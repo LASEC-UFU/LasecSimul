@@ -8,12 +8,13 @@ import { TrustStore } from "./trust/TrustStore";
 import { isPreApproved, isPreBlocked, resolveConsentChoice, shouldLoadLibrary, decisionToPersist } from "./trust/trustDecision";
 import { SchematicPanel } from "./ui/panels/SchematicPanel";
 import { createInitialWebviewState } from "./ui/webview/catalog";
-import { PropertySchemaEntry, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./ui/webview/model";
+import { PackageDescriptor, PackagePin, PackageShape, PropertySchemaEntry, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./ui/webview/model";
 import { SimulationStatus, WebviewToHostMessage } from "./ui/webview/messages";
-import { ComponentPaletteProvider } from "./ui/tree/ComponentPaletteProvider";
+import { ComponentPaletteViewProvider } from "./ui/views/ComponentPaletteViewProvider";
 import { ProjectSerializer } from "./project/ProjectSerializer";
 import { ProjectComponent, ProjectDocument, createEmptyProject } from "./project/ProjectTypes";
 import { loadUnifiedCatalog, RegisteredSource, saveRegisteredSources } from "./catalog/UnifiedCatalog";
+import { compileSymbolAuthoringComponents, seedSymbolAuthoringComponents } from "./catalog/symbolAuthoring";
 import { PropertySchemaDto } from "./ipc/types";
 import { hasShowOnSymbolProperty, mergePropertySchemas, nextIndexedLabel } from "./catalog/catalogMerge";
 import { LasecSimulLanguage, resolveLasecSimulLanguage } from "./language";
@@ -23,7 +24,7 @@ let coreClient: CoreClient | undefined;
 let schematicPanel: SchematicPanel | undefined;
 let schematicState: WebviewProjectState = createInitialWebviewState();
 let simulationStatus: SimulationStatus = "stopped";
-let paletteProvider: ComponentPaletteProvider | undefined;
+let paletteViewProvider: ComponentPaletteViewProvider | undefined;
 let extensionContext: vscode.ExtensionContext | undefined;
 let trustStore: TrustStore | undefined;
 const projectSerializer = new ProjectSerializer();
@@ -122,6 +123,14 @@ function inferLibraryPathForDevice(deviceFilePath: string): string | undefined {
   return fileExists(candidate) ? candidate : undefined;
 }
 
+/** Subcircuitos não têm pasta por item (ver .spec/lasecsimul-subcircuits.spec seção 7 — diferença
+ * deliberada de devices/mcu-adapters: arquivo único, sem binário por plataforma) -- o
+ * `library.json` fica na MESMA pasta do `.lssub.json`, não um nível acima. */
+function inferLibraryPathForSubcircuit(manifestFilePath: string): string | undefined {
+  const candidate = path.join(path.dirname(manifestFilePath), "library.json");
+  return fileExists(candidate) ? candidate : undefined;
+}
+
 function resolveFolderPath(source: RegisteredSource, fallback: string[]): string[] {
   if (Array.isArray(source.folderPath) && source.folderPath.length > 0) {
     return source.folderPath.map((segment) => String(segment).trim()).filter((segment) => segment.length > 0);
@@ -160,6 +169,62 @@ function localizedManifestName(json: Record<string, unknown>, language: LasecSim
   return typeof json.name === "string" ? json.name : undefined;
 }
 
+const PACKAGE_SHAPE_KINDS = new Set(["rect", "text", "line", "ellipse"]);
+
+/** Confia na mesma medida que `device.json`/`mcu.json`/`.lssub.json` já são confiados pelo resto
+ * desta função (são manifestos de primeira parte ou já passaram por consentimento de plugin antes
+ * de chegar aqui, ver `ensureLibraryTrusted`) — valida só a forma estrutural mínima (presença e tipo
+ * dos campos numéricos obrigatórios), não cada combinação de campo por `kind`, mesmo nível de
+ * validação que `readDeviceLsconfig` já aplica aos outros campos do manifesto. */
+function sanitizePackage(value: unknown): PackageDescriptor | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const raw = value as Record<string, unknown>;
+  if (typeof raw.width !== "number" || typeof raw.height !== "number" || !Array.isArray(raw.pins)) return undefined;
+
+  const pins: PackagePin[] = [];
+  for (const pinValue of raw.pins) {
+    if (typeof pinValue !== "object" || pinValue === null) continue;
+    const pin = pinValue as Record<string, unknown>;
+    if (typeof pin.id !== "string" || !pin.id.trim()) continue;
+    if (typeof pin.x !== "number" || typeof pin.y !== "number") continue;
+    pins.push({
+      id: pin.id,
+      kind: typeof pin.kind === "string" ? pin.kind : undefined,
+      x: pin.x,
+      y: pin.y,
+      angle: typeof pin.angle === "number" ? pin.angle : 0,
+      length: typeof pin.length === "number" ? pin.length : 8,
+      label: typeof pin.label === "string" ? pin.label : undefined,
+    });
+  }
+  if (pins.length === 0) return undefined;
+
+  const shapes: PackageShape[] = [];
+  if (Array.isArray(raw.shapes)) {
+    for (const shapeValue of raw.shapes) {
+      if (typeof shapeValue !== "object" || shapeValue === null) continue;
+      const shape = shapeValue as Record<string, unknown> & { kind?: unknown };
+      if (typeof shape.kind !== "string" || !PACKAGE_SHAPE_KINDS.has(shape.kind)) continue;
+      shapes.push(shape as unknown as PackageShape);
+    }
+  }
+
+  const backgroundRaw = raw.background;
+  const background =
+    typeof backgroundRaw === "object" && backgroundRaw !== null && typeof (backgroundRaw as Record<string, unknown>).kind === "string"
+      ? (backgroundRaw as PackageDescriptor["background"])
+      : undefined;
+
+  return {
+    width: raw.width,
+    height: raw.height,
+    border: typeof raw.border === "boolean" ? raw.border : undefined,
+    background,
+    shapes,
+    pins,
+  };
+}
+
 interface DeviceLsconfig {
   typeId?: string;
   label?: string;
@@ -167,6 +232,7 @@ interface DeviceLsconfig {
   icon?: string;
   iconPath?: string;
   symbolSvg?: string;
+  package?: unknown;
   pinCount?: number;
   defaultProperties?: Record<string, string | number | boolean>;
 }
@@ -247,6 +313,7 @@ function resolveRegisteredItem(source: RegisteredSource, extensionPath: string, 
   try {
     const json = readJsonFile(absoluteFilePath) as Record<string, unknown>;
     const { absolutePath: absoluteLsconfigPath, config: lsconfig } = readDeviceLsconfig(source, extensionPath);
+    const packageDescriptor = sanitizePackage(json.package) ?? sanitizePackage(lsconfig?.package);
     if (source.kind === "abi-device" || source.kind === "mcu-adapter") {
       const typeIdKey = source.kind === "mcu-adapter" ? "chipId" : "typeId";
       const typeId = typeof json[typeIdKey] === "string" && String(json[typeIdKey]).trim()
@@ -256,9 +323,11 @@ function resolveRegisteredItem(source: RegisteredSource, extensionPath: string, 
       const label = typeof lsconfig?.label === "string" && lsconfig.label.trim() ? lsconfig.label.trim() : (manifestLabel || typeId);
       const pins = Array.isArray(json.pins) ? json.pins : [];
       const pinMap = typeof json.pinMap === "object" && json.pinMap !== null ? Object.keys(json.pinMap as Record<string, unknown>) : [];
-      const pinCount = typeof lsconfig?.pinCount === "number" && lsconfig.pinCount > 0
-        ? lsconfig.pinCount
-        : (pins.length > 0 ? pins.length : (pinMap.length > 0 ? pinMap.length : 2));
+      const pinCount = packageDescriptor
+        ? packageDescriptor.pins.length
+        : (typeof lsconfig?.pinCount === "number" && lsconfig.pinCount > 0
+          ? lsconfig.pinCount
+          : (pins.length > 0 ? pins.length : (pinMap.length > 0 ? pinMap.length : 2)));
       const folderPath = resolveFolderPath({
         ...source,
         folderPath: Array.isArray(lsconfig?.folderPath) && lsconfig.folderPath.length > 0 ? lsconfig.folderPath : source.folderPath,
@@ -284,6 +353,7 @@ function resolveRegisteredItem(source: RegisteredSource, extensionPath: string, 
         icon: lsconfig?.icon,
         iconFilePath,
         symbolSvg: lsconfig?.symbolSvg,
+        package: packageDescriptor,
         disabled: false,
         isRegistered: true,
         registeredSourceId: source.id,
@@ -311,35 +381,69 @@ function resolveRegisteredItem(source: RegisteredSource, extensionPath: string, 
       };
     }
 
+    // subcircuit-file: Core já expande subcircuito de ponta a ponta (addComponent detecta
+    // isSubcircuitType() e chama addSubcircuitInstance() -- ver CoreApplication.cpp) desde que o
+    // library.json correspondente tenha sido carregado. Mesmo tratamento de disabled/libraryPath
+    // que abi-device, não um gate fixo.
     const typeId = typeof json.typeId === "string" && json.typeId.trim()
       ? json.typeId
       : `registered.subcircuit.${source.id}`;
-    const label = localizedManifestName(json, language)?.trim() ? localizedManifestName(json, language)! : typeId;
+    const manifestLabel = localizedManifestName(json, language)?.trim();
+    const label = typeof lsconfig?.label === "string" && lsconfig.label.trim() ? lsconfig.label.trim() : (manifestLabel || typeId);
     const packagePins =
       typeof json.package === "object" && json.package !== null && Array.isArray((json.package as { pins?: unknown[] }).pins)
         ? ((json.package as { pins: unknown[] }).pins.length || 2)
         : 2;
-    const folderPath = resolveFolderPath(source, localizedRegisteredFolder("subcircuit-file", language));
+    const pinCount = packageDescriptor
+      ? packageDescriptor.pins.length
+      : (typeof lsconfig?.pinCount === "number" && lsconfig.pinCount > 0 ? lsconfig.pinCount : packagePins);
+    const folderPath = resolveFolderPath({
+      ...source,
+      folderPath: Array.isArray(lsconfig?.folderPath) && lsconfig.folderPath.length > 0 ? lsconfig.folderPath : source.folderPath,
+    }, localizedRegisteredFolder("subcircuit-file", language));
     const category = folderPath[0] ?? localizedRegisteredRoot(language);
     const subcategory = folderPath.length > 1 ? folderPath[1] : undefined;
+    const libraryPath = source.libraryPath
+      ? normalizeAbsolutePath(extensionPath, source.libraryPath)
+      : inferLibraryPathForSubcircuit(absoluteFilePath);
+    const iconFilePath = typeof lsconfig?.iconPath === "string" && lsconfig.iconPath.trim()
+      ? normalizeExistingFilePath(path.dirname(absoluteLsconfigPath ?? absoluteFilePath), lsconfig.iconPath)
+      : undefined;
+    const entry: WebviewComponentCatalogEntry = {
+      typeId,
+      label,
+      pinCount,
+      defaultProperties: lsconfig?.defaultProperties ?? {},
+      category,
+      subcategory,
+      folderPath,
+      icon: lsconfig?.icon,
+      iconFilePath,
+      symbolSvg: lsconfig?.symbolSvg,
+      package: packageDescriptor,
+      disabled: false,
+      isRegistered: true,
+      registeredSourceId: source.id,
+      registeredSourceRemovable: source.removable !== false,
+    };
+    if (!libraryPath || !fileExists(libraryPath)) {
+      return {
+        sourceId: source.id,
+        kind: source.kind,
+        entry: {
+          ...entry,
+          disabled: true,
+          disabledReason: "subcircuito registrado sem library.json valido associado",
+          icon: "fantasma",
+          iconFilePath: undefined,
+        },
+      };
+    }
     return {
       sourceId: source.id,
       kind: source.kind,
-      entry: {
-        typeId,
-        label,
-        pinCount: packagePins,
-        defaultProperties: {},
-        category,
-        subcategory,
-        folderPath,
-        disabled: true,
-        disabledReason: "subcircuito registrado (execução ainda indisponível no Core atual)",
-        isRegistered: true,
-        registeredSourceId: source.id,
-        registeredSourceRemovable: source.removable !== false,
-        icon: "fantasma",
-      },
+      libraryPathToLoad: libraryPath,
+      entry,
     };
   } catch (err) {
     const fallbackFolder = localizedRegisteredFolder(source.kind, language);
@@ -361,7 +465,7 @@ function resolveRegisteredItems(extensionPath: string, sources: RegisteredSource
 
 function setEffectiveCatalog(entries: WebviewComponentCatalogEntry[]): void {
   schematicState = { ...schematicState, catalog: entries };
-  paletteProvider?.setCatalog(entries);
+  paletteViewProvider?.setCatalog(entries);
   syncSchematicPanel();
 }
 
@@ -444,7 +548,7 @@ function pushComponentToCore(
   properties: Record<string, unknown>,
   pins: Array<{ id: string; x: number; y: number }>
 ): void {
-  if (!coreClient) return;
+  if (!coreClient || !shouldSyncComponentToCore(typeId)) return;
   coreClient
     .addComponent(typeId, properties, pins)
     .then((instanceId) => coreInstanceIdByComponentId.set(componentId, instanceId))
@@ -595,6 +699,11 @@ function pinsForTypeId(typeId: string): Array<{ id: string; x: number; y: number
   return Array.from({ length: pinCount }, (_, index) => ({ id: `pin-${index + 1}`, x: 0, y: index * 12 }));
 }
 
+function shouldSyncComponentToCore(typeId: string): boolean {
+  const descriptor = schematicState.catalog.find((item) => item.typeId === typeId);
+  return (descriptor?.pinCount ?? 2) > 0;
+}
+
 function junctionComponentAt(point: { x: number; y: number }): WebviewComponentModel {
   return {
     id: nextId("junction"),
@@ -647,6 +756,7 @@ async function rebuildCoreFromSchematicState(): Promise<void> {
   coreInstanceIdByComponentId.clear();
 
   for (const component of schematicState.components) {
+    if (!shouldSyncComponentToCore(component.typeId)) continue;
     try {
       const instanceId = await coreClient.addComponent(
         component.typeId,
@@ -690,6 +800,7 @@ async function pushProjectToCore(project: ProjectDocument): Promise<void> {
   if (!coreClient) return;
   coreInstanceIdByComponentId.clear();
   for (const component of project.components) {
+    if (!shouldSyncComponentToCore(component.typeId)) continue;
     try {
       const instanceId = await coreClient.addComponent(
         component.typeId,
@@ -1006,6 +1117,9 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
     case "requestOpenProject":
       if (extensionContext) void openProjectCommand(extensionContext);
       return;
+    case "requestSaveSymbol":
+      void saveSymbolCommand(message.filePath, message.typeId, message.components);
+      return;
   }
 }
 
@@ -1294,6 +1408,166 @@ async function removeRegisteredCatalogItemCommand(item?: { sourceId?: string }):
   vscode.window.showInformationMessage("Item removido da paleta de componentes.");
 }
 
+/** Pinos elétricos REAIS de um manifesto, melhor-esforço, só pra avisar (não bloquear) quando um
+ * `pinId` de um `other.package_pin` não bate com nada conhecido -- ver `saveSymbolCommand`.
+ * `abi-device`: `pins[].id`. `mcu-adapter`: chaves
+ * de `pinMap` (o mesmo campo estático que `resolveRegisteredItem` já usa como fallback de
+ * `pinCount`, ver acima — não tem relação com o `get_pin_map()` em runtime do plugin).
+ * `subcircuit-file`: `interface[].pinId`. */
+function knownPinIdsForManifest(json: Record<string, unknown>, kind: RegisteredItemKind): string[] {
+  if (kind === "abi-device") {
+    const pins = Array.isArray(json.pins) ? json.pins : [];
+    return pins
+      .filter((value): value is Record<string, unknown> => typeof value === "object" && value !== null)
+      .map((pin) => pin.id)
+      .filter((id): id is string => typeof id === "string" && id.trim().length > 0);
+  }
+  if (kind === "mcu-adapter") {
+    return typeof json.pinMap === "object" && json.pinMap !== null ? Object.keys(json.pinMap as Record<string, unknown>) : [];
+  }
+  const entries = Array.isArray(json.interface) ? json.interface : [];
+  return entries
+    .filter((value): value is Record<string, unknown> => typeof value === "object" && value !== null)
+    .map((entry) => entry.pinId)
+    .filter((id): id is string => typeof id === "string" && id.trim().length > 0);
+}
+
+/** Lê o bloco `package` do manifesto pra EDIÇÃO -- deliberadamente mais permissivo que
+ * `sanitizePackage` (que descarta `pins: []` tratando como "sem package", certo pra decidir o que
+ * mostrar na paleta, errado aqui: um symbol em construção começa vazio mesmo). Mesmo nível de
+ * confiança que o resto desta função aplica ao manifesto (1ª parte ou já passou por consentimento
+ * de plugin). Sem `package` no arquivo -> corpo em branco, pronto pra desenhar do zero. */
+function extractPackageForEditing(json: Record<string, unknown>): PackageDescriptor {
+  const raw = json.package;
+  if (typeof raw === "object" && raw !== null) {
+    const candidate = raw as Record<string, unknown>;
+    if (typeof candidate.width === "number" && typeof candidate.height === "number") {
+      return {
+        width: candidate.width,
+        height: candidate.height,
+        border: typeof candidate.border === "boolean" ? candidate.border : undefined,
+        background: typeof candidate.background === "object" && candidate.background !== null
+          ? (candidate.background as PackageDescriptor["background"])
+          : undefined,
+        shapes: Array.isArray(candidate.shapes) ? (candidate.shapes as PackageShape[]) : [],
+        pins: Array.isArray(candidate.pins) ? (candidate.pins as PackagePin[]) : [],
+      };
+    }
+  }
+  return { width: 80, height: 60, border: true, shapes: [], pins: [] };
+}
+
+function detectManifestKind(absoluteFilePath: string, json: Record<string, unknown>): RegisteredItemKind {
+  const fileName = path.basename(absoluteFilePath).toLowerCase();
+  if (fileName.endsWith(".lssub.json")) return "subcircuit-file";
+  const hasChipId = typeof json.chipId === "string" && json.chipId.trim().length > 0;
+  if (fileName === "mcu.json" || hasChipId) return "mcu-adapter";
+  return "abi-device";
+}
+
+/** Comando "Editar Símbolo Visual" (Épico G, parte de escrita) -- com `item.sourceId`, edita o
+ * `package` de um item JÁ registrado na paleta (botão "✎" em `palette.ts`); sem `sourceId` (botão
+ * da barra de título, `lasecsimul.palette.editSymbol` sem argumento), abre um seletor de arquivo
+ * pra editar QUALQUER `device.json`/`mcu.json`/`.lssub.json`, registrado ou não -- útil pra ajustar
+ * o símbolo de um manifesto ainda em construção, antes mesmo de registrá-lo na paleta. Em ambos os
+ * casos abre o MESMO webview do esquemático (`openSchematicEditor`), só que em modo de edição de
+ * `package` -- nunca um painel novo (ver `.spec/lasecsimul-native-devices.spec` seção 21.3). */
+async function editPackageSymbolCommand(item?: { sourceId?: string }): Promise<void> {
+  if (!extensionContext) return;
+  const ctx = extensionContext;
+
+  let absoluteFilePath: string | undefined;
+  const sourceId = typeof item?.sourceId === "string" ? item.sourceId : undefined;
+  if (sourceId) {
+    const unifiedCatalog = loadUnifiedCatalog(ctx.extensionPath, currentLasecSimulLanguage());
+    const source = unifiedCatalog.registeredSources.find((value) => value.id === sourceId);
+    if (!source) {
+      vscode.window.showWarningMessage("Item registrado não encontrado no catálogo.");
+      return;
+    }
+    absoluteFilePath = normalizeAbsolutePath(ctx.extensionPath, source.filePath);
+  } else {
+    const picked = await vscode.window.showOpenDialog({
+      canSelectMany: false,
+      filters: { JSON: ["json"] },
+      title: "Editar símbolo visual de um device.json/mcu.json/.lssub.json",
+    });
+    absoluteFilePath = picked?.[0]?.fsPath;
+  }
+  if (!absoluteFilePath) return;
+
+  if (!fileExists(absoluteFilePath)) {
+    vscode.window.showErrorMessage(`Arquivo não encontrado: ${absoluteFilePath}`);
+    return;
+  }
+
+  let json: Record<string, unknown>;
+  try {
+    json = readJsonFile(absoluteFilePath) as Record<string, unknown>;
+  } catch (err) {
+    vscode.window.showErrorMessage(
+      `Não foi possível ler ${absoluteFilePath}: ${err instanceof Error ? err.message : String(err)}`
+    );
+    return;
+  }
+
+  const kind = detectManifestKind(absoluteFilePath, json);
+  const typeIdKey = kind === "mcu-adapter" ? "chipId" : "typeId";
+  const typeId = typeof json[typeIdKey] === "string" && String(json[typeIdKey]).trim() ? String(json[typeIdKey]).trim() : path.basename(absoluteFilePath);
+
+  if (!schematicPanel) openSchematicEditor(ctx.extensionUri);
+  schematicPanel?.postMessage({
+    version: 1,
+    type: "enterSymbolAuthoring",
+    filePath: absoluteFilePath,
+    typeId,
+    components: seedSymbolAuthoringComponents(extractPackageForEditing(json)),
+  });
+}
+
+/** Handler de `requestSaveSymbol` (`messages.ts`) -- relê o arquivo do disco (não confia no que a
+ * Webview tinha em memória pras OUTRAS chaves, podem ter mudado por fora desde que a sessão de
+ * autoria abriu), compila a sessão (`compileSymbolAuthoringComponents`) e substitui só `"package"`,
+ * preservando tudo o mais. Mesmo arquivo que um humano editaria à mão — nunca um formato/estado
+ * paralelo (ver `.spec/lasecsimul-native-devices.spec` seção 21.3). Avisa (sem bloquear o save) se
+ * algum `pinId` digitado num `other.package_pin` não bate com nenhum pino elétrico conhecido
+ * (`knownPinIdsForManifest`, melhor-esforço -- vazio pra `mcu-adapter`, pinos vêm do plugin em
+ * runtime). */
+async function saveSymbolCommand(filePath: string, typeId: string, components: WebviewComponentModel[]): Promise<void> {
+  let json: Record<string, unknown>;
+  try {
+    json = readJsonFile(filePath) as Record<string, unknown>;
+  } catch (err) {
+    vscode.window.showErrorMessage(`Não foi possível reler ${filePath}: ${err instanceof Error ? err.message : String(err)}`);
+    return;
+  }
+
+  const existingBackground = extractPackageForEditing(json).background;
+  const result = compileSymbolAuthoringComponents(components, existingBackground);
+  if (!result.package) {
+    vscode.window.showErrorMessage(result.error ?? "Não foi possível compilar o símbolo.");
+    return;
+  }
+
+  const knownPinIds = knownPinIdsForManifest(json, detectManifestKind(filePath, json));
+  if (knownPinIds.length > 0) {
+    const unknownIds = result.package.pins.map((pin) => pin.id).filter((id) => !knownPinIds.includes(id));
+    if (unknownIds.length > 0) {
+      vscode.window.showWarningMessage(`Pino(s) sem correspondência elétrica conhecida em "${typeId}": ${unknownIds.join(", ")}. Salvando assim mesmo.`);
+    }
+  }
+
+  json.package = result.package;
+  try {
+    fs.writeFileSync(filePath, `${JSON.stringify(json, null, 2)}\n`, "utf8");
+  } catch (err) {
+    vscode.window.showErrorMessage(`Não foi possível salvar ${filePath}: ${err instanceof Error ? err.message : String(err)}`);
+    return;
+  }
+  await refreshUnifiedCatalogState(true);
+  vscode.window.showInformationMessage(`Símbolo visual de "${typeId}" salvo em ${filePath}.`);
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   extensionContext = context;
   const unifiedCatalog = loadUnifiedCatalog(context.extensionPath, currentLasecSimulLanguage());
@@ -1339,22 +1613,30 @@ export function activate(context: vscode.ExtensionContext): void {
       );
     });
 
-  paletteProvider = new ComponentPaletteProvider(context.extensionUri, schematicState.catalog);
-  const paletteView = vscode.window.createTreeView("lasecsimul.componentPalette", {
-    treeDataProvider: paletteProvider,
-    showCollapseAll: true,
-  });
-
   const addPaletteComponent = (typeId: string) => {
     if (!schematicPanel) openSchematicEditor(context.extensionUri);
     schematicPanel?.postMessage({ version: 1, type: "requestAddComponent", typeId });
   };
 
+  paletteViewProvider = new ComponentPaletteViewProvider(
+    context.extensionUri,
+    schematicState.catalog,
+    currentLasecSimulLanguage(),
+    addPaletteComponent,
+    (item) => removeRegisteredCatalogItemCommand(item),
+    (item) => editPackageSymbolCommand(item)
+  );
+
   context.subscriptions.push(
-    paletteView,
+    vscode.window.registerWebviewViewProvider("lasecsimul.componentPalette", paletteViewProvider, {
+      webviewOptions: {
+        retainContextWhenHidden: true,
+      },
+    }),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (!event.affectsConfiguration("lasecsimul.language")) return;
       schematicState = { ...schematicState, locale: currentLasecSimulLanguage() };
+      paletteViewProvider?.setLanguage(currentLasecSimulLanguage());
       void refreshUnifiedCatalogState(Boolean(coreClient));
       syncSchematicPanel();
     }),
@@ -1370,6 +1652,9 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("lasecsimul.palette.registerFile", () => registerCatalogFileCommand()),
     vscode.commands.registerCommand("lasecsimul.palette.removeRegistered", (item: { sourceId?: string }) =>
       removeRegisteredCatalogItemCommand(item)
+    ),
+    vscode.commands.registerCommand("lasecsimul.palette.editSymbol", (item?: { sourceId?: string }) =>
+      editPackageSymbolCommand(item)
     ),
     // Keybinding em contributes.keybindings ("when": activeWebviewPanelId == 'lasecsimul.schematic')
     // sobrepõe Ctrl+R/Ctrl+Shift+R do VSCode SÓ enquanto o painel do esquemático está em foco --

@@ -187,16 +187,12 @@ fica para depois do MVP. Ver `docs/14-integracao-final.md` para os critérios de
   fisicamente incorreto, por isso foram removidos da paleta em vez de fingidos. `mcu.arduino_uno`
   exigiria um `IMcuAdapter`/máquina QEMU próprios para ATmega328p (hoje só `espressif.esp32`
   existe). Reintroduzir cada um no catálogo só depois de existir a factory/adapter correspondente.
-- **Plugin que usa `LsdnHostApi`/`pin_declare` em `init()` ainda derruba o processo ao instanciar**:
-  `PluginRuntime::createDeviceInstance` chama `vt->create(nullptr, nullptr)` — o `host_ctx` real que
-  ligaria `pin_declare`/`pin_write` ao `Netlist`/`Scheduler` desta sessão não existe ainda.
-  `devices/example-blinker/src/lib.c` desreferencia esse `api` dentro de `init()`; chamar
-  `addComponent("example.blinker", ...)` hoje crasharia o Core — `plugin_loader_real_dll` valida
-  carregar+registrar o binário real, deliberadamente sem chamar `addComponent` por essa razão.
-  **Não afeta todo plugin**: `instruments.voltmeter` (`devices/voltmeter`) não usa `LsdnHostApi` —
-  só `LsdnMatrixView` (`stamp()`), que já é real e funcional — por isso já pode ser instanciado e
-  usado num circuito hoje (ver item validado acima). Um instrumento que precise de `pin_declare`
-  (ex: canais configuráveis em runtime) continua bloqueado até este bridge existir.
+- **Resolvido nesta sessão (2026-06-28)**: `pin_write`/`pin_write_analog`/`pin_read`/`now_ns`/
+  `schedule_event` deixaram de ser stubs vazios e passaram a ser reais (ligados a
+  `Netlist`/`Scheduler` da sessão); `device_abi.h` foi de major 1 → 3 (bus removido, `pin_watch`
+  removido, `pin_name` adicionado). `devices/example-blinker` foi migrado e funciona, incluindo
+  `instruments.voltmeter` (que já usava só `LsdnMatrixView`, sem mudança necessária). Ver
+  `docs/17-pendencias-pos-sessao-qemu-abi.md` seções 0.2/0.3 para o detalhamento completo.
 - **`device_abi.h` mudou de forma binário-incompatível (vtable de 8 → 10 funções, `get_property`/
   `set_property` novos no meio da struct) sem rebuild automático dos `.dll` existentes**: qualquer
   mudança na ordem/contagem de `LsdnDeviceVTable` exige `npm run build:devices` de novo — sem isso,
@@ -208,16 +204,16 @@ fica para depois do MVP. Ver `docs/14-integracao-final.md` para os critérios de
   leitura (`"... V"` parado) porque `instruments.voltmeter` nunca tinha factory — corrigido
   rebuildando `core` + `devices` juntos. **Sempre que `device_abi.h` mudar, rebuildar os dois**:
   `npm run build:core && npm run build:devices` (não basta só um dos dois).
-- **Ciclo ESP32/QEMU real sem GPIO/firmware de verdade**: `McuController` (novo) abre a arena e
-  inicia o `qemu-system-xtensa.exe` real com sucesso (teste `mcu_controller_real_qemu`), mas:
-  (a) não há toolchain `xtensa-esp32-elf`/ESP-IDF nesta máquina para compilar um firmware `.bin` de
-  blink real — decisão explícita de não instalar ESP-IDF nesta rodada (download grande, fora de
-  escopo); (b) o mecanismo pelo qual o nome da arena de memória compartilhada chega até o processo
-  QEMU (flag de linha de comando ou variável de ambiente própria do fork) não está documentado
-  neste repositório — só o layout de `LsdnQemuArena` está espelhado em `qemu_arena_abi.h`, a partir
-  do binário já compilado; o código-fonte do fork (`G:\Meu Drive\SourceCode\qemu-simulide-1`) não
-  está disponível aqui para inspecionar. Sem isso, não há garantia de que o QEMU real de fato anexe
-  à arena que o Core cria, mesmo com o nome combinado de antemão.
+- **Ciclo ESP32/QEMU real sem firmware de verdade (GPIO já funciona)**: `McuController` abre a arena e
+  inicia o `qemu-system-xtensa.exe` real com sucesso (teste `mcu_controller_real_qemu`, binário
+  vendorizado em `devices/qemu-esp32/bin/`), e `McuComponent`/`Esp32GpioModule` já provam GPIO de
+  ponta a ponta com arena sintética (`McuComponentTest`). O que falta é só: não há toolchain
+  `xtensa-esp32-elf`/ESP-IDF nesta máquina para compilar um firmware `.bin` de blink real — decisão
+  explícita de não instalar ESP-IDF (download grande, fora de escopo). **Resolvido nesta sessão**: o
+  mecanismo de passagem do nome da arena pro processo QEMU — `argv[1]` é sempre a chave da shared
+  memory (confirmado lendo `simuMain()` real em `simuliface.c` do fork
+  `C:\SourceCode\qemu_simulide`); resto dos args bate com `Esp32::createArgs()` real. Ver
+  `docs/17-pendencias-pos-sessao-qemu-abi.md` seção 0.5 para o detalhamento completo.
 - **Ambiente de build**: o projeto foi movido para fora de pastas sincronizadas por nuvem (Google
   Drive/OneDrive/Dropbox) — `cmake -S core -B core/build` com o gerador padrão (Visual Studio no
   Windows) funciona normalmente agora. A limitação de Ninja Multi-Config em pasta sincronizada
@@ -229,13 +225,14 @@ fica para depois do MVP. Ver `docs/14-integracao-final.md` para os critérios de
 
 - Configurar `@vscode/test-electron` para um smoke test real de ativação (abrir editor, ver
   comandos registrados).
-- Implementar o `LsdnHostApi` real (ponte `pin_declare`/`pin_write` do `device_abi.h` para
-  `Netlist`/`Scheduler` da sessão) — necessário só para plugins que precisem de pinos dinâmicos via
-  ABI (ex: GPIO de um device tipo `example-blinker`); instrumentos que só usam `LsdnMatrixView` (ex:
-  `instruments.voltmeter`) já funcionam sem isso.
-- Descobrir (ou obter do código-fonte do fork) o mecanismo de passagem do nome da arena para o
-  processo QEMU, e então compilar um firmware `.bin` de blink real (exige instalar ESP-IDF) para
-  validar GPIO de ponta a ponta via `McuController`.
+- ~~Implementar o `LsdnHostApi` real~~ — feito (2026-06-28): `pin_write`/`pin_read`/`now_ns`/
+  `schedule_event` reais; `example-blinker` migrado e funcionando.
+- ~~Descobrir o mecanismo de passagem do nome da arena~~ — feito (2026-06-28): `argv[1]`, confirmado
+  contra o binário/fonte real. Falta só compilar um firmware `.bin` de blink real (exige instalar
+  ESP-IDF) para validar GPIO de ponta a ponta com firmware de verdade — o pipeline em si
+  (`McuController`/`McuComponent`/`Esp32GpioModule`) já funciona (ver acima).
+- IOMUX/pin-matrix e módulos `Esp32TwiModule`/`Esp32SpiModule`/`Esp32UsartModule` do ESP32 (só GPIO
+  existe hoje) — ver `docs/17-pendencias-pos-sessao-qemu-abi.md` seção 3.1.
 - Implementar diodo/transistor com Newton-Raphson real (`IComponentModel::isNonlinear()`) antes de
   reintroduzir `semiconductors.*`/`logic.led` no catálogo.
 - Próximo instrumento (ex: osciloscópio/traço de pino ao longo do tempo) segue o mesmo padrão do

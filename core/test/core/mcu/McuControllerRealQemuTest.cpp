@@ -1,5 +1,6 @@
 // Valida McuController contra o binário REAL do fork qemu-simulide (não fake/sintético como
-// QemuProcessManagerTest/QemuArenaBridgeTest) -- ver docs/mvp-limitacoes.md.
+// QemuProcessManagerTest/QemuArenaBridgeTest) -- ver docs/mvp-limitacoes.md. O adaptador ESP32 vem
+// do plugin real (mcu_abi.h major 2+, mcu-adapters/espressif-esp32/), não built-in.
 //
 // Escopo deliberadamente limitado: usa um caminho de firmware que NÃO existe, porque não há
 // toolchain xtensa-esp32-elf/ESP-IDF nesta máquina para compilar um blink.bin real (decisão tomada
@@ -9,20 +10,19 @@
 //   2. iniciar de fato o processo qemu-system-xtensa.exe REAL (CreateProcess/exec contra o binário
 //      verdadeiro, não um stub do próprio teste),
 // e encerrar tudo de volta sem travar nem vazar processo/handle. NÃO prova que o GPIO funciona de
-// ponta a ponta -- isso exige firmware real E o mecanismo (não documentado neste repo, sem o
-// código-fonte do fork) pelo qual o nome da arena chega até o processo QEMU. Pula (sai com 0) se o
-// binário real não estiver presente no caminho esperado, para não quebrar quem não tem o fork
-// baixado localmente.
+// ponta a ponta -- isso exige firmware real. Pula (sai com 0) se o binário real do QEMU ou o
+// adapter.dll do plugin não estiverem presentes no caminho esperado.
 #include <chrono>
 #include <cstdio>
 #include <filesystem>
+#include <memory>
 #include <thread>
 #include "mcu/McuController.hpp"
-#include "mcu/esp32/Esp32Adapter.hpp"
+#include "plugins/GlobalPluginCache.hpp"
+#include "plugins/PluginRuntime.hpp"
 
 using namespace lasecsimul;
 using namespace lasecsimul::mcu;
-using namespace lasecsimul::mcu::esp32;
 
 namespace {
 
@@ -51,7 +51,11 @@ int main() {
 #ifndef QEMU_REAL_BINARY_PATH
 #error "QEMU_REAL_BINARY_PATH precisa ser definido pelo CMakeLists (caminho do qemu-system-xtensa.exe real)"
 #endif
+#ifndef ESP32_ADAPTER_DLL_PATH
+#error "ESP32_ADAPTER_DLL_PATH precisa ser definido pelo CMakeLists (caminho do adapter.dll real)"
+#endif
     const std::filesystem::path qemuPath = QEMU_REAL_BINARY_PATH;
+    const std::filesystem::path dllPath = ESP32_ADAPTER_DLL_PATH;
 
     if (!std::filesystem::exists(qemuPath)) {
         std::fprintf(stderr,
@@ -60,9 +64,22 @@ int main() {
                       qemuPath.string().c_str());
         return 0;
     }
+    if (!std::filesystem::exists(dllPath)) {
+        std::fprintf(stderr,
+                      "PULADO: %s não existe -- rode 'npm run build:mcu-adapters' antes deste teste.\n",
+                      dllPath.string().c_str());
+        return 0;
+    }
 
-    Esp32Adapter adapter;
-    McuController controller(adapter, qemuPath.string());
+    plugins::GlobalPluginCache cache;
+    std::shared_ptr<plugins::PluginModule> module = cache.loader().loadMcuPlugin(dllPath);
+    cache.setActiveMcuModule("espressif.esp32", module);
+
+    plugins::PluginRuntime runtime(cache);
+    const std::unique_ptr<IMcuAdapter> adapter = runtime.createMcuAdapter("espressif.esp32");
+    TEST_ASSERT(adapter != nullptr, "PluginRuntime cria o IMcuAdapter ESP32 a partir do plugin real");
+
+    McuController controller(*adapter, qemuPath.string());
 
     const std::string arenaName = uniqueArenaName();
     bool started = false;

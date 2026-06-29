@@ -1,4 +1,4 @@
-import { WebviewProjectState } from "./model";
+import { WebviewComponentModel, WebviewProjectState } from "./model";
 
 export const WEBVIEW_MESSAGE_VERSION = 1 as const;
 
@@ -20,7 +20,23 @@ export type HostToWebviewMessage =
   | { version: number; type: "requestRotateSelection"; direction: "cw" | "ccw" }
   /** Mesmo caminho de `requestRotateSelection`, mas pra flip -- ver `lasecsimul.flipSelectionHorizontal`/
    * `Vertical` em `extension.ts`. */
-  | { version: number; type: "requestFlipSelection"; axis: "horizontal" | "vertical" };
+  | { version: number; type: "requestFlipSelection"; axis: "horizontal" | "vertical" }
+  /** Entra no modo de autoria de símbolo (Épico G, parte de escrita) -- ver `.spec/
+   * lasecsimul-native-devices.spec` seção 21.3 e `docs/16-roadmap-pendencias-spec.md` Épico G:
+   * mesmo princípio do SimulIDE real (`SubPackage`/`Rectangle`/`Ellipse`/.../`PackagePin` são
+   * `Component`s comuns na MESMA cena do circuito, não um editor separado). `main.ts` troca
+   * `state` por uma sessão nova semeada com `components` (um `other.package` + um `graphics.*` por
+   * forma + um `other.package_pin` por pino, todos reconstruídos a partir do `package` atual do
+   * manifesto pela Extension, ver `extension.ts::seedSymbolAuthoringComponents`) -- o circuito real
+   * do usuário (se houver um aberto) nunca é tocado, só fica "escondido" até "Salvar Símbolo"/
+   * "Cancelar" devolver `state` pro original. */
+  | {
+      version: number;
+      type: "enterSymbolAuthoring";
+      filePath: string;
+      typeId: string;
+      components: WebviewComponentModel[];
+    };
 
 export type WebviewToHostMessage =
   | { version: number; type: "webviewReady" }
@@ -48,7 +64,12 @@ export type WebviewToHostMessage =
   | { version: number; type: "requestPauseSimulation" }
   | { version: number; type: "requestStopSimulation" }
   | { version: number; type: "requestSaveProject" }
-  | { version: number; type: "requestOpenProject" };
+  | { version: number; type: "requestOpenProject" }
+  /** Sai do modo de autoria com "Salvar Símbolo" -- `components` é a sessão de autoria completa no
+   * momento do clique (não o circuito real, ver `enterSymbolAuthoring`). A Extension compila isso
+   * num `PackageDescriptor` (`extension.ts::compileSymbolAuthoringComponents`) e escreve de volta no
+   * `package` do `filePath` original, preservando todas as outras chaves do manifesto. */
+  | { version: number; type: "requestSaveSymbol"; filePath: string; typeId: string; components: WebviewComponentModel[] };
 
 export function isHostMessage(value: unknown): value is HostToWebviewMessage {
   return typeof value === "object" && value !== null && "type" in value && "version" in value;

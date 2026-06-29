@@ -23,11 +23,13 @@ public:
     std::span<const MemoryRegion> memoryRegions() const override { return m_memoryRegions; }
     std::span<const PinMapping> pinMap() const override { return m_pinMappings; }
 
-    /** Plugin de MCU via mcu_abi.h ainda não tem como declarar módulos concretos (QemuModule é
-     * conceito só do lado C++ do Core, sem equivalente na ABI C ainda) -- vazio até essa extensão
-     * existir. Não é um esquecimento: adaptadores built-in (ex: Esp32Adapter) são o caminho real
-     * hoje, plugin de MCU de terceiro é o caso ainda não construído. */
-    std::vector<std::unique_ptr<QemuModule>> createModules() const override { return {}; }
+    /** Chama `LsdnMcuVTable::create_modules` (major 2+) e envolve cada `LsdnQemuModuleHandle`
+     * devolvido num `QemuModuleProxy` -- mesmo papel que um adaptador built-in faz devolvendo
+     * `QemuModule`s C++ direto. `memStart`/`memEnd` de cada módulo vêm de `m_memoryRegions` (já
+     * resolvidos no construtor via `get_memory_regions`), casando por `moduleKind`/`moduleIndex`.
+     * Plugin compilado contra uma ABI sem `create_modules` (ou que devolve 0 módulos) resulta em
+     * vetor vazio -- mesmo comportamento de antes da major 2 (pino sempre flutuante). */
+    std::vector<std::unique_ptr<QemuModule>> createModules() const override;
 
 private:
     static MemoryRegion toCoreRegion(const LsdnMemoryRegion& region);

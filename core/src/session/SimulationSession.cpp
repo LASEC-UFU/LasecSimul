@@ -93,7 +93,7 @@ void SimulationSession::registerKnownPluginTypes() {
 
 void SimulationSession::registerKnownMcuTypes() {
     for (const std::string& chipId : m_globalCache.knownMcuChipIds()) {
-        m_mcus.registerFactory(chipId, [this, chipId] { return m_pluginRuntime.createMcuAdapter(chipId); });
+        m_mcus.replaceFactory(chipId, [this, chipId] { return m_pluginRuntime.createMcuAdapter(chipId); });
     }
 }
 

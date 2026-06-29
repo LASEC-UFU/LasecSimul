@@ -250,14 +250,13 @@ de plugin deve ser suficiente para o host renderizar e editar o componente sem c
 A intenção da ABI já era clara; o que faltava era deixar isto inequívoco — qualquer função nova adicionada à
 ABI segue estas regras por padrão, sem precisar repeti-las:
 
-- **Buffers de saída são sempre pré-alocados pelo lado que lê.** Em `get_state(dev, out, cap)`,
-  `bus_read(ctx, bus, out, cap)`: quem chama aloca `out`/`cap`; quem é chamado só escreve até `cap`, nunca
-  realoca nem faz `free` do buffer do chamador. Nenhuma função desta ABI transfere ownership de memória
-  heap-alocada através da fronteira.
+- **Buffers de saída são sempre pré-alocados pelo lado que lê.** Em `get_state(dev, out, cap)`: quem chama
+  aloca `out`/`cap`; quem é chamado só escreve até `cap`, nunca realoca nem faz `free` do buffer do chamador.
+  Nenhuma função desta ABI transfere ownership de memória heap-alocada através da fronteira.
 - **Ponteiros passados como parâmetro (`const char*`, `const uint8_t*`) só são válidos durante a chamada.**
   Nem host nem plugin podem reter um ponteiro recebido como argumento depois que a função retorna — quem
   precisa do dado depois deve copiá-lo antes de retornar. Isso vale para `log(ctx, level, msg)`,
-  `bus_write(ctx, bus, data, len)`, etc.
+  `set_property(dev, key, value)`, etc. — inclusive a string retornada por `pin_name(host_ctx, index)`.
 - **Strings retornadas por valor em structs (`LsdnQemuLaunchSpec.binary`/`.args`) devem apontar para memória
   estática ou de vida igual à instância** (ex: `static const char*` ou campo de `LsdnDevice`) — o host as lê
   imediatamente após a chamada e não as copia ali; se precisar reter, copia antes do próximo passo do
@@ -275,18 +274,22 @@ ABI segue estas regras por padrão, sem precisar repeti-las:
 #pragma once
 #include <stdint.h>
 
-#define LSDN_ABI_VERSION_MAJOR 1
+#define LSDN_ABI_VERSION_MAJOR 3
 #define LSDN_ABI_VERSION_MINOR 0
+/* Changelog (git log é a fonte completa, isto é só orientação rápida):
+ * Major 2: removidos bus_attach/bus_write/bus_read de LsdnHostApi e LSDN_EVT_BUS_WRITE/
+ *          LSDN_EVT_BUS_READ_REQUEST de LsdnEventTag — esse caminho (barramento por bytes, sem
+ *          simular SDA/SCL/SCK reais) nunca foi ligado a um SimulationSession real.
+ * Major 3: pin_write/pin_write_analog/pin_read/now_ns/schedule_event deixaram de ser stubs vazios
+ *          e passaram a ser reais; pin_watch saiu (redundante — todo pino já recebe
+ *          LSDN_EVT_PIN_CHANGE automaticamente); entrou pin_name. */
 
 typedef struct LsdnDevice LsdnDevice; // opaco — só o plugin sabe o que tem dentro
 
 typedef enum { LSDN_PIN_DIGITAL_IN, LSDN_PIN_DIGITAL_OUT, LSDN_PIN_DIGITAL_BIDIR,
                LSDN_PIN_ANALOG_IN, LSDN_PIN_ANALOG_OUT, LSDN_PIN_PWM_OUT, LSDN_PIN_POWER } LsdnPinKind;
 
-typedef enum { LSDN_BUS_ROLE_MASTER = 0, LSDN_BUS_ROLE_SLAVE = 1 } LsdnBusRole;
-
-typedef enum { LSDN_EVT_PIN_CHANGE = 1, LSDN_EVT_TIMER = 2, LSDN_EVT_BUS_WRITE = 3,
-               LSDN_EVT_BUS_READ_REQUEST = 4 } LsdnEventTag;
+typedef enum { LSDN_EVT_PIN_CHANGE = 1, LSDN_EVT_TIMER = 2 } LsdnEventTag;
 
 typedef struct { uint32_t tag, a, b, c; } LsdnEvent;
 
@@ -452,7 +455,7 @@ flags (`hidden`/`readOnly`/`noCopy`/`affectsTopology`/`requiresRestart`/`showOnS
 | `vt->init` | `(LsdnDevice*) -> void` | uma vez, após `create` |
 | `vt->stamp` | `(LsdnDevice*, LsdnMatrixView*) -> void` | só quando "dirty" (topologia/propriedade mudou) |
 | `vt->post_step` | `(LsdnDevice*, uint64_t time_ns) -> void` | só se o device se registrou como dinâmico |
-| `vt->on_event` | `(LsdnDevice*, const LsdnEvent*) -> void` | pin-change, bus, timer |
+| `vt->on_event` | `(LsdnDevice*, const LsdnEvent*) -> void` | pin-change, timer |
 | `vt->get_state` / `vt->set_state` | buffers de serialização | salvar/abrir projeto |
 | `vt->destroy` | `(LsdnDevice*) -> void` | remoção do componente |
 
@@ -464,11 +467,10 @@ crescer a vtable (OCP), igual ao desenho original do ABI WASM.
 | Campo da vtable | Assinatura | Uso |
 |---|---|---|
 | `pin_declare` | `(ctx, index, kind, name) -> uint32_t` | registra pino do manifesto, retorna handle |
-| `pin_write` / `pin_write_analog` | `(ctx, pin, level/volts) -> void` | escreve nível digital/analógico/PWM |
-| `pin_read` | `(ctx, pin) -> int32_t` | lê nível do nó conectado |
-| `pin_watch` | `(ctx, pin, enable) -> void` | habilita `LSDN_EVT_PIN_CHANGE` |
-| `bus_attach` / `bus_write` / `bus_read` | ver seção 8 | I2C/SPI/UART |
-| `schedule_event` | `(ctx, delay_ns, event_id) -> void` | agenda `LSDN_EVT_TIMER` |
+| `pin_write` / `pin_write_analog` | `(ctx, pin, level/volts) -> void` | dirige o próprio pino diretamente na matriz real (atalho ergonômico — equivalente a `stamp()` via `LsdnMatrixView`), nunca stub |
+| `pin_read` | `(ctx, pin) -> int32_t` | tensão do próprio pino na última `stamp()` (cache, nunca dispara solve novo) |
+| `pin_name` | `(ctx, index) -> const char*` | nome do pino (mesma ordem de `device.json` `pins[]`) — usado por device pra validar a ordem declarada bate com a esperada (ver `validate_pin_order()`) |
+| `schedule_event` | `(ctx, delay_ns, event_id) -> void` | agenda `LSDN_EVT_TIMER`, real (não stub) |
 | `config_get` | `(ctx, property_id, out_value) -> uint32_t` | lê configuração persistida do manifesto/projeto, em tipo genérico |
 | `now_ns` | `(ctx) -> uint64_t` | tempo de simulação (determinístico) |
 | `log` | `(ctx, level, msg) -> void` | aparece no Output do VSCode (via IPC até a Extension) |
@@ -499,99 +501,71 @@ intermediário, sem cópia:
 | `BIDIR` | direção corrente decide qual comportamento acima se aplica |
 | `POWER` | referência; não participa de `stamp()` como sinal |
 
-## 8. Modelo de comunicação I2C, SPI, UART e GPIO
+## 8. Modelo de comunicação I2C, SPI, UART e GPIO — decodificação bit a bit, sem módulo de barramento
 
-Mesma divisão de responsabilidade já validada no desenho anterior, agora mediada pelo `BusController` nativo
-(`core/src/components/bus/BusController.{h,cpp}`):
+**O desenho anterior desta seção (módulo de barramento genérico, `BusController`/`IBusParticipant`,
+`I2cBusModule`/`SpiBusModule`) foi avaliado, implementado, testado, e descartado** — nunca chegou a ser
+ligado a um `SimulationSession` real, só os próprios testes do subsistema o exercitavam. Foi substituído por
+um mecanismo mais simples, construído e testado nesta sessão (2026-06-28):
 
-- **GPIO**: conjunto de pinos digitais independentes (seção 7); reaproveitado sem alteração quando o pino é
-  exposto como periférico de um MCU emulado.
-- **I2C**: seleção **por endereço de protocolo**. `BusController` mapeia `endereço -> IBusParticipant` por
-  `bus_id`; roteia `LSDN_EVT_BUS_WRITE`/`LSDN_EVT_BUS_READ_REQUEST` ao slave correspondente.
-- **SPI**: seleção **elétrica**, via pino Chip-Select comum (`DIGITAL_IN`); `BusController` encaminha bytes só
-  ao device com CS ativo no instante da transferência.
-- **UART**: ponto-a-ponto, framing de byte feito pelo host; usa a mesma interface `IBusParticipant` por
-  consistência (preparado para RS-485/multiponto futuro).
+- **GPIO**: conjunto de pinos digitais independentes (seção 7); sem alteração quando o pino é exposto como
+  periférico de um MCU emulado.
+- **I2C/SPI/UART**: decodificados **bit a bit pelo próprio device**, nunca por um módulo de barramento
+  intermediário. `SimulationSession::settleStep()` detecta borda digital real (quando a tensão de um nó
+  cruza `kDigitalLevelThreshold`, 2.5V, `core/include/lasecsimul/Types.hpp`) e dispara
+  `ComponentEvent{kPinChangeEventTag, localPinIndex, nivel, nsDesdeABordaAnterior}` (que chega ao plugin como
+  `LsdnEvent{LSDN_EVT_PIN_CHANGE, ...}` via `on_event`) para **todo** componente/pino presente naquele nó —
+  built-in ou plugin, sem distinção, sem precisar de registro prévio (`pin_watch` foi removido por ser
+  redundante com isso).
+- Quem decodifica start/stop/ACK (I2C) ou shift bit-a-bit (SPI) é o **próprio device**, com a lógica que ele
+  já precisa ter de qualquer forma para entender o protocolo — ver `devices/simulide-complex/src/lib.c`
+  (`i2c_clock_bit`, `pcd8544_clock_bit`, `max_clock_bit`, `ws_edge`, etc.) como referência real de
+  implementação.
 
-```cpp
-// include/lasecsimul/IBusParticipant.hpp
-class IBusParticipant {
-public:
-    virtual ~IBusParticipant() = default;
-    virtual BusRole role() const = 0;
-    virtual std::optional<uint8_t> address() const = 0; // só I2C
-    virtual void onBusWrite(std::span<const uint8_t> data) = 0;
-    virtual std::vector<uint8_t> onBusReadRequest() = 0;
-};
-```
+Um sensor nativo e um adaptador de MCU (ESP32, por exemplo) conversam pelos mesmos `Pin`s reais do circuito —
+nenhuma ponte dedicada plugin↔MCU é necessária, e nenhum dos dois lados sabe se quem está do outro lado do
+fio é um MCU emulado ou outro componente.
 
-Um sensor nativo e um adaptador de MCU (ESP32, por exemplo) conversam pelo mesmo `BusController`, registrados
-como dois `IBusParticipant` no mesmo `bus_id` — nenhuma ponte dedicada plugin↔MCU é necessária (mesma
-conclusão do desenho anterior, agora sem custo de cosimulação nenhum).
+**Regra de design**: `Netlist`/`Scheduler` resolvem **só** topologia/tempo — nunca um
+`if (chipFamily == ...)`/`if (typeId == ...)`. Bugs reais achados decodificando protocolo bit a bit (lição
+pra qualquer device novo que decodifique I2C/SPI por borda): `aip31068_i2c.json` tinha SCL/SDA trocados
+(decodificava o protocolo errado silenciosamente); `ili9341.json` usava nomes de pino inconsistentes
+(`mosi`/`rst` em vez de `sda`/`reset`). Mitigação adotada: `pin_name(host_ctx, index)` na ABI (seção 6) +
+`validate_pin_order()` (chamado no `init()` de cada device em `devices/simulide-complex/src/lib.c`), que loga
+erro se a ordem de pino declarada no `device.json` não bate com a esperada.
 
-**Regra de design, não só observação**: `BusController` resolve **só** endereço (I2C) ou CS (SPI) — nunca um
-`if (chipFamily == ...)`/`if (typeId == ...)`. Qualquer diferença de comportamento por protocolo já está
-isolada em `I2cBusModule`/`SpiBusModule`/`UsartModule` (`lasecsimul.spec`, seção 4); diferença por fabricante
-de chip fica isolada no `IMcuAdapter` daquele chip (`MemoryRegion`/`PinMapping`, seção 8.1). Se uma mudança
-futura exigir `BusController` saber "é ESP32" ou "é o plugin X", é sinal de que a lógica está no lugar errado.
+### 8.1 MCU emulado (QEMU) com periférico I2C/SPI do outro lado — módulo é chip-específico, não genérico
 
-### 8.1 Um device customizado em I2C/SPI precisa de QEMU? Depende do que está do outro lado do barramento
+Pergunta recorrente ao descrever um device novo: "preciso de QEMU pra falar I2C/SPI com um chip?" — resposta
+baseada no mecanismo real confirmado contra o fork QEMU (`C:\SourceCode\qemu_simulide`) e o SimulIDE atual
+(`C:\SourceCode\simulide_2`), não suposição:
 
-Pergunta recorrente ao descrever um device novo — resposta com base no mecanismo real já validado pelo
-SimulIDE-dev (`SimulIDE-dev/src/microsim/cores/qemu/{qemutwi,qemuspi}.{h,cpp}` e
-`SimulIDE-dev/src/microsim/modules/twi/twimodule.h`), não numa suposição de design:
-
-- **Sem MCU envolvido** (seu device fala I2C/SPI com outro device customizado, ou com um built-in, ou até
-  atua como master de um device slave): nunca toca QEMU. Os dois lados implementam `IBusParticipant`, o
-  `BusController` resolve endereço (I2C) ou CS (SPI) e pronto. Isso já é o caminho descrito acima.
-- **Com um MCU emulado do outro lado**: o `IMcuAdapter` daquele chip **não** implementa `IBusParticipant`
-  diretamente. O periférico I2C/SPI do MCU é, no QEMU usado (build modificado por chip), um conjunto de
-  registradores cujos acessos da CPU emulada são exportados como eventos para o Core via a arena de memória
-  compartilhada (`QemuArenaBridge`, ver `lasecsimul.spec` seção 8). Quem efetivamente implementa
-  `IBusParticipant` nesse caso é um **módulo de barramento genérico do próprio Core**
-  (`I2cBusModule`/`SpiBusModule` — equivalentes a `TwiModule`/`SpiModule` do SimulIDE), que traduz esses
-  eventos de registrador em protocolo de barramento real (start/stop/ACK, shift bit-a-bit) sobre os mesmos
-  `Pin`s do circuito. **Esse módulo é escrito uma única vez e reusado por qualquer chip** — o adaptador de
-  cada MCU só declara qual faixa de endereço de memória pertence a qual periférico; nunca reimplementa I2C
-  ou SPI.
-- Consequência prática: um device customizado nunca precisa saber se o master/slave do outro lado é um MCU
-  emulado ou outro device — ele só implementa `IBusParticipant` contra o `BusController`, sempre. A
-  dependência de QEMU é inteira do lado do MCU, e mesmo ali fica isolada no `I2cBusModule`/`SpiBusModule`
-  genérico, nunca no device do usuário.
-
-### 8.2 Desenho interno de `I2cBusModule`/`SpiBusModule` — validado, ainda não implementado
-
-Decisões fixadas agora (lendo `TwiModule`/`SpiModule.cpp` reais do SimulIDE-dev, não suposição), pra quando a
-implementação acontecer (depois do pipeline mínimo de QEMU — ver ordem de implementação já combinada).
-Nenhum código aqui ainda, só o contrato que a implementação futura precisa seguir:
-
-1. **Master é agendado por evento; slave é puramente reativo.** O lado master do barramento avança bit a
-   bit via `Scheduler::scheduleEvent()` (um evento por meio-período de clock — mesmo papel de
-   `Simulator::addEvent()` no `TwiModule::runEvent()`). O lado slave **nunca agenda nada própria** — só
-   reage quando o pino de clock/dado muda (equivalente a `voltChanged()`), via o mecanismo de listener por
-   nó que já temos (`Topology::listenersByNode`). Consequência de escalabilidade: um barramento com N slaves
-   custa O(1) evento agendado (só o master) enquanto está parado — adicionar slave não adiciona custo de
-   agendamento, só mais um listener passivo.
-2. **Vocabulário de estado neutro, nunca emprestado de uma família de chip.** O `TwiModule` real usa nomes
-   de estado do registrador TWSR do AVR (`TWI_MRX_DATA_ACK` etc.) — conveniente pro AVR, mas embute viés de
-   chip num módulo que deveria ser genérico. **Não copiar essa parte**: `I2cBusModule`/`SpiBusModule`
-   reportam estado num vocabulário próprio (`Idle`/`Start`/`Addr`/`Data`/`Ack`/`Nack`/`Stop`), e cada
-   `IMcuAdapter` traduz pro encoding de registrador do chip dele. Mais código de tradução por chip, mas o
-   módulo genérico fica genérico de verdade — coerente com `IMcuAdapter` nunca conhecer outro chip por nome.
-3. **Atraso artificial pequeno pra desambiguar causa/efeito no mesmo instante**, não desempate por ordem de
-   processamento. O `TwiModule` real agenda a resposta do slave 10ns depois do evento que a causou
-   (`scheduleState(bit, 10000)`), evitando que master e slave caiam no mesmo instante simulado. Adotar o
-   mesmo princípio (delay pequeno e configurável, não um número mágico fixo herdado sem revisão) sempre que
-   uma mudança em B for consequência direta de uma mudança em A no mesmo round.
-4. **Nunca acessar o `Scheduler` via singleton/`self()` de dentro do módulo.** O `TwiModule` real chama
-   `Simulator::self()->addEvent(...)` direto — exatamente o padrão de acoplamento global que já decidimos
-   evitar (ver `lasecsimul.spec`, lista do que não copiar do SimulIDE). `I2cBusModule`/`SpiBusModule` recebem
-   uma referência ao `Scheduler` da própria `SimulationSession` no construtor — nunca um ponteiro estático.
+- **Sem MCU envolvido** (device fala I2C/SPI com outro device customizado ou built-in): nunca toca QEMU. Os
+  dois lados decodificam o protocolo bit a bit via `LSDN_EVT_PIN_CHANGE`, como descrito na seção 8 acima.
+- **Com um MCU emulado do outro lado**: o periférico I2C/SPI do MCU é, no QEMU usado, um conjunto de
+  registradores cujos acessos da CPU emulada são exportados pra arena de memória compartilhada como
+  endereço+valor **bruto, sem decodificação nenhuma** (`hw/gpio/esp32_gpio.c` do fork real confirma isso —
+  QEMU nunca pré-decodifica). Quem dá significado ao registrador (`offset 0x04 = GPIO_OUT_REG`, por exemplo)
+  é um `QemuModule` concreto do lado do Core (`core/include/lasecsimul/QemuModule.hpp`,
+  `Esp32GpioModule` como exemplo hoje) — **achado crítico desta sessão: esse módulo é CHIP-ESPECÍFICO de
+  propósito, não genérico reusado por qualquer chip.** Só `Scheduler`/`Netlist`/IPC/UI precisam ser neutros
+  quanto a chip.
+- `McuComponent` (`core/src/mcu/McuComponent.{hpp,cpp}`, `lasecsimul.spec` seção 8) é a peça que liga isso a
+  pinos de circuito reais: despacha `SIM_READ`/`SIM_WRITE` pro `QemuModule` certo por endereço, e a cada
+  `stamp()` traduz `isOutputEnabled`/`outputLevel` em estampa elétrica real. Uma vez que o sinal chega num
+  `Pin` real do circuito, o resto (decodificação I2C/SPI por borda, seção 8 acima) funciona igual,
+  MCU-emulado ou não — o device do outro lado do fio não distingue os dois casos.
+- Periféricos I2C/SPI/USART reais do ESP32 (`Esp32TwiModule`/`Esp32SpiModule`/`Esp32UsartModule`) ainda não
+  existem — só GPIO puro (`Esp32GpioModule`) está implementado hoje; também falta IOMUX/pin-matrix (tabela de
+  512 entradas roteando periférico pra pino, `Esp32::createMatrix()` real) pra rotear qualquer periférico pra
+  qualquer pino via firmware real. Ver `docs/17-pendencias-pos-sessao-qemu-abi.md`, seção 3.1, para os
+  arquivos de referência reais a copiar fielmente quando esse trabalho acontecer.
 
 ## 9. Modelo de eventos
 
 Igual à seção 9 do `lasecsimul-wasm-devices.spec`: `LsdnEvent { tag, a, b, c }`, entregue via `vt->on_event`.
-Tags fixas (seção 4) cobrem pin-change, timer e barramento; novas tags não exigem nova função na vtable.
+Tags fixas (seção 4) cobrem pin-change e timer; protocolo de barramento é decodificado pelo device a partir
+de eventos de pin-change (seção 8), não por uma tag própria. Novas tags não exigem nova função na vtable.
 
 ## 10. Scheduler de execução dos dispositivos
 
@@ -783,23 +757,28 @@ const LsdnDeviceVTable* lsdn_get_vtable(uint32_t* major, uint32_t* minor) {
 
 ## 17. Exemplo de dispositivo com barramento I2C (sensor de temperatura customizado)
 
+Sem `bus_attach`/módulo de barramento: o device decodifica START/STOP/ACK e bytes MSB-first ele mesmo, a
+partir de `LSDN_EVT_PIN_CHANGE` nos pinos SDA/SCL (mesmo padrão real usado em
+`devices/simulide-complex/src/lib.c` para AIP31068/SSD1306/SH1107 — ver seção 8). Versão simplificada,
+ilustrativa:
+
 ```c
 #include "lasecsimul/device_abi.h"
 
-typedef struct { uint32_t bus; float temperature_c; } DeviceState;
+typedef struct { uint32_t pinSda, pinScl; int sclWasHigh; int started; uint8_t shiftReg; int bitCount;
+                  float temperature_c; } DeviceState;
 
 static void init(LsdnDevice* dev) {
     DeviceState* s = (DeviceState*)dev;
-    // s->bus = host_api->bus_attach(ctx, "i2c0", LSDN_BUS_ROLE_SLAVE, 0x48);
+    s->pinSda = 0; s->pinScl = 1; /* índice local, validado contra pin_name() no init — ver seção 8 */
     s->temperature_c = 25.0f;
 }
 static void on_event(LsdnDevice* dev, const LsdnEvent* ev) {
     DeviceState* s = (DeviceState*)dev;
-    if (ev->tag == LSDN_EVT_BUS_READ_REQUEST) {
-        int16_t raw = (int16_t)(s->temperature_c * 256.0f);
-        uint8_t payload[2] = { (uint8_t)(raw >> 8), (uint8_t)(raw & 0xFF) };
-        // host_api->bus_write(ctx, s->bus, payload, 2); — resposta ao master
-    }
+    if (ev->tag != LSDN_EVT_PIN_CHANGE) return;
+    /* ev->a = pino local, ev->b = novo nível -- detecta START (SDA cai com SCL alto), shift de bit em
+     * borda de subida de SCL, e responde ao endereço 0x48 escrevendo de volta via pin_write quando for
+     * o byte de leitura -- decodificação completa fica no device real, isto é só a forma. */
 }
 // create/stamp/post_step/get_state/set_state/destroy/lsdn_get_vtable: mesmo padrão da seção 16
 ```
@@ -832,7 +811,7 @@ static void on_event(LsdnDevice* dev, const LsdnEvent* ev) {
 | Nível | Ferramenta | O que valida |
 |---|---|---|
 | Unitário (lógica) | testes nativos da linguagem-fonte (`ctest`/`cargo test`) no target nativo de teste | regra de negócio isolada da ABI |
-| Unitário (ABI) | executável de teste que `LoadLibrary` o binário real e injeta estímulos via uma `LsdnHostApi` fake, capturando `pin_write`/`bus_write` | comportamento fiel ao manifesto, fora do Core completo |
+| Unitário (ABI) | executável de teste que `LoadLibrary` o binário real e injeta estímulos via uma `LsdnHostApi` fake, capturando `pin_write`/`pin_write_analog` | comportamento fiel ao manifesto, fora do Core completo |
 | Trace dourado | mesmo harness, modo `--golden` | regressão entre builds |
 | Integração | `LasecSimul Core` headless (sem VSCode, sem QEMU) com netlist mínima carregando o plugin real | comportamento elétrico correto via `MnaSolver` real |
 | Fault injection | harness dedicado: binário sem `lsdn_get_vtable`, com versão de ABI incompatível, que crasha em `init`, que trava em `stamp` | `PluginLoader` rejeita corretamente; `CrashGuard`/watchdog contêm sem derrubar o test runner |
@@ -855,26 +834,33 @@ usuário final.
   da queda, quando recuperável (registrado pelo `CrashGuard` antes de cada chamada).
 
 **QEMU**:
-- Adaptadores de MCU usam a mesma família de vtable (`LsdnMcuVTable`, `mcu_abi.h`), mas **declarativa**, não
-  orientada a evento: `create`/`build_launch_args`/`get_memory_regions`/`get_pin_map`/`destroy`. O adaptador
-  nunca é chamado por pino ou por registrador individual — ele só descreve, uma vez, quais faixas de endereço
-  MMIO do chip pertencem a qual módulo genérico (`LSDN_MODULE_GPIO/I2C/SPI/USART/TIMER`) e qual pino lógico
-  mapeia para qual bit/linha desse módulo. Quem efetivamente processa cada evento em runtime são os módulos
-  genéricos do Core (`I2cBusModule`/`SpiBusModule`/`UsartModule`/`GpioModule`), alimentados pelo
-  `QemuArenaBridge` — mecanismo idêntico ao `QemuModule`+`TwiModule`/`SpiModule` do SimulIDE-dev (ver
-  `lasecsimul.spec`, seção 8). Isso é o que torna "adicionar um MCU" mais barato do que "adicionar um
-  protocolo": o autor do adaptador nunca reimplementa I2C/SPI/USART.
-- Um device nativo e um MCU emulado compartilham o mesmo `BusController` (seção 8.1) — do lado do MCU, quem
-  implementa `IBusParticipant` é o módulo genérico (`I2cBusModule`/`SpiBusModule`), não o `IMcuAdapter`.
-  Nenhuma ponte dedicada device↔MCU é necessária, e sem custo de cosimulação, já que tudo roda no mesmo
-  processo Core.
+- **Adaptador de MCU é sempre plugin DLL/SO** (`mcu_abi.h`, `LsdnMcuVTable`, carregado via
+  `NativeMcuAdapterProxy`) — não existe mais caminho built-in. Até 2026-06-28 só um adaptador built-in (C++
+  compilado direto no Core) conseguia de fato decodificar registrador; nesta data `mcu_abi.h` bumpou para
+  **major 2**: ganhou `LsdnQemuModuleVTable`/`LsdnQemuModuleHandle` e `LsdnMcuVTable::create_modules` —
+  simétrico ao `QemuModule` C++ que só built-in tinha antes (resolve a pendência que a seção 3.4 do
+  `docs/17-pendencias-pos-sessao-qemu-abi.md` deixou aberta). O ESP32
+  (`mcu-adapters/espressif-esp32/`) foi migrado do built-in que existia (removido) pra esse plugin, provando
+  paridade total de desempenho — `QemuModuleProxy` (`core/src/plugins/QemuModuleProxy.hpp`) embrulha o
+  `LsdnQemuModuleHandle` do plugin numa subclasse de `QemuModule`, uma indireção de ponteiro de função C, no
+  mesmo processo do Core, sem IPC — mesmo custo de uma chamada virtual C++ built-in.
+- `create_modules` (novo na major 2) segue o mesmo protocolo de duas chamadas de `get_memory_regions`/
+  `get_pin_map` (`cap=0` só pra contar). Cada `LsdnQemuModuleHandle` devolvido é CHIP-ESPECÍFICO de
+  propósito — não existe módulo genérico (`I2cBusModule`/`SpiBusModule`/`GpioModule`) reusado entre chips;
+  `write_register`/`read_register` são obrigatórias, `reset`/`is_output_enabled`/`output_level`/
+  `set_input_level`/`destroy` são opcionais (`NULL` = no-op/"nunca dirige nada").
+- `McuComponent` (`IComponentModel` real, `lasecsimul.spec` seção 8) é quem liga isso a pinos de circuito de
+  verdade — nenhuma ponte dedicada device↔MCU é necessária: uma vez que o sinal chega a um `Pin` real, a
+  decodificação de protocolo (I2C/SPI/UART) acontece pelo mesmo mecanismo bit a bit da seção 8 acima, sem
+  custo de cosimulação, já que tudo roda no mesmo processo Core.
 
 ## 21. Modelo visual do dispositivo (package) e editor de UI
 
-> Mecanismo de referência validado pelo SimulIDE-dev, não suposição — ver
-> `SimulIDE-dev/src/components/subcircuits/chip.cpp` (`initPackage`/`setPinStr`, campos `width`/`height`/
-> `border`/`background`/`logic_symbol` e `xpos`/`ypos`/`angle`/`length`/`space`/`label`/`type` por pino) e
-> `SimulIDE-dev/src/components/other/subpackage.cpp` (`embeedBackground` — lê um arquivo de imagem e embute
+> Mecanismo de referência validado pelo `simulide_2`, não suposição — ver
+> `C:\SourceCode\simulide_2\src\components\subcircuits\chip.cpp` (`initPackage`/`setPinStr`, campos
+> `width`/`height`/`border`/`background`/`logic_symbol` e `xpos`/`ypos`/`angle`/`length`/`space`/`label`/`type`
+> por pino) e `C:\SourceCode\simulide_2\src\components\other\subpackage.cpp` (`embeedBackground` — lê um
+> arquivo de imagem e embute
 > como bytes no próprio pacote, linha ~459-463). SimulIDE não tem um editor de pacote separado: reaproveita o
 > editor de esquemático, com componentes só-gráficos (`components/graphical/{rectangle,ellipse,line,
 > textcomponent,image}`) e um componente especial (`SubPackage`) que entra em "board mode" para
@@ -937,22 +923,63 @@ de componentes e o pacote do componente).
 
 ### 21.3 Editor de pacote na Extension — mesmo princípio do SimulIDE, não uma ferramenta nova
 
-Não construir um editor vetorial separado. Reaproveitar o **mesmo webview do editor de esquemático**
-(`extension/src/ui/webview/`), com um modo de edição de pacote:
+**Implementado em 2026-06-29** (segunda versão — a primeira, de 2026-06-28, era um canvas SVG bespoke
+com alças de arrastar feitas à mão; descartada depois de revisão com captura de tela real mostrando
+rótulos sobrepostos e visual divergente do renderizador de leitura, e de uma auditoria do fonte real do
+SimulIDE, `C:\SourceCode\simulide_2\src\components\other\subpackage.{h,cpp}` +
+`components\graphical\{rectangle,ellipse,line,textcomponent,image}.{h,cpp}`).
 
-- Redimensionar o corpo arrastando os cantos → escreve `package.width`/`height`.
-- Barra de ferramentas para adicionar retângulo/elipse/linha/texto → cada um é só um item novo em
-  `package.shapes[]`; arrastar/redimensionar no canvas edita os campos numéricos do mesmo item.
-- Clicar numa borda do corpo adiciona um pino ali (ângulo já inferido pela borda clicada); arrastar
-  reposiciona; um popover pequeno edita `id`/`label`/`length` — equivalente direto ao `EditDialog` do
-  `SubPackage` no SimulIDE.
-- Botão "Carregar imagem de fundo" → `vscode.window.showOpenDialog` (SVG/PNG/JPEG) → conteúdo lido e
-  embutido em `package.background.data` (markup inline se SVG, data URI base64 se raster) — mesmo papel do
-  `embeedBackground()` do SimulIDE, mesma garantia de auto-contenção (o manifesto nunca referencia um
-  arquivo de imagem externo).
-- Salvar grava direto em `package`/`pins[]` do `device.json` — **é o mesmo arquivo que alguém poderia editar
-  à mão**; o editor é uma forma confortável de produzir o JSON, nunca um formato/estado paralelo. Abrir um
-  `device.json` escrito manualmente no editor deve renderizar exatamente o que ele descreve, e vice-versa.
+**Achado da auditoria**: o SimulIDE NÃO tem um editor separado. `SubPackage` é só mais um `Component`
+na MESMA `QGraphicsScene` do circuito; `Rectangle`/`Ellipse`/`Line`/`TextComponent`/`Image` também são
+`Component`s comuns ali, redimensionados por **propriedades numéricas** (`H_size`/`V_size`) no MESMO
+painel de propriedades de qualquer resistor — nunca por alça de arrastar. Pino novo: Shift+hover na
+borda do `SubPackage` → clique cria um `PackagePin` (também um `Component` arrastável) → `EditDialog`
+modal pequeno (não tela cheia) pra id/label/ângulo. `SubPackage::savePackage()` varre os pinos que
+mantém e escreve um arquivo `.package`.
 
-Esse painel é só código de Extension (TypeScript/webview) — não depende do Core estar rodando, e o Core nunca
-precisa ser tocado para isso existir.
+**Reimplementação fiel a esse princípio**: não existe mais canvas/alça/barra lateral bespoke. A
+"edição de pacote" é uma **sessão de autoria** dentro do MESMO webview do esquemático — `main.ts`
+troca temporariamente qual `WebviewProjectState` `render()`/drag/seleção/painel de propriedades operam
+em cima (`enterSymbolAuthoring`/`exitSymbolAuthoring`/`saveSymbolAuthoring`), sem nenhum código de
+renderização/interação novo: tudo isso já era genérico sobre a variável `state`, nunca soube que era
+"o circuito do usuário" especificamente.
+
+- `other.package` (typeId já existia no catálogo, desabilitado — agora habilitado e property-driven:
+  `width`/`height`/`border`/`backgroundColor`) representa o corpo do símbolo. `graphics.rectangle`/
+  `ellipse`/`line`/`text` (também já existiam, decorativos — agora property-driven) representam as
+  formas. `other.package_pin` (NOVO typeId) representa um pino do símbolo: `pinId`/`label`/`length`
+  como propriedades, o **ângulo do lead é o próprio `component.rotation`** (0/90/180/270, já genérico
+  pra qualquer componente — reaproveita rotação por teclado/toolbar sem nenhum campo/código novo).
+  Todos com `pinCount: 0`, nunca sincronizados com o Core (`shouldSyncComponentToCore`, já existia).
+- Resize: só por campo numérico no painel de propriedades (`inferPropertyFields`, já existia, nunca
+  precisou de mudança) — **igual ao SimulIDE real**, não uma alça de arrastar nova.
+- Adicionar pino: colocar um `other.package_pin` na paleta, posicionar arrastando (drag genérico de
+  qualquer componente), girar com o atalho de rotação genérico. Sem o gesto "Shift+hover na borda" do
+  SimulIDE (decisão de simplificação: a paleta já é o caminho de "adicionar algo" de todo o resto do
+  app, não duplicar um segundo gesto só pra isto).
+- Sem upload de imagem de fundo nesta rodada (só cor sólida via `backgroundColor`) — um `package` que já
+  tinha fundo `svg`/`image` escrito à mão é **preservado verbatim** ao salvar
+  (`extension.ts::saveSymbolCommand` relê o valor atual do disco antes de compilar), nunca apagado
+  silenciosamente.
+- Salvar ("Salvar Símbolo" na barra, só aparece durante a sessão de autoria) varre os componentes da
+  sessão (`extension/src/catalog/symbolAuthoring.ts::compileSymbolAuthoringComponents`), espera
+  exatamente 1 `other.package` (erro claro com 0 ou mais de 1), e grava de volta só a chave `package` do
+  manifesto original (relido do disco) — **é o mesmo arquivo que alguém poderia editar à mão**, exatamente
+  como especificado.
+- Abrir pra editar (`seedSymbolAuthoringComponents`, inverso exato de compilar) semeia a sessão a partir
+  do `package` já existente — round-trip sem perda pra retângulo/elipse/texto/pino; `graphics.line` perde
+  precisão de ângulo não-cardinal (vira o múltiplo de 90° mais próximo, já que só rotação genérica de
+  4 valores existe) — nenhum dos manifestos reais do projeto usa ângulo de linha não-cardinal hoje.
+
+Pontos de entrada (decisão de implementação, não descritos no texto original): botão "✎" por item
+registrado na paleta (`palette.ts`, sessão abre já semeada com o `package` daquele item) e comando
+genérico `lasecsimul.palette.editSymbol` (botão na barra de título da paleta) que abre um seletor de
+arquivo — permite editar o símbolo de um manifesto ainda não registrado.
+
+Esse fluxo é só código de Extension (TypeScript/webview) — não depende do Core estar rodando, e o Core
+nunca precisa ser tocado para isso existir (nenhum dos typeIds novos/alterados tem pino elétrico real).
+**O que isto não inclui** (fora de escopo desta rodada, ver `.spec/lasecsimul-subcircuits.spec` seção 4
+e `docs/16-roadmap-pendencias-spec.md` Épico G): o comando "Criar Subcircuito a partir da Seleção"
+(detectar fios cruzando a borda de uma seleção no esquemático e gerar tunnels automaticamente) — esse
+fluxo ainda não existe; a sessão de autoria hoje só edita o `package` de um manifesto que já tem seus
+pinos elétricos declarados à mão.

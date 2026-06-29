@@ -27,7 +27,6 @@
 #include "../components/passive/Inductor.hpp"
 #include "../components/passive/Resistor.hpp"
 #include "../components/sources/DcVoltageSource.hpp"
-#include "../mcu/esp32/Esp32Adapter.hpp"
 #include <nlohmann/json.hpp>
 #include <array>
 #include <cstdio>
@@ -499,13 +498,6 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
                             englishName("Logic Analyzer"));
 }
 
-void registerBuiltinMcuAdapters(registry::McuRegistry& reg) {
-    if (reg.contains("espressif.esp32")) return;
-    reg.registerFactory("espressif.esp32", [] {
-        return std::make_unique<mcu::esp32::Esp32Adapter>();
-    });
-}
-
 } // namespace
 
 // ── dispatch de mensagens IPC ──────────────────────────────────────────────────
@@ -831,6 +823,42 @@ void loadDeviceLibraryFile(const std::filesystem::path& libraryJsonPath, GlobalP
     }
 }
 
+/** Mesmo padrão de `loadDeviceLibraryFile`, para a chave `"mcus"` de `library.json` (adaptador de
+ * MCU via plugin nativo, ver `mcu_abi.h`). Cada entrada `{chipId, manifest}` aponta pra um
+ * `mcu.json` cujo `nativeEntry[plataforma]` é resolvido e carregado via `PluginLoader::loadMcuPlugin`
+ * — mesma convenção de caminho relativo de `loadDeviceLibraryFile`. */
+void loadMcuLibraryFile(const std::filesystem::path& libraryJsonPath, GlobalPluginCache& pluginCache) {
+    std::ifstream libraryFile(libraryJsonPath);
+    if (!libraryFile) throw std::runtime_error("library.json não encontrado: " + libraryJsonPath.string());
+    nlohmann::json library;
+    libraryFile >> library;
+
+    if (!library.contains("mcus") || !library["mcus"].is_array()) return;
+    const std::filesystem::path libraryDir = libraryJsonPath.parent_path();
+
+    for (const auto& mcuEntry : library["mcus"]) {
+        const std::string chipId = mcuEntry.value("chipId", std::string{});
+        const std::string manifestRelative = mcuEntry.value("manifest", std::string{});
+        if (chipId.empty() || manifestRelative.empty()) continue;
+
+        const std::filesystem::path manifestPath = libraryDir / manifestRelative;
+        std::ifstream manifestFile(manifestPath);
+        if (!manifestFile) throw std::runtime_error("mcu.json não encontrado: " + manifestPath.string());
+        nlohmann::json mcu;
+        manifestFile >> mcu;
+
+        if (!mcu.contains("nativeEntry") || !mcu["nativeEntry"].contains(kPlatformKey)) {
+            throw std::runtime_error("mcu.json sem nativeEntry para a plataforma atual ('" +
+                                      std::string(kPlatformKey) + "'): " + manifestPath.string());
+        }
+        const std::filesystem::path binaryPath =
+            manifestPath.parent_path() / mcu["nativeEntry"][kPlatformKey].get<std::string>();
+
+        std::shared_ptr<PluginModule> module = pluginCache.loader().loadMcuPlugin(binaryPath);
+        pluginCache.setActiveMcuModule(chipId, module);
+    }
+}
+
 } // namespace
 
 namespace {
@@ -1116,6 +1144,7 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
                 msg.payloadJson.empty() ? nlohmann::json::object() : nlohmann::json::parse(msg.payloadJson);
             const std::string libraryPath = payload.value("path", std::string{});
             loadDeviceLibraryFile(libraryPath, pluginCache);
+            loadMcuLibraryFile(libraryPath, pluginCache);
             loadSubcircuitLibraryFile(libraryPath, session.subcircuits());
             // Reaplica: registra factory pra qualquer typeId que ficou ativo agora (chamar de novo
             // é idempotente — só reatribui no map, ver ComponentRegistry::registerFactory).
@@ -1159,7 +1188,6 @@ CoreApplication::CoreApplication(CoreConfig config)
     registerBuiltinComponents(m_impl->session.components(), m_impl->pluginCache.metadata(), m_impl->session.scheduler());
     m_impl->session.registerKnownPluginTypes();
     m_impl->session.registerKnownMcuTypes();
-    registerBuiltinMcuAdapters(m_impl->session.mcus());
 
     m_impl->ipcServer.setMessageHandler([this](const IncomingMessage& msg) {
         return handleMessage(msg, m_impl->session, m_impl->ipcServer, m_impl->pluginCache);

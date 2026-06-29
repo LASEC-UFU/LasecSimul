@@ -10,20 +10,24 @@ Adapter ESP32, launch args, regiões MMIO e mapa de pinos.
 
 ## Contexto
 
-A ESP32 roda via QEMU modificado. O adapter descreve launch, MMIO e pinos, não emula CPU.
+A ESP32 roda via QEMU modificado. O adapter descreve launch, MMIO e pinos, não emula CPU. **Sempre
+via plugin DLL/SO (`mcu_abi.h`) — não existe, e não deve ser criado, caminho built-in compilado no
+Core.** Decisão tomada em 2026-06-28 ao migrar o adapter do caminho built-in que existia em
+`core/src/mcu/esp32/` (removido) para `mcu-adapters/espressif-esp32/` — mesmo desempenho dos dois
+(chamada de função C indireta, mesmo processo, sem IPC), sem precisar recompilar o Core por chip.
 
 ## Arquivos que pode criar
 
-- `core/src/mcu/esp32/Esp32Adapter.hpp`.
-- `core/src/mcu/esp32/Esp32Adapter.cpp`.
-- `core/src/mcu/esp32/Esp32MemoryMap.hpp`.
-- `test/core/mcu/Esp32AdapterTest.cpp`.
+- `mcu-adapters/espressif-esp32/src/Esp32Adapter.cpp` (módulo(s) `LsdnQemuModuleVTable` novos, se
+  necessário).
+- `core/test/core/mcu/Esp32AdapterTest.cpp`.
 
 ## Arquivos que pode modificar
 
 - `mcu-adapters/espressif-esp32/mcu.json`.
 - `mcu-adapters/espressif-esp32/src/Esp32Adapter.cpp`.
-- `core/include/lasecsimul/IMcuAdapter.hpp` em acordo com agente 11.
+- `core/include/lasecsimul/mcu_abi.h` em acordo com agente 11 (mudança de ABI pública, bump de
+  versão).
 - `core/src/registry/McuRegistry.hpp`.
 
 ## Arquivos que não pode modificar
@@ -35,14 +39,15 @@ A ESP32 roda via QEMU modificado. O adapter descreve launch, MMIO e pinos, não 
 ## Dependências
 
 - Agente 11 para QEMU bridge.
-- Agente 13 para adapter MCU nativo, se plugin for usado.
+- Agente 13 para o proxy de plugin de MCU (`NativeMcuAdapterProxy`/`QemuModuleProxy`).
 
 ## Interfaces obrigatórias
 
-- `chipId`: `espressif.esp32` ou id definido no manifesto.
-- `buildLaunchArgs`.
-- `getMemoryRegions`.
-- `getPinMap`.
+- `chipId`: `espressif.esp32` ou id definido no manifesto (`mcu.json`, não na vtable).
+- `build_launch_args`.
+- `get_memory_regions`.
+- `get_pin_map`.
+- `create_modules` (mcu_abi.h major 2+) para periféricos que decodificam registrador de verdade.
 - Declaração de dependência de QEMU compatível.
 
 ## Tarefas
@@ -80,7 +85,9 @@ A ESP32 roda via QEMU modificado. O adapter descreve launch, MMIO e pinos, não 
 
 ## Observações de integração
 
-Protocolos de barramento devem ficar em módulos genéricos do Core, não no adapter ESP32.
+Protocolo de barramento (I2C/SPI/UART) é decodificado bit a bit pelo device do outro lado do fio, a
+partir de `LSDN_EVT_PIN_CHANGE` — não existe módulo genérico de barramento no Core, e o adapter ESP32
+nunca decodifica protocolo, só registrador GPIO/IOMUX/periférico bruto.
 
 ## O que não fazer
 

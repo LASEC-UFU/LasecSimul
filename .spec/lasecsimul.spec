@@ -9,7 +9,7 @@ Status: rascunho | Tipo: extensão VSCode (UI) + núcleo nativo C++ (simulação
 > WASM descrita em `lasecsimul-wasm-devices.spec` (agora superseded; ver `lasecsimul-native-devices.spec`).
 > Motivação registrada na conversa de design: rodar **todo** componente (R, L, C, fontes, instrumentos) via
 > um mecanismo de plugin com overhead de IPC/worker tornaria o simulador lento mesmo para circuitos triviais
-> — confirmado comparando com `SimulIDE-dev/src/simulator/elements/passive/e-resistor.cpp`, onde `stamp()`
+> — confirmado comparando com `C:\SourceCode\simulide_2\src\simulator\elements\passive\e-resistor.cpp`, onde `stamp()`
 > roda uma única vez (não a cada passo) e o dispatch é uma chamada de função direta em processo único.
 
 ---
@@ -205,14 +205,17 @@ de um jeito que tornaria um shell futuro mais caro do que precisa ser. Ver ADR 0
 │  └─────┬──────┘                                                │      │
 │        │                                          PluginRuntime (desta sessão)
 │  ┌─────▼─────────────┐  ┌──────────────┐  ┌──────────────────┐ │      │
-│  │ Built-in components│  │ BusController│  │ NativeDeviceProxy│◄┘      │
-│  │ (compilados no Core)│ │ (I2C/SPI/UART)│ │ (= PluginInstance)│        │
-│  └────────────────────┘  └──────────────┘  └──────────────────┘        │
+│  │ Built-in components│  │  McuComponent │  │ NativeDeviceProxy│◄┘      │
+│  │ (compilados no Core)│ │ (pinos reais, │  │ (= PluginInstance)│        │
+│  │                     │ │  via QemuModule)│ └──────────────────┘        │
+│  └────────────────────┘  └──────────────┘                              │
+│  Detecção de borda (settleStep) despacha ComponentEvent{kPinChangeEventTag} │
+│  pra todo componente/pino do nó — é assim que I2C/SPI/UART são decodificados │
 │                                                                      │
 │  ┌──────────────────────────────────────────────────────────────┐  │
-│  │ QEMU Integration: QemuProcessManager · QemuArenaBridge        │  │
-│  │ (arena de memória compartilhada + dispatch por endereço,      │  │
-│  │  ver seção 8 — mesmo mecanismo validado pelo SimulIDE-dev)     │  │
+│  │ QEMU Integration: QemuProcessManager · QemuModule (por chip)  │  │
+│  │ (arena de memória compartilhada + dispatch por endereço bruto,│  │
+│  │  ver seção 8 — mecanismo validado contra o fork QEMU real)     │  │
 │  └───────────────────────────────┬──────────────────────────────┘  │
 └──────────────────────────────────┼─────────────────────────────────┘
                                     │ child process (spawn/exec)
@@ -225,15 +228,16 @@ de um jeito que tornaria um shell futuro mais caro do que precisa ser. Ver ADR 0
 | Módulo (Core, C++) | Responsabilidade única (SRP) |
 |---|---|
 | `GlobalPluginCache` | Estado compartilhado entre sessões: `PluginModule` ativo por `typeId`/`chipId`, manifestos parseados, `ComponentMetadataRegistry`. Nunca mutado fora de um load/versioned-swap; sessões só leem. |
-| `SimulationSession` | Unidade de isolamento lógico de um projeto aberto: dona de `Netlist`, `Scheduler`, `PluginRuntime`, `BusController`, `QemuProcessManager` dessa sessão. **Escopo atual: exatamente uma sessão por processo Core** — o tipo existe para que isso não seja um singleton implícito, não porque múltiplas sessões simultâneas sejam suportadas hoje. |
+| `SimulationSession` | Unidade de isolamento lógico de um projeto aberto: dona de `Netlist`, `Scheduler`, `PluginRuntime`, `QemuProcessManager` dessa sessão. **Escopo atual: exatamente uma sessão por processo Core** — o tipo existe para que isso não seja um singleton implícito, não porque múltiplas sessões simultâneas sejam suportadas hoje. |
 | `MnaSolver` | Monta e resolve a matriz (Modified Nodal Analysis + Newton-Raphson para não-lineares) |
 | `Scheduler` | Avança o tempo de simulação, decide quando re-stampar (changed-list, ver seção 7) |
 | `ComponentRegistry` / `McuRegistry` | Mapa `typeId`/`chipId` → fábrica de `IComponentModel`/`IMcuAdapter`, por sessão |
 | `PluginLoader` / `PluginRuntime` | `PluginLoader` (em `GlobalPluginCache`) descobre/valida/carrega DLL/SO; `PluginRuntime` (por sessão) cria/destrói instâncias a partir do módulo ativo. Distinção completa em `lasecsimul-native-devices.spec`, seção 1. |
 | `NativeDeviceProxy` / `NativeMcuAdapterProxy` | `PluginInstance` — adaptam a vtable C de um plugin (via `shared_ptr<PluginModule>`) para a interface C++ interna; solver não distingue plugin de built-in |
-| `BusController` | Roteia I2C/SPI/UART entre participantes (componentes, MCUs), por sessão |
-| `I2cBusModule` / `SpiBusModule` / `UsartModule` | Protocolo de barramento bit-a-bit sobre `Pin`s reais — implementados uma vez, reusados por qualquer chip (equivalentes a `TwiModule`/`SpiModule` do SimulIDE) |
-| `QemuProcessManager` / `QemuArenaBridge` | Ciclo de vida do processo QEMU + arena de memória compartilhada + dispatch de eventos de registrador por faixa de endereço |
+| `McuComponent` | `IComponentModel` que liga um `IMcuAdapter` ao circuito de verdade: polling da arena, despacho `SIM_READ`/`SIM_WRITE` pro `QemuModule` certo (por endereço), estampa elétrica real a partir de `isOutputEnabled`/`outputLevel` |
+| `QemuModule`/`QemuModuleProxy` (por chip/periférico, ex: GPIO do ESP32 via plugin) | Decodifica registrador bruto (`regAddr`/`regData`) — CHIP-ESPECÍFICO de propósito, único lugar que conhece o mapa de registrador real. Sempre via plugin (`mcu_abi.h`/`LsdnQemuModuleVTable`) desde 2026-06-28 — não existe mais `QemuModule` built-in |
+| Detecção de borda digital (`SimulationSession::settleStep()`) | Substitui o antigo `BusController`: ao cruzar `kDigitalLevelThreshold`, despacha `ComponentEvent{kPinChangeEventTag}` pra todo componente/pino do nó — quem decodifica I2C/SPI/UART é o próprio componente/device, bit a bit |
+| `QemuProcessManager` | Ciclo de vida do processo QEMU + arena de memória compartilhada (88 bytes, seção 8.1) |
 | `IpcServer` | Expõe o protocolo de controle + telemetria para a Extension |
 
 Regra de dependência (DIP): `MnaSolver`/`Scheduler` dependem só de `IComponentModel`/`IMcuAdapter` (interfaces
@@ -265,17 +269,17 @@ LasecSimul/
 ├── core/                            # LasecSimul Core — C++ nativo, processo separado
 │   ├── CMakeLists.txt
 │   ├── include/lasecsimul/          # headers públicos (consumidos por plugins, ver native-devices.spec)
-│   │   ├── IComponentModel.hpp      # interface C++ interna; addVoltageSource/addConductanceToGround reais
-│   │   ├── IMcuAdapter.hpp
-│   │   ├── IBusParticipant.hpp
-│   │   ├── device_abi.h             # ABI C estável para plugins (ver lasecsimul-native-devices.spec)
-│   │   └── qemu_arena_abi.h         # QemuArena ABI v1 — formato, não pipeline (seção 8.1)
+│   │   ├── IComponentModel.hpp      # interface C++ interna; addVoltageSource/addConductanceToGround reais, current()
+│   │   ├── IMcuAdapter.hpp          # chipId/buildLaunchArgs/memoryRegions/pinMap/createModules()
+│   │   ├── QemuModule.hpp           # base chip-específica: memStart/memEnd/writeRegister/readRegister/reset
+│   │   ├── device_abi.h             # ABI C estável para plugins (ver lasecsimul-native-devices.spec), major 3
+│   │   └── qemu_arena_abi.h         # protocolo real (regAddr/regData/SIM_READ/SIM_WRITE, 88 bytes, seção 8.1)
 │   ├── test/
 │   │   └── voltage_divider_test.cpp # fonte+2 resistores+terra, confere contra conta analítica (seção 7.3)
 │   └── src/
 │       ├── main.cpp                 # entry point do processo Core; cria GlobalPluginCache + 1 SimulationSession
 │       ├── session/
-│       │   └── SimulationSession.{h,cpp}     # dona de Netlist/Scheduler/PluginRuntime/BusController/Qemu desta sessão
+│       │   └── SimulationSession.{h,cpp}     # dona de Netlist/Scheduler/PluginRuntime/Qemu desta sessão
 │       ├── simulation/
 │       │   ├── MnaSolver.hpp          # particiona em grupos, fatora/resolve via Eigen (seção 7.1)
 │       │   ├── CircuitGroup.hpp       # 1 sistema linear (nós + variáveis extras, seção 7.3)
@@ -291,8 +295,7 @@ LasecSimul/
 │       │   ├── sources/{DcVoltageSource,AcVoltage,Battery}.{h,cpp} # DcVoltageSource já implementado
 │       │   ├── connectors/Tunnel.hpp  # conecta por nome de túnel, não por fio (seção 7.2)
 │       │   ├── other/Ground.hpp       # referência de 0V — todo grupo passivo precisa de uma (seção 7.3)
-│       │   ├── instruments/{Oscilloscope,Multimeter,FunctionGenerator,LogicAnalyzer}.{h,cpp}
-│       │   └── bus/{BusController,I2cBusModule,SpiBusModule,UsartModule}.{h,cpp}
+│       │   └── instruments/{Oscilloscope,Multimeter,FunctionGenerator,LogicAnalyzer}.{h,cpp}
 │       ├── registry/
 │       │   ├── ComponentRegistry.{h,cpp}         # factory, por sessão
 │       │   ├── ComponentParams.hpp               # posição de pino + propriedades de uma instância
@@ -304,11 +307,13 @@ LasecSimul/
 │       │   ├── PluginLoader.{h,cpp}          # LoadLibrary/dlopen + validação de ABI — só descoberta/load
 │       │   ├── PluginRuntime.{h,cpp}         # cria/destrói PluginInstance, por sessão
 │       │   ├── NativeDeviceProxy.{h,cpp}     # PluginInstance de device
-│       │   └── NativeMcuAdapterProxy.{h,cpp} # PluginInstance de MCU adapter
+│       │   ├── NativeMcuAdapterProxy.{h,cpp} # PluginInstance de MCU adapter
+│       │   └── QemuModuleProxy.hpp           # embrulha LsdnQemuModuleHandle (plugin) em QemuModule
 │       ├── mcu/
-│       │   ├── QemuProcessManager.{h,cpp}      # spawn/kill do processo qemu-system-* (ainda não implementado)
-│       │   ├── QemuArenaBridge.{h,cpp}         # consome qemu_arena_abi.h, dispatch por endereço (ainda não implementado)
+│       │   ├── QemuProcessManager.{h,cpp}      # spawn/kill do processo qemu-system-* + arena (88 bytes, seção 8.1)
+│       │   ├── McuComponent.{h,cpp}            # IComponentModel real: liga IMcuAdapter ao circuito via pinos
 │       │   └── FirmwareWatcher.{h,cpp}         # poll de mtime na pasta configurada -> kill+respawn (seção 8.3)
+│       # ESP32 não tem mais pasta aqui -- vive em mcu-adapters/espressif-esp32/ (plugin), não em core/src/mcu/
 │       └── ipc/
 │           ├── IpcServer.{h,cpp}
 │           └── protocol/             # definição de mensagens do canal de controle
@@ -345,28 +350,19 @@ public:
     virtual size_t getState(uint8_t* out, size_t cap) const = 0;
     virtual void setState(const uint8_t* in, size_t len) = 0;
     virtual std::vector<PropertyDescriptor> propertyDescriptors() { return {}; } // edição em runtime, seção 6.1
+    virtual std::optional<double> current() const { return std::nullopt; } // leitura de corrente, seção 6.1.4
 };
 
-// IMcuAdapter.hpp — deliberadamente declarativo (ver seção 8): nunca chamado por pino/registrador
-// individual. QemuArenaBridge despacha eventos para os módulos genéricos de barramento usando só
-// estas duas declarações estáticas, lidas uma vez no load.
+// IMcuAdapter.hpp — chipId/buildLaunchArgs/memoryRegions/pinMap continuam declarativos;
+// createModules() é a peça que faltava para o chip de fato afetar o circuito (ver McuComponent, seção 8).
 class IMcuAdapter {
 public:
     virtual ~IMcuAdapter() = default;
     virtual const char* chipId() const = 0;
     virtual QemuLaunchSpec buildLaunchArgs(std::string_view firmwarePath) const = 0;
-    virtual std::span<const MemoryRegion> memoryRegions() const = 0; // endereço MMIO -> módulo genérico
+    virtual std::span<const MemoryRegion> memoryRegions() const = 0; // faixa MMIO -> módulo concreto
     virtual std::span<const PinMapping> pinMap() const = 0;          // pino lógico -> bit/linha de um módulo
-};
-
-// IBusParticipant.hpp
-class IBusParticipant {
-public:
-    virtual ~IBusParticipant() = default;
-    virtual BusRole role() const = 0;             // Master | Slave
-    virtual std::optional<uint8_t> address() const = 0; // só I2C
-    virtual void onBusWrite(std::span<const uint8_t> data) = 0;
-    virtual std::vector<uint8_t> onBusReadRequest() = 0;
+    virtual std::vector<std::unique_ptr<QemuModule>> createModules() const = 0; // módulos concretos do chip
 };
 ```
 
@@ -517,6 +513,26 @@ Teste de regressão: `core_bootstrap` (`testGetPropertySchemasOverIpc` — built
 `loadDeviceLibrary`, plugin aparece só depois); `passive_components`/`logic_components` (cada
 `propertyDescriptors()[0].schema` não-vazio).
 
+### 6.1.4 Leitura de corrente (`current()`) — implementado 2026-06-28
+
+Opção de baixo custo, sem incógnita nova na matriz: `IComponentModel::current()` lê estado já cacheado na
+última `stamp()` (`std::nullopt` se o componente não implementa). `MnaMatrixView::getBranchCurrent()` dá
+leitura gratuita da corrente de ramo de fontes de tensão ideal (variável extra já resolvida).
+`SimulationSession::componentCurrent(componentIndex)` nunca dispara solve novo — `std::nullopt` se o
+componente não implementa ou já foi removido (mesmo princípio de `nodeVoltageOfPin`). Exposto via IPC
+`getComponentCurrent` (`CoreApplication.cpp`) e `CoreClient.getComponentCurrent` na Extension.
+
+**Convenção de sinal, validada empiricamente, não só derivada**: convenção passiva — positiva entrando no
+primeiro pino/saindo no segundo (ou na terra implícita pra componente de 1 pino); fonte fornecendo energia
+aparece **negativa**. Implementado em: `Resistor`, `Inductor`, `Capacitor` (sempre 0.0 — modelo atual não
+contribui nada pra matriz), `Diode`, `DcVoltageSource`, `Battery`, `Rail`, `FixedVolt`, `VoltSource`,
+`CurrSource`, `Csource`, `Clock`, `WaveGen`, `Ampmeter`.
+
+Lição de um bug real corrigido neste caminho: qualquer componente com pino "decorativo" (ex: `gnd` de um modo
+de operação) precisa de alguma contribuição na matriz — nunca zero absoluto, ou a linha fica inteiramente
+zerada (matriz singular). `WaveGen` no modo não-bipolar tinha esse bug, corrigido fixando o pino em 0V via
+`addConductanceToGround`.
+
 ### 6.2 Lacunas obrigatórias antes da expansão do catálogo estilo SimulIDE
 
 Para que o catálogo atual do SimulIDE (ver `itemlibrary.cpp` e `gui/properties/`) possa migrar para o
@@ -531,7 +547,13 @@ Status atualizado depois da seção 6.1.2/6.1.3:
    `ComponentMetadataRegistry`). **Ainda não feito pra `package`/`pins`** de built-in — ver item 3.
 3. **Package data-driven**: a renderização de símbolo/corpo/pinos de built-in ainda depende de
    `componentSymbols.ts` (switch hardcoded por `typeId`) — plugins/subcircuitos já usam `package.json`
-   data-driven (`lasecsimul-native-devices.spec` seção 21), built-ins não. Aberto.
+   data-driven (`lasecsimul-native-devices.spec` seção 21), built-ins não. **Parcialmente mitigado pela seção
+   13.5** (2026-06-28): os componentes que precisavam de renderização gráfica rica/protocolada (displays,
+   TFTs, MAX72xx, WS2812, servo, DIAC/SCR/TRIAC, BJT/MOSFET/JFET, transformer) foram movidos de built-in
+   incompleto pra plugin ABI — esses já ganham `package.json` data-driven de graça. O que resta como built-in
+   C++ de fato (resistivos, potenciômetro, chaves, relé simples, regulador, LED simples) não precisa de
+   renderização rica hoje; o gap descrito aqui só volta a importar se um built-in novo precisar de corpo
+   gráfico custom — não bloqueia o catálogo atual.
 4. **Semântica declarada de propriedade**: flags `affectsTopology`/`requiresRestart`/`readOnly`/
    `showOnSymbol`/`noCopy`/`hidden` **existem no schema e viajam até a UI** (`readOnly`/`hidden`/
    `showOnSymbol` já têm efeito real na Webview — campo desabilitado, oculto, ou ligado à telemetria).
@@ -691,11 +713,19 @@ resolve(localized, requestedLang, baseLang):
    d. `postStep()` roda **só** para componentes que se registraram como "dinâmicos" (capacitores/indutores
       com estado, fontes variáveis no tempo, instrumentos amostrando, plugins com comportamento temporal,
       pinos de MCU) — um resistor estático nunca tem `postStep()` chamado.
-   e. `BusController` resolve tráfego I2C/SPI/UART pendente — incluindo o vindo de `QemuArenaBridge` (MCU
-      emulado) e o vindo de plugins/built-ins, sem distinção (seção 8 do `lasecsimul-native-devices.spec`).
-   f. `QemuArenaBridge` aplica eventos de registrador pendentes (GPIO/I2C/SPI/USART) vindos da arena e
-      injeta no `Netlist` os níveis calculados pelo solver de volta — tudo dentro do mesmo processo Core,
-      sem cosimulação assíncrona (diferente do que era necessário com WASM/workers).
+   e. Detecção de borda digital: quando a tensão de um nó cruza `kDigitalLevelThreshold` (2.5V,
+      `core/include/lasecsimul/Types.hpp`), dispara `ComponentEvent{kPinChangeEventTag, localPinIndex,
+      nivel, nsDesdeABordaAnterior}` para todo componente/pino presente naquele nó (`Netlist::Topology::
+      pinRefsByNode`) — built-in ou plugin, sem distinção. **Substitui por completo** o antigo
+      `BusController`/I2C/SPI/UART por byte: protocolo agora é decodificado bit a bit pelo próprio
+      componente/device do outro lado do fio, nunca por um módulo de barramento intermediário.
+   f. `McuComponent` (MCU emulado) processa eventos pendentes da arena QEMU no seu próprio `stamp()`
+      (`SIM_READ`/`SIM_WRITE` despachado pro `QemuModule` certo por endereço) e injeta no `Netlist` os
+      níveis elétricos resultantes — tudo dentro do mesmo processo Core, sem cosimulação assíncrona
+      (diferente do que era necessário com WASM/workers). Agendamento é por evento detectado, não pelo
+      timestamp exato (`qemuTime`) reportado pelo QEMU — simplificação aceitável para GPIO digital simples,
+      revisitar se/quando precisão de timing fino for necessária (ver `docs/17-pendencias-pos-sessao-qemu-abi.md`,
+      seção 3.6).
 5. Telemetria (amostras de instrumentos, traços de pino) é publicada num ring buffer de memória compartilhada;
    a Extension lê e renderiza no webview sem round-trip de IPC por amostra. Política de descarte sob
    saturação é a da RNF09 (descarta amostra mais antiga; eventos discretos como `faulted` vão pelo canal de
@@ -706,7 +736,7 @@ resolve(localized, requestedLang, baseLang):
 
 ### 7.1 `MnaSolver` — decisões de algoritmo (auditoria do SimulIDE-dev, com correções)
 
-Mecanismo de partida validado lendo `SimulIDE-dev/src/simulator/{circmatrix,e-node,simulator}.{h,cpp}` — mas
+Mecanismo de partida validado lendo `C:\SourceCode\simulide_2\src\simulator\{circmatrix,e-node,simulator}.{h,cpp}` — mas
 **não copiado às cegas**: SimulIDE é um projeto solo de 2012+, e nem toda escolha dele resiste ao escrutínio
 em hardware/bibliotecas de hoje. Decisão por item, com o porquê:
 
@@ -730,7 +760,7 @@ isso dá um sinal mensurável de quando vale revisitar, em vez de decidir por in
 ### 7.2 Resolução de topologia — `Netlist` (pino → nó → grupo)
 
 Validado contra um caso real do SimulIDE que expõe uma fonte de "conexão" diferente de fio:
-**`Tunnel`** (`SimulIDE-dev/src/components/connectors/tunnel.{h,cpp}`) une pinos por **nome
+**`Tunnel`** (`C:\SourceCode\simulide_2\src\components\connectors\tunnel.{h,cpp}`) une pinos por **nome
 compartilhado**, não por desenho gráfico — `Tunnel::registerEnode()` propaga o mesmo `eNode` para
 todo outro `Tunnel` com o mesmo nome via um registro estático (`m_tunnels`). A resolução abaixo
 generaliza isso sem caso especial: união por nome é só outra fonte de aresta para a mesma primitiva
@@ -822,17 +852,23 @@ componente concreto, ainda não escrita. Isto fixa o contrato pra não fechar a 
 
 ## 8. Fluxo de integração com QEMU
 
-> Mecanismo validado pelo próprio SimulIDE-dev (não é suposição de design) — ver
-> `SimulIDE-dev/src/microsim/cores/qemu/{qemudevice,qemumodule,qemutwi,qemuspi}.{h,cpp}` e
-> `SimulIDE-dev/src/microsim/modules/twi/twimodule.h`. O LasecSimul Core porta essa mesma arquitetura para o
-> processo nativo descrito neste `.spec`, sem Qt (RNF05) e sem QMP — o controle do processo é mais simples do
-> que QMP sugere.
+> Mecanismo validado pelo próprio `simulide_2` (não é suposição de design) — ver
+> `C:\SourceCode\simulide_2\src\microsim\cores\qemu\{qemudevice,qemumodule}.{h,cpp}` e, por chip,
+> `C:\SourceCode\simulide_2\src\microsim\cores\qemu\esp32\esp32{,iomux,twi,spi,usart}.{h,cpp}`. O LasecSimul
+> Core porta essa mesma arquitetura para o processo nativo descrito neste `.spec`, sem Qt (RNF05) e sem QMP —
+> o controle do processo é mais simples do que QMP sugere. **Achado crítico confirmado lendo
+> `hw/gpio/esp32_gpio.c` do fork real (`C:\SourceCode\qemu_simulide`)**: o QEMU manda registrador bruto
+> (endereço + valor) sem decodificar nada — quem decodifica é o módulo do lado do Core, e esse módulo É
+> chip-específico de propósito (só `Scheduler`/`Netlist`/IPC/UI precisam ser neutros quanto a chip). Não
+> existe mais "módulo de barramento genérico reusado por qualquer chip" — ver seção 8.1.
 
 1. Usuário insere um componente MCU no esquemático e associa uma **pasta** (não um arquivo fixo) onde o
    firmware (`.bin`/`.elf`/`.hex`) é gerado pela toolchain externa do usuário (Arduino IDE/PlatformIO/ESP-IDF
    — o LasecSimul nunca compila nada, ver seção 13) — caminho da pasta enviado pela Extension ao Core via
    IPC. `FirmwareWatcher` (seção 8.3) passa a vigiar essa pasta a partir daqui, sem ação manual nenhuma.
-2. `McuRegistry` resolve `chipId` → instancia o `IMcuAdapter` (built-in ou plugin nativo).
+2. `McuRegistry` resolve `chipId` → instancia o `IMcuAdapter`, sempre via plugin nativo
+   (`mcu_abi.h`/`NativeMcuAdapterProxy`) — **não existe caminho built-in para adaptador de MCU**, decisão
+   tomada em 2026-06-28 ao migrar o ESP32 (ver seção 8.1).
 3. **QEMU usado é um build modificado por chip** (espelhando o fork da Espressif para ESP32, ou um patch
    equivalente para STM32/outros) — os modelos de periférico (I2C/SPI/USART/Timer/GPIO) desse chip, dentro do
    QEMU, não emulam o hardware sozinhos: a cada acesso da CPU emulada a um registrador desses periféricos,
@@ -848,19 +884,21 @@ componente concreto, ainda não escrita. Isto fixa o contrato pra não fechar a 
    despacha a thread dedicada à instância de MCU para essa espera; o custo de uma syscall por evento é
    trocado por uma thread ocupando um núcleo enquanto o firmware roda. Isso é deliberado (mesma troca já
    validada pelo SimulIDE) e está coberto pelo orçamento de threads do Core (`std::thread`/pool).
-6. Cada evento da arena traz um endereço; um **dispatcher de faixas de memória** (análogo a
-   `QemuDevice::doAction()`) decide qual módulo de periférico é o dono daquele endereço e entrega o evento a
-   ele — não ao `IMcuAdapter` diretamente. O adaptador de cada chip só declara essas faixas de endereço no
-   manifesto; não reimplementa protocolo nenhum.
-7. Cada módulo de periférico (`I2cBusModule`/`SpiBusModule`/`UsartModule`/`TimerModule` — implementados **uma
-   vez no Core**, reaproveitados por qualquer chip, análogos a `TwiModule`/`SpiModule` do SimulIDE) traduz o
-   evento de registrador em protocolo de barramento real (start/stop/ACK para I2C, shift bit-a-bit para SPI)
-   e aciona os `Pin`s de circuito de verdade (SDA/SCL, MOSI/MISO/SCK/SS) através do mesmo `BusController` da
-   seção 8 do `lasecsimul-native-devices.spec`. Um dispositivo nativo do outro lado do barramento nunca sabe
-   se o master é um MCU emulado ou outro componente — ver detalhamento e os dois caminhos possíveis (com e
-   sem QEMU) nessa seção.
-8. UART é tratada pelo mesmo princípio (`UsartModule`), roteada para um `vscode.Terminal` (via IPC) ou para um
-   componente "display serial".
+6. Cada evento da arena traz `regAddr`/`regData`; `McuComponent` (`core/src/mcu/McuComponent.{hpp,cpp}`) —
+   a peça que liga o `IMcuAdapter` ao circuito de verdade — despacha pro `QemuModule` concreto (`SIM_READ`/
+   `SIM_WRITE`, por faixa de endereço, `IMcuAdapter::createModules()`) que é dono daquele endereço. O
+   `QemuModule` decodifica o registrador (ex: `Esp32GpioModule` sabe que offset `0x04` é `GPIO_OUT_REG`) —
+   o `McuComponent`/`Scheduler`/`Netlist` nunca sabem que registrador é esse.
+7. A cada `stamp()`, `McuComponent` traduz `isOutputEnabled`/`outputLevel` do módulo em estampa elétrica real
+   (Norton de baixa impedância) nos `Pin`s de circuito reais (`IMcuAdapter::pinMap()`), ou lê a tensão do nó
+   de volta pro módulo (`setInputLevel`). Protocolo (I2C/SPI/UART) não é decodificado por um "módulo de
+   barramento" intermediário — é decodificado bit a bit pelo componente/device do outro lado do fio via
+   `ComponentEvent{kPinChangeEventTag}` (mesmo mecanismo de qualquer detecção de borda no `Netlist`, seção
+   0.4 do handoff `docs/17-pendencias-pos-sessao-qemu-abi.md`). Um dispositivo nativo do outro lado nunca
+   sabe se quem está do outro lado do fio é um MCU emulado ou outro componente.
+8. UART/SPI/I2C reais do ESP32 (`Esp32TwiModule`/`Esp32SpiModule`/`Esp32UsartModule`) ainda não existem —
+   só GPIO puro (`Esp32GpioModule`) está implementado hoje (ver pendência 3.1 do handoff). Quando existirem,
+   seguem o mesmo padrão do item 6/7: `QemuModule` concreto por periférico, nunca módulo genérico.
 9. Depuração: `gdbserver` da QEMU exposto em porta TCP; Debug Adapter do VSCode conecta diretamente nele
    (não passa pelo Core).
 10. **Reset e parada não usam QMP**: o pino de reset do componente, ao ser ativado, zera `arena->running` e
@@ -869,12 +907,17 @@ componente concreto, ainda não escrita. Isto fixa o contrato pra não fechar a 
     a simulação segue a mesma rota: kill + timeout, nunca um comando de protocolo esperando resposta. Isso
     elimina a necessidade de um `QmpClient`/protocolo QMP no Core.
 
-### 8.1 `QemuArena ABI v1` — espelho exato do fork real, não um redesenho
+### 8.1 `qemu_arena_abi.h` — reescrito nesta sessão (2026-06-28), confirmado contra o binário real
 
-`core/include/lasecsimul/qemu_arena_abi.h` **copia byte a byte** `qemuArena_t` de
-`qemu-simulide-1/system/simuliface.h` — não é mais uma reformulação livre (a v1 anterior desta seção
-inventava `regAddr`/`regData`/`eventSequence` genéricos que não existem no fork real). Duas decisões viraram
-diferentes depois de ler o código de verdade, e ambas são correções, não polimento:
+`core/include/lasecsimul/qemu_arena_abi.h` foi **reescrito por completo** depois de auditar o protocolo real
+contra três fontes confirmadas acessíveis nesta máquina: `C:\SourceCode\qemu_simulide`
+(`softmmu/simuliface.{h,c}`, fork QEMU atual), `C:\SourceCode\simulide_2` (fonte C++ do SimulIDE atual — o
+antigo `SimulIDE-dev` não existe mais neste disco) e o binário oficial vendorizado de
+`SimulIDE_2-R260501_Win64\data\bin\qemu-system-xtensa.exe`. O protocolo anterior descrito aqui (tag
+`simuAction` com payload já decodificado, sem endereço) **estava errado** — substituído pelo protocolo real:
+`regAddr`/`regData`/`irqNumber`/`irqLevel`/`SIM_READ`/`SIM_WRITE`/`loop_timeout_ns`/`ps_per_inst`, **88 bytes
+total** (confirmado batendo com o log do próprio binário real: "Qemu: arena mapped 88 bytes"). Duas decisões
+de versionamento/sincronização seguem valendo, e ambas são correções confirmadas, não polimento:
 
 - **Sem cabeçalho de versão dentro da struct.** O binário já compilado (`qemu-system-xtensa.exe`) e os
   patches já existentes (`hw/gpio/esp32_gpio.c`, `hw/arm/stm32.c`) dependem do layout exato, campo a campo,
@@ -882,33 +925,30 @@ diferentes depois de ler o código de verdade, e ambas são correções, não po
   Versionamento fica fora da struct: o manifesto do adaptador (`mcu.json`, campo `qemuBuild`) é quem declara
   qual build de QEMU é esperado pra aquele chip. Isso é uma troca deliberada — usar o binário que já existe
   sem precisar mantê-lo (recompilar QEMU é um projeto de build próprio) — não um esquecimento.
-- **Protocolo é ping-pong por flag, não seqlock.** A v1 anterior usava sequence number com store
-  release/load acquire — mais "moderno", mas com uma lacuna real: o produtor pode escrever duas vezes antes
-  do consumidor olhar uma vez, e a segunda escrita apaga a primeira sem aviso. O protocolo real do fork
-  (`doAction()` em `simuliface.c`) é **totalmente síncrono por construção**: QEMU seta `simuAction`+payload,
-  seta `simuTime` != 0, e **bloqueia em espera ativa até o Core zerar `simuTime`** — não executa a próxima
-  instrução emulada enquanto isso não acontece. Isso garante zero perda de evento sem precisar de sequence
-  number: o produtor não consegue avançar antes da confirmação, por construção. Para semântica de acesso a
-  registrador de hardware (a CPU pode ler de volta o que escreveu na instrução seguinte) isso não é só mais
-  simples, é o modelo correto — o meu seqlock anterior tinha um bug de corretude ali, não só desempenho pior.
+- **Protocolo é ping-pong síncrono por construção, não seqlock.** O protocolo real (`doAction()` em
+  `simuliface.c`) bloqueia em espera ativa em ambos os sentidos — QEMU escreve o evento e espera o Core
+  confirmar antes de seguir; não executa a próxima instrução emulada enquanto isso não acontece. Isso garante
+  zero perda de evento sem precisar de sequence number: o produtor não consegue avançar antes da confirmação,
+  por construção. Para semântica de acesso a registrador de hardware (a CPU pode ler de volta o que escreveu
+  na instrução seguinte) isso é o modelo correto, não só mais simples.
 
-Protocolo completo, três campos coordenando dois sentidos:
+Campos reais do contrato (88 bytes), QEMU **nunca pré-decodifica**:
 
-1. **QEMU → Core** (evento de periférico): escreve `simuAction` (enum chip-específico, ex: `ESP_GPIO_OUT`)
-   + payload (`data8`/`data16`/`data32` conforme a largura do registrador acessado — sem `regAddr` genérico,
-   porque o despacho por endereço **já aconteceu dentro do próprio QEMU**, via `MemoryRegionOps` nativo,
-   antes de qualquer coisa tocar a arena), depois seta `simuTime`. Bloqueia em `while(simuTime)`.
-2. **Core → QEMU** (ação que o Core quer que o QEMU execute, ex: "GPIO de entrada mudou"): seta `qemuAction`
-   (enum genérico, `LsdnSimAction`: `LSDN_SIM_I2C/SPI/USART/TIMER/GPIO_IN/EVENT`) + payload, **enquanto QEMU
-   já está bloqueado no passo 1** — QEMU consome dentro do mesmo laço de espera, zera `qemuAction`, continua
-   esperando `simuTime`.
-3. **`qemuTime`**: Core escreve quando quer que o timer virtual do QEMU dispare de novo; QEMU espera isso
-   ficar não-zero (`getNextEvent()`, fora de `doAction()`) antes de agendar seu próprio `QEMUTimer` e voltar
-   a rodar a CPU emulada normalmente até esse timer disparar.
+1. **QEMU → Core** (evento de periférico): escreve `regAddr` (endereço bruto do registrador acessado pela
+   CPU emulada, sem decodificação — quem decodifica "offset 0x04 = GPIO_OUT_REG" é o `QemuModule` do lado do
+   Core, nunca o QEMU) + `regData` + `SIM_READ`/`SIM_WRITE` (qual operação foi feita). Despacho por endereço
+   dentro do QEMU usa `MemoryRegionOps` nativo só para decidir que aquele endereço pertence à arena — não
+   decodifica o significado do registrador.
+2. **IRQ**: `irqNumber`/`irqLevel` — sinalização de interrupção, independente do par `regAddr`/`regData`.
+3. **Timing**: `loop_timeout_ns`/`ps_per_inst` — orçamento de tempo virtual por rodada de espera ativa e
+   picosegundos por instrução emulada (usado pelo Core para converter tempo de CPU emulada em `timeNs` real
+   do `Scheduler`).
 
-Ações chip-específicas (`esp32Actions`: `ESP_GPIO_OUT/DIR/IN`, `ESP_IOMUX`, `ESP_MATRIX_IN/OUT`;
-`arm32Actions` equivalente pra STM32) **não vivem no header compartilhado** — cada adaptador de MCU traz o
-próprio enum, mesma razão de `IMcuAdapter` nunca conhecer outro chip por nome.
+Não existe mais um enum de ação chip-específico trocado pela arena (`simuAction`/`qemuAction` da versão
+anterior desta seção) — o endereço bruto já basta, e quem dá significado a ele é o `QemuModule` concreto,
+sempre vindo de um plugin (`mcu_abi.h`/`LsdnQemuModuleVTable`, via `QemuModuleProxy`) desde 2026-06-28 — ver
+GPIO do ESP32 (`mcu-adapters/espressif-esp32/`) hoje; `IMcuAdapter::createModules()` decide quais módulos um
+chip usa.
 
 **Por que isso não vira o mesmo padrão na ABI de plugin nativo (`device_abi.h`)**: ping-pong por memória
 compartilhada existe pra evitar o custo de uma syscall **entre processos diferentes**. Plugin roda no mesmo
@@ -918,10 +958,20 @@ que o ping-pong resolve (perda de evento por sobrescrita) **não existe** na ABI
 cada evento é uma chamada de função com parâmetro próprio (`on_event(dev, &ev)`), nunca um campo único
 reaproveitado — não tem nada a corrigir. Avaliado e descartado deliberadamente, não esquecido.
 
-**O que isto NÃO é**: não existe `QemuProcessManager`/`QemuArenaBridge` funcionando contra um QEMU real
-ainda — nenhum processo é de fato gerado pelo Core. Isto é só o formato do contrato, agora idêntico ao que
-já roda de verdade no binário compilado (seção 8.2) — o pipeline mínimo (processo sobe, arena conecta, 1
-GPIO de saída funciona pro ESP32) é o próximo trabalho real, não mais bloqueado por incerteza de formato.
+**Estado atual (não mais "formato sem pipeline")**: o pipeline mínimo já funciona de ponta a ponta —
+`McuController`/`buildLaunchArgs` (no adaptador ESP32, hoje um plugin, `mcu-adapters/espressif-esp32/`)
+prependam a chave da shared memory como `argv[1]`
+(confirmado lendo `simuMain()` real em `simuliface.c`: `shMemKey = argv[1]; argv = &argv[2];`), e o resto dos
+args bate com `Esp32::createArgs()` real: `-M esp32-simul -L <romdir> -drive file=...,if=mtd,format=raw
+-icount shift=4,align=off,sleep=off` — não mais o placeholder antigo `-machine esp32 -kernel ...`. O binário
+real
+(`devices/qemu-esp32/bin/qemu-system-xtensa.exe` + DLLs + ROMs do ESP32, vendorizado nesta sessão a partir de
+`SimulIDE_2-R260501_Win64\data\bin\`) é de fato lançado pelo teste
+`core/test/core/mcu/McuControllerRealQemuTest.cpp` (`mcu_controller_real_qemu` no ctest) — abre a arena,
+inicia o processo, só falha no firmware porque ainda não existe um `.bin` real (falta toolchain ESP-IDF, ver
+`docs/mvp-limitacoes.md`). `McuComponent` (`core/src/mcu/McuComponent.{hpp,cpp}`) já liga isso a um circuito
+de verdade, sem precisar do processo QEMU real — `core/test/core/mcu/McuComponentTest.cpp` prova
+`GPIO_ENABLE_REG`+`GPIO_OUT_REG` subindo um pino do circuito pra 3.3V com arena sintética.
 
 ### 8.2 Estado real do fork QEMU — verificado, não suposto
 
@@ -1011,28 +1061,37 @@ seção 12 do `lasecsimul-native-devices.spec`).
 
 ## 10. Estratégia para adicionar novos microcontroladores
 
-Mesmo princípio, espelhando o ESP32 — e, na prática, mais barato do que parece, porque o protocolo de
-barramento (I2C/SPI/USART) **não é reimplementado por chip** (seção 8):
+Mesmo princípio, espelhando o ESP32 — mas **o protocolo de registrador (GPIO/I2C/SPI/USART) é CHIP-ESPECÍFICO
+de propósito, não genérico** (achado crítico confirmado lendo `hw/gpio/esp32_gpio.c` do fork real, seção 8):
 
-1. Implementar `IMcuAdapter` (built-in no Core ou plugin nativo via `NativeMcuAdapterProxy`), cujo trabalho
-   real é só: (a) `buildLaunchArgs()` para o binário QEMU daquele chip, (b) declarar as faixas de endereço de
-   cada periférico (qual faixa é I2C, qual é SPI, qual é GPIO) para o dispatcher da arena.
-2. **Não** implementar lógica de protocolo I2C/SPI/USART no adaptador — isso é responsabilidade dos módulos
-   genéricos (`I2cBusModule`/`SpiBusModule`/`UsartModule`, seção 4) reusados por qualquer chip.
+1. Implementar `IMcuAdapter` como plugin nativo (`mcu-adapters/<chip>/`, `mcu_abi.h`/`LsdnMcuVTable`,
+   carregado via `NativeMcuAdapterProxy`) — não existe mais caminho built-in (removido ao migrar o ESP32 em
+   2026-06-28, mesmo desempenho dos dois): (a) `build_launch_args` para o binário QEMU daquele chip, (b)
+   `get_memory_regions`/`get_pin_map` declarativos, (c) `create_modules` — devolve um
+   `LsdnQemuModuleHandle` (`mcu_abi.h`) concreto por periférico que o chip de fato usa (ex: GPIO do ESP32);
+   `QemuModuleProxy` (`core/src/plugins/QemuModuleProxy.hpp`) embrulha isso num `QemuModule` C++ do lado do
+   Core, mesmo custo de chamada que um `QemuModule` built-in teria.
+2. Implementar um módulo (`LsdnQemuModuleVTable`) por periférico, do lado do plugin — **é aqui que vive o
+   conhecimento do mapa de registrador real daquele chip** (ex: offset `0x04` = `GPIO_OUT_REG` no ESP32);
+   copiar fielmente do código de referência real
+   (`C:\SourceCode\simulide_2\src\microsim\cores\qemu\<chip>\`), nunca inventar offset. Não existe módulo
+   genérico reusado entre chips — cada `QemuModule` concreto é específico de um periférico de um chip.
 3. Pré-requisito por chip: precisa existir um build de QEMU modificado para esse chip que escreva os eventos
-   de registrador na arena de memória compartilhada (seção 8) — documentar isso como dependência externa no
+   de registrador na arena de memória compartilhada (seção 8.1) — documentar isso como dependência externa no
    manifesto do adaptador (campo `qemuBuild`), não como limitação do Core.
-4. `McuRegistry` e `QemuArenaBridge` são genéricos por design — não conhecem "ESP32" nem "STM32", só
-   `IMcuAdapter`/`MemoryRegion`/`PinMapping`.
+4. `McuComponent`/`McuRegistry`/`Scheduler`/`Netlist`/IPC/UI são neutros por design — não conhecem "ESP32" nem
+   "STM32", só `IMcuAdapter`/`QemuModule`/`MemoryRegion`/`PinMapping`. Protocolo de barramento real (I2C/SPI)
+   entre o MCU e outro componente do circuito é decodificado bit a bit pelo componente do outro lado do fio
+   via `ComponentEvent{kPinChangeEventTag}` (seção 7, passo "3e"), nunca por um módulo de barramento.
 
 ## 11. SOLID aplicado
 
 | Princípio | Aplicação concreta |
 |---|---|
-| **S**RP | `MnaSolver` resolve circuito; `QemuProcessManager` gerencia processo QEMU; `QemuArenaBridge` só desempacota eventos de registrador e despacha por endereço; `IpcServer` só serializa/desserializa; `PluginLoader` só descobre/valida/carrega código, `PluginRuntime` só cria/destrói instâncias — nenhuma classe acumula mais de uma responsabilidade. |
-| **O**CP | Novo componente/MCU = nova classe compilada no Core **ou** novo plugin DLL/SO — nunca uma edição em `MnaSolver`/`Scheduler`. Novo chip não exige reimplementar I2C/SPI/USART (item 10.2). |
-| **L**SP | Qualquer `IComponentModel` (built-in ou `NativeDeviceProxy` envolvendo um plugin) é intercambiável no `stamp()` do solver sem checagem de tipo concreto. Idem para `IMcuAdapter` no `QemuArenaBridge`. |
-| **I**SP | `IComponentModel`, `IMcuAdapter` e `IBusParticipant` são interfaces separadas — um componente sem barramento não implementa `IBusParticipant`; um MCU adapter não implementa métodos de pino de componente passivo. `ComponentMetadataRegistry` separado de `ComponentRegistry` — consultar o catálogo para UI não exige uma factory instanciável. |
+| **S**RP | `MnaSolver` resolve circuito; `QemuProcessManager` gerencia processo QEMU; `McuComponent` só despacha registrador da arena pro `QemuModule` certo e traduz pra estampa elétrica; cada `QemuModule` só decodifica o registrador de um periférico; `IpcServer` só serializa/desserializa; `PluginLoader` só descobre/valida/carrega código, `PluginRuntime` só cria/destrói instâncias — nenhuma classe acumula mais de uma responsabilidade. |
+| **O**CP | Novo componente/MCU = nova classe compilada no Core **ou** novo plugin DLL/SO — nunca uma edição em `MnaSolver`/`Scheduler`. Novo periférico de chip = novo `QemuModule` concreto, nunca edição em `McuComponent`/`Scheduler`/`Netlist` (item 10.2). |
+| **L**SP | Qualquer `IComponentModel` (built-in, `NativeDeviceProxy` envolvendo um plugin, ou `McuComponent`) é intercambiável no `stamp()` do solver sem checagem de tipo concreto. Idem para `IMcuAdapter`/`QemuModule` no `McuComponent`. |
+| **I**SP | `IComponentModel` e `IMcuAdapter` são interfaces separadas — um MCU adapter não implementa métodos de pino de componente passivo. `ComponentMetadataRegistry` separado de `ComponentRegistry` — consultar o catálogo para UI não exige uma factory instanciável. |
 | **D**IP | `simulation/` depende só de `include/lasecsimul/*.hpp`. `components/`, `plugins/`, `mcu/` dependem do Core, nunca o contrário. `GlobalPluginCache` + `ComponentRegistry`/`McuRegistry` por sessão são o único ponto de inversão de controle. |
 
 ## 12. Exemplos práticos
@@ -1092,7 +1151,7 @@ da UI fala com `CoreClient`, nunca com sockets/buffers diretamente (SRP também 
 
 ## 13. UI da Extension — baseada no SimulIDE, exceto edição/compilação de código
 
-Princípio: a organização de painéis/fluxo de trabalho segue o SimulIDE real (`SimulIDE-dev/src/gui/`,
+Princípio: a organização de painéis/fluxo de trabalho segue o SimulIDE real (`C:\SourceCode\simulide_2\src\gui\`,
 `mainwindow.{h,cpp}`), lido agora, não suposto — **com exceção de qualquer área de digitar/compilar
 firmware**, que não existe no LasecSimul (compilação é sempre externa; o Core só lê o artefato já
 compilado, seção 8.3). Onde o equivalente nativo do VSCode já cobre algo que o SimulIDE precisou construir
@@ -1336,8 +1395,10 @@ protocolados/graficos ou modelos ativos mais ricos foram movidos para a via ABI/
 A ABI foi aprimorada sem criar runtime paralelo: `PluginRuntime` injeta a propriedade reservada
 `__typeId` no contexto de configuracao para permitir que um mesmo binario ABI compartilhe codigo entre
 varios manifests, e `SimulationSession`/IPC expõem `sendComponentEvent`, que entrega eventos diretamente a
-`LsdnDeviceVTable::on_event`. O evento usa os tags ABI existentes (`LSDN_EVT_BUS_WRITE`,
-`LSDN_EVT_PIN_CHANGE`) para bytes de barramento/comando e bordas temporizadas. Quando uma biblioteca ABI
+`LsdnDeviceVTable::on_event`. O evento usa os tags ABI existentes (`LSDN_EVT_PIN_CHANGE`/`LSDN_EVT_TIMER`)
+para bordas temporizadas — `LSDN_EVT_BUS_WRITE`/`LSDN_EVT_BUS_READ_REQUEST` foram removidos no bump de ABI
+major 2 (sem barramento por bytes nunca ligado a um `SimulationSession` real, ver
+`docs/17-pendencias-pos-sessao-qemu-abi.md` seção 0.3). Quando uma biblioteca ABI
 declara um `typeId` que ja existia como built-in aproximado, o registro de plugin substitui explicitamente a
 factory anterior para novas instancias; isso preserva o contrato "built-in ou ABI" sem manter duas
 implementacoes ativas do mesmo componente.
@@ -1347,8 +1408,8 @@ OLED SSD1306/SH1107, PCD8544, KS0108, controladores TFT ST77xx/ILI9341/GC9A01A/P
 servo PWM, expondo RAM/framebuffer/estado por `get_state`. A entrada principal desses componentes e bit a bit via
 `LSDN_EVT_PIN_CHANGE`: HD44780/KS0108 fazem latch de pinos paralelos em `EN`, PCD8544/MAX72xx/TFTs deslocam bits em
 SCK/SCL, AIP31068/SSD1306/SH1107 reconhecem START/STOP e bytes I2C MSB-first, WS2812 mede pulsos temporizados e
-servo PWM converte largura de pulso em alvo angular. `LSDN_EVT_BUS_WRITE` continua existindo apenas como conveniencia
-para os modulos genericos de barramento quando eles ja tiverem remontado um byte. Tambem substitui os aproximados de
+servo PWM converte largura de pulso em alvo angular. Nao existe mais modulo generico de barramento remontando
+byte algum — cada device decodifica o protocolo por conta propria a partir dos eventos de borda. Tambem substitui os aproximados de
 DIAC/SCR/TRIAC, BJT/MOSFET/JFET, audio out e transformer por plugins ABI com estado/propriedades/modelo eletrico no
 caminho de plugin. Teste de aceitacao headless: `CoreBootstrapTest::testSimulideComplexAbiEventsOverIpc` carrega
 `devices/library.json`, instancia `outputs.hd44780` via ABI, envia RS/RW/D0-D7/EN por IPC bit a bit e verifica a DDRAM

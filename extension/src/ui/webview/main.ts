@@ -1,6 +1,6 @@
 import { WEBVIEW_MESSAGE_VERSION, HostToWebviewMessage, SimulationStatus, WebviewToHostMessage } from "./messages.js";
 import { PropertySchemaEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./model.js";
-import { PIN_RADIUS, componentBox, componentSymbolSvg, pinLocalPosition } from "./componentSymbols.js";
+import { PIN_RADIUS, componentBox, componentSymbolSvg, packageSymbolSvg, pinLocalPosition, registerPackage } from "./componentSymbols.js";
 import {
   Point,
   WIRE_GRID_SIZE,
@@ -59,8 +59,16 @@ function normalizeProjectState(raw: WebviewProjectState): WebviewProjectState {
   };
 }
 
+/** `componentSymbols.ts` cacheia o layout de `package` por typeId num registro próprio (módulo
+ * importado uma vez, sobrevive a troca de `state`) -- precisa ser re-sincronizado toda vez que o
+ * catálogo chega de novo (Épico G: cada item registrado pode trazer um `package` real). */
+function syncPackageRegistry(catalog: WebviewProjectState["catalog"]): void {
+  for (const entry of catalog) registerPackage(entry.typeId, entry.package);
+}
+
 const initialWindowState = (window as WindowWithInitialState).__LASECSIMUL_INITIAL_STATE__;
 let state = normalizeProjectState((vscode?.getState() as WebviewProjectState | undefined) ?? initialWindowState ?? createEmptyState());
+syncPackageRegistry(state.catalog);
 
 const UI_TEXT = {
   "pt-BR": {
@@ -206,13 +214,52 @@ function hideContextMenu(): void {
 window.addEventListener("click", () => hideContextMenu());
 window.addEventListener("blur", () => hideContextMenu());
 
+/** Sessão de "autoria de símbolo" ativa (Épico G, parte de escrita) -- ver `enterSymbolAuthoring`.
+ * `realCircuitState` guarda o `state` de verdade (circuito do usuário, se houver algum aberto)
+ * enquanto a sessão de autoria usa a MESMA variável `state`/render()/drag/painel de propriedades de
+ * sempre -- nenhum desses precisa saber que "isto não é bem o circuito real" (mesmo princípio do
+ * SimulIDE: `SubPackage`/`Rectangle`/`PackagePin` são `Component`s comuns, não exigem um modo
+ * especial de canvas/drag/seleção, ver auditoria em `.spec/lasecsimul-native-devices.spec`
+ * seção 21.3). */
+let realCircuitState: WebviewProjectState | undefined;
+let symbolAuthoringContext: { filePath: string; typeId: string } | undefined;
+
+function enterSymbolAuthoring(filePath: string, typeId: string, components: WebviewComponentModel[]): void {
+  if (symbolAuthoringContext) return; // já em autoria -- reentrada ignorada, ver nota em messages.ts
+  realCircuitState = state;
+  symbolAuthoringContext = { filePath, typeId };
+  state = { ...createEmptyState(), catalog: realCircuitState.catalog, locale: realCircuitState.locale, components };
+  render();
+}
+
+function exitSymbolAuthoring(): void {
+  if (!symbolAuthoringContext || !realCircuitState) return;
+  state = realCircuitState;
+  realCircuitState = undefined;
+  symbolAuthoringContext = undefined;
+  render();
+}
+
+function saveSymbolAuthoring(): void {
+  const context = symbolAuthoringContext;
+  if (!context) return;
+  const components = state.components;
+  exitSymbolAuthoring(); // restaura o circuito real ANTES de mandar a mensagem -- `send()` abaixo só
+  // bloqueia enquanto `symbolAuthoringContext` está ativo, então a ordem aqui importa.
+  send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestSaveSymbol", filePath: context.filePath, typeId: context.typeId, components });
+}
+
 function persistState(): void {
   vscode?.setState(state);
+  // Sessão de autoria nunca sincroniza com o `schematicState` real do lado da Extension -- só
+  // `requestSaveSymbol` (`saveSymbolAuthoring`) cruza o IPC, e só depois de já restaurar `state`.
+  if (symbolAuthoringContext) return;
   const outbound: WebviewToHostMessage = { version: WEBVIEW_MESSAGE_VERSION, type: "projectChanged", project: state };
   vscode?.postMessage(outbound);
 }
 
 function send(message: WebviewToHostMessage): void {
+  if (symbolAuthoringContext) return;
   vscode?.postMessage(message);
 }
 
@@ -376,7 +423,40 @@ function renderToolbarButton(kind: ToolbarIconKind, title: string, onClick: () =
   return button;
 }
 
+/** Barra de "autoria de símbolo" -- Run/Pause/Stop/Abrir/Salvar Projeto não fazem sentido aqui (a
+ * sessão de autoria não é o circuito do usuário, nunca vai pro Core, ver `enterSymbolAuthoring`),
+ * então a barra normal seria enganosa (cliques pareceriam funcionar mas `send()` os descarta
+ * silenciosamente enquanto `symbolAuthoringContext` está ativo). Só "Cancelar"/"Salvar Símbolo". */
+function renderSymbolAuthoringAppBar(context: { typeId: string }): HTMLElement {
+  const bar = document.createElement("div");
+  bar.className = "appbar";
+
+  const title = document.createElement("div");
+  title.className = "appbar__selection";
+  title.textContent = `Editando símbolo: ${context.typeId}`;
+
+  const actions = document.createElement("div");
+  actions.className = "appbar__group appbar__meta";
+  const cancelButton = document.createElement("button");
+  cancelButton.type = "button";
+  cancelButton.className = "property-sheet__button";
+  cancelButton.textContent = "Cancelar";
+  cancelButton.addEventListener("click", () => exitSymbolAuthoring());
+
+  const saveButton = document.createElement("button");
+  saveButton.type = "button";
+  saveButton.className = "property-sheet__button";
+  saveButton.textContent = "Salvar Símbolo";
+  saveButton.addEventListener("click", () => saveSymbolAuthoring());
+
+  actions.append(cancelButton, saveButton);
+  bar.append(title, actions);
+  return bar;
+}
+
 function renderAppBar(): HTMLElement {
+  if (symbolAuthoringContext) return renderSymbolAuthoringAppBar(symbolAuthoringContext);
+
   const bar = document.createElement("div");
   bar.className = "appbar";
 
@@ -644,7 +724,7 @@ function applyMarqueeSelection(start: Point, end: Point, additive: boolean): voi
   const hitComponentIds = state.components
     .filter((component) => {
       if (component.hidden) return false;
-      const box = componentBox(component.typeId);
+      const box = componentBox(component.typeId, component.properties);
       return component.x < right && component.x + box.width > left && component.y < bottom && component.y + box.height > top;
     })
     .map((component) => component.id);
@@ -797,8 +877,8 @@ function rotatePoint(local: Point, box: { width: number; height: number }, rotat
 }
 
 function componentPinLocalPosition(component: WebviewComponentModel, pinIndex: number): Point {
-  const box = componentBox(component.typeId);
-  const base = pinLocalPosition(pinIndex, component.pins.length, component.typeId);
+  const box = componentBox(component.typeId, component.properties);
+  const base = pinLocalPosition(component.pins[pinIndex]?.id ?? "", pinIndex, component.pins.length, component.typeId);
   const flipped = flipPoint(base, box, Boolean(component.flipH), Boolean(component.flipV));
   return rotatePoint(flipped, box, component.rotation);
 }
@@ -1474,7 +1554,7 @@ function flipSelectedComponents(axis: "horizontal" | "vertical"): void {
 function renderComponent(component: WebviewComponentModel): HTMLElement {
   const el = document.createElement("div");
   const catalogEntry = state.catalog.find((entry) => entry.typeId === component.typeId);
-  const box = componentBox(component.typeId);
+  const box = componentBox(component.typeId, component.properties);
   const isVoltmeter = component.typeId === "instruments.voltmeter"; // só tinge o símbolo, ver styles.css
 
   el.className = `component ${isComponentSelected(component.id) ? "selected" : ""} ${isVoltmeter ? "component--voltmeter" : ""}`;
@@ -1493,7 +1573,7 @@ function renderComponent(component: WebviewComponentModel): HTMLElement {
   const scaleX = component.flipH ? -1 : 1;
   const scaleY = component.flipV ? -1 : 1;
   svg.style.transform = `rotate(${component.rotation}deg) scale(${scaleX}, ${scaleY})`;
-  svg.innerHTML = catalogEntry?.symbolSvg ?? componentSymbolSvg(component.typeId);
+  svg.innerHTML = packageSymbolSvg(component.typeId) ?? catalogEntry?.symbolSvg ?? componentSymbolSvg(component.typeId, component.properties);
 
   if (isComponentSelected(component.id)) {
     const overlay = document.createElementNS(SVG_NS, "rect");
@@ -2022,6 +2102,7 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
 
   if (message.type === "init" || message.type === "syncState") {
     state = message.project;
+    syncPackageRegistry(state.catalog);
     if (!state.pendingConnection) {
       pendingWirePreviewTarget = undefined;
       pendingWireRoute = [];
@@ -2071,6 +2152,10 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
 
   if (message.type === "requestFlipSelection") {
     flipSelectedComponents(message.axis);
+  }
+
+  if (message.type === "enterSymbolAuthoring") {
+    enterSymbolAuthoring(message.filePath, message.typeId, message.components);
   }
 });
 

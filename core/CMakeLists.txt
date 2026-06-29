@@ -56,7 +56,6 @@ set(CORE_SOURCES
     src/mcu/qemu/FirmwareWatcher.cpp
     src/mcu/qemu/QemuArenaBridge.cpp
     src/mcu/qemu/QemuProcessManager.cpp
-    src/mcu/esp32/Esp32Adapter.cpp
     src/mcu/McuController.cpp
     src/mcu/McuComponent.cpp
     src/simulation/Scheduler.cpp
@@ -88,7 +87,6 @@ set(TEST_COMMON_SOURCES
     src/mcu/qemu/FirmwareWatcher.cpp
     src/mcu/qemu/QemuArenaBridge.cpp
     src/mcu/qemu/QemuProcessManager.cpp
-    src/mcu/esp32/Esp32Adapter.cpp
     src/mcu/McuController.cpp
     src/mcu/McuComponent.cpp
     src/simulation/Scheduler.cpp
@@ -300,31 +298,81 @@ add_executable(firmware_watcher_test
 target_include_directories(firmware_watcher_test PRIVATE include src)
 add_test(NAME firmware_watcher COMMAND firmware_watcher_test)
 
-# Teste do adapter declarativo ESP32 (Agente 12)
+# Teste do adapter ESP32 -- agora via plugin DLL/SO real (mcu_abi.h major 2+), não mais built-in
+# (ver mcu-adapters/espressif-esp32/). Carrega o binário real através do PluginLoader de produção,
+# mesmo padrão de plugin_loader_real_dll_test para devices.
+if(WIN32)
+    set(ESP32_ADAPTER_ARTIFACT "${CMAKE_CURRENT_SOURCE_DIR}/../mcu-adapters/espressif-esp32/build/win-x64/adapter.dll")
+elseif(APPLE)
+    set(ESP32_ADAPTER_ARTIFACT "${CMAKE_CURRENT_SOURCE_DIR}/../mcu-adapters/espressif-esp32/build/macos-universal/adapter.dylib")
+else()
+    set(ESP32_ADAPTER_ARTIFACT "${CMAKE_CURRENT_SOURCE_DIR}/../mcu-adapters/espressif-esp32/build/linux-x64/adapter.so")
+endif()
+
 add_executable(esp32_adapter_test
     test/core/mcu/Esp32AdapterTest.cpp
-    src/mcu/esp32/Esp32Adapter.cpp
+    src/plugins/PluginModule.cpp
+    src/plugins/PluginLoader.cpp
+    src/plugins/PluginRuntime.cpp
+    src/plugins/NativeDeviceProxy.cpp
+    src/plugins/NativeMcuAdapterProxy.cpp
+    src/plugins/CrashGuard.cpp
+    src/simulation/Scheduler.cpp
 )
 target_include_directories(esp32_adapter_test PRIVATE include src)
+target_compile_definitions(esp32_adapter_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+)
+if(NOT WIN32)
+    target_link_libraries(esp32_adapter_test PRIVATE dl)
+endif()
 add_test(NAME esp32_adapter COMMAND esp32_adapter_test)
+
+# Subcircuitos REAIS da ESP32 (não sintéticos) -- prova que os .lssub.json reais carregam e
+# expandem corretamente contra o plugin ESP32 de verdade (ver mcu-adapters/espressif-esp32/,
+# subcircuits/esp32_devkitc_v4.lssub.json e subcircuits/esp32_wroom32.lssub.json).
+add_executable(esp32_devkitc_subcircuit_test
+    test/esp32_devkitc_subcircuit_test.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(esp32_devkitc_subcircuit_test PRIVATE include src)
+target_link_libraries(esp32_devkitc_subcircuit_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(esp32_devkitc_subcircuit_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+    LSSUB_MANIFEST_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../subcircuits/esp32_devkitc_v4.lssub.json"
+    WROOM32_LSSUB_MANIFEST_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../subcircuits/esp32_wroom32.lssub.json"
+)
+if(NOT WIN32)
+    target_link_libraries(esp32_devkitc_subcircuit_test PRIVATE dl)
+endif()
+add_test(NAME esp32_devkitc_subcircuit COMMAND esp32_devkitc_subcircuit_test)
 
 # Orquestrador McuController contra o binário REAL do fork qemu-simulide (não fake) -- pula se o
 # binário não existir no caminho esperado (sibling do repositório, ver docs/mvp-limitacoes.md).
+# Adapter ESP32 agora vem do plugin real (mesmo binário de esp32_adapter_test acima), não built-in.
 add_executable(mcu_controller_real_qemu_test
     test/core/mcu/McuControllerRealQemuTest.cpp
     src/mcu/McuController.cpp
     src/mcu/McuComponent.cpp
     src/mcu/qemu/QemuProcessManager.cpp
     src/mcu/qemu/QemuArenaBridge.cpp
-    src/mcu/esp32/Esp32Adapter.cpp
+    src/plugins/PluginModule.cpp
+    src/plugins/PluginLoader.cpp
+    src/plugins/PluginRuntime.cpp
+    src/plugins/NativeDeviceProxy.cpp
+    src/plugins/NativeMcuAdapterProxy.cpp
+    src/plugins/CrashGuard.cpp
     src/simulation/Scheduler.cpp
 )
 target_include_directories(mcu_controller_real_qemu_test PRIVATE include src)
 target_compile_definitions(mcu_controller_real_qemu_test PRIVATE
     QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
 )
 if(WIN32)
     target_compile_definitions(mcu_controller_real_qemu_test PRIVATE _CRT_SECURE_NO_WARNINGS)
+else()
+    target_link_libraries(mcu_controller_real_qemu_test PRIVATE dl)
 endif()
 add_test(NAME mcu_controller_real_qemu COMMAND mcu_controller_real_qemu_test)
 
@@ -335,6 +383,9 @@ add_executable(mcu_component_test
 )
 target_include_directories(mcu_component_test PRIVATE include src)
 target_link_libraries(mcu_component_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(mcu_component_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+)
 if(NOT WIN32)
     target_link_libraries(mcu_component_test PRIVATE dl)
 endif()

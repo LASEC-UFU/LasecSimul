@@ -21,6 +21,14 @@ public:
         m_factories.emplace(std::move(chipId), std::move(factory));
     }
 
+    /** Mesmo papel de `ComponentRegistry::replaceFactory` -- registra ou reatribui sem lançar.
+     * Usado por `SimulationSession::registerKnownMcuTypes()`, que pode ser chamado mais de uma vez
+     * por sessão (uma vez por `library.json` carregado via IPC `loadDeviceLibrary`) -- precisa ser
+     * idempotente, nunca lançar em chipId já conhecido. */
+    void replaceFactory(std::string chipId, Factory factory) {
+        m_factories[std::move(chipId)] = std::move(factory);
+    }
+
     std::unique_ptr<IMcuAdapter> create(const std::string& chipId) const {
         auto it = m_factories.find(chipId);
         if (it == m_factories.end()) {

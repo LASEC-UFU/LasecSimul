@@ -1,22 +1,8 @@
 #include "NativeMcuAdapterProxy.hpp"
 #include <stdexcept>
+#include "QemuModuleProxy.hpp"
 
 namespace lasecsimul::plugins {
-
-namespace {
-
-ModuleKind toCoreModuleKind(LsdnModuleKind kind) {
-    switch (kind) {
-        case LSDN_MODULE_GPIO: return ModuleKind::Gpio;
-        case LSDN_MODULE_I2C: return ModuleKind::I2c;
-        case LSDN_MODULE_SPI: return ModuleKind::Spi;
-        case LSDN_MODULE_USART: return ModuleKind::Usart;
-        case LSDN_MODULE_TIMER: return ModuleKind::Timer;
-        default: throw std::runtime_error("LsdnModuleKind desconhecido");
-    }
-}
-
-} // namespace
 
 NativeMcuAdapterProxy::NativeMcuAdapterProxy(std::shared_ptr<PluginModule> module, LsdnMcuAdapter* handle,
                                              std::string chipId)
@@ -65,6 +51,34 @@ MemoryRegion NativeMcuAdapterProxy::toCoreRegion(const LsdnMemoryRegion& region)
 PinMapping NativeMcuAdapterProxy::toCorePinMapping(const LsdnPinMapping& mapping) {
     return PinMapping{mapping.pinId ? mapping.pinId : std::string{}, toCoreModuleKind(mapping.moduleKind),
                       mapping.moduleIndex, mapping.bitOrLine};
+}
+
+std::vector<std::unique_ptr<QemuModule>> NativeMcuAdapterProxy::createModules() const {
+    const LsdnMcuVTable* vt = m_module->mcuVTable();
+    if (!vt->create_modules) return {};
+
+    const uint32_t count = vt->create_modules(m_handle, nullptr, 0);
+    std::vector<std::unique_ptr<QemuModule>> modules;
+    if (count == 0) return modules;
+
+    std::vector<LsdnQemuModuleHandle> handles(count);
+    vt->create_modules(m_handle, handles.data(), count);
+
+    modules.reserve(count);
+    for (const LsdnQemuModuleHandle& handle : handles) {
+        const ModuleKind kind = toCoreModuleKind(handle.moduleKind);
+        uint64_t memStart = 0;
+        uint64_t memEnd = 0;
+        for (const MemoryRegion& region : m_memoryRegions) {
+            if (region.moduleKind == kind && region.moduleIndex == handle.moduleIndex) {
+                memStart = region.start;
+                memEnd = region.end;
+                break;
+            }
+        }
+        modules.push_back(std::make_unique<QemuModuleProxy>(handle, memStart, memEnd));
+    }
+    return modules;
 }
 
 } // namespace lasecsimul::plugins

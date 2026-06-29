@@ -125,7 +125,7 @@ void destroyMcu(LsdnMcuAdapter* adapter) {
     ++mcuDestroyCount;
     delete reinterpret_cast<McuState*>(adapter);
 }
-const LsdnMcuVTable kMcuVTable = {&createMcu, &buildLaunchArgs, &getMemoryRegions, &getPinMap, &destroyMcu};
+const LsdnMcuVTable kMcuVTable = {&createMcu, &buildLaunchArgs, &getMemoryRegions, &getPinMap, nullptr, &destroyMcu};
 
 const LsdnDeviceVTable* getDeviceVTable1Wrapper(uint32_t* major, uint32_t* minor) { return getDeviceVTable1(major, minor); }
 const LsdnDeviceVTable* getDeviceVTable2Wrapper(uint32_t* major, uint32_t* minor) { return getDeviceVTable2(major, minor); }

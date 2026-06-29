@@ -67,6 +67,67 @@ export interface PropertySchemaEntry {
   showOnSymbol?: boolean;
 }
 
+/** Pino declarado em `package.pins[]` (`device.json`/`.lssub.json`, ver
+ * `.spec/lasecsimul-native-devices.spec` seção 21.2) — `x`/`y` é o ponto onde o "lead" toca o corpo
+ * do símbolo (não a ponta do fio); a ponta real (onde o fio conecta) fica em
+ * `x + cos(angle)*length, y + sin(angle)*length`. `id` deve bater com o `pin.id` real devolvido pelo
+ * Core — é por `id`, nunca por posição no array, que o renderizador casa pino declarado com pino
+ * real (um `McuComponent`/subcircuito pode devolver pinos em ordem diferente da declarada). */
+export interface PackagePin {
+  id: string;
+  kind?: string;
+  x: number;
+  y: number;
+  angle: number;
+  length: number;
+  label?: string;
+}
+
+/** Uma forma declarativa de `package.shapes[]` — mesmo vocabulário de
+ * `components/graphical/{rectangle,ellipse,line,textcomponent}` do SimulIDE, só que como dado
+ * (`.spec/lasecsimul-native-devices.spec` seção 21.2), nunca um componente à parte. */
+export interface PackageShape {
+  kind: "rect" | "text" | "line" | "ellipse";
+  x?: number;
+  y?: number;
+  w?: number;
+  h?: number;
+  x1?: number;
+  y1?: number;
+  x2?: number;
+  y2?: number;
+  cx?: number;
+  cy?: number;
+  rx?: number;
+  ry?: number;
+  value?: string;
+  fontSize?: number;
+  color?: string;
+  stroke?: string;
+  fill?: string;
+  strokeWidth?: number;
+}
+
+export interface PackageBackground {
+  kind: "color" | "svg" | "image" | "none";
+  value?: string;
+  data?: string;
+}
+
+/** Símbolo visual declarativo de um `typeId` — mesmo bloco `package` de `device.json`/`.lssub.json`
+ * (`.spec/lasecsimul-native-devices.spec` seção 21, `.spec/lasecsimul-subcircuits.spec` seção 3).
+ * Quando presente, o renderizador da Webview desenha o corpo e posiciona cada pino na coordenada
+ * REAL declarada — nunca o algoritmo genérico esquerda/direita usado para built-ins sem `package`
+ * (ver `componentSymbols.ts`, Épico G do roadmap de pendências). */
+export interface PackageDescriptor {
+  width: number;
+  height: number;
+  border?: boolean;
+  background?: PackageBackground;
+  shapes?: PackageShape[];
+  pins: PackagePin[];
+}
+
 export interface WebviewComponentCatalogEntry {
   typeId: string;
   label: string;
@@ -88,6 +149,9 @@ export interface WebviewComponentCatalogEntry {
   icon?: string;
   iconFilePath?: string;
   symbolSvg?: string;
+  /** Símbolo declarativo real (`device.json`/`.lssub.json` `package`) — quando presente, tem
+   * prioridade sobre `symbolSvg`/algoritmo genérico (ver `componentSymbols.ts`). */
+  package?: PackageDescriptor;
   pinCount: number;
   defaultProperties: Record<string, string | number | boolean>;
   /** Schema rico de propriedades deste typeId (grupo/editor/min/max/opções/flags), vindo do Core via

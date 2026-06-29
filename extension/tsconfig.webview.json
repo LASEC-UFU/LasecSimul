@@ -14,8 +14,10 @@
   },
   "include": [
     "src/ui/webview/main.ts",
+    "src/ui/webview/palette.ts",
     "src/ui/webview/messages.ts",
     "src/ui/webview/model.ts",
+    "src/ui/webview/paletteTree.ts",
     "src/ui/webview/componentSymbols.ts",
     "src/ui/webview/wireGeometry.ts",
     "src/ui/webview/valueFormatting.ts"

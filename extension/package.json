@@ -40,6 +40,11 @@
         "command": "lasecsimul.palette.removeRegistered",
         "title": "LasecSimul: Remover Dispositivo Registrado"
       },
+      {
+        "command": "lasecsimul.palette.editSymbol",
+        "title": "LasecSimul: Editar Símbolo Visual...",
+        "icon": "$(symbol-color)"
+      },
       { "command": "lasecsimul.saveProject", "title": "LasecSimul: Save Project As..." },
       { "command": "lasecsimul.openProject", "title": "LasecSimul: Open Project..." },
       { "command": "lasecsimul.rotateSelectionCw", "title": "LasecSimul: Rotate Selection CW" },
@@ -60,7 +65,8 @@
       "lasecsimul": [
         {
           "id": "lasecsimul.componentPalette",
-          "name": "Components"
+          "name": "Components",
+          "type": "webview"
         }
       ]
     },
@@ -86,6 +92,11 @@
           "command": "lasecsimul.palette.registerFile",
           "when": "view == lasecsimul.componentPalette",
           "group": "navigation@2"
+        },
+        {
+          "command": "lasecsimul.palette.editSymbol",
+          "when": "view == lasecsimul.componentPalette",
+          "group": "navigation@3"
         },
         {
           "command": "lasecsimul.newSubcircuit",
@@ -137,7 +148,7 @@
     "watch": "tsc -p ./ -w",
     "watch:webview": "tsc -p ./tsconfig.webview.json -w",
     "pretest": "npm run compile && tsc -p ./tsconfig.test.json",
-    "test": "node out-test/test/project/ProjectSerializer.test.js && node out-test/src/ipc/CoreClient.test.js && node out-test/src/catalog/UnifiedCatalog.test.js && node out-test/src/catalog/catalogMerge.test.js && node out-test/src/language.test.js && node out-test/src/ui/webview/wireGeometry.test.js && node out-test/src/ui/webview/valueFormatting.test.js && node out-test/src/trust/trustDecision.test.js"
+    "test": "node out-test/test/project/ProjectSerializer.test.js && node out-test/src/ipc/CoreClient.test.js && node out-test/src/catalog/UnifiedCatalog.test.js && node out-test/src/catalog/catalogMerge.test.js && node out-test/src/language.test.js && node out-test/src/ui/webview/paletteTree.test.js && node out-test/src/ui/webview/wireGeometry.test.js && node out-test/src/ui/webview/valueFormatting.test.js && node out-test/src/ui/webview/componentSymbols.test.js && node out-test/src/catalog/symbolAuthoring.test.js && node out-test/src/trust/trustDecision.test.js"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

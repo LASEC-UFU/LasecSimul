@@ -2,15 +2,16 @@
 // firmware: abre uma arena sintética (mesmo papel de QemuArenaBridgeTest) e escreve direto nos
 // campos que o QEMU real escreveria via writeReg()/readReg() (simuliface.c) -- depois verifica
 // que o pino certo do circuito muda de tensão, e o caminho contrário (GPIO_IN_REG reflete a
-// tensão real do nó).
+// tensão real do nó). O adaptador ESP32 vem do plugin real (mcu_abi.h major 2+), não built-in --
+// ver docs/17-pendencias-pos-sessao-qemu-abi.md seção 3.4.
 #include <chrono>
 #include <cstdio>
+#include <filesystem>
 #include <memory>
 #include "lasecsimul/qemu_arena_abi.h"
 #include "mcu/McuComponent.hpp"
-#include "mcu/esp32/Esp32Adapter.hpp"
-#include "mcu/esp32/Esp32MemoryMap.hpp"
 #include "plugins/GlobalPluginCache.hpp"
+#include "plugins/PluginRuntime.hpp"
 #include "session/SimulationSession.hpp"
 
 using namespace lasecsimul;
@@ -46,12 +47,41 @@ void simulateQemuWrite(LsdnQemuArena* arena, uint64_t addr, uint64_t value) {
 } // namespace
 
 int main() {
+#ifndef ESP32_ADAPTER_DLL_PATH
+#error "ESP32_ADAPTER_DLL_PATH precisa ser definido pelo CMakeLists (caminho do adapter.dll real)"
+#endif
+    const std::filesystem::path dllPath = ESP32_ADAPTER_DLL_PATH;
+    if (!std::filesystem::exists(dllPath)) {
+        std::fprintf(stderr,
+                      "PULADO: %s não existe -- rode 'npm run build:mcu-adapters' antes deste teste.\n",
+                      dllPath.string().c_str());
+        return 0;
+    }
+
     plugins::GlobalPluginCache cache;
+    std::shared_ptr<plugins::PluginModule> module = cache.loader().loadMcuPlugin(dllPath);
+    cache.setActiveMcuModule("espressif.esp32", module);
+
     SimulationSession session(cache);
+    session.registerKnownMcuTypes();
+
+    // Pega o GPIO start real declarado pelo próprio plugin (memoryRegions()) -- em vez de assumir
+    // uma constante ESP32 hardcoded no teste, já que o adaptador agora é um plugin, não um tipo
+    // C++ conhecido em tempo de compilação aqui.
+    plugins::PluginRuntime runtime(cache);
+    const std::unique_ptr<IMcuAdapter> probeAdapter = runtime.createMcuAdapter("espressif.esp32");
+    uint64_t gpioStart = 0;
+    for (const MemoryRegion& region : probeAdapter->memoryRegions()) {
+        if (region.moduleKind == ModuleKind::Gpio && region.moduleIndex == 0) {
+            gpioStart = region.start;
+            break;
+        }
+    }
+    check(gpioStart != 0, "memoryRegions() do plugin declara uma faixa GPIO");
 
     mcu::McuComponent* mcuPtr = nullptr;
     session.components().registerFactory("mcu.esp32", [&mcuPtr, &session](const registry::ComponentParams&) {
-        auto instance = std::make_unique<mcu::McuComponent>(std::make_unique<mcu::esp32::Esp32Adapter>(), session.scheduler());
+        auto instance = std::make_unique<mcu::McuComponent>(session.mcus().create("espressif.esp32"), session.scheduler());
         mcuPtr = instance.get();
         return instance;
     });
@@ -72,10 +102,10 @@ int main() {
     // dirty por si só (em produção, McuComponent::scheduleNextPoll() faz isso a cada 50us via
     // Scheduler; aqui simulamos isso manualmente, sem precisar avançar o relógio).
     LsdnQemuArena* arena = mcuPtr->arenaBridge().arena();
-    simulateQemuWrite(arena, mcu::esp32::kGpioStart + 0x20, 1u << 2);
+    simulateQemuWrite(arena, gpioStart + 0x20, 1u << 2);
     session.scheduler().markDirty(mcuIndex);
     for (int i = 0; i < 5 && session.settleStep(); ++i) {}
-    simulateQemuWrite(arena, mcu::esp32::kGpioStart + 0x04, 1u << 2);
+    simulateQemuWrite(arena, gpioStart + 0x04, 1u << 2);
     session.scheduler().markDirty(mcuIndex);
     for (int i = 0; i < 5 && session.settleStep(); ++i) {}
 
@@ -84,7 +114,7 @@ int main() {
 
     // Agora o caminho contrário: GPIO3 não foi habilitado como saída -- McuComponent deve ler a
     // tensão real do nó (default 0V, sem nada estampado) e alimentar isso de volta no módulo.
-    simulateQemuWrite(arena, mcu::esp32::kGpioStart + 0x3C, 0); // dispara um SIM_READ
+    simulateQemuWrite(arena, gpioStart + 0x3C, 0); // dispara um SIM_READ
     arena->simuAction = LSDN_SIM_READ;
     session.scheduler().markDirty(mcuIndex);
     for (int i = 0; i < 5 && session.settleStep(); ++i) {}

@@ -5,9 +5,22 @@
     "en": {
       "items": {
         "connectors.junction": { "label": "Junction", "folderPath": ["Connectors"] },
+        "connectors.bus": { "label": "Bus", "folderPath": ["Connectors"] },
         "connectors.tunnel": { "label": "Tunnel", "folderPath": ["Connectors"] },
+        "connectors.socket": { "label": "Socket", "folderPath": ["Connectors"] },
+        "connectors.header": { "label": "Header", "folderPath": ["Connectors"] },
         "sources.dc_voltage": { "label": "DC Voltage Source", "folderPath": ["Sources"] },
         "other.ground": { "label": "Ground (0 V)", "folderPath": ["Sources"] },
+
+        "graphics.image": { "label": "Image", "folderPath": ["Graphical"] },
+        "graphics.text": { "label": "Text", "folderPath": ["Graphical"] },
+        "graphics.rectangle": { "label": "Rectangle", "folderPath": ["Graphical"] },
+        "graphics.ellipse": { "label": "Ellipse", "folderPath": ["Graphical"] },
+        "graphics.line": { "label": "Line", "folderPath": ["Graphical"] },
+        "other.package": { "label": "Package", "folderPath": ["Others"] },
+        "other.package_pin": { "label": "Package Pin", "folderPath": ["Others"] },
+        "other.test_unit": { "label": "Test Unit", "folderPath": ["Others"] },
+        "other.dial": { "label": "Dial", "folderPath": ["Others"] },
 
         "meters.probe": { "label": "Probe", "folderPath": ["Meters"] },
         "meters.ampmeter": { "label": "Ampmeter", "folderPath": ["Meters"] },
@@ -27,7 +40,9 @@
     }
   },
   "deviceLibraries": [
-    "../devices/library.json"
+    "../devices/library.json",
+    "../mcu-adapters/library.json",
+    "../subcircuits/library.json"
   ],
   "items": [
     { "typeId": "switches.push", "label": "Push", "pinCount": 2, "icon": "push", "folderPath": ["Interruptores"], "defaultProperties": { "closed": false } },
@@ -35,6 +50,39 @@
     { "typeId": "switches.switch_dip", "label": "Switch Dip", "pinCount": 16, "icon": "switchdip", "folderPath": ["Interruptores"], "defaultProperties": { "closed": false } },
     { "typeId": "switches.relay", "label": "Relay (all)", "pinCount": 4, "icon": "relay-spst", "folderPath": ["Interruptores"], "defaultProperties": { "iOn": 15, "iOff": 5, "normallyClosed": false } },
     { "typeId": "switches.keypad", "label": "KeyPad", "pinCount": 8, "icon": "keypad", "folderPath": ["Interruptores"], "defaultProperties": { "diodes": false, "diodesDirection": false, "rows": 4, "columns": 4, "keyLabels": "123A456B789C*0#D" } },
+
+    { "typeId": "logic.buffer", "label": "Buffer", "pinCount": 2, "icon": "generic-component", "folderPath": ["Logicos", "Portas"], "defaultProperties": {} },
+    { "typeId": "logic.and_gate", "label": "And Gate", "pinCount": 3, "icon": "generic-component", "folderPath": ["Logicos", "Portas"], "defaultProperties": {} },
+    { "typeId": "logic.or_gate", "label": "Or Gate", "pinCount": 3, "icon": "generic-component", "folderPath": ["Logicos", "Portas"], "defaultProperties": {} },
+    { "typeId": "logic.xor_gate", "label": "Xor Gate", "pinCount": 3, "icon": "generic-component", "folderPath": ["Logicos", "Portas"], "defaultProperties": {} },
+
+    { "typeId": "logic.counter", "label": "Simple Counter", "pinCount": 3, "icon": "generic-component", "folderPath": ["Logicos", "Aritmeticos"], "defaultProperties": { "maxValue": 1 } },
+    { "typeId": "logic.bin_counter", "label": "Binary Counter", "pinCount": 6, "icon": "generic-component", "folderPath": ["Logicos", "Aritmeticos"], "defaultProperties": {} },
+    { "typeId": "logic.full_adder", "label": "Full Adder", "pinCount": 5, "icon": "generic-component", "folderPath": ["Logicos", "Aritmeticos"], "defaultProperties": {} },
+    { "typeId": "logic.magnitude_comp", "label": "Magnitude Comparator", "pinCount": 11, "icon": "generic-component", "folderPath": ["Logicos", "Aritmeticos"], "defaultProperties": {} },
+    { "typeId": "logic.shift_reg", "label": "Shift Register", "pinCount": 11, "icon": "generic-component", "folderPath": ["Logicos", "Aritmeticos"], "defaultProperties": {} },
+    { "typeId": "logic.function", "label": "Function", "pinCount": 3, "icon": "generic-component", "folderPath": ["Logicos", "Aritmeticos"], "defaultProperties": { "functions": "i0 | i1" } },
+
+    { "typeId": "logic.flipflop_d", "label": "FlipFlopD", "pinCount": 6, "icon": "generic-component", "folderPath": ["Logicos", "Memorias"], "defaultProperties": {} },
+    { "typeId": "logic.flipflop_t", "label": "FlipFlopT", "pinCount": 6, "icon": "generic-component", "folderPath": ["Logicos", "Memorias"], "defaultProperties": {} },
+    { "typeId": "logic.flipflop_rs", "label": "FlipFlop RS", "pinCount": 4, "icon": "generic-component", "folderPath": ["Logicos", "Memorias"], "defaultProperties": {} },
+    { "typeId": "logic.flipflop_jk", "label": "FlipFlop JK", "pinCount": 7, "icon": "generic-component", "folderPath": ["Logicos", "Memorias"], "defaultProperties": {} },
+    { "typeId": "logic.latch_d", "label": "Latch", "pinCount": 4, "icon": "generic-component", "folderPath": ["Logicos", "Memorias"], "defaultProperties": {} },
+    { "typeId": "logic.memory", "label": "Memory", "pinCount": 15, "icon": "generic-component", "folderPath": ["Logicos", "Memorias"], "defaultProperties": {} },
+    { "typeId": "logic.dynamic_memory", "label": "Dynamic Memory", "pinCount": 15, "icon": "generic-component", "folderPath": ["Logicos", "Memorias"], "defaultProperties": {} },
+    { "typeId": "logic.i2c_ram", "label": "I2C Ram", "pinCount": 5, "icon": "generic-component", "folderPath": ["Logicos", "Memorias"], "defaultProperties": { "sizeBytes": 65536, "controlCode": 80, "frequencyKHz": 100, "persistent": false } },
+
+    { "typeId": "logic.mux", "label": "Mux", "pinCount": 13, "icon": "generic-component", "folderPath": ["Logicos", "Conversores"], "defaultProperties": {} },
+    { "typeId": "logic.demux", "label": "Demux", "pinCount": 12, "icon": "generic-component", "folderPath": ["Logicos", "Conversores"], "defaultProperties": {} },
+    { "typeId": "logic.bcd_to_dec", "label": "Bcd To Dec", "pinCount": 14, "icon": "generic-component", "folderPath": ["Logicos", "Conversores"], "defaultProperties": {} },
+    { "typeId": "logic.dec_to_bcd", "label": "Dec To Bcd", "pinCount": 14, "icon": "generic-component", "folderPath": ["Logicos", "Conversores"], "defaultProperties": {} },
+    { "typeId": "logic.bcd_to_7seg", "label": "Bcd To 7S.", "pinCount": 11, "icon": "generic-component", "folderPath": ["Logicos", "Conversores"], "defaultProperties": {} },
+    { "typeId": "logic.i2c_to_parallel", "label": "I2C to Parallel", "pinCount": 14, "icon": "generic-component", "folderPath": ["Logicos", "Conversores"], "defaultProperties": { "controlCode": 80, "frequencyKHz": 100 } },
+
+    { "typeId": "logic.adc", "label": "ADC", "pinCount": 9, "icon": "generic-component", "folderPath": ["Logicos", "Outros logicos"], "defaultProperties": { "vref": 5 } },
+    { "typeId": "logic.dac", "label": "DAC", "pinCount": 9, "icon": "generic-component", "folderPath": ["Logicos", "Outros logicos"], "defaultProperties": { "vref": 5 } },
+    { "typeId": "logic.seven_segment_bcd", "label": "7 Segment BCD", "pinCount": 11, "icon": "seven_segment", "folderPath": ["Logicos", "Outros logicos"], "defaultProperties": {} },
+    { "typeId": "logic.lm555", "label": "LM555", "pinCount": 8, "icon": "generic-component", "folderPath": ["Logicos", "Outros logicos"], "defaultProperties": {} },
 
     { "typeId": "passive.resistor", "label": "Resistor", "pinCount": 2, "icon": "resistor", "folderPath": ["Passivos", "Resistors"], "defaultProperties": { "resistance": 1000 } },
     { "typeId": "passive.variable_resistor", "label": "Variable Resistor", "pinCount": 2, "icon": "varresistor", "folderPath": ["Passivos", "Resistors"], "defaultProperties": { "resistance": 10000 } },
@@ -95,7 +143,19 @@
     { "typeId": "outputs.incandescent_lamp", "label": "Incandescent lamp", "pinCount": 2, "icon": "lamp", "folderPath": ["Saidas", "Other Outputs"], "defaultProperties": { "resistance": 100 } },
 
     { "typeId": "connectors.junction", "label": "Juncao", "pinCount": 1, "icon": "tunel", "folderPath": ["Conectores"], "defaultProperties": {} },
+    { "typeId": "connectors.bus", "label": "Barramento", "pinCount": 1, "icon": "bus", "folderPath": ["Conectores"], "defaultProperties": {}, "disabled": true, "disabledReason": "modelo eletrico ainda indisponivel no Core" },
     { "typeId": "connectors.tunnel", "label": "Tunel", "pinCount": 1, "icon": "tunel", "folderPath": ["Conectores"], "defaultProperties": {} },
+    { "typeId": "connectors.socket", "label": "Soquete", "pinCount": 8, "icon": "socket", "folderPath": ["Conectores"], "defaultProperties": {}, "disabled": true, "disabledReason": "modelo eletrico ainda indisponivel no Core" },
+    { "typeId": "connectors.header", "label": "Cabecalho", "pinCount": 8, "icon": "header", "folderPath": ["Conectores"], "defaultProperties": {}, "disabled": true, "disabledReason": "modelo eletrico ainda indisponivel no Core" },
+    { "typeId": "graphics.image", "label": "Imagem", "pinCount": 0, "icon": "graphic-image", "folderPath": ["Grafico"], "defaultProperties": { "path": "" } },
+    { "typeId": "graphics.text", "label": "Texto", "pinCount": 0, "icon": "graphic-text", "folderPath": ["Grafico"], "defaultProperties": { "text": "Texto", "fontSize": 11, "color": "#1f2937" } },
+    { "typeId": "graphics.rectangle", "label": "Retangulo", "pinCount": 0, "icon": "graphic-rectangle", "folderPath": ["Grafico"], "defaultProperties": { "width": 60, "height": 40, "stroke": "#94a3b8", "fill": "none", "strokeWidth": 1 } },
+    { "typeId": "graphics.ellipse", "label": "Elipse", "pinCount": 0, "icon": "graphic-ellipse", "folderPath": ["Grafico"], "defaultProperties": { "width": 40, "height": 40, "stroke": "#94a3b8", "fill": "none" } },
+    { "typeId": "graphics.line", "label": "Linha", "pinCount": 0, "icon": "graphic-line", "folderPath": ["Grafico"], "defaultProperties": { "length": 40, "stroke": "#94a3b8" } },
+    { "typeId": "other.package", "label": "Pacote", "pinCount": 0, "icon": "package", "folderPath": ["Outros"], "defaultProperties": { "width": 80, "height": 60, "border": true, "backgroundColor": "#ffffff" } },
+    { "typeId": "other.package_pin", "label": "Pino de Pacote", "pinCount": 0, "icon": "package-pin", "folderPath": ["Outros"], "defaultProperties": { "pinId": "pin1", "label": "pin1", "length": 8 } },
+    { "typeId": "other.test_unit", "label": "Unidade de Teste", "pinCount": 0, "icon": "test-unit", "folderPath": ["Outros"], "defaultProperties": {}, "disabled": true, "disabledReason": "unidade de teste ainda indisponivel no Core" },
+    { "typeId": "other.dial", "label": "Rotativo", "pinCount": 0, "icon": "dial", "folderPath": ["Outros"], "defaultProperties": {}, "disabled": true, "disabledReason": "controle interativo ainda indisponivel no Core" },
     { "typeId": "meters.probe", "label": "Sonda", "pinCount": 1, "icon": "sonda", "folderPath": ["Medidores"], "defaultProperties": { "threshold": 2.5, "showVolt": true } },
     { "typeId": "meters.ampmeter", "label": "Amperimetro", "pinCount": 3, "icon": "amperimetro", "folderPath": ["Medidores"], "defaultProperties": { "resistance": 0.000001 } },
     { "typeId": "meters.freqmeter", "label": "Frequencimetro", "pinCount": 1, "icon": "frequencimetro", "folderPath": ["Medidores"], "defaultProperties": { "filter": 0.1 } },
@@ -127,6 +187,22 @@
       "kind": "mcu-adapter",
       "filePath": "../mcu-adapters/espressif-esp32/mcu.json",
       "lsconfigPath": "../mcu-adapters/espressif-esp32/device.lsconfig",
+      "removable": false
+    },
+    {
+      "id": "builtin-subcircuit-esp32-devkitc-v4",
+      "kind": "subcircuit-file",
+      "filePath": "../subcircuits/esp32_devkitc_v4.lssub.json",
+      "libraryPath": "../subcircuits/library.json",
+      "lsconfigPath": "../subcircuits/esp32_devkitc_v4.lsconfig",
+      "removable": false
+    },
+    {
+      "id": "builtin-subcircuit-esp32-wroom32",
+      "kind": "subcircuit-file",
+      "filePath": "../subcircuits/esp32_wroom32.lssub.json",
+      "libraryPath": "../subcircuits/library.json",
+      "lsconfigPath": "../subcircuits/esp32_wroom32.lsconfig",
       "removable": false
     }
   ]

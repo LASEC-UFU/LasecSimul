@@ -24,7 +24,7 @@ Hoje as pendências se concentram em seis frentes:
 
 1. fechar o comportamento normativo já especificado do Core;
 2. completar o pipeline MCU/QEMU;
-3. completar infraestrutura genérica de barramentos e fault handling de plugins;
+3. completar periféricos de chip restantes (IOMUX/TWI/SPI/USART do ESP32) e fault handling de plugins;
 4. construir a suíte de testes faltante da Extension;
 5. entregar subcircuitos como produto;
 6. atacar o backlog avançado do editor.
@@ -90,45 +90,66 @@ explicitam isso em `lasecsimul.spec` seção 6.1.2 e `lasecsimul-native-devices.
 - `requiresRestart` produz comportamento explícito e testado;
 - testes headless cobrindo tipo, faixa, enum e flags.
 
+### Nota adicional: leitura de corrente (`current()`) — entregue em 2026-06-28
+
+Fora do escopo original deste épico, mas no mesmo espírito (expor mais estado do componente sem
+disparar solve novo): `IComponentModel::current()` + `SimulationSession::componentCurrent()` + IPC
+`getComponentCurrent` + `CoreClient.getComponentCurrent`. Convenção de sinal passiva validada
+empiricamente (fonte fornecendo energia aparece negativa). Detalhe completo em
+`.spec/lasecsimul.spec` seção 6.1.4 e `docs/17-pendencias-pos-sessao-qemu-abi.md` seção 0.1.
+
 ## Épico B - Completar o pipeline MCU/QEMU
 
-**Status: concluído.** `QemuProcessManager`, `QemuArenaBridge` e `FirmwareWatcher` estão
-implementados em `core/src/mcu/qemu/`, `Esp32Adapter` em `core/src/mcu/esp32/`, e há teste de
-integração ponta a ponta contra o binário QEMU real (`core/test/core/mcu/McuControllerRealQemuTest.cpp`,
-target `mcu_controller_real_qemu`) — todos passando em `ctest`.
+**Status: concluído, e mais avançado do que quando este épico foi escrito.** `QemuProcessManager`,
+`FirmwareWatcher` e `McuComponent` (peça que faltava: liga `IMcuAdapter` ao circuito real via pinos,
+seção 8 do `.spec/lasecsimul.spec`) estão implementados. Adaptador ESP32 migrado em 2026-06-28 do
+caminho built-in (que existia em `core/src/mcu/esp32/`, removido) para **plugin DLL/SO**
+(`mcu-adapters/espressif-esp32/`, `mcu_abi.h` major 2+, `LsdnQemuModuleVTable`/`create_modules`) — mesmo
+desempenho, sem precisar recompilar o Core pra cada chip novo. Binário real do QEMU **vendorizado** em
+`devices/qemu-esp32/bin/` (copiado de
+`SimulIDE_2-R260501_Win64\data\bin\`) e teste de integração ponta a ponta lança o processo real
+(`core/test/core/mcu/McuControllerRealQemuTest.cpp`, target `mcu_controller_real_qemu`) — abre a arena,
+inicia o processo, só falha no firmware porque ainda não existe um `.bin` real (falta toolchain
+ESP-IDF). `core/test/core/mcu/McuComponentTest.cpp` prova `GPIO_ENABLE_REG`+`GPIO_OUT_REG` subindo um
+pino do circuito pra 3.3V sem precisar de QEMU real (arena sintética). Protocolo da arena
+(`qemu_arena_abi.h`) foi reescrito nesta sessão (regAddr/regData/SIM_READ/SIM_WRITE, 88 bytes,
+confirmado contra o binário real) — ver `docs/17-pendencias-pos-sessao-qemu-abi.md` seção 0.5.
+**O que ainda falta** (não bloqueia o critério de aceite original, mas seria necessário pra periféricos
+alem de GPIO simples): IOMUX/pin-matrix e módulos TWI/SPI/USART do ESP32 (seção 3.1 do handoff),
+`McuRuntimeManager` pra múltiplas instâncias de MCU por projeto (seção 3.2), expor
+`loadFirmware`/`stopFirmware` via IPC (seção 3.3).
 
-### Motivação
+### Motivação (histórica — RF04/RF05/RF08 já atendidos pelo que está implementado)
 
-RF04, RF05 e RF08 continuam dependentes do fechamento real de `QemuProcessManager` e `QemuArenaBridge`.
-As specs já tratam o formato e o modelo como resolvidos; o que falta é implementação.
+### Pendências reais que restam
 
-### Pendências
+- IOMUX/pin-matrix e módulos `Esp32TwiModule`/`Esp32SpiModule`/`Esp32UsartModule` (só GPIO existe).
+- `McuRuntimeManager` pra múltiplas instâncias de MCU por projeto.
+- Expor `loadFirmware`/`stopFirmware` via IPC (hoje só exercitado por teste C++ direto).
+- Toolchain ESP-IDF pra gerar um firmware `.bin` real (dependência externa, não é trabalho do Core).
 
-- Implementar `QemuProcessManager`.
-- Implementar `QemuArenaBridge`.
-- Fechar ciclo start/pause/stop/kill do processo QEMU.
-- Integrar `FirmwareWatcher` com reset/reload automático do firmware.
-- Conectar `IMcuAdapter`/`Esp32Adapter` ao pipeline real.
-- Expor sinais mínimos para debug e observabilidade operacional.
+### Entregáveis (já alcançados)
 
-### Entregáveis
-
-- processo QEMU controlado pelo Core;
-- arena de memória lida/escrita com dispatch por endereço;
-- ESP32 inicial rodando firmware real;
-- ciclo de reload automático de firmware sem intervenção manual;
-- teste blink ponta a ponta.
+- processo QEMU real controlado pelo Core (`QemuProcessManager`), binário vendorizado;
+- arena de memória lida/escrita com dispatch por endereço (`QemuArenaBridge` + `McuComponent` + módulo
+  GPIO do plugin ESP32, via `QemuModuleProxy`);
+- `McuComponentTest` prova GPIO subindo um pino do circuito a 3.3V sem precisar de QEMU real;
+- ciclo de reload automático de firmware via `FirmwareWatcher` (poll de mtime).
+- **Falta** (não bloqueia o que já existe): teste blink ponta a ponta com firmware `.bin` real (precisa
+  da toolchain ESP-IDF).
 
 ### Dependências
 
-- Épico C parcialmente, se a implementação dos módulos genéricos de barramento for necessária para os primeiros
-  casos úteis.
+- Épico C (decodificação bit a bit) já não é bloqueio — mecanismo substituído e funcionando
+  independente deste épico.
 
 ### Arquivos alvo
 
-- `core/src/mcu/QemuProcessManager.*`
-- `core/src/mcu/QemuArenaBridge.*`
-- `core/src/mcu/FirmwareWatcher.*`
+- `core/src/mcu/qemu/QemuProcessManager.*`
+- `core/src/mcu/qemu/QemuArenaBridge.*`
+- `core/src/mcu/qemu/FirmwareWatcher.*`
+- `core/src/mcu/McuComponent.*`
+- `core/src/plugins/QemuModuleProxy.hpp`
 - `core/src/mcu/`
 - `mcu-adapters/espressif-esp32/`
 
@@ -138,56 +159,52 @@ As specs já tratam o formato e o modelo como resolvidos; o que falta é impleme
 - alterações no artefato observado acionam reload automático;
 - teste integrado de blink passa de forma reproduzível.
 
-## Épico C - Implementar módulos genéricos de barramento e integração MCU↔device
+## Épico C - Decodificação bit a bit de protocolo (substituiu módulos genéricos de barramento)
 
-**Status: concluído (primeira versão).** `BusController`, `I2cBusModule` e `SpiBusModule`
-implementados em `core/src/bus/` seguindo à risca o desenho fixado em
-`.spec/lasecsimul-native-devices.spec` seção 8.2 (master agendado via `Scheduler::scheduleEvent`,
-slave puramente reativo via `IBusParticipant::onBusWrite`/`onBusReadRequest`, vocabulário de estado
-neutro `Idle/Start/Addr/Data/Ack/Nack/Stop` para I2C e `Idle/Select/Transfer/Deselect` para SPI,
-delay configurável por passo, `Scheduler` recebido por referência no construtor — nunca singleton).
-Testes em `core/test/core/bus/{I2cBusModuleTest,SpiBusModuleTest}.cpp`, 100% passando via `ctest`.
-Simplificação documentada e assumida nesta primeira versão: granularidade por byte (a própria
-`IBusParticipant` já opera em `span<uint8_t>`, não em bits), sem clock-stretching nem NACK de um
-byte de dado específico no meio de uma transação — revisitar apenas se um `IMcuAdapter` real exigir.
-Ainda não integrado a um `IMcuAdapter` real (esse é o próximo passo natural do Épico C, mas não
-bloqueia o restante do roadmap).
+**Status: substituído por completo em 2026-06-28.** A abordagem original deste épico
+(`BusController`/`I2cBusModule`/`SpiBusModule` genéricos, `core/src/bus/`) foi avaliada, implementada
+e testada — mas **nunca foi ligada a um `SimulationSession` real**, só os próprios testes do
+subsistema o exercitavam. Não é uma continuação: é uma substituição arquitetural. Removidos por
+completo: `core/src/bus/{BusController,I2cBusModule,SpiBusModule}.hpp`, `IBusParticipant.hpp`, e os
+testes `core/test/core/bus/{I2cBusModuleTest,SpiBusModuleTest}.cpp`.
 
-### Motivação
+**O que existe agora**: detecção de borda digital real em `SimulationSession::settleStep()` — quando a
+tensão de um nó cruza `kDigitalLevelThreshold` (2.5V, `core/include/lasecsimul/Types.hpp`), o Core
+dispara `ComponentEvent{kPinChangeEventTag, localPinIndex, nivel, nsDesdeABordaAnterior}` para todo
+componente/pino presente naquele nó — built-in ou plugin, sem distinção, sem precisar de registro
+prévio. Protocolo (I2C/SPI/UART) é decodificado bit a bit pelo próprio device/componente a partir
+desses eventos — nunca por um módulo de barramento intermediário. Infraestrutura de suporte:
+`Netlist::Topology::pinRefsByNode` (paralelo a `listenersByNode`, sem dedup),
+`Scheduler::nowNsUnlocked()`/`scheduleEventUnlocked()` (variantes sem mutex, seguras de dentro do
+próprio settle-loop). Teste: `core/test/core/session/PinChangeDispatchTest.cpp` (`pin_change_dispatch`
+no ctest). `devices/simulide-complex/src/lib.c` migrado pra usar só `LSDN_EVT_PIN_CHANGE`.
 
-`I2cBusModule` e `SpiBusModule` têm contrato validado em spec, mas ainda não foram escritos. Isso é a base
-para não reimplementar protocolo por chip.
+**Achado crítico relacionado** (afeta também o Épico B/MCU): a crença de que "módulos de
+periférico devem ser genéricos, reusados por qualquer chip" estava errada — confirmado lendo
+`hw/gpio/esp32_gpio.c` do fork QEMU real. O QEMU manda registrador bruto, sem decodificar nada; quem
+decodifica é o módulo do lado do Core, e esse módulo é CHIP-ESPECÍFICO de propósito (ver
+`core/include/lasecsimul/QemuModule.hpp`, `Esp32GpioModule`). Só `Scheduler`/`Netlist`/IPC/UI precisam
+ser neutros quanto a chip.
 
-### Pendências
+Detalhe completo da sessão que fez essa substituição:
+`docs/17-pendencias-pos-sessao-qemu-abi.md`, seções 0.1/0.4/0.5.
 
-- Implementar `I2cBusModule`.
-- Implementar `SpiBusModule`.
-- Confirmar se `UsartModule` e `GpioModule` atuais já cobrem o mesmo padrão esperado pela spec.
-- Integrar esses módulos ao `BusController`.
-- Garantir vocabulário neutro de estado, sem acoplamento a AVR/TWSR.
-- Garantir agendamento master/reatividade slave conforme a spec.
+### Pendências reais que restam (não é mais sobre módulo de barramento)
 
-### Entregáveis
+- ESP32: IOMUX/pin-matrix (tabela de 512 entradas) e módulos `Esp32TwiModule`/`Esp32SpiModule`/
+  `Esp32UsartModule` (só GPIO puro existe hoje) — ver `docs/17-pendencias-pos-sessao-qemu-abi.md`
+  seção 3.1.
+- `mcu_abi.h` (ABI de MCU plugin de terceiro) não tem equivalente a `QemuModule`/`createModules()` —
+  só adaptadores built-in conseguem declarar módulos concretos hoje (seção 3.4 do mesmo documento).
 
-- barramentos genéricos reutilizáveis por qualquer `IMcuAdapter`;
-- testes unitários de protocolo em nível de Core;
-- integração inicial device plugin ↔ MCU via mesmo `BusController`.
+### Critério de aceite (revisado)
 
-### Dependências
-
-- pode rodar em paralelo com Épico B, mas converge nele.
-
-### Arquivos alvo
-
-- `core/src/bus/`
-- `core/src/session/SimulationSession.*`
-- `core/test/`
-
-### Critério de aceite
-
-- um adaptador de MCU novo não precisa reimplementar I2C/SPI;
-- os testes de barramento não dependem da UI;
-- a API não fica contaminada por semântica específica de um chip.
+- protocolo (I2C/SPI/UART) decodificado pelo device a partir de `LSDN_EVT_PIN_CHANGE`, sem módulo de
+  barramento intermediário;
+- um adaptador de MCU novo declara seus próprios `QemuModule`s concretos via `createModules()` — não
+  reimplementa o despacho por endereço (`McuComponent` faz isso), mas também não finge que o registrador
+  é genérico entre chips;
+- testes de decodificação de protocolo não dependem da UI nem de QEMU real (`PinChangeDispatchTest`).
 
 ## Épico D - Robustez de plugins nativos: timeout, fault, trust e recovery
 
@@ -313,11 +330,22 @@ seguindo `.spec/lasecsimul-subcircuits.spec` seção 5 à risca:
   resolve eletricamente igual ao mesmo divisor montado componente a componente; cobre também
   não-colisão entre instâncias, cascata de remoção e ciclo.
 
-**Ainda pendente (lado Extension, não iniciado nesta rodada)**: comando "Criar Subcircuito a
-partir da Seleção", editor de símbolo (depende do Épico G), persistência `.lssub.json` a partir do
-editor, integração na paleta com `folderPath`/i18n/`deviceLibraries[]`. Cada um exigiria UI nova no
-webview testável só com interação real (mouse/seleção) -- não cabe na mesma rodada que a fundação
-do Core sem virar trabalho não testado, ver mesma decisão de escopo do Épico G abaixo.
+**Integração na paleta — concluída em 2026-06-28** (estava parcialmente escrita mas com um gate
+fixo: `extension.ts::resolveRegisteredItem` desabilitava incondicionalmente qualquer
+`kind: "subcircuit-file"` com a razão hardcoded "execução ainda indisponível no Core atual" —
+desatualizado desde que o Core ganhou suporte de ponta a ponta, descrito acima). Corrigido pra
+seguir o mesmo tratamento de `abi-device` (lê `lsconfig` pra label/folderPath/icon/`symbolSvg`/
+`pinCount`/`defaultProperties`, infere `library.json` na mesma pasta do `.lssub.json` — convenção de
+arquivo único da seção 7 do spec — e só desabilita se esse `library.json` não existir). Prova real:
+`subcircuits/esp32_devkitc_v4.lssub.json` (placa ESP32 DevKitC V4, ver `docs/11-qemu-esp32.md`),
+registrado via `registeredSources` (`project/schema/component-catalog.json`) com seu próprio
+`esp32_devkitc_v4.lsconfig`, aparece habilitado na paleta e instancia de verdade.
+
+**Ainda pendente (lado Extension)**: comando "Criar Subcircuito a partir da Seleção", editor de
+símbolo (depende do Épico G), persistência `.lssub.json` a partir do editor — cada um exigiria UI
+nova no webview testável só com interação real (mouse/seleção), ver mesma decisão de escopo do
+Épico G abaixo. Registrar/usar um subcircuito já escrito à mão (este épico) não depende de nenhum
+dos três.
 
 ### Motivação
 
@@ -334,13 +362,15 @@ suficiente para começar a implementação por fases.
 - Detectar ciclo de dependência entre subcircuitos.
 - Criar comando “Criar Subcircuito a partir da Seleção”.
 - Criar persistência `.lssub.json`.
-- Integrar subcircuitos à paleta com `folderPath`, i18n e `deviceLibraries[]`.
+- ~~Integrar subcircuitos à paleta com `folderPath`, i18n e `deviceLibraries[]`.~~ **Feito**
+  (2026-06-28) — ver nota acima.
 
 ### Entregáveis
 
 - suporte headless do Core a subcircuitos;
-- fluxo de criação a partir de seleção no editor;
-- subcircuito aparecendo e sendo instanciado pela paleta;
+- fluxo de criação a partir de seleção no editor — ainda aberto;
+- ~~subcircuito aparecendo e sendo instanciado pela paleta~~ **feito** — `subcircuits.esp32_devkitc_v4`
+  é a prova real;
 - biblioteca `subcircuits/` funcional.
 
 ### Dependências
@@ -367,33 +397,68 @@ suficiente para começar a implementação por fases.
 
 ## Épico G - Editor de package/símbolo visual de dispositivos
 
-**Status: não iniciado nesta rodada (decisão de escopo explícita).** Diferente dos Épicos A-D/H/F
-(Core/lógica pura, verificáveis por teste automatizado sem interação humana), este épico é
-fundamentalmente uma ferramenta de edição visual interativa -- redimensionar corpo, posicionar
-pino arrastando o mouse, upload de imagem, round-trip de edição na UI. Não há como entregar isto
-com confiança real sem rodar a Extension de verdade num VSCode e interagir com o canvas; a Onda 1
-já tinha decidido conscientemente deixar teste de Webview com DOM real (`jsdom` ou equivalente)
-fora de propósito por enquanto (ver Épico E, decisão de E4) -- construir um editor visual inteiro
-sem essa rede de segurança é o tipo de trabalho que `.spec`/CLAUDE.md pedem para tratar com mais
-cautela (UI: "use a feature in a browser before reporting the task as complete"), não para
-produzir as ciegas numa sessão sem esse loop de verificação disponível. Recomendação: tratar como
-sessão dedicada, com a Extension rodando interativamente (`F5`/Extension Development Host) para
-validar cada etapa visualmente conforme escrita, em vez de tentar adivinhar geometria/UX certa só
-lendo a spec.
+**Renderizador (leitura) implementado em 2026-06-28** — ver seção anterior deste arquivo/
+`docs/11-qemu-esp32.md` ("Renderizador real de `package`").
+
+**Editor (escrita) reimplementado em 2026-06-29.** A primeira versão (2026-06-28,
+`extension/src/ui/webview/packageEditor.ts` + `packageEditorGeometry.ts`, um canvas SVG bespoke com
+alças feitas à mão) foi **descartada** depois de revisão com captura de tela real (rótulos de pino
+sobrepostos, visual divergente do renderizador de leitura) e de uma auditoria do fonte real do SimulIDE
+(`C:\SourceCode\simulide_2\src\components\other\subpackage.{h,cpp}` + `components\graphical\*`), que
+mostrou que o SimulIDE não tem editor separado: `SubPackage`/`Rectangle`/`Ellipse`/`Line`/
+`TextComponent`/`PackagePin` são `Component`s comuns na MESMA cena do circuito, redimensionados por
+propriedade numérica (nunca alça de arrastar).
+
+A versão atual segue esse princípio — não existe mais canvas/sidebar bespoke. `main.ts` ganhou uma
+**sessão de autoria de símbolo** (`enterSymbolAuthoring`/`exitSymbolAuthoring`/`saveSymbolAuthoring`)
+que troca temporariamente qual `WebviewProjectState` o render/drag/painel de propriedades operam em
+cima — zero código de renderização/interação novo, tudo já era genérico sobre `state`. Os "objetos
+gráficos" viram componentes de catálogo de verdade: `other.package` (corpo, antes desabilitado, agora
+property-driven: `width`/`height`/`border`/`backgroundColor`), `graphics.rectangle`/`ellipse`/`line`/
+`text` (formas, antes decorativas com tamanho fixo, agora property-driven), e `other.package_pin` (NOVO
+typeId — pino do símbolo, ângulo = `component.rotation` genérico, sem campo/código de ângulo
+dedicado). Todos `pinCount: 0`, nunca tocam o Core. Conversão pura package↔componentes em
+`extension/src/catalog/symbolAuthoring.ts` (`seedSymbolAuthoringComponents`/
+`compileSymbolAuthoringComponents`, 7 testes em `symbolAuthoring.test.ts`). Salvar relê o
+`device.json`/`mcu.json`/`.lssub.json` do disco e substitui só `package`
+(`extension.ts::saveSymbolCommand`); fundo `svg`/`image` já existente é preservado verbatim (sem UI de
+upload nesta rodada). Dois pontos de entrada: botão "✎" por item registrado na paleta, comando
+`lasecsimul.palette.editSymbol` (seletor de arquivo, pra manifesto ainda não registrado). Detalhe
+completo em `docs/11-qemu-esp32.md` e `.spec/lasecsimul-native-devices.spec` seção 21.3.
+
+**Limite real desta entrega — verificação manual no Extension Development Host ainda não foi feita.**
+Não há `jsdom`/navegador headless neste repositório (decisão consciente da Onda 1, Épico E/E4), então o
+que foi verificado é `tsc` limpo nos dois `tsconfig` (extensão + webview) e os testes automatizados da
+conversão PURA package↔componentes (`symbolAuthoring.test.ts`) — nenhum clique real foi simulado contra
+o drag/seleção/painel de propriedades. A superfície de risco é menor que a da versão descartada porque a
+maior parte do que seria testado manualmente (drag, seleção, rotação, propriedades) é código JÁ EM
+PRODUÇÃO, reaproveitado por ~30 outros typeIds do catálogo — não escrito do zero pra este épico. Ainda
+assim, antes de considerar isto encerrado de fato, alguém precisa abrir a Extension via `F5` (Extension
+Development Host), clicar "✎" num item registrado da paleta, e confirmar visualmente: arrastar/girar um
+`other.package_pin`, redimensionar um `graphics.rectangle` pelo painel de propriedades, e "Salvar
+Símbolo" reproduzindo o visual original.
 
 ### Motivação
 
-A spec do `package` está detalhada, e isso prepara tanto devices ABI quanto subcircuitos. Hoje o contrato
-existe melhor do que a ferramenta visual para produzi-lo.
+A spec do `package` está detalhada, e isso prepara tanto devices ABI quanto subcircuitos. Antes desta
+rodada, o contrato existia melhor do que a ferramenta visual para produzi-lo.
 
 ### Pendências
 
-- modo de edição de package no mesmo webview do esquemático;
-- resize do corpo;
-- inserção/edição de `shapes[]`;
-- posicionamento visual de pinos;
-- upload e embed de SVG/PNG/JPEG no `background.data`;
-- round-trip fiel: abrir JSON manual e renderizar igual; editar na UI e salvar igual.
+- ~~modo de edição de package reaproveitando o esquemático~~ **feito** (2026-06-29, redesenhado a
+  partir da auditoria do SimulIDE real — ver nota acima);
+- ~~resize do corpo (via propriedade, não alça)~~ **feito**;
+- ~~inserção/edição de formas (`graphics.*` property-driven)~~ **feito**;
+- ~~posicionamento/rotação visual de pinos (`other.package_pin`)~~ **feito**;
+- upload e embed de imagem em `background.data` — **não implementado** nesta rodada (só cor sólida via
+  `backgroundColor`; fundo `svg`/`image` já existente é preservado, nunca perdido, mas não editável
+  visualmente ainda);
+- round-trip fiel (abrir JSON manual e renderizar igual; editar na UI e salvar igual) — implementado e
+  testado (`symbolAuthoring.test.ts`), mas ainda sem confirmação visual manual no Extension Development
+  Host (ver ressalva acima);
+- comando "Criar Subcircuito a partir da Seleção" (detectar fios cruzando a borda de uma seleção,
+  inserir `connectors.tunnel` automaticamente) — **não implementado**, escopo do Épico F/seção 4 de
+  `.spec/lasecsimul-subcircuits.spec`, decisão explícita de não incluir nesta rodada.
 
 ### Entregáveis
 
@@ -407,7 +472,9 @@ existe melhor do que a ferramenta visual para produzi-lo.
 
 ### Arquivos alvo
 
-- `extension/src/ui/webview/`
+- `extension/src/ui/webview/` (`main.ts`, `componentSymbols.ts`)
+- `extension/src/catalog/symbolAuthoring.ts`
+- `project/schema/component-catalog.json` (`other.package`/`other.package_pin`/`graphics.*`)
 - `devices/*/device.json`
 
 ### Critério de aceite
@@ -684,10 +751,10 @@ Estado atual verificado diretamente no código (não suposto) antes de quebrar a
 - Épico C
 - parte operacional do Épico D
 
-Resultado esperado:
+Resultado esperado (alcançado — ver Épico B/C):
 
-- pipeline real de MCU;
-- barramentos genéricos;
+- pipeline real de MCU (GPIO);
+- decodificação bit a bit de protocolo via `LSDN_EVT_PIN_CHANGE`;
 - base para RF04/RF05/RF08.
 
 ### Onda 3 - Robustez operacional de plugins
@@ -735,10 +802,10 @@ Resultado esperado:
 - integrar `FirmwareWatcher`;
 - executar teste blink.
 
-### Sprint 3
+### Sprint 3 (realizado com abordagem diferente da planejada — ver Épico C)
 
-- implementar `I2cBusModule` e `SpiBusModule`;
-- integrar adaptador ESP32 ao caminho completo;
+- decodificação bit a bit de protocolo via `LSDN_EVT_PIN_CHANGE`, não módulo de barramento genérico;
+- adaptador ESP32 integrado ao caminho completo (GPIO; TWI/SPI/USART ainda pendentes);
 - iniciar watchdog/fault policy de plugin.
 
 ### Sprint 4

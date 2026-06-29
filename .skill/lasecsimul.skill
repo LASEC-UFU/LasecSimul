@@ -19,7 +19,7 @@ processos**, não um:
 Dentro do Core, duas unidades não devem ser confundidas: `GlobalPluginCache` (processo-wide, só leitura após
 o load — código de plugin, metadados) e `SimulationSession` (por projeto aberto — hoje sempre uma por
 processo; o tipo existe para não virar singleton implícito, não porque sessões múltiplas sejam suportadas).
-`Netlist`/`Scheduler`/`BusController`/`PluginRuntime`/`QemuProcessManager` pertencem à sessão, nunca ao cache.
+`Netlist`/`Scheduler`/`PluginRuntime`/`QemuProcessManager` pertencem à sessão, nunca ao cache.
 
 Especificações fonte de verdade, nesta ordem de leitura:
 1. [`.spec/lasecsimul.spec`](../.spec/lasecsimul.spec) (v0.2+) — arquitetura geral, os dois processos, IPC, fluxos.
@@ -32,8 +32,8 @@ remeter a WASM/worker, é desatualizado — confiar nos dois `.spec` acima.
 ## Regras inegociáveis
 
 1. Microcontroladores **nunca** são simulados com código de emulação manual. Todo MCU é um processo QEMU
-   real, controlado via `IMcuAdapter` (built-in ou plugin nativo) + `QemuProcessManager` + `QemuArenaBridge`,
-   dentro do processo Core.
+   real, controlado via `IMcuAdapter` (plugin nativo — `mcu_abi.h`, não existe mais caminho built-in) +
+   `QemuProcessManager` + `QemuArenaBridge`, dentro do processo Core.
 2. Dispositivos eletrônicos e adaptadores de MCU adicionais **nunca** usam WASM, worker_threads, ou qualquer
    sandbox de processo/linguagem. O único mecanismo de extensão é plugin nativo (DLL/SO) — descoberto/carregado
    pelo `PluginLoader` em `GlobalPluginCache`, instanciado pelo `PluginRuntime` de cada sessão, conforme
@@ -48,9 +48,9 @@ remeter a WASM/worker, é desatualizado — confiar nos dois `.spec` acima.
    swap* (carregar a nova versão lado a lado, só novas instâncias usam; a antiga descarrega sozinha via
    `shared_ptr` quando sua última instância morrer) — nunca "descarrega e recarrega o mesmo módulo". Ver
    `lasecsimul-native-devices.spec`, seção 3.
-5. **Todo MCU passa por QEMU, sem exceção — inclusive famílias que o SimulIDE-dev simula manualmente (AVR,
+5. **Todo MCU passa por QEMU, sem exceção — inclusive famílias que o `simulide_2` simula manualmente (AVR,
    PIC).** Antes de prometer suporte a uma família de chip nova, verificar se existe target de CPU pra ela
-   no QEMU (checar o fork em `G:\Meu Drive\SourceCode\qemu-simulide-1\target\` e `hw\`, não assumir de
+   no QEMU (checar o fork em `C:\SourceCode\qemu_simulide\target\` e `hw\`, não assumir de
    memória) — se não existir, é dependência externa que falta, não tarefa deste projeto. PIC está
    formalmente fora de escopo por esse motivo (ver `lasecsimul.spec`, seção 8.2).
 
@@ -72,11 +72,13 @@ remeter a WASM/worker, é desatualizado — confiar nos dois `.spec` acima.
   sem SVG externo; imagem de fundo é embutida como string no próprio JSON). É lido só pela Extension; o Core
   nunca processa `package`. Um eventual "editor de pacote" é o mesmo webview do esquemático com um modo
   especial — não uma ferramenta nova.
-- **Novo MCU** → mesma lógica: `IMcuAdapter` built-in (compilado no Core) ou plugin nativo
-  (`LsdnMcuVTable`). Verificar se a build de QEMU alvo expõe GPIO por canal externo antes de prometer
-  suporte — se não expõe, é dependência externa (patch de QEMU), não responsabilidade do Core.
+- **Novo MCU** → sempre plugin nativo (`mcu-adapters/<chip>/`, `mcu_abi.h`/`LsdnMcuVTable` +
+  `LsdnQemuModuleVTable` por periférico, ver `docs/18-guia-dispositivo-abi-e-mcu-qemu.md` seção 2) — não
+  existe mais caminho built-in (removido ao migrar o ESP32, mesmo desempenho dos dois). Verificar se a
+  build de QEMU alvo expõe GPIO por canal externo antes de prometer suporte — se não expõe, é dependência
+  externa (patch de QEMU), não responsabilidade do Core.
 - **Alteração no `MnaSolver`/`Scheduler`** → só se nenhuma interface existente (`IComponentModel`,
-  `IMcuAdapter`, `IBusParticipant`) cobre o caso. Confirmar antes que o problema não é resolvível como
+  `IMcuAdapter`) cobre o caso. Confirmar antes que o problema não é resolvível como
   plugin ou componente novo (OCP).
 - **Fronteira de plugin (`device_abi.h`, `LsdnHostApi`, `LsdnDeviceVTable`)** → qualquer mudança aqui é
   mudança de ABI pública; bump de `LSDN_ABI_VERSION_MAJOR`/`MINOR` conforme a regra da seção 4 do
@@ -91,7 +93,7 @@ remeter a WASM/worker, é desatualizado — confiar nos dois `.spec` acima.
 ## Convenções de código
 
 **Core (C++)**:
-- Interfaces (`IComponentModel`, `IMcuAdapter`, `IBusParticipant`) são classes abstratas puras em
+- Interfaces (`IComponentModel`, `IMcuAdapter`) são classes abstratas puras em
   `core/include/lasecsimul/`.
 - Nenhum tipo C++ (STL, exceções, RTTI) cruza a fronteira de um plugin — só a ABI C de `device_abi.h`.
   `extern "C"`, calling convention da plataforma, structs `Lsdn*` só com tipos POD de tamanho fixo.
@@ -121,12 +123,15 @@ remeter a WASM/worker, é desatualizado — confiar nos dois `.spec` acima.
 - **Editar componente já existente (painel de propriedades) é `PropertyDescriptor`/`propertyDescriptors()`
   (seção 6.1 do `.spec`), nunca um `if`/`switch` por `typeId` em `SimulationSession`.** `Tunnel` é exceção
   deliberada (não expõe "name" por aqui — precisa de `setTunnelName`, que rebuilda topologia). Plugin nativo
-  ainda não participa (`device_abi.h` não tem `set_property`) — não fingir que funciona pra plugin sem essa
-  função existir na ABI.
-- **Futuro `I2cBusModule`/`SpiBusModule` (ainda não implementado, ver `lasecsimul-native-devices.spec`
-  seção 8.2): master agendado por evento, slave puramente reativo a mudança de pino — nunca os dois
-  agendados.** Vocabulário de estado neutro (nunca emprestar encoding de registrador de uma família de
-  chip específica). Recebe `Scheduler` por injeção no construtor, nunca por singleton/`self()`.
+  já participa (`device_abi.h` tem `set_property`/`get_property` na `LsdnDeviceVTable`) — não tratar isso
+  como pendência.
+- **Protocolo (I2C/SPI/etc.) é decodificado bit a bit via `ComponentEvent{kPinChangeEventTag}`, nunca por
+  um "módulo de barramento" que entrega byte pronto.** `SimulationSession::settleStep()` detecta borda
+  digital (cruzamento de `kDigitalLevelThreshold`, `core/include/lasecsimul/Types.hpp`) e despacha o evento
+  pra todo componente/pino presente naquele nó (built-in ou plugin, via `Netlist::Topology::pinRefsByNode`)
+  — quem decodifica o protocolo é o próprio componente/device (ver `devices/simulide-complex/src/lib.c`),
+  nunca um módulo de barramento intermediário. `Scheduler::nowNsUnlocked()`/`scheduleEventUnlocked()` existem
+  especificamente pra permitir agendar de dentro do próprio despacho de evento sem deadlock de mutex.
 - **Dirty-tracking e fila de eventos do `Scheduler` usam estrutura plana, nunca ponteiro intrusivo
   (`next`)**: `SparseSet` (array denso + índice esparso) para "quem está dirty agora"; `std::priority_queue`
   para eventos agendados por tempo. O SimulIDE usa listas ligadas intrusivas nesses dois pontos — decisão
@@ -137,10 +142,21 @@ remeter a WASM/worker, é desatualizado — confiar nos dois `.spec` acima.
   Seguro porque grupos não compartilham estado mutável por construção; não generalizar pra paralelizar
   dentro de uma única matriz grande, isso é um problema diferente e mais arriscado, fora de escopo agora.
 - Antes de tocar em `MnaSolver`/`CircuitGroup`/`Scheduler`, ler `circmatrix.{h,cpp}`/`e-node.h`/
-  `simulator.cpp` do SimulIDE-dev — mas **não copiar às ciegas**: a tabela da seção 7.1 do `lasecsimul.spec`
-  já separou o que é técnica atemporal (adotar) do que é provável limitação de projeto solo de 2012 (LU sem
-  pivoteamento, nunca paralelizar, lista intrusiva) — essa tabela é a referência, não o código do SimulIDE
-  diretamente.
+  `simulator.cpp` em `C:\SourceCode\simulide_2` — mas **não copiar às ciegas**: a tabela da seção 7.1 do
+  `lasecsimul.spec` já separou o que é técnica atemporal (adotar) do que é provável limitação de projeto
+  solo de 2012 (LU sem pivoteamento, nunca paralelizar, lista intrusiva) — essa tabela é a referência, não o
+  código do SimulIDE diretamente.
+- **Leitura de corrente (`IComponentModel::current()`)**: convenção passiva — positiva entrando no primeiro
+  pino/saindo no segundo (ou na terra implícita pra componente de 1 pino); fonte fornecendo energia aparece
+  **negativa**. Validada empiricamente, não só derivada — qualquer componente novo que implemente `current()`
+  segue a mesma convenção, sem reabrir a discussão. Pino "decorativo" (ex: `gnd` de um modo de operação) nunca
+  pode ficar com linha inteiramente zerada na matriz (singular) — sempre dar alguma contribuição (ex:
+  `addConductanceToGround`), nunca zero absoluto.
+- **Componente com muitos pinos simultaneamente flutuantes** (ex: MCU multi-pino): não copiar o par
+  drive=1e9/flutuante=1e-9 de outros componentes sem checar o spread resultante contra o limite de
+  singularidade do solver (`rcond()` ~1e-14, `CircuitGroup::singular()`) — um spread grande o bastante
+  produz `rcond()` artificialmente baixo mesmo numa matriz bem-condicionada equação a equação. Ajustar os
+  valores próprios desse componente (ex: 1e6/1e-6) se isso ocorrer, em vez de mexer no limite do solver.
 - **UI da Extension segue a organização de painéis do SimulIDE real (seção 13 do `.spec`), exceto qualquer
   área de digitar/compilar código — essa não existe no LasecSimul.** Compilação é sempre externa; o Core só
   lê o artefato (`.bin`/`.elf`/`.hex`) já pronto (seção 8.3). Também não replicar o `FileWidget` (navegador de
@@ -158,15 +174,26 @@ remeter a WASM/worker, é desatualizado — confiar nos dois `.spec` acima.
   `#ifdef _WIN32`/POSIX no próprio arquivo (padrão de `PluginLoader.cpp`/`CrashGuard.cpp`), nunca espalhar a
   divergência pelo código de domínio. Mentalmente compilar para os três alvos antes de considerar a tarefa
   pronta.
-- **Integração com QEMU (I2C/SPI/USART/GPIO/IRQ) segue o mecanismo já validado pelo SimulIDE-dev, não uma
-  ideia nova**: arena de memória compartilhada + dispatch por faixa de endereço + módulo de barramento
-  genérico reusado por qualquer chip — nunca pino-a-pino, nunca protocolo reimplementado por adaptador. Antes
-  de tocar em `QemuArenaBridge`/`IMcuAdapter`/módulos de barramento, ler
-  `SimulIDE-dev/src/microsim/cores/qemu/{qemudevice,qemumodule,qemutwi,qemuspi}.{h,cpp}` e
-  `SimulIDE-dev/src/microsim/modules/twi/twimodule.h` — são a referência de comportamento, não só inspiração.
-- **`BusController` nunca sabe o nome de um chip ou de um plugin** — só endereço (I2C) ou CS (SPI). Se uma
-  mudança parecer exigir `if (chipFamily == ...)`/`if (typeId == ...)` ali, a lógica pertence ao
-  `IMcuAdapter`/`I2cBusModule`/`SpiBusModule`, não ao `BusController` (`lasecsimul-native-devices.spec`, seção 8).
+- **Integração com QEMU (I2C/SPI/USART/GPIO/IRQ) usa módulo de registrador CHIP-ESPECÍFICO, nunca um
+  módulo de barramento genérico reusado entre chips.** Confirmado lendo `hw/gpio/esp32_gpio.c` do fork real
+  (`C:\SourceCode\qemu_simulide`): o QEMU manda registrador bruto (endereço + valor) sem decodificar nada —
+  decodificar "offset 0x04 = GPIO_OUT_REG" é conhecimento do ESP32, não universal. Só `Scheduler`/`Netlist`/
+  IPC/UI precisam ser neutros quanto a chip; um `QemuModule` (`core/include/lasecsimul/QemuModule.hpp`)
+  concreto por periférico é o padrão. Antes de criar um módulo novo, copiar fielmente o mapa de registrador
+  real em `C:\SourceCode\simulide_2\src\microsim\cores\qemu\esp32\esp32{iomux,twi,spi,usart}.{h,cpp}` e o
+  lado QEMU em `C:\SourceCode\qemu_simulide\hw\{gpio,i2c,ssi}\esp32_*.c` — não inventar offset de registrador.
+- **Adaptador de MCU é sempre plugin DLL/SO (`mcu_abi.h`, `LsdnQemuModuleVTable`/`create_modules`), nunca
+  built-in compilado no Core** — decisão tomada em 2026-06-28 ao migrar o ESP32
+  (`mcu-adapters/espressif-esp32/`) do caminho built-in que existia antes (removido,
+  `core/src/mcu/esp32/`) pro plugin, provando paridade total de desempenho (chamada de função C indireta,
+  mesmo processo, sem IPC — mesmo custo de chamada virtual C++). `QemuModuleProxy`
+  (`core/src/plugins/QemuModuleProxy.hpp`) é quem embrulha o `LsdnQemuModuleHandle` do plugin numa subclasse
+  de `QemuModule` — nunca escrever um `QemuModule` C++ novo direto no Core pra um chip; escrever a vtable C
+  no plugin (`mcu-adapters/<chip>/`) e deixar `QemuModuleProxy` fazer a ponte.
+- **`McuComponent`/`Scheduler`/`Netlist` nunca sabem o nome de um chip ou plugin** — só o módulo concreto
+  (`LsdnQemuModuleVTable` do plugin, via `QemuModuleProxy`) sabe layout de registrador. Se uma mudança
+  parecer exigir `if (chipFamily == ...)`/`if (typeId == ...)` em `McuComponent`/`Scheduler`/`Netlist`, a
+  lógica pertence a um módulo novo do lado do plugin, não a eles.
 - **ABI (`device_abi.h`/`mcu_abi.h`) tem regras de ownership e thread-affinity fixas, não implícitas**:
   buffers de saída são sempre pré-alocados por quem lê; nenhum ponteiro de parâmetro é válido após a chamada
   retornar; nenhuma função de `LsdnHostApi` pode ser chamada de uma thread que o host não controla. Qualquer
@@ -192,7 +219,7 @@ Procedimento obrigatório, nesta ordem, pra **qualquer agente** (incluindo sub-a
 
 1. **Procurar uma solução real** — não implementar a primeira ideia que ocorrer. Considerar pelo menos uma
    alternativa antes de decidir.
-2. **Avaliar como o SimulIDE-dev resolve o mesmo problema**, mesmo que a resposta final seja não copiar —
+2. **Avaliar como o `simulide_2` (`C:\SourceCode\simulide_2`) resolve o mesmo problema**, mesmo que a resposta final seja não copiar —
    é a referência concreta deste projeto, não uma opção qualquer entre várias. Registrar o porquê de adotar,
    adaptar ou rejeitar (mesmo padrão das tabelas já usadas nas seções 7.1/8.2/13 do `lasecsimul.spec`).
 3. **Se sobrar dúvida real** (trade-off não óbvio, ambiguidade de escopo, ou qualquer decisão que toque o

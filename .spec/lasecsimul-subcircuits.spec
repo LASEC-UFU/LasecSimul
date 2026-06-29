@@ -13,10 +13,10 @@ padrão (C++ built-in) e plugin nativo (DLL/SO via `device_abi.h`). Decisão reg
 - Um **subcircuito** é um circuito desenhado no próprio editor, salvo em disco como `.json`, com pinos de I/O
   e um símbolo visual definidos pelo usuário — **dado, nunca código**. Não exige compilador, não exige DLL/SO,
   não exige reiniciar o Core.
-- Mecanismo de referência validado pelo SimulIDE-dev (não suposição de design) — ver
-  `SimulIDE-dev/src/components/subcircuits/{subcircuit,chip}.{h,cpp}`,
-  `SimulIDE-dev/src/components/other/{subpackage,packagepin}.{h,cpp}` e
-  `SimulIDE-dev/src/components/connectors/tunnel.{h,cpp}`. O SimulIDE resolve isso com três peças que o
+- Mecanismo de referência validado pelo `simulide_2` (não suposição de design) — ver
+  `C:\SourceCode\simulide_2\src\components\subcircuits\{subcircuit,chip}.{h,cpp}`,
+  `C:\SourceCode\simulide_2\src\components\other\{subpackage,packagepin}.{h,cpp}` e
+  `C:\SourceCode\simulide_2\src\components\connectors\tunnel.{h,cpp}`. O SimulIDE resolve isso com três peças que o
   LasecSimul já tem equivalente parcial: (a) serialização XML do circuito interno → no LasecSimul já existe
   serialização JSON (`.lsproj`, ver `lasecsimul.spec` RF01); (b) `Tunnel` unindo pinos por nome compartilhado
   → o LasecSimul **já implementa isso** (`connectors.tunnel`, `Netlist::setTunnelName`, ver `lasecsimul.spec`
@@ -123,14 +123,16 @@ Sem campo novo. O bloco `package` de um `.lssub.json` é **estruturalmente idên
 `interface[].pinId` (validado ao carregar; subcircuito com pino de símbolo sem pino de interface
 correspondente é rejeitado com erro claro, mesmo espírito de `addComponent` com `typeId` desconhecido hoje).
 
-**Implicação de arquitetura para a Extension (preparar desde já)**: o renderizador de símbolo da Webview
-(`extension/src/ui/webview/componentSymbols.ts`, ver `docs/07-extension-typescript.md`) hoje resolve a
-geometria por um `switch(typeId)` hardcoded — funciona para os ~8 built-ins de hoje, não escala para
-dispositivos de plugin nem subcircuitos, que chegam em tempo de execução, não em tempo de compilação da
-Extension. Caminho correto: estender `WebviewComponentCatalogEntry` (`extension/src/ui/webview/model.ts`)
-com um campo opcional `package?: PackageDescriptor` (mesmo formato JSON desta seção); o renderizador passa a
-desenhar **genericamente** a partir desse campo quando presente, caindo no `switch` hardcoded só para os
-built-ins que não têm `package.json`/`.lssub.json` (resistor, capacitor, etc. — ver seção 11).
+**Implementado em 2026-06-28** (era só "preparar desde já" até esta data): `WebviewComponentCatalogEntry`
+(`extension/src/ui/webview/model.ts`) ganhou `package?: PackageDescriptor`, populado em
+`extension.ts::resolveRegisteredItem` a partir do `package` real do `.lssub.json`/`device.json`/`mcu.json`.
+O renderizador (`extension/src/ui/webview/componentSymbols.ts`) passou a desenhar **genericamente** a
+partir desse campo quando presente — `registerPackage`/`pinLocalPosition`/`packageSymbolSvg`, cada pino na
+posição/lado real declarado, casado por `id` (nunca por posição no array) — caindo no `switch(typeId)`
+hardcoded só para built-ins sem `package` (resistor, capacitor, etc. — ver seção 11). Prova real: os dois
+subcircuitos da ESP32 (`subcircuits/esp32_devkitc_v4.lssub.json`, `esp32_wroom32.lssub.json`, ver
+`docs/11-qemu-esp32.md`). **O que isto NÃO é**: não existe editor visual (arrastar pino, redimensionar,
+upload de imagem) — só o caminho de leitura; ver Épico G do roadmap de pendências.
 
 ## 4. Fluxo de criação no editor
 
@@ -150,6 +152,18 @@ Sem ferramenta nova — reaproveita o canvas do `SchematicEditorPanel` que já e
    poderia escrever à mão; o editor é conveniência, nunca um formato/estado paralelo (mesma garantia da
    seção 21.3 do spec de plugins nativos).
 5. O novo subcircuito aparece na paleta de componentes da mesma forma que um built-in ou plugin — ver seção 7.
+
+**Status em 2026-06-29** (revisado — a versão de 2026-06-28 era um canvas bespoke, descartada e
+reimplementada seguindo o modelo real do SimulIDE, ver seção 21.3 de
+`lasecsimul-native-devices.spec`): passo 3 (editor de símbolo, agora uma sessão de autoria dentro do
+MESMO webview do esquemático) está **implementado** — sem distinção de código entre editar o `package`
+de um `device.json`, `mcu.json` ou `.lssub.json` (mesma chave, mesmo formato, mesmo comando
+`lasecsimul.palette.editSymbol`, mesmo `extension/src/catalog/symbolAuthoring.ts`). Passos 1-2
+(**"Criar Subcircuito a partir da Seleção"** — detecção de fronteira de seleção e inserção automática de
+`connectors.tunnel`) **ainda não existem** — hoje só dá pra editar visualmente o `package` de um
+`.lssub.json` que já tem `components`/`wires`/`interface` escritos à mão (foi assim que
+`subcircuits/esp32_devkitc_v4.lssub.json` e `esp32_wroom32.lssub.json` foram criados, ver
+`docs/11-qemu-esp32.md`). Ver Épico G do roadmap de pendências para o escopo restante.
 
 **Fora de escopo nesta v0.1**: editar um subcircuito "por dentro" depois de já ter instâncias colocadas
 (SimulIDE tem "Open Subcircuit" abrindo uma segunda instância do programa, `subcircuit.cpp` linha ~480) —

@@ -10,6 +10,8 @@
  * layout de pino são calculados a partir da caixa do tipo, nunca de uma constante global de tamanho.
  */
 
+import { PackageDescriptor, PackagePin, PackageShape } from "./model.js";
+
 export interface ComponentBox {
   width: number;
   height: number;
@@ -19,6 +21,128 @@ const PIN_INSET = 6; // distância do pino até a borda da caixa -- evita cortar
 const LEAD_MARGIN = 18; // distância do pino até onde o corpo do símbolo começa (componentes de 2 pinos)
 
 export const PIN_RADIUS = 4.5;
+
+// ── Símbolo declarativo real (Épico G) ──────────────────────────────────────────────────────────
+// Quando um typeId tem `package` (device.json/.lssub.json, ver model.ts), cada pino é desenhado na
+// posição REAL declarada (qualquer lado, com nome) -- nunca o algoritmo genérico esquerda/direita
+// abaixo, que existe só pra built-ins sem package. `x`/`y` de um PackagePin é onde o "lead" toca o
+// corpo; a ponta real (onde o fio conecta) é `x + cos(angle)*length, y + sin(angle)*length` -- pode
+// cair fora de `0..width`/`0..height` (lead saindo da borda), por isso o layout é "resolvido" uma
+// vez (desloca tudo pra um espaço sem coordenada negativa) em vez de usar `width`/`height` crus.
+interface ResolvedPackagePin extends PackagePin {
+  tipX: number;
+  tipY: number;
+}
+
+interface ResolvedPackage {
+  width: number;
+  height: number;
+  offsetX: number;
+  offsetY: number;
+  pins: ResolvedPackagePin[];
+  source: PackageDescriptor;
+}
+
+function resolvePackageLayout(pkg: PackageDescriptor): ResolvedPackage {
+  let minX = 0;
+  let minY = 0;
+  let maxX = pkg.width;
+  let maxY = pkg.height;
+  const tips = pkg.pins.map((pin) => {
+    const rad = (pin.angle * Math.PI) / 180;
+    const tipX = pin.x + Math.cos(rad) * pin.length;
+    const tipY = pin.y + Math.sin(rad) * pin.length;
+    minX = Math.min(minX, tipX, pin.x);
+    maxX = Math.max(maxX, tipX, pin.x);
+    minY = Math.min(minY, tipY, pin.y);
+    maxY = Math.max(maxY, tipY, pin.y);
+    return { ...pin, tipX, tipY };
+  });
+  const offsetX = -minX;
+  const offsetY = -minY;
+  return {
+    width: maxX - minX,
+    height: maxY - minY,
+    offsetX,
+    offsetY,
+    pins: tips.map((pin) => ({ ...pin, tipX: pin.tipX + offsetX, tipY: pin.tipY + offsetY })),
+    source: pkg,
+  };
+}
+
+const RESOLVED_PACKAGE_BY_TYPE_ID = new Map<string, ResolvedPackage>();
+
+/** Chamado quando o catálogo chega/atualiza (ver `main.ts`) -- cacheia o layout resolvido (cálculo
+ * de deslocamento é o mesmo pra toda renderização do mesmo typeId, não precisa repetir por frame).
+ * `undefined` remove (typeId sem package mais, ou catálogo recarregado do zero). */
+export function registerPackage(typeId: string, pkg: PackageDescriptor | undefined): void {
+  if (pkg && pkg.pins.length > 0) RESOLVED_PACKAGE_BY_TYPE_ID.set(typeId, resolvePackageLayout(pkg));
+  else RESOLVED_PACKAGE_BY_TYPE_ID.delete(typeId);
+}
+
+function resolvedPackageFor(typeId: string): ResolvedPackage | undefined {
+  return RESOLVED_PACKAGE_BY_TYPE_ID.get(typeId);
+}
+
+/** Corpo do símbolo a partir do `package` real, se este typeId tiver um registrado -- `undefined`
+ * pra `main.ts` cair em `catalogEntry?.symbolSvg ?? componentSymbolSvg(typeId)` (mesma prioridade
+ * de sempre, só com `package` real entrando ANTES de symbolSvg). */
+export function packageSymbolSvg(typeId: string): string | undefined {
+  const resolved = resolvedPackageFor(typeId);
+  return resolved ? packageBodySvg(resolved) : undefined;
+}
+
+function escapeXmlText(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function packageShapeSvg(shape: PackageShape): string {
+  switch (shape.kind) {
+    case "rect":
+      return `<rect x="${shape.x ?? 0}" y="${shape.y ?? 0}" width="${shape.w ?? 0}" height="${shape.h ?? 0}" stroke="${shape.stroke ?? "currentColor"}" fill="${shape.fill ?? "none"}" stroke-width="${shape.strokeWidth ?? 1}"/>`;
+    case "line":
+      return `<line x1="${shape.x1 ?? 0}" y1="${shape.y1 ?? 0}" x2="${shape.x2 ?? 0}" y2="${shape.y2 ?? 0}" stroke="${shape.stroke ?? "currentColor"}"/>`;
+    case "ellipse":
+      return `<ellipse cx="${shape.cx ?? 0}" cy="${shape.cy ?? 0}" rx="${shape.rx ?? 0}" ry="${shape.ry ?? 0}" stroke="${shape.stroke ?? "currentColor"}" fill="${shape.fill ?? "none"}"/>`;
+    case "text":
+    default:
+      return `<text x="${shape.x ?? 0}" y="${shape.y ?? 0}" text-anchor="middle" font-size="${shape.fontSize ?? 11}" fill="${shape.color ?? "currentColor"}">${escapeXmlText(shape.value ?? "")}</text>`;
+  }
+}
+
+/** Lead (corpo -> ponta real) + rótulo, em coordenadas ORIGINAIS do package (sem o deslocamento de
+ * `resolvePackageLayout` -- quem chama envolve isto num `<g transform="translate(offsetX,offsetY)">`,
+ * ver `packageBodySvg`). O círculo do terminal em si (onde o clique conecta fio) é desenhado por
+ * quem chama (`main.ts::renderComponent`), na posição JÁ deslocada devolvida por `pinLocalPosition`. */
+function packagePinLeadSvg(pin: PackagePin): string {
+  const rad = (pin.angle * Math.PI) / 180;
+  const tipX = pin.x + Math.cos(rad) * pin.length;
+  const tipY = pin.y + Math.sin(rad) * pin.length;
+  const labelX = tipX + Math.cos(rad) * 9;
+  const labelY = tipY + Math.sin(rad) * 9;
+  const label = pin.label ?? pin.id;
+  return (
+    `<line x1="${pin.x}" y1="${pin.y}" x2="${tipX.toFixed(1)}" y2="${tipY.toFixed(1)}" class="symbol-stroke"/>` +
+    `<text x="${labelX.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="middle" class="symbol-text" style="font-size:7px">${escapeXmlText(label)}</text>`
+  );
+}
+
+/** Corpo completo de um typeId com `package`: fundo + formas declarativas + lead/rótulo de cada
+ * pino, tudo num único `<g>` deslocado pro espaço sem coordenada negativa que `componentBox` usa
+ * pro `viewBox` (ver `resolvePackageLayout`). */
+function packageBodySvg(resolved: ResolvedPackage): string {
+  const pkg = resolved.source;
+  let markup = "";
+  if (pkg.background?.kind === "color" && pkg.background.value) {
+    markup += `<rect x="0" y="0" width="${pkg.width}" height="${pkg.height}" fill="${pkg.background.value}"/>`;
+  }
+  if (pkg.border) {
+    markup += `<rect x="0.5" y="0.5" width="${Math.max(0, pkg.width - 1)}" height="${Math.max(0, pkg.height - 1)}" class="symbol-stroke" fill="none"/>`;
+  }
+  for (const shape of pkg.shapes ?? []) markup += packageShapeSvg(shape);
+  for (const pin of pkg.pins) markup += packagePinLeadSvg(pin);
+  return `<g transform="translate(${resolved.offsetX},${resolved.offsetY})">${markup}</g>`;
+}
 
 const COMPONENT_BOX: Record<string, ComponentBox> = {
   "connectors.junction": { width: 0, height: 0 },
@@ -37,7 +161,18 @@ const COMPONENT_BOX: Record<string, ComponentBox> = {
   "passive.variable_inductor": { width: 86, height: 34 },
   "passive.transformer": { width: 86, height: 58 },
   "other.ground": { width: 48, height: 36 },
+  "connectors.bus": { width: 76, height: 28 },
   "connectors.tunnel": { width: 36, height: 36 },
+  "connectors.socket": { width: 72, height: 86 },
+  "connectors.header": { width: 76, height: 36 },
+  "graphics.image": { width: 96, height: 64 },
+  "graphics.text": { width: 74, height: 28 },
+  "graphics.rectangle": { width: 96, height: 58 },
+  "graphics.ellipse": { width: 96, height: 58 },
+  "graphics.line": { width: 86, height: 32 },
+  "other.package": { width: 84, height: 66 },
+  "other.test_unit": { width: 72, height: 56 },
+  "other.dial": { width: 56, height: 56 },
   "sources.dc_voltage": { width: 64, height: 48 },
   "logic.button": { width: 68, height: 32 },
   "switches.push": { width: 68, height: 32 },
@@ -97,19 +232,97 @@ const COMPONENT_BOX: Record<string, ComponentBox> = {
   "sources.battery": { width: 48, height: 36 },
   "sources.rail": { width: 36, height: 28 },
   "espressif.esp32": { width: 160, height: 300 },
+  "subcircuits.esp32_devkitc_v4": { width: 220, height: 328 },
 };
 const DEFAULT_BOX: ComponentBox = { width: 70, height: 40 };
 
-/** Caixa (tamanho irregular, por tipo) usada pro `viewBox` do SVG e pro layout dos pinos. */
-export function componentBox(typeId: string): ComponentBox {
+/** Caixa property-driven dos typeIds "de autoria de símbolo" (Épico G) -- `other.package`/
+ * `graphics.rectangle`/`ellipse` usam `width`/`height` direto (mesmo significado de
+ * `PackageDescriptor.width/height`/`PackageShape.w/h`, ver seção 21.2 do
+ * `.spec/lasecsimul-native-devices.spec`). `graphics.line`/`other.package_pin` usam uma caixa
+ * QUADRADA centrada no `length` -- o ponto fixo que não se move quando `component.rotation` gira
+ * (CSS `rotate()` pivota no CENTRO do elemento, ver `renderComponent`) é o CENTRO da caixa, por isso
+ * o desenho "canônico" (rotation=0) tem que colocar a âncora/ponto médio exatamente lá -- ver
+ * `componentSymbolSvg` e `extension.ts::compileSymbolAuthoringComponents` (fórmula inversa). */
+function propertyDrivenBox(typeId: string, properties: Record<string, unknown> | undefined): ComponentBox | undefined {
+  if (!properties) return undefined;
+  const numberOf = (key: string): number | undefined => (typeof properties[key] === "number" ? (properties[key] as number) : undefined);
+  switch (typeId) {
+    case "graphics.rectangle":
+    case "graphics.ellipse":
+    case "other.package": {
+      const width = numberOf("width");
+      const height = numberOf("height");
+      if (width === undefined || height === undefined) return undefined;
+      return { width: Math.max(8, width), height: Math.max(8, height) };
+    }
+    case "graphics.line": {
+      const length = numberOf("length") ?? 40;
+      const side = Math.max(20, length + 12);
+      return { width: side, height: side };
+    }
+    case "other.package_pin": {
+      const length = numberOf("length") ?? 8;
+      const side = Math.max(24, length * 2 + 16);
+      return { width: side, height: side };
+    }
+    case "graphics.text": {
+      const text = typeof properties.text === "string" ? properties.text : "Texto";
+      const fontSize = numberOf("fontSize") ?? 11;
+      return { width: Math.max(24, text.length * fontSize * 0.62 + 12), height: fontSize + 14 };
+    }
+    default:
+      return undefined;
+  }
+}
+
+/** Caixa (tamanho irregular, por tipo) usada pro `viewBox` do SVG e pro layout dos pinos. Quando o
+ * typeId tem `package` (ver `registerPackage`), a caixa vem do layout resolvido (já com folga pra
+ * leads que saem fora de `0..width`/`0..height`), nunca da tabela estática abaixo. `properties` (a
+ * instância, não o typeId) tem prioridade sobre `package`/tabela estática quando presente -- só os
+ * típicos "de autoria de símbolo" (`propertyDrivenBox`) realmente usam isso hoje. */
+export function componentBox(typeId: string, properties?: Record<string, unknown>): ComponentBox {
+  const resolved = resolvedPackageFor(typeId);
+  if (resolved) return { width: resolved.width, height: resolved.height };
+  const propertyBox = propertyDrivenBox(typeId, properties);
+  if (propertyBox) return propertyBox;
+  if (typeId.startsWith("logic.")) {
+    if (
+      [
+        "logic.memory",
+        "logic.dynamic_memory",
+        "logic.mux",
+        "logic.demux",
+        "logic.bcd_to_dec",
+        "logic.dec_to_bcd",
+        "logic.bcd_to_7seg",
+        "logic.magnitude_comp",
+        "logic.shift_reg",
+        "logic.seven_segment_bcd",
+        "logic.i2c_to_parallel",
+      ].includes(typeId)
+    ) {
+      return { width: 96, height: 126 };
+    }
+    if (["logic.adc", "logic.dac", "logic.lm555", "logic.flipflop_jk"].includes(typeId)) return { width: 88, height: 86 };
+    return { width: 76, height: 56 };
+  }
   return COMPONENT_BOX[typeId] ?? DEFAULT_BOX;
 }
 
-/** Posição local (dentro da caixa do componente) do pino `pinIndex` de `pinCount` pinos. 2 pinos:
- * um de cada lado (esquerda/direita), no meio da altura -- igual ao layout Comp2Pin do SimulIDE.
- * 1 pino (terra/túnel): no TOPO, centralizado -- o fio entra por cima e o símbolo (linhas
- * decrescentes do terra, círculo do túnel) fica abaixo, nunca o contrário. */
-export function pinLocalPosition(pinIndex: number, pinCount: number, typeId: string): { x: number; y: number } {
+/** Posição local (dentro da caixa do componente) do pino `pinId` (índice `pinIndex` de `pinCount`
+ * pinos no array real que o Core devolveu, usado só pra fallback). Quando o typeId tem `package`, a
+ * posição vem do layout resolvido, casando por `id` -- nunca por posição no array, porque a ordem
+ * real de `component.pins[]` (Core) não é garantida bater com a ordem de `package.pins[]`
+ * declarada. Sem `package` (built-ins de sempre), cai no algoritmo genérico de sempre: 2 pinos um de
+ * cada lado (esquerda/direita), no meio da altura -- igual ao layout Comp2Pin do SimulIDE; 1 pino
+ * (terra/túnel) no TOPO, centralizado. */
+export function pinLocalPosition(pinId: string, pinIndex: number, pinCount: number, typeId: string): { x: number; y: number } {
+  const resolved = resolvedPackageFor(typeId);
+  if (resolved) {
+    const pin = resolved.pins.find((candidate) => candidate.id === pinId);
+    if (pin) return { x: pin.tipX, y: pin.tipY };
+  }
   if (typeId === "connectors.junction") return { x: 0, y: 0 };
   const box = componentBox(typeId);
   if (pinCount <= 1) return { x: box.width / 2, y: PIN_INSET };
@@ -144,9 +357,11 @@ function horizontalLeads(box: ComponentBox, yMid: number): string {
 }
 
 /** Corpo do símbolo (SVG inline, em coordenadas locais da caixa do tipo) para um `typeId` conhecido.
- * Tipos sem símbolo dedicado caem num retângulo genérico com leads — nunca undefined/branco. */
-export function componentSymbolSvg(typeId: string): string {
-  const box = componentBox(typeId);
+ * Tipos sem símbolo dedicado caem num retângulo genérico com leads — nunca undefined/branco.
+ * `properties` (opcional) é a instância real -- só os typeIds "de autoria de símbolo" (Épico G) leem
+ * isso pra desenhar tamanho/cor reais em vez de um ícone decorativo fixo, ver `propertyDrivenBox`. */
+export function componentSymbolSvg(typeId: string, properties?: Record<string, unknown>): string {
+  const box = componentBox(typeId, properties);
   const yMid = box.height / 2;
   const x1 = LEAD_MARGIN;
   const x2 = box.width - LEAD_MARGIN;
@@ -255,6 +470,110 @@ export function componentSymbolSvg(typeId: string): string {
       return (
         `<line x1="${midX}" y1="${PIN_INSET}" x2="${midX}" y2="${yMid - 8}" class="symbol-stroke"/>` +
         `<circle cx="${midX}" cy="${yMid}" r="8" class="symbol-stroke" fill="none"/>`
+      );
+
+    case "connectors.bus":
+      return (
+        `<line x1="12" y1="${yMid}" x2="${box.width - 12}" y2="${yMid}" class="symbol-stroke symbol-stroke--thick"/>` +
+        Array.from({ length: 6 }, (_, index) => {
+          const x = 18 + index * 8;
+          return `<line x1="${x}" y1="${yMid - 5}" x2="${x}" y2="${yMid + 5}" class="symbol-stroke"/>`;
+        }).join("")
+      );
+
+    case "connectors.socket":
+      return (
+        `<rect x="18" y="8" width="${box.width - 36}" height="${box.height - 16}" rx="2" class="symbol-stroke" fill="none"/>` +
+        Array.from({ length: 6 }, (_, index) => `<circle cx="${midX}" cy="${18 + index * 10}" r="2" class="symbol-stroke" fill="none"/>`).join("")
+      );
+
+    case "connectors.header":
+      return (
+        `<line x1="12" y1="${yMid}" x2="${box.width - 12}" y2="${yMid}" class="symbol-stroke symbol-stroke--thick"/>` +
+        Array.from({ length: 6 }, (_, index) => {
+          const x = 18 + index * 8;
+          return `<line x1="${x}" y1="${yMid - 8}" x2="${x}" y2="${yMid + 8}" class="symbol-stroke"/>`;
+        }).join("")
+      );
+
+    case "graphics.image":
+      return (
+        `<rect x="4" y="4" width="${box.width - 8}" height="${box.height - 8}" class="symbol-stroke" fill="none"/>` +
+        `<circle cx="24" cy="20" r="5" class="symbol-stroke" fill="none"/>` +
+        `<path d="M 8 ${box.height - 10} L 34 34 L 48 46 L 62 28 L ${box.width - 8} ${box.height - 10}" class="symbol-stroke" fill="none"/>`
+      );
+
+    case "graphics.text": {
+      // Sem `properties` (paleta/preview) cai no placeholder de sempre; com `properties`, desenha o
+      // texto/cor/tamanho reais -- mesmo princípio property-driven do resto deste `case`, ver
+      // `propertyDrivenBox`.
+      const text = typeof properties?.text === "string" ? properties.text : "Texto";
+      const fontSize = typeof properties?.fontSize === "number" ? properties.fontSize : 11;
+      const color = typeof properties?.color === "string" ? properties.color : "currentColor";
+      return `<text x="${midX}" y="${yMid + fontSize / 3}" text-anchor="middle" font-size="${fontSize}" fill="${color}">${escapeXmlText(text)}</text>`;
+    }
+
+    case "graphics.rectangle": {
+      const stroke = typeof properties?.stroke === "string" ? properties.stroke : "currentColor";
+      const fill = typeof properties?.fill === "string" ? properties.fill : "none";
+      const strokeWidth = typeof properties?.strokeWidth === "number" ? properties.strokeWidth : 1;
+      return `<rect x="0.5" y="0.5" width="${Math.max(0, box.width - 1)}" height="${Math.max(0, box.height - 1)}" stroke="${stroke}" fill="${fill}" stroke-width="${strokeWidth}"/>`;
+    }
+
+    case "graphics.ellipse": {
+      const stroke = typeof properties?.stroke === "string" ? properties.stroke : "currentColor";
+      const fill = typeof properties?.fill === "string" ? properties.fill : "none";
+      return `<ellipse cx="${midX}" cy="${yMid}" rx="${box.width / 2 - 0.5}" ry="${box.height / 2 - 0.5}" stroke="${stroke}" fill="${fill}"/>`;
+    }
+
+    case "graphics.line": {
+      // Desenho CANÔNICO (rotation=0): linha horizontal centrada no meio da caixa quadrada -- o
+      // ponto médio é o único ponto invariante sob `rotate()` em torno do centro (ver
+      // `propertyDrivenBox`), por isso é ele (não uma ponta) que vira a referência ao compilar de
+      // volta pra `PackageShape.x1/y1/x2/y2` em `extension.ts::compileSymbolAuthoringComponents`.
+      const length = typeof properties?.length === "number" ? properties.length : 40;
+      const stroke = typeof properties?.stroke === "string" ? properties.stroke : "currentColor";
+      return `<line x1="${midX - length / 2}" y1="${yMid}" x2="${midX + length / 2}" y2="${yMid}" stroke="${stroke}" stroke-width="2"/>`;
+    }
+
+    case "other.package": {
+      const border = properties?.border !== false;
+      const backgroundColor = typeof properties?.backgroundColor === "string" ? properties.backgroundColor : undefined;
+      return (
+        (backgroundColor ? `<rect x="0" y="0" width="${box.width}" height="${box.height}" fill="${backgroundColor}"/>` : "") +
+        (border ? `<rect x="0.5" y="0.5" width="${Math.max(0, box.width - 1)}" height="${Math.max(0, box.height - 1)}" class="symbol-stroke" fill="none"/>` : "") +
+        `<text x="4" y="11" font-size="7" fill="currentColor" opacity="0.55">PKG</text>`
+      );
+    }
+
+    case "other.package_pin": {
+      // Desenho CANÔNICO (rotation=0): âncora no CENTRO da caixa (ponto invariante sob `rotate()`),
+      // lead saindo pra DIREITA -- mesma convenção de ângulo 0=direita do renderizador de leitura
+      // (`packagePinLeadSvg`). `component.rotation` (0/90/180/270, CSS) faz o papel do `angle` real
+      // de um `PackagePin` sem nenhum campo novo -- reaproveita rotação genérica (teclado/toolbar).
+      const length = typeof properties?.length === "number" ? properties.length : 8;
+      const label = typeof properties?.label === "string" && properties.label.trim() ? properties.label : (typeof properties?.pinId === "string" ? properties.pinId : "pin");
+      const tipX = midX + length;
+      return (
+        `<line x1="${midX}" y1="${yMid}" x2="${tipX}" y2="${yMid}" class="symbol-stroke"/>` +
+        `<circle cx="${midX}" cy="${yMid}" r="2" class="symbol-stroke" fill="currentColor"/>` +
+        `<text x="${tipX + 9}" y="${yMid + 3}" text-anchor="middle" font-size="7" fill="currentColor">${escapeXmlText(label)}</text>`
+      );
+    }
+
+    case "other.test_unit":
+      return (
+        `<rect x="10" y="8" width="${box.width - 20}" height="${box.height - 16}" rx="2" class="symbol-stroke" fill="none"/>` +
+        `<path d="M 20 ${yMid} L 30 ${yMid + 10} L 50 ${yMid - 10}" class="symbol-stroke symbol-stroke--accent" fill="none"/>` +
+        `<line x1="16" y1="16" x2="22" y2="16" class="symbol-stroke"/>` +
+        `<line x1="${box.width - 22}" y1="${box.height - 16}" x2="${box.width - 16}" y2="${box.height - 16}" class="symbol-stroke"/>`
+      );
+
+    case "other.dial":
+      return (
+        `<circle cx="${midX}" cy="${yMid}" r="22" class="symbol-stroke" fill="none"/>` +
+        `<circle cx="${midX}" cy="${yMid}" r="12" class="symbol-stroke" fill="none"/>` +
+        `<line x1="${midX}" y1="${yMid}" x2="${midX + 8}" y2="${yMid - 12}" class="symbol-stroke symbol-stroke--thick"/>`
       );
 
     case "sources.dc_voltage":
@@ -390,6 +709,63 @@ export function componentSymbolSvg(typeId: string): string {
     case "outputs.gc9a01a":
     case "outputs.pcf8833":
       return labelBox((typeId.split(".")[1] ?? typeId).replace(/_/g, " ").toUpperCase());
+
+    case "logic.buffer":
+      return labelBox("BUF");
+    case "logic.and_gate":
+      return labelBox("AND");
+    case "logic.or_gate":
+      return labelBox("OR");
+    case "logic.xor_gate":
+      return labelBox("XOR");
+    case "logic.counter":
+      return labelBox("CNT");
+    case "logic.bin_counter":
+      return labelBox("BIN CNT");
+    case "logic.full_adder":
+      return labelBox("ADD");
+    case "logic.magnitude_comp":
+      return labelBox("A:B");
+    case "logic.shift_reg":
+      return labelBox("SHIFT");
+    case "logic.function":
+      return labelBox("F(x)");
+    case "logic.flipflop_d":
+      return labelBox("D FF");
+    case "logic.flipflop_t":
+      return labelBox("T FF");
+    case "logic.flipflop_rs":
+      return labelBox("RS");
+    case "logic.flipflop_jk":
+      return labelBox("JK");
+    case "logic.latch_d":
+      return labelBox("LATCH");
+    case "logic.memory":
+      return labelBox("RAM");
+    case "logic.dynamic_memory":
+      return labelBox("DRAM");
+    case "logic.i2c_ram":
+      return labelBox("I2C RAM");
+    case "logic.mux":
+      return labelBox("MUX");
+    case "logic.demux":
+      return labelBox("DEMUX");
+    case "logic.bcd_to_dec":
+      return labelBox("BCD>DEC");
+    case "logic.dec_to_bcd":
+      return labelBox("DEC>BCD");
+    case "logic.bcd_to_7seg":
+      return labelBox("BCD>7S");
+    case "logic.i2c_to_parallel":
+      return labelBox("I2C>P");
+    case "logic.adc":
+      return labelBox("ADC");
+    case "logic.dac":
+      return labelBox("DAC");
+    case "logic.seven_segment_bcd":
+      return labelBox("7S BCD");
+    case "logic.lm555":
+      return labelBox("555");
 
     case "instruments.voltmeter":
       // Limitação conhecida: o plugin agora declara um 3º pino ("outPin", saída analógica da

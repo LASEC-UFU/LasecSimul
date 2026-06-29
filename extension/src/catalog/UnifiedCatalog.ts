@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { WebviewComponentCatalogEntry } from "../ui/webview/model";
+import { PackageDescriptor, WebviewComponentCatalogEntry } from "../ui/webview/model";
 import { defaultComponentCatalog } from "../ui/webview/catalog";
 
 export type RegisteredSourceKind = "abi-device" | "mcu-adapter" | "subcircuit-file";
@@ -23,10 +23,13 @@ export interface UnifiedCatalogItem {
   icon?: string;
   iconFilePath?: string;
   symbolSvg?: string;
+  package?: PackageDescriptor;
   folderPath?: string[];
   category?: string;
   subcategory?: string;
   hidden?: boolean;
+  disabled?: boolean;
+  disabledReason?: string;
 }
 
 /** Tradução de um item do catálogo pra uma língua — subconjunto dos mesmos campos visíveis
@@ -74,6 +77,8 @@ const DEFAULT_CATALOG_FILE: UnifiedCatalogFile = {
     folderPath: entry.folderPath,
     category: entry.category,
     subcategory: entry.subcategory,
+    disabled: entry.disabled,
+    disabledReason: entry.disabledReason,
   })),
   registeredSources: [],
 };
@@ -101,9 +106,12 @@ function entryToWebview(item: UnifiedCatalogItem): WebviewComponentCatalogEntry 
     icon: item.icon,
     iconFilePath: item.iconFilePath,
     symbolSvg: item.symbolSvg,
+    package: item.package,
     pinCount: item.pinCount,
     defaultProperties: item.defaultProperties ?? {},
     hidden: item.hidden,
+    disabled: item.disabled,
+    disabledReason: item.disabledReason,
   };
 }
 

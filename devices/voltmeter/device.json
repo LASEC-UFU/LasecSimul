@@ -7,11 +7,17 @@
     "en": {
       "name": "DC Voltmeter (two-point measurement)",
       "properties": {
-        "displayVoltage": { "label": "Measured voltage", "group": "Reading" }
+        "displayVoltage": {
+          "label": "Measured voltage",
+          "group": "Reading"
+        }
       }
     }
   },
-  "abiVersion": { "major": 3, "minor": 0 },
+  "abiVersion": {
+    "major": 3,
+    "minor": 0
+  },
   "nativeEntry": {
     "win32-x64": "build/win-x64/device.dll",
     "linux-x64": "build/linux-x64/device.so",
@@ -21,15 +27,50 @@
     "width": 50,
     "height": 50,
     "border": true,
-    "background": { "kind": "color", "value": "#ffffff" },
+    "background": {
+      "kind": "color",
+      "value": "#ffffff"
+    },
     "shapes": [
-      { "kind": "text", "x": 18, "y": 28, "value": "V", "fontSize": 20, "color": "#000000" }
-    ]
+      {
+        "kind": "text",
+        "x": 18,
+        "y": 28,
+        "value": "V",
+        "fontSize": 20,
+        "color": "#000000"
+      }
+    ],
+    "pins": []
   },
   "pins": [
-    { "id": "p1", "kind": "ANALOG_IN", "x": 0, "y": 15, "angle": 180, "length": 8, "label": "+" },
-    { "id": "p2", "kind": "ANALOG_IN", "x": 0, "y": 35, "angle": 180, "length": 8, "label": "-" },
-    { "id": "outPin", "kind": "ANALOG_OUT", "x": 50, "y": 15, "angle": 0, "length": 8, "label": "out" }
+    {
+      "id": "p1",
+      "kind": "ANALOG_IN",
+      "x": 0,
+      "y": 15,
+      "angle": 180,
+      "length": 8,
+      "label": "+"
+    },
+    {
+      "id": "p2",
+      "kind": "ANALOG_IN",
+      "x": 0,
+      "y": 35,
+      "angle": 180,
+      "length": 8,
+      "label": "-"
+    },
+    {
+      "id": "outPin",
+      "kind": "ANALOG_OUT",
+      "x": 50,
+      "y": 15,
+      "angle": 0,
+      "length": 8,
+      "label": "out"
+    }
   ],
   "properties": [
     {
@@ -45,5 +86,8 @@
     }
   ],
   "buses": [],
-  "limits": { "stepTimeoutMs": 4, "expectedComplexity": "low" }
+  "limits": {
+    "stepTimeoutMs": 4,
+    "expectedComplexity": "low"
+  }
 }

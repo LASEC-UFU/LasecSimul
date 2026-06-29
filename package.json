@@ -8,6 +8,7 @@
     "build:extension": "node scripts/build-extension.js",
     "build:core": "node scripts/build-core.js",
     "build:devices": "node scripts/build-devices.js",
+    "build:mcu-adapters": "node scripts/build-mcu-adapters.js",
     "watch:extension": "node scripts/build-extension.js --watch",
     "test:core": "node scripts/test-core.js",
     "test:extension": "npm --prefix extension test"

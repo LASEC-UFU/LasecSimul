@@ -3,9 +3,5 @@
   "typeId": "espressif.esp32",
   "label": "ESP32 (QEMU)",
   "folderPath": ["Microcontroladores", "Espressif"],
-  "icon": "esp32",
-  "iconPath": "icon.png",
-  "symbolSvg": "<rect x=\"24\" y=\"18\" width=\"112\" height=\"264\" rx=\"8\" class=\"symbol-stroke\" fill=\"none\"/><rect x=\"54\" y=\"116\" width=\"52\" height=\"68\" rx=\"6\" class=\"symbol-stroke\" fill=\"none\"/><text x=\"80\" y=\"144\" text-anchor=\"middle\" class=\"symbol-text\">ESP32</text><text x=\"80\" y=\"164\" text-anchor=\"middle\" class=\"symbol-text\">QEMU</text>",
-  "pinCount": 42,
   "defaultProperties": {}
 }
