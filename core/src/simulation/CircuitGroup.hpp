@@ -104,9 +104,29 @@ public:
             return;
         }
 
-        Eigen::FullPivLU<Eigen::MatrixXd> rankCheck(m_admittance);
+        // Equilibração diagonal simétrica (Jacobi) antes de checar posto/condicionamento: sem isso,
+        // um grupo que mistura condutância Norton-pra-terra "ideal" (Ground/FixedVolt/Clock/
+        // VoltSource/WaveGen, todos ~1e9) com um componente de muitos pinos flutuantes (ex:
+        // McuComponent, ~1e-6 -- ajustado pra ficar seguro SOZINHO, ver doc lá) faz
+        // FullPivLU::rank() ficar bem abaixo de cols() mesmo sem nenhuma linha literalmente zerada,
+        // porque o threshold do Eigen escala com o maior pivô (`maxPivot * size * epsilon`) -- 15
+        // ordens de grandeza de spread sepultam as linhas fracas. Escalar cada linha/coluna i por
+        // `1/sqrt(|A_ii|)` deixa a diagonal em ~1 e o spread relativo correto reaparece (resolve a
+        // causa raiz pra qualquer combinação futura de magnitudes, não só este caso -- ver
+        // .spec/lasecsimul-native-devices.spec seção 8.1). Variáveis extras (corrente de ramo de
+        // fonte de tensão ideal) têm diagonal exatamente 0 por construção (MNA padrão) -- escala 1,
+        // sem tocar essas linhas, que já são bem-condicionadas sozinhas (±1 nos off-diagonais).
+        const Eigen::Index n = m_admittance.rows();
+        m_scale = Eigen::VectorXd::Ones(n);
+        for (Eigen::Index i = 0; i < n; ++i) {
+            const double diag = std::abs(m_admittance(i, i));
+            if (diag > 0.0) m_scale(i) = 1.0 / std::sqrt(diag);
+        }
+        const Eigen::MatrixXd scaled = m_scale.asDiagonal() * m_admittance * m_scale.asDiagonal();
+
+        Eigen::FullPivLU<Eigen::MatrixXd> rankCheck(scaled);
         m_lastRcond = rankCheck.rcond();
-        if (rankCheck.rank() < m_admittance.cols() || !std::isfinite(m_lastRcond) || m_lastRcond <= 1e-14) {
+        if (rankCheck.rank() < scaled.cols() || !std::isfinite(m_lastRcond) || m_lastRcond <= 1e-14) {
             m_factorization.reset();
             m_lastSolution.setZero();
             m_singular = true;
@@ -114,7 +134,7 @@ public:
             return;
         }
 
-        m_factorization.emplace(m_admittance);
+        m_factorization.emplace(scaled);
         m_singular = false;
         m_admittanceChanged = false;
     }
@@ -125,7 +145,10 @@ public:
             m_lastSolution.setZero();
             return m_lastSolution;
         }
-        m_lastSolution = m_factorization->solve(m_rhs);
+        // Sistema equilibrado: A'=S*A*S, b'=S*b, resolvido pra y; x verdadeiro = S*y (ver factor()).
+        const Eigen::VectorXd scaledRhs = m_scale.cwiseProduct(m_rhs);
+        const Eigen::VectorXd y = m_factorization->solve(scaledRhs);
+        m_lastSolution = m_scale.cwiseProduct(y);
         if (!m_lastSolution.allFinite()) {
             m_lastSolution.setZero();
             m_singular = true;
@@ -153,6 +176,7 @@ private:
     Eigen::MatrixXd m_admittance;
     Eigen::VectorXd m_rhs;
     Eigen::VectorXd m_lastSolution;
+    Eigen::VectorXd m_scale; // fatores de equilibração da última factor() -- ver factor()/solve()
     std::optional<Eigen::PartialPivLU<Eigen::MatrixXd>> m_factorization;
     std::unordered_map<uint32_t, StampContribution> m_stamps;
     bool m_admittanceChanged = true;

@@ -757,6 +757,20 @@ algum grupo real chega a ficar grande o suficiente para precisar. Gatilho concre
 `kLargeGroupNodeThreshold` (200 nós num único grupo, ajustável por medição real) o Core registra um aviso —
 isso dá um sinal mensurável de quando vale revisitar, em vez de decidir por intuição.
 
+**Equilibração diagonal (Jacobi), adicionada 2026-06-29** — `CircuitGroup::factor()`/`solve()`: antes de
+checar posto/`rcond()` e de fatorar, cada linha/coluna `i` é escalada por `1/sqrt(|A_ii|)` (variável extra
+com diagonal 0 por construção MNA fica com escala 1, intocada). Achado real, não preventivo: um grupo
+misturando condutância "ideal" Norton-pra-terra (`Ground`/`FixedVolt`/`Clock`/`VoltSource`/`WaveGen`, todas
+`1e9`) com um componente de muitos pinos simultaneamente flutuantes (`McuComponent`, `1e-6` — ajustado pra
+ficar seguro sozinho, nunca testado em conjunto) fazia `FullPivLU::rank()` cair bem abaixo de `cols()` —
+nenhuma linha literalmente zerada, só o threshold do Eigen (`maxPivot·tamanho·epsilon`) sepultando as linhas
+fracas por spread de magnitude, não por falta de conexão real. `CircuitGroup::singular()` rejeitava o grupo
+inteiro (caso real: pull-up + botão de um GPIO do ESP32 ligado a GND/3V3, `subcircuits/
+esp32_devkitc_v4.lssub.json`, EN/BOOT). Equilibração é transformação de similaridade (`x = S·y`, resolve-se
+`S·A·S·y = S·b`) — preserva a solução exata a menos de erro de ponto flutuante, não muda comportamento de
+grupo já bem-condicionado, e resolve a causa raiz pra qualquer combinação futura de magnitudes, não só este
+caso (ver `.spec/lasecsimul-native-devices.spec` seção 8.1 para o relato completo do bug original).
+
 ### 7.2 Resolução de topologia — `Netlist` (pino → nó → grupo)
 
 Validado contra um caso real do SimulIDE que expõe uma fonte de "conexão" diferente de fio:

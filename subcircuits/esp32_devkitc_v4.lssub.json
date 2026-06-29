@@ -1,1286 +1,1398 @@
 {
-  "schemaVersion": 1,
-  "typeId": "subcircuits.esp32_devkitc_v4",
-  "name": "ESP32 DevKitC V4 (placa completa)",
-  "language": "pt-BR",
-  "translations": {
-    "en": {
-      "name": "ESP32 DevKitC V4 (full board)"
-    }
-  },
-  "components": [
-    {
-      "id": "mcu1",
-      "typeId": "espressif.esp32"
-    },
-    {
-      "id": "gnd1",
-      "typeId": "other.ground"
-    },
-    {
-      "id": "rail3v3",
-      "typeId": "sources.fixed_volt",
-      "properties": {
-        "voltage": 3.3,
-        "out": true
-      }
-    },
-    {
-      "id": "rail5v",
-      "typeId": "sources.fixed_volt",
-      "properties": {
-        "voltage": 5,
-        "out": true
-      }
-    },
-    {
-      "id": "tunnel_EN",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "EN"
-      }
-    },
-    {
-      "id": "tunnel_GND",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "GND"
-      }
-    },
-    {
-      "id": "tunnel_RAIL_3V3",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "RAIL_3V3"
-      }
-    },
-    {
-      "id": "tunnel_RAIL_5V",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "RAIL_5V"
-      }
-    },
-    {
-      "id": "tunnel_GPIO0",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "GPIO0"
-      }
-    },
-    {
-      "id": "tunnel_GPIO1",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "GPIO1"
-      }
-    },
-    {
-      "id": "tunnel_GPIO2",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "GPIO2"
-      }
-    },
-    {
-      "id": "tunnel_GPIO3",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "GPIO3"
-      }
-    },
-    {
-      "id": "tunnel_GPIO4",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "GPIO4"
-      }
-    },
-    {
-      "id": "tunnel_GPIO5",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "GPIO5"
-      }
-    },
-    {
-      "id": "tunnel_GPIO6",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "GPIO6"
-      }
-    },
-    {
-      "id": "tunnel_GPIO7",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "GPIO7"
-      }
-    },
-    {
-      "id": "tunnel_GPIO8",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "GPIO8"
-      }
-    },
-    {
-      "id": "tunnel_GPIO9",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "GPIO9"
-      }
-    },
-    {
-      "id": "tunnel_GPIO10",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "GPIO10"
-      }
-    },
-    {
-      "id": "tunnel_GPIO11",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "GPIO11"
-      }
-    },
-    {
-      "id": "tunnel_GPIO12",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "GPIO12"
-      }
-    },
-    {
-      "id": "tunnel_GPIO13",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "GPIO13"
-      }
-    },
-    {
-      "id": "tunnel_GPIO14",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "GPIO14"
-      }
-    },
-    {
-      "id": "tunnel_GPIO15",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "GPIO15"
-      }
-    },
-    {
-      "id": "tunnel_GPIO16",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "GPIO16"
-      }
-    },
-    {
-      "id": "tunnel_GPIO17",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "GPIO17"
-      }
-    },
-    {
-      "id": "tunnel_GPIO18",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "GPIO18"
-      }
-    },
-    {
-      "id": "tunnel_GPIO19",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "GPIO19"
-      }
-    },
-    {
-      "id": "tunnel_GPIO21",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "GPIO21"
-      }
-    },
-    {
-      "id": "tunnel_GPIO22",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "GPIO22"
-      }
-    },
-    {
-      "id": "tunnel_GPIO23",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "GPIO23"
-      }
-    },
-    {
-      "id": "tunnel_GPIO25",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "GPIO25"
-      }
-    },
-    {
-      "id": "tunnel_GPIO26",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "GPIO26"
-      }
-    },
-    {
-      "id": "tunnel_GPIO27",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "GPIO27"
-      }
-    },
-    {
-      "id": "tunnel_GPIO32",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "GPIO32"
-      }
-    },
-    {
-      "id": "tunnel_GPIO33",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "GPIO33"
-      }
-    },
-    {
-      "id": "tunnel_GPIO34",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "GPIO34"
-      }
-    },
-    {
-      "id": "tunnel_GPIO35",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "GPIO35"
-      }
-    },
-    {
-      "id": "tunnel_GPIO36",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "GPIO36"
-      }
-    },
-    {
-      "id": "tunnel_GPIO39",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "GPIO39"
-      }
-    }
-  ],
-  "wires": [
-    {
-      "from": {
-        "componentId": "tunnel_GND",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "gnd1",
-        "pinId": "pin"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_RAIL_3V3",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "rail3v3",
-        "pinId": "out"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_RAIL_5V",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "rail5v",
-        "pinId": "out"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_GPIO0",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO0"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_GPIO1",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO1"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_GPIO2",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO2"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_GPIO3",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO3"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_GPIO4",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO4"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_GPIO5",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO5"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_GPIO6",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO6"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_GPIO7",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO7"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_GPIO8",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO8"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_GPIO9",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO9"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_GPIO10",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO10"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_GPIO11",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO11"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_GPIO12",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO12"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_GPIO13",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO13"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_GPIO14",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO14"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_GPIO15",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO15"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_GPIO16",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO16"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_GPIO17",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO17"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_GPIO18",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO18"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_GPIO19",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO19"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_GPIO21",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO21"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_GPIO22",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO22"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_GPIO23",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO23"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_GPIO25",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO25"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_GPIO26",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO26"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_GPIO27",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO27"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_GPIO32",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO32"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_GPIO33",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO33"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_GPIO34",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO34"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_GPIO35",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO35"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_GPIO36",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO36"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_GPIO39",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO39"
-      }
-    }
-  ],
-  "interface": [
-    {
-      "pinId": "GND1",
-      "label": "Gnd",
-      "internalTunnel": "GND"
-    },
-    {
-      "pinId": "3V3",
-      "label": "3V3",
-      "internalTunnel": "RAIL_3V3"
-    },
-    {
-      "pinId": "G23",
-      "label": "23",
-      "internalTunnel": "GPIO23"
-    },
-    {
-      "pinId": "EN",
-      "label": "En",
-      "internalTunnel": "EN"
-    },
-    {
-      "pinId": "G22",
-      "label": "22",
-      "internalTunnel": "GPIO22"
-    },
-    {
-      "pinId": "VP",
-      "label": "VP",
-      "internalTunnel": "GPIO36"
-    },
-    {
-      "pinId": "TX",
-      "label": "Tx",
-      "internalTunnel": "GPIO1"
-    },
-    {
-      "pinId": "VN",
-      "label": "VN",
-      "internalTunnel": "GPIO39"
-    },
-    {
-      "pinId": "RX",
-      "label": "Rx",
-      "internalTunnel": "GPIO3"
-    },
-    {
-      "pinId": "G34",
-      "label": "34",
-      "internalTunnel": "GPIO34"
-    },
-    {
-      "pinId": "G21",
-      "label": "21",
-      "internalTunnel": "GPIO21"
-    },
-    {
-      "pinId": "G35",
-      "label": "35",
-      "internalTunnel": "GPIO35"
-    },
-    {
-      "pinId": "GND2",
-      "label": "Gnd",
-      "internalTunnel": "GND"
-    },
-    {
-      "pinId": "G32",
-      "label": "32",
-      "internalTunnel": "GPIO32"
-    },
-    {
-      "pinId": "G19",
-      "label": "19",
-      "internalTunnel": "GPIO19"
-    },
-    {
-      "pinId": "G33",
-      "label": "33",
-      "internalTunnel": "GPIO33"
-    },
-    {
-      "pinId": "G18",
-      "label": "18",
-      "internalTunnel": "GPIO18"
-    },
-    {
-      "pinId": "G25",
-      "label": "25",
-      "internalTunnel": "GPIO25"
-    },
-    {
-      "pinId": "G05",
-      "label": "5",
-      "internalTunnel": "GPIO5"
-    },
-    {
-      "pinId": "G26",
-      "label": "26",
-      "internalTunnel": "GPIO26"
-    },
-    {
-      "pinId": "G17",
-      "label": "17",
-      "internalTunnel": "GPIO17"
-    },
-    {
-      "pinId": "G27",
-      "label": "27",
-      "internalTunnel": "GPIO27"
-    },
-    {
-      "pinId": "G16",
-      "label": "16",
-      "internalTunnel": "GPIO16"
-    },
-    {
-      "pinId": "G14",
-      "label": "14",
-      "internalTunnel": "GPIO14"
-    },
-    {
-      "pinId": "G04",
-      "label": "4",
-      "internalTunnel": "GPIO4"
-    },
-    {
-      "pinId": "G12",
-      "label": "12",
-      "internalTunnel": "GPIO12"
-    },
-    {
-      "pinId": "G00",
-      "label": "0",
-      "internalTunnel": "GPIO0"
-    },
-    {
-      "pinId": "GND3",
-      "label": "Gnd",
-      "internalTunnel": "GND"
-    },
-    {
-      "pinId": "G02",
-      "label": "2",
-      "internalTunnel": "GPIO2"
-    },
-    {
-      "pinId": "G13",
-      "label": "13",
-      "internalTunnel": "GPIO13"
-    },
-    {
-      "pinId": "G15",
-      "label": "15",
-      "internalTunnel": "GPIO15"
-    },
-    {
-      "pinId": "D2",
-      "label": "D2",
-      "internalTunnel": "GPIO9"
-    },
-    {
-      "pinId": "D1",
-      "label": "D1",
-      "internalTunnel": "GPIO8"
-    },
-    {
-      "pinId": "D3",
-      "label": "D3",
-      "internalTunnel": "GPIO10"
-    },
-    {
-      "pinId": "D0",
-      "label": "D0",
-      "internalTunnel": "GPIO7"
-    },
-    {
-      "pinId": "CM",
-      "label": "Cm",
-      "internalTunnel": "GPIO11"
-    },
-    {
-      "pinId": "CK",
-      "label": "Ck",
-      "internalTunnel": "GPIO6"
-    },
-    {
-      "pinId": "5V",
-      "label": "5V",
-      "internalTunnel": "RAIL_5V"
-    }
-  ],
-  "package": {
-    "width": 220,
-    "height": 328,
-    "border": true,
-    "background": {
-      "kind": "color",
-      "value": "#0f1f3d"
-    },
-    "shapes": [
-      {
-        "kind": "rect",
-        "x": 65.0,
-        "y": 28,
-        "w": 90,
-        "h": 70,
-        "stroke": "#94a3b8",
-        "fill": "#1f2937",
-        "strokeWidth": 1
-      },
-      {
-        "kind": "rect",
-        "x": 128.0,
-        "y": 28,
-        "w": 18,
-        "h": 12,
-        "stroke": "#64748b",
-        "fill": "none",
-        "strokeWidth": 1
-      },
-      {
-        "kind": "text",
-        "x": 110.0,
-        "y": 58,
-        "value": "ESP32-WROOM-32",
-        "fontSize": 8.5,
-        "color": "#e2e8f0"
-      },
-      {
-        "kind": "text",
-        "x": 110.0,
-        "y": 72,
-        "value": "(QEMU)",
-        "fontSize": 7.5,
-        "color": "#94a3b8"
-      },
-      {
-        "kind": "text",
-        "x": 110.0,
-        "y": 150,
-        "value": "DevKitC V4",
-        "fontSize": 12,
-        "color": "#e2e8f0"
-      },
-      {
-        "kind": "ellipse",
-        "cx": 50.0,
-        "cy": 268,
-        "rx": 7,
-        "ry": 7,
-        "stroke": "#94a3b8",
-        "fill": "none"
-      },
-      {
-        "kind": "text",
-        "x": 50.0,
-        "y": 284,
-        "value": "EN",
-        "fontSize": 7,
-        "color": "#94a3b8"
-      },
-      {
-        "kind": "ellipse",
-        "cx": 170.0,
-        "cy": 268,
-        "rx": 7,
-        "ry": 7,
-        "stroke": "#94a3b8",
-        "fill": "none"
-      },
-      {
-        "kind": "text",
-        "x": 170.0,
-        "y": 284,
-        "value": "BOOT",
-        "fontSize": 7,
-        "color": "#94a3b8"
-      },
-      {
-        "kind": "rect",
-        "x": 90.0,
-        "y": 310,
-        "w": 40,
-        "h": 18,
-        "stroke": "#94a3b8",
-        "fill": "#374151",
-        "strokeWidth": 1
-      },
-      {
-        "kind": "rect",
-        "x": 98.0,
-        "y": 314,
-        "w": 24,
-        "h": 10,
-        "stroke": "#94a3b8",
-        "fill": "none",
-        "strokeWidth": 1
-      }
-    ],
-    "pins": [
-      {
-        "id": "GND1",
-        "kind": "POWER",
-        "x": 0,
-        "y": 20,
-        "angle": 180,
-        "length": 8,
-        "label": "Gnd"
-      },
-      {
-        "id": "3V3",
-        "kind": "POWER",
-        "x": 220,
-        "y": 20,
-        "angle": 0,
-        "length": 8,
-        "label": "3V3"
-      },
-      {
-        "id": "G23",
-        "kind": "DIGITAL_BIDIR",
-        "x": 0,
-        "y": 36,
-        "angle": 180,
-        "length": 8,
-        "label": "23"
-      },
-      {
-        "id": "EN",
-        "kind": "POWER",
-        "x": 220,
-        "y": 36,
-        "angle": 0,
-        "length": 8,
-        "label": "En"
-      },
-      {
-        "id": "G22",
-        "kind": "DIGITAL_BIDIR",
-        "x": 0,
-        "y": 52,
-        "angle": 180,
-        "length": 8,
-        "label": "22"
-      },
-      {
-        "id": "VP",
-        "kind": "DIGITAL_BIDIR",
-        "x": 220,
-        "y": 52,
-        "angle": 0,
-        "length": 8,
-        "label": "VP"
-      },
-      {
-        "id": "TX",
-        "kind": "DIGITAL_BIDIR",
-        "x": 0,
-        "y": 68,
-        "angle": 180,
-        "length": 8,
-        "label": "Tx"
-      },
-      {
-        "id": "VN",
-        "kind": "DIGITAL_BIDIR",
-        "x": 220,
-        "y": 68,
-        "angle": 0,
-        "length": 8,
-        "label": "VN"
-      },
-      {
-        "id": "RX",
-        "kind": "DIGITAL_BIDIR",
-        "x": 0,
-        "y": 84,
-        "angle": 180,
-        "length": 8,
-        "label": "Rx"
-      },
-      {
-        "id": "G34",
-        "kind": "DIGITAL_BIDIR",
-        "x": 220,
-        "y": 84,
-        "angle": 0,
-        "length": 8,
-        "label": "34"
-      },
-      {
-        "id": "G21",
-        "kind": "DIGITAL_BIDIR",
-        "x": 0,
-        "y": 100,
-        "angle": 180,
-        "length": 8,
-        "label": "21"
-      },
-      {
-        "id": "G35",
-        "kind": "DIGITAL_BIDIR",
-        "x": 220,
-        "y": 100,
-        "angle": 0,
-        "length": 8,
-        "label": "35"
-      },
-      {
-        "id": "GND2",
-        "kind": "POWER",
-        "x": 0,
-        "y": 116,
-        "angle": 180,
-        "length": 8,
-        "label": "Gnd"
-      },
-      {
-        "id": "G32",
-        "kind": "DIGITAL_BIDIR",
-        "x": 220,
-        "y": 116,
-        "angle": 0,
-        "length": 8,
-        "label": "32"
-      },
-      {
-        "id": "G19",
-        "kind": "DIGITAL_BIDIR",
-        "x": 0,
-        "y": 132,
-        "angle": 180,
-        "length": 8,
-        "label": "19"
-      },
-      {
-        "id": "G33",
-        "kind": "DIGITAL_BIDIR",
-        "x": 220,
-        "y": 132,
-        "angle": 0,
-        "length": 8,
-        "label": "33"
-      },
-      {
-        "id": "G18",
-        "kind": "DIGITAL_BIDIR",
-        "x": 0,
-        "y": 148,
-        "angle": 180,
-        "length": 8,
-        "label": "18"
-      },
-      {
-        "id": "G25",
-        "kind": "DIGITAL_BIDIR",
-        "x": 220,
-        "y": 148,
-        "angle": 0,
-        "length": 8,
-        "label": "25"
-      },
-      {
-        "id": "G05",
-        "kind": "DIGITAL_BIDIR",
-        "x": 0,
-        "y": 164,
-        "angle": 180,
-        "length": 8,
-        "label": "5"
-      },
-      {
-        "id": "G26",
-        "kind": "DIGITAL_BIDIR",
-        "x": 220,
-        "y": 164,
-        "angle": 0,
-        "length": 8,
-        "label": "26"
-      },
-      {
-        "id": "G17",
-        "kind": "DIGITAL_BIDIR",
-        "x": 0,
-        "y": 180,
-        "angle": 180,
-        "length": 8,
-        "label": "17"
-      },
-      {
-        "id": "G27",
-        "kind": "DIGITAL_BIDIR",
-        "x": 220,
-        "y": 180,
-        "angle": 0,
-        "length": 8,
-        "label": "27"
-      },
-      {
-        "id": "G16",
-        "kind": "DIGITAL_BIDIR",
-        "x": 0,
-        "y": 196,
-        "angle": 180,
-        "length": 8,
-        "label": "16"
-      },
-      {
-        "id": "G14",
-        "kind": "DIGITAL_BIDIR",
-        "x": 220,
-        "y": 196,
-        "angle": 0,
-        "length": 8,
-        "label": "14"
-      },
-      {
-        "id": "G04",
-        "kind": "DIGITAL_BIDIR",
-        "x": 0,
-        "y": 212,
-        "angle": 180,
-        "length": 8,
-        "label": "4"
-      },
-      {
-        "id": "G12",
-        "kind": "DIGITAL_BIDIR",
-        "x": 220,
-        "y": 212,
-        "angle": 0,
-        "length": 8,
-        "label": "12"
-      },
-      {
-        "id": "G00",
-        "kind": "DIGITAL_BIDIR",
-        "x": 0,
-        "y": 228,
-        "angle": 180,
-        "length": 8,
-        "label": "0"
-      },
-      {
-        "id": "GND3",
-        "kind": "POWER",
-        "x": 220,
-        "y": 228,
-        "angle": 0,
-        "length": 8,
-        "label": "Gnd"
-      },
-      {
-        "id": "G02",
-        "kind": "DIGITAL_BIDIR",
-        "x": 0,
-        "y": 244,
-        "angle": 180,
-        "length": 8,
-        "label": "2"
-      },
-      {
-        "id": "G13",
-        "kind": "DIGITAL_BIDIR",
-        "x": 220,
-        "y": 244,
-        "angle": 0,
-        "length": 8,
-        "label": "13"
-      },
-      {
-        "id": "G15",
-        "kind": "DIGITAL_BIDIR",
-        "x": 0,
-        "y": 260,
-        "angle": 180,
-        "length": 8,
-        "label": "15"
-      },
-      {
-        "id": "D2",
-        "kind": "DIGITAL_BIDIR",
-        "x": 220,
-        "y": 260,
-        "angle": 0,
-        "length": 8,
-        "label": "D2"
-      },
-      {
-        "id": "D1",
-        "kind": "DIGITAL_BIDIR",
-        "x": 0,
-        "y": 276,
-        "angle": 180,
-        "length": 8,
-        "label": "D1"
-      },
-      {
-        "id": "D3",
-        "kind": "DIGITAL_BIDIR",
-        "x": 220,
-        "y": 276,
-        "angle": 0,
-        "length": 8,
-        "label": "D3"
-      },
-      {
-        "id": "D0",
-        "kind": "DIGITAL_BIDIR",
-        "x": 0,
-        "y": 292,
-        "angle": 180,
-        "length": 8,
-        "label": "D0"
-      },
-      {
-        "id": "CM",
-        "kind": "DIGITAL_BIDIR",
-        "x": 220,
-        "y": 292,
-        "angle": 0,
-        "length": 8,
-        "label": "Cm"
-      },
-      {
-        "id": "CK",
-        "kind": "DIGITAL_BIDIR",
-        "x": 0,
-        "y": 308,
-        "angle": 180,
-        "length": 8,
-        "label": "Ck"
-      },
-      {
-        "id": "5V",
-        "kind": "POWER",
-        "x": 220,
-        "y": 308,
-        "angle": 0,
-        "length": 8,
-        "label": "5V"
-      }
-    ]
-  }
+    "schemaVersion":  1,
+    "typeId":  "subcircuits.esp32_devkitc_v4",
+    "name":  "ESP32 DevKitC V4 (placa completa)",
+    "language":  "pt-BR",
+    "translations":  {
+                         "en":  {
+                                    "name":  "ESP32 DevKitC V4 (full board)"
+                                }
+                     },
+    "components":  [
+                       {
+                           "id":  "mcu1",
+                           "typeId":  "espressif.esp32"
+                       },
+                       {
+                           "id":  "gnd1",
+                           "typeId":  "other.ground"
+                       },
+                       {
+                           "id":  "rail3v3",
+                           "typeId":  "sources.fixed_volt",
+                           "properties":  {
+                                              "voltage":  3.3,
+                                              "out":  true
+                                          }
+                       },
+                       {
+                           "id":  "rail5v",
+                           "typeId":  "sources.fixed_volt",
+                           "properties":  {
+                                              "voltage":  5,
+                                              "out":  true
+                                          }
+                       },
+                       {
+                           "id":  "pullup_en",
+                           "typeId":  "passive.resistor",
+                           "properties":  {
+                                              "resistance":  10000
+                                          }
+                       },
+                       {
+                           "id":  "pullup_boot",
+                           "typeId":  "passive.resistor",
+                           "properties":  {
+                                              "resistance":  10000
+                                          }
+                       },
+                       {
+                           "id":  "button_en",
+                           "typeId":  "switches.push"
+                       },
+                       {
+                           "id":  "button_boot",
+                           "typeId":  "switches.push"
+                       },
+                       {
+                           "id":  "tunnel_gnd",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "GND"
+                                          }
+                       },
+                       {
+                           "id":  "tunnel_3v3",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "3V3"
+                                          }
+                       },
+                       {
+                           "id":  "tunnel_5v",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "5V"
+                                          }
+                       },
+                       {
+                           "id":  "tunnel_en",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "EN"
+                                          }
+                       },
+                       {
+                           "id":  "tunnel_G23",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "G23"
+                                          }
+                       },
+                       {
+                           "id":  "tunnel_G22",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "G22"
+                                          }
+                       },
+                       {
+                           "id":  "tunnel_VP",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "VP"
+                                          }
+                       },
+                       {
+                           "id":  "tunnel_TX",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "TX"
+                                          }
+                       },
+                       {
+                           "id":  "tunnel_VN",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "VN"
+                                          }
+                       },
+                       {
+                           "id":  "tunnel_RX",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "RX"
+                                          }
+                       },
+                       {
+                           "id":  "tunnel_G34",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "G34"
+                                          }
+                       },
+                       {
+                           "id":  "tunnel_G21",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "G21"
+                                          }
+                       },
+                       {
+                           "id":  "tunnel_G35",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "G35"
+                                          }
+                       },
+                       {
+                           "id":  "tunnel_G32",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "G32"
+                                          }
+                       },
+                       {
+                           "id":  "tunnel_G19",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "G19"
+                                          }
+                       },
+                       {
+                           "id":  "tunnel_G33",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "G33"
+                                          }
+                       },
+                       {
+                           "id":  "tunnel_G18",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "G18"
+                                          }
+                       },
+                       {
+                           "id":  "tunnel_G25",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "G25"
+                                          }
+                       },
+                       {
+                           "id":  "tunnel_G05",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "G05"
+                                          }
+                       },
+                       {
+                           "id":  "tunnel_G26",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "G26"
+                                          }
+                       },
+                       {
+                           "id":  "tunnel_G17",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "G17"
+                                          }
+                       },
+                       {
+                           "id":  "tunnel_G27",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "G27"
+                                          }
+                       },
+                       {
+                           "id":  "tunnel_G16",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "G16"
+                                          }
+                       },
+                       {
+                           "id":  "tunnel_G14",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "G14"
+                                          }
+                       },
+                       {
+                           "id":  "tunnel_G04",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "G04"
+                                          }
+                       },
+                       {
+                           "id":  "tunnel_G12",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "G12"
+                                          }
+                       },
+                       {
+                           "id":  "tunnel_G00",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "G00"
+                                          }
+                       },
+                       {
+                           "id":  "tunnel_G02",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "G02"
+                                          }
+                       },
+                       {
+                           "id":  "tunnel_G13",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "G13"
+                                          }
+                       },
+                       {
+                           "id":  "tunnel_G15",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "G15"
+                                          }
+                       },
+                       {
+                           "id":  "tunnel_D2",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "D2"
+                                          }
+                       },
+                       {
+                           "id":  "tunnel_D1",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "D1"
+                                          }
+                       },
+                       {
+                           "id":  "tunnel_D3",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "D3"
+                                          }
+                       },
+                       {
+                           "id":  "tunnel_D0",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "D0"
+                                          }
+                       },
+                       {
+                           "id":  "tunnel_CM",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "CM"
+                                          }
+                       },
+                       {
+                           "id":  "tunnel_CK",
+                           "typeId":  "connectors.tunnel",
+                           "properties":  {
+                                              "name":  "CK"
+                                          }
+                       }
+                   ],
+    "wires":  [
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_gnd",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "gnd1",
+                                 "pinId":  "pin"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_3v3",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "rail3v3",
+                                 "pinId":  "out"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_5v",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "rail5v",
+                                 "pinId":  "out"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "pullup_en",
+                                   "pinId":  "p1"
+                               },
+                      "to":  {
+                                 "componentId":  "tunnel_en",
+                                 "pinId":  "pin"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "pullup_en",
+                                   "pinId":  "p2"
+                               },
+                      "to":  {
+                                 "componentId":  "rail3v3",
+                                 "pinId":  "out"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "button_en",
+                                   "pinId":  "pin-1"
+                               },
+                      "to":  {
+                                 "componentId":  "tunnel_en",
+                                 "pinId":  "pin"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "button_en",
+                                   "pinId":  "pin-2"
+                               },
+                      "to":  {
+                                 "componentId":  "gnd1",
+                                 "pinId":  "pin"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_en",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "mcu1",
+                                 "pinId":  "RST"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "pullup_boot",
+                                   "pinId":  "p1"
+                               },
+                      "to":  {
+                                 "componentId":  "tunnel_G00",
+                                 "pinId":  "pin"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "pullup_boot",
+                                   "pinId":  "p2"
+                               },
+                      "to":  {
+                                 "componentId":  "rail3v3",
+                                 "pinId":  "out"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "button_boot",
+                                   "pinId":  "pin-1"
+                               },
+                      "to":  {
+                                 "componentId":  "tunnel_G00",
+                                 "pinId":  "pin"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "button_boot",
+                                   "pinId":  "pin-2"
+                               },
+                      "to":  {
+                                 "componentId":  "gnd1",
+                                 "pinId":  "pin"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_G23",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "mcu1",
+                                 "pinId":  "GPIO23"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_G22",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "mcu1",
+                                 "pinId":  "GPIO22"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_VP",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "mcu1",
+                                 "pinId":  "GPIO36"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_TX",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "mcu1",
+                                 "pinId":  "GPIO1"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_VN",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "mcu1",
+                                 "pinId":  "GPIO39"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_RX",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "mcu1",
+                                 "pinId":  "GPIO3"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_G34",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "mcu1",
+                                 "pinId":  "GPIO34"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_G21",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "mcu1",
+                                 "pinId":  "GPIO21"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_G35",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "mcu1",
+                                 "pinId":  "GPIO35"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_G32",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "mcu1",
+                                 "pinId":  "GPIO32"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_G19",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "mcu1",
+                                 "pinId":  "GPIO19"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_G33",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "mcu1",
+                                 "pinId":  "GPIO33"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_G18",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "mcu1",
+                                 "pinId":  "GPIO18"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_G25",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "mcu1",
+                                 "pinId":  "GPIO25"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_G05",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "mcu1",
+                                 "pinId":  "GPIO5"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_G26",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "mcu1",
+                                 "pinId":  "GPIO26"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_G17",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "mcu1",
+                                 "pinId":  "GPIO17"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_G27",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "mcu1",
+                                 "pinId":  "GPIO27"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_G16",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "mcu1",
+                                 "pinId":  "GPIO16"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_G14",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "mcu1",
+                                 "pinId":  "GPIO14"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_G04",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "mcu1",
+                                 "pinId":  "GPIO4"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_G12",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "mcu1",
+                                 "pinId":  "GPIO12"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_G00",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "mcu1",
+                                 "pinId":  "GPIO0"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_G02",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "mcu1",
+                                 "pinId":  "GPIO2"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_G13",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "mcu1",
+                                 "pinId":  "GPIO13"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_G15",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "mcu1",
+                                 "pinId":  "GPIO15"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_D2",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "mcu1",
+                                 "pinId":  "GPIO9"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_D1",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "mcu1",
+                                 "pinId":  "GPIO8"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_D3",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "mcu1",
+                                 "pinId":  "GPIO10"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_D0",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "mcu1",
+                                 "pinId":  "GPIO7"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_CM",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "mcu1",
+                                 "pinId":  "GPIO11"
+                             }
+                  },
+                  {
+                      "from":  {
+                                   "componentId":  "tunnel_CK",
+                                   "pinId":  "pin"
+                               },
+                      "to":  {
+                                 "componentId":  "mcu1",
+                                 "pinId":  "GPIO6"
+                             }
+                  }
+              ],
+    "interface":  [
+                      {
+                          "pinId":  "GND1",
+                          "label":  "Gnd",
+                          "internalTunnel":  "GND"
+                      },
+                      {
+                          "pinId":  "3V3",
+                          "label":  "3V3",
+                          "internalTunnel":  "3V3"
+                      },
+                      {
+                          "pinId":  "G23",
+                          "label":  "23",
+                          "internalTunnel":  "G23"
+                      },
+                      {
+                          "pinId":  "EN",
+                          "label":  "En",
+                          "internalTunnel":  "EN"
+                      },
+                      {
+                          "pinId":  "G22",
+                          "label":  "22",
+                          "internalTunnel":  "G22"
+                      },
+                      {
+                          "pinId":  "VP",
+                          "label":  "VP",
+                          "internalTunnel":  "VP"
+                      },
+                      {
+                          "pinId":  "TX",
+                          "label":  "Tx",
+                          "internalTunnel":  "TX"
+                      },
+                      {
+                          "pinId":  "VN",
+                          "label":  "VN",
+                          "internalTunnel":  "VN"
+                      },
+                      {
+                          "pinId":  "RX",
+                          "label":  "Rx",
+                          "internalTunnel":  "RX"
+                      },
+                      {
+                          "pinId":  "G34",
+                          "label":  "34",
+                          "internalTunnel":  "G34"
+                      },
+                      {
+                          "pinId":  "G21",
+                          "label":  "21",
+                          "internalTunnel":  "G21"
+                      },
+                      {
+                          "pinId":  "G35",
+                          "label":  "35",
+                          "internalTunnel":  "G35"
+                      },
+                      {
+                          "pinId":  "GND2",
+                          "label":  "Gnd",
+                          "internalTunnel":  "GND"
+                      },
+                      {
+                          "pinId":  "G32",
+                          "label":  "32",
+                          "internalTunnel":  "G32"
+                      },
+                      {
+                          "pinId":  "G19",
+                          "label":  "19",
+                          "internalTunnel":  "G19"
+                      },
+                      {
+                          "pinId":  "G33",
+                          "label":  "33",
+                          "internalTunnel":  "G33"
+                      },
+                      {
+                          "pinId":  "G18",
+                          "label":  "18",
+                          "internalTunnel":  "G18"
+                      },
+                      {
+                          "pinId":  "G25",
+                          "label":  "25",
+                          "internalTunnel":  "G25"
+                      },
+                      {
+                          "pinId":  "G05",
+                          "label":  "5",
+                          "internalTunnel":  "G05"
+                      },
+                      {
+                          "pinId":  "G26",
+                          "label":  "26",
+                          "internalTunnel":  "G26"
+                      },
+                      {
+                          "pinId":  "G17",
+                          "label":  "17",
+                          "internalTunnel":  "G17"
+                      },
+                      {
+                          "pinId":  "G27",
+                          "label":  "27",
+                          "internalTunnel":  "G27"
+                      },
+                      {
+                          "pinId":  "G16",
+                          "label":  "16",
+                          "internalTunnel":  "G16"
+                      },
+                      {
+                          "pinId":  "G14",
+                          "label":  "14",
+                          "internalTunnel":  "G14"
+                      },
+                      {
+                          "pinId":  "G04",
+                          "label":  "4",
+                          "internalTunnel":  "G04"
+                      },
+                      {
+                          "pinId":  "G12",
+                          "label":  "12",
+                          "internalTunnel":  "G12"
+                      },
+                      {
+                          "pinId":  "G00",
+                          "label":  "0",
+                          "internalTunnel":  "G00"
+                      },
+                      {
+                          "pinId":  "GND3",
+                          "label":  "Gnd",
+                          "internalTunnel":  "GND"
+                      },
+                      {
+                          "pinId":  "G02",
+                          "label":  "2",
+                          "internalTunnel":  "G02"
+                      },
+                      {
+                          "pinId":  "G13",
+                          "label":  "13",
+                          "internalTunnel":  "G13"
+                      },
+                      {
+                          "pinId":  "G15",
+                          "label":  "15",
+                          "internalTunnel":  "G15"
+                      },
+                      {
+                          "pinId":  "D2",
+                          "label":  "D2",
+                          "internalTunnel":  "D2"
+                      },
+                      {
+                          "pinId":  "D1",
+                          "label":  "D1",
+                          "internalTunnel":  "D1"
+                      },
+                      {
+                          "pinId":  "D3",
+                          "label":  "D3",
+                          "internalTunnel":  "D3"
+                      },
+                      {
+                          "pinId":  "D0",
+                          "label":  "D0",
+                          "internalTunnel":  "D0"
+                      },
+                      {
+                          "pinId":  "CM",
+                          "label":  "Cm",
+                          "internalTunnel":  "CM"
+                      },
+                      {
+                          "pinId":  "CK",
+                          "label":  "Ck",
+                          "internalTunnel":  "CK"
+                      },
+                      {
+                          "pinId":  "5V",
+                          "label":  "5V",
+                          "internalTunnel":  "5V"
+                      }
+                  ],
+    "package":  {
+                    "width":  220,
+                    "height":  328,
+                    "border":  true,
+                    "background":  {
+                                       "kind":  "color",
+                                       "value":  "#0f1f3d"
+                                   },
+                    "shapes":  [
+                                   {
+                                       "kind":  "rect",
+                                       "x":  65.0,
+                                       "y":  28,
+                                       "w":  90,
+                                       "h":  70,
+                                       "stroke":  "#94a3b8",
+                                       "fill":  "#1f2937",
+                                       "strokeWidth":  1
+                                   },
+                                   {
+                                       "kind":  "rect",
+                                       "x":  128.0,
+                                       "y":  28,
+                                       "w":  18,
+                                       "h":  12,
+                                       "stroke":  "#64748b",
+                                       "fill":  "none",
+                                       "strokeWidth":  1
+                                   },
+                                   {
+                                       "kind":  "text",
+                                       "x":  110.0,
+                                       "y":  58,
+                                       "value":  "ESP32-WROOM-32",
+                                       "fontSize":  8.5,
+                                       "color":  "#e2e8f0"
+                                   },
+                                   {
+                                       "kind":  "text",
+                                       "x":  110.0,
+                                       "y":  72,
+                                       "value":  "(QEMU)",
+                                       "fontSize":  7.5,
+                                       "color":  "#94a3b8"
+                                   },
+                                   {
+                                       "kind":  "text",
+                                       "x":  110.0,
+                                       "y":  150,
+                                       "value":  "DevKitC V4",
+                                       "fontSize":  12,
+                                       "color":  "#e2e8f0"
+                                   },
+                                   {
+                                       "kind":  "ellipse",
+                                       "cx":  50.0,
+                                       "cy":  268,
+                                       "rx":  7,
+                                       "ry":  7,
+                                       "stroke":  "#94a3b8",
+                                       "fill":  "none"
+                                   },
+                                   {
+                                       "kind":  "text",
+                                       "x":  50.0,
+                                       "y":  284,
+                                       "value":  "EN",
+                                       "fontSize":  7,
+                                       "color":  "#94a3b8"
+                                   },
+                                   {
+                                       "kind":  "ellipse",
+                                       "cx":  170.0,
+                                       "cy":  268,
+                                       "rx":  7,
+                                       "ry":  7,
+                                       "stroke":  "#94a3b8",
+                                       "fill":  "none"
+                                   },
+                                   {
+                                       "kind":  "text",
+                                       "x":  170.0,
+                                       "y":  284,
+                                       "value":  "BOOT",
+                                       "fontSize":  7,
+                                       "color":  "#94a3b8"
+                                   },
+                                   {
+                                       "kind":  "rect",
+                                       "x":  90.0,
+                                       "y":  310,
+                                       "w":  40,
+                                       "h":  18,
+                                       "stroke":  "#94a3b8",
+                                       "fill":  "#374151",
+                                       "strokeWidth":  1
+                                   },
+                                   {
+                                       "kind":  "rect",
+                                       "x":  98.0,
+                                       "y":  314,
+                                       "w":  24,
+                                       "h":  10,
+                                       "stroke":  "#94a3b8",
+                                       "fill":  "none",
+                                       "strokeWidth":  1
+                                   }
+                               ],
+                    "pins":  [
+                                 {
+                                     "id":  "GND1",
+                                     "kind":  "POWER",
+                                     "x":  0,
+                                     "y":  20,
+                                     "angle":  180,
+                                     "length":  8,
+                                     "label":  "Gnd"
+                                 },
+                                 {
+                                     "id":  "3V3",
+                                     "kind":  "POWER",
+                                     "x":  220,
+                                     "y":  20,
+                                     "angle":  0,
+                                     "length":  8,
+                                     "label":  "3V3"
+                                 },
+                                 {
+                                     "id":  "G23",
+                                     "kind":  "DIGITAL_BIDIR",
+                                     "x":  0,
+                                     "y":  36,
+                                     "angle":  180,
+                                     "length":  8,
+                                     "label":  "23"
+                                 },
+                                 {
+                                     "id":  "EN",
+                                     "kind":  "POWER",
+                                     "x":  220,
+                                     "y":  36,
+                                     "angle":  0,
+                                     "length":  8,
+                                     "label":  "En"
+                                 },
+                                 {
+                                     "id":  "G22",
+                                     "kind":  "DIGITAL_BIDIR",
+                                     "x":  0,
+                                     "y":  52,
+                                     "angle":  180,
+                                     "length":  8,
+                                     "label":  "22"
+                                 },
+                                 {
+                                     "id":  "VP",
+                                     "kind":  "DIGITAL_BIDIR",
+                                     "x":  220,
+                                     "y":  52,
+                                     "angle":  0,
+                                     "length":  8,
+                                     "label":  "VP"
+                                 },
+                                 {
+                                     "id":  "TX",
+                                     "kind":  "DIGITAL_BIDIR",
+                                     "x":  0,
+                                     "y":  68,
+                                     "angle":  180,
+                                     "length":  8,
+                                     "label":  "Tx"
+                                 },
+                                 {
+                                     "id":  "VN",
+                                     "kind":  "DIGITAL_BIDIR",
+                                     "x":  220,
+                                     "y":  68,
+                                     "angle":  0,
+                                     "length":  8,
+                                     "label":  "VN"
+                                 },
+                                 {
+                                     "id":  "RX",
+                                     "kind":  "DIGITAL_BIDIR",
+                                     "x":  0,
+                                     "y":  84,
+                                     "angle":  180,
+                                     "length":  8,
+                                     "label":  "Rx"
+                                 },
+                                 {
+                                     "id":  "G34",
+                                     "kind":  "DIGITAL_BIDIR",
+                                     "x":  220,
+                                     "y":  84,
+                                     "angle":  0,
+                                     "length":  8,
+                                     "label":  "34"
+                                 },
+                                 {
+                                     "id":  "G21",
+                                     "kind":  "DIGITAL_BIDIR",
+                                     "x":  0,
+                                     "y":  100,
+                                     "angle":  180,
+                                     "length":  8,
+                                     "label":  "21"
+                                 },
+                                 {
+                                     "id":  "G35",
+                                     "kind":  "DIGITAL_BIDIR",
+                                     "x":  220,
+                                     "y":  100,
+                                     "angle":  0,
+                                     "length":  8,
+                                     "label":  "35"
+                                 },
+                                 {
+                                     "id":  "GND2",
+                                     "kind":  "POWER",
+                                     "x":  0,
+                                     "y":  116,
+                                     "angle":  180,
+                                     "length":  8,
+                                     "label":  "Gnd"
+                                 },
+                                 {
+                                     "id":  "G32",
+                                     "kind":  "DIGITAL_BIDIR",
+                                     "x":  220,
+                                     "y":  116,
+                                     "angle":  0,
+                                     "length":  8,
+                                     "label":  "32"
+                                 },
+                                 {
+                                     "id":  "G19",
+                                     "kind":  "DIGITAL_BIDIR",
+                                     "x":  0,
+                                     "y":  132,
+                                     "angle":  180,
+                                     "length":  8,
+                                     "label":  "19"
+                                 },
+                                 {
+                                     "id":  "G33",
+                                     "kind":  "DIGITAL_BIDIR",
+                                     "x":  220,
+                                     "y":  132,
+                                     "angle":  0,
+                                     "length":  8,
+                                     "label":  "33"
+                                 },
+                                 {
+                                     "id":  "G18",
+                                     "kind":  "DIGITAL_BIDIR",
+                                     "x":  0,
+                                     "y":  148,
+                                     "angle":  180,
+                                     "length":  8,
+                                     "label":  "18"
+                                 },
+                                 {
+                                     "id":  "G25",
+                                     "kind":  "DIGITAL_BIDIR",
+                                     "x":  220,
+                                     "y":  148,
+                                     "angle":  0,
+                                     "length":  8,
+                                     "label":  "25"
+                                 },
+                                 {
+                                     "id":  "G05",
+                                     "kind":  "DIGITAL_BIDIR",
+                                     "x":  0,
+                                     "y":  164,
+                                     "angle":  180,
+                                     "length":  8,
+                                     "label":  "5"
+                                 },
+                                 {
+                                     "id":  "G26",
+                                     "kind":  "DIGITAL_BIDIR",
+                                     "x":  220,
+                                     "y":  164,
+                                     "angle":  0,
+                                     "length":  8,
+                                     "label":  "26"
+                                 },
+                                 {
+                                     "id":  "G17",
+                                     "kind":  "DIGITAL_BIDIR",
+                                     "x":  0,
+                                     "y":  180,
+                                     "angle":  180,
+                                     "length":  8,
+                                     "label":  "17"
+                                 },
+                                 {
+                                     "id":  "G27",
+                                     "kind":  "DIGITAL_BIDIR",
+                                     "x":  220,
+                                     "y":  180,
+                                     "angle":  0,
+                                     "length":  8,
+                                     "label":  "27"
+                                 },
+                                 {
+                                     "id":  "G16",
+                                     "kind":  "DIGITAL_BIDIR",
+                                     "x":  0,
+                                     "y":  196,
+                                     "angle":  180,
+                                     "length":  8,
+                                     "label":  "16"
+                                 },
+                                 {
+                                     "id":  "G14",
+                                     "kind":  "DIGITAL_BIDIR",
+                                     "x":  220,
+                                     "y":  196,
+                                     "angle":  0,
+                                     "length":  8,
+                                     "label":  "14"
+                                 },
+                                 {
+                                     "id":  "G04",
+                                     "kind":  "DIGITAL_BIDIR",
+                                     "x":  0,
+                                     "y":  212,
+                                     "angle":  180,
+                                     "length":  8,
+                                     "label":  "4"
+                                 },
+                                 {
+                                     "id":  "G12",
+                                     "kind":  "DIGITAL_BIDIR",
+                                     "x":  220,
+                                     "y":  212,
+                                     "angle":  0,
+                                     "length":  8,
+                                     "label":  "12"
+                                 },
+                                 {
+                                     "id":  "G00",
+                                     "kind":  "DIGITAL_BIDIR",
+                                     "x":  0,
+                                     "y":  228,
+                                     "angle":  180,
+                                     "length":  8,
+                                     "label":  "0"
+                                 },
+                                 {
+                                     "id":  "GND3",
+                                     "kind":  "POWER",
+                                     "x":  220,
+                                     "y":  228,
+                                     "angle":  0,
+                                     "length":  8,
+                                     "label":  "Gnd"
+                                 },
+                                 {
+                                     "id":  "G02",
+                                     "kind":  "DIGITAL_BIDIR",
+                                     "x":  0,
+                                     "y":  244,
+                                     "angle":  180,
+                                     "length":  8,
+                                     "label":  "2"
+                                 },
+                                 {
+                                     "id":  "G13",
+                                     "kind":  "DIGITAL_BIDIR",
+                                     "x":  220,
+                                     "y":  244,
+                                     "angle":  0,
+                                     "length":  8,
+                                     "label":  "13"
+                                 },
+                                 {
+                                     "id":  "G15",
+                                     "kind":  "DIGITAL_BIDIR",
+                                     "x":  0,
+                                     "y":  260,
+                                     "angle":  180,
+                                     "length":  8,
+                                     "label":  "15"
+                                 },
+                                 {
+                                     "id":  "D2",
+                                     "kind":  "DIGITAL_BIDIR",
+                                     "x":  220,
+                                     "y":  260,
+                                     "angle":  0,
+                                     "length":  8,
+                                     "label":  "D2"
+                                 },
+                                 {
+                                     "id":  "D1",
+                                     "kind":  "DIGITAL_BIDIR",
+                                     "x":  0,
+                                     "y":  276,
+                                     "angle":  180,
+                                     "length":  8,
+                                     "label":  "D1"
+                                 },
+                                 {
+                                     "id":  "D3",
+                                     "kind":  "DIGITAL_BIDIR",
+                                     "x":  220,
+                                     "y":  276,
+                                     "angle":  0,
+                                     "length":  8,
+                                     "label":  "D3"
+                                 },
+                                 {
+                                     "id":  "D0",
+                                     "kind":  "DIGITAL_BIDIR",
+                                     "x":  0,
+                                     "y":  292,
+                                     "angle":  180,
+                                     "length":  8,
+                                     "label":  "D0"
+                                 },
+                                 {
+                                     "id":  "CM",
+                                     "kind":  "DIGITAL_BIDIR",
+                                     "x":  220,
+                                     "y":  292,
+                                     "angle":  0,
+                                     "length":  8,
+                                     "label":  "Cm"
+                                 },
+                                 {
+                                     "id":  "CK",
+                                     "kind":  "DIGITAL_BIDIR",
+                                     "x":  0,
+                                     "y":  308,
+                                     "angle":  180,
+                                     "length":  8,
+                                     "label":  "Ck"
+                                 },
+                                 {
+                                     "id":  "5V",
+                                     "kind":  "POWER",
+                                     "x":  220,
+                                     "y":  308,
+                                     "angle":  0,
+                                     "length":  8,
+                                     "label":  "5V"
+                                 }
+                             ]
+                }
 }

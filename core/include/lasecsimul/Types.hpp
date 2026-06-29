@@ -69,7 +69,10 @@ enum class PluginHealthStatus { Ok, Lagging, Faulted };
  * `QemuModule` concreto (ex: Esp32GpioModule) é dono de um endereço; NÃO implica que exista um
  * único "GpioModule genérico" universal -- cada chip tem sua própria subclasse com seu próprio
  * mapa de registradores (ver QemuModule.hpp/IMcuAdapter.hpp). */
-enum class ModuleKind { Gpio, I2c, Spi, Usart, Timer };
+/** `Reset` é tratado especialmente por `McuComponent::stamp()` -- nunca tem `QemuModule` próprio
+ * (não existe registrador por trás, é uma linha de controle de hardware: ESP32 chama de EN). Ver
+ * .spec/lasecsimul-native-devices.spec seção 8.1. */
+enum class ModuleKind { Gpio, IoMux, I2c, Spi, Usart, Timer, Reset };
 
 /** Faixa de endereco MMIO do chip -> qual QemuModule concreto deve trata-la.
  * Declarado pelo IMcuAdapter; nunca calculado pelo Core. */

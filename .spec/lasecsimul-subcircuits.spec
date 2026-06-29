@@ -93,6 +93,11 @@ Por que um arquivo único (sem separar circuito interno de `package`, ao contrá
 não tem o problema de mistura de formato (texto+binário) que motivava separar no SimulIDE; um arquivo só
 elimina risco de referência pendente entre dois arquivos.
 
+`language`/`translations` na raiz seguem exatamente a mesma convenção de `device.json`
+(`lasecsimul-native-devices.spec` seção 4.2.2.1, que já cobre subcircuitos explicitamente) — omitidos do
+exemplo acima só por brevidade. Exemplo real em uso: `subcircuits/esp32_devkitc_v4.lssub.json`/
+`esp32_wroom32.lssub.json` (`"language": "pt-BR"`, `"translations": {"en": {"name": "..."}}`).
+
 ## 2. Definição de I/O — `Tunnel` com nome no escopo da instância
 
 Validado contra `Tunnel::registerEnode()` do SimulIDE (`tunnel.cpp` linhas ~80-106): todos os `Tunnel` com o

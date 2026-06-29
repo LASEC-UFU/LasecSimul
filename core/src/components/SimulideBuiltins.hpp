@@ -192,7 +192,11 @@ public:
 
     void stamp(MnaMatrixView& matrix) override {
         const bool conductive = m_normallyClosed ? !m_closed : m_closed;
-        if (m_pins.size() >= 2) matrix.addConductance(m_pins[0], m_pins[1], conductive ? 1e6 : 1e-9);
+        // 1e-9 (aberto) ao lado de 1e6 (fechado) dá rcond ~1e-18 -- abaixo do limite de
+        // CircuitGroup::singular() -- quando este switch acaba no mesmo grupo de um McuComponent
+        // (que já estampa 1e-6/1e6 nos pinos flutuantes, ver McuComponent.cpp::stamp() pra raciocínio
+        // completo). 1e-6 mantém "fraco o bastante" pra qualquer fio real com rcond seguro (~1e-12).
+        if (m_pins.size() >= 2) matrix.addConductance(m_pins[0], m_pins[1], conductive ? 1e6 : 1e-6);
     }
 
     void postStep(uint64_t) override {}
@@ -234,7 +238,9 @@ public:
             if (coilCurrentMa >= m_iOn) m_energized = true;
             if (coilCurrentMa <= m_iOff) m_energized = false;
             const bool conductive = m_normallyClosed ? !m_energized : m_energized;
-            matrix.addConductance(m_pins[2], m_pins[3], conductive ? 1e6 : 1e-9);
+            // Mesmo ajuste de SimulideSwitch::stamp() acima -- 1e-6 em vez de 1e-9 evita rcond
+            // abaixo do limite quando este relé acaba no mesmo grupo de um McuComponent.
+            matrix.addConductance(m_pins[2], m_pins[3], conductive ? 1e6 : 1e-6);
         }
     }
 

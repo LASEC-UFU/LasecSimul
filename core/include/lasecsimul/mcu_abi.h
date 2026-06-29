@@ -32,7 +32,7 @@ extern "C" {
 #endif
 
 #define LSDN_MCU_ABI_VERSION_MAJOR 2
-#define LSDN_MCU_ABI_VERSION_MINOR 0
+#define LSDN_MCU_ABI_VERSION_MINOR 4
 /* Major 2 (2026-06-28): entrou LsdnQemuModuleVTable/LsdnQemuModuleHandle e
  * LsdnMcuVTable::create_modules -- antes desta versao um plugin de MCU so conseguia DECLARAR faixas
  * de endereco/pinos (get_memory_regions/get_pin_map), nunca decodificar registrador de verdade (o
@@ -42,16 +42,21 @@ extern "C" {
  * ja usava -- mesmo custo de chamada (ponteiro de funcao C, mesmo processo, sem IPC) que qualquer
  * outra funcao desta ABI. Ver docs/17-pendencias-pos-sessao-qemu-abi.md secao 3.4 (pendencia
  * original) e docs/18-guia-dispositivo-abi-e-mcu-qemu.md secao 2 (que esta correcao tornou
- * desatualizada -- atualizar junto). */
+ * desatualizada -- atualizar junto).
+ * Minor 4 (2026-06-29): entrou LSDN_MODULE_RESET -- pino de controle de hardware (EN do ESP32),
+ * tratado especialmente por McuComponent::stamp() (nunca tem LsdnQemuModule proprio, nao ha
+ * registrador por tras). Ver .spec/lasecsimul-native-devices.spec secao 8.1. */
 
 typedef struct LsdnMcuAdapter LsdnMcuAdapter; /* opaco */
 
 typedef enum LsdnModuleKind {
     LSDN_MODULE_GPIO = 0,
-    LSDN_MODULE_I2C = 1,
-    LSDN_MODULE_SPI = 2,
-    LSDN_MODULE_USART = 3,
-    LSDN_MODULE_TIMER = 4
+    LSDN_MODULE_IOMUX = 1,
+    LSDN_MODULE_I2C = 2,
+    LSDN_MODULE_SPI = 3,
+    LSDN_MODULE_USART = 4,
+    LSDN_MODULE_TIMER = 5,
+    LSDN_MODULE_RESET = 6
 } LsdnModuleKind;
 
 /* Uma faixa de endereco MMIO do chip e o periferico generico do Core que deve trata-la.
@@ -87,6 +92,8 @@ typedef struct LsdnMcuHostApi {
  * decodificar registrador (nao so declarar faixa de endereco) cria um destes por periferico. */
 typedef struct LsdnQemuModule LsdnQemuModule;
 
+#define LSDN_QEMU_MODULE_NO_WAKEUP UINT64_MAX
+
 /* As funcoes de UM modulo concreto -- mesmo papel dos metodos virtuais de QemuModule, so que como
  * ponteiro de funcao C pra cruzar a fronteira ABI. `is_output_enabled`/`output_level` devolvem
  * int32_t (0/1) por ser C; `set_input_level` recebe int32_t pela mesma razao.
@@ -103,6 +110,11 @@ typedef struct LsdnQemuModuleVTable {
     int32_t  (*output_level)(LsdnQemuModule* module, uint32_t bit_or_line);
     void     (*set_input_level)(LsdnQemuModule* module, uint32_t bit_or_line, int32_t level);
     void     (*destroy)(LsdnQemuModule* module);
+    uint64_t (*next_wakeup_delay_ns)(LsdnQemuModule* module);
+    void     (*on_wakeup)(LsdnQemuModule* module, uint64_t now_ns);
+    void     (*write_register_at)(LsdnQemuModule* module, uint64_t address, uint64_t value, uint64_t now_ns);
+    void     (*set_input_level_at)(LsdnQemuModule* module, uint32_t bit_or_line, int32_t level, uint64_t now_ns);
+    uint64_t (*next_wakeup_delay_ns_at)(LsdnQemuModule* module, uint64_t now_ns);
 } LsdnQemuModuleVTable;
 
 /* Um modulo concreto devolvido por create_modules(): estado opaco + vtable + identidade

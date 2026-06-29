@@ -12,8 +12,10 @@
 #include <fstream>
 #include <memory>
 #include <nlohmann/json.hpp>
+#include "components/SimulideBuiltins.hpp"
 #include "components/connectors/Tunnel.hpp"
 #include "components/other/Ground.hpp"
+#include "components/passive/Resistor.hpp"
 #include "components/sources/FixedVolt.hpp"
 #include "plugins/GlobalPluginCache.hpp"
 #include "registry/SubcircuitRegistry.hpp"
@@ -48,6 +50,28 @@ void registerNeededBuiltins(ComponentRegistry& components) {
     components.registerFactory("sources.fixed_volt", [](const ComponentParams& p) {
         return std::make_unique<components::FixedVolt>(Pin{"out"}, p.property("voltage", 5.0),
                                                          p.property("out", true));
+    });
+    // DevKitC real usa pull-up (passive.resistor) e os botões EN/BOOT (switches.push) -- mesmas
+    // factories de CoreApplication.cpp::registerBuiltinComponents, versão mínima só com o que o
+    // teste eletricamente precisa (sem metadata, que é só pro catálogo da Extension).
+    components.registerFactory("passive.resistor", [](const ComponentParams& p) {
+        const auto pos = p.pins<2>();
+        return std::make_unique<components::Resistor>(
+            std::array<Pin, 2>{Pin{pos[0].id.empty() ? "p1" : pos[0].id, pos[0].x, pos[0].y},
+                                Pin{pos[1].id.empty() ? "p2" : pos[1].id, pos[1].x, pos[1].y}},
+            p.property("resistance", 1000.0));
+    });
+    components.registerFactory("switches.push", [](const ComponentParams& p) {
+        std::vector<Pin> pins;
+        pins.reserve(2);
+        for (size_t i = 0; i < 2; ++i) {
+            Pin pin = i < p.pinList.size() ? p.pinList[i] : Pin{};
+            if (pin.id.empty()) pin.id = "pin-" + std::to_string(i + 1);
+            pins.push_back(std::move(pin));
+        }
+        return std::make_unique<components::SimulideSwitch>("switches.push", std::move(pins),
+                                                              p.property("closed", false),
+                                                              p.property("normallyClosed", false));
     });
 }
 
@@ -131,7 +155,7 @@ int main() {
                 "GND1/GND2/GND3 todos expostos");
     TEST_ASSERT(expansion.exposedPins.count("3V3") == 1 && expansion.exposedPins.count("5V") == 1,
                 "trilhas 3V3 e 5V expostas");
-    TEST_ASSERT(expansion.exposedPins.count("EN") == 1, "pino EN exposto (decorativo, sem conexão elétrica)");
+    TEST_ASSERT(expansion.exposedPins.count("EN") == 1, "pino EN exposto");
 
     for (int i = 0; i < 5 && session.settleStep(); ++i) {}
 
@@ -139,6 +163,10 @@ int main() {
     const auto& gnd2 = expansion.exposedPins.at("GND2");
     const auto& rail3v3 = expansion.exposedPins.at("3V3");
     const auto& rail5v = expansion.exposedPins.at("5V");
+    const auto& en = expansion.exposedPins.at("EN");
+
+    TEST_ASSERT(session.nodeVoltageOfPin(en.instanceId, en.pinId) > 3.0,
+                "EN em repouso (pull-up, botão solto) fica em ~3.3V -- mcu1.RST liberado, chip roda");
 
     TEST_ASSERT(std::abs(session.nodeVoltageOfPin(rail3v3.instanceId, rail3v3.pinId) - 3.3) < 0.05,
                 "trilha 3V3 entrega 3.3V de verdade");

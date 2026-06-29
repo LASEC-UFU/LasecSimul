@@ -53,6 +53,10 @@ public:
     void stopFirmware();
     bool firmwareRunning() const { return m_processManager.isRunning(); }
 
+    /** Estado do pino RST (ModuleKind::Reset, ex: EN do ESP32) na última stamp() -- exposto só pra
+     * teste confirmar a borda sem precisar reler tensão de matriz. */
+    bool resetPinHigh() const { return m_resetPinHigh; }
+
     /** Abre a arena SEM iniciar nenhum processo QEMU -- só pra teste poder simular escritas de
      * registrador manualmente (mesmo papel de QemuArenaBridgeTest), sem precisar de um binário
      * real nem de firmware. Produção sempre usa loadFirmware(), nunca isto direto. */
@@ -64,7 +68,12 @@ public:
 
 private:
     void scheduleNextPoll();
+    void scheduleModuleWakeup(size_t moduleIndex);
+    void scheduleWakeupsForAllModules();
+    void runPendingModuleWakeups();
     void pollAndDispatchPendingEvents();
+    void stampResetPin(MnaMatrixView& matrix, const Pin& pin);
+    void resetModulesAndWakeups();
     QemuModule* findModule(uint64_t address) const;
 
     static constexpr uint64_t kPollIntervalNs = 50'000; // 50us -- mesma ordem do period_ns real
@@ -80,10 +89,20 @@ private:
     simulation::Scheduler& m_scheduler;
     std::vector<Pin> m_pins;
     std::vector<std::unique_ptr<QemuModule>> m_modules;
+    std::vector<uint64_t> m_moduleWakeupDueNs;
+    std::vector<uint64_t> m_moduleWakeupGeneration;
+    std::vector<uint8_t> m_moduleWakeupPending;
     qemu::QemuArenaBridge m_arenaBridge;
     qemu::QemuProcessManager m_processManager;
     uint32_t m_componentIndex = 0;
     bool m_arenaOpen = false;
+    // ModuleKind::Reset (ex: EN do ESP32) -- nunca tem QemuModule, McuComponent trata direto.
+    // Default true: sem fio externo nenhum, o pino fica com polarização fraca pra ALTO (chip roda
+    // normalmente) -- inverso do floating genérico de GPIO (que vai fraco pra terra), porque aqui
+    // "sem ligação" tem que significar "não resetado", nunca o oposto (ver stampResetPin()).
+    bool m_resetPinHigh = true;
+    std::filesystem::path m_lastFirmwarePath;
+    std::string m_lastArenaName;
 };
 
 } // namespace lasecsimul::mcu

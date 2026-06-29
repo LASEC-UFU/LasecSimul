@@ -7,6 +7,9 @@ McuComponent::McuComponent(std::unique_ptr<IMcuAdapter> adapter, simulation::Sch
                            std::span<const Pin> requestedPins)
     : m_adapter(std::move(adapter)), m_scheduler(scheduler) {
     m_modules = m_adapter->createModules();
+    m_moduleWakeupDueNs.assign(m_modules.size(), QemuModule::kNoWakeup);
+    m_moduleWakeupGeneration.assign(m_modules.size(), 0);
+    m_moduleWakeupPending.assign(m_modules.size(), 0);
 
     const auto pinMap = m_adapter->pinMap();
     const bool useRequestedPins = requestedPins.size() == pinMap.size();
@@ -35,6 +38,46 @@ void McuComponent::scheduleNextPoll() {
     });
 }
 
+void McuComponent::scheduleModuleWakeup(size_t moduleIndex) {
+    if (moduleIndex >= m_modules.size()) return;
+
+    const uint64_t nowNs = m_scheduler.nowNsUnlocked();
+    const uint64_t delayNs = m_modules[moduleIndex]->nextWakeupDelayNs(nowNs);
+    if (delayNs == QemuModule::kNoWakeup) {
+        if (m_moduleWakeupDueNs[moduleIndex] != QemuModule::kNoWakeup) ++m_moduleWakeupGeneration[moduleIndex];
+        m_moduleWakeupDueNs[moduleIndex] = QemuModule::kNoWakeup;
+        return;
+    }
+
+    const uint64_t dueNs = nowNs + delayNs;
+    if (m_moduleWakeupDueNs[moduleIndex] != QemuModule::kNoWakeup && m_moduleWakeupDueNs[moduleIndex] <= dueNs) {
+        return;
+    }
+
+    m_moduleWakeupDueNs[moduleIndex] = dueNs;
+    const uint64_t generation = ++m_moduleWakeupGeneration[moduleIndex];
+    m_scheduler.scheduleEventUnlocked(delayNs, [this, moduleIndex, generation] {
+        if (moduleIndex >= m_moduleWakeupGeneration.size()) return;
+        if (m_moduleWakeupGeneration[moduleIndex] != generation) return;
+        m_moduleWakeupDueNs[moduleIndex] = QemuModule::kNoWakeup;
+        m_moduleWakeupPending[moduleIndex] = 1;
+        m_scheduler.markDirty(m_componentIndex);
+    });
+}
+
+void McuComponent::scheduleWakeupsForAllModules() {
+    for (size_t i = 0; i < m_modules.size(); ++i) scheduleModuleWakeup(i);
+}
+
+void McuComponent::runPendingModuleWakeups() {
+    const uint64_t nowNs = m_scheduler.nowNsUnlocked();
+    for (size_t i = 0; i < m_modules.size(); ++i) {
+        if (!m_moduleWakeupPending[i]) continue;
+        m_moduleWakeupPending[i] = 0;
+        m_modules[i]->onWakeup(nowNs);
+    }
+}
+
 QemuModule* McuComponent::findModule(uint64_t address) const {
     for (const std::unique_ptr<QemuModule>& module : m_modules) {
         if (module->owns(address)) return module.get();
@@ -50,7 +93,9 @@ void McuComponent::pollAndDispatchPendingEvents() {
         const qemu::QemuArenaEvent& event = *result.event;
 
         if (event.simuAction == LSDN_SIM_WRITE) {
-            if (QemuModule* module = findModule(event.regAddr)) module->writeRegister(event.regAddr, event.regData);
+            if (QemuModule* module = findModule(event.regAddr)) {
+                module->writeRegisterAt(event.regAddr, event.regData, m_scheduler.nowNsUnlocked());
+            }
             m_arenaBridge.acknowledgeWrite();
         } else if (event.simuAction == LSDN_SIM_READ) {
             uint64_t value = 0;
@@ -66,6 +111,7 @@ void McuComponent::pollAndDispatchPendingEvents() {
 }
 
 void McuComponent::stamp(MnaMatrixView& matrix) {
+    runPendingModuleWakeups();
     pollAndDispatchPendingEvents();
 
     // Ponte pino<->matriz, genérica (ver doc da classe): pra cada PinMapping, pergunta ao módulo
@@ -74,6 +120,10 @@ void McuComponent::stamp(MnaMatrixView& matrix) {
     // de registrador futura, ex: GPIO_IN_REG, devolver o valor certo).
     for (size_t i = 0; i < m_pins.size(); ++i) {
         const PinMapping& mapping = m_adapter->pinMap()[i];
+        if (mapping.moduleKind == ModuleKind::Reset) {
+            stampResetPin(matrix, m_pins[i]);
+            continue;
+        }
         QemuModule* module = nullptr;
         for (const std::unique_ptr<QemuModule>& candidate : m_modules) {
             if (candidate->kind() == mapping.moduleKind && candidate->index() == mapping.moduleIndex) {
@@ -110,12 +160,16 @@ void McuComponent::stamp(MnaMatrixView& matrix) {
             // seguro pro double. Ver .spec se outro componente algum dia precisar do mesmo ajuste.
             matrix.addConductanceToGround(m_pins[i], kFloatingConductance);
             const double voltage = matrix.getNodeVoltage(m_pins[i]);
-            module->setInputLevel(mapping.bitOrLine, voltage > kDigitalLevelThreshold);
+            module->setInputLevelAt(mapping.bitOrLine, voltage > kDigitalLevelThreshold, m_scheduler.nowNsUnlocked());
         }
     }
+    scheduleWakeupsForAllModules();
 }
 
 void McuComponent::loadFirmware(const std::filesystem::path& firmwarePath, const std::string& arenaName) {
+    m_lastFirmwarePath = firmwarePath;
+    m_lastArenaName = arenaName;
+
     QemuLaunchSpec spec = m_adapter->buildLaunchArgs(firmwarePath.string());
     spec.args.insert(spec.args.begin(), arenaName); // argv[1] = chave da arena, ver McuController
 
@@ -129,6 +183,50 @@ void McuComponent::stopFirmware() {
     m_processManager.stop();
     m_arenaBridge.close();
     m_arenaOpen = false;
+}
+
+void McuComponent::resetModulesAndWakeups() {
+    for (const std::unique_ptr<QemuModule>& m : m_modules) m->reset();
+    for (size_t i = 0; i < m_modules.size(); ++i) {
+        ++m_moduleWakeupGeneration[i]; // invalida qualquer wakeup já agendado antes do reset
+        m_moduleWakeupDueNs[i] = QemuModule::kNoWakeup;
+        m_moduleWakeupPending[i] = 0;
+    }
+}
+
+void McuComponent::stampResetPin(MnaMatrixView& matrix, const Pin& pin) {
+    // ModuleKind::Reset (ex: EN do ESP32) nunca tem QemuModule -- é linha de controle de
+    // hardware, não registrador. Sem fio externo, fica fracamente puxado pra ALTO (chip roda) --
+    // ao contrário do floating genérico de GPIO (puxa fraco pra terra) -- "sem ligação" aqui tem
+    // que significar "não resetado". Um circuito real (botão + pull-up, igual ao EN real) com
+    // condutância muito mais forte domina e decide o nível de verdade quando presente.
+    matrix.addConductanceToGround(pin, kFloatingConductance);
+    matrix.addCurrentToGround(pin, kDriveHighVolts * kFloatingConductance);
+    const bool levelHigh = matrix.getNodeVoltage(pin) > kDigitalLevelThreshold;
+
+    if (m_resetPinHigh && !levelHigh) {
+        // Borda de descida: EN/RST ativo (baixo) -- mantém o chip parado enquanto durar, igual a
+        // hardware real (CHIP_PU desasserta, CPU não roda). stopFirmware()/loadFirmware() chamam
+        // Scheduler::markDirty (toma m_mutex) -- nunca direto de dentro de stamp() (deadlock, ver
+        // doc de scheduleEventUnlocked em Scheduler.hpp), por isso agendado.
+        m_resetPinHigh = false;
+        m_scheduler.scheduleEventUnlocked(0, [this] {
+            resetModulesAndWakeups();
+            stopFirmware();
+            m_scheduler.markDirty(m_componentIndex);
+        });
+    } else if (!m_resetPinHigh && levelHigh) {
+        // Borda de subida: EN/RST liberado -- reinicia o firmware do zero (mesmo path/arena do
+        // loadFirmware() anterior), igual a hardware real (CPU reinicia do vetor de boot).
+        m_resetPinHigh = true;
+        if (!m_lastFirmwarePath.empty()) {
+            const std::filesystem::path firmwarePath = m_lastFirmwarePath;
+            const std::string arenaName = m_lastArenaName;
+            m_scheduler.scheduleEventUnlocked(0, [this, firmwarePath, arenaName] {
+                loadFirmware(firmwarePath, arenaName);
+            });
+        }
+    }
 }
 
 } // namespace lasecsimul::mcu

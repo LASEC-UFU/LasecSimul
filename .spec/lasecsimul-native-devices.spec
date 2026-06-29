@@ -555,11 +555,61 @@ baseada no mecanismo real confirmado contra o fork QEMU (`C:\SourceCode\qemu_sim
   `stamp()` traduz `isOutputEnabled`/`outputLevel` em estampa elétrica real. Uma vez que o sinal chega num
   `Pin` real do circuito, o resto (decodificação I2C/SPI por borda, seção 8 acima) funciona igual,
   MCU-emulado ou não — o device do outro lado do fio não distingue os dois casos.
-- Periféricos I2C/SPI/USART reais do ESP32 (`Esp32TwiModule`/`Esp32SpiModule`/`Esp32UsartModule`) ainda não
-  existem — só GPIO puro (`Esp32GpioModule`) está implementado hoje; também falta IOMUX/pin-matrix (tabela de
-  512 entradas roteando periférico pra pino, `Esp32::createMatrix()` real) pra rotear qualquer periférico pra
-  qualquer pino via firmware real. Ver `docs/17-pendencias-pos-sessao-qemu-abi.md`, seção 3.1, para os
-  arquivos de referência reais a copiar fielmente quando esse trabalho acontecer.
+- **IOMUX/GPIO matrix real implementados** (`mcu-adapters/espressif-esp32/src/Esp32Adapter.cpp`,
+  `ModuleKind::IoMux`/`LSDN_MODULE_IOMUX` na ABI, minor 3): tabela `getIoMuxPin()` (offset↔pino, auditada
+  pino a pino contra `IO_MUX_xxx_REG` real do ESP32) e roteamento direto (`MCU_SEL`, bits[14:12]) +
+  GPIO matrix completo (`matrixInRegs`/`matrixOutRegs`, funções 8-11/14/17/29-30/63-68/95-96/198 — SPI HSPI/
+  VSPI, UART0/1/2, I2C0/1) — qualquer periférico pode ser roteado pra qualquer pino, igual a firmware real.
+- **USART (UART0/1/2) com timing real**: bit-banging completo de TX/RX (start/data/stop, LSB-first) via o
+  mecanismo de wakeup agendado descrito no item seguinte — não é mais um registrador que só declara faixa
+  de endereço, decodifica e gera o sinal elétrico bit a bit no tempo certo (`UsartState`/`usartAdvanceTx`/
+  `usartAdvanceRx` em `Esp32Adapter.cpp`). `UART_CLKDIV_REG` real (inteiro+fração) é suportado via um bit-
+  marcador explícito (bit 31, nunca usado por hardware real nem por bit-time em ns plausível) — produção
+  sempre manda bit-time já convertido em ns (sem o marcador), igual ao `qemu_simulide` real.
+- **I2C0/1 e SPI(HSPI/VSPI) ainda são esqueleto**: têm módulo registrado, roteamento IOMUX/matrix completo
+  (pino real chega no nível elétrico certo) e leitura/escrita de nível digital, mas `i2cWriteRegister`/
+  `spiWriteRegister`/`i2cReadRegister`/`spiReadRegister` são stubs (`{}`/`return 0`) — sem decodificação de
+  protocolo real ainda (sem START/STOP/ACK de I2C, sem shift register de SPI). Próximo passo natural quando
+  esse trabalho acontecer: mesmo padrão de `UsartState`, copiando os módulos reais do SimulIDE
+  (`Esp32TwiModule`/`Esp32SpiModule`) citados no `docs/17-pendencias-pos-sessao-qemu-abi.md`, seção 3.1.
+- **Mecanismo de wakeup agendado** (`QemuModule::nextWakeupDelayNs()`/`onWakeup()`, `McuComponent::
+  scheduleModuleWakeup()`): um `QemuModule` pode pedir pro Core agendar uma chamada futura (`Scheduler::
+  scheduleEventUnlocked`) sem conhecer `Scheduler`/`Netlist` — é o que permite UART decodificar tempo real
+  (baud rate) sem reintroduzir nada built-in no Core. Variantes `*At(..., now_ns)` em
+  `QemuModule`/`LsdnQemuModuleVTable` (ABI minor 3) levam o timestamp explícito em vez de depender de estado
+  global; vtables antigas (sem esses ponteiros) continuam funcionando via fallback em `QemuModuleProxy`.
+- **Pino RST real (reset de hardware, `ModuleKind::Reset`/`LSDN_MODULE_RESET`, ABI minor 4,
+  2026-06-29)**: ESP32 real chama esse pino EN — auditado contra `devkitC.sim2` (botão "EN" da
+  DevKitC liga direto no `Rst` do `QemuDevice`, NUNCA num GPIO). Não tem `QemuModule` por trás (não
+  é registrador, é linha de controle), então `McuComponent::stamp()` trata especialmente
+  (`stampResetPin()`): sem fio externo, fica fracamente puxado pra ALTO (inverso do floating
+  genérico de GPIO, que vai fraco pra terra — aqui "sem ligação" tem que significar "não
+  resetado", senão qualquer subcircuito/teste que não ligue nada no RST trava o chip permanentemente
+  em reset). Borda de descida (RST baixo, ex: botão EN pressionado) chama `module->reset()` em
+  todo `QemuModule` (limpa registradores sombra) e `stopFirmware()` (mata o processo QEMU real,
+  chip fica parado); borda de subida chama `loadFirmware()` de novo com o mesmo path/arena do
+  último `loadFirmware()` (CPU reinicia do vetor de boot, igual a hardware real). As duas chamadas
+  são agendadas via `Scheduler::scheduleEventUnlocked` (nunca direto dentro de `stamp()` — `stop
+  Firmware()`/`loadFirmware()` chamam `markDirty()`, que toma `m_mutex`; chamar de dentro do
+  `stamp()` travado faria deadlock, mesma regra documentada em `Scheduler.hpp`).
+  `subcircuits/esp32_devkitc_v4.lssub.json` liga o botão EN/pull-up real em `mcu1.RST` (deixou de
+  ser "decorativo").
+- **Cuidado numérico ao misturar `McuComponent` num grupo com `other.ground`/fontes ideais — RESOLVIDO na
+  raiz, 2026-06-29**: `McuComponent` usa `kDriveConductance=1e6`/`kFloatingConductance=1e-6` (em vez do `1e9`
+  universal de `Ground`/`FixedVolt`/`Clock`/`VoltSource`/`WaveGen`) porque 42 pinos simultaneamente
+  flutuantes com `1e9`/`1e-9` davam `rcond()~1e-18` (abaixo do limite do solver). Isso resolvia o MCU
+  isolado, mas reabria o problema quando um pino do MCU acabava no mesmo grupo que um `other.ground` real
+  (ex: pull-up + botão ligando um GPIO a GND/3V3 — caso real, não hipotético, ver
+  `subcircuits/esp32_devkitc_v4.lssub.json`, EN/BOOT): o spread 1e9 (Ground) vs 1e-6 (MCU flutuante) fazia
+  `FullPivLU::rank()` ficar bem abaixo de `cols()`, mesmo sem nenhuma linha literalmente zerada —
+  `CircuitGroup::singular()` rejeitava a matriz inteira. **Corrigido via equilibração diagonal simétrica
+  (Jacobi)** em `CircuitGroup::factor()`/`solve()` (`core/src/simulation/CircuitGroup.hpp`): antes de checar
+  posto/condicionamento e de fatorar, cada linha/coluna `i` é escalada por `1/sqrt(|A_ii|)`, deixando a
+  diagonal em ~1 e o spread relativo correto reaparece pro solver — resolve a causa raiz pra qualquer
+  combinação futura de magnitudes, não só ESP32 (`x = S·y`, sistema resolvido é `S·A·S·y = S·b`; variáveis
+  extras de fonte de tensão, com diagonal exatamente 0 por construção MNA, ficam com escala 1, sem tocar
+  essas linhas). Zero mudança de comportamento pra grupos já bem-condicionados (o escalonamento é uma
+  transformação de similaridade, preserva a solução exata a menos de erro de ponto flutuante).
 
 ## 9. Modelo de eventos
 
@@ -844,6 +894,10 @@ usuário final.
   paridade total de desempenho — `QemuModuleProxy` (`core/src/plugins/QemuModuleProxy.hpp`) embrulha o
   `LsdnQemuModuleHandle` do plugin numa subclasse de `QemuModule`, uma indireção de ponteiro de função C, no
   mesmo processo do Core, sem IPC — mesmo custo de uma chamada virtual C++ built-in.
+- **`mcu_abi.h` minor 0→3** (major continua 2, sem quebra — só ponteiros novos no fim da vtable, checados
+  contra `nullptr` em `QemuModuleProxy` antes de usar, então um plugin antigo continua funcionando): adiciona
+  `ModuleKind::IoMux`/`LSDN_MODULE_IOMUX` e os 5 ponteiros `*_at`/wakeup descritos na seção 8.1 acima
+  (`next_wakeup_delay_ns`/`on_wakeup`/`write_register_at`/`set_input_level_at`/`next_wakeup_delay_ns_at`).
 - `create_modules` (novo na major 2) segue o mesmo protocolo de duas chamadas de `get_memory_regions`/
   `get_pin_map` (`cap=0` só pra contar). Cada `LsdnQemuModuleHandle` devolvido é CHIP-ESPECÍFICO de
   propósito — não existe módulo genérico (`I2cBusModule`/`SpiBusModule`/`GpioModule`) reusado entre chips;

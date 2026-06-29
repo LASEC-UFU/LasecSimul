@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <memory>
+#include "components/sources/FixedVolt.hpp"
 #include "lasecsimul/qemu_arena_abi.h"
 #include "mcu/McuComponent.hpp"
 #include "plugins/GlobalPluginCache.hpp"
@@ -71,13 +72,20 @@ int main() {
     plugins::PluginRuntime runtime(cache);
     const std::unique_ptr<IMcuAdapter> probeAdapter = runtime.createMcuAdapter("espressif.esp32");
     uint64_t gpioStart = 0;
+    uint64_t ioMuxStart = 0;
+    uint64_t uart0Start = 0;
     for (const MemoryRegion& region : probeAdapter->memoryRegions()) {
         if (region.moduleKind == ModuleKind::Gpio && region.moduleIndex == 0) {
             gpioStart = region.start;
-            break;
+        } else if (region.moduleKind == ModuleKind::IoMux && region.moduleIndex == 0) {
+            ioMuxStart = region.start;
+        } else if (region.moduleKind == ModuleKind::Usart && region.moduleIndex == 0) {
+            uart0Start = region.start;
         }
     }
     check(gpioStart != 0, "memoryRegions() do plugin declara uma faixa GPIO");
+    check(ioMuxStart != 0, "memoryRegions() do plugin declara uma faixa IOMUX");
+    check(uart0Start != 0, "memoryRegions() do plugin declara uma faixa UART0");
 
     mcu::McuComponent* mcuPtr = nullptr;
     session.components().registerFactory("mcu.esp32", [&mcuPtr, &session](const registry::ComponentParams&) {
@@ -119,6 +127,46 @@ int main() {
     session.scheduler().markDirty(mcuIndex);
     for (int i = 0; i < 5 && session.settleStep(); ++i) {}
     check(arena->qemuAction == LSDN_SIM_READ, "leitura de GPIO_IN_REG confirma via qemuAction (desbloquearia o QEMU real)");
+
+    // UART0 TX temporizado: GPIO1 em funcao IOMUX 0 e' U0TXD. Escrever 0x55 no FIFO deve iniciar
+    // start bit baixo imediatamente, depois o wakeup do modulo avanca para o primeiro bit de dados
+    // (LSB=1) em ~8.68us, reestampando o pino pelo Scheduler.
+    simulateQemuWrite(arena, ioMuxStart + 0x88, 0);
+    session.scheduler().markDirty(mcuIndex);
+    for (int i = 0; i < 5 && session.settleStep(); ++i) {}
+
+    simulateQemuWrite(arena, uart0Start + 0x00, 0x55);
+    session.scheduler().markDirty(mcuIndex);
+    for (int i = 0; i < 5 && session.settleStep(); ++i) {}
+    check(session.nodeVoltageOfPin(mcuIndex, "GPIO1") < 0.1, "UART0 TX coloca start bit baixo em GPIO1");
+
+    session.scheduler().step(9'000);
+    check(session.nodeVoltageOfPin(mcuIndex, "GPIO1") > 3.0, "UART0 TX wakeup avanca para primeiro bit de dados alto");
+
+    // ModuleKind::Reset (pino "RST", ex: EN do ESP32 real): sem fio nenhum, fica fracamente puxado
+    // pra ALTO -- confirma ANTES de ligar qualquer fonte externa.
+    check(session.nodeVoltageOfPin(mcuIndex, "RST") > 3.0, "RST sem fio fica em ~3.3V (chip roda, nao resetado)");
+    check(mcuPtr->resetPinHigh(), "resetPinHigh() comeca true (sem reset)");
+
+    // Fonte de tensao controlavel ligada em RST -- simula um botao EN externo puxando pra GND.
+    session.components().registerFactory("test.volt_source", [](const registry::ComponentParams& p) {
+        return std::make_unique<components::FixedVolt>(Pin{"out"}, p.property("voltage", 3.3), true);
+    });
+    const uint32_t enSourceIndex = session.addComponent("test.volt_source", {});
+    session.connectWire(enSourceIndex, "out", mcuIndex, "RST");
+    for (int i = 0; i < 5 && session.settleStep(); ++i) {}
+    check(session.nodeVoltageOfPin(mcuIndex, "RST") > 3.0, "fonte de 3.3V em RST mantem o chip fora de reset");
+    check(mcuPtr->resetPinHigh(), "resetPinHigh() continua true com a fonte em 3.3V");
+
+    // Borda de descida: RST cai pra 0V -- McuComponent::stampResetPin() deve detectar e (via
+    // evento agendado, fora do stamp() atual -- ver doc no .cpp) chamar module->reset() em todo
+    // QemuModule, limpando GPIO_OUT/GPIO_ENABLE -- GPIO2 (ligado como saida alta mais acima) deve
+    // cair de volta pra perto de 0V, prova observavel de que o reset de verdade aconteceu.
+    session.setProperty(enSourceIndex, "voltage", PropertyValue{0.0});
+    for (int i = 0; i < 5 && session.settleStep(); ++i) {}
+    check(!mcuPtr->resetPinHigh(), "resetPinHigh() vira false na borda de descida de RST");
+    check(session.nodeVoltageOfPin(mcuIndex, "GPIO2") < 0.1,
+          "reset de verdade limpa GPIO_ENABLE/GPIO_OUT -- GPIO2 volta a flutuar perto de 0V");
 
     if (failures == 0) {
         std::printf("\nTodos os testes de McuComponent passaram.\n");

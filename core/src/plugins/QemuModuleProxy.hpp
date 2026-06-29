@@ -9,10 +9,12 @@ namespace lasecsimul::plugins {
 inline ModuleKind toCoreModuleKind(LsdnModuleKind kind) {
     switch (kind) {
         case LSDN_MODULE_GPIO: return ModuleKind::Gpio;
+        case LSDN_MODULE_IOMUX: return ModuleKind::IoMux;
         case LSDN_MODULE_I2C: return ModuleKind::I2c;
         case LSDN_MODULE_SPI: return ModuleKind::Spi;
         case LSDN_MODULE_USART: return ModuleKind::Usart;
         case LSDN_MODULE_TIMER: return ModuleKind::Timer;
+        case LSDN_MODULE_RESET: return ModuleKind::Reset;
         default: throw std::runtime_error("LsdnModuleKind desconhecido");
     }
 }
@@ -45,7 +47,19 @@ public:
     }
 
     void writeRegister(uint64_t address, uint64_t value) override {
-        m_handle.vtable->write_register(m_handle.module, address, value);
+        if (m_handle.vtable->write_register_at) {
+            m_handle.vtable->write_register_at(m_handle.module, address, value, 0);
+        } else {
+            m_handle.vtable->write_register(m_handle.module, address, value);
+        }
+    }
+
+    void writeRegisterAt(uint64_t address, uint64_t value, uint64_t nowNs) override {
+        if (m_handle.vtable->write_register_at) {
+            m_handle.vtable->write_register_at(m_handle.module, address, value, nowNs);
+        } else {
+            m_handle.vtable->write_register(m_handle.module, address, value);
+        }
     }
 
     uint64_t readRegister(uint64_t address) override {
@@ -61,7 +75,37 @@ public:
     }
 
     void setInputLevel(uint32_t bitOrLine, bool level) override {
-        if (m_handle.vtable->set_input_level) m_handle.vtable->set_input_level(m_handle.module, bitOrLine, level ? 1 : 0);
+        if (m_handle.vtable->set_input_level_at) {
+            m_handle.vtable->set_input_level_at(m_handle.module, bitOrLine, level ? 1 : 0, 0);
+        } else if (m_handle.vtable->set_input_level) {
+            m_handle.vtable->set_input_level(m_handle.module, bitOrLine, level ? 1 : 0);
+        }
+    }
+
+    void setInputLevelAt(uint32_t bitOrLine, bool level, uint64_t nowNs) override {
+        if (m_handle.vtable->set_input_level_at) {
+            m_handle.vtable->set_input_level_at(m_handle.module, bitOrLine, level ? 1 : 0, nowNs);
+        } else if (m_handle.vtable->set_input_level) {
+            m_handle.vtable->set_input_level(m_handle.module, bitOrLine, level ? 1 : 0);
+        }
+    }
+
+    uint64_t nextWakeupDelayNs() const override {
+        if (m_handle.vtable->next_wakeup_delay_ns_at) return m_handle.vtable->next_wakeup_delay_ns_at(m_handle.module, 0);
+        return m_handle.vtable->next_wakeup_delay_ns ? m_handle.vtable->next_wakeup_delay_ns(m_handle.module)
+                                                     : QemuModule::kNoWakeup;
+    }
+
+    uint64_t nextWakeupDelayNs(uint64_t nowNs) const override {
+        if (m_handle.vtable->next_wakeup_delay_ns_at) {
+            return m_handle.vtable->next_wakeup_delay_ns_at(m_handle.module, nowNs);
+        }
+        return m_handle.vtable->next_wakeup_delay_ns ? m_handle.vtable->next_wakeup_delay_ns(m_handle.module)
+                                                     : QemuModule::kNoWakeup;
+    }
+
+    void onWakeup(uint64_t nowNs) override {
+        if (m_handle.vtable->on_wakeup) m_handle.vtable->on_wakeup(m_handle.module, nowNs);
     }
 
 private:

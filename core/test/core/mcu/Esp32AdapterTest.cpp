@@ -1,9 +1,8 @@
-// Carrega o adapter.dll REAL compilado de mcu-adapters/espressif-esp32/ (mcu_abi.h major 2+) através
-// do PluginLoader de produção e confirma o mesmo contrato que o adaptador built-in tinha antes desta
-// sessão (chipId, launch args, memoryRegions, pinMap) -- e adicionalmente que createModules() (novo
-// na major 2) devolve um QemuModule real via QemuModuleProxy, decodificando registrador de verdade,
-// não só declarando faixa de endereço. Ver docs/17-pendencias-pos-sessao-qemu-abi.md seção 3.4 (a
-// pendência que esta extensão de ABI resolve).
+// Carrega o adapter.dll REAL compilado de mcu-adapters/espressif-esp32/ (mcu_abi.h major 2+)
+// atraves do PluginLoader de producao e confirma o contrato principal do adapter ESP32 via plugin:
+// chipId, launch args, regioes MMIO, pinMap, e os QemuModules concretos devolvidos por
+// createModules(). Alem do GPIO simples, este teste agora verifica tambem a presenca do IOMUX e o
+// roteamento temporizado de UART0 TX/RX via IOMUX/GPIO matrix.
 #include <algorithm>
 #include <cstdio>
 #include <filesystem>
@@ -44,8 +43,8 @@ int main() {
     const std::filesystem::path dllPath = ESP32_ADAPTER_DLL_PATH;
     if (!std::filesystem::exists(dllPath)) {
         std::fprintf(stderr,
-                      "PULADO: %s não existe -- rode 'npm run build:mcu-adapters' antes deste teste.\n",
-                      dllPath.string().c_str());
+                     "PULADO: %s nao existe -- rode 'npm run build:mcu-adapters' antes deste teste.\n",
+                     dllPath.string().c_str());
         return 0;
     }
 
@@ -54,7 +53,7 @@ int main() {
     try {
         module = cache.loader().loadMcuPlugin(dllPath);
     } catch (const std::exception& e) {
-        std::fprintf(stderr, "FALHOU: loadMcuPlugin lançou: %s\n", e.what());
+        std::fprintf(stderr, "FALHOU: loadMcuPlugin lancou: %s\n", e.what());
         return 1;
     }
     TEST_ASSERT(module != nullptr, "loadMcuPlugin devolve um PluginModule real");
@@ -72,41 +71,111 @@ int main() {
 
     const QemuLaunchSpec launch = adapter->buildLaunchArgs("build/blink.bin");
     TEST_ASSERT(launch.binary == "qemu-system-xtensa", "QEMU binary is Xtensa");
-    TEST_ASSERT(containsArg(launch, "qemu-system-xtensa"), "launch args include conventional argv[0] for QEMU itself");
+    TEST_ASSERT(containsArg(launch, "qemu-system-xtensa"),
+                "launch args include conventional argv[0] for QEMU itself");
     TEST_ASSERT(containsArg(launch, "-M"), "launch args include -M flag");
     TEST_ASSERT(containsArg(launch, "esp32-simul"), "launch args include esp32-simul machine");
-    TEST_ASSERT(containsArg(launch, "file=build/blink.bin,if=mtd,format=raw"), "launch args include firmware drive");
+    TEST_ASSERT(containsArg(launch, "file=build/blink.bin,if=mtd,format=raw"),
+                "launch args include firmware drive");
 
     const auto regions = adapter->memoryRegions();
     const auto gpioRegion = std::find_if(regions.begin(), regions.end(), [](const MemoryRegion& region) {
         return region.moduleKind == ModuleKind::Gpio && region.moduleIndex == 0;
     });
+    const auto ioMuxRegion = std::find_if(regions.begin(), regions.end(), [](const MemoryRegion& region) {
+        return region.moduleKind == ModuleKind::IoMux && region.moduleIndex == 0;
+    });
     TEST_ASSERT(gpioRegion != regions.end(), "GPIO memory region exists");
     TEST_ASSERT(gpioRegion != regions.end() && gpioRegion->start == 0x3FF44000 && gpioRegion->end == 0x3FF44FFF,
                 "GPIO memory region uses ESP32 MMIO range");
+    TEST_ASSERT(ioMuxRegion != regions.end(), "IOMUX memory region exists");
+    TEST_ASSERT(ioMuxRegion != regions.end() && ioMuxRegion->start == 0x3FF49000 && ioMuxRegion->end == 0x3FF49FFF,
+                "IOMUX memory region uses ESP32 MMIO range");
 
     const auto pins = adapter->pinMap();
-    const auto gpio2 = std::find_if(pins.begin(), pins.end(), [](const PinMapping& pin) { return pin.pinId == "GPIO2"; });
+    const auto gpio2 =
+        std::find_if(pins.begin(), pins.end(), [](const PinMapping& pin) { return pin.pinId == "GPIO2"; });
     TEST_ASSERT(gpio2 != pins.end(), "pin map contains GPIO2");
     TEST_ASSERT(gpio2 != pins.end() && gpio2->moduleKind == ModuleKind::Gpio && gpio2->bitOrLine == 2,
                 "GPIO2 maps to GPIO bit 2");
 
     const auto modules = adapter->createModules();
-    TEST_ASSERT(!modules.empty(), "createModules() devolve ao menos 1 módulo (GPIO) via plugin");
+    TEST_ASSERT(modules.size() == 9, "createModules() devolve GPIO + IOMUX + USART/I2C/SPI principais");
     bool hasGpioModule = false;
+    bool hasIoMuxModule = false;
+    QemuModule* gpioModule = nullptr;
+    QemuModule* ioMuxModule = nullptr;
+    QemuModule* uart0Module = nullptr;
     for (const std::unique_ptr<QemuModule>& m : modules) {
-        if (m->kind() == ModuleKind::Gpio && m->index() == 0 && m->owns(0x3FF44000)) hasGpioModule = true;
+        if (m->kind() == ModuleKind::Gpio && m->index() == 0 && m->owns(0x3FF44000)) {
+            hasGpioModule = true;
+            gpioModule = m.get();
+        }
+        if (m->kind() == ModuleKind::IoMux && m->index() == 0 && m->owns(0x3FF49000)) {
+            hasIoMuxModule = true;
+            ioMuxModule = m.get();
+        }
+        if (m->kind() == ModuleKind::Usart && m->index() == 0 && m->owns(0x3FF40000)) {
+            uart0Module = m.get();
+        }
     }
-    TEST_ASSERT(hasGpioModule, "createModules() inclui um QemuModule GPIO (via QemuModuleProxy) cobrindo a faixa real");
+    TEST_ASSERT(hasGpioModule, "createModules() inclui um QemuModule GPIO cobrindo a faixa real");
+    TEST_ASSERT(hasIoMuxModule, "createModules() inclui um QemuModule IOMUX cobrindo a faixa real");
 
-    // Prova que o módulo do plugin DECODIFICA registrador de verdade, não só declara faixa --
-    // exatamente o que o NativeMcuAdapterProxy::createModules() de antes da major 2 não conseguia.
-    for (const std::unique_ptr<QemuModule>& m : modules) {
-        if (m->kind() != ModuleKind::Gpio) continue;
-        m->writeRegister(0x3FF44000 + 0x20, 1u << 2); // GPIO_ENABLE_REG: bit 2 como saída
-        m->writeRegister(0x3FF44000 + 0x04, 1u << 2); // GPIO_OUT_REG: bit 2 em nível alto
-        TEST_ASSERT(m->isOutputEnabled(2), "módulo via plugin marca bit 2 como saída após ENABLE_REG");
-        TEST_ASSERT(m->outputLevel(2), "módulo via plugin reporta nível alto no bit 2 após OUT_REG");
+    TEST_ASSERT(gpioModule != nullptr, "teste encontrou o modulo GPIO");
+    TEST_ASSERT(ioMuxModule != nullptr, "teste encontrou o modulo IOMUX");
+    TEST_ASSERT(uart0Module != nullptr, "teste encontrou o modulo UART0");
+    if (gpioModule) {
+        gpioModule->writeRegister(0x3FF44000 + 0x20, 1u << 2);
+        gpioModule->writeRegister(0x3FF44000 + 0x04, 1u << 2);
+        TEST_ASSERT(gpioModule->isOutputEnabled(2), "modulo via plugin marca bit 2 como saida apos ENABLE_REG");
+        TEST_ASSERT(gpioModule->outputLevel(2), "modulo via plugin reporta nivel alto no bit 2 apos OUT_REG");
+
+        if (ioMuxModule) ioMuxModule->writeRegister(0x3FF49000 + 0x88, 0);
+        TEST_ASSERT(gpioModule->isOutputEnabled(1), "IOMUX direto habilita GPIO1 como saida do U0TXD");
+        TEST_ASSERT(gpioModule->outputLevel(1), "IOMUX direto roteia idle alto do U0TXD para GPIO1");
+
+        if (ioMuxModule) ioMuxModule->writeRegister(0x3FF49000 + 0x88, 2u << 12);
+        gpioModule->writeRegister(0x3FF44000 + 0x530 + 4, 14u);
+        TEST_ASSERT(gpioModule->isOutputEnabled(1), "GPIO matrix habilita GPIO1 como saida do U0TXD");
+        TEST_ASSERT(gpioModule->outputLevel(1), "GPIO matrix roteia U0TXD para GPIO1");
+
+        if (ioMuxModule) ioMuxModule->writeRegister(0x3FF49000 + 0x88, 0);
+        if (uart0Module) uart0Module->writeRegister(0x3FF40000 + 0x14, 5'000u);
+        if (uart0Module) uart0Module->writeRegister(0x3FF40000 + 0x00, 0x55u);
+        TEST_ASSERT(gpioModule->isOutputEnabled(1), "UART0 TX temporizado continua roteado para GPIO1");
+        TEST_ASSERT(!gpioModule->outputLevel(1), "UART0 FIFO inicia start bit baixo em GPIO1");
+        TEST_ASSERT(uart0Module && uart0Module->nextWakeupDelayNs() == 5'000u,
+                    "UART0 agenda wakeup usando bit time escrito em UART_CLKDIV");
+        if (uart0Module) uart0Module->onWakeup(5'000u);
+        TEST_ASSERT(gpioModule->outputLevel(1), "UART0 wakeup avanca para primeiro bit de dados alto");
+
+        if (uart0Module) uart0Module->reset();
+        if (uart0Module) uart0Module->writeRegisterAt(0x3FF40000 + 0x14, 5'000u, 0);
+        gpioModule->setInputLevelAt(3, true, 0);
+        if (ioMuxModule) ioMuxModule->writeRegisterAt(0x3FF49000 + 0x84, 0, 0);
+        gpioModule->setInputLevelAt(3, false, 0);
+        TEST_ASSERT(uart0Module && uart0Module->nextWakeupDelayNs(0) == 2'500u,
+                    "UART0 RX agenda amostra no meio do start bit");
+
+        if (uart0Module) uart0Module->onWakeup(2'500u);
+        TEST_ASSERT(uart0Module && uart0Module->nextWakeupDelayNs(2'500u) == 5'000u,
+                    "UART0 RX agenda primeira amostra de dado um bit depois");
+
+        const bool rxBits[8] = {true, false, true, false, false, true, false, true}; // 0xA5, LSB first
+        for (uint32_t i = 0; i < 8; ++i) {
+            const uint64_t sampleNs = 7'500u + (static_cast<uint64_t>(i) * 5'000u);
+            gpioModule->setInputLevelAt(3, rxBits[i], sampleNs);
+            if (uart0Module) uart0Module->onWakeup(sampleNs);
+        }
+        gpioModule->setInputLevelAt(3, true, 47'500u);
+        if (uart0Module) uart0Module->onWakeup(47'500u);
+        TEST_ASSERT(uart0Module && (uart0Module->readRegister(0x3FF40000 + 0x1C) & 0xFFu) == 1u,
+                    "UART0 RX coloca um byte no RX FIFO apos stop bit valido");
+        TEST_ASSERT(uart0Module && uart0Module->readRegister(0x3FF40000 + 0x00) == 0xA5u,
+                    "UART0 FIFO le o byte recebido 0xA5");
+        TEST_ASSERT(uart0Module && (uart0Module->readRegister(0x3FF40000 + 0x1C) & 0xFFu) == 0u,
+                    "UART0 RX FIFO decrementa apos leitura");
     }
 
     if (failures == 0) {
