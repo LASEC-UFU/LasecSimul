@@ -149,8 +149,16 @@ export function resolveLocalizedItems(
   });
 }
 
+function catalogPathCandidates(extensionPath: string): string[] {
+  return [
+    path.join(extensionPath, "..", "project", "schema", "component-catalog.json"),
+    path.join(extensionPath, "bundled", "project", "schema", "component-catalog.json"),
+  ];
+}
+
 function catalogPath(extensionPath: string): string {
-  return path.join(extensionPath, "..", "project", "schema", "component-catalog.json");
+  const candidates = catalogPathCandidates(extensionPath);
+  return candidates.find((candidate) => fs.existsSync(candidate)) ?? path.join(extensionPath, "..", "project", "schema", "component-catalog.json");
 }
 
 function sanitizeRegisteredSources(input: unknown): RegisteredSource[] {

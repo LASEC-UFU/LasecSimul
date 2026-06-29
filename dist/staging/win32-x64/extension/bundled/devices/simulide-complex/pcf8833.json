@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "typeId": "outputs.pcf8833",
+  "name": "Pcf8833",
+  "language": "pt-BR",
+  "translations": { "en": { "name": "Pcf8833" } },
+  "abiVersion": { "major": 3, "minor": 0 },
+  "nativeEntry": { "win32-x64": "build/win-x64/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" },
+  "pins": [
+    { "id": "dc", "kind": "DIGITAL_IN", "x": -12, "y": 60, "angle": 270, "length": 8, "label": "DC" },
+    { "id": "cs", "kind": "DIGITAL_IN", "x": -20, "y": 60, "angle": 270, "length": 8, "label": "CS" },
+    { "id": "sda", "kind": "DIGITAL_IN", "x": -28, "y": 60, "angle": 270, "length": 8, "label": "SDA" },
+    { "id": "sck", "kind": "DIGITAL_IN", "x": -36, "y": 60, "angle": 270, "length": 8, "label": "SCK" },
+    { "id": "reset", "kind": "DIGITAL_IN", "x": -44, "y": 60, "angle": 270, "length": 8, "label": "RST" }
+  ],
+  "properties": [
+    { "id": "width", "label": "Largura", "group": "Principal", "valueKind": "number", "editor": "number", "default": 132, "min": 32, "step": 1 },
+    { "id": "height", "label": "Altura", "group": "Principal", "valueKind": "number", "editor": "number", "default": 132, "min": 16, "step": 1 }
+  ],
+  "limits": { "stepTimeoutMs": 10, "expectedComplexity": "high" }
+}

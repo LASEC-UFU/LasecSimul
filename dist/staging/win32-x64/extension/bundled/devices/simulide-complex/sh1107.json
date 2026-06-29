@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "typeId": "outputs.sh1107",
+  "name": "Sh1107",
+  "language": "pt-BR",
+  "translations": { "en": { "name": "Sh1107" } },
+  "abiVersion": { "major": 3, "minor": 0 },
+  "nativeEntry": { "win32-x64": "build/win-x64/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" },
+  "pins": [
+    { "id": "scl", "kind": "DIGITAL_IN", "x": 0, "y": 48, "angle": 180, "length": 8, "label": "SCL" },
+    { "id": "sda", "kind": "DIGITAL_BIDIR", "x": 0, "y": 56, "angle": 180, "length": 8, "label": "SDA" }
+  ],
+  "properties": [
+    { "id": "width", "label": "Largura", "group": "Principal", "valueKind": "number", "editor": "number", "default": 128, "min": 32, "step": 1 },
+    { "id": "height", "label": "Altura", "group": "Principal", "valueKind": "number", "editor": "number", "default": 128, "min": 16, "step": 8 },
+    { "id": "i2cAddress", "label": "Endereço I2C", "group": "Principal", "valueKind": "number", "editor": "number", "default": 60, "min": 0, "max": 127, "step": 1 }
+  ],
+  "limits": { "stepTimeoutMs": 8, "expectedComplexity": "medium" }
+}

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "publisher": "lasecsimul-core-team",
+  "trust": "first-party",
+  "version": "0.1.0",
+  "license": "MIT",
+  "mcus": [
+    { "chipId": "espressif.esp32", "manifest": "espressif-esp32/mcu.json" }
+  ],
+  "checksums": {
+    "espressif-esp32/build/win-x64/adapter.dll": "PREENCHER_NO_BUILD_SHA256"
+  }
+}

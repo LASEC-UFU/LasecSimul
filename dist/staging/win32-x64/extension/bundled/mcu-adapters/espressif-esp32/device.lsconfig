@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "typeId": "espressif.esp32",
+  "label": "ESP32 (QEMU)",
+  "folderPath": ["Microcontroladores", "Espressif"],
+  "defaultProperties": {}
+}

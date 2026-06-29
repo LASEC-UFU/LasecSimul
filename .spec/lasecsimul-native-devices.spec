@@ -898,7 +898,11 @@ referência pendente (o problema que o SimulIDE evita ao embutir).
 
   "pins": [
     { "id": "out", "kind": "DIGITAL_OUT", "x": 0, "y": 20, "angle": 180, "length": 8, "label": "OUT" }
-  ]
+  ],
+
+  "logicSymbolPackage": {
+    "_comment": "Opcional -- aparência ALTERNATIVA (mesmo formato de `package`, igual ao SimulIDE real `SubPackage::Logic_Symbol`, ver seção 21.3). Só pra mcu-adapter/subcircuit-file, nunca abi-device puro (decisão explícita, 2026-06-29). Quando presente, a instância ganha a propriedade booleana `logicSymbol` (default false) que escolhe entre os dois -- mesmos pinos elétricos nos dois, nunca validado à força (só aviso, ver `extension.ts::saveSymbolCommand`)."
+  }
 }
 ```
 
@@ -913,8 +917,9 @@ referência pendente (o problema que o SimulIDE evita ao embutir).
 | `pins[].angle` | `angle` | 0/90/180/270 — de qual lado do corpo o terminal sai e em que direção desenha |
 | `pins[].length` | `length` | tamanho do traço do terminal, em px |
 | `pins[].label` | `label` | texto exibido junto ao pino; se omitido, usa `id` |
+| `pins[].labelX`/`labelY` | (texto de pino arrastável independente, ver `PackagePin`/`PackagePin::editPos` real) | posição do RÓTULO, independente da posição do pino (mesmo espaço de `x`/`y`) — ausente == posição padrão calculada (ponta do lead + 9px na direção de `angle`); 2026-06-29, ver seção 21.3 |
 
-Nenhum campo novo aqui é lido pelo Core — `package`/`pins[].angle|length|label` são consumidos **só pela
+Nenhum campo novo aqui é lido pelo Core — `package`/`pins[].angle|length|label|labelX|labelY` são consumidos **só pela
 Extension** (ela já lê `device.json` direto do disco para popular a paleta/painel de propriedades; não
 precisa pedir isso ao Core por IPC). O Core continua só enxergando `pins[].id/kind` (contrato elétrico).
 `icon.svg` (seção 14) continua existindo **à parte** — é a miniatura da paleta de componentes, papel
@@ -947,10 +952,18 @@ renderização/interação novo: tudo isso já era genérico sobre a variável `
 - `other.package` (typeId já existia no catálogo, desabilitado — agora habilitado e property-driven:
   `width`/`height`/`border`/`backgroundColor`) representa o corpo do símbolo. `graphics.rectangle`/
   `ellipse`/`line`/`text` (também já existiam, decorativos — agora property-driven) representam as
-  formas. `other.package_pin` (NOVO typeId) representa um pino do símbolo: `pinId`/`label`/`length`
-  como propriedades, o **ângulo do lead é o próprio `component.rotation`** (0/90/180/270, já genérico
-  pra qualquer componente — reaproveita rotação por teclado/toolbar sem nenhum campo/código novo).
-  Todos com `pinCount: 0`, nunca sincronizados com o Core (`shouldSyncComponentToCore`, já existia).
+  formas. `other.package_pin` (NOVO typeId) representa um pino do símbolo: `pinId`/`length` como
+  propriedades, o **ângulo do lead é o próprio `component.rotation`** (0/90/180/270, já genérico pra
+  qualquer componente — reaproveita rotação por teclado/toolbar sem nenhum campo/código novo). Todos
+  com `pinCount: 0`, nunca sincronizados com o Core (`shouldSyncComponentToCore`, já existia).
+- **Rótulo de pino arrastável e independente** (pedido explícito do usuário, mesma referência do
+  SimulIDE real onde "o user consegue movimentar sempre os textos de tudo, dos pinos, do label do
+  ci"): `other.package_pin` NÃO desenha o próprio texto — `main.ts::componentsToAddForTypeId` sempre
+  cria, junto com o pino, um `graphics.text` vinculado por `linkedPinComponentId` (id ESTÁVEL do
+  componente do pino, nunca o valor mutável da propriedade `pinId` — sobrevive a renomear depois).
+  Esse texto é um componente comum, arrastável pra qualquer lugar, inclusive dentro do corpo do
+  `other.package`. `PackagePin.labelX`/`labelY` (seção 21.2) guardam essa posição quando o usuário a
+  move; ausentes, o renderizador de leitura cai na posição padrão de sempre (ponta do lead + 9px).
 - Resize: só por campo numérico no painel de propriedades (`inferPropertyFields`, já existia, nunca
   precisou de mudança) — **igual ao SimulIDE real**, não uma alça de arrastar nova.
 - Adicionar pino: colocar um `other.package_pin` na paleta, posicionar arrastando (drag genérico de
@@ -972,9 +985,12 @@ renderização/interação novo: tudo isso já era genérico sobre a variável `
   4 valores existe) — nenhum dos manifestos reais do projeto usa ângulo de linha não-cardinal hoje.
 
 Pontos de entrada (decisão de implementação, não descritos no texto original): botão "✎" por item
-registrado na paleta (`palette.ts`, sessão abre já semeada com o `package` daquele item) e comando
+registrado na paleta (`palette.ts`, sessão abre já semeada com o `package` daquele item); comando
 genérico `lasecsimul.palette.editSymbol` (botão na barra de título da paleta) que abre um seletor de
-arquivo — permite editar o símbolo de um manifesto ainda não registrado.
+arquivo — permite editar o símbolo de um manifesto ainda não registrado; e "Editar Símbolo Visual" no
+menu de contexto (botão direito) de uma instância JÁ COLOCADA no circuito — mesmo princípio do "Open
+Subcircuit" do SimulIDE real, mensagem `requestEditSymbol` reaproveitando `editPackageSymbolCommand`
+tal qual (2026-06-29).
 
 Esse fluxo é só código de Extension (TypeScript/webview) — não depende do Core estar rodando, e o Core
 nunca precisa ser tocado para isso existir (nenhum dos typeIds novos/alterados tem pino elétrico real).
@@ -983,3 +999,36 @@ e `docs/16-roadmap-pendencias-spec.md` Épico G): o comando "Criar Subcircuito a
 (detectar fios cruzando a borda de uma seleção no esquemático e gerar tunnels automaticamente) — esse
 fluxo ainda não existe; a sessão de autoria hoje só edita o `package` de um manifesto que já tem seus
 pinos elétricos declarados à mão.
+
+### 21.4 "Logic Symbol" — aparência alternativa opcional (2026-06-29)
+
+Auditoria real do SimulIDE (`simulide_2/src/components/other/subpackage.cpp`,
+https://simulidedocs.netlify.app/1-circuit/components/11-other/package.html, resposta de dev no
+fórum oficial) corrigiu uma explicação errada que eu tinha dado antes nesta mesma sessão: "Logic
+Symbol" não é uma lista aberta de N variantes — é literalmente um **booleano** (`SubPackage::
+Logic_Symbol`, "Chip or Logic Symbol" no diálogo de propriedades real) que troca entre o corpo
+físico do CI e um símbolo esquemático abstrato, mesmos pinos elétricos nos dois.
+
+Implementado fiel a isso: `logicSymbolPackage` (seção 21.2) é um `PackageDescriptor` opcional
+IRMÃO de `package` — `package` continua sendo a aparência padrão. Quando presente, a Extension
+injeta `logicSymbol: false` em `defaultProperties` (`extension.ts::resolveRegisteredItem`); uma
+instância colocada no circuito ganha esse checkbox booleano no painel de propriedades (de graça,
+`inferPropertyFields` já mostra qualquer propriedade booleana como checkbox); `componentSymbols.ts`
+(`registerPackage`/`resolvedPackageFor`) escolhe `logicSymbolPackage` quando `properties.logicSymbol
+=== true`, senão `package` — **decisão de implementação**: nunca validado que os dois sejam
+"pin-compatíveis" à força (o SimulIDE real exige isso); aqui é só aviso, mesmo padrão de
+`knownPinIdsForManifest`.
+
+Dentro da sessão de autoria, um botão "Ver: Físico"/"Ver: Símbolo Lógico" na barra
+(`main.ts::toggleLogicSymbolView`) troca qual chave está sendo editada — implementação simplificada
+deliberada: trocar de vista DESCARTA sem confirmar qualquer mudança não salva na vista que está
+saindo (sem `window.confirm()`, que nem sempre funciona dentro de uma Webview do VSCode; um hint no
+botão avisa "salve antes de trocar"), mas preserva o circuito interno tal como está (não relido do
+disco) — só o `package`/`logicSymbolPackage` é re-semeado a partir do arquivo. Escopo: só pra
+`mcu-adapter` e `subcircuit-file`, nunca `abi-device` puro (decisão explícita do usuário). Teste:
+`componentSymbols.test.ts` (resolução por `properties.logicSymbol`).
+
+Board Mode (posicionar componentes "graphical" reais sobre a arte do `package`, com posição
+independente da posição no circuito interno) é uma feature RELACIONADA mas distinta, documentada em
+`.spec/lasecsimul-subcircuits.spec` seção 4 (só faz sentido pra `subcircuit-file`, que tem circuito
+interno pra organizar -- `mcu-adapter`/`abi-device` não têm, "Package ≠ Subcircuit").

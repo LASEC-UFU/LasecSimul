@@ -1,6 +1,6 @@
-import { WEBVIEW_MESSAGE_VERSION, HostToWebviewMessage, SimulationStatus, WebviewToHostMessage } from "./messages.js";
+import { WEBVIEW_MESSAGE_VERSION, HostToWebviewMessage, SimulationStatus, SymbolAuthoringKind, WebviewToHostMessage } from "./messages.js";
 import { PropertySchemaEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./model.js";
-import { PIN_RADIUS, componentBox, componentSymbolSvg, packageSymbolSvg, pinLocalPosition, registerPackage } from "./componentSymbols.js";
+import { PIN_RADIUS, componentBox, componentSymbolSvg, hasRealPinPosition, packageSymbolSvg, pinLocalPosition, registerPackage } from "./componentSymbols.js";
 import {
   Point,
   WIRE_GRID_SIZE,
@@ -63,7 +63,7 @@ function normalizeProjectState(raw: WebviewProjectState): WebviewProjectState {
  * importado uma vez, sobrevive a troca de `state`) -- precisa ser re-sincronizado toda vez que o
  * catálogo chega de novo (Épico G: cada item registrado pode trazer um `package` real). */
 function syncPackageRegistry(catalog: WebviewProjectState["catalog"]): void {
-  for (const entry of catalog) registerPackage(entry.typeId, entry.package);
+  for (const entry of catalog) registerPackage(entry.typeId, entry.package, entry.logicSymbolPackage);
 }
 
 const initialWindowState = (window as WindowWithInitialState).__LASECSIMUL_INITIAL_STATE__;
@@ -106,6 +106,7 @@ const UI_TEXT = {
     noProperties: "Nenhuma propriedade disponivel nesta aba.",
     type: "Type",
     uid: "Uid",
+    editSymbol: "Editar Símbolo Visual",
   },
   en: {
     nothingSelected: "Nothing selected",
@@ -142,6 +143,7 @@ const UI_TEXT = {
     noProperties: "No properties available in this tab.",
     type: "Type",
     uid: "Uid",
+    editSymbol: "Edit Visual Symbol",
   },
 } as const;
 
@@ -222,13 +224,26 @@ window.addEventListener("blur", () => hideContextMenu());
  * especial de canvas/drag/seleção, ver auditoria em `.spec/lasecsimul-native-devices.spec`
  * seção 21.3). */
 let realCircuitState: WebviewProjectState | undefined;
-let symbolAuthoringContext: { filePath: string; typeId: string } | undefined;
+let symbolAuthoringContext: { filePath: string; typeId: string; kind: SymbolAuthoringKind; view: "default" | "logicSymbol" } | undefined;
+/** Modo Placa (igual ao SimulIDE real, `SubPackage::boardModeSlot()`) -- só faz sentido pra
+ * `kind === "subcircuit-file"` (só subcircuito tem circuito interno pra organizar espacialmente,
+ * ver `toggleBoardMode`). */
+let boardModeActive = false;
 
-function enterSymbolAuthoring(filePath: string, typeId: string, components: WebviewComponentModel[]): void {
-  if (symbolAuthoringContext) return; // já em autoria -- reentrada ignorada, ver nota em messages.ts
-  realCircuitState = state;
-  symbolAuthoringContext = { filePath, typeId };
-  state = { ...createEmptyState(), catalog: realCircuitState.catalog, locale: realCircuitState.locale, components };
+/** Mesmo typeIds "de autoria de símbolo" de `extension/src/catalog/symbolAuthoring.ts::
+ * isSymbolAuthoringTypeId` -- duplicado de propósito (webview não importa do host, tsconfigs
+ * diferentes/rootDir diferente). `other.package`/`graphics.*`/`other.package_pin` SEMPRE ficam
+ * visíveis/na mesma posição nos dois modos (Modo Placa É a arte deles) -- só o circuito interno
+ * real troca de posição/visibilidade. */
+function isSymbolAuthoringTypeId(typeId: string): boolean {
+  return typeId === "other.package" || typeId === "other.package_pin" || typeId.startsWith("graphics.");
+}
+
+function enterSymbolAuthoring(filePath: string, typeId: string, kind: SymbolAuthoringKind, view: "default" | "logicSymbol", components: WebviewComponentModel[], wires: WebviewWireModel[]): void {
+  if (!symbolAuthoringContext) realCircuitState = state; // só guarda o circuito real na 1ª entrada -- reentrada (troca de vista) não deve pisar nele de novo
+  symbolAuthoringContext = { filePath, typeId, kind, view };
+  boardModeActive = false;
+  state = { ...createEmptyState(), catalog: realCircuitState!.catalog, locale: realCircuitState!.locale, components, wires };
   render();
 }
 
@@ -237,6 +252,7 @@ function exitSymbolAuthoring(): void {
   state = realCircuitState;
   realCircuitState = undefined;
   symbolAuthoringContext = undefined;
+  boardModeActive = false;
   render();
 }
 
@@ -244,9 +260,76 @@ function saveSymbolAuthoring(): void {
   const context = symbolAuthoringContext;
   if (!context) return;
   const components = state.components;
+  const wires = state.wires;
   exitSymbolAuthoring(); // restaura o circuito real ANTES de mandar a mensagem -- `send()` abaixo só
   // bloqueia enquanto `symbolAuthoringContext` está ativo, então a ordem aqui importa.
-  send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestSaveSymbol", filePath: context.filePath, typeId: context.typeId, components });
+  send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestSaveSymbol", filePath: context.filePath, typeId: context.typeId, kind: context.kind, view: context.view, components, wires });
+}
+
+/** Toggle "Ver: Físico / Símbolo Lógico" -- descarta sem aviso qualquer mudança não salva no
+ * `package`/`logicSymbolPackage` da vista que está SAINDO (decisão de escopo deliberada: sem
+ * `confirm()`, que nem sempre funciona dentro de uma Webview do VSCode -- o hint na barra já avisa
+ * "salve antes de trocar de vista"). Preserva o circuito interno tal como está agora (não relido do
+ * disco, ver `extension.ts::switchSymbolViewCommand`). */
+function toggleLogicSymbolView(): void {
+  const context = symbolAuthoringContext;
+  if (!context) return;
+  const toView: "default" | "logicSymbol" = context.view === "logicSymbol" ? "default" : "logicSymbol";
+  const internalComponents = state.components.filter((component) => !isSymbolAuthoringTypeId(component.typeId));
+  const internalWires = state.wires;
+  exitSymbolAuthoring();
+  send({
+    version: WEBVIEW_MESSAGE_VERSION,
+    type: "requestSwitchSymbolView",
+    filePath: context.filePath,
+    typeId: context.typeId,
+    kind: context.kind,
+    toView,
+    internalComponents,
+    internalWires,
+  });
+}
+
+/** Modo Placa -- troca, pra cada componente do circuito INTERNO (nunca `other.package`/
+ * `graphics.*`/`other.package_pin`, que são a arte da placa em si), qual posição está "ativa"
+ * (`x`/`y`/`rotation`/`flipH`/`flipV` <-> `boardX`/`boardY`/`boardRotation`/`boardFlipH`/
+ * `boardFlipV`) -- swap simétrico, funciona entrando OU saindo do modo, igual ao SimulIDE real
+ * (`SubPackage::setBoardMode()`: "Positions of components in one mode does not affect positions in
+ * the other"). Visibilidade (`renderComponent`'s caller, ver `render()`) some à parte, checando
+ * `catalog.graphical`. */
+function toggleBoardMode(): void {
+  if (!symbolAuthoringContext || symbolAuthoringContext.kind !== "subcircuit-file") return;
+  boardModeActive = !boardModeActive;
+  for (const component of state.components) {
+    if (isSymbolAuthoringTypeId(component.typeId)) continue;
+    const activeX = component.x;
+    const activeY = component.y;
+    const activeRotation = component.rotation;
+    const activeFlipH = component.flipH;
+    const activeFlipV = component.flipV;
+    component.x = component.boardX ?? activeX;
+    component.y = component.boardY ?? activeY;
+    component.rotation = component.boardRotation ?? 0;
+    component.flipH = component.boardFlipH;
+    component.flipV = component.boardFlipV;
+    component.boardX = activeX;
+    component.boardY = activeY;
+    component.boardRotation = activeRotation;
+    component.boardFlipH = activeFlipH;
+    component.boardFlipV = activeFlipV;
+  }
+  persistState();
+  render();
+}
+
+/** Visível no Modo Placa: a arte da placa em si (sempre) OU um componente "graphical" de verdade
+ * (`catalog.graphical`, ver model.ts) -- mesmo princípio do SimulIDE real (LED/motor/display/switch
+ * etc. continuam visíveis, o resto -- resistor, MCU, fonte fixa -- some). Fora de Modo Placa, ou
+ * fora de uma sessão de subcircuito, sempre visível (comportamento de sempre). */
+function isVisibleInCurrentMode(component: WebviewComponentModel): boolean {
+  if (!boardModeActive) return true;
+  if (isSymbolAuthoringTypeId(component.typeId)) return true;
+  return Boolean(state.catalog.find((entry) => entry.typeId === component.typeId)?.graphical);
 }
 
 function persistState(): void {
@@ -427,13 +510,42 @@ function renderToolbarButton(kind: ToolbarIconKind, title: string, onClick: () =
  * sessão de autoria não é o circuito do usuário, nunca vai pro Core, ver `enterSymbolAuthoring`),
  * então a barra normal seria enganosa (cliques pareceriam funcionar mas `send()` os descarta
  * silenciosamente enquanto `symbolAuthoringContext` está ativo). Só "Cancelar"/"Salvar Símbolo". */
-function renderSymbolAuthoringAppBar(context: { typeId: string }): HTMLElement {
+function renderSymbolAuthoringAppBar(context: { typeId: string; kind: SymbolAuthoringKind; view: "default" | "logicSymbol" }): HTMLElement {
   const bar = document.createElement("div");
   bar.className = "appbar";
 
+  const isSubcircuit = context.kind === "subcircuit-file";
+  const titleText = isSubcircuit ? `Abrindo subcircuito: ${context.typeId}` : `Editando símbolo: ${context.typeId}`;
+
   const title = document.createElement("div");
   title.className = "appbar__selection";
-  title.textContent = `Editando símbolo: ${context.typeId}`;
+  title.textContent = `${titleText}${context.view === "logicSymbol" ? " (vista: Símbolo Lógico)" : ""}`;
+
+  const viewGroup = document.createElement("div");
+  viewGroup.className = "appbar__group";
+  // "Logic Symbol" -- igual ao SimulIDE real (`SubPackage::Logic_Symbol`): aparência ALTERNATIVA
+  // opcional, nunca pra `abi-device` puro ("Package ≠ Subcircuit", ver `.spec/
+  // lasecsimul-native-devices.spec` seção 21.3).
+  if (context.kind !== "abi-device") {
+    const viewToggle = document.createElement("button");
+    viewToggle.type = "button";
+    viewToggle.className = "property-sheet__button";
+    viewToggle.title = "Salve antes de trocar -- mudanças não salvas na vista atual são descartadas.";
+    viewToggle.textContent = context.view === "logicSymbol" ? "Ver: Físico" : "Ver: Símbolo Lógico";
+    viewToggle.addEventListener("click", () => toggleLogicSymbolView());
+    viewGroup.appendChild(viewToggle);
+  }
+  // Modo Placa -- só faz sentido pra subcircuito (só ele tem circuito interno pra organizar
+  // espacialmente, ver `toggleBoardMode`).
+  if (isSubcircuit) {
+    const boardModeToggle = document.createElement("button");
+    boardModeToggle.type = "button";
+    boardModeToggle.className = `property-sheet__button${boardModeActive ? " property-sheet__button--active" : ""}`;
+    boardModeToggle.textContent = boardModeActive ? "Modo Placa: ON" : "Modo Placa";
+    boardModeToggle.title = "Organiza componentes \"de interação\" (LED, motor, display, switch...) sobre a arte da placa, numa posição independente do layout do circuito interno.";
+    boardModeToggle.addEventListener("click", () => toggleBoardMode());
+    viewGroup.appendChild(boardModeToggle);
+  }
 
   const actions = document.createElement("div");
   actions.className = "appbar__group appbar__meta";
@@ -446,11 +558,11 @@ function renderSymbolAuthoringAppBar(context: { typeId: string }): HTMLElement {
   const saveButton = document.createElement("button");
   saveButton.type = "button";
   saveButton.className = "property-sheet__button";
-  saveButton.textContent = "Salvar Símbolo";
+  saveButton.textContent = isSubcircuit ? "Salvar Subcircuito" : "Salvar Símbolo";
   saveButton.addEventListener("click", () => saveSymbolAuthoring());
 
   actions.append(cancelButton, saveButton);
-  bar.append(title, actions);
+  bar.append(title, viewGroup, actions);
   return bar;
 }
 
@@ -700,7 +812,7 @@ function render(): void {
   renderPendingWirePreview(wireLayer);
   canvasContent.appendChild(wireLayer);
 
-  for (const component of state.components.filter((entry) => !entry.hidden)) {
+  for (const component of state.components.filter((entry) => !entry.hidden && isVisibleInCurrentMode(entry))) {
     canvasContent.appendChild(renderComponent(component));
   }
 
@@ -878,7 +990,7 @@ function rotatePoint(local: Point, box: { width: number; height: number }, rotat
 
 function componentPinLocalPosition(component: WebviewComponentModel, pinIndex: number): Point {
   const box = componentBox(component.typeId, component.properties);
-  const base = pinLocalPosition(component.pins[pinIndex]?.id ?? "", pinIndex, component.pins.length, component.typeId);
+  const base = pinLocalPosition(component.pins[pinIndex]?.id ?? "", pinIndex, component.pins.length, component.typeId, component.properties);
   const flipped = flipPoint(base, box, Boolean(component.flipH), Boolean(component.flipV));
   return rotatePoint(flipped, box, component.rotation);
 }
@@ -1573,7 +1685,7 @@ function renderComponent(component: WebviewComponentModel): HTMLElement {
   const scaleX = component.flipH ? -1 : 1;
   const scaleY = component.flipV ? -1 : 1;
   svg.style.transform = `rotate(${component.rotation}deg) scale(${scaleX}, ${scaleY})`;
-  svg.innerHTML = packageSymbolSvg(component.typeId) ?? catalogEntry?.symbolSvg ?? componentSymbolSvg(component.typeId, component.properties);
+  svg.innerHTML = packageSymbolSvg(component.typeId, component.properties) ?? catalogEntry?.symbolSvg ?? componentSymbolSvg(component.typeId, component.properties);
 
   if (isComponentSelected(component.id)) {
     const overlay = document.createElementNS(SVG_NS, "rect");
@@ -1584,6 +1696,12 @@ function renderComponent(component: WebviewComponentModel): HTMLElement {
   }
 
   component.pins.forEach((pin, index) => {
+    // Pino elétrico real sem lead físico no encapsulamento (ex: GPIO20/24/28-31/UART0_RX/TX do chip
+    // ESP32 nu) -- nunca desenha terminal genérico por cima do desenho real dos outros, ver
+    // `componentSymbols.ts::hasRealPinPosition`. Continua existindo em `component.pins[]` (contrato
+    // posicional com o Core), só não fica clicável/visível -- fiel ao hardware real, que também não
+    // tem ponto de solda aí.
+    if (!hasRealPinPosition(component.typeId, pin.id, component.properties)) return;
     const local = componentPinLocalPosition(component, index);
     const isActive = state.pendingConnection?.componentId === component.id && state.pendingConnection?.pinId === pin.id;
     const circle = document.createElementNS(SVG_NS, "circle");
@@ -1669,11 +1787,17 @@ function renderComponent(component: WebviewComponentModel): HTMLElement {
     render();
     const selectedComponents = getSelectedComponents();
     const isGroup = selectedComponents.length > 1;
+    // Mesma entrada do botão "✎" da paleta (`palette.ts`) -- só que a partir de uma INSTÂNCIA já
+    // colocada no circuito, igual ao "Open Subcircuit" do SimulIDE no menu de botão direito. Só
+    // aparece pra typeId registrado (tem `registeredSourceId` -- built-ins de verdade não têm
+    // manifesto nenhum pra editar visualmente).
+    const sourceId = catalogEntry?.registeredSourceId;
     showContextMenu(event, [
       ...(isGroup ? [] : [{ label: t("properties"), onClick: () => openPropertyDialog(component) }]),
       { label: t("rotateCw"), onClick: () => rotateSelectedComponents(1) },
       { label: t("rotateCcw"), onClick: () => rotateSelectedComponents(-1) },
       { label: t("rotate180"), onClick: () => rotateSelectedComponents(2) },
+      ...(!isGroup && sourceId ? [{ label: t("editSymbol"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestEditSymbol", sourceId }) }] : []),
       { label: isGroup ? t("deleteSelectedItems") : t("delete"), onClick: () => deleteSelectedItems() },
     ]);
   });
@@ -2116,7 +2240,7 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
   if (message.type === "requestAddComponent") {
     state = {
       ...state,
-      components: [...state.components, makeComponentFromTypeId(message.typeId)],
+      components: [...state.components, ...componentsToAddForTypeId(message.typeId)],
     };
     vscode?.setState(state);
     persistState();
@@ -2155,7 +2279,7 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
   }
 
   if (message.type === "enterSymbolAuthoring") {
-    enterSymbolAuthoring(message.filePath, message.typeId, message.components);
+    enterSymbolAuthoring(message.filePath, message.typeId, message.kind, message.view, message.components, message.wires);
   }
 });
 
@@ -2177,11 +2301,52 @@ function nextIndexedLabel(typeId: string, baseLabel: string): string {
   return `${baseLabel}-${maxIndex + 1}`;
 }
 
+/** `other.package_pin` sempre vem acompanhado de um `graphics.text` vinculado
+ * (`linkedPinComponentId` == id ESTÁVEL do componente do pino, nunca o valor mutável da propriedade
+ * `pinId` -- assim o vínculo sobrevive a renomear o pino depois, ver `extension/src/catalog/
+ * symbolAuthoring.ts::compileSymbolAuthoringComponents`) -- é o rótulo arrastável independente, igual
+ * ao SimulIDE real (texto de pino nunca presa a um deslocamento fixo). Posição inicial = mesma
+ * fórmula padrão do renderizador de leitura (ponta do lead + 9 unidades na direção do ângulo). Todo
+ * outro typeId continua devolvendo só o próprio componente, sem comportamento especial. */
+function componentsToAddForTypeId(typeId: string): WebviewComponentModel[] {
+  const component = makeComponentFromTypeId(typeId);
+  if (typeId !== "other.package_pin") return [component];
+
+  const box = componentBox(component.typeId, component.properties);
+  const anchorX = component.x + box.width / 2;
+  const anchorY = component.y + box.height / 2;
+  const length = typeof component.properties.length === "number" ? component.properties.length : 8;
+  const rad = (component.rotation * Math.PI) / 180;
+  const labelX = anchorX + Math.cos(rad) * (length + 9);
+  const labelY = anchorY + Math.sin(rad) * (length + 9);
+  const pinId = typeof component.properties.pinId === "string" ? component.properties.pinId : component.id;
+  const labelBox = componentBox("graphics.text", { text: pinId, fontSize: 7 });
+  const label: WebviewComponentModel = {
+    id: `component-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}-label`,
+    typeId: "graphics.text",
+    label: "graphics.text",
+    hidden: false,
+    x: Math.round(labelX - labelBox.width / 2),
+    y: Math.round(labelY - labelBox.height / 2),
+    rotation: 0,
+    pins: [],
+    properties: { text: pinId, fontSize: 7, color: "#1f2937", linkedPinComponentId: component.id },
+  };
+  return [component, label];
+}
+
 function makeComponentFromTypeId(typeId: string): WebviewComponentModel {
   const descriptor = state.catalog.find((entry) => entry.typeId === typeId);
   const componentIndex = state.components.length;
   const pinCount = descriptor?.pinCount ?? 2;
   const baseLabel = descriptor?.label ?? typeId;
+  // `pinIds` (quando presente) é o id elétrico REAL de cada pino, casando por `id` com
+  // `package.pins[]` em `pinLocalPosition` -- sem isso, o terminal de fio cai no algoritmo
+  // genérico (esquerda/direita por índice), nunca na posição real desenhada do `package`. Ver
+  // `model.ts::WebviewComponentCatalogEntry.pinIds`.
+  const pins = descriptor?.pinIds && descriptor.pinIds.length === pinCount
+    ? descriptor.pinIds.map((id, index) => ({ id, x: 0, y: index * 12 }))
+    : Array.from({ length: pinCount }, (_, index) => ({ id: `pin-${index + 1}`, x: 0, y: index * 12 }));
   return {
     id: `component-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`,
     typeId,
@@ -2191,7 +2356,7 @@ function makeComponentFromTypeId(typeId: string): WebviewComponentModel {
     x: 140 + componentIndex * 24,
     y: 140 + componentIndex * 24,
     rotation: 0,
-    pins: Array.from({ length: pinCount }, (_, index) => ({ id: `pin-${index + 1}`, x: 0, y: index * 12 })),
+    pins,
     properties: { ...(descriptor?.defaultProperties ?? {}) },
   };
 }

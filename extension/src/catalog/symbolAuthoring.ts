@@ -15,7 +15,41 @@
  * linha: perde precisão de ângulo não-cardinal, ver `snapRotation`).
  */
 import { componentBox } from "../ui/webview/componentSymbols";
-import { PackageBackground, PackageDescriptor, PackagePin, PackageShape, WebviewComponentModel } from "../ui/webview/model";
+import { PackageBackground, PackageDescriptor, PackagePin, PackageShape, WebviewComponentModel, WebviewWireModel } from "../ui/webview/model";
+
+/** Posição/orientação visual de um componente -- mesmo formato de `ProjectComponent.visual`
+ * (`project/ProjectTypes.ts`), reaproveitado pro circuito INTERNO de um subcircuito
+ * (`.lssub.json::components[].visual`/`boardVisual`, ver `extension.ts::extractInternalCircuit`). */
+export interface VisualPosition {
+  x: number;
+  y: number;
+  rotation?: 0 | 90 | 180 | 270;
+  flipH?: boolean;
+  flipV?: boolean;
+}
+
+export interface InternalComponentSeed {
+  id: string;
+  typeId: string;
+  properties: Record<string, unknown>;
+  visual?: VisualPosition;
+  boardVisual?: VisualPosition;
+}
+
+export interface InternalWireSeed {
+  id?: string;
+  from: { componentId: string; pinId: string };
+  to: { componentId: string; pinId: string };
+  points?: Array<{ x: number; y: number }>;
+}
+
+/** Typeids que pertencem à AUTORIA DO SÍMBOLO (corpo/formas/pinos visuais) -- tudo o mais numa
+ * sessão de "Abrir Subcircuito" é circuito interno real (`compileSubcircuitInternalComponents`).
+ * Rótulo de pino (`graphics.text` com `linkedPinComponentId`) é um caso especial dentro de
+ * "graphics.text" -- tratado à parte em `compileSymbolAuthoringComponents`. */
+function isSymbolAuthoringTypeId(typeId: string): boolean {
+  return typeId === "other.package" || typeId === "other.package_pin" || typeId.startsWith("graphics.");
+}
 
 function nextComponentId(prefix: string, index: number): string {
   return `symbol-${prefix}-${index}`;
@@ -51,21 +85,126 @@ export function seedSymbolAuthoringComponents(pkg: PackageDescriptor, originX = 
   });
 
   pkg.pins.forEach((pin, index) => {
-    const properties: Record<string, string | number | boolean> = { pinId: pin.id, label: pin.label ?? pin.id, length: pin.length };
+    const properties: Record<string, string | number | boolean> = { pinId: pin.id, length: pin.length };
     const box = componentBox("other.package_pin", properties);
-    components.push(
-      baseComponent(
-        nextComponentId("pin", index),
-        "other.package_pin",
-        originX + pin.x - box.width / 2,
-        originY + pin.y - box.height / 2,
-        snapRotation(pin.angle),
-        properties,
-      ),
-    );
+    const pinComponentId = nextComponentId("pin", index);
+    components.push(baseComponent(pinComponentId, "other.package_pin", originX + pin.x - box.width / 2, originY + pin.y - box.height / 2, snapRotation(pin.angle), properties));
+    components.push(seedPinLabelComponent(pin, pinComponentId, index, originX, originY));
   });
 
   return components;
+}
+
+/** Posição padrão (sem `visual` salvo ainda -- nenhum dos `.lssub.json` reais do projeto tem essa
+ * chave hoje, escritos à mão antes dela existir) -- grade simples, só pra não empilhar tudo no
+ * mesmo ponto na primeira vez que alguém abre um subcircuito antigo pra editar. */
+function defaultInternalLayout(index: number): VisualPosition {
+  const columns = 6;
+  return { x: 400 + (index % columns) * 90, y: 60 + Math.floor(index / columns) * 70, rotation: 0 };
+}
+
+function toWebviewVisual(visual: VisualPosition | undefined, index: number): Required<Pick<VisualPosition, "x" | "y" | "rotation">> & Pick<VisualPosition, "flipH" | "flipV"> {
+  const resolved = visual ?? defaultInternalLayout(index);
+  return { x: resolved.x, y: resolved.y, rotation: resolved.rotation ?? 0, flipH: resolved.flipH, flipV: resolved.flipV };
+}
+
+/** Semeia o circuito INTERNO real de um subcircuito (`.lssub.json` `components[]`/`wires[]`) pra
+ * dentro da MESMA sessão de autoria do `package` -- igual ao SimulIDE real, onde "Open Subcircuit"
+ * mostra o objeto `Package` E o circuito interno juntos, na mesma cena (ver `.spec/
+ * lasecsimul-subcircuits.spec`). `pins: []` aqui é só placeholder -- quem chama
+ * (`extension.ts::editPackageSymbolCommand`) preenche com `pinsForTypeId(typeId)` depois (mesmo
+ * catálogo que populariza pinos pra QUALQUER componente adicionado normalmente, ver
+ * `extension.ts::pinsForTypeId`) -- esta função não tem acesso ao catálogo, só à geometria. */
+export function seedSubcircuitInternalComponents(components: InternalComponentSeed[], wires: InternalWireSeed[]): { components: WebviewComponentModel[]; wires: WebviewWireModel[] } {
+  const seededComponents: WebviewComponentModel[] = components.map((component, index) => {
+    const visual = toWebviewVisual(component.visual, index);
+    const model: WebviewComponentModel = {
+      id: component.id,
+      typeId: component.typeId,
+      label: component.id,
+      hidden: false,
+      x: Math.round(visual.x),
+      y: Math.round(visual.y),
+      rotation: visual.rotation,
+      flipH: visual.flipH,
+      flipV: visual.flipV,
+      pins: [],
+      properties: component.properties as Record<string, string | number | boolean>,
+    };
+    if (component.boardVisual) {
+      model.boardX = Math.round(component.boardVisual.x);
+      model.boardY = Math.round(component.boardVisual.y);
+      model.boardRotation = component.boardVisual.rotation ?? 0;
+      model.boardFlipH = component.boardVisual.flipH;
+      model.boardFlipV = component.boardVisual.flipV;
+    }
+    return model;
+  });
+
+  const seededWires: WebviewWireModel[] = wires.map((wire, index) => ({
+    id: wire.id ?? `internal-wire-${index}`,
+    from: wire.from,
+    to: wire.to,
+    points: wire.points,
+  }));
+
+  return { components: seededComponents, wires: seededWires };
+}
+
+export interface CompiledInternalCircuit {
+  components: InternalComponentSeed[];
+  wires: InternalWireSeed[];
+}
+
+/** Inverso de `seedSubcircuitInternalComponents` -- varre a sessão e separa o que é circuito
+ * interno REAL (qualquer typeId que não seja autoria de símbolo, ver `isSymbolAuthoringTypeId`) do
+ * que é `package`. Grava `visual` (posição ativa no momento de salvar) e `boardVisual` (se o
+ * componente já tiver entrado em Modo Placa alguma vez na sessão, ver `main.ts::toggleBoardMode`)
+ * separadamente -- nunca perde a posição do modo que não está ativo no momento de salvar. */
+export function compileSubcircuitInternalComponents(components: WebviewComponentModel[], wires: WebviewWireModel[]): CompiledInternalCircuit {
+  const internalComponents: InternalComponentSeed[] = components
+    .filter((component) => !isSymbolAuthoringTypeId(component.typeId))
+    .map((component) => {
+      const seed: InternalComponentSeed = {
+        id: component.id,
+        typeId: component.typeId,
+        properties: component.properties,
+        visual: { x: component.x, y: component.y, rotation: component.rotation, flipH: component.flipH, flipV: component.flipV },
+      };
+      if (component.boardX !== undefined && component.boardY !== undefined) {
+        seed.boardVisual = { x: component.boardX, y: component.boardY, rotation: component.boardRotation ?? 0, flipH: component.boardFlipH, flipV: component.boardFlipV };
+      }
+      return seed;
+    });
+
+  const internalWires: InternalWireSeed[] = wires.map((wire) => ({ id: wire.id, from: wire.from, to: wire.to, points: wire.points }));
+
+  return { components: internalComponents, wires: internalWires };
+}
+
+/** Rótulo do pino -- SEMPRE um `graphics.text` vinculado (`linkedPinComponentId`), nunca desenhado
+ * pelo próprio `other.package_pin` (ver `componentSymbols.ts`) -- arrastável independente da posição
+ * do pino, igual ao SimulIDE real. Sem `pin.labelX`/`labelY` (package nunca editado assim antes),
+ * cai na MESMA posição padrão que o renderizador de leitura sempre calculou (ponta do lead + 9
+ * unidades na direção do `angle`) -- abrir e salvar sem mover nada reproduz o `package` idêntico. */
+function seedPinLabelComponent(pin: PackagePin, pinComponentId: string, index: number, originX: number, originY: number): WebviewComponentModel {
+  const rad = (pin.angle * Math.PI) / 180;
+  const tipX = pin.x + Math.cos(rad) * pin.length;
+  const tipY = pin.y + Math.sin(rad) * pin.length;
+  // `labelX`/`labelY` (e a fórmula padrão de fallback) são a posição EXATA da baseline do `<text>`
+  // que `packagePinLeadSvg` desenha (`x=labelX y=labelY` direto) -- mesma convenção do `shape.y` de
+  // um `PackageShape` kind "text" em `packageShapeSvg`, por isso o mesmo ajuste de `fontSize/3` pra
+  // converter baseline -> centro da caixa (ver `seedShapeComponent`/`case "text"` abaixo e a
+  // compilação espelhada em `compileSymbolAuthoringComponents`).
+  const labelX = pin.labelX ?? tipX + Math.cos(rad) * 9;
+  const labelY = pin.labelY ?? tipY + Math.sin(rad) * 9;
+  const text = pin.label ?? pin.id;
+  const fontSize = 7;
+  const properties: Record<string, string | number | boolean> = { text, fontSize, color: "#1f2937", linkedPinComponentId: pinComponentId };
+  const box = componentBox("graphics.text", properties);
+  const centerX = labelX;
+  const centerY = labelY - fontSize / 3;
+  return baseComponent(nextComponentId("pin-label", index), "graphics.text", originX + centerX - box.width / 2, originY + centerY - box.height / 2, 0, properties);
 }
 
 function seedShapeComponent(shape: PackageShape, index: number, originX: number, originY: number): WebviewComponentModel | undefined {
@@ -136,11 +275,24 @@ export function compileSymbolAuthoringComponents(components: WebviewComponentMod
       ? existingBackground
       : undefined;
 
+  // Rótulo de pino é um `graphics.text` vinculado por `linkedPinComponentId` (id ESTÁVEL do
+  // componente do pino, ver `main.ts::componentsToAddForTypeId`) -- precisa ser identificado ANTES
+  // do laço principal, pra (a) não cair também em `shapes[]` como texto decorativo genérico e
+  // (b) fornecer `label`/`labelX`/`labelY` reais pro `PackagePin` correspondente.
+  const linkedLabelByPinComponentId = new Map<string, WebviewComponentModel>();
+  for (const component of components) {
+    const linkedId = component.properties.linkedPinComponentId;
+    if (component.typeId === "graphics.text" && typeof linkedId === "string") {
+      linkedLabelByPinComponentId.set(linkedId, component);
+    }
+  }
+
   const shapes: PackageShape[] = [];
   const pins: PackagePin[] = [];
 
   for (const component of components) {
     if (component.typeId === "other.package") continue;
+    if (component.typeId === "graphics.text" && typeof component.properties.linkedPinComponentId === "string") continue;
     const localX = component.x - originX;
     const localY = component.y - originY;
     if (component.typeId === "graphics.rectangle") {
@@ -198,14 +350,22 @@ export function compileSymbolAuthoringComponents(components: WebviewComponentMod
     } else if (component.typeId === "other.package_pin") {
       const box = componentBox("other.package_pin", component.properties);
       const id = typeof component.properties.pinId === "string" && component.properties.pinId.trim() ? component.properties.pinId.trim() : `pin${pins.length + 1}`;
-      pins.push({
+      const pin: PackagePin = {
         id,
         x: localX + box.width / 2,
         y: localY + box.height / 2,
         angle: component.rotation,
         length: typeof component.properties.length === "number" ? component.properties.length : 8,
-        label: typeof component.properties.label === "string" ? component.properties.label : undefined,
-      });
+      };
+      const linkedLabel = linkedLabelByPinComponentId.get(component.id);
+      if (linkedLabel) {
+        const labelBox = componentBox("graphics.text", linkedLabel.properties);
+        const labelFontSize = typeof linkedLabel.properties.fontSize === "number" ? linkedLabel.properties.fontSize : 7;
+        pin.label = typeof linkedLabel.properties.text === "string" ? linkedLabel.properties.text : undefined;
+        pin.labelX = linkedLabel.x - originX + labelBox.width / 2;
+        pin.labelY = linkedLabel.y - originY + labelBox.height / 2 + labelFontSize / 3;
+      }
+      pins.push(pin);
     }
   }
 

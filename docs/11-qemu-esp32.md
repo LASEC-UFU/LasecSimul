@@ -132,6 +132,42 @@ GPIO reais/wireáveis + 14 decorativos como `Vdd`/`Lna`/`XTALi`/`Rst`, mesmo pad
 `componentSymbols.test.ts` (lógica de layout) e `esp32_devkitc_subcircuit_test` (os dois
 subcircuitos, ctest).
 
+**Correção 2026-06-29 — rótulos sobrepostos no topo do chip nu**: com 12 pinos em 170 unidades de
+largura (chip ESP32 nu), o texto horizontal de cada rótulo colidia com o do vizinho (ex: "Ca1 Ca2 VddA1
+XTALo..." virava um borrão ilegível). `packagePinLeadSvg` agora gira o `<text>` -90° (`transform="rotate
+(-90 ...)"`) só quando o lead é vertical (`angle` 90 ou 270 — topo/base do corpo), passando a ler de
+baixo pra cima alinhado ao lead, igual a qualquer diagrama de chip real — lead horizontal (esquerda/
+direita) nunca girava, já tinha espaçamento vertical de sobra entre linhas e nunca teve esse problema.
+Teste: `componentSymbols.test.ts`.
+
+**Correção 2026-06-29 — terminal de fio fora da posição real do pino**: o chip ESP32 nu sintetizava
+`component.pins[]` com ids genéricos (`pin-1`, `pin-2`...) que nunca batiam com os ids reais do
+`package` (`GPIO23`, `deco_Ca1`...) — `pinLocalPosition` nunca achava o pino por `id`, caindo sempre no
+algoritmo genérico (esquerda/direita por índice), então o PONTO DE CONEXÃO (onde o fio liga) ficava bem
+longe da posição visual real do pino, mesmo com o desenho do chip certo. Causa raiz: `mcu.json` só tinha
+3 entradas placeholder em `pinMap` (devia ter as 42 reais — GPIO0-39 + UART0_RX/TX — que o plugin
+(`Esp32Adapter.cpp::buildPinMap`) de fato expõe). Corrigido em duas pontas: `mcu.json` ganhou o `pinMap`
+completo (42 entradas, espelhando o C++ exatamente); a Extension ganhou
+`WebviewComponentCatalogEntry.pinIds` (ids elétricos reais, na ordem que o Core espera) e tanto a
+Webview (`makeComponentFromTypeId`) quanto o lado da Extension (`pinsForTypeId`) passaram a sintetizar
+`component.pins[]` com esses ids reais — vale pra **qualquer** device/mcu-adapter/subcircuito registrado
+com `package`, não só o ESP32. Resultado: 34 dos 38 pinos GPIO visíveis no chip nu agora têm terminal
+exatamente na ponta do pino desenhado.
+
+**Correção complementar, mesmo dia — bolinhas soltas/embaralhadas por cima do desenho**: os 8 pinos
+elétricos que SOBRAM (GPIO20/24/28-31, sem lead físico no encapsulamento real, + UART0_RX/TX, alias
+elétrico do GPIO3/GPIO1) ainda caíam no algoritmo genérico individualmente (`pinLocalPosition` por
+índice GLOBAL entre os 42 pinos), aparecendo como terminais soltos espalhados por cima dos 34 já
+corretos — pior visualmente que não desenhar nada, porque ficavam parecendo erros novos. Esses 8 não
+têm NENHUMA posição real pra apontar (não existe ponto de solda aí no chip de verdade), então a
+correção certa não é "achar uma posição melhor" — é não desenhar terminal nenhum pra eles.
+`componentSymbols.ts` ganhou `hasRealPinPosition(typeId, pinId)`: falso só quando o typeId tem
+`package` real e ESTE pino específico não está nele; `main.ts::renderComponent` pula o `<circle>` do
+terminal (e a interação de clique) nesse caso — o pino continua em `component.pins[]` (contrato
+posicional com o Core/`pinMap`, precisa dos 42 pra `McuComponent` casar certo), só não aparece nem é
+clicável na Webview. Pra typeId sem `package` (built-ins), `hasRealPinPosition` é sempre `true` — o
+algoritmo genérico de sempre não muda em nada. Teste: `componentSymbols.test.ts`.
+
 ## Editor visual de `package` (Épico G, parte de escrita) — 2026-06-29
 
 Os três `package` acima (e os de `devices/example-blinker`/`devices/voltmeter`) foram escritos à mão,
@@ -149,9 +185,25 @@ MESMO webview do esquemático (`main.ts::enterSymbolAuthoring`/`exitSymbolAuthor
 propriedades usam — nenhum código de renderização/interação novo, tudo já era genérico). Componentes de
 verdade: `other.package` (corpo, property-driven: `width`/`height`/`border`/`backgroundColor`),
 `graphics.rectangle`/`ellipse`/`line`/`text` (formas, também property-driven), `other.package_pin`
-(NOVO — pino do símbolo: `pinId`/`label`/`length` como propriedades, o ângulo do lead é o próprio
+(NOVO — pino do símbolo: `pinId`/`length` como propriedades, o ângulo do lead é o próprio
 `component.rotation`, reaproveitando rotação genérica sem campo/código novo). Todos `pinCount: 0`,
 nunca vão pro Core. Resize só por campo numérico (igual ao SimulIDE real).
+
+**Rótulo de pino arrastável e independente (2026-06-29, mesmo dia)** — pedido explícito do usuário
+depois de ver como o SimulIDE faz isso de verdade ("o user consegue movimentar sempre os textos de
+tudo, dos pinos, do label do ci"): `other.package_pin` **não desenha mais o próprio texto** —
+`componentsToAddForTypeId` (`main.ts`) sempre cria, junto com o pino, um `graphics.text` vinculado
+(`linkedPinComponentId` == id ESTÁVEL do componente do pino, nunca o valor mutável da propriedade
+`pinId` — sobrevive a renomear o pino depois). Esse texto é um componente comum, arrastável pra
+QUALQUER lugar — inclusive pra dentro do corpo do `other.package`, exatamente como pedido. `PackagePin`
+ganhou `labelX`/`labelY` opcionais (`model.ts`) — ausentes, o renderizador de leitura
+(`packagePinLeadSvg`) continua calculando a posição padrão de sempre (ponta do lead + 9 unidades,
+girada -90° se o lead for vertical); presentes, usa a posição exata que o usuário escolheu, sem girar
+(ele já decidiu onde e como cabe). `seedSymbolAuthoringComponents`/`compileSymbolAuthoringComponents`
+(`symbolAuthoring.ts`) fazem o caminho de ida e volta — abrir um `package` sem `labelX`/`labelY` semeia
+o rótulo na posição padrão (visual idêntico a antes); arrastar e salvar grava a posição nova. Teste:
+`symbolAuthoring.test.ts` (seed/compile com rótulo vinculado, round-trip de `labelX`/`labelY`),
+`componentSymbols.test.ts` (renderizador de leitura respeita `labelX`/`labelY` quando presentes).
 
 Conversão pura entre o `package` salvo em disco e essa lista de componentes vive em
 `extension/src/catalog/symbolAuthoring.ts` (`seedSymbolAuthoringComponents`/
@@ -162,17 +214,73 @@ retângulo/elipse/texto/pino; `graphics.line` perde precisão de ângulo não-ca
 se a sessão não definir `backgroundColor` (sem UI de upload de imagem nesta rodada — perder esse dado
 ao salvar seria regressão, não limitação aceitável).
 
-Dois pontos de entrada: botão "✎" em cada item registrado na paleta (`palette.ts`), e o comando
+Três pontos de entrada: botão "✎" em cada item registrado na paleta (`palette.ts`); o comando
 `lasecsimul.palette.editSymbol` (botão na barra de título da paleta) que abre um seletor de arquivo pra
-editar qualquer manifesto, registrado ou não.
+editar qualquer manifesto, registrado ou não; e (2026-06-29, pedido explícito do usuário comparando com
+o "Open Subcircuit" do menu de botão direito do SimulIDE) **"Editar Símbolo Visual" no menu de contexto
+de uma instância já colocada no circuito** — mesmo `sourceId`, mesmo `editPackageSymbolCommand`, só
+chamado a partir de `requestEditSymbol` (nova mensagem) em vez do clique na paleta.
+
+**Como adicionar um pino na sessão de autoria, concretamente** (pergunta real do usuário): arraste
+"Pino de Pacote" (`other.package_pin`) da paleta, pasta "Outros", pro lugar onde o terminal deve ficar
+no desenho — posicionar é arrastar o componente normalmente, igual qualquer outro; orientar de qual
+lado o lead sai é girar com os MESMOS atalhos de sempre (Ctrl+R/Ctrl+Shift+R/180°, sem atalho novo);
+qual pino elétrico real ele representa é o campo "Id (pino real)" no painel de propriedades (duplo-
+clique ou botão direito → Propriedades). O rótulo vem junto automaticamente (`graphics.text`
+vinculado, ver seção do rótulo arrastável acima) e pode ser arrastado pra qualquer lugar, inclusive
+dentro do corpo.
 
 **O que isto NÃO é**: não existe o comando "Criar Subcircuito a partir da Seleção" (detectar fios
 cruzando a borda de uma seleção no esquemático e gerar `connectors.tunnel` automaticamente) — a sessão
-de autoria só edita o símbolo visual de um manifesto que já tem seus pinos elétricos declarados à mão
-(ver `.spec/lasecsimul-subcircuits.spec` seção 4, Épico G no roadmap de pendências). Também não existe
-upload de imagem de fundo (só cor sólida) nem alça de arrastar pra redimensionar formas (campo numérico,
-igual ao SimulIDE real). Validação manual no Extension Development Host (F5) ainda pendente — sem
-`jsdom` neste repo, drag/rotação/painel de propriedades foram verificados só por `tsc` limpo + testes da
-lógica pura de seed/compile, nunca clicados de verdade num navegador; a superfície de risco é menor que
-a versão anterior porque a maior parte do que seria testado manualmente (drag, seleção, propriedades,
-rotação) é código já em produção, reaproveitado, não escrito do zero.
+de autoria edita um manifesto que JÁ EXISTE (pinos elétricos já declarados à mão), nunca cria um do
+zero a partir de uma seleção no circuito real do usuário (ver `.spec/lasecsimul-subcircuits.spec`
+seção 4, Épico G no roadmap de pendências; ver também a seção abaixo — pra `subcircuit-file`
+especificamente, a sessão JÁ foi estendida pra editar o circuito interno também, não só o símbolo
+visual). Também não existe upload de imagem de fundo (só cor sólida) nem alça de arrastar pra
+redimensionar formas (campo numérico, igual ao SimulIDE real). Validação manual no Extension
+Development Host (F5) ainda pendente — sem `jsdom` neste repo, drag/rotação/painel de propriedades
+foram verificados só por `tsc` limpo + testes da lógica pura de seed/compile, nunca clicados de
+verdade num navegador; a superfície de risco é menor que a versão anterior porque a maior parte do
+que seria testado manualmente (drag, seleção, propriedades, rotação) é código já em produção,
+reaproveitado, não escrito do zero.
+
+## "Abrir Subcircuito" — circuito interno real + Modo Placa + Logic Symbol — 2026-06-29 (mesmo dia)
+
+Depois de fechar o editor de `package`, o usuário comparou com telas REAIS do SimulIDE (botão direito
+→ "Open Subcircuit" abrindo outra view igual ao esquemático normal) e apontou que minha explicação do
+conceito "Package" estava errada (eu tinha descrito como lista de N-variantes). Pesquisa real (fonte
+em `C:\SourceCode\simulide_2\src` + https://simulidedocs.netlify.app + resposta de dev no fórum
+oficial: *"A Package é apenas o invólucro, enquanto um Subcircuit é uma Package com um Circuito
+dentro, como um IC"*) corrigiu isso e revelou o que realmente faltava — documentado em detalhe em
+`.spec/lasecsimul-native-devices.spec` seção 21.4 e `.spec/lasecsimul-subcircuits.spec` seção 4:
+
+- **Circuito interno real editável.** Pra `subcircuit-file` (nunca `device.json`/`mcu.json` — não
+  têm circuito interno, "Package ≠ Subcircuit"), a MESMA sessão de autoria agora também semeia
+  `components[]`/`wires[]` reais do `.lssub.json` (`extension.ts::extractInternalCircuit` +
+  `symbolAuthoring.ts::seedSubcircuitInternalComponents`) — igual ao SimulIDE real mostrar `Package`
+  e circuito interno juntos na mesma cena. `.lssub.json` ganhou campos aditivos `components[].visual`/
+  `boardVisual` e `wires[].points` — Core ignora o que não reconhece (confirmado, `ctest` 26/26 sem
+  nenhuma mudança em `SubcircuitRegistry.hpp`). Sem `visual` salvo (caso dos 2 subcircuitos reais
+  escritos à mão antes de hoje), cai num layout em grade simples na primeira abertura.
+- **Modo Placa**, igual a `SubPackage::boardModeSlot()` do SimulIDE real
+  (https://www.simulide.com/p/boards.html: *"hides all non-graphical components... allowing to place
+  them in the position that will be shown"*): botão na barra da sessão; cada componente interno tem 2
+  posições independentes (`x/y/rotation` do circuito, `boardX/boardY/boardRotation` da placa,
+  `model.ts::WebviewComponentModel`) — ligar o modo esconde quem não tem `graphical: true` no
+  catálogo (29 typeIds marcados: LEDs, motores, displays, switches, sonda — mesma lista de categorias
+  "de interação do usuário" do SimulIDE real) e deixa arrastar os visíveis pra uma posição de placa
+  separada, sem afetar a posição no circuito.
+- **"Logic Symbol"** — depois de eu explicar errado (lista de N-variantes), a auditoria mostrou que é
+  um BOOLEANO simples (`SubPackage::Logic_Symbol`, "Chip or Logic Symbol" no diálogo real de
+  propriedades). `logicSymbolPackage` (irmã de `package` no manifesto) é a aparência alternativa
+  opcional — `mcu-adapter`/`subcircuit-file` apenas, nunca `abi-device`. Botão "Ver: Físico/Símbolo
+  Lógico" na barra troca qual chave está sendo editada — trocar de vista descarta sem confirmar
+  mudanças não salvas na vista que está saindo (decisão de simplificação: sem `window.confirm()`, que
+  nem sempre funciona dentro de uma Webview do VSCode), mas preserva o circuito interno como está.
+
+Teste: `symbolAuthoring.test.ts` (seed/compile do circuito interno, `visual`/`boardVisual`
+independentes, ignora componentes de autoria de símbolo), `componentSymbols.test.ts` (resolução por
+`properties.logicSymbol`). **O que isto NÃO inclui**: simulação elétrica ao vivo dentro da sessão (só
+posição/propriedades, sem IPC com o Core); `BoardSubc`/`ShieldSubc` (Arduino Uno + Shield empilhado do
+SimulIDE real, feature à parte, não pedida); "Criar Subcircuito a partir da Seleção" (continua de
+fora, ver acima).

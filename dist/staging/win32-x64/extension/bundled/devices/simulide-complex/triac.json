@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "typeId": "active.triac",
+  "name": "Triac",
+  "language": "pt-BR",
+  "translations": { "en": { "name": "Triac" } },
+  "abiVersion": { "major": 3, "minor": 0 },
+  "nativeEntry": { "win32-x64": "build/win-x64/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" },
+  "pins": [
+    { "id": "mt1", "kind": "ANALOG_IN", "x": 0, "y": 0, "angle": 90, "length": 8, "label": "MT1" },
+    { "id": "mt2", "kind": "ANALOG_IN", "x": 0, "y": 32, "angle": 270, "length": 8, "label": "MT2" },
+    { "id": "g", "kind": "ANALOG_IN", "x": -16, "y": 16, "angle": 180, "length": 8, "label": "G" }
+  ],
+  "properties": [],
+  "limits": { "stepTimeoutMs": 8, "expectedComplexity": "high" }
+}

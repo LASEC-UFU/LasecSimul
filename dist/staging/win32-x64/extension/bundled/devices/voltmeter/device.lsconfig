@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "typeId": "instruments.voltmeter",
+  "label": "Voltimetro",
+  "folderPath": ["Medidores"],
+  "icon": "voltimetro",
+  "iconPath": "icon.svg",
+  "symbolSvg": "<line x1=\"10\" y1=\"24\" x2=\"18\" y2=\"24\" class=\"symbol-stroke\"/><line x1=\"46\" y1=\"24\" x2=\"54\" y2=\"24\" class=\"symbol-stroke\"/><circle cx=\"32\" cy=\"24\" r=\"14\" class=\"symbol-stroke symbol-stroke--accent\" fill=\"none\"/><text x=\"32\" y=\"29\" text-anchor=\"middle\" class=\"symbol-text symbol-text--accent\">V</text>",
+  "pinCount": 3,
+  "defaultProperties": {}
+}

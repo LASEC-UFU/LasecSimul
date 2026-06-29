@@ -1,0 +1,1 @@
+{"version":3,"file":"messages.js","sourceRoot":"","sources":["../src/ui/webview/messages.ts"],"names":[],"mappings":"AAEA,MAAM,CAAC,MAAM,uBAAuB,GAAG,CAAU,CAAC;AA4ElD,MAAM,UAAU,aAAa,CAAC,KAAc;IAC1C,OAAO,OAAO,KAAK,KAAK,QAAQ,IAAI,KAAK,KAAK,IAAI,IAAI,MAAM,IAAI,KAAK,IAAI,SAAS,IAAI,KAAK,CAAC;AAC9F,CAAC"}

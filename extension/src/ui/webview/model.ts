@@ -29,6 +29,20 @@ export interface WebviewComponentModel {
   flipV?: boolean;
   pins: WebviewPinModel[];
   properties: Record<string, string | number | boolean>;
+  /** Posição/orientação na PLACA (Board Mode) — independente de `x`/`y`/`rotation`/`flipH`/`flipV`
+   * (posição no CIRCUITO), igual a `circPos`/`boardPos` do SimulIDE real (`SubPackage::
+   * setBoardMode()`, `simulide_2/src/components/other/subpackage.cpp`): cada componente tem 2
+   * posições independentes, um toggle alterna qual está "ativa" -- mover num modo nunca afeta a
+   * posição no outro. Só usado dentro de uma sessão de "Abrir Subcircuito" com Modo Placa
+   * (`main.ts::toggleBoardMode`); ausente até o usuário entrar em Modo Placa a primeira vez.
+   * Convenção: os campos `x`/`y`/`rotation`/`flipH`/`flipV` de sempre SEMPRE refletem a posição
+   * "ativa" no momento (igual ao SimulIDE) -- entrar/sair de Modo Placa faz SWAP com estes campos,
+   * nunca lê os dois ao mesmo tempo pra desenhar. */
+  boardX?: number;
+  boardY?: number;
+  boardRotation?: 0 | 90 | 180 | 270;
+  boardFlipH?: boolean;
+  boardFlipV?: boolean;
 }
 
 export interface WebviewPoint {
@@ -81,6 +95,16 @@ export interface PackagePin {
   angle: number;
   length: number;
   label?: string;
+  /** Posição do RÓTULO, independente da posição do pino -- igual ao SimulIDE real (texto de pino,
+   * texto do CI etc são objetos arrastáveis à parte, nunca presos a um deslocamento fixo do pino).
+   * Em coordenadas ORIGINAIS do package (mesmo espaço de `x`/`y`, antes do deslocamento de
+   * `resolvePackageLayout`). Ausente == posição padrão calculada (ponta do lead + 9 unidades na
+   * direção do `angle`, com rótulo girado -90° se o lead for vertical) -- mesmo comportamento de
+   * sempre, nunca quebra um `package` escrito antes deste campo existir. Editado arrastando um
+   * `graphics.text` vinculado na sessão de autoria (`other.package_pin`/`symbolAuthoring.ts`), nunca
+   * uma alça nova. */
+  labelX?: number;
+  labelY?: number;
 }
 
 /** Uma forma declarativa de `package.shapes[]` — mesmo vocabulário de
@@ -152,7 +176,26 @@ export interface WebviewComponentCatalogEntry {
   /** Símbolo declarativo real (`device.json`/`.lssub.json` `package`) — quando presente, tem
    * prioridade sobre `symbolSvg`/algoritmo genérico (ver `componentSymbols.ts`). */
   package?: PackageDescriptor;
+  /** Aparência ALTERNATIVA opcional ("Chip or Logic Symbol", igual ao SimulIDE real —
+   * `SubPackage::Logic_Symbol`, booleano simples, não uma lista de N variantes). Quando presente,
+   * a instância ganha a propriedade `logicSymbol` (boolean) que escolhe entre este e `package` —
+   * mesmos pinos elétricos nos dois (não validado à força, só aviso, ver `saveSymbolCommand`). */
+  logicSymbolPackage?: PackageDescriptor;
+  /** Igual ao `m_graphical` do SimulIDE real (setado por classe em `component.cpp`) -- typeIds "de
+   * interação do usuário" (LED, motor, display, switch, ...) que continuam visíveis em Modo Placa
+   * dentro de uma sessão de "Abrir Subcircuito"; o resto (resistor, MCU, fonte fixa, lógica pura)
+   * fica oculto nesse modo, ver `main.ts::toggleBoardMode`. Ausente == `false`. */
+  graphical?: boolean;
   pinCount: number;
+  /** Ids elétricos REAIS na ordem que o Core espera (`abi-device`: `device.json` `pins[].id`;
+   * `mcu-adapter`: chaves de `mcu.json` `pinMap`, mesma ordem/contagem que `get_pin_map()` do plugin
+   * devolve em runtime — ordem importa, ver `NativeMcuAdapterProxy`/`McuComponent::McuComponent`,
+   * que casam `requestedPins[i]` posicionalmente com `pinMap()[i]`; `subcircuit-file`:
+   * `interface[].pinId`). Ausente == comportamento legado (`pin-1`, `pin-2`, ... genérico) — só
+   * builtins sem schema próprio caem nisso hoje. Quando presente, `pinCount` é sempre
+   * `pinIds.length` (nunca o tamanho de `package.pins[]`, que conta TAMBÉM pinos puramente visuais/
+   * decorativos sem contrapartida elétrica — ver `componentSymbols.ts`/Épico G). */
+  pinIds?: string[];
   defaultProperties: Record<string, string | number | boolean>;
   /** Schema rico de propriedades deste typeId (grupo/editor/min/max/opções/flags), vindo do Core via
    * `getPropertySchemas` — ausente/vazio só pra typeId que o Core ainda não conhece (ex: registrado

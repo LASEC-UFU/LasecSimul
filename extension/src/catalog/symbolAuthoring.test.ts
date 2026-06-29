@@ -1,6 +1,13 @@
 import { createTestRunner, assert } from "../ipc/testSupport/MockCoreServer";
-import { compileSymbolAuthoringComponents, seedSymbolAuthoringComponents } from "./symbolAuthoring";
-import { PackageDescriptor } from "../ui/webview/model";
+import {
+  compileSubcircuitInternalComponents,
+  compileSymbolAuthoringComponents,
+  InternalComponentSeed,
+  InternalWireSeed,
+  seedSubcircuitInternalComponents,
+  seedSymbolAuthoringComponents,
+} from "./symbolAuthoring";
+import { PackageDescriptor, WebviewWireModel } from "../ui/webview/model";
 
 (async () => {
   const { test, finish } = createTestRunner("symbolAuthoring — seed/compile entre package e componentes (Épico G, escrita)");
@@ -27,11 +34,17 @@ import { PackageDescriptor } from "../ui/webview/model";
       pins: [{ id: "GPIO2", x: 0, y: 20, angle: 180, length: 8, label: "G2" }],
     };
     const components = seedSymbolAuthoringComponents(pkg);
-    assert(components.length === 6, `esperado 1 package + 4 shapes + 1 pin = 6, recebido ${components.length}`);
+    // 1 package + 4 shapes + 1 pino + 1 rótulo de pino (graphics.text vinculado, sempre semeado
+    // junto -- ver seedPinLabelComponent) = 7.
+    assert(components.length === 7, `esperado 1 package + 4 shapes + 1 pin + 1 rótulo = 7, recebido ${components.length}`);
     const rect = components.find((c) => c.typeId === "graphics.rectangle");
     assert(Boolean(rect) && rect!.properties.width === 20 && rect!.properties.height === 15, "rect deveria preservar w/h");
     const pin = components.find((c) => c.typeId === "other.package_pin");
     assert(Boolean(pin) && pin!.properties.pinId === "GPIO2" && pin!.rotation === 180, "pino deveria preservar id e ângulo (180 já é cardinal)");
+    const decorativeTexts = components.filter((c) => c.typeId === "graphics.text" && !c.properties.linkedPinComponentId);
+    assert(decorativeTexts.length === 1 && decorativeTexts[0]!.properties.text === "ESP32", "o graphics.text DECORATIVO (não vinculado) deveria ser só o do shape kind text original");
+    const pinLabel = components.find((c) => c.typeId === "graphics.text" && c.properties.linkedPinComponentId === pin!.id);
+    assert(Boolean(pinLabel) && pinLabel!.properties.text === "G2", "deveria existir um graphics.text vinculado ao pino com o texto do rótulo");
   });
 
   await test("seed: pino com âncora no CENTRO da caixa (ponto invariante sob rotação)", () => {
@@ -70,7 +83,24 @@ import { PackageDescriptor } from "../ui/webview/model";
     const compiled = result.package!;
     assert(compiled.width === original.width && compiled.height === original.height, "width/height deveriam sobreviver ao round-trip");
     assert(compiled.pins.length === 1 && compiled.pins[0]!.id === "GPIO2" && compiled.pins[0]!.angle === 180 && compiled.pins[0]!.length === 8, "pino deveria sobreviver ao round-trip");
+    assert(compiled.pins[0]!.label === "G2", "rótulo do pino deveria sobreviver ao round-trip (via graphics.text vinculado)");
     assert(compiled.shapes?.length === 1 && compiled.shapes[0]!.kind === "rect" && compiled.shapes[0]!.w === 20 && compiled.shapes[0]!.h === 15, "forma rect deveria sobreviver ao round-trip");
+  });
+
+  await test("round-trip: rótulo de pino arrastado pra posição própria (labelX/labelY) sobrevive", () => {
+    const original: PackageDescriptor = {
+      width: 100,
+      height: 80,
+      pins: [{ id: "GPIO2", x: 0, y: 20, angle: 180, length: 8, label: "G2", labelX: 50, labelY: 40 }],
+    };
+    const components = seedSymbolAuthoringComponents(original);
+    const result = compileSymbolAuthoringComponents(components, undefined);
+    assert(Boolean(result.package), "deveria compilar com sucesso");
+    const pin = result.package!.pins[0]!;
+    // Tolerância de 1 unidade -- `baseComponent` arredonda x/y pra inteiro ao semear (mesmo
+    // comportamento de qualquer componente posicionado no canvas), então um `labelY` fracionário
+    // como 40 perde um pouquinho de precisão no arredondamento, não é uma regressão real.
+    assert(Math.abs((pin.labelX ?? 0) - 50) < 1 && Math.abs((pin.labelY ?? 0) - 40) < 1, `labelX/labelY deveriam sobreviver ao round-trip (posição arrastada pelo usuário, não a fórmula padrão), recebido {${pin.labelX},${pin.labelY}}`);
   });
 
   await test("compile: fundo color vem do componente other.package, svg/image existente é preservado se não houver backgroundColor", () => {
@@ -83,6 +113,54 @@ import { PackageDescriptor } from "../ui/webview/model";
     const withColor = components.map((c) => (c.typeId === "other.package" ? { ...c, properties: { ...c.properties, backgroundColor: "#112233" } } : c));
     const resultWithColor = compileSymbolAuthoringComponents(withColor, existingSvgBackground);
     assert(resultWithColor.package?.background?.kind === "color" && resultWithColor.package.background.value === "#112233", "backgroundColor explícito deveria sobrescrever o fundo svg existente");
+  });
+
+  // ── Circuito interno real ("Abrir Subcircuito", Board Mode) ────────────────────────────────────
+
+  await test("seedSubcircuitInternalComponents: sem visual salvo, usa layout em grade padrão (nunca empilha tudo no mesmo ponto)", () => {
+    const components: InternalComponentSeed[] = [
+      { id: "mcu1", typeId: "espressif.esp32", properties: {} },
+      { id: "gnd1", typeId: "other.ground", properties: {} },
+    ];
+    const { components: seeded } = seedSubcircuitInternalComponents(components, []);
+    assert(seeded.length === 2, `esperado 2 componentes, recebido ${seeded.length}`);
+    assert(seeded[0]!.x !== seeded[1]!.x || seeded[0]!.y !== seeded[1]!.y, "componentes sem visual salvo não deveriam empilhar na mesma posição");
+    assert(seeded[0]!.boardX === undefined, "sem boardVisual salvo, boardX não deveria existir ainda");
+  });
+
+  await test("seed/compile do circuito interno: visual e boardVisual sobrevivem ao round-trip, independentes um do outro", () => {
+    const components: InternalComponentSeed[] = [
+      {
+        id: "led1",
+        typeId: "outputs.led",
+        properties: { threshold: 2 },
+        visual: { x: 500, y: 80, rotation: 90 },
+        boardVisual: { x: 30, y: 40, rotation: 0 },
+      },
+    ];
+    const wires: InternalWireSeed[] = [{ from: { componentId: "led1", pinId: "a" }, to: { componentId: "tunnel_X", pinId: "pin" }, points: [{ x: 1, y: 2 }] }];
+
+    const seeded = seedSubcircuitInternalComponents(components, wires);
+    assert(seeded.components[0]!.x === 500 && seeded.components[0]!.y === 80 && seeded.components[0]!.rotation === 90, "posição/rotação no CIRCUITO deveria vir de `visual`");
+    assert(seeded.components[0]!.boardX === 30 && seeded.components[0]!.boardY === 40, "posição na PLACA deveria vir de `boardVisual`, independente de `visual`");
+    assert(seeded.wires[0]!.points?.[0]?.x === 1, "roteamento do fio interno deveria sobreviver");
+
+    const compiled = compileSubcircuitInternalComponents(seeded.components, seeded.wires);
+    assert(compiled.components.length === 1 && compiled.components[0]!.id === "led1", "componente interno deveria sobreviver ao round-trip");
+    assert(compiled.components[0]!.visual?.x === 500 && compiled.components[0]!.visual?.rotation === 90, "visual (circuito) deveria sobreviver ao round-trip");
+    assert(compiled.components[0]!.boardVisual?.x === 30 && compiled.components[0]!.boardVisual?.y === 40, "boardVisual (placa) deveria sobreviver ao round-trip, sem se misturar com visual");
+    assert(compiled.wires[0]!.points?.[0]?.x === 1, "roteamento do fio deveria sobreviver ao round-trip");
+  });
+
+  await test("compileSubcircuitInternalComponents: ignora componentes de autoria de símbolo (other.package/graphics.*/other.package_pin), só circuito interno real", () => {
+    const pkg: PackageDescriptor = { width: 80, height: 60, pins: [{ id: "GPIO2", x: 0, y: 20, angle: 180, length: 8 }] };
+    const symbolComponents = seedSymbolAuthoringComponents(pkg);
+    const internalSeeded = seedSubcircuitInternalComponents([{ id: "gnd1", typeId: "other.ground", properties: {} }], []);
+    const allSessionComponents = [...symbolComponents, ...internalSeeded.components];
+    const wires: WebviewWireModel[] = [];
+
+    const compiled = compileSubcircuitInternalComponents(allSessionComponents, wires);
+    assert(compiled.components.length === 1 && compiled.components[0]!.typeId === "other.ground", `só o componente interno real deveria sobreviver, recebido ${compiled.components.map((c) => c.typeId).join(",")}`);
   });
 
   finish();

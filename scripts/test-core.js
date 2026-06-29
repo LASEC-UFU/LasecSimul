@@ -15,6 +15,11 @@ const path = require("path");
 const repoRoot = path.resolve(__dirname, "..");
 const buildDir = path.join(repoRoot, "core", "build");
 const cachePath = path.join(buildDir, "CMakeCache.txt");
+const configArg = process.argv.find((arg) => arg.startsWith("--config="));
+const configIndex = process.argv.indexOf("--config");
+const requestedConfig =
+  (configArg ? configArg.slice("--config=".length) : undefined) ??
+  (configIndex >= 0 ? process.argv[configIndex + 1] : undefined);
 
 if (!fs.existsSync(buildDir)) {
   console.error(
@@ -26,7 +31,7 @@ const ctestArgs = ["--test-dir", buildDir, "--output-on-failure"];
 if (fs.existsSync(cachePath)) {
   const cache = fs.readFileSync(cachePath, "utf8");
   if (cache.includes("CMAKE_CONFIGURATION_TYPES:STRING=")) {
-    ctestArgs.push("-C", "Debug");
+    ctestArgs.push("-C", requestedConfig ?? "Debug");
   }
 }
 

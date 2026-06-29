@@ -25,6 +25,11 @@ const path = require("path");
 const repoRoot = path.resolve(__dirname, "..");
 const buildDir = path.join(repoRoot, "core", "build");
 const clean = process.argv.includes("--clean");
+const configArg = process.argv.find((arg) => arg.startsWith("--config="));
+const configIndex = process.argv.indexOf("--config");
+const config =
+  (configArg ? configArg.slice("--config=".length) : undefined) ??
+  (configIndex >= 0 ? process.argv[configIndex + 1] : undefined);
 
 function run(command, args, cwd) {
   console.log(`[build-core] ${command} ${args.join(" ")} (cwd=${cwd})`);
@@ -53,5 +58,11 @@ if (clean && fs.existsSync(buildDir)) {
 
 // Caminhos relativos à raiz do repositório -- equivalente direto ao par de comandos exigido pelo
 // teste obrigatório do agente 01 ("cmake -S core -B core/build" / "cmake --build core/build").
-run("cmake", ["-S", "core", "-B", path.join("core", "build")], repoRoot);
-run("cmake", ["--build", path.join("core", "build")], repoRoot);
+const configureArgs = ["-S", "core", "-B", path.join("core", "build")];
+if (config) configureArgs.push(`-DCMAKE_BUILD_TYPE=${config}`);
+
+const buildArgs = ["--build", path.join("core", "build")];
+if (config) buildArgs.push("--config", config);
+
+run("cmake", configureArgs, repoRoot);
+run("cmake", buildArgs, repoRoot);

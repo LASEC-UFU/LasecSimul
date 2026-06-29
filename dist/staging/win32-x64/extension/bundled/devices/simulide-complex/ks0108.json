@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "typeId": "outputs.ks0108",
+  "name": "KS0108",
+  "language": "pt-BR",
+  "translations": { "en": { "name": "KS0108" } },
+  "abiVersion": { "major": 3, "minor": 0 },
+  "nativeEntry": { "win32-x64": "build/win-x64/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" },
+  "pins": [
+    { "id": "rs", "kind": "DIGITAL_IN", "x": 16, "y": 8, "angle": 270, "length": 8, "label": "RS" },
+    { "id": "rw", "kind": "DIGITAL_IN", "x": 24, "y": 8, "angle": 270, "length": 8, "label": "RW" },
+    { "id": "e", "kind": "DIGITAL_IN", "x": 32, "y": 8, "angle": 270, "length": 8, "label": "E" },
+    { "id": "d0", "kind": "DIGITAL_BIDIR", "x": 40, "y": 8, "angle": 270, "length": 8, "label": "D0" },
+    { "id": "d1", "kind": "DIGITAL_BIDIR", "x": 48, "y": 8, "angle": 270, "length": 8, "label": "D1" },
+    { "id": "d2", "kind": "DIGITAL_BIDIR", "x": 56, "y": 8, "angle": 270, "length": 8, "label": "D2" },
+    { "id": "d3", "kind": "DIGITAL_BIDIR", "x": 64, "y": 8, "angle": 270, "length": 8, "label": "D3" },
+    { "id": "d4", "kind": "DIGITAL_BIDIR", "x": 72, "y": 8, "angle": 270, "length": 8, "label": "D4" },
+    { "id": "d5", "kind": "DIGITAL_BIDIR", "x": 80, "y": 8, "angle": 270, "length": 8, "label": "D5" },
+    { "id": "d6", "kind": "DIGITAL_BIDIR", "x": 88, "y": 8, "angle": 270, "length": 8, "label": "D6" },
+    { "id": "d7", "kind": "DIGITAL_BIDIR", "x": 96, "y": 8, "angle": 270, "length": 8, "label": "D7" }
+  ],
+  "properties": [],
+  "limits": { "stepTimeoutMs": 8, "expectedComplexity": "medium" }
+}

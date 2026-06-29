@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "publisher": "lasecsimul-core-team",
+  "trust": "first-party",
+  "version": "0.1.0",
+  "license": "MIT",
+  "subcircuits": [
+    { "typeId": "subcircuits.esp32_devkitc_v4", "manifest": "esp32_devkitc_v4.lssub.json" },
+    { "typeId": "subcircuits.esp32_wroom32", "manifest": "esp32_wroom32.lssub.json" }
+  ]
+}

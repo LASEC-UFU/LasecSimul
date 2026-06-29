@@ -153,17 +153,34 @@ Sem ferramenta nova — reaproveita o canvas do `SchematicEditorPanel` que já e
    seção 21.3 do spec de plugins nativos).
 5. O novo subcircuito aparece na paleta de componentes da mesma forma que um built-in ou plugin — ver seção 7.
 
-**Status em 2026-06-29** (revisado — a versão de 2026-06-28 era um canvas bespoke, descartada e
-reimplementada seguindo o modelo real do SimulIDE, ver seção 21.3 de
-`lasecsimul-native-devices.spec`): passo 3 (editor de símbolo, agora uma sessão de autoria dentro do
-MESMO webview do esquemático) está **implementado** — sem distinção de código entre editar o `package`
-de um `device.json`, `mcu.json` ou `.lssub.json` (mesma chave, mesmo formato, mesmo comando
-`lasecsimul.palette.editSymbol`, mesmo `extension/src/catalog/symbolAuthoring.ts`). Passos 1-2
-(**"Criar Subcircuito a partir da Seleção"** — detecção de fronteira de seleção e inserção automática de
-`connectors.tunnel`) **ainda não existem** — hoje só dá pra editar visualmente o `package` de um
-`.lssub.json` que já tem `components`/`wires`/`interface` escritos à mão (foi assim que
-`subcircuits/esp32_devkitc_v4.lssub.json` e `esp32_wroom32.lssub.json` foram criados, ver
-`docs/11-qemu-esp32.md`). Ver Épico G do roadmap de pendências para o escopo restante.
+**Status em 2026-06-29** (revisado de novo no mesmo dia — depois de fechar o editor de `package`
+sozinho, o usuário pediu pra ir além e cobrir o que SimulIDE chama de "Open Subcircuit": editar o
+circuito INTERNO real de um subcircuito, não só o símbolo visual). Passo 3 ficou mais completo:
+
+- Editor de símbolo (`package`/`logicSymbolPackage`) está **implementado**, sem distinção de código
+  entre `device.json`/`mcu.json`/`.lssub.json` (mesmo comando `lasecsimul.palette.editSymbol`, mesmo
+  `extension/src/catalog/symbolAuthoring.ts`).
+- **NOVO**: pra `subcircuit-file` especificamente, a MESMA sessão agora também semeia o circuito
+  INTERNO real (`components[]`/`wires[]`, igual ao "Open Subcircuit" do SimulIDE real mostrar
+  `Package` + circuito juntos na mesma cena) — `extractInternalCircuit`/
+  `seedSubcircuitInternalComponents`/`compileSubcircuitInternalComponents` em
+  `extension.ts`/`symbolAuthoring.ts`. `.lssub.json` ganhou campos aditivos `components[].visual`/
+  `boardVisual` e `wires[].points` (Core ignora o que não reconhece, zero mudança em
+  `SubcircuitRegistry.hpp`).
+- **NOVO**: "Modo Placa" (`SubPackage::boardModeSlot()` do SimulIDE real) — dentro da sessão, um
+  componente interno tem 2 posições independentes (circuito/placa); ligar o modo esconde tudo que
+  não for `graphical: true` no catálogo (LED, motor, display, switch...) e deixa arrastar os
+  visíveis pra uma posição de placa separada, sem afetar a posição no circuito.
+- **NOVO**: "Logic Symbol" (`SubPackage::Logic_Symbol` do SimulIDE real) — aparência alternativa
+  opcional (`logicSymbolPackage`), trocável por um botão "Ver: Físico/Símbolo Lógico" na barra —
+  vale pra `subcircuit-file` E `mcu-adapter`, nunca `abi-device` puro (decisão explícita do usuário).
+- Passos 1-2 (**"Criar Subcircuito a partir da Seleção"** — detecção de fronteira de seleção e
+  inserção automática de `connectors.tunnel`, criar um `.lssub.json` NOVO do zero) **ainda não
+  existem** — hoje a sessão de "Abrir Subcircuito" edita um `.lssub.json` que já existe (mesmo que
+  com `components[]`/`wires[]` escritos à mão, sem `visual` ainda — nesse caso cai num layout em
+  grade simples na primeira abertura). Ver Épico G do roadmap de pendências para o escopo restante
+  (sem simulação elétrica ao vivo dentro da sessão; sem `BoardSubc`/`ShieldSubc` — Arduino+Shield
+  empilhado, feature à parte do SimulIDE).
 
 **Fora de escopo nesta v0.1**: editar um subcircuito "por dentro" depois de já ter instâncias colocadas
 (SimulIDE tem "Open Subcircuit" abrindo uma segunda instância do programa, `subcircuit.cpp` linha ~480) —

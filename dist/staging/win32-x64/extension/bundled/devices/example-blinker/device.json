@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "typeId": "example.blinker",
+  "name": "Blinker (exemplo de dispositivo nativo)",
+  "language": "pt-BR",
+  "translations": {
+    "en": {
+      "name": "Blinker (native device example)",
+      "properties": {
+        "periodMs": {
+          "label": "Period",
+          "group": "Timing"
+        }
+      }
+    }
+  },
+  "abiVersion": { "major": 3, "minor": 0 },
+  "nativeEntry": {
+    "win32-x64": "build/win-x64/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
+  "package": {
+    "width": 60,
+    "height": 40,
+    "border": true,
+    "background": { "kind": "color", "value": "#ffffff" },
+    "shapes": [
+      { "kind": "text", "x": 8, "y": 16, "value": "BLINK", "fontSize": 9, "color": "#000000" }
+    ]
+  },
+  "pins": [
+    { "id": "out", "kind": "DIGITAL_OUT", "x": 60, "y": 20, "angle": 0, "length": 8, "label": "OUT" },
+    { "id": "vcc", "kind": "POWER", "x": 0, "y": 10, "angle": 180, "length": 8, "label": "VCC" },
+    { "id": "gnd", "kind": "POWER", "x": 0, "y": 30, "angle": 180, "length": 8, "label": "GND" }
+  ],
+  "properties": [
+    {
+      "id": "periodMs",
+      "label": "Período",
+      "group": "Temporização",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 500,
+      "min": 1,
+      "step": 1,
+      "unit": "ms"
+    }
+  ],
+  "buses": [],
+  "limits": { "stepTimeoutMs": 4, "expectedComplexity": "low" }
+}

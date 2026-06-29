@@ -18,6 +18,11 @@ const path = require("path");
 const repoRoot = path.resolve(__dirname, "..");
 const adaptersRoot = path.join(repoRoot, "mcu-adapters");
 const clean = process.argv.includes("--clean");
+const configArg = process.argv.find((arg) => arg.startsWith("--config="));
+const configIndex = process.argv.indexOf("--config");
+const config =
+  (configArg ? configArg.slice("--config=".length) : undefined) ??
+  (configIndex >= 0 ? process.argv[configIndex + 1] : undefined);
 
 const platformTarget = {
   win32: { dir: "win-x64", file: "adapter.dll", artifactNames: ["adapter.dll", "libadapter.dll"] },
@@ -78,8 +83,13 @@ function buildAdapter(adapterDir) {
     fs.rmSync(buildDir, { recursive: true, force: true });
   }
 
-  run(cmakeCommand, ["-S", adapterDir, "-B", buildDir], repoRoot);
-  run(cmakeCommand, ["--build", buildDir], repoRoot);
+  const configureArgs = ["-S", adapterDir, "-B", buildDir];
+  if (config) configureArgs.push(`-DCMAKE_BUILD_TYPE=${config}`);
+  const buildArgs = ["--build", buildDir];
+  if (config) buildArgs.push("--config", config);
+
+  run(cmakeCommand, configureArgs, repoRoot);
+  run(cmakeCommand, buildArgs, repoRoot);
 
   const artifactPath = findArtifact(buildDir, platformTarget.artifactNames);
   if (!artifactPath) {

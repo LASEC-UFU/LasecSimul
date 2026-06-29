@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "typeId": "outputs.ws2812",
+  "name": "WS2812 Led",
+  "language": "pt-BR",
+  "translations": { "en": { "name": "WS2812 Led" } },
+  "abiVersion": { "major": 3, "minor": 0 },
+  "nativeEntry": { "win32-x64": "build/win-x64/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" },
+  "pins": [
+    { "id": "din", "kind": "DIGITAL_IN", "x": 0, "y": 16, "angle": 180, "length": 8, "label": "DIN" }
+  ],
+  "properties": [
+    { "id": "rows", "label": "Linhas", "group": "Principal", "valueKind": "number", "editor": "number", "default": 1, "min": 1, "step": 1 },
+    { "id": "columns", "label": "Colunas", "group": "Principal", "valueKind": "number", "editor": "number", "default": 1, "min": 1, "step": 1 },
+    { "id": "resetPulse", "label": "Pulso minimo de reset", "group": "Timing", "valueKind": "number", "editor": "number", "default": 50, "min": 1, "step": 1 },
+    { "id": "t0h", "label": "0, tempo alto", "group": "Timing", "valueKind": "number", "editor": "number", "default": 400, "min": 1, "step": 1 },
+    { "id": "t1h", "label": "1, tempo alto", "group": "Timing", "valueKind": "number", "editor": "number", "default": 850, "min": 1, "step": 1 }
+  ],
+  "limits": { "stepTimeoutMs": 8, "expectedComplexity": "medium" }
+}

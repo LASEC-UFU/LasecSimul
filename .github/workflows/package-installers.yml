@@ -1,0 +1,68 @@
+name: Package Installers
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  package:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: win32-x64
+          - os: ubuntu-latest
+            target: linux-x64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        if: matrix.os == 'windows-latest'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: extension/package-lock.json
+
+      - name: Install extension dependencies
+        run: npm --prefix extension ci
+
+      - name: Compile extension
+        run: npm --prefix extension run compile
+
+      - name: Build core
+        run: node scripts/build-core.js --clean --config Release
+
+      - name: Build devices
+        run: node scripts/build-devices.js --clean --config Release
+
+      - name: Build MCU adapters
+        run: node scripts/build-mcu-adapters.js --clean --config Release
+
+      - name: Run extension tests
+        run: npm --prefix extension test
+
+      - name: Run core tests
+        run: node scripts/test-core.js --config Release
+
+      - name: Package release artifacts
+        run: node scripts/package-release.js
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: lasecsimul-${{ matrix.target }}
+          path: dist/release/${{ matrix.target }}
+          if-no-files-found: error

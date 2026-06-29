@@ -438,6 +438,25 @@ Development Host), clicar "✎" num item registrado da paleta, e confirmar visua
 `other.package_pin`, redimensionar um `graphics.rectangle` pelo painel de propriedades, e "Salvar
 Símbolo" reproduzindo o visual original.
 
+**Estendido no MESMO dia (2026-06-29) — "Open Subcircuit" + Modo Placa + Logic Symbol.** Depois de
+fechar o editor de `package` sozinho, o usuário apontou (com razão) que minha primeira explicação do
+conceito "Package" do SimulIDE estava errada (eu tinha descrito como lista de N-variantes) — pesquisa
+real corrigiu (fonte + https://simulidedocs.netlify.app + fórum oficial, ver `.spec/
+lasecsimul-native-devices.spec` seção 21.4) e revelou que faltava mais coisa fiel ao SimulIDE real:
+
+- **"Logic Symbol"** (seção 21.4 do spec de plugins nativos): aparência alternativa booleana
+  (`logicSymbolPackage`), trocável por botão na barra da sessão de autoria — pra `mcu-adapter` e
+  `subcircuit-file`, nunca `abi-device`.
+- **Circuito interno real editável** (`.spec/lasecsimul-subcircuits.spec` seção 4): a sessão de
+  autoria de um `subcircuit-file` agora TAMBÉM semeia `components[]`/`wires[]` reais (não só o
+  `package`) — igual ao "Open Subcircuit" do SimulIDE mostrar os dois juntos na mesma cena.
+  `.lssub.json` ganhou campos aditivos (`visual`/`boardVisual`/`points`), Core ignora o que não
+  reconhece, zero mudança em `SubcircuitRegistry.hpp` (confirmado, `ctest` 26/26 sem alteração).
+- **Modo Placa** (`SubPackage::boardModeSlot()` do SimulIDE real): dentro da sessão, componente
+  interno tem 2 posições independentes (circuito/placa); ligar o modo esconde quem não for
+  `graphical: true` no catálogo (29 typeIds marcados — LED, motor, display, switch...) e deixa
+  organizar os visíveis sobre a arte da placa.
+
 ### Motivação
 
 A spec do `package` está detalhada, e isso prepara tanto devices ABI quanto subcircuitos. Antes desta
@@ -450,9 +469,15 @@ rodada, o contrato existia melhor do que a ferramenta visual para produzi-lo.
 - ~~resize do corpo (via propriedade, não alça)~~ **feito**;
 - ~~inserção/edição de formas (`graphics.*` property-driven)~~ **feito**;
 - ~~posicionamento/rotação visual de pinos (`other.package_pin`)~~ **feito**;
+- ~~aparência alternativa "Logic Symbol"~~ **feito** (2026-06-29, mesmo dia);
+- ~~circuito interno real editável + Modo Placa pra subcircuito~~ **feito** (2026-06-29, mesmo dia);
 - upload e embed de imagem em `background.data` — **não implementado** nesta rodada (só cor sólida via
   `backgroundColor`; fundo `svg`/`image` já existente é preservado, nunca perdido, mas não editável
   visualmente ainda);
+- simulação elétrica ao vivo dentro da sessão de "Abrir Subcircuito" — **não implementado**, decisão
+  explícita de escopo (a sessão é só posição/propriedades, sem IPC com o Core);
+- `BoardSubc`/`ShieldSubc` (Arduino Uno + Shield empilhado, do SimulIDE real) — **não implementado**,
+  feature à parte, não pedida;
 - round-trip fiel (abrir JSON manual e renderizar igual; editar na UI e salvar igual) — implementado e
   testado (`symbolAuthoring.test.ts`), mas ainda sem confirmação visual manual no Extension Development
   Host (ver ressalva acima);
@@ -472,10 +497,13 @@ rodada, o contrato existia melhor do que a ferramenta visual para produzi-lo.
 
 ### Arquivos alvo
 
-- `extension/src/ui/webview/` (`main.ts`, `componentSymbols.ts`)
+- `extension/src/ui/webview/` (`main.ts`, `componentSymbols.ts`, `model.ts`, `messages.ts`)
 - `extension/src/catalog/symbolAuthoring.ts`
-- `project/schema/component-catalog.json` (`other.package`/`other.package_pin`/`graphics.*`)
-- `devices/*/device.json`
+- `extension/src/extension.ts` (`extractInternalCircuit`, `editPackageSymbolCommand`,
+  `saveSymbolCommand`, `switchSymbolViewCommand`, `resolveRegisteredItem`)
+- `project/schema/component-catalog.json` (`other.package`/`other.package_pin`/`graphics.*`,
+  `graphical: true` nos typeIds de interação do usuário)
+- `devices/*/device.json`, `mcu-adapters/*/mcu.json`, `subcircuits/*.lssub.json`
 
 ### Critério de aceite
 

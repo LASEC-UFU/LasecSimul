@@ -457,6 +457,13 @@ html, body {
   color: #202020;
 }
 
+/** Toggle "ligado" (ex: Modo Placa ativo) -- mesmo `--accent` usado em destaques de seleção. */
+.property-sheet__button--active {
+  border-color: var(--accent);
+  background: linear-gradient(#fff4dc, #f3dca3);
+  color: #4a3a0c;
+}
+
 .property-sheet__show-toggle {
   display: flex;
   align-items: center;

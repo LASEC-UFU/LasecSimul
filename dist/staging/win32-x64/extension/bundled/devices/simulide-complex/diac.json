@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "typeId": "active.diac",
+  "name": "Diac",
+  "language": "pt-BR",
+  "translations": { "en": { "name": "Diac" } },
+  "abiVersion": { "major": 3, "minor": 0 },
+  "nativeEntry": { "win32-x64": "build/win-x64/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" },
+  "pins": [
+    { "id": "a1", "kind": "ANALOG_IN", "x": 0, "y": 16, "angle": 180, "length": 8, "label": "A1" },
+    { "id": "a2", "kind": "ANALOG_IN", "x": 32, "y": 16, "angle": 0, "length": 8, "label": "A2" }
+  ],
+  "properties": [
+    { "id": "resOn", "label": "Resistencia ligada", "group": "Principal", "valueKind": "number", "editor": "number", "default": 500, "min": 0.000001, "step": 1 },
+    { "id": "resOff", "label": "Resistencia desligada", "group": "Principal", "valueKind": "number", "editor": "number", "default": 100000000, "min": 1, "step": 1 },
+    { "id": "breakdown", "label": "Tensao de ruptura", "group": "Principal", "valueKind": "number", "editor": "number", "default": 30, "min": 0, "step": 0.1 },
+    { "id": "holdCurrent", "label": "Corrente de manutencao", "group": "Principal", "valueKind": "number", "editor": "number", "default": 0.01, "min": 0, "step": 0.001 }
+  ],
+  "limits": { "stepTimeoutMs": 8, "expectedComplexity": "high" }
+}

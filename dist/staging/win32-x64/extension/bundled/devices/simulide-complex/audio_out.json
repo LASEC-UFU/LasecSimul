@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "typeId": "outputs.audio_out",
+  "name": "Audio Out",
+  "language": "pt-BR",
+  "translations": { "en": { "name": "Audio Out" } },
+  "abiVersion": { "major": 3, "minor": 0 },
+  "nativeEntry": { "win32-x64": "build/win-x64/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" },
+  "pins": [
+    { "id": "in", "kind": "ANALOG_IN", "x": 0, "y": 16, "angle": 180, "length": 8, "label": "+" },
+    { "id": "gnd", "kind": "ANALOG_IN", "x": 0, "y": 32, "angle": 180, "length": 8, "label": "-" }
+  ],
+  "properties": [
+    { "id": "impedance", "label": "Impedancia", "group": "Eletrica", "valueKind": "number", "editor": "number", "default": 8, "min": 0.1, "step": 0.1 },
+    { "id": "frequency", "label": "Frequencia", "group": "Audio", "valueKind": "number", "editor": "number", "default": 1000, "min": 1, "step": 1 }
+  ],
+  "limits": { "stepTimeoutMs": 8, "expectedComplexity": "medium" }
+}

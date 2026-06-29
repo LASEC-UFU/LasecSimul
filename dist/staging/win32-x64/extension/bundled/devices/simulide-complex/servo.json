@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "typeId": "outputs.servo",
+  "name": "Servo Motor",
+  "language": "pt-BR",
+  "translations": { "en": { "name": "Servo Motor" } },
+  "abiVersion": { "major": 3, "minor": 0 },
+  "nativeEntry": { "win32-x64": "build/win-x64/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" },
+  "pins": [
+    { "id": "pwm", "kind": "DIGITAL_IN", "x": 0, "y": 16, "angle": 180, "length": 8, "label": "PWM" }
+  ],
+  "properties": [
+    { "id": "speed", "label": "Velocidade", "group": "Principal", "valueKind": "number", "editor": "number", "default": 0.2, "min": 0.001, "step": 0.01 },
+    { "id": "minPulse", "label": "Pulso minimo", "group": "Principal", "valueKind": "number", "editor": "number", "default": 1000, "min": 1, "step": 10 },
+    { "id": "maxPulse", "label": "Pulso maximo", "group": "Principal", "valueKind": "number", "editor": "number", "default": 2000, "min": 1, "step": 10 },
+    { "id": "angle", "label": "Angulo", "group": "Leitura", "valueKind": "number", "editor": "display", "default": 90, "readOnly": true }
+  ],
+  "limits": { "stepTimeoutMs": 8, "expectedComplexity": "medium" }
+}

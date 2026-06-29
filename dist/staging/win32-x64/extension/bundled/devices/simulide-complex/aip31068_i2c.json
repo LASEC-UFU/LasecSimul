@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "typeId": "outputs.aip31068_i2c",
+  "name": "Aip31068 I2C",
+  "language": "pt-BR",
+  "translations": { "en": { "name": "Aip31068 I2C" } },
+  "abiVersion": { "major": 3, "minor": 0 },
+  "nativeEntry": { "win32-x64": "build/win-x64/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" },
+  "pins": [
+    { "id": "scl", "kind": "DIGITAL_IN", "x": 24, "y": 8, "angle": 270, "length": 8, "label": "SCL" },
+    { "id": "sda", "kind": "DIGITAL_BIDIR", "x": 16, "y": 8, "angle": 270, "length": 8, "label": "SDA" }
+  ],
+  "properties": [
+    { "id": "rows", "label": "Linhas", "group": "Principal", "valueKind": "number", "editor": "number", "default": 2, "min": 1, "step": 1 },
+    { "id": "columns", "label": "Colunas", "group": "Principal", "valueKind": "number", "editor": "number", "default": 16, "min": 8, "step": 1 },
+    { "id": "i2cAddress", "label": "Endereço I2C", "group": "Principal", "valueKind": "number", "editor": "number", "default": 62, "min": 0, "max": 127, "step": 1 }
+  ],
+  "limits": { "stepTimeoutMs": 8, "expectedComplexity": "medium" }
+}

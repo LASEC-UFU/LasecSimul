@@ -1,0 +1,2 @@
+C:\SourceCode\LasecSimul\dist\staging\win32-x64\windows-bootstrapper\publish\LasecSimul.Setup.pdb
+C:\SourceCode\LasecSimul\dist\staging\win32-x64\windows-bootstrapper\publish\LasecSimul.Setup.exe

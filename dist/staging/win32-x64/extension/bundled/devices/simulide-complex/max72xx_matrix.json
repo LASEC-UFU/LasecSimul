@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "typeId": "outputs.max72xx_matrix",
+  "name": "Max72xx matrix",
+  "language": "pt-BR",
+  "translations": { "en": { "name": "Max72xx matrix" } },
+  "abiVersion": { "major": 3, "minor": 0 },
+  "nativeEntry": { "win32-x64": "build/win-x64/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" },
+  "pins": [
+    { "id": "cs", "kind": "DIGITAL_IN", "x": -12, "y": 52, "angle": 270, "length": 8, "label": "CS" },
+    { "id": "din", "kind": "DIGITAL_IN", "x": -20, "y": 52, "angle": 270, "length": 8, "label": "DIN" },
+    { "id": "sck", "kind": "DIGITAL_IN", "x": -28, "y": 52, "angle": 270, "length": 8, "label": "SCK" }
+  ],
+  "properties": [
+    { "id": "numDisplays", "label": "Tamanho", "group": "Principal", "valueKind": "number", "editor": "number", "default": 4, "min": 1, "step": 1 }
+  ],
+  "limits": { "stepTimeoutMs": 8, "expectedComplexity": "medium" }
+}

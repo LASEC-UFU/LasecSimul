@@ -20,6 +20,11 @@ const path = require("path");
 const repoRoot = path.resolve(__dirname, "..");
 const devicesRoot = path.join(repoRoot, "devices");
 const clean = process.argv.includes("--clean");
+const configArg = process.argv.find((arg) => arg.startsWith("--config="));
+const configIndex = process.argv.indexOf("--config");
+const config =
+  (configArg ? configArg.slice("--config=".length) : undefined) ??
+  (configIndex >= 0 ? process.argv[configIndex + 1] : undefined);
 
 const platformTarget = {
   win32: { dir: "win-x64", file: "device.dll", artifactNames: ["device.dll", "libdevice.dll"] },
@@ -80,8 +85,13 @@ function buildDevice(deviceDir) {
     fs.rmSync(buildDir, { recursive: true, force: true });
   }
 
-  run(cmakeCommand, ["-S", deviceDir, "-B", buildDir], repoRoot);
-  run(cmakeCommand, ["--build", buildDir], repoRoot);
+  const configureArgs = ["-S", deviceDir, "-B", buildDir];
+  if (config) configureArgs.push(`-DCMAKE_BUILD_TYPE=${config}`);
+  const buildArgs = ["--build", buildDir];
+  if (config) buildArgs.push("--config", config);
+
+  run(cmakeCommand, configureArgs, repoRoot);
+  run(cmakeCommand, buildArgs, repoRoot);
 
   const artifactPath = findArtifact(buildDir, platformTarget.artifactNames);
   if (!artifactPath) {

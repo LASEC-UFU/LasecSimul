@@ -56,6 +56,12 @@ function resolvePackageLayout(pkg: PackageDescriptor): ResolvedPackage {
     maxX = Math.max(maxX, tipX, pin.x);
     minY = Math.min(minY, tipY, pin.y);
     maxY = Math.max(maxY, tipY, pin.y);
+    // Rótulo pode ter posição própria, arrastada pra fora do alcance do lead (ver model.ts
+    // PackagePin.labelX/labelY) -- sem isso no cálculo, um rótulo arrastado bem pra fora poderia
+    // ficar fora do viewBox calculado (overflow:visible evita corte, mas o box do componente
+    // ficaria menor do que devia).
+    if (pin.labelX !== undefined) { minX = Math.min(minX, pin.labelX); maxX = Math.max(maxX, pin.labelX); }
+    if (pin.labelY !== undefined) { minY = Math.min(minY, pin.labelY); maxY = Math.max(maxY, pin.labelY); }
     return { ...pin, tipX, tipY };
   });
   const offsetX = -minX;
@@ -71,24 +77,40 @@ function resolvePackageLayout(pkg: PackageDescriptor): ResolvedPackage {
 }
 
 const RESOLVED_PACKAGE_BY_TYPE_ID = new Map<string, ResolvedPackage>();
+/** Aparência ALTERNATIVA opcional ("Chip or Logic Symbol", igual ao `SubPackage::Logic_Symbol` do
+ * SimulIDE real -- booleano simples, não uma lista de N variantes). Mapa SEPARADO do padrão (não um
+ * 2º registro no mesmo mapa) pra não precisar inventar uma chave composta -- escolhido em
+ * `resolvedPackageFor` pela propriedade `logicSymbol` da INSTÂNCIA, ver model.ts
+ * `WebviewComponentCatalogEntry.logicSymbolPackage`. */
+const RESOLVED_LOGIC_SYMBOL_PACKAGE_BY_TYPE_ID = new Map<string, ResolvedPackage>();
 
 /** Chamado quando o catálogo chega/atualiza (ver `main.ts`) -- cacheia o layout resolvido (cálculo
  * de deslocamento é o mesmo pra toda renderização do mesmo typeId, não precisa repetir por frame).
  * `undefined` remove (typeId sem package mais, ou catálogo recarregado do zero). */
-export function registerPackage(typeId: string, pkg: PackageDescriptor | undefined): void {
+export function registerPackage(typeId: string, pkg: PackageDescriptor | undefined, logicSymbolPkg?: PackageDescriptor): void {
   if (pkg && pkg.pins.length > 0) RESOLVED_PACKAGE_BY_TYPE_ID.set(typeId, resolvePackageLayout(pkg));
   else RESOLVED_PACKAGE_BY_TYPE_ID.delete(typeId);
+
+  if (logicSymbolPkg && logicSymbolPkg.pins.length > 0) RESOLVED_LOGIC_SYMBOL_PACKAGE_BY_TYPE_ID.set(typeId, resolvePackageLayout(logicSymbolPkg));
+  else RESOLVED_LOGIC_SYMBOL_PACKAGE_BY_TYPE_ID.delete(typeId);
 }
 
-function resolvedPackageFor(typeId: string): ResolvedPackage | undefined {
+/** `properties.logicSymbol === true` E existe uma variante Logic Symbol registrada pra este typeId
+ * -> usa ela; qualquer outro caso (sem variante, propriedade ausente/falsa, ou sem `properties`
+ * nenhuma -- chamadas legadas que só passam typeId) -> cai no `package` padrão de sempre. */
+function resolvedPackageFor(typeId: string, properties?: Record<string, unknown>): ResolvedPackage | undefined {
+  if (properties?.logicSymbol === true) {
+    const logicSymbolResolved = RESOLVED_LOGIC_SYMBOL_PACKAGE_BY_TYPE_ID.get(typeId);
+    if (logicSymbolResolved) return logicSymbolResolved;
+  }
   return RESOLVED_PACKAGE_BY_TYPE_ID.get(typeId);
 }
 
 /** Corpo do símbolo a partir do `package` real, se este typeId tiver um registrado -- `undefined`
  * pra `main.ts` cair em `catalogEntry?.symbolSvg ?? componentSymbolSvg(typeId)` (mesma prioridade
  * de sempre, só com `package` real entrando ANTES de symbolSvg). */
-export function packageSymbolSvg(typeId: string): string | undefined {
-  const resolved = resolvedPackageFor(typeId);
+export function packageSymbolSvg(typeId: string, properties?: Record<string, unknown>): string | undefined {
+  const resolved = resolvedPackageFor(typeId, properties);
   return resolved ? packageBodySvg(resolved) : undefined;
 }
 
@@ -118,12 +140,22 @@ function packagePinLeadSvg(pin: PackagePin): string {
   const rad = (pin.angle * Math.PI) / 180;
   const tipX = pin.x + Math.cos(rad) * pin.length;
   const tipY = pin.y + Math.sin(rad) * pin.length;
-  const labelX = tipX + Math.cos(rad) * 9;
-  const labelY = tipY + Math.sin(rad) * 9;
   const label = pin.label ?? pin.id;
+  const hasCustomLabelPos = pin.labelX !== undefined && pin.labelY !== undefined;
+  const labelX = pin.labelX ?? tipX + Math.cos(rad) * 9;
+  const labelY = pin.labelY ?? tipY + Math.sin(rad) * 9;
+  // Lead vertical (topo/baixo do corpo, angle 90/270) -- texto horizontal colide com o label do
+  // pino vizinho quando há muitos pinos apertados num lado só (ex: 12 pinos em 170 unidades no chip
+  // ESP32 nu). Giram -90° (lê de baixo pra cima) só nesses dois ângulos -- lead horizontal
+  // (esquerda/direita) já tem espaçamento vertical de sobra entre linhas, não precisa girar. Só se
+  // aplica na posição PADRÃO (calculada) -- uma vez que o usuário arrastou o rótulo pra um lugar
+  // próprio (`labelX`/`labelY`, ver model.ts), a rotação automática pra encaixe apertado não faz
+  // mais sentido (ele já escolheu onde e como cabe).
+  const isVerticalLead = !hasCustomLabelPos && (pin.angle === 90 || pin.angle === 270);
+  const rotateAttr = isVerticalLead ? ` transform="rotate(-90 ${labelX.toFixed(1)} ${labelY.toFixed(1)})"` : "";
   return (
     `<line x1="${pin.x}" y1="${pin.y}" x2="${tipX.toFixed(1)}" y2="${tipY.toFixed(1)}" class="symbol-stroke"/>` +
-    `<text x="${labelX.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="middle" class="symbol-text" style="font-size:7px">${escapeXmlText(label)}</text>`
+    `<text x="${labelX.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="middle" class="symbol-text" style="font-size:7px"${rotateAttr}>${escapeXmlText(label)}</text>`
   );
 }
 
@@ -282,7 +314,7 @@ function propertyDrivenBox(typeId: string, properties: Record<string, unknown> |
  * instância, não o typeId) tem prioridade sobre `package`/tabela estática quando presente -- só os
  * típicos "de autoria de símbolo" (`propertyDrivenBox`) realmente usam isso hoje. */
 export function componentBox(typeId: string, properties?: Record<string, unknown>): ComponentBox {
-  const resolved = resolvedPackageFor(typeId);
+  const resolved = resolvedPackageFor(typeId, properties);
   if (resolved) return { width: resolved.width, height: resolved.height };
   const propertyBox = propertyDrivenBox(typeId, properties);
   if (propertyBox) return propertyBox;
@@ -317,14 +349,28 @@ export function componentBox(typeId: string, properties?: Record<string, unknown
  * declarada. Sem `package` (built-ins de sempre), cai no algoritmo genérico de sempre: 2 pinos um de
  * cada lado (esquerda/direita), no meio da altura -- igual ao layout Comp2Pin do SimulIDE; 1 pino
  * (terra/túnel) no TOPO, centralizado. */
-export function pinLocalPosition(pinId: string, pinIndex: number, pinCount: number, typeId: string): { x: number; y: number } {
-  const resolved = resolvedPackageFor(typeId);
+/** Falso só quando o typeId TEM `package` real e este pino específico NÃO está nele -- ex: o chip
+ * ESP32 nu expõe 42 pinos elétricos (`pinMap`, casa com o que o plugin/Core esperam
+ * posicionalmente), mas só 34 deles têm um lead físico desenhado no encapsulamento real (os outros
+ * 8 -- GPIO20/24/28-31 não pinados pra fora + UART0_RX/TX, alias elétrico do GPIO3/GPIO1 -- não
+ * existem como ponto de solda separado). Sem isto, esses 8 cairiam no algoritmo genérico (posição
+ * por índice global entre os 42), aparecendo como bolinhas soltas/embaralhadas por cima do desenho
+ * real dos outros 34 -- pior que não desenhar nada. Pra typeId SEM `package` (built-ins de sempre),
+ * sempre `true` -- o algoritmo genérico já é a posição "real" deles, nunca um substituto malfeito. */
+export function hasRealPinPosition(typeId: string, pinId: string, properties?: Record<string, unknown>): boolean {
+  const resolved = resolvedPackageFor(typeId, properties);
+  if (!resolved) return true;
+  return resolved.pins.some((candidate) => candidate.id === pinId);
+}
+
+export function pinLocalPosition(pinId: string, pinIndex: number, pinCount: number, typeId: string, properties?: Record<string, unknown>): { x: number; y: number } {
+  const resolved = resolvedPackageFor(typeId, properties);
   if (resolved) {
     const pin = resolved.pins.find((candidate) => candidate.id === pinId);
     if (pin) return { x: pin.tipX, y: pin.tipY };
   }
   if (typeId === "connectors.junction") return { x: 0, y: 0 };
-  const box = componentBox(typeId);
+  const box = componentBox(typeId, properties);
   if (pinCount <= 1) return { x: box.width / 2, y: PIN_INSET };
 
   const side = pinIndex % 2 === 0 ? PIN_INSET : box.width - PIN_INSET;
@@ -551,13 +597,14 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
       // lead saindo pra DIREITA -- mesma convenção de ângulo 0=direita do renderizador de leitura
       // (`packagePinLeadSvg`). `component.rotation` (0/90/180/270, CSS) faz o papel do `angle` real
       // de um `PackagePin` sem nenhum campo novo -- reaproveita rotação genérica (teclado/toolbar).
+      // SEM texto aqui -- o rótulo é um `graphics.text` vinculado separado (`linkedPinComponentId`),
+      // arrastável independente da posição do pino, igual ao SimulIDE real (ver
+      // `symbolAuthoring.ts`/`main.ts::requestAddComponent`).
       const length = typeof properties?.length === "number" ? properties.length : 8;
-      const label = typeof properties?.label === "string" && properties.label.trim() ? properties.label : (typeof properties?.pinId === "string" ? properties.pinId : "pin");
       const tipX = midX + length;
       return (
         `<line x1="${midX}" y1="${yMid}" x2="${tipX}" y2="${yMid}" class="symbol-stroke"/>` +
-        `<circle cx="${midX}" cy="${yMid}" r="2" class="symbol-stroke" fill="currentColor"/>` +
-        `<text x="${tipX + 9}" y="${yMid + 3}" text-anchor="middle" font-size="7" fill="currentColor">${escapeXmlText(label)}</text>`
+        `<circle cx="${midX}" cy="${yMid}" r="2" class="symbol-stroke" fill="currentColor"/>`
       );
     }
 
