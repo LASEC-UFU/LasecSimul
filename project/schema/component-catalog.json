@@ -1436,6 +1436,16 @@
       }
     },
     {
+      "typeId": "instruments.voltmeter",
+      "label": "Voltimetro",
+      "pinCount": 3,
+      "icon": "voltimetro",
+      "folderPath": [
+        "Medidores"
+      ],
+      "defaultProperties": {}
+    },
+    {
       "typeId": "meters.freqmeter",
       "label": "Frequencimetro",
       "pinCount": 1,
@@ -1607,14 +1617,6 @@
     }
   ],
   "registeredSources": [
-    {
-      "id": "builtin-abi-voltmeter",
-      "kind": "abi-device",
-      "filePath": "../devices/voltmeter/device.json",
-      "libraryPath": "../devices/library.json",
-      "lsconfigPath": "../devices/voltmeter/device.lsconfig",
-      "removable": false
-    },
     {
       "id": "builtin-qemu-esp32",
       "kind": "mcu-adapter",

@@ -624,6 +624,7 @@ function pushWireToCore(wire: WebviewWireModel): void {
 }
 
 function isUiOnlyRuntimeProperty(component: WebviewComponentModel | undefined, name: string): boolean {
+  if (name.startsWith("__ui_")) return true;
   if (!component || (name !== "firmwarePath" && name !== "qemuBinaryOverride")) return false;
   if (component.typeId === "espressif.esp32") return true;
   const catalogEntry = schematicState.catalog.find((entry) => entry.typeId === component.typeId);

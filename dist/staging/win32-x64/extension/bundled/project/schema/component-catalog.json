@@ -1435,6 +1435,16 @@
       }
     },
     {
+      "typeId": "instruments.voltmeter",
+      "label": "Voltimetro",
+      "pinCount": 3,
+      "icon": "voltimetro",
+      "folderPath": [
+        "Medidores"
+      ],
+      "defaultProperties": {}
+    },
+    {
       "typeId": "meters.freqmeter",
       "label": "Frequencimetro",
       "pinCount": 1,

@@ -520,31 +520,42 @@ html, body {
 
 /** Nome com Ã­ndice (ex: "Resistor-1") perto do sÃ­mbolo -- mesma convenÃ§Ã£o de cor do SimulIDE
  * (`Component::m_idLabel`, azul-escuro), mostrado sÃ³ quando `WebviewComponentModel.showId` Ã© true. */
-.component__id-label {
+.component__id-label,
+.component-floating-label {
   position: absolute;
-  bottom: 100%;
-  left: 0;
-  margin-bottom: 2px;
   white-space: nowrap;
+  transform-origin: center;
+  user-select: none;
+}
+
+.component__id-label,
+.component-floating-label--id {
   color: #5b7fd1;
   font-size: 11px;
   font-weight: 600;
-  pointer-events: none;
 }
 
 /** Valor formatado da propriedade `showOnSymbol` (ex: "1 kÎ©") ou leitura ao vivo (ex: voltÃ­metro) --
  * mesma convenÃ§Ã£o de cor do SimulIDE (`Component::m_valLabel`, vermelho-escuro), mostrado quando
  * `WebviewComponentModel.showValue` Ã© true (default calculado, ver `findShowOnSymbolSchema`). */
-.component__value-label {
+.component__value-label,
+.component-floating-label--value {
   position: absolute;
-  top: 100%;
-  left: 0;
-  margin-top: 2px;
-  white-space: nowrap;
   color: #c0594a;
   font-size: 11px;
   font-weight: 600;
-  pointer-events: none;
+}
+
+.component-floating-label {
+  padding: 1px 2px;
+  cursor: move;
+  z-index: 3;
+}
+
+.component-floating-label.selected {
+  outline: 1px dashed rgba(24, 71, 199, 0.95);
+  outline-offset: 1px;
+  background: rgba(255, 255, 255, 0.68);
 }
 
 .junction-dot {

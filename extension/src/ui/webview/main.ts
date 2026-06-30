@@ -239,6 +239,8 @@ let activePropertyComponentId: string | undefined;
 let propertyDialogShowAll = false;
 let clipboardItems: { components: WebviewComponentModel[]; wires: WebviewWireModel[] } | undefined;
 const activePushShortcutIds = new Set<string>();
+type ExternalLabelKind = "id" | "value";
+let selectedTextLabel: { componentId: string; kind: ExternalLabelKind } | undefined;
 
 const propertyDialog = document.createElement("dialog");
 propertyDialog.className = "property-dialog";
@@ -409,6 +411,10 @@ function isWireCornerSelected(wireId: string, pointIndex: number): boolean {
   return selectedWireCorner?.wireId === wireId && selectedWireCorner.pointIndex === pointIndex;
 }
 
+function isTextLabelSelected(componentId: string, kind: ExternalLabelKind): boolean {
+  return selectedTextLabel?.componentId === componentId && selectedTextLabel.kind === kind;
+}
+
 function getSelectedComponents(): WebviewComponentModel[] {
   return state.components.filter((component) => state.selectedComponentIds.includes(component.id));
 }
@@ -428,6 +434,7 @@ function selectOnlyComponent(componentId: string): void {
   state.selectedWireIds = [];
   selectedWireSegment = undefined;
   selectedWireCorner = undefined;
+  selectedTextLabel = undefined;
 }
 
 function selectOnlyWire(wireId: string, segmentIndex?: number): void {
@@ -435,6 +442,7 @@ function selectOnlyWire(wireId: string, segmentIndex?: number): void {
   state.selectedWireIds = [wireId];
   selectedWireSegment = segmentIndex === undefined ? undefined : { wireId, segmentIndex };
   selectedWireCorner = undefined;
+  selectedTextLabel = undefined;
 }
 
 function selectOnlyWireCorner(wireId: string, pointIndex: number): void {
@@ -442,6 +450,15 @@ function selectOnlyWireCorner(wireId: string, pointIndex: number): void {
   state.selectedWireIds = [wireId];
   selectedWireSegment = undefined;
   selectedWireCorner = { wireId, pointIndex };
+  selectedTextLabel = undefined;
+}
+
+function selectOnlyTextLabel(componentId: string, kind: ExternalLabelKind): void {
+  state.selectedComponentIds = [];
+  state.selectedWireIds = [];
+  selectedWireSegment = undefined;
+  selectedWireCorner = undefined;
+  selectedTextLabel = { componentId, kind };
 }
 
 /** Shift+click: alterna um componente dentro/fora de uma seleção múltipla já existente — convenção
@@ -450,6 +467,7 @@ function toggleComponentSelection(componentId: string): void {
   state.selectedWireIds = [];
   selectedWireSegment = undefined;
   selectedWireCorner = undefined;
+  selectedTextLabel = undefined;
   state.selectedComponentIds = isComponentSelected(componentId)
     ? state.selectedComponentIds.filter((id) => id !== componentId)
     : [...state.selectedComponentIds, componentId];
@@ -457,6 +475,7 @@ function toggleComponentSelection(componentId: string): void {
 
 function toggleWireSelection(wireId: string, segmentIndex?: number): void {
   state.selectedComponentIds = [];
+  selectedTextLabel = undefined;
   if (isWireSelected(wireId)) {
     state.selectedWireIds = state.selectedWireIds.filter((id) => id !== wireId);
     if (selectedWireSegment?.wireId === wireId) selectedWireSegment = undefined;
@@ -470,6 +489,12 @@ function toggleWireSelection(wireId: string, segmentIndex?: number): void {
 }
 
 function selectionLabel(): string {
+  if (selectedTextLabel) {
+    const activeLabel = selectedTextLabel;
+    const component = state.components.find((entry) => entry.id === activeLabel.componentId);
+    const suffix = activeLabel.kind === "id" ? "name" : "value";
+    return component ? `${component.label} (${suffix})` : t("nothingSelected");
+  }
   const components = getSelectedComponents();
   const wires = state.selectedWireIds;
   const total = components.length + wires.length;
@@ -483,6 +508,7 @@ function clearSelection(): void {
   state.selectedWireIds = [];
   selectedWireSegment = undefined;
   selectedWireCorner = undefined;
+  selectedTextLabel = undefined;
 }
 
 function clearPendingWire(): void {
@@ -833,7 +859,7 @@ function render(): void {
     // sintetizado quando o `render()` do `onUp` do marquee recria o DOM no meio do gesto).
     if (
       event.target instanceof Element &&
-      (event.target.closest(".pin-terminal") || event.target.closest(".component") || event.target.closest("polyline[data-wire-id]"))
+      (event.target.closest(".pin-terminal") || event.target.closest(".component") || event.target.closest(".component-floating-label") || event.target.closest("polyline[data-wire-id]"))
     ) {
       return;
     }
@@ -924,6 +950,18 @@ function render(): void {
 
   for (const component of state.components.filter((entry) => !entry.hidden && isVisibleInCurrentMode(entry))) {
     canvasContent.appendChild(renderComponent(component));
+  }
+
+  for (const component of state.components.filter((entry) => !entry.hidden && isVisibleInCurrentMode(entry))) {
+    const embedsOwnIdLabel = component.typeId === "connectors.tunnel" &&
+      typeof component.properties.name === "string" &&
+      component.properties.name.trim().length > 0;
+    if (!embedsOwnIdLabel) {
+      const idLabel = renderExternalLabel(component, "id");
+      if (idLabel) canvasContent.appendChild(idLabel);
+    }
+    const valueLabel = renderExternalLabel(component, "value");
+    if (valueLabel) canvasContent.appendChild(valueLabel);
   }
 
   for (const component of state.components.filter((entry) => entry.typeId === "connectors.junction")) {
@@ -1178,13 +1216,17 @@ function flipPoint(local: Point, box: { width: number; height: number }, flipH: 
 }
 
 function rotatePoint(local: Point, box: { width: number; height: number }, rotation: 0 | 90 | 180 | 270): Point {
+  const cx = box.width / 2;
+  const cy = box.height / 2;
+  const dx = local.x - cx;
+  const dy = local.y - cy;
   switch (rotation) {
     case 90:
-      return { x: box.width - local.y, y: local.x };
+      return { x: cx - dy, y: cy + dx };
     case 180:
-      return { x: box.width - local.x, y: box.height - local.y };
+      return { x: cx - dx, y: cy - dy };
     case 270:
-      return { x: local.y, y: box.height - local.x };
+      return { x: cx + dy, y: cy - dx };
     case 0:
     default:
       return local;
@@ -2474,6 +2516,7 @@ function rotateComponent(component: WebviewComponentModel): void {
 }
 
 function rotateSelectedComponents(steps: 1 | -1 | 2): void {
+  if (rotateSelectedTextLabel(steps)) return;
   const components = getSelectedComponents();
   if (components.length === 0) return;
   for (const component of components) applyRotation(component, steps);
@@ -2497,6 +2540,7 @@ function applyFlip(component: WebviewComponentModel, axis: "horizontal" | "verti
 }
 
 function flipSelectedComponents(axis: "horizontal" | "vertical"): void {
+  if (selectedTextLabel) return;
   const components = getSelectedComponents();
   if (components.length === 0) return;
   for (const component of components) applyFlip(component, axis);
@@ -2616,27 +2660,6 @@ function renderComponent(component: WebviewComponentModel): HTMLElement {
   });
 
   el.appendChild(svg);
-
-  const embedsOwnIdLabel = component.typeId === "connectors.tunnel" &&
-    typeof component.properties.name === "string" &&
-    component.properties.name.trim().length > 0;
-  if (!component.hidden && component.showId && !embedsOwnIdLabel) {
-    const idLabelEl = document.createElement("div");
-    idLabelEl.className = "component__id-label";
-    idLabelEl.textContent = component.label;
-    el.appendChild(idLabelEl);
-  }
-
-  const showValue = usesEmbeddedValueLabel(component.typeId) ? false : component.showValue ?? Boolean(findShowOnSymbolSchema(component));
-  if (!component.hidden && showValue) {
-    const text = valueLabelText(component);
-    if (text !== undefined) {
-      const valueLabelEl = document.createElement("div");
-      valueLabelEl.className = "component__value-label";
-      valueLabelEl.textContent = text;
-      el.appendChild(valueLabelEl);
-    }
-  }
 
   if (isPushButton) {
     el.addEventListener("pointerdown", (event) => {
@@ -2895,6 +2918,70 @@ function valueLabelText(component: WebviewComponentModel): string | undefined {
   return typeof raw === "number" ? formatEngineeringValue(raw, schema.unit) : String(raw);
 }
 
+function labelPropertyKey(kind: ExternalLabelKind, suffix: "x" | "y" | "rotation"): string {
+  const prefix = kind === "id" ? "__ui_idLabel" : "__ui_valueLabel";
+  return `${prefix}${suffix === "rotation" ? "Rotation" : suffix.toUpperCase()}`;
+}
+
+function externalLabelText(component: WebviewComponentModel, kind: ExternalLabelKind): string | undefined {
+  if (kind === "id") {
+    return !component.hidden && component.showId ? component.label : undefined;
+  }
+  const showValue = usesEmbeddedValueLabel(component.typeId) ? false : component.showValue ?? Boolean(findShowOnSymbolSchema(component));
+  return !component.hidden && showValue ? valueLabelText(component) : undefined;
+}
+
+function defaultExternalLabelOffset(component: WebviewComponentModel, kind: ExternalLabelKind): Point {
+  const box = componentBox(component.typeId, component.properties);
+  return kind === "id"
+    ? { x: 0, y: -14 }
+    : { x: 0, y: box.height + 2 };
+}
+
+function externalLabelOffset(component: WebviewComponentModel, kind: ExternalLabelKind): Point {
+  const fallback = defaultExternalLabelOffset(component, kind);
+  const x = component.properties[labelPropertyKey(kind, "x")];
+  const y = component.properties[labelPropertyKey(kind, "y")];
+  return {
+    x: typeof x === "number" ? x : fallback.x,
+    y: typeof y === "number" ? y : fallback.y,
+  };
+}
+
+function externalLabelRotation(component: WebviewComponentModel, kind: ExternalLabelKind): 0 | 90 | 180 | 270 {
+  const raw = component.properties[labelPropertyKey(kind, "rotation")];
+  return raw === 90 || raw === 180 || raw === 270 ? raw : 0;
+}
+
+function setExternalLabelLayout(component: WebviewComponentModel, kind: ExternalLabelKind, patch: Partial<{ x: number; y: number; rotation: 0 | 90 | 180 | 270 }>): void {
+  if (patch.x !== undefined) {
+    component.properties[labelPropertyKey(kind, "x")] = Math.round(patch.x);
+    send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name: labelPropertyKey(kind, "x"), value: Math.round(patch.x) });
+  }
+  if (patch.y !== undefined) {
+    component.properties[labelPropertyKey(kind, "y")] = Math.round(patch.y);
+    send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name: labelPropertyKey(kind, "y"), value: Math.round(patch.y) });
+  }
+  if (patch.rotation !== undefined) {
+    component.properties[labelPropertyKey(kind, "rotation")] = patch.rotation;
+    send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name: labelPropertyKey(kind, "rotation"), value: patch.rotation });
+  }
+}
+
+function rotateSelectedTextLabel(steps: 1 | -1 | 2): boolean {
+  if (!selectedTextLabel) return false;
+  const activeLabel = selectedTextLabel;
+  const component = state.components.find((entry) => entry.id === activeLabel.componentId);
+  if (!component) return false;
+  const current = externalLabelRotation(component, activeLabel.kind);
+  const delta = steps === 2 ? 180 : steps * 90;
+  const next = ((((current + delta) % 360) + 360) % 360) as 0 | 90 | 180 | 270;
+  setExternalLabelLayout(component, activeLabel.kind, { rotation: next });
+  persistState();
+  render();
+  return true;
+}
+
 function isMcuHostComponent(component: WebviewComponentModel): boolean {
   const entry = state.catalog.find((catalogEntry) => catalogEntry.typeId === component.typeId);
   return entry?.mcuHost === true || component.typeId === "espressif.esp32";
@@ -2963,6 +3050,7 @@ function resolvePropertyFields(component: WebviewComponentModel): PropertyField[
 function inferPropertyFields(component: WebviewComponentModel): PropertyField[] {
   const fields: PropertyField[] = [];
   for (const [key, value] of Object.entries(component.properties)) {
+    if (key.startsWith("__ui_")) continue;
     fields.push({
       key,
       label: humanizePropertyName(key),
@@ -3448,6 +3536,81 @@ function renderJunction(component: WebviewComponentModel): HTMLElement {
   dot.style.top = `${component.y - 4}px`;
   dot.dataset.componentId = component.id;
   return dot;
+}
+
+function renderExternalLabel(component: WebviewComponentModel, kind: ExternalLabelKind): HTMLElement | undefined {
+  const text = externalLabelText(component, kind);
+  if (!text) return undefined;
+  const el = document.createElement("div");
+  const offset = externalLabelOffset(component, kind);
+  const rotation = externalLabelRotation(component, kind);
+  el.className = `component-floating-label component-floating-label--${kind}${isTextLabelSelected(component.id, kind) ? " selected" : ""}`;
+  el.textContent = text;
+  el.style.left = `${component.x + offset.x}px`;
+  el.style.top = `${component.y + offset.y}px`;
+  el.style.transform = rotation === 0 ? "" : `rotate(${rotation}deg)`;
+  el.dataset.componentId = component.id;
+  el.dataset.labelKind = kind;
+
+  el.addEventListener("click", (event) => {
+    event.stopPropagation();
+    selectOnlyTextLabel(component.id, kind);
+    persistState();
+    render();
+  });
+
+  el.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    selectOnlyTextLabel(component.id, kind);
+    persistState();
+    render();
+    showContextMenu(event, [
+      { label: t("rotateCw"), icon: "rotateCw", shortcut: "Ctrl+R", onClick: () => rotateSelectedTextLabel(1) },
+      { label: t("rotateCcw"), icon: "rotateCcw", shortcut: "Ctrl+Shift+R", onClick: () => rotateSelectedTextLabel(-1) },
+      { label: t("rotate180"), icon: "rotate180", onClick: () => rotateSelectedTextLabel(2) },
+    ]);
+  });
+
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let startOffset = offset;
+  el.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    selectOnlyTextLabel(component.id, kind);
+    dragStartX = event.clientX;
+    dragStartY = event.clientY;
+    startOffset = externalLabelOffset(component, kind);
+    el.setPointerCapture(event.pointerId);
+
+    const onMove = (moveEvent: PointerEvent): void => {
+      const zoom = state.viewport.zoom || 1;
+      const dx = (moveEvent.clientX - dragStartX) / zoom;
+      const dy = (moveEvent.clientY - dragStartY) / zoom;
+      el.style.left = `${component.x + startOffset.x + dx}px`;
+      el.style.top = `${component.y + startOffset.y + dy}px`;
+    };
+
+    const onUp = (upEvent: PointerEvent): void => {
+      el.removeEventListener("pointermove", onMove);
+      el.removeEventListener("pointerup", onUp);
+      el.removeEventListener("pointercancel", onUp);
+      const zoom = state.viewport.zoom || 1;
+      const dx = (upEvent.clientX - dragStartX) / zoom;
+      const dy = (upEvent.clientY - dragStartY) / zoom;
+      setExternalLabelLayout(component, kind, { x: startOffset.x + dx, y: startOffset.y + dy });
+      persistState();
+      render();
+    };
+
+    el.addEventListener("pointermove", onMove);
+    el.addEventListener("pointerup", onUp, { once: true });
+    el.addEventListener("pointercancel", onUp, { once: true });
+  });
+
+  return el;
 }
 
 /** Seleciona todo componente/fio não oculto (`Ctrl+A`, `circuit.cpp::keyPressEvent` do SimulIDE). */

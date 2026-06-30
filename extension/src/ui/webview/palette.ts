@@ -155,6 +155,10 @@ function renderTreeNode(node: PaletteTreeNode, depth: number): HTMLElement {
 
 function render(): void {
   if (!app) return;
+  const activeElement = document.activeElement;
+  const shouldRestoreSearchFocus = activeElement instanceof HTMLInputElement && activeElement.classList.contains("palette__search-input");
+  const selectionStart = shouldRestoreSearchFocus ? activeElement.selectionStart : null;
+  const selectionEnd = shouldRestoreSearchFocus ? activeElement.selectionEnd : null;
   const tree = buildPaletteTree(state.catalog, query);
   const visibleComponents = collectVisibleComponents(tree).filter((node) => !node.disabled);
   app.innerHTML = "";
@@ -212,6 +216,11 @@ function render(): void {
 
   shell.append(search, treeRoot);
   app.appendChild(shell);
+
+  if (shouldRestoreSearchFocus) {
+    input.focus();
+    if (selectionStart !== null && selectionEnd !== null) input.setSelectionRange(selectionStart, selectionEnd);
+  }
 }
 
 window.addEventListener("message", (event: MessageEvent<{ type: string; state?: PaletteState }>) => {

@@ -130,7 +130,6 @@ static std::filesystem::path createRequiresRestartLibraryFixture() {
     const std::filesystem::path devicesRoot = sourceLibraryPath.parent_path();
     const std::filesystem::path tempDir = uniqueTempPath("lasecsimul-setproperty-restart");
     std::filesystem::create_directories(tempDir / "example-blinker");
-    std::filesystem::create_directories(tempDir / "voltmeter");
 
     const auto absolutizeNativeEntry = [](const std::filesystem::path& manifestPath, nlohmann::json& manifest) -> bool {
         if (!manifest.contains("nativeEntry") || !manifest["nativeEntry"].contains(kTestPlatformKey)) return false;
@@ -142,8 +141,7 @@ static std::filesystem::path createRequiresRestartLibraryFixture() {
     };
 
     const std::filesystem::path blinkerSourceManifest = devicesRoot / "example-blinker" / "device.json";
-    const std::filesystem::path voltmeterSourceManifest = devicesRoot / "voltmeter" / "device.json";
-    if (!std::filesystem::exists(blinkerSourceManifest) || !std::filesystem::exists(voltmeterSourceManifest)) return {};
+    if (!std::filesystem::exists(blinkerSourceManifest)) return {};
 
     nlohmann::json blinkerManifest;
     {
@@ -151,14 +149,7 @@ static std::filesystem::path createRequiresRestartLibraryFixture() {
         if (!input) return {};
         input >> blinkerManifest;
     }
-    nlohmann::json voltmeterManifest;
-    {
-        std::ifstream input(voltmeterSourceManifest);
-        if (!input) return {};
-        input >> voltmeterManifest;
-    }
-    if (!absolutizeNativeEntry(blinkerSourceManifest, blinkerManifest)
-        || !absolutizeNativeEntry(voltmeterSourceManifest, voltmeterManifest)) {
+    if (!absolutizeNativeEntry(blinkerSourceManifest, blinkerManifest)) {
         return {};
     }
 
@@ -166,25 +157,17 @@ static std::filesystem::path createRequiresRestartLibraryFixture() {
     blinkerManifest["properties"][0]["requiresRestart"] = true;
 
     const std::filesystem::path blinkerManifestOut = tempDir / "example-blinker" / "device.json";
-    const std::filesystem::path voltmeterManifestOut = tempDir / "voltmeter" / "device.json";
     const std::filesystem::path libraryOut = tempDir / "library.json";
 
     {
         std::ofstream manifestFile(blinkerManifestOut);
         manifestFile << blinkerManifest.dump(2);
     }
-    {
-        std::ofstream manifestFile(voltmeterManifestOut);
-        manifestFile << voltmeterManifest.dump(2);
-    }
-
     const nlohmann::json library = {
         {"schemaVersion", 1},
         {"publisher", "test"},
         {"version", "0.0.0"},
-        {"devices",
-         {{{"typeId", "example.blinker.requires_restart"}, {"manifest", "example-blinker/device.json"}},
-          {{"typeId", "instruments.voltmeter"}, {"manifest", "voltmeter/device.json"}}}},
+        {"devices", {{{"typeId", "example.blinker.requires_restart"}, {"manifest", "example-blinker/device.json"}}}},
     };
     std::ofstream libraryFile(libraryOut);
     libraryFile << library.dump(2);
@@ -508,108 +491,6 @@ static void testGetComponentCurrentOverIpc() {
     TEST_ASSERT(serverResult == 0, "servidor encerrou com codigo 0 apos shutdown");
 }
 
-// Teste 4c: loadDeviceLibrary carrega o voltímetro REAL (devices/voltmeter, DLL compilada por
-// 'npm run build:devices') e ele mede ~5V no ponto médio do mesmo divisor resistivo de sempre —
-// valida de ponta a ponta: loadDeviceLibrary, addComponent repassando pins pro plugin, stamp() do
-// voltímetro via LsdnMatrixView real, e getComponentState lendo o resultado de volta.
-static void testVoltmeterPluginOverIpc() {
-    std::fprintf(stderr, "\n[T4c] Plugin voltímetro real mede ~5V no divisor resistivo via IPC\n");
-
-#ifndef DEVICES_LIBRARY_JSON_PATH
-#error "DEVICES_LIBRARY_JSON_PATH precisa ser definido pelo CMakeLists"
-#endif
-    const std::filesystem::path libraryPath = DEVICES_LIBRARY_JSON_PATH;
-    if (!std::filesystem::exists(libraryPath)) {
-        std::fprintf(stderr, "PULADO: %s não existe.\n", libraryPath.string().c_str());
-        return;
-    }
-
-    const std::string pipeName = "lasecsimul-bootstrap-test-voltmeter";
-    int serverResult = -1;
-    std::thread serverThread([&] {
-        lasecsimul::app::CoreApplication app({pipeName});
-        serverResult = app.run();
-    });
-
-#ifdef _WIN32
-    void* conn = clientConnect(pipeName);
-    TEST_ASSERT(conn != INVALID_HANDLE_VALUE, "cliente conectou");
-#else
-    int conn = clientConnect(pipeName);
-    TEST_ASSERT(conn >= 0, "cliente conectou");
-#endif
-
-    if (
-#ifdef _WIN32
-        conn != INVALID_HANDLE_VALUE
-#else
-        conn >= 0
-#endif
-    ) {
-        int nextId = 1;
-        auto send = [&](const std::string& type, const nlohmann::json& payload) -> nlohmann::json {
-            const nlohmann::json req = {{"id", std::to_string(nextId++)},
-                                         {"type", type},
-                                         {"payload", payload},
-                                         {"protocolVersion", lasecsimul::ipc::PROTOCOL_VERSION}};
-            clientWriteLine(conn, req.dump());
-            return nlohmann::json::parse(clientReadLine(conn));
-        };
-
-        send("hello", {{"clientVersion", "0.1.0"}});
-
-        const nlohmann::json loadResp = send("loadDeviceLibrary", {{"path", libraryPath.string()}});
-        TEST_ASSERT(loadResp.value("ok", false), "loadDeviceLibrary carrega devices/library.json real sem erro");
-
-        const std::string source = send("addComponent", {{"typeId", "sources.dc_voltage"}, {"properties", {{"voltage", 10.0}}}})["payload"]["instanceId"];
-        const std::string r1 = send("addComponent", {{"typeId", "passive.resistor"}, {"properties", {{"resistance", 1000.0}}}})["payload"]["instanceId"];
-        const std::string r2 = send("addComponent", {{"typeId", "passive.resistor"}, {"properties", {{"resistance", 1000.0}}}})["payload"]["instanceId"];
-        const std::string ground = send("addComponent", {{"typeId", "other.ground"}, {"properties", nlohmann::json::object()}})["payload"]["instanceId"];
-
-        const nlohmann::json voltmeterResp = send("addComponent", {{"typeId", "instruments.voltmeter"},
-                                                                     {"properties", nlohmann::json::object()},
-                                                                     {"pins", {{{"id", "p1"}}, {{"id", "p2"}}}}});
-        TEST_ASSERT(voltmeterResp.value("ok", false), "addComponent('instruments.voltmeter') com pins funciona via plugin real");
-        const std::string voltmeter = voltmeterResp["payload"]["instanceId"];
-
-        send("connectWire", {{"componentA", source}, {"pinIdA", "p1"}, {"componentB", r1}, {"pinIdB", "p1"}});
-        send("connectWire", {{"componentA", r1}, {"pinIdA", "p2"}, {"componentB", r2}, {"pinIdB", "p1"}});
-        send("connectWire", {{"componentA", r2}, {"pinIdA", "p2"}, {"componentB", source}, {"pinIdB", "p2"}});
-        send("connectWire", {{"componentA", source}, {"pinIdA", "p2"}, {"componentB", ground}, {"pinIdB", "pin"}});
-        send("connectWire", {{"componentA", voltmeter}, {"pinIdA", "p1"}, {"componentB", r1}, {"pinIdB", "p2"}});
-        send("connectWire", {{"componentA", voltmeter}, {"pinIdA", "p2"}, {"componentB", ground}, {"pinIdB", "pin"}});
-
-        send("start", nlohmann::json::object());
-
-        double lastVoltage = -1.0;
-        bool stabilized = false;
-        for (int attempt = 0; attempt < 150 && !stabilized; ++attempt) {
-            const nlohmann::json resp = send("getComponentState", {{"instanceId", voltmeter}});
-            if (resp.value("ok", false)) {
-                const std::string hex = resp["payload"].value("stateHex", std::string{});
-                if (hex.size() == 16) {
-                    uint8_t bytes[8];
-                    const auto hexNibble = [](char c) -> int { return (c >= '0' && c <= '9') ? c - '0' : (c - 'a' + 10); };
-                    for (int i = 0; i < 8; ++i)
-                        bytes[i] = static_cast<uint8_t>((hexNibble(hex[i * 2]) << 4) | hexNibble(hex[i * 2 + 1]));
-                    std::memcpy(&lastVoltage, bytes, sizeof(lastVoltage));
-                    if (std::abs(lastVoltage - 5.0) < 1e-3) stabilized = true;
-                }
-            }
-            if (!stabilized) std::this_thread::sleep_for(std::chrono::milliseconds(20));
-        }
-        TEST_ASSERT(stabilized, "voltimetro plugin mede ~5V no ponto medio via getComponentState");
-        std::fprintf(stderr, "  [info] ultima tensao medida pelo plugin: %.6f\n", lastVoltage);
-
-        send("stop", nlohmann::json::object());
-        send("shutdown", nlohmann::json::object());
-        clientClose(conn);
-    }
-
-    serverThread.join();
-    TEST_ASSERT(serverResult == 0, "servidor encerrou com codigo 0 apos shutdown");
-}
-
 // Teste 4c.2: componentes complexos refeitos via ABI recebem comandos bit a bit pelo on_event.
 static void testSimulideComplexAbiEventsOverIpc() {
     std::fprintf(stderr, "\n[T4c.2] componente complexo SimulIDE via ABI interpreta pinos bit a bit\n");
@@ -754,7 +635,7 @@ static void testGetPropertySchemasOverIpc() {
         TEST_ASSERT(beforeResp.value("ok", false), "getPropertySchemas responde ok");
         const nlohmann::json& beforeSchemas = beforeResp["payload"]["schemasByTypeId"];
         TEST_ASSERT(beforeSchemas.contains("passive.resistor"), "schema do resistor built-in já existe sem nenhum loadDeviceLibrary");
-        TEST_ASSERT(!beforeSchemas.contains("instruments.voltmeter"), "voltímetro (plugin) ainda não aparece antes de carregar a library");
+        TEST_ASSERT(!beforeSchemas.contains("example.blinker"), "example.blinker (plugin) ainda não aparece antes de carregar a library");
 
         const nlohmann::json& resistorSchema = beforeSchemas["passive.resistor"][0];
         TEST_ASSERT(resistorSchema.value("group", std::string{}) == "Elétrica", "resistor: grupo == Elétrica");
@@ -768,27 +649,13 @@ static void testGetPropertySchemasOverIpc() {
             send("loadDeviceLibrary", {{"path", libraryPath.string()}});
             const nlohmann::json afterResp = send("getPropertySchemas", nlohmann::json::object());
             const nlohmann::json& afterSchemas = afterResp["payload"]["schemasByTypeId"];
-            TEST_ASSERT(afterSchemas.contains("instruments.voltmeter"), "voltímetro (plugin) aparece depois de loadDeviceLibrary");
+            TEST_ASSERT(afterSchemas.contains("example.blinker"), "example.blinker (plugin) aparece depois de loadDeviceLibrary");
             TEST_ASSERT(afterSchemas.contains("passive.resistor"), "resistor (built-in) continua presente depois do loadDeviceLibrary");
 
-            // T4e: resolução de idioma (lasecsimul.spec seção 6.3.3) -- devices/voltmeter/device.json
-            // declara "language":"pt-BR" + tradução "en" de displayVoltage.label/.group.
-            const nlohmann::json ptResp = send("getPropertySchemas", {{"language", "pt-BR"}});
-            const std::string ptLabel = ptResp["payload"]["schemasByTypeId"]["instruments.voltmeter"][0].value("label", std::string{});
-            TEST_ASSERT(ptLabel == "Tensão medida", "voltímetro: language=pt-BR devolve label original (língua-base)");
-
-            const nlohmann::json enResp = send("getPropertySchemas", {{"language", "en"}});
-            const nlohmann::json& enVoltmeterSchema = enResp["payload"]["schemasByTypeId"]["instruments.voltmeter"][0];
-            TEST_ASSERT(enVoltmeterSchema.value("label", std::string{}) == "Measured voltage", "voltímetro: language=en resolve label traduzido");
-            TEST_ASSERT(enVoltmeterSchema.value("group", std::string{}) == "Reading", "voltímetro: language=en resolve group traduzido");
-
             // Built-in agora também pode declarar tradução no Core -- pedir "en" resolve o grupo traduzido.
+            const nlohmann::json enResp = send("getPropertySchemas", {{"language", "en"}});
             const nlohmann::json& enResistorSchema = enResp["payload"]["schemasByTypeId"]["passive.resistor"][0];
             TEST_ASSERT(enResistorSchema.value("group", std::string{}) == "Electrical", "resistor: language=en resolve group traduzido");
-
-            const nlohmann::json frResp = send("getPropertySchemas", {{"language", "fr"}});
-            const nlohmann::json& frVoltmeterSchema = frResp["payload"]["schemasByTypeId"]["instruments.voltmeter"][0];
-            TEST_ASSERT(frVoltmeterSchema.value("label", std::string{}) == "Tensão medida", "voltímetro: language=fr (não traduzido) cai pra língua-base pt-BR");
         } else {
             std::fprintf(stderr, "  [info] %s não existe -- pulando verificação pós-loadDeviceLibrary.\n", libraryPath.string().c_str());
         }
@@ -881,20 +748,6 @@ static void testSetPropertyValidationOverIpc() {
             const nlohmann::json loadRestartResp = send("loadDeviceLibrary", {{"path", restartFixture.string()}});
             TEST_ASSERT(loadRestartResp.value("ok", false), "loadDeviceLibrary da fixture requiresRestart funciona");
 
-            const nlohmann::json voltmeterResp =
-                send("addComponent", {{"typeId", "instruments.voltmeter"},
-                                       {"properties", nlohmann::json::object()},
-                                       {"pins", {{{"id", "p1"}}, {{"id", "p2"}}}}});
-            TEST_ASSERT(voltmeterResp.value("ok", false), "addComponent do voltimetro real funciona");
-            if (voltmeterResp.value("ok", false)) {
-                const std::string voltmeter = voltmeterResp["payload"]["instanceId"];
-                const nlohmann::json readOnlyResp =
-                    send("setProperty", {{"instanceId", voltmeter}, {"name", "displayVoltage"}, {"value", 3.3}});
-                TEST_ASSERT(!readOnlyResp.value("ok", true), "setProperty rejeita propriedade readOnly do plugin");
-                TEST_ASSERT(payloadString(readOnlyResp, "errorCode") == "read_only",
-                            "errorCode=read_only para propriedade somente leitura");
-            }
-
             const nlohmann::json blinkerResp =
                 send("addComponent", {{"typeId", "example.blinker.requires_restart"},
                                        {"properties", {{"periodMs", 500.0}}},
@@ -912,21 +765,8 @@ static void testSetPropertyValidationOverIpc() {
             const std::filesystem::path libraryPath = DEVICES_LIBRARY_JSON_PATH;
             if (std::filesystem::exists(libraryPath)) {
                 send("loadDeviceLibrary", {{"path", libraryPath.string()}});
-                const nlohmann::json voltmeterResp =
-                    send("addComponent", {{"typeId", "instruments.voltmeter"},
-                                           {"properties", nlohmann::json::object()},
-                                           {"pins", {{{"id", "p1"}}, {{"id", "p2"}}}}});
-                TEST_ASSERT(voltmeterResp.value("ok", false), "addComponent do voltimetro real funciona");
-                if (voltmeterResp.value("ok", false)) {
-                    const std::string voltmeter = voltmeterResp["payload"]["instanceId"];
-                    const nlohmann::json readOnlyResp =
-                        send("setProperty", {{"instanceId", voltmeter}, {"name", "displayVoltage"}, {"value", 3.3}});
-                    TEST_ASSERT(!readOnlyResp.value("ok", true), "setProperty rejeita propriedade readOnly do plugin");
-                    TEST_ASSERT(payloadString(readOnlyResp, "errorCode") == "read_only",
-                                "errorCode=read_only para propriedade somente leitura");
-                }
             } else {
-                std::fprintf(stderr, "  [info] devices/library.json nao existe -- pulando readOnly de plugin.\n");
+                std::fprintf(stderr, "  [info] devices/library.json nao existe -- pulando plugins ABI.\n");
             }
             std::fprintf(stderr,
                          "  [info] artefato real do example-blinker nao existe -- pulando requiresRestart.\n");
@@ -1007,7 +847,6 @@ int main() {
     testGetComponentStateOverIpc();
     testGetNodeVoltageOverIpc();
     testGetComponentCurrentOverIpc();
-    testVoltmeterPluginOverIpc();
     testSimulideComplexAbiEventsOverIpc();
     testGetPropertySchemasOverIpc();
     testSetPropertyValidationOverIpc();

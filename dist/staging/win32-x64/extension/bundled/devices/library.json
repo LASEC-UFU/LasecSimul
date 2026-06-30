@@ -6,7 +6,6 @@
   "license": "MIT",
   "devices": [
     { "typeId": "example.blinker", "manifest": "example-blinker/device.json" },
-    { "typeId": "instruments.voltmeter", "manifest": "voltmeter/device.json" },
     { "typeId": "outputs.ssd1306", "manifest": "simulide-complex/ssd1306.json" },
     { "typeId": "outputs.sh1107", "manifest": "simulide-complex/sh1107.json" },
     { "typeId": "outputs.hd44780", "manifest": "simulide-complex/hd44780.json" },
@@ -59,7 +58,6 @@
     { "typeId": "logic.lm555", "manifest": "simulide-logic/lm555.json" }
   ],
   "checksums": {
-    "example-blinker/build/win-x64/device.dll": "PREENCHER_NO_BUILD_SHA256",
-    "voltmeter/build/win-x64/device.dll": "PREENCHER_NO_BUILD_SHA256"
+    "example-blinker/build/win-x64/device.dll": "PREENCHER_NO_BUILD_SHA256"
   }
 }
