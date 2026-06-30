@@ -342,7 +342,8 @@ function builtinComponentBox(typeId: string): ComponentBox | undefined {
     case "switches.switch": return SWITCH_BOX; // switches/switch.cpp + mech_contact.cpp
     case "switches.switch_dip": return { width: 32, height: 64 };
     case "switches.relay": return { width: 48, height: 48 };
-    case "switches.keypad": return { width: 72, height: 72 };
+    // "switches.keypad" agora é property-driven (ver `propertyDrivenBox`) -- cresce com rows/columns
+    // reais, nunca um tamanho fixo.
 
     case "active.diode": return COMP2PIN_BOX;
     case "active.zener": return { width: 36, height: 20 };
@@ -446,6 +447,15 @@ function propertyDrivenBox(typeId: string, properties: Record<string, unknown> |
       const text = typeof properties.text === "string" ? properties.text : "Texto";
       const fontSize = numberOf("fontSize") ?? 11;
       return { width: Math.max(24, text.length * fontSize * 0.62 + 12), height: fontSize + 14 };
+    }
+    case "switches.keypad": {
+      // Mesma fórmula de `switches/keypad.cpp::updateBoardLayout()` real: `m_area = QRectF(-12,-4,
+      // 16*cols+8, 16*rows+8)` -- cresce/encolhe com `rows`/`columns` reais da instância, nunca um
+      // tamanho fixo (bug relatado 2026-06-30: grade sempre desenhada 4×4 vazia, ignorando a
+      // configuração real do componente).
+      const cols = numberOf("columns") ?? 3;
+      const rows = numberOf("rows") ?? 4;
+      return { width: 16 * cols + 8, height: 16 * rows + 8 };
     }
     default:
       return undefined;
@@ -746,8 +756,29 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
     }
 
     case "passive.resistor_dip":
-    case "switches.switch_dip":
-      return labelBox(typeId === "passive.resistor_dip" ? "DIP-R" : "DIP-SW");
+      return labelBox("DIP-R");
+
+    case "switches.switch_dip": {
+      // Antes era um `labelBox("DIP-SW")` genérico (texto+caixa únicos, SEM marca de alavanca
+      // nenhuma) -- numa caixa MUITO mais alta que o texto (até 8 posições empilhadas), o texto
+      // ficava no meio da pilha de pinos, colidindo visualmente com eles (bug relatado 2026-06-30,
+      // "D...SW" sobreposto às bolinhas de pino). Agora desenha N marcas de alavanca empilhadas
+      // (uma por posição, `N = box.height/8`, mesma fórmula de `switchdip.cpp::m_area`), igual ao
+      // corpo retangular fino real -- sem texto nenhum no meio do corpo.
+      const closed = properties?.closed === true;
+      const bodyWidth = 16;
+      const bodyX = midX - bodyWidth / 2;
+      const positions = Math.max(1, Math.round(box.height / 8));
+      let leversMarkup = `<rect x="${bodyX}" y="2" width="${bodyWidth}" height="${box.height - 4}" class="symbol-stroke" fill="none"/>`;
+      for (let i = 0; i < positions; i++) {
+        const cy = 2 + ((i + 0.5) * (box.height - 4)) / positions;
+        const leverX2 = closed ? bodyX + bodyWidth - 3 : bodyX + bodyWidth - 7;
+        leversMarkup +=
+          `<line x1="${bodyX + 3}" y1="${cy}" x2="${leverX2}" y2="${cy - 2}" class="symbol-stroke"/>` +
+          `<circle cx="${bodyX + 3}" cy="${cy}" r="1.4" class="symbol-stroke" fill="currentColor"/>`;
+      }
+      return leversMarkup;
+    }
 
     case "passive.potentiometer":
       return (
@@ -1001,15 +1032,31 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
         `<circle cx="${box.width - 28}" cy="${box.height - 18}" r="2" class="symbol-stroke" fill="currentColor"/>`
       );
 
-    case "switches.keypad":
-      return (
-        `<rect x="14" y="12" width="${box.width - 28}" height="${box.height - 24}" class="symbol-stroke" fill="none"/>` +
-        Array.from({ length: 4 }, (_, row) =>
-          Array.from({ length: 4 }, (_, col) =>
-            `<rect x="${24 + col * 12}" y="${22 + row * 12}" width="8" height="8" rx="1" class="symbol-stroke" fill="none"/>`
-          ).join("")
-        ).join("")
-      );
+    case "switches.keypad": {
+      // Lê rows/columns/keyLabels REAIS da instância (mesmo default do real SimulIDE,
+      // `keypad.cpp`: `m_keyLabels = "123456789*0#"`) -- sem isto, a grade saía sempre 4×4 vazia,
+      // ignorando a configuração real do componente (bug relatado 2026-06-30, "veja o keypad o
+      // quanto está diferente"). Cada tecla é um quadrado arredondado com o caractere centralizado,
+      // igual ao desenho real (`keypad.cpp::paint()`).
+      const cols = typeof properties?.columns === "number" ? properties.columns : 3;
+      const rows = typeof properties?.rows === "number" ? properties.rows : 4;
+      const keyLabels = typeof properties?.keyLabels === "string" ? properties.keyLabels : "123456789*0#";
+      const cell = 16;
+      const keySize = 12;
+      let keysMarkup = "";
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const index = row * cols + col;
+          const label = keyLabels[index] ?? "";
+          const cx = 4 + col * cell + cell / 2;
+          const cy = 4 + row * cell + cell / 2;
+          keysMarkup +=
+            `<rect x="${cx - keySize / 2}" y="${cy - keySize / 2}" width="${keySize}" height="${keySize}" rx="2" class="symbol-stroke" fill="none"/>` +
+            (label ? `<text x="${cx}" y="${cy + 3}" text-anchor="middle" class="symbol-text" style="font-size:8px">${escapeXmlText(label)}</text>` : "");
+        }
+      }
+      return keysMarkup;
+    }
 
     case "active.diode":
     case "active.zener":

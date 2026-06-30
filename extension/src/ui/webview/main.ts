@@ -264,6 +264,16 @@ let activePropertyTarget:
 let propertyDialogShowAll = false;
 let clipboardItems: { components: WebviewComponentModel[]; wires: WebviewWireModel[] } | undefined;
 const activePushShortcutIds = new Set<string>();
+/** `true` durante QUALQUER gesto de arrastar componente em andamento (mouse ainda pressionado) --
+ * `render()` reconstrói `app.innerHTML` inteiro (ver função `render`), o que destrói o elemento
+ * `el` que tem `setPointerCapture()`/os listeners `pointermove`/`pointerup` do arrasto em curso.
+ * Como `componentReadout`/`wireVoltages` chegam a cada ~300ms DURANTE a simulação e cada um chama
+ * `render()` sem condição, um arrasto em andamento durante a simulação era interrompido a cada
+ * poll -- o usuário só conseguia mover um pedacinho por vez, "soltar e começar de novo" a cada
+ * ~300ms (bug relatado 2026-06-30). Enquanto isto for `true`, esses dois handlers pulam o
+ * `render()` (ainda atualizam os dados em cache -- a tela só fica "atrasada" até o solte do mouse,
+ * que já chama `render()` no fim do gesto). */
+let isDraggingComponent = false;
 type ExternalLabelKind = "id" | "value";
 let selectedTextLabel: { componentId: string; kind: ExternalLabelKind } | undefined;
 
@@ -405,6 +415,7 @@ function renderBoardOverlaysFor(component: WebviewComponentModel): HTMLElement[]
         if (!dragging && Math.hypot(moveEvent.clientX - startClientX, moveEvent.clientY - startClientY) > DRAG_THRESHOLD_PX) {
           dragging = true;
           el.classList.add("dragging");
+          isDraggingComponent = true;
           setPressed(false); // movimento detectado -- isto era arrasto, não aperto, desfaz o efeito
         }
         if (dragging) {
@@ -417,6 +428,7 @@ function renderBoardOverlaysFor(component: WebviewComponentModel): HTMLElement[]
         window.removeEventListener("pointerup", finish);
         window.removeEventListener("pointercancel", finish);
         el.classList.remove("dragging");
+        isDraggingComponent = false;
         setPressed(false);
         if (!dragging) return;
         const zoom = state.viewport.zoom || 1;
@@ -2968,68 +2980,11 @@ function renderComponent(component: WebviewComponentModel): HTMLElement {
 
   el.appendChild(svg);
 
-  if (isPushButton) {
-    el.addEventListener("pointerdown", (event) => {
-      if (event.button !== 0 || event.shiftKey) return;
-      if (event.target instanceof Element && event.target.closest(".pin-terminal")) return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      if (!isComponentSelected(component.id)) selectOnlyComponent(component.id);
-
-      const release = (): void => {
-        window.removeEventListener("pointerup", release);
-        window.removeEventListener("pointercancel", release);
-        window.removeEventListener("blur", release);
-        const refreshedComponent = state.components.find((entry) => entry.id === component.id);
-        if (refreshedComponent) setPushClosed(refreshedComponent, false);
-      };
-
-      window.addEventListener("pointerup", release);
-      window.addEventListener("pointercancel", release);
-      window.addEventListener("blur", release);
-      setPushClosed(component, true);
-    });
-  }
-
-  if (isSwitchToggle) {
-    el.addEventListener("pointerdown", (event) => {
-      if (event.button !== 0 || event.shiftKey) return;
-      if (event.target instanceof Element && event.target.closest(".pin-terminal")) return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      if (!isComponentSelected(component.id)) {
-        selectOnlyComponent(component.id);
-        persistState();
-      }
-      setSwitchClosed(component, component.properties.closed !== true);
-    });
-
-    el.addEventListener("click", (event) => {
-      if (event.target instanceof Element && event.target.closest(".pin-terminal")) return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-    }, { capture: true });
-  }
-
-  if (isFixedVolt) {
-    el.addEventListener("pointerdown", (event) => {
-      if (event.button !== 0 || event.shiftKey) return;
-      if (event.target instanceof Element && event.target.closest(".pin-terminal")) return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      if (!isComponentSelected(component.id)) {
-        selectOnlyComponent(component.id);
-        persistState();
-      }
-      setFixedVoltOut(component, component.properties.out !== true);
-    });
-
-    el.addEventListener("click", (event) => {
-      if (event.target instanceof Element && event.target.closest(".pin-terminal")) return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-    }, { capture: true });
-  }
+  // Clique-pra-alternar (push/switch/fixed-volt) é desambiguado de ARRASTAR dentro do handler
+  // genérico de `pointerdown` mais abaixo (ver `DRAG_THRESHOLD_PX`) -- antes disto, estes 3 tipos
+  // tinham handler PRÓPRIO que chamava `stopImmediatePropagation()` e alternava direto no
+  // `pointerdown`, impedindo COMPLETAMENTE o handler genérico de arrastar de rodar (bug relatado
+  // 2026-06-30: "os botões onde tem ação eu não consigo mover, sempre acha que é clicar").
 
   if (isExpandableInstrument) {
     el.addEventListener("click", (event) => {
@@ -3144,13 +3099,31 @@ function renderComponent(component: WebviewComponentModel): HTMLElement {
       return;
     }
     if (!isComponentSelected(component.id)) selectOnlyComponent(component.id);
-    el.classList.add("dragging");
     dragStartX = event.clientX;
     dragStartY = event.clientY;
     dragTargets = dragSelectionWithLinkedPinLabels().map((selected) => ({ component: selected, startX: selected.x, startY: selected.y }));
     el.setPointerCapture(event.pointerId);
 
+    // Clique-pra-alternar (push/switch/fixed-volt) vs ARRASTAR é o MESMO gesto de pointerdown,
+    // desambiguado por distância percorrida -- igual ao overlay de Modo Placa (ver
+    // `renderBoardOverlaysFor`). Push pressiona IMEDIATAMENTE (feedback tátil de "segurar"), mas o
+    // aperto é desfeito se virar arrasto; switch/fixed-volt só alternam no soltar, se NÃO arrastou.
+    const DRAG_THRESHOLD_PX = 4;
+    let dragStarted = false;
+    if (isPushButton) setPushClosed(component, true);
+
+    const startDragging = (): void => {
+      dragStarted = true;
+      el.classList.add("dragging");
+      isDraggingComponent = true;
+      if (isPushButton) setPushClosed(component, false); // movimento detectado -- isto era arrasto, não aperto
+    };
+
     const onMove = (moveEvent: PointerEvent) => {
+      if (!dragStarted && Math.hypot(moveEvent.clientX - dragStartX, moveEvent.clientY - dragStartY) > DRAG_THRESHOLD_PX) {
+        startDragging();
+      }
+      if (!dragStarted) return;
       const zoom = state.viewport.zoom || 1;
       const dx = (moveEvent.clientX - dragStartX) / zoom;
       const dy = (moveEvent.clientY - dragStartY) / zoom;
@@ -3171,7 +3144,13 @@ function renderComponent(component: WebviewComponentModel): HTMLElement {
       el.removeEventListener("pointerup", onUp);
       el.removeEventListener("pointercancel", onUp);
       el.classList.remove("dragging");
+      isDraggingComponent = false;
       dragTargets = [];
+      if (!dragStarted) {
+        if (isPushButton) setPushClosed(component, false);
+        else if (isSwitchToggle) setSwitchClosed(component, component.properties.closed !== true);
+        else if (isFixedVolt) setFixedVoltOut(component, component.properties.out !== true);
+      }
       persistState();
       render();
     };
@@ -3685,7 +3664,11 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
   if (message.type === "componentReadout") {
     readoutsByComponentId = message.readoutsByComponentId;
     updateReadoutHistories(message.readoutsByComponentId);
-    render();
+    // `render()` reconstrói o DOM inteiro -- chamado SEM CONDIÇÃO a cada poll de telemetria (~300ms
+    // durante a simulação) destruiria um arrasto de componente em andamento (ver doc de
+    // `isDraggingComponent`). Os dados (`readoutsByComponentId`) já ficaram atualizados acima; só a
+    // TELA fica momentaneamente atrasada até o usuário soltar o mouse (que já chama `render()`).
+    if (!isDraggingComponent) render();
     refreshOpenPropertyDialog();
   }
 
@@ -3697,12 +3680,12 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
 
   if (message.type === "boardOverlayData") {
     boardOverlayDataByComponentId.set(message.componentId, message.items);
-    render();
+    if (!isDraggingComponent) render();
   }
 
   if (message.type === "wireVoltages") {
     voltagesByWireId = message.voltagesByWireId;
-    render();
+    if (!isDraggingComponent) render();
   }
 
   if (message.type === "simulationStatus") {
@@ -3966,6 +3949,7 @@ function renderExternalLabel(component: WebviewComponentModel, kind: ExternalLab
     dragStartY = event.clientY;
     startOffset = externalLabelOffset(component, kind);
     el.setPointerCapture(event.pointerId);
+    isDraggingComponent = true;
 
     const onMove = (moveEvent: PointerEvent): void => {
       const zoom = state.viewport.zoom || 1;
@@ -3979,6 +3963,7 @@ function renderExternalLabel(component: WebviewComponentModel, kind: ExternalLab
       el.removeEventListener("pointermove", onMove);
       el.removeEventListener("pointerup", onUp);
       el.removeEventListener("pointercancel", onUp);
+      isDraggingComponent = false;
       const zoom = state.viewport.zoom || 1;
       const dx = (upEvent.clientX - dragStartX) / zoom;
       const dy = (upEvent.clientY - dragStartY) / zoom;
