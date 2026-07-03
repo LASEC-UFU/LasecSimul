@@ -125,8 +125,12 @@ function fileExists(filePath: string): boolean {
 }
 
 function readJsonFile(filePath: string): unknown {
-  const raw = fs.readFileSync(filePath, "utf8");
-  return JSON.parse(raw) as unknown;
+  const raw = fs.readFileSync(filePath, "utf8").replace(/^\uFEFF/, "");
+  const parsed = JSON.parse(raw) as unknown;
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error("raiz do arquivo JSON precisa ser um objeto");
+  }
+  return parsed;
 }
 
 function inferLibraryPathForDevice(deviceFilePath: string): string | undefined {
@@ -142,10 +146,48 @@ function inferLibraryPathForSubcircuit(manifestFilePath: string): string | undef
   return fileExists(candidate) ? candidate : undefined;
 }
 
-function resolveFolderPath(source: RegisteredSource, fallback: string[]): string[] {
-  if (Array.isArray(source.folderPath) && source.folderPath.length > 0) {
-    return source.folderPath.map((segment) => String(segment).trim()).filter((segment) => segment.length > 0);
+function sanitizeFolderPathSegments(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((segment) => String(segment).trim()).filter((segment) => segment.length > 0);
+}
+
+function folderPathFromManifestFile(filePath: string): string[] | undefined {
+  try {
+    const json = readJsonFile(filePath) as Record<string, unknown>;
+    const folderPath = sanitizeFolderPathSegments(json.folderPath);
+    return folderPath.length > 0 ? folderPath : undefined;
+  } catch {
+    return undefined;
   }
+}
+
+function folderPathFromMalformedJsonText(filePath: string): string[] | undefined {
+  try {
+    const raw = fs.readFileSync(filePath, "utf8").replace(/^\uFEFF/, "");
+    const match = /"folderPath"\s*:\s*\[([\s\S]*?)\]/.exec(raw);
+    const arrayBody = match?.[1];
+    if (!arrayBody) return undefined;
+    const segments: string[] = [];
+    for (const segmentMatch of arrayBody.matchAll(/"((?:\\.|[^"\\])*)"/g)) {
+      const rawSegment = segmentMatch[1] ?? "";
+      let segment = rawSegment;
+      try {
+        segment = JSON.parse(`"${rawSegment}"`) as string;
+      } catch {
+        // Mantem o texto cru quando o proprio escape da string estiver quebrado.
+      }
+      segment = segment.trim();
+      if (segment) segments.push(segment);
+    }
+    return segments.length > 0 ? segments : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function resolveFolderPath(source: RegisteredSource, fallback: string[]): string[] {
+  const sourceFolder = sanitizeFolderPathSegments(source.folderPath);
+  if (sourceFolder.length > 0) return sourceFolder;
   return fallback;
 }
 
@@ -517,7 +559,7 @@ function resolveRegisteredItem(source: RegisteredSource, extensionPath: string, 
       entry,
     };
   } catch (err) {
-    const fallbackFolder = localizedRegisteredFolder(source.kind, language);
+    const fallbackFolder = folderPathFromMalformedJsonText(absoluteFilePath) ?? localizedRegisteredFolder(source.kind, language);
     return createDisabledEntry(
       source,
       source.kind,
@@ -1811,6 +1853,7 @@ function inferSourcesFromSelectedFile(extensionPath: string, selectedPath: strin
         filePath: manifestPath,
         libraryPath: absoluteSelectedPath,
         lsconfigPath: inferLsconfigPath(manifestPath),
+        folderPath: folderPathFromManifestFile(manifestPath),
       });
     }
 
@@ -1826,6 +1869,7 @@ function inferSourcesFromSelectedFile(extensionPath: string, selectedPath: strin
         filePath: manifestPath,
         libraryPath: absoluteSelectedPath,
         lsconfigPath: inferLsconfigPath(manifestPath),
+        folderPath: folderPathFromManifestFile(manifestPath),
       });
     }
 
@@ -1839,6 +1883,7 @@ function inferSourcesFromSelectedFile(extensionPath: string, selectedPath: strin
         id: nextSourceId(),
         kind: "subcircuit-file",
         filePath: manifestPath,
+        folderPath: folderPathFromManifestFile(manifestPath),
       });
     }
 
@@ -1850,6 +1895,7 @@ function inferSourcesFromSelectedFile(extensionPath: string, selectedPath: strin
       id: nextSourceId(),
       kind: "subcircuit-file",
       filePath: absoluteSelectedPath,
+      folderPath: sanitizeFolderPathSegments(json.folderPath),
     });
     return sources;
   }
@@ -1863,6 +1909,7 @@ function inferSourcesFromSelectedFile(extensionPath: string, selectedPath: strin
       filePath: absoluteSelectedPath,
       libraryPath: inferLibraryPathForDevice(absoluteSelectedPath),
       lsconfigPath: inferLsconfigPath(absoluteSelectedPath),
+      folderPath: sanitizeFolderPathSegments(json.folderPath),
     });
     return sources;
   }
@@ -1874,6 +1921,7 @@ function inferSourcesFromSelectedFile(extensionPath: string, selectedPath: strin
       filePath: absoluteSelectedPath,
       libraryPath: inferLibraryPathForDevice(absoluteSelectedPath),
       lsconfigPath: inferLsconfigPath(absoluteSelectedPath),
+      folderPath: sanitizeFolderPathSegments(json.folderPath),
     });
     return sources;
   }
@@ -1884,6 +1932,7 @@ function inferSourcesFromSelectedFile(extensionPath: string, selectedPath: strin
       id: nextSourceId(),
       kind: "subcircuit-file",
       filePath: absoluteSelectedPath,
+      folderPath: sanitizeFolderPathSegments(json.folderPath),
     });
   }
 

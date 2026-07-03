@@ -1,4 +1,4 @@
-﻿{
+{
   "schemaVersion": 1,
   "typeId": "peripherals.ds1307",
   "name": "DS1307 — RTC I2C",

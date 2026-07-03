@@ -1,4 +1,4 @@
-﻿{
+{
   "schemaVersion": 1,
   "typeId": "sensors.ds1621",
   "name": "DS1621 — Termômetro Digital I2C",

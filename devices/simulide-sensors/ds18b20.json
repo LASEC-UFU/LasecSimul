@@ -1,4 +1,4 @@
-﻿{
+{
   "schemaVersion": 1,
   "typeId": "sensors.ds18b20",
   "name": "DS18B20 — Termômetro Digital 1-Wire",

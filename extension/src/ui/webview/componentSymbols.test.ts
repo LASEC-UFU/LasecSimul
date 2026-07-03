@@ -162,6 +162,13 @@ import { PackageDescriptor } from "./model";
     assert(svg.includes("GPIO23"), "nome do tunel deveria ser desenhado dentro do simbolo");
   });
 
+  await test("voltimetro ancora leituras longas dentro do display", () => {
+    const svg = componentSymbolSvg("instruments.voltmeter", { __readout: -2.499 });
+    assert(svg.includes('text-anchor="end"'), "valor do voltimetro deveria ficar ancorado pela borda direita do LCD");
+    assert(svg.includes('style="font-size:11px"'), "leitura com sinal e tres casas deveria reduzir fonte para caber no LCD");
+    assert(svg.includes(">-2.499<"), "leitura negativa deveria ser preservada no texto do display");
+  });
+
   registerPackage("test.example", undefined);
   registerPackage("test.scaled", undefined);
   registerPackage("test.vertical", undefined);

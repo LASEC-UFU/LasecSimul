@@ -164,6 +164,12 @@ function formatLcdNumber(value: number | undefined): string {
   return (value ?? 0).toFixed(3);
 }
 
+function lcdValueFontSize(text: string): number {
+  if (text.length >= 7) return 10;
+  if (text.length >= 6) return 11;
+  return 14;
+}
+
 function formatHz(value: number | undefined): string {
   const hz = value ?? 0;
   if (hz >= 1000) return `${Number((hz / 1000).toFixed(2))} kHz`;
@@ -627,9 +633,11 @@ function horizontalLeads(box: ComponentBox, yMid: number): string {
 }
 
 function smallMeterDisplaySvg(box: ComponentBox, unit: "A" | "V", readout: number | undefined): string {
+  const valueText = formatLcdNumber(readout);
+  const valueFontSize = lcdValueFontSize(valueText);
   return (
     `<rect x="0" y="0" width="48" height="32" rx="1" class="meter-lcd"/>` +
-    `<text x="8" y="13" class="meter-lcd-value">${formatLcdNumber(readout)}</text>` +
+    `<text x="44" y="13" text-anchor="end" class="meter-lcd-value" style="font-size:${valueFontSize}px">${valueText}</text>` +
     `<text x="8" y="27" class="meter-lcd-unit">${unit}</text>` +
     `<rect x="48" y="13" width="8" height="6" rx="3" fill="currentColor"/>` +
     `<rect x="13.5" y="32" width="5" height="8" rx="2.5" fill="currentColor"/>` +

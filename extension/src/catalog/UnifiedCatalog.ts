@@ -192,7 +192,7 @@ function sanitizeRegisteredSources(input: unknown): RegisteredSource[] {
 function readUnifiedCatalogFile(extensionPath: string): { sourcePath: string; file: UnifiedCatalogFile } {
   const sourcePath = catalogPath(extensionPath);
   try {
-    const raw = fs.readFileSync(sourcePath, "utf8");
+    const raw = fs.readFileSync(sourcePath, "utf8").replace(/^\uFEFF/, "");
     const parsed = JSON.parse(raw) as UnifiedCatalogFile;
     if (!Array.isArray(parsed.items)) throw new Error("items precisa ser um array");
     return { sourcePath, file: parsed };

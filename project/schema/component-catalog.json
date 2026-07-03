@@ -1621,6 +1621,10 @@
       "id": "builtin-qemu-esp32",
       "kind": "mcu-adapter",
       "filePath": "../mcu-adapters/espressif-esp32/mcu.json",
+      "folderPath": [
+        "Microcontroladores",
+        "Espressif"
+      ],
       "removable": false
     },
     {

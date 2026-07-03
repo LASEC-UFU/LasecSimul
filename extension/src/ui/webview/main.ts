@@ -1240,6 +1240,33 @@ function render(): void {
     canvas.addEventListener("pointercancel", finish, { once: true });
   });
 
+  // Pan com botão do meio (MiddleButton) -- igual ao SimulIDE (`CircuitView::mousePressEvent` com
+  // `Qt::MiddleButton` → `ScrollHandDrag`). Mutação direta de `state.viewport` + transform sem
+  // `render()` (mesmo padrão do wheel acima -- evita recriar o DOM a cada pixel arrastado).
+  canvas.addEventListener("pointerdown", (event) => {
+    if (event.button !== 1) return;
+    event.preventDefault(); // impede autoscroll cursor do browser com botão do meio
+    const startClientX = event.clientX;
+    const startClientY = event.clientY;
+    const startViewportX = state.viewport.x;
+    const startViewportY = state.viewport.y;
+    canvas.setPointerCapture(event.pointerId);
+    const onPanMove = (moveEvent: PointerEvent): void => {
+      state.viewport.x = startViewportX + (moveEvent.clientX - startClientX);
+      state.viewport.y = startViewportY + (moveEvent.clientY - startClientY);
+      canvasContent.style.transform = `translate(${state.viewport.x}px, ${state.viewport.y}px) scale(${state.viewport.zoom})`;
+    };
+    const finishPan = (): void => {
+      canvas.removeEventListener("pointermove", onPanMove);
+      canvas.removeEventListener("pointerup", finishPan);
+      canvas.removeEventListener("pointercancel", finishPan);
+      persistState();
+    };
+    canvas.addEventListener("pointermove", onPanMove);
+    canvas.addEventListener("pointerup", finishPan, { once: true });
+    canvas.addEventListener("pointercancel", finishPan, { once: true });
+  });
+
   canvas.addEventListener(
     "wheel",
     (event) => {
@@ -1275,6 +1302,7 @@ function render(): void {
     polyline.style.pointerEvents = "none";
     wireLayer.appendChild(polyline);
     renderWireSegmentHandles(wireLayer, wire, points);
+    renderWireCornerHandles(wireLayer, wire, points);
   }
   renderPendingWirePreview(wireLayer);
   canvasContent.appendChild(wireLayer);
@@ -1931,7 +1959,10 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
 
       const onMove = (moveEvent: PointerEvent): void => {
         const drag = wireSegmentDrag;
-        if (!drag || drag.wireId !== wire.id || drag.segmentIndex !== index) return;
+        // `prepared.segmentIndex` pode diferir de `index` quando o segmento arrastado é o primeiro
+        // (duplicateEditableEndpointForSegmentMove insere um ponto duplicado antes e desloca o índice
+        // de 0 pra 1) -- comparar contra `prepared.segmentIndex`, não `index` original.
+        if (!drag || drag.wireId !== wire.id || drag.segmentIndex !== prepared.segmentIndex) return;
         const wireToMove = state.wires.find((entry) => entry.id === drag.wireId);
         if (!wireToMove) return;
         const current = eventToCanvasPoint(moveEvent, canvasEl);
@@ -2167,6 +2198,24 @@ function moveSelectedWireCornerByArrow(key: string, step: number): boolean {
     wire,
     moveOrthogonalWireCorner(points, selectedWireCorner.pointIndex, { x: current.x + delta.x, y: current.y + delta.y })
   );
+  persistState();
+  render();
+  return true;
+}
+
+/** Move todos os componentes selecionados por `step` px na direção da tecla de seta -- mesmo padrão
+ * do SimulIDE (`Component::keyPressEvent` com `GRID_SIZE` step). Posições são puramente visuais:
+ * nenhuma notificação pro Core (o Core não usa coordenadas xy). Retorna `false` se nada foi movido. */
+function moveSelectedComponentsByArrow(key: string, step: number): boolean {
+  const components = getSelectedComponents();
+  if (components.length === 0) return false;
+  const dx = key === "ArrowLeft" ? -step : key === "ArrowRight" ? step : 0;
+  const dy = key === "ArrowUp" ? -step : key === "ArrowDown" ? step : 0;
+  if (dx === 0 && dy === 0) return false;
+  for (const component of components) {
+    component.x += dx;
+    component.y += dy;
+  }
   persistState();
   render();
   return true;
@@ -4232,6 +4281,10 @@ window.addEventListener("keydown", (event) => {
       return;
     }
     if (moveSelectedWireSegmentByArrow(event.key, step)) {
+      event.preventDefault();
+      return;
+    }
+    if (moveSelectedComponentsByArrow(event.key, step)) {
       event.preventDefault();
       return;
     }
