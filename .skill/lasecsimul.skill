@@ -53,6 +53,22 @@ remeter a WASM/worker, é desatualizado — confiar nos dois `.spec` acima.
    no QEMU (checar o fork em `C:\SourceCode\qemu_simulide\target\` e `hw\`, não assumir de
    memória) — se não existir, é dependência externa que falta, não tarefa deste projeto. PIC está
    formalmente fora de escopo por esse motivo (ver `lasecsimul.spec`, seção 8.2).
+6. **Nunca hardcode lógica de um typeId específico fora do módulo daquele device quando existe (ou
+   deveria existir) um caminho de metadata genérico pro mesmo problema.** Exemplo formal já resolvido:
+   `ReadoutFormat`/`InteractionKind` (`.spec/lasecsimul-native-devices.spec` seção 22) — como a UI
+   decodifica leitura/interage com um componente vem de metadata declarado pelo PRÓPRIO device (método
+   estático pro built-in, chave em `device.json` pro plugin), nunca de um `if (typeId === "...")`
+   espalhado pela Extension. Quando a MESMA classificação por typeId precisar existir em mais de um
+   lugar, a resposta é centralizar numa declaração única consultada por todos — nunca repetir o `if`
+   em cada função que precisar dela (isso vira inconsistência garantida quando um typeId novo for
+   adicionado e alguém esquecer de atualizar uma das cópias).
+7. **Agrupar múltiplos devices RELACIONADOS num mesmo módulo/classe/arquivo é permitido e intencional**
+   (`SimulideBuiltins.hpp`, `simulide-complex`/`simulide-logic` — 18+25 tipos cada num único `lib.c`) —
+   **não é violação de SRP a "corrigir" separando arquivos.** O critério real de SRP aqui não é "uma
+   classe por arquivo": é "nenhuma lógica específica de UM typeId vaza pra fora do código daquele
+   device E/OU fica duplicada em outro lugar" (ver regra 6 acima e `.spec/lasecsimul.spec` seção 11).
+   Built-in novo SEM relação com um grupo já existente ganha arquivo próprio; built-in novo
+   RELACIONADO a um grupo existente (ex: mais um tipo de switch) pode entrar no mesmo módulo do grupo.
 
 ## Como agir por tipo de tarefa
 
@@ -203,6 +219,12 @@ remeter a WASM/worker, é desatualizado — confiar nos dois `.spec` acima.
   tipo de evento (ex: novo estado de instrumento), decidir explicitamente se ele vai no ring buffer
   (telemetria contínua, pode perder) ou no canal de controle (entrega garantida) — nunca assumir um dos dois
   por padrão. Ver RNF09 do `lasecsimul.spec`.
+- **Código novo de transporte/parsing prefere I/O em bloco a byte-a-byte.** `IpcServer::readLine()`
+  lia 1 byte por `ReadFile`/`read()` (N syscalls pra uma mensagem de N bytes) até 2026-06-30 — corrigido
+  pra ler em blocos de 4096 bytes num buffer interno, extraindo linhas por `\n` (ver `lasecsimul.spec`
+  seção 7, item 0). Qualquer parser/leitor novo de stream segue o mesmo padrão desde o início — nunca
+  introduzir um loop de leitura de 1 byte por vez como ponto de partida "simples", mesmo em código
+  experimental.
 
 **Extension (TypeScript)**:
 - Nenhum cálculo elétrico ou de simulação — só UI, IPC, e metadados de exibição
@@ -231,3 +253,25 @@ Procedimento obrigatório, nesta ordem, pra **qualquer agente** (incluindo sub-a
 
 Isso vale tanto pra lacuna técnica pequena (ex: qual estrutura de dado usar) quanto pra decisão de produto
 maior (ex: novo painel de UI) — a única coisa que muda é o tamanho da seção de spec que o passo 4 produz.
+
+## Antes de reportar uma tarefa concluída
+
+Build e teste de verdade, não revisão de código só pela leitura — gap confirmado (instrução ausente
+desta skill até 2026-06-30, apesar de já ser a prática real durante a sessão que motivou esta seção):
+
+1. **Mudou Core (C++)**: `cmake --build core/build --config Debug` limpo + `ctest -C Debug` (todos os
+   testes, não só os relacionados à mudança) — 100% precisa passar antes de considerar concluído.
+2. **Mudou Extension (TypeScript)**: `npm --prefix extension run compile` (os dois tsconfigs —
+   `tsconfig.json` e `tsconfig.webview.json`, compilam separado) + `npm --prefix extension test`.
+3. **Mudou device/MCU adapter nativo (`devices/`, `mcu-adapters/`)**: `npm run build:devices` (e/ou
+   `npm run build:mcu-adapters`) — recompila a DLL/SO real antes de qualquer teste que dependa do
+   binário atualizado (testes do Core que carregam plugins reais ficam silenciosamente desatualizados
+   sem isso, sem erro nenhum — só continuam testando a versão velha do `.dll`/`.so`).
+4. **Mudança toca código de interação da Webview (arrastar, popups, menus de contexto, drag-and-drop)
+   que não tem cobertura de teste automatizado** (não existe harness de DOM/jsdom neste projeto pros
+   testes da Webview — só "testes puros" de função, sem simular evento de mouse/ponteiro real): deixar
+   EXPLÍCITO no relatório final que falta validação manual interativa (abrir a extensão de verdade,
+   exercitar a interação) antes de considerar a mudança confiável em produção — nunca reportar como
+   "concluído e testado" o que só foi verificado por compilação + leitura de código.
+5. Nunca reportar uma tarefa como concluída com testes falhando, build quebrado, ou sem rodar a
+   verificação aplicável da lista acima — "deveria funcionar" não é "está testado".

@@ -134,14 +134,22 @@ bool IpcServer::sendLine(const std::string& line) {
 }
 
 std::string IpcServer::readLine(bool& eof) {
-    std::string result;
-    char ch = '\0';
-    DWORD nRead = 0;
-    while (true) {
-        BOOL ok = ReadFile(static_cast<HANDLE>(m_pipe), &ch, 1, &nRead, nullptr);
-        if (!ok || nRead == 0) { eof = true; return result; }
-        if (ch == '\n') return result;
-        result += ch;
+    for (;;) {
+        if (const size_t pos = m_readBuffer.find('\n'); pos != std::string::npos) {
+            std::string line = m_readBuffer.substr(0, pos);
+            m_readBuffer.erase(0, pos + 1);
+            return line;
+        }
+        char chunk[4096];
+        DWORD nRead = 0;
+        BOOL ok = ReadFile(static_cast<HANDLE>(m_pipe), chunk, sizeof(chunk), &nRead, nullptr);
+        if (!ok || nRead == 0) {
+            eof = true;
+            std::string rest = std::move(m_readBuffer);
+            m_readBuffer.clear();
+            return rest;
+        }
+        m_readBuffer.append(chunk, nRead);
     }
 }
 
@@ -200,13 +208,21 @@ bool IpcServer::sendLine(const std::string& line) {
 }
 
 std::string IpcServer::readLine(bool& eof) {
-    std::string result;
-    char ch = '\0';
-    while (true) {
-        ssize_t n = read(m_clientFd, &ch, 1);
-        if (n <= 0) { eof = true; return result; }
-        if (ch == '\n') return result;
-        result += ch;
+    for (;;) {
+        if (const size_t pos = m_readBuffer.find('\n'); pos != std::string::npos) {
+            std::string line = m_readBuffer.substr(0, pos);
+            m_readBuffer.erase(0, pos + 1);
+            return line;
+        }
+        char chunk[4096];
+        ssize_t n = read(m_clientFd, chunk, sizeof(chunk));
+        if (n <= 0) {
+            eof = true;
+            std::string rest = std::move(m_readBuffer);
+            m_readBuffer.clear();
+            return rest;
+        }
+        m_readBuffer.append(chunk, static_cast<size_t>(n));
     }
 }
 

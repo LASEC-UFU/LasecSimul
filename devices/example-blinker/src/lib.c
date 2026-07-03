@@ -10,6 +10,13 @@
 
 #define EV_TICK 1
 
+/* ABI v2 (.spec/lasecsimul-native-devices.spec): get_state/set_state passam a se autoversionar --
+ * os primeiros 4 bytes são sempre um uint32 de versão do layout, ANTES do payload em si. Sem isso,
+ * um set_state recebendo um blob de layout diferente (snapshot/undo antigo, versão futura do
+ * device) interpretaria bytes alheios às cegas. set_state que não reconhece a versão loga e ignora
+ * o blob inteiro (mantém o estado atual), nunca decodifica parcialmente. */
+#define BLINKER_STATE_VERSION 1u
+
 typedef struct {
     void* host_ctx;
     const LsdnHostApi* api;
@@ -76,13 +83,23 @@ static uint32_t set_property(LsdnDevice* dev, const char* name, const LsdnProper
 }
 static uint32_t get_state(LsdnDevice* dev, uint8_t* out, uint32_t cap) {
     BlinkerState* s = (BlinkerState*)dev;
-    if (cap < sizeof(int32_t)) return 0;
-    *(int32_t*)out = s->level;
-    return sizeof(int32_t);
+    const uint32_t needed = (uint32_t)sizeof(uint32_t) + (uint32_t)sizeof(int32_t);
+    if (cap < needed) return 0;
+    uint32_t version = BLINKER_STATE_VERSION;
+    memcpy(out, &version, sizeof(uint32_t));
+    memcpy(out + sizeof(uint32_t), &s->level, sizeof(int32_t));
+    return needed;
 }
 static void set_state(LsdnDevice* dev, const uint8_t* in, uint32_t len) {
     BlinkerState* s = (BlinkerState*)dev;
-    if (len >= sizeof(int32_t)) s->level = *(const int32_t*)in;
+    if (len < sizeof(uint32_t) + sizeof(int32_t)) return;
+    uint32_t version = 0;
+    memcpy(&version, in, sizeof(uint32_t));
+    if (version != BLINKER_STATE_VERSION) {
+        if (s->api->log) s->api->log(s->host_ctx, 1, "example-blinker: set_state versao desconhecida, ignorado");
+        return;
+    }
+    memcpy(&s->level, in + sizeof(uint32_t), sizeof(int32_t));
 }
 static void destroy(LsdnDevice* dev) { free(dev); }
 

@@ -912,31 +912,37 @@ html, body {
   color: #1c1e22;
 }
 
+/** Barra de título CLARA (cinza, igual chrome de janela nativa do Qt no SimulIDE real --
+ * `oscwidget.ui`/`lawidget.ui` são QDialog padrão, sem barra escura customizada) -- ANTES desta
+ * mudança era um gradiente escuro com "X" vermelho, look de app web, não de instrumento SimulIDE. */
 .instrument-popup__titlebar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 4px 8px;
-  background: linear-gradient(180deg, #4a4f58, #2c2f35);
-  color: #fff;
+  background: linear-gradient(180deg, #f5f6f8, #e2e4e8);
+  color: #2c2f35;
   font-weight: 700;
   cursor: move;
   border-radius: 4px 4px 0 0;
+  border-bottom: 1px solid #aeb1b6;
 }
 
 .instrument-popup__close {
   width: 18px;
   height: 18px;
-  border: none;
+  border: 1px solid #9a9ea5;
   border-radius: 2px;
-  background: #c0392b;
-  color: #fff;
+  background: #e2e4e8;
+  color: #2c2f35;
   cursor: pointer;
   line-height: 1;
 }
 
 .instrument-popup__close:hover {
-  background: #e74c3c;
+  background: #d33;
+  border-color: #a02020;
+  color: #fff;
 }
 
 .instrument-popup__body {
@@ -949,11 +955,14 @@ html, body {
   flex: 0 0 auto;
 }
 
+/* SimulIDE real (oscwidget.ui): janela default 765x496, área de plot ocupa a maior parte --
+   altura aumentada de 280 pra 380 pra bater com a proporção real (antes ficava "achatado"). */
 .instrument-plot-svg {
   width: 560px;
-  height: 280px;
+  height: 380px;
   border: 2px solid #444;
   border-radius: 4px;
+  background: #000;
 }
 
 .instrument-plot-grid {
@@ -977,29 +986,92 @@ html, body {
   gap: 2px;
 }
 
-.instrument-tab {
+/** Botões Ch1-Ch4/All -- cor de fundo do PRÓPRIO canal, borda "inset" quando ativo (igual
+ * `oscwidget.cpp`: background = cor do canal via stylesheet, "3px solid gray, border-style: inset"
+ * no estado checked) -- ANTES eram botões cinza sem cor nenhuma, sem nenhuma pista visual de qual
+ * canal cada um representa. */
+.instrument-tab,
+.instrument-channel-button {
   flex: 1;
   padding: 3px 4px;
-  border: 1px solid #8a8e96;
+  border: 1px solid #6b6f76;
   background: #e6e8ec;
   cursor: pointer;
   font-size: 11px;
+  font-weight: 700;
+  border-radius: 2px;
+  color: #1c1e22;
 }
 
-.instrument-tab--active {
-  background: #fff;
+.instrument-tab--active,
+.instrument-channel-button--active {
+  border: 2px solid #555;
+  border-style: inset;
   font-weight: 700;
-  border-color: #2c2f35;
 }
 
 .instrument-knobs {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   background: #e6e8ec;
   border: 1px solid #8a8e96;
   border-radius: 3px;
   padding: 6px;
+}
+
+/** Linha de "knob" (dial visual estático + rótulo + spinner editável) -- réplica do layout
+ * QDial+QLabel+PlotSpinBox de `oscwidget.ui` (Divisão/Posição de Tempo/Tensão). O disco é só visual
+ * (sem arrastar pra girar nesta rodada); o spinner ao lado é o controle real, igual antes. */
+.instrument-knob-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.instrument-knob-dial {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #f7f7f8, #c7c9cd 65%, #989ba1);
+  border: 1px solid #6b6f76;
+  position: relative;
+}
+
+.instrument-knob-dial::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  width: 2px;
+  height: 10px;
+  background: #3a3d42;
+  transform: translateX(-50%);
+}
+
+.instrument-knob-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.instrument-knob-info label {
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.instrument-knob-info input[type="number"] {
+  width: 78px;
+}
+
+.instrument-divider {
+  border: none;
+  border-top: 1px solid #9a9ea5;
+  margin: 2px 0;
+  width: 100%;
 }
 
 .instrument-field {
@@ -1049,6 +1121,38 @@ html, body {
   height: 14px;
   border: 1px solid #777;
   border-radius: 2px;
+}
+
+/** Linhas "Auto"/"Trigger"/"Esconder" -- rótulo + bolinhas coloridas por canal, igual
+ * `oscwidget.ui` (QRadioButton com background = cor do canal via stylesheet). Auto/Trigger são
+ * seleção EXCLUSIVA (1 canal ou nenhum) -- ver `makeExclusiveDotRow`; Esconder é TOGGLE
+ * independente por canal (`hideGroup` no real tem `exclusive=false`) -- ver `makeToggleDotRow`. */
+.instrument-radio-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.instrument-radio-row__label {
+  width: 52px;
+  flex: 0 0 auto;
+  font-weight: 700;
+}
+
+.instrument-radio-dot {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 1px solid #555;
+  cursor: pointer;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+}
+
+.instrument-radio-dot--selected {
+  border: 2px solid #1c1e22;
+  box-shadow: 0 0 0 1px #fff inset;
 }
 
 .instrument-export-button {

@@ -89,6 +89,28 @@ function schemaDto(overrides: Partial<PropertySchemaDto> = {}): PropertySchemaDt
     assert(catalog[0]?.propertySchema === undefined, "catálogo original não deve ser mutado");
   });
 
+  // ABI v2 (.spec/lasecsimul-native-devices.spec) -- readoutFormat/interactionKind são mapas
+  // irmãos aditivos, separados de schemasByTypeId.
+  await test("mergePropertySchemas anexa readoutFormat/interactionKind por typeId quando presentes", () => {
+    const catalog = [catalogEntry("meters.oscope"), catalogEntry("switches.push"), catalogEntry("passive.resistor")];
+    const merged = mergePropertySchemas(
+      catalog,
+      {},
+      { "meters.oscope": { kind: "channelHistory", channels: 4 } },
+      { "switches.push": "momentary" }
+    );
+    assert(merged[0]?.readoutFormat?.kind === "channelHistory", "oscope deveria ganhar readoutFormat");
+    assert(merged[1]?.interactionKind === "momentary", "push deveria ganhar interactionKind");
+    assert(merged[2]?.readoutFormat === undefined && merged[2]?.interactionKind === undefined, "resistor não declara nenhum dos dois");
+  });
+
+  await test("mergePropertySchemas sem readoutFormatByTypeId/interactionKindByTypeId (chamador antigo) preserva comportamento de sempre", () => {
+    const catalog = [catalogEntry("core.resistor")];
+    const merged = mergePropertySchemas(catalog, { "core.resistor": [schemaDto()] });
+    assert(merged[0]?.propertySchema?.length === 1, "schema continua funcionando sem os mapas novos");
+    assert(merged[0]?.readoutFormat === undefined, "sem mapa novo, readoutFormat fica ausente");
+  });
+
   const { failed } = finish();
   process.exitCode = failed > 0 ? 1 : 0;
 })();

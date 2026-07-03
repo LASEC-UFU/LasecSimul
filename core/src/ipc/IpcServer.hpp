@@ -45,6 +45,10 @@ private:
     std::string m_pipeName;
     MessageHandler m_handler;
     bool m_shutdown = false;
+    // Sobra de bytes já lidos do transporte que ainda não formam uma linha completa -- readLine()
+    // lê em blocos (ver IpcServer.cpp) em vez de 1 byte por syscall, então o que vier depois do
+    // último '\n' de um bloco fica aqui até o próximo readLine() completar a linha.
+    std::string m_readBuffer;
 
 #ifdef _WIN32
     void* m_pipe = nullptr; // HANDLE

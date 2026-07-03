@@ -194,6 +194,48 @@ extensão), salvar, e instâncias já no esquemático só veem a versão nova na
 Hot-reload de subcircuito em uso fica como refinamento futuro, mesmo espírito do *versioned swap* de plugins
 (RF09) mas não implementado agora.
 
+### 4.1 Selecionar componentes expostos (dentro da sessão de edição) e usá-los na instância colocada
+(implementado 2026-06-29/30, documentado aqui pela primeira vez)
+
+Dentro da sessão de "Abrir Subcircuito" (passo 3, seção 4 acima), clicar com o botão direito num
+componente interno mostra a opção **"Exposto"** (toggle, `internalSubcircuitMenuItems` em
+`main.ts::createComponentElement`) junto das demais opções de contexto já existentes daquele
+componente — marca `component.exposed = true` no `.lssub.json` (campo aditivo, igual `visual`/
+`boardVisual`, Core ignora). Não existe mais um campo "Modo Placa" separado FORA do subcircuito — só
+dentro da edição, e só pra escolher QUAIS componentes internos exportam suas propriedades.
+
+Na instância JÁ COLOCADA no esquemático principal (fora da sessão de edição), o menu de contexto
+("clicar com botão direito" na instância do subcircuito) ganha um SUBMENU por componente interno
+EXPOSTO (`buildExposedComponentMenuItems` em `main.ts`) — selecionar um item do submenu abre um
+diálogo NOVO (`openExposedInternalPropertyDialog`), só com as propriedades DAQUELE componente interno
+(não as do subcircuito como um todo). Editar um campo nesse diálogo viaja por
+`setSubcircuitChildProperty` (seção 6 abaixo), não por `setProperty` comum — o Core resolve o
+componente interno por `localId` (não tem `componentIndex` próprio que a Extension conheça, ver
+`findSubcircuitChildByLocalId`/`SimulationSession`).
+
+**Duas coisas chamadas "Modo Placa" que NÃO são a mesma feature** — distinção que vale deixar
+explícita, porque o nome é o mesmo e o contexto confunde:
+
+1. **Modo Placa DENTRO da sessão de edição** (já documentado acima, seção 4): alterna entre posição-
+   circuito e posição-placa de cada componente `graphical: true`, só existe enquanto a sessão de
+   "Abrir Subcircuito" está aberta. Persistido em `component.boardVisual` no `.lssub.json`.
+2. **Overlay de Modo Placa no esquemático PRINCIPAL** (fora de qualquer sessão de edição), pra uma
+   instância de subcircuito JÁ COLOCADA com componentes expostos: retângulos arrastáveis sobre o
+   símbolo da instância, um por componente exposto com `graphical: true`, refletindo a posição salva
+   em `boardVisual` (fallback pra posição padrão em grade se nunca foi posicionado manualmente —
+   `fallbackBoardVisualPosition` em `main.ts`). Arrastar um desses retângulos persiste de volta no
+   `.lssub.json` via `requestUpdateBoardOverlayProperty`/`updateBoardOverlayPropertyCommand`
+   (`extension.ts`) -- BoardVisual.x/y, não uma propriedade elétrica. Dados carregados sob demanda via
+   IPC (`boardOverlayData`, ver seção 6) quando a instância tem `properties.boardModeEnabled === true`.
+
+A feature 2 é o que o usuário pediu explicitamente ("tudo que estiver ligado a um componente no
+subcircuit o user pode escolher quais elemento que ele quer externar suas propriedades ai no
+scematico original quando clicar em propriedades tem um campo com o nome do dispositivo") — um campo
+"Modo Placa" a mais FORA do subcircuito (ex: um toggle solto no menu da instância) seria confuso e
+foi removido dessa ideia original; o controle real é só "Exposto" (feature 4.1, dentro da sessão) +
+o submenu/overlay automático na instância (decorrência direta de quais componentes foram marcados
+expostos, sem precisar de outro toggle).
+
 ## 5. Resolução em tempo de simulação no Core
 
 ### 5.1 Expansão na própria `SimulationSession`, sem matriz separada
@@ -274,6 +316,25 @@ Extensões ao protocolo da seção 7 de `lasecsimul.spec` (payload, não verbo n
 
 Nenhum verbo novo de **leitura** é necessário — `getComponentState`/`getNodeVoltage` (se existirem) já
 funcionam contra os `componentIndex` internos normalmente, porque são componentes reais.
+
+### 6.1 Verbos pro overlay de Modo Placa / propriedades de componente interno exposto (seção 4.1)
+
+- **`getSubcircuitChildInstanceId`** `{instanceId, localId}` → `{instanceId: childIndex}` — resolve o
+  id local de um componente DENTRO de um `.lssub.json` (ex: `"button_en"`) pro índice REAL do Core,
+  via `SimulationSession::findSubcircuitChildByLocalId(outerInstanceId, localId)`
+  (`m_subcircuitChildIndexByLocalId`, mapa construído na expansão do subcircuito — seção 5.1). A
+  Extension não tem como adivinhar esse índice sozinha (só conhece `componentIndex` de instâncias de
+  TOPO, ver `coreInstanceIdByComponentId`).
+- **`setSubcircuitChildProperty`** `{instanceId, localId, name, value}` → mesmo formato de resposta de
+  `setProperty` comum (`ok`/`error`/`errorCode`/`requiresRestart`) — edita uma propriedade de um
+  componente DENTRO de um subcircuito endereçando por id local em vez do índice Core, resolvendo
+  `localId` → `childIndex` internamente (mesmo `findSubcircuitChildByLocalId` acima) antes de chamar
+  `SimulationSession::setProperty(childIndex, name, value)`. Usado tanto pelo overlay de Modo Placa
+  arrastável quanto pelo diálogo de propriedades do componente exposto (seção 4.1).
+- **`boardOverlayData`** (notificação, não request/response) — a Extension envia sob demanda quando
+  uma instância de subcircuito tem `properties.boardModeEnabled === true`: lê `boardVisual`/posição de
+  cada componente interno `graphical: true` exposto e empurra pra Webview desenhar os retângulos
+  arrastáveis sobre o símbolo da instância no esquemático principal.
 
 ## 7. Estrutura de pastas e biblioteca de subcircuitos
 

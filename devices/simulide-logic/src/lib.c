@@ -766,23 +766,37 @@ static uint32_t set_property(LsdnDevice* dev, const char* name, const LsdnProper
     return 0;
 }
 
+/* ABI v2 (.spec/lasecsimul-native-devices.spec): get_state/set_state passam a se autoversionar --
+ * uint32 de versão antes do payload, mesmo padrão de example-blinker/simulide-complex. */
+#define SIMULIDE_LOGIC_STATE_VERSION 1u
+
 static uint32_t get_state(LsdnDevice* dev, uint8_t* out, uint32_t cap) {
     LogicDevice* s = (LogicDevice*)dev;
-    const uint32_t need = (uint32_t)(sizeof(s->state) + sizeof(s->latch) + sizeof(s->mem));
+    const uint32_t need = (uint32_t)(sizeof(uint32_t) + sizeof(s->state) + sizeof(s->latch) + sizeof(s->mem));
     if (!out || cap < need) return 0;
-    memcpy(out, &s->state, sizeof(s->state));
-    memcpy(out + sizeof(s->state), &s->latch, sizeof(s->latch));
-    memcpy(out + sizeof(s->state) + sizeof(s->latch), s->mem, sizeof(s->mem));
+    uint32_t version = SIMULIDE_LOGIC_STATE_VERSION;
+    uint8_t* cursor = out;
+    memcpy(cursor, &version, sizeof(version)); cursor += sizeof(version);
+    memcpy(cursor, &s->state, sizeof(s->state)); cursor += sizeof(s->state);
+    memcpy(cursor, &s->latch, sizeof(s->latch)); cursor += sizeof(s->latch);
+    memcpy(cursor, s->mem, sizeof(s->mem));
     return need;
 }
 
 static void set_state(LsdnDevice* dev, const uint8_t* in, uint32_t len) {
     LogicDevice* s = (LogicDevice*)dev;
-    const uint32_t need = (uint32_t)(sizeof(s->state) + sizeof(s->latch) + sizeof(s->mem));
+    const uint32_t need = (uint32_t)(sizeof(uint32_t) + sizeof(s->state) + sizeof(s->latch) + sizeof(s->mem));
     if (!in || len < need) return;
-    memcpy(&s->state, in, sizeof(s->state));
-    memcpy(&s->latch, in + sizeof(s->state), sizeof(s->latch));
-    memcpy(s->mem, in + sizeof(s->state) + sizeof(s->latch), sizeof(s->mem));
+    uint32_t version = 0;
+    memcpy(&version, in, sizeof(version));
+    if (version != SIMULIDE_LOGIC_STATE_VERSION) {
+        if (s->api->log) s->api->log(s->host_ctx, 1, "simulide-logic: set_state versao desconhecida, ignorado");
+        return;
+    }
+    const uint8_t* cursor = in + sizeof(version);
+    memcpy(&s->state, cursor, sizeof(s->state)); cursor += sizeof(s->state);
+    memcpy(&s->latch, cursor, sizeof(s->latch)); cursor += sizeof(s->latch);
+    memcpy(s->mem, cursor, sizeof(s->mem));
 }
 
 static void destroy(LsdnDevice* dev) { free(dev); }

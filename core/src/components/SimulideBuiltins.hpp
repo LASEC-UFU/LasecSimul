@@ -236,6 +236,18 @@ public:
         return schemas;
     }
 
+    /** Decisão de qual schema usar por typeId mora aqui (dentro da própria classe), não no
+     * registrador central -- ver .spec/lasecsimul-native-devices.spec, critério de decoupling. */
+    static std::vector<PropertySchema> propertySchemaFor(const std::string& typeId) {
+        return typeId == "switches.push" ? pushPropertySchema() : propertySchema();
+    }
+
+    /** ABI v2 -- mesmo critério de `propertySchemaFor`: push é momentâneo (solta ao soltar o botão),
+     * switch/switch_dip são toggle. */
+    static InteractionKind interactionKindFor(const std::string& typeId) {
+        return typeId == "switches.push" ? InteractionKind::Momentary : InteractionKind::Toggle;
+    }
+
 private:
     std::string m_typeId;
     std::vector<Pin> m_pins;

@@ -580,7 +580,9 @@ static void testSimulideComplexAbiEventsOverIpc() {
         const nlohmann::json stateResp = send("getComponentState", {{"instanceId", hd}});
         TEST_ASSERT(stateResp.value("ok", false), "getComponentState retorna RAM do HD44780 ABI");
         const std::vector<uint8_t> state = decodeHex(stateResp["payload"].value("stateHex", std::string{}));
-        TEST_ASSERT(state.size() >= 33 && state[32] == 65, "DDRAM[0] contem 'A' apos latches bit a bit");
+        // ABI v2 (.spec/lasecsimul-native-devices.spec): header de get_state ganhou um uint32 de
+        // versão na frente (header[0]) -- payload (DDRAM) agora começa no byte 36, não 32.
+        TEST_ASSERT(state.size() >= 37 && state[36] == 65, "DDRAM[0] contem 'A' apos latches bit a bit");
 
         send("shutdown", nlohmann::json::object());
         clientClose(conn);
@@ -642,6 +644,35 @@ static void testGetPropertySchemasOverIpc() {
         TEST_ASSERT(resistorSchema.value("editor", std::string{}) == "number", "resistor: editor == number");
         TEST_ASSERT(resistorSchema.value("unit", std::string{}) == "Ω", "resistor: unidade == Ω");
         TEST_ASSERT(resistorSchema.contains("min"), "resistor: min presente");
+
+        // ABI v2 (.spec/lasecsimul-native-devices.spec) -- readoutFormatByTypeId/interactionKindByTypeId
+        // são mapas IRMÃOS aditivos, só aparecem pra quem declarou; resistor não declara nenhum dos dois.
+        const nlohmann::json& readoutByTypeId = beforeResp["payload"]["readoutFormatByTypeId"];
+        const nlohmann::json& interactionByTypeId = beforeResp["payload"]["interactionKindByTypeId"];
+        TEST_ASSERT(!readoutByTypeId.contains("passive.resistor"), "resistor não declara readoutFormat");
+        TEST_ASSERT(!interactionByTypeId.contains("passive.resistor"), "resistor não declara interactionKind");
+
+        const nlohmann::json& oscopeReadout = readoutByTypeId["meters.oscope"];
+        TEST_ASSERT(oscopeReadout.value("kind", std::string{}) == "channelHistory", "oscope: readout.kind == channelHistory");
+        TEST_ASSERT(oscopeReadout.value("channels", 0u) == 4u, "oscope: readout.channels == 4");
+
+        const nlohmann::json& logicAnalyzerReadout = readoutByTypeId["meters.logic_analyzer"];
+        TEST_ASSERT(logicAnalyzerReadout.value("kind", std::string{}) == "bitmaskHistory", "logic_analyzer: readout.kind == bitmaskHistory");
+        TEST_ASSERT(logicAnalyzerReadout.value("channels", 0u) == 8u, "logic_analyzer: readout.channels == 8");
+
+        const nlohmann::json& ampmeterReadout = readoutByTypeId["meters.ampmeter"];
+        TEST_ASSERT(ampmeterReadout.value("kind", std::string{}) == "scalar", "ampmeter: readout.kind == scalar");
+        TEST_ASSERT(ampmeterReadout.value("unit", std::string{}) == "A", "ampmeter: readout.unit == A");
+
+        const nlohmann::json& freqmeterReadout = readoutByTypeId["meters.freqmeter"];
+        TEST_ASSERT(freqmeterReadout.value("unit", std::string{}) == "Hz", "freqmeter: readout.unit == Hz");
+
+        const nlohmann::json& probeReadout = readoutByTypeId["meters.probe"];
+        TEST_ASSERT(probeReadout.value("unit", std::string{}) == "V", "probe: readout.unit == V");
+
+        TEST_ASSERT(interactionByTypeId.value("switches.push", std::string{}) == "momentary", "push: interaction == momentary");
+        TEST_ASSERT(interactionByTypeId.value("switches.switch", std::string{}) == "toggle", "switch: interaction == toggle");
+        TEST_ASSERT(interactionByTypeId.value("switches.switch_dip", std::string{}) == "toggle", "switch_dip: interaction == toggle");
 
 #ifdef DEVICES_LIBRARY_JSON_PATH
         const std::filesystem::path libraryPath = DEVICES_LIBRARY_JSON_PATH;

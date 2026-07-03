@@ -101,16 +101,18 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
         [&metadata](std::string typeId,
                     std::string displayName,
                     std::vector<PropertySchema> propertySchema,
-                    std::string translationsJson) {
-            metadata.registerMetadata({
-                std::move(typeId),
-                std::move(displayName),
-                {},
-                std::move(propertySchema),
-                "",
-                "pt-BR",
-                std::move(translationsJson),
-            });
+                    std::string translationsJson,
+                    std::optional<ReadoutFormat> readoutFormat = std::nullopt,
+                    std::optional<InteractionKind> interactionKind = std::nullopt) {
+            registry::ComponentMetadata meta;
+            meta.typeId = std::move(typeId);
+            meta.displayName = std::move(displayName);
+            meta.propertySchema = std::move(propertySchema);
+            meta.language = "pt-BR";
+            meta.translationsJson = std::move(translationsJson);
+            meta.readoutFormat = std::move(readoutFormat);
+            meta.interactionKind = std::move(interactionKind);
+            metadata.registerMetadata(std::move(meta));
         };
     reg.registerFactory("passive.resistor", [](const ComponentParams& p) {
         const auto pos = p.pins<2>();
@@ -281,10 +283,9 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
                 typeId, makePinVector(p, pinCount), p.property("closed", false), p.property("normallyClosed", false),
                 p.property("doubleThrow", false), p.property("poles", 1.0), std::move(key));
         });
-        registerBuiltinMetadata(typeId, label,
-                                typeId == "switches.push" ? components::SimulideSwitch::pushPropertySchema()
-                                                          : components::SimulideSwitch::propertySchema(),
-                                englishName(label));
+        registerBuiltinMetadata(typeId, label, components::SimulideSwitch::propertySchemaFor(typeId),
+                                englishName(label), std::nullopt,
+                                components::SimulideSwitch::interactionKindFor(typeId));
     };
     registerSwitchLike("switches.push", "Push", 2);
     registerSwitchLike("switches.switch", "Switch (all)", 2);
@@ -470,7 +471,8 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
         return std::make_unique<components::Probe>(Pin{pos[0].id.empty() ? "in" : pos[0].id, pos[0].x, pos[0].y},
                                                     p.property("threshold", 2.5));
     });
-    registerBuiltinMetadata("meters.probe", "Sonda (Probe)", components::Probe::propertySchema(), englishName("Probe"));
+    registerBuiltinMetadata("meters.probe", "Sonda (Probe)", components::Probe::propertySchema(), englishName("Probe"),
+                            components::Probe::readoutFormat());
 
     reg.registerFactory("meters.ampmeter", [](const ComponentParams& p) {
         const auto pos = makePinVector(p, 3);
@@ -478,7 +480,7 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
                                                        p.property("resistance", 1e-6));
     });
     registerBuiltinMetadata("meters.ampmeter", "Amperímetro", components::Ampmeter::propertySchema(),
-                            englishName("Ampmeter"));
+                            englishName("Ampmeter"), components::Ampmeter::readoutFormat());
 
     reg.registerFactory("meters.freqmeter", [&scheduler](const ComponentParams& p) {
         const auto pos = p.pins<1>();
@@ -486,7 +488,7 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
             scheduler, Pin{pos[0].id.empty() ? "in" : pos[0].id, pos[0].x, pos[0].y}, p.property("filter", 0.1));
     });
     registerBuiltinMetadata("meters.freqmeter", "Frequencímetro", components::FreqMeter::propertySchema(),
-                            englishName("Frequency Meter"));
+                            englishName("Frequency Meter"), components::FreqMeter::readoutFormat());
 
     reg.registerFactory("meters.oscope", [&scheduler](const ComponentParams& p) {
         const auto pos = makePinVector(p, components::Oscope::kChannelCount);
@@ -494,7 +496,7 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
             scheduler, std::array<Pin, components::Oscope::kChannelCount>{pos[0], pos[1], pos[2], pos[3]});
     });
     registerBuiltinMetadata("meters.oscope", "Osciloscópio", components::Oscope::propertySchema(),
-                            englishName("Oscilloscope"));
+                            englishName("Oscilloscope"), components::Oscope::readoutFormat());
 
     reg.registerFactory("meters.logic_analyzer", [&scheduler](const ComponentParams& p) {
         const auto pos = makePinVector(p, components::LogicAnalyzer::kChannelCount);
@@ -503,7 +505,7 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
         return std::make_unique<components::LogicAnalyzer>(scheduler, pins, p.property("thresholdRising", 2.5), p.property("thresholdFalling", 2.5));
     });
     registerBuiltinMetadata("meters.logic_analyzer", "Analisador Lógico", components::LogicAnalyzer::propertySchema(),
-                            englishName("Logic Analyzer"));
+                            englishName("Logic Analyzer"), components::LogicAnalyzer::readoutFormat());
 }
 
 } // namespace
@@ -598,6 +600,38 @@ std::vector<PropertySchema> parsePropertySchemaList(const nlohmann::json& device
     return schemaList;
 }
 
+/** ABI v2 (.spec/lasecsimul-native-devices.spec): chave opcional `"readout"` de `device.json` --
+ * device de terceiros declara como a UI deve decodificar sua leitura sem nenhuma mudança de código
+ * no Core nem na Extension. Ausente/mal-formado = nullopt ("sem leitura estruturada"), nunca erro --
+ * a maioria dos devices não tem mostrador. */
+std::optional<ReadoutFormat> parseReadoutFormat(const nlohmann::json& deviceJson) {
+    if (!deviceJson.contains("readout") || !deviceJson["readout"].is_object()) return std::nullopt;
+    const nlohmann::json& readout = deviceJson["readout"];
+    const std::string kind = readout.value("kind", std::string{"scalar"});
+    ReadoutFormat format;
+    if (kind == "channelHistory") {
+        format.kind = ReadoutKind::ChannelHistory;
+        format.channels = readout.value("channels", 0u);
+    } else if (kind == "bitmaskHistory") {
+        format.kind = ReadoutKind::BitmaskHistory;
+        format.channels = readout.value("channels", 0u);
+    } else {
+        format.kind = ReadoutKind::Scalar;
+        format.unit = readout.value("unit", std::string{});
+    }
+    return format;
+}
+
+/** Mesmo padrão de `parseReadoutFormat`, pra chave opcional `"interaction"` (string:
+ * "momentary"/"toggle"/"none"). */
+std::optional<InteractionKind> parseInteractionKind(const nlohmann::json& deviceJson) {
+    if (!deviceJson.contains("interaction") || !deviceJson["interaction"].is_string()) return std::nullopt;
+    const std::string value = deviceJson["interaction"].get<std::string>();
+    if (value == "momentary") return InteractionKind::Momentary;
+    if (value == "toggle") return InteractionKind::Toggle;
+    return InteractionKind::None;
+}
+
 // ── serialização pro lado IPC (getPropertySchemas) — inversa de jsonToPropertyValue/
 // parsePropertySchema acima, pra a Webview receber exatamente o que `device.json` já declara pros
 // plugins, agora também pros built-ins (ComponentMetadataRegistry, ver registerBuiltinComponents). ──
@@ -647,6 +681,29 @@ nlohmann::json propertySchemaToJson(const PropertySchema& schema) {
         json["options"] = std::move(options);
     }
     return json;
+}
+
+/** ABI v2 -- serializa `ReadoutFormat`/`InteractionKind` pro mesmo payload de `getPropertySchemas`,
+ * inversa de `parseReadoutFormat`/`parseInteractionKind` acima. */
+nlohmann::json readoutFormatToJson(const ReadoutFormat& format) {
+    switch (format.kind) {
+        case ReadoutKind::ChannelHistory:
+            return nlohmann::json{{"kind", "channelHistory"}, {"channels", format.channels}};
+        case ReadoutKind::BitmaskHistory:
+            return nlohmann::json{{"kind", "bitmaskHistory"}, {"channels", format.channels}};
+        case ReadoutKind::Scalar:
+        default:
+            return nlohmann::json{{"kind", "scalar"}, {"unit", format.unit}};
+    }
+}
+
+const char* interactionKindToJson(InteractionKind kind) {
+    switch (kind) {
+        case InteractionKind::Momentary: return "momentary";
+        case InteractionKind::Toggle: return "toggle";
+        case InteractionKind::None:
+        default: return "none";
+    }
 }
 
 /** Resolve `propertySchema` de uma `ComponentMetadata` pra a língua pedida — implementação de
@@ -807,6 +864,8 @@ void loadDeviceLibraryFile(const std::filesystem::path& libraryJsonPath, GlobalP
         metadata.typeId = typeId;
         metadata.displayName = device.value("name", typeId);
         metadata.propertySchema = parsePropertySchemaList(device);
+        metadata.readoutFormat = parseReadoutFormat(device);
+        metadata.interactionKind = parseInteractionKind(device);
         // language é obrigatório por contrato (RNF12 de lasecsimul.spec), mas device.json anterior a
         // esta rodada não declara -- default "pt-BR" preserva compatibilidade (todo manifesto existente
         // até aqui foi de fato escrito em português, então o default não está mentindo).
@@ -1217,6 +1276,14 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
             // "language" é só um pedido de tradução, nunca obrigatório (ver lasecsimul.spec seção 6.3.3).
             const std::string requestedLanguage = payload.value("language", std::string{});
             nlohmann::json schemasByTypeId = nlohmann::json::object();
+            // ABI v2 (.spec/lasecsimul-native-devices.spec) -- mapas IRMÃOS, ADITIVOS, não um campo a
+            // mais dentro de schemasByTypeId[typeId]: manter schemasByTypeId[typeId] como array puro
+            // preserva 100% de compatibilidade de wire com todo consumidor existente da Extension
+            // (lê só o array de propertySchema); readoutFormatByTypeId/interactionKindByTypeId só
+            // aparecem pra quem o device declarou, e consumidor antigo simplesmente ignora as chaves
+            // novas do payload.
+            nlohmann::json readoutFormatByTypeId = nlohmann::json::object();
+            nlohmann::json interactionKindByTypeId = nlohmann::json::object();
             for (const auto& [typeId, meta] : pluginCache.metadata().all()) {
                 const std::vector<PropertySchema> resolved = resolvePropertySchemaForLanguage(meta, requestedLanguage);
                 nlohmann::json schemas = nlohmann::json::array();
@@ -1224,9 +1291,14 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
                     schemas.push_back(propertySchemaToJson(schema));
                 }
                 schemasByTypeId[typeId] = std::move(schemas);
+                if (meta.readoutFormat) readoutFormatByTypeId[typeId] = readoutFormatToJson(*meta.readoutFormat);
+                if (meta.interactionKind) interactionKindByTypeId[typeId] = interactionKindToJson(*meta.interactionKind);
             }
             resp.ok = true;
-            resp.payloadJson = nlohmann::json{{"schemasByTypeId", schemasByTypeId}}.dump();
+            resp.payloadJson = nlohmann::json{{"schemasByTypeId", schemasByTypeId},
+                                               {"readoutFormatByTypeId", readoutFormatByTypeId},
+                                               {"interactionKindByTypeId", interactionKindByTypeId}}
+                                    .dump();
         } catch (const std::exception& e) {
             resp.ok = false;
             resp.error = std::string("getPropertySchemas falhou: ") + e.what();

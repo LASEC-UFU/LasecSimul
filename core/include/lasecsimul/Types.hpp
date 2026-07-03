@@ -56,6 +56,32 @@ struct PropertySchema {
     uint32_t flags = PropertySchemaNone;
 };
 
+/** Como a UI deve interpretar os bytes de leitura de um componente (`getComponentState`/instrumento)
+ * sem precisar conhecer o typeId -- ABI v2, ver .spec/lasecsimul-native-devices.spec. Declarado pelo
+ * device (built-in: método estático; plugin/DLL: chave `"readout"` opcional em `device.json`), nunca
+ * inferido por typeId em nenhum lado (Core ou Extension). Ausência (`std::optional` em
+ * `ComponentMetadata`) é uma declaração válida de "sem leitura estruturada" -- a maioria dos
+ * componentes (resistores, fios, etc.) não tem mostrador, isso não é um estado "não migrado". */
+enum class ReadoutKind : uint32_t {
+    Scalar = 0,         // 1 double (ex: amperímetro, frequencímetro, sonda) -- `unit` descreve a grandeza
+    ChannelHistory = 1, // N séries temporais independentes de double, channel-major (ex: osciloscópio:
+                        // canal 0 inteiro, depois canal 1, ...) -- `channels` = N
+    BitmaskHistory = 2, // 1 série temporal de {timestamp, bitmask uint32}, cada amostra captura todos
+                        // os canais digitais de uma vez (ex: analisador lógico) -- `channels` = nº de
+                        // bits válidos do bitmask
+};
+
+struct ReadoutFormat {
+    ReadoutKind kind = ReadoutKind::Scalar;
+    std::string unit;       // usado quando kind == Scalar (ex: "V", "A", "Hz")
+    uint32_t channels = 0;  // usado quando kind == ChannelHistory ou BitmaskHistory
+};
+
+/** Como a UI deve tratar a interação de clique/arrasto com o componente, sem precisar checar typeId
+ * (ex: push é momentâneo -- solta ao soltar o botão -- enquanto switch/relay são toggle). Mesma
+ * convenção de declaração de `ReadoutFormat` acima -- ABI v2. */
+enum class InteractionKind : uint32_t { None = 0, Momentary = 1, Toggle = 2 };
+
 enum class BusRole { Master, Slave };
 
 /** Saúde operacional de uma instância de componente (watchdog/crash-guard de plugin nativo) -- só

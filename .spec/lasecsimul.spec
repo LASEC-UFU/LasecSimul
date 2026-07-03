@@ -513,6 +513,25 @@ Teste de regressão: `core_bootstrap` (`testGetPropertySchemasOverIpc` — built
 `loadDeviceLibrary`, plugin aparece só depois); `passive_components`/`logic_components` (cada
 `propertyDescriptors()[0].schema` não-vazio).
 
+#### 6.1.3.1 ABI v2 (2026-06-30) — `readoutFormatByTypeId`/`interactionKindByTypeId`, mesmo payload
+
+A mesma resposta de `getPropertySchemas` ganhou 2 mapas irmãos ADITIVOS (`readoutFormatByTypeId`/
+`interactionKindByTypeId`, por typeId) — como a UI decodifica `getComponentState()`/interage com um
+componente sem checar typeId em código nenhum. Especificação completa, desenho, justificativa (por que
+LasecSimul precisa disso onde o SimulIDE usa despacho virtual C++) e migração dos devices reais em
+`.spec/lasecsimul-native-devices.spec` seção 22. Teste de regressão: `core_bootstrap`
+(`testGetPropertySchemasOverIpc`, mesma função, asserções novas pra oscope/logic_analyzer/ampmeter/
+freqmeter/probe/push/switch).
+
+#### 6.1.3.2 `setSubcircuitChildProperty`/`getSubcircuitChildInstanceId` (2026-06-29)
+
+Variante de `setProperty` endereçando por `{instanceId do subcircuito, localId do componente interno}`
+em vez de um `componentIndex` de topo (a Extension não tem como conhecer o índice Core de um
+componente DENTRO de um subcircuito sem perguntar) — usado pelo overlay de Modo Placa e pelo diálogo
+de propriedades de componente exposto no esquemático principal. Especificação completa em
+`.spec/lasecsimul-subcircuits.spec` seção 6.1 (handler em `CoreApplication.cpp`,
+`SimulationSession::findSubcircuitChildByLocalId`).
+
 ### 6.1.4 Leitura de corrente (`current()`) — implementado 2026-06-28
 
 Opção de baixo custo, sem incógnita nova na matriz: `IComponentModel::current()` lê estado já cacheado na
@@ -691,6 +710,12 @@ resolve(localized, requestedLang, baseLang):
    `IpcServer` responde aceitando ou recusando. Versão incompatível encerra a conexão com erro explícito —
    nunca segue assumindo compatibilidade. Isso é o que permite evoluir mensagens do canal de controle sem
    migração retroativa (ver RNF08); o payload de cada mensagem é versionado dentro do mesmo esquema.
+   **Framing de transporte** (2026-06-30): cada mensagem é uma linha JSON terminada em `\n`
+   (newline-delimited), igual desde sempre — o que mudou foi `IpcServer::readLine()` (Windows e
+   POSIX): lia 1 byte por `ReadFile`/`read()` (N syscalls pra uma mensagem de N bytes, clássico
+   gargalo de I/O); passou a ler em blocos de 4096 bytes num `m_readBuffer` interno, extraindo linhas
+   por `\n` e guardando sobra parcial pro próximo `readLine()` — mesmo protocolo/formato de mensagem,
+   só troca de ESTRATÉGIA de leitura. `sendLine()` não mudou (já escrevia a linha inteira de uma vez).
 1. Webview edita o esquemático → `CoreClient` envia o diff (componente adicionado/removido, propriedade
    alterada, conexão alterada) pelo canal de controle ao `IpcServer` do Core.
 2. Core atualiza a `Netlist` e marca os componentes afetados como "dirty".
@@ -733,6 +758,14 @@ resolve(localized, requestedLang, baseLang):
 6. `pause()/step()/stop()` controlam o `Scheduler`; o Core não distingue se a pausa veio de um comando do
    usuário ou de um breakpoint de firmware via QMP. Como o `Scheduler` está em thread própria (item 3), esses
    comandos chegam e são honrados mesmo com um macropasso pesado em andamento.
+
+**Auditoria de performance (2026-06-30)**: revisão dedicada do solver/scheduler (dirty-tracking em 2
+níveis, item 7.1 abaixo) e do carregamento de DLL/projeto (`LoadLibrary`/`dlopen` nativo do SO) não
+achou gargalo real sem evidência de profiling — ambos documentados como já adequados nesta rodada, sem
+mudança especulativa. Os 2 gargalos REAIS confirmados e corrigidos foram: leitura de IPC byte a byte
+(item 0 desta seção) e reconstrução total do DOM da Webview a cada render (`extension/src/ui/webview/
+main.ts::createComponentElement`/`updateComponentElement`, reconciliação incremental por id —
+implementada, pendente validação manual interativa do usuário antes de considerar fechada).
 
 ### 7.1 `MnaSolver` — decisões de algoritmo (auditoria do SimulIDE-dev, com correções)
 
@@ -1102,7 +1135,7 @@ de propósito, não genérico** (achado crítico confirmado lendo `hw/gpio/esp32
 
 | Princípio | Aplicação concreta |
 |---|---|
-| **S**RP | `MnaSolver` resolve circuito; `QemuProcessManager` gerencia processo QEMU; `McuComponent` só despacha registrador da arena pro `QemuModule` certo e traduz pra estampa elétrica; cada `QemuModule` só decodifica o registrador de um periférico; `IpcServer` só serializa/desserializa; `PluginLoader` só descobre/valida/carrega código, `PluginRuntime` só cria/destrói instâncias — nenhuma classe acumula mais de uma responsabilidade. |
+| **S**RP | `MnaSolver` resolve circuito; `QemuProcessManager` gerencia processo QEMU; `McuComponent` só despacha registrador da arena pro `QemuModule` certo e traduz pra estampa elétrica; cada `QemuModule` só decodifica o registrador de um periférico; `IpcServer` só serializa/desserializa; `PluginLoader` só descobre/valida/carrega código, `PluginRuntime` só cria/destrói instâncias — nenhuma classe acumula mais de uma responsabilidade. **Esclarecimento (2026-06-30)**: SRP aqui é "uma responsabilidade", não "uma classe por arquivo" — agrupar múltiplos devices RELACIONADOS num mesmo módulo (`SimulideBuiltins.hpp` com 8+ classes; `simulide-complex`/`simulide-logic`, 18+25 tipos cada num único `lib.c`) é permitido e intencional, tanto built-in quanto plugin ABI/DLL. O que de fato violaria SRP/DIP: lógica específica de UM typeId vazando pra fora do código daquele device E/OU duplicada em vários lugares (ex: a mesma classificação por typeId repetida em 4 funções da Extension) — ver `.spec/lasecsimul-native-devices.spec` seção 22.8 pro critério completo e o exemplo formal (`ReadoutFormat`/`InteractionKind`, seção 22) de centralizar em vez de duplicar. |
 | **O**CP | Novo componente/MCU = nova classe compilada no Core **ou** novo plugin DLL/SO — nunca uma edição em `MnaSolver`/`Scheduler`. Novo periférico de chip = novo `QemuModule` concreto, nunca edição em `McuComponent`/`Scheduler`/`Netlist` (item 10.2). |
 | **L**SP | Qualquer `IComponentModel` (built-in, `NativeDeviceProxy` envolvendo um plugin, ou `McuComponent`) é intercambiável no `stamp()` do solver sem checagem de tipo concreto. Idem para `IMcuAdapter`/`QemuModule` no `McuComponent`. |
 | **I**SP | `IComponentModel` e `IMcuAdapter` são interfaces separadas — um MCU adapter não implementa métodos de pino de componente passivo. `ComponentMetadataRegistry` separado de `ComponentRegistry` — consultar o catálogo para UI não exige uma factory instanciável. |

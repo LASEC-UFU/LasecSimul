@@ -972,6 +972,7 @@ referência pendente (o problema que o SimulIDE evita ao embutir).
 | `pins[].length` | `length` | tamanho do traço do terminal, em px |
 | `pins[].label` | `label` | texto exibido junto ao pino; se omitido, usa `id` |
 | `pins[].labelX`/`labelY` | (texto de pino arrastável independente, ver `PackagePin`/`PackagePin::editPos` real) | posição do RÓTULO, independente da posição do pino (mesmo espaço de `x`/`y`) — ausente == posição padrão calculada (ponta do lead + 9px na direção de `angle`); 2026-06-29, ver seção 21.3 |
+| `package.pinLabelColor` | (cor fixa de tema do SimulIDE, aqui configurável por package) | cor (hex) de TODOS os rótulos de pino do `package` — opcional, ausente usa a cor padrão do tema ativo (`currentColor`); setado/editado pelo editor de autoria (`symbolAuthoring.ts::seedPinLabelComponent`/`compileSubcircuitInternalComponents`, cada rótulo de pino é um `graphics.text` vinculado cuja `properties.color` é semeada/lida de volta neste campo no round-trip seed→compile) |
 
 Nenhum campo novo aqui é lido pelo Core — `package`/`pins[].angle|length|label|labelX|labelY` são consumidos **só pela
 Extension** (ela já lê `device.json` direto do disco para popular a paleta/painel de propriedades; não
@@ -1086,3 +1087,169 @@ Board Mode (posicionar componentes "graphical" reais sobre a arte do `package`, 
 independente da posição no circuito interno) é uma feature RELACIONADA mas distinta, documentada em
 `.spec/lasecsimul-subcircuits.spec` seção 4 (só faz sentido pra `subcircuit-file`, que tem circuito
 interno pra organizar -- `mcu-adapter`/`abi-device` não têm, "Package ≠ Subcircuit").
+
+## 22. ABI v2 — leitura estruturada, interação genérica e versionamento de estado (2026-06-30)
+
+Auditoria arquitetural completa do projeto (varredura de código + 2 agentes de pesquisa dedicados — um
+auditando as 5 implementações reais de device ABI existentes, outro auditando a interface real de
+`Component`/`eElement` do SimulIDE em `C:\SourceCode\simulide_2`) encontrou 3 gaps REAIS (não
+especulação) no contrato de device, fechados nesta rodada.
+
+### 22.1 Por que LasecSimul precisa de metadata declarativa onde o SimulIDE usa despacho virtual C++
+
+O SimulIDE real **não tem** um sistema declarativo de "formato de leitura": cada `Meter` (ver
+`simulide_2/src/components/meters/meter.cpp:61-127`) simplesmente sobrescreve `updateStep()` em C++ e
+escreve texto formatado direto num `QGraphicsSimpleTextItem` filho — possível porque SimulIDE roda
+device e desenho no MESMO processo/linguagem (C++/Qt), com despacho virtual de método resolvendo a
+diferença de comportamento por subclasse.
+
+LasecSimul não pode replicar isso ao pé da letra: o device (Core, C++/DLL) e o desenho (Webview,
+TypeScript, processo separado, IPC) estão em lados opostos de uma fronteira de processo. Um device não
+pode "só sobrescrever paint()" através de IPC — a implementação de desenho não pode morar no código do
+device. Onde o SimulIDE usa despacho virtual C++ pra desacoplar, LasecSimul precisa de METADADOS
+DECLARATIVOS pro mesmo efeito de desacoplamento. Esta seção formaliza esse metadado.
+
+### 22.2 `ReadoutFormat` — como a UI decodifica `getComponentState()`/instrumento sem checar typeId
+
+Tipo novo em `registry::ComponentMetadataRegistry.hpp` (Core) e espelhado em `extension/src/ipc/types.ts`
+(`ReadoutFormatDto`)/`extension/src/ui/webview/model.ts` (`ReadoutFormatEntry`):
+
+```ts
+type ReadoutFormat =
+  | { kind: "scalar"; unit: string }            // 1 double (amperímetro, frequencímetro, sonda)
+  | { kind: "channelHistory"; channels: number } // N séries independentes de double, channel-major
+                                                  // (osciloscópio: canal 0 inteiro, depois canal 1, ...)
+  | { kind: "bitmaskHistory"; channels: number }; // 1 série de {timestamp, bitmask}, cada amostra
+                                                   // captura todos os canais de uma vez (analisador lógico)
+```
+
+Declaração:
+- **Built-in**: método estático próprio na classe (`Oscope::readoutFormat()`, `LogicAnalyzer::
+  readoutFormat()`, `Ampmeter::readoutFormat()`, `FreqMeter::readoutFormat()`, `Probe::readoutFormat()`),
+  passado em `registerBuiltinMetadata(...)` (`CoreApplication.cpp`).
+- **Plugin/DLL**: chave opcional `"readout"` em `device.json` (mesmo padrão de `properties[]`), parseada
+  por `parseReadoutFormat()` em `loadDeviceLibraryFile` — um device de terceiros declara isso SEM
+  precisar de nenhuma mudança de código no Core nem na Extension, e sem precisar de função nova na
+  vtable C (`device_abi.h`) — é puramente um campo de manifesto, como `properties[]`/`pins[]`.
+
+```json
+{ "readout": { "kind": "scalar", "unit": "V" } }
+{ "readout": { "kind": "channelHistory", "channels": 4 } }
+{ "readout": { "kind": "bitmaskHistory", "channels": 8 } }
+```
+
+Ausência (`std::optional<ReadoutFormat>` em `ComponentMetadata`, campo ausente no JSON de resposta) é
+uma declaração VÁLIDA de "sem leitura estruturada" — a maioria dos devices (resistor, os 18+25 tipos de
+`simulide-complex`/`simulide-logic`, ESP32) não são instrumentos com mostrador, isso não é um estado
+"ainda não migrado".
+
+### 22.3 `InteractionKind` — como a UI trata clique/arrasto sem checar typeId
+
+```ts
+type InteractionKind = "momentary" | "toggle" | "none";
+```
+
+Declarado do mesmo jeito (`SimulideSwitch::interactionKindFor(typeId)` pro built-in; `"interaction"`
+opcional em `device.json` pro plugin). `switches.push` declara `"momentary"` (solta ao soltar o botão);
+`switches.switch`/`switches.switch_dip` declaram `"toggle"`.
+
+### 22.4 Transporte — mesmo IPC `getPropertySchemas`, mapas irmãos ADITIVOS
+
+Sem mensagem IPC nova. A resposta de `getPropertySchemas` ganhou 2 chaves de topo NOVAS e ADITIVAS,
+irmãs de `schemasByTypeId` (que continua exatamente como antes — nunca um campo a mais DENTRO de cada
+entrada, pra preservar 100% de compatibilidade de wire com qualquer consumidor antigo que só lia o
+array de schema):
+
+```json
+{
+  "schemasByTypeId": { "meters.oscope": [ /* ... */ ] },
+  "readoutFormatByTypeId": { "meters.oscope": { "kind": "channelHistory", "channels": 4 } },
+  "interactionKindByTypeId": { "switches.push": "momentary" }
+}
+```
+
+`WebviewComponentCatalogEntry.readoutFormat?`/`.interactionKind?` (Extension) são populados no mesmo
+merge de `propertySchema` (`catalogMerge.ts::mergePropertySchemas`). Consumidores genéricos (
+`isReadableInstrument`/`decodeComponentReadout`/`decodeInstrumentHistory`/`usesEmbeddedValueLabel` em
+`extension.ts`/`main.ts`, `interactionKindFor`/`isPushButton` em `main.ts`) consultam o catálogo
+PRIMEIRO; o `if (typeId === ...)` antigo continua como FALLBACK legítimo (não removido) pra typeId cujo
+catálogo ainda não carregou esse campo (ex: instante entre o componente aparecer na tela e a resposta
+de `getPropertySchemas` chegar) — não é duplicação/gambiarra, é o mesmo padrão de degradação graciosa
+já usado em todo o resto do catálogo (`componentBox`/`componentSymbolSvg` caem pro genérico até o
+`package` real carregar).
+
+**Migrados nesta rodada**: os 6 instrumentos com leitura (`meters.probe/ampmeter/freqmeter/oscope/
+logic_analyzer`, equivalente de `instruments.voltmeter` via `meters.probe`) + os 3 typeIds de switch
+(`switches.push/switch/switch_dip`). **Não migrados** (fora de escopo desta rodada, ver seção 22.7):
+os ~30 demais checks de typeId na Extension que não são sobre "leitura/interação de device" (são sobre
+o EDITOR — topologia de fio, autoria de símbolo, etc.) e os 18+25 tipos de `simulide-complex`/
+`simulide-logic`, que não têm leitura/interação especial hoje na UI.
+
+### 22.5 Versionamento de blobs de `get_state`/`set_state`
+
+Gap real confirmado pela auditoria: nenhum dos 5 devices reais tinha QUALQUER cabeçalho de versão nos
+blobs binários de `get_state`/`set_state` — um layout de estado mudando no futuro (bugfix que adiciona
+um campo) faria `set_state` antigo interpretar um blob novo (ou vice-versa) às cegas, corrompendo
+silenciosamente.
+
+**Convenção obrigatória a partir desta rodada** (não é mudança de struct/vtable, é contrato de
+payload, igual ao resto do protocolo binário já existente): os primeiros 4 bytes de TODO blob de
+`get_state` passam a ser um `uint32_t` de versão de layout, antes do payload em si. `set_state` que
+recebe uma versão que não reconhece DEVE logar (nível erro, via `LsdnHostApi::log`) e ignorar o blob
+inteiro (mantém o estado atual), nunca interpretar bytes de layout potencialmente errado.
+
+Aplicado nos 3 devices que usam `device_abi.h` (`example-blinker` — `BLINKER_STATE_VERSION`;
+`simulide-complex` — `SIMULIDE_COMPLEX_STATE_VERSION`, header de 9 uint32 em vez de 8, payload desloca
+de offset 32 pra 36; `simulide-logic` — `SIMULIDE_LOGIC_STATE_VERSION`). Devices novos seguem a mesma
+convenção desde o primeiro commit.
+
+### 22.6 `abiVersion` do manifesto — esclarecimento (não era o gap que parecia)
+
+Investigação inicial desta rodada sinalizou "Core nunca valida `abiVersion`" como gap de segurança —
+**parcialmente errado**: o Core JÁ valida a versão real do contrato C, só não onde se esperava.
+`PluginLoader::createDeviceModuleFromExports`/`createMcuModuleFromExports`
+(`core/src/plugins/PluginLoader.cpp:29-63`) comparam o `abiMajor`/`abiMinor` que o BINÁRIO se
+autodeclara via `lsdn_get_vtable(&abi_major, &abi_minor)` (compilado contra `LSDN_ABI_VERSION_MAJOR`
+do header que o Core também usa) contra a constante do header do Core — rejeitando (`throw
+std::runtime_error("ABI incompativel")`) qualquer binário desalinhado. Esse é o gate REAL e robusto,
+porque valida o que foi de fato COMPILADO, não uma declaração JSON que poderia divergir do binário.
+
+O campo `"abiVersion"` dentro de `device.json`/`mcu.json` é **só documentação/metadado informativo**,
+nunca lido pelo Core — adicionar um SEGUNDO gate no Core validando esse campo JSON seria redundante com
+o gate binário já robusto (exatamente o tipo de duplicação que este projeto evita, ver seção 22.8).
+Mesmo assim, todo manifesto de `device_abi.h` (os 3 devices da seção 22.5) foi atualizado pra declarar
+`{"major": 4, "minor": 0}`, sinalizando honestamente que o SCHEMA DE MANIFESTO ganhou campos novos
+(`readout`/`interaction`) nesta rodada — sem que o Core precise (ou deva) impor isso como gate.
+`mcu.json` (ABI separada, `mcu_abi.h`, atualmente major 2) não foi tocado — não tem conceito de
+readout/interação (adaptador de chip, não instrumento), fora de escopo desta seção.
+
+### 22.7 Fase 2 (próximo passo CONCRETO, não backlog vago)
+
+Hoje o FORMATO em si (`ReadoutFormat`/`InteractionKind`) já vem do Core/manifesto — mas os ~30 checks
+de typeId restantes na Extension (fora dos 9 migrados na seção 22.4) continuam por `if (typeId)`,
+porque cobrem conceitos que não são "leitura/interação de device" (topologia de fio, autoria de
+símbolo, etc. — ver objetivo do `.skill`, critério "lógica de EDITOR vs lógica de DEVICE"). Quando um
+device novo precisar de uma leitura/interação fora dos 3 `ReadoutKind`/3 `InteractionKind` de hoje
+(ex: um display com leitura de string, não numérica), o desenho a seguir é o MESMO padrão: adicionar
+um `kind` novo ao tagged union, parsear/serializar nos mesmos 2 pontos (`parseReadoutFormat`/
+`readoutFormatToJson` em `CoreApplication.cpp`), consumir no catálogo — nunca inventar um mecanismo
+paralelo.
+
+### 22.8 Critérios formais de decoupling (confirmados pelo usuário nesta rodada)
+
+(a) **Agrupar múltiplos devices relacionados num mesmo módulo/classe/arquivo é PERMITIDO e
+intencional**, tanto built-in (`SimulideBuiltins.hpp` com 8+ classes) quanto via ABI/DLL
+(`simulide-complex`/`simulide-logic`, 18+25 tipos cada num único `lib.c`) — **não é violação de SRP a
+corrigir**. O critério real não é "uma classe por arquivo".
+
+(b) **O que de fato não pode acontecer**: lógica específica de UM typeId vazar pra fora do código
+daquele device E/OU ficar DUPLICADA em vários lugares. Built-in: a decisão mora dentro da própria
+classe (ex: `SimulideSwitch::propertySchemaFor(typeId)`/`interactionKindFor(typeId)`, não numa ternária
+em `CoreApplication.cpp`). Plugin/DLL: a decisão mora no `device.json`/binário daquele device, nunca
+hardcoded no Core ou na Extension. Quando a MESMA classificação por typeId precisa existir em mais de
+um lugar (caso clássico: decodificar leitura), a resposta não é "if (typeId) em cada função" — é
+exatamente o que esta seção (22.2-22.4) resolve: uma declaração ÚNICA, consultada por todo mundo.
+
+(c) **Nunca duplicar código de segurança/robustez já existente em outra camada** (ver seção 22.6) — um
+gate novo só se justifica se fechar um gap REAL, confirmado por leitura de código, nunca por
+suposição.

@@ -109,6 +109,16 @@ public:
         return {thresholdRising, thresholdFalling, sampleInterval};
     }
 
+    /** ABI v2 (.spec/lasecsimul-native-devices.spec) -- `getState()` é 1 série temporal de
+     * {timestamp, bitmask}, não N séries independentes como o Oscope (ver formato em getState()
+     * acima) -- por isso BitmaskHistory, não ChannelHistory. */
+    static ReadoutFormat readoutFormat() {
+        ReadoutFormat format;
+        format.kind = ReadoutKind::BitmaskHistory;
+        format.channels = kChannelCount;
+        return format;
+    }
+
     static std::vector<PropertySchema> propertySchema() {
         PropertySchema thresholdRising;
         thresholdRising.id = "thresholdRising";

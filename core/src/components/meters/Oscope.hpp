@@ -120,6 +120,15 @@ public:
         return {filter, autoSc, tracks, sampleInterval};
     }
 
+    /** ABI v2 (.spec/lasecsimul-native-devices.spec) -- declara que `getState()` começa com 4
+     * canais de histórico temporal, pra Webview decodificar sem checar typeId. */
+    static ReadoutFormat readoutFormat() {
+        ReadoutFormat format;
+        format.kind = ReadoutKind::ChannelHistory;
+        format.channels = kChannelCount;
+        return format;
+    }
+
     static std::vector<PropertySchema> propertySchema() {
         PropertySchema filter;
         filter.id = "filter";

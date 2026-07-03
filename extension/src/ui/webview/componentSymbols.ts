@@ -399,10 +399,6 @@ function builtinComponentBox(typeId: string): ComponentBox | undefined {
     case "sources.battery": return COMP2PIN_BOX;
     case "sources.rail": return { width: 24, height: 16 };
 
-    // Estes só entram se o catálogo ainda não registrou o package real.
-    case "espressif.esp32": return { width: 88, height: 98 };
-    case "subcircuits.esp32_devkitc_v4": return { width: 88, height: 176 };
-    case "subcircuits.esp32_wroom32": return { width: 104, height: 160 };
     default: return undefined;
   }
 }
@@ -993,7 +989,7 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
         `<line x1="27" y1="${contactY}" x2="32" y2="${contactY}" class="symbol-stroke"/>` +
         `<rect x="10" y="2" width="12" height="3" rx="1.5" class="push-actuator-bar" fill="currentColor"/>` +
         `<line x1="7" y1="${contactY - 4}" x2="25" y2="${contactY - 4}" class="symbol-stroke symbol-stroke--thick push-actuator-bar"/>` +
-        `<rect x="10" y="11" width="12" height="11" rx="2" class="push-body" fill="#dddddd" stroke="#777777" stroke-width="1.5"/>`
+        `<rect x="10" y="11" width="12" height="11" rx="2" class="push-body toggle-hit-zone" fill="#dddddd" stroke="#777777" stroke-width="1.5"/>`
       );
     }
 
@@ -1005,7 +1001,7 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
         `<rect x="5" y="${contactY - 2}" width="8" height="4" rx="2" fill="currentColor"/>` +
         `<rect x="19" y="${contactY - 2}" width="8" height="4" rx="2" fill="currentColor"/>` +
         `<line x1="8" y1="${contactY}" x2="24" y2="0" class="symbol-stroke symbol-stroke--thick switch-lever"/>` +
-        `<rect x="10" y="11" width="12" height="11" rx="2" class="switch-body" fill="#dddddd" stroke="#777777" stroke-width="1.5"/>`
+        `<rect x="10" y="11" width="12" height="11" rx="2" class="switch-body toggle-hit-zone" fill="#dddddd" stroke="#777777" stroke-width="1.5"/>`
       );
     }
 
@@ -1118,13 +1114,6 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
       return labelBox("SERVO");
     case "outputs.audio_out":
       return labelBox("AUDIO");
-    case "espressif.esp32":
-      return (
-        `<rect x="24" y="18" width="${box.width - 48}" height="${box.height - 36}" rx="8" class="symbol-stroke" fill="none"/>` +
-        `<rect x="${midX - 26}" y="${yMid - 34}" width="52" height="68" rx="6" class="symbol-stroke" fill="none"/>` +
-        `<text x="${midX}" y="${yMid - 6}" text-anchor="middle" class="symbol-text">ESP32</text>` +
-        `<text x="${midX}" y="${yMid + 14}" text-anchor="middle" class="symbol-text">QEMU</text>`
-      );
     case "outputs.incandescent_lamp":
       return (
         horizontalLeads(box, yMid) +
@@ -1241,7 +1230,7 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
     case "sources.fixed_volt": {
       return (
         `<rect x="0" y="4" width="16" height="16" rx="2" class="fixed-volt-button" fill="#dddddd" stroke="#777777" stroke-width="1.5"/>` +
-        `<rect x="24" y="4" width="16" height="16" rx="2" class="fixed-volt-body" fill="#dddddd" stroke="#777777" stroke-width="1.5"/>` +
+        `<rect x="24" y="4" width="16" height="16" rx="2" class="fixed-volt-body toggle-hit-zone" fill="#dddddd" stroke="#777777" stroke-width="1.5"/>` +
         `<rect x="40" y="9" width="8" height="6" rx="3" class="fixed-volt-terminal" fill="currentColor"/>`
       );
     }

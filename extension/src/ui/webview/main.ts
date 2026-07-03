@@ -71,6 +71,17 @@ const initialWindowState = (window as WindowWithInitialState).__LASECSIMUL_INITI
 let state = normalizeProjectState((vscode?.getState() as WebviewProjectState | undefined) ?? initialWindowState ?? createEmptyState());
 syncPackageRegistry(state.catalog);
 
+/** Reconciliação incremental da camada de COMPONENTES (a mais cara/mais re-renderizada da Webview) --
+ * `render()` (mais abaixo) cria/atualiza/remove só o que mudou em vez de `app.innerHTML = ""` +
+ * reconstrução total, que antes recriava TODO `.component` (com seu `<svg>` e listeners) a cada
+ * poll de telemetria (~300ms durante simulação). `canvas`/`canvasContent`/camada de fios/labels
+ * continuam recriados a cada `render()` nesta rodada (custo bem menor, documentado como próximo
+ * passo natural em `.spec/lasecsimul-native-devices.spec` com o mesmo padrão) -- mover um
+ * `.component` pra um `canvasContent` novo via `appendChild` NÃO derruba seus listeners (pertencem
+ * ao elemento, não ao pai), e `render()` nunca roda durante um arrasto ativo (`isDraggingComponent`),
+ * então não há risco de perder `setPointerCapture()` em trânsito. */
+const componentElementsById = new Map<string, HTMLElement>();
+
 const UI_TEXT = {
   "pt-BR": {
     nothingSelected: "Nada selecionado",
@@ -381,7 +392,7 @@ function renderBoardOverlaysFor(component: WebviewComponentModel): HTMLElement[]
     svg.innerHTML = componentSymbolSvg(item.typeId, properties);
     el.appendChild(svg);
 
-    const isPushButton = item.typeId === "switches.push";
+    const isPushButton = interactionKindFor(item.typeId) === "momentary";
     if (isPushButton) svg.classList.add("component__symbol--push");
 
     // Arrastar (move/persiste boardVisual) vs apertar/segurar (switches.push) são o MESMO gesto de
@@ -1238,8 +1249,22 @@ function render(): void {
   renderPendingWirePreview(wireLayer);
   canvasContent.appendChild(wireLayer);
 
+  const visibleComponentIds = new Set<string>();
   for (const component of state.components.filter((entry) => !entry.hidden && isVisibleInCurrentMode(entry))) {
-    canvasContent.appendChild(renderComponent(component));
+    visibleComponentIds.add(component.id);
+    let componentEl = componentElementsById.get(component.id);
+    if (!componentEl) {
+      componentEl = createComponentElement(component);
+      componentElementsById.set(component.id, componentEl);
+    } else {
+      updateComponentElement(componentEl, component);
+    }
+    canvasContent.appendChild(componentEl);
+  }
+  for (const [id, componentEl] of componentElementsById) {
+    if (visibleComponentIds.has(id)) continue;
+    componentEl.remove();
+    componentElementsById.delete(id);
   }
 
   for (const component of state.components.filter((entry) => {
@@ -1384,7 +1409,7 @@ function pasteClipboardItems(): void {
     component.label = nextIndexedLabel(component.typeId, baseLabel, stagedComponents);
     component.x += WIRE_GRID_SIZE;
     component.y += WIRE_GRID_SIZE;
-    if (component.typeId === "switches.push") component.properties.closed = false;
+    if (interactionKindFor(component.typeId) === "momentary") component.properties.closed = false;
     stagedComponents.push(component);
     return component;
   });
@@ -2169,8 +2194,26 @@ function numericReadout(component: WebviewComponentModel): number | undefined {
   return typeof readout === "number" ? readout : undefined;
 }
 
+/** ABI v2 (.spec/lasecsimul-native-devices.spec): consulta `interactionKind` do catálogo (vindo do
+ * Core via `getPropertySchemas`) em vez de checar typeId -- fallback legado só pra typeId sem o
+ * campo declarado ainda (catálogo não carregou do Core). */
+function interactionKindFor(typeId: string): "momentary" | "toggle" | "none" {
+  const declared = state.catalog.find((entry) => entry.typeId === typeId)?.interactionKind;
+  if (declared) return declared;
+  if (typeId === "switches.push") return "momentary";
+  if (typeId === "switches.switch" || typeId === "switches.switch_dip") return "toggle";
+  return "none";
+}
+
 function usesEmbeddedValueLabel(typeId: string): boolean {
-  return typeId === "sources.fixed_volt" || typeId === "sources.rail" || typeId === "instruments.voltmeter" || typeId.startsWith("meters.");
+  // sources.fixed_volt/sources.rail mostram um valor CONFIGURADO (propriedade estática), não uma
+  // leitura medida -- conceito diferente de `readoutFormat` (ABI v2), que é só pra instrumentos com
+  // leitura simulada (ver findCatalogEntry abaixo). Os dois continuam embutindo valor no símbolo,
+  // por isso ficam juntos nesta função, mas a ORIGEM do "embute valor" é diferente pra cada um.
+  if (typeId === "sources.fixed_volt" || typeId === "sources.rail") return true;
+  if (state.catalog.find((entry) => entry.typeId === typeId)?.readoutFormat) return true;
+  // Fallback legado -- typeId sem readoutFormat no catálogo ainda.
+  return typeId === "instruments.voltmeter" || typeId.startsWith("meters.");
 }
 
 function voltmeterReadoutText(component: WebviewComponentModel): string {
@@ -2277,7 +2320,9 @@ interface LogicPopupState {
 type InstrumentPopupState = ScopePopupState | LogicPopupState;
 
 const instrumentPopups = new Map<string, InstrumentPopupState>();
-const INSTRUMENT_CHANNEL_COLORS = ["#f6f65a", "#d9d7ff", "#ffd06a", "#00e89a", "#f6f65a", "#d9d7ff", "#ffd06a", "#00e89a"];
+// Cores EXATAS do SimulIDE real (plotbase.cpp: m_color[0..3] = RGB(240,240,100)/(220,220,255)/
+// (255,210,90)/(0,245,160)) -- canais 4-7 do analisador lógico reusam as mesmas 4 cores (i % 4).
+const INSTRUMENT_CHANNEL_COLORS = ["#f0f064", "#dcdcff", "#ffd25a", "#00f5a0", "#f0f064", "#dcdcff", "#ffd25a", "#00f5a0"];
 
 const instrumentPopupLayer = document.createElement("div");
 instrumentPopupLayer.className = "instrument-popup-layer";
@@ -2496,13 +2541,92 @@ function makeNumberInput(value: number, step: number, onChange: (value: number) 
   return input;
 }
 
-function makeButton(label: string, active: boolean, onClick: () => void): HTMLButtonElement {
+/** Botão de canal (Ch1-Ch4/All) com a cor de fundo do PRÓPRIO canal -- réplica do
+ * `oscwidget.cpp`/`oscwidget.ui` real (QPushButton checkable, background = cor do canal via
+ * stylesheet, borda "inset" quando ativo). */
+function makeChannelButton(label: string, color: string, active: boolean, onClick: () => void): HTMLButtonElement {
   const button = document.createElement("button");
   button.type = "button";
   button.textContent = label;
-  button.className = `instrument-tab${active ? " instrument-tab--active" : ""}`;
+  button.className = `instrument-channel-button${active ? " instrument-channel-button--active" : ""}`;
+  button.style.background = color;
   button.addEventListener("click", onClick);
   return button;
+}
+
+/** Linha de "knob" (disco visual estático + rótulo + spinner numérico editável) -- réplica do
+ * layout QDial+QLabel+PlotSpinBox de `oscwidget.ui` (Divisão/Posição de Tempo/Tensão). O disco é só
+ * decorativo nesta rodada (sem arrastar pra girar); o spinner ao lado é o controle real. */
+function makeKnobRow(labelText: string, value: number, step: number, onChange: (value: number) => void): HTMLDivElement {
+  const row = document.createElement("div");
+  row.className = "instrument-knob-row";
+  const dial = document.createElement("span");
+  dial.className = "instrument-knob-dial";
+  const info = document.createElement("div");
+  info.className = "instrument-knob-info";
+  const label = document.createElement("label");
+  label.textContent = labelText;
+  info.append(label, makeNumberInput(value, step, onChange));
+  row.append(dial, info);
+  return row;
+}
+
+function makeDivider(): HTMLHRElement {
+  const hr = document.createElement("hr");
+  hr.className = "instrument-divider";
+  return hr;
+}
+
+/** Linha "Auto"/"Trigger" -- seleção EXCLUSIVA de 1 canal (ou nenhum), uma bolinha colorida por
+ * canal + uma cinza pra "nenhum" -- réplica das `QRadioButton` (background = cor do canal) dentro
+ * de `autoGroup`/`triggerGroup` (`exclusive=true`) de `oscwidget.ui`. */
+function makeExclusiveDotRow(
+  labelText: string,
+  selected: 0 | 1 | 2 | 3 | "none",
+  onSelect: (value: 0 | 1 | 2 | 3 | "none") => void
+): HTMLDivElement {
+  const row = document.createElement("div");
+  row.className = "instrument-radio-row";
+  const label = document.createElement("span");
+  label.className = "instrument-radio-row__label";
+  label.textContent = labelText;
+  row.appendChild(label);
+  ([0, 1, 2, 3] as const).forEach((channel) => {
+    const dot = document.createElement("span");
+    dot.className = `instrument-radio-dot${selected === channel ? " instrument-radio-dot--selected" : ""}`;
+    dot.style.background = INSTRUMENT_CHANNEL_COLORS[channel] ?? "#888";
+    dot.title = `Ch${channel + 1}`;
+    dot.addEventListener("click", () => onSelect(channel));
+    row.appendChild(dot);
+  });
+  const noneDot = document.createElement("span");
+  noneDot.className = `instrument-radio-dot${selected === "none" ? " instrument-radio-dot--selected" : ""}`;
+  noneDot.style.background = "#cfd3da";
+  noneDot.title = "Nenhum";
+  noneDot.addEventListener("click", () => onSelect("none"));
+  row.appendChild(noneDot);
+  return row;
+}
+
+/** Linha "Esconder" -- TOGGLE independente por canal (não exclusivo), uma bolinha colorida por
+ * canal -- réplica de `hideGroup` (`exclusive=false`) de `oscwidget.ui`: vários canais podem ficar
+ * escondidos ao mesmo tempo. */
+function makeToggleDotRow(labelText: string, hiddenByChannel: boolean[], onToggle: (channel: number) => void): HTMLDivElement {
+  const row = document.createElement("div");
+  row.className = "instrument-radio-row";
+  const label = document.createElement("span");
+  label.className = "instrument-radio-row__label";
+  label.textContent = labelText;
+  row.appendChild(label);
+  hiddenByChannel.slice(0, 4).forEach((hidden, channel) => {
+    const dot = document.createElement("span");
+    dot.className = `instrument-radio-dot${hidden ? " instrument-radio-dot--selected" : ""}`;
+    dot.style.background = INSTRUMENT_CHANNEL_COLORS[channel] ?? "#888";
+    dot.title = `Ch${channel + 1}`;
+    dot.addEventListener("click", () => onToggle(channel));
+    row.appendChild(dot);
+  });
+  return row;
 }
 
 /** Janela "Expande" arrastável pela barra de título -- mesmo padrão de pointer capture usado em
@@ -2565,87 +2689,47 @@ function buildScopePopup(popup: ScopePopupState, component: WebviewComponentMode
   const controls = document.createElement("div");
   controls.className = "instrument-popup__controls";
 
+  // Botões Ch1-Ch4/All -- cor de fundo do PRÓPRIO canal, igual `oscwidget.ui` real (ver
+  // makeChannelButton). Trocar a aba ativa também troca qual canal os knobs de Posição de
+  // Tempo/Tensão abaixo editam (mesmo papel do `m_channel` em `OscWidget`).
   const tabs = document.createElement("div");
   tabs.className = "instrument-tabs";
   ([0, 1, 2, 3] as const).forEach((channel) => {
-    tabs.appendChild(makeButton(`Ch${channel + 1}`, popup.activeTab === channel, () => {
+    tabs.appendChild(makeChannelButton(`Ch${channel + 1}`, INSTRUMENT_CHANNEL_COLORS[channel] ?? "#888", popup.activeTab === channel, () => {
       popup.activeTab = channel;
       renderInstrumentPopups();
     }));
   });
-  tabs.appendChild(makeButton("All", popup.activeTab === "all", () => {
+  tabs.appendChild(makeChannelButton("All", "#e6e8ec", popup.activeTab === "all", () => {
     popup.activeTab = "all";
     renderInstrumentPopups();
   }));
   controls.appendChild(tabs);
 
+  // Knobs (disco + spinner) -- réplica do layout QDial+QLabel+PlotSpinBox de `oscwidget.ui`.
   const knobs = document.createElement("div");
   knobs.className = "instrument-knobs";
-  knobs.appendChild(makeFieldRow("Divisão de Tempo (ms)", makeNumberInput(popup.timeDivMs, 100, (v) => { popup.timeDivMs = Math.max(0.001, v); renderInstrumentPopups(); })));
   const activeChannelIndex = popup.activeTab === "all" ? 0 : popup.activeTab;
   const activeChannel = popup.channels[activeChannelIndex] ?? popup.channels[0]!;
-  knobs.appendChild(makeFieldRow("Posição de Tempo (ms)", makeNumberInput(activeChannel.timePosMs, 100, (v) => { activeChannel.timePosMs = v; renderInstrumentPopups(); })));
-  knobs.appendChild(makeFieldRow("Divisão de Tensão (V)", makeNumberInput(activeChannel.voltDiv, 0.1, (v) => { activeChannel.voltDiv = Math.max(0.001, v); renderInstrumentPopups(); })));
-  knobs.appendChild(makeFieldRow("Posição de Tensão (V)", makeNumberInput(activeChannel.voltPos, 0.1, (v) => { activeChannel.voltPos = v; renderInstrumentPopups(); })));
+  knobs.appendChild(makeKnobRow("Divisão de Tempo (ms)", popup.timeDivMs, 100, (v) => { popup.timeDivMs = Math.max(0.001, v); renderInstrumentPopups(); }));
+  knobs.appendChild(makeKnobRow("Posição de Tempo (ms)", activeChannel.timePosMs, 100, (v) => { activeChannel.timePosMs = v; renderInstrumentPopups(); }));
+  knobs.appendChild(makeKnobRow("Divisão de Tensão (V)", activeChannel.voltDiv, 0.1, (v) => { activeChannel.voltDiv = Math.max(0.001, v); renderInstrumentPopups(); }));
+  knobs.appendChild(makeKnobRow("Posição de Tensão (V)", activeChannel.voltPos, 0.1, (v) => { activeChannel.voltPos = v; renderInstrumentPopups(); }));
   controls.appendChild(knobs);
 
-  const channelRows = document.createElement("div");
-  channelRows.className = "instrument-channel-rows";
-  popup.channels.forEach((settings, channel) => {
-    const row = document.createElement("div");
-    row.className = "instrument-channel-row";
-    const swatch = document.createElement("span");
-    swatch.className = "instrument-channel-swatch";
-    swatch.style.background = INSTRUMENT_CHANNEL_COLORS[channel] ?? "#888";
-    row.appendChild(swatch);
+  controls.appendChild(makeDivider());
+  controls.appendChild(makeFieldRow("Filtro (V)", makeNumberInput(popup.filterThreshold, 0.01, (v) => { popup.filterThreshold = Math.max(0, v); renderInstrumentPopups(); })));
 
-    const hideLabel = document.createElement("label");
-    const hideCheck = document.createElement("input");
-    hideCheck.type = "checkbox";
-    hideCheck.checked = settings.hidden;
-    hideCheck.addEventListener("change", () => { settings.hidden = hideCheck.checked; renderInstrumentPopups(); });
-    hideLabel.append(hideCheck, document.createTextNode("Esconder"));
-    row.appendChild(hideLabel);
-
-    const triggerLabel = document.createElement("label");
-    const triggerRadio = document.createElement("input");
-    triggerRadio.type = "radio";
-    triggerRadio.name = `scope-${component.id}-trigger`;
-    triggerRadio.checked = popup.triggerSource === channel;
-    triggerRadio.addEventListener("change", () => { popup.triggerSource = channel as 0 | 1 | 2 | 3; renderInstrumentPopups(); });
-    triggerLabel.append(triggerRadio, document.createTextNode("Trigger"));
-    row.appendChild(triggerLabel);
-
-    const autoLabel = document.createElement("label");
-    const autoRadio = document.createElement("input");
-    autoRadio.type = "radio";
-    autoRadio.name = `scope-${component.id}-auto`;
-    autoRadio.checked = popup.autoScaleChannel === channel;
-    autoRadio.addEventListener("change", () => { popup.autoScaleChannel = channel as 0 | 1 | 2 | 3; renderInstrumentPopups(); });
-    autoLabel.append(autoRadio, document.createTextNode("Auto"));
-    row.appendChild(autoLabel);
-
-    channelRows.appendChild(row);
-  });
-  controls.appendChild(channelRows);
-
-  const noTriggerLabel = document.createElement("label");
-  const noTriggerRadio = document.createElement("input");
-  noTriggerRadio.type = "radio";
-  noTriggerRadio.name = `scope-${component.id}-trigger`;
-  noTriggerRadio.checked = popup.triggerSource === "none";
-  noTriggerRadio.addEventListener("change", () => { popup.triggerSource = "none"; renderInstrumentPopups(); });
-  noTriggerLabel.append(noTriggerRadio, document.createTextNode("Trigger: Nenhum (free-running)"));
-  controls.appendChild(makeFieldRow("", noTriggerLabel));
-
-  const noAutoLabel = document.createElement("label");
-  const noAutoRadio = document.createElement("input");
-  noAutoRadio.type = "radio";
-  noAutoRadio.name = `scope-${component.id}-auto`;
-  noAutoRadio.checked = popup.autoScaleChannel === "none";
-  noAutoRadio.addEventListener("change", () => { popup.autoScaleChannel = "none"; renderInstrumentPopups(); });
-  noAutoLabel.append(noAutoRadio, document.createTextNode("Auto-escala: Nenhuma"));
-  controls.appendChild(makeFieldRow("", noAutoLabel));
+  // Auto/Trigger/Esconder -- bolinhas coloridas por canal, igual `oscwidget.ui` real (réplica de
+  // `autoGroup`/`triggerGroup`/`hideGroup`, ver makeExclusiveDotRow/makeToggleDotRow).
+  controls.appendChild(makeDivider());
+  controls.appendChild(makeExclusiveDotRow("Auto", popup.autoScaleChannel, (value) => { popup.autoScaleChannel = value; renderInstrumentPopups(); }));
+  controls.appendChild(makeExclusiveDotRow("Trigger", popup.triggerSource, (value) => { popup.triggerSource = value; renderInstrumentPopups(); }));
+  controls.appendChild(makeToggleDotRow("Esconder", popup.channels.map((c) => c.hidden), (channel) => {
+    popup.channels[channel]!.hidden = !popup.channels[channel]!.hidden;
+    renderInstrumentPopups();
+  }));
+  controls.appendChild(makeDivider());
 
   const tracksRow = document.createElement("div");
   tracksRow.className = "instrument-field";
@@ -2667,8 +2751,6 @@ function buildScopePopup(popup: ScopePopupState, component: WebviewComponentMode
   });
   controls.appendChild(tracksRow);
 
-  controls.appendChild(makeFieldRow("Filtro / Histerese (V)", makeNumberInput(popup.filterThreshold, 0.01, (v) => { popup.filterThreshold = Math.max(0, v); renderInstrumentPopups(); })));
-
   body.append(plotWrap, controls);
   return container;
 }
@@ -2686,8 +2768,8 @@ function buildLogicPopup(popup: LogicPopupState, component: WebviewComponentMode
 
   const knobs = document.createElement("div");
   knobs.className = "instrument-knobs";
-  knobs.appendChild(makeFieldRow("Divisão de Tempo (ms)", makeNumberInput(popup.timeDivMs, 100, (v) => { popup.timeDivMs = Math.max(10, v); renderInstrumentPopups(); })));
-  knobs.appendChild(makeFieldRow("Posição de Tempo (ms)", makeNumberInput(popup.timePosMs, 100, (v) => { popup.timePosMs = v; renderInstrumentPopups(); })));
+  knobs.appendChild(makeKnobRow("Divisão de Tempo (ms)", popup.timeDivMs, 100, (v) => { popup.timeDivMs = Math.max(10, v); renderInstrumentPopups(); }));
+  knobs.appendChild(makeKnobRow("Posição de Tempo (ms)", popup.timePosMs, 100, (v) => { popup.timePosMs = v; renderInstrumentPopups(); }));
   controls.appendChild(knobs);
 
   const busLabel = document.createElement("div");
@@ -2864,17 +2946,263 @@ function flipSelectedComponents(axis: "horizontal" | "vertical"): void {
   render();
 }
 
-function renderComponent(component: WebviewComponentModel): HTMLElement {
+/** Cria o elemento `.component` UMA VEZ por id (reaproveitado entre renders, ver
+ * `componentElementsById`) -- registra aqui SÓ os listeners de longa duração (clique/seleção,
+ * duplo-clique, menu de contexto, arrastar, popup de instrumento). Reconciliação incremental
+ * (.spec/lasecsimul-native-devices.spec): pintura visual (posição/classe/SVG/pinos) fica inteira em
+ * `updateComponentElement`, chamada daqui pra pintura inicial e de novo em TODO `render()` seguinte
+ * pro mesmo id -- nunca recria o wrapper nem os listeners abaixo, só atualiza.
+ *
+ * Listeners aqui NUNCA capturam `component` por referência: mensagens "init"/"syncState" do host
+ * substituem `state` inteiro (objetos novos, mesmo id) toda vez que algo muda no projeto, então uma
+ * closure que capturasse o objeto leria dados desatualizados depois do primeiro `syncState` seguinte
+ * à criação. Toda leitura de campo MUTÁVEL (x/y/properties/exposed/...) relê via `liveComponent()`
+ * (busca por id, sempre atual); só `componentId` e flags derivadas de `typeId` (também imutável pro
+ * tempo de vida da instância) são seguros pra capturar uma vez. */
+function createComponentElement(component: WebviewComponentModel): HTMLElement {
   const el = document.createElement("div");
+  const componentId = component.id;
+  el.dataset.componentId = componentId;
+
+  const liveComponent = (): WebviewComponentModel | undefined =>
+    state.components.find((entry) => entry.id === componentId);
+
+  // ABI v2 (.spec/lasecsimul-native-devices.spec): isPushButton vem de interactionKind (genérico);
+  // isSwitchToggle continua específico de "switches.switch" de propósito -- é sobre QUAL CSS/visual
+  // este typeId usa, não sobre o conceito genérico de "é toggle" (switch_dip também é toggle mas
+  // tem visual/lógica própria, construída à parte nesta sessão, não deve cair neste bucket).
+  const isPushButton = (state.catalog.find((entry) => entry.typeId === component.typeId)?.interactionKind ?? interactionKindFor(component.typeId)) === "momentary";
+  const isSwitchToggle = component.typeId === "switches.switch";
+  const isFixedVolt = component.typeId === "sources.fixed_volt";
+  const isExpandableInstrument = component.typeId === "meters.oscope" || component.typeId === "meters.logic_analyzer";
+
+  // Clique-pra-alternar (push/switch/fixed-volt) é desambiguado de ARRASTAR dentro do handler
+  // genérico de `pointerdown` mais abaixo (ver `DRAG_THRESHOLD_PX`) -- antes disto, estes 3 tipos
+  // tinham handler PRÓPRIO que chamava `stopImmediatePropagation()` e alternava direto no
+  // `pointerdown`, impedindo COMPLETAMENTE o handler genérico de arrastar de rodar (bug relatado
+  // 2026-06-30: "os botões onde tem ação eu não consigo mover, sempre acha que é clicar").
+
+  if (isExpandableInstrument) {
+    el.addEventListener("click", (event) => {
+      if (!(event.target instanceof Element) || !event.target.closest(".meter-expand-button")) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const current = liveComponent();
+      if (current) toggleInstrumentPopup(current);
+    }, { capture: true });
+  }
+
+  el.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (event.shiftKey) toggleComponentSelection(componentId);
+    else selectOnlyComponent(componentId);
+    persistState();
+    render();
+    if (event.detail >= 2) {
+      queueMicrotask(() => {
+        const refreshed = liveComponent();
+        if (refreshed) openPropertyDialog(refreshed);
+      });
+    }
+  });
+
+  el.addEventListener("contextmenu", (event) => {
+    const component = liveComponent();
+    if (!component) return;
+    const catalogEntry = state.catalog.find((entry) => entry.typeId === component.typeId);
+    if (!isComponentSelected(component.id)) selectOnlyComponent(component.id);
+    persistState();
+    render();
+    const selectedComponents = getSelectedComponents();
+    const isGroup = selectedComponents.length > 1;
+    const isInternalSubcircuitComponent = Boolean(symbolAuthoringContext && symbolAuthoringContext.kind === "subcircuit-file" && !isSymbolAuthoringTypeId(component.typeId));
+    // Mesma entrada do botão "✎" da paleta (`palette.ts`) -- só que a partir de uma INSTÂNCIA já
+    // colocada no circuito, igual ao "Open Subcircuit" do SimulIDE no menu de botão direito. Só
+    // aparece pra typeId registrado (tem `registeredSourceId` -- built-ins de verdade não têm
+    // manifesto nenhum pra editar visualmente).
+    const sourceId = catalogEntry?.registeredSourceId;
+    const propertyMenuItems: ContextMenuItem[] = isGroup
+      ? []
+      : [{ label: t("properties"), icon: "properties", onClick: () => openPropertyDialog(component) }];
+    const internalSubcircuitMenuItems: ContextMenuItem[] = !isGroup && isInternalSubcircuitComponent
+      ? [{
+          label: t("exposed"),
+          checked: component.exposed === true,
+          onClick: () => {
+            component.exposed = component.exposed !== true;
+            persistState();
+            render();
+            refreshOpenPropertyDialog();
+          },
+        }]
+      : [];
+    const symbolMenuItems: ContextMenuItem[] = !isGroup && sourceId
+      ? [{
+          label: catalogEntry?.registeredSourceKind === "subcircuit-file" ? t("openSubcircuit") : t("editSymbol"),
+          onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestEditSymbol", sourceId }),
+        }]
+      : [];
+    // Menu da instância do subcircuito no circuito principal: ações da própria instância ficam
+    // aqui; os componentes internos expostos aparecem em submenus separados.
+    const isSubcircuitWithPackage = !isGroup && Boolean(sourceId) && catalogEntry?.registeredSourceKind === "subcircuit-file";
+    const subcircuitPackageMenuItems: ContextMenuItem[] = isSubcircuitWithPackage
+      ? [
+          { label: t("loadPackage"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestLoadPackage", sourceId: sourceId! }) },
+          { label: t("savePackage"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestSavePackage", sourceId: sourceId! }) },
+          { kind: "separator" },
+        ]
+      : [];
+    const exposedSubmenuItems: ContextMenuItem[] = !isGroup && isSubcircuitWithPackage ? buildExposedComponentMenuItems(component) : [];
+    const mcuMenuItems: ContextMenuItem[] = !isGroup && !isSubcircuitWithPackage && isMcuHostComponent(component)
+      ? [
+          { kind: "separator" },
+          { label: t("loadFirmware"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestChooseMcuFirmware", componentId: component.id }) },
+          { label: t("reloadFirmware"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestReloadMcuFirmware", componentId: component.id }) },
+          { label: `${t("openSerialMonitor")} USART1`, onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenMcuSerialMonitor", componentId: component.id, usartIndex: 0 }) },
+          { label: `${t("openSerialMonitor")} USART2`, onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenMcuSerialMonitor", componentId: component.id, usartIndex: 1 }) },
+          { label: `${t("openSerialMonitor")} USART3`, onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenMcuSerialMonitor", componentId: component.id, usartIndex: 2 }) },
+        ]
+      : [];
+    const menuItems: ContextMenuItem[] = [
+      ...exposedSubmenuItems,
+      ...(exposedSubmenuItems.length > 0 ? [{ kind: "separator" } satisfies ContextMenuItem] : []),
+      ...subcircuitPackageMenuItems,
+      { label: t("copy"), icon: "copy", shortcut: "Ctrl+C", onClick: () => copySelectedItems() },
+      { label: t("cut"), icon: "cut", shortcut: "Ctrl+X", onClick: () => cutSelectedItems() },
+      { label: isGroup ? t("deleteSelectedItems") : t("remove"), icon: "remove", shortcut: "Del", onClick: () => deleteSelectedItems() },
+      ...propertyMenuItems,
+      ...internalSubcircuitMenuItems,
+      { kind: "separator" },
+      { label: t("rotateCw"), icon: "rotateCw", shortcut: "Ctrl+R", onClick: () => rotateSelectedComponents(1) },
+      { label: t("rotateCcw"), icon: "rotateCcw", shortcut: "Ctrl+Shift+R", onClick: () => rotateSelectedComponents(-1) },
+      { label: t("rotate180"), icon: "rotate180", onClick: () => rotateSelectedComponents(2) },
+      { label: t("flipHorizontal"), icon: "flipHorizontal", shortcut: "Ctrl+L", onClick: () => flipSelectedComponents("horizontal") },
+      { label: t("flipVertical"), icon: "flipVertical", shortcut: "Ctrl+Shift+L", onClick: () => flipSelectedComponents("vertical") },
+      ...symbolMenuItems,
+      ...mcuMenuItems,
+    ];
+    showContextMenu(event, menuItems);
+  });
+
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let dragTargets: Array<{ component: WebviewComponentModel; startX: number; startY: number }> = [];
+
+  el.addEventListener("pointerdown", (event) => {
+    const component = liveComponent();
+    if (!component) return;
+    if (event.button !== 0) return;
+    if (event.target instanceof Element && event.target.closest(".pin-terminal, .meter-expand-button")) return;
+    event.stopPropagation();
+    if (event.shiftKey) {
+      toggleComponentSelection(component.id);
+      persistState();
+      render();
+      return;
+    }
+    if (!isComponentSelected(component.id)) selectOnlyComponent(component.id);
+    dragStartX = event.clientX;
+    dragStartY = event.clientY;
+    dragTargets = dragSelectionWithLinkedPinLabels().map((selected) => ({ component: selected, startX: selected.x, startY: selected.y }));
+    el.setPointerCapture(event.pointerId);
+    // Bloqueia render() de telemetria DESDE O POINTERDOWN, não só depois do limiar de arrasto
+    // (`startDragging` abaixo) -- com reconciliação (`componentElementsById`), `el` é REAPROVEITADO
+    // entre renders via `appendChild` num `canvasContent` novo a cada `render()`; se um render() de
+    // telemetria rodar NESSA janela (pointerdown ainda sem cruzar o limiar), o reparenting pode
+    // soltar `setPointerCapture()` implicitamente (a spec de Pointer Events libera captura quando o
+    // elemento "sai" do DOM, mesmo que seja um remove+insert atômico do mesmo appendChild) --
+    // `pointerup`/`pointercancel` nunca mais disparam, e os listeners de `onMove`/`onUp` abaixo ficam
+    // vazados em `el` para sempre, disparando movimento (com coordenadas de início desatualizadas) no
+    // primeiro `pointermove` que passar por cima do elemento depois, mesmo sem o botão pressionado
+    // (bug relatado 2026-06-30: "mouse sem clicar e movendo ele e o dispositivo esta movendo").
+    isDraggingComponent = true;
+
+    // Clique-pra-alternar (push/switch/fixed-volt) vs ARRASTAR é o MESMO gesto de pointerdown,
+    // desambiguado por distância percorrida -- igual ao overlay de Modo Placa (ver
+    // `renderBoardOverlaysFor`). Push pressiona IMEDIATAMENTE (feedback tátil de "segurar"), mas o
+    // aperto é desfeito se virar arrasto; switch/fixed-volt só alternam no soltar, se NÃO arrastou.
+    //
+    // SimulIDE real (`switches/switch_base.cpp`, `push_base.cpp`) NÃO trata o componente inteiro como
+    // área de clique-pra-alternar -- o "botão" é um `QGraphicsProxyWidget` PRÓPRIO, de 16x16px,
+    // sobreposto a uma área pequena dentro da caixa maior do componente; clique fora dele cai pro
+    // `Component` pai (mover), só clique bem em cima do retângulo/alavanca alterna o estado (bug
+    // relatado 2026-06-30: "tem que ser bem encima do retângulo, fora é mover"). `.toggle-hit-zone`
+    // (componentSymbols.ts) marca os mesmos elementos visuais (corpo do botão/alavanca) que o
+    // SimulIDE cobre com o widget -- clique fora dessa zona NUNCA tenta alternar, vira arrasto puro
+    // desde o primeiro pixel, igual a qualquer componente comum.
+    const clickedToggleZone = event.target instanceof Element && Boolean(event.target.closest(".toggle-hit-zone"));
+    const canToggle = (isPushButton || isSwitchToggle || isFixedVolt) && clickedToggleZone;
+
+    const DRAG_THRESHOLD_PX = 4;
+    let dragStarted = false;
+    if (isPushButton && canToggle) setPushClosed(component, true);
+
+    const startDragging = (): void => {
+      dragStarted = true;
+      el.classList.add("dragging");
+      if (isPushButton && canToggle) setPushClosed(component, false); // movimento detectado -- isto era arrasto, não aperto
+    };
+
+    const onMove = (moveEvent: PointerEvent) => {
+      if (!dragStarted && Math.hypot(moveEvent.clientX - dragStartX, moveEvent.clientY - dragStartY) > DRAG_THRESHOLD_PX) {
+        startDragging();
+      }
+      if (!dragStarted) return;
+      const zoom = state.viewport.zoom || 1;
+      const dx = (moveEvent.clientX - dragStartX) / zoom;
+      const dy = (moveEvent.clientY - dragStartY) / zoom;
+      for (const target of dragTargets) {
+        target.component.x = target.startX + dx;
+        target.component.y = target.startY + dy;
+        const targetEl = document.querySelector<HTMLElement>(`.component[data-component-id="${target.component.id}"]`);
+        if (targetEl) {
+          targetEl.style.left = `${target.component.x}px`;
+          targetEl.style.top = `${target.component.y}px`;
+        }
+        updateWiresTouchingComponent(target.component.id);
+      }
+    };
+
+    const onUp = () => {
+      el.removeEventListener("pointermove", onMove);
+      el.removeEventListener("pointerup", onUp);
+      el.removeEventListener("pointercancel", onUp);
+      el.classList.remove("dragging");
+      isDraggingComponent = false;
+      dragTargets = [];
+      if (!dragStarted && canToggle) {
+        if (isPushButton) setPushClosed(component, false);
+        else if (isSwitchToggle) setSwitchClosed(component, component.properties.closed !== true);
+        else if (isFixedVolt) setFixedVoltOut(component, component.properties.out !== true);
+      }
+      persistState();
+      render();
+    };
+
+    el.addEventListener("pointermove", onMove);
+    el.addEventListener("pointerup", onUp, { once: true });
+    el.addEventListener("pointercancel", onUp, { once: true });
+  });
+
+  updateComponentElement(el, component);
+  return el;
+}
+
+/** Atualização VISUAL pura do `.component` já existente -- roda em TODO `render()` (ver
+ * `componentElementsById`), nunca toca os listeners de `createComponentElement`. Reconstrói o
+ * `<svg>` inteiro (símbolo/pinos/seleção) porque rotação/flip/propriedades podem ter mudado desde a
+ * última chamada; os listeners dos PINOS (clique pra iniciar/terminar fio) são recriados aqui junto
+ * do resto do SVG -- sempre frescos, sem risco de capturar `component` desatualizado (diferente dos
+ * listeners de `el`, que sobrevivem a vários renders). */
+function updateComponentElement(el: HTMLElement, component: WebviewComponentModel): void {
   const catalogEntry = state.catalog.find((entry) => entry.typeId === component.typeId);
   const box = componentBox(component.typeId, component.properties);
-  const isPushButton = component.typeId === "switches.push";
+  const isPushButton = (catalogEntry?.interactionKind ?? interactionKindFor(component.typeId)) === "momentary";
   const isSwitchToggle = component.typeId === "switches.switch";
   const isFixedVolt = component.typeId === "sources.fixed_volt";
   const isRail = component.typeId === "sources.rail";
   const isTunnel = component.typeId === "connectors.tunnel";
   const isMeter = component.typeId.startsWith("meters.") || component.typeId === "instruments.voltmeter";
-  const isExpandableInstrument = component.typeId === "meters.oscope" || component.typeId === "meters.logic_analyzer";
   const meterClass = isMeter ? `component--meter component--${component.typeId.replace(/[._]/g, "-")}` : "";
   const isVoltmeter = component.typeId === "instruments.voltmeter"; // só tinge o símbolo, ver styles.css
 
@@ -2883,7 +3211,6 @@ function renderComponent(component: WebviewComponentModel): HTMLElement {
   el.style.top = `${component.y}px`;
   el.style.width = `${box.width}px`;
   el.style.height = `${box.height}px`;
-  el.dataset.componentId = component.id;
   el.title = `${component.label} (${component.typeId})`;
 
   const svg = document.createElementNS(SVG_NS, "svg");
@@ -2978,189 +3305,8 @@ function renderComponent(component: WebviewComponentModel): HTMLElement {
     svg.appendChild(circle);
   });
 
+  el.querySelector("svg")?.remove();
   el.appendChild(svg);
-
-  // Clique-pra-alternar (push/switch/fixed-volt) é desambiguado de ARRASTAR dentro do handler
-  // genérico de `pointerdown` mais abaixo (ver `DRAG_THRESHOLD_PX`) -- antes disto, estes 3 tipos
-  // tinham handler PRÓPRIO que chamava `stopImmediatePropagation()` e alternava direto no
-  // `pointerdown`, impedindo COMPLETAMENTE o handler genérico de arrastar de rodar (bug relatado
-  // 2026-06-30: "os botões onde tem ação eu não consigo mover, sempre acha que é clicar").
-
-  if (isExpandableInstrument) {
-    el.addEventListener("click", (event) => {
-      if (!(event.target instanceof Element) || !event.target.closest(".meter-expand-button")) return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      toggleInstrumentPopup(component);
-    }, { capture: true });
-  }
-
-  el.addEventListener("click", (event) => {
-    event.stopPropagation();
-    if (event.shiftKey) toggleComponentSelection(component.id);
-    else selectOnlyComponent(component.id);
-    persistState();
-    render();
-    if (event.detail >= 2) {
-      queueMicrotask(() => {
-        const refreshedComponent = state.components.find((entry) => entry.id === component.id);
-        if (refreshedComponent) openPropertyDialog(refreshedComponent);
-      });
-    }
-  });
-
-  el.addEventListener("contextmenu", (event) => {
-    if (!isComponentSelected(component.id)) selectOnlyComponent(component.id);
-    persistState();
-    render();
-    const selectedComponents = getSelectedComponents();
-    const isGroup = selectedComponents.length > 1;
-    const isInternalSubcircuitComponent = Boolean(symbolAuthoringContext && symbolAuthoringContext.kind === "subcircuit-file" && !isSymbolAuthoringTypeId(component.typeId));
-    // Mesma entrada do botão "✎" da paleta (`palette.ts`) -- só que a partir de uma INSTÂNCIA já
-    // colocada no circuito, igual ao "Open Subcircuit" do SimulIDE no menu de botão direito. Só
-    // aparece pra typeId registrado (tem `registeredSourceId` -- built-ins de verdade não têm
-    // manifesto nenhum pra editar visualmente).
-    const sourceId = catalogEntry?.registeredSourceId;
-    const propertyMenuItems: ContextMenuItem[] = isGroup
-      ? []
-      : [{ label: t("properties"), icon: "properties", onClick: () => openPropertyDialog(component) }];
-    const internalSubcircuitMenuItems: ContextMenuItem[] = !isGroup && isInternalSubcircuitComponent
-      ? [{
-          label: t("exposed"),
-          checked: component.exposed === true,
-          onClick: () => {
-            component.exposed = component.exposed !== true;
-            persistState();
-            render();
-            refreshOpenPropertyDialog();
-          },
-        }]
-      : [];
-    const symbolMenuItems: ContextMenuItem[] = !isGroup && sourceId
-      ? [{
-          label: catalogEntry?.registeredSourceKind === "subcircuit-file" ? t("openSubcircuit") : t("editSymbol"),
-          onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestEditSymbol", sourceId }),
-        }]
-      : [];
-    // Menu da instância do subcircuito no circuito principal: ações da própria instância ficam
-    // aqui; os componentes internos expostos aparecem em submenus separados.
-    const isSubcircuitWithPackage = !isGroup && Boolean(sourceId) && catalogEntry?.registeredSourceKind === "subcircuit-file";
-    const subcircuitPackageMenuItems: ContextMenuItem[] = isSubcircuitWithPackage
-      ? [
-          { label: t("loadPackage"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestLoadPackage", sourceId: sourceId! }) },
-          { label: t("savePackage"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestSavePackage", sourceId: sourceId! }) },
-          { kind: "separator" },
-        ]
-      : [];
-    const exposedSubmenuItems: ContextMenuItem[] = !isGroup && isSubcircuitWithPackage ? buildExposedComponentMenuItems(component) : [];
-    const mcuMenuItems: ContextMenuItem[] = !isGroup && !isSubcircuitWithPackage && isMcuHostComponent(component)
-      ? [
-          { kind: "separator" },
-          { label: t("loadFirmware"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestChooseMcuFirmware", componentId: component.id }) },
-          { label: t("reloadFirmware"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestReloadMcuFirmware", componentId: component.id }) },
-          { label: `${t("openSerialMonitor")} USART1`, onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenMcuSerialMonitor", componentId: component.id, usartIndex: 0 }) },
-          { label: `${t("openSerialMonitor")} USART2`, onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenMcuSerialMonitor", componentId: component.id, usartIndex: 1 }) },
-          { label: `${t("openSerialMonitor")} USART3`, onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenMcuSerialMonitor", componentId: component.id, usartIndex: 2 }) },
-        ]
-      : [];
-    const menuItems: ContextMenuItem[] = [
-      ...exposedSubmenuItems,
-      ...(exposedSubmenuItems.length > 0 ? [{ kind: "separator" } satisfies ContextMenuItem] : []),
-      ...subcircuitPackageMenuItems,
-      { label: t("copy"), icon: "copy", shortcut: "Ctrl+C", onClick: () => copySelectedItems() },
-      { label: t("cut"), icon: "cut", shortcut: "Ctrl+X", onClick: () => cutSelectedItems() },
-      { label: isGroup ? t("deleteSelectedItems") : t("remove"), icon: "remove", shortcut: "Del", onClick: () => deleteSelectedItems() },
-      ...propertyMenuItems,
-      ...internalSubcircuitMenuItems,
-      { kind: "separator" },
-      { label: t("rotateCw"), icon: "rotateCw", shortcut: "Ctrl+R", onClick: () => rotateSelectedComponents(1) },
-      { label: t("rotateCcw"), icon: "rotateCcw", shortcut: "Ctrl+Shift+R", onClick: () => rotateSelectedComponents(-1) },
-      { label: t("rotate180"), icon: "rotate180", onClick: () => rotateSelectedComponents(2) },
-      { label: t("flipHorizontal"), icon: "flipHorizontal", shortcut: "Ctrl+L", onClick: () => flipSelectedComponents("horizontal") },
-      { label: t("flipVertical"), icon: "flipVertical", shortcut: "Ctrl+Shift+L", onClick: () => flipSelectedComponents("vertical") },
-      ...symbolMenuItems,
-      ...mcuMenuItems,
-    ];
-    showContextMenu(event, menuItems);
-  });
-
-  let dragStartX = 0;
-  let dragStartY = 0;
-  let dragTargets: Array<{ component: WebviewComponentModel; startX: number; startY: number }> = [];
-
-  el.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0) return;
-    if (event.target instanceof Element && event.target.closest(".pin-terminal, .meter-expand-button")) return;
-    event.stopPropagation();
-    if (event.shiftKey) {
-      toggleComponentSelection(component.id);
-      persistState();
-      render();
-      return;
-    }
-    if (!isComponentSelected(component.id)) selectOnlyComponent(component.id);
-    dragStartX = event.clientX;
-    dragStartY = event.clientY;
-    dragTargets = dragSelectionWithLinkedPinLabels().map((selected) => ({ component: selected, startX: selected.x, startY: selected.y }));
-    el.setPointerCapture(event.pointerId);
-
-    // Clique-pra-alternar (push/switch/fixed-volt) vs ARRASTAR é o MESMO gesto de pointerdown,
-    // desambiguado por distância percorrida -- igual ao overlay de Modo Placa (ver
-    // `renderBoardOverlaysFor`). Push pressiona IMEDIATAMENTE (feedback tátil de "segurar"), mas o
-    // aperto é desfeito se virar arrasto; switch/fixed-volt só alternam no soltar, se NÃO arrastou.
-    const DRAG_THRESHOLD_PX = 4;
-    let dragStarted = false;
-    if (isPushButton) setPushClosed(component, true);
-
-    const startDragging = (): void => {
-      dragStarted = true;
-      el.classList.add("dragging");
-      isDraggingComponent = true;
-      if (isPushButton) setPushClosed(component, false); // movimento detectado -- isto era arrasto, não aperto
-    };
-
-    const onMove = (moveEvent: PointerEvent) => {
-      if (!dragStarted && Math.hypot(moveEvent.clientX - dragStartX, moveEvent.clientY - dragStartY) > DRAG_THRESHOLD_PX) {
-        startDragging();
-      }
-      if (!dragStarted) return;
-      const zoom = state.viewport.zoom || 1;
-      const dx = (moveEvent.clientX - dragStartX) / zoom;
-      const dy = (moveEvent.clientY - dragStartY) / zoom;
-      for (const target of dragTargets) {
-        target.component.x = target.startX + dx;
-        target.component.y = target.startY + dy;
-        const targetEl = document.querySelector<HTMLElement>(`.component[data-component-id="${target.component.id}"]`);
-        if (targetEl) {
-          targetEl.style.left = `${target.component.x}px`;
-          targetEl.style.top = `${target.component.y}px`;
-        }
-        updateWiresTouchingComponent(target.component.id);
-      }
-    };
-
-    const onUp = () => {
-      el.removeEventListener("pointermove", onMove);
-      el.removeEventListener("pointerup", onUp);
-      el.removeEventListener("pointercancel", onUp);
-      el.classList.remove("dragging");
-      isDraggingComponent = false;
-      dragTargets = [];
-      if (!dragStarted) {
-        if (isPushButton) setPushClosed(component, false);
-        else if (isSwitchToggle) setSwitchClosed(component, component.properties.closed !== true);
-        else if (isFixedVolt) setFixedVoltOut(component, component.properties.out !== true);
-      }
-      persistState();
-      render();
-    };
-
-    el.addEventListener("pointermove", onMove);
-    el.addEventListener("pointerup", onUp, { once: true });
-    el.addEventListener("pointercancel", onUp, { once: true });
-  });
-
-  return el;
 }
 
 type PropertyFieldKind = "boolean" | "number" | "text" | "readonly" | "select";
@@ -3304,13 +3450,12 @@ function rotateSelectedTextLabel(steps: 1 | -1 | 2): boolean {
 }
 
 function isMcuHostComponent(component: WebviewComponentModel): boolean {
-  const entry = state.catalog.find((catalogEntry) => catalogEntry.typeId === component.typeId);
-  return entry?.mcuHost === true || component.typeId === "espressif.esp32";
+  return isMcuHostTypeId(component.typeId);
 }
 
 function isMcuHostTypeId(typeId: string): boolean {
   const entry = state.catalog.find((catalogEntry) => catalogEntry.typeId === typeId);
-  return entry?.mcuHost === true || typeId === "espressif.esp32";
+  return entry?.mcuHost === true;
 }
 
 function buildExposedComponentMenuItems(component: WebviewComponentModel): ContextMenuItem[] {

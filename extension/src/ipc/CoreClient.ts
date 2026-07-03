@@ -10,7 +10,7 @@ import {
   IpcError,
   errorCodeFromPayload,
 } from "./protocol";
-import { PropertySchemaDto, TelemetrySample } from "./types";
+import { InteractionKindDto, PropertySchemaDto, ReadoutFormatDto, TelemetrySample } from "./types";
 
 function toPipePath(name: string): string {
   return process.platform === "win32"
@@ -194,9 +194,24 @@ export class CoreClient {
    * pede `label`/`group`/opções traduzidos quando o `device.json`/built-in tiver essa tradução
    * declarada (`translations`); sem isso (ou sem tradução pra essa língua), devolve na língua-base
    * do componente -- nunca falha, ver `lasecsimul.spec` seção 6.3.3. */
-  async getPropertySchemas(language?: string): Promise<Record<string, PropertySchemaDto[]>> {
+  async getPropertySchemas(language?: string): Promise<{
+    schemasByTypeId: Record<string, PropertySchemaDto[]>;
+    /** ABI v2 (.spec/lasecsimul-native-devices.spec) -- mapas irmãos aditivos, só presentes pro
+     * typeId que o device declarou; ausência é "sem leitura estruturada"/"sem interação especial". */
+    readoutFormatByTypeId: Record<string, ReadoutFormatDto>;
+    interactionKindByTypeId: Record<string, InteractionKindDto>;
+  }> {
     const resp = await this.request("getPropertySchemas", { language });
-    return (resp as { schemasByTypeId: Record<string, PropertySchemaDto[]> }).schemasByTypeId;
+    const payload = resp as {
+      schemasByTypeId: Record<string, PropertySchemaDto[]>;
+      readoutFormatByTypeId?: Record<string, ReadoutFormatDto>;
+      interactionKindByTypeId?: Record<string, InteractionKindDto>;
+    };
+    return {
+      schemasByTypeId: payload.schemasByTypeId,
+      readoutFormatByTypeId: payload.readoutFormatByTypeId ?? {},
+      interactionKindByTypeId: payload.interactionKindByTypeId ?? {},
+    };
   }
 
   onTelemetry(callback: (sample: TelemetrySample) => void): void {

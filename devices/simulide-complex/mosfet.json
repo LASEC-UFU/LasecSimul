@@ -4,7 +4,7 @@
   "name": "Mosfet",
   "language": "pt-BR",
   "translations": { "en": { "name": "Mosfet" } },
-  "abiVersion": { "major": 3, "minor": 0 },
+  "abiVersion": { "major": 4, "minor": 0 },
   "nativeEntry": { "win32-x64": "build/win-x64/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" },
   "pins": [
     { "id": "d", "kind": "ANALOG_IN", "x": 0, "y": 0, "angle": 90, "length": 8, "label": "D" },

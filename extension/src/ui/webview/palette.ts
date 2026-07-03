@@ -23,7 +23,6 @@ let query = persisted.query ?? "";
 const UI_TEXT = {
   "pt-BR": {
     searchPlaceholder: "Search Components",
-    clear: "Limpar busca",
     unavailable: "indisponivel",
     visual: "visual",
     noResults: "Nenhum componente encontrado para este filtro.",
@@ -33,7 +32,6 @@ const UI_TEXT = {
   },
   en: {
     searchPlaceholder: "Search Components",
-    clear: "Clear search",
     unavailable: "unavailable",
     visual: "visual",
     noResults: "No components match this filter.",
@@ -187,19 +185,7 @@ function render(): void {
     }
   });
 
-  const clearButton = document.createElement("button");
-  clearButton.type = "button";
-  clearButton.className = "palette__clear";
-  clearButton.title = t("clear");
-  clearButton.textContent = "x";
-  clearButton.disabled = query.length === 0;
-  clearButton.addEventListener("click", () => {
-    query = "";
-    vscode?.setState({ query });
-    render();
-  });
-
-  search.append(input, clearButton);
+  search.append(input);
 
   const treeRoot = document.createElement("div");
   treeRoot.className = "palette__tree";

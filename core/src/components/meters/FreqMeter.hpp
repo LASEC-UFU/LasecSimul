@@ -76,6 +76,14 @@ public:
         return {filter};
     }
 
+    /** ABI v2 (.spec/lasecsimul-native-devices.spec) -- `getState()` é 1 double de frequência. */
+    static ReadoutFormat readoutFormat() {
+        ReadoutFormat format;
+        format.kind = ReadoutKind::Scalar;
+        format.unit = "Hz";
+        return format;
+    }
+
     static std::vector<PropertySchema> propertySchema() {
         PropertySchema filter;
         filter.id = "filter";

@@ -54,6 +54,14 @@ public:
         return {threshold, showVolt};
     }
 
+    /** ABI v2 (.spec/lasecsimul-native-devices.spec) -- `getState()` é 1 double de tensão. */
+    static ReadoutFormat readoutFormat() {
+        ReadoutFormat format;
+        format.kind = ReadoutKind::Scalar;
+        format.unit = "V";
+        return format;
+    }
+
     static std::vector<PropertySchema> propertySchema() {
         PropertySchema threshold;
         threshold.id = "threshold";

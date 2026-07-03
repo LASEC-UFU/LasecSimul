@@ -60,6 +60,14 @@ public:
         return {resistance};
     }
 
+    /** ABI v2 (.spec/lasecsimul-native-devices.spec) -- `getState()` é 1 double de corrente. */
+    static ReadoutFormat readoutFormat() {
+        ReadoutFormat format;
+        format.kind = ReadoutKind::Scalar;
+        format.unit = "A";
+        return format;
+    }
+
     static std::vector<PropertySchema> propertySchema() {
         PropertySchema resistance;
         resistance.id = "resistance";

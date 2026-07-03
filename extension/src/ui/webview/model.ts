@@ -4,6 +4,18 @@ export interface WebviewPinModel {
   y: number;
 }
 
+/** ABI v2 (.spec/lasecsimul-native-devices.spec) -- como a UI decodifica `getComponentState()` de um
+ * typeId sem checar typeId em código nenhum: declarado pelo device (built-in: método estático no
+ * Core; plugin/DLL: chave `"readout"` em `device.json`), vindo via `getPropertySchemas`. Ausente ==
+ * device sem leitura estruturada (válido, não "ainda não migrado"). */
+export type ReadoutFormatEntry =
+  | { kind: "scalar"; unit: string }
+  | { kind: "channelHistory"; channels: number }
+  | { kind: "bitmaskHistory"; channels: number };
+
+/** Mesma convenção de `ReadoutFormatEntry`, pra como a UI trata clique/arrasto sem checar typeId. */
+export type InteractionKindEntry = "momentary" | "toggle" | "none";
+
 export interface WebviewComponentModel {
   id: string;
   typeId: string;
@@ -237,6 +249,11 @@ export interface WebviewComponentCatalogEntry {
   /** `true` quando esta entrada representa um MCU direto (`mcu-adapter`) OU um subcircuito que
    * hospeda um MCU interno (ex: DevKit/WROOM com ESP32 QEMU dentro). */
   mcuHost?: boolean;
+  /** ABI v2 -- ver `ReadoutFormatEntry`. Vem de `getPropertySchemas` (`attachPropertySchemas` em
+   * extension.ts), mesmo merge de `propertySchema`. */
+  readoutFormat?: ReadoutFormatEntry;
+  /** ABI v2 -- ver `InteractionKindEntry`. */
+  interactionKind?: InteractionKindEntry;
 }
 
 export interface WebviewProjectState {

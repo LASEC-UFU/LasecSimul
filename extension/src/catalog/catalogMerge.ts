@@ -1,4 +1,4 @@
-import { PropertySchemaDto } from "../ipc/types";
+import { InteractionKindDto, PropertySchemaDto, ReadoutFormatDto } from "../ipc/types";
 import { PropertySchemaEntry, WebviewComponentCatalogEntry, WebviewComponentModel } from "../ui/webview/model";
 
 function escapeRegExp(value: string): string {
@@ -53,14 +53,26 @@ export function toWebviewPropertySchema(dto: PropertySchemaDto): PropertySchemaE
 
 /** Combina o catálogo unificado (sem schema rico) com o mapa typeId→schemas já resolvido pelo Core
  * (`getPropertySchemas`). Função pura — quem chama (`extension.ts::attachPropertySchemas`) cuida de
- * obter `schemasByTypeId` via IPC; aqui só o merge é testado, sem precisar de Core real. */
+ * obter `schemasByTypeId` via IPC; aqui só o merge é testado, sem precisar de Core real.
+ * `readoutFormatByTypeId`/`interactionKindByTypeId` (ABI v2, .spec/lasecsimul-native-devices.spec)
+ * são opcionais -- ausentes (chamador antigo, resposta do Core sem os campos novos) preserva
+ * exatamente o comportamento de antes desta rodada, sem quebrar nada. */
 export function mergePropertySchemas(
   catalog: WebviewComponentCatalogEntry[],
-  schemasByTypeId: Record<string, PropertySchemaDto[]>
+  schemasByTypeId: Record<string, PropertySchemaDto[]>,
+  readoutFormatByTypeId: Record<string, ReadoutFormatDto> = {},
+  interactionKindByTypeId: Record<string, InteractionKindDto> = {}
 ): WebviewComponentCatalogEntry[] {
   return catalog.map((entry) => {
     const schemas = schemasByTypeId[entry.typeId];
-    if (!schemas || schemas.length === 0) return entry;
-    return { ...entry, propertySchema: schemas.map(toWebviewPropertySchema) };
+    const readoutFormat = readoutFormatByTypeId[entry.typeId];
+    const interactionKind = interactionKindByTypeId[entry.typeId];
+    if ((!schemas || schemas.length === 0) && !readoutFormat && !interactionKind) return entry;
+    return {
+      ...entry,
+      ...(schemas && schemas.length > 0 ? { propertySchema: schemas.map(toWebviewPropertySchema) } : {}),
+      ...(readoutFormat ? { readoutFormat } : {}),
+      ...(interactionKind ? { interactionKind } : {}),
+    };
   });
 }

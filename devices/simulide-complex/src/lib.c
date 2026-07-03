@@ -58,6 +58,12 @@ typedef struct {
     double p[12];
     int latch;
     double last_a, last_b, last_c;
+    /* ABI v2 (.spec/lasecsimul-native-devices.spec) -- setado por validate_pin_order() quando o
+     * device.json declara pins[] fora da ordem que este arquivo espera. Antes só logava e
+     * continuava decodificando ERRADO silenciosamente; agora handle_pin_change() vira no-op
+     * (device fica inerte, visivelmente quebrado -- ex: display em branco) em vez de produzir
+     * leitura incorreta sem aviso visual nenhum. */
+    int misconfigured;
 } SimDevice;
 
 static const char* cfg_string(SimDevice* s, const char* name, const char* fallback) {
@@ -87,10 +93,14 @@ static int is_type(SimDevice* s, const char* suffix) {
 
 /* Toda a lógica deste arquivo (handle_pin_change/i2c_clock_bit/etc) indexa pino por NÚMERO,
  * confiando que device.json declara `pins[]` na mesma ordem esperada aqui -- sem isso, o device
- * "funciona" (compila, carrega) mas decodifica o protocolo errado silenciosamente (foi exatamente
- * o bug real de aip31068_i2c.json, que tinha sda/scl trocados). Chamado 1x no fim de init(); só
- * loga (s->api->log nível 2 = erro) -- não impede o device de rodar, porque travar o Core inteiro
- * por um device.json mal escrito seria pior que um aviso visível no log. */
+ * "funciona" (compila, carrega) mas decodificava o protocolo errado silenciosamente (foi
+ * exatamente o bug real de aip31068_i2c.json, que tinha sda/scl trocados). Chamado 1x no fim de
+ * init(); loga (s->api->log nível 2 = erro) E marca `s->misconfigured` -- a vtable C
+ * (`device_abi.h`) não tem como `init()` recusar a instância (retorna void, ver ABI v2 em
+ * .spec/lasecsimul-native-devices.spec), então em vez de travar o Core, handle_pin_change() vira
+ * no-op pra essa instância: o device fica inerte/visivelmente quebrado (ex: display em branco) em
+ * vez de decodificar errado sem nenhum aviso visual -- bem melhor que o log-e-continua de antes,
+ * que produzia leitura ERRADA silenciosa. */
 static void validate_pin_order(SimDevice* s, const char* const* expected, uint32_t count) {
     if (!s->api->pin_name) return;
     for (uint32_t i = 0; i < count; ++i) {
@@ -99,9 +109,10 @@ static void validate_pin_order(SimDevice* s, const char* const* expected, uint32
         char msg[192];
         snprintf(msg, sizeof(msg),
                  "%s: pino %u esperado \"%s\", device.json declara \"%s\" -- ordem errada, "
-                 "protocolo vai decodificar errado silenciosamente",
+                 "device fica inerte (sem decodificar protocolo) ate o manifesto ser corrigido",
                  s->type_id, i, expected[i], actual ? actual : "(nenhum)");
         s->api->log(s->host_ctx, 2, msg);
+        s->misconfigured = 1;
     }
 }
 
@@ -426,6 +437,7 @@ static void i2c_clock_bit(SimDevice* s) {
 }
 
 static void handle_pin_change(SimDevice* s, uint32_t pin, uint32_t level) {
+    if (s->misconfigured) return; /* ver validate_pin_order() -- ordem de pinos errada, fica inerte */
     if (pin >= 32) return;
     uint8_t old = s->pin_level[pin];
     uint8_t now = level ? 1 : 0;
@@ -680,33 +692,47 @@ static uint32_t set_property(LsdnDevice* dev, const char* name, const LsdnProper
     return 1;
 }
 
+/* ABI v2 (.spec/lasecsimul-native-devices.spec): header[0] passa a ser um uint32 de versão de
+ * layout, antes dos campos que já existiam (deslocados +1 posição) -- set_state rejeita
+ * (loga e ignora, mantém estado atual) um blob de versão diferente da que este binário entende,
+ * em vez de interpretar offsets de um layout potencialmente diferente às cegas. */
+#define SIMULIDE_COMPLEX_STATE_VERSION 1u
+#define SIMULIDE_COMPLEX_STATE_HEADER_BYTES 36u /* 9 * sizeof(uint32_t) */
+
 static uint32_t get_state(LsdnDevice* dev, uint8_t* out, uint32_t cap) {
     SimDevice* s = (SimDevice*)dev;
-    uint32_t need = 32;
+    uint32_t need = SIMULIDE_COMPLEX_STATE_HEADER_BYTES;
     if (s->kind == KIND_HD44780 || s->kind == KIND_AIP31068) need += 80;
     else if (s->kind == KIND_TFT) need += s->width * s->height * 4;
     else if (s->kind == KIND_MAX72XX) need += sizeof(s->max_ram);
     else if (s->kind == KIND_WS2812) need += s->ws_count * 4;
     else need += s->width * (s->height / 8 ? s->height / 8 : 1);
     if (!out || cap < need) return 0;
-    uint32_t header[8] = {(uint32_t)s->kind, s->width, s->height, s->display_on, s->x, s->y, (uint32_t)(s->servo_pos * 1000.0), need};
+    uint32_t header[9] = {SIMULIDE_COMPLEX_STATE_VERSION, (uint32_t)s->kind, s->width, s->height,
+                           s->display_on, s->x, s->y, (uint32_t)(s->servo_pos * 1000.0), need};
     memcpy(out, header, sizeof(header));
-    if (s->kind == KIND_HD44780 || s->kind == KIND_AIP31068) memcpy(out + 32, s->ddram, 80);
-    else if (s->kind == KIND_TFT) memcpy(out + 32, s->pixels, need - 32);
-    else if (s->kind == KIND_MAX72XX) memcpy(out + 32, s->max_ram, sizeof(s->max_ram));
-    else if (s->kind == KIND_WS2812) memcpy(out + 32, s->pixels, s->ws_count * 4);
-    else memcpy(out + 32, s->bytes, need - 32);
+    uint8_t* payload = out + SIMULIDE_COMPLEX_STATE_HEADER_BYTES;
+    const uint32_t payloadCap = need - SIMULIDE_COMPLEX_STATE_HEADER_BYTES;
+    if (s->kind == KIND_HD44780 || s->kind == KIND_AIP31068) memcpy(payload, s->ddram, 80);
+    else if (s->kind == KIND_TFT) memcpy(payload, s->pixels, payloadCap);
+    else if (s->kind == KIND_MAX72XX) memcpy(payload, s->max_ram, sizeof(s->max_ram));
+    else if (s->kind == KIND_WS2812) memcpy(payload, s->pixels, s->ws_count * 4);
+    else memcpy(payload, s->bytes, payloadCap);
     return need;
 }
 
 static void set_state(LsdnDevice* dev, const uint8_t* in, uint32_t len) {
     SimDevice* s = (SimDevice*)dev;
-    if (!in || len < 32) return;
+    if (!in || len < SIMULIDE_COMPLEX_STATE_HEADER_BYTES) return;
     const uint32_t* header = (const uint32_t*)in;
-    s->display_on = (uint8_t)header[3];
-    s->x = header[4];
-    s->y = header[5];
-    s->servo_pos = (double)header[6] / 1000.0;
+    if (header[0] != SIMULIDE_COMPLEX_STATE_VERSION) {
+        if (s->api->log) s->api->log(s->host_ctx, 1, "simulide-complex: set_state versao desconhecida, ignorado");
+        return;
+    }
+    s->display_on = (uint8_t)header[4];
+    s->x = header[5];
+    s->y = header[6];
+    s->servo_pos = (double)header[7] / 1000.0;
 }
 
 static void destroy(LsdnDevice* dev) { free(dev); }

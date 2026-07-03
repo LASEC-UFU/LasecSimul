@@ -9,9 +9,15 @@ interface CatalogWithPath extends WebviewComponentCatalogEntry {
 }
 
 class PaletteFolderItem extends vscode.TreeItem {
-  constructor(public readonly pathSegments: string[]) {
-    super(pathSegments[pathSegments.length - 1] ?? "", vscode.TreeItemCollapsibleState.Expanded);
+  constructor(public readonly pathSegments: string[], icon?: IconUriPair) {
+    const isTopLevel = pathSegments.length === 1;
+    super(
+      pathSegments[pathSegments.length - 1] ?? "",
+      isTopLevel ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed
+    );
+    this.id = "lasecsimul.palette.folder." + pathSegments.join("/");
     this.contextValue = "lasecsimul.palette.folder";
+    if (icon) this.iconPath = icon;
   }
 }
 
@@ -92,6 +98,16 @@ export class ComponentPaletteProvider implements vscode.TreeDataProvider<vscode.
     return Promise.resolve([]);
   }
 
+  private static readonly FOLDER_ICONS: Record<string, string> = {
+    "Logicos/Portas": "gates",
+    "Logicos/Aritmeticos": "2to2",
+    "Logicos/Memorias": "package",
+    "Logicos/Conversores": "1to2",
+    "Logicos/Outros logicos": "2to3",
+    "Passivos/Resistores": "resistors",
+    "Passivos/Reativo": "reactive",
+  };
+
   private childrenForPath(pathSegments: string[]): vscode.TreeItem[] {
     const depth = pathSegments.length;
     const visibleEntries = this.catalog.filter((entry) => this.startsWith(entry.folderPathNormalized, pathSegments));
@@ -105,7 +121,9 @@ export class ComponentPaletteProvider implements vscode.TreeDataProvider<vscode.
 
     const folderItems = nextFolders.map((folderName) => {
       const fullPath = [...pathSegments, folderName];
-      return new PaletteFolderItem(fullPath);
+      const iconName = ComponentPaletteProvider.FOLDER_ICONS[fullPath.join("/")];
+      const icon = iconName ? this.resolveFolderIcon(iconName) : undefined;
+      return new PaletteFolderItem(fullPath, icon);
     });
 
     const directItems = visibleEntries
@@ -161,6 +179,14 @@ export class ComponentPaletteProvider implements vscode.TreeDataProvider<vscode.
       if (a[index] !== b[index]) return false;
     }
     return true;
+  }
+
+  private resolveFolderIcon(iconName: string): IconUriPair | undefined {
+    const iconRef = this.resolveIconReference(iconName);
+    return {
+      light: vscode.Uri.joinPath(this.extensionUri, "media", "components", "light", `${iconRef.name}.${iconRef.extension}`),
+      dark: vscode.Uri.joinPath(this.extensionUri, "media", "components", "dark", `${iconRef.name}.${iconRef.extension}`),
+    };
   }
 
   private resolveIcon(entry: WebviewComponentCatalogEntry): IconUriPair {

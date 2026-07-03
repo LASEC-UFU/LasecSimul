@@ -27,6 +27,16 @@ export interface PropertySchemaDto {
   showOnSymbol: boolean;
 }
 
+/** Espelha 1:1 `readoutFormatToJson` em `CoreApplication.cpp` -- ABI v2, ver
+ * .spec/lasecsimul-native-devices.spec. */
+export type ReadoutFormatDto =
+  | { kind: "scalar"; unit: string }
+  | { kind: "channelHistory"; channels: number }
+  | { kind: "bitmaskHistory"; channels: number };
+
+/** Espelha 1:1 `interactionKindToJson` em `CoreApplication.cpp`. */
+export type InteractionKindDto = "momentary" | "toggle" | "none";
+
 export interface TelemetrySample {
   instanceId: string;
   pinId: string;

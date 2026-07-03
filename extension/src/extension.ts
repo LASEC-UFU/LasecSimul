@@ -23,7 +23,6 @@ import {
   seedSymbolAuthoringComponents,
   VisualPosition,
 } from "./catalog/symbolAuthoring";
-import { PropertySchemaDto } from "./ipc/types";
 import { hasShowOnSymbolProperty, mergePropertySchemas, nextIndexedLabel } from "./catalog/catalogMerge";
 import { LasecSimulLanguage, resolveLasecSimulLanguage } from "./language";
 
@@ -594,11 +593,17 @@ function reportCoreWarning(action: string, err: unknown): void {
 
 function registerCoreIdsForComponent(componentId: string, typeId: string, response: { instanceId: string; primaryMcuInstanceId?: string }): void {
   coreInstanceIdByComponentId.set(componentId, response.instanceId);
-  if (typeId === "espressif.esp32") {
-    mcuTargetCoreIdByComponentId.set(componentId, response.instanceId);
+  if (response.primaryMcuInstanceId) {
+    // Subcircuito hospedando MCU interno -- o alvo é o FILHO (primaryMcuInstanceId), não a
+    // instância do subcircuito em si.
+    mcuTargetCoreIdByComponentId.set(componentId, response.primaryMcuInstanceId);
     return;
   }
-  if (response.primaryMcuInstanceId) mcuTargetCoreIdByComponentId.set(componentId, response.primaryMcuInstanceId);
+  // Genérico via `mcuHost` (.spec/lasecsimul-native-devices.spec): qualquer typeId que SEJA um
+  // mcu-adapter direto (ex: espressif.esp32) não tem `primaryMcuInstanceId` próprio -- o
+  // componente É o MCU, sua própria instância é o alvo. Nenhum hardcode de typeId aqui.
+  const catalogEntry = schematicState.catalog.find((entry) => entry.typeId === typeId);
+  if (catalogEntry?.mcuHost === true) mcuTargetCoreIdByComponentId.set(componentId, response.instanceId);
 }
 
 /** Cria a instância no Core de forma assíncrona (fire-and-forget) — usado pelo fluxo interativo da
@@ -632,7 +637,6 @@ function isUiOnlyRuntimeProperty(component: WebviewComponentModel | undefined, n
   // só controla renderização/interação na Webview (ver `toggleInstanceBoardMode`).
   if (name === "boardModeEnabled") return true;
   if (!component || (name !== "firmwarePath" && name !== "qemuBinaryOverride")) return false;
-  if (component.typeId === "espressif.esp32") return true;
   const catalogEntry = schematicState.catalog.find((entry) => entry.typeId === component.typeId);
   return catalogEntry?.mcuHost === true;
 }
@@ -679,7 +683,31 @@ function updateBoardOverlayPropertyCommand(outerComponentId: string, innerCompon
 
 let voltageReadoutTimer: ReturnType<typeof setInterval> | undefined;
 
+/** Lookup único de catálogo por typeId -- usado pelos 3 decodificadores genéricos abaixo (ABI v2,
+ * .spec/lasecsimul-native-devices.spec) pra consultar `readoutFormat` sem repetir
+ * `schematicState.catalog.find(...)` em cada um. */
+function findCatalogEntry(typeId: string): WebviewComponentCatalogEntry | undefined {
+  return schematicState.catalog.find((entry) => entry.typeId === typeId);
+}
+
+/** Decodifica `getComponentState()` SEM checar typeId quando o catálogo já declara
+ * `readoutFormat` (ABI v2) -- mesmo formato binário de sempre (scalar = 1 double; channelHistory =
+ * N doubles + contagem + histórico; bitmaskHistory = bitmask + contagem + histórico), só que a
+ * FORMA vem do Core, não de um `if (typeId)` aqui. Fallback pros typeIds que ainda não declararam
+ * (catálogo não carregou do Core ainda) preserva o comportamento de sempre, nunca quebra. */
 function decodeComponentReadout(typeId: string, state: Buffer): ComponentReadoutValue | undefined {
+  const readoutFormat = findCatalogEntry(typeId)?.readoutFormat;
+  if (readoutFormat?.kind === "scalar") {
+    return state.length >= 8 ? state.readDoubleLE(0) : undefined;
+  }
+  if (readoutFormat?.kind === "channelHistory") {
+    if (state.length < readoutFormat.channels * 8) return undefined;
+    return Array.from({ length: readoutFormat.channels }, (_, channel) => state.readDoubleLE(channel * 8));
+  }
+  if (readoutFormat?.kind === "bitmaskHistory") {
+    return state.length >= 4 ? state.readUInt32LE(0) : undefined;
+  }
+  // Fallback legado -- typeId sem readoutFormat no catálogo ainda.
   if (
     typeId === "instruments.voltmeter" ||
     typeId === "meters.probe" ||
@@ -700,12 +728,46 @@ function decodeComponentReadout(typeId: string, state: Buffer): ComponentReadout
 
 /** Decodifica o histórico REAL (tempo simulado, ver doc de `Oscope.hpp`/`LogicAnalyzer.hpp`) do
  * mesmo `getComponentState()` que `decodeComponentReadout` já usa pra última leitura -- formato:
- * Oscope = [0..32) 4 doubles + [32..36) uint32 contagem + histórico CHANNEL-MAJOR, cada amostra
- * {uint64 timestampNs, double value}; LogicAnalyzer = [0..4) uint32 + [4..8) uint32 contagem +
- * histórico {uint64 timestampNs, uint32 bitmask}. Espelha EXATAMENTE o `getState()` de cada
- * classe -- mudar um lado sem o outro quebra silenciosamente (offsets batem por construção, não
- * por validação em runtime). */
+ * channelHistory = [0..N*8) N doubles + [N*8..N*8+4) uint32 contagem + histórico CHANNEL-MAJOR,
+ * cada amostra {uint64 timestampNs, double value}; bitmaskHistory = [0..4) uint32 + [4..8) uint32
+ * contagem + histórico {uint64 timestampNs, uint32 bitmask}. `readoutFormat.channels` (ABI v2)
+ * substitui o `4`/`8` hardcoded de antes -- espelha EXATAMENTE o `getState()` de cada classe, mudar
+ * um lado sem o outro quebra silenciosamente (offsets batem por construção, não por validação em
+ * runtime). Fallback legado preserva o comportamento de sempre pra typeId sem readoutFormat. */
 function decodeInstrumentHistory(typeId: string, state: Buffer): InstrumentHistoryPayload["oscope"] | InstrumentHistoryPayload["logic"] | undefined {
+  const readoutFormat = findCatalogEntry(typeId)?.readoutFormat;
+  if (readoutFormat?.kind === "channelHistory") {
+    const headerBytes = readoutFormat.channels * 8;
+    if (state.length < headerBytes + 4) return undefined;
+    const sampleCount = state.readUInt32LE(headerBytes);
+    const channels: Array<{ timestampsNs: number[]; values: number[] }> = [];
+    let offset = headerBytes + 4;
+    for (let channel = 0; channel < readoutFormat.channels; channel++) {
+      const timestampsNs: number[] = [];
+      const values: number[] = [];
+      for (let i = 0; i < sampleCount; i++) {
+        timestampsNs.push(Number(state.readBigUInt64LE(offset)));
+        values.push(state.readDoubleLE(offset + 8));
+        offset += 16;
+      }
+      channels.push({ timestampsNs, values });
+    }
+    return { channels };
+  }
+  if (readoutFormat?.kind === "bitmaskHistory") {
+    if (state.length < 8) return undefined;
+    const sampleCount = state.readUInt32LE(4);
+    const timestampsNs: number[] = [];
+    const masks: number[] = [];
+    let offset = 8;
+    for (let i = 0; i < sampleCount; i++) {
+      timestampsNs.push(Number(state.readBigUInt64LE(offset)));
+      masks.push(state.readUInt32LE(offset + 8));
+      offset += 12;
+    }
+    return { timestampsNs, masks };
+  }
+  // Fallback legado -- typeId sem readoutFormat no catálogo ainda.
   if (typeId === "meters.oscope") {
     if (state.length < 36) return undefined;
     const sampleCount = state.readUInt32LE(32);
@@ -760,6 +822,8 @@ async function sendInstrumentHistory(componentId: string): Promise<void> {
 }
 
 function isReadableInstrument(typeId: string): boolean {
+  if (findCatalogEntry(typeId)?.readoutFormat) return true;
+  // Fallback legado -- typeId sem readoutFormat no catálogo ainda.
   return (
     typeId === "instruments.voltmeter" ||
     typeId === "meters.probe" ||
@@ -1863,13 +1927,13 @@ async function attachPropertySchemas(
   catalog: WebviewComponentCatalogEntry[]
 ): Promise<WebviewComponentCatalogEntry[]> {
   if (!coreClient) return catalog;
-  let schemasByTypeId: Record<string, PropertySchemaDto[]>;
+  let resolved: Awaited<ReturnType<typeof coreClient.getPropertySchemas>>;
   try {
-    schemasByTypeId = await coreClient.getPropertySchemas(currentLasecSimulLanguage());
+    resolved = await coreClient.getPropertySchemas(currentLasecSimulLanguage());
   } catch {
     return catalog; // Core ainda não respondeu -- catálogo sem schema, inferência cobre o resto
   }
-  return mergePropertySchemas(catalog, schemasByTypeId);
+  return mergePropertySchemas(catalog, resolved.schemasByTypeId, resolved.readoutFormatByTypeId, resolved.interactionKindByTypeId);
 }
 
 async function registerCatalogFileCommand(): Promise<void> {

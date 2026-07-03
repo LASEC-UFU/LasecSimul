@@ -33,9 +33,6 @@ body {
   position: sticky;
   top: 0;
   z-index: 1;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 6px;
   padding: 8px;
   border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, transparent);
   background: linear-gradient(180deg, color-mix(in srgb, var(--vscode-sideBar-background) 94%, white), var(--vscode-sideBar-background));
@@ -53,15 +50,6 @@ body {
 
 .palette__search-input:focus {
   border-color: var(--vscode-focusBorder);
-}
-
-.palette__clear {
-  min-width: 28px;
-  height: 28px;
-  border: 1px solid var(--vscode-button-border, transparent);
-  background: var(--vscode-button-secondaryBackground, transparent);
-  color: var(--vscode-button-secondaryForeground, var(--vscode-sideBar-foreground));
-  cursor: pointer;
 }
 
 .palette__tree {
