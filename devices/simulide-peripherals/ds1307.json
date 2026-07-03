@@ -66,5 +66,8 @@
       "options": [{"label":"1 Hz","value":1},{"label":"4.096 kHz","value":2},{"label":"8.192 kHz","value":3},{"label":"32.768 kHz","value":4}] },
     { "id": "time_updated", "label": "Hora atualizada",   "group": "RTC", "valueKind": "bool",   "editor": "bool",   "default": false }
   ],
+  "help": {
+    "description": "RTC DS1307 com interface I2C. Mantém data/hora com bateria de backup (VBAT). Saída SQW configurável (1 Hz a 32 kHz). Configure data/hora iniciais e frequência SQW."
+  },
   "limits": { "stepTimeoutMs": 2, "expectedComplexity": "medium" }
 }

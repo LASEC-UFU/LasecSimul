@@ -50,5 +50,8 @@
     { "id": "distance_m", "label": "Distância (m)",         "group": "Sensor", "valueKind": "number", "editor": "number", "default": 0.5,  "min": 0.02,  "max": 4.0, "step": 0.01, "unit": "m" },
     { "id": "use_analog", "label": "Saída de tensão analógica", "group": "Sensor", "valueKind": "bool", "editor": "bool", "default": false }
   ],
+  "help": {
+    "description": "Sensor ultrassônico HC-SR04 de distância. Emite pulso TRIG e mede o tempo de retorno no ECHO para calcular distância (2 cm a 4 m). Configure a distância simulada em metros."
+  },
   "limits": { "stepTimeoutMs": 2, "expectedComplexity": "medium" }
 }

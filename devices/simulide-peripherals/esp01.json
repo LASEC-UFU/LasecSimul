@@ -57,5 +57,8 @@
     },
     { "id": "debug", "label": "Debug comandos AT", "group": "ESP-01", "valueKind": "bool", "editor": "bool", "default": false }
   ],
+  "help": {
+    "description": "Módulo Wi-Fi ESP-01 (ESP8266) com firmware AT. Comunica por UART (TX/RX). Simula respostas a comandos AT como AT+CWJAP, AT+CIPSTART e AT+CIPSEND para testar firmware sem hardware real."
+  },
   "limits": { "stepTimeoutMs": 1, "expectedComplexity": "high" }
 }

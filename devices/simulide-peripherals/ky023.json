@@ -54,5 +54,8 @@
     { "id": "y_pos",      "label": "Posição Y (0-1023)", "group": "Joystick", "valueKind": "number", "editor": "number", "default": 512, "min": 0, "max": 1023, "step": 1     },
     { "id": "sw_pressed", "label": "Botão pressionado",  "group": "Joystick", "valueKind": "bool",   "editor": "bool",   "default": false }
   ],
+  "help": {
+    "description": "Joystick analógico KY-023 com dois eixos (VRX/VRY, 0–1023) e botão central (SW ativo em LOW). Configure posição X, Y e estado do botão para simular entrada do usuário."
+  },
   "limits": { "stepTimeoutMs": 4, "expectedComplexity": "low" }
 }

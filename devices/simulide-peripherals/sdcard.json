@@ -50,5 +50,8 @@
   "properties": [
     { "id": "file", "label": "Arquivo de imagem SD", "group": "SD Card", "valueKind": "string", "editor": "text", "default": "" }
   ],
+  "help": {
+    "description": "Cartão SD via SPI (CS/DI/CK/DO). Aponta para um arquivo de imagem FAT no disco do host para leitura/escrita simulada. Informe o caminho completo do arquivo de imagem SD."
+  },
   "limits": { "stepTimeoutMs": 1, "expectedComplexity": "high" }
 }

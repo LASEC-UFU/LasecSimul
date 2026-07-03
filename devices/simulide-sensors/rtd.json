@@ -55,5 +55,8 @@
     { "id": "max_temp", "label": "Máx. Temp (°C)",   "group": "Main",       "valueKind": "number", "editor": "number", "default": 200, "min": 0,    "max": 850, "step": 1,   "unit": "°C" },
     { "id": "r0",       "label": "R0 (Ω a 0°C)",    "group": "Parameters", "valueKind": "number", "editor": "number", "default": 100, "min": 1,    "max": 10000,"step": 1,  "unit": "Ω" }
   ],
+  "help": {
+    "description": "RTD (Resistance Temperature Detector): resistência varia linearmente com a temperatura. Modela PT100/PT1000 via R0 a 0°C e coeficiente α. Configure temperatura, faixa de operação e R0."
+  },
   "limits": { "stepTimeoutMs": 4, "expectedComplexity": "low" }
 }

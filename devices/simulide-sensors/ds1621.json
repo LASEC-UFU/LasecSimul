@@ -60,5 +60,8 @@
     { "id": "th",   "label": "Limite TH (°C)",  "group": "Sensor", "valueKind": "number", "editor": "number", "default": 80,  "min": -55, "max": 125, "step": 1,   "unit": "°C" },
     { "id": "tl",   "label": "Limite TL (°C)",  "group": "Sensor", "valueKind": "number", "editor": "number", "default": 20,  "min": -55, "max": 125, "step": 1,   "unit": "°C" }
   ],
+  "help": {
+    "description": "Termômetro digital DS1621 com interface I2C. Resolução de 0,5°C, saída de alarme TOUT configurável via limites TH/TL. Endereço I2C selecionado pelos pinos A0/A1/A2."
+  },
   "limits": { "stepTimeoutMs": 2, "expectedComplexity": "medium" }
 }

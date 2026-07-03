@@ -65,5 +65,8 @@
     { "id": "ry_min",     "label": "Rmin eixo Y (Ω)",   "group": "Parameters", "valueKind": "number", "editor": "number", "default": 100,  "min": 1,   "max": 10000,"step": 1, "unit": "Ω" },
     { "id": "ry_max",     "label": "Rmax eixo Y (Ω)",   "group": "Parameters", "valueKind": "number", "editor": "number", "default": 500,  "min": 10,  "max": 10000,"step": 1, "unit": "Ω" }
   ],
+  "help": {
+    "description": "Touchscreen resistivo de 4 fios (XP/XM/YP/YM). Simula toque por coordenadas (X, Y) e estado pressed. Configure resolução, posição do toque e resistências dos eixos para calibrar o modelo elétrico."
+  },
   "limits": { "stepTimeoutMs": 4, "expectedComplexity": "low" }
 }

@@ -55,5 +55,8 @@
     { "id": "steps_rev",  "label": "Passos/revolução",   "group": "Encoder", "valueKind": "number", "editor": "number", "default": 20,  "min": 1,           "max": 1024,       "step": 1 },
     { "id": "sw_pressed", "label": "Botão pressionado",  "group": "Encoder", "valueKind": "bool",   "editor": "bool",   "default": false }
   ],
+  "help": {
+    "description": "Encoder rotativo KY-040 com saídas em quadratura (CLK/DT) e botão (SW). Configure posição, número de passos por revolução e estado do botão para simular giro e clique."
+  },
   "limits": { "stepTimeoutMs": 2, "expectedComplexity": "low" }
 }

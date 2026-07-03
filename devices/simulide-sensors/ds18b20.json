@@ -50,5 +50,8 @@
     { "id": "rom",  "label": "Endereço ROM (hex)", "group": "Sensor", "valueKind": "string", "editor": "text",   "default": "28AA0000000000B1" },
     { "id": "temp", "label": "Temperatura (°C)",   "group": "Sensor", "valueKind": "number", "editor": "number", "default": 25.0, "min": -55, "max": 125, "step": 0.0625, "unit": "°C" }
   ],
+  "help": {
+    "description": "Sensor de temperatura DS18B20 com interface 1-Wire. Suporta múltiplos sensores no mesmo barramento via endereço ROM único. Configure temperatura (°C) e endereço ROM para simular leituras."
+  },
   "limits": { "stepTimeoutMs": 2, "expectedComplexity": "medium" }
 }

@@ -69,5 +69,8 @@
     { "id": "rx_buffer", "label": "Buffer RX (enviar)", "group": "Serial", "valueKind": "string", "editor": "text", "default": "" },
     { "id": "tx_bytes",  "label": "TX recebido (hex)",  "group": "Serial", "valueKind": "string", "editor": "text", "default": "" }
   ],
+  "help": {
+    "description": "Terminal serial interno para inspecionar e enviar dados UART sem hardware externo. RX buffer envia bytes ao MCU; TX bytes exibe em hex o que o MCU transmitiu. Configure baud rate e formato de frame."
+  },
   "limits": { "stepTimeoutMs": 1, "expectedComplexity": "medium" }
 }

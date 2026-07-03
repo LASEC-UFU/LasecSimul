@@ -68,5 +68,8 @@
     },
     { "id": "auto_open", "label": "Abrir automaticamente", "group": "Serial", "valueKind": "bool",   "editor": "bool",   "default": true  }
   ],
+  "help": {
+    "description": "Ponte entre o circuito simulado e uma porta serial real do host (COM no Windows, /dev/ttyUSB0 no Linux). Útil para comunicação com hardware físico durante a simulação. Configure nome da porta e baud rate."
+  },
   "limits": { "stepTimeoutMs": 1, "expectedComplexity": "high" }
 }
