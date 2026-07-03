@@ -263,7 +263,7 @@
       "typeId": "logic.buffer",
       "label": "Buffer",
       "pinCount": 2,
-      "icon": "generic-component",
+      "icon": "buffer",
       "folderPath": [
         "Logicos",
         "Portas"
@@ -274,7 +274,7 @@
       "typeId": "logic.and_gate",
       "label": "And Gate",
       "pinCount": 3,
-      "icon": "generic-component",
+      "icon": "andgate",
       "folderPath": [
         "Logicos",
         "Portas"
@@ -285,7 +285,7 @@
       "typeId": "logic.or_gate",
       "label": "Or Gate",
       "pinCount": 3,
-      "icon": "generic-component",
+      "icon": "orgate",
       "folderPath": [
         "Logicos",
         "Portas"
@@ -296,7 +296,7 @@
       "typeId": "logic.xor_gate",
       "label": "Xor Gate",
       "pinCount": 3,
-      "icon": "generic-component",
+      "icon": "xorgate",
       "folderPath": [
         "Logicos",
         "Portas"
@@ -307,7 +307,7 @@
       "typeId": "logic.counter",
       "label": "Simple Counter",
       "pinCount": 3,
-      "icon": "generic-component",
+      "icon": "2to1",
       "folderPath": [
         "Logicos",
         "Aritmeticos"
@@ -320,7 +320,7 @@
       "typeId": "logic.bin_counter",
       "label": "Binary Counter",
       "pinCount": 6,
-      "icon": "generic-component",
+      "icon": "2to3g",
       "folderPath": [
         "Logicos",
         "Aritmeticos"
@@ -331,7 +331,7 @@
       "typeId": "logic.full_adder",
       "label": "Full Adder",
       "pinCount": 5,
-      "icon": "generic-component",
+      "icon": "2to2",
       "folderPath": [
         "Logicos",
         "Aritmeticos"
@@ -342,7 +342,7 @@
       "typeId": "logic.magnitude_comp",
       "label": "Magnitude Comparator",
       "pinCount": 11,
-      "icon": "generic-component",
+      "icon": "3to2g",
       "folderPath": [
         "Logicos",
         "Aritmeticos"
@@ -353,7 +353,7 @@
       "typeId": "logic.shift_reg",
       "label": "Shift Register",
       "pinCount": 11,
-      "icon": "generic-component",
+      "icon": "1to3",
       "folderPath": [
         "Logicos",
         "Aritmeticos"
@@ -364,7 +364,7 @@
       "typeId": "logic.function",
       "label": "Function",
       "pinCount": 3,
-      "icon": "generic-component",
+      "icon": "package",
       "folderPath": [
         "Logicos",
         "Aritmeticos"
@@ -377,7 +377,7 @@
       "typeId": "logic.flipflop_d",
       "label": "FlipFlopD",
       "pinCount": 6,
-      "icon": "generic-component",
+      "icon": "2to2",
       "folderPath": [
         "Logicos",
         "Memorias"
@@ -388,7 +388,7 @@
       "typeId": "logic.flipflop_t",
       "label": "FlipFlopT",
       "pinCount": 6,
-      "icon": "generic-component",
+      "icon": "2to2",
       "folderPath": [
         "Logicos",
         "Memorias"
@@ -399,7 +399,7 @@
       "typeId": "logic.flipflop_rs",
       "label": "FlipFlop RS",
       "pinCount": 4,
-      "icon": "generic-component",
+      "icon": "2to2",
       "folderPath": [
         "Logicos",
         "Memorias"
@@ -410,7 +410,7 @@
       "typeId": "logic.flipflop_jk",
       "label": "FlipFlop JK",
       "pinCount": 7,
-      "icon": "generic-component",
+      "icon": "3to2",
       "folderPath": [
         "Logicos",
         "Memorias"
@@ -421,7 +421,7 @@
       "typeId": "logic.latch_d",
       "label": "Latch",
       "pinCount": 4,
-      "icon": "generic-component",
+      "icon": "package",
       "folderPath": [
         "Logicos",
         "Memorias"
@@ -432,7 +432,7 @@
       "typeId": "logic.memory",
       "label": "Memory",
       "pinCount": 15,
-      "icon": "generic-component",
+      "icon": "2to3g",
       "folderPath": [
         "Logicos",
         "Memorias"
@@ -443,7 +443,7 @@
       "typeId": "logic.dynamic_memory",
       "label": "Dynamic Memory",
       "pinCount": 15,
-      "icon": "generic-component",
+      "icon": "2to3g",
       "folderPath": [
         "Logicos",
         "Memorias"
@@ -454,7 +454,7 @@
       "typeId": "logic.i2c_ram",
       "label": "I2C Ram",
       "pinCount": 5,
-      "icon": "generic-component",
+      "icon": "2to3",
       "folderPath": [
         "Logicos",
         "Memorias"
@@ -470,7 +470,7 @@
       "typeId": "logic.mux",
       "label": "Mux",
       "pinCount": 13,
-      "icon": "generic-component",
+      "icon": "mux",
       "folderPath": [
         "Logicos",
         "Conversores"
@@ -481,7 +481,7 @@
       "typeId": "logic.demux",
       "label": "Demux",
       "pinCount": 12,
-      "icon": "generic-component",
+      "icon": "demux",
       "folderPath": [
         "Logicos",
         "Conversores"
@@ -492,7 +492,7 @@
       "typeId": "logic.bcd_to_dec",
       "label": "Bcd To Dec",
       "pinCount": 14,
-      "icon": "generic-component",
+      "icon": "2to3g",
       "folderPath": [
         "Logicos",
         "Conversores"
@@ -503,7 +503,7 @@
       "typeId": "logic.dec_to_bcd",
       "label": "Dec To Bcd",
       "pinCount": 14,
-      "icon": "generic-component",
+      "icon": "3to2g",
       "folderPath": [
         "Logicos",
         "Conversores"
@@ -514,7 +514,7 @@
       "typeId": "logic.bcd_to_7seg",
       "label": "Bcd To 7S.",
       "pinCount": 11,
-      "icon": "generic-component",
+      "icon": "2to3g",
       "folderPath": [
         "Logicos",
         "Conversores"
@@ -525,7 +525,7 @@
       "typeId": "logic.i2c_to_parallel",
       "label": "I2C to Parallel",
       "pinCount": 14,
-      "icon": "generic-component",
+      "icon": "2to3g",
       "folderPath": [
         "Logicos",
         "Conversores"
@@ -539,7 +539,7 @@
       "typeId": "logic.adc",
       "label": "ADC",
       "pinCount": 9,
-      "icon": "generic-component",
+      "icon": "1to3",
       "folderPath": [
         "Logicos",
         "Outros logicos"
@@ -552,7 +552,7 @@
       "typeId": "logic.dac",
       "label": "DAC",
       "pinCount": 9,
-      "icon": "generic-component",
+      "icon": "3to1",
       "folderPath": [
         "Logicos",
         "Outros logicos"
@@ -565,7 +565,7 @@
       "typeId": "logic.seven_segment_bcd",
       "label": "7 Segment BCD",
       "pinCount": 11,
-      "icon": "seven_segment",
+      "icon": "7segbcd",
       "folderPath": [
         "Logicos",
         "Outros logicos"
@@ -576,7 +576,7 @@
       "typeId": "logic.lm555",
       "label": "LM555",
       "pinCount": 8,
-      "icon": "generic-component",
+      "icon": "ic2",
       "folderPath": [
         "Logicos",
         "Outros logicos"
@@ -1629,7 +1629,7 @@
       "kind": "subcircuit-file",
       "filePath": "../subcircuits/esp32_devkitc_v4.lssub.json",
       "libraryPath": "../subcircuits/library.json",
-      "lsconfigPath": "../subcircuits/esp32_devkitc_v4.lsconfig",
+      "lsconfigPath": "../subcircuits/esp32_devkitc_v4.lssub.json.lsconfig",
       "removable": false
     },
     {
@@ -1637,7 +1637,7 @@
       "kind": "subcircuit-file",
       "filePath": "../subcircuits/esp32_wroom32.lssub.json",
       "libraryPath": "../subcircuits/library.json",
-      "lsconfigPath": "../subcircuits/esp32_wroom32.lsconfig",
+      "lsconfigPath": "../subcircuits/esp32_wroom32.lssub.json.lsconfig",
       "removable": false
     }
   ]

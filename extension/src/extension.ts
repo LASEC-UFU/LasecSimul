@@ -272,9 +272,11 @@ function inferLsconfigPath(manifestPath: string): string | undefined {
 }
 
 function readDeviceLsconfig(source: RegisteredSource, extensionPath: string): { absolutePath?: string; config?: DeviceLsconfig } {
-  const resolvedPath = source.lsconfigPath
-    ? normalizeAbsolutePath(extensionPath, source.lsconfigPath)
-    : inferLsconfigPath(normalizeAbsolutePath(extensionPath, source.filePath));
+  const absoluteFilePath = normalizeAbsolutePath(extensionPath, source.filePath);
+  const storedPath = source.lsconfigPath ? normalizeAbsolutePath(extensionPath, source.lsconfigPath) : undefined;
+  const resolvedPath = (storedPath && fileExists(storedPath))
+    ? storedPath
+    : inferLsconfigPath(absoluteFilePath);
   if (!resolvedPath || !fileExists(resolvedPath)) return {};
   try {
     return {
