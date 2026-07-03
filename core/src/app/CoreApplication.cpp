@@ -7,6 +7,7 @@
 #include "../components/SimulideBuiltins.hpp"
 #include "../components/active/Diode.hpp"
 #include "../components/meters/Ampmeter.hpp"
+#include "../components/meters/Voltmeter.hpp"
 #include "../components/meters/FreqMeter.hpp"
 #include "../components/meters/LogicAnalyzer.hpp"
 #include "../components/meters/Oscope.hpp"
@@ -506,6 +507,13 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
     });
     registerBuiltinMetadata("meters.logic_analyzer", "Analisador Lógico", components::LogicAnalyzer::propertySchema(),
                             englishName("Logic Analyzer"), components::LogicAnalyzer::readoutFormat());
+
+    reg.registerFactory("instruments.voltmeter", [](const ComponentParams& p) {
+        const auto pos = makePinVector(p, 3);
+        return std::make_unique<components::Voltmeter>(std::array<Pin, 3>{pos[0], pos[1], pos[2]});
+    });
+    registerBuiltinMetadata("instruments.voltmeter", "Voltímetro", components::Voltmeter::propertySchema(),
+                            englishName("Voltmeter"), components::Voltmeter::readoutFormat());
 }
 
 } // namespace

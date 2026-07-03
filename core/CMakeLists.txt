@@ -145,6 +145,18 @@ if(NOT WIN32)
 endif()
 add_test(NAME simulide_sources_meters COMMAND simulide_sources_meters_test)
 
+# Voltímetro built-in: alta impedância, leitura V(+)−V(−), getState() = 1 double
+add_executable(voltmeter_test
+    test/voltmeter_test.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(voltmeter_test PRIVATE include src)
+target_link_libraries(voltmeter_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+if(NOT WIN32)
+    target_link_libraries(voltmeter_test PRIVATE dl)
+endif()
+add_test(NAME voltmeter COMMAND voltmeter_test)
+
 # Teste de remoção de componente (mvp-limitacoes.md: remoção de instância no Core)
 add_executable(component_removal_test
     test/component_removal_test.cpp
