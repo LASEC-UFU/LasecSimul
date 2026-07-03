@@ -1124,6 +1124,25 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
         }
         return resp;
     }
+    // Renomeia um túnel e atualiza a topologia do Netlist (grupo de túnel). Não pode passar pelo
+    // caminho genérico de setProperty (que só re-stampa sem rebuildar topologia). Ver Tunnel.hpp e
+    // SimulationSession::setTunnelName. Payload: { instanceId, pinId, oldName, newName }.
+    if (msg.type == "setTunnelName") {
+        try {
+            const nlohmann::json payload =
+                msg.payloadJson.empty() ? nlohmann::json::object() : nlohmann::json::parse(msg.payloadJson);
+            const uint32_t instanceId = static_cast<uint32_t>(std::stoul(payload.value("instanceId", std::string{"0"})));
+            const std::string pinId = payload.value("pinId", std::string{});
+            const std::string oldName = payload.value("oldName", std::string{});
+            const std::string newName = payload.value("newName", std::string{});
+            session.setTunnelName(instanceId, pinId, oldName, newName);
+            resp.ok = true;
+        } catch (const std::exception& e) {
+            resp.ok = false;
+            resp.error = std::string("setTunnelName falhou: ") + e.what();
+        }
+        return resp;
+    }
     if (msg.type == "removeComponent") {
         try {
             const nlohmann::json payload =
@@ -1338,6 +1357,24 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
         } catch (const std::exception& e) {
             resp.ok = false;
             resp.error = std::string("loadDeviceLibrary falhou: ") + e.what();
+        }
+        return resp;
+    }
+    // Configura parâmetros operacionais do Scheduler em runtime. Payload (todos opcionais):
+    // { targetStepUs: number, maxNonLinearIterations: number }
+    // targetStepUs=0: sem throttle (default). maxNonLinearIterations=0: ilimitado (default).
+    if (msg.type == "setSimulationConfig") {
+        try {
+            const nlohmann::json payload =
+                msg.payloadJson.empty() ? nlohmann::json::object() : nlohmann::json::parse(msg.payloadJson);
+            if (payload.contains("targetStepUs") && payload["targetStepUs"].is_number())
+                session.scheduler().setTargetStepUs(payload["targetStepUs"].get<uint64_t>());
+            if (payload.contains("maxNonLinearIterations") && payload["maxNonLinearIterations"].is_number())
+                session.scheduler().setMaxNonLinearIterations(static_cast<size_t>(payload["maxNonLinearIterations"].get<uint64_t>()));
+            resp.ok = true;
+        } catch (const std::exception& e) {
+            resp.ok = false;
+            resp.error = std::string("setSimulationConfig falhou: ") + e.what();
         }
         return resp;
     }

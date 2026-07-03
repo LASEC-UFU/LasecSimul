@@ -594,6 +594,9 @@
       ],
       "defaultProperties": {
         "resistance": 1000
+      },
+      "help": {
+        "description": "Resistor ideal. Valor de resistência configurável em Ω. Limitador de corrente e divisor de tensão."
       }
     },
     {
@@ -699,6 +702,9 @@
       ],
       "defaultProperties": {
         "capacitance": 0.000001
+      },
+      "help": {
+        "description": "Capacitor ideal. Valor de capacitância configurável em Farads. Armazena energia no campo elétrico."
       }
     },
     {
@@ -1238,7 +1244,10 @@
       "folderPath": [
         "Conectores"
       ],
-      "defaultProperties": {}
+      "defaultProperties": {},
+      "help": {
+        "description": "Ponto de junção elétrica entre 3 ou mais fios. Coloque sobre um fio para criar uma derivação."
+      }
     },
     {
       "typeId": "connectors.bus",
@@ -1260,7 +1269,10 @@
       "folderPath": [
         "Conectores"
       ],
-      "defaultProperties": {}
+      "defaultProperties": { "name": "NetA" },
+      "help": {
+        "description": "Conecta pinos por nome compartilhado em vez de fio desenhado. Dois túneis com o mesmo nome formam um nó elétrico."
+      }
     },
     {
       "typeId": "connectors.socket",
@@ -1421,7 +1433,10 @@
         "threshold": 2.5,
         "showVolt": true
       },
-      "graphical": true
+      "graphical": true,
+      "help": {
+        "description": "Sonda de tensão de um pino. Mostra o valor de tensão em tempo real e muda de cor conforme o threshold lógico configurado."
+      }
     },
     {
       "typeId": "meters.ampmeter",
@@ -1433,6 +1448,9 @@
       ],
       "defaultProperties": {
         "resistance": 0.000001
+      },
+      "help": {
+        "description": "Amperímetro de baixa resistência série. Conecte em série no ramo para medir a corrente que passa por ele."
       }
     },
     {
@@ -1443,7 +1461,10 @@
       "folderPath": [
         "Medidores"
       ],
-      "defaultProperties": {}
+      "defaultProperties": {},
+      "help": {
+        "description": "Voltímetro diferencial. Conecte os dois pinos de medição nos nós desejados para ler a tensão entre eles."
+      }
     },
     {
       "typeId": "meters.freqmeter",
@@ -1455,6 +1476,9 @@
       ],
       "defaultProperties": {
         "filter": 0.1
+      },
+      "help": {
+        "description": "Frequencímetro: mede a frequência do sinal digital no pino de entrada e mostra em Hz."
       }
     },
     {
@@ -1469,6 +1493,9 @@
         "filter": 0,
         "autoScale": true,
         "tracks": 4
+      },
+      "help": {
+        "description": "Osciloscópio de até 4 canais. Conecte os pinos CH1–CH4 para visualizar formas de onda analógicas em tempo real."
       }
     },
     {
@@ -1482,6 +1509,9 @@
       "defaultProperties": {
         "thresholdRising": 2.5,
         "thresholdFalling": 2.5
+      },
+      "help": {
+        "description": "Analisador lógico de 8 canais digitais. Captura e exibe transições de sinal com timestamp em nanosegundos."
       }
     },
     {
@@ -1494,6 +1524,9 @@
       ],
       "defaultProperties": {
         "voltage": 5
+      },
+      "help": {
+        "description": "Fonte de tensão CC ideal com dois pinos (+ e −). A tensão configurada é mantida constante independente da corrente."
       }
     },
     {
@@ -1507,6 +1540,9 @@
       "defaultProperties": {
         "voltage": 5,
         "out": true
+      },
+      "help": {
+        "description": "Fonte de tensão fixa de um pino referenciada ao GND. Útil como trilho de alimentação (VCC, 3.3 V, etc.)."
       }
     },
     {
@@ -1521,6 +1557,9 @@
         "voltage": 5,
         "freqHz": 1000,
         "alwaysOn": false
+      },
+      "help": {
+        "description": "Gerador de clock digital (onda quadrada 50% duty cycle). Frequência configurável em Hz."
       }
     },
     {
@@ -1535,6 +1574,9 @@
         "waveType": "Sine",
         "freqHz": 1000,
         "semiAmplitude": 2.5
+      },
+      "help": {
+        "description": "Gerador de formas de onda: senoidal, triangular, quadrada. Configure frequência e amplitude."
       }
     },
     {
@@ -1549,6 +1591,9 @@
         "value": 5,
         "minValue": 0,
         "maxValue": 5
+      },
+      "help": {
+        "description": "Fonte de tensão variável controlável via slider durante a simulação. Referenciada ao GND."
       }
     },
     {
@@ -1563,6 +1608,9 @@
         "value": 1,
         "minValue": 0,
         "maxValue": 1
+      },
+      "help": {
+        "description": "Fonte de corrente variável controlável durante a simulação. Injeção de corrente constante no nó."
       }
     },
     {
@@ -1578,6 +1626,9 @@
         "currSource": true,
         "currControl": false,
         "gain": 1
+      },
+      "help": {
+        "description": "Fonte controlada por tensão ou corrente (VCCS/VCVS/CCCS/CCVS). Configure tipo e ganho."
       }
     },
     {
@@ -1591,6 +1642,9 @@
       "defaultProperties": {
         "voltage": 5,
         "resistance": 0.001
+      },
+      "help": {
+        "description": "Bateria com resistência série interna configurável. Modelo de fonte real com queda de tensão sob carga."
       }
     },
     {
@@ -1603,6 +1657,9 @@
       ],
       "defaultProperties": {
         "voltage": 5
+      },
+      "help": {
+        "description": "Trilho de alimentação (power rail): fio virtual que distribui a mesma tensão para múltiplos pontos sem fios desenhados."
       }
     },
     {
@@ -1613,7 +1670,10 @@
       "folderPath": [
         "Fontes"
       ],
-      "defaultProperties": {}
+      "defaultProperties": {},
+      "help": {
+        "description": "Referência de 0 V (GND/terra) do circuito. Todo circuito precisa de pelo menos um terra para o solver MNA funcionar."
+      }
     }
   ],
   "registeredSources": [

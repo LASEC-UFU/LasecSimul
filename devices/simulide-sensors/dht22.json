@@ -57,5 +57,8 @@
     { "id": "temp_inc", "label": "Taxa Temp (°C/s)", "group": "Main", "valueKind": "number", "editor": "number", "default": 0.0,   "min": -10,  "max": 10,   "step": 0.1, "unit": "°C/s" },
     { "id": "humi_inc", "label": "Taxa Umidade (%/s)","group":"Main", "valueKind": "number", "editor": "number", "default": 0.0,   "min": -10,  "max": 10,   "step": 0.1, "unit": "%/s" }
   ],
+  "help": {
+    "description": "Sensor de temperatura e umidade relativa DHT22 (ou DHT11). Interface 1-wire digital proprietária. Configure temperatura (°C) e umidade (%) para simular leituras do sensor."
+  },
   "limits": { "stepTimeoutMs": 2, "expectedComplexity": "medium" }
 }

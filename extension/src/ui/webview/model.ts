@@ -259,6 +259,11 @@ export interface WebviewComponentCatalogEntry {
   readoutFormat?: ReadoutFormatEntry;
   /** ABI v2 -- ver `InteractionKindEntry`. */
   interactionKind?: InteractionKindEntry;
+  /** Informação de ajuda do componente — `description` é um resumo curto (1-2 linhas) mostrado no
+   * tooltip do diálogo de propriedades; `url` é link externo opcional para documentação completa;
+   * `file` é caminho relativo ao manifesto para um arquivo .md de ajuda local.
+   * Ausente: botão "Ajuda" no diálogo de propriedades permanece desabilitado. */
+  help?: { description?: string; url?: string; file?: string };
 }
 
 export interface WebviewProjectState {

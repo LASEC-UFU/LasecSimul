@@ -85,6 +85,15 @@ public:
     void runUntil(uint64_t targetTimeNs);
     void step(uint64_t deltaNs);
 
+    /** Duração mínima de cada ciclo de liquidação em tempo real (µs). 0 = ilimitado (default).
+     * Thread-safe: lido pela thread do Scheduler, escrito pela thread de IPC. */
+    void setTargetStepUs(uint64_t us) { m_targetStepUs.store(us, std::memory_order_relaxed); }
+    uint64_t targetStepUs() const { return m_targetStepUs.load(std::memory_order_relaxed); }
+
+    /** Limite de iterações não-lineares por settle cycle. 0 = ilimitado (default). */
+    void setMaxNonLinearIterations(size_t n) { m_maxNonLinearIterations.store(n, std::memory_order_relaxed); }
+    size_t maxNonLinearIterations() const { return m_maxNonLinearIterations.load(std::memory_order_relaxed); }
+
 private:
     static constexpr uint32_t kNoComponent = std::numeric_limits<uint32_t>::max();
 
@@ -103,6 +112,8 @@ private:
     std::condition_variable m_wake;
     std::atomic<bool> m_running{false};
     std::atomic<bool> m_paused{false};
+    std::atomic<uint64_t> m_targetStepUs{0};
+    std::atomic<size_t> m_maxNonLinearIterations{0};
 };
 
 } // namespace lasecsimul::simulation

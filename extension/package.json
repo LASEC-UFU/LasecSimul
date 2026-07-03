@@ -78,6 +78,30 @@
           "enum": ["system", "pt-BR", "en"],
           "default": "system",
           "description": "Language used by the LasecSimul editor, palette and property sheets."
+        },
+        "lasecsimul.simulation.targetStepUs": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000000,
+          "markdownDescription": "Duração mínima (µs) de cada ciclo de liquidação da simulação em tempo real. `0` = ilimitado (máxima velocidade). Aumente para câmera lenta ou para reduzir uso de CPU."
+        },
+        "lasecsimul.simulation.maxNonLinearIterations": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000,
+          "markdownDescription": "Limite de iterações não-lineares por passo de liquidação. `0` = ilimitado. Reduzir pode evitar loops em circuitos oscilatórios, com alguma perda de precisão."
+        },
+        "lasecsimul.ui.showComponentIds": {
+          "type": "boolean",
+          "default": false,
+          "description": "Exibe o identificador (ex: 'Resistor-1') junto de cada componente no esquemático por padrão."
+        },
+        "lasecsimul.ui.snapToGrid": {
+          "type": "boolean",
+          "default": true,
+          "description": "Encaixa componentes na grade ao posicionar e mover."
         }
       }
     },

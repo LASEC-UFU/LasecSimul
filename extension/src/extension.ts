@@ -1694,6 +1694,7 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       return;
     }
     case "requestUpdateProperty": {
+      const prevComponent = schematicState.components.find((c) => c.id === message.componentId);
       schematicState = {
         ...schematicState,
         components: schematicState.components.map((component) =>
@@ -1702,7 +1703,18 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
             : component
         ),
       };
-      pushPropertyToCore(message.componentId, message.name, message.value);
+      // Túnel: nome precisa de setTunnelName (rebuilda topologia do Netlist), não setProperty.
+      if (message.name === "name" && prevComponent?.typeId === "connectors.tunnel") {
+        const coreId = coreInstanceIdByComponentId.get(message.componentId);
+        if (coreClient && coreId) {
+          const pinId = prevComponent.pins[0]?.id ?? "pin";
+          const oldName = String(prevComponent.properties["name"] ?? "");
+          coreClient.setTunnelName(coreId, pinId, oldName, String(message.value))
+            .catch((err: unknown) => reportCoreWarning("renomear túnel", err));
+        }
+      } else {
+        pushPropertyToCore(message.componentId, message.name, message.value);
+      }
       syncSchematicPanel();
       if (simulationStatus === "running") {
         void pollInstrumentReadouts();
@@ -1710,6 +1722,9 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       }
       return;
     }
+    case "requestOpenExternal":
+      void vscode.env.openExternal(vscode.Uri.parse(message.url));
+      return;
     case "requestRunSimulation":
       runSimulation();
       return;
@@ -2742,9 +2757,20 @@ export function activate(context: vscode.ExtensionContext): void {
       void refreshUnifiedCatalogState(Boolean(coreClient));
       syncSchematicPanel();
     }),
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (!event.affectsConfiguration("lasecsimul.simulation")) return;
+      if (!coreClient) return;
+      const cfg = vscode.workspace.getConfiguration("lasecsimul.simulation");
+      const targetStepUs = cfg.get<number>("targetStepUs", 0);
+      const maxNonLinearIterations = cfg.get<number>("maxNonLinearIterations", 0);
+      coreClient.setSimulationConfig({ targetStepUs, maxNonLinearIterations })
+        .catch((err: unknown) => reportCoreWarning("configurar simulação", err));
+    }),
     vscode.commands.registerCommand("lasecsimul.openSchematicEditor", () => openSchematicEditor(context.extensionUri)),
-    vscode.commands.registerCommand("lasecsimul.newSubcircuit", () => {}),
-    vscode.commands.registerCommand("lasecsimul.openSettings", () => {}),
+    vscode.commands.registerCommand("lasecsimul.newSubcircuit", () => triggerCreateSubcircuitFromSelection()),
+    vscode.commands.registerCommand("lasecsimul.openSettings", () => {
+      void vscode.commands.executeCommand("workbench.action.openSettings", "lasecsimul.");
+    }),
     vscode.commands.registerCommand("lasecsimul.palette.addComponent", (typeId: string) => addPaletteComponent(typeId)),
     vscode.commands.registerCommand("lasecsimul.run", () => runSimulation()),
     vscode.commands.registerCommand("lasecsimul.pause", () => pauseSimulation()),

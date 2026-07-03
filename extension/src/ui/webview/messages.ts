@@ -114,6 +114,9 @@ export type WebviewToHostMessage =
     }
   | { version: number; type: "requestConnectPins"; from: { componentId: string; pinId: string }; to: { componentId: string; pinId: string }; points?: Array<{ x: number; y: number }> }
   | { version: number; type: "requestUpdateProperty"; componentId: string; name: string; value: string | number | boolean }
+  /** Abre URL no browser externo — disparado pelo botão "Ajuda" do diálogo de propriedades quando
+   * o componente tem `help.url` declarado no catálogo. */
+  | { version: number; type: "requestOpenExternal"; url: string }
   | { version: number; type: "requestRunSimulation" }
   | { version: number; type: "requestPauseSimulation" }
   | { version: number; type: "requestStopSimulation" }

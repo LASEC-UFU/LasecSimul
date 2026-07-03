@@ -129,6 +129,20 @@ export class CoreClient {
     return (resp as { instanceId: string }).instanceId;
   }
 
+  /** Renomeia um túnel no Netlist. Deve ser chamado em vez de `setProperty` quando a propriedade
+   * "name" de um `connectors.tunnel` muda — `setProperty` só re-stampa, não rebuilda topologia.
+   * Ver `SimulationSession::setTunnelName` e `.spec/lasecsimul.spec` seção 6.1. */
+  async setTunnelName(instanceId: string, pinId: string, oldName: string, newName: string): Promise<void> {
+    await this.request("setTunnelName", { instanceId, pinId, oldName, newName });
+  }
+
+  /** Configura parâmetros operacionais do Scheduler em runtime.
+   * `targetStepUs`: duração mínima (µs) de cada cycle de liquidação; 0 = ilimitado (default).
+   * `maxNonLinearIterations`: limite de iterações de settle por passo; 0 = ilimitado (default). */
+  async setSimulationConfig(config: { targetStepUs?: number; maxNonLinearIterations?: number }): Promise<void> {
+    await this.request("setSimulationConfig", config);
+  }
+
   async connectWire(componentA: string, pinIdA: string, componentB: string, pinIdB: string): Promise<void> {
     await this.request("connectWire", { componentA, pinIdA, componentB, pinIdB });
   }

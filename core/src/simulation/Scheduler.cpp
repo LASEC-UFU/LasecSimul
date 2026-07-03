@@ -62,7 +62,11 @@ uint64_t Scheduler::nowNs() const {
 
 bool Scheduler::settleUntilStableLocked() {
     bool hadWork = false;
+    const size_t maxIter = m_maxNonLinearIterations.load(std::memory_order_relaxed);
+    size_t iter = 0;
     while (!m_dirty.empty()) {
+        if (maxIter > 0 && iter >= maxIter) break;
+        ++iter;
         hadWork = true;
         if (!m_settleStep || !m_settleStep()) break;
     }
@@ -131,6 +135,7 @@ void Scheduler::start() {
                 continue;
             }
 
+            bool processedEvent = false;
             {
                 std::unique_lock<std::mutex> lock(m_mutex);
                 settleUntilStableLocked();
@@ -138,10 +143,16 @@ void Scheduler::start() {
                 if (!m_events.empty()) {
                     const uint64_t nextTimeNs = m_events.top().timeNs;
                     processNextEventUntilLocked(lock, nextTimeNs);
-                    continue;
+                    processedEvent = true;
                 }
 
-                if (m_dirty.empty()) m_wake.wait_for(lock, std::chrono::milliseconds(10));
+                if (!processedEvent && m_dirty.empty())
+                    m_wake.wait_for(lock, std::chrono::milliseconds(10));
+            }
+
+            if (processedEvent) {
+                const uint64_t stepUs = m_targetStepUs.load(std::memory_order_relaxed);
+                if (stepUs > 0) std::this_thread::sleep_for(std::chrono::microseconds(stepUs));
             }
         }
     });

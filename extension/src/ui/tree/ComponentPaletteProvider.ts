@@ -33,13 +33,16 @@ class PaletteComponentItem extends vscode.TreeItem {
     public readonly isRegistered: boolean,
     public readonly registeredSourceRemovable: boolean,
     icon: IconUriPair | undefined,
+    helpDescription?: string,
   ) {
     super(label, vscode.TreeItemCollapsibleState.None);
     const behavesAsRemovableRegistered = isRegistered && registeredSourceRemovable;
     this.description = disabled ? "indisponível" : `${pinCount} pinos`;
     this.tooltip = disabled
       ? `${typeId}\nCategoria: ${category}\nIndisponível: ${disabledReason ?? "erro desconhecido"}`
-      : `${typeId}\nCategoria: ${category}`;
+      : helpDescription
+        ? `${typeId}\nCategoria: ${category}\n${helpDescription}`
+        : `${typeId}\nCategoria: ${category}`;
     if (disabled) {
       this.contextValue = behavesAsRemovableRegistered
         ? "lasecsimul.palette.component.registered.disabled"
@@ -144,7 +147,8 @@ export class ComponentPaletteProvider implements vscode.TreeDataProvider<vscode.
       entry.disabledReason,
       Boolean(entry.isRegistered),
       entry.registeredSourceRemovable !== false,
-      this.resolveIcon(entry)
+      this.resolveIcon(entry),
+      entry.help?.description,
     );
   }
 

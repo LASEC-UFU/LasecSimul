@@ -3757,11 +3757,19 @@ function renderPropertySheet(component: WebviewComponentModel, options: Property
   typeText.textContent = `${t("type")}: ${componentTypeLabel(component)}`;
   const toolbarActions = document.createElement("div");
   toolbarActions.className = "property-sheet__actions";
+  const catalogEntry = state.catalog.find((entry) => entry.typeId === component.typeId);
+  const helpInfo = catalogEntry?.help;
   const helpButton = document.createElement("button");
   helpButton.type = "button";
   helpButton.className = "property-sheet__button";
   helpButton.textContent = t("help");
-  helpButton.disabled = true;
+  helpButton.disabled = !helpInfo;
+  if (helpInfo?.description) helpButton.title = helpInfo.description;
+  if (helpInfo?.url) {
+    helpButton.addEventListener("click", () => {
+      send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenExternal", url: helpInfo.url! });
+    });
+  }
   const showLabel = document.createElement("label");
   showLabel.className = "property-sheet__show-toggle";
   const showText = document.createElement("span");
