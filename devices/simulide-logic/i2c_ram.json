@@ -1,11 +1,11 @@
-{
+﻿{
   "schemaVersion": 1,
   "typeId": "logic.i2c_ram",
   "name": "I2C Ram",
   "language": "pt-BR",
   "abiVersion": { "major": 4, "minor": 0 },
   "nativeEntry": {
-    "win32-x64": "build/win-x64/device.dll",
+    "win32-x64": "build-msvc/device.dll",
     "linux-x64": "build/linux-x64/device.so",
     "darwin-universal": "build/macos-universal/device.dylib"
   },

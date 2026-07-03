@@ -523,6 +523,12 @@ PropertyValue jsonToPropertyValue(const nlohmann::json& value) {
     return value.get<double>();
 }
 
+std::string optionValueToString(const nlohmann::json& value) {
+    if (value.is_string()) return value.get<std::string>();
+    if (value.is_number() || value.is_boolean()) return value.dump();
+    return {};
+}
+
 PropertyValueKind parsePropertyValueKind(const std::string& valueKind, const std::string& editor) {
     if (valueKind == "number" || valueKind == "double" || valueKind == "int" || valueKind == "uint") {
         return PropertyValueKind::Number;
@@ -577,10 +583,13 @@ PropertySchema parsePropertySchema(const nlohmann::json& propertyJson) {
         for (const auto& optionJson : propertyJson["options"]) {
             PropertyOption option;
             if (optionJson.is_object()) {
-                option.value = optionJson.value("value", std::string{});
-                option.label = optionJson.value("label", option.value);
+                if (optionJson.contains("value")) option.value = optionValueToString(optionJson["value"]);
+                option.label = optionJson.contains("label") ? optionValueToString(optionJson["label"]) : option.value;
             } else if (optionJson.is_string()) {
                 option.value = optionJson.get<std::string>();
+                option.label = option.value;
+            } else {
+                option.value = optionValueToString(optionJson);
                 option.label = option.value;
             }
             schema.options.push_back(std::move(option));

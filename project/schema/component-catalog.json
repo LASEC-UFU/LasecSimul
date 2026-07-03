@@ -1614,134 +1614,6 @@
         "Fontes"
       ],
       "defaultProperties": {}
-    },
-    {
-      "typeId": "sensors.ldr",
-      "label": "LDR — Fotorresistor",
-      "pinCount": 2,
-      "icon": "ldr",
-      "folderPath": ["Sensores"],
-      "defaultProperties": { "lux": 1, "gamma": 0.8582, "r1": 127410 }
-    },
-    {
-      "typeId": "sensors.thermistor",
-      "label": "Termistor NTC/PTC",
-      "pinCount": 2,
-      "icon": "thermistor",
-      "folderPath": ["Sensores"],
-      "defaultProperties": { "temp": 25, "b_coeff": 3455, "r25": 10000, "ptc": false }
-    },
-    {
-      "typeId": "sensors.rtd",
-      "label": "RTD — Detector de Temperatura Resistivo",
-      "pinCount": 2,
-      "icon": "rtd",
-      "folderPath": ["Sensores"],
-      "defaultProperties": { "temp": 25, "r0": 100 }
-    },
-    {
-      "typeId": "sensors.strain",
-      "label": "Extensômetro (Strain Gauge)",
-      "pinCount": 2,
-      "icon": "strain",
-      "folderPath": ["Sensores"],
-      "defaultProperties": { "force_n": 0, "gf": 2.0, "area_mm2": 10, "r0": 120 }
-    },
-    {
-      "typeId": "sensors.sr04",
-      "label": "HC-SR04 — Sensor Ultrassônico",
-      "pinCount": 4,
-      "icon": "sr04",
-      "folderPath": ["Sensores"],
-      "defaultProperties": { "distance_m": 0.5, "use_analog": false }
-    },
-    {
-      "typeId": "sensors.dht22",
-      "label": "DHT22/11 — Temperatura e Umidade",
-      "pinCount": 4,
-      "icon": "dht22",
-      "folderPath": ["Sensores"],
-      "defaultProperties": { "model": 22, "temp": 25, "humi": 50 }
-    },
-    {
-      "typeId": "sensors.ds1621",
-      "label": "DS1621 — Termômetro I2C",
-      "pinCount": 8,
-      "icon": "ds1621",
-      "folderPath": ["Sensores"],
-      "defaultProperties": { "temp": 25, "th": 80, "tl": 20 }
-    },
-    {
-      "typeId": "sensors.ds18b20",
-      "label": "DS18B20 — Termômetro 1-Wire",
-      "pinCount": 3,
-      "icon": "ds18b20",
-      "folderPath": ["Sensores"],
-      "defaultProperties": { "rom": "28AA0000000000B1", "temp": 25 }
-    },
-    {
-      "typeId": "peripherals.ky023",
-      "label": "KY-023 — Joystick Analógico",
-      "pinCount": 5,
-      "icon": "ky023",
-      "folderPath": ["Periféricos"],
-      "defaultProperties": { "x_pos": 512, "y_pos": 512, "sw_pressed": false }
-    },
-    {
-      "typeId": "peripherals.ky040",
-      "label": "KY-040 — Encoder Rotativo",
-      "pinCount": 5,
-      "icon": "ky040",
-      "folderPath": ["Periféricos"],
-      "defaultProperties": { "position": 0, "steps_rev": 20, "sw_pressed": false }
-    },
-    {
-      "typeId": "peripherals.touchpad",
-      "label": "TouchPad — Tela Sensível ao Toque",
-      "pinCount": 4,
-      "icon": "touchpad",
-      "folderPath": ["Periféricos"],
-      "defaultProperties": { "width": 240, "height": 320, "touch_x": 120, "touch_y": 160, "pressed": false }
-    },
-    {
-      "typeId": "peripherals.ds1307",
-      "label": "DS1307 — RTC I2C",
-      "pinCount": 6,
-      "icon": "ds1307",
-      "folderPath": ["Periféricos"],
-      "defaultProperties": { "set_time": "2024-01-01T00:00:00" }
-    },
-    {
-      "typeId": "peripherals.serialterm",
-      "label": "Terminal Serial",
-      "pinCount": 2,
-      "icon": "serialterm",
-      "folderPath": ["Periféricos"],
-      "defaultProperties": { "baudrate": 9600, "rx_buffer": "", "tx_bytes": "" }
-    },
-    {
-      "typeId": "peripherals.serialport",
-      "label": "Porta Serial (COM/TTY)",
-      "pinCount": 2,
-      "icon": "serialport",
-      "folderPath": ["Periféricos"],
-      "defaultProperties": { "port_name": "COM1", "baudrate": 9600, "auto_open": true }
-    },
-    {
-      "typeId": "peripherals.sdcard",
-      "label": "Cartão SD (SPI)",
-      "pinCount": 4,
-      "icon": "sdcard",
-      "folderPath": ["Periféricos"],
-      "defaultProperties": { "file": "" }
-    },
-    {
-      "typeId": "peripherals.esp01",
-      "label": "ESP-01 — Módulo Wi-Fi AT",
-      "pinCount": 5,
-      "icon": "esp01",
-      "folderPath": ["Periféricos"],
-      "defaultProperties": { "baudrate": 115200, "debug": false }
     }
   ],
   "registeredSources": [
@@ -1764,6 +1636,22 @@
       "filePath": "../subcircuits/esp32_wroom32.lssub.json",
       "libraryPath": "../subcircuits/library.json",
       "removable": false
-    }
+    },
+    { "id": "builtin-sensors-ldr",       "kind": "abi-device", "filePath": "../devices/simulide-sensors/ldr.json",       "libraryPath": "../devices/library.json", "removable": false },
+    { "id": "builtin-sensors-thermistor","kind": "abi-device", "filePath": "../devices/simulide-sensors/thermistor.json", "libraryPath": "../devices/library.json", "removable": false },
+    { "id": "builtin-sensors-rtd",       "kind": "abi-device", "filePath": "../devices/simulide-sensors/rtd.json",       "libraryPath": "../devices/library.json", "removable": false },
+    { "id": "builtin-sensors-strain",    "kind": "abi-device", "filePath": "../devices/simulide-sensors/strain.json",    "libraryPath": "../devices/library.json", "removable": false },
+    { "id": "builtin-sensors-sr04",      "kind": "abi-device", "filePath": "../devices/simulide-sensors/sr04.json",      "libraryPath": "../devices/library.json", "removable": false },
+    { "id": "builtin-sensors-dht22",     "kind": "abi-device", "filePath": "../devices/simulide-sensors/dht22.json",     "libraryPath": "../devices/library.json", "removable": false },
+    { "id": "builtin-sensors-ds1621",    "kind": "abi-device", "filePath": "../devices/simulide-sensors/ds1621.json",    "libraryPath": "../devices/library.json", "removable": false },
+    { "id": "builtin-sensors-ds18b20",   "kind": "abi-device", "filePath": "../devices/simulide-sensors/ds18b20.json",   "libraryPath": "../devices/library.json", "removable": false },
+    { "id": "builtin-peripherals-ky023",     "kind": "abi-device", "filePath": "../devices/simulide-peripherals/ky023.json",      "libraryPath": "../devices/library.json", "removable": false },
+    { "id": "builtin-peripherals-ky040",     "kind": "abi-device", "filePath": "../devices/simulide-peripherals/ky040.json",      "libraryPath": "../devices/library.json", "removable": false },
+    { "id": "builtin-peripherals-touchpad",  "kind": "abi-device", "filePath": "../devices/simulide-peripherals/touchpad.json",   "libraryPath": "../devices/library.json", "removable": false },
+    { "id": "builtin-peripherals-ds1307",    "kind": "abi-device", "filePath": "../devices/simulide-peripherals/ds1307.json",     "libraryPath": "../devices/library.json", "removable": false },
+    { "id": "builtin-peripherals-serialterm","kind": "abi-device", "filePath": "../devices/simulide-peripherals/serialterm.json", "libraryPath": "../devices/library.json", "removable": false },
+    { "id": "builtin-peripherals-serialport","kind": "abi-device", "filePath": "../devices/simulide-peripherals/serialport.json", "libraryPath": "../devices/library.json", "removable": false },
+    { "id": "builtin-peripherals-sdcard",    "kind": "abi-device", "filePath": "../devices/simulide-peripherals/sdcard.json",     "libraryPath": "../devices/library.json", "removable": false },
+    { "id": "builtin-peripherals-esp01",     "kind": "abi-device", "filePath": "../devices/simulide-peripherals/esp01.json",      "libraryPath": "../devices/library.json", "removable": false }
   ]
 }

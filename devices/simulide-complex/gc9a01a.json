@@ -1,11 +1,11 @@
-{
+﻿{
   "schemaVersion": 1,
   "typeId": "outputs.gc9a01a",
   "name": "GC9A01A",
   "language": "pt-BR",
   "translations": { "en": { "name": "GC9A01A" } },
   "abiVersion": { "major": 4, "minor": 0 },
-  "nativeEntry": { "win32-x64": "build/win-x64/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" },
+  "nativeEntry": { "win32-x64": "build-msvc/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" },
   "pins": [
     { "id": "dc", "kind": "DIGITAL_IN", "x": -12, "y": 60, "angle": 270, "length": 8, "label": "DC" },
     { "id": "cs", "kind": "DIGITAL_IN", "x": -20, "y": 60, "angle": 270, "length": 8, "label": "CS" },

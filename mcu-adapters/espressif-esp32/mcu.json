@@ -1,4 +1,4 @@
-{
+﻿{
   "schemaVersion": 1,
   "chipId": "espressif.esp32",
   "name": "Espressif ESP32 (QEMU)",
@@ -7,7 +7,7 @@
     "minor": 3
   },
   "nativeEntry": {
-    "win32-x64": "build/win-x64/adapter.dll",
+    "win32-x64": "build-msvc/adapter.dll",
     "linux-x64": "build/linux-x64/adapter.so",
     "darwin-universal": "build/macos-universal/adapter.dylib"
   },

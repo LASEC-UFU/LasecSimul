@@ -4,6 +4,10 @@ project(LasecSimulCore CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if(MSVC)
+    add_compile_options(/EHsc)
+endif()
+
 # GIT_SHALLOW TRUE em todas as dependências via FetchContent: GIT_TAG já fixa um commit exato, então
 # o histórico completo do repositório nunca é necessário -- só o objeto da tag. Sem isso, o primeiro
 # configure clona o repositório inteiro (anos de histórico do Eigen/nlohmann-json), o que pode demorar
@@ -180,7 +184,7 @@ add_executable(core_bootstrap_test
 target_include_directories(core_bootstrap_test PRIVATE include src)
 target_link_libraries(core_bootstrap_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
 target_compile_definitions(core_bootstrap_test PRIVATE
-    DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
+    DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/bootstrap-test-library.json"
 )
 if(NOT WIN32)
     target_link_libraries(core_bootstrap_test PRIVATE dl pthread)

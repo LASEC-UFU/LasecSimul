@@ -1,13 +1,65 @@
 #include "lasecsimul/device_abi.h"
-#include <string.h>
 #include <stdint.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <time.h>
 
-/* ------------------------------------------------------------------ */
-/*  Kind constants                                                      */
-/* ------------------------------------------------------------------ */
+/* MinGW on Windows: replace CRT so ucrtbase.dll is never loaded alongside ucrtbased.dll.
+ * MSVC builds use the normal CRT (matching the Core), no action needed. */
+#if defined(_WIN32) && !defined(_MSC_VER)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+
+BOOL WINAPI DllMainCRTStartup(HINSTANCE h, DWORD r, LPVOID p) {
+    (void)h; (void)r; (void)p; return TRUE;
+}
+
+static void *_lsdn_calloc(size_t n) {
+    return HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, n);
+}
+static void _lsdn_free(void *p) {
+    if (p) HeapFree(GetProcessHeap(), 0, p);
+}
+
+void *memset(void *s, int c, size_t n) {
+    unsigned char *p = (unsigned char *)s;
+    while (n--) *p++ = (unsigned char)c;
+    return s;
+}
+void *memcpy(void *d, const void *s, size_t n) {
+    char *dp = (char *)d;
+    const char *sp = (const char *)s;
+    while (n--) *dp++ = *sp++;
+    return d;
+}
+
+static int _lsdn_strcmp(const char *a, const char *b) {
+    while (*a && *a == *b) { ++a; ++b; }
+    return (unsigned char)*a - (unsigned char)*b;
+}
+static void _lsdn_strncpy(char *d, const char *s, size_t n) {
+    size_t i;
+    for (i = 0; i < n && s[i]; i++) d[i] = s[i];
+    for (; i < n; i++) d[i] = '\0';
+}
+static const char *_lsdn_strstr(const char *h, const char *needle) {
+    if (!*needle) return h;
+    for (; *h; ++h) {
+        const char *p = h, *q = needle;
+        while (*p && *q && *p == *q) { ++p; ++q; }
+        if (!*q) return h;
+    }
+    return 0;
+}
+
+#define calloc(n, sz)    _lsdn_calloc((size_t)(n) * (size_t)(sz))
+#define free(p)          _lsdn_free(p)
+#define strcmp(a, b)     _lsdn_strcmp(a, b)
+#define strncpy(d, s, n) _lsdn_strncpy(d, s, n)
+#define strstr(h, nd)    _lsdn_strstr(h, nd)
+
+#else  /* MSVC or non-Windows: use normal CRT */
+#include <string.h>
+#include <stdlib.h>
+#endif
+
 enum {
     KIND_KY023      = 0,
     KIND_KY040      = 1,
@@ -19,48 +71,50 @@ enum {
     KIND_ESP01      = 7,
 };
 
-/* ------------------------------------------------------------------ */
-/*  State                                                               */
-/* ------------------------------------------------------------------ */
 typedef struct {
     void *host_ctx;
     const LsdnHostApi *api;
     int kind;
 
     /* KY-023 */
-    int joy_x;
-    int joy_y;
-    int joy_sw;
+    int joy_x, joy_y, joy_sw;
 
     /* KY-040 */
     int32_t enc_pos;
-    int     enc_steps_rev;
-    int     enc_sw;
-    int     enc_clk_prev;
+    int     enc_steps_rev, enc_sw, enc_clk_prev;
 
     /* TouchPad */
-    int tp_width;
-    int tp_height;
-    int tp_touch_x;
-    int tp_touch_y;
-    int tp_pressed;
+    int    tp_width, tp_height;
+    int    tp_touch_x, tp_touch_y;
+    int    tp_pressed, tp_transparent;
+    double tp_rx_min, tp_rx_max;
+    double tp_ry_min, tp_ry_max;
 
-    /* DS1307 */
-    char rtc_time_str[32];
+    /* DS1307 — BCD time registers [0]=sec [1]=min [2]=hr [3]=dow [4]=date [5]=mon [6]=yr */
+    uint8_t rtc_regs[8];
+    uint8_t rtc_ptr;
+    int     rtc_i2c_addr;
+    int     rtc_i2c_state;
+    int     rtc_time_updated;
+    int     rtc_sqw_freq;
+    /* raw user fields */
+    int rtc_year, rtc_month, rtc_day;
+    int rtc_hour, rtc_min, rtc_sec;
 
     /* Serial Terminal */
     uint32_t ser_baudrate;
     uint32_t ser_bit_period_ns;
+    int      ser_data_bits, ser_stop_bits;
     char     ser_rx_buf[256];
     char     ser_tx_buf[256];
     int      ser_tx_pos;
-    int      ser_rx_active;
-    int      ser_rx_bit_idx;
+    int      ser_rx_active, ser_rx_bit_idx;
     uint8_t  ser_rx_byte;
 
     /* Serial Port */
     char     port_name[64];
     uint32_t port_baudrate;
+    int      port_data_bits, port_stop_bits;
     int      port_auto_open;
 
     /* SD Card */
@@ -70,9 +124,7 @@ typedef struct {
     uint32_t esp_baudrate;
     int      esp_debug;
     char     esp_at_buf[256];
-    int      esp_at_pos;
-    int      esp_rx_active;
-    int      esp_rx_bit_idx;
+    int      esp_at_pos, esp_rx_active, esp_rx_bit_idx;
     uint8_t  esp_rx_byte;
 } PeriphState;
 
@@ -102,13 +154,43 @@ static double cfg_num(PeriphState *s, const char *name, double fallback) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Encoder quadrature output                                           */
+/*  BCD helpers                                                         */
+/* ------------------------------------------------------------------ */
+static uint8_t to_bcd(int v) { return (uint8_t)(((v / 10) << 4) | (v % 10)); }
+static int     from_bcd(uint8_t b) { return ((b >> 4) * 10) + (b & 0x0F); }
+
+static void rtc_load_regs(PeriphState *s) {
+    int yr = s->rtc_year % 100;
+    s->rtc_regs[0] = to_bcd(s->rtc_sec   & 0x3F);  /* CH bit cleared = clock running */
+    s->rtc_regs[1] = to_bcd(s->rtc_min   & 0x3F);
+    s->rtc_regs[2] = to_bcd(s->rtc_hour  & 0x3F);  /* 24h mode */
+    s->rtc_regs[3] = 1;                              /* day-of-week = Monday */
+    s->rtc_regs[4] = to_bcd(s->rtc_day   & 0x3F);
+    s->rtc_regs[5] = to_bcd(s->rtc_month & 0x1F);
+    s->rtc_regs[6] = to_bcd(yr & 0xFF);
+    s->rtc_regs[7] = 0x10; /* 1Hz SQW */
+}
+
+static void rtc_tick(PeriphState *s) {
+    s->rtc_sec++;
+    if (s->rtc_sec >= 60) { s->rtc_sec = 0; s->rtc_min++; }
+    if (s->rtc_min >= 60) { s->rtc_min = 0; s->rtc_hour++; }
+    if (s->rtc_hour >= 24){ s->rtc_hour = 0; s->rtc_day++; }
+    /* Simplified: no month-end rollover */
+    if (s->rtc_day > 31)  { s->rtc_day = 1; s->rtc_month++; }
+    if (s->rtc_month > 12){ s->rtc_month = 1; s->rtc_year++; }
+    rtc_load_regs(s);
+}
+
+/* ------------------------------------------------------------------ */
+/*  KY-040 quadrature output                                            */
 /* ------------------------------------------------------------------ */
 static void enc_update(PeriphState *s) {
     int steps = s->enc_steps_rev > 0 ? s->enc_steps_rev : 1;
     int phase = ((s->enc_pos % steps) + steps) % 4;
     int clk   = (phase == 0 || phase == 1) ? 1 : 0;
     int dt    = (phase == 0 || phase == 3) ? 1 : 0;
+    /* pin order: GND=0, +5V=1, SW=2, DT=3, CLK=4 */
     s->api->pin_write(s->host_ctx, 4, clk);
     s->api->pin_write(s->host_ctx, 3, dt);
     s->api->pin_write(s->host_ctx, 2, s->enc_sw ? 0 : 1);
@@ -138,35 +220,49 @@ static void periph_init(LsdnDevice *dev) {
     else if (strstr(tid, "sdcard"))     s->kind = KIND_SDCARD;
     else if (strstr(tid, "esp01"))      s->kind = KIND_ESP01;
 
-    s->joy_x         = (int)cfg_num(s, "x_pos",      512.0);
-    s->joy_y         = (int)cfg_num(s, "y_pos",       512.0);
-    s->joy_sw        = (int)cfg_num(s, "sw_pressed",  0.0);
+    s->joy_x  = (int)cfg_num(s, "x_pos",      512.0);
+    s->joy_y  = (int)cfg_num(s, "y_pos",       512.0);
+    s->joy_sw = (int)cfg_num(s, "sw_pressed",  0.0);
 
-    s->enc_steps_rev = (int)cfg_num(s, "steps_rev",   20.0);
+    s->enc_steps_rev = (int)cfg_num(s, "steps_rev", 20.0);
     s->enc_pos       = (int32_t)cfg_num(s, "position", 0.0);
 
-    s->tp_width      = (int)cfg_num(s, "width",    240.0);
-    s->tp_height     = (int)cfg_num(s, "height",   320.0);
-    s->tp_touch_x    = (int)cfg_num(s, "touch_x",  120.0);
-    s->tp_touch_y    = (int)cfg_num(s, "touch_y",  160.0);
-    s->tp_pressed    = (int)cfg_num(s, "pressed",    0.0);
+    s->tp_width       = (int)cfg_num(s, "width",       240.0);
+    s->tp_height      = (int)cfg_num(s, "height",      320.0);
+    s->tp_touch_x     = (int)cfg_num(s, "touch_x",     120.0);
+    s->tp_touch_y     = (int)cfg_num(s, "touch_y",     160.0);
+    s->tp_pressed     = (int)cfg_num(s, "pressed",     0.0);
+    s->tp_transparent = (int)cfg_num(s, "transparent", 0.0);
+    s->tp_rx_min      = cfg_num(s, "rx_min", 100.0);
+    s->tp_rx_max      = cfg_num(s, "rx_max", 500.0);
+    s->tp_ry_min      = cfg_num(s, "ry_min", 100.0);
+    s->tp_ry_max      = cfg_num(s, "ry_max", 500.0);
 
-    strncpy(s->rtc_time_str, cfg_str(s, "set_time", "2024-01-01T00:00:00"),
-            sizeof(s->rtc_time_str) - 1);
+    s->rtc_year  = (int)cfg_num(s, "year",   2024.0);
+    s->rtc_month = (int)cfg_num(s, "month",  1.0);
+    s->rtc_day   = (int)cfg_num(s, "day",    1.0);
+    s->rtc_hour  = (int)cfg_num(s, "hour",   0.0);
+    s->rtc_min   = (int)cfg_num(s, "minute", 0.0);
+    s->rtc_sec   = (int)cfg_num(s, "second", 0.0);
+    s->rtc_sqw_freq = (int)cfg_num(s, "sqw_freq", 1.0);
+    rtc_load_regs(s);
 
-    s->ser_baudrate     = (uint32_t)cfg_num(s, "baudrate", 9600.0);
+    s->ser_baudrate      = (uint32_t)cfg_num(s, "baudrate",  9600.0);
     s->ser_bit_period_ns = s->ser_baudrate > 0 ? 1000000000u / s->ser_baudrate : 104167u;
+    s->ser_data_bits     = (int)cfg_num(s, "data_bits", 8.0);
+    s->ser_stop_bits     = (int)cfg_num(s, "stop_bits", 1.0);
 
     strncpy(s->port_name, cfg_str(s, "port_name", "COM1"), sizeof(s->port_name) - 1);
-    s->port_baudrate  = (uint32_t)cfg_num(s, "baudrate",  9600.0);
-    s->port_auto_open = (int)cfg_num(s,      "auto_open", 1.0);
+    s->port_baudrate  = (uint32_t)cfg_num(s, "baudrate",   9600.0);
+    s->port_data_bits = (int)cfg_num(s, "data_bits", 8.0);
+    s->port_stop_bits = (int)cfg_num(s, "stop_bits", 1.0);
+    s->port_auto_open = (int)cfg_num(s, "auto_open", 1.0);
 
     strncpy(s->sd_file, cfg_str(s, "file", ""), sizeof(s->sd_file) - 1);
 
     s->esp_baudrate = (uint32_t)cfg_num(s, "baudrate", 115200.0);
     s->esp_debug    = (int)cfg_num(s, "debug", 0.0);
 
-    /* Schedule 1-second tick for RTC */
     if (s->kind == KIND_DS1307)
         s->api->schedule_event(s->host_ctx, 1000000000u, 10u);
 }
@@ -177,10 +273,11 @@ static void periph_stamp(LsdnDevice *dev, LsdnMatrixView *m) {
 
     switch (s->kind) {
         case KIND_KY023: {
-            /* Joystick: VRX=pin2, VRY=pin3, SW=pin4; GND=pin0, +5V=pin1 */
-            double vx  = (s->joy_x  / 1023.0) * 5.0;
-            double vy  = (s->joy_y  / 1023.0) * 5.0;
-            double vsw = s->joy_sw  ? 0.0 : 5.0;
+            /* VRX=pin2, VRY=pin3, SW=pin4 (GND=0, +5V=1) */
+            double vcc = 5.0;
+            double vx  = (s->joy_x / 1023.0) * vcc;
+            double vy  = (s->joy_y / 1023.0) * vcc;
+            double vsw = s->joy_sw ? 0.0 : vcc;
             double G   = 1e6;
             m->add_conductance_to_ground(m->opaque, 2, G);
             m->add_current_to_ground(m->opaque, 2, vx  * G);
@@ -191,14 +288,28 @@ static void periph_stamp(LsdnDevice *dev, LsdnMatrixView *m) {
             break;
         }
         case KIND_TOUCHPAD: {
+            /*
+             * 4-wire resistive model:
+             * pins: XP=0, XM=1, YP=2, YM=3
+             * When pressed, X position appears on YP (pin2) and Y position on XM (pin1)
+             * using Thevenin equivalent with Rx/Ry resistances.
+             */
             if (s->tp_pressed) {
-                double vx = ((double)s->tp_touch_x / (s->tp_width  > 0 ? s->tp_width  : 1)) * 5.0;
-                double vy = ((double)s->tp_touch_y / (s->tp_height > 0 ? s->tp_height : 1)) * 5.0;
-                double G  = 1e6;
-                m->add_conductance_to_ground(m->opaque, 0, G);
-                m->add_current_to_ground(m->opaque, 0, vx * G);
+                double w   = s->tp_width  > 0 ? (double)s->tp_width  : 1.0;
+                double h   = s->tp_height > 0 ? (double)s->tp_height : 1.0;
+                double vcc = 5.0;
+                /* X measurement: XP=VCC, XM=GND → voltage divider on Y axis */
+                double rx  = s->tp_rx_min + (s->tp_rx_max - s->tp_rx_min) * (s->tp_touch_x / w);
+                double ry  = s->tp_ry_min + (s->tp_ry_max - s->tp_ry_min) * (s->tp_touch_y / h);
+                double vx  = vcc * rx / (s->tp_rx_max > 0.0 ? s->tp_rx_max : 1.0);
+                double vy  = vcc * ry / (s->tp_ry_max > 0.0 ? s->tp_ry_max : 1.0);
+                double G   = 1e6;
+                /* YP output = X position voltage */
                 m->add_conductance_to_ground(m->opaque, 2, G);
-                m->add_current_to_ground(m->opaque, 2, vy * G);
+                m->add_current_to_ground(m->opaque, 2, vx * G);
+                /* XM output = Y position voltage */
+                m->add_conductance_to_ground(m->opaque, 1, G);
+                m->add_current_to_ground(m->opaque, 1, vy * G);
             }
             break;
         }
@@ -222,7 +333,6 @@ static void periph_on_event(LsdnDevice *dev, const LsdnEvent *ev) {
                 if (ev->a == 4) {
                     int clk_now = (int)ev->b;
                     if (clk_now && !s->enc_clk_prev) {
-                        /* Rising CLK: DT low=CW, DT high=CCW */
                         int dt_level = s->api->pin_read(s->host_ctx, 3);
                         if (dt_level) s->enc_pos--;
                         else          s->enc_pos++;
@@ -237,7 +347,6 @@ static void periph_on_event(LsdnDevice *dev, const LsdnEvent *ev) {
                     s->ser_rx_active  = 1;
                     s->ser_rx_bit_idx = 0;
                     s->ser_rx_byte    = 0;
-                    /* Sample first data bit after 1.5 bit periods */
                     s->api->schedule_event(s->host_ctx,
                         (uint64_t)(s->ser_bit_period_ns * 3 / 2), 20u);
                 }
@@ -245,11 +354,11 @@ static void periph_on_event(LsdnDevice *dev, const LsdnEvent *ev) {
             case KIND_ESP01:
                 /* RX = pin 1 */
                 if (ev->a == 1 && ev->b == 0 && !s->esp_rx_active) {
+                    uint64_t period_ns = s->esp_baudrate > 0 ? 1000000000u / s->esp_baudrate : 8681u;
                     s->esp_rx_active  = 1;
                     s->esp_rx_bit_idx = 0;
                     s->esp_rx_byte    = 0;
-                    s->api->schedule_event(s->host_ctx,
-                        (uint64_t)(1000000000u / s->esp_baudrate * 3 / 2), 30u);
+                    s->api->schedule_event(s->host_ctx, period_ns * 3 / 2, 30u);
                 }
                 break;
             default:
@@ -260,13 +369,17 @@ static void periph_on_event(LsdnDevice *dev, const LsdnEvent *ev) {
         switch (s->kind) {
             case KIND_DS1307:
                 if (id == 10u) {
-                    /* Reschedule 1-second tick */
+                    rtc_tick(s);
                     s->api->schedule_event(s->host_ctx, 1000000000u, 10u);
+                    /* Toggle SQW at 1Hz */
+                    int sqw = (s->rtc_sec & 1);
+                    s->api->pin_write(s->host_ctx, 2, sqw);
                 }
                 break;
             case KIND_SERIALTERM:
                 if (id == 20u) {
-                    if (s->ser_rx_bit_idx < 8) {
+                    int data_bits = s->ser_data_bits > 0 ? s->ser_data_bits : 8;
+                    if (s->ser_rx_bit_idx < data_bits) {
                         int bit = s->api->pin_read(s->host_ctx, 1);
                         if (bit) s->ser_rx_byte |= (1u << (unsigned)s->ser_rx_bit_idx);
                         s->ser_rx_bit_idx++;
@@ -300,7 +413,6 @@ static void periph_on_event(LsdnDevice *dev, const LsdnEvent *ev) {
                         }
                         s->esp_rx_active  = 0;
                         s->esp_rx_bit_idx = 0;
-                        /* Detect AT command end and reply OK */
                         if (s->esp_at_pos >= 4 && s->esp_at_buf[s->esp_at_pos-1] == '\n'
                                 && s->esp_at_buf[s->esp_at_pos-2] == '\r') {
                             s->esp_at_pos = 0;
@@ -335,23 +447,39 @@ static uint32_t periph_get_property(LsdnDevice *dev, const char *name, LsdnPrope
             if (!strcmp(name,"sw_pressed")) RET_BOOL(s->enc_sw);
             break;
         case KIND_TOUCHPAD:
-            if (!strcmp(name,"width"))   RET_NUM(s->tp_width);
-            if (!strcmp(name,"height"))  RET_NUM(s->tp_height);
-            if (!strcmp(name,"touch_x")) RET_NUM(s->tp_touch_x);
-            if (!strcmp(name,"touch_y")) RET_NUM(s->tp_touch_y);
-            if (!strcmp(name,"pressed")) RET_BOOL(s->tp_pressed);
+            if (!strcmp(name,"width"))       RET_NUM(s->tp_width);
+            if (!strcmp(name,"height"))      RET_NUM(s->tp_height);
+            if (!strcmp(name,"touch_x"))    RET_NUM(s->tp_touch_x);
+            if (!strcmp(name,"touch_y"))    RET_NUM(s->tp_touch_y);
+            if (!strcmp(name,"pressed"))    RET_BOOL(s->tp_pressed);
+            if (!strcmp(name,"transparent"))RET_BOOL(s->tp_transparent);
+            if (!strcmp(name,"rx_min"))     RET_NUM(s->tp_rx_min);
+            if (!strcmp(name,"rx_max"))     RET_NUM(s->tp_rx_max);
+            if (!strcmp(name,"ry_min"))     RET_NUM(s->tp_ry_min);
+            if (!strcmp(name,"ry_max"))     RET_NUM(s->tp_ry_max);
             break;
         case KIND_DS1307:
-            if (!strcmp(name,"set_time")) RET_STR(s->rtc_time_str);
+            if (!strcmp(name,"year"))         RET_NUM(s->rtc_year);
+            if (!strcmp(name,"month"))        RET_NUM(s->rtc_month);
+            if (!strcmp(name,"day"))          RET_NUM(s->rtc_day);
+            if (!strcmp(name,"hour"))         RET_NUM(s->rtc_hour);
+            if (!strcmp(name,"minute"))       RET_NUM(s->rtc_min);
+            if (!strcmp(name,"second"))       RET_NUM(s->rtc_sec);
+            if (!strcmp(name,"sqw_freq"))     RET_NUM(s->rtc_sqw_freq);
+            if (!strcmp(name,"time_updated")) RET_BOOL(s->rtc_time_updated);
             break;
         case KIND_SERIALTERM:
             if (!strcmp(name,"baudrate"))  RET_NUM(s->ser_baudrate);
+            if (!strcmp(name,"data_bits")) RET_NUM(s->ser_data_bits);
+            if (!strcmp(name,"stop_bits")) RET_NUM(s->ser_stop_bits);
             if (!strcmp(name,"rx_buffer")) RET_STR(s->ser_rx_buf);
             if (!strcmp(name,"tx_bytes"))  RET_STR(s->ser_tx_buf);
             break;
         case KIND_SERIALPORT:
             if (!strcmp(name,"port_name")) RET_STR(s->port_name);
             if (!strcmp(name,"baudrate"))  RET_NUM(s->port_baudrate);
+            if (!strcmp(name,"data_bits")) RET_NUM(s->port_data_bits);
+            if (!strcmp(name,"stop_bits")) RET_NUM(s->port_stop_bits);
             if (!strcmp(name,"auto_open")) RET_BOOL(s->port_auto_open);
             break;
         case KIND_SDCARD:
@@ -377,8 +505,8 @@ static uint32_t periph_set_property(LsdnDevice *dev, const char *name, const Lsd
 
     switch (s->kind) {
         case KIND_KY023:
-            if (!strcmp(name,"x_pos"))      { s->joy_x  = (int)n; if (s->joy_x < 0) s->joy_x = 0; if (s->joy_x > 1023) s->joy_x = 1023; return 1; }
-            if (!strcmp(name,"y_pos"))      { s->joy_y  = (int)n; if (s->joy_y < 0) s->joy_y = 0; if (s->joy_y > 1023) s->joy_y = 1023; return 1; }
+            if (!strcmp(name,"x_pos"))      { s->joy_x  = (int)n; if (s->joy_x<0) s->joy_x=0; if (s->joy_x>1023) s->joy_x=1023; return 1; }
+            if (!strcmp(name,"y_pos"))      { s->joy_y  = (int)n; if (s->joy_y<0) s->joy_y=0; if (s->joy_y>1023) s->joy_y=1023; return 1; }
             if (!strcmp(name,"sw_pressed")) { s->joy_sw = b; return 1; }
             break;
         case KIND_KY040:
@@ -387,17 +515,26 @@ static uint32_t periph_set_property(LsdnDevice *dev, const char *name, const Lsd
             if (!strcmp(name,"sw_pressed")) { s->enc_sw = b; enc_update(s); return 1; }
             break;
         case KIND_TOUCHPAD:
-            if (!strcmp(name,"width"))   { s->tp_width   = (int)n > 0 ? (int)n : 1; return 1; }
-            if (!strcmp(name,"height"))  { s->tp_height  = (int)n > 0 ? (int)n : 1; return 1; }
-            if (!strcmp(name,"touch_x")) { s->tp_touch_x = (int)n; return 1; }
-            if (!strcmp(name,"touch_y")) { s->tp_touch_y = (int)n; return 1; }
-            if (!strcmp(name,"pressed")) { s->tp_pressed  = b; return 1; }
+            if (!strcmp(name,"width"))       { s->tp_width   = (int)n>0?(int)n:1; return 1; }
+            if (!strcmp(name,"height"))      { s->tp_height  = (int)n>0?(int)n:1; return 1; }
+            if (!strcmp(name,"touch_x"))    { s->tp_touch_x = (int)n; return 1; }
+            if (!strcmp(name,"touch_y"))    { s->tp_touch_y = (int)n; return 1; }
+            if (!strcmp(name,"pressed"))    { s->tp_pressed    = b; return 1; }
+            if (!strcmp(name,"transparent")){ s->tp_transparent = b; return 1; }
+            if (!strcmp(name,"rx_min"))     { s->tp_rx_min = n; return 1; }
+            if (!strcmp(name,"rx_max"))     { s->tp_rx_max = n; return 1; }
+            if (!strcmp(name,"ry_min"))     { s->tp_ry_min = n; return 1; }
+            if (!strcmp(name,"ry_max"))     { s->tp_ry_max = n; return 1; }
             break;
         case KIND_DS1307:
-            if (!strcmp(name,"set_time") && val->kind == LSDN_PROPERTY_STRING && val->string_value) {
-                strncpy(s->rtc_time_str, val->string_value, sizeof(s->rtc_time_str) - 1);
-                return 1;
-            }
+            if (!strcmp(name,"year"))         { s->rtc_year  = (int)n; rtc_load_regs(s); return 1; }
+            if (!strcmp(name,"month"))        { s->rtc_month = (int)n; rtc_load_regs(s); return 1; }
+            if (!strcmp(name,"day"))          { s->rtc_day   = (int)n; rtc_load_regs(s); return 1; }
+            if (!strcmp(name,"hour"))         { s->rtc_hour  = (int)n; rtc_load_regs(s); return 1; }
+            if (!strcmp(name,"minute"))       { s->rtc_min   = (int)n; rtc_load_regs(s); return 1; }
+            if (!strcmp(name,"second"))       { s->rtc_sec   = (int)n; rtc_load_regs(s); return 1; }
+            if (!strcmp(name,"sqw_freq"))     { s->rtc_sqw_freq = (int)n; return 1; }
+            if (!strcmp(name,"time_updated")) { s->rtc_time_updated = b; return 1; }
             break;
         case KIND_SERIALTERM:
             if (!strcmp(name,"baudrate")) {
@@ -405,21 +542,24 @@ static uint32_t periph_set_property(LsdnDevice *dev, const char *name, const Lsd
                 s->ser_bit_period_ns = s->ser_baudrate > 0 ? 1000000000u / s->ser_baudrate : 104167u;
                 return 1;
             }
+            if (!strcmp(name,"data_bits")) { s->ser_data_bits = (int)n; return 1; }
+            if (!strcmp(name,"stop_bits")) { s->ser_stop_bits = (int)n; return 1; }
             if (!strcmp(name,"rx_buffer") && val->kind == LSDN_PROPERTY_STRING && val->string_value) {
-                strncpy(s->ser_rx_buf, val->string_value, sizeof(s->ser_rx_buf) - 1);
-                return 1;
+                strncpy(s->ser_rx_buf, val->string_value, sizeof(s->ser_rx_buf)-1); return 1;
             }
             break;
         case KIND_SERIALPORT:
             if (!strcmp(name,"port_name") && val->kind == LSDN_PROPERTY_STRING && val->string_value) {
-                strncpy(s->port_name, val->string_value, sizeof(s->port_name) - 1); return 1;
+                strncpy(s->port_name, val->string_value, sizeof(s->port_name)-1); return 1;
             }
             if (!strcmp(name,"baudrate"))  { s->port_baudrate  = (uint32_t)n; return 1; }
+            if (!strcmp(name,"data_bits")) { s->port_data_bits = (int)n;      return 1; }
+            if (!strcmp(name,"stop_bits")) { s->port_stop_bits = (int)n;      return 1; }
             if (!strcmp(name,"auto_open")) { s->port_auto_open = b;            return 1; }
             break;
         case KIND_SDCARD:
             if (!strcmp(name,"file") && val->kind == LSDN_PROPERTY_STRING && val->string_value) {
-                strncpy(s->sd_file, val->string_value, sizeof(s->sd_file) - 1); return 1;
+                strncpy(s->sd_file, val->string_value, sizeof(s->sd_file)-1); return 1;
             }
             break;
         case KIND_ESP01:

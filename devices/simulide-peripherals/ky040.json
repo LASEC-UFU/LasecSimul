@@ -1,8 +1,10 @@
-{
+﻿{
   "schemaVersion": 1,
   "typeId": "peripherals.ky040",
   "name": "KY-040 — Encoder Rotativo",
   "language": "pt-BR",
+  "icon": "ky040",
+  "folderPath": ["Periféricos"],
   "translations": {
     "en": {
       "name": "KY-040 — Rotary Encoder",
@@ -15,35 +17,38 @@
   },
   "abiVersion": { "major": 4, "minor": 0 },
   "nativeEntry": {
-    "win32-x64":        "build/win-x64/device.dll",
+    "win32-x64":        "build-msvc/device.dll",
     "linux-x64":        "build/linux-x64/device.so",
     "darwin-universal": "build/macos-universal/device.dylib"
   },
   "package": {
-    "width": 48,
-    "height": 64,
-    "border": true,
-    "background": { "kind": "color", "value": "#f0f0f8" },
+    "width": 56,
+    "height": 72,
+    "border": false,
+    "background": { "kind": "color", "value": "transparent" },
     "shapes": [
-      { "kind": "rect",    "x": 8,  "y": 8,  "w": 32, "h": 32, "stroke": "#555", "fill": "#ddd", "strokeWidth": 1 },
-      { "kind": "ellipse", "cx": 24, "cy": 24, "rx": 12, "ry": 12, "stroke": "#777", "fill": "#aaa" },
-      { "kind": "line",    "x1": 24, "y1": 12, "x2": 24, "y2": 8, "stroke": "#333" },
-      { "kind": "text",    "x": 10,  "y": 58,  "value": "KY-040", "fontSize": 7, "color": "#444" }
+      { "kind": "rect",    "x": 0,  "y": 0,  "w": 56, "h": 64, "stroke": "#2a2c24", "fill": "#3A3C34", "strokeWidth": 2 },
+      { "kind": "rect",    "x": 8,  "y": 6,  "w": 40, "h": 40, "stroke": "#555",    "fill": "#4a4c44", "strokeWidth": 1 },
+      { "kind": "ellipse", "cx": 28, "cy": 26, "rx": 14, "ry": 14, "stroke": "#888", "fill": "#555" },
+      { "kind": "ellipse", "cx": 28, "cy": 26, "rx": 8,  "ry": 8,  "stroke": "#aaa", "fill": "#777" },
+      { "kind": "line",    "x1": 28, "y1": 12, "x2": 28, "y2": 6,  "stroke": "#ccc", "strokeWidth": 2 },
+      { "kind": "text",    "x": 8,  "y": 58, "value": "KY-040", "fontSize": 7, "color": "#ccc" }
     ],
+    "pinLabelColor": "#FAFAC8",
     "pins": [
-      { "id": "gnd", "x": 4,  "y": 64, "angle": 90, "length": 8, "label": "GND" },
-      { "id": "5v",  "x": 14, "y": 64, "angle": 90, "length": 8, "label": "+5V" },
-      { "id": "sw",  "x": 24, "y": 64, "angle": 90, "length": 8, "label": "SW"  },
-      { "id": "dt",  "x": 34, "y": 64, "angle": 90, "length": 8, "label": "DT"  },
-      { "id": "clk", "x": 44, "y": 64, "angle": 90, "length": 8, "label": "CLK" }
+      { "id": "gnd", "x": 6,  "y": 72, "angle": 90, "length": 8, "label": "GND" },
+      { "id": "5v",  "x": 18, "y": 72, "angle": 90, "length": 8, "label": "+5V" },
+      { "id": "sw",  "x": 28, "y": 72, "angle": 90, "length": 8, "label": "SW"  },
+      { "id": "dt",  "x": 40, "y": 72, "angle": 90, "length": 8, "label": "DT"  },
+      { "id": "clk", "x": 52, "y": 72, "angle": 90, "length": 8, "label": "CLK" }
     ]
   },
   "pins": [
-    { "id": "gnd", "kind": "POWER",       "x": 4,  "y": 64, "angle": 90, "length": 8, "label": "GND" },
-    { "id": "5v",  "kind": "POWER",       "x": 14, "y": 64, "angle": 90, "length": 8, "label": "+5V" },
-    { "id": "sw",  "kind": "DIGITAL_OUT", "x": 24, "y": 64, "angle": 90, "length": 8, "label": "SW"  },
-    { "id": "dt",  "kind": "DIGITAL_OUT", "x": 34, "y": 64, "angle": 90, "length": 8, "label": "DT"  },
-    { "id": "clk", "kind": "DIGITAL_OUT", "x": 44, "y": 64, "angle": 90, "length": 8, "label": "CLK" }
+    { "id": "gnd", "kind": "POWER",       "x": 6,  "y": 72, "angle": 90, "length": 8, "label": "GND" },
+    { "id": "5v",  "kind": "POWER",       "x": 18, "y": 72, "angle": 90, "length": 8, "label": "+5V" },
+    { "id": "sw",  "kind": "DIGITAL_OUT", "x": 28, "y": 72, "angle": 90, "length": 8, "label": "SW"  },
+    { "id": "dt",  "kind": "DIGITAL_OUT", "x": 40, "y": 72, "angle": 90, "length": 8, "label": "DT"  },
+    { "id": "clk", "kind": "DIGITAL_OUT", "x": 52, "y": 72, "angle": 90, "length": 8, "label": "CLK" }
   ],
   "properties": [
     { "id": "position",   "label": "Posição atual",      "group": "Encoder", "valueKind": "number", "editor": "number", "default": 0,   "min": -2147483648, "max": 2147483647, "step": 1 },

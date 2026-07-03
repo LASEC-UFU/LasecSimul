@@ -1,11 +1,11 @@
-{
+﻿{
   "schemaVersion": 1,
   "typeId": "outputs.ws2812",
   "name": "WS2812 Led",
   "language": "pt-BR",
   "translations": { "en": { "name": "WS2812 Led" } },
   "abiVersion": { "major": 4, "minor": 0 },
-  "nativeEntry": { "win32-x64": "build/win-x64/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" },
+  "nativeEntry": { "win32-x64": "build-msvc/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" },
   "pins": [
     { "id": "din", "kind": "DIGITAL_IN", "x": 0, "y": 16, "angle": 180, "length": 8, "label": "DIN" }
   ],

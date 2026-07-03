@@ -1,4 +1,4 @@
-{
+﻿{
   "schemaVersion": 1,
   "typeId": "outputs.ssd1306",
   "name": "SSD1306",
@@ -6,7 +6,7 @@
   "translations": { "en": { "name": "SSD1306" } },
   "abiVersion": { "major": 4, "minor": 0 },
   "nativeEntry": {
-    "win32-x64": "build/win-x64/device.dll",
+    "win32-x64": "build-msvc/device.dll",
     "linux-x64": "build/linux-x64/device.so",
     "darwin-universal": "build/macos-universal/device.dylib"
   },

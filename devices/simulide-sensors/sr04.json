@@ -1,8 +1,10 @@
-{
+﻿{
   "schemaVersion": 1,
   "typeId": "sensors.sr04",
   "name": "HC-SR04 — Sensor Ultrassônico",
   "language": "pt-BR",
+  "icon": "sr04",
+  "folderPath": ["Sensores"],
   "translations": {
     "en": {
       "name": "HC-SR04 — Ultrasonic Distance Sensor",
@@ -14,7 +16,7 @@
   },
   "abiVersion": { "major": 4, "minor": 0 },
   "nativeEntry": {
-    "win32-x64":        "build/win-x64/device.dll",
+    "win32-x64":        "build-msvc/device.dll",
     "linux-x64":        "build/linux-x64/device.so",
     "darwin-universal": "build/macos-universal/device.dylib"
   },

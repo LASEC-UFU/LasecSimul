@@ -1,11 +1,11 @@
-{
+﻿{
   "schemaVersion": 1,
   "typeId": "outputs.ks0108",
   "name": "KS0108",
   "language": "pt-BR",
   "translations": { "en": { "name": "KS0108" } },
   "abiVersion": { "major": 4, "minor": 0 },
-  "nativeEntry": { "win32-x64": "build/win-x64/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" },
+  "nativeEntry": { "win32-x64": "build-msvc/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" },
   "pins": [
     { "id": "rs", "kind": "DIGITAL_IN", "x": 16, "y": 8, "angle": 270, "length": 8, "label": "RS" },
     { "id": "rw", "kind": "DIGITAL_IN", "x": 24, "y": 8, "angle": 270, "length": 8, "label": "RW" },

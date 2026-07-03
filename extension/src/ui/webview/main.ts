@@ -3655,7 +3655,7 @@ function renderPropertyField(component: WebviewComponentModel, field: PropertyFi
       select.appendChild(optionEl);
     }
     select.addEventListener("change", () => {
-      applyChange(select.value);
+      applyChange(typeof field.value === "number" ? Number(select.value) : select.value);
     });
     row.append(caption, select);
     return row;

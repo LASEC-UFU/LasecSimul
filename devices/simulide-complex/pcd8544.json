@@ -1,11 +1,11 @@
-{
+﻿{
   "schemaVersion": 1,
   "typeId": "outputs.pcd8544",
   "name": "Pcd8544",
   "language": "pt-BR",
   "translations": { "en": { "name": "Pcd8544" } },
   "abiVersion": { "major": 4, "minor": 0 },
-  "nativeEntry": { "win32-x64": "build/win-x64/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" },
+  "nativeEntry": { "win32-x64": "build-msvc/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" },
   "pins": [
     { "id": "rst", "kind": "DIGITAL_IN", "x": -12, "y": 60, "angle": 270, "length": 8, "label": "RST" },
     { "id": "ce", "kind": "DIGITAL_IN", "x": -20, "y": 60, "angle": 270, "length": 8, "label": "CE" },

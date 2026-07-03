@@ -59,17 +59,18 @@ export class CoreClient {
   }
 
   /** Envia uma requisição ao Core e aguarda a resposta. */
-  async request(type: string, payload: unknown): Promise<unknown> {
+  async request(type: string, payload: unknown, timeoutMs?: number): Promise<unknown> {
     if (!this.socket) {
       throw new Error("CoreClient não está conectado");
     }
+    const effectiveTimeout = timeoutMs ?? this.requestTimeoutMs;
     const id = String(++this.requestCounter);
     const envelope: RequestEnvelope = { id, type, payload, protocolVersion: PROTOCOL_VERSION };
     return new Promise<unknown>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error(`Requisição "${type}" (id=${id}) expirou após ${this.requestTimeoutMs}ms`));
-      }, this.requestTimeoutMs);
+        reject(new Error(`Requisição "${type}" (id=${id}) expirou após ${effectiveTimeout}ms`));
+      }, effectiveTimeout);
       this.pending.set(id, { resolve, reject, timer });
       this.socket!.write(JSON.stringify(envelope) + "\n");
     });
@@ -138,7 +139,8 @@ export class CoreClient {
 
   async loadDeviceLibrary(libraryJsonPath: string): Promise<void> {
     // só deve ser chamado depois do fluxo de confiança/consentimento
-    await this.request("loadDeviceLibrary", { path: libraryJsonPath });
+    // 30 s: carregamento de DLL nova pode ser varrido pelo Defender antes de executar
+    await this.request("loadDeviceLibrary", { path: libraryJsonPath }, 30_000);
   }
 
   /** Bytes opacos de `IComponentModel::getState()` de uma instância (built-in ou plugin),

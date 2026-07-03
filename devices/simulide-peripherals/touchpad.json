@@ -1,56 +1,69 @@
-{
+﻿{
   "schemaVersion": 1,
   "typeId": "peripherals.touchpad",
   "name": "TouchPad — Tela Sensível ao Toque",
   "language": "pt-BR",
+  "icon": "touchpad",
+  "folderPath": ["Periféricos"],
   "translations": {
     "en": {
-      "name": "TouchPad — Touch Screen",
+      "name": "TouchPad — Resistive Touch Screen",
       "properties": {
-        "width":   { "label": "Width (px)",  "group": "TouchPad" },
-        "height":  { "label": "Height (px)", "group": "TouchPad" },
-        "touch_x": { "label": "Touch X",    "group": "TouchPad" },
-        "touch_y": { "label": "Touch Y",    "group": "TouchPad" },
-        "pressed": { "label": "Pressed",    "group": "TouchPad" }
+        "width":       { "label": "Width (px)",           "group": "TouchPad"   },
+        "height":      { "label": "Height (px)",          "group": "TouchPad"   },
+        "touch_x":     { "label": "Touch X",              "group": "TouchPad"   },
+        "touch_y":     { "label": "Touch Y",              "group": "TouchPad"   },
+        "pressed":     { "label": "Pressed",              "group": "TouchPad"   },
+        "transparent": { "label": "Transparent overlay",  "group": "TouchPad"   },
+        "rx_min":      { "label": "X-axis Rmin (Ω)",     "group": "Parameters" },
+        "rx_max":      { "label": "X-axis Rmax (Ω)",     "group": "Parameters" },
+        "ry_min":      { "label": "Y-axis Rmin (Ω)",     "group": "Parameters" },
+        "ry_max":      { "label": "Y-axis Rmax (Ω)",     "group": "Parameters" }
       }
     }
   },
   "abiVersion": { "major": 4, "minor": 0 },
   "nativeEntry": {
-    "win32-x64":        "build/win-x64/device.dll",
+    "win32-x64":        "build-msvc/device.dll",
     "linux-x64":        "build/linux-x64/device.so",
     "darwin-universal": "build/macos-universal/device.dylib"
   },
   "package": {
     "width": 120,
-    "height": 160,
-    "border": true,
-    "background": { "kind": "color", "value": "#e8f8ff" },
+    "height": 168,
+    "border": false,
+    "background": { "kind": "color", "value": "transparent" },
     "shapes": [
-      { "kind": "rect", "x": 8,   "y": 8,   "w": 104, "h": 120, "stroke": "#aac", "fill": "#d0e8f8", "strokeWidth": 2 },
-      { "kind": "line", "x1": 60, "y1": 8,  "x2": 60, "y2": 128, "stroke": "#99b" },
-      { "kind": "line", "x1": 8,  "y1": 68, "x2": 112,"y2": 68,  "stroke": "#99b" },
-      { "kind": "text", "x": 30,  "y": 148, "value": "TouchPad", "fontSize": 9, "color": "#335" }
+      { "kind": "rect", "x": 4,   "y": 4,   "w": 112, "h": 136, "stroke": "#6688aa", "fill": "#d0e8f8aa", "strokeWidth": 2 },
+      { "kind": "line", "x1": 60, "y1": 4,  "x2": 60, "y2": 140, "stroke": "#99bb" },
+      { "kind": "line", "x1": 4,  "y1": 72, "x2": 116,"y2": 72,  "stroke": "#99bb" },
+      { "kind": "text", "x": 22,  "y": 154, "value": "TouchPad 4W", "fontSize": 8, "color": "#335" }
     ],
+    "pinLabelColor": "#224",
     "pins": [
-      { "id": "x1",  "x": 20,  "y": 160, "angle": 90, "length": 8, "label": "X1" },
-      { "id": "x2",  "x": 50,  "y": 160, "angle": 90, "length": 8, "label": "X2" },
-      { "id": "y1",  "x": 80,  "y": 160, "angle": 90, "length": 8, "label": "Y1" },
-      { "id": "y2",  "x": 110, "y": 160, "angle": 90, "length": 8, "label": "Y2" }
+      { "id": "xp",  "x": 20,  "y": 168, "angle": 90, "length": 14, "label": "XP" },
+      { "id": "xm",  "x": 46,  "y": 168, "angle": 90, "length": 14, "label": "XM" },
+      { "id": "yp",  "x": 74,  "y": 168, "angle": 90, "length": 14, "label": "YP" },
+      { "id": "ym",  "x": 100, "y": 168, "angle": 90, "length": 14, "label": "YM" }
     ]
   },
   "pins": [
-    { "id": "x1",  "kind": "ANALOG_IN", "x": 20,  "y": 160, "angle": 90, "length": 8, "label": "X1" },
-    { "id": "x2",  "kind": "ANALOG_IN", "x": 50,  "y": 160, "angle": 90, "length": 8, "label": "X2" },
-    { "id": "y1",  "kind": "ANALOG_IN", "x": 80,  "y": 160, "angle": 90, "length": 8, "label": "Y1" },
-    { "id": "y2",  "kind": "ANALOG_IN", "x": 110, "y": 160, "angle": 90, "length": 8, "label": "Y2" }
+    { "id": "xp",  "kind": "ANALOG_IN", "x": 20,  "y": 168, "angle": 90, "length": 14, "label": "XP" },
+    { "id": "xm",  "kind": "ANALOG_IN", "x": 46,  "y": 168, "angle": 90, "length": 14, "label": "XM" },
+    { "id": "yp",  "kind": "ANALOG_IN", "x": 74,  "y": 168, "angle": 90, "length": 14, "label": "YP" },
+    { "id": "ym",  "kind": "ANALOG_IN", "x": 100, "y": 168, "angle": 90, "length": 14, "label": "YM" }
   ],
   "properties": [
-    { "id": "width",   "label": "Largura (px)",      "group": "TouchPad", "valueKind": "number", "editor": "number", "default": 240,  "min": 10, "max": 4096, "step": 1  },
-    { "id": "height",  "label": "Altura (px)",       "group": "TouchPad", "valueKind": "number", "editor": "number", "default": 320,  "min": 10, "max": 4096, "step": 1  },
-    { "id": "touch_x", "label": "Toque X",           "group": "TouchPad", "valueKind": "number", "editor": "number", "default": 120,  "min": 0,  "max": 4095, "step": 1  },
-    { "id": "touch_y", "label": "Toque Y",           "group": "TouchPad", "valueKind": "number", "editor": "number", "default": 160,  "min": 0,  "max": 4095, "step": 1  },
-    { "id": "pressed", "label": "Toque ativo",       "group": "TouchPad", "valueKind": "bool",   "editor": "bool",   "default": false }
+    { "id": "width",       "label": "Largura (px)",       "group": "TouchPad",   "valueKind": "number", "editor": "number", "default": 240,  "min": 10,  "max": 4096, "step": 1        },
+    { "id": "height",      "label": "Altura (px)",        "group": "TouchPad",   "valueKind": "number", "editor": "number", "default": 320,  "min": 10,  "max": 4096, "step": 1        },
+    { "id": "touch_x",    "label": "Toque X",             "group": "TouchPad",   "valueKind": "number", "editor": "number", "default": 120,  "min": 0,   "max": 4095, "step": 1        },
+    { "id": "touch_y",    "label": "Toque Y",             "group": "TouchPad",   "valueKind": "number", "editor": "number", "default": 160,  "min": 0,   "max": 4095, "step": 1        },
+    { "id": "pressed",    "label": "Toque ativo",         "group": "TouchPad",   "valueKind": "bool",   "editor": "bool",   "default": false                                             },
+    { "id": "transparent","label": "Overlay transparente","group": "TouchPad",   "valueKind": "bool",   "editor": "bool",   "default": false                                             },
+    { "id": "rx_min",     "label": "Rmin eixo X (Ω)",   "group": "Parameters", "valueKind": "number", "editor": "number", "default": 100,  "min": 1,   "max": 10000,"step": 1, "unit": "Ω" },
+    { "id": "rx_max",     "label": "Rmax eixo X (Ω)",   "group": "Parameters", "valueKind": "number", "editor": "number", "default": 500,  "min": 10,  "max": 10000,"step": 1, "unit": "Ω" },
+    { "id": "ry_min",     "label": "Rmin eixo Y (Ω)",   "group": "Parameters", "valueKind": "number", "editor": "number", "default": 100,  "min": 1,   "max": 10000,"step": 1, "unit": "Ω" },
+    { "id": "ry_max",     "label": "Rmax eixo Y (Ω)",   "group": "Parameters", "valueKind": "number", "editor": "number", "default": 500,  "min": 10,  "max": 10000,"step": 1, "unit": "Ω" }
   ],
   "limits": { "stepTimeoutMs": 4, "expectedComplexity": "low" }
 }

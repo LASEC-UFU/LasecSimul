@@ -1,8 +1,10 @@
-{
+﻿{
   "schemaVersion": 1,
   "typeId": "peripherals.sdcard",
   "name": "Cartão SD (SPI)",
   "language": "pt-BR",
+  "icon": "sdcard",
+  "folderPath": ["Periféricos"],
   "translations": {
     "en": {
       "name": "SD Card (SPI)",
@@ -13,32 +15,37 @@
   },
   "abiVersion": { "major": 4, "minor": 0 },
   "nativeEntry": {
-    "win32-x64":        "build/win-x64/device.dll",
+    "win32-x64":        "build-msvc/device.dll",
     "linux-x64":        "build/linux-x64/device.so",
     "darwin-universal": "build/macos-universal/device.dylib"
   },
   "package": {
-    "width": 64,
-    "height": 40,
-    "border": true,
-    "background": { "kind": "color", "value": "#f8f8e8" },
+    "width": 72,
+    "height": 48,
+    "border": false,
+    "background": { "kind": "color", "value": "transparent" },
     "shapes": [
-      { "kind": "rect",    "x": 20, "y": 4,  "w": 38, "h": 30, "stroke": "#888", "fill": "#e8e8d8", "strokeWidth": 2 },
-      { "kind": "text",    "x": 22, "y": 18, "value": "SD",   "fontSize": 10, "color": "#444" },
-      { "kind": "text",    "x": 22, "y": 30, "value": "SPI",  "fontSize": 7,  "color": "#666" }
+      { "kind": "line", "x1": 20, "y1": 4,  "x2": 52, "y2": 4,  "stroke": "#888", "strokeWidth": 1 },
+      { "kind": "line", "x1": 52, "y1": 4,  "x2": 62, "y2": 14, "stroke": "#888", "strokeWidth": 1 },
+      { "kind": "line", "x1": 62, "y1": 14, "x2": 62, "y2": 42, "stroke": "#888", "strokeWidth": 1 },
+      { "kind": "line", "x1": 62, "y1": 42, "x2": 20, "y2": 42, "stroke": "#888", "strokeWidth": 1 },
+      { "kind": "line", "x1": 20, "y1": 42, "x2": 20, "y2": 4,  "stroke": "#888", "strokeWidth": 1 },
+      { "kind": "rect", "x": 21, "y": 5,  "w": 40, "h": 36, "stroke": "none", "fill": "#e8e8d8" },
+      { "kind": "text", "x": 30, "y": 22, "value": "SD",  "fontSize": 12, "color": "#444" },
+      { "kind": "text", "x": 30, "y": 34, "value": "SPI", "fontSize": 7,  "color": "#666" }
     ],
     "pins": [
-      { "id": "cs",  "x": 0, "y": 8,  "angle": 180, "length": 8, "label": "CS"  },
-      { "id": "di",  "x": 0, "y": 18, "angle": 180, "length": 8, "label": "DI"  },
-      { "id": "ck",  "x": 0, "y": 28, "angle": 180, "length": 8, "label": "CK"  },
-      { "id": "do",  "x": 0, "y": 38, "angle": 180, "length": 8, "label": "DO"  }
+      { "id": "cs",  "x": 0, "y": 10, "angle": 180, "length": 8, "label": "CS"  },
+      { "id": "di",  "x": 0, "y": 20, "angle": 180, "length": 8, "label": "DI"  },
+      { "id": "ck",  "x": 0, "y": 30, "angle": 180, "length": 8, "label": "CK"  },
+      { "id": "do",  "x": 0, "y": 40, "angle": 180, "length": 8, "label": "DO"  }
     ]
   },
   "pins": [
-    { "id": "cs",  "kind": "DIGITAL_IN",  "x": 0, "y": 8,  "angle": 180, "length": 8, "label": "CS"  },
-    { "id": "di",  "kind": "DIGITAL_IN",  "x": 0, "y": 18, "angle": 180, "length": 8, "label": "DI"  },
-    { "id": "ck",  "kind": "DIGITAL_IN",  "x": 0, "y": 28, "angle": 180, "length": 8, "label": "CK"  },
-    { "id": "do",  "kind": "DIGITAL_OUT", "x": 0, "y": 38, "angle": 180, "length": 8, "label": "DO"  }
+    { "id": "cs",  "kind": "DIGITAL_IN",  "x": 0, "y": 10, "angle": 180, "length": 8, "label": "CS"  },
+    { "id": "di",  "kind": "DIGITAL_IN",  "x": 0, "y": 20, "angle": 180, "length": 8, "label": "DI"  },
+    { "id": "ck",  "kind": "DIGITAL_IN",  "x": 0, "y": 30, "angle": 180, "length": 8, "label": "CK"  },
+    { "id": "do",  "kind": "DIGITAL_OUT", "x": 0, "y": 40, "angle": 180, "length": 8, "label": "DO"  }
   ],
   "properties": [
     { "id": "file", "label": "Arquivo de imagem SD", "group": "SD Card", "valueKind": "string", "editor": "text", "default": "" }

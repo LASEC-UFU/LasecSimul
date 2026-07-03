@@ -1,45 +1,50 @@
-{
+﻿{
   "schemaVersion": 1,
   "typeId": "sensors.ds18b20",
   "name": "DS18B20 — Termômetro Digital 1-Wire",
   "language": "pt-BR",
+  "icon": "ds18b20",
+  "folderPath": ["Sensores"],
   "translations": {
     "en": {
       "name": "DS18B20 — Digital Thermometer 1-Wire",
       "properties": {
         "rom":  { "label": "ROM Address (hex)", "group": "Sensor" },
-        "temp": { "label": "Temperature (°C)", "group": "Sensor" }
+        "temp": { "label": "Temperature (°C)",  "group": "Sensor" }
       }
     }
   },
   "abiVersion": { "major": 4, "minor": 0 },
   "nativeEntry": {
-    "win32-x64":        "build/win-x64/device.dll",
+    "win32-x64":        "build-msvc/device.dll",
     "linux-x64":        "build/linux-x64/device.so",
     "darwin-universal": "build/macos-universal/device.dylib"
   },
   "package": {
-    "width": 48,
-    "height": 36,
-    "border": true,
-    "background": { "kind": "color", "value": "#1a1a1a" },
+    "width": 56,
+    "height": 48,
+    "border": false,
+    "background": { "kind": "color", "value": "transparent" },
     "shapes": [
-      { "kind": "rect",    "x": 0,  "y": 0,  "w": 48, "h": 36, "stroke": "#333", "fill": "#1a1a1a", "strokeWidth": 2 },
-      { "kind": "ellipse", "cx": 24, "cy": 14, "rx": 16, "ry": 12, "stroke": "#555", "fill": "#222" },
-      { "kind": "text",    "x": 8,  "y": 18, "value": "DS18B20", "fontSize": 7, "color": "#FAFAC8" },
-      { "kind": "text",    "x": 11, "y": 30, "value": "1-Wire",  "fontSize": 7, "color": "#888"    }
+      { "kind": "rect",    "x": 8,  "y": 0,  "w": 40, "h": 34, "stroke": "#333", "fill": "#1a1a1a", "strokeWidth": 2 },
+      { "kind": "ellipse", "cx": 28, "cy": 17, "rx": 16, "ry": 13, "stroke": "#555", "fill": "#2a2a2a" },
+      { "kind": "text",    "x": 11, "y": 14, "value": "DS18B20", "fontSize": 7, "color": "#FAFAC8" },
+      { "kind": "text",    "x": 15, "y": 26, "value": "1-Wire",  "fontSize": 7, "color": "#888"    },
+      { "kind": "line",    "x1": 16, "y1": 34, "x2": 16, "y2": 48, "stroke": "#888" },
+      { "kind": "line",    "x1": 28, "y1": 34, "x2": 28, "y2": 48, "stroke": "#888" },
+      { "kind": "line",    "x1": 40, "y1": 34, "x2": 40, "y2": 48, "stroke": "#888" }
     ],
     "pinLabelColor": "#FAFAC8",
     "pins": [
-      { "id": "gnd", "x": 8,  "y": 36, "angle": 90, "length": 8, "label": "GND" },
-      { "id": "dq",  "x": 24, "y": 36, "angle": 90, "length": 8, "label": "DQ"  },
-      { "id": "vcc", "x": 40, "y": 36, "angle": 90, "length": 8, "label": "VCC" }
+      { "id": "gnd", "x": 16, "y": 48, "angle": 90, "length": 0, "label": "GND" },
+      { "id": "dq",  "x": 28, "y": 48, "angle": 90, "length": 0, "label": "DQ"  },
+      { "id": "vcc", "x": 40, "y": 48, "angle": 90, "length": 0, "label": "VCC" }
     ]
   },
   "pins": [
-    { "id": "gnd", "kind": "POWER",         "x": 8,  "y": 36, "angle": 90, "length": 8, "label": "GND" },
-    { "id": "dq",  "kind": "DIGITAL_BIDIR", "x": 24, "y": 36, "angle": 90, "length": 8, "label": "DQ"  },
-    { "id": "vcc", "kind": "POWER",         "x": 40, "y": 36, "angle": 90, "length": 8, "label": "VCC" }
+    { "id": "gnd", "kind": "POWER",         "x": 16, "y": 48, "angle": 90, "length": 0, "label": "GND" },
+    { "id": "dq",  "kind": "DIGITAL_BIDIR", "x": 28, "y": 48, "angle": 90, "length": 0, "label": "DQ"  },
+    { "id": "vcc", "kind": "POWER",         "x": 40, "y": 48, "angle": 90, "length": 0, "label": "VCC" }
   ],
   "properties": [
     { "id": "rom",  "label": "Endereço ROM (hex)", "group": "Sensor", "valueKind": "string", "editor": "text",   "default": "28AA0000000000B1" },

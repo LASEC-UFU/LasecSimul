@@ -727,7 +727,7 @@ Inclui o bloco `package` (corpo + pinos visuais) — schema completo e justifica
   "name": "8x8 LED Matrix (custom)",
   "abiVersion": { "major": 1, "minor": 0 },
   "nativeEntry": {
-    "win32-x64": "build/win-x64/device.dll",
+    "win32-x64": "build-msvc/device.dll",
     "linux-x64": "build/linux-x64/device.so",
     "darwin-universal": "build/macos-universal/device.dylib"
   },
@@ -841,9 +841,22 @@ static void on_event(LsdnDevice* dev, const LsdnEvent* ev) {
 
 ## 18. Processo de build, empacotamento e instalação
 
-1. **Toolchains**: qualquer compilador C/C++/Rust capaz de gerar uma biblioteca dinâmica nativa para o
-   triplo-alvo desejado (MSVC ou Clang/MinGW no Windows; GCC/Clang no Linux; Clang no macOS). Não é exigido o
-   mesmo compilador do Core — a fronteira ABI (seção 4) é especificamente desenhada para tolerar isso.
+1. **Toolchains**:
+
+   - **Windows (obrigatório): MSVC** (`cl.exe`, Visual Studio Build Tools ≥ 2022).
+     MinGW/GCC no Windows é **proibido** para qualquer DLL carregada pelo Core em produção ou desenvolvimento.
+     Razão: o Core Debug (`lasecsimul-core.exe`) usa `ucrtbased.dll` (CRT debug do MSVC). MinGW DLLs
+     sempre carregam `ucrtbase.dll` (CRT release) via `api-ms-win-crt-*.dll`, mesmo sem `#include <stdio.h>` —
+     é MinGW's `DllMainCRTStartup` que o faz. Ter os dois CRTs no mesmo processo faz o CRT debug detectar a
+     inconsistência e chamar `abort()`, travando o Core. DLLs MSVC Debug carregam `ucrtbased.dll` (igual ao
+     Core); Release carregam `ucrtbase.dll` (conflita). **Portanto: builds de device DLL no Windows DEVEM
+     ser feitos com MSVC e com a mesma configuração (Debug/Release) que o Core.**
+     Comando: `cmake -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Debug` em shell com `vcvars64.bat` ativado.
+   - **Linux**: GCC ou Clang. A restrição de CRT não existe fora do Windows.
+   - **macOS**: Clang universal (arm64+x86_64).
+
+   O mesmo compilador do Core não é exigido em outras plataformas — a fronteira ABI (seção 4) tolera isso.
+   No Windows, a coincidência de compilador é **exigida** pela restrição de CRT acima.
 2. **Exportação**: `extern "C"` + `__declspec(dllexport)` (Windows) ou
    `__attribute__((visibility("default")))` com `-fvisibility=hidden` global (Linux/macOS) — só
    `lsdn_get_vtable` fica visível, reduzindo colisão de símbolos entre plugins.

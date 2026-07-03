@@ -1,11 +1,11 @@
-{
+﻿{
   "schemaVersion": 1,
   "typeId": "passive.transformer",
   "name": "Transformer",
   "language": "pt-BR",
   "translations": { "en": { "name": "Transformer" } },
   "abiVersion": { "major": 4, "minor": 0 },
-  "nativeEntry": { "win32-x64": "build/win-x64/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" },
+  "nativeEntry": { "win32-x64": "build-msvc/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" },
   "pins": [
     { "id": "p1", "kind": "ANALOG_IN", "x": -16, "y": 0, "angle": 180, "length": 8, "label": "P1" },
     { "id": "p2", "kind": "ANALOG_IN", "x": -16, "y": 32, "angle": 180, "length": 8, "label": "P2" },

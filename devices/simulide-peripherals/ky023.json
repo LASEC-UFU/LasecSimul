@@ -1,8 +1,10 @@
-{
+﻿{
   "schemaVersion": 1,
   "typeId": "peripherals.ky023",
   "name": "KY-023 — Joystick Analógico",
   "language": "pt-BR",
+  "icon": "ky023",
+  "folderPath": ["Periféricos"],
   "translations": {
     "en": {
       "name": "KY-023 — Analog Joystick",
@@ -15,35 +17,37 @@
   },
   "abiVersion": { "major": 4, "minor": 0 },
   "nativeEntry": {
-    "win32-x64":        "build/win-x64/device.dll",
+    "win32-x64":        "build-msvc/device.dll",
     "linux-x64":        "build/linux-x64/device.so",
     "darwin-universal": "build/macos-universal/device.dylib"
   },
   "package": {
-    "width": 48,
-    "height": 56,
-    "border": true,
-    "background": { "kind": "color", "value": "#f8f0e8" },
+    "width": 56,
+    "height": 64,
+    "border": false,
+    "background": { "kind": "color", "value": "transparent" },
     "shapes": [
-      { "kind": "rect",    "x": 8,  "y": 8,  "w": 32, "h": 32, "stroke": "#555", "fill": "#ddd",  "strokeWidth": 1 },
-      { "kind": "ellipse", "cx": 24, "cy": 24, "rx": 10, "ry": 10, "stroke": "#888", "fill": "#bbb" },
-      { "kind": "ellipse", "cx": 24, "cy": 24, "rx": 4,  "ry": 4,  "stroke": "#666", "fill": "#999" },
-      { "kind": "text",    "x": 10, "y": 50, "value": "KY-023", "fontSize": 7, "color": "#444" }
+      { "kind": "rect",    "x": 0,  "y": 0,  "w": 56, "h": 56, "stroke": "#2a2c24", "fill": "#3A3C34", "strokeWidth": 2 },
+      { "kind": "rect",    "x": 8,  "y": 6,  "w": 40, "h": 40, "stroke": "#555",    "fill": "#4a4c44", "strokeWidth": 1 },
+      { "kind": "ellipse", "cx": 28, "cy": 26, "rx": 12, "ry": 12, "stroke": "#888", "fill": "#666" },
+      { "kind": "ellipse", "cx": 28, "cy": 26, "rx": 5,  "ry": 5,  "stroke": "#aaa", "fill": "#999" },
+      { "kind": "text",    "x": 8,  "y": 52, "value": "KY-023", "fontSize": 7, "color": "#ccc" }
     ],
+    "pinLabelColor": "#FAFAC8",
     "pins": [
-      { "id": "gnd", "x": 4,  "y": 56, "angle": 90, "length": 8, "label": "GND" },
-      { "id": "5v",  "x": 14, "y": 56, "angle": 90, "length": 8, "label": "+5V" },
-      { "id": "vrx", "x": 24, "y": 56, "angle": 90, "length": 8, "label": "VRX" },
-      { "id": "vry", "x": 34, "y": 56, "angle": 90, "length": 8, "label": "VRY" },
-      { "id": "sw",  "x": 44, "y": 56, "angle": 90, "length": 8, "label": "SW"  }
+      { "id": "gnd", "x": 6,  "y": 64, "angle": 90, "length": 8, "label": "GND" },
+      { "id": "5v",  "x": 18, "y": 64, "angle": 90, "length": 8, "label": "+5V" },
+      { "id": "vrx", "x": 30, "y": 64, "angle": 90, "length": 8, "label": "VRX" },
+      { "id": "vry", "x": 42, "y": 64, "angle": 90, "length": 8, "label": "VRY" },
+      { "id": "sw",  "x": 52, "y": 64, "angle": 90, "length": 8, "label": "SW"  }
     ]
   },
   "pins": [
-    { "id": "gnd", "kind": "POWER",       "x": 4,  "y": 56, "angle": 90, "length": 8, "label": "GND" },
-    { "id": "5v",  "kind": "POWER",       "x": 14, "y": 56, "angle": 90, "length": 8, "label": "+5V" },
-    { "id": "vrx", "kind": "ANALOG_OUT",  "x": 24, "y": 56, "angle": 90, "length": 8, "label": "VRX" },
-    { "id": "vry", "kind": "ANALOG_OUT",  "x": 34, "y": 56, "angle": 90, "length": 8, "label": "VRY" },
-    { "id": "sw",  "kind": "DIGITAL_OUT", "x": 44, "y": 56, "angle": 90, "length": 8, "label": "SW"  }
+    { "id": "gnd", "kind": "POWER",       "x": 6,  "y": 64, "angle": 90, "length": 8, "label": "GND" },
+    { "id": "5v",  "kind": "POWER",       "x": 18, "y": 64, "angle": 90, "length": 8, "label": "+5V" },
+    { "id": "vrx", "kind": "ANALOG_OUT",  "x": 30, "y": 64, "angle": 90, "length": 8, "label": "VRX" },
+    { "id": "vry", "kind": "ANALOG_OUT",  "x": 42, "y": 64, "angle": 90, "length": 8, "label": "VRY" },
+    { "id": "sw",  "kind": "DIGITAL_OUT", "x": 52, "y": 64, "angle": 90, "length": 8, "label": "SW"  }
   ],
   "properties": [
     { "id": "x_pos",      "label": "Posição X (0-1023)", "group": "Joystick", "valueKind": "number", "editor": "number", "default": 512, "min": 0, "max": 1023, "step": 1     },
