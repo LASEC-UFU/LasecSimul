@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "typeId": "sensors.ds18b20",
+  "name": "DS18B20 — Termômetro Digital 1-Wire",
+  "language": "pt-BR",
+  "translations": {
+    "en": {
+      "name": "DS18B20 — Digital Thermometer 1-Wire",
+      "properties": {
+        "rom":  { "label": "ROM Address (hex)", "group": "Sensor" },
+        "temp": { "label": "Temperature (°C)", "group": "Sensor" }
+      }
+    }
+  },
+  "abiVersion": { "major": 4, "minor": 0 },
+  "nativeEntry": {
+    "win32-x64":        "build/win-x64/device.dll",
+    "linux-x64":        "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
+  "package": {
+    "width": 48,
+    "height": 36,
+    "border": true,
+    "background": { "kind": "color", "value": "#1a1a1a" },
+    "shapes": [
+      { "kind": "rect",    "x": 0,  "y": 0,  "w": 48, "h": 36, "stroke": "#333", "fill": "#1a1a1a", "strokeWidth": 2 },
+      { "kind": "ellipse", "cx": 24, "cy": 14, "rx": 16, "ry": 12, "stroke": "#555", "fill": "#222" },
+      { "kind": "text",    "x": 8,  "y": 18, "value": "DS18B20", "fontSize": 7, "color": "#FAFAC8" },
+      { "kind": "text",    "x": 11, "y": 30, "value": "1-Wire",  "fontSize": 7, "color": "#888"    }
+    ],
+    "pinLabelColor": "#FAFAC8",
+    "pins": [
+      { "id": "gnd", "x": 8,  "y": 36, "angle": 90, "length": 8, "label": "GND" },
+      { "id": "dq",  "x": 24, "y": 36, "angle": 90, "length": 8, "label": "DQ"  },
+      { "id": "vcc", "x": 40, "y": 36, "angle": 90, "length": 8, "label": "VCC" }
+    ]
+  },
+  "pins": [
+    { "id": "gnd", "kind": "POWER",         "x": 8,  "y": 36, "angle": 90, "length": 8, "label": "GND" },
+    { "id": "dq",  "kind": "DIGITAL_BIDIR", "x": 24, "y": 36, "angle": 90, "length": 8, "label": "DQ"  },
+    { "id": "vcc", "kind": "POWER",         "x": 40, "y": 36, "angle": 90, "length": 8, "label": "VCC" }
+  ],
+  "properties": [
+    { "id": "rom",  "label": "Endereço ROM (hex)", "group": "Sensor", "valueKind": "string", "editor": "text",   "default": "28AA0000000000B1" },
+    { "id": "temp", "label": "Temperatura (°C)",   "group": "Sensor", "valueKind": "number", "editor": "number", "default": 25.0, "min": -55, "max": 125, "step": 0.0625, "unit": "°C" }
+  ],
+  "limits": { "stepTimeoutMs": 2, "expectedComplexity": "medium" }
+}

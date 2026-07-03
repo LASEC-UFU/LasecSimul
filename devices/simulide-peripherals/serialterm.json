@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "typeId": "peripherals.serialterm",
+  "name": "Terminal Serial",
+  "language": "pt-BR",
+  "translations": {
+    "en": {
+      "name": "Serial Terminal",
+      "properties": {
+        "baudrate":  { "label": "Baud rate",         "group": "Serial" },
+        "rx_buffer": { "label": "RX buffer (send)",  "group": "Serial" },
+        "tx_bytes":  { "label": "TX received (hex)", "group": "Serial" }
+      }
+    }
+  },
+  "abiVersion": { "major": 4, "minor": 0 },
+  "nativeEntry": {
+    "win32-x64":        "build/win-x64/device.dll",
+    "linux-x64":        "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
+  "package": {
+    "width": 72,
+    "height": 32,
+    "border": true,
+    "background": { "kind": "color", "value": "#1a1a1a" },
+    "shapes": [
+      { "kind": "rect", "x": 0,  "y": 0,  "w": 72, "h": 32, "stroke": "#333", "fill": "#1a1a1a", "strokeWidth": 2 },
+      { "kind": "text", "x": 10, "y": 14, "value": "SERIAL", "fontSize": 8, "color": "#00ff44" },
+      { "kind": "text", "x": 12, "y": 26, "value": "TERM",   "fontSize": 8, "color": "#00cc33" }
+    ],
+    "pinLabelColor": "#FAFAC8",
+    "pins": [
+      { "id": "tx", "x": 0, "y": 10, "angle": 180, "length": 8, "label": "TX" },
+      { "id": "rx", "x": 0, "y": 22, "angle": 180, "length": 8, "label": "RX" }
+    ]
+  },
+  "pins": [
+    { "id": "tx", "kind": "DIGITAL_OUT", "x": 0, "y": 10, "angle": 180, "length": 8, "label": "TX" },
+    { "id": "rx", "kind": "DIGITAL_IN",  "x": 0, "y": 22, "angle": 180, "length": 8, "label": "RX" }
+  ],
+  "properties": [
+    { "id": "baudrate",  "label": "Baud rate",           "group": "Serial", "valueKind": "number", "editor": "select", "default": 9600,
+      "options": [
+        {"label":"1200",   "value":1200},
+        {"label":"2400",   "value":2400},
+        {"label":"4800",   "value":4800},
+        {"label":"9600",   "value":9600},
+        {"label":"19200",  "value":19200},
+        {"label":"38400",  "value":38400},
+        {"label":"57600",  "value":57600},
+        {"label":"115200", "value":115200}
+      ]
+    },
+    { "id": "rx_buffer", "label": "Buffer RX (enviar)", "group": "Serial", "valueKind": "string", "editor": "text", "default": "" },
+    { "id": "tx_bytes",  "label": "TX recebido (hex)",  "group": "Serial", "valueKind": "string", "editor": "text", "default": "" }
+  ],
+  "limits": { "stepTimeoutMs": 1, "expectedComplexity": "medium" }
+}

@@ -95,7 +95,7 @@ function renderTreeNode(node: PaletteTreeNode, depth: number): HTMLElement {
   row.className = `palette-item palette-item--depth-${Math.min(depth, 3)}${node.disabled ? " palette-item--disabled" : " palette-item--button"}`;
   if (!node.disabled) {
     row.setAttribute("type", "button");
-    row.addEventListener("click", () => vscode?.postMessage({ type: "addComponent", typeId: node.typeId }));
+    row.addEventListener("click", () => vscode?.postMessage({ type: "startPlacingComponent", typeId: node.typeId }));
   }
 
   const icon = document.createElement("img");
@@ -181,7 +181,7 @@ function render(): void {
     if (event.key === "Enter" && visibleComponents.length === 1) {
       event.preventDefault();
       const singleMatch = visibleComponents[0];
-      if (singleMatch) vscode?.postMessage({ type: "addComponent", typeId: singleMatch.typeId });
+      if (singleMatch) vscode?.postMessage({ type: "startPlacingComponent", typeId: singleMatch.typeId });
     }
   });
 

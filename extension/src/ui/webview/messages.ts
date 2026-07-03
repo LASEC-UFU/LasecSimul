@@ -46,7 +46,7 @@ export interface InternalComponentSnapshot {
 export type HostToWebviewMessage =
   | { version: number; type: "init"; project: WebviewProjectState }
   | { version: number; type: "selectComponent"; componentId: string | null }
-  | { version: number; type: "requestAddComponent"; typeId: string }
+  | { version: number; type: "beginComponentPlacement"; typeId: string }
   | { version: number; type: "syncState"; project: WebviewProjectState }
   | { version: number; type: "componentReadout"; readoutsByComponentId: Record<string, ComponentReadoutValue> }
   | { version: number; type: "wireVoltages"; voltagesByWireId: Record<string, number> }

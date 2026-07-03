@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "typeId": "peripherals.esp01",
+  "name": "ESP-01 — Módulo Wi-Fi AT",
+  "language": "pt-BR",
+  "translations": {
+    "en": {
+      "name": "ESP-01 — Wi-Fi AT Module",
+      "properties": {
+        "baudrate": { "label": "Baud rate",         "group": "ESP-01" },
+        "debug":    { "label": "Debug AT commands", "group": "ESP-01" }
+      }
+    }
+  },
+  "abiVersion": { "major": 4, "minor": 0 },
+  "nativeEntry": {
+    "win32-x64":        "build/win-x64/device.dll",
+    "linux-x64":        "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
+  "package": {
+    "width": 56,
+    "height": 40,
+    "border": true,
+    "background": { "kind": "color", "value": "#1a2a1a" },
+    "shapes": [
+      { "kind": "rect",    "x": 0,  "y": 0,  "w": 56, "h": 40, "stroke": "#2a4a2a", "fill": "#1a2a1a", "strokeWidth": 2 },
+      { "kind": "rect",    "x": 8,  "y": 6,  "w": 40, "h": 16, "stroke": "#888",    "fill": "#aaa",    "strokeWidth": 1 },
+      { "kind": "text",    "x": 12, "y": 18, "value": "ESP-01", "fontSize": 8, "color": "#333" },
+      { "kind": "text",    "x": 10, "y": 34, "value": "WiFi AT","fontSize": 7, "color": "#6f6" }
+    ],
+    "pinLabelColor": "#FAFAC8",
+    "pins": [
+      { "id": "tx",  "x": 0,  "y": 8,  "angle": 180, "length": 8, "label": "TX"  },
+      { "id": "rx",  "x": 0,  "y": 20, "angle": 180, "length": 8, "label": "RX"  },
+      { "id": "rst", "x": 0,  "y": 32, "angle": 180, "length": 8, "label": "RST" },
+      { "id": "vcc", "x": 56, "y": 8,  "angle": 0,   "length": 8, "label": "VCC" },
+      { "id": "gnd", "x": 56, "y": 32, "angle": 0,   "length": 8, "label": "GND" }
+    ]
+  },
+  "pins": [
+    { "id": "tx",  "kind": "DIGITAL_OUT", "x": 0,  "y": 8,  "angle": 180, "length": 8, "label": "TX"  },
+    { "id": "rx",  "kind": "DIGITAL_IN",  "x": 0,  "y": 20, "angle": 180, "length": 8, "label": "RX"  },
+    { "id": "rst", "kind": "DIGITAL_IN",  "x": 0,  "y": 32, "angle": 180, "length": 8, "label": "RST" },
+    { "id": "vcc", "kind": "POWER",       "x": 56, "y": 8,  "angle": 0,   "length": 8, "label": "VCC" },
+    { "id": "gnd", "kind": "POWER",       "x": 56, "y": 32, "angle": 0,   "length": 8, "label": "GND" }
+  ],
+  "properties": [
+    { "id": "baudrate", "label": "Baud rate",           "group": "ESP-01", "valueKind": "number", "editor": "select", "default": 115200,
+      "options": [
+        {"label":"9600",   "value":9600},
+        {"label":"57600",  "value":57600},
+        {"label":"115200", "value":115200}
+      ]
+    },
+    { "id": "debug", "label": "Debug comandos AT", "group": "ESP-01", "valueKind": "bool", "editor": "bool", "default": false }
+  ],
+  "limits": { "stepTimeoutMs": 1, "expectedComplexity": "high" }
+}

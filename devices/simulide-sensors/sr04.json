@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "typeId": "sensors.sr04",
+  "name": "HC-SR04 — Sensor Ultrassônico",
+  "language": "pt-BR",
+  "translations": {
+    "en": {
+      "name": "HC-SR04 — Ultrasonic Distance Sensor",
+      "properties": {
+        "distance_m":  { "label": "Distance (m)",      "group": "Sensor" },
+        "use_analog":  { "label": "Analog voltage out","group": "Sensor" }
+      }
+    }
+  },
+  "abiVersion": { "major": 4, "minor": 0 },
+  "nativeEntry": {
+    "win32-x64":        "build/win-x64/device.dll",
+    "linux-x64":        "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
+  "package": {
+    "width": 168,
+    "height": 72,
+    "border": true,
+    "background": { "kind": "color", "value": "#e8f8e8" },
+    "shapes": [
+      { "kind": "ellipse", "cx": 48,  "cy": 36, "rx": 18, "ry": 18, "stroke": "#558", "fill": "#b0c4de" },
+      { "kind": "ellipse", "cx": 120, "cy": 36, "rx": 18, "ry": 18, "stroke": "#558", "fill": "#b0c4de" },
+      { "kind": "text",    "x": 60,   "y": 20,  "value": "HC-SR04",  "fontSize": 9,  "color": "#224" },
+      { "kind": "text",    "x": 36,   "y": 40,  "value": "T",        "fontSize": 10, "color": "#fff" },
+      { "kind": "text",    "x": 108,  "y": 40,  "value": "R",        "fontSize": 10, "color": "#fff" },
+      { "kind": "text",    "x": 61,   "y": 58,  "value": "Ultrasonic","fontSize": 7, "color": "#446" }
+    ],
+    "pins": [
+      { "id": "vcc",  "x": 40,  "y": 72, "angle": 90, "length": 8, "label": "VCC"  },
+      { "id": "trig", "x": 72,  "y": 72, "angle": 90, "length": 8, "label": "TRIG" },
+      { "id": "echo", "x": 104, "y": 72, "angle": 90, "length": 8, "label": "ECHO" },
+      { "id": "gnd",  "x": 136, "y": 72, "angle": 90, "length": 8, "label": "GND"  }
+    ]
+  },
+  "pins": [
+    { "id": "vcc",  "kind": "POWER",       "x": 40,  "y": 72, "angle": 90, "length": 8, "label": "VCC"  },
+    { "id": "trig", "kind": "DIGITAL_IN",  "x": 72,  "y": 72, "angle": 90, "length": 8, "label": "TRIG" },
+    { "id": "echo", "kind": "DIGITAL_OUT", "x": 104, "y": 72, "angle": 90, "length": 8, "label": "ECHO" },
+    { "id": "gnd",  "kind": "POWER",       "x": 136, "y": 72, "angle": 90, "length": 8, "label": "GND"  }
+  ],
+  "properties": [
+    { "id": "distance_m", "label": "Distância (m)",         "group": "Sensor", "valueKind": "number", "editor": "number", "default": 0.5,  "min": 0.02,  "max": 4.0, "step": 0.01, "unit": "m" },
+    { "id": "use_analog", "label": "Saída de tensão analógica", "group": "Sensor", "valueKind": "bool", "editor": "bool", "default": false }
+  ],
+  "limits": { "stepTimeoutMs": 2, "expectedComplexity": "medium" }
+}

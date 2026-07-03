@@ -732,7 +732,7 @@ Inclui o bloco `package` (corpo + pinos visuais) — schema completo e justifica
     "darwin-universal": "build/macos-universal/device.dylib"
   },
   "folderPath": ["Saídas", "Displays"],
-  "icon": "<svg viewBox=\"0 0 20 20\" xmlns=\"http://www.w3.org/2000/svg\"><rect x=\"3\" y=\"3\" width=\"14\" height=\"14\" fill=\"#1a1a1a\" stroke=\"#bbb\" stroke-width=\"1.5\"/><circle cx=\"7\" cy=\"7\" r=\"1.5\" fill=\"#f00\"/><circle cx=\"10\" cy=\"7\" r=\"1.5\" fill=\"#f00\"/><circle cx=\"13\" cy=\"7\" r=\"1.5\" fill=\"#f00\"/><circle cx=\"7\" cy=\"13\" r=\"1.5\" fill=\"#f00\"/><circle cx=\"10\" cy=\"13\" r=\"1.5\" fill=\"#f00\"/><circle cx=\"13\" cy=\"13\" r=\"1.5\" fill=\"#f00\"/></svg>",
+  "icon": "led-matrix",
   "package": {
     "width": 80, "height": 80, "border": true,
     "background": { "kind": "color", "value": "#1a1a1a" },
@@ -983,11 +983,17 @@ referência pendente (o problema que o SimulIDE evita ao embutir).
 Nenhum campo novo aqui é lido pelo Core — `package`/`pins[].angle|length|label|labelX|labelY` são consumidos **só pela
 Extension** (ela já lê `device.json` direto do disco para popular a paleta/painel de propriedades; não
 precisa pedir isso ao Core por IPC). O Core continua só enxergando `pins[].id/kind` (contrato elétrico).
-O campo `icon` do `device.json` (ver seção 15) carrega o SVG da miniatura da paleta **inline** — é um SVG
-compacto (20×20) diferente do corpo completo desenhado no canvas (`package`). A Extension detecta que o
-valor começa com `<svg` e converte para `data:image/svg+xml,...` URI, sem nenhum arquivo externo.
+O campo `icon` do `device.json` (ver seção 15) define a miniatura da paleta de dois modos:
+
+- **Nome curto** (ex: `"board"`, `"ic2"`, `"esp01"`) — a Extension resolve para
+  `extension/media/components/{dark,light}/<nome>.png` (PNG primeiro) ou `.svg`; é o modo preferido
+  quando o ícone já existe na biblioteca de mídia da extensão (importado do SimulIDE ou criado à parte).
+- **SVG inline** (valor começando com `<svg`) — a Extension converte para `data:image/svg+xml,...` URI
+  diretamente, sem nenhum arquivo externo; útil para ícones novos que ainda não têm arquivo PNG/SVG.
+
 `icon.svg` separado **não existe mais** — foi removido quando o princípio de arquivo único foi adotado
-(2026-07-02).
+(2026-07-02). O corpo completo desenhado no canvas continua sendo o campo `package` (diferente do ícone
+da paleta — mesma separação que o SimulIDE faz entre ícone da árvore e o pacote do componente).
 
 ### 21.3 Editor de pacote na Extension — mesmo princípio do SimulIDE, não uma ferramenta nova
 

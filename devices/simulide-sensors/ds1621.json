@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "typeId": "sensors.ds1621",
+  "name": "DS1621 — Termômetro Digital I2C",
+  "language": "pt-BR",
+  "translations": {
+    "en": {
+      "name": "DS1621 — Digital Thermometer I2C",
+      "properties": {
+        "temp": { "label": "Temperature (°C)", "group": "Sensor" },
+        "th":   { "label": "T-High setpoint",  "group": "Sensor" },
+        "tl":   { "label": "T-Low setpoint",   "group": "Sensor" }
+      }
+    }
+  },
+  "abiVersion": { "major": 4, "minor": 0 },
+  "nativeEntry": {
+    "win32-x64":        "build/win-x64/device.dll",
+    "linux-x64":        "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
+  "package": {
+    "width": 48,
+    "height": 56,
+    "border": true,
+    "background": { "kind": "color", "value": "#f0f0f0" },
+    "shapes": [
+      { "kind": "text", "x": 10, "y": 22, "value": "DS",    "fontSize": 8,  "color": "#FAFAC8" },
+      { "kind": "text", "x": 6,  "y": 34, "value": "1621",  "fontSize": 9,  "color": "#FAFAC8" },
+      { "kind": "text", "x": 7,  "y": 46, "value": "I2C T°","fontSize": 7,  "color": "#aaa"    },
+      { "kind": "rect", "x": 0,  "y": 0,  "w": 48, "h": 56, "stroke": "#333", "fill": "#1a1a2e", "strokeWidth": 2 }
+    ],
+    "pinLabelColor": "#FAFAC8",
+    "pins": [
+      { "id": "sda",  "x": 0,  "y": 8,  "angle": 180, "length": 8, "label": "SDA"  },
+      { "id": "scl",  "x": 0,  "y": 20, "angle": 180, "length": 8, "label": "SCL"  },
+      { "id": "tout", "x": 0,  "y": 32, "angle": 180, "length": 8, "label": "TOUT" },
+      { "id": "gnd",  "x": 0,  "y": 44, "angle": 180, "length": 8, "label": "GND"  },
+      { "id": "vdd",  "x": 48, "y": 8,  "angle": 0,   "length": 8, "label": "VDD"  },
+      { "id": "a2",   "x": 48, "y": 20, "angle": 0,   "length": 8, "label": "A2"   },
+      { "id": "a1",   "x": 48, "y": 32, "angle": 0,   "length": 8, "label": "A1"   },
+      { "id": "a0",   "x": 48, "y": 44, "angle": 0,   "length": 8, "label": "A0"   }
+    ]
+  },
+  "pins": [
+    { "id": "sda",  "kind": "DIGITAL_BIDIR", "x": 0,  "y": 8,  "angle": 180, "length": 8, "label": "SDA"  },
+    { "id": "scl",  "kind": "DIGITAL_IN",    "x": 0,  "y": 20, "angle": 180, "length": 8, "label": "SCL"  },
+    { "id": "tout", "kind": "DIGITAL_OUT",   "x": 0,  "y": 32, "angle": 180, "length": 8, "label": "TOUT" },
+    { "id": "gnd",  "kind": "POWER",         "x": 0,  "y": 44, "angle": 180, "length": 8, "label": "GND"  },
+    { "id": "vdd",  "kind": "POWER",         "x": 48, "y": 8,  "angle": 0,   "length": 8, "label": "VDD"  },
+    { "id": "a2",   "kind": "DIGITAL_IN",    "x": 48, "y": 20, "angle": 0,   "length": 8, "label": "A2"   },
+    { "id": "a1",   "kind": "DIGITAL_IN",    "x": 48, "y": 32, "angle": 0,   "length": 8, "label": "A1"   },
+    { "id": "a0",   "kind": "DIGITAL_IN",    "x": 48, "y": 44, "angle": 0,   "length": 8, "label": "A0"   }
+  ],
+  "properties": [
+    { "id": "temp", "label": "Temperatura (°C)", "group": "Sensor", "valueKind": "number", "editor": "number", "default": 25,  "min": -55, "max": 125, "step": 0.5, "unit": "°C" },
+    { "id": "th",   "label": "Limite TH (°C)",  "group": "Sensor", "valueKind": "number", "editor": "number", "default": 80,  "min": -55, "max": 125, "step": 1,   "unit": "°C" },
+    { "id": "tl",   "label": "Limite TL (°C)",  "group": "Sensor", "valueKind": "number", "editor": "number", "default": 20,  "min": -55, "max": 125, "step": 1,   "unit": "°C" }
+  ],
+  "limits": { "stepTimeoutMs": 2, "expectedComplexity": "medium" }
+}

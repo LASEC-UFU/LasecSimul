@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "typeId": "peripherals.touchpad",
+  "name": "TouchPad — Tela Sensível ao Toque",
+  "language": "pt-BR",
+  "translations": {
+    "en": {
+      "name": "TouchPad — Touch Screen",
+      "properties": {
+        "width":   { "label": "Width (px)",  "group": "TouchPad" },
+        "height":  { "label": "Height (px)", "group": "TouchPad" },
+        "touch_x": { "label": "Touch X",    "group": "TouchPad" },
+        "touch_y": { "label": "Touch Y",    "group": "TouchPad" },
+        "pressed": { "label": "Pressed",    "group": "TouchPad" }
+      }
+    }
+  },
+  "abiVersion": { "major": 4, "minor": 0 },
+  "nativeEntry": {
+    "win32-x64":        "build/win-x64/device.dll",
+    "linux-x64":        "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
+  "package": {
+    "width": 120,
+    "height": 160,
+    "border": true,
+    "background": { "kind": "color", "value": "#e8f8ff" },
+    "shapes": [
+      { "kind": "rect", "x": 8,   "y": 8,   "w": 104, "h": 120, "stroke": "#aac", "fill": "#d0e8f8", "strokeWidth": 2 },
+      { "kind": "line", "x1": 60, "y1": 8,  "x2": 60, "y2": 128, "stroke": "#99b" },
+      { "kind": "line", "x1": 8,  "y1": 68, "x2": 112,"y2": 68,  "stroke": "#99b" },
+      { "kind": "text", "x": 30,  "y": 148, "value": "TouchPad", "fontSize": 9, "color": "#335" }
+    ],
+    "pins": [
+      { "id": "x1",  "x": 20,  "y": 160, "angle": 90, "length": 8, "label": "X1" },
+      { "id": "x2",  "x": 50,  "y": 160, "angle": 90, "length": 8, "label": "X2" },
+      { "id": "y1",  "x": 80,  "y": 160, "angle": 90, "length": 8, "label": "Y1" },
+      { "id": "y2",  "x": 110, "y": 160, "angle": 90, "length": 8, "label": "Y2" }
+    ]
+  },
+  "pins": [
+    { "id": "x1",  "kind": "ANALOG_IN", "x": 20,  "y": 160, "angle": 90, "length": 8, "label": "X1" },
+    { "id": "x2",  "kind": "ANALOG_IN", "x": 50,  "y": 160, "angle": 90, "length": 8, "label": "X2" },
+    { "id": "y1",  "kind": "ANALOG_IN", "x": 80,  "y": 160, "angle": 90, "length": 8, "label": "Y1" },
+    { "id": "y2",  "kind": "ANALOG_IN", "x": 110, "y": 160, "angle": 90, "length": 8, "label": "Y2" }
+  ],
+  "properties": [
+    { "id": "width",   "label": "Largura (px)",      "group": "TouchPad", "valueKind": "number", "editor": "number", "default": 240,  "min": 10, "max": 4096, "step": 1  },
+    { "id": "height",  "label": "Altura (px)",       "group": "TouchPad", "valueKind": "number", "editor": "number", "default": 320,  "min": 10, "max": 4096, "step": 1  },
+    { "id": "touch_x", "label": "Toque X",           "group": "TouchPad", "valueKind": "number", "editor": "number", "default": 120,  "min": 0,  "max": 4095, "step": 1  },
+    { "id": "touch_y", "label": "Toque Y",           "group": "TouchPad", "valueKind": "number", "editor": "number", "default": 160,  "min": 0,  "max": 4095, "step": 1  },
+    { "id": "pressed", "label": "Toque ativo",       "group": "TouchPad", "valueKind": "bool",   "editor": "bool",   "default": false }
+  ],
+  "limits": { "stepTimeoutMs": 4, "expectedComplexity": "low" }
+}

@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "typeId": "peripherals.ky040",
+  "name": "KY-040 — Encoder Rotativo",
+  "language": "pt-BR",
+  "translations": {
+    "en": {
+      "name": "KY-040 — Rotary Encoder",
+      "properties": {
+        "position":   { "label": "Current position", "group": "Encoder" },
+        "steps_rev":  { "label": "Steps/revolution", "group": "Encoder" },
+        "sw_pressed": { "label": "Button pressed",   "group": "Encoder" }
+      }
+    }
+  },
+  "abiVersion": { "major": 4, "minor": 0 },
+  "nativeEntry": {
+    "win32-x64":        "build/win-x64/device.dll",
+    "linux-x64":        "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
+  "package": {
+    "width": 48,
+    "height": 64,
+    "border": true,
+    "background": { "kind": "color", "value": "#f0f0f8" },
+    "shapes": [
+      { "kind": "rect",    "x": 8,  "y": 8,  "w": 32, "h": 32, "stroke": "#555", "fill": "#ddd", "strokeWidth": 1 },
+      { "kind": "ellipse", "cx": 24, "cy": 24, "rx": 12, "ry": 12, "stroke": "#777", "fill": "#aaa" },
+      { "kind": "line",    "x1": 24, "y1": 12, "x2": 24, "y2": 8, "stroke": "#333" },
+      { "kind": "text",    "x": 10,  "y": 58,  "value": "KY-040", "fontSize": 7, "color": "#444" }
+    ],
+    "pins": [
+      { "id": "gnd", "x": 4,  "y": 64, "angle": 90, "length": 8, "label": "GND" },
+      { "id": "5v",  "x": 14, "y": 64, "angle": 90, "length": 8, "label": "+5V" },
+      { "id": "sw",  "x": 24, "y": 64, "angle": 90, "length": 8, "label": "SW"  },
+      { "id": "dt",  "x": 34, "y": 64, "angle": 90, "length": 8, "label": "DT"  },
+      { "id": "clk", "x": 44, "y": 64, "angle": 90, "length": 8, "label": "CLK" }
+    ]
+  },
+  "pins": [
+    { "id": "gnd", "kind": "POWER",       "x": 4,  "y": 64, "angle": 90, "length": 8, "label": "GND" },
+    { "id": "5v",  "kind": "POWER",       "x": 14, "y": 64, "angle": 90, "length": 8, "label": "+5V" },
+    { "id": "sw",  "kind": "DIGITAL_OUT", "x": 24, "y": 64, "angle": 90, "length": 8, "label": "SW"  },
+    { "id": "dt",  "kind": "DIGITAL_OUT", "x": 34, "y": 64, "angle": 90, "length": 8, "label": "DT"  },
+    { "id": "clk", "kind": "DIGITAL_OUT", "x": 44, "y": 64, "angle": 90, "length": 8, "label": "CLK" }
+  ],
+  "properties": [
+    { "id": "position",   "label": "Posição atual",      "group": "Encoder", "valueKind": "number", "editor": "number", "default": 0,   "min": -2147483648, "max": 2147483647, "step": 1 },
+    { "id": "steps_rev",  "label": "Passos/revolução",   "group": "Encoder", "valueKind": "number", "editor": "number", "default": 20,  "min": 1,           "max": 1024,       "step": 1 },
+    { "id": "sw_pressed", "label": "Botão pressionado",  "group": "Encoder", "valueKind": "bool",   "editor": "bool",   "default": false }
+  ],
+  "limits": { "stepTimeoutMs": 2, "expectedComplexity": "low" }
+}

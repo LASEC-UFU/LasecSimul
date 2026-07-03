@@ -55,7 +55,23 @@
     { "typeId": "logic.adc", "manifest": "simulide-logic/adc.json" },
     { "typeId": "logic.dac", "manifest": "simulide-logic/dac.json" },
     { "typeId": "logic.seven_segment_bcd", "manifest": "simulide-logic/seven_segment_bcd.json" },
-    { "typeId": "logic.lm555", "manifest": "simulide-logic/lm555.json" }
+    { "typeId": "logic.lm555", "manifest": "simulide-logic/lm555.json" },
+    { "typeId": "sensors.ldr",       "manifest": "simulide-sensors/ldr.json"       },
+    { "typeId": "sensors.thermistor","manifest": "simulide-sensors/thermistor.json" },
+    { "typeId": "sensors.rtd",       "manifest": "simulide-sensors/rtd.json"       },
+    { "typeId": "sensors.strain",    "manifest": "simulide-sensors/strain.json"    },
+    { "typeId": "sensors.sr04",      "manifest": "simulide-sensors/sr04.json"      },
+    { "typeId": "sensors.dht22",     "manifest": "simulide-sensors/dht22.json"     },
+    { "typeId": "sensors.ds1621",    "manifest": "simulide-sensors/ds1621.json"    },
+    { "typeId": "sensors.ds18b20",   "manifest": "simulide-sensors/ds18b20.json"   },
+    { "typeId": "peripherals.ky023",      "manifest": "simulide-peripherals/ky023.json"      },
+    { "typeId": "peripherals.ky040",      "manifest": "simulide-peripherals/ky040.json"      },
+    { "typeId": "peripherals.touchpad",   "manifest": "simulide-peripherals/touchpad.json"   },
+    { "typeId": "peripherals.ds1307",     "manifest": "simulide-peripherals/ds1307.json"     },
+    { "typeId": "peripherals.serialterm", "manifest": "simulide-peripherals/serialterm.json" },
+    { "typeId": "peripherals.serialport", "manifest": "simulide-peripherals/serialport.json" },
+    { "typeId": "peripherals.sdcard",     "manifest": "simulide-peripherals/sdcard.json"     },
+    { "typeId": "peripherals.esp01",      "manifest": "simulide-peripherals/esp01.json"      }
   ],
   "checksums": {
     "example-blinker/build/win-x64/device.dll": "PREENCHER_NO_BUILD_SHA256"

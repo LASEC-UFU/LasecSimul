@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "typeId": "peripherals.sdcard",
+  "name": "Cartão SD (SPI)",
+  "language": "pt-BR",
+  "translations": {
+    "en": {
+      "name": "SD Card (SPI)",
+      "properties": {
+        "file": { "label": "SD image file path", "group": "SD Card" }
+      }
+    }
+  },
+  "abiVersion": { "major": 4, "minor": 0 },
+  "nativeEntry": {
+    "win32-x64":        "build/win-x64/device.dll",
+    "linux-x64":        "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
+  "package": {
+    "width": 64,
+    "height": 40,
+    "border": true,
+    "background": { "kind": "color", "value": "#f8f8e8" },
+    "shapes": [
+      { "kind": "rect",    "x": 20, "y": 4,  "w": 38, "h": 30, "stroke": "#888", "fill": "#e8e8d8", "strokeWidth": 2 },
+      { "kind": "text",    "x": 22, "y": 18, "value": "SD",   "fontSize": 10, "color": "#444" },
+      { "kind": "text",    "x": 22, "y": 30, "value": "SPI",  "fontSize": 7,  "color": "#666" }
+    ],
+    "pins": [
+      { "id": "cs",  "x": 0, "y": 8,  "angle": 180, "length": 8, "label": "CS"  },
+      { "id": "di",  "x": 0, "y": 18, "angle": 180, "length": 8, "label": "DI"  },
+      { "id": "ck",  "x": 0, "y": 28, "angle": 180, "length": 8, "label": "CK"  },
+      { "id": "do",  "x": 0, "y": 38, "angle": 180, "length": 8, "label": "DO"  }
+    ]
+  },
+  "pins": [
+    { "id": "cs",  "kind": "DIGITAL_IN",  "x": 0, "y": 8,  "angle": 180, "length": 8, "label": "CS"  },
+    { "id": "di",  "kind": "DIGITAL_IN",  "x": 0, "y": 18, "angle": 180, "length": 8, "label": "DI"  },
+    { "id": "ck",  "kind": "DIGITAL_IN",  "x": 0, "y": 28, "angle": 180, "length": 8, "label": "CK"  },
+    { "id": "do",  "kind": "DIGITAL_OUT", "x": 0, "y": 38, "angle": 180, "length": 8, "label": "DO"  }
+  ],
+  "properties": [
+    { "id": "file", "label": "Arquivo de imagem SD", "group": "SD Card", "valueKind": "string", "editor": "text", "default": "" }
+  ],
+  "limits": { "stepTimeoutMs": 1, "expectedComplexity": "high" }
+}

@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "typeId": "peripherals.ds1307",
+  "name": "DS1307 — RTC I2C",
+  "language": "pt-BR",
+  "translations": {
+    "en": {
+      "name": "DS1307 — Real Time Clock I2C",
+      "properties": {
+        "set_time": { "label": "Set time (ISO 8601)", "group": "RTC" }
+      }
+    }
+  },
+  "abiVersion": { "major": 4, "minor": 0 },
+  "nativeEntry": {
+    "win32-x64":        "build/win-x64/device.dll",
+    "linux-x64":        "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
+  "package": {
+    "width": 56,
+    "height": 40,
+    "border": true,
+    "background": { "kind": "color", "value": "#1a1a2e" },
+    "shapes": [
+      { "kind": "rect", "x": 0, "y": 0, "w": 56, "h": 40, "stroke": "#333", "fill": "#1a1a2e", "strokeWidth": 2 },
+      { "kind": "text", "x": 8, "y": 18, "value": "DS1307", "fontSize": 8, "color": "#FAFAC8" },
+      { "kind": "text", "x": 14, "y": 30, "value": "RTC I2C", "fontSize": 7, "color": "#aaa"  }
+    ],
+    "pinLabelColor": "#FAFAC8",
+    "pins": [
+      { "id": "sda",  "x": 0,  "y": 8,  "angle": 180, "length": 8, "label": "SDA"  },
+      { "id": "scl",  "x": 0,  "y": 20, "angle": 180, "length": 8, "label": "SCL"  },
+      { "id": "sqw",  "x": 0,  "y": 32, "angle": 180, "length": 8, "label": "SQW"  },
+      { "id": "vcc",  "x": 56, "y": 8,  "angle": 0,   "length": 8, "label": "VCC"  },
+      { "id": "bat",  "x": 56, "y": 20, "angle": 0,   "length": 8, "label": "VBAT" },
+      { "id": "gnd",  "x": 56, "y": 32, "angle": 0,   "length": 8, "label": "GND"  }
+    ]
+  },
+  "pins": [
+    { "id": "sda",  "kind": "DIGITAL_BIDIR", "x": 0,  "y": 8,  "angle": 180, "length": 8, "label": "SDA"  },
+    { "id": "scl",  "kind": "DIGITAL_IN",    "x": 0,  "y": 20, "angle": 180, "length": 8, "label": "SCL"  },
+    { "id": "sqw",  "kind": "DIGITAL_OUT",   "x": 0,  "y": 32, "angle": 180, "length": 8, "label": "SQW"  },
+    { "id": "vcc",  "kind": "POWER",         "x": 56, "y": 8,  "angle": 0,   "length": 8, "label": "VCC"  },
+    { "id": "bat",  "kind": "POWER",         "x": 56, "y": 20, "angle": 0,   "length": 8, "label": "VBAT" },
+    { "id": "gnd",  "kind": "POWER",         "x": 56, "y": 32, "angle": 0,   "length": 8, "label": "GND"  }
+  ],
+  "properties": [
+    { "id": "set_time", "label": "Definir hora (ISO 8601)", "group": "RTC", "valueKind": "string", "editor": "text", "default": "2024-01-01T00:00:00" }
+  ],
+  "limits": { "stepTimeoutMs": 2, "expectedComplexity": "medium" }
+}

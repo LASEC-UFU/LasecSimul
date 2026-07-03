@@ -2668,7 +2668,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const addPaletteComponent = (typeId: string) => {
     if (!schematicPanel) openSchematicEditor(context.extensionUri);
-    schematicPanel?.postMessage({ version: 1, type: "requestAddComponent", typeId });
+    schematicPanel?.postMessage({ version: 1, type: "beginComponentPlacement", typeId });
   };
 
   paletteViewProvider = new ComponentPaletteViewProvider(

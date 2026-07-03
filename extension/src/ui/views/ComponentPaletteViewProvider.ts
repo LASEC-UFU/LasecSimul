@@ -16,7 +16,7 @@ interface PaletteHostState {
 
 type PaletteWebviewMessage =
   | { type: "webviewReady" }
-  | { type: "addComponent"; typeId: string }
+  | { type: "startPlacingComponent"; typeId: string }
   | { type: "removeRegistered"; sourceId: string }
   | { type: "editSymbol"; sourceId: string };
 
@@ -78,7 +78,7 @@ export class ComponentPaletteViewProvider implements vscode.WebviewViewProvider 
       void this.postState();
       return;
     }
-    if (message.type === "addComponent") {
+    if (message.type === "startPlacingComponent") {
       this.onAddComponent(message.typeId);
       return;
     }

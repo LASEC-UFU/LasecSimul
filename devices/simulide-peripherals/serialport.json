@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "typeId": "peripherals.serialport",
+  "name": "Porta Serial (COM/TTY)",
+  "language": "pt-BR",
+  "translations": {
+    "en": {
+      "name": "Serial Port (COM/TTY)",
+      "properties": {
+        "port_name": { "label": "Port name (COM1/ttyUSB0)", "group": "Serial" },
+        "baudrate":  { "label": "Baud rate",                "group": "Serial" },
+        "auto_open": { "label": "Auto open on simulate",    "group": "Serial" }
+      }
+    }
+  },
+  "abiVersion": { "major": 4, "minor": 0 },
+  "nativeEntry": {
+    "win32-x64":        "build/win-x64/device.dll",
+    "linux-x64":        "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
+  "package": {
+    "width": 160,
+    "height": 32,
+    "border": true,
+    "background": { "kind": "color", "value": "#1e1e2e" },
+    "shapes": [
+      { "kind": "rect", "x": 0,   "y": 0,  "w": 160, "h": 32, "stroke": "#333", "fill": "#1e1e2e", "strokeWidth": 2 },
+      { "kind": "rect", "x": 100, "y": 4,  "w": 50,  "h": 24, "stroke": "#555", "fill": "#333",    "strokeWidth": 1 },
+      { "kind": "text", "x": 16,  "y": 14, "value": "SERIAL PORT", "fontSize": 8, "color": "#00aaff" },
+      { "kind": "text", "x": 105, "y": 20, "value": "DB9",         "fontSize": 8, "color": "#88aacc" }
+    ],
+    "pinLabelColor": "#FAFAC8",
+    "pins": [
+      { "id": "tx", "x": 0, "y": 10, "angle": 180, "length": 8, "label": "TX" },
+      { "id": "rx", "x": 0, "y": 22, "angle": 180, "length": 8, "label": "RX" }
+    ]
+  },
+  "pins": [
+    { "id": "tx", "kind": "DIGITAL_OUT", "x": 0, "y": 10, "angle": 180, "length": 8, "label": "TX" },
+    { "id": "rx", "kind": "DIGITAL_IN",  "x": 0, "y": 22, "angle": 180, "length": 8, "label": "RX" }
+  ],
+  "properties": [
+    { "id": "port_name", "label": "Nome da porta",          "group": "Serial", "valueKind": "string", "editor": "text",   "default": "COM1"  },
+    { "id": "baudrate",  "label": "Baud rate",              "group": "Serial", "valueKind": "number", "editor": "select", "default": 9600,
+      "options": [
+        {"label":"1200",   "value":1200},
+        {"label":"2400",   "value":2400},
+        {"label":"4800",   "value":4800},
+        {"label":"9600",   "value":9600},
+        {"label":"19200",  "value":19200},
+        {"label":"38400",  "value":38400},
+        {"label":"57600",  "value":57600},
+        {"label":"115200", "value":115200}
+      ]
+    },
+    { "id": "auto_open", "label": "Abrir automaticamente", "group": "Serial", "valueKind": "bool",   "editor": "bool",   "default": true  }
+  ],
+  "limits": { "stepTimeoutMs": 1, "expectedComplexity": "high" }
+}

@@ -288,6 +288,10 @@ let isDraggingComponent = false;
 type ExternalLabelKind = "id" | "value";
 let selectedTextLabel: { componentId: string; kind: ExternalLabelKind } | undefined;
 
+// Modo de posicionamento de componente (SimulIDE-style: clicar na paleta → mover → clicar no canvas).
+let placingTypeId: string | null = null;
+let placementGhostEl: HTMLElement | null = null;
+
 const propertyDialog = document.createElement("dialog");
 propertyDialog.className = "property-dialog";
 document.body.appendChild(propertyDialog);
@@ -302,6 +306,19 @@ const contextMenu = document.createElement("div");
 contextMenu.className = "context-menu";
 contextMenu.hidden = true;
 document.body.appendChild(contextMenu);
+
+// Ghost do modo de posicionamento: posição absoluta na tela, segue o cursor.
+document.addEventListener("pointermove", (event) => {
+  if (!placingTypeId || !placementGhostEl) return;
+  const zoom = state.viewport.zoom || 1;
+  const box = componentBox(placingTypeId, {});
+  const w = box.width * zoom;
+  const h = box.height * zoom;
+  placementGhostEl.style.left = `${event.clientX - w / 2}px`;
+  placementGhostEl.style.top = `${event.clientY - h / 2}px`;
+  placementGhostEl.style.width = `${w}px`;
+  placementGhostEl.style.height = `${h}px`;
+});
 
 /** Popups de submenu (ver `renderContextMenuItems`) são anexados direto em `document.body`, fora de
  * `contextMenu` (pra não ficarem limitados pela largura/altura do menu pai) -- por isso precisam
@@ -1113,6 +1130,19 @@ function render(): void {
   });
   canvas.addEventListener("click", (event) => {
     hideContextMenu();
+    if (placingTypeId) {
+      const pt = eventToCanvasPoint(event, canvas);
+      const snappedX = snapCoordinate(pt.x, WIRE_GRID_SIZE);
+      const snappedY = snapCoordinate(pt.y, WIRE_GRID_SIZE);
+      const newComponents = componentsToAddForTypeId(placingTypeId);
+      for (const comp of newComponents) { comp.x = snappedX; comp.y = snappedY; }
+      state = { ...state, components: [...state.components, ...newComponents] };
+      vscode?.setState(state);
+      persistState();
+      exitPlacementMode();
+      render();
+      return;
+    }
     if (marqueeJustFinished) {
       marqueeJustFinished = false;
       return;
@@ -3790,14 +3820,8 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     refreshOpenPropertyDialog();
   }
 
-  if (message.type === "requestAddComponent") {
-    state = {
-      ...state,
-      components: [...state.components, ...componentsToAddForTypeId(message.typeId)],
-    };
-    vscode?.setState(state);
-    persistState();
-    render();
+  if (message.type === "beginComponentPlacement") {
+    enterPlacementMode(message.typeId);
   }
 
   if (message.type === "selectComponent") {
@@ -3882,6 +3906,25 @@ function nextIndexedLabel(typeId: string, baseLabel: string, components: Webview
  * ao SimulIDE real (texto de pino nunca presa a um deslocamento fixo). Posição inicial = mesma
  * fórmula padrão do renderizador de leitura (ponta do lead + 9 unidades na direção do ângulo). Todo
  * outro typeId continua devolvendo só o próprio componente, sem comportamento especial. */
+function enterPlacementMode(typeId: string): void {
+  placingTypeId = typeId;
+  if (!placementGhostEl) {
+    placementGhostEl = document.createElement("div");
+    placementGhostEl.className = "placement-ghost";
+    document.body.appendChild(placementGhostEl);
+  }
+  const descriptor = state.catalog.find((e) => e.typeId === typeId);
+  placementGhostEl.textContent = descriptor?.label ?? typeId;
+  placementGhostEl.classList.add("visible");
+  document.body.style.cursor = "crosshair";
+}
+
+function exitPlacementMode(): void {
+  placingTypeId = null;
+  placementGhostEl?.classList.remove("visible");
+  document.body.style.cursor = "";
+}
+
 function componentsToAddForTypeId(typeId: string): WebviewComponentModel[] {
   const component = makeComponentFromTypeId(typeId);
   if (typeId !== "other.package_pin") return [component];
@@ -4213,6 +4256,7 @@ window.addEventListener("keydown", (event) => {
 
   if (event.key === "Escape") {
     hideContextMenu();
+    if (placingTypeId) { exitPlacementMode(); return; }
   }
 
   if (event.key === "Escape" && state.pendingConnection) {

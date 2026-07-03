@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "typeId": "sensors.ldr",
+  "name": "LDR — Fotorresistor",
+  "language": "pt-BR",
+  "translations": {
+    "en": {
+      "name": "LDR — Light Dependent Resistor",
+      "properties": {
+        "lux":   { "label": "Illuminance (lux)", "group": "Main"       },
+        "min_lux":{ "label": "Min Lux",          "group": "Main"       },
+        "max_lux":{ "label": "Max Lux",          "group": "Main"       },
+        "gamma": { "label": "Exponent γ",        "group": "Parameters" },
+        "r1":    { "label": "R1 (Ω)",            "group": "Parameters" }
+      }
+    }
+  },
+  "abiVersion": { "major": 4, "minor": 0 },
+  "nativeEntry": {
+    "win32-x64":        "build/win-x64/device.dll",
+    "linux-x64":        "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
+  "package": {
+    "width": 56,
+    "height": 24,
+    "border": false,
+    "background": { "kind": "color", "value": "transparent" },
+    "shapes": [
+      { "kind": "line", "x1": 10, "y1": 16, "x2": 14, "y2": 16, "stroke": "#444" },
+      { "kind": "line", "x1": 14, "y1": 16, "x2": 17, "y2": 10, "stroke": "#444" },
+      { "kind": "line", "x1": 17, "y1": 10, "x2": 23, "y2": 22, "stroke": "#444" },
+      { "kind": "line", "x1": 23, "y1": 22, "x2": 28, "y2": 10, "stroke": "#444" },
+      { "kind": "line", "x1": 28, "y1": 10, "x2": 33, "y2": 22, "stroke": "#444" },
+      { "kind": "line", "x1": 33, "y1": 22, "x2": 39, "y2": 10, "stroke": "#444" },
+      { "kind": "line", "x1": 39, "y1": 10, "x2": 42, "y2": 16, "stroke": "#444" },
+      { "kind": "line", "x1": 42, "y1": 16, "x2": 46, "y2": 16, "stroke": "#444" },
+      { "kind": "line", "x1": 19, "y1": 2,  "x2": 23, "y2": 7,  "stroke": "#888" },
+      { "kind": "line", "x1": 23, "y1": 7,  "x2": 21, "y2": 5,  "stroke": "#888" },
+      { "kind": "line", "x1": 23, "y1": 7,  "x2": 25, "y2": 5,  "stroke": "#888" },
+      { "kind": "line", "x1": 27, "y1": 2,  "x2": 31, "y2": 7,  "stroke": "#888" },
+      { "kind": "line", "x1": 31, "y1": 7,  "x2": 29, "y2": 5,  "stroke": "#888" },
+      { "kind": "line", "x1": 31, "y1": 7,  "x2": 33, "y2": 5,  "stroke": "#888" }
+    ],
+    "pins": [
+      { "id": "a", "x": 0,  "y": 16, "angle": 180, "length": 10, "label": "" },
+      { "id": "b", "x": 56, "y": 16, "angle": 0,   "length": 10, "label": "" }
+    ]
+  },
+  "pins": [
+    { "id": "a", "kind": "ANALOG_IN", "x": 0,  "y": 16, "angle": 180, "length": 10, "label": "" },
+    { "id": "b", "kind": "ANALOG_IN", "x": 56, "y": 16, "angle": 0,   "length": 10, "label": "" }
+  ],
+  "properties": [
+    { "id": "lux",     "label": "Iluminância (lux)", "group": "Main",       "valueKind": "number", "editor": "number", "default": 1,      "min": 0.001, "max": 100000,  "step": 1,    "unit": "lux" },
+    { "id": "min_lux", "label": "Mín. Lux",          "group": "Main",       "valueKind": "number", "editor": "number", "default": 0.001,  "min": 0.001, "max": 100000,  "step": 1,    "unit": "lux" },
+    { "id": "max_lux", "label": "Máx. Lux",          "group": "Main",       "valueKind": "number", "editor": "number", "default": 100000, "min": 1,     "max": 1000000, "step": 1,    "unit": "lux" },
+    { "id": "gamma",   "label": "Expoente γ",        "group": "Parameters", "valueKind": "number", "editor": "number", "default": 0.8582, "min": 0.1,   "max": 2.0,     "step": 0.01           },
+    { "id": "r1",      "label": "R1 (Ω)",            "group": "Parameters", "valueKind": "number", "editor": "number", "default": 127410, "min": 1,     "max": 10000000,"step": 1,    "unit": "Ω" }
+  ],
+  "limits": { "stepTimeoutMs": 4, "expectedComplexity": "low" }
+}
