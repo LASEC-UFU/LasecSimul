@@ -367,9 +367,14 @@ function resolveRegisteredItem(source: RegisteredSource, extensionPath: string, 
         : (packageDescriptor
           ? packageDescriptor.pins.length
           : (typeof lsconfig?.pinCount === "number" && lsconfig.pinCount > 0 ? lsconfig.pinCount : 2));
+      const manifestFolderPath = Array.isArray(json.folderPath)
+        ? (json.folderPath as unknown[]).filter((s): s is string => typeof s === "string")
+        : undefined;
       const folderPath = resolveFolderPath({
         ...source,
-        folderPath: Array.isArray(lsconfig?.folderPath) && lsconfig.folderPath.length > 0 ? lsconfig.folderPath : source.folderPath,
+        folderPath: Array.isArray(lsconfig?.folderPath) && lsconfig.folderPath.length > 0
+          ? lsconfig.folderPath
+          : (manifestFolderPath && manifestFolderPath.length > 0 ? manifestFolderPath : source.folderPath),
       }, localizedRegisteredFolder(source.kind, language));
       const category = folderPath[0] ?? localizedRegisteredRoot(language);
       const subcategory = folderPath.length > 1 ? folderPath[1] : undefined;
@@ -378,7 +383,9 @@ function resolveRegisteredItem(source: RegisteredSource, extensionPath: string, 
         : (source.libraryPath
           ? normalizeAbsolutePath(extensionPath, source.libraryPath)
           : inferLibraryPathForDevice(absoluteFilePath));
-      const iconFilePath = typeof lsconfig?.iconPath === "string" && lsconfig.iconPath.trim()
+      const manifestIcon = typeof json.icon === "string" ? json.icon.trim() : undefined;
+      const iconSvgInline = manifestIcon?.startsWith("<svg") ? manifestIcon : undefined;
+      const iconFilePath = !iconSvgInline && typeof lsconfig?.iconPath === "string" && lsconfig.iconPath.trim()
         ? normalizeExistingFilePath(path.dirname(absoluteLsconfigPath ?? absoluteFilePath), lsconfig.iconPath)
         : undefined;
       const entry: WebviewComponentCatalogEntry = {
@@ -390,8 +397,9 @@ function resolveRegisteredItem(source: RegisteredSource, extensionPath: string, 
         category,
         subcategory,
         folderPath,
-        icon: lsconfig?.icon,
+        icon: lsconfig?.icon ?? (!iconSvgInline ? manifestIcon : undefined),
         iconFilePath,
+        iconSvgInline,
         symbolSvg: lsconfig?.symbolSvg,
         package: packageDescriptor,
         logicSymbolPackage,
@@ -446,16 +454,23 @@ function resolveRegisteredItem(source: RegisteredSource, extensionPath: string, 
       : (packageDescriptor
         ? packageDescriptor.pins.length
         : (typeof lsconfig?.pinCount === "number" && lsconfig.pinCount > 0 ? lsconfig.pinCount : packagePins));
+    const manifestFolderPath2 = Array.isArray(json.folderPath)
+      ? (json.folderPath as unknown[]).filter((s): s is string => typeof s === "string")
+      : undefined;
     const folderPath = resolveFolderPath({
       ...source,
-      folderPath: Array.isArray(lsconfig?.folderPath) && lsconfig.folderPath.length > 0 ? lsconfig.folderPath : source.folderPath,
+      folderPath: Array.isArray(lsconfig?.folderPath) && lsconfig.folderPath.length > 0
+        ? lsconfig.folderPath
+        : (manifestFolderPath2 && manifestFolderPath2.length > 0 ? manifestFolderPath2 : source.folderPath),
     }, localizedRegisteredFolder("subcircuit-file", language));
     const category = folderPath[0] ?? localizedRegisteredRoot(language);
     const subcategory = folderPath.length > 1 ? folderPath[1] : undefined;
     const libraryPath = source.libraryPath
       ? normalizeAbsolutePath(extensionPath, source.libraryPath)
       : inferLibraryPathForSubcircuit(absoluteFilePath);
-    const iconFilePath = typeof lsconfig?.iconPath === "string" && lsconfig.iconPath.trim()
+    const manifestIcon2 = typeof json.icon === "string" ? json.icon.trim() : undefined;
+    const iconSvgInline2 = manifestIcon2?.startsWith("<svg") ? manifestIcon2 : undefined;
+    const iconFilePath = !iconSvgInline2 && typeof lsconfig?.iconPath === "string" && lsconfig.iconPath.trim()
       ? normalizeExistingFilePath(path.dirname(absoluteLsconfigPath ?? absoluteFilePath), lsconfig.iconPath)
       : undefined;
     // "Logic Symbol" também pra subcircuito (mesma decisão de escopo de mcu-adapter acima).
@@ -469,8 +484,9 @@ function resolveRegisteredItem(source: RegisteredSource, extensionPath: string, 
       category,
       subcategory,
       folderPath,
-      icon: lsconfig?.icon,
+      icon: lsconfig?.icon ?? (!iconSvgInline2 ? manifestIcon2 : undefined),
       iconFilePath,
+      iconSvgInline: iconSvgInline2,
       symbolSvg: lsconfig?.symbolSvg,
       package: packageDescriptor,
       logicSymbolPackage,

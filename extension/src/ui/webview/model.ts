@@ -203,6 +203,11 @@ export interface WebviewComponentCatalogEntry {
    * conforme o tema ativo do VSCode. */
   icon?: string;
   iconFilePath?: string;
+  /** SVG inline da miniatura da paleta — alternativa a `icon`/`iconFilePath` para dispositivos
+   * cujo manifesto embute o ícone diretamente (campo `icon` do `device.json`/`.lssub.json` quando
+   * o valor começa com `<svg`). Prevalece sobre `icon`/`iconFilePath` quando presente.
+   * Renderizado como data URI (`data:image/svg+xml,...`) — funciona sem arquivo externo. */
+  iconSvgInline?: string;
   symbolSvg?: string;
   /** Símbolo declarativo real (`device.json`/`.lssub.json` `package`) — quando presente, tem
    * prioridade sobre `symbolSvg`/algoritmo genérico (ver `componentSymbols.ts`). */

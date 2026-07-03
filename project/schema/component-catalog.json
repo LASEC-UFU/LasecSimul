@@ -1621,7 +1621,6 @@
       "id": "builtin-qemu-esp32",
       "kind": "mcu-adapter",
       "filePath": "../mcu-adapters/espressif-esp32/mcu.json",
-      "lsconfigPath": "../mcu-adapters/espressif-esp32/device.lsconfig",
       "removable": false
     },
     {
@@ -1629,7 +1628,6 @@
       "kind": "subcircuit-file",
       "filePath": "../subcircuits/esp32_devkitc_v4.lssub.json",
       "libraryPath": "../subcircuits/library.json",
-      "lsconfigPath": "../subcircuits/esp32_devkitc_v4.lssub.json.lsconfig",
       "removable": false
     },
     {
@@ -1637,7 +1635,6 @@
       "kind": "subcircuit-file",
       "filePath": "../subcircuits/esp32_wroom32.lssub.json",
       "libraryPath": "../subcircuits/library.json",
-      "lsconfigPath": "../subcircuits/esp32_wroom32.lssub.json.lsconfig",
       "removable": false
     }
   ]

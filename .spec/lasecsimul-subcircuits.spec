@@ -55,6 +55,9 @@ Um subcircuito é definido por um único arquivo `*.lssub.json`, com três bloco
   "typeId": "subcircuits.divisor_5v",
   "name": "Divisor 5V (R/R)",
 
+  "folderPath": ["Subcircuitos", "Fontes auxiliares"],
+  "icon": "<svg viewBox=\"0 0 20 20\" xmlns=\"http://www.w3.org/2000/svg\">...</svg>",
+
   "components": [
     { "id": "r1", "typeId": "passive.resistor", "properties": { "resistance": 1000 } },
     { "id": "r2", "typeId": "passive.resistor", "properties": { "resistance": 1000 } },
@@ -352,31 +355,36 @@ manifesto): subcircuito é um arquivo só, então `library.json` referencia o `.
 `subcircuits/`, sem subpasta — menos estrutura do que dispositivos nativos exigem, porque não há nada além
 do JSON pra versionar junto.
 
-### 7.1 Registro canônico na paleta (fonte única)
+### 7.1 Registro canônico na paleta (princípio do arquivo único)
 
-Para subcircuito aparecer na paleta, o item correspondente MUST existir em
-`LasecSimul/project/schema/component-catalog.json` (mesmo arquivo usado por built-ins e plugins), por exemplo:
+O registro aponta SOMENTE para o arquivo do subcircuito — sem duplicar metadados. A Extension lê
+`folderPath`, `icon`, e `label` diretamente do `.lssub.json` ao resolver o item de paleta.
+
+Em `LasecSimul/project/schema/component-catalog.json`, um subcircuito é registrado assim:
 
 ```json
 {
-  "typeId": "subcircuits.divisor_5v",
-  "label": "Divisor 5V",
-  "pinCount": 3,
-  "folderPath": ["Subcircuitos", "Fontes auxiliares"],
-  "defaultProperties": {}
+  "kind": "subcircuit-file",
+  "id": "bundled.subcircuits.divisor_5v",
+  "filePath": "../subcircuits/divisor_5v.lssub.json",
+  "removable": false
 }
 ```
 
+Toda informação de paleta (`folderPath`, `icon`, `label`) vem do `.lssub.json` — nunca repetida no catálogo.
+O catálogo é apenas um ponteiro para o arquivo; o arquivo é a fonte de verdade completa.
+
 Regras normativas:
 
-1. Subcircuito NÃO ganha caminho de cadastro alternativo na UI; entra no mesmo `items[]` do catálogo
-  unificado.
-2. A pasta/subpasta exibida na paleta é definida por `folderPath` e pode ter profundidade arbitrária.
-3. A shell MUST construir a árvore exclusivamente a partir de `items[]` (sem árvore hardcoded por tipo).
-4. `typeId` do item de paleta MUST corresponder ao `typeId` declarado no `.lssub.json` referenciado na
-  biblioteca de subcircuitos.
-5. Bibliotecas de subcircuito MUST ser listadas em `deviceLibraries[]` do mesmo catálogo unificado quando
-  fizerem parte da distribuição ativa.
+1. Subcircuito NÃO ganha caminho de cadastro alternativo na UI; entra nos `registeredSources[]` do catálogo
+  unificado como `"kind": "subcircuit-file"`.
+2. A pasta/subpasta exibida na paleta vem de `folderPath` no `.lssub.json` e pode ter profundidade arbitrária.
+3. O ícone da paleta vem do campo `icon` do `.lssub.json` (SVG inline de 20×20px começando com `<svg`).
+4. A Extension usa o `icon`/`folderPath` do `.lssub.json` com precedência máxima; se ausentes, cai para
+  `source.folderPath` do catálogo como fallback de último recurso.
+5. `typeId` do `.lssub.json` é o identificador único; o catálogo não declara typeId — só caminho do arquivo.
+6. Bibliotecas de subcircuito MUST ser registradas em `deviceLibraries[]` do catálogo quando fizerem parte
+  da distribuição ativa.
 
 ## 8. Comparação com SimulIDE-dev
 

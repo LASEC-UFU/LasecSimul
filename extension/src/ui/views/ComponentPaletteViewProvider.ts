@@ -132,6 +132,10 @@ export class ComponentPaletteViewProvider implements vscode.WebviewViewProvider 
   }
 
   private decorateCatalogEntry(entry: WebviewComponentCatalogEntry): PaletteWebviewCatalogEntry {
+    if (entry.iconSvgInline) {
+      const dataUri = `data:image/svg+xml,${encodeURIComponent(entry.iconSvgInline)}`;
+      return { ...entry, iconLightUri: dataUri, iconDarkUri: dataUri };
+    }
     const icon = this.resolveIcon(entry);
     return {
       ...entry,

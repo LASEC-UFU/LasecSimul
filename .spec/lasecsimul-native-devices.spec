@@ -699,18 +699,22 @@ my-device-library/
 ├── library.json                    # publisher, versão, licença, hash assinado de cada binário
 ├── devices/
 │   └── my-led-matrix/
-│       ├── device.json             # manifesto (seção 15)
+│       ├── device.json             # manifesto único: typeId, icon (inline SVG), folderPath, package, pins, properties (seção 15)
 │       ├── src/                    # fonte (C/C++/Rust), opcional no pacote final
 │       │   └── lib.c
 │       ├── build/
 │       │   ├── win-x64/device.dll
 │       │   ├── linux-x64/device.so
 │       │   └── macos-universal/device.dylib
-│       ├── icon.svg                # miniatura da paleta — diferente do corpo desenhado no canvas (seção 21.2)
 │       └── README.md
 ├── test/                           # harness nativo (seção 19)
 └── CMakeLists.txt                  # build multiplataforma
 ```
+
+**Princípio do arquivo único**: o registro (`component-catalog.json`) aponta SOMENTE para o `device.json` de
+cada dispositivo. Tudo o que a UI precisa — ícone da paleta, pasta de exibição, label, configurações — vem
+desse arquivo único. Nenhum arquivo `.lsconfig` ou `icon.svg` separado é criado; `device.json` é a fonte de
+verdade completa.
 
 ## 15. Exemplo de manifesto do dispositivo (`device.json`)
 
@@ -727,6 +731,8 @@ Inclui o bloco `package` (corpo + pinos visuais) — schema completo e justifica
     "linux-x64": "build/linux-x64/device.so",
     "darwin-universal": "build/macos-universal/device.dylib"
   },
+  "folderPath": ["Saídas", "Displays"],
+  "icon": "<svg viewBox=\"0 0 20 20\" xmlns=\"http://www.w3.org/2000/svg\"><rect x=\"3\" y=\"3\" width=\"14\" height=\"14\" fill=\"#1a1a1a\" stroke=\"#bbb\" stroke-width=\"1.5\"/><circle cx=\"7\" cy=\"7\" r=\"1.5\" fill=\"#f00\"/><circle cx=\"10\" cy=\"7\" r=\"1.5\" fill=\"#f00\"/><circle cx=\"13\" cy=\"7\" r=\"1.5\" fill=\"#f00\"/><circle cx=\"7\" cy=\"13\" r=\"1.5\" fill=\"#f00\"/><circle cx=\"10\" cy=\"13\" r=\"1.5\" fill=\"#f00\"/><circle cx=\"13\" cy=\"13\" r=\"1.5\" fill=\"#f00\"/></svg>",
   "package": {
     "width": 80, "height": 80, "border": true,
     "background": { "kind": "color", "value": "#1a1a1a" },
@@ -977,9 +983,11 @@ referência pendente (o problema que o SimulIDE evita ao embutir).
 Nenhum campo novo aqui é lido pelo Core — `package`/`pins[].angle|length|label|labelX|labelY` são consumidos **só pela
 Extension** (ela já lê `device.json` direto do disco para popular a paleta/painel de propriedades; não
 precisa pedir isso ao Core por IPC). O Core continua só enxergando `pins[].id/kind` (contrato elétrico).
-`icon.svg` (seção 14) continua existindo **à parte** — é a miniatura da paleta de componentes, papel
-diferente do corpo completo desenhado no canvas (mesma separação que o SimulIDE faz entre o ícone da árvore
-de componentes e o pacote do componente).
+O campo `icon` do `device.json` (ver seção 15) carrega o SVG da miniatura da paleta **inline** — é um SVG
+compacto (20×20) diferente do corpo completo desenhado no canvas (`package`). A Extension detecta que o
+valor começa com `<svg` e converte para `data:image/svg+xml,...` URI, sem nenhum arquivo externo.
+`icon.svg` separado **não existe mais** — foi removido quando o princípio de arquivo único foi adotado
+(2026-07-02).
 
 ### 21.3 Editor de pacote na Extension — mesmo princípio do SimulIDE, não uma ferramenta nova
 

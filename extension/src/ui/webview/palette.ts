@@ -69,7 +69,7 @@ function renderTreeNode(node: PaletteTreeNode, depth: number): HTMLElement {
   if (node.kind === "folder") {
     const details = document.createElement("details");
     details.className = `palette-folder palette-folder--depth-${Math.min(depth, 3)}`;
-    details.open = true;
+    details.open = depth === 0;
 
     const summary = document.createElement("summary");
     summary.className = "palette-folder__summary";
