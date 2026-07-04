@@ -1,18 +1,134 @@
-﻿{
+{
   "schemaVersion": 1,
   "typeId": "outputs.pcd8544",
   "name": "Pcd8544",
   "language": "pt-BR",
-  "translations": { "en": { "name": "Pcd8544" } },
-  "abiVersion": { "major": 4, "minor": 0 },
-  "nativeEntry": { "win32-x64": "build-msvc/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" },
+  "translations": {
+    "en": {
+      "name": "Pcd8544"
+    }
+  },
+  "abiVersion": {
+    "major": 4,
+    "minor": 0
+  },
+  "nativeEntry": {
+    "win32-x64": "build-msvc/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
   "pins": [
-    { "id": "rst", "kind": "DIGITAL_IN", "x": -12, "y": 60, "angle": 270, "length": 8, "label": "RST" },
-    { "id": "ce", "kind": "DIGITAL_IN", "x": -20, "y": 60, "angle": 270, "length": 8, "label": "CE" },
-    { "id": "dc", "kind": "DIGITAL_IN", "x": -28, "y": 60, "angle": 270, "length": 8, "label": "DC" },
-    { "id": "din", "kind": "DIGITAL_IN", "x": -36, "y": 60, "angle": 270, "length": 8, "label": "DIN" },
-    { "id": "clk", "kind": "DIGITAL_IN", "x": -44, "y": 60, "angle": 270, "length": 8, "label": "CLK" }
+    {
+      "id": "rst",
+      "kind": "DIGITAL_IN",
+      "x": -12,
+      "y": 60,
+      "angle": 270,
+      "length": 8,
+      "label": "RST"
+    },
+    {
+      "id": "ce",
+      "kind": "DIGITAL_IN",
+      "x": -20,
+      "y": 60,
+      "angle": 270,
+      "length": 8,
+      "label": "CE"
+    },
+    {
+      "id": "dc",
+      "kind": "DIGITAL_IN",
+      "x": -28,
+      "y": 60,
+      "angle": 270,
+      "length": 8,
+      "label": "DC"
+    },
+    {
+      "id": "din",
+      "kind": "DIGITAL_IN",
+      "x": -36,
+      "y": 60,
+      "angle": 270,
+      "length": 8,
+      "label": "DIN"
+    },
+    {
+      "id": "clk",
+      "kind": "DIGITAL_IN",
+      "x": -44,
+      "y": 60,
+      "angle": 270,
+      "length": 8,
+      "label": "CLK"
+    }
   ],
   "properties": [],
-  "limits": { "stepTimeoutMs": 8, "expectedComplexity": "medium" }
+  "limits": {
+    "stepTimeoutMs": 8,
+    "expectedComplexity": "medium"
+  },
+  "package": {
+    "width": 104,
+    "height": 84,
+    "border": false,
+    "background": { "kind": "none" },
+    "shapes": [],
+    "viewSpec": {
+      "paint": [
+        { "kind": "rect", "x": 0, "y": 0, "w": 104, "h": 84, "rx": 2, "ry": 2, "fill": "#324664" },
+        { "kind": "rect", "x": 4, "y": 4, "w": 96, "h": 60, "rx": 8, "ry": 8, "fill": "#c8dcb4" },
+        { "kind": "rect", "x": 10, "y": 10, "w": 84, "h": 48, "fill": "#000000" },
+        { "kind": "text", "x": 52, "y": -4, "value": "__label", "fontSize": 6, "color": "#0000aa" }
+      ]
+    },
+    "pins": [
+      {
+        "id": "rst",
+        "x": 20,
+        "y": 84,
+        "angle": 90,
+        "length": 8,
+        "label": "RST"
+      },
+      {
+        "id": "ce",
+        "x": 36,
+        "y": 84,
+        "angle": 90,
+        "length": 8,
+        "label": "CE"
+      },
+      {
+        "id": "dc",
+        "x": 52,
+        "y": 84,
+        "angle": 90,
+        "length": 8,
+        "label": "DC"
+      },
+      {
+        "id": "din",
+        "x": 68,
+        "y": 84,
+        "angle": 90,
+        "length": 8,
+        "label": "DIN"
+      },
+      {
+        "id": "clk",
+        "x": 84,
+        "y": 84,
+        "angle": 90,
+        "length": 8,
+        "label": "CLK"
+      }
+    ]
+  },
+  "icon": "pcd8544",
+  "folderPath": [
+    "Saidas",
+    "Displays"
+  ]
 }

@@ -1,1 +1,200 @@
-﻿{ "schemaVersion": 1, "typeId": "logic.mux", "name": "Mux", "language": "pt-BR", "abiVersion": { "major": 4, "minor": 0 }, "nativeEntry": { "win32-x64": "build-msvc/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" }, "pins": [ { "id": "s0", "kind": "DIGITAL_IN" }, { "id": "s1", "kind": "DIGITAL_IN" }, { "id": "s2", "kind": "DIGITAL_IN" }, { "id": "d0", "kind": "DIGITAL_IN" }, { "id": "d1", "kind": "DIGITAL_IN" }, { "id": "d2", "kind": "DIGITAL_IN" }, { "id": "d3", "kind": "DIGITAL_IN" }, { "id": "d4", "kind": "DIGITAL_IN" }, { "id": "d5", "kind": "DIGITAL_IN" }, { "id": "d6", "kind": "DIGITAL_IN" }, { "id": "d7", "kind": "DIGITAL_IN" }, { "id": "y", "kind": "DIGITAL_OUT" }, { "id": "ny", "kind": "DIGITAL_OUT" } ], "properties": [], "limits": { "stepTimeoutMs": 4, "expectedComplexity": "low" } }
+{
+  "schemaVersion": 1,
+  "typeId": "logic.mux",
+  "name": "Mux",
+  "language": "pt-BR",
+  "abiVersion": {
+    "major": 4,
+    "minor": 0
+  },
+  "nativeEntry": {
+    "win32-x64": "build-msvc/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
+  "pins": [
+    {
+      "id": "s0",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "s1",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "s2",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "d0",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "d1",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "d2",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "d3",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "d4",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "d5",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "d6",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "d7",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "y",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "ny",
+      "kind": "DIGITAL_OUT"
+    }
+  ],
+  "properties": [],
+  "limits": {
+    "stepTimeoutMs": 4,
+    "expectedComplexity": "low"
+  },
+  "package": {
+    "width": 50,
+    "height": 114,
+    "border": false,
+    "background": {
+      "kind": "none"
+    },
+    "shapes": [],
+    "viewSpec": {
+      "paint": [
+        { "kind": "polygon", "points": [{"x":0,"y":6},{"x":0,"y":108},{"x":50,"y":90},{"x":50,"y":24}], "fill": "#ffffff" },
+        { "kind": "text", "x": 25, "y": -4, "value": "__label", "fontSize": 5, "color": "#0000aa" }
+      ]
+    },
+    "pins": [
+      {
+        "id": "s0",
+        "x": 0,
+        "y": 9.5,
+        "angle": 180,
+        "length": 8,
+        "label": "S0"
+      },
+      {
+        "id": "s1",
+        "x": 0,
+        "y": 19,
+        "angle": 180,
+        "length": 8,
+        "label": "S1"
+      },
+      {
+        "id": "s2",
+        "x": 0,
+        "y": 28.5,
+        "angle": 180,
+        "length": 8,
+        "label": "S2"
+      },
+      {
+        "id": "d0",
+        "x": 0,
+        "y": 38,
+        "angle": 180,
+        "length": 8,
+        "label": "D0"
+      },
+      {
+        "id": "d1",
+        "x": 0,
+        "y": 47.5,
+        "angle": 180,
+        "length": 8,
+        "label": "D1"
+      },
+      {
+        "id": "d2",
+        "x": 0,
+        "y": 57,
+        "angle": 180,
+        "length": 8,
+        "label": "D2"
+      },
+      {
+        "id": "d3",
+        "x": 0,
+        "y": 66.5,
+        "angle": 180,
+        "length": 8,
+        "label": "D3"
+      },
+      {
+        "id": "d4",
+        "x": 0,
+        "y": 76,
+        "angle": 180,
+        "length": 8,
+        "label": "D4"
+      },
+      {
+        "id": "d5",
+        "x": 0,
+        "y": 85.5,
+        "angle": 180,
+        "length": 8,
+        "label": "D5"
+      },
+      {
+        "id": "d6",
+        "x": 0,
+        "y": 95,
+        "angle": 180,
+        "length": 8,
+        "label": "D6"
+      },
+      {
+        "id": "d7",
+        "x": 0,
+        "y": 104.5,
+        "angle": 180,
+        "length": 8,
+        "label": "D7"
+      },
+      {
+        "id": "y",
+        "x": 50,
+        "y": 46,
+        "angle": 0,
+        "length": 8,
+        "label": "Y"
+      },
+      {
+        "id": "ny",
+        "x": 50,
+        "y": 68,
+        "angle": 0,
+        "length": 8,
+        "label": "NY"
+      }
+    ]
+  },
+  "icon": "mux",
+  "folderPath": [
+    "Logicos",
+    "Conversores"
+  ]
+}

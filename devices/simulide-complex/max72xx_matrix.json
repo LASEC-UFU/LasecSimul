@@ -1,18 +1,2219 @@
-﻿{
+{
   "schemaVersion": 1,
   "typeId": "outputs.max72xx_matrix",
   "name": "Max72xx matrix",
   "language": "pt-BR",
-  "translations": { "en": { "name": "Max72xx matrix" } },
-  "abiVersion": { "major": 4, "minor": 0 },
-  "nativeEntry": { "win32-x64": "build-msvc/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" },
+  "translations": {
+    "en": {
+      "name": "Max72xx matrix"
+    }
+  },
+  "abiVersion": {
+    "major": 4,
+    "minor": 0
+  },
+  "nativeEntry": {
+    "win32-x64": "build-msvc/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
   "pins": [
-    { "id": "cs", "kind": "DIGITAL_IN", "x": -12, "y": 52, "angle": 270, "length": 8, "label": "CS" },
-    { "id": "din", "kind": "DIGITAL_IN", "x": -20, "y": 52, "angle": 270, "length": 8, "label": "DIN" },
-    { "id": "sck", "kind": "DIGITAL_IN", "x": -28, "y": 52, "angle": 270, "length": 8, "label": "SCK" }
+    {
+      "id": "cs",
+      "kind": "DIGITAL_IN",
+      "x": -12,
+      "y": 52,
+      "angle": 270,
+      "length": 8,
+      "label": "CS"
+    },
+    {
+      "id": "din",
+      "kind": "DIGITAL_IN",
+      "x": -20,
+      "y": 52,
+      "angle": 270,
+      "length": 8,
+      "label": "DIN"
+    },
+    {
+      "id": "sck",
+      "kind": "DIGITAL_IN",
+      "x": -28,
+      "y": 52,
+      "angle": 270,
+      "length": 8,
+      "label": "SCK"
+    }
   ],
   "properties": [
-    { "id": "numDisplays", "label": "Tamanho", "group": "Principal", "valueKind": "number", "editor": "number", "default": 4, "min": 1, "step": 1 }
+    {
+      "id": "numDisplays",
+      "label": "Tamanho",
+      "group": "Principal",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 4,
+      "min": 1,
+      "step": 1
+    }
   ],
-  "limits": { "stepTimeoutMs": 8, "expectedComplexity": "medium" }
+  "limits": {
+    "stepTimeoutMs": 8,
+    "expectedComplexity": "medium"
+  },
+  "package": {
+    "width": 264,
+    "height": 88,
+    "border": false,
+    "background": {
+      "kind": "none"
+    },
+    "shapes": [],
+    "pins": [
+      {
+        "id": "cs",
+        "x": 120,
+        "y": 52,
+        "angle": 270,
+        "length": 8,
+        "label": "CS"
+      },
+      {
+        "id": "din",
+        "x": 112,
+        "y": 52,
+        "angle": 270,
+        "length": 8,
+        "label": "DIN"
+      },
+      {
+        "id": "sck",
+        "x": 104,
+        "y": 52,
+        "angle": 270,
+        "length": 8,
+        "label": "SCK"
+      }
+    ],
+    "viewSpec": {
+      "paint": [
+        {
+          "kind": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 264,
+          "h": 88,
+          "rx": 2,
+          "ry": 2,
+          "fill": "#324664"
+        },
+        {
+          "kind": "rect",
+          "x": 1.6,
+          "y": 12,
+          "w": 64,
+          "h": 64,
+          "rx": 2,
+          "ry": 2,
+          "fill": "#111111"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 5.6,
+          "cy": 16,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 13.6,
+          "cy": 16,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 21.6,
+          "cy": 16,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 29.6,
+          "cy": 16,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 37.6,
+          "cy": 16,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 45.6,
+          "cy": 16,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 53.6,
+          "cy": 16,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 61.6,
+          "cy": 16,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 5.6,
+          "cy": 24,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 13.6,
+          "cy": 24,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 21.6,
+          "cy": 24,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 29.6,
+          "cy": 24,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 37.6,
+          "cy": 24,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 45.6,
+          "cy": 24,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 53.6,
+          "cy": 24,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 61.6,
+          "cy": 24,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 5.6,
+          "cy": 32,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 13.6,
+          "cy": 32,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 21.6,
+          "cy": 32,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 29.6,
+          "cy": 32,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 37.6,
+          "cy": 32,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 45.6,
+          "cy": 32,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 53.6,
+          "cy": 32,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 61.6,
+          "cy": 32,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 5.6,
+          "cy": 40,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 13.6,
+          "cy": 40,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 21.6,
+          "cy": 40,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 29.6,
+          "cy": 40,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 37.6,
+          "cy": 40,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 45.6,
+          "cy": 40,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 53.6,
+          "cy": 40,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 61.6,
+          "cy": 40,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 5.6,
+          "cy": 48,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 13.6,
+          "cy": 48,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 21.6,
+          "cy": 48,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 29.6,
+          "cy": 48,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 37.6,
+          "cy": 48,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 45.6,
+          "cy": 48,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 53.6,
+          "cy": 48,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 61.6,
+          "cy": 48,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 5.6,
+          "cy": 56,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 13.6,
+          "cy": 56,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 21.6,
+          "cy": 56,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 29.6,
+          "cy": 56,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 37.6,
+          "cy": 56,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 45.6,
+          "cy": 56,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 53.6,
+          "cy": 56,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 61.6,
+          "cy": 56,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 5.6,
+          "cy": 64,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 13.6,
+          "cy": 64,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 21.6,
+          "cy": 64,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 29.6,
+          "cy": 64,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 37.6,
+          "cy": 64,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 45.6,
+          "cy": 64,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 53.6,
+          "cy": 64,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 61.6,
+          "cy": 64,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 5.6,
+          "cy": 72,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 13.6,
+          "cy": 72,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 21.6,
+          "cy": 72,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 29.6,
+          "cy": 72,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 37.6,
+          "cy": 72,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 45.6,
+          "cy": 72,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 53.6,
+          "cy": 72,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 61.6,
+          "cy": 72,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "rect",
+          "x": 67.19999999999999,
+          "y": 12,
+          "w": 64,
+          "h": 64,
+          "rx": 2,
+          "ry": 2,
+          "fill": "#111111"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 71.19999999999999,
+          "cy": 16,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 79.19999999999999,
+          "cy": 16,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 87.19999999999999,
+          "cy": 16,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 95.19999999999999,
+          "cy": 16,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 103.19999999999999,
+          "cy": 16,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 111.19999999999999,
+          "cy": 16,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 119.19999999999999,
+          "cy": 16,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 127.19999999999999,
+          "cy": 16,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 71.19999999999999,
+          "cy": 24,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 79.19999999999999,
+          "cy": 24,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 87.19999999999999,
+          "cy": 24,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 95.19999999999999,
+          "cy": 24,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 103.19999999999999,
+          "cy": 24,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 111.19999999999999,
+          "cy": 24,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 119.19999999999999,
+          "cy": 24,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 127.19999999999999,
+          "cy": 24,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 71.19999999999999,
+          "cy": 32,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 79.19999999999999,
+          "cy": 32,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 87.19999999999999,
+          "cy": 32,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 95.19999999999999,
+          "cy": 32,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 103.19999999999999,
+          "cy": 32,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 111.19999999999999,
+          "cy": 32,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 119.19999999999999,
+          "cy": 32,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 127.19999999999999,
+          "cy": 32,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 71.19999999999999,
+          "cy": 40,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 79.19999999999999,
+          "cy": 40,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 87.19999999999999,
+          "cy": 40,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 95.19999999999999,
+          "cy": 40,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 103.19999999999999,
+          "cy": 40,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 111.19999999999999,
+          "cy": 40,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 119.19999999999999,
+          "cy": 40,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 127.19999999999999,
+          "cy": 40,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 71.19999999999999,
+          "cy": 48,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 79.19999999999999,
+          "cy": 48,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 87.19999999999999,
+          "cy": 48,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 95.19999999999999,
+          "cy": 48,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 103.19999999999999,
+          "cy": 48,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 111.19999999999999,
+          "cy": 48,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 119.19999999999999,
+          "cy": 48,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 127.19999999999999,
+          "cy": 48,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 71.19999999999999,
+          "cy": 56,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 79.19999999999999,
+          "cy": 56,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 87.19999999999999,
+          "cy": 56,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 95.19999999999999,
+          "cy": 56,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 103.19999999999999,
+          "cy": 56,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 111.19999999999999,
+          "cy": 56,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 119.19999999999999,
+          "cy": 56,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 127.19999999999999,
+          "cy": 56,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 71.19999999999999,
+          "cy": 64,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 79.19999999999999,
+          "cy": 64,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 87.19999999999999,
+          "cy": 64,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 95.19999999999999,
+          "cy": 64,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 103.19999999999999,
+          "cy": 64,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 111.19999999999999,
+          "cy": 64,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 119.19999999999999,
+          "cy": 64,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 127.19999999999999,
+          "cy": 64,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 71.19999999999999,
+          "cy": 72,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 79.19999999999999,
+          "cy": 72,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 87.19999999999999,
+          "cy": 72,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 95.19999999999999,
+          "cy": 72,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 103.19999999999999,
+          "cy": 72,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 111.19999999999999,
+          "cy": 72,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 119.19999999999999,
+          "cy": 72,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 127.19999999999999,
+          "cy": 72,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "rect",
+          "x": 132.79999999999998,
+          "y": 12,
+          "w": 64,
+          "h": 64,
+          "rx": 2,
+          "ry": 2,
+          "fill": "#111111"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 136.79999999999998,
+          "cy": 16,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 144.79999999999998,
+          "cy": 16,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 152.79999999999998,
+          "cy": 16,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 160.79999999999998,
+          "cy": 16,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 168.79999999999998,
+          "cy": 16,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 176.79999999999998,
+          "cy": 16,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 184.79999999999998,
+          "cy": 16,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 192.79999999999998,
+          "cy": 16,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 136.79999999999998,
+          "cy": 24,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 144.79999999999998,
+          "cy": 24,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 152.79999999999998,
+          "cy": 24,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 160.79999999999998,
+          "cy": 24,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 168.79999999999998,
+          "cy": 24,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 176.79999999999998,
+          "cy": 24,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 184.79999999999998,
+          "cy": 24,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 192.79999999999998,
+          "cy": 24,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 136.79999999999998,
+          "cy": 32,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 144.79999999999998,
+          "cy": 32,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 152.79999999999998,
+          "cy": 32,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 160.79999999999998,
+          "cy": 32,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 168.79999999999998,
+          "cy": 32,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 176.79999999999998,
+          "cy": 32,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 184.79999999999998,
+          "cy": 32,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 192.79999999999998,
+          "cy": 32,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 136.79999999999998,
+          "cy": 40,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 144.79999999999998,
+          "cy": 40,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 152.79999999999998,
+          "cy": 40,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 160.79999999999998,
+          "cy": 40,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 168.79999999999998,
+          "cy": 40,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 176.79999999999998,
+          "cy": 40,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 184.79999999999998,
+          "cy": 40,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 192.79999999999998,
+          "cy": 40,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 136.79999999999998,
+          "cy": 48,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 144.79999999999998,
+          "cy": 48,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 152.79999999999998,
+          "cy": 48,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 160.79999999999998,
+          "cy": 48,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 168.79999999999998,
+          "cy": 48,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 176.79999999999998,
+          "cy": 48,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 184.79999999999998,
+          "cy": 48,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 192.79999999999998,
+          "cy": 48,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 136.79999999999998,
+          "cy": 56,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 144.79999999999998,
+          "cy": 56,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 152.79999999999998,
+          "cy": 56,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 160.79999999999998,
+          "cy": 56,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 168.79999999999998,
+          "cy": 56,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 176.79999999999998,
+          "cy": 56,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 184.79999999999998,
+          "cy": 56,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 192.79999999999998,
+          "cy": 56,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 136.79999999999998,
+          "cy": 64,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 144.79999999999998,
+          "cy": 64,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 152.79999999999998,
+          "cy": 64,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 160.79999999999998,
+          "cy": 64,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 168.79999999999998,
+          "cy": 64,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 176.79999999999998,
+          "cy": 64,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 184.79999999999998,
+          "cy": 64,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 192.79999999999998,
+          "cy": 64,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 136.79999999999998,
+          "cy": 72,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 144.79999999999998,
+          "cy": 72,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 152.79999999999998,
+          "cy": 72,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 160.79999999999998,
+          "cy": 72,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 168.79999999999998,
+          "cy": 72,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 176.79999999999998,
+          "cy": 72,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 184.79999999999998,
+          "cy": 72,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 192.79999999999998,
+          "cy": 72,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "rect",
+          "x": 198.39999999999998,
+          "y": 12,
+          "w": 64,
+          "h": 64,
+          "rx": 2,
+          "ry": 2,
+          "fill": "#111111"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 202.39999999999998,
+          "cy": 16,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 210.39999999999998,
+          "cy": 16,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 218.39999999999998,
+          "cy": 16,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 226.39999999999998,
+          "cy": 16,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 234.39999999999998,
+          "cy": 16,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 242.39999999999998,
+          "cy": 16,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 250.39999999999998,
+          "cy": 16,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 258.4,
+          "cy": 16,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 202.39999999999998,
+          "cy": 24,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 210.39999999999998,
+          "cy": 24,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 218.39999999999998,
+          "cy": 24,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 226.39999999999998,
+          "cy": 24,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 234.39999999999998,
+          "cy": 24,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 242.39999999999998,
+          "cy": 24,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 250.39999999999998,
+          "cy": 24,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 258.4,
+          "cy": 24,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 202.39999999999998,
+          "cy": 32,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 210.39999999999998,
+          "cy": 32,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 218.39999999999998,
+          "cy": 32,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 226.39999999999998,
+          "cy": 32,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 234.39999999999998,
+          "cy": 32,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 242.39999999999998,
+          "cy": 32,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 250.39999999999998,
+          "cy": 32,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 258.4,
+          "cy": 32,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 202.39999999999998,
+          "cy": 40,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 210.39999999999998,
+          "cy": 40,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 218.39999999999998,
+          "cy": 40,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 226.39999999999998,
+          "cy": 40,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 234.39999999999998,
+          "cy": 40,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 242.39999999999998,
+          "cy": 40,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 250.39999999999998,
+          "cy": 40,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 258.4,
+          "cy": 40,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 202.39999999999998,
+          "cy": 48,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 210.39999999999998,
+          "cy": 48,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 218.39999999999998,
+          "cy": 48,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 226.39999999999998,
+          "cy": 48,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 234.39999999999998,
+          "cy": 48,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 242.39999999999998,
+          "cy": 48,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 250.39999999999998,
+          "cy": 48,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 258.4,
+          "cy": 48,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 202.39999999999998,
+          "cy": 56,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 210.39999999999998,
+          "cy": 56,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 218.39999999999998,
+          "cy": 56,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 226.39999999999998,
+          "cy": 56,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 234.39999999999998,
+          "cy": 56,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 242.39999999999998,
+          "cy": 56,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 250.39999999999998,
+          "cy": 56,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 258.4,
+          "cy": 56,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 202.39999999999998,
+          "cy": 64,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 210.39999999999998,
+          "cy": 64,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 218.39999999999998,
+          "cy": 64,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 226.39999999999998,
+          "cy": 64,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 234.39999999999998,
+          "cy": 64,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 242.39999999999998,
+          "cy": 64,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 250.39999999999998,
+          "cy": 64,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 258.4,
+          "cy": 64,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 202.39999999999998,
+          "cy": 72,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 210.39999999999998,
+          "cy": 72,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 218.39999999999998,
+          "cy": 72,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 226.39999999999998,
+          "cy": 72,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 234.39999999999998,
+          "cy": 72,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 242.39999999999998,
+          "cy": 72,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 250.39999999999998,
+          "cy": 72,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 258.4,
+          "cy": 72,
+          "rx": 3,
+          "ry": 3,
+          "fill": "#3a1414"
+        },
+        {
+          "kind": "text",
+          "x": 132,
+          "y": -4,
+          "value": "__label",
+          "fontSize": 6,
+          "color": "#0000aa"
+        }
+      ]
+    }
+  },
+  "icon": "max72xx",
+  "folderPath": [
+    "Saidas",
+    "Leds"
+  ],
+  "defaultProperties": {
+    "rows": 8,
+    "columns": 8
+  }
 }

@@ -1,5 +1,5 @@
 import { WEBVIEW_MESSAGE_VERSION, ComponentReadoutValue, HostToWebviewMessage, InternalComponentSnapshot, SimulationStatus, SymbolAuthoringKind, WebviewToHostMessage } from "./messages.js";
-import { InteractionKindEntry, PropertySchemaEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./model.js";
+import { InteractionKindEntry, PropertySchemaEntry, ViewSpecInteraction, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./model.js";
 import { ComponentBox, PIN_RADIUS, componentBox, componentSymbolSvg, hasRealPinPosition, packageSymbolSvg, pinLocalPosition, registerPackage } from "./componentSymbols.js";
 import { detectChannelTrigger, findTriggerAnchorIndex, triggerAlignedWindowEndNs, visibleSampleWindowByTime } from "./instrumentTrigger.js";
 import {
@@ -71,16 +71,14 @@ const initialWindowState = (window as WindowWithInitialState).__LASECSIMUL_INITI
 let state = normalizeProjectState((vscode?.getState() as WebviewProjectState | undefined) ?? initialWindowState ?? createEmptyState());
 syncPackageRegistry(state.catalog);
 
-/** Reconciliação incremental da camada de COMPONENTES (a mais cara/mais re-renderizada da Webview) --
- * `render()` (mais abaixo) cria/atualiza/remove só o que mudou em vez de `app.innerHTML = ""` +
- * reconstrução total, que antes recriava TODO `.component` (com seu `<svg>` e listeners) a cada
- * poll de telemetria (~300ms durante simulação). `canvas`/`canvasContent`/camada de fios/labels
- * continuam recriados a cada `render()` nesta rodada (custo bem menor, documentado como próximo
- * passo natural em `.spec/lasecsimul-native-devices.spec` com o mesmo padrão) -- mover um
- * `.component` pra um `canvasContent` novo via `appendChild` NÃO derruba seus listeners (pertencem
- * ao elemento, não ao pai), e `render()` nunca roda durante um arrasto ativo (`isDraggingComponent`),
- * então não há risco de perder `setPointerCapture()` em trânsito. */
+/** Reconciliação incremental da camada de render. O shell (`appbar` + `.canvas` + `.canvas-content`)
+ * é mantido vivo entre renders; as camadas internas são atualizadas sem `app.innerHTML = ""`.
+ * Componentes também são cacheados por id para preservar listeners e estado de interação. */
 const componentElementsById = new Map<string, HTMLElement>();
+let appBarElement: HTMLElement | undefined;
+let canvasElement: HTMLDivElement | undefined;
+let canvasContentElement: HTMLDivElement | undefined;
+let wireLayerElement: SVGSVGElement | undefined;
 
 const UI_TEXT = {
   "pt-BR": {
@@ -278,8 +276,8 @@ let propertyDialogShowAll = false;
 let clipboardItems: { components: WebviewComponentModel[]; wires: WebviewWireModel[] } | undefined;
 const activePushShortcutIds = new Set<string>();
 /** `true` durante QUALQUER gesto de arrastar componente em andamento (mouse ainda pressionado) --
- * `render()` reconstrói `app.innerHTML` inteiro (ver função `render`), o que destrói o elemento
- * `el` que tem `setPointerCapture()`/os listeners `pointermove`/`pointerup` do arrasto em curso.
+ * mesmo com shell persistente, o render de telemetria pode trocar SVG interno e estado visual no
+ * meio de um gesto que depende de `setPointerCapture()`/listeners `pointermove`/`pointerup`.
  * Como `componentReadout`/`wireVoltages` chegam a cada ~300ms DURANTE a simulação e cada um chama
  * `render()` sem condição, um arrasto em andamento durante a simulação era interrompido a cada
  * poll -- o usuário só conseguia mover um pedacinho por vez, "soltar e começar de novo" a cada
@@ -1106,20 +1104,7 @@ function renderIcon(kind: ToolbarIconKind): SVGSVGElement {
   return svg;
 }
 
-function render(): void {
-  if (!app) return;
-  normalizeSelectedWireSegment();
-  normalizeSelectedWireCorner();
-  app.innerHTML = "";
-  app.appendChild(renderAppBar());
-
-  const canvas = document.createElement("div");
-  canvas.className = "canvas";
-
-  const canvasContent = document.createElement("div");
-  canvasContent.className = "canvas-content";
-  canvasContent.style.transform = `translate(${state.viewport.x}px, ${state.viewport.y}px) scale(${state.viewport.zoom})`;
-
+function installCanvasEventHandlers(canvas: HTMLDivElement, canvasContent: HTMLDivElement): void {
   let marqueeStart: Point | undefined;
   let marqueeStartScreen: Point | undefined;
   let marqueeRectEl: HTMLElement | undefined;
@@ -1291,9 +1276,63 @@ function render(): void {
     },
     { passive: false }
   );
+}
 
-  const wireLayer = document.createElementNS(SVG_NS, "svg");
-  wireLayer.classList.add("wire-layer");
+function ensureRenderShell(): { canvas: HTMLDivElement; canvasContent: HTMLDivElement; wireLayer: SVGSVGElement } | undefined {
+  if (!app) return undefined;
+
+  const nextAppBar = renderAppBar();
+  if (appBarElement) appBarElement.replaceWith(nextAppBar);
+  else app.appendChild(nextAppBar);
+  appBarElement = nextAppBar;
+
+  if (!canvasElement || !canvasContentElement || !wireLayerElement) {
+    canvasElement = document.createElement("div");
+    canvasElement.className = "canvas";
+
+    canvasContentElement = document.createElement("div");
+    canvasContentElement.className = "canvas-content";
+
+    wireLayerElement = document.createElementNS(SVG_NS, "svg");
+    wireLayerElement.classList.add("wire-layer");
+    canvasContentElement.appendChild(wireLayerElement);
+    canvasElement.appendChild(canvasContentElement);
+    installCanvasEventHandlers(canvasElement, canvasContentElement);
+  }
+
+  if (canvasElement.parentElement !== app) app.appendChild(canvasElement);
+  if (appBarElement.nextSibling !== canvasElement) app.insertBefore(canvasElement, appBarElement.nextSibling);
+
+  canvasContentElement.style.transform = `translate(${state.viewport.x}px, ${state.viewport.y}px) scale(${state.viewport.zoom})`;
+  if (wireLayerElement.parentElement !== canvasContentElement) canvasContentElement.insertBefore(wireLayerElement, canvasContentElement.firstChild);
+  else if (canvasContentElement.firstChild !== wireLayerElement) canvasContentElement.insertBefore(wireLayerElement, canvasContentElement.firstChild);
+
+  return { canvas: canvasElement, canvasContent: canvasContentElement, wireLayer: wireLayerElement };
+}
+
+function clearEphemeralCanvasChildren(canvasContent: HTMLDivElement): void {
+  for (const child of Array.from(canvasContent.children)) {
+    if (!(child instanceof HTMLElement)) continue;
+    if (
+      child.classList.contains("component--board-overlay") ||
+      child.classList.contains("component-floating-label") ||
+      child.classList.contains("junction-dot")
+    ) {
+      child.remove();
+    }
+  }
+}
+
+function render(): void {
+  if (!app) return;
+  normalizeSelectedWireSegment();
+  normalizeSelectedWireCorner();
+  const shell = ensureRenderShell();
+  if (!shell) return;
+  const { canvasContent, wireLayer } = shell;
+  clearEphemeralCanvasChildren(canvasContent);
+  wireLayer.replaceChildren();
+
   for (const wire of state.wires) {
     const points = wirePolylinePoints(wire);
     if (points.length < 2) continue;
@@ -1307,7 +1346,6 @@ function render(): void {
     renderWireCornerHandles(wireLayer, wire, points);
   }
   renderPendingWirePreview(wireLayer);
-  canvasContent.appendChild(wireLayer);
 
   const visibleComponentIds = new Set<string>();
   for (const component of state.components.filter((entry) => !entry.hidden && isVisibleInCurrentMode(entry))) {
@@ -1355,8 +1393,6 @@ function render(): void {
     canvasContent.appendChild(renderJunction(component));
   }
 
-  canvas.appendChild(canvasContent);
-  app.append(canvas);
   renderInstrumentPopups();
 }
 
@@ -2286,6 +2322,29 @@ function interactionKindFor(typeId: string): InteractionKindEntry {
   return "none";
 }
 
+function viewSpecInteractionFor<K extends ViewSpecInteraction["kind"]>(
+  typeId: string,
+  kind: K
+): Extract<ViewSpecInteraction, { kind: K }> | undefined {
+  const interactions = state.catalog.find((entry) => entry.typeId === typeId)?.package?.viewSpec?.interaction;
+  if (!interactions) return undefined;
+  return Object.values(interactions).find(
+    (entry): entry is Extract<ViewSpecInteraction, { kind: K }> => entry.kind === kind
+  );
+}
+
+function mapLinear(value: number, from: [number, number], to: [number, number]): number {
+  if (from[0] === from[1]) return to[0];
+  const t = (value - from[0]) / (from[1] - from[0]);
+  return to[0] + t * (to[1] - to[0]);
+}
+
+function numericComponentProperty(component: WebviewComponentModel, prop: string | undefined, fallback: number): number {
+  if (!prop) return fallback;
+  const value = Number(component.properties[prop]);
+  return Number.isFinite(value) ? value : fallback;
+}
+
 function usesEmbeddedValueLabel(typeId: string): boolean {
   // sources.fixed_volt/sources.rail mostram um valor CONFIGURADO (propriedade estática), não uma
   // leitura medida -- conceito diferente de `readoutFormat` (ABI v2), que é só pra instrumentos com
@@ -3057,8 +3116,9 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
   const isSwitchToggle = component.typeId === "switches.switch";
   const isFixedVolt = component.typeId === "sources.fixed_volt";
   const isExpandableInstrument = component.typeId === "meters.oscope" || component.typeId === "meters.logic_analyzer";
-  const isJoystick = catalogInteractionKind === "joystick";
-  const isEncoder = catalogInteractionKind === "encoder";
+  const isJoystick = catalogInteractionKind === "joystick" || Boolean(viewSpecInteractionFor(component.typeId, "dragVector"));
+  const isEncoder = catalogInteractionKind === "encoder" || Boolean(viewSpecInteractionFor(component.typeId, "dragAngular"));
+  const isTouchpad = catalogInteractionKind === "touchpad" || Boolean(viewSpecInteractionFor(component.typeId, "touchPoint"));
 
   // Clique-pra-alternar (push/switch/fixed-volt) é desambiguado de ARRASTAR dentro do handler
   // genérico de `pointerdown` mais abaixo (ver `DRAG_THRESHOLD_PX`) -- antes disto, estes 3 tipos
@@ -3078,22 +3138,27 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
 
   if (isEncoder) {
     el.addEventListener("wheel", (event) => {
-      if (!(event.target instanceof Element) || !event.target.closest(".encoder-hit-zone")) return;
+      if (!(event.target instanceof Element) || !event.target.closest(".encoder-hit-zone, .viewspec-interaction-dragAngular")) return;
       event.preventDefault();
       event.stopPropagation();
       const comp = liveComponent();
       if (!comp) return;
-      const currentPos = typeof comp.properties.position === "number" ? comp.properties.position : 0;
+      const turn = viewSpecInteractionFor(comp.typeId, "dragAngular");
+      const positionProp = turn?.prop ?? "position";
+      const stepsRevFallback = turn?.stepsPerRev ?? 20;
+      const stepsRev = numericComponentProperty(comp, turn?.stepsPerRevProp ?? "steps_rev", stepsRevFallback);
+      const centerX = turn?.cx ?? 20;
+      const centerY = turn?.cy ?? 20;
+      const currentPos = numericComponentProperty(comp, positionProp, 0);
       const delta = event.deltaY > 0 ? 1 : -1;
       const newPos = currentPos + delta;
-      comp.properties.position = newPos;
-      send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: comp.id, name: "position", value: newPos });
+      comp.properties[positionProp] = newPos;
+      send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: comp.id, name: positionProp, value: newPos });
       // Rotate the indicator line visually based on position
-      const stepsRev = typeof comp.properties.steps_rev === "number" ? comp.properties.steps_rev : 20;
       const indicatorEl = el.querySelector<SVGElement>(".encoder-indicator");
       if (indicatorEl) {
         const angle = ((((newPos % stepsRev) + stepsRev) % stepsRev) / stepsRev) * 360;
-        indicatorEl.setAttribute("transform", `rotate(${angle}, 20, 20)`);
+        indicatorEl.setAttribute("transform", `rotate(${angle}, ${centerX}, ${centerY})`);
       }
       persistState();
     }, { passive: false });
@@ -3245,17 +3310,37 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
     // SimulIDE cobre com o widget -- clique fora dessa zona NUNCA tenta alternar, vira arrasto puro
     // desde o primeiro pixel, igual a qualquer componente comum.
     // Joystick drag: arrastar o círculo interno manda x_pos/y_pos ao Core e mola de volta ao centro.
+    // Encoder drag: arrasto angular no knob incrementa/decrementa a posição.
+    // Touchpad drag: arrastar dentro da área sensível manda touch_x/touch_y/pressed ao Core.
     // SW button: clicar no `.sw-hit-zone` alterna sw_pressed (para joystick e encoder).
-    if (isJoystick || isEncoder) {
-      const hitJoystick = isJoystick && event.target instanceof Element && Boolean(event.target.closest(".joystick-hit-zone"));
-      const hitSw = event.target instanceof Element && Boolean(event.target.closest(".sw-hit-zone"));
+    if (isJoystick || isEncoder || isTouchpad) {
+      const dragVector = viewSpecInteractionFor(component.typeId, "dragVector");
+      const dragAngular = viewSpecInteractionFor(component.typeId, "dragAngular");
+      const touchPoint = viewSpecInteractionFor(component.typeId, "touchPoint");
+      const press = viewSpecInteractionFor(component.typeId, "press");
+      const hitJoystick = isJoystick && event.target instanceof Element && Boolean(event.target.closest(".joystick-hit-zone, .viewspec-interaction-dragVector"));
+      const hitEncoder = isEncoder && event.target instanceof Element && Boolean(event.target.closest(".encoder-hit-zone, .viewspec-interaction-dragAngular"));
+      const hitTouchpad = isTouchpad && event.target instanceof Element && Boolean(event.target.closest(".touchpad-hit-zone, .viewspec-interaction-touchPoint"));
+      const hitSw = event.target instanceof Element && Boolean(event.target.closest(".sw-hit-zone, .viewspec-interaction-press"));
       if (hitJoystick) {
         const joystickEl = el.querySelector<SVGElement>(".joystick-hit-zone");
         const startClientX = event.clientX;
         const startClientY = event.clientY;
-        // Bowl r=17, thumbstick r=10 → max translation = 17-10 = 7 (stick stays within bowl boundary).
-        // The 7-unit scale maps to ±511 ADC units (0-1023, center=512).
-        const JOYSTICK_CLAMP = 7;
+        const dragLimit = dragVector?.limits
+          ? state.catalog.find((entry) => entry.typeId === component.typeId)?.package?.viewSpec?.limits?.[dragVector.limits]
+          : undefined;
+        const xMapping = dragVector?.x;
+        const yMapping = dragVector?.y;
+        const xProp = xMapping?.prop ?? "x_pos";
+        const yProp = yMapping?.prop ?? "y_pos";
+        const xPropRange = xMapping?.propRange ?? [0, 1023] as [number, number];
+        const yPropRange = yMapping?.propRange ?? [0, 1023] as [number, number];
+        const xPixelRange = xMapping?.pixelRange ?? [-7, 7] as [number, number];
+        const yPixelRange = yMapping?.pixelRange ?? [-7, 7] as [number, number];
+        // Bowl r=17, thumbstick r=10 -> max translation = 7 unless a ViewSpec limit overrides it.
+        const JOYSTICK_CLAMP =
+          dragLimit?.radius ??
+          Math.max(Math.abs(xPixelRange[0]), Math.abs(xPixelRange[1]), Math.abs(yPixelRange[0]), Math.abs(yPixelRange[1]), 1);
         const onJoystickMove = (moveEvent: PointerEvent) => {
           const zoom = state.viewport.zoom || 1;
           const rawDx = (moveEvent.clientX - startClientX) / zoom;
@@ -3264,14 +3349,14 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
           const clampedDx = dist > JOYSTICK_CLAMP ? rawDx * JOYSTICK_CLAMP / dist : rawDx;
           const clampedDy = dist > JOYSTICK_CLAMP ? rawDy * JOYSTICK_CLAMP / dist : rawDy;
           if (joystickEl) joystickEl.setAttribute("transform", `translate(${clampedDx},${clampedDy})`);
-          const x_pos = Math.round(512 + clampedDx * 511 / JOYSTICK_CLAMP);
-          const y_pos = Math.round(512 + clampedDy * 511 / JOYSTICK_CLAMP);
+          const x_pos = Math.round(mapLinear(clampedDx, xPixelRange, xPropRange));
+          const y_pos = Math.round(mapLinear(clampedDy, yPixelRange, yPropRange));
           const comp = liveComponent();
           if (comp) {
-            comp.properties.x_pos = x_pos;
-            comp.properties.y_pos = y_pos;
-            send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: comp.id, name: "x_pos", value: x_pos });
-            send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: comp.id, name: "y_pos", value: y_pos });
+            comp.properties[xProp] = x_pos;
+            comp.properties[yProp] = y_pos;
+            send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: comp.id, name: xProp, value: x_pos });
+            send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: comp.id, name: yProp, value: y_pos });
           }
         };
         const onJoystickUp = () => {
@@ -3281,11 +3366,13 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
           isDraggingComponent = false;
           if (joystickEl) joystickEl.removeAttribute("transform");
           const comp = liveComponent();
-          if (comp) {
-            comp.properties.x_pos = 512;
-            comp.properties.y_pos = 512;
-            send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: comp.id, name: "x_pos", value: 512 });
-            send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: comp.id, name: "y_pos", value: 512 });
+          if (comp && dragVector?.springBack !== false) {
+            const centerX = Math.round((xPropRange[0] + xPropRange[1]) / 2);
+            const centerY = Math.round((yPropRange[0] + yPropRange[1]) / 2);
+            comp.properties[xProp] = centerX;
+            comp.properties[yProp] = centerY;
+            send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: comp.id, name: xProp, value: centerX });
+            send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: comp.id, name: yProp, value: centerY });
           }
           persistState();
           render();
@@ -3297,20 +3384,174 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
         el.addEventListener("pointercancel", onJoystickUp, { once: true });
         return;
       }
+      if (hitEncoder) {
+        // Arrasto angular (igual ao QDial nativo do SimulIDE): atan2 do cursor em relação ao centro
+        // do knob. Acumula fração de steps para resposta suave (igual ao `single-step` do QDial).
+        const svgEl = el.querySelector<SVGElement>(".component__symbol");
+        const indicatorEl = el.querySelector<SVGElement>(".encoder-indicator");
+        if (!svgEl) { isDraggingComponent = false; return; }
+        const svgRect = svgEl.getBoundingClientRect();
+        const viewBoxParts = svgEl.getAttribute("viewBox")?.split(" ") ?? [];
+        const vbW = parseFloat(viewBoxParts[2] ?? "40");
+        const vbH = parseFloat(viewBoxParts[3] ?? "64");
+        const centerX = dragAngular?.cx ?? 20;
+        const centerY = dragAngular?.cy ?? 20;
+        const positionProp = dragAngular?.prop ?? "position";
+        const hitElement = event.target instanceof Element
+          ? event.target.closest(".encoder-hit-zone, .viewspec-interaction-dragAngular")
+          : undefined;
+        const hitRect = hitElement instanceof SVGGraphicsElement ? hitElement.getBoundingClientRect() : undefined;
+        // Para o ângulo do mouse, usa o centro real da região clicável já deslocada no viewBox.
+        // Para o transform do indicador, `centerX/centerY` continuam sendo coordenadas nativas do package.
+        const kx = hitRect ? hitRect.left + hitRect.width / 2 : svgRect.left + (centerX / vbW) * svgRect.width;
+        const ky = hitRect ? hitRect.top + hitRect.height / 2 : svgRect.top  + (centerY / vbH) * svgRect.height;
+        const dx0 = event.clientX - kx;
+        const dy0 = event.clientY - ky;
+        if (Math.hypot(dx0, dy0) < 3) {
+          // Zona morta: ponteiro no centro exato — consume mas não inicia arrasto angular
+          isDraggingComponent = false;
+          return;
+        }
+        const comp0 = liveComponent();
+        const stepsRevFallback = dragAngular?.stepsPerRev ?? 20;
+        const stepsRev = comp0 ? numericComponentProperty(comp0, dragAngular?.stepsPerRevProp ?? "steps_rev", stepsRevFallback) : stepsRevFallback;
+        const radPerStep = (2 * Math.PI) / stepsRev;
+        let prevAngle = Math.atan2(dy0, dx0);
+        let accumDelta = 0;
+        const onEncoderMove = (moveEvent: PointerEvent) => {
+          const dx = moveEvent.clientX - kx;
+          const dy = moveEvent.clientY - ky;
+          if (Math.hypot(dx, dy) < 3) return;
+          let dAngle = Math.atan2(dy, dx) - prevAngle;
+          if (dAngle >  Math.PI) dAngle -= 2 * Math.PI;
+          if (dAngle < -Math.PI) dAngle += 2 * Math.PI;
+          prevAngle = Math.atan2(dy, dx);
+          accumDelta += dAngle / radPerStep;
+          const steps = Math.trunc(accumDelta);
+          if (steps !== 0) {
+            accumDelta -= steps;
+            const comp = liveComponent();
+            if (comp) {
+              const currentPos = numericComponentProperty(comp, positionProp, 0);
+              const newPos = currentPos + steps;
+              comp.properties[positionProp] = newPos;
+              send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: comp.id, name: positionProp, value: newPos });
+              if (indicatorEl) {
+                const angle = ((((newPos % stepsRev) + stepsRev) % stepsRev) / stepsRev) * 360;
+                indicatorEl.setAttribute("transform", `rotate(${angle}, ${centerX}, ${centerY})`);
+              }
+              persistState();
+            }
+          }
+        };
+        const onEncoderUp = () => {
+          el.removeEventListener("pointermove", onEncoderMove);
+          el.removeEventListener("pointerup", onEncoderUp);
+          el.removeEventListener("pointercancel", onEncoderUp);
+          isDraggingComponent = false;
+          render();
+        };
+        isDraggingComponent = true;
+        el.setPointerCapture(event.pointerId);
+        el.addEventListener("pointermove", onEncoderMove);
+        el.addEventListener("pointerup", onEncoderUp, { once: true });
+        el.addEventListener("pointercancel", onEncoderUp, { once: true });
+        return;
+      }
+      if (hitTouchpad) {
+        const svgEl = el.querySelector<SVGSVGElement>(".component__symbol");
+        if (!svgEl) { isDraggingComponent = false; return; }
+        const indicatorEl = el.querySelector<SVGElement>(".touch-indicator");
+        const xPixelRange = touchPoint?.x.pixelRange ?? [4, 116] as [number, number];
+        const yPixelRange = touchPoint?.y.pixelRange ?? [4, 140] as [number, number];
+        const touchMinX = Math.min(xPixelRange[0], xPixelRange[1]);
+        const touchMaxX = Math.max(xPixelRange[0], xPixelRange[1]);
+        const touchMinY = Math.min(yPixelRange[0], yPixelRange[1]);
+        const touchMaxY = Math.max(yPixelRange[0], yPixelRange[1]);
+        const touchPropX = touchPoint?.x.prop ?? "touch_x";
+        const touchPropY = touchPoint?.y.prop ?? "touch_y";
+        const pressedProp = touchPoint?.pressedProp ?? "pressed";
+        const pointFromEvent = (pointerEvent: PointerEvent): { x: number; y: number } => {
+          const svgRect = svgEl.getBoundingClientRect();
+          const viewBoxParts = svgEl.getAttribute("viewBox")?.split(/\s+/) ?? [];
+          const vbX = parseFloat(viewBoxParts[0] ?? "0");
+          const vbY = parseFloat(viewBoxParts[1] ?? "0");
+          const vbW = parseFloat(viewBoxParts[2] ?? String(svgRect.width || Math.max(1, touchMaxX - touchMinX)));
+          const vbH = parseFloat(viewBoxParts[3] ?? String(svgRect.height || Math.max(1, touchMaxY - touchMinY)));
+          const localX = vbX + ((pointerEvent.clientX - svgRect.left) / Math.max(1, svgRect.width)) * vbW;
+          const localY = vbY + ((pointerEvent.clientY - svgRect.top) / Math.max(1, svgRect.height)) * vbH;
+          return {
+            x: Math.max(touchMinX, Math.min(touchMaxX, localX)),
+            y: Math.max(touchMinY, Math.min(touchMaxY, localY)),
+          };
+        };
+        const applyTouch = (pointerEvent: PointerEvent, pressed: boolean) => {
+          const point = pointFromEvent(pointerEvent);
+          const comp = liveComponent();
+          if (!comp) return;
+          const widthPx = Math.max(1, Number(comp.properties.width) || 240);
+          const heightPx = Math.max(1, Number(comp.properties.height) || 320);
+          const xOutputRange = touchPropX === "touch_x" ? [0, widthPx] as [number, number] : (touchPoint?.x.propRange ?? [0, widthPx] as [number, number]);
+          const yOutputRange = touchPropY === "touch_y" ? [0, heightPx] as [number, number] : (touchPoint?.y.propRange ?? [0, heightPx] as [number, number]);
+          const touchX = Math.round(mapLinear(point.x, xPixelRange, xOutputRange));
+          const touchY = Math.round(mapLinear(point.y, yPixelRange, yOutputRange));
+          comp.properties[touchPropX] = touchX;
+          comp.properties[touchPropY] = touchY;
+          comp.properties[pressedProp] = pressed;
+          send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: comp.id, name: touchPropX, value: touchX });
+          send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: comp.id, name: touchPropY, value: touchY });
+          send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: comp.id, name: pressedProp, value: pressed });
+          if (indicatorEl) {
+            const dx = mapLinear(touchX, xOutputRange, [0, 112]);
+            const dy = mapLinear(touchY, yOutputRange, [0, 136]);
+            indicatorEl.setAttribute("transform", `translate(${dx.toFixed(2)},${dy.toFixed(2)})`);
+            indicatorEl.style.display = pressed ? "" : "none";
+          }
+        };
+        const onTouchpadMove = (moveEvent: PointerEvent) => {
+          applyTouch(moveEvent, true);
+          persistState();
+        };
+        const onTouchpadUp = (upEvent: PointerEvent) => {
+          el.removeEventListener("pointermove", onTouchpadMove);
+          el.removeEventListener("pointerup", onTouchpadUp);
+          el.removeEventListener("pointercancel", onTouchpadUp);
+          applyTouch(upEvent, false);
+          isDraggingComponent = false;
+          persistState();
+          render();
+        };
+        isDraggingComponent = true;
+        el.setPointerCapture(event.pointerId);
+        applyTouch(event, true);
+        persistState();
+        el.addEventListener("pointermove", onTouchpadMove);
+        el.addEventListener("pointerup", onTouchpadUp, { once: true });
+        el.addEventListener("pointercancel", onTouchpadUp, { once: true });
+        return;
+      }
       if (hitSw) {
+        const pressProp = press?.prop ?? "sw_pressed";
+        const pressedValue = press?.pressedValue ?? true;
+        const releasedValue = press?.releasedValue ?? false;
+        const comp = liveComponent();
+        if (comp) {
+          comp.properties[pressProp] = pressedValue;
+          send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: comp.id, name: pressProp, value: pressedValue });
+        }
         const onSwUp = () => {
           el.removeEventListener("pointerup", onSwUp);
           el.removeEventListener("pointercancel", onSwUp);
           isDraggingComponent = false;
           const comp = liveComponent();
           if (comp) {
-            const newVal = comp.properties.sw_pressed !== true;
-            comp.properties.sw_pressed = newVal;
-            send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: comp.id, name: "sw_pressed", value: newVal });
+            comp.properties[pressProp] = releasedValue;
+            send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: comp.id, name: pressProp, value: releasedValue });
           }
           persistState();
           render();
         };
+        persistState();
         el.addEventListener("pointerup", onSwUp, { once: true });
         el.addEventListener("pointercancel", onSwUp, { once: true });
         return;
@@ -3392,8 +3633,9 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
   const isMeter = component.typeId.startsWith("meters.") || component.typeId === "instruments.voltmeter";
   const meterClass = isMeter ? `component--meter component--${component.typeId.replace(/[._]/g, "-")}` : "";
   const isVoltmeter = component.typeId === "instruments.voltmeter"; // só tinge o símbolo, ver styles.css
+  const hasPackageVisual = Boolean(catalogEntry?.package || (component.properties.logicSymbol === true && catalogEntry?.logicSymbolPackage));
 
-  el.className = `component ${isComponentSelected(component.id) ? "selected" : ""} ${isVoltmeter ? "component--voltmeter" : ""} ${isPushButton ? "component--push" : ""} ${isSwitchToggle ? "component--switch" : ""} ${isFixedVolt ? "component--fixed-volt" : ""} ${isRail ? "component--rail" : ""} ${isTunnel ? "component--tunnel" : ""} ${meterClass}`;
+  el.className = `component ${isComponentSelected(component.id) ? "selected" : ""} ${hasPackageVisual ? "component--package" : ""} ${isVoltmeter ? "component--voltmeter" : ""} ${isPushButton ? "component--push" : ""} ${isSwitchToggle ? "component--switch" : ""} ${isFixedVolt ? "component--fixed-volt" : ""} ${isRail ? "component--rail" : ""} ${isTunnel ? "component--tunnel" : ""} ${meterClass}`;
   el.style.left = `${component.x}px`;
   el.style.top = `${component.y}px`;
   el.style.width = `${box.width}px`;
@@ -3423,7 +3665,7 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
     if (component.properties.out === true) svg.classList.add("component__symbol--fixed-volt-on");
   }
   const symbolProperties = runtimeSymbolProperties(component);
-  bodyGroup.innerHTML = packageSymbolSvg(component.typeId, symbolProperties) ?? catalogEntry?.symbolSvg ?? componentSymbolSvg(component.typeId, symbolProperties);
+  bodyGroup.innerHTML = packageSymbolSvg(component.typeId, symbolProperties, component.id) ?? catalogEntry?.symbolSvg ?? componentSymbolSvg(component.typeId, symbolProperties);
   svg.appendChild(bodyGroup);
   const tunnelLabel = bodyGroup.querySelector<SVGTextElement>(".tunnel-name");
   if (tunnelLabel && (component.flipH || component.flipV)) {

@@ -1,20 +1,186 @@
-﻿{
+{
   "schemaVersion": 1,
   "typeId": "active.diac",
   "name": "Diac",
   "language": "pt-BR",
-  "translations": { "en": { "name": "Diac" } },
-  "abiVersion": { "major": 4, "minor": 0 },
-  "nativeEntry": { "win32-x64": "build-msvc/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" },
+  "translations": {
+    "en": {
+      "name": "Diac"
+    }
+  },
+  "abiVersion": {
+    "major": 4,
+    "minor": 0
+  },
+  "nativeEntry": {
+    "win32-x64": "build-msvc/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
   "pins": [
-    { "id": "a1", "kind": "ANALOG_IN", "x": 0, "y": 16, "angle": 180, "length": 8, "label": "A1" },
-    { "id": "a2", "kind": "ANALOG_IN", "x": 32, "y": 16, "angle": 0, "length": 8, "label": "A2" }
+    {
+      "id": "a1",
+      "kind": "ANALOG_IN",
+      "x": 0,
+      "y": 16,
+      "angle": 180,
+      "length": 8,
+      "label": "A1"
+    },
+    {
+      "id": "a2",
+      "kind": "ANALOG_IN",
+      "x": 32,
+      "y": 16,
+      "angle": 0,
+      "length": 8,
+      "label": "A2"
+    }
   ],
   "properties": [
-    { "id": "resOn", "label": "Resistencia ligada", "group": "Principal", "valueKind": "number", "editor": "number", "default": 500, "min": 0.000001, "step": 1 },
-    { "id": "resOff", "label": "Resistencia desligada", "group": "Principal", "valueKind": "number", "editor": "number", "default": 100000000, "min": 1, "step": 1 },
-    { "id": "breakdown", "label": "Tensao de ruptura", "group": "Principal", "valueKind": "number", "editor": "number", "default": 30, "min": 0, "step": 0.1 },
-    { "id": "holdCurrent", "label": "Corrente de manutencao", "group": "Principal", "valueKind": "number", "editor": "number", "default": 0.01, "min": 0, "step": 0.001 }
+    {
+      "id": "resOn",
+      "label": "Resistencia ligada",
+      "group": "Principal",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 500,
+      "min": 0.000001,
+      "step": 1
+    },
+    {
+      "id": "resOff",
+      "label": "Resistencia desligada",
+      "group": "Principal",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 100000000,
+      "min": 1,
+      "step": 1
+    },
+    {
+      "id": "breakdown",
+      "label": "Tensao de ruptura",
+      "group": "Principal",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 30,
+      "min": 0,
+      "step": 0.1
+    },
+    {
+      "id": "holdCurrent",
+      "label": "Corrente de manutencao",
+      "group": "Principal",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 0.01,
+      "min": 0,
+      "step": 0.001
+    }
   ],
-  "limits": { "stepTimeoutMs": 8, "expectedComplexity": "high" }
+  "limits": {
+    "stepTimeoutMs": 8,
+    "expectedComplexity": "high"
+  },
+  "package": {
+    "width": 36,
+    "height": 32,
+    "border": false,
+    "background": {
+      "kind": "none"
+    },
+    "shapes": [],
+    "pins": [
+      {
+        "id": "a1",
+        "x": 0,
+        "y": 16,
+        "angle": 180,
+        "length": 8,
+        "label": "A1"
+      },
+      {
+        "id": "a2",
+        "x": 32,
+        "y": 16,
+        "angle": 0,
+        "length": 8,
+        "label": "A2"
+      }
+    ],
+    "viewSpec": {
+      "paint": [
+        {
+          "kind": "polygon",
+          "points": [
+            {
+              "x": 25,
+              "y": 8
+            },
+            {
+              "x": 10,
+              "y": 1
+            },
+            {
+              "x": 10,
+              "y": 16
+            }
+          ],
+          "fill": "#222222"
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            {
+              "x": 11,
+              "y": 24
+            },
+            {
+              "x": 26,
+              "y": 16
+            },
+            {
+              "x": 26,
+              "y": 31
+            }
+          ],
+          "fill": "#222222"
+        },
+        {
+          "kind": "line",
+          "x1": 10,
+          "y1": 0,
+          "x2": 10,
+          "y2": 32,
+          "strokeWidth": 3
+        },
+        {
+          "kind": "line",
+          "x1": 26,
+          "y1": 0,
+          "x2": 26,
+          "y2": 32,
+          "strokeWidth": 3
+        },
+        {
+          "kind": "text",
+          "x": 18,
+          "y": -4,
+          "value": "__label",
+          "fontSize": 5,
+          "color": "#0000aa"
+        }
+      ]
+    }
+  },
+  "icon": "diac",
+  "folderPath": [
+    "Ativos",
+    "Rectifiers"
+  ],
+  "defaultProperties": {
+    "threshold": 30,
+    "resistance": 1
+  }
 }

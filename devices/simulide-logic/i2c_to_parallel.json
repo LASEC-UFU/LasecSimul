@@ -1,33 +1,253 @@
-﻿{
+{
   "schemaVersion": 1,
   "typeId": "logic.i2c_to_parallel",
   "name": "I2C to Parallel",
   "language": "pt-BR",
-  "abiVersion": { "major": 4, "minor": 0 },
+  "abiVersion": {
+    "major": 4,
+    "minor": 0
+  },
   "nativeEntry": {
     "win32-x64": "build-msvc/device.dll",
     "linux-x64": "build/linux-x64/device.so",
     "darwin-universal": "build/macos-universal/device.dylib"
   },
   "pins": [
-    { "id": "sda", "kind": "DIGITAL_BIDIR" },
-    { "id": "scl", "kind": "DIGITAL_BIDIR" },
-    { "id": "a0", "kind": "DIGITAL_IN" },
-    { "id": "a1", "kind": "DIGITAL_IN" },
-    { "id": "a2", "kind": "DIGITAL_IN" },
-    { "id": "int", "kind": "DIGITAL_OUT" },
-    { "id": "d0", "kind": "DIGITAL_BIDIR" },
-    { "id": "d1", "kind": "DIGITAL_BIDIR" },
-    { "id": "d2", "kind": "DIGITAL_BIDIR" },
-    { "id": "d3", "kind": "DIGITAL_BIDIR" },
-    { "id": "d4", "kind": "DIGITAL_BIDIR" },
-    { "id": "d5", "kind": "DIGITAL_BIDIR" },
-    { "id": "d6", "kind": "DIGITAL_BIDIR" },
-    { "id": "d7", "kind": "DIGITAL_BIDIR" }
+    {
+      "id": "sda",
+      "kind": "DIGITAL_BIDIR"
+    },
+    {
+      "id": "scl",
+      "kind": "DIGITAL_BIDIR"
+    },
+    {
+      "id": "a0",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "a1",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "a2",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "int",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "d0",
+      "kind": "DIGITAL_BIDIR"
+    },
+    {
+      "id": "d1",
+      "kind": "DIGITAL_BIDIR"
+    },
+    {
+      "id": "d2",
+      "kind": "DIGITAL_BIDIR"
+    },
+    {
+      "id": "d3",
+      "kind": "DIGITAL_BIDIR"
+    },
+    {
+      "id": "d4",
+      "kind": "DIGITAL_BIDIR"
+    },
+    {
+      "id": "d5",
+      "kind": "DIGITAL_BIDIR"
+    },
+    {
+      "id": "d6",
+      "kind": "DIGITAL_BIDIR"
+    },
+    {
+      "id": "d7",
+      "kind": "DIGITAL_BIDIR"
+    }
   ],
   "properties": [
-    { "id": "controlCode", "label": "I2C Address", "group": "Main", "valueKind": "number", "editor": "number", "default": 80, "min": 0, "max": 127, "step": 1 },
-    { "id": "frequencyKHz", "label": "I2C Frequency", "group": "Main", "valueKind": "number", "editor": "number", "default": 100, "min": 1, "step": 1, "unit": "kHz" }
+    {
+      "id": "controlCode",
+      "label": "I2C Address",
+      "group": "Main",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 80,
+      "min": 0,
+      "max": 127,
+      "step": 1
+    },
+    {
+      "id": "frequencyKHz",
+      "label": "I2C Frequency",
+      "group": "Main",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 100,
+      "min": 1,
+      "step": 1,
+      "unit": "kHz"
+    }
   ],
-  "limits": { "stepTimeoutMs": 4, "expectedComplexity": "medium" }
+  "limits": {
+    "stepTimeoutMs": 4,
+    "expectedComplexity": "medium"
+  },
+  "package": {
+    "width": 48,
+    "height": 64,
+    "border": false,
+    "background": {
+      "kind": "none"
+    },
+    "shapes": [],
+    "pins": [
+      {
+        "id": "sda",
+        "x": 0,
+        "y": 8,
+        "angle": 180,
+        "length": 8,
+        "label": "SDA"
+      },
+      {
+        "id": "scl",
+        "x": 0,
+        "y": 16,
+        "angle": 180,
+        "length": 8,
+        "label": "SCL"
+      },
+      {
+        "id": "a0",
+        "x": 0,
+        "y": 24,
+        "angle": 180,
+        "length": 8,
+        "label": "A0"
+      },
+      {
+        "id": "a1",
+        "x": 0,
+        "y": 32,
+        "angle": 180,
+        "length": 8,
+        "label": "A1"
+      },
+      {
+        "id": "a2",
+        "x": 0,
+        "y": 40,
+        "angle": 180,
+        "length": 8,
+        "label": "A2"
+      },
+      {
+        "id": "int",
+        "x": 48,
+        "y": 8,
+        "angle": 0,
+        "length": 8,
+        "label": "INT"
+      },
+      {
+        "id": "d0",
+        "x": 0,
+        "y": 48,
+        "angle": 180,
+        "length": 8,
+        "label": "D0"
+      },
+      {
+        "id": "d1",
+        "x": 0,
+        "y": 56,
+        "angle": 180,
+        "length": 8,
+        "label": "D1"
+      },
+      {
+        "id": "d2",
+        "x": 0,
+        "y": 64,
+        "angle": 180,
+        "length": 8,
+        "label": "D2"
+      },
+      {
+        "id": "d3",
+        "x": 0,
+        "y": 72,
+        "angle": 180,
+        "length": 8,
+        "label": "D3"
+      },
+      {
+        "id": "d4",
+        "x": 0,
+        "y": 80,
+        "angle": 180,
+        "length": 8,
+        "label": "D4"
+      },
+      {
+        "id": "d5",
+        "x": 0,
+        "y": 88,
+        "angle": 180,
+        "length": 8,
+        "label": "D5"
+      },
+      {
+        "id": "d6",
+        "x": 0,
+        "y": 96,
+        "angle": 180,
+        "length": 8,
+        "label": "D6"
+      },
+      {
+        "id": "d7",
+        "x": 0,
+        "y": 104,
+        "angle": 180,
+        "length": 8,
+        "label": "D7"
+      }
+    ],
+    "viewSpec": {
+      "paint": [
+        {
+          "kind": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 48,
+          "h": 64,
+          "fill": "#ffffff"
+        },
+        {
+          "kind": "text",
+          "x": 24,
+          "y": -4,
+          "value": "__label",
+          "fontSize": 5,
+          "color": "#0000aa"
+        }
+      ]
+    }
+  },
+  "icon": "2to3g",
+  "folderPath": [
+    "Logicos",
+    "Conversores"
+  ],
+  "defaultProperties": {
+    "controlCode": 80,
+    "frequencyKHz": 100
+  }
 }

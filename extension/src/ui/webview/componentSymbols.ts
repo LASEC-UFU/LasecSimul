@@ -10,7 +10,7 @@
  * layout de pino são calculados a partir da caixa do tipo, nunca de uma constante global de tamanho.
  */
 
-import { PackageDescriptor, PackagePin, PackageShape, SIMULIDE_PACKAGE_GRID_UNIT } from "./model.js";
+import { ComponentViewSpec, PackageDescriptor, PackagePin, PackageShape, SIMULIDE_PACKAGE_GRID_UNIT, ViewSpecHitTest } from "./model.js";
 
 export interface ComponentBox {
   width: number;
@@ -128,10 +128,12 @@ function resolvedPackageFor(typeId: string, properties?: Record<string, unknown>
 
 /** Corpo do símbolo a partir do `package` real, se este typeId tiver um registrado -- `undefined`
  * pra `main.ts` cair em `catalogEntry?.symbolSvg ?? componentSymbolSvg(typeId)` (mesma prioridade
- * de sempre, só com `package` real entrando ANTES de symbolSvg). */
-export function packageSymbolSvg(typeId: string, properties?: Record<string, unknown>): string | undefined {
+ * de sempre, só com `package` real entrando ANTES de symbolSvg).
+ * `componentId` é opcional mas necessário para ativar o ViewSpec renderer (gradientes escopados + stateProjection).
+ * Chamadas sem `componentId` (ex: testes, paleta) usam o caminho legado `shapes[]`. */
+export function packageSymbolSvg(typeId: string, properties?: Record<string, unknown>, componentId?: string): string | undefined {
   const resolved = resolvedPackageFor(typeId, properties);
-  return resolved ? packageBodySvg(resolved) : undefined;
+  return resolved ? packageBodySvg(resolved, componentId, properties) : undefined;
 }
 
 function escapeXmlText(value: string): string {
@@ -189,26 +191,178 @@ function tracePath(history: number[], x: number, y: number, width: number, heigh
     .join(" ");
 }
 
-function packageShapeSvg(shape: PackageShape): string {
+function packageShapeSvg(shape: PackageShape, extraTransform?: string): string {
   const cls = shape.cssClass ? ` class="${shape.cssClass}"` : "";
+  const xf = extraTransform ? ` transform="${extraTransform}"` : "";
+  const fill = shape.fill ?? "none";
   switch (shape.kind) {
     case "rect":
-      return `<rect${cls} x="${shape.x ?? 0}" y="${shape.y ?? 0}" width="${shape.w ?? 0}" height="${shape.h ?? 0}"${shape.rx !== undefined ? ` rx="${shape.rx}"` : ""}${shape.ry !== undefined ? ` ry="${shape.ry}"` : ""} stroke="${shape.stroke ?? "currentColor"}" fill="${shape.fill ?? "none"}" stroke-width="${shape.strokeWidth ?? 1}"/>`;
+      return `<rect${cls}${xf} x="${shape.x ?? 0}" y="${shape.y ?? 0}" width="${shape.w ?? 0}" height="${shape.h ?? 0}"${shape.rx !== undefined ? ` rx="${shape.rx}"` : ""}${shape.ry !== undefined ? ` ry="${shape.ry}"` : ""} stroke="${shape.stroke ?? "currentColor"}" fill="${fill}" stroke-width="${shape.strokeWidth ?? 1}"/>`;
     case "line":
-      return `<line${cls} x1="${shape.x1 ?? 0}" y1="${shape.y1 ?? 0}" x2="${shape.x2 ?? 0}" y2="${shape.y2 ?? 0}" stroke="${shape.stroke ?? "currentColor"}"/>`;
+      return `<line${cls}${xf} x1="${shape.x1 ?? 0}" y1="${shape.y1 ?? 0}" x2="${shape.x2 ?? 0}" y2="${shape.y2 ?? 0}" stroke="${shape.stroke ?? "currentColor"}"/>`;
     case "ellipse":
-      return `<ellipse${cls} cx="${shape.cx ?? 0}" cy="${shape.cy ?? 0}" rx="${shape.rx ?? 0}" ry="${shape.ry ?? 0}" stroke="${shape.stroke ?? "currentColor"}" fill="${shape.fill ?? "none"}" stroke-width="${shape.strokeWidth ?? 1}"/>`;
+      return `<ellipse${cls}${xf} cx="${shape.cx ?? 0}" cy="${shape.cy ?? 0}" rx="${shape.rx ?? 0}" ry="${shape.ry ?? 0}" stroke="${shape.stroke ?? "currentColor"}" fill="${fill}" stroke-width="${shape.strokeWidth ?? 1}"/>`;
     case "svg":
       return shape.value ?? "";
     case "polygon": {
       const pts = (shape.points ?? []).map(p => `${p.x},${p.y}`).join(" ");
-      return `<polygon${cls} points="${pts}" stroke="${shape.stroke ?? "currentColor"}" fill="${shape.fill ?? "none"}" stroke-width="${shape.strokeWidth ?? 1}"/>`;
+      return `<polygon${cls}${xf} points="${pts}" stroke="${shape.stroke ?? "currentColor"}" fill="${fill}" stroke-width="${shape.strokeWidth ?? 1}"/>`;
+    }
+    case "path":
+      return `<path${cls}${xf} d="${escapeXmlText(shape.d ?? "")}" stroke="${shape.stroke ?? "currentColor"}" fill="${fill}" stroke-width="${shape.strokeWidth ?? 1}"/>`;
+    case "image": {
+      const href = shape.href ?? shape.value ?? "";
+      return `<image${cls}${xf} x="${shape.x ?? 0}" y="${shape.y ?? 0}" width="${shape.w ?? 0}" height="${shape.h ?? 0}" preserveAspectRatio="${escapeXmlText(shape.preserveAspectRatio ?? "none")}" href="${escapeXmlText(href)}"/>`;
     }
     case "text":
     default:
-      return `<text${cls} x="${shape.x ?? 0}" y="${shape.y ?? 0}" text-anchor="middle" font-size="${shape.fontSize ?? 11}" fill="${shape.color ?? "currentColor"}">${escapeXmlText(shape.value ?? "")}</text>`;
+      return `<text${cls}${xf} x="${shape.x ?? 0}" y="${shape.y ?? 0}" text-anchor="${shape.textAnchor ?? "middle"}" font-size="${shape.fontSize ?? 11}" fill="${shape.color ?? "currentColor"}">${escapeXmlText(shape.value ?? "")}</text>`;
   }
 }
+
+// ── ViewSpec renderer ────────────────────────────────────────────────────────────────────────────
+
+/** Resolve um mapeamento linear de eixo: propRange → pixelRange. */
+function resolveAxisMapping(value: number, propRange: [number, number], pixelRange: [number, number]): number {
+  const t = propRange[1] === propRange[0] ? 0 : (value - propRange[0]) / (propRange[1] - propRange[0]);
+  return pixelRange[0] + t * (pixelRange[1] - pixelRange[0]);
+}
+
+function numericViewSpecProperty(properties: Record<string, unknown>, prop: string, fallback: number): number {
+  const value = Number(properties[prop]);
+  return Number.isFinite(value) ? value : fallback;
+}
+
+interface ViewSpecResolvedProjection {
+  transform?: string;
+  fill?: string;
+  visible?: boolean;
+}
+
+/** Computa a projeção visual inicial para um `partId` com base nas propriedades do componente. */
+function viewSpecResolvedProjection(partId: string, spec: ComponentViewSpec, properties: Record<string, unknown>): ViewSpecResolvedProjection {
+  const projections = spec.stateProjection?.[partId];
+  if (!projections) return {};
+  const transforms: string[] = [];
+  let fill: string | undefined;
+  let visible: boolean | undefined;
+  for (const proj of projections) {
+    if (proj.kind === "translate") {
+      const dx = proj.x
+        ? resolveAxisMapping(numericViewSpecProperty(properties, proj.x.prop, (proj.x.propRange[0] + proj.x.propRange[1]) / 2), proj.x.propRange, proj.x.pixelRange)
+        : 0;
+      const dy = proj.y
+        ? resolveAxisMapping(numericViewSpecProperty(properties, proj.y.prop, (proj.y.propRange[0] + proj.y.propRange[1]) / 2), proj.y.propRange, proj.y.pixelRange)
+        : 0;
+      if (dx !== 0 || dy !== 0) transforms.push(`translate(${dx.toFixed(2)},${dy.toFixed(2)})`);
+    } else if (proj.kind === "rotate") {
+      const pos = numericViewSpecProperty(properties, proj.prop, 0);
+      const stepsPerRev = Math.max(1, numericViewSpecProperty(properties, proj.stepsPerRevProp ?? "", proj.stepsPerRev));
+      const angle = (((pos % stepsPerRev) + stepsPerRev) % stepsPerRev) / stepsPerRev * 360;
+      if (angle !== 0) transforms.push(`rotate(${angle.toFixed(2)},${proj.cx},${proj.cy})`);
+    } else if (proj.kind === "fill") {
+      const rawValue = properties[proj.prop];
+      const key = rawValue === undefined ? "absent" : String(rawValue);
+      fill = proj.map[key] ?? proj.map.default ?? fill;
+    } else if (proj.kind === "visible") {
+      const rawValue = properties[proj.prop];
+      const nextVisible = Boolean(rawValue);
+      visible = proj.invert ? !nextVisible : nextVisible;
+    }
+  }
+  return {
+    ...(transforms.length > 0 ? { transform: transforms.join(" ") } : {}),
+    ...(fill ? { fill } : {}),
+    ...(visible !== undefined ? { visible } : {}),
+  };
+}
+
+function viewSpecClassToken(value: string): string {
+  return value.replace(/[^a-zA-Z0-9_-]/g, "_");
+}
+
+function viewSpecHitTestSvg(id: string, region: ViewSpecHitTest, extraClasses: string[]): string {
+  const classes = ["viewspec-hit-zone", `viewspec-hit-${viewSpecClassToken(id)}`, ...extraClasses].join(" ");
+  const cursor = region.cursor ? ` style="cursor:${escapeXmlText(region.cursor)}"` : "";
+  const common = ` class="${classes}" data-viewspec-hit-id="${escapeXmlText(id)}" fill="transparent" stroke="none" pointer-events="all"${cursor}`;
+  switch (region.kind) {
+    case "rect":
+      return `<rect${common} x="${region.x}" y="${region.y}" width="${region.w}" height="${region.h}"/>`;
+    case "circle":
+      return `<circle${common} cx="${region.cx}" cy="${region.cy}" r="${region.r}"/>`;
+    case "ellipse":
+      return `<ellipse${common} cx="${region.cx}" cy="${region.cy}" rx="${region.rx}" ry="${region.ry}"/>`;
+    case "polygon": {
+      const pts = region.points.map((point) => `${point.x},${point.y}`).join(" ");
+      return `<polygon${common} points="${pts}"/>`;
+    }
+    case "path":
+      return `<path${common} d="${escapeXmlText(region.d)}"/>`;
+  }
+  return "";
+}
+
+/** Renderiza o corpo SVG de um ViewSpec: gradientes escopados por `componentId` + paint items com
+ * stateProjection inicial. `fill: "gradient:name"` resolve para `url(#name-componentId)`.
+ * Retorna `undefined` se `pkg.viewSpec` está ausente (caller cai para shapes[]). */
+function viewSpecBodySvg(pkg: PackageDescriptor, componentId: string, properties: Record<string, unknown>): string | undefined {
+  const spec = pkg.viewSpec;
+  if (!spec) return undefined;
+
+  const idSuffix = componentId.replace(/[^a-zA-Z0-9_-]/g, "_");
+
+  // Build gradient defs
+  let defs = "";
+  const gradientIdMap = new Map<string, string>();
+  if (spec.gradients) {
+    for (const [name, grad] of Object.entries(spec.gradients)) {
+      const scopedId = `${name}-${idSuffix}`;
+      gradientIdMap.set(`gradient:${name}`, `url(#${scopedId})`);
+      const units = grad.gradientUnits ?? "userSpaceOnUse";
+      const stops = grad.stops.map(s => `<stop offset="${s.offset}" stop-color="${s.color}"/>`).join("");
+      if (grad.kind === "radial") {
+        const fxAttr = grad.fx !== undefined ? ` fx="${grad.fx}"` : "";
+        const fyAttr = grad.fy !== undefined ? ` fy="${grad.fy}"` : "";
+        defs += `<radialGradient id="${scopedId}" cx="${grad.cx}" cy="${grad.cy}" r="${grad.r}"${fxAttr}${fyAttr} gradientUnits="${units}">${stops}</radialGradient>`;
+      } else {
+        defs += `<linearGradient id="${scopedId}" x1="${grad.x1}" y1="${grad.y1}" x2="${grad.x2}" y2="${grad.y2}" gradientUnits="${units}">${stops}</linearGradient>`;
+      }
+    }
+  }
+
+  // Render paint items
+  let paintMarkup = "";
+  for (const shape of spec.paint) {
+    const projection = shape.partId ? viewSpecResolvedProjection(shape.partId, spec, properties) : {};
+    if (projection.visible === false) continue;
+    const projectedShape = projection.fill ? { ...shape, fill: projection.fill } : shape;
+    // Resolve gradient references in fill
+    const resolvedShape: PackageShape = gradientIdMap.has(projectedShape.fill ?? "")
+      ? { ...projectedShape, fill: gradientIdMap.get(projectedShape.fill!)! }
+      : projectedShape;
+    paintMarkup += packageShapeSvg(resolvedShape, projection.transform);
+  }
+
+  let hitTestMarkup = "";
+  if (spec.hitTest) {
+    const classesByHitTestId = new Map<string, string[]>();
+    if (spec.interaction) {
+      for (const interaction of Object.values(spec.interaction)) {
+        if (!interaction.hitTest) continue;
+        const classes = classesByHitTestId.get(interaction.hitTest) ?? [];
+        classes.push(`viewspec-interaction-${viewSpecClassToken(interaction.kind)}`);
+        classesByHitTestId.set(interaction.hitTest, classes);
+      }
+    }
+    for (const [hitTestId, region] of Object.entries(spec.hitTest)) {
+      hitTestMarkup += viewSpecHitTestSvg(hitTestId, region, classesByHitTestId.get(hitTestId) ?? []);
+    }
+  }
+
+  return (defs ? `<defs>${defs}</defs>` : "") + paintMarkup + hitTestMarkup;
+}
+
+// ────────────────────────────────────────────────────────────────────────────────────────────────
 
 /** Lead (corpo -> ponta real) + rótulo, em coordenadas ORIGINAIS do package (sem o deslocamento de
  * `resolvePackageLayout` -- quem chama envolve isto num `<g transform="translate(offsetX,offsetY)">`,
@@ -241,30 +395,41 @@ function packagePinLeadSvg(pin: PackagePin, resolved: ResolvedPackage, labelColo
   const rotateAttr = isVerticalLead ? ` transform="rotate(-90 ${labelX.toFixed(1)} ${labelY.toFixed(1)})"` : "";
   const fillAttr = labelColor === "currentColor" ? ` class="symbol-text"` : ` fill="${labelColor}"`;
   return (
-    `<line x1="${x.toFixed(1)}" y1="${y.toFixed(1)}" x2="${tipX.toFixed(1)}" y2="${tipY.toFixed(1)}" class="symbol-stroke"/>` +
+    `<line x1="${x.toFixed(1)}" y1="${y.toFixed(1)}" x2="${tipX.toFixed(1)}" y2="${tipY.toFixed(1)}" stroke="#000" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>` +
     `<text x="${labelX.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="middle"${fillAttr} style="font-size:${PACKAGE_PIN_LABEL_FONT_SIZE}px"${rotateAttr}>${escapeXmlText(label)}</text>`
   );
 }
 
+function packageBackgroundSvg(pkg: PackageDescriptor): string {
+  if (pkg.background?.kind === "color" && pkg.background.value) {
+    return `<rect x="0" y="0" width="${pkg.width}" height="${pkg.height}" fill="${pkg.background.value}"/>`;
+  }
+  if (pkg.background?.kind === "image" && pkg.background.data) {
+    // `data` e o PNG/JPEG/SVG em base64 puro (sem prefixo `data:`) -- mesma convencao de
+    // `BckGndData` do SimulIDE real quando a imagem da placa vem embutida no proprio arquivo.
+    return `<image x="0" y="0" width="${pkg.width}" height="${pkg.height}" preserveAspectRatio="none" href="data:${pkg.background.mime ?? "image/png"};base64,${pkg.background.data}"/>`;
+  }
+  return "";
+}
+
 /** Corpo completo de um typeId com `package`: fundo + formas declarativas + lead/rótulo de cada
  * pino, tudo num único `<g>` deslocado pro espaço sem coordenada negativa que `componentBox` usa
- * pro `viewBox` (ver `resolvePackageLayout`). */
-function packageBodySvg(resolved: ResolvedPackage): string {
+ * pro `viewBox` (ver `resolvePackageLayout`).
+ * Quando `pkg.viewSpec` está presente e `componentId` é fornecido, usa o ViewSpec renderer (gradientes
+ * escopados + stateProjection inicial). Caso contrário cai para `shapes[]` legado. */
+function packageBodySvg(resolved: ResolvedPackage, componentId?: string, properties?: Record<string, unknown>): string {
   const pkg = resolved.source;
-  let markup = "";
-  if (pkg.background?.kind === "color" && pkg.background.value) {
-    markup += `<rect x="0" y="0" width="${pkg.width}" height="${pkg.height}" fill="${pkg.background.value}"/>`;
-  } else if (pkg.background?.kind === "image" && pkg.background.data) {
-    // `data` é o PNG/JPEG em base64 puro (sem prefixo `data:`) -- mesma convenção de
-    // `BckGndData` do SimulIDE real (foto da placa real embutida no próprio arquivo, sem
-    // depender de um asset externo que possa ficar pendente). `preserveAspectRatio="none"`
-    // porque width/height do package JÁ são as dimensões nativas da imagem (1:1, sem distorção).
-    markup += `<image x="0" y="0" width="${pkg.width}" height="${pkg.height}" preserveAspectRatio="none" href="data:image/png;base64,${pkg.background.data}"/>`;
+  let markup = packageBackgroundSvg(pkg);
+
+  if (pkg.viewSpec && componentId) {
+    markup += viewSpecBodySvg(pkg, componentId, properties ?? {}) ?? "";
+  } else {
+    for (const shape of pkg.shapes ?? []) markup += packageShapeSvg(shape);
   }
   if (pkg.border) {
     markup += `<rect x="0.5" y="0.5" width="${Math.max(0, pkg.width - 1)}" height="${Math.max(0, pkg.height - 1)}" class="symbol-stroke" fill="none"/>`;
   }
-  for (const shape of pkg.shapes ?? []) markup += packageShapeSvg(shape);
+
   const bodyMarkup =
     `<g transform="translate(${(resolved.offsetX * resolved.scaleX).toFixed(3)},${(resolved.offsetY * resolved.scaleY).toFixed(3)})">` +
     `<g transform="scale(${resolved.scaleX.toFixed(6)},${resolved.scaleY.toFixed(6)})">${markup}</g>` +
@@ -290,25 +455,25 @@ function logicComponentBox(widthCells: number, heightRows: number): ComponentBox
 function builtinComponentBox(typeId: string): ComponentBox | undefined {
   switch (typeId) {
     case "connectors.junction": return { width: 0, height: 0 };
-    case "connectors.bus": return { width: 76, height: 28 };
+    case "connectors.bus": return { width: 24, height: 64 }; // logic/bus.cpp: tronco vertical
     case "connectors.tunnel": return { width: 44, height: 16 };
-    case "connectors.socket": return { width: 32, height: 64 };
-    case "connectors.header": return { width: 64, height: 16 };
+    case "connectors.socket": return { width: 24, height: 64 }; // connectors/socket.cpp + connbase.cpp
+    case "connectors.header": return { width: 24, height: 64 }; // connectors/header.cpp + connbase.cpp
 
-    case "graphics.image": return { width: 96, height: 64 };
+    case "graphics.image": return { width: 80, height: 80 };
     case "graphics.text": return { width: 74, height: 28 };
     case "graphics.rectangle": return { width: 96, height: 58 };
     case "graphics.ellipse": return { width: 96, height: 58 };
     case "graphics.line": return { width: 86, height: 32 };
     case "other.package": return { width: 84, height: 66 };
     case "other.package_pin": return { width: 24, height: 24 };
-    case "other.test_unit": return { width: 72, height: 56 };
-    case "other.dial": return { width: 56, height: 56 };
+    case "other.test_unit": return { width: 32, height: 32 }; // other/testunit.cpp (IoComponent generico)
+    case "other.dial": return { width: 40, height: 40 }; // other/dial.cpp: knob nativo (QDial) -- estilizacao vetorial menor que antes
     case "other.ground": return { width: 16, height: 18 }; // sources/ground.cpp
 
     case "passive.resistor": return COMP2PIN_BOX; // comp2pin.cpp
     case "passive.variable_resistor": return { width: 40, height: 24 };
-    case "passive.resistor_dip": return { width: 32, height: 68 };
+    case "passive.resistor_dip": return { width: 24, height: 68 }; // passive/resistordip.cpp
     case "passive.potentiometer": return { width: 40, height: 32 };
     case "passive.ldr": return { width: 40, height: 24 };
     case "passive.thermistor": return { width: 40, height: 24 };
@@ -353,8 +518,8 @@ function builtinComponentBox(typeId: string): ComponentBox | undefined {
 
     case "switches.push": return SWITCH_BOX; // switches/push.cpp
     case "switches.switch": return SWITCH_BOX; // switches/switch.cpp + mech_contact.cpp
-    case "switches.switch_dip": return { width: 32, height: 64 };
-    case "switches.relay": return { width: 48, height: 48 };
+    case "switches.switch_dip": return { width: 24, height: 64 }; // switches/switchdip.cpp
+    case "switches.relay": return { width: 32, height: 44 }; // switches/relay.cpp (bobina + contato)
     // "switches.keypad" agora é property-driven (ver `propertyDrivenBox`) -- cresce com rows/columns
     // reais, nunca um tamanho fixo.
 
@@ -368,16 +533,16 @@ function builtinComponentBox(typeId: string): ComponentBox | undefined {
     case "active.jfet": return TRANSISTOR_BOX;
     case "active.opamp": return TRIANGLE_AMP_BOX;
     case "active.comparator": return TRIANGLE_AMP_BOX;
-    case "active.analog_mux": return { width: 48, height: 88 };
-    case "active.volt_regulator": return { width: 32, height: 24 };
+    case "active.analog_mux": return { width: 32, height: 72 }; // active/mux_analog.cpp (8 canais default)
+    case "active.volt_regulator": return { width: 24, height: 20 }; // active/volt_reg.cpp
 
     case "outputs.led": return { width: 40, height: 24 };
-    case "outputs.led_rgb": return { width: 32, height: 24 };
-    case "outputs.led_bar": return { width: 32, height: 64 };
+    case "outputs.led_rgb": return { width: 24, height: 24 }; // outputs/leds/ledrgb.cpp
+    case "outputs.led_bar": return { width: 20, height: 64 }; // outputs/leds/ledbar.cpp
     case "outputs.led_matrix": return { width: 72, height: 72 };
     case "outputs.max72xx_matrix": return { width: 264, height: 88 }; // outputs/leds/max72xx_matrix.cpp
     case "outputs.ws2812": return { width: 24, height: 24 };
-    case "outputs.seven_segment": return { width: 60, height: 60 }; // outputs/leds/sevensegment.cpp
+    case "outputs.seven_segment": return { width: 40, height: 56 }; // outputs/leds/sevensegment.cpp
     case "outputs.hd44780": return { width: 210, height: 75 }; // outputs/displays/hd44780_base.cpp + pins.
     case "outputs.aip31068_i2c": return { width: 210, height: 75 };
     case "outputs.pcd8544": return { width: 104, height: 84 };
@@ -403,13 +568,13 @@ function builtinComponentBox(typeId: string): ComponentBox | undefined {
     case "meters.logic_analyzer": return { width: 260, height: 212 };
 
     case "sources.dc_voltage": return { width: 64, height: 48 };
-    case "sources.fixed_volt": return { width: 48, height: 24 };
-    case "sources.clock": return { width: 30, height: 16 };
-    case "sources.wave_gen": return { width: 48, height: 40 };
-    case "sources.voltage_source": return { width: 44, height: 32 }; // sources/voltsource.cpp
-    case "sources.current_source": return { width: 44, height: 32 }; // sources/currsource.cpp
-    case "sources.controlled_source": return { width: 48, height: 40 };
-    case "sources.battery": return COMP2PIN_BOX;
+    case "sources.fixed_volt": return { width: 24, height: 24 }; // sources/fixedvolt.cpp
+    case "sources.clock": return { width: 26, height: 16 }; // sources/clockbase.cpp
+    case "sources.wave_gen": return { width: 26, height: 16 }; // sources/clockbase.cpp (WaveGen herda)
+    case "sources.voltage_source": return { width: 40, height: 32 }; // sources/voltsource.cpp+varsource.cpp
+    case "sources.current_source": return { width: 40, height: 32 }; // sources/currsource.cpp+varsource.cpp
+    case "sources.controlled_source": return { width: 36, height: 36 }; // sources/csource.cpp
+    case "sources.battery": return { width: 20, height: 20 }; // sources/battery.cpp
     case "sources.rail": return { width: 24, height: 16 };
 
     default: return undefined;
@@ -516,6 +681,39 @@ export function pinLocalPosition(pinId: string, pinIndex: number, pinCount: numb
   if (typeId === "connectors.tunnel" && pinCount <= 1) {
     return { x: box.width - 8, y: box.height / 2 };
   }
+  // logic/bus.cpp real só tem 1 pino elétrico (o Core modela como Junction, ver
+  // CoreApplication.cpp) -- os 8 traços de bit no desenho são só decoração do tronco. O ponto de
+  // ligação clicável fica no CENTRO do tronco vertical (não no topo, fallback genérico antigo
+  // deixava a bolinha longe do meio do traço grosso).
+  if (typeId === "connectors.bus" && pinCount <= 1) {
+    return { x: box.width / 2, y: box.height / 2 };
+  }
+  // connectors/socket.cpp e header.cpp: coluna ÚNICA vertical de N pinos (ver `componentSymbolSvg`,
+  // mesma fórmula de posição Y dos círculos/marcas desenhados) -- o fallback genérico de 2 colunas
+  // (usado por engano antes) deixava as bolinhas de ligação flutuando fora da tira desenhada.
+  if ((typeId === "connectors.socket" || typeId === "connectors.header") && pinCount > 0) {
+    return { x: box.width / 2, y: (box.height / (pinCount + 1)) * (pinIndex + 1) };
+  }
+  // switches/relay.cpp: 4 pinos reais -- 2 na bobina (extremos do traço grosso embaixo) + 2 no
+  // contato/alavanca (extremos da tira em cima), ver `componentSymbolSvg` pro desenho exato. O
+  // fallback genérico (2 colunas em Y intermediário) não batia com nenhum dos dois traços.
+  if (typeId === "switches.relay" && pinCount >= 4) {
+    const coilY = box.height - 10;
+    const leverY = 8;
+    if (pinIndex === 0) return { x: 4, y: coilY };
+    if (pinIndex === 1) return { x: box.width - 4, y: coilY };
+    if (pinIndex === 2) return { x: 4, y: leverY };
+    return { x: box.width - 4, y: leverY };
+  }
+  // outputs/stepper.cpp: os 4 pinos reais ficam TODOS na tira conectora à esquerda (ver o
+  // `<rect>` estreito em `componentSymbolSvg`) -- o motor circular à direita não tem pino nenhum.
+  // Fallback genérico jogava 2 dos 4 pinos pro lado direito, flutuando sobre o corpo do motor.
+  if (typeId === "outputs.stepper" && pinCount > 0) {
+    const r = Math.min(box.width, box.height) / 2 - 4;
+    const stripTop = box.height / 2 - r * 0.7;
+    const stripHeight = r * 1.4;
+    return { x: 0, y: stripTop + (stripHeight / pinCount) * (pinIndex + 0.5) };
+  }
   switch (typeId) {
     // SimulIDE Comp2Pin: src/components/comp2pin.cpp
     case "passive.resistor":
@@ -532,6 +730,11 @@ export function pinLocalPosition(pinId: string, pinIndex: number, pinCount: numb
     case "sources.battery":
     case "active.diode":
     case "active.zener":
+    case "outputs.led":
+    case "outputs.incandescent_lamp":
+      // led.cpp/lamp.cpp: pinos reais em x=±16 (caixa compacta, ver `horizontalLeads` -- caía nesta
+      // mesma convenção 0/width antes, mas sem case aqui o fallback genérico usava PIN_INSET(6) em
+      // vez de 0, deixando a bolinha de ligação 6px longe da ponta do traço desenhado).
       if (pinCount <= 2) return { x: pinIndex === 0 ? 0 : box.width, y: box.height / 2 };
       break;
     case "active.diac":
@@ -564,19 +767,28 @@ export function pinLocalPosition(pinId: string, pinIndex: number, pinCount: numb
       break;
     case "active.volt_regulator":
       if (pinIndex === 0) return { x: 0, y: 8 };
-      if (pinIndex === 1) return { x: 32, y: 8 };
-      if (pinIndex === 2) return { x: 16, y: 24 };
+      if (pinIndex === 1) return { x: 24, y: 8 };
+      if (pinIndex === 2) return { x: 12, y: 20 };
       break;
     case "sources.voltage_source":
     case "sources.current_source":
       if (pinCount <= 1) return { x: box.width, y: box.height / 2 };
       break;
     case "sources.controlled_source":
-      if (pinIndex === 0) return { x: 0, y: 12 };
-      if (pinIndex === 1) return { x: 0, y: 28 };
-      if (pinIndex === 2) return { x: 24, y: 0 };
-      if (pinIndex === 3) return { x: 24, y: 40 };
+      if (pinIndex === 0) return { x: 0, y: 10 };
+      if (pinIndex === 1) return { x: 0, y: 26 };
+      if (pinIndex === 2) return { x: 18, y: 0 };
+      if (pinIndex === 3) return { x: 18, y: 36 };
       break;
+    // potentiometer.cpp: pins[0]/[1] são as pontas A/B (Core stampa conductance entre elas e o
+    // wiper, ver SimulidePotentiometer::stamp) -- esquerda/direita, na mesma convenção compacta
+    // 0/width usada pelo `horizontalLeads` (ver componentSymbolSvg). pins[2] é o wiper embaixo, no
+    // mesmo x do traço vertical desenhado (`midX`). Sem este case, o fallback genérico (2 colunas
+    // em Y intermediário) não batia com NENHUM dos 3 traços reais.
+    case "passive.potentiometer":
+      if (pinIndex === 0) return { x: 0, y: box.height / 2 };
+      if (pinIndex === 1) return { x: box.width, y: box.height / 2 };
+      return { x: box.width / 2, y: box.height - PIN_INSET };
   }
   if ((typeId === "switches.push" || typeId === "switches.switch") && pinCount <= 2) {
     return { x: pinIndex % 2 === 0 ? 0 : box.width, y: 8 };
@@ -743,10 +955,15 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
     `<rect x="${x1}" y="${Math.max(8, yMid - 14)}" width="${Math.max(24, x2 - x1)}" height="28" class="symbol-stroke" fill="none"/>` +
     `<text x="${midX}" y="${yMid + 4}" text-anchor="middle" class="symbol-text">${label}</text>`;
 
+  // active/diode.cpp: triangulo (meia-altura 7) + barra de catodo cabem dentro do corpo 20x16 real
+  // sem transbordar -- amplitude fixa de 12/13 (independente de box.height) estourava caixas mais
+  // baixas (bug relatado 2026-07-04: triangulo do diodo saia 4px pra fora da propria caixa).
+  const diodeTriHalf = Math.max(6, Math.min(12, yMid - 2));
+  const diodeBarHalf = diodeTriHalf + 1;
   const diodeBody = (extra = ""): string =>
     horizontalLeads(box, yMid) +
-    `<path d="M ${midX - 9} ${yMid - 12} L ${midX - 9} ${yMid + 12} L ${midX + 8} ${yMid} Z" class="symbol-stroke" fill="none"/>` +
-    `<line x1="${midX + 10}" y1="${yMid - 13}" x2="${midX + 10}" y2="${yMid + 13}" class="symbol-stroke symbol-stroke--thick"/>` +
+    `<path d="M ${midX - 9} ${(yMid - diodeTriHalf).toFixed(1)} L ${midX - 9} ${(yMid + diodeTriHalf).toFixed(1)} L ${midX + 8} ${yMid} Z" class="symbol-stroke" fill="none"/>` +
+    `<line x1="${midX + 10}" y1="${(yMid - diodeBarHalf).toFixed(1)}" x2="${midX + 10}" y2="${(yMid + diodeBarHalf).toFixed(1)}" class="symbol-stroke symbol-stroke--thick"/>` +
     extra;
 
   switch (typeId) {
@@ -754,20 +971,47 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
     case "passive.variable_resistor":
     case "passive.ldr":
     case "passive.thermistor":
-    case "passive.rtd":
-    case "passive.force_strain_gauge": {
+    case "passive.rtd": {
       const amplitude = box.height / 2 - 5;
-      const mark =
-        typeId === "passive.variable_resistor"
-          ? `<line x1="${midX - 12}" y1="${yMid + 14}" x2="${midX + 12}" y2="${yMid - 14}" class="symbol-stroke symbol-stroke--accent"/>`
-          : typeId !== "passive.resistor"
-            ? `<text x="${midX}" y="${yMid - 11}" text-anchor="middle" class="symbol-text">${(typeId.split(".")[1] ?? "").slice(0, 3).toUpperCase()}</text>`
-            : "";
+      // Marcas reais por tipo (coordenadas relativas ao centro do corpo, mesmos valores de
+      // `ldr.cpp`/`thermistorbase.cpp`/`rtd.cpp`) -- antes cada um só ganhava as 3 primeiras letras
+      // do typeId como texto ("LDR"/"THE"/"RTD"), sem nenhuma relação com o desenho real.
+      let mark = "";
+      if (typeId === "passive.variable_resistor") {
+        mark = `<line x1="${midX - 12}" y1="${yMid + 14}" x2="${midX + 12}" y2="${yMid - 14}" class="symbol-stroke symbol-stroke--accent"/>`;
+      } else if (typeId === "passive.ldr") {
+        mark =
+          `<path d="M ${midX - 5} ${yMid - 11} L ${midX - 1} ${yMid - 7} M ${midX - 1} ${yMid - 7} L ${midX - 1} ${yMid - 9} M ${midX - 1} ${yMid - 7} L ${midX - 3} ${yMid - 7}" class="symbol-stroke symbol-stroke--accent" fill="none"/>` +
+          `<path d="M ${midX + 5} ${yMid - 11} L ${midX + 1} ${yMid - 7} M ${midX + 1} ${yMid - 7} L ${midX + 1} ${yMid - 9} M ${midX + 1} ${yMid - 7} L ${midX + 3} ${yMid - 7}" class="symbol-stroke symbol-stroke--accent" fill="none"/>`;
+      } else if (typeId === "passive.thermistor") {
+        mark = `<path d="M ${midX - 8} ${yMid + 6} L ${midX + 6} ${yMid - 8} L ${midX + 10} ${yMid - 8}" class="symbol-stroke symbol-stroke--accent" fill="none"/>`;
+      } else if (typeId === "passive.rtd") {
+        mark =
+          `<line x1="${midX - 6}" y1="${yMid + 6}" x2="${midX + 8}" y2="${yMid - 8}" class="symbol-stroke symbol-stroke--accent"/>` +
+          `<text x="${midX - 8}" y="${yMid - 6}" text-anchor="middle" class="symbol-text" style="font-size:7px">+t&#176;</text>`;
+      }
       return horizontalLeads(box, yMid) + `<path d="${zigzagPath(x1, x2, yMid, amplitude, 3)}" class="symbol-stroke"/>` + mark;
     }
 
-    case "passive.resistor_dip":
-      return labelBox("DIP-R");
+    case "passive.force_strain_gauge": {
+      // strain.cpp: NADA a ver com o corpo zigzag de resistor -- retangulo (corpo do sensor) + 2
+      // abas de fixacao (quadrados preenchidos) + grade zigzag de 8 pontos (as trilhas do extensometro).
+      const bodyHalfW = 11, bodyHalfH = 12;
+      return (
+        horizontalLeads(box, yMid) +
+        `<rect x="${midX - bodyHalfW}" y="${yMid - bodyHalfH}" width="${bodyHalfW * 2}" height="${bodyHalfH * 2}" class="symbol-stroke" fill="none"/>` +
+        `<rect x="${midX - 8}" y="${yMid - 2}" width="4" height="4" fill="currentColor"/>` +
+        `<rect x="${midX + 4}" y="${yMid - 2}" width="4" height="4" fill="currentColor"/>` +
+        `<path d="M ${midX - 6} ${yMid} L ${midX - 6} ${yMid - 16} L ${midX - 2} ${yMid - 16} L ${midX - 2} ${yMid - 4} L ${midX + 2} ${yMid - 4} L ${midX + 2} ${yMid - 16} L ${midX + 6} ${yMid - 16} L ${midX + 6} ${yMid}" class="symbol-stroke" fill="none"/>`
+      );
+    }
+
+    case "passive.resistor_dip": {
+      // resistordip.cpp: retangulo simples do corpo do CI (sem zigue-zague nenhum dentro -- os
+      // resistores individuais nao sao desenhados, só o encapsulamento) + N pares de pino (8 default).
+      const bodyHalfW = 9;
+      return `<rect x="${midX - bodyHalfW}" y="2" width="${bodyHalfW * 2}" height="${box.height - 4}" rx="1" class="symbol-stroke" fill="none"/>`;
+    }
 
     case "switches.switch_dip": {
       // Antes era um `labelBox("DIP-SW")` genérico (texto+caixa únicos, SEM marca de alavanca
@@ -800,21 +1044,30 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
       );
 
     case "passive.capacitor": {
-      const plateHalfLength = box.height / 2 - 6;
+      // capacitorbase.cpp: placas ocupam quase a altura toda do corpo (12 de 16, ~75%) -- a formula
+      // antiga (`box.height/2-6`) dava só 25% (4px), placas curtas demais (bug relatado 2026-07-04).
+      const plateHalfLength = yMid - 2;
       return (
         horizontalLeads(box, yMid) +
         `<line x1="${x1}" y1="${yMid}" x2="${midX - 5}" y2="${yMid}" class="symbol-stroke"/>` +
         `<line x1="${midX + 5}" y1="${yMid}" x2="${x2}" y2="${yMid}" class="symbol-stroke"/>` +
-        `<line x1="${midX - 5}" y1="${yMid - plateHalfLength}" x2="${midX - 5}" y2="${yMid + plateHalfLength}" class="symbol-stroke symbol-stroke--thick"/>` +
-        `<line x1="${midX + 5}" y1="${yMid - plateHalfLength}" x2="${midX + 5}" y2="${yMid + plateHalfLength}" class="symbol-stroke symbol-stroke--thick"/>`
+        `<line x1="${midX - 5}" y1="${(yMid - plateHalfLength).toFixed(1)}" x2="${midX - 5}" y2="${(yMid + plateHalfLength).toFixed(1)}" class="symbol-stroke symbol-stroke--thick"/>` +
+        `<line x1="${midX + 5}" y1="${(yMid - plateHalfLength).toFixed(1)}" x2="${midX + 5}" y2="${(yMid + plateHalfLength).toFixed(1)}" class="symbol-stroke symbol-stroke--thick"/>`
       );
     }
 
-    case "passive.electrolytic_capacitor":
+    case "passive.electrolytic_capacitor": {
+      // elcapacitor.cpp: placa direita reta + placa esquerda em formato de "balde" (3 segmentos) --
+      // a polaridade é transmitida pela geometria da placa, nunca por um texto "+" solto.
+      const plateHalfLength = yMid - 2;
       return (
-        componentSymbolSvg("passive.capacitor") +
-        `<text x="${midX - 15}" y="${yMid - 12}" text-anchor="middle" class="symbol-text">+</text>`
+        horizontalLeads(box, yMid) +
+        `<line x1="${x1}" y1="${yMid}" x2="${midX - 5}" y2="${yMid}" class="symbol-stroke"/>` +
+        `<line x1="${midX + 5}" y1="${yMid}" x2="${x2}" y2="${yMid}" class="symbol-stroke"/>` +
+        `<line x1="${midX + 5}" y1="${(yMid - plateHalfLength).toFixed(1)}" x2="${midX + 5}" y2="${(yMid + plateHalfLength).toFixed(1)}" class="symbol-stroke symbol-stroke--thick"/>` +
+        `<path d="M ${midX - 5} ${(yMid - plateHalfLength).toFixed(1)} L ${midX + 5} ${(yMid - plateHalfLength).toFixed(1)} M ${midX - 5} ${(yMid + plateHalfLength).toFixed(1)} L ${midX + 5} ${(yMid + plateHalfLength).toFixed(1)} M ${midX - 5} ${(yMid - plateHalfLength / 2).toFixed(1)} L ${midX - 5} ${(yMid + plateHalfLength / 2).toFixed(1)}" class="symbol-stroke symbol-stroke--thick" fill="none"/>`
       );
+    }
 
     case "passive.variable_capacitor":
       return componentSymbolSvg("passive.capacitor") +
@@ -873,45 +1126,73 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
         );
       }
 
-    case "connectors.bus":
-      return (
-        `<line x1="12" y1="${yMid}" x2="${box.width - 12}" y2="${yMid}" class="symbol-stroke symbol-stroke--thick"/>` +
-        Array.from({ length: 6 }, (_, index) => {
-          const x = 18 + index * 8;
-          return `<line x1="${x}" y1="${yMid - 5}" x2="${x}" y2="${yMid + 5}" class="symbol-stroke"/>`;
-        }).join("")
-      );
+    case "connectors.bus": {
+      // logic/bus.cpp: tronco VERTICAL grosso (não horizontal) com os fios de bit saindo pra
+      // esquerda -- orientação e proporção corrigidas (era um traço horizontal com 6 tiquinhos).
+      const trunkX = midX;
+      let bits = `<line x1="${trunkX}" y1="4" x2="${trunkX}" y2="${box.height - 4}" class="symbol-stroke symbol-stroke--thick"/>`;
+      const count = 8;
+      for (let i = 0; i < count; i++) {
+        const y = 4 + ((box.height - 8) / (count - 1)) * i;
+        bits += `<line x1="4" y1="${y.toFixed(1)}" x2="${trunkX}" y2="${y.toFixed(1)}" class="symbol-stroke"/>`;
+      }
+      return bits;
+    }
 
-    case "connectors.socket":
-      return (
-        `<rect x="18" y="8" width="${box.width - 36}" height="${box.height - 16}" rx="2" class="symbol-stroke" fill="none"/>` +
-        Array.from({ length: 6 }, (_, index) => `<circle cx="${midX}" cy="${18 + index * 10}" r="2" class="symbol-stroke" fill="none"/>`).join("")
-      );
+    case "connectors.socket": {
+      // connectors/socket.cpp + connbase.cpp: tira VERTICAL fina com uma coluna de pinos -- o
+      // desenho antigo tinha `width = box.width-36` que dava LARGURA NEGATIVA (bug: não renderizava
+      // nada) pra caixa pequena real. `count` casa com o `pinCount:8` real do Core
+      // (CoreApplication.cpp) -- desenhar menos círculos que pinos reais deixava 2 pinos sem marca
+      // nenhuma, e a "bolinha azul" clicável (`pinLocalPosition`) caía no fallback genérico de 2
+      // colunas em vez desta coluna única (bug relatado 2026-07-04: pontos de ligação flutuando fora
+      // do desenho).
+      const count = 8;
+      let pins = `<rect x="4" y="2" width="${box.width - 8}" height="${box.height - 4}" rx="2" class="symbol-stroke" fill="none"/>`;
+      for (let i = 0; i < count; i++) {
+        const y = ((box.height) / (count + 1)) * (i + 1);
+        pins += `<circle cx="${midX}" cy="${y.toFixed(1)}" r="2" class="symbol-stroke" fill="none"/>`;
+      }
+      return pins;
+    }
 
-    case "connectors.header":
-      return (
-        `<line x1="12" y1="${yMid}" x2="${box.width - 12}" y2="${yMid}" class="symbol-stroke symbol-stroke--thick"/>` +
-        Array.from({ length: 6 }, (_, index) => {
-          const x = 18 + index * 8;
-          return `<line x1="${x}" y1="${yMid - 8}" x2="${x}" y2="${yMid + 8}" class="symbol-stroke"/>`;
-        }).join("")
-      );
+    case "connectors.header": {
+      // connectors/header.cpp + connbase.cpp: mesma tira vertical do Socket, com marcas de pino
+      // retas (macho) em vez de círculos (fêmea) -- era um traço horizontal com 6 tiquinhos. `count`
+      // casa com o `pinCount:8` real do Core, mesmo motivo do Socket acima.
+      const count = 8;
+      let pins = `<rect x="4" y="2" width="${box.width - 8}" height="${box.height - 4}" rx="2" class="symbol-stroke" fill="none"/>`;
+      for (let i = 0; i < count; i++) {
+        const y = ((box.height) / (count + 1)) * (i + 1);
+        pins += `<line x1="${midX - 4}" y1="${y.toFixed(1)}" x2="${midX + 4}" y2="${y.toFixed(1)}" class="symbol-stroke symbol-stroke--thick"/>`;
+      }
+      return pins;
+    }
 
-    case "graphics.image":
+    case "graphics.image": {
+      // image.cpp real sempre desenha a imagem carregada (`drawPixmap`) escalada pro corpo -- sem
+      // suporte a carregar/exibir a imagem de verdade nesta Webview ainda, o glifo decorativo
+      // "foto" abaixo é um placeholder assumido (ver auditoria 2026-07-04); manter proporcional à
+      // caixa real (80x80) em vez de números fixos de uma caixa antiga (96x64).
+      const w = box.width, h = box.height;
       return (
-        `<rect x="4" y="4" width="${box.width - 8}" height="${box.height - 8}" class="symbol-stroke" fill="none"/>` +
-        `<circle cx="24" cy="20" r="5" class="symbol-stroke" fill="none"/>` +
-        `<path d="M 8 ${box.height - 10} L 34 34 L 48 46 L 62 28 L ${box.width - 8} ${box.height - 10}" class="symbol-stroke" fill="none"/>`
+        `<rect x="4" y="4" width="${w - 8}" height="${h - 8}" class="symbol-stroke" fill="none"/>` +
+        `<circle cx="${w * 0.3}" cy="${h * 0.3}" r="${Math.min(w, h) * 0.08}" class="symbol-stroke" fill="none"/>` +
+        `<path d="M 8 ${h - 12} L ${w * 0.4} ${h * 0.55} L ${w * 0.58} ${h * 0.68} L ${w * 0.75} ${h * 0.42} L ${w - 8} ${h - 12}" class="symbol-stroke" fill="none"/>`
       );
+    }
 
     case "graphics.text": {
-      // Sem `properties` (paleta/preview) cai no placeholder de sempre; com `properties`, desenha o
-      // texto/cor/tamanho reais -- mesmo princípio property-driven do resto deste `case`, ver
-      // `propertyDrivenBox`.
+      // textcomponent.cpp: SEMPRE tem uma placa de fundo preenchida (amarelo-claro por padrão) +
+      // borda -- antes só o texto flutuava sem nenhum retângulo atrás (bug: real nunca mostra texto
+      // "no ar").
       const text = typeof properties?.text === "string" ? properties.text : "Texto";
       const fontSize = typeof properties?.fontSize === "number" ? properties.fontSize : 11;
       const color = typeof properties?.color === "string" ? properties.color : "currentColor";
-      return `<text x="${midX}" y="${yMid + fontSize / 3}" text-anchor="middle" font-size="${fontSize}" fill="${color}">${escapeXmlText(text)}</text>`;
+      return (
+        `<rect x="0.5" y="0.5" width="${Math.max(0, box.width - 1)}" height="${Math.max(0, box.height - 1)}" fill="#fffcdc" stroke="currentColor" stroke-width="1"/>` +
+        `<text x="${midX}" y="${yMid + fontSize / 3}" text-anchor="middle" font-size="${fontSize}" fill="${color}">${escapeXmlText(text)}</text>`
+      );
     }
 
     case "graphics.rectangle": {
@@ -971,18 +1252,18 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
     }
 
     case "other.test_unit":
-      return (
-        `<rect x="10" y="8" width="${box.width - 20}" height="${box.height - 16}" rx="2" class="symbol-stroke" fill="none"/>` +
-        `<path d="M 20 ${yMid} L 30 ${yMid + 10} L 50 ${yMid - 10}" class="symbol-stroke symbol-stroke--accent" fill="none"/>` +
-        `<line x1="16" y1="16" x2="22" y2="16" class="symbol-stroke"/>` +
-        `<line x1="${box.width - 22}" y1="${box.height - 16}" x2="${box.width - 16}" y2="${box.height - 16}" class="symbol-stroke"/>`
-      );
+      // testunit.cpp (IoComponent): `Component::paint()` + `drawRect(m_area)` -- corpo vazio, sem
+      // check-mark nem cantos decorados (isso era inventado, sem base no paint() real).
+      return `<rect x="2" y="2" width="${box.width - 4}" height="${box.height - 4}" class="symbol-stroke" fill="none"/>`;
 
     case "other.dial":
+      // dial.cpp: o knob de verdade é um `QDial` NATIVO do Qt (widget do SO, não dá pra reproduzir
+      // em SVG) -- isto aqui é só uma estilização vetorial razoável dele, numa caixa mais modesta que
+      // antes (56×56 → 40×40) já que o componente só desenha uma plaquinha pequena por conta própria.
       return (
-        `<circle cx="${midX}" cy="${yMid}" r="22" class="symbol-stroke" fill="none"/>` +
-        `<circle cx="${midX}" cy="${yMid}" r="12" class="symbol-stroke" fill="none"/>` +
-        `<line x1="${midX}" y1="${yMid}" x2="${midX + 8}" y2="${yMid - 12}" class="symbol-stroke symbol-stroke--thick"/>`
+        `<circle cx="${midX}" cy="${yMid}" r="${Math.min(midX, yMid) - 2}" class="symbol-stroke" fill="none"/>` +
+        `<circle cx="${midX}" cy="${yMid}" r="${(Math.min(midX, yMid) - 2) * 0.55}" class="symbol-stroke" fill="none"/>` +
+        `<line x1="${midX}" y1="${yMid}" x2="${midX + (Math.min(midX, yMid) - 2) * 0.4}" y2="${yMid - (Math.min(midX, yMid) - 2) * 0.6}" class="symbol-stroke symbol-stroke--thick"/>`
       );
 
     case "sources.dc_voltage":
@@ -1032,16 +1313,27 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
       );
     }
 
-    case "switches.relay":
+    case "switches.relay": {
+      // relay.cpp: bobina real (arcos, igual passive.inductor) na METADE DE BAIXO + contato/alavanca
+      // do interruptor na metade de CIMA -- não uma caixa de bobina + alavanca lado a lado como
+      // estava antes (posições/proporções invented, sem relação com o m_area/paint real).
+      const coilY = box.height - 10;
+      let coil = `<line x1="4" y1="${coilY}" x2="${box.width - 4}" y2="${coilY}" class="symbol-stroke"/>`;
+      const loopWidth = (box.width - 8) / 3;
+      for (let i = 0; i < 3; i++) {
+        const cx = 4 + loopWidth * (i + 0.5);
+        coil += `<path d="M ${(cx - loopWidth / 2).toFixed(1)} ${coilY} A ${(loopWidth / 2).toFixed(1)} 6 0 1 1 ${(cx + loopWidth / 2).toFixed(1)} ${coilY}" class="symbol-stroke" fill="none"/>`;
+      }
+      const leverY = 8;
       return (
-        `<rect x="12" y="10" width="24" height="20" class="symbol-stroke" fill="none"/>` +
-        `<line x1="${PIN_INSET}" y1="20" x2="12" y2="20" class="symbol-stroke"/>` +
-        `<line x1="36" y1="20" x2="${midX - 2}" y2="20" class="symbol-stroke"/>` +
-        `<line x1="${midX + 4}" y1="${box.height - 18}" x2="${box.width - PIN_INSET}" y2="${box.height - 18}" class="symbol-stroke"/>` +
-        `<line x1="${midX + 4}" y1="${box.height - 18}" x2="${box.width - 28}" y2="${box.height - 34}" class="symbol-stroke"/>` +
-        `<circle cx="${midX + 4}" cy="${box.height - 18}" r="2" class="symbol-stroke" fill="currentColor"/>` +
-        `<circle cx="${box.width - 28}" cy="${box.height - 18}" r="2" class="symbol-stroke" fill="currentColor"/>`
+        coil +
+        `<line x1="4" y1="${leverY}" x2="12" y2="${leverY}" class="symbol-stroke"/>` +
+        `<circle cx="12" cy="${leverY}" r="1.6" class="symbol-stroke" fill="currentColor"/>` +
+        `<line x1="12" y1="${leverY}" x2="${box.width - 8}" y2="${leverY - 6}" class="symbol-stroke symbol-stroke--thick"/>` +
+        `<circle cx="${box.width - 8}" cy="${leverY - 6}" r="1.6" class="symbol-stroke" fill="currentColor"/>` +
+        `<line x1="${box.width - 8}" y1="${leverY}" x2="${box.width - 4}" y2="${leverY}" class="symbol-stroke"/>`
       );
+    }
 
     case "switches.keypad": {
       // Lê rows/columns/keyLabels REAIS da instância (mesmo default do real SimulIDE,
@@ -1074,57 +1366,187 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
     case "active.diac":
     case "active.scr":
     case "active.triac":
-    case "outputs.led":
       return diodeBody(
         typeId === "active.zener"
-          ? `<path d="M ${midX + 10} ${yMid - 13} l 5 -5 M ${midX + 10} ${yMid + 13} l -5 5" class="symbol-stroke"/>`
-          : typeId === "outputs.led"
-            ? `<path d="M ${midX + 16} ${yMid - 14} l 8 -8 M ${midX + 20} ${yMid - 6} l 8 -8" class="symbol-stroke symbol-stroke--accent"/>`
-            : ""
+          ? `<path d="M ${midX + 10} ${(yMid - diodeBarHalf).toFixed(1)} l 5 -5 M ${midX + 10} ${(yMid + diodeBarHalf).toFixed(1)} l -5 5" class="symbol-stroke"/>`
+          : ""
+      );
+
+    case "outputs.led":
+      // outputs/leds/led.cpp + ledbase.cpp::drawBackground(): a bolha de vidro (elipse preenchida,
+      // cor = brilho ao vivo) é o sinal visual real do LED -- as setinhas de "luz emitida" que
+      // existiam aqui antes não têm equivalente nenhum no paint() real, foram removidas.
+      return (
+        `<ellipse cx="${midX - 1}" cy="${yMid}" rx="8" ry="8" fill="#3a3a3a" stroke="#111" stroke-width="1"/>` +
+        diodeBody()
       );
 
     case "active.bjt":
-    case "active.mosfet":
-    case "active.jfet":
+      // active/bjt.cpp: m_area real QRectF(-12,-14,28,28) (elipse centrada em (2,0), raio 14) +
+      // pinos Collector(8,-16)/Emiter(8,16)/Base(-16,0) -- convertido pra origem top-left desta
+      // caixa 32×32 (deslocamento +16,+16, mesma metade da caixa) fica elipse em (18,16) r=14. O
+      // raio fixo antigo (18) era MAIOR que a metade da caixa (16), estourando o próprio viewBox
+      // (bug relatado 2026-07-04: "corpo" do transistor vazando pra fora do componente); os
+      // `pinLocalPosition` já estavam certos (24,0)/(24,32)/(0,16), só o desenho não batia com eles.
       return (
-        `<circle cx="${midX}" cy="${yMid}" r="18" class="symbol-stroke" fill="none"/>` +
-        `<line x1="${PIN_INSET}" y1="${yMid}" x2="${midX - 12}" y2="${yMid}" class="symbol-stroke"/>` +
-        `<line x1="${midX}" y1="${yMid - 16}" x2="${box.width - PIN_INSET}" y2="${PIN_INSET}" class="symbol-stroke"/>` +
-        `<line x1="${midX}" y1="${yMid + 16}" x2="${box.width - PIN_INSET}" y2="${box.height - PIN_INSET}" class="symbol-stroke"/>` +
-        `<line x1="${midX - 12}" y1="${yMid - 16}" x2="${midX - 12}" y2="${yMid + 16}" class="symbol-stroke"/>`
+        `<ellipse cx="18" cy="16" rx="14" ry="14" class="symbol-stroke" fill="none"/>` +
+        `<line x1="0" y1="16" x2="12" y2="16" class="symbol-stroke"/>` +
+        `<line x1="12" y1="8" x2="12" y2="24" class="symbol-stroke"/>` +
+        `<line x1="12" y1="12" x2="24" y2="4" class="symbol-stroke"/>` +
+        `<line x1="12" y1="20" x2="24" y2="28" class="symbol-stroke"/>` +
+        `<line x1="24" y1="0" x2="24" y2="4" class="symbol-stroke"/>` +
+        `<line x1="24" y1="32" x2="24" y2="28" class="symbol-stroke"/>` +
+        `<path d="M 22 26.7 L 18.4 26 L 20 23.5 Z" fill="currentColor"/>`
+      );
+
+    case "active.mosfet":
+      // active/mosfet.cpp: mesma elipse/pinos do BJT (m_area e Pin idênticos) -- só o glifo interno
+      // muda (3 "dedos" horizontais + barra de gate + setinha de canal N, modo enhancement default).
+      return (
+        `<ellipse cx="18" cy="16" rx="14" ry="14" class="symbol-stroke" fill="none"/>` +
+        `<line x1="0" y1="16" x2="12" y2="16" class="symbol-stroke"/>` +
+        `<line x1="12" y1="8" x2="12" y2="24" class="symbol-stroke"/>` +
+        `<line x1="16" y1="9" x2="24" y2="9" class="symbol-stroke"/>` +
+        `<line x1="16" y1="16" x2="24" y2="16" class="symbol-stroke"/>` +
+        `<line x1="16" y1="23" x2="24" y2="23" class="symbol-stroke"/>` +
+        `<line x1="24" y1="0" x2="24" y2="9" class="symbol-stroke"/>` +
+        `<line x1="24" y1="32" x2="24" y2="16" class="symbol-stroke"/>` +
+        `<line x1="16" y1="7" x2="16" y2="11" class="symbol-stroke symbol-stroke--thick"/>` +
+        `<line x1="16" y1="14" x2="16" y2="18" class="symbol-stroke symbol-stroke--thick"/>` +
+        `<line x1="16" y1="21" x2="16" y2="25" class="symbol-stroke symbol-stroke--thick"/>` +
+        `<path d="M 17 16 L 21 14 L 21 18 Z" fill="currentColor"/>`
+      );
+
+    case "active.jfet":
+      // active/jfet.cpp: mesma elipse/pinos do BJT/Mosfet -- gate é uma barra reta única (sem
+      // enhancement/depletion) e a seta aponta pra dentro (canal N default).
+      return (
+        `<ellipse cx="18" cy="16" rx="14" ry="14" class="symbol-stroke" fill="none"/>` +
+        `<line x1="0" y1="16" x2="16" y2="16" class="symbol-stroke"/>` +
+        `<line x1="16" y1="7" x2="16" y2="25" class="symbol-stroke"/>` +
+        `<line x1="16" y1="9" x2="24" y2="9" class="symbol-stroke"/>` +
+        `<line x1="16" y1="23" x2="24" y2="23" class="symbol-stroke"/>` +
+        `<line x1="24" y1="0" x2="24" y2="9" class="symbol-stroke"/>` +
+        `<line x1="24" y1="32" x2="24" y2="24" class="symbol-stroke"/>` +
+        `<path d="M 15 16 L 11 14 L 11 18 Z" fill="currentColor"/>`
       );
 
     case "active.opamp":
     case "active.comparator":
       return (
+        // Entradas ligadas EXATAMENTE em y=8/24 (mesmos valores de `pinLocalPosition` acima) -- a
+        // proporção antiga (0.35/0.65 do box.height=32) dava 11.2/20.8, ~3px longe da bolinha de
+        // ligação real.
         `<path d="M 24 12 L 24 ${box.height - 12} L ${box.width - 16} ${yMid} Z" class="symbol-stroke" fill="none"/>` +
-        `<line x1="${PIN_INSET}" y1="${box.height * 0.35}" x2="24" y2="${box.height * 0.35}" class="symbol-stroke"/>` +
-        `<line x1="${PIN_INSET}" y1="${box.height * 0.65}" x2="24" y2="${box.height * 0.65}" class="symbol-stroke"/>` +
+        `<line x1="${PIN_INSET}" y1="8" x2="24" y2="8" class="symbol-stroke"/>` +
+        `<line x1="${PIN_INSET}" y1="24" x2="24" y2="24" class="symbol-stroke"/>` +
         `<line x1="${box.width - 16}" y1="${yMid}" x2="${box.width - PIN_INSET}" y2="${yMid}" class="symbol-stroke"/>` +
-        `<text x="18" y="${box.height * 0.36 + 4}" text-anchor="middle" class="symbol-text">+</text>` +
-        `<text x="18" y="${box.height * 0.66 + 4}" text-anchor="middle" class="symbol-text">-</text>`
+        `<text x="18" y="12" text-anchor="middle" class="symbol-text">+</text>` +
+        `<text x="18" y="28" text-anchor="middle" class="symbol-text">-</text>`
       );
 
     case "active.analog_mux":
-      return labelBox("MUX");
+      // mux_analog.cpp: paint() é só `drawRect(m_area)` -- sem texto nenhum (era `labelBox("MUX")`).
+      return horizontalLeads(box, yMid) + `<rect x="4" y="2" width="${box.width - 8}" height="${box.height - 4}" class="symbol-stroke" fill="none"/>`;
 
     case "active.volt_regulator":
-      return labelBox("REG");
+      // volt_reg.cpp: idem, `drawRect(m_area)` sem texto (era `labelBox("REG")`).
+      return `<rect x="4" y="2" width="${box.width - 8}" height="${box.height - 4}" class="symbol-stroke" fill="none"/>`;
 
     case "outputs.led_rgb":
-      return labelBox("RGB");
-    case "outputs.led_bar":
-      return labelBox("LED BAR");
-    case "outputs.led_matrix":
-    case "outputs.max72xx_matrix":
-    case "outputs.ws2812":
-      return labelBox("MATRIX");
-    case "outputs.seven_segment":
-      return labelBox("7SEG");
-    case "outputs.dc_motor":
-      return labelBox("M");
-    case "outputs.stepper":
-      return labelBox("STEP");
+      // ledrgb.cpp: borda arredondada (pena grossa) + elipse preenchida com a cor viva (mistura
+      // R/G/B) -- aqui em repouso/estático usamos cinza escuro (apagado), sem nenhum texto "RGB".
+      return (
+        `<rect x="2" y="2" width="${box.width - 4}" height="${box.height - 4}" rx="4" ry="4" class="symbol-stroke symbol-stroke--thick" fill="none"/>` +
+        `<ellipse cx="${midX}" cy="${yMid}" rx="${box.width / 2 - 4}" ry="${box.height / 2 - 4}" fill="#3a3a3a"/>`
+      );
+
+    case "outputs.led_bar": {
+      // ledbar.cpp: encapsulamento estreito + N LEDs individuais empilhados (8 default), cada um seu
+      // proprio quadrado -- não um texto "LED BAR" solto.
+      const count = 8;
+      const cellH = (box.height - 8) / count;
+      let cells = `<rect x="2" y="2" width="${box.width - 4}" height="${box.height - 4}" class="symbol-stroke" fill="none"/>`;
+      for (let i = 0; i < count; i++) {
+        const cy = 4 + cellH * (i + 0.5);
+        cells += `<rect x="${midX - 4}" y="${(cy - 3).toFixed(1)}" width="8" height="6" fill="#3a3a3a" stroke="currentColor" stroke-width="0.75"/>`;
+      }
+      return cells;
+    }
+
+    case "outputs.led_matrix": {
+      // ledmatrix.cpp: corpo arredondado + grade rows×cols de LEDs individuais (8x8 default) --
+      // mesmo espírito do grid já implementado pra `switches.keypad`, não um texto "MATRIX".
+      const rows = typeof properties?.rows === "number" ? properties.rows : 8;
+      const cols = typeof properties?.columns === "number" ? properties.columns : 8;
+      const cellW = (box.width - 8) / cols;
+      const cellH = (box.height - 8) / rows;
+      let cells = `<rect x="2" y="2" width="${box.width - 4}" height="${box.height - 4}" rx="3" ry="3" class="symbol-stroke" fill="none"/>`;
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const cx = 4 + cellW * (col + 0.5);
+          const cy = 4 + cellH * (row + 0.5);
+          cells += `<rect x="${(cx - cellW * 0.35).toFixed(1)}" y="${(cy - cellH * 0.35).toFixed(1)}" width="${(cellW * 0.7).toFixed(1)}" height="${(cellH * 0.7).toFixed(1)}" fill="#3a1414"/>`;
+        }
+      }
+      return cells;
+    }
+
+    case "outputs.seven_segment": {
+      // sevensegment.cpp: glifo real de 7 segmentos (o "8" clássico) em repouso/apagado -- não um
+      // texto "7SEG". Segmentos como linhas grossas de ponta arredondada, igual ao LED real.
+      const segColor = "#3a1414";
+      const L = 6, R = box.width - 6, T = 6, M = yMid, B = box.height - 6;
+      const seg = (x1: number, y1: number, x2: number, y2: number): string =>
+        `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${segColor}" stroke-width="4" stroke-linecap="round"/>`;
+      return (
+        seg(L + 2, T, R - 2, T) + // a
+        seg(R, T + 2, R, M - 2) + // b
+        seg(R, M + 2, R, B - 2) + // c
+        seg(L + 2, B, R - 2, B) + // d
+        seg(L, M + 2, L, B - 2) + // e
+        seg(L, T + 2, L, M - 2) + // f
+        seg(L + 2, M, R - 2, M) + // g
+        `<circle cx="${R + 4}" cy="${B}" r="2" fill="${segColor}"/>` // ponto decimal
+      );
+    }
+
+    case "outputs.dc_motor": {
+      // dcmotor.cpp: corpo circular concêntrico (carcaça + rotor) + 2 abas de terminal coloridas.
+      const r = Math.min(box.width, box.height) / 2 - 2;
+      return (
+        `<ellipse cx="${midX}" cy="${yMid}" rx="${r}" ry="${r}" fill="#324664"/>` +
+        `<rect x="${(midX - r - 6).toFixed(1)}" y="${(yMid - 4).toFixed(1)}" width="8" height="8" rx="2" fill="#8d0000"/>` +
+        `<rect x="${(midX + r - 2).toFixed(1)}" y="${(yMid - 4).toFixed(1)}" width="8" height="8" rx="2" fill="#111"/>` +
+        `<ellipse cx="${midX}" cy="${yMid}" rx="${(r * 0.8).toFixed(1)}" ry="${(r * 0.8).toFixed(1)}" fill="#ffffff"/>` +
+        `<path d="M ${midX} ${yMid} L ${midX} ${(yMid - r * 0.7).toFixed(1)} A ${(r * 0.7).toFixed(1)} ${(r * 0.7).toFixed(1)} 0 0 1 ${(midX + r * 0.7 * 0.87).toFixed(1)} ${(yMid - r * 0.7 * 0.5).toFixed(1)} Z" fill="#324664"/>` +
+        `<ellipse cx="${midX}" cy="${yMid}" rx="${(r * 0.4).toFixed(1)}" ry="${(r * 0.4).toFixed(1)}" fill="#dcdcdc" stroke="#888" stroke-width="1"/>`
+      );
+    }
+
+    case "outputs.stepper": {
+      // stepper.cpp: mesma família visual do dc_motor (círculos concêntricos) + marcas de passo em
+      // volta do rotor + tira de conector à esquerda (5 pinos, todos do lado esquerdo no real).
+      const r = Math.min(box.width, box.height) / 2 - 4;
+      const cx = midX + 8;
+      let ticks = "";
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2;
+        const x1 = cx + Math.cos(a) * (r - 3);
+        const y1 = yMid + Math.sin(a) * (r - 3);
+        const x2 = cx + Math.cos(a) * r;
+        const y2 = yMid + Math.sin(a) * r;
+        ticks += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#ffffff" stroke-width="1.5"/>`;
+      }
+      return (
+        `<rect x="0" y="${(yMid - r * 0.7).toFixed(1)}" width="14" height="${(r * 1.4).toFixed(1)}" rx="1" fill="#324664"/>` +
+        `<ellipse cx="${cx}" cy="${yMid}" rx="${r}" ry="${r}" fill="#324664"/>` +
+        `<ellipse cx="${cx}" cy="${yMid}" rx="${(r * 0.82).toFixed(1)}" ry="${(r * 0.82).toFixed(1)}" fill="#ffffff"/>` +
+        ticks +
+        `<ellipse cx="${cx}" cy="${yMid}" rx="${(r * 0.5).toFixed(1)}" ry="${(r * 0.5).toFixed(1)}" fill="#324664"/>` +
+        `<ellipse cx="${cx}" cy="${yMid}" rx="${(r * 0.28).toFixed(1)}" ry="${(r * 0.28).toFixed(1)}" fill="#dcdcdc"/>`
+      );
+    }
     case "outputs.servo":
       return labelBox("SERVO");
     case "outputs.audio_out":
@@ -1215,11 +1637,20 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
 
     // ── Medidores (pasta "Meters" do SimulIDE) ──────────────────────────────────
     case "meters.probe": {
+      // probe.cpp: o círculo é preenchido dinamicamente conforme o sinal medido (laranja acima do
+      // limiar, azul abaixo, lavanda-claro no meio) -- antes sempre `fill="none"`, nunca refletia a
+      // leitura.
       const showVolt = properties?.showVolt !== false;
+      const reading = symbolReadoutNumber(properties);
+      const threshold = 2.5;
+      const fill = reading === undefined ? "#e6e6ff" : reading > threshold ? "#ffa600" : reading < -threshold ? "#0064ff" : "#e6e6ff";
+      // probe.cpp: circulo real (drawEllipse(-8,-8,16,16)) fica encostado na borda direita de
+      // m_area, nao centralizado com folga dos dois lados -- cx=22 (nao 20) faz o traco do pino
+      // tocar exatamente a borda do circulo (era 2px curto antes).
       return (
-        `<line x1="0" y1="8" x2="10" y2="8" class="symbol-stroke"/>` +
-        `<ellipse cx="20" cy="8" rx="8" ry="8" class="symbol-stroke" fill="none"/>` +
-        (showVolt ? `<text x="32" y="6" class="probe-voltage-label">${escapeXmlText(formatRailVoltage(symbolReadoutNumber(properties) ?? 0))} V</text>` : "")
+        `<line x1="0" y1="8" x2="14" y2="8" class="symbol-stroke"/>` +
+        `<ellipse cx="22" cy="8" rx="8" ry="8" class="symbol-stroke" fill="${fill}"/>` +
+        (showVolt ? `<text x="34" y="6" class="probe-voltage-label">${escapeXmlText(formatRailVoltage(reading ?? 0))} V</text>` : "")
       );
     }
 
@@ -1243,55 +1674,61 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
 
     // ── Fontes (pasta "Sources" do SimulIDE) ────────────────────────────────────
     case "sources.fixed_volt": {
+      // fixedvolt.cpp: UM único botão quadrado (não dois lado a lado) -- laranja quando ligado,
+      // lavanda-claro quando desligado, exatamente como o toggle real.
+      const on = properties?.closed === true;
       return (
-        `<rect x="0" y="4" width="16" height="16" rx="2" class="fixed-volt-button" fill="#dddddd" stroke="#777777" stroke-width="1.5"/>` +
-        `<rect x="24" y="4" width="16" height="16" rx="2" class="fixed-volt-body toggle-hit-zone" fill="#dddddd" stroke="#777777" stroke-width="1.5"/>` +
-        `<rect x="40" y="9" width="8" height="6" rx="3" class="fixed-volt-terminal" fill="currentColor"/>`
+        `<rect x="2" y="2" width="${box.width - 4}" height="${box.height - 4}" rx="3" class="fixed-volt-body toggle-hit-zone" fill="${on ? "#ffa600" : "#e6e6ff"}" stroke="#777777" stroke-width="1.5"/>`
       );
     }
 
-    case "sources.clock":
-      // Pulso quadrado -- mesma sequência exata de drawLine do Clock::paint original.
+    case "sources.clock": {
+      // clockbase.cpp: SEMPRE tem um corpo preenchido atrás do pulso (amarelo rodando, lavanda
+      // parado) -- antes só as linhas do pulso apareciam, sem nenhum fundo (bug: real nunca mostra
+      // as linhas "no ar").
+      const running = properties?.running !== false;
       return (
+        `<rect x="1" y="1" width="${box.width - 2}" height="${box.height - 2}" rx="2" fill="${running ? "#fac832" : "#e6e6ff"}" stroke="currentColor" stroke-width="1"/>` +
         `<path d="M ${midX - 11} ${yMid + 3} L ${midX - 11} ${yMid - 3} L ${midX - 5} ${yMid - 3} L ${midX - 5} ${yMid + 3} ` +
         `L ${midX + 1} ${yMid + 3} L ${midX + 1} ${yMid - 3} L ${midX + 4} ${yMid - 3}" class="symbol-stroke" fill="none"/>`
       );
+    }
 
-    case "sources.wave_gen":
+    case "sources.wave_gen": {
+      // wavegen.cpp herda o mesmo corpo preenchido de ClockBase (amarelo/lavanda) -- o ícone de onda
+      // é uma aproximação (o real troca de pixmap por tipo de onda selecionado).
+      const running = properties?.running !== false;
       return (
-        `<rect x="4" y="4" width="${box.width - 8}" height="${box.height - 8}" rx="2" class="symbol-stroke" fill="none"/>` +
-        `<path d="M 10 ${yMid} Q ${midX - 8} ${yMid - 12}, ${midX} ${yMid} T ${box.width - 10} ${yMid}" class="symbol-stroke symbol-stroke--accent" fill="none"/>`
+        `<rect x="1" y="1" width="${box.width - 2}" height="${box.height - 2}" rx="2" fill="${running ? "#fac832" : "#e6e6ff"}" stroke="currentColor" stroke-width="1"/>` +
+        `<path d="M 6 ${yMid} Q ${midX - 5} ${yMid - 6}, ${midX} ${yMid} T ${box.width - 6} ${yMid}" class="symbol-stroke" fill="none"/>`
       );
+    }
 
     case "sources.voltage_source":
+    case "sources.current_source": {
+      // varsource.cpp: componente de UM pino só (dial+botão nativos do Qt, não reproduzíveis em
+      // SVG) -- era desenhado como fonte clássica de 2 terminais (bug de topologia: teria 2 leads
+      // pra um componente que só tem 1 pino elétrico real). Aqui: corpo cinza-claro + label, 1 lead
+      // à direita (ver `pinLocalPosition`, já trata como pinCount<=1 no lado direito).
+      const label = typeId === "sources.voltage_source" ? "V" : "A";
       return (
-        horizontalLeads(box, yMid) +
-        `<line x1="${x1}" y1="${yMid}" x2="${midX - 14}" y2="${yMid}" class="symbol-stroke"/>` +
-        `<line x1="${midX + 14}" y1="${yMid}" x2="${x2}" y2="${yMid}" class="symbol-stroke"/>` +
-        `<circle cx="${midX}" cy="${yMid}" r="14" class="symbol-stroke" fill="none"/>` +
-        `<text x="${midX}" y="${yMid + 5}" text-anchor="middle" class="symbol-text">V</text>` +
-        `<line x1="${midX - 7}" y1="${yMid - 11}" x2="${midX + 7}" y2="${yMid - 11}" class="symbol-stroke symbol-stroke--accent"/>`
+        `<line x1="${box.width - 8}" y1="${yMid}" x2="${box.width}" y2="${yMid}" class="symbol-stroke"/>` +
+        `<rect x="2" y="2" width="${box.width - 12}" height="${box.height - 4}" rx="3" fill="#e6e6e6" stroke="#777777" stroke-width="1.5"/>` +
+        `<text x="${(box.width - 12) / 2 + 2}" y="${yMid + 4}" text-anchor="middle" class="symbol-text">${label}</text>`
       );
-
-    case "sources.current_source":
-      return (
-        horizontalLeads(box, yMid) +
-        `<line x1="${x1}" y1="${yMid}" x2="${midX - 14}" y2="${yMid}" class="symbol-stroke"/>` +
-        `<line x1="${midX + 14}" y1="${yMid}" x2="${x2}" y2="${yMid}" class="symbol-stroke"/>` +
-        `<circle cx="${midX}" cy="${yMid}" r="14" class="symbol-stroke" fill="none"/>` +
-        `<line x1="${midX}" y1="${yMid + 8}" x2="${midX}" y2="${yMid - 8}" class="symbol-stroke symbol-stroke--accent"/>` +
-        `<path d="M ${midX - 4} ${yMid - 4} L ${midX} ${yMid - 8} L ${midX + 4} ${yMid - 4}" class="symbol-stroke symbol-stroke--accent" fill="none"/>`
-      );
+    }
 
     case "sources.controlled_source": {
-      // Diamante (Csource::paint do original, modo "control pins": polígono de 4 pontos) com seta
-      // de corrente -- mesma lógica de m_currSource do original.
+      // csource.cpp: borda quadrada (m_area, 32x32) + diamante MENOR por dentro (metade da escala
+      // que estava desenhada antes -- bug: diamante 2x maior que o real, e faltava a moldura
+      // quadrada em volta por completo).
       const cx = box.width / 2;
       const cy = box.height / 2;
       return (
-        `<path d="M ${cx - 16} ${cy} L ${cx} ${cy - 26} L ${cx + 16} ${cy} L ${cx} ${cy + 26} Z" class="symbol-stroke" fill="none"/>` +
-        `<line x1="${cx}" y1="${cy - 10}" x2="${cx}" y2="${cy + 10}" class="symbol-stroke symbol-stroke--accent"/>` +
-        `<path d="M ${cx - 4} ${cy + 4} L ${cx} ${cy + 10} L ${cx + 4} ${cy + 4}" class="symbol-stroke symbol-stroke--accent" fill="none"/>`
+        `<rect x="2" y="2" width="${box.width - 4}" height="${box.height - 4}" class="symbol-stroke" fill="none"/>` +
+        `<path d="M ${cx - 8} ${cy} L ${cx} ${cy - 13} L ${cx + 8} ${cy} L ${cx} ${cy + 13} Z" class="symbol-stroke" fill="none"/>` +
+        `<line x1="${cx}" y1="${cy - 5}" x2="${cx}" y2="${cy + 5}" class="symbol-stroke symbol-stroke--accent"/>` +
+        `<path d="M ${cx - 2} ${cy + 2} L ${cx} ${cy + 5} L ${cx + 2} ${cy + 2}" class="symbol-stroke symbol-stroke--accent" fill="none"/>`
       );
     }
 

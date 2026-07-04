@@ -1,1 +1,106 @@
-﻿{ "schemaVersion": 1, "typeId": "logic.flipflop_rs", "name": "FlipFlop RS", "language": "pt-BR", "abiVersion": { "major": 4, "minor": 0 }, "nativeEntry": { "win32-x64": "build-msvc/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" }, "pins": [ { "id": "s", "kind": "DIGITAL_IN" }, { "id": "r", "kind": "DIGITAL_IN" }, { "id": "q", "kind": "DIGITAL_OUT" }, { "id": "nq", "kind": "DIGITAL_OUT" } ], "properties": [], "limits": { "stepTimeoutMs": 4, "expectedComplexity": "low" } }
+{
+  "schemaVersion": 1,
+  "typeId": "logic.flipflop_rs",
+  "name": "FlipFlop RS",
+  "language": "pt-BR",
+  "abiVersion": {
+    "major": 4,
+    "minor": 0
+  },
+  "nativeEntry": {
+    "win32-x64": "build-msvc/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
+  "pins": [
+    {
+      "id": "s",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "r",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "q",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "nq",
+      "kind": "DIGITAL_OUT"
+    }
+  ],
+  "properties": [],
+  "limits": {
+    "stepTimeoutMs": 4,
+    "expectedComplexity": "low"
+  },
+  "package": {
+    "width": 40,
+    "height": 32,
+    "border": false,
+    "background": {
+      "kind": "none"
+    },
+    "shapes": [],
+    "pins": [
+      {
+        "id": "s",
+        "x": 0,
+        "y": 8,
+        "angle": 180,
+        "length": 8,
+        "label": "S"
+      },
+      {
+        "id": "r",
+        "x": 0,
+        "y": 16,
+        "angle": 180,
+        "length": 8,
+        "label": "R"
+      },
+      {
+        "id": "q",
+        "x": 40,
+        "y": 8,
+        "angle": 0,
+        "length": 8,
+        "label": "Q"
+      },
+      {
+        "id": "nq",
+        "x": 40,
+        "y": 16,
+        "angle": 0,
+        "length": 8,
+        "label": "NQ"
+      }
+    ],
+    "viewSpec": {
+      "paint": [
+        {
+          "kind": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 40,
+          "h": 32,
+          "fill": "#ffffff"
+        },
+        {
+          "kind": "text",
+          "x": 20,
+          "y": -4,
+          "value": "__label",
+          "fontSize": 5,
+          "color": "#0000aa"
+        }
+      ]
+    }
+  },
+  "icon": "2to2",
+  "folderPath": [
+    "Logicos",
+    "Memorias"
+  ]
+}

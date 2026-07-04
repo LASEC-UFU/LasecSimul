@@ -1,24 +1,236 @@
-﻿{
+{
   "schemaVersion": 1,
   "typeId": "outputs.ks0108",
   "name": "KS0108",
   "language": "pt-BR",
-  "translations": { "en": { "name": "KS0108" } },
-  "abiVersion": { "major": 4, "minor": 0 },
-  "nativeEntry": { "win32-x64": "build-msvc/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" },
+  "translations": {
+    "en": {
+      "name": "KS0108"
+    }
+  },
+  "abiVersion": {
+    "major": 4,
+    "minor": 0
+  },
+  "nativeEntry": {
+    "win32-x64": "build-msvc/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
   "pins": [
-    { "id": "rs", "kind": "DIGITAL_IN", "x": 16, "y": 8, "angle": 270, "length": 8, "label": "RS" },
-    { "id": "rw", "kind": "DIGITAL_IN", "x": 24, "y": 8, "angle": 270, "length": 8, "label": "RW" },
-    { "id": "e", "kind": "DIGITAL_IN", "x": 32, "y": 8, "angle": 270, "length": 8, "label": "E" },
-    { "id": "d0", "kind": "DIGITAL_BIDIR", "x": 40, "y": 8, "angle": 270, "length": 8, "label": "D0" },
-    { "id": "d1", "kind": "DIGITAL_BIDIR", "x": 48, "y": 8, "angle": 270, "length": 8, "label": "D1" },
-    { "id": "d2", "kind": "DIGITAL_BIDIR", "x": 56, "y": 8, "angle": 270, "length": 8, "label": "D2" },
-    { "id": "d3", "kind": "DIGITAL_BIDIR", "x": 64, "y": 8, "angle": 270, "length": 8, "label": "D3" },
-    { "id": "d4", "kind": "DIGITAL_BIDIR", "x": 72, "y": 8, "angle": 270, "length": 8, "label": "D4" },
-    { "id": "d5", "kind": "DIGITAL_BIDIR", "x": 80, "y": 8, "angle": 270, "length": 8, "label": "D5" },
-    { "id": "d6", "kind": "DIGITAL_BIDIR", "x": 88, "y": 8, "angle": 270, "length": 8, "label": "D6" },
-    { "id": "d7", "kind": "DIGITAL_BIDIR", "x": 96, "y": 8, "angle": 270, "length": 8, "label": "D7" }
+    {
+      "id": "rs",
+      "kind": "DIGITAL_IN",
+      "x": 16,
+      "y": 8,
+      "angle": 270,
+      "length": 8,
+      "label": "RS"
+    },
+    {
+      "id": "rw",
+      "kind": "DIGITAL_IN",
+      "x": 24,
+      "y": 8,
+      "angle": 270,
+      "length": 8,
+      "label": "RW"
+    },
+    {
+      "id": "e",
+      "kind": "DIGITAL_IN",
+      "x": 32,
+      "y": 8,
+      "angle": 270,
+      "length": 8,
+      "label": "E"
+    },
+    {
+      "id": "d0",
+      "kind": "DIGITAL_BIDIR",
+      "x": 40,
+      "y": 8,
+      "angle": 270,
+      "length": 8,
+      "label": "D0"
+    },
+    {
+      "id": "d1",
+      "kind": "DIGITAL_BIDIR",
+      "x": 48,
+      "y": 8,
+      "angle": 270,
+      "length": 8,
+      "label": "D1"
+    },
+    {
+      "id": "d2",
+      "kind": "DIGITAL_BIDIR",
+      "x": 56,
+      "y": 8,
+      "angle": 270,
+      "length": 8,
+      "label": "D2"
+    },
+    {
+      "id": "d3",
+      "kind": "DIGITAL_BIDIR",
+      "x": 64,
+      "y": 8,
+      "angle": 270,
+      "length": 8,
+      "label": "D3"
+    },
+    {
+      "id": "d4",
+      "kind": "DIGITAL_BIDIR",
+      "x": 72,
+      "y": 8,
+      "angle": 270,
+      "length": 8,
+      "label": "D4"
+    },
+    {
+      "id": "d5",
+      "kind": "DIGITAL_BIDIR",
+      "x": 80,
+      "y": 8,
+      "angle": 270,
+      "length": 8,
+      "label": "D5"
+    },
+    {
+      "id": "d6",
+      "kind": "DIGITAL_BIDIR",
+      "x": 88,
+      "y": 8,
+      "angle": 270,
+      "length": 8,
+      "label": "D6"
+    },
+    {
+      "id": "d7",
+      "kind": "DIGITAL_BIDIR",
+      "x": 96,
+      "y": 8,
+      "angle": 270,
+      "length": 8,
+      "label": "D7"
+    }
   ],
   "properties": [],
-  "limits": { "stepTimeoutMs": 8, "expectedComplexity": "medium" }
+  "limits": {
+    "stepTimeoutMs": 8,
+    "expectedComplexity": "medium"
+  },
+  "package": {
+    "width": 148,
+    "height": 100,
+    "border": false,
+    "background": { "kind": "none" },
+    "shapes": [],
+    "viewSpec": {
+      "paint": [
+        { "kind": "rect", "x": 0, "y": 8, "w": 148, "h": 92, "rx": 2, "ry": 2, "fill": "#324664" },
+        { "kind": "rect", "x": 8, "y": 18, "w": 132, "h": 74, "rx": 8, "ry": 8, "fill": "#c8dcb4" },
+        { "kind": "rect", "x": 14, "y": 24, "w": 120, "h": 62, "fill": "#000000" },
+        { "kind": "text", "x": 74, "y": 4, "value": "__label", "fontSize": 6, "color": "#0000aa" }
+      ]
+    },
+    "pins": [
+      {
+        "id": "rs",
+        "x": 16,
+        "y": 8,
+        "angle": 270,
+        "length": 8,
+        "label": "RS"
+      },
+      {
+        "id": "rw",
+        "x": 24,
+        "y": 8,
+        "angle": 270,
+        "length": 8,
+        "label": "RW"
+      },
+      {
+        "id": "e",
+        "x": 32,
+        "y": 8,
+        "angle": 270,
+        "length": 8,
+        "label": "E"
+      },
+      {
+        "id": "d0",
+        "x": 40,
+        "y": 8,
+        "angle": 270,
+        "length": 8,
+        "label": "D0"
+      },
+      {
+        "id": "d1",
+        "x": 48,
+        "y": 8,
+        "angle": 270,
+        "length": 8,
+        "label": "D1"
+      },
+      {
+        "id": "d2",
+        "x": 56,
+        "y": 8,
+        "angle": 270,
+        "length": 8,
+        "label": "D2"
+      },
+      {
+        "id": "d3",
+        "x": 64,
+        "y": 8,
+        "angle": 270,
+        "length": 8,
+        "label": "D3"
+      },
+      {
+        "id": "d4",
+        "x": 72,
+        "y": 8,
+        "angle": 270,
+        "length": 8,
+        "label": "D4"
+      },
+      {
+        "id": "d5",
+        "x": 80,
+        "y": 8,
+        "angle": 270,
+        "length": 8,
+        "label": "D5"
+      },
+      {
+        "id": "d6",
+        "x": 88,
+        "y": 8,
+        "angle": 270,
+        "length": 8,
+        "label": "D6"
+      },
+      {
+        "id": "d7",
+        "x": 96,
+        "y": 8,
+        "angle": 270,
+        "length": 8,
+        "label": "D7"
+      }
+    ]
+  },
+  "icon": "ks0108",
+  "folderPath": [
+    "Saidas",
+    "Displays"
+  ]
 }

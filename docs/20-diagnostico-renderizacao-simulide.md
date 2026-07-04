@@ -10,7 +10,7 @@ Plano fundido: diagnóstico do SimulIDE-dev + análise LasecSimul. Cobre todos o
 
 O SimulIDE usa **paint() por componente em C++/Qt** — cada device tem sua própria classe, widgets nativos embutidos (`JoystickWidget`, `CustomDial`, `UpDoButton`, `CustomSlider`, `TouchPadWidget`) e eventos Qt locais (`mousePressEvent`/`mouseMoveEvent`/`mouseReleaseEvent`/`paintEvent`). O LasecSimul usa uma **pipeline declarativa genérica** (JSON shapes → SVG estático) sem modelo formal de partes interativas.
 
-Há um **bug zero** confirmado que pode ser corrigido em minutos: o KY-040 não tem nenhum elemento com `encoder-hit-zone` — o handler da roda do mouse filtra por essa classe e sempre retorna sem fazer nada. A correção é uma linha no JSON.
+Havia um **bug zero** confirmado: o KY-040 não tinha nenhum elemento com `encoder-hit-zone`, então o handler da roda do mouse filtrava por essa classe e retornava sem fazer nada. A correção esperada é manter o knob/indicador do KY-040 declarados como `encoder-hit-zone`.
 
 O caminho correto para os demais componentes é introduzir uma **camada `ComponentViewSpec`** por typeId — partes nomeadas, hitTest explícito, limites, stateProjection e tipos formais de interação — em vez de continuar extendendo o sistema de shapes genérico que não foi desenhado para isso.
 
@@ -20,11 +20,11 @@ O caminho correto para os demais componentes é introduzir uma **camada `Compone
 
 > **Pré-requisito inegociável:** a reconciliação incremental do render (`createComponentElement` / `updateComponentElement` + Map keyed por id) deve entrar _antes_ de qualquer interação nova. Hoje `render()` faz `app.innerHTML = ""` a cada telemetria (~300ms), destruindo qualquer elemento sendo arrastado. Toda interação futura sofre esse bug enquanto ele não for corrigido.
 
-## P0 — Correções visíveis imediatas **[Fazer agora]**
+## P0 — Correções visíveis imediatas **[Implementado parcialmente]**
 
 ### P0.1 — KY-040: encoder-hit-zone ausente
 
-O handler em `main.ts:3081` faz `event.target.closest(".encoder-hit-zone")`. Nenhum shape em `ky040.json` tem essa classe — a interação nunca dispara. Correção: adicionar `"cssClass": "encoder-hit-zone"` na ellipse do knob (`rx=13`).
+O handler em `main.ts:3081` faz `event.target.closest(".encoder-hit-zone")`. O `ky040.json` deve manter a ellipse do knob (`rx=13`) e o ponto indicador com essa classe, para que clicar no knob ou no indicador inicie a interação.
 
 ```json
 // ky040.json — linha 36 — ellipse do knob (rx=13)
@@ -92,7 +92,7 @@ Não existe teste confirmando que `interaction: "encoder"` no JSON do manifesto 
 | Componente                                    | SimulIDE (referência)                                                                                                                            | LasecSimul (atual)                                                                                                                          | Bug principal                                                         | Status           |
 | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | ---------------- |
 | KY-023                                        | JoystickWidget 50×50. Drag XY, clamp radial, returnToCenter. SW momentário. Hit-test: clique perto do atuador central (`joystickwidget.cpp:81`). | Bowl + thumbstick gradiente. joystick-hit-zone na ellipse rx=10. setPointerCapture + isDraggingComponent corrigidos.                        | P0.3: validar path interactionKind. Visualmente ok.                   | **[Testar]**     |
-| KY-040                                        | CustomDial 36×36. Arraste angular horário/anti-horário. 20 notches, wrap, steps. SW momentário.                                                  | encoder-indicator existe. encoder-hit-zone ausente — interação NUNCA dispara. Wheel sim., mas não é o comportamento fiel (arraste angular). | **P0.1: adicionar encoder-hit-zone.** UX assumida: arraste angular como SimulIDE. | **[Crítico]** |
+| KY-040                                        | CustomDial 36×36. Arraste angular horário/anti-horário. 20 notches, wrap, steps. SW momentário.                                                  | `viewSpec` com knob/indicador, `encoder-hit-zone` e `encoder-indicator`. Wheel existe; arraste angular foi assumido como UX final.           | Validar manualmente arraste angular, wheel e SW.                       | **[Testar]**     |
 | TouchPad                                      | TouchPadWidget. Press/move/release → X/Y resistivos. Reset ao soltar. `touchpad.cpp:31`                                                          | Tipo touchpad existe em model.ts. Handler específico: não localizado.                                                                       | Handler de interação ausente.                                         | **[Crítico]**    |
 | SR04                                          | sr04.svg background (168×72) + CustomSlider 0–400cm. `sr04.cpp:30`                                                                               | Shapes estáticos. Sem SVG de fundo. Sem slider.                                                                                             | Sem interaction kind "slider".                                        | **[Crítico]**    |
 | DHT22                                         | dht22.svg background (36×46) + 4× UpDoButton (temp ▲▼, umidade ▲▼). `dht22.cpp:30`                                                               | Shapes estáticos. Sem SVG. Sem botões.                                                                                                      | Sem interaction kind "updown".                                        | **[Crítico]**    |
@@ -208,7 +208,7 @@ Antes de qualquer ViewSpec, o render deve ser incremental. A separação:
 
 **Correções visíveis imediatas**
 
-Corrigir os bugs que impedem validação visual e interativa agora: adicionar `"cssClass":"encoder-hit-zone"` no KY-040, testar KY-023 manualmente (drag, spring-back, SW), validar que `interaction:"encoder"` chega como `catalogInteractionKind` na webview, e documentar o risco de IDs de gradiente duplicados até o P2 resolver por componentId.
+Corrigir os bugs que impedem validação visual e interativa agora: manter `"cssClass":"encoder-hit-zone"` no KY-040, testar KY-023 manualmente (drag, spring-back, SW), validar que `interaction:"encoder"` chega como `catalogInteractionKind` na webview, e documentar o risco de IDs de gradiente duplicados até o P2 resolver por componentId.
 
 ### P1
 

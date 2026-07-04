@@ -1,1 +1,130 @@
-﻿{ "schemaVersion": 1, "typeId": "logic.bin_counter", "name": "Binary Counter", "language": "pt-BR", "abiVersion": { "major": 4, "minor": 0 }, "nativeEntry": { "win32-x64": "build-msvc/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" }, "pins": [ { "id": "clk", "kind": "DIGITAL_IN" }, { "id": "rst", "kind": "DIGITAL_IN" }, { "id": "q0", "kind": "DIGITAL_OUT" }, { "id": "q1", "kind": "DIGITAL_OUT" }, { "id": "q2", "kind": "DIGITAL_OUT" }, { "id": "q3", "kind": "DIGITAL_OUT" } ], "properties": [], "limits": { "stepTimeoutMs": 4, "expectedComplexity": "low" } }
+{
+  "schemaVersion": 1,
+  "typeId": "logic.bin_counter",
+  "name": "Binary Counter",
+  "language": "pt-BR",
+  "abiVersion": {
+    "major": 4,
+    "minor": 0
+  },
+  "nativeEntry": {
+    "win32-x64": "build-msvc/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
+  "pins": [
+    {
+      "id": "clk",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "rst",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "q0",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "q1",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "q2",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "q3",
+      "kind": "DIGITAL_OUT"
+    }
+  ],
+  "properties": [],
+  "limits": {
+    "stepTimeoutMs": 4,
+    "expectedComplexity": "low"
+  },
+  "package": {
+    "width": 48,
+    "height": 48,
+    "border": false,
+    "background": {
+      "kind": "none"
+    },
+    "shapes": [],
+    "pins": [
+      {
+        "id": "clk",
+        "x": 0,
+        "y": 8,
+        "angle": 180,
+        "length": 8,
+        "label": "CLK"
+      },
+      {
+        "id": "rst",
+        "x": 0,
+        "y": 16,
+        "angle": 180,
+        "length": 8,
+        "label": "RST"
+      },
+      {
+        "id": "q0",
+        "x": 48,
+        "y": 8,
+        "angle": 0,
+        "length": 8,
+        "label": "Q0"
+      },
+      {
+        "id": "q1",
+        "x": 48,
+        "y": 16,
+        "angle": 0,
+        "length": 8,
+        "label": "Q1"
+      },
+      {
+        "id": "q2",
+        "x": 48,
+        "y": 24,
+        "angle": 0,
+        "length": 8,
+        "label": "Q2"
+      },
+      {
+        "id": "q3",
+        "x": 48,
+        "y": 32,
+        "angle": 0,
+        "length": 8,
+        "label": "Q3"
+      }
+    ],
+    "viewSpec": {
+      "paint": [
+        {
+          "kind": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 48,
+          "h": 48,
+          "fill": "#ffffff"
+        },
+        {
+          "kind": "text",
+          "x": 24,
+          "y": -4,
+          "value": "__label",
+          "fontSize": 5,
+          "color": "#0000aa"
+        }
+      ]
+    }
+  },
+  "icon": "2to3g",
+  "folderPath": [
+    "Logicos",
+    "Aritmeticos"
+  ]
+}

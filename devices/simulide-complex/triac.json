@@ -1,16 +1,162 @@
-﻿{
+{
   "schemaVersion": 1,
   "typeId": "active.triac",
   "name": "Triac",
   "language": "pt-BR",
-  "translations": { "en": { "name": "Triac" } },
-  "abiVersion": { "major": 4, "minor": 0 },
-  "nativeEntry": { "win32-x64": "build-msvc/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" },
+  "translations": {
+    "en": {
+      "name": "Triac"
+    }
+  },
+  "abiVersion": {
+    "major": 4,
+    "minor": 0
+  },
+  "nativeEntry": {
+    "win32-x64": "build-msvc/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
   "pins": [
-    { "id": "mt1", "kind": "ANALOG_IN", "x": 0, "y": 0, "angle": 90, "length": 8, "label": "MT1" },
-    { "id": "mt2", "kind": "ANALOG_IN", "x": 0, "y": 32, "angle": 270, "length": 8, "label": "MT2" },
-    { "id": "g", "kind": "ANALOG_IN", "x": -16, "y": 16, "angle": 180, "length": 8, "label": "G" }
+    {
+      "id": "mt1",
+      "kind": "ANALOG_IN",
+      "x": 0,
+      "y": 0,
+      "angle": 90,
+      "length": 8,
+      "label": "MT1"
+    },
+    {
+      "id": "mt2",
+      "kind": "ANALOG_IN",
+      "x": 0,
+      "y": 32,
+      "angle": 270,
+      "length": 8,
+      "label": "MT2"
+    },
+    {
+      "id": "g",
+      "kind": "ANALOG_IN",
+      "x": -16,
+      "y": 16,
+      "angle": 180,
+      "length": 8,
+      "label": "G"
+    }
   ],
   "properties": [],
-  "limits": { "stepTimeoutMs": 8, "expectedComplexity": "high" }
+  "limits": {
+    "stepTimeoutMs": 8,
+    "expectedComplexity": "high"
+  },
+  "package": {
+    "width": 32,
+    "height": 32,
+    "border": false,
+    "background": {
+      "kind": "none"
+    },
+    "shapes": [],
+    "pins": [
+      {
+        "id": "mt1",
+        "x": 16,
+        "y": 0,
+        "angle": 270,
+        "length": 8,
+        "label": "MT1"
+      },
+      {
+        "id": "mt2",
+        "x": 16,
+        "y": 32,
+        "angle": 90,
+        "length": 8,
+        "label": "MT2"
+      },
+      {
+        "id": "g",
+        "x": 0,
+        "y": 16,
+        "angle": 180,
+        "length": 8,
+        "label": "G"
+      }
+    ],
+    "viewSpec": {
+      "paint": [
+        {
+          "kind": "polygon",
+          "points": [
+            {
+              "x": 9,
+              "y": 8
+            },
+            {
+              "x": 24,
+              "y": 16
+            },
+            {
+              "x": 24,
+              "y": 1
+            }
+          ],
+          "fill": "#222222"
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            {
+              "x": 23,
+              "y": 24
+            },
+            {
+              "x": 8,
+              "y": 31
+            },
+            {
+              "x": 8,
+              "y": 16
+            }
+          ],
+          "fill": "#222222"
+        },
+        {
+          "kind": "line",
+          "x1": 8,
+          "y1": 0,
+          "x2": 8,
+          "y2": 32,
+          "strokeWidth": 3
+        },
+        {
+          "kind": "line",
+          "x1": 24,
+          "y1": 0,
+          "x2": 24,
+          "y2": 32,
+          "strokeWidth": 3
+        },
+        {
+          "kind": "text",
+          "x": 16,
+          "y": -4,
+          "value": "__label",
+          "fontSize": 5,
+          "color": "#0000aa"
+        }
+      ]
+    }
+  },
+  "icon": "triac",
+  "folderPath": [
+    "Ativos",
+    "Rectifiers"
+  ],
+  "defaultProperties": {
+    "threshold": 0.8,
+    "resistance": 1
+  }
 }

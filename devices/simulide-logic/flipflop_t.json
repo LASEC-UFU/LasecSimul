@@ -1,1 +1,130 @@
-﻿{ "schemaVersion": 1, "typeId": "logic.flipflop_t", "name": "FlipFlopT", "language": "pt-BR", "abiVersion": { "major": 4, "minor": 0 }, "nativeEntry": { "win32-x64": "build-msvc/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" }, "pins": [ { "id": "t", "kind": "DIGITAL_IN" }, { "id": "clk", "kind": "DIGITAL_IN" }, { "id": "set", "kind": "DIGITAL_IN" }, { "id": "rst", "kind": "DIGITAL_IN" }, { "id": "q", "kind": "DIGITAL_OUT" }, { "id": "nq", "kind": "DIGITAL_OUT" } ], "properties": [], "limits": { "stepTimeoutMs": 4, "expectedComplexity": "low" } }
+{
+  "schemaVersion": 1,
+  "typeId": "logic.flipflop_t",
+  "name": "FlipFlopT",
+  "language": "pt-BR",
+  "abiVersion": {
+    "major": 4,
+    "minor": 0
+  },
+  "nativeEntry": {
+    "win32-x64": "build-msvc/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
+  "pins": [
+    {
+      "id": "t",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "clk",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "set",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "rst",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "q",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "nq",
+      "kind": "DIGITAL_OUT"
+    }
+  ],
+  "properties": [],
+  "limits": {
+    "stepTimeoutMs": 4,
+    "expectedComplexity": "low"
+  },
+  "package": {
+    "width": 40,
+    "height": 24,
+    "border": false,
+    "background": {
+      "kind": "none"
+    },
+    "shapes": [],
+    "pins": [
+      {
+        "id": "t",
+        "x": 0,
+        "y": 8,
+        "angle": 180,
+        "length": 8,
+        "label": "T"
+      },
+      {
+        "id": "clk",
+        "x": 0,
+        "y": 16,
+        "angle": 180,
+        "length": 8,
+        "label": "CLK"
+      },
+      {
+        "id": "set",
+        "x": 0,
+        "y": 24,
+        "angle": 180,
+        "length": 8,
+        "label": "SET"
+      },
+      {
+        "id": "rst",
+        "x": 0,
+        "y": 32,
+        "angle": 180,
+        "length": 8,
+        "label": "RST"
+      },
+      {
+        "id": "q",
+        "x": 40,
+        "y": 8,
+        "angle": 0,
+        "length": 8,
+        "label": "Q"
+      },
+      {
+        "id": "nq",
+        "x": 40,
+        "y": 16,
+        "angle": 0,
+        "length": 8,
+        "label": "NQ"
+      }
+    ],
+    "viewSpec": {
+      "paint": [
+        {
+          "kind": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 40,
+          "h": 24,
+          "fill": "#ffffff"
+        },
+        {
+          "kind": "text",
+          "x": 20,
+          "y": -4,
+          "value": "__label",
+          "fontSize": 5,
+          "color": "#0000aa"
+        }
+      ]
+    }
+  },
+  "icon": "2to2",
+  "folderPath": [
+    "Logicos",
+    "Memorias"
+  ]
+}

@@ -23,34 +23,88 @@
     "darwin-universal": "build/macos-universal/device.dylib"
   },
   "package": {
-    "width": 40,
-    "height": 56,
+    "width": 56,
+    "height": 40,
     "border": false,
-    "background": { "kind": "color", "value": "transparent" },
-    "shapes": [
-      { "kind": "svg", "value": "<defs><radialGradient id=\"ky023-bowl\" cx=\"17\" cy=\"17\" r=\"22\" fx=\"-2\" fy=\"-2\" gradientUnits=\"userSpaceOnUse\"><stop offset=\"0%\" stop-color=\"#646464\"/><stop offset=\"100%\" stop-color=\"#000000\"/></radialGradient><radialGradient id=\"ky023-stick\" cx=\"21\" cy=\"14\" r=\"14\" fx=\"12\" fy=\"13\" gradientUnits=\"userSpaceOnUse\"><stop offset=\"0%\" stop-color=\"#b4b4b4\"/><stop offset=\"100%\" stop-color=\"#323232\"/></radialGradient></defs>" },
-      { "kind": "rect",    "x": 0,  "y": 0,  "w": 40, "h": 56, "rx": 2, "ry": 2, "stroke": "#2a2c24", "fill": "#3A3C34", "strokeWidth": 2 },
-      { "kind": "rect",    "x": 3,  "y": 3,  "w": 34, "h": 44, "rx": 2, "ry": 2, "stroke": "#555",    "fill": "#424438", "strokeWidth": 1 },
-      { "kind": "ellipse", "cx": 20, "cy": 20, "rx": 17, "ry": 17, "stroke": "none", "fill": "url(#ky023-bowl)", "strokeWidth": 0 },
-      { "kind": "ellipse", "cx": 20, "cy": 20, "rx": 10, "ry": 10, "stroke": "#aaa",  "fill": "url(#ky023-stick)", "strokeWidth": 0.5, "cssClass": "joystick-hit-zone" },
-      { "kind": "rect",    "x": 26, "y": 41,  "w": 10, "h": 6, "rx": 2, "ry": 2, "stroke": "#777", "fill": "#555", "cssClass": "sw-hit-zone" },
-      { "kind": "text",    "x": 20, "y": 53,  "value": "KY-023", "fontSize": 7, "color": "#bbb" }
-    ],
+    "background": { "kind": "none" },
+    "viewSpec": {
+      "gradients": {
+        "bowl": {
+          "kind": "radial",
+          "cx": 33, "cy": 17, "r": 22, "fx": 14, "fy": 14,
+          "gradientUnits": "userSpaceOnUse",
+          "stops": [
+            { "offset": "0%",   "color": "#646464" },
+            { "offset": "100%", "color": "#000000" }
+          ]
+        },
+        "stick": {
+          "kind": "radial",
+          "cx": 46, "cy": 20, "r": 17, "fx": 31, "fy": 20,
+          "gradientUnits": "userSpaceOnUse",
+          "stops": [
+            { "offset": "0%",   "color": "#b4b4b4" },
+            { "offset": "100%", "color": "#323232" }
+          ]
+        }
+      },
+      "parts": {
+        "thumbstick": { "role": "actuator", "hitTest": "thumbstick", "interaction": "stickDrag", "origin": { "x": 36, "y": 20 }, "movable": true, "cursor": "grab" },
+        "switch": { "role": "button", "hitTest": "switch", "interaction": "switchPress", "cursor": "pointer" }
+      },
+      "hitTest": {
+        "thumbstick": { "kind": "circle", "cx": 36, "cy": 20, "r": 10, "cursor": "grab" },
+        "switch": { "kind": "rect", "x": 8, "y": 29, "w": 10, "h": 10, "cursor": "pointer" }
+      },
+      "limits": {
+        "stickTravel": { "min": 0, "max": 1023, "center": 512, "radius": 13, "clamp": true }
+      },
+      "interaction": {
+        "stickDrag": {
+          "kind": "dragVector",
+          "partId": "thumbstick",
+          "hitTest": "thumbstick",
+          "x": { "prop": "x_pos", "propRange": [0, 1023], "pixelRange": [-13, 13] },
+          "y": { "prop": "y_pos", "propRange": [0, 1023], "pixelRange": [-13, 13] },
+          "springBack": true,
+          "limits": "stickTravel"
+        },
+        "switchPress": {
+          "kind": "press",
+          "partId": "switch",
+          "hitTest": "switch",
+          "prop": "sw_pressed",
+          "pressedValue": true,
+          "releasedValue": false
+        }
+      },
+      "paint": [
+        { "kind": "rect",    "x": 0,  "y": 0,  "w": 56, "h": 40, "rx": 2, "ry": 2, "stroke": "#050505", "fill": "#3A3C34",        "strokeWidth": 2 },
+        { "kind": "ellipse", "cx": 36, "cy": 20, "rx": 17, "ry": 17,               "stroke": "none",    "fill": "gradient:bowl",   "strokeWidth": 0 },
+        { "kind": "ellipse", "cx": 36, "cy": 20, "rx": 10, "ry": 10,               "stroke": "#aaa",    "fill": "gradient:stick",  "strokeWidth": 0.5, "cssClass": "joystick-hit-zone", "partId": "thumbstick" },
+        { "kind": "rect",    "x": 8,  "y": 29,  "w": 10, "h": 10, "rx": 2, "ry": 2, "stroke": "#8b8b8b", "fill": "#e8e8e8", "cssClass": "sw-hit-zone" }
+      ],
+      "stateProjection": {
+        "thumbstick": [
+          {
+            "kind": "translate",
+            "x": { "prop": "x_pos", "propRange": [0, 1023], "pixelRange": [-13, 13] },
+            "y": { "prop": "y_pos", "propRange": [0, 1023], "pixelRange": [-13, 13] }
+          }
+        ]
+      }
+    },
     "pinLabelColor": "#FAFAC8",
     "pins": [
-      { "id": "gnd", "x": 4,  "y": 56, "angle": 90, "length": 8, "label": "GND" },
-      { "id": "5v",  "x": 12, "y": 56, "angle": 90, "length": 8, "label": "+5V" },
-      { "id": "vrx", "x": 20, "y": 56, "angle": 90, "length": 8, "label": "VRX" },
-      { "id": "vry", "x": 28, "y": 56, "angle": 90, "length": 8, "label": "VRY" },
-      { "id": "sw",  "x": 36, "y": 56, "angle": 90, "length": 8, "label": "SW"  }
+      { "id": "vrx", "x": 0, "y": 8,  "angle": 180, "length": 8, "label": "VRX", "labelX": 10, "labelY": 12 },
+      { "id": "vry", "x": 0, "y": 16, "angle": 180, "length": 8, "label": "VRY", "labelX": 10, "labelY": 20 },
+      { "id": "sw",  "x": 0, "y": 24, "angle": 180, "length": 8, "label": "SW",  "labelX": 10, "labelY": 28 }
     ]
   },
   "pins": [
-    { "id": "gnd", "kind": "POWER",       "x": 4,  "y": 56, "angle": 90, "length": 8, "label": "GND" },
-    { "id": "5v",  "kind": "POWER",       "x": 12, "y": 56, "angle": 90, "length": 8, "label": "+5V" },
-    { "id": "vrx", "kind": "ANALOG_OUT",  "x": 20, "y": 56, "angle": 90, "length": 8, "label": "VRX" },
-    { "id": "vry", "kind": "ANALOG_OUT",  "x": 28, "y": 56, "angle": 90, "length": 8, "label": "VRY" },
-    { "id": "sw",  "kind": "DIGITAL_OUT", "x": 36, "y": 56, "angle": 90, "length": 8, "label": "SW"  }
+    { "id": "vrx", "kind": "ANALOG_OUT",  "x": 0, "y": 8,  "angle": 180, "length": 8, "label": "VRX" },
+    { "id": "vry", "kind": "ANALOG_OUT",  "x": 0, "y": 16, "angle": 180, "length": 8, "label": "VRY" },
+    { "id": "sw",  "kind": "DIGITAL_OUT", "x": 0, "y": 24, "angle": 180, "length": 8, "label": "SW"  }
   ],
   "properties": [
     { "id": "x_pos",      "label": "Posição X (0-1023)", "group": "Joystick", "valueKind": "number", "editor": "number", "default": 512, "min": 0, "max": 1023, "step": 1 },

@@ -1115,6 +1115,91 @@ independente da posição no circuito interno) é uma feature RELACIONADA mas di
 `.spec/lasecsimul-subcircuits.spec` seção 4 (só faz sentido pra `subcircuit-file`, que tem circuito
 interno pra organizar -- `mcu-adapter`/`abi-device` não têm, "Package ≠ Subcircuit").
 
+## 21.5 Critérios de autoria de `viewSpec` — fidelidade ao SimulIDE (2026-07-04)
+
+Regras derivadas de uma análise pós-mortem de implementação incorreta comparada com a referência real do
+SimulIDE e com uma implementação correta produzida em paralelo (touchpad, 2026-07-04).
+
+### 21.5.1 Verificar antes de modificar
+
+Nunca confiar em resumos de sessão para inferir o estado atual de um arquivo. Antes de qualquer escrita
+em lote:
+
+1. Ler o arquivo real e confirmar que `package.viewSpec.paint` está vazio/ausente.
+2. Se já tiver conteúdo, comparar com a referência do SimulIDE — só modificar se houver divergência
+   confirmada visualmente.
+
+Arquivos marcados como `M` no `git status` já foram modificados por algum agente/sessão anterior;
+tratar como "corretos até prova em contrário", não como vazios.
+
+### 21.5.2 Entender a função do componente antes de desenhar
+
+O visual deve representar **o que o componente faz**, não apenas o que ele é fisicamente.
+
+| Comportamento no SimulIDE | Padrão visual correto | Erro típico |
+|---|---|---|
+| Abre janela modal ao clicar (terminal serial, etc.) | Botão "Abrir" (fundo azul `#2f4664`, texto branco centralizado) | Criar visor de terminal com texto de conteúdo |
+| IC digital/analógico (DIP, SOP, etc.) | Retângulo escuro, notch no canto do pino 1, part number em texto | Gradientes decorativos, bordas duplas |
+| Sensor com encapsulamento TO-92 | Forma D (retângulo + semicírculo) em preto, pinos na face plana | Retângulo simples |
+| PCB com transdutores (ex: HC-SR04) | PCB colorido + círculos de transdutor com linhas de emissão | Retângulo azul com texto |
+| Resistor passivo (LDR, RTD, NTC) | Corpo retangular com símbolo zigzag interno | Corpo sem símbolo elétrico |
+| Sensor ambiental compacto (DHT22, etc.) | Corpo branco com grade de pontos, cap arredondado — conforme o SVG real do SimulIDE | Retângulo genérico com texto |
+
+### 21.5.3 Escala 1:1 com o SimulIDE
+
+`package.width`/`height` devem corresponder às dimensões reais do componente no SimulIDE.
+1 grid unit do SimulIDE = 8 px no LasecSimul (`SIMULIDE_PACKAGE_GRID_UNIT`).
+
+O touchpad correto usa `240×350` px — não uma versão compacta do componente real. Sempre verificar
+as dimensões do componente no SimulIDE (`C:\SourceCode\simulide_2`) antes de definir `width`/`height`.
+
+### 21.5.4 Âncora dos elementos visuais nos pinos reais
+
+Os pinos declarados em `package.pins[]` já estão nas coordenadas corretas. O corpo do `viewSpec` deve
+**coincidir** com essas coordenadas, não ser desenhado independentemente.
+
+Cálculo obrigatório antes de posicionar qualquer elemento de paint:
+
+- Pino lateral (`angle: 180`, sai pela esquerda): o terminal está em `x=0`; o corpo começa em
+  `x = pin.length` (ex: `length: 8` → corpo começa em `x=8`).
+- Pino inferior (`angle: 90`, sai pela base): o terminal está em `y = package.height`; o corpo termina
+  em `y = package.height - pin.length`.
+- Labels de pino no paint devem estar junto ao terminal, não ao centro do corpo: `x ≈ pin.length + 2`
+  (para pinos esquerdos), `fontSize` 4–5 px.
+
+### 21.5.5 Token `__label`
+
+Sempre que houver espaço no corpo (componentes com `height ≥ 24` e sem conteúdo denso), incluir:
+
+```json
+{ "kind": "text", "x": <cx>, "y": <topo + 8>, "value": "__label", "fontSize": 8, "color": "#0000aa" }
+```
+
+`__label` é substituído em runtime pelo nome da instância no schematic (ex: "DS1307-1"). Ausente nos 13
+dispositivos da autoria incorreta — todos ficaram sem identificação de instância no canvas.
+
+### 21.5.6 `background: { "kind": "none" }` quando viewSpec já desenha o corpo
+
+Quando `viewSpec.paint` contém o retângulo principal do componente, o background automático deve ser
+desabilitado para evitar sobreposição:
+
+```json
+"background": { "kind": "none" }
+```
+
+Sem isso, a Extension desenha o retângulo padrão de fundo por cima (ou por baixo) do viewSpec.
+
+### 21.5.7 O que NÃO alterar
+
+Se um componente renderiza igual à referência do SimulIDE, não tocar — mesmo que o código pareça
+diferente do que se esperaria. Componentes corretos não precisam de "melhoria" visual.
+
+Exemplos que estavam corretos e não deviam ter sido modificados: KY-023 (joystick), KY-040 (encoder),
+todos os 13 dispositivos de `simulide-peripherals` e `simulide-sensors` que já tinham `viewSpec`
+implementado por sessão anterior antes desta rodada de autoria incorreta.
+
+---
+
 ## 22. ABI v2 — leitura estruturada, interação genérica e versionamento de estado (2026-06-30)
 
 Auditoria arquitetural completa do projeto (varredura de código + 2 agentes de pesquisa dedicados — um

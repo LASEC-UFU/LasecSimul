@@ -1,1 +1,108 @@
-﻿{ "schemaVersion": 1, "typeId": "logic.counter", "name": "Simple Counter", "language": "pt-BR", "abiVersion": { "major": 4, "minor": 0 }, "nativeEntry": { "win32-x64": "build-msvc/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" }, "pins": [ { "id": "clk", "kind": "DIGITAL_IN" }, { "id": "rst", "kind": "DIGITAL_IN" }, { "id": "q", "kind": "DIGITAL_OUT" } ], "properties": [ { "id": "maxValue", "label": "Count to", "group": "Main", "valueKind": "number", "editor": "number", "default": 1, "min": 1, "step": 1 } ], "limits": { "stepTimeoutMs": 4, "expectedComplexity": "low" } }
+{
+  "schemaVersion": 1,
+  "typeId": "logic.counter",
+  "name": "Simple Counter",
+  "language": "pt-BR",
+  "abiVersion": {
+    "major": 4,
+    "minor": 0
+  },
+  "nativeEntry": {
+    "win32-x64": "build-msvc/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
+  "pins": [
+    {
+      "id": "clk",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "rst",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "q",
+      "kind": "DIGITAL_OUT"
+    }
+  ],
+  "properties": [
+    {
+      "id": "maxValue",
+      "label": "Count to",
+      "group": "Main",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 1,
+      "min": 1,
+      "step": 1
+    }
+  ],
+  "limits": {
+    "stepTimeoutMs": 4,
+    "expectedComplexity": "low"
+  },
+  "package": {
+    "width": 40,
+    "height": 24,
+    "border": false,
+    "background": {
+      "kind": "none"
+    },
+    "shapes": [],
+    "pins": [
+      {
+        "id": "clk",
+        "x": 0,
+        "y": 8,
+        "angle": 180,
+        "length": 8,
+        "label": "CLK"
+      },
+      {
+        "id": "rst",
+        "x": 0,
+        "y": 16,
+        "angle": 180,
+        "length": 8,
+        "label": "RST"
+      },
+      {
+        "id": "q",
+        "x": 40,
+        "y": 8,
+        "angle": 0,
+        "length": 8,
+        "label": "Q"
+      }
+    ],
+    "viewSpec": {
+      "paint": [
+        {
+          "kind": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 40,
+          "h": 24,
+          "fill": "#ffffff"
+        },
+        {
+          "kind": "text",
+          "x": 20,
+          "y": -4,
+          "value": "__label",
+          "fontSize": 5,
+          "color": "#0000aa"
+        }
+      ]
+    }
+  },
+  "icon": "2to1",
+  "folderPath": [
+    "Logicos",
+    "Aritmeticos"
+  ],
+  "defaultProperties": {
+    "maxValue": 1
+  }
+}

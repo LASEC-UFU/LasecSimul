@@ -104,6 +104,26 @@ function schemaDto(overrides: Partial<PropertySchemaDto> = {}): PropertySchemaDt
     assert(merged[2]?.readoutFormat === undefined && merged[2]?.interactionKind === undefined, "resistor não declara nenhum dos dois");
   });
 
+  // P0.3: interactionKind="encoder" deve fluir do manifesto (interaction field) ao entry do catálogo
+  // (via extensionInteractionKind em extension.ts → interactionKindByTypeId em mergePropertySchemas).
+  await test("mergePropertySchemas porta interactionKind 'encoder' do manifesto ao entry do catálogo", () => {
+    const catalog = [catalogEntry("peripherals.ky040")];
+    const merged = mergePropertySchemas(catalog, {}, {}, { "peripherals.ky040": "encoder" });
+    assert(merged[0]?.interactionKind === "encoder", "ky040 deveria ganhar interactionKind 'encoder' via interactionKindByTypeId");
+  });
+
+  await test("mergePropertySchemas porta interactionKind 'joystick' do manifesto ao entry do catálogo", () => {
+    const catalog = [catalogEntry("peripherals.ky023")];
+    const merged = mergePropertySchemas(catalog, {}, {}, { "peripherals.ky023": "joystick" });
+    assert(merged[0]?.interactionKind === "joystick", "ky023 deveria ganhar interactionKind 'joystick' via interactionKindByTypeId");
+  });
+
+  await test("mergePropertySchemas porta interactionKind 'touchpad' do manifesto ao entry do catálogo", () => {
+    const catalog = [catalogEntry("peripherals.touchpad")];
+    const merged = mergePropertySchemas(catalog, {}, {}, { "peripherals.touchpad": "touchpad" });
+    assert(merged[0]?.interactionKind === "touchpad", "touchpad deveria ganhar interactionKind 'touchpad' via interactionKindByTypeId");
+  });
+
   await test("mergePropertySchemas sem readoutFormatByTypeId/interactionKindByTypeId (chamador antigo) preserva comportamento de sempre", () => {
     const catalog = [catalogEntry("core.resistor")];
     const merged = mergePropertySchemas(catalog, { "core.resistor": [schemaDto()] });

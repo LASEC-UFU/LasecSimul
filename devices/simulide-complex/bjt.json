@@ -1,16 +1,175 @@
-﻿{
+{
   "schemaVersion": 1,
   "typeId": "active.bjt",
   "name": "BJT",
   "language": "pt-BR",
-  "translations": { "en": { "name": "BJT" } },
-  "abiVersion": { "major": 4, "minor": 0 },
-  "nativeEntry": { "win32-x64": "build-msvc/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" },
+  "translations": {
+    "en": {
+      "name": "BJT"
+    }
+  },
+  "abiVersion": {
+    "major": 4,
+    "minor": 0
+  },
+  "nativeEntry": {
+    "win32-x64": "build-msvc/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
   "pins": [
-    { "id": "c", "kind": "ANALOG_IN", "x": 0, "y": 0, "angle": 90, "length": 8, "label": "C" },
-    { "id": "b", "kind": "ANALOG_IN", "x": -16, "y": 16, "angle": 180, "length": 8, "label": "B" },
-    { "id": "e", "kind": "ANALOG_IN", "x": 0, "y": 32, "angle": 270, "length": 8, "label": "E" }
+    {
+      "id": "c",
+      "kind": "ANALOG_IN",
+      "x": 0,
+      "y": 0,
+      "angle": 90,
+      "length": 8,
+      "label": "C"
+    },
+    {
+      "id": "b",
+      "kind": "ANALOG_IN",
+      "x": -16,
+      "y": 16,
+      "angle": 180,
+      "length": 8,
+      "label": "B"
+    },
+    {
+      "id": "e",
+      "kind": "ANALOG_IN",
+      "x": 0,
+      "y": 32,
+      "angle": 270,
+      "length": 8,
+      "label": "E"
+    }
   ],
   "properties": [],
-  "limits": { "stepTimeoutMs": 8, "expectedComplexity": "high" }
+  "limits": {
+    "stepTimeoutMs": 8,
+    "expectedComplexity": "high"
+  },
+  "package": {
+    "width": 32,
+    "height": 32,
+    "border": false,
+    "background": {
+      "kind": "none"
+    },
+    "shapes": [],
+    "pins": [
+      {
+        "id": "c",
+        "x": 16,
+        "y": 0,
+        "angle": 270,
+        "length": 8,
+        "label": "C"
+      },
+      {
+        "id": "b",
+        "x": 0,
+        "y": 16,
+        "angle": 180,
+        "length": 8,
+        "label": "B"
+      },
+      {
+        "id": "e",
+        "x": 16,
+        "y": 32,
+        "angle": 90,
+        "length": 8,
+        "label": "E"
+      }
+    ],
+    "viewSpec": {
+      "paint": [
+        {
+          "kind": "ellipse",
+          "cx": 16,
+          "cy": 16,
+          "rx": 14,
+          "ry": 14,
+          "fill": "#dcdcdc"
+        },
+        {
+          "kind": "line",
+          "x1": 16,
+          "y1": 4,
+          "x2": 16,
+          "y2": 12,
+          "strokeWidth": 3
+        },
+        {
+          "kind": "line",
+          "x1": 4,
+          "y1": 16,
+          "x2": 12,
+          "y2": 16,
+          "strokeWidth": 3
+        },
+        {
+          "kind": "line",
+          "x1": 12,
+          "y1": 8,
+          "x2": 12,
+          "y2": 24,
+          "strokeWidth": 2
+        },
+        {
+          "kind": "line",
+          "x1": 12,
+          "y1": 12,
+          "x2": 16,
+          "y2": 4,
+          "strokeWidth": 3
+        },
+        {
+          "kind": "line",
+          "x1": 12,
+          "y1": 20,
+          "x2": 16,
+          "y2": 28,
+          "strokeWidth": 3
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            {
+              "x": 10,
+              "y": 23
+            },
+            {
+              "x": 12,
+              "y": 27
+            },
+            {
+              "x": 15,
+              "y": 24
+            }
+          ],
+          "fill": "#222222"
+        },
+        {
+          "kind": "text",
+          "x": 16,
+          "y": -4,
+          "value": "__label",
+          "fontSize": 5,
+          "color": "#0000aa"
+        }
+      ]
+    }
+  },
+  "icon": "bjt",
+  "folderPath": [
+    "Ativos",
+    "Transistors"
+  ],
+  "defaultProperties": {
+    "beta": 100
+  }
 }

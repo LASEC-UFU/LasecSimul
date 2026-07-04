@@ -190,10 +190,10 @@ static void enc_update(PeriphState *s) {
     int phase = ((s->enc_pos % steps) + steps) % 4;
     int clk   = (phase == 0 || phase == 1) ? 1 : 0;
     int dt    = (phase == 0 || phase == 3) ? 1 : 0;
-    /* pin order: GND=0, +5V=1, SW=2, DT=3, CLK=4 */
-    s->api->pin_write(s->host_ctx, 4, clk);
-    s->api->pin_write(s->host_ctx, 3, dt);
-    s->api->pin_write(s->host_ctx, 2, s->enc_sw ? 0 : 1);
+    /* SimulIDE pin order: SW=0, DT=1, CLK=2 */
+    s->api->pin_write(s->host_ctx, 2, clk);
+    s->api->pin_write(s->host_ctx, 1, dt);
+    s->api->pin_write(s->host_ctx, 0, s->enc_sw ? 0 : 1);
 }
 
 /* ------------------------------------------------------------------ */
@@ -273,18 +273,18 @@ static void periph_stamp(LsdnDevice *dev, LsdnMatrixView *m) {
 
     switch (s->kind) {
         case KIND_KY023: {
-            /* VRX=pin2, VRY=pin3, SW=pin4 (GND=0, +5V=1) */
+            /* SimulIDE pin order: VRX=0, VRY=1, SW=2 */
             double vcc = 5.0;
             double vx  = (s->joy_x / 1023.0) * vcc;
             double vy  = (s->joy_y / 1023.0) * vcc;
             double vsw = s->joy_sw ? 0.0 : vcc;
             double G   = 1e6;
+            m->add_conductance_to_ground(m->opaque, 0, G);
+            m->add_current_to_ground(m->opaque, 0, vx  * G);
+            m->add_conductance_to_ground(m->opaque, 1, G);
+            m->add_current_to_ground(m->opaque, 1, vy  * G);
             m->add_conductance_to_ground(m->opaque, 2, G);
-            m->add_current_to_ground(m->opaque, 2, vx  * G);
-            m->add_conductance_to_ground(m->opaque, 3, G);
-            m->add_current_to_ground(m->opaque, 3, vy  * G);
-            m->add_conductance_to_ground(m->opaque, 4, G);
-            m->add_current_to_ground(m->opaque, 4, vsw * G);
+            m->add_current_to_ground(m->opaque, 2, vsw * G);
             break;
         }
         case KIND_TOUCHPAD: {
@@ -329,11 +329,11 @@ static void periph_on_event(LsdnDevice *dev, const LsdnEvent *ev) {
     if (ev->tag == LSDN_EVT_PIN_CHANGE) {
         switch (s->kind) {
             case KIND_KY040:
-                /* CLK = pin 4 */
-                if (ev->a == 4) {
+                /* SimulIDE pin order: SW=0, DT=1, CLK=2 */
+                if (ev->a == 2) {
                     int clk_now = (int)ev->b;
                     if (clk_now && !s->enc_clk_prev) {
-                        int dt_level = s->api->pin_read(s->host_ctx, 3);
+                        int dt_level = s->api->pin_read(s->host_ctx, 1);
                         if (dt_level) s->enc_pos--;
                         else          s->enc_pos++;
                         enc_update(s);

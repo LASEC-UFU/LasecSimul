@@ -1,1 +1,98 @@
-﻿{ "schemaVersion": 1, "typeId": "logic.full_adder", "name": "Full Adder", "language": "pt-BR", "abiVersion": { "major": 4, "minor": 0 }, "nativeEntry": { "win32-x64": "build-msvc/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" }, "pins": [ { "id": "a", "kind": "DIGITAL_IN" }, { "id": "b", "kind": "DIGITAL_IN" }, { "id": "cin", "kind": "DIGITAL_IN" }, { "id": "sum", "kind": "DIGITAL_OUT" }, { "id": "cout", "kind": "DIGITAL_OUT" } ], "properties": [], "limits": { "stepTimeoutMs": 4, "expectedComplexity": "low" } }
+{
+  "schemaVersion": 1,
+  "typeId": "logic.full_adder",
+  "name": "Full Adder",
+  "language": "pt-BR",
+  "icon": "2to2",
+  "folderPath": ["Logicos", "Aritmeticos"],
+  "abiVersion": {
+    "major": 4,
+    "minor": 0
+  },
+  "nativeEntry": {
+    "win32-x64": "build-msvc/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
+  "pins": [
+    {
+      "id": "a",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "b",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "cin",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "sum",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "cout",
+      "kind": "DIGITAL_OUT"
+    }
+  ],
+  "properties": [],
+  "limits": {
+    "stepTimeoutMs": 4,
+    "expectedComplexity": "low"
+  },
+  "package": {
+    "width": 40,
+    "height": 32,
+    "border": false,
+    "background": { "kind": "none" },
+    "viewSpec": {
+      "paint": [
+        { "kind": "rect", "x": 8, "y": 0, "w": 24, "h": 32, "fill": "#ffffff" },
+        { "kind": "text", "x": 20, "y": -4, "value": "__label", "fontSize": 5, "color": "#0000aa" }
+      ]
+    },
+    "pins": [
+      {
+        "id": "a",
+        "x": 8,
+        "y": 8,
+        "angle": 180,
+        "length": 8,
+        "label": "A"
+      },
+      {
+        "id": "b",
+        "x": 8,
+        "y": 24,
+        "angle": 180,
+        "length": 8,
+        "label": "B"
+      },
+      {
+        "id": "cin",
+        "x": 32,
+        "y": 8,
+        "angle": 0,
+        "length": 8,
+        "label": "CI"
+      },
+      {
+        "id": "sum",
+        "x": 32,
+        "y": 16,
+        "angle": 0,
+        "length": 8,
+        "label": "S"
+      },
+      {
+        "id": "cout",
+        "x": 32,
+        "y": 24,
+        "angle": 0,
+        "length": 8,
+        "label": "CO"
+      }
+    ]
+  }
+}

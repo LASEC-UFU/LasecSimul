@@ -1,1 +1,135 @@
-﻿{ "schemaVersion": 1, "typeId": "logic.lm555", "name": "LM555", "language": "pt-BR", "abiVersion": { "major": 4, "minor": 0 }, "nativeEntry": { "win32-x64": "build-msvc/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" }, "pins": [ { "id": "gnd", "kind": "POWER" }, { "id": "trig", "kind": "ANALOG_IN" }, { "id": "out", "kind": "DIGITAL_OUT" }, { "id": "rst", "kind": "ANALOG_IN" }, { "id": "cv", "kind": "ANALOG_IN" }, { "id": "thr", "kind": "ANALOG_IN" }, { "id": "dis", "kind": "ANALOG_OUT" }, { "id": "vcc", "kind": "POWER" } ], "properties": [], "limits": { "stepTimeoutMs": 4, "expectedComplexity": "medium" } }
+{
+  "schemaVersion": 1,
+  "typeId": "logic.lm555",
+  "name": "LM555",
+  "language": "pt-BR",
+  "icon": "ic2",
+  "folderPath": ["Logicos", "Outros logicos"],
+  "abiVersion": {
+    "major": 4,
+    "minor": 0
+  },
+  "nativeEntry": {
+    "win32-x64": "build-msvc/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
+  "pins": [
+    {
+      "id": "gnd",
+      "kind": "POWER"
+    },
+    {
+      "id": "trig",
+      "kind": "ANALOG_IN"
+    },
+    {
+      "id": "out",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "rst",
+      "kind": "ANALOG_IN"
+    },
+    {
+      "id": "cv",
+      "kind": "ANALOG_IN"
+    },
+    {
+      "id": "thr",
+      "kind": "ANALOG_IN"
+    },
+    {
+      "id": "dis",
+      "kind": "ANALOG_OUT"
+    },
+    {
+      "id": "vcc",
+      "kind": "POWER"
+    }
+  ],
+  "properties": [],
+  "limits": {
+    "stepTimeoutMs": 4,
+    "expectedComplexity": "medium"
+  },
+  "package": {
+    "width": 48,
+    "height": 40,
+    "border": false,
+    "background": { "kind": "none" },
+    "viewSpec": {
+      "paint": [
+        { "kind": "rect", "x": 8, "y": 0, "w": 32, "h": 40, "rx": 1, "ry": 1, "fill": "#ffffff" },
+        { "kind": "path", "d": "M 18 0 A 4 4 0 0 0 26 0", "fill": "none" },
+        { "kind": "text", "x": 24, "y": 22, "value": "__label", "fontSize": 6, "color": "#0000aa" }
+      ]
+    },
+    "pins": [
+      {
+        "id": "gnd",
+        "x": 8,
+        "y": 8,
+        "angle": 180,
+        "length": 8,
+        "label": "GND"
+      },
+      {
+        "id": "trig",
+        "x": 8,
+        "y": 16,
+        "angle": 180,
+        "length": 8,
+        "label": "TRG"
+      },
+      {
+        "id": "out",
+        "x": 8,
+        "y": 24,
+        "angle": 180,
+        "length": 8,
+        "label": "OUT"
+      },
+      {
+        "id": "rst",
+        "x": 8,
+        "y": 32,
+        "angle": 180,
+        "length": 8,
+        "label": "RST"
+      },
+      {
+        "id": "vcc",
+        "x": 40,
+        "y": 8,
+        "angle": 0,
+        "length": 8,
+        "label": "VCC"
+      },
+      {
+        "id": "dis",
+        "x": 40,
+        "y": 16,
+        "angle": 0,
+        "length": 8,
+        "label": "DIS"
+      },
+      {
+        "id": "thr",
+        "x": 40,
+        "y": 24,
+        "angle": 0,
+        "length": 8,
+        "label": "THR"
+      },
+      {
+        "id": "cv",
+        "x": 40,
+        "y": 32,
+        "angle": 0,
+        "length": 8,
+        "label": "CV"
+      }
+    ]
+  }
+}

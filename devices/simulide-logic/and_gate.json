@@ -1,1 +1,73 @@
-﻿{ "schemaVersion": 1, "typeId": "logic.and_gate", "name": "And Gate", "language": "pt-BR", "abiVersion": { "major": 4, "minor": 0 }, "nativeEntry": { "win32-x64": "build-msvc/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" }, "pins": [ { "id": "in1", "kind": "DIGITAL_IN" }, { "id": "in2", "kind": "DIGITAL_IN" }, { "id": "out", "kind": "DIGITAL_OUT" } ], "properties": [], "limits": { "stepTimeoutMs": 4, "expectedComplexity": "low" } }
+{
+  "schemaVersion": 1,
+  "typeId": "logic.and_gate",
+  "name": "And Gate",
+  "language": "pt-BR",
+  "icon": "andgate",
+  "folderPath": ["Logicos", "Portas"],
+  "abiVersion": {
+    "major": 4,
+    "minor": 0
+  },
+  "nativeEntry": {
+    "win32-x64": "build-msvc/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
+  "pins": [
+    {
+      "id": "in1",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "in2",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "out",
+      "kind": "DIGITAL_OUT"
+    }
+  ],
+  "properties": [],
+  "limits": {
+    "stepTimeoutMs": 4,
+    "expectedComplexity": "low"
+  },
+  "package": {
+    "width": 32,
+    "height": 16,
+    "border": false,
+    "background": { "kind": "none" },
+    "viewSpec": {
+      "paint": [
+        { "kind": "path", "d": "M 7 0 L 12 0 Q 25 0 25 8 Q 25 16 12 16 L 7 16 Z", "fill": "#ffffff" }
+      ]
+    },
+    "pins": [
+      {
+        "id": "in1",
+        "x": 8,
+        "y": 4,
+        "angle": 180,
+        "length": 8,
+        "label": ""
+      },
+      {
+        "id": "in2",
+        "x": 8,
+        "y": 12,
+        "angle": 180,
+        "length": 8,
+        "label": ""
+      },
+      {
+        "id": "out",
+        "x": 24,
+        "y": 8,
+        "angle": 0,
+        "length": 8,
+        "label": ""
+      }
+    ]
+  }
+}

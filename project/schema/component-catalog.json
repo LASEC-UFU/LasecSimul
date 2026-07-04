@@ -260,330 +260,6 @@
       "graphical": true
     },
     {
-      "typeId": "logic.buffer",
-      "label": "Buffer",
-      "pinCount": 2,
-      "icon": "buffer",
-      "folderPath": [
-        "Logicos",
-        "Portas"
-      ],
-      "defaultProperties": {}
-    },
-    {
-      "typeId": "logic.and_gate",
-      "label": "And Gate",
-      "pinCount": 3,
-      "icon": "andgate",
-      "folderPath": [
-        "Logicos",
-        "Portas"
-      ],
-      "defaultProperties": {}
-    },
-    {
-      "typeId": "logic.or_gate",
-      "label": "Or Gate",
-      "pinCount": 3,
-      "icon": "orgate",
-      "folderPath": [
-        "Logicos",
-        "Portas"
-      ],
-      "defaultProperties": {}
-    },
-    {
-      "typeId": "logic.xor_gate",
-      "label": "Xor Gate",
-      "pinCount": 3,
-      "icon": "xorgate",
-      "folderPath": [
-        "Logicos",
-        "Portas"
-      ],
-      "defaultProperties": {}
-    },
-    {
-      "typeId": "logic.counter",
-      "label": "Simple Counter",
-      "pinCount": 3,
-      "icon": "2to1",
-      "folderPath": [
-        "Logicos",
-        "Aritmeticos"
-      ],
-      "defaultProperties": {
-        "maxValue": 1
-      }
-    },
-    {
-      "typeId": "logic.bin_counter",
-      "label": "Binary Counter",
-      "pinCount": 6,
-      "icon": "2to3g",
-      "folderPath": [
-        "Logicos",
-        "Aritmeticos"
-      ],
-      "defaultProperties": {}
-    },
-    {
-      "typeId": "logic.full_adder",
-      "label": "Full Adder",
-      "pinCount": 5,
-      "icon": "2to2",
-      "folderPath": [
-        "Logicos",
-        "Aritmeticos"
-      ],
-      "defaultProperties": {}
-    },
-    {
-      "typeId": "logic.magnitude_comp",
-      "label": "Magnitude Comparator",
-      "pinCount": 11,
-      "icon": "3to2g",
-      "folderPath": [
-        "Logicos",
-        "Aritmeticos"
-      ],
-      "defaultProperties": {}
-    },
-    {
-      "typeId": "logic.shift_reg",
-      "label": "Shift Register",
-      "pinCount": 11,
-      "icon": "1to3",
-      "folderPath": [
-        "Logicos",
-        "Aritmeticos"
-      ],
-      "defaultProperties": {}
-    },
-    {
-      "typeId": "logic.function",
-      "label": "Function",
-      "pinCount": 3,
-      "icon": "package",
-      "folderPath": [
-        "Logicos",
-        "Aritmeticos"
-      ],
-      "defaultProperties": {
-        "functions": "i0 | i1"
-      }
-    },
-    {
-      "typeId": "logic.flipflop_d",
-      "label": "FlipFlopD",
-      "pinCount": 6,
-      "icon": "2to2",
-      "folderPath": [
-        "Logicos",
-        "Memorias"
-      ],
-      "defaultProperties": {}
-    },
-    {
-      "typeId": "logic.flipflop_t",
-      "label": "FlipFlopT",
-      "pinCount": 6,
-      "icon": "2to2",
-      "folderPath": [
-        "Logicos",
-        "Memorias"
-      ],
-      "defaultProperties": {}
-    },
-    {
-      "typeId": "logic.flipflop_rs",
-      "label": "FlipFlop RS",
-      "pinCount": 4,
-      "icon": "2to2",
-      "folderPath": [
-        "Logicos",
-        "Memorias"
-      ],
-      "defaultProperties": {}
-    },
-    {
-      "typeId": "logic.flipflop_jk",
-      "label": "FlipFlop JK",
-      "pinCount": 7,
-      "icon": "3to2",
-      "folderPath": [
-        "Logicos",
-        "Memorias"
-      ],
-      "defaultProperties": {}
-    },
-    {
-      "typeId": "logic.latch_d",
-      "label": "Latch",
-      "pinCount": 4,
-      "icon": "package",
-      "folderPath": [
-        "Logicos",
-        "Memorias"
-      ],
-      "defaultProperties": {}
-    },
-    {
-      "typeId": "logic.memory",
-      "label": "Memory",
-      "pinCount": 15,
-      "icon": "2to3g",
-      "folderPath": [
-        "Logicos",
-        "Memorias"
-      ],
-      "defaultProperties": {}
-    },
-    {
-      "typeId": "logic.dynamic_memory",
-      "label": "Dynamic Memory",
-      "pinCount": 15,
-      "icon": "2to3g",
-      "folderPath": [
-        "Logicos",
-        "Memorias"
-      ],
-      "defaultProperties": {}
-    },
-    {
-      "typeId": "logic.i2c_ram",
-      "label": "I2C Ram",
-      "pinCount": 5,
-      "icon": "2to3",
-      "folderPath": [
-        "Logicos",
-        "Memorias"
-      ],
-      "defaultProperties": {
-        "sizeBytes": 65536,
-        "controlCode": 80,
-        "frequencyKHz": 100,
-        "persistent": false
-      }
-    },
-    {
-      "typeId": "logic.mux",
-      "label": "Mux",
-      "pinCount": 13,
-      "icon": "mux",
-      "folderPath": [
-        "Logicos",
-        "Conversores"
-      ],
-      "defaultProperties": {}
-    },
-    {
-      "typeId": "logic.demux",
-      "label": "Demux",
-      "pinCount": 12,
-      "icon": "demux",
-      "folderPath": [
-        "Logicos",
-        "Conversores"
-      ],
-      "defaultProperties": {}
-    },
-    {
-      "typeId": "logic.bcd_to_dec",
-      "label": "Bcd To Dec",
-      "pinCount": 14,
-      "icon": "2to3g",
-      "folderPath": [
-        "Logicos",
-        "Conversores"
-      ],
-      "defaultProperties": {}
-    },
-    {
-      "typeId": "logic.dec_to_bcd",
-      "label": "Dec To Bcd",
-      "pinCount": 14,
-      "icon": "3to2g",
-      "folderPath": [
-        "Logicos",
-        "Conversores"
-      ],
-      "defaultProperties": {}
-    },
-    {
-      "typeId": "logic.bcd_to_7seg",
-      "label": "Bcd To 7S.",
-      "pinCount": 11,
-      "icon": "2to3g",
-      "folderPath": [
-        "Logicos",
-        "Conversores"
-      ],
-      "defaultProperties": {}
-    },
-    {
-      "typeId": "logic.i2c_to_parallel",
-      "label": "I2C to Parallel",
-      "pinCount": 14,
-      "icon": "2to3g",
-      "folderPath": [
-        "Logicos",
-        "Conversores"
-      ],
-      "defaultProperties": {
-        "controlCode": 80,
-        "frequencyKHz": 100
-      }
-    },
-    {
-      "typeId": "logic.adc",
-      "label": "ADC",
-      "pinCount": 9,
-      "icon": "1to3",
-      "folderPath": [
-        "Logicos",
-        "Outros logicos"
-      ],
-      "defaultProperties": {
-        "vref": 5
-      }
-    },
-    {
-      "typeId": "logic.dac",
-      "label": "DAC",
-      "pinCount": 9,
-      "icon": "3to1",
-      "folderPath": [
-        "Logicos",
-        "Outros logicos"
-      ],
-      "defaultProperties": {
-        "vref": 5
-      }
-    },
-    {
-      "typeId": "logic.seven_segment_bcd",
-      "label": "7 Segment BCD",
-      "pinCount": 11,
-      "icon": "7segbcd",
-      "folderPath": [
-        "Logicos",
-        "Outros logicos"
-      ],
-      "defaultProperties": {}
-    },
-    {
-      "typeId": "logic.lm555",
-      "label": "LM555",
-      "pinCount": 8,
-      "icon": "ic2",
-      "folderPath": [
-        "Logicos",
-        "Outros logicos"
-      ],
-      "defaultProperties": {}
-    },
-    {
       "typeId": "passive.resistor",
       "label": "Resistor",
       "pinCount": 2,
@@ -734,20 +410,6 @@
       }
     },
     {
-      "typeId": "passive.transformer",
-      "label": "Transformer",
-      "pinCount": 4,
-      "icon": "transformer",
-      "folderPath": [
-        "Passivos",
-        "Reactive"
-      ],
-      "defaultProperties": {
-        "coupling": 0.99,
-        "baseInductance": 1
-      }
-    },
-    {
       "typeId": "passive.variable_capacitor",
       "label": "Variable Capacitor",
       "pinCount": 2,
@@ -798,87 +460,6 @@
       "defaultProperties": {
         "threshold": 5.1,
         "resistance": 1
-      }
-    },
-    {
-      "typeId": "active.diac",
-      "label": "Diac",
-      "pinCount": 2,
-      "icon": "diac",
-      "folderPath": [
-        "Ativos",
-        "Rectifiers"
-      ],
-      "defaultProperties": {
-        "threshold": 30,
-        "resistance": 1
-      }
-    },
-    {
-      "typeId": "active.scr",
-      "label": "SCR",
-      "pinCount": 2,
-      "icon": "scr",
-      "folderPath": [
-        "Ativos",
-        "Rectifiers"
-      ],
-      "defaultProperties": {
-        "threshold": 0.8,
-        "resistance": 1
-      }
-    },
-    {
-      "typeId": "active.triac",
-      "label": "Triac",
-      "pinCount": 2,
-      "icon": "triac",
-      "folderPath": [
-        "Ativos",
-        "Rectifiers"
-      ],
-      "defaultProperties": {
-        "threshold": 0.8,
-        "resistance": 1
-      }
-    },
-    {
-      "typeId": "active.bjt",
-      "label": "BJT",
-      "pinCount": 3,
-      "icon": "bjt",
-      "folderPath": [
-        "Ativos",
-        "Transistors"
-      ],
-      "defaultProperties": {
-        "beta": 100
-      }
-    },
-    {
-      "typeId": "active.mosfet",
-      "label": "Mosfet",
-      "pinCount": 3,
-      "icon": "mosfet",
-      "folderPath": [
-        "Ativos",
-        "Transistors"
-      ],
-      "defaultProperties": {
-        "beta": 100
-      }
-    },
-    {
-      "typeId": "active.jfet",
-      "label": "Jfet",
-      "pinCount": 3,
-      "icon": "jfet",
-      "folderPath": [
-        "Ativos",
-        "Transistors"
-      ],
-      "defaultProperties": {
-        "beta": 100
       }
     },
     {
@@ -992,36 +573,6 @@
       "graphical": true
     },
     {
-      "typeId": "outputs.max72xx_matrix",
-      "label": "Max72xx matrix",
-      "pinCount": 5,
-      "icon": "max72xx",
-      "folderPath": [
-        "Saidas",
-        "Leds"
-      ],
-      "defaultProperties": {
-        "rows": 8,
-        "columns": 8
-      },
-      "graphical": true
-    },
-    {
-      "typeId": "outputs.ws2812",
-      "label": "WS2812 Led",
-      "pinCount": 3,
-      "icon": "ws2812",
-      "folderPath": [
-        "Saidas",
-        "Leds"
-      ],
-      "defaultProperties": {
-        "rows": 1,
-        "columns": 1
-      },
-      "graphical": true
-    },
-    {
       "typeId": "outputs.seven_segment",
       "label": "7 Segment",
       "pinCount": 10,
@@ -1033,138 +584,6 @@
       "defaultProperties": {
         "size": 8
       },
-      "graphical": true
-    },
-    {
-      "typeId": "outputs.hd44780",
-      "label": "Hd44780",
-      "pinCount": 16,
-      "icon": "hd44780",
-      "folderPath": [
-        "Saidas",
-        "Displays"
-      ],
-      "defaultProperties": {},
-      "graphical": true
-    },
-    {
-      "typeId": "outputs.aip31068_i2c",
-      "label": "Aip31068 I2C",
-      "pinCount": 4,
-      "icon": "aip31068",
-      "folderPath": [
-        "Saidas",
-        "Displays"
-      ],
-      "defaultProperties": {},
-      "graphical": true
-    },
-    {
-      "typeId": "outputs.pcd8544",
-      "label": "Pcd8544",
-      "pinCount": 8,
-      "icon": "pcd8544",
-      "folderPath": [
-        "Saidas",
-        "Displays"
-      ],
-      "defaultProperties": {},
-      "graphical": true
-    },
-    {
-      "typeId": "outputs.ks0108",
-      "label": "KS0108",
-      "pinCount": 20,
-      "icon": "ks0108",
-      "folderPath": [
-        "Saidas",
-        "Displays"
-      ],
-      "defaultProperties": {},
-      "graphical": true
-    },
-    {
-      "typeId": "outputs.ssd1306",
-      "label": "SSD1306",
-      "pinCount": 4,
-      "icon": "ssd1306",
-      "folderPath": [
-        "Saidas",
-        "Displays"
-      ],
-      "defaultProperties": {},
-      "graphical": true
-    },
-    {
-      "typeId": "outputs.sh1107",
-      "label": "Sh1107",
-      "pinCount": 4,
-      "icon": "sh1107",
-      "folderPath": [
-        "Saidas",
-        "Displays"
-      ],
-      "defaultProperties": {},
-      "graphical": true
-    },
-    {
-      "typeId": "outputs.st7735",
-      "label": "St7735",
-      "pinCount": 8,
-      "icon": "st7735",
-      "folderPath": [
-        "Saidas",
-        "Displays"
-      ],
-      "defaultProperties": {},
-      "graphical": true
-    },
-    {
-      "typeId": "outputs.st7789",
-      "label": "St7789",
-      "pinCount": 8,
-      "icon": "st7789",
-      "folderPath": [
-        "Saidas",
-        "Displays"
-      ],
-      "defaultProperties": {},
-      "graphical": true
-    },
-    {
-      "typeId": "outputs.ili9341",
-      "label": "Ili9341",
-      "pinCount": 8,
-      "icon": "ili9341",
-      "folderPath": [
-        "Saidas",
-        "Displays"
-      ],
-      "defaultProperties": {},
-      "graphical": true
-    },
-    {
-      "typeId": "outputs.gc9a01a",
-      "label": "GC9A01A",
-      "pinCount": 8,
-      "icon": "gc9a01a",
-      "folderPath": [
-        "Saidas",
-        "Displays"
-      ],
-      "defaultProperties": {},
-      "graphical": true
-    },
-    {
-      "typeId": "outputs.pcf8833",
-      "label": "Pcf8833",
-      "pinCount": 8,
-      "icon": "pcf8833",
-      "folderPath": [
-        "Saidas",
-        "Displays"
-      ],
-      "defaultProperties": {},
       "graphical": true
     },
     {
@@ -1193,33 +612,6 @@
       "defaultProperties": {
         "resistance": 10
       },
-      "graphical": true
-    },
-    {
-      "typeId": "outputs.servo",
-      "label": "Servo Motor",
-      "pinCount": 3,
-      "icon": "servo",
-      "folderPath": [
-        "Saidas",
-        "Motors"
-      ],
-      "defaultProperties": {
-        "minPulse": 1000,
-        "maxPulse": 2000
-      },
-      "graphical": true
-    },
-    {
-      "typeId": "outputs.audio_out",
-      "label": "Audio Out",
-      "pinCount": 1,
-      "icon": "audio_out",
-      "folderPath": [
-        "Saidas",
-        "Other Outputs"
-      ],
-      "defaultProperties": {},
       "graphical": true
     },
     {
@@ -1267,7 +659,9 @@
       "folderPath": [
         "Conectores"
       ],
-      "defaultProperties": { "name": "NetA" },
+      "defaultProperties": {
+        "name": "NetA"
+      },
       "help": {
         "description": "Conecta pinos por nome compartilhado em vez de fio desenhado. Dois túneis com o mesmo nome formam um nó elétrico."
       }
@@ -1693,21 +1087,467 @@
       "libraryPath": "../subcircuits/library.json",
       "removable": false
     },
-    { "id": "builtin-sensors-ldr",       "kind": "abi-device", "filePath": "../devices/simulide-sensors/ldr.json",       "libraryPath": "../devices/library.json", "removable": false },
-    { "id": "builtin-sensors-thermistor","kind": "abi-device", "filePath": "../devices/simulide-sensors/thermistor.json", "libraryPath": "../devices/library.json", "removable": false },
-    { "id": "builtin-sensors-rtd",       "kind": "abi-device", "filePath": "../devices/simulide-sensors/rtd.json",       "libraryPath": "../devices/library.json", "removable": false },
-    { "id": "builtin-sensors-strain",    "kind": "abi-device", "filePath": "../devices/simulide-sensors/strain.json",    "libraryPath": "../devices/library.json", "removable": false },
-    { "id": "builtin-sensors-sr04",      "kind": "abi-device", "filePath": "../devices/simulide-sensors/sr04.json",      "libraryPath": "../devices/library.json", "removable": false },
-    { "id": "builtin-sensors-dht22",     "kind": "abi-device", "filePath": "../devices/simulide-sensors/dht22.json",     "libraryPath": "../devices/library.json", "removable": false },
-    { "id": "builtin-sensors-ds1621",    "kind": "abi-device", "filePath": "../devices/simulide-sensors/ds1621.json",    "libraryPath": "../devices/library.json", "removable": false },
-    { "id": "builtin-sensors-ds18b20",   "kind": "abi-device", "filePath": "../devices/simulide-sensors/ds18b20.json",   "libraryPath": "../devices/library.json", "removable": false },
-    { "id": "builtin-peripherals-ky023",     "kind": "abi-device", "filePath": "../devices/simulide-peripherals/ky023.json",      "libraryPath": "../devices/library.json", "removable": false },
-    { "id": "builtin-peripherals-ky040",     "kind": "abi-device", "filePath": "../devices/simulide-peripherals/ky040.json",      "libraryPath": "../devices/library.json", "removable": false },
-    { "id": "builtin-peripherals-touchpad",  "kind": "abi-device", "filePath": "../devices/simulide-peripherals/touchpad.json",   "libraryPath": "../devices/library.json", "removable": false },
-    { "id": "builtin-peripherals-ds1307",    "kind": "abi-device", "filePath": "../devices/simulide-peripherals/ds1307.json",     "libraryPath": "../devices/library.json", "removable": false },
-    { "id": "builtin-peripherals-serialterm","kind": "abi-device", "filePath": "../devices/simulide-peripherals/serialterm.json", "libraryPath": "../devices/library.json", "removable": false },
-    { "id": "builtin-peripherals-serialport","kind": "abi-device", "filePath": "../devices/simulide-peripherals/serialport.json", "libraryPath": "../devices/library.json", "removable": false },
-    { "id": "builtin-peripherals-sdcard",    "kind": "abi-device", "filePath": "../devices/simulide-peripherals/sdcard.json",     "libraryPath": "../devices/library.json", "removable": false },
-    { "id": "builtin-peripherals-esp01",     "kind": "abi-device", "filePath": "../devices/simulide-peripherals/esp01.json",      "libraryPath": "../devices/library.json", "removable": false }
+    {
+      "id": "builtin-sensors-ldr",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-sensors/ldr.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-sensors-thermistor",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-sensors/thermistor.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-sensors-rtd",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-sensors/rtd.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-sensors-strain",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-sensors/strain.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-sensors-sr04",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-sensors/sr04.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-sensors-dht22",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-sensors/dht22.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-sensors-ds1621",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-sensors/ds1621.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-sensors-ds18b20",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-sensors/ds18b20.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-peripherals-ky023",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-peripherals/ky023.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-peripherals-ky040",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-peripherals/ky040.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-peripherals-touchpad",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-peripherals/touchpad.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-peripherals-ds1307",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-peripherals/ds1307.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-peripherals-serialterm",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-peripherals/serialterm.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-peripherals-serialport",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-peripherals/serialport.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-peripherals-sdcard",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-peripherals/sdcard.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-peripherals-esp01",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-peripherals/esp01.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-logic-and_gate",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-logic/and_gate.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-logic-or_gate",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-logic/or_gate.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-logic-xor_gate",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-logic/xor_gate.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-logic-buffer",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-logic/buffer.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-logic-full_adder",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-logic/full_adder.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-logic-lm555",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-logic/lm555.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-logic-counter",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-logic/counter.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-logic-bin_counter",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-logic/bin_counter.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-logic-magnitude_comp",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-logic/magnitude_comp.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-logic-shift_reg",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-logic/shift_reg.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-logic-function",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-logic/function.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-logic-flipflop_d",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-logic/flipflop_d.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-logic-flipflop_t",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-logic/flipflop_t.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-logic-flipflop_rs",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-logic/flipflop_rs.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-logic-flipflop_jk",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-logic/flipflop_jk.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-logic-latch_d",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-logic/latch_d.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-logic-memory",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-logic/memory.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-logic-dynamic_memory",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-logic/dynamic_memory.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-logic-i2c_ram",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-logic/i2c_ram.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-logic-mux",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-logic/mux.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-logic-demux",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-logic/demux.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-logic-bcd_to_dec",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-logic/bcd_to_dec.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-logic-dec_to_bcd",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-logic/dec_to_bcd.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-logic-bcd_to_7seg",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-logic/bcd_to_7seg.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-logic-i2c_to_parallel",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-logic/i2c_to_parallel.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-logic-adc",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-logic/adc.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-logic-dac",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-logic/dac.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-logic-seven_segment_bcd",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-logic/seven_segment_bcd.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-complex-transformer",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-complex/transformer.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-complex-diac",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-complex/diac.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-complex-scr",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-complex/scr.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-complex-triac",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-complex/triac.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-complex-bjt",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-complex/bjt.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-complex-mosfet",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-complex/mosfet.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-complex-jfet",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-complex/jfet.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-complex-max72xx_matrix",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-complex/max72xx_matrix.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-complex-ws2812",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-complex/ws2812.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-complex-hd44780",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-complex/hd44780.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-complex-aip31068_i2c",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-complex/aip31068_i2c.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-complex-pcd8544",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-complex/pcd8544.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-complex-ks0108",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-complex/ks0108.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-complex-ssd1306",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-complex/ssd1306.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-complex-sh1107",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-complex/sh1107.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-complex-st7735",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-complex/st7735.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-complex-st7789",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-complex/st7789.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-complex-ili9341",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-complex/ili9341.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-complex-gc9a01a",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-complex/gc9a01a.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-complex-pcf8833",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-complex/pcf8833.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-complex-servo",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-complex/servo.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    },
+    {
+      "id": "builtin-complex-audio_out",
+      "kind": "abi-device",
+      "filePath": "../devices/simulide-complex/audio_out.json",
+      "libraryPath": "../devices/library.json",
+      "removable": false
+    }
   ]
 }

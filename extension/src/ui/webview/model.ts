@@ -128,7 +128,7 @@ export interface PackagePin {
  * `components/graphical/{rectangle,ellipse,line,textcomponent}` do SimulIDE, só que como dado
  * (`.spec/lasecsimul-native-devices.spec` seção 21.2), nunca um componente à parte. */
 export interface PackageShape {
-  kind: "rect" | "text" | "line" | "ellipse" | "polygon" | "svg";
+  kind: "rect" | "text" | "line" | "ellipse" | "polygon" | "path" | "image" | "svg";
   x?: number;
   y?: number;
   w?: number;
@@ -142,24 +142,190 @@ export interface PackageShape {
   rx?: number;
   ry?: number;
   points?: Array<{ x: number; y: number }>;
+  d?: string;
+  href?: string;
+  preserveAspectRatio?: string;
   value?: string;
   fontSize?: number;
+  textAnchor?: "start" | "middle" | "end";
   color?: string;
   stroke?: string;
   fill?: string;
   strokeWidth?: number;
   /** CSS class(es) added to the SVG element — used for interactive hit zones (e.g. "joystick-hit-zone"). */
   cssClass?: string;
+  /** Nome do "part" deste elemento no ViewSpec — conecta ao `stateProjection[partId]` da spec.
+   * Quando presente, o renderizador aplica o transform inicial derivado das propriedades do componente
+   * (ex: position do encoder → rotate; x_pos/y_pos do joystick → translate). */
+  partId?: string;
 }
 
 export interface PackageBackground {
   kind: "color" | "svg" | "image" | "none";
   value?: string;
   data?: string;
+  asset?: string;
+  mime?: string;
 }
 
 /** SimulIDE stores Package.Width/Height in schematic grid cells; each cell is 8 scene units. */
 export const SIMULIDE_PACKAGE_GRID_UNIT = 8;
+
+// ── ViewSpec (P2) ────────────────────────────────────────────────────────────────────────────────
+// Sistema declarativo de renderização e interação para devices com SVG complexo (gradientes,
+// stateProjection, etc.). Ativa-se quando `package.viewSpec` está presente; fallback para
+// `package.shapes[]` quando ausente — nenhum device existente quebra.
+
+/** Gradiente SVG declarado no ViewSpec. IDs são auto-escopados por instância (`name-componentId`)
+ * pelo ViewSpecRenderer para evitar colisão entre múltiplas instâncias do mesmo typeId. */
+export type ViewSpecGradient =
+  | {
+      kind: "radial";
+      cx: number; cy: number; r: number;
+      fx?: number; fy?: number;
+      gradientUnits?: "userSpaceOnUse" | "objectBoundingBox";
+      stops: Array<{ offset: string; color: string }>;
+    }
+  | {
+      kind: "linear";
+      x1: number; y1: number; x2: number; y2: number;
+      gradientUnits?: "userSpaceOnUse" | "objectBoundingBox";
+      stops: Array<{ offset: string; color: string }>;
+    };
+
+/** Mapeamento linear de um eixo de uma propriedade do componente para pixels SVG.
+ * `dx = pixelRange[0] + (prop - propRange[0]) / (propRange[1] - propRange[0]) * (pixelRange[1] - pixelRange[0])` */
+export interface ViewSpecAxisMapping {
+  prop: string;
+  propRange: [number, number];
+  pixelRange: [number, number];
+}
+
+/** Como o valor de uma propriedade do componente se projeta em transform/fill/visibility de um
+ * element visual identificado por `partId` em `paint[]`. */
+export type ViewSpecProjection =
+  | { kind: "translate"; x?: ViewSpecAxisMapping; y?: ViewSpecAxisMapping }
+  | { kind: "rotate"; prop: string; stepsPerRev: number; stepsPerRevProp?: string; cx: number; cy: number }
+  | { kind: "fill"; prop: string; map: Record<string, string> }
+  | { kind: "visible"; prop: string; invert?: boolean };
+
+/** Região declarativa de hit-test em coordenadas nativas do package/ViewSpec. Ela separa desenho de
+ * interação: um knob pode ser composto de várias formas visuais, mas ter uma única área clicável. */
+export type ViewSpecHitTest =
+  | { kind: "rect"; x: number; y: number; w: number; h: number; cursor?: string }
+  | { kind: "circle"; cx: number; cy: number; r: number; cursor?: string }
+  | { kind: "ellipse"; cx: number; cy: number; rx: number; ry: number; cursor?: string }
+  | { kind: "polygon"; points: Array<{ x: number; y: number }>; cursor?: string }
+  | { kind: "path"; d: string; cursor?: string };
+
+/** Limite físico/numérico reutilizável por interações. Exemplos: raio máximo do joystick, intervalo
+ * angular de um knob, faixa em pixels de um slider, min/max/step de propriedade. */
+export interface ViewSpecLimit {
+  min?: number;
+  max?: number;
+  step?: number;
+  center?: number;
+  radius?: number;
+  minAngleDeg?: number;
+  maxAngleDeg?: number;
+  clamp?: boolean;
+}
+
+/** Parte semântica do componente. `paint[]` continua sendo a fonte visual principal, mas `parts`
+ * permite nomear regiões móveis/acionáveis e conectar hit-test + interação + origem de rotação. */
+export interface ViewSpecPart {
+  role?: string;
+  paint?: PackageShape[];
+  hitTest?: string | ViewSpecHitTest;
+  interaction?: string;
+  origin?: { x: number; y: number };
+  movable?: boolean;
+  cursor?: string;
+}
+
+/** Interação declarativa por parte/região. O webview atual ainda implementa handlers específicos
+ * para joystick/encoder/touchpad; este contrato é o alvo comum para migrar todos os dispositivos
+ * sem hardcode por typeId. */
+export type ViewSpecInteraction =
+  | {
+      kind: "dragVector";
+      partId?: string;
+      hitTest?: string;
+      x?: ViewSpecAxisMapping;
+      y?: ViewSpecAxisMapping;
+      springBack?: boolean;
+      pressedProp?: string;
+      limits?: string;
+    }
+  | {
+      kind: "dragAngular";
+      partId?: string;
+      hitTest?: string;
+      prop: string;
+      cx: number;
+      cy: number;
+      stepsPerRev?: number;
+      stepsPerRevProp?: string;
+      continuous?: boolean;
+      limits?: string;
+    }
+  | {
+      kind: "touchPoint";
+      partId?: string;
+      hitTest?: string;
+      x: ViewSpecAxisMapping;
+      y: ViewSpecAxisMapping;
+      pressedProp?: string;
+      limits?: string;
+    }
+  | {
+      kind: "press";
+      partId?: string;
+      hitTest?: string;
+      prop: string;
+      pressedValue?: boolean | number | string;
+      releasedValue?: boolean | number | string;
+    }
+  | {
+      kind: "toggle";
+      partId?: string;
+      hitTest?: string;
+      prop: string;
+      values?: [boolean | number | string, boolean | number | string];
+    }
+  | {
+      kind: "slider";
+      partId?: string;
+      hitTest?: string;
+      axis: "x" | "y";
+      prop: string;
+      propRange: [number, number];
+      pixelRange: [number, number];
+      limits?: string;
+    };
+
+/** Especificação declarativa de renderização para um device. Alternativa a `shapes[]` com suporte
+ * a gradientes escopados por instância e projeção de estado (posição/rotação baseada em propriedades).
+ * Campos `fill: "gradient:name"` nos `paint` items referenciam `gradients[name]` com ID auto-escopado. */
+export interface ComponentViewSpec {
+  gradients?: Record<string, ViewSpecGradient>;
+  /** Partes semânticas nomeadas; base para reescrita em massa dos módulos com interações móveis. */
+  parts?: Record<string, ViewSpecPart>;
+  /** Regiões de hit-test reutilizáveis por `parts` e `interaction`. */
+  hitTest?: Record<string, ViewSpecHitTest>;
+  /** Interações declarativas por id lógico (ex: "knob", "stick", "button"). */
+  interaction?: Record<string, ViewSpecInteraction>;
+  /** Limites físicos reutilizáveis por interações/projeções. */
+  limits?: Record<string, ViewSpecLimit>;
+  /** Formas visuais — mesma sintaxe de `PackageShape`, mas `fill: "gradient:name"` resolve para
+   * o gradiente escopado, e `partId` conecta ao `stateProjection`. */
+  paint: PackageShape[];
+  /** Projeções de estado por `partId` — aplicadas ao `transform`/`fill`/`visibility` dos elementos
+   * com esse `partId` no `paint[]`, em ordem. */
+  stateProjection?: Record<string, ViewSpecProjection[]>;
+}
+
+// ────────────────────────────────────────────────────────────────────────────────────────────────
 
 /** Símbolo visual declarativo de um `typeId` — mesmo bloco `package` de `device.json`/`.lssub.json`
  * (`.spec/lasecsimul-native-devices.spec` seção 21, `.spec/lasecsimul-subcircuits.spec` seção 3).
@@ -179,6 +345,9 @@ export interface PackageDescriptor {
   border?: boolean;
   background?: PackageBackground;
   shapes?: PackageShape[];
+  /** ViewSpec declarativo (P2) — quando presente, tem prioridade sobre `shapes[]`. Suporta
+   * gradientes escopados por instância e stateProjection. */
+  viewSpec?: ComponentViewSpec;
   pins: PackagePin[];
   /** Cor dos rótulos de pinos — padrão `currentColor` (herda do canvas). Usar `"#FAFAC8"` pra
    * placas com fundo escuro (mesma cor `QColor(250,250,200)` dos rótulos de `PackagePin` do

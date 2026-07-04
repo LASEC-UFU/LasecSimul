@@ -385,10 +385,14 @@ html, body {
   font-weight: 700;
 }
 
+/* Terminal discreto (mesma tinta do traçado, sem halo de cor de fundo) -- real SimulIDE não
+   desenha nenhuma "bolinha" nos pinos, só a ponta do fio; o padrão antigo (bola grande na cor de
+   destaque + anel na cor de fundo) já tinha sido corrigido pra `--component--fixed-volt/rail/
+   tunnel/meter` isoladamente, mas nunca virou o padrão -- por isso resistor/porta lógica/keypad/
+   relay/potenciômetro/etc ainda mostravam a bola gigante (bug relatado 2026-07-04). */
 .pin-terminal {
-  fill: var(--accent-2);
-  stroke: var(--bg);
-  stroke-width: 1;
+  fill: var(--text);
+  stroke: none;
   cursor: crosshair;
 }
 
@@ -452,6 +456,16 @@ html, body {
 .component--meters-probe .pin-terminal:hover {
   fill: #ecebff;
   r: 10;
+}
+
+.component--package .pin-terminal,
+.component--package .pin-terminal:hover,
+.component--package .pin-terminal--active {
+  fill: transparent;
+  stroke: transparent;
+  opacity: 0;
+  pointer-events: all;
+  r: 4.5;
 }
 
 .meter-lcd {

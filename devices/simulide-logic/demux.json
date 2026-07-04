@@ -1,1 +1,188 @@
-﻿{ "schemaVersion": 1, "typeId": "logic.demux", "name": "Demux", "language": "pt-BR", "abiVersion": { "major": 4, "minor": 0 }, "nativeEntry": { "win32-x64": "build-msvc/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" }, "pins": [ { "id": "s0", "kind": "DIGITAL_IN" }, { "id": "s1", "kind": "DIGITAL_IN" }, { "id": "s2", "kind": "DIGITAL_IN" }, { "id": "di", "kind": "DIGITAL_IN" }, { "id": "q0", "kind": "DIGITAL_OUT" }, { "id": "q1", "kind": "DIGITAL_OUT" }, { "id": "q2", "kind": "DIGITAL_OUT" }, { "id": "q3", "kind": "DIGITAL_OUT" }, { "id": "q4", "kind": "DIGITAL_OUT" }, { "id": "q5", "kind": "DIGITAL_OUT" }, { "id": "q6", "kind": "DIGITAL_OUT" }, { "id": "q7", "kind": "DIGITAL_OUT" } ], "properties": [], "limits": { "stepTimeoutMs": 4, "expectedComplexity": "low" } }
+{
+  "schemaVersion": 1,
+  "typeId": "logic.demux",
+  "name": "Demux",
+  "language": "pt-BR",
+  "abiVersion": {
+    "major": 4,
+    "minor": 0
+  },
+  "nativeEntry": {
+    "win32-x64": "build-msvc/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
+  "pins": [
+    {
+      "id": "s0",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "s1",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "s2",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "di",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "q0",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "q1",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "q2",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "q3",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "q4",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "q5",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "q6",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "q7",
+      "kind": "DIGITAL_OUT"
+    }
+  ],
+  "properties": [],
+  "limits": {
+    "stepTimeoutMs": 4,
+    "expectedComplexity": "low"
+  },
+  "package": {
+    "width": 50,
+    "height": 114,
+    "border": false,
+    "background": {
+      "kind": "none"
+    },
+    "shapes": [],
+    "viewSpec": {
+      "paint": [
+        { "kind": "polygon", "points": [{"x":0,"y":24},{"x":0,"y":90},{"x":50,"y":108},{"x":50,"y":6}], "fill": "#ffffff" },
+        { "kind": "text", "x": 25, "y": -4, "value": "__label", "fontSize": 5, "color": "#0000aa" }
+      ]
+    },
+    "pins": [
+      {
+        "id": "s0",
+        "x": 0,
+        "y": 37,
+        "angle": 180,
+        "length": 8,
+        "label": "S0"
+      },
+      {
+        "id": "s1",
+        "x": 0,
+        "y": 50,
+        "angle": 180,
+        "length": 8,
+        "label": "S1"
+      },
+      {
+        "id": "s2",
+        "x": 0,
+        "y": 64,
+        "angle": 180,
+        "length": 8,
+        "label": "S2"
+      },
+      {
+        "id": "di",
+        "x": 0,
+        "y": 77,
+        "angle": 180,
+        "length": 8,
+        "label": "DI"
+      },
+      {
+        "id": "q0",
+        "x": 50,
+        "y": 12.667,
+        "angle": 0,
+        "length": 8,
+        "label": "Q0"
+      },
+      {
+        "id": "q1",
+        "x": 50,
+        "y": 25.333,
+        "angle": 0,
+        "length": 8,
+        "label": "Q1"
+      },
+      {
+        "id": "q2",
+        "x": 50,
+        "y": 38,
+        "angle": 0,
+        "length": 8,
+        "label": "Q2"
+      },
+      {
+        "id": "q3",
+        "x": 50,
+        "y": 50.667,
+        "angle": 0,
+        "length": 8,
+        "label": "Q3"
+      },
+      {
+        "id": "q4",
+        "x": 50,
+        "y": 63.333,
+        "angle": 0,
+        "length": 8,
+        "label": "Q4"
+      },
+      {
+        "id": "q5",
+        "x": 50,
+        "y": 76,
+        "angle": 0,
+        "length": 8,
+        "label": "Q5"
+      },
+      {
+        "id": "q6",
+        "x": 50,
+        "y": 88.667,
+        "angle": 0,
+        "length": 8,
+        "label": "Q6"
+      },
+      {
+        "id": "q7",
+        "x": 50,
+        "y": 101.333,
+        "angle": 0,
+        "length": 8,
+        "label": "Q7"
+      }
+    ]
+  },
+  "icon": "demux",
+  "folderPath": [
+    "Logicos",
+    "Conversores"
+  ]
+}

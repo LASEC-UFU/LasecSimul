@@ -1,19 +1,114 @@
-﻿{
+{
   "schemaVersion": 1,
   "typeId": "outputs.sh1107",
   "name": "Sh1107",
   "language": "pt-BR",
-  "translations": { "en": { "name": "Sh1107" } },
-  "abiVersion": { "major": 4, "minor": 0 },
-  "nativeEntry": { "win32-x64": "build-msvc/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" },
+  "translations": {
+    "en": {
+      "name": "Sh1107"
+    }
+  },
+  "abiVersion": {
+    "major": 4,
+    "minor": 0
+  },
+  "nativeEntry": {
+    "win32-x64": "build-msvc/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
   "pins": [
-    { "id": "scl", "kind": "DIGITAL_IN", "x": 0, "y": 48, "angle": 180, "length": 8, "label": "SCL" },
-    { "id": "sda", "kind": "DIGITAL_BIDIR", "x": 0, "y": 56, "angle": 180, "length": 8, "label": "SDA" }
+    {
+      "id": "scl",
+      "kind": "DIGITAL_IN",
+      "x": 0,
+      "y": 48,
+      "angle": 180,
+      "length": 8,
+      "label": "SCL"
+    },
+    {
+      "id": "sda",
+      "kind": "DIGITAL_BIDIR",
+      "x": 0,
+      "y": 56,
+      "angle": 180,
+      "length": 8,
+      "label": "SDA"
+    }
   ],
   "properties": [
-    { "id": "width", "label": "Largura", "group": "Principal", "valueKind": "number", "editor": "number", "default": 128, "min": 32, "step": 1 },
-    { "id": "height", "label": "Altura", "group": "Principal", "valueKind": "number", "editor": "number", "default": 128, "min": 16, "step": 8 },
-    { "id": "i2cAddress", "label": "Endereço I2C", "group": "Principal", "valueKind": "number", "editor": "number", "default": 60, "min": 0, "max": 127, "step": 1 }
+    {
+      "id": "width",
+      "label": "Largura",
+      "group": "Principal",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 128,
+      "min": 32,
+      "step": 1
+    },
+    {
+      "id": "height",
+      "label": "Altura",
+      "group": "Principal",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 128,
+      "min": 16,
+      "step": 8
+    },
+    {
+      "id": "i2cAddress",
+      "label": "Endereço I2C",
+      "group": "Principal",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 60,
+      "min": 0,
+      "max": 127,
+      "step": 1
+    }
   ],
-  "limits": { "stepTimeoutMs": 8, "expectedComplexity": "medium" }
+  "limits": {
+    "stepTimeoutMs": 8,
+    "expectedComplexity": "medium"
+  },
+  "package": {
+    "width": 88,
+    "height": 144,
+    "border": false,
+    "background": { "kind": "none" },
+    "shapes": [],
+    "viewSpec": {
+      "paint": [
+        { "kind": "rect", "x": 0, "y": 0, "w": 88, "h": 144, "rx": 2, "ry": 2, "fill": "#324664" },
+        { "kind": "rect", "x": 6, "y": 6, "w": 76, "h": 132, "fill": "#000000" },
+        { "kind": "text", "x": 44, "y": -4, "value": "__label", "fontSize": 6, "color": "#0000aa" }
+      ]
+    },
+    "pins": [
+      {
+        "id": "scl",
+        "x": 22,
+        "y": 144,
+        "angle": 90,
+        "length": 8,
+        "label": "SCL"
+      },
+      {
+        "id": "sda",
+        "x": 30,
+        "y": 144,
+        "angle": 90,
+        "length": 8,
+        "label": "SDA"
+      }
+    ]
+  },
+  "icon": "sh1107",
+  "folderPath": [
+    "Saidas",
+    "Displays"
+  ]
 }

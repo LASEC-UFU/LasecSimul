@@ -1,1 +1,238 @@
-﻿{ "schemaVersion": 1, "typeId": "logic.dynamic_memory", "name": "Dynamic Memory", "language": "pt-BR", "abiVersion": { "major": 4, "minor": 0 }, "nativeEntry": { "win32-x64": "build-msvc/device.dll", "linux-x64": "build/linux-x64/device.so", "darwin-universal": "build/macos-universal/device.dylib" }, "pins": [ { "id": "clk", "kind": "DIGITAL_IN" }, { "id": "we", "kind": "DIGITAL_IN" }, { "id": "oe", "kind": "DIGITAL_IN" }, { "id": "a0", "kind": "DIGITAL_IN" }, { "id": "a1", "kind": "DIGITAL_IN" }, { "id": "a2", "kind": "DIGITAL_IN" }, { "id": "a3", "kind": "DIGITAL_IN" }, { "id": "d0", "kind": "DIGITAL_IN" }, { "id": "d1", "kind": "DIGITAL_IN" }, { "id": "d2", "kind": "DIGITAL_IN" }, { "id": "d3", "kind": "DIGITAL_IN" }, { "id": "q0", "kind": "DIGITAL_OUT" }, { "id": "q1", "kind": "DIGITAL_OUT" }, { "id": "q2", "kind": "DIGITAL_OUT" }, { "id": "q3", "kind": "DIGITAL_OUT" } ], "properties": [], "limits": { "stepTimeoutMs": 4, "expectedComplexity": "low" } }
+{
+  "schemaVersion": 1,
+  "typeId": "logic.dynamic_memory",
+  "name": "Dynamic Memory",
+  "language": "pt-BR",
+  "abiVersion": {
+    "major": 4,
+    "minor": 0
+  },
+  "nativeEntry": {
+    "win32-x64": "build-msvc/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
+  "pins": [
+    {
+      "id": "clk",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "we",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "oe",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "a0",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "a1",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "a2",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "a3",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "d0",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "d1",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "d2",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "d3",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "q0",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "q1",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "q2",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "q3",
+      "kind": "DIGITAL_OUT"
+    }
+  ],
+  "properties": [],
+  "limits": {
+    "stepTimeoutMs": 4,
+    "expectedComplexity": "low"
+  },
+  "package": {
+    "width": 48,
+    "height": 88,
+    "border": false,
+    "background": {
+      "kind": "none"
+    },
+    "shapes": [],
+    "pins": [
+      {
+        "id": "clk",
+        "x": 0,
+        "y": 8,
+        "angle": 180,
+        "length": 8,
+        "label": "CLK"
+      },
+      {
+        "id": "we",
+        "x": 0,
+        "y": 16,
+        "angle": 180,
+        "length": 8,
+        "label": "WE"
+      },
+      {
+        "id": "oe",
+        "x": 0,
+        "y": 24,
+        "angle": 180,
+        "length": 8,
+        "label": "OE"
+      },
+      {
+        "id": "a0",
+        "x": 0,
+        "y": 32,
+        "angle": 180,
+        "length": 8,
+        "label": "A0"
+      },
+      {
+        "id": "a1",
+        "x": 0,
+        "y": 40,
+        "angle": 180,
+        "length": 8,
+        "label": "A1"
+      },
+      {
+        "id": "a2",
+        "x": 0,
+        "y": 48,
+        "angle": 180,
+        "length": 8,
+        "label": "A2"
+      },
+      {
+        "id": "a3",
+        "x": 0,
+        "y": 56,
+        "angle": 180,
+        "length": 8,
+        "label": "A3"
+      },
+      {
+        "id": "d0",
+        "x": 0,
+        "y": 64,
+        "angle": 180,
+        "length": 8,
+        "label": "D0"
+      },
+      {
+        "id": "d1",
+        "x": 0,
+        "y": 72,
+        "angle": 180,
+        "length": 8,
+        "label": "D1"
+      },
+      {
+        "id": "d2",
+        "x": 0,
+        "y": 80,
+        "angle": 180,
+        "length": 8,
+        "label": "D2"
+      },
+      {
+        "id": "d3",
+        "x": 0,
+        "y": 88,
+        "angle": 180,
+        "length": 8,
+        "label": "D3"
+      },
+      {
+        "id": "q0",
+        "x": 48,
+        "y": 8,
+        "angle": 0,
+        "length": 8,
+        "label": "Q0"
+      },
+      {
+        "id": "q1",
+        "x": 48,
+        "y": 16,
+        "angle": 0,
+        "length": 8,
+        "label": "Q1"
+      },
+      {
+        "id": "q2",
+        "x": 48,
+        "y": 24,
+        "angle": 0,
+        "length": 8,
+        "label": "Q2"
+      },
+      {
+        "id": "q3",
+        "x": 48,
+        "y": 32,
+        "angle": 0,
+        "length": 8,
+        "label": "Q3"
+      }
+    ],
+    "viewSpec": {
+      "paint": [
+        {
+          "kind": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 48,
+          "h": 88,
+          "fill": "#ffffff"
+        },
+        {
+          "kind": "text",
+          "x": 24,
+          "y": -4,
+          "value": "__label",
+          "fontSize": 5,
+          "color": "#0000aa"
+        }
+      ]
+    }
+  },
+  "icon": "2to3g",
+  "folderPath": [
+    "Logicos",
+    "Memorias"
+  ]
+}
