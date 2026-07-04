@@ -143,6 +143,7 @@ const UI_TEXT = {
     exposedComponentsSelectAll: "Selecionar todos",
     exposedComponentsClearAll: "Limpar seleção",
     notGraphicalHint: "(sem efeito visual no Modo Placa)",
+    createSubcircuit: "Criar Subcircuito da Seleção",
   },
   en: {
     nothingSelected: "Nothing selected",
@@ -204,6 +205,7 @@ const UI_TEXT = {
     exposedComponentsSelectAll: "Select all",
     exposedComponentsClearAll: "Clear selection",
     notGraphicalHint: "(no visual effect in Board Mode)",
+    createSubcircuit: "Create Subcircuit from Selection",
   },
 } as const;
 
@@ -3142,6 +3144,12 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
           { label: `${t("openSerialMonitor")} USART3`, onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenMcuSerialMonitor", componentId: component.id, usartIndex: 2 }) },
         ]
       : [];
+    const createSubcircuitMenuItems: ContextMenuItem[] = isGroup && !symbolAuthoringContext
+      ? [
+          { kind: "separator" },
+          { label: t("createSubcircuit"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestCreateSubcircuitFromSelection", componentIds: state.selectedComponentIds }) },
+        ]
+      : [];
     const menuItems: ContextMenuItem[] = [
       ...exposedSubmenuItems,
       ...(exposedSubmenuItems.length > 0 ? [{ kind: "separator" } satisfies ContextMenuItem] : []),
@@ -3159,6 +3167,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
       { label: t("flipVertical"), icon: "flipVertical", shortcut: "Ctrl+Shift+L", onClick: () => flipSelectedComponents("vertical") },
       ...symbolMenuItems,
       ...mcuMenuItems,
+      ...createSubcircuitMenuItems,
     ];
     showContextMenu(event, menuItems);
   });
@@ -3935,6 +3944,12 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
 
   if (message.type === "enterSymbolAuthoring") {
     enterSymbolAuthoring(message.filePath, message.typeId, message.kind, message.view, message.components, message.wires);
+  }
+
+  if (message.type === "triggerCreateSubcircuitFromSelection") {
+    if (state.selectedComponentIds.length > 1 && !symbolAuthoringContext) {
+      send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestCreateSubcircuitFromSelection", componentIds: state.selectedComponentIds });
+    }
   }
 });
 

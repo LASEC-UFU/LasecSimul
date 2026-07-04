@@ -67,6 +67,10 @@ export type HostToWebviewMessage =
   /** Mesmo caminho de `requestRotateSelection`, mas pra flip -- ver `lasecsimul.flipSelectionHorizontal`/
    * `Vertical` em `extension.ts`. */
   | { version: number; type: "requestFlipSelection"; axis: "horizontal" | "vertical" }
+  /** Solicita à Webview que empacote a seleção atual e envie `requestCreateSubcircuitFromSelection`
+   * de volta -- disparado pelo comando `lasecsimul.newSubcircuit` quando o painel está aberto, como
+   * alternativa ao item do menu de contexto (que só aparece quando já há uma multi-seleção). */
+  | { version: number; type: "triggerCreateSubcircuitFromSelection" }
   /** Entra no modo de autoria de símbolo (Épico G, parte de escrita) -- ver `.spec/
    * lasecsimul-native-devices.spec` seção 21.3 e `docs/16-roadmap-pendencias-spec.md` Épico G:
    * mesmo princípio do SimulIDE real (`SubPackage`/`Rectangle`/`Ellipse`/.../`PackagePin` são
@@ -196,7 +200,11 @@ export type WebviewToHostMessage =
    * componente dentro do `.lssub.json` (ex: "button_en"). extension.ts traduz isso pro índice real
    * do componente Core dentro da instância expandida (ver `SimulationSession::
    * setSubcircuitChildProperty`, novo). */
-  | { version: number; type: "requestUpdateBoardOverlayProperty"; outerComponentId: string; innerComponentId: string; name: string; value: string | number | boolean };
+  | { version: number; type: "requestUpdateBoardOverlayProperty"; outerComponentId: string; innerComponentId: string; name: string; value: string | number | boolean }
+  /** Envia a seleção atual pro host pra criar um `.lssub.json` — disparado pelo item do menu de
+   * contexto de multi-seleção OU pela resposta da Webview a `triggerCreateSubcircuitFromSelection`.
+   * `componentIds`: IDs dos componentes selecionados. */
+  | { version: number; type: "requestCreateSubcircuitFromSelection"; componentIds: string[] };
 
 export function isHostMessage(value: unknown): value is HostToWebviewMessage {
   return typeof value === "object" && value !== null && "type" in value && "version" in value;

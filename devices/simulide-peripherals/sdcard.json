@@ -20,32 +20,29 @@
     "darwin-universal": "build/macos-universal/device.dylib"
   },
   "package": {
-    "width": 72,
-    "height": 48,
+    "width": 64,
+    "height": 40,
     "border": false,
     "background": { "kind": "color", "value": "transparent" },
     "shapes": [
-      { "kind": "line", "x1": 20, "y1": 4,  "x2": 52, "y2": 4,  "stroke": "#888", "strokeWidth": 1 },
-      { "kind": "line", "x1": 52, "y1": 4,  "x2": 62, "y2": 14, "stroke": "#888", "strokeWidth": 1 },
-      { "kind": "line", "x1": 62, "y1": 14, "x2": 62, "y2": 42, "stroke": "#888", "strokeWidth": 1 },
-      { "kind": "line", "x1": 62, "y1": 42, "x2": 20, "y2": 42, "stroke": "#888", "strokeWidth": 1 },
-      { "kind": "line", "x1": 20, "y1": 42, "x2": 20, "y2": 4,  "stroke": "#888", "strokeWidth": 1 },
-      { "kind": "rect", "x": 21, "y": 5,  "w": 40, "h": 36, "stroke": "none", "fill": "#e8e8d8" },
-      { "kind": "text", "x": 30, "y": 22, "value": "SD",  "fontSize": 12, "color": "#444" },
-      { "kind": "text", "x": 30, "y": 34, "value": "SPI", "fontSize": 7,  "color": "#666" }
+      { "kind": "polygon",
+        "points": [{"x":0,"y":0},{"x":56,"y":0},{"x":64,"y":8},{"x":64,"y":40},{"x":0,"y":40}],
+        "stroke": "#888888", "fill": "#ffffff", "strokeWidth": 1 },
+      { "kind": "text", "x": 40, "y": 24, "value": "SD", "fontSize": 12, "color": "#444444" }
     ],
+    "pinLabelColor": "#444444",
     "pins": [
-      { "id": "cs",  "x": 0, "y": 10, "angle": 180, "length": 8, "label": "CS"  },
-      { "id": "di",  "x": 0, "y": 20, "angle": 180, "length": 8, "label": "DI"  },
-      { "id": "ck",  "x": 0, "y": 30, "angle": 180, "length": 8, "label": "CK"  },
-      { "id": "do",  "x": 0, "y": 40, "angle": 180, "length": 8, "label": "DO"  }
+      { "id": "cs", "x": 0, "y": 8,  "angle": 180, "length": 8, "label": "CS", "labelX": 10, "labelY": 10 },
+      { "id": "di", "x": 0, "y": 16, "angle": 180, "length": 8, "label": "DI", "labelX": 10, "labelY": 18 },
+      { "id": "ck", "x": 0, "y": 24, "angle": 180, "length": 8, "label": "CK", "labelX": 10, "labelY": 26 },
+      { "id": "do", "x": 0, "y": 32, "angle": 180, "length": 8, "label": "DO", "labelX": 10, "labelY": 34 }
     ]
   },
   "pins": [
-    { "id": "cs",  "kind": "DIGITAL_IN",  "x": 0, "y": 10, "angle": 180, "length": 8, "label": "CS"  },
-    { "id": "di",  "kind": "DIGITAL_IN",  "x": 0, "y": 20, "angle": 180, "length": 8, "label": "DI"  },
-    { "id": "ck",  "kind": "DIGITAL_IN",  "x": 0, "y": 30, "angle": 180, "length": 8, "label": "CK"  },
-    { "id": "do",  "kind": "DIGITAL_OUT", "x": 0, "y": 40, "angle": 180, "length": 8, "label": "DO"  }
+    { "id": "cs",  "kind": "DIGITAL_IN",  "x": 0, "y": 8,  "angle": 180, "length": 8, "label": "CS"  },
+    { "id": "di",  "kind": "DIGITAL_IN",  "x": 0, "y": 16, "angle": 180, "length": 8, "label": "DI"  },
+    { "id": "ck",  "kind": "DIGITAL_IN",  "x": 0, "y": 24, "angle": 180, "length": 8, "label": "CK"  },
+    { "id": "do",  "kind": "DIGITAL_OUT", "x": 0, "y": 32, "angle": 180, "length": 8, "label": "DO"  }
   ],
   "properties": [
     { "id": "file", "label": "Arquivo de imagem SD", "group": "SD Card", "valueKind": "string", "editor": "text", "default": "" }

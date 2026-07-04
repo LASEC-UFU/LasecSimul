@@ -1465,3 +1465,74 @@ via `getComponentState`.
 Tambem esta implementado o contrato de `setProperty` que estava pendente na secao 6.1.2: validacao de
 `readOnly`, tipo, faixa e opcoes antes do setter; erro IPC estavel (`errorCode`); `affectsTopology` marcando
 topologia suja; e `requiresRestart` reportado explicitamente na resposta IPC sem reinicio automatico.
+
+## 15. Novos verbos IPC e contratos de UI (2026-07-03)
+
+### 15.1 `setTunnelName` — renomear túnel em runtime via IPC dedicado
+
+**Contrato**: `setTunnelName { instanceId, pinId, oldName, newName }` → `{ ok, error? }`.
+
+O `setProperty` genérico NÃO pode ser usado para renomear túnel porque ele apenas re-stampa o
+componente (não reconstrói topologia). `SimulationSession::setTunnelName` faz o que é necessário:
+remove o slot do mapa de túneis pelo nome antigo, muda o nome da propriedade, e re-registra — o que
+dispara o rebuild de topologia correto (mesma operação que o `Tunnel::setName()` do SimulIDE real
+desencadeia via `Simulator::rebuild()`). A Extension captura o estado ANTES de atualizar o
+`schematicState` para obter `oldName` e `pinId`, depois chama `setTunnelName` em vez de `setProperty`
+quando `name === "name"` e `typeId === "connectors.tunnel"`.
+
+O catálogo de `connectors.tunnel` declara `defaultProperties: { name: "NetA" }` para que toda nova
+instância tenha um nome não-vazio desde a criação — sem isso, o primeiro `setTunnelName` receberia
+`oldName: ""` e não encontraria o slot para mover.
+
+### 15.2 `setSimulationConfig` — throttle e limite de iterações não-lineares
+
+**Contrato**: `setSimulationConfig { targetStepUs?, maxNonLinearIterations? }` → `{ ok, error? }`.
+
+Configura dois parâmetros do `Scheduler` via `std::atomic` (thread-safe, sem parar a simulação):
+- `targetStepUs`: intervalo mínimo de sleep entre eventos processados. `0` = sem throttle (padrão).
+  Útil para ver a simulação em câmera-lenta em projetos simples.
+- `maxNonLinearIterations`: cap no número de iterações do settle-loop por evento. `0` = sem limite
+  (padrão). Útil para evitar que simulações com não-linearidades fortes travem em laços longos.
+
+Ambos sobrevivem até o próximo `setSimulationConfig` ou fim da sessão. O Core não persiste esses
+valores em arquivo — é responsabilidade da Extension reaplicá-los ao abrir o painel (via listener de
+`vscode.workspace.onDidChangeConfiguration`).
+
+### 15.3 Settings VSCode (`lasecsimul.*`)
+
+As seguintes configurações VSCode (contribuídas em `package.json`) controlam comportamento global:
+
+| Setting | Tipo | Default | Efeito |
+|---|---|---|---|
+| `lasecsimul.simulation.targetStepUs` | number | 0 | Enviado via `setSimulationConfig` ao mudar |
+| `lasecsimul.simulation.maxNonLinearIterations` | number | 0 | Enviado via `setSimulationConfig` ao mudar |
+| `lasecsimul.ui.showComponentIds` | boolean | false | Mostra IDs internos na UI (debug) |
+| `lasecsimul.ui.snapToGrid` | boolean | true | Snap de posicionamento à grade |
+
+O comando `lasecsimul.openSettings` abre o painel nativo de Settings do VSCode filtrado em
+`"lasecsimul."` via `workbench.action.openSettings` — sem painel próprio, sem reimplementar a UI de
+configurações.
+
+### 15.4 Campo `help` no catálogo de componentes
+
+`WebviewComponentCatalogEntry.help?: { description?: string; url?: string; file?: string }`
+
+- `description`: texto curto (1-2 linhas) exibido no tooltip do botão "Ajuda" no diálogo de
+  propriedades e no tooltip do item na paleta de componentes.
+- `url`: link externo para documentação completa. O botão "Ajuda" no diálogo de propriedades dispara
+  `requestOpenExternal { url }` → Extension → `vscode.env.openExternal(Uri.parse(url))`.
+- `file`: caminho relativo ao manifesto para arquivo `.md` local (não implementado ainda — reservado).
+
+O botão "Ajuda" fica desabilitado quando `help` está ausente ou nenhum `url` é fornecido. Todos os
+device JSONs de `devices/simulide-sensors/` e `devices/simulide-peripherals/` têm `help.description`
+declarado. Os built-ins do catálogo `project/schema/component-catalog.json` têm `help` nos tipos
+relevantes (resistor, capacitor, fontes, medidores, conectores, etc.).
+
+### 15.5 `requestOpenExternal` (Webview → Extension)
+
+**Mensagem**: `{ version, type: "requestOpenExternal", url: string }`
+
+Disparado pela Webview ao clicar no botão "Ajuda" quando `help.url` está presente. A Extension
+simplesmente chama `vscode.env.openExternal(vscode.Uri.parse(url))` — sem validação adicional (a URL
+vem do manifesto de primeira parte ou de item registrado pelo usuário, já confiável no mesmo nível que
+o restante do manifesto).

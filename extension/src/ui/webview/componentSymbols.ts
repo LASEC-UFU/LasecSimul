@@ -192,11 +192,15 @@ function tracePath(history: number[], x: number, y: number, width: number, heigh
 function packageShapeSvg(shape: PackageShape): string {
   switch (shape.kind) {
     case "rect":
-      return `<rect x="${shape.x ?? 0}" y="${shape.y ?? 0}" width="${shape.w ?? 0}" height="${shape.h ?? 0}" stroke="${shape.stroke ?? "currentColor"}" fill="${shape.fill ?? "none"}" stroke-width="${shape.strokeWidth ?? 1}"/>`;
+      return `<rect x="${shape.x ?? 0}" y="${shape.y ?? 0}" width="${shape.w ?? 0}" height="${shape.h ?? 0}"${shape.rx !== undefined ? ` rx="${shape.rx}"` : ""}${shape.ry !== undefined ? ` ry="${shape.ry}"` : ""} stroke="${shape.stroke ?? "currentColor"}" fill="${shape.fill ?? "none"}" stroke-width="${shape.strokeWidth ?? 1}"/>`;
     case "line":
       return `<line x1="${shape.x1 ?? 0}" y1="${shape.y1 ?? 0}" x2="${shape.x2 ?? 0}" y2="${shape.y2 ?? 0}" stroke="${shape.stroke ?? "currentColor"}"/>`;
     case "ellipse":
       return `<ellipse cx="${shape.cx ?? 0}" cy="${shape.cy ?? 0}" rx="${shape.rx ?? 0}" ry="${shape.ry ?? 0}" stroke="${shape.stroke ?? "currentColor"}" fill="${shape.fill ?? "none"}"/>`;
+    case "polygon": {
+      const pts = (shape.points ?? []).map(p => `${p.x},${p.y}`).join(" ");
+      return `<polygon points="${pts}" stroke="${shape.stroke ?? "currentColor"}" fill="${shape.fill ?? "none"}" stroke-width="${shape.strokeWidth ?? 1}"/>`;
+    }
     case "text":
     default:
       return `<text x="${shape.x ?? 0}" y="${shape.y ?? 0}" text-anchor="middle" font-size="${shape.fontSize ?? 11}" fill="${shape.color ?? "currentColor"}">${escapeXmlText(shape.value ?? "")}</text>`;

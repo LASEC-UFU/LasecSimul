@@ -1257,9 +1257,7 @@
       "folderPath": [
         "Conectores"
       ],
-      "defaultProperties": {},
-      "disabled": true,
-      "disabledReason": "modelo eletrico ainda indisponivel no Core"
+      "defaultProperties": {}
     },
     {
       "typeId": "connectors.tunnel",
@@ -1282,9 +1280,7 @@
       "folderPath": [
         "Conectores"
       ],
-      "defaultProperties": {},
-      "disabled": true,
-      "disabledReason": "modelo eletrico ainda indisponivel no Core"
+      "defaultProperties": {}
     },
     {
       "typeId": "connectors.header",
@@ -1294,9 +1290,7 @@
       "folderPath": [
         "Conectores"
       ],
-      "defaultProperties": {},
-      "disabled": true,
-      "disabledReason": "modelo eletrico ainda indisponivel no Core"
+      "defaultProperties": {}
     },
     {
       "typeId": "graphics.image",
@@ -1406,8 +1400,7 @@
         "Outros"
       ],
       "defaultProperties": {},
-      "disabled": true,
-      "disabledReason": "unidade de teste ainda indisponivel no Core"
+      "hidden": true
     },
     {
       "typeId": "other.dial",
@@ -1418,8 +1411,7 @@
         "Outros"
       ],
       "defaultProperties": {},
-      "disabled": true,
-      "disabledReason": "controle interativo ainda indisponivel no Core"
+      "hidden": true
     },
     {
       "typeId": "meters.probe",

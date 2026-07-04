@@ -25,26 +25,25 @@
   },
   "package": {
     "width": 160,
-    "height": 40,
+    "height": 32,
     "border": false,
     "background": { "kind": "color", "value": "transparent" },
     "shapes": [
-      { "kind": "rect", "x": 0,   "y": 0,  "w": 160, "h": 40, "stroke": "#333", "fill": "#1e1e2e", "strokeWidth": 2 },
-      { "kind": "text", "x": 14,  "y": 16, "value": "SERIAL PORT", "fontSize": 9, "color": "#00aaff" },
-      { "kind": "text", "x": 14,  "y": 30, "value": "COM / TTY",   "fontSize": 7, "color": "#6688cc" },
-      { "kind": "rect", "x": 108, "y": 5,  "w": 44,  "h": 28, "stroke": "#556", "fill": "#2a2a3e", "strokeWidth": 1 },
-      { "kind": "rect", "x": 112, "y": 10, "w": 36,  "h": 18, "stroke": "#88aacc", "fill": "none",  "strokeWidth": 1 },
-      { "kind": "text", "x": 118, "y": 22, "value": "DB9",  "fontSize": 8, "color": "#88aacc" }
+      { "kind": "rect", "x": 0,  "y": 0,  "w": 160, "h": 32, "rx": 4, "ry": 4, "stroke": "#00006b", "fill": "#00008b", "strokeWidth": 1 },
+      { "kind": "rect", "x": 11, "y": 5,  "w": 8,   "h": 6,  "rx": 2, "ry": 2, "stroke": "none",    "fill": "#000000" },
+      { "kind": "rect", "x": 11, "y": 21, "w": 8,   "h": 6,  "rx": 2, "ry": 2, "stroke": "none",    "fill": "#000000" },
+      { "kind": "rect", "x": 24, "y": 6,  "w": 44,  "h": 20, "rx": 3, "ry": 3, "stroke": "#888888", "fill": "#c0c0c0", "strokeWidth": 1 },
+      { "kind": "text", "x": 46, "y": 20, "value": "Abrir", "fontSize": 11, "color": "#000000" }
     ],
     "pinLabelColor": "#FAFAC8",
     "pins": [
-      { "id": "tx", "x": 0, "y": 12, "angle": 180, "length": 8, "label": "TX" },
-      { "id": "rx", "x": 0, "y": 26, "angle": 180, "length": 8, "label": "RX" }
+      { "id": "tx", "x": 0, "y": 8,  "angle": 180, "length": 8, "label": "Tx", "labelX": 6, "labelY": 10 },
+      { "id": "rx", "x": 0, "y": 24, "angle": 180, "length": 8, "label": "Rx", "labelX": 6, "labelY": 26 }
     ]
   },
   "pins": [
-    { "id": "tx", "kind": "DIGITAL_OUT", "x": 0, "y": 12, "angle": 180, "length": 8, "label": "TX" },
-    { "id": "rx", "kind": "DIGITAL_IN",  "x": 0, "y": 26, "angle": 180, "length": 8, "label": "RX" }
+    { "id": "tx", "kind": "DIGITAL_OUT", "x": 0, "y": 8,  "angle": 180, "length": 8, "label": "Tx" },
+    { "id": "rx", "kind": "DIGITAL_IN",  "x": 0, "y": 24, "angle": 180, "length": 8, "label": "Rx" }
   ],
   "properties": [
     { "id": "port_name", "label": "Nome da porta",          "group": "Serial", "valueKind": "string", "editor": "text",   "default": "COM1"  },

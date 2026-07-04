@@ -128,7 +128,7 @@ export interface PackagePin {
  * `components/graphical/{rectangle,ellipse,line,textcomponent}` do SimulIDE, só que como dado
  * (`.spec/lasecsimul-native-devices.spec` seção 21.2), nunca um componente à parte. */
 export interface PackageShape {
-  kind: "rect" | "text" | "line" | "ellipse";
+  kind: "rect" | "text" | "line" | "ellipse" | "polygon";
   x?: number;
   y?: number;
   w?: number;
@@ -141,6 +141,7 @@ export interface PackageShape {
   cy?: number;
   rx?: number;
   ry?: number;
+  points?: Array<{ x: number; y: number }>;
   value?: string;
   fontSize?: number;
   color?: string;

@@ -222,7 +222,7 @@ function localizedManifestName(json: Record<string, unknown>, language: LasecSim
   return typeof json.name === "string" ? json.name : undefined;
 }
 
-const PACKAGE_SHAPE_KINDS = new Set(["rect", "text", "line", "ellipse"]);
+const PACKAGE_SHAPE_KINDS = new Set(["rect", "text", "line", "ellipse", "polygon"]);
 
 /** Confia na mesma medida que `device.json`/`mcu.json`/`.lssub.json` já são confiados pelo resto
  * desta função (são manifestos de primeira parte ou já passaram por consentimento de plugin antes
@@ -1791,7 +1791,212 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
     case "requestUpdateExposedComponentProperty":
       void updateExposedComponentPropertyCommand(message.outerComponentId, message.sourceId, message.innerComponentId, message.name, message.value);
       return;
+    case "requestCreateSubcircuitFromSelection":
+      void createSubcircuitFromSelectionHandler(message.componentIds);
+      return;
   }
+}
+
+/** Disparado por `lasecsimul.newSubcircuit` (comando VSCode) -- envia `triggerCreateSubcircuitFromSelection`
+ * à Webview, que verifica a seleção atual e devolve `requestCreateSubcircuitFromSelection` com os IDs.
+ * Se o painel não estiver aberto ou não houver multi-seleção, não faz nada (a Webview trata isso). */
+function triggerCreateSubcircuitFromSelection(panel: { postMessage: (msg: unknown) => void } | undefined): void {
+  if (!panel) {
+    vscode.window.showWarningMessage("Abra o editor de esquemático antes de criar um subcircuito.");
+    return;
+  }
+  panel.postMessage({ version: 1, type: "triggerCreateSubcircuitFromSelection" });
+}
+
+/** Cria um `.lssub.json` a partir dos componentes selecionados no esquemático:
+ * 1. Salva o arquivo escolhido pelo usuário.
+ * 2. Registra o novo subcircuito na paleta.
+ * 3. Substitui os componentes selecionados por uma instância do novo subcircuito no esquemático,
+ *    reconectando os fios que cruzavam a fronteira via os pinos gerados automaticamente. */
+async function createSubcircuitFromSelectionHandler(componentIds: string[]): Promise<void> {
+  if (!extensionContext || componentIds.length < 1) return;
+
+  const selectedSet = new Set(componentIds);
+  const selectedComponents = schematicState.components.filter((c) => selectedSet.has(c.id));
+  if (selectedComponents.length === 0) return;
+
+  // 1. Salvar arquivo
+  const saveUri = await vscode.window.showSaveDialog({
+    filters: { "Subcircuito LasecSimul": ["lssub.json"] },
+    title: "Salvar novo subcircuito",
+  });
+  if (!saveUri) return;
+  const rawPath = saveUri.fsPath;
+  const normalizedPath = rawPath.endsWith(".lssub.json")
+    ? rawPath
+    : rawPath.replace(/\.json$/, "") + ".lssub.json";
+
+  // 2. Gerar typeId a partir do nome do arquivo
+  const baseName = path.basename(normalizedPath, ".lssub.json");
+  const safeSlug = baseName.replace(/[^a-zA-Z0-9_-]/g, "_").toLowerCase();
+  const typeId = `subcircuits.${safeSlug}`;
+
+  // 3. Categorizar fios
+  const allWires = schematicState.wires;
+  const internalWires: WebviewWireModel[] = [];
+  const boundaryWires: WebviewWireModel[] = [];
+  for (const wire of allWires) {
+    const fromIn = selectedSet.has(wire.from.componentId);
+    const toIn = selectedSet.has(wire.to.componentId);
+    if (fromIn && toIn) internalWires.push(wire);
+    else if (fromIn || toIn) boundaryWires.push(wire);
+  }
+
+  // 4. Bounding box dos componentes selecionados
+  let minX = Infinity, minY = Infinity;
+  for (const c of selectedComponents) {
+    if (c.x < minX) minX = c.x;
+    if (c.y < minY) minY = c.y;
+    if (c.x > 0 || c.y > 0) { /* just need bounds */ }
+  }
+  let maxX = -Infinity;
+  for (const c of selectedComponents) {
+    if (c.x > maxX) maxX = c.x;
+  }
+
+  // 5. Gerar um túnel interno por fio de fronteira
+  interface TunnelEntry {
+    id: string;
+    name: string;
+    x: number;
+    y: number;
+    internalComponentId: string;
+    internalPinId: string;
+    isFromInside: boolean;
+    wireId: string;
+  }
+  const tunnels: TunnelEntry[] = boundaryWires.map((wire, i) => {
+    const pinName = `P${i + 1}`;
+    const fromIn = selectedSet.has(wire.from.componentId);
+    return {
+      id: `tunnel_${pinName.toLowerCase()}`,
+      name: pinName,
+      x: minX - 64,
+      y: minY + i * 16,
+      internalComponentId: fromIn ? wire.from.componentId : wire.to.componentId,
+      internalPinId: fromIn ? wire.from.pinId : wire.to.pinId,
+      isFromInside: fromIn,
+      wireId: wire.id,
+    };
+  });
+
+  // 6. Montar o .lssub.json
+  const internalCompObjects = selectedComponents.map((c) => ({
+    id: c.id,
+    typeId: c.typeId,
+    properties: { ...c.properties },
+    visual: { x: c.x, y: c.y, rotation: c.rotation },
+    exposed: false,
+  }));
+  const tunnelCompObjects = tunnels.map((t) => ({
+    id: t.id,
+    typeId: "connectors.tunnel",
+    properties: { name: t.name },
+    visual: { x: t.x, y: t.y, rotation: 0 },
+    exposed: false,
+  }));
+  const internalWireObjects = internalWires.map((w) => ({
+    from: { componentId: w.from.componentId, pinId: w.from.pinId },
+    to: { componentId: w.to.componentId, pinId: w.to.pinId },
+    ...(w.points ? { points: w.points } : {}),
+  }));
+  const stubWireObjects = tunnels.map((t) => ({
+    from: { componentId: t.id, pinId: "pin" },
+    to: { componentId: t.internalComponentId, pinId: t.internalPinId },
+  }));
+  const interfaceEntries = tunnels.map((t) => ({
+    pinId: t.name,
+    label: t.name,
+    internalTunnel: t.name,
+  }));
+
+  const lssubJson = {
+    schemaVersion: 1,
+    typeId,
+    name: baseName,
+    language: "pt-BR",
+    components: [...internalCompObjects, ...tunnelCompObjects],
+    wires: [...internalWireObjects, ...stubWireObjects],
+    interface: interfaceEntries,
+  };
+
+  // 7. Gravar arquivo
+  try {
+    fs.writeFileSync(normalizedPath, `${JSON.stringify(lssubJson, null, 2)}\n`, "utf8");
+  } catch (err) {
+    vscode.window.showErrorMessage(`Não foi possível salvar o subcircuito: ${err instanceof Error ? err.message : String(err)}`);
+    return;
+  }
+
+  // 8. Registrar na paleta
+  const unifiedCatalog = loadUnifiedCatalog(extensionContext.extensionPath, currentLasecSimulLanguage());
+  const newSource: RegisteredSource = {
+    id: nextId("registered"),
+    kind: "subcircuit-file",
+    filePath: normalizedPath,
+    folderPath: ["Meus Subcircuitos"],
+  };
+  saveRegisteredSources(extensionContext.extensionPath, [...unifiedCatalog.registeredSources, newSource]);
+  await refreshUnifiedCatalogState(false);
+
+  // 9. Inserir instância do subcircuito no esquemático, no centro da bounding box
+  const newCompId = nextId("component");
+  const centerX = Math.round((minX + maxX) / 2);
+  const centerY = Math.round((minY + (minY + (selectedComponents.length - 1) * 16)) / 2);
+  const newPins = pinsForTypeId(typeId);
+  const catalogEntry = schematicState.catalog.find((e) => e.typeId === typeId);
+  const newComponent: WebviewComponentModel = {
+    id: newCompId,
+    typeId,
+    label: nextIndexedLabel(typeId, catalogEntry?.label ?? baseName, schematicState.components),
+    x: centerX,
+    y: centerY,
+    rotation: 0,
+    pins: newPins,
+    properties: { ...(catalogEntry?.defaultProperties ?? {}) },
+  };
+
+  // 10. Reconectar fios de fronteira ao novo subcircuito
+  const newBoundaryWires: WebviewWireModel[] = tunnels.map((t) => {
+    const original = boundaryWires.find((w) => w.id === t.wireId)!;
+    const externalEndpoint = t.isFromInside
+      ? { componentId: original.to.componentId, pinId: original.to.pinId }
+      : { componentId: original.from.componentId, pinId: original.from.pinId };
+    return {
+      id: nextId("wire"),
+      from: { componentId: newCompId, pinId: t.name },
+      to: externalEndpoint,
+    };
+  });
+
+  // 11. Remover componentes e fios selecionados do esquemático
+  const removedWireIds = new Set(
+    allWires.filter((w) => selectedSet.has(w.from.componentId) || selectedSet.has(w.to.componentId)).map((w) => w.id)
+  );
+  schematicState = {
+    ...schematicState,
+    components: [...schematicState.components.filter((c) => !selectedSet.has(c.id)), newComponent],
+    wires: [...schematicState.wires.filter((w) => !removedWireIds.has(w.id)), ...newBoundaryWires],
+    selectedComponentIds: [newCompId],
+    selectedWireIds: [],
+  };
+
+  // 12. Atualizar Core
+  for (const id of componentIds) {
+    pushRemoveToCore(id);
+    coreInstanceIdByComponentId.delete(id);
+  }
+  pushComponentToCore(newCompId, typeId, newComponent.properties, newPins);
+  for (const wire of newBoundaryWires) pushWireToCore(wire);
+
+  syncSchematicPanel();
+  void queueCoreRebuild();
+  vscode.window.showInformationMessage(`Subcircuito '${baseName}' criado e registrado na paleta em 'Meus Subcircuitos'.`);
 }
 
 /** "Exportar Dados" da janela "Expande" (osciloscópio/analisador lógico) -- o CSV já vem formatado
@@ -2767,7 +2972,7 @@ export function activate(context: vscode.ExtensionContext): void {
         .catch((err: unknown) => reportCoreWarning("configurar simulação", err));
     }),
     vscode.commands.registerCommand("lasecsimul.openSchematicEditor", () => openSchematicEditor(context.extensionUri)),
-    vscode.commands.registerCommand("lasecsimul.newSubcircuit", () => triggerCreateSubcircuitFromSelection()),
+    vscode.commands.registerCommand("lasecsimul.newSubcircuit", () => triggerCreateSubcircuitFromSelection(schematicPanel)),
     vscode.commands.registerCommand("lasecsimul.openSettings", () => {
       void vscode.commands.executeCommand("workbench.action.openSettings", "lasecsimul.");
     }),

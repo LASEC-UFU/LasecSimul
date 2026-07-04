@@ -174,6 +174,36 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
         std::vector<PropertySchema>{},
         R"json({"en":{"name":"Junction"}})json");
 
+    reg.registerFactory("connectors.bus", [](const ComponentParams& p) {
+        const auto pos = p.pins<1>();
+        return std::make_unique<components::Junction>(Pin{pos[0].id.empty() ? "pin" : pos[0].id, pos[0].x, pos[0].y});
+    });
+    registerBuiltinMetadata(
+        "connectors.bus",
+        "Barramento",
+        std::vector<PropertySchema>{},
+        R"json({"en":{"name":"Bus"}})json");
+
+    reg.registerFactory("connectors.socket", [](const ComponentParams& p) {
+        return std::make_unique<components::SimulidePassiveState>("connectors.socket", makePinVector(p, 8),
+                                                                  std::vector<PropertySchema>{});
+    });
+    registerBuiltinMetadata(
+        "connectors.socket",
+        "Soquete",
+        std::vector<PropertySchema>{},
+        R"json({"en":{"name":"Socket"}})json");
+
+    reg.registerFactory("connectors.header", [](const ComponentParams& p) {
+        return std::make_unique<components::SimulidePassiveState>("connectors.header", makePinVector(p, 8),
+                                                                  std::vector<PropertySchema>{});
+    });
+    registerBuiltinMetadata(
+        "connectors.header",
+        "Cabecalho",
+        std::vector<PropertySchema>{},
+        R"json({"en":{"name":"Header"}})json");
+
     reg.registerFactory("other.ground", [](const ComponentParams& p) {
         const auto pos = p.pins<1>();
         return std::make_unique<components::Ground>(Pin{pos[0].id.empty() ? "pin" : pos[0].id, pos[0].x, pos[0].y});

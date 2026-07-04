@@ -1280,3 +1280,28 @@ exatamente o que esta seção (22.2-22.4) resolve: uma declaração ÚNICA, cons
 (c) **Nunca duplicar código de segurança/robustez já existente em outra camada** (ver seção 22.6) — um
 gate novo só se justifica se fechar um gap REAL, confirmado por leitura de código, nunca por
 suposição.
+
+### 22.9 Campo `help` no manifesto de device (implementado 2026-07-03)
+
+Todo device que quiser expor texto de ajuda na UI declara o campo opcional `help` no manifesto:
+
+```json
+"help": {
+  "description": "Texto curto (1-2 linhas) exibido no tooltip do botão 'Ajuda' e na paleta.",
+  "url": "https://..."   // opcional — link externo para documentação completa
+}
+```
+
+Ausente `help` (ou `help.url`): o botão "Ajuda" no diálogo de propriedades fica desabilitado. Quando
+presente, o clique no botão envia `requestOpenExternal { url }` à Extension, que chama
+`vscode.env.openExternal`. O campo `help.description` também aparece no tooltip do item na paleta de
+componentes (`ComponentPaletteProvider.ts`) e como `title` do botão "Ajuda".
+
+O campo `help.file` (caminho relativo para `.md` local) está reservado no tipo mas ainda não
+implementado na UI — presente no esquema de tipo `WebviewComponentCatalogEntry.help` mas ignorado
+pelo renderizador atual.
+
+Todos os JSONs de `devices/simulide-sensors/` e `devices/simulide-peripherals/` têm `help.description`
+declarado. O catálogo `project/schema/component-catalog.json` tem `help` nos tipos mais relevantes
+(resistor, capacitor, conectores, fontes, medidores). Device criado sem `help` funciona normalmente —
+o campo é puramente aditivo.

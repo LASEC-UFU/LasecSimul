@@ -427,6 +427,69 @@ retrabalho quando a feature for implementada:
    `SimulationSession::removeComponent`) — a variante de cascata (seção 5.4) reaproveita, não substitui.
 4. **`setTunnelName` já aceita renomear em runtime** (`Netlist::setTunnelName`) — é exatamente o que a
    expansão da seção 5.1, passo 5, precisa; nenhuma mudança nesse método é esperada.
-5. Implementação real (parser de `.lssub.json`, algoritmo de expansão recursiva, comando "Criar Subcircuito
+5. ~~Implementação real (parser de `.lssub.json`, algoritmo de expansão recursiva, comando "Criar Subcircuito
    a partir da Seleção" na Extension) fica para uma rodada futura — este spec existe pra essa rodada não
-   precisar redescobrir o desenho, só seguir.
+   precisar redescobrir o desenho, só seguir.~~ **Feito** — ver seção 11.
+
+## 11. "Criar Subcircuito da Seleção" — algoritmo implementado (2026-07-03)
+
+Comando `lasecsimul.newSubcircuit` (também disponível no menu de contexto de multi-seleção na Webview).
+Fluxo completo:
+
+### 11.1 Ponto de entrada
+
+- **Menu de contexto da Webview**: ao clicar com botão direito numa multi-seleção (≥ 2 componentes) fora
+  de sessão de autoria de símbolo, o menu exibe "Criar Subcircuito da Seleção". Ao clicar, a Webview
+  envia `requestCreateSubcircuitFromSelection { componentIds }` à Extension.
+- **Comando VSCode**: `lasecsimul.newSubcircuit` envia `triggerCreateSubcircuitFromSelection` à Webview;
+  a Webview verifica se há ≥ 2 componentes selecionados e, se sim, envia
+  `requestCreateSubcircuitFromSelection` de volta.
+
+### 11.2 Algoritmo na Extension (`createSubcircuitFromSelectionHandler`)
+
+Dados de entrada: `componentIds[]` (IDs dos componentes selecionados no `schematicState`).
+
+1. **Categorizar fios**: para cada fio em `schematicState.wires`:
+   - Ambos os endpoints dentro de `componentIds` → **fio interno** (vai para `wires[]` do `.lssub.json`)
+   - Um endpoint dentro, um fora → **fio de fronteira** (gera um túnel + entrada de interface)
+   - Nenhum endpoint dentro → ignorado
+
+2. **Gerar túneis**: um `connectors.tunnel` por fio de fronteira, nomeado `P1`, `P2`, etc.
+   Posicionado em `(minX - 64, minY + i * 16)` dentro do espaço interno para não sobrepor os
+   componentes selecionados quando o subcircuito for aberto para edição.
+
+3. **Montar o `.lssub.json`**:
+   ```json
+   {
+     "schemaVersion": 1,
+     "typeId": "subcircuits.<slug>",
+     "name": "<nome_do_arquivo>",
+     "language": "pt-BR",
+     "components": [ ...componentes_selecionados, ...túneis_gerados ],
+     "wires": [ ...fios_internos, ...stubs_de_túnel ],
+     "interface": [{ "pinId": "P1", "label": "P1", "internalTunnel": "P1" }, ...]
+   }
+   ```
+   Stubs de túnel: cada túnel tem um fio `{ from: { componentId: tunnelId, pinId: "pin" }, to: { innerComponentId, innerPinId } }`.
+
+4. **Salvar e registrar**: diálogo de save (`*.lssub.json`) → gravar arquivo → adicionar `RegisteredSource`
+   com `kind: "subcircuit-file"` e `folderPath: ["Meus Subcircuitos"]` → `saveRegisteredSources` →
+   `refreshUnifiedCatalogState(false)` (não recarrega DLLs, só atualiza catálogo).
+
+5. **Atualizar esquemático**:
+   - Remove todos os componentes selecionados e qualquer fio que toque neles.
+   - Insere novo componente do tipo gerado no centro da bounding box dos componentes removidos.
+   - Para cada fio de fronteira: cria um novo fio de `{ newSubcircuitId, pinName }` para o endpoint
+     externo do fio original (preservando a conectividade externa sem alterar nenhum outro componente).
+   - Atualiza o Core (pushRemoveToCore × N + pushComponentToCore × 1 + pushWireToCore × M) e
+     chama `queueCoreRebuild`.
+
+### 11.3 Limitações conhecidas
+
+- O `.lssub.json` gerado não tem campo `package` — o símbolo visual usa o renderizador genérico até
+  o usuário executar "Editar Símbolo Visual" manualmente.
+- Posições internas dos componentes são absolutas (não re-centradas) — o espaço interno do subcircuito
+  começa com as coordenadas originais do esquemático. Isso é funcionalmente correto (o Core não usa
+  coordenadas visuais para simulação) mas pode exigir scroll quando o subcircuito for aberto para edição.
+- Pins de fronteira são nomeados genericamente (P1, P2, ...) — o usuário pode renomeá-los via
+  "Abrir Subcircuito" → "Salvar Subcircuito" depois da criação.
