@@ -14,7 +14,7 @@ export type ReadoutFormatEntry =
   | { kind: "bitmaskHistory"; channels: number };
 
 /** Mesma convenção de `ReadoutFormatEntry`, pra como a UI trata clique/arrasto sem checar typeId. */
-export type InteractionKindEntry = "momentary" | "toggle" | "none";
+export type InteractionKindEntry = "momentary" | "toggle" | "none" | "joystick" | "encoder" | "touchpad";
 
 export interface WebviewComponentModel {
   id: string;
@@ -128,7 +128,7 @@ export interface PackagePin {
  * `components/graphical/{rectangle,ellipse,line,textcomponent}` do SimulIDE, só que como dado
  * (`.spec/lasecsimul-native-devices.spec` seção 21.2), nunca um componente à parte. */
 export interface PackageShape {
-  kind: "rect" | "text" | "line" | "ellipse" | "polygon";
+  kind: "rect" | "text" | "line" | "ellipse" | "polygon" | "svg";
   x?: number;
   y?: number;
   w?: number;
@@ -148,6 +148,8 @@ export interface PackageShape {
   stroke?: string;
   fill?: string;
   strokeWidth?: number;
+  /** CSS class(es) added to the SVG element — used for interactive hit zones (e.g. "joystick-hit-zone"). */
+  cssClass?: string;
 }
 
 export interface PackageBackground {

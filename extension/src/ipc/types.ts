@@ -34,8 +34,9 @@ export type ReadoutFormatDto =
   | { kind: "channelHistory"; channels: number }
   | { kind: "bitmaskHistory"; channels: number };
 
-/** Espelha 1:1 `interactionKindToJson` em `CoreApplication.cpp`. */
-export type InteractionKindDto = "momentary" | "toggle" | "none";
+/** Espelha 1:1 `interactionKindToJson` em `CoreApplication.cpp`, mais valores Extension-side
+ * ("joystick", "encoder", "touchpad") que o Core não conhece mas a Extension lê do device.json. */
+export type InteractionKindDto = "momentary" | "toggle" | "none" | "joystick" | "encoder" | "touchpad";
 
 export interface TelemetrySample {
   instanceId: string;

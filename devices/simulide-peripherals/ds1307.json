@@ -15,7 +15,7 @@
         "hour":         { "label": "Hour (0-23)",        "group": "RTC" },
         "minute":       { "label": "Minute (0-59)",      "group": "RTC" },
         "second":       { "label": "Second (0-59)",      "group": "RTC" },
-        "sqw_freq":     { "label": "SQW Frequency",     "group": "RTC" },
+        "sqw_freq":     { "label": "SQW Frequency",      "group": "RTC" },
         "time_updated": { "label": "Time updated by I2C","group": "RTC" }
       }
     }
@@ -27,33 +27,48 @@
     "darwin-universal": "build/macos-universal/device.dylib"
   },
   "package": {
-    "width": 64,
-    "height": 48,
+    "width": 56,
+    "height": 40,
     "border": false,
     "background": { "kind": "color", "value": "transparent" },
     "shapes": [
-      { "kind": "rect", "x": 0,  "y": 0,  "w": 64, "h": 48, "stroke": "#333", "fill": "#1a1a2e", "strokeWidth": 2 },
-      { "kind": "line", "x1": 4, "y1": 0, "x2": 4, "y2": 48, "stroke": "#2a2a3e" },
-      { "kind": "text", "x": 10, "y": 20, "value": "DS1307", "fontSize": 9, "color": "#FAFAC8" },
-      { "kind": "text", "x": 10, "y": 34, "value": "RTC I2C", "fontSize": 7, "color": "#aaa"  }
+      { "kind": "svg", "value": "<defs><linearGradient id=\"ds1307-xtal\" x1=\"0\" y1=\"0.5\" x2=\"1\" y2=\"0.5\" gradientUnits=\"objectBoundingBox\"><stop offset=\"0%\" stop-color=\"#555\"/><stop offset=\"35%\" stop-color=\"#999\"/><stop offset=\"55%\" stop-color=\"#cccccc\"/><stop offset=\"75%\" stop-color=\"#999\"/><stop offset=\"100%\" stop-color=\"#555\"/></linearGradient></defs>" },
+      { "kind": "rect",    "x": 0,  "y": 0,  "w": 56, "h": 40, "rx": 2, "ry": 2, "stroke": "#111", "fill": "#1c1e14", "strokeWidth": 1.5 },
+      { "kind": "rect",    "x": 18, "y": 2,  "w": 6,  "h": 3,  "rx": 1, "ry": 1, "stroke": "none", "fill": "#4a6c4a" },
+      { "kind": "rect",    "x": 7,  "y": 8,  "w": 16, "h": 24, "rx": 1, "ry": 1, "stroke": "#3a3c38", "fill": "#282c24", "strokeWidth": 0.5 },
+      { "kind": "rect",    "x": 3,  "y": 10, "w": 4,  "h": 3,  "stroke": "none", "fill": "#4a6c4a" },
+      { "kind": "rect",    "x": 3,  "y": 15, "w": 4,  "h": 3,  "stroke": "none", "fill": "#4a6c4a" },
+      { "kind": "rect",    "x": 3,  "y": 20, "w": 4,  "h": 3,  "stroke": "none", "fill": "#4a6c4a" },
+      { "kind": "rect",    "x": 3,  "y": 25, "w": 4,  "h": 3,  "stroke": "none", "fill": "#4a6c4a" },
+      { "kind": "rect",    "x": 23, "y": 10, "w": 4,  "h": 3,  "stroke": "none", "fill": "#4a6c4a" },
+      { "kind": "rect",    "x": 23, "y": 15, "w": 4,  "h": 3,  "stroke": "none", "fill": "#4a6c4a" },
+      { "kind": "rect",    "x": 23, "y": 20, "w": 4,  "h": 3,  "stroke": "none", "fill": "#4a6c4a" },
+      { "kind": "rect",    "x": 23, "y": 25, "w": 4,  "h": 3,  "stroke": "none", "fill": "#4a6c4a" },
+      { "kind": "rect",    "x": 30, "y": 5,  "w": 11, "h": 30, "rx": 3, "ry": 5, "stroke": "#444", "fill": "url(#ds1307-xtal)", "strokeWidth": 0.5 },
+      { "kind": "rect",    "x": 43, "y": 3,  "w": 3,  "h": 3,  "stroke": "none", "fill": "#4a6c4a" },
+      { "kind": "rect",    "x": 47, "y": 3,  "w": 3,  "h": 3,  "stroke": "none", "fill": "#4a6c4a" },
+      { "kind": "rect",    "x": 51, "y": 3,  "w": 3,  "h": 3,  "stroke": "none", "fill": "#4a6c4a" },
+      { "kind": "rect",    "x": 43, "y": 7,  "w": 3,  "h": 3,  "stroke": "none", "fill": "#4a6c4a" },
+      { "kind": "rect",    "x": 47, "y": 7,  "w": 3,  "h": 3,  "stroke": "none", "fill": "#4a6c4a" },
+      { "kind": "rect",    "x": 51, "y": 7,  "w": 3,  "h": 3,  "stroke": "none", "fill": "#4a6c4a" },
+      { "kind": "rect",    "x": 44, "y": 24, "w": 5,  "h": 3,  "stroke": "none", "fill": "#4a6c4a" },
+      { "kind": "rect",    "x": 44, "y": 29, "w": 5,  "h": 3,  "stroke": "none", "fill": "#4a6c4a" },
+      { "kind": "rect",    "x": 44, "y": 34, "w": 5,  "h": 3,  "stroke": "none", "fill": "#4a6c4a" }
     ],
     "pinLabelColor": "#FAFAC8",
     "pins": [
-      { "id": "sda",  "x": 0,  "y": 8,  "angle": 180, "length": 8, "label": "SDA"  },
-      { "id": "scl",  "x": 0,  "y": 20, "angle": 180, "length": 8, "label": "SCL"  },
-      { "id": "sqw",  "x": 0,  "y": 32, "angle": 180, "length": 8, "label": "SQW"  },
-      { "id": "vcc",  "x": 64, "y": 8,  "angle": 0,   "length": 8, "label": "VCC"  },
-      { "id": "bat",  "x": 64, "y": 20, "angle": 0,   "length": 8, "label": "VBAT" },
-      { "id": "gnd",  "x": 64, "y": 32, "angle": 0,   "length": 8, "label": "GND"  }
+      { "id": "sda", "x": 0, "y": 8,  "angle": 180, "length": 8, "label": "SDA", "labelX": 8, "labelY": 10 },
+      { "id": "scl", "x": 0, "y": 20, "angle": 180, "length": 8, "label": "SCL", "labelX": 8, "labelY": 22 },
+      { "id": "sqw", "x": 0, "y": 32, "angle": 180, "length": 8, "label": "SQW", "labelX": 8, "labelY": 34 }
     ]
   },
   "pins": [
     { "id": "sda",  "kind": "DIGITAL_BIDIR", "x": 0,  "y": 8,  "angle": 180, "length": 8, "label": "SDA"  },
     { "id": "scl",  "kind": "DIGITAL_IN",    "x": 0,  "y": 20, "angle": 180, "length": 8, "label": "SCL"  },
     { "id": "sqw",  "kind": "DIGITAL_OUT",   "x": 0,  "y": 32, "angle": 180, "length": 8, "label": "SQW"  },
-    { "id": "vcc",  "kind": "POWER",         "x": 64, "y": 8,  "angle": 0,   "length": 8, "label": "VCC"  },
-    { "id": "bat",  "kind": "POWER",         "x": 64, "y": 20, "angle": 0,   "length": 8, "label": "VBAT" },
-    { "id": "gnd",  "kind": "POWER",         "x": 64, "y": 32, "angle": 0,   "length": 8, "label": "GND"  }
+    { "id": "vcc",  "kind": "POWER",         "x": 56, "y": 8,  "angle": 0,   "length": 8, "label": "VCC"  },
+    { "id": "bat",  "kind": "POWER",         "x": 56, "y": 20, "angle": 0,   "length": 8, "label": "VBAT" },
+    { "id": "gnd",  "kind": "POWER",         "x": 56, "y": 32, "angle": 0,   "length": 8, "label": "GND"  }
   ],
   "properties": [
     { "id": "year",         "label": "Ano",                "group": "RTC", "valueKind": "number", "editor": "number", "default": 2024, "min": 2000, "max": 2099, "step": 1 },

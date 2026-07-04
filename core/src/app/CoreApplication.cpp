@@ -676,7 +676,8 @@ std::optional<InteractionKind> parseInteractionKind(const nlohmann::json& device
     const std::string value = deviceJson["interaction"].get<std::string>();
     if (value == "momentary") return InteractionKind::Momentary;
     if (value == "toggle") return InteractionKind::Toggle;
-    return InteractionKind::None;
+    if (value == "none") return InteractionKind::None;
+    return std::nullopt; // unknown values (joystick, encoder, etc.) handled Extension-side
 }
 
 // ── serialização pro lado IPC (getPropertySchemas) — inversa de jsonToPropertyValue/

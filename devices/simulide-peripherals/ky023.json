@@ -5,6 +5,7 @@
   "language": "pt-BR",
   "icon": "ky023",
   "folderPath": ["Periféricos"],
+  "interaction": "joystick",
   "translations": {
     "en": {
       "name": "KY-023 — Analog Joystick",
@@ -22,40 +23,42 @@
     "darwin-universal": "build/macos-universal/device.dylib"
   },
   "package": {
-    "width": 56,
-    "height": 64,
+    "width": 40,
+    "height": 56,
     "border": false,
     "background": { "kind": "color", "value": "transparent" },
     "shapes": [
-      { "kind": "rect",    "x": 0,  "y": 0,  "w": 56, "h": 56, "stroke": "#2a2c24", "fill": "#3A3C34", "strokeWidth": 2 },
-      { "kind": "rect",    "x": 8,  "y": 6,  "w": 40, "h": 40, "stroke": "#555",    "fill": "#4a4c44", "strokeWidth": 1 },
-      { "kind": "ellipse", "cx": 28, "cy": 26, "rx": 12, "ry": 12, "stroke": "#888", "fill": "#666" },
-      { "kind": "ellipse", "cx": 28, "cy": 26, "rx": 5,  "ry": 5,  "stroke": "#aaa", "fill": "#999" },
-      { "kind": "text",    "x": 8,  "y": 52, "value": "KY-023", "fontSize": 7, "color": "#ccc" }
+      { "kind": "svg", "value": "<defs><radialGradient id=\"ky023-bowl\" cx=\"17\" cy=\"17\" r=\"22\" fx=\"-2\" fy=\"-2\" gradientUnits=\"userSpaceOnUse\"><stop offset=\"0%\" stop-color=\"#646464\"/><stop offset=\"100%\" stop-color=\"#000000\"/></radialGradient><radialGradient id=\"ky023-stick\" cx=\"21\" cy=\"14\" r=\"14\" fx=\"12\" fy=\"13\" gradientUnits=\"userSpaceOnUse\"><stop offset=\"0%\" stop-color=\"#b4b4b4\"/><stop offset=\"100%\" stop-color=\"#323232\"/></radialGradient></defs>" },
+      { "kind": "rect",    "x": 0,  "y": 0,  "w": 40, "h": 56, "rx": 2, "ry": 2, "stroke": "#2a2c24", "fill": "#3A3C34", "strokeWidth": 2 },
+      { "kind": "rect",    "x": 3,  "y": 3,  "w": 34, "h": 44, "rx": 2, "ry": 2, "stroke": "#555",    "fill": "#424438", "strokeWidth": 1 },
+      { "kind": "ellipse", "cx": 20, "cy": 20, "rx": 17, "ry": 17, "stroke": "none", "fill": "url(#ky023-bowl)", "strokeWidth": 0 },
+      { "kind": "ellipse", "cx": 20, "cy": 20, "rx": 10, "ry": 10, "stroke": "#aaa",  "fill": "url(#ky023-stick)", "strokeWidth": 0.5, "cssClass": "joystick-hit-zone" },
+      { "kind": "rect",    "x": 26, "y": 41,  "w": 10, "h": 6, "rx": 2, "ry": 2, "stroke": "#777", "fill": "#555", "cssClass": "sw-hit-zone" },
+      { "kind": "text",    "x": 20, "y": 53,  "value": "KY-023", "fontSize": 7, "color": "#bbb" }
     ],
     "pinLabelColor": "#FAFAC8",
     "pins": [
-      { "id": "gnd", "x": 6,  "y": 64, "angle": 90, "length": 8, "label": "GND" },
-      { "id": "5v",  "x": 18, "y": 64, "angle": 90, "length": 8, "label": "+5V" },
-      { "id": "vrx", "x": 30, "y": 64, "angle": 90, "length": 8, "label": "VRX" },
-      { "id": "vry", "x": 42, "y": 64, "angle": 90, "length": 8, "label": "VRY" },
-      { "id": "sw",  "x": 52, "y": 64, "angle": 90, "length": 8, "label": "SW"  }
+      { "id": "gnd", "x": 4,  "y": 56, "angle": 90, "length": 8, "label": "GND" },
+      { "id": "5v",  "x": 12, "y": 56, "angle": 90, "length": 8, "label": "+5V" },
+      { "id": "vrx", "x": 20, "y": 56, "angle": 90, "length": 8, "label": "VRX" },
+      { "id": "vry", "x": 28, "y": 56, "angle": 90, "length": 8, "label": "VRY" },
+      { "id": "sw",  "x": 36, "y": 56, "angle": 90, "length": 8, "label": "SW"  }
     ]
   },
   "pins": [
-    { "id": "gnd", "kind": "POWER",       "x": 6,  "y": 64, "angle": 90, "length": 8, "label": "GND" },
-    { "id": "5v",  "kind": "POWER",       "x": 18, "y": 64, "angle": 90, "length": 8, "label": "+5V" },
-    { "id": "vrx", "kind": "ANALOG_OUT",  "x": 30, "y": 64, "angle": 90, "length": 8, "label": "VRX" },
-    { "id": "vry", "kind": "ANALOG_OUT",  "x": 42, "y": 64, "angle": 90, "length": 8, "label": "VRY" },
-    { "id": "sw",  "kind": "DIGITAL_OUT", "x": 52, "y": 64, "angle": 90, "length": 8, "label": "SW"  }
+    { "id": "gnd", "kind": "POWER",       "x": 4,  "y": 56, "angle": 90, "length": 8, "label": "GND" },
+    { "id": "5v",  "kind": "POWER",       "x": 12, "y": 56, "angle": 90, "length": 8, "label": "+5V" },
+    { "id": "vrx", "kind": "ANALOG_OUT",  "x": 20, "y": 56, "angle": 90, "length": 8, "label": "VRX" },
+    { "id": "vry", "kind": "ANALOG_OUT",  "x": 28, "y": 56, "angle": 90, "length": 8, "label": "VRY" },
+    { "id": "sw",  "kind": "DIGITAL_OUT", "x": 36, "y": 56, "angle": 90, "length": 8, "label": "SW"  }
   ],
   "properties": [
-    { "id": "x_pos",      "label": "Posição X (0-1023)", "group": "Joystick", "valueKind": "number", "editor": "number", "default": 512, "min": 0, "max": 1023, "step": 1     },
-    { "id": "y_pos",      "label": "Posição Y (0-1023)", "group": "Joystick", "valueKind": "number", "editor": "number", "default": 512, "min": 0, "max": 1023, "step": 1     },
+    { "id": "x_pos",      "label": "Posição X (0-1023)", "group": "Joystick", "valueKind": "number", "editor": "number", "default": 512, "min": 0, "max": 1023, "step": 1 },
+    { "id": "y_pos",      "label": "Posição Y (0-1023)", "group": "Joystick", "valueKind": "number", "editor": "number", "default": 512, "min": 0, "max": 1023, "step": 1 },
     { "id": "sw_pressed", "label": "Botão pressionado",  "group": "Joystick", "valueKind": "bool",   "editor": "bool",   "default": false }
   ],
   "help": {
-    "description": "Joystick analógico KY-023 com dois eixos (VRX/VRY, 0–1023) e botão central (SW ativo em LOW). Configure posição X, Y e estado do botão para simular entrada do usuário."
+    "description": "Joystick analógico KY-023 com dois eixos (VRX/VRY, 0–1023) e botão central (SW ativo em LOW). Arraste o círculo interno (thumbstick) para deflexão X/Y — ele retorna ao centro ao soltar. Clique no retângulo SW para pressionar o botão."
   },
   "limits": { "stepTimeoutMs": 4, "expectedComplexity": "low" }
 }

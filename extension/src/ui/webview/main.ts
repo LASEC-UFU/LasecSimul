@@ -1,5 +1,5 @@
 import { WEBVIEW_MESSAGE_VERSION, ComponentReadoutValue, HostToWebviewMessage, InternalComponentSnapshot, SimulationStatus, SymbolAuthoringKind, WebviewToHostMessage } from "./messages.js";
-import { PropertySchemaEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./model.js";
+import { InteractionKindEntry, PropertySchemaEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./model.js";
 import { ComponentBox, PIN_RADIUS, componentBox, componentSymbolSvg, hasRealPinPosition, packageSymbolSvg, pinLocalPosition, registerPackage } from "./componentSymbols.js";
 import { detectChannelTrigger, findTriggerAnchorIndex, triggerAlignedWindowEndNs, visibleSampleWindowByTime } from "./instrumentTrigger.js";
 import {
@@ -2278,7 +2278,7 @@ function numericReadout(component: WebviewComponentModel): number | undefined {
 /** ABI v2 (.spec/lasecsimul-native-devices.spec): consulta `interactionKind` do catálogo (vindo do
  * Core via `getPropertySchemas`) em vez de checar typeId -- fallback legado só pra typeId sem o
  * campo declarado ainda (catálogo não carregou do Core). */
-function interactionKindFor(typeId: string): "momentary" | "toggle" | "none" {
+function interactionKindFor(typeId: string): InteractionKindEntry {
   const declared = state.catalog.find((entry) => entry.typeId === typeId)?.interactionKind;
   if (declared) return declared;
   if (typeId === "switches.push") return "momentary";
@@ -3052,10 +3052,13 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
   // isSwitchToggle continua específico de "switches.switch" de propósito -- é sobre QUAL CSS/visual
   // este typeId usa, não sobre o conceito genérico de "é toggle" (switch_dip também é toggle mas
   // tem visual/lógica própria, construída à parte nesta sessão, não deve cair neste bucket).
-  const isPushButton = (state.catalog.find((entry) => entry.typeId === component.typeId)?.interactionKind ?? interactionKindFor(component.typeId)) === "momentary";
+  const catalogInteractionKind = state.catalog.find((entry) => entry.typeId === component.typeId)?.interactionKind ?? interactionKindFor(component.typeId);
+  const isPushButton = catalogInteractionKind === "momentary";
   const isSwitchToggle = component.typeId === "switches.switch";
   const isFixedVolt = component.typeId === "sources.fixed_volt";
   const isExpandableInstrument = component.typeId === "meters.oscope" || component.typeId === "meters.logic_analyzer";
+  const isJoystick = catalogInteractionKind === "joystick";
+  const isEncoder = catalogInteractionKind === "encoder";
 
   // Clique-pra-alternar (push/switch/fixed-volt) é desambiguado de ARRASTAR dentro do handler
   // genérico de `pointerdown` mais abaixo (ver `DRAG_THRESHOLD_PX`) -- antes disto, estes 3 tipos
@@ -3071,6 +3074,29 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
       const current = liveComponent();
       if (current) toggleInstrumentPopup(current);
     }, { capture: true });
+  }
+
+  if (isEncoder) {
+    el.addEventListener("wheel", (event) => {
+      if (!(event.target instanceof Element) || !event.target.closest(".encoder-hit-zone")) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const comp = liveComponent();
+      if (!comp) return;
+      const currentPos = typeof comp.properties.position === "number" ? comp.properties.position : 0;
+      const delta = event.deltaY > 0 ? 1 : -1;
+      const newPos = currentPos + delta;
+      comp.properties.position = newPos;
+      send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: comp.id, name: "position", value: newPos });
+      // Rotate the indicator line visually based on position
+      const stepsRev = typeof comp.properties.steps_rev === "number" ? comp.properties.steps_rev : 20;
+      const indicatorEl = el.querySelector<SVGElement>(".encoder-indicator");
+      if (indicatorEl) {
+        const angle = ((((newPos % stepsRev) + stepsRev) % stepsRev) / stepsRev) * 360;
+        indicatorEl.setAttribute("transform", `rotate(${angle}, 20, 20)`);
+      }
+      persistState();
+    }, { passive: false });
   }
 
   el.addEventListener("click", (event) => {
@@ -3218,6 +3244,79 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
     // (componentSymbols.ts) marca os mesmos elementos visuais (corpo do botão/alavanca) que o
     // SimulIDE cobre com o widget -- clique fora dessa zona NUNCA tenta alternar, vira arrasto puro
     // desde o primeiro pixel, igual a qualquer componente comum.
+    // Joystick drag: arrastar o círculo interno manda x_pos/y_pos ao Core e mola de volta ao centro.
+    // SW button: clicar no `.sw-hit-zone` alterna sw_pressed (para joystick e encoder).
+    if (isJoystick || isEncoder) {
+      const hitJoystick = isJoystick && event.target instanceof Element && Boolean(event.target.closest(".joystick-hit-zone"));
+      const hitSw = event.target instanceof Element && Boolean(event.target.closest(".sw-hit-zone"));
+      if (hitJoystick) {
+        const joystickEl = el.querySelector<SVGElement>(".joystick-hit-zone");
+        const startClientX = event.clientX;
+        const startClientY = event.clientY;
+        // Bowl r=17, thumbstick r=10 → max translation = 17-10 = 7 (stick stays within bowl boundary).
+        // The 7-unit scale maps to ±511 ADC units (0-1023, center=512).
+        const JOYSTICK_CLAMP = 7;
+        const onJoystickMove = (moveEvent: PointerEvent) => {
+          const zoom = state.viewport.zoom || 1;
+          const rawDx = (moveEvent.clientX - startClientX) / zoom;
+          const rawDy = (moveEvent.clientY - startClientY) / zoom;
+          const dist = Math.hypot(rawDx, rawDy);
+          const clampedDx = dist > JOYSTICK_CLAMP ? rawDx * JOYSTICK_CLAMP / dist : rawDx;
+          const clampedDy = dist > JOYSTICK_CLAMP ? rawDy * JOYSTICK_CLAMP / dist : rawDy;
+          if (joystickEl) joystickEl.setAttribute("transform", `translate(${clampedDx},${clampedDy})`);
+          const x_pos = Math.round(512 + clampedDx * 511 / JOYSTICK_CLAMP);
+          const y_pos = Math.round(512 + clampedDy * 511 / JOYSTICK_CLAMP);
+          const comp = liveComponent();
+          if (comp) {
+            comp.properties.x_pos = x_pos;
+            comp.properties.y_pos = y_pos;
+            send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: comp.id, name: "x_pos", value: x_pos });
+            send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: comp.id, name: "y_pos", value: y_pos });
+          }
+        };
+        const onJoystickUp = () => {
+          el.removeEventListener("pointermove", onJoystickMove);
+          el.removeEventListener("pointerup", onJoystickUp);
+          el.removeEventListener("pointercancel", onJoystickUp);
+          isDraggingComponent = false;
+          if (joystickEl) joystickEl.removeAttribute("transform");
+          const comp = liveComponent();
+          if (comp) {
+            comp.properties.x_pos = 512;
+            comp.properties.y_pos = 512;
+            send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: comp.id, name: "x_pos", value: 512 });
+            send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: comp.id, name: "y_pos", value: 512 });
+          }
+          persistState();
+          render();
+        };
+        isDraggingComponent = true;
+        el.setPointerCapture(event.pointerId);
+        el.addEventListener("pointermove", onJoystickMove);
+        el.addEventListener("pointerup", onJoystickUp, { once: true });
+        el.addEventListener("pointercancel", onJoystickUp, { once: true });
+        return;
+      }
+      if (hitSw) {
+        const onSwUp = () => {
+          el.removeEventListener("pointerup", onSwUp);
+          el.removeEventListener("pointercancel", onSwUp);
+          isDraggingComponent = false;
+          const comp = liveComponent();
+          if (comp) {
+            const newVal = comp.properties.sw_pressed !== true;
+            comp.properties.sw_pressed = newVal;
+            send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: comp.id, name: "sw_pressed", value: newVal });
+          }
+          persistState();
+          render();
+        };
+        el.addEventListener("pointerup", onSwUp, { once: true });
+        el.addEventListener("pointercancel", onSwUp, { once: true });
+        return;
+      }
+    }
+
     const clickedToggleZone = event.target instanceof Element && Boolean(event.target.closest(".toggle-hit-zone"));
     const canToggle = (isPushButton || isSwitchToggle || isFixedVolt) && clickedToggleZone;
 

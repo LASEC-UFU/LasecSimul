@@ -8,7 +8,7 @@ import { TrustStore } from "./trust/TrustStore";
 import { isPreApproved, isPreBlocked, resolveConsentChoice, shouldLoadLibrary, decisionToPersist } from "./trust/trustDecision";
 import { SchematicPanel } from "./ui/panels/SchematicPanel";
 import { createInitialWebviewState } from "./ui/webview/catalog";
-import { PackageDescriptor, PackagePin, PackageShape, PropertySchemaEntry, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./ui/webview/model";
+import { InteractionKindEntry, PackageDescriptor, PackagePin, PackageShape, PropertySchemaEntry, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./ui/webview/model";
 import { ComponentReadoutValue, InstrumentHistoryPayload, InternalComponentSnapshot, SimulationStatus, WebviewToHostMessage } from "./ui/webview/messages";
 import { ComponentPaletteViewProvider } from "./ui/views/ComponentPaletteViewProvider";
 import { ProjectSerializer } from "./project/ProjectSerializer";
@@ -222,7 +222,7 @@ function localizedManifestName(json: Record<string, unknown>, language: LasecSim
   return typeof json.name === "string" ? json.name : undefined;
 }
 
-const PACKAGE_SHAPE_KINDS = new Set(["rect", "text", "line", "ellipse", "polygon"]);
+const PACKAGE_SHAPE_KINDS = new Set(["rect", "text", "line", "ellipse", "polygon", "svg"]);
 
 /** Confia na mesma medida que `device.json`/`mcu.json`/`.lssub.json` já são confiados pelo resto
  * desta função (são manifestos de primeira parte ou já passaram por consentimento de plugin antes
@@ -260,7 +260,10 @@ function sanitizePackage(value: unknown): PackageDescriptor | undefined {
       if (typeof shapeValue !== "object" || shapeValue === null) continue;
       const shape = shapeValue as Record<string, unknown> & { kind?: unknown };
       if (typeof shape.kind !== "string" || !PACKAGE_SHAPE_KINDS.has(shape.kind)) continue;
-      shapes.push(shape as unknown as PackageShape);
+      shapes.push({
+        ...(shape as unknown as PackageShape),
+        cssClass: typeof shape.cssClass === "string" && shape.cssClass.trim() ? shape.cssClass.trim() : undefined,
+      });
     }
   }
 
@@ -430,6 +433,12 @@ function resolveRegisteredItem(source: RegisteredSource, extensionPath: string, 
       const iconFilePath = !iconSvgInline && typeof lsconfig?.iconPath === "string" && lsconfig.iconPath.trim()
         ? normalizeExistingFilePath(path.dirname(absoluteLsconfigPath ?? absoluteFilePath), lsconfig.iconPath)
         : undefined;
+      const EXTENSION_SIDE_INTERACTION_KINDS = new Set<string>(["joystick", "encoder", "touchpad"]);
+      const manifestInteraction = typeof json.interaction === "string" ? json.interaction : undefined;
+      const extensionInteractionKind: InteractionKindEntry | undefined =
+        manifestInteraction && EXTENSION_SIDE_INTERACTION_KINDS.has(manifestInteraction)
+          ? (manifestInteraction as InteractionKindEntry)
+          : undefined;
       const entry: WebviewComponentCatalogEntry = {
         typeId,
         label,
@@ -451,6 +460,7 @@ function resolveRegisteredItem(source: RegisteredSource, extensionPath: string, 
         registeredSourceRemovable: source.removable !== false,
         registeredSourceKind: source.kind,
         mcuHost: source.kind === "mcu-adapter",
+        ...(extensionInteractionKind ? { interactionKind: extensionInteractionKind } : {}),
       };
       if (source.kind === "abi-device" && (!libraryPath || !fileExists(libraryPath))) {
         return {

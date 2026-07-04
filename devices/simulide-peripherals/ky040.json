@@ -5,6 +5,7 @@
   "language": "pt-BR",
   "icon": "ky040",
   "folderPath": ["Periféricos"],
+  "interaction": "encoder",
   "translations": {
     "en": {
       "name": "KY-040 — Rotary Encoder",
@@ -22,33 +23,38 @@
     "darwin-universal": "build/macos-universal/device.dylib"
   },
   "package": {
-    "width": 56,
-    "height": 72,
+    "width": 40,
+    "height": 56,
     "border": false,
     "background": { "kind": "color", "value": "transparent" },
     "shapes": [
-      { "kind": "rect",    "x": 0,  "y": 0,  "w": 56, "h": 64, "stroke": "#2a2c24", "fill": "#3A3C34", "strokeWidth": 2 },
-      { "kind": "rect",    "x": 8,  "y": 6,  "w": 40, "h": 40, "stroke": "#555",    "fill": "#4a4c44", "strokeWidth": 1 },
-      { "kind": "ellipse", "cx": 28, "cy": 26, "rx": 14, "ry": 14, "stroke": "#888", "fill": "#555" },
-      { "kind": "ellipse", "cx": 28, "cy": 26, "rx": 8,  "ry": 8,  "stroke": "#aaa", "fill": "#777" },
-      { "kind": "line",    "x1": 28, "y1": 12, "x2": 28, "y2": 6,  "stroke": "#ccc", "strokeWidth": 2 },
-      { "kind": "text",    "x": 8,  "y": 58, "value": "KY-040", "fontSize": 7, "color": "#ccc" }
+      { "kind": "svg", "value": "<defs><radialGradient id=\"ky040-knob\" cx=\"6\" cy=\"6\" r=\"28\" gradientUnits=\"userSpaceOnUse\"><stop offset=\"0%\" stop-color=\"#ffffff\"/><stop offset=\"80%\" stop-color=\"#e6e6e1\"/><stop offset=\"83%\" stop-color=\"#dcdcd7\"/><stop offset=\"100%\" stop-color=\"#c8c8c3\"/></radialGradient></defs>" },
+      { "kind": "rect",    "x": 0,  "y": 0,  "w": 40, "h": 56, "rx": 2, "ry": 2, "stroke": "#2a2c24", "fill": "#3A3C34", "strokeWidth": 2 },
+      { "kind": "rect",    "x": 3,  "y": 3,  "w": 34, "h": 44, "rx": 2, "ry": 2, "stroke": "#555",    "fill": "#424438", "strokeWidth": 1 },
+      { "kind": "svg", "value": "<g transform=\"translate(20,20)\"><line x1=\"14\" y1=\"0\" x2=\"19\" y2=\"0\" transform=\"rotate(270)\" stroke=\"#c80000\" stroke-width=\"1.5\"/><line x1=\"15\" y1=\"0\" x2=\"18\" y2=\"0\" transform=\"rotate(0)\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"15\" y1=\"0\" x2=\"18\" y2=\"0\" transform=\"rotate(18)\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"15\" y1=\"0\" x2=\"18\" y2=\"0\" transform=\"rotate(36)\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"15\" y1=\"0\" x2=\"18\" y2=\"0\" transform=\"rotate(54)\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"15\" y1=\"0\" x2=\"18\" y2=\"0\" transform=\"rotate(72)\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"15\" y1=\"0\" x2=\"18\" y2=\"0\" transform=\"rotate(90)\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"15\" y1=\"0\" x2=\"18\" y2=\"0\" transform=\"rotate(108)\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"15\" y1=\"0\" x2=\"18\" y2=\"0\" transform=\"rotate(126)\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"15\" y1=\"0\" x2=\"18\" y2=\"0\" transform=\"rotate(144)\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"15\" y1=\"0\" x2=\"18\" y2=\"0\" transform=\"rotate(162)\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"15\" y1=\"0\" x2=\"18\" y2=\"0\" transform=\"rotate(180)\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"15\" y1=\"0\" x2=\"18\" y2=\"0\" transform=\"rotate(198)\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"15\" y1=\"0\" x2=\"18\" y2=\"0\" transform=\"rotate(216)\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"15\" y1=\"0\" x2=\"18\" y2=\"0\" transform=\"rotate(234)\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"15\" y1=\"0\" x2=\"18\" y2=\"0\" transform=\"rotate(252)\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"15\" y1=\"0\" x2=\"18\" y2=\"0\" transform=\"rotate(288)\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"15\" y1=\"0\" x2=\"18\" y2=\"0\" transform=\"rotate(306)\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"15\" y1=\"0\" x2=\"18\" y2=\"0\" transform=\"rotate(324)\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"15\" y1=\"0\" x2=\"18\" y2=\"0\" transform=\"rotate(342)\" stroke=\"#6e6e6e\" stroke-width=\"1\"/></g>" },
+      { "kind": "ellipse", "cx": 20, "cy": 20, "rx": 14, "ry": 14, "stroke": "#464646", "fill": "#3a3c34", "strokeWidth": 1 },
+      { "kind": "ellipse", "cx": 20, "cy": 20, "rx": 13, "ry": 13, "stroke": "#ffffff", "fill": "none",   "strokeWidth": 0.5 },
+      { "kind": "ellipse", "cx": 20, "cy": 20, "rx": 13, "ry": 13, "stroke": "none",    "fill": "url(#ky040-knob)", "strokeWidth": 0 },
+      { "kind": "ellipse", "cx": 20, "cy": 12, "rx": 2,  "ry": 2,  "stroke": "#dcdcd0", "fill": "#d2d2c8", "strokeWidth": 0.5, "cssClass": "encoder-indicator" },
+      { "kind": "ellipse", "cx": 20, "cy": 20, "rx": 2.5, "ry": 2.5, "stroke": "#888", "fill": "#464646", "strokeWidth": 0.5 },
+      { "kind": "rect",    "x": 26, "y": 41,  "w": 10, "h": 6, "rx": 2, "ry": 2, "stroke": "#777", "fill": "#555", "cssClass": "sw-hit-zone" },
+      { "kind": "text",    "x": 20, "y": 53,  "value": "KY-040", "fontSize": 7, "color": "#bbb" }
     ],
     "pinLabelColor": "#FAFAC8",
     "pins": [
-      { "id": "gnd", "x": 6,  "y": 72, "angle": 90, "length": 8, "label": "GND" },
-      { "id": "5v",  "x": 18, "y": 72, "angle": 90, "length": 8, "label": "+5V" },
-      { "id": "sw",  "x": 28, "y": 72, "angle": 90, "length": 8, "label": "SW"  },
-      { "id": "dt",  "x": 40, "y": 72, "angle": 90, "length": 8, "label": "DT"  },
-      { "id": "clk", "x": 52, "y": 72, "angle": 90, "length": 8, "label": "CLK" }
+      { "id": "gnd", "x": 4,  "y": 56, "angle": 90, "length": 8, "label": "GND" },
+      { "id": "5v",  "x": 12, "y": 56, "angle": 90, "length": 8, "label": "+5V" },
+      { "id": "sw",  "x": 20, "y": 56, "angle": 90, "length": 8, "label": "SW"  },
+      { "id": "dt",  "x": 28, "y": 56, "angle": 90, "length": 8, "label": "DT"  },
+      { "id": "clk", "x": 36, "y": 56, "angle": 90, "length": 8, "label": "CLK" }
     ]
   },
   "pins": [
-    { "id": "gnd", "kind": "POWER",       "x": 6,  "y": 72, "angle": 90, "length": 8, "label": "GND" },
-    { "id": "5v",  "kind": "POWER",       "x": 18, "y": 72, "angle": 90, "length": 8, "label": "+5V" },
-    { "id": "sw",  "kind": "DIGITAL_OUT", "x": 28, "y": 72, "angle": 90, "length": 8, "label": "SW"  },
-    { "id": "dt",  "kind": "DIGITAL_OUT", "x": 40, "y": 72, "angle": 90, "length": 8, "label": "DT"  },
-    { "id": "clk", "kind": "DIGITAL_OUT", "x": 52, "y": 72, "angle": 90, "length": 8, "label": "CLK" }
+    { "id": "gnd", "kind": "POWER",       "x": 4,  "y": 56, "angle": 90, "length": 8, "label": "GND" },
+    { "id": "5v",  "kind": "POWER",       "x": 12, "y": 56, "angle": 90, "length": 8, "label": "+5V" },
+    { "id": "sw",  "kind": "DIGITAL_OUT", "x": 20, "y": 56, "angle": 90, "length": 8, "label": "SW"  },
+    { "id": "dt",  "kind": "DIGITAL_OUT", "x": 28, "y": 56, "angle": 90, "length": 8, "label": "DT"  },
+    { "id": "clk", "kind": "DIGITAL_OUT", "x": 36, "y": 56, "angle": 90, "length": 8, "label": "CLK" }
   ],
   "properties": [
     { "id": "position",   "label": "Posição atual",      "group": "Encoder", "valueKind": "number", "editor": "number", "default": 0,   "min": -2147483648, "max": 2147483647, "step": 1 },
@@ -56,7 +62,7 @@
     { "id": "sw_pressed", "label": "Botão pressionado",  "group": "Encoder", "valueKind": "bool",   "editor": "bool",   "default": false }
   ],
   "help": {
-    "description": "Encoder rotativo KY-040 com saídas em quadratura (CLK/DT) e botão (SW). Configure posição, número de passos por revolução e estado do botão para simular giro e clique."
+    "description": "Encoder rotativo incremental KY-040 com saídas em quadratura (CLK/DT) e botão (SW). Role a roda do mouse sobre o dial para girar o encoder; clique no retângulo SW para pressionar o botão."
   },
   "limits": { "stepTimeoutMs": 2, "expectedComplexity": "low" }
 }
