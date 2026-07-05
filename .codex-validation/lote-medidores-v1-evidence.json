@@ -1,0 +1,462 @@
+{
+  "generatedAt": "2026-07-05T17:42:04.027Z",
+  "scope": "Medidores v1: Probe, Voltimeter, Ampmeter, FreqMeter, Oscope, Logic Analyzer",
+  "rootCause": "Os instrumentos divergiam porque parte ainda vinha de fallbacks por typeId: Probe era SVG manual, medidores digitais tinham LCD manual, e Oscope/Logic Analyzer eram painéis reinterpretados. Agora Probe/digitais usam package.simulidePaint/package.pins e PlotBase usa package.qtWidget, todos no mesmo fluxo de renderer/offset/scale/pinos.",
+  "rendererChanges": [
+    "SimulidePaintPrimitive text agora aceita stateText para Meter::updateStep e FreqMeter::updateStep.",
+    "PackageShape text renderiza multiplas linhas com tspan, preservando QGraphicsSimpleTextItem.",
+    "PackagePin aceita leadColor para cores declaradas de Pin::setColor, sem desenho hardcoded.",
+    "stateFill agora aceita regras numericas com valueProp para thresholds configuraveis do Probe.",
+    "PackageDescriptor agora aceita qtWidget.kind=plotBase para traduzir DataWidget/DataLaWidget/PlotDisplay do SimulIDE."
+  ],
+  "simulideSources": [
+    ".codex-simulide-src/src/components/meters/probe.cpp",
+    ".codex-simulide-src/src/components/meters/meter.cpp",
+    ".codex-simulide-src/src/components/meters/voltmeter.cpp",
+    ".codex-simulide-src/src/components/meters/ampmeter.cpp",
+    ".codex-simulide-src/src/components/meters/freqmeter.cpp",
+    ".codex-simulide-src/src/components/meters/oscope.cpp",
+    ".codex-simulide-src/src/components/meters/logicanalizer.cpp",
+    ".codex-simulide-src/src/gui/dataplotwidget/datawidget.ui",
+    ".codex-simulide-src/src/gui/dataplotwidget/datalawidget.ui",
+    ".codex-simulide-src/src/gui/dataplotwidget/plotdisplay.cpp",
+    ".codex-simulide-src/src/utils.h"
+  ],
+  "items": [
+    {
+      "typeId": "meters.probe",
+      "label": "Sonda",
+      "props": {
+        "__readout": 0,
+        "threshold": 2.5,
+        "negativeThreshold": -2.5
+      },
+      "status": "simulidePaint",
+      "source": {
+        "file": "src/components/meters/probe.cpp",
+        "className": "Probe",
+        "method": "paint",
+        "notes": "Non-small Probe uses m_area QRect(-12,-8,20,16), input IoPin(180,QPoint(-22,0)) with length 14 when rotation is not multiple of 90, and paint draws ellipse QRect(-8,-8,16,16). Constructor setRotation(-45) is not represented yet because LasecSimul component rotation is restricted to 0/90/180/270."
+      },
+      "box": {
+        "width": 30,
+        "height": 16
+      },
+      "pins": [
+        {
+          "id": "pin-1",
+          "aliases": [
+            "inpin"
+          ],
+          "position": {
+            "x": 0,
+            "y": 8
+          },
+          "real": true
+        }
+      ],
+      "checks": {
+        "usesPackageRenderer": true,
+        "hasSimulidePaint": true,
+        "hasQtWidget": false,
+        "hasMultilineText": false,
+        "hasAllRealPinPositions": true,
+        "hasBlackBodyOrPlot": false,
+        "hasUbuntuMono": false,
+        "hasPlotBaseButton": false
+      },
+      "svg": "<g transform=\"translate(0.000,0.000)\"><g transform=\"scale(1.000000,1.000000)\"><ellipse cx=\"22\" cy=\"8\" rx=\"8\" ry=\"8\" stroke=\"#000\" fill=\"#e6e6ff\" stroke-width=\"1.5\"/></g></g><line x1=\"0.0\" y1=\"8.0\" x2=\"13.3\" y2=\"8.0\" stroke=\"#000\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>"
+    },
+    {
+      "typeId": "instruments.voltmeter",
+      "label": "Voltimetro",
+      "props": {
+        "__readout": -2.499
+      },
+      "status": "simulidePaint",
+      "source": {
+        "file": "src/components/meters/meter.cpp + voltmeter.cpp",
+        "className": "Voltimeter",
+        "method": "Meter::paint/updateStep",
+        "notes": "Same Meter base geometry as Ampmeter. The subclass only changes m_unit to V and initial display text to ' 0.000\\n V'."
+      },
+      "box": {
+        "width": 64,
+        "height": 48
+      },
+      "pins": [
+        {
+          "id": "pin-1",
+          "aliases": [
+            "lPin"
+          ],
+          "position": {
+            "x": 16,
+            "y": 40
+          },
+          "real": true
+        },
+        {
+          "id": "pin-2",
+          "aliases": [
+            "rPin"
+          ],
+          "position": {
+            "x": 32,
+            "y": 40
+          },
+          "real": true
+        },
+        {
+          "id": "pin-3",
+          "aliases": [
+            "outnod"
+          ],
+          "position": {
+            "x": 56,
+            "y": 16
+          },
+          "real": true
+        }
+      ],
+      "checks": {
+        "usesPackageRenderer": true,
+        "hasSimulidePaint": true,
+        "hasQtWidget": false,
+        "hasMultilineText": true,
+        "hasAllRealPinPositions": true,
+        "hasBlackBodyOrPlot": true,
+        "hasUbuntuMono": true,
+        "hasPlotBaseButton": false
+      },
+      "svg": "<g transform=\"translate(0.000,0.000)\"><g transform=\"scale(1.000000,1.000000)\"><rect x=\"0\" y=\"0\" width=\"48\" height=\"32\" rx=\"1\" ry=\"1\" stroke=\"#000000\" fill=\"#000000\" stroke-width=\"1\"/><text x=\"2\" y=\"2\" text-anchor=\"start\" font-size=\"13\" dominant-baseline=\"text-before-edge\" font-family=\"Ubuntu Mono\" font-weight=\"700\" fill=\"#ffff00\"><tspan x=\"2\" dy=\"0\">-2.499</tspan><tspan x=\"2\" dy=\"14.95\"> V</tspan></text></g></g><line x1=\"16.0\" y1=\"40.0\" x2=\"16.0\" y2=\"32.7\" stroke=\"#ff0000\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><line x1=\"32.0\" y1=\"40.0\" x2=\"32.0\" y2=\"32.7\" stroke=\"#000\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><line x1=\"56.0\" y1=\"16.0\" x2=\"48.7\" y2=\"16.0\" stroke=\"#000\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>"
+    },
+    {
+      "typeId": "meters.ampmeter",
+      "label": "Amperimetro",
+      "props": {
+        "__readout": 0.0012
+      },
+      "status": "simulidePaint",
+      "source": {
+        "file": "src/components/meters/meter.cpp + ampmeter.cpp",
+        "className": "Ampmeter",
+        "method": "Meter::paint/updateStep",
+        "notes": "Meter::paint draws a black rounded rect at QRectF(-24,-24,48,32). QGraphicsSimpleTextItem is Ubuntu Mono bold pixelSize 13, yellow, pos(-22,-22). Pins are Pin(270,QPoint(-8,16)), Pin(270,QPoint(8,16)) and IoPin(0,QPoint(32,-8)); these QPoint values are the electrical terminal positions, so package pins use leadOrigin=terminal and Pin::paint trim 0.7."
+      },
+      "box": {
+        "width": 64,
+        "height": 48
+      },
+      "pins": [
+        {
+          "id": "pin-1",
+          "aliases": [
+            "lPin"
+          ],
+          "position": {
+            "x": 16,
+            "y": 40
+          },
+          "real": true
+        },
+        {
+          "id": "pin-2",
+          "aliases": [
+            "rPin"
+          ],
+          "position": {
+            "x": 32,
+            "y": 40
+          },
+          "real": true
+        },
+        {
+          "id": "pin-3",
+          "aliases": [
+            "outnod"
+          ],
+          "position": {
+            "x": 56,
+            "y": 16
+          },
+          "real": true
+        }
+      ],
+      "checks": {
+        "usesPackageRenderer": true,
+        "hasSimulidePaint": true,
+        "hasQtWidget": false,
+        "hasMultilineText": true,
+        "hasAllRealPinPositions": true,
+        "hasBlackBodyOrPlot": true,
+        "hasUbuntuMono": true,
+        "hasPlotBaseButton": false
+      },
+      "svg": "<g transform=\"translate(0.000,0.000)\"><g transform=\"scale(1.000000,1.000000)\"><rect x=\"0\" y=\"0\" width=\"48\" height=\"32\" rx=\"1\" ry=\"1\" stroke=\"#000000\" fill=\"#000000\" stroke-width=\"1\"/><text x=\"2\" y=\"2\" text-anchor=\"start\" font-size=\"13\" dominant-baseline=\"text-before-edge\" font-family=\"Ubuntu Mono\" font-weight=\"700\" fill=\"#ffff00\"><tspan x=\"2\" dy=\"0\"> 1.200</tspan><tspan x=\"2\" dy=\"14.95\"> mA</tspan></text></g></g><line x1=\"16.0\" y1=\"40.0\" x2=\"16.0\" y2=\"32.7\" stroke=\"#ff0000\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><line x1=\"32.0\" y1=\"40.0\" x2=\"32.0\" y2=\"32.7\" stroke=\"#000\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><line x1=\"56.0\" y1=\"16.0\" x2=\"48.7\" y2=\"16.0\" stroke=\"#000\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>"
+    },
+    {
+      "typeId": "meters.freqmeter",
+      "label": "Frequencimetro",
+      "props": {
+        "__readout": 2500
+      },
+      "status": "simulidePaint",
+      "source": {
+        "file": "src/components/meters/freqmeter.cpp",
+        "className": "FreqMeter",
+        "method": "paint/updateStep",
+        "notes": "m_area is QRectF(-32,-10,85,20) and paint draws the same rounded rect filled black. Display is Ubuntu Mono bold pixelSize 13, yellow, pos(-30,-6). Input pin is Pin(180,QPoint(-40,0)); QPoint is electrical terminal and visual lead reaches the rect after Pin::paint trim 0.7."
+      },
+      "box": {
+        "width": 93,
+        "height": 20
+      },
+      "pins": [
+        {
+          "id": "pin-1",
+          "aliases": [
+            "lPin"
+          ],
+          "position": {
+            "x": 0,
+            "y": 10
+          },
+          "real": true
+        }
+      ],
+      "checks": {
+        "usesPackageRenderer": true,
+        "hasSimulidePaint": true,
+        "hasQtWidget": false,
+        "hasMultilineText": false,
+        "hasAllRealPinPositions": true,
+        "hasBlackBodyOrPlot": true,
+        "hasUbuntuMono": true,
+        "hasPlotBaseButton": false
+      },
+      "svg": "<g transform=\"translate(0.000,0.000)\"><g transform=\"scale(1.000000,1.000000)\"><rect x=\"8\" y=\"0\" width=\"85\" height=\"20\" rx=\"1\" ry=\"1\" stroke=\"#000000\" fill=\"#000000\" stroke-width=\"1\"/><text x=\"10\" y=\"4\" text-anchor=\"start\" font-size=\"13\" dominant-baseline=\"text-before-edge\" font-family=\"Ubuntu Mono\" font-weight=\"700\" fill=\"#ffff00\">2.5000 kHz</text></g></g><line x1=\"0.0\" y1=\"10.0\" x2=\"7.3\" y2=\"10.0\" stroke=\"#000\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>"
+    },
+    {
+      "typeId": "meters.oscope",
+      "label": "Osciloscopio",
+      "props": {
+        "__readout": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "__history": [
+          [
+            0,
+            0
+          ],
+          [
+            0,
+            0
+          ],
+          [
+            0,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ]
+      },
+      "status": "qtWidget",
+      "source": {
+        "file": "src/components/meters/oscope.cpp + src/gui/dataplotwidget/datawidget.ui + plotdisplay.cpp",
+        "className": "Oscope/DataWidget/PlotDisplay",
+        "method": "Oscope::expand(false), DataWidget::setupUi, PlotDisplay::drawBackground",
+        "notes": "Collapsed PlotBase: m_baSize=135, screen=143x143, widgetSize=215x147, proxy pos(-78,-71), m_area(-80,-73,219,153). Package bounds include left IoPin terminals at x=-88."
+      },
+      "box": {
+        "width": 227,
+        "height": 153
+      },
+      "pins": [
+        {
+          "id": "pin-1",
+          "aliases": [
+            "Pin0"
+          ],
+          "position": {
+            "x": 0,
+            "y": 25
+          },
+          "real": true
+        },
+        {
+          "id": "pin-2",
+          "aliases": [
+            "Pin1"
+          ],
+          "position": {
+            "x": 0,
+            "y": 57
+          },
+          "real": true
+        },
+        {
+          "id": "pin-3",
+          "aliases": [
+            "Pin2"
+          ],
+          "position": {
+            "x": 0,
+            "y": 89
+          },
+          "real": true
+        },
+        {
+          "id": "pin-4",
+          "aliases": [
+            "Pin3"
+          ],
+          "position": {
+            "x": 0,
+            "y": 121
+          },
+          "real": true
+        }
+      ],
+      "checks": {
+        "usesPackageRenderer": true,
+        "hasSimulidePaint": false,
+        "hasQtWidget": true,
+        "hasMultilineText": false,
+        "hasAllRealPinPositions": true,
+        "hasBlackBodyOrPlot": true,
+        "hasUbuntuMono": false,
+        "hasPlotBaseButton": true
+      },
+      "svg": "<g transform=\"translate(0.000,0.000)\"><g transform=\"scale(1.000000,1.000000)\"><rect x=\"8\" y=\"0\" width=\"219\" height=\"153\" rx=\"4\" ry=\"4\" fill=\"#f4f4f4\" stroke=\"#606060\" stroke-width=\"1.5\"/><text x=\"18\" y=\"20\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"9\" font-weight=\"700\" fill=\"#000\">0 Hz</text><rect x=\"18\" y=\"25\" width=\"60\" height=\"15\" rx=\"2\" ry=\"2\" fill=\"#c8c83c\" stroke=\"#777\" stroke-width=\"1\"/><text x=\"18\" y=\"49\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"9\" font-weight=\"700\" fill=\"#000\">0 Hz</text><rect x=\"18\" y=\"54\" width=\"60\" height=\"15\" rx=\"2\" ry=\"2\" fill=\"#b4b4d7\" stroke=\"#777\" stroke-width=\"1\"/><text x=\"18\" y=\"78\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"9\" font-weight=\"700\" fill=\"#000\">0 Hz</text><rect x=\"18\" y=\"83\" width=\"60\" height=\"15\" rx=\"2\" ry=\"2\" fill=\"#c0a05f\" stroke=\"#777\" stroke-width=\"1\"/><text x=\"18\" y=\"107\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"9\" font-weight=\"700\" fill=\"#000\">0 Hz</text><rect x=\"18\" y=\"112\" width=\"60\" height=\"15\" rx=\"2\" ry=\"2\" fill=\"#00c864\" stroke=\"#777\" stroke-width=\"1\"/><defs><linearGradient id=\"simulide-lote-medidores-v1-meters_oscope-scope-button-grad\" x1=\"48\" y1=\"132\" x2=\"48\" y2=\"146\" gradientUnits=\"userSpaceOnUse\"><stop offset=\"0%\" stop-color=\"#ffffff\"/><stop offset=\"100%\" stop-color=\"#c8c8c8\"/></linearGradient></defs><rect x=\"18.8\" y=\"132.8\" width=\"58.4\" height=\"14.4\" rx=\"2\" ry=\"2\" fill=\"none\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><rect x=\"19\" y=\"133\" width=\"58\" height=\"14\" rx=\"2\" ry=\"2\" fill=\"url(#simulide-lote-medidores-v1-meters_oscope-scope-button-grad)\" stroke=\"none\"/><text x=\"48\" y=\"140\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"9\" font-weight=\"700\" fill=\"#000014\">Expande</text><rect x=\"82\" y=\"4\" width=\"143\" height=\"143\" rx=\"7\" ry=\"7\" fill=\"#000000\" stroke=\"#000000\" stroke-width=\"1\"/><line x1=\"86\" y1=\"8\" x2=\"86\" y2=\"143\" stroke=\"#464646\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><line x1=\"99.5\" y1=\"8\" x2=\"99.5\" y2=\"143\" stroke=\"#464646\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><line x1=\"113\" y1=\"8\" x2=\"113\" y2=\"143\" stroke=\"#464646\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><line x1=\"126.5\" y1=\"8\" x2=\"126.5\" y2=\"143\" stroke=\"#464646\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><line x1=\"140\" y1=\"8\" x2=\"140\" y2=\"143\" stroke=\"#464646\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><line x1=\"153.5\" y1=\"8\" x2=\"153.5\" y2=\"143\" stroke=\"#464646\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><line x1=\"167\" y1=\"8\" x2=\"167\" y2=\"143\" stroke=\"#464646\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><line x1=\"180.5\" y1=\"8\" x2=\"180.5\" y2=\"143\" stroke=\"#464646\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><line x1=\"194\" y1=\"8\" x2=\"194\" y2=\"143\" stroke=\"#464646\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><line x1=\"207.5\" y1=\"8\" x2=\"207.5\" y2=\"143\" stroke=\"#464646\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><line x1=\"221\" y1=\"8\" x2=\"221\" y2=\"143\" stroke=\"#464646\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><path d=\"M 86.0 75.5 L 221.0 75.5\" fill=\"none\" stroke=\"#00c864\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M 86.0 75.5 L 221.0 75.5\" fill=\"none\" stroke=\"#f6f65a\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M 86.0 75.5 L 221.0 75.5\" fill=\"none\" stroke=\"#ffd06a\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M 86.0 75.5 L 221.0 75.5\" fill=\"none\" stroke=\"#d9d7ff\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></g></g><line x1=\"0.0\" y1=\"25.0\" x2=\"7.3\" y2=\"25.0\" stroke=\"#000\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><line x1=\"0.0\" y1=\"57.0\" x2=\"7.3\" y2=\"57.0\" stroke=\"#000\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><line x1=\"0.0\" y1=\"89.0\" x2=\"7.3\" y2=\"89.0\" stroke=\"#000\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><line x1=\"0.0\" y1=\"121.0\" x2=\"7.3\" y2=\"121.0\" stroke=\"#000\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>"
+    },
+    {
+      "typeId": "meters.logic_analyzer",
+      "label": "Analisador Logico",
+      "props": {
+        "__readout": 0,
+        "__history": [
+          0,
+          0
+        ]
+      },
+      "status": "qtWidget",
+      "source": {
+        "file": "src/components/meters/logicanalizer.cpp + src/gui/dataplotwidget/datalawidget.ui + plotdisplay.cpp",
+        "className": "LAnalizer/DataLaWidget/PlotDisplay",
+        "method": "LAnalizer::expand(false), DataLaWidget::setupUi, PlotDisplay::drawBackground",
+        "notes": "Same collapsed PlotBase dimensions as Oscope, with 8 QLineEdit channel boxes and 8 input IoPins at QPoint(-88,-64+16*i)."
+      },
+      "box": {
+        "width": 227,
+        "height": 153
+      },
+      "pins": [
+        {
+          "id": "pin-1",
+          "aliases": [
+            "Pin0"
+          ],
+          "position": {
+            "x": 0,
+            "y": 9
+          },
+          "real": true
+        },
+        {
+          "id": "pin-2",
+          "aliases": [
+            "Pin1"
+          ],
+          "position": {
+            "x": 0,
+            "y": 25
+          },
+          "real": true
+        },
+        {
+          "id": "pin-3",
+          "aliases": [
+            "Pin2"
+          ],
+          "position": {
+            "x": 0,
+            "y": 41
+          },
+          "real": true
+        },
+        {
+          "id": "pin-4",
+          "aliases": [
+            "Pin3"
+          ],
+          "position": {
+            "x": 0,
+            "y": 57
+          },
+          "real": true
+        },
+        {
+          "id": "pin-5",
+          "aliases": [
+            "Pin4"
+          ],
+          "position": {
+            "x": 0,
+            "y": 73
+          },
+          "real": true
+        },
+        {
+          "id": "pin-6",
+          "aliases": [
+            "Pin5"
+          ],
+          "position": {
+            "x": 0,
+            "y": 89
+          },
+          "real": true
+        },
+        {
+          "id": "pin-7",
+          "aliases": [
+            "Pin6"
+          ],
+          "position": {
+            "x": 0,
+            "y": 105
+          },
+          "real": true
+        },
+        {
+          "id": "pin-8",
+          "aliases": [
+            "Pin7"
+          ],
+          "position": {
+            "x": 0,
+            "y": 121
+          },
+          "real": true
+        }
+      ],
+      "checks": {
+        "usesPackageRenderer": true,
+        "hasSimulidePaint": false,
+        "hasQtWidget": true,
+        "hasMultilineText": false,
+        "hasAllRealPinPositions": true,
+        "hasBlackBodyOrPlot": true,
+        "hasUbuntuMono": false,
+        "hasPlotBaseButton": true
+      },
+      "svg": "<g transform=\"translate(0.000,0.000)\"><g transform=\"scale(1.000000,1.000000)\"><rect x=\"8\" y=\"0\" width=\"219\" height=\"153\" rx=\"4\" ry=\"4\" fill=\"#f4f4f4\" stroke=\"#606060\" stroke-width=\"1.5\"/><rect x=\"18\" y=\"8\" width=\"60\" height=\"14\" rx=\"2\" ry=\"2\" fill=\"#c8c83c\" stroke=\"#777\" stroke-width=\"1\"/><rect x=\"18\" y=\"24\" width=\"60\" height=\"14\" rx=\"2\" ry=\"2\" fill=\"#b4b4d7\" stroke=\"#777\" stroke-width=\"1\"/><rect x=\"18\" y=\"40\" width=\"60\" height=\"14\" rx=\"2\" ry=\"2\" fill=\"#c0a05f\" stroke=\"#777\" stroke-width=\"1\"/><rect x=\"18\" y=\"56\" width=\"60\" height=\"14\" rx=\"2\" ry=\"2\" fill=\"#00c864\" stroke=\"#777\" stroke-width=\"1\"/><rect x=\"18\" y=\"72\" width=\"60\" height=\"14\" rx=\"2\" ry=\"2\" fill=\"#c8c83c\" stroke=\"#777\" stroke-width=\"1\"/><rect x=\"18\" y=\"88\" width=\"60\" height=\"14\" rx=\"2\" ry=\"2\" fill=\"#b4b4d7\" stroke=\"#777\" stroke-width=\"1\"/><rect x=\"18\" y=\"104\" width=\"60\" height=\"14\" rx=\"2\" ry=\"2\" fill=\"#c0a05f\" stroke=\"#777\" stroke-width=\"1\"/><rect x=\"18\" y=\"120\" width=\"60\" height=\"14\" rx=\"2\" ry=\"2\" fill=\"#00c864\" stroke=\"#777\" stroke-width=\"1\"/><defs><linearGradient id=\"simulide-lote-medidores-v1-meters_logic_analyzer-logic-button-grad\" x1=\"48\" y1=\"132\" x2=\"48\" y2=\"146\" gradientUnits=\"userSpaceOnUse\"><stop offset=\"0%\" stop-color=\"#ffffff\"/><stop offset=\"100%\" stop-color=\"#c8c8c8\"/></linearGradient></defs><rect x=\"18.8\" y=\"132.8\" width=\"58.4\" height=\"14.4\" rx=\"2\" ry=\"2\" fill=\"none\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><rect x=\"19\" y=\"133\" width=\"58\" height=\"14\" rx=\"2\" ry=\"2\" fill=\"url(#simulide-lote-medidores-v1-meters_logic_analyzer-logic-button-grad)\" stroke=\"none\"/><text x=\"48\" y=\"140\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"9\" font-weight=\"700\" fill=\"#000014\">Expande</text><rect x=\"82\" y=\"4\" width=\"143\" height=\"143\" rx=\"7\" ry=\"7\" fill=\"#000000\" stroke=\"#000000\" stroke-width=\"1\"/><line x1=\"86\" y1=\"8\" x2=\"86\" y2=\"143\" stroke=\"#464646\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><line x1=\"99.5\" y1=\"8\" x2=\"99.5\" y2=\"143\" stroke=\"#464646\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><line x1=\"113\" y1=\"8\" x2=\"113\" y2=\"143\" stroke=\"#464646\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><line x1=\"126.5\" y1=\"8\" x2=\"126.5\" y2=\"143\" stroke=\"#464646\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><line x1=\"140\" y1=\"8\" x2=\"140\" y2=\"143\" stroke=\"#464646\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><line x1=\"153.5\" y1=\"8\" x2=\"153.5\" y2=\"143\" stroke=\"#464646\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><line x1=\"167\" y1=\"8\" x2=\"167\" y2=\"143\" stroke=\"#464646\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><line x1=\"180.5\" y1=\"8\" x2=\"180.5\" y2=\"143\" stroke=\"#464646\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><line x1=\"194\" y1=\"8\" x2=\"194\" y2=\"143\" stroke=\"#464646\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><line x1=\"207.5\" y1=\"8\" x2=\"207.5\" y2=\"143\" stroke=\"#464646\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><line x1=\"221\" y1=\"8\" x2=\"221\" y2=\"143\" stroke=\"#464646\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><line x1=\"86\" y1=\"16.438\" x2=\"221\" y2=\"16.438\" stroke=\"#464646\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><line x1=\"86\" y1=\"33.313\" x2=\"221\" y2=\"33.313\" stroke=\"#464646\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><line x1=\"86\" y1=\"50.188\" x2=\"221\" y2=\"50.188\" stroke=\"#464646\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><line x1=\"86\" y1=\"67.063\" x2=\"221\" y2=\"67.063\" stroke=\"#464646\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><line x1=\"86\" y1=\"83.938\" x2=\"221\" y2=\"83.938\" stroke=\"#464646\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><line x1=\"86\" y1=\"100.813\" x2=\"221\" y2=\"100.813\" stroke=\"#464646\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><line x1=\"86\" y1=\"117.688\" x2=\"221\" y2=\"117.688\" stroke=\"#464646\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><line x1=\"86\" y1=\"134.563\" x2=\"221\" y2=\"134.563\" stroke=\"#464646\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><path d=\"M 86 20.656 L 221 20.656\" fill=\"none\" stroke=\"#c8c83c\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M 86 37.531 L 221 37.531\" fill=\"none\" stroke=\"#b4b4d7\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M 86 54.406 L 221 54.406\" fill=\"none\" stroke=\"#c0a05f\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M 86 71.281 L 221 71.281\" fill=\"none\" stroke=\"#00c864\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M 86 88.156 L 221 88.156\" fill=\"none\" stroke=\"#c8c83c\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M 86 105.031 L 221 105.031\" fill=\"none\" stroke=\"#b4b4d7\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M 86 121.906 L 221 121.906\" fill=\"none\" stroke=\"#c0a05f\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M 86 138.781 L 221 138.781\" fill=\"none\" stroke=\"#00c864\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></g></g><line x1=\"0.0\" y1=\"9.0\" x2=\"7.3\" y2=\"9.0\" stroke=\"#000\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><line x1=\"0.0\" y1=\"25.0\" x2=\"7.3\" y2=\"25.0\" stroke=\"#000\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><line x1=\"0.0\" y1=\"41.0\" x2=\"7.3\" y2=\"41.0\" stroke=\"#000\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><line x1=\"0.0\" y1=\"57.0\" x2=\"7.3\" y2=\"57.0\" stroke=\"#000\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><line x1=\"0.0\" y1=\"73.0\" x2=\"7.3\" y2=\"73.0\" stroke=\"#000\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><line x1=\"0.0\" y1=\"89.0\" x2=\"7.3\" y2=\"89.0\" stroke=\"#000\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><line x1=\"0.0\" y1=\"105.0\" x2=\"7.3\" y2=\"105.0\" stroke=\"#000\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><line x1=\"0.0\" y1=\"121.0\" x2=\"7.3\" y2=\"121.0\" stroke=\"#000\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>"
+    }
+  ]
+}

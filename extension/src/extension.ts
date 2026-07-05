@@ -8,7 +8,7 @@ import { TrustStore } from "./trust/TrustStore";
 import { isPreApproved, isPreBlocked, resolveConsentChoice, shouldLoadLibrary, decisionToPersist } from "./trust/trustDecision";
 import { SchematicPanel } from "./ui/panels/SchematicPanel";
 import { createInitialWebviewState } from "./ui/webview/catalog";
-import { ComponentViewSpec, InteractionKindEntry, PackageDescriptor, PackagePin, PackageShape, PropertySchemaEntry, SimulidePaintGradient, SimulidePaintPrimitive, SimulidePaintSpec, SimulidePaintStateHref, SimulidePaintStyle, ViewSpecAxisMapping, ViewSpecGradient, ViewSpecHitTest, ViewSpecInteraction, ViewSpecLimit, ViewSpecPart, ViewSpecProjection, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./ui/webview/model";
+import { ComponentViewSpec, InteractionKindEntry, PackageDescriptor, PackagePin, PackageShape, PropertySchemaEntry, SimulidePaintGradient, SimulidePaintPrimitive, SimulidePaintSpec, SimulidePaintStateHref, SimulidePaintStateText, SimulidePaintStyle, SimulideQtWidgetSpec, ViewSpecAxisMapping, ViewSpecGradient, ViewSpecHitTest, ViewSpecInteraction, ViewSpecLimit, ViewSpecPart, ViewSpecProjection, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./ui/webview/model";
 import { ComponentReadoutValue, InstrumentHistoryPayload, InternalComponentSnapshot, SimulationStatus, WebviewToHostMessage } from "./ui/webview/messages";
 import { ComponentPaletteViewProvider } from "./ui/views/ComponentPaletteViewProvider";
 import { ProjectSerializer } from "./project/ProjectSerializer";
@@ -306,11 +306,28 @@ function sanitizeSimulidePaintStateFill(value: unknown): SimulidePaintPrimitive[
   if (typeof value !== "object" || value === null) return undefined;
   const raw = value as Record<string, unknown>;
   if (typeof raw.prop !== "string" || !raw.prop.trim()) return undefined;
-  if (typeof raw.map !== "object" || raw.map === null) return undefined;
-  const map = Object.fromEntries(
-    Object.entries(raw.map as Record<string, unknown>).filter((entry): entry is [string, string] => typeof entry[1] === "string")
-  );
-  return Object.keys(map).length > 0 ? { prop: raw.prop, map } : undefined;
+  const map = typeof raw.map === "object" && raw.map !== null
+    ? Object.fromEntries(
+        Object.entries(raw.map as Record<string, unknown>).filter((entry): entry is [string, string] => typeof entry[1] === "string")
+      )
+    : undefined;
+  const numeric = Array.isArray(raw.numeric)
+    ? raw.numeric
+        .map((rule): { op: ">" | ">=" | "<" | "<=" | "==" | "!="; value?: number; valueProp?: string; color: string } | undefined => {
+          if (typeof rule !== "object" || rule === null) return undefined;
+          const rawRule = rule as Record<string, unknown>;
+          const op = rawRule.op;
+          const value = finiteNumber(rawRule.value);
+          const valueProp = typeof rawRule.valueProp === "string" && rawRule.valueProp.trim() ? rawRule.valueProp : undefined;
+          return (op === ">" || op === ">=" || op === "<" || op === "<=" || op === "==" || op === "!=") && (value !== undefined || valueProp) && typeof rawRule.color === "string"
+            ? { op, ...(value !== undefined ? { value } : {}), ...(valueProp ? { valueProp } : {}), color: rawRule.color }
+            : undefined;
+        })
+        .filter((rule): rule is { op: ">" | ">=" | "<" | "<=" | "==" | "!="; value?: number; valueProp?: string; color: string } => Boolean(rule))
+    : undefined;
+  return (map && Object.keys(map).length > 0) || (numeric && numeric.length > 0)
+    ? { prop: raw.prop, ...(map && Object.keys(map).length > 0 ? { map } : {}), ...(numeric && numeric.length > 0 ? { numeric } : {}), ...(typeof raw.fallback === "string" ? { fallback: raw.fallback } : {}) }
+    : undefined;
 }
 
 function sanitizeSimulidePaintStateVisible(value: unknown): SimulidePaintPrimitive["stateVisible"] | undefined {
@@ -340,6 +357,34 @@ function sanitizeSimulidePaintStateHref(value: unknown): SimulidePaintStateHref 
     Object.entries(raw.map as Record<string, unknown>).filter((entry): entry is [string, string] => typeof entry[1] === "string")
   );
   return Object.keys(map).length > 0 ? { prop: raw.prop, map } : undefined;
+}
+
+function sanitizeSimulidePaintStateText(value: unknown): SimulidePaintStateText | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const raw = value as Record<string, unknown>;
+  if (raw.kind === "meterDisplay") {
+    return typeof raw.unit === "string" ? { kind: "meterDisplay", unit: raw.unit } : undefined;
+  }
+  if (raw.kind === "frequencyDisplay") return { kind: "frequencyDisplay" };
+  if (raw.kind === "readout") {
+    return {
+      kind: "readout",
+      ...(typeof raw.unit === "string" ? { unit: raw.unit } : {}),
+      ...(finiteNumber(raw.decimals) !== undefined ? { decimals: finiteNumber(raw.decimals) } : {}),
+    };
+  }
+  return undefined;
+}
+
+function sanitizeDominantBaseline(value: unknown): PackageShape["dominantBaseline"] | undefined {
+  return value === "auto" ||
+    value === "middle" ||
+    value === "central" ||
+    value === "hanging" ||
+    value === "text-before-edge" ||
+    value === "text-after-edge"
+    ? value
+    : undefined;
 }
 
 function sanitizeSimulidePaintPrimitive(value: unknown): SimulidePaintPrimitive | undefined {
@@ -393,8 +438,10 @@ function sanitizeSimulidePaintPrimitive(value: unknown): SimulidePaintPrimitive 
       value: raw.value,
       ...(finiteNumber(raw.fontSize) !== undefined ? { fontSize: finiteNumber(raw.fontSize) } : {}),
       ...(textAnchor ? { textAnchor } : {}),
+      ...(sanitizeDominantBaseline(raw.dominantBaseline) ? { dominantBaseline: sanitizeDominantBaseline(raw.dominantBaseline) } : {}),
       ...(sanitizeOptionalString(raw.fontFamily) ? { fontFamily: sanitizeOptionalString(raw.fontFamily) } : {}),
       ...(typeof raw.fontWeight === "string" || typeof raw.fontWeight === "number" ? { fontWeight: raw.fontWeight } : {}),
+      ...(sanitizeSimulidePaintStateText(raw.stateText) ? { stateText: sanitizeSimulidePaintStateText(raw.stateText) } : {}),
       ...stateAttrs,
       ...style,
     };
@@ -433,6 +480,32 @@ function sanitizeSimulidePaintSpec(value: unknown): SimulidePaintSpec | undefine
     ...(finiteNumber(raw.defaultStrokeWidth) !== undefined ? { defaultStrokeWidth: finiteNumber(raw.defaultStrokeWidth) } : {}),
     primitives,
   };
+}
+
+function sanitizeSimulideQtWidgetSpec(value: unknown): SimulideQtWidgetSpec | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const raw = value as Record<string, unknown>;
+  if (raw.kind !== "plotBase") return undefined;
+  if (raw.variant !== "oscope" && raw.variant !== "logicAnalyzer") return undefined;
+  const channels = finiteNumber(raw.channels);
+  const tracks = finiteNumber(raw.tracks);
+  const sourceRaw = typeof raw.source === "object" && raw.source !== null ? raw.source as Record<string, unknown> : undefined;
+  return channels !== undefined && channels > 0
+    ? {
+        kind: "plotBase",
+        variant: raw.variant,
+        channels,
+        ...(tracks !== undefined ? { tracks } : {}),
+        source: sourceRaw
+          ? {
+              ...(sanitizeOptionalString(sourceRaw.file) ? { file: sanitizeOptionalString(sourceRaw.file) } : {}),
+              ...(sanitizeOptionalString(sourceRaw.className) ? { className: sanitizeOptionalString(sourceRaw.className) } : {}),
+              ...(sanitizeOptionalString(sourceRaw.method) ? { method: sanitizeOptionalString(sourceRaw.method) } : {}),
+              ...(sanitizeOptionalString(sourceRaw.notes) ? { notes: sanitizeOptionalString(sourceRaw.notes) } : {}),
+            }
+          : undefined,
+      }
+    : undefined;
 }
 
 function isNumberPair(value: unknown): value is [number, number] {
@@ -836,21 +909,14 @@ function sanitizePackage(value: unknown, assetBasePath?: string): PackageDescrip
       length: typeof pin.length === "number" ? pin.length : 8,
       leadOrigin: pin.leadOrigin === "terminal" || pin.leadOrigin === "body" ? pin.leadOrigin : undefined,
       leadEndTrim: typeof pin.leadEndTrim === "number" ? pin.leadEndTrim : undefined,
+      leadColor: typeof pin.leadColor === "string" ? pin.leadColor : undefined,
       label: typeof pin.label === "string" ? pin.label : undefined,
       labelColor: typeof pin.labelColor === "string" ? pin.labelColor : undefined,
       labelFontSize: typeof pin.labelFontSize === "number" ? pin.labelFontSize : undefined,
       labelSpace: typeof pin.labelSpace === "number" ? pin.labelSpace : undefined,
       labelStateVisible: sanitizeSimulidePaintStateVisible(pin.labelStateVisible),
       labelTextAnchor: pin.labelTextAnchor === "start" || pin.labelTextAnchor === "middle" || pin.labelTextAnchor === "end" ? pin.labelTextAnchor : undefined,
-      labelDominantBaseline:
-        pin.labelDominantBaseline === "auto" ||
-        pin.labelDominantBaseline === "middle" ||
-        pin.labelDominantBaseline === "central" ||
-        pin.labelDominantBaseline === "hanging" ||
-        pin.labelDominantBaseline === "text-before-edge" ||
-        pin.labelDominantBaseline === "text-after-edge"
-          ? pin.labelDominantBaseline
-          : undefined,
+      labelDominantBaseline: sanitizeDominantBaseline(pin.labelDominantBaseline),
       labelX: typeof pin.labelX === "number" ? pin.labelX : undefined,
       labelY: typeof pin.labelY === "number" ? pin.labelY : undefined,
     });
@@ -866,6 +932,7 @@ function sanitizePackage(value: unknown, assetBasePath?: string): PackageDescrip
   }
   const viewSpec = sanitizeComponentViewSpec(raw.viewSpec);
   const simulidePaint = sanitizeSimulidePaintSpec(raw.simulidePaint);
+  const qtWidget = sanitizeSimulideQtWidgetSpec(raw.qtWidget);
 
   const background = sanitizePackageBackground(raw.background, assetBasePath);
 
@@ -878,6 +945,7 @@ function sanitizePackage(value: unknown, assetBasePath?: string): PackageDescrip
     background,
     shapes,
     simulidePaint,
+    qtWidget,
     viewSpec,
     valueLabel: sanitizePackageValueLabel(raw.valueLabel),
     pins,

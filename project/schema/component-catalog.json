@@ -1164,11 +1164,90 @@
       ],
       "defaultProperties": {
         "threshold": 2.5,
-        "showVolt": true
+        "showVolt": true,
+        "negativeThreshold": -2.5
       },
       "graphical": true,
       "help": {
         "description": "Sonda de tensão de um pino. Mostra o valor de tensão em tempo real e muda de cor conforme o threshold lógico configurado."
+      },
+      "package": {
+        "width": 30,
+        "height": 16,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/meters/probe.cpp",
+            "className": "Probe",
+            "method": "paint",
+            "notes": "Non-small Probe uses m_area QRect(-12,-8,20,16), input IoPin(180,QPoint(-22,0)) with length 14 when rotation is not multiple of 90, and paint draws ellipse QRect(-8,-8,16,16). Constructor setRotation(-45) is not represented yet because LasecSimul component rotation is restricted to 0/90/180/270."
+          },
+          "bounds": {
+            "x": -22,
+            "y": -8,
+            "w": 30,
+            "h": 16
+          },
+          "defaultStroke": "#000",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 1,
+          "primitives": [
+            {
+              "kind": "ellipse",
+              "cx": 0,
+              "cy": 0,
+              "rx": 8,
+              "ry": 8,
+              "strokeWidth": 1.5,
+              "fill": "#e6e6ff",
+              "stateFill": {
+                "prop": "__readout",
+                "numeric": [
+                  {
+                    "op": ">",
+                    "valueProp": "threshold",
+                    "color": "#ffa600"
+                  },
+                  {
+                    "op": "<",
+                    "valueProp": "negativeThreshold",
+                    "color": "#0064ff"
+                  }
+                ],
+                "fallback": "#e6e6ff"
+              }
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "aliases": [
+              "inpin"
+            ],
+            "x": 0,
+            "y": 8,
+            "angle": 180,
+            "length": 14,
+            "label": "",
+            "leadOrigin": "terminal",
+            "leadEndTrim": 0.7
+          }
+        ],
+        "valueLabel": {
+          "x": 38,
+          "y": 8,
+          "rotation": 0,
+          "source": {
+            "file": "src/components/meters/probe.cpp",
+            "method": "Component::setValLabelPos",
+            "notes": "setValLabelPos(16,0,45) translated by bounds (-22,-8). Rotation 45 is not representable by current external label rotation enum."
+          }
+        }
       }
     },
     {
@@ -1184,6 +1263,105 @@
       },
       "help": {
         "description": "Amperímetro de baixa resistência série. Conecte em série no ramo para medir a corrente que passa por ele."
+      },
+      "package": {
+        "width": 64,
+        "height": 48,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/meters/meter.cpp + ampmeter.cpp",
+            "className": "Ampmeter",
+            "method": "Meter::paint/updateStep",
+            "notes": "Meter::paint draws a black rounded rect at QRectF(-24,-24,48,32). QGraphicsSimpleTextItem is Ubuntu Mono bold pixelSize 13, yellow, pos(-22,-22). Pins are Pin(270,QPoint(-8,16)), Pin(270,QPoint(8,16)) and IoPin(0,QPoint(32,-8)); these QPoint values are the electrical terminal positions, so package pins use leadOrigin=terminal and Pin::paint trim 0.7."
+          },
+          "bounds": {
+            "x": -24,
+            "y": -24,
+            "w": 64,
+            "h": 48
+          },
+          "defaultStroke": "#000",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 1,
+          "primitives": [
+            {
+              "kind": "roundedRect",
+              "x": -24,
+              "y": -24,
+              "w": 48,
+              "h": 32,
+              "rx": 1,
+              "ry": 1,
+              "fill": "#000000",
+              "stroke": "#000000",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "text",
+              "x": -22,
+              "y": -22,
+              "value": " 0.000\n A",
+              "fill": "#ffff00",
+              "stroke": "none",
+              "fontSize": 13,
+              "fontFamily": "Ubuntu Mono",
+              "fontWeight": 700,
+              "textAnchor": "start",
+              "dominantBaseline": "text-before-edge",
+              "stateText": {
+                "kind": "meterDisplay",
+                "unit": "A"
+              }
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "aliases": [
+              "lPin"
+            ],
+            "x": 16,
+            "y": 40,
+            "angle": 270,
+            "length": 8,
+            "label": "",
+            "leadOrigin": "terminal",
+            "leadEndTrim": 0.7,
+            "leadColor": "#ff0000"
+          },
+          {
+            "id": "pin-2",
+            "aliases": [
+              "rPin"
+            ],
+            "x": 32,
+            "y": 40,
+            "angle": 270,
+            "length": 8,
+            "label": "",
+            "leadOrigin": "terminal",
+            "leadEndTrim": 0.7
+          },
+          {
+            "id": "pin-3",
+            "aliases": [
+              "outnod"
+            ],
+            "x": 56,
+            "y": 16,
+            "angle": 0,
+            "length": 8,
+            "label": "",
+            "leadOrigin": "terminal",
+            "leadEndTrim": 0.7
+          }
+        ]
       }
     },
     {
@@ -1197,6 +1375,105 @@
       "defaultProperties": {},
       "help": {
         "description": "Voltímetro diferencial. Conecte os dois pinos de medição nos nós desejados para ler a tensão entre eles."
+      },
+      "package": {
+        "width": 64,
+        "height": 48,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/meters/meter.cpp + voltmeter.cpp",
+            "className": "Voltimeter",
+            "method": "Meter::paint/updateStep",
+            "notes": "Same Meter base geometry as Ampmeter. The subclass only changes m_unit to V and initial display text to ' 0.000\\n V'."
+          },
+          "bounds": {
+            "x": -24,
+            "y": -24,
+            "w": 64,
+            "h": 48
+          },
+          "defaultStroke": "#000",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 1,
+          "primitives": [
+            {
+              "kind": "roundedRect",
+              "x": -24,
+              "y": -24,
+              "w": 48,
+              "h": 32,
+              "rx": 1,
+              "ry": 1,
+              "fill": "#000000",
+              "stroke": "#000000",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "text",
+              "x": -22,
+              "y": -22,
+              "value": " 0.000\n V",
+              "fill": "#ffff00",
+              "stroke": "none",
+              "fontSize": 13,
+              "fontFamily": "Ubuntu Mono",
+              "fontWeight": 700,
+              "textAnchor": "start",
+              "dominantBaseline": "text-before-edge",
+              "stateText": {
+                "kind": "meterDisplay",
+                "unit": "V"
+              }
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "aliases": [
+              "lPin"
+            ],
+            "x": 16,
+            "y": 40,
+            "angle": 270,
+            "length": 8,
+            "label": "",
+            "leadOrigin": "terminal",
+            "leadEndTrim": 0.7,
+            "leadColor": "#ff0000"
+          },
+          {
+            "id": "pin-2",
+            "aliases": [
+              "rPin"
+            ],
+            "x": 32,
+            "y": 40,
+            "angle": 270,
+            "length": 8,
+            "label": "",
+            "leadOrigin": "terminal",
+            "leadEndTrim": 0.7
+          },
+          {
+            "id": "pin-3",
+            "aliases": [
+              "outnod"
+            ],
+            "x": 56,
+            "y": 16,
+            "angle": 0,
+            "length": 8,
+            "label": "",
+            "leadOrigin": "terminal",
+            "leadEndTrim": 0.7
+          }
+        ]
       }
     },
     {
@@ -1212,6 +1489,77 @@
       },
       "help": {
         "description": "Frequencímetro: mede a frequência do sinal digital no pino de entrada e mostra em Hz."
+      },
+      "package": {
+        "width": 93,
+        "height": 20,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/meters/freqmeter.cpp",
+            "className": "FreqMeter",
+            "method": "paint/updateStep",
+            "notes": "m_area is QRectF(-32,-10,85,20) and paint draws the same rounded rect filled black. Display is Ubuntu Mono bold pixelSize 13, yellow, pos(-30,-6). Input pin is Pin(180,QPoint(-40,0)); QPoint is electrical terminal and visual lead reaches the rect after Pin::paint trim 0.7."
+          },
+          "bounds": {
+            "x": -40,
+            "y": -10,
+            "w": 93,
+            "h": 20
+          },
+          "defaultStroke": "#000",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 1,
+          "primitives": [
+            {
+              "kind": "roundedRect",
+              "x": -32,
+              "y": -10,
+              "w": 85,
+              "h": 20,
+              "rx": 1,
+              "ry": 1,
+              "fill": "#000000",
+              "stroke": "#000000",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "text",
+              "x": -30,
+              "y": -6,
+              "value": "0 Hz",
+              "fill": "#ffff00",
+              "stroke": "none",
+              "fontSize": 13,
+              "fontFamily": "Ubuntu Mono",
+              "fontWeight": 700,
+              "textAnchor": "start",
+              "dominantBaseline": "text-before-edge",
+              "stateText": {
+                "kind": "frequencyDisplay"
+              }
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "aliases": [
+              "lPin"
+            ],
+            "x": 0,
+            "y": 10,
+            "angle": 180,
+            "length": 8,
+            "label": "",
+            "leadOrigin": "terminal",
+            "leadEndTrim": 0.7
+          }
+        ]
       }
     },
     {
@@ -1229,6 +1577,80 @@
       },
       "help": {
         "description": "Osciloscópio de até 4 canais. Conecte os pinos CH1–CH4 para visualizar formas de onda analógicas em tempo real."
+      },
+      "package": {
+        "width": 227,
+        "height": 153,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "qtWidget": {
+          "kind": "plotBase",
+          "variant": "oscope",
+          "channels": 4,
+          "tracks": 1,
+          "source": {
+            "file": "src/components/meters/oscope.cpp + src/gui/dataplotwidget/datawidget.ui + plotdisplay.cpp",
+            "className": "Oscope/DataWidget/PlotDisplay",
+            "method": "Oscope::expand(false), DataWidget::setupUi, PlotDisplay::drawBackground",
+            "notes": "Collapsed PlotBase: m_baSize=135, screen=143x143, widgetSize=215x147, proxy pos(-78,-71), m_area(-80,-73,219,153). Package bounds include left IoPin terminals at x=-88."
+          }
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "aliases": [
+              "Pin0"
+            ],
+            "x": 0,
+            "y": 25,
+            "angle": 180,
+            "length": 8,
+            "label": "",
+            "leadOrigin": "terminal",
+            "leadEndTrim": 0.7
+          },
+          {
+            "id": "pin-2",
+            "aliases": [
+              "Pin1"
+            ],
+            "x": 0,
+            "y": 57,
+            "angle": 180,
+            "length": 8,
+            "label": "",
+            "leadOrigin": "terminal",
+            "leadEndTrim": 0.7
+          },
+          {
+            "id": "pin-3",
+            "aliases": [
+              "Pin2"
+            ],
+            "x": 0,
+            "y": 89,
+            "angle": 180,
+            "length": 8,
+            "label": "",
+            "leadOrigin": "terminal",
+            "leadEndTrim": 0.7
+          },
+          {
+            "id": "pin-4",
+            "aliases": [
+              "Pin3"
+            ],
+            "x": 0,
+            "y": 121,
+            "angle": 180,
+            "length": 8,
+            "label": "",
+            "leadOrigin": "terminal",
+            "leadEndTrim": 0.7
+          }
+        ]
       }
     },
     {
@@ -1245,6 +1667,132 @@
       },
       "help": {
         "description": "Analisador lógico de 8 canais digitais. Captura e exibe transições de sinal com timestamp em nanosegundos."
+      },
+      "package": {
+        "width": 227,
+        "height": 153,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "qtWidget": {
+          "kind": "plotBase",
+          "variant": "logicAnalyzer",
+          "channels": 8,
+          "tracks": 8,
+          "source": {
+            "file": "src/components/meters/logicanalizer.cpp + src/gui/dataplotwidget/datalawidget.ui + plotdisplay.cpp",
+            "className": "LAnalizer/DataLaWidget/PlotDisplay",
+            "method": "LAnalizer::expand(false), DataLaWidget::setupUi, PlotDisplay::drawBackground",
+            "notes": "Same collapsed PlotBase dimensions as Oscope, with 8 QLineEdit channel boxes and 8 input IoPins at QPoint(-88,-64+16*i)."
+          }
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "aliases": [
+              "Pin0"
+            ],
+            "x": 0,
+            "y": 9,
+            "angle": 180,
+            "length": 8,
+            "label": "",
+            "leadOrigin": "terminal",
+            "leadEndTrim": 0.7
+          },
+          {
+            "id": "pin-2",
+            "aliases": [
+              "Pin1"
+            ],
+            "x": 0,
+            "y": 25,
+            "angle": 180,
+            "length": 8,
+            "label": "",
+            "leadOrigin": "terminal",
+            "leadEndTrim": 0.7
+          },
+          {
+            "id": "pin-3",
+            "aliases": [
+              "Pin2"
+            ],
+            "x": 0,
+            "y": 41,
+            "angle": 180,
+            "length": 8,
+            "label": "",
+            "leadOrigin": "terminal",
+            "leadEndTrim": 0.7
+          },
+          {
+            "id": "pin-4",
+            "aliases": [
+              "Pin3"
+            ],
+            "x": 0,
+            "y": 57,
+            "angle": 180,
+            "length": 8,
+            "label": "",
+            "leadOrigin": "terminal",
+            "leadEndTrim": 0.7
+          },
+          {
+            "id": "pin-5",
+            "aliases": [
+              "Pin4"
+            ],
+            "x": 0,
+            "y": 73,
+            "angle": 180,
+            "length": 8,
+            "label": "",
+            "leadOrigin": "terminal",
+            "leadEndTrim": 0.7
+          },
+          {
+            "id": "pin-6",
+            "aliases": [
+              "Pin5"
+            ],
+            "x": 0,
+            "y": 89,
+            "angle": 180,
+            "length": 8,
+            "label": "",
+            "leadOrigin": "terminal",
+            "leadEndTrim": 0.7
+          },
+          {
+            "id": "pin-7",
+            "aliases": [
+              "Pin6"
+            ],
+            "x": 0,
+            "y": 105,
+            "angle": 180,
+            "length": 8,
+            "label": "",
+            "leadOrigin": "terminal",
+            "leadEndTrim": 0.7
+          },
+          {
+            "id": "pin-8",
+            "aliases": [
+              "Pin7"
+            ],
+            "x": 0,
+            "y": 121,
+            "angle": 180,
+            "length": 8,
+            "label": "",
+            "leadOrigin": "terminal",
+            "leadEndTrim": 0.7
+          }
+        ]
       }
     },
     {

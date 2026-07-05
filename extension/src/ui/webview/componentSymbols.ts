@@ -10,7 +10,7 @@
  * layout de pino são calculados a partir da caixa do tipo, nunca de uma constante global de tamanho.
  */
 
-import { ComponentViewSpec, PackageDescriptor, PackagePin, PackageShape, SIMULIDE_PACKAGE_GRID_UNIT, SimulidePaintSpec, ViewSpecHitTest } from "./model.js";
+import { ComponentViewSpec, PackageDescriptor, PackagePin, PackageShape, SIMULIDE_PACKAGE_GRID_UNIT, SimulidePaintSpec, SimulideQtWidgetSpec, ViewSpecHitTest } from "./model.js";
 import { simulidePaintToPackageShapes } from "./simulidePaint.js";
 
 export interface ComponentBox {
@@ -209,6 +209,18 @@ function formatHz(value: number | undefined): string {
   return `${Math.round(hz)} Hz`;
 }
 
+function packageTextContent(shape: PackageShape): string {
+  const lines = String(shape.value ?? "").split(/\r?\n/);
+  if (lines.length <= 1) return escapeXmlText(lines[0] ?? "");
+  const lineHeight = Math.round((shape.fontSize ?? 11) * 1.15 * 1000) / 1000;
+  return lines
+    .map((line, index) => {
+      const dy = index === 0 ? 0 : lineHeight;
+      return `<tspan x="${shape.x ?? 0}" dy="${dy}">${escapeXmlText(line)}</tspan>`;
+    })
+    .join("");
+}
+
 function tracePath(history: number[], x: number, y: number, width: number, height: number, min = -5, max = 5): string {
   const samples = history.length > 1 ? history : [0, 0];
   const span = Math.max(1e-9, max - min);
@@ -254,7 +266,7 @@ function packageShapeSvg(shape: PackageShape, extraTransform?: string): string {
     }
     case "text":
     default:
-      return `<text${cls}${xf} x="${shape.x ?? 0}" y="${shape.y ?? 0}" text-anchor="${shape.textAnchor ?? "middle"}" font-size="${shape.fontSize ?? 11}"${shape.fontFamily ? ` font-family="${escapeXmlText(shape.fontFamily)}"` : ""}${shape.fontWeight ? ` font-weight="${escapeXmlText(String(shape.fontWeight))}"` : ""} fill="${shape.color ?? "currentColor"}"${paintAttrs}>${escapeXmlText(shape.value ?? "")}</text>`;
+      return `<text${cls}${xf} x="${shape.x ?? 0}" y="${shape.y ?? 0}" text-anchor="${shape.textAnchor ?? "middle"}" font-size="${shape.fontSize ?? 11}"${shape.dominantBaseline ? ` dominant-baseline="${shape.dominantBaseline}"` : ""}${shape.fontFamily ? ` font-family="${escapeXmlText(shape.fontFamily)}"` : ""}${shape.fontWeight ? ` font-weight="${escapeXmlText(String(shape.fontWeight))}"` : ""} fill="${shape.color ?? "currentColor"}"${paintAttrs}>${packageTextContent(shape)}</text>`;
   }
 }
 
@@ -572,9 +584,10 @@ function packagePinLeadSvg(pin: PackagePin, resolved: ResolvedPackage, labelColo
   const labelFontSize = pin.labelFontSize ?? PACKAGE_PIN_LABEL_FONT_SIZE;
   const textAnchor = pin.labelTextAnchor ?? "middle";
   const baselineAttr = pin.labelDominantBaseline ? ` dominant-baseline="${pin.labelDominantBaseline}"` : "";
+  const leadColor = pin.leadColor ?? "#000";
   const leadMarkup = pin.length === 0
     ? ""
-    : `<line x1="${x.toFixed(1)}" y1="${y.toFixed(1)}" x2="${leadEndX.toFixed(1)}" y2="${leadEndY.toFixed(1)}" stroke="#000" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`;
+    : `<line x1="${x.toFixed(1)}" y1="${y.toFixed(1)}" x2="${leadEndX.toFixed(1)}" y2="${leadEndY.toFixed(1)}" stroke="${escapeXmlText(leadColor)}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`;
   const labelVisible = stateVisibleMatches(pin.labelStateVisible, properties);
   const labelMarkup = labelVisible && label.trim()
     ? `<text x="${labelX.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="${textAnchor}"${baselineAttr}${fillAttr} style="font-size:${labelFontSize}px"${rotateAttr}>${escapeXmlText(label)}</text>`
@@ -597,6 +610,102 @@ function packageBackgroundSvg(pkg: PackageDescriptor): string {
   return "";
 }
 
+function svgRound(value: number): number {
+  return Math.round(value * 1000) / 1000;
+}
+
+function qtButtonSvg(x: number, y: number, w: number, h: number, text: string, id: string): string {
+  const gradId = `${id}-button-grad`;
+  const innerH = h - 2;
+  return (
+    `<defs><linearGradient id="${gradId}" x1="${x + w / 2}" y1="${y}" x2="${x + w / 2}" y2="${y + innerH}" gradientUnits="userSpaceOnUse">` +
+    `<stop offset="0%" stop-color="#ffffff"/><stop offset="100%" stop-color="#c8c8c8"/></linearGradient></defs>` +
+    `<rect x="${x + 0.8}" y="${y + 0.8}" width="${w - 1.6}" height="${innerH + 0.4}" rx="2" ry="2" fill="none" stroke="#6e6e6e" stroke-width="1"/>` +
+    `<rect x="${x + 1}" y="${y + 1}" width="${w - 2}" height="${innerH}" rx="2" ry="2" fill="url(#${gradId})" stroke="none"/>` +
+    `<text x="${x + w / 2}" y="${y + h / 2}" text-anchor="middle" dominant-baseline="central" font-family="Segoe UI,Arial,sans-serif" font-size="9" font-weight="700" fill="#000014">${escapeXmlText(text)}</text>`
+  );
+}
+
+function plotDisplaySvg(x: number, y: number, w: number, h: number, channels: number, tracks: number, histories: number[][], logicHistory: number[], colors: string[], expanded: boolean): string {
+  const marginX = expanded ? 30 : 4;
+  const marginY = expanded ? 10 : 4;
+  const ceroX = x + marginX;
+  const endX = x + w - marginX;
+  const ceroY = y + marginY;
+  const endY = y + h - marginY;
+  const sizeX = w - 2 * marginX;
+  const sizeY = h - 2 * marginY;
+  let markup = `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="7" ry="7" fill="#000000" stroke="#000000" stroke-width="1"/>`;
+
+  for (let gx = ceroX; gx <= endX + 1; gx += sizeX / 10) {
+    markup += `<line x1="${svgRound(gx)}" y1="${ceroY}" x2="${svgRound(gx)}" y2="${endY}" stroke="#464646" stroke-width="1.5" stroke-linecap="round"/>`;
+  }
+  if (expanded || channels === 8) {
+    const divs = channels === 8 ? 8 : 10 * tracks;
+    const startY = channels === 8 ? ceroY + sizeY / 16 : ceroY;
+    for (let gy = startY; gy <= endY + 1; gy += sizeY / divs) {
+      markup += `<line x1="${ceroX}" y1="${svgRound(gy)}" x2="${endX}" y2="${svgRound(gy)}" stroke="#464646" stroke-width="1.5" stroke-linecap="round"/>`;
+    }
+  }
+
+  if (channels === 8) {
+    const samples = logicHistory.length > 1 ? logicHistory : [0, 0];
+    for (let channel = 0; channel < 8; channel += 1) {
+      const rowCenter = ceroY + (channel + 0.5) * sizeY / 8;
+      const highY = rowCenter - sizeY / 32;
+      const lowY = rowCenter + sizeY / 32;
+      const points = samples.map((mask, index) => {
+        const px = ceroX + (sizeX * index) / Math.max(1, samples.length - 1);
+        const py = ((mask >>> channel) & 1) === 1 ? highY : lowY;
+        return `${index === 0 ? "M" : "L"} ${svgRound(px)} ${svgRound(py)}`;
+      }).join(" ");
+      markup += `<path d="${points}" fill="none" stroke="${colors[channel % colors.length]}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+    }
+  } else {
+    for (let channel = 0; channel < channels; channel += 1) {
+      const history = histories[channel] ?? [];
+      const samples = history.length > 1 ? history : [0, 0];
+      markup += `<path d="${tracePath(samples, ceroX, ceroY, sizeX, sizeY, -5, 5)}" fill="none" stroke="${colors[channel % colors.length]}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+    }
+  }
+  return markup;
+}
+
+function simulideQtWidgetSvg(widget: SimulideQtWidgetSpec, properties: Record<string, unknown>, scopeId: string): string {
+  const isLogic = widget.variant === "logicAnalyzer";
+  const histories = symbolHistoryMatrix(properties);
+  const logicHistory = symbolHistoryArray(properties);
+  const latest = symbolReadoutArray(properties);
+  const colors = ["#c8c83c", "#b4b4d7", "#c0a05f", "#00c864", "#c8c83c", "#b4b4d7", "#c0a05f", "#00c864"];
+  const widgetX = 10;
+  const widgetY = 2;
+  const displayX = widgetX + 72;
+  const displayY = widgetY + 2;
+  const displayW = 143;
+  const displayH = 143;
+  let markup = `<rect x="8" y="0" width="219" height="153" rx="4" ry="4" fill="#f4f4f4" stroke="#606060" stroke-width="1.5"/>`;
+
+  if (isLogic) {
+    for (let i = 0; i < 8; i += 1) {
+      const y = widgetY + 6 + i * 16;
+      markup += `<rect x="${widgetX + 8}" y="${y}" width="60" height="14" rx="2" ry="2" fill="${colors[i]}" stroke="#777" stroke-width="1"/>`;
+    }
+    markup += qtButtonSvg(widgetX + 8, widgetY + 130, 60, 16, "Expande", `${scopeId}-logic`);
+    markup += plotDisplaySvg(displayX, displayY, displayW, displayH, 8, 8, [], logicHistory, colors, false);
+  } else {
+    for (let i = 0; i < 4; i += 1) {
+      const y = widgetY + 18 + i * 29;
+      const latestValue = latest[i];
+      const label = typeof latestValue === "number" && latestValue !== 0 ? `${formatRailVoltage(latestValue)} Hz` : "0 Hz";
+      markup += `<text x="${widgetX + 8}" y="${y}" font-family="Segoe UI,Arial,sans-serif" font-size="9" font-weight="700" fill="#000">${escapeXmlText(label)}</text>`;
+      markup += `<rect x="${widgetX + 8}" y="${y + 5}" width="60" height="15" rx="2" ry="2" fill="${colors[i]}" stroke="#777" stroke-width="1"/>`;
+    }
+    markup += qtButtonSvg(widgetX + 8, widgetY + 130, 60, 16, "Expande", `${scopeId}-scope`);
+    markup += plotDisplaySvg(displayX, displayY, displayW, displayH, 4, widget.tracks ?? 1, histories, [], ["#00c864", "#f6f65a", "#ffd06a", "#d9d7ff"], false);
+  }
+  return markup;
+}
+
 /** Corpo completo de um typeId com `package`: fundo + formas declarativas + lead/rótulo de cada
  * pino, tudo num único `<g>` deslocado pro espaço sem coordenada negativa que `componentBox` usa
  * pro `viewBox` (ver `resolvePackageLayout`).
@@ -605,10 +714,12 @@ function packageBackgroundSvg(pkg: PackageDescriptor): string {
 function packageBodySvg(resolved: ResolvedPackage, componentId?: string, properties?: Record<string, unknown>): string {
   const pkg = resolved.source;
   let markup = packageBackgroundSvg(pkg);
+  const scopeId = `simulide-${componentId ? componentId.replace(/[^a-zA-Z0-9_-]/g, "_") : "static"}`;
 
   if (pkg.simulidePaint) {
-    const scopeId = `simulide-${componentId ? componentId.replace(/[^a-zA-Z0-9_-]/g, "_") : "static"}`;
     for (const shape of simulidePaintToPackageShapes(pkg.simulidePaint, pkg.width, pkg.height, properties ?? {}, scopeId)) markup += packageShapeSvg(shape);
+  } else if (pkg.qtWidget) {
+    markup += simulideQtWidgetSvg(pkg.qtWidget, properties ?? {}, scopeId);
   } else if (pkg.viewSpec && componentId) {
     markup += viewSpecBodySvg(pkg, componentId, properties ?? {}) ?? "";
   } else {

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><title>Lote Medidores v1</title>
+<style>
+body{font-family:Segoe UI,Arial,sans-serif;background:#f8f8e8;color:#111;margin:24px}
+table{border-collapse:collapse;width:100%;background:white}td,th{border:1px solid #ccc;padding:8px;vertical-align:top}code{font-family:Consolas,monospace;font-size:12px}.ok{color:#126b2f;font-weight:700}
+img{max-width:100%;border:1px solid #bbb;background:#f8f8e8}
+</style></head><body>
+<h1>Lote Medidores v1</h1>
+<p class="ok">Gerado a partir do renderer compilado da extensao. Teste executado: <code>npm --prefix extension test</code>.</p>
+<p><img src="lote-medidores-v1-contact-sheet.svg" alt="Contato visual do lote Medidores v1"></p>
+<table><thead><tr><th>Componente</th><th>Status</th><th>Fonte SimulIDE</th><th>Box</th><th>Pinos</th><th>Checks</th></tr></thead><tbody><tr>
+  <td><code>meters.probe</code></td>
+  <td>simulidePaint</td>
+  <td><code>src/components/meters/probe.cpp</code></td>
+  <td><code>{"width":30,"height":16}</code></td>
+  <td><code>[{"id":"pin-1","aliases":["inpin"],"position":{"x":0,"y":8},"real":true}]</code></td>
+  <td><code>{"usesPackageRenderer":true,"hasSimulidePaint":true,"hasQtWidget":false,"hasMultilineText":false,"hasAllRealPinPositions":true,"hasBlackBodyOrPlot":false,"hasUbuntuMono":false,"hasPlotBaseButton":false}</code></td>
+</tr>
+<tr>
+  <td><code>instruments.voltmeter</code></td>
+  <td>simulidePaint</td>
+  <td><code>src/components/meters/meter.cpp + voltmeter.cpp</code></td>
+  <td><code>{"width":64,"height":48}</code></td>
+  <td><code>[{"id":"pin-1","aliases":["lPin"],"position":{"x":16,"y":40},"real":true},{"id":"pin-2","aliases":["rPin"],"position":{"x":32,"y":40},"real":true},{"id":"pin-3","aliases":["outnod"],"position":{"x":56,"y":16},"real":true}]</code></td>
+  <td><code>{"usesPackageRenderer":true,"hasSimulidePaint":true,"hasQtWidget":false,"hasMultilineText":true,"hasAllRealPinPositions":true,"hasBlackBodyOrPlot":true,"hasUbuntuMono":true,"hasPlotBaseButton":false}</code></td>
+</tr>
+<tr>
+  <td><code>meters.ampmeter</code></td>
+  <td>simulidePaint</td>
+  <td><code>src/components/meters/meter.cpp + ampmeter.cpp</code></td>
+  <td><code>{"width":64,"height":48}</code></td>
+  <td><code>[{"id":"pin-1","aliases":["lPin"],"position":{"x":16,"y":40},"real":true},{"id":"pin-2","aliases":["rPin"],"position":{"x":32,"y":40},"real":true},{"id":"pin-3","aliases":["outnod"],"position":{"x":56,"y":16},"real":true}]</code></td>
+  <td><code>{"usesPackageRenderer":true,"hasSimulidePaint":true,"hasQtWidget":false,"hasMultilineText":true,"hasAllRealPinPositions":true,"hasBlackBodyOrPlot":true,"hasUbuntuMono":true,"hasPlotBaseButton":false}</code></td>
+</tr>
+<tr>
+  <td><code>meters.freqmeter</code></td>
+  <td>simulidePaint</td>
+  <td><code>src/components/meters/freqmeter.cpp</code></td>
+  <td><code>{"width":93,"height":20}</code></td>
+  <td><code>[{"id":"pin-1","aliases":["lPin"],"position":{"x":0,"y":10},"real":true}]</code></td>
+  <td><code>{"usesPackageRenderer":true,"hasSimulidePaint":true,"hasQtWidget":false,"hasMultilineText":false,"hasAllRealPinPositions":true,"hasBlackBodyOrPlot":true,"hasUbuntuMono":true,"hasPlotBaseButton":false}</code></td>
+</tr>
+<tr>
+  <td><code>meters.oscope</code></td>
+  <td>qtWidget</td>
+  <td><code>src/components/meters/oscope.cpp + src/gui/dataplotwidget/datawidget.ui + plotdisplay.cpp</code></td>
+  <td><code>{"width":227,"height":153}</code></td>
+  <td><code>[{"id":"pin-1","aliases":["Pin0"],"position":{"x":0,"y":25},"real":true},{"id":"pin-2","aliases":["Pin1"],"position":{"x":0,"y":57},"real":true},{"id":"pin-3","aliases":["Pin2"],"position":{"x":0,"y":89},"real":true},{"id":"pin-4","aliases":["Pin3"],"position":{"x":0,"y":121},"real":true}]</code></td>
+  <td><code>{"usesPackageRenderer":true,"hasSimulidePaint":false,"hasQtWidget":true,"hasMultilineText":false,"hasAllRealPinPositions":true,"hasBlackBodyOrPlot":true,"hasUbuntuMono":false,"hasPlotBaseButton":true}</code></td>
+</tr>
+<tr>
+  <td><code>meters.logic_analyzer</code></td>
+  <td>qtWidget</td>
+  <td><code>src/components/meters/logicanalizer.cpp + src/gui/dataplotwidget/datalawidget.ui + plotdisplay.cpp</code></td>
+  <td><code>{"width":227,"height":153}</code></td>
+  <td><code>[{"id":"pin-1","aliases":["Pin0"],"position":{"x":0,"y":9},"real":true},{"id":"pin-2","aliases":["Pin1"],"position":{"x":0,"y":25},"real":true},{"id":"pin-3","aliases":["Pin2"],"position":{"x":0,"y":41},"real":true},{"id":"pin-4","aliases":["Pin3"],"position":{"x":0,"y":57},"real":true},{"id":"pin-5","aliases":["Pin4"],"position":{"x":0,"y":73},"real":true},{"id":"pin-6","aliases":["Pin5"],"position":{"x":0,"y":89},"real":true},{"id":"pin-7","aliases":["Pin6"],"position":{"x":0,"y":105},"real":true},{"id":"pin-8","aliases":["Pin7"],"position":{"x":0,"y":121},"real":true}]</code></td>
+  <td><code>{"usesPackageRenderer":true,"hasSimulidePaint":false,"hasQtWidget":true,"hasMultilineText":false,"hasAllRealPinPositions":true,"hasBlackBodyOrPlot":true,"hasUbuntuMono":false,"hasPlotBaseButton":true}</code></td>
+</tr></tbody></table>
+</body></html>

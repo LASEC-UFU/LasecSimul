@@ -100,6 +100,70 @@ import { PackageDescriptor } from "./model";
     assert(!currentControlledSvg.includes(">+</text>") && !currentControlledSvg.includes(">–</text>"), `CurrControl=true deveria limpar labels dos pinos como Csource::updateStep(), markup: ${currentControlledSvg}`);
   });
 
+  await test("medidores pequenos vem do renderer package.simulidePaint, nao do SVG hardcoded legado", () => {
+    catalogPackage("instruments.voltmeter");
+    catalogPackage("meters.ampmeter");
+    catalogPackage("meters.freqmeter");
+
+    const voltBox = componentBox("instruments.voltmeter");
+    const ampBox = componentBox("meters.ampmeter");
+    const freqBox = componentBox("meters.freqmeter");
+    assert(voltBox.width === 64 && voltBox.height === 48, `Voltimeter deveria usar bounds do Meter real + pinos, recebido {${voltBox.width},${voltBox.height}}`);
+    assert(ampBox.width === 64 && ampBox.height === 48, `Ampmeter deveria usar bounds do Meter real + pinos, recebido {${ampBox.width},${ampBox.height}}`);
+    assert(freqBox.width === 93 && freqBox.height === 20, `FreqMeter deveria usar m_area + pino real, recebido {${freqBox.width},${freqBox.height}}`);
+
+    const v1 = pinLocalPosition("pin-1", 0, 3, "instruments.voltmeter");
+    const v2 = pinLocalPosition("pin-2", 1, 3, "instruments.voltmeter");
+    const v3 = pinLocalPosition("pin-3", 2, 3, "instruments.voltmeter");
+    assert(v1.x === 16 && v1.y === 40, `Voltimeter lPin deveria ficar em (-8,16) traduzido => (16,40), recebido ${JSON.stringify(v1)}`);
+    assert(v2.x === 32 && v2.y === 40, `Voltimeter rPin deveria ficar em (8,16) traduzido => (32,40), recebido ${JSON.stringify(v2)}`);
+    assert(v3.x === 56 && v3.y === 16, `Voltimeter outnod deveria ficar em (32,-8) traduzido => (56,16), recebido ${JSON.stringify(v3)}`);
+    const f1 = pinLocalPosition("pin-1", 0, 1, "meters.freqmeter");
+    assert(f1.x === 0 && f1.y === 10, `FreqMeter lPin deveria ficar em (-40,0) traduzido => (0,10), recebido ${JSON.stringify(f1)}`);
+
+    const voltSvg = packageSymbolSvg("instruments.voltmeter", { __readout: -2.499 }, "voltmeter-render") ?? "";
+    const ampSvg = packageSymbolSvg("meters.ampmeter", { __readout: 0.0012 }, "ampmeter-render") ?? "";
+    const freqSvg = packageSymbolSvg("meters.freqmeter", { __readout: 2500 }, "freqmeter-render") ?? "";
+    assert(voltSvg.includes('width="48" height="32"') && voltSvg.includes('fill="#000000"'), `Voltimeter deveria desenhar QRectF(-24,-24,48,32) preto, markup: ${voltSvg}`);
+    assert(voltSvg.includes('font-family="Ubuntu Mono"') && voltSvg.includes('font-size="13"'), `Voltimeter deveria usar fonte do SimulIDE, markup: ${voltSvg}`);
+    assert(voltSvg.includes('stroke="#ff0000"'), `Voltimeter lPin deveria preservar setColor(Qt::red), markup: ${voltSvg}`);
+    assert(voltSvg.includes("<tspan") && voltSvg.includes("-2.499") && voltSvg.includes("> V<"), `Voltimeter deveria renderizar QGraphicsSimpleTextItem em duas linhas, markup: ${voltSvg}`);
+    assert(ampSvg.includes("> 1.200<") && ampSvg.includes("> mA<"), `Ampmeter deveria formatar leitura via Meter::updateStep/valToUnit, markup: ${ampSvg}`);
+    assert(freqSvg.includes(">2.5000 kHz<"), `FreqMeter deveria formatar leitura via FreqMeter::updateStep, markup: ${freqSvg}`);
+  });
+
+  await test("probe e graficos PlotBase vem de package renderer, nao dos fallbacks grandes", () => {
+    const probePkg = catalogPackage("meters.probe");
+    const scopePkg = catalogPackage("meters.oscope");
+    const logicPkg = catalogPackage("meters.logic_analyzer");
+    assert(Boolean(probePkg.simulidePaint), "Probe deveria usar package.simulidePaint traduzido de probe.cpp");
+    assert(scopePkg.qtWidget?.kind === "plotBase", "Oscope deveria usar qtWidget plotBase traduzido de PlotBase/DataWidget");
+    assert(logicPkg.qtWidget?.variant === "logicAnalyzer", "Logic analyzer deveria usar qtWidget plotBase variant logicAnalyzer");
+
+    const probeBox = componentBox("meters.probe");
+    const scopeBox = componentBox("meters.oscope");
+    const logicBox = componentBox("meters.logic_analyzer");
+    assert(probeBox.width === 30 && probeBox.height === 16, `Probe deveria usar bounds reais (-22,-8,30,16), recebido ${JSON.stringify(probeBox)}`);
+    assert(scopeBox.width === 227 && scopeBox.height === 153, `Oscope deveria usar m_area+pins do PlotBase colapsado, recebido ${JSON.stringify(scopeBox)}`);
+    assert(logicBox.width === 227 && logicBox.height === 153, `Logic analyzer deveria usar m_area+pins do PlotBase colapsado, recebido ${JSON.stringify(logicBox)}`);
+
+    const probePin = pinLocalPosition("pin-1", 0, 1, "meters.probe");
+    const scopePin = pinLocalPosition("pin-1", 0, 4, "meters.oscope");
+    const logicPin8 = pinLocalPosition("pin-8", 7, 8, "meters.logic_analyzer");
+    assert(probePin.x === 0 && probePin.y === 8, `Probe inpin deveria ficar em (-22,0) traduzido => (0,8), recebido ${JSON.stringify(probePin)}`);
+    assert(scopePin.x === 0 && scopePin.y === 25, `Oscope Pin0 deveria ficar em (-88,-48) traduzido => (0,25), recebido ${JSON.stringify(scopePin)}`);
+    assert(logicPin8.x === 0 && logicPin8.y === 121, `Logic Pin7 deveria ficar em (-88,48) traduzido => (0,121), recebido ${JSON.stringify(logicPin8)}`);
+
+    const probeHigh = packageSymbolSvg("meters.probe", { __readout: 5, threshold: 2.5, negativeThreshold: -2.5 }, "probe-render") ?? "";
+    const probeLow = packageSymbolSvg("meters.probe", { __readout: -5, threshold: 2.5, negativeThreshold: -2.5 }, "probe-render-low") ?? "";
+    const scopeSvg = packageSymbolSvg("meters.oscope", {}, "scope-render") ?? "";
+    const logicSvg = packageSymbolSvg("meters.logic_analyzer", {}, "logic-render") ?? "";
+    assert(probeHigh.includes('fill="#ffa600"'), `Probe acima do threshold deveria ficar laranja por stateFill numerico, markup: ${probeHigh}`);
+    assert(probeLow.includes('fill="#0064ff"'), `Probe abaixo do threshold negativo deveria ficar azul por stateFill numerico, markup: ${probeLow}`);
+    assert(scopeSvg.includes('width="219" height="153"') && scopeSvg.includes(">0 Hz</text>"), `Oscope deveria renderizar DataWidget/PlotDisplay colapsado, markup: ${scopeSvg}`);
+    assert(logicSvg.includes('width="219" height="153"') && logicSvg.includes('width="60" height="14"'), `Logic analyzer deveria renderizar DataLaWidget/PlotDisplay colapsado, markup: ${logicSvg}`);
+  });
+
   await test("com package registrado, componentBox usa o layout resolvido (com folga pra leads)", () => {
     registerPackage("test.example", pkg);
     const box = componentBox("test.example");
@@ -511,10 +575,11 @@ import { PackageDescriptor } from "./model";
     assert(svg.includes("GPIO23"), "nome do tunel deveria ser desenhado dentro do simbolo");
   });
 
-  await test("voltimetro ancora leituras longas dentro do display", () => {
-    const svg = componentSymbolSvg("instruments.voltmeter", { __readout: -2.499 });
-    assert(svg.includes('text-anchor="end"'), "valor do voltimetro deveria ficar ancorado pela borda direita do LCD");
-    assert(svg.includes('style="font-size:11px"'), "leitura com sinal e tres casas deveria reduzir fonte para caber no LCD");
+  await test("voltimetro com package usa texto dinamico do renderer SimulIDE", () => {
+    catalogPackage("instruments.voltmeter");
+    const svg = packageSymbolSvg("instruments.voltmeter", { __readout: -2.499 }, "voltmeter-render-negative") ?? "";
+    assert(svg.includes('text-anchor="start"'), "texto do Meter real deveria iniciar em m_display.pos(), nao ancorar na direita como LCD custom");
+    assert(svg.includes('font-size="13"'), "texto do Meter real deveria usar pixelSize 13");
     assert(svg.includes(">-2.499<"), "leitura negativa deveria ser preservada no texto do display");
   });
 

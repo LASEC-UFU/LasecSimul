@@ -115,6 +115,7 @@ export interface PackagePin {
   length: number;
   leadOrigin?: "body" | "terminal";
   leadEndTrim?: number;
+  leadColor?: string;
   label?: string;
   labelColor?: string;
   labelFontSize?: number;
@@ -170,6 +171,7 @@ export interface PackageShape {
   transform?: string;
   fontFamily?: string;
   fontWeight?: string | number;
+  dominantBaseline?: "auto" | "middle" | "central" | "hanging" | "text-before-edge" | "text-after-edge";
   /** CSS class(es) added to the SVG element — used for interactive hit zones (e.g. "joystick-hit-zone"). */
   cssClass?: string;
   /** Nome do "part" deste elemento no ViewSpec — conecta ao `stateProjection[partId]` da spec.
@@ -219,7 +221,9 @@ export interface SimulidePaintStyle {
 
 export interface SimulidePaintStateFill {
   prop: string;
-  map: Record<string, string>;
+  map?: Record<string, string>;
+  numeric?: Array<{ op: ">" | ">=" | "<" | "<=" | "==" | "!="; value?: number; valueProp?: string; color: string }>;
+  fallback?: string;
 }
 
 export interface SimulidePaintStateVisible {
@@ -230,6 +234,11 @@ export interface SimulidePaintStateHref {
   prop: string;
   map: Record<string, string>;
 }
+
+export type SimulidePaintStateText =
+  | { kind: "meterDisplay"; unit: string }
+  | { kind: "frequencyDisplay" }
+  | { kind: "readout"; unit?: string; decimals?: number };
 
 export type SimulidePaintGradient =
   | {
@@ -259,7 +268,7 @@ export type SimulidePaintPrimitive =
   | ({ kind: "path"; d: string; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible } & SimulidePaintStyle)
   | ({ kind: "polygon"; points: Array<{ x: number; y: number }>; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible } & SimulidePaintStyle)
   | ({ kind: "polyline"; points: Array<{ x: number; y: number }>; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible } & SimulidePaintStyle)
-  | ({ kind: "text"; x: number; y: number; value: string; fontSize?: number; textAnchor?: PackageShape["textAnchor"]; fontFamily?: string; fontWeight?: string | number; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible } & SimulidePaintStyle)
+  | ({ kind: "text"; x: number; y: number; value: string; fontSize?: number; textAnchor?: PackageShape["textAnchor"]; dominantBaseline?: PackageShape["dominantBaseline"]; fontFamily?: string; fontWeight?: string | number; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible; stateText?: SimulidePaintStateText } & SimulidePaintStyle)
   | ({ kind: "image"; x: number; y: number; w: number; h: number; href: string; preserveAspectRatio?: string; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible; stateHref?: SimulidePaintStateHref } & SimulidePaintStyle);
 
 /** Declarative IR for SimulIDE C++ paint() output. Coordinates stay in the original QPainter item
@@ -272,6 +281,14 @@ export interface SimulidePaintSpec {
   defaultFill?: string;
   defaultStrokeWidth?: number;
   primitives: SimulidePaintPrimitive[];
+}
+
+export interface SimulideQtWidgetSpec {
+  kind: "plotBase";
+  variant: "oscope" | "logicAnalyzer";
+  channels: number;
+  tracks?: number;
+  source?: SimulidePaintSource;
 }
 
 /** SimulIDE stores Package.Width/Height in schematic grid cells; each cell is 8 scene units. */
@@ -448,12 +465,14 @@ export interface PackageDescriptor {
    * comportamento legado: usa `width`/`height` como tamanho visual também. */
   schematicWidth?: number;
   schematicHeight?: number;
+  initialTransform?: { rotateDeg?: number; cx?: number; cy?: number };
   border?: boolean;
   background?: PackageBackground;
   shapes?: PackageShape[];
   /** SimulIDE-compatible paint IR. When present it is rendered before legacy `viewSpec`/`shapes[]`
    * so migrated symbols can be audited against the original C++ paint() source. */
   simulidePaint?: SimulidePaintSpec;
+  qtWidget?: SimulideQtWidgetSpec;
   /** ViewSpec declarativo (P2) — quando presente, tem prioridade sobre `shapes[]`. Suporta
    * gradientes escopados por instância e stateProjection. */
   viewSpec?: ComponentViewSpec;

@@ -28,7 +28,29 @@ function transformFor(spec: SimulidePaintSpec, width: number, height: number): P
 function stateFillFor(primitive: SimulidePaintPrimitive, properties: Record<string, unknown>): string | undefined {
   if (!primitive.stateFill) return undefined;
   const raw = properties[primitive.stateFill.prop];
-  return primitive.stateFill.map[String(raw)];
+  if (primitive.stateFill.map) {
+    const mapped = primitive.stateFill.map[String(raw)];
+    if (mapped !== undefined) return mapped;
+  }
+  if (primitive.stateFill.numeric) {
+    const value = Number(raw);
+    if (Number.isFinite(value)) {
+      for (const rule of primitive.stateFill.numeric) {
+        const compareRaw = rule.valueProp ? Number(properties[rule.valueProp]) : rule.value;
+        if (!Number.isFinite(compareRaw)) continue;
+        const compareTo = Number(compareRaw);
+        if (
+          (rule.op === ">" && value > compareTo) ||
+          (rule.op === ">=" && value >= compareTo) ||
+          (rule.op === "<" && value < compareTo) ||
+          (rule.op === "<=" && value <= compareTo) ||
+          (rule.op === "==" && value === compareTo) ||
+          (rule.op === "!=" && value !== compareTo)
+        ) return rule.color;
+      }
+    }
+  }
+  return primitive.stateFill.fallback;
 }
 
 function stateVisibleFor(primitive: SimulidePaintPrimitive, properties: Record<string, unknown>): boolean {
@@ -43,6 +65,65 @@ function stateHrefFor(primitive: SimulidePaintPrimitive, properties: Record<stri
   if (primitive.kind !== "image" || !primitive.stateHref) return undefined;
   const raw = properties[primitive.stateHref.prop];
   return primitive.stateHref.map[String(raw)];
+}
+
+function readoutNumber(properties: Record<string, unknown>): number {
+  const value = properties.__readout;
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function simulideUnitScale(value: number): { value: number; multiplier: string; decimals: number } {
+  let scaled = value;
+  const units = [" p", " n", " u", " m", " ", " k", " M", " G"];
+  let unitIndex = 0;
+  for (; unitIndex < units.length - 1 && Math.abs(scaled) > 999; unitIndex += 1) {
+    scaled /= 1000;
+  }
+  const absScaled = Math.abs(scaled);
+  const decimals = absScaled < 10 ? 3 : absScaled < 100 ? 2 : 1;
+  return { value: scaled, multiplier: units[unitIndex] ?? "  ", decimals };
+}
+
+function formatFixed(value: number, decimals: number): string {
+  return value.toFixed(Math.max(0, Math.trunc(decimals)));
+}
+
+function formatSimulideMeterDisplay(value: number, unit: string): string {
+  let sign = " ";
+  let scaled = Math.abs(value);
+  if (scaled < 1e-9) scaled = 0;
+  let multiplier = " ";
+  let decimals = 3;
+  if (scaled !== 0) {
+    scaled *= 1e12;
+    if (value < 0) sign = "-";
+    const projected = simulideUnitScale(scaled);
+    scaled = projected.value;
+    multiplier = projected.multiplier;
+    decimals = projected.decimals;
+  }
+  if (scaled > 999) return " ----";
+  const numberText = formatFixed(scaled, decimals).slice(0, 5);
+  return `${sign}${numberText}\n${multiplier}${unit}`;
+}
+
+function formatSimulideFrequencyDisplay(value: number): string {
+  let freq = Math.max(0, value);
+  let unit = "  Hz";
+  if (freq > 999) { freq /= 1000; unit = " kHz"; }
+  if (freq > 999) { freq /= 1000; unit = " MHz"; }
+  if (freq > 999) { freq /= 1000; unit = " GHz"; }
+  const decimals = freq < 10 ? 4 : freq < 100 ? 3 : 2;
+  return `${formatFixed(freq, decimals)}${unit}`;
+}
+
+function stateTextFor(primitive: SimulidePaintPrimitive, properties: Record<string, unknown>): string | undefined {
+  if (primitive.kind !== "text" || !primitive.stateText) return undefined;
+  const readout = readoutNumber(properties);
+  if (primitive.stateText.kind === "meterDisplay") return formatSimulideMeterDisplay(readout, primitive.stateText.unit);
+  if (primitive.stateText.kind === "frequencyDisplay") return formatSimulideFrequencyDisplay(readout);
+  const decimals = primitive.stateText.decimals ?? 2;
+  return `${formatFixed(readout, decimals)}${primitive.stateText.unit ?? ""}`;
 }
 
 function gradientStops(stops: SimulidePaintGradient["stops"]): string {
@@ -214,9 +295,10 @@ export function simulidePaintToPackageShapes(
           kind: "text",
           x: transform.x(primitive.x),
           y: transform.y(primitive.y),
-          value: primitive.value,
+          value: stateTextFor(primitive, properties) ?? primitive.value,
           fontSize: transform.sw(primitive.fontSize),
           textAnchor: primitive.textAnchor,
+          dominantBaseline: primitive.dominantBaseline,
           color: primitive.fill ?? primitive.stroke ?? spec.defaultStroke ?? "currentColor",
           fontFamily: primitive.fontFamily,
           fontWeight: primitive.fontWeight,
