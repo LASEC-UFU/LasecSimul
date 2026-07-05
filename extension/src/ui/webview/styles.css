@@ -334,8 +334,8 @@ html, body {
 }
 
 .component__symbol--fixed-volt-on .fixed-volt-body {
-  fill: #c99a3d;
-  stroke: #5b513f;
+  fill: #ffa600;
+  stroke: currentColor;
 }
 
 .component__symbol {
@@ -391,70 +391,71 @@ html, body {
    tunnel/meter` isoladamente, mas nunca virou o padrão -- por isso resistor/porta lógica/keypad/
    relay/potenciômetro/etc ainda mostravam a bola gigante (bug relatado 2026-07-04). */
 .pin-terminal {
-  fill: var(--text);
+  fill: transparent;
   stroke: none;
   cursor: crosshair;
+  pointer-events: all;
 }
 
 .pin-terminal:hover {
-  fill: var(--accent);
+  fill: transparent;
   r: 6.5;
 }
 
 .pin-terminal--active {
-  fill: var(--accent);
-  stroke: var(--accent);
+  fill: transparent;
+  stroke: transparent;
   stroke-width: 2;
 }
 
 .component--fixed-volt .pin-terminal {
-  fill: var(--text);
-  stroke: var(--text);
+  fill: transparent;
+  stroke: transparent;
 }
 
 .component--fixed-volt .pin-terminal:hover {
-  fill: var(--text);
+  fill: transparent;
   r: 4.5;
 }
 
 .component--rail .pin-terminal {
-  fill: var(--text);
-  stroke: var(--text);
+  fill: transparent;
+  stroke: transparent;
 }
 
 .component--rail .pin-terminal:hover {
-  fill: var(--text);
+  fill: transparent;
   r: 4.5;
 }
 
 .component--tunnel .pin-terminal {
-  fill: var(--text);
-  stroke: var(--text);
+  fill: transparent;
+  stroke: transparent;
 }
 
 .component--tunnel .pin-terminal:hover {
-  fill: var(--text);
+  fill: transparent;
   r: 4.5;
 }
 
 .component--meter .pin-terminal {
-  fill: var(--text);
-  stroke: var(--text);
+  fill: transparent;
+  stroke: transparent;
 }
 
 .component--meter .pin-terminal:hover {
-  fill: var(--text);
+  fill: transparent;
   r: 4.5;
 }
 
 .component--meters-probe .pin-terminal {
-  fill: #ecebff;
-  stroke: var(--text);
+  fill: transparent;
+  stroke: transparent;
   r: 10;
 }
 
 .component--meters-probe .pin-terminal:hover {
-  fill: #ecebff;
+  fill: transparent;
   r: 10;
 }
 

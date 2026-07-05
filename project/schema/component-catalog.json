@@ -273,6 +273,186 @@
       },
       "help": {
         "description": "Resistor ideal. Valor de resistência configurável em Ω. Limitador de corrente e divisor de tensão."
+      },
+      "pinIds": [
+        "pin-1",
+        "pin-2"
+      ],
+      "package": {
+        "width": 32,
+        "height": 9,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/passive/resistors/resistor.cpp + src/components/comp2pin.cpp",
+            "className": "Resistor",
+            "method": "paint/drawAnsi",
+            "notes": "Comp2Pin m_area=QRectF(-11,-4.5,22,9), pins at (-16,0)/(16,0); Resistor setLength(4.4) so Pin draws length-0.7=3.7. Default SimulIDE ansi=false draws drawRect(m_area) with Component pen width 1.5 and white brush; ansi=true draws seven 2px zigzag segments from -12..12."
+          },
+          "bounds": {
+            "x": -16,
+            "y": -4.5,
+            "w": 32,
+            "h": 9
+          },
+          "defaultStroke": "#000",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 1.5,
+          "primitives": [
+            {
+              "kind": "rect",
+              "x": -11,
+              "y": -4.5,
+              "w": 22,
+              "h": 9,
+              "fill": "#ffffff",
+              "strokeWidth": 1.5,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "false",
+                    "undefined"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -12,
+              "y1": 0,
+              "x2": -10,
+              "y2": -4,
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -10,
+              "y1": -4,
+              "x2": -6,
+              "y2": 4,
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -6,
+              "y1": 4,
+              "x2": -2,
+              "y2": -4,
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -2,
+              "y1": -4,
+              "x2": 2,
+              "y2": 4,
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": 2,
+              "y1": 4,
+              "x2": 6,
+              "y2": -4,
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": 6,
+              "y1": -4,
+              "x2": 10,
+              "y2": 4,
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": 10,
+              "y1": 4,
+              "x2": 12,
+              "y2": 0,
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "true"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "aliases": [
+              "p1",
+              "lPin"
+            ],
+            "x": 3.7,
+            "y": 4.5,
+            "angle": 180,
+            "length": 3.7,
+            "label": ""
+          },
+          {
+            "id": "pin-2",
+            "aliases": [
+              "p2",
+              "rPin"
+            ],
+            "x": 28.3,
+            "y": 4.5,
+            "angle": 0,
+            "length": 3.7,
+            "label": ""
+          }
+        ]
       }
     },
     {
@@ -381,6 +561,82 @@
       },
       "help": {
         "description": "Capacitor ideal. Valor de capacitância configurável em Farads. Armazena energia no campo elétrico."
+      },
+      "pinIds": [
+        "pin-1",
+        "pin-2"
+      ],
+      "package": {
+        "width": 32,
+        "height": 16,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/passive/reactive/capacitor.cpp + capacitorbase.cpp + comp2pin.cpp",
+            "className": "Capacitor",
+            "method": "paint",
+            "notes": "CapacitorBase m_area=QRectF(-10,-8,20,16), inherited Comp2Pin pins (-16,0)/(16,0); setLength(12) so Pin draws length-0.7=11.3. Capacitor::paint uses pen width 3 and drawLine(-3,-6,-3,6), drawLine(3,-6,3,6)."
+          },
+          "bounds": {
+            "x": -16,
+            "y": -8,
+            "w": 32,
+            "h": 16
+          },
+          "defaultStroke": "#000",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 1.5,
+          "primitives": [
+            {
+              "kind": "line",
+              "x1": -3,
+              "y1": -6,
+              "x2": -3,
+              "y2": 6,
+              "strokeWidth": 3,
+              "strokeLinecap": "round"
+            },
+            {
+              "kind": "line",
+              "x1": 3,
+              "y1": -6,
+              "x2": 3,
+              "y2": 6,
+              "strokeWidth": 3,
+              "strokeLinecap": "round"
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "aliases": [
+              "p1",
+              "lPin"
+            ],
+            "x": 11.3,
+            "y": 8,
+            "angle": 180,
+            "length": 11.3,
+            "label": ""
+          },
+          {
+            "id": "pin-2",
+            "aliases": [
+              "p2",
+              "rPin"
+            ],
+            "x": 20.7,
+            "y": 8,
+            "angle": 0,
+            "length": 11.3,
+            "label": ""
+          }
+        ]
       }
     },
     {
@@ -407,6 +663,97 @@
       ],
       "defaultProperties": {
         "inductance": 0.001
+      },
+      "pinIds": [
+        "pin-1",
+        "pin-2"
+      ],
+      "package": {
+        "width": 32,
+        "height": 12,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/passive/reactive/inductor.cpp + reactive.cpp + comp2pin.cpp",
+            "className": "Inductor",
+            "method": "paint",
+            "notes": "Inductor m_area=QRectF(-10,-6,20,12), inherited Comp2Pin pins (-16,0)/(16,0); setLength(4) so Pin draws length-0.7=3.3. paint uses pen width 2 and drawArc QRectF(-12,-4.5,10,10),(-5,-4.5,10,10),(2,-4.5,10,10) with spans 220,-270,-220."
+          },
+          "bounds": {
+            "x": -16,
+            "y": -6,
+            "w": 32,
+            "h": 12
+          },
+          "defaultStroke": "#000",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 2,
+          "primitives": [
+            {
+              "kind": "arc",
+              "x": -12,
+              "y": -4.5,
+              "w": 10,
+              "h": 10,
+              "startDeg": -45,
+              "spanDeg": 220,
+              "strokeWidth": 2,
+              "fill": "none"
+            },
+            {
+              "kind": "arc",
+              "x": -5,
+              "y": -4.5,
+              "w": 10,
+              "h": 10,
+              "startDeg": 225,
+              "spanDeg": -270,
+              "strokeWidth": 2,
+              "fill": "none"
+            },
+            {
+              "kind": "arc",
+              "x": 2,
+              "y": -4.5,
+              "w": 10,
+              "h": 10,
+              "startDeg": 225,
+              "spanDeg": -220,
+              "strokeWidth": 2,
+              "fill": "none"
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "aliases": [
+              "p1",
+              "lPin"
+            ],
+            "x": 3.3,
+            "y": 6,
+            "angle": 180,
+            "length": 3.3,
+            "label": ""
+          },
+          {
+            "id": "pin-2",
+            "aliases": [
+              "p2",
+              "rPin"
+            ],
+            "x": 28.7,
+            "y": 6,
+            "angle": 0,
+            "length": 3.3,
+            "label": ""
+          }
+        ]
       }
     },
     {
@@ -919,6 +1266,9 @@
       "typeId": "sources.fixed_volt",
       "label": "Tensao Fixa",
       "pinCount": 1,
+      "pinIds": [
+        "out"
+      ],
       "icon": "tensao-fixa",
       "folderPath": [
         "Fontes"
@@ -926,6 +1276,74 @@
       "defaultProperties": {
         "voltage": 5,
         "out": true
+      },
+      "package": {
+        "width": 28,
+        "height": 24,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/sources/fixedvolt.cpp",
+            "className": "FixedVolt",
+            "method": "paint",
+            "notes": "non-small: m_area=QRect(-10,-10,20,20); IoPin(0,QPoint(16,0)); drawRoundedRect(-8,-8,16,16,2,2); brush #ffa600 when Out=true else #e6e6ff"
+          },
+          "bounds": {
+            "x": -12,
+            "y": -12,
+            "w": 28,
+            "h": 24
+          },
+          "defaultStroke": "#000",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 1.5,
+          "primitives": [
+            {
+              "kind": "line",
+              "x1": 8,
+              "y1": 0,
+              "x2": 16,
+              "y2": 0,
+              "strokeWidth": 3,
+              "strokeLinecap": "round"
+            },
+            {
+              "kind": "roundedRect",
+              "x": -8,
+              "y": -8,
+              "w": 16,
+              "h": 16,
+              "rx": 2,
+              "ry": 2,
+              "stateFill": {
+                "prop": "out",
+                "map": {
+                  "true": "#ffa600",
+                  "false": "#e6e6ff"
+                }
+              },
+              "fill": "#e6e6ff"
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "out",
+            "aliases": [
+              "pin",
+              "pin-1"
+            ],
+            "x": 28,
+            "y": 12,
+            "angle": 0,
+            "length": 0,
+            "label": ""
+          }
+        ]
       },
       "help": {
         "description": "Fonte de tensão fixa de um pino referenciada ao GND. Útil como trilho de alimentação (VCC, 3.3 V, etc.)."
@@ -946,6 +1364,113 @@
       },
       "help": {
         "description": "Gerador de clock digital (onda quadrada 50% duty cycle). Frequência configurável em Hz."
+      },
+      "pinIds": [
+        "pin-1"
+      ],
+      "package": {
+        "width": 30,
+        "height": 16,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/sources/clock.cpp + clock-base.cpp",
+            "className": "Clock",
+            "method": "paint",
+            "notes": "ClockBase m_area=QRect(-14,-8,22,16), IoPin(0,QPoint(16,0)); Clock::paint roundedRect(m_area,2,2), fill #fac832 running else #e6e6ff, then pulse polyline with pen width 1."
+          },
+          "bounds": {
+            "x": -14,
+            "y": -8,
+            "w": 30,
+            "h": 16
+          },
+          "defaultStroke": "#000",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 1,
+          "primitives": [
+            {
+              "kind": "line",
+              "x1": 8,
+              "y1": 0,
+              "x2": 16,
+              "y2": 0,
+              "strokeWidth": 3,
+              "strokeLinecap": "round"
+            },
+            {
+              "kind": "roundedRect",
+              "x": -14,
+              "y": -8,
+              "w": 22,
+              "h": 16,
+              "rx": 2,
+              "ry": 2,
+              "fill": "#e6e6ff",
+              "stateFill": {
+                "prop": "running",
+                "map": {
+                  "true": "#fac832",
+                  "false": "#e6e6ff"
+                }
+              }
+            },
+            {
+              "kind": "polyline",
+              "points": [
+                {
+                  "x": -11,
+                  "y": 3
+                },
+                {
+                  "x": -11,
+                  "y": -3
+                },
+                {
+                  "x": -5,
+                  "y": -3
+                },
+                {
+                  "x": -5,
+                  "y": 3
+                },
+                {
+                  "x": 1,
+                  "y": 3
+                },
+                {
+                  "x": 1,
+                  "y": -3
+                },
+                {
+                  "x": 4,
+                  "y": -3
+                }
+              ],
+              "fill": "none",
+              "strokeWidth": 1,
+              "strokeLinecap": "square",
+              "strokeLinejoin": "miter"
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "aliases": [
+              "out"
+            ],
+            "x": 30,
+            "y": 8,
+            "angle": 0,
+            "length": 0,
+            "label": ""
+          }
+        ]
       }
     },
     {
@@ -963,6 +1488,131 @@
       },
       "help": {
         "description": "Gerador de formas de onda: senoidal, triangular, quadrada. Configure frequência e amplitude."
+      },
+      "pinIds": [
+        "pin-1",
+        "pin-2"
+      ],
+      "package": {
+        "width": 30,
+        "height": 16,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/sources/wavegen.cpp + clock-base.cpp",
+            "className": "WaveGen",
+            "method": "paint",
+            "notes": "ClockBase m_area=QRect(-14,-8,22,16); out pin (16,0), gnd pin (16,4) visible only when Bipolar=true; drawRoundedRect(m_area,2,2); drawPixmap(m_area.x()+3,m_area.y()+4,16,8,*m_wavePixmap)."
+          },
+          "bounds": {
+            "x": -14,
+            "y": -8,
+            "w": 30,
+            "h": 16
+          },
+          "defaultStroke": "#000",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 1,
+          "primitives": [
+            {
+              "kind": "line",
+              "x1": 8,
+              "y1": 0,
+              "x2": 16,
+              "y2": 0,
+              "strokeWidth": 3,
+              "strokeLinecap": "round"
+            },
+            {
+              "kind": "line",
+              "x1": 8,
+              "y1": 4,
+              "x2": 16,
+              "y2": 4,
+              "strokeWidth": 3,
+              "strokeLinecap": "round",
+              "stateVisible": {
+                "when": {
+                  "bipolar": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "roundedRect",
+              "x": -14,
+              "y": -8,
+              "w": 22,
+              "h": 16,
+              "rx": 2,
+              "ry": 2,
+              "fill": "#e6e6ff",
+              "stateFill": {
+                "prop": "running",
+                "map": {
+                  "true": "#fac832",
+                  "false": "#e6e6ff"
+                }
+              }
+            },
+            {
+              "kind": "image",
+              "x": -11,
+              "y": -4,
+              "w": 16,
+              "h": 8,
+              "href": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFAAAAAqCAYAAAAkqNwKAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAABvgAAAb4BF1aGFAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAOySURBVGiB3dtviGZjGMfxz/OYtTGMXa0pliX/kt1WYlEopdlk/YnygpJ5YZPyztaWNwZFSpLyP2lTeCHZDa2IBhuxu7yRdrMW479kMMxgmseL29TMc99PPX/OOc85863z6sy5rt91nfPc93Vf9z01vVPDhbgeF2ANhvArDmI3XsWbmM3A35JiBB+j0cb1A7ZgsC9KS8ZReF57iWu+DmJj8ZLLw3p8obvkzV9zuBv1grVnTq3Dvx/Bi8IY18wc3sF7mMIwzsZFWNbC3jO4+f9nlzxX4G/pL2o7zmjx3CqM4fcWzz6m8xdZOTZiRhz8FEbbtLEG4wkbDTyYrdxysQ6/iYP+Hud0aGsZnk3YauDGjPSWimOkJ4yvcXKXNg/BCwmbUzizR72lYjneFQf6HU7t0fYAXknY/hSH92i7NDwuDvAvbMjI/krpr/v+jOz3lWuka7cbMvazQTw5/SuUP5XlePwiTuCdOfnbmvD1oTBWVo463hIHtFN+tdqA9Hp6c07+cuU2cSA/4dic/Z4rdGoW+v0RR+bsN1NOEK8W5nB5Qf4fEb+8sYJ8Z8IOcQCPFuh/WFywT8n/68+Eq8XJ+xYrCtZxR0LHUwVr6JhDsV8s/Mo+aDkME006ZoXlZFmoY63QJEHoEjcn76W+SAuMJvS81kc9CxnELkHTjLCNEb3xad2vc7Ogjk/ESby0j5rmuc9iTRPECby3X+oWMCJO4F797WCfIl41TRA+w/kbu5Rn02encrW8tif0bJm/uUoYGMu0R7FeXFx/JUw0RZPqDewTJuBS87RY+NaCNQzhm4SOTQXr6IrV+NNi4ZMWlBAF8KQ4eS8X6L9n7hEH8HBBvq8SlrPNL3B1Qf4z4Qhh/6W5uO50P6ZThoXTFM0v75ac/ebCreJA9gitsDyo4fWEzzdUdAt2QEhYyzIiY8YSvn7GcTn5K4Sz8I/FQc3I/qd8nXjcawgNl8rzgDiwA7LrGp0vLGX72dbLlUF8Jg5wh97Hw9OlJ41xFSiYO2GduDZs4Dndb0SdJl0sH1BszVkYN4mDbWCb1ifBWnGesP/SbGvSEjsp0cxD0kkcx4lt2tgs/TVPK0f7LFdqeEI6iX/gLqEYTrFWaNKmnp3GZZ2IqDJ1oeEw2uL+rNCi2yv8TIdwsXDoMxX7JK7F21kLLTN14bhwqnbr5PpcufZeCmdEOMDeTfK2qdgmfl4M4nbhCF47ifsIl/TisOpjYCsGhFl0k3Bs5CQcLUwuX+J94d80PhAS2TX/AXF65T+XhwPNAAAAAElFTkSuQmCC",
+              "preserveAspectRatio": "none",
+              "stateHref": {
+                "prop": "waveType",
+                "map": {
+                  "Sine": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFAAAAAqCAYAAAAkqNwKAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAABvgAAAb4BF1aGFAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAOySURBVGiB3dtviGZjGMfxz/OYtTGMXa0pliX/kt1WYlEopdlk/YnygpJ5YZPyztaWNwZFSpLyP2lTeCHZDa2IBhuxu7yRdrMW479kMMxgmseL29TMc99PPX/OOc85863z6sy5rt91nfPc93Vf9z01vVPDhbgeF2ANhvArDmI3XsWbmM3A35JiBB+j0cb1A7ZgsC9KS8ZReF57iWu+DmJj8ZLLw3p8obvkzV9zuBv1grVnTq3Dvx/Bi8IY18wc3sF7mMIwzsZFWNbC3jO4+f9nlzxX4G/pL2o7zmjx3CqM4fcWzz6m8xdZOTZiRhz8FEbbtLEG4wkbDTyYrdxysQ6/iYP+Hud0aGsZnk3YauDGjPSWimOkJ4yvcXKXNg/BCwmbUzizR72lYjneFQf6HU7t0fYAXknY/hSH92i7NDwuDvAvbMjI/krpr/v+jOz3lWuka7cbMvazQTw5/SuUP5XlePwiTuCdOfnbmvD1oTBWVo463hIHtFN+tdqA9Hp6c07+cuU2cSA/4dic/Z4rdGoW+v0RR+bsN1NOEK8W5nB5Qf4fEb+8sYJ8Z8IOcQCPFuh/WFywT8n/68+Eq8XJ+xYrCtZxR0LHUwVr6JhDsV8s/Mo+aDkME006ZoXlZFmoY63QJEHoEjcn76W+SAuMJvS81kc9CxnELkHTjLCNEb3xad2vc7Ogjk/ESby0j5rmuc9iTRPECby3X+oWMCJO4F797WCfIl41TRA+w/kbu5Rn02encrW8tif0bJm/uUoYGMu0R7FeXFx/JUw0RZPqDewTJuBS87RY+NaCNQzhm4SOTQXr6IrV+NNi4ZMWlBAF8KQ4eS8X6L9n7hEH8HBBvq8SlrPNL3B1Qf4z4Qhh/6W5uO50P6ZThoXTFM0v75ac/ebCreJA9gitsDyo4fWEzzdUdAt2QEhYyzIiY8YSvn7GcTn5K4Sz8I/FQc3I/qd8nXjcawgNl8rzgDiwA7LrGp0vLGX72dbLlUF8Jg5wh97Hw9OlJ41xFSiYO2GduDZs4Dndb0SdJl0sH1BszVkYN4mDbWCb1ifBWnGesP/SbGvSEjsp0cxD0kkcx4lt2tgs/TVPK0f7LFdqeEI6iX/gLqEYTrFWaNKmnp3GZZ2IqDJ1oeEw2uL+rNCi2yv8TIdwsXDoMxX7JK7F21kLLTN14bhwqnbr5PpcufZeCmdEOMDeTfK2qdgmfl4M4nbhCF47ifsIl/TisOpjYCsGhFl0k3Bs5CQcLUwuX+J94d80PhAS2TX/AXF65T+XhwPNAAAAAElFTkSuQmCC",
+                  "Saw": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFAAAAAqCAYAAAAkqNwKAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAABvgAAAb4BF1aGFAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAANLSURBVGiBzds5iCRlGIDhpxdvxEBnF9REVEwMBQPRwEAQ0UUQ0cUTRDwCQRFUzDwDwWM1NveKPFjFYAPBRPE+InHEQAwMFo/F7Z026Bl2uv2+urqq/v5gYOip+uflobq7uruafudyfIu/8DL29Lx+13kYf+BX7C/cks5VOILZrp8bixbN5ymLTUdwetGiYK7GnxZDZ3i8ZBSe9v+mGS4qGbU815jfZaPQJwp2PZM0zXBxwa6FuRZ/y0NLAS7fbdcS8Dr8ozq0BGAd3loAXo+j6kPHBswe89YK8Gb8G0T9gqlygM8FTTP8FtxWDPAWHAuCNs2f2ZaPyrEAsyPvMA4EtxcBPCDG+xkXbm9TAjB7tv3I/Hxvf/C30QHvwfEg5CdcsGu7sQHr8FgDwHvFeD/i/KVtxwTM8D60+EqjKOB92AoCfsB5wfZjAT4bNEV4FAR8RIz3Pc5N9hkDsA0ehQAfTSK/wEbFfkMDZqcqGR4FAB9LIj/HOTX7DgmY4R3CaRX7jQqY4X2GsxvsPxRgVzxGBMxeQ36CsxquMQTg80lXEzxGAnwhiTyMM1us0zfgi0nX+zi14Rp9A+7BpXY9FzyZRH6MM1ou3ifgS0lXGzz6BdzAp9trHMWt8HvwDw7p9rZ3H4ATOd572uHRH+AGvlxaZxO+CyKbPLZEsyrgxPzDqL7w6AdwA18F62zCldu/HMPrOKVD5M6sAliF965ueKwOuFeMt4XbOjal0xVwgleCyBk+0P0ewWqAe/F1sP8WHlyhKZ0ugHV4XY+8nekKODoe7QEnOBhE9oVHN8AieLQDrMJre6pSNW0Bq/Ae6KkpnaaAY+HRDrAoHs0AJ3g1iBwCj+aA+xTGox6wCq/reV7dNAHch2+C7bZw/wBN6VQBlsCjHnBt8MgBJ3gtiBwaj2rAtcIjBqzCewcnD9yUAWZ4x3H3wE3pRIAl8YgBrzC/EDTCu2uEpnSWAaPLKmZ42zh4xIBRV3E8ml1wNCYeMeBa4lEPODYe9YBTa4JHNeBbxsejGnCKOws0pZMBvomTCjVlgFPcUagpneiK1ZJ4cEPQNMXtBZvSWf7M4A1l8eASi5eoTA3wTnJfc5kTX7Q5qDzezjzkxBdtbupz4f8A3MQa9JJgxyIAAAAASUVORK5CYII=",
+                  "Triangle": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFAAAAAqCAYAAAAkqNwKAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAABvgAAAb4BF1aGFAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAK9SURBVGiB7dvLjhRVGAfwX00zwAMMDBdJeADeBHYEZcJNNJkIj2Bcs4UAKlFRwnUBqAvUeQTWKuAFwoQnYEmYgXZxOAbor2oauqq7err/SW2qur7z9S+n+tTiNPVmL5bxFJ/XXHvdZz+eo/vacRrFKJsalxzQizdF7DMfYkWMl48zpohhDlgbLx8XTBHfyEEx3iMsBee7OGeKiPLHdhm7sRE/B9e7+MaEI5bhPZbwctZCnBlaxy3KR/rDy9mIn4LPTyRiGd4/2Flx36xyxG9NCGLZgrEWXs4sfgzu7+I76xxxULyciURcwKreL/y3d8PL6eB6UK+Li9YZ4nG8EOPtGKDuRCCW4f1lMLycDq4F9bv43pgjfqJZvJwOrgbjjDViFd72BsarQrzx6vrY5FMx3gPN4OV0cCUYNyNuaHDs2rKIl3q/wJ+YH8L4GySsCPGyds3EGezBXD5xSIz3B7YOsbGq1fmKdiDO4a7U0zPpNc8TvQ3/ji0jaLBqdb5qtIhbJJfXe3pCL+Co8HKqFpZrRoMY4f0PuCBNx640PefiGkNN1cJy3XARt0o/Z2/38VL6+UNC26Nd714daQEZ5eo8Ly2kEd7iEMYfODO4JEa8qVnEqpl3ssFxa88MflCOONvAmFV4JxoYr/EU+NpwEKse27HEyynwlRjxlnoQq/A+q6H+yFOFeNtgiPO4F9R9gY8HqNu6FPhSjHgHm96jZhXescFbbl/qRNwmxlu1TvFyCpwXI/6iP8RtuB/cv4qj9bfcvgyCOPF4OYW05yZC/BWbg3s+wL/B51dxpPmW25cCZ/WHuEs53uHhtdy+VCH+JiHuwsPg+sTj5VQ9zkvS1ru3z69ImwemeZVC2hEbIUYz71BcZrLTD+KKtFVvmpIU0gb3CO+5tD15mj5ySu9juzDSjsYwX0h//lnGvjoL/wccxeWGUBpJFwAAAABJRU5ErkJggg==",
+                  "Square": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFAAAAAqCAYAAAAkqNwKAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAABvgAAAb4BF1aGFAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAEuSURBVGiB7dsxagJBGIbh10FyhLQ2Vpa2CaTPCYScIBdJ4YVs4wVSiVXA1itEJaYYITouceUL/rPwPTDFLlv8vGw5P8AY+AB2wL7CswIm1KEHvAFrcrMxwIL4SJfOF3D//z2u9szpXIsEjEJHaucOGEYPwXmrUSL/ll1Qw5ypeO71Gz6aAfMbDPOXAfAaPEMrTQHfgemN5yg90JGA5S9pV3JAkQOKHFDkgCIHFDmgyAFFDihyQJEDihxQ5IAiBxQ5oMgBRQ4ockCRA4ocUOSAIgcUOaDIAUUOKHJAkQOKHFDkgCIHFDmgqOl+YK1egMfgGZ7KF10KWOWFy0S+bX7sO2KQQjlTrfYJWBYvy+cIn8AmeogWlvC7aLMmL5HUcBse8nLNivgdlaaz5bBo8wPXj5FTBwtyFAAAAABJRU5ErkJggg==",
+                  "Random": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFAAAAAqCAYAAAAkqNwKAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAABvgAAAb4BF1aGFAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAJvSURBVGiB7drPi41RHMfxl+sySVbEiFFjykRJmj/A2oLF7GZDyopsRo0/QBYsZ0EpK5mNkJ0dZSQLSwlJI8rMhBLJlRmL5xrjuXdmnjnPr3v1vOvU7Tzne87n+Tz3POd7ng6dyzFMYz5B+Yk72FSK0g5kGxqSmbe4nC9aaK3oARMygHUBcYNZC1mJTjVwTcFxwdSLHjAFVzAVqzuNvhK0LNBNBt7Ao1jdsJIN7NQp3DVUBqakMjAldWzAKezJsN8vuIpXGfaZN3WcxMGE7V/ich3XMJKDoBOivOxjDn3nwUWMrjJmqCZayfJgMw7l1HcehPgwXENP1koWkWffWROitaddHvgeHwI6W4/9AXGdyjTexep6sWNxRTsDx3EpYMA+vA2I61QmtL4Tx0TvygWqNCYllYEpqQxMSVkfE3qwz9IPsPDveqGUYWA/HmBXCWNnThlTeNR/Yh6RgfGcLyQHXA29gXF560pCi1c1UW7TaFZM4mahkpIxjtdlixB5M9n83cBYHddxD1vxHHMFi3qG48tc/4Q3BWlZie+i/f1ezGD2zyIy2yxl8A1PSxo7hDnRQ0eVB6amMjAllYEpyTuRvoCzsbrdOY/ZjqNNHRuXabMlpOO8DexvljIZwC053WuWU/hHwXFJGRJmXmPlJtkaOONvkrkabmeooR1rA2J+4W6Shln/rY/gDHYmaDuPh6Ivv0Uzga9LXGuIdhyPi5NTHk/8ez6w3TZ0ROs5wszO01RpTEoqA1NSGZiSbjofmIRBnIvVHShDSLcQX0SSlmoRaTJfcFwL3W7gi4CYz6KkvwLbcV+0c0gydadwOEsBvwEfR4aVhzL6oQAAAABJRU5ErkJggg==",
+                  "Wav": "data:image/png;base64,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"
+                }
+              }
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "aliases": [
+              "out"
+            ],
+            "x": 30,
+            "y": 8,
+            "angle": 0,
+            "length": 0,
+            "label": ""
+          },
+          {
+            "id": "pin-2",
+            "aliases": [
+              "gnd"
+            ],
+            "x": 30,
+            "y": 12,
+            "angle": 0,
+            "length": 0,
+            "label": "",
+            "stateVisible": {
+              "when": {
+                "bipolar": [
+                  "true"
+                ]
+              }
+            }
+          }
+        ]
       }
     },
     {
@@ -980,6 +1630,70 @@
       },
       "help": {
         "description": "Fonte de tensão variável controlável via slider durante a simulação. Referenciada ao GND."
+      },
+      "pinIds": [
+        "pin-1"
+      ],
+      "package": {
+        "width": 48,
+        "height": 56,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/sources/varsource.cpp + voltsource.cpp",
+            "className": "VoltSource",
+            "method": "VarSource::paint + Qt widgets",
+            "notes": "VarSource paint draws roundedRect(m_area,2,2) with m_area=(-20,-28,40,56); native QDial+CustomButton are QGraphicsProxyWidget children and require a widget adapter for full fidelity; out pin at (28,16)."
+          },
+          "bounds": {
+            "x": -20,
+            "y": -28,
+            "w": 48,
+            "h": 56
+          },
+          "defaultStroke": "#000",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 1,
+          "primitives": [
+            {
+              "kind": "line",
+              "x1": 20,
+              "y1": 16,
+              "x2": 28,
+              "y2": 16,
+              "strokeWidth": 3,
+              "strokeLinecap": "round"
+            },
+            {
+              "kind": "roundedRect",
+              "x": -20,
+              "y": -28,
+              "w": 40,
+              "h": 56,
+              "rx": 2,
+              "ry": 2,
+              "fill": "#e6e6e6",
+              "strokeWidth": 1
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "aliases": [
+              "out"
+            ],
+            "x": 48,
+            "y": 44,
+            "angle": 0,
+            "length": 0,
+            "label": ""
+          }
+        ]
       }
     },
     {
@@ -997,6 +1711,70 @@
       },
       "help": {
         "description": "Fonte de corrente variável controlável durante a simulação. Injeção de corrente constante no nó."
+      },
+      "pinIds": [
+        "pin-1"
+      ],
+      "package": {
+        "width": 48,
+        "height": 56,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/sources/varsource.cpp + currsource.cpp",
+            "className": "CurrSource",
+            "method": "VarSource::paint + Qt widgets",
+            "notes": "VarSource paint draws roundedRect(m_area,2,2) with m_area=(-20,-28,40,56); native QDial+CustomButton are QGraphicsProxyWidget children and require a widget adapter for full fidelity; out pin at (28,16)."
+          },
+          "bounds": {
+            "x": -20,
+            "y": -28,
+            "w": 48,
+            "h": 56
+          },
+          "defaultStroke": "#000",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 1,
+          "primitives": [
+            {
+              "kind": "line",
+              "x1": 20,
+              "y1": 16,
+              "x2": 28,
+              "y2": 16,
+              "strokeWidth": 3,
+              "strokeLinecap": "round"
+            },
+            {
+              "kind": "roundedRect",
+              "x": -20,
+              "y": -28,
+              "w": 40,
+              "h": 56,
+              "rx": 2,
+              "ry": 2,
+              "fill": "#e6e6e6",
+              "strokeWidth": 1
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "aliases": [
+              "out"
+            ],
+            "x": 48,
+            "y": 44,
+            "angle": 0,
+            "length": 0,
+            "label": ""
+          }
+        ]
       }
     },
     {
@@ -1015,6 +1793,396 @@
       },
       "help": {
         "description": "Fonte controlada por tensão ou corrente (VCCS/VCVS/CCCS/CCVS). Configure tipo e ganho."
+      },
+      "pinIds": [
+        "pin-1",
+        "pin-2",
+        "pin-3",
+        "pin-4"
+      ],
+      "package": {
+        "width": 48,
+        "height": 40,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/sources/csource.cpp",
+            "className": "Csource",
+            "method": "paint",
+            "notes": "m_area=QRect(-16,-16,32,32); control pins (-24,-8),(-24,8); source pins (0,-20),(0,20); controlPins/currSource/currControl switch rect/ellipse/diamond, arrow/signs and current-control mark."
+          },
+          "bounds": {
+            "x": -24,
+            "y": -20,
+            "w": 48,
+            "h": 40
+          },
+          "defaultStroke": "#000",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 1,
+          "primitives": [
+            {
+              "kind": "line",
+              "x1": -24,
+              "y1": -8,
+              "x2": -16,
+              "y2": -8,
+              "strokeWidth": 3,
+              "strokeLinecap": "round",
+              "stateVisible": {
+                "when": {
+                  "controlPins": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -24,
+              "y1": 8,
+              "x2": -16,
+              "y2": 8,
+              "strokeWidth": 3,
+              "strokeLinecap": "round",
+              "stateVisible": {
+                "when": {
+                  "controlPins": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": 0,
+              "y1": -20,
+              "x2": 0,
+              "y2": -16,
+              "strokeWidth": 3,
+              "strokeLinecap": "round"
+            },
+            {
+              "kind": "line",
+              "x1": 0,
+              "y1": 16,
+              "x2": 0,
+              "y2": 20,
+              "strokeWidth": 3,
+              "strokeLinecap": "round"
+            },
+            {
+              "kind": "rect",
+              "x": -16,
+              "y": -16,
+              "w": 32,
+              "h": 32,
+              "fill": "none",
+              "strokeWidth": 1,
+              "stateVisible": {
+                "when": {
+                  "controlPins": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "ellipse",
+              "cx": 0,
+              "cy": 0,
+              "rx": 10,
+              "ry": 10,
+              "fill": "none",
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "controlPins": [
+                    "false"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "polygon",
+              "points": [
+                {
+                  "x": -8,
+                  "y": 0
+                },
+                {
+                  "x": 0,
+                  "y": -13
+                },
+                {
+                  "x": 8,
+                  "y": 0
+                },
+                {
+                  "x": 0,
+                  "y": 13
+                }
+              ],
+              "fill": "none",
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "controlPins": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": 0,
+              "y1": -5,
+              "x2": 0,
+              "y2": 5,
+              "strokeWidth": 1,
+              "stateVisible": {
+                "when": {
+                  "currSource": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -2,
+              "y1": 2,
+              "x2": 0,
+              "y2": 5,
+              "strokeWidth": 1,
+              "stateVisible": {
+                "when": {
+                  "currSource": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": 2,
+              "y1": 2,
+              "x2": 0,
+              "y2": 5,
+              "strokeWidth": 1,
+              "stateVisible": {
+                "when": {
+                  "currSource": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -2,
+              "y1": -4,
+              "x2": 2,
+              "y2": -4,
+              "strokeWidth": 1,
+              "stateVisible": {
+                "when": {
+                  "currSource": [
+                    "false"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": 0,
+              "y1": -6,
+              "x2": 0,
+              "y2": -2,
+              "strokeWidth": 1,
+              "stateVisible": {
+                "when": {
+                  "currSource": [
+                    "false"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -2,
+              "y1": 4,
+              "x2": 2,
+              "y2": 4,
+              "strokeWidth": 1,
+              "stateVisible": {
+                "when": {
+                  "currSource": [
+                    "false"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -12,
+              "y1": -7,
+              "x2": -12,
+              "y2": 7,
+              "strokeWidth": 0.6,
+              "stateVisible": {
+                "when": {
+                  "currControl": [
+                    "true"
+                  ],
+                  "controlPins": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -13,
+              "y1": 5,
+              "x2": -12,
+              "y2": 7,
+              "strokeWidth": 0.6,
+              "stateVisible": {
+                "when": {
+                  "currControl": [
+                    "true"
+                  ],
+                  "controlPins": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -11,
+              "y1": 5,
+              "x2": -12,
+              "y2": 7,
+              "strokeWidth": 0.6,
+              "stateVisible": {
+                "when": {
+                  "currControl": [
+                    "true"
+                  ],
+                  "controlPins": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "text",
+              "x": -19,
+              "y": -5,
+              "value": "+",
+              "fontSize": 9,
+              "fill": "#ff0000",
+              "stroke": "none",
+              "textAnchor": "middle",
+              "stateVisible": {
+                "when": {
+                  "controlPins": [
+                    "true"
+                  ],
+                  "currControl": [
+                    "false"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "text",
+              "x": -19,
+              "y": 11,
+              "value": "?",
+              "fontSize": 9,
+              "fill": "#000000",
+              "stroke": "none",
+              "textAnchor": "middle",
+              "stateVisible": {
+                "when": {
+                  "controlPins": [
+                    "true"
+                  ],
+                  "currControl": [
+                    "false"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "aliases": [
+              "cp"
+            ],
+            "x": 0,
+            "y": 12,
+            "angle": 180,
+            "length": 0,
+            "label": "",
+            "stateVisible": {
+              "when": {
+                "controlPins": [
+                  "true"
+                ]
+              }
+            }
+          },
+          {
+            "id": "pin-2",
+            "aliases": [
+              "cm"
+            ],
+            "x": 0,
+            "y": 28,
+            "angle": 180,
+            "length": 0,
+            "label": "",
+            "stateVisible": {
+              "when": {
+                "controlPins": [
+                  "true"
+                ]
+              }
+            }
+          },
+          {
+            "id": "pin-3",
+            "aliases": [
+              "s1"
+            ],
+            "x": 24,
+            "y": 0,
+            "angle": 270,
+            "length": 0,
+            "label": ""
+          },
+          {
+            "id": "pin-4",
+            "aliases": [
+              "s2"
+            ],
+            "x": 24,
+            "y": 40,
+            "angle": 90,
+            "length": 0,
+            "label": ""
+          }
+        ]
       }
     },
     {
@@ -1031,6 +2199,98 @@
       },
       "help": {
         "description": "Bateria com resistência série interna configurável. Modelo de fonte real com queda de tensão sob carga."
+      },
+      "pinIds": [
+        "pin-1",
+        "pin-2"
+      ],
+      "package": {
+        "width": 32,
+        "height": 20,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/sources/battery.cpp",
+            "className": "Battery",
+            "method": "paint",
+            "notes": "m_area=QRect(-10,-10,20,20); Comp2Pin pins at (-16,0)/(16,0); pen width 3; drawLine(-7,-8,-7,8),(-2,-3,-2,3),(3,-8,3,8),(8,-3,8,3)"
+          },
+          "bounds": {
+            "x": -16,
+            "y": -10,
+            "w": 32,
+            "h": 20
+          },
+          "defaultStroke": "#000",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 3,
+          "primitives": [
+            {
+              "kind": "line",
+              "x1": -7,
+              "y1": -8,
+              "x2": -7,
+              "y2": 8,
+              "strokeWidth": 3,
+              "strokeLinecap": "round"
+            },
+            {
+              "kind": "line",
+              "x1": -2,
+              "y1": -3,
+              "x2": -2,
+              "y2": 3,
+              "strokeWidth": 3,
+              "strokeLinecap": "round"
+            },
+            {
+              "kind": "line",
+              "x1": 3,
+              "y1": -8,
+              "x2": 3,
+              "y2": 8,
+              "strokeWidth": 3,
+              "strokeLinecap": "round"
+            },
+            {
+              "kind": "line",
+              "x1": 8,
+              "y1": -3,
+              "x2": 8,
+              "y2": 3,
+              "strokeWidth": 3,
+              "strokeLinecap": "round"
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "aliases": [
+              "p1"
+            ],
+            "x": 0,
+            "y": 10,
+            "angle": 180,
+            "length": 0,
+            "label": ""
+          },
+          {
+            "id": "pin-2",
+            "aliases": [
+              "p2"
+            ],
+            "x": 32,
+            "y": 10,
+            "angle": 0,
+            "length": 0,
+            "label": ""
+          }
+        ]
       }
     },
     {
@@ -1046,17 +2306,168 @@
       },
       "help": {
         "description": "Trilho de alimentação (power rail): fio virtual que distribui a mesma tensão para múltiplos pontos sem fios desenhados."
+      },
+      "pinIds": [
+        "pin-1"
+      ],
+      "package": {
+        "width": 20,
+        "height": 16,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/sources/rail.cpp",
+            "className": "Rail",
+            "method": "paint",
+            "notes": "m_area=QRect(-2,-8,12,16); IoPin(0,QPoint(16,0)); setRotation(90); paint polygon points (-1.5,-6.5),(-1.5,6.5),(9,1),(9,-1), brush #ffa600. Lasec package keeps the local paint geometry and exposes the pin at the translated QPoint(16,0)."
+          },
+          "bounds": {
+            "x": -4,
+            "y": -8,
+            "w": 20,
+            "h": 16
+          },
+          "defaultStroke": "#000",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 1,
+          "primitives": [
+            {
+              "kind": "line",
+              "x1": 9,
+              "y1": 0,
+              "x2": 16,
+              "y2": 0,
+              "strokeWidth": 3,
+              "strokeLinecap": "round"
+            },
+            {
+              "kind": "polygon",
+              "points": [
+                {
+                  "x": -1.5,
+                  "y": -6.5
+                },
+                {
+                  "x": -1.5,
+                  "y": 6.5
+                },
+                {
+                  "x": 9,
+                  "y": 1
+                },
+                {
+                  "x": 9,
+                  "y": -1
+                }
+              ],
+              "fill": "#ffa600",
+              "strokeWidth": 1,
+              "strokeLinejoin": "round"
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "aliases": [
+              "out"
+            ],
+            "x": 20,
+            "y": 8,
+            "angle": 0,
+            "length": 0,
+            "label": ""
+          }
+        ]
       }
     },
     {
       "typeId": "other.ground",
       "label": "Terra (0 V)",
       "pinCount": 1,
+      "pinIds": [
+        "pin"
+      ],
       "icon": "terra",
       "folderPath": [
         "Fontes"
       ],
       "defaultProperties": {},
+      "package": {
+        "width": 16,
+        "height": 18,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/sources/ground.cpp",
+            "className": "Ground",
+            "method": "paint",
+            "notes": "m_area = QRect(-8,-10,16,12); IoPin(90,QPoint(0,-16)); bars at y=-8,-4,0 with pen 2.5"
+          },
+          "bounds": {
+            "x": -8,
+            "y": -16,
+            "w": 16,
+            "h": 18
+          },
+          "defaultStroke": "#000",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 2.5,
+          "primitives": [
+            {
+              "kind": "line",
+              "x1": 0,
+              "y1": -16,
+              "x2": 0,
+              "y2": -8,
+              "strokeWidth": 3,
+              "strokeLinecap": "round"
+            },
+            {
+              "kind": "line",
+              "x1": -6.6,
+              "y1": -8,
+              "x2": 6.6,
+              "y2": -8
+            },
+            {
+              "kind": "line",
+              "x1": -4.3,
+              "y1": -4,
+              "x2": 4.3,
+              "y2": -4
+            },
+            {
+              "kind": "line",
+              "x1": -1.9,
+              "y1": 0,
+              "x2": 1.9,
+              "y2": 0
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin",
+            "aliases": [
+              "pin-1"
+            ],
+            "x": 8,
+            "y": 0,
+            "angle": 270,
+            "length": 0,
+            "label": ""
+          }
+        ]
+      },
       "help": {
         "description": "Referência de 0 V (GND/terra) do circuito. Todo circuito precisa de pelo menos um terra para o solver MNA funcionar."
       }

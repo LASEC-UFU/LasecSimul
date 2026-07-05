@@ -1,0 +1,130 @@
+[
+  {
+    "typeId": "sources.dc_voltage",
+    "status": "n?o localizado no SimulIDE consultado; mantido fora deste lote de migra??o fiel",
+    "package": null,
+    "defaultPins": "pin-1: (6,24); pin-2: (58,24)"
+  },
+  {
+    "typeId": "other.ground",
+    "status": "migrado no lote anterior: sources/ground.cpp",
+    "package": {
+      "width": 16,
+      "height": 18,
+      "pinIds": [
+        "pin"
+      ],
+      "source": "src/components/sources/ground.cpp"
+    },
+    "defaultPins": "pin: (8,0)"
+  },
+  {
+    "typeId": "sources.fixed_volt",
+    "status": "migrado no lote anterior: sources/fixedvolt.cpp",
+    "package": {
+      "width": 28,
+      "height": 24,
+      "pinIds": [
+        "out"
+      ],
+      "source": "src/components/sources/fixedvolt.cpp"
+    },
+    "defaultPins": "out: (28,12)"
+  },
+  {
+    "typeId": "sources.clock",
+    "status": "migrado: sources/clock.cpp + clock-base.cpp",
+    "package": {
+      "width": 30,
+      "height": 16,
+      "pinIds": [
+        "pin-1"
+      ],
+      "source": "src/components/sources/clock.cpp + clock-base.cpp"
+    },
+    "defaultPins": "pin-1: (30,8)"
+  },
+  {
+    "typeId": "sources.wave_gen",
+    "status": "migrado: sources/wavegen.cpp + pixmaps reais sin/saw/tri/sqa/rnd/wav",
+    "package": {
+      "width": 30,
+      "height": 16,
+      "pinIds": [
+        "pin-1",
+        "pin-2"
+      ],
+      "source": "src/components/sources/wavegen.cpp + clock-base.cpp"
+    },
+    "defaultPins": "pin-1: (30,8); pin-2: oculto/sem ponto real"
+  },
+  {
+    "typeId": "sources.voltage_source",
+    "status": "parcial: paint/pino de VarSource; widgets Qt QDial/CustomButton exigem adaptador",
+    "package": {
+      "width": 48,
+      "height": 56,
+      "pinIds": [
+        "pin-1"
+      ],
+      "source": "src/components/sources/varsource.cpp + voltsource.cpp"
+    },
+    "defaultPins": "pin-1: (48,44)"
+  },
+  {
+    "typeId": "sources.current_source",
+    "status": "parcial: paint/pino de VarSource; widgets Qt QDial/CustomButton exigem adaptador",
+    "package": {
+      "width": 48,
+      "height": 56,
+      "pinIds": [
+        "pin-1"
+      ],
+      "source": "src/components/sources/varsource.cpp + currsource.cpp"
+    },
+    "defaultPins": "pin-1: (48,44)"
+  },
+  {
+    "typeId": "sources.controlled_source",
+    "status": "migrado: sources/csource.cpp com estados controlPins/currSource/currControl",
+    "package": {
+      "width": 48,
+      "height": 40,
+      "pinIds": [
+        "pin-1",
+        "pin-2",
+        "pin-3",
+        "pin-4"
+      ],
+      "source": "src/components/sources/csource.cpp"
+    },
+    "defaultPins": "pin-1: (0,12); pin-2: (0,28); pin-3: (24,0); pin-4: (24,40)"
+  },
+  {
+    "typeId": "sources.battery",
+    "status": "migrado: sources/battery.cpp",
+    "package": {
+      "width": 32,
+      "height": 20,
+      "pinIds": [
+        "pin-1",
+        "pin-2"
+      ],
+      "source": "src/components/sources/battery.cpp"
+    },
+    "defaultPins": "pin-1: (0,10); pin-2: (32,10)"
+  },
+  {
+    "typeId": "sources.rail",
+    "status": "migrado: sources/rail.cpp; nota: SimulIDE chama setRotation(90) no construtor",
+    "package": {
+      "width": 20,
+      "height": 16,
+      "pinIds": [
+        "pin-1"
+      ],
+      "source": "src/components/sources/rail.cpp"
+    },
+    "defaultPins": "pin-1: (20,8)"
+  }
+]

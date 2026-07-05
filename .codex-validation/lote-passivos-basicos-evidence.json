@@ -1,0 +1,47 @@
+[
+  {
+    "typeId": "passive.resistor",
+    "status": "migrado: Comp2Pin + resistor.cpp, incluindo IEC default e ANSI por ansiSymbol=true",
+    "package": {
+      "width": 32,
+      "height": 9,
+      "pinIds": [
+        "pin-1",
+        "pin-2"
+      ],
+      "source": "src/components/passive/resistors/resistor.cpp + src/components/comp2pin.cpp"
+    },
+    "defaultPins": "pin-1: (0,4.500000000000001); pin-2: (32,4.5)",
+    "variants": {
+      "ansiPins": "pin-1: (0,4.500000000000001); pin-2: (32,4.5)"
+    }
+  },
+  {
+    "typeId": "passive.capacitor",
+    "status": "migrado: Comp2Pin + capacitorbase.cpp + capacitor.cpp",
+    "package": {
+      "width": 32,
+      "height": 16,
+      "pinIds": [
+        "pin-1",
+        "pin-2"
+      ],
+      "source": "src/components/passive/reactive/capacitor.cpp + capacitorbase.cpp + comp2pin.cpp"
+    },
+    "defaultPins": "pin-1: (0,8.000000000000002); pin-2: (32,8)"
+  },
+  {
+    "typeId": "passive.inductor",
+    "status": "migrado: Comp2Pin + reactive.cpp + inductor.cpp",
+    "package": {
+      "width": 32,
+      "height": 12,
+      "pinIds": [
+        "pin-1",
+        "pin-2"
+      ],
+      "source": "src/components/passive/reactive/inductor.cpp + reactive.cpp + comp2pin.cpp"
+    },
+    "defaultPins": "pin-1: (0,6); pin-2: (32,6)"
+  }
+]

@@ -8,7 +8,7 @@ import { TrustStore } from "./trust/TrustStore";
 import { isPreApproved, isPreBlocked, resolveConsentChoice, shouldLoadLibrary, decisionToPersist } from "./trust/trustDecision";
 import { SchematicPanel } from "./ui/panels/SchematicPanel";
 import { createInitialWebviewState } from "./ui/webview/catalog";
-import { ComponentViewSpec, InteractionKindEntry, PackageDescriptor, PackagePin, PackageShape, PropertySchemaEntry, ViewSpecAxisMapping, ViewSpecGradient, ViewSpecHitTest, ViewSpecInteraction, ViewSpecLimit, ViewSpecPart, ViewSpecProjection, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./ui/webview/model";
+import { ComponentViewSpec, InteractionKindEntry, PackageDescriptor, PackagePin, PackageShape, PropertySchemaEntry, SimulidePaintPrimitive, SimulidePaintSpec, SimulidePaintStateHref, SimulidePaintStyle, ViewSpecAxisMapping, ViewSpecGradient, ViewSpecHitTest, ViewSpecInteraction, ViewSpecLimit, ViewSpecPart, ViewSpecProjection, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./ui/webview/model";
 import { ComponentReadoutValue, InstrumentHistoryPayload, InternalComponentSnapshot, SimulationStatus, WebviewToHostMessage } from "./ui/webview/messages";
 import { ComponentPaletteViewProvider } from "./ui/views/ComponentPaletteViewProvider";
 import { ProjectSerializer } from "./project/ProjectSerializer";
@@ -223,6 +223,7 @@ function localizedManifestName(json: Record<string, unknown>, language: LasecSim
 }
 
 const PACKAGE_SHAPE_KINDS = new Set(["rect", "text", "line", "ellipse", "polygon", "path", "image", "svg"]);
+const SIMULIDE_PAINT_PRIMITIVE_KINDS = new Set(["line", "rect", "roundedRect", "ellipse", "arc", "path", "polygon", "polyline", "text", "image"]);
 const VIEW_SPEC_GRADIENT_KINDS = new Set(["radial", "linear"]);
 const VIEW_SPEC_PROJECTION_KINDS = new Set(["translate", "rotate", "fill", "visible"]);
 const VIEW_SPEC_HIT_TEST_KINDS = new Set(["rect", "circle", "ellipse", "polygon", "path"]);
@@ -236,6 +237,170 @@ function sanitizePackageShape(value: unknown): PackageShape | undefined {
     ...(shape as unknown as PackageShape),
     cssClass: typeof shape.cssClass === "string" && shape.cssClass.trim() ? shape.cssClass.trim() : undefined,
     partId: typeof shape.partId === "string" && shape.partId.trim() ? shape.partId.trim() : undefined,
+  };
+}
+
+function finiteNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function sanitizePointList(value: unknown): Array<{ x: number; y: number }> | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const points = value
+    .map((point) => {
+      if (typeof point !== "object" || point === null) return undefined;
+      const raw = point as Record<string, unknown>;
+      const x = finiteNumber(raw.x);
+      const y = finiteNumber(raw.y);
+      return x !== undefined && y !== undefined ? { x, y } : undefined;
+    })
+    .filter((point): point is { x: number; y: number } => Boolean(point));
+  return points.length > 0 ? points : undefined;
+}
+
+function sanitizeSimulidePaintStyle(raw: Record<string, unknown>): SimulidePaintStyle {
+  return {
+    ...(sanitizeOptionalString(raw.stroke) ? { stroke: sanitizeOptionalString(raw.stroke) } : {}),
+    ...(sanitizeOptionalString(raw.fill) ? { fill: sanitizeOptionalString(raw.fill) } : {}),
+    ...(finiteNumber(raw.strokeWidth) !== undefined ? { strokeWidth: finiteNumber(raw.strokeWidth) } : {}),
+    ...(raw.strokeLinecap === "butt" || raw.strokeLinecap === "round" || raw.strokeLinecap === "square" ? { strokeLinecap: raw.strokeLinecap } : {}),
+    ...(raw.strokeLinejoin === "arcs" || raw.strokeLinejoin === "bevel" || raw.strokeLinejoin === "miter" || raw.strokeLinejoin === "miter-clip" || raw.strokeLinejoin === "round" ? { strokeLinejoin: raw.strokeLinejoin } : {}),
+    ...(sanitizeOptionalString(raw.strokeDasharray) ? { strokeDasharray: sanitizeOptionalString(raw.strokeDasharray) } : {}),
+    ...(raw.fillRule === "nonzero" || raw.fillRule === "evenodd" ? { fillRule: raw.fillRule } : {}),
+    ...(finiteNumber(raw.opacity) !== undefined ? { opacity: finiteNumber(raw.opacity) } : {}),
+  };
+}
+
+function sanitizeSimulidePaintStateFill(value: unknown): SimulidePaintPrimitive["stateFill"] | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const raw = value as Record<string, unknown>;
+  if (typeof raw.prop !== "string" || !raw.prop.trim()) return undefined;
+  if (typeof raw.map !== "object" || raw.map === null) return undefined;
+  const map = Object.fromEntries(
+    Object.entries(raw.map as Record<string, unknown>).filter((entry): entry is [string, string] => typeof entry[1] === "string")
+  );
+  return Object.keys(map).length > 0 ? { prop: raw.prop, map } : undefined;
+}
+
+function sanitizeSimulidePaintStateVisible(value: unknown): SimulidePaintPrimitive["stateVisible"] | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const raw = value as Record<string, unknown>;
+  const whenRaw = typeof raw.when === "object" && raw.when !== null ? raw.when as Record<string, unknown> : undefined;
+  if (!whenRaw) return undefined;
+  const when: Record<string, string[]> = {};
+  for (const [prop, acceptedRaw] of Object.entries(whenRaw)) {
+    if (!prop.trim()) continue;
+    const accepted = Array.isArray(acceptedRaw)
+      ? acceptedRaw.map((item) => String(item)).filter(Boolean)
+      : typeof acceptedRaw === "string" || typeof acceptedRaw === "number" || typeof acceptedRaw === "boolean"
+        ? [String(acceptedRaw)]
+        : [];
+    if (accepted.length > 0) when[prop] = accepted;
+  }
+  return Object.keys(when).length > 0 ? { when } : undefined;
+}
+
+function sanitizeSimulidePaintStateHref(value: unknown): SimulidePaintStateHref | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const raw = value as Record<string, unknown>;
+  if (typeof raw.prop !== "string" || !raw.prop.trim()) return undefined;
+  if (typeof raw.map !== "object" || raw.map === null) return undefined;
+  const map = Object.fromEntries(
+    Object.entries(raw.map as Record<string, unknown>).filter((entry): entry is [string, string] => typeof entry[1] === "string")
+  );
+  return Object.keys(map).length > 0 ? { prop: raw.prop, map } : undefined;
+}
+
+function sanitizeSimulidePaintPrimitive(value: unknown): SimulidePaintPrimitive | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const raw = value as Record<string, unknown>;
+  if (typeof raw.kind !== "string" || !SIMULIDE_PAINT_PRIMITIVE_KINDS.has(raw.kind)) return undefined;
+  const style = sanitizeSimulidePaintStyle(raw);
+  const stateFill = sanitizeSimulidePaintStateFill(raw.stateFill);
+  const stateVisible = sanitizeSimulidePaintStateVisible(raw.stateVisible);
+  const stateAttrs = { ...(stateFill ? { stateFill } : {}), ...(stateVisible ? { stateVisible } : {}) };
+
+  if (raw.kind === "line") {
+    const x1 = finiteNumber(raw.x1), y1 = finiteNumber(raw.y1), x2 = finiteNumber(raw.x2), y2 = finiteNumber(raw.y2);
+    return x1 !== undefined && y1 !== undefined && x2 !== undefined && y2 !== undefined ? { kind: "line", x1, y1, x2, y2, ...stateAttrs, ...style } : undefined;
+  }
+  if (raw.kind === "rect" || raw.kind === "roundedRect") {
+    const x = finiteNumber(raw.x), y = finiteNumber(raw.y), w = finiteNumber(raw.w), h = finiteNumber(raw.h);
+    if (x === undefined || y === undefined || w === undefined || h === undefined) return undefined;
+    const rx = finiteNumber(raw.rx);
+    const ry = finiteNumber(raw.ry);
+    return raw.kind === "roundedRect"
+      ? { kind: "roundedRect", x, y, w, h, rx: rx ?? 0, ry: ry ?? rx ?? 0, ...stateAttrs, ...style }
+      : { kind: "rect", x, y, w, h, ...(rx !== undefined ? { rx } : {}), ...(ry !== undefined ? { ry } : {}), ...stateAttrs, ...style };
+  }
+  if (raw.kind === "ellipse") {
+    const cx = finiteNumber(raw.cx), cy = finiteNumber(raw.cy), rx = finiteNumber(raw.rx), ry = finiteNumber(raw.ry);
+    return cx !== undefined && cy !== undefined && rx !== undefined && ry !== undefined ? { kind: "ellipse", cx, cy, rx, ry, ...stateAttrs, ...style } : undefined;
+  }
+  if (raw.kind === "arc") {
+    const x = finiteNumber(raw.x), y = finiteNumber(raw.y), w = finiteNumber(raw.w), h = finiteNumber(raw.h);
+    const startDeg = finiteNumber(raw.startDeg), spanDeg = finiteNumber(raw.spanDeg);
+    return x !== undefined && y !== undefined && w !== undefined && h !== undefined && startDeg !== undefined && spanDeg !== undefined
+      ? { kind: "arc", x, y, w, h, startDeg, spanDeg, ...stateAttrs, ...style }
+      : undefined;
+  }
+  if (raw.kind === "path") {
+    return typeof raw.d === "string" && raw.d.trim() ? { kind: "path", d: raw.d, ...stateAttrs, ...style } : undefined;
+  }
+  if (raw.kind === "polygon" || raw.kind === "polyline") {
+    const points = sanitizePointList(raw.points);
+    return points ? { kind: raw.kind, points, ...stateAttrs, ...style } : undefined;
+  }
+  if (raw.kind === "text") {
+    const x = finiteNumber(raw.x), y = finiteNumber(raw.y);
+    if (x === undefined || y === undefined || typeof raw.value !== "string") return undefined;
+    const textAnchor = raw.textAnchor === "start" || raw.textAnchor === "middle" || raw.textAnchor === "end" ? raw.textAnchor : undefined;
+    return {
+      kind: "text",
+      x,
+      y,
+      value: raw.value,
+      ...(finiteNumber(raw.fontSize) !== undefined ? { fontSize: finiteNumber(raw.fontSize) } : {}),
+      ...(textAnchor ? { textAnchor } : {}),
+      ...(sanitizeOptionalString(raw.fontFamily) ? { fontFamily: sanitizeOptionalString(raw.fontFamily) } : {}),
+      ...(typeof raw.fontWeight === "string" || typeof raw.fontWeight === "number" ? { fontWeight: raw.fontWeight } : {}),
+      ...stateAttrs,
+      ...style,
+    };
+  }
+  const x = finiteNumber(raw.x), y = finiteNumber(raw.y), w = finiteNumber(raw.w), h = finiteNumber(raw.h);
+  if (x === undefined || y === undefined || w === undefined || h === undefined || typeof raw.href !== "string" || !raw.href.trim()) return undefined;
+  const stateHref = sanitizeSimulidePaintStateHref(raw.stateHref);
+  return { kind: "image", x, y, w, h, href: raw.href, ...(sanitizeOptionalString(raw.preserveAspectRatio) ? { preserveAspectRatio: sanitizeOptionalString(raw.preserveAspectRatio) } : {}), ...stateAttrs, ...(stateHref ? { stateHref } : {}), ...style };
+}
+
+function sanitizeSimulidePaintSpec(value: unknown): SimulidePaintSpec | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const raw = value as Record<string, unknown>;
+  const boundsRaw = typeof raw.bounds === "object" && raw.bounds !== null ? raw.bounds as Record<string, unknown> : undefined;
+  const x = finiteNumber(boundsRaw?.x), y = finiteNumber(boundsRaw?.y), w = finiteNumber(boundsRaw?.w), h = finiteNumber(boundsRaw?.h);
+  if (raw.version !== 1 || x === undefined || y === undefined || w === undefined || h === undefined || w <= 0 || h <= 0) return undefined;
+  if (!Array.isArray(raw.primitives)) return undefined;
+  const primitives = raw.primitives
+    .map(sanitizeSimulidePaintPrimitive)
+    .filter((primitive): primitive is SimulidePaintPrimitive => Boolean(primitive));
+  if (primitives.length === 0) return undefined;
+  const sourceRaw = typeof raw.source === "object" && raw.source !== null ? raw.source as Record<string, unknown> : undefined;
+  return {
+    version: 1,
+    source: sourceRaw
+      ? {
+          ...(sanitizeOptionalString(sourceRaw.file) ? { file: sanitizeOptionalString(sourceRaw.file) } : {}),
+          ...(sanitizeOptionalString(sourceRaw.className) ? { className: sanitizeOptionalString(sourceRaw.className) } : {}),
+          ...(sanitizeOptionalString(sourceRaw.method) ? { method: sanitizeOptionalString(sourceRaw.method) } : {}),
+          ...(sanitizeOptionalString(sourceRaw.notes) ? { notes: sanitizeOptionalString(sourceRaw.notes) } : {}),
+        }
+      : undefined,
+    bounds: { x, y, w, h },
+    ...(sanitizeOptionalString(raw.defaultStroke) ? { defaultStroke: sanitizeOptionalString(raw.defaultStroke) } : {}),
+    ...(sanitizeOptionalString(raw.defaultFill) ? { defaultFill: sanitizeOptionalString(raw.defaultFill) } : {}),
+    ...(finiteNumber(raw.defaultStrokeWidth) !== undefined ? { defaultStrokeWidth: finiteNumber(raw.defaultStrokeWidth) } : {}),
+    primitives,
   };
 }
 
@@ -619,6 +784,8 @@ function sanitizePackage(value: unknown, assetBasePath?: string): PackageDescrip
     if (typeof pin.x !== "number" || typeof pin.y !== "number") continue;
     pins.push({
       id: pin.id,
+      aliases: Array.isArray(pin.aliases) ? pin.aliases.filter((alias): alias is string => typeof alias === "string" && Boolean(alias.trim())) : undefined,
+      stateVisible: sanitizeSimulidePaintStateVisible(pin.stateVisible),
       kind: typeof pin.kind === "string" ? pin.kind : undefined,
       x: pin.x,
       y: pin.y,
@@ -639,6 +806,7 @@ function sanitizePackage(value: unknown, assetBasePath?: string): PackageDescrip
     }
   }
   const viewSpec = sanitizeComponentViewSpec(raw.viewSpec);
+  const simulidePaint = sanitizeSimulidePaintSpec(raw.simulidePaint);
 
   const background = sanitizePackageBackground(raw.background, assetBasePath);
 
@@ -650,6 +818,7 @@ function sanitizePackage(value: unknown, assetBasePath?: string): PackageDescrip
     border: typeof raw.border === "boolean" ? raw.border : undefined,
     background,
     shapes,
+    simulidePaint,
     viewSpec,
     pins,
     pinLabelColor: typeof raw.pinLabelColor === "string" && raw.pinLabelColor.trim() ? raw.pinLabelColor : undefined,

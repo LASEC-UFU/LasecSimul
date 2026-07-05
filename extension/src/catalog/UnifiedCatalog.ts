@@ -19,6 +19,7 @@ export interface UnifiedCatalogItem {
   typeId: string;
   label: string;
   pinCount: number;
+  pinIds?: string[];
   defaultProperties?: Record<string, string | number | boolean>;
   icon?: string;
   iconFilePath?: string;
@@ -77,6 +78,7 @@ const DEFAULT_CATALOG_FILE: UnifiedCatalogFile = {
     typeId: entry.typeId,
     label: entry.label,
     pinCount: entry.pinCount,
+    pinIds: entry.pinIds,
     defaultProperties: entry.defaultProperties,
     icon: entry.icon,
     folderPath: entry.folderPath,
@@ -113,6 +115,7 @@ function entryToWebview(item: UnifiedCatalogItem): WebviewComponentCatalogEntry 
     symbolSvg: item.symbolSvg,
     package: item.package,
     pinCount: item.pinCount,
+    pinIds: item.pinIds,
     defaultProperties: item.defaultProperties ?? {},
     hidden: item.hidden,
     disabled: item.disabled,

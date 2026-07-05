@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LasecSimul fidelity validation</title>
+    <link rel="stylesheet" href="../extension/src/ui/webview/styles.css" />
+    <style>
+      body { background: #ffffdd; }
+      .appbar { display: none; }
+    </style>
+  </head>
+  <body>
+    <main id="app"></main>
+    <script>
+      window.__LASECSIMUL_INITIAL_STATE__ = {
+        locale: "pt-BR",
+        catalog: [
+          {
+            typeId: "other.ground",
+            label: "Terra (0 V)",
+            category: "Fontes",
+            pinCount: 1,
+            pinIds: ["pin"],
+            defaultProperties: {},
+            package: {
+              width: 16,
+              height: 18,
+              border: false,
+              background: { kind: "none" },
+              simulidePaint: {
+                version: 1,
+                source: { file: "src/components/sources/ground.cpp", className: "Ground", method: "paint" },
+                bounds: { x: -8, y: -16, w: 16, h: 18 },
+                defaultStroke: "#000",
+                defaultFill: "none",
+                defaultStrokeWidth: 2.5,
+                primitives: [
+                  { kind: "line", x1: 0, y1: -16, x2: 0, y2: -8, strokeWidth: 3, strokeLinecap: "round" },
+                  { kind: "line", x1: -6.6, y1: -8, x2: 6.6, y2: -8 },
+                  { kind: "line", x1: -4.3, y1: -4, x2: 4.3, y2: -4 },
+                  { kind: "line", x1: -1.9, y1: 0, x2: 1.9, y2: 0 }
+                ]
+              },
+              pins: [{ id: "pin", x: 8, y: 0, angle: 270, length: 0, label: "" }]
+            }
+          },
+          { typeId: "sources.rail", label: "Trilho", category: "Fontes", pinCount: 1, pinIds: ["pin"], defaultProperties: { voltage: 5 } },
+          { typeId: "sources.fixed_volt", label: "Tensao Fixa", category: "Fontes", pinCount: 1, pinIds: ["pin"], defaultProperties: { voltage: 5, out: true } },
+          { typeId: "passive.resistor", label: "Resistor", category: "Passivos", pinCount: 2, pinIds: ["p1", "p2"], defaultProperties: { resistance: 1000 } },
+          { typeId: "passive.capacitor", label: "Capacitor", category: "Passivos", pinCount: 2, pinIds: ["p1", "p2"], defaultProperties: { capacitance: 0.000001 } },
+          { typeId: "passive.inductor", label: "Inductor", category: "Passivos", pinCount: 2, pinIds: ["p1", "p2"], defaultProperties: { inductance: 0.001 } },
+          { typeId: "sources.battery", label: "Bateria", category: "Fontes", pinCount: 2, pinIds: ["p1", "p2"], defaultProperties: { voltage: 5 } },
+          { typeId: "meters.probe", label: "Sonda", category: "Medidores", pinCount: 1, pinIds: ["pin"], defaultProperties: { threshold: 2.5, showVolt: true } }
+        ],
+        components: [
+          { id: "gnd", typeId: "other.ground", x: 80, y: 80, rotation: 0, label: "GND", pins: [{ id: "pin", x: 0, y: 0 }], properties: {} },
+          { id: "rail", typeId: "sources.rail", x: 80, y: 148, rotation: 0, label: "Rail", pins: [{ id: "pin", x: 0, y: 0 }], properties: { voltage: 5 } },
+          { id: "fixed", typeId: "sources.fixed_volt", x: 160, y: 148, rotation: 0, label: "Fixed", pins: [{ id: "pin", x: 0, y: 0 }], properties: { voltage: 5, out: true } },
+          { id: "r1", typeId: "passive.resistor", x: 80, y: 224, rotation: 0, label: "R", pins: [{ id: "p1", x: 0, y: 0 }, { id: "p2", x: 0, y: 0 }], properties: { resistance: 1000 } },
+          { id: "c1", typeId: "passive.capacitor", x: 160, y: 224, rotation: 0, label: "C", pins: [{ id: "p1", x: 0, y: 0 }, { id: "p2", x: 0, y: 0 }], properties: { capacitance: 0.000001 } },
+          { id: "l1", typeId: "passive.inductor", x: 240, y: 224, rotation: 0, label: "L", pins: [{ id: "p1", x: 0, y: 0 }, { id: "p2", x: 0, y: 0 }], properties: { inductance: 0.001 } },
+          { id: "bat", typeId: "sources.battery", x: 80, y: 292, rotation: 0, label: "Bat", pins: [{ id: "p1", x: 0, y: 0 }, { id: "p2", x: 0, y: 0 }], properties: { voltage: 5 } },
+          { id: "probe", typeId: "meters.probe", x: 160, y: 292, rotation: 0, label: "Probe", pins: [{ id: "pin", x: 0, y: 0 }], properties: { threshold: 2.5, showVolt: true, __readout: 0 } }
+        ],
+        wires: [
+          { id: "wg", from: { componentId: "gnd", pinId: "pin" }, to: { componentId: "r1", pinId: "p1" }, points: [{ x: 88, y: 180 }] },
+          { id: "wr", from: { componentId: "rail", pinId: "pin" }, to: { componentId: "fixed", pinId: "pin" } }
+        ],
+        viewport: { x: 0, y: 0, zoom: 1 },
+        selectedComponentIds: [],
+        selectedWireIds: []
+      };
+    </script>
+    <script type="module" src="../extension/out-webview/main.js"></script>
+  </body>
+</html>

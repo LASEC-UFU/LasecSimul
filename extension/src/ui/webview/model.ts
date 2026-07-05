@@ -106,6 +106,8 @@ export interface PropertySchemaEntry {
  * real (um `McuComponent`/subcircuito pode devolver pinos em ordem diferente da declarada). */
 export interface PackagePin {
   id: string;
+  aliases?: string[];
+  stateVisible?: SimulidePaintStateVisible;
   kind?: string;
   x: number;
   y: number;
@@ -152,6 +154,14 @@ export interface PackageShape {
   stroke?: string;
   fill?: string;
   strokeWidth?: number;
+  strokeLinecap?: "butt" | "round" | "square";
+  strokeLinejoin?: "arcs" | "bevel" | "miter" | "miter-clip" | "round";
+  strokeDasharray?: string;
+  fillRule?: "nonzero" | "evenodd";
+  opacity?: number;
+  transform?: string;
+  fontFamily?: string;
+  fontWeight?: string | number;
   /** CSS class(es) added to the SVG element — used for interactive hit zones (e.g. "joystick-hit-zone"). */
   cssClass?: string;
   /** Nome do "part" deste elemento no ViewSpec — conecta ao `stateProjection[partId]` da spec.
@@ -166,6 +176,74 @@ export interface PackageBackground {
   data?: string;
   asset?: string;
   mime?: string;
+}
+
+export interface SimulidePaintBounds {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface SimulidePaintSource {
+  file?: string;
+  className?: string;
+  method?: string;
+  notes?: string;
+}
+
+export interface SimulidePaintStyle {
+  stroke?: string;
+  fill?: string;
+  strokeWidth?: number;
+  strokeLinecap?: PackageShape["strokeLinecap"];
+  strokeLinejoin?: PackageShape["strokeLinejoin"];
+  strokeDasharray?: string;
+  fillRule?: PackageShape["fillRule"];
+  opacity?: number;
+  /** Passa direto pro `PackageShape.cssClass` -- usado por built-ins interativos (ex:
+   * `sources.fixed_volt`/`clock`/`wave_gen`) pra marcar a primitiva como parte do
+   * `.toggle-hit-zone` clicável, já que o motor SimulidePaint não tem outro jeito de expressar
+   * "isso responde a clique" além de uma classe CSS reconhecida pelo `main.ts`. */
+  cssClass?: string;
+}
+
+export interface SimulidePaintStateFill {
+  prop: string;
+  map: Record<string, string>;
+}
+
+export interface SimulidePaintStateVisible {
+  when: Record<string, string[]>;
+}
+
+export interface SimulidePaintStateHref {
+  prop: string;
+  map: Record<string, string>;
+}
+
+export type SimulidePaintPrimitive =
+  | ({ kind: "line"; x1: number; y1: number; x2: number; y2: number; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible } & SimulidePaintStyle)
+  | ({ kind: "rect"; x: number; y: number; w: number; h: number; rx?: number; ry?: number; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible } & SimulidePaintStyle)
+  | ({ kind: "roundedRect"; x: number; y: number; w: number; h: number; rx: number; ry: number; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible } & SimulidePaintStyle)
+  | ({ kind: "ellipse"; cx: number; cy: number; rx: number; ry: number; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible } & SimulidePaintStyle)
+  | ({ kind: "arc"; x: number; y: number; w: number; h: number; startDeg: number; spanDeg: number; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible } & SimulidePaintStyle)
+  | ({ kind: "path"; d: string; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible } & SimulidePaintStyle)
+  | ({ kind: "polygon"; points: Array<{ x: number; y: number }>; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible } & SimulidePaintStyle)
+  | ({ kind: "polyline"; points: Array<{ x: number; y: number }>; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible } & SimulidePaintStyle)
+  | ({ kind: "text"; x: number; y: number; value: string; fontSize?: number; textAnchor?: PackageShape["textAnchor"]; fontFamily?: string; fontWeight?: string | number; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible } & SimulidePaintStyle)
+  | ({ kind: "image"; x: number; y: number; w: number; h: number; href: string; preserveAspectRatio?: string; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible; stateHref?: SimulidePaintStateHref } & SimulidePaintStyle);
+
+/** Declarative IR for SimulIDE C++ paint() output. Coordinates stay in the original QPainter item
+ * space; `bounds` maps that local space into the positive SVG viewBox used by LasecSimul. */
+export interface SimulidePaintSpec {
+  version: 1;
+  source?: SimulidePaintSource;
+  bounds: SimulidePaintBounds;
+  defaultStroke?: string;
+  defaultFill?: string;
+  defaultStrokeWidth?: number;
+  primitives: SimulidePaintPrimitive[];
 }
 
 /** SimulIDE stores Package.Width/Height in schematic grid cells; each cell is 8 scene units. */
@@ -345,6 +423,9 @@ export interface PackageDescriptor {
   border?: boolean;
   background?: PackageBackground;
   shapes?: PackageShape[];
+  /** SimulIDE-compatible paint IR. When present it is rendered before legacy `viewSpec`/`shapes[]`
+   * so migrated symbols can be audited against the original C++ paint() source. */
+  simulidePaint?: SimulidePaintSpec;
   /** ViewSpec declarativo (P2) — quando presente, tem prioridade sobre `shapes[]`. Suporta
    * gradientes escopados por instância e stateProjection. */
   viewSpec?: ComponentViewSpec;

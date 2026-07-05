@@ -10,7 +10,8 @@
  * layout de pino são calculados a partir da caixa do tipo, nunca de uma constante global de tamanho.
  */
 
-import { ComponentViewSpec, PackageDescriptor, PackagePin, PackageShape, SIMULIDE_PACKAGE_GRID_UNIT, ViewSpecHitTest } from "./model.js";
+import { ComponentViewSpec, PackageDescriptor, PackagePin, PackageShape, SIMULIDE_PACKAGE_GRID_UNIT, SimulidePaintSpec, ViewSpecHitTest } from "./model.js";
+import { simulidePaintToPackageShapes } from "./simulidePaint.js";
 
 export interface ComponentBox {
   width: number;
@@ -126,6 +127,18 @@ function resolvedPackageFor(typeId: string, properties?: Record<string, unknown>
   return RESOLVED_PACKAGE_BY_TYPE_ID.get(typeId);
 }
 
+function packagePinMatches(pin: PackagePin, pinId: string): boolean {
+  return pin.id === pinId || Boolean(pin.aliases?.includes(pinId));
+}
+
+function stateVisibleMatches(stateVisible: PackagePin["stateVisible"] | undefined, properties?: Record<string, unknown>): boolean {
+  if (!stateVisible) return true;
+  for (const [prop, accepted] of Object.entries(stateVisible.when)) {
+    if (!accepted.includes(String(properties?.[prop]))) return false;
+  }
+  return true;
+}
+
 /** Corpo do símbolo a partir do `package` real, se este typeId tiver um registrado -- `undefined`
  * pra `main.ts` cair em `catalogEntry?.symbolSvg ?? componentSymbolSvg(typeId)` (mesma prioridade
  * de sempre, só com `package` real entrando ANTES de symbolSvg).
@@ -193,32 +206,172 @@ function tracePath(history: number[], x: number, y: number, width: number, heigh
 
 function packageShapeSvg(shape: PackageShape, extraTransform?: string): string {
   const cls = shape.cssClass ? ` class="${shape.cssClass}"` : "";
-  const xf = extraTransform ? ` transform="${extraTransform}"` : "";
+  const transform = [shape.transform, extraTransform].filter(Boolean).join(" ");
+  const xf = transform ? ` transform="${escapeXmlText(transform)}"` : "";
   const fill = shape.fill ?? "none";
+  const paintAttrs =
+    `${shape.strokeLinecap ? ` stroke-linecap="${shape.strokeLinecap}"` : ""}` +
+    `${shape.strokeLinejoin ? ` stroke-linejoin="${shape.strokeLinejoin}"` : ""}` +
+    `${shape.strokeDasharray ? ` stroke-dasharray="${escapeXmlText(shape.strokeDasharray)}"` : ""}` +
+    `${shape.fillRule ? ` fill-rule="${shape.fillRule}"` : ""}` +
+    `${shape.opacity !== undefined ? ` opacity="${shape.opacity}"` : ""}`;
   switch (shape.kind) {
     case "rect":
-      return `<rect${cls}${xf} x="${shape.x ?? 0}" y="${shape.y ?? 0}" width="${shape.w ?? 0}" height="${shape.h ?? 0}"${shape.rx !== undefined ? ` rx="${shape.rx}"` : ""}${shape.ry !== undefined ? ` ry="${shape.ry}"` : ""} stroke="${shape.stroke ?? "currentColor"}" fill="${fill}" stroke-width="${shape.strokeWidth ?? 1}"/>`;
+      return `<rect${cls}${xf} x="${shape.x ?? 0}" y="${shape.y ?? 0}" width="${shape.w ?? 0}" height="${shape.h ?? 0}"${shape.rx !== undefined ? ` rx="${shape.rx}"` : ""}${shape.ry !== undefined ? ` ry="${shape.ry}"` : ""} stroke="${shape.stroke ?? "currentColor"}" fill="${fill}" stroke-width="${shape.strokeWidth ?? 1}"${paintAttrs}/>`;
     case "line":
-      return `<line${cls}${xf} x1="${shape.x1 ?? 0}" y1="${shape.y1 ?? 0}" x2="${shape.x2 ?? 0}" y2="${shape.y2 ?? 0}" stroke="${shape.stroke ?? "currentColor"}"/>`;
+      return `<line${cls}${xf} x1="${shape.x1 ?? 0}" y1="${shape.y1 ?? 0}" x2="${shape.x2 ?? 0}" y2="${shape.y2 ?? 0}" stroke="${shape.stroke ?? "currentColor"}" stroke-width="${shape.strokeWidth ?? 1}"${paintAttrs}/>`;
     case "ellipse":
-      return `<ellipse${cls}${xf} cx="${shape.cx ?? 0}" cy="${shape.cy ?? 0}" rx="${shape.rx ?? 0}" ry="${shape.ry ?? 0}" stroke="${shape.stroke ?? "currentColor"}" fill="${fill}" stroke-width="${shape.strokeWidth ?? 1}"/>`;
+      return `<ellipse${cls}${xf} cx="${shape.cx ?? 0}" cy="${shape.cy ?? 0}" rx="${shape.rx ?? 0}" ry="${shape.ry ?? 0}" stroke="${shape.stroke ?? "currentColor"}" fill="${fill}" stroke-width="${shape.strokeWidth ?? 1}"${paintAttrs}/>`;
     case "svg":
       return shape.value ?? "";
     case "polygon": {
       const pts = (shape.points ?? []).map(p => `${p.x},${p.y}`).join(" ");
-      return `<polygon${cls}${xf} points="${pts}" stroke="${shape.stroke ?? "currentColor"}" fill="${fill}" stroke-width="${shape.strokeWidth ?? 1}"/>`;
+      return `<polygon${cls}${xf} points="${pts}" stroke="${shape.stroke ?? "currentColor"}" fill="${fill}" stroke-width="${shape.strokeWidth ?? 1}"${paintAttrs}/>`;
     }
     case "path":
-      return `<path${cls}${xf} d="${escapeXmlText(shape.d ?? "")}" stroke="${shape.stroke ?? "currentColor"}" fill="${fill}" stroke-width="${shape.strokeWidth ?? 1}"/>`;
+      return `<path${cls}${xf} d="${escapeXmlText(shape.d ?? "")}" stroke="${shape.stroke ?? "currentColor"}" fill="${fill}" stroke-width="${shape.strokeWidth ?? 1}"${paintAttrs}/>`;
     case "image": {
       const href = shape.href ?? shape.value ?? "";
-      return `<image${cls}${xf} x="${shape.x ?? 0}" y="${shape.y ?? 0}" width="${shape.w ?? 0}" height="${shape.h ?? 0}" preserveAspectRatio="${escapeXmlText(shape.preserveAspectRatio ?? "none")}" href="${escapeXmlText(href)}"/>`;
+      return `<image${cls}${xf} x="${shape.x ?? 0}" y="${shape.y ?? 0}" width="${shape.w ?? 0}" height="${shape.h ?? 0}" preserveAspectRatio="${escapeXmlText(shape.preserveAspectRatio ?? "none")}" href="${escapeXmlText(href)}"${paintAttrs}/>`;
     }
     case "text":
     default:
-      return `<text${cls}${xf} x="${shape.x ?? 0}" y="${shape.y ?? 0}" text-anchor="${shape.textAnchor ?? "middle"}" font-size="${shape.fontSize ?? 11}" fill="${shape.color ?? "currentColor"}">${escapeXmlText(shape.value ?? "")}</text>`;
+      return `<text${cls}${xf} x="${shape.x ?? 0}" y="${shape.y ?? 0}" text-anchor="${shape.textAnchor ?? "middle"}" font-size="${shape.fontSize ?? 11}"${shape.fontFamily ? ` font-family="${escapeXmlText(shape.fontFamily)}"` : ""}${shape.fontWeight ? ` font-weight="${escapeXmlText(String(shape.fontWeight))}"` : ""} fill="${shape.color ?? "currentColor"}"${paintAttrs}>${escapeXmlText(shape.value ?? "")}</text>`;
   }
 }
+
+/** Tradutor genérico SimulIDE→LasecSimul pra typeIds BUILT-IN (sem `devices/*.json`/`package`).
+ * Reusa o MESMO motor já usado pelos devices JSON-backed (`simulidePaintToPackageShapes` +
+ * `packageShapeSvg`, ver `simulidePaint.ts`) -- um `SimulidePaintSpec` carrega as primitivas
+ * (linha/retângulo/elipse/arco/path/polígono/texto) em coordenadas LOCAIS copiadas quase
+ * literalmente do `paint()`/`m_area`/`Pin` reais do C++ (ver `spec.source`), e o motor faz UMA
+ * transformação de coordenadas (translação, já que `bounds.w/h` sempre bate com `box.width/height`
+ * aqui -- built-ins não reescalam, só traduzem) pra todas elas de uma vez. Isso substitui deslocar
+ * cada linha/retângulo/pino à mão por componente -- a mesma fonte de erro (bug real encontrado:
+ * `sources.battery` tinha as 4 barras com espessuras alternadas por engano; o C++ real usa
+ * `pen.setWidth(3)` uma vez só, pras 4) some quando a tradução é mecânica, não manual. */
+function builtinPaintSvg(spec: SimulidePaintSpec, box: ComponentBox, properties?: Record<string, unknown>): string {
+  const shapes = simulidePaintToPackageShapes(spec, box.width, box.height, properties ?? {});
+  return shapes.map((shape) => packageShapeSvg(shape)).join("");
+}
+
+// ── Fontes (pasta "Sources" do SimulIDE) -- specs SimulidePaint (ver `builtinPaintSvg`) ───────────
+// Coordenadas de cada `primitives[]` são as mesmas que aparecem literalmente no `paint()`/`m_area`/
+// `Pin` do arquivo citado em `source` -- não precisam de nenhuma conta de deslocamento manual, só
+// copiar do C++. `bounds` é a união do `m_area` real com a extremidade de cada pino (o pino real
+// costuma sair fora do `m_area` visual).
+
+const GROUND_PAINT: SimulidePaintSpec = {
+  version: 1,
+  source: { file: "sources/ground.cpp", className: "Ground", method: "paint" },
+  bounds: { x: -8, y: -16, w: 16, h: 18 },
+  defaultStroke: "currentColor",
+  defaultStrokeWidth: 2.5,
+  primitives: [
+    // lead do pino: NÃO está no paint() real (o IoPin/base class desenha isso sozinho no SimulIDE
+    // real -- built-ins do LasecSimul não têm esse mecanismo automático, então o lead é desenhado
+    // aqui explicitamente; usa pen 3px, igual ao Pin::paint() real).
+    { kind: "line", x1: 0, y1: -16, x2: 0, y2: -8, strokeWidth: 3 },
+    { kind: "line", x1: -6.6, y1: -8, x2: 6.6, y2: -8 },
+    { kind: "line", x1: -4.3, y1: -4, x2: 4.3, y2: -4 },
+    { kind: "line", x1: -1.9, y1: 0, x2: 1.9, y2: 0 },
+  ],
+};
+
+const BATTERY_PAINT: SimulidePaintSpec = {
+  version: 1,
+  source: { file: "sources/battery.cpp", className: "Battery", method: "paint", notes: "Comp2Pin: pinos herdados em x=±16." },
+  bounds: { x: -16, y: -10, w: 32, h: 20 },
+  defaultStroke: "currentColor",
+  defaultStrokeWidth: 3,
+  primitives: [
+    { kind: "line", x1: -16, y1: 0, x2: -7, y2: 0, strokeWidth: 1.5 },
+    { kind: "line", x1: -7, y1: -8, x2: -7, y2: 8 },
+    { kind: "line", x1: -2, y1: -3, x2: -2, y2: 3 },
+    { kind: "line", x1: 3, y1: -8, x2: 3, y2: 8 },
+    { kind: "line", x1: 8, y1: -3, x2: 8, y2: 3 },
+    { kind: "line", x1: 8, y1: 0, x2: 16, y2: 0, strokeWidth: 1.5 },
+  ],
+};
+
+const RAIL_PAINT: SimulidePaintSpec = {
+  version: 1,
+  source: {
+    file: "sources/rail.cpp",
+    className: "Rail",
+    method: "paint",
+    notes: "setRotation(90) no construtor real -- pontos locais já rotacionados 90° aqui (funil aponta pra baixo, não a bandeirola horizontal dos pontos crus).",
+  },
+  bounds: { x: -8, y: -4, w: 16, h: 20 },
+  primitives: [
+    { kind: "polygon", points: [{ x: 6.5, y: -1.5 }, { x: -6.5, y: -1.5 }, { x: -1, y: 9 }, { x: 1, y: 9 }], fill: "#ffa500", stroke: "currentColor", strokeWidth: 2 },
+    { kind: "line", x1: 0, y1: 9, x2: 0, y2: 16, strokeWidth: 1.5 },
+  ],
+};
+
+/** fixedvolt.cpp: `m_button` (widget nativo QGraphicsProxyWidget nas coordenadas reais, ver
+ * `FixedVolt::FixedVolt`) fica 16x16 à esquerda do corpo -- posição exata do proxy não é
+ * 100% reconstruível só da leitura do `.cpp` (a geometria de QGraphicsProxyWidget soma
+ * `setGeometry`/`setPos` de um jeito que depende do layout interno do Qt em tempo de execução);
+ * usa a posição já validada visualmente lado a lado com o SimulIDE real (2026-07-05). */
+function fixedVoltPaint(): SimulidePaintSpec {
+  return {
+    version: 1,
+    source: { file: "sources/fixedvolt.cpp", className: "FixedVolt", method: "paint" },
+    bounds: { x: -32, y: -8, w: 48, h: 16 },
+    defaultStroke: "currentColor",
+    primitives: [
+      { kind: "rect", x: -32, y: -8, w: 16, h: 16, rx: 2, ry: 2, fill: "#dddddd", strokeWidth: 1.5, cssClass: "toggle-hit-zone" },
+      { kind: "line", x1: 8, y1: 0, x2: 16, y2: 0, strokeWidth: 3 },
+      { kind: "roundedRect", x: -8, y: -8, w: 16, h: 16, rx: 2, ry: 2, fill: "#e6e6ff", strokeWidth: 1.5, cssClass: "fixed-volt-body toggle-hit-zone", stateFill: { prop: "out", map: { true: "#ffa600", false: "#e6e6ff" } } },
+    ],
+  };
+}
+
+/** clock.cpp/wavegen.cpp (ClockBase): mesmo `m_button` do FixedVolt (herdado, posição idêntica) +
+ * `m_area` próprio (-14,-8,22,16). `pulsePath` é o glifo de onda (traços fixos do Clock real,
+ * `drawLine` x6; WaveGen usa um path aproximado, o real troca de PIXMAP bitmap por tipo de onda). */
+function clockLikePaint(pulseOrWavePath: string, pins: "one" | "two"): SimulidePaintSpec {
+  return {
+    version: 1,
+    source: { file: "sources/clock-base.cpp + clock.cpp/wavegen.cpp", className: "ClockBase", method: "paint" },
+    bounds: { x: -32, y: -8, w: 48, h: 16 },
+    defaultStroke: "currentColor",
+    primitives: [
+      { kind: "rect", x: -32, y: -8, w: 16, h: 16, rx: 2, ry: 2, fill: "#dddddd", strokeWidth: 1.5, cssClass: "toggle-hit-zone" },
+      { kind: "roundedRect", x: -14, y: -8, w: 22, h: 16, rx: 2, ry: 2, fill: "#e6e6ff", strokeWidth: 1, stateFill: { prop: "running", map: { true: "#fac832", false: "#e6e6ff" } } },
+      { kind: "path", d: pulseOrWavePath, fill: "none", strokeWidth: 1.5 },
+      { kind: "line", x1: 8, y1: pins === "two" ? -4 : 0, x2: 16, y2: pins === "two" ? -4 : 0, strokeWidth: 1.5 },
+      ...(pins === "two" ? ([{ kind: "line", x1: 8, y1: 4, x2: 16, y2: 4, strokeWidth: 1.5 }] as SimulidePaintSpec["primitives"]) : []),
+    ],
+  };
+}
+
+const CLOCK_PULSE_PATH = "M -11 3 L -11 -3 L -5 -3 L -5 3 L 1 3 L 1 -3 L 4 -3";
+const WAVE_GEN_SINE_PATH = "M -10 0 Q -6 -5 -3 0 T 6 0";
+
+const CONTROLLED_SOURCE_PAINT: SimulidePaintSpec = {
+  // csource.cpp: estado default real (Control_Pins=true, CurrSource=true, CurrControl=false, que é
+  // também o default do Core -- ver CoreApplication.cpp). Alternar essas 3 propriedades muda a
+  // forma real (círculo em vez de diamante, seta em direção diferente, marca de tensão-controlada)
+  // -- não implementado ainda, documentado aqui como próximo passo, não parte deste fix.
+  version: 1,
+  source: { file: "sources/csource.cpp", className: "Csource", method: "paint" },
+  bounds: { x: -24, y: -20, w: 40, h: 40 },
+  defaultStroke: "currentColor",
+  primitives: [
+    { kind: "rect", x: -16, y: -16, w: 32, h: 32, fill: "#ffffff", strokeWidth: 1 },
+    { kind: "polygon", points: [{ x: -8, y: 0 }, { x: 0, y: -13 }, { x: 8, y: 0 }, { x: 0, y: 13 }], fill: "#ffffff", strokeWidth: 2 },
+    { kind: "line", x1: 0, y1: -5, x2: 0, y2: 5, strokeWidth: 1 },
+    { kind: "path", d: "M -2 2 L 0 5 L 2 2", fill: "none", strokeWidth: 1 },
+    { kind: "line", x1: -24, y1: -8, x2: -16, y2: -8, strokeWidth: 1.5 },
+    { kind: "line", x1: -24, y1: 8, x2: -16, y2: 8, strokeWidth: 1.5 },
+    { kind: "text", x: -21, y: -10, value: "+", fill: "#c65252", fontSize: 8 },
+    { kind: "text", x: -21, y: 11, value: "−", fill: "#888888", fontSize: 8 },
+    { kind: "line", x1: 0, y1: -20, x2: 0, y2: -13, strokeWidth: 1.5 },
+    { kind: "line", x1: 0, y1: 20, x2: 0, y2: 13, strokeWidth: 1.5 },
+  ],
+};
 
 // ── ViewSpec renderer ────────────────────────────────────────────────────────────────────────────
 
@@ -394,9 +547,15 @@ function packagePinLeadSvg(pin: PackagePin, resolved: ResolvedPackage, labelColo
   const isVerticalLead = !hasCustomLabelPos && (pin.angle === 90 || pin.angle === 270);
   const rotateAttr = isVerticalLead ? ` transform="rotate(-90 ${labelX.toFixed(1)} ${labelY.toFixed(1)})"` : "";
   const fillAttr = labelColor === "currentColor" ? ` class="symbol-text"` : ` fill="${labelColor}"`;
+  const leadMarkup = pin.length === 0
+    ? ""
+    : `<line x1="${x.toFixed(1)}" y1="${y.toFixed(1)}" x2="${tipX.toFixed(1)}" y2="${tipY.toFixed(1)}" stroke="#000" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`;
+  const labelMarkup = label.trim()
+    ? `<text x="${labelX.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="middle"${fillAttr} style="font-size:${PACKAGE_PIN_LABEL_FONT_SIZE}px"${rotateAttr}>${escapeXmlText(label)}</text>`
+    : "";
   return (
-    `<line x1="${x.toFixed(1)}" y1="${y.toFixed(1)}" x2="${tipX.toFixed(1)}" y2="${tipY.toFixed(1)}" stroke="#000" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>` +
-    `<text x="${labelX.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="middle"${fillAttr} style="font-size:${PACKAGE_PIN_LABEL_FONT_SIZE}px"${rotateAttr}>${escapeXmlText(label)}</text>`
+    leadMarkup +
+    labelMarkup
   );
 }
 
@@ -421,7 +580,9 @@ function packageBodySvg(resolved: ResolvedPackage, componentId?: string, propert
   const pkg = resolved.source;
   let markup = packageBackgroundSvg(pkg);
 
-  if (pkg.viewSpec && componentId) {
+  if (pkg.simulidePaint) {
+    for (const shape of simulidePaintToPackageShapes(pkg.simulidePaint, pkg.width, pkg.height, properties ?? {})) markup += packageShapeSvg(shape);
+  } else if (pkg.viewSpec && componentId) {
     markup += viewSpecBodySvg(pkg, componentId, properties ?? {}) ?? "";
   } else {
     for (const shape of pkg.shapes ?? []) markup += packageShapeSvg(shape);
@@ -435,7 +596,10 @@ function packageBodySvg(resolved: ResolvedPackage, componentId?: string, propert
     `<g transform="scale(${resolved.scaleX.toFixed(6)},${resolved.scaleY.toFixed(6)})">${markup}</g>` +
     `</g>`;
   const pinLabelColor = pkg.pinLabelColor ?? "currentColor";
-  const pinsMarkup = pkg.pins.map((pin) => packagePinLeadSvg(pin, resolved, pinLabelColor)).join("");
+  const pinsMarkup = pkg.pins
+    .filter((pin) => stateVisibleMatches(pin.stateVisible, properties))
+    .map((pin) => packagePinLeadSvg(pin, resolved, pinLabelColor))
+    .join("");
   return bodyMarkup + pinsMarkup;
 }
 
@@ -568,14 +732,14 @@ function builtinComponentBox(typeId: string): ComponentBox | undefined {
     case "meters.logic_analyzer": return { width: 260, height: 212 };
 
     case "sources.dc_voltage": return { width: 64, height: 48 };
-    case "sources.fixed_volt": return { width: 24, height: 24 }; // sources/fixedvolt.cpp
-    case "sources.clock": return { width: 26, height: 16 }; // sources/clockbase.cpp
-    case "sources.wave_gen": return { width: 26, height: 16 }; // sources/clockbase.cpp (WaveGen herda)
-    case "sources.voltage_source": return { width: 40, height: 32 }; // sources/voltsource.cpp+varsource.cpp
-    case "sources.current_source": return { width: 40, height: 32 }; // sources/currsource.cpp+varsource.cpp
-    case "sources.controlled_source": return { width: 36, height: 36 }; // sources/csource.cpp
-    case "sources.battery": return { width: 20, height: 20 }; // sources/battery.cpp
-    case "sources.rail": return { width: 24, height: 16 };
+    case "sources.fixed_volt": return { width: 48, height: 16 }; // sources/fixedvolt.cpp: m_button (16x16) + corpo (16x16) + pino, ver fixedVoltPaint().bounds
+    case "sources.clock": return { width: 48, height: 16 }; // sources/clock.cpp: m_button herdado + m_area(22x16) + pino, ver clockLikePaint().bounds
+    case "sources.wave_gen": return { width: 48, height: 16 }; // sources/wavegen.cpp: idem Clock, 2 pinos (out/gnd)
+    case "sources.voltage_source": return { width: 48, height: 56 }; // sources/voltsource.cpp+varsource.cpp: WIDTH=40,HEIGHT=56 + pino em (28,16)
+    case "sources.current_source": return { width: 48, height: 56 }; // sources/currsource.cpp+varsource.cpp
+    case "sources.controlled_source": return { width: 40, height: 40 }; // sources/csource.cpp: m_area 32x32 + pinos de controle em x=-24
+    case "sources.battery": return { width: 32, height: 20 }; // sources/battery.cpp (Comp2Pin): m_area 20x20, pinos herdados em x=±16
+    case "sources.rail": return { width: 16, height: 20 }; // sources/rail.cpp: setRotation(90) no construtor -- funil aponta pra baixo
 
     default: return undefined;
   }
@@ -667,17 +831,25 @@ export function componentBox(typeId: string, properties?: Record<string, unknown
 export function hasRealPinPosition(typeId: string, pinId: string, properties?: Record<string, unknown>): boolean {
   const resolved = resolvedPackageFor(typeId, properties);
   if (!resolved) return true;
-  return resolved.pins.some((candidate) => candidate.id === pinId);
+  return resolved.pins.some((candidate) => packagePinMatches(candidate, pinId) && stateVisibleMatches(candidate.stateVisible, properties));
 }
 
 export function pinLocalPosition(pinId: string, pinIndex: number, pinCount: number, typeId: string, properties?: Record<string, unknown>): { x: number; y: number } {
   const resolved = resolvedPackageFor(typeId, properties);
   if (resolved) {
-    const pin = resolved.pins.find((candidate) => candidate.id === pinId);
+    const pin = resolved.pins.find((candidate) => packagePinMatches(candidate, pinId) && stateVisibleMatches(candidate.stateVisible, properties));
     if (pin) return { x: pin.tipX, y: pin.tipY };
   }
   if (typeId === "connectors.junction") return { x: 0, y: 0 };
   const box = componentBox(typeId, properties);
+  // SimulIDE sources/ground.cpp:
+  //   m_area = QRect(-8,-10,16,12)
+  //   IoPin(90, QPoint(0,-16), ...)
+  // In this positive viewBox the offset is (+8,+16), so the real electrical
+  // connection is the top of the vertical lead, not the middle of the symbol.
+  if (typeId === "other.ground" && pinCount <= 1) {
+    return { x: box.width / 2, y: 0 };
+  }
   if (typeId === "connectors.tunnel" && pinCount <= 1) {
     return { x: box.width - 8, y: box.height / 2 };
   }
@@ -772,14 +944,29 @@ export function pinLocalPosition(pinId: string, pinIndex: number, pinCount: numb
       break;
     case "sources.voltage_source":
     case "sources.current_source":
-      if (pinCount <= 1) return { x: box.width, y: box.height / 2 };
+      // voltsource.cpp/currsource.cpp: pino real em (28,16) local dentro de m_area(-20,-28,40,56)
+      // -- deslocado (+20,+28) fica (48,44), na borda direita perto da caixa de valor, NÃO no meio
+      // vertical da caixa toda (46% da altura, não 50%).
+      if (pinCount <= 1) return { x: box.width, y: 44 };
       break;
     case "sources.controlled_source":
-      if (pinIndex === 0) return { x: 0, y: 10 };
-      if (pinIndex === 1) return { x: 0, y: 26 };
-      if (pinIndex === 2) return { x: 18, y: 0 };
-      if (pinIndex === 3) return { x: 18, y: 36 };
+      // csource.cpp: 4 pinos reais -- 2 de controle (+/-) à ESQUERDA da moldura quadrada (que já
+      // começa 8px depois da borda da caixa, ver componentSymbolSvg) + 2 de fonte (topo/baixo) no
+      // meio do diamante. Caixa antiga (36x36) não tinha espaço pros pinos de controle, que no real
+      // saem 8px além da moldura.
+      if (pinIndex === 0) return { x: 0, y: 12 };
+      if (pinIndex === 1) return { x: 0, y: 28 };
+      if (pinIndex === 2) return { x: 24, y: 0 };
+      if (pinIndex === 3) return { x: 24, y: 40 };
       break;
+    case "sources.clock":
+      if (pinCount <= 1) return { x: box.width, y: box.height / 2 };
+      break;
+    case "sources.wave_gen":
+      // wavegen.cpp: 2 pinos reais, AMBOS do lado direito (out em cima, gnd embaixo) -- não um de
+      // cada lado (fallback genérico jogava o 2º pino pra esquerda, sem nenhum traço desenhado lá).
+      if (pinIndex === 0) return { x: box.width, y: 4 };
+      return { x: box.width, y: 12 };
     // potentiometer.cpp: pins[0]/[1] são as pontas A/B (Core stampa conductance entre elas e o
     // wiper, ver SimulidePotentiometer::stamp) -- esquerda/direita, na mesma convenção compacta
     // 0/width usada pelo `horizontalLeads` (ver componentSymbolSvg). pins[2] é o wiper embaixo, no
@@ -797,7 +984,10 @@ export function pinLocalPosition(pinId: string, pinIndex: number, pinCount: numb
     return { x: box.width, y: box.height / 2 };
   }
   if (typeId === "sources.rail" && pinCount <= 1) {
-    return { x: box.width, y: box.height / 2 };
+    // rail.cpp: pino sai da ponta ESTREITA do funil, embaixo (ver componentSymbolSvg) -- não do
+    // lado direito (bug: era desenhado como bandeirola horizontal, sem base real no `setRotation(90)`
+    // do construtor real).
+    return { x: box.width / 2, y: box.height };
   }
   if (typeId === "meters.probe" && pinCount <= 1) {
     return { x: 0, y: box.height / 2 };
@@ -848,6 +1038,43 @@ function horizontalLeads(box: ComponentBox, yMid: number): string {
   return (
     `<line x1="${pinLeft}" y1="${yMid}" x2="${bodyLeft}" y2="${yMid}" class="symbol-stroke"/>` +
     `<line x1="${bodyRight}" y1="${yMid}" x2="${pinRight}" y2="${yMid}" class="symbol-stroke"/>`
+  );
+}
+
+/** Estilização vetorial de um `QDial` NATIVO do Qt (widget do SO, ver `gui/customdial.cpp` --
+ * `CustomDial::paintEvent` real, não aproximação livre) -- usado por `other.dial` e
+ * `sources.voltage_source`/`current_source` pra ficarem visualmente consistentes entre si (mesmo
+ * widget real por trás dos três). Geometria fiel ao paintEvent: arco de 300° começando em 240°,
+ * marcas cinza (110,110,110) a cada passo + a PRIMEIRA marca (240°, início da faixa) sempre
+ * VERMELHA -- essa marca vermelha é uma referência FIXA de zero, não o indicador de valor real (o
+ * indicador de valor é um "nub" circular separado, que se move ao longo do mesmo arco conforme
+ * value/maximum). Gradiente radial quase branco (só (200,200,195) na borda, não um cinza forte). */
+function qDialKnobSvg(cx: number, cy: number, r: number): string {
+  const gradientId = `dial-grad-${Math.round(cx)}-${Math.round(cy)}-${Math.round(r)}`;
+  const tickCount = 20;
+  let ticks = "";
+  for (let i = 0; i <= tickCount; i++) {
+    const angleDeg = 240 + (300 / tickCount) * i;
+    const rad = (angleDeg * Math.PI) / 180;
+    const inner = r - 4;
+    const isZeroRef = i === 0;
+    ticks +=
+      `<line x1="${(cx + Math.cos(rad) * inner).toFixed(1)}" y1="${(cy + Math.sin(rad) * inner).toFixed(1)}" ` +
+      `x2="${(cx + Math.cos(rad) * r).toFixed(1)}" y2="${(cy + Math.sin(rad) * r).toFixed(1)}" ` +
+      `stroke="${isZeroRef ? "#e02020" : "#6e6e6e"}" stroke-width="${isZeroRef ? 2 : 1}"/>`;
+  }
+  // Nub de valor decorativo no meio do curso (50%) -- widget interativo real, sem estado de
+  // "posição atual" reproduzido aqui, ver docstring da função.
+  const valueRad = ((240 + 300 * 0.5) * Math.PI) / 180;
+  const knobR = r / 6;
+  const nubX = cx + Math.cos(valueRad) * (r - knobR * 2.5);
+  const nubY = cy + Math.sin(valueRad) * (r - knobR * 2.5);
+  return (
+    `<defs><radialGradient id="${gradientId}" cx="50%" cy="50%" r="50%">` +
+    `<stop offset="0%" stop-color="#ffffff"/><stop offset="80%" stop-color="#e6e6e1"/><stop offset="100%" stop-color="#c8c8c3"/></radialGradient></defs>` +
+    `<circle cx="${cx}" cy="${cy}" r="${r}" fill="url(#${gradientId})" stroke="#464646" stroke-width="1"/>` +
+    ticks +
+    `<circle cx="${nubX.toFixed(1)}" cy="${nubY.toFixed(1)}" r="${knobR.toFixed(1)}" fill="#d2d2c8" stroke="#464646" stroke-width="1"/>`
   );
 }
 
@@ -1103,12 +1330,7 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
       );
 
     case "other.ground":
-      return (
-        `<line x1="8" y1="0" x2="8" y2="8" class="symbol-stroke"/>` +
-        `<line x1="1.4" y1="8" x2="14.6" y2="8" class="symbol-stroke"/>` +
-        `<line x1="3.7" y1="12" x2="12.3" y2="12" class="symbol-stroke"/>` +
-        `<line x1="6.1" y1="16" x2="9.9" y2="16" class="symbol-stroke"/>`
-      );
+      return builtinPaintSvg(GROUND_PAINT, box);
 
     case "connectors.tunnel":
       {
@@ -1258,13 +1480,10 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
 
     case "other.dial":
       // dial.cpp: o knob de verdade é um `QDial` NATIVO do Qt (widget do SO, não dá pra reproduzir
-      // em SVG) -- isto aqui é só uma estilização vetorial razoável dele, numa caixa mais modesta que
-      // antes (56×56 → 40×40) já que o componente só desenha uma plaquinha pequena por conta própria.
-      return (
-        `<circle cx="${midX}" cy="${yMid}" r="${Math.min(midX, yMid) - 2}" class="symbol-stroke" fill="none"/>` +
-        `<circle cx="${midX}" cy="${yMid}" r="${(Math.min(midX, yMid) - 2) * 0.55}" class="symbol-stroke" fill="none"/>` +
-        `<line x1="${midX}" y1="${yMid}" x2="${midX + (Math.min(midX, yMid) - 2) * 0.4}" y2="${yMid - (Math.min(midX, yMid) - 2) * 0.6}" class="symbol-stroke symbol-stroke--thick"/>`
-      );
+      // em SVG) -- usa a MESMA estilização de `sources.voltage_source`/`current_source`
+      // (`qDialKnobSvg`), já que é o mesmo widget real por trás dos dois, em vez de manter dois
+      // desenhos diferentes pra aproximar a mesma peça.
+      return qDialKnobSvg(midX, yMid, Math.min(midX, yMid) - 2);
 
     case "sources.dc_voltage":
       return (
@@ -1673,81 +1892,44 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
       return logicAnalyzerPanelSvg(properties);
 
     // ── Fontes (pasta "Sources" do SimulIDE) ────────────────────────────────────
-    case "sources.fixed_volt": {
-      // fixedvolt.cpp: UM único botão quadrado (não dois lado a lado) -- laranja quando ligado,
-      // lavanda-claro quando desligado, exatamente como o toggle real.
-      const on = properties?.closed === true;
-      return (
-        `<rect x="2" y="2" width="${box.width - 4}" height="${box.height - 4}" rx="3" class="fixed-volt-body toggle-hit-zone" fill="${on ? "#ffa600" : "#e6e6ff"}" stroke="#777777" stroke-width="1.5"/>`
-      );
-    }
+    case "sources.fixed_volt":
+      return builtinPaintSvg(fixedVoltPaint(), box, properties);
 
-    case "sources.clock": {
-      // clockbase.cpp: SEMPRE tem um corpo preenchido atrás do pulso (amarelo rodando, lavanda
-      // parado) -- antes só as linhas do pulso apareciam, sem nenhum fundo (bug: real nunca mostra
-      // as linhas "no ar").
-      const running = properties?.running !== false;
-      return (
-        `<rect x="1" y="1" width="${box.width - 2}" height="${box.height - 2}" rx="2" fill="${running ? "#fac832" : "#e6e6ff"}" stroke="currentColor" stroke-width="1"/>` +
-        `<path d="M ${midX - 11} ${yMid + 3} L ${midX - 11} ${yMid - 3} L ${midX - 5} ${yMid - 3} L ${midX - 5} ${yMid + 3} ` +
-        `L ${midX + 1} ${yMid + 3} L ${midX + 1} ${yMid - 3} L ${midX + 4} ${yMid - 3}" class="symbol-stroke" fill="none"/>`
-      );
-    }
+    case "sources.clock":
+      return builtinPaintSvg(clockLikePaint(CLOCK_PULSE_PATH, "one"), box, properties);
 
-    case "sources.wave_gen": {
-      // wavegen.cpp herda o mesmo corpo preenchido de ClockBase (amarelo/lavanda) -- o ícone de onda
-      // é uma aproximação (o real troca de pixmap por tipo de onda selecionado).
-      const running = properties?.running !== false;
-      return (
-        `<rect x="1" y="1" width="${box.width - 2}" height="${box.height - 2}" rx="2" fill="${running ? "#fac832" : "#e6e6ff"}" stroke="currentColor" stroke-width="1"/>` +
-        `<path d="M 6 ${yMid} Q ${midX - 5} ${yMid - 6}, ${midX} ${yMid} T ${box.width - 6} ${yMid}" class="symbol-stroke" fill="none"/>`
-      );
-    }
+    case "sources.wave_gen":
+      return builtinPaintSvg(clockLikePaint(WAVE_GEN_SINE_PATH, "two"), box, properties);
 
     case "sources.voltage_source":
     case "sources.current_source": {
-      // varsource.cpp: componente de UM pino só (dial+botão nativos do Qt, não reproduzíveis em
-      // SVG) -- era desenhado como fonte clássica de 2 terminais (bug de topologia: teria 2 leads
-      // pra um componente que só tem 1 pino elétrico real). Aqui: corpo cinza-claro + label, 1 lead
-      // à direita (ver `pinLocalPosition`, já trata como pinCount<=1 no lado direito).
-      const label = typeId === "sources.voltage_source" ? "V" : "A";
+      // varsource.cpp: `paint()` preenche o `m_area` INTEIRO (40x56) com um painel cinza-claro
+      // arredondado (230,230,230) ANTES do QDial nativo -- faltava esse painel de fundo (só o
+      // botão de valor tinha fundo próprio antes, deixando o dial "flutuando" sem moldura, bug
+      // relatado 2026-07-05). QDial via `qDialKnobSvg` (mesmo widget de `other.dial`).
+      const unit = typeId === "sources.voltage_source" ? "V" : "A";
+      const value = typeof properties?.value === "number" ? properties.value : unit === "V" ? 5 : 1;
       return (
-        `<line x1="${box.width - 8}" y1="${yMid}" x2="${box.width}" y2="${yMid}" class="symbol-stroke"/>` +
-        `<rect x="2" y="2" width="${box.width - 12}" height="${box.height - 4}" rx="3" fill="#e6e6e6" stroke="#777777" stroke-width="1.5"/>` +
-        `<text x="${(box.width - 12) / 2 + 2}" y="${yMid + 4}" text-anchor="middle" class="symbol-text">${label}</text>`
+        `<rect x="0" y="0" width="40" height="56" rx="2" fill="#e6e6e6" stroke="#464646" stroke-width="1.5"/>` +
+        qDialKnobSvg(20, 19, 16) +
+        `<rect x="4" y="39" width="32" height="14" rx="2" fill="#f2f2f2" stroke="#464646" stroke-width="1"/>` +
+        `<text x="20" y="49" text-anchor="middle" class="symbol-text" style="font-size:9px">${escapeXmlText(formatRailVoltage(value))} ${unit}</text>` +
+        `<line x1="40" y1="44" x2="48" y2="44" class="symbol-stroke"/>`
       );
     }
 
-    case "sources.controlled_source": {
-      // csource.cpp: borda quadrada (m_area, 32x32) + diamante MENOR por dentro (metade da escala
-      // que estava desenhada antes -- bug: diamante 2x maior que o real, e faltava a moldura
-      // quadrada em volta por completo).
-      const cx = box.width / 2;
-      const cy = box.height / 2;
-      return (
-        `<rect x="2" y="2" width="${box.width - 4}" height="${box.height - 4}" class="symbol-stroke" fill="none"/>` +
-        `<path d="M ${cx - 8} ${cy} L ${cx} ${cy - 13} L ${cx + 8} ${cy} L ${cx} ${cy + 13} Z" class="symbol-stroke" fill="none"/>` +
-        `<line x1="${cx}" y1="${cy - 5}" x2="${cx}" y2="${cy + 5}" class="symbol-stroke symbol-stroke--accent"/>` +
-        `<path d="M ${cx - 2} ${cy + 2} L ${cx} ${cy + 5} L ${cx + 2} ${cy + 2}" class="symbol-stroke symbol-stroke--accent" fill="none"/>`
-      );
-    }
+    case "sources.controlled_source":
+      return builtinPaintSvg(CONTROLLED_SOURCE_PAINT, box);
 
     case "sources.battery":
-      // Barras alternadas longa/curta -- mesma sequência exata de drawLine do Battery::paint original.
-      return (
-        `<line x1="${midX - 7}" y1="${yMid - 8}" x2="${midX - 7}" y2="${yMid + 8}" class="symbol-stroke symbol-stroke--thick"/>` +
-        `<line x1="${midX - 2}" y1="${yMid - 3}" x2="${midX - 2}" y2="${yMid + 3}" class="symbol-stroke"/>` +
-        `<line x1="${midX + 3}" y1="${yMid - 8}" x2="${midX + 3}" y2="${yMid + 8}" class="symbol-stroke symbol-stroke--thick"/>` +
-        `<line x1="${midX + 8}" y1="${yMid - 3}" x2="${midX + 8}" y2="${yMid + 3}" class="symbol-stroke"/>`
-      );
+      return builtinPaintSvg(BATTERY_PAINT, box);
 
     case "sources.rail": {
       const voltage = typeof properties?.voltage === "number" ? properties.voltage : 5.0;
       const label = `${formatRailVoltage(voltage)} V`;
       return (
-        `<text x="6" y="6" text-anchor="middle" class="rail-voltage-label">${escapeXmlText(label)}</text>` +
-        `<path d="M 6 1.5 L 6 14.5 L 17 9 L 17 7 Z" fill="#ffa500" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>` +
-        `<rect x="16" y="5" width="8" height="6" rx="3" fill="currentColor"/>`
+        builtinPaintSvg(RAIL_PAINT, box) +
+        `<text x="8" y="-2" text-anchor="middle" class="rail-voltage-label">${escapeXmlText(label)}</text>`
       );
     }
 

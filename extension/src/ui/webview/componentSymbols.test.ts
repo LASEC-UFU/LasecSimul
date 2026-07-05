@@ -22,6 +22,32 @@ import { PackageDescriptor } from "./model";
     assert(box.width === 70 && box.height === 40, `esperado box genérico, recebido {${box.width},${box.height}}`);
   });
 
+  await test("other.ground replica sources/ground.cpp: caixa, pino no topo do lead e barras com stroke 2.5", () => {
+    const box = componentBox("other.ground");
+    assert(box.width === 16 && box.height === 18, `Ground deveria usar caixa compacta 16x18, recebido {${box.width},${box.height}}`);
+    const pin = pinLocalPosition("pin", 0, 1, "other.ground");
+    assert(pin.x === 8 && pin.y === 0, `pino eletrico do Ground deveria ficar no topo do lead (8,0), recebido {${pin.x},${pin.y}}`);
+    const svg = componentSymbolSvg("other.ground");
+    assert(svg.includes('x1="1.4" y1="8" x2="14.6" y2="8"'), `barra superior do Ground deveria vir de ground.cpp, markup: ${svg}`);
+    assert(svg.includes('stroke-width="2.5"'), `barras do Ground deveriam usar pen 2.5 como no SimulIDE, markup: ${svg}`);
+  });
+
+  await test("sources.fixed_volt usa propriedade out e desenha o lead ate o IoPin real", () => {
+    const box = componentBox("sources.fixed_volt");
+    // fixedvolt.cpp: m_button (widget nativo, 16x16) + corpo (16x16) + pino, todos derivados do
+    // mesmo bounds (-32,-8,48,16) via o tradutor SimulidePaint (`fixedVoltPaint`) -- caixa cresceu
+    // de 28 pra 48 quando o botao de liga/desliga (antes ausente) foi adicionado de volta.
+    assert(box.width === 48 && box.height === 16, `FixedVolt deveria incluir botao (16x16) + corpo (16x16) + pino em x=48, recebido {${box.width},${box.height}}`);
+    const pin = pinLocalPosition("pin", 0, 1, "sources.fixed_volt");
+    assert(pin.x === 48 && pin.y === 8, `pino eletrico do FixedVolt deveria ficar em (48,8), recebido {${pin.x},${pin.y}}`);
+    const svgOn = componentSymbolSvg("sources.fixed_volt", { out: true });
+    assert(svgOn.includes('x1="40" y1="8" x2="48" y2="8"'), `FixedVolt deveria desenhar lead ate o pino, markup: ${svgOn}`);
+    assert(svgOn.includes('fill="#ffa600"'), `FixedVolt ligado deveria ficar laranja por properties.out, markup: ${svgOn}`);
+    assert(svgOn.includes('fill="#dddddd"'), `FixedVolt deveria desenhar o botao de liga/desliga (cinza), markup: ${svgOn}`);
+    const svgOff = componentSymbolSvg("sources.fixed_volt", { out: false });
+    assert(svgOff.includes('fill="#e6e6ff"'), `FixedVolt desligado deveria ficar lavanda por properties.out=false, markup: ${svgOff}`);
+  });
+
   await test("com package registrado, componentBox usa o layout resolvido (com folga pra leads)", () => {
     registerPackage("test.example", pkg);
     const box = componentBox("test.example");
@@ -99,6 +125,128 @@ import { PackageDescriptor } from "./model";
     const svg = packageSymbolSvg("test.rich-shapes") ?? "";
     assert(svg.includes('<path class="simulide-path" d="M 2 2 L 20 8 L 2 14 Z"'), `path deveria renderizar no package, markup: ${svg}`);
     assert(svg.includes('<image class="simulide-image" x="4" y="4" width="16" height="12" preserveAspectRatio="xMidYMid meet" href="data:image/png;base64,AAAA"'), `image deveria renderizar no package, markup: ${svg}`);
+  });
+
+  await test("package.simulidePaint traduz coordenadas locais do SimulIDE antes de viewSpec/shapes", () => {
+    const simulidePkg: PackageDescriptor = {
+      width: 16,
+      height: 18,
+      pins: [{ id: "pin", x: 8, y: 0, angle: 270, length: 0, label: "" }],
+      shapes: [{ kind: "rect", x: 0, y: 0, w: 16, h: 18, fill: "#f00", stroke: "#f00" }],
+      simulidePaint: {
+        version: 1,
+        source: { file: "src/components/sources/ground.cpp", className: "Ground", method: "paint" },
+        bounds: { x: -8, y: -16, w: 16, h: 18 },
+        defaultStroke: "#000",
+        defaultFill: "none",
+        defaultStrokeWidth: 2.5,
+        primitives: [
+          { kind: "line", x1: 0, y1: -16, x2: 0, y2: -8, strokeWidth: 3, strokeLinecap: "round" },
+          { kind: "line", x1: -6.6, y1: -8, x2: 6.6, y2: -8 },
+          { kind: "line", x1: -4.3, y1: -4, x2: 4.3, y2: -4 },
+          { kind: "line", x1: -1.9, y1: 0, x2: 1.9, y2: 0 },
+        ],
+      },
+    };
+    registerPackage("test.simulide-paint.ground", simulidePkg);
+    const svg = packageSymbolSvg("test.simulide-paint.ground", {}, "ground-1") ?? "";
+    assert(svg.includes('x1="8" y1="0" x2="8" y2="8"'), `lead deveria ser traduzido do local SimulIDE para viewBox positivo, markup: ${svg}`);
+    assert(svg.includes('x1="1.4" y1="8" x2="14.6" y2="8"'), `barra superior deveria preservar geometria -6.6..6.6, markup: ${svg}`);
+    assert(svg.includes('stroke-width="2.5"'), `stroke default do paint deveria sobreviver, markup: ${svg}`);
+    assert(!svg.includes('fill="#f00"'), `simulidePaint deveria ter prioridade sobre shapes[] legado, markup: ${svg}`);
+    assert(!svg.includes('x1="8.0" y1="0.0" x2="8.0" y2="0.0"'), `pino length=0 nao deveria emitir lead zero-length, markup: ${svg}`);
+    assert(!svg.includes("<text"), `label vazio nao deveria emitir texto invisivel, markup: ${svg}`);
+  });
+
+  await test("package.simulidePaint converte drawArc Qt em path SVG auditavel", () => {
+    const arcPkg: PackageDescriptor = {
+      width: 20,
+      height: 20,
+      pins: [{ id: "p1", x: 0, y: 10, angle: 180, length: 8, label: "P1" }],
+      simulidePaint: {
+        version: 1,
+        bounds: { x: -10, y: -10, w: 20, h: 20 },
+        primitives: [
+          { kind: "arc", x: -8, y: -8, w: 16, h: 16, startDeg: 0, spanDeg: -180, stroke: "#123", strokeWidth: 1.5 },
+        ],
+      },
+    };
+    registerPackage("test.simulide-paint.arc", arcPkg);
+    const svg = packageSymbolSvg("test.simulide-paint.arc", {}, "arc-1") ?? "";
+    assert(svg.includes('<path d="M 18 10 A 8 8 0 0 1 2 10" stroke="#123" fill="none" stroke-width="1.5"'), `drawArc deveria virar path SVG com endpoint deterministico, markup: ${svg}`);
+  });
+
+  await test("package.simulidePaint aplica fill por propriedade e aliases de pino", () => {
+    const fixedVoltPkg: PackageDescriptor = {
+      width: 28,
+      height: 24,
+      pins: [{ id: "out", aliases: ["pin", "pin-1"], x: 28, y: 12, angle: 0, length: 0, label: "" }],
+      simulidePaint: {
+        version: 1,
+        bounds: { x: -12, y: -12, w: 28, h: 24 },
+        defaultStroke: "#000",
+        defaultFill: "none",
+        defaultStrokeWidth: 1.5,
+        primitives: [
+          { kind: "line", x1: 8, y1: 0, x2: 16, y2: 0, strokeWidth: 3, strokeLinecap: "round" },
+          {
+            kind: "roundedRect",
+            x: -8,
+            y: -8,
+            w: 16,
+            h: 16,
+            rx: 2,
+            ry: 2,
+            fill: "#e6e6ff",
+            stateFill: { prop: "out", map: { true: "#ffa600", false: "#e6e6ff" } },
+          },
+        ],
+      },
+    };
+    registerPackage("test.simulide-paint.fixed-volt", fixedVoltPkg);
+    const svgOn = packageSymbolSvg("test.simulide-paint.fixed-volt", { out: true }, "fixed-1") ?? "";
+    const svgOff = packageSymbolSvg("test.simulide-paint.fixed-volt", { out: false }, "fixed-2") ?? "";
+    assert(svgOn.includes('x1="20" y1="12" x2="28" y2="12"'), `lead deveria vir do paint local (8,0)->(16,0), markup: ${svgOn}`);
+    assert(svgOn.includes('fill="#ffa600"'), `out=true deveria projetar fill laranja SimulIDE, markup: ${svgOn}`);
+    assert(svgOff.includes('fill="#e6e6ff"'), `out=false deveria projetar fill lavanda SimulIDE, markup: ${svgOff}`);
+    const pinOut = pinLocalPosition("out", 0, 1, "test.simulide-paint.fixed-volt");
+    const pinLegacy = pinLocalPosition("pin-1", 0, 1, "test.simulide-paint.fixed-volt");
+    assert(pinOut.x === 28 && pinOut.y === 12, `id real out deveria conectar em (28,12), recebido ${JSON.stringify(pinOut)}`);
+    assert(pinLegacy.x === 28 && pinLegacy.y === 12, `alias pin-1 deveria conectar no mesmo ponto, recebido ${JSON.stringify(pinLegacy)}`);
+    assert(hasRealPinPosition("test.simulide-paint.fixed-volt", "pin"), "alias pin deveria contar como posicao real");
+  });
+
+  await test("package.simulidePaint aplica visibilidade e imagem condicionais por estado", () => {
+    const pkg: PackageDescriptor = {
+      width: 12,
+      height: 12,
+      background: { kind: "none" },
+      pins: [{ id: "out", aliases: ["pin-1"], x: 12, y: 6, angle: 0, length: 0, label: "", stateVisible: { when: { enabled: ["true"] } } }],
+      simulidePaint: {
+        version: 1,
+        bounds: { x: 0, y: 0, w: 12, h: 12 },
+        primitives: [
+          { kind: "line", x1: 0, y1: 6, x2: 12, y2: 6, strokeWidth: 1, stateVisible: { when: { enabled: ["true"] } } },
+          {
+            kind: "image",
+            x: 1,
+            y: 1,
+            w: 4,
+            h: 4,
+            href: "data:image/png;base64,AAAA",
+            stateHref: { prop: "mode", map: { alt: "data:image/png;base64,BBBB" } },
+          },
+        ],
+      },
+    };
+    registerPackage("test.simulide-paint.conditional", pkg);
+    const disabled = packageSymbolSvg("test.simulide-paint.conditional", { enabled: false, mode: "alt" }, "cond-1") ?? "";
+    const enabled = packageSymbolSvg("test.simulide-paint.conditional", { enabled: true, mode: "alt" }, "cond-2") ?? "";
+    assert(!disabled.includes('x1="0" y1="6" x2="12" y2="6"'), `linha condicional nao deveria aparecer desligada, markup: ${disabled}`);
+    assert(enabled.includes('x1="0" y1="6" x2="12" y2="6"'), `linha condicional deveria aparecer ligada, markup: ${enabled}`);
+    assert(enabled.includes('href="data:image/png;base64,BBBB"'), `stateHref deveria trocar a imagem, markup: ${enabled}`);
+    assert(!hasRealPinPosition("test.simulide-paint.conditional", "out", { enabled: false }), "pino condicional nao deveria ficar clicavel invisivel");
+    assert(hasRealPinPosition("test.simulide-paint.conditional", "pin-1", { enabled: true }), "alias do pino condicional deveria ficar clicavel quando visivel");
   });
 
   await test("ViewSpec escopa gradientes por componentId e aplica rotate stateProjection", () => {
@@ -287,5 +435,6 @@ import { PackageDescriptor } from "./model";
   registerPackage("test.viewspec.joystick", undefined);
   registerPackage("test.viewspec.background", undefined);
   registerPackage("test.rich-shapes", undefined);
+  registerPackage("test.simulide-paint.fixed-volt", undefined);
   finish();
 })();

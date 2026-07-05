@@ -1,0 +1,1943 @@
+{
+  "generatedAt": "2026-07-05T05:35:13.648Z",
+  "simulideSourceRoot": ".codex-simulide-src",
+  "summary": {
+    "total": 132,
+    "byScope": {
+      "built-in": 62,
+      "abi-device": 67,
+      "mcu-adapter": 1,
+      "subcircuit": 2
+    },
+    "byOrigin": {
+      "componentSymbols/fallback": 50,
+      "simulidePaint": 12,
+      "package.shapes": 17,
+      "viewSpec": 53
+    },
+    "byStatus": {
+      "divergent-by-architecture": 120,
+      "candidate-needs-visual-proof": 12
+    }
+  },
+  "items": [
+    {
+      "scope": "built-in",
+      "typeId": "switches.push",
+      "label": "Push",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "switches.switch",
+      "label": "Switch (all)",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "switches.switch_dip",
+      "label": "Switch Dip",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "switches.relay",
+      "label": "Relay (all)",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "switches.keypad",
+      "label": "KeyPad",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "passive.resistor",
+      "label": "Resistor",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/passive/resistors/resistor.cpp + src/components/comp2pin.cpp",
+      "missingDetails": [
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "passive.variable_resistor",
+      "label": "Variable Resistor",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "passive.potentiometer",
+      "label": "Potentiometer",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "passive.resistor_dip",
+      "label": "ResistorDip",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "passive.ldr",
+      "label": "LDR",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "passive.thermistor",
+      "label": "Thermistor",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "passive.rtd",
+      "label": "RTD",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "passive.force_strain_gauge",
+      "label": "Force Strain Gauge",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "passive.capacitor",
+      "label": "Capacitor",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/passive/reactive/capacitor.cpp + capacitorbase.cpp + comp2pin.cpp",
+      "missingDetails": [
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "passive.electrolytic_capacitor",
+      "label": "Electrolytic Capacitor",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "passive.inductor",
+      "label": "Inductor",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/passive/reactive/inductor.cpp + reactive.cpp + comp2pin.cpp",
+      "missingDetails": [
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "passive.variable_capacitor",
+      "label": "Variable Capacitor",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "passive.variable_inductor",
+      "label": "Variable Inductor",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "active.diode",
+      "label": "Diode",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "active.zener",
+      "label": "Zener Diode",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "active.opamp",
+      "label": "OpAmp",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "active.comparator",
+      "label": "Comparator",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "active.analog_mux",
+      "label": "Analog Mux",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "active.volt_regulator",
+      "label": "Volt. Regulator",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "outputs.led",
+      "label": "Led",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "outputs.led_rgb",
+      "label": "Led Rgb",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "outputs.led_bar",
+      "label": "Led Bar",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "outputs.led_matrix",
+      "label": "LedMatrix",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "outputs.seven_segment",
+      "label": "7 Segment",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "outputs.dc_motor",
+      "label": "Dc Motor",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "outputs.stepper",
+      "label": "Stepper",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "outputs.incandescent_lamp",
+      "label": "Incandescent lamp",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "connectors.junction",
+      "label": "Juncao",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "connectors.bus",
+      "label": "Barramento",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "connectors.tunnel",
+      "label": "Tunel",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "connectors.socket",
+      "label": "Soquete",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "connectors.header",
+      "label": "Cabecalho",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "graphics.image",
+      "label": "Imagem",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "graphics.text",
+      "label": "Texto",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "graphics.rectangle",
+      "label": "Retangulo",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "graphics.ellipse",
+      "label": "Elipse",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "graphics.line",
+      "label": "Linha",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "other.package",
+      "label": "Pacote",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "other.package_pin",
+      "label": "Pino de Pacote",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "other.test_unit",
+      "label": "Unidade de Teste",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "other.dial",
+      "label": "Rotativo",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "meters.probe",
+      "label": "Sonda",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "meters.ampmeter",
+      "label": "Amperimetro",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "instruments.voltmeter",
+      "label": "Voltimetro",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "meters.freqmeter",
+      "label": "Frequencimetro",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "meters.oscope",
+      "label": "Osciloscopio",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "meters.logic_analyzer",
+      "label": "Analisador Logico",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "sources.dc_voltage",
+      "label": "Fonte de Tensao",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "componentSymbols/fallback",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "fallback generico",
+        "geometria SimulIDE nao localizada",
+        "pinos/bounding box/hit-test por heuristica"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "sources.fixed_volt",
+      "label": "Tensao Fixa",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/sources/fixedvolt.cpp",
+      "missingDetails": [
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "sources.clock",
+      "label": "Clock",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/sources/clock.cpp + clock-base.cpp",
+      "missingDetails": [
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "sources.wave_gen",
+      "label": "Gerador de Onda",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/sources/wavegen.cpp + clock-base.cpp",
+      "missingDetails": [
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "sources.voltage_source",
+      "label": "Fonte de Tensao Variavel",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/sources/varsource.cpp + voltsource.cpp",
+      "missingDetails": [
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "sources.current_source",
+      "label": "Fonte de Corrente",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/sources/varsource.cpp + currsource.cpp",
+      "missingDetails": [
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "sources.controlled_source",
+      "label": "Fonte Controlada",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/sources/csource.cpp",
+      "missingDetails": [
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "sources.battery",
+      "label": "Bateria",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/sources/battery.cpp",
+      "missingDetails": [
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "sources.rail",
+      "label": "Trilho",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/sources/rail.cpp",
+      "missingDetails": [
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "other.ground",
+      "label": "Terra (0 V)",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/sources/ground.cpp",
+      "missingDetails": [
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "example.blinker",
+      "label": "Blinker (exemplo de dispositivo nativo)",
+      "manifestPath": "devices\\example-blinker\\device.json",
+      "visualOrigin": "package.shapes",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "estado visual dinamico possivelmente ausente",
+        "hit-test real nao localizado",
+        "labels/pinos dependem do package manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "outputs.ssd1306",
+      "label": "SSD1306",
+      "manifestPath": "devices\\simulide-complex\\ssd1306.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "outputs.sh1107",
+      "label": "Sh1107",
+      "manifestPath": "devices\\simulide-complex\\sh1107.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "outputs.hd44780",
+      "label": "Hd44780",
+      "manifestPath": "devices\\simulide-complex\\hd44780.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "outputs.aip31068_i2c",
+      "label": "Aip31068 I2C",
+      "manifestPath": "devices\\simulide-complex\\aip31068_i2c.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "outputs.ili9341",
+      "label": "Ili9341",
+      "manifestPath": "devices\\simulide-complex\\ili9341.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "outputs.st7735",
+      "label": "St7735",
+      "manifestPath": "devices\\simulide-complex\\st7735.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "outputs.st7789",
+      "label": "St7789",
+      "manifestPath": "devices\\simulide-complex\\st7789.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "outputs.gc9a01a",
+      "label": "GC9A01A",
+      "manifestPath": "devices\\simulide-complex\\gc9a01a.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "outputs.pcf8833",
+      "label": "Pcf8833",
+      "manifestPath": "devices\\simulide-complex\\pcf8833.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "outputs.pcd8544",
+      "label": "Pcd8544",
+      "manifestPath": "devices\\simulide-complex\\pcd8544.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "outputs.ks0108",
+      "label": "KS0108",
+      "manifestPath": "devices\\simulide-complex\\ks0108.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "outputs.max72xx_matrix",
+      "label": "Max72xx matrix",
+      "manifestPath": "devices\\simulide-complex\\max72xx_matrix.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "outputs.ws2812",
+      "label": "WS2812 Led",
+      "manifestPath": "devices\\simulide-complex\\ws2812.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "outputs.servo",
+      "label": "Servo Motor",
+      "manifestPath": "devices\\simulide-complex\\servo.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "outputs.audio_out",
+      "label": "Audio Out",
+      "manifestPath": "devices\\simulide-complex\\audio_out.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "passive.transformer",
+      "label": "Transformer",
+      "manifestPath": "devices\\simulide-complex\\transformer.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "active.diac",
+      "label": "Diac",
+      "manifestPath": "devices\\simulide-complex\\diac.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "active.scr",
+      "label": "SCR",
+      "manifestPath": "devices\\simulide-complex\\scr.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "active.triac",
+      "label": "Triac",
+      "manifestPath": "devices\\simulide-complex\\triac.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "active.bjt",
+      "label": "BJT",
+      "manifestPath": "devices\\simulide-complex\\bjt.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "active.mosfet",
+      "label": "Mosfet",
+      "manifestPath": "devices\\simulide-complex\\mosfet.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "active.jfet",
+      "label": "Jfet",
+      "manifestPath": "devices\\simulide-complex\\jfet.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "logic.buffer",
+      "label": "Buffer",
+      "manifestPath": "devices\\simulide-logic\\buffer.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "logic.and_gate",
+      "label": "And Gate",
+      "manifestPath": "devices\\simulide-logic\\and_gate.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "logic.or_gate",
+      "label": "Or Gate",
+      "manifestPath": "devices\\simulide-logic\\or_gate.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "logic.xor_gate",
+      "label": "Xor Gate",
+      "manifestPath": "devices\\simulide-logic\\xor_gate.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "logic.counter",
+      "label": "Simple Counter",
+      "manifestPath": "devices\\simulide-logic\\counter.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "logic.bin_counter",
+      "label": "Binary Counter",
+      "manifestPath": "devices\\simulide-logic\\bin_counter.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "logic.full_adder",
+      "label": "Full Adder",
+      "manifestPath": "devices\\simulide-logic\\full_adder.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "logic.magnitude_comp",
+      "label": "Magnitude Comparator",
+      "manifestPath": "devices\\simulide-logic\\magnitude_comp.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "logic.shift_reg",
+      "label": "Shift Register",
+      "manifestPath": "devices\\simulide-logic\\shift_reg.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "logic.function",
+      "label": "Function",
+      "manifestPath": "devices\\simulide-logic\\function.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "logic.flipflop_d",
+      "label": "FlipFlopD",
+      "manifestPath": "devices\\simulide-logic\\flipflop_d.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "logic.flipflop_t",
+      "label": "FlipFlopT",
+      "manifestPath": "devices\\simulide-logic\\flipflop_t.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "logic.flipflop_rs",
+      "label": "FlipFlop RS",
+      "manifestPath": "devices\\simulide-logic\\flipflop_rs.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "logic.flipflop_jk",
+      "label": "FlipFlop JK",
+      "manifestPath": "devices\\simulide-logic\\flipflop_jk.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "logic.latch_d",
+      "label": "Latch",
+      "manifestPath": "devices\\simulide-logic\\latch_d.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "logic.memory",
+      "label": "Memory",
+      "manifestPath": "devices\\simulide-logic\\memory.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "logic.dynamic_memory",
+      "label": "Dynamic Memory",
+      "manifestPath": "devices\\simulide-logic\\dynamic_memory.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "logic.i2c_ram",
+      "label": "I2C Ram",
+      "manifestPath": "devices\\simulide-logic\\i2c_ram.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "logic.mux",
+      "label": "Mux",
+      "manifestPath": "devices\\simulide-logic\\mux.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "logic.demux",
+      "label": "Demux",
+      "manifestPath": "devices\\simulide-logic\\demux.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "logic.bcd_to_dec",
+      "label": "Bcd To Dec",
+      "manifestPath": "devices\\simulide-logic\\bcd_to_dec.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "logic.dec_to_bcd",
+      "label": "Dec To Bcd",
+      "manifestPath": "devices\\simulide-logic\\dec_to_bcd.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "logic.bcd_to_7seg",
+      "label": "Bcd To 7S.",
+      "manifestPath": "devices\\simulide-logic\\bcd_to_7seg.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "logic.i2c_to_parallel",
+      "label": "I2C to Parallel",
+      "manifestPath": "devices\\simulide-logic\\i2c_to_parallel.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "logic.adc",
+      "label": "ADC",
+      "manifestPath": "devices\\simulide-logic\\adc.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "logic.dac",
+      "label": "DAC",
+      "manifestPath": "devices\\simulide-logic\\dac.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "logic.seven_segment_bcd",
+      "label": "7 Segment BCD",
+      "manifestPath": "devices\\simulide-logic\\seven_segment_bcd.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "logic.lm555",
+      "label": "LM555",
+      "manifestPath": "devices\\simulide-logic\\lm555.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "sensors.ldr",
+      "label": "LDR — Fotorresistor",
+      "manifestPath": "devices\\simulide-sensors\\ldr.json",
+      "visualOrigin": "package.shapes",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "estado visual dinamico possivelmente ausente",
+        "hit-test real nao localizado",
+        "labels/pinos dependem do package manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "sensors.thermistor",
+      "label": "Termistor NTC/PTC",
+      "manifestPath": "devices\\simulide-sensors\\thermistor.json",
+      "visualOrigin": "package.shapes",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "estado visual dinamico possivelmente ausente",
+        "hit-test real nao localizado",
+        "labels/pinos dependem do package manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "sensors.rtd",
+      "label": "RTD — Detector de Temperatura Resistivo",
+      "manifestPath": "devices\\simulide-sensors\\rtd.json",
+      "visualOrigin": "package.shapes",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "estado visual dinamico possivelmente ausente",
+        "hit-test real nao localizado",
+        "labels/pinos dependem do package manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "sensors.strain",
+      "label": "Extensômetro (Strain Gauge)",
+      "manifestPath": "devices\\simulide-sensors\\strain.json",
+      "visualOrigin": "package.shapes",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "estado visual dinamico possivelmente ausente",
+        "hit-test real nao localizado",
+        "labels/pinos dependem do package manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "sensors.sr04",
+      "label": "HC-SR04 — Sensor Ultrassônico",
+      "manifestPath": "devices\\simulide-sensors\\sr04.json",
+      "visualOrigin": "package.shapes",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "estado visual dinamico possivelmente ausente",
+        "hit-test real nao localizado",
+        "labels/pinos dependem do package manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "sensors.dht22",
+      "label": "DHT22/11 — Sensor de Temperatura e Umidade",
+      "manifestPath": "devices\\simulide-sensors\\dht22.json",
+      "visualOrigin": "package.shapes",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "estado visual dinamico possivelmente ausente",
+        "hit-test real nao localizado",
+        "labels/pinos dependem do package manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "sensors.ds1621",
+      "label": "DS1621 — Termômetro Digital I2C",
+      "manifestPath": "devices\\simulide-sensors\\ds1621.json",
+      "visualOrigin": "package.shapes",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "estado visual dinamico possivelmente ausente",
+        "hit-test real nao localizado",
+        "labels/pinos dependem do package manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "sensors.ds18b20",
+      "label": "DS18B20 — Termômetro Digital 1-Wire",
+      "manifestPath": "devices\\simulide-sensors\\ds18b20.json",
+      "visualOrigin": "package.shapes",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "estado visual dinamico possivelmente ausente",
+        "hit-test real nao localizado",
+        "labels/pinos dependem do package manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "peripherals.ky023",
+      "label": "KY-023 — Joystick Analógico",
+      "manifestPath": "devices\\simulide-peripherals\\ky023.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "peripherals.ky040",
+      "label": "KY-040 — Encoder Rotativo",
+      "manifestPath": "devices\\simulide-peripherals\\ky040.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "peripherals.touchpad",
+      "label": "TouchPad — Tela Sensível ao Toque",
+      "manifestPath": "devices\\simulide-peripherals\\touchpad.json",
+      "visualOrigin": "viewSpec",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "QPainterPath/arc/text metrics Qt nao garantidos",
+        "hit-test aproximado",
+        "partes moveis dependem de adapter manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "peripherals.ds1307",
+      "label": "DS1307 — RTC I2C",
+      "manifestPath": "devices\\simulide-peripherals\\ds1307.json",
+      "visualOrigin": "package.shapes",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "estado visual dinamico possivelmente ausente",
+        "hit-test real nao localizado",
+        "labels/pinos dependem do package manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "peripherals.serialterm",
+      "label": "Terminal Serial",
+      "manifestPath": "devices\\simulide-peripherals\\serialterm.json",
+      "visualOrigin": "package.shapes",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "estado visual dinamico possivelmente ausente",
+        "hit-test real nao localizado",
+        "labels/pinos dependem do package manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "peripherals.serialport",
+      "label": "Porta Serial (COM/TTY)",
+      "manifestPath": "devices\\simulide-peripherals\\serialport.json",
+      "visualOrigin": "package.shapes",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "estado visual dinamico possivelmente ausente",
+        "hit-test real nao localizado",
+        "labels/pinos dependem do package manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "peripherals.sdcard",
+      "label": "Cartão SD (SPI)",
+      "manifestPath": "devices\\simulide-peripherals\\sdcard.json",
+      "visualOrigin": "package.shapes",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "estado visual dinamico possivelmente ausente",
+        "hit-test real nao localizado",
+        "labels/pinos dependem do package manual"
+      ]
+    },
+    {
+      "scope": "abi-device",
+      "typeId": "peripherals.esp01",
+      "label": "ESP-01 — Módulo Wi-Fi AT",
+      "manifestPath": "devices\\simulide-peripherals\\esp01.json",
+      "visualOrigin": "package.shapes",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "estado visual dinamico possivelmente ausente",
+        "hit-test real nao localizado",
+        "labels/pinos dependem do package manual"
+      ]
+    },
+    {
+      "scope": "mcu-adapter",
+      "typeId": "espressif.esp32",
+      "label": "Espressif ESP32 (QEMU)",
+      "manifestPath": "mcu-adapters\\espressif-esp32\\mcu.json",
+      "visualOrigin": "package.shapes",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "estado visual dinamico possivelmente ausente",
+        "hit-test real nao localizado",
+        "labels/pinos dependem do package manual"
+      ]
+    },
+    {
+      "scope": "subcircuit",
+      "typeId": "subcircuits.esp32_devkitc_v4",
+      "label": "ESP32 DevKitC V4 (placa completa)",
+      "manifestPath": "subcircuits\\esp32_devkitc_v4.lssub.json",
+      "visualOrigin": "package.shapes",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "estado visual dinamico possivelmente ausente",
+        "hit-test real nao localizado",
+        "labels/pinos dependem do package manual"
+      ]
+    },
+    {
+      "scope": "subcircuit",
+      "typeId": "subcircuits.esp32_wroom32",
+      "label": "ESP32-WROOM-32 (modulo)",
+      "manifestPath": "subcircuits\\esp32_wroom32.lssub.json",
+      "visualOrigin": "package.shapes",
+      "fidelityStatus": "divergent-by-architecture",
+      "simulideSource": "nao localizado",
+      "missingDetails": [
+        "paint() C++ nao traduzido",
+        "estado visual dinamico possivelmente ausente",
+        "hit-test real nao localizado",
+        "labels/pinos dependem do package manual"
+      ]
+    }
+  ]
+}
