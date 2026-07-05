@@ -3828,6 +3828,8 @@ function externalLabelText(component: WebviewComponentModel, kind: ExternalLabel
 }
 
 function defaultExternalLabelOffset(component: WebviewComponentModel, kind: ExternalLabelKind): Point {
+  const packageValueLabel = state.catalog.find((entry) => entry.typeId === component.typeId)?.package?.valueLabel;
+  if (kind === "value" && packageValueLabel) return { x: packageValueLabel.x, y: packageValueLabel.y };
   const box = componentBox(component.typeId, component.properties);
   return kind === "id"
     ? { x: 0, y: -14 }
@@ -3846,6 +3848,11 @@ function externalLabelOffset(component: WebviewComponentModel, kind: ExternalLab
 
 function externalLabelRotation(component: WebviewComponentModel, kind: ExternalLabelKind): 0 | 90 | 180 | 270 {
   const raw = component.properties[labelPropertyKey(kind, "rotation")];
+  if (raw === undefined && kind === "value") {
+    const packageRotation = state.catalog.find((entry) => entry.typeId === component.typeId)?.package?.valueLabel?.rotation;
+    if (packageRotation === -90) return 270;
+    if (packageRotation === 0 || packageRotation === 90 || packageRotation === 180 || packageRotation === 270) return packageRotation;
+  }
   return raw === 90 || raw === 180 || raw === 270 ? raw : 0;
 }
 

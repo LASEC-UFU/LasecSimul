@@ -8,7 +8,7 @@ import { TrustStore } from "./trust/TrustStore";
 import { isPreApproved, isPreBlocked, resolveConsentChoice, shouldLoadLibrary, decisionToPersist } from "./trust/trustDecision";
 import { SchematicPanel } from "./ui/panels/SchematicPanel";
 import { createInitialWebviewState } from "./ui/webview/catalog";
-import { ComponentViewSpec, InteractionKindEntry, PackageDescriptor, PackagePin, PackageShape, PropertySchemaEntry, SimulidePaintPrimitive, SimulidePaintSpec, SimulidePaintStateHref, SimulidePaintStyle, ViewSpecAxisMapping, ViewSpecGradient, ViewSpecHitTest, ViewSpecInteraction, ViewSpecLimit, ViewSpecPart, ViewSpecProjection, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./ui/webview/model";
+import { ComponentViewSpec, InteractionKindEntry, PackageDescriptor, PackagePin, PackageShape, PropertySchemaEntry, SimulidePaintGradient, SimulidePaintPrimitive, SimulidePaintSpec, SimulidePaintStateHref, SimulidePaintStyle, ViewSpecAxisMapping, ViewSpecGradient, ViewSpecHitTest, ViewSpecInteraction, ViewSpecLimit, ViewSpecPart, ViewSpecProjection, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./ui/webview/model";
 import { ComponentReadoutValue, InstrumentHistoryPayload, InternalComponentSnapshot, SimulationStatus, WebviewToHostMessage } from "./ui/webview/messages";
 import { ComponentPaletteViewProvider } from "./ui/views/ComponentPaletteViewProvider";
 import { ProjectSerializer } from "./project/ProjectSerializer";
@@ -262,6 +262,7 @@ function sanitizeSimulidePaintStyle(raw: Record<string, unknown>): SimulidePaint
   return {
     ...(sanitizeOptionalString(raw.stroke) ? { stroke: sanitizeOptionalString(raw.stroke) } : {}),
     ...(sanitizeOptionalString(raw.fill) ? { fill: sanitizeOptionalString(raw.fill) } : {}),
+    ...(sanitizeSimulidePaintGradient(raw.fillGradient) ? { fillGradient: sanitizeSimulidePaintGradient(raw.fillGradient) } : {}),
     ...(finiteNumber(raw.strokeWidth) !== undefined ? { strokeWidth: finiteNumber(raw.strokeWidth) } : {}),
     ...(raw.strokeLinecap === "butt" || raw.strokeLinecap === "round" || raw.strokeLinecap === "square" ? { strokeLinecap: raw.strokeLinecap } : {}),
     ...(raw.strokeLinejoin === "arcs" || raw.strokeLinejoin === "bevel" || raw.strokeLinejoin === "miter" || raw.strokeLinejoin === "miter-clip" || raw.strokeLinejoin === "round" ? { strokeLinejoin: raw.strokeLinejoin } : {}),
@@ -269,6 +270,36 @@ function sanitizeSimulidePaintStyle(raw: Record<string, unknown>): SimulidePaint
     ...(raw.fillRule === "nonzero" || raw.fillRule === "evenodd" ? { fillRule: raw.fillRule } : {}),
     ...(finiteNumber(raw.opacity) !== undefined ? { opacity: finiteNumber(raw.opacity) } : {}),
   };
+}
+
+function sanitizeSimulidePaintGradient(value: unknown): SimulidePaintGradient | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const raw = value as Record<string, unknown>;
+  const stopsRaw = Array.isArray(raw.stops) ? raw.stops : [];
+  const stops = stopsRaw
+    .map((stop) => {
+      if (typeof stop !== "object" || stop === null) return undefined;
+      const rawStop = stop as Record<string, unknown>;
+      const offset = typeof rawStop.offset === "number" || typeof rawStop.offset === "string" ? rawStop.offset : undefined;
+      const color = sanitizeOptionalString(rawStop.color);
+      return offset !== undefined && color ? { offset, color } : undefined;
+    })
+    .filter((stop): stop is { offset: number | string; color: string } => Boolean(stop));
+  if (stops.length === 0) return undefined;
+  if (raw.kind === "linear") {
+    const x1 = finiteNumber(raw.x1), y1 = finiteNumber(raw.y1), x2 = finiteNumber(raw.x2), y2 = finiteNumber(raw.y2);
+    return x1 !== undefined && y1 !== undefined && x2 !== undefined && y2 !== undefined
+      ? { kind: "linear", x1, y1, x2, y2, stops }
+      : undefined;
+  }
+  if (raw.kind === "radial") {
+    const cx = finiteNumber(raw.cx), cy = finiteNumber(raw.cy), r = finiteNumber(raw.r);
+    const fx = finiteNumber(raw.fx), fy = finiteNumber(raw.fy);
+    return cx !== undefined && cy !== undefined && r !== undefined
+      ? { kind: "radial", cx, cy, r, ...(fx !== undefined ? { fx } : {}), ...(fy !== undefined ? { fy } : {}), stops }
+      : undefined;
+  }
+  return undefined;
 }
 
 function sanitizeSimulidePaintStateFill(value: unknown): SimulidePaintPrimitive["stateFill"] | undefined {
@@ -688,6 +719,18 @@ function sanitizePackageBackground(value: unknown, assetBasePath?: string): Pack
   };
 }
 
+function sanitizePackageValueLabel(value: unknown): PackageDescriptor["valueLabel"] | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const raw = value as Record<string, unknown>;
+  const x = finiteNumber(raw.x);
+  const y = finiteNumber(raw.y);
+  if (x === undefined || y === undefined) return undefined;
+  const rotation = raw.rotation === -90 || raw.rotation === 0 || raw.rotation === 90 || raw.rotation === 180 || raw.rotation === 270
+    ? raw.rotation
+    : undefined;
+  return { x, y, ...(rotation !== undefined ? { rotation } : {}) };
+}
+
 function sanitizeComponentViewSpec(value: unknown): ComponentViewSpec | undefined {
   if (typeof value !== "object" || value === null) return undefined;
   const raw = value as Record<string, unknown>;
@@ -791,7 +834,23 @@ function sanitizePackage(value: unknown, assetBasePath?: string): PackageDescrip
       y: pin.y,
       angle: typeof pin.angle === "number" ? pin.angle : 0,
       length: typeof pin.length === "number" ? pin.length : 8,
+      leadOrigin: pin.leadOrigin === "terminal" || pin.leadOrigin === "body" ? pin.leadOrigin : undefined,
+      leadEndTrim: typeof pin.leadEndTrim === "number" ? pin.leadEndTrim : undefined,
       label: typeof pin.label === "string" ? pin.label : undefined,
+      labelColor: typeof pin.labelColor === "string" ? pin.labelColor : undefined,
+      labelFontSize: typeof pin.labelFontSize === "number" ? pin.labelFontSize : undefined,
+      labelSpace: typeof pin.labelSpace === "number" ? pin.labelSpace : undefined,
+      labelStateVisible: sanitizeSimulidePaintStateVisible(pin.labelStateVisible),
+      labelTextAnchor: pin.labelTextAnchor === "start" || pin.labelTextAnchor === "middle" || pin.labelTextAnchor === "end" ? pin.labelTextAnchor : undefined,
+      labelDominantBaseline:
+        pin.labelDominantBaseline === "auto" ||
+        pin.labelDominantBaseline === "middle" ||
+        pin.labelDominantBaseline === "central" ||
+        pin.labelDominantBaseline === "hanging" ||
+        pin.labelDominantBaseline === "text-before-edge" ||
+        pin.labelDominantBaseline === "text-after-edge"
+          ? pin.labelDominantBaseline
+          : undefined,
       labelX: typeof pin.labelX === "number" ? pin.labelX : undefined,
       labelY: typeof pin.labelY === "number" ? pin.labelY : undefined,
     });
@@ -820,6 +879,7 @@ function sanitizePackage(value: unknown, assetBasePath?: string): PackageDescrip
     shapes,
     simulidePaint,
     viewSpec,
+    valueLabel: sanitizePackageValueLabel(raw.valueLabel),
     pins,
     pinLabelColor: typeof raw.pinLabelColor === "string" && raw.pinLabelColor.trim() ? raw.pinLabelColor : undefined,
   };

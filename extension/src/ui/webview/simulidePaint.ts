@@ -1,4 +1,4 @@
-import { PackageShape, SimulidePaintPrimitive, SimulidePaintSpec } from "./model.js";
+import { PackageShape, SimulidePaintGradient, SimulidePaintPrimitive, SimulidePaintSpec } from "./model.js";
 
 interface PaintTransform {
   x: (value: number) => number;
@@ -45,16 +45,42 @@ function stateHrefFor(primitive: SimulidePaintPrimitive, properties: Record<stri
   return primitive.stateHref.map[String(raw)];
 }
 
+function gradientStops(stops: SimulidePaintGradient["stops"]): string {
+  return stops
+    .map((stop) => {
+      const offset = typeof stop.offset === "number" ? `${Math.round(stop.offset * 1000) / 10}%` : stop.offset;
+      return `<stop offset="${offset}" stop-color="${stop.color}"/>`;
+    })
+    .join("");
+}
+
+function gradientDefFor(
+  gradient: SimulidePaintGradient | undefined,
+  id: string,
+  transform: PaintTransform
+): string | undefined {
+  if (!gradient || gradient.stops.length === 0) return undefined;
+  const stops = gradientStops(gradient.stops);
+  if (gradient.kind === "linear") {
+    return `<linearGradient id="${id}" x1="${transform.x(gradient.x1)}" y1="${transform.y(gradient.y1)}" x2="${transform.x(gradient.x2)}" y2="${transform.y(gradient.y2)}" gradientUnits="userSpaceOnUse">${stops}</linearGradient>`;
+  }
+  const fx = gradient.fx === undefined ? "" : ` fx="${transform.x(gradient.fx)}"`;
+  const fy = gradient.fy === undefined ? "" : ` fy="${transform.y(gradient.fy)}"`;
+  const r = Math.abs((transform.sx(gradient.r) + transform.sy(gradient.r)) / 2);
+  return `<radialGradient id="${id}" cx="${transform.x(gradient.cx)}" cy="${transform.y(gradient.cy)}" r="${r}"${fx}${fy} gradientUnits="userSpaceOnUse">${stops}</radialGradient>`;
+}
+
 function styleFor(
   spec: SimulidePaintSpec,
   primitive: SimulidePaintPrimitive,
   transform: PaintTransform,
-  properties: Record<string, unknown>
+  properties: Record<string, unknown>,
+  gradientId?: string
 ): Partial<PackageShape> {
   const projectedFill = stateFillFor(primitive, properties);
   return {
     stroke: primitive.stroke ?? spec.defaultStroke ?? "currentColor",
-    fill: projectedFill ?? primitive.fill ?? spec.defaultFill ?? "none",
+    fill: projectedFill ?? (gradientId ? `url(#${gradientId})` : primitive.fill ?? spec.defaultFill ?? "none"),
     strokeWidth: transform.sw(primitive.strokeWidth ?? spec.defaultStrokeWidth ?? 1),
     strokeLinecap: primitive.strokeLinecap,
     strokeLinejoin: primitive.strokeLinejoin,
@@ -137,14 +163,20 @@ export function simulidePaintToPackageShapes(
   spec: SimulidePaintSpec,
   width: number,
   height: number,
-  properties: Record<string, unknown> = {}
+  properties: Record<string, unknown> = {},
+  scopeId = "simulide-paint"
 ): PackageShape[] {
   const transform = transformFor(spec, width, height);
   const shapes: PackageShape[] = [];
+  const defs: string[] = [];
+  let gradientIndex = 0;
 
   for (const primitive of spec.primitives) {
     if (!stateVisibleFor(primitive, properties)) continue;
-    const style = styleFor(spec, primitive, transform, properties);
+    const gradientId = primitive.fillGradient ? `${scopeId}-grad-${gradientIndex++}` : undefined;
+    const gradientDef = gradientDefFor(primitive.fillGradient, gradientId ?? "", transform);
+    if (gradientDef) defs.push(gradientDef);
+    const style = styleFor(spec, primitive, transform, properties, gradientId);
     switch (primitive.kind) {
       case "line":
         shapes.push({ kind: "line", x1: transform.x(primitive.x1), y1: transform.y(primitive.y1), x2: transform.x(primitive.x2), y2: transform.y(primitive.y2), ...style });
@@ -206,5 +238,6 @@ export function simulidePaintToPackageShapes(
     }
   }
 
+  if (defs.length > 0) shapes.unshift({ kind: "svg", value: `<defs>${defs.join("")}</defs>` });
   return shapes;
 }

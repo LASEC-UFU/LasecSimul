@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><title>Lote Fontes v2</title>
+<style>
+body{font-family:Segoe UI,Arial,sans-serif;background:#f8f8e8;color:#111;margin:24px}
+table{border-collapse:collapse;width:100%;background:white}td,th{border:1px solid #ccc;padding:8px;vertical-align:top}code{font-family:Consolas,monospace;font-size:12px}.ok{color:#126b2f;font-weight:700}.warn{color:#9a4d00;font-weight:700}
+img{max-width:100%;border:1px solid #bbb;background:#f8f8e8}
+</style></head><body>
+<h1>Lote Fontes v2</h1>
+<p>Gerado a partir do renderer compilado da extensão. O item <code>sources.dc_voltage</code> aparece como <span class="warn">nao-localizado</span> porque nao foi localizado componente correspondente separado no SimulIDE original consultado.</p>
+<p class="ok">Teste executado: <code>npm --prefix extension test</code>.</p>
+<p><img src="lote-fontes-v2-contact-sheet.svg" alt="Contato visual do lote Fontes v2"></p>
+<table><thead><tr><th>Componente</th><th>Status</th><th>Fonte SimulIDE</th><th>Box</th><th>Pinos</th></tr></thead><tbody><tr>
+  <td><code>sources.dc_voltage</code></td>
+  <td>nao-localizado</td>
+  <td><code>nao localizado</code></td>
+  <td><code>{"width":64,"height":48}</code></td>
+  <td><code>[{"id":"pin-1","aliases":[],"position":{"x":6,"y":24},"real":true},{"id":"pin-2","aliases":[],"position":{"x":58,"y":24},"real":true}]</code></td>
+</tr>
+<tr>
+  <td><code>sources.fixed_volt</code></td>
+  <td>simulidePaint</td>
+  <td><code>src/components/sources/fixedvolt.cpp</code></td>
+  <td><code>{"width":48,"height":16}</code></td>
+  <td><code>[{"id":"out","aliases":["pin","pin-1"],"position":{"x":48,"y":8},"real":true}]</code></td>
+</tr>
+<tr>
+  <td><code>sources.clock</code></td>
+  <td>simulidePaint</td>
+  <td><code>src/components/sources/clock.cpp + clock-base.cpp</code></td>
+  <td><code>{"width":48,"height":16}</code></td>
+  <td><code>[{"id":"pin-1","aliases":["out"],"position":{"x":48,"y":8},"real":true}]</code></td>
+</tr>
+<tr>
+  <td><code>sources.wave_gen</code></td>
+  <td>simulidePaint</td>
+  <td><code>src/components/sources/wavegen.cpp + clock-base.cpp</code></td>
+  <td><code>{"width":48,"height":16}</code></td>
+  <td><code>[{"id":"pin-1","aliases":["out"],"position":{"x":48,"y":8},"real":true},{"id":"pin-2","aliases":["gnd"],"position":{"x":48,"y":12},"real":false}]</code></td>
+</tr>
+<tr>
+  <td><code>sources.voltage_source</code></td>
+  <td>simulidePaint</td>
+  <td><code>src/components/sources/varsource.cpp + voltsource.cpp + src/gui/sourcewidget.cpp + customdial.cpp + custombutton.cpp</code></td>
+  <td><code>{"width":48,"height":56}</code></td>
+  <td><code>[{"id":"pin-1","aliases":["out"],"position":{"x":48,"y":44},"real":true}]</code></td>
+</tr>
+<tr>
+  <td><code>sources.current_source</code></td>
+  <td>simulidePaint</td>
+  <td><code>src/components/sources/varsource.cpp + currsource.cpp + src/gui/sourcewidget.cpp + customdial.cpp + custombutton.cpp</code></td>
+  <td><code>{"width":48,"height":56}</code></td>
+  <td><code>[{"id":"pin-1","aliases":["out"],"position":{"x":48,"y":44},"real":true}]</code></td>
+</tr>
+<tr>
+  <td><code>sources.controlled_source</code></td>
+  <td>simulidePaint</td>
+  <td><code>src/components/sources/csource.cpp</code></td>
+  <td><code>{"width":48,"height":40}</code></td>
+  <td><code>[{"id":"pin-1","aliases":["cp"],"position":{"x":0,"y":12},"real":true},{"id":"pin-2","aliases":["cm"],"position":{"x":0,"y":28},"real":true},{"id":"pin-3","aliases":["s1"],"position":{"x":24,"y":0},"real":true},{"id":"pin-4","aliases":["s2"],"position":{"x":24,"y":40},"real":true}]</code></td>
+</tr>
+<tr>
+  <td><code>sources.battery</code></td>
+  <td>simulidePaint</td>
+  <td><code>src/components/sources/battery.cpp</code></td>
+  <td><code>{"width":32,"height":20}</code></td>
+  <td><code>[{"id":"pin-1","aliases":["p1"],"position":{"x":0,"y":10},"real":true},{"id":"pin-2","aliases":["p2"],"position":{"x":32,"y":10},"real":true}]</code></td>
+</tr>
+<tr>
+  <td><code>sources.rail</code></td>
+  <td>simulidePaint</td>
+  <td><code>src/components/sources/rail.cpp</code></td>
+  <td><code>{"width":20,"height":16}</code></td>
+  <td><code>[{"id":"pin-1","aliases":["out"],"position":{"x":20,"y":8},"real":true}]</code></td>
+</tr>
+<tr>
+  <td><code>other.ground</code></td>
+  <td>simulidePaint</td>
+  <td><code>src/components/sources/ground.cpp</code></td>
+  <td><code>{"width":16,"height":18}</code></td>
+  <td><code>[{"id":"pin","aliases":["pin-1"],"position":{"x":8,"y":0},"real":true}]</code></td>
+</tr></tbody></table>
+<h2>Parser Qt->IR</h2>
+<p>Saida detalhada em <code>qt-parser-fontes-v2.json</code>.</p>
+</body></html>

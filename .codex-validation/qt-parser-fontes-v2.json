@@ -1,0 +1,199 @@
+{
+  "file": "scripts/qt-paint-to-simulide-ir.mjs",
+  "supportedNow": [
+    "QPainter::drawLine",
+    "QPainter::drawRoundedRect",
+    "QPainter::drawRect",
+    "QPainter::drawEllipse",
+    "QPainter::drawArc",
+    "QPainter::drawPixmap",
+    "QLinearGradient",
+    "QRadialGradient",
+    "QPen/QBrush cores e largura",
+    "QPoint/QPointF/QRect/QRectF",
+    "variaveis locais numericas simples"
+  ],
+  "stillPendingGenericQtCoverage": [
+    "execucao completa de if/else por estado visual",
+    "loops com transform save/translate/rotate por primitiva",
+    "QPainterPath declarativo completo",
+    "metricas reais de drawText Qt"
+  ],
+  "samples": [
+    {
+      "name": "clock.cpp",
+      "file": ".codex-simulide-src/src/components/sources/clock.cpp",
+      "symbols": {},
+      "primitives": [
+        {
+          "kind": "line",
+          "x1": -11,
+          "y1": 3,
+          "x2": -11,
+          "y2": -3,
+          "stroke": "#000",
+          "strokeWidth": 1,
+          "strokeLinecap": "round",
+          "strokeLinejoin": "round"
+        },
+        {
+          "kind": "line",
+          "x1": -11,
+          "y1": -3,
+          "x2": -5,
+          "y2": -3,
+          "stroke": "#000",
+          "strokeWidth": 1,
+          "strokeLinecap": "round",
+          "strokeLinejoin": "round"
+        },
+        {
+          "kind": "line",
+          "x1": -5,
+          "y1": -3,
+          "x2": -5,
+          "y2": 3,
+          "stroke": "#000",
+          "strokeWidth": 1,
+          "strokeLinecap": "round",
+          "strokeLinejoin": "round"
+        },
+        {
+          "kind": "line",
+          "x1": -5,
+          "y1": 3,
+          "x2": 1,
+          "y2": 3,
+          "stroke": "#000",
+          "strokeWidth": 1,
+          "strokeLinecap": "round",
+          "strokeLinejoin": "round"
+        },
+        {
+          "kind": "line",
+          "x1": 1,
+          "y1": 3,
+          "x2": 1,
+          "y2": -3,
+          "stroke": "#000",
+          "strokeWidth": 1,
+          "strokeLinecap": "round",
+          "strokeLinejoin": "round"
+        },
+        {
+          "kind": "line",
+          "x1": 1,
+          "y1": -3,
+          "x2": 4,
+          "y2": -3,
+          "stroke": "#000",
+          "strokeWidth": 1,
+          "strokeLinecap": "round",
+          "strokeLinejoin": "round"
+        }
+      ]
+    },
+    {
+      "name": "custombutton.cpp normal widget 32x16",
+      "file": ".codex-simulide-src/src/gui/custombutton.cpp",
+      "symbols": {
+        "width": 32,
+        "height": 16,
+        "w": 32,
+        "h": 14
+      },
+      "primitives": [
+        {
+          "kind": "roundedRect",
+          "x": 0.8,
+          "y": 0.8,
+          "w": 30.4,
+          "h": 14.4,
+          "rx": 2,
+          "ry": 2,
+          "stroke": "#6e6e6e",
+          "fill": "none",
+          "strokeWidth": 1.5
+        },
+        {
+          "kind": "roundedRect",
+          "x": 1,
+          "y": 1,
+          "w": 30,
+          "h": 14,
+          "rx": 2,
+          "ry": 2,
+          "stroke": "none",
+          "fillGradient": {
+            "kind": "linear",
+            "x1": 16,
+            "y1": 0,
+            "x2": 16,
+            "y2": 14,
+            "stops": [
+              {
+                "offset": 0,
+                "color": "#e6e6e6"
+              },
+              {
+                "offset": 1,
+                "color": "#b4b4b4"
+              },
+              {
+                "offset": 0,
+                "color": "#ffffff"
+              },
+              {
+                "offset": 1,
+                "color": "#c8c8c8"
+              }
+            ]
+          },
+          "strokeWidth": 1.5
+        }
+      ]
+    },
+    {
+      "name": "customdial.cpp widget 36x36",
+      "file": ".codex-simulide-src/src/gui/customdial.cpp",
+      "symbols": {
+        "width": 36,
+        "height": 36
+      },
+      "primitives": [
+        {
+          "kind": "line",
+          "x1": 15,
+          "y1": 0,
+          "x2": 19,
+          "y2": 0,
+          "stroke": "red",
+          "strokeWidth": 1.5,
+          "strokeLinecap": "round",
+          "strokeLinejoin": "round"
+        },
+        {
+          "kind": "line",
+          "x1": 15,
+          "y1": 0,
+          "x2": 18,
+          "y2": 0,
+          "stroke": "#6e6e6e",
+          "strokeWidth": 1.5,
+          "strokeLinecap": "round",
+          "strokeLinejoin": "round"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 18,
+          "cy": 18,
+          "rx": 14,
+          "ry": 14,
+          "stroke": "#464646",
+          "fill": "none",
+          "strokeWidth": 1
+        }
+      ]
+    }
+  ]
+}

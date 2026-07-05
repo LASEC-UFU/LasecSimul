@@ -113,7 +113,15 @@ export interface PackagePin {
   y: number;
   angle: number;
   length: number;
+  leadOrigin?: "body" | "terminal";
+  leadEndTrim?: number;
   label?: string;
+  labelColor?: string;
+  labelFontSize?: number;
+  labelSpace?: number;
+  labelStateVisible?: SimulidePaintStateVisible;
+  labelTextAnchor?: "start" | "middle" | "end";
+  labelDominantBaseline?: "auto" | "middle" | "central" | "hanging" | "text-before-edge" | "text-after-edge";
   /** Posição do RÓTULO, independente da posição do pino -- igual ao SimulIDE real (texto de pino,
    * texto do CI etc são objetos arrastáveis à parte, nunca presos a um deslocamento fixo do pino).
    * Em coordenadas ORIGINAIS do package (mesmo espaço de `x`/`y`, antes do deslocamento de
@@ -195,6 +203,7 @@ export interface SimulidePaintSource {
 export interface SimulidePaintStyle {
   stroke?: string;
   fill?: string;
+  fillGradient?: SimulidePaintGradient;
   strokeWidth?: number;
   strokeLinecap?: PackageShape["strokeLinecap"];
   strokeLinejoin?: PackageShape["strokeLinejoin"];
@@ -221,6 +230,25 @@ export interface SimulidePaintStateHref {
   prop: string;
   map: Record<string, string>;
 }
+
+export type SimulidePaintGradient =
+  | {
+      kind: "linear";
+      x1: number;
+      y1: number;
+      x2: number;
+      y2: number;
+      stops: Array<{ offset: number | string; color: string }>;
+    }
+  | {
+      kind: "radial";
+      cx: number;
+      cy: number;
+      r: number;
+      fx?: number;
+      fy?: number;
+      stops: Array<{ offset: number | string; color: string }>;
+    };
 
 export type SimulidePaintPrimitive =
   | ({ kind: "line"; x1: number; y1: number; x2: number; y2: number; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible } & SimulidePaintStyle)
@@ -429,6 +457,7 @@ export interface PackageDescriptor {
   /** ViewSpec declarativo (P2) — quando presente, tem prioridade sobre `shapes[]`. Suporta
    * gradientes escopados por instância e stateProjection. */
   viewSpec?: ComponentViewSpec;
+  valueLabel?: { x: number; y: number; rotation?: 0 | 90 | 180 | 270 | -90 };
   pins: PackagePin[];
   /** Cor dos rótulos de pinos — padrão `currentColor` (herda do canvas). Usar `"#FAFAC8"` pra
    * placas com fundo escuro (mesma cor `QColor(250,250,200)` dos rótulos de `PackagePin` do

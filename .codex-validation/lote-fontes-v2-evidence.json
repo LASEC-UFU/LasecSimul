@@ -1,0 +1,610 @@
+{
+  "generatedAt": "2026-07-05T16:57:14.001Z",
+  "scope": "Fontes",
+  "rootCause": "Os componentes divergiam porque parte da renderizacao original esta em primitivas QPainter/Qt widget fora do paint principal; o LasecSimul antes caia em fallback generico ou em shapes manuais.",
+  "parser": {
+    "file": "scripts/qt-paint-to-simulide-ir.mjs",
+    "supportedNow": [
+      "QPainter::drawLine",
+      "QPainter::drawRoundedRect",
+      "QPainter::drawRect",
+      "QPainter::drawEllipse",
+      "QPainter::drawArc",
+      "QPainter::drawPixmap",
+      "QLinearGradient",
+      "QRadialGradient",
+      "QPen/QBrush cores e largura",
+      "QPoint/QPointF/QRect/QRectF",
+      "variaveis locais numericas simples"
+    ],
+    "stillPendingGenericQtCoverage": [
+      "execucao completa de if/else por estado visual",
+      "loops com transform save/translate/rotate por primitiva",
+      "QPainterPath declarativo completo",
+      "metricas reais de drawText Qt"
+    ],
+    "samples": [
+      {
+        "name": "clock.cpp",
+        "file": ".codex-simulide-src/src/components/sources/clock.cpp",
+        "symbols": {},
+        "primitives": [
+          {
+            "kind": "line",
+            "x1": -11,
+            "y1": 3,
+            "x2": -11,
+            "y2": -3,
+            "stroke": "#000",
+            "strokeWidth": 1,
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          },
+          {
+            "kind": "line",
+            "x1": -11,
+            "y1": -3,
+            "x2": -5,
+            "y2": -3,
+            "stroke": "#000",
+            "strokeWidth": 1,
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          },
+          {
+            "kind": "line",
+            "x1": -5,
+            "y1": -3,
+            "x2": -5,
+            "y2": 3,
+            "stroke": "#000",
+            "strokeWidth": 1,
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          },
+          {
+            "kind": "line",
+            "x1": -5,
+            "y1": 3,
+            "x2": 1,
+            "y2": 3,
+            "stroke": "#000",
+            "strokeWidth": 1,
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          },
+          {
+            "kind": "line",
+            "x1": 1,
+            "y1": 3,
+            "x2": 1,
+            "y2": -3,
+            "stroke": "#000",
+            "strokeWidth": 1,
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          },
+          {
+            "kind": "line",
+            "x1": 1,
+            "y1": -3,
+            "x2": 4,
+            "y2": -3,
+            "stroke": "#000",
+            "strokeWidth": 1,
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          }
+        ]
+      },
+      {
+        "name": "custombutton.cpp normal widget 32x16",
+        "file": ".codex-simulide-src/src/gui/custombutton.cpp",
+        "symbols": {
+          "width": 32,
+          "height": 16,
+          "w": 32,
+          "h": 14
+        },
+        "primitives": [
+          {
+            "kind": "roundedRect",
+            "x": 0.8,
+            "y": 0.8,
+            "w": 30.4,
+            "h": 14.4,
+            "rx": 2,
+            "ry": 2,
+            "stroke": "#6e6e6e",
+            "fill": "none",
+            "strokeWidth": 1.5
+          },
+          {
+            "kind": "roundedRect",
+            "x": 1,
+            "y": 1,
+            "w": 30,
+            "h": 14,
+            "rx": 2,
+            "ry": 2,
+            "stroke": "none",
+            "fillGradient": {
+              "kind": "linear",
+              "x1": 16,
+              "y1": 0,
+              "x2": 16,
+              "y2": 14,
+              "stops": [
+                {
+                  "offset": 0,
+                  "color": "#e6e6e6"
+                },
+                {
+                  "offset": 1,
+                  "color": "#b4b4b4"
+                },
+                {
+                  "offset": 0,
+                  "color": "#ffffff"
+                },
+                {
+                  "offset": 1,
+                  "color": "#c8c8c8"
+                }
+              ]
+            },
+            "strokeWidth": 1.5
+          }
+        ]
+      },
+      {
+        "name": "customdial.cpp widget 36x36",
+        "file": ".codex-simulide-src/src/gui/customdial.cpp",
+        "symbols": {
+          "width": 36,
+          "height": 36
+        },
+        "primitives": [
+          {
+            "kind": "line",
+            "x1": 15,
+            "y1": 0,
+            "x2": 19,
+            "y2": 0,
+            "stroke": "red",
+            "strokeWidth": 1.5,
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          },
+          {
+            "kind": "line",
+            "x1": 15,
+            "y1": 0,
+            "x2": 18,
+            "y2": 0,
+            "stroke": "#6e6e6e",
+            "strokeWidth": 1.5,
+            "strokeLinecap": "round",
+            "strokeLinejoin": "round"
+          },
+          {
+            "kind": "ellipse",
+            "cx": 18,
+            "cy": 18,
+            "rx": 14,
+            "ry": 14,
+            "stroke": "#464646",
+            "fill": "none",
+            "strokeWidth": 1
+          }
+        ]
+      }
+    ]
+  },
+  "items": [
+    {
+      "typeId": "sources.dc_voltage",
+      "label": "Fonte de Tensao",
+      "status": "nao-localizado",
+      "source": "nao localizado",
+      "notes": "sem paint SimulIDE localizado",
+      "props": {
+        "voltage": 5
+      },
+      "box": {
+        "width": 64,
+        "height": 48
+      },
+      "pins": [
+        {
+          "id": "pin-1",
+          "aliases": [],
+          "position": {
+            "x": 6,
+            "y": 24
+          },
+          "real": true
+        },
+        {
+          "id": "pin-2",
+          "aliases": [],
+          "position": {
+            "x": 58,
+            "y": 24
+          },
+          "real": true
+        }
+      ],
+      "checks": {
+        "hasSimulidePaint": false,
+        "usesFallback": true,
+        "containsGradient": false,
+        "hasPinPositionForAllPins": true
+      },
+      "svg": "<line x1=\"6\" y1=\"24\" x2=\"18\" y2=\"24\" class=\"symbol-stroke\"/><line x1=\"46\" y1=\"24\" x2=\"58\" y2=\"24\" class=\"symbol-stroke\"/><line x1=\"18\" y1=\"24\" x2=\"18\" y2=\"24\" class=\"symbol-stroke\"/><line x1=\"46\" y1=\"24\" x2=\"46\" y2=\"24\" class=\"symbol-stroke\"/><circle cx=\"32\" cy=\"24\" r=\"14\" class=\"symbol-stroke\" fill=\"none\"/><text x=\"25\" y=\"29\" text-anchor=\"middle\" class=\"symbol-text\">+</text><text x=\"39\" y=\"29\" text-anchor=\"middle\" class=\"symbol-text\">&#8722;</text><line x1=\"6\" y1=\"17\" x2=\"6\" y2=\"31\" class=\"symbol-stroke symbol-stroke--accent\"/><line x1=\"52\" y1=\"24\" x2=\"64\" y2=\"24\" class=\"symbol-stroke symbol-stroke--accent\"/>"
+    },
+    {
+      "typeId": "sources.fixed_volt",
+      "label": "Tensao Fixa",
+      "status": "simulidePaint",
+      "source": "src/components/sources/fixedvolt.cpp",
+      "notes": "non-small: m_area=QRect(-10,-10,20,20); IoPin(0,QPoint(16,0)); drawRoundedRect(-8,-8,16,16,2,2); brush #ffa600 when Out=true else #e6e6ff",
+      "props": {
+        "voltage": 5,
+        "out": true
+      },
+      "box": {
+        "width": 48,
+        "height": 16
+      },
+      "pins": [
+        {
+          "id": "out",
+          "aliases": [
+            "pin",
+            "pin-1"
+          ],
+          "position": {
+            "x": 48,
+            "y": 8
+          },
+          "real": true
+        }
+      ],
+      "checks": {
+        "hasSimulidePaint": true,
+        "usesFallback": false,
+        "containsGradient": false,
+        "hasPinPositionForAllPins": true
+      },
+      "svg": "<g transform=\"translate(0.000,0.000)\"><g transform=\"scale(1.000000,1.000000)\"><rect class=\"toggle-hit-zone\" x=\"0\" y=\"0\" width=\"16\" height=\"16\" rx=\"2\" ry=\"2\" stroke=\"#000\" fill=\"#dddddd\" stroke-width=\"1.5\"/><line x1=\"40\" y1=\"8\" x2=\"48\" y2=\"8\" stroke=\"#000\" stroke-width=\"3\" stroke-linecap=\"round\"/><rect x=\"24\" y=\"0\" width=\"16\" height=\"16\" rx=\"2\" ry=\"2\" stroke=\"#000\" fill=\"#ffa600\" stroke-width=\"1.5\"/></g></g>"
+    },
+    {
+      "typeId": "sources.clock",
+      "label": "Clock",
+      "status": "simulidePaint",
+      "source": "src/components/sources/clock.cpp + clock-base.cpp",
+      "notes": "ClockBase m_area=QRect(-14,-8,22,16), IoPin(0,QPoint(16,0)); Clock::paint roundedRect(m_area,2,2), fill #fac832 running else #e6e6ff, then pulse polyline with pen width 1.",
+      "props": {
+        "out": true
+      },
+      "box": {
+        "width": 48,
+        "height": 16
+      },
+      "pins": [
+        {
+          "id": "pin-1",
+          "aliases": [
+            "out"
+          ],
+          "position": {
+            "x": 48,
+            "y": 8
+          },
+          "real": true
+        }
+      ],
+      "checks": {
+        "hasSimulidePaint": true,
+        "usesFallback": false,
+        "containsGradient": false,
+        "hasPinPositionForAllPins": true
+      },
+      "svg": "<g transform=\"translate(0.000,0.000)\"><g transform=\"scale(1.000000,1.000000)\"><rect class=\"toggle-hit-zone\" x=\"0\" y=\"0\" width=\"16\" height=\"16\" rx=\"2\" ry=\"2\" stroke=\"#000\" fill=\"#dddddd\" stroke-width=\"1.5\"/><line x1=\"40\" y1=\"8\" x2=\"48\" y2=\"8\" stroke=\"#000\" stroke-width=\"3\" stroke-linecap=\"round\"/><rect x=\"18\" y=\"0\" width=\"22\" height=\"16\" rx=\"2\" ry=\"2\" stroke=\"#000\" fill=\"#e6e6ff\" stroke-width=\"1\"/><path d=\"M 21 11 L 21 5 L 27 5 L 27 11 L 33 11 L 33 5 L 36 5\" stroke=\"#000\" fill=\"none\" stroke-width=\"1\" stroke-linecap=\"square\" stroke-linejoin=\"miter\"/></g></g>"
+    },
+    {
+      "typeId": "sources.wave_gen",
+      "label": "Gerador de Onda",
+      "status": "simulidePaint",
+      "source": "src/components/sources/wavegen.cpp + clock-base.cpp",
+      "notes": "ClockBase m_area=QRect(-14,-8,22,16); out pin (16,0), gnd pin (16,4) visible only when Bipolar=true; drawRoundedRect(m_area,2,2); drawPixmap(m_area.x()+3,m_area.y()+4,16,8,*m_wavePixmap).",
+      "props": {
+        "bipolar": false
+      },
+      "box": {
+        "width": 48,
+        "height": 16
+      },
+      "pins": [
+        {
+          "id": "pin-1",
+          "aliases": [
+            "out"
+          ],
+          "position": {
+            "x": 48,
+            "y": 8
+          },
+          "real": true
+        },
+        {
+          "id": "pin-2",
+          "aliases": [
+            "gnd"
+          ],
+          "position": {
+            "x": 48,
+            "y": 12
+          },
+          "real": false
+        }
+      ],
+      "checks": {
+        "hasSimulidePaint": true,
+        "usesFallback": false,
+        "containsGradient": false,
+        "hasPinPositionForAllPins": false
+      },
+      "svg": "<g transform=\"translate(0.000,0.000)\"><g transform=\"scale(1.000000,1.000000)\"><rect class=\"toggle-hit-zone\" x=\"0\" y=\"0\" width=\"16\" height=\"16\" rx=\"2\" ry=\"2\" stroke=\"#000\" fill=\"#dddddd\" stroke-width=\"1.5\"/><line x1=\"40\" y1=\"8\" x2=\"48\" y2=\"8\" stroke=\"#000\" stroke-width=\"3\" stroke-linecap=\"round\"/><rect x=\"18\" y=\"0\" width=\"22\" height=\"16\" rx=\"2\" ry=\"2\" stroke=\"#000\" fill=\"#e6e6ff\" stroke-width=\"1\"/><image x=\"21\" y=\"4\" width=\"16\" height=\"8\" preserveAspectRatio=\"none\" href=\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFAAAAAqCAYAAAAkqNwKAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAABvgAAAb4BF1aGFAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAOySURBVGiB3dtviGZjGMfxz/OYtTGMXa0pliX/kt1WYlEopdlk/YnygpJ5YZPyztaWNwZFSpLyP2lTeCHZDa2IBhuxu7yRdrMW479kMMxgmseL29TMc99PPX/OOc85863z6sy5rt91nfPc93Vf9z01vVPDhbgeF2ANhvArDmI3XsWbmM3A35JiBB+j0cb1A7ZgsC9KS8ZReF57iWu+DmJj8ZLLw3p8obvkzV9zuBv1grVnTq3Dvx/Bi8IY18wc3sF7mMIwzsZFWNbC3jO4+f9nlzxX4G/pL2o7zmjx3CqM4fcWzz6m8xdZOTZiRhz8FEbbtLEG4wkbDTyYrdxysQ6/iYP+Hud0aGsZnk3YauDGjPSWimOkJ4yvcXKXNg/BCwmbUzizR72lYjneFQf6HU7t0fYAXknY/hSH92i7NDwuDvAvbMjI/krpr/v+jOz3lWuka7cbMvazQTw5/SuUP5XlePwiTuCdOfnbmvD1oTBWVo463hIHtFN+tdqA9Hp6c07+cuU2cSA/4dic/Z4rdGoW+v0RR+bsN1NOEK8W5nB5Qf4fEb+8sYJ8Z8IOcQCPFuh/WFywT8n/68+Eq8XJ+xYrCtZxR0LHUwVr6JhDsV8s/Mo+aDkME006ZoXlZFmoY63QJEHoEjcn76W+SAuMJvS81kc9CxnELkHTjLCNEb3xad2vc7Ogjk/ESby0j5rmuc9iTRPECby3X+oWMCJO4F797WCfIl41TRA+w/kbu5Rn02encrW8tif0bJm/uUoYGMu0R7FeXFx/JUw0RZPqDewTJuBS87RY+NaCNQzhm4SOTQXr6IrV+NNi4ZMWlBAF8KQ4eS8X6L9n7hEH8HBBvq8SlrPNL3B1Qf4z4Qhh/6W5uO50P6ZThoXTFM0v75ac/ebCreJA9gitsDyo4fWEzzdUdAt2QEhYyzIiY8YSvn7GcTn5K4Sz8I/FQc3I/qd8nXjcawgNl8rzgDiwA7LrGp0vLGX72dbLlUF8Jg5wh97Hw9OlJ41xFSiYO2GduDZs4Dndb0SdJl0sH1BszVkYN4mDbWCb1ifBWnGesP/SbGvSEjsp0cxD0kkcx4lt2tgs/TVPK0f7LFdqeEI6iX/gLqEYTrFWaNKmnp3GZZ2IqDJ1oeEw2uL+rNCi2yv8TIdwsXDoMxX7JK7F21kLLTN14bhwqnbr5PpcufZeCmdEOMDeTfK2qdgmfl4M4nbhCF47ifsIl/TisOpjYCsGhFl0k3Bs5CQcLUwuX+J94d80PhAS2TX/AXF65T+XhwPNAAAAAElFTkSuQmCC\"/></g></g>"
+    },
+    {
+      "typeId": "sources.voltage_source",
+      "label": "Fonte de Tensao Variavel",
+      "status": "simulidePaint",
+      "source": "src/components/sources/varsource.cpp + voltsource.cpp + src/gui/sourcewidget.cpp + customdial.cpp + custombutton.cpp",
+      "notes": "VarSource m_area=(-20,-28,40,56), proxy SourceWidget at (-18,-26), dial 36x36 at top, CustomButton 32x16 centered at y=10, out pin at (28,16). Widget primitives are converted from generic Qt paint calls: drawRoundedRect/drawEllipse/drawLine/QLinearGradient/QRadialGradient.",
+      "props": {
+        "value": 0
+      },
+      "box": {
+        "width": 48,
+        "height": 56
+      },
+      "pins": [
+        {
+          "id": "pin-1",
+          "aliases": [
+            "out"
+          ],
+          "position": {
+            "x": 48,
+            "y": 44
+          },
+          "real": true
+        }
+      ],
+      "checks": {
+        "hasSimulidePaint": true,
+        "usesFallback": false,
+        "containsGradient": true,
+        "hasPinPositionForAllPins": true
+      },
+      "svg": "<g transform=\"translate(0.000,0.000)\"><g transform=\"scale(1.000000,1.000000)\"><defs><radialGradient id=\"simulide-lote-fontes-v2-sources_voltage_source-grad-0\" cx=\"6\" cy=\"6\" r=\"28\" gradientUnits=\"userSpaceOnUse\"><stop offset=\"0%\" stop-color=\"#ffffff\"/><stop offset=\"80%\" stop-color=\"#e6e6e1\"/><stop offset=\"83%\" stop-color=\"#dcdcd7\"/><stop offset=\"100%\" stop-color=\"#c8c8c3\"/></radialGradient><linearGradient id=\"simulide-lote-fontes-v2-sources_voltage_source-grad-1\" x1=\"20\" y1=\"38\" x2=\"20\" y2=\"52\" gradientUnits=\"userSpaceOnUse\"><stop offset=\"0%\" stop-color=\"#ffffff\"/><stop offset=\"100%\" stop-color=\"#c8c8c8\"/></linearGradient></defs><line x1=\"40\" y1=\"44\" x2=\"48\" y2=\"44\" stroke=\"#000\" stroke-width=\"3\" stroke-linecap=\"round\"/><rect x=\"0\" y=\"0\" width=\"40\" height=\"56\" rx=\"2\" ry=\"2\" stroke=\"#000\" fill=\"#e6e6e6\" stroke-width=\"1\"/><line x1=\"12.5\" y1=\"32.99\" x2=\"10.5\" y2=\"36.454\" stroke=\"#ff0000\" stroke-width=\"1\"/><line x1=\"9.393\" y1=\"30.607\" x2=\"7.272\" y2=\"32.728\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"7.01\" y1=\"27.5\" x2=\"4.412\" y2=\"29\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"5.511\" y1=\"23.882\" x2=\"2.613\" y2=\"24.659\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"5\" y1=\"20\" x2=\"2\" y2=\"20\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"5.511\" y1=\"16.118\" x2=\"2.613\" y2=\"15.341\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"7.01\" y1=\"12.5\" x2=\"4.412\" y2=\"11\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"9.393\" y1=\"9.393\" x2=\"7.272\" y2=\"7.272\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"12.5\" y1=\"7.01\" x2=\"11\" y2=\"4.412\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"16.118\" y1=\"5.511\" x2=\"15.341\" y2=\"2.613\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"20\" y1=\"5\" x2=\"20\" y2=\"2\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"23.882\" y1=\"5.511\" x2=\"24.659\" y2=\"2.613\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"27.5\" y1=\"7.01\" x2=\"29\" y2=\"4.412\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"30.607\" y1=\"9.393\" x2=\"32.728\" y2=\"7.272\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"32.99\" y1=\"12.5\" x2=\"35.588\" y2=\"11\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"34.489\" y1=\"16.118\" x2=\"37.387\" y2=\"15.341\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"35\" y1=\"20\" x2=\"38\" y2=\"20\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"34.489\" y1=\"23.882\" x2=\"37.387\" y2=\"24.659\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"32.99\" y1=\"27.5\" x2=\"35.588\" y2=\"29\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"30.607\" y1=\"30.607\" x2=\"32.728\" y2=\"32.728\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"27.5\" y1=\"32.99\" x2=\"29\" y2=\"35.588\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><ellipse cx=\"20\" cy=\"20\" rx=\"14\" ry=\"14\" stroke=\"#464646\" fill=\"none\" stroke-width=\"1\"/><ellipse cx=\"20\" cy=\"20\" rx=\"13\" ry=\"13\" stroke=\"#ffffff\" fill=\"none\" stroke-width=\"1\"/><ellipse cx=\"20\" cy=\"20\" rx=\"13\" ry=\"13\" stroke=\"none\" fill=\"url(#simulide-lote-fontes-v2-sources_voltage_source-grad-0)\" stroke-width=\"1\"/><ellipse cx=\"15.917\" cy=\"27.073\" rx=\"2.833\" ry=\"2.833\" stroke=\"#f0f0e6\" fill=\"#d2d2c8\" stroke-width=\"1\"/><ellipse cx=\"15.917\" cy=\"27.073\" rx=\"2.333\" ry=\"2.333\" stroke=\"#464646\" fill=\"#d2d2c8\" stroke-width=\"1\"/><ellipse cx=\"15.917\" cy=\"27.073\" rx=\"2.133\" ry=\"2.133\" stroke=\"none\" fill=\"#d2d2c8\" stroke-width=\"1\"/><rect x=\"4.8\" y=\"38.8\" width=\"30.4\" height=\"14.4\" rx=\"2\" ry=\"2\" stroke=\"#6e6e6e\" fill=\"none\" stroke-width=\"1\"/><rect x=\"5\" y=\"39\" width=\"30\" height=\"14\" rx=\"2\" ry=\"2\" stroke=\"none\" fill=\"url(#simulide-lote-fontes-v2-sources_voltage_source-grad-1)\" stroke-width=\"1\"/><text x=\"20\" y=\"48.8\" text-anchor=\"middle\" font-size=\"8\" font-family=\"Segoe UI\" fill=\"#000014\">---V</text></g></g>"
+    },
+    {
+      "typeId": "sources.current_source",
+      "label": "Fonte de Corrente",
+      "status": "simulidePaint",
+      "source": "src/components/sources/varsource.cpp + currsource.cpp + src/gui/sourcewidget.cpp + customdial.cpp + custombutton.cpp",
+      "notes": "VarSource m_area=(-20,-28,40,56), proxy SourceWidget at (-18,-26), dial 36x36 at top, CustomButton 32x16 centered at y=10, out pin at (28,16). Widget primitives are converted from generic Qt paint calls: drawRoundedRect/drawEllipse/drawLine/QLinearGradient/QRadialGradient.",
+      "props": {
+        "value": 0
+      },
+      "box": {
+        "width": 48,
+        "height": 56
+      },
+      "pins": [
+        {
+          "id": "pin-1",
+          "aliases": [
+            "out"
+          ],
+          "position": {
+            "x": 48,
+            "y": 44
+          },
+          "real": true
+        }
+      ],
+      "checks": {
+        "hasSimulidePaint": true,
+        "usesFallback": false,
+        "containsGradient": true,
+        "hasPinPositionForAllPins": true
+      },
+      "svg": "<g transform=\"translate(0.000,0.000)\"><g transform=\"scale(1.000000,1.000000)\"><defs><radialGradient id=\"simulide-lote-fontes-v2-sources_current_source-grad-0\" cx=\"6\" cy=\"6\" r=\"28\" gradientUnits=\"userSpaceOnUse\"><stop offset=\"0%\" stop-color=\"#ffffff\"/><stop offset=\"80%\" stop-color=\"#e6e6e1\"/><stop offset=\"83%\" stop-color=\"#dcdcd7\"/><stop offset=\"100%\" stop-color=\"#c8c8c3\"/></radialGradient><linearGradient id=\"simulide-lote-fontes-v2-sources_current_source-grad-1\" x1=\"20\" y1=\"38\" x2=\"20\" y2=\"52\" gradientUnits=\"userSpaceOnUse\"><stop offset=\"0%\" stop-color=\"#ffffff\"/><stop offset=\"100%\" stop-color=\"#c8c8c8\"/></linearGradient></defs><line x1=\"40\" y1=\"44\" x2=\"48\" y2=\"44\" stroke=\"#000\" stroke-width=\"3\" stroke-linecap=\"round\"/><rect x=\"0\" y=\"0\" width=\"40\" height=\"56\" rx=\"2\" ry=\"2\" stroke=\"#000\" fill=\"#e6e6e6\" stroke-width=\"1\"/><line x1=\"12.5\" y1=\"32.99\" x2=\"10.5\" y2=\"36.454\" stroke=\"#ff0000\" stroke-width=\"1\"/><line x1=\"9.393\" y1=\"30.607\" x2=\"7.272\" y2=\"32.728\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"7.01\" y1=\"27.5\" x2=\"4.412\" y2=\"29\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"5.511\" y1=\"23.882\" x2=\"2.613\" y2=\"24.659\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"5\" y1=\"20\" x2=\"2\" y2=\"20\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"5.511\" y1=\"16.118\" x2=\"2.613\" y2=\"15.341\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"7.01\" y1=\"12.5\" x2=\"4.412\" y2=\"11\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"9.393\" y1=\"9.393\" x2=\"7.272\" y2=\"7.272\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"12.5\" y1=\"7.01\" x2=\"11\" y2=\"4.412\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"16.118\" y1=\"5.511\" x2=\"15.341\" y2=\"2.613\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"20\" y1=\"5\" x2=\"20\" y2=\"2\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"23.882\" y1=\"5.511\" x2=\"24.659\" y2=\"2.613\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"27.5\" y1=\"7.01\" x2=\"29\" y2=\"4.412\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"30.607\" y1=\"9.393\" x2=\"32.728\" y2=\"7.272\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"32.99\" y1=\"12.5\" x2=\"35.588\" y2=\"11\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"34.489\" y1=\"16.118\" x2=\"37.387\" y2=\"15.341\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"35\" y1=\"20\" x2=\"38\" y2=\"20\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"34.489\" y1=\"23.882\" x2=\"37.387\" y2=\"24.659\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"32.99\" y1=\"27.5\" x2=\"35.588\" y2=\"29\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"30.607\" y1=\"30.607\" x2=\"32.728\" y2=\"32.728\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><line x1=\"27.5\" y1=\"32.99\" x2=\"29\" y2=\"35.588\" stroke=\"#6e6e6e\" stroke-width=\"1\"/><ellipse cx=\"20\" cy=\"20\" rx=\"14\" ry=\"14\" stroke=\"#464646\" fill=\"none\" stroke-width=\"1\"/><ellipse cx=\"20\" cy=\"20\" rx=\"13\" ry=\"13\" stroke=\"#ffffff\" fill=\"none\" stroke-width=\"1\"/><ellipse cx=\"20\" cy=\"20\" rx=\"13\" ry=\"13\" stroke=\"none\" fill=\"url(#simulide-lote-fontes-v2-sources_current_source-grad-0)\" stroke-width=\"1\"/><ellipse cx=\"15.917\" cy=\"27.073\" rx=\"2.833\" ry=\"2.833\" stroke=\"#f0f0e6\" fill=\"#d2d2c8\" stroke-width=\"1\"/><ellipse cx=\"15.917\" cy=\"27.073\" rx=\"2.333\" ry=\"2.333\" stroke=\"#464646\" fill=\"#d2d2c8\" stroke-width=\"1\"/><ellipse cx=\"15.917\" cy=\"27.073\" rx=\"2.133\" ry=\"2.133\" stroke=\"none\" fill=\"#d2d2c8\" stroke-width=\"1\"/><rect x=\"4.8\" y=\"38.8\" width=\"30.4\" height=\"14.4\" rx=\"2\" ry=\"2\" stroke=\"#6e6e6e\" fill=\"none\" stroke-width=\"1\"/><rect x=\"5\" y=\"39\" width=\"30\" height=\"14\" rx=\"2\" ry=\"2\" stroke=\"none\" fill=\"url(#simulide-lote-fontes-v2-sources_current_source-grad-1)\" stroke-width=\"1\"/><text x=\"20\" y=\"48.8\" text-anchor=\"middle\" font-size=\"8\" font-family=\"Segoe UI\" fill=\"#000014\">---A</text></g></g>"
+    },
+    {
+      "typeId": "sources.controlled_source",
+      "label": "Fonte Controlada",
+      "status": "simulidePaint",
+      "source": "src/components/sources/csource.cpp",
+      "notes": "Csource::paint draws outline-only rect/diamond/arrow. Leads are rendered from Pin::paint: Pin QPoint is the electrical terminal, visual segment length is m_length-0.7 with round cap. Control +/- are Pin labels: cp/cm at (-24,-8)/(-24,8), angle 180, length 8, setFontSize(9), setSpace(1.7), labelColor red/black; labels are cleared when CurrControl=true.",
+      "props": {
+        "controlPins": true,
+        "currSource": true,
+        "currControl": false
+      },
+      "box": {
+        "width": 48,
+        "height": 40
+      },
+      "pins": [
+        {
+          "id": "pin-1",
+          "aliases": [
+            "cp"
+          ],
+          "position": {
+            "x": 0,
+            "y": 12
+          },
+          "real": true
+        },
+        {
+          "id": "pin-2",
+          "aliases": [
+            "cm"
+          ],
+          "position": {
+            "x": 0,
+            "y": 28
+          },
+          "real": true
+        },
+        {
+          "id": "pin-3",
+          "aliases": [
+            "s1"
+          ],
+          "position": {
+            "x": 24,
+            "y": 0
+          },
+          "real": true
+        },
+        {
+          "id": "pin-4",
+          "aliases": [
+            "s2"
+          ],
+          "position": {
+            "x": 24,
+            "y": 40
+          },
+          "real": true
+        }
+      ],
+      "checks": {
+        "hasSimulidePaint": true,
+        "usesFallback": false,
+        "containsGradient": false,
+        "hasPinPositionForAllPins": true
+      },
+      "svg": "<g transform=\"translate(0.000,0.000)\"><g transform=\"scale(1.000000,1.000000)\"><rect x=\"8\" y=\"4\" width=\"32\" height=\"32\" stroke=\"#000\" fill=\"none\" stroke-width=\"1\"/><polygon points=\"16,20 24,7 32,20 24,33\" stroke=\"#000\" fill=\"none\" stroke-width=\"2\"/><line x1=\"24\" y1=\"15\" x2=\"24\" y2=\"25\" stroke=\"#000\" stroke-width=\"1\"/><line x1=\"22\" y1=\"22\" x2=\"24\" y2=\"25\" stroke=\"#000\" stroke-width=\"1\"/><line x1=\"26\" y1=\"22\" x2=\"24\" y2=\"25\" stroke=\"#000\" stroke-width=\"1\"/></g></g><line x1=\"0.0\" y1=\"12.0\" x2=\"7.3\" y2=\"12.0\" stroke=\"#000\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><text x=\"9.7\" y=\"6.0\" text-anchor=\"start\" dominant-baseline=\"hanging\" fill=\"#ff0000\" style=\"font-size:9px\">+</text><line x1=\"0.0\" y1=\"28.0\" x2=\"7.3\" y2=\"28.0\" stroke=\"#000\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><text x=\"9.7\" y=\"22.0\" text-anchor=\"start\" dominant-baseline=\"hanging\" fill=\"#000000\" style=\"font-size:9px\">–</text><line x1=\"24.0\" y1=\"0.0\" x2=\"24.0\" y2=\"7.3\" stroke=\"#000\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><line x1=\"24.0\" y1=\"40.0\" x2=\"24.0\" y2=\"32.7\" stroke=\"#000\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>"
+    },
+    {
+      "typeId": "sources.battery",
+      "label": "Bateria",
+      "status": "simulidePaint",
+      "source": "src/components/sources/battery.cpp",
+      "notes": "m_area=QRect(-10,-10,20,20); Comp2Pin pins at (-16,0)/(16,0); pen width 3; drawLine(-7,-8,-7,8),(-2,-3,-2,3),(3,-8,3,8),(8,-3,8,3); explicit pin filaments -16..-7 and 8..16",
+      "props": {
+        "voltage": 5
+      },
+      "box": {
+        "width": 32,
+        "height": 20
+      },
+      "pins": [
+        {
+          "id": "pin-1",
+          "aliases": [
+            "p1"
+          ],
+          "position": {
+            "x": 0,
+            "y": 10
+          },
+          "real": true
+        },
+        {
+          "id": "pin-2",
+          "aliases": [
+            "p2"
+          ],
+          "position": {
+            "x": 32,
+            "y": 10
+          },
+          "real": true
+        }
+      ],
+      "checks": {
+        "hasSimulidePaint": true,
+        "usesFallback": false,
+        "containsGradient": false,
+        "hasPinPositionForAllPins": true
+      },
+      "svg": "<g transform=\"translate(0.000,0.000)\"><g transform=\"scale(1.000000,1.000000)\"><line x1=\"0\" y1=\"10\" x2=\"9\" y2=\"10\" stroke=\"#000\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><line x1=\"9\" y1=\"2\" x2=\"9\" y2=\"18\" stroke=\"#000\" stroke-width=\"3\" stroke-linecap=\"round\"/><line x1=\"14\" y1=\"7\" x2=\"14\" y2=\"13\" stroke=\"#000\" stroke-width=\"3\" stroke-linecap=\"round\"/><line x1=\"19\" y1=\"2\" x2=\"19\" y2=\"18\" stroke=\"#000\" stroke-width=\"3\" stroke-linecap=\"round\"/><line x1=\"24\" y1=\"7\" x2=\"24\" y2=\"13\" stroke=\"#000\" stroke-width=\"3\" stroke-linecap=\"round\"/><line x1=\"24\" y1=\"10\" x2=\"32\" y2=\"10\" stroke=\"#000\" stroke-width=\"1.5\" stroke-linecap=\"round\"/></g></g>"
+    },
+    {
+      "typeId": "sources.rail",
+      "label": "Trilho",
+      "status": "simulidePaint",
+      "source": "src/components/sources/rail.cpp",
+      "notes": "m_area=QRect(-2,-8,12,16); IoPin(0,QPoint(16,0)); setRotation(90); paint polygon points (-1.5,-6.5),(-1.5,6.5),(9,1),(9,-1), brush #ffa600. Lasec package keeps the local paint geometry and exposes the pin at the translated QPoint(16,0).",
+      "props": {
+        "voltage": 5
+      },
+      "box": {
+        "width": 20,
+        "height": 16
+      },
+      "pins": [
+        {
+          "id": "pin-1",
+          "aliases": [
+            "out"
+          ],
+          "position": {
+            "x": 20,
+            "y": 8
+          },
+          "real": true
+        }
+      ],
+      "checks": {
+        "hasSimulidePaint": true,
+        "usesFallback": false,
+        "containsGradient": false,
+        "hasPinPositionForAllPins": true
+      },
+      "svg": "<g transform=\"translate(0.000,0.000)\"><g transform=\"scale(1.000000,1.000000)\"><line x1=\"13\" y1=\"8\" x2=\"20\" y2=\"8\" stroke=\"#000\" stroke-width=\"3\" stroke-linecap=\"round\"/><polygon points=\"2.5,1.5 2.5,14.5 13,9 13,7\" stroke=\"#000\" fill=\"#ffa600\" stroke-width=\"1\" stroke-linejoin=\"round\"/></g></g>"
+    },
+    {
+      "typeId": "other.ground",
+      "label": "Terra (0 V)",
+      "status": "simulidePaint",
+      "source": "src/components/sources/ground.cpp",
+      "notes": "m_area = QRect(-8,-10,16,12); IoPin(90,QPoint(0,-16)); bars at y=-8,-4,0 with pen 2.5",
+      "props": {},
+      "box": {
+        "width": 16,
+        "height": 18
+      },
+      "pins": [
+        {
+          "id": "pin",
+          "aliases": [
+            "pin-1"
+          ],
+          "position": {
+            "x": 8,
+            "y": 0
+          },
+          "real": true
+        }
+      ],
+      "checks": {
+        "hasSimulidePaint": true,
+        "usesFallback": false,
+        "containsGradient": false,
+        "hasPinPositionForAllPins": true
+      },
+      "svg": "<g transform=\"translate(0.000,0.000)\"><g transform=\"scale(1.000000,1.000000)\"><line x1=\"8\" y1=\"0\" x2=\"8\" y2=\"8\" stroke=\"#000\" stroke-width=\"3\" stroke-linecap=\"round\"/><line x1=\"1.4\" y1=\"8\" x2=\"14.6\" y2=\"8\" stroke=\"#000\" stroke-width=\"2.5\"/><line x1=\"3.7\" y1=\"12\" x2=\"12.3\" y2=\"12\" stroke=\"#000\" stroke-width=\"2.5\"/><line x1=\"6.1\" y1=\"16\" x2=\"9.9\" y2=\"16\" stroke=\"#000\" stroke-width=\"2.5\"/></g></g>"
+    }
+  ]
+}

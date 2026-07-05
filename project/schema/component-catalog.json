@@ -1278,8 +1278,8 @@
         "out": true
       },
       "package": {
-        "width": 28,
-        "height": 24,
+        "width": 48,
+        "height": 16,
         "border": false,
         "background": {
           "kind": "none"
@@ -1293,15 +1293,27 @@
             "notes": "non-small: m_area=QRect(-10,-10,20,20); IoPin(0,QPoint(16,0)); drawRoundedRect(-8,-8,16,16,2,2); brush #ffa600 when Out=true else #e6e6ff"
           },
           "bounds": {
-            "x": -12,
-            "y": -12,
-            "w": 28,
-            "h": 24
+            "x": -32,
+            "y": -8,
+            "w": 48,
+            "h": 16
           },
           "defaultStroke": "#000",
           "defaultFill": "none",
           "defaultStrokeWidth": 1.5,
           "primitives": [
+            {
+              "kind": "rect",
+              "x": -32,
+              "y": -8,
+              "w": 16,
+              "h": 16,
+              "rx": 2,
+              "ry": 2,
+              "fill": "#dddddd",
+              "strokeWidth": 1.5,
+              "cssClass": "toggle-hit-zone"
+            },
             {
               "kind": "line",
               "x1": 8,
@@ -1337,8 +1349,8 @@
               "pin",
               "pin-1"
             ],
-            "x": 28,
-            "y": 12,
+            "x": 48,
+            "y": 8,
             "angle": 0,
             "length": 0,
             "label": ""
@@ -1369,7 +1381,7 @@
         "pin-1"
       ],
       "package": {
-        "width": 30,
+        "width": 48,
         "height": 16,
         "border": false,
         "background": {
@@ -1384,15 +1396,27 @@
             "notes": "ClockBase m_area=QRect(-14,-8,22,16), IoPin(0,QPoint(16,0)); Clock::paint roundedRect(m_area,2,2), fill #fac832 running else #e6e6ff, then pulse polyline with pen width 1."
           },
           "bounds": {
-            "x": -14,
+            "x": -32,
             "y": -8,
-            "w": 30,
+            "w": 48,
             "h": 16
           },
           "defaultStroke": "#000",
           "defaultFill": "none",
           "defaultStrokeWidth": 1,
           "primitives": [
+            {
+              "kind": "rect",
+              "x": -32,
+              "y": -8,
+              "w": 16,
+              "h": 16,
+              "rx": 2,
+              "ry": 2,
+              "fill": "#dddddd",
+              "strokeWidth": 1.5,
+              "cssClass": "toggle-hit-zone"
+            },
             {
               "kind": "line",
               "x1": 8,
@@ -1464,7 +1488,7 @@
             "aliases": [
               "out"
             ],
-            "x": 30,
+            "x": 48,
             "y": 8,
             "angle": 0,
             "length": 0,
@@ -1494,7 +1518,7 @@
         "pin-2"
       ],
       "package": {
-        "width": 30,
+        "width": 48,
         "height": 16,
         "border": false,
         "background": {
@@ -1509,15 +1533,27 @@
             "notes": "ClockBase m_area=QRect(-14,-8,22,16); out pin (16,0), gnd pin (16,4) visible only when Bipolar=true; drawRoundedRect(m_area,2,2); drawPixmap(m_area.x()+3,m_area.y()+4,16,8,*m_wavePixmap)."
           },
           "bounds": {
-            "x": -14,
+            "x": -32,
             "y": -8,
-            "w": 30,
+            "w": 48,
             "h": 16
           },
           "defaultStroke": "#000",
           "defaultFill": "none",
           "defaultStrokeWidth": 1,
           "primitives": [
+            {
+              "kind": "rect",
+              "x": -32,
+              "y": -8,
+              "w": 16,
+              "h": 16,
+              "rx": 2,
+              "ry": 2,
+              "fill": "#dddddd",
+              "strokeWidth": 1.5,
+              "cssClass": "toggle-hit-zone"
+            },
             {
               "kind": "line",
               "x1": 8,
@@ -1588,7 +1624,7 @@
             "aliases": [
               "out"
             ],
-            "x": 30,
+            "x": 48,
             "y": 8,
             "angle": 0,
             "length": 0,
@@ -1599,7 +1635,7 @@
             "aliases": [
               "gnd"
             ],
-            "x": 30,
+            "x": 48,
             "y": 12,
             "angle": 0,
             "length": 0,
@@ -1644,10 +1680,10 @@
         "simulidePaint": {
           "version": 1,
           "source": {
-            "file": "src/components/sources/varsource.cpp + voltsource.cpp",
+            "file": "src/components/sources/varsource.cpp + voltsource.cpp + src/gui/sourcewidget.cpp + customdial.cpp + custombutton.cpp",
             "className": "VoltSource",
-            "method": "VarSource::paint + Qt widgets",
-            "notes": "VarSource paint draws roundedRect(m_area,2,2) with m_area=(-20,-28,40,56); native QDial+CustomButton are QGraphicsProxyWidget children and require a widget adapter for full fidelity; out pin at (28,16)."
+            "method": "VarSource::paint + SourceWidget/CustomDial/CustomButton paintEvent",
+            "notes": "VarSource m_area=(-20,-28,40,56), proxy SourceWidget at (-18,-26), dial 36x36 at top, CustomButton 32x16 centered at y=10, out pin at (28,16). Widget primitives are converted from generic Qt paint calls: drawRoundedRect/drawEllipse/drawLine/QLinearGradient/QRadialGradient."
           },
           "bounds": {
             "x": -20,
@@ -1678,6 +1714,326 @@
               "ry": 2,
               "fill": "#e6e6e6",
               "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": -7.5,
+              "y1": 4.99,
+              "x2": -9.5,
+              "y2": 8.454,
+              "stroke": "#ff0000",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": -10.607,
+              "y1": 2.607,
+              "x2": -12.728,
+              "y2": 4.728,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": -12.99,
+              "y1": -0.5,
+              "x2": -15.588,
+              "y2": 1,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": -14.489,
+              "y1": -4.118,
+              "x2": -17.387,
+              "y2": -3.341,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": -15,
+              "y1": -8,
+              "x2": -18,
+              "y2": -8,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": -14.489,
+              "y1": -11.882,
+              "x2": -17.387,
+              "y2": -12.659,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": -12.99,
+              "y1": -15.5,
+              "x2": -15.588,
+              "y2": -17,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": -10.607,
+              "y1": -18.607,
+              "x2": -12.728,
+              "y2": -20.728,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": -7.5,
+              "y1": -20.99,
+              "x2": -9,
+              "y2": -23.588,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": -3.882,
+              "y1": -22.489,
+              "x2": -4.659,
+              "y2": -25.387,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": 0,
+              "y1": -23,
+              "x2": 0,
+              "y2": -26,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": 3.882,
+              "y1": -22.489,
+              "x2": 4.659,
+              "y2": -25.387,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": 7.5,
+              "y1": -20.99,
+              "x2": 9,
+              "y2": -23.588,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": 10.607,
+              "y1": -18.607,
+              "x2": 12.728,
+              "y2": -20.728,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": 12.99,
+              "y1": -15.5,
+              "x2": 15.588,
+              "y2": -17,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": 14.489,
+              "y1": -11.882,
+              "x2": 17.387,
+              "y2": -12.659,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": 15,
+              "y1": -8,
+              "x2": 18,
+              "y2": -8,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": 14.489,
+              "y1": -4.118,
+              "x2": 17.387,
+              "y2": -3.341,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": 12.99,
+              "y1": -0.5,
+              "x2": 15.588,
+              "y2": 1,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": 10.607,
+              "y1": 2.607,
+              "x2": 12.728,
+              "y2": 4.728,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": 7.5,
+              "y1": 4.99,
+              "x2": 9,
+              "y2": 7.588,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "ellipse",
+              "cx": 0,
+              "cy": -8,
+              "rx": 14,
+              "ry": 14,
+              "fill": "none",
+              "stroke": "#464646",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "ellipse",
+              "cx": 0,
+              "cy": -8,
+              "rx": 13,
+              "ry": 13,
+              "fill": "none",
+              "stroke": "#ffffff",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "ellipse",
+              "cx": 0,
+              "cy": -8,
+              "rx": 13,
+              "ry": 13,
+              "stroke": "none",
+              "fillGradient": {
+                "kind": "radial",
+                "cx": -14,
+                "cy": -22,
+                "r": 28,
+                "stops": [
+                  {
+                    "offset": 0,
+                    "color": "#ffffff"
+                  },
+                  {
+                    "offset": 0.8,
+                    "color": "#e6e6e1"
+                  },
+                  {
+                    "offset": 0.83,
+                    "color": "#dcdcd7"
+                  },
+                  {
+                    "offset": 1,
+                    "color": "#c8c8c3"
+                  }
+                ]
+              }
+            },
+            {
+              "kind": "ellipse",
+              "cx": -4.083,
+              "cy": -0.927,
+              "rx": 2.833,
+              "ry": 2.833,
+              "fill": "#d2d2c8",
+              "stroke": "#f0f0e6",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "ellipse",
+              "cx": -4.083,
+              "cy": -0.927,
+              "rx": 2.333,
+              "ry": 2.333,
+              "fill": "#d2d2c8",
+              "stroke": "#464646",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "ellipse",
+              "cx": -4.083,
+              "cy": -0.927,
+              "rx": 2.133,
+              "ry": 2.133,
+              "fill": "#d2d2c8",
+              "stroke": "none"
+            },
+            {
+              "kind": "roundedRect",
+              "x": -15.2,
+              "y": 10.8,
+              "w": 30.4,
+              "h": 14.4,
+              "rx": 2,
+              "ry": 2,
+              "fill": "none",
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "roundedRect",
+              "x": -15,
+              "y": 11,
+              "w": 30,
+              "h": 14,
+              "rx": 2,
+              "ry": 2,
+              "stroke": "none",
+              "fillGradient": {
+                "kind": "linear",
+                "x1": 0,
+                "y1": 10,
+                "x2": 0,
+                "y2": 24,
+                "stops": [
+                  {
+                    "offset": 0,
+                    "color": "#ffffff"
+                  },
+                  {
+                    "offset": 1,
+                    "color": "#c8c8c8"
+                  }
+                ]
+              }
+            },
+            {
+              "kind": "text",
+              "x": 0,
+              "y": 20.8,
+              "value": "---V",
+              "fontSize": 8,
+              "fontFamily": "Segoe UI",
+              "textAnchor": "middle",
+              "fill": "#000014",
+              "stroke": "none"
             }
           ]
         },
@@ -1725,10 +2081,10 @@
         "simulidePaint": {
           "version": 1,
           "source": {
-            "file": "src/components/sources/varsource.cpp + currsource.cpp",
+            "file": "src/components/sources/varsource.cpp + currsource.cpp + src/gui/sourcewidget.cpp + customdial.cpp + custombutton.cpp",
             "className": "CurrSource",
-            "method": "VarSource::paint + Qt widgets",
-            "notes": "VarSource paint draws roundedRect(m_area,2,2) with m_area=(-20,-28,40,56); native QDial+CustomButton are QGraphicsProxyWidget children and require a widget adapter for full fidelity; out pin at (28,16)."
+            "method": "VarSource::paint + SourceWidget/CustomDial/CustomButton paintEvent",
+            "notes": "VarSource m_area=(-20,-28,40,56), proxy SourceWidget at (-18,-26), dial 36x36 at top, CustomButton 32x16 centered at y=10, out pin at (28,16). Widget primitives are converted from generic Qt paint calls: drawRoundedRect/drawEllipse/drawLine/QLinearGradient/QRadialGradient."
           },
           "bounds": {
             "x": -20,
@@ -1759,6 +2115,326 @@
               "ry": 2,
               "fill": "#e6e6e6",
               "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": -7.5,
+              "y1": 4.99,
+              "x2": -9.5,
+              "y2": 8.454,
+              "stroke": "#ff0000",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": -10.607,
+              "y1": 2.607,
+              "x2": -12.728,
+              "y2": 4.728,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": -12.99,
+              "y1": -0.5,
+              "x2": -15.588,
+              "y2": 1,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": -14.489,
+              "y1": -4.118,
+              "x2": -17.387,
+              "y2": -3.341,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": -15,
+              "y1": -8,
+              "x2": -18,
+              "y2": -8,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": -14.489,
+              "y1": -11.882,
+              "x2": -17.387,
+              "y2": -12.659,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": -12.99,
+              "y1": -15.5,
+              "x2": -15.588,
+              "y2": -17,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": -10.607,
+              "y1": -18.607,
+              "x2": -12.728,
+              "y2": -20.728,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": -7.5,
+              "y1": -20.99,
+              "x2": -9,
+              "y2": -23.588,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": -3.882,
+              "y1": -22.489,
+              "x2": -4.659,
+              "y2": -25.387,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": 0,
+              "y1": -23,
+              "x2": 0,
+              "y2": -26,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": 3.882,
+              "y1": -22.489,
+              "x2": 4.659,
+              "y2": -25.387,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": 7.5,
+              "y1": -20.99,
+              "x2": 9,
+              "y2": -23.588,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": 10.607,
+              "y1": -18.607,
+              "x2": 12.728,
+              "y2": -20.728,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": 12.99,
+              "y1": -15.5,
+              "x2": 15.588,
+              "y2": -17,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": 14.489,
+              "y1": -11.882,
+              "x2": 17.387,
+              "y2": -12.659,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": 15,
+              "y1": -8,
+              "x2": 18,
+              "y2": -8,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": 14.489,
+              "y1": -4.118,
+              "x2": 17.387,
+              "y2": -3.341,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": 12.99,
+              "y1": -0.5,
+              "x2": 15.588,
+              "y2": 1,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": 10.607,
+              "y1": 2.607,
+              "x2": 12.728,
+              "y2": 4.728,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": 7.5,
+              "y1": 4.99,
+              "x2": 9,
+              "y2": 7.588,
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "ellipse",
+              "cx": 0,
+              "cy": -8,
+              "rx": 14,
+              "ry": 14,
+              "fill": "none",
+              "stroke": "#464646",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "ellipse",
+              "cx": 0,
+              "cy": -8,
+              "rx": 13,
+              "ry": 13,
+              "fill": "none",
+              "stroke": "#ffffff",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "ellipse",
+              "cx": 0,
+              "cy": -8,
+              "rx": 13,
+              "ry": 13,
+              "stroke": "none",
+              "fillGradient": {
+                "kind": "radial",
+                "cx": -14,
+                "cy": -22,
+                "r": 28,
+                "stops": [
+                  {
+                    "offset": 0,
+                    "color": "#ffffff"
+                  },
+                  {
+                    "offset": 0.8,
+                    "color": "#e6e6e1"
+                  },
+                  {
+                    "offset": 0.83,
+                    "color": "#dcdcd7"
+                  },
+                  {
+                    "offset": 1,
+                    "color": "#c8c8c3"
+                  }
+                ]
+              }
+            },
+            {
+              "kind": "ellipse",
+              "cx": -4.083,
+              "cy": -0.927,
+              "rx": 2.833,
+              "ry": 2.833,
+              "fill": "#d2d2c8",
+              "stroke": "#f0f0e6",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "ellipse",
+              "cx": -4.083,
+              "cy": -0.927,
+              "rx": 2.333,
+              "ry": 2.333,
+              "fill": "#d2d2c8",
+              "stroke": "#464646",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "ellipse",
+              "cx": -4.083,
+              "cy": -0.927,
+              "rx": 2.133,
+              "ry": 2.133,
+              "fill": "#d2d2c8",
+              "stroke": "none"
+            },
+            {
+              "kind": "roundedRect",
+              "x": -15.2,
+              "y": 10.8,
+              "w": 30.4,
+              "h": 14.4,
+              "rx": 2,
+              "ry": 2,
+              "fill": "none",
+              "stroke": "#6e6e6e",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "roundedRect",
+              "x": -15,
+              "y": 11,
+              "w": 30,
+              "h": 14,
+              "rx": 2,
+              "ry": 2,
+              "stroke": "none",
+              "fillGradient": {
+                "kind": "linear",
+                "x1": 0,
+                "y1": 10,
+                "x2": 0,
+                "y2": 24,
+                "stops": [
+                  {
+                    "offset": 0,
+                    "color": "#ffffff"
+                  },
+                  {
+                    "offset": 1,
+                    "color": "#c8c8c8"
+                  }
+                ]
+              }
+            },
+            {
+              "kind": "text",
+              "x": 0,
+              "y": 20.8,
+              "value": "---A",
+              "fontSize": 8,
+              "fontFamily": "Segoe UI",
+              "textAnchor": "middle",
+              "fill": "#000014",
+              "stroke": "none"
             }
           ]
         },
@@ -1813,7 +2489,7 @@
             "file": "src/components/sources/csource.cpp",
             "className": "Csource",
             "method": "paint",
-            "notes": "m_area=QRect(-16,-16,32,32); control pins (-24,-8),(-24,8); source pins (0,-20),(0,20); controlPins/currSource/currControl switch rect/ellipse/diamond, arrow/signs and current-control mark."
+            "notes": "Csource::paint draws outline-only rect/diamond/arrow. Leads are rendered from Pin::paint: Pin QPoint is the electrical terminal, visual segment length is m_length-0.7 with round cap. Control +/- are Pin labels: cp/cm at (-24,-8)/(-24,8), angle 180, length 8, setFontSize(9), setSpace(1.7), labelColor red/black; labels are cleared when CurrControl=true."
           },
           "bounds": {
             "x": -24,
@@ -1825,56 +2501,6 @@
           "defaultFill": "none",
           "defaultStrokeWidth": 1,
           "primitives": [
-            {
-              "kind": "line",
-              "x1": -24,
-              "y1": -8,
-              "x2": -16,
-              "y2": -8,
-              "strokeWidth": 3,
-              "strokeLinecap": "round",
-              "stateVisible": {
-                "when": {
-                  "controlPins": [
-                    "true"
-                  ]
-                }
-              }
-            },
-            {
-              "kind": "line",
-              "x1": -24,
-              "y1": 8,
-              "x2": -16,
-              "y2": 8,
-              "strokeWidth": 3,
-              "strokeLinecap": "round",
-              "stateVisible": {
-                "when": {
-                  "controlPins": [
-                    "true"
-                  ]
-                }
-              }
-            },
-            {
-              "kind": "line",
-              "x1": 0,
-              "y1": -20,
-              "x2": 0,
-              "y2": -16,
-              "strokeWidth": 3,
-              "strokeLinecap": "round"
-            },
-            {
-              "kind": "line",
-              "x1": 0,
-              "y1": 16,
-              "x2": 0,
-              "y2": 20,
-              "strokeWidth": 3,
-              "strokeLinecap": "round"
-            },
             {
               "kind": "rect",
               "x": -16,
@@ -2080,46 +2706,6 @@
                   ]
                 }
               }
-            },
-            {
-              "kind": "text",
-              "x": -19,
-              "y": -5,
-              "value": "+",
-              "fontSize": 9,
-              "fill": "#ff0000",
-              "stroke": "none",
-              "textAnchor": "middle",
-              "stateVisible": {
-                "when": {
-                  "controlPins": [
-                    "true"
-                  ],
-                  "currControl": [
-                    "false"
-                  ]
-                }
-              }
-            },
-            {
-              "kind": "text",
-              "x": -19,
-              "y": 11,
-              "value": "?",
-              "fontSize": 9,
-              "fill": "#000000",
-              "stroke": "none",
-              "textAnchor": "middle",
-              "stateVisible": {
-                "when": {
-                  "controlPins": [
-                    "true"
-                  ],
-                  "currControl": [
-                    "false"
-                  ]
-                }
-              }
             }
           ]
         },
@@ -2132,15 +2718,34 @@
             "x": 0,
             "y": 12,
             "angle": 180,
-            "length": 0,
-            "label": "",
+            "length": 8,
+            "label": "+",
             "stateVisible": {
               "when": {
                 "controlPins": [
                   "true"
                 ]
               }
-            }
+            },
+            "labelColor": "#ff0000",
+            "labelFontSize": 9,
+            "labelSpace": 1.7,
+            "labelTextAnchor": "start",
+            "labelDominantBaseline": "hanging",
+            "labelX": 9.7,
+            "labelY": 6,
+            "labelStateVisible": {
+              "when": {
+                "controlPins": [
+                  "true"
+                ],
+                "currControl": [
+                  "false"
+                ]
+              }
+            },
+            "leadOrigin": "terminal",
+            "leadEndTrim": 0.7
           },
           {
             "id": "pin-2",
@@ -2150,15 +2755,34 @@
             "x": 0,
             "y": 28,
             "angle": 180,
-            "length": 0,
-            "label": "",
+            "length": 8,
+            "label": "–",
             "stateVisible": {
               "when": {
                 "controlPins": [
                   "true"
                 ]
               }
-            }
+            },
+            "labelColor": "#000000",
+            "labelFontSize": 9,
+            "labelSpace": 1.7,
+            "labelTextAnchor": "start",
+            "labelDominantBaseline": "hanging",
+            "labelX": 9.7,
+            "labelY": 22,
+            "labelStateVisible": {
+              "when": {
+                "controlPins": [
+                  "true"
+                ],
+                "currControl": [
+                  "false"
+                ]
+              }
+            },
+            "leadOrigin": "terminal",
+            "leadEndTrim": 0.7
           },
           {
             "id": "pin-3",
@@ -2167,9 +2791,11 @@
             ],
             "x": 24,
             "y": 0,
-            "angle": 270,
-            "length": 0,
-            "label": ""
+            "angle": 90,
+            "length": 8,
+            "label": "",
+            "leadOrigin": "terminal",
+            "leadEndTrim": 0.7
           },
           {
             "id": "pin-4",
@@ -2178,12 +2804,35 @@
             ],
             "x": 24,
             "y": 40,
-            "angle": 90,
-            "length": 0,
-            "label": ""
+            "angle": 270,
+            "length": 8,
+            "label": "",
+            "leadOrigin": "terminal",
+            "leadEndTrim": 0.7
           }
-        ]
-      }
+        ],
+        "valueLabel": {
+          "x": 28,
+          "y": 38,
+          "rotation": 0,
+          "source": {
+            "file": "src/components/sources/csource.cpp",
+            "method": "Component::setValLabelPos",
+            "notes": "setValLabelPos(4,18,0) translated by simulidePaint bounds (-24,-20) => package coordinates (28,38)."
+          }
+        }
+      },
+      "propertySchema": [
+        {
+          "id": "gain",
+          "label": "Ganho",
+          "group": "Main",
+          "unit": "",
+          "editor": "number",
+          "default": 1,
+          "showOnSymbol": true
+        }
+      ]
     },
     {
       "typeId": "sources.battery",
@@ -2217,7 +2866,7 @@
             "file": "src/components/sources/battery.cpp",
             "className": "Battery",
             "method": "paint",
-            "notes": "m_area=QRect(-10,-10,20,20); Comp2Pin pins at (-16,0)/(16,0); pen width 3; drawLine(-7,-8,-7,8),(-2,-3,-2,3),(3,-8,3,8),(8,-3,8,3)"
+            "notes": "m_area=QRect(-10,-10,20,20); Comp2Pin pins at (-16,0)/(16,0); pen width 3; drawLine(-7,-8,-7,8),(-2,-3,-2,3),(3,-8,3,8),(8,-3,8,3); explicit pin filaments -16..-7 and 8..16"
           },
           "bounds": {
             "x": -16,
@@ -2229,6 +2878,15 @@
           "defaultFill": "none",
           "defaultStrokeWidth": 3,
           "primitives": [
+            {
+              "kind": "line",
+              "x1": -16,
+              "y1": 0,
+              "x2": -7,
+              "y2": 0,
+              "strokeWidth": 1.5,
+              "strokeLinecap": "round"
+            },
             {
               "kind": "line",
               "x1": -7,
@@ -2263,6 +2921,15 @@
               "x2": 8,
               "y2": 3,
               "strokeWidth": 3,
+              "strokeLinecap": "round"
+            },
+            {
+              "kind": "line",
+              "x1": 8,
+              "y1": 0,
+              "x2": 16,
+              "y2": 0,
+              "strokeWidth": 1.5,
               "strokeLinecap": "round"
             }
           ]

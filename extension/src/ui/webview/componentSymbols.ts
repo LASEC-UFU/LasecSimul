@@ -58,13 +58,14 @@ function resolvePackageLayout(pkg: PackageDescriptor): ResolvedPackage {
   let maxX = pkg.width;
   let maxY = pkg.height;
   const tips = pkg.pins.map((pin) => {
-    const rad = (pin.angle * Math.PI) / 180;
-    const tipX = pin.x + Math.cos(rad) * pin.length;
-    const tipY = pin.y + Math.sin(rad) * pin.length;
-    minX = Math.min(minX, tipX, pin.x);
-    maxX = Math.max(maxX, tipX, pin.x);
-    minY = Math.min(minY, tipY, pin.y);
-    maxY = Math.max(maxY, tipY, pin.y);
+    const electrical = packagePinElectricalPoint(pin);
+    const visualEnd = packagePinVisualEnd(pin);
+    const tipX = electrical.x;
+    const tipY = electrical.y;
+    minX = Math.min(minX, tipX, pin.x, visualEnd.x);
+    maxX = Math.max(maxX, tipX, pin.x, visualEnd.x);
+    minY = Math.min(minY, tipY, pin.y, visualEnd.y);
+    maxY = Math.max(maxY, tipY, pin.y, visualEnd.y);
     // Rótulo pode ter posição própria, arrastada pra fora do alcance do lead (ver model.ts
     // PackagePin.labelX/labelY) -- sem isso no cálculo, um rótulo arrastado bem pra fora poderia
     // ficar fora do viewBox calculado (overflow:visible evita corte, mas o box do componente
@@ -95,6 +96,23 @@ function resolvePackageLayout(pkg: PackageDescriptor): ResolvedPackage {
     })),
     source: pkg,
   };
+}
+
+function packagePinElectricalPoint(pin: PackagePin): { x: number; y: number } {
+  if (pin.leadOrigin === "terminal") return { x: pin.x, y: pin.y };
+  const rad = (pin.angle * Math.PI) / 180;
+  return { x: pin.x + Math.cos(rad) * pin.length, y: pin.y + Math.sin(rad) * pin.length };
+}
+
+function packagePinVisualEnd(pin: PackagePin): { x: number; y: number } {
+  if (pin.length === 0) return { x: pin.x, y: pin.y };
+  const visualLength = Math.max(0, pin.length - (pin.leadEndTrim ?? 0));
+  if (pin.leadOrigin === "terminal") {
+    const rad = ((180 - pin.angle) * Math.PI) / 180;
+    return { x: pin.x + Math.cos(rad) * visualLength, y: pin.y + Math.sin(rad) * visualLength };
+  }
+  const rad = (pin.angle * Math.PI) / 180;
+  return { x: pin.x + Math.cos(rad) * visualLength, y: pin.y + Math.sin(rad) * visualLength };
 }
 
 const RESOLVED_PACKAGE_BY_TYPE_ID = new Map<string, ResolvedPackage>();
@@ -360,8 +378,8 @@ const CONTROLLED_SOURCE_PAINT: SimulidePaintSpec = {
   bounds: { x: -24, y: -20, w: 40, h: 40 },
   defaultStroke: "currentColor",
   primitives: [
-    { kind: "rect", x: -16, y: -16, w: 32, h: 32, fill: "#ffffff", strokeWidth: 1 },
-    { kind: "polygon", points: [{ x: -8, y: 0 }, { x: 0, y: -13 }, { x: 8, y: 0 }, { x: 0, y: 13 }], fill: "#ffffff", strokeWidth: 2 },
+    { kind: "rect", x: -16, y: -16, w: 32, h: 32, fill: "none", strokeWidth: 1 },
+    { kind: "polygon", points: [{ x: -8, y: 0 }, { x: 0, y: -13 }, { x: 8, y: 0 }, { x: 0, y: 13 }], fill: "none", strokeWidth: 2 },
     { kind: "line", x1: 0, y1: -5, x2: 0, y2: 5, strokeWidth: 1 },
     { kind: "path", d: "M -2 2 L 0 5 L 2 2", fill: "none", strokeWidth: 1 },
     { kind: "line", x1: -24, y1: -8, x2: -16, y2: -8, strokeWidth: 1.5 },
@@ -521,20 +539,23 @@ function viewSpecBodySvg(pkg: PackageDescriptor, componentId: string, properties
  * `resolvePackageLayout` -- quem chama envolve isto num `<g transform="translate(offsetX,offsetY)">`,
  * ver `packageBodySvg`). O círculo do terminal em si (onde o clique conecta fio) é desenhado por
  * quem chama (`main.ts::renderComponent`), na posição JÁ deslocada devolvida por `pinLocalPosition`. */
-function packagePinLeadSvg(pin: PackagePin, resolved: ResolvedPackage, labelColor = "currentColor"): string {
-  const rad = (pin.angle * Math.PI) / 180;
-  const tipNativeX = pin.x + Math.cos(rad) * pin.length;
-  const tipNativeY = pin.y + Math.sin(rad) * pin.length;
+function packagePinLeadSvg(pin: PackagePin, resolved: ResolvedPackage, labelColor = "currentColor", properties?: Record<string, unknown>): string {
+  const visualEnd = packagePinVisualEnd(pin);
+  const electrical = packagePinElectricalPoint(pin);
+  const tipNativeX = electrical.x;
+  const tipNativeY = electrical.y;
   const label = pin.label ?? pin.id;
   const hasCustomLabelPos = pin.labelX !== undefined && pin.labelY !== undefined;
-  const labelNativeX = pin.labelX ?? tipNativeX + Math.cos(rad) * 9;
-  const labelNativeY = pin.labelY ?? tipNativeY + Math.sin(rad) * 9;
+  const labelSpace = pin.labelSpace ?? 9;
+  const rad = (pin.angle * Math.PI) / 180;
+  const labelNativeX = pin.labelX ?? tipNativeX + Math.cos(rad) * labelSpace;
+  const labelNativeY = pin.labelY ?? tipNativeY + Math.sin(rad) * labelSpace;
   const toDisplayX = (value: number): number => (value + resolved.offsetX) * resolved.scaleX;
   const toDisplayY = (value: number): number => (value + resolved.offsetY) * resolved.scaleY;
   const x = toDisplayX(pin.x);
   const y = toDisplayY(pin.y);
-  const tipX = toDisplayX(tipNativeX);
-  const tipY = toDisplayY(tipNativeY);
+  const leadEndX = toDisplayX(visualEnd.x);
+  const leadEndY = toDisplayY(visualEnd.y);
   const labelX = toDisplayX(labelNativeX);
   const labelY = toDisplayY(labelNativeY);
   // Lead vertical (topo/baixo do corpo, angle 90/270) -- texto horizontal colide com o label do
@@ -546,12 +567,17 @@ function packagePinLeadSvg(pin: PackagePin, resolved: ResolvedPackage, labelColo
   // mais sentido (ele já escolheu onde e como cabe).
   const isVerticalLead = !hasCustomLabelPos && (pin.angle === 90 || pin.angle === 270);
   const rotateAttr = isVerticalLead ? ` transform="rotate(-90 ${labelX.toFixed(1)} ${labelY.toFixed(1)})"` : "";
-  const fillAttr = labelColor === "currentColor" ? ` class="symbol-text"` : ` fill="${labelColor}"`;
+  const resolvedLabelColor = pin.labelColor ?? labelColor;
+  const fillAttr = resolvedLabelColor === "currentColor" ? ` class="symbol-text"` : ` fill="${resolvedLabelColor}"`;
+  const labelFontSize = pin.labelFontSize ?? PACKAGE_PIN_LABEL_FONT_SIZE;
+  const textAnchor = pin.labelTextAnchor ?? "middle";
+  const baselineAttr = pin.labelDominantBaseline ? ` dominant-baseline="${pin.labelDominantBaseline}"` : "";
   const leadMarkup = pin.length === 0
     ? ""
-    : `<line x1="${x.toFixed(1)}" y1="${y.toFixed(1)}" x2="${tipX.toFixed(1)}" y2="${tipY.toFixed(1)}" stroke="#000" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`;
-  const labelMarkup = label.trim()
-    ? `<text x="${labelX.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="middle"${fillAttr} style="font-size:${PACKAGE_PIN_LABEL_FONT_SIZE}px"${rotateAttr}>${escapeXmlText(label)}</text>`
+    : `<line x1="${x.toFixed(1)}" y1="${y.toFixed(1)}" x2="${leadEndX.toFixed(1)}" y2="${leadEndY.toFixed(1)}" stroke="#000" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`;
+  const labelVisible = stateVisibleMatches(pin.labelStateVisible, properties);
+  const labelMarkup = labelVisible && label.trim()
+    ? `<text x="${labelX.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="${textAnchor}"${baselineAttr}${fillAttr} style="font-size:${labelFontSize}px"${rotateAttr}>${escapeXmlText(label)}</text>`
     : "";
   return (
     leadMarkup +
@@ -581,7 +607,8 @@ function packageBodySvg(resolved: ResolvedPackage, componentId?: string, propert
   let markup = packageBackgroundSvg(pkg);
 
   if (pkg.simulidePaint) {
-    for (const shape of simulidePaintToPackageShapes(pkg.simulidePaint, pkg.width, pkg.height, properties ?? {})) markup += packageShapeSvg(shape);
+    const scopeId = `simulide-${componentId ? componentId.replace(/[^a-zA-Z0-9_-]/g, "_") : "static"}`;
+    for (const shape of simulidePaintToPackageShapes(pkg.simulidePaint, pkg.width, pkg.height, properties ?? {}, scopeId)) markup += packageShapeSvg(shape);
   } else if (pkg.viewSpec && componentId) {
     markup += viewSpecBodySvg(pkg, componentId, properties ?? {}) ?? "";
   } else {
@@ -598,7 +625,7 @@ function packageBodySvg(resolved: ResolvedPackage, componentId?: string, propert
   const pinLabelColor = pkg.pinLabelColor ?? "currentColor";
   const pinsMarkup = pkg.pins
     .filter((pin) => stateVisibleMatches(pin.stateVisible, properties))
-    .map((pin) => packagePinLeadSvg(pin, resolved, pinLabelColor))
+    .map((pin) => packagePinLeadSvg(pin, resolved, pinLabelColor, properties))
     .join("");
   return bodyMarkup + pinsMarkup;
 }
@@ -732,9 +759,9 @@ function builtinComponentBox(typeId: string): ComponentBox | undefined {
     case "meters.logic_analyzer": return { width: 260, height: 212 };
 
     case "sources.dc_voltage": return { width: 64, height: 48 };
-    case "sources.fixed_volt": return { width: 48, height: 16 }; // sources/fixedvolt.cpp: m_button (16x16) + corpo (16x16) + pino, ver fixedVoltPaint().bounds
-    case "sources.clock": return { width: 48, height: 16 }; // sources/clock.cpp: m_button herdado + m_area(22x16) + pino, ver clockLikePaint().bounds
-    case "sources.wave_gen": return { width: 48, height: 16 }; // sources/wavegen.cpp: idem Clock, 2 pinos (out/gnd)
+    case "sources.fixed_volt": return { width: 48, height: 16 }; // botao proxy 16x16 + corpo 16x16 + pino
+    case "sources.clock": return { width: 48, height: 16 }; // botao proxy herdado + m_area 22x16 + pino
+    case "sources.wave_gen": return { width: 48, height: 16 }; // idem Clock, 2 pinos (out/gnd)
     case "sources.voltage_source": return { width: 48, height: 56 }; // sources/voltsource.cpp+varsource.cpp: WIDTH=40,HEIGHT=56 + pino em (28,16)
     case "sources.current_source": return { width: 48, height: 56 }; // sources/currsource.cpp+varsource.cpp
     case "sources.controlled_source": return { width: 40, height: 40 }; // sources/csource.cpp: m_area 32x32 + pinos de controle em x=-24

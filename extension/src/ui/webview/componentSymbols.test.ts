@@ -1,4 +1,6 @@
 import { createTestRunner, assert } from "../../ipc/testSupport/MockCoreServer";
+import fs from "node:fs";
+import path from "node:path";
 import { componentBox, componentSymbolSvg, hasRealPinPosition, pinLocalPosition, packageSymbolSvg, registerPackage } from "./componentSymbols";
 import { PackageDescriptor } from "./model";
 
@@ -16,6 +18,20 @@ import { PackageDescriptor } from "./model";
     ],
   };
 
+  function catalogPackage(typeId: string): PackageDescriptor {
+    const candidates = [
+      path.resolve(process.cwd(), "..", "project", "schema", "component-catalog.json"),
+      path.resolve(process.cwd(), "project", "schema", "component-catalog.json"),
+    ];
+    const catalogPath = candidates.find((candidate) => fs.existsSync(candidate));
+    if (!catalogPath) throw new Error("component-catalog.json nao localizado para teste de renderer");
+    const catalog = JSON.parse(fs.readFileSync(catalogPath, "utf8")) as { items?: Array<{ typeId?: string; package?: PackageDescriptor }> };
+    const item = catalog.items?.find((entry) => entry.typeId === typeId);
+    if (!item?.package) throw new Error(`package nao localizado no catalogo para ${typeId}`);
+    registerPackage(typeId, item.package);
+    return item.package;
+  }
+
   await test("sem package registrado, componentBox cai pro algoritmo genérico (fallback)", () => {
     registerPackage("test.example", undefined);
     const box = componentBox("test.example");
@@ -32,20 +48,56 @@ import { PackageDescriptor } from "./model";
     assert(svg.includes('stroke-width="2.5"'), `barras do Ground deveriam usar pen 2.5 como no SimulIDE, markup: ${svg}`);
   });
 
-  await test("sources.fixed_volt usa propriedade out e desenha o lead ate o IoPin real", () => {
+  await test("sources.fixed_volt vem do renderer package.simulidePaint, com botao proxy e lead ate o IoPin real", () => {
+    catalogPackage("sources.fixed_volt");
     const box = componentBox("sources.fixed_volt");
-    // fixedvolt.cpp: m_button (widget nativo, 16x16) + corpo (16x16) + pino, todos derivados do
-    // mesmo bounds (-32,-8,48,16) via o tradutor SimulidePaint (`fixedVoltPaint`) -- caixa cresceu
-    // de 28 pra 48 quando o botao de liga/desliga (antes ausente) foi adicionado de volta.
-    assert(box.width === 48 && box.height === 16, `FixedVolt deveria incluir botao (16x16) + corpo (16x16) + pino em x=48, recebido {${box.width},${box.height}}`);
+    assert(box.width === 48 && box.height === 16, `FixedVolt deveria incluir botao 16x16 + corpo 16x16 + pino, recebido {${box.width},${box.height}}`);
     const pin = pinLocalPosition("pin", 0, 1, "sources.fixed_volt");
     assert(pin.x === 48 && pin.y === 8, `pino eletrico do FixedVolt deveria ficar em (48,8), recebido {${pin.x},${pin.y}}`);
-    const svgOn = componentSymbolSvg("sources.fixed_volt", { out: true });
+    const svgOn = packageSymbolSvg("sources.fixed_volt", { out: true }, "fixed-render") ?? "";
     assert(svgOn.includes('x1="40" y1="8" x2="48" y2="8"'), `FixedVolt deveria desenhar lead ate o pino, markup: ${svgOn}`);
     assert(svgOn.includes('fill="#ffa600"'), `FixedVolt ligado deveria ficar laranja por properties.out, markup: ${svgOn}`);
-    assert(svgOn.includes('fill="#dddddd"'), `FixedVolt deveria desenhar o botao de liga/desliga (cinza), markup: ${svgOn}`);
-    const svgOff = componentSymbolSvg("sources.fixed_volt", { out: false });
+    assert(svgOn.includes('fill="#dddddd"'), `FixedVolt deveria desenhar botao cinza no schematic, markup: ${svgOn}`);
+    const svgOff = packageSymbolSvg("sources.fixed_volt", { out: false }, "fixed-render-off") ?? "";
     assert(svgOff.includes('fill="#e6e6ff"'), `FixedVolt desligado deveria ficar lavanda por properties.out=false, markup: ${svgOff}`);
+  });
+
+  await test("sources.clock e sources.wave_gen vem do renderer package.simulidePaint com botao proxy", () => {
+    catalogPackage("sources.clock");
+    catalogPackage("sources.wave_gen");
+    const clockBox = componentBox("sources.clock");
+    const waveBox = componentBox("sources.wave_gen");
+    assert(clockBox.width === 48 && clockBox.height === 16, `Clock deveria incluir botao, recebido {${clockBox.width},${clockBox.height}}`);
+    assert(waveBox.width === 48 && waveBox.height === 16, `WaveGen deveria incluir botao, recebido {${waveBox.width},${waveBox.height}}`);
+    const clockSvg = packageSymbolSvg("sources.clock", { running: false }, "clock-render") ?? "";
+    const waveSvg = packageSymbolSvg("sources.wave_gen", { running: false, bipolar: false }, "wave-render") ?? "";
+    assert(clockSvg.includes('fill="#dddddd"'), `Clock deveria desenhar botao cinza, markup: ${clockSvg}`);
+    assert(waveSvg.includes('fill="#dddddd"'), `WaveGen deveria desenhar botao cinza, markup: ${waveSvg}`);
+    assert(clockSvg.includes('x1="40" y1="8" x2="48" y2="8"'), `Clock deveria manter lead de saida, markup: ${clockSvg}`);
+    assert(waveSvg.includes('x1="40" y1="8" x2="48" y2="8"'), `WaveGen deveria manter lead de saida, markup: ${waveSvg}`);
+  });
+
+  await test("sources.battery vem do renderer package.simulidePaint com filamentos horizontais", () => {
+    catalogPackage("sources.battery");
+    const svg = packageSymbolSvg("sources.battery", {}, "battery-render") ?? "";
+    assert(svg.includes('x1="0" y1="10" x2="9" y2="10"'), `Battery deveria desenhar filamento esquerdo ate a primeira placa, markup: ${svg}`);
+    assert(svg.includes('x1="24" y1="10" x2="32" y2="10"'), `Battery deveria desenhar filamento direito depois da ultima placa, markup: ${svg}`);
+  });
+
+  await test("sources.controlled_source trata sinais +/- como labels de Pin do SimulIDE e corpo sem fill branco", () => {
+    const controlledPkg = catalogPackage("sources.controlled_source");
+    assert(!controlledPkg.simulidePaint?.primitives.some((primitive) => primitive.kind === "text"), "Csource nao deveria carregar +/- como primitive text; no SimulIDE eles sao labels dos Pins");
+    assert(!controlledPkg.simulidePaint?.primitives.some((primitive) => primitive.kind === "line" && primitive.strokeWidth === 3), "Csource nao deveria carregar leads de Pin como primitive paint; no SimulIDE eles sao Pin::paint()");
+    const svg = packageSymbolSvg("sources.controlled_source", { controlPins: true, currSource: true, currControl: false }, "csource-render") ?? "";
+    assert(!svg.includes('fill="#ffffff"'), `Csource nao deveria preencher o corpo interno de branco, markup: ${svg}`);
+    assert(svg.includes('x1="0.0" y1="12.0" x2="7.3" y2="12.0"'), `lead esquerdo superior deveria seguir Pin::paint() com m_length-0.7, markup: ${svg}`);
+    assert(svg.includes('x1="24.0" y1="0.0" x2="24.0" y2="7.3"'), `lead superior deveria seguir Pin::paint() com origem no terminal eletrico, markup: ${svg}`);
+    assert(svg.includes('x="9.7" y="6.0" text-anchor="start" dominant-baseline="hanging" fill="#ff0000" style="font-size:9px">+</text>'), `label + deveria vir do pino cp como label de Pin do SimulIDE, markup: ${svg}`);
+    assert(svg.includes('x="9.7" y="22.0" text-anchor="start" dominant-baseline="hanging" fill="#000000" style="font-size:9px">–</text>'), `label - deveria vir do pino cm como label de Pin do SimulIDE, markup: ${svg}`);
+    assert(svg.includes('x="8" y="4" width="32" height="32"'), `m_area deve comecar em x=8 apos traduzir bounds -24..24, deixando labels fora da moldura, markup: ${svg}`);
+
+    const currentControlledSvg = packageSymbolSvg("sources.controlled_source", { controlPins: true, currSource: true, currControl: true }, "csource-current-render") ?? "";
+    assert(!currentControlledSvg.includes(">+</text>") && !currentControlledSvg.includes(">–</text>"), `CurrControl=true deveria limpar labels dos pinos como Csource::updateStep(), markup: ${currentControlledSvg}`);
   });
 
   await test("com package registrado, componentBox usa o layout resolvido (com folga pra leads)", () => {
@@ -247,6 +299,46 @@ import { PackageDescriptor } from "./model";
     assert(enabled.includes('href="data:image/png;base64,BBBB"'), `stateHref deveria trocar a imagem, markup: ${enabled}`);
     assert(!hasRealPinPosition("test.simulide-paint.conditional", "out", { enabled: false }), "pino condicional nao deveria ficar clicavel invisivel");
     assert(hasRealPinPosition("test.simulide-paint.conditional", "pin-1", { enabled: true }), "alias do pino condicional deveria ficar clicavel quando visivel");
+  });
+
+  await test("package.simulidePaint converte gradientes Qt em defs SVG escopados por componente", () => {
+    const pkg: PackageDescriptor = {
+      width: 32,
+      height: 16,
+      background: { kind: "none" },
+      pins: [{ id: "out", x: 32, y: 8, angle: 0, length: 0, label: "" }],
+      simulidePaint: {
+        version: 1,
+        bounds: { x: 0, y: 0, w: 32, h: 16 },
+        primitives: [
+          {
+            kind: "roundedRect",
+            x: 1,
+            y: 1,
+            w: 30,
+            h: 14,
+            rx: 2,
+            ry: 2,
+            stroke: "none",
+            fillGradient: {
+              kind: "linear",
+              x1: 16,
+              y1: 0,
+              x2: 16,
+              y2: 14,
+              stops: [
+                { offset: 0, color: "#ffffff" },
+                { offset: 1, color: "#c8c8c8" },
+              ],
+            },
+          },
+        ],
+      },
+    };
+    registerPackage("test.simulide-paint.gradient", pkg);
+    const svg = packageSymbolSvg("test.simulide-paint.gradient", {}, "gradient component") ?? "";
+    assert(svg.includes('<defs><linearGradient id="simulide-gradient_component-grad-0"'), `gradiente deveria ser emitido em defs com id escopado, markup: ${svg}`);
+    assert(svg.includes('fill="url(#simulide-gradient_component-grad-0)"'), `fill deveria referenciar o gradiente escopado, markup: ${svg}`);
   });
 
   await test("ViewSpec escopa gradientes por componentId e aplica rotate stateProjection", () => {

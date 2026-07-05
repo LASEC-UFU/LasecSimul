@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="824" viewBox="0 0 820 824">
+<rect width="100%" height="100%" fill="#f8f8e8"/>
+<defs>
+  <pattern id="grid" width="8" height="8" patternUnits="userSpaceOnUse">
+    <path d="M 8 0 L 0 0 0 8" fill="none" stroke="#d7d7c7" stroke-width="1"/>
+  </pattern>
+</defs>
+<rect x="0" y="0" width="820" height="824" fill="url(#grid)" opacity="0.85"/>
+<text x="24" y="28" font-family="Segoe UI,Arial" font-size="18" font-weight="700">Lote Fontes v2 - renderer compilado do LasecSimul</text>
+
+  <g transform="translate(24,48)">
+    <rect width="236" height="160" fill="#fff" stroke="#b8b8a8"/>
+    <text x="10" y="18" font-family="Segoe UI,Arial" font-size="10" fill="#111">sources.dc_voltage (nao-localizado)</text>
+    <text x="10" y="34" font-family="Consolas,monospace" font-size="9" fill="#555">box=64x48</text>
+    <g transform="translate(35,38) scale(2)">
+      <svg viewBox="0 0 64 48" width="64" height="48" overflow="visible"><line x1="6" y1="24" x2="18" y2="24" class="symbol-stroke"/><line x1="46" y1="24" x2="58" y2="24" class="symbol-stroke"/><line x1="18" y1="24" x2="18" y2="24" class="symbol-stroke"/><line x1="46" y1="24" x2="46" y2="24" class="symbol-stroke"/><circle cx="32" cy="24" r="14" class="symbol-stroke" fill="none"/><text x="25" y="29" text-anchor="middle" class="symbol-text">+</text><text x="39" y="29" text-anchor="middle" class="symbol-text">&#8722;</text><line x1="6" y1="17" x2="6" y2="31" class="symbol-stroke symbol-stroke--accent"/><line x1="52" y1="24" x2="64" y2="24" class="symbol-stroke symbol-stroke--accent"/></svg>
+    </g>
+    <text x="10" y="144" font-family="Consolas,monospace" font-size="8" fill="#9a4d00">nao localizado</text>
+  </g>
+
+  <g transform="translate(284,48)">
+    <rect width="236" height="160" fill="#fff" stroke="#b8b8a8"/>
+    <text x="10" y="18" font-family="Segoe UI,Arial" font-size="10" fill="#111">sources.fixed_volt (simulidePaint)</text>
+    <text x="10" y="34" font-family="Consolas,monospace" font-size="9" fill="#555">box=48x16</text>
+    <g transform="translate(24,61) scale(3.125)">
+      <svg viewBox="0 0 48 16" width="48" height="16" overflow="visible"><g transform="translate(0.000,0.000)"><g transform="scale(1.000000,1.000000)"><rect class="toggle-hit-zone" x="0" y="0" width="16" height="16" rx="2" ry="2" stroke="#000" fill="#dddddd" stroke-width="1.5"/><line x1="40" y1="8" x2="48" y2="8" stroke="#000" stroke-width="3" stroke-linecap="round"/><rect x="24" y="0" width="16" height="16" rx="2" ry="2" stroke="#000" fill="#ffa600" stroke-width="1.5"/></g></g></svg>
+    </g>
+    <text x="10" y="144" font-family="Consolas,monospace" font-size="8" fill="#126b2f">src/components/sources/fixedvolt.cpp</text>
+  </g>
+
+  <g transform="translate(544,48)">
+    <rect width="236" height="160" fill="#fff" stroke="#b8b8a8"/>
+    <text x="10" y="18" font-family="Segoe UI,Arial" font-size="10" fill="#111">sources.clock (simulidePaint)</text>
+    <text x="10" y="34" font-family="Consolas,monospace" font-size="9" fill="#555">box=48x16</text>
+    <g transform="translate(24,61) scale(3.125)">
+      <svg viewBox="0 0 48 16" width="48" height="16" overflow="visible"><g transform="translate(0.000,0.000)"><g transform="scale(1.000000,1.000000)"><rect class="toggle-hit-zone" x="0" y="0" width="16" height="16" rx="2" ry="2" stroke="#000" fill="#dddddd" stroke-width="1.5"/><line x1="40" y1="8" x2="48" y2="8" stroke="#000" stroke-width="3" stroke-linecap="round"/><rect x="18" y="0" width="22" height="16" rx="2" ry="2" stroke="#000" fill="#e6e6ff" stroke-width="1"/><path d="M 21 11 L 21 5 L 27 5 L 27 11 L 33 11 L 33 5 L 36 5" stroke="#000" fill="none" stroke-width="1" stroke-linecap="square" stroke-linejoin="miter"/></g></g></svg>
+    </g>
+    <text x="10" y="144" font-family="Consolas,monospace" font-size="8" fill="#126b2f">src/components/sources/clock.cpp + clock-base.cpp</text>
+  </g>
+
+  <g transform="translate(24,236)">
+    <rect width="236" height="160" fill="#fff" stroke="#b8b8a8"/>
+    <text x="10" y="18" font-family="Segoe UI,Arial" font-size="10" fill="#111">sources.wave_gen (simulidePaint)</text>
+    <text x="10" y="34" font-family="Consolas,monospace" font-size="9" fill="#555">box=48x16</text>
+    <g transform="translate(24,61) scale(3.125)">
+      <svg viewBox="0 0 48 16" width="48" height="16" overflow="visible"><g transform="translate(0.000,0.000)"><g transform="scale(1.000000,1.000000)"><rect class="toggle-hit-zone" x="0" y="0" width="16" height="16" rx="2" ry="2" stroke="#000" fill="#dddddd" stroke-width="1.5"/><line x1="40" y1="8" x2="48" y2="8" stroke="#000" stroke-width="3" stroke-linecap="round"/><rect x="18" y="0" width="22" height="16" rx="2" ry="2" stroke="#000" fill="#e6e6ff" stroke-width="1"/><image x="21" y="4" width="16" height="8" preserveAspectRatio="none" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFAAAAAqCAYAAAAkqNwKAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAABvgAAAb4BF1aGFAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAOySURBVGiB3dtviGZjGMfxz/OYtTGMXa0pliX/kt1WYlEopdlk/YnygpJ5YZPyztaWNwZFSpLyP2lTeCHZDa2IBhuxu7yRdrMW479kMMxgmseL29TMc99PPX/OOc85863z6sy5rt91nfPc93Vf9z01vVPDhbgeF2ANhvArDmI3XsWbmM3A35JiBB+j0cb1A7ZgsC9KS8ZReF57iWu+DmJj8ZLLw3p8obvkzV9zuBv1grVnTq3Dvx/Bi8IY18wc3sF7mMIwzsZFWNbC3jO4+f9nlzxX4G/pL2o7zmjx3CqM4fcWzz6m8xdZOTZiRhz8FEbbtLEG4wkbDTyYrdxysQ6/iYP+Hud0aGsZnk3YauDGjPSWimOkJ4yvcXKXNg/BCwmbUzizR72lYjneFQf6HU7t0fYAXknY/hSH92i7NDwuDvAvbMjI/krpr/v+jOz3lWuka7cbMvazQTw5/SuUP5XlePwiTuCdOfnbmvD1oTBWVo463hIHtFN+tdqA9Hp6c07+cuU2cSA/4dic/Z4rdGoW+v0RR+bsN1NOEK8W5nB5Qf4fEb+8sYJ8Z8IOcQCPFuh/WFywT8n/68+Eq8XJ+xYrCtZxR0LHUwVr6JhDsV8s/Mo+aDkME006ZoXlZFmoY63QJEHoEjcn76W+SAuMJvS81kc9CxnELkHTjLCNEb3xad2vc7Ogjk/ESby0j5rmuc9iTRPECby3X+oWMCJO4F797WCfIl41TRA+w/kbu5Rn02encrW8tif0bJm/uUoYGMu0R7FeXFx/JUw0RZPqDewTJuBS87RY+NaCNQzhm4SOTQXr6IrV+NNi4ZMWlBAF8KQ4eS8X6L9n7hEH8HBBvq8SlrPNL3B1Qf4z4Qhh/6W5uO50P6ZThoXTFM0v75ac/ebCreJA9gitsDyo4fWEzzdUdAt2QEhYyzIiY8YSvn7GcTn5K4Sz8I/FQc3I/qd8nXjcawgNl8rzgDiwA7LrGp0vLGX72dbLlUF8Jg5wh97Hw9OlJ41xFSiYO2GduDZs4Dndb0SdJl0sH1BszVkYN4mDbWCb1ifBWnGesP/SbGvSEjsp0cxD0kkcx4lt2tgs/TVPK0f7LFdqeEI6iX/gLqEYTrFWaNKmnp3GZZ2IqDJ1oeEw2uL+rNCi2yv8TIdwsXDoMxX7JK7F21kLLTN14bhwqnbr5PpcufZeCmdEOMDeTfK2qdgmfl4M4nbhCF47ifsIl/TisOpjYCsGhFl0k3Bs5CQcLUwuX+J94d80PhAS2TX/AXF65T+XhwPNAAAAAElFTkSuQmCC"/></g></g></svg>
+    </g>
+    <text x="10" y="144" font-family="Consolas,monospace" font-size="8" fill="#126b2f">src/components/sources/wavegen.cpp + clock-base.cpp</text>
+  </g>
+
+  <g transform="translate(284,236)">
+    <rect width="236" height="160" fill="#fff" stroke="#b8b8a8"/>
+    <text x="10" y="18" font-family="Segoe UI,Arial" font-size="10" fill="#111">sources.voltage_source (simulidePaint)</text>
+    <text x="10" y="34" font-family="Consolas,monospace" font-size="9" fill="#555">box=48x56</text>
+    <g transform="translate(57.85714285714289,38) scale(1.7142857142857142)">
+      <svg viewBox="0 0 48 56" width="48" height="56" overflow="visible"><g transform="translate(0.000,0.000)"><g transform="scale(1.000000,1.000000)"><defs><radialGradient id="simulide-lote-fontes-v2-sources_voltage_source-grad-0" cx="6" cy="6" r="28" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#ffffff"/><stop offset="80%" stop-color="#e6e6e1"/><stop offset="83%" stop-color="#dcdcd7"/><stop offset="100%" stop-color="#c8c8c3"/></radialGradient><linearGradient id="simulide-lote-fontes-v2-sources_voltage_source-grad-1" x1="20" y1="38" x2="20" y2="52" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#ffffff"/><stop offset="100%" stop-color="#c8c8c8"/></linearGradient></defs><line x1="40" y1="44" x2="48" y2="44" stroke="#000" stroke-width="3" stroke-linecap="round"/><rect x="0" y="0" width="40" height="56" rx="2" ry="2" stroke="#000" fill="#e6e6e6" stroke-width="1"/><line x1="12.5" y1="32.99" x2="10.5" y2="36.454" stroke="#ff0000" stroke-width="1"/><line x1="9.393" y1="30.607" x2="7.272" y2="32.728" stroke="#6e6e6e" stroke-width="1"/><line x1="7.01" y1="27.5" x2="4.412" y2="29" stroke="#6e6e6e" stroke-width="1"/><line x1="5.511" y1="23.882" x2="2.613" y2="24.659" stroke="#6e6e6e" stroke-width="1"/><line x1="5" y1="20" x2="2" y2="20" stroke="#6e6e6e" stroke-width="1"/><line x1="5.511" y1="16.118" x2="2.613" y2="15.341" stroke="#6e6e6e" stroke-width="1"/><line x1="7.01" y1="12.5" x2="4.412" y2="11" stroke="#6e6e6e" stroke-width="1"/><line x1="9.393" y1="9.393" x2="7.272" y2="7.272" stroke="#6e6e6e" stroke-width="1"/><line x1="12.5" y1="7.01" x2="11" y2="4.412" stroke="#6e6e6e" stroke-width="1"/><line x1="16.118" y1="5.511" x2="15.341" y2="2.613" stroke="#6e6e6e" stroke-width="1"/><line x1="20" y1="5" x2="20" y2="2" stroke="#6e6e6e" stroke-width="1"/><line x1="23.882" y1="5.511" x2="24.659" y2="2.613" stroke="#6e6e6e" stroke-width="1"/><line x1="27.5" y1="7.01" x2="29" y2="4.412" stroke="#6e6e6e" stroke-width="1"/><line x1="30.607" y1="9.393" x2="32.728" y2="7.272" stroke="#6e6e6e" stroke-width="1"/><line x1="32.99" y1="12.5" x2="35.588" y2="11" stroke="#6e6e6e" stroke-width="1"/><line x1="34.489" y1="16.118" x2="37.387" y2="15.341" stroke="#6e6e6e" stroke-width="1"/><line x1="35" y1="20" x2="38" y2="20" stroke="#6e6e6e" stroke-width="1"/><line x1="34.489" y1="23.882" x2="37.387" y2="24.659" stroke="#6e6e6e" stroke-width="1"/><line x1="32.99" y1="27.5" x2="35.588" y2="29" stroke="#6e6e6e" stroke-width="1"/><line x1="30.607" y1="30.607" x2="32.728" y2="32.728" stroke="#6e6e6e" stroke-width="1"/><line x1="27.5" y1="32.99" x2="29" y2="35.588" stroke="#6e6e6e" stroke-width="1"/><ellipse cx="20" cy="20" rx="14" ry="14" stroke="#464646" fill="none" stroke-width="1"/><ellipse cx="20" cy="20" rx="13" ry="13" stroke="#ffffff" fill="none" stroke-width="1"/><ellipse cx="20" cy="20" rx="13" ry="13" stroke="none" fill="url(#simulide-lote-fontes-v2-sources_voltage_source-grad-0)" stroke-width="1"/><ellipse cx="15.917" cy="27.073" rx="2.833" ry="2.833" stroke="#f0f0e6" fill="#d2d2c8" stroke-width="1"/><ellipse cx="15.917" cy="27.073" rx="2.333" ry="2.333" stroke="#464646" fill="#d2d2c8" stroke-width="1"/><ellipse cx="15.917" cy="27.073" rx="2.133" ry="2.133" stroke="none" fill="#d2d2c8" stroke-width="1"/><rect x="4.8" y="38.8" width="30.4" height="14.4" rx="2" ry="2" stroke="#6e6e6e" fill="none" stroke-width="1"/><rect x="5" y="39" width="30" height="14" rx="2" ry="2" stroke="none" fill="url(#simulide-lote-fontes-v2-sources_voltage_source-grad-1)" stroke-width="1"/><text x="20" y="48.8" text-anchor="middle" font-size="8" font-family="Segoe UI" fill="#000014">---V</text></g></g></svg>
+    </g>
+    <text x="10" y="144" font-family="Consolas,monospace" font-size="8" fill="#126b2f">src/components/sources/varsource.cpp + voltsource.cpp + src/gui/sourcewidget.cpp + customdial.cpp + custombutton.cpp</text>
+  </g>
+
+  <g transform="translate(544,236)">
+    <rect width="236" height="160" fill="#fff" stroke="#b8b8a8"/>
+    <text x="10" y="18" font-family="Segoe UI,Arial" font-size="10" fill="#111">sources.current_source (simulidePaint)</text>
+    <text x="10" y="34" font-family="Consolas,monospace" font-size="9" fill="#555">box=48x56</text>
+    <g transform="translate(57.85714285714289,38) scale(1.7142857142857142)">
+      <svg viewBox="0 0 48 56" width="48" height="56" overflow="visible"><g transform="translate(0.000,0.000)"><g transform="scale(1.000000,1.000000)"><defs><radialGradient id="simulide-lote-fontes-v2-sources_current_source-grad-0" cx="6" cy="6" r="28" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#ffffff"/><stop offset="80%" stop-color="#e6e6e1"/><stop offset="83%" stop-color="#dcdcd7"/><stop offset="100%" stop-color="#c8c8c3"/></radialGradient><linearGradient id="simulide-lote-fontes-v2-sources_current_source-grad-1" x1="20" y1="38" x2="20" y2="52" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#ffffff"/><stop offset="100%" stop-color="#c8c8c8"/></linearGradient></defs><line x1="40" y1="44" x2="48" y2="44" stroke="#000" stroke-width="3" stroke-linecap="round"/><rect x="0" y="0" width="40" height="56" rx="2" ry="2" stroke="#000" fill="#e6e6e6" stroke-width="1"/><line x1="12.5" y1="32.99" x2="10.5" y2="36.454" stroke="#ff0000" stroke-width="1"/><line x1="9.393" y1="30.607" x2="7.272" y2="32.728" stroke="#6e6e6e" stroke-width="1"/><line x1="7.01" y1="27.5" x2="4.412" y2="29" stroke="#6e6e6e" stroke-width="1"/><line x1="5.511" y1="23.882" x2="2.613" y2="24.659" stroke="#6e6e6e" stroke-width="1"/><line x1="5" y1="20" x2="2" y2="20" stroke="#6e6e6e" stroke-width="1"/><line x1="5.511" y1="16.118" x2="2.613" y2="15.341" stroke="#6e6e6e" stroke-width="1"/><line x1="7.01" y1="12.5" x2="4.412" y2="11" stroke="#6e6e6e" stroke-width="1"/><line x1="9.393" y1="9.393" x2="7.272" y2="7.272" stroke="#6e6e6e" stroke-width="1"/><line x1="12.5" y1="7.01" x2="11" y2="4.412" stroke="#6e6e6e" stroke-width="1"/><line x1="16.118" y1="5.511" x2="15.341" y2="2.613" stroke="#6e6e6e" stroke-width="1"/><line x1="20" y1="5" x2="20" y2="2" stroke="#6e6e6e" stroke-width="1"/><line x1="23.882" y1="5.511" x2="24.659" y2="2.613" stroke="#6e6e6e" stroke-width="1"/><line x1="27.5" y1="7.01" x2="29" y2="4.412" stroke="#6e6e6e" stroke-width="1"/><line x1="30.607" y1="9.393" x2="32.728" y2="7.272" stroke="#6e6e6e" stroke-width="1"/><line x1="32.99" y1="12.5" x2="35.588" y2="11" stroke="#6e6e6e" stroke-width="1"/><line x1="34.489" y1="16.118" x2="37.387" y2="15.341" stroke="#6e6e6e" stroke-width="1"/><line x1="35" y1="20" x2="38" y2="20" stroke="#6e6e6e" stroke-width="1"/><line x1="34.489" y1="23.882" x2="37.387" y2="24.659" stroke="#6e6e6e" stroke-width="1"/><line x1="32.99" y1="27.5" x2="35.588" y2="29" stroke="#6e6e6e" stroke-width="1"/><line x1="30.607" y1="30.607" x2="32.728" y2="32.728" stroke="#6e6e6e" stroke-width="1"/><line x1="27.5" y1="32.99" x2="29" y2="35.588" stroke="#6e6e6e" stroke-width="1"/><ellipse cx="20" cy="20" rx="14" ry="14" stroke="#464646" fill="none" stroke-width="1"/><ellipse cx="20" cy="20" rx="13" ry="13" stroke="#ffffff" fill="none" stroke-width="1"/><ellipse cx="20" cy="20" rx="13" ry="13" stroke="none" fill="url(#simulide-lote-fontes-v2-sources_current_source-grad-0)" stroke-width="1"/><ellipse cx="15.917" cy="27.073" rx="2.833" ry="2.833" stroke="#f0f0e6" fill="#d2d2c8" stroke-width="1"/><ellipse cx="15.917" cy="27.073" rx="2.333" ry="2.333" stroke="#464646" fill="#d2d2c8" stroke-width="1"/><ellipse cx="15.917" cy="27.073" rx="2.133" ry="2.133" stroke="none" fill="#d2d2c8" stroke-width="1"/><rect x="4.8" y="38.8" width="30.4" height="14.4" rx="2" ry="2" stroke="#6e6e6e" fill="none" stroke-width="1"/><rect x="5" y="39" width="30" height="14" rx="2" ry="2" stroke="none" fill="url(#simulide-lote-fontes-v2-sources_current_source-grad-1)" stroke-width="1"/><text x="20" y="48.8" text-anchor="middle" font-size="8" font-family="Segoe UI" fill="#000014">---A</text></g></g></svg>
+    </g>
+    <text x="10" y="144" font-family="Consolas,monospace" font-size="8" fill="#126b2f">src/components/sources/varsource.cpp + currsource.cpp + src/gui/sourcewidget.cpp + customdial.cpp + custombutton.cpp</text>
+  </g>
+
+  <g transform="translate(24,424)">
+    <rect width="236" height="160" fill="#fff" stroke="#b8b8a8"/>
+    <text x="10" y="18" font-family="Segoe UI,Arial" font-size="10" fill="#111">sources.controlled_source (simulidePaint)</text>
+    <text x="10" y="34" font-family="Consolas,monospace" font-size="9" fill="#555">box=48x40</text>
+    <g transform="translate(41.400000000000006,38) scale(2.4)">
+      <svg viewBox="0 0 48 40" width="48" height="40" overflow="visible"><g transform="translate(0.000,0.000)"><g transform="scale(1.000000,1.000000)"><rect x="8" y="4" width="32" height="32" stroke="#000" fill="none" stroke-width="1"/><polygon points="16,20 24,7 32,20 24,33" stroke="#000" fill="none" stroke-width="2"/><line x1="24" y1="15" x2="24" y2="25" stroke="#000" stroke-width="1"/><line x1="22" y1="22" x2="24" y2="25" stroke="#000" stroke-width="1"/><line x1="26" y1="22" x2="24" y2="25" stroke="#000" stroke-width="1"/></g></g><line x1="0.0" y1="12.0" x2="7.3" y2="12.0" stroke="#000" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><text x="9.7" y="6.0" text-anchor="start" dominant-baseline="hanging" fill="#ff0000" style="font-size:9px">+</text><line x1="0.0" y1="28.0" x2="7.3" y2="28.0" stroke="#000" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><text x="9.7" y="22.0" text-anchor="start" dominant-baseline="hanging" fill="#000000" style="font-size:9px">–</text><line x1="24.0" y1="0.0" x2="24.0" y2="7.3" stroke="#000" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><line x1="24.0" y1="40.0" x2="24.0" y2="32.7" stroke="#000" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </g>
+    <text x="10" y="144" font-family="Consolas,monospace" font-size="8" fill="#126b2f">src/components/sources/csource.cpp</text>
+  </g>
+
+  <g transform="translate(284,424)">
+    <rect width="236" height="160" fill="#fff" stroke="#b8b8a8"/>
+    <text x="10" y="18" font-family="Segoe UI,Arial" font-size="10" fill="#111">sources.battery (simulidePaint)</text>
+    <text x="10" y="34" font-family="Consolas,monospace" font-size="9" fill="#555">box=32x20</text>
+    <g transform="translate(24,39.125) scale(4.6875)">
+      <svg viewBox="0 0 32 20" width="32" height="20" overflow="visible"><g transform="translate(0.000,0.000)"><g transform="scale(1.000000,1.000000)"><line x1="0" y1="10" x2="9" y2="10" stroke="#000" stroke-width="1.5" stroke-linecap="round"/><line x1="9" y1="2" x2="9" y2="18" stroke="#000" stroke-width="3" stroke-linecap="round"/><line x1="14" y1="7" x2="14" y2="13" stroke="#000" stroke-width="3" stroke-linecap="round"/><line x1="19" y1="2" x2="19" y2="18" stroke="#000" stroke-width="3" stroke-linecap="round"/><line x1="24" y1="7" x2="24" y2="13" stroke="#000" stroke-width="3" stroke-linecap="round"/><line x1="24" y1="10" x2="32" y2="10" stroke="#000" stroke-width="1.5" stroke-linecap="round"/></g></g></svg>
+    </g>
+    <text x="10" y="144" font-family="Consolas,monospace" font-size="8" fill="#126b2f">src/components/sources/battery.cpp</text>
+  </g>
+
+  <g transform="translate(544,424)">
+    <rect width="236" height="160" fill="#fff" stroke="#b8b8a8"/>
+    <text x="10" y="18" font-family="Segoe UI,Arial" font-size="10" fill="#111">sources.rail (simulidePaint)</text>
+    <text x="10" y="34" font-family="Consolas,monospace" font-size="9" fill="#555">box=20x16</text>
+    <g transform="translate(39,38) scale(6)">
+      <svg viewBox="0 0 20 16" width="20" height="16" overflow="visible"><g transform="translate(0.000,0.000)"><g transform="scale(1.000000,1.000000)"><line x1="13" y1="8" x2="20" y2="8" stroke="#000" stroke-width="3" stroke-linecap="round"/><polygon points="2.5,1.5 2.5,14.5 13,9 13,7" stroke="#000" fill="#ffa600" stroke-width="1" stroke-linejoin="round"/></g></g></svg>
+    </g>
+    <text x="10" y="144" font-family="Consolas,monospace" font-size="8" fill="#126b2f">src/components/sources/rail.cpp</text>
+  </g>
+
+  <g transform="translate(24,612)">
+    <rect width="236" height="160" fill="#fff" stroke="#b8b8a8"/>
+    <text x="10" y="18" font-family="Segoe UI,Arial" font-size="10" fill="#111">other.ground (simulidePaint)</text>
+    <text x="10" y="34" font-family="Consolas,monospace" font-size="9" fill="#555">box=16x18</text>
+    <g transform="translate(56.33333333333334,38) scale(5.333333333333333)">
+      <svg viewBox="0 0 16 18" width="16" height="18" overflow="visible"><g transform="translate(0.000,0.000)"><g transform="scale(1.000000,1.000000)"><line x1="8" y1="0" x2="8" y2="8" stroke="#000" stroke-width="3" stroke-linecap="round"/><line x1="1.4" y1="8" x2="14.6" y2="8" stroke="#000" stroke-width="2.5"/><line x1="3.7" y1="12" x2="12.3" y2="12" stroke="#000" stroke-width="2.5"/><line x1="6.1" y1="16" x2="9.9" y2="16" stroke="#000" stroke-width="2.5"/></g></g></svg>
+    </g>
+    <text x="10" y="144" font-family="Consolas,monospace" font-size="8" fill="#126b2f">src/components/sources/ground.cpp</text>
+  </g>
+</svg>

@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { PackageDescriptor, WebviewComponentCatalogEntry } from "../ui/webview/model";
+import { PackageDescriptor, PropertySchemaEntry, WebviewComponentCatalogEntry } from "../ui/webview/model";
 import { defaultComponentCatalog } from "../ui/webview/catalog";
 
 export type RegisteredSourceKind = "abi-device" | "mcu-adapter" | "subcircuit-file";
@@ -25,6 +25,7 @@ export interface UnifiedCatalogItem {
   iconFilePath?: string;
   symbolSvg?: string;
   package?: PackageDescriptor;
+  propertySchema?: PropertySchemaEntry[];
   folderPath?: string[];
   category?: string;
   subcategory?: string;
@@ -114,6 +115,7 @@ function entryToWebview(item: UnifiedCatalogItem): WebviewComponentCatalogEntry 
     iconFilePath: item.iconFilePath,
     symbolSvg: item.symbolSvg,
     package: item.package,
+    propertySchema: item.propertySchema,
     pinCount: item.pinCount,
     pinIds: item.pinIds,
     defaultProperties: item.defaultProperties ?? {},

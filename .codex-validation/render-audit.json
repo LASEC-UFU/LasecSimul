@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-05T05:35:13.648Z",
+  "generatedAt": "2026-07-05T09:45:06.243Z",
   "simulideSourceRoot": ".codex-simulide-src",
   "summary": {
     "total": 132,
@@ -812,7 +812,7 @@
       "manifestPath": "project\\schema\\component-catalog.json",
       "visualOrigin": "simulidePaint",
       "fidelityStatus": "candidate-needs-visual-proof",
-      "simulideSource": "src/components/sources/varsource.cpp + voltsource.cpp",
+      "simulideSource": "src/components/sources/varsource.cpp + voltsource.cpp + src/gui/sourcewidget.cpp + customdial.cpp + custombutton.cpp",
       "missingDetails": [
         "validar pixel contra SimulIDE",
         "validar hit-test/shape",
@@ -826,7 +826,7 @@
       "manifestPath": "project\\schema\\component-catalog.json",
       "visualOrigin": "simulidePaint",
       "fidelityStatus": "candidate-needs-visual-proof",
-      "simulideSource": "src/components/sources/varsource.cpp + currsource.cpp",
+      "simulideSource": "src/components/sources/varsource.cpp + currsource.cpp + src/gui/sourcewidget.cpp + customdial.cpp + custombutton.cpp",
       "missingDetails": [
         "validar pixel contra SimulIDE",
         "validar hit-test/shape",
