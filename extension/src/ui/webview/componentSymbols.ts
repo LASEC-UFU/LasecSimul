@@ -1759,6 +1759,12 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
       const text = typeof properties?.text === "string" ? properties.text : "Texto";
       const fontSize = typeof properties?.fontSize === "number" ? properties.fontSize : 11;
       const color = typeof properties?.color === "string" ? properties.color : "currentColor";
+      const isLinkedPinLabel = typeof properties?.linkedPinComponentId === "string" && properties.linkedPinComponentId.trim().length > 0;
+      if (isLinkedPinLabel) {
+        // Label de pino do `other.package_pin` (autorias de símbolo/subcircuito) é equivalente ao
+        // `Pin::m_label` do SimulIDE: somente texto, sem placa amarela de fundo.
+        return `<text x="${midX}" y="${yMid + fontSize / 3}" text-anchor="middle" font-size="${fontSize}" fill="${color}">${escapeXmlText(text)}</text>`;
+      }
       return (
         `<rect x="0.5" y="0.5" width="${Math.max(0, box.width - 1)}" height="${Math.max(0, box.height - 1)}" fill="#fffcdc" stroke="currentColor" stroke-width="1"/>` +
         `<text x="${midX}" y="${yMid + fontSize / 3}" text-anchor="middle" font-size="${fontSize}" fill="${color}">${escapeXmlText(text)}</text>`

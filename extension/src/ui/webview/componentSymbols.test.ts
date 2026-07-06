@@ -232,6 +232,29 @@ import { PackageDescriptor } from "./model";
     assert(Math.abs(pin.x - 38) < 0.001, `pino deveria escalar junto com a largura visual (38), recebido ${pin.x}`);
   });
 
+  await test("package com schematicWidth/schematicHeight tambem escala font-size e stroke-width do rotulo/lead (bug dos retangulos amarelos)", () => {
+    // SimulIDE real: Pin::paint() usa font.setPixelSize(7) fixo -- a UNICA coisa que reescala
+    // fonte+traco junto com a posicao e o zoom do QGraphicsView, que escala a cena INTEIRA
+    // uniformemente (ver .spec/lasecsimul-subcircuits.spec secao 14). Sem escalar o font-size junto
+    // com a posicao comprimida por schematicWidth/schematicHeight, rotulos de pinos densos (ex:
+    // ESP32-WROOM-32, 14 pinos por lado) colam uns nos outros e formam um bloco solido.
+    registerPackage("test.scaled-labels", { ...pkg, schematicWidth: 30, schematicHeight: 20 });
+    const svg = packageSymbolSvg("test.scaled-labels") ?? "";
+    const scale = Math.sqrt((30 / 60) * (20 / 40)); // 0.5
+    const fontSizes = [...svg.matchAll(/font-size:([\d.]+)px/g)].map((m) => Number(m[1]));
+    assert(fontSizes.length > 0, "deveria ter pelo menos um rotulo de pino");
+    assert(fontSizes.every((size) => Math.abs(size - 7 * scale) < 0.01), `font-size deveria escalar por ${scale}, recebido ${fontSizes.join(",")}`);
+    const strokeWidths = [...svg.matchAll(/stroke-width="([\d.]+)"/g)].map((m) => Number(m[1]));
+    assert(strokeWidths.includes(Number((3 * scale).toFixed(2))), `lead stroke-width deveria escalar por ${scale}, recebido ${strokeWidths.join(",")}`);
+
+    // Sem schematicWidth/schematicHeight (scale=1, a maioria esmagadora dos package), a formatacao
+    // deve ficar BYTE-A-BYTE identica a antes desta correcao -- "7px"/"3", nunca "7.00px"/"3.00".
+    registerPackage("test.unscaled-labels", pkg);
+    const unscaledSvg = packageSymbolSvg("test.unscaled-labels") ?? "";
+    assert(unscaledSvg.includes("font-size:7px"), `sem escala, font-size deveria continuar "7px" sem casas decimais, markup: ${unscaledSvg}`);
+    assert(unscaledSvg.includes('stroke-width="3"'), `sem escala, stroke-width deveria continuar "3" sem casas decimais, markup: ${unscaledSvg}`);
+  });
+
   await test("pinLocalPosition casa por id, na ponta real do lead (corpo + length na direção do angle)", () => {
     registerPackage("test.example", pkg);
     const outPos = pinLocalPosition("out", 0, 3, "test.example");

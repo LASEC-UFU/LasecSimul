@@ -12,11 +12,7 @@
     {
       "id": "mcu1",
       "typeId": "espressif.esp32",
-      "properties": {
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611
-      },
+      "properties": {},
       "visual": {
         "x": 553,
         "y": 182,
@@ -30,9 +26,6 @@
       "id": "gnd1",
       "typeId": "other.ground",
       "properties": {
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__ui_idLabelX": 5,
         "__ui_idLabelY": 33
       },
@@ -50,9 +43,6 @@
       "typeId": "passive.resistor",
       "properties": {
         "resistance": 10000,
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__ui_idLabelX": -1,
         "__ui_idLabelY": -25,
         "__ui_valueLabelX": 17,
@@ -70,9 +60,6 @@
       "typeId": "passive.resistor",
       "properties": {
         "resistance": 10000,
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__ui_valueLabelX": 16,
         "__ui_valueLabelY": 38,
         "__ui_idLabelX": 15,
@@ -89,9 +76,6 @@
       "id": "button_en",
       "typeId": "switches.push",
       "properties": {
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__ui_idLabelX": 16,
         "__ui_idLabelY": 56
       },
@@ -108,9 +92,6 @@
       "id": "button_boot",
       "typeId": "switches.push",
       "properties": {
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "closed": false,
         "__ui_idLabelX": 11,
         "__ui_idLabelY": 59
@@ -129,9 +110,6 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "GND",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": false
       },
       "visual": {
@@ -148,14 +126,11 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "3V3",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": false
       },
       "visual": {
-        "x": 337.90891177825347,
-        "y": 137.70632735551914,
+        "x": 338,
+        "y": 138,
         "rotation": 0,
         "flipH": false,
         "flipV": false
@@ -167,9 +142,6 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "5V",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": false
       },
       "visual": {
@@ -186,9 +158,6 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "G23",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": true
       },
       "visual": {
@@ -205,9 +174,6 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "G22",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": true
       },
       "visual": {
@@ -224,9 +190,6 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "VP",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": false
       },
       "visual": {
@@ -243,9 +206,6 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "TX",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": true
       },
       "visual": {
@@ -262,9 +222,6 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "VN",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": false
       },
       "visual": {
@@ -281,9 +238,6 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "RX",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": true
       },
       "visual": {
@@ -300,9 +254,6 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "G34",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": false
       },
       "visual": {
@@ -319,9 +270,6 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "G21",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": true
       },
       "visual": {
@@ -338,9 +286,6 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "G35",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": false
       },
       "visual": {
@@ -357,9 +302,6 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "G32",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": false
       },
       "visual": {
@@ -376,9 +318,6 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "G19",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": true
       },
       "visual": {
@@ -395,9 +334,6 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "G33",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": false
       },
       "visual": {
@@ -414,9 +350,6 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "G18",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": true
       },
       "visual": {
@@ -433,9 +366,6 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "G25",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": false
       },
       "visual": {
@@ -452,9 +382,6 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "G05",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": true
       },
       "visual": {
@@ -471,9 +398,6 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "G26",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": false
       },
       "visual": {
@@ -490,9 +414,6 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "G17",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": true
       },
       "visual": {
@@ -509,9 +430,6 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "G27",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": false
       },
       "visual": {
@@ -528,9 +446,6 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "G16",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": true
       },
       "visual": {
@@ -547,9 +462,6 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "G14",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": false
       },
       "visual": {
@@ -566,9 +478,6 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "G04",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": false
       },
       "visual": {
@@ -585,9 +494,6 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "G12",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": false
       },
       "visual": {
@@ -604,9 +510,6 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "G00",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": false
       },
       "visual": {
@@ -623,9 +526,6 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "G02",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": false
       },
       "visual": {
@@ -642,9 +542,6 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "G13",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": false
       },
       "visual": {
@@ -661,9 +558,6 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "G15",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": false
       },
       "visual": {
@@ -680,9 +574,6 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "D2",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": true
       },
       "visual": {
@@ -699,9 +590,6 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "D1",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": true
       },
       "visual": {
@@ -718,9 +606,6 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "D3",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": true
       },
       "visual": {
@@ -737,9 +622,6 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "D0",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": true
       },
       "visual": {
@@ -756,9 +638,6 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "CM",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": true
       },
       "visual": {
@@ -775,9 +654,6 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "CK",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": true
       },
       "visual": {
@@ -794,9 +670,6 @@
       "typeId": "connectors.tunnel",
       "properties": {
         "name": "EN",
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611,
         "__simulideTunnelRotated": false
       },
       "visual": {
@@ -814,10 +687,7 @@
       "properties": {
         "voltage": 3.3,
         "__ui_idLabelX": -186,
-        "__ui_idLabelY": -27,
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611
+        "__ui_idLabelY": -27
       },
       "visual": {
         "x": 408,
@@ -832,14 +702,11 @@
       "typeId": "sources.rail",
       "properties": {
         "voltage": 5,
-        "__ui_idLabelRotation": 0,
-        "__simulideQtOrigin": true,
-        "__simulideSceneScaleX": 2.714442258,
-        "__simulideSceneScaleY": 1.719123611
+        "__ui_idLabelRotation": 0
       },
       "visual": {
-        "x": 482.70632735551914,
-        "y": 68.10408951367381,
+        "x": 483,
+        "y": 68,
         "rotation": 90
       },
       "exposed": false
@@ -1598,18 +1465,12 @@
   "authoringScene": {
     "package": {
       "x": 70,
-      "y": 232
+      "y": 224
     },
     "source": {
       "format": "simulide.sim2",
       "path": "C:/SourceCode/SimulIDE_2-R260501_Win64/data/esp32/devkitC.sim2",
       "note": "Cena coletada do SimulIDE; components usam Pos/rotation/hflip/vflip e wires usam pointList completo via grafo de Connector/Node."
-    },
-    "transform": {
-      "scaleX": 2.714442258,
-      "translateX": 216.243538098,
-      "scaleY": 1.719123611,
-      "translateY": 326.396463821
     },
     "components": [
       {
@@ -1661,6 +1522,10 @@
         "x": 417,
         "y": 587,
         "rotation": 0,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": false
+        },
         "flipH": false
       },
       {
@@ -1668,6 +1533,10 @@
         "x": 362,
         "y": 144,
         "rotation": 0,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": false
+        },
         "flipH": false
       },
       {
@@ -1675,6 +1544,10 @@
         "x": 360,
         "y": 167,
         "rotation": 0,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": false
+        },
         "flipH": false
       },
       {
@@ -1682,6 +1555,10 @@
         "x": 951,
         "y": 223,
         "rotation": 0,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": true
+        },
         "flipH": true
       },
       {
@@ -1689,6 +1566,10 @@
         "x": 814,
         "y": 155,
         "rotation": 270,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": true
+        },
         "flipH": true
       },
       {
@@ -1696,6 +1577,10 @@
         "x": 509,
         "y": 265,
         "rotation": 0,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": false
+        },
         "flipH": false
       },
       {
@@ -1703,6 +1588,10 @@
         "x": 770,
         "y": 154,
         "rotation": 270,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": true
+        },
         "flipH": true
       },
       {
@@ -1710,6 +1599,10 @@
         "x": 509,
         "y": 306,
         "rotation": 0,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": false
+        },
         "flipH": false
       },
       {
@@ -1717,6 +1610,10 @@
         "x": 792,
         "y": 155,
         "rotation": 270,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": true
+        },
         "flipH": true
       },
       {
@@ -1724,6 +1621,10 @@
         "x": 509,
         "y": 333,
         "rotation": 0,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": false
+        },
         "flipH": false
       },
       {
@@ -1731,6 +1632,10 @@
         "x": 748,
         "y": 155,
         "rotation": 270,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": true
+        },
         "flipH": true
       },
       {
@@ -1738,6 +1643,10 @@
         "x": 509,
         "y": 347,
         "rotation": 0,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": false
+        },
         "flipH": false
       },
       {
@@ -1745,6 +1654,10 @@
         "x": 509,
         "y": 361,
         "rotation": 0,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": false
+        },
         "flipH": false
       },
       {
@@ -1752,6 +1665,10 @@
         "x": 835,
         "y": 155,
         "rotation": 270,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": true
+        },
         "flipH": true
       },
       {
@@ -1759,6 +1676,10 @@
         "x": 596,
         "y": 455,
         "rotation": 270,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": false
+        },
         "flipH": false
       },
       {
@@ -1766,6 +1687,10 @@
         "x": 951,
         "y": 237,
         "rotation": 0,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": true
+        },
         "flipH": true
       },
       {
@@ -1773,6 +1698,10 @@
         "x": 618,
         "y": 455,
         "rotation": 270,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": false
+        },
         "flipH": false
       },
       {
@@ -1780,6 +1709,10 @@
         "x": 951,
         "y": 251,
         "rotation": 0,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": true
+        },
         "flipH": true
       },
       {
@@ -1787,6 +1720,10 @@
         "x": 640,
         "y": 455,
         "rotation": 270,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": false
+        },
         "flipH": false
       },
       {
@@ -1794,6 +1731,10 @@
         "x": 951,
         "y": 347,
         "rotation": 0,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": true
+        },
         "flipH": true
       },
       {
@@ -1801,6 +1742,10 @@
         "x": 661,
         "y": 455,
         "rotation": 270,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": false
+        },
         "flipH": false
       },
       {
@@ -1808,6 +1753,10 @@
         "x": 951,
         "y": 375,
         "rotation": 0,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": true
+        },
         "flipH": true
       },
       {
@@ -1815,6 +1764,10 @@
         "x": 683,
         "y": 455,
         "rotation": 270,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": false
+        },
         "flipH": false
       },
       {
@@ -1822,6 +1775,10 @@
         "x": 835,
         "y": 456,
         "rotation": 270,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": false
+        },
         "flipH": false
       },
       {
@@ -1829,6 +1786,10 @@
         "x": 705,
         "y": 455,
         "rotation": 270,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": false
+        },
         "flipH": false
       },
       {
@@ -1836,6 +1797,10 @@
         "x": 813,
         "y": 553,
         "rotation": 270,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": false
+        },
         "flipH": false
       },
       {
@@ -1843,6 +1808,10 @@
         "x": 792,
         "y": 455,
         "rotation": 270,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": false
+        },
         "flipH": false
       },
       {
@@ -1850,6 +1819,10 @@
         "x": 748,
         "y": 455,
         "rotation": 270,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": false
+        },
         "flipH": false
       },
       {
@@ -1857,6 +1830,10 @@
         "x": 770,
         "y": 455,
         "rotation": 270,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": false
+        },
         "flipH": false
       },
       {
@@ -1864,6 +1841,10 @@
         "x": 951,
         "y": 333,
         "rotation": 0,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": true
+        },
         "flipH": true
       },
       {
@@ -1871,6 +1852,10 @@
         "x": 951,
         "y": 265,
         "rotation": 0,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": true
+        },
         "flipH": true
       },
       {
@@ -1878,6 +1863,10 @@
         "x": 951,
         "y": 320,
         "rotation": 0,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": true
+        },
         "flipH": true
       },
       {
@@ -1885,6 +1874,10 @@
         "x": 951,
         "y": 278,
         "rotation": 0,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": true
+        },
         "flipH": true
       },
       {
@@ -1892,6 +1885,10 @@
         "x": 951,
         "y": 306,
         "rotation": 0,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": true
+        },
         "flipH": true
       },
       {
@@ -1899,7 +1896,22 @@
         "x": 951,
         "y": 292,
         "rotation": 0,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": true
+        },
         "flipH": true
+      },
+      {
+        "componentId": "tunnel_EN",
+        "x": 320,
+        "y": 310,
+        "rotation": 0,
+        "properties": {
+          "__simulideQtOrigin": true,
+          "__simulideTunnelRotated": false
+        },
+        "flipH": false
       },
       {
         "componentId": "component-1783345154513-836838",
@@ -2269,367 +2281,367 @@
       {
         "id": "GND1",
         "x": 308,
-        "y": 40.97727272727273,
+        "y": 68.29545454545455,
         "angle": 0,
         "length": 8,
         "label": "Gnd",
-        "labelX": 323.785,
-        "labelY": 40.40814393939394
+        "labelX": 274.785,
+        "labelY": 77.97064393939394
       },
       {
         "id": "3V3",
         "x": 0,
-        "y": 37.5625,
+        "y": 64.88068181818181,
         "angle": 180,
         "length": 8,
         "label": "3V3",
         "labelX": -19.215000000000003,
-        "labelY": 36.99337121212121
+        "labelY": 64.31155303030302
       },
       {
         "id": "G23",
         "x": 308,
-        "y": 68.29545454545455,
+        "y": 95.61363636363636,
         "angle": 0,
         "length": 8,
         "label": "23",
-        "labelX": 325.5,
-        "labelY": 67.72632575757575
+        "labelX": 283.5,
+        "labelY": 105.28882575757575
       },
       {
         "id": "EN",
         "x": 0,
-        "y": 64.88068181818181,
+        "y": 92.19886363636363,
         "angle": 180,
         "length": 8,
         "label": "En",
         "labelX": -17.5,
-        "labelY": 64.31155303030302
+        "labelY": 91.62973484848484
       },
       {
         "id": "G22",
         "x": 308,
-        "y": 99.02840909090908,
+        "y": 126.3465909090909,
         "angle": 0,
         "length": 8,
         "label": "22",
-        "labelX": 325.5,
-        "labelY": 98.4592803030303
+        "labelX": 283.5,
+        "labelY": 132.60700757575756
       },
       {
         "id": "VP",
         "x": 0,
-        "y": 95.61363636363636,
+        "y": 122.93181818181817,
         "angle": 180,
         "length": 8,
         "label": "VP",
         "labelX": -17.5,
-        "labelY": 95.04450757575756
+        "labelY": 122.36268939393939
       },
       {
         "id": "TX",
         "x": 308,
-        "y": 129.76136363636363,
+        "y": 157.07954545454544,
         "angle": 0,
         "length": 8,
         "label": "Tx",
-        "labelX": 325.5,
-        "labelY": 129.19223484848484
+        "labelX": 283.5,
+        "labelY": 163.33996212121212
       },
       {
         "id": "VN",
         "x": 0,
-        "y": 126.3465909090909,
+        "y": 153.66477272727272,
         "angle": 180,
         "length": 8,
         "label": "VN",
         "labelX": -17.5,
-        "labelY": 125.77746212121212
+        "labelY": 153.09564393939394
       },
       {
         "id": "RX",
         "x": 308,
-        "y": 157.07954545454544,
+        "y": 184.39772727272725,
         "angle": 0,
         "length": 8,
         "label": "Rx",
-        "labelX": 325.5,
-        "labelY": 156.51041666666666
+        "labelX": 283.5,
+        "labelY": 194.07291666666666
       },
       {
         "id": "G34",
         "x": 0,
-        "y": 153.66477272727272,
+        "y": 180.98295454545453,
         "angle": 180,
         "length": 8,
         "label": "34",
         "labelX": -17.5,
-        "labelY": 153.09564393939394
+        "labelY": 180.41382575757575
       },
       {
         "id": "G21",
         "x": 308,
-        "y": 187.8125,
+        "y": 215.1306818181818,
         "angle": 0,
         "length": 8,
         "label": "21",
-        "labelX": 325.5,
-        "labelY": 187.24337121212122
+        "labelX": 283.5,
+        "labelY": 224.8058712121212
       },
       {
         "id": "G35",
         "x": 0,
-        "y": 184.39772727272725,
+        "y": 211.71590909090907,
         "angle": 180,
         "length": 8,
         "label": "35",
         "labelX": -17.5,
-        "labelY": 183.82859848484847
+        "labelY": 211.1467803030303
       },
       {
         "id": "GND2",
         "x": 308,
-        "y": 215.1306818181818,
+        "y": 242.44886363636363,
         "angle": 0,
         "length": 8,
         "label": "Gnd",
-        "labelX": 323.785,
-        "labelY": 214.56155303030303
+        "labelX": 274.785,
+        "labelY": 252.124053030303
       },
       {
         "id": "G32",
         "x": 0,
-        "y": 211.71590909090907,
+        "y": 239.0340909090909,
         "angle": 180,
         "length": 8,
         "label": "32",
         "labelX": -17.5,
-        "labelY": 211.1467803030303
+        "labelY": 238.4649621212121
       },
       {
         "id": "G19",
         "x": 308,
-        "y": 245.86363636363635,
+        "y": 273.1818181818182,
         "angle": 0,
         "length": 8,
         "label": "19",
-        "labelX": 325.5,
-        "labelY": 245.29450757575754
+        "labelX": 280,
+        "labelY": 282.85700757575756
       },
       {
         "id": "G33",
         "x": 0,
-        "y": 242.44886363636363,
+        "y": 269.76704545454544,
         "angle": 180,
         "length": 8,
         "label": "33",
         "labelX": -17.5,
-        "labelY": 241.87973484848482
+        "labelY": 269.19791666666663
       },
       {
         "id": "G18",
-        "x": 308,
-        "y": 273.1818181818182,
+        "x": 304.5,
+        "y": 303.9147727272727,
         "angle": 0,
         "length": 8,
         "label": "18",
-        "labelX": 325.5,
-        "labelY": 272.6126893939394
+        "labelX": 280,
+        "labelY": 313.58996212121207
       },
       {
         "id": "G25",
         "x": 0,
-        "y": 269.76704545454544,
+        "y": 297.08522727272725,
         "angle": 180,
         "length": 8,
         "label": "25",
         "labelX": -17.5,
-        "labelY": 269.19791666666663
+        "labelY": 296.51609848484844
       },
       {
         "id": "G05",
         "x": 308,
-        "y": 303.9147727272727,
+        "y": 331.2329545454545,
         "angle": 0,
         "length": 8,
         "label": "5",
-        "labelX": 325.5,
-        "labelY": 303.3456439393939
+        "labelX": 287,
+        "labelY": 340.9081439393939
       },
       {
         "id": "G26",
         "x": 0,
-        "y": 300.5,
+        "y": 327.8181818181818,
         "angle": 180,
         "length": 8,
         "label": "26",
         "labelX": -17.5,
-        "labelY": 299.9308712121212
+        "labelY": 327.249053030303
       },
       {
         "id": "G17",
         "x": 308,
-        "y": 334.64772727272725,
+        "y": 361.96590909090907,
         "angle": 0,
         "length": 8,
         "label": "17",
-        "labelX": 325.5,
-        "labelY": 334.07859848484844
+        "labelX": 280,
+        "labelY": 371.64109848484844
       },
       {
         "id": "G27",
         "x": 0,
-        "y": 331.2329545454545,
+        "y": 358.5511363636363,
         "angle": 180,
         "length": 8,
         "label": "27",
         "labelX": -17.5,
-        "labelY": 330.6638257575757
+        "labelY": 357.98200757575756
       },
       {
         "id": "G16",
         "x": 308,
-        "y": 361.96590909090907,
+        "y": 389.2840909090909,
         "angle": 0,
         "length": 8,
         "label": "16",
-        "labelX": 325.5,
-        "labelY": 361.39678030303025
+        "labelX": 276.5,
+        "labelY": 398.95928030303025
       },
       {
         "id": "G14",
         "x": 0,
-        "y": 358.5511363636363,
+        "y": 385.8693181818182,
         "angle": 180,
         "length": 8,
         "label": "14",
         "labelX": -17.5,
-        "labelY": 357.98200757575756
+        "labelY": 385.3001893939394
       },
       {
         "id": "G04",
         "x": 308,
-        "y": 392.6988636363636,
+        "y": 420.01704545454544,
         "angle": 0,
         "length": 8,
         "label": "4",
-        "labelX": 325.5,
-        "labelY": 392.1297348484848
+        "labelX": 280,
+        "labelY": 426.27746212121207
       },
       {
         "id": "G12",
         "x": 0,
-        "y": 389.2840909090909,
+        "y": 416.6022727272727,
         "angle": 180,
         "length": 8,
         "label": "12",
         "labelX": -17.5,
-        "labelY": 388.71496212121207
+        "labelY": 416.0331439393939
       },
       {
         "id": "G00",
         "x": 308,
-        "y": 420.01704545454544,
+        "y": 447.33522727272725,
         "angle": 0,
         "length": 8,
         "label": "0",
-        "labelX": 325.5,
-        "labelY": 422.8626893939394
+        "labelX": 280,
+        "labelY": 453.59564393939394
       },
       {
         "id": "GND3",
         "x": 0,
-        "y": 416.6022727272727,
+        "y": 443.9204545454545,
         "angle": 180,
         "length": 8,
         "label": "Gnd",
         "labelX": -19.215000000000003,
-        "labelY": 419.44791666666663
+        "labelY": 446.7660984848485
       },
       {
         "id": "G02",
         "x": 308,
-        "y": 450.75,
+        "y": 478.0681818181818,
         "angle": 0,
         "length": 8,
         "label": "2",
-        "labelX": 325.5,
-        "labelY": 450.1808712121212
+        "labelX": 280,
+        "labelY": 480.91382575757575
       },
       {
         "id": "G13",
         "x": 0,
-        "y": 447.33522727272725,
+        "y": 474.65340909090907,
         "angle": 180,
         "length": 8,
         "label": "13",
         "labelX": -17.5,
-        "labelY": 446.7660984848485
+        "labelY": 474.0842803030303
       },
       {
         "id": "G15",
         "x": 308,
-        "y": 478.0681818181818,
+        "y": 505.3863636363636,
         "angle": 0,
         "length": 8,
         "label": "15",
-        "labelX": 325.5,
-        "labelY": 480.91382575757575
+        "labelX": 273,
+        "labelY": 508.23200757575756
       },
       {
         "id": "D2",
         "x": 0,
-        "y": 474.65340909090907,
+        "y": 501.9715909090909,
         "angle": 180,
         "length": 8,
         "label": "D2",
         "labelX": -17.5,
-        "labelY": 477.49905303030306
+        "labelY": 504.8172348484849
       },
       {
         "id": "D1",
         "x": 308,
-        "y": 522.4602272727273,
+        "y": 529.2897727272727,
         "angle": 0,
         "length": 8,
         "label": "D1",
-        "labelX": 276.5,
+        "labelX": 273,
         "labelY": 532.1354166666666
       },
       {
         "id": "D3",
         "x": 0,
-        "y": 505.3863636363636,
+        "y": 532.7045454545454,
         "angle": 180,
         "length": 8,
         "label": "D3",
         "labelX": -17.5,
-        "labelY": 504.8172348484849
+        "labelY": 532.1354166666666
       },
       {
         "id": "D0",
         "x": 308,
-        "y": 549.778409090909,
+        "y": 556.6079545454545,
         "angle": 0,
         "length": 8,
         "label": "D0",
-        "labelX": 276.5,
-        "labelY": 559.4535984848485
+        "labelX": 273,
+        "labelY": 562.8683712121212
       },
       {
         "id": "CM",
         "x": 0,
-        "y": 536.1193181818181,
+        "y": 563.4375,
         "angle": 180,
         "length": 8,
         "label": "Cm",
         "labelX": -17.5,
-        "labelY": 535.5501893939394
+        "labelY": 562.8683712121212
       },
       {
         "id": "CK",
         "x": 308,
-        "y": 577.0965909090909,
+        "y": 583.9261363636364,
         "angle": 0,
         "length": 8,
         "label": "Ck",
@@ -2639,12 +2651,12 @@
       {
         "id": "5V",
         "x": 0,
-        "y": 563.4375,
+        "y": 590.7556818181818,
         "angle": 180,
         "length": 8,
         "label": "5V",
         "labelX": -17.5,
-        "labelY": 566.283143939394
+        "labelY": 593.6013257575758
       }
     ],
     "pinLabelColor": "#FAFAC8",

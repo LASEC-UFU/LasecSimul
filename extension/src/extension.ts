@@ -3950,17 +3950,31 @@ function serializeSubcircuitSceneComponent(component: WebviewComponentModel): {
   rotation?: WebviewComponentModel["rotation"];
   flipH?: boolean;
   flipV?: boolean;
+  properties?: Record<string, string | number | boolean>;
 } {
   const localOrigin = componentLocalOrigin(component.typeId, component.properties);
+  const sceneProperties: Record<string, string | number | boolean> = {};
+  const qtOrigin = component.properties.__simulideQtOrigin;
+  const scaleX = component.properties.__simulideSceneScaleX;
+  const scaleY = component.properties.__simulideSceneScaleY;
+  if (qtOrigin === true || Boolean(localOrigin)) sceneProperties.__simulideQtOrigin = true;
+  if (typeof scaleX === "number" && Number.isFinite(scaleX) && scaleX > 0) sceneProperties.__simulideSceneScaleX = scaleX;
+  if (typeof scaleY === "number" && Number.isFinite(scaleY) && scaleY > 0) sceneProperties.__simulideSceneScaleY = scaleY;
   const placement = {
     componentId: component.id,
     x: Math.round(component.x + (localOrigin?.x ?? 0)),
     y: Math.round(component.y + (localOrigin?.y ?? 0)),
     ...(component.rotation !== undefined ? { rotation: component.rotation } : {}),
+    ...(Object.keys(sceneProperties).length > 0 ? { properties: sceneProperties } : {}),
   };
   if (component.typeId === "connectors.tunnel") {
     const rotated = component.properties.__simulideTunnelRotated;
-    return typeof rotated === "boolean" ? { ...placement, flipH: rotated } : placement;
+    if (typeof rotated === "boolean") {
+      if (!placement.properties) placement.properties = {};
+      placement.properties.__simulideTunnelRotated = rotated;
+      return { ...placement, flipH: rotated };
+    }
+    return placement;
   }
   return {
     ...placement,
@@ -4003,8 +4017,9 @@ function persistSubcircuitAuthoringScene(json: Record<string, unknown>, componen
   const existing = typeof json.authoringScene === "object" && json.authoringScene !== null
     ? json.authoringScene as Record<string, unknown>
     : {};
+  const { transform: _legacyTransform, ...existingWithoutTransform } = existing;
   json.authoringScene = {
-    ...existing,
+    ...existingWithoutTransform,
     package: { x: packageComponent.x, y: packageComponent.y },
     components: internalComponents,
     wires: internalWires,

@@ -119,6 +119,23 @@ import { PackageDescriptor, WebviewWireModel } from "../ui/webview/model";
     assert(result.package?.pinLabelColor === "#00AAFF", `compile deveria devolver a cor editada do rótulo de pino, recebido ${result.package?.pinLabelColor}`);
   });
 
+  await test("seed/compile: fontSize do rótulo de pino é preservado entre editor e package (labelFontSize)", () => {
+    const original: PackageDescriptor = {
+      width: 100,
+      height: 80,
+      border: true,
+      pins: [{ id: "G2", x: 100, y: 24, angle: 0, length: 8, label: "G2", labelFontSize: 13 }],
+      shapes: [],
+    };
+    const components = seedSymbolAuthoringComponents(original);
+    const pinLabel = components.find((c) => c.typeId === "graphics.text" && c.properties.linkedPinComponentId)!;
+    assert(pinLabel.properties.fontSize === 13, `seed deveria usar labelFontSize do package no rótulo vinculado, recebido ${pinLabel.properties.fontSize}`);
+
+    pinLabel.properties.fontSize = 17;
+    const result = compileSymbolAuthoringComponents(components, undefined);
+    assert(result.package?.pins[0]?.labelFontSize === 17, `compile deveria persistir labelFontSize editado no package, recebido ${result.package?.pins[0]?.labelFontSize}`);
+  });
+
   await test("compile: fundo color vem do componente other.package, svg/image existente é preservado se não houver backgroundColor", () => {
     const pkg: PackageDescriptor = { width: 80, height: 60, pins: [] };
     const components = seedSymbolAuthoringComponents(pkg);

@@ -640,3 +640,47 @@ interno já carregar essa marca, a tradução inteira (componentes E fios, sempr
 um marcador que já fazia parte do design. Teste de regressão:
 `simulideSceneTranslator.test.ts` ("NAO reaplica a cena ... num componente que já foi traduzido
 antes") reproduz save→reload→edit manual→save→reload e confirma posição/escala/rota preservadas.
+
+**Reverificado em 2026-07-06 (pedido de investigação adicional)**: reprodução fiel via
+`out-test` chamando as funções REAIS de produção
+(`seedSubcircuitInternalComponents`/`translateSimulideSubcircuitAuthoringScene`/
+`compileSubcircuitInternalComponents`/`compileSymbolAuthoringComponents`/
+`persistSubcircuitAuthoringScene`) com os 44 componentes reais de `esp32_devkitc_v4.lssubcircuit`
+mais 3 componentes novos (resistor/tunnel/push button) e 1 fio novo, comparando estado
+pré-salvamento × pós-reload: nenhuma diferença em x/y/rotation/flip/properties/SVG renderizado/
+pontos de fio. Confirmado por leitura direta de código que `updateComponentElement` (`main.ts`) é
+o MESMO renderer para o editor de subcircuito e o editor de circuito normal -- `symbolAuthoringContext`
+só desvia INTERAÇÃO (fio local sem round-trip pro host), nunca renderização visual. A correção desta
+seção continua cobrindo o fluxo corretamente; nenhuma nova causa de distorção foi encontrada.
+
+## 14. Bug corrigido: rótulo de pino do `package` não escala com `schematicWidth`/`schematicHeight` (2026-07-06)
+
+**Sintoma relatado**: pinos do `package` do ESP32-WROOM-32/DevKitC V4 (quando colocado como bloco ou
+visto dentro de "Abrir Subcircuito") aparecem como retângulos amarelo-claro sólidos em vez de rótulos
+de texto legíveis -- não existe nada parecido no SimulIDE real.
+
+**Causa raiz**: `resolvePackageLayout` (`componentSymbols.ts`) escala POSIÇÃO de pino por
+`scaleX = schematicWidth/width`, `scaleY = schematicHeight/height` quando o `package` declara um
+"tamanho nativo" (capturado do SimulIDE real, ex. 343×487) maior que o footprint razoável pro
+schematic (ex. 104×160) -- ver `esp32_wroom32.lssubcircuit`/`esp32_devkitc_v4.lssubcircuit`. Essa
+escala é aplicada às coordenadas x/y do lead/label via `toDisplayX`/`toDisplayY`
+(`packagePinLeadSvg`), mas o `font-size` do rótulo (`PACKAGE_PIN_LABEL_FONT_SIZE = 7`, mesmo valor
+absoluto fixo do `Pin::paint()` real, `font.setPixelSize(7)`) e o `stroke-width` do lead/marcador (3
+e 0.5, também fiéis ao `QPen` real) NUNCA passavam por essa escala. No SimulIDE de verdade não existe
+esse descompasso porque não existe o conceito de "tamanho nativo vs. schematic" -- cada `Package`
+(`Chip::setPackage()`) já é autorado com dimensão/pinagem definitivas, e a ÚNICA coisa que reescala
+fonte+traço junto com a posição é o zoom do `QGraphicsView`, que escala a cena INTEIRA
+uniformemente. Com 14 pinos por lado comprimidos por ~0.30×/0.33× (309/487→88/176,
+343/487→104/160), o espaçamento vertical entre rótulos cai pra ~9.4px enquanto a fonte continua
+"nativa" em 7px -- rótulos adjacentes colam e viram um bloco sólido na cor `#FAFAC8`
+(`QColor(250,250,200)`, a cor real de texto que o SimulIDE usa pra rótulo de pino sobre corpo de
+chip escuro -- NUNCA um retângulo de fundo, confirmado por leitura de `pin.cpp`/`chip.cpp`).
+
+**Correção** (`componentSymbols.ts::packagePinLeadSvg`): novo fator `packageVisualScale(resolved) =
+√(scaleX·scaleY)` aplicado ao `font-size` do rótulo e ao `stroke-width` do lead/marcador -- mesmo
+princípio do zoom uniforme do `QGraphicsView` real, sem hardcode por typeId (qualquer `package` com
+`schematicWidth`/`schematicHeight` futuro herda o mesmo comportamento). Quando o fator é 1
+(a maioria esmagadora dos `package`, sem essa compressão), `scaledDimension` devolve o literal
+original sem casas decimais extras -- markup byte-a-byte idêntico ao anterior, zero regressão
+(confirmado pelos 40 testes de `componentSymbols.test.ts`, incluindo os 3 que dependiam da
+formatação exata de `"3"`/`"0.5"`/`"7px"`).

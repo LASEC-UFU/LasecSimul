@@ -151,39 +151,92 @@ function wireRouteKey(from: WireEndpoint, to: WireEndpoint): string {
   return a < b ? `${a}|${b}` : `${b}|${a}`;
 }
 
+function sanitizePlacementProperties(properties: Record<string, string | number | boolean> | undefined): Record<string, string | number | boolean> {
+  if (!properties) return {};
+  const out: Record<string, string | number | boolean> = {};
+  for (const [key, value] of Object.entries(properties)) {
+    if (key === "__simulideSceneScaleX" || key === "__simulideSceneScaleY") continue;
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") out[key] = value;
+  }
+  return out;
+}
+
 function translateWireRoutes(wires: WebviewWireModel[], routes: SimulideSubcircuitWireRoute[] | undefined): WebviewWireModel[] {
   if (!routes || routes.length === 0) return wires;
-  const routeByKey = new Map(routes.map((route) => [wireRouteKey(route.from, route.to), route.points]));
+  const routeBuckets = new Map<string, Array<Array<{ x: number; y: number }>>>();
+  for (const route of routes) {
+    const key = wireRouteKey(route.from, route.to);
+    const bucket = routeBuckets.get(key);
+    if (bucket) bucket.push(route.points);
+    else routeBuckets.set(key, [route.points]);
+  }
+  const routeCursorByKey = new Map<string, number>();
   return wires.map((wire) => {
-    const points = routeByKey.get(wireRouteKey(wire.from, wire.to));
+    const key = wireRouteKey(wire.from, wire.to);
+    const bucket = routeBuckets.get(key);
+    if (!bucket || bucket.length === 0) return wire;
+    const cursor = routeCursorByKey.get(key) ?? 0;
+    const points = bucket[Math.min(cursor, bucket.length - 1)];
+    routeCursorByKey.set(key, cursor + 1);
     return points ? { ...wire, points: points.map((point) => ({ ...point })) } : wire;
   });
 }
 
 function translateComponentPlacements(components: WebviewComponentModel[], placements: SimulideSubcircuitComponentPlacement[] | undefined, transform: SimulideSubcircuitScenePlacement["transform"]): WebviewComponentModel[] {
   if (!placements || placements.length === 0) return components;
+  const legacyTransformMode = transform?.scaleX !== undefined || transform?.scaleY !== undefined;
   const placementById = new Map(placements.map((placement) => [placement.componentId, placement]));
   return components.map((component) => {
     const placement = placementById.get(component.id);
     if (!placement) return component;
     const placementProperties: Record<string, string | number | boolean> = { ...(placement.properties ?? {}) };
-    placementProperties.__simulideQtOrigin = true;
-    if (transform?.scaleX !== undefined) placementProperties.__simulideSceneScaleX = transform.scaleX;
-    if (transform?.scaleY !== undefined) placementProperties.__simulideSceneScaleY = transform.scaleY;
+    const persistentPlacementProperties = sanitizePlacementProperties(placementProperties);
+    const translationProps: Record<string, string | number | boolean> = { ...component.properties, ...placementProperties };
+    const intrinsicOrigin = componentLocalOrigin(component.typeId, translationProps);
+    const placementUsesQtOrigin =
+      placement.properties?.__simulideQtOrigin === true
+      || (intrinsicOrigin !== undefined && placement.properties?.__simulideQtOrigin !== false)
+      || (legacyTransformMode && placement.properties?.__simulideQtOrigin !== false);
+    if (placementUsesQtOrigin) translationProps.__simulideQtOrigin = true;
+
+    const explicitScaleX = placement.properties?.__simulideSceneScaleX;
+    const explicitScaleY = placement.properties?.__simulideSceneScaleY;
+    if (typeof explicitScaleX === "number" && Number.isFinite(explicitScaleX) && explicitScaleX > 0) {
+      translationProps.__simulideSceneScaleX = explicitScaleX;
+    } else if (placementUsesQtOrigin && transform?.scaleX !== undefined) {
+      translationProps.__simulideSceneScaleX = transform.scaleX;
+    }
+    if (typeof explicitScaleY === "number" && Number.isFinite(explicitScaleY) && explicitScaleY > 0) {
+      translationProps.__simulideSceneScaleY = explicitScaleY;
+    } else if (placementUsesQtOrigin && transform?.scaleY !== undefined) {
+      translationProps.__simulideSceneScaleY = transform.scaleY;
+    }
+
     if (component.typeId === "connectors.tunnel") {
-      placementProperties.__simulideTunnelRotated =
-        typeof placementProperties.__simulideTunnelRotated === "boolean"
-          ? placementProperties.__simulideTunnelRotated
+      translationProps.__simulideTunnelRotated =
+        typeof translationProps.__simulideTunnelRotated === "boolean"
+          ? translationProps.__simulideTunnelRotated
           : placement.flipH === true;
     }
-    const properties = Object.keys(placementProperties).length > 0
-      ? { ...component.properties, ...placementProperties }
+    if (placementUsesQtOrigin) persistentPlacementProperties.__simulideQtOrigin = true;
+    if (placementUsesQtOrigin && typeof translationProps.__simulideSceneScaleX === "number") {
+      persistentPlacementProperties.__simulideSceneScaleX = translationProps.__simulideSceneScaleX;
+    }
+    if (placementUsesQtOrigin && typeof translationProps.__simulideSceneScaleY === "number") {
+      persistentPlacementProperties.__simulideSceneScaleY = translationProps.__simulideSceneScaleY;
+    }
+    if (component.typeId === "connectors.tunnel" && typeof translationProps.__simulideTunnelRotated === "boolean") {
+      persistentPlacementProperties.__simulideTunnelRotated = translationProps.__simulideTunnelRotated;
+    }
+
+    const properties = Object.keys(persistentPlacementProperties).length > 0
+      ? { ...component.properties, ...persistentPlacementProperties }
       : component.properties;
-    const localOrigin = componentLocalOrigin(component.typeId, properties);
+    const localOrigin = componentLocalOrigin(component.typeId, translationProps);
     return {
       ...component,
-      x: localOrigin ? placement.x - localOrigin.x : placement.x,
-      y: localOrigin ? placement.y - localOrigin.y : placement.y,
+      x: placementUsesQtOrigin && localOrigin ? placement.x - localOrigin.x : placement.x,
+      y: placementUsesQtOrigin && localOrigin ? placement.y - localOrigin.y : placement.y,
       rotation: placement.rotation ?? component.rotation,
       flipH: component.typeId === "connectors.tunnel" ? false : placement.flipH,
       flipV: component.typeId === "connectors.tunnel" ? false : placement.flipV,

@@ -134,6 +134,18 @@ function toWebviewVisual(visual: VisualPosition | undefined, index: number): Req
   return { x: resolved.x, y: resolved.y, rotation: resolved.rotation ?? 0, flipH: resolved.flipH, flipV: resolved.flipV };
 }
 
+function sanitizeSubcircuitInternalProperties(properties: Record<string, unknown> | undefined): Record<string, string | number | boolean> {
+  if (!properties) return {};
+  const out: Record<string, string | number | boolean> = {};
+  for (const [key, value] of Object.entries(properties)) {
+    // Metadados de tradução Qt->Webview são transitórios: não devem contaminar o estado visual
+    // persistido de `components[]` (causava escala/distorção após reopen).
+    if (key === "__simulideQtOrigin" || key === "__simulideSceneScaleX" || key === "__simulideSceneScaleY") continue;
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") out[key] = value;
+  }
+  return out;
+}
+
 /** Semeia o circuito INTERNO real de um subcircuito (`.lssubcircuit` `components[]`/`wires[]`) pra
  * dentro da MESMA sessão de autoria do `package` -- igual ao SimulIDE real, onde "Open Subcircuit"
  * mostra o objeto `Package` E o circuito interno juntos, na mesma cena (ver `.spec/
@@ -164,7 +176,7 @@ export function seedSubcircuitInternalComponents(components: InternalComponentSe
       flipH: visual.flipH,
       flipV: visual.flipV,
       pins: [],
-      properties: component.properties as Record<string, string | number | boolean>,
+      properties: sanitizeSubcircuitInternalProperties(component.properties),
       exposed: component.exposed === true,
     };
     if (component.boardVisual) {
@@ -204,7 +216,7 @@ export function compileSubcircuitInternalComponents(components: WebviewComponent
       const seed: InternalComponentSeed = {
         id: component.id,
         typeId: component.typeId,
-        properties: component.properties,
+        properties: sanitizeSubcircuitInternalProperties(component.properties),
         visual: { x: component.x, y: component.y, rotation: component.rotation, flipH: component.flipH, flipV: component.flipV },
         exposed: component.exposed === true,
       };
@@ -245,7 +257,7 @@ function seedPinLabelComponent(
   const labelX = (pin.labelX ?? tipX + Math.cos(rad) * 9) * scaleX;
   const labelY = (pin.labelY ?? tipY + Math.sin(rad) * 9) * scaleY;
   const text = pin.label ?? pin.id;
-  const fontSize = 7;
+  const fontSize = typeof pin.labelFontSize === "number" && pin.labelFontSize > 0 ? pin.labelFontSize : 7;
   const properties: Record<string, string | number | boolean> = { text, fontSize, color: labelColor, linkedPinComponentId: pinComponentId };
   const box = componentBox("graphics.text", properties);
   const centerX = labelX;
@@ -419,6 +431,7 @@ export function compileSymbolAuthoringComponents(components: WebviewComponentMod
         const labelBox = componentBox("graphics.text", linkedLabel.properties);
         const labelFontSize = typeof linkedLabel.properties.fontSize === "number" ? linkedLabel.properties.fontSize : 7;
         pin.label = typeof linkedLabel.properties.text === "string" ? linkedLabel.properties.text : undefined;
+        pin.labelFontSize = labelFontSize;
         pin.labelX = toNativeX(linkedLabel.x - originX + labelBox.width / 2);
         pin.labelY = toNativeY(linkedLabel.y - originY + labelBox.height / 2 + labelFontSize / 3);
       }

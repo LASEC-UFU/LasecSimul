@@ -1155,9 +1155,9 @@ function installCanvasEventHandlers(canvas: HTMLDivElement, canvasContent: HTMLD
     render();
   });
   canvas.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
     if (state.pendingConnection) {
-      event.preventDefault();
-      event.stopPropagation();
       if (pendingWireBendLengths.length > 0) {
         undoPendingWireBend();
         refreshPendingWirePreview();
@@ -3248,8 +3248,16 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
   });
 
   el.addEventListener("contextmenu", (event) => {
+    // O menu customizado do LasecSimul deve sempre prevalecer sobre o menu nativo do navegador.
+    // Se `preventDefault` ficar só no `showContextMenu(...)` ao final, qualquer retorno antecipado
+    // (ou render custoso antes dele) pode deixar o menu nativo "vazar" de forma intermitente.
+    event.preventDefault();
+    event.stopPropagation();
     const component = liveComponent();
-    if (!component) return;
+    if (!component) {
+      hideContextMenu();
+      return;
+    }
     const catalogEntry = state.catalog.find((entry) => entry.typeId === component.typeId);
     if (!isComponentSelected(component.id)) selectOnlyComponent(component.id);
     persistState();
