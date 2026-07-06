@@ -191,33 +191,376 @@
       "typeId": "switches.push",
       "label": "Push",
       "pinCount": 2,
+      "pinIds": [
+        "pin-1",
+        "pin-2"
+      ],
       "icon": "push",
       "folderPath": [
         "Interruptores"
       ],
       "defaultProperties": {
-        "closed": false
+        "closed": false,
+        "normallyClosed": false,
+        "key": ""
       },
-      "graphical": true
+      "graphical": true,
+      "help": {
+        "description": "Botão momentâneo (SPST). Fecha o contato só enquanto está pressionado; solta e abre sozinho ao soltar o mouse."
+      },
+      "package": {
+        "width": 32,
+        "height": 28,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/switches/push.cpp + push_base.cpp + switch_base.cpp + mech_contact.cpp",
+            "className": "Push",
+            "method": "paint",
+            "notes": "SetupSwitches(1,1) com m_pin0=0 da m_area=QRectF(-12,-8,24,12) -- usado só pra boundingRect()/shape() (hit-test), Push::paint() NUNCA desenha esse retângulo (Component::paint() não pinta nada, só seta pen/brush) -- não adicionar um `rect` visual aqui. Pinos reais (MechContact::SetupSwitches) em QPoint(-16,0)/(16,0), comprimento padrao do Pin (8). m_button (CustomButton 16x16, checkable) fica em (-8,4) (SwitchBase::m_proxy, Push::Push sobrescreve setPos). Push::paint desenha SÓ a barra do atuador em y=-2 quando m_closed (pressionado) e y=-8 quando solto, pen width 3; m_closed reflete onbuttonPressed/onbuttonReleased XOR Norm_Close (mesma logica dos 4 stateVisible da barra abaixo)."
+          },
+          "bounds": {
+            "x": -16,
+            "y": -8,
+            "w": 32,
+            "h": 28
+          },
+          "defaultStroke": "#000",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 1.5,
+          "primitives": [
+            {
+              "kind": "roundedRect",
+              "x": -8,
+              "y": 4,
+              "w": 16,
+              "h": 16,
+              "rx": 2,
+              "ry": 2,
+              "stroke": "#777777",
+              "strokeWidth": 1.5,
+              "fill": "#dddddd",
+              "stateFill": {
+                "prop": "closed",
+                "map": {
+                  "true": "#62d67b",
+                  "false": "#dddddd"
+                }
+              },
+              "cssClass": "push-body toggle-hit-zone"
+            },
+            {
+              "kind": "text",
+              "x": 0,
+              "y": 15,
+              "value": "",
+              "textAnchor": "middle",
+              "fontSize": 7,
+              "fill": "#1a1a1a",
+              "stateText": {
+                "kind": "property",
+                "prop": "key"
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -9,
+              "y1": -2,
+              "x2": 9,
+              "y2": -2,
+              "strokeWidth": 3,
+              "stateVisible": {
+                "when": {
+                  "closed": [
+                    "true"
+                  ],
+                  "normallyClosed": [
+                    "false",
+                    "undefined"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -9,
+              "y1": -2,
+              "x2": 9,
+              "y2": -2,
+              "strokeWidth": 3,
+              "stateVisible": {
+                "when": {
+                  "closed": [
+                    "false"
+                  ],
+                  "normallyClosed": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -9,
+              "y1": -8,
+              "x2": 9,
+              "y2": -8,
+              "strokeWidth": 3,
+              "stateVisible": {
+                "when": {
+                  "closed": [
+                    "false",
+                    "undefined"
+                  ],
+                  "normallyClosed": [
+                    "false",
+                    "undefined"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -9,
+              "y1": -8,
+              "x2": 9,
+              "y2": -8,
+              "strokeWidth": 3,
+              "stateVisible": {
+                "when": {
+                  "closed": [
+                    "true"
+                  ],
+                  "normallyClosed": [
+                    "true"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "x": 8,
+            "y": 8,
+            "angle": 180,
+            "length": 8,
+            "label": ""
+          },
+          {
+            "id": "pin-2",
+            "x": 24,
+            "y": 8,
+            "angle": 0,
+            "length": 8,
+            "label": ""
+          }
+        ]
+      }
     },
     {
       "typeId": "switches.switch",
       "label": "Switch (all)",
       "pinCount": 2,
+      "pinIds": [
+        "pin-1",
+        "pin-2"
+      ],
       "icon": "switch",
       "folderPath": [
         "Interruptores"
       ],
       "defaultProperties": {
         "closed": false,
-        "normallyClosed": false
+        "normallyClosed": false,
+        "key": ""
       },
-      "graphical": true
+      "graphical": true,
+      "help": {
+        "description": "Chave alternada (SPST). Clique no corpo para alternar entre aberta e fechada; mantém o estado até o próximo clique."
+      },
+      "package": {
+        "width": 32,
+        "height": 28,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/switches/switch.cpp + switch_base.cpp + mech_contact.cpp",
+            "className": "Switch",
+            "method": "paint (via MechContact::paint)",
+            "notes": "Mesma m_area/pinos/m_button de Push (ver push.cpp) -- m_area é só hit-test, NUNCA desenhada (MechContact::paint não chama drawRect, só a alavanca). MechContact::paint desenha SÓ a alavanca com pen width 3: fechada drawLine(-10,0,10,-2); aberta drawLine(-10.5,0,8,-8) (offset=16*0-16+4*m_pin0=-16 ja aplicado nas coordenadas). m_closed reflete onbuttonclicked() XOR Norm_Close, mesma logica dos 4 stateVisible da alavanca abaixo."
+          },
+          "bounds": {
+            "x": -16,
+            "y": -8,
+            "w": 32,
+            "h": 28
+          },
+          "defaultStroke": "#000",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 1.5,
+          "primitives": [
+            {
+              "kind": "roundedRect",
+              "x": -8,
+              "y": 4,
+              "w": 16,
+              "h": 16,
+              "rx": 2,
+              "ry": 2,
+              "stroke": "#777777",
+              "strokeWidth": 1.5,
+              "fill": "#dddddd",
+              "stateFill": {
+                "prop": "closed",
+                "map": {
+                  "true": "#62d67b",
+                  "false": "#dddddd"
+                }
+              },
+              "cssClass": "switch-body toggle-hit-zone"
+            },
+            {
+              "kind": "text",
+              "x": 0,
+              "y": 15,
+              "value": "",
+              "textAnchor": "middle",
+              "fontSize": 7,
+              "fill": "#1a1a1a",
+              "stateText": {
+                "kind": "property",
+                "prop": "key"
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -10,
+              "y1": 0,
+              "x2": 10,
+              "y2": -2,
+              "strokeWidth": 3,
+              "stateVisible": {
+                "when": {
+                  "closed": [
+                    "true"
+                  ],
+                  "normallyClosed": [
+                    "false",
+                    "undefined"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -10,
+              "y1": 0,
+              "x2": 10,
+              "y2": -2,
+              "strokeWidth": 3,
+              "stateVisible": {
+                "when": {
+                  "closed": [
+                    "false"
+                  ],
+                  "normallyClosed": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -10.5,
+              "y1": 0,
+              "x2": 8,
+              "y2": -8,
+              "strokeWidth": 3,
+              "stateVisible": {
+                "when": {
+                  "closed": [
+                    "false",
+                    "undefined"
+                  ],
+                  "normallyClosed": [
+                    "false",
+                    "undefined"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -10.5,
+              "y1": 0,
+              "x2": 8,
+              "y2": -8,
+              "strokeWidth": 3,
+              "stateVisible": {
+                "when": {
+                  "closed": [
+                    "true"
+                  ],
+                  "normallyClosed": [
+                    "true"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "x": 8,
+            "y": 8,
+            "angle": 180,
+            "length": 8,
+            "label": ""
+          },
+          {
+            "id": "pin-2",
+            "x": 24,
+            "y": 8,
+            "angle": 0,
+            "length": 8,
+            "label": ""
+          }
+        ]
+      }
     },
     {
       "typeId": "switches.switch_dip",
       "label": "Switch Dip",
       "pinCount": 16,
+      "pinIds": [
+        "pin-1",
+        "pin-2",
+        "pin-3",
+        "pin-4",
+        "pin-5",
+        "pin-6",
+        "pin-7",
+        "pin-8",
+        "pin-9",
+        "pin-10",
+        "pin-11",
+        "pin-12",
+        "pin-13",
+        "pin-14",
+        "pin-15",
+        "pin-16"
+      ],
       "icon": "switchdip",
       "folderPath": [
         "Interruptores"
@@ -225,12 +568,214 @@
       "defaultProperties": {
         "closed": false
       },
-      "graphical": true
+      "graphical": true,
+      "help": {
+        "description": "Bloco DIP de 8 chaves. No SimulIDE real cada posição liga/desliga de forma independente; nesta versão do Core as 8 posições compartilham um único estado aberto/fechado (clicar em qualquer uma alterna todas)."
+      },
+      "package": {
+        "width": 24,
+        "height": 64,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/switches/switchdip.cpp",
+            "className": "SwitchDip",
+            "method": "paint",
+            "notes": "Default Size=8: m_area=QRectF(-3,-28,14,8*8=64). createSwitches: botao QPushButton 6x6 em QPoint(3,-27+i*8), Pin P em QPoint(-8,-32+8+i*8) angulo180 length5, Pin N em QPoint(16,-32+8+i*8) angulo0 length5, i=0..7. Core (SimulideSwitch, ver switches.push) so simula 1 par de pinos (m_pins[0]/[1]) mesmo com 16 pinos alocados -- as 8 posicoes visuais compartilham a propriedade unica `closed`, sem estado independente por chave (limitacao do Core, nao do renderer)."
+          },
+          "bounds": {
+            "x": -8,
+            "y": -28,
+            "w": 24,
+            "h": 64
+          },
+          "defaultStroke": "#000",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 1.5,
+          "primitives": [
+            {
+              "kind": "rect",
+              "x": -3,
+              "y": -28,
+              "w": 14,
+              "h": 64,
+              "fill": "none"
+            },
+            {
+              "kind": "repeat",
+              "count": 8,
+              "stepY": 8,
+              "primitives": [
+                {
+                  "kind": "rect",
+                  "x": 3,
+                  "y": -27,
+                  "w": 6,
+                  "h": 6,
+                  "rx": 1,
+                  "ry": 1,
+                  "stroke": "#555555",
+                  "strokeWidth": 1.5,
+                  "fill": "#dddddd",
+                  "stateFill": {
+                    "prop": "closed",
+                    "map": {
+                      "true": "#62d67b",
+                      "false": "#dddddd"
+                    }
+                  },
+                  "cssClass": "toggle-hit-zone"
+                }
+              ]
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "x": 5,
+            "y": 4,
+            "angle": 180,
+            "length": 5,
+            "label": ""
+          },
+          {
+            "id": "pin-2",
+            "x": 19,
+            "y": 4,
+            "angle": 0,
+            "length": 5,
+            "label": ""
+          },
+          {
+            "id": "pin-3",
+            "x": 5,
+            "y": 12,
+            "angle": 180,
+            "length": 5,
+            "label": ""
+          },
+          {
+            "id": "pin-4",
+            "x": 19,
+            "y": 12,
+            "angle": 0,
+            "length": 5,
+            "label": ""
+          },
+          {
+            "id": "pin-5",
+            "x": 5,
+            "y": 20,
+            "angle": 180,
+            "length": 5,
+            "label": ""
+          },
+          {
+            "id": "pin-6",
+            "x": 19,
+            "y": 20,
+            "angle": 0,
+            "length": 5,
+            "label": ""
+          },
+          {
+            "id": "pin-7",
+            "x": 5,
+            "y": 28,
+            "angle": 180,
+            "length": 5,
+            "label": ""
+          },
+          {
+            "id": "pin-8",
+            "x": 19,
+            "y": 28,
+            "angle": 0,
+            "length": 5,
+            "label": ""
+          },
+          {
+            "id": "pin-9",
+            "x": 5,
+            "y": 36,
+            "angle": 180,
+            "length": 5,
+            "label": ""
+          },
+          {
+            "id": "pin-10",
+            "x": 19,
+            "y": 36,
+            "angle": 0,
+            "length": 5,
+            "label": ""
+          },
+          {
+            "id": "pin-11",
+            "x": 5,
+            "y": 44,
+            "angle": 180,
+            "length": 5,
+            "label": ""
+          },
+          {
+            "id": "pin-12",
+            "x": 19,
+            "y": 44,
+            "angle": 0,
+            "length": 5,
+            "label": ""
+          },
+          {
+            "id": "pin-13",
+            "x": 5,
+            "y": 52,
+            "angle": 180,
+            "length": 5,
+            "label": ""
+          },
+          {
+            "id": "pin-14",
+            "x": 19,
+            "y": 52,
+            "angle": 0,
+            "length": 5,
+            "label": ""
+          },
+          {
+            "id": "pin-15",
+            "x": 5,
+            "y": 60,
+            "angle": 180,
+            "length": 5,
+            "label": ""
+          },
+          {
+            "id": "pin-16",
+            "x": 19,
+            "y": 60,
+            "angle": 0,
+            "length": 5,
+            "label": ""
+          }
+        ]
+      }
     },
     {
       "typeId": "switches.relay",
       "label": "Relay (all)",
       "pinCount": 4,
+      "pinIds": [
+        "pin-1",
+        "pin-2",
+        "pin-3",
+        "pin-4"
+      ],
       "icon": "relay-spst",
       "folderPath": [
         "Interruptores"
@@ -240,7 +785,144 @@
         "iOff": 5,
         "normallyClosed": false
       },
-      "graphical": true
+      "graphical": true,
+      "help": {
+        "description": "Relé SPST: a bobina (100 Ω / 100 mH) energiza o contato quando a corrente passa de IOn (mA); o contato volta a abrir abaixo de IOff (histerese). pin-1/pin-2 = bobina, pin-3/pin-4 = contato."
+      },
+      "package": {
+        "width": 32,
+        "height": 36,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/switches/relay.cpp + mech_contact.cpp + passive/reactive/inductor.cpp",
+            "className": "Relay",
+            "method": "paint",
+            "notes": "m_pin0=4 (contato comeca depois da bobina) => SetupSwitches(1,1) da m_area=QRectF(-12,-28,24,36). Bobina = Inductor interno movido pra (0,0) local (mesmos pinos Comp2Pin +-16,0 e arcos de inductor.cpp). Pinos de contato em QPoint(-16,-16)/(16,-16) (offset=-4*m_pin0=-16 na formula de MechContact::SetupSwitches), comprimento padrao 8 (igual aos pinos da bobina). MechContact::paint (offset=16*0-16+4*4=0): fechado drawLine(-10,-16,10,-18); aberto drawLine(-10.5,-16,8,-24). Relay::voltChanged() NAO expoe o estado energizado (m_energized) como propriedade no Core hoje -- o desenho abaixo usa a posicao de REPOUSO (des-energizado) conforme normallyClosed, sem refletir a simulacao ao vivo (limitacao do Core, documentada em docs/20-diagnostico-renderizacao-simulide.md)."
+          },
+          "bounds": {
+            "x": -16,
+            "y": -28,
+            "w": 32,
+            "h": 36
+          },
+          "defaultStroke": "#000",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 1.5,
+          "primitives": [
+            {
+              "kind": "rect",
+              "x": -12,
+              "y": -28,
+              "w": 24,
+              "h": 36,
+              "fill": "none"
+            },
+            {
+              "kind": "arc",
+              "x": -12,
+              "y": -4.5,
+              "w": 10,
+              "h": 10,
+              "startDeg": -45,
+              "spanDeg": 220,
+              "strokeWidth": 2,
+              "fill": "none"
+            },
+            {
+              "kind": "arc",
+              "x": -5,
+              "y": -4.5,
+              "w": 10,
+              "h": 10,
+              "startDeg": 225,
+              "spanDeg": -270,
+              "strokeWidth": 2,
+              "fill": "none"
+            },
+            {
+              "kind": "arc",
+              "x": 2,
+              "y": -4.5,
+              "w": 10,
+              "h": 10,
+              "startDeg": 225,
+              "spanDeg": -220,
+              "strokeWidth": 2,
+              "fill": "none"
+            },
+            {
+              "kind": "line",
+              "x1": -10.5,
+              "y1": -16,
+              "x2": 8,
+              "y2": -24,
+              "strokeWidth": 3,
+              "stateVisible": {
+                "when": {
+                  "normallyClosed": [
+                    "false",
+                    "undefined"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -10,
+              "y1": -16,
+              "x2": 10,
+              "y2": -18,
+              "strokeWidth": 3,
+              "stateVisible": {
+                "when": {
+                  "normallyClosed": [
+                    "true"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "x": 8,
+            "y": 28,
+            "angle": 180,
+            "length": 8,
+            "label": ""
+          },
+          {
+            "id": "pin-2",
+            "x": 24,
+            "y": 28,
+            "angle": 0,
+            "length": 8,
+            "label": ""
+          },
+          {
+            "id": "pin-3",
+            "x": 8,
+            "y": 12,
+            "angle": 180,
+            "length": 8,
+            "label": ""
+          },
+          {
+            "id": "pin-4",
+            "x": 24,
+            "y": 12,
+            "angle": 0,
+            "length": 8,
+            "label": ""
+          }
+        ]
+      }
     },
     {
       "typeId": "switches.keypad",
@@ -256,6 +938,176 @@
         "rows": 4,
         "columns": 4,
         "keyLabels": "123A456B789C*0#D"
+      },
+      "pinIds": [
+        "pin-1",
+        "pin-2",
+        "pin-3",
+        "pin-4",
+        "pin-5",
+        "pin-6",
+        "pin-7",
+        "pin-8"
+      ],
+      "package": {
+        "width": 72,
+        "height": 72,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/switches/keypad.cpp",
+            "className": "KeyPad",
+            "method": "paint + setupButtons/createSwitches",
+            "notes": "keypad.cpp nao localizado no workspace atual; IR reconstruido a partir da captura SimulIDE fornecida e das notas existentes de m_area=QRectF(-12,-4,16*cols+8,16*rows+8), botoes 16x16 repetidos e pinos de linha/coluna. Usa repeat.countProp/indexName + stateText.propertyChar do render, sem listar tecla por tecla."
+          },
+          "bounds": {
+            "x": -12,
+            "y": -4,
+            "w": 72,
+            "h": 72
+          },
+          "defaultStroke": "#303840",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 2,
+          "primitives": [
+            {
+              "kind": "roundedRect",
+              "x": -12,
+              "y": -4,
+              "w": 72,
+              "h": 72,
+              "rx": 2,
+              "ry": 2,
+              "fill": "#fffef0",
+              "stroke": "#303840",
+              "strokeWidth": 2.8
+            },
+            {
+              "kind": "repeat",
+              "countProp": "rows",
+              "indexName": "row",
+              "stepY": 16,
+              "primitives": [
+                {
+                  "kind": "repeat",
+                  "countProp": "columns",
+                  "indexName": "col",
+                  "stepX": 16,
+                  "primitives": [
+                    {
+                      "kind": "roundedRect",
+                      "x": -8,
+                      "y": 0,
+                      "w": 16,
+                      "h": 16,
+                      "rx": 2,
+                      "ry": 2,
+                      "fill": "#fffef0",
+                      "stroke": "#303840",
+                      "strokeWidth": 2.4
+                    },
+                    {
+                      "kind": "text",
+                      "x": 0,
+                      "y": 8.5,
+                      "value": "",
+                      "fontSize": 9.5,
+                      "textAnchor": "middle",
+                      "dominantBaseline": "central",
+                      "fontFamily": "Segoe UI,Arial,sans-serif",
+                      "fill": "#111820",
+                      "stateText": {
+                        "kind": "propertyChar",
+                        "prop": "keyLabels",
+                        "rowIndex": "row",
+                        "columnIndex": "col",
+                        "columnsProp": "columns"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "x": 0,
+            "y": 12,
+            "angle": 180,
+            "length": 4,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-2",
+            "x": 0,
+            "y": 28,
+            "angle": 180,
+            "length": 4,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-3",
+            "x": 0,
+            "y": 44,
+            "angle": 180,
+            "length": 4,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-4",
+            "x": 0,
+            "y": 60,
+            "angle": 180,
+            "length": 4,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-5",
+            "x": 12,
+            "y": 0,
+            "angle": 270,
+            "length": 4,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-6",
+            "x": 28,
+            "y": 0,
+            "angle": 270,
+            "length": 4,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-7",
+            "x": 44,
+            "y": 0,
+            "angle": 270,
+            "length": 4,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-8",
+            "x": 60,
+            "y": 0,
+            "angle": 270,
+            "length": 4,
+            "leadEndTrim": 0.7,
+            "label": ""
+          }
+        ]
       },
       "graphical": true
     },
@@ -1014,6 +1866,29 @@
       }
     },
     {
+      "typeId": "subcircuits.external",
+      "label": "Subcircuito (arquivo externo)",
+      "pinCount": 0,
+      "icon": "package",
+      "folderPath": [
+        "Subcircuitos"
+      ],
+      "defaultProperties": {},
+      "propertySchema": [
+        {
+          "id": "subcircuitPath",
+          "label": "Arquivo do subcircuito",
+          "group": "Geral",
+          "unit": "",
+          "editor": "filePath",
+          "default": ""
+        }
+      ],
+      "help": {
+        "description": "Bloco generico que aponta para um arquivo .lssubcircuit escolhido nas propriedades. Forma, pinos e icone sao assumidos automaticamente do arquivo escolhido."
+      }
+    },
+    {
       "typeId": "connectors.socket",
       "label": "Soquete",
       "pinCount": 8,
@@ -1178,13 +2053,18 @@
         "background": {
           "kind": "none"
         },
+        "initialTransform": {
+          "rotateDeg": -45,
+          "cx": 22,
+          "cy": 8
+        },
         "simulidePaint": {
           "version": 1,
           "source": {
             "file": "src/components/meters/probe.cpp",
             "className": "Probe",
             "method": "paint",
-            "notes": "Non-small Probe uses m_area QRect(-12,-8,20,16), input IoPin(180,QPoint(-22,0)) with length 14 when rotation is not multiple of 90, and paint draws ellipse QRect(-8,-8,16,16). Constructor setRotation(-45) is not represented yet because LasecSimul component rotation is restricted to 0/90/180/270."
+            "notes": "Non-small Probe uses m_area QRect(-12,-8,20,16), input IoPin(180,QPoint(-22,0)) with length 14 when rotation is not multiple of 90, and paint draws ellipse QRect(-8,-8,16,16). Constructor calls setRotation(rotation()-45) -- represented via package.initialTransform (rotateDeg=-45 around the component's real local origin (0,0), which in this bounds/shift frame is (22,8)); pins/labels below stay declared in the CANONICAL unrotated frame, the renderer bakes the -45deg for both the body and the pin (resolvePackageLayout/packageBodySvg)."
           },
           "bounds": {
             "x": -22,
@@ -1239,13 +2119,13 @@
           }
         ],
         "valueLabel": {
-          "x": 38,
-          "y": 8,
+          "x": 33.31,
+          "y": -3.31,
           "rotation": 0,
           "source": {
             "file": "src/components/meters/probe.cpp",
             "method": "Component::setValLabelPos",
-            "notes": "setValLabelPos(16,0,45) translated by bounds (-22,-8). Rotation 45 is not representable by current external label rotation enum."
+            "notes": "setValLabelPos(16,0,45) translated by bounds (-22,-8) => (38,8), then rotated -45deg around pivot (22,8) to match package.initialTransform (labels are positioned in the same pre-rotation frame as the pins/body in real SimulIDE, so they rotate together). Own label rotation of 45 still not representable by the external label rotation enum (0/90/180/270/-90)."
           }
         }
       }
@@ -3692,7 +4572,7 @@
     {
       "id": "builtin-qemu-esp32",
       "kind": "mcu-adapter",
-      "filePath": "../mcu-adapters/espressif-esp32/mcu.json",
+      "filePath": "../mcu-adapters/espressif-esp32/mcu.lsdevice",
       "folderPath": [
         "Microcontroladores",
         "Espressif"
@@ -3702,476 +4582,476 @@
     {
       "id": "builtin-subcircuit-esp32-devkitc-v4",
       "kind": "subcircuit-file",
-      "filePath": "../subcircuits/esp32_devkitc_v4.lssub.json",
+      "filePath": "../subcircuits/esp32_devkitc_v4.lssubcircuit",
       "libraryPath": "../subcircuits/library.json",
       "removable": false
     },
     {
       "id": "builtin-subcircuit-esp32-wroom32",
       "kind": "subcircuit-file",
-      "filePath": "../subcircuits/esp32_wroom32.lssub.json",
+      "filePath": "../subcircuits/esp32_wroom32.lssubcircuit",
       "libraryPath": "../subcircuits/library.json",
       "removable": false
     },
     {
       "id": "builtin-sensors-ldr",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-sensors/ldr.json",
+      "filePath": "../devices/simulide-sensors/ldr.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-sensors-thermistor",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-sensors/thermistor.json",
+      "filePath": "../devices/simulide-sensors/thermistor.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-sensors-rtd",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-sensors/rtd.json",
+      "filePath": "../devices/simulide-sensors/rtd.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-sensors-strain",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-sensors/strain.json",
+      "filePath": "../devices/simulide-sensors/strain.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-sensors-sr04",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-sensors/sr04.json",
+      "filePath": "../devices/simulide-sensors/sr04.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-sensors-dht22",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-sensors/dht22.json",
+      "filePath": "../devices/simulide-sensors/dht22.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-sensors-ds1621",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-sensors/ds1621.json",
+      "filePath": "../devices/simulide-sensors/ds1621.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-sensors-ds18b20",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-sensors/ds18b20.json",
+      "filePath": "../devices/simulide-sensors/ds18b20.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-peripherals-ky023",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-peripherals/ky023.json",
+      "filePath": "../devices/simulide-peripherals/ky023.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-peripherals-ky040",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-peripherals/ky040.json",
+      "filePath": "../devices/simulide-peripherals/ky040.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-peripherals-touchpad",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-peripherals/touchpad.json",
+      "filePath": "../devices/simulide-peripherals/touchpad.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-peripherals-ds1307",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-peripherals/ds1307.json",
+      "filePath": "../devices/simulide-peripherals/ds1307.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-peripherals-serialterm",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-peripherals/serialterm.json",
+      "filePath": "../devices/simulide-peripherals/serialterm.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-peripherals-serialport",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-peripherals/serialport.json",
+      "filePath": "../devices/simulide-peripherals/serialport.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-peripherals-sdcard",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-peripherals/sdcard.json",
+      "filePath": "../devices/simulide-peripherals/sdcard.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-peripherals-esp01",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-peripherals/esp01.json",
+      "filePath": "../devices/simulide-peripherals/esp01.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-logic-and_gate",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-logic/and_gate.json",
+      "filePath": "../devices/simulide-logic/and_gate.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-logic-or_gate",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-logic/or_gate.json",
+      "filePath": "../devices/simulide-logic/or_gate.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-logic-xor_gate",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-logic/xor_gate.json",
+      "filePath": "../devices/simulide-logic/xor_gate.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-logic-buffer",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-logic/buffer.json",
+      "filePath": "../devices/simulide-logic/buffer.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-logic-full_adder",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-logic/full_adder.json",
+      "filePath": "../devices/simulide-logic/full_adder.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-logic-lm555",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-logic/lm555.json",
+      "filePath": "../devices/simulide-logic/lm555.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-logic-counter",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-logic/counter.json",
+      "filePath": "../devices/simulide-logic/counter.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-logic-bin_counter",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-logic/bin_counter.json",
+      "filePath": "../devices/simulide-logic/bin_counter.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-logic-magnitude_comp",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-logic/magnitude_comp.json",
+      "filePath": "../devices/simulide-logic/magnitude_comp.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-logic-shift_reg",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-logic/shift_reg.json",
+      "filePath": "../devices/simulide-logic/shift_reg.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-logic-function",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-logic/function.json",
+      "filePath": "../devices/simulide-logic/function.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-logic-flipflop_d",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-logic/flipflop_d.json",
+      "filePath": "../devices/simulide-logic/flipflop_d.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-logic-flipflop_t",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-logic/flipflop_t.json",
+      "filePath": "../devices/simulide-logic/flipflop_t.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-logic-flipflop_rs",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-logic/flipflop_rs.json",
+      "filePath": "../devices/simulide-logic/flipflop_rs.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-logic-flipflop_jk",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-logic/flipflop_jk.json",
+      "filePath": "../devices/simulide-logic/flipflop_jk.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-logic-latch_d",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-logic/latch_d.json",
+      "filePath": "../devices/simulide-logic/latch_d.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-logic-memory",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-logic/memory.json",
+      "filePath": "../devices/simulide-logic/memory.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-logic-dynamic_memory",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-logic/dynamic_memory.json",
+      "filePath": "../devices/simulide-logic/dynamic_memory.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-logic-i2c_ram",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-logic/i2c_ram.json",
+      "filePath": "../devices/simulide-logic/i2c_ram.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-logic-mux",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-logic/mux.json",
+      "filePath": "../devices/simulide-logic/mux.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-logic-demux",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-logic/demux.json",
+      "filePath": "../devices/simulide-logic/demux.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-logic-bcd_to_dec",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-logic/bcd_to_dec.json",
+      "filePath": "../devices/simulide-logic/bcd_to_dec.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-logic-dec_to_bcd",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-logic/dec_to_bcd.json",
+      "filePath": "../devices/simulide-logic/dec_to_bcd.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-logic-bcd_to_7seg",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-logic/bcd_to_7seg.json",
+      "filePath": "../devices/simulide-logic/bcd_to_7seg.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-logic-i2c_to_parallel",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-logic/i2c_to_parallel.json",
+      "filePath": "../devices/simulide-logic/i2c_to_parallel.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-logic-adc",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-logic/adc.json",
+      "filePath": "../devices/simulide-logic/adc.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-logic-dac",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-logic/dac.json",
+      "filePath": "../devices/simulide-logic/dac.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-logic-seven_segment_bcd",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-logic/seven_segment_bcd.json",
+      "filePath": "../devices/simulide-logic/seven_segment_bcd.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-complex-transformer",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-complex/transformer.json",
+      "filePath": "../devices/simulide-complex/transformer.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-complex-diac",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-complex/diac.json",
+      "filePath": "../devices/simulide-complex/diac.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-complex-scr",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-complex/scr.json",
+      "filePath": "../devices/simulide-complex/scr.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-complex-triac",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-complex/triac.json",
+      "filePath": "../devices/simulide-complex/triac.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-complex-bjt",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-complex/bjt.json",
+      "filePath": "../devices/simulide-complex/bjt.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-complex-mosfet",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-complex/mosfet.json",
+      "filePath": "../devices/simulide-complex/mosfet.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-complex-jfet",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-complex/jfet.json",
+      "filePath": "../devices/simulide-complex/jfet.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-complex-max72xx_matrix",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-complex/max72xx_matrix.json",
+      "filePath": "../devices/simulide-complex/max72xx_matrix.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-complex-ws2812",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-complex/ws2812.json",
+      "filePath": "../devices/simulide-complex/ws2812.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-complex-hd44780",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-complex/hd44780.json",
+      "filePath": "../devices/simulide-complex/hd44780.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-complex-aip31068_i2c",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-complex/aip31068_i2c.json",
+      "filePath": "../devices/simulide-complex/aip31068_i2c.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-complex-pcd8544",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-complex/pcd8544.json",
+      "filePath": "../devices/simulide-complex/pcd8544.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-complex-ks0108",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-complex/ks0108.json",
+      "filePath": "../devices/simulide-complex/ks0108.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-complex-ssd1306",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-complex/ssd1306.json",
+      "filePath": "../devices/simulide-complex/ssd1306.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-complex-sh1107",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-complex/sh1107.json",
+      "filePath": "../devices/simulide-complex/sh1107.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-complex-st7735",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-complex/st7735.json",
+      "filePath": "../devices/simulide-complex/st7735.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-complex-st7789",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-complex/st7789.json",
+      "filePath": "../devices/simulide-complex/st7789.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-complex-ili9341",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-complex/ili9341.json",
+      "filePath": "../devices/simulide-complex/ili9341.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-complex-gc9a01a",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-complex/gc9a01a.json",
+      "filePath": "../devices/simulide-complex/gc9a01a.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-complex-pcf8833",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-complex/pcf8833.json",
+      "filePath": "../devices/simulide-complex/pcf8833.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-complex-servo",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-complex/servo.json",
+      "filePath": "../devices/simulide-complex/servo.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     },
     {
       "id": "builtin-complex-audio_out",
       "kind": "abi-device",
-      "filePath": "../devices/simulide-complex/audio_out.json",
+      "filePath": "../devices/simulide-complex/audio_out.lsdevice",
       "libraryPath": "../devices/library.json",
       "removable": false
     }

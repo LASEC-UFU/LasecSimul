@@ -37,6 +37,7 @@
 #include <fstream>
 #include <memory>
 #include <string>
+#include <unordered_set>
 
 namespace lasecsimul::app {
 
@@ -336,6 +337,13 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
         components::detail::numberSchema("rows", "Linhas", "", 4.0, 1.0, 1.0, PropertySchemaAffectsTopology),
         components::detail::numberSchema("columns", "Colunas", "", 4.0, 1.0, 1.0, PropertySchemaAffectsTopology),
         components::detail::textSchema("keyLabels", "Rotulos", "123A456B789C*0#D")};
+    // keypad.cpp real: addPropGroup({tr("Main"), {diodes, direction, rows, cols, keyLabels}, 0}) --
+    // as 5 propriedades ficam no MESMO grupo/aba. numberSchema/boolSchema/textSchema tem grupo
+    // default diferente cada (Eletrica/Eletrica/Geral) porque isso é o correto pra maioria dos
+    // devices -- aqui precisa sobrescrever igual `pushPropertySchema()` faz, senão "Rotulos das
+    // teclas" cai numa aba/seção separada de "Linhas"/"Colunas" na Webview (bug relatado: usuário
+    // via os campos numéricos mas achava que faltava o campo de rótulos).
+    for (PropertySchema& schema : keypadSchema) schema.group = "Principal";
     reg.registerFactory("switches.keypad", [&, keypadSchema](const ComponentParams& p) {
         return std::make_unique<components::SimulidePassiveState>("switches.keypad", makePinVector(p, 8), keypadSchema);
     });
@@ -647,7 +655,7 @@ std::vector<PropertySchema> parsePropertySchemaList(const nlohmann::json& device
     return schemaList;
 }
 
-/** ABI v2 (.spec/lasecsimul-native-devices.spec): chave opcional `"readout"` de `device.json` --
+/** ABI v2 (.spec/lasecsimul-native-devices.spec): chave opcional `"readout"` de `.lsdevice` --
  * device de terceiros declara como a UI deve decodificar sua leitura sem nenhuma mudança de código
  * no Core nem na Extension. Ausente/mal-formado = nullopt ("sem leitura estruturada"), nunca erro --
  * a maioria dos devices não tem mostrador. */
@@ -681,7 +689,7 @@ std::optional<InteractionKind> parseInteractionKind(const nlohmann::json& device
 }
 
 // ── serialização pro lado IPC (getPropertySchemas) — inversa de jsonToPropertyValue/
-// parsePropertySchema acima, pra a Webview receber exatamente o que `device.json` já declara pros
+// parsePropertySchema acima, pra a Webview receber exatamente o que `.lsdevice` já declara pros
 // plugins, agora também pros built-ins (ComponentMetadataRegistry, ver registerBuiltinComponents). ──
 
 nlohmann::json propertyValueToJson(const PropertyValue& value) {
@@ -804,11 +812,226 @@ ParsedPropertyError parsePropertyError(const std::string& rawError) {
 }
 
 /** Parseia `subcircuits/library.json` (lista de `{typeId, manifest}`, mesmo padrão de
- * `devices/library.json`) e cada `.lssub.json` referenciado, registrando no `SubcircuitRegistry`
+ * `devices/library.json`) e cada `.lssubcircuit` referenciado (ou `.lssub.json` antigo, ainda
+ * aberto por compatibilidade), registrando no `SubcircuitRegistry`
  * da sessão -- ver .spec/lasecsimul-subcircuits.spec, seções 1 e 7. Roda no mesmo verbo IPC
  * `loadDeviceLibrary` que já existe (seção 6): um `library.json` com `"devices"` cai no caminho de
  * plugin nativo (`loadDeviceLibraryFile`), um com `"subcircuits"` cai aqui -- os dois são checados
  * independentemente porque um `library.json` futuro poderia, em tese, ter as duas chaves. */
+/** Lê UM `.lssubcircuit` e registra no `SubcircuitRegistry` -- corpo por-entrada que
+ * `loadSubcircuitLibraryFile` sempre executou, fatorado aqui pra ser reutilizado também pelo verbo
+ * IPC avulso `registerAdhocSubcircuit` (bloco genérico de subcircuito por caminho, sem exigir
+ * `library.json`/registro prévio na paleta -- ver .spec/lasecsimul-subcircuits.spec seção 12).
+ * `typeIdOverride` preserva o comportamento de sempre quando chamado a partir do loop de
+ * `library.json` (typeId vem da ENTRADA do library.json, não do manifesto); quando vazio (caso do
+ * verbo avulso), usa o `typeId` declarado dentro do próprio manifesto. Devolve o typeId
+ * efetivamente registrado. */
+struct RegisteredSubcircuitInfo {
+    std::string typeId;
+    nlohmann::json payload;
+};
+
+std::string canonicalPathString(const std::filesystem::path& path) {
+    std::error_code ec;
+    const std::filesystem::path canonical = std::filesystem::weakly_canonical(path, ec);
+    return (ec ? std::filesystem::absolute(path) : canonical).lexically_normal().string();
+}
+
+std::string requiredString(const nlohmann::json& object, const char* key, const std::string& context) {
+    if (!object.contains(key) || !object[key].is_string() || object[key].get<std::string>().empty()) {
+        throw std::runtime_error(context + " sem campo string obrigatorio '" + key + "'");
+    }
+    return object[key].get<std::string>();
+}
+
+const nlohmann::json& requiredArray(const nlohmann::json& object, const char* key, const std::string& context) {
+    if (!object.contains(key) || !object[key].is_array()) {
+        throw std::runtime_error(context + " sem array obrigatorio '" + key + "'");
+    }
+    return object[key];
+}
+
+std::string registerSubcircuitFromManifestLegacyUnused(const std::filesystem::path& manifestPath,
+                                                       registry::SubcircuitRegistry& subcircuits,
+                                                       const std::string& typeIdOverride = {}) {
+    std::ifstream manifestFile(manifestPath);
+    if (!manifestFile) throw std::runtime_error("manifesto de subcircuito (.lssubcircuit) não encontrado: " + manifestPath.string());
+    nlohmann::json manifest;
+    manifestFile >> manifest;
+
+    const std::string typeId = !typeIdOverride.empty() ? typeIdOverride : manifest.value("typeId", std::string{});
+    if (typeId.empty()) throw std::runtime_error("manifesto de subcircuito sem typeId: " + manifestPath.string());
+
+    registry::SubcircuitDefinition def;
+    def.typeId = typeId;
+    def.name = manifest.value("name", typeId);
+    def.packageJson = manifest.contains("package") ? manifest["package"].dump() : "{}";
+
+    if (manifest.contains("components") && manifest["components"].is_array()) {
+        for (const auto& compJson : manifest["components"]) {
+            registry::SubcircuitComponentDef comp;
+            comp.id = compJson.value("id", std::string{});
+            comp.typeId = compJson.value("typeId", std::string{});
+            comp.propertiesJson = compJson.contains("properties") ? compJson["properties"].dump() : "{}";
+            def.components.push_back(std::move(comp));
+        }
+    }
+    if (manifest.contains("wires") && manifest["wires"].is_array()) {
+        for (const auto& wireJson : manifest["wires"]) {
+            registry::SubcircuitWireDef wire;
+            wire.fromComponentId = wireJson["from"].value("componentId", std::string{});
+            wire.fromPinId = wireJson["from"].value("pinId", std::string{});
+            wire.toComponentId = wireJson["to"].value("componentId", std::string{});
+            wire.toPinId = wireJson["to"].value("pinId", std::string{});
+            def.wires.push_back(std::move(wire));
+        }
+    }
+    if (manifest.contains("interface") && manifest["interface"].is_array()) {
+        for (const auto& ifaceJson : manifest["interface"]) {
+            registry::SubcircuitInterfaceDef iface;
+            iface.pinId = ifaceJson.value("pinId", std::string{});
+            iface.label = ifaceJson.value("label", iface.pinId);
+            iface.internalTunnel = ifaceJson.value("internalTunnel", std::string{});
+            def.interfaceDefs.push_back(std::move(iface));
+        }
+    }
+    subcircuits.registerDefinition(std::move(def));
+    return typeId;
+}
+
+RegisteredSubcircuitInfo registerSubcircuitFromManifestRich(const std::filesystem::path& manifestPath,
+                                                            registry::SubcircuitRegistry& subcircuits,
+                                                            const std::string& typeIdOverride = {},
+                                                            bool allowReplace = true) {
+    std::ifstream manifestFile(manifestPath);
+    if (!manifestFile) throw std::runtime_error("manifesto de subcircuito (.lssubcircuit) nao encontrado: " + manifestPath.string());
+    nlohmann::json manifest;
+    manifestFile >> manifest;
+    if (!manifest.is_object()) throw std::runtime_error("manifesto de subcircuito deve ser um objeto JSON: " + manifestPath.string());
+
+    if (!manifest.contains("schemaVersion") || !manifest["schemaVersion"].is_number_integer()) {
+        throw std::runtime_error("manifesto de subcircuito sem schemaVersion inteiro: " + manifestPath.string());
+    }
+    const int schemaVersion = manifest["schemaVersion"].get<int>();
+    if (schemaVersion != 1) {
+        throw std::runtime_error("schemaVersion de subcircuito nao suportado: " + std::to_string(schemaVersion));
+    }
+
+    const std::string typeId = !typeIdOverride.empty() ? typeIdOverride : requiredString(manifest, "typeId", "manifesto de subcircuito");
+    const std::string sourcePath = canonicalPathString(manifestPath);
+    const registry::SubcircuitDefinition* existing = subcircuits.find(typeId);
+    const bool sameSourceReload = existing && !existing->sourcePath.empty() && existing->sourcePath == sourcePath;
+    if (existing && !allowReplace && !sameSourceReload) {
+        throw std::runtime_error("typeId de subcircuito duplicado: " + typeId + " (ja registrado em " +
+                                 (existing->sourcePath.empty() ? std::string{"fonte nao informada"} : existing->sourcePath) + ")");
+    }
+    const bool replacing = existing != nullptr;
+
+    const nlohmann::json& componentsJson = requiredArray(manifest, "components", "manifesto de subcircuito");
+    const nlohmann::json& wiresJson = requiredArray(manifest, "wires", "manifesto de subcircuito");
+    const nlohmann::json& interfaceJson = requiredArray(manifest, "interface", "manifesto de subcircuito");
+
+    registry::SubcircuitDefinition def;
+    def.typeId = typeId;
+    def.name = manifest.value("name", typeId);
+    def.sourcePath = sourcePath;
+    def.packageJson = manifest.contains("package") ? manifest["package"].dump() : "{}";
+
+    std::unordered_set<std::string> componentIds;
+    std::unordered_set<std::string> tunnelNames;
+    for (const auto& compJson : componentsJson) {
+        if (!compJson.is_object()) throw std::runtime_error("components[] deve conter objetos em " + sourcePath);
+        registry::SubcircuitComponentDef comp;
+        comp.id = requiredString(compJson, "id", "components[]");
+        comp.typeId = requiredString(compJson, "typeId", "components[]");
+        if (!componentIds.insert(comp.id).second) throw std::runtime_error("id de componente duplicado no subcircuito: " + comp.id);
+        if (compJson.contains("properties") && !compJson["properties"].is_object()) {
+            throw std::runtime_error("properties de componente deve ser objeto: " + comp.id);
+        }
+        comp.propertiesJson = compJson.contains("properties") ? compJson["properties"].dump() : "{}";
+        if (comp.typeId == "connectors.tunnel" && compJson.contains("properties") && compJson["properties"].is_object()) {
+            const auto& properties = compJson["properties"];
+            if (properties.contains("name") && properties["name"].is_string() && !properties["name"].get<std::string>().empty()) {
+                tunnelNames.insert(properties["name"].get<std::string>());
+            }
+        }
+        def.components.push_back(std::move(comp));
+    }
+
+    for (const auto& wireJson : wiresJson) {
+        if (!wireJson.is_object()) throw std::runtime_error("wires[] deve conter objetos em " + sourcePath);
+        if (!wireJson.contains("from") || !wireJson["from"].is_object() || !wireJson.contains("to") || !wireJson["to"].is_object()) {
+            throw std::runtime_error("wire sem endpoints from/to objetos em " + sourcePath);
+        }
+        registry::SubcircuitWireDef wire;
+        wire.fromComponentId = requiredString(wireJson["from"], "componentId", "wire.from");
+        wire.fromPinId = requiredString(wireJson["from"], "pinId", "wire.from");
+        wire.toComponentId = requiredString(wireJson["to"], "componentId", "wire.to");
+        wire.toPinId = requiredString(wireJson["to"], "pinId", "wire.to");
+        if (!componentIds.contains(wire.fromComponentId)) {
+            throw std::runtime_error("wire referencia componente inexistente: " + wire.fromComponentId);
+        }
+        if (!componentIds.contains(wire.toComponentId)) {
+            throw std::runtime_error("wire referencia componente inexistente: " + wire.toComponentId);
+        }
+        def.wires.push_back(std::move(wire));
+    }
+
+    nlohmann::json exportedInterface = nlohmann::json::array();
+    nlohmann::json pinIds = nlohmann::json::array();
+    std::unordered_set<std::string> interfacePinIds;
+    for (const auto& ifaceJson : interfaceJson) {
+        if (!ifaceJson.is_object()) throw std::runtime_error("interface[] deve conter objetos em " + sourcePath);
+        registry::SubcircuitInterfaceDef iface;
+        iface.pinId = requiredString(ifaceJson, "pinId", "interface[]");
+        iface.label = ifaceJson.value("label", iface.pinId);
+        iface.internalTunnel = requiredString(ifaceJson, "internalTunnel", "interface[]");
+        if (!interfacePinIds.insert(iface.pinId).second) throw std::runtime_error("pinId duplicado na interface: " + iface.pinId);
+        if (!tunnelNames.contains(iface.internalTunnel)) {
+            throw std::runtime_error("interface referencia tunnel interno inexistente: " + iface.internalTunnel);
+        }
+        exportedInterface.push_back({{"pinId", iface.pinId}, {"label", iface.label}, {"internalTunnel", iface.internalTunnel}});
+        pinIds.push_back(iface.pinId);
+        def.interfaceDefs.push_back(std::move(iface));
+    }
+
+    if (manifest.contains("package")) {
+        if (!manifest["package"].is_object()) throw std::runtime_error("package de subcircuito deve ser objeto: " + typeId);
+        if (manifest["package"].contains("pins")) {
+            const nlohmann::json& packagePins = manifest["package"]["pins"];
+            if (!packagePins.is_array()) throw std::runtime_error("package.pins deve ser array: " + typeId);
+            std::unordered_set<std::string> packagePinIds;
+            for (const auto& pinJson : packagePins) {
+                if (!pinJson.is_object()) throw std::runtime_error("package.pins[] deve conter objetos: " + typeId);
+                const std::string pinId = requiredString(pinJson, "id", "package.pins[]");
+                if (!packagePinIds.insert(pinId).second) throw std::runtime_error("package.pins id duplicado: " + pinId);
+                if (!interfacePinIds.contains(pinId)) throw std::runtime_error("package.pins referencia pin fora da interface: " + pinId);
+            }
+        }
+    }
+
+    subcircuits.registerDefinition(std::move(def), true);
+    nlohmann::json payload{
+        {"status", replacing ? "reloaded" : "registered"},
+        {"replaced", replacing},
+        {"typeId", typeId},
+        {"name", manifest.value("name", typeId)},
+        {"path", sourcePath},
+        {"interface", exportedInterface},
+        {"pinIds", pinIds},
+        {"pinCount", pinIds.size()},
+        {"package", manifest.contains("package") ? manifest["package"] : nlohmann::json(nullptr)},
+        {"logicSymbolPackage", manifest.contains("logicSymbolPackage") ? manifest["logicSymbolPackage"] : nlohmann::json(nullptr)},
+        {"defaultProperties", manifest.contains("defaultProperties") && manifest["defaultProperties"].is_object() ? manifest["defaultProperties"] : nlohmann::json::object()},
+        {"propertySchema", manifest.contains("propertySchema") && manifest["propertySchema"].is_array() ? manifest["propertySchema"] : nlohmann::json::array()},
+        {"translations", manifest.contains("translations") && manifest["translations"].is_object() ? manifest["translations"] : nlohmann::json::object()},
+        {"language", manifest.contains("language") && manifest["language"].is_string() ? manifest["language"] : nlohmann::json(nullptr)},
+        {"folderPath", manifest.contains("folderPath") && (manifest["folderPath"].is_array() || manifest["folderPath"].is_string()) ? manifest["folderPath"] : nlohmann::json(nullptr)},
+        {"icon", manifest.contains("icon") && manifest["icon"].is_string() ? manifest["icon"] : nlohmann::json(nullptr)},
+        {"iconPath", manifest.contains("iconPath") && manifest["iconPath"].is_string() ? manifest["iconPath"] : nlohmann::json(nullptr)}};
+    return {typeId, std::move(payload)};
+}
+
 void loadSubcircuitLibraryFile(const std::filesystem::path& libraryJsonPath, registry::SubcircuitRegistry& subcircuits) {
     std::ifstream libraryFile(libraryJsonPath);
     if (!libraryFile) throw std::runtime_error("library.json não encontrado: " + libraryJsonPath.string());
@@ -822,47 +1045,7 @@ void loadSubcircuitLibraryFile(const std::filesystem::path& libraryJsonPath, reg
         const std::string typeId = entry.value("typeId", std::string{});
         const std::string manifestRelative = entry.value("manifest", std::string{});
         if (typeId.empty() || manifestRelative.empty()) continue;
-
-        const std::filesystem::path manifestPath = libraryDir / manifestRelative;
-        std::ifstream manifestFile(manifestPath);
-        if (!manifestFile) throw std::runtime_error(".lssub.json não encontrado: " + manifestPath.string());
-        nlohmann::json manifest;
-        manifestFile >> manifest;
-
-        registry::SubcircuitDefinition def;
-        def.typeId = typeId;
-        def.name = manifest.value("name", typeId);
-        def.packageJson = manifest.contains("package") ? manifest["package"].dump() : "{}";
-
-        if (manifest.contains("components") && manifest["components"].is_array()) {
-            for (const auto& compJson : manifest["components"]) {
-                registry::SubcircuitComponentDef comp;
-                comp.id = compJson.value("id", std::string{});
-                comp.typeId = compJson.value("typeId", std::string{});
-                comp.propertiesJson = compJson.contains("properties") ? compJson["properties"].dump() : "{}";
-                def.components.push_back(std::move(comp));
-            }
-        }
-        if (manifest.contains("wires") && manifest["wires"].is_array()) {
-            for (const auto& wireJson : manifest["wires"]) {
-                registry::SubcircuitWireDef wire;
-                wire.fromComponentId = wireJson["from"].value("componentId", std::string{});
-                wire.fromPinId = wireJson["from"].value("pinId", std::string{});
-                wire.toComponentId = wireJson["to"].value("componentId", std::string{});
-                wire.toPinId = wireJson["to"].value("pinId", std::string{});
-                def.wires.push_back(std::move(wire));
-            }
-        }
-        if (manifest.contains("interface") && manifest["interface"].is_array()) {
-            for (const auto& ifaceJson : manifest["interface"]) {
-                registry::SubcircuitInterfaceDef iface;
-                iface.pinId = ifaceJson.value("pinId", std::string{});
-                iface.label = ifaceJson.value("label", iface.pinId);
-                iface.internalTunnel = ifaceJson.value("internalTunnel", std::string{});
-                def.interfaceDefs.push_back(std::move(iface));
-            }
-        }
-        subcircuits.registerDefinition(std::move(def));
+        (void)registerSubcircuitFromManifestRich(libraryDir / manifestRelative, subcircuits, typeId, true);
     }
 }
 
@@ -874,12 +1057,13 @@ constexpr const char* kPlatformKey = "darwin-universal";
 constexpr const char* kPlatformKey = "linux-x64";
 #endif
 
-/** Parseia `library.json` (lista de `{typeId, manifest}`), parseia cada `device.json` referenciado,
+/** Parseia `library.json` (lista de `{typeId, manifest}`), parseia cada `.lsdevice` referenciado
+ * (ou `device.json` antigo, ainda aberto por compatibilidade),
  * resolve o binário nativo da plataforma atual e publica no GlobalPluginCache —
  * `PluginLoader::scanDirectory()` permanece o stub documentado (ver PluginLoader.hpp, "quem chama
  * scanDirectory é responsável por publicar no GlobalPluginCache"); esta função é esse chamador, só
  * ainda não existia nenhum. Caminhos em `nativeEntry`/`manifest` são relativos ao arquivo que os
- * declara (device.json e library.json, respectivamente) — mesma convenção usada por
+ * declara (`.lsdevice`/`device.json` e library.json, respectivamente) — mesma convenção usada por
  * `npm run build:devices` ao gerar `devices/example-blinker/build/win-x64/device.dll`. */
 void loadDeviceLibraryFile(const std::filesystem::path& libraryJsonPath, GlobalPluginCache& pluginCache) {
     std::ifstream libraryFile(libraryJsonPath);
@@ -897,12 +1081,12 @@ void loadDeviceLibraryFile(const std::filesystem::path& libraryJsonPath, GlobalP
 
         const std::filesystem::path manifestPath = libraryDir / manifestRelative;
         std::ifstream manifestFile(manifestPath);
-        if (!manifestFile) throw std::runtime_error("device.json não encontrado: " + manifestPath.string());
+        if (!manifestFile) throw std::runtime_error("manifesto de dispositivo (.lsdevice) não encontrado: " + manifestPath.string());
         nlohmann::json device;
         manifestFile >> device;
 
         if (!device.contains("nativeEntry") || !device["nativeEntry"].contains(kPlatformKey)) {
-            throw std::runtime_error("device.json sem nativeEntry para a plataforma atual ('" +
+            throw std::runtime_error("manifesto de dispositivo sem nativeEntry para a plataforma atual ('" +
                                       std::string(kPlatformKey) + "'): " + manifestPath.string());
         }
         const std::filesystem::path binaryPath =
@@ -914,7 +1098,7 @@ void loadDeviceLibraryFile(const std::filesystem::path& libraryJsonPath, GlobalP
         metadata.propertySchema = parsePropertySchemaList(device);
         metadata.readoutFormat = parseReadoutFormat(device);
         metadata.interactionKind = parseInteractionKind(device);
-        // language é obrigatório por contrato (RNF12 de lasecsimul.spec), mas device.json anterior a
+        // language é obrigatório por contrato (RNF12 de lasecsimul.spec), mas manifesto anterior a
         // esta rodada não declara -- default "pt-BR" preserva compatibilidade (todo manifesto existente
         // até aqui foi de fato escrito em português, então o default não está mentindo).
         metadata.language = device.value("language", std::string{"pt-BR"});
@@ -958,12 +1142,12 @@ void loadMcuLibraryFile(const std::filesystem::path& libraryJsonPath, GlobalPlug
 
         const std::filesystem::path manifestPath = libraryDir / manifestRelative;
         std::ifstream manifestFile(manifestPath);
-        if (!manifestFile) throw std::runtime_error("mcu.json não encontrado: " + manifestPath.string());
+        if (!manifestFile) throw std::runtime_error("manifesto de MCU (.lsdevice) não encontrado: " + manifestPath.string());
         nlohmann::json mcu;
         manifestFile >> mcu;
 
         if (!mcu.contains("nativeEntry") || !mcu["nativeEntry"].contains(kPlatformKey)) {
-            throw std::runtime_error("mcu.json sem nativeEntry para a plataforma atual ('" +
+            throw std::runtime_error("manifesto de MCU sem nativeEntry para a plataforma atual ('" +
                                       std::string(kPlatformKey) + "'): " + manifestPath.string());
         }
         const std::filesystem::path binaryPath =
@@ -1050,7 +1234,7 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
             const std::string typeId = payload.value("typeId", std::string{});
             if (session.isSubcircuitType(typeId)) {
                 // Subcircuito: nem `properties`/`pins` do payload se aplicam (interno já vem fixo
-                // do .lssub.json) — ver .spec/lasecsimul-subcircuits.spec, seção 5.1/6.
+                // do .lssubcircuit) — ver .spec/lasecsimul-subcircuits.spec, seção 5.1/6.
                 const session::SubcircuitExpansionResult expansion = session.addSubcircuitInstance(typeId);
                 nlohmann::json exposedPinsJson = nlohmann::json::object();
                 for (const auto& [pinId, exposed] : expansion.exposedPins) {
@@ -1331,7 +1515,7 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
     }
     // Schema de propriedades por typeId (grupo/editor/min/max/opções/flags) — built-in (registrado em
     // registerBuiltinComponents) OU plugin (registrado por loadDeviceLibraryFile a partir do
-    // device.json) — `ComponentMetadataRegistry` é a MESMA fonte pros dois, sem distinção aqui. Só
+    // .lsdevice) — `ComponentMetadataRegistry` é a MESMA fonte pros dois, sem distinção aqui. Só
     // leitura, sem payload de entrada; devolve tudo que já está registrado neste momento (chamar de
     // novo depois de um loadDeviceLibrary pega os typeIds novos também).
     if (msg.type == "getPropertySchemas") {
@@ -1388,6 +1572,27 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
         } catch (const std::exception& e) {
             resp.ok = false;
             resp.error = std::string("loadDeviceLibrary falhou: ") + e.what();
+        }
+        return resp;
+    }
+    // Registra UM `.lssubcircuit` avulso direto, sem exigir um `library.json` -- usado pelo bloco
+    // genérico de subcircuito por caminho (Extension escolhe um arquivo numa propriedade; aqui só
+    // registra a definição, `addComponent` com esse typeId continua sendo o mesmo caminho de sempre,
+    // ver `.spec/lasecsimul-subcircuits.spec` seção 12). Payload: `{path: string}`.
+    if (msg.type == "registerAdhocSubcircuit") {
+        try {
+            const nlohmann::json payload =
+                msg.payloadJson.empty() ? nlohmann::json::object() : nlohmann::json::parse(msg.payloadJson);
+            const std::string manifestPath = payload.value("path", std::string{});
+            const bool replace = payload.value("replace", false);
+            if (manifestPath.empty()) throw std::runtime_error("payload sem 'path'");
+            const RegisteredSubcircuitInfo info =
+                registerSubcircuitFromManifestRich(manifestPath, session.subcircuits(), {}, replace);
+            resp.ok = true;
+            resp.payloadJson = info.payload.dump();
+        } catch (const std::exception& e) {
+            resp.ok = false;
+            resp.error = std::string("registerAdhocSubcircuit falhou: ") + e.what();
         }
         return resp;
     }

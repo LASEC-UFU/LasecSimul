@@ -341,8 +341,16 @@ arquivo único da seção 7 do spec — e só desabilita se esse `library.json` 
 registrado via `registeredSources` (`project/schema/component-catalog.json`) com seu próprio
 `esp32_devkitc_v4.lsconfig`, aparece habilitado na paleta e instancia de verdade.
 
+**Atualização 2026-07-06 (migração de extensões)**: o `.lsconfig` descrito acima era exatamente a
+duplicação que contrariava o "princípio do arquivo único" já valendo pra `device.json`/`.lsdevice`
+desde 2026-07-02 — corrigido nesta data. `esp32_devkitc_v4.lssub.json`+`esp32_devkitc_v4.lsconfig`
+(e o par `esp32_wroom32.*`) foram fundidos num único `esp32_devkitc_v4.lssubcircuit` (campo
+`iconPath` movido pro manifesto raiz, `.lsconfig` apagado). `mcu-adapters/espressif-esp32/mcu.json`
+também virou `.lsdevice`, fundindo seu `device.lsconfig`. Ver `.spec/lasecsimul-subcircuits.spec`
+seção 7.1 e `.spec/lasecsimul-native-devices.spec` seção 14/21.2 (já atualizadas).
+
 **Ainda pendente (lado Extension)**: comando "Criar Subcircuito a partir da Seleção", editor de
-símbolo (depende do Épico G), persistência `.lssub.json` a partir do editor — cada um exigiria UI
+símbolo (depende do Épico G), persistência `.lssubcircuit` a partir do editor — cada um exigiria UI
 nova no webview testável só com interação real (mouse/seleção), ver mesma decisão de escopo do
 Épico G abaixo. Registrar/usar um subcircuito já escrito à mão (este épico) não depende de nenhum
 dos três.
@@ -361,7 +369,7 @@ suficiente para começar a implementação por fases.
 - Implementar expansão recursiva de subcircuito dentro da `SimulationSession`.
 - Detectar ciclo de dependência entre subcircuitos.
 - Criar comando “Criar Subcircuito a partir da Seleção”.
-- Criar persistência `.lssub.json`.
+- Criar persistência `.lssubcircuit`.
 - ~~Integrar subcircuitos à paleta com `folderPath`, i18n e `deviceLibraries[]`.~~ **Feito**
   (2026-06-28) — ver nota acima.
 
@@ -420,7 +428,7 @@ typeId — pino do símbolo, ângulo = `component.rotation` genérico, sem campo
 dedicado). Todos `pinCount: 0`, nunca tocam o Core. Conversão pura package↔componentes em
 `extension/src/catalog/symbolAuthoring.ts` (`seedSymbolAuthoringComponents`/
 `compileSymbolAuthoringComponents`, 7 testes em `symbolAuthoring.test.ts`). Salvar relê o
-`device.json`/`mcu.json`/`.lssub.json` do disco e substitui só `package`
+`.lsdevice`/`.lssubcircuit` do disco e substitui só `package`
 (`extension.ts::saveSymbolCommand`); fundo `svg`/`image` já existente é preservado verbatim (sem UI de
 upload nesta rodada). Dois pontos de entrada: botão "✎" por item registrado na paleta, comando
 `lasecsimul.palette.editSymbol` (seletor de arquivo, pra manifesto ainda não registrado). Detalhe
@@ -450,7 +458,7 @@ lasecsimul-native-devices.spec` seção 21.4) e revelou que faltava mais coisa f
 - **Circuito interno real editável** (`.spec/lasecsimul-subcircuits.spec` seção 4): a sessão de
   autoria de um `subcircuit-file` agora TAMBÉM semeia `components[]`/`wires[]` reais (não só o
   `package`) — igual ao "Open Subcircuit" do SimulIDE mostrar os dois juntos na mesma cena.
-  `.lssub.json` ganhou campos aditivos (`visual`/`boardVisual`/`points`), Core ignora o que não
+  `.lssubcircuit` ganhou campos aditivos (`visual`/`boardVisual`/`points`), Core ignora o que não
   reconhece, zero mudança em `SubcircuitRegistry.hpp` (confirmado, `ctest` 26/26 sem alteração).
 - **Modo Placa** (`SubPackage::boardModeSlot()` do SimulIDE real): dentro da sessão, componente
   interno tem 2 posições independentes (circuito/placa); ligar o modo esconde quem não for
@@ -503,11 +511,11 @@ rodada, o contrato existia melhor do que a ferramenta visual para produzi-lo.
   `saveSymbolCommand`, `switchSymbolViewCommand`, `resolveRegisteredItem`)
 - `project/schema/component-catalog.json` (`other.package`/`other.package_pin`/`graphics.*`,
   `graphical: true` nos typeIds de interação do usuário)
-- `devices/*/device.json`, `mcu-adapters/*/mcu.json`, `subcircuits/*.lssub.json`
+- `devices/*/*.lsdevice`, `mcu-adapters/*/*.lsdevice`, `subcircuits/*.lssubcircuit`
 
 ### Critério de aceite
 
-- um `device.json` sem edição manual extensa já pode ser produzido pela UI;
+- um `.lsdevice` sem edição manual extensa já pode ser produzido pela UI;
 - abrir/salvar preserva fidelidade sem formato paralelo.
 
 ## Épico H - Solver e componentes não lineares

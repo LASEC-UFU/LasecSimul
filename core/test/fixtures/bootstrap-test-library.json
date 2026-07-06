@@ -5,6 +5,6 @@
   "version": "0.1.0",
   "license": "MIT",
   "devices": [
-    { "typeId": "example.blinker", "manifest": "../../../devices/example-blinker/device.json" }
+    { "typeId": "example.blinker", "manifest": "../../../devices/example-blinker/device.lsdevice" }
   ]
 }

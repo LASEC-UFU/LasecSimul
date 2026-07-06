@@ -1,8 +1,38 @@
 ---
 name: lasecsimul-development
-description: Habilidade para desenvolver o LasecSimul — simulador de circuitos eletrônicos com extensão VSCode (TS) + núcleo nativo C++, MCUs emulados via QEMU, dispositivos extensíveis via plugin nativo DLL/SO. Referência técnica em .spec/lasecsimul.spec e .spec/lasecsimul-native-devices.spec.
+description: Claude Code skill for developing LasecSimul (VS Code extension in TypeScript plus native C++ core, MCU emulation via QEMU, native plugin extensibility).
 applies_to: LasecSimul/**
+language: en
+keywords: [coding-skill, architecture-boundary, native-plugin, qemu, testing-gates, change-management, decision-protocol]
+source_of_truth:
+  - .spec/lasecsimul.spec
+  - .spec/lasecsimul-native-devices.spec
 ---
+
+# Claude Code Skill Contract (English)
+
+Purpose: Operational skill guide for coding agents implementing LasecSimul.
+Audience: implementation agents, reviewers, maintainers.
+Mode: actionable execution rules.
+
+Execution Rules:
+1. MUST read primary specs before implementing behavior changes.
+2. MUST preserve Extension/Core boundary and host-agnostic contracts.
+3. MUST treat native plugin ABI plus QEMU strategy as active architecture.
+4. MUST run relevant build/test gates before declaring completion.
+5. SHOULD document non-trivial decisions in specs during the same task.
+
+Task Loop:
+1. Understand requirement.
+2. Map to spec section.
+3. Implement minimal safe change.
+4. Validate with tests/build.
+5. Update spec when contract evolved.
+
+Decision Keywords:
+- MUST, SHOULD, MAY, OUT OF SCOPE follow RFC 2119 intent.
+
+## Legacy Detailed Guidance (pt-BR)
 
 # Skill: Desenvolvimento do LasecSimul
 
@@ -69,6 +99,10 @@ remeter a WASM/worker, é desatualizado — confiar nos dois `.spec` acima.
    device E/OU fica duplicada em outro lugar" (ver regra 6 acima e `.spec/lasecsimul.spec` seção 11).
    Built-in novo SEM relação com um grupo já existente ganha arquivo próprio; built-in novo
    RELACIONADO a um grupo existente (ex: mais um tipo de switch) pode entrar no mesmo módulo do grupo.
+8. **Na UI/webview, `authoringScene`/`package` é sempre consumido via parser/tradutor genérico
+  compatível com construção SimulIDE.** Não implementar helper ad-hoc por device nem `if/switch`
+  por `typeId` para reconstruir geometria, placement, pinos ou wire-route quando o dado já está no
+  payload declarativo. Mapeamento visual hardcoded por device é OUT OF SCOPE.
 
 ## Como agir por tipo de tarefa
 
@@ -88,6 +122,9 @@ remeter a WASM/worker, é desatualizado — confiar nos dois `.spec` acima.
   sem SVG externo; imagem de fundo é embutida como string no próprio JSON). É lido só pela Extension; o Core
   nunca processa `package`. Um eventual "editor de pacote" é o mesmo webview do esquemático com um modo
   especial — não uma ferramenta nova.
+- **Renderização de subcircuito/símbolo no webview** → passar por tradutor/parser único (ex:
+  `extractSimulideSubcircuitScene` + `translateSimulideSubcircuitAuthoringScene`) e evoluir esse pipeline,
+  não espalhar heurística por componente.
 - **Novo MCU** → sempre plugin nativo (`mcu-adapters/<chip>/`, `mcu_abi.h`/`LsdnMcuVTable` +
   `LsdnQemuModuleVTable` por periférico, ver `docs/18-guia-dispositivo-abi-e-mcu-qemu.md` seção 2) — não
   existe mais caminho built-in (removido ao migrar o ESP32, mesmo desempenho dos dois). Verificar se a

@@ -295,38 +295,12 @@ html, body {
   z-index: 5;
 }
 
-.component__symbol--push .push-actuator-bar,
-.component__symbol--push .push-body {
-  transition: transform 80ms ease-out, fill 80ms ease-out, stroke 80ms ease-out;
-}
-
-.component__symbol--push-pressed .push-actuator-bar {
-  transform: translateY(4px);
-}
-
-.component__symbol--push-pressed .push-body {
-  fill: #62d67b;
-  stroke: #24803a;
-}
-
-.component__symbol--switch .switch-lever {
-  transform: none;
-  transform-box: view-box;
-  transform-origin: 8px 8px;
-  transition: transform 100ms ease-out;
-}
-
-.component__symbol--switch .switch-body {
+/* Estado aberto/fechado de push/switch/switch_dip vem de `stateFill`/`stateVisible` no
+   `package.simulidePaint` (ver component-catalog.json) -- a cor/posição corretas já saem prontas do
+   SVG a cada `packageSymbolSvg`; só a transição suave de cor fica aqui. */
+.push-body,
+.switch-body {
   transition: fill 100ms ease-out, stroke 100ms ease-out;
-}
-
-.component__symbol--switch-closed .switch-lever {
-  transform: rotate(26.565deg);
-}
-
-.component__symbol--switch-closed .switch-body {
-  fill: #62d67b;
-  stroke: #24803a;
 }
 
 .component__symbol--fixed-volt .fixed-volt-body {
@@ -431,6 +405,13 @@ html, body {
 .component--tunnel .pin-terminal {
   fill: transparent;
   stroke: transparent;
+}
+
+/** Bloco genérico de subcircuito por caminho com arquivo `.lssubcircuit` ausente (arquivo movido ou
+ * apagado desde o último salvamento do projeto) -- ver `main.ts::updateComponentElement`. */
+.component--subcircuit-missing {
+  outline: 1px dashed #d9534f;
+  outline-offset: 2px;
 }
 
 .component--tunnel .pin-terminal:hover {
@@ -723,6 +704,31 @@ html, body {
   border: 1px solid #b8b8b8;
   background: #fff;
   color: #202020;
+}
+
+.property-sheet__file-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.property-sheet__file-group .property-sheet__field-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.property-sheet__file-browse-button {
+  height: 24px;
+  padding: 2px 8px;
+  border: 1px solid #b8b8b8;
+  background: #f0f0f0;
+  color: #202020;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.property-sheet__file-browse-button:hover {
+  background: #e2e2e2;
 }
 
 .property-sheet__tabs {

@@ -83,13 +83,13 @@ device — só `#include` ele.
 
 | Função | O que faz |
 |---|---|
-| `pin_declare(ctx, index, kind, name)` | Registra um pino do seu device (mesma ordem do `pins[]` do `device.json`), devolve um handle pra usar nas outras chamadas. Chame em `init()`. |
+| `pin_declare(ctx, index, kind, name)` | Registra um pino do seu device (mesma ordem do `pins[]` do `.lsdevice`), devolve um handle pra usar nas outras chamadas. Chame em `init()`. |
 | `pin_write(ctx, pin, level)` | Jeito ergonômico de dirigir um pino digital direto (fonte de baixa impedância) — sem montar `stamp()` na mão. Equivalente a "eu sou o único dono deste pino". |
 | `pin_write_analog(ctx, pin, volts)` | Mesma ideia, valor analógico. |
 | `pin_read(ctx, pin)` | Nível (0/1) do próprio pino na última `stamp()` — cache, nunca dispara solve novo. Use fora de `stamp()` (em `on_event`/`post_step`). |
-| `pin_name(ctx, index)` | Nome do pino pelo índice — útil pra validar no `init()` que a ordem que você assumiu bate com o `device.json` (erro clássico: SCL/SDA trocados). |
+| `pin_name(ctx, index)` | Nome do pino pelo índice — útil pra validar no `init()` que a ordem que você assumiu bate com o `.lsdevice` (erro clássico: SCL/SDA trocados). |
 | `schedule_event(ctx, delay_ns, event_id)` | Agenda um `LSDN_EVT_TIMER` no futuro — para piscar, fazer polling, animar. |
-| `config_get(ctx, name, out_value)` | Lê o valor **atual** de uma propriedade declarada no `device.json` (já considerando o que o usuário configurou no projeto). |
+| `config_get(ctx, name, out_value)` | Lê o valor **atual** de uma propriedade declarada no `.lsdevice` (já considerando o que o usuário configurou no projeto). |
 | `now_ns(ctx)` | Tempo de simulação atual, determinístico. |
 | `log(ctx, level, msg)` | Aparece no Output do VSCode. |
 | `submit_task(ctx, fn, arg)` | Único jeito correto de fazer trabalho em background — nunca crie sua própria thread e chame `LsdnHostApi` dela concorrentemente. |
@@ -124,7 +124,7 @@ typedef struct LsdnDeviceVTable {
 | `stamp` | Só quando "dirty" (mudou topologia/propriedade) | Contribuir na matriz (`LsdnMatrixView`) se o device tiver comportamento elétrico passivo; é também onde você faz o primeiro `schedule_event` (ver regra acima). |
 | `post_step` | Só se o device se registrou como dinâmico — na prática, raramente usado; a maioria dos devices reais usa `schedule_event`/`on_event` em vez disso (ver `example-blinker`). | Lógica de avanço de tempo contínuo, se precisar. |
 | `on_event` | Quando um `LSDN_EVT_PIN_CHANGE`/`LSDN_EVT_TIMER` chega | Decodificar protocolo bit a bit, reagir a timer. |
-| `get_property`/`set_property` | Usuário edita propriedade no painel | Espelhar exatamente o schema do `device.json` — `name` é o `id` da propriedade. |
+| `get_property`/`set_property` | Usuário edita propriedade no painel | Espelhar exatamente o schema do `.lsdevice` — `name` é o `id` da propriedade. |
 | `get_state`/`set_state` | Salvar/abrir projeto | Serializar todo estado interno relevante num buffer próprio seu (formato é privado ao seu device). |
 | `destroy` | Remoção do componente | Liberar memória. |
 
@@ -142,10 +142,10 @@ const LsdnDeviceVTable* lsdn_get_vtable(uint32_t* abi_major, uint32_t* abi_minor
 `LSDN_ABI_VERSION_MAJOR` hoje é **3**. O `PluginLoader` só rejeita por `major` diferente (minor é só
 informativo) — sempre recompile o device (`npm run build:devices`) depois de atualizar o Core.
 
-## 1.3 Anatomia de `device.json` — cada campo, o que faz
+## 1.3 Anatomia de `.lsdevice` — cada campo, o que faz
 
-Arquivo real de referência: `devices/example-blinker/device.json` e
-`devices/voltmeter/device.json`. Schema completo: `.spec/lasecsimul-native-devices.spec` seção 4.2.2.
+Arquivo real de referência: `devices/example-blinker/.lsdevice` e
+`devices/voltmeter/.lsdevice`. Schema completo: `.spec/lasecsimul-native-devices.spec` seção 4.2.2.
 
 ```json
 {
@@ -190,13 +190,13 @@ Arquivo real de referência: `devices/example-blinker/device.json` e
 ### 1.3.1 Internacionalização
 
 Todo campo textual visível pode ser uma string simples (no idioma de `language`) ou um objeto
-`translations.<locale>` espelhando a mesma chave. Exemplo real (`devices/voltmeter/device.json`):
+`translations.<locale>` espelhando a mesma chave. Exemplo real (`devices/voltmeter/.lsdevice`):
 `language: "pt-BR"`, e `translations.en.name`/`translations.en.properties.displayVoltage.label`
 fornecem a versão em inglês só dos campos que precisam de tradução — não precisa duplicar tudo.
 
 ## 1.4 Como exportar propriedades e enums
 
-Cada item de `properties[]` no `device.json`:
+Cada item de `properties[]` no `.lsdevice`:
 
 ```json
 {
@@ -251,7 +251,7 @@ comparador — com um `threshold` (`number`) e um `mode` (`enum`: `"normal"` = s
 entrada > threshold; `"inverted"` = o contrário). Baseado fielmente no padrão real de
 `devices/example-blinker/src/lib.c` e `devices/voltmeter/src/lib.c`.
 
-`devices/comparator-example/device.json`:
+`devices/comparator-example/.lsdevice`:
 
 ```json
 {
@@ -439,13 +439,13 @@ set_target_properties(device PROPERTIES C_VISIBILITY_PRESET hidden)
 
 ## 1.6 Build e registro
 
-1. Crie a pasta `devices/<seu-nome>/` com `CMakeLists.txt`, `device.json`, `src/lib.c` (ou `.cpp`).
+1. Crie a pasta `devices/<seu-nome>/` com `CMakeLists.txt`, `.lsdevice`, `src/lib.c` (ou `.cpp`).
 2. `npm run build:devices` — o script (`scripts/build-devices.js`) **descobre automaticamente**
    qualquer pasta em `devices/` que tenha um `CMakeLists.txt`, configura+builda com CMake, e copia o
    artefato pra `devices/<nome>/build/<plataforma>/device.{dll,so,dylib}` (o caminho que
    `nativeEntry` espera). Não precisa registrar o novo device em nenhum script — só precisa existir.
 3. Adicione uma entrada em `devices/library.json` (`devices[]`: `{ "typeId": "...", "manifest":
-   "<seu-nome>/device.json" }`) — é isso que o catálogo lê pra descobrir seu `typeId`.
+   "<seu-nome>/.lsdevice" }`) — é isso que o catálogo lê pra descobrir seu `typeId`.
 4. Reinicie/abra o Core — o `typeId` novo aparece na paleta de componentes.
 
 ---
@@ -495,7 +495,7 @@ typedef struct LsdnQemuModuleVTable {
 ```
 
 - **`create`/`build_launch_args`/`get_memory_regions`/`get_pin_map`** — mesma vtable declarativa de
-  sempre: `chipId` (não está na vtable, vem de `mcu.json`), argumentos de launch do QEMU, faixas
+  sempre: `chipId` (não está na vtable, vem de `.lsdevice`), argumentos de launch do QEMU, faixas
   MMIO, mapa de pino lógico → bit. **`argv[0]`** deve ser o nome convencional que o próprio QEMU
   espera (ex: `"qemu-system-xtensa"`) — **não** inclua a chave da shared memory, isso é
   responsabilidade do `McuController`, que prepende `argv[1]` automaticamente.
@@ -534,10 +534,10 @@ interage com `McuComponent` diretamente — você só escreve o binário do plug
 
 ## 2.3 Passo a passo: criar um adaptador de MCU novo (plugin DLL/SO)
 
-Usando como referência fiel `mcu-adapters/espressif-esp32/{mcu.json,src/Esp32Adapter.cpp}` —
+Usando como referência fiel `mcu-adapters/espressif-esp32/{.lsdevice,src/Esp32Adapter.cpp}` —
 migrado nesta sessão do equivalente built-in que existia antes em `core/src/mcu/esp32/`.
 
-1. **Pasta nova**: `mcu-adapters/<nome>/{CMakeLists.txt,mcu.json,src/<Chip>Adapter.cpp}` — mesma
+1. **Pasta nova**: `mcu-adapters/<nome>/{CMakeLists.txt,.lsdevice,src/<Chip>Adapter.cpp}` — mesma
    convenção de `devices/<nome>/` (qualquer pasta com `CMakeLists.txt` é descoberta automaticamente
    por `npm run build:mcu-adapters`).
 2. **Offsets de registrador e faixas MMIO**: copiados fielmente da documentação/SDK real do chip (ou
@@ -549,7 +549,7 @@ migrado nesta sessão do equivalente built-in que existia antes em `core/src/mcu
    `build_launch_args`/`get_memory_regions`/`get_pin_map` declarativos, `create_modules` instancia
    um `LsdnQemuModuleHandle` por módulo que o chip realmente tem implementado (pode ser só um, como
    o ESP32 hoje — GPIO puro).
-5. **`mcu.json`**: `chipId`, `nativeEntry` por plataforma, `abiVersion: {major: 2, minor: 0}`.
+5. **`.lsdevice`**: `chipId`, `nativeEntry` por plataforma, `abiVersion: {major: 2, minor: 0}`.
 6. **`mcu-adapters/library.json`**: adicionar `{chipId, manifest}` à lista `"mcus"`.
 7. **`npm run build:mcu-adapters`** — compila e copia o artefato pra `build/<plataforma>/
    adapter.{dll,so,dylib}`, mesmo padrão de `build:devices`.
@@ -620,18 +620,18 @@ equação-a-equação. Isso é responsabilidade do `McuComponent` (não muda com
 ## 3. Checklist final
 
 **Dispositivo ABI**:
-- [ ] `devices/<nome>/{CMakeLists.txt,device.json,src/lib.c}` criados.
-- [ ] `pins[]` do `device.json` na mesma ordem dos `pin_declare(..., index, ...)`.
+- [ ] `devices/<nome>/{CMakeLists.txt,.lsdevice,src/lib.c}` criados.
+- [ ] `pins[]` do `.lsdevice` na mesma ordem dos `pin_declare(..., index, ...)`.
 - [ ] Toda propriedade em `properties[]` tem `get_property`/`set_property` correspondentes em C.
 - [ ] `npm run build:devices` passa, gera `build/<plataforma>/device.{dll,so,dylib}`.
 - [ ] Entrada adicionada em `devices/library.json`.
 
 **Adaptador de MCU**:
-- [ ] `mcu-adapters/<nome>/{CMakeLists.txt,mcu.json,src/<Chip>Adapter.cpp}` criados.
+- [ ] `mcu-adapters/<nome>/{CMakeLists.txt,.lsdevice,src/<Chip>Adapter.cpp}` criados.
 - [ ] Offsets de registrador e faixas MMIO copiados de fonte real (datasheet/SDK/fork QEMU), nunca
   inventados.
 - [ ] `LsdnQemuModuleVTable` concreta por periférico; `create_modules` devolve todos eles.
-- [ ] `mcu.json` com `abiVersion: {major: 2, minor: 0}`.
+- [ ] `.lsdevice` com `abiVersion: {major: 2, minor: 0}`.
 - [ ] Entrada adicionada em `mcu-adapters/library.json` (`"mcus"`).
 - [ ] `npm run build:mcu-adapters` passa, gera `build/<plataforma>/adapter.{dll,so,dylib}`.
 - [ ] Teste com arena sintética (sem QEMU real) antes de tentar o pipeline real — ver

@@ -1,7 +1,7 @@
 import { WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./model";
 
 /** Mesmo `RegisteredItemKind` de `extension.ts` -- duplicado aqui de propósito (mensagens não devem
- * importar de `extension.ts`, que tem `vscode` e roda só no host). `device.json` (`abi-device`) não
+ * importar de `extension.ts`, que tem `vscode` e roda só no host). `.lsdevice` (`abi-device`) não
  * tem circuito interno nem variante Logic Symbol ("Package ≠ Subcircuit", ver `.spec/
  * lasecsimul-subcircuits.spec` seção 4) -- só listado aqui pra completar o tipo. */
 export type SymbolAuthoringKind = "abi-device" | "mcu-adapter" | "subcircuit-file";
@@ -25,12 +25,12 @@ export interface InstrumentHistoryPayload {
   logic?: { timestampsNs: number[]; masks: number[] };
 }
 
-/** Um componente do circuito INTERNO de um `.lssub.json` -- alimenta o overlay de Modo Placa no
+/** Um componente do circuito INTERNO de um `.lssubcircuit` -- alimenta o overlay de Modo Placa no
  * circuito principal E o submenu por componente exposto no menu de contexto da instância (ver
  * `subpackage.cpp::mainComp()`/`setBoardMode()` no SimulIDE real). `boardVisual` ausente significa
  * que o componente nunca foi posicionado em Modo Placa (sem posição pra desenhar no overlay, cai
  * num padrão calculado, ver `main.ts::fallbackBoardVisualPosition`). `properties` é o último valor
- * SALVO no `.lssub.json` (não necessariamente o estado ao vivo do Core) -- suficiente pro dialog de
+ * SALVO no `.lssubcircuit` (não necessariamente o estado ao vivo do Core) -- suficiente pro dialog de
  * propriedades do componente exposto, mesmo princípio de como o dialog de Propriedades de fora já
  * lê de `WebviewComponentModel.properties` em vez de reconsultar o Core toda vez. */
 export interface InternalComponentSnapshot {
@@ -118,6 +118,11 @@ export type WebviewToHostMessage =
     }
   | { version: number; type: "requestConnectPins"; from: { componentId: string; pinId: string }; to: { componentId: string; pinId: string }; points?: Array<{ x: number; y: number }> }
   | { version: number; type: "requestUpdateProperty"; componentId: string; name: string; value: string | number | boolean }
+  /** Bloco genérico de subcircuito por caminho -- abre um seletor de `.lssubcircuit`, resolve
+   * typeId/pinos/package do arquivo escolhido e registra no Core (verbo IPC avulso, sem
+   * `library.json`). Mesmo comando serve pra escolha inicial e pra "relink" (arquivo ausente ou
+   * trocar de arquivo depois de já resolvido) -- ver `.spec/lasecsimul-subcircuits.spec` seção 12. */
+  | { version: number; type: "requestChooseSubcircuitFile"; componentId: string }
   /** Abre URL no browser externo — disparado pelo botão "Ajuda" do diálogo de propriedades quando
    * o componente tem `help.url` declarado no catálogo. */
   | { version: number; type: "requestOpenExternal"; url: string }
@@ -144,7 +149,7 @@ export type WebviewToHostMessage =
   | { version: number; type: "requestOpenMcuSerialMonitor"; componentId: string; usartIndex: 0 | 1 | 2 }
   /** Mesmas ações do MCU de topo, mas disparadas a partir do submenu de um componente INTERNO
    * exposto de um subcircuito no esquemático principal. `outerComponentId` é a instância do
-   * subcircuito colocada no circuito; `innerComponentId` é o id local salvo no `.lssub.json`
+   * subcircuito colocada no circuito; `innerComponentId` é o id local salvo no `.lssubcircuit`
    * (ex: "mcu1"). O host resolve isso para a instância real do filho no Core. */
   | { version: number; type: "requestChooseExposedMcuFirmware"; outerComponentId: string; innerComponentId: string }
   | { version: number; type: "requestReloadExposedMcuFirmware"; outerComponentId: string; innerComponentId: string }
@@ -175,7 +180,7 @@ export type WebviewToHostMessage =
    * como `package` do `sourceId` (mesmo formato gravado por `requestSavePackage`). Reaproveita
    * `editPackageSymbolCommand` internamente pra abrir a sessão de edição já com esse conteúdo. */
   | { version: number; type: "requestLoadPackage"; sourceId: string }
-  /** "Salvar pacote" -- exporta só a chave `package` do `.lssub.json`/`device.json`/`mcu.json` do
+  /** "Salvar pacote" -- exporta só a chave `package` do `.lssubcircuit`/`.lsdevice` do
    * `sourceId` pra um arquivo `.pkg.json` separado escolhido pelo usuário (formato espelha
    * `PackageDescriptor`, mesmo schema usado internamente). */
   | { version: number; type: "requestSavePackage"; sourceId: string }
@@ -186,22 +191,22 @@ export type WebviewToHostMessage =
    * não por uma mensagem dedicada daqui de fora. */
   | { version: number; type: "requestBoardOverlayData"; componentId: string; sourceId: string }
   /** Arrastar um componente do overlay de Modo Placa direto no circuito principal -- grava
-   * `boardVisual` em `components[]` do `.lssub.json` (`sourceId`), mesmo campo que "Abrir
+   * `boardVisual` em `components[]` do `.lssubcircuit` (`sourceId`), mesmo campo que "Abrir
    * Subcircuito"/Modo Placa interno já usa (`compileSubcircuitInternalComponents`), só que editado
    * SEM precisar entrar na sessão de edição. `x`/`y` já vêm RELATIVOS à instância (não posição de
    * tela). */
   | { version: number; type: "requestUpdateBoardOverlayVisual"; sourceId: string; innerComponentId: string; x: number; y: number }
   /** Edita uma propriedade real de um componente INTERNO exposto sem entrar em "Open Subcircuit" --
-   * usado pelo diálogo dedicado de propriedades do submenu externo. Persiste no `.lssub.json` e,
+   * usado pelo diálogo dedicado de propriedades do submenu externo. Persiste no `.lssubcircuit` e,
    * se a instância já estiver expandida no Core, tenta aplicar em runtime também. */
   | { version: number; type: "requestUpdateExposedComponentProperty"; outerComponentId: string; sourceId: string; innerComponentId: string; name: string; value: string | number | boolean }
   /** Clique num componente do overlay de Modo Placa no circuito principal -- `outerComponentId` é a
    * instância do subcircuito colocada no circuito do usuário, `innerComponentId` é o id LOCAL do
-   * componente dentro do `.lssub.json` (ex: "button_en"). extension.ts traduz isso pro índice real
+   * componente dentro do `.lssubcircuit` (ex: "button_en"). extension.ts traduz isso pro índice real
    * do componente Core dentro da instância expandida (ver `SimulationSession::
    * setSubcircuitChildProperty`, novo). */
   | { version: number; type: "requestUpdateBoardOverlayProperty"; outerComponentId: string; innerComponentId: string; name: string; value: string | number | boolean }
-  /** Envia a seleção atual pro host pra criar um `.lssub.json` — disparado pelo item do menu de
+  /** Envia a seleção atual pro host pra criar um `.lssubcircuit` — disparado pelo item do menu de
    * contexto de multi-seleção OU pela resposta da Webview a `triggerCreateSubcircuitFromSelection`.
    * `componentIds`: IDs dos componentes selecionados. */
   | { version: number; type: "requestCreateSubcircuitFromSelection"; componentIds: string[] };

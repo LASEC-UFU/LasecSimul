@@ -1,6 +1,6 @@
 import { WEBVIEW_MESSAGE_VERSION, ComponentReadoutValue, HostToWebviewMessage, InternalComponentSnapshot, SimulationStatus, SymbolAuthoringKind, WebviewToHostMessage } from "./messages.js";
 import { InteractionKindEntry, PropertySchemaEntry, ViewSpecInteraction, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./model.js";
-import { ComponentBox, PIN_RADIUS, componentBox, componentSymbolSvg, hasRealPinPosition, packageSymbolSvg, pinLocalPosition, registerPackage } from "./componentSymbols.js";
+import { ComponentBox, PIN_RADIUS, componentBox, componentLocalOrigin, componentSymbolSvg, hasRealPinPosition, missingSubcircuitPlaceholderSvg, packageSymbolSvg, pinLocalPosition, registerPackage } from "./componentSymbols.js";
 import { detectChannelTrigger, findTriggerAnchorIndex, triggerAlignedWindowEndNs, visibleSampleWindowByTime } from "./instrumentTrigger.js";
 import {
   Point,
@@ -124,6 +124,9 @@ const UI_TEXT = {
     uid: "Uid",
     editSymbol: "Editar Símbolo Visual",
     openSubcircuit: "Abrir Subcircuito",
+    chooseSubcircuitFile: "Procurar...",
+    noSubcircuitFileChosen: "(nenhum)",
+    locateSubcircuitFile: "Localizar arquivo do subcircuito...",
     loadFirmware: "Carregar firmware",
     reloadFirmware: "Recarregar firmware",
     openSerialMonitor: "Abrir monitor serial",
@@ -186,6 +189,9 @@ const UI_TEXT = {
     uid: "Uid",
     editSymbol: "Edit Visual Symbol",
     openSubcircuit: "Open Subcircuit",
+    chooseSubcircuitFile: "Browse...",
+    noSubcircuitFileChosen: "(none)",
+    locateSubcircuitFile: "Locate subcircuit file...",
     loadFirmware: "Load firmware",
     reloadFirmware: "Reload firmware",
     openSerialMonitor: "Open serial monitor",
@@ -373,7 +379,7 @@ function ensureBoardOverlayData(component: WebviewComponentModel): void {
  * `requestUpdateBoardOverlayProperty` (ver `CoreApplication.cpp::"setSubcircuitChildProperty"`),
  * nunca por `state.components` (estes elementos não fazem parte do circuito do usuário). */
 /** Posição padrão pra um componente exposto que AINDA não foi posicionado em Modo Placa nenhuma
- * vez (sem `boardVisual` no `.lssub.json`) -- sem isto, marcar "exposto" + ligar "Modo Placa" não
+ * vez (sem `boardVisual` no `.lssubcircuit`) -- sem isto, marcar "exposto" + ligar "Modo Placa" não
  * mostrava NADA (bug relatado 2026-06-30: usuário esperava ver um retângulo aparecer mesmo sem
  * posicionar manualmente antes). Empilha em coluna à DIREITA da foto do package, na ordem que
  * vieram -- só um ponto de partida razoável; o usuário arrasta pra posição final (ver drag abaixo,
@@ -406,11 +412,10 @@ function renderBoardOverlaysFor(component: WebviewComponentModel): HTMLElement[]
     const svg = document.createElementNS(SVG_NS, "svg");
     svg.setAttribute("viewBox", `0 0 ${box.width} ${box.height}`);
     svg.classList.add("component__symbol");
-    svg.innerHTML = componentSymbolSvg(item.typeId, properties);
+    svg.innerHTML = packageSymbolSvg(item.typeId, properties, item.id) ?? componentSymbolSvg(item.typeId, properties);
     el.appendChild(svg);
 
     const isPushButton = interactionKindFor(item.typeId) === "momentary";
-    if (isPushButton) svg.classList.add("component__symbol--push");
 
     // Arrastar (move/persiste boardVisual) vs apertar/segurar (switches.push) são o MESMO gesto de
     // pointerdown -- pressiona IMEDIATAMENTE (mesma sensação de "segurar" de sempre), mas cancela o
@@ -428,10 +433,14 @@ function renderBoardOverlaysFor(component: WebviewComponentModel): HTMLElement[]
       let pressed = false;
       const DRAG_THRESHOLD_PX = 4;
 
+      // Estado aberto/fechado vem de `stateFill`/`stateVisible` no `package.simulidePaint` (quando
+      // registrado) -- reconstrói o SVG a cada aperto/soltura em vez de só alternar uma classe CSS,
+      // senão a primitiva certa (aberta/fechada) nunca troca pro overlay de Modo Placa.
       const setPressed = (value: boolean): void => {
         if (pressed === value) return;
         pressed = value;
-        svg.classList.toggle("component__symbol--push-pressed", value);
+        const pressedProperties = { ...properties, closed: value };
+        svg.innerHTML = packageSymbolSvg(item.typeId, pressedProperties, item.id) ?? componentSymbolSvg(item.typeId, pressedProperties);
         send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateBoardOverlayProperty", outerComponentId: component.id, innerComponentId: item.id, name: "closed", value });
       };
       if (isPushButton) setPressed(true);
@@ -1433,6 +1442,26 @@ function applyMarqueeSelection(start: Point, end: Point, additive: boolean): voi
 /** Remove TODOS os componentes e fios selecionados — uma mensagem IPC por item (reaproveita os
  * verbos `requestRemoveComponent`/`requestRemoveWire` já existentes; nenhum verbo em lote novo). */
 function deleteSelectedItems(): void {
+  // Dentro de uma sessão de autoria (`symbolAuthoringContext`), `send()` é um no-op -- os dois loops
+  // abaixo não fariam NADA (nem no circuito local, nem no Host), deixando fio/componente selecionado
+  // "preso" pra sempre. Muta `state` direto aqui, igual ao resto da autoria (ex: colocar componente
+  // em `installCanvasEventHandlers`), sem round-trip pelo Host.
+  if (symbolAuthoringContext) {
+    const removedComponentIds = new Set(state.selectedComponentIds);
+    const removedWireIds = new Set(state.selectedWireIds);
+    for (const wire of state.wires) {
+      if (removedComponentIds.has(wire.from.componentId) || removedComponentIds.has(wire.to.componentId)) removedWireIds.add(wire.id);
+    }
+    state = {
+      ...state,
+      components: state.components.filter((component) => !removedComponentIds.has(component.id)),
+      wires: state.wires.filter((wire) => !removedWireIds.has(wire.id)),
+    };
+    clearSelection();
+    persistState();
+    render();
+    return;
+  }
   for (const wireId of state.selectedWireIds) {
     send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestRemoveWire", wireId });
   }
@@ -1465,6 +1494,23 @@ function newComponentId(): string {
 
 function newWireId(): string {
   return `wire-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
+}
+
+/** Equivalente client-side de `extension.ts::junctionComponentAt` -- usado só dentro de uma sessão
+ * de autoria (`symbolAuthoringContext`), onde `send()` é um no-op (ver comentário de `send()`) e o
+ * fio->fio precisa criar a junção localmente em vez de pedir pro Host. */
+function newJunctionComponent(point: Point): WebviewComponentModel {
+  return {
+    id: newComponentId(),
+    typeId: "connectors.junction",
+    label: "Junction",
+    hidden: true,
+    x: point.x,
+    y: point.y,
+    rotation: 0,
+    pins: [{ id: "pin-1", x: 0, y: 0 }],
+    properties: {},
+  };
 }
 
 function copySelectedItems(): boolean {
@@ -1631,16 +1677,18 @@ function eventToCanvasPoint(event: PointerEvent | MouseEvent, canvas: HTMLElemen
 
 /** Espelha o ponto local antes da rotação -- mesma ordem do CSS `transform: rotate(...) scale(...)`
  * em `renderComponent` (transform aplica da direita pra esquerda: scale primeiro, rotate depois). */
-function flipPoint(local: Point, box: { width: number; height: number }, flipH: boolean, flipV: boolean): Point {
+function flipPoint(local: Point, box: { width: number; height: number }, flipH: boolean, flipV: boolean, origin?: Point): Point {
+  const pivot = origin ?? { x: box.width / 2, y: box.height / 2 };
   return {
-    x: flipH ? box.width - local.x : local.x,
-    y: flipV ? box.height - local.y : local.y,
+    x: flipH ? pivot.x - (local.x - pivot.x) : local.x,
+    y: flipV ? pivot.y - (local.y - pivot.y) : local.y,
   };
 }
 
-function rotatePoint(local: Point, box: { width: number; height: number }, rotation: 0 | 90 | 180 | 270): Point {
-  const cx = box.width / 2;
-  const cy = box.height / 2;
+function rotatePoint(local: Point, box: { width: number; height: number }, rotation: 0 | 90 | 180 | 270, origin?: Point): Point {
+  const pivot = origin ?? { x: box.width / 2, y: box.height / 2 };
+  const cx = pivot.x;
+  const cy = pivot.y;
   const dx = local.x - cx;
   const dy = local.y - cy;
   switch (rotation) {
@@ -1656,9 +1704,10 @@ function rotatePoint(local: Point, box: { width: number; height: number }, rotat
   }
 }
 
-function svgBodyTransform(box: { width: number; height: number }, rotation: 0 | 90 | 180 | 270, flipH: boolean, flipV: boolean): string {
-  const cx = box.width / 2;
-  const cy = box.height / 2;
+function svgBodyTransform(box: { width: number; height: number }, rotation: 0 | 90 | 180 | 270, flipH: boolean, flipV: boolean, origin?: Point): string {
+  const pivot = origin ?? { x: box.width / 2, y: box.height / 2 };
+  const cx = pivot.x;
+  const cy = pivot.y;
   const scaleX = flipH ? -1 : 1;
   const scaleY = flipV ? -1 : 1;
   return `translate(${cx} ${cy}) rotate(${rotation}) scale(${scaleX} ${scaleY}) translate(${-cx} ${-cy})`;
@@ -1666,9 +1715,10 @@ function svgBodyTransform(box: { width: number; height: number }, rotation: 0 | 
 
 function componentPinLocalPosition(component: WebviewComponentModel, pinIndex: number): Point {
   const box = componentBox(component.typeId, component.properties);
+  const origin = componentLocalOrigin(component.typeId, component.properties);
   const base = pinLocalPosition(component.pins[pinIndex]?.id ?? "", pinIndex, component.pins.length, component.typeId, component.properties);
-  const flipped = flipPoint(base, box, Boolean(component.flipH), Boolean(component.flipV));
-  return rotatePoint(flipped, box, component.rotation);
+  const flipped = flipPoint(base, box, Boolean(component.flipH), Boolean(component.flipV), origin);
+  return rotatePoint(flipped, box, component.rotation, origin);
 }
 
 function setPolylinePoints(polyline: SVGPolylineElement, points: Point[]): void {
@@ -1899,16 +1949,32 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
         const target =
           cornerIndex !== undefined ? points[cornerIndex]! : nearestSnappedPointOnOrthogonalSegment(clickPoint, from, to, WIRE_GRID_SIZE);
         const split = splitWireRouteAtPoint(wire, target);
-        send({
-          version: WEBVIEW_MESSAGE_VERSION,
-          type: "requestConnectPinToWire",
-          from: state.pendingConnection,
-          wireId: wire.id,
-          point: target,
-          points: pendingWirePointsForTarget(target),
-          existingWireFirstPoints: split.first,
-          existingWireSecondPoints: split.second,
-        });
+        if (symbolAuthoringContext) {
+          // `send()` é no-op em sessão de autoria -- reproduz aqui o que
+          // `extension.ts::"requestConnectPinToWire"` faria (junção + split em 2 fios + fio novo).
+          const junction = newJunctionComponent(target);
+          const firstWire: WebviewWireModel = { id: newWireId(), from: wire.from, to: { componentId: junction.id, pinId: "pin-1" }, points: split.first };
+          const secondWire: WebviewWireModel = { id: newWireId(), from: { componentId: junction.id, pinId: "pin-1" }, to: wire.to, points: split.second };
+          const newWire: WebviewWireModel = { id: newWireId(), from: state.pendingConnection, to: { componentId: junction.id, pinId: "pin-1" }, points: pendingWirePointsForTarget(target) };
+          state = {
+            ...state,
+            components: [...state.components, junction],
+            wires: [...state.wires.filter((entry) => entry.id !== wire.id), firstWire, secondWire, newWire],
+            selectedComponentIds: [],
+            selectedWireIds: [newWire.id],
+          };
+        } else {
+          send({
+            version: WEBVIEW_MESSAGE_VERSION,
+            type: "requestConnectPinToWire",
+            from: state.pendingConnection,
+            wireId: wire.id,
+            point: target,
+            points: pendingWirePointsForTarget(target),
+            existingWireFirstPoints: split.first,
+            existingWireSecondPoints: split.second,
+          });
+        }
         clearPendingWire();
         vscode?.setState(state);
         render();
@@ -3108,12 +3174,15 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
     state.components.find((entry) => entry.id === componentId);
 
   // ABI v2 (.spec/lasecsimul-native-devices.spec): isPushButton vem de interactionKind (genérico);
-  // isSwitchToggle continua específico de "switches.switch" de propósito -- é sobre QUAL CSS/visual
-  // este typeId usa, não sobre o conceito genérico de "é toggle" (switch_dip também é toggle mas
-  // tem visual/lógica própria, construída à parte nesta sessão, não deve cair neste bucket).
+  // isSwitchToggle continua específico de "switches.switch" -- é sobre QUAL CSS/visual este typeId
+  // usa. isToggleClickable é o conceito genérico de "clicar no toggle-hit-zone alterna `closed`" --
+  // cobre switch E switch_dip (e qualquer typeId futuro de interactionKind "toggle" que use a mesma
+  // propriedade `closed`), sem precisar de um bucket por typeId (bug real: switch_dip não tinha
+  // NENHUM handler de clique, só o `isSwitchToggle` escopado a "switches.switch" via canToggle).
   const catalogInteractionKind = state.catalog.find((entry) => entry.typeId === component.typeId)?.interactionKind ?? interactionKindFor(component.typeId);
   const isPushButton = catalogInteractionKind === "momentary";
   const isSwitchToggle = component.typeId === "switches.switch";
+  const isToggleClickable = catalogInteractionKind === "toggle";
   const isFixedVolt = component.typeId === "sources.fixed_volt";
   const isExpandableInstrument = component.typeId === "meters.oscope" || component.typeId === "meters.logic_analyzer";
   const isJoystick = catalogInteractionKind === "joystick" || Boolean(viewSpecInteractionFor(component.typeId, "dragVector"));
@@ -3241,6 +3310,15 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
           { label: t("createSubcircuit"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestCreateSubcircuitFromSelection", componentIds: state.selectedComponentIds }) },
         ]
       : [];
+    // Bloco genérico de subcircuito por caminho (`subcircuitRef` presente, resolvido ou não) --
+    // mesmo comando da propriedade "Arquivo do subcircuito"/botão "Procurar...", só mais acessível
+    // quando o bloco já está marcado visualmente como "ausente" (ver `updateComponentElement`).
+    const subcircuitRefMenuItems: ContextMenuItem[] = !isGroup && component.subcircuitRef
+      ? [
+          { kind: "separator" },
+          { label: t("locateSubcircuitFile"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestChooseSubcircuitFile", componentId: component.id }) },
+        ]
+      : [];
     const menuItems: ContextMenuItem[] = [
       ...exposedSubmenuItems,
       ...(exposedSubmenuItems.length > 0 ? [{ kind: "separator" } satisfies ContextMenuItem] : []),
@@ -3259,6 +3337,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
       ...symbolMenuItems,
       ...mcuMenuItems,
       ...createSubcircuitMenuItems,
+      ...subcircuitRefMenuItems,
     ];
     showContextMenu(event, menuItems);
   });
@@ -3559,7 +3638,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
     }
 
     const clickedToggleZone = event.target instanceof Element && Boolean(event.target.closest(".toggle-hit-zone"));
-    const canToggle = (isPushButton || isSwitchToggle || isFixedVolt) && clickedToggleZone;
+    const canToggle = (isPushButton || isToggleClickable || isFixedVolt) && clickedToggleZone;
 
     const DRAG_THRESHOLD_PX = 4;
     let dragStarted = false;
@@ -3600,7 +3679,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
       dragTargets = [];
       if (!dragStarted && canToggle) {
         if (isPushButton) setPushClosed(component, false);
-        else if (isSwitchToggle) setSwitchClosed(component, component.properties.closed !== true);
+        else if (isToggleClickable) setSwitchClosed(component, component.properties.closed !== true);
         else if (isFixedVolt) setFixedVoltOut(component, component.properties.out !== true);
       }
       persistState();
@@ -3634,13 +3713,19 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
   const meterClass = isMeter ? `component--meter component--${component.typeId.replace(/[._]/g, "-")}` : "";
   const isVoltmeter = component.typeId === "instruments.voltmeter"; // só tinge o símbolo, ver styles.css
   const hasPackageVisual = Boolean(catalogEntry?.package || (component.properties.logicSymbol === true && catalogEntry?.logicSymbolPackage));
+  // Bloco genérico de subcircuito por caminho cujo `.lssubcircuit` não foi encontrado (arquivo
+  // movido/apagado, ver `chooseSubcircuitFileCommand`/carregamento de projeto) -- `subcircuitRef`
+  // presente mas o typeId atual não tem entrada no catálogo desta sessão.
+  const isMissingSubcircuitRef = Boolean(component.subcircuitRef) && !catalogEntry;
 
-  el.className = `component ${isComponentSelected(component.id) ? "selected" : ""} ${hasPackageVisual ? "component--package" : ""} ${isVoltmeter ? "component--voltmeter" : ""} ${isPushButton ? "component--push" : ""} ${isSwitchToggle ? "component--switch" : ""} ${isFixedVolt ? "component--fixed-volt" : ""} ${isRail ? "component--rail" : ""} ${isTunnel ? "component--tunnel" : ""} ${meterClass}`;
+  el.className = `component ${isComponentSelected(component.id) ? "selected" : ""} ${hasPackageVisual ? "component--package" : ""} ${isVoltmeter ? "component--voltmeter" : ""} ${isPushButton ? "component--push" : ""} ${isSwitchToggle ? "component--switch" : ""} ${isFixedVolt ? "component--fixed-volt" : ""} ${isRail ? "component--rail" : ""} ${isTunnel ? "component--tunnel" : ""} ${meterClass} ${isMissingSubcircuitRef ? "component--subcircuit-missing" : ""}`;
   el.style.left = `${component.x}px`;
   el.style.top = `${component.y}px`;
   el.style.width = `${box.width}px`;
   el.style.height = `${box.height}px`;
-  el.title = `${component.label} (${component.typeId})`;
+  el.title = isMissingSubcircuitRef
+    ? `${component.label} -- ${t("locateSubcircuitFile")}\n${component.subcircuitRef?.path ?? ""}`
+    : `${component.label} (${component.typeId})`;
 
   const svg = document.createElementNS(SVG_NS, "svg");
   svg.classList.add("component__symbol");
@@ -3651,21 +3736,20 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
   // em flipPoint/rotatePoint pra calcular posição de pino, ver componentPinLocalPosition.
   const scaleX = component.flipH ? -1 : 1;
   const scaleY = component.flipV ? -1 : 1;
-  bodyGroup.setAttribute("transform", svgBodyTransform(box, component.rotation, Boolean(component.flipH), Boolean(component.flipV)));
-  if (isPushButton) {
-    svg.classList.add("component__symbol--push");
-    if (component.properties.closed === true) svg.classList.add("component__symbol--push-pressed");
-  }
-  if (isSwitchToggle) {
-    svg.classList.add("component__symbol--switch");
-    if (component.properties.closed === true) svg.classList.add("component__symbol--switch-closed");
-  }
+  const symbolProperties = runtimeSymbolProperties(component);
+  const localOrigin = componentLocalOrigin(component.typeId, symbolProperties);
+  bodyGroup.setAttribute("transform", svgBodyTransform(box, component.rotation, Boolean(component.flipH), Boolean(component.flipV), localOrigin));
+  // Estado aberto/fechado de push/switch/switch_dip agora vem de `stateFill`/`stateVisible` no
+  // `package.simulidePaint` (primitivas diferentes por valor de `properties.closed`, reconstruídas a
+  // cada `packageSymbolSvg` abaixo) -- não precisa mais de uma classe CSS `--push-pressed`/
+  // `--switch-closed` alternada aqui pra trocar a aparência.
   if (isFixedVolt) {
     svg.classList.add("component__symbol--fixed-volt");
     if (component.properties.out === true) svg.classList.add("component__symbol--fixed-volt-on");
   }
-  const symbolProperties = runtimeSymbolProperties(component);
-  bodyGroup.innerHTML = packageSymbolSvg(component.typeId, symbolProperties, component.id) ?? catalogEntry?.symbolSvg ?? componentSymbolSvg(component.typeId, symbolProperties);
+  bodyGroup.innerHTML = isMissingSubcircuitRef
+    ? missingSubcircuitPlaceholderSvg(box)
+    : packageSymbolSvg(component.typeId, symbolProperties, component.id) ?? catalogEntry?.symbolSvg ?? componentSymbolSvg(component.typeId, symbolProperties);
   svg.appendChild(bodyGroup);
   const tunnelLabel = bodyGroup.querySelector<SVGTextElement>(".tunnel-name");
   if (tunnelLabel && (component.flipH || component.flipV)) {
@@ -3720,13 +3804,31 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
         return;
       }
       const toPos = pinScenePosition(component, pin.id);
-      send({
-        version: WEBVIEW_MESSAGE_VERSION,
-        type: "requestConnectPins",
-        from: state.pendingConnection,
-        to: { componentId: component.id, pinId: pin.id },
-        points: toPos ? pendingWirePointsForTarget(toPos) : pendingWireRoute,
-      });
+      const newConnectionPoints = toPos ? pendingWirePointsForTarget(toPos) : pendingWireRoute;
+      if (symbolAuthoringContext) {
+        // `send()` é no-op em sessão de autoria -- cria o fio direto em `state`, igual ao que
+        // `extension.ts::"requestConnectPins"` faria pro circuito real.
+        const newWire: WebviewWireModel = {
+          id: newWireId(),
+          from: state.pendingConnection,
+          to: { componentId: component.id, pinId: pin.id },
+          points: newConnectionPoints,
+        };
+        state = {
+          ...state,
+          wires: [...state.wires, newWire],
+          selectedComponentIds: [],
+          selectedWireIds: [newWire.id],
+        };
+      } else {
+        send({
+          version: WEBVIEW_MESSAGE_VERSION,
+          type: "requestConnectPins",
+          from: state.pendingConnection,
+          to: { componentId: component.id, pinId: pin.id },
+          points: newConnectionPoints,
+        });
+      }
       clearPendingWire();
       vscode?.setState(state);
       render();
@@ -3738,7 +3840,7 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
   el.appendChild(svg);
 }
 
-type PropertyFieldKind = "boolean" | "number" | "text" | "readonly" | "select";
+type PropertyFieldKind = "boolean" | "number" | "text" | "readonly" | "select" | "filePath";
 
 interface PropertyField {
   key: string;
@@ -3780,6 +3882,7 @@ function propertyFieldKindFromEditor(editor: string): PropertyFieldKind {
   if (editor === "select" || editor === "enum") return "select";
   if (editor === "display") return "readonly";
   if (editor === "number") return "number";
+  if (editor === "filePath") return "filePath";
   return "text";
 }
 
@@ -3958,9 +4061,14 @@ function resolvePropertyFields(component: WebviewComponentModel): PropertyField[
     if (propSchema.hidden && !propertyDialogShowAll) continue;
     const kind = propertyFieldKindFromEditor(propSchema.editor);
     const isLiveReadout = kind === "readonly" && Boolean(propSchema.showOnSymbol);
+    // "filePath" (bloco genérico de subcircuito) nunca guarda o caminho em `properties` -- vem de
+    // `component.subcircuitRef.path` (ver model.ts), a mesma referência usada pra resolver
+    // pinos/package/relink, nunca duplicada num segundo lugar.
     const value = isLiveReadout
       ? formatLiveReadout(propSchema, component)
-      : component.properties[propSchema.id] ?? propSchema.default;
+      : kind === "filePath"
+        ? (component.subcircuitRef?.path ?? "")
+        : component.properties[propSchema.id] ?? propSchema.default;
     fields.push({
       key: propSchema.id,
       label: propSchema.label,
@@ -4025,6 +4133,36 @@ function renderPropertyField(component: WebviewComponentModel, field: PropertyFi
     }
     refreshOpenPropertyDialog();
   };
+  if (field.kind === "filePath") {
+    // Bloco genérico de subcircuito por caminho -- NUNCA edita `component.properties[field.key]`
+    // direto (o campo é só leitura + botão), o caminho de verdade mora em `component.subcircuitRef`
+    // (ver `resolvePropertyFields`). Escolher/trocar arquivo é um fluxo assíncrono no host (parse +
+    // troca de typeId/pinos/package + registro no Core) -- mesmo comando usado pelo menu de
+    // contexto "Localizar arquivo do subcircuito...".
+    const row = document.createElement("label");
+    row.className = "property-sheet__field-row";
+    const caption = document.createElement("span");
+    caption.className = "property-sheet__field-label";
+    caption.textContent = `${field.label}:`;
+    const fileGroup = document.createElement("div");
+    fileGroup.className = "property-sheet__file-group";
+    const pathText = document.createElement("input");
+    pathText.className = "property-sheet__field-input";
+    pathText.type = "text";
+    pathText.readOnly = true;
+    pathText.value = String(field.value) || t("noSubcircuitFileChosen");
+    pathText.title = String(field.value);
+    const browseButton = document.createElement("button");
+    browseButton.type = "button";
+    browseButton.className = "property-sheet__file-browse-button";
+    browseButton.textContent = t("chooseSubcircuitFile");
+    browseButton.addEventListener("click", () => {
+      send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestChooseSubcircuitFile", componentId: component.id });
+    });
+    fileGroup.append(pathText, browseButton);
+    row.append(caption, fileGroup);
+    return row;
+  }
   if (field.kind === "boolean") {
     const row = document.createElement("label");
     row.className = "property-sheet__check-row";
@@ -4034,7 +4172,7 @@ function renderPropertyField(component: WebviewComponentModel, field: PropertyFi
     input.disabled = field.readonly ?? false;
     input.addEventListener("change", () => {
       applyChange(input.checked);
-      if (component.typeId === "switches.switch" && field.key === "closed") updateRenderedSwitchState(component);
+      if ((component.typeId === "switches.switch" || component.typeId === "switches.switch_dip") && field.key === "closed") updateRenderedToggleState(component);
       if (component.typeId === "sources.fixed_volt" && field.key === "out") updateRenderedFixedVoltState(component);
     });
     const text = document.createElement("span");
@@ -4429,26 +4567,14 @@ function pushShortcutKey(component: WebviewComponentModel): string | undefined {
   return trimmed ? trimmed.toLowerCase() : undefined;
 }
 
-function updateRenderedPushState(component: WebviewComponentModel): void {
-  const elements = document.querySelectorAll(".component");
-  for (let index = 0; index < elements.length; index += 1) {
-    const el = elements.item(index) as HTMLElement;
-    if (el.dataset.componentId !== component.id) continue;
-    const svg = el.querySelector(".component__symbol--push") as SVGSVGElement | null;
-    svg?.classList.toggle("component__symbol--push-pressed", component.properties.closed === true);
-    return;
-  }
-}
-
-function updateRenderedSwitchState(component: WebviewComponentModel): void {
-  const elements = document.querySelectorAll(".component");
-  for (let index = 0; index < elements.length; index += 1) {
-    const el = elements.item(index) as HTMLElement;
-    if (el.dataset.componentId !== component.id) continue;
-    const svg = el.querySelector(".component__symbol--switch") as SVGSVGElement | null;
-    svg?.classList.toggle("component__symbol--switch-closed", component.properties.closed === true);
-    return;
-  }
+/** Repintura imediata (antes do `render()` de fim de gesto) pro feedback visual de apertar/soltar --
+ * o estado aberto/fechado agora vem de `stateVisible`/`stateFill` no `package.simulidePaint` (não de
+ * uma classe CSS alternada), então só um `classList.toggle` não muda mais QUAL primitiva aparece;
+ * precisa reconstruir o SVG de verdade via `updateComponentElement`, a mesma função usada em todo
+ * `render()`. Cobre push, switch E switch_dip (interactionKind "toggle" genérico). */
+function updateRenderedToggleState(component: WebviewComponentModel): void {
+  const el = document.querySelector<HTMLElement>(`.component[data-component-id="${component.id}"]`);
+  if (el) updateComponentElement(el, component);
 }
 
 function updateRenderedFixedVoltState(component: WebviewComponentModel): void {
@@ -4467,7 +4593,7 @@ function setPushClosed(component: WebviewComponentModel, closed: boolean): void 
   component.properties.closed = closed;
   send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name: "closed", value: closed });
   vscode?.setState(state);
-  updateRenderedPushState(component);
+  updateRenderedToggleState(component);
   refreshOpenPropertyDialog();
 }
 
@@ -4476,7 +4602,7 @@ function setSwitchClosed(component: WebviewComponentModel, closed: boolean): voi
   component.properties.closed = closed;
   send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name: "closed", value: closed });
   vscode?.setState(state);
-  updateRenderedSwitchState(component);
+  updateRenderedToggleState(component);
   refreshOpenPropertyDialog();
 }
 

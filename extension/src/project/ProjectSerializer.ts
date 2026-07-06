@@ -4,6 +4,7 @@ import {
   LS_PROJ_SCHEMA_VERSION,
   ProjectComponent,
   ProjectDocument,
+  ProjectSubcircuitRef,
   ProjectWire,
   createEmptyProject,
 } from "./ProjectTypes";
@@ -22,6 +23,23 @@ function asNumber(value: unknown): number | undefined {
 
 function asBoolean(value: unknown): boolean | undefined {
   return typeof value === "boolean" ? value : undefined;
+}
+
+function asStringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const out = value.filter((v): v is string => typeof v === "string");
+  return out.length > 0 ? out : undefined;
+}
+
+function validateSubcircuitRef(value: unknown): ProjectSubcircuitRef | undefined {
+  if (!isObject(value)) return undefined;
+  const path = asString(value.path);
+  if (!path) return undefined;
+  return {
+    path,
+    lastKnownTypeId: asString(value.lastKnownTypeId),
+    lastKnownPinIds: asStringArray(value.lastKnownPinIds),
+  };
 }
 
 function validateComponent(component: unknown, index: number): ProjectComponent {
@@ -49,6 +67,7 @@ function validateComponent(component: unknown, index: number): ProjectComponent 
             : 0,
         }
       : undefined,
+    subcircuitRef: validateSubcircuitRef(component.subcircuitRef),
   };
 }
 

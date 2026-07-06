@@ -20,6 +20,26 @@ function toPipePath(name: string): string {
 
 type NotificationHandler = (n: NotificationEnvelope) => void;
 
+export interface RegisteredSubcircuitInfo {
+  status: "registered" | "reloaded";
+  replaced: boolean;
+  typeId: string;
+  name?: string;
+  path?: string;
+  interface?: Array<{ pinId: string; label?: string; internalTunnel: string }>;
+  pinIds?: string[];
+  pinCount?: number;
+  package?: unknown;
+  logicSymbolPackage?: unknown;
+  defaultProperties?: Record<string, unknown>;
+  propertySchema?: unknown[];
+  translations?: Record<string, unknown>;
+  language?: string | null;
+  folderPath?: string[] | string | null;
+  icon?: string | null;
+  iconPath?: string | null;
+}
+
 interface PendingRequest {
   resolve: (payload: unknown) => void;
   reject: (err: Error) => void;
@@ -122,7 +142,7 @@ export class CoreClient {
   }
 
   /** Resolve o `componentIndex` real no Core de um filho interno de subcircuito identificado pelo
-   * id local salvo no `.lssub.json` (ex: "mcu1"). Usado por ações do submenu externo de
+   * id local salvo no `.lssubcircuit` (ex: "mcu1"). Usado por ações do submenu externo de
    * componentes expostos que precisam de um alvo direto de MCU (firmware/serial). */
   async getSubcircuitChildInstanceId(instanceId: string, localId: string): Promise<string> {
     const resp = await this.request("getSubcircuitChildInstanceId", { instanceId, localId });
@@ -155,6 +175,16 @@ export class CoreClient {
     // só deve ser chamado depois do fluxo de confiança/consentimento
     // 30 s: carregamento de DLL nova pode ser varrido pelo Defender antes de executar
     await this.request("loadDeviceLibrary", { path: libraryJsonPath }, 30_000);
+  }
+
+  /** Registra UM `.lssubcircuit` avulso direto no `SubcircuitRegistry` do Core, sem exigir um
+   * `library.json` -- usado pelo bloco genérico de subcircuito por caminho (propriedade
+   * `subcircuitPath` do componente). Sem risco de plugin nativo (dado JSON puro, nunca DLL/SO),
+   * então não passa pelo fluxo de confiança/consentimento que `loadDeviceLibrary` exige. Devolve o
+   * `typeId` efetivamente registrado (lido do próprio manifesto). */
+  async registerAdhocSubcircuit(manifestPath: string, options: { replace?: boolean } = {}): Promise<RegisteredSubcircuitInfo> {
+    const resp = await this.request("registerAdhocSubcircuit", { path: manifestPath, replace: Boolean(options.replace) });
+    return resp as RegisteredSubcircuitInfo;
   }
 
   /** Bytes opacos de `IComponentModel::getState()` de uma instância (built-in ou plugin),
@@ -207,7 +237,7 @@ export class CoreClient {
    * no Core neste momento — built-in (sempre presente) e plugin (só depois de `loadDeviceLibrary`
    * bem-sucedido). Por `typeId`, nunca por instância — chamar de novo depois de carregar uma
    * library nova pega os typeIds que acabaram de ficar disponíveis. `language` (BCP-47, opcional):
-   * pede `label`/`group`/opções traduzidos quando o `device.json`/built-in tiver essa tradução
+   * pede `label`/`group`/opções traduzidos quando o `.lsdevice`/built-in tiver essa tradução
    * declarada (`translations`); sem isso (ou sem tradução pra essa língua), devolve na língua-base
    * do componente -- nunca falha, ver `lasecsimul.spec` seção 6.3.3. */
   async getPropertySchemas(language?: string): Promise<{

@@ -1,5 +1,9 @@
 import { PackageShape, SimulidePaintGradient, SimulidePaintPrimitive, SimulidePaintSpec } from "./model.js";
 
+/** Todas as primitivas desenháveis (têm `SimulidePaintStyle` -- stroke/fill/stateFill/...), exceto
+ * `repeat`, que é só um laço de repetição resolvido em `pushPrimitive` antes de chegar aqui. */
+type DrawablePrimitive = Exclude<SimulidePaintPrimitive, { kind: "repeat" }>;
+
 interface PaintTransform {
   x: (value: number) => number;
   y: (value: number) => number;
@@ -7,6 +11,8 @@ interface PaintTransform {
   sy: (value: number) => number;
   sw: (value: number | undefined) => number | undefined;
 }
+
+type RepeatContext = Record<string, number>;
 
 function round(value: number): number {
   return Math.round(value * 1000) / 1000;
@@ -25,7 +31,7 @@ function transformFor(spec: SimulidePaintSpec, width: number, height: number): P
   };
 }
 
-function stateFillFor(primitive: SimulidePaintPrimitive, properties: Record<string, unknown>): string | undefined {
+function stateFillFor(primitive: DrawablePrimitive, properties: Record<string, unknown>): string | undefined {
   if (!primitive.stateFill) return undefined;
   const raw = properties[primitive.stateFill.prop];
   if (primitive.stateFill.map) {
@@ -53,7 +59,7 @@ function stateFillFor(primitive: SimulidePaintPrimitive, properties: Record<stri
   return primitive.stateFill.fallback;
 }
 
-function stateVisibleFor(primitive: SimulidePaintPrimitive, properties: Record<string, unknown>): boolean {
+function stateVisibleFor(primitive: { stateVisible?: SimulidePaintPrimitive["stateVisible"] }, properties: Record<string, unknown>): boolean {
   if (!primitive.stateVisible) return true;
   for (const [prop, accepted] of Object.entries(primitive.stateVisible.when)) {
     if (!accepted.includes(String(properties[prop]))) return false;
@@ -61,7 +67,7 @@ function stateVisibleFor(primitive: SimulidePaintPrimitive, properties: Record<s
   return true;
 }
 
-function stateHrefFor(primitive: SimulidePaintPrimitive, properties: Record<string, unknown>): string | undefined {
+function stateHrefFor(primitive: DrawablePrimitive, properties: Record<string, unknown>): string | undefined {
   if (primitive.kind !== "image" || !primitive.stateHref) return undefined;
   const raw = properties[primitive.stateHref.prop];
   return primitive.stateHref.map[String(raw)];
@@ -117,8 +123,27 @@ function formatSimulideFrequencyDisplay(value: number): string {
   return `${formatFixed(freq, decimals)}${unit}`;
 }
 
-function stateTextFor(primitive: SimulidePaintPrimitive, properties: Record<string, unknown>): string | undefined {
+function numericProperty(properties: Record<string, unknown>, prop: string | undefined, fallback: number): number {
+  if (!prop) return fallback;
+  const value = Number(properties[prop]);
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function stateTextFor(primitive: SimulidePaintPrimitive, properties: Record<string, unknown>, context: RepeatContext): string | undefined {
   if (primitive.kind !== "text" || !primitive.stateText) return undefined;
+  if (primitive.stateText.kind === "property") {
+    const raw = properties[primitive.stateText.prop];
+    return raw === undefined || raw === null ? "" : String(raw);
+  }
+  if (primitive.stateText.kind === "propertyChar") {
+    const raw = properties[primitive.stateText.prop];
+    const text = raw === undefined || raw === null ? "" : String(raw);
+    const row = primitive.stateText.rowIndex ? context[primitive.stateText.rowIndex] ?? 0 : 0;
+    const col = primitive.stateText.columnIndex ? context[primitive.stateText.columnIndex] ?? 0 : 0;
+    const columns = numericProperty(properties, primitive.stateText.columnsProp, 1);
+    const index = Math.max(0, Math.trunc(row * columns + col));
+    return text[index] ?? primitive.stateText.fallback ?? "";
+  }
   const readout = readoutNumber(properties);
   if (primitive.stateText.kind === "meterDisplay") return formatSimulideMeterDisplay(readout, primitive.stateText.unit);
   if (primitive.stateText.kind === "frequencyDisplay") return formatSimulideFrequencyDisplay(readout);
@@ -153,7 +178,7 @@ function gradientDefFor(
 
 function styleFor(
   spec: SimulidePaintSpec,
-  primitive: SimulidePaintPrimitive,
+  primitive: DrawablePrimitive,
   transform: PaintTransform,
   properties: Record<string, unknown>,
   gradientId?: string
@@ -240,6 +265,19 @@ function transformPathData(d: string, transform: PaintTransform): string {
   return out.join(" ");
 }
 
+/** Offset em coordenadas ORIGINAIS (antes do shift/scale de `bounds`) -- usado por `repeat` pra
+ * deslocar uma cópia do template sem duplicar a lógica de transformação por tipo de primitiva. */
+function offsetTransform(transform: PaintTransform, dx: number, dy: number): PaintTransform {
+  if (dx === 0 && dy === 0) return transform;
+  return {
+    x: (value) => transform.x(value + dx),
+    y: (value) => transform.y(value + dy),
+    sx: transform.sx,
+    sy: transform.sy,
+    sw: transform.sw,
+  };
+}
+
 export function simulidePaintToPackageShapes(
   spec: SimulidePaintSpec,
   width: number,
@@ -252,51 +290,61 @@ export function simulidePaintToPackageShapes(
   const defs: string[] = [];
   let gradientIndex = 0;
 
-  for (const primitive of spec.primitives) {
-    if (!stateVisibleFor(primitive, properties)) continue;
+  function pushPrimitive(primitive: SimulidePaintPrimitive, activeTransform: PaintTransform, context: RepeatContext): void {
+    if (!stateVisibleFor(primitive, properties)) return;
+    if (primitive.kind === "repeat") {
+      const countSource = primitive.countProp ? numericProperty(properties, primitive.countProp, primitive.count ?? 0) : primitive.count ?? 0;
+      const count = Math.max(0, Math.trunc(countSource));
+      for (let i = 0; i < count; i += 1) {
+        const shifted = offsetTransform(activeTransform, (primitive.stepX ?? 0) * i, (primitive.stepY ?? 0) * i);
+        const childContext = primitive.indexName ? { ...context, [primitive.indexName]: i } : context;
+        for (const child of primitive.primitives) pushPrimitive(child, shifted, childContext);
+      }
+      return;
+    }
     const gradientId = primitive.fillGradient ? `${scopeId}-grad-${gradientIndex++}` : undefined;
-    const gradientDef = gradientDefFor(primitive.fillGradient, gradientId ?? "", transform);
+    const gradientDef = gradientDefFor(primitive.fillGradient, gradientId ?? "", activeTransform);
     if (gradientDef) defs.push(gradientDef);
-    const style = styleFor(spec, primitive, transform, properties, gradientId);
+    const style = styleFor(spec, primitive, activeTransform, properties, gradientId);
     switch (primitive.kind) {
       case "line":
-        shapes.push({ kind: "line", x1: transform.x(primitive.x1), y1: transform.y(primitive.y1), x2: transform.x(primitive.x2), y2: transform.y(primitive.y2), ...style });
+        shapes.push({ kind: "line", x1: activeTransform.x(primitive.x1), y1: activeTransform.y(primitive.y1), x2: activeTransform.x(primitive.x2), y2: activeTransform.y(primitive.y2), ...style });
         break;
       case "rect":
       case "roundedRect":
         shapes.push({
           kind: "rect",
-          x: transform.x(primitive.x),
-          y: transform.y(primitive.y),
-          w: transform.sx(primitive.w),
-          h: transform.sy(primitive.h),
-          rx: primitive.rx === undefined ? undefined : Math.abs(transform.sx(primitive.rx)),
-          ry: primitive.ry === undefined ? undefined : Math.abs(transform.sy(primitive.ry)),
+          x: activeTransform.x(primitive.x),
+          y: activeTransform.y(primitive.y),
+          w: activeTransform.sx(primitive.w),
+          h: activeTransform.sy(primitive.h),
+          rx: primitive.rx === undefined ? undefined : Math.abs(activeTransform.sx(primitive.rx)),
+          ry: primitive.ry === undefined ? undefined : Math.abs(activeTransform.sy(primitive.ry)),
           ...style,
         });
         break;
       case "ellipse":
-        shapes.push({ kind: "ellipse", cx: transform.x(primitive.cx), cy: transform.y(primitive.cy), rx: Math.abs(transform.sx(primitive.rx)), ry: Math.abs(transform.sy(primitive.ry)), ...style });
+        shapes.push({ kind: "ellipse", cx: activeTransform.x(primitive.cx), cy: activeTransform.y(primitive.cy), rx: Math.abs(activeTransform.sx(primitive.rx)), ry: Math.abs(activeTransform.sy(primitive.ry)), ...style });
         break;
       case "arc":
-        shapes.push({ kind: "path", d: simulidePaintArcPathD(primitive.x, primitive.y, primitive.w, primitive.h, primitive.startDeg, primitive.spanDeg, transform), fill: "none", ...style });
+        shapes.push({ kind: "path", d: simulidePaintArcPathD(primitive.x, primitive.y, primitive.w, primitive.h, primitive.startDeg, primitive.spanDeg, activeTransform), fill: "none", ...style });
         break;
       case "path":
-        shapes.push({ kind: "path", d: transformPathData(primitive.d, transform), ...style });
+        shapes.push({ kind: "path", d: transformPathData(primitive.d, activeTransform), ...style });
         break;
       case "polygon":
-        shapes.push({ kind: "polygon", points: pointList(primitive.points, transform), ...style });
+        shapes.push({ kind: "polygon", points: pointList(primitive.points, activeTransform), ...style });
         break;
       case "polyline":
-        shapes.push({ kind: "path", d: polylinePath(pointList(primitive.points, transform)), fill: "none", ...style });
+        shapes.push({ kind: "path", d: polylinePath(pointList(primitive.points, activeTransform)), fill: "none", ...style });
         break;
       case "text":
         shapes.push({
           kind: "text",
-          x: transform.x(primitive.x),
-          y: transform.y(primitive.y),
-          value: stateTextFor(primitive, properties) ?? primitive.value,
-          fontSize: transform.sw(primitive.fontSize),
+          x: activeTransform.x(primitive.x),
+          y: activeTransform.y(primitive.y),
+          value: stateTextFor(primitive, properties, context) ?? primitive.value,
+          fontSize: activeTransform.sw(primitive.fontSize),
           textAnchor: primitive.textAnchor,
           dominantBaseline: primitive.dominantBaseline,
           color: primitive.fill ?? primitive.stroke ?? spec.defaultStroke ?? "currentColor",
@@ -308,10 +356,10 @@ export function simulidePaintToPackageShapes(
       case "image":
         shapes.push({
           kind: "image",
-          x: transform.x(primitive.x),
-          y: transform.y(primitive.y),
-          w: transform.sx(primitive.w),
-          h: transform.sy(primitive.h),
+          x: activeTransform.x(primitive.x),
+          y: activeTransform.y(primitive.y),
+          w: activeTransform.sx(primitive.w),
+          h: activeTransform.sy(primitive.h),
           href: stateHrefFor(primitive, properties) ?? primitive.href,
           preserveAspectRatio: primitive.preserveAspectRatio,
           ...style,
@@ -319,6 +367,8 @@ export function simulidePaintToPackageShapes(
         break;
     }
   }
+
+  for (const primitive of spec.primitives) pushPrimitive(primitive, transform, {});
 
   if (defs.length > 0) shapes.unshift({ kind: "svg", value: `<defs>${defs.join("")}</defs>` });
   return shapes;

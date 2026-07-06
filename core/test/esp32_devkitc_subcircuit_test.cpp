@@ -1,9 +1,9 @@
-// Valida o subcircuito REAL `subcircuits/esp32_devkitc_v4.lssub.json` (não um exemplo sintético
+// Valida o subcircuito REAL `subcircuits/esp32_devkitc_v4.lssubcircuit` (não um exemplo sintético
 // como subcircuit_test.cpp) -- carrega o arquivo de verdade, registra o adaptador ESP32 REAL via
 // plugin (mcu-adapters/espressif-esp32/), expande a instância, e prova eletricamente que:
 //   1. Pinos GPIO expostos (ex: "G23") realmente chegam no McuComponent dentro do subcircuito.
 //   2. As três referências de GND ("GND1"/"GND2"/"GND3") compartilham o mesmo nó (mesmo
-//      `other.ground` interno) -- ver subcircuits/esp32_devkitc_v4.lssub.json.
+//      `other.ground` interno) -- ver subcircuits/esp32_devkitc_v4.lssubcircuit.
 //   3. As trilhas "3V3"/"5V" entregam a tensão configurada via `sources.fixed_volt`.
 // Pula (sai com 0) se o adapter.dll do plugin ESP32 não estiver compilado ainda.
 #include <cmath>
@@ -79,7 +79,7 @@ void registerNeededBuiltins(ComponentRegistry& components) {
 // sincronia manualmente (lógica trivial, ver lá para o original).
 SubcircuitDefinition parseLssubJson(const std::filesystem::path& path) {
     std::ifstream file(path);
-    if (!file) throw std::runtime_error(".lssub.json não encontrado: " + path.string());
+    if (!file) throw std::runtime_error("manifesto de subcircuito (.lssubcircuit) não encontrado: " + path.string());
     nlohmann::json manifest;
     file >> manifest;
 
@@ -144,7 +144,7 @@ int main() {
 
     const std::filesystem::path manifestPath =
         std::filesystem::path(LSSUB_MANIFEST_PATH);
-    TEST_ASSERT(std::filesystem::exists(manifestPath), "esp32_devkitc_v4.lssub.json existe no repositório");
+    TEST_ASSERT(std::filesystem::exists(manifestPath), "esp32_devkitc_v4.lssubcircuit existe no repositório");
     session.subcircuits().registerDefinition(parseLssubJson(manifestPath));
 
     const SubcircuitExpansionResult expansion = session.addSubcircuitInstance("subcircuits.esp32_devkitc_v4");
@@ -195,7 +195,7 @@ int main() {
         wroomSession.registerKnownMcuTypes();
 
         const std::filesystem::path wroomManifestPath = std::filesystem::path(WROOM32_LSSUB_MANIFEST_PATH);
-        TEST_ASSERT(std::filesystem::exists(wroomManifestPath), "esp32_wroom32.lssub.json existe no repositório");
+        TEST_ASSERT(std::filesystem::exists(wroomManifestPath), "esp32_wroom32.lssubcircuit existe no repositório");
         wroomSession.subcircuits().registerDefinition(parseLssubJson(wroomManifestPath));
 
         const SubcircuitExpansionResult wroomExpansion = wroomSession.addSubcircuitInstance("subcircuits.esp32_wroom32");

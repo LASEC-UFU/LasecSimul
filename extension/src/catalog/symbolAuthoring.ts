@@ -1,6 +1,6 @@
 /**
  * Conversão pura entre `PackageDescriptor` (o que fica salvo no `package` de um
- * `device.json`/`mcu.json`/`.lssub.json`) e uma lista de `WebviewComponentModel` (o que aparece na
+ * `.lsdevice`/`.lssubcircuit`) e uma lista de `WebviewComponentModel` (o que aparece na
  * sessão de autoria de símbolo, ver `.spec/lasecsimul-native-devices.spec` seção 21.3 e
  * `main.ts::enterSymbolAuthoring`). Mesma ideia do SimulIDE real: `other.package`/`graphics.*`/
  * `other.package_pin` são componentes comuns colocados no canvas; "compilar" é só ler de volta a
@@ -19,7 +19,7 @@ import { PackageBackground, PackageDescriptor, PackagePin, PackageShape, SIMULID
 
 /** Posição/orientação visual de um componente -- mesmo formato de `ProjectComponent.visual`
  * (`project/ProjectTypes.ts`), reaproveitado pro circuito INTERNO de um subcircuito
- * (`.lssub.json::components[].visual`/`boardVisual`, ver `extension.ts::extractInternalCircuit`). */
+ * (`.lssubcircuit::components[].visual`/`boardVisual`, ver `extension.ts::extractInternalCircuit`). */
 export interface VisualPosition {
   x: number;
   y: number;
@@ -121,7 +121,7 @@ export function seedSymbolAuthoringComponents(pkg: PackageDescriptor, originX = 
   return components;
 }
 
-/** Posição padrão (sem `visual` salvo ainda -- nenhum dos `.lssub.json` reais do projeto tem essa
+/** Posição padrão (sem `visual` salvo ainda -- nenhum dos `.lssubcircuit` reais do projeto tem essa
  * chave hoje, escritos à mão antes dela existir) -- grade simples, só pra não empilhar tudo no
  * mesmo ponto na primeira vez que alguém abre um subcircuito antigo pra editar. */
 function defaultInternalLayout(index: number): VisualPosition {
@@ -134,7 +134,7 @@ function toWebviewVisual(visual: VisualPosition | undefined, index: number): Req
   return { x: resolved.x, y: resolved.y, rotation: resolved.rotation ?? 0, flipH: resolved.flipH, flipV: resolved.flipV };
 }
 
-/** Semeia o circuito INTERNO real de um subcircuito (`.lssub.json` `components[]`/`wires[]`) pra
+/** Semeia o circuito INTERNO real de um subcircuito (`.lssubcircuit` `components[]`/`wires[]`) pra
  * dentro da MESMA sessão de autoria do `package` -- igual ao SimulIDE real, onde "Open Subcircuit"
  * mostra o objeto `Package` E o circuito interno juntos, na mesma cena (ver `.spec/
  * lasecsimul-subcircuits.spec`). `pins: []` aqui é só placeholder -- quem chama

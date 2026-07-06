@@ -1,0 +1,1032 @@
+{
+  "generatedAt": "2026-07-06T00:10:36.410Z",
+  "sourceStatus": {
+    "simulideEsp32Package": "nao localizado em .codex-simulide-src; SimulIDE usa ./data/esp32/esp32.package em esp32.cpp",
+    "simulideChipPaint": "localizado em .codex-simulide-src/src/components/subcircuits/chip.cpp",
+    "simulidePackagePinPaint": "localizado em .codex-simulide-src/src/components/other/packagepin.cpp",
+    "simulidePinPaint": "localizado em .codex-simulide-src/src/gui/circuitwidget/pin.cpp"
+  },
+  "rendererAssertions": {
+    "packagePriority": true,
+    "idBasedPinMatching": true,
+    "missingElectricalLeadsHidden": true,
+    "packagePinMarker": true,
+    "initialTransformSanitized": true
+  },
+  "components": [
+    {
+      "typeId": "espressif.esp32",
+      "title": "ESP32 QEMU",
+      "manifest": "mcu-adapters/espressif-esp32/mcu.json",
+      "box": {
+        "width": 98.3529411764706,
+        "height": 108.31578947368422
+      },
+      "nativePackageSize": {
+        "width": 170,
+        "height": 190
+      },
+      "schematicSize": {
+        "width": 88,
+        "height": 98
+      },
+      "background": "color",
+      "pinMarker": null,
+      "pinLabelColor": null,
+      "electricalPins": 42,
+      "packagePins": 48,
+      "missingElectricalLeads": [
+        "GPIO20",
+        "GPIO24",
+        "GPIO28",
+        "GPIO29",
+        "GPIO30",
+        "GPIO31",
+        "UART0_RX",
+        "UART0_TX"
+      ],
+      "decorativeOrNcPins": [
+        "deco_Ca1",
+        "deco_Ca2",
+        "deco_VddA1",
+        "deco_XTALo",
+        "deco_XTALi",
+        "deco_VddA2",
+        "deco_Vdd4",
+        "deco_Vdd2",
+        "deco_Vdd3",
+        "deco_Vdda2",
+        "deco_Lna",
+        "deco_Vdd6",
+        "deco_Vdd5",
+        "RST"
+      ],
+      "pins": [
+        {
+          "id": "GPIO0",
+          "real": true,
+          "position": {
+            "x": 79.71764705882353,
+            "y": 108.31578947368422
+          }
+        },
+        {
+          "id": "GPIO1",
+          "real": true,
+          "position": {
+            "x": 59.52941176470589,
+            "y": 0
+          }
+        },
+        {
+          "id": "GPIO2",
+          "real": true,
+          "position": {
+            "x": 72.98823529411766,
+            "y": 108.31578947368422
+          }
+        },
+        {
+          "id": "GPIO3",
+          "real": true,
+          "position": {
+            "x": 66.25882352941177,
+            "y": 0
+          }
+        },
+        {
+          "id": "GPIO4",
+          "real": true,
+          "position": {
+            "x": 86.44705882352942,
+            "y": 108.31578947368422
+          }
+        },
+        {
+          "id": "GPIO5",
+          "real": true,
+          "position": {
+            "x": 98.3529411764706,
+            "y": 27.85263157894737
+          }
+        },
+        {
+          "id": "GPIO6",
+          "real": true,
+          "position": {
+            "x": 98.3529411764706,
+            "y": 50.54736842105264
+          }
+        },
+        {
+          "id": "GPIO7",
+          "real": true,
+          "position": {
+            "x": 98.3529411764706,
+            "y": 42.81052631578948
+          }
+        },
+        {
+          "id": "GPIO8",
+          "real": true,
+          "position": {
+            "x": 98.3529411764706,
+            "y": 35.07368421052632
+          }
+        },
+        {
+          "id": "GPIO9",
+          "real": true,
+          "position": {
+            "x": 98.3529411764706,
+            "y": 73.2421052631579
+          }
+        },
+        {
+          "id": "GPIO10",
+          "real": true,
+          "position": {
+            "x": 98.3529411764706,
+            "y": 65.50526315789475
+          }
+        },
+        {
+          "id": "GPIO11",
+          "real": true,
+          "position": {
+            "x": 98.3529411764706,
+            "y": 57.76842105263158
+          }
+        },
+        {
+          "id": "GPIO12",
+          "real": true,
+          "position": {
+            "x": 45.55294117647059,
+            "y": 108.31578947368422
+          }
+        },
+        {
+          "id": "GPIO13",
+          "real": true,
+          "position": {
+            "x": 59.52941176470589,
+            "y": 108.31578947368422
+          }
+        },
+        {
+          "id": "GPIO14",
+          "real": true,
+          "position": {
+            "x": 38.82352941176471,
+            "y": 108.31578947368422
+          }
+        },
+        {
+          "id": "GPIO15",
+          "real": true,
+          "position": {
+            "x": 66.25882352941177,
+            "y": 108.31578947368422
+          }
+        },
+        {
+          "id": "GPIO16",
+          "real": true,
+          "position": {
+            "x": 98.3529411764706,
+            "y": 95.42105263157896
+          }
+        },
+        {
+          "id": "GPIO17",
+          "real": true,
+          "position": {
+            "x": 98.3529411764706,
+            "y": 80.46315789473685
+          }
+        },
+        {
+          "id": "GPIO18",
+          "real": true,
+          "position": {
+            "x": 98.3529411764706,
+            "y": 20.115789473684213
+          }
+        },
+        {
+          "id": "GPIO19",
+          "real": true,
+          "position": {
+            "x": 79.71764705882353,
+            "y": 0
+          }
+        },
+        {
+          "id": "GPIO20",
+          "real": false
+        },
+        {
+          "id": "GPIO21",
+          "real": true,
+          "position": {
+            "x": 52.800000000000004,
+            "y": 0
+          }
+        },
+        {
+          "id": "GPIO22",
+          "real": true,
+          "position": {
+            "x": 72.98823529411766,
+            "y": 0
+          }
+        },
+        {
+          "id": "GPIO23",
+          "real": true,
+          "position": {
+            "x": 98.3529411764706,
+            "y": 12.894736842105264
+          }
+        },
+        {
+          "id": "GPIO24",
+          "real": false
+        },
+        {
+          "id": "GPIO25",
+          "real": true,
+          "position": {
+            "x": 18.63529411764706,
+            "y": 108.31578947368422
+          }
+        },
+        {
+          "id": "GPIO26",
+          "real": true,
+          "position": {
+            "x": 25.364705882352943,
+            "y": 108.31578947368422
+          }
+        },
+        {
+          "id": "GPIO27",
+          "real": true,
+          "position": {
+            "x": 32.09411764705882,
+            "y": 108.31578947368422
+          }
+        },
+        {
+          "id": "GPIO28",
+          "real": false
+        },
+        {
+          "id": "GPIO29",
+          "real": false
+        },
+        {
+          "id": "GPIO30",
+          "real": false
+        },
+        {
+          "id": "GPIO31",
+          "real": false
+        },
+        {
+          "id": "GPIO32",
+          "real": true,
+          "position": {
+            "x": 0,
+            "y": 95.42105263157896
+          }
+        },
+        {
+          "id": "GPIO33",
+          "real": true,
+          "position": {
+            "x": 11.905882352941177,
+            "y": 108.31578947368422
+          }
+        },
+        {
+          "id": "GPIO34",
+          "real": true,
+          "position": {
+            "x": 0,
+            "y": 80.46315789473685
+          }
+        },
+        {
+          "id": "GPIO35",
+          "real": true,
+          "position": {
+            "x": 0,
+            "y": 88.2
+          }
+        },
+        {
+          "id": "GPIO36",
+          "real": true,
+          "position": {
+            "x": 0,
+            "y": 42.81052631578948
+          }
+        },
+        {
+          "id": "GPIO37",
+          "real": true,
+          "position": {
+            "x": 0,
+            "y": 50.54736842105264
+          }
+        },
+        {
+          "id": "GPIO38",
+          "real": true,
+          "position": {
+            "x": 0,
+            "y": 57.76842105263158
+          }
+        },
+        {
+          "id": "GPIO39",
+          "real": true,
+          "position": {
+            "x": 0,
+            "y": 65.50526315789475
+          }
+        },
+        {
+          "id": "UART0_RX",
+          "real": false
+        },
+        {
+          "id": "UART0_TX",
+          "real": false
+        }
+      ]
+    },
+    {
+      "typeId": "subcircuits.esp32_devkitc_v4",
+      "title": "ESP32 DevKitC V4",
+      "manifest": "subcircuits/esp32_devkitc_v4.lssub.json",
+      "box": {
+        "width": 98.49000000000001,
+        "height": 176
+      },
+      "nativePackageSize": {
+        "width": 308,
+        "height": 601
+      },
+      "schematicSize": {
+        "width": 88,
+        "height": 176
+      },
+      "background": "image",
+      "pinMarker": "packagePin",
+      "pinLabelColor": "#FAFAC8",
+      "electricalPins": 38,
+      "packagePins": 38,
+      "missingElectricalLeads": [],
+      "decorativeOrNcPins": [],
+      "pins": [
+        {
+          "id": "GND1",
+          "real": true,
+          "position": {
+            "x": 95.77571428571429,
+            "y": 12
+          }
+        },
+        {
+          "id": "3V3",
+          "real": true,
+          "position": {
+            "x": 3.204285714285715,
+            "y": 11
+          }
+        },
+        {
+          "id": "G23",
+          "real": true,
+          "position": {
+            "x": 95.77571428571429,
+            "y": 20
+          }
+        },
+        {
+          "id": "EN",
+          "real": true,
+          "position": {
+            "x": 3.204285714285715,
+            "y": 19
+          }
+        },
+        {
+          "id": "G22",
+          "real": true,
+          "position": {
+            "x": 95.77571428571429,
+            "y": 29
+          }
+        },
+        {
+          "id": "VP",
+          "real": true,
+          "position": {
+            "x": 3.204285714285715,
+            "y": 28
+          }
+        },
+        {
+          "id": "TX",
+          "real": true,
+          "position": {
+            "x": 95.77571428571429,
+            "y": 38
+          }
+        },
+        {
+          "id": "VN",
+          "real": true,
+          "position": {
+            "x": 3.204285714285715,
+            "y": 37
+          }
+        },
+        {
+          "id": "RX",
+          "real": true,
+          "position": {
+            "x": 95.77571428571429,
+            "y": 46
+          }
+        },
+        {
+          "id": "G34",
+          "real": true,
+          "position": {
+            "x": 3.204285714285715,
+            "y": 45
+          }
+        },
+        {
+          "id": "G21",
+          "real": true,
+          "position": {
+            "x": 95.77571428571429,
+            "y": 55
+          }
+        },
+        {
+          "id": "G35",
+          "real": true,
+          "position": {
+            "x": 3.204285714285715,
+            "y": 54
+          }
+        },
+        {
+          "id": "GND2",
+          "real": true,
+          "position": {
+            "x": 95.77571428571429,
+            "y": 63
+          }
+        },
+        {
+          "id": "G32",
+          "real": true,
+          "position": {
+            "x": 3.204285714285715,
+            "y": 61.99999999999999
+          }
+        },
+        {
+          "id": "G19",
+          "real": true,
+          "position": {
+            "x": 95.77571428571429,
+            "y": 72
+          }
+        },
+        {
+          "id": "G33",
+          "real": true,
+          "position": {
+            "x": 3.204285714285715,
+            "y": 71
+          }
+        },
+        {
+          "id": "G18",
+          "real": true,
+          "position": {
+            "x": 95.77571428571429,
+            "y": 80
+          }
+        },
+        {
+          "id": "G25",
+          "real": true,
+          "position": {
+            "x": 3.204285714285715,
+            "y": 79
+          }
+        },
+        {
+          "id": "G05",
+          "real": true,
+          "position": {
+            "x": 95.77571428571429,
+            "y": 89
+          }
+        },
+        {
+          "id": "G26",
+          "real": true,
+          "position": {
+            "x": 3.204285714285715,
+            "y": 88
+          }
+        },
+        {
+          "id": "G17",
+          "real": true,
+          "position": {
+            "x": 95.77571428571429,
+            "y": 98
+          }
+        },
+        {
+          "id": "G27",
+          "real": true,
+          "position": {
+            "x": 3.204285714285715,
+            "y": 97
+          }
+        },
+        {
+          "id": "G16",
+          "real": true,
+          "position": {
+            "x": 95.77571428571429,
+            "y": 106
+          }
+        },
+        {
+          "id": "G14",
+          "real": true,
+          "position": {
+            "x": 3.204285714285715,
+            "y": 104.99999999999999
+          }
+        },
+        {
+          "id": "G04",
+          "real": true,
+          "position": {
+            "x": 95.77571428571429,
+            "y": 115
+          }
+        },
+        {
+          "id": "G12",
+          "real": true,
+          "position": {
+            "x": 3.204285714285715,
+            "y": 114
+          }
+        },
+        {
+          "id": "G00",
+          "real": true,
+          "position": {
+            "x": 95.77571428571429,
+            "y": 123
+          }
+        },
+        {
+          "id": "GND3",
+          "real": true,
+          "position": {
+            "x": 3.204285714285715,
+            "y": 122
+          }
+        },
+        {
+          "id": "G02",
+          "real": true,
+          "position": {
+            "x": 95.77571428571429,
+            "y": 132
+          }
+        },
+        {
+          "id": "G13",
+          "real": true,
+          "position": {
+            "x": 3.204285714285715,
+            "y": 131
+          }
+        },
+        {
+          "id": "G15",
+          "real": true,
+          "position": {
+            "x": 95.77571428571429,
+            "y": 140
+          }
+        },
+        {
+          "id": "D2",
+          "real": true,
+          "position": {
+            "x": 3.204285714285715,
+            "y": 139
+          }
+        },
+        {
+          "id": "D1",
+          "real": true,
+          "position": {
+            "x": 95.77571428571429,
+            "y": 153
+          }
+        },
+        {
+          "id": "D3",
+          "real": true,
+          "position": {
+            "x": 3.204285714285715,
+            "y": 148
+          }
+        },
+        {
+          "id": "D0",
+          "real": true,
+          "position": {
+            "x": 95.77571428571429,
+            "y": 160.99999999999997
+          }
+        },
+        {
+          "id": "CM",
+          "real": true,
+          "position": {
+            "x": 3.204285714285715,
+            "y": 157
+          }
+        },
+        {
+          "id": "CK",
+          "real": true,
+          "position": {
+            "x": 95.77571428571429,
+            "y": 169
+          }
+        },
+        {
+          "id": "5V",
+          "real": true,
+          "position": {
+            "x": 3.204285714285715,
+            "y": 165
+          }
+        }
+      ]
+    },
+    {
+      "typeId": "subcircuits.esp32_wroom32",
+      "title": "ESP32-WROOM-32",
+      "manifest": "subcircuits/esp32_wroom32.lssub.json",
+      "box": {
+        "width": 108.85131195335278,
+        "height": 162.6283367556468
+      },
+      "nativePackageSize": {
+        "width": 343,
+        "height": 487
+      },
+      "schematicSize": {
+        "width": 104,
+        "height": 160
+      },
+      "background": "image",
+      "pinMarker": "packagePin",
+      "pinLabelColor": "#FAFAC8",
+      "electricalPins": 38,
+      "packagePins": 38,
+      "missingElectricalLeads": [],
+      "decorativeOrNcPins": [],
+      "pins": [
+        {
+          "id": "GND1",
+          "real": true,
+          "position": {
+            "x": 0,
+            "y": 10.184804928131417
+          }
+        },
+        {
+          "id": "3v3",
+          "real": true,
+          "position": {
+            "x": 0,
+            "y": 19.646817248459957
+          }
+        },
+        {
+          "id": "EN",
+          "real": true,
+          "position": {
+            "x": 0,
+            "y": 29.075975359342916
+          }
+        },
+        {
+          "id": "SVP",
+          "real": true,
+          "position": {
+            "x": 0,
+            "y": 38.53798767967145
+          }
+        },
+        {
+          "id": "SVN",
+          "real": true,
+          "position": {
+            "x": 0,
+            "y": 47.99999999999999
+          }
+        },
+        {
+          "id": "G34",
+          "real": true,
+          "position": {
+            "x": 0,
+            "y": 57.46201232032854
+          }
+        },
+        {
+          "id": "G35",
+          "real": true,
+          "position": {
+            "x": 0,
+            "y": 66.92402464065708
+          }
+        },
+        {
+          "id": "G32",
+          "real": true,
+          "position": {
+            "x": 0,
+            "y": 76.35318275154003
+          }
+        },
+        {
+          "id": "G33",
+          "real": true,
+          "position": {
+            "x": 0,
+            "y": 85.81519507186857
+          }
+        },
+        {
+          "id": "G25",
+          "real": true,
+          "position": {
+            "x": 0,
+            "y": 95.27720739219713
+          }
+        },
+        {
+          "id": "G26",
+          "real": true,
+          "position": {
+            "x": 0,
+            "y": 104.73921971252567
+          }
+        },
+        {
+          "id": "G27",
+          "real": true,
+          "position": {
+            "x": 0,
+            "y": 114.16837782340862
+          }
+        },
+        {
+          "id": "G14",
+          "real": true,
+          "position": {
+            "x": 0,
+            "y": 123.63039014373716
+          }
+        },
+        {
+          "id": "G12",
+          "real": true,
+          "position": {
+            "x": 0,
+            "y": 133.0924024640657
+          }
+        },
+        {
+          "id": "GND3",
+          "real": true,
+          "position": {
+            "x": 108.85131195335278,
+            "y": 10.184804928131417
+          }
+        },
+        {
+          "id": "G23",
+          "real": true,
+          "position": {
+            "x": 108.85131195335278,
+            "y": 19.646817248459957
+          }
+        },
+        {
+          "id": "G22",
+          "real": true,
+          "position": {
+            "x": 108.85131195335278,
+            "y": 29.075975359342916
+          }
+        },
+        {
+          "id": "TX0",
+          "real": true,
+          "position": {
+            "x": 108.85131195335278,
+            "y": 38.53798767967145
+          }
+        },
+        {
+          "id": "RX0",
+          "real": true,
+          "position": {
+            "x": 108.85131195335278,
+            "y": 47.99999999999999
+          }
+        },
+        {
+          "id": "G21",
+          "real": true,
+          "position": {
+            "x": 108.85131195335278,
+            "y": 57.46201232032854
+          }
+        },
+        {
+          "id": "NC",
+          "real": true,
+          "position": {
+            "x": 108.85131195335278,
+            "y": 66.92402464065708
+          }
+        },
+        {
+          "id": "G19",
+          "real": true,
+          "position": {
+            "x": 108.85131195335278,
+            "y": 76.35318275154003
+          }
+        },
+        {
+          "id": "G18",
+          "real": true,
+          "position": {
+            "x": 108.85131195335278,
+            "y": 85.81519507186857
+          }
+        },
+        {
+          "id": "G05",
+          "real": true,
+          "position": {
+            "x": 108.85131195335278,
+            "y": 95.27720739219713
+          }
+        },
+        {
+          "id": "G17",
+          "real": true,
+          "position": {
+            "x": 108.85131195335278,
+            "y": 104.73921971252567
+          }
+        },
+        {
+          "id": "G16",
+          "real": true,
+          "position": {
+            "x": 108.85131195335278,
+            "y": 114.16837782340862
+          }
+        },
+        {
+          "id": "G04",
+          "real": true,
+          "position": {
+            "x": 108.85131195335278,
+            "y": 123.63039014373716
+          }
+        },
+        {
+          "id": "G00",
+          "real": true,
+          "position": {
+            "x": 108.85131195335278,
+            "y": 133.0924024640657
+          }
+        },
+        {
+          "id": "GND2",
+          "real": true,
+          "position": {
+            "x": 12.037317784256562,
+            "y": 162.6283367556468
+          }
+        },
+        {
+          "id": "G13",
+          "real": true,
+          "position": {
+            "x": 21.61865889212828,
+            "y": 162.6283367556468
+          }
+        },
+        {
+          "id": "SD2",
+          "real": true,
+          "position": {
+            "x": 30.411661807580177,
+            "y": 162.6283367556468
+          }
+        },
+        {
+          "id": "SD3",
+          "real": true,
+          "position": {
+            "x": 40.02332361516035,
+            "y": 162.6283367556468
+          }
+        },
+        {
+          "id": "CMD",
+          "real": true,
+          "position": {
+            "x": 49.63498542274053,
+            "y": 162.6283367556468
+          }
+        },
+        {
+          "id": "CLK",
+          "real": true,
+          "position": {
+            "x": 59.21632653061225,
+            "y": 162.6283367556468
+          }
+        },
+        {
+          "id": "SD0",
+          "real": true,
+          "position": {
+            "x": 68.82798833819243,
+            "y": 162.6283367556468
+          }
+        },
+        {
+          "id": "SD1",
+          "real": true,
+          "position": {
+            "x": 78.4396501457726,
+            "y": 162.6283367556468
+          }
+        },
+        {
+          "id": "G15",
+          "real": true,
+          "position": {
+            "x": 87.2326530612245,
+            "y": 162.6283367556468
+          }
+        },
+        {
+          "id": "G02",
+          "real": true,
+          "position": {
+            "x": 96.81399416909622,
+            "y": 162.6283367556468
+          }
+        }
+      ]
+    }
+  ]
+}

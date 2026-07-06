@@ -85,7 +85,7 @@ ela é o contexto que faltava nos `.spec`/docs atuais.
   (endereço de pino errado, decodificava o protocolo errado silenciosamente); `ili9341.json` usava
   nomes inconsistentes (`mosi`/`rst` em vez de `sda`/`reset`). Mitigação: `pin_name()` na ABI +
   `validate_pin_order()` em `devices/simulide-complex/src/lib.c`, chamado no `init()` de cada
-  device, loga erro se a ordem declarada no `device.json` não bate com o esperado.
+  device, loga erro se a ordem declarada no `.lsdevice` não bate com o esperado.
 - I2C ganhou endereço configurável (`i2cAddress`) + ACK elétrico real (antes era só uma flag
   interna, nunca puxava SDA de verdade) — só ACKa quando o endereço bate.
 - MAX72xx corrigido: antes latchava a cada 16 bits clocados; agora só na borda de subida de

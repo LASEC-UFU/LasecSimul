@@ -7,12 +7,12 @@ Status: aceito e implementado | Depende de: `.spec/lasecsimul.spec` seção 6.1-
 
 O pipeline de schema de propriedades (ver seção 6.1/6.1.3 de `lasecsimul.spec`) acabou de ficar 100%
 declarativo: todo rótulo, grupo e nome de propriedade — de built-in ou de plugin — vem de um
-`PropertySchema` (C++, registrado em `ComponentMetadataRegistry`) ou de `device.json` (plugin), nunca mais
+`PropertySchema` (C++, registrado em `ComponentMetadataRegistry`) ou de `.lsdevice` (plugin), nunca mais
 de inferência na Webview. O mesmo vale pro catálogo da paleta (`component-catalog.json`,
 `items[].label`/`folderPath`).
 
 Hoje toda essa string é texto solto em português, decidido implicitamente pelo autor de cada arquivo —
-built-ins em C++ (`"Resistência"`, `"Elétrica"`), plugins em `device.json` (`"Tensao medida"`, `"Leitura"`),
+built-ins em C++ (`"Resistência"`, `"Elétrica"`), plugins em `.lsdevice` (`"Tensao medida"`, `"Leitura"`),
 catálogo em JSON (`"Resistor"`, `"Passivos"`). Quem constrói um dispositivo novo (plugin de terceiro, e no
 futuro um subcircuito publicado) não tem como declarar que escreveu em outra língua, nem fornecer
 tradução — e o projeto não tem mecanismo pra escolher entre línguas mesmo que houvesse.
@@ -29,7 +29,7 @@ autor de fato forneceu quando a solicitada não existir.
    paleta) aceita ou uma string simples (língua única) ou um mapa BCP-47→string (múltiplas línguas). Campo
    técnico não-traduzível (`id`, `typeId`, `unit`) continua `string` puro — nunca virou `LocalizedString`.
 2. **`language` é obrigatório, `translations` é opcional**, declarados na raiz de cada manifesto/catálogo
-   (`device.json`, `component-catalog.json`, fonte registrada). `language` diz em que língua estão os
+   (`.lsdevice`, `component-catalog.json`, fonte registrada). `language` diz em que língua estão os
    campos `string` simples do resto do arquivo; `translations.<lang>` é um subconjunto dos mesmos campos,
    só o que foi de fato traduzido — campo faltante em `translations` cai pra `language`, nunca pra string
    vazia.
@@ -64,14 +64,14 @@ autor de fato forneceu quando a solicitada não existir.
 
 ## Consequências
 
-- Todo `device.json`/`component-catalog.json` existente continua válido sem alteração — `language`
+- Todo `.lsdevice`/`component-catalog.json` existente continua válido sem alteração — `language`
   ausente é tratado como "pt-BR implícito" (`CoreApplication.cpp::loadDeviceLibraryFile`,
   `UnifiedCatalog.ts::loadUnifiedCatalog`); todo arquivo NOVO deve declarar `language` explicitamente
   (normativo, RNF12 de `lasecsimul.spec`).
 - **Implementado**: Core (`ComponentMetadataRegistry::language`/`translationsJson`,
   `resolvePropertySchemaForLanguage`, payload `language` em `getPropertySchemas`); Extension
   (`CoreClient.getPropertySchemas(language)` com `vscode.env.language`, `UnifiedCatalog.ts::
-  resolveLocalizedItems`); exemplo real de tradução `en` em `devices/voltmeter/device.json`
+  resolveLocalizedItems`); exemplo real de tradução `en` em `devices/voltmeter/.lsdevice`
   (`displayVoltage`) e em `project/schema/component-catalog.json` (todos os 8 itens) — validado de
   ponta a ponta por teste (`testGetPropertySchemasOverIpc`, `UnifiedCatalog.test.ts`).
 - Builtins continuam só com `language: "pt-BR"` (default), sem tradução nenhuma fornecida — pedir

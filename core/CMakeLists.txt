@@ -344,9 +344,9 @@ if(NOT WIN32)
 endif()
 add_test(NAME esp32_adapter COMMAND esp32_adapter_test)
 
-# Subcircuitos REAIS da ESP32 (não sintéticos) -- prova que os .lssub.json reais carregam e
+# Subcircuitos REAIS da ESP32 (não sintéticos) -- prova que os .lssubcircuit reais carregam e
 # expandem corretamente contra o plugin ESP32 de verdade (ver mcu-adapters/espressif-esp32/,
-# subcircuits/esp32_devkitc_v4.lssub.json e subcircuits/esp32_wroom32.lssub.json).
+# subcircuits/esp32_devkitc_v4.lssubcircuit e subcircuits/esp32_wroom32.lssubcircuit).
 add_executable(esp32_devkitc_subcircuit_test
     test/esp32_devkitc_subcircuit_test.cpp
     ${TEST_COMMON_SOURCES}
@@ -355,8 +355,8 @@ target_include_directories(esp32_devkitc_subcircuit_test PRIVATE include src)
 target_link_libraries(esp32_devkitc_subcircuit_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
 target_compile_definitions(esp32_devkitc_subcircuit_test PRIVATE
     ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
-    LSSUB_MANIFEST_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../subcircuits/esp32_devkitc_v4.lssub.json"
-    WROOM32_LSSUB_MANIFEST_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../subcircuits/esp32_wroom32.lssub.json"
+    LSSUB_MANIFEST_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../subcircuits/esp32_devkitc_v4.lssubcircuit"
+    WROOM32_LSSUB_MANIFEST_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../subcircuits/esp32_wroom32.lssubcircuit"
 )
 if(NOT WIN32)
     target_link_libraries(esp32_devkitc_subcircuit_test PRIVATE dl)

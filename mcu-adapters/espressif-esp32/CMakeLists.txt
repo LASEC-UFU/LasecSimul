@@ -10,4 +10,4 @@ target_include_directories(adapter PRIVATE ${CMAKE_SOURCE_DIR}/../../core/includ
 set_target_properties(adapter PROPERTIES CXX_VISIBILITY_PRESET hidden)
 
 # lasecsimul-cli build copia o artefato gerado para build/<plataforma>/adapter.{dll,so,dylib}
-# conforme mcu.json (ver .spec/lasecsimul-native-devices.spec, secao 18).
+# conforme .lsdevice (ver .spec/lasecsimul-native-devices.spec, secao 18).

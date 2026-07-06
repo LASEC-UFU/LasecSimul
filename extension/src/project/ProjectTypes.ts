@@ -28,6 +28,19 @@ export interface ProjectWire {
   to: { componentId: string; pinId: string };
 }
 
+/** Referência do "bloco genérico de subcircuito" a um `.lssubcircuit` escolhido por caminho (fora
+ * de `registeredSources[]` -- ver `.spec/lasecsimul-subcircuits.spec` seção 12). `path` é relativo
+ * ao diretório do próprio `.lsproj` quando possível, senão absoluto. `lastKnownTypeId`/
+ * `lastKnownPinIds` são a ÚNICA exceção deliberada à regra "nunca persistir pinos" (comentário em
+ * `extension.ts::projectToWebviewState`): sem um `RegisteredSource` pra consultar, não há de onde
+ * re-derivar os pinos quando o arquivo está ausente -- o snapshot preserva a integridade estrutural
+ * dos fios (`ProjectWire.from/to.pinId`) até o usuário relocalizar o arquivo. */
+export interface ProjectSubcircuitRef {
+  path: string;
+  lastKnownTypeId?: string;
+  lastKnownPinIds?: string[];
+}
+
 export interface ProjectComponent {
   id: string;
   typeId: string;
@@ -44,6 +57,7 @@ export interface ProjectComponent {
     y?: number;
     rotation?: 0 | 90 | 180 | 270;
   };
+  subcircuitRef?: ProjectSubcircuitRef;
 }
 
 export interface ProjectFirmwareConfig {

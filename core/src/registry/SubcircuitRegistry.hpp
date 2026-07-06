@@ -1,12 +1,13 @@
 #pragma once
 
 #include <string>
+#include <stdexcept>
 #include <unordered_map>
 #include <vector>
 
 namespace lasecsimul::registry {
 
-/** Componente interno declarado em `components[]` de um `.lssub.json` -- propriedades já vêm como
+/** Componente interno declarado em `components[]` de um `.lssubcircuit` -- propriedades já vêm como
  * JSON serializado (não tipa aqui, quem aplica via `SimulationSession::setProperty` decide o
  * `PropertyValue` certo a partir do schema do `typeId`, igual a qualquer outro `addComponent`). */
 struct SubcircuitComponentDef {
@@ -31,12 +32,13 @@ struct SubcircuitInterfaceDef {
     std::string internalTunnel;
 };
 
-/** Definição completa de um subcircuito, já parseada de `.lssub.json` -- `packageJson` fica opaco
+/** Definição completa de um subcircuito, já parseada de `.lssubcircuit` -- `packageJson` fica opaco
  * (a Extension é quem desenha o símbolo; o Core nunca precisa interpretar `package`/`pins[]`
  * visuais, só validar que todo `package.pins[].id` existe em `interface[].pinId`, ver seção 3). */
 struct SubcircuitDefinition {
     std::string typeId;
     std::string name;
+    std::string sourcePath;
     std::vector<SubcircuitComponentDef> components;
     std::vector<SubcircuitWireDef> wires;
     std::vector<SubcircuitInterfaceDef> interfaceDefs;
@@ -45,7 +47,10 @@ struct SubcircuitDefinition {
 
 class SubcircuitRegistry {
 public:
-    void registerDefinition(SubcircuitDefinition def) {
+    void registerDefinition(SubcircuitDefinition def, bool allowReplace = true) {
+        if (!allowReplace && contains(def.typeId)) {
+            throw std::invalid_argument("subcircuito duplicado: " + def.typeId);
+        }
         m_byTypeId[def.typeId] = std::move(def);
     }
 

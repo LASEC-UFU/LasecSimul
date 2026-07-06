@@ -122,7 +122,7 @@ typedef struct LsdnMatrixView {
  * nível digital (0/1) -- pra ler fora de stamp() (post_step/on_event).
  * `now_ns`/`schedule_event`: tempo de simulação e timer (LSDN_EVT_TIMER) independente de borda de
  * pino -- mesmo papel do `Scheduler::scheduleEvent` que Clock/WaveGen built-in já usam.
- * `pin_name`: nome do pino (mesma ordem/index de device.json `pins[]`) -- pra device validar a
+ * `pin_name`: nome do pino (mesma ordem/index de `.lsdevice` `pins[]`) -- pra device validar a
  * própria ordem esperada no init() em vez de confiar em índice hardcoded silenciosamente.
  *
  * ATENÇÃO de sequenciamento: `pin_write`/`pin_write_analog`/`schedule_event`/`now_ns` exigem o

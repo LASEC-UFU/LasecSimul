@@ -1,3 +1,32 @@
+<!-- Claude Code Spec Header v1 -->
+## Claude Code Operating Contract (English)
+
+Purpose: This file is a source-of-truth technical spec for LasecSimul architecture and implementation behavior.
+Audience: coding agents and maintainers.
+Mode: normative guidance before code changes.
+
+Keywords: source-of-truth, architecture, extension-host, native-core, ipc, qemu, plugin-abi, mna-solver, scheduler, contracts, acceptance-criteria
+
+Priority Rules:
+1. MUST preserve architecture boundaries (Extension UI/orchestration vs Core simulation runtime).
+2. MUST treat this spec as normative when task instructions are ambiguous.
+3. MUST update this spec when introducing a new architectural decision.
+4. SHOULD keep protocol and file-format decisions host-agnostic.
+5. MUST NOT move simulation logic into the VS Code extension layer.
+
+Agent Workflow:
+1. Read this file first.
+2. Validate whether requested changes fit existing requirements.
+3. If a gap exists: compare alternatives, pick best option, and document the decision in this spec.
+4. Implement only after contract clarity.
+
+Decision Keywords:
+- MUST: mandatory behavior.
+- SHOULD: preferred unless a documented reason exists.
+- MAY: optional behavior.
+- OUT OF SCOPE: must not be implemented in the current phase.
+
+---
 # LasecSimul — Especificação Técnica (v0.2)
 
 Status: rascunho | Tipo: extensão VSCode (UI) + núcleo nativo C++ (simulação) | Emulação de MCU: QEMU (processo externo)
@@ -51,7 +80,7 @@ algo VSCode-específico tinha vazado pra fora da Extension.
 
 **Regra**: nada que cruze a fronteira Core↔shell pode depender de um mecanismo específico de um host. Dito de
 outro modo, o **protocolo de IPC (named pipe/socket + JSON, seção 7) e os formatos de arquivo em disco
-(`.lsproj`, `device.json`, `library.json` e o futuro formato de subcircuito, ver
+(`.lsproj`, `.lsdevice`, `.lssubcircuit`, `library.json`, ver
 `lasecsimul-subcircuits.spec`) são o contrato inteiro.** Um shell Flutter implementaria seu próprio cliente
 do protocolo (equivalente a `CoreClient.ts`, em Dart) e sua própria renderização (widgets Flutter, não
 DOM/SVG) — **não existe nem se espera reuso de código de UI entre frameworks tão diferentes**; o que se
@@ -61,7 +90,7 @@ reaproveita é o protocolo e os formatos de arquivo, nunca TypeScript/webview.
 consolidada em arquivo host-agnóstico de projeto: `LasecSimul/project/schema/component-catalog.json`.
 Esse arquivo é a fonte única para: (a) itens da paleta (`items[]`, incluindo hierarquia de pastas por
 `folderPath`), e (b) bibliotecas que a shell manda o Core carregar (`deviceLibraries[]`, tipicamente
-`../devices/library.json`, `../mcu-adapters/library.json`, e no futuro `../subcircuits/library.json`).
+`../devices/library.json`, `../mcu-adapters/library.json`, e `../subcircuits/library.json`).
 Qualquer shell alternativo lê o mesmo arquivo e chama o mesmo verbo IPC (`loadDeviceLibrary`) sem conhecer
 nada de VSCode.
 
@@ -113,7 +142,7 @@ de um jeito que tornaria um shell futuro mais caro do que precisa ser. Ver ADR 0
   for destruída. **Não existe** "descarregar e recarregar o mesmo `PluginModule`" com instâncias vivas — isso
   foi avaliado como inseguro (use-after-free de código) e descartado.
 - RF10: Permitir que o usuário crie um **subcircuito** a partir de uma seleção no próprio editor de
-  esquemático — circuito interno + pinos de I/O expostos + símbolo visual, salvo como arquivo `.json` (não
+  esquemático — circuito interno + pinos de I/O expostos + símbolo visual, salvo como arquivo `.lssubcircuit` (não
   C++, não DLL/SO) — e o reutilize como componente em outros projetos, na mesma paleta de built-ins e
   plugins. Especificação completa em `lasecsimul-subcircuits.spec`.
 
@@ -171,7 +200,7 @@ de um jeito que tornaria um shell futuro mais caro do que precisa ser. Ver ADR 0
   (`resolvePropertySchemaForLanguage`/`getPropertySchemas`), Extension (`UnifiedCatalog.ts::
   resolveLocalizedItems`), fallback localizável pra fontes registradas (`extension.ts::
   localizedRegisteredFolder`/`localizedManifestName`), exemplo real de tradução em
-  `devices/voltmeter/device.json`, `devices/example-blinker/device.json` e
+  `devices/voltmeter/.lsdevice`, `devices/example-blinker/.lsdevice` e
   `project/schema/component-catalog.json` (pt-BR → en). Política de produto desta fase:
   todo dispositivo/componente novo MUST nascer com base `pt-BR` + tradução `en`, e a shell MUST
   expor chave runtime entre essas duas línguas nas configurações.
@@ -472,7 +501,7 @@ estático `propertySchema()` (mesmo arquivo `.hpp` do componente) que devolve o 
 reusado em dois lugares: (a) `propertyDescriptors()` da instância preenche `PropertyDescriptor::schema` a
 partir dele; (b) `CoreApplication::registerBuiltinComponents` registra o mesmo schema, por `typeId`, no
 `ComponentMetadataRegistry` (`core/src/registry/ComponentMetadataRegistry.hpp`) — **o mesmo registry que
-plugins já populavam via `loadDeviceLibraryFile`** (`device.json`'s `properties[]`, parseado por
+plugins já populavam via `loadDeviceLibraryFile`** (`.lsdevice`'s `properties[]`, parseado por
 `parsePropertySchema`/`parsePropertySchemaList` em `CoreApplication.cpp`). Não existem dois registries
 paralelos (um pra built-in, um pra plugin); a fonte é única, só o que a alimenta difere (C++ estático vs.
 JSON de manifesto).
@@ -561,7 +590,7 @@ Status atualizado depois da seção 6.1.2/6.1.3:
 1. ~~**ABI de propriedade genérica**: substituir o bootstrap limitado a `get_property_f32` por
    `config_get` + `set_property/get_property` tipados.~~ **Feito** — `device_abi.h`, vtable de plugin tem
    `get_property`/`set_property` (10 funções, ABI 1.1); `config_get` existe em `LsdnHostApi`.
-2. ~~**Schema único de componente**: `device.json`/catálogo/IPC/Core precisam falar o mesmo idioma para
+2. ~~**Schema único de componente**: `.lsdevice`/catálogo/IPC/Core precisam falar o mesmo idioma para
    `pins`/`properties`.~~ **Feito pra `properties`** (seção 6.1.2/6.1.3, built-in e plugin no mesmo
    `ComponentMetadataRegistry`). **Ainda não feito pra `package`/`pins`** de built-in — ver item 3.
 3. **Package data-driven**: a renderização de símbolo/corpo/pinos de built-in ainda depende de
@@ -607,7 +636,7 @@ num formato JSON simples, coerente com o resto do manifesto.
 #### 6.3.1 `LocalizedString` — tipo canônico
 
 ```typescript
-// Conceitual — mesmo formato em JSON (device.json, component-catalog.json) nos dois lados (Core e
+// Conceitual — mesmo formato em JSON (.lsdevice, component-catalog.json) nos dois lados (Core e
 // Extension), implementado duas vezes (C++ e TypeScript) com o MESMO algoritmo de resolução, não
 // uma dependência cruzada entre os dois processos.
 type LocalizedString = string | Record<string, string>;
@@ -616,7 +645,7 @@ type LocalizedString = string | Record<string, string>;
 // Record<string,string> = mapa BCP-47 (ex: "pt-BR", "en", "en-US") -> string traduzida.
 ```
 
-**Implementado** (`devices/voltmeter/device.json`, `project/schema/component-catalog.json`): o tipo é o
+**Implementado** (`devices/voltmeter/.lsdevice`, `project/schema/component-catalog.json`): o tipo é o
 conceito; a codificação JSON real NÃO faz o campo em si virar union — `properties[].label`/`items[].label`
 continuam sempre string simples (a língua-base, exatamente como já eram antes desta seção existir), e o
 "mapa" mora num bloco `translations.<lang>` paralelo, separado, no mesmo arquivo (ver 6.3.2). Mantém o
@@ -628,7 +657,7 @@ Todo campo hoje declarado como `string` solto e VISÍVEL ao usuário final passa
 (`id`, `typeId`, `editor`, `valueKind`, `unit` continuam `string` puro: `unit` é símbolo técnico ("Ω", "V"),
 não texto traduzível). Campos afetados:
 
-- `device.json`: `name` (nome do dispositivo), `properties[].label`, `properties[].group`,
+- `.lsdevice`: `name` (nome do dispositivo), `properties[].label`, `properties[].group`,
   `properties[].options[].label`, `pins[].label`, `package.shapes[].value` (texto desenhado no símbolo).
 - `component-catalog.json`/`library.json`/fontes registradas: `items[].label`, cada segmento de
   `items[].folderPath` (categoria/pasta da paleta).
@@ -639,7 +668,7 @@ não texto traduzível). Campos afetados:
 
 #### 6.3.2 Língua-base declarada — nunca string vazia
 
-Todo manifesto (`device.json`) e toda declaração de built-in passam a ter uma língua-base obrigatória:
+Todo manifesto (`.lsdevice`) e toda declaração de built-in passam a ter uma língua-base obrigatória:
 
 ```json
 {
@@ -699,7 +728,7 @@ resolve(localized, requestedLang, baseLang):
 - Strings de erro/log do Core e da Extension (não são declarativas de dispositivo, não fazem parte do
   manifesto) — fora de escopo; tratamento de l10n da própria Extension (`vscode-nls`/`package.nls.json`,
   textos de comando/menu) é mecanismo nativo do VSCode, decisão independente, não decidida aqui.
-- Subcircuitos (`.lssub.json`) ganham o mesmo contrato (`language`/`translations`) quando a seção 5 de
+- Subcircuitos (`.lssubcircuit`) ganham o mesmo contrato (`language`/`translations`) quando a seção 5 de
   `lasecsimul-subcircuits.spec` for revisada — não duplicado aqui, só referenciado.
 - Decisão completa, alternativas descartadas e justificativa em
   `docs/adr/0009-localizacao-de-strings-declarativas.md`.
@@ -799,7 +828,7 @@ ficar seguro sozinho, nunca testado em conjunto) fazia `FullPivLU::rank()` cair 
 nenhuma linha literalmente zerada, só o threshold do Eigen (`maxPivot·tamanho·epsilon`) sepultando as linhas
 fracas por spread de magnitude, não por falta de conexão real. `CircuitGroup::singular()` rejeitava o grupo
 inteiro (caso real: pull-up + botão de um GPIO do ESP32 ligado a GND/3V3, `subcircuits/
-esp32_devkitc_v4.lssub.json`, EN/BOOT). Equilibração é transformação de similaridade (`x = S·y`, resolve-se
+esp32_devkitc_v4.lssubcircuit`, EN/BOOT). Equilibração é transformação de similaridade (`x = S·y`, resolve-se
 `S·A·S·y = S·b`) — preserva a solução exata a menos de erro de ponto flutuante, não muda comportamento de
 grupo já bem-condicionado, e resolve a causa raiz pra qualquer combinação futura de magnitudes, não só este
 caso (ver `.spec/lasecsimul-native-devices.spec` seção 8.1 para o relato completo do bug original).
@@ -969,7 +998,7 @@ de versionamento/sincronização seguem valendo, e ambas são correções confir
 - **Sem cabeçalho de versão dentro da struct.** O binário já compilado (`qemu-system-xtensa.exe`) e os
   patches já existentes (`hw/gpio/esp32_gpio.c`, `hw/arm/stm32.c`) dependem do layout exato, campo a campo,
   na ordem atual — inserir `abiMajor`/`abiMinor` na frente deslocaria tudo e exigiria recompilar o QEMU.
-  Versionamento fica fora da struct: o manifesto do adaptador (`mcu.json`, campo `qemuBuild`) é quem declara
+  Versionamento fica fora da struct: o manifesto do adaptador (`.lsdevice`, campo `qemuBuild`) é quem declara
   qual build de QEMU é esperado pra aquele chip. Isso é uma troca deliberada — usar o binário que já existe
   sem precisar mantê-lo (recompilar QEMU é um projeto de build próprio) — não um esquecimento.
 - **Protocolo é ping-pong síncrono por construção, não seqlock.** O protocolo real (`doAction()` em
@@ -1091,7 +1120,7 @@ Três caminhos, sem nunca editar `MnaSolver`/`Scheduler`:
   Especificação completa — manifesto, ABI, ciclo de vida, build, testes — em **`lasecsimul-native-devices.spec`**.
 - **Subcircuito** (usuário, sem código): circuito desenhado no editor, salvo como `.json` — pinos internos
   expostos via `Tunnel` com nome reaproveitando o mesmo mecanismo da seção 7.2, símbolo visual reaproveitando
-  o mesmo bloco `package` de `device.json` (seção 21 do `lasecsimul-native-devices.spec`). **Não implementa
+  o mesmo bloco `package` de `.lsdevice` (seção 21 do `lasecsimul-native-devices.spec`). **Não implementa
   `IComponentModel`** — ao instanciar, o Core expande os componentes internos diretamente na mesma
   `SimulationSession` (sem flattening prévio pela Extension, sem sandbox/consentimento porque é dado, não
   código executável). Especificação completa em **`lasecsimul-subcircuits.spec`**.
@@ -1294,6 +1323,15 @@ Regras normativas (MUST/NEVER):
     Para o catálogo first-party do projeto, `translations.en` é obrigatória para todo item novo.
     **Implementado**: `UnifiedCatalog.ts::resolveLocalizedItems`, exemplo real em
     `project/schema/component-catalog.json`, e fontes registradas/subcircuitos com fallback de pasta
+
+12. A UI MUST traduzir `authoringScene`/`package` por um parser/tradutor genérico compatível com a
+  construção do SimulIDE (mesmos primitivos, mesmas transformações e mesma semântica de pinos/fios).
+13. A UI MUST NOT depender de helper ad-hoc por dispositivo (`if/switch` por `typeId`) para montar
+  geometria, pinos, placement ou wire routes quando essa informação existir no payload declarativo
+  (`authoringScene`/`package`/metadata).
+14. Mapeamento hardcoded por dispositivo para rendering/placement é OUT OF SCOPE; a única exceção
+  permitida é infraestrutura genérica do próprio parser/tradutor (normalização, validação, fallback
+  sintático), sem regra de negócio acoplada a `typeId` específico.
     localizável em `extension.ts`.
 
 ### 13.2 Achado fora do mapeamento de painel: `BatchTest` — regressão headless de circuitos

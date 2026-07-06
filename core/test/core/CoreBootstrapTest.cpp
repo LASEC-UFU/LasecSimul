@@ -140,7 +140,7 @@ static std::filesystem::path createRequiresRestartLibraryFixture() {
         return true;
     };
 
-    const std::filesystem::path blinkerSourceManifest = devicesRoot / "example-blinker" / "device.json";
+    const std::filesystem::path blinkerSourceManifest = devicesRoot / "example-blinker" / "device.lsdevice";
     if (!std::filesystem::exists(blinkerSourceManifest)) return {};
 
     nlohmann::json blinkerManifest;
@@ -156,7 +156,7 @@ static std::filesystem::path createRequiresRestartLibraryFixture() {
     blinkerManifest["typeId"] = "example.blinker.requires_restart";
     blinkerManifest["properties"][0]["requiresRestart"] = true;
 
-    const std::filesystem::path blinkerManifestOut = tempDir / "example-blinker" / "device.json";
+    const std::filesystem::path blinkerManifestOut = tempDir / "example-blinker" / "device.lsdevice";
     const std::filesystem::path libraryOut = tempDir / "library.json";
 
     {
@@ -167,7 +167,7 @@ static std::filesystem::path createRequiresRestartLibraryFixture() {
         {"schemaVersion", 1},
         {"publisher", "test"},
         {"version", "0.0.0"},
-        {"devices", {{{"typeId", "example.blinker.requires_restart"}, {"manifest", "example-blinker/device.json"}}}},
+        {"devices", {{{"typeId", "example.blinker.requires_restart"}, {"manifest", "example-blinker/device.lsdevice"}}}},
     };
     std::ofstream libraryFile(libraryOut);
     libraryFile << library.dump(2);
@@ -489,6 +489,184 @@ static void testGetComponentCurrentOverIpc() {
 
     serverThread.join();
     TEST_ASSERT(serverResult == 0, "servidor encerrou com codigo 0 apos shutdown");
+}
+
+// Teste 4b4: 'registerAdhocSubcircuit' via IPC registra UM .lssubcircuit avulso (sem library.json) e
+// addComponent com o typeId resultante expande normalmente -- prova o verbo IPC usado pelo bloco
+// genérico de subcircuito por caminho (ver .spec/lasecsimul-subcircuits.spec seção 9). Mesmo
+// "divisor_5v" sintético de subcircuit_test.cpp, mas escrito num arquivo real e registrado pela
+// via IPC em vez de SubcircuitRegistry::registerDefinition() direto.
+static void testRegisterAdhocSubcircuitOverIpc() {
+    std::fprintf(stderr, "\n[T4b4] 'registerAdhocSubcircuit' via IPC registra .lssubcircuit avulso e expande via addComponent\n");
+
+    const std::filesystem::path manifestPath = uniqueTempPath("lasecsimul-adhoc-divisor");
+    {
+        std::ofstream manifestFile(manifestPath);
+        manifestFile << nlohmann::json{
+            {"schemaVersion", 1},
+            {"typeId", "subcircuits.divisor_5v_adhoc"},
+            {"name", "Divisor 5V avulso (teste IPC)"},
+            {"components", {
+                {{"id", "r1"}, {"typeId", "passive.resistor"}, {"properties", {{"resistance", 1000}}}},
+                {{"id", "r2"}, {"typeId", "passive.resistor"}, {"properties", {{"resistance", 1000}}}},
+                {{"id", "tunnel_in"}, {"typeId", "connectors.tunnel"}, {"properties", {{"name", "VIN"}}}},
+                {{"id", "tunnel_out"}, {"typeId", "connectors.tunnel"}, {"properties", {{"name", "VOUT"}}}},
+                {{"id", "tunnel_gnd"}, {"typeId", "connectors.tunnel"}, {"properties", {{"name", "GND"}}}},
+            }},
+            {"wires", {
+                {{"from", {{"componentId", "tunnel_in"}, {"pinId", "pin"}}}, {"to", {{"componentId", "r1"}, {"pinId", "p1"}}}},
+                {{"from", {{"componentId", "r1"}, {"pinId", "p2"}}}, {"to", {{"componentId", "r2"}, {"pinId", "p1"}}}},
+                {{"from", {{"componentId", "r1"}, {"pinId", "p2"}}}, {"to", {{"componentId", "tunnel_out"}, {"pinId", "pin"}}}},
+                {{"from", {{"componentId", "r2"}, {"pinId", "p2"}}}, {"to", {{"componentId", "tunnel_gnd"}, {"pinId", "pin"}}}},
+            }},
+            {"interface", {
+                {{"pinId", "VIN"}, {"label", "Entrada"}, {"internalTunnel", "VIN"}},
+                {{"pinId", "VOUT"}, {"label", "Saída"}, {"internalTunnel", "VOUT"}},
+                {{"pinId", "GND"}, {"label", "Terra"}, {"internalTunnel", "GND"}},
+            }},
+            {"package", {
+                {"width", 60},
+                {"height", 48},
+                {"pins", {
+                    {{"id", "VIN"}, {"x", -30}, {"y", -12}, {"side", "left"}},
+                    {{"id", "VOUT"}, {"x", 30}, {"y", 0}, {"side", "right"}},
+                    {{"id", "GND"}, {"x", 0}, {"y", 24}, {"side", "bottom"}},
+                }},
+            }},
+        }.dump(2);
+    }
+    const std::filesystem::path invalidSchemaPath = uniqueTempPath("lasecsimul-adhoc-invalid-schema");
+    {
+        std::ofstream manifestFile(invalidSchemaPath);
+        manifestFile << nlohmann::json{
+            {"schemaVersion", 999},
+            {"typeId", "subcircuits.invalid_schema"},
+            {"components", nlohmann::json::array()},
+            {"wires", nlohmann::json::array()},
+            {"interface", nlohmann::json::array()},
+        }.dump(2);
+    }
+    const std::filesystem::path duplicateManifestPath = uniqueTempPath("lasecsimul-adhoc-divisor-duplicate");
+    {
+        std::ofstream manifestFile(duplicateManifestPath);
+        manifestFile << nlohmann::json{
+            {"schemaVersion", 1},
+            {"typeId", "subcircuits.divisor_5v_adhoc"},
+            {"name", "Duplicado em outro arquivo"},
+            {"components", {
+                {{"id", "tunnel_in"}, {"typeId", "connectors.tunnel"}, {"properties", {{"name", "VIN"}}}},
+            }},
+            {"wires", nlohmann::json::array()},
+            {"interface", {
+                {{"pinId", "VIN"}, {"label", "Entrada"}, {"internalTunnel", "VIN"}},
+            }},
+        }.dump(2);
+    }
+
+    const std::string pipeName = "lasecsimul-bootstrap-test-adhoc-subcircuit";
+    int serverResult = -1;
+    std::thread serverThread([&] {
+        lasecsimul::app::CoreApplication app({pipeName});
+        serverResult = app.run();
+    });
+
+#ifdef _WIN32
+    void* conn = clientConnect(pipeName);
+    TEST_ASSERT(conn != INVALID_HANDLE_VALUE, "cliente conectou");
+#else
+    int conn = clientConnect(pipeName);
+    TEST_ASSERT(conn >= 0, "cliente conectou");
+#endif
+
+    if (
+#ifdef _WIN32
+        conn != INVALID_HANDLE_VALUE
+#else
+        conn >= 0
+#endif
+    ) {
+        int nextId = 1;
+        auto send = [&](const std::string& type, const nlohmann::json& payload) -> nlohmann::json {
+            const nlohmann::json req = {{"id", std::to_string(nextId++)},
+                                         {"type", type},
+                                         {"payload", payload},
+                                         {"protocolVersion", lasecsimul::ipc::PROTOCOL_VERSION}};
+            clientWriteLine(conn, req.dump());
+            return nlohmann::json::parse(clientReadLine(conn));
+        };
+
+        send("hello", {{"clientVersion", "0.1.0"}});
+
+        const nlohmann::json missingResp = send("registerAdhocSubcircuit", {{"path", (manifestPath.string() + "-nao-existe")}});
+        TEST_ASSERT(!missingResp.value("ok", true), "registerAdhocSubcircuit com caminho inexistente reporta erro, nao trava o Core");
+        const nlohmann::json invalidSchemaResp = send("registerAdhocSubcircuit", {{"path", invalidSchemaPath.string()}});
+        TEST_ASSERT(!invalidSchemaResp.value("ok", true), "registerAdhocSubcircuit rejeita schemaVersion invalido");
+
+        const nlohmann::json registerResp = send("registerAdhocSubcircuit", {{"path", manifestPath.string()}});
+        TEST_ASSERT(registerResp.value("ok", false), "registerAdhocSubcircuit aceita o .lssubcircuit avulso");
+        const std::string typeId = registerResp["payload"].value("typeId", std::string{});
+        TEST_ASSERT(typeId == "subcircuits.divisor_5v_adhoc", "typeId devolvido bate com o declarado no manifesto");
+        TEST_ASSERT(registerResp["payload"].value("status", std::string{}) == "registered", "payload informa status registered no primeiro carregamento");
+        TEST_ASSERT(registerResp["payload"].value("pinCount", 0) == 3, "payload informa pinCount derivado da interface");
+        TEST_ASSERT(registerResp["payload"].contains("interface") && registerResp["payload"]["interface"].size() == 3, "payload inclui interface completa");
+        TEST_ASSERT(registerResp["payload"].contains("package") && registerResp["payload"]["package"].contains("pins"), "payload inclui package visual");
+
+        const nlohmann::json reloadResp = send("registerAdhocSubcircuit", {{"path", manifestPath.string()}});
+        TEST_ASSERT(reloadResp.value("ok", false), "recarregar o mesmo arquivo sem replace e permitido");
+        TEST_ASSERT(reloadResp["payload"].value("status", std::string{}) == "reloaded", "payload informa status reloaded no mesmo sourcePath");
+
+        const nlohmann::json duplicateResp = send("registerAdhocSubcircuit", {{"path", duplicateManifestPath.string()}});
+        TEST_ASSERT(!duplicateResp.value("ok", true), "typeId duplicado em outro arquivo e rejeitado por padrao");
+        const nlohmann::json replaceResp = send("registerAdhocSubcircuit", {{"path", duplicateManifestPath.string()}, {"replace", true}});
+        TEST_ASSERT(replaceResp.value("ok", false), "typeId duplicado em outro arquivo so substitui com replace explicito");
+        (void)send("registerAdhocSubcircuit", {{"path", manifestPath.string()}, {"replace", true}});
+
+        const nlohmann::json addResp = send("addComponent", {{"typeId", typeId}, {"properties", nlohmann::json::object()}});
+        TEST_ASSERT(addResp.value("ok", false), "addComponent com o typeId avulso expande a instância");
+        const auto& exposedPins = addResp["payload"]["exposedPins"];
+        TEST_ASSERT(exposedPins.size() == 3, "3 pinos expostos (VIN/VOUT/GND)");
+
+        // `exposedPins[label].pinId` é sempre "pin" (o pino real do `connectors.tunnel` interno
+        // renomeado) -- "VIN"/"VOUT"/"GND" são só as CHAVES do mapa (o rótulo externo), nunca o
+        // pinId de fiação real, mesmo padrão de `esp32_devkitc_subcircuit_test.cpp`.
+        const std::string vin = exposedPins["VIN"].value("instanceId", std::string{});
+        const std::string vout = exposedPins["VOUT"].value("instanceId", std::string{});
+        const std::string gnd = exposedPins["GND"].value("instanceId", std::string{});
+        const std::string tunnelPinId = exposedPins["VIN"].value("pinId", std::string{});
+        TEST_ASSERT(tunnelPinId == "pin", "pino do tunnel exposto é 'pin' (Tunnel real interno)");
+
+        const std::string source = send("addComponent", {{"typeId", "sources.dc_voltage"}, {"properties", {{"voltage", 10.0}}}})["payload"]["instanceId"];
+        const std::string ground = send("addComponent", {{"typeId", "other.ground"}, {"properties", nlohmann::json::object()}})["payload"]["instanceId"];
+
+        send("connectWire", {{"componentA", source}, {"pinIdA", "p1"}, {"componentB", vin}, {"pinIdB", "pin"}});
+        send("connectWire", {{"componentA", source}, {"pinIdA", "p2"}, {"componentB", ground}, {"pinIdB", "pin"}});
+        send("connectWire", {{"componentA", gnd}, {"pinIdA", "pin"}, {"componentB", ground}, {"pinIdB", "pin"}});
+
+        send("start", nlohmann::json::object());
+
+        double lastVoltage = -1.0;
+        bool stabilized = false;
+        for (int attempt = 0; attempt < 100 && !stabilized; ++attempt) {
+            const nlohmann::json resp = send("getNodeVoltage", {{"instanceId", vout}, {"pinId", "pin"}});
+            if (resp.value("ok", false)) {
+                lastVoltage = resp["payload"].value("voltage", -1.0);
+                if (std::abs(lastVoltage - 5.0) < 1e-3) stabilized = true;
+            }
+            if (!stabilized) std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+        TEST_ASSERT(stabilized, "subcircuito avulso expandido resolve eletricamente (VOUT converge para 5V)");
+        std::fprintf(stderr, "  [info] ultima tensao lida: %.6f\n", lastVoltage);
+
+        send("stop", nlohmann::json::object());
+        send("shutdown", nlohmann::json::object());
+        clientClose(conn);
+    }
+
+    serverThread.join();
+    TEST_ASSERT(serverResult == 0, "servidor encerrou com codigo 0 apos shutdown");
+    std::filesystem::remove(manifestPath);
+    std::filesystem::remove(invalidSchemaPath);
+    std::filesystem::remove(duplicateManifestPath);
 }
 
 // Teste 4c.2: componentes complexos refeitos via ABI recebem comandos bit a bit pelo on_event.
@@ -878,6 +1056,7 @@ int main() {
     testGetComponentStateOverIpc();
     testGetNodeVoltageOverIpc();
     testGetComponentCurrentOverIpc();
+    testRegisterAdhocSubcircuitOverIpc();
     testSimulideComplexAbiEventsOverIpc();
     testGetPropertySchemasOverIpc();
     testSetPropertyValidationOverIpc();

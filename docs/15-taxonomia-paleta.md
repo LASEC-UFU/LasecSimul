@@ -23,7 +23,11 @@ sempre têm (`extension/media/components/{light,dark}/<icon>.svg`).
 | `instruments.voltmeter` | Medidores | — | Voltímetro | `voltimetro` |
 | `sources.dc_voltage` | Fontes | — | Fonte de Tensão | `fonte-de-tensao` |
 | `other.ground` | Fontes | — | Terra (0 V) | `terra` |
-| `logic.button` | Interruptores | — | Botão | `botao` |
+| `switches.push` | Interruptores | — | Push | `push` |
+| `switches.switch` | Interruptores | — | Switch (all) | `switch` |
+| `switches.switch_dip` | Interruptores | — | Switch Dip | `switchdip` |
+| `switches.relay` | Interruptores | — | Relay (all) | `relay-spst` |
+| `switches.keypad` | Interruptores | — | KeyPad | `keypad` |
 | `passive.resistor` | Passivos | Resistores | Resistor | `resistor` |
 | `passive.capacitor` | Passivos | Reativo | Capacitor | `capacitor` |
 | `passive.inductor` | Passivos | Reativo | Indutor | `inductor` |
@@ -51,7 +55,10 @@ alimentação), **Terra (0 V)**\*.
 
 ### Interruptores
 
-**Botão**\* (Push), Chave (Switch), Chave DIP (Switch DIP), Relé (Relay), Teclado (Keypad).
+**Botão**\* (Push), **Chave**\* (Switch), **Chave DIP**\* (Switch DIP), **Relé**\* (Relay),
+**Teclado**\* (Keypad). Todos com `package.simulidePaint` real (geometria/pinos/estado aberto-fechado
+traduzidos de `push.cpp`/`switch.cpp`/`switchdip.cpp`/`relay.cpp`; Teclado é property-driven --
+cresce com `rows`/`columns` reais, ver `componentSymbols.ts`).
 
 ### Passivos
 
@@ -96,7 +103,7 @@ Espressif (ESP32 entra aqui), Shields, QemuDevice.
 ### Subcircuitos
 
 SubCircuit — equivalente ao que `.spec/lasecsimul-subcircuits.spec` especifica pro LasecSimul
-(circuito reutilizável definido por `.lssub.json`, ver ADR 0008).
+(circuito reutilizável definido por `.lssubcircuit`, ver ADR 0008).
 
 ### Conectores
 

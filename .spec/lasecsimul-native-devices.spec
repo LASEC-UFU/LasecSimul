@@ -1,3 +1,29 @@
+<!-- Claude Code Spec Header v1 -->
+## Claude Code Operating Contract (English)
+
+Purpose: Defines the canonical native plugin ABI model for devices and MCU adapters.
+Audience: coding agents working on Core, devices, adapters, and loading/runtime paths.
+Mode: normative technical contract.
+
+Keywords: native-plugin, dll, so, abi, plugin-loader, plugin-runtime, plugin-module, instance-lifecycle, versioned-swap, trust-model, qemu-module
+
+Priority Rules:
+1. MUST use native plugins as the extensibility path.
+2. MUST preserve PluginModule vs PluginInstance lifecycle separation.
+3. MUST use versioned swap for upgrades; never unload live code in use.
+4. MUST keep hot simulation path in-process with no per-step IPC boundary crossing.
+5. MUST NOT reintroduce WASM/worker sandbox model unless explicitly re-approved.
+
+Agent Workflow:
+1. Confirm ABI compatibility impact before any interface change.
+2. Update versioning semantics when ABI signatures change.
+3. Keep ownership/thread/host boundaries explicit.
+4. Validate failure handling and observability after load/runtime updates.
+
+Decision Keywords:
+- MUST, SHOULD, MAY, OUT OF SCOPE follow RFC 2119 intent.
+
+---
 # LasecSimul — Sistema de Dispositivos Customizados Nativos (DLL/SO) (v0.1)
 
 Status: rascunho inicial | Depende de: [`.spec/lasecsimul.spec`](./lasecsimul.spec) (v0.2+) | Substitui: `lasecsimul-wasm-devices.spec` (superseded)
@@ -85,7 +111,7 @@ via `IComponentModel` (DIP, igual à seção 11 do `lasecsimul.spec`).
 
 Um dispositivo nativo é definido por:
 
-1. **Manifesto** (`device.json`) — `typeId`, pinos, propriedades, barramentos, e o caminho do binário por
+1. **Manifesto** (`.lsdevice`) — `typeId`, pinos, propriedades, barramentos, e o caminho do binário por
    plataforma/arquitetura. Única fonte de verdade sobre a interface elétrica perante o Core. Alimenta o
    `ComponentMetadataRegistry` independentemente de o binário carregar com sucesso. O mesmo arquivo também
    carrega o corpo/pinos visuais (bloco `package`, seção 21) — consumido só pela Extension, nunca pelo Core.
@@ -157,7 +183,7 @@ funcionar sem arriscar `FreeLibrary` com código em uso.
 
 **Ciclo do `PluginModule` (código), dono: `GlobalPluginCache`**
 ```
-discover        PluginLoader varre biblioteca, lê device.json (a confiança/consentimento já aconteceu na
+discover        PluginLoader varre biblioteca, lê .lsdevice (a confiança/consentimento já aconteceu na
   │              Extension antes do IPC pedir este load — ver seção 12, item 2; TrustStore não é do Core)
 verify          PluginLoader recalcula SHA-256 do binário e confere com o hash assinado no manifesto
   │             (defesa em profundidade — Core não confia ciegamente na Extension)
@@ -327,7 +353,7 @@ O “tipo de valor” e o “modo de edição” são coisas separadas:
 
 #### 4.2.2 Schema canônico — implementado (formato real, ver nota abaixo)
 
-`device.json` é a fonte de verdade da forma estática da propriedade. Formato REAL parseado por
+`.lsdevice` é a fonte de verdade da forma estática da propriedade. Formato REAL parseado por
 `parsePropertySchema`/`parsePropertySchemaList` (`CoreApplication.cpp`) — difere da sketch original desta
 seção (corrigida agora): flags são booleanos individuais no objeto, não um array `flags: [...]`; opções são
 objetos `{value, label}`, não dois arrays paralelos:
@@ -353,9 +379,9 @@ objetos `{value, label}`, não dois arrays paralelos:
 }
 ```
 
-Exemplo real em uso hoje — `devices/voltmeter/device.json` (`displayVoltage`, `editor: "display"`,
+Exemplo real em uso hoje — `devices/voltmeter/.lsdevice` (`displayVoltage`, `editor: "display"`,
 `readOnly`+`showOnSymbol`, alimenta o campo de leitura ao vivo no diálogo de propriedades) e
-`devices/example-blinker/device.json` (`periodMs`, `editor: "number"`, `min`/`step`) — ambos com `group`
+`devices/example-blinker/.lsdevice` (`periodMs`, `editor: "number"`, `min`/`step`) — ambos com `group`
 em português, mesma convenção dos built-ins (`Resistor`/`Capacitor`/etc., todos com `group: "Elétrica"`,
 ver `lasecsimul.spec` seção 6.1.2).
 
@@ -378,8 +404,8 @@ Campos opcionais conforme o caso:
 
 ##### 4.2.2.1 `language`/`translations` no manifesto — internacionalização
 
-Todo `device.json` declara, na raiz, em que língua o autor escreveu os campos textuais visíveis e pode,
-opcionalmente, fornecer traduções. Exemplo real em uso (`devices/voltmeter/device.json`):
+Todo `.lsdevice` declara, na raiz, em que língua o autor escreveu os campos textuais visíveis e pode,
+opcionalmente, fornecer traduções. Exemplo real em uso (`devices/voltmeter/.lsdevice`):
 
 ```json
 {
@@ -397,7 +423,7 @@ opcionalmente, fornecer traduções. Exemplo real em uso (`devices/voltmeter/dev
 - `language` (BCP-47) é **obrigatório** — sem ele o host não sabe em que língua está o texto simples do
   resto do manifesto. Um manifesto sem `translations` é válido: a UI mostra sempre na língua declarada,
   qualquer que seja a língua ativa do host (fallback final, nunca string vazia).
-- Política do produto LasecSimul a partir desta revisão: todo `device.json` novo mantido pelo projeto
+- Política do produto LasecSimul a partir desta revisão: todo `.lsdevice` novo mantido pelo projeto
   MUST trazer base `pt-BR` e bloco `translations.en` já no primeiro commit; migrar depois deixa de ser
   aceitável.
 - `translations.<lang>.properties.<id>.label`/`.group`/`.options` — subconjunto das mesmas propriedades,
@@ -469,7 +495,7 @@ crescer a vtable (OCP), igual ao desenho original do ABI WASM.
 | `pin_declare` | `(ctx, index, kind, name) -> uint32_t` | registra pino do manifesto, retorna handle |
 | `pin_write` / `pin_write_analog` | `(ctx, pin, level/volts) -> void` | dirige o próprio pino diretamente na matriz real (atalho ergonômico — equivalente a `stamp()` via `LsdnMatrixView`), nunca stub |
 | `pin_read` | `(ctx, pin) -> int32_t` | tensão do próprio pino na última `stamp()` (cache, nunca dispara solve novo) |
-| `pin_name` | `(ctx, index) -> const char*` | nome do pino (mesma ordem de `device.json` `pins[]`) — usado por device pra validar a ordem declarada bate com a esperada (ver `validate_pin_order()`) |
+| `pin_name` | `(ctx, index) -> const char*` | nome do pino (mesma ordem de `.lsdevice` `pins[]`) — usado por device pra validar a ordem declarada bate com a esperada (ver `validate_pin_order()`) |
 | `schedule_event` | `(ctx, delay_ns, event_id) -> void` | agenda `LSDN_EVT_TIMER`, real (não stub) |
 | `config_get` | `(ctx, property_id, out_value) -> uint32_t` | lê configuração persistida do manifesto/projeto, em tipo genérico |
 | `now_ns` | `(ctx) -> uint64_t` | tempo de simulação (determinístico) |
@@ -532,7 +558,7 @@ pra qualquer device novo que decodifique I2C/SPI por borda): `aip31068_i2c.json`
 (decodificava o protocolo errado silenciosamente); `ili9341.json` usava nomes de pino inconsistentes
 (`mosi`/`rst` em vez de `sda`/`reset`). Mitigação adotada: `pin_name(host_ctx, index)` na ABI (seção 6) +
 `validate_pin_order()` (chamado no `init()` de cada device em `devices/simulide-complex/src/lib.c`), que loga
-erro se a ordem de pino declarada no `device.json` não bate com a esperada.
+erro se a ordem de pino declarada no `.lsdevice` não bate com a esperada.
 
 ### 8.1 MCU emulado (QEMU) com periférico I2C/SPI do outro lado — módulo é chip-específico, não genérico
 
@@ -592,7 +618,7 @@ baseada no mecanismo real confirmado contra o fork QEMU (`C:\SourceCode\qemu_sim
   são agendadas via `Scheduler::scheduleEventUnlocked` (nunca direto dentro de `stamp()` — `stop
   Firmware()`/`loadFirmware()` chamam `markDirty()`, que toma `m_mutex`; chamar de dentro do
   `stamp()` travado faria deadlock, mesma regra documentada em `Scheduler.hpp`).
-  `subcircuits/esp32_devkitc_v4.lssub.json` liga o botão EN/pull-up real em `mcu1.RST` (deixou de
+  `subcircuits/esp32_devkitc_v4.lssubcircuit` liga o botão EN/pull-up real em `mcu1.RST` (deixou de
   ser "decorativo").
 - **Cuidado numérico ao misturar `McuComponent` num grupo com `other.ground`/fontes ideais — RESOLVIDO na
   raiz, 2026-06-29**: `McuComponent` usa `kDriveConductance=1e6`/`kFloatingConductance=1e-6` (em vez do `1e9`
@@ -600,7 +626,7 @@ baseada no mecanismo real confirmado contra o fork QEMU (`C:\SourceCode\qemu_sim
   flutuantes com `1e9`/`1e-9` davam `rcond()~1e-18` (abaixo do limite do solver). Isso resolvia o MCU
   isolado, mas reabria o problema quando um pino do MCU acabava no mesmo grupo que um `other.ground` real
   (ex: pull-up + botão ligando um GPIO a GND/3V3 — caso real, não hipotético, ver
-  `subcircuits/esp32_devkitc_v4.lssub.json`, EN/BOOT): o spread 1e9 (Ground) vs 1e-6 (MCU flutuante) fazia
+  `subcircuits/esp32_devkitc_v4.lssubcircuit`, EN/BOOT): o spread 1e9 (Ground) vs 1e-6 (MCU flutuante) fazia
   `FullPivLU::rank()` ficar bem abaixo de `cols()`, mesmo sem nenhuma linha literalmente zerada —
   `CircuitGroup::singular()` rejeitava a matriz inteira. **Corrigido via equilibração diagonal simétrica
   (Jacobi)** em `CircuitGroup::factor()`/`solve()` (`core/src/simulation/CircuitGroup.hpp`): antes de checar
@@ -699,7 +725,7 @@ my-device-library/
 ├── library.json                    # publisher, versão, licença, hash assinado de cada binário
 ├── devices/
 │   └── my-led-matrix/
-│       ├── device.json             # manifesto único: typeId, icon (inline SVG), folderPath, package, pins, properties (seção 15)
+│       ├── .lsdevice             # manifesto único: typeId, icon (inline SVG), folderPath, package, pins, properties (seção 15)
 │       ├── src/                    # fonte (C/C++/Rust), opcional no pacote final
 │       │   └── lib.c
 │       ├── build/
@@ -711,12 +737,12 @@ my-device-library/
 └── CMakeLists.txt                  # build multiplataforma
 ```
 
-**Princípio do arquivo único**: o registro (`component-catalog.json`) aponta SOMENTE para o `device.json` de
+**Princípio do arquivo único**: o registro (`component-catalog.json`) aponta SOMENTE para o `.lsdevice` de
 cada dispositivo. Tudo o que a UI precisa — ícone da paleta, pasta de exibição, label, configurações — vem
-desse arquivo único. Nenhum arquivo `.lsconfig` ou `icon.svg` separado é criado; `device.json` é a fonte de
+desse arquivo único. Nenhum arquivo `.lsconfig` ou `icon.svg` separado é criado; `.lsdevice` é a fonte de
 verdade completa.
 
-## 15. Exemplo de manifesto do dispositivo (`device.json`)
+## 15. Exemplo de manifesto do dispositivo (`.lsdevice`)
 
 Inclui o bloco `package` (corpo + pinos visuais) — schema completo e justificativa na seção 21.
 
@@ -944,10 +970,10 @@ usuário final.
 A pergunta era se isso exige um arquivo separado (ex: XML/SVG à parte). Resposta: não — SVG é texto, e o
 próprio SimulIDE já embute a imagem de fundo como dado opaco dentro do pacote (`bckGndData`), não como
 referência externa. O equivalente em JSON é trivial: o markup do SVG (ou um data URI, para raster) entra como
-**string** num campo do mesmo `device.json`. Não há ganho em separar em outro arquivo — só risco de
+**string** num campo do mesmo `.lsdevice`. Não há ganho em separar em outro arquivo — só risco de
 referência pendente (o problema que o SimulIDE evita ao embutir).
 
-### 21.2 Extensão do manifesto (`device.json`)
+### 21.2 Extensão do manifesto (`.lsdevice`)
 
 ```json
 {
@@ -994,9 +1020,20 @@ referência pendente (o problema que o SimulIDE evita ao embutir).
 | `package.pinLabelColor` | (cor fixa de tema do SimulIDE, aqui configurável por package) | cor (hex) de TODOS os rótulos de pino do `package` — opcional, ausente usa a cor padrão do tema ativo (`currentColor`); setado/editado pelo editor de autoria (`symbolAuthoring.ts::seedPinLabelComponent`/`compileSubcircuitInternalComponents`, cada rótulo de pino é um `graphics.text` vinculado cuja `properties.color` é semeada/lida de volta neste campo no round-trip seed→compile) |
 
 Nenhum campo novo aqui é lido pelo Core — `package`/`pins[].angle|length|label|labelX|labelY` são consumidos **só pela
-Extension** (ela já lê `device.json` direto do disco para popular a paleta/painel de propriedades; não
+Extension** (ela já lê `.lsdevice` direto do disco para popular a paleta/painel de propriedades; não
 precisa pedir isso ao Core por IPC). O Core continua só enxergando `pins[].id/kind` (contrato elétrico).
-O campo `icon` do `device.json` (ver seção 15) define a miniatura da paleta de dois modos:
+
+Contrato normativo da UI para este payload:
+
+1. A Extension MUST implementar um parser/tradutor genérico de `package`/`authoringScene` (SimulIDE-like)
+  para projetar a cena no canvas, sem branch por device específico.
+2. A Extension MUST NOT introduzir helpers hardcoded por `typeId` para reconstruir formas, pinos,
+  transformações ou rotas que já estão declaradas no payload.
+3. `if/switch` por `typeId` para regras visuais é OUT OF SCOPE; exceção única: infraestrutura genérica
+  do tradutor (parse/normalização/compatibilidade), desde que não codifique comportamento de um device
+  específico fora do próprio payload.
+
+O campo `icon` do `.lsdevice` (ver seção 15) define a miniatura da paleta de dois modos:
 
 - **Nome curto** (ex: `"board"`, `"ic2"`, `"esp01"`) — a Extension resolve para
   `extension/media/components/{dark,light}/<nome>.png` (PNG primeiro) ou `.svg`; é o modo preferido
@@ -1239,7 +1276,7 @@ Declaração:
 - **Built-in**: método estático próprio na classe (`Oscope::readoutFormat()`, `LogicAnalyzer::
   readoutFormat()`, `Ampmeter::readoutFormat()`, `FreqMeter::readoutFormat()`, `Probe::readoutFormat()`),
   passado em `registerBuiltinMetadata(...)` (`CoreApplication.cpp`).
-- **Plugin/DLL**: chave opcional `"readout"` em `device.json` (mesmo padrão de `properties[]`), parseada
+- **Plugin/DLL**: chave opcional `"readout"` em `.lsdevice` (mesmo padrão de `properties[]`), parseada
   por `parseReadoutFormat()` em `loadDeviceLibraryFile` — um device de terceiros declara isso SEM
   precisar de nenhuma mudança de código no Core nem na Extension, e sem precisar de função nova na
   vtable C (`device_abi.h`) — é puramente um campo de manifesto, como `properties[]`/`pins[]`.
@@ -1262,7 +1299,7 @@ type InteractionKind = "momentary" | "toggle" | "none";
 ```
 
 Declarado do mesmo jeito (`SimulideSwitch::interactionKindFor(typeId)` pro built-in; `"interaction"`
-opcional em `device.json` pro plugin). `switches.push` declara `"momentary"` (solta ao soltar o botão);
+opcional em `.lsdevice` pro plugin). `switches.push` declara `"momentary"` (solta ao soltar o botão);
 `switches.switch`/`switches.switch_dip` declaram `"toggle"`.
 
 ### 22.4 Transporte — mesmo IPC `getPropertySchemas`, mapas irmãos ADITIVOS
@@ -1326,13 +1363,14 @@ do header que o Core também usa) contra a constante do header do Core — rejei
 std::runtime_error("ABI incompativel")`) qualquer binário desalinhado. Esse é o gate REAL e robusto,
 porque valida o que foi de fato COMPILADO, não uma declaração JSON que poderia divergir do binário.
 
-O campo `"abiVersion"` dentro de `device.json`/`mcu.json` é **só documentação/metadado informativo**,
+O campo `"abiVersion"` dentro de `.lsdevice` (manifesto de device OU de MCU adapter, mesma extensão
+pós-migração, ver `lasecsimul.spec`) é **só documentação/metadado informativo**,
 nunca lido pelo Core — adicionar um SEGUNDO gate no Core validando esse campo JSON seria redundante com
 o gate binário já robusto (exatamente o tipo de duplicação que este projeto evita, ver seção 22.8).
 Mesmo assim, todo manifesto de `device_abi.h` (os 3 devices da seção 22.5) foi atualizado pra declarar
 `{"major": 4, "minor": 0}`, sinalizando honestamente que o SCHEMA DE MANIFESTO ganhou campos novos
 (`readout`/`interaction`) nesta rodada — sem que o Core precise (ou deva) impor isso como gate.
-`mcu.json` (ABI separada, `mcu_abi.h`, atualmente major 2) não foi tocado — não tem conceito de
+O manifesto de MCU adapter (ABI separada, `mcu_abi.h`, atualmente major 2) não foi tocado — não tem conceito de
 readout/interação (adaptador de chip, não instrumento), fora de escopo desta seção.
 
 ### 22.7 Fase 2 (próximo passo CONCRETO, não backlog vago)
@@ -1357,7 +1395,7 @@ corrigir**. O critério real não é "uma classe por arquivo".
 (b) **O que de fato não pode acontecer**: lógica específica de UM typeId vazar pra fora do código
 daquele device E/OU ficar DUPLICADA em vários lugares. Built-in: a decisão mora dentro da própria
 classe (ex: `SimulideSwitch::propertySchemaFor(typeId)`/`interactionKindFor(typeId)`, não numa ternária
-em `CoreApplication.cpp`). Plugin/DLL: a decisão mora no `device.json`/binário daquele device, nunca
+em `CoreApplication.cpp`). Plugin/DLL: a decisão mora no `.lsdevice`/binário daquele device, nunca
 hardcoded no Core ou na Extension. Quando a MESMA classificação por typeId precisa existir em mais de
 um lugar (caso clássico: decodificar leitura), a resposta não é "if (typeId) em cada função" — é
 exatamente o que esta seção (22.2-22.4) resolve: uma declaração ÚNICA, consultada por todo mundo.

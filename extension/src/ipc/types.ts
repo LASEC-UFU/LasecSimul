@@ -4,7 +4,7 @@ export interface PropertySchemaOption {
 }
 
 /** Espelha 1:1 o JSON devolvido pelo Core (`propertySchemaToJson` em `CoreApplication.cpp`) — mesmo
- * schema rico que `device.json` já declara pra plugins, agora também devolvido pra built-ins
+ * schema rico que `.lsdevice` já declara pra plugins, agora também devolvido pra built-ins
  * (`ComponentMetadataRegistry`, populado em `registerBuiltinComponents`). Schema é por `typeId`
  * (catálogo), nunca por instância — ver `getPropertySchemas` no Core. */
 export interface PropertySchemaDto {
@@ -35,7 +35,7 @@ export type ReadoutFormatDto =
   | { kind: "bitmaskHistory"; channels: number };
 
 /** Espelha 1:1 `interactionKindToJson` em `CoreApplication.cpp`, mais valores Extension-side
- * ("joystick", "encoder", "touchpad") que o Core não conhece mas a Extension lê do device.json. */
+ * ("joystick", "encoder", "touchpad") que o Core não conhece mas a Extension lê do .lsdevice. */
 export type InteractionKindDto = "momentary" | "toggle" | "none" | "joystick" | "encoder" | "touchpad";
 
 export interface TelemetrySample {

@@ -11,8 +11,8 @@ Plugins DLL/SO em processo, ABI C estável e integração com Core. WASM não fa
 ## Modelo
 
 - `library.json`: catálogo da biblioteca.
-- `device.json`: manifesto de dispositivo.
-- `mcu.json`: manifesto de adapter MCU, quando aplicável.
+- `.lsdevice`: manifesto de dispositivo.
+- `.lsdevice`: manifesto de adapter MCU, quando aplicável.
 - DLL/SO/DYLIB: binário nativo com símbolo `lsdn_get_vtable`.
 - `PluginModule`: código carregado.
 - `NativeDeviceProxy`: instância de dispositivo.

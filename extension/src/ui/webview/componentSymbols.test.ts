@@ -1,7 +1,7 @@
 import { createTestRunner, assert } from "../../ipc/testSupport/MockCoreServer";
 import fs from "node:fs";
 import path from "node:path";
-import { componentBox, componentSymbolSvg, hasRealPinPosition, pinLocalPosition, packageSymbolSvg, registerPackage } from "./componentSymbols";
+import { componentBox, componentLocalOrigin, componentSymbolSvg, hasRealPinPosition, pinLocalPosition, packageSymbolSvg, registerPackage } from "./componentSymbols";
 import { PackageDescriptor } from "./model";
 
 (async () => {
@@ -17,6 +17,13 @@ import { PackageDescriptor } from "./model";
       { id: "gnd", x: 0, y: 30, angle: 180, length: 8, label: "GND" },
     ],
   };
+
+  // cos/sin(180deg)/(0deg) em ponto flutuante não batem com -1/0/1 exatos (ex: Math.sin(Math.PI) ≈
+  // 1.22e-16, não 0) -- suficiente pra quebrar `===` num pino a 8 unidades de distância mesmo sendo
+  // visualmente idêntico. Tolerância de 1e-6 absorve esse ruído sem mascarar erro de geometria real.
+  function near(a: number, b: number): boolean {
+    return Math.abs(a - b) < 1e-6;
+  }
 
   function catalogPackage(typeId: string): PackageDescriptor {
     const candidates = [
@@ -36,6 +43,25 @@ import { PackageDescriptor } from "./model";
     registerPackage("test.example", undefined);
     const box = componentBox("test.example");
     assert(box.width === 70 && box.height === 40, `esperado box genérico, recebido {${box.width},${box.height}}`);
+  });
+
+  await test("package com origem Qt do SimulIDE expõe origem local separada do bounding box visual", () => {
+    registerPackage("test.qt-origin", pkg);
+    const box = componentBox("test.qt-origin", { __simulideQtOrigin: true });
+    const origin = componentLocalOrigin("test.qt-origin", { __simulideQtOrigin: true });
+    assert(box.width === 76 && box.height === 40, `box deveria incluir lead externo do package, recebido {${box.width},${box.height}}`);
+    assert(Boolean(origin) && near(origin!.x, 8) && near(origin!.y, 0), `origem Qt deveria ser o offset do layout resolvido, recebido ${JSON.stringify(origin)}`);
+  });
+
+  await test("package traduzido de cena SimulIDE aplica escala local em box, origem e pinos", () => {
+    registerPackage("test.qt-scale", pkg);
+    const properties = { __simulideQtOrigin: true, __simulideSceneScaleX: 2, __simulideSceneScaleY: 3 };
+    const box = componentBox("test.qt-scale", properties);
+    const origin = componentLocalOrigin("test.qt-scale", properties);
+    const out = pinLocalPosition("out", 0, 3, "test.qt-scale", properties);
+    assert(box.width === 152 && box.height === 120, `box deveria escalar package resolvido, recebido {${box.width},${box.height}}`);
+    assert(Boolean(origin) && near(origin!.x, 16) && near(origin!.y, 0), `origem Qt deveria acompanhar escala da cena, recebido ${JSON.stringify(origin)}`);
+    assert(near(out.x, 152) && near(out.y, 60), `pino deveria acompanhar escala da cena, recebido ${JSON.stringify(out)}`);
   });
 
   await test("other.ground replica sources/ground.cpp: caixa, pino no topo do lead e barras com stroke 2.5", () => {
@@ -137,20 +163,27 @@ import { PackageDescriptor } from "./model";
     const scopePkg = catalogPackage("meters.oscope");
     const logicPkg = catalogPackage("meters.logic_analyzer");
     assert(Boolean(probePkg.simulidePaint), "Probe deveria usar package.simulidePaint traduzido de probe.cpp");
+    assert(probePkg.initialTransform?.rotateDeg === -45, "Probe deveria declarar initialTransform.rotateDeg=-45 (Probe::Probe() faz setRotation(rotation()-45))");
     assert(scopePkg.qtWidget?.kind === "plotBase", "Oscope deveria usar qtWidget plotBase traduzido de PlotBase/DataWidget");
     assert(logicPkg.qtWidget?.variant === "logicAnalyzer", "Logic analyzer deveria usar qtWidget plotBase variant logicAnalyzer");
 
     const probeBox = componentBox("meters.probe");
     const scopeBox = componentBox("meters.oscope");
     const logicBox = componentBox("meters.logic_analyzer");
-    assert(probeBox.width === 30 && probeBox.height === 16, `Probe deveria usar bounds reais (-22,-8,30,16), recebido ${JSON.stringify(probeBox)}`);
+    // Box do Probe cresce em Y (16 -> ~23.56) porque o pino real (declarado na orientação CANÔNICA,
+    // sem rotação) é girado -45° em volta do pivô (22,8) pelo initialTransform -- resolvePackageLayout
+    // expande a caixa pra caber a nova ponta do pino, exatamente como faria pra qualquer pino comum
+    // que saísse fora do `width`/`height` estático declarado.
+    assert(probeBox.width === 30 && Math.abs(probeBox.height - 23.556349186104043) < 1e-9, `Probe deveria crescer em Y pelo pino rotacionado -45°, recebido ${JSON.stringify(probeBox)}`);
     assert(scopeBox.width === 227 && scopeBox.height === 153, `Oscope deveria usar m_area+pins do PlotBase colapsado, recebido ${JSON.stringify(scopeBox)}`);
     assert(logicBox.width === 227 && logicBox.height === 153, `Logic analyzer deveria usar m_area+pins do PlotBase colapsado, recebido ${JSON.stringify(logicBox)}`);
 
     const probePin = pinLocalPosition("pin-1", 0, 1, "meters.probe");
     const scopePin = pinLocalPosition("pin-1", 0, 4, "meters.oscope");
     const logicPin8 = pinLocalPosition("pin-8", 7, 8, "meters.logic_analyzer");
-    assert(probePin.x === 0 && probePin.y === 8, `Probe inpin deveria ficar em (-22,0) traduzido => (0,8), recebido ${JSON.stringify(probePin)}`);
+    // Pino canônico (-22,0) traduzido => (0,8) antes do initialTransform; girado -45° em volta de
+    // (22,8) (mesmo pivô do corpo) => (6.44,23.56) -- ver initialTransform acima.
+    assert(Math.abs(probePin.x - 6.443650813895953) < 1e-9 && Math.abs(probePin.y - 23.556349186104043) < 1e-9, `Probe inpin deveria ficar em (-22,0) traduzido+girado -45° => (6.44,23.56), recebido ${JSON.stringify(probePin)}`);
     assert(scopePin.x === 0 && scopePin.y === 25, `Oscope Pin0 deveria ficar em (-88,-48) traduzido => (0,25), recebido ${JSON.stringify(scopePin)}`);
     assert(logicPin8.x === 0 && logicPin8.y === 121, `Logic Pin7 deveria ficar em (-88,48) traduzido => (0,121), recebido ${JSON.stringify(logicPin8)}`);
 
@@ -330,6 +363,70 @@ import { PackageDescriptor } from "./model";
     assert(pinOut.x === 28 && pinOut.y === 12, `id real out deveria conectar em (28,12), recebido ${JSON.stringify(pinOut)}`);
     assert(pinLegacy.x === 28 && pinLegacy.y === 12, `alias pin-1 deveria conectar no mesmo ponto, recebido ${JSON.stringify(pinLegacy)}`);
     assert(hasRealPinPosition("test.simulide-paint.fixed-volt", "pin"), "alias pin deveria contar como posicao real");
+  });
+
+  await test("package.simulidePaint primitive 'repeat' duplica um template N vezes (arrays/repeticoes, ex: SwitchDip::createSwitches) sem hand-enumeration por device", () => {
+    const repeatPkg: PackageDescriptor = {
+      width: 20,
+      height: 40,
+      pins: [{ id: "pin-1", x: 20, y: 20, angle: 0, length: 0, label: "" }],
+      simulidePaint: {
+        version: 1,
+        bounds: { x: 0, y: 0, w: 20, h: 40 },
+        primitives: [
+          {
+            kind: "repeat",
+            count: 4,
+            stepY: 10,
+            primitives: [
+              { kind: "rect", x: 2, y: 2, w: 6, h: 6, stateFill: { prop: "on", map: { true: "#0f0", false: "#ccc" } }, fill: "#ccc" },
+            ],
+          },
+        ],
+      },
+    };
+    registerPackage("test.simulide-paint.repeat", repeatPkg);
+    const svgOn = packageSymbolSvg("test.simulide-paint.repeat", { on: true }, "repeat-1") ?? "";
+    const svgOff = packageSymbolSvg("test.simulide-paint.repeat", { on: false }, "repeat-2") ?? "";
+    const rectCountOn = (svgOn.match(/<rect/g) ?? []).length;
+    assert(rectCountOn === 4, `'repeat' com count=4 deveria gerar 4 rects, recebido ${rectCountOn} no markup: ${svgOn}`);
+    assert(svgOn.includes('y="2"') && svgOn.includes('y="12"') && svgOn.includes('y="22"') && svgOn.includes('y="32"'), `'repeat' deveria deslocar cada copia por stepY=10 (y=2,12,22,32), markup: ${svgOn}`);
+    assert((svgOn.match(/#0f0/g) ?? []).length === 4, "cada copia deveria aplicar o proprio stateFill (todas 'on' juntas, ja que compartilham a mesma property)");
+    assert((svgOff.match(/#ccc/g) ?? []).length === 4, "com on=false, as 4 copias deveriam usar o fallback/false do stateFill");
+  });
+
+  await test("package.simulidePaint repeat aceita countProp/indexName e texto por caractere para matrizes Qt", () => {
+    const matrixPkg: PackageDescriptor = {
+      width: 32,
+      height: 16,
+      pins: [{ id: "pin-1", x: 0, y: 0, angle: 0, length: 0, label: "" }],
+      simulidePaint: {
+        version: 1,
+        bounds: { x: 0, y: 0, w: 32, h: 16 },
+        primitives: [
+          {
+            kind: "repeat",
+            countProp: "columns",
+            indexName: "col",
+            stepX: 8,
+            primitives: [
+              { kind: "rect", x: 0, y: 0, w: 8, h: 8, fill: "#fff" },
+              {
+                kind: "text",
+                x: 4,
+                y: 4,
+                value: "",
+                stateText: { kind: "propertyChar", prop: "keyLabels", columnIndex: "col", columnsProp: "columns" },
+              },
+            ],
+          },
+        ],
+      },
+    };
+    registerPackage("test.simulide-paint.matrix", matrixPkg);
+    const svg = packageSymbolSvg("test.simulide-paint.matrix", { columns: 4, keyLabels: "ABCD" }, "matrix-1") ?? "";
+    assert((svg.match(/<rect/g) ?? []).length === 4, `countProp columns=4 deveria gerar 4 copias, markup: ${svg}`);
+    assert(svg.includes(">A<") && svg.includes(">D<"), `stateText.propertyChar deveria indexar keyLabels por repeat context, markup: ${svg}`);
   });
 
   await test("package.simulidePaint aplica visibilidade e imagem condicionais por estado", () => {
@@ -526,6 +623,20 @@ import { PackageDescriptor } from "./model";
     registerPackage("test.customlabel", undefined);
   });
 
+  await test("packagePinLeadSvg desenha o marcador cinza de PackagePin quando o package declara pinMarker=packagePin", () => {
+    const packagePinPkg: PackageDescriptor = {
+      width: 40,
+      height: 40,
+      pinMarker: "packagePin",
+      pins: [{ id: "p1", x: 0, y: 20, angle: 180, length: 8, label: "P1" }],
+    };
+    registerPackage("test.packagepin-marker", packagePinPkg);
+    const svg = packageSymbolSvg("test.packagepin-marker") ?? "";
+    assert(svg.includes('stroke="#d3d3d3" stroke-width="0.5"'), `PackagePin::paint deveria gerar marcador cinza, markup: ${svg}`);
+    assert(svg.includes('<line x1="7.0" y1="20.0" x2="9.0" y2="20.0"'), `marcador deveria ficar no ponto de origem do pino, markup: ${svg}`);
+    registerPackage("test.packagepin-marker", undefined);
+  });
+
   await test("hasRealPinPosition: sem package, qualquer pinId tem posição (algoritmo genérico já é a posição real)", () => {
     registerPackage("test.example", undefined);
     assert(hasRealPinPosition("test.example", "qualquer-id") === true, "sem package deveria sempre devolver true");
@@ -565,14 +676,18 @@ import { PackageDescriptor } from "./model";
     assert(box.width === 76, "sem variante registrada, logicSymbol=true deveria ser ignorado e cair no package padrão");
   });
 
-  await test("connectors.tunnel cresce para caber o nome e mantem o pino na ponta da seta", () => {
+  await test("connectors.tunnel usa geometria real do Tunnel/Pin do SimulIDE", () => {
     const shortBox = componentBox("connectors.tunnel", { name: "GND" });
     const longBox = componentBox("connectors.tunnel", { name: "GPIO_UART_DEBUG_LONG_NAME" });
     assert(longBox.width > shortBox.width, `nome longo deveria aumentar a largura (${shortBox.width} -> ${longBox.width})`);
     const pin = pinLocalPosition("pin", 0, 1, "connectors.tunnel", { name: "GPIO_UART_DEBUG_LONG_NAME" });
-    assert(pin.x === longBox.width - 8, `pino deveria ficar na ponta da seta (x=width-8), recebido ${pin.x} para width=${longBox.width}`);
+    assert(pin.x === longBox.width && pin.y === 6, `pino deveria ficar na origem Qt do Tunnel nao-rotated (${longBox.width},6), recebido ${pin.x},${pin.y}`);
+    const rotatedPin = pinLocalPosition("pin", 0, 1, "connectors.tunnel", { name: "GPIO_UART_DEBUG_LONG_NAME", __simulideTunnelRotated: true });
+    assert(rotatedPin.x === 0 && rotatedPin.y === 6, `setRotated(true) deveria mover a origem/pino para a esquerda, recebido ${rotatedPin.x},${rotatedPin.y}`);
     const svg = componentSymbolSvg("connectors.tunnel", { name: "GPIO23" });
     assert(svg.includes("GPIO23"), "nome do tunel deveria ser desenhado dentro do simbolo");
+    assert(svg.includes("<polygon") && svg.includes('fill="#fffffa"'), "tunel deveria vir do renderer SimulidePaint com fill real de grupo existente");
+    assert(!svg.includes('stroke-width="4"'), "tunel nao deveria manter o contorno grosso do SVG manual antigo");
   });
 
   await test("voltimetro com package usa texto dinamico do renderer SimulIDE", () => {
@@ -581,6 +696,108 @@ import { PackageDescriptor } from "./model";
     assert(svg.includes('text-anchor="start"'), "texto do Meter real deveria iniciar em m_display.pos(), nao ancorar na direita como LCD custom");
     assert(svg.includes('font-size="13"'), "texto do Meter real deveria usar pixelSize 13");
     assert(svg.includes(">-2.499<"), "leitura negativa deveria ser preservada no texto do display");
+  });
+
+  await test("switches.push/switches.switch vem de package.simulidePaint (Interruptores) com botao proxy e alavanca/barra reais", () => {
+    catalogPackage("switches.push");
+    catalogPackage("switches.switch");
+    const pushBox = componentBox("switches.push");
+    const switchBox = componentBox("switches.switch");
+    assert(pushBox.width === 32 && pushBox.height === 28, `Push deveria usar m_area(-12,-8,24,12) + botao(-8,4,16,16), recebido ${JSON.stringify(pushBox)}`);
+    assert(switchBox.width === 32 && switchBox.height === 28, `Switch deveria ter a mesma caixa de Push (mesma SwitchBase), recebido ${JSON.stringify(switchBox)}`);
+
+    const p1 = pinLocalPosition("pin-1", 0, 2, "switches.push");
+    const p2 = pinLocalPosition("pin-2", 1, 2, "switches.push");
+    assert(near(p1.x, 0) && near(p1.y, 8), `Pino esquerdo do Push deveria ficar em (-16,0) traduzido => (0,8), recebido ${JSON.stringify(p1)}`);
+    assert(near(p2.x, 32) && near(p2.y, 8), `Pino direito do Push deveria ficar em (16,0) traduzido => (32,8), recebido ${JSON.stringify(p2)}`);
+
+    const pushOpen = packageSymbolSvg("switches.push", { closed: false, normallyClosed: false, key: "A" }, "push-open") ?? "";
+    const pushPressed = packageSymbolSvg("switches.push", { closed: true, normallyClosed: false, key: "A" }, "push-pressed") ?? "";
+    assert(pushOpen.includes('y1="0" x2="25" y2="0"'), `Push solto deveria desenhar a barra em y=-8 (Push::paint), markup: ${pushOpen}`);
+    assert(pushPressed.includes('y1="6" x2="25" y2="6"'), `Push pressionado deveria desenhar a barra em y=-2, markup: ${pushPressed}`);
+    assert(pushPressed.includes('fill="#62d67b"') && pushOpen.includes('fill="#dddddd"'), `Botao proxy deveria mudar de cor com \`closed\`, markups: ${pushOpen} | ${pushPressed}`);
+    assert(pushOpen.includes(">A<"), "Push deveria ecoar properties.key no rotulo do botao (SwitchBase::setKey/CustomButton)");
+
+    // Norm_Close inverte a POSIÇÃO VISUAL (m_closed real = onbuttonPressed/Released XOR Norm_Close),
+    // mas NÃO a cor do botão (CustomButton::isChecked reflete o `closed` cru, sem XOR).
+    const pushNcPressed = packageSymbolSvg("switches.push", { closed: true, normallyClosed: true, key: "" }, "push-nc-pressed") ?? "";
+    assert(pushNcPressed.includes('y1="0" x2="25" y2="0"'), `Push Norm_Close pressionado deveria desenhar a barra na posição SOLTA (XOR), markup: ${pushNcPressed}`);
+    assert(pushNcPressed.includes('fill="#62d67b"'), "Botao deveria continuar verde (closed=true cru) mesmo com Norm_Close invertendo a posicao visual");
+
+    const switchClosed = packageSymbolSvg("switches.switch", { closed: true, normallyClosed: false }, "switch-closed") ?? "";
+    const switchOpen = packageSymbolSvg("switches.switch", { closed: false, normallyClosed: false }, "switch-open") ?? "";
+    assert(switchClosed.includes('x1="6" y1="8" x2="26" y2="6"'), `Switch fechado deveria desenhar MechContact::paint drawLine(-10,0,10,-2), markup: ${switchClosed}`);
+    assert(switchOpen.includes('x1="5.5" y1="8" x2="24" y2="0"'), `Switch aberto deveria desenhar drawLine(-10.5,0,8,-8), markup: ${switchOpen}`);
+
+    // Component::paint() real não desenha nada (só seta pen/brush) e nem Push::paint() nem
+    // MechContact::paint() chamam drawRect(m_area) -- ao contrário de SwitchDip/Relay, que chamam.
+    // `m_area` aqui é só boundingRect()/hit-test; um `<rect>` desenhado em volta da alavanca/barra
+    // é um elemento INVENTADO que não existe no SimulIDE real (bug encontrado comparando screenshot
+    // real x LasecSimul: a alavanca aparecia "presa numa caixa" que não deveria existir).
+    assert(!pushOpen.includes("<rect") || !/<rect[^>]*x="4"[^>]*y="0"/.test(pushOpen), `Push NÃO deveria desenhar um rect de corpo em volta da barra (m_area é só hit-test), markup: ${pushOpen}`);
+    assert(!switchOpen.includes("<rect") || !/<rect[^>]*x="4"[^>]*y="0"/.test(switchOpen), `Switch NÃO deveria desenhar um rect de corpo em volta da alavanca (m_area é só hit-test), markup: ${switchOpen}`);
+  });
+
+  await test("switches.switch_dip vem de package.simulidePaint com 8 posicoes e 16 pinos reais (switchdip.cpp)", () => {
+    catalogPackage("switches.switch_dip");
+    const box = componentBox("switches.switch_dip");
+    assert(box.width === 24 && box.height === 64, `SwitchDip deveria usar m_area(-3,-28,14,64) + pinos, recebido ${JSON.stringify(box)}`);
+    const first = pinLocalPosition("pin-1", 0, 16, "switches.switch_dip");
+    const last = pinLocalPosition("pin-16", 15, 16, "switches.switch_dip");
+    assert(near(first.x, 0) && near(first.y, 4), `Pino P da posicao 0 deveria ficar em (-8,-24) traduzido => (0,4), recebido ${JSON.stringify(first)}`);
+    assert(near(last.x, 24) && near(last.y, 60), `Pino N da posicao 7 deveria ficar em (16,32) traduzido => (24,60), recebido ${JSON.stringify(last)}`);
+    const svg = packageSymbolSvg("switches.switch_dip", { closed: true }, "dip-closed") ?? "";
+    assert((svg.match(/toggle-hit-zone/g) ?? []).length === 8, `SwitchDip deveria desenhar 8 botoes clicaveis (1 por posicao), markup: ${svg}`);
+    assert((svg.match(/#62d67b/g) ?? []).length === 8, "As 8 posicoes compartilham a mesma propriedade `closed` (limitacao do Core) -- todas devem ficar verdes juntas");
+  });
+
+  await test("switches.relay vem de package.simulidePaint com bobina (arcos de inductor.cpp) + contato SPST (relay.cpp)", () => {
+    catalogPackage("switches.relay");
+    const box = componentBox("switches.relay");
+    assert(box.width === 32 && box.height === 36, `Relay deveria usar m_area(-12,-28,24,36) + pinos, recebido ${JSON.stringify(box)}`);
+    const coilP = pinLocalPosition("pin-1", 0, 4, "switches.relay");
+    const coilN = pinLocalPosition("pin-2", 1, 4, "switches.relay");
+    const contactP = pinLocalPosition("pin-3", 2, 4, "switches.relay");
+    const contactN = pinLocalPosition("pin-4", 3, 4, "switches.relay");
+    assert(near(coilP.x, 0) && near(coilP.y, 28), `Pino P da bobina deveria ficar em (-16,0) traduzido => (0,28), recebido ${JSON.stringify(coilP)}`);
+    assert(near(coilN.x, 32) && near(coilN.y, 28), `Pino N da bobina deveria ficar em (16,0) traduzido => (32,28), recebido ${JSON.stringify(coilN)}`);
+    assert(near(contactP.x, 0) && near(contactP.y, 12), `Pino P do contato deveria ficar em (-16,-16) traduzido => (0,12), recebido ${JSON.stringify(contactP)}`);
+    assert(near(contactN.x, 32) && near(contactN.y, 12), `Pino N do contato deveria ficar em (16,-16) traduzido => (32,12), recebido ${JSON.stringify(contactN)}`);
+
+    const relayOpen = packageSymbolSvg("switches.relay", { normallyClosed: false }, "relay-open") ?? "";
+    const relayNc = packageSymbolSvg("switches.relay", { normallyClosed: true }, "relay-nc") ?? "";
+    assert(relayOpen.includes('x1="5.5" y1="12" x2="24" y2="4"'), `Relay normalmente aberto (repouso) deveria desenhar drawLine(-10.5,-16,8,-24), markup: ${relayOpen}`);
+    assert(relayNc.includes('x1="6" y1="12" x2="26" y2="10"'), `Relay Norm_Close (repouso fechado) deveria desenhar drawLine(-10,-16,10,-18), markup: ${relayNc}`);
+    assert((relayOpen.match(/<path/g) ?? []).length === 3, "Bobina do rele deveria reusar os 3 arcos de inductor.cpp");
+  });
+
+  await test("switches.keypad vem de package.simulidePaint com repeat rows/columns e labels reais", () => {
+    catalogPackage("switches.keypad");
+    const props = { rows: 4, columns: 4, keyLabels: "123A456B789C*0#D" };
+    const box = componentBox("switches.keypad", props);
+    assert(box.width === 76 && box.height === 76, `KeyPad 4x4 deveria incluir m_area 72x72 + leads de 4px, recebido ${JSON.stringify(box)}`);
+
+    const rowPin0 = pinLocalPosition("pin-1", 0, 8, "switches.keypad", props);
+    const rowPin3 = pinLocalPosition("pin-4", 3, 8, "switches.keypad", props);
+    const colPin0 = pinLocalPosition("pin-5", 4, 8, "switches.keypad", props);
+    const colPin3 = pinLocalPosition("pin-8", 7, 8, "switches.keypad", props);
+    assert(near(rowPin0.x, 0) && near(rowPin0.y, 16), `1o pino de linha deveria ficar na ponta do lead esquerdo, recebido ${JSON.stringify(rowPin0)}`);
+    assert(near(rowPin3.x, 0) && near(rowPin3.y, 64), `4o pino de linha deveria ficar na ponta do lead esquerdo, recebido ${JSON.stringify(rowPin3)}`);
+    assert(near(colPin0.x, 16) && near(colPin0.y, 0), `1o pino de coluna deveria ficar na ponta do lead superior, recebido ${JSON.stringify(colPin0)}`);
+    assert(near(colPin3.x, 64) && near(colPin3.y, 0), `4o pino de coluna deveria ficar na ponta do lead superior, recebido ${JSON.stringify(colPin3)}`);
+
+    const svg = componentSymbolSvg("switches.keypad", props);
+    assert(svg.includes('fill="#fffef0"'), `Corpo do KeyPad deveria seguir a referencia SimulIDE clara, markup: ${svg}`);
+    assert((svg.match(/<rect/g) ?? []).length === 17, `Deveria desenhar 1 corpo + 16 teclas (4x4), recebido ${(svg.match(/<rect/g) ?? []).length}`);
+    assert(svg.includes(">A<") && svg.includes(">D<") && svg.includes(">*<"), `Rótulos das teclas deveriam vir de keyLabels real ("123A456B789C*0#D"), markup: ${svg}`);
+
+    // keypad.cpp::createSwitches() cria Pin(...,length=4) por linha/coluna -- sem um <line> real de
+    // lead desenhado, o KeyPad ficava sem NENHUM traço de terminal (só o círculo invisível de
+    // hit-test que main.ts desenha à parte pra todo componente, package ou não).
+    const leadLines = svg.match(/<line[^>]*stroke-width="3"[^>]*\/>/g) ?? [];
+    assert(leadLines.length === 8, `KeyPad 4x4 deveria desenhar 8 leads grossos (4 linhas + 4 colunas), recebido ${leadLines.length}: ${svg}`);
+    assert(svg.includes('x1="4.0" y1="16.0" x2="0.7" y2="16.0"'), `Lead da 1a linha deveria sair da borda esquerda ate o pino, markup: ${svg}`);
+    assert(svg.includes('x1="16.0" y1="4.0" x2="16.0" y2="0.7"'), `Lead da 1a coluna deveria sair da borda superior ate o pino, markup: ${svg}`);
   });
 
   registerPackage("test.example", undefined);
@@ -593,5 +810,6 @@ import { PackageDescriptor } from "./model";
   registerPackage("test.viewspec.background", undefined);
   registerPackage("test.rich-shapes", undefined);
   registerPackage("test.simulide-paint.fixed-volt", undefined);
+  registerPackage("test.simulide-paint.matrix", undefined);
   finish();
 })();

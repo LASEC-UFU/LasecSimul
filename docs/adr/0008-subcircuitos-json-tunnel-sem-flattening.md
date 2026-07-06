@@ -28,8 +28,8 @@ terceira: o formato de arquivo do circuito interno + a regra de expansão em sim
 
 ## Decisão
 
-Um subcircuito é um arquivo `*.lssub.json` com três blocos: `components`/`wires` (mesmo schema de `.lsproj`),
-`interface` (mapeia pino público → nome de túnel interno) e `package` (mesmo bloco visual de `device.json`,
+Um subcircuito é um arquivo `*.lssubcircuit` com três blocos: `components`/`wires` (mesmo schema de `.lsproj`),
+`interface` (mapeia pino público → nome de túnel interno) e `package` (mesmo bloco visual de `.lsdevice`,
 reaproveitado sem alteração). Ao instanciar (`addComponent`), o Core expande os componentes internos
 diretamente na `SimulationSession` ativa — sem matriz MNA separada, sem flattening feito pela Extension —
 prefixando cada nome de túnel interno com o id da instância (`<subcircuitInstanceId>::<nome>`), mesmo
@@ -49,7 +49,7 @@ Especificação completa: `.spec/lasecsimul-subcircuits.spec`.
   (multi-sessão aninhada) sem necessidade real — `lasecsimul.spec` seção 4 já declara explicitamente que
   múltiplas sessões não são suportadas hoje.
 - Formato XML (espelhando `.sim1`/`.sim2` do SimulIDE) em vez de JSON: descartada — todo o resto do
-  LasecSimul já usa JSON (`.lsproj`, `device.json`, protocolo IPC); introduzir XML só pra subcircuito
+  LasecSimul já usa JSON (`.lsproj`, `.lsdevice`, protocolo IPC); introduzir XML só pra subcircuito
   quebraria consistência sem ganho.
 - Arquivo de símbolo separado do circuito interno (espelhando `.package` separado do SimulIDE): descartada
   pela mesma razão já registrada em `lasecsimul-native-devices.spec` seção 21.1 — JSON não tem a limitação de

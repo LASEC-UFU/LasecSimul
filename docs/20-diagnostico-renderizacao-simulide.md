@@ -107,7 +107,7 @@ Não existe teste confirmando que `interaction: "encoder"` no JSON do manifesto 
 
 ## Arquitetura proposta
 
-- device.json:
+- .lsdevice:
 **viewSpec**
 — partes + limites
 

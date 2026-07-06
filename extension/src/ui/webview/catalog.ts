@@ -59,7 +59,7 @@ export const defaultComponentCatalog: WebviewComponentCatalogEntry[] = [
 // docs/mvp-limitacoes.md): semiconductors.diode/transistor_npn/transistor_pnp e logic.led exigem
 // modelo nao-linear (sem Newton-Raphson real ainda, so o contrato/mecanica em IComponentModel) -
 // modela-los como resistor linear seria fisicamente incorreto. MCUs/ABIs externos entram pelo
-// catalogo unificado via `registeredSources` + `.lsconfig`, nao por hardcode aqui. Novos MCUs
+// catalogo unificado via `registeredSources` (manifesto `.lsdevice` unico), nao por hardcode aqui. Novos MCUs
 // devem seguir a taxonomia ja mapeada em docs/15-taxonomia-paleta.md ("Microcontroladores" >
 // plataforma/chip).
 

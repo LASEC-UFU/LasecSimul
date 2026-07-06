@@ -65,6 +65,48 @@ import { createEmptyProject } from "../../src/project/ProjectTypes";
   assert.strictEqual(labeledRoundTrip.components[0]?.flipH, true);
   assert.strictEqual(labeledRoundTrip.components[0]?.flipV, false);
 
+  // `subcircuitRef` (bloco genérico de subcircuito por caminho, ver .spec/lasecsimul-subcircuits.spec
+  // seção 9) precisa sobreviver a save→load igual label/showId/showValue -- é a ÚNICA exceção
+  // deliberada à regra "nunca persistir pinos" (lastKnownPinIds), sem ela o componente perderia a
+  // identidade elétrica dos fios ao reabrir com o arquivo ausente.
+  const subcircuitRefProject = createEmptyProject();
+  subcircuitRefProject.components.push({
+    id: "sub1",
+    typeId: "subcircuits.divisor_5v",
+    properties: {},
+    visual: { x: 10, y: 20, rotation: 0 },
+    subcircuitRef: {
+      path: "../subcircuits/divisor_5v.lssubcircuit",
+      lastKnownTypeId: "subcircuits.divisor_5v",
+      lastKnownPinIds: ["VIN", "VOUT", "GND"],
+    },
+  });
+  const subcircuitRefPath = path.join(tmpDir, "subcircuit-ref.lsproj");
+  await serializer.save(subcircuitRefPath, subcircuitRefProject);
+  const subcircuitRefRoundTrip = await serializer.load(subcircuitRefPath);
+  assert.deepStrictEqual(subcircuitRefRoundTrip.components[0]?.subcircuitRef, {
+    path: "../subcircuits/divisor_5v.lssubcircuit",
+    lastKnownTypeId: "subcircuits.divisor_5v",
+    lastKnownPinIds: ["VIN", "VOUT", "GND"],
+  });
+
+  // Componente normal (sem `subcircuitRef`) continua sem o campo depois do load -- nunca inventa um
+  // valor default pra quem nunca teve essa referência.
+  assert.strictEqual(labeledRoundTrip.components[0]?.subcircuitRef, undefined);
+
+  // `subcircuitRef` sem `path` (malformado) é ignorado, não quebra o load do resto do componente.
+  const malformedRefPath = path.join(tmpDir, "malformed-subcircuit-ref.lsproj");
+  await fs.writeFile(
+    malformedRefPath,
+    JSON.stringify({
+      ...createEmptyProject(),
+      components: [{ id: "sub1", typeId: "subcircuits.divisor_5v", properties: {}, subcircuitRef: { lastKnownTypeId: "x" } }],
+    }),
+    "utf8"
+  );
+  const malformedRefLoaded = await serializer.load(malformedRefPath);
+  assert.strictEqual(malformedRefLoaded.components[0]?.subcircuitRef, undefined);
+
   // Ausência completa dos campos (projeto salvo antes desta versão) não deve quebrar o load.
   const legacyPath = path.join(tmpDir, "legacy.lsproj");
   await fs.writeFile(

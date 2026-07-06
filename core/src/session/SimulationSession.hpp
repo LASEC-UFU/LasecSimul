@@ -137,7 +137,7 @@ public:
                                            const PropertyValue& value);
 
     /** Resolve o id LOCAL de um componente dentro de um subcircuito (ex: "button_en" no
-     * `.lssub.json`) pro índice REAL do componente no Core -- usado pelo overlay de Modo Placa no
+     * `.lssubcircuit`) pro índice REAL do componente no Core -- usado pelo overlay de Modo Placa no
      * circuito principal (Extension não tem acesso a `componentIndexByLocalId`, que é local de
      * `expandSubcircuit()`). `subcircuitInstanceId` é o id COM a flag (`kSubcircuitInstanceFlag`),
      * mesmo valor devolvido por `addSubcircuitInstance()`. `std::nullopt` se a instância ou o id
@@ -171,7 +171,7 @@ private:
     registry::McuRegistry m_mcus;
     registry::SubcircuitRegistry m_subcircuits;
     std::unordered_map<uint32_t, std::vector<uint32_t>> m_subcircuitChildren; // rawId (sem a flag) -> filhos
-    // rawId (sem a flag) -> {id local do .lssub.json -> índice real do componente no Core} --
+    // rawId (sem a flag) -> {id local do .lssubcircuit -> índice real do componente no Core} --
     // sobrevive além do escopo de expandSubcircuit() pra permitir endereçar um filho específico por
     // nome (overlay de Modo Placa, ver findSubcircuitChildByLocalId()).
     std::unordered_map<uint32_t, std::unordered_map<std::string, uint32_t>> m_subcircuitChildIndexByLocalId;

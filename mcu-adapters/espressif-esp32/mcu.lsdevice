@@ -295,436 +295,629 @@
     }
   },
   "package": {
-    "width": 170,
-    "height": 190,
-    "schematicWidth": 88,
-    "schematicHeight": 98,
-    "border": true,
+    "width": 120,
+    "height": 120,
+    "border": false,
     "background": {
-      "kind": "color",
-      "value": "#0f1f3d"
+      "kind": "none"
     },
     "shapes": [
       {
         "kind": "rect",
-        "x": 59,
-        "y": 73,
-        "w": 52,
-        "h": 44,
+        "x": 0,
+        "y": 0,
+        "w": 120,
+        "h": 120,
+        "rx": 1,
+        "ry": 1,
+        "stroke": "#111111",
+        "fill": "#323246",
+        "strokeWidth": 1.5
+      },
+      {
+        "kind": "rect",
+        "x": 52,
+        "y": 52,
+        "w": 16,
+        "h": 16,
         "stroke": "#94a3b8",
         "fill": "none",
-        "strokeWidth": 1
+        "strokeWidth": 0.5
       },
       {
         "kind": "text",
-        "x": 85,
-        "y": 91,
+        "x": 60,
+        "y": 58.5,
         "value": "ESP32",
-        "fontSize": 11,
-        "color": "#e2e8f0"
+        "fontSize": 4,
+        "color": "#fafac8"
       },
       {
         "kind": "text",
-        "x": 85,
-        "y": 107,
+        "x": 60,
+        "y": 64.5,
         "value": "QEMU",
-        "fontSize": 9,
-        "color": "#94a3b8"
-      },
-      {
-        "kind": "ellipse",
-        "cx": 14,
-        "cy": 14,
-        "rx": 3,
-        "ry": 3,
-        "stroke": "#e2e8f0",
-        "fill": "#e2e8f0"
+        "fontSize": 3,
+        "color": "#fafac8"
       }
     ],
+    "pinLabelColor": "#fafac8",
     "pins": [
       {
-        "id": "deco_Ca1",
-        "x": 13,
-        "y": 0,
-        "angle": 270,
-        "length": 10,
-        "label": "Ca1"
-      },
-      {
-        "id": "deco_Ca2",
-        "x": 26,
-        "y": 0,
-        "angle": 270,
-        "length": 10,
-        "label": "Ca2"
-      },
-      {
-        "id": "deco_VddA1",
-        "x": 39,
-        "y": 0,
-        "angle": 270,
-        "length": 10,
-        "label": "VddA1"
-      },
-      {
-        "id": "deco_XTALo",
-        "x": 52,
-        "y": 0,
-        "angle": 270,
-        "length": 10,
-        "label": "XTALo"
-      },
-      {
-        "id": "deco_XTALi",
-        "x": 65,
-        "y": 0,
-        "angle": 270,
-        "length": 10,
-        "label": "XTALi"
-      },
-      {
-        "id": "deco_VddA2",
-        "x": 78,
-        "y": 0,
-        "angle": 270,
-        "length": 10,
-        "label": "VddA2"
-      },
-      {
-        "id": "GPIO21",
-        "x": 92,
-        "y": 0,
-        "angle": 270,
-        "length": 10,
-        "label": "G21"
-      },
-      {
-        "id": "GPIO1",
-        "x": 105,
-        "y": 0,
-        "angle": 270,
-        "length": 10,
-        "label": "G01"
+        "id": "GPIO5",
+        "x": 128,
+        "y": 32,
+        "angle": 0,
+        "length": 8,
+        "label": "G05",
+        "leadOrigin": "terminal",
+        "aliases": [
+          "G05"
+        ]
       },
       {
         "id": "GPIO3",
-        "x": 118,
-        "y": 0,
-        "angle": 270,
-        "length": 10,
-        "label": "G03"
+        "x": 80,
+        "y": -8,
+        "angle": 90,
+        "length": 8,
+        "label": "G03",
+        "leadOrigin": "terminal",
+        "aliases": [
+          "G03"
+        ]
       },
       {
-        "id": "GPIO22",
-        "x": 131,
-        "y": 0,
-        "angle": 270,
-        "length": 10,
-        "label": "G22"
+        "id": "GPIO1",
+        "x": 72,
+        "y": -8,
+        "angle": 90,
+        "length": 8,
+        "label": "G01",
+        "leadOrigin": "terminal",
+        "aliases": [
+          "G01"
+        ]
       },
       {
-        "id": "GPIO19",
-        "x": 144,
-        "y": 0,
-        "angle": 270,
-        "length": 10,
-        "label": "G19"
+        "id": "deco_XTALi",
+        "x": 48,
+        "y": -8,
+        "angle": 90,
+        "length": 8,
+        "label": "XTALi",
+        "leadOrigin": "terminal",
+        "kind": "nc",
+        "leadColor": "#4b78aa",
+        "labelColor": "#fafac8"
       },
       {
-        "id": "deco_Vdd4",
-        "x": 157,
-        "y": 0,
-        "angle": 270,
-        "length": 10,
-        "label": "Vdd4"
+        "id": "deco_XTALo",
+        "x": 40,
+        "y": -8,
+        "angle": 90,
+        "length": 8,
+        "label": "XTALo",
+        "leadOrigin": "terminal",
+        "kind": "nc",
+        "leadColor": "#4b78aa",
+        "labelColor": "#fafac8"
       },
       {
-        "id": "GPIO23",
-        "x": 170,
-        "y": 15,
-        "angle": 0,
-        "length": 10,
-        "label": "G23"
-      },
-      {
-        "id": "GPIO18",
-        "x": 170,
-        "y": 29,
-        "angle": 0,
-        "length": 10,
-        "label": "G18"
-      },
-      {
-        "id": "GPIO5",
-        "x": 170,
-        "y": 44,
-        "angle": 0,
-        "length": 10,
-        "label": "G05"
+        "id": "deco_VddA1",
+        "x": 32,
+        "y": -8,
+        "angle": 90,
+        "length": 8,
+        "label": "VddA",
+        "leadOrigin": "terminal",
+        "kind": "nc",
+        "leadColor": "#4b78aa",
+        "labelColor": "#fafac8"
       },
       {
         "id": "GPIO8",
-        "x": 170,
-        "y": 58,
+        "x": 128,
+        "y": 40,
         "angle": 0,
-        "length": 10,
-        "label": "G08"
+        "length": 8,
+        "label": "G08",
+        "leadOrigin": "terminal",
+        "aliases": [
+          "G08"
+        ]
       },
       {
         "id": "GPIO7",
-        "x": 170,
-        "y": 73,
+        "x": 128,
+        "y": 48,
         "angle": 0,
-        "length": 10,
-        "label": "G07"
+        "length": 8,
+        "label": "G07",
+        "leadOrigin": "terminal",
+        "aliases": [
+          "G07"
+        ]
       },
       {
         "id": "GPIO6",
-        "x": 170,
-        "y": 88,
+        "x": 128,
+        "y": 56,
         "angle": 0,
-        "length": 10,
-        "label": "G06"
+        "length": 8,
+        "label": "G06",
+        "leadOrigin": "terminal",
+        "aliases": [
+          "G06"
+        ]
       },
       {
         "id": "GPIO11",
-        "x": 170,
-        "y": 102,
+        "x": 128,
+        "y": 64,
         "angle": 0,
-        "length": 10,
-        "label": "G11"
+        "length": 8,
+        "label": "G11",
+        "leadOrigin": "terminal",
+        "aliases": [
+          "G11"
+        ]
       },
       {
         "id": "GPIO10",
-        "x": 170,
-        "y": 117,
+        "x": 128,
+        "y": 72,
         "angle": 0,
-        "length": 10,
-        "label": "G10"
+        "length": 8,
+        "label": "G10",
+        "leadOrigin": "terminal",
+        "aliases": [
+          "G10"
+        ]
       },
       {
         "id": "GPIO9",
-        "x": 170,
-        "y": 132,
+        "x": 128,
+        "y": 80,
         "angle": 0,
-        "length": 10,
-        "label": "G09"
-      },
-      {
-        "id": "GPIO17",
-        "x": 170,
-        "y": 146,
-        "angle": 0,
-        "length": 10,
-        "label": "G17"
+        "length": 8,
+        "label": "G09",
+        "leadOrigin": "terminal",
+        "aliases": [
+          "G09"
+        ]
       },
       {
         "id": "deco_Vdd2",
-        "x": 170,
-        "y": 161,
+        "x": 128,
+        "y": 96,
         "angle": 0,
-        "length": 10,
-        "label": "Vdd2"
-      },
-      {
-        "id": "GPIO16",
-        "x": 170,
-        "y": 175,
-        "angle": 0,
-        "length": 10,
-        "label": "G16"
-      },
-      {
-        "id": "GPIO33",
-        "x": 13,
-        "y": 190,
-        "angle": 90,
-        "length": 10,
-        "label": "G33"
-      },
-      {
-        "id": "GPIO25",
-        "x": 26,
-        "y": 190,
-        "angle": 90,
-        "length": 10,
-        "label": "G25"
-      },
-      {
-        "id": "GPIO26",
-        "x": 39,
-        "y": 190,
-        "angle": 90,
-        "length": 10,
-        "label": "G26"
-      },
-      {
-        "id": "GPIO27",
-        "x": 52,
-        "y": 190,
-        "angle": 90,
-        "length": 10,
-        "label": "G27"
-      },
-      {
-        "id": "GPIO14",
-        "x": 65,
-        "y": 190,
-        "angle": 90,
-        "length": 10,
-        "label": "G14"
-      },
-      {
-        "id": "GPIO12",
-        "x": 78,
-        "y": 190,
-        "angle": 90,
-        "length": 10,
-        "label": "G12"
-      },
-      {
-        "id": "deco_Vdd3",
-        "x": 92,
-        "y": 190,
-        "angle": 90,
-        "length": 10,
-        "label": "Vdd3"
-      },
-      {
-        "id": "GPIO13",
-        "x": 105,
-        "y": 190,
-        "angle": 90,
-        "length": 10,
-        "label": "G13"
-      },
-      {
-        "id": "GPIO15",
-        "x": 118,
-        "y": 190,
-        "angle": 90,
-        "length": 10,
-        "label": "G15"
-      },
-      {
-        "id": "GPIO2",
-        "x": 131,
-        "y": 190,
-        "angle": 90,
-        "length": 10,
-        "label": "G02"
-      },
-      {
-        "id": "GPIO0",
-        "x": 144,
-        "y": 190,
-        "angle": 90,
-        "length": 10,
-        "label": "G00"
+        "length": 8,
+        "label": "Vdd",
+        "leadOrigin": "terminal",
+        "kind": "nc",
+        "leadColor": "#4b78aa",
+        "labelColor": "#fafac8"
       },
       {
         "id": "GPIO4",
-        "x": 157,
-        "y": 190,
-        "angle": 90,
-        "length": 10,
-        "label": "G04"
+        "x": 104,
+        "y": 128,
+        "angle": 270,
+        "length": 8,
+        "label": "G04",
+        "leadOrigin": "terminal",
+        "aliases": [
+          "G04"
+        ]
       },
       {
-        "id": "deco_Vdda2",
-        "x": 0,
-        "y": 15,
-        "angle": 180,
-        "length": 10,
-        "label": "Vdda2"
+        "id": "GPIO0",
+        "x": 96,
+        "y": 128,
+        "angle": 270,
+        "length": 8,
+        "label": "G00",
+        "leadOrigin": "terminal",
+        "aliases": [
+          "G00"
+        ]
       },
       {
-        "id": "deco_Lna",
-        "x": 0,
-        "y": 29,
-        "angle": 180,
-        "length": 10,
-        "label": "Lna"
+        "id": "GPIO2",
+        "x": 88,
+        "y": 128,
+        "angle": 270,
+        "length": 8,
+        "label": "G02",
+        "leadOrigin": "terminal",
+        "aliases": [
+          "G02"
+        ]
       },
       {
-        "id": "deco_Vdd6",
-        "x": 0,
-        "y": 44,
-        "angle": 180,
-        "length": 10,
-        "label": "Vdd6"
+        "id": "GPIO15",
+        "x": 80,
+        "y": 128,
+        "angle": 270,
+        "length": 8,
+        "label": "G15",
+        "leadOrigin": "terminal",
+        "aliases": [
+          "G15"
+        ]
       },
       {
-        "id": "deco_Vdd5",
-        "x": 0,
-        "y": 58,
-        "angle": 180,
-        "length": 10,
-        "label": "Vdd5"
+        "id": "GPIO13",
+        "x": 72,
+        "y": 128,
+        "angle": 270,
+        "length": 8,
+        "label": "G13",
+        "leadOrigin": "terminal",
+        "aliases": [
+          "G13"
+        ]
       },
       {
-        "id": "GPIO36",
-        "x": 0,
-        "y": 73,
-        "angle": 180,
-        "length": 10,
-        "label": "G36"
+        "id": "deco_Vdd3",
+        "x": 64,
+        "y": 128,
+        "angle": 270,
+        "length": 8,
+        "label": "Vdd",
+        "leadOrigin": "terminal",
+        "kind": "nc",
+        "leadColor": "#4b78aa",
+        "labelColor": "#fafac8"
       },
       {
-        "id": "GPIO37",
-        "x": 0,
-        "y": 88,
-        "angle": 180,
-        "length": 10,
-        "label": "G37"
+        "id": "GPIO12",
+        "x": 56,
+        "y": 128,
+        "angle": 270,
+        "length": 8,
+        "label": "G12",
+        "leadOrigin": "terminal",
+        "aliases": [
+          "G12"
+        ]
       },
       {
-        "id": "GPIO38",
-        "x": 0,
-        "y": 102,
-        "angle": 180,
-        "length": 10,
-        "label": "G38"
-      },
-      {
-        "id": "GPIO39",
-        "x": 0,
-        "y": 117,
-        "angle": 180,
-        "length": 10,
-        "label": "G39"
+        "id": "GPIO14",
+        "x": 48,
+        "y": 128,
+        "angle": 270,
+        "length": 8,
+        "label": "G14",
+        "leadOrigin": "terminal",
+        "aliases": [
+          "G14"
+        ]
       },
       {
         "id": "RST",
-        "x": 0,
-        "y": 132,
+        "x": -8,
+        "y": 80,
         "angle": 180,
-        "length": 10,
-        "label": "Rst"
+        "length": 8,
+        "label": "Rst",
+        "leadOrigin": "terminal",
+        "aliases": [
+          "Rst"
+        ]
+      },
+      {
+        "id": "deco_Vdd4",
+        "x": 104,
+        "y": -8,
+        "angle": 90,
+        "length": 8,
+        "label": "Vdd",
+        "leadOrigin": "terminal",
+        "kind": "nc",
+        "leadColor": "#4b78aa",
+        "labelColor": "#fafac8"
+      },
+      {
+        "id": "deco_Vdd5",
+        "x": -8,
+        "y": 40,
+        "angle": 180,
+        "length": 8,
+        "label": "Vdd",
+        "leadOrigin": "terminal",
+        "kind": "nc",
+        "leadColor": "#4b78aa",
+        "labelColor": "#fafac8"
+      },
+      {
+        "id": "deco_Vdda2",
+        "x": -8,
+        "y": 16,
+        "angle": 180,
+        "length": 8,
+        "label": "Vdd",
+        "leadOrigin": "terminal",
+        "kind": "nc",
+        "leadColor": "#4b78aa",
+        "labelColor": "#fafac8"
+      },
+      {
+        "id": "deco_Lna",
+        "x": -8,
+        "y": 24,
+        "angle": 180,
+        "length": 8,
+        "label": "Lna",
+        "leadOrigin": "terminal",
+        "kind": "nc",
+        "leadColor": "#4b78aa",
+        "labelColor": "#fafac8"
+      },
+      {
+        "id": "deco_Vdd6",
+        "x": -8,
+        "y": 32,
+        "angle": 180,
+        "length": 8,
+        "label": "Vdd",
+        "leadOrigin": "terminal",
+        "kind": "nc",
+        "leadColor": "#4b78aa",
+        "labelColor": "#fafac8"
+      },
+      {
+        "id": "deco_Ca1",
+        "x": 16,
+        "y": -8,
+        "angle": 90,
+        "length": 8,
+        "label": "Ca1",
+        "leadOrigin": "terminal",
+        "kind": "nc",
+        "leadColor": "#4b78aa",
+        "labelColor": "#fafac8"
+      },
+      {
+        "id": "deco_Ca2",
+        "x": 24,
+        "y": -8,
+        "angle": 90,
+        "length": 8,
+        "label": "Ca2",
+        "leadOrigin": "terminal",
+        "kind": "nc",
+        "leadColor": "#4b78aa",
+        "labelColor": "#fafac8"
+      },
+      {
+        "id": "GPIO16",
+        "x": 128,
+        "y": 104,
+        "angle": 0,
+        "length": 8,
+        "label": "G16",
+        "leadOrigin": "terminal",
+        "aliases": [
+          "G16"
+        ]
+      },
+      {
+        "id": "GPIO17",
+        "x": 128,
+        "y": 88,
+        "angle": 0,
+        "length": 8,
+        "label": "G17",
+        "leadOrigin": "terminal",
+        "aliases": [
+          "G17"
+        ]
+      },
+      {
+        "id": "GPIO18",
+        "x": 128,
+        "y": 24,
+        "angle": 0,
+        "length": 8,
+        "label": "G18",
+        "leadOrigin": "terminal",
+        "aliases": [
+          "G18"
+        ]
+      },
+      {
+        "id": "GPIO23",
+        "x": 128,
+        "y": 16,
+        "angle": 0,
+        "length": 8,
+        "label": "G23",
+        "leadOrigin": "terminal",
+        "aliases": [
+          "G23"
+        ]
+      },
+      {
+        "id": "GPIO27",
+        "x": 40,
+        "y": 128,
+        "angle": 270,
+        "length": 8,
+        "label": "G27",
+        "leadOrigin": "terminal",
+        "aliases": [
+          "G27"
+        ]
+      },
+      {
+        "id": "GPIO26",
+        "x": 32,
+        "y": 128,
+        "angle": 270,
+        "length": 8,
+        "label": "G26",
+        "leadOrigin": "terminal",
+        "aliases": [
+          "G26"
+        ]
+      },
+      {
+        "id": "GPIO25",
+        "x": 24,
+        "y": 128,
+        "angle": 270,
+        "length": 8,
+        "label": "G25",
+        "leadOrigin": "terminal",
+        "aliases": [
+          "G25"
+        ]
+      },
+      {
+        "id": "deco_VddA2",
+        "x": 56,
+        "y": -8,
+        "angle": 90,
+        "length": 8,
+        "label": "VddA",
+        "leadOrigin": "terminal",
+        "kind": "nc",
+        "leadColor": "#4b78aa",
+        "labelColor": "#fafac8"
+      },
+      {
+        "id": "GPIO19",
+        "x": 96,
+        "y": -8,
+        "angle": 90,
+        "length": 8,
+        "label": "G19",
+        "leadOrigin": "terminal",
+        "aliases": [
+          "G19"
+        ]
+      },
+      {
+        "id": "GPIO22",
+        "x": 88,
+        "y": -8,
+        "angle": 90,
+        "length": 8,
+        "label": "G22",
+        "leadOrigin": "terminal",
+        "aliases": [
+          "G22"
+        ]
+      },
+      {
+        "id": "GPIO36",
+        "x": -8,
+        "y": 48,
+        "angle": 180,
+        "length": 8,
+        "label": "G36",
+        "leadOrigin": "terminal",
+        "aliases": [
+          "G36"
+        ]
+      },
+      {
+        "id": "GPIO37",
+        "x": -8,
+        "y": 56,
+        "angle": 180,
+        "length": 8,
+        "label": "G37",
+        "leadOrigin": "terminal",
+        "aliases": [
+          "G37"
+        ]
+      },
+      {
+        "id": "GPIO38",
+        "x": -8,
+        "y": 64,
+        "angle": 180,
+        "length": 8,
+        "label": "G38",
+        "leadOrigin": "terminal",
+        "aliases": [
+          "G38"
+        ]
+      },
+      {
+        "id": "GPIO39",
+        "x": -8,
+        "y": 72,
+        "angle": 180,
+        "length": 8,
+        "label": "G39",
+        "leadOrigin": "terminal",
+        "aliases": [
+          "G39"
+        ]
       },
       {
         "id": "GPIO34",
-        "x": 0,
-        "y": 146,
+        "x": -8,
+        "y": 88,
         "angle": 180,
-        "length": 10,
-        "label": "G34"
+        "length": 8,
+        "label": "G34",
+        "leadOrigin": "terminal",
+        "aliases": [
+          "G34"
+        ]
       },
       {
         "id": "GPIO35",
-        "x": 0,
-        "y": 161,
+        "x": -8,
+        "y": 96,
         "angle": 180,
-        "length": 10,
-        "label": "G35"
+        "length": 8,
+        "label": "G35",
+        "leadOrigin": "terminal",
+        "aliases": [
+          "G35"
+        ]
       },
       {
         "id": "GPIO32",
-        "x": 0,
-        "y": 175,
+        "x": -8,
+        "y": 104,
         "angle": 180,
-        "length": 10,
-        "label": "G32"
+        "length": 8,
+        "label": "G32",
+        "leadOrigin": "terminal",
+        "aliases": [
+          "G32"
+        ]
+      },
+      {
+        "id": "GPIO33",
+        "x": 16,
+        "y": 128,
+        "angle": 270,
+        "length": 8,
+        "label": "G33",
+        "leadOrigin": "terminal",
+        "aliases": [
+          "G33"
+        ]
+      },
+      {
+        "id": "GPIO21",
+        "x": 64,
+        "y": -8,
+        "angle": 90,
+        "length": 8,
+        "label": "G21",
+        "leadOrigin": "terminal",
+        "aliases": [
+          "G21"
+        ]
       }
     ]
   },
@@ -732,5 +925,6 @@
     "Microcontroladores",
     "Espressif"
   ],
-  "icon": "<svg viewBox=\"0 0 20 20\" xmlns=\"http://www.w3.org/2000/svg\"><rect x=\"3\" y=\"3\" width=\"14\" height=\"14\" rx=\"1\" fill=\"#2d5a1b\" stroke=\"#aaa\" stroke-width=\"1\"/><rect x=\"7\" y=\"1\" width=\"6\" height=\"3\" rx=\"0.5\" fill=\"#888\" stroke=\"#aaa\" stroke-width=\"0.7\"/><line x1=\"0\" y1=\"6\" x2=\"3\" y2=\"6\" stroke=\"#bbb\" stroke-width=\"1.2\"/><line x1=\"0\" y1=\"8.5\" x2=\"3\" y2=\"8.5\" stroke=\"#bbb\" stroke-width=\"1.2\"/><line x1=\"0\" y1=\"11\" x2=\"3\" y2=\"11\" stroke=\"#bbb\" stroke-width=\"1.2\"/><line x1=\"0\" y1=\"13.5\" x2=\"3\" y2=\"13.5\" stroke=\"#bbb\" stroke-width=\"1.2\"/><line x1=\"17\" y1=\"6\" x2=\"20\" y2=\"6\" stroke=\"#bbb\" stroke-width=\"1.2\"/><line x1=\"17\" y1=\"8.5\" x2=\"20\" y2=\"8.5\" stroke=\"#bbb\" stroke-width=\"1.2\"/><line x1=\"17\" y1=\"11\" x2=\"20\" y2=\"11\" stroke=\"#bbb\" stroke-width=\"1.2\"/><line x1=\"17\" y1=\"13.5\" x2=\"20\" y2=\"13.5\" stroke=\"#bbb\" stroke-width=\"1.2\"/><rect x=\"6\" y=\"8\" width=\"8\" height=\"6\" rx=\"0.5\" fill=\"#111\" stroke=\"#555\" stroke-width=\"0.8\"/></svg>"
+  "icon": "<svg viewBox=\"0 0 20 20\" xmlns=\"http://www.w3.org/2000/svg\"><rect x=\"3\" y=\"3\" width=\"14\" height=\"14\" rx=\"1\" fill=\"#2d5a1b\" stroke=\"#aaa\" stroke-width=\"1\"/><rect x=\"7\" y=\"1\" width=\"6\" height=\"3\" rx=\"0.5\" fill=\"#888\" stroke=\"#aaa\" stroke-width=\"0.7\"/><line x1=\"0\" y1=\"6\" x2=\"3\" y2=\"6\" stroke=\"#bbb\" stroke-width=\"1.2\"/><line x1=\"0\" y1=\"8.5\" x2=\"3\" y2=\"8.5\" stroke=\"#bbb\" stroke-width=\"1.2\"/><line x1=\"0\" y1=\"11\" x2=\"3\" y2=\"11\" stroke=\"#bbb\" stroke-width=\"1.2\"/><line x1=\"0\" y1=\"13.5\" x2=\"3\" y2=\"13.5\" stroke=\"#bbb\" stroke-width=\"1.2\"/><line x1=\"17\" y1=\"6\" x2=\"20\" y2=\"6\" stroke=\"#bbb\" stroke-width=\"1.2\"/><line x1=\"17\" y1=\"8.5\" x2=\"20\" y2=\"8.5\" stroke=\"#bbb\" stroke-width=\"1.2\"/><line x1=\"17\" y1=\"11\" x2=\"20\" y2=\"11\" stroke=\"#bbb\" stroke-width=\"1.2\"/><line x1=\"17\" y1=\"13.5\" x2=\"20\" y2=\"13.5\" stroke=\"#bbb\" stroke-width=\"1.2\"/><rect x=\"6\" y=\"8\" width=\"8\" height=\"6\" rx=\"0.5\" fill=\"#111\" stroke=\"#555\" stroke-width=\"0.8\"/></svg>",
+  "iconPath": "icon.png"
 }

@@ -1,3 +1,25 @@
+<!-- Claude Code Spec Header v1 -->
+## Claude Code Operating Contract (English)
+
+Purpose: Historical record of a superseded design path.
+Audience: coding agents needing migration/decision context.
+Mode: non-implementable reference.
+
+Keywords: superseded, historical, wasm, worker-threads, rejected-architecture, migration-note
+
+Priority Rules:
+1. MUST treat this document as historical context only.
+2. MUST NOT implement new features from this design path.
+3. SHOULD map any relevant concept to the current native-plugin spec when needed.
+
+Agent Workflow:
+1. If requested behavior references this file, redirect implementation to native plugin architecture.
+2. Keep this file for rationale and traceability only.
+
+Decision Keywords:
+- SUPERSEDED means implementation is prohibited unless the project explicitly reopens architecture strategy.
+
+---
 # LasecSimul — Sistema de Dispositivos Customizados em WASM (v0.1)
 
 > **SUPERSEDED — não implementar.** Esta abordagem (worker_threads + módulo WASM por dispositivo) foi

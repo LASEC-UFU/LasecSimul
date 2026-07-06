@@ -84,12 +84,12 @@ Processo QEMU externo, arena compartilhada, dispatch MMIO e adapter ESP32 inicia
 - `FirmwareWatcher` detecta artefato novo e recarrega sem ação manual;
 - `FirmwareWatcher` escolhe o artefato de `mtime` mais recente quando há mais de um na pasta;
 - capturar logs;
-- subcircuito `subcircuits/esp32_devkitc_v4.lssub.json` carrega e expande contra o plugin real
+- subcircuito `subcircuits/esp32_devkitc_v4.lssubcircuit` carrega e expande contra o plugin real
   (`esp32_devkitc_subcircuit_test`, ctest) — ver seção "Placa DevKitC V4" abaixo.
 
 ## Placa DevKitC V4 (subcircuito real, port do SimulIDE)
 
-`subcircuits/esp32_devkitc_v4.lssub.json` é uma placa completa (2026-06-28), pinout traduzido do
+`subcircuits/esp32_devkitc_v4.lssubcircuit` é uma placa completa (2026-06-28), pinout traduzido do
 `devkitC.sim2` real do SimulIDE (`SimulIDE_2-R260501_Win64\data\esp32\`) — 38 pinos no layout padrão
 da ESP32 DevKitC V4 (2 headers de 19 pinos), não o chip "nu". Decisões reais, não decorativas:
 
@@ -107,7 +107,7 @@ da ESP32 DevKitC V4 (2 headers de 19 pinos), não o chip "nu". Decisões reais, 
   (1 nó sem referência) e cai pra 0V com aviso, nunca trava nem inventa um valor.
 - GPIOs que o ESP32 real não expõe (20, 24, 28-31, 37, 38) **não aparecem** — fiel ao hardware, não
   preenchido por completude artificial.
-- Visual vem do `package` real do `.lssub.json` (`width`/`height`/`background`/`shapes[]`/`pins[]`),
+- Visual vem do `package` real do `.lssubcircuit` (`width`/`height`/`background`/`shapes[]`/`pins[]`),
   renderizado de ponta a ponta pelo renderizador novo (ver seção abaixo) — cada um dos 38 pinos
   aparece na posição/lado real do hardware, com o nome ao lado, não mais um retângulo genérico.
 
@@ -124,10 +124,10 @@ de propósito fora de `0..width`/`0..height` (ex: pino na borda esquerda com `an
 fora). Sem `package`, o algoritmo genérico de sempre continua valendo (built-ins não afetados).
 
 Três itens da paleta usam isso hoje, todos com pinout traduzido fielmente do SimulIDE real (não
-inventado): adaptador ESP32 nu (`mcu-adapters/espressif-esp32/mcu.json`, 48 pinos em 4 lados — 34
+inventado): adaptador ESP32 nu (`mcu-adapters/espressif-esp32/.lsdevice`, 48 pinos em 4 lados — 34
 GPIO reais/wireáveis + 14 decorativos como `Vdd`/`Lna`/`XTALi`/`Rst`, mesmo padrão `type=nc` do
 `esp32.package` original do SimulIDE), placa DevKitC V4 (seção acima) e módulo WROOM-32
-(`subcircuits/esp32_wroom32.lssub.json` — mesmo princípio da DevKitC, pinout do `Wroom32.sim2` real:
+(`subcircuits/esp32_wroom32.lssubcircuit` — mesmo princípio da DevKitC, pinout do `Wroom32.sim2` real:
 38 pinos, sem pino `5V` — só `3v3` —, com `SVP`/`SVN` em vez de `VP`/`VN`, sem botão BOOT). Teste:
 `componentSymbols.test.ts` (lógica de layout) e `esp32_devkitc_subcircuit_test` (os dois
 subcircuitos, ctest).
@@ -144,9 +144,9 @@ Teste: `componentSymbols.test.ts`.
 `component.pins[]` com ids genéricos (`pin-1`, `pin-2`...) que nunca batiam com os ids reais do
 `package` (`GPIO23`, `deco_Ca1`...) — `pinLocalPosition` nunca achava o pino por `id`, caindo sempre no
 algoritmo genérico (esquerda/direita por índice), então o PONTO DE CONEXÃO (onde o fio liga) ficava bem
-longe da posição visual real do pino, mesmo com o desenho do chip certo. Causa raiz: `mcu.json` só tinha
+longe da posição visual real do pino, mesmo com o desenho do chip certo. Causa raiz: `.lsdevice` só tinha
 3 entradas placeholder em `pinMap` (devia ter as 42 reais — GPIO0-39 + UART0_RX/TX — que o plugin
-(`Esp32Adapter.cpp::buildPinMap`) de fato expõe). Corrigido em duas pontas: `mcu.json` ganhou o `pinMap`
+(`Esp32Adapter.cpp::buildPinMap`) de fato expõe). Corrigido em duas pontas: `.lsdevice` ganhou o `pinMap`
 completo (42 entradas, espelhando o C++ exatamente); a Extension ganhou
 `WebviewComponentCatalogEntry.pinIds` (ids elétricos reais, na ordem que o Core espera) e tanto a
 Webview (`makeComponentFromTypeId`) quanto o lado da Extension (`pinsForTypeId`) passaram a sintetizar
@@ -209,7 +209,7 @@ Conversão pura entre o `package` salvo em disco e essa lista de componentes viv
 `extension/src/catalog/symbolAuthoring.ts` (`seedSymbolAuthoringComponents`/
 `compileSymbolAuthoringComponents`, testado em `symbolAuthoring.test.ts`) — sem perda pra
 retângulo/elipse/texto/pino; `graphics.line` perde precisão de ângulo não-cardinal (vira o múltiplo de
-90° mais próximo). Salvar relê o `device.json`/`mcu.json`/`.lssub.json` do disco e substitui só a chave
+90° mais próximo). Salvar relê o `.lsdevice`/`.lssubcircuit` do disco e substitui só a chave
 `package` (`extension.ts::saveSymbolCommand`) — fundo `svg`/`image` já existente é preservado verbatim
 se a sessão não definir `backgroundColor` (sem UI de upload de imagem nesta rodada — perder esse dado
 ao salvar seria regressão, não limitação aceitável).
@@ -254,11 +254,11 @@ oficial: *"A Package é apenas o invólucro, enquanto um Subcircuit é uma Packa
 dentro, como um IC"*) corrigiu isso e revelou o que realmente faltava — documentado em detalhe em
 `.spec/lasecsimul-native-devices.spec` seção 21.4 e `.spec/lasecsimul-subcircuits.spec` seção 4:
 
-- **Circuito interno real editável.** Pra `subcircuit-file` (nunca `device.json`/`mcu.json` — não
+- **Circuito interno real editável.** Pra `subcircuit-file` (nunca `abi-device`/`mcu-adapter` — não
   têm circuito interno, "Package ≠ Subcircuit"), a MESMA sessão de autoria agora também semeia
-  `components[]`/`wires[]` reais do `.lssub.json` (`extension.ts::extractInternalCircuit` +
+  `components[]`/`wires[]` reais do `.lssubcircuit` (`extension.ts::extractInternalCircuit` +
   `symbolAuthoring.ts::seedSubcircuitInternalComponents`) — igual ao SimulIDE real mostrar `Package`
-  e circuito interno juntos na mesma cena. `.lssub.json` ganhou campos aditivos `components[].visual`/
+  e circuito interno juntos na mesma cena. `.lssubcircuit` ganhou campos aditivos `components[].visual`/
   `boardVisual` e `wires[].points` — Core ignora o que não reconhece (confirmado, `ctest` 26/26 sem
   nenhuma mudança em `SubcircuitRegistry.hpp`). Sem `visual` salvo (caso dos 2 subcircuitos reais
   escritos à mão antes de hoje), cai num layout em grade simples na primeira abertura.

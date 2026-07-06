@@ -10,7 +10,6 @@ export interface RegisteredSource {
   kind: RegisteredSourceKind;
   filePath: string;
   libraryPath?: string;
-  lsconfigPath?: string;
   folderPath?: string[];
   removable?: boolean;
 }
@@ -40,7 +39,7 @@ export interface UnifiedCatalogItem {
 }
 
 /** Tradução de um item do catálogo pra uma língua — subconjunto dos mesmos campos visíveis
- * (`label`/`folderPath`), mesmo princípio de `device.json` (`lasecsimul.spec` seção 6.3,
+ * (`label`/`folderPath`), mesmo princípio de `.lsdevice` (`lasecsimul.spec` seção 6.3,
  * ADR 0009): campo ausente cai pra `language`-base do arquivo, nunca string vazia. */
 export interface UnifiedCatalogItemTranslation {
   label?: string;
@@ -186,7 +185,6 @@ function sanitizeRegisteredSources(input: unknown): RegisteredSource[] {
       kind: source.kind,
       filePath: source.filePath,
       libraryPath: typeof source.libraryPath === "string" && source.libraryPath.trim() ? source.libraryPath : undefined,
-      lsconfigPath: typeof source.lsconfigPath === "string" && source.lsconfigPath.trim() ? source.lsconfigPath : undefined,
       folderPath: sanitizeFolderPath(source.folderPath),
       removable: source.removable !== false,
     });

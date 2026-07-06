@@ -19,14 +19,14 @@ struct ComponentMetadata {
     std::string iconPath;
     /** Língua em que `displayName`/`propertySchema[].label`/`.group`/`.options[].label` estão escritos
      * — declaração obrigatória (RNF12 de `lasecsimul.spec`), default "pt-BR" pra built-in e pra
-     * `device.json` que ainda não declara `language` explicitamente (compatibilidade). */
+     * `.lsdevice` que ainda não declara `language` explicitamente (compatibilidade). */
     std::string language = "pt-BR";
-    /** JSON crú de `device.json`'s `translations` (vazio = nenhuma tradução) — texto, não struct
+    /** JSON crú de `.lsdevice`'s `translations` (vazio = nenhuma tradução) — texto, não struct
      * tipada, pra não acoplar este header a `nlohmann::json`; quem resolve é `CoreApplication.cpp`
      * (`resolvePropertySchemaForLanguage`), que já depende disso em todo lugar. Formato:
      * `{"<lang>": {"name": "...", "properties": {"<id>": {"label": "...", "group": "..."}}}}`. */
     std::string translationsJson;
-    /** `limits.stepTimeoutMs` do `device.json` -- 0 == sem watchdog. Ver
+    /** `limits.stepTimeoutMs` do `.lsdevice` -- 0 == sem watchdog. Ver
      * .spec/lasecsimul-native-devices.spec, seção 13. */
     uint32_t stepTimeoutMs = 0;
     /** ABI v2 (.spec/lasecsimul-native-devices.spec): como a UI decodifica leitura/interage com o

@@ -47,7 +47,7 @@ public:
     /** Schema rico estático (grupo/editor/min/step) — usado tanto aqui (preenche `PropertyDescriptor::
      * schema` de uma instância) quanto em `CoreApplication::registerBuiltinComponents` (registra no
      * `ComponentMetadataRegistry` por typeId, antes de qualquer instância existir). Mesmo vocabulário
-     * que `device.json` usa pra plugins — ver `.spec/lasecsimul.spec` sobre paridade built-in/plugin. */
+     * que `.lsdevice` usa pra plugins — ver `.spec/lasecsimul.spec` sobre paridade built-in/plugin. */
     static std::vector<PropertySchema> propertySchema() {
         PropertySchema schema;
         schema.id = "resistance";

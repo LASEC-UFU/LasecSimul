@@ -26,8 +26,8 @@ o *contribution point* nativo de extensões VSCode. Um shell Flutter não tem `p
 ## Decisão
 
 O contrato entre Core e qualquer shell de UI é exclusivamente: (a) o protocolo de IPC (named pipe/socket +
-JSON, versionado por `protocolVersion`) e (b) os formatos de arquivo em disco (`.lsproj`, `device.json`,
-`library.json`, e o futuro `.lssub.json` de subcircuitos — ver ADR 0008). Nenhuma decisão de protocolo ou de
+JSON, versionado por `protocolVersion`) e (b) os formatos de arquivo em disco (`.lsproj`, `.lsdevice`,
+`library.json`, e `.lssubcircuit` de subcircuitos — ver ADR 0008). Nenhuma decisão de protocolo ou de
 "o que carregar" pode depender de um mecanismo exclusivo de um host.
 
 Correção registrada (implementação pendente, ver `.spec/lasecsimul.spec` seção 1.1 e RNF10): a declaração de

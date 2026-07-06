@@ -1,7 +1,31 @@
+<!-- Claude Code Spec Header v1 -->
+## Claude Code Operating Contract (English)
+
+Purpose: Defines data-driven reusable subcircuits as a first-class component type.
+Audience: coding agents for project schema, editor flow, netlist/session expansion, and persistence.
+Mode: normative design contract.
+
+Keywords: subcircuit, data-driven, reusable-component, interface-pins, package-visual, tunnel, nesting, serialization, no-native-code
+
+Priority Rules:
+1. MUST keep subcircuits data-only (no custom native code required).
+2. MUST preserve compatibility with project and package schemas.
+3. MUST perform expansion/instantiation in Core session flow, not pre-flatten in UI.
+4. SHOULD reuse existing contracts (tunnel, package, lsproj schema) instead of inventing parallel formats.
+
+Agent Workflow:
+1. Validate schema compatibility first.
+2. Ensure pin/interface mapping remains deterministic.
+3. Add/adjust acceptance tests for persistence and instantiation behavior.
+
+Decision Keywords:
+- MUST, SHOULD, MAY, OUT OF SCOPE follow RFC 2119 intent.
+
+---
 # LasecSimul — Subcircuitos como Componente Reutilizável Definido por Dados (v0.1)
 
 Status: rascunho inicial | Depende de: [`.spec/lasecsimul.spec`](./lasecsimul.spec) (v0.2+, seção 9, RF10,
-RNF10) | Reaproveita: bloco `package`/`pins[]` de `device.json`, ver `lasecsimul-native-devices.spec` seção 21
+RNF10) | Reaproveita: bloco `package`/`pins[]` de `.lsdevice`, ver `lasecsimul-native-devices.spec` seção 21
 
 ---
 
@@ -37,7 +61,7 @@ padrão (C++ built-in) e plugin nativo (DLL/SO via `device_abi.h`). Decisão reg
 
 ## 1. Modelo de subcircuito
 
-Um subcircuito é definido por um único arquivo `*.lssub.json`, com três blocos:
+Um subcircuito é definido por um único arquivo `*.lssubcircuit`, com três blocos:
 
 1. **Circuito interno** (`components`/`wires`) — mesmo schema de `.lsproj` (RF01 de `lasecsimul.spec`):
    lista de componentes (typeId + properties + pins) e fios entre eles. Pode incluir QUALQUER tipo de
@@ -45,7 +69,7 @@ Um subcircuito é definido por um único arquivo `*.lssub.json`, com três bloco
 2. **Interface** (`interface`) — quais pinos do circuito interno ficam expostos como pinos do subcircuito,
    e com que nome/label públicos. Mecanismo: cada pino exposto é um `connectors.tunnel` dentro do circuito
    interno (ver seção 2) — não um tipo de pino novo.
-3. **Símbolo visual** (`package`) — mesmo bloco `package`/`pins[]` já especificado em `device.json`
+3. **Símbolo visual** (`package`) — mesmo bloco `package`/`pins[]` já especificado em `.lsdevice`
    (`lasecsimul-native-devices.spec` seção 21), **reaproveitado tal e qual**, não redesenhado. Um campo só:
    `package.pins[].id` precisa bater com uma entrada de `interface[].pinId`.
 
@@ -96,10 +120,10 @@ Por que um arquivo único (sem separar circuito interno de `package`, ao contrá
 não tem o problema de mistura de formato (texto+binário) que motivava separar no SimulIDE; um arquivo só
 elimina risco de referência pendente entre dois arquivos.
 
-`language`/`translations` na raiz seguem exatamente a mesma convenção de `device.json`
+`language`/`translations` na raiz seguem exatamente a mesma convenção de `.lsdevice`
 (`lasecsimul-native-devices.spec` seção 4.2.2.1, que já cobre subcircuitos explicitamente) — omitidos do
-exemplo acima só por brevidade. Exemplo real em uso: `subcircuits/esp32_devkitc_v4.lssub.json`/
-`esp32_wroom32.lssub.json` (`"language": "pt-BR"`, `"translations": {"en": {"name": "..."}}`).
+exemplo acima só por brevidade. Exemplo real em uso: `subcircuits/esp32_devkitc_v4.lssubcircuit`/
+`esp32_wroom32.lssubcircuit` (`"language": "pt-BR"`, `"translations": {"en": {"name": "..."}}`).
 
 ## 2. Definição de I/O — `Tunnel` com nome no escopo da instância
 
@@ -123,9 +147,9 @@ O pino **público** que o circuito externo vê (`VIN`/`VOUT`/`GND` na paleta) é
 do `Tunnel` renomeado — não existe um componente "subcircuito" com pinos próprios fazendo ponte; o túnel
 expandido **é** o pino externo (seção 5.2 detalha o que isso implica pra `addComponent`/`connectWire`).
 
-## 3. Modelo visual — reaproveita `package`/`pins[]` de `device.json`
+## 3. Modelo visual — reaproveita `package`/`pins[]` de `.lsdevice`
 
-Sem campo novo. O bloco `package` de um `.lssub.json` é **estruturalmente idêntico** ao de `device.json`
+Sem campo novo. O bloco `package` de um `.lssubcircuit` é **estruturalmente idêntico** ao de `.lsdevice`
 (`lasecsimul-native-devices.spec` seção 21.2: `width`/`height`/`border`/`background`/`shapes[]`,
 `pins[].x/y/angle/length/label`). Única regra adicional: todo `id` em `package.pins[]` precisa existir em
 `interface[].pinId` (validado ao carregar; subcircuito com pino de símbolo sem pino de interface
@@ -133,14 +157,22 @@ correspondente é rejeitado com erro claro, mesmo espírito de `addComponent` co
 
 **Implementado em 2026-06-28** (era só "preparar desde já" até esta data): `WebviewComponentCatalogEntry`
 (`extension/src/ui/webview/model.ts`) ganhou `package?: PackageDescriptor`, populado em
-`extension.ts::resolveRegisteredItem` a partir do `package` real do `.lssub.json`/`device.json`/`mcu.json`.
+`extension.ts::resolveRegisteredItem` a partir do `package` real do manifesto (`.lsdevice`/`.lssubcircuit`).
 O renderizador (`extension/src/ui/webview/componentSymbols.ts`) passou a desenhar **genericamente** a
 partir desse campo quando presente — `registerPackage`/`pinLocalPosition`/`packageSymbolSvg`, cada pino na
 posição/lado real declarado, casado por `id` (nunca por posição no array) — caindo no `switch(typeId)`
 hardcoded só para built-ins sem `package` (resistor, capacitor, etc. — ver seção 11). Prova real: os dois
-subcircuitos da ESP32 (`subcircuits/esp32_devkitc_v4.lssub.json`, `esp32_wroom32.lssub.json`, ver
+subcircuitos da ESP32 (`subcircuits/esp32_devkitc_v4.lssubcircuit`, `esp32_wroom32.lssubcircuit`, ver
 `docs/11-qemu-esp32.md`). **O que isto NÃO é**: não existe editor visual (arrastar pino, redimensionar,
 upload de imagem) — só o caminho de leitura; ver Épico G do roadmap de pendências.
+
+Regras normativas adicionais para a UI:
+
+1. Subcircuitos com `package` e/ou `authoringScene` MUST ser renderizados por parser/tradutor genérico,
+  nunca por helper específico daquele `typeId`.
+2. `if/switch` por `typeId` para montagem de geometria/pinos/fios é permitido apenas em fallback legado
+  para tipos sem payload declarativo equivalente.
+3. Introduzir hardcode visual para um subcircuito que já traz payload declarativo é OUT OF SCOPE.
 
 ## 4. Fluxo de criação no editor
 
@@ -156,7 +188,7 @@ Sem ferramenta nova — reaproveita o canvas do `SchematicEditorPanel` que já e
    redimensionar corpo, adicionar formas/imagem de fundo, posicionar os pinos do `package` — os mesmos
    `pinId` já coletados no passo 2, sem poder inventar um novo aqui (a interface elétrica vem do passo 2, o
    símbolo só posiciona visualmente).
-4. Salvar grava `components`/`wires`/`interface`/`package` num `.lssub.json` — é o mesmo arquivo que alguém
+4. Salvar grava `components`/`wires`/`interface`/`package` num `.lssubcircuit` — é o mesmo arquivo que alguém
    poderia escrever à mão; o editor é conveniência, nunca um formato/estado paralelo (mesma garantia da
    seção 21.3 do spec de plugins nativos).
 5. O novo subcircuito aparece na paleta de componentes da mesma forma que um built-in ou plugin — ver seção 7.
@@ -166,13 +198,13 @@ sozinho, o usuário pediu pra ir além e cobrir o que SimulIDE chama de "Open Su
 circuito INTERNO real de um subcircuito, não só o símbolo visual). Passo 3 ficou mais completo:
 
 - Editor de símbolo (`package`/`logicSymbolPackage`) está **implementado**, sem distinção de código
-  entre `device.json`/`mcu.json`/`.lssub.json` (mesmo comando `lasecsimul.palette.editSymbol`, mesmo
+  entre device/mcu-adapter (`.lsdevice`) e subcircuito (`.lssubcircuit`) (mesmo comando `lasecsimul.palette.editSymbol`, mesmo
   `extension/src/catalog/symbolAuthoring.ts`).
 - **NOVO**: pra `subcircuit-file` especificamente, a MESMA sessão agora também semeia o circuito
   INTERNO real (`components[]`/`wires[]`, igual ao "Open Subcircuit" do SimulIDE real mostrar
   `Package` + circuito juntos na mesma cena) — `extractInternalCircuit`/
   `seedSubcircuitInternalComponents`/`compileSubcircuitInternalComponents` em
-  `extension.ts`/`symbolAuthoring.ts`. `.lssub.json` ganhou campos aditivos `components[].visual`/
+  `extension.ts`/`symbolAuthoring.ts`. `.lssubcircuit` ganhou campos aditivos `components[].visual`/
   `boardVisual` e `wires[].points` (Core ignora o que não reconhece, zero mudança em
   `SubcircuitRegistry.hpp`).
 - **NOVO**: "Modo Placa" (`SubPackage::boardModeSlot()` do SimulIDE real) — dentro da sessão, um
@@ -183,8 +215,8 @@ circuito INTERNO real de um subcircuito, não só o símbolo visual). Passo 3 fi
   opcional (`logicSymbolPackage`), trocável por um botão "Ver: Físico/Símbolo Lógico" na barra —
   vale pra `subcircuit-file` E `mcu-adapter`, nunca `abi-device` puro (decisão explícita do usuário).
 - Passos 1-2 (**"Criar Subcircuito a partir da Seleção"** — detecção de fronteira de seleção e
-  inserção automática de `connectors.tunnel`, criar um `.lssub.json` NOVO do zero) **ainda não
-  existem** — hoje a sessão de "Abrir Subcircuito" edita um `.lssub.json` que já existe (mesmo que
+  inserção automática de `connectors.tunnel`, criar um `.lssubcircuit` NOVO do zero) **ainda não
+  existem** — hoje a sessão de "Abrir Subcircuito" edita um `.lssubcircuit` que já existe (mesmo que
   com `components[]`/`wires[]` escritos à mão, sem `visual` ainda — nesse caso cai num layout em
   grade simples na primeira abertura). Ver Épico G do roadmap de pendências para o escopo restante
   (sem simulação elétrica ao vivo dentro da sessão; sem `BoardSubc`/`ShieldSubc` — Arduino+Shield
@@ -192,7 +224,7 @@ circuito INTERNO real de um subcircuito, não só o símbolo visual). Passo 3 fi
 
 **Fora de escopo nesta v0.1**: editar um subcircuito "por dentro" depois de já ter instâncias colocadas
 (SimulIDE tem "Open Subcircuit" abrindo uma segunda instância do programa, `subcircuit.cpp` linha ~480) —
-abordagem inicial é editar o `.lssub.json` como um projeto normal (`lasecsimul.openProject` aceitaria a
+abordagem inicial é editar o `.lssubcircuit` como um projeto normal (`lasecsimul.openProject` aceitaria a
 extensão), salvar, e instâncias já no esquemático só veem a versão nova na próxima vez que forem recriadas.
 Hot-reload de subcircuito em uso fica como refinamento futuro, mesmo espírito do *versioned swap* de plugins
 (RF09) mas não implementado agora.
@@ -203,7 +235,7 @@ Hot-reload de subcircuito em uso fica como refinamento futuro, mesmo espírito d
 Dentro da sessão de "Abrir Subcircuito" (passo 3, seção 4 acima), clicar com o botão direito num
 componente interno mostra a opção **"Exposto"** (toggle, `internalSubcircuitMenuItems` em
 `main.ts::createComponentElement`) junto das demais opções de contexto já existentes daquele
-componente — marca `component.exposed = true` no `.lssub.json` (campo aditivo, igual `visual`/
+componente — marca `component.exposed = true` no `.lssubcircuit` (campo aditivo, igual `visual`/
 `boardVisual`, Core ignora). Não existe mais um campo "Modo Placa" separado FORA do subcircuito — só
 dentro da edição, e só pra escolher QUAIS componentes internos exportam suas propriedades.
 
@@ -221,13 +253,13 @@ explícita, porque o nome é o mesmo e o contexto confunde:
 
 1. **Modo Placa DENTRO da sessão de edição** (já documentado acima, seção 4): alterna entre posição-
    circuito e posição-placa de cada componente `graphical: true`, só existe enquanto a sessão de
-   "Abrir Subcircuito" está aberta. Persistido em `component.boardVisual` no `.lssub.json`.
+   "Abrir Subcircuito" está aberta. Persistido em `component.boardVisual` no `.lssubcircuit`.
 2. **Overlay de Modo Placa no esquemático PRINCIPAL** (fora de qualquer sessão de edição), pra uma
    instância de subcircuito JÁ COLOCADA com componentes expostos: retângulos arrastáveis sobre o
    símbolo da instância, um por componente exposto com `graphical: true`, refletindo a posição salva
    em `boardVisual` (fallback pra posição padrão em grade se nunca foi posicionado manualmente —
    `fallbackBoardVisualPosition` em `main.ts`). Arrastar um desses retângulos persiste de volta no
-   `.lssub.json` via `requestUpdateBoardOverlayProperty`/`updateBoardOverlayPropertyCommand`
+   `.lssubcircuit` via `requestUpdateBoardOverlayProperty`/`updateBoardOverlayPropertyCommand`
    (`extension.ts`) -- BoardVisual.x/y, não uma propriedade elétrica. Dados carregados sob demanda via
    IPC (`boardOverlayData`, ver seção 6) quando a instância tem `properties.boardModeEnabled === true`.
 
@@ -246,7 +278,7 @@ expostos, sem precisar de outro toggle).
 Quando `addComponent` recebe um `typeId` que resolve para um subcircuito (registro descrito na seção 7, não
 um `ComponentRegistry::Factory` de `IComponentModel`), o Core:
 
-1. Lê o `.lssub.json` já carregado em memória (mesmo cache de manifesto que `GlobalPluginCache` mantém pra
+1. Lê o `.lssubcircuit` já carregado em memória (mesmo cache de manifesto que `GlobalPluginCache` mantém pra
    plugins, seção 7).
 2. Gera um `subcircuitInstanceId` novo (pode ser o próprio próximo índice livre, ou um id sintético — decisão
    de implementação, não de contrato).
@@ -265,7 +297,7 @@ um `ComponentRegistry::Factory` de `IComponentModel`), o Core:
 **Sem flattening prévio**: o passo 3 já é, na prática, o mesmo efeito de "achatar" — mas acontece **dentro do
 Core**, no momento da instanciação, igual ao SimulIDE resolver tudo numa `Circuit::self()->m_pinMap` única
 (seção 6 do relatório de investigação, `Simulator::createNodes()`). A Extension nunca pré-processa nada —
-manda o `.lssub.json` (ou seu caminho) pro Core uma vez, o Core decide como expandir.
+manda o `.lssubcircuit` (ou seu caminho) pro Core uma vez, o Core decide como expandir.
 
 ### 5.2 O pino externo do subcircuito É o pino do `Tunnel`, não um proxy
 
@@ -323,7 +355,7 @@ funcionam contra os `componentIndex` internos normalmente, porque são component
 ### 6.1 Verbos pro overlay de Modo Placa / propriedades de componente interno exposto (seção 4.1)
 
 - **`getSubcircuitChildInstanceId`** `{instanceId, localId}` → `{instanceId: childIndex}` — resolve o
-  id local de um componente DENTRO de um `.lssub.json` (ex: `"button_en"`) pro índice REAL do Core,
+  id local de um componente DENTRO de um `.lssubcircuit` (ex: `"button_en"`) pro índice REAL do Core,
   via `SimulationSession::findSubcircuitChildByLocalId(outerInstanceId, localId)`
   (`m_subcircuitChildIndexByLocalId`, mapa construído na expansão do subcircuito — seção 5.1). A
   Extension não tem como adivinhar esse índice sozinha (só conhece `componentIndex` de instâncias de
@@ -346,19 +378,19 @@ Mesmo padrão de `devices/library.json` (`lasecsimul-native-devices.spec` seçã
 ```
 LasecSimul/
 └── subcircuits/
-    ├── library.json                 # { "subcircuits": [ { "typeId": "...", "manifest": "divisor_5v.lssub.json" }, ... ] }
-    └── divisor_5v.lssub.json        # arquivo único, seção 1 — sem pasta por subcircuito (não tem binário por plataforma)
+    ├── library.json                 # { "subcircuits": [ { "typeId": "...", "manifest": "divisor_5v.lssubcircuit" }, ... ] }
+    └── divisor_5v.lssubcircuit        # arquivo único, seção 1 — sem pasta por subcircuito (não tem binário por plataforma)
 ```
 
-Diferença deliberada de `devices/<nome>/device.json` (uma pasta por dispositivo, porque tem binário +
-manifesto): subcircuito é um arquivo só, então `library.json` referencia o `.lssub.json` direto na raiz de
+Diferença deliberada de `devices/<nome>/.lsdevice` (uma pasta por dispositivo, porque tem binário +
+manifesto): subcircuito é um arquivo só, então `library.json` referencia o `.lssubcircuit` direto na raiz de
 `subcircuits/`, sem subpasta — menos estrutura do que dispositivos nativos exigem, porque não há nada além
 do JSON pra versionar junto.
 
 ### 7.1 Registro canônico na paleta (princípio do arquivo único)
 
 O registro aponta SOMENTE para o arquivo do subcircuito — sem duplicar metadados. A Extension lê
-`folderPath`, `icon`, e `label` diretamente do `.lssub.json` ao resolver o item de paleta.
+`folderPath`, `icon`, e `label` diretamente do `.lssubcircuit` ao resolver o item de paleta.
 
 Em `LasecSimul/project/schema/component-catalog.json`, um subcircuito é registrado assim:
 
@@ -366,23 +398,23 @@ Em `LasecSimul/project/schema/component-catalog.json`, um subcircuito é registr
 {
   "kind": "subcircuit-file",
   "id": "bundled.subcircuits.divisor_5v",
-  "filePath": "../subcircuits/divisor_5v.lssub.json",
+  "filePath": "../subcircuits/divisor_5v.lssubcircuit",
   "removable": false
 }
 ```
 
-Toda informação de paleta (`folderPath`, `icon`, `label`) vem do `.lssub.json` — nunca repetida no catálogo.
+Toda informação de paleta (`folderPath`, `icon`, `label`) vem do `.lssubcircuit` — nunca repetida no catálogo.
 O catálogo é apenas um ponteiro para o arquivo; o arquivo é a fonte de verdade completa.
 
 Regras normativas:
 
 1. Subcircuito NÃO ganha caminho de cadastro alternativo na UI; entra nos `registeredSources[]` do catálogo
   unificado como `"kind": "subcircuit-file"`.
-2. A pasta/subpasta exibida na paleta vem de `folderPath` no `.lssub.json` e pode ter profundidade arbitrária.
-3. O ícone da paleta vem do campo `icon` do `.lssub.json` (SVG inline de 20×20px começando com `<svg`).
-4. A Extension usa o `icon`/`folderPath` do `.lssub.json` com precedência máxima; se ausentes, cai para
+2. A pasta/subpasta exibida na paleta vem de `folderPath` no `.lssubcircuit` e pode ter profundidade arbitrária.
+3. O ícone da paleta vem do campo `icon` do `.lssubcircuit` (SVG inline de 20×20px começando com `<svg`).
+4. A Extension usa o `icon`/`folderPath` do `.lssubcircuit` com precedência máxima; se ausentes, cai para
   `source.folderPath` do catálogo como fallback de último recurso.
-5. `typeId` do `.lssub.json` é o identificador único; o catálogo não declara typeId — só caminho do arquivo.
+5. `typeId` do `.lssubcircuit` é o identificador único; o catálogo não declara typeId — só caminho do arquivo.
 6. Bibliotecas de subcircuito MUST ser registradas em `deviceLibraries[]` do catálogo quando fizerem parte
   da distribuição ativa.
 
@@ -390,9 +422,9 @@ Regras normativas:
 
 | Aspecto | SimulIDE-dev | LasecSimul (este spec) |
 |---|---|---|
-| Formato do circuito interno | `.sim1`/`.sim2` (XML) | mesmo schema de `.lsproj` (JSON), embutido no `.lssub.json` |
+| Formato do circuito interno | `.sim1`/`.sim2` (XML) | mesmo schema de `.lsproj` (JSON), embutido no `.lssubcircuit` |
 | Definição de I/O | `Tunnel` + propriedade `Pins` no item `Package` | `Tunnel` + bloco `interface[]` — mesmo mecanismo, nome explícito em vez de string codificada |
-| Símbolo visual | arquivo `.package` separado (XML), ou inline no `.sim2` | bloco `package` único, reaproveitado de `device.json` (seção 21 do native-devices.spec) |
+| Símbolo visual | arquivo `.package` separado (XML), ou inline no `.sim2` | bloco `package` único, reaproveitado de `.lsdevice` (seção 21 do native-devices.spec) |
 | Editor de símbolo | `SubPackage` (modo "board" no próprio editor) | mesmo princípio: modo de edição no `SchematicEditorPanel` (seção 4), nada novo |
 | Resolução em simulação | Sem flattening; `Tunnel`s com mesmo nome compartilham `eNode`; matriz MNA única | Sem flattening; expansão recursiva na mesma `SimulationSession` no momento do `addComponent` (seção 5.1); matriz MNA única (consequência, não mudança de mecanismo) |
 | Nomeação de túnel entre instâncias | `m_id + "-" + id` (prefixo pelo id da instância) | `<subcircuitInstanceId>::<internalTunnel>` (mesmo princípio) |
@@ -402,7 +434,7 @@ Regras normativas:
 
 - **Não é** um quarto tipo de `IComponentModel`. Não existe `SubcircuitComponent : IComponentModel` — a
   "instância de subcircuito" é só um agrupamento lógico de instâncias reais (seção 5.2).
-- **Não é** flattening feito pela Extension. A Extension nunca lê o `.lssub.json` pra decidir topologia —
+- **Não é** flattening feito pela Extension. A Extension nunca lê o `.lssubcircuit` pra decidir topologia —
   manda o `typeId`/caminho, o Core decide tudo (consistente com "Extension nunca calcula simulação elétrica",
   `lasecsimul.spec` seção 1).
 - **Não é** uma segunda matriz MNA por subcircuito. Um subcircuito nunca é uma "caixa-preta" resolvida
@@ -427,7 +459,7 @@ retrabalho quando a feature for implementada:
    `SimulationSession::removeComponent`) — a variante de cascata (seção 5.4) reaproveita, não substitui.
 4. **`setTunnelName` já aceita renomear em runtime** (`Netlist::setTunnelName`) — é exatamente o que a
    expansão da seção 5.1, passo 5, precisa; nenhuma mudança nesse método é esperada.
-5. ~~Implementação real (parser de `.lssub.json`, algoritmo de expansão recursiva, comando "Criar Subcircuito
+5. ~~Implementação real (parser de `.lssubcircuit`, algoritmo de expansão recursiva, comando "Criar Subcircuito
    a partir da Seleção" na Extension) fica para uma rodada futura — este spec existe pra essa rodada não
    precisar redescobrir o desenho, só seguir.~~ **Feito** — ver seção 11.
 
@@ -450,7 +482,7 @@ Fluxo completo:
 Dados de entrada: `componentIds[]` (IDs dos componentes selecionados no `schematicState`).
 
 1. **Categorizar fios**: para cada fio em `schematicState.wires`:
-   - Ambos os endpoints dentro de `componentIds` → **fio interno** (vai para `wires[]` do `.lssub.json`)
+   - Ambos os endpoints dentro de `componentIds` → **fio interno** (vai para `wires[]` do `.lssubcircuit`)
    - Um endpoint dentro, um fora → **fio de fronteira** (gera um túnel + entrada de interface)
    - Nenhum endpoint dentro → ignorado
 
@@ -458,7 +490,7 @@ Dados de entrada: `componentIds[]` (IDs dos componentes selecionados no `schemat
    Posicionado em `(minX - 64, minY + i * 16)` dentro do espaço interno para não sobrepor os
    componentes selecionados quando o subcircuito for aberto para edição.
 
-3. **Montar o `.lssub.json`**:
+3. **Montar o `.lssubcircuit`**:
    ```json
    {
      "schemaVersion": 1,
@@ -472,7 +504,7 @@ Dados de entrada: `componentIds[]` (IDs dos componentes selecionados no `schemat
    ```
    Stubs de túnel: cada túnel tem um fio `{ from: { componentId: tunnelId, pinId: "pin" }, to: { innerComponentId, innerPinId } }`.
 
-4. **Salvar e registrar**: diálogo de save (`*.lssub.json`) → gravar arquivo → adicionar `RegisteredSource`
+4. **Salvar e registrar**: diálogo de save (`*.lssubcircuit`) → gravar arquivo → adicionar `RegisteredSource`
    com `kind: "subcircuit-file"` e `folderPath: ["Meus Subcircuitos"]` → `saveRegisteredSources` →
    `refreshUnifiedCatalogState(false)` (não recarrega DLLs, só atualiza catálogo).
 
@@ -486,10 +518,125 @@ Dados de entrada: `componentIds[]` (IDs dos componentes selecionados no `schemat
 
 ### 11.3 Limitações conhecidas
 
-- O `.lssub.json` gerado não tem campo `package` — o símbolo visual usa o renderizador genérico até
+- O `.lssubcircuit` gerado não tem campo `package` — o símbolo visual usa o renderizador genérico até
   o usuário executar "Editar Símbolo Visual" manualmente.
 - Posições internas dos componentes são absolutas (não re-centradas) — o espaço interno do subcircuito
   começa com as coordenadas originais do esquemático. Isso é funcionalmente correto (o Core não usa
   coordenadas visuais para simulação) mas pode exigir scroll quando o subcircuito for aberto para edição.
 - Pins de fronteira são nomeados genericamente (P1, P2, ...) — o usuário pode renomeá-los via
   "Abrir Subcircuito" → "Salvar Subcircuito" depois da criação.
+
+## 12. Bloco genérico de subcircuito por caminho (2026-07-06)
+
+Segunda forma de usar um subcircuito num circuito normal, ADICIONAL ao registro na paleta (seção 7)
+— um componente aponta direto pra um `.lssubcircuit` qualquer via uma propriedade, sem exigir
+`RegisteredSource`/`component-catalog.json`. Motivação: usar um subcircuito emprestado/compartilhado
+sem poluir a paleta global de todo mundo com um registro permanente.
+
+### 12.1 Modelo
+
+- Novo typeId built-in `subcircuits.external` (`project/schema/component-catalog.json::items[]`,
+  `pinCount: 0`, sem `package`) — placeholder até o usuário escolher um arquivo. Propriedade
+  `subcircuitPath` com `editor: "filePath"` (novo tipo de editor, `main.ts::renderPropertyField`) —
+  campo só-leitura + botão "Procurar..." que dispara `requestChooseSubcircuitFile`.
+- Ao escolher um arquivo, `chooseSubcircuitFileCommand` (`extension.ts`) faz o MESMO parse que
+  `resolveRegisteredItem`'s subcircuit-file branch usa pra registro na paleta -- fatorado num
+  helper compartilhado, `parseSubcircuitManifest(json, manifestDir, language)`, pra nunca duplicar
+  `knownPinIdsForManifest`/`sanitizePackage`/derivação de ícone uma terceira vez.
+- O `typeId` da INSTÂNCIA muda pro `typeId` real declarado no arquivo (ex:
+  `subcircuits.divisor_5v`) — reaproveita o MESMO registro `typeId`-indexado de renderização
+  (`registerPackage`/`packageSymbolSvg` em `componentSymbols.ts`) que já existe pra subcircuitos
+  registrados, em vez de inventar um segundo pipeline de renderização por instância. A entrada de
+  catálogo correspondente é EFÊMERA (`hidden: true`, nunca gravada em `component-catalog.json`) --
+  não aparece na paleta (`paletteTree.ts` já filtra `hidden`), só serve pra resolução de
+  pinos/package/label desta sessão.
+- Core: novo verbo IPC leve `registerAdhocSubcircuit { path }` (`CoreApplication.cpp`, factory
+  `registerSubcircuitFromManifest` compartilhada com o loop de `library.json`) registra UM
+  `.lssubcircuit` avulso no `SubcircuitRegistry` sem exigir `library.json` — `addComponent` com o
+  typeId resultante funciona exatamente igual a qualquer subcircuito registrado
+  (`isSubcircuitType`/`addSubcircuitInstance` não mudam nada).
+
+### 12.2 Referência persistida no `.lsproj`
+
+Único campo novo em `ProjectComponent`/`WebviewComponentModel` (`ProjectTypes.ts`/`model.ts`),
+aditivo, sem bump de `schemaVersion`:
+```json
+"subcircuitRef": {
+  "path": "../subcircuits/divisor_5v.lssubcircuit",
+  "lastKnownTypeId": "subcircuits.divisor_5v",
+  "lastKnownPinIds": ["VIN", "VOUT", "GND"]
+}
+```
+`path` é relativo ao diretório do `.lsproj` quando possível, absoluto senão. `lastKnownTypeId`/
+`lastKnownPinIds` são a ÚNICA exceção deliberada à regra "nunca persistir pinos" (seção 5) —
+sem um `RegisteredSource` pra consultar, não há de onde re-derivar os pinos quando o arquivo está
+ausente; o snapshot preserva a integridade estrutural dos fios até o usuário relocalizar o arquivo.
+
+### 12.3 Arquivo ausente ao reabrir o projeto
+
+`resolveProjectSubcircuitReferences` (`extension.ts`) roda logo após `projectToWebviewState`, antes
+de `rebuildCoreFromSchematicState`, pra cada componente com `subcircuitRef`:
+- **Arquivo encontrado**: resolve silenciosamente (mesmo parse de 12.1), registra no Core, sem
+  diálogo nem toast por item.
+- **Arquivo ausente**: componente vira placeholder visual (borda tracejada vermelha + "?",
+  `componentSymbols.ts::missingSubcircuitPlaceholderSvg`), preservando posição/propriedades/pinos
+  (`lastKnownPinIds` via `pinsForProjectComponent`) — fios continuam estruturalmente íntegros, só
+  sem simulação elétrica. `isUnresolvedSubcircuitRef` bloqueia qualquer tentativa de `addComponent`
+  no Core enquanto não resolvido (nunca gera erro de "typeId desconhecido" à toa). UM aviso
+  agregado no final ("N subcircuito(s) não encontrado(s)..."), nunca um toast por componente.
+- **Relink**: mesmo comando `chooseSubcircuitFileCommand` de 12.1 (botão "Procurar..." na
+  propriedade, ou menu de contexto "Localizar arquivo do subcircuito..." no bloco). Faz diff de
+  fios contra `lastKnownPinIds`: quem sobrevive no novo arquivo é mantido, quem não existe mais é
+  removido COM aviso explícito (nunca silencioso).
+
+### 12.4 Limitações conhecidas
+
+- Trocar de arquivo depois de já posicionado destrói e recria a instância no Core (pino é um
+  `std::span` fixo desde a construção, `IComponentModel::pins()` não redimensiona in-place).
+- Colocar `subcircuits.external` DENTRO de uma sessão de "Abrir Subcircuito" (circuito interno de
+  outro subcircuito) não é bloqueado explicitamente -- `subcircuitRef` não faz parte do schema de
+  `InternalComponentSeed`/`compileSubcircuitInternalComponents`, então salvar o subcircuito pai
+  perderia a referência (o componente interno ficaria com o typeId resolvido mas sem
+  `subcircuitRef` pra re-resolver depois). Degrada graciosamente (vira instância "typeId
+  desconhecido" genérica no próximo carregamento), não corrompe nada, mas não é uma combinação
+  suportada -- evitar.
+
+## 13. Bug corrigido: distorção de componentes ao salvar/reabrir um subcircuito importado do SimulIDE (2026-07-06)
+
+**Sintoma relatado**: ao editar um subcircuito com `authoringScene` (importado de uma cena real do
+SimulIDE, `.sim2`, ver seção 4), inserir um componente novo aparecia com tamanho correto; depois de
+salvar e reabrir, alguns componentes (não todos) voltavam com proporção/escala visivelmente errada
+(ex: o corpo quadrado do chip ESP32 virava um retângulo achatado).
+
+**Causa raiz**: `authoringScene.components[]`/`.transform`/`.wires[]` são um SNAPSHOT CONGELADO da
+importação original -- `extension.ts::persistSubcircuitAuthoringScene` (chamado a cada "Salvar
+Subcircuito") só reescreve a chave `.package` (posição do corpo do símbolo), NUNCA
+`.components[]`/`.transform`/`.wires[]`. Mas
+`simulideSceneTranslator.ts::translateSimulideSubcircuitAuthoringScene` reaplicava esse snapshot
+CONGELADO em TODA reabertura, incondicionalmente:
+- Sobrescrevia `x`/`y`/`rotation`/`flipH`/`flipV` de cada componente interno cujo id ainda constasse
+  no snapshot, descartando silenciosamente qualquer edição manual feita depois da 1ª importação.
+- Regravava `properties.__simulideSceneScaleX`/`__simulideSceneScaleY` (a conversão POR EIXO
+  Qt-pixel → grid do LasecSimul, ex. `2.714442258`/`1.719123611` -- quase nunca 1:1) em todo
+  componente cujo `typeId` tivesse um `package` real registrado (`componentSymbols.ts::componentBox`/
+  `packageBodySvg` leem essa escala, ver seção 3). Como os dois eixos escalam por fatores
+  DIFERENTES, um corpo originalmente quadrado (ex. `espressif.esp32`, 136×136) virava um retângulo
+  não-quadrado (369×234) -- distorção real, mensurável, não um efeito colateral inofensivo.
+- Regravava `wires[].points` a partir de `authoringScene.wires[]`, descartando qualquer rota de fio
+  editada manualmente depois da importação.
+
+**Por que só alguns componentes distorcem**: só quem tem (a) um `id` presente no snapshot
+`authoringScene.components[]` E (b) um `package` REAL registrado pro seu `typeId`
+(`passive.resistor`, `switches.push`, `espressif.esp32`, `other.ground`, etc. -- ver seção 3).
+`connectors.tunnel` e qualquer componente NOVO (id nunca visto no snapshot original) nunca entram
+nesse caminho -- por isso "aparece certo" recém-inserido, e o tunnel nunca distorce.
+
+**Correção** (`simulideSceneTranslator.ts::translateSimulideSubcircuitAuthoringScene`): a tradução
+do snapshot agora é IDEMPOTENTE -- aplicada no máximo UMA VEZ por componente. `properties.
+__simulideQtOrigin === true` (marca já existente, gravada pela PRÓPRIA tradução na 1ª vez) é usada
+como sinal "esta sessão de arquivo já consumiu o snapshot de importação"; se QUALQUER componente
+interno já carregar essa marca, a tradução inteira (componentes E fios, sempre da MESMA importação)
+é pulada e o circuito usa exatamente o que está salvo. Sem hardcode por componente/typeId -- reusa
+um marcador que já fazia parte do design. Teste de regressão:
+`simulideSceneTranslator.test.ts` ("NAO reaplica a cena ... num componente que já foi traduzido
+antes") reproduz save→reload→edit manual→save→reload e confirma posição/escala/rota preservadas.

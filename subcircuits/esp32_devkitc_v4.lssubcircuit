@@ -12,50 +12,36 @@
     {
       "id": "mcu1",
       "typeId": "espressif.esp32",
-      "properties": {},
+      "properties": {
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611
+      },
       "visual": {
-        "x": 640,
-        "y": 160,
-        "rotation": 0
+        "x": 553,
+        "y": 182,
+        "rotation": 0,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": true
     },
     {
       "id": "gnd1",
       "typeId": "other.ground",
-      "properties": {},
-      "visual": {
-        "x": 530,
-        "y": 580,
-        "rotation": 0
-      },
-      "exposed": false
-    },
-    {
-      "id": "rail3v3",
-      "typeId": "sources.fixed_volt",
       "properties": {
-        "voltage": 3.3,
-        "out": true
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__ui_idLabelX": 5,
+        "__ui_idLabelY": 33
       },
       "visual": {
-        "x": 420,
-        "y": 80,
-        "rotation": 0
-      },
-      "exposed": false
-    },
-    {
-      "id": "rail5v",
-      "typeId": "sources.fixed_volt",
-      "properties": {
-        "voltage": 5,
-        "out": true
-      },
-      "visual": {
-        "x": 540,
-        "y": 80,
-        "rotation": 0
+        "x": 611,
+        "y": 655,
+        "rotation": 0,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -63,11 +49,18 @@
       "id": "pullup_en",
       "typeId": "passive.resistor",
       "properties": {
-        "resistance": 10000
+        "resistance": 10000,
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__ui_idLabelX": -1,
+        "__ui_idLabelY": -25,
+        "__ui_valueLabelX": 17,
+        "__ui_valueLabelY": 18
       },
       "visual": {
-        "x": 480,
-        "y": 232,
+        "x": 341,
+        "y": 304,
         "rotation": 0
       },
       "exposed": false
@@ -76,11 +69,18 @@
       "id": "pullup_boot",
       "typeId": "passive.resistor",
       "properties": {
-        "resistance": 10000
+        "resistance": 10000,
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__ui_valueLabelX": 16,
+        "__ui_valueLabelY": 38,
+        "__ui_idLabelX": 15,
+        "__ui_idLabelY": 23
       },
       "visual": {
-        "x": 844,
-        "y": 480,
+        "x": 919,
+        "y": 544,
         "rotation": 90
       },
       "exposed": false
@@ -88,22 +88,39 @@
     {
       "id": "button_en",
       "typeId": "switches.push",
-      "properties": {},
+      "properties": {
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__ui_idLabelX": 16,
+        "__ui_idLabelY": 56
+      },
       "visual": {
-        "x": 530,
-        "y": 362,
-        "rotation": 0
+        "x": 488,
+        "y": 540,
+        "rotation": 0,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
     {
       "id": "button_boot",
       "typeId": "switches.push",
-      "properties": {},
+      "properties": {
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "closed": false,
+        "__ui_idLabelX": 11,
+        "__ui_idLabelY": 59
+      },
       "visual": {
-        "x": 924,
-        "y": 480,
-        "rotation": 0
+        "x": 742,
+        "y": 614,
+        "rotation": 0,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -111,12 +128,18 @@
       "id": "tunnel_gnd",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "GND"
+        "name": "GND",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": false
       },
       "visual": {
-        "x": 440,
-        "y": 580,
-        "rotation": 0
+        "x": 393,
+        "y": 581,
+        "rotation": 0,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -124,12 +147,18 @@
       "id": "tunnel_3v3",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "3V3"
+        "name": "3V3",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": false
       },
       "visual": {
-        "x": 420,
-        "y": 140,
-        "rotation": 0
+        "x": 337.90891177825347,
+        "y": 137.70632735551914,
+        "rotation": 0,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -137,25 +166,18 @@
       "id": "tunnel_5v",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "5V"
+        "name": "5V",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": false
       },
       "visual": {
-        "x": 540,
-        "y": 140,
-        "rotation": 0
-      },
-      "exposed": false
-    },
-    {
-      "id": "tunnel_en",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "EN"
-      },
-      "visual": {
-        "x": 480,
-        "y": 270,
-        "rotation": 0
+        "x": 340,
+        "y": 161,
+        "rotation": 0,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -163,12 +185,18 @@
       "id": "tunnel_G23",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "G23"
+        "name": "G23",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": true
       },
       "visual": {
-        "x": 960,
-        "y": 130,
-        "rotation": 0
+        "x": 951,
+        "y": 217,
+        "rotation": 0,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -176,12 +204,18 @@
       "id": "tunnel_G22",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "G22"
+        "name": "G22",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": true
       },
       "visual": {
-        "x": 721,
-        "y": 88,
-        "rotation": 0
+        "x": 814,
+        "y": 149,
+        "rotation": 270,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -189,12 +223,18 @@
       "id": "tunnel_VP",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "VP"
+        "name": "VP",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": false
       },
       "visual": {
-        "x": 480,
-        "y": 211,
-        "rotation": 0
+        "x": 489,
+        "y": 259,
+        "rotation": 0,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -202,12 +242,18 @@
       "id": "tunnel_TX",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "TX"
+        "name": "TX",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": true
       },
       "visual": {
-        "x": 695,
-        "y": 88,
-        "rotation": 0
+        "x": 770,
+        "y": 148,
+        "rotation": 270,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -215,12 +261,18 @@
       "id": "tunnel_VN",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "VN"
+        "name": "VN",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": false
       },
       "visual": {
-        "x": 480,
-        "y": 255,
-        "rotation": 0
+        "x": 489,
+        "y": 300,
+        "rotation": 0,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -228,12 +280,18 @@
       "id": "tunnel_RX",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "RX"
+        "name": "RX",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": true
       },
       "visual": {
-        "x": 708,
-        "y": 88,
-        "rotation": 0
+        "x": 792,
+        "y": 149,
+        "rotation": 270,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -241,12 +299,18 @@
       "id": "tunnel_G34",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "G34"
+        "name": "G34",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": false
       },
       "visual": {
-        "x": 480,
-        "y": 284,
-        "rotation": 0
+        "x": 485,
+        "y": 327,
+        "rotation": 0,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -254,12 +318,18 @@
       "id": "tunnel_G21",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "G21"
+        "name": "G21",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": true
       },
       "visual": {
-        "x": 682,
-        "y": 88,
-        "rotation": 0
+        "x": 748,
+        "y": 149,
+        "rotation": 270,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -267,12 +337,18 @@
       "id": "tunnel_G35",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "G35"
+        "name": "G35",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": false
       },
       "visual": {
-        "x": 480,
-        "y": 299,
-        "rotation": 0
+        "x": 485,
+        "y": 341,
+        "rotation": 0,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -280,12 +356,18 @@
       "id": "tunnel_G32",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "G32"
+        "name": "G32",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": false
       },
       "visual": {
-        "x": 480,
-        "y": 313,
-        "rotation": 0
+        "x": 485,
+        "y": 355,
+        "rotation": 0,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -293,12 +375,18 @@
       "id": "tunnel_G19",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "G19"
+        "name": "G19",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": true
       },
       "visual": {
-        "x": 734,
-        "y": 88,
-        "rotation": 0
+        "x": 835,
+        "y": 149,
+        "rotation": 270,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -306,12 +394,18 @@
       "id": "tunnel_G33",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "G33"
+        "name": "G33",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": false
       },
       "visual": {
-        "x": 603,
-        "y": 430,
-        "rotation": 0
+        "x": 572,
+        "y": 449,
+        "rotation": 270,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -319,12 +413,18 @@
       "id": "tunnel_G18",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "G18"
+        "name": "G18",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": true
       },
       "visual": {
-        "x": 960,
-        "y": 176,
-        "rotation": 0
+        "x": 951,
+        "y": 231,
+        "rotation": 0,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -332,12 +432,18 @@
       "id": "tunnel_G25",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "G25"
+        "name": "G25",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": false
       },
       "visual": {
-        "x": 616,
-        "y": 430,
-        "rotation": 0
+        "x": 594,
+        "y": 449,
+        "rotation": 270,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -345,12 +451,18 @@
       "id": "tunnel_G05",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "G05"
+        "name": "G05",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": true
       },
       "visual": {
-        "x": 960,
-        "y": 222,
-        "rotation": 0
+        "x": 951,
+        "y": 245,
+        "rotation": 0,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -358,12 +470,18 @@
       "id": "tunnel_G26",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "G26"
+        "name": "G26",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": false
       },
       "visual": {
-        "x": 629,
-        "y": 430,
-        "rotation": 0
+        "x": 616,
+        "y": 449,
+        "rotation": 270,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -371,12 +489,18 @@
       "id": "tunnel_G17",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "G17"
+        "name": "G17",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": true
       },
       "visual": {
-        "x": 960,
-        "y": 544,
-        "rotation": 0
+        "x": 951,
+        "y": 341,
+        "rotation": 0,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -384,12 +508,18 @@
       "id": "tunnel_G27",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "G27"
+        "name": "G27",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": false
       },
       "visual": {
-        "x": 642,
-        "y": 430,
-        "rotation": 0
+        "x": 637,
+        "y": 449,
+        "rotation": 270,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -397,12 +527,18 @@
       "id": "tunnel_G16",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "G16"
+        "name": "G16",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": true
       },
       "visual": {
-        "x": 960,
-        "y": 590,
-        "rotation": 0
+        "x": 951,
+        "y": 369,
+        "rotation": 0,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -410,12 +546,18 @@
       "id": "tunnel_G14",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "G14"
+        "name": "G14",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": false
       },
       "visual": {
-        "x": 655,
-        "y": 430,
-        "rotation": 0
+        "x": 659,
+        "y": 449,
+        "rotation": 270,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -423,12 +565,18 @@
       "id": "tunnel_G04",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "G04"
+        "name": "G04",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": false
       },
       "visual": {
-        "x": 747,
-        "y": 430,
-        "rotation": 0
+        "x": 811,
+        "y": 450,
+        "rotation": 270,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -436,12 +584,18 @@
       "id": "tunnel_G12",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "G12"
+        "name": "G12",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": false
       },
       "visual": {
-        "x": 668,
-        "y": 430,
-        "rotation": 0
+        "x": 681,
+        "y": 449,
+        "rotation": 270,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -449,12 +603,18 @@
       "id": "tunnel_G00",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "G00"
+        "name": "G00",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": false
       },
       "visual": {
-        "x": 734,
-        "y": 430,
-        "rotation": 0
+        "x": 789,
+        "y": 547,
+        "rotation": 270,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -462,12 +622,18 @@
       "id": "tunnel_G02",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "G02"
+        "name": "G02",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": false
       },
       "visual": {
-        "x": 721,
-        "y": 430,
-        "rotation": 0
+        "x": 768,
+        "y": 449,
+        "rotation": 270,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -475,12 +641,18 @@
       "id": "tunnel_G13",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "G13"
+        "name": "G13",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": false
       },
       "visual": {
-        "x": 695,
-        "y": 430,
-        "rotation": 0
+        "x": 724,
+        "y": 449,
+        "rotation": 270,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -488,12 +660,18 @@
       "id": "tunnel_G15",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "G15"
+        "name": "G15",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": false
       },
       "visual": {
-        "x": 708,
-        "y": 430,
-        "rotation": 0
+        "x": 746,
+        "y": 449,
+        "rotation": 270,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -501,12 +679,18 @@
       "id": "tunnel_D2",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "D2"
+        "name": "D2",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": true
       },
       "visual": {
-        "x": 960,
-        "y": 498,
-        "rotation": 0
+        "x": 951,
+        "y": 327,
+        "rotation": 0,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -514,12 +698,18 @@
       "id": "tunnel_D1",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "D1"
+        "name": "D1",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": true
       },
       "visual": {
-        "x": 960,
-        "y": 268,
-        "rotation": 0
+        "x": 951,
+        "y": 259,
+        "rotation": 0,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -527,12 +717,18 @@
       "id": "tunnel_D3",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "D3"
+        "name": "D3",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": true
       },
       "visual": {
-        "x": 960,
-        "y": 452,
-        "rotation": 0
+        "x": 951,
+        "y": 314,
+        "rotation": 0,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -540,12 +736,18 @@
       "id": "tunnel_D0",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "D0"
+        "name": "D0",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": true
       },
       "visual": {
-        "x": 960,
-        "y": 314,
-        "rotation": 0
+        "x": 951,
+        "y": 272,
+        "rotation": 0,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -553,12 +755,18 @@
       "id": "tunnel_CM",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "CM"
+        "name": "CM",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": true
       },
       "visual": {
-        "x": 960,
-        "y": 406,
-        "rotation": 0
+        "x": 951,
+        "y": 300,
+        "rotation": 0,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -566,157 +774,78 @@
       "id": "tunnel_CK",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "CK"
+        "name": "CK",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": true
       },
       "visual": {
-        "x": 960,
-        "y": 360,
-        "rotation": 0
+        "x": 951,
+        "y": 286,
+        "rotation": 0,
+        "flipH": false,
+        "flipV": false
+      },
+      "exposed": false
+    },
+    {
+      "id": "tunnel_EN",
+      "typeId": "connectors.tunnel",
+      "properties": {
+        "name": "EN",
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611,
+        "__simulideTunnelRotated": false
+      },
+      "visual": {
+        "x": 300,
+        "y": 304,
+        "rotation": 0,
+        "flipH": false,
+        "flipV": false
+      },
+      "exposed": false
+    },
+    {
+      "id": "component-1783345154513-836838",
+      "typeId": "sources.rail",
+      "properties": {
+        "voltage": 3.3,
+        "__ui_idLabelX": -186,
+        "__ui_idLabelY": -27,
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611
+      },
+      "visual": {
+        "x": 408,
+        "y": 67,
+        "rotation": 270,
+        "flipH": true
+      },
+      "exposed": false
+    },
+    {
+      "id": "component-1783345270243-110688",
+      "typeId": "sources.rail",
+      "properties": {
+        "voltage": 5,
+        "__ui_idLabelRotation": 0,
+        "__simulideQtOrigin": true,
+        "__simulideSceneScaleX": 2.714442258,
+        "__simulideSceneScaleY": 1.719123611
+      },
+      "visual": {
+        "x": 482.70632735551914,
+        "y": 68.10408951367381,
+        "rotation": 90
       },
       "exposed": false
     }
   ],
   "wires": [
-    {
-      "from": {
-        "componentId": "tunnel_gnd",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "gnd1",
-        "pinId": "pin"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_3v3",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "rail3v3",
-        "pinId": "out"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_5v",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "rail5v",
-        "pinId": "out"
-      }
-    },
-    {
-      "from": {
-        "componentId": "pullup_en",
-        "pinId": "p1"
-      },
-      "to": {
-        "componentId": "tunnel_en",
-        "pinId": "pin"
-      }
-    },
-    {
-      "from": {
-        "componentId": "pullup_en",
-        "pinId": "p2"
-      },
-      "to": {
-        "componentId": "rail3v3",
-        "pinId": "out"
-      }
-    },
-    {
-      "from": {
-        "componentId": "button_en",
-        "pinId": "pin-1"
-      },
-      "to": {
-        "componentId": "tunnel_en",
-        "pinId": "pin"
-      }
-    },
-    {
-      "from": {
-        "componentId": "button_en",
-        "pinId": "pin-2"
-      },
-      "to": {
-        "componentId": "gnd1",
-        "pinId": "pin"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_en",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "RST"
-      }
-    },
-    {
-      "from": {
-        "componentId": "pullup_boot",
-        "pinId": "p1"
-      },
-      "to": {
-        "componentId": "tunnel_G00",
-        "pinId": "pin"
-      }
-    },
-    {
-      "from": {
-        "componentId": "pullup_boot",
-        "pinId": "p2"
-      },
-      "to": {
-        "componentId": "rail3v3",
-        "pinId": "out"
-      }
-    },
-    {
-      "from": {
-        "componentId": "button_boot",
-        "pinId": "pin-1"
-      },
-      "to": {
-        "componentId": "tunnel_G00",
-        "pinId": "pin"
-      }
-    },
-    {
-      "from": {
-        "componentId": "button_boot",
-        "pinId": "pin-2"
-      },
-      "to": {
-        "componentId": "gnd1",
-        "pinId": "pin"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_G23",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO23"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_G22",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO22"
-      }
-    },
     {
       "from": {
         "componentId": "tunnel_VP",
@@ -725,17 +854,17 @@
       "to": {
         "componentId": "mcu1",
         "pinId": "GPIO36"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_TX",
-        "pinId": "pin"
       },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO1"
-      }
+      "points": [
+        {
+          "x": 509.403,
+          "y": 264.508
+        },
+        {
+          "x": 531.119,
+          "y": 264.508
+        }
+      ]
     },
     {
       "from": {
@@ -745,17 +874,17 @@
       "to": {
         "componentId": "mcu1",
         "pinId": "GPIO39"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_RX",
-        "pinId": "pin"
       },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO3"
-      }
+      "points": [
+        {
+          "x": 509.403,
+          "y": 305.767
+        },
+        {
+          "x": 531.119,
+          "y": 305.767
+        }
+      ]
     },
     {
       "from": {
@@ -765,17 +894,17 @@
       "to": {
         "componentId": "mcu1",
         "pinId": "GPIO34"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_G21",
-        "pinId": "pin"
       },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO21"
-      }
+      "points": [
+        {
+          "x": 509.403,
+          "y": 333.273
+        },
+        {
+          "x": 531.119,
+          "y": 333.273
+        }
+      ]
     },
     {
       "from": {
@@ -785,7 +914,17 @@
       "to": {
         "componentId": "mcu1",
         "pinId": "GPIO35"
-      }
+      },
+      "points": [
+        {
+          "x": 509.403,
+          "y": 347.026
+        },
+        {
+          "x": 531.119,
+          "y": 347.026
+        }
+      ]
     },
     {
       "from": {
@@ -795,17 +934,17 @@
       "to": {
         "componentId": "mcu1",
         "pinId": "GPIO32"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_G19",
-        "pinId": "pin"
       },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO19"
-      }
+      "points": [
+        {
+          "x": 509.403,
+          "y": 360.779
+        },
+        {
+          "x": 531.119,
+          "y": 360.779
+        }
+      ]
     },
     {
       "from": {
@@ -815,17 +954,17 @@
       "to": {
         "componentId": "mcu1",
         "pinId": "GPIO33"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_G18",
-        "pinId": "pin"
       },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO18"
-      }
+      "points": [
+        {
+          "x": 596.265,
+          "y": 415.791
+        },
+        {
+          "x": 596.265,
+          "y": 402.038
+        }
+      ]
     },
     {
       "from": {
@@ -835,17 +974,17 @@
       "to": {
         "componentId": "mcu1",
         "pinId": "GPIO25"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_G05",
-        "pinId": "pin"
       },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO5"
-      }
+      "points": [
+        {
+          "x": 617.981,
+          "y": 415.791
+        },
+        {
+          "x": 617.981,
+          "y": 402.038
+        }
+      ]
     },
     {
       "from": {
@@ -855,17 +994,17 @@
       "to": {
         "componentId": "mcu1",
         "pinId": "GPIO26"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_G17",
-        "pinId": "pin"
       },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO17"
-      }
+      "points": [
+        {
+          "x": 639.697,
+          "y": 415.791
+        },
+        {
+          "x": 639.697,
+          "y": 402.038
+        }
+      ]
     },
     {
       "from": {
@@ -875,17 +1014,17 @@
       "to": {
         "componentId": "mcu1",
         "pinId": "GPIO27"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_G16",
-        "pinId": "pin"
       },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO16"
-      }
+      "points": [
+        {
+          "x": 661.412,
+          "y": 415.791
+        },
+        {
+          "x": 661.412,
+          "y": 402.038
+        }
+      ]
     },
     {
       "from": {
@@ -895,7 +1034,17 @@
       "to": {
         "componentId": "mcu1",
         "pinId": "GPIO14"
-      }
+      },
+      "points": [
+        {
+          "x": 683.128,
+          "y": 415.791
+        },
+        {
+          "x": 683.128,
+          "y": 402.038
+        }
+      ]
     },
     {
       "from": {
@@ -905,7 +1054,17 @@
       "to": {
         "componentId": "mcu1",
         "pinId": "GPIO4"
-      }
+      },
+      "points": [
+        {
+          "x": 835.136,
+          "y": 415.791
+        },
+        {
+          "x": 835.136,
+          "y": 402.038
+        }
+      ]
     },
     {
       "from": {
@@ -915,17 +1074,17 @@
       "to": {
         "componentId": "mcu1",
         "pinId": "GPIO12"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_G00",
-        "pinId": "pin"
       },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO0"
-      }
+      "points": [
+        {
+          "x": 704.843,
+          "y": 415.791
+        },
+        {
+          "x": 704.843,
+          "y": 402.038
+        }
+      ]
     },
     {
       "from": {
@@ -935,7 +1094,17 @@
       "to": {
         "componentId": "mcu1",
         "pinId": "GPIO2"
-      }
+      },
+      "points": [
+        {
+          "x": 791.705,
+          "y": 415.791
+        },
+        {
+          "x": 791.705,
+          "y": 402.038
+        }
+      ]
     },
     {
       "from": {
@@ -945,7 +1114,17 @@
       "to": {
         "componentId": "mcu1",
         "pinId": "GPIO13"
-      }
+      },
+      "points": [
+        {
+          "x": 748.274,
+          "y": 415.791
+        },
+        {
+          "x": 748.274,
+          "y": 402.038
+        }
+      ]
     },
     {
       "from": {
@@ -955,27 +1134,50 @@
       "to": {
         "componentId": "mcu1",
         "pinId": "GPIO15"
-      }
+      },
+      "points": [
+        {
+          "x": 769.99,
+          "y": 415.791
+        },
+        {
+          "x": 769.99,
+          "y": 402.038
+        }
+      ]
     },
     {
       "from": {
+        "componentId": "mcu1",
+        "pinId": "GPIO16"
+      },
+      "to": {
+        "componentId": "tunnel_G16",
+        "pinId": "pin"
+      },
+      "points": []
+    },
+    {
+      "from": {
+        "componentId": "tunnel_G17",
+        "pinId": "pin"
+      },
+      "to": {
+        "componentId": "mcu1",
+        "pinId": "GPIO17"
+      },
+      "points": []
+    },
+    {
+      "from": {
+        "componentId": "mcu1",
+        "pinId": "GPIO9"
+      },
+      "to": {
         "componentId": "tunnel_D2",
         "pinId": "pin"
       },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO9"
-      }
-    },
-    {
-      "from": {
-        "componentId": "tunnel_D1",
-        "pinId": "pin"
-      },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO8"
-      }
+      "points": []
     },
     {
       "from": {
@@ -985,27 +1187,19 @@
       "to": {
         "componentId": "mcu1",
         "pinId": "GPIO10"
-      }
+      },
+      "points": []
     },
     {
       "from": {
-        "componentId": "tunnel_D0",
-        "pinId": "pin"
+        "componentId": "mcu1",
+        "pinId": "GPIO11"
       },
       "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO7"
-      }
-    },
-    {
-      "from": {
         "componentId": "tunnel_CM",
         "pinId": "pin"
       },
-      "to": {
-        "componentId": "mcu1",
-        "pinId": "GPIO11"
-      }
+      "points": []
     },
     {
       "from": {
@@ -1015,7 +1209,198 @@
       "to": {
         "componentId": "mcu1",
         "pinId": "GPIO6"
-      }
+      },
+      "points": []
+    },
+    {
+      "from": {
+        "componentId": "mcu1",
+        "pinId": "GPIO7"
+      },
+      "to": {
+        "componentId": "tunnel_D0",
+        "pinId": "pin"
+      },
+      "points": []
+    },
+    {
+      "from": {
+        "componentId": "mcu1",
+        "pinId": "GPIO23"
+      },
+      "to": {
+        "componentId": "tunnel_G23",
+        "pinId": "pin"
+      },
+      "points": []
+    },
+    {
+      "from": {
+        "componentId": "tunnel_G18",
+        "pinId": "pin"
+      },
+      "to": {
+        "componentId": "mcu1",
+        "pinId": "GPIO18"
+      },
+      "points": []
+    },
+    {
+      "from": {
+        "componentId": "mcu1",
+        "pinId": "GPIO5"
+      },
+      "to": {
+        "componentId": "tunnel_G05",
+        "pinId": "pin"
+      },
+      "points": []
+    },
+    {
+      "from": {
+        "componentId": "tunnel_D1",
+        "pinId": "pin"
+      },
+      "to": {
+        "componentId": "mcu1",
+        "pinId": "GPIO8"
+      },
+      "points": []
+    },
+    {
+      "from": {
+        "componentId": "tunnel_G19",
+        "pinId": "pin"
+      },
+      "to": {
+        "componentId": "mcu1",
+        "pinId": "GPIO19"
+      },
+      "points": []
+    },
+    {
+      "from": {
+        "componentId": "tunnel_G22",
+        "pinId": "pin"
+      },
+      "to": {
+        "componentId": "mcu1",
+        "pinId": "GPIO22"
+      },
+      "points": []
+    },
+    {
+      "from": {
+        "componentId": "tunnel_RX",
+        "pinId": "pin"
+      },
+      "to": {
+        "componentId": "mcu1",
+        "pinId": "GPIO3"
+      },
+      "points": []
+    },
+    {
+      "from": {
+        "componentId": "mcu1",
+        "pinId": "GPIO21"
+      },
+      "to": {
+        "componentId": "tunnel_G21",
+        "pinId": "pin"
+      },
+      "points": []
+    },
+    {
+      "from": {
+        "componentId": "mcu1",
+        "pinId": "GPIO1"
+      },
+      "to": {
+        "componentId": "tunnel_TX",
+        "pinId": "pin"
+      },
+      "points": []
+    },
+    {
+      "from": {
+        "componentId": "tunnel_5v",
+        "pinId": "pin"
+      },
+      "to": {
+        "componentId": "component-1783345270243-110688",
+        "pinId": "out"
+      },
+      "points": [
+        {
+          "x": 468.95333846751913,
+          "y": 167
+        }
+      ]
+    },
+    {
+      "from": {
+        "componentId": "component-1783345154513-836838",
+        "pinId": "out"
+      },
+      "to": {
+        "componentId": "tunnel_3v3",
+        "pinId": "pin"
+      },
+      "points": [
+        {
+          "x": 421.752988888,
+          "y": 144
+        },
+        {
+          "x": 408,
+          "y": 144
+        }
+      ]
+    },
+    {
+      "from": {
+        "componentId": "pullup_en",
+        "pinId": "pin-1"
+      },
+      "to": {
+        "componentId": "tunnel_3v3",
+        "pinId": "pin"
+      },
+      "points": []
+    },
+    {
+      "from": {
+        "componentId": "pullup_en",
+        "pinId": "pin-2"
+      },
+      "to": {
+        "componentId": "tunnel_EN",
+        "pinId": "pin"
+      },
+      "points": []
+    },
+    {
+      "from": {
+        "componentId": "button_en",
+        "pinId": "pin-1"
+      },
+      "to": {
+        "componentId": "tunnel_EN",
+        "pinId": "pin"
+      },
+      "points": []
+    },
+    {
+      "from": {
+        "componentId": "button_en",
+        "pinId": "pin-2"
+      },
+      "to": {
+        "componentId": "tunnel_gnd",
+        "pinId": "pin"
+      },
+      "points": []
     }
   ],
   "interface": [
@@ -1210,6 +1595,665 @@
       "internalTunnel": "5V"
     }
   ],
+  "authoringScene": {
+    "package": {
+      "x": 70,
+      "y": 232
+    },
+    "source": {
+      "format": "simulide.sim2",
+      "path": "C:/SourceCode/SimulIDE_2-R260501_Win64/data/esp32/devkitC.sim2",
+      "note": "Cena coletada do SimulIDE; components usam Pos/rotation/hflip/vflip e wires usam pointList completo via grafo de Connector/Node."
+    },
+    "transform": {
+      "scaleX": 2.714442258,
+      "translateX": 216.243538098,
+      "scaleY": 1.719123611,
+      "translateY": 326.396463821
+    },
+    "components": [
+      {
+        "componentId": "mcu1",
+        "x": 553,
+        "y": 182,
+        "rotation": 0,
+        "flipH": false,
+        "flipV": false
+      },
+      {
+        "componentId": "gnd1",
+        "x": 611,
+        "y": 655,
+        "rotation": 0,
+        "flipH": false,
+        "flipV": false
+      },
+      {
+        "componentId": "pullup_en",
+        "x": 341,
+        "y": 304,
+        "rotation": 0
+      },
+      {
+        "componentId": "pullup_boot",
+        "x": 919,
+        "y": 544,
+        "rotation": 90
+      },
+      {
+        "componentId": "button_en",
+        "x": 488,
+        "y": 540,
+        "rotation": 0,
+        "flipH": false,
+        "flipV": false
+      },
+      {
+        "componentId": "button_boot",
+        "x": 742,
+        "y": 614,
+        "rotation": 0,
+        "flipH": false,
+        "flipV": false
+      },
+      {
+        "componentId": "tunnel_gnd",
+        "x": 417,
+        "y": 587,
+        "rotation": 0,
+        "flipH": false
+      },
+      {
+        "componentId": "tunnel_3v3",
+        "x": 362,
+        "y": 144,
+        "rotation": 0,
+        "flipH": false
+      },
+      {
+        "componentId": "tunnel_5v",
+        "x": 360,
+        "y": 167,
+        "rotation": 0,
+        "flipH": false
+      },
+      {
+        "componentId": "tunnel_G23",
+        "x": 951,
+        "y": 223,
+        "rotation": 0,
+        "flipH": true
+      },
+      {
+        "componentId": "tunnel_G22",
+        "x": 814,
+        "y": 155,
+        "rotation": 270,
+        "flipH": true
+      },
+      {
+        "componentId": "tunnel_VP",
+        "x": 509,
+        "y": 265,
+        "rotation": 0,
+        "flipH": false
+      },
+      {
+        "componentId": "tunnel_TX",
+        "x": 770,
+        "y": 154,
+        "rotation": 270,
+        "flipH": true
+      },
+      {
+        "componentId": "tunnel_VN",
+        "x": 509,
+        "y": 306,
+        "rotation": 0,
+        "flipH": false
+      },
+      {
+        "componentId": "tunnel_RX",
+        "x": 792,
+        "y": 155,
+        "rotation": 270,
+        "flipH": true
+      },
+      {
+        "componentId": "tunnel_G34",
+        "x": 509,
+        "y": 333,
+        "rotation": 0,
+        "flipH": false
+      },
+      {
+        "componentId": "tunnel_G21",
+        "x": 748,
+        "y": 155,
+        "rotation": 270,
+        "flipH": true
+      },
+      {
+        "componentId": "tunnel_G35",
+        "x": 509,
+        "y": 347,
+        "rotation": 0,
+        "flipH": false
+      },
+      {
+        "componentId": "tunnel_G32",
+        "x": 509,
+        "y": 361,
+        "rotation": 0,
+        "flipH": false
+      },
+      {
+        "componentId": "tunnel_G19",
+        "x": 835,
+        "y": 155,
+        "rotation": 270,
+        "flipH": true
+      },
+      {
+        "componentId": "tunnel_G33",
+        "x": 596,
+        "y": 455,
+        "rotation": 270,
+        "flipH": false
+      },
+      {
+        "componentId": "tunnel_G18",
+        "x": 951,
+        "y": 237,
+        "rotation": 0,
+        "flipH": true
+      },
+      {
+        "componentId": "tunnel_G25",
+        "x": 618,
+        "y": 455,
+        "rotation": 270,
+        "flipH": false
+      },
+      {
+        "componentId": "tunnel_G05",
+        "x": 951,
+        "y": 251,
+        "rotation": 0,
+        "flipH": true
+      },
+      {
+        "componentId": "tunnel_G26",
+        "x": 640,
+        "y": 455,
+        "rotation": 270,
+        "flipH": false
+      },
+      {
+        "componentId": "tunnel_G17",
+        "x": 951,
+        "y": 347,
+        "rotation": 0,
+        "flipH": true
+      },
+      {
+        "componentId": "tunnel_G27",
+        "x": 661,
+        "y": 455,
+        "rotation": 270,
+        "flipH": false
+      },
+      {
+        "componentId": "tunnel_G16",
+        "x": 951,
+        "y": 375,
+        "rotation": 0,
+        "flipH": true
+      },
+      {
+        "componentId": "tunnel_G14",
+        "x": 683,
+        "y": 455,
+        "rotation": 270,
+        "flipH": false
+      },
+      {
+        "componentId": "tunnel_G04",
+        "x": 835,
+        "y": 456,
+        "rotation": 270,
+        "flipH": false
+      },
+      {
+        "componentId": "tunnel_G12",
+        "x": 705,
+        "y": 455,
+        "rotation": 270,
+        "flipH": false
+      },
+      {
+        "componentId": "tunnel_G00",
+        "x": 813,
+        "y": 553,
+        "rotation": 270,
+        "flipH": false
+      },
+      {
+        "componentId": "tunnel_G02",
+        "x": 792,
+        "y": 455,
+        "rotation": 270,
+        "flipH": false
+      },
+      {
+        "componentId": "tunnel_G13",
+        "x": 748,
+        "y": 455,
+        "rotation": 270,
+        "flipH": false
+      },
+      {
+        "componentId": "tunnel_G15",
+        "x": 770,
+        "y": 455,
+        "rotation": 270,
+        "flipH": false
+      },
+      {
+        "componentId": "tunnel_D2",
+        "x": 951,
+        "y": 333,
+        "rotation": 0,
+        "flipH": true
+      },
+      {
+        "componentId": "tunnel_D1",
+        "x": 951,
+        "y": 265,
+        "rotation": 0,
+        "flipH": true
+      },
+      {
+        "componentId": "tunnel_D3",
+        "x": 951,
+        "y": 320,
+        "rotation": 0,
+        "flipH": true
+      },
+      {
+        "componentId": "tunnel_D0",
+        "x": 951,
+        "y": 278,
+        "rotation": 0,
+        "flipH": true
+      },
+      {
+        "componentId": "tunnel_CM",
+        "x": 951,
+        "y": 306,
+        "rotation": 0,
+        "flipH": true
+      },
+      {
+        "componentId": "tunnel_CK",
+        "x": 951,
+        "y": 292,
+        "rotation": 0,
+        "flipH": true
+      },
+      {
+        "componentId": "component-1783345154513-836838",
+        "x": 408,
+        "y": 67,
+        "rotation": 270,
+        "flipH": true
+      },
+      {
+        "componentId": "component-1783345270243-110688",
+        "x": 483,
+        "y": 68,
+        "rotation": 90
+      }
+    ],
+    "wires": [
+      {
+        "from": {
+          "componentId": "tunnel_VP",
+          "pinId": "pin"
+        },
+        "to": {
+          "componentId": "mcu1",
+          "pinId": "GPIO36"
+        },
+        "points": [
+          {
+            "x": 509.403,
+            "y": 264.508
+          },
+          {
+            "x": 531.119,
+            "y": 264.508
+          }
+        ]
+      },
+      {
+        "from": {
+          "componentId": "tunnel_VN",
+          "pinId": "pin"
+        },
+        "to": {
+          "componentId": "mcu1",
+          "pinId": "GPIO39"
+        },
+        "points": [
+          {
+            "x": 509.403,
+            "y": 305.767
+          },
+          {
+            "x": 531.119,
+            "y": 305.767
+          }
+        ]
+      },
+      {
+        "from": {
+          "componentId": "tunnel_G34",
+          "pinId": "pin"
+        },
+        "to": {
+          "componentId": "mcu1",
+          "pinId": "GPIO34"
+        },
+        "points": [
+          {
+            "x": 509.403,
+            "y": 333.273
+          },
+          {
+            "x": 531.119,
+            "y": 333.273
+          }
+        ]
+      },
+      {
+        "from": {
+          "componentId": "tunnel_G35",
+          "pinId": "pin"
+        },
+        "to": {
+          "componentId": "mcu1",
+          "pinId": "GPIO35"
+        },
+        "points": [
+          {
+            "x": 509.403,
+            "y": 347.026
+          },
+          {
+            "x": 531.119,
+            "y": 347.026
+          }
+        ]
+      },
+      {
+        "from": {
+          "componentId": "tunnel_G32",
+          "pinId": "pin"
+        },
+        "to": {
+          "componentId": "mcu1",
+          "pinId": "GPIO32"
+        },
+        "points": [
+          {
+            "x": 509.403,
+            "y": 360.779
+          },
+          {
+            "x": 531.119,
+            "y": 360.779
+          }
+        ]
+      },
+      {
+        "from": {
+          "componentId": "tunnel_G33",
+          "pinId": "pin"
+        },
+        "to": {
+          "componentId": "mcu1",
+          "pinId": "GPIO33"
+        },
+        "points": [
+          {
+            "x": 596.265,
+            "y": 415.791
+          },
+          {
+            "x": 596.265,
+            "y": 402.038
+          }
+        ]
+      },
+      {
+        "from": {
+          "componentId": "tunnel_G25",
+          "pinId": "pin"
+        },
+        "to": {
+          "componentId": "mcu1",
+          "pinId": "GPIO25"
+        },
+        "points": [
+          {
+            "x": 617.981,
+            "y": 415.791
+          },
+          {
+            "x": 617.981,
+            "y": 402.038
+          }
+        ]
+      },
+      {
+        "from": {
+          "componentId": "tunnel_G26",
+          "pinId": "pin"
+        },
+        "to": {
+          "componentId": "mcu1",
+          "pinId": "GPIO26"
+        },
+        "points": [
+          {
+            "x": 639.697,
+            "y": 415.791
+          },
+          {
+            "x": 639.697,
+            "y": 402.038
+          }
+        ]
+      },
+      {
+        "from": {
+          "componentId": "tunnel_G27",
+          "pinId": "pin"
+        },
+        "to": {
+          "componentId": "mcu1",
+          "pinId": "GPIO27"
+        },
+        "points": [
+          {
+            "x": 661.412,
+            "y": 415.791
+          },
+          {
+            "x": 661.412,
+            "y": 402.038
+          }
+        ]
+      },
+      {
+        "from": {
+          "componentId": "tunnel_G14",
+          "pinId": "pin"
+        },
+        "to": {
+          "componentId": "mcu1",
+          "pinId": "GPIO14"
+        },
+        "points": [
+          {
+            "x": 683.128,
+            "y": 415.791
+          },
+          {
+            "x": 683.128,
+            "y": 402.038
+          }
+        ]
+      },
+      {
+        "from": {
+          "componentId": "tunnel_G04",
+          "pinId": "pin"
+        },
+        "to": {
+          "componentId": "mcu1",
+          "pinId": "GPIO4"
+        },
+        "points": [
+          {
+            "x": 835.136,
+            "y": 415.791
+          },
+          {
+            "x": 835.136,
+            "y": 402.038
+          }
+        ]
+      },
+      {
+        "from": {
+          "componentId": "tunnel_G12",
+          "pinId": "pin"
+        },
+        "to": {
+          "componentId": "mcu1",
+          "pinId": "GPIO12"
+        },
+        "points": [
+          {
+            "x": 704.843,
+            "y": 415.791
+          },
+          {
+            "x": 704.843,
+            "y": 402.038
+          }
+        ]
+      },
+      {
+        "from": {
+          "componentId": "tunnel_G02",
+          "pinId": "pin"
+        },
+        "to": {
+          "componentId": "mcu1",
+          "pinId": "GPIO2"
+        },
+        "points": [
+          {
+            "x": 791.705,
+            "y": 415.791
+          },
+          {
+            "x": 791.705,
+            "y": 402.038
+          }
+        ]
+      },
+      {
+        "from": {
+          "componentId": "tunnel_G13",
+          "pinId": "pin"
+        },
+        "to": {
+          "componentId": "mcu1",
+          "pinId": "GPIO13"
+        },
+        "points": [
+          {
+            "x": 748.274,
+            "y": 415.791
+          },
+          {
+            "x": 748.274,
+            "y": 402.038
+          }
+        ]
+      },
+      {
+        "from": {
+          "componentId": "tunnel_G15",
+          "pinId": "pin"
+        },
+        "to": {
+          "componentId": "mcu1",
+          "pinId": "GPIO15"
+        },
+        "points": [
+          {
+            "x": 769.99,
+            "y": 415.791
+          },
+          {
+            "x": 769.99,
+            "y": 402.038
+          }
+        ]
+      },
+      {
+        "from": {
+          "componentId": "tunnel_5v",
+          "pinId": "pin"
+        },
+        "to": {
+          "componentId": "component-1783345270243-110688",
+          "pinId": "out"
+        },
+        "points": [
+          {
+            "x": 468.95333846751913,
+            "y": 167
+          }
+        ]
+      },
+      {
+        "from": {
+          "componentId": "component-1783345154513-836838",
+          "pinId": "out"
+        },
+        "to": {
+          "componentId": "tunnel_3v3",
+          "pinId": "pin"
+        },
+        "points": [
+          {
+            "x": 421.752988888,
+            "y": 144
+          },
+          {
+            "x": 408,
+            "y": 144
+          }
+        ]
+      }
+    ]
+  },
   "package": {
     "width": 308,
     "height": 601,
@@ -1603,11 +2647,13 @@
         "labelY": 566.283143939394
       }
     ],
-    "pinLabelColor": "#FAFAC8"
+    "pinLabelColor": "#FAFAC8",
+    "pinMarker": "packagePin"
   },
   "folderPath": [
     "Microcontroladores",
     "Espressif"
   ],
-  "icon": "board"
+  "icon": "board",
+  "iconPath": "esp32_devkitc_v4_icon.png"
 }

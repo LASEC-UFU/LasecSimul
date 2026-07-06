@@ -35,7 +35,7 @@ fica para depois do MVP. Ver `docs/14-integracao-final.md` para os critérios de
   oferecidos na paleta) até existir modelo/adapter real — ver limitações abaixo.
 - **Plugin nativo de exemplo carregado de verdade**: `npm run build:devices` compila
   `devices/example-blinker` como DLL real (`device.dll`) via seu próprio projeto CMake e copia para
-  `devices/example-blinker/build/win-x64/device.dll` (convenção de `device.json`). Teste
+  `devices/example-blinker/build/win-x64/device.dll` (convenção de `.lsdevice`). Teste
   `plugin_loader_real_dll` carrega esse binário real (não vtable sintética) via `PluginLoader`,
   confere ABI, publica no `GlobalPluginCache` e confirma que uma `SimulationSession` real passa a
   conhecer `example.blinker` via `registerKnownPluginTypes()`.
@@ -48,7 +48,7 @@ fica para depois do MVP. Ver `docs/14-integracao-final.md` para os critérios de
   opacos de `IComponentModel::getState()` de qualquer instância (built-in ou plugin) — mecanismo
   único de "ler de volta" um valor calculado, sem verbo por tipo de componente. Teste
   `core_bootstrap` cobre instância válida, `instanceId` inválido e instância removida.
-- **`loadDeviceLibrary` implementado**: parseia `library.json`+`device.json` real, resolve o
+- **`loadDeviceLibrary` implementado**: parseia `library.json`+`.lsdevice` real, resolve o
   binário da plataforma atual e publica no `GlobalPluginCache` (`CoreApplication.cpp`,
   `loadDeviceLibraryFile`). A Extension chama isto na ativação para cada entrada de
   `contributes["lasecsimul.deviceLibraries"]` do `package.json` — sem isso, nenhum plugin (nem o
@@ -113,12 +113,12 @@ fica para depois do MVP. Ver `docs/14-integracao-final.md` para os critérios de
   é elétrico); persistido em `ProjectComponent` (`.lsproj`) — antes desta rodada, `label` não era
   persistido nenhum. Ver `.spec/lasecsimul.spec` seção 13.3.
 - **Internacionalização de strings declarativas implementada** (ADR 0009, `.spec/lasecsimul.spec`
-  seção 6.3, RNF12): `device.json`/`component-catalog.json` declaram `language` (obrigatório) +
+  seção 6.3, RNF12): `.lsdevice`/`component-catalog.json` declaram `language` (obrigatório) +
   `translations` (opcional); resolução por fallback (idioma ativo do VSCode → `language` do autor →
   primeira tradução disponível) implementada nos dois lados — Core
   (`resolvePropertySchemaForLanguage`, payload `language` em `getPropertySchemas`) e Extension
   (`UnifiedCatalog.ts::resolveLocalizedItems`). Exemplo real de tradução `en`:
-  `devices/voltmeter/device.json` (`displayVoltage`) e `project/schema/component-catalog.json` (8
+  `devices/voltmeter/.lsdevice` (`displayVoltage`) e `project/schema/component-catalog.json` (8
   itens). Testes: `testGetPropertySchemasOverIpc` (pt-BR/en/fr), `UnifiedCatalog.test.ts`. Built-ins
   só declaram `language: "pt-BR"`, sem tradução nenhuma fornecida ainda.
 - **Seleção múltipla (marquee), atalhos de teclado e zoom no esquemático, igual ao SimulIDE**:
@@ -240,7 +240,7 @@ fica para depois do MVP. Ver `docs/14-integracao-final.md` para os critérios de
 - ~~Corrigir `contributes["lasecsimul.deviceLibraries"]`~~ — feito: consolidado em
   `project/schema/component-catalog.json` (`deviceLibraries[]`), lido por
   `extension/src/catalog/UnifiedCatalog.ts` — ver `.spec/lasecsimul.spec` seção 1.1 e ADR 0007.
-- Implementar subcircuitos (circuito reutilizável definido por `.lssub.json`, sem código) — spec
+- Implementar subcircuitos (circuito reutilizável definido por `.lssubcircuit`, sem código) — spec
   completa em `.spec/lasecsimul-subcircuits.spec` e ADR 0008; nada implementado ainda, só
   especificado. Preparação recomendada antes da implementação: catálogo da Webview aceitar um
   campo `package` por entrada (renderização data-driven do símbolo, em vez do `switch(typeId)`

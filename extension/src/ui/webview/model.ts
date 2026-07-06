@@ -6,7 +6,7 @@ export interface WebviewPinModel {
 
 /** ABI v2 (.spec/lasecsimul-native-devices.spec) -- como a UI decodifica `getComponentState()` de um
  * typeId sem checar typeId em código nenhum: declarado pelo device (built-in: método estático no
- * Core; plugin/DLL: chave `"readout"` em `device.json`), vindo via `getPropertySchemas`. Ausente ==
+ * Core; plugin/DLL: chave `"readout"` em `.lsdevice`), vindo via `getPropertySchemas`. Ausente ==
  * device sem leitura estruturada (válido, não "ainda não migrado"). */
 export type ReadoutFormatEntry =
   | { kind: "scalar"; unit: string }
@@ -60,6 +60,14 @@ export interface WebviewComponentModel {
    * round-trip de "Abrir Subcircuito" via `InternalComponentSeed.exposed` (ver
    * `symbolAuthoring.ts`). Ausente == `false`. */
   exposed?: boolean;
+  /** Presença deste campo (independente do `typeId` atual) é o marcador de "isto é um bloco
+   * genérico de subcircuito por caminho" -- mesmo shape de `ProjectSubcircuitRef`
+   * (`ProjectTypes.ts`). Ausente == componente normal, resolvido só por `typeId`/catálogo. */
+  subcircuitRef?: {
+    path: string;
+    lastKnownTypeId?: string;
+    lastKnownPinIds?: string[];
+  };
 }
 
 export interface WebviewPoint {
@@ -98,7 +106,7 @@ export interface PropertySchemaEntry {
   showOnSymbol?: boolean;
 }
 
-/** Pino declarado em `package.pins[]` (`device.json`/`.lssub.json`, ver
+/** Pino declarado em `package.pins[]` (`.lsdevice`/`.lssubcircuit`, ver
  * `.spec/lasecsimul-native-devices.spec` seção 21.2) — `x`/`y` é o ponto onde o "lead" toca o corpo
  * do símbolo (não a ponta do fio); a ponta real (onde o fio conecta) fica em
  * `x + cos(angle)*length, y + sin(angle)*length`. `id` deve bater com o `pin.id` real devolvido pelo
@@ -238,7 +246,19 @@ export interface SimulidePaintStateHref {
 export type SimulidePaintStateText =
   | { kind: "meterDisplay"; unit: string }
   | { kind: "frequencyDisplay" }
-  | { kind: "readout"; unit?: string; decimals?: number };
+  | { kind: "readout"; unit?: string; decimals?: number }
+  | {
+      kind: "propertyChar";
+      prop: string;
+      rowIndex?: string;
+      columnIndex?: string;
+      columnsProp?: string;
+      fallback?: string;
+    }
+  /** Ecoa uma propriedade string/bool/number QUALQUER da instância direto como texto -- ex: `key` de
+   * `switches.push`/`switches.switch` (rótulo do `CustomButton`, `SwitchBase::setKey`). Sem isto,
+   * cada device com um texto arbitrário precisaria de um `stateText.kind` novo só pra ele. */
+  | { kind: "property"; prop: string };
 
 export type SimulidePaintGradient =
   | {
@@ -269,7 +289,28 @@ export type SimulidePaintPrimitive =
   | ({ kind: "polygon"; points: Array<{ x: number; y: number }>; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible } & SimulidePaintStyle)
   | ({ kind: "polyline"; points: Array<{ x: number; y: number }>; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible } & SimulidePaintStyle)
   | ({ kind: "text"; x: number; y: number; value: string; fontSize?: number; textAnchor?: PackageShape["textAnchor"]; dominantBaseline?: PackageShape["dominantBaseline"]; fontFamily?: string; fontWeight?: string | number; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible; stateText?: SimulidePaintStateText } & SimulidePaintStyle)
-  | ({ kind: "image"; x: number; y: number; w: number; h: number; href: string; preserveAspectRatio?: string; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible; stateHref?: SimulidePaintStateHref } & SimulidePaintStyle);
+  | ({ kind: "image"; x: number; y: number; w: number; h: number; href: string; preserveAspectRatio?: string; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible; stateHref?: SimulidePaintStateHref } & SimulidePaintStyle)
+  /** Duplica `primitives[]` `count` vezes, deslocando `stepX`/`stepY` (coordenadas ORIGINAIS, mesma
+   * unidade de `bounds`) por repetição -- traduz diretamente os laços `for` que o SimulIDE real usa
+   * pra desenhar N sub-widgets iguais (ex: `SwitchDip::createSwitches` cria 1 QPushButton 6x6 por
+   * posição; `KeyPad`/`Socket`/`Header`/LED bar têm o mesmo padrão). Sem isto, cada device com N
+   * subelementos repetidos exigia listar N cópias quase idênticas na mão em
+   * `component-catalog.json` -- fonte comum de erro de copy-paste (offset errado numa cópia) e
+   * exatamente o tipo de "remendo por dispositivo" que este IR existe pra evitar. Os `primitives[]`
+   * internos continuam podendo usar `stateFill`/`stateVisible` normalmente (lidos das MESMAS
+   * `properties` da instância -- o Core de hoje não tem estado por posição pra maioria destes
+   * devices, ver `switches.switch_dip`; quando tiver, um `stateFill.numeric` com `valueProp`
+   * calculado por índice resolve sem mudar este contrato). */
+  | {
+      kind: "repeat";
+      count?: number;
+      countProp?: string;
+      indexName?: string;
+      stepX?: number;
+      stepY?: number;
+      primitives: SimulidePaintPrimitive[];
+      stateVisible?: SimulidePaintStateVisible;
+    };
 
 /** Declarative IR for SimulIDE C++ paint() output. Coordinates stay in the original QPainter item
  * space; `bounds` maps that local space into the positive SVG viewBox used by LasecSimul. */
@@ -450,7 +491,7 @@ export interface ComponentViewSpec {
 
 // ────────────────────────────────────────────────────────────────────────────────────────────────
 
-/** Símbolo visual declarativo de um `typeId` — mesmo bloco `package` de `device.json`/`.lssub.json`
+/** Símbolo visual declarativo de um `typeId` — mesmo bloco `package` de `.lsdevice`/`.lssubcircuit`
  * (`.spec/lasecsimul-native-devices.spec` seção 21, `.spec/lasecsimul-subcircuits.spec` seção 3).
  * Quando presente, o renderizador da Webview desenha o corpo e posiciona cada pino na coordenada
  * REAL declarada — nunca o algoritmo genérico esquerda/direita usado para built-ins sem `package`
@@ -468,6 +509,10 @@ export interface PackageDescriptor {
   initialTransform?: { rotateDeg?: number; cx?: number; cy?: number };
   border?: boolean;
   background?: PackageBackground;
+  /** Estilo visual dos pinos do package. `packagePin` replica `PackagePin::paint()` do SimulIDE:
+   * depois do lead normal (`Pin::paint()`), desenha uma pequena cruz cinza no ponto onde o pino toca
+   * o corpo do encapsulamento/subcircuito. */
+  pinMarker?: "packagePin";
   shapes?: PackageShape[];
   /** SimulIDE-compatible paint IR. When present it is rendered before legacy `viewSpec`/`shapes[]`
    * so migrated symbols can be audited against the original C++ paint() source. */
@@ -505,12 +550,12 @@ export interface WebviewComponentCatalogEntry {
   icon?: string;
   iconFilePath?: string;
   /** SVG inline da miniatura da paleta — alternativa a `icon`/`iconFilePath` para dispositivos
-   * cujo manifesto embute o ícone diretamente (campo `icon` do `device.json`/`.lssub.json` quando
+   * cujo manifesto embute o ícone diretamente (campo `icon` do `.lsdevice`/`.lssubcircuit` quando
    * o valor começa com `<svg`). Prevalece sobre `icon`/`iconFilePath` quando presente.
    * Renderizado como data URI (`data:image/svg+xml,...`) — funciona sem arquivo externo. */
   iconSvgInline?: string;
   symbolSvg?: string;
-  /** Símbolo declarativo real (`device.json`/`.lssub.json` `package`) — quando presente, tem
+  /** Símbolo declarativo real (`.lsdevice`/`.lssubcircuit` `package`) — quando presente, tem
    * prioridade sobre `symbolSvg`/algoritmo genérico (ver `componentSymbols.ts`). */
   package?: PackageDescriptor;
   /** Aparência ALTERNATIVA opcional ("Chip or Logic Symbol", igual ao SimulIDE real —
@@ -524,8 +569,8 @@ export interface WebviewComponentCatalogEntry {
    * fica oculto nesse modo, ver `main.ts::toggleBoardMode`. Ausente == `false`. */
   graphical?: boolean;
   pinCount: number;
-  /** Ids elétricos REAIS na ordem que o Core espera (`abi-device`: `device.json` `pins[].id`;
-   * `mcu-adapter`: chaves de `mcu.json` `pinMap`, mesma ordem/contagem que `get_pin_map()` do plugin
+  /** Ids elétricos REAIS na ordem que o Core espera (`abi-device`: `.lsdevice` `pins[].id`;
+   * `mcu-adapter`: chaves de `.lsdevice` `pinMap`, mesma ordem/contagem que `get_pin_map()` do plugin
    * devolve em runtime — ordem importa, ver `NativeMcuAdapterProxy`/`McuComponent::McuComponent`,
    * que casam `requestedPins[i]` posicionalmente com `pinMap()[i]`; `subcircuit-file`:
    * `interface[].pinId`). Ausente == comportamento legado (`pin-1`, `pin-2`, ... genérico) — só

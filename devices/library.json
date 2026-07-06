@@ -5,73 +5,274 @@
   "version": "0.1.0",
   "license": "MIT",
   "devices": [
-    { "typeId": "example.blinker", "manifest": "example-blinker/device.json" },
-    { "typeId": "outputs.ssd1306", "manifest": "simulide-complex/ssd1306.json" },
-    { "typeId": "outputs.sh1107", "manifest": "simulide-complex/sh1107.json" },
-    { "typeId": "outputs.hd44780", "manifest": "simulide-complex/hd44780.json" },
-    { "typeId": "outputs.aip31068_i2c", "manifest": "simulide-complex/aip31068_i2c.json" },
-    { "typeId": "outputs.ili9341", "manifest": "simulide-complex/ili9341.json" },
-    { "typeId": "outputs.st7735", "manifest": "simulide-complex/st7735.json" },
-    { "typeId": "outputs.st7789", "manifest": "simulide-complex/st7789.json" },
-    { "typeId": "outputs.gc9a01a", "manifest": "simulide-complex/gc9a01a.json" },
-    { "typeId": "outputs.pcf8833", "manifest": "simulide-complex/pcf8833.json" },
-    { "typeId": "outputs.pcd8544", "manifest": "simulide-complex/pcd8544.json" },
-    { "typeId": "outputs.ks0108", "manifest": "simulide-complex/ks0108.json" },
-    { "typeId": "outputs.max72xx_matrix", "manifest": "simulide-complex/max72xx_matrix.json" },
-    { "typeId": "outputs.ws2812", "manifest": "simulide-complex/ws2812.json" },
-    { "typeId": "outputs.servo", "manifest": "simulide-complex/servo.json" },
-    { "typeId": "outputs.audio_out", "manifest": "simulide-complex/audio_out.json" },
-    { "typeId": "passive.transformer", "manifest": "simulide-complex/transformer.json" },
-    { "typeId": "active.diac", "manifest": "simulide-complex/diac.json" },
-    { "typeId": "active.scr", "manifest": "simulide-complex/scr.json" },
-    { "typeId": "active.triac", "manifest": "simulide-complex/triac.json" },
-    { "typeId": "active.bjt", "manifest": "simulide-complex/bjt.json" },
-    { "typeId": "active.mosfet", "manifest": "simulide-complex/mosfet.json" },
-    { "typeId": "active.jfet", "manifest": "simulide-complex/jfet.json" },
-    { "typeId": "logic.buffer", "manifest": "simulide-logic/buffer.json" },
-    { "typeId": "logic.and_gate", "manifest": "simulide-logic/and_gate.json" },
-    { "typeId": "logic.or_gate", "manifest": "simulide-logic/or_gate.json" },
-    { "typeId": "logic.xor_gate", "manifest": "simulide-logic/xor_gate.json" },
-    { "typeId": "logic.counter", "manifest": "simulide-logic/counter.json" },
-    { "typeId": "logic.bin_counter", "manifest": "simulide-logic/bin_counter.json" },
-    { "typeId": "logic.full_adder", "manifest": "simulide-logic/full_adder.json" },
-    { "typeId": "logic.magnitude_comp", "manifest": "simulide-logic/magnitude_comp.json" },
-    { "typeId": "logic.shift_reg", "manifest": "simulide-logic/shift_reg.json" },
-    { "typeId": "logic.function", "manifest": "simulide-logic/function.json" },
-    { "typeId": "logic.flipflop_d", "manifest": "simulide-logic/flipflop_d.json" },
-    { "typeId": "logic.flipflop_t", "manifest": "simulide-logic/flipflop_t.json" },
-    { "typeId": "logic.flipflop_rs", "manifest": "simulide-logic/flipflop_rs.json" },
-    { "typeId": "logic.flipflop_jk", "manifest": "simulide-logic/flipflop_jk.json" },
-    { "typeId": "logic.latch_d", "manifest": "simulide-logic/latch_d.json" },
-    { "typeId": "logic.memory", "manifest": "simulide-logic/memory.json" },
-    { "typeId": "logic.dynamic_memory", "manifest": "simulide-logic/dynamic_memory.json" },
-    { "typeId": "logic.i2c_ram", "manifest": "simulide-logic/i2c_ram.json" },
-    { "typeId": "logic.mux", "manifest": "simulide-logic/mux.json" },
-    { "typeId": "logic.demux", "manifest": "simulide-logic/demux.json" },
-    { "typeId": "logic.bcd_to_dec", "manifest": "simulide-logic/bcd_to_dec.json" },
-    { "typeId": "logic.dec_to_bcd", "manifest": "simulide-logic/dec_to_bcd.json" },
-    { "typeId": "logic.bcd_to_7seg", "manifest": "simulide-logic/bcd_to_7seg.json" },
-    { "typeId": "logic.i2c_to_parallel", "manifest": "simulide-logic/i2c_to_parallel.json" },
-    { "typeId": "logic.adc", "manifest": "simulide-logic/adc.json" },
-    { "typeId": "logic.dac", "manifest": "simulide-logic/dac.json" },
-    { "typeId": "logic.seven_segment_bcd", "manifest": "simulide-logic/seven_segment_bcd.json" },
-    { "typeId": "logic.lm555", "manifest": "simulide-logic/lm555.json" },
-    { "typeId": "sensors.ldr",       "manifest": "simulide-sensors/ldr.json"       },
-    { "typeId": "sensors.thermistor","manifest": "simulide-sensors/thermistor.json" },
-    { "typeId": "sensors.rtd",       "manifest": "simulide-sensors/rtd.json"       },
-    { "typeId": "sensors.strain",    "manifest": "simulide-sensors/strain.json"    },
-    { "typeId": "sensors.sr04",      "manifest": "simulide-sensors/sr04.json"      },
-    { "typeId": "sensors.dht22",     "manifest": "simulide-sensors/dht22.json"     },
-    { "typeId": "sensors.ds1621",    "manifest": "simulide-sensors/ds1621.json"    },
-    { "typeId": "sensors.ds18b20",   "manifest": "simulide-sensors/ds18b20.json"   },
-    { "typeId": "peripherals.ky023",      "manifest": "simulide-peripherals/ky023.json"      },
-    { "typeId": "peripherals.ky040",      "manifest": "simulide-peripherals/ky040.json"      },
-    { "typeId": "peripherals.touchpad",   "manifest": "simulide-peripherals/touchpad.json"   },
-    { "typeId": "peripherals.ds1307",     "manifest": "simulide-peripherals/ds1307.json"     },
-    { "typeId": "peripherals.serialterm", "manifest": "simulide-peripherals/serialterm.json" },
-    { "typeId": "peripherals.serialport", "manifest": "simulide-peripherals/serialport.json" },
-    { "typeId": "peripherals.sdcard",     "manifest": "simulide-peripherals/sdcard.json"     },
-    { "typeId": "peripherals.esp01",      "manifest": "simulide-peripherals/esp01.json"      }
+    {
+      "typeId": "example.blinker",
+      "manifest": "example-blinker/device.lsdevice"
+    },
+    {
+      "typeId": "outputs.ssd1306",
+      "manifest": "simulide-complex/ssd1306.lsdevice"
+    },
+    {
+      "typeId": "outputs.sh1107",
+      "manifest": "simulide-complex/sh1107.lsdevice"
+    },
+    {
+      "typeId": "outputs.hd44780",
+      "manifest": "simulide-complex/hd44780.lsdevice"
+    },
+    {
+      "typeId": "outputs.aip31068_i2c",
+      "manifest": "simulide-complex/aip31068_i2c.lsdevice"
+    },
+    {
+      "typeId": "outputs.ili9341",
+      "manifest": "simulide-complex/ili9341.lsdevice"
+    },
+    {
+      "typeId": "outputs.st7735",
+      "manifest": "simulide-complex/st7735.lsdevice"
+    },
+    {
+      "typeId": "outputs.st7789",
+      "manifest": "simulide-complex/st7789.lsdevice"
+    },
+    {
+      "typeId": "outputs.gc9a01a",
+      "manifest": "simulide-complex/gc9a01a.lsdevice"
+    },
+    {
+      "typeId": "outputs.pcf8833",
+      "manifest": "simulide-complex/pcf8833.lsdevice"
+    },
+    {
+      "typeId": "outputs.pcd8544",
+      "manifest": "simulide-complex/pcd8544.lsdevice"
+    },
+    {
+      "typeId": "outputs.ks0108",
+      "manifest": "simulide-complex/ks0108.lsdevice"
+    },
+    {
+      "typeId": "outputs.max72xx_matrix",
+      "manifest": "simulide-complex/max72xx_matrix.lsdevice"
+    },
+    {
+      "typeId": "outputs.ws2812",
+      "manifest": "simulide-complex/ws2812.lsdevice"
+    },
+    {
+      "typeId": "outputs.servo",
+      "manifest": "simulide-complex/servo.lsdevice"
+    },
+    {
+      "typeId": "outputs.audio_out",
+      "manifest": "simulide-complex/audio_out.lsdevice"
+    },
+    {
+      "typeId": "passive.transformer",
+      "manifest": "simulide-complex/transformer.lsdevice"
+    },
+    {
+      "typeId": "active.diac",
+      "manifest": "simulide-complex/diac.lsdevice"
+    },
+    {
+      "typeId": "active.scr",
+      "manifest": "simulide-complex/scr.lsdevice"
+    },
+    {
+      "typeId": "active.triac",
+      "manifest": "simulide-complex/triac.lsdevice"
+    },
+    {
+      "typeId": "active.bjt",
+      "manifest": "simulide-complex/bjt.lsdevice"
+    },
+    {
+      "typeId": "active.mosfet",
+      "manifest": "simulide-complex/mosfet.lsdevice"
+    },
+    {
+      "typeId": "active.jfet",
+      "manifest": "simulide-complex/jfet.lsdevice"
+    },
+    {
+      "typeId": "logic.buffer",
+      "manifest": "simulide-logic/buffer.lsdevice"
+    },
+    {
+      "typeId": "logic.and_gate",
+      "manifest": "simulide-logic/and_gate.lsdevice"
+    },
+    {
+      "typeId": "logic.or_gate",
+      "manifest": "simulide-logic/or_gate.lsdevice"
+    },
+    {
+      "typeId": "logic.xor_gate",
+      "manifest": "simulide-logic/xor_gate.lsdevice"
+    },
+    {
+      "typeId": "logic.counter",
+      "manifest": "simulide-logic/counter.lsdevice"
+    },
+    {
+      "typeId": "logic.bin_counter",
+      "manifest": "simulide-logic/bin_counter.lsdevice"
+    },
+    {
+      "typeId": "logic.full_adder",
+      "manifest": "simulide-logic/full_adder.lsdevice"
+    },
+    {
+      "typeId": "logic.magnitude_comp",
+      "manifest": "simulide-logic/magnitude_comp.lsdevice"
+    },
+    {
+      "typeId": "logic.shift_reg",
+      "manifest": "simulide-logic/shift_reg.lsdevice"
+    },
+    {
+      "typeId": "logic.function",
+      "manifest": "simulide-logic/function.lsdevice"
+    },
+    {
+      "typeId": "logic.flipflop_d",
+      "manifest": "simulide-logic/flipflop_d.lsdevice"
+    },
+    {
+      "typeId": "logic.flipflop_t",
+      "manifest": "simulide-logic/flipflop_t.lsdevice"
+    },
+    {
+      "typeId": "logic.flipflop_rs",
+      "manifest": "simulide-logic/flipflop_rs.lsdevice"
+    },
+    {
+      "typeId": "logic.flipflop_jk",
+      "manifest": "simulide-logic/flipflop_jk.lsdevice"
+    },
+    {
+      "typeId": "logic.latch_d",
+      "manifest": "simulide-logic/latch_d.lsdevice"
+    },
+    {
+      "typeId": "logic.memory",
+      "manifest": "simulide-logic/memory.lsdevice"
+    },
+    {
+      "typeId": "logic.dynamic_memory",
+      "manifest": "simulide-logic/dynamic_memory.lsdevice"
+    },
+    {
+      "typeId": "logic.i2c_ram",
+      "manifest": "simulide-logic/i2c_ram.lsdevice"
+    },
+    {
+      "typeId": "logic.mux",
+      "manifest": "simulide-logic/mux.lsdevice"
+    },
+    {
+      "typeId": "logic.demux",
+      "manifest": "simulide-logic/demux.lsdevice"
+    },
+    {
+      "typeId": "logic.bcd_to_dec",
+      "manifest": "simulide-logic/bcd_to_dec.lsdevice"
+    },
+    {
+      "typeId": "logic.dec_to_bcd",
+      "manifest": "simulide-logic/dec_to_bcd.lsdevice"
+    },
+    {
+      "typeId": "logic.bcd_to_7seg",
+      "manifest": "simulide-logic/bcd_to_7seg.lsdevice"
+    },
+    {
+      "typeId": "logic.i2c_to_parallel",
+      "manifest": "simulide-logic/i2c_to_parallel.lsdevice"
+    },
+    {
+      "typeId": "logic.adc",
+      "manifest": "simulide-logic/adc.lsdevice"
+    },
+    {
+      "typeId": "logic.dac",
+      "manifest": "simulide-logic/dac.lsdevice"
+    },
+    {
+      "typeId": "logic.seven_segment_bcd",
+      "manifest": "simulide-logic/seven_segment_bcd.lsdevice"
+    },
+    {
+      "typeId": "logic.lm555",
+      "manifest": "simulide-logic/lm555.lsdevice"
+    },
+    {
+      "typeId": "sensors.ldr",
+      "manifest": "simulide-sensors/ldr.lsdevice"
+    },
+    {
+      "typeId": "sensors.thermistor",
+      "manifest": "simulide-sensors/thermistor.lsdevice"
+    },
+    {
+      "typeId": "sensors.rtd",
+      "manifest": "simulide-sensors/rtd.lsdevice"
+    },
+    {
+      "typeId": "sensors.strain",
+      "manifest": "simulide-sensors/strain.lsdevice"
+    },
+    {
+      "typeId": "sensors.sr04",
+      "manifest": "simulide-sensors/sr04.lsdevice"
+    },
+    {
+      "typeId": "sensors.dht22",
+      "manifest": "simulide-sensors/dht22.lsdevice"
+    },
+    {
+      "typeId": "sensors.ds1621",
+      "manifest": "simulide-sensors/ds1621.lsdevice"
+    },
+    {
+      "typeId": "sensors.ds18b20",
+      "manifest": "simulide-sensors/ds18b20.lsdevice"
+    },
+    {
+      "typeId": "peripherals.ky023",
+      "manifest": "simulide-peripherals/ky023.lsdevice"
+    },
+    {
+      "typeId": "peripherals.ky040",
+      "manifest": "simulide-peripherals/ky040.lsdevice"
+    },
+    {
+      "typeId": "peripherals.touchpad",
+      "manifest": "simulide-peripherals/touchpad.lsdevice"
+    },
+    {
+      "typeId": "peripherals.ds1307",
+      "manifest": "simulide-peripherals/ds1307.lsdevice"
+    },
+    {
+      "typeId": "peripherals.serialterm",
+      "manifest": "simulide-peripherals/serialterm.lsdevice"
+    },
+    {
+      "typeId": "peripherals.serialport",
+      "manifest": "simulide-peripherals/serialport.lsdevice"
+    },
+    {
+      "typeId": "peripherals.sdcard",
+      "manifest": "simulide-peripherals/sdcard.lsdevice"
+    },
+    {
+      "typeId": "peripherals.esp01",
+      "manifest": "simulide-peripherals/esp01.lsdevice"
+    }
   ],
   "checksums": {
     "example-blinker/build/win-x64/device.dll": "PREENCHER_NO_BUILD_SHA256"

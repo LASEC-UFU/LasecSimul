@@ -224,7 +224,7 @@ void testCycleDetection() {
 
 /** Prova `findSubcircuitChildByLocalId()` (2026-06-29, suporte ao overlay de Modo Placa da
  * Extension -- ver `CoreApplication.cpp::"setSubcircuitChildProperty"`): resolve um id LOCAL do
- * `.lssub.json` (ex: "r1") pro índice real do Core, em duas instâncias INDEPENDENTES (não pode
+ * `.lssubcircuit` (ex: "r1") pro índice real do Core, em duas instâncias INDEPENDENTES (não pode
  * colidir, mesmo princípio do teste de túneis acima), confirma que editar a propriedade resolvida
  * tem efeito elétrico real (muda a tensão de saída do divisor), e que IDs inválidos/instância
  * removida devolvem `std::nullopt` em vez de um índice qualquer. */

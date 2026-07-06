@@ -58,7 +58,7 @@ struct PropertySchema {
 
 /** Como a UI deve interpretar os bytes de leitura de um componente (`getComponentState`/instrumento)
  * sem precisar conhecer o typeId -- ABI v2, ver .spec/lasecsimul-native-devices.spec. Declarado pelo
- * device (built-in: método estático; plugin/DLL: chave `"readout"` opcional em `device.json`), nunca
+ * device (built-in: método estático; plugin/DLL: chave `"readout"` opcional em `.lsdevice`), nunca
  * inferido por typeId em nenhum lado (Core ou Extension). Ausência (`std::optional` em
  * `ComponentMetadata`) é uma declaração válida de "sem leitura estruturada" -- a maioria dos
  * componentes (resistores, fios, etc.) não tem mostrador, isso não é um estado "não migrado". */
@@ -126,7 +126,7 @@ struct ComponentMeta {
     std::string typeId;
     std::vector<Pin> pins;
     std::vector<PropertySchema> propertySchema;
-    /** `limits.stepTimeoutMs` do `device.json` -- 0 == sem watchdog (chamada roda sem limite de
+    /** `limits.stepTimeoutMs` do `.lsdevice` -- 0 == sem watchdog (chamada roda sem limite de
      * tempo, comportamento de hoje). Ver .spec/lasecsimul-native-devices.spec, seção 13. */
     uint32_t stepTimeoutMs = 0;
 };
