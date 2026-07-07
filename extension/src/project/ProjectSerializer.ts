@@ -114,9 +114,6 @@ export class ProjectSerializer {
       wires,
       visual: isObject(parsed.visual)
         ? {
-            components: Array.isArray(parsed.visual.components)
-              ? (parsed.visual.components as ProjectDocument["visual"]["components"])
-              : [],
             wires: Array.isArray(parsed.visual.wires)
               ? (parsed.visual.wires as ProjectDocument["visual"]["wires"])
               : [],

@@ -156,6 +156,38 @@ int main() {
                      "component should appear only once in listeners for a shared node");
     }
 
+    // EX-6.1/EX-6.2: disconnectWire is the inverse of connectWire -- removing just one wire without
+    // touching any other component, so the Extension can drop a wire without rebuilding the whole
+    // circuit (see SimulationSession::disconnectWire / IPC "disconnectWire" in CoreApplication.cpp).
+    {
+        Netlist netlist;
+        const auto a = netlist.registerComponent(0, {"p1", "p2"});
+        const auto b = netlist.registerComponent(1, {"p1", "p2"});
+        netlist.connectWire(a.at("p2"), b.at("p1"));
+        const bool removed = netlist.disconnectWire(a.at("p2"), b.at("p1"));
+        ok &= expect(removed, "disconnectWire should report true for an existing edge");
+        const Topology topology = netlist.rebuildTopology();
+        ok &= expect(topology.groups.size() == 2, "removing the only wire should split the group back in two");
+    }
+
+    {
+        Netlist netlist;
+        const auto a = netlist.registerComponent(0, {"p1", "p2"});
+        const auto b = netlist.registerComponent(1, {"p1", "p2"});
+        netlist.connectWire(a.at("p2"), b.at("p1"));
+        // Order of endpoints should not matter -- same as an undirected edge.
+        const bool removed = netlist.disconnectWire(b.at("p1"), a.at("p2"));
+        ok &= expect(removed, "disconnectWire should match the edge regardless of endpoint order");
+    }
+
+    {
+        Netlist netlist;
+        const auto a = netlist.registerComponent(0, {"p1", "p2"});
+        const auto b = netlist.registerComponent(1, {"p1", "p2"});
+        const bool removed = netlist.disconnectWire(a.at("p1"), b.at("p1"));
+        ok &= expect(!removed, "disconnectWire should report false when no such edge exists (idempotent)");
+    }
+
     if (ok) std::printf("OK: Netlist topology cases passed.\n");
     return ok ? 0 : 1;
 }

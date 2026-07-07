@@ -1,4 +1,4 @@
-﻿import { resolveLocalizedItems, UnifiedCatalogItem, UnifiedCatalogTranslation } from "./UnifiedCatalog";
+﻿import { entryToWebview, resolveLocalizedItems, sanitizeStringArray, UnifiedCatalogItem, UnifiedCatalogTranslation } from "./UnifiedCatalog";
 
 // â”€â”€ utilitÃ¡rios de teste (mesmo padrÃ£o de ipc/CoreClient.test.ts) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -73,6 +73,45 @@ test("item SEM traduÃ§Ã£o pra a lÃ­ngua pedida cai pra lÃ­ngua-base, nun
 test("lÃ­ngua pedida sem nenhuma traduÃ§Ã£o no arquivo (ex: 'fr') cai pra base inteira", () => {
   const resolved = resolveLocalizedItems(baseItems, "fr", "pt-BR", translations);
   assert(resolved === baseItems, "'fr' nÃ£o existe em translations -- devolve a base sem alteraÃ§Ã£o");
+});
+
+// ── sanitizeStringArray/entryToWebview (PC-16, .spec/lasecsimul-native-devices.spec) ──────────────
+// component-catalog.json/registro de device é JSON externo -- só o container (`items` é array) era
+// checado antes; um campo individual malformado (ex: "pinIds":"AB" em vez de array) passava direto
+// pro tipo `WebviewComponentCatalogEntry` e derrubava `pinsForTypeId` (extension.ts) com TypeError.
+
+console.log("\nUnifiedCatalog — sanitizeStringArray/entryToWebview (PC-16)\n");
+
+test("sanitizeStringArray: array de strings passa intacto", () => {
+  const result = sanitizeStringArray(["G23", "GND"]);
+  assert(JSON.stringify(result) === JSON.stringify(["G23", "GND"]), "array de strings válido preservado");
+});
+
+test("sanitizeStringArray: valor não-array (string) vira undefined, não quebra", () => {
+  assert(sanitizeStringArray("AB") === undefined, "string em vez de array deveria virar undefined");
+});
+
+test("sanitizeStringArray: array com elementos não-string é filtrado", () => {
+  const result = sanitizeStringArray(["p1", 42, null, "p2"]);
+  assert(JSON.stringify(result) === JSON.stringify(["p1", "p2"]), "só elementos string sobrevivem");
+});
+
+test("sanitizeStringArray: array vazio (após filtro) vira undefined, nunca [] fantasma", () => {
+  assert(sanitizeStringArray([42, null, {}]) === undefined, "array sem nenhuma string válida vira undefined");
+  assert(sanitizeStringArray(undefined) === undefined, "undefined permanece undefined");
+});
+
+test("entryToWebview: pinIds malformado (string em vez de array) não derruba a conversão", () => {
+  const item = { typeId: "custom.device", label: "Device", pinCount: 2, pinIds: "AB" as unknown as string[] };
+  const entry = entryToWebview(item);
+  assert(entry.pinIds === undefined, "pinIds inválido deveria virar undefined, não propagar a string malformada");
+  assert(entry.typeId === "custom.device", "typeId/label/pinCount continuam passando normalmente");
+});
+
+test("entryToWebview: pinIds válido sobrevive intacto", () => {
+  const item = { typeId: "other.ground", label: "Terra", pinCount: 1, pinIds: ["pin"] };
+  const entry = entryToWebview(item);
+  assert(JSON.stringify(entry.pinIds) === JSON.stringify(["pin"]), "pinIds válido preservado");
 });
 
 console.log(`\nResultado: ${passed} passaram, ${failed} falharam\n`);

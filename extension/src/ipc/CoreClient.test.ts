@@ -126,6 +126,47 @@ const { test, finish } = createTestRunner("CoreClient — testes de IPC");
     await new Promise<void>((r) => srv.close(() => { cleanup(name); r(); }));
   });
 
+  // PC-4 (.spec/lasecsimul-native-devices.spec): um caractere UTF-8 multi-byte (ex: "ç" = 2 bytes,
+  // 0xC3 0xA7) cortado bem na fronteira entre dois `socket.write()` -- antes, `Buffer.toString("utf8")`
+  // por chunk decodificava o byte solto (0xC3, sem o par 0xA7 que só chega no próximo `data`) como
+  // U+FFFD (replacement character), corrompendo qualquer texto acentuado que caísse nessa fronteira
+  // (comum: praticamente todo texto deste app é pt-BR). `StringDecoder` deve reconstituir certo.
+  await test("Caractere UTF-8 multi-byte cortado entre dois chunks de socket é decodificado corretamente (PC-4)", async () => {
+    const name = `lasecsimul-test-utf8-split-${process.pid}`;
+    cleanup(name);
+    const srv = net.createServer((s) => {
+      s.on("data", (d: Buffer) => {
+        const msg = JSON.parse(d.toString("utf8").trim()) as RequestEnvelope;
+        if (msg.type === "hello") {
+          const r: ResponseEnvelope = {
+            id: msg.id, ok: true,
+            payload: { serverVersion: "0.1.0", protocolVersion: PROTOCOL_VERSION },
+          };
+          s.write(JSON.stringify(r) + "\n");
+          return;
+        }
+        const label = "opção com acentuação ção ã õ ü 中文"; // várias sequências multi-byte de propósito
+        const responseJson = JSON.stringify({ id: msg.id, ok: true, payload: { label } } satisfies ResponseEnvelope) + "\n";
+        const fullBuffer = Buffer.from(responseJson, "utf8");
+        // Corta bem no MEIO da primeira sequência multi-byte encontrada (0xC3 0xA7 de "ç"), não numa
+        // fronteira arbitrária -- prova que é a fronteira do CARACTERE que importa, não só do chunk.
+        const splitIndex = fullBuffer.indexOf(0xc3) + 1;
+        s.write(fullBuffer.subarray(0, splitIndex));
+        setTimeout(() => s.write(fullBuffer.subarray(splitIndex)), 10);
+      });
+    });
+    await new Promise<void>((r) => srv.listen(serverPath(name), r));
+    const client = new CoreClient(name, { requestTimeoutMs: 2_000 });
+    await client.start();
+    const payload = (await client.request("getLabel", {})) as { label: string };
+    assert(
+      payload.label === "opção com acentuação ção ã õ ü 中文",
+      `texto UTF-8 deveria sobreviver intacto ao corte entre chunks, recebido: ${JSON.stringify(payload.label)}`
+    );
+    await client.stop();
+    await new Promise<void>((r) => srv.close(() => { cleanup(name); r(); }));
+  });
+
   const { failed } = finish();
   process.exitCode = failed > 0 ? 1 : 0;
 })();

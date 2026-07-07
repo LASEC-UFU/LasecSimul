@@ -72,3 +72,8 @@ _deps/
 
 # Pacotes e caches locais opcionais
 /devices/qemu-esp32/bin/
+
+# Saida de build/empacotamento (gerada por scripts/build-all.js e scripts/package-release.js)
+/dist/
+/packaging/*/obj/
+/packaging/*/bin/

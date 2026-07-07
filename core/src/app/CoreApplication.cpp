@@ -105,7 +105,8 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
                     std::vector<PropertySchema> propertySchema,
                     std::string translationsJson,
                     std::optional<ReadoutFormat> readoutFormat = std::nullopt,
-                    std::optional<InteractionKind> interactionKind = std::nullopt) {
+                    std::optional<InteractionKind> interactionKind = std::nullopt,
+                    std::vector<std::string> canonicalPinIds = {}) {
             registry::ComponentMetadata meta;
             meta.typeId = std::move(typeId);
             meta.displayName = std::move(displayName);
@@ -114,6 +115,11 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
             meta.translationsJson = std::move(translationsJson);
             meta.readoutFormat = std::move(readoutFormat);
             meta.interactionKind = std::move(interactionKind);
+            // Mesmos ids canônicos que a factory acima usa como fallback quando o chamador não
+            // manda pino explícito (`pos[N].id.empty() ? "..." : pos[N].id`) -- ABI v2 expõe isso
+            // pra `getPropertySchemas` (`pinIdsByTypeId`) em vez da Extension manter uma 2ª cópia
+            // hardcoded do mesmo dado (ver .spec/lasecsimul-native-devices.spec).
+            for (const std::string& pinId : canonicalPinIds) meta.pins.push_back(Pin{pinId, 0.0, 0.0});
             metadata.registerMetadata(std::move(meta));
         };
     reg.registerFactory("passive.resistor", [](const ComponentParams& p) {
@@ -127,7 +133,8 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
         "passive.resistor",
         "Resistor",
         components::Resistor::propertySchema(),
-        R"json({"en":{"name":"Resistor","properties":{"resistance":{"label":"Resistance","group":"Electrical"}}}})json");
+        R"json({"en":{"name":"Resistor","properties":{"resistance":{"label":"Resistance","group":"Electrical"}}}})json",
+        std::nullopt, std::nullopt, std::vector<std::string>{"p1", "p2"});
 
     reg.registerFactory("passive.capacitor", [](const ComponentParams& p) {
         const auto pos = p.pins<2>();
@@ -163,7 +170,8 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
         "connectors.tunnel",
         "Túnel",
         std::vector<PropertySchema>{},
-        R"json({"en":{"name":"Tunnel"}})json");
+        R"json({"en":{"name":"Tunnel"}})json",
+        std::nullopt, std::nullopt, std::vector<std::string>{"pin"});
 
     reg.registerFactory("connectors.junction", [](const ComponentParams& p) {
         const auto pos = p.pins<1>();
@@ -213,7 +221,8 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
         "other.ground",
         "Terra (0 V)",
         std::vector<PropertySchema>{},
-        R"json({"en":{"name":"Ground (0 V)"}})json");
+        R"json({"en":{"name":"Ground (0 V)"}})json",
+        std::nullopt, std::nullopt, std::vector<std::string>{"pin"});
 
     reg.registerFactory("sources.dc_voltage", [](const ComponentParams& p) {
         const auto pos = p.pins<2>();
@@ -445,14 +454,16 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
         return std::make_unique<components::Battery>(makePins2(p, "p1", "p2"), p.property("voltage", 5.0),
                                                       p.property("resistance", 1e-3));
     });
-    registerBuiltinMetadata("sources.battery", "Bateria", components::Battery::propertySchema(), englishName("Battery"));
+    registerBuiltinMetadata("sources.battery", "Bateria", components::Battery::propertySchema(), englishName("Battery"),
+                            std::nullopt, std::nullopt, std::vector<std::string>{"p1", "p2"});
 
     reg.registerFactory("sources.rail", [](const ComponentParams& p) {
         const auto pos = p.pins<1>();
         return std::make_unique<components::Rail>(Pin{pos[0].id.empty() ? "out" : pos[0].id, pos[0].x, pos[0].y},
                                                    p.property("voltage", 5.0));
     });
-    registerBuiltinMetadata("sources.rail", "Trilho (Rail)", components::Rail::propertySchema(), englishName("Rail"));
+    registerBuiltinMetadata("sources.rail", "Trilho (Rail)", components::Rail::propertySchema(), englishName("Rail"),
+                            std::nullopt, std::nullopt, std::vector<std::string>{"out"});
 
     reg.registerFactory("sources.fixed_volt", [](const ComponentParams& p) {
         const auto pos = p.pins<1>();
@@ -460,7 +471,7 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
                                                         p.property("voltage", 5.0), p.property("out", true));
     });
     registerBuiltinMetadata("sources.fixed_volt", "Tensão Fixa", components::FixedVolt::propertySchema(),
-                            englishName("Fixed Voltage"));
+                            englishName("Fixed Voltage"), std::nullopt, std::nullopt, std::vector<std::string>{"out"});
 
     reg.registerFactory("sources.voltage_source", [](const ComponentParams& p) {
         const auto pos = p.pins<1>();
@@ -1534,6 +1545,13 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
             // novas do payload.
             nlohmann::json readoutFormatByTypeId = nlohmann::json::object();
             nlohmann::json interactionKindByTypeId = nlohmann::json::object();
+            // `pinIdsByTypeId`: id ELÉTRICO real de cada pino, na mesma ordem que a factory usa como
+            // fallback (ver `registerBuiltinMetadata`/`registerBuiltinComponents` acima) -- só
+            // aparece pra typeId que declarou `pins` (built-ins com id canônico fixo, OU device/
+            // subcircuit-file cujo `.lsdevice`/`.lssubcircuit` já populou `meta.pins` via
+            // `interface[]`). Substitui a Extension manter uma tabela hardcoded 2ª cópia do mesmo
+            // dado (ver .spec/lasecsimul-native-devices.spec).
+            nlohmann::json pinIdsByTypeId = nlohmann::json::object();
             for (const auto& [typeId, meta] : pluginCache.metadata().all()) {
                 const std::vector<PropertySchema> resolved = resolvePropertySchemaForLanguage(meta, requestedLanguage);
                 nlohmann::json schemas = nlohmann::json::array();
@@ -1543,9 +1561,15 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
                 schemasByTypeId[typeId] = std::move(schemas);
                 if (meta.readoutFormat) readoutFormatByTypeId[typeId] = readoutFormatToJson(*meta.readoutFormat);
                 if (meta.interactionKind) interactionKindByTypeId[typeId] = interactionKindToJson(*meta.interactionKind);
+                if (!meta.pins.empty()) {
+                    nlohmann::json pinIds = nlohmann::json::array();
+                    for (const Pin& pin : meta.pins) pinIds.push_back(pin.id);
+                    pinIdsByTypeId[typeId] = std::move(pinIds);
+                }
             }
             resp.ok = true;
             resp.payloadJson = nlohmann::json{{"schemasByTypeId", schemasByTypeId},
+                                               {"pinIdsByTypeId", pinIdsByTypeId},
                                                {"readoutFormatByTypeId", readoutFormatByTypeId},
                                                {"interactionKindByTypeId", interactionKindByTypeId}}
                                     .dump();
@@ -1625,6 +1649,25 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
         } catch (const std::exception& e) {
             resp.ok = false;
             resp.error = std::string("connectWire falhou: ") + e.what();
+        }
+        return resp;
+    }
+    // EX-6.1/EX-6.2 (.spec/lasecsimul-native-devices.spec) -- inverso de "connectWire", remove só
+    // este fio sem reconstruir o circuito inteiro (antes, a Extension não tinha nenhum jeito de
+    // remover um fio sem removeComponent+addComponent+connectWire de TODOS os componentes).
+    if (msg.type == "disconnectWire") {
+        try {
+            const nlohmann::json payload =
+                msg.payloadJson.empty() ? nlohmann::json::object() : nlohmann::json::parse(msg.payloadJson);
+            const uint32_t componentA = static_cast<uint32_t>(std::stoul(payload.value("componentA", std::string{"0"})));
+            const uint32_t componentB = static_cast<uint32_t>(std::stoul(payload.value("componentB", std::string{"0"})));
+            const bool removed = session.disconnectWire(componentA, payload.value("pinIdA", std::string{}), componentB,
+                                                          payload.value("pinIdB", std::string{}));
+            resp.ok = true;
+            resp.payloadJson = nlohmann::json{{"removed", removed}}.dump();
+        } catch (const std::exception& e) {
+            resp.ok = false;
+            resp.error = std::string("disconnectWire falhou: ") + e.what();
         }
         return resp;
     }

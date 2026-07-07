@@ -131,6 +131,57 @@ function schemaDto(overrides: Partial<PropertySchemaDto> = {}): PropertySchemaDt
     assert(merged[0]?.readoutFormat === undefined, "sem mapa novo, readoutFormat fica ausente");
   });
 
+  // EX-4.2 (.spec/lasecsimul-native-devices.spec) -- pinIdsByTypeId só PREENCHE builtins sem
+  // pinIds próprio (ex: passive.resistor, sem package), nunca sobrescreve o que devices/mcu-
+  // adapter/subcircuit-file já tinham resolvido direto do manifesto (mesma fonte, resolvida antes).
+  await test("mergePropertySchemas preenche pinIds vindo do Core só quando o catalogo ainda nao tem (EX-4.2)", () => {
+    const catalog = [
+      catalogEntry("passive.resistor", { pinIds: undefined }),
+      catalogEntry("espressif.esp32", { pinIds: ["G23", "GND"] }),
+    ];
+    const merged = mergePropertySchemas(catalog, {}, {}, {}, {
+      "passive.resistor": ["p1", "p2"],
+      "espressif.esp32": ["deveria-ser-ignorado"],
+    });
+    assert(
+      merged[0]?.pinIds?.[0] === "p1" && merged[0]?.pinIds?.[1] === "p2",
+      "resistor deveria ganhar pinIds canônicos do Core (p1/p2)"
+    );
+    assert(
+      merged[1]?.pinIds?.[0] === "G23" && merged[1]?.pinIds?.[1] === "GND",
+      "esp32 já tinha pinIds do manifesto -- pinIdsByTypeId do Core NUNCA deve sobrescrever"
+    );
+  });
+
+  await test("mergePropertySchemas sem pinIdsByTypeId (chamador antigo) preserva comportamento de sempre", () => {
+    const catalog = [catalogEntry("passive.resistor", { pinIds: undefined })];
+    const merged = mergePropertySchemas(catalog, { "passive.resistor": [schemaDto()] });
+    assert(merged[0]?.pinIds === undefined, "sem mapa novo, pinIds continua ausente");
+  });
+
+  await test("mergePropertySchemas anexa serialPorts declaradas por typeId", () => {
+    const catalog = [catalogEntry("espressif.esp32", { mcuHost: true })];
+    const merged = mergePropertySchemas(catalog, {}, {}, {}, {}, {
+      "espressif.esp32": [
+        { label: "UART0", usartIndex: 0 },
+        { label: "UART2", usartIndex: 2 },
+      ],
+    });
+    assert(merged[0]?.serialPorts?.length === 2, "esp32 deveria ganhar duas portas seriais");
+    assert(merged[0]?.serialPorts?.[1]?.label === "UART2", "label da porta deve vir do metadata, sem fallback");
+  });
+
+  await test("mergePropertySchemas descarta serialPorts invalidas em vez de inventar label", () => {
+    const catalog = [catalogEntry("espressif.esp32", { mcuHost: true })];
+    const merged = mergePropertySchemas(catalog, {}, {}, {}, {}, {
+      "espressif.esp32": [
+        { label: "", usartIndex: 0 },
+        { label: "UART9", usartIndex: 9 as 0 },
+      ],
+    });
+    assert(merged[0]?.serialPorts === undefined, "portas sem label valido/indice valido nao devem chegar ao catalogo");
+  });
+
   const { failed } = finish();
   process.exitCode = failed > 0 ? 1 : 0;
 })();

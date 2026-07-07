@@ -1,6 +1,7 @@
 import * as net from "net";
 import * as os from "os";
 import * as path from "path";
+import { StringDecoder } from "string_decoder";
 import {
   PROTOCOL_VERSION,
   RequestEnvelope,
@@ -10,7 +11,7 @@ import {
   IpcError,
   errorCodeFromPayload,
 } from "./protocol";
-import { InteractionKindDto, PropertySchemaDto, ReadoutFormatDto, TelemetrySample } from "./types";
+import { InteractionKindDto, McuSerialPortDto, PropertySchemaDto, ReadoutFormatDto, TelemetrySample } from "./types";
 
 function toPipePath(name: string): string {
   return process.platform === "win32"
@@ -56,6 +57,15 @@ export class CoreClient {
   private readonly notificationHandlers: NotificationHandler[] = [];
   private requestCounter = 0;
   private lineBuffer = "";
+  /** PC-4 (.spec/lasecsimul-native-devices.spec): decodifica UTF-8 de forma INCREMENTAL entre
+   * chamadas de `_onData` -- um `Buffer.toString("utf8")` ingênuo por chunk (como era antes) corrompe
+   * qualquer caractere multi-byte (praticamente todo texto acentuado -- "ç"/"ã"/"õ", comum em
+   * label/erro/tradução deste app, majoritariamente em pt-BR) que caia bem na fronteira entre dois
+   * chunks de socket/pipe: os bytes incompletos do lado de cá viram U+FFFD (replacement character)
+   * na hora, sem chance de completar com os bytes que só chegam no PRÓXIMO `data`. `StringDecoder`
+   * resolve isso -- guarda bytes finais incompletos internamente e só devolve caracteres já
+   * completos, prefixando o resto automaticamente na próxima chamada de `.write()`. */
+  private readonly utf8Decoder = new StringDecoder("utf8");
   private readonly requestTimeoutMs: number;
 
   constructor(private readonly pipeName: string, opts: { requestTimeoutMs?: number } = {}) {
@@ -167,6 +177,15 @@ export class CoreClient {
     await this.request("connectWire", { componentA, pinIdA, componentB, pinIdB });
   }
 
+  /** Inverso de `connectWire` (EX-6.1/EX-6.2) -- remove só ESTE fio no Core, sem precisar
+   * reconstruir o circuito inteiro (`removeComponent`+`addComponent`+`connectWire` de todos os
+   * componentes, ver `extension.ts::rebuildCoreFromSchematicState`). Devolve `false` (sem lançar)
+   * se o par de pinos já não estava conectado -- idempotente, igual a `removeComponent`. */
+  async disconnectWire(componentA: string, pinIdA: string, componentB: string, pinIdB: string): Promise<boolean> {
+    const resp = await this.request("disconnectWire", { componentA, pinIdA, componentB, pinIdB });
+    return (resp as { removed?: boolean }).removed === true;
+  }
+
   async removeComponent(instanceId: string): Promise<void> {
     await this.request("removeComponent", { instanceId });
   }
@@ -246,17 +265,27 @@ export class CoreClient {
      * typeId que o device declarou; ausência é "sem leitura estruturada"/"sem interação especial". */
     readoutFormatByTypeId: Record<string, ReadoutFormatDto>;
     interactionKindByTypeId: Record<string, InteractionKindDto>;
+    /** Id ELÉTRICO real de cada pino, na ordem canônica que o Core usa (ver
+     * `CoreApplication.cpp::registerBuiltinMetadata`) -- só presente pro typeId que declarou
+     * `pins` (built-in com id fixo, OU device/subcircuit-file cujo manifesto já populou via
+     * `interface[]`). Substitui a Extension manter uma tabela hardcoded 2ª cópia do mesmo dado. */
+    pinIdsByTypeId: Record<string, string[]>;
+    serialPortsByTypeId: Record<string, McuSerialPortDto[]>;
   }> {
     const resp = await this.request("getPropertySchemas", { language });
     const payload = resp as {
       schemasByTypeId: Record<string, PropertySchemaDto[]>;
       readoutFormatByTypeId?: Record<string, ReadoutFormatDto>;
       interactionKindByTypeId?: Record<string, InteractionKindDto>;
+      pinIdsByTypeId?: Record<string, string[]>;
+      serialPortsByTypeId?: Record<string, McuSerialPortDto[]>;
     };
     return {
       schemasByTypeId: payload.schemasByTypeId,
       readoutFormatByTypeId: payload.readoutFormatByTypeId ?? {},
       interactionKindByTypeId: payload.interactionKindByTypeId ?? {},
+      pinIdsByTypeId: payload.pinIdsByTypeId ?? {},
+      serialPortsByTypeId: payload.serialPortsByTypeId ?? {},
     };
   }
 
@@ -309,7 +338,7 @@ export class CoreClient {
   }
 
   private _onData(data: Buffer): void {
-    this.lineBuffer += data.toString("utf8");
+    this.lineBuffer += this.utf8Decoder.write(data);
     const lines = this.lineBuffer.split("\n");
     this.lineBuffer = lines.pop() ?? "";
     for (const line of lines) {

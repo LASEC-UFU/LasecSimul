@@ -1,5 +1,5 @@
 import { WEBVIEW_MESSAGE_VERSION, ComponentReadoutValue, HostToWebviewMessage, InternalComponentSnapshot, SimulationStatus, SymbolAuthoringKind, WebviewToHostMessage } from "./messages.js";
-import { InteractionKindEntry, PropertySchemaEntry, ViewSpecInteraction, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./model.js";
+import { InteractionKindEntry, JUNCTION_TYPE_ID, McuSerialPortEntry, PropertySchemaEntry, TUNNEL_TYPE_ID, ViewSpecInteraction, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./model.js";
 import { ComponentBox, PIN_RADIUS, componentBox, componentLocalOrigin, componentSymbolSvg, hasRealPinPosition, missingSubcircuitPlaceholderSvg, packageSymbolSvg, pinLocalPosition, registerPackage } from "./componentSymbols.js";
 import { detectChannelTrigger, findTriggerAnchorIndex, triggerAlignedWindowEndNs, visibleSampleWindowByTime } from "./instrumentTrigger.js";
 import {
@@ -71,6 +71,17 @@ const initialWindowState = (window as WindowWithInitialState).__LASECSIMUL_INITI
 let state = normalizeProjectState((vscode?.getState() as WebviewProjectState | undefined) ?? initialWindowState ?? createEmptyState());
 syncPackageRegistry(state.catalog);
 
+let catalogLookupSource: WebviewProjectState["catalog"] | undefined;
+let catalogEntryByTypeId = new Map<string, WebviewComponentCatalogEntry>();
+
+function catalogEntryFor(typeId: string): WebviewComponentCatalogEntry | undefined {
+  if (catalogLookupSource !== state.catalog) {
+    catalogLookupSource = state.catalog;
+    catalogEntryByTypeId = new Map(state.catalog.map((entry) => [entry.typeId, entry]));
+  }
+  return catalogEntryByTypeId.get(typeId);
+}
+
 // Histórico de undo/redo do circuito principal e da sessão de autoria de símbolo/subcircuito (ver
 // definição completa de `UndoHistory`/`resetUndoHistory` mais abaixo, junto do resto do mecanismo de
 // undo). Inicializados aqui (antes de qualquer interação do usuário) pra que a 1ª ação já seja
@@ -89,6 +100,14 @@ resetUndoHistory(mainUndoHistory);
  * é mantido vivo entre renders; as camadas internas são atualizadas sem `app.innerHTML = ""`.
  * Componentes também são cacheados por id para preservar listeners e estado de interação. */
 const componentElementsById = new Map<string, HTMLElement>();
+/** Mesmo princípio de `componentElementsById` (UI-4) -- o `<polyline>` de cada fio é 100% não-
+ * interativo (`pointer-events:none`, ver `render()`), sem listener nenhum pra se preocupar em
+ * recriar com closure obsoleta; reaproveitar via Map em vez de recriar do zero a cada `render()`
+ * evita `createElementNS`+5 atributos por fio em circuitos grandes. As alças de segmento/canto
+ * (`renderWireSegmentHandles`/`renderWireCornerHandles`) continuam recriadas -- têm listener próprio
+ * capturando `points`/`index` da chamada atual, mexer nisso é um risco de interação bem maior pra um
+ * ganho bem menor (poucas alças por fio vs. potencialmente centenas de fios). */
+const wirePolylineElementsById = new Map<string, SVGPolylineElement>();
 let appBarElement: HTMLElement | undefined;
 let canvasElement: HTMLDivElement | undefined;
 let canvasContentElement: HTMLDivElement | undefined;
@@ -159,6 +178,8 @@ const UI_TEXT = {
     exposedComponentsClearAll: "Limpar seleção",
     notGraphicalHint: "(sem efeito visual no Modo Placa)",
     createSubcircuit: "Criar Subcircuito da Seleção",
+    selectAll: "Selecionar tudo",
+    unknownComponent: "Componente desconhecido",
   },
   en: {
     nothingSelected: "Nothing selected",
@@ -224,6 +245,8 @@ const UI_TEXT = {
     exposedComponentsClearAll: "Clear selection",
     notGraphicalHint: "(no visual effect in Board Mode)",
     createSubcircuit: "Create Subcircuit from Selection",
+    selectAll: "Select all",
+    unknownComponent: "Unknown component",
   },
 } as const;
 
@@ -305,6 +328,16 @@ const activePushShortcutIds = new Set<string>();
  * `render()` (ainda atualizam os dados em cache -- a tela só fica "atrasada" até o solte do mouse,
  * que já chama `render()` no fim do gesto). */
 let isDraggingComponent = false;
+
+/** Guarda de render concorrente GENÉRICA (UI-1) -- `true` durante QUALQUER gesto de arrastar em
+ * andamento (componente OU canto/segmento de fio, ver `wireCornerDrag`/`wireSegmentDrag`), não só
+ * componente. Motivo é o mesmo de `isDraggingComponent` (telemetria chegando a cada ~300ms durante a
+ * simulação chamaria `render()` sem condição, atropelando o gesto em andamento) -- antes só cobria
+ * arrasto de componente, então um `render()` de telemetria no meio de um arrasto de fio (agora
+ * incremental via `updateWireVisual`, ver UI-2/UI-3) reconstruiria o canvas inteiro à toa. */
+function isInteractiveGestureInProgress(): boolean {
+  return isDraggingComponent || wireCornerDrag !== undefined || wireSegmentDrag !== undefined;
+}
 type ExternalLabelKind = "id" | "value";
 let selectedTextLabel: { componentId: string; kind: ExternalLabelKind } | undefined;
 
@@ -380,7 +413,7 @@ const boardOverlayDataByComponentId = new Map<string, InternalComponentSnapshot[
 
 function ensureBoardOverlayData(component: WebviewComponentModel): void {
   if (boardOverlayDataByComponentId.has(component.id)) return;
-  const sourceId = state.catalog.find((entry) => entry.typeId === component.typeId)?.registeredSourceId;
+  const sourceId = catalogEntryFor(component.typeId)?.registeredSourceId;
   if (!sourceId) return;
   boardOverlayDataByComponentId.set(component.id, []); // marca "pedido em andamento" -- evita reenviar a cada render()
   send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestBoardOverlayData", componentId: component.id, sourceId });
@@ -406,7 +439,7 @@ function renderBoardOverlaysFor(component: WebviewComponentModel): HTMLElement[]
   const items = boardOverlayDataByComponentId.get(component.id);
   if (!items || items.length === 0) return [];
   const packageBox = componentBox(component.typeId, component.properties);
-  const sourceId = state.catalog.find((entry) => entry.typeId === component.typeId)?.registeredSourceId;
+  const sourceId = catalogEntryFor(component.typeId)?.registeredSourceId;
   const elements: HTMLElement[] = [];
   let fallbackIndex = 0;
   for (const item of items) {
@@ -603,7 +636,7 @@ function toggleBoardMode(): void {
 function isVisibleInCurrentMode(component: WebviewComponentModel): boolean {
   if (!boardModeActive) return true;
   if (isSymbolAuthoringTypeId(component.typeId)) return true;
-  return Boolean(state.catalog.find((entry) => entry.typeId === component.typeId)?.graphical);
+  return Boolean(catalogEntryFor(component.typeId)?.graphical);
 }
 
 // ────────────────────────────────────────────────────────────────────────────────────────────────
@@ -673,35 +706,44 @@ function resetUndoHistory(history: UndoHistory): void {
   history.baselineKey = undoContentKey(snapshot);
 }
 
-/** Núcleo do commit de undo: `current` é o estado "de agora" (depois da mutação que já aconteceu),
- * comparado contra o último commit (`baselineSnapshot`) -- só empilha se o CONTEÚDO
- * (`components`/`wires`) realmente mudou. Compartilhado por dois chamadores:
- * `recordUndoSnapshotIfChanged` (mutação local, ex. `component.x =` num drag, `persistState()` já
- * chamada em seguida) e o handler de `"syncState"` (mutação aplicada pelo HOST, ex. `deleteSelectedItems`
- * fora de autoria só manda `requestRemoveComponent`/`Wire` e espera a Extension devolver o estado já
- * sem o item removido -- `state` local nunca muda antes disso, então sem este 2º caminho a remoção
- * nunca viraria uma entrada de undo). */
-function recordUndoTransition(current: UndoSnapshot): void {
+/** Núcleo do commit de undo: `currentKey` é a chave de conteúdo "de agora" (depois da mutação que já
+ * aconteceu), comparada contra o último commit (`baselineKey`) -- só empilha (e só CLONA via
+ * `captureCurrent`, ver UI-5) se o CONTEÚDO (`components`/`wires`) realmente mudou. `captureCurrent`
+ * só é chamada quando precisa MESMO de um snapshot independente (1ª chamada da história, ou
+ * conteúdo confirmadamente diferente) -- `currentKey` sozinho (comparação de string, sem clonar
+ * nada) já resolve o caso comum de "chamada seguiu só uma troca de seleção, nada mudou de verdade".
+ * Compartilhado por dois chamadores: `recordUndoSnapshotIfChanged` (mutação local, ex. `component.x
+ * =` num drag, `persistState()` já chamada em seguida) e o handler de `"syncState"` (mutação
+ * aplicada pelo HOST, ex. `deleteSelectedItems` fora de autoria só manda
+ * `requestRemoveComponent`/`Wire` e espera a Extension devolver o estado já sem o item removido --
+ * `state` local nunca muda antes disso, então sem este 2º caminho a remoção nunca viraria uma
+ * entrada de undo). */
+function recordUndoTransition(currentKey: string, captureCurrent: () => UndoSnapshot): void {
   if (isApplyingUndoSnapshot) return;
   const history = activeUndoHistory();
-  const currentKey = undoContentKey(current);
   if (history.baselineKey === undefined) {
     // 1ª chamada desta história (ver `resetUndoHistory` -- normalmente já cobre isto, mas cobre
     // também o caso de uma história nunca inicializada explicitamente).
-    history.baselineSnapshot = current;
+    history.baselineSnapshot = captureCurrent();
     history.baselineKey = currentKey;
     return;
   }
-  if (currentKey === history.baselineKey) return; // só seleção mudou (ou nada) -- não é undoable
+  if (currentKey === history.baselineKey) return; // só seleção mudou (ou nada) -- não é undoable, nunca clona
   history.undoStack.push(history.baselineSnapshot!);
   if (history.undoStack.length > UNDO_HISTORY_LIMIT) history.undoStack.shift();
   history.redoStack = []; // qualquer ação nova invalida o redo, igual a qualquer editor de verdade
-  history.baselineSnapshot = current;
+  history.baselineSnapshot = captureCurrent();
   history.baselineKey = currentKey;
 }
 
+/** UI-5: computa a chave de comparação DIRETO do `state` vivo (`JSON.stringify`, sem
+ * `structuredClone` primeiro) -- só paga o clone caro (`captureUndoSnapshot`) se a chave realmente
+ * diferir da última commitada. A maioria das ~49 chamadas de `persistState()` no arquivo segue uma
+ * mudança de SELEÇÃO apenas (nunca vira entrada de undo, ver `undoContentKey`) -- antes clonava
+ * `components`/`wires` inteiros só pra descobrir isso a cada uma. */
 function recordUndoSnapshotIfChanged(): void {
-  recordUndoTransition(captureUndoSnapshot());
+  const currentKey = undoContentKey(state);
+  recordUndoTransition(currentKey, captureUndoSnapshot);
 }
 
 /** Aplica um snapshot (de undo OU redo) como o novo `state.components`/`wires`/seleção -- mesmo
@@ -796,10 +838,6 @@ function dragSelectionWithLinkedPinLabels(): WebviewComponentModel[] {
     if (linkedLabel && !byId.has(linkedLabel.id)) byId.set(linkedLabel.id, linkedLabel);
   }
   return [...byId.values()];
-}
-
-function getSelectedWires(): WebviewWireModel[] {
-  return state.wires.filter((wire) => state.selectedWireIds.includes(wire.id));
 }
 
 /** Primeiro componente selecionado — usado por operações que só fazem sentido pra UM (atalho `r` sem
@@ -1340,7 +1378,7 @@ function installCanvasEventHandlers(canvas: HTMLDivElement, canvasContent: HTMLD
     }
     clearSelection();
     render();
-    showContextMenu(event, [{ label: "Selecionar tudo", onClick: () => selectAll() }]);
+    showContextMenu(event, [{ label: t("selectAll"), onClick: () => selectAll() }]);
   });
 
   // Marquee (retângulo de arrasto a partir do fundo vazio) -- seleção por interseção, igual ao
@@ -1510,19 +1548,36 @@ function render(): void {
   if (!shell) return;
   const { canvasContent, wireLayer } = shell;
   clearEphemeralCanvasChildren(canvasContent);
-  wireLayer.replaceChildren();
+  // Alças de segmento/canto E o preview de fio pendente (`renderPendingWirePreview`, sempre recriado
+  // do zero, nunca reaproveitado) são removidos aqui -- só os `<polyline>` REAIS rastreados em
+  // `wirePolylineElementsById` (ver abaixo) sobrevivem entre renders.
+  const trackedPolylines = new Set<SVGPolylineElement>(wirePolylineElementsById.values());
+  for (const child of Array.from(wireLayer.children)) {
+    if (!(child instanceof SVGPolylineElement) || !trackedPolylines.has(child)) child.remove();
+  }
 
+  const visibleWireIds = new Set<string>();
   for (const wire of state.wires) {
     const points = wirePolylinePoints(wire);
     if (points.length < 2) continue;
-    const polyline = document.createElementNS(SVG_NS, "polyline");
-    polyline.dataset.wireId = wire.id;
+    visibleWireIds.add(wire.id);
+    let polyline = wirePolylineElementsById.get(wire.id);
+    if (!polyline) {
+      polyline = document.createElementNS(SVG_NS, "polyline");
+      polyline.dataset.wireId = wire.id;
+      polyline.style.pointerEvents = "none";
+      wirePolylineElementsById.set(wire.id, polyline);
+    }
     setPolylinePoints(polyline, points);
     polyline.setAttribute("class", wireClass(wire.id));
-    polyline.style.pointerEvents = "none";
-    wireLayer.appendChild(polyline);
+    wireLayer.appendChild(polyline); // reordena pro fim (no-op se já era o último) -- mantém a ordem de state.wires
     renderWireSegmentHandles(wireLayer, wire, points);
     renderWireCornerHandles(wireLayer, wire, points);
+  }
+  for (const [id, polyline] of wirePolylineElementsById) {
+    if (visibleWireIds.has(id)) continue;
+    polyline.remove();
+    wirePolylineElementsById.delete(id);
   }
   renderPendingWirePreview(wireLayer);
 
@@ -1530,6 +1585,11 @@ function render(): void {
   for (const component of state.components.filter((entry) => !entry.hidden && isVisibleInCurrentMode(entry))) {
     visibleComponentIds.add(component.id);
     let componentEl = componentElementsById.get(component.id);
+    if (componentEl && componentEl.dataset.typeId !== component.typeId) {
+      componentEl.remove();
+      componentElementsById.delete(component.id);
+      componentEl = undefined;
+    }
     if (!componentEl) {
       componentEl = createComponentElement(component);
       componentElementsById.set(component.id, componentEl);
@@ -1546,7 +1606,7 @@ function render(): void {
 
   for (const component of state.components.filter((entry) => {
     if (entry.hidden) return false;
-    const catalogEntry = state.catalog.find((item) => item.typeId === entry.typeId);
+    const catalogEntry = catalogEntryFor(entry.typeId);
     return catalogEntry?.registeredSourceKind === "subcircuit-file";
   })) {
     ensureBoardOverlayData(component);
@@ -1557,7 +1617,7 @@ function render(): void {
   }
 
   for (const component of state.components.filter((entry) => !entry.hidden && isVisibleInCurrentMode(entry))) {
-    const embedsOwnIdLabel = component.typeId === "connectors.tunnel" &&
+    const embedsOwnIdLabel = component.typeId === TUNNEL_TYPE_ID &&
       typeof component.properties.name === "string" &&
       component.properties.name.trim().length > 0;
     if (!embedsOwnIdLabel) {
@@ -1568,7 +1628,7 @@ function render(): void {
     if (valueLabel) canvasContent.appendChild(valueLabel);
   }
 
-  for (const component of state.components.filter((entry) => entry.typeId === "connectors.junction")) {
+  for (const component of state.components.filter((entry) => entry.typeId === JUNCTION_TYPE_ID)) {
     canvasContent.appendChild(renderJunction(component));
   }
 
@@ -1672,7 +1732,7 @@ function newWireId(): string {
 function newJunctionComponent(point: Point): WebviewComponentModel {
   return {
     id: newComponentId(),
-    typeId: "connectors.junction",
+    typeId: JUNCTION_TYPE_ID,
     label: "Junction",
     hidden: true,
     x: point.x,
@@ -1713,7 +1773,7 @@ function pasteClipboardItems(): void {
   const stagedComponents = [...state.components];
   const components = clipboardItems.components.map((source) => {
     const component = cloneComponent(source);
-    const descriptor = state.catalog.find((entry) => entry.typeId === component.typeId);
+    const descriptor = catalogEntryFor(component.typeId);
     const baseLabel = descriptor?.label ?? component.typeId;
     const nextId = newComponentId();
     idMap.set(component.id, nextId);
@@ -2008,6 +2068,7 @@ function renderWireCornerHandles(wireLayer: SVGSVGElement, wire: WebviewWireMode
   for (let index = 1; index < points.length - 1; index += 1) {
     const point = points[index]!;
     const handle = document.createElementNS(SVG_NS, "circle");
+    handle.dataset.wireId = wire.id; // ver `updateWireVisual` -- marca de qual fio esta alça é
     handle.setAttribute("cx", String(point.x));
     handle.setAttribute("cy", String(point.y));
     handle.setAttribute("r", isWireCornerSelected(wire.id, index) ? "5.5" : "4");
@@ -2059,7 +2120,7 @@ function renderWireCornerHandles(wireLayer: SVGSVGElement, wire: WebviewWireMode
         const target = { x: snapCoordinate(raw.x, step), y: snapCoordinate(raw.y, step) };
         updateWireFromFullPath(wireToMove, moveOrthogonalWireCorner(drag.startFullPoints, drag.pointIndex, target));
         drag.moved = true;
-        render();
+        updateWireVisual(wire.id);
       };
 
       const finish = (): void => {
@@ -2091,6 +2152,7 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
 
     if (isWireSegmentSelected(wire.id, index)) {
       const highlight = document.createElementNS(SVG_NS, "line");
+      highlight.dataset.wireId = wire.id; // ver `updateWireVisual` -- marca de qual fio este realce é
       highlight.setAttribute("x1", String(from.x));
       highlight.setAttribute("y1", String(from.y));
       highlight.setAttribute("x2", String(to.x));
@@ -2100,6 +2162,7 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
     }
 
     const handle = document.createElementNS(SVG_NS, "line");
+    handle.dataset.wireId = wire.id; // ver `updateWireVisual` -- marca de qual fio esta alça é
     handle.setAttribute("x1", String(from.x));
     handle.setAttribute("y1", String(from.y));
     handle.setAttribute("x2", String(to.x));
@@ -2198,7 +2261,7 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
           const target = { x: snapCoordinate(raw.x, step), y: snapCoordinate(raw.y, step) };
           updateWireFromFullPath(wireToMove, moveOrthogonalWireCorner(drag.startFullPoints, drag.pointIndex, target));
           drag.moved = true;
-          render();
+          updateWireVisual(wire.id);
         };
 
         const finishCorner = (): void => {
@@ -2248,7 +2311,7 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
         );
         drag.moved = true;
         selectedWireSegment = { wireId: wire.id, segmentIndex: drag.segmentIndex };
-        render();
+        updateWireVisual(wire.id);
       };
 
       const finish = (): void => {
@@ -2495,23 +2558,6 @@ function moveSelectedComponentsByArrow(key: string, step: number): boolean {
   return true;
 }
 
-function nearestPointOnWire(wire: WebviewWireModel, point: Point): Point | undefined {
-  const full = wirePolylinePoints(wire);
-  if (full.length < 2) return undefined;
-
-  let bestPoint: Point | undefined;
-  let bestDistance = Number.POSITIVE_INFINITY;
-  for (let index = 1; index < full.length; index += 1) {
-    const candidate = nearestPointOnOrthogonalSegment(point, full[index - 1]!, full[index]!);
-    const distance = squaredDistance(candidate, point);
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      bestPoint = candidate;
-    }
-  }
-  return bestDistance <= 144 ? snapToWireGrid(bestPoint!) : undefined;
-}
-
 function pinScenePosition(component: WebviewComponentModel, pinId: string): Point | undefined {
   const pinIndex = component.pins.findIndex((pin) => pin.id === pinId);
   if (pinIndex < 0) return undefined;
@@ -2520,11 +2566,12 @@ function pinScenePosition(component: WebviewComponentModel, pinId: string): Poin
 }
 
 function updateWiresTouchingComponent(componentId: string): void {
-  const wireLayer = document.querySelector<SVGSVGElement>(".wire-layer");
-  if (!wireLayer) return;
   for (const wire of state.wires) {
     if (wire.from.componentId !== componentId && wire.to.componentId !== componentId) continue;
-    const polyline = wireLayer.querySelector<SVGPolylineElement>(`polyline[data-wire-id="${wire.id}"]`);
+    // Lookup O(1) via `wirePolylineElementsById` (UI-2/UI-3) em vez de `querySelector` -- percorrido
+    // uma vez por fio tocado a cada `pointermove` de um arrasto de componente, potencialmente muitas
+    // vezes por segundo em circuitos grandes.
+    const polyline = wirePolylineElementsById.get(wire.id);
     if (!polyline) continue;
     const points = wirePolylinePoints(wire);
     if (points.length < 2) continue;
@@ -2533,13 +2580,31 @@ function updateWiresTouchingComponent(componentId: string): void {
   }
 }
 
-function refreshWireColors(): void {
+/** Atualização de UM fio (polyline + suas próprias alças/realces) sem tocar em nenhum outro fio ou
+ * componente -- chamado a cada `pointermove` de um arrasto de canto/segmento de fio (UI-2/UI-3) em
+ * vez do `render()` completo de sempre, que reconstruía TODO o canvas (todos os componentes E todos
+ * os fios) a cada pixel de movimento do mouse. As alças/realces deste fio são marcadas com
+ * `dataset.wireId` (ver `renderWireCornerHandles`/`renderWireSegmentHandles`) -- removidas e
+ * reconstruídas do zero aqui (elas têm listener próprio capturando `points` da posição atual, então
+ * "atualizar" em vez de recriar exigiria reatribuir os 5 listeners também; reconstruir só ESTE fio é
+ * barato o bastante, o caro era reconstruir os OUTROS fios/componentes junto). */
+function updateWireVisual(wireId: string): void {
+  const wire = state.wires.find((entry) => entry.id === wireId);
   const wireLayer = document.querySelector<SVGSVGElement>(".wire-layer");
-  if (!wireLayer) return;
-  for (const wire of state.wires) {
-    const polyline = wireLayer.querySelector<SVGPolylineElement>(`polyline[data-wire-id="${wire.id}"]`);
-    if (polyline) polyline.setAttribute("class", wireClass(wire.id));
+  if (!wire || !wireLayer) return;
+  const points = wirePolylinePoints(wire);
+
+  for (const child of Array.from(wireLayer.children)) {
+    if (child instanceof SVGPolylineElement) continue; // polyline reaproveitado abaixo, nunca removido aqui
+    if (child instanceof SVGElement && child.dataset.wireId === wireId) child.remove();
   }
+
+  const polyline = wirePolylineElementsById.get(wireId);
+  if (points.length < 2 || !polyline) return;
+  setPolylinePoints(polyline, points);
+  polyline.setAttribute("class", wireClass(wireId));
+  renderWireSegmentHandles(wireLayer, wire, points);
+  renderWireCornerHandles(wireLayer, wire, points);
 }
 
 function numericReadout(component: WebviewComponentModel): number | undefined {
@@ -2551,7 +2616,7 @@ function numericReadout(component: WebviewComponentModel): number | undefined {
  * Core via `getPropertySchemas`) em vez de checar typeId -- fallback legado só pra typeId sem o
  * campo declarado ainda (catálogo não carregou do Core). */
 function interactionKindFor(typeId: string): InteractionKindEntry {
-  const declared = state.catalog.find((entry) => entry.typeId === typeId)?.interactionKind;
+  const declared = catalogEntryFor(typeId)?.interactionKind;
   if (declared) return declared;
   if (typeId === "switches.push") return "momentary";
   if (typeId === "switches.switch" || typeId === "switches.switch_dip") return "toggle";
@@ -2562,7 +2627,7 @@ function viewSpecInteractionFor<K extends ViewSpecInteraction["kind"]>(
   typeId: string,
   kind: K
 ): Extract<ViewSpecInteraction, { kind: K }> | undefined {
-  const interactions = state.catalog.find((entry) => entry.typeId === typeId)?.package?.viewSpec?.interaction;
+  const interactions = catalogEntryFor(typeId)?.package?.viewSpec?.interaction;
   if (!interactions) return undefined;
   return Object.values(interactions).find(
     (entry): entry is Extract<ViewSpecInteraction, { kind: K }> => entry.kind === kind
@@ -2587,9 +2652,26 @@ function usesEmbeddedValueLabel(typeId: string): boolean {
   // leitura simulada (ver findCatalogEntry abaixo). Os dois continuam embutindo valor no símbolo,
   // por isso ficam juntos nesta função, mas a ORIGEM do "embute valor" é diferente pra cada um.
   if (typeId === "sources.fixed_volt" || typeId === "sources.rail") return true;
-  if (state.catalog.find((entry) => entry.typeId === typeId)?.readoutFormat) return true;
+  if (catalogEntryFor(typeId)?.readoutFormat) return true;
   // Fallback legado -- typeId sem readoutFormat no catálogo ainda.
   return typeId === "instruments.voltmeter" || typeId.startsWith("meters.");
+}
+
+/** `readoutFormat.kind` (ABI v2) de um typeId quando é "de histórico" (janela "Expande" faz
+ * sentido) -- `channelHistory` é o osciloscópio (N canais analógicos), `bitmaskHistory` o
+ * analisador lógico (1 palavra digital por amostra). Substitui checar
+ * `typeId === "meters.oscope"`/`"meters.logic_analyzer"` nos 4 pontos que decidem "isto tem
+ * histórico e de que FORMA" -- sem isto, um instrumento de terceiros (device/plugin) com o mesmo
+ * `readoutFormat.kind` nunca ganharia popup "Expande"/rastreamento de histórico, só os 2 builtins.
+ * Fallback legado pros mesmos 2 typeIds cobre o catálogo ainda não ter chegado do Core. */
+function instrumentHistoryKind(typeId: string): "channelHistory" | "bitmaskHistory" | undefined {
+  const readoutFormat = catalogEntryFor(typeId)?.readoutFormat;
+  if (readoutFormat?.kind === "channelHistory" || readoutFormat?.kind === "bitmaskHistory") return readoutFormat.kind;
+  if (readoutFormat) return undefined;
+  // Fallback legado -- typeId sem readoutFormat no catálogo ainda.
+  if (typeId === "meters.oscope") return "channelHistory";
+  if (typeId === "meters.logic_analyzer") return "bitmaskHistory";
+  return undefined;
 }
 
 function voltmeterReadoutText(component: WebviewComponentModel): string {
@@ -2623,14 +2705,14 @@ function updateReadoutHistories(readouts: Record<string, ComponentReadoutValue>)
   }
   for (const component of state.components) {
     const readout = readouts[component.id];
-    if (component.typeId === "meters.oscope" && Array.isArray(readout)) {
+    if (instrumentHistoryKind(component.typeId) === "channelHistory" && Array.isArray(readout)) {
       const previous = scopeHistoryByComponentId[component.id] ?? [[], [], [], []];
       scopeHistories[component.id] = [0, 1, 2, 3].map((channel) => {
         const history = [...(previous[channel] ?? []), Number(readout[channel] ?? 0)];
         return history.slice(-INSTRUMENT_HISTORY_DEPTH);
       });
     }
-    if (component.typeId === "meters.logic_analyzer" && typeof readout === "number") {
+    if (instrumentHistoryKind(component.typeId) === "bitmaskHistory" && typeof readout === "number") {
       const history = [...(logicHistoryByComponentId[component.id] ?? []), readout >>> 0];
       logicHistories[component.id] = history.slice(-INSTRUMENT_HISTORY_DEPTH);
     }
@@ -2750,9 +2832,10 @@ function toggleInstrumentPopup(component: WebviewComponentModel): void {
     realLogicHistoryByComponentId.delete(component.id);
   } else {
     const cascadeOffset = (instrumentPopups.size % 6) * 28;
-    if (component.typeId === "meters.oscope") {
+    const historyKind = instrumentHistoryKind(component.typeId);
+    if (historyKind === "channelHistory") {
       instrumentPopups.set(component.id, defaultScopePopupState(component.id, 90 + cascadeOffset, 90 + cascadeOffset));
-    } else if (component.typeId === "meters.logic_analyzer") {
+    } else if (historyKind === "bitmaskHistory") {
       instrumentPopups.set(component.id, defaultLogicPopupState(component, 90 + cascadeOffset, 90 + cascadeOffset));
     }
     requestInstrumentHistoryRefresh(component.id);
@@ -3322,6 +3405,51 @@ function flipSelectedComponents(axis: "horizontal" | "vertical"): void {
   render();
 }
 
+interface ComponentVisualFlags {
+  catalogEntry: WebviewComponentCatalogEntry | undefined;
+  isPushButton: boolean;
+  isSwitchToggle: boolean;
+  isToggleClickable: boolean;
+  isFixedVolt: boolean;
+  isExpandableInstrument: boolean;
+  isJoystick: boolean;
+  isEncoder: boolean;
+  isTouchpad: boolean;
+  isRail: boolean;
+  isTunnel: boolean;
+  isMeter: boolean;
+  isVoltmeter: boolean;
+  hasPackageVisual: boolean;
+  isMissingSubcircuitRef: boolean;
+}
+
+/** Ponto único de "que categoria visual/interativa este componente é" -- ANTES calculado duas vezes
+ * (`createComponentElement`/`updateComponentElement`), com `isPushButton`/`isSwitchToggle`/
+ * `isFixedVolt` repetidos idênticos nos dois (UI-11/PC-12). ABI v2 (interactionKind/viewSpec
+ * interaction) tem prioridade; typeId hardcoded só cobre exceção específica de CSS/glifo
+ * (`isSwitchToggle`/`isFixedVolt`/`isRail`/`isTunnel`/`isVoltmeter`) sem equivalente genérico ainda. */
+function componentVisualFlags(component: WebviewComponentModel): ComponentVisualFlags {
+  const catalogEntry = catalogEntryFor(component.typeId);
+  const catalogInteractionKind = catalogEntry?.interactionKind ?? interactionKindFor(component.typeId);
+  return {
+    catalogEntry,
+    isPushButton: catalogInteractionKind === "momentary",
+    isSwitchToggle: component.typeId === "switches.switch",
+    isToggleClickable: catalogInteractionKind === "toggle",
+    isFixedVolt: component.typeId === "sources.fixed_volt",
+    isExpandableInstrument: instrumentHistoryKind(component.typeId) !== undefined,
+    isJoystick: catalogInteractionKind === "joystick" || Boolean(viewSpecInteractionFor(component.typeId, "dragVector")),
+    isEncoder: catalogInteractionKind === "encoder" || Boolean(viewSpecInteractionFor(component.typeId, "dragAngular")),
+    isTouchpad: catalogInteractionKind === "touchpad" || Boolean(viewSpecInteractionFor(component.typeId, "touchPoint")),
+    isRail: component.typeId === "sources.rail",
+    isTunnel: component.typeId === TUNNEL_TYPE_ID,
+    isMeter: component.typeId.startsWith("meters.") || component.typeId === "instruments.voltmeter",
+    isVoltmeter: component.typeId === "instruments.voltmeter",
+    hasPackageVisual: Boolean(catalogEntry?.package || (component.properties.logicSymbol === true && catalogEntry?.logicSymbolPackage)),
+    isMissingSubcircuitRef: Boolean(component.subcircuitRef) && !catalogEntry,
+  };
+}
+
 /** Cria o elemento `.component` UMA VEZ por id (reaproveitado entre renders, ver
  * `componentElementsById`) -- registra aqui SÓ os listeners de longa duração (clique/seleção,
  * duplo-clique, menu de contexto, arrastar, popup de instrumento). Reconciliação incremental
@@ -3339,25 +3467,18 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
   const el = document.createElement("div");
   const componentId = component.id;
   el.dataset.componentId = componentId;
+  el.dataset.typeId = component.typeId;
 
   const liveComponent = (): WebviewComponentModel | undefined =>
     state.components.find((entry) => entry.id === componentId);
 
   // ABI v2 (.spec/lasecsimul-native-devices.spec): isPushButton vem de interactionKind (genérico);
-  // isSwitchToggle continua específico de "switches.switch" -- é sobre QUAL CSS/visual este typeId
-  // usa. isToggleClickable é o conceito genérico de "clicar no toggle-hit-zone alterna `closed`" --
-  // cobre switch E switch_dip (e qualquer typeId futuro de interactionKind "toggle" que use a mesma
+  // isToggleClickable é o conceito genérico de "clicar no toggle-hit-zone alterna `closed`" -- cobre
+  // switch E switch_dip (e qualquer typeId futuro de interactionKind "toggle" que use a mesma
   // propriedade `closed`), sem precisar de um bucket por typeId (bug real: switch_dip não tinha
-  // NENHUM handler de clique, só o `isSwitchToggle` escopado a "switches.switch" via canToggle).
-  const catalogInteractionKind = state.catalog.find((entry) => entry.typeId === component.typeId)?.interactionKind ?? interactionKindFor(component.typeId);
-  const isPushButton = catalogInteractionKind === "momentary";
-  const isSwitchToggle = component.typeId === "switches.switch";
-  const isToggleClickable = catalogInteractionKind === "toggle";
-  const isFixedVolt = component.typeId === "sources.fixed_volt";
-  const isExpandableInstrument = component.typeId === "meters.oscope" || component.typeId === "meters.logic_analyzer";
-  const isJoystick = catalogInteractionKind === "joystick" || Boolean(viewSpecInteractionFor(component.typeId, "dragVector"));
-  const isEncoder = catalogInteractionKind === "encoder" || Boolean(viewSpecInteractionFor(component.typeId, "dragAngular"));
-  const isTouchpad = catalogInteractionKind === "touchpad" || Boolean(viewSpecInteractionFor(component.typeId, "touchPoint"));
+  // NENHUM handler de clique, só um `isSwitchToggle` escopado a "switches.switch" via canToggle).
+  const { isPushButton, isToggleClickable, isFixedVolt, isExpandableInstrument, isJoystick, isEncoder, isTouchpad } =
+    componentVisualFlags(component);
 
   // Clique-pra-alternar (push/switch/fixed-volt) é desambiguado de ARRASTAR dentro do handler
   // genérico de `pointerdown` mais abaixo (ver `DRAG_THRESHOLD_PX`) -- antes disto, estes 3 tipos
@@ -3430,7 +3551,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
       hideContextMenu();
       return;
     }
-    const catalogEntry = state.catalog.find((entry) => entry.typeId === component.typeId);
+    const catalogEntry = catalogEntryFor(component.typeId);
     if (!isComponentSelected(component.id)) selectOnlyComponent(component.id);
     persistState();
     render();
@@ -3479,9 +3600,15 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
           { kind: "separator" },
           { label: t("loadFirmware"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestChooseMcuFirmware", componentId: component.id }) },
           { label: t("reloadFirmware"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestReloadMcuFirmware", componentId: component.id }) },
-          { label: `${t("openSerialMonitor")} USART1`, onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenMcuSerialMonitor", componentId: component.id, usartIndex: 0 }) },
-          { label: `${t("openSerialMonitor")} USART2`, onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenMcuSerialMonitor", componentId: component.id, usartIndex: 1 }) },
-          { label: `${t("openSerialMonitor")} USART3`, onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenMcuSerialMonitor", componentId: component.id, usartIndex: 2 }) },
+          ...serialPortsForTypeId(component.typeId).map((port) => ({
+            label: `${t("openSerialMonitor")} ${port.label}`,
+            onClick: () => send({
+              version: WEBVIEW_MESSAGE_VERSION,
+              type: "requestOpenMcuSerialMonitor",
+              componentId: component.id,
+              usartIndex: port.usartIndex,
+            }),
+          } satisfies ContextMenuItem)),
         ]
       : [];
     const createSubcircuitMenuItems: ContextMenuItem[] = isGroup && !symbolAuthoringContext
@@ -3586,7 +3713,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
         const startClientX = event.clientX;
         const startClientY = event.clientY;
         const dragLimit = dragVector?.limits
-          ? state.catalog.find((entry) => entry.typeId === component.typeId)?.package?.viewSpec?.limits?.[dragVector.limits]
+          ? catalogEntryFor(component.typeId)?.package?.viewSpec?.limits?.[dragVector.limits]
           : undefined;
         const xMapping = dragVector?.x;
         const yMapping = dragVector?.y;
@@ -3841,7 +3968,9 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
       for (const target of dragTargets) {
         target.component.x = target.startX + dx;
         target.component.y = target.startY + dy;
-        const targetEl = document.querySelector<HTMLElement>(`.component[data-component-id="${target.component.id}"]`);
+        // Lookup O(1) via `componentElementsById` (UI-2/UI-3) -- percorrido por alvo arrastado a
+        // cada `pointermove`, potencialmente muitas vezes por segundo com vários componentes selecionados.
+        const targetEl = componentElementsById.get(target.component.id);
         if (targetEl) {
           targetEl.style.left = `${target.component.x}px`;
           targetEl.style.top = `${target.component.y}px`;
@@ -3882,30 +4011,26 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
  * do resto do SVG -- sempre frescos, sem risco de capturar `component` desatualizado (diferente dos
  * listeners de `el`, que sobrevivem a vários renders). */
 function updateComponentElement(el: HTMLElement, component: WebviewComponentModel): void {
-  const catalogEntry = state.catalog.find((entry) => entry.typeId === component.typeId);
   const box = componentBox(component.typeId, component.properties);
-  const isPushButton = (catalogEntry?.interactionKind ?? interactionKindFor(component.typeId)) === "momentary";
-  const isSwitchToggle = component.typeId === "switches.switch";
-  const isFixedVolt = component.typeId === "sources.fixed_volt";
-  const isRail = component.typeId === "sources.rail";
-  const isTunnel = component.typeId === "connectors.tunnel";
-  const isMeter = component.typeId.startsWith("meters.") || component.typeId === "instruments.voltmeter";
-  const meterClass = isMeter ? `component--meter component--${component.typeId.replace(/[._]/g, "-")}` : "";
-  const isVoltmeter = component.typeId === "instruments.voltmeter"; // só tinge o símbolo, ver styles.css
-  const hasPackageVisual = Boolean(catalogEntry?.package || (component.properties.logicSymbol === true && catalogEntry?.logicSymbolPackage));
   // Bloco genérico de subcircuito por caminho cujo `.lssubcircuit` não foi encontrado (arquivo
   // movido/apagado, ver `chooseSubcircuitFileCommand`/carregamento de projeto) -- `subcircuitRef`
   // presente mas o typeId atual não tem entrada no catálogo desta sessão.
-  const isMissingSubcircuitRef = Boolean(component.subcircuitRef) && !catalogEntry;
+  const {
+    catalogEntry, isPushButton, isSwitchToggle, isFixedVolt, isRail, isTunnel, isMeter, isVoltmeter, hasPackageVisual, isMissingSubcircuitRef,
+  } = componentVisualFlags(component);
+  const isUnknownComponent = !catalogEntry && !component.subcircuitRef;
+  const meterClass = isMeter ? `component--meter component--${component.typeId.replace(/[._]/g, "-")}` : "";
 
-  el.className = `component ${isComponentSelected(component.id) ? "selected" : ""} ${hasPackageVisual ? "component--package" : ""} ${isVoltmeter ? "component--voltmeter" : ""} ${isPushButton ? "component--push" : ""} ${isSwitchToggle ? "component--switch" : ""} ${isFixedVolt ? "component--fixed-volt" : ""} ${isRail ? "component--rail" : ""} ${isTunnel ? "component--tunnel" : ""} ${meterClass} ${isMissingSubcircuitRef ? "component--subcircuit-missing" : ""}`;
+  el.className = `component ${isComponentSelected(component.id) ? "selected" : ""} ${hasPackageVisual ? "component--package" : ""} ${isVoltmeter ? "component--voltmeter" : ""} ${isPushButton ? "component--push" : ""} ${isSwitchToggle ? "component--switch" : ""} ${isFixedVolt ? "component--fixed-volt" : ""} ${isRail ? "component--rail" : ""} ${isTunnel ? "component--tunnel" : ""} ${meterClass} ${isMissingSubcircuitRef ? "component--subcircuit-missing" : ""} ${isUnknownComponent ? "component--unknown" : ""}`;
   el.style.left = `${component.x}px`;
   el.style.top = `${component.y}px`;
   el.style.width = `${box.width}px`;
   el.style.height = `${box.height}px`;
   el.title = isMissingSubcircuitRef
     ? `${component.label} -- ${t("locateSubcircuitFile")}\n${component.subcircuitRef?.path ?? ""}`
-    : `${component.label} (${component.typeId})`;
+    : isUnknownComponent
+      ? `${component.label} -- ${t("unknownComponent")}\n${component.typeId}`
+      : `${component.label} (${component.typeId})`;
 
   const svg = document.createElementNS(SVG_NS, "svg");
   svg.classList.add("component__symbol");
@@ -3927,7 +4052,7 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
     svg.classList.add("component__symbol--fixed-volt");
     if (component.properties.out === true) svg.classList.add("component__symbol--fixed-volt-on");
   }
-  bodyGroup.innerHTML = isMissingSubcircuitRef
+  bodyGroup.innerHTML = isMissingSubcircuitRef || isUnknownComponent
     ? missingSubcircuitPlaceholderSvg(box)
     : packageSymbolSvg(component.typeId, symbolProperties, component.id) ?? catalogEntry?.symbolSvg ?? componentSymbolSvg(component.typeId, symbolProperties);
   svg.appendChild(bodyGroup);
@@ -4020,7 +4145,7 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
   el.appendChild(svg);
 }
 
-type PropertyFieldKind = "boolean" | "number" | "text" | "readonly" | "select" | "filePath";
+type PropertyFieldKind = "boolean" | "number" | "text" | "readonly" | "select" | "filePath" | "color" | "textarea";
 
 interface PropertyField {
   key: string;
@@ -4058,11 +4183,14 @@ function inferPropertyGroup(name: string): string {
 }
 
 function propertyFieldKindFromEditor(editor: string): PropertyFieldKind {
-  if (editor === "checkbox" || editor === "switch") return "boolean";
-  if (editor === "select" || editor === "enum") return "select";
-  if (editor === "display") return "readonly";
-  if (editor === "number") return "number";
-  if (editor === "filePath") return "filePath";
+  const normalized = editor.trim().toLowerCase();
+  if (normalized === "checkbox" || normalized === "switch") return "boolean";
+  if (normalized === "select" || normalized === "enum") return "select";
+  if (normalized === "display") return "readonly";
+  if (normalized === "number") return "number";
+  if (normalized === "filepath") return "filePath";
+  if (normalized === "color") return "color";
+  if (normalized === "textarea" || normalized === "textedit") return "textarea";
   return "text";
 }
 
@@ -4083,7 +4211,7 @@ function formatLiveReadout(schema: PropertySchemaEntry, component: WebviewCompon
  * atuais só têm 1 propriedade elétrica cada) — mesma fonte (`propertySchema` do catálogo) usada pelo
  * diálogo de propriedades, ver `resolvePropertyFields`. */
 function findShowOnSymbolSchema(component: WebviewComponentModel): PropertySchemaEntry | undefined {
-  return state.catalog.find((entry) => entry.typeId === component.typeId)?.propertySchema?.find((schema) => schema.showOnSymbol);
+  return catalogEntryFor(component.typeId)?.propertySchema?.find((schema) => schema.showOnSymbol);
 }
 
 /** Texto do rótulo de valor (ex: "1 kΩ", ou a leitura ao vivo do voltímetro) — `undefined` quando o
@@ -4102,16 +4230,25 @@ function labelPropertyKey(kind: ExternalLabelKind, suffix: "x" | "y" | "rotation
   return `${prefix}${suffix === "rotation" ? "Rotation" : suffix.toUpperCase()}`;
 }
 
+/** `showValue` efetivo de um componente -- `false` incondicional pra typeId com mostrador embutido
+ * no próprio SVG do símbolo (meters/voltímetro/readoutFormat, ver `usesEmbeddedValueLabel`), senão
+ * o valor explícito da instância ou, na ausência, se o catálogo tem alguma propriedade
+ * `showOnSymbol` (default "mostra se tem o que mostrar"). Ponto único -- calculado em dois lugares
+ * antes (`externalLabelText`/`refreshReadouts`) sempre com a mesma expressão. */
+function effectiveShowValue(component: WebviewComponentModel): boolean {
+  if (usesEmbeddedValueLabel(component.typeId)) return false;
+  return component.showValue ?? Boolean(findShowOnSymbolSchema(component));
+}
+
 function externalLabelText(component: WebviewComponentModel, kind: ExternalLabelKind): string | undefined {
   if (kind === "id") {
     return !component.hidden && component.showId ? component.label : undefined;
   }
-  const showValue = usesEmbeddedValueLabel(component.typeId) ? false : component.showValue ?? Boolean(findShowOnSymbolSchema(component));
-  return !component.hidden && showValue ? valueLabelText(component) : undefined;
+  return !component.hidden && effectiveShowValue(component) ? valueLabelText(component) : undefined;
 }
 
 function defaultExternalLabelOffset(component: WebviewComponentModel, kind: ExternalLabelKind): Point {
-  const packageValueLabel = state.catalog.find((entry) => entry.typeId === component.typeId)?.package?.valueLabel;
+  const packageValueLabel = catalogEntryFor(component.typeId)?.package?.valueLabel;
   if (kind === "value" && packageValueLabel) return { x: packageValueLabel.x, y: packageValueLabel.y };
   const box = componentBox(component.typeId, component.properties);
   return kind === "id"
@@ -4132,7 +4269,7 @@ function externalLabelOffset(component: WebviewComponentModel, kind: ExternalLab
 function externalLabelRotation(component: WebviewComponentModel, kind: ExternalLabelKind): 0 | 90 | 180 | 270 {
   const raw = component.properties[labelPropertyKey(kind, "rotation")];
   if (raw === undefined && kind === "value") {
-    const packageRotation = state.catalog.find((entry) => entry.typeId === component.typeId)?.package?.valueLabel?.rotation;
+    const packageRotation = catalogEntryFor(component.typeId)?.package?.valueLabel?.rotation;
     if (packageRotation === -90) return 270;
     if (packageRotation === 0 || packageRotation === 90 || packageRotation === 180 || packageRotation === 270) return packageRotation;
   }
@@ -4173,12 +4310,16 @@ function isMcuHostComponent(component: WebviewComponentModel): boolean {
 }
 
 function isMcuHostTypeId(typeId: string): boolean {
-  const entry = state.catalog.find((catalogEntry) => catalogEntry.typeId === typeId);
+  const entry = catalogEntryFor(typeId);
   return entry?.mcuHost === true;
 }
 
+function serialPortsForTypeId(typeId: string): McuSerialPortEntry[] {
+  return catalogEntryFor(typeId)?.serialPorts ?? [];
+}
+
 function buildExposedComponentMenuItems(component: WebviewComponentModel): ContextMenuItem[] {
-  const sourceId = state.catalog.find((entry) => entry.typeId === component.typeId)?.registeredSourceId;
+  const sourceId = catalogEntryFor(component.typeId)?.registeredSourceId;
   if (!sourceId) return [];
   ensureBoardOverlayData(component);
   const items = boardOverlayDataByComponentId.get(component.id) ?? [];
@@ -4190,9 +4331,16 @@ function buildExposedComponentMenuItems(component: WebviewComponentModel): Conte
         actions.push(
           { label: t("loadFirmware"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestChooseExposedMcuFirmware", outerComponentId: component.id, innerComponentId: item.id }) },
           { label: t("reloadFirmware"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestReloadExposedMcuFirmware", outerComponentId: component.id, innerComponentId: item.id }) },
-          { label: `${t("openSerialMonitor")} USART1`, onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenExposedMcuSerialMonitor", outerComponentId: component.id, innerComponentId: item.id, usartIndex: 0 }) },
-          { label: `${t("openSerialMonitor")} USART2`, onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenExposedMcuSerialMonitor", outerComponentId: component.id, innerComponentId: item.id, usartIndex: 1 }) },
-          { label: `${t("openSerialMonitor")} USART3`, onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenExposedMcuSerialMonitor", outerComponentId: component.id, innerComponentId: item.id, usartIndex: 2 }) },
+          ...serialPortsForTypeId(item.typeId).map((port) => ({
+            label: `${t("openSerialMonitor")} ${port.label}`,
+            onClick: () => send({
+              version: WEBVIEW_MESSAGE_VERSION,
+              type: "requestOpenExposedMcuSerialMonitor",
+              outerComponentId: component.id,
+              innerComponentId: item.id,
+              usartIndex: port.usartIndex,
+            }),
+          } satisfies ContextMenuItem)),
         );
       }
       actions.push({ label: t("properties"), icon: "properties", onClick: () => openExposedInternalPropertyDialog(component.id, sourceId, item) });
@@ -4232,7 +4380,7 @@ function augmentRuntimePropertyFields(component: WebviewComponentModel, fields: 
  * quando o Core ainda não tem schema pra este typeId (registrado-mas-desabilitado, por exemplo) --
  * degradação graciosa, nunca quebra o diálogo. */
 function resolvePropertyFields(component: WebviewComponentModel): PropertyField[] {
-  const catalogEntry = state.catalog.find((entry) => entry.typeId === component.typeId);
+  const catalogEntry = catalogEntryFor(component.typeId);
   const schema = catalogEntry?.propertySchema;
   if (!schema || schema.length === 0) return augmentRuntimePropertyFields(component, inferPropertyFields(component));
 
@@ -4385,9 +4533,21 @@ function renderPropertyField(component: WebviewComponentModel, field: PropertyFi
     return row;
   }
 
+  if (field.kind === "textarea") {
+    const textarea = document.createElement("textarea");
+    textarea.className = "property-sheet__field-input property-sheet__field-input--textarea";
+    textarea.value = String(field.value);
+    textarea.readOnly = Boolean(field.readonly);
+    if (!textarea.readOnly) {
+      textarea.addEventListener("change", () => applyChange(textarea.value));
+    }
+    row.append(caption, textarea);
+    return row;
+  }
+
   const input = document.createElement("input");
   input.className = "property-sheet__field-input";
-  input.type = field.kind === "number" ? "number" : "text";
+  input.type = field.kind === "number" ? "number" : field.kind === "color" ? "color" : "text";
   input.value = String(field.value);
   input.readOnly = field.kind === "readonly" || Boolean(field.readonly);
   if (field.kind === "number") {
@@ -4406,7 +4566,7 @@ function renderPropertyField(component: WebviewComponentModel, field: PropertyFi
 }
 
 function componentTypeLabel(component: WebviewComponentModel): string {
-  return state.catalog.find((entry) => entry.typeId === component.typeId)?.label ?? component.typeId;
+  return catalogEntryFor(component.typeId)?.label ?? component.typeId;
 }
 
 function renderPropertySheet(component: WebviewComponentModel, options: PropertySheetOptions = {}): HTMLElement {
@@ -4432,7 +4592,7 @@ function renderPropertySheet(component: WebviewComponentModel, options: Property
   typeText.textContent = `${t("type")}: ${componentTypeLabel(component)}`;
   const toolbarActions = document.createElement("div");
   toolbarActions.className = "property-sheet__actions";
-  const catalogEntry = state.catalog.find((entry) => entry.typeId === component.typeId);
+  const catalogEntry = catalogEntryFor(component.typeId);
   const helpInfo = catalogEntry?.help;
   const helpButton = document.createElement("button");
   helpButton.type = "button";
@@ -4484,7 +4644,7 @@ function renderPropertySheet(component: WebviewComponentModel, options: Property
     titleRow.append(titleCaption, titleInput);
   }
 
-  const usesSchema = Boolean(state.catalog.find((entry) => entry.typeId === component.typeId)?.propertySchema?.length);
+  const usesSchema = Boolean(catalogEntryFor(component.typeId)?.propertySchema?.length);
   const groups = groupFields(resolvePropertyFields(component));
   // Schema-driven: ordem das abas = ordem de primeira aparição do grupo no schema (Map preserva
   // ordem de inserção) -- nunca prefixado por "Principal", que só faz sentido como fallback da
@@ -4548,7 +4708,7 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     // qualquer ambiguidade se isso mudar no futuro. `"init"` (1ª carga) nunca deveria virar uma
     // entrada de undo -- reseta o histórico pro estado recém-carregado em vez de registrar transição.
     if (message.type === "syncState" && !symbolAuthoringContext) {
-      recordUndoTransition(snapshotOfProjectState(message.project));
+      recordUndoTransition(undoContentKey(message.project), () => snapshotOfProjectState(message.project));
     }
     state = message.project;
     syncPackageRegistry(state.catalog);
@@ -4558,6 +4718,36 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
       pendingWireBendLengths = [];
     }
     if (message.type === "init") resetUndoHistory(mainUndoHistory);
+    vscode?.setState(state);
+    render();
+    refreshOpenPropertyDialog();
+  }
+
+  // PC-1/EX-7: versão incremental de "syncState" -- `patch` só tem os campos de `WebviewProjectState`
+  // que mudaram desde o último sync (ver `extension.ts::computeProjectStatePatch`), nunca substitui
+  // `state` por inteiro (campo ausente == sem mudança, não "esvaziar"). Mesmo pós-processamento do
+  // handler de "syncState" acima, exceto `resetUndoHistory` (nunca é um "1º load"). `syncPackageRegistry`
+  // só roda quando `catalog` de fato veio no patch -- reduz ainda mais o retrabalho quando só
+  // posição/propriedade de componente mudou.
+  if (message.type === "syncStatePatch") {
+    // `pendingConnection: null` é o sentinela de "limpar" (ver `extension.ts::computeProjectStatePatch`
+    // -- `undefined` não sobrevive a um JSON.stringify, a chave some sem deixar rastro) -- convertido
+    // de volta pra `undefined` aqui, único jeito de `WebviewProjectState` continuar tipado certo.
+    const merged: WebviewProjectState = {
+      ...state,
+      ...message.patch,
+      pendingConnection: message.patch.pendingConnection === null ? undefined : message.patch.pendingConnection ?? state.pendingConnection,
+    };
+    if (!symbolAuthoringContext) {
+      recordUndoTransition(undoContentKey(merged), () => snapshotOfProjectState(merged));
+    }
+    state = merged;
+    if (message.patch.catalog) syncPackageRegistry(state.catalog);
+    if (!state.pendingConnection) {
+      pendingWirePreviewTarget = undefined;
+      pendingWireRoute = [];
+      pendingWireBendLengths = [];
+    }
     vscode?.setState(state);
     render();
     refreshOpenPropertyDialog();
@@ -4577,10 +4767,20 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     readoutsByComponentId = message.readoutsByComponentId;
     updateReadoutHistories(message.readoutsByComponentId);
     // `render()` reconstrói o DOM inteiro -- chamado SEM CONDIÇÃO a cada poll de telemetria (~300ms
-    // durante a simulação) destruiria um arrasto de componente em andamento (ver doc de
-    // `isDraggingComponent`). Os dados (`readoutsByComponentId`) já ficaram atualizados acima; só a
-    // TELA fica momentaneamente atrasada até o usuário soltar o mouse (que já chama `render()`).
-    if (!isDraggingComponent) render();
+    // durante a simulação) destruiria um arrasto em andamento (ver doc de
+    // `isInteractiveGestureInProgress`). Os dados (`readoutsByComponentId`) já ficaram atualizados
+    // acima; só a TELA fica momentaneamente atrasada até o usuário soltar o mouse (que já atualiza).
+    if (!isInteractiveGestureInProgress()) {
+      // Só typeIds com `usesEmbeddedValueLabel` desenham a leitura DENTRO do próprio SVG do símbolo
+      // (mostrador do voltímetro/amperímetro/frequencímetro/osciloscópio/analisador lógico, ver
+      // `symbolReadoutNumber`/`symbolReadoutArray` em componentSymbols.ts) -- só esses exigem
+      // reconstruir o SVG inteiro a cada tick. Qualquer outro componente com leitura ao vivo usa só o
+      // rótulo de valor FORA do SVG (`refreshReadouts`, texto simples), bem mais barato que um
+      // `render()` completo do canvas -- sem isto, `refreshReadouts` nunca era chamado (função morta).
+      const needsFullRender = state.components.some((component) => usesEmbeddedValueLabel(component.typeId));
+      if (needsFullRender) render();
+      else refreshReadouts();
+    }
     refreshOpenPropertyDialog();
   }
 
@@ -4592,12 +4792,12 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
 
   if (message.type === "boardOverlayData") {
     boardOverlayDataByComponentId.set(message.componentId, message.items);
-    if (!isDraggingComponent) render();
+    if (!isInteractiveGestureInProgress()) render();
   }
 
   if (message.type === "wireVoltages") {
     voltagesByWireId = message.voltagesByWireId;
-    if (!isDraggingComponent) render();
+    if (!isInteractiveGestureInProgress()) render();
   }
 
   if (message.type === "simulationStatus") {
@@ -4670,7 +4870,7 @@ function enterPlacementMode(typeId: string): void {
     placementGhostEl.className = "placement-ghost";
     document.body.appendChild(placementGhostEl);
   }
-  const descriptor = state.catalog.find((e) => e.typeId === typeId);
+  const descriptor = catalogEntryFor(typeId);
   placementGhostEl.textContent = descriptor?.label ?? typeId;
   placementGhostEl.classList.add("visible");
   document.body.style.cursor = "crosshair";
@@ -4710,7 +4910,7 @@ function componentsToAddForTypeId(typeId: string): WebviewComponentModel[] {
 }
 
 function makeComponentFromTypeId(typeId: string): WebviewComponentModel {
-  const descriptor = state.catalog.find((entry) => entry.typeId === typeId);
+  const descriptor = catalogEntryFor(typeId);
   const componentIndex = state.components.length;
   const pinCount = descriptor?.pinCount ?? 2;
   const baseLabel = descriptor?.label ?? typeId;
@@ -4744,8 +4944,7 @@ function refreshReadouts(): void {
     if (!el) continue;
     const existing = el.querySelector<HTMLElement>(".component__value-label");
 
-    const showValue = usesEmbeddedValueLabel(component.typeId) ? false : component.showValue ?? Boolean(findShowOnSymbolSchema(component));
-    const text = !component.hidden && showValue ? valueLabelText(component) : undefined;
+    const text = externalLabelText(component, "value");
     if (text === undefined) {
       existing?.remove();
       continue;

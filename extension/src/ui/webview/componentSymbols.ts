@@ -10,7 +10,7 @@
  * layout de pino são calculados a partir da caixa do tipo, nunca de uma constante global de tamanho.
  */
 
-import { ComponentViewSpec, PackageDescriptor, PackagePin, PackageShape, SIMULIDE_PACKAGE_GRID_UNIT, SimulidePaintSpec, SimulideQtWidgetSpec, ViewSpecHitTest } from "./model.js";
+import { ComponentViewSpec, JUNCTION_TYPE_ID, PackageDescriptor, PackagePin, PackageShape, SIMULIDE_PACKAGE_GRID_UNIT, SimulidePaintSpec, SimulideQtWidgetSpec, TUNNEL_TYPE_ID, ViewSpecHitTest } from "./model.js";
 import { simulidePaintToPackageShapes } from "./simulidePaint.js";
 
 export interface ComponentBox {
@@ -25,7 +25,6 @@ export const PIN_RADIUS = 4.5;
 const PACKAGE_PIN_LABEL_FONT_SIZE = 7;
 const COMP2PIN_BOX: ComponentBox = { width: 32, height: 16 };
 const SMALL_METER_BOX: ComponentBox = { width: 56, height: 40 };
-const TRANSISTOR_BOX: ComponentBox = { width: 32, height: 32 };
 const TRIANGLE_AMP_BOX: ComponentBox = { width: 48, height: 32 };
 
 // ── Símbolo declarativo real (Épico G) ──────────────────────────────────────────────────────────
@@ -306,7 +305,7 @@ function packageShapeSvg(shape: PackageShape, extraTransform?: string): string {
     case "ellipse":
       return `<ellipse${cls}${xf} cx="${shape.cx ?? 0}" cy="${shape.cy ?? 0}" rx="${shape.rx ?? 0}" ry="${shape.ry ?? 0}" stroke="${shape.stroke ?? "currentColor"}" fill="${fill}" stroke-width="${shape.strokeWidth ?? 1}"${paintAttrs}/>`;
     case "svg":
-      return shape.value ?? "";
+      return safeInlineSvg(shape.value);
     case "polygon": {
       const pts = (shape.points ?? []).map(p => `${p.x},${p.y}`).join(" ");
       return `<polygon${cls}${xf} points="${pts}" stroke="${shape.stroke ?? "currentColor"}" fill="${fill}" stroke-width="${shape.strokeWidth ?? 1}"${paintAttrs}/>`;
@@ -314,13 +313,32 @@ function packageShapeSvg(shape: PackageShape, extraTransform?: string): string {
     case "path":
       return `<path${cls}${xf} d="${escapeXmlText(shape.d ?? "")}" stroke="${shape.stroke ?? "currentColor"}" fill="${fill}" stroke-width="${shape.strokeWidth ?? 1}"${paintAttrs}/>`;
     case "image": {
-      const href = shape.href ?? shape.value ?? "";
+      const href = safeImageHref(shape.href ?? shape.value);
       return `<image${cls}${xf} x="${shape.x ?? 0}" y="${shape.y ?? 0}" width="${shape.w ?? 0}" height="${shape.h ?? 0}" preserveAspectRatio="${escapeXmlText(shape.preserveAspectRatio ?? "none")}" href="${escapeXmlText(href)}"${paintAttrs}/>`;
     }
     case "text":
     default:
       return `<text${cls}${xf} x="${shape.x ?? 0}" y="${shape.y ?? 0}" text-anchor="${shape.textAnchor ?? "middle"}" font-size="${shape.fontSize ?? 11}"${shape.dominantBaseline ? ` dominant-baseline="${shape.dominantBaseline}"` : ""}${shape.fontFamily ? ` font-family="${escapeXmlText(shape.fontFamily)}"` : ""}${shape.fontWeight ? ` font-weight="${escapeXmlText(String(shape.fontWeight))}"` : ""} fill="${shape.color ?? "currentColor"}"${paintAttrs}>${packageTextContent(shape)}</text>`;
   }
+}
+
+function safeInlineSvg(value: string | undefined): string {
+  if (!value) return "";
+  if (/<\s*script\b/i.test(value)) return "";
+  if (/<\s*foreignObject\b/i.test(value)) return "";
+  if (/\son[a-z]+\s*=/i.test(value)) return "";
+  if (/javascript\s*:/i.test(value)) return "";
+  return value;
+}
+
+function safeImageHref(value: string | undefined): string {
+  if (!value) return "";
+  const trimmed = value.trim();
+  if (/^data:image\//i.test(trimmed)) return trimmed;
+  if (/^#/i.test(trimmed)) return trimmed;
+  if (/^(?:https?:|file:|javascript:)/i.test(trimmed)) return "";
+  if (trimmed.includes("..")) return "";
+  return trimmed;
 }
 
 /** Tradutor genérico SimulIDE→LasecSimul pra typeIds BUILT-IN (sem `devices/*.json`/`package`).
@@ -659,7 +677,7 @@ function viewSpecHitTestSvg(id: string, region: ViewSpecHitTest, extraClasses: s
 /** Renderiza o corpo SVG de um ViewSpec: gradientes escopados por `componentId` + paint items com
  * stateProjection inicial. `fill: "gradient:name"` resolve para `url(#name-componentId)`.
  * Retorna `undefined` se `pkg.viewSpec` está ausente (caller cai para shapes[]). */
-function viewSpecBodySvg(pkg: PackageDescriptor, componentId: string, properties: Record<string, unknown>): string | undefined {
+function viewSpecBodySvg(pkg: PackageDescriptor, componentId: string, properties: Record<string, unknown>, includePaint = true): string | undefined {
   const spec = pkg.viewSpec;
   if (!spec) return undefined;
 
@@ -686,15 +704,17 @@ function viewSpecBodySvg(pkg: PackageDescriptor, componentId: string, properties
 
   // Render paint items
   let paintMarkup = "";
-  for (const shape of spec.paint) {
-    const projection = shape.partId ? viewSpecResolvedProjection(shape.partId, spec, properties) : {};
-    if (projection.visible === false) continue;
-    const projectedShape = projection.fill ? { ...shape, fill: projection.fill } : shape;
-    // Resolve gradient references in fill
-    const resolvedShape: PackageShape = gradientIdMap.has(projectedShape.fill ?? "")
-      ? { ...projectedShape, fill: gradientIdMap.get(projectedShape.fill!)! }
-      : projectedShape;
-    paintMarkup += packageShapeSvg(resolvedShape, projection.transform);
+  if (includePaint) {
+    for (const shape of spec.paint ?? []) {
+      const projection = shape.partId ? viewSpecResolvedProjection(shape.partId, spec, properties) : {};
+      if (projection.visible === false) continue;
+      const projectedShape = projection.fill ? { ...shape, fill: projection.fill } : shape;
+      // Resolve gradient references in fill
+      const resolvedShape: PackageShape = gradientIdMap.has(projectedShape.fill ?? "")
+        ? { ...projectedShape, fill: gradientIdMap.get(projectedShape.fill!)! }
+        : projectedShape;
+      paintMarkup += packageShapeSvg(resolvedShape, projection.transform);
+    }
   }
 
   let hitTestMarkup = "";
@@ -922,14 +942,18 @@ function packageBodySvg(resolved: ResolvedPackage, componentId?: string, propert
   let markup = packageBackgroundSvg(pkg);
   const scopeId = `simulide-${componentId ? componentId.replace(/[^a-zA-Z0-9_-]/g, "_") : "static"}`;
 
+  const hasViewSpec = Boolean(pkg.viewSpec && componentId);
   if (pkg.simulidePaint) {
     for (const shape of simulidePaintToPackageShapes(pkg.simulidePaint, pkg.width, pkg.height, properties ?? {}, scopeId)) markup += packageShapeSvg(shape);
   } else if (pkg.qtWidget) {
     markup += simulideQtWidgetSvg(pkg.qtWidget, properties ?? {}, scopeId);
-  } else if (pkg.viewSpec && componentId) {
-    markup += viewSpecBodySvg(pkg, componentId, properties ?? {}) ?? "";
+  } else if (hasViewSpec) {
+    markup += viewSpecBodySvg(pkg, componentId!, properties ?? {}) ?? "";
   } else {
     for (const shape of pkg.shapes ?? []) markup += packageShapeSvg(shape);
+  }
+  if (hasViewSpec && (pkg.simulidePaint || pkg.qtWidget)) {
+    markup += viewSpecBodySvg(pkg, componentId!, properties ?? {}, false) ?? "";
   }
   if (pkg.initialTransform?.rotateDeg) {
     const cx = pkg.initialTransform.cx ?? pkg.width / 2;
@@ -958,22 +982,11 @@ function packageBodySvg(resolved: ResolvedPackage, componentId?: string, propert
 
 const DEFAULT_BOX: ComponentBox = { width: 70, height: 40 };
 
-function ioComponentBox(widthCells: number, rows: number, hasLabel = true): ComponentBox {
-  // SimulIDE: src/components/iocomponent.cpp::setNumPins().
-  const heightRows = hasLabel ? rows + 1 : rows;
-  return { width: widthCells * 8 + 16, height: heightRows * 8 };
-}
-
-function logicComponentBox(widthCells: number, heightRows: number): ComponentBox {
-  // SimulIDE: several LogicComponent subclasses set m_area directly from m_width/m_height.
-  return { width: widthCells * 8 + 16, height: heightRows * 8 };
-}
-
 function builtinComponentBox(typeId: string): ComponentBox | undefined {
   switch (typeId) {
-    case "connectors.junction": return { width: 0, height: 0 };
+    case JUNCTION_TYPE_ID: return { width: 0, height: 0 };
     case "connectors.bus": return { width: 24, height: 64 }; // logic/bus.cpp: tronco vertical
-    case "connectors.tunnel": return tunnelBox();
+    case TUNNEL_TYPE_ID: return tunnelBox();
     case "connectors.socket": return { width: 24, height: 64 }; // connectors/socket.cpp + connbase.cpp
     case "connectors.header": return { width: 24, height: 64 }; // connectors/header.cpp + connbase.cpp
 
@@ -1001,37 +1014,8 @@ function builtinComponentBox(typeId: string): ComponentBox | undefined {
     case "passive.variable_capacitor": return { width: 40, height: 24 };
     case "passive.inductor": return COMP2PIN_BOX;
     case "passive.variable_inductor": return { width: 40, height: 24 };
-    case "passive.transformer": return { width: 56, height: 64 };
 
     case "logic.button": return COMP2PIN_BOX;
-    case "logic.buffer": return ioComponentBox(2, 1, false);
-    case "logic.and_gate": return ioComponentBox(2, 2, false);
-    case "logic.or_gate": return ioComponentBox(2, 2, false);
-    case "logic.xor_gate": return ioComponentBox(2, 2, false);
-    case "logic.counter": return logicComponentBox(3, 3); // logic/counter.cpp
-    case "logic.bin_counter": return logicComponentBox(4, 6); // logic/bincounter.cpp
-    case "logic.full_adder": return { width: 40, height: 32 }; // logic/fulladder.cpp
-    case "logic.magnitude_comp": return logicComponentBox(4, 4); // logic/magnitudecomp.cpp
-    case "logic.shift_reg": return logicComponentBox(4, 9); // logic/shiftreg.cpp
-    case "logic.function": return ioComponentBox(3, 4);
-    case "logic.flipflop_d": return logicComponentBox(3, 3); // logic/flipflopd.cpp
-    case "logic.flipflop_t": return logicComponentBox(3, 3); // logic/flipflopt.cpp
-    case "logic.flipflop_rs": return logicComponentBox(3, 4); // logic/flipfloprs.cpp
-    case "logic.flipflop_jk": return logicComponentBox(3, 4); // logic/flipflopjk.cpp
-    case "logic.latch_d": return logicComponentBox(4, 10); // logic/latchd.cpp
-    case "logic.memory": return logicComponentBox(4, 11); // logic/memory.cpp
-    case "logic.dynamic_memory": return logicComponentBox(4, 11); // logic/dynamic_memory.cpp
-    case "logic.i2c_ram": return logicComponentBox(4, 4); // logic/i2cram.cpp
-    case "logic.mux": return { width: 50, height: 114 }; // logic/mux.cpp, default channels + enables.
-    case "logic.demux": return { width: 50, height: 114 };
-    case "logic.bcd_to_dec": return logicComponentBox(4, 11); // logic/bcdtodec.cpp
-    case "logic.dec_to_bcd": return logicComponentBox(4, 10); // logic/dectobcd.cpp
-    case "logic.bcd_to_7seg": return logicComponentBox(4, 8); // logic/bcdto7s.cpp
-    case "logic.i2c_to_parallel": return logicComponentBox(4, 8); // logic/i2ctoparallel.cpp
-    case "logic.adc": return logicComponentBox(4, 9); // logic/adc.cpp
-    case "logic.dac": return logicComponentBox(4, 9); // logic/dac.cpp
-    case "logic.seven_segment_bcd": return logicComponentBox(4, 6); // logic/sevensegment_bcd.cpp
-    case "logic.lm555": return { width: 48, height: 40 }; // logic/lm555.cpp
 
     // "switches.push"/"switches.switch"/"switches.switch_dip"/"switches.relay" agora vêm de
     // `package.simulidePaint` real (ver component-catalog.json + `registerPackage`) -- caixa
@@ -1041,12 +1025,6 @@ function builtinComponentBox(typeId: string): ComponentBox | undefined {
 
     case "active.diode": return COMP2PIN_BOX;
     case "active.zener": return { width: 36, height: 20 };
-    case "active.diac": return { width: 36, height: 32 }; // active/diac.cpp
-    case "active.scr": return { width: 32, height: 24 };
-    case "active.triac": return { width: 32, height: 32 };
-    case "active.bjt": return TRANSISTOR_BOX;
-    case "active.mosfet": return TRANSISTOR_BOX;
-    case "active.jfet": return TRANSISTOR_BOX;
     case "active.opamp": return TRIANGLE_AMP_BOX;
     case "active.comparator": return TRIANGLE_AMP_BOX;
     case "active.analog_mux": return { width: 32, height: 72 }; // active/mux_analog.cpp (8 canais default)
@@ -1056,24 +1034,9 @@ function builtinComponentBox(typeId: string): ComponentBox | undefined {
     case "outputs.led_rgb": return { width: 24, height: 24 }; // outputs/leds/ledrgb.cpp
     case "outputs.led_bar": return { width: 20, height: 64 }; // outputs/leds/ledbar.cpp
     case "outputs.led_matrix": return { width: 72, height: 72 };
-    case "outputs.max72xx_matrix": return { width: 264, height: 88 }; // outputs/leds/max72xx_matrix.cpp
-    case "outputs.ws2812": return { width: 24, height: 24 };
     case "outputs.seven_segment": return { width: 40, height: 56 }; // outputs/leds/sevensegment.cpp
-    case "outputs.hd44780": return { width: 210, height: 75 }; // outputs/displays/hd44780_base.cpp + pins.
-    case "outputs.aip31068_i2c": return { width: 210, height: 75 };
-    case "outputs.pcd8544": return { width: 104, height: 84 };
-    case "outputs.ks0108": return { width: 148, height: 100 };
-    case "outputs.ssd1306": return { width: 140, height: 88 };
-    case "outputs.sh1107": return { width: 88, height: 144 };
-    case "outputs.st7735": return { width: 144, height: 184 };
-    case "outputs.st7789": return { width: 252, height: 342 };
-    case "outputs.ili9341": return { width: 252, height: 342 };
-    case "outputs.gc9a01a": return { width: 252, height: 252 };
-    case "outputs.pcf8833": return { width: 144, height: 152 };
     case "outputs.dc_motor": return { width: 80, height: 66 };
     case "outputs.stepper": return { width: 114, height: 100 };
-    case "outputs.servo": return { width: 96, height: 80 };
-    case "outputs.audio_out": return { width: 32, height: 40 };
     case "outputs.incandescent_lamp": return { width: 32, height: 32 };
 
     case "instruments.voltmeter": return SMALL_METER_BOX;
@@ -1109,7 +1072,7 @@ function propertyDrivenBox(typeId: string, properties: Record<string, unknown> |
   if (!properties) return undefined;
   const numberOf = (key: string): number | undefined => (typeof properties[key] === "number" ? (properties[key] as number) : undefined);
   switch (typeId) {
-    case "connectors.tunnel":
+    case TUNNEL_TYPE_ID:
       return tunnelBox(properties);
     case "graphics.rectangle":
     case "graphics.ellipse":
@@ -1187,7 +1150,7 @@ export function hasRealPinPosition(typeId: string, pinId: string, properties?: R
 }
 
 export function componentLocalOrigin(typeId: string, properties?: Record<string, unknown>): { x: number; y: number } | undefined {
-  if (typeId === "connectors.tunnel") return tunnelOrigin(properties);
+  if (typeId === TUNNEL_TYPE_ID) return tunnelOrigin(properties);
   if (properties?.__simulideQtOrigin === true) {
     const resolved = resolvedPackageFor(typeId, properties);
     if (resolved) {
@@ -1207,7 +1170,7 @@ export function pinLocalPosition(pinId: string, pinIndex: number, pinCount: numb
       return { x: pin.tipX * instanceScale.x, y: pin.tipY * instanceScale.y };
     }
   }
-  if (typeId === "connectors.junction") return { x: 0, y: 0 };
+  if (typeId === JUNCTION_TYPE_ID) return { x: 0, y: 0 };
   const box = componentBox(typeId, properties);
   // SimulIDE sources/ground.cpp:
   //   m_area = QRect(-8,-10,16,12)
@@ -1217,7 +1180,7 @@ export function pinLocalPosition(pinId: string, pinIndex: number, pinCount: numb
   if (typeId === "other.ground" && pinCount <= 1) {
     return { x: box.width / 2, y: 0 };
   }
-  if (typeId === "connectors.tunnel" && pinCount <= 1) {
+  if (typeId === TUNNEL_TYPE_ID && pinCount <= 1) {
     return tunnelOrigin(properties);
   }
   // logic/bus.cpp real só tem 1 pino elétrico (o Core modela como Junction, ver
@@ -1275,26 +1238,6 @@ export function pinLocalPosition(pinId: string, pinIndex: number, pinCount: numb
       // mesma convenção 0/width antes, mas sem case aqui o fallback genérico usava PIN_INSET(6) em
       // vez de 0, deixando a bolinha de ligação 6px longe da ponta do traço desenhado).
       if (pinCount <= 2) return { x: pinIndex === 0 ? 0 : box.width, y: box.height / 2 };
-      break;
-    case "active.diac":
-      if (pinCount <= 2) return { x: pinIndex === 0 ? 0 : box.width, y: 16 };
-      break;
-    case "active.scr":
-      if (pinIndex === 0) return { x: 0, y: 8 };
-      if (pinIndex === 1) return { x: 32, y: 8 };
-      if (pinIndex === 2) return { x: 32, y: 16 };
-      break;
-    case "active.triac":
-      if (pinIndex === 0) return { x: 0, y: 16 };
-      if (pinIndex === 1) return { x: 32, y: 16 };
-      if (pinIndex === 2) return { x: 32, y: 28 };
-      break;
-    case "active.bjt":
-    case "active.mosfet":
-    case "active.jfet":
-      if (pinIndex === 0) return { x: 24, y: 0 };
-      if (pinIndex === 1) return { x: 24, y: 32 };
-      if (pinIndex === 2) return { x: 0, y: 16 };
       break;
     case "active.opamp":
     case "active.comparator":
@@ -1661,7 +1604,7 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
     case "other.ground":
       return builtinPaintSvg(GROUND_PAINT, box);
 
-    case "connectors.tunnel":
+    case TUNNEL_TYPE_ID:
       return builtinPaintSvg(tunnelPaintSpec(properties), box, properties);
 
     case "connectors.bus": {

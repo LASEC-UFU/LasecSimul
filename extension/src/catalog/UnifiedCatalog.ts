@@ -1,7 +1,8 @@
 import * as fs from "fs";
 import * as path from "path";
-import { PackageDescriptor, PropertySchemaEntry, WebviewComponentCatalogEntry } from "../ui/webview/model";
+import { McuSerialPortEntry, PackageDescriptor, PropertySchemaEntry, WebviewComponentCatalogEntry } from "../ui/webview/model";
 import { defaultComponentCatalog } from "../ui/webview/catalog";
+import { sanitizeMcuSerialPorts } from "./catalogMetadata";
 
 export type RegisteredSourceKind = "abi-device" | "mcu-adapter" | "subcircuit-file";
 
@@ -36,6 +37,7 @@ export interface UnifiedCatalogItem {
    * true` já presente em `component-catalog.json` nunca chegava na Webview -- bug encontrado ao
    * implementar o overlay de Modo Placa no circuito principal. */
   graphical?: boolean;
+  serialPorts?: McuSerialPortEntry[];
 }
 
 /** Tradução de um item do catálogo pra uma língua — subconjunto dos mesmos campos visíveis
@@ -100,7 +102,18 @@ function sanitizeFolderPath(input: string[] | undefined): string[] {
   return out;
 }
 
-function entryToWebview(item: UnifiedCatalogItem): WebviewComponentCatalogEntry {
+/** PC-16 (.spec/lasecsimul-native-devices.spec): `item` vem de JSON externo
+ * (`component-catalog.json`/registro de device) só com o CONTAINER checado (`readUnifiedCatalogFile`
+ * garante que `items` é array, nunca que cada `item.pinIds` de fato é `string[]`) -- sem isto, um
+ * `pinIds` mal formado (ex: string em vez de array) passava direto pro tipo `WebviewComponentCatalogEntry`
+ * e derrubava `extension.ts::pinsForTypeId` com `TypeError` ao criar um componente desse typeId. */
+export function sanitizeStringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const strings = value.filter((entry): entry is string => typeof entry === "string");
+  return strings.length > 0 ? strings : undefined;
+}
+
+export function entryToWebview(item: UnifiedCatalogItem): WebviewComponentCatalogEntry {
   const folderPath = sanitizeFolderPath(item.folderPath);
   const category = folderPath[0] ?? item.category ?? "Outros";
   const subcategory = folderPath.length > 1 ? folderPath[1] : item.subcategory;
@@ -116,12 +129,13 @@ function entryToWebview(item: UnifiedCatalogItem): WebviewComponentCatalogEntry 
     package: item.package,
     propertySchema: item.propertySchema,
     pinCount: item.pinCount,
-    pinIds: item.pinIds,
+    pinIds: sanitizeStringArray(item.pinIds),
     defaultProperties: item.defaultProperties ?? {},
     hidden: item.hidden,
     disabled: item.disabled,
     disabledReason: item.disabledReason,
     graphical: item.graphical,
+    serialPorts: sanitizeMcuSerialPorts(item.serialPorts),
   };
 }
 

@@ -73,6 +73,15 @@ public:
     void connectWire(uint32_t componentA, const std::string& pinIdA, uint32_t componentB,
                       const std::string& pinIdB);
 
+    /** Inverso de `connectWire` -- remove SÓ este fio específico (Netlist::disconnectWire), sem
+     * tocar em nenhum outro componente/fio (EX-6.1/EX-6.2, .spec/lasecsimul-native-devices.spec) --
+     * antes disto, a Extension não tinha como remover um fio sem reconstruir o circuito inteiro do
+     * zero (removeComponent+addComponent+connectWire de TODOS os componentes). Devolve `false` (sem
+     * marcar a topologia como suja) se este par de pinos não estava conectado -- idempotente, igual
+     * a `removeComponent`. Marca a topologia como suja só quando de fato removeu algo. */
+    bool disconnectWire(uint32_t componentA, const std::string& pinIdA, uint32_t componentB,
+                         const std::string& pinIdB);
+
     /** Renomeia (ou remove, se newName vazio) o nome de túnel do pino `pinId` da instância
      * `component` — ver .spec, seção 7.2. Marca a topologia como suja. */
     void setTunnelName(uint32_t component, const std::string& pinId, const std::string& oldName,

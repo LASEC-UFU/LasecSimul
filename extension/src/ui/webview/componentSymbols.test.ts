@@ -292,6 +292,45 @@ import { PackageDescriptor } from "./model";
     assert(svg.includes('<image class="simulide-image" x="4" y="4" width="16" height="12" preserveAspectRatio="xMidYMid meet" href="data:image/png;base64,AAAA"'), `image deveria renderizar no package, markup: ${svg}`);
   });
 
+  await test("packageSymbolSvg bloqueia svg inline perigoso em shapes[]", () => {
+    registerPackage("test.unsafe-svg-shape", {
+      width: 20,
+      height: 20,
+      pins: [{ id: "p1", x: 0, y: 10, angle: 180, length: 0, label: "" }],
+      shapes: [
+        { kind: "svg", value: '<script>alert("x")</script><rect width="20" height="20"/>' },
+        { kind: "svg", value: '<g onclick="alert(1)"><rect width="10" height="10"/></g>' },
+        { kind: "svg", value: '<path d="M0 0 L10 10"/>' },
+      ],
+    });
+    const svg = packageSymbolSvg("test.unsafe-svg-shape") ?? "";
+    assert(!svg.includes("<script"), `script inline nao deveria sobreviver, markup: ${svg}`);
+    assert(!svg.includes("onclick"), `handler inline nao deveria sobreviver, markup: ${svg}`);
+    assert(svg.includes('<path d="M0 0 L10 10"/>'), `svg inline seguro deveria ser preservado, markup: ${svg}`);
+  });
+
+  await test("package.viewSpec adiciona hit-test mesmo quando simulidePaint desenha o corpo", () => {
+    registerPackage("test.viewspec-over-simulide-paint", {
+      width: 20,
+      height: 20,
+      pins: [{ id: "p1", x: 0, y: 10, angle: 180, length: 0, label: "" }],
+      simulidePaint: {
+        version: 1,
+        bounds: { x: 0, y: 0, w: 20, h: 20 },
+        primitives: [{ kind: "rect", x: 0, y: 0, w: 20, h: 20, fill: "#ff0000" }],
+      },
+      viewSpec: {
+        paint: [{ kind: "rect", x: 0, y: 0, w: 20, h: 20, fill: "#00ff00" }],
+        interaction: { press: { kind: "press", hitTest: "button", prop: "pressed" } },
+        hitTest: { button: { kind: "rect", x: 2, y: 2, w: 16, h: 16, cursor: "pointer" } },
+      },
+    });
+    const svg = packageSymbolSvg("test.viewspec-over-simulide-paint", {}, "viewspec-overlay") ?? "";
+    assert(svg.includes('fill="#ff0000"'), `simulidePaint deveria continuar desenhando o corpo, markup: ${svg}`);
+    assert(!svg.includes('fill="#00ff00"'), `paint do viewSpec nao deveria duplicar quando simulidePaint existe, markup: ${svg}`);
+    assert(svg.includes('data-viewspec-hit-id="button"') && svg.includes("viewspec-hit-button"), `hit-test do viewSpec deveria ser composto sobre simulidePaint, markup: ${svg}`);
+  });
+
   await test("package.simulidePaint traduz coordenadas locais do SimulIDE antes de viewSpec/shapes", () => {
     const simulidePkg: PackageDescriptor = {
       width: 16,

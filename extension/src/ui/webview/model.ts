@@ -16,6 +16,11 @@ export type ReadoutFormatEntry =
 /** Mesma convenção de `ReadoutFormatEntry`, pra como a UI trata clique/arrasto sem checar typeId. */
 export type InteractionKindEntry = "momentary" | "toggle" | "none" | "joystick" | "encoder" | "touchpad";
 
+export interface McuSerialPortEntry {
+  label: string;
+  usartIndex: 0 | 1 | 2;
+}
+
 export interface WebviewComponentModel {
   id: string;
   typeId: string;
@@ -335,6 +340,18 @@ export interface SimulideQtWidgetSpec {
 /** SimulIDE stores Package.Width/Height in schematic grid cells; each cell is 8 scene units. */
 export const SIMULIDE_PACKAGE_GRID_UNIT = 8;
 
+/** typeId de `connectors.tunnel` -- ponto único (TR-7, .spec/lasecsimul-native-devices.spec), usado
+ * nos vários lugares (symbolAuthoring.ts/main.ts/componentSymbols.ts/extension.ts) que tratam este
+ * conector como exceção (rótulo derivado ao vivo do nome do net, geometria variável, id embutido no
+ * próprio SVG) -- cada exceção continua com sua própria lógica/justificativa local (não são cópias
+ * do mesmo comportamento, ver histórico de cada call site), só a STRING do typeId é compartilhada
+ * aqui em vez de repetida como literal em cada arquivo. */
+export const TUNNEL_TYPE_ID = "connectors.tunnel";
+
+/** typeId de `connectors.junction` -- mesmo princípio de `TUNNEL_TYPE_ID`, ponto elétrico sem
+ * símbolo/rótulo visível (sempre `hidden: true`), tratado como exceção nos mesmos arquivos. */
+export const JUNCTION_TYPE_ID = "connectors.junction";
+
 // ── ViewSpec (P2) ────────────────────────────────────────────────────────────────────────────────
 // Sistema declarativo de renderização e interação para devices com SVG complexo (gradientes,
 // stateProjection, etc.). Ativa-se quando `package.viewSpec` está presente; fallback para
@@ -600,6 +617,8 @@ export interface WebviewComponentCatalogEntry {
   /** `true` quando esta entrada representa um MCU direto (`mcu-adapter`) OU um subcircuito que
    * hospeda um MCU interno (ex: DevKit/WROOM com ESP32 QEMU dentro). */
   mcuHost?: boolean;
+  /** Portas seriais expostas pelo MCU/subcircuito. Ausente significa que a UI nao oferece monitor serial. */
+  serialPorts?: McuSerialPortEntry[];
   /** ABI v2 -- ver `ReadoutFormatEntry`. Vem de `getPropertySchemas` (`attachPropertySchemas` em
    * extension.ts), mesmo merge de `propertySchema`. */
   readoutFormat?: ReadoutFormatEntry;

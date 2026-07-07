@@ -6,22 +6,6 @@ export interface ProjectSimulationSettings {
   paused?: boolean;
 }
 
-export interface ProjectVisualPin {
-  id: string;
-  x: number;
-  y: number;
-}
-
-export interface ProjectVisualComponent {
-  id: string;
-  typeId: string;
-  x: number;
-  y: number;
-  rotation?: 0 | 90 | 180 | 270;
-  selected?: boolean;
-  pins?: ProjectVisualPin[];
-}
-
 export interface ProjectWire {
   id: string;
   from: { componentId: string; pinId: string };
@@ -71,7 +55,6 @@ export interface ProjectDocument {
   components: ProjectComponent[];
   wires: ProjectWire[];
   visual: {
-    components: ProjectVisualComponent[];
     wires: Array<{ id: string; selected?: boolean; points?: { x: number; y: number }[] }>;
     viewport: { x: number; y: number; zoom: number };
   };
@@ -85,7 +68,6 @@ export function createEmptyProject(): ProjectDocument {
     components: [],
     wires: [],
     visual: {
-      components: [],
       wires: [],
       viewport: { x: 0, y: 0, zoom: 1 },
     },

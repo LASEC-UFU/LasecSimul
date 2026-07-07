@@ -72,6 +72,8 @@ Um subcircuito é definido por um único arquivo `*.lssubcircuit`, com três blo
 3. **Símbolo visual** (`package`) — mesmo bloco `package`/`pins[]` já especificado em `.lsdevice`
    (`lasecsimul-native-devices.spec` seção 21), **reaproveitado tal e qual**, não redesenhado. Um campo só:
    `package.pins[].id` precisa bater com uma entrada de `interface[].pinId`.
+4. **Portas seriais expostas** (`serialPorts[]`) — obrigatorio quando o subcircuito pretende oferecer
+   monitor serial para um MCU interno; a UI nao inventa USART/UART por `typeId`.
 
 ```json
 {

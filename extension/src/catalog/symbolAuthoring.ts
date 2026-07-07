@@ -15,7 +15,7 @@
  * linha: perde precisão de ângulo não-cardinal, ver `snapRotation`).
  */
 import { componentBox } from "../ui/webview/componentSymbols";
-import { PackageBackground, PackageDescriptor, PackagePin, PackageShape, SIMULIDE_PACKAGE_GRID_UNIT, WebviewComponentModel, WebviewWireModel } from "../ui/webview/model";
+import { JUNCTION_TYPE_ID, PackageBackground, PackageDescriptor, PackagePin, PackageShape, SIMULIDE_PACKAGE_GRID_UNIT, TUNNEL_TYPE_ID, WebviewComponentModel, WebviewWireModel } from "../ui/webview/model";
 
 /** Posição/orientação visual de um componente -- mesmo formato de `ProjectComponent.visual`
  * (`project/ProjectTypes.ts`), reaproveitado pro circuito INTERNO de um subcircuito
@@ -199,8 +199,8 @@ export function seedSubcircuitInternalComponents(components: InternalComponentSe
     // `hidden`/`label` -- só é derivado aqui, na hora de semear a sessão) e reaparecia como um
     // círculo com o id bruto ("component-<timestamp>-<random>") escrito por cima, permanentemente
     // visível e sem nenhuma serventia (bug real relatado, `esp32_devkitc_v4.lssubcircuit`).
-    const isJunction = component.typeId === "connectors.junction";
-    const isTunnel = component.typeId === "connectors.tunnel";
+    const isJunction = component.typeId === JUNCTION_TYPE_ID;
+    const isTunnel = component.typeId === TUNNEL_TYPE_ID;
     const tunnelName = isTunnel && typeof component.properties.name === "string" ? component.properties.name : undefined;
     // `label`/`showId` persistidos (ver docstring de `InternalComponentSeed`) só valem pro caso
     // GERAL -- `connectors.tunnel`/`connectors.junction` continuam IGNORANDO qualquer valor salvo
@@ -268,8 +268,8 @@ export function compileSubcircuitInternalComponents(components: WebviewComponent
       // `label`/`showId` só persistem pro caso GERAL -- `connectors.tunnel`/`connectors.junction`
       // nunca leem esses campos de volta no seed (sempre derivados ao vivo), então gravá-los ali
       // seria dado morto no arquivo. `showValue` persiste sempre (nenhum typeId tem exceção).
-      const isJunction = component.typeId === "connectors.junction";
-      const isTunnel = component.typeId === "connectors.tunnel";
+      const isJunction = component.typeId === JUNCTION_TYPE_ID;
+      const isTunnel = component.typeId === TUNNEL_TYPE_ID;
       if (!isJunction && !isTunnel) seed.label = component.label;
       if (!isJunction) seed.showId = component.showId;
       seed.showValue = component.showValue;

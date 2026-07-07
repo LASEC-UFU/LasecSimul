@@ -82,6 +82,20 @@
       "moduleIndex": 2
     }
   ],
+  "serialPorts": [
+    {
+      "label": "UART0",
+      "usartIndex": 0
+    },
+    {
+      "label": "UART1",
+      "usartIndex": 1
+    },
+    {
+      "label": "UART2",
+      "usartIndex": 2
+    }
+  ],
   "pinMap": {
     "GPIO0": {
       "moduleKind": "GPIO",

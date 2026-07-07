@@ -130,6 +130,17 @@ void SimulationSession::connectWire(uint32_t componentA, const std::string& pinI
     m_topologyDirty = true;
 }
 
+bool SimulationSession::disconnectWire(uint32_t componentA, const std::string& pinIdA, uint32_t componentB,
+                                        const std::string& pinIdB) {
+    if (m_netlist.isComponentRemoved(componentA) || m_netlist.isComponentRemoved(componentB))
+        throw std::invalid_argument("SimulationSession::disconnectWire: componente removido");
+    const uint32_t slotA = m_netlist.pinSlotsOf(componentA).at(pinIdA);
+    const uint32_t slotB = m_netlist.pinSlotsOf(componentB).at(pinIdB);
+    const bool removed = m_netlist.disconnectWire(slotA, slotB);
+    if (removed) m_topologyDirty = true;
+    return removed;
+}
+
 void SimulationSession::setTunnelName(uint32_t component, const std::string& pinId, const std::string& oldName,
                                        const std::string& newName) {
     if (m_netlist.isComponentRemoved(component))

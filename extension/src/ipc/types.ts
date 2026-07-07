@@ -38,6 +38,11 @@ export type ReadoutFormatDto =
  * ("joystick", "encoder", "touchpad") que o Core não conhece mas a Extension lê do .lsdevice. */
 export type InteractionKindDto = "momentary" | "toggle" | "none" | "joystick" | "encoder" | "touchpad";
 
+export interface McuSerialPortDto {
+  label: string;
+  usartIndex: 0 | 1 | 2;
+}
+
 export interface TelemetrySample {
   instanceId: string;
   pinId: string;

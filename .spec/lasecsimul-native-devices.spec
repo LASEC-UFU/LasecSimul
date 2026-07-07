@@ -258,6 +258,7 @@ O contrato canônico de componente executável do LasecSimul passa a ser um conj
 - interface elétrica: `pins[]`, `buses[]`;
 - propriedades: `properties[]` com schema tipado;
 - pacote visual: `package`;
+- MCU/QEMU: `serialPorts[]` declarativo para cada porta serial que a UI pode oferecer;
 - execução: `nativeEntry`, `limits`, ABI version.
 
 O mesmo modelo deve servir para:

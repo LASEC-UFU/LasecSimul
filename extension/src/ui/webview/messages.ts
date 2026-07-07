@@ -48,6 +48,18 @@ export type HostToWebviewMessage =
   | { version: number; type: "selectComponent"; componentId: string | null }
   | { version: number; type: "beginComponentPlacement"; typeId: string }
   | { version: number; type: "syncState"; project: WebviewProjectState }
+  /** PC-1/EX-7 (.spec/lasecsimul-native-devices.spec) -- versão incremental de "syncState": só os
+   * campos de nível superior de `WebviewProjectState` que MUDARAM desde o último sync (comparação
+   * por referência no lado da Extension, ver `extension.ts::syncSchematicPanel`). A Webview funde
+   * (`state = {...state, ...patch}`), nunca substitui por inteiro -- um campo ausente aqui significa
+   * "sem mudança", não "esvaziar". `catalog` em especial quase nunca muda, então a maioria dos
+   * patches nem chega a incluí-lo (nem re-clonar do lado da Extension, nem re-registrar pacotes do
+   * lado da Webview). "syncState"/"init" continuam existindo tal como antes pros casos de
+   * ressincronização completa (painel recriado, carga inicial). `pendingConnection` usa `null`
+   * (nunca `undefined`) pra "limpar" -- `undefined` some silenciosamente de um `JSON.stringify`
+   * (chave nem aparece no objeto resultante), então "voltou a `undefined`" ficaria indistinguível de
+   * "não mudou" se não fosse por um sentinela serializável; `null` sobrevive o round-trip inteiro. */
+  | { version: number; type: "syncStatePatch"; patch: Omit<Partial<WebviewProjectState>, "pendingConnection"> & { pendingConnection?: WebviewProjectState["pendingConnection"] | null } }
   | { version: number; type: "componentReadout"; readoutsByComponentId: Record<string, ComponentReadoutValue> }
   | { version: number; type: "wireVoltages"; voltagesByWireId: Record<string, number> }
   | { version: number; type: "simulationStatus"; status: SimulationStatus }

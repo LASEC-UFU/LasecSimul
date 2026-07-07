@@ -1,5 +1,6 @@
-import { InteractionKindDto, PropertySchemaDto, ReadoutFormatDto } from "../ipc/types";
+import { InteractionKindDto, McuSerialPortDto, PropertySchemaDto, ReadoutFormatDto } from "../ipc/types";
 import { PropertySchemaEntry, WebviewComponentCatalogEntry, WebviewComponentModel } from "../ui/webview/model";
+import { sanitizeMcuSerialPortsByTypeId } from "./catalogMetadata";
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -56,23 +57,35 @@ export function toWebviewPropertySchema(dto: PropertySchemaDto): PropertySchemaE
  * obter `schemasByTypeId` via IPC; aqui só o merge é testado, sem precisar de Core real.
  * `readoutFormatByTypeId`/`interactionKindByTypeId` (ABI v2, .spec/lasecsimul-native-devices.spec)
  * são opcionais -- ausentes (chamador antigo, resposta do Core sem os campos novos) preserva
- * exatamente o comportamento de antes desta rodada, sem quebrar nada. */
+ * exatamente o comportamento de antes desta rodada, sem quebrar nada.
+ * `pinIdsByTypeId` só PREENCHE quando `entry.pinIds` ainda está ausente (built-in sem `package`,
+ * ex: passive.resistor/other.ground/connectors.tunnel/sources.rail/sources.fixed_volt/
+ * sources.battery, ver EX-4.2) -- nunca sobrescreve o `pinIds` que devices/mcu-adapter/subcircuit-
+ * file já tinham derivado direto do próprio manifesto (mesma fonte, mas resolvida antes, sem
+ * depender de round-trip com o Core). */
 export function mergePropertySchemas(
   catalog: WebviewComponentCatalogEntry[],
   schemasByTypeId: Record<string, PropertySchemaDto[]>,
   readoutFormatByTypeId: Record<string, ReadoutFormatDto> = {},
-  interactionKindByTypeId: Record<string, InteractionKindDto> = {}
+  interactionKindByTypeId: Record<string, InteractionKindDto> = {},
+  pinIdsByTypeId: Record<string, string[]> = {},
+  serialPortsByTypeId: Record<string, McuSerialPortDto[]> = {}
 ): WebviewComponentCatalogEntry[] {
+  const safeSerialPortsByTypeId = sanitizeMcuSerialPortsByTypeId(serialPortsByTypeId);
   return catalog.map((entry) => {
     const schemas = schemasByTypeId[entry.typeId];
     const readoutFormat = readoutFormatByTypeId[entry.typeId];
     const interactionKind = interactionKindByTypeId[entry.typeId];
-    if ((!schemas || schemas.length === 0) && !readoutFormat && !interactionKind) return entry;
+    const pinIds = entry.pinIds === undefined ? pinIdsByTypeId[entry.typeId] : undefined;
+    const serialPorts = safeSerialPortsByTypeId[entry.typeId];
+    if ((!schemas || schemas.length === 0) && !readoutFormat && !interactionKind && !pinIds && !serialPorts) return entry;
     return {
       ...entry,
       ...(schemas && schemas.length > 0 ? { propertySchema: schemas.map(toWebviewPropertySchema) } : {}),
       ...(readoutFormat ? { readoutFormat } : {}),
       ...(interactionKind ? { interactionKind } : {}),
+      ...(pinIds && pinIds.length > 0 ? { pinIds } : {}),
+      ...(serialPorts && serialPorts.length > 0 ? { serialPorts } : {}),
     };
   });
 }
