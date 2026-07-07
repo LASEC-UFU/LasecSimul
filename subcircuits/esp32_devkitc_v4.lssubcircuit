@@ -2285,6 +2285,7 @@
         "angle": 0,
         "length": 8,
         "label": "Gnd",
+        "labelFontSize": 7,
         "labelX": 274.785,
         "labelY": 77.97064393939394
       },
@@ -2295,8 +2296,9 @@
         "angle": 180,
         "length": 8,
         "label": "3V3",
-        "labelX": -19.215000000000003,
-        "labelY": 64.31155303030302
+        "labelFontSize": 7,
+        "labelX": 34.51000133514405,
+        "labelY": 82.40984587958364
       },
       {
         "id": "G23",
@@ -2305,18 +2307,20 @@
         "angle": 0,
         "length": 8,
         "label": "23",
+        "labelFontSize": 7,
         "labelX": 283.5,
         "labelY": 105.28882575757575
       },
       {
         "id": "EN",
-        "x": 0,
-        "y": 92.19886363636363,
+        "x": 2.625,
+        "y": 94.58922017704356,
         "angle": 180,
         "length": 8,
         "label": "En",
-        "labelX": -17.5,
-        "labelY": 91.62973484848484
+        "labelFontSize": 7,
+        "labelX": 29.05000400543213,
+        "labelY": 106.6547530853387
       },
       {
         "id": "G22",
@@ -2325,6 +2329,7 @@
         "angle": 0,
         "length": 8,
         "label": "22",
+        "labelFontSize": 7,
         "labelX": 283.5,
         "labelY": 132.60700757575756
       },
@@ -2335,8 +2340,9 @@
         "angle": 180,
         "length": 8,
         "label": "VP",
-        "labelX": -17.5,
-        "labelY": 122.36268939393939
+        "labelFontSize": 7,
+        "labelX": 29.225001335144043,
+        "labelY": 132.94849266427937
       },
       {
         "id": "TX",
@@ -2345,6 +2351,7 @@
         "angle": 0,
         "length": 8,
         "label": "Tx",
+        "labelFontSize": 7,
         "labelX": 283.5,
         "labelY": 163.33996212121212
       },
@@ -2355,8 +2362,9 @@
         "angle": 180,
         "length": 8,
         "label": "VN",
-        "labelX": -17.5,
-        "labelY": 153.09564393939394
+        "labelFontSize": 7,
+        "labelX": 28.524998664855957,
+        "labelY": 164.3643913341291
       },
       {
         "id": "RX",
@@ -2365,6 +2373,7 @@
         "angle": 0,
         "length": 8,
         "label": "Rx",
+        "labelFontSize": 7,
         "labelX": 283.5,
         "labelY": 194.07291666666666
       },
@@ -2375,8 +2384,9 @@
         "angle": 180,
         "length": 8,
         "label": "34",
-        "labelX": -17.5,
-        "labelY": 180.41382575757575
+        "labelFontSize": 7,
+        "labelX": 28.525005340576172,
+        "labelY": 191.68256012598673
       },
       {
         "id": "G21",
@@ -2385,6 +2395,7 @@
         "angle": 0,
         "length": 8,
         "label": "21",
+        "labelFontSize": 7,
         "labelX": 283.5,
         "labelY": 224.8058712121212
       },
@@ -2395,8 +2406,9 @@
         "angle": 180,
         "length": 8,
         "label": "35",
-        "labelX": -17.5,
-        "labelY": 211.1467803030303
+        "labelFontSize": 7,
+        "labelX": 29.92500400543213,
+        "labelY": 222.41554072408962
       },
       {
         "id": "GND2",
@@ -2405,6 +2417,7 @@
         "angle": 0,
         "length": 8,
         "label": "Gnd",
+        "labelFontSize": 7,
         "labelX": 274.785,
         "labelY": 252.124053030303
       },
@@ -2415,8 +2428,9 @@
         "angle": 180,
         "length": 8,
         "label": "32",
-        "labelX": -17.5,
-        "labelY": 238.4649621212121
+        "labelFontSize": 7,
+        "labelX": 30.625,
+        "labelY": 249.05075236522788
       },
       {
         "id": "G19",
@@ -2425,6 +2439,7 @@
         "angle": 0,
         "length": 8,
         "label": "19",
+        "labelFontSize": 7,
         "labelX": 280,
         "labelY": 282.85700757575756
       },
@@ -2435,8 +2450,9 @@
         "angle": 180,
         "length": 8,
         "label": "33",
-        "labelX": -17.5,
-        "labelY": 269.19791666666663
+        "labelFontSize": 7,
+        "labelX": 29.92500400543213,
+        "labelY": 277.73484848484844
       },
       {
         "id": "G18",
@@ -2445,6 +2461,7 @@
         "angle": 0,
         "length": 8,
         "label": "18",
+        "labelFontSize": 7,
         "labelX": 280,
         "labelY": 313.58996212121207
       },
@@ -2455,8 +2472,9 @@
         "angle": 180,
         "length": 8,
         "label": "25",
-        "labelX": -17.5,
-        "labelY": 296.51609848484844
+        "labelFontSize": 7,
+        "labelX": 29.92500400543213,
+        "labelY": 307.7848589059078
       },
       {
         "id": "G05",
@@ -2465,6 +2483,7 @@
         "angle": 0,
         "length": 8,
         "label": "5",
+        "labelFontSize": 7,
         "labelX": 287,
         "labelY": 340.9081439393939
       },
@@ -2475,8 +2494,9 @@
         "angle": 180,
         "length": 8,
         "label": "26",
-        "labelX": -17.5,
-        "labelY": 327.249053030303
+        "labelFontSize": 7,
+        "labelX": 30.625,
+        "labelY": 336.4689550255284
       },
       {
         "id": "G17",
@@ -2485,6 +2505,7 @@
         "angle": 0,
         "length": 8,
         "label": "17",
+        "labelFontSize": 7,
         "labelX": 280,
         "labelY": 371.64109848484844
       },
@@ -2495,8 +2516,9 @@
         "angle": 180,
         "length": 8,
         "label": "27",
-        "labelX": -17.5,
-        "labelY": 357.98200757575756
+        "labelFontSize": 7,
+        "labelX": 28,
+        "labelY": 364.811553030303
       },
       {
         "id": "G16",
@@ -2505,18 +2527,20 @@
         "angle": 0,
         "length": 8,
         "label": "16",
+        "labelFontSize": 7,
         "labelX": 276.5,
         "labelY": 398.95928030303025
       },
       {
         "id": "G14",
-        "x": 0,
+        "x": 3.5,
         "y": 385.8693181818182,
         "angle": 180,
         "length": 8,
         "label": "14",
-        "labelX": -17.5,
-        "labelY": 385.3001893939394
+        "labelFontSize": 7,
+        "labelX": 28,
+        "labelY": 392.1297348484848
       },
       {
         "id": "G04",
@@ -2525,6 +2549,7 @@
         "angle": 0,
         "length": 8,
         "label": "4",
+        "labelFontSize": 7,
         "labelX": 280,
         "labelY": 426.27746212121207
       },
@@ -2535,8 +2560,9 @@
         "angle": 180,
         "length": 8,
         "label": "12",
-        "labelX": -17.5,
-        "labelY": 416.0331439393939
+        "labelFontSize": 7,
+        "labelX": 28,
+        "labelY": 426.27746212121207
       },
       {
         "id": "G00",
@@ -2545,6 +2571,7 @@
         "angle": 0,
         "length": 8,
         "label": "0",
+        "labelFontSize": 7,
         "labelX": 280,
         "labelY": 453.59564393939394
       },
@@ -2555,8 +2582,9 @@
         "angle": 180,
         "length": 8,
         "label": "Gnd",
-        "labelX": -19.215000000000003,
-        "labelY": 446.7660984848485
+        "labelFontSize": 7,
+        "labelX": 33.285000000000004,
+        "labelY": 453.59564393939394
       },
       {
         "id": "G02",
@@ -2565,6 +2593,7 @@
         "angle": 0,
         "length": 8,
         "label": "2",
+        "labelFontSize": 7,
         "labelX": 280,
         "labelY": 480.91382575757575
       },
@@ -2575,8 +2604,9 @@
         "angle": 180,
         "length": 8,
         "label": "13",
-        "labelX": -17.5,
-        "labelY": 474.0842803030303
+        "labelFontSize": 7,
+        "labelX": 28,
+        "labelY": 484.3285984848485
       },
       {
         "id": "G15",
@@ -2585,6 +2615,7 @@
         "angle": 0,
         "length": 8,
         "label": "15",
+        "labelFontSize": 7,
         "labelX": 273,
         "labelY": 508.23200757575756
       },
@@ -2595,8 +2626,9 @@
         "angle": 180,
         "length": 8,
         "label": "D2",
-        "labelX": -17.5,
-        "labelY": 504.8172348484849
+        "labelFontSize": 7,
+        "labelX": 31.5,
+        "labelY": 515.061553030303
       },
       {
         "id": "D1",
@@ -2605,6 +2637,7 @@
         "angle": 0,
         "length": 8,
         "label": "D1",
+        "labelFontSize": 7,
         "labelX": 273,
         "labelY": 532.1354166666666
       },
@@ -2615,8 +2648,9 @@
         "angle": 180,
         "length": 8,
         "label": "D3",
-        "labelX": -17.5,
-        "labelY": 532.1354166666666
+        "labelFontSize": 7,
+        "labelX": 31.5,
+        "labelY": 542.3797348484849
       },
       {
         "id": "D0",
@@ -2625,18 +2659,20 @@
         "angle": 0,
         "length": 8,
         "label": "D0",
+        "labelFontSize": 7,
         "labelX": 273,
         "labelY": 562.8683712121212
       },
       {
         "id": "CM",
-        "x": 0,
-        "y": 563.4375,
+        "x": 3.5,
+        "y": 560.0227272727273,
         "angle": 180,
         "length": 8,
         "label": "Cm",
-        "labelX": -17.5,
-        "labelY": 562.8683712121212
+        "labelFontSize": 7,
+        "labelX": 35,
+        "labelY": 566.283143939394
       },
       {
         "id": "CK",
@@ -2645,18 +2681,20 @@
         "angle": 0,
         "length": 8,
         "label": "Ck",
+        "labelFontSize": 7,
         "labelX": 273,
         "labelY": 586.7717803030303
       },
       {
         "id": "5V",
-        "x": 0,
-        "y": 590.7556818181818,
+        "x": 3.5,
+        "y": 587.340909090909,
         "angle": 180,
         "length": 8,
         "label": "5V",
-        "labelX": -17.5,
-        "labelY": 593.6013257575758
+        "labelFontSize": 7,
+        "labelX": 31.5,
+        "labelY": 590.186553030303
       }
     ],
     "pinLabelColor": "#FAFAC8",

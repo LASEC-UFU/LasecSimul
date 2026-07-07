@@ -1574,3 +1574,49 @@ Disparado pela Webview ao clicar no botão "Ajuda" quando `help.url` está prese
 simplesmente chama `vscode.env.openExternal(vscode.Uri.parse(url))` — sem validação adicional (a URL
 vem do manifesto de primeira parte ou de item registrado pelo usuário, já confiável no mesmo nível que
 o restante do manifesto).
+
+## 16. Bug corrigido: menu de contexto do dispositivo aparece e é substituído pelo menu nativo (2026-07-06)
+
+**Sintoma relatado**: clique direito num dispositivo mostra o menu customizado correto (com todas as
+propriedades/ações) por um instante, mas ele logo desaparece e é substituído por um menu genérico
+com apenas Cortar/Copiar/Colar.
+
+**Causa raiz**: `showContextMenu()` (`extension/src/ui/webview/main.ts`, chamada por TODOS os 5
+handlers de `contextmenu` da Webview -- componente, rótulo de texto externo, corner/segment handle
+de fio, canvas vazio) chamava `event.stopPropagation()` incondicionalmente. Isso cortava a
+propagação do evento DOM antes dele chegar em `window`/`document` -- onde o HOST da Webview do
+VSCode (fora do controle da extensão, parte da infraestrutura de webview do próprio VSCode/Electron)
+também escuta `contextmenu` pra decidir se abre o menu NATIVO (Cortar/Copiar/Colar) do editor, com
+base em `event.defaultPrevented`. Como o evento nunca chegava lá, o host nunca via que o menu já
+tinha sido tratado por completo e abria o nativo por cima -- um instante depois, por ser um
+round-trip nativo/nível-Electron, não um evento DOM síncrono, o que explica o "aparece e some".
+
+Confirmado com uma simulação do algoritmo real de dispatch/bubble (target → ancestors → window,
+checando `defaultPrevented` a cada nível): com `stopPropagation()`, o "host" nunca observa o evento
+e vê `defaultPrevented=false` (abriria o nativo); sem `stopPropagation()`, o host observa
+`defaultPrevented=true` depois que qualquer handler mais específico já tratou o evento.
+
+**Correção**: removido `event.stopPropagation()` de `showContextMenu()` e dos 2 handlers que também
+chamavam explicitamente (componente, rótulo de texto externo) -- `preventDefault()` sozinho já basta
+pra suprimir o menu nativo do navegador E sinalizar (via `defaultPrevented`) pro host que o evento
+foi tratado. Como o evento agora BORBULHA normalmente até o `canvas` (ancestor de todo
+componente/fio/handle no DOM, ver `.canvas` > `.canvas-content` > elementos), o handler de
+`contextmenu` do `canvas` (o "genérico", mostra só "Selecionar tudo" em área vazia) ganhou uma
+guarda `if (event.defaultPrevented) return;` no topo -- nunca substitui um menu mais específico já
+mostrado por um descendente. Os 2 handlers de `handle` (corner/segment de fio) e o de rótulo de
+texto externo NUNCA chamavam `stopPropagation()` diretamente (só via `showContextMenu`), então já
+ficaram corretos automaticamente com a mudança na função compartilhada.
+
+**Por que não é workaround visual**: a causa raiz era a suposição errada de que "cortar a propagação"
+é a forma certa de impedir um menu mais genérico de substituir um mais específico -- na presença de
+um host de Webview que TAMBÉM observa o mesmo evento em `window`/`document`, cortar a propagação tem
+o efeito colateral de esconder do host que o evento já foi tratado. A troca por `defaultPrevented`
+resolve os dois problemas com o MESMO mecanismo idiomático do DOM (`preventDefault()` sinaliza "já
+tratado" pra qualquer observador em qualquer nível da árvore, sem impedir ninguém mais de OBSERVAR o
+evento).
+
+**Limitação desta sessão**: sem GUI disponível neste ambiente pra abrir o VSCode e confirmar
+interativamente que o menu nativo não aparece mais -- a verificação foi (a) compilação limpa
+(`tsc` webview + test), (b) suíte de testes completa sem regressão, e (c) uma simulação numérica do
+algoritmo de bubble/`defaultPrevented` reproduzindo o bug com o código antigo e confirmando a
+correção com o novo. Recomenda-se confirmar visualmente no VSCode real.

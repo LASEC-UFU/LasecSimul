@@ -684,3 +684,90 @@ princípio do zoom uniforme do `QGraphicsView` real, sem hardcode por typeId (qu
 original sem casas decimais extras -- markup byte-a-byte idêntico ao anterior, zero regressão
 (confirmado pelos 40 testes de `componentSymbols.test.ts`, incluindo os 3 que dependiam da
 formatação exata de `"3"`/`"0.5"`/`"7px"`).
+
+### 14.1 Follow-up (mesmo dia): a sessão de autoria (`symbolAuthoring.ts`) não aplicava o mesmo fator
+
+**Sintoma relatado**: com a correção acima em produção, o texto do `package` de um subcircuito
+(ex. `esp32_devkitc_v4.lssubcircuit`) aparecia com um tamanho **na sessão de autoria** (`"Abrir
+Subcircuito"`/editor de símbolo) e com um tamanho **diferente** quando o mesmo subcircuito é usado
+como bloco no schematic normal -- exatamente o problema que a seção 14 deveria ter eliminado por
+completo, mas só resolveu de um lado.
+
+**Causa raiz**: `seedSymbolAuthoringComponents`/`seedPinLabelComponent`/`seedShapeComponent`
+(`symbolAuthoring.ts`) escalam POSIÇÃO (`pin.x*scaleX`, `pin.y*scaleY`, `shape.x*scaleX`...) exatamente
+como `componentSymbols.ts`, mas seguiam usando `pin.labelFontSize`/`shape.fontSize` NATIVO direto,
+sem multiplicar por `√(scaleX·scaleY)`, ao semear o `graphics.text.fontSize` exibido na tela de
+autoria. Pior: `compileSymbolAuthoringComponents` (o "Salvar Símbolo") gravava esse `fontSize`
+EXIBIDO (já em espaço de tela) direto em `pin.labelFontSize`/`shape.fontSize` (espaço NATIVO,
+esperado por `componentSymbols.ts`), sem dividir de volta -- ou seja, além do descompasso visual
+entre as duas telas, o valor salvo em disco não era nem o nativo nem o exibido corretamente, e uma
+nova rodada de abrir/editar/salvar amplificava o erro (verificado numericamente: escolher "4" na
+tela de autoria salvava `13.83` no `.lssubcircuit`, que a instância normal do schematic então
+renderizava como `~4.00px` só por coincidência daquela sessão -- reabrir de novo pra editar mais um
+pouco já não batia mais).
+
+**Correção** (`symbolAuthoring.ts`): novo helper `authoringFontScale(scaleX, scaleY) =
+√(scaleX·scaleY) || 1`, mesma fórmula de `packageVisualScale`. `seedPinLabelComponent`/
+`seedShapeComponent` (caso `"text"`) agora multiplicam o `fontSize` nativo por esse fator ao
+popular `graphics.text.fontSize` (o que o autor vê/edita passa a bater com o que
+`packagePinLeadSvg`/`packageShapeSvg` realmente desenham fora da sessão de autoria).
+`compileSymbolAuthoringComponents` agora DIVIDE o `fontSize` editado (espaço de tela) por esse
+mesmo fator antes de gravar em `pin.labelFontSize`/`shape.fontSize` (espaço nativo) -- o inverso
+exato do seed. Quando não há `schematicWidth`/`schematicHeight` (maioria esmagadora dos `package`),
+o fator é `1` e nada muda (zero regressão, confirmado pelos testes pré-existentes de
+`symbolAuthoring.test.ts`). Round-trip verificado numericamente ponta-a-ponta: escolher "4" na
+sessão de autoria → salvar → reabrir mostra "4" de novo → a MESMA instância normal do schematic
+(`packageSymbolSvg`) desenha `font-size:4.00px` -- as duas telas agora usam a MESMA unidade de
+verdade (nativa, em `pin.labelFontSize`) e a MESMA conversão pra tela.
+
+### 14.2 CORREÇÃO DO DIAGNÓSTICO (mesmo dia, follow-up): a seção 14 partiu de uma premissa errada -- não deveria ter escalado fonte NENHUMA
+
+**Sintoma relatado (nova rodada)**: com 14/14.1 em produção, o texto do `package` ficou CONSISTENTE
+entre a sessão de autoria e o schematic normal, mas pequeno demais -- menor do que o SimulIDE real
+mostra pro mesmo componente. Comparação pixel-a-pixel com `C:\SourceCode\simulide_2` (fonte real) e
+com `C:\SourceCode\SimulIDE_2-R260501_Win64\data\esp32\esp32.package` (definição real do pacote
+ESP32-WROOM que o SimulIDE instala) revelou que a premissa da seção 14 estava ERRADA:
+
+- `subcircuits/chip.cpp::Chip::setWidth/setHeight` -- `m_area = QRect(0, 0, 8*m_width, 8*m_height)`:
+  a caixa visual de um `Package`/`Chip` real é `8×(largura/altura declaradas)`, e o `QPixmap` de
+  fundo é desenhado ESTICADO pra caber nessa caixa (`p->drawPixmap(imgArea, *m_backPixmap)`,
+  `chip.cpp::paint()`) -- ou seja, o BACKGROUND é que se adapta ao tamanho final, nunca o inverso.
+- `esp32.package` (arquivo real, formato SimulIDE, não LasecSimul): `packageB width="15" height="15"`
+  (→ área 120×120 unidades) com pinos declarados em `xpos`/`ypos` JÁ no espaço final (ex.
+  `xpos="128" ypos="32"`, `xpos="128" ypos="40"` -- 8 unidades de distância, o pitch padrão de
+  QUALQUER pino no SimulIDE). Não existe, na definição real de um `Package`, nenhum conceito de
+  "tamanho nativo de captura" separado do tamanho final -- cada um já nasce autorado direto no
+  espaço definitivo.
+- `gui/circuitwidget/pin.cpp::Pin::paint()` (mesma classe usada por `PackagePin::paint()` via
+  `Pin::paint(p,o,w)`): `font.setPixelSize(7)`, `QPen(color, 3, ...)` pro lead, `QPen(labelColor,
+  0.5, ...)` pro sublinhado -- CONSTANTES literais, nunca multiplicadas por nenhum fator de
+  escala/zoom-por-`package`. A única coisa que reescala fonte+traço junto com a posição no SimulIDE
+  real é o zoom do `QGraphicsView`, que escala a CENA INTEIRA (todo componente, todo texto,
+  uniformemente) -- nunca um fator isolado por-`package` como `packageVisualScale` tentava emular.
+
+Ou seja: o pitch "denso" que a seção 14 descreveu como bug ("~9.4px, rótulos colam e formam bloco
+sólido") é, na verdade, **igual ou mais folgado que o pitch nativo do SimulIDE real** (8 unidades,
+mesma fonte de 7px, funciona bem há anos). Medido numericamente contra os dois `.lssubcircuit` reais
+do projeto: `esp32_wroom32.lssubcircuit` comprime pra ~9.43/8.79 unidades de pitch,
+`esp32_devkitc_v4.lssubcircuit` comprime pra ~7.00/8.00 -- ambos NO MESMO PATAMAR do pitch nativo
+de 8 unidades do SimulIDE real. Um rótulo de 7px NUNCA deveria overlaping nessas distâncias; o
+sintoma original relatado na seção 14 (retângulos sólidos) teve outra causa (provavelmente posição
+ainda não compactada corretamente numa versão anterior do translator) e foi diagnosticado errado.
+
+**Correção (reverte 14/14.1)**: `componentSymbols.ts::packagePinLeadSvg` voltou a desenhar
+`font-size`/`stroke-width` de rótulo/lead/marcador com os valores LITERAIS (`labelFontSize ?? 7`,
+`3`, `0.5`), sem nenhum fator de escala -- funções `packageVisualScale`/`scaledDimension` removidas
+por inteiro (não sobrou nenhum caller). `symbolAuthoring.ts` (`seedPinLabelComponent`/
+`seedShapeComponent`/`compileSymbolAuthoringComponents`) teve o `authoringFontScale` (14.1) também
+removido -- sem fator nenhum dos dois lados, sessão de autoria e schematic normal usam o MESMO
+`fontSize` literal automaticamente, e esse literal agora bate com o SimulIDE real. `scaleX`/`scaleY`
+continuam existindo e sendo aplicados SÓ à POSIÇÃO (pin `x`/`y`, extremidade do lead, geometria de
+`shapes[]`) -- essa parte é uma necessidade real e exclusiva do LasecSimul (pinos de um `package`
+fotográfico como o `esp32_devkitc_v4` são capturados em coordenada de pixel da FOTO, não no espaço
+final de grade como no SimulIDE real, então PRECISAM ser comprimidos; fonte e traço não, porque no
+SimulIDE real eles nunca dependeram dessa distinção pra começo de conversa).
+
+Verificado numericamente contra o `esp32_devkitc_v4.lssubcircuit` real: sessão de autoria e
+instância normal do schematic (`packageSymbolSvg`) agora desenham `font-size:7px` idêntico -- o
+MESMO valor que `Pin::paint()` do SimulIDE real usa pro mesmo tipo de rótulo. Todos os testes
+pré-existentes (61) mais os 2 reescritos nesta correção continuam passando.

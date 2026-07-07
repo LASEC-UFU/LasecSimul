@@ -129,30 +129,18 @@ function resolvePackageLayout(pkgInput: PackageDescriptor): ResolvedPackage {
   };
 }
 
-/** Fator único (média geométrica de `scaleX`/`scaleY`) usado só para atributos que não têm eixo
- * X/Y próprio -- tamanho de fonte e espessura de traço. Necessário porque `schematicWidth`/
- * `schematicHeight` (quando um `package` importado do SimulIDE é grande demais pra caber num bloco
- * de schematic razoável) só reescala X/Y de POSIÇÃO em `toDisplayX`/`toDisplayY` -- no SimulIDE real
- * não existe essa reescala (`Pin::paint()` usa `font.setPixelSize(7)` fixo, ver
- * `docs/20-diagnostico-renderizacao-simulide.md`); lá, a ÚNICA coisa que encolhe rótulo/traço junto
- * com a posição é o zoom do `QGraphicsView`, que escala a cena INTEIRA uniformemente (posição E
- * fonte E traço). Sem este fator, um `package` com pinos densos (ex: 14 pinos em 160 unidades no
- * ESP32-WROOM) mantém fonte de 7px fixa sobre um espaçamento de pino comprimido pra ~9px -- rótulos
- * adjacentes colam uns nos outros e viram um bloco sólido (os "retângulos amarelos" sobre `#FAFAC8`
- * reportados). Quando não há `schematicWidth`/`schematicHeight` (a maioria dos packages, scaleX=
- * scaleY=1), este fator é 1 e nada muda. */
-function packageVisualScale(resolved: ResolvedPackage): number {
-  return Math.sqrt(resolved.scaleX * resolved.scaleY);
-}
-
-/** `value * scale`, mas devolve `value` cru (sem casas decimais extras) quando `scale === 1` -- a
- * enorme maioria dos `package` não declara `schematicWidth`/`schematicHeight` (ver
- * `packageVisualScale`), então preserva a formatação exata de sempre pra eles (nenhuma mudança de
- * markup, nenhum teste existente quebra por causa de "3" virar "3.00"). */
-function scaledDimension(value: number, scale: number): string {
-  return scale === 1 ? String(value) : (value * scale).toFixed(2);
-}
-
+/** `font-size`/`stroke-width` de rótulo e lead de pino NUNCA escalam com `scaleX`/`scaleY`
+ * (`schematicWidth`/`schematicHeight`) -- confirmado lendo o SimulIDE real (`gui/circuitwidget/
+ * pin.cpp::Pin::paint()`): `font.setPixelSize(7)` e `QPen(...,3,...)`/`QPen(...,0.5,...)` são
+ * CONSTANTES fixas, desenhadas direto no espaço final do item (sem nenhum conceito de "tamanho
+ * nativo vs. schematic" -- cada `Package` real já nasce com dimensão/pinagem definitivas, ver
+ * `other/subpackage.cpp`/`subcircuits/chip.cpp::m_area = QRect(0,0,8*m_width,8*m_height)`). A ÚNICA
+ * coisa que reescala fonte+traço junto com a posição no SimulIDE real é o zoom do `QGraphicsView`,
+ * que escala a cena INTEIRA uniformemente -- nunca um fator por-`package`. `scaleX`/`scaleY` aqui só
+ * existem pra comprimir POSIÇÃO (`toDisplayX`/`toDisplayY`) quando um `package` LasecSimul foi
+ * capturado em espaço de pixel nativo de uma foto/imagem (ex: `esp32_devkitc_v4.lssubcircuit`,
+ * pinos capturados em coordenada de pixel da foto, sem equivalente no SimulIDE real onde pinos já
+ * nascem autorados direto no espaço final) -- ver `docs/20-diagnostico-renderizacao-simulide.md`. */
 function packagePinElectricalPoint(pin: PackagePin): { x: number; y: number } {
   if (pin.leadOrigin === "terminal") return { x: pin.x, y: pin.y };
   const rad = (pin.angle * Math.PI) / 180;
@@ -744,8 +732,6 @@ function packagePinLeadSvg(pin: PackagePin, resolved: ResolvedPackage, labelColo
   const labelSpace = pin.labelSpace ?? 9;
   const rad = (pin.angle * Math.PI) / 180;
   const labelFontSize = pin.labelFontSize ?? PACKAGE_PIN_LABEL_FONT_SIZE;
-  const visualScale = packageVisualScale(resolved);
-  const displayLabelFontSize = scaledDimension(labelFontSize, visualScale);
   let labelNativeX = pin.labelX ?? tipNativeX + Math.cos(rad) * labelSpace;
   let labelNativeY = pin.labelY ?? tipNativeY + Math.sin(rad) * labelSpace;
   let textAnchor = pin.labelTextAnchor ?? "middle";
@@ -801,17 +787,15 @@ function packagePinLeadSvg(pin: PackagePin, resolved: ResolvedPackage, labelColo
   const fillAttr = resolvedLabelColor === "currentColor" ? ` class="symbol-text"` : ` fill="${resolvedLabelColor}"`;
   const baselineAttr = labelDominantBaseline ? ` dominant-baseline="${labelDominantBaseline}"` : "";
   const leadColor = pin.leadColor ?? "#000";
-  const leadStrokeWidth = scaledDimension(3, visualScale);
   const leadMarkup = pin.length === 0
     ? ""
-    : `<line x1="${x.toFixed(1)}" y1="${y.toFixed(1)}" x2="${leadEndX.toFixed(1)}" y2="${leadEndY.toFixed(1)}" stroke="${escapeXmlText(leadColor)}" stroke-width="${leadStrokeWidth}" stroke-linecap="round" stroke-linejoin="round"/>`;
-  const markerStrokeWidth = scaledDimension(0.5, visualScale);
+    : `<line x1="${x.toFixed(1)}" y1="${y.toFixed(1)}" x2="${leadEndX.toFixed(1)}" y2="${leadEndY.toFixed(1)}" stroke="${escapeXmlText(leadColor)}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`;
   const markerMarkup = resolved.source.pinMarker === "packagePin"
-    ? `<g stroke="#d3d3d3" stroke-width="${markerStrokeWidth}" stroke-linecap="round" stroke-linejoin="round"><line x1="${(x - 1).toFixed(1)}" y1="${y.toFixed(1)}" x2="${(x + 1).toFixed(1)}" y2="${y.toFixed(1)}"/><line x1="${x.toFixed(1)}" y1="${(y - 1).toFixed(1)}" x2="${x.toFixed(1)}" y2="${(y + 1).toFixed(1)}"/></g>`
+    ? `<g stroke="#d3d3d3" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round"><line x1="${(x - 1).toFixed(1)}" y1="${y.toFixed(1)}" x2="${(x + 1).toFixed(1)}" y2="${y.toFixed(1)}"/><line x1="${x.toFixed(1)}" y1="${(y - 1).toFixed(1)}" x2="${x.toFixed(1)}" y2="${(y + 1).toFixed(1)}"/></g>`
     : "";
   const labelVisible = stateVisibleMatches(pin.labelStateVisible, properties);
   const labelMarkup = labelVisible && label.trim()
-    ? `<text x="${labelX.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="${textAnchor}"${baselineAttr}${fillAttr} style="font-size:${displayLabelFontSize}px"${rotateAttr}>${escapeXmlText(label)}</text>`
+    ? `<text x="${labelX.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="${textAnchor}"${baselineAttr}${fillAttr} style="font-size:${labelFontSize}px"${rotateAttr}>${escapeXmlText(label)}</text>`
     : "";
   return (
     leadMarkup +

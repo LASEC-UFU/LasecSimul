@@ -943,9 +943,17 @@ function renderContextMenuItems(container: HTMLElement, items: ContextMenuItem[]
   }
 }
 
+/** NUNCA chamar `event.stopPropagation()` aqui -- o host da Webview do VS Code também escuta
+ * `contextmenu` em `window`/`document` (fora do nosso controle) pra decidir se abre o menu NATIVO
+ * (Cortar/Copiar/Colar) checando `event.defaultPrevented`; se a propagação for cortada antes de
+ * chegar lá, o host nunca vê que o evento já foi tratado e abre o menu nativo por cima do nosso
+ * (chega um instante depois, por ser round-trip nativo/IPC -- exatamente o "menu certo aparece e
+ * some" relatado). `preventDefault()` sozinho já basta pra suprimir o menu nativo do navegador E
+ * sinalizar pro host que o evento foi tratado; quem precisa evitar abrir um SEGUNDO menu nosso por
+ * cima (ex: `canvas` no fundo vazio) deve checar `event.defaultPrevented`, nunca depender de
+ * propagação cortada. */
 function showContextMenu(event: MouseEvent, items: ContextMenuItem[]): void {
   event.preventDefault();
-  event.stopPropagation();
   if (items.length === 0 || items.every((item) => "kind" in item && item.kind === "separator")) {
     hideContextMenu();
     return;
@@ -1155,8 +1163,12 @@ function installCanvasEventHandlers(canvas: HTMLDivElement, canvasContent: HTMLD
     render();
   });
   canvas.addEventListener("contextmenu", (event) => {
+    // Handler mais GENÉRICO (fundo vazio) -- roda DEPOIS de qualquer handler mais específico
+    // (componente/fio/handle), já que `canvas` é ancestor deles no DOM e eles não cortam mais a
+    // propagação (ver `showContextMenu`). Se algum já tratou (defaultPrevented), não faz nada --
+    // nunca substitui um menu mais específico pelo genérico "Selecionar tudo".
+    if (event.defaultPrevented) return;
     event.preventDefault();
-    event.stopPropagation();
     if (state.pendingConnection) {
       if (pendingWireBendLengths.length > 0) {
         undoPendingWireBend();
@@ -3248,11 +3260,13 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
   });
 
   el.addEventListener("contextmenu", (event) => {
-    // O menu customizado do LasecSimul deve sempre prevalecer sobre o menu nativo do navegador.
+    // O menu customizado do LasecSimul deve sempre prevalecer sobre o menu nativo da Webview.
     // Se `preventDefault` ficar só no `showContextMenu(...)` ao final, qualquer retorno antecipado
     // (ou render custoso antes dele) pode deixar o menu nativo "vazar" de forma intermitente.
+    // NUNCA `stopPropagation()` aqui -- precisa borbulhar até `window`/`document` pro host da
+    // Webview ver `defaultPrevented` e não abrir o menu nativo (Cortar/Copiar/Colar) por cima do
+    // nosso; `canvas` (ancestor) já ignora o evento quando `defaultPrevented` (ver seu handler).
     event.preventDefault();
-    event.stopPropagation();
     const component = liveComponent();
     if (!component) {
       hideContextMenu();
@@ -4667,8 +4681,8 @@ function renderExternalLabel(component: WebviewComponentModel, kind: ExternalLab
   });
 
   el.addEventListener("contextmenu", (event) => {
+    // NUNCA stopPropagation() -- ver comentário equivalente no handler de componente.
     event.preventDefault();
-    event.stopPropagation();
     selectOnlyTextLabel(component.id, kind);
     persistState();
     render();

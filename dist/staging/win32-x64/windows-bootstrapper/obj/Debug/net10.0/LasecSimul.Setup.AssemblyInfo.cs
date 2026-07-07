@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("LasecSimul.Setup")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+006c570ea8fbe45d8c2e5cc2e94ca1015c6cc60b")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+08273c89e941e0dfda7661e89f9fecf733bf3ad0")]
 [assembly: System.Reflection.AssemblyProductAttribute("LasecSimul.Setup")]
 [assembly: System.Reflection.AssemblyTitleAttribute("LasecSimul.Setup")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

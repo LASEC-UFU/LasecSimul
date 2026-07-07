@@ -136,6 +136,44 @@ import { PackageDescriptor, WebviewWireModel } from "../ui/webview/model";
     assert(result.package?.pins[0]?.labelFontSize === 17, `compile deveria persistir labelFontSize editado no package, recebido ${result.package?.pins[0]?.labelFontSize}`);
   });
 
+  await test("seed/compile: com schematicWidth/schematicHeight, fontSize NUNCA escala (fidelidade ao SimulIDE real)", () => {
+    // SimulIDE real (gui/circuitwidget/pin.cpp::Pin::paint()): `font.setPixelSize(7)` é uma
+    // CONSTANTE fixa, desenhada direto no espaço final do item -- não existe conceito de "tamanho
+    // nativo vs. schematic" nem fator de escala aplicado à fonte. `schematicWidth`/`schematicHeight`
+    // (feature LasecSimul, sem equivalente real) só comprime POSIÇÃO de pinos capturados em espaço
+    // de pixel de foto/imagem -- fontSize deve permanecer EXATAMENTE o valor nativo salvo, na sessão
+    // de autoria E na instância normal do schematic, igual ao SimulIDE. (Ver .spec seção 14.2 --
+    // reverte um fator de escala de fonte introduzido antes por diagnóstico equivocado.)
+    const pkg: PackageDescriptor = {
+      width: 308,
+      height: 601,
+      schematicWidth: 88,
+      schematicHeight: 176,
+      border: false,
+      pins: [{ id: "G23", x: 308, y: 96, angle: 0, length: 8, label: "23" }],
+      shapes: [{ kind: "text", x: 150, y: 300, value: "ESP32-WROOM", fontSize: 11 }],
+    };
+    const components = seedSymbolAuthoringComponents(pkg);
+    const pinLabel = components.find((c) => c.typeId === "graphics.text" && c.properties.linkedPinComponentId)!;
+    const decorativeText = components.find((c) => c.typeId === "graphics.text" && !c.properties.linkedPinComponentId)!;
+
+    assert(pinLabel.properties.fontSize === 7, `fontSize exibido do rótulo de pino deveria ser o nativo (7), sem escala, recebido ${pinLabel.properties.fontSize}`);
+    assert(decorativeText.properties.fontSize === 11, `fontSize exibido do texto decorativo deveria ser o nativo (11), sem escala, recebido ${decorativeText.properties.fontSize}`);
+
+    // Usuário edita o fontSize pra um valor que "parece certo" -- deve sobreviver ao compile+reseed
+    // como o MESMO valor literal (idempotente, sem nenhuma conversão de escala no meio do caminho).
+    pinLabel.properties.fontSize = 4;
+    decorativeText.properties.fontSize = 6;
+    const compiled = compileSymbolAuthoringComponents(components, undefined);
+    assert(compiled.package?.pins[0]?.labelFontSize === 4, `compile deveria salvar o fontSize editado sem escalar, recebido ${compiled.package?.pins[0]?.labelFontSize}`);
+    assert(compiled.package?.shapes?.[0]?.fontSize === 6, `compile deveria salvar o fontSize do shape editado sem escalar, recebido ${compiled.package?.shapes?.[0]?.fontSize}`);
+    const reseeded = seedSymbolAuthoringComponents(compiled.package!);
+    const reseededPinLabel = reseeded.find((c) => c.typeId === "graphics.text" && c.properties.linkedPinComponentId)!;
+    const reseededText = reseeded.find((c) => c.typeId === "graphics.text" && !c.properties.linkedPinComponentId)!;
+    assert(reseededPinLabel.properties.fontSize === 4, `reabrir deveria mostrar o MESMO fontSize escolhido (4), recebido ${reseededPinLabel.properties.fontSize}`);
+    assert(reseededText.properties.fontSize === 6, `reabrir deveria mostrar o MESMO fontSize escolhido (6), recebido ${reseededText.properties.fontSize}`);
+  });
+
   await test("compile: fundo color vem do componente other.package, svg/image existente é preservado se não houver backgroundColor", () => {
     const pkg: PackageDescriptor = { width: 80, height: 60, pins: [] };
     const components = seedSymbolAuthoringComponents(pkg);
