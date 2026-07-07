@@ -34,7 +34,7 @@ RNF10) | Reaproveita: bloco `package`/`pins[]` de `.lsdevice`, ver `lasecsimul-n
 Terceiro caminho de extensibilidade do LasecSimul (ver `lasecsimul.spec` seção 9), ao lado de biblioteca
 padrão (C++ built-in) e plugin nativo (DLL/SO via `device_abi.h`). Decisão registrada na conversa de design:
 
-- Um **subcircuito** é um circuito desenhado no próprio editor, salvo em disco como `.json`, com pinos de I/O
+- Um **subcircuito** é um circuito desenhado no próprio editor, salvo em disco como `.lssubcircuit`, com pinos de I/O
   e um símbolo visual definidos pelo usuário — **dado, nunca código**. Não exige compilador, não exige DLL/SO,
   não exige reiniciar o Core.
 - Mecanismo de referência validado pelo `simulide_2` (não suposição de design) — ver
@@ -73,7 +73,8 @@ Um subcircuito é definido por um único arquivo `*.lssubcircuit`, com três blo
    (`lasecsimul-native-devices.spec` seção 21), **reaproveitado tal e qual**, não redesenhado. Um campo só:
    `package.pins[].id` precisa bater com uma entrada de `interface[].pinId`.
 4. **Portas seriais expostas** (`serialPorts[]`) — obrigatorio quando o subcircuito pretende oferecer
-   monitor serial para um MCU interno; a UI nao inventa USART/UART por `typeId`.
+   monitor serial para um MCU interno; cada entrada descreve um periferico UART/USART monitoravel,
+   nao um pino fisico. A UI nao inventa USART/UART por `typeId`.
 
 ```json
 {

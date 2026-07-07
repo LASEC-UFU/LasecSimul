@@ -30,7 +30,8 @@ Código em `extension/`, comandos, painéis, webview, projeto e IPC.
 - `extension/src/extension.ts`: ativação, comandos e ciclo de vida.
 - `extension/src/ipc/CoreClient.ts`: comunicação com Core.
 - `extension/src/ipc/types.ts`: tipos de mensagem.
-- `extension/src/ui/commands/`: comandos.
+- Comandos da UI continuam registrados em `extension/src/extension.ts`; não existe diretório
+  `extension/src/ui/commands/` separado no desenho atual.
 - `extension/src/ui/panels/`: criação de painéis.
 - `extension/src/ui/webview/`: assets e scripts da UI.
 - `extension/src/project/`: serializer `.lsproj`.

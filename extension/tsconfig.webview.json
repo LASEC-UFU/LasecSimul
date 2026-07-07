@@ -20,6 +20,7 @@
     "src/ui/webview/paletteTree.ts",
     "src/ui/webview/componentSymbols.ts",
     "src/ui/webview/wireGeometry.ts",
+    "src/ui/webview/wireConnections.ts",
     "src/ui/webview/valueFormatting.ts"
   ]
 }

@@ -1,7 +1,7 @@
 ﻿import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import { CoreClient, RegisteredSubcircuitInfo } from "./ipc/CoreClient";
+import { CoreClient } from "./ipc/CoreClient";
 import { CoreProcess } from "./ipc/CoreProcess";
 import { TrustStore } from "./trust/TrustStore";
 import { isPreApproved, isPreBlocked, resolveConsentChoice, shouldLoadLibrary, decisionToPersist } from "./trust/trustDecision";
@@ -25,7 +25,7 @@ import {
   VisualPosition,
 } from "./catalog/symbolAuthoring";
 import { hasShowOnSymbolProperty, mergePropertySchemas, nextIndexedLabel } from "./catalog/catalogMerge";
-import { sanitizeManifestDefaultProperties, sanitizePackage } from "./catalog/packageSanitizers";
+import { sanitizeManifestDefaultProperties, sanitizePackage, sanitizePackageBackground } from "./catalog/packageSanitizers";
 import { LasecSimulLanguage } from "./language";
 import { fileExists, normalizeAbsolutePath, readJsonFile } from "./pathUtils";
 import { currentLasecSimulLanguage } from "./currentLanguage";
@@ -37,7 +37,6 @@ import {
   localizedAbiFailure,
   knownPinIdsForManifest,
   parseSubcircuitManifest,
-  registeredSubcircuitInfoToParsedManifest,
   resolveRegisteredItem,
   resolveRegisteredItems,
 } from "./catalog/registeredSources";
@@ -398,15 +397,19 @@ async function chooseSubcircuitFileCommand(componentId: string): Promise<void> {
     return;
   }
 
-  let registered: RegisteredSubcircuitInfo;
   try {
-    registered = await state.coreClient.registerAdhocSubcircuit(absolutePath, { replace: Boolean(component.subcircuitRef?.lastKnownTypeId) });
+    await state.coreClient.registerAdhocSubcircuit(absolutePath, { replace: Boolean(component.subcircuitRef?.lastKnownTypeId) });
   } catch (err) {
     vscode.window.showErrorMessage(`Não foi possível ler ${absolutePath}: ${err instanceof Error ? err.message : String(err)}`);
     return;
   }
 
-  const parsed = registeredSubcircuitInfoToParsedManifest(registered, path.dirname(absolutePath), currentLasecSimulLanguage());
+  const parsed = parseSubcircuitManifest(
+    readJsonFile(absolutePath) as Record<string, unknown>,
+    path.dirname(absolutePath),
+    currentLasecSimulLanguage(),
+    new Set(state.schematicState.catalog.filter((entry) => entry.registeredSourceKind === "mcu-adapter").map((entry) => entry.typeId))
+  );
   if (!parsed.typeId) {
     vscode.window.showErrorMessage(`Arquivo inválido: "${path.basename(absolutePath)}" não declara "typeId".`);
     return;
@@ -448,6 +451,7 @@ async function chooseSubcircuitFileCommand(componentId: string): Promise<void> {
     logicSymbolPackage: parsed.logicSymbolPackage,
     disabled: false,
     mcuHost: parsed.mcuHost,
+    serialPorts: parsed.serialPorts,
   };
 
   const updatedComponent: WebviewComponentModel = {
@@ -722,14 +726,18 @@ async function resolveProjectSubcircuitReferences(projectDir: string): Promise<v
       continue;
     }
 
-    let registered: RegisteredSubcircuitInfo;
     try {
-      registered = await state.coreClient.registerAdhocSubcircuit(absolutePath);
+      await state.coreClient.registerAdhocSubcircuit(absolutePath);
     } catch {
       missingCount++;
       continue;
     }
-    const parsed = registeredSubcircuitInfoToParsedManifest(registered, path.dirname(absolutePath), language);
+    const parsed = parseSubcircuitManifest(
+      readJsonFile(absolutePath) as Record<string, unknown>,
+      path.dirname(absolutePath),
+      language,
+      new Set(state.schematicState.catalog.filter((entry) => entry.registeredSourceKind === "mcu-adapter").map((entry) => entry.typeId))
+    );
     if (!parsed.typeId) {
       missingCount++;
       continue;
@@ -752,6 +760,7 @@ async function resolveProjectSubcircuitReferences(projectDir: string): Promise<v
       logicSymbolPackage: parsed.logicSymbolPackage,
       disabled: false,
       mcuHost: parsed.mcuHost,
+      serialPorts: parsed.serialPorts,
     });
     updatedComponents.set(component.id, {
       ...component,
@@ -1455,6 +1464,14 @@ async function createSubcircuitFromSelectionHandler(componentIds: string[]): Pro
     vscode.window.showErrorMessage(`Não foi possível salvar o subcircuito: ${err instanceof Error ? err.message : String(err)}`);
     return;
   }
+  if (state.coreClient) {
+    try {
+      await state.coreClient.registerAdhocSubcircuit(normalizedPath);
+    } catch (err) {
+      vscode.window.showErrorMessage(`Não foi possível registrar o subcircuito no Core: ${err instanceof Error ? err.message : String(err)}`);
+      return;
+    }
+  }
 
   // 8. Registrar na paleta
   const unifiedCatalog = loadUnifiedCatalog(state.extensionContext.extensionPath, currentLasecSimulLanguage());
@@ -1714,6 +1731,7 @@ async function refreshUnifiedCatalogState(loadLibrariesInCore: boolean): Promise
   const resolved = resolveRegisteredItems(state.extensionContext.extensionPath, unifiedCatalog.registeredSources);
 
   const requests = new Map<string, { displayPath: string; absolutePath: string }>();
+  const adhocSubcircuits = new Set<string>();
   for (const relativePath of unifiedCatalog.deviceLibraries) {
     const absolutePath = normalizeAbsolutePath(state.extensionContext.extensionPath, relativePath);
     requests.set(absolutePath, { displayPath: relativePath, absolutePath });
@@ -1725,21 +1743,48 @@ async function refreshUnifiedCatalogState(loadLibrariesInCore: boolean): Promise
       requests.set(absolutePath, { displayPath: absolutePath, absolutePath });
     }
   }
+  for (const item of resolved) {
+    if (item.adhocSubcircuitPathToRegister) {
+      adhocSubcircuits.add(item.adhocSubcircuitPathToRegister);
+    }
+  }
 
   const failures = loadLibrariesInCore
     ? await loadConfiguredDeviceLibraries(state.extensionContext.extensionPath, [...requests.values()])
     : new Map<string, string>();
+  const adhocFailures = new Map<string, string>();
+  if (loadLibrariesInCore && state.coreClient) {
+    for (const absolutePath of adhocSubcircuits) {
+      try {
+        await state.coreClient.registerAdhocSubcircuit(absolutePath);
+      } catch (err) {
+        adhocFailures.set(absolutePath, err instanceof Error ? err.message : String(err));
+      }
+    }
+  }
 
   const baseTypeIds = new Set(unifiedCatalog.catalog.map((entry) => entry.typeId));
   const registeredEntries = resolved.flatMap((item) => {
     const failedReason = item.libraryPathToLoad
       ? failures.get(normalizeAbsolutePath(state.extensionContext!.extensionPath, item.libraryPathToLoad))
       : undefined;
+    const adhocFailedReason = item.adhocSubcircuitPathToRegister
+      ? adhocFailures.get(item.adhocSubcircuitPathToRegister)
+      : undefined;
     if (failedReason) {
       return [{
         ...item.entry,
         disabled: true,
         disabledReason: localizedAbiFailure(failedReason, currentLasecSimulLanguage()),
+      }];
+    }
+    if (adhocFailedReason) {
+      return [{
+        ...item.entry,
+        disabled: true,
+        disabledReason: currentLasecSimulLanguage() === "en"
+          ? `subcircuit registration failed: ${adhocFailedReason}`
+          : `falha ao registrar subcircuito: ${adhocFailedReason}`,
       }];
     }
     if (baseTypeIds.has(item.entry.typeId)) {
@@ -1847,7 +1892,7 @@ async function removeRegisteredCatalogItemCommand(item?: { sourceId?: string }):
   }
 
   if (source.removable === false) {
-    vscode.window.showInformationMessage("Esse item faz parte do catÃ¡logo integrado e nÃ£o pode ser removido pela paleta.");
+    vscode.window.showInformationMessage("Esse item faz parte do catálogo integrado e não pode ser removido pela paleta.");
     return;
   }
 
@@ -1875,7 +1920,7 @@ function sanitizeJsonObjectArray(value: unknown): Record<string, unknown>[] {
   return value.filter((entry): entry is Record<string, unknown> => typeof entry === "object" && entry !== null);
 }
 
-function extractPackageForEditing(json: Record<string, unknown>, key: "package" | "logicSymbolPackage" = "package"): PackageDescriptor {
+function extractPackageForEditing(json: Record<string, unknown>, key: "package" | "logicSymbolPackage" = "package", assetBasePath?: string): PackageDescriptor {
   const raw = json[key];
   if (typeof raw === "object" && raw !== null) {
     const candidate = raw as Record<string, unknown>;
@@ -1889,9 +1934,7 @@ function extractPackageForEditing(json: Record<string, unknown>, key: "package" 
         schematicWidth: typeof candidate.schematicWidth === "number" ? candidate.schematicWidth : undefined,
         schematicHeight: typeof candidate.schematicHeight === "number" ? candidate.schematicHeight : undefined,
         border: typeof candidate.border === "boolean" ? candidate.border : undefined,
-        background: typeof candidate.background === "object" && candidate.background !== null
-          ? (candidate.background as PackageDescriptor["background"])
-          : undefined,
+        background: sanitizePackageBackground(candidate.background, assetBasePath),
         initialTransform: typeof candidate.initialTransform === "object" && candidate.initialTransform !== null
           ? (candidate.initialTransform as PackageDescriptor["initialTransform"])
           : undefined,
@@ -2298,7 +2341,7 @@ async function editPackageSymbolCommand(item?: { sourceId?: string; view?: "defa
 
   const view: "default" | "logicSymbol" = item?.view === "logicSymbol" && kind !== "abi-device" ? "logicSymbol" : "default";
   const packageKey = view === "logicSymbol" ? "logicSymbolPackage" : "package";
-  let packageComponents = applySubcircuitInterfaceToPackageComponents(json, seedSymbolAuthoringComponents(extractPackageForEditing(json, packageKey), kind === "subcircuit-file" ? 0 : 140, kind === "subcircuit-file" ? 0 : 140));
+  let packageComponents = applySubcircuitInterfaceToPackageComponents(json, seedSymbolAuthoringComponents(extractPackageForEditing(json, packageKey, path.dirname(absoluteFilePath)), kind === "subcircuit-file" ? 0 : 140, kind === "subcircuit-file" ? 0 : 140));
   let components = packageComponents;
   let wires: WebviewWireModel[] = [];
 
@@ -2355,7 +2398,7 @@ async function switchSymbolViewCommand(
   }
 
   const packageKey = toView === "logicSymbol" ? "logicSymbolPackage" : "package";
-  const seededPackageComponents = applySubcircuitInterfaceToPackageComponents(json, seedSymbolAuthoringComponents(extractPackageForEditing(json, packageKey), kind === "subcircuit-file" ? 0 : 140, kind === "subcircuit-file" ? 0 : 140));
+  const seededPackageComponents = applySubcircuitInterfaceToPackageComponents(json, seedSymbolAuthoringComponents(extractPackageForEditing(json, packageKey, path.dirname(filePath)), kind === "subcircuit-file" ? 0 : 140, kind === "subcircuit-file" ? 0 : 140));
   const packageComponents = kind === "subcircuit-file"
     ? translateSimulideSubcircuitAuthoringScene(seededPackageComponents, internalComponents, internalWires, extractSimulideSubcircuitScene(json)).components.slice(0, seededPackageComponents.length)
     : seededPackageComponents;
@@ -2498,7 +2541,7 @@ async function saveSymbolCommand(
   }
 
   const packageKey = view === "logicSymbol" ? "logicSymbolPackage" : "package";
-  const existingPackage = extractPackageForEditing(json, packageKey);
+  const existingPackage = extractPackageForEditing(json, packageKey, path.dirname(filePath));
   const existingInterfaceByPinId = extractSubcircuitInterfaceMap(json);
   const existingBackground = existingPackage.background;
   const result = compileSymbolAuthoringComponents(components, existingBackground, existingPackage);

@@ -1544,6 +1544,7 @@ function render(): void {
   if (!app) return;
   normalizeSelectedWireSegment();
   normalizeSelectedWireCorner();
+  normalizeSelectedTextLabel();
   const shell = ensureRenderShell();
   if (!shell) return;
   const { canvasContent, wireLayer } = shell;
@@ -1847,6 +1848,15 @@ function normalizeSelectedWireCorner(): void {
   const pointCount = wirePolylinePoints(wire).length;
   if (selectedWireCorner.pointIndex <= 0 || selectedWireCorner.pointIndex >= pointCount - 1) {
     selectedWireCorner = undefined;
+  }
+}
+
+function normalizeSelectedTextLabel(): void {
+  if (!selectedTextLabel) return;
+  const activeLabel = selectedTextLabel;
+  const component = state.components.find((entry) => entry.id === activeLabel.componentId);
+  if (!component || externalLabelText(component, activeLabel.kind) === undefined) {
+    selectedTextLabel = undefined;
   }
 }
 
@@ -4500,8 +4510,9 @@ function renderPropertyField(component: WebviewComponentModel, field: PropertyFi
     input.disabled = field.readonly ?? false;
     input.addEventListener("change", () => {
       applyChange(input.checked);
-      if ((component.typeId === "switches.switch" || component.typeId === "switches.switch_dip") && field.key === "closed") updateRenderedToggleState(component);
-      if (component.typeId === "sources.fixed_volt" && field.key === "out") updateRenderedFixedVoltState(component);
+      const visualFlags = componentVisualFlags(component);
+      if (visualFlags.isToggleClickable && field.key === "closed") updateRenderedToggleState(component);
+      if (visualFlags.isFixedVolt && field.key === "out") updateRenderedFixedVoltState(component);
     });
     const text = document.createElement("span");
     text.textContent = field.label;

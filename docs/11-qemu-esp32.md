@@ -230,13 +230,12 @@ clique ou botão direito → Propriedades). O rótulo vem junto automaticamente 
 vinculado, ver seção do rótulo arrastável acima) e pode ser arrastado pra qualquer lugar, inclusive
 dentro do corpo.
 
-**O que isto NÃO é**: não existe o comando "Criar Subcircuito a partir da Seleção" (detectar fios
-cruzando a borda de uma seleção no esquemático e gerar `connectors.tunnel` automaticamente) — a sessão
-de autoria edita um manifesto que JÁ EXISTE (pinos elétricos já declarados à mão), nunca cria um do
-zero a partir de uma seleção no circuito real do usuário (ver `.spec/lasecsimul-subcircuits.spec`
-seção 4, Épico G no roadmap de pendências; ver também a seção abaixo — pra `subcircuit-file`
-especificamente, a sessão JÁ foi estendida pra editar o circuito interno também, não só o símbolo
-visual). Também não existe upload de imagem de fundo (só cor sólida) nem alça de arrastar pra
+**Atualização 2026-07-07**: o comando "Criar Subcircuito a partir da Seleção" existe e gera
+`connectors.tunnel` automaticamente para fios que cruzam a borda da seleção; ver
+`.spec/lasecsimul-subcircuits.spec` seção 11 e `createSubcircuitFromSelectionHandler` em
+`extension.ts`. Esta seção continua útil para o fluxo de autoria/edição de um manifesto que JÁ EXISTE
+e para o escopo que segue fora dela. Ainda não existe upload de imagem de fundo (só cor sólida) nem
+alça de arrastar pra
 redimensionar formas (campo numérico, igual ao SimulIDE real). Validação manual no Extension
 Development Host (F5) ainda pendente — sem `jsdom` neste repo, drag/rotação/painel de propriedades
 foram verificados só por `tsc` limpo + testes da lógica pura de seed/compile, nunca clicados de
@@ -282,5 +281,5 @@ Teste: `symbolAuthoring.test.ts` (seed/compile do circuito interno, `visual`/`bo
 independentes, ignora componentes de autoria de símbolo), `componentSymbols.test.ts` (resolução por
 `properties.logicSymbol`). **O que isto NÃO inclui**: simulação elétrica ao vivo dentro da sessão (só
 posição/propriedades, sem IPC com o Core); `BoardSubc`/`ShieldSubc` (Arduino Uno + Shield empilhado do
-SimulIDE real, feature à parte, não pedida); "Criar Subcircuito a partir da Seleção" (continua de
-fora, ver acima).
+SimulIDE real, feature à parte, não pedida). "Criar Subcircuito a partir da Seleção" foi implementado
+depois deste desenho inicial; ver nota acima e `.spec/lasecsimul-subcircuits.spec` seção 11.

@@ -1,7 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
 import { RegisteredSource } from "./UnifiedCatalog";
-import { RegisteredSubcircuitInfo } from "../ipc/CoreClient";
 import { InteractionKindEntry, PackageDescriptor, WebviewComponentCatalogEntry } from "../ui/webview/model";
 import { LasecSimulLanguage } from "../language";
 import { currentLasecSimulLanguage } from "../currentLanguage";
@@ -24,6 +23,7 @@ export interface ResolvedRegisteredItem {
   kind: RegisteredItemKind;
   entry: WebviewComponentCatalogEntry;
   libraryPathToLoad?: string;
+  adhocSubcircuitPathToRegister?: string;
 }
 
 export function inferLibraryPathForDevice(deviceFilePath: string): string | undefined {
@@ -282,71 +282,6 @@ export function parseSubcircuitManifest(json: Record<string, unknown>, manifestD
   };
 }
 
-/** Lê o bloco `package` do manifesto pra EDIÇÃO -- deliberadamente mais permissivo que
- * `sanitizePackage` (que descarta `pins: []` tratando como "sem package", certo pra decidir o que
- * mostrar na paleta, errado aqui: um symbol em construção começa vazio mesmo). Mesmo nível de
- * confiança que o resto desta função aplica ao manifesto (1ª parte ou já passou por consentimento
- * de plugin). Sem `package` no arquivo -> corpo em branco, pronto pra desenhar do zero. */
-export function registeredSubcircuitInfoToParsedManifest(
-  info: RegisteredSubcircuitInfo,
-  manifestDir: string,
-  language: LasecSimulLanguage
-): ParsedSubcircuitManifest {
-  const raw = info as unknown as Record<string, unknown>;
-  const typeId = typeof info.typeId === "string" ? info.typeId.trim() : "";
-  const label = localizedManifestName(raw, language)?.trim() || (typeof info.name === "string" ? info.name.trim() : undefined);
-  const pinIds = Array.isArray(info.pinIds)
-    ? info.pinIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0)
-    : Array.isArray(info.interface)
-      // PC-16: `info` vem do Core (IPC `registerAdhocSubcircuit`), mas só repassa o `interface[]` do
-      // `.lssubcircuit` externo tal como está no arquivo -- um elemento `null`/sem `pinId` aqui
-      // derrubava esta função com `TypeError`, mesmo gatilho de `extractPackageForEditing` (PC-16).
-      ? info.interface
-          .filter((entry) => typeof entry === "object" && entry !== null)
-          .map((entry) => entry.pinId)
-          .filter((id): id is string => typeof id === "string" && id.trim().length > 0)
-      : [];
-  const packageDescriptor = sanitizePackage(info.package, manifestDir);
-  const packagePins =
-    typeof info.package === "object" && info.package !== null && Array.isArray((info.package as { pins?: unknown[] }).pins)
-      ? ((info.package as { pins: unknown[] }).pins.length || 2)
-      : 2;
-  const pinCount = pinIds.length > 0
-    ? pinIds.length
-    : (typeof info.pinCount === "number" && Number.isFinite(info.pinCount) && info.pinCount > 0
-      ? Math.floor(info.pinCount)
-      : (packageDescriptor ? packageDescriptor.pins.length : packagePins));
-  const manifestIcon = typeof info.icon === "string" ? info.icon.trim() : undefined;
-  const iconSvgInline = manifestIcon?.startsWith("<svg") ? manifestIcon : undefined;
-  const iconFilePath = !iconSvgInline && typeof info.iconPath === "string" && info.iconPath.trim()
-    ? normalizeExistingFilePath(manifestDir, info.iconPath.trim())
-    : undefined;
-  const logicSymbolPackage = sanitizePackage(info.logicSymbolPackage, manifestDir);
-  const folderPath = Array.isArray(info.folderPath)
-    ? info.folderPath.filter((segment): segment is string => typeof segment === "string")
-    : (typeof info.folderPath === "string" && info.folderPath.trim() ? [info.folderPath.trim()] : undefined);
-  return {
-    typeId,
-    label,
-    pinIds,
-    pinCount,
-    package: packageDescriptor,
-    logicSymbolPackage,
-    icon: !iconSvgInline ? manifestIcon : undefined,
-    iconSvgInline,
-    iconFilePath,
-    defaultProperties: logicSymbolPackage
-      ? { logicSymbol: false, ...sanitizeManifestDefaultProperties(info.defaultProperties) }
-      : sanitizeManifestDefaultProperties(info.defaultProperties),
-    folderPath,
-    // `RegisteredSubcircuitInfo` (resposta do Core pra `registerAdhocSubcircuit`, ver CoreClient.ts)
-    // não devolve `components[]`/`chipId` -- `manifestHostsMcu` sempre cai no `false` aqui até o
-    // Core passar a expor isso no IPC (gap pré-existente, fora do escopo desta função).
-    mcuHost: manifestHostsMcu(raw, EMPTY_MCU_ADAPTER_TYPE_IDS),
-    serialPorts: sanitizeMcuSerialPorts(raw.serialPorts),
-  };
-}
-
 export function resolveRegisteredItem(source: RegisteredSource, extensionPath: string, language: LasecSimulLanguage, mcuAdapterTypeIds: ReadonlySet<string>): ResolvedRegisteredItem {
   const absoluteFilePath = normalizeAbsolutePath(extensionPath, source.filePath);
   if (!fileExists(absoluteFilePath)) {
@@ -511,23 +446,11 @@ export function resolveRegisteredItem(source: RegisteredSource, extensionPath: s
       mcuHost: parsed.mcuHost,
       serialPorts: parsed.serialPorts,
     };
-    if (!libraryPath || !fileExists(libraryPath)) {
-      return {
-        sourceId: source.id,
-        kind: source.kind,
-        entry: {
-          ...entry,
-          disabled: true,
-          disabledReason: "subcircuito registrado sem library.json valido associado",
-          icon: "fantasma",
-          iconFilePath: undefined,
-        },
-      };
-    }
     return {
       sourceId: source.id,
       kind: source.kind,
-      libraryPathToLoad: libraryPath,
+      libraryPathToLoad: libraryPath && fileExists(libraryPath) ? libraryPath : undefined,
+      adhocSubcircuitPathToRegister: libraryPath && fileExists(libraryPath) ? undefined : absoluteFilePath,
       entry,
     };
   } catch (err) {

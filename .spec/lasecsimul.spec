@@ -1144,7 +1144,7 @@ Três caminhos, sem nunca editar `MnaSolver`/`Scheduler`:
   (descoberta + ABI) para o `GlobalPluginCache`; instâncias são criadas pelo `PluginRuntime` de cada sessão,
   exportando a vtable C de `device_abi.h`, que o Core envolve num `NativeDeviceProxy` (`IComponentModel`).
   Especificação completa — manifesto, ABI, ciclo de vida, build, testes — em **`lasecsimul-native-devices.spec`**.
-- **Subcircuito** (usuário, sem código): circuito desenhado no editor, salvo como `.json` — pinos internos
+- **Subcircuito** (usuário, sem código): circuito desenhado no editor, salvo como `.lssubcircuit` — pinos internos
   expostos via `Tunnel` com nome reaproveitando o mesmo mecanismo da seção 7.2, símbolo visual reaproveitando
   o mesmo bloco `package` de `.lsdevice` (seção 21 do `lasecsimul-native-devices.spec`). **Não implementa
   `IComponentModel`** — ao instanciar, o Core expande os componentes internos diretamente na mesma
@@ -1293,7 +1293,7 @@ hierárquico completo, sem limite fixo de profundidade (não só categoria/subca
 ele é soberano.
 
 Mesmo princípio visual do SimulIDE: pasta/categoria de topo nunca exige ícone próprio; item de
-componente pode declarar ícone (`TreeItem.iconPath`,
+componente pode declarar ícone de Webview (`iconLightUri`/`iconDarkUri`, derivados de
 `extension/media/components/{light,dark}/<icone>.svg` — par claro/escuro porque ícone de arquivo
 custom não é retematizado automaticamente pelo VSCode, diferente de `ThemeIcon`/codicon). Árvore é
 derivada do catálogo (sem lista hardcoded no provider) — pasta sem item descendente não aparece.
@@ -1462,10 +1462,9 @@ atual troca a seleção pra só ele primeiro. Fundo vazio ganhou "Selecionar tud
 **Cursor `grabbing`**: classe `.dragging` aplicada via JS no início do arraste de componente, removida
 no fim — `cursor: grabbing` (CSS) enquanto arrasta, `grab` em repouso (já existia).
 
-**Fora de escopo desta rodada** (backlog, não implementado): copiar/colar (`Ctrl+C/X/V` — exige remapear
-fios internos entre itens copiados, não é só duplicar); flip horizontal/vertical (`Ctrl+L`/`Ctrl+Shift+L`
-— nova capacidade real de espelhar símbolo+pinos); undo/redo (`Ctrl+Z/Y` — o LasecSimul não tem NENHUM
-sistema de undo hoje; construir um é um projeto à parte).
+**Implementado após esta rodada inicial**: copiar/colar (`Ctrl+C/X/V`), flip horizontal/vertical
+(`H`/`V`) e undo/redo (`Ctrl+Z/Y`/`Ctrl+Shift+Z`) já existem. Ver seção 17 para o desenho atual do
+histórico de undo/redo e os keybindings finais.
 
 **Correção pós-validação — `Ctrl+R`/`Ctrl+Shift+R` sobrepondo keybinding nativo do VSCode**: tratar a
 tecla só no `keydown` da Webview (com `event.preventDefault()`) não impede o VSCode de TAMBÉM despachar
