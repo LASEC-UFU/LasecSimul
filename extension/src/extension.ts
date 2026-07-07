@@ -8,6 +8,7 @@ import { isPreApproved, isPreBlocked, resolveConsentChoice, shouldLoadLibrary, d
 import { SchematicPanel } from "./ui/panels/SchematicPanel";
 import { createInitialWebviewState } from "./ui/webview/catalog";
 import { InteractionKindEntry, JUNCTION_TYPE_ID, PackageDescriptor, PackagePin, PackageShape, PropertySchemaEntry, TUNNEL_TYPE_ID, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./ui/webview/model";
+import { buildPinToPinWire, buildPinToWireConnection } from "./ui/webview/wireConnections";
 import { InternalComponentSnapshot, WebviewToHostMessage } from "./ui/webview/messages";
 import { ComponentPaletteViewProvider } from "./ui/views/ComponentPaletteViewProvider";
 import { componentLocalOrigin } from "./ui/webview/componentSymbols";
@@ -681,20 +682,6 @@ function pinsForInternalComponent(componentId: string, typeId: string, wires: In
   }));
 }
 
-function junctionComponentAt(point: { x: number; y: number }): WebviewComponentModel {
-  return {
-    id: nextId("junction"),
-    typeId: JUNCTION_TYPE_ID,
-    label: "Junction",
-    hidden: true,
-    x: point.x,
-    y: point.y,
-    rotation: 0,
-    pins: [{ id: "pin-1", x: 0, y: 0 }],
-    properties: {},
-  };
-}
-
 /** Roda logo depois de `projectToWebviewState` num `openProjectCommand`, ANTES de
  * `rebuildCoreFromSchematicState` (o typeId precisa estar certo e o Core precisar já ter a
  * definição avulsa registrada antes do rebuild tentar `addComponent`). Pra cada componente com
@@ -1114,12 +1101,7 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       return;
     }
     case "requestConnectPins": {
-      const wire: WebviewWireModel = {
-        id: nextId("wire"),
-        from: message.from,
-        to: message.to,
-        points: message.points,
-      };
+      const wire = buildPinToPinWire({ id: nextId("wire"), from: message.from, to: message.to, points: message.points });
       state.schematicState = {
         ...state.schematicState,
         wires: [...state.schematicState.wires, wire],
@@ -1135,25 +1117,18 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
     case "requestConnectPinToWire": {
       const existingWire = state.schematicState.wires.find((wire) => wire.id === message.wireId);
       if (!existingWire) return;
-      const junction = junctionComponentAt(message.point);
-      const firstWire: WebviewWireModel = {
-        id: nextId("wire"),
-        from: existingWire.from,
-        to: { componentId: junction.id, pinId: "pin-1" },
-        points: message.existingWireFirstPoints,
-      };
-      const secondWire: WebviewWireModel = {
-        id: nextId("wire"),
-        from: { componentId: junction.id, pinId: "pin-1" },
-        to: existingWire.to,
-        points: message.existingWireSecondPoints,
-      };
-      const newWire: WebviewWireModel = {
-        id: nextId("wire"),
+      const { junction, firstWire, secondWire, newWire } = buildPinToWireConnection({
+        existingWire,
+        junctionId: nextId("junction"),
+        junctionPoint: message.point,
         from: message.from,
-        to: { componentId: junction.id, pinId: "pin-1" },
-        points: message.points,
-      };
+        newWireId: nextId("wire"),
+        firstWireId: nextId("wire"),
+        secondWireId: nextId("wire"),
+        existingWireFirstPoints: message.existingWireFirstPoints,
+        existingWireSecondPoints: message.existingWireSecondPoints,
+        newWirePoints: message.points,
+      });
       state.schematicState = {
         ...state.schematicState,
         components: [...state.schematicState.components, junction],

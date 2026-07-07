@@ -14,6 +14,7 @@ import {
   snapToWireGrid,
 } from "./wireGeometry.js";
 import { formatEngineeringValue } from "./valueFormatting.js";
+import { buildPinToPinWire, buildPinToWireConnection } from "./wireConnections.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const FINE_WIRE_STEP = WIRE_GRID_SIZE / 10;
@@ -1727,23 +1728,6 @@ function newWireId(): string {
   return `wire-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
 }
 
-/** Equivalente client-side de `extension.ts::junctionComponentAt` -- usado só dentro de uma sessão
- * de autoria (`symbolAuthoringContext`), onde `send()` é um no-op (ver comentário de `send()`) e o
- * fio->fio precisa criar a junção localmente em vez de pedir pro Host. */
-function newJunctionComponent(point: Point): WebviewComponentModel {
-  return {
-    id: newComponentId(),
-    typeId: JUNCTION_TYPE_ID,
-    label: "Junction",
-    hidden: true,
-    x: point.x,
-    y: point.y,
-    rotation: 0,
-    pins: [{ id: "pin-1", x: 0, y: 0 }],
-    properties: {},
-  };
-}
-
 function copySelectedItems(): boolean {
   const selectedComponentIds = new Set(state.selectedComponentIds);
   const components = state.components.filter((component) => selectedComponentIds.has(component.id)).map(cloneComponent);
@@ -2193,12 +2177,20 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
           cornerIndex !== undefined ? points[cornerIndex]! : nearestSnappedPointOnOrthogonalSegment(clickPoint, from, to, WIRE_GRID_SIZE);
         const split = splitWireRouteAtPoint(wire, target);
         if (symbolAuthoringContext) {
-          // `send()` é no-op em sessão de autoria -- reproduz aqui o que
-          // `extension.ts::"requestConnectPinToWire"` faria (junção + split em 2 fios + fio novo).
-          const junction = newJunctionComponent(target);
-          const firstWire: WebviewWireModel = { id: newWireId(), from: wire.from, to: { componentId: junction.id, pinId: "pin-1" }, points: split.first };
-          const secondWire: WebviewWireModel = { id: newWireId(), from: { componentId: junction.id, pinId: "pin-1" }, to: wire.to, points: split.second };
-          const newWire: WebviewWireModel = { id: newWireId(), from: state.pendingConnection, to: { componentId: junction.id, pinId: "pin-1" }, points: pendingWirePointsForTarget(target) };
+          // `send()` é no-op em sessão de autoria -- aplica localmente ao `state` a MESMA regra que
+          // `extension.ts::"requestConnectPinToWire"` aplica pro circuito real (ver `wireConnections.ts`).
+          const { junction, firstWire, secondWire, newWire } = buildPinToWireConnection({
+            existingWire: wire,
+            junctionId: newComponentId(),
+            junctionPoint: target,
+            from: state.pendingConnection,
+            newWireId: newWireId(),
+            firstWireId: newWireId(),
+            secondWireId: newWireId(),
+            existingWireFirstPoints: split.first,
+            existingWireSecondPoints: split.second,
+            newWirePoints: pendingWirePointsForTarget(target),
+          });
           state = {
             ...state,
             components: [...state.components, junction],
@@ -4121,14 +4113,14 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
       const toPos = pinScenePosition(component, pin.id);
       const newConnectionPoints = toPos ? pendingWirePointsForTarget(toPos) : pendingWireRoute;
       if (symbolAuthoringContext) {
-        // `send()` é no-op em sessão de autoria -- cria o fio direto em `state`, igual ao que
-        // `extension.ts::"requestConnectPins"` faria pro circuito real.
-        const newWire: WebviewWireModel = {
+        // `send()` é no-op em sessão de autoria -- aplica localmente a MESMA regra que
+        // `extension.ts::"requestConnectPins"` aplica pro circuito real (ver `wireConnections.ts`).
+        const newWire = buildPinToPinWire({
           id: newWireId(),
           from: state.pendingConnection,
           to: { componentId: component.id, pinId: pin.id },
           points: newConnectionPoints,
-        };
+        });
         state = {
           ...state,
           wires: [...state.wires, newWire],
