@@ -1,7 +1,0 @@
-{
-  "schemaVersion": 1,
-  "typeId": "subcircuits.esp32_wroom32",
-  "label": "ESP32-WROOM-32 (modulo)",
-  "folderPath": ["Microcontroladores", "Espressif"],
-  "defaultProperties": {}
-}
