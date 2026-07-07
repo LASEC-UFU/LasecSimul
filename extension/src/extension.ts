@@ -2375,7 +2375,15 @@ function projectToWebviewState(project: ProjectDocument): WebviewProjectState {
       typeId: component.typeId,
       // Projeto salvo antes desta versão não tem `label` -- cai pro catálogo, igual sempre foi.
       label: component.label ?? descriptor?.label ?? component.typeId,
-      hidden: descriptor?.hidden ?? false,
+      // `connectors.junction` SEMPRE nasce `hidden: true` (ver `junctionComponentAt`) -- um ponto de
+      // fiação sem símbolo/rótulo visível, igual ao SimulIDE real. `ProjectComponent` (`.lsproj`) não
+      // tem campo `hidden` pra persistir isso (só `descriptor?.hidden`, que é sobre esconder o
+      // typeId da PALETA -- "Junção" é colocável manualmente de propósito, ver
+      // `component-catalog.json`, então não pode virar `hidden` ali) -- sem esta exceção, reabrir um
+      // projeto com uma junção virava um ponto/círculo visível que nunca deveria aparecer (mesma
+      // causa raiz do bug real corrigido em `symbolAuthoring.ts::seedSubcircuitInternalComponents`
+      // pro circuito INTERNO de um subcircuito).
+      hidden: component.typeId === "connectors.junction" ? true : (descriptor?.hidden ?? false),
       showId: component.showId,
       showValue: component.showValue ?? hasShowOnSymbolProperty(descriptor),
       flipH: component.flipH,
@@ -3556,6 +3564,9 @@ function extractInternalCircuit(json: Record<string, unknown>): { components: In
       visual: sanitizeVisualPosition(value.visual),
       boardVisual: sanitizeVisualPosition(value.boardVisual),
       exposed: value.exposed === true,
+      label: typeof value.label === "string" && value.label.trim() ? value.label : undefined,
+      showId: typeof value.showId === "boolean" ? value.showId : undefined,
+      showValue: typeof value.showValue === "boolean" ? value.showValue : undefined,
     }))
     .filter((component) => component.id && component.typeId);
 
@@ -4046,7 +4057,7 @@ async function saveSymbolCommand(
   const existingPackage = extractPackageForEditing(json, packageKey);
   const existingInterfaceByPinId = extractSubcircuitInterfaceMap(json);
   const existingBackground = existingPackage.background;
-  const result = compileSymbolAuthoringComponents(components, existingBackground);
+  const result = compileSymbolAuthoringComponents(components, existingBackground, existingPackage);
   if (!result.package) {
     vscode.window.showErrorMessage(result.error ?? "Não foi possível compilar o símbolo.");
     return;
@@ -4204,6 +4215,15 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand("lasecsimul.flipSelectionVertical", () => {
       schematicPanel?.postMessage({ version: 1, type: "requestFlipSelection", axis: "vertical" });
+    }),
+    // Mesmo motivo do Ctrl+R acima -- Ctrl+Z/Ctrl+Y/Ctrl+Shift+Z são comandos globais nativos do
+    // VSCode (undo/redo do editor de texto); sem este keybinding dedicado (quando o painel do
+    // esquemático está em foco) o VSCode intercepta antes de chegar na Webview via `keydown`.
+    vscode.commands.registerCommand("lasecsimul.undo", () => {
+      schematicPanel?.postMessage({ version: 1, type: "requestUndo" });
+    }),
+    vscode.commands.registerCommand("lasecsimul.redo", () => {
+      schematicPanel?.postMessage({ version: 1, type: "requestRedo" });
     }),
   );
 

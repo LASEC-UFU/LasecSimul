@@ -50,7 +50,9 @@
       { "command": "lasecsimul.rotateSelectionCw", "title": "LasecSimul: Rotate Selection CW" },
       { "command": "lasecsimul.rotateSelectionCcw", "title": "LasecSimul: Rotate Selection CCW" },
       { "command": "lasecsimul.flipSelectionHorizontal", "title": "LasecSimul: Flip Selection Horizontal" },
-      { "command": "lasecsimul.flipSelectionVertical", "title": "LasecSimul: Flip Selection Vertical" }
+      { "command": "lasecsimul.flipSelectionVertical", "title": "LasecSimul: Flip Selection Vertical" },
+      { "command": "lasecsimul.undo", "title": "LasecSimul: Undo" },
+      { "command": "lasecsimul.redo", "title": "LasecSimul: Redo" }
     ],
     "viewsContainers": {
       "activitybar": [
@@ -141,9 +143,6 @@
         }
       ]
     },
-    "lasecsimul.deviceLibraries": [
-      { "libraryManifest": "../devices/library.json" }
-    ],
     "keybindings": [
       {
         "command": "lasecsimul.rotateSelectionCw",
@@ -163,6 +162,21 @@
       {
         "command": "lasecsimul.flipSelectionVertical",
         "key": "v",
+        "when": "activeWebviewPanelId == 'lasecsimul.schematic'"
+      },
+      {
+        "command": "lasecsimul.undo",
+        "key": "ctrl+z",
+        "when": "activeWebviewPanelId == 'lasecsimul.schematic'"
+      },
+      {
+        "command": "lasecsimul.redo",
+        "key": "ctrl+y",
+        "when": "activeWebviewPanelId == 'lasecsimul.schematic'"
+      },
+      {
+        "command": "lasecsimul.redo",
+        "key": "ctrl+shift+z",
         "when": "activeWebviewPanelId == 'lasecsimul.schematic'"
       }
     ]

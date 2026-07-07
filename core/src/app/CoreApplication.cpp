@@ -812,8 +812,7 @@ ParsedPropertyError parsePropertyError(const std::string& rawError) {
 }
 
 /** Parseia `subcircuits/library.json` (lista de `{typeId, manifest}`, mesmo padrão de
- * `devices/library.json`) e cada `.lssubcircuit` referenciado (ou `.lssub.json` antigo, ainda
- * aberto por compatibilidade), registrando no `SubcircuitRegistry`
+ * `devices/library.json`) e cada `.lssubcircuit` referenciado, registrando no `SubcircuitRegistry`
  * da sessão -- ver .spec/lasecsimul-subcircuits.spec, seções 1 e 7. Roda no mesmo verbo IPC
  * `loadDeviceLibrary` que já existe (seção 6): um `library.json` com `"devices"` cai no caminho de
  * plugin nativo (`loadDeviceLibraryFile`), um com `"subcircuits"` cai aqui -- os dois são checados

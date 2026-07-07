@@ -13,7 +13,7 @@ Este documento complementa as specs. Ele não substitui `.spec/lasecsimul.spec` 
 - `.spec/lasecsimul.spec`: arquitetura principal.
 - `.spec/lasecsimul-native-devices.spec`: plugins nativos DLL/SO.
 - `.skill/lasecsimul.skill`: regras práticas para agentes.
-- `.spec/lasecsimul-wasm-devices.spec`: apenas histórico superseded.
+- `.spec/archive/lasecsimul-wasm-devices.spec`: apenas histórico superseded.
 
 ## Produto
 

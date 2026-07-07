@@ -1545,10 +1545,6 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
   const x2 = compactTwoPin ? box.width - 5 : box.width - LEAD_MARGIN;
   const midX = box.width / 2;
 
-  const labelBox = (label: string): string =>
-    `<rect x="${x1}" y="${Math.max(8, yMid - 14)}" width="${Math.max(24, x2 - x1)}" height="28" class="symbol-stroke" fill="none"/>` +
-    `<text x="${midX}" y="${yMid + 4}" text-anchor="middle" class="symbol-text">${label}</text>`;
-
   // active/diode.cpp: triangulo (meia-altura 7) + barra de catodo cabem dentro do corpo 20x16 real
   // sem transbordar -- amplitude fixa de 12/13 (independente de box.height) estourava caixas mais
   // baixas (bug relatado 2026-07-04: triangulo do diodo saia 4px pra fora da propria caixa).
@@ -1661,18 +1657,6 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
     case "passive.variable_inductor":
       return componentSymbolSvg("passive.inductor") +
         `<line x1="${midX - 18}" y1="${yMid + 14}" x2="${midX + 18}" y2="${yMid - 14}" class="symbol-stroke symbol-stroke--accent"/>`;
-
-    case "passive.transformer":
-      return (
-        `<line x1="${PIN_INSET}" y1="${box.height * 0.3}" x2="${LEAD_MARGIN}" y2="${box.height * 0.3}" class="symbol-stroke"/>` +
-        `<line x1="${PIN_INSET}" y1="${box.height * 0.7}" x2="${LEAD_MARGIN}" y2="${box.height * 0.7}" class="symbol-stroke"/>` +
-        `<line x1="${box.width - LEAD_MARGIN}" y1="${box.height * 0.3}" x2="${box.width - PIN_INSET}" y2="${box.height * 0.3}" class="symbol-stroke"/>` +
-        `<line x1="${box.width - LEAD_MARGIN}" y1="${box.height * 0.7}" x2="${box.width - PIN_INSET}" y2="${box.height * 0.7}" class="symbol-stroke"/>` +
-        `<path d="M 24 16 A 8 8 0 1 1 24 30 A 8 8 0 1 1 24 44" class="symbol-stroke" fill="none"/>` +
-        `<path d="M ${box.width - 24} 16 A 8 8 0 1 0 ${box.width - 24} 30 A 8 8 0 1 0 ${box.width - 24} 44" class="symbol-stroke" fill="none"/>` +
-        `<line x1="${midX - 3}" y1="12" x2="${midX - 3}" y2="${box.height - 12}" class="symbol-stroke"/>` +
-        `<line x1="${midX + 3}" y1="12" x2="${midX + 3}" y2="${box.height - 12}" class="symbol-stroke"/>`
-      );
 
     case "other.ground":
       return builtinPaintSvg(GROUND_PAINT, box);
@@ -1889,9 +1873,6 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
 
     case "active.diode":
     case "active.zener":
-    case "active.diac":
-    case "active.scr":
-    case "active.triac":
       return diodeBody(
         typeId === "active.zener"
           ? `<path d="M ${midX + 10} ${(yMid - diodeBarHalf).toFixed(1)} l 5 -5 M ${midX + 10} ${(yMid + diodeBarHalf).toFixed(1)} l -5 5" class="symbol-stroke"/>`
@@ -1905,56 +1886,6 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
       return (
         `<ellipse cx="${midX - 1}" cy="${yMid}" rx="8" ry="8" fill="#3a3a3a" stroke="#111" stroke-width="1"/>` +
         diodeBody()
-      );
-
-    case "active.bjt":
-      // active/bjt.cpp: m_area real QRectF(-12,-14,28,28) (elipse centrada em (2,0), raio 14) +
-      // pinos Collector(8,-16)/Emiter(8,16)/Base(-16,0) -- convertido pra origem top-left desta
-      // caixa 32×32 (deslocamento +16,+16, mesma metade da caixa) fica elipse em (18,16) r=14. O
-      // raio fixo antigo (18) era MAIOR que a metade da caixa (16), estourando o próprio viewBox
-      // (bug relatado 2026-07-04: "corpo" do transistor vazando pra fora do componente); os
-      // `pinLocalPosition` já estavam certos (24,0)/(24,32)/(0,16), só o desenho não batia com eles.
-      return (
-        `<ellipse cx="18" cy="16" rx="14" ry="14" class="symbol-stroke" fill="none"/>` +
-        `<line x1="0" y1="16" x2="12" y2="16" class="symbol-stroke"/>` +
-        `<line x1="12" y1="8" x2="12" y2="24" class="symbol-stroke"/>` +
-        `<line x1="12" y1="12" x2="24" y2="4" class="symbol-stroke"/>` +
-        `<line x1="12" y1="20" x2="24" y2="28" class="symbol-stroke"/>` +
-        `<line x1="24" y1="0" x2="24" y2="4" class="symbol-stroke"/>` +
-        `<line x1="24" y1="32" x2="24" y2="28" class="symbol-stroke"/>` +
-        `<path d="M 22 26.7 L 18.4 26 L 20 23.5 Z" fill="currentColor"/>`
-      );
-
-    case "active.mosfet":
-      // active/mosfet.cpp: mesma elipse/pinos do BJT (m_area e Pin idênticos) -- só o glifo interno
-      // muda (3 "dedos" horizontais + barra de gate + setinha de canal N, modo enhancement default).
-      return (
-        `<ellipse cx="18" cy="16" rx="14" ry="14" class="symbol-stroke" fill="none"/>` +
-        `<line x1="0" y1="16" x2="12" y2="16" class="symbol-stroke"/>` +
-        `<line x1="12" y1="8" x2="12" y2="24" class="symbol-stroke"/>` +
-        `<line x1="16" y1="9" x2="24" y2="9" class="symbol-stroke"/>` +
-        `<line x1="16" y1="16" x2="24" y2="16" class="symbol-stroke"/>` +
-        `<line x1="16" y1="23" x2="24" y2="23" class="symbol-stroke"/>` +
-        `<line x1="24" y1="0" x2="24" y2="9" class="symbol-stroke"/>` +
-        `<line x1="24" y1="32" x2="24" y2="16" class="symbol-stroke"/>` +
-        `<line x1="16" y1="7" x2="16" y2="11" class="symbol-stroke symbol-stroke--thick"/>` +
-        `<line x1="16" y1="14" x2="16" y2="18" class="symbol-stroke symbol-stroke--thick"/>` +
-        `<line x1="16" y1="21" x2="16" y2="25" class="symbol-stroke symbol-stroke--thick"/>` +
-        `<path d="M 17 16 L 21 14 L 21 18 Z" fill="currentColor"/>`
-      );
-
-    case "active.jfet":
-      // active/jfet.cpp: mesma elipse/pinos do BJT/Mosfet -- gate é uma barra reta única (sem
-      // enhancement/depletion) e a seta aponta pra dentro (canal N default).
-      return (
-        `<ellipse cx="18" cy="16" rx="14" ry="14" class="symbol-stroke" fill="none"/>` +
-        `<line x1="0" y1="16" x2="16" y2="16" class="symbol-stroke"/>` +
-        `<line x1="16" y1="7" x2="16" y2="25" class="symbol-stroke"/>` +
-        `<line x1="16" y1="9" x2="24" y2="9" class="symbol-stroke"/>` +
-        `<line x1="16" y1="23" x2="24" y2="23" class="symbol-stroke"/>` +
-        `<line x1="24" y1="0" x2="24" y2="9" class="symbol-stroke"/>` +
-        `<line x1="24" y1="32" x2="24" y2="24" class="symbol-stroke"/>` +
-        `<path d="M 15 16 L 11 14 L 11 18 Z" fill="currentColor"/>`
       );
 
     case "active.opamp":
@@ -2073,86 +2004,12 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
         `<ellipse cx="${cx}" cy="${yMid}" rx="${(r * 0.28).toFixed(1)}" ry="${(r * 0.28).toFixed(1)}" fill="#dcdcdc"/>`
       );
     }
-    case "outputs.servo":
-      return labelBox("SERVO");
-    case "outputs.audio_out":
-      return labelBox("AUDIO");
     case "outputs.incandescent_lamp":
       return (
         horizontalLeads(box, yMid) +
         `<circle cx="${midX}" cy="${yMid}" r="14" class="symbol-stroke" fill="none"/>` +
         `<path d="M ${midX - 8} ${yMid - 8} L ${midX + 8} ${yMid + 8} M ${midX + 8} ${yMid - 8} L ${midX - 8} ${yMid + 8}" class="symbol-stroke"/>`
       );
-
-    case "outputs.hd44780":
-    case "outputs.aip31068_i2c":
-    case "outputs.pcd8544":
-    case "outputs.ks0108":
-    case "outputs.ssd1306":
-    case "outputs.sh1107":
-    case "outputs.st7735":
-    case "outputs.st7789":
-    case "outputs.ili9341":
-    case "outputs.gc9a01a":
-    case "outputs.pcf8833":
-      return labelBox((typeId.split(".")[1] ?? typeId).replace(/_/g, " ").toUpperCase());
-
-    case "logic.buffer":
-      return labelBox("BUF");
-    case "logic.and_gate":
-      return labelBox("AND");
-    case "logic.or_gate":
-      return labelBox("OR");
-    case "logic.xor_gate":
-      return labelBox("XOR");
-    case "logic.counter":
-      return labelBox("CNT");
-    case "logic.bin_counter":
-      return labelBox("BIN CNT");
-    case "logic.full_adder":
-      return labelBox("ADD");
-    case "logic.magnitude_comp":
-      return labelBox("A:B");
-    case "logic.shift_reg":
-      return labelBox("SHIFT");
-    case "logic.function":
-      return labelBox("F(x)");
-    case "logic.flipflop_d":
-      return labelBox("D FF");
-    case "logic.flipflop_t":
-      return labelBox("T FF");
-    case "logic.flipflop_rs":
-      return labelBox("RS");
-    case "logic.flipflop_jk":
-      return labelBox("JK");
-    case "logic.latch_d":
-      return labelBox("LATCH");
-    case "logic.memory":
-      return labelBox("RAM");
-    case "logic.dynamic_memory":
-      return labelBox("DRAM");
-    case "logic.i2c_ram":
-      return labelBox("I2C RAM");
-    case "logic.mux":
-      return labelBox("MUX");
-    case "logic.demux":
-      return labelBox("DEMUX");
-    case "logic.bcd_to_dec":
-      return labelBox("BCD>DEC");
-    case "logic.dec_to_bcd":
-      return labelBox("DEC>BCD");
-    case "logic.bcd_to_7seg":
-      return labelBox("BCD>7S");
-    case "logic.i2c_to_parallel":
-      return labelBox("I2C>P");
-    case "logic.adc":
-      return labelBox("ADC");
-    case "logic.dac":
-      return labelBox("DAC");
-    case "logic.seven_segment_bcd":
-      return labelBox("7S BCD");
-    case "logic.lm555":
-      return labelBox("555");
 
     case "instruments.voltmeter":
       // O manifesto não declara `symbolSvg` próprio (o antigo círculo+"V" tinha leads

@@ -308,10 +308,18 @@ Sem isso, o backlog de editor e i18n fica caro de manter.
 
 ## Épico F - Subcircuitos como produto
 
-**Status: fundação do Core concluída; integração na Extension ainda pendente.** Implementado em
-`core/src/registry/SubcircuitRegistry.hpp` e `core/src/session/SimulationSession.{hpp,cpp}`,
-seguindo `.spec/lasecsimul-subcircuits.spec` seção 5 à risca:
-- Loader de `.lssub.json`/`subcircuits/library.json` (`loadSubcircuitLibraryFile` em
+**Status (atualizado 2026-07-07): fundação do Core concluída E integração na Extension também —
+"Criar Subcircuito a partir da Seleção" foi implementado em 2026-07-03 (ver seção 11 de
+`.spec/lasecsimul-subcircuits.spec`), fechando o que este Épico ainda listava como pendente. O texto
+abaixo (escrito em 2026-06-28/29) usa o formato de arquivo ANTIGO (`.lssub.json`+`.lsconfig`
+separados) como exemplo — já migrado pra `.lssubcircuit` único em 2026-07-06, ver a nota
+"Atualização 2026-07-06" logo abaixo. Mantido como registro histórico da fundação do Core; as
+pendências reais de então já foram todas resolvidas (ver lista de Pendências atualizada mais
+abaixo).** Implementado em `core/src/registry/SubcircuitRegistry.hpp` e
+`core/src/session/SimulationSession.{hpp,cpp}`, seguindo `.spec/lasecsimul-subcircuits.spec` seção 5
+à risca:
+- Loader de `.lssub.json`/`subcircuits/library.json` (histórico -- hoje é `.lssubcircuit`, ver nota
+  de migração 2026-07-06 abaixo) (`loadSubcircuitLibraryFile` em
   `CoreApplication.cpp`, reaproveita o verbo IPC `loadDeviceLibrary` já existente — um
   `library.json` com `"devices"` cai no caminho de plugin, um com `"subcircuits"` cai aqui).
 - `SimulationSession::addSubcircuitInstance()` -- expansão recursiva (`addComponent`/`connectWire`
@@ -349,11 +357,11 @@ desde 2026-07-02 — corrigido nesta data. `esp32_devkitc_v4.lssub.json`+`esp32_
 também virou `.lsdevice`, fundindo seu `device.lsconfig`. Ver `.spec/lasecsimul-subcircuits.spec`
 seção 7.1 e `.spec/lasecsimul-native-devices.spec` seção 14/21.2 (já atualizadas).
 
-**Ainda pendente (lado Extension)**: comando "Criar Subcircuito a partir da Seleção", editor de
-símbolo (depende do Épico G), persistência `.lssubcircuit` a partir do editor — cada um exigiria UI
-nova no webview testável só com interação real (mouse/seleção), ver mesma decisão de escopo do
-Épico G abaixo. Registrar/usar um subcircuito já escrito à mão (este épico) não depende de nenhum
-dos três.
+**Atualização 2026-07-03**: comando "Criar Subcircuito a partir da Seleção" **implementado** —
+`lasecsimul.newSubcircuit`, algoritmo completo em `createSubcircuitFromSelectionHandler`
+(`extension.ts`), detalhado em `.spec/lasecsimul-subcircuits.spec` seção 11. Editor de símbolo
+(Épico G) e persistência `.lssubcircuit` a partir do editor também já implementados (ver Épico G
+abaixo) — nenhuma das três pendências listadas aqui em 2026-06-28 continua em aberto.
 
 ### Motivação
 
@@ -368,15 +376,16 @@ suficiente para começar a implementação por fases.
 - Implementar `removeSubcircuitInstance()` e remoção em cascata.
 - Implementar expansão recursiva de subcircuito dentro da `SimulationSession`.
 - Detectar ciclo de dependência entre subcircuitos.
-- Criar comando “Criar Subcircuito a partir da Seleção”.
-- Criar persistência `.lssubcircuit`.
+- ~~Criar comando "Criar Subcircuito a partir da Seleção".~~ **Feito** (2026-07-03, ver
+  `.spec/lasecsimul-subcircuits.spec` seção 11).
+- ~~Criar persistência `.lssubcircuit`.~~ **Feito**.
 - ~~Integrar subcircuitos à paleta com `folderPath`, i18n e `deviceLibraries[]`.~~ **Feito**
   (2026-06-28) — ver nota acima.
 
 ### Entregáveis
 
 - suporte headless do Core a subcircuitos;
-- fluxo de criação a partir de seleção no editor — ainda aberto;
+- ~~fluxo de criação a partir de seleção no editor~~ **feito** (2026-07-03) — `lasecsimul.newSubcircuit`;
 - ~~subcircuito aparecendo e sendo instanciado pela paleta~~ **feito** — `subcircuits.esp32_devkitc_v4`
   é a prova real;
 - biblioteca `subcircuits/` funcional.
@@ -489,9 +498,9 @@ rodada, o contrato existia melhor do que a ferramenta visual para produzi-lo.
 - round-trip fiel (abrir JSON manual e renderizar igual; editar na UI e salvar igual) — implementado e
   testado (`symbolAuthoring.test.ts`), mas ainda sem confirmação visual manual no Extension Development
   Host (ver ressalva acima);
-- comando "Criar Subcircuito a partir da Seleção" (detectar fios cruzando a borda de uma seleção,
-  inserir `connectors.tunnel` automaticamente) — **não implementado**, escopo do Épico F/seção 4 de
-  `.spec/lasecsimul-subcircuits.spec`, decisão explícita de não incluir nesta rodada.
+- ~~comando "Criar Subcircuito a partir da Seleção" (detectar fios cruzando a borda de uma seleção,
+  inserir `connectors.tunnel` automaticamente)~~ **feito** (2026-07-03, ver Épico F acima e
+  `.spec/lasecsimul-subcircuits.spec` seção 11).
 
 ### Entregáveis
 

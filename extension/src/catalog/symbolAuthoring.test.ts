@@ -199,6 +199,28 @@ import { PackageDescriptor, WebviewWireModel } from "../ui/webview/model";
     assert(seeded[0]!.boardX === undefined, "sem boardVisual salvo, boardX não deveria existir ainda");
   });
 
+  await test("seedSubcircuitInternalComponents: connectors.junction nasce hidden/label 'Junction', nunca visível com id cru", () => {
+    // Bug real (esp32_devkitc_v4.lssubcircuit): antes desta correção, TODO componente do circuito
+    // interno (incluindo connectors.junction) nascia com `hidden: false, showId: true, label:
+    // component.id` -- uma junção criada ao ligar fio->fio dentro de "Abrir Subcircuito" perdia seu
+    // estado correto (`hidden: true, label: "Junction"`, ver `junctionComponentAt`/
+    // `newJunctionComponent`) ao salvar/reabrir (o formato persistido, `InternalComponentSeed`, não
+    // tem campo `hidden`/`label` -- só é derivado aqui) e reaparecia como um círculo com o id bruto
+    // ("component-<timestamp>-<random>") escrito por cima, permanentemente visível.
+    const components: InternalComponentSeed[] = [
+      { id: "component-1783414925016-10722", typeId: "connectors.junction", properties: {}, visual: { x: 624, y: 504, rotation: 0 } },
+      { id: "tunnel_G21", typeId: "connectors.tunnel", properties: { name: "G21" }, visual: { x: 100, y: 100, rotation: 0 } },
+    ];
+    const { components: seeded } = seedSubcircuitInternalComponents(components, []);
+    const junction = seeded.find((c) => c.typeId === "connectors.junction")!;
+    assert(junction.hidden === true, `junção deveria nascer hidden=true, recebido ${junction.hidden}`);
+    assert(junction.label === "Junction", `label da junção deveria ser "Junction", recebido "${junction.label}"`);
+    assert(junction.showId === false, `showId da junção deveria ser false, recebido ${junction.showId}`);
+    // Sanity check: connectors.tunnel continua com o comportamento de sempre (visível, label = nome do net).
+    const tunnel = seeded.find((c) => c.typeId === "connectors.tunnel")!;
+    assert(tunnel.hidden === false && tunnel.label === "G21" && tunnel.showId === true, "connectors.tunnel não deveria ser afetado pela exceção de junction");
+  });
+
   await test("seed/compile do circuito interno: visual e boardVisual sobrevivem ao round-trip, independentes um do outro", () => {
     const components: InternalComponentSeed[] = [
       {
@@ -232,6 +254,161 @@ import { PackageDescriptor, WebviewWireModel } from "../ui/webview/model";
 
     const compiled = compileSubcircuitInternalComponents(allSessionComponents, wires);
     assert(compiled.components.length === 1 && compiled.components[0]!.typeId === "other.ground", `só o componente interno real deveria sobreviver, recebido ${compiled.components.map((c) => c.typeId).join(",")}`);
+  });
+
+  await test("seed/compile: label/showId/showValue de componente interno real sobrevivem ao round-trip (PC-14)", () => {
+    // Bug real: editar o "Título"/"Mostrar Id" de um componente interno dentro de "Abrir
+    // Subcircuito" e salvar descartava a edição -- `InternalComponentSeed` não tinha campo pra
+    // persistir isso, então reabrir sempre re-derivava do zero (id bruto + showId=true).
+    const components: InternalComponentSeed[] = [{ id: "r1", typeId: "passive.resistor", properties: { resistance: 1000 } }];
+    const seeded = seedSubcircuitInternalComponents(components, []);
+    assert(seeded.components[0]!.label === "r1", `sem label salvo, deveria cair pro id bruto, recebido "${seeded.components[0]!.label}"`);
+    assert(seeded.components[0]!.showId === true, "sem showId salvo, deveria cair pro default true");
+
+    seeded.components[0]!.label = "Pull-up";
+    seeded.components[0]!.showId = false;
+    seeded.components[0]!.showValue = true;
+    const compiled = compileSubcircuitInternalComponents(seeded.components, []);
+    assert(compiled.components[0]!.label === "Pull-up", `label editado deveria persistir, recebido "${compiled.components[0]!.label}"`);
+    assert(compiled.components[0]!.showId === false, "showId editado deveria persistir");
+    assert(compiled.components[0]!.showValue === true, "showValue editado deveria persistir");
+
+    const reseeded = seedSubcircuitInternalComponents(compiled.components, []);
+    assert(reseeded.components[0]!.label === "Pull-up", "reabrir deveria mostrar o MESMO label editado");
+    assert(reseeded.components[0]!.showId === false, "reabrir deveria mostrar o MESMO showId editado");
+    assert(reseeded.components[0]!.showValue === true, "reabrir deveria mostrar o MESMO showValue editado");
+  });
+
+  await test("seed/compile: connectors.tunnel ignora LABEL persistido (sempre nome do net vivo) mas honra showId; connectors.junction ignora os dois", () => {
+    // `label` do túnel PRECISA ficar sempre vivo (é o nome do net, editável em outro lugar -- uma
+    // cópia congelada divergiria). `showId` é um toggle de visibilidade independente, sem motivo pra
+    // ficar travado -- só a junção (exceção de topologia, nunca visível) ignora os dois.
+    const components: InternalComponentSeed[] = [
+      { id: "tunnel_G23", typeId: "connectors.tunnel", properties: { name: "G23" }, label: "nome antigo travado", showId: false },
+      { id: "j1", typeId: "connectors.junction", properties: {}, label: "nome antigo travado", showId: true },
+    ];
+    const seeded = seedSubcircuitInternalComponents(components, []);
+    const tunnel = seeded.components.find((c) => c.id === "tunnel_G23")!;
+    const junction = seeded.components.find((c) => c.id === "j1")!;
+    assert(tunnel.label === "G23", `túnel deveria sempre mostrar o nome do net vivo ("G23"), não o label persistido, recebido "${tunnel.label}"`);
+    assert(tunnel.showId === false, "túnel deveria honrar showId persistido (false) -- é um toggle independente do nome do net");
+    assert(junction.label === "Junction" && junction.hidden === true, "junção deveria sempre ser hidden/label 'Junction', ignorando o que foi persistido");
+
+    const compiled = compileSubcircuitInternalComponents(seeded.components, []);
+    const compiledTunnel = compiled.components.find((c) => c.id === "tunnel_G23")!;
+    const compiledJunction = compiled.components.find((c) => c.id === "j1")!;
+    assert(compiledTunnel.label === undefined, "túnel nunca deveria gravar label (sempre derivado do nome do net, dado morto no arquivo)");
+    assert(compiledTunnel.showId === false, "túnel DEVE gravar showId (toggle real, não derivado)");
+    assert(compiledJunction.label === undefined && compiledJunction.showId === undefined, "junção nunca deveria gravar label/showId (sempre derivado, dado morto no arquivo)");
+  });
+
+  await test("seed/compile: PackagePin preserva campos sem alça editável (aliases/stateVisible/leadOrigin/labelColor por pino) -- TR-4", () => {
+    // Bug real confirmado em sources.controlled_source: abrir "Editar Símbolo Visual" e salvar SEM
+    // alterar nada já colapsava a cor por pino numa única cor genérica, tornava pinos de controle
+    // sempre visíveis (perdendo stateVisible), e mudava o ponto elétrico de conexão (perdendo
+    // leadOrigin:"terminal"/leadEndTrim).
+    const pkg: PackageDescriptor = {
+      width: 100,
+      height: 80,
+      pins: [
+        {
+          id: "cp", x: 0, y: 12, angle: 180, length: 8,
+          label: "+", labelColor: "#ff0000", labelFontSize: 9,
+          stateVisible: { when: { controlPins: ["true"] } },
+          leadOrigin: "terminal", leadEndTrim: 0.7,
+          aliases: ["control-plus"], leadColor: "#333333",
+        },
+        {
+          id: "cm", x: 0, y: 40, angle: 180, length: 8,
+          label: "−", labelColor: "#000000", labelFontSize: 9,
+          stateVisible: { when: { controlPins: ["true"] } },
+        },
+      ],
+    };
+    const components = seedSymbolAuthoringComponents(pkg);
+    // Cor por pino já deve aparecer distinta na sessão (antes do fix, as duas caíam na MESMA cor).
+    const cpLabel = components.find((c) => c.typeId === "graphics.text" && c.properties.text === "+")!;
+    const cmLabel = components.find((c) => c.typeId === "graphics.text" && c.properties.text === "−")!;
+    assert(cpLabel.properties.color === "#ff0000", `rótulo "+" deveria manter cor própria #ff0000, recebido ${cpLabel.properties.color}`);
+    assert(cmLabel.properties.color === "#000000", `rótulo "−" deveria manter cor própria #000000, recebido ${cmLabel.properties.color}`);
+
+    // Salvar SEM alterar nada -- os campos sem alça editável precisam sobreviver via merge com o pkg original.
+    const compiled = compileSymbolAuthoringComponents(components, undefined, pkg);
+    assert(compiled.package !== undefined, "compile não deveria falhar");
+    const cp = compiled.package!.pins.find((p) => p.id === "cp")!;
+    const cm = compiled.package!.pins.find((p) => p.id === "cm")!;
+    assert(cp.labelColor === "#ff0000" && cm.labelColor === "#000000", `cor por pino deveria sobreviver distinta, recebido cp=${cp.labelColor} cm=${cm.labelColor}`);
+    assert(JSON.stringify(cp.stateVisible) === JSON.stringify({ when: { controlPins: ["true"] } }), "stateVisible do pino de controle deveria sobreviver");
+    assert(cp.leadOrigin === "terminal" && cp.leadEndTrim === 0.7, "leadOrigin/leadEndTrim deveriam sobreviver (mudam o ponto elétrico de conexão)");
+    assert(JSON.stringify(cp.aliases) === JSON.stringify(["control-plus"]), "aliases deveriam sobreviver");
+    assert(cp.leadColor === "#333333", "leadColor deveria sobreviver");
+  });
+
+  await test("compileSymbolAuthoringComponents: formas sem componente equivalente (polygon/path/image/svg) são preservadas verbatim -- TR-5", () => {
+    // Bug real confirmado em ds1307.lsdevice (svg)/sdcard.lsdevice (polygon): seedShapeComponent não
+    // sabe criar componente pra esses kinds, então salvar sem tocar em nada as apagava do arquivo.
+    const pkg: PackageDescriptor = {
+      width: 100,
+      height: 80,
+      pins: [],
+      shapes: [
+        { kind: "rect", x: 0, y: 0, w: 10, h: 10 },
+        { kind: "svg", value: "<svg><circle r=\"4\"/></svg>" },
+        { kind: "polygon", points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 5, y: 10 }] },
+      ],
+    };
+    const components = seedSymbolAuthoringComponents(pkg);
+    // shapes[] tinha 3 entradas, mas só "rect" gera componente (svg/polygon caem no default:undefined).
+    const shapeComponents = components.filter((c) => c.typeId.startsWith("graphics."));
+    assert(shapeComponents.length === 1, `esperado 1 componente de forma (só rect), recebido ${shapeComponents.length}`);
+
+    const compiled = compileSymbolAuthoringComponents(components, undefined, pkg);
+    assert(compiled.package !== undefined, "compile não deveria falhar");
+    const kinds = compiled.package!.shapes!.map((s) => s.kind).sort();
+    assert(JSON.stringify(kinds) === JSON.stringify(["polygon", "rect", "svg"]), `svg/polygon deveriam sobreviver verbatim, recebido ${JSON.stringify(kinds)}`);
+    const svgShape = compiled.package!.shapes!.find((s) => s.kind === "svg")!;
+    assert(svgShape.value === "<svg><circle r=\"4\"/></svg>", "conteúdo do svg deveria sobreviver idêntico");
+  });
+
+  await test("seed: package.viewSpec.paint gera componentes de referência visual (rect/ellipse/line/text) -- TR-5b", () => {
+    const pkg: PackageDescriptor = {
+      width: 100,
+      height: 80,
+      pins: [],
+      viewSpec: {
+        paint: [
+          { kind: "rect", x: 0, y: 0, w: 20, h: 20 },
+          { kind: "text", x: 10, y: 40, value: "IC1" },
+        ],
+        stateProjection: { body: [] },
+      },
+    };
+    const components = seedSymbolAuthoringComponents(pkg);
+    const shapeComponents = components.filter((c) => c.typeId.startsWith("graphics."));
+    assert(shapeComponents.length === 2, `esperado 2 componentes vindos de viewSpec.paint, recebido ${shapeComponents.length}`);
+  });
+
+  await test("compileSymbolAuthoringComponents: viewSpec/simulidePaint/qtWidget são SEMPRE preservados verbatim, nunca reconstruídos da sessão -- TR-5b", () => {
+    // Bug real mais severo que TR-5: extension.ts::saveSymbolCommand faz `json[packageKey] =
+    // {...result.package}` -- substituição TOTAL da chave. Sem preservar viewSpec/simulidePaint/
+    // qtWidget aqui, "Salvar Símbolo" em QUALQUER device que usa um desses como mecanismo PRIMÁRIO
+    // (todo logic.*, transistores, displays -- 54 devices reais) apagava o desenho inteiro do device.
+    const pkg: PackageDescriptor = {
+      width: 100,
+      height: 80,
+      pins: [{ id: "a", x: 0, y: 20, angle: 180, length: 8 }],
+      viewSpec: { paint: [{ kind: "rect", x: 0, y: 0, w: 20, h: 20 }], stateProjection: { body: [] } },
+      simulidePaint: { version: 1, bounds: { x: 0, y: 0, w: 100, h: 80 }, primitives: [{ kind: "line", x1: 0, y1: 0, x2: 10, y2: 10 }] },
+      qtWidget: { kind: "plotBase", variant: "oscope", channels: 4 },
+      pinMarker: "packagePin",
+    };
+    const components = seedSymbolAuthoringComponents(pkg);
+    const compiled = compileSymbolAuthoringComponents(components, undefined, pkg);
+    assert(compiled.package !== undefined, "compile não deveria falhar");
+    assert(JSON.stringify(compiled.package!.viewSpec) === JSON.stringify(pkg.viewSpec), "viewSpec deveria sobreviver idêntico, mesmo sem alça editável na sessão");
+    assert(JSON.stringify(compiled.package!.simulidePaint) === JSON.stringify(pkg.simulidePaint), "simulidePaint deveria sobreviver idêntico");
+    assert(JSON.stringify(compiled.package!.qtWidget) === JSON.stringify(pkg.qtWidget), "qtWidget deveria sobreviver idêntico");
+    assert(compiled.package!.pinMarker === "packagePin", "pinMarker deveria sobreviver");
   });
 
   finish();

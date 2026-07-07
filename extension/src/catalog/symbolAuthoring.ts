@@ -38,6 +38,20 @@ export interface InternalComponentSeed {
    * SimulIDE real. Controla quem aparece no overlay de Modo Placa do circuito PRINCIPAL (não a
    * sessão de autoria). Ausente == `false` (não exposto por padrão). */
   exposed?: boolean;
+  /** Título/visibilidade editados via diálogo de propriedades DENTRO de "Abrir Subcircuito" (bug
+   * real corrigido, ver `.spec/lasecsimul-subcircuits.spec` seção 15.1): antes destes 3 campos
+   * existirem aqui, editar o "Título" ou o checkbox "Mostrar Id"/"Mostrar Valor" de um componente
+   * interno real e salvar descartava a edição silenciosamente -- `seedSubcircuitInternalComponents`
+   * sempre re-derivava `label`/`showId` do zero (id bruto + `true`), sem nada persistido pra ler de
+   * volta. Ausentes == comportamento legado de sempre (arquivo escrito antes destes campos
+   * existirem): `label` cai pro id bruto (ou nome do net, pra `connectors.tunnel`), `showId` cai pra
+   * `true`, `showValue` cai pro fallback de `main.ts` (schema `showOnSymbol`). `connectors.tunnel`/
+   * `connectors.junction` IGNORAM `label`/`showId` persistidos aqui de propósito -- continuam
+   * derivados ao vivo (nome do net / exceção de junção, ver `seedSubcircuitInternalComponents`),
+   * nunca uma cópia congelada que poderia divergir da propriedade real. */
+  label?: string;
+  showId?: boolean;
+  showValue?: boolean;
 }
 
 export interface InternalWireSeed {
@@ -109,6 +123,20 @@ export function seedSymbolAuthoringComponents(pkg: PackageDescriptor, originX = 
     if (component) components.push(component);
   });
 
+  // `package.viewSpec.paint[]` usa o MESMO vocabulário declarativo de `PackageShape[]` (ver
+  // `model.ts::ComponentViewSpec.paint`) -- sem isto, abrir "Editar Símbolo Visual" pra qualquer
+  // device migrado pra ViewSpec (54 devices reais no catálogo hoje: todo `logic.*`, transistores,
+  // displays, `peripherals.ky023/ky040/touchpad`, etc.) mostrava uma sessão praticamente vazia (só o
+  // placeholder `other.package`), sem nenhuma relação visual com o que o device realmente desenha.
+  // Só as formas BÁSICAS (rect/ellipse/line/text, ver `seedShapeComponent`) viram componente editável
+  // aqui -- gradientes/hit-test/interação/`stateProjection`/`partId` do ViewSpec NÃO têm alça nesta
+  // sessão ainda (feature maior, fora de escopo desta correção) e são preservados verbatim ao salvar
+  // (ver `compileSymbolAuthoringComponents`), nunca reconstruídos a partir do que apareceu aqui.
+  (pkg.viewSpec?.paint ?? []).forEach((shape, index) => {
+    const component = seedShapeComponent(shape, (pkg.shapes?.length ?? 0) + index, originX, originY, scaleX, scaleY);
+    if (component) components.push(component);
+  });
+
   pkg.pins.forEach((pin, index) => {
     const pinScale = pin.angle === 90 || pin.angle === 270 ? scaleY : scaleX;
     const properties: Record<string, string | number | boolean> = { pinId: pin.id, length: pin.length * pinScale };
@@ -163,13 +191,27 @@ export function seedSubcircuitInternalComponents(components: InternalComponentSe
     // todo componente do circuito interno aparecia sem nenhum texto, só o símbolo genérico, o que
     // tornava a tela de "Abrir Subcircuito" difícil de entender (várias formas iguais sem dizer o
     // que são).
-    const tunnelName = component.typeId === "connectors.tunnel" && typeof component.properties.name === "string" ? component.properties.name : undefined;
+    // `connectors.junction` é EXCEÇÃO: no circuito PRINCIPAL ele sempre nasce `hidden: true, label:
+    // "Junction"` (ver `extension.ts::junctionComponentAt`/`main.ts::newJunctionComponent`) -- um
+    // ponto de fiação sem símbolo/rótulo visível, igual ao SimulIDE real. Sem esta exceção aqui, uma
+    // junção criada ao ligar fio->fio DENTRO de "Abrir Subcircuito" perdia esse estado ao
+    // salvar/reabrir (`InternalComponentSeed`, formato persistido em `.lssubcircuit`, não tem campo
+    // `hidden`/`label` -- só é derivado aqui, na hora de semear a sessão) e reaparecia como um
+    // círculo com o id bruto ("component-<timestamp>-<random>") escrito por cima, permanentemente
+    // visível e sem nenhuma serventia (bug real relatado, `esp32_devkitc_v4.lssubcircuit`).
+    const isJunction = component.typeId === "connectors.junction";
+    const isTunnel = component.typeId === "connectors.tunnel";
+    const tunnelName = isTunnel && typeof component.properties.name === "string" ? component.properties.name : undefined;
+    // `label`/`showId` persistidos (ver docstring de `InternalComponentSeed`) só valem pro caso
+    // GERAL -- `connectors.tunnel`/`connectors.junction` continuam IGNORANDO qualquer valor salvo
+    // aqui, sempre derivados ao vivo (nome do net / exceção de junção), nunca uma cópia congelada.
     const model: WebviewComponentModel = {
       id: component.id,
       typeId: component.typeId,
-      label: tunnelName ?? component.id,
-      hidden: false,
-      showId: true,
+      label: isJunction ? "Junction" : (tunnelName ?? component.label ?? component.id),
+      hidden: isJunction,
+      showId: isJunction ? false : (component.showId ?? true),
+      showValue: component.showValue,
       x: Math.round(visual.x),
       y: Math.round(visual.y),
       rotation: visual.rotation,
@@ -223,6 +265,14 @@ export function compileSubcircuitInternalComponents(components: WebviewComponent
       if (component.boardX !== undefined && component.boardY !== undefined) {
         seed.boardVisual = { x: component.boardX, y: component.boardY, rotation: component.boardRotation ?? 0, flipH: component.boardFlipH, flipV: component.boardFlipV };
       }
+      // `label`/`showId` só persistem pro caso GERAL -- `connectors.tunnel`/`connectors.junction`
+      // nunca leem esses campos de volta no seed (sempre derivados ao vivo), então gravá-los ali
+      // seria dado morto no arquivo. `showValue` persiste sempre (nenhum typeId tem exceção).
+      const isJunction = component.typeId === "connectors.junction";
+      const isTunnel = component.typeId === "connectors.tunnel";
+      if (!isJunction && !isTunnel) seed.label = component.label;
+      if (!isJunction) seed.showId = component.showId;
+      seed.showValue = component.showValue;
       return seed;
     });
 
@@ -244,7 +294,7 @@ function seedPinLabelComponent(
   originY: number,
   scaleX = 1,
   scaleY = 1,
-  labelColor = "#1f2937"
+  packageDefaultLabelColor = "#1f2937"
 ): WebviewComponentModel {
   const rad = (pin.angle * Math.PI) / 180;
   const tipX = pin.x + Math.cos(rad) * pin.length;
@@ -258,7 +308,12 @@ function seedPinLabelComponent(
   const labelY = (pin.labelY ?? tipY + Math.sin(rad) * 9) * scaleY;
   const text = pin.label ?? pin.id;
   const fontSize = typeof pin.labelFontSize === "number" && pin.labelFontSize > 0 ? pin.labelFontSize : 7;
-  const properties: Record<string, string | number | boolean> = { text, fontSize, color: labelColor, linkedPinComponentId: pinComponentId };
+  // Cor POR PINO (`pin.labelColor`) tem prioridade sobre o default do package (`pinLabelColor`) --
+  // sem isto, pinos com cor própria (ex: "+"/"-" vermelho/preto de `sources.controlled_source`)
+  // apareciam todos na MESMA cor genérica assim que a sessão de autoria era aberta, escondendo a
+  // distinção real já salva no arquivo (ver docstring de `compileSymbolAuthoringComponents`).
+  const color = pin.labelColor ?? packageDefaultLabelColor;
+  const properties: Record<string, string | number | boolean> = { text, fontSize, color, linkedPinComponentId: pinComponentId };
   const box = componentBox("graphics.text", properties);
   const centerX = labelX;
   const centerY = labelY - fontSize / 3;
@@ -314,8 +369,37 @@ export interface CompileSymbolResult {
  * no momento de "Salvar Símbolo") e reconstrói o `PackageDescriptor`. `existingBackground` é o
  * `background` ATUAL no disco (relido fresco, ver `extension.ts::saveSymbolCommand`) -- preservado
  * verbatim quando não é `"color"` (svg/image ainda não tem UI de upload nesta sessão de autoria,
- * perder esse dado ao salvar seria uma regressão silenciosa, não uma limitação aceitável). */
-export function compileSymbolAuthoringComponents(components: WebviewComponentModel[], existingBackground: PackageBackground | undefined): CompileSymbolResult {
+ * perder esse dado ao salvar seria uma regressão silenciosa, não uma limitação aceitável).
+ *
+ * `existingPackage` (opcional, `pins`/`shapes` do `package` ATUAL no disco) existe pelo MESMO motivo:
+ * a sessão de autoria só tem componentes pra um SUBCONJUNTO dos campos reais de `PackagePin`
+ * (`id`/`x`/`y`/`angle`/`length`/`label`/`labelFontSize`/`labelX`/`labelY`/`labelColor` -- os únicos
+ * com alça/campo editável hoje) e de `PackageShape` (`rect`/`ellipse`/`line`/`text` -- os únicos com
+ * componente `graphics.*` correspondente, ver `seedShapeComponent`). Sem isto, salvar um símbolo que
+ * já tem `aliases`/`kind`/`stateVisible`/`leadOrigin`/`leadEndTrim`/`leadColor`/`labelSpace`/
+ * `labelStateVisible`/`labelTextAnchor`/`labelDominantBaseline` num pino (ex:
+ * `sources.controlled_source`) ou uma forma `polygon`/`path`/`image`/`svg` (ex: `ds1307.lsdevice`,
+ * `sdcard.lsdevice`) SEM tocar em nada já apagava esses dados silenciosamente -- bug real confirmado
+ * (ver `.spec/lasecsimul-native-devices.spec` seção 21.3.1). A estratégia é sempre a mesma: o que a
+ * sessão de autoria sabe editar vem da sessão; o que ela NUNCA soube editar é preservado verbatim do
+ * arquivo, casado por `id` de pino (formas sem id equivalente são só reanexadas ao array de saída,
+ * já que nunca tiveram como ser tocadas nesta sessão pra começo de conversa).
+ *
+ * MESMO princípio, mais grave, pra `viewSpec`/`simulidePaint`/`qtWidget` (mecanismos de
+ * renderização INTEIROS, não campo a campo): o retorno desta função NUNCA soube preencher esses 3
+ * campos (só `shapes[]`/`pins[]` "achatados"), e `extension.ts::saveSymbolCommand` faz
+ * `json[packageKey] = {...result.package}` -- SUBSTITUIÇÃO TOTAL da chave `package`/
+ * `logicSymbolPackage` no arquivo. Sem preservá-los aqui, "Salvar Símbolo" em QUALQUER device que
+ * use `viewSpec`/`simulidePaint`/`qtWidget` como mecanismo PRIMÁRIO (54 devices reais no catálogo,
+ * ex. todo `logic.*`, transistores, displays) apagava o desenho inteiro do device e substituía por
+ * um `shapes: []` quase vazio -- bug real, mais severo que a perda campo-a-campo de `PackagePin`
+ * acima, encontrado na MESMA auditoria (2026-07-07). `initialTransform`/`valueLabel`/`pinMarker`
+ * entram no mesmo pacote de preservação por serem também campos sem alça editável nesta sessão. */
+export function compileSymbolAuthoringComponents(
+  components: WebviewComponentModel[],
+  existingBackground: PackageBackground | undefined,
+  existingPackage?: Pick<PackageDescriptor, "pins" | "shapes" | "viewSpec" | "simulidePaint" | "qtWidget" | "initialTransform" | "valueLabel" | "pinMarker">
+): CompileSymbolResult {
   const packages = components.filter((component) => component.typeId === "other.package");
   if (packages.length === 0) return { error: "Nenhum componente \"Pacote\" (other.package) na sessão -- adicione um pra definir o corpo do símbolo." };
   if (packages.length > 1) return { error: "Mais de um componente \"Pacote\" (other.package) na sessão -- deixe só um." };
@@ -353,6 +437,14 @@ export function compileSymbolAuthoringComponents(components: WebviewComponentMod
       linkedLabelByPinComponentId.set(linkedId, component);
     }
   }
+
+  // Campos de `PackagePin`/`PackageShape` sem alça/campo editável nesta sessão -- preservados
+  // verbatim do arquivo (ver docstring da função). `PACKAGE_SHAPE_EDITABLE_KINDS` são os únicos
+  // `kind` com componente `graphics.*` correspondente em `seedShapeComponent`; o resto (polygon/
+  // path/image/svg) nunca teve como ser tocado nesta sessão, então é só reanexado ao final.
+  const existingPinById = new Map((existingPackage?.pins ?? []).map((pin) => [pin.id, pin]));
+  const PACKAGE_SHAPE_EDITABLE_KINDS = new Set(["rect", "ellipse", "line", "text"]);
+  const preservedShapes = (existingPackage?.shapes ?? []).filter((shape) => !PACKAGE_SHAPE_EDITABLE_KINDS.has(shape.kind));
 
   const shapes: PackageShape[] = [];
   const pins: PackagePin[] = [];
@@ -419,12 +511,26 @@ export function compileSymbolAuthoringComponents(components: WebviewComponentMod
     } else if (component.typeId === "other.package_pin") {
       const box = componentBox("other.package_pin", component.properties);
       const id = typeof component.properties.pinId === "string" && component.properties.pinId.trim() ? component.properties.pinId.trim() : `pin${pins.length + 1}`;
+      const original = existingPinById.get(id);
       const pin: PackagePin = {
         id,
         x: toNativeX(localDisplayX + box.width / 2),
         y: toNativeY(localDisplayY + box.height / 2),
         angle: component.rotation,
         length: (typeof component.properties.length === "number" ? component.properties.length : 8) / (component.rotation === 90 || component.rotation === 270 ? scaleY : scaleX),
+        // Campos sem alça/campo editável nesta sessão -- nunca derivados de `component`, sempre
+        // herdados do pino original (por `id`) quando existir. `undefined` (pino novo, criado nesta
+        // sessão, sem correspondente no arquivo) simplesmente não aparece no objeto final.
+        aliases: original?.aliases,
+        kind: original?.kind,
+        stateVisible: original?.stateVisible,
+        leadOrigin: original?.leadOrigin,
+        leadEndTrim: original?.leadEndTrim,
+        leadColor: original?.leadColor,
+        labelSpace: original?.labelSpace,
+        labelStateVisible: original?.labelStateVisible,
+        labelTextAnchor: original?.labelTextAnchor,
+        labelDominantBaseline: original?.labelDominantBaseline,
       };
       const linkedLabel = linkedLabelByPinComponentId.get(component.id);
       if (linkedLabel) {
@@ -434,6 +540,17 @@ export function compileSymbolAuthoringComponents(components: WebviewComponentMod
         pin.labelFontSize = labelFontSize;
         pin.labelX = toNativeX(linkedLabel.x - originX + labelBox.width / 2);
         pin.labelY = toNativeY(linkedLabel.y - originY + labelBox.height / 2 + labelFontSize / 3);
+        // Cor do rótulo é POR PINO (`pin.labelColor`), editável via `linkedLabel.properties.color` --
+        // grava sempre que a sessão trouxer uma cor, nunca colapsando pra uma única cor "global" (era
+        // exatamente esse colapso, via `pinLabelColor` abaixo sem contrapartida por pino, que perdia a
+        // distinção real entre pinos com cor própria, ex: `sources.controlled_source` "+"/"-").
+        if (typeof linkedLabel.properties.color === "string" && linkedLabel.properties.color.trim()) {
+          pin.labelColor = linkedLabel.properties.color;
+        } else {
+          pin.labelColor = original?.labelColor;
+        }
+      } else {
+        pin.labelColor = original?.labelColor;
       }
       pins.push(pin);
     }
@@ -447,5 +564,23 @@ export function compileSymbolAuthoringComponents(components: WebviewComponentMod
     ?? (typeof packageComponent.properties.pinLabelColor === "string" && packageComponent.properties.pinLabelColor.trim()
       ? packageComponent.properties.pinLabelColor as string
       : undefined);
-  return { package: { width, height, schematicWidth, schematicHeight, border, background, shapes, pins, pinLabelColor } };
+  // Formas sem componente `graphics.*` equivalente nesta sessão (polygon/path/image/svg) nunca
+  // passaram pelo laço acima -- reanexadas verbatim do arquivo original (ver docstring da função).
+  return {
+    package: {
+      width, height, schematicWidth, schematicHeight, border, background,
+      shapes: [...shapes, ...preservedShapes],
+      pins, pinLabelColor,
+      // Mecanismos de renderização inteiros sem alça editável nesta sessão -- SEMPRE preservados
+      // verbatim do arquivo original (ver docstring da função). Nunca reconstruídos a partir dos
+      // componentes `graphics.*` da sessão, mesmo quando `viewSpec.paint` foi usado só pra dar
+      // referência visual (ver `seedSymbolAuthoringComponents`).
+      viewSpec: existingPackage?.viewSpec,
+      simulidePaint: existingPackage?.simulidePaint,
+      qtWidget: existingPackage?.qtWidget,
+      initialTransform: existingPackage?.initialTransform,
+      valueLabel: existingPackage?.valueLabel,
+      pinMarker: existingPackage?.pinMarker,
+    },
+  };
 }

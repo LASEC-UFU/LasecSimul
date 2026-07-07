@@ -67,6 +67,13 @@ export type HostToWebviewMessage =
   /** Mesmo caminho de `requestRotateSelection`, mas pra flip -- ver `lasecsimul.flipSelectionHorizontal`/
    * `Vertical` em `extension.ts`. */
   | { version: number; type: "requestFlipSelection"; axis: "horizontal" | "vertical" }
+  /** Mesmo caminho de `requestRotateSelection`, mas pra desfazer/refazer -- ver `lasecsimul.undo`/
+   * `lasecsimul.redo` em `extension.ts`. Undo/redo é 100% local à Webview (pilha de snapshots de
+   * `components`/`wires`/seleção mantida em `main.ts`, ver `recordUndoSnapshotIfChanged`) -- ao
+   * aplicar um snapshot, `persistState()` roda normalmente e o `"projectChanged"` de sempre já
+   * sincroniza o Core via diff (sem verbo IPC dedicado pra desfazer). */
+  | { version: number; type: "requestUndo" }
+  | { version: number; type: "requestRedo" }
   /** Solicita à Webview que empacote a seleção atual e envie `requestCreateSubcircuitFromSelection`
    * de volta -- disparado pelo comando `lasecsimul.newSubcircuit` quando o painel está aberto, como
    * alternativa ao item do menu de contexto (que só aparece quando já há uma multi-seleção). */

@@ -55,7 +55,7 @@ Especificações fonte de verdade, nesta ordem de leitura:
 1. [`.spec/lasecsimul.spec`](../.spec/lasecsimul.spec) (v0.2+) — arquitetura geral, os dois processos, IPC, fluxos.
 2. [`.spec/lasecsimul-native-devices.spec`](../.spec/lasecsimul-native-devices.spec) — sistema de plugins nativos (dispositivos e MCUs).
 
-`.spec/lasecsimul-wasm-devices.spec` está marcado **SUPERSEDED** — é registro histórico de uma abordagem
+`.spec/archive/lasecsimul-wasm-devices.spec` está marcado **SUPERSEDED** — é registro histórico de uma abordagem
 descartada (WASM + worker_threads). Nunca usar como referência de implementação; se algo nesta skill parecer
 remeter a WASM/worker, é desatualizado — confiar nos dois `.spec` acima.
 
@@ -214,9 +214,14 @@ remeter a WASM/worker, é desatualizado — confiar nos dois `.spec` acima.
   área de digitar/compilar código — essa não existe no LasecSimul.** Compilação é sempre externa; o Core só
   lê o artefato (`.bin`/`.elf`/`.hex`) já pronto (seção 8.3). Também não replicar o `FileWidget` (navegador de
   arquivo) nem nenhum diálogo de arquivo próprio — o VSCode já cobre os dois nativamente. Paleta de
-  componentes é `TreeView` nativo do VSCode, não webview (já tem busca/filtro de fábrica). Propriedades é
-  painel persistente, nunca modal — SimulIDE usa `QDialog` ali, decisão deliberada de não copiar porque modal
-  interrompe o fluxo.
+  componentes é uma Webview própria (`ui/views/ComponentPaletteViewProvider.ts` + `ui/webview/palette.ts`),
+  com busca/árvore construídas a partir de `folderPath`/`category` do catálogo — decisão final, não usar
+  `TreeView` nativo (uma implementação em `TreeDataProvider` chegou a existir e foi removida por nunca ter
+  sido ligada; se um dia fizer sentido migrar de volta, é decisão de produto nova, não retomada do código
+  morto). Diálogo de propriedades é **modal** (`&lt;dialog&gt;.showModal()` na própria Webview, aberto com
+  duplo-clique) — decisão revertida na prática (esta linha dizia "painel persistente, nunca modal"; um
+  painel lateral fixo ocupava espaço permanente e duplicava a paleta, avaliado e descartado, ver
+  `.spec/lasecsimul.spec` seção 13).
 - **Firmware é vigiado por pasta, recarrega sozinho — nunca exige ação manual como o `slotReload()` do
   SimulIDE (confirmado: zero uso de `QFileSystemWatcher` em todo o projeto real).** `FirmwareWatcher` (seção
   8.3 do `.spec`) faz polling de `mtime` (não API de evento nativa por SO — simplicidade deliberada, latência

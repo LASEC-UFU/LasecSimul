@@ -22,7 +22,7 @@ Dispositivos customizados usam plugins nativos DLL/SO carregados em processo pel
 
 ## Alternativas consideradas
 
-- WASM com `worker_threads`: descartado e mantido apenas como histórico em `.spec/lasecsimul-wasm-devices.spec`.
+- WASM com `worker_threads`: descartado e mantido apenas como histórico em `.spec/archive/lasecsimul-wasm-devices.spec`.
 - Plugins isolados por processo: descartados no caminho padrão por custo e complexidade.
 
 ## Consequências

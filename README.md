@@ -67,7 +67,7 @@ envia componentes/fios desenhados na Webview para o Core via IPC
 - [Spec principal](.spec/lasecsimul.spec)
 - [Spec de plugins nativos](.spec/lasecsimul-native-devices.spec)
 - [Spec de subcircuitos](.spec/lasecsimul-subcircuits.spec) — terceiro caminho de extensibilidade (dado, não código), ainda não implementado.
-- [Spec WASM superseded](.spec/lasecsimul-wasm-devices.spec), apenas histórico, não usar como arquitetura ativa.
+- [Spec WASM superseded](.spec/archive/lasecsimul-wasm-devices.spec), apenas histórico, não usar como arquitetura ativa.
 - [Documentação operacional](docs/00-visao-geral.md)
 - [Tarefas por agente](tasks/agent-01-estrutura-repositorio.md)
 

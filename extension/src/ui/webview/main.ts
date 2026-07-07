@@ -71,6 +71,20 @@ const initialWindowState = (window as WindowWithInitialState).__LASECSIMUL_INITI
 let state = normalizeProjectState((vscode?.getState() as WebviewProjectState | undefined) ?? initialWindowState ?? createEmptyState());
 syncPackageRegistry(state.catalog);
 
+// Histórico de undo/redo do circuito principal e da sessão de autoria de símbolo/subcircuito (ver
+// definição completa de `UndoHistory`/`resetUndoHistory` mais abaixo, junto do resto do mecanismo de
+// undo). Inicializados aqui (antes de qualquer interação do usuário) pra que a 1ª ação já seja
+// desfazível -- inicializar só na 1ª chamada de `persistState()` capturaria o estado JÁ mutado por
+// essa 1ª ação como "baseline", tornando-a não-desfazível.
+let mainUndoHistory = createUndoHistory();
+let authoringUndoHistory = createUndoHistory();
+/** Verdadeiro só durante a aplicação de um snapshot de undo/redo -- impede que a própria
+ * `persistState()` disparada por `applyUndoSnapshot` grave OUTRO snapshot em cima do que acabou de
+ * ser restaurado (senão desfazer criaria uma entrada de refazer idêntica à de desfazer, e vice-versa,
+ * quebrando a pilha). */
+let isApplyingUndoSnapshot = false;
+resetUndoHistory(mainUndoHistory);
+
 /** Reconciliação incremental da camada de render. O shell (`appbar` + `.canvas` + `.canvas-content`)
  * é mantido vivo entre renders; as camadas internas são atualizadas sem `app.innerHTML = ""`.
  * Componentes também são cacheados por id para preservar listeners e estado de interação. */
@@ -503,6 +517,7 @@ function enterSymbolAuthoring(filePath: string, typeId: string, kind: SymbolAuth
   symbolAuthoringContext = { filePath, typeId, kind, view };
   boardModeActive = false;
   state = { ...createEmptyState(), catalog: realCircuitState!.catalog, locale: realCircuitState!.locale, components, wires };
+  resetUndoHistory(authoringUndoHistory); // sessão de autoria (ou troca de vista) sempre começa com histórico de undo limpo
   render();
 }
 
@@ -591,7 +606,150 @@ function isVisibleInCurrentMode(component: WebviewComponentModel): boolean {
   return Boolean(state.catalog.find((entry) => entry.typeId === component.typeId)?.graphical);
 }
 
+// ────────────────────────────────────────────────────────────────────────────────────────────────
+// Undo/Redo (Ctrl+Z/Ctrl+Y) -- 100% client-side, sem verbo IPC dedicado. `state.components`/`wires`
+// são mutados livremente pelo resto do arquivo (às vezes por reatribuição imutável, às vezes campo a
+// campo direto, ex. `component.x = ...` durante um drag) -- não há como diferenciar "ação distinta"
+// por identidade de referência. Em vez disso, aproveita `persistState()` como o funil ÚNICO por onde
+// toda mutação relevante já passa (~40 call sites no arquivo, sempre no fim de uma ação discreta ou
+// no fim de um drag -- nunca a cada `pointermove` intermediário, ver `onUp` dos handlers de arrasto)
+// e compara o conteúdo ANTES/DEPOIS a cada chamada: só empilha um snapshot de undo quando
+// `components`/`wires` realmente mudaram desde o último commit (mudança só de seleção não conta,
+// senão clicar pra selecionar algo viraria uma ação desfazível). Duas pilhas SEPARADAS (`mainUndo`/
+// `authoringUndo`) porque `enterSymbolAuthoring`/`exitSymbolAuthoring` trocam a variável `state`
+// inteira pra editar o `package`/circuito interno de um subcircuito -- desfazer dentro da sessão de
+// autoria nunca deve enxergar/misturar o histórico do circuito principal, e vice-versa.
+interface UndoSnapshot {
+  components: WebviewComponentModel[];
+  wires: WebviewWireModel[];
+  selectedComponentIds: string[];
+  selectedWireIds: string[];
+}
+
+interface UndoHistory {
+  undoStack: UndoSnapshot[];
+  redoStack: UndoSnapshot[];
+  /** Serialização (`components`+`wires`, NUNCA seleção) do último snapshot commitado -- comparado a
+   * cada `persistState()` pra decidir se algo que importa mudou. `undefined` até a 1ª chamada. */
+  baselineKey: string | undefined;
+  baselineSnapshot: UndoSnapshot | undefined;
+}
+
+const UNDO_HISTORY_LIMIT = 200;
+
+function createUndoHistory(): UndoHistory {
+  return { undoStack: [], redoStack: [], baselineKey: undefined, baselineSnapshot: undefined };
+}
+
+function activeUndoHistory(): UndoHistory {
+  return symbolAuthoringContext ? authoringUndoHistory : mainUndoHistory;
+}
+
+function snapshotOfProjectState(project: Pick<WebviewProjectState, "components" | "wires" | "selectedComponentIds" | "selectedWireIds">): UndoSnapshot {
+  return {
+    components: structuredClone(project.components),
+    wires: structuredClone(project.wires),
+    selectedComponentIds: [...project.selectedComponentIds],
+    selectedWireIds: [...project.selectedWireIds],
+  };
+}
+
+function captureUndoSnapshot(): UndoSnapshot {
+  return snapshotOfProjectState(state);
+}
+
+/** Chave de comparação -- só `components`/`wires` (NUNCA seleção, ver comentário da seção). */
+function undoContentKey(snapshot: Pick<UndoSnapshot, "components" | "wires">): string {
+  return JSON.stringify([snapshot.components, snapshot.wires]);
+}
+
+/** Reseta o histórico (undo E redo) pro estado ATUAL de `state` -- chamado ao entrar/sair da sessão
+ * de autoria e na carga inicial, nunca durante edição normal (isso apagaria o histórico do usuário). */
+function resetUndoHistory(history: UndoHistory): void {
+  history.undoStack = [];
+  history.redoStack = [];
+  const snapshot = captureUndoSnapshot();
+  history.baselineSnapshot = snapshot;
+  history.baselineKey = undoContentKey(snapshot);
+}
+
+/** Núcleo do commit de undo: `current` é o estado "de agora" (depois da mutação que já aconteceu),
+ * comparado contra o último commit (`baselineSnapshot`) -- só empilha se o CONTEÚDO
+ * (`components`/`wires`) realmente mudou. Compartilhado por dois chamadores:
+ * `recordUndoSnapshotIfChanged` (mutação local, ex. `component.x =` num drag, `persistState()` já
+ * chamada em seguida) e o handler de `"syncState"` (mutação aplicada pelo HOST, ex. `deleteSelectedItems`
+ * fora de autoria só manda `requestRemoveComponent`/`Wire` e espera a Extension devolver o estado já
+ * sem o item removido -- `state` local nunca muda antes disso, então sem este 2º caminho a remoção
+ * nunca viraria uma entrada de undo). */
+function recordUndoTransition(current: UndoSnapshot): void {
+  if (isApplyingUndoSnapshot) return;
+  const history = activeUndoHistory();
+  const currentKey = undoContentKey(current);
+  if (history.baselineKey === undefined) {
+    // 1ª chamada desta história (ver `resetUndoHistory` -- normalmente já cobre isto, mas cobre
+    // também o caso de uma história nunca inicializada explicitamente).
+    history.baselineSnapshot = current;
+    history.baselineKey = currentKey;
+    return;
+  }
+  if (currentKey === history.baselineKey) return; // só seleção mudou (ou nada) -- não é undoable
+  history.undoStack.push(history.baselineSnapshot!);
+  if (history.undoStack.length > UNDO_HISTORY_LIMIT) history.undoStack.shift();
+  history.redoStack = []; // qualquer ação nova invalida o redo, igual a qualquer editor de verdade
+  history.baselineSnapshot = current;
+  history.baselineKey = currentKey;
+}
+
+function recordUndoSnapshotIfChanged(): void {
+  recordUndoTransition(captureUndoSnapshot());
+}
+
+/** Aplica um snapshot (de undo OU redo) como o novo `state.components`/`wires`/seleção -- mesmo
+ * princípio do handler de `"init"`/`"syncState"` (`state = message.project; render();`), só que sem
+ * round-trip pela Extension. Cancela qualquer fio em desenho/seleção de segmento-de-fio em curso
+ * (índices/ids ali podem não corresponder mais aos fios restaurados). */
+function applyUndoSnapshot(snapshot: UndoSnapshot): void {
+  isApplyingUndoSnapshot = true;
+  try {
+    state.components = snapshot.components;
+    state.wires = snapshot.wires;
+    state.selectedComponentIds = snapshot.selectedComponentIds;
+    state.selectedWireIds = snapshot.selectedWireIds;
+    clearPendingWire();
+    selectedWireSegment = undefined;
+    selectedWireCorner = undefined;
+    selectedTextLabel = undefined;
+    hideContextMenu();
+    persistState();
+    render();
+  } finally {
+    isApplyingUndoSnapshot = false;
+  }
+}
+
+function undo(): void {
+  const history = activeUndoHistory();
+  if (history.undoStack.length === 0) return;
+  const previous = history.undoStack.pop()!;
+  history.redoStack.push(history.baselineSnapshot ?? captureUndoSnapshot());
+  history.baselineSnapshot = previous;
+  history.baselineKey = undoContentKey(previous);
+  applyUndoSnapshot(previous);
+}
+
+function redo(): void {
+  const history = activeUndoHistory();
+  if (history.redoStack.length === 0) return;
+  const next = history.redoStack.pop()!;
+  history.undoStack.push(history.baselineSnapshot ?? captureUndoSnapshot());
+  history.baselineSnapshot = next;
+  history.baselineKey = undoContentKey(next);
+  applyUndoSnapshot(next);
+}
+// ────────────────────────────────────────────────────────────────────────────────────────────────
+
 function persistState(): void {
+  recordUndoSnapshotIfChanged();
   vscode?.setState(state);
   // Sessão de autoria nunca sincroniza com o `schematicState` real do lado da Extension -- só
   // `requestSaveSymbol` (`saveSymbolAuthoring`) cruza o IPC, e só depois de já restaurar `state`.
@@ -4382,6 +4540,16 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
   if (!message || message.version !== WEBVIEW_MESSAGE_VERSION) return;
 
   if (message.type === "init" || message.type === "syncState") {
+    // `syncState` é como o Host confirma mutações que NUNCA passam por `state` local antes (ex:
+    // `deleteSelectedItems` fora de autoria só manda `requestRemoveComponent`/`Wire` -- sem este
+    // registro aqui, apagar um componente/fio no circuito principal nunca viraria undoable). Só o
+    // circuito principal -- `symbolAuthoringContext` nunca recebe `syncState` de verdade (mensagens
+    // ficam bloqueadas em `send()` enquanto a sessão de autoria está ativa), mas a guarda evita
+    // qualquer ambiguidade se isso mudar no futuro. `"init"` (1ª carga) nunca deveria virar uma
+    // entrada de undo -- reseta o histórico pro estado recém-carregado em vez de registrar transição.
+    if (message.type === "syncState" && !symbolAuthoringContext) {
+      recordUndoTransition(snapshotOfProjectState(message.project));
+    }
     state = message.project;
     syncPackageRegistry(state.catalog);
     if (!state.pendingConnection) {
@@ -4389,6 +4557,7 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
       pendingWireRoute = [];
       pendingWireBendLengths = [];
     }
+    if (message.type === "init") resetUndoHistory(mainUndoHistory);
     vscode?.setState(state);
     render();
     refreshOpenPropertyDialog();
@@ -4448,6 +4617,14 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
 
   if (message.type === "requestFlipSelection") {
     flipSelectedComponents(message.axis);
+  }
+
+  if (message.type === "requestUndo") {
+    undo();
+  }
+
+  if (message.type === "requestRedo") {
+    redo();
   }
 
   if (message.type === "enterSymbolAuthoring") {

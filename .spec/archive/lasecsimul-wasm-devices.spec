@@ -1,4 +1,11 @@
 <!-- Claude Code Spec Header v1 -->
+<!-- Movido de `.spec/lasecsimul-wasm-devices.spec` para `.spec/archive/` em 2026-07-07 (auditoria de
+     UI, achado SK-3): conteúdo 100% morto no código (zero uso de wasm/worker_threads confirmado em
+     todo extension/src + core/src) e corretamente marcado SUPERSEDED há tempos, mas morava ao lado
+     dos specs ATIVOS em `.spec/*.spec` -- um agente novo lendo ".spec/*.spec primeiro" (fluxo padrão
+     da skill) gastava orçamento de contexto nas 514 linhas antes de perceber que são históricas. Fora
+     do caminho de leitura padrão agora; conteúdo preservado intacto (é referência real de decisão,
+     apontada pela ADR 0002). -->
 ## Claude Code Operating Contract (English)
 
 Purpose: Historical record of a superseded design path.
