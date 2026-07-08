@@ -24,9 +24,9 @@ history) e este documento.
    cada mudança não-trivial. Todos os comandos abaixo assumem `cd c:/SourceCode/LasecSimul/extension`
    primeiro.
 2. **Mudanças no Core (C++) exigem rebuild + ctest**: `node scripts/build-core.js --config=Debug`
-   (na raiz do repo) e depois `ctest --test-dir core/build -C Debug --output-on-failure -E
-   "esp32_devkitc_subcircuit"` (o `-E` exclui um teste QUEBRADO PRÉ-EXISTENTE, não relacionado a este
-   trabalho — ver seção "Armadilhas conhecidas" abaixo).
+   (na raiz do repo) e depois `ctest --test-dir core/build -C Debug --output-on-failure` (sem `-E`
+   nenhum -- `esp32_devkitc_subcircuit` foi corrigido em 2026-07-08, ver seção "Armadilhas
+   conhecidas" abaixo; a exclusão só fazia sentido antes disso).
 3. **Não há GUI/harness de teste de interação** neste ambiente — não dá pra abrir o VSCode de verdade
    e testar drag-and-drop/undo/render visualmente. Por isso: (a) prefira mudanças que sejam
    comportamentalmente idênticas e só verificáveis por compilação+teste (refatoração pura, mover
@@ -332,10 +332,19 @@ encerrada.
 
 ## Armadilhas conhecidas (não são bugs seus, não tente "consertar")
 
-1. **`esp32_devkitc_subcircuit_test` sempre falha com `abort()`** (dialog de erro do Windows CRT
-   Debug pode aparecer — instrua o usuário a clicar "Ignorar"). CONFIRMADO pré-existente: reproduzido
-   idêntico com E sem as mudanças desta sessão (via `git stash` do arquivo tocado + rebuild). Sempre
-   excluir com `-E "esp32_devkitc_subcircuit"` no `ctest`.
+1. ~~**`esp32_devkitc_subcircuit_test` sempre falha com `abort()`**~~ **CORRIGIDO em 2026-07-08**
+   (investigando por que `.github/workflows/package-installers.yml` falhava sempre no passo de
+   testes). Causa real: o teste não registrava a factory local `sources.rail` (usada 2x no
+   subcircuito real) -- exceção não capturada -> `std::terminate()`/`abort()`; o `0xc0000409` que
+   aparecia no Windows Release NÃO é um buffer overflow de verdade, é só o exit code padrão do
+   MSVC/UCRT pra `abort()` sem handler SEH. Corrigir isso revelou um bug maior no PRÓPRIO
+   `subcircuits/esp32_devkitc_v4.lssubcircuit` real: 11 túneis de GPIO + o túnel de GND + todo o
+   circuito EN/BOOT (pull-ups + botões) nunca tinham fio nenhum -- ficavam eletricamente flutuando,
+   mascarados pelo `abort()` anterior. Ambos corrigidos (`core/test/esp32_devkitc_subcircuit_test.cpp`
+   + o `.lssubcircuit`, usando `subcircuits/esp32_wroom32.lssubcircuit` como referência do padrão
+   correto). **`-E "esp32_devkitc_subcircuit"` não é mais necessário** -- `ctest` completo (29/29,
+   Debug e Release) passa sem exclusão nenhuma. Ver
+   [[project_lasecsimul_esp32_devkitc_subcircuit_wiring_fix]] na memória do projeto.
 2. **`union_find_test` às vezes aparece como "Not Run"** (`.exe` não encontrado no diretório de build)
    mesmo depois de compilar com sucesso — quirk de ambiente, não relacionado ao código, também
    pré-existente.

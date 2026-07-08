@@ -17,6 +17,7 @@
 #include "components/other/Ground.hpp"
 #include "components/passive/Resistor.hpp"
 #include "components/sources/FixedVolt.hpp"
+#include "components/sources/Rail.hpp"
 #include "plugins/GlobalPluginCache.hpp"
 #include "registry/SubcircuitRegistry.hpp"
 #include "session/SimulationSession.hpp"
@@ -50,6 +51,16 @@ void registerNeededBuiltins(ComponentRegistry& components) {
     components.registerFactory("sources.fixed_volt", [](const ComponentParams& p) {
         return std::make_unique<components::FixedVolt>(Pin{"out"}, p.property("voltage", 5.0),
                                                          p.property("out", true));
+    });
+    // Trilhos 3V3/5V do próprio esp32_devkitc_v4.lssubcircuit real usam "sources.rail" (não
+    // "sources.fixed_volt") -- faltava aqui, causando "Unknown component typeId: sources.rail" (uma
+    // exceção não capturada por main(), std::terminate()/abort() -- o "0xc0000409" que aparecia no
+    // ctest é só o código de saída padrão do MSVC/UCRT pra abort() sem handler SEH, não um buffer
+    // overflow real). Mesma factory de CoreApplication.cpp::registerBuiltinComponents.
+    components.registerFactory("sources.rail", [](const ComponentParams& p) {
+        const auto pos = p.pins<1>();
+        return std::make_unique<components::Rail>(Pin{pos[0].id.empty() ? "out" : pos[0].id, pos[0].x, pos[0].y},
+                                                    p.property("voltage", 5.0));
     });
     // DevKitC real usa pull-up (passive.resistor) e os botões EN/BOOT (switches.push) -- mesmas
     // factories de CoreApplication.cpp::registerBuiltinComponents, versão mínima só com o que o
@@ -115,7 +126,12 @@ SubcircuitDefinition parseLssubJson(const std::filesystem::path& path) {
 
 } // namespace
 
-int main() {
+// Corpo real do teste, isolado de main() só para poder envolver tudo num try/catch -- uma exceção
+// não capturada (ex: "Unknown component typeId") vira std::terminate()/abort() sem nenhuma
+// mensagem útil, só um código de saída opaco do SO (ex: 0xc0000409 no Windows, que parece um buffer
+// overflow real de /GS mas é só o sinal padrão de abort() sem handler SEH -- já nos custou uma
+// investigação inteira por causa disso).
+int runTest() {
     std::fprintf(stderr, "=== Esp32DevkitcSubcircuitTest ===\n");
 
 #ifndef ESP32_ADAPTER_DLL_PATH
@@ -226,4 +242,13 @@ int main() {
     }
     std::fprintf(stderr, "\n%d teste(s) FALHARAM.\n", failures);
     return 1;
+}
+
+int main() {
+    try {
+        return runTest();
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "FALHOU: exceção não tratada -- %s\n", e.what());
+        return 1;
+    }
 }

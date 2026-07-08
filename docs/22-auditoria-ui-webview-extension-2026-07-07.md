@@ -113,6 +113,28 @@ do documento abaixo permanece como histórico do diagnóstico original.
   LED forward, ambos validando KCL na tensão convergida, não só que o laço parou). `.spec/lasecsimul.spec`
   §7.4 atualizada (estava desatualizada dizendo "não existe diodo... ainda não escrita", de antes do
   `active.diode` já ter sido implementado por outra sessão sem atualizar a spec).
+- **Workflow de instaladores (`.github/workflows/package-installers.yml`) corrigido (2026-07-08)**: item
+  fora da lista original, pedido do usuário ("veja se o workflow está atualizado para gerar os
+  instaladores"). O workflow em si estava correto (paths de `bundled/`, `component-catalog.json`,
+  `devices`/`mcu-adapters`/`subcircuits`, bootstrapper .NET -- tudo coerente com o layout atual), mas o
+  passo "Run core tests" (`node scripts/test-core.js --config Release`, sem nenhum `-E`) sempre falhava
+  por causa de `esp32_devkitc_subcircuit_test`, um teste "quebrado pré-existente" documentado desde
+  `docs/21` (que instruía excluir com `-E "esp32_devkitc_subcircuit"`, nunca aplicado no script de CI) --
+  ou seja, **nenhum instalador jamais foi gerado** por esse workflow. Causa raiz real (não um buffer
+  overflow, apesar do `0xc0000409` enganoso): o teste não registrava a factory local `sources.rail`
+  (usada pelos trilhos 3.3V/5V do subcircuito real) -- exceção `std::runtime_error` não capturada por
+  `main()` -> `std::terminate()`/`abort()`. Corrigido registrando `sources.rail` no teste + envolvendo
+  `main()` num try/catch que imprime `e.what()` (`core/test/esp32_devkitc_subcircuit_test.cpp`).
+  Consertar o crash **revelou** um bug bem maior no PRÓPRIO `subcircuits/esp32_devkitc_v4.lssubcircuit`
+  (arquivo real, distribuído com o produto): 11 túneis de GPIO expostos (`G00`,`G02`,`G04`,`G12`-`G15`,
+  `G25`-`G27`,`G33`), o túnel de GND, e todo o circuito de reset EN/BOOT (pull-ups de 10k + botões)
+  nunca tinham fio nenhum no array `"wires"` real -- ficavam eletricamente flutuando (só apareciam
+  "expostos" na interface, sem chegar no `mcu1` de verdade), mascarados o tempo todo pelo `abort()`
+  anterior. Corrigido adicionando os ~17 fios que faltavam, usando `subcircuits/esp32_wroom32.lssubcircuit`
+  (o subcircuito irmão, corretamente fiado) como referência do padrão certo -- mesma convenção de nome
+  de pino (`GPIO<N>`), mesmo par pull-up+botão pra EN/GND e BOOT/GPIO0. `ctest` completo (29/29, Debug E
+  Release, SEM nenhum `-E`) passa limpo agora; `docs/21` atualizado pra não instruir mais a exclusão.
+  Ver [[project_lasecsimul_esp32_devkitc_subcircuit_wiring_fix]].
 - **Validação final**:
   - `npm test` passou; após as extrações de `catalogCommands.ts`, `mcuCommands.ts` e
     `symbolAuthoring/symbolCommands.ts`, passou novamente; após a migração final dos 15 built-ins visuais,
