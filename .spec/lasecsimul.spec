@@ -945,12 +945,39 @@ mudado tensão o bastante pra disparar isso via listener (seção 7, passo 3). L
 (`kMaxNonlinearIterations = 50`, contador global por enquanto, mesmo papel do
 `Simulator::m_maxNlstp` do SimulIDE) evita girar pra sempre se algo nunca convergir.
 
-**O que isto NÃO é**: não existe diodo, transistor, nem critério de convergência real — `stamp()`
-de um componente não-linear lê o ponto de operação via `getNodeVoltage()` (mesmo mecanismo de
-qualquer componente, sem API especial) e decide por conta própria, em `hasConverged()`, se a
-estimativa estabilizou. O Scheduler só fornece o laço de repetição e o limite — toda a matemática
-de Newton-Raphson (linearização do diodo, tolerância de convergência) é responsabilidade de cada
-componente concreto, ainda não escrita. Isto fixa o contrato pra não fechar a porta depois.
+**O que isto define**: o Scheduler só fornece o laço de repetição e o limite — toda a matemática de
+Newton-Raphson (linearização, tolerância de convergência) é responsabilidade de cada componente
+concreto que implementa `stamp()`. `stamp()` lê o ponto de operação via `getNodeVoltage()` (mesmo
+mecanismo de qualquer componente, sem API especial) e decide por conta própria, em
+`hasConverged()`, se a estimativa estabilizou.
+
+**Estado real (2026-07-08), primeiro componente não-linear implementado com Newton-Raphson
+genuíno** (`core/src/components/active/Diode.hpp`, classe `Diode`): diodo Shockley
+(`Id = Is*(exp(Vd/Vt)-1)`) com companion model (condutância + fonte de corrente equivalente)
+linearizado no ponto de operação da última `stamp()`, amortecimento de Newton ("limiting" padrão de
+SPICE — passo de `Vd` entre iterações limitado a `2*Vt` uma vez passado `vCrit`, evita que
+`exp()` divirja antes do laço convergir) e `hasConverged()` genuíno (compara `Vd` entre iterações
+consecutivas contra uma tolerância, não hardcoded). Parâmetro opcional `breakdownVoltage`
+(0 = desativado) adiciona um segundo ramo exponencial espelhado pra ruptura reversa tipo zener,
+com o mesmo amortecimento espelhado. A mesma classe é reaproveitada por três typeIds com parâmetros
+diferentes:
+- `active.diode`: `saturationCurrent` editável, sem ruptura (`supportsBreakdown=false`).
+- `active.zener`: idem + `breakdownVoltage` editável (`supportsBreakdown=true`, default 5.1V).
+- `outputs.led`: `saturationCurrent`/`thermalVoltage` fixados nos valores do preset real "RGY
+  Default" do SimulIDE (`e-diode.cpp::getModels()`, `satCurr=0.0932nA`, `thermalVoltage` efetivo =
+  `emCoef*Vt = 3.73*0.025865 ≈ 0.0965V`, sem `emCoef` como parâmetro separado — já embutido no
+  `thermalVoltage` desta classe), sem ruptura. Testes: `core/test/diode_test.cpp` (diodo comum),
+  `core/test/zener_led_test.cpp` (regulador zener + LED, ambos validando KCL no ponto convergido,
+  não só que o laço parou de iterar).
+
+**Achado documentado, não corrigido nesta tarefa**: `active.diac`/`active.scr`/`active.triac`/
+`active.bjt`/`active.mosfet`/`active.jfet` têm registro built-in (`CoreApplication.cpp`) mas são
+CONFIRMADAMENTE código morto em produção — `devices/simulide-complex` (plugin ABI) registra os
+MESMOS typeIds via `SimulationSession::registerKnownPluginTypes()`, chamado depois de
+`registerBuiltinComponents()`, e sempre vence via `ComponentRegistry::replaceFactory`. O modelo do
+plugin (`lib.c`) é um limiar on/off simplificado, não Newton-Raphson real — portar Shockley/Ebers-Moll
+pra estes exigiria mexer no `lib.c` do plugin (fora do escopo desta tarefa), não só no built-in
+inerte.
 
 ## 8. Fluxo de integração com QEMU
 

@@ -25,7 +25,6 @@ export const PIN_RADIUS = 4.5;
 const PACKAGE_PIN_LABEL_FONT_SIZE = 7;
 const COMP2PIN_BOX: ComponentBox = { width: 32, height: 16 };
 const SMALL_METER_BOX: ComponentBox = { width: 56, height: 40 };
-const TRIANGLE_AMP_BOX: ComponentBox = { width: 48, height: 32 };
 
 // ── Símbolo declarativo real (Épico G) ──────────────────────────────────────────────────────────
 // Quando um typeId tem `package` (.lsdevice/.lssubcircuit, ver model.ts), cada pino é desenhado na
@@ -1100,8 +1099,6 @@ function builtinComponentBox(typeId: string): ComponentBox | undefined {
     case JUNCTION_TYPE_ID: return { width: 0, height: 0 };
     case "connectors.bus": return { width: 24, height: 64 }; // logic/bus.cpp: tronco vertical
     case TUNNEL_TYPE_ID: return tunnelBox();
-    case "connectors.socket": return { width: 24, height: 64 }; // connectors/socket.cpp + connbase.cpp
-    case "connectors.header": return { width: 24, height: 64 }; // connectors/header.cpp + connbase.cpp
 
     case "graphics.image": return { width: 80, height: 80 };
     case "graphics.text": return { width: 74, height: 28 };
@@ -1112,33 +1109,12 @@ function builtinComponentBox(typeId: string): ComponentBox | undefined {
     case "other.package_pin": return { width: 24, height: 24 };
     case "other.test_unit": return { width: 32, height: 32 }; // other/testunit.cpp (IoComponent generico)
     case "other.dial": return { width: 40, height: 40 }; // other/dial.cpp: knob nativo (QDial) -- estilizacao vetorial menor que antes
-    case "passive.resistor_dip": return { width: 24, height: 68 }; // passive/resistordip.cpp
-    case "passive.potentiometer": return { width: 40, height: 32 };
 
     case "logic.button": return COMP2PIN_BOX;
 
     // "switches.push"/"switches.switch"/"switches.switch_dip"/"switches.relay" agora vêm de
     // `package.simulidePaint` real (ver component-catalog.json + `registerPackage`) -- caixa
     // resolvida em `resolvePackageLayout`, nunca mais uma caixa estática aqui.
-    // "switches.keypad" agora é property-driven (ver `propertyDrivenBox`) -- cresce com rows/columns
-    // reais, nunca um tamanho fixo.
-
-    case "active.diode": return COMP2PIN_BOX;
-    case "active.zener": return { width: 36, height: 20 };
-    case "active.opamp": return TRIANGLE_AMP_BOX;
-    case "active.comparator": return TRIANGLE_AMP_BOX;
-    case "active.analog_mux": return { width: 32, height: 72 }; // active/mux_analog.cpp (8 canais default)
-    case "active.volt_regulator": return { width: 24, height: 20 }; // active/volt_reg.cpp
-
-    case "outputs.led": return { width: 40, height: 24 };
-    case "outputs.led_rgb": return { width: 24, height: 24 }; // outputs/leds/ledrgb.cpp
-    case "outputs.led_bar": return { width: 20, height: 64 }; // outputs/leds/ledbar.cpp
-    case "outputs.led_matrix": return { width: 72, height: 72 };
-    case "outputs.seven_segment": return { width: 40, height: 56 }; // outputs/leds/sevensegment.cpp
-    case "outputs.dc_motor": return { width: 80, height: 66 };
-    case "outputs.stepper": return { width: 114, height: 100 };
-    case "outputs.incandescent_lamp": return { width: 32, height: 32 };
-
     default: return undefined;
   }
 }
@@ -1180,15 +1156,6 @@ function propertyDrivenBox(typeId: string, properties: Record<string, unknown> |
       const text = typeof properties.text === "string" ? properties.text : "Texto";
       const fontSize = numberOf("fontSize") ?? 11;
       return { width: Math.max(24, text.length * fontSize * 0.62 + 12), height: fontSize + 14 };
-    }
-    case "switches.keypad": {
-      // Mesma fórmula de `switches/keypad.cpp::updateBoardLayout()` real: `m_area = QRectF(-12,-4,
-      // 16*cols+8, 16*rows+8)` -- cresce/encolhe com `rows`/`columns` reais da instância, nunca um
-      // tamanho fixo (bug relatado 2026-06-30: grade sempre desenhada 4×4 vazia, ignorando a
-      // configuração real do componente).
-      const cols = numberOf("columns") ?? 3;
-      const rows = numberOf("rows") ?? 4;
-      return { width: 16 * cols + 8, height: 16 * rows + 8 };
     }
     default:
       return undefined;
@@ -1272,66 +1239,6 @@ export function pinLocalPosition(pinId: string, pinIndex: number, pinCount: numb
   // deixava a bolinha longe do meio do traço grosso).
   if (typeId === "connectors.bus" && pinCount <= 1) {
     return { x: box.width / 2, y: box.height / 2 };
-  }
-  // connectors/socket.cpp e header.cpp: coluna ÚNICA vertical de N pinos (ver `componentSymbolSvg`,
-  // mesma fórmula de posição Y dos círculos/marcas desenhados) -- o fallback genérico de 2 colunas
-  // (usado por engano antes) deixava as bolinhas de ligação flutuando fora da tira desenhada.
-  if ((typeId === "connectors.socket" || typeId === "connectors.header") && pinCount > 0) {
-    return { x: box.width / 2, y: (box.height / (pinCount + 1)) * (pinIndex + 1) };
-  }
-  // switches/keypad.cpp: setupButtons()+setflip() sem flip -- os primeiros `rows` pinos saem pela
-  // ESQUERDA (um por linha, x=-16, y=8+16*linha) e os `columns` seguintes saem por CIMA (um por
-  // coluna, x=16*coluna, y=-8); NÃO é a grade genérica de 2 colunas do fallback abaixo (que jogava
-  // metade dos pinos pro lado direito, flutuando fora do corpo do teclado). `switches.keypad` não
-  // tem `package` (o corpo é property-driven, ver `propertyDrivenBox`/`componentSymbolSvg` -- rows/
-  // columns mudam a grade em runtime, o que `simulidePaint.primitives[]` estático não expressa).
-  if (typeId === "switches.keypad" && pinCount > 0) {
-    const rows = typeof properties?.rows === "number" ? properties.rows : 4;
-    if (pinIndex < rows) return { x: -4, y: 12 + 16 * pinIndex };
-    return { x: 16 * (pinIndex - rows) + 12, y: -4 };
-  }
-  // outputs/stepper.cpp: os 4 pinos reais ficam TODOS na tira conectora à esquerda (ver o
-  // `<rect>` estreito em `componentSymbolSvg`) -- o motor circular à direita não tem pino nenhum.
-  // Fallback genérico jogava 2 dos 4 pinos pro lado direito, flutuando sobre o corpo do motor.
-  if (typeId === "outputs.stepper" && pinCount > 0) {
-    const r = Math.min(box.width, box.height) / 2 - 4;
-    const stripTop = box.height / 2 - r * 0.7;
-    const stripHeight = r * 1.4;
-    return { x: 0, y: stripTop + (stripHeight / pinCount) * (pinIndex + 0.5) };
-  }
-  switch (typeId) {
-    // SimulIDE Comp2Pin: src/components/comp2pin.cpp
-    case "active.diode":
-    case "active.zener":
-    case "outputs.led":
-    case "outputs.incandescent_lamp":
-      // led.cpp/lamp.cpp: pinos reais em x=±16 (caixa compacta, ver `horizontalLeads` -- caía nesta
-      // mesma convenção 0/width antes, mas sem case aqui o fallback genérico usava PIN_INSET(6) em
-      // vez de 0, deixando a bolinha de ligação 6px longe da ponta do traço desenhado).
-      if (pinCount <= 2) return { x: pinIndex === 0 ? 0 : box.width, y: box.height / 2 };
-      break;
-    case "active.opamp":
-    case "active.comparator":
-      if (pinIndex === 0) return { x: 0, y: 8 };
-      if (pinIndex === 1) return { x: 0, y: 24 };
-      if (pinIndex === 2) return { x: 48, y: 16 };
-      if (pinIndex === 3) return { x: 24, y: 0 };
-      if (pinIndex === 4) return { x: 24, y: 32 };
-      break;
-    case "active.volt_regulator":
-      if (pinIndex === 0) return { x: 0, y: 8 };
-      if (pinIndex === 1) return { x: 24, y: 8 };
-      if (pinIndex === 2) return { x: 12, y: 20 };
-      break;
-    // potentiometer.cpp: pins[0]/[1] são as pontas A/B (Core stampa conductance entre elas e o
-    // wiper, ver SimulidePotentiometer::stamp) -- esquerda/direita, na mesma convenção compacta
-    // 0/width usada pelo `horizontalLeads` (ver componentSymbolSvg). pins[2] é o wiper embaixo, no
-    // mesmo x do traço vertical desenhado (`midX`). Sem este case, o fallback genérico (2 colunas
-    // em Y intermediário) não batia com NENHUM dos 3 traços reais.
-    case "passive.potentiometer":
-      if (pinIndex === 0) return { x: 0, y: box.height / 2 };
-      if (pinIndex === 1) return { x: box.width, y: box.height / 2 };
-      return { x: box.width / 2, y: box.height - PIN_INSET };
   }
   if (pinCount <= 1) return { x: box.width / 2, y: PIN_INSET };
 
@@ -1508,33 +1415,7 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
   const x2 = compactTwoPin ? box.width - 5 : box.width - LEAD_MARGIN;
   const midX = box.width / 2;
 
-  // active/diode.cpp: triangulo (meia-altura 7) + barra de catodo cabem dentro do corpo 20x16 real
-  // sem transbordar -- amplitude fixa de 12/13 (independente de box.height) estourava caixas mais
-  // baixas (bug relatado 2026-07-04: triangulo do diodo saia 4px pra fora da propria caixa).
-  const diodeTriHalf = Math.max(6, Math.min(12, yMid - 2));
-  const diodeBarHalf = diodeTriHalf + 1;
-  const diodeBody = (extra = ""): string =>
-    horizontalLeads(box, yMid) +
-    `<path d="M ${midX - 9} ${(yMid - diodeTriHalf).toFixed(1)} L ${midX - 9} ${(yMid + diodeTriHalf).toFixed(1)} L ${midX + 8} ${yMid} Z" class="symbol-stroke" fill="none"/>` +
-    `<line x1="${midX + 10}" y1="${(yMid - diodeBarHalf).toFixed(1)}" x2="${midX + 10}" y2="${(yMid + diodeBarHalf).toFixed(1)}" class="symbol-stroke symbol-stroke--thick"/>` +
-    extra;
-
   switch (typeId) {
-    case "passive.resistor_dip": {
-      // resistordip.cpp: retangulo simples do corpo do CI (sem zigue-zague nenhum dentro -- os
-      // resistores individuais nao sao desenhados, só o encapsulamento) + N pares de pino (8 default).
-      const bodyHalfW = 9;
-      return `<rect x="${midX - bodyHalfW}" y="2" width="${bodyHalfW * 2}" height="${box.height - 4}" rx="1" class="symbol-stroke" fill="none"/>`;
-    }
-
-    case "passive.potentiometer":
-      return (
-        horizontalLeads(box, yMid) +
-        `<path d="${zigzagPath(x1, x2, yMid, 8, 3)}" class="symbol-stroke"/>` +
-        `<line x1="${midX}" y1="${box.height - PIN_INSET}" x2="${midX}" y2="${yMid + 7}" class="symbol-stroke"/>` +
-        `<path d="M ${midX - 7} ${yMid + 9} L ${midX} ${yMid + 2} L ${midX + 7} ${yMid + 9}" class="symbol-stroke" fill="none"/>`
-      );
-
     case TUNNEL_TYPE_ID:
       return builtinPaintSvg(tunnelPaintSpec(properties), box, properties);
 
@@ -1549,36 +1430,6 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
         bits += `<line x1="4" y1="${y.toFixed(1)}" x2="${trunkX}" y2="${y.toFixed(1)}" class="symbol-stroke"/>`;
       }
       return bits;
-    }
-
-    case "connectors.socket": {
-      // connectors/socket.cpp + connbase.cpp: tira VERTICAL fina com uma coluna de pinos -- o
-      // desenho antigo tinha `width = box.width-36` que dava LARGURA NEGATIVA (bug: não renderizava
-      // nada) pra caixa pequena real. `count` casa com o `pinCount:8` real do Core
-      // (CoreApplication.cpp) -- desenhar menos círculos que pinos reais deixava 2 pinos sem marca
-      // nenhuma, e a "bolinha azul" clicável (`pinLocalPosition`) caía no fallback genérico de 2
-      // colunas em vez desta coluna única (bug relatado 2026-07-04: pontos de ligação flutuando fora
-      // do desenho).
-      const count = 8;
-      let pins = `<rect x="4" y="2" width="${box.width - 8}" height="${box.height - 4}" rx="2" class="symbol-stroke" fill="none"/>`;
-      for (let i = 0; i < count; i++) {
-        const y = ((box.height) / (count + 1)) * (i + 1);
-        pins += `<circle cx="${midX}" cy="${y.toFixed(1)}" r="2" class="symbol-stroke" fill="none"/>`;
-      }
-      return pins;
-    }
-
-    case "connectors.header": {
-      // connectors/header.cpp + connbase.cpp: mesma tira vertical do Socket, com marcas de pino
-      // retas (macho) em vez de círculos (fêmea) -- era um traço horizontal com 6 tiquinhos. `count`
-      // casa com o `pinCount:8` real do Core, mesmo motivo do Socket acima.
-      const count = 8;
-      let pins = `<rect x="4" y="2" width="${box.width - 8}" height="${box.height - 4}" rx="2" class="symbol-stroke" fill="none"/>`;
-      for (let i = 0; i < count; i++) {
-        const y = ((box.height) / (count + 1)) * (i + 1);
-        pins += `<line x1="${midX - 4}" y1="${y.toFixed(1)}" x2="${midX + 4}" y2="${y.toFixed(1)}" class="symbol-stroke symbol-stroke--thick"/>`;
-      }
-      return pins;
     }
 
     case "graphics.image": {
@@ -1692,186 +1543,6 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
         `<line x1="${midX - 8}" y1="${yMid}" x2="${midX + 6}" y2="${(yMid - rise).toFixed(1)}" class="symbol-stroke"/>`
       );
     }
-
-    case "switches.keypad": {
-      // keypad.cpp::setupButtons(): m_area=QRectF(-12,-4,16*cols+8,16*rows+8), preenchido com
-      // QColor(50,70,100) (drawRoundedRect raio 2) -- corpo ocupa a caixa INTEIRA (property-driven,
-      // ver `propertyDrivenBox`), não uma moldura vazia com folga. Cada botão é uma PushBase própria
-      // (`button->setPos(col*16+12,16+row*16)` + `m_proxy` padrão em (-20,-16)), CustomButton 16x16
-      // real, cujo canto top-left cai em (col*16-8,row*16) relativo à origem do KeyPad -- deslocado
-      // pelo mesmo (+12,+4) do corpo isso vira (col*16+4,row*16+4). Rótulo de cada tecla vem de
-      // `keyLabels[row*cols+col]` (default real: "123456789*0#", 4 linhas x 3 colunas -- o default
-      // do LasecSimul é 4x4 "123A456B789C*0#D", ver component-catalog.json).
-      const cols = typeof properties?.columns === "number" ? properties.columns : 4;
-      const rows = typeof properties?.rows === "number" ? properties.rows : 4;
-      const keyLabels = typeof properties?.keyLabels === "string" ? properties.keyLabels : "123A456B789C*0#D";
-      let keysMarkup = `<rect x="0" y="0" width="${box.width}" height="${box.height}" rx="2" ry="2" fill="#326496" class="symbol-stroke"/>`;
-      for (let row = 0; row < rows; row++) {
-        for (let col = 0; col < cols; col++) {
-          const index = row * cols + col;
-          const label = keyLabels[index] ?? "";
-          const x = col * 16 + 4;
-          const y = row * 16 + 4;
-          keysMarkup +=
-            `<rect x="${x}" y="${y}" width="16" height="16" rx="2" class="symbol-stroke" fill="#e6e6e6" stroke="#777777"/>` +
-            (label ? `<text x="${x + 8}" y="${y + 11}" text-anchor="middle" fill="#1a1a1a" style="font-size:9px">${escapeXmlText(label)}</text>` : "");
-        }
-      }
-      // keypad.cpp::createSwitches(): Pin(180,QPoint(-16,8+16*row),...,length=4) por linha (sai pela
-      // ESQUERDA) e Pin(270,QPoint(16*col,-8),...,length=4) por coluna (sai por CIMA) -- sem isto o
-      // componente não tinha NENHUM traço de terminal (só o círculo de hit-test invisível desenhado
-      // à parte em main.ts), diferente de todo device com `package` real, que ganha o lead grosso via
-      // `packagePinLeadSvg`. Mesmo deslocamento (+12,+4) de `pinLocalPosition` acima.
-      for (let row = 0; row < rows; row++) {
-        const y = row * 16 + 12;
-        keysMarkup += `<line x1="0" y1="${y}" x2="-4" y2="${y}" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>`;
-      }
-      for (let col = 0; col < cols; col++) {
-        const x = col * 16 + 12;
-        keysMarkup += `<line x1="${x}" y1="0" x2="${x}" y2="-4" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>`;
-      }
-      return keysMarkup;
-    }
-
-    case "active.diode":
-    case "active.zener":
-      return diodeBody(
-        typeId === "active.zener"
-          ? `<path d="M ${midX + 10} ${(yMid - diodeBarHalf).toFixed(1)} l 5 -5 M ${midX + 10} ${(yMid + diodeBarHalf).toFixed(1)} l -5 5" class="symbol-stroke"/>`
-          : ""
-      );
-
-    case "outputs.led":
-      // outputs/leds/led.cpp + ledbase.cpp::drawBackground(): a bolha de vidro (elipse preenchida,
-      // cor = brilho ao vivo) é o sinal visual real do LED -- as setinhas de "luz emitida" que
-      // existiam aqui antes não têm equivalente nenhum no paint() real, foram removidas.
-      return (
-        `<ellipse cx="${midX - 1}" cy="${yMid}" rx="8" ry="8" fill="#3a3a3a" stroke="#111" stroke-width="1"/>` +
-        diodeBody()
-      );
-
-    case "active.opamp":
-    case "active.comparator":
-      return (
-        // Entradas ligadas EXATAMENTE em y=8/24 (mesmos valores de `pinLocalPosition` acima) -- a
-        // proporção antiga (0.35/0.65 do box.height=32) dava 11.2/20.8, ~3px longe da bolinha de
-        // ligação real.
-        `<path d="M 24 12 L 24 ${box.height - 12} L ${box.width - 16} ${yMid} Z" class="symbol-stroke" fill="none"/>` +
-        `<line x1="${PIN_INSET}" y1="8" x2="24" y2="8" class="symbol-stroke"/>` +
-        `<line x1="${PIN_INSET}" y1="24" x2="24" y2="24" class="symbol-stroke"/>` +
-        `<line x1="${box.width - 16}" y1="${yMid}" x2="${box.width - PIN_INSET}" y2="${yMid}" class="symbol-stroke"/>` +
-        `<text x="18" y="12" text-anchor="middle" class="symbol-text">+</text>` +
-        `<text x="18" y="28" text-anchor="middle" class="symbol-text">-</text>`
-      );
-
-    case "active.analog_mux":
-      // mux_analog.cpp: paint() é só `drawRect(m_area)` -- sem texto nenhum (era `labelBox("MUX")`).
-      return horizontalLeads(box, yMid) + `<rect x="4" y="2" width="${box.width - 8}" height="${box.height - 4}" class="symbol-stroke" fill="none"/>`;
-
-    case "active.volt_regulator":
-      // volt_reg.cpp: idem, `drawRect(m_area)` sem texto (era `labelBox("REG")`).
-      return `<rect x="4" y="2" width="${box.width - 8}" height="${box.height - 4}" class="symbol-stroke" fill="none"/>`;
-
-    case "outputs.led_rgb":
-      // ledrgb.cpp: borda arredondada (pena grossa) + elipse preenchida com a cor viva (mistura
-      // R/G/B) -- aqui em repouso/estático usamos cinza escuro (apagado), sem nenhum texto "RGB".
-      return (
-        `<rect x="2" y="2" width="${box.width - 4}" height="${box.height - 4}" rx="4" ry="4" class="symbol-stroke symbol-stroke--thick" fill="none"/>` +
-        `<ellipse cx="${midX}" cy="${yMid}" rx="${box.width / 2 - 4}" ry="${box.height / 2 - 4}" fill="#3a3a3a"/>`
-      );
-
-    case "outputs.led_bar": {
-      // ledbar.cpp: encapsulamento estreito + N LEDs individuais empilhados (8 default), cada um seu
-      // proprio quadrado -- não um texto "LED BAR" solto.
-      const count = 8;
-      const cellH = (box.height - 8) / count;
-      let cells = `<rect x="2" y="2" width="${box.width - 4}" height="${box.height - 4}" class="symbol-stroke" fill="none"/>`;
-      for (let i = 0; i < count; i++) {
-        const cy = 4 + cellH * (i + 0.5);
-        cells += `<rect x="${midX - 4}" y="${(cy - 3).toFixed(1)}" width="8" height="6" fill="#3a3a3a" stroke="currentColor" stroke-width="0.75"/>`;
-      }
-      return cells;
-    }
-
-    case "outputs.led_matrix": {
-      // ledmatrix.cpp: corpo arredondado + grade rows×cols de LEDs individuais (8x8 default) --
-      // mesmo espírito do grid já implementado pra `switches.keypad`, não um texto "MATRIX".
-      const rows = typeof properties?.rows === "number" ? properties.rows : 8;
-      const cols = typeof properties?.columns === "number" ? properties.columns : 8;
-      const cellW = (box.width - 8) / cols;
-      const cellH = (box.height - 8) / rows;
-      let cells = `<rect x="2" y="2" width="${box.width - 4}" height="${box.height - 4}" rx="3" ry="3" class="symbol-stroke" fill="none"/>`;
-      for (let row = 0; row < rows; row++) {
-        for (let col = 0; col < cols; col++) {
-          const cx = 4 + cellW * (col + 0.5);
-          const cy = 4 + cellH * (row + 0.5);
-          cells += `<rect x="${(cx - cellW * 0.35).toFixed(1)}" y="${(cy - cellH * 0.35).toFixed(1)}" width="${(cellW * 0.7).toFixed(1)}" height="${(cellH * 0.7).toFixed(1)}" fill="#3a1414"/>`;
-        }
-      }
-      return cells;
-    }
-
-    case "outputs.seven_segment": {
-      // sevensegment.cpp: glifo real de 7 segmentos (o "8" clássico) em repouso/apagado -- não um
-      // texto "7SEG". Segmentos como linhas grossas de ponta arredondada, igual ao LED real.
-      const segColor = "#3a1414";
-      const L = 6, R = box.width - 6, T = 6, M = yMid, B = box.height - 6;
-      const seg = (x1: number, y1: number, x2: number, y2: number): string =>
-        `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${segColor}" stroke-width="4" stroke-linecap="round"/>`;
-      return (
-        seg(L + 2, T, R - 2, T) + // a
-        seg(R, T + 2, R, M - 2) + // b
-        seg(R, M + 2, R, B - 2) + // c
-        seg(L + 2, B, R - 2, B) + // d
-        seg(L, M + 2, L, B - 2) + // e
-        seg(L, T + 2, L, M - 2) + // f
-        seg(L + 2, M, R - 2, M) + // g
-        `<circle cx="${R + 4}" cy="${B}" r="2" fill="${segColor}"/>` // ponto decimal
-      );
-    }
-
-    case "outputs.dc_motor": {
-      // dcmotor.cpp: corpo circular concêntrico (carcaça + rotor) + 2 abas de terminal coloridas.
-      const r = Math.min(box.width, box.height) / 2 - 2;
-      return (
-        `<ellipse cx="${midX}" cy="${yMid}" rx="${r}" ry="${r}" fill="#324664"/>` +
-        `<rect x="${(midX - r - 6).toFixed(1)}" y="${(yMid - 4).toFixed(1)}" width="8" height="8" rx="2" fill="#8d0000"/>` +
-        `<rect x="${(midX + r - 2).toFixed(1)}" y="${(yMid - 4).toFixed(1)}" width="8" height="8" rx="2" fill="#111"/>` +
-        `<ellipse cx="${midX}" cy="${yMid}" rx="${(r * 0.8).toFixed(1)}" ry="${(r * 0.8).toFixed(1)}" fill="#ffffff"/>` +
-        `<path d="M ${midX} ${yMid} L ${midX} ${(yMid - r * 0.7).toFixed(1)} A ${(r * 0.7).toFixed(1)} ${(r * 0.7).toFixed(1)} 0 0 1 ${(midX + r * 0.7 * 0.87).toFixed(1)} ${(yMid - r * 0.7 * 0.5).toFixed(1)} Z" fill="#324664"/>` +
-        `<ellipse cx="${midX}" cy="${yMid}" rx="${(r * 0.4).toFixed(1)}" ry="${(r * 0.4).toFixed(1)}" fill="#dcdcdc" stroke="#888" stroke-width="1"/>`
-      );
-    }
-
-    case "outputs.stepper": {
-      // stepper.cpp: mesma família visual do dc_motor (círculos concêntricos) + marcas de passo em
-      // volta do rotor + tira de conector à esquerda (5 pinos, todos do lado esquerdo no real).
-      const r = Math.min(box.width, box.height) / 2 - 4;
-      const cx = midX + 8;
-      let ticks = "";
-      for (let i = 0; i < 12; i++) {
-        const a = (i / 12) * Math.PI * 2;
-        const x1 = cx + Math.cos(a) * (r - 3);
-        const y1 = yMid + Math.sin(a) * (r - 3);
-        const x2 = cx + Math.cos(a) * r;
-        const y2 = yMid + Math.sin(a) * r;
-        ticks += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#ffffff" stroke-width="1.5"/>`;
-      }
-      return (
-        `<rect x="0" y="${(yMid - r * 0.7).toFixed(1)}" width="14" height="${(r * 1.4).toFixed(1)}" rx="1" fill="#324664"/>` +
-        `<ellipse cx="${cx}" cy="${yMid}" rx="${r}" ry="${r}" fill="#324664"/>` +
-        `<ellipse cx="${cx}" cy="${yMid}" rx="${(r * 0.82).toFixed(1)}" ry="${(r * 0.82).toFixed(1)}" fill="#ffffff"/>` +
-        ticks +
-        `<ellipse cx="${cx}" cy="${yMid}" rx="${(r * 0.5).toFixed(1)}" ry="${(r * 0.5).toFixed(1)}" fill="#324664"/>` +
-        `<ellipse cx="${cx}" cy="${yMid}" rx="${(r * 0.28).toFixed(1)}" ry="${(r * 0.28).toFixed(1)}" fill="#dcdcdc"/>`
-      );
-    }
-    case "outputs.incandescent_lamp":
-      return (
-        horizontalLeads(box, yMid) +
-        `<circle cx="${midX}" cy="${yMid}" r="14" class="symbol-stroke" fill="none"/>` +
-        `<path d="M ${midX - 8} ${yMid - 8} L ${midX + 8} ${yMid + 8} M ${midX + 8} ${yMid - 8} L ${midX - 8} ${yMid + 8}" class="symbol-stroke"/>`
-      );
 
     default:
       return horizontalLeads(box, yMid) + `<rect x="${x1}" y="${yMid - 10}" width="${x2 - x1}" height="20" class="symbol-stroke" fill="none"/>`;

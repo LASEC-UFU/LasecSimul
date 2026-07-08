@@ -121,6 +121,18 @@ if(NOT WIN32)
 endif()
 add_test(NAME diode COMMAND diode_test)
 
+# Ruptura reversa (zener) e LED reaproveitando a mesma classe Diode (Convergência não-linear real)
+add_executable(zener_led_test
+    test/zener_led_test.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(zener_led_test PRIVATE include src)
+target_link_libraries(zener_led_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+if(NOT WIN32)
+    target_link_libraries(zener_led_test PRIVATE dl)
+endif()
+add_test(NAME zener_led COMMAND zener_led_test)
+
 # Subcircuitos (Épico F do roadmap de pendências)
 add_executable(subcircuit_test
     test/subcircuit_test.cpp

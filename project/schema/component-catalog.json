@@ -1619,7 +1619,125 @@
       "defaultProperties": {
         "resistance": 10000,
         "position": 0.5
-      }
+      },
+      "package": {
+        "width": 32,
+        "height": 44,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/passive/resistors/potentiometer.cpp",
+            "className": "Potentiometer",
+            "method": "paint + Dialed proxy",
+            "notes": "m_areaComp=QRectF(-12,-4.5,24,12.5), m_areaDial=QRectF(-11,-28,22,22). The native QDial is approximated as a small dial ellipse so the declarative package owns the full visual."
+          },
+          "bounds": {
+            "x": -16,
+            "y": -28,
+            "w": 32,
+            "h": 44
+          },
+          "defaultStroke": "#303840",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 2,
+          "primitives": [
+            {
+              "kind": "ellipse",
+              "cx": 0,
+              "cy": -17,
+              "rx": 11,
+              "ry": 11,
+              "fill": "#e6e6e6",
+              "stroke": "#303840",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "line",
+              "x1": 0,
+              "y1": -17,
+              "x2": 5,
+              "y2": -24,
+              "stroke": "#303840",
+              "strokeWidth": 2,
+              "strokeLinecap": "round"
+            },
+            {
+              "kind": "rect",
+              "x": -11,
+              "y": -4.5,
+              "w": 22,
+              "h": 9,
+              "fill": "none"
+            },
+            {
+              "kind": "line",
+              "x1": 0,
+              "y1": 6,
+              "x2": -3,
+              "y2": 9,
+              "strokeWidth": 3
+            },
+            {
+              "kind": "line",
+              "x1": 0,
+              "y1": 6,
+              "x2": 3,
+              "y2": 9,
+              "strokeWidth": 3
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "x": -11,
+            "y": 0,
+            "angle": 180,
+            "length": 5,
+            "leadEndTrim": 0.7,
+            "label": "",
+            "aliases": [
+              "PinA",
+              "p1"
+            ]
+          },
+          {
+            "id": "pin-2",
+            "x": 0,
+            "y": 8,
+            "angle": 90,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "",
+            "aliases": [
+              "PinM",
+              "wiper"
+            ]
+          },
+          {
+            "id": "pin-3",
+            "x": 11,
+            "y": 0,
+            "angle": 0,
+            "length": 5,
+            "leadEndTrim": 0.7,
+            "label": "",
+            "aliases": [
+              "PinB",
+              "p2"
+            ]
+          }
+        ]
+      },
+      "pinIds": [
+        "pin-1",
+        "pin-2",
+        "pin-3"
+      ]
     },
     {
       "typeId": "passive.resistor_dip",
@@ -1632,7 +1750,223 @@
       ],
       "defaultProperties": {
         "resistance": 1000
-      }
+      },
+      "package": {
+        "width": 20,
+        "height": 68,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/passive/resistors/resistordip.cpp",
+            "className": "ResistorDip",
+            "method": "paint + createResistors",
+            "notes": "Default setSize(8): m_area=QRect(-10,-30,20,68), package body drawRect(-9,-28,18,size*8), pins are interleaved left/right at y=-24+i*8."
+          },
+          "bounds": {
+            "x": -10,
+            "y": -30,
+            "w": 20,
+            "h": 68
+          },
+          "defaultStroke": "#303840",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 2,
+          "primitives": [
+            {
+              "kind": "rect",
+              "x": -9,
+              "y": -28,
+              "w": 18,
+              "h": 64,
+              "fill": "none"
+            },
+            {
+              "kind": "repeat",
+              "count": 8,
+              "indexName": "i",
+              "stepY": 8,
+              "primitives": [
+                {
+                  "kind": "line",
+                  "x1": -6,
+                  "y1": -24,
+                  "x2": 6,
+                  "y2": -24,
+                  "strokeWidth": 1
+                }
+              ]
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "x": -9,
+            "y": -24,
+            "angle": 180,
+            "length": 7,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-2",
+            "x": 9,
+            "y": -24,
+            "angle": 0,
+            "length": 7,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-3",
+            "x": -9,
+            "y": -16,
+            "angle": 180,
+            "length": 7,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-4",
+            "x": 9,
+            "y": -16,
+            "angle": 0,
+            "length": 7,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-5",
+            "x": -9,
+            "y": -8,
+            "angle": 180,
+            "length": 7,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-6",
+            "x": 9,
+            "y": -8,
+            "angle": 0,
+            "length": 7,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-7",
+            "x": -9,
+            "y": 0,
+            "angle": 180,
+            "length": 7,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-8",
+            "x": 9,
+            "y": 0,
+            "angle": 0,
+            "length": 7,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-9",
+            "x": -9,
+            "y": 8,
+            "angle": 180,
+            "length": 7,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-10",
+            "x": 9,
+            "y": 8,
+            "angle": 0,
+            "length": 7,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-11",
+            "x": -9,
+            "y": 16,
+            "angle": 180,
+            "length": 7,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-12",
+            "x": 9,
+            "y": 16,
+            "angle": 0,
+            "length": 7,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-13",
+            "x": -9,
+            "y": 24,
+            "angle": 180,
+            "length": 7,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-14",
+            "x": 9,
+            "y": 24,
+            "angle": 0,
+            "length": 7,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-15",
+            "x": -9,
+            "y": 32,
+            "angle": 180,
+            "length": 7,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-16",
+            "x": 9,
+            "y": 32,
+            "angle": 0,
+            "length": 7,
+            "leadEndTrim": 0.7,
+            "label": ""
+          }
+        ]
+      },
+      "pinIds": [
+        "pin-1",
+        "pin-2",
+        "pin-3",
+        "pin-4",
+        "pin-5",
+        "pin-6",
+        "pin-7",
+        "pin-8",
+        "pin-9",
+        "pin-10",
+        "pin-11",
+        "pin-12",
+        "pin-13",
+        "pin-14",
+        "pin-15",
+        "pin-16"
+      ]
     },
     {
       "typeId": "passive.ldr",
@@ -2392,7 +2726,7 @@
         "Reactive"
       ],
       "defaultProperties": {
-        "capacitance": 1e-06
+        "capacitance": 0.000001
       },
       "help": {
         "description": "Capacitor ideal. Valor de capacitância configurável em Farads. Armazena energia no campo elétrico."
@@ -2484,7 +2818,7 @@
         "Reactive"
       ],
       "defaultProperties": {
-        "capacitance": 1e-06
+        "capacitance": 0.000001
       },
       "pinIds": [
         "pin-1",
@@ -2695,7 +3029,7 @@
         "Reactive"
       ],
       "defaultProperties": {
-        "capacitance": 1e-06
+        "capacitance": 0.000001
       },
       "pinIds": [
         "pin-1",
@@ -2937,7 +3271,95 @@
       ],
       "defaultProperties": {
         "saturationCurrent": 1e-12
-      }
+      },
+      "package": {
+        "width": 20,
+        "height": 16,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/active/diode.cpp",
+            "className": "Diode",
+            "method": "paint",
+            "notes": "m_area=QRect(-10,-8,20,16); pins at QPoint(-16,0)/(16,0); triangle points (7,0),(-8,-7),(-8,7)."
+          },
+          "bounds": {
+            "x": -10,
+            "y": -8,
+            "w": 20,
+            "h": 16
+          },
+          "defaultStroke": "#303840",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 2,
+          "primitives": [
+            {
+              "kind": "polygon",
+              "points": [
+                {
+                  "x": 7,
+                  "y": 0
+                },
+                {
+                  "x": -8,
+                  "y": -7
+                },
+                {
+                  "x": -8,
+                  "y": 7
+                }
+              ],
+              "fill": "#303840"
+            },
+            {
+              "kind": "line",
+              "x1": 7,
+              "y1": -6,
+              "x2": 7,
+              "y2": 6,
+              "strokeWidth": 3
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "anode",
+            "x": -10,
+            "y": 0,
+            "angle": 180,
+            "length": 6,
+            "leadEndTrim": 0.7,
+            "label": "",
+            "aliases": [
+              "pin-1",
+              "p1",
+              "lPin"
+            ]
+          },
+          {
+            "id": "cathode",
+            "x": 10,
+            "y": 0,
+            "angle": 0,
+            "length": 6,
+            "leadEndTrim": 0.7,
+            "label": "",
+            "aliases": [
+              "pin-2",
+              "p2",
+              "rPin"
+            ]
+          }
+        ]
+      },
+      "pinIds": [
+        "anode",
+        "cathode"
+      ]
     },
     {
       "typeId": "active.zener",
@@ -2951,7 +3373,111 @@
       "defaultProperties": {
         "threshold": 5.1,
         "resistance": 1
-      }
+      },
+      "package": {
+        "width": 20,
+        "height": 16,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/active/diode.cpp + zener.cpp",
+            "className": "Zener",
+            "method": "paint",
+            "notes": "Same Diode paint with m_isZener=true: adds cathode dog-leg lines at (7,-6)->(4,-6) and (7,6)->(10,6)."
+          },
+          "bounds": {
+            "x": -10,
+            "y": -8,
+            "w": 20,
+            "h": 16
+          },
+          "defaultStroke": "#303840",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 2,
+          "primitives": [
+            {
+              "kind": "polygon",
+              "points": [
+                {
+                  "x": 7,
+                  "y": 0
+                },
+                {
+                  "x": -8,
+                  "y": -7
+                },
+                {
+                  "x": -8,
+                  "y": 7
+                }
+              ],
+              "fill": "#303840"
+            },
+            {
+              "kind": "line",
+              "x1": 7,
+              "y1": -6,
+              "x2": 7,
+              "y2": 6,
+              "strokeWidth": 3
+            },
+            {
+              "kind": "line",
+              "x1": 7,
+              "y1": -6,
+              "x2": 4,
+              "y2": -6,
+              "strokeWidth": 3
+            },
+            {
+              "kind": "line",
+              "x1": 7,
+              "y1": 6,
+              "x2": 10,
+              "y2": 6,
+              "strokeWidth": 3
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "anode",
+            "x": -10,
+            "y": 0,
+            "angle": 180,
+            "length": 6,
+            "leadEndTrim": 0.7,
+            "label": "",
+            "aliases": [
+              "pin-1",
+              "p1",
+              "lPin"
+            ]
+          },
+          {
+            "id": "cathode",
+            "x": 10,
+            "y": 0,
+            "angle": 0,
+            "length": 6,
+            "leadEndTrim": 0.7,
+            "label": "",
+            "aliases": [
+              "pin-2",
+              "p2",
+              "rPin"
+            ]
+          }
+        ]
+      },
+      "pinIds": [
+        "anode",
+        "cathode"
+      ]
     },
     {
       "typeId": "active.opamp",
@@ -2964,7 +3490,137 @@
       ],
       "defaultProperties": {
         "gain": 100000
-      }
+      },
+      "package": {
+        "width": 32,
+        "height": 32,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/active/op_amp.cpp",
+            "className": "OpAmp",
+            "method": "paint + constructor pins",
+            "notes": "m_area=QRect(-18,-16,36,32); body polygon (-16,-16),(-16,16),(16,1),(16,-1). Inputs at QPoint(-24,-8)/( -24,8), output at QPoint(24,0), supply pins shown here to preserve the 5-pin built-in contract."
+          },
+          "bounds": {
+            "x": -16,
+            "y": -16,
+            "w": 32,
+            "h": 32
+          },
+          "defaultStroke": "#303840",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 2,
+          "primitives": [
+            {
+              "kind": "polygon",
+              "points": [
+                {
+                  "x": -16,
+                  "y": -16
+                },
+                {
+                  "x": -16,
+                  "y": 16
+                },
+                {
+                  "x": 16,
+                  "y": 1
+                },
+                {
+                  "x": 16,
+                  "y": -1
+                }
+              ],
+              "fill": "none",
+              "strokeWidth": 2
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "x": -16,
+            "y": -8,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "+",
+            "aliases": [
+              "inputNinv"
+            ],
+            "labelColor": "#c83232",
+            "labelFontSize": 9,
+            "labelSpace": 1.7
+          },
+          {
+            "id": "pin-2",
+            "x": -16,
+            "y": 8,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "-",
+            "aliases": [
+              "inputInv"
+            ],
+            "labelFontSize": 9,
+            "labelSpace": 1.7
+          },
+          {
+            "id": "pin-3",
+            "x": 16,
+            "y": 0,
+            "angle": 0,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "",
+            "aliases": [
+              "output"
+            ]
+          },
+          {
+            "id": "pin-4",
+            "x": 0,
+            "y": -16,
+            "angle": 270,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "+",
+            "aliases": [
+              "powerPos"
+            ],
+            "labelColor": "#c83232",
+            "labelFontSize": 9,
+            "labelSpace": 1.7
+          },
+          {
+            "id": "pin-5",
+            "x": 0,
+            "y": 16,
+            "angle": 90,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "-",
+            "aliases": [
+              "powerNeg"
+            ],
+            "labelFontSize": 9,
+            "labelSpace": 1.7
+          }
+        ]
+      },
+      "pinIds": [
+        "pin-1",
+        "pin-2",
+        "pin-3",
+        "pin-4",
+        "pin-5"
+      ]
     },
     {
       "typeId": "active.comparator",
@@ -2977,7 +3633,137 @@
       ],
       "defaultProperties": {
         "gain": 100000
-      }
+      },
+      "package": {
+        "width": 32,
+        "height": 32,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/active/comparator.cpp",
+            "className": "Comparator",
+            "method": "paint + constructor pins",
+            "notes": "m_area=QRect(-18,-16,36,32); body polygon (-16,-16),(-16,16),(16,1),(16,-1). Inputs at QPoint(-24,-8)/( -24,8), output at QPoint(24,0), supply pins shown here to preserve the 5-pin built-in contract."
+          },
+          "bounds": {
+            "x": -16,
+            "y": -16,
+            "w": 32,
+            "h": 32
+          },
+          "defaultStroke": "#303840",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 2,
+          "primitives": [
+            {
+              "kind": "polygon",
+              "points": [
+                {
+                  "x": -16,
+                  "y": -16
+                },
+                {
+                  "x": -16,
+                  "y": 16
+                },
+                {
+                  "x": 16,
+                  "y": 1
+                },
+                {
+                  "x": 16,
+                  "y": -1
+                }
+              ],
+              "fill": "none",
+              "strokeWidth": 2
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "x": -16,
+            "y": -8,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "+",
+            "aliases": [
+              "inputNinv"
+            ],
+            "labelColor": "#c83232",
+            "labelFontSize": 9,
+            "labelSpace": 1.7
+          },
+          {
+            "id": "pin-2",
+            "x": -16,
+            "y": 8,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "-",
+            "aliases": [
+              "inputInv"
+            ],
+            "labelFontSize": 9,
+            "labelSpace": 1.7
+          },
+          {
+            "id": "pin-3",
+            "x": 16,
+            "y": 0,
+            "angle": 0,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "",
+            "aliases": [
+              "output"
+            ]
+          },
+          {
+            "id": "pin-4",
+            "x": 0,
+            "y": -16,
+            "angle": 270,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "+",
+            "aliases": [
+              "powerPos"
+            ],
+            "labelColor": "#c83232",
+            "labelFontSize": 9,
+            "labelSpace": 1.7
+          },
+          {
+            "id": "pin-5",
+            "x": 0,
+            "y": 16,
+            "angle": 90,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "-",
+            "aliases": [
+              "powerNeg"
+            ],
+            "labelFontSize": 9,
+            "labelSpace": 1.7
+          }
+        ]
+      },
+      "pinIds": [
+        "pin-1",
+        "pin-2",
+        "pin-3",
+        "pin-4",
+        "pin-5"
+      ]
     },
     {
       "typeId": "active.analog_mux",
@@ -3255,7 +4041,89 @@
       ],
       "defaultProperties": {
         "voltage": 5
-      }
+      },
+      "package": {
+        "width": 22,
+        "height": 19,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/active/volt_reg.cpp",
+            "className": "VoltReg",
+            "method": "paint",
+            "notes": "m_area=QRect(-11,-8,22,19); input/output/ref pins at QPoint(-16,0)/(16,0)/(0,16)."
+          },
+          "bounds": {
+            "x": -11,
+            "y": -8,
+            "w": 22,
+            "h": 19
+          },
+          "defaultStroke": "#303840",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 2,
+          "primitives": [
+            {
+              "kind": "rect",
+              "x": -11,
+              "y": -8,
+              "w": 22,
+              "h": 19,
+              "fill": "none"
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "x": -11,
+            "y": 0,
+            "angle": 180,
+            "length": 5,
+            "leadEndTrim": 0.7,
+            "label": "I",
+            "aliases": [
+              "input"
+            ],
+            "labelFontSize": 7
+          },
+          {
+            "id": "pin-2",
+            "x": 11,
+            "y": 0,
+            "angle": 0,
+            "length": 5,
+            "leadEndTrim": 0.7,
+            "label": "O",
+            "aliases": [
+              "output"
+            ],
+            "labelFontSize": 7
+          },
+          {
+            "id": "pin-3",
+            "x": 0,
+            "y": 11,
+            "angle": 90,
+            "length": 5,
+            "leadEndTrim": 0.7,
+            "label": "R",
+            "aliases": [
+              "ref"
+            ],
+            "labelFontSize": 7
+          }
+        ]
+      },
+      "pinIds": [
+        "pin-1",
+        "pin-2",
+        "pin-3"
+      ]
     },
     {
       "typeId": "outputs.led",
@@ -3270,7 +4138,114 @@
         "threshold": 2,
         "resistance": 1
       },
-      "graphical": true
+      "graphical": true,
+      "package": {
+        "width": 20,
+        "height": 20,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/outputs/leds/led.cpp + ledbase.cpp",
+            "className": "Led",
+            "method": "LedBase::paint + Led::drawBackground/drawForeground",
+            "notes": "m_area=QRect(-8,-10,20,20), pins at QPoint(-16,0)/(16,0), left pin length 10."
+          },
+          "bounds": {
+            "x": -8,
+            "y": -10,
+            "w": 20,
+            "h": 20
+          },
+          "defaultStroke": "#303840",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 2,
+          "primitives": [
+            {
+              "kind": "ellipse",
+              "cx": 2,
+              "cy": 0,
+              "rx": 8,
+              "ry": 8,
+              "fill": "#000000",
+              "stroke": "#000000",
+              "strokeWidth": 4
+            },
+            {
+              "kind": "polygon",
+              "points": [
+                {
+                  "x": 8,
+                  "y": 0
+                },
+                {
+                  "x": -3,
+                  "y": -6
+                },
+                {
+                  "x": -3,
+                  "y": 6
+                }
+              ],
+              "fill": "#3a3a3a",
+              "stroke": "#3a3a3a"
+            },
+            {
+              "kind": "line",
+              "x1": 8,
+              "y1": -4,
+              "x2": 8,
+              "y2": 4,
+              "stroke": "#3a3a3a",
+              "strokeWidth": 2
+            },
+            {
+              "kind": "line",
+              "x1": -6,
+              "y1": 0,
+              "x2": 10,
+              "y2": 0,
+              "stroke": "#3a3a3a",
+              "strokeWidth": 2
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "anode",
+            "x": -6,
+            "y": 0,
+            "angle": 180,
+            "length": 10,
+            "leadEndTrim": 0.7,
+            "label": "",
+            "aliases": [
+              "pin-1",
+              "lPin"
+            ]
+          },
+          {
+            "id": "cathode",
+            "x": 10,
+            "y": 0,
+            "angle": 0,
+            "length": 6,
+            "leadEndTrim": 0.7,
+            "label": "",
+            "aliases": [
+              "pin-2",
+              "rPin"
+            ]
+          }
+        ]
+      },
+      "pinIds": [
+        "anode",
+        "cathode"
+      ]
     },
     {
       "typeId": "outputs.led_rgb",
@@ -3284,7 +4259,135 @@
       "defaultProperties": {
         "threshold": 2
       },
-      "graphical": true
+      "graphical": true,
+      "package": {
+        "width": 20,
+        "height": 20,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/outputs/leds/ledrgb.cpp",
+            "className": "LedRgb",
+            "method": "paint + setComCathode",
+            "notes": "Common cathode default: m_area=QRect(-8,-10,20,20); RGB pins at x=-16 y=-8/0/8, common at x=16 y=0."
+          },
+          "bounds": {
+            "x": -8,
+            "y": -10,
+            "w": 20,
+            "h": 20
+          },
+          "defaultStroke": "#303840",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 2,
+          "primitives": [
+            {
+              "kind": "roundedRect",
+              "x": -8,
+              "y": -10,
+              "w": 20,
+              "h": 20,
+              "rx": 2,
+              "ry": 2,
+              "fill": "none",
+              "stroke": "#000000",
+              "strokeWidth": 4
+            },
+            {
+              "kind": "ellipse",
+              "cx": 2,
+              "cy": 0,
+              "rx": 10,
+              "ry": 10,
+              "fill": "#0f0f0f",
+              "stroke": "#303840",
+              "strokeWidth": 2
+            },
+            {
+              "kind": "ellipse",
+              "cx": -1,
+              "cy": -2,
+              "rx": 3,
+              "ry": 3,
+              "fill": "#641919",
+              "stroke": "none"
+            },
+            {
+              "kind": "ellipse",
+              "cx": 3,
+              "cy": -2,
+              "rx": 3,
+              "ry": 3,
+              "fill": "#196419",
+              "stroke": "none"
+            },
+            {
+              "kind": "ellipse",
+              "cx": 1,
+              "cy": 3,
+              "rx": 3,
+              "ry": 3,
+              "fill": "#192064",
+              "stroke": "none"
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "x": -8,
+            "y": -8,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "R",
+            "labelColor": "#b47800",
+            "labelFontSize": 7
+          },
+          {
+            "id": "pin-2",
+            "x": -8,
+            "y": 0,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "G",
+            "labelColor": "#007800",
+            "labelFontSize": 7
+          },
+          {
+            "id": "pin-3",
+            "x": -8,
+            "y": 8,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "B",
+            "labelColor": "#3040a0",
+            "labelFontSize": 7
+          },
+          {
+            "id": "pin-4",
+            "x": 12,
+            "y": 0,
+            "angle": 0,
+            "length": 4,
+            "leadEndTrim": 0.7,
+            "label": "C",
+            "labelFontSize": 7
+          }
+        ]
+      },
+      "pinIds": [
+        "pin-1",
+        "pin-2",
+        "pin-3",
+        "pin-4"
+      ]
     },
     {
       "typeId": "outputs.led_bar",
@@ -3928,7 +5031,276 @@
       "defaultProperties": {
         "size": 8
       },
-      "graphical": true
+      "graphical": true,
+      "package": {
+        "width": 36,
+        "height": 56,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/outputs/leds/sevensegment.cpp",
+            "className": "SevenSegment",
+            "method": "paint + createDisplay",
+            "notes": "One display geometry: m_area=QRect(-18,-28,36,56); segment SMD positions copied from createDisplay(0). Pin 10 is kept as a second common alias to preserve the current 10-pin built-in contract."
+          },
+          "bounds": {
+            "x": -18,
+            "y": -28,
+            "w": 36,
+            "h": 56
+          },
+          "defaultStroke": "#303840",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 2,
+          "primitives": [
+            {
+              "kind": "rect",
+              "x": -18,
+              "y": -28,
+              "w": 36,
+              "h": 56,
+              "fill": "none"
+            },
+            {
+              "kind": "line",
+              "x1": -5,
+              "y1": -20,
+              "x2": 8.5,
+              "y2": -20,
+              "stroke": "#3a1414",
+              "strokeWidth": 4,
+              "strokeLinecap": "round"
+            },
+            {
+              "kind": "line",
+              "x1": 13,
+              "y1": -15,
+              "x2": 11.5,
+              "y2": -2,
+              "stroke": "#3a1414",
+              "strokeWidth": 4,
+              "strokeLinecap": "round"
+            },
+            {
+              "kind": "line",
+              "x1": 11.5,
+              "y1": 5,
+              "x2": 10,
+              "y2": 18,
+              "stroke": "#3a1414",
+              "strokeWidth": 4,
+              "strokeLinecap": "round"
+            },
+            {
+              "kind": "line",
+              "x1": -8,
+              "y1": 20,
+              "x2": 5.5,
+              "y2": 20,
+              "stroke": "#3a1414",
+              "strokeWidth": 4,
+              "strokeLinecap": "round"
+            },
+            {
+              "kind": "line",
+              "x1": -8,
+              "y1": 5,
+              "x2": -9.5,
+              "y2": 18,
+              "stroke": "#3a1414",
+              "strokeWidth": 4,
+              "strokeLinecap": "round"
+            },
+            {
+              "kind": "line",
+              "x1": -6.5,
+              "y1": -15,
+              "x2": -8,
+              "y2": -2,
+              "stroke": "#3a1414",
+              "strokeWidth": 4,
+              "strokeLinecap": "round"
+            },
+            {
+              "kind": "line",
+              "x1": -6.5,
+              "y1": 0,
+              "x2": 7,
+              "y2": 0,
+              "stroke": "#3a1414",
+              "strokeWidth": 4,
+              "strokeLinecap": "round"
+            },
+            {
+              "kind": "ellipse",
+              "cx": 12.75,
+              "cy": 19.75,
+              "rx": 1.5,
+              "ry": 1.5,
+              "fill": "#3a1414",
+              "stroke": "#3a1414"
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "x": -16,
+            "y": -24,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "a",
+            "aliases": [
+              "pin_a"
+            ],
+            "labelFontSize": 4,
+            "labelSpace": 1
+          },
+          {
+            "id": "pin-2",
+            "x": -16,
+            "y": -16,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "b",
+            "aliases": [
+              "pin_b"
+            ],
+            "labelFontSize": 4,
+            "labelSpace": 1
+          },
+          {
+            "id": "pin-3",
+            "x": -16,
+            "y": -8,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "c",
+            "aliases": [
+              "pin_c"
+            ],
+            "labelFontSize": 4,
+            "labelSpace": 1
+          },
+          {
+            "id": "pin-4",
+            "x": -16,
+            "y": 0,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "d",
+            "aliases": [
+              "pin_d"
+            ],
+            "labelFontSize": 4,
+            "labelSpace": 1
+          },
+          {
+            "id": "pin-5",
+            "x": -16,
+            "y": 8,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "e",
+            "aliases": [
+              "pin_e"
+            ],
+            "labelFontSize": 4,
+            "labelSpace": 1
+          },
+          {
+            "id": "pin-6",
+            "x": -16,
+            "y": 16,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "f",
+            "aliases": [
+              "pin_f"
+            ],
+            "labelFontSize": 4,
+            "labelSpace": 1
+          },
+          {
+            "id": "pin-7",
+            "x": -16,
+            "y": 24,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "g",
+            "aliases": [
+              "pin_g"
+            ],
+            "labelFontSize": 4,
+            "labelSpace": 1
+          },
+          {
+            "id": "pin-8",
+            "x": -8,
+            "y": 24,
+            "angle": 90,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": ".",
+            "aliases": [
+              "pin_dot"
+            ],
+            "labelFontSize": 4,
+            "labelSpace": 1
+          },
+          {
+            "id": "pin-9",
+            "x": 8,
+            "y": 24,
+            "angle": 90,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "|",
+            "aliases": [
+              "pin_commona"
+            ],
+            "labelFontSize": 4,
+            "labelSpace": 1
+          },
+          {
+            "id": "pin-10",
+            "x": 24,
+            "y": 24,
+            "angle": 90,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "|",
+            "aliases": [
+              "pin_commonb"
+            ],
+            "labelFontSize": 4,
+            "labelSpace": 1
+          }
+        ]
+      },
+      "pinIds": [
+        "pin-1",
+        "pin-2",
+        "pin-3",
+        "pin-4",
+        "pin-5",
+        "pin-6",
+        "pin-7",
+        "pin-8",
+        "pin-9",
+        "pin-10"
+      ]
     },
     {
       "typeId": "outputs.dc_motor",
@@ -3942,7 +5314,130 @@
       "defaultProperties": {
         "resistance": 10
       },
-      "graphical": true
+      "graphical": true,
+      "package": {
+        "width": 80,
+        "height": 66,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/outputs/motors/dcmotor.cpp",
+            "className": "DcMotor",
+            "method": "paint",
+            "notes": "m_area=QRectF(-35,-33,70,66), pins at QPoint(-40,0)/(40,0) length 4. Bounds include terminal tabs at x=-36..36."
+          },
+          "bounds": {
+            "x": -40,
+            "y": -33,
+            "w": 80,
+            "h": 66
+          },
+          "defaultStroke": "#303840",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 2,
+          "primitives": [
+            {
+              "kind": "ellipse",
+              "cx": 0,
+              "cy": 0,
+              "rx": 32,
+              "ry": 32,
+              "fill": "#324664",
+              "stroke": "#303840"
+            },
+            {
+              "kind": "roundedRect",
+              "x": -36,
+              "y": -4,
+              "w": 8,
+              "h": 8,
+              "rx": 4,
+              "ry": 4,
+              "fill": "#ff0000",
+              "stroke": "none"
+            },
+            {
+              "kind": "roundedRect",
+              "x": 28,
+              "y": -4,
+              "w": 8,
+              "h": 8,
+              "rx": 4,
+              "ry": 4,
+              "fill": "#000000",
+              "stroke": "none"
+            },
+            {
+              "kind": "ellipse",
+              "cx": 0,
+              "cy": 0,
+              "rx": 26,
+              "ry": 26,
+              "fill": "#ffffff",
+              "stroke": "#000000"
+            },
+            {
+              "kind": "arc",
+              "x": -24,
+              "y": -24,
+              "w": 48,
+              "h": 48,
+              "startDeg": 7.5,
+              "spanDeg": 15,
+              "fill": "none",
+              "stroke": "#324664",
+              "strokeWidth": 18
+            },
+            {
+              "kind": "ellipse",
+              "cx": 0,
+              "cy": 0,
+              "rx": 20,
+              "ry": 20,
+              "fill": "#324664",
+              "stroke": "none"
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "x": -36,
+            "y": 0,
+            "angle": 180,
+            "length": 4,
+            "leadEndTrim": 0.7,
+            "label": "+",
+            "aliases": [
+              "lPin"
+            ],
+            "labelFontSize": 9,
+            "labelSpace": 1.7
+          },
+          {
+            "id": "pin-2",
+            "x": 36,
+            "y": 0,
+            "angle": 0,
+            "length": 4,
+            "leadEndTrim": 0.7,
+            "label": "-",
+            "aliases": [
+              "rPin"
+            ],
+            "labelFontSize": 9,
+            "labelSpace": 1.7
+          }
+        ]
+      },
+      "pinIds": [
+        "pin-1",
+        "pin-2"
+      ]
     },
     {
       "typeId": "outputs.stepper",
@@ -3956,7 +5451,149 @@
       "defaultProperties": {
         "resistance": 10
       },
-      "graphical": true
+      "graphical": true,
+      "package": {
+        "width": 114,
+        "height": 100,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/outputs/motors/stepper.cpp",
+            "className": "Stepper",
+            "method": "paint",
+            "notes": "m_area=QRectF(-64,-50,114,100). Real SimulIDE has 5 pins including Co; LasecSimul built-in currently exposes 4, so this package maps the four coil pins and keeps the connector strip visual."
+          },
+          "bounds": {
+            "x": -64,
+            "y": -50,
+            "w": 114,
+            "h": 100
+          },
+          "defaultStroke": "#303840",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 2,
+          "primitives": [
+            {
+              "kind": "roundedRect",
+              "x": -64,
+              "y": -40,
+              "w": 25,
+              "h": 80,
+              "rx": 1,
+              "ry": 1,
+              "fill": "none"
+            },
+            {
+              "kind": "roundedRect",
+              "x": -48,
+              "y": -48,
+              "w": 96,
+              "h": 96,
+              "rx": 1,
+              "ry": 1,
+              "fill": "#324664"
+            },
+            {
+              "kind": "ellipse",
+              "cx": 0,
+              "cy": 0,
+              "rx": 37,
+              "ry": 37,
+              "fill": "#ffffff",
+              "stroke": "#000000"
+            },
+            {
+              "kind": "ellipse",
+              "cx": 0,
+              "cy": 0,
+              "rx": 33,
+              "ry": 33,
+              "fill": "none",
+              "stroke": "#ffffff",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "ellipse",
+              "cx": 0,
+              "cy": 0,
+              "rx": 29,
+              "ry": 29,
+              "fill": "none",
+              "stroke": "#ffffff",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "ellipse",
+              "cx": 0,
+              "cy": 0,
+              "rx": 25,
+              "ry": 25,
+              "fill": "#324664",
+              "stroke": "#000000"
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "x": -64,
+            "y": -32,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "A+",
+            "aliases": [
+              "PinA1"
+            ]
+          },
+          {
+            "id": "pin-2",
+            "x": -64,
+            "y": 16,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "A-",
+            "aliases": [
+              "PinA2"
+            ]
+          },
+          {
+            "id": "pin-3",
+            "x": -64,
+            "y": -16,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "B+",
+            "aliases": [
+              "PinB1"
+            ]
+          },
+          {
+            "id": "pin-4",
+            "x": -64,
+            "y": 32,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "B-",
+            "aliases": [
+              "PinB2"
+            ]
+          }
+        ]
+      },
+      "pinIds": [
+        "pin-1",
+        "pin-2",
+        "pin-3",
+        "pin-4"
+      ]
     },
     {
       "typeId": "outputs.incandescent_lamp",
@@ -3970,7 +5607,92 @@
       "defaultProperties": {
         "resistance": 100
       },
-      "graphical": true
+      "graphical": true,
+      "package": {
+        "width": 20,
+        "height": 20,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/outputs/lamp.cpp",
+            "className": "Lamp",
+            "method": "paint",
+            "notes": "m_area=QRect(-10,-10,20,20); Comp2Pin terminals are at +/-16, body ellipse is drawEllipse(-8,-8,16,16)."
+          },
+          "bounds": {
+            "x": -10,
+            "y": -10,
+            "w": 20,
+            "h": 20
+          },
+          "defaultStroke": "#303840",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 2,
+          "primitives": [
+            {
+              "kind": "ellipse",
+              "cx": 0,
+              "cy": 0,
+              "rx": 8,
+              "ry": 8,
+              "fill": "#191964",
+              "stroke": "#303840"
+            },
+            {
+              "kind": "line",
+              "x1": -5,
+              "y1": -5,
+              "x2": 5,
+              "y2": 5,
+              "strokeWidth": 2
+            },
+            {
+              "kind": "line",
+              "x1": -5,
+              "y1": 5,
+              "x2": 5,
+              "y2": -5,
+              "strokeWidth": 2
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "x": -10,
+            "y": 0,
+            "angle": 180,
+            "length": 6,
+            "leadEndTrim": 0.7,
+            "label": "",
+            "aliases": [
+              "p1",
+              "lPin"
+            ]
+          },
+          {
+            "id": "pin-2",
+            "x": 10,
+            "y": 0,
+            "angle": 0,
+            "length": 6,
+            "leadEndTrim": 0.7,
+            "label": "",
+            "aliases": [
+              "p2",
+              "rPin"
+            ]
+          }
+        ]
+      },
+      "pinIds": [
+        "pin-1",
+        "pin-2"
+      ]
     },
     {
       "typeId": "connectors.junction",
@@ -4041,7 +5763,147 @@
       "folderPath": [
         "Conectores"
       ],
-      "defaultProperties": {}
+      "defaultProperties": {},
+      "package": {
+        "width": 8,
+        "height": 64,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/gui/circuitwidget/connbase.cpp + src/components/connectors/socket.cpp",
+            "className": "Socket",
+            "method": "ConnBase::paint + Socket::updatePixmap",
+            "notes": "Default setSize(8): m_area=QRectF(-4,-28,8,64). Pixmap holes are represented as small circles, one per socket pin."
+          },
+          "bounds": {
+            "x": -4,
+            "y": -28,
+            "w": 8,
+            "h": 64
+          },
+          "defaultStroke": "#303840",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 2,
+          "primitives": [
+            {
+              "kind": "roundedRect",
+              "x": -4,
+              "y": -28,
+              "w": 8,
+              "h": 64,
+              "rx": 4,
+              "ry": 4,
+              "fill": "none",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "repeat",
+              "count": 8,
+              "indexName": "i",
+              "stepY": 8,
+              "primitives": [
+                {
+                  "kind": "ellipse",
+                  "cx": 0,
+                  "cy": -24,
+                  "rx": 2,
+                  "ry": 2,
+                  "fill": "none",
+                  "strokeWidth": 1
+                }
+              ]
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "x": 0,
+            "y": -24,
+            "angle": 270,
+            "length": 0,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-2",
+            "x": 0,
+            "y": -16,
+            "angle": 270,
+            "length": 0,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-3",
+            "x": 0,
+            "y": -8,
+            "angle": 270,
+            "length": 0,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-4",
+            "x": 0,
+            "y": 0,
+            "angle": 270,
+            "length": 0,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-5",
+            "x": 0,
+            "y": 8,
+            "angle": 270,
+            "length": 0,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-6",
+            "x": 0,
+            "y": 16,
+            "angle": 270,
+            "length": 0,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-7",
+            "x": 0,
+            "y": 24,
+            "angle": 270,
+            "length": 0,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-8",
+            "x": 0,
+            "y": 32,
+            "angle": 270,
+            "length": 0,
+            "leadEndTrim": 0.7,
+            "label": ""
+          }
+        ]
+      },
+      "pinIds": [
+        "pin-1",
+        "pin-2",
+        "pin-3",
+        "pin-4",
+        "pin-5",
+        "pin-6",
+        "pin-7",
+        "pin-8"
+      ]
     },
     {
       "typeId": "connectors.header",
@@ -4051,7 +5913,147 @@
       "folderPath": [
         "Conectores"
       ],
-      "defaultProperties": {}
+      "defaultProperties": {},
+      "package": {
+        "width": 8,
+        "height": 64,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/gui/circuitwidget/connbase.cpp + src/components/connectors/header.cpp",
+            "className": "Header",
+            "method": "ConnBase::paint + Header::updatePixmap",
+            "notes": "Default setSize(8): m_area=QRectF(-4,-28,8,64). Header pixmap pins represented as short horizontal bars."
+          },
+          "bounds": {
+            "x": -4,
+            "y": -28,
+            "w": 8,
+            "h": 64
+          },
+          "defaultStroke": "#303840",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 2,
+          "primitives": [
+            {
+              "kind": "roundedRect",
+              "x": -4,
+              "y": -28,
+              "w": 8,
+              "h": 64,
+              "rx": 4,
+              "ry": 4,
+              "fill": "none",
+              "strokeWidth": 1
+            },
+            {
+              "kind": "repeat",
+              "count": 8,
+              "indexName": "i",
+              "stepY": 8,
+              "primitives": [
+                {
+                  "kind": "line",
+                  "x1": -3,
+                  "y1": -24,
+                  "x2": 3,
+                  "y2": -24,
+                  "strokeWidth": 2,
+                  "strokeLinecap": "round"
+                }
+              ]
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "x": 0,
+            "y": -24,
+            "angle": 270,
+            "length": 0,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-2",
+            "x": 0,
+            "y": -16,
+            "angle": 270,
+            "length": 0,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-3",
+            "x": 0,
+            "y": -8,
+            "angle": 270,
+            "length": 0,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-4",
+            "x": 0,
+            "y": 0,
+            "angle": 270,
+            "length": 0,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-5",
+            "x": 0,
+            "y": 8,
+            "angle": 270,
+            "length": 0,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-6",
+            "x": 0,
+            "y": 16,
+            "angle": 270,
+            "length": 0,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-7",
+            "x": 0,
+            "y": 24,
+            "angle": 270,
+            "length": 0,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-8",
+            "x": 0,
+            "y": 32,
+            "angle": 270,
+            "length": 0,
+            "leadEndTrim": 0.7,
+            "label": ""
+          }
+        ]
+      },
+      "pinIds": [
+        "pin-1",
+        "pin-2",
+        "pin-3",
+        "pin-4",
+        "pin-5",
+        "pin-6",
+        "pin-7",
+        "pin-8"
+      ]
     },
     {
       "typeId": "graphics.image",
@@ -4284,7 +6286,7 @@
         "Medidores"
       ],
       "defaultProperties": {
-        "resistance": 1e-06
+        "resistance": 0.000001
       },
       "help": {
         "description": "Amperímetro de baixa resistência série. Conecte em série no ramo para medir a corrente que passa por ele."

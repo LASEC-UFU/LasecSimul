@@ -380,10 +380,34 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
         registerBuiltinMetadata(typeId, label, components::SimulideDiodeLike::propertySchema(threshold, 1.0),
                                 englishName(label));
     };
-    registerDiodeLike("active.zener", "Zener Diode", 5.1);
+    // "active.diac"/"active.scr"/"active.triac" (e mais abaixo "active.bjt"/"mosfet"/"jfet"):
+    // registro built-in aqui é CONFIRMADAMENTE código morto em produção -- `devices/simulide-complex`
+    // (KIND_DIAC/SCR/TRIAC/BJT/MOSFET/JFET em `lib.c`) registra os MESMOS typeIds via
+    // `SimulationSession::registerKnownPluginTypes()`, chamado DEPOIS de `registerBuiltinComponents`
+    // (ver App::activate() abaixo) usando `ComponentRegistry::replaceFactory` -- o plugin sempre
+    // vence quando carregado. Mantido como fallback (nunca exercitado se o plugin carrega) --
+    // não vale a pena portar Shockley/ruptura pra estes (built-in E plugin usam o mesmo modelo
+    // simplificado on/off hoje; consertar de verdade exigiria mexer no `lib.c` do plugin, que é
+    // quem manda). Ver .spec/lasecsimul.spec seção 7.4 e memória do projeto.
     registerDiodeLike("active.diac", "Diac", 30.0);
     registerDiodeLike("active.scr", "SCR", 0.8);
     registerDiodeLike("active.triac", "Triac", 0.8);
+
+    // Zener: reaproveita a MESMA classe `Diode` (Shockley + Newton amortecido REAL,
+    // `hasConverged()` genuíno) de `active.diode` -- não a `SimulideDiodeLike` simplificada de
+    // cima, que sequer modelava ruptura reversa (só um limiar direto de 5.1V, fisicamente errado
+    // pra um zener: o comportamento útil de um zener é a ruptura REVERSA, não um joelho direto
+    // alto). `supportsBreakdown=true` expõe a propriedade `breakdownVoltage` editável (default
+    // 5.1V, igual ao valor antigo -- só a FÍSICA por trás mudou).
+    reg.registerFactory("active.zener", [](const ComponentParams& p) {
+        const auto pos = p.pins<2>();
+        return std::make_unique<components::Diode>(
+            std::array<Pin, 2>{Pin{pos[0].id.empty() ? "anode" : pos[0].id, pos[0].x, pos[0].y},
+                                Pin{pos[1].id.empty() ? "cathode" : pos[1].id, pos[1].x, pos[1].y}},
+            p.property("saturationCurrent", 1e-12), 0.02585, p.property("breakdownVoltage", 5.1), true);
+    });
+    registerBuiltinMetadata("active.zener", "Zener Diode", components::Diode::propertySchema(true),
+                            englishName("Zener Diode"));
 
     const auto registerTransistorLike = [&](const std::string& typeId, const std::string& label, bool pnp) {
         reg.registerFactory(typeId, [&, typeId, pnp](const ComponentParams& p) {
@@ -437,7 +461,21 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
         });
         registerBuiltinMetadata(typeId, label, schema, englishName(label));
     };
-    registerDiodeLike("outputs.led", "Led", 2.0);
+    // LED: mesma classe `Diode` real (não `SimulideDiodeLike`) que `active.zener` acima --
+    // `saturationCurrent`/`thermalVoltage` iguais ao preset real "RGY Default" do SimulIDE
+    // (`e-diode.cpp::getModels()`: satCurr=0.0932nA, emCoef=3.73 -> thermalVoltage efetivo =
+    // emCoef*Vt = 3.73*0.025865 ≈ 0.0965V) -- dá o joelho de tensão bem mais alto que um diodo
+    // comum (~1.8-2V vs ~0.6V), sem precisar de um parâmetro `emCoef` separado nesta classe (já
+    // embutido em `thermalVoltage`). Sem ruptura reversa (LED não teria breakdown modelado aqui,
+    // `supportsBreakdown=false`, igual ao preset "RGY Default" real, `brkDown=0`).
+    reg.registerFactory("outputs.led", [](const ComponentParams& p) {
+        const auto pos = p.pins<2>();
+        return std::make_unique<components::Diode>(
+            std::array<Pin, 2>{Pin{pos[0].id.empty() ? "anode" : pos[0].id, pos[0].x, pos[0].y},
+                                Pin{pos[1].id.empty() ? "cathode" : pos[1].id, pos[1].x, pos[1].y}},
+            p.property("saturationCurrent", 9.32e-11), p.property("thermalVoltage", 0.0965));
+    });
+    registerBuiltinMetadata("outputs.led", "Led", components::Diode::propertySchema(), englishName("Led"));
     registerOutputState("outputs.led_rgb", "Led Rgb", 4,
                         {components::detail::numberSchema("threshold", "Tensao Direta", "V", 2.0, 0.0, 0.01)});
     // `ledbar.cpp` real: `m_pin.resize(m_size*2)` -- par P/N por LED (`pinP`/`pinN`), nunca 1 pino

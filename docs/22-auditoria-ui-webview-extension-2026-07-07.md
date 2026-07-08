@@ -79,31 +79,68 @@ do documento abaixo permanece como histórico do diagnóstico original.
     dependem de `ceil(log2(channels))`, não expressável só com multiplicador/offset lineares.
     **⚠️ Valores de pixel NÃO verificados numa sessão interativa** (sem GUI/harness de DOM neste
     projeto) — a fórmula foi conferida por leitura direta do código-fonte real do SimulIDE e por 3
-    testes de regressão novos (`componentSymbols.test.ts`, 46/46 passando), mas nunca vista renderizada
+    testes de regressão novos (`componentSymbols.test.ts`, 47/47 passando), mas nunca vista renderizada
     de verdade. Recomendo abrir o Extension Development Host e comparar visualmente antes de considerar
     isto no mesmo nível de confiança que o `switches.keypad` (que teve o mesmo trabalho feito por outra
     sessão, também sem confirmação de que foi visualmente checado).
+- **Fidelidade visual built-in finalizada (2026-07-08)**: o follow-up dizia "14 gaps", mas enumerava 15
+  `typeId`s; foram tratados os 15. `passive.potentiometer`, `passive.resistor_dip`, `active.diode`,
+  `active.zener`, `active.opamp`, `active.comparator`, `active.volt_regulator`, `outputs.led`,
+  `outputs.led_rgb`, `outputs.seven_segment`, `outputs.dc_motor`, `outputs.stepper`,
+  `outputs.incandescent_lamp`, `connectors.socket` e `connectors.header` ganharam `package` completo com
+  `simulidePaint.source.file`, geometria e pinos portados do SimulIDE real em
+  `C:\SourceCode\simulide_2`. Os fallbacks mortos correspondentes foram removidos de `componentSymbols.ts`
+  (incluindo restos de `switches.keypad`, `outputs.led_matrix`, `outputs.led_bar` e `active.analog_mux`),
+  então esses built-ins agora atravessam o mesmo pipeline declarativo dos plugins: catálogo -> parser/
+  sanitizer de `package` -> `registerPackage` -> renderer. Teste novo em `componentSymbols.test.ts` garante
+  que todos continuam com `simulidePaint.source.file`, SVG gerado pelo package e pino real resolvido pelo
+  package.
+- **Convergência não-linear real (Newton-Raphson) fechada para diodo/zener/LED (2026-07-08)**: item fora da
+  lista de 24 achados originais, escolhido pelo usuário entre as lacunas de paridade SimulIDE levantadas
+  numa auditoria de acompanhamento ("veja o que falta implementar no código para ficar igual o SimulIDE").
+  `active.diode` já tinha um modelo Shockley + companion model + amortecimento de Newton corretos
+  (`core/src/components/active/Diode.hpp`); `active.zener`/`outputs.led` ainda usavam a classe simplificada
+  `SimulideDiodeLike` (`hasConverged()` hardcoded `true`, sem ruptura reversa nenhuma pro zener). Estendida
+  a classe `Diode` com um parâmetro opcional `breakdownVoltage`/`supportsBreakdown` (ramo exponencial
+  espelhado, mesmo amortecimento de Newton espelhado) e reaproveitada pelos três typeIds com parâmetros
+  diferentes -- `active.zener` (breakdown editável, default 5.1V) e `outputs.led` (`saturationCurrent`/
+  `thermalVoltage` = preset real "RGY Default" do SimulIDE, joelho de condução ~1.5-2.5V em vez de
+  ~0.3-1.0V). Achado documentado à parte, não corrigido: `active.diac`/`scr`/`triac`/`bjt`/`mosfet`/`jfet`
+  são código morto confirmado (sempre sobrescritos pelo plugin `devices/simulide-complex` via
+  `replaceFactory`, chamado depois do registro built-in), e o modelo do próprio plugin (`lib.c`) também é um
+  limiar on/off simplificado -- portar Newton-Raphson de verdade pra estes exigiria mexer no `lib.c`, fora do
+  escopo desta tarefa. Testes novos: `core/test/zener_led_test.cpp` (regulador zener com fonte reversa +
+  LED forward, ambos validando KCL na tensão convergida, não só que o laço parou). `.spec/lasecsimul.spec`
+  §7.4 atualizada (estava desatualizada dizendo "não existe diodo... ainda não escrita", de antes do
+  `active.diode` já ter sido implementado por outra sessão sem atualizar a spec).
 - **Validação final**:
   - `npm test` passou; após as extrações de `catalogCommands.ts`, `mcuCommands.ts` e
-    `symbolAuthoring/symbolCommands.ts`, passou novamente.
+    `symbolAuthoring/symbolCommands.ts`, passou novamente; após a migração final dos 15 built-ins visuais,
+    passou novamente com `componentSymbols.test.ts` em 47/47.
   - `npx tsc -p tsconfig.json --noEmit` passou duas vezes na terceira etapa: uma logo após conectar a
-    extração de autoria de símbolo e outra na rodada final.
-  - `npx tsc -p tsconfig.webview.json --noEmit` passou.
-  - `npx tsc -p tsconfig.test.json --noEmit` passou.
-  - `npx --yes mocha "out-test/**/*.test.js"` saiu com código 0. Observação: os testes atuais são scripts
+    extração de autoria de símbolo e outra na rodada final; passou também na rodada final da migração visual
+    de 2026-07-08.
+  - `npx tsc -p tsconfig.webview.json --noEmit` passou, incluindo a rodada final de 2026-07-08.
+  - `npx tsc -p tsconfig.test.json --noEmit` passou, incluindo a rodada final de 2026-07-08.
+  - `npx --yes mocha "out-test/**/*.test.js"` saiu com código 0 na rodada final de 2026-07-08. Observação:
+    os testes atuais são scripts
     autoexecutáveis, não specs Mocha nativas; por isso o rodapé do Mocha mostra `0 passing`, enquanto os
     próprios scripts imprimem seus blocos com `0 falharam`.
   - `node scripts/build-core.js --config=Debug` passou.
-  - `ctest --test-dir core/build -C Debug --output-on-failure -E "esp32_devkitc_subcircuit"` passou 27/27.
+  - `ctest --test-dir core/build -C Debug --output-on-failure -E "esp32_devkitc_subcircuit|union_find"`
+    passou 27/27 (inclui `zener_led_test` novo, executado primeiro isoladamente pra evitar o dialog modal
+    do Windows CRT em caso de exceção não capturada -- ver `docs/21`).
   - `ctest --test-dir core/build -C Debug --output-on-failure` passou até `esp32_adapter` e ficou travado
     sem saída no teste `esp32_devkitc_subcircuit`; o processo foi encerrado manualmente para não deixar a
     sessão pendurada.
 
 Memória de continuidade: built-ins migrados não devem ganhar helpers internos paralelos; qualquer novo
 comportamento visual/pinagem precisa entrar como dado de `package` e ser interpretado pelo parser/renderer
-compartilhado. Para os casos arquiteturais restantes de Fase D, pedir decisão explícita antes de alterar
-fluxo global. A terceira etapa de EX-9 já extraiu `symbolAuthoring/symbolCommands.ts`; não reabrir este
-cluster dentro de `extension.ts` em trabalhos futuros.
+compartilhado. Isto agora inclui explicitamente os 15 built-ins finais de fidelidade visual listados acima,
+além de `switches.keypad`, `outputs.led_matrix`, `outputs.led_bar` e `active.analog_mux`. Para os casos
+arquiteturais restantes de Fase D, pedir decisão explícita antes de alterar fluxo global. A terceira etapa
+de EX-9 já extraiu `symbolAuthoring/symbolCommands.ts`; não reabrir este cluster dentro de `extension.ts`
+em trabalhos futuros.
 
 ## Método
 

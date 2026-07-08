@@ -955,6 +955,44 @@ import { PackageDescriptor } from "./model";
     assert(near(smallChan0.y, 8), `1o pino chan com channels=4 deveria continuar em y=8 (offset do grupo, independente da contagem de bits), recebido ${JSON.stringify(smallChan0)}`);
   });
 
+  await test("built-ins restantes de fidelidade visual vêm de package declarativo, sem helper interno", () => {
+    const ids = [
+      "passive.potentiometer",
+      "passive.resistor_dip",
+      "active.diode",
+      "active.zener",
+      "active.opamp",
+      "active.comparator",
+      "active.volt_regulator",
+      "outputs.led",
+      "outputs.led_rgb",
+      "outputs.seven_segment",
+      "outputs.dc_motor",
+      "outputs.stepper",
+      "outputs.incandescent_lamp",
+      "connectors.socket",
+      "connectors.header",
+    ];
+
+    for (const id of ids) {
+      const pkg = catalogPackage(id);
+      const props = id === "passive.resistor_dip" ? { size: 8 } : {};
+      const svg = componentSymbolSvg(id, props) ?? "";
+      assert(Boolean(pkg.simulidePaint?.source?.file), `${id} deveria documentar fonte SimulIDE no package.simulidePaint.source.file`);
+      assert(svg.includes("<"), `${id} deveria renderizar pelo pipeline packageSymbolSvg/componentSymbolSvg`);
+      assert(hasRealPinPosition(id, pkg.pins[0]!.id, props), `${id} deveria expor posicao real de pino pelo package`);
+    }
+
+    const diode = componentSymbolSvg("active.diode") ?? "";
+    assert(diode.includes("<polygon"), `active.diode deveria vir do polygon declarativo do package, markup: ${diode}`);
+
+    const socket = componentSymbolSvg("connectors.socket") ?? "";
+    assert((socket.match(/<ellipse/g) ?? []).length === 8, `connectors.socket deveria desenhar 8 furos via repeat do package, markup: ${socket}`);
+
+    const sevenSegment = componentSymbolSvg("outputs.seven_segment") ?? "";
+    assert((sevenSegment.match(/stroke="#3a1414"/g) ?? []).length >= 8, `outputs.seven_segment deveria desenhar segmentos e ponto pelo package, markup: ${sevenSegment}`);
+  });
+
   registerPackage("test.example", undefined);
   registerPackage("test.scaled", undefined);
   registerPackage("test.vertical", undefined);
