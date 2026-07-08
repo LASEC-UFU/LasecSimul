@@ -237,6 +237,31 @@ export interface ParsedSubcircuitManifest {
   serialPorts: ReturnType<typeof sanitizeMcuSerialPorts>;
 }
 
+function manifestFolderPath(json: Record<string, unknown>): string[] | undefined {
+  return Array.isArray(json.folderPath)
+    ? (json.folderPath as unknown[]).filter((s): s is string => typeof s === "string")
+    : undefined;
+}
+
+function manifestIconFields(json: Record<string, unknown>, manifestDir: string): Pick<ParsedSubcircuitManifest, "icon" | "iconSvgInline" | "iconFilePath"> {
+  const manifestIcon = typeof json.icon === "string" ? json.icon.trim() : undefined;
+  const iconSvgInline = manifestIcon?.startsWith("<svg") ? manifestIcon : undefined;
+  const iconFilePath = !iconSvgInline && typeof json.iconPath === "string" && json.iconPath.trim()
+    ? normalizeExistingFilePath(manifestDir, json.iconPath.trim())
+    : undefined;
+  return {
+    icon: !iconSvgInline ? manifestIcon : undefined,
+    iconSvgInline,
+    iconFilePath,
+  };
+}
+
+function manifestDefaultProperties(json: Record<string, unknown>, logicSymbolPackage: PackageDescriptor | undefined): Record<string, string | number | boolean> {
+  return logicSymbolPackage
+    ? { logicSymbol: false, ...sanitizeManifestDefaultProperties(json.defaultProperties) }
+    : sanitizeManifestDefaultProperties(json.defaultProperties);
+}
+
 /** Deriva os campos "de conteúdo" de um `.lssubcircuit` já lido (typeId/label/pinos/package/ícone)
  * -- compartilhado entre `resolveRegisteredItem`'s subcircuit-file branch (registro na paleta) e a
  * resolução do bloco genérico de subcircuito por caminho (`extension.ts::chooseSubcircuitFileCommand`/
@@ -254,14 +279,8 @@ export function parseSubcircuitManifest(json: Record<string, unknown>, manifestD
       ? ((json.package as { pins: unknown[] }).pins.length || 2)
       : 2;
   const pinCount = pinIds.length > 0 ? pinIds.length : (packageDescriptor ? packageDescriptor.pins.length : packagePins);
-  const folderPath = Array.isArray(json.folderPath)
-    ? (json.folderPath as unknown[]).filter((s): s is string => typeof s === "string")
-    : undefined;
-  const manifestIcon = typeof json.icon === "string" ? json.icon.trim() : undefined;
-  const iconSvgInline = manifestIcon?.startsWith("<svg") ? manifestIcon : undefined;
-  const iconFilePath = !iconSvgInline && typeof json.iconPath === "string" && json.iconPath.trim()
-    ? normalizeExistingFilePath(manifestDir, json.iconPath.trim())
-    : undefined;
+  const folderPath = manifestFolderPath(json);
+  const iconFields = manifestIconFields(json, manifestDir);
   const logicSymbolPackage = sanitizePackage(json.logicSymbolPackage, manifestDir);
   return {
     typeId,
@@ -270,12 +289,8 @@ export function parseSubcircuitManifest(json: Record<string, unknown>, manifestD
     pinCount,
     package: packageDescriptor,
     logicSymbolPackage,
-    icon: !iconSvgInline ? manifestIcon : undefined,
-    iconSvgInline,
-    iconFilePath,
-    defaultProperties: logicSymbolPackage
-      ? { logicSymbol: false, ...sanitizeManifestDefaultProperties(json.defaultProperties) }
-      : sanitizeManifestDefaultProperties(json.defaultProperties),
+    ...iconFields,
+    defaultProperties: manifestDefaultProperties(json, logicSymbolPackage),
     folderPath,
     mcuHost: manifestHostsMcu(json, mcuAdapterTypeIds),
     serialPorts: sanitizeMcuSerialPorts(json.serialPorts),
@@ -320,12 +335,10 @@ export function resolveRegisteredItem(source: RegisteredSource, extensionPath: s
       const pinCount = pinIds.length > 0
         ? pinIds.length
         : (packageDescriptor ? packageDescriptor.pins.length : 2);
-      const manifestFolderPath = Array.isArray(json.folderPath)
-        ? (json.folderPath as unknown[]).filter((s): s is string => typeof s === "string")
-        : undefined;
+      const parsedFolderPath = manifestFolderPath(json);
       const folderPath = resolveFolderPath({
         ...source,
-        folderPath: manifestFolderPath && manifestFolderPath.length > 0 ? manifestFolderPath : source.folderPath,
+        folderPath: parsedFolderPath && parsedFolderPath.length > 0 ? parsedFolderPath : source.folderPath,
       }, localizedRegisteredFolder(source.kind, language));
       const category = folderPath[0] ?? localizedRegisteredRoot(language);
       const subcategory = folderPath.length > 1 ? folderPath[1] : undefined;
@@ -334,13 +347,7 @@ export function resolveRegisteredItem(source: RegisteredSource, extensionPath: s
         : (source.libraryPath
           ? normalizeAbsolutePath(extensionPath, source.libraryPath)
           : inferLibraryPathForDevice(absoluteFilePath));
-      const manifestIcon = typeof json.icon === "string" ? json.icon.trim() : undefined;
-      const iconSvgInline = manifestIcon?.startsWith("<svg") ? manifestIcon : undefined;
-      // `iconPath` (thumbnail da paleta, distinto do símbolo `icon`/`package`) vem do próprio
-      // manifesto -- arquivo único, nunca de um sidecar separado.
-      const iconFilePath = !iconSvgInline && typeof json.iconPath === "string" && json.iconPath.trim()
-        ? normalizeExistingFilePath(path.dirname(absoluteFilePath), json.iconPath.trim())
-        : undefined;
+      const iconFields = manifestIconFields(json, path.dirname(absoluteFilePath));
       const EXTENSION_SIDE_INTERACTION_KINDS = new Set<string>(["joystick", "encoder", "touchpad"]);
       const manifestInteraction = typeof json.interaction === "string" ? json.interaction : undefined;
       const extensionInteractionKind: InteractionKindEntry | undefined =
@@ -353,15 +360,11 @@ export function resolveRegisteredItem(source: RegisteredSource, extensionPath: s
         label,
         pinCount,
         pinIds: pinIds.length > 0 ? pinIds : undefined,
-        defaultProperties: logicSymbolPackage
-          ? { logicSymbol: false, ...sanitizeManifestDefaultProperties(json.defaultProperties) }
-          : sanitizeManifestDefaultProperties(json.defaultProperties),
+        defaultProperties: manifestDefaultProperties(json, logicSymbolPackage),
         category,
         subcategory,
         folderPath,
-        icon: !iconSvgInline ? manifestIcon : undefined,
-        iconFilePath,
-        iconSvgInline,
+        ...iconFields,
         package: packageDescriptor,
         logicSymbolPackage,
         disabled: false,

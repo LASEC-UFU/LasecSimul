@@ -10,7 +10,7 @@
  * layout de pino são calculados a partir da caixa do tipo, nunca de uma constante global de tamanho.
  */
 
-import { ComponentViewSpec, JUNCTION_TYPE_ID, PackageDescriptor, PackagePin, PackageShape, SIMULIDE_PACKAGE_GRID_UNIT, SimulidePaintSpec, SimulideQtWidgetSpec, TUNNEL_TYPE_ID, ViewSpecHitTest } from "./model.js";
+import { ComponentViewSpec, JUNCTION_TYPE_ID, PackageDescriptor, PackageDynamicPinGroup, PackageNumberValue, PackagePin, PackageShape, SIMULIDE_PACKAGE_GRID_UNIT, SimulidePaintSpec, SimulideQtWidgetSpec, TUNNEL_TYPE_ID, ViewSpecHitTest } from "./model.js";
 import { simulidePaintToPackageShapes } from "./simulidePaint.js";
 
 export interface ComponentBox {
@@ -34,7 +34,23 @@ const TRIANGLE_AMP_BOX: ComponentBox = { width: 48, height: 32 };
 // corpo; a ponta real (onde o fio conecta) é `x + cos(angle)*length, y + sin(angle)*length` -- pode
 // cair fora de `0..width`/`0..height` (lead saindo da borda), por isso o layout é "resolvido" uma
 // vez (desloca tudo pra um espaço sem coordenada negativa) em vez de usar `width`/`height` crus.
-interface ResolvedPackagePin extends PackagePin {
+interface MaterializedPackagePin extends Omit<PackagePin, "x" | "y" | "angle" | "length" | "leadEndTrim" | "labelFontSize" | "labelSpace" | "labelX" | "labelY"> {
+  x: number;
+  y: number;
+  angle: number;
+  length: number;
+  leadEndTrim?: number;
+  labelFontSize?: number;
+  labelSpace?: number;
+  labelX?: number;
+  labelY?: number;
+}
+
+interface MaterializedPackageDescriptor extends Omit<PackageDescriptor, "pins"> {
+  pins: MaterializedPackagePin[];
+}
+
+interface ResolvedPackagePin extends MaterializedPackagePin {
   tipX: number;
   tipY: number;
 }
@@ -47,7 +63,7 @@ interface ResolvedPackage {
   scaleX: number;
   scaleY: number;
   pins: ResolvedPackagePin[];
-  source: PackageDescriptor;
+  source: MaterializedPackageDescriptor;
 }
 
 function rotatePoint(x: number, y: number, cx: number, cy: number, deg: number): { x: number; y: number } {
@@ -59,6 +75,101 @@ function rotatePoint(x: number, y: number, cx: number, cy: number, deg: number):
   return { x: cx + dx * cos - dy * sin, y: cy + dx * sin + dy * cos };
 }
 
+function numericPackageValue(value: PackageNumberValue | undefined, properties: Record<string, unknown> | undefined, context: Record<string, number>, fallback = 0): number {
+  if (typeof value === "number") return Number.isFinite(value) ? value : fallback;
+  if (!value) return fallback;
+  const rawBase = value.index
+    ? context[value.index] ?? value.fallback ?? fallback
+    : value.prop
+      ? (Number.isFinite(Number(properties?.[value.prop])) ? Number(properties?.[value.prop]) : value.fallback ?? fallback)
+      : value.fallback ?? fallback;
+  const base = value.transform === "log2Ceil" ? (rawBase > 1 ? Math.ceil(Math.log2(rawBase)) : 0) : rawBase;
+  let out = base * (value.multiplier ?? 1) + (value.offset ?? 0);
+  if (value.min !== undefined) out = Math.max(value.min, out);
+  if (value.max !== undefined) out = Math.min(value.max, out);
+  switch (value.round) {
+    case "round": return Math.round(out);
+    case "floor": return Math.floor(out);
+    case "ceil": return Math.ceil(out);
+    case "trunc": return Math.trunc(out);
+    default: return out;
+  }
+}
+
+function materializePin(pin: PackagePin, properties?: Record<string, unknown>, context: Record<string, number> = {}): MaterializedPackagePin {
+  return {
+    ...pin,
+    x: numericPackageValue(pin.x, properties, context),
+    y: numericPackageValue(pin.y, properties, context),
+    angle: numericPackageValue(pin.angle, properties, context),
+    length: numericPackageValue(pin.length, properties, context, 8),
+    leadEndTrim: pin.leadEndTrim === undefined ? undefined : numericPackageValue(pin.leadEndTrim, properties, context),
+    labelFontSize: pin.labelFontSize === undefined ? undefined : numericPackageValue(pin.labelFontSize, properties, context),
+    labelSpace: pin.labelSpace === undefined ? undefined : numericPackageValue(pin.labelSpace, properties, context),
+    labelX: pin.labelX === undefined ? undefined : numericPackageValue(pin.labelX, properties, context),
+    labelY: pin.labelY === undefined ? undefined : numericPackageValue(pin.labelY, properties, context),
+  };
+}
+
+/** Exportado pra ser reaproveitado por `extension.ts::pinsForTypeId` -- o número/id REAL de pinos
+ * elétricos que o Core recebe em `addComponent` precisa da MESMA fórmula usada aqui pro desenho
+ * (`dynamicLayout.pinGroups`), senão a Webview desenha um pino que não existe de verdade no Core
+ * (TR-9). Pura, sem DOM -- compilada tanto pelo host (`tsconfig.json`) quanto pela Webview. */
+export function materializePinGroup(group: PackageDynamicPinGroup, properties?: Record<string, unknown>): MaterializedPackagePin[] {
+  const rawCount = Number(properties?.[group.countProp]) || 0;
+  const count =
+    group.countFn === "log2Ceil"
+      ? (rawCount > 1 ? Math.ceil(Math.log2(rawCount)) : 0)
+      : Math.max(0, Math.trunc(rawCount));
+  const pins: MaterializedPackagePin[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const context = group.indexName ? { [group.indexName]: index } : { index };
+    const idNumber = Math.max(1, Math.trunc(numericPackageValue(group.idStart, properties, context, 1) + index));
+    pins.push({
+      id: `${group.idPrefix ?? "pin-"}${idNumber}`,
+      x: numericPackageValue(group.x, properties, context),
+      y: numericPackageValue(group.y, properties, context),
+      angle: numericPackageValue(group.angle, properties, context, 0),
+      length: numericPackageValue(group.length, properties, context, 8),
+      leadEndTrim: group.leadEndTrim === undefined ? undefined : numericPackageValue(group.leadEndTrim, properties, context),
+      leadOrigin: group.leadOrigin,
+      leadColor: group.leadColor,
+      label: group.label,
+    });
+  }
+  return pins;
+}
+
+function materializePackage(pkg: PackageDescriptor, properties?: Record<string, unknown>): MaterializedPackageDescriptor {
+  const dynamic = pkg.dynamicLayout;
+  const width = dynamic?.width === undefined ? pkg.width : numericPackageValue(dynamic.width, properties, {}, pkg.width);
+  const height = dynamic?.height === undefined ? pkg.height : numericPackageValue(dynamic.height, properties, {}, pkg.height);
+  const pins = [
+    ...(dynamic?.replacePins ? [] : pkg.pins.map((pin) => materializePin(pin, properties))),
+    ...(dynamic?.pinGroups ?? []).flatMap((group) => materializePinGroup(group, properties)),
+  ];
+  const simulidePaint = pkg.simulidePaint && dynamic?.simulideBounds
+    ? {
+        ...pkg.simulidePaint,
+        bounds: {
+          x: dynamic.simulideBounds.x === undefined ? pkg.simulidePaint.bounds.x : numericPackageValue(dynamic.simulideBounds.x, properties, {}, pkg.simulidePaint.bounds.x),
+          y: dynamic.simulideBounds.y === undefined ? pkg.simulidePaint.bounds.y : numericPackageValue(dynamic.simulideBounds.y, properties, {}, pkg.simulidePaint.bounds.y),
+          w: dynamic.simulideBounds.w === undefined ? pkg.simulidePaint.bounds.w : numericPackageValue(dynamic.simulideBounds.w, properties, {}, pkg.simulidePaint.bounds.w),
+          h: dynamic.simulideBounds.h === undefined ? pkg.simulidePaint.bounds.h : numericPackageValue(dynamic.simulideBounds.h, properties, {}, pkg.simulidePaint.bounds.h),
+        },
+      }
+    : pkg.simulidePaint;
+  return {
+    ...pkg,
+    width,
+    height,
+    schematicWidth: dynamic?.schematicWidth === undefined ? pkg.schematicWidth : numericPackageValue(dynamic.schematicWidth, properties, {}, pkg.schematicWidth ?? width),
+    schematicHeight: dynamic?.schematicHeight === undefined ? pkg.schematicHeight : numericPackageValue(dynamic.schematicHeight, properties, {}, pkg.schematicHeight ?? height),
+    simulidePaint,
+    pins,
+  };
+}
+
 /** Rotação de repouso arbitrária do símbolo (`PackageDescriptor.initialTransform`) -- pro caso de
  * devices que nascem girados no SimulIDE real (ex: `Probe::Probe()` faz `setRotation(rotation()-45)`
  * no construtor, algo que o modelo de rotação do schematic do LasecSimul -- só 0/90/180/270 -- não
@@ -68,7 +179,7 @@ function rotatePoint(x: number, y: number, cx: number, cy: number, deg: number):
  * usa a fórmula `180-angle` (não `angle` direto) pra achar o visualEnd -- rotacionar o VETOR
  * resultante corretamente exige SUBTRAIR `rotateDeg` do ângulo nesse modo (não somar); ver dedução em
  * `docs/20-diagnostico-renderizacao-simulide.md`. */
-function applyInitialTransformToPins(pkg: PackageDescriptor): PackagePin[] {
+function applyInitialTransformToPins(pkg: MaterializedPackageDescriptor): MaterializedPackagePin[] {
   const transform = pkg.initialTransform;
   if (!transform?.rotateDeg) return pkg.pins;
   const rotateDeg = transform.rotateDeg;
@@ -81,7 +192,7 @@ function applyInitialTransformToPins(pkg: PackageDescriptor): PackagePin[] {
   });
 }
 
-function resolvePackageLayout(pkgInput: PackageDescriptor): ResolvedPackage {
+function resolvePackageLayout(pkgInput: MaterializedPackageDescriptor): ResolvedPackage {
   const pkg = pkgInput.initialTransform?.rotateDeg ? { ...pkgInput, pins: applyInitialTransformToPins(pkgInput) } : pkgInput;
   let minX = 0;
   let minY = 0;
@@ -140,13 +251,13 @@ function resolvePackageLayout(pkgInput: PackageDescriptor): ResolvedPackage {
  * capturado em espaço de pixel nativo de uma foto/imagem (ex: `esp32_devkitc_v4.lssubcircuit`,
  * pinos capturados em coordenada de pixel da foto, sem equivalente no SimulIDE real onde pinos já
  * nascem autorados direto no espaço final) -- ver `docs/20-diagnostico-renderizacao-simulide.md`. */
-function packagePinElectricalPoint(pin: PackagePin): { x: number; y: number } {
+function packagePinElectricalPoint(pin: MaterializedPackagePin): { x: number; y: number } {
   if (pin.leadOrigin === "terminal") return { x: pin.x, y: pin.y };
   const rad = (pin.angle * Math.PI) / 180;
   return { x: pin.x + Math.cos(rad) * pin.length, y: pin.y + Math.sin(rad) * pin.length };
 }
 
-function packagePinVisualEnd(pin: PackagePin): { x: number; y: number } {
+function packagePinVisualEnd(pin: MaterializedPackagePin): { x: number; y: number } {
   if (pin.length === 0) return { x: pin.x, y: pin.y };
   const visualLength = Math.max(0, pin.length - (pin.leadEndTrim ?? 0));
   if (pin.leadOrigin === "terminal") {
@@ -157,23 +268,24 @@ function packagePinVisualEnd(pin: PackagePin): { x: number; y: number } {
   return { x: pin.x + Math.cos(rad) * visualLength, y: pin.y + Math.sin(rad) * visualLength };
 }
 
-const RESOLVED_PACKAGE_BY_TYPE_ID = new Map<string, ResolvedPackage>();
+const PACKAGE_BY_TYPE_ID = new Map<string, PackageDescriptor>();
 /** Aparência ALTERNATIVA opcional ("Chip or Logic Symbol", igual ao `SubPackage::Logic_Symbol` do
  * SimulIDE real -- booleano simples, não uma lista de N variantes). Mapa SEPARADO do padrão (não um
  * 2º registro no mesmo mapa) pra não precisar inventar uma chave composta -- escolhido em
  * `resolvedPackageFor` pela propriedade `logicSymbol` da INSTÂNCIA, ver model.ts
  * `WebviewComponentCatalogEntry.logicSymbolPackage`. */
-const RESOLVED_LOGIC_SYMBOL_PACKAGE_BY_TYPE_ID = new Map<string, ResolvedPackage>();
+const LOGIC_SYMBOL_PACKAGE_BY_TYPE_ID = new Map<string, PackageDescriptor>();
 
-/** Chamado quando o catálogo chega/atualiza (ver `main.ts`) -- cacheia o layout resolvido (cálculo
- * de deslocamento é o mesmo pra toda renderização do mesmo typeId, não precisa repetir por frame).
- * `undefined` remove (typeId sem package mais, ou catálogo recarregado do zero). */
+/** Chamado quando o catálogo chega/atualiza (ver `main.ts`) -- registra o descriptor original.
+ * O layout é materializado em `resolvedPackageFor` por instância, porque packages como KeyPad dependem
+ * de `properties` (`rows`/`columns`) para largura, altura e pinGroups. `undefined` remove (typeId sem
+ * package mais, ou catálogo recarregado do zero). */
 export function registerPackage(typeId: string, pkg: PackageDescriptor | undefined, logicSymbolPkg?: PackageDescriptor): void {
-  if (pkg && pkg.pins.length > 0) RESOLVED_PACKAGE_BY_TYPE_ID.set(typeId, resolvePackageLayout(pkg));
-  else RESOLVED_PACKAGE_BY_TYPE_ID.delete(typeId);
+  if (pkg && (pkg.pins.length > 0 || pkg.dynamicLayout?.pinGroups?.length)) PACKAGE_BY_TYPE_ID.set(typeId, pkg);
+  else PACKAGE_BY_TYPE_ID.delete(typeId);
 
-  if (logicSymbolPkg && logicSymbolPkg.pins.length > 0) RESOLVED_LOGIC_SYMBOL_PACKAGE_BY_TYPE_ID.set(typeId, resolvePackageLayout(logicSymbolPkg));
-  else RESOLVED_LOGIC_SYMBOL_PACKAGE_BY_TYPE_ID.delete(typeId);
+  if (logicSymbolPkg && (logicSymbolPkg.pins.length > 0 || logicSymbolPkg.dynamicLayout?.pinGroups?.length)) LOGIC_SYMBOL_PACKAGE_BY_TYPE_ID.set(typeId, logicSymbolPkg);
+  else LOGIC_SYMBOL_PACKAGE_BY_TYPE_ID.delete(typeId);
 }
 
 /** `properties.logicSymbol === true` E existe uma variante Logic Symbol registrada pra este typeId
@@ -181,10 +293,11 @@ export function registerPackage(typeId: string, pkg: PackageDescriptor | undefin
  * nenhuma -- chamadas legadas que só passam typeId) -> cai no `package` padrão de sempre. */
 function resolvedPackageFor(typeId: string, properties?: Record<string, unknown>): ResolvedPackage | undefined {
   if (properties?.logicSymbol === true) {
-    const logicSymbolResolved = RESOLVED_LOGIC_SYMBOL_PACKAGE_BY_TYPE_ID.get(typeId);
-    if (logicSymbolResolved) return logicSymbolResolved;
+    const logicSymbolPackage = LOGIC_SYMBOL_PACKAGE_BY_TYPE_ID.get(typeId);
+    if (logicSymbolPackage) return resolvePackageLayout(materializePackage(logicSymbolPackage, properties));
   }
-  return RESOLVED_PACKAGE_BY_TYPE_ID.get(typeId);
+  const pkg = PACKAGE_BY_TYPE_ID.get(typeId);
+  return pkg ? resolvePackageLayout(materializePackage(pkg, properties)) : undefined;
 }
 
 function packageInstanceScale(properties?: Record<string, unknown>): { x: number; y: number } {
@@ -742,7 +855,7 @@ function viewSpecBodySvg(pkg: PackageDescriptor, componentId: string, properties
  * `resolvePackageLayout` -- quem chama envolve isto num `<g transform="translate(offsetX,offsetY)">`,
  * ver `packageBodySvg`). O círculo do terminal em si (onde o clique conecta fio) é desenhado por
  * quem chama (`main.ts::renderComponent`), na posição JÁ deslocada devolvida por `pinLocalPosition`. */
-function packagePinLeadSvg(pin: PackagePin, resolved: ResolvedPackage, labelColor = "currentColor", properties?: Record<string, unknown>): string {
+function packagePinLeadSvg(pin: MaterializedPackagePin, resolved: ResolvedPackage, labelColor = "currentColor", properties?: Record<string, unknown>): string {
   const visualEnd = packagePinVisualEnd(pin);
   const electrical = packagePinElectricalPoint(pin);
   const tipNativeX = electrical.x;
@@ -999,21 +1112,8 @@ function builtinComponentBox(typeId: string): ComponentBox | undefined {
     case "other.package_pin": return { width: 24, height: 24 };
     case "other.test_unit": return { width: 32, height: 32 }; // other/testunit.cpp (IoComponent generico)
     case "other.dial": return { width: 40, height: 40 }; // other/dial.cpp: knob nativo (QDial) -- estilizacao vetorial menor que antes
-    case "other.ground": return { width: 16, height: 18 }; // sources/ground.cpp
-
-    case "passive.resistor": return COMP2PIN_BOX; // comp2pin.cpp
-    case "passive.variable_resistor": return { width: 40, height: 24 };
     case "passive.resistor_dip": return { width: 24, height: 68 }; // passive/resistordip.cpp
     case "passive.potentiometer": return { width: 40, height: 32 };
-    case "passive.ldr": return { width: 40, height: 24 };
-    case "passive.thermistor": return { width: 40, height: 24 };
-    case "passive.rtd": return { width: 40, height: 24 };
-    case "passive.force_strain_gauge": return { width: 40, height: 24 };
-    case "passive.capacitor": return COMP2PIN_BOX;
-    case "passive.electrolytic_capacitor": return { width: 36, height: 20 };
-    case "passive.variable_capacitor": return { width: 40, height: 24 };
-    case "passive.inductor": return COMP2PIN_BOX;
-    case "passive.variable_inductor": return { width: 40, height: 24 };
 
     case "logic.button": return COMP2PIN_BOX;
 
@@ -1038,23 +1138,6 @@ function builtinComponentBox(typeId: string): ComponentBox | undefined {
     case "outputs.dc_motor": return { width: 80, height: 66 };
     case "outputs.stepper": return { width: 114, height: 100 };
     case "outputs.incandescent_lamp": return { width: 32, height: 32 };
-
-    case "instruments.voltmeter": return SMALL_METER_BOX;
-    case "meters.probe": return { width: 30, height: 16 };
-    case "meters.ampmeter": return SMALL_METER_BOX;
-    case "meters.freqmeter": return { width: 93, height: 20 };
-    case "meters.oscope": return { width: 260, height: 180 };
-    case "meters.logic_analyzer": return { width: 260, height: 212 };
-
-    case "sources.dc_voltage": return { width: 64, height: 48 };
-    case "sources.fixed_volt": return { width: 48, height: 16 }; // botao proxy 16x16 + corpo 16x16 + pino
-    case "sources.clock": return { width: 48, height: 16 }; // botao proxy herdado + m_area 22x16 + pino
-    case "sources.wave_gen": return { width: 48, height: 16 }; // idem Clock, 2 pinos (out/gnd)
-    case "sources.voltage_source": return { width: 48, height: 56 }; // sources/voltsource.cpp+varsource.cpp: WIDTH=40,HEIGHT=56 + pino em (28,16)
-    case "sources.current_source": return { width: 48, height: 56 }; // sources/currsource.cpp+varsource.cpp
-    case "sources.controlled_source": return { width: 40, height: 40 }; // sources/csource.cpp: m_area 32x32 + pinos de controle em x=-24
-    case "sources.battery": return { width: 32, height: 20 }; // sources/battery.cpp (Comp2Pin): m_area 20x20, pinos herdados em x=±16
-    case "sources.rail": return { width: 16, height: 20 }; // sources/rail.cpp: setRotation(90) no construtor -- funil aponta pra baixo
 
     default: return undefined;
   }
@@ -1218,18 +1301,6 @@ export function pinLocalPosition(pinId: string, pinIndex: number, pinCount: numb
   }
   switch (typeId) {
     // SimulIDE Comp2Pin: src/components/comp2pin.cpp
-    case "passive.resistor":
-    case "passive.capacitor":
-    case "passive.inductor":
-    case "passive.variable_resistor":
-    case "passive.ldr":
-    case "passive.thermistor":
-    case "passive.rtd":
-    case "passive.force_strain_gauge":
-    case "passive.electrolytic_capacitor":
-    case "passive.variable_capacitor":
-    case "passive.variable_inductor":
-    case "sources.battery":
     case "active.diode":
     case "active.zener":
     case "outputs.led":
@@ -1252,31 +1323,6 @@ export function pinLocalPosition(pinId: string, pinIndex: number, pinCount: numb
       if (pinIndex === 1) return { x: 24, y: 8 };
       if (pinIndex === 2) return { x: 12, y: 20 };
       break;
-    case "sources.voltage_source":
-    case "sources.current_source":
-      // voltsource.cpp/currsource.cpp: pino real em (28,16) local dentro de m_area(-20,-28,40,56)
-      // -- deslocado (+20,+28) fica (48,44), na borda direita perto da caixa de valor, NÃO no meio
-      // vertical da caixa toda (46% da altura, não 50%).
-      if (pinCount <= 1) return { x: box.width, y: 44 };
-      break;
-    case "sources.controlled_source":
-      // csource.cpp: 4 pinos reais -- 2 de controle (+/-) à ESQUERDA da moldura quadrada (que já
-      // começa 8px depois da borda da caixa, ver componentSymbolSvg) + 2 de fonte (topo/baixo) no
-      // meio do diamante. Caixa antiga (36x36) não tinha espaço pros pinos de controle, que no real
-      // saem 8px além da moldura.
-      if (pinIndex === 0) return { x: 0, y: 12 };
-      if (pinIndex === 1) return { x: 0, y: 28 };
-      if (pinIndex === 2) return { x: 24, y: 0 };
-      if (pinIndex === 3) return { x: 24, y: 40 };
-      break;
-    case "sources.clock":
-      if (pinCount <= 1) return { x: box.width, y: box.height / 2 };
-      break;
-    case "sources.wave_gen":
-      // wavegen.cpp: 2 pinos reais, AMBOS do lado direito (out em cima, gnd embaixo) -- não um de
-      // cada lado (fallback genérico jogava o 2º pino pra esquerda, sem nenhum traço desenhado lá).
-      if (pinIndex === 0) return { x: box.width, y: 4 };
-      return { x: box.width, y: 12 };
     // potentiometer.cpp: pins[0]/[1] são as pontas A/B (Core stampa conductance entre elas e o
     // wiper, ver SimulidePotentiometer::stamp) -- esquerda/direita, na mesma convenção compacta
     // 0/width usada pelo `horizontalLeads` (ver componentSymbolSvg). pins[2] é o wiper embaixo, no
@@ -1286,32 +1332,6 @@ export function pinLocalPosition(pinId: string, pinIndex: number, pinCount: numb
       if (pinIndex === 0) return { x: 0, y: box.height / 2 };
       if (pinIndex === 1) return { x: box.width, y: box.height / 2 };
       return { x: box.width / 2, y: box.height - PIN_INSET };
-  }
-  if (typeId === "sources.fixed_volt" && pinCount <= 1) {
-    return { x: box.width, y: box.height / 2 };
-  }
-  if (typeId === "sources.rail" && pinCount <= 1) {
-    // rail.cpp: pino sai da ponta ESTREITA do funil, embaixo (ver componentSymbolSvg) -- não do
-    // lado direito (bug: era desenhado como bandeirola horizontal, sem base real no `setRotation(90)`
-    // do construtor real).
-    return { x: box.width / 2, y: box.height };
-  }
-  if (typeId === "meters.probe" && pinCount <= 1) {
-    return { x: 0, y: box.height / 2 };
-  }
-  if ((typeId === "meters.ampmeter" || typeId === "instruments.voltmeter") && pinCount >= 3) {
-    if (pinIndex === 0) return { x: 16, y: box.height };
-    if (pinIndex === 1) return { x: 32, y: box.height };
-    return { x: box.width, y: 16 };
-  }
-  if (typeId === "meters.freqmeter" && pinCount <= 1) {
-    return { x: 0, y: box.height / 2 };
-  }
-  if (typeId === "meters.oscope") {
-    return { x: PIN_INSET, y: 28 + pinIndex * 28 };
-  }
-  if (typeId === "meters.logic_analyzer") {
-    return { x: PIN_INSET, y: 20 + pinIndex * 20 };
   }
   if (pinCount <= 1) return { x: box.width / 2, y: PIN_INSET };
 
@@ -1500,45 +1520,6 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
     extra;
 
   switch (typeId) {
-    case "passive.resistor":
-    case "passive.variable_resistor":
-    case "passive.ldr":
-    case "passive.thermistor":
-    case "passive.rtd": {
-      const amplitude = box.height / 2 - 5;
-      // Marcas reais por tipo (coordenadas relativas ao centro do corpo, mesmos valores de
-      // `ldr.cpp`/`thermistorbase.cpp`/`rtd.cpp`) -- antes cada um só ganhava as 3 primeiras letras
-      // do typeId como texto ("LDR"/"THE"/"RTD"), sem nenhuma relação com o desenho real.
-      let mark = "";
-      if (typeId === "passive.variable_resistor") {
-        mark = `<line x1="${midX - 12}" y1="${yMid + 14}" x2="${midX + 12}" y2="${yMid - 14}" class="symbol-stroke symbol-stroke--accent"/>`;
-      } else if (typeId === "passive.ldr") {
-        mark =
-          `<path d="M ${midX - 5} ${yMid - 11} L ${midX - 1} ${yMid - 7} M ${midX - 1} ${yMid - 7} L ${midX - 1} ${yMid - 9} M ${midX - 1} ${yMid - 7} L ${midX - 3} ${yMid - 7}" class="symbol-stroke symbol-stroke--accent" fill="none"/>` +
-          `<path d="M ${midX + 5} ${yMid - 11} L ${midX + 1} ${yMid - 7} M ${midX + 1} ${yMid - 7} L ${midX + 1} ${yMid - 9} M ${midX + 1} ${yMid - 7} L ${midX + 3} ${yMid - 7}" class="symbol-stroke symbol-stroke--accent" fill="none"/>`;
-      } else if (typeId === "passive.thermistor") {
-        mark = `<path d="M ${midX - 8} ${yMid + 6} L ${midX + 6} ${yMid - 8} L ${midX + 10} ${yMid - 8}" class="symbol-stroke symbol-stroke--accent" fill="none"/>`;
-      } else if (typeId === "passive.rtd") {
-        mark =
-          `<line x1="${midX - 6}" y1="${yMid + 6}" x2="${midX + 8}" y2="${yMid - 8}" class="symbol-stroke symbol-stroke--accent"/>` +
-          `<text x="${midX - 8}" y="${yMid - 6}" text-anchor="middle" class="symbol-text" style="font-size:7px">+t&#176;</text>`;
-      }
-      return horizontalLeads(box, yMid) + `<path d="${zigzagPath(x1, x2, yMid, amplitude, 3)}" class="symbol-stroke"/>` + mark;
-    }
-
-    case "passive.force_strain_gauge": {
-      // strain.cpp: NADA a ver com o corpo zigzag de resistor -- retangulo (corpo do sensor) + 2
-      // abas de fixacao (quadrados preenchidos) + grade zigzag de 8 pontos (as trilhas do extensometro).
-      const bodyHalfW = 11, bodyHalfH = 12;
-      return (
-        horizontalLeads(box, yMid) +
-        `<rect x="${midX - bodyHalfW}" y="${yMid - bodyHalfH}" width="${bodyHalfW * 2}" height="${bodyHalfH * 2}" class="symbol-stroke" fill="none"/>` +
-        `<rect x="${midX - 8}" y="${yMid - 2}" width="4" height="4" fill="currentColor"/>` +
-        `<rect x="${midX + 4}" y="${yMid - 2}" width="4" height="4" fill="currentColor"/>` +
-        `<path d="M ${midX - 6} ${yMid} L ${midX - 6} ${yMid - 16} L ${midX - 2} ${yMid - 16} L ${midX - 2} ${yMid - 4} L ${midX + 2} ${yMid - 4} L ${midX + 2} ${yMid - 16} L ${midX + 6} ${yMid - 16} L ${midX + 6} ${yMid}" class="symbol-stroke" fill="none"/>`
-      );
-    }
-
     case "passive.resistor_dip": {
       // resistordip.cpp: retangulo simples do corpo do CI (sem zigue-zague nenhum dentro -- os
       // resistores individuais nao sao desenhados, só o encapsulamento) + N pares de pino (8 default).
@@ -1553,56 +1534,6 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
         `<line x1="${midX}" y1="${box.height - PIN_INSET}" x2="${midX}" y2="${yMid + 7}" class="symbol-stroke"/>` +
         `<path d="M ${midX - 7} ${yMid + 9} L ${midX} ${yMid + 2} L ${midX + 7} ${yMid + 9}" class="symbol-stroke" fill="none"/>`
       );
-
-    case "passive.capacitor": {
-      // capacitorbase.cpp: placas ocupam quase a altura toda do corpo (12 de 16, ~75%) -- a formula
-      // antiga (`box.height/2-6`) dava só 25% (4px), placas curtas demais (bug relatado 2026-07-04).
-      const plateHalfLength = yMid - 2;
-      return (
-        horizontalLeads(box, yMid) +
-        `<line x1="${x1}" y1="${yMid}" x2="${midX - 5}" y2="${yMid}" class="symbol-stroke"/>` +
-        `<line x1="${midX + 5}" y1="${yMid}" x2="${x2}" y2="${yMid}" class="symbol-stroke"/>` +
-        `<line x1="${midX - 5}" y1="${(yMid - plateHalfLength).toFixed(1)}" x2="${midX - 5}" y2="${(yMid + plateHalfLength).toFixed(1)}" class="symbol-stroke symbol-stroke--thick"/>` +
-        `<line x1="${midX + 5}" y1="${(yMid - plateHalfLength).toFixed(1)}" x2="${midX + 5}" y2="${(yMid + plateHalfLength).toFixed(1)}" class="symbol-stroke symbol-stroke--thick"/>`
-      );
-    }
-
-    case "passive.electrolytic_capacitor": {
-      // elcapacitor.cpp: placa direita reta + placa esquerda em formato de "balde" (3 segmentos) --
-      // a polaridade é transmitida pela geometria da placa, nunca por um texto "+" solto.
-      const plateHalfLength = yMid - 2;
-      return (
-        horizontalLeads(box, yMid) +
-        `<line x1="${x1}" y1="${yMid}" x2="${midX - 5}" y2="${yMid}" class="symbol-stroke"/>` +
-        `<line x1="${midX + 5}" y1="${yMid}" x2="${x2}" y2="${yMid}" class="symbol-stroke"/>` +
-        `<line x1="${midX + 5}" y1="${(yMid - plateHalfLength).toFixed(1)}" x2="${midX + 5}" y2="${(yMid + plateHalfLength).toFixed(1)}" class="symbol-stroke symbol-stroke--thick"/>` +
-        `<path d="M ${midX - 5} ${(yMid - plateHalfLength).toFixed(1)} L ${midX + 5} ${(yMid - plateHalfLength).toFixed(1)} M ${midX - 5} ${(yMid + plateHalfLength).toFixed(1)} L ${midX + 5} ${(yMid + plateHalfLength).toFixed(1)} M ${midX - 5} ${(yMid - plateHalfLength / 2).toFixed(1)} L ${midX - 5} ${(yMid + plateHalfLength / 2).toFixed(1)}" class="symbol-stroke symbol-stroke--thick" fill="none"/>`
-      );
-    }
-
-    case "passive.variable_capacitor":
-      return componentSymbolSvg("passive.capacitor") +
-        `<line x1="${midX - 18}" y1="${yMid + 16}" x2="${midX + 18}" y2="${yMid - 16}" class="symbol-stroke symbol-stroke--accent"/>`;
-
-    case "passive.inductor": {
-      const loopWidth = (x2 - x1) / 3;
-      const ry = box.height / 2 - 5;
-      let arcs = horizontalLeads(box, yMid);
-      for (let i = 0; i < 3; i++) {
-        const cx = x1 + loopWidth * (i + 0.5);
-        const left = (cx - loopWidth / 2).toFixed(1);
-        const right = (cx + loopWidth / 2).toFixed(1);
-        arcs += `<path d="M ${left} ${yMid} A ${(loopWidth / 2).toFixed(1)} ${ry.toFixed(1)} 0 1 1 ${right} ${yMid}" class="symbol-stroke"/>`;
-      }
-      return arcs;
-    }
-
-    case "passive.variable_inductor":
-      return componentSymbolSvg("passive.inductor") +
-        `<line x1="${midX - 18}" y1="${yMid + 14}" x2="${midX + 18}" y2="${yMid - 14}" class="symbol-stroke symbol-stroke--accent"/>`;
-
-    case "other.ground":
-      return builtinPaintSvg(GROUND_PAINT, box);
 
     case TUNNEL_TYPE_ID:
       return builtinPaintSvg(tunnelPaintSpec(properties), box, properties);
@@ -1749,18 +1680,6 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
       // (`qDialKnobSvg`), já que é o mesmo widget real por trás dos dois, em vez de manter dois
       // desenhos diferentes pra aproximar a mesma peça.
       return qDialKnobSvg(midX, yMid, Math.min(midX, yMid) - 2);
-
-    case "sources.dc_voltage":
-      return (
-        horizontalLeads(box, yMid) +
-        `<line x1="${x1}" y1="${yMid}" x2="${midX - 14}" y2="${yMid}" class="symbol-stroke"/>` +
-        `<line x1="${midX + 14}" y1="${yMid}" x2="${x2}" y2="${yMid}" class="symbol-stroke"/>` +
-        `<circle cx="${midX}" cy="${yMid}" r="14" class="symbol-stroke" fill="none"/>` +
-        `<text x="${midX - 7}" y="${yMid + 5}" text-anchor="middle" class="symbol-text">+</text>` +
-        `<text x="${midX + 7}" y="${yMid + 5}" text-anchor="middle" class="symbol-text">&#8722;</text>` +
-        `<line x1="${PIN_INSET}" y1="${yMid - 7}" x2="${PIN_INSET}" y2="${yMid + 7}" class="symbol-stroke symbol-stroke--accent"/>` +
-        `<line x1="${box.width - PIN_INSET - 6}" y1="${yMid}" x2="${box.width - PIN_INSET + 6}" y2="${yMid}" class="symbol-stroke symbol-stroke--accent"/>`
-      );
 
     case "logic.button": {
       const rise = box.height / 2 - 5;
@@ -1953,92 +1872,6 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
         `<circle cx="${midX}" cy="${yMid}" r="14" class="symbol-stroke" fill="none"/>` +
         `<path d="M ${midX - 8} ${yMid - 8} L ${midX + 8} ${yMid + 8} M ${midX + 8} ${yMid - 8} L ${midX - 8} ${yMid + 8}" class="symbol-stroke"/>`
       );
-
-    case "instruments.voltmeter":
-      // O manifesto não declara `symbolSvg` próprio (o antigo círculo+"V" tinha leads
-      // horizontais em y=24 que nunca bateram com a posição real do pino, calculada pra ESTE
-      // desenho -- ver pinLocalPosition acima). O 3º pino ("outPin", saída analógica da leitura, ver
-      // devices/voltmeter/src/lib.c) usa o terminal da direita desenhado por smallMeterDisplaySvg.
-      return smallMeterDisplaySvg(box, "V", symbolReadoutNumber(properties));
-
-    // ── Medidores (pasta "Meters" do SimulIDE) ──────────────────────────────────
-    case "meters.probe": {
-      // probe.cpp: o círculo é preenchido dinamicamente conforme o sinal medido (laranja acima do
-      // limiar, azul abaixo, lavanda-claro no meio) -- antes sempre `fill="none"`, nunca refletia a
-      // leitura.
-      const showVolt = properties?.showVolt !== false;
-      const reading = symbolReadoutNumber(properties);
-      const threshold = 2.5;
-      const fill = reading === undefined ? "#e6e6ff" : reading > threshold ? "#ffa600" : reading < -threshold ? "#0064ff" : "#e6e6ff";
-      // probe.cpp: circulo real (drawEllipse(-8,-8,16,16)) fica encostado na borda direita de
-      // m_area, nao centralizado com folga dos dois lados -- cx=22 (nao 20) faz o traco do pino
-      // tocar exatamente a borda do circulo (era 2px curto antes).
-      return (
-        `<line x1="0" y1="8" x2="14" y2="8" class="symbol-stroke"/>` +
-        `<ellipse cx="22" cy="8" rx="8" ry="8" class="symbol-stroke" fill="${fill}"/>` +
-        (showVolt ? `<text x="34" y="6" class="probe-voltage-label">${escapeXmlText(formatRailVoltage(reading ?? 0))} V</text>` : "")
-      );
-    }
-
-    case "meters.ampmeter":
-      return smallMeterDisplaySvg(box, "A", symbolReadoutNumber(properties));
-
-    case "meters.freqmeter":
-      return (
-        `<rect x="8" y="0" width="85" height="20" rx="1" class="meter-lcd"/>` +
-        `<rect x="0" y="${yMid - 3}" width="8" height="6" rx="3" fill="currentColor"/>` +
-        `<text x="13" y="${yMid + 5}" class="freq-lcd-value">${escapeXmlText(formatHz(symbolReadoutNumber(properties)))}</text>`
-      );
-
-    case "meters.oscope":
-      // Caixa preta com uma forma de onda simplificada -- mesmo espírito do Oscope::paint (corpo
-      // preenchido) sem a janela de plotagem real (ver docstring de Oscope.hpp no Core).
-      return scopePanelSvg(properties);
-
-    case "meters.logic_analyzer":
-      return logicAnalyzerPanelSvg(properties);
-
-    // ── Fontes (pasta "Sources" do SimulIDE) ────────────────────────────────────
-    case "sources.fixed_volt":
-      return builtinPaintSvg(fixedVoltPaint(), box, properties);
-
-    case "sources.clock":
-      return builtinPaintSvg(clockLikePaint(CLOCK_PULSE_PATH, "one"), box, properties);
-
-    case "sources.wave_gen":
-      return builtinPaintSvg(clockLikePaint(WAVE_GEN_SINE_PATH, "two"), box, properties);
-
-    case "sources.voltage_source":
-    case "sources.current_source": {
-      // varsource.cpp: `paint()` preenche o `m_area` INTEIRO (40x56) com um painel cinza-claro
-      // arredondado (230,230,230) ANTES do QDial nativo -- faltava esse painel de fundo (só o
-      // botão de valor tinha fundo próprio antes, deixando o dial "flutuando" sem moldura, bug
-      // relatado 2026-07-05). QDial via `qDialKnobSvg` (mesmo widget de `other.dial`).
-      const unit = typeId === "sources.voltage_source" ? "V" : "A";
-      const value = typeof properties?.value === "number" ? properties.value : unit === "V" ? 5 : 1;
-      return (
-        `<rect x="0" y="0" width="40" height="56" rx="2" fill="#e6e6e6" stroke="#464646" stroke-width="1.5"/>` +
-        qDialKnobSvg(20, 19, 16) +
-        `<rect x="4" y="39" width="32" height="14" rx="2" fill="#f2f2f2" stroke="#464646" stroke-width="1"/>` +
-        `<text x="20" y="49" text-anchor="middle" class="symbol-text" style="font-size:9px">${escapeXmlText(formatRailVoltage(value))} ${unit}</text>` +
-        `<line x1="40" y1="44" x2="48" y2="44" class="symbol-stroke"/>`
-      );
-    }
-
-    case "sources.controlled_source":
-      return builtinPaintSvg(CONTROLLED_SOURCE_PAINT, box);
-
-    case "sources.battery":
-      return builtinPaintSvg(BATTERY_PAINT, box);
-
-    case "sources.rail": {
-      const voltage = typeof properties?.voltage === "number" ? properties.voltage : 5.0;
-      const label = `${formatRailVoltage(voltage)} V`;
-      return (
-        builtinPaintSvg(RAIL_PAINT, box) +
-        `<text x="8" y="-2" text-anchor="middle" class="rail-voltage-label">${escapeXmlText(label)}</text>`
-      );
-    }
 
     default:
       return horizontalLeads(box, yMid) + `<rect x="${x1}" y="${yMid - 10}" width="${x2 - x1}" height="20" class="symbol-stroke" fill="none"/>`;

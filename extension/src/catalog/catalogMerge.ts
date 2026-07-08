@@ -49,6 +49,7 @@ export function toWebviewPropertySchema(dto: PropertySchemaDto): PropertySchemaE
     hidden: dto.hidden,
     readOnly: dto.readOnly,
     showOnSymbol: dto.showOnSymbol,
+    affectsPinCount: dto.affectsPinCount,
   };
 }
 

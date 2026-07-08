@@ -1,4 +1,5 @@
 #include "CoreApplication.hpp"
+#include <algorithm>
 #include "../ipc/IpcServer.hpp"
 #include "../ipc/Protocol.hpp"
 #include "../plugins/GlobalPluginCache.hpp"
@@ -340,11 +341,18 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
     registerBuiltinMetadata("switches.relay", "Relay (all)", components::SimulideRelay::propertySchema(),
                             englishName("Relay (all)"));
 
+    // Limite de 8 rows/8 columns (16 pinos no máximo) -- mesma ordem de grandeza do maior builtin de
+    // pino fixo já existente (`switches.switch_dip`, 16 pinos). Sem isto `rows`/`columns` seriam
+    // ilimitados (`numberSchema` só tinha `minValue` até esta mudança) e o pino sintético que
+    // `makePinVector` cria pra preencher o que faltar (`Pin{}`, sem id/posição reais) apareceria como
+    // pino "fantasma" sem conexão elétrica real -- TR-9.
     std::vector<PropertySchema> keypadSchema{
         components::detail::boolSchema("diodes", "Diodos", false),
         components::detail::boolSchema("diodesDirection", "Direcao dos Diodos", false),
-        components::detail::numberSchema("rows", "Linhas", "", 4.0, 1.0, 1.0, PropertySchemaAffectsTopology),
-        components::detail::numberSchema("columns", "Colunas", "", 4.0, 1.0, 1.0, PropertySchemaAffectsTopology),
+        components::detail::numberSchema("rows", "Linhas", "", 4.0, 1.0, 1.0,
+                                         PropertySchemaAffectsTopology | PropertySchemaAffectsPinCount, 8.0),
+        components::detail::numberSchema("columns", "Colunas", "", 4.0, 1.0, 1.0,
+                                         PropertySchemaAffectsTopology | PropertySchemaAffectsPinCount, 8.0),
         components::detail::textSchema("keyLabels", "Rotulos", "123A456B789C*0#D")};
     // keypad.cpp real: addPropGroup({tr("Main"), {diodes, direction, rows, cols, keyLabels}, 0}) --
     // as 5 propriedades ficam no MESMO grupo/aba. numberSchema/boolSchema/textSchema tem grupo
@@ -353,8 +361,14 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
     // teclas" cai numa aba/seção separada de "Linhas"/"Colunas" na Webview (bug relatado: usuário
     // via os campos numéricos mas achava que faltava o campo de rótulos).
     for (PropertySchema& schema : keypadSchema) schema.group = "Principal";
-    reg.registerFactory("switches.keypad", [&, keypadSchema](const ComponentParams& p) {
-        return std::make_unique<components::SimulidePassiveState>("switches.keypad", makePinVector(p, 8), keypadSchema);
+    // Pinos = rows+columns, igual ao `keypad.cpp` real do SimulIDE (`m_pin[m_rows+col]`, matriz de
+    // varredura -- nunca rows*columns). Dado declarado (`ComponentPinSpec`), não fórmula escrita à
+    // mão -- `SimulidePassiveState` resolve isto na criação E a cada edição de `rows`/`columns`
+    // (`PropertySchemaAffectsPinCount`), via `resolveDynamicPins` (único intérprete do projeto).
+    const ComponentPinSpec keypadPinSpec{{}, {{"pin-", "rows"}, {"pin-", "columns"}}};
+    reg.registerFactory("switches.keypad", [&, keypadSchema, keypadPinSpec](const ComponentParams& p) {
+        return std::make_unique<components::SimulidePassiveState>("switches.keypad", makePinVector(p, 8), keypadSchema,
+                                                                   p.properties, keypadPinSpec);
     });
     registerBuiltinMetadata("switches.keypad", "KeyPad", keypadSchema, englishName("KeyPad"));
 
@@ -391,10 +405,20 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
     });
     registerBuiltinMetadata("active.comparator", "Comparator", opAmpSchema, englishName("Comparator"));
 
+    // `mux_analog.cpp` real do SimulIDE: pinos = Z (saída) + enable + `addrBits` (linhas de
+    // endereço) + `2^addrBits` (canais) -- default `addrBits=3` -> 8 canais (`setAddrBits(3)`).
+    // Aqui "channels" é o Nº DE CANAIS diretamente (mais intuitivo que expor `addrBits` bruto na
+    // UI) -- `addrBits` é DERIVADO via `Log2Ceil`, nunca um segundo campo editável. Default
+    // corrigido pra 8.0 (igual ao SimulIDE real) -- o valor antigo (3.0) media "canais" contra um
+    // pino fixo de 5, sem relação real com `addrBits`; 64 de teto é folga generosa (7 bits de
+    // endereço, 73 pinos), não um limite físico conhecido do componente.
     std::vector<PropertySchema> muxAnalogSchema{
-        components::detail::numberSchema("channels", "Canais", "", 3.0, 1.0, 1.0, PropertySchemaAffectsTopology)};
-    reg.registerFactory("active.analog_mux", [&, muxAnalogSchema](const ComponentParams& p) {
-        return std::make_unique<components::SimulidePassiveState>("active.analog_mux", makePinVector(p, 5), muxAnalogSchema);
+        components::detail::numberSchema("channels", "Canais", "", 8.0, 1.0, 1.0,
+                                         PropertySchemaAffectsTopology | PropertySchemaAffectsPinCount, 64.0)};
+    const ComponentPinSpec muxAnalogPinSpec{{"z", "en"}, {{"addr-", "channels", DynamicPinCountFn::Log2Ceil}, {"chan-", "channels"}}};
+    reg.registerFactory("active.analog_mux", [&, muxAnalogSchema, muxAnalogPinSpec](const ComponentParams& p) {
+        return std::make_unique<components::SimulidePassiveState>("active.analog_mux", makePinVector(p, 5), muxAnalogSchema,
+                                                                   p.properties, muxAnalogPinSpec);
     });
     registerBuiltinMetadata("active.analog_mux", "Analog Mux", muxAnalogSchema, englishName("Analog Mux"));
 
@@ -405,20 +429,34 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
                             components::SimulideVoltageRegulator::propertySchema(), englishName("Volt. Regulator"));
 
     const auto registerOutputState = [&](const std::string& typeId, const std::string& label, size_t pinCount,
-                                         std::vector<PropertySchema> schema) {
-        reg.registerFactory(typeId, [&, typeId, pinCount, schema](const ComponentParams& p) {
-            return std::make_unique<components::SimulidePassiveState>(typeId, makePinVector(p, pinCount), schema);
+                                         std::vector<PropertySchema> schema,
+                                         std::optional<ComponentPinSpec> pinSpec = std::nullopt) {
+        reg.registerFactory(typeId, [&, typeId, pinCount, schema, pinSpec](const ComponentParams& p) {
+            return std::make_unique<components::SimulidePassiveState>(typeId, makePinVector(p, pinCount), schema,
+                                                                       p.properties, pinSpec);
         });
         registerBuiltinMetadata(typeId, label, schema, englishName(label));
     };
     registerDiodeLike("outputs.led", "Led", 2.0);
     registerOutputState("outputs.led_rgb", "Led Rgb", 4,
                         {components::detail::numberSchema("threshold", "Tensao Direta", "V", 2.0, 0.0, 0.01)});
+    // `ledbar.cpp` real: `m_pin.resize(m_size*2)` -- par P/N por LED (`pinP`/`pinN`), nunca 1 pino
+    // por LED. Dois grupos independentes na MESMA propriedade `size`, ids `pin-P1..PN`/`pin-N1..NN`
+    // (ordem P1..PN,N1..NN -- difere da intercalação do SimulIDE real, P1,N1,P2,N2,..., mas o `id`
+    // é opaco pro Core; quem intercala pra bater com o desenho é o `dynamicLayout` da Extension,
+    // que é livre pra escolher a própria ordem contanto que os MESMOS ids apareçam dos dois lados).
     registerOutputState("outputs.led_bar", "Led Bar", 16,
-                        {components::detail::numberSchema("size", "Tamanho", "Leds", 8.0, 1.0, 1.0, PropertySchemaAffectsTopology)});
+                        {components::detail::numberSchema("size", "Tamanho", "Leds", 8.0, 1.0, 1.0,
+                                                          PropertySchemaAffectsTopology | PropertySchemaAffectsPinCount, 32.0)},
+                        ComponentPinSpec{{}, {{"pin-P", "size"}, {"pin-N", "size"}}});
+    // `ledmatrix.cpp` real: `m_pin[row]`/`m_pin[m_rows+col]` -- MESMA fórmula do `switches.keypad`
+    // (rows+columns, nunca rows*columns).
     registerOutputState("outputs.led_matrix", "LedMatrix", 16,
-                        {components::detail::numberSchema("rows", "Linhas", "Leds", 8.0, 1.0, 1.0, PropertySchemaAffectsTopology),
-                         components::detail::numberSchema("columns", "Colunas", "Leds", 8.0, 1.0, 1.0, PropertySchemaAffectsTopology)});
+                        {components::detail::numberSchema("rows", "Linhas", "Leds", 8.0, 1.0, 1.0,
+                                                          PropertySchemaAffectsTopology | PropertySchemaAffectsPinCount, 16.0),
+                         components::detail::numberSchema("columns", "Colunas", "Leds", 8.0, 1.0, 1.0,
+                                                          PropertySchemaAffectsTopology | PropertySchemaAffectsPinCount, 16.0)},
+                        ComponentPinSpec{{}, {{"pin-", "rows"}, {"pin-", "columns"}}});
     registerOutputState("outputs.max72xx_matrix", "Max72xx matrix", 5,
                         {components::detail::numberSchema("rows", "Linhas", "Leds", 8.0, 1.0, 1.0),
                          components::detail::numberSchema("columns", "Colunas", "Leds", 8.0, 1.0, 1.0)});
@@ -606,6 +644,11 @@ uint32_t parsePropertyFlags(const nlohmann::json& propertyJson) {
     if (propertyJson.value("readOnly", false)) flags |= PropertySchemaReadOnly;
     if (propertyJson.value("noCopy", false)) flags |= PropertySchemaNoCopy;
     if (propertyJson.value("affectsTopology", false)) flags |= PropertySchemaAffectsTopology;
+    // Plugin de terceiro ganha pino dinâmico só declarando isto no `device.json` (ver
+    // `pin_declare` em `device_abi.h` -- chamável de `set_property()`, não só `init()`) + chamando
+    // de verdade dentro do próprio `set_property` -- `SimulationSession::setProperty` reregistra no
+    // Netlist olhando só este flag, nunca o typeId (mesmo caminho genérico do built-in keypad).
+    if (propertyJson.value("affectsPinCount", false)) flags |= PropertySchemaAffectsPinCount;
     if (propertyJson.value("requiresRestart", false)) flags |= PropertySchemaRequiresRestart;
     if (propertyJson.value("showOnSymbol", false)) flags |= PropertySchemaShowOnSymbol;
     return flags;
@@ -699,6 +742,37 @@ std::optional<InteractionKind> parseInteractionKind(const nlohmann::json& device
     return std::nullopt; // unknown values (joystick, encoder, etc.) handled Extension-side
 }
 
+/** `pinSpec` opcional do `.lsdevice` -- caminho declarativo de pino dinâmico pra plugin de
+ * terceiro que não quer/precisa escrever `pin_declare` em C (ver `ComponentMeta::pinSpec`,
+ * Types.hpp, pro contrato completo). Mesmo vocabulário/JSON usado pelos builtins
+ * (`registerBuiltinComponents`), só que aqui vem de arquivo em vez de literal C++:
+ * `{"fixedPinIds": ["z","en"], "dynamicGroups": [{"idPrefix":"chan-","countProperty":"channels",
+ * "countFn":"log2Ceil"}]}` -- `countFn` ausente/desconhecido cai em "value" (leitura direta). */
+std::optional<ComponentPinSpec> parsePinSpec(const nlohmann::json& deviceJson) {
+    if (!deviceJson.contains("pinSpec") || !deviceJson["pinSpec"].is_object()) return std::nullopt;
+    const nlohmann::json& pinSpecJson = deviceJson["pinSpec"];
+
+    ComponentPinSpec spec;
+    if (pinSpecJson.contains("fixedPinIds") && pinSpecJson["fixedPinIds"].is_array()) {
+        for (const auto& idJson : pinSpecJson["fixedPinIds"]) {
+            if (idJson.is_string()) spec.fixedPinIds.push_back(idJson.get<std::string>());
+        }
+    }
+    if (pinSpecJson.contains("dynamicGroups") && pinSpecJson["dynamicGroups"].is_array()) {
+        for (const auto& groupJson : pinSpecJson["dynamicGroups"]) {
+            if (!groupJson.is_object() || !groupJson.contains("countProperty")) continue;
+            DynamicPinGroupSpec group;
+            group.idPrefix = groupJson.value("idPrefix", std::string{"pin-"});
+            group.countProperty = groupJson.value("countProperty", std::string{});
+            group.countFn = groupJson.value("countFn", std::string{"value"}) == "log2Ceil"
+                                ? DynamicPinCountFn::Log2Ceil
+                                : DynamicPinCountFn::Value;
+            spec.dynamicGroups.push_back(std::move(group));
+        }
+    }
+    return spec;
+}
+
 // ── serialização pro lado IPC (getPropertySchemas) — inversa de jsonToPropertyValue/
 // parsePropertySchema acima, pra a Webview receber exatamente o que `.lsdevice` já declara pros
 // plugins, agora também pros built-ins (ComponentMetadataRegistry, ver registerBuiltinComponents). ──
@@ -734,6 +808,7 @@ nlohmann::json propertySchemaToJson(const PropertySchema& schema) {
         {"readOnly", (schema.flags & PropertySchemaReadOnly) != 0},
         {"noCopy", (schema.flags & PropertySchemaNoCopy) != 0},
         {"affectsTopology", (schema.flags & PropertySchemaAffectsTopology) != 0},
+        {"affectsPinCount", (schema.flags & PropertySchemaAffectsPinCount) != 0},
         {"requiresRestart", (schema.flags & PropertySchemaRequiresRestart) != 0},
         {"showOnSymbol", (schema.flags & PropertySchemaShowOnSymbol) != 0},
     };
@@ -912,7 +987,8 @@ std::string registerSubcircuitFromManifestLegacyUnused(const std::filesystem::pa
 RegisteredSubcircuitInfo registerSubcircuitFromManifestRich(const std::filesystem::path& manifestPath,
                                                             registry::SubcircuitRegistry& subcircuits,
                                                             const std::string& typeIdOverride = {},
-                                                            bool allowReplace = true) {
+                                                            bool allowReplace = true,
+                                                            bool returnPayload = true) {
     std::ifstream manifestFile(manifestPath);
     if (!manifestFile) throw std::runtime_error("manifesto de subcircuito (.lssubcircuit) nao encontrado: " + manifestPath.string());
     nlohmann::json manifest;
@@ -1000,8 +1076,10 @@ RegisteredSubcircuitInfo registerSubcircuitFromManifestRich(const std::filesyste
         if (!tunnelNames.contains(iface.internalTunnel)) {
             throw std::runtime_error("interface referencia tunnel interno inexistente: " + iface.internalTunnel);
         }
-        exportedInterface.push_back({{"pinId", iface.pinId}, {"label", iface.label}, {"internalTunnel", iface.internalTunnel}});
-        pinIds.push_back(iface.pinId);
+        if (returnPayload) {
+            exportedInterface.push_back({{"pinId", iface.pinId}, {"label", iface.label}, {"internalTunnel", iface.internalTunnel}});
+            pinIds.push_back(iface.pinId);
+        }
         def.interfaceDefs.push_back(std::move(iface));
     }
 
@@ -1021,6 +1099,8 @@ RegisteredSubcircuitInfo registerSubcircuitFromManifestRich(const std::filesyste
     }
 
     subcircuits.registerDefinition(std::move(def), true);
+    if (!returnPayload) return {typeId, nlohmann::json::object()};
+
     nlohmann::json payload{
         {"status", replacing ? "reloaded" : "registered"},
         {"replaced", replacing},
@@ -1055,7 +1135,7 @@ void loadSubcircuitLibraryFile(const std::filesystem::path& libraryJsonPath, reg
         const std::string typeId = entry.value("typeId", std::string{});
         const std::string manifestRelative = entry.value("manifest", std::string{});
         if (typeId.empty() || manifestRelative.empty()) continue;
-        (void)registerSubcircuitFromManifestRich(libraryDir / manifestRelative, subcircuits, typeId, true);
+        (void)registerSubcircuitFromManifestRich(libraryDir / manifestRelative, subcircuits, typeId, true, false);
     }
 }
 
@@ -1108,6 +1188,7 @@ void loadDeviceLibraryFile(const std::filesystem::path& libraryJsonPath, GlobalP
         metadata.propertySchema = parsePropertySchemaList(device);
         metadata.readoutFormat = parseReadoutFormat(device);
         metadata.interactionKind = parseInteractionKind(device);
+        metadata.pinSpec = parsePinSpec(device);
         // language é obrigatório por contrato (RNF12 de lasecsimul.spec), mas manifesto anterior a
         // esta rodada não declara -- default "pt-BR" preserva compatibilidade (todo manifesto existente
         // até aqui foi de fato escrito em português, então o default não está mentindo).
@@ -1608,11 +1689,12 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
                 msg.payloadJson.empty() ? nlohmann::json::object() : nlohmann::json::parse(msg.payloadJson);
             const std::string manifestPath = payload.value("path", std::string{});
             const bool replace = payload.value("replace", false);
+            const bool returnPayload = payload.value("returnPayload", true);
             if (manifestPath.empty()) throw std::runtime_error("payload sem 'path'");
             const RegisteredSubcircuitInfo info =
-                registerSubcircuitFromManifestRich(manifestPath, session.subcircuits(), {}, replace);
+                registerSubcircuitFromManifestRich(manifestPath, session.subcircuits(), {}, replace, returnPayload);
             resp.ok = true;
-            resp.payloadJson = info.payload.dump();
+            if (returnPayload) resp.payloadJson = info.payload.dump();
         } catch (const std::exception& e) {
             resp.ok = false;
             resp.error = std::string("registerAdhocSubcircuit falhou: ") + e.what();

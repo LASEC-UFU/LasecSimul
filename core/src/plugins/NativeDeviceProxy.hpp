@@ -21,6 +21,16 @@ class NativeDeviceProxy;
 struct NativeDeviceHostContext {
     std::unordered_map<std::string, PropertyValue> properties;
     std::vector<std::string> pinNames;
+    /** Contagem/id REAL de pino da instância -- semeado do manifesto (`ComponentMeta::pins`) ANTES
+     * de `create()`/`init()` rodar (plugin que nunca chama `pin_declare` mantém o comportamento de
+     * sempre); `hostPinDeclare` (PluginRuntime.cpp) escreve aqui de verdade, ao contrário de
+     * `pinNames` (só nomes pra `pin_write`/`pin_read`/`pin_name`, nunca a lista elétrica real que
+     * `Netlist`/`SimulationSession` usam). `NativeDeviceProxy::pins()` devolve ISTO, não
+     * `ComponentMeta::pins` -- por isso um plugin pode chamar `pin_declare` de dentro do próprio
+     * `set_property()` (não só `init()`) pra ganhar pino dinâmico, sem nenhuma mudança de ABI: quem
+     * detecta a contagem mudou e reregistra no `Netlist` é `SimulationSession::setProperty`, olhando
+     * só a `PropertySchema` (`PropertySchemaAffectsPinCount`), nunca o typeId. */
+    std::vector<Pin> declaredPins;
 
     simulation::Scheduler* scheduler = nullptr;
     uint32_t componentIndex = 0;
@@ -47,7 +57,11 @@ public:
     ~NativeDeviceProxy() override;
 
     const char* typeId() const override { return m_meta.typeId.c_str(); }
-    std::span<Pin> pins() override { return m_meta.pins; }
+    /** `m_hostContext->declaredPins`, NUNCA `m_meta.pins` -- este último é só a semente do
+     * manifesto (congelada na criação); o primeiro é a lista REAL, atualizada por `pin_declare`
+     * (`init()` ou `set_property()`, ver `PluginRuntime.cpp::hostPinDeclare`). Os dois só divergem
+     * pra um plugin que efetivamente declara pino dinâmico -- pra todo o resto, são idênticos. */
+    std::span<Pin> pins() override { return m_hostContext->declaredPins; }
 
     void stamp(MnaMatrixView& matrix) override;
     void postStep(uint64_t timeNs) override;

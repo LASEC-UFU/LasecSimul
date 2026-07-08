@@ -15,7 +15,7 @@
  * linha: perde precisão de ângulo não-cardinal, ver `snapRotation`).
  */
 import { componentBox } from "../ui/webview/componentSymbols";
-import { JUNCTION_TYPE_ID, PackageBackground, PackageDescriptor, PackagePin, PackageShape, SIMULIDE_PACKAGE_GRID_UNIT, TUNNEL_TYPE_ID, WebviewComponentModel, WebviewWireModel } from "../ui/webview/model";
+import { JUNCTION_TYPE_ID, PackageBackground, PackageDescriptor, PackageNumberValue, PackagePin, PackageShape, SIMULIDE_PACKAGE_GRID_UNIT, TUNNEL_TYPE_ID, WebviewComponentModel, WebviewWireModel } from "../ui/webview/model";
 
 /** Posição/orientação visual de um componente -- mesmo formato de `ProjectComponent.visual`
  * (`project/ProjectTypes.ts`), reaproveitado pro circuito INTERNO de um subcircuito
@@ -26,6 +26,10 @@ export interface VisualPosition {
   rotation?: 0 | 90 | 180 | 270;
   flipH?: boolean;
   flipV?: boolean;
+}
+
+function concreteNumber(value: PackageNumberValue | undefined, fallback = 0): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
 export interface InternalComponentSeed {
@@ -138,11 +142,15 @@ export function seedSymbolAuthoringComponents(pkg: PackageDescriptor, originX = 
   });
 
   pkg.pins.forEach((pin, index) => {
-    const pinScale = pin.angle === 90 || pin.angle === 270 ? scaleY : scaleX;
-    const properties: Record<string, string | number | boolean> = { pinId: pin.id, length: pin.length * pinScale };
+    const pinAngle = concreteNumber(pin.angle);
+    const pinLength = concreteNumber(pin.length, 8);
+    const pinX = concreteNumber(pin.x);
+    const pinY = concreteNumber(pin.y);
+    const pinScale = pinAngle === 90 || pinAngle === 270 ? scaleY : scaleX;
+    const properties: Record<string, string | number | boolean> = { pinId: pin.id, length: pinLength * pinScale };
     const box = componentBox("other.package_pin", properties);
     const pinComponentId = nextComponentId("pin", index);
-    components.push(baseComponent(pinComponentId, "other.package_pin", originX + pin.x * scaleX - box.width / 2, originY + pin.y * scaleY - box.height / 2, snapRotation(pin.angle), properties));
+    components.push(baseComponent(pinComponentId, "other.package_pin", originX + pinX * scaleX - box.width / 2, originY + pinY * scaleY - box.height / 2, snapRotation(pinAngle), properties));
     components.push(seedPinLabelComponent(pin, pinComponentId, index, originX, originY, scaleX, scaleY, pkg.pinLabelColor));
   });
 
@@ -296,18 +304,23 @@ function seedPinLabelComponent(
   scaleY = 1,
   packageDefaultLabelColor = "#1f2937"
 ): WebviewComponentModel {
-  const rad = (pin.angle * Math.PI) / 180;
-  const tipX = pin.x + Math.cos(rad) * pin.length;
-  const tipY = pin.y + Math.sin(rad) * pin.length;
+  const angle = concreteNumber(pin.angle);
+  const length = concreteNumber(pin.length, 8);
+  const pinX = concreteNumber(pin.x);
+  const pinY = concreteNumber(pin.y);
+  const rad = (angle * Math.PI) / 180;
+  const tipX = pinX + Math.cos(rad) * length;
+  const tipY = pinY + Math.sin(rad) * length;
   // `labelX`/`labelY` (e a fórmula padrão de fallback) são a posição EXATA da baseline do `<text>`
   // que `packagePinLeadSvg` desenha (`x=labelX y=labelY` direto) -- mesma convenção do `shape.y` de
   // um `PackageShape` kind "text" em `packageShapeSvg`, por isso o mesmo ajuste de `fontSize/3` pra
   // converter baseline -> centro da caixa (ver `seedShapeComponent`/`case "text"` abaixo e a
   // compilação espelhada em `compileSymbolAuthoringComponents`).
-  const labelX = (pin.labelX ?? tipX + Math.cos(rad) * 9) * scaleX;
-  const labelY = (pin.labelY ?? tipY + Math.sin(rad) * 9) * scaleY;
+  const labelX = (concreteNumber(pin.labelX, tipX + Math.cos(rad) * 9)) * scaleX;
+  const labelY = (concreteNumber(pin.labelY, tipY + Math.sin(rad) * 9)) * scaleY;
   const text = pin.label ?? pin.id;
-  const fontSize = typeof pin.labelFontSize === "number" && pin.labelFontSize > 0 ? pin.labelFontSize : 7;
+  const fontSizeValue = concreteNumber(pin.labelFontSize, 7);
+  const fontSize = fontSizeValue > 0 ? fontSizeValue : 7;
   // Cor POR PINO (`pin.labelColor`) tem prioridade sobre o default do package (`pinLabelColor`) --
   // sem isto, pinos com cor própria (ex: "+"/"-" vermelho/preto de `sources.controlled_source`)
   // apareciam todos na MESMA cor genérica assim que a sessão de autoria era aberta, escondendo a

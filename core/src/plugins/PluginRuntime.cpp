@@ -1,16 +1,26 @@
 #include "PluginRuntime.hpp"
 #include <cstdio>
+#include <string>
 #include <utility>
 
 namespace lasecsimul::plugins {
 
 namespace {
 
+// Até esta mudança, `pin_declare` só escrevia em `pinNames` (usado só por `pin_write`/`pin_read`/
+// `pin_name`) -- `NativeDeviceProxy::pins()` continuava devolvendo `ComponentMeta::pins`, fixo
+// desde o manifesto, então um plugin que chamasse `pin_declare` (ex: `example-blinker`,
+// `simulide-logic`) não mudava NADA na topologia elétrica real -- bug latente pré-existente, mesma
+// classe do keypad (TR-9). Agora escreve em `declaredPins` (a lista REAL que `pins()` devolve) --
+// `id` vazio (`name` nulo/vazio) usa `pin-N` genérico, igual a `makePinVector` do lado built-in,
+// nunca deixa um `Pin` com id vazio (`Netlist::registerComponent` rejeita isso).
 uint32_t hostPinDeclare(void* hostCtx, uint32_t index, LsdnPinKind, const char* name) {
     auto* ctx = static_cast<NativeDeviceHostContext*>(hostCtx);
     if (!ctx) return index;
     if (ctx->pinNames.size() <= index) ctx->pinNames.resize(index + 1);
     ctx->pinNames[index] = name ? name : "";
+    if (ctx->declaredPins.size() <= index) ctx->declaredPins.resize(index + 1);
+    ctx->declaredPins[index].id = (name && *name) ? name : ("pin-" + std::to_string(index + 1));
     return index;
 }
 
@@ -140,6 +150,14 @@ std::unique_ptr<IComponentModel> PluginRuntime::createDeviceInstance(const std::
     hostContext->properties["__typeId"] = typeId;
     hostContext->pinNames.reserve(meta.pins.size());
     for (const Pin& pin : meta.pins) hostContext->pinNames.push_back(pin.id);
+    // Semente = `pins[]` do manifesto -- plugin que NUNCA chama `pin_declare` (a maioria hoje)
+    // mantém o comportamento de sempre. `hostPinDeclare` (acima) sobrescreve por índice se o
+    // plugin declarar de verdade, durante `init()` OU depois, de dentro do próprio `set_property()`
+    // (é assim que um plugin de terceiro ganha pino dinâmico, sem nenhuma mudança de ABI -- ver
+    // NativeDeviceHostContext::declaredPins). `pinSpec` declarativo (manifesto) tem prioridade
+    // sobre a semente estática quando presente -- caminho SEM CÓDIGO C nenhum, ver
+    // ComponentMeta::pinSpec.
+    hostContext->declaredPins = meta.pinSpec ? resolveDynamicPins(*meta.pinSpec, params.properties) : meta.pins;
 
     const LsdnDeviceVTable* vt = module->deviceVTable();
     LsdnDevice* handle = vt->create(hostContext.get(), &kHostApi);

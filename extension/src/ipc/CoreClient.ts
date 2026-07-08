@@ -206,6 +206,17 @@ export class CoreClient {
     return resp as RegisteredSubcircuitInfo;
   }
 
+  /** Mesmo registro avulso, mas sem pedir ao Core o manifesto serializado de volta. Use quando o
+   * chamador jÃ¡ vai ler o `.lssubcircuit` localmente ou sÃ³ precisa garantir que o typeId estÃ¡ no
+   * registry antes de `addComponent`/rebuild. */
+  async registerAdhocSubcircuitDefinition(manifestPath: string, options: { replace?: boolean } = {}): Promise<void> {
+    await this.request("registerAdhocSubcircuit", {
+      path: manifestPath,
+      replace: Boolean(options.replace),
+      returnPayload: false,
+    });
+  }
+
   /** Bytes opacos de `IComponentModel::getState()` de uma instância (built-in ou plugin),
    * devolvidos como hex — quem chama decide o que os bytes significam (ex: "instruments.voltmeter"
    * é sempre 1 double little-endian = a última tensão medida). */

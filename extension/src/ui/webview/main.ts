@@ -1583,8 +1583,20 @@ function render(): void {
   }
   renderPendingWirePreview(wireLayer);
 
+  const visibleComponents: WebviewComponentModel[] = [];
+  const subcircuitFileComponents: WebviewComponentModel[] = [];
+  const boardModeComponents: WebviewComponentModel[] = [];
+  const junctionComponents: WebviewComponentModel[] = [];
+  for (const component of state.components) {
+    if (component.typeId === JUNCTION_TYPE_ID) junctionComponents.push(component);
+    if (component.hidden) continue;
+    if (isVisibleInCurrentMode(component)) visibleComponents.push(component);
+    if (component.properties.boardModeEnabled) boardModeComponents.push(component);
+    if (catalogEntryFor(component.typeId)?.registeredSourceKind === "subcircuit-file") subcircuitFileComponents.push(component);
+  }
+
   const visibleComponentIds = new Set<string>();
-  for (const component of state.components.filter((entry) => !entry.hidden && isVisibleInCurrentMode(entry))) {
+  for (const component of visibleComponents) {
     visibleComponentIds.add(component.id);
     let componentEl = componentElementsById.get(component.id);
     if (componentEl && componentEl.dataset.typeId !== component.typeId) {
@@ -1606,19 +1618,15 @@ function render(): void {
     componentElementsById.delete(id);
   }
 
-  for (const component of state.components.filter((entry) => {
-    if (entry.hidden) return false;
-    const catalogEntry = catalogEntryFor(entry.typeId);
-    return catalogEntry?.registeredSourceKind === "subcircuit-file";
-  })) {
+  for (const component of subcircuitFileComponents) {
     ensureBoardOverlayData(component);
   }
 
-  for (const component of state.components.filter((entry) => !entry.hidden && entry.properties.boardModeEnabled)) {
+  for (const component of boardModeComponents) {
     for (const overlayEl of renderBoardOverlaysFor(component)) canvasContent.appendChild(overlayEl);
   }
 
-  for (const component of state.components.filter((entry) => !entry.hidden && isVisibleInCurrentMode(entry))) {
+  for (const component of visibleComponents) {
     const embedsOwnIdLabel = component.typeId === TUNNEL_TYPE_ID &&
       typeof component.properties.name === "string" &&
       component.properties.name.trim().length > 0;
@@ -1630,7 +1638,7 @@ function render(): void {
     if (valueLabel) canvasContent.appendChild(valueLabel);
   }
 
-  for (const component of state.components.filter((entry) => entry.typeId === JUNCTION_TYPE_ID)) {
+  for (const component of junctionComponents) {
     canvasContent.appendChild(renderJunction(component));
   }
 
@@ -2567,9 +2575,30 @@ function pinScenePosition(component: WebviewComponentModel, pinId: string): Poin
   return { x: component.x + local.x, y: component.y + local.y };
 }
 
-function updateWiresTouchingComponent(componentId: string): void {
+let wiresByComponentCacheKey = "";
+let wiresByComponentCache = new Map<string, WebviewWireModel[]>();
+
+function wiresByComponentId(): Map<string, WebviewWireModel[]> {
+  const key = state.wires.map((wire) => `${wire.id}:${wire.from.componentId}>${wire.to.componentId}`).join("|");
+  if (key === wiresByComponentCacheKey) return wiresByComponentCache;
+  const next = new Map<string, WebviewWireModel[]>();
   for (const wire of state.wires) {
-    if (wire.from.componentId !== componentId && wire.to.componentId !== componentId) continue;
+    const fromList = next.get(wire.from.componentId) ?? [];
+    fromList.push(wire);
+    next.set(wire.from.componentId, fromList);
+    if (wire.to.componentId !== wire.from.componentId) {
+      const toList = next.get(wire.to.componentId) ?? [];
+      toList.push(wire);
+      next.set(wire.to.componentId, toList);
+    }
+  }
+  wiresByComponentCacheKey = key;
+  wiresByComponentCache = next;
+  return next;
+}
+
+function updateWiresTouchingComponent(componentId: string): void {
+  for (const wire of wiresByComponentId().get(componentId) ?? []) {
     // Lookup O(1) via `wirePolylineElementsById` (UI-2/UI-3) em vez de `querySelector` -- percorrido
     // uma vez por fio tocado a cada `pointermove` de um arrasto de componente, potencialmente muitas
     // vezes por segundo em circuitos grandes.

@@ -83,6 +83,7 @@ public:
 
             const uint32_t slot = static_cast<uint32_t>(m_slotOwner.size());
             m_slotOwner.push_back(componentIndex);
+            m_slotOrphaned.push_back(false);
             m_tunnelNameBySlot.emplace_back();
             slotsByPinId.emplace(pinId, slot);
         }
@@ -104,15 +105,53 @@ public:
 
         for (const auto& [pinId, slot] : m_componentPinSlots[componentIndex]) {
             (void)pinId;
-            if (!m_tunnelNameBySlot[slot].empty()) setTunnelName(slot, m_tunnelNameBySlot[slot], "");
-            const auto touchesSlot = [slot](const auto& edge) { return edge.first == slot || edge.second == slot; };
-            m_wireEdges.erase(std::remove_if(m_wireEdges.begin(), m_wireEdges.end(), touchesSlot),
-                               m_wireEdges.end());
+            disconnectSlot(slot);
         }
         m_componentRemoved[componentIndex] = true;
     }
 
     bool isComponentRemoved(uint32_t componentIndex) const { return m_componentRemoved.at(componentIndex); }
+
+    /** Troca o CONJUNTO de pinos de um componente vivo (ex: `rows`/`columns` de um keypad mudou) —
+     * mesma filosofia append-only/nunca-reciclado de `removeComponent`/`registerComponent`, só que
+     * pro nível de pino em vez de componente inteiro: os slots ANTIGOS são desconectados (fio/túnel)
+     * e marcados órfãos (`m_slotOrphaned`, nunca mais aparecem em nó/grupo/listener/pinRef depois de
+     * `rebuildTopology()` — mesmo tratamento que `m_componentRemoved` já dá aos slots de um
+     * componente inteiramente removido), os slots NOVOS são alocados no final do array global
+     * (mesmo padrão de `registerComponent`) e `m_firstSlotByComponent[componentIndex]` é atualizado
+     * pro novo início -- `localPinIndex = slot - primeiro slot` continua válido pros pinos NOVOS
+     * (contíguos entre si), só não existe mais pros antigos (que não são mais referenciados). Custo:
+     * alguns slots "mortos" por edição de propriedade que muda contagem de pino, ao longo de uma
+     * sessão -- aceito pela mesma razão que `componentIndex` nunca ser reciclado já é aceito. Chamar
+     * isto NUNCA é caminho crítico (só via `SimulationSession::setProperty`, evento raro do
+     * usuário) -- não confundir com `connectWire`/`disconnectWire`, que são frequentes. */
+    void reregisterComponentPins(uint32_t componentIndex, const std::vector<std::string>& newPinIds) {
+        if (componentIndex >= m_componentPinSlots.size())
+            throw std::out_of_range("Netlist::reregisterComponentPins: invalid component index");
+        if (m_componentRemoved[componentIndex])
+            throw std::invalid_argument("Netlist::reregisterComponentPins: componente removido");
+
+        for (const auto& [pinId, slot] : m_componentPinSlots[componentIndex]) {
+            (void)pinId;
+            disconnectSlot(slot);
+            m_slotOrphaned[slot] = true;
+        }
+
+        m_firstSlotByComponent[componentIndex] = static_cast<uint32_t>(m_slotOwner.size());
+        std::unordered_map<std::string, uint32_t> slotsByPinId;
+        for (const std::string& pinId : newPinIds) {
+            if (pinId.empty()) throw std::invalid_argument("Netlist::reregisterComponentPins: empty pin id");
+            if (slotsByPinId.find(pinId) != slotsByPinId.end())
+                throw std::invalid_argument("Netlist::reregisterComponentPins: duplicate pin id");
+
+            const uint32_t slot = static_cast<uint32_t>(m_slotOwner.size());
+            m_slotOwner.push_back(componentIndex);
+            m_slotOrphaned.push_back(false);
+            m_tunnelNameBySlot.emplace_back();
+            slotsByPinId.emplace(pinId, slot);
+        }
+        m_componentPinSlots[componentIndex] = std::move(slotsByPinId);
+    }
 
     void connectWire(uint32_t slotA, uint32_t slotB) {
         validateSlot(slotA, "Netlist::connectWire");
@@ -245,7 +284,9 @@ public:
 
         topology.listenersByNode.resize(nodeCount);
         for (uint32_t slot = 0; slot < slotCount; ++slot) {
-            if (m_componentRemoved[m_slotOwner[slot]]) continue; // removido nunca volta a ser dirty
+            // removido nunca volta a ser dirty; órfão (reregisterComponentPins trocou o conjunto de
+            // pinos do componente, este slot específico não existe mais) idem, mesmo o dono vivo.
+            if (m_componentRemoved[m_slotOwner[slot]] || m_slotOrphaned[slot]) continue;
             topology.listenersByNode[slotToNode[slot]].push_back(m_slotOwner[slot]);
         }
         for (std::vector<uint32_t>& listeners : topology.listenersByNode) {
@@ -256,7 +297,8 @@ public:
         topology.pinRefsByNode.resize(nodeCount);
         for (uint32_t slot = 0; slot < slotCount; ++slot) {
             const uint32_t owner = m_slotOwner[slot];
-            if (m_componentRemoved[owner]) continue; // removido nunca volta a receber evento de pino
+            // removido nunca volta a receber evento de pino; órfão idem (ver listenersByNode acima).
+            if (m_componentRemoved[owner] || m_slotOrphaned[slot]) continue;
             const uint32_t localPinIndex = slot - m_firstSlotByComponent[owner];
             topology.pinRefsByNode[slotToNode[slot]].push_back({owner, localPinIndex});
         }
@@ -271,7 +313,18 @@ private:
         if (slot >= m_slotOwner.size()) throw std::out_of_range(std::string(operation) + ": invalid pin slot");
     }
 
+    /** Limpa nome de túnel e fios de UM slot -- extraído de `removeComponent` pra ser reaproveitado
+     * por `reregisterComponentPins` (mesma limpeza, granularidade de slot em vez de componente
+     * inteiro). Não marca `m_slotOrphaned`/`m_componentRemoved` -- cada chamador decide qual dos
+     * dois (ou nenhum, não há terceiro caso hoje). */
+    void disconnectSlot(uint32_t slot) {
+        if (!m_tunnelNameBySlot[slot].empty()) setTunnelName(slot, m_tunnelNameBySlot[slot], "");
+        const auto touchesSlot = [slot](const auto& edge) { return edge.first == slot || edge.second == slot; };
+        m_wireEdges.erase(std::remove_if(m_wireEdges.begin(), m_wireEdges.end(), touchesSlot), m_wireEdges.end());
+    }
+
     std::vector<uint32_t> m_slotOwner;                                    // slot -> componentIndex
+    std::vector<bool> m_slotOrphaned; // slot -> true se reregisterComponentPins descartou este pino
     std::vector<uint32_t> m_firstSlotByComponent;                         // componentIndex -> 1o slot dele
     std::vector<std::unordered_map<std::string, uint32_t>> m_componentPinSlots; // por componente: pinId -> slot
     std::vector<std::pair<uint32_t, uint32_t>> m_wireEdges;

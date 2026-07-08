@@ -247,12 +247,9 @@ fica para depois do MVP. Ver `docs/14-integracao-final.md` para os critérios de
   hardcoded em `componentSymbols.ts` hoje) — beneficia subcircuitos e plugins igualmente.
 - **Backlog de paridade SimulIDE na Webview** (achado ao investigar a UI do SimulIDE — itens restantes,
   nenhum é pré-requisito de outro):
-  - Copiar/colar (Ctrl+C/Ctrl+X/Ctrl+V) — exige remapear fios internos entre os itens copiados, não é
-    só duplicar componente; deixado de fora da rodada de seleção múltipla/atalhos/zoom de propósito.
-  - Flip horizontal/vertical (Ctrl+L/Ctrl+Shift+L) — nova capacidade real (espelhar símbolo+pinos),
-    não implementada.
-  - Undo/redo (Ctrl+Z/Y) — o LasecSimul não tem NENHUM sistema de undo hoje; SimulIDE tem, mas
-    construir um aqui é um projeto à parte, não um item isolado deste backlog.
+  - Copiar/colar (Ctrl+C/Ctrl+X/Ctrl+V), flip horizontal/vertical (`H`/`V`) e undo/redo
+    (Ctrl+Z/Y/Ctrl+Shift+Z) já foram implementados na Webview; ver `.spec/lasecsimul.spec` seções 13.4 e
+    17 para o comportamento atual e os keybindings finais.
   - Arrastar o rótulo de nome/valor independentemente do símbolo (`Label::mousePressEvent` do
     SimulIDE) — posição hoje é fixa (acima/abaixo da caixa do componente), ver `.spec/lasecsimul.spec`
     seção 13.3.

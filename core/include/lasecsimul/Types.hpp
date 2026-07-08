@@ -1,8 +1,10 @@
 #pragma once
 
+#include <cmath>
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <variant>
 #include <vector>
 
@@ -39,6 +41,13 @@ enum PropertySchemaFlags : uint32_t {
     PropertySchemaAffectsTopology = 1u << 3,
     PropertySchemaRequiresRestart = 1u << 4,
     PropertySchemaShowOnSymbol = 1u << 5,
+    /** Editar esta propriedade muda o NÚMERO de pinos do componente (não só a fiação) -- ver
+     * `ComponentPinSpec`/`resolveDynamicPins` abaixo. Implica `AffectsTopology` na prática
+     * (`SimulationSession::setProperty` trata os dois como o mesmo evento de rebuild), mas é um bit
+     * separado porque só ESTE dispara `Netlist::reregisterComponentPins` -- uma propriedade com só
+     * `AffectsTopology` (ex: `poles` de um switch) nunca muda a contagem, só a fiação entre pinos
+     * que já existem. */
+    PropertySchemaAffectsPinCount = 1u << 6,
 };
 
 struct PropertySchema {
@@ -55,6 +64,66 @@ struct PropertySchema {
     std::vector<PropertyOption> options;
     uint32_t flags = PropertySchemaNone;
 };
+
+/** Como o NÚMERO de pinos de um grupo dinâmico é derivado do valor bruto de uma propriedade --
+ * `Value` é a leitura direta (ex: `rows` -> N linhas); `Log2Ceil` é pra dispositivos cuja contagem
+ * de endereço cresce logaritmicamente com a contagem de itens (ex: `active.analog_mux`: N canais
+ * precisa de ceil(log2(N)) linhas de endereço, ver `mux_analog.cpp` real do SimulIDE). Vocabulário
+ * fechado de propósito -- adicionar um modo novo é preferível a um device calcular a própria
+ * contagem fora deste mecanismo (ver `ComponentPinSpec`). */
+enum class DynamicPinCountFn : uint32_t { Value = 0, Log2Ceil = 1 };
+
+/** Um grupo de N pinos cuja contagem vem de UMA propriedade numérica da instância -- equivalente,
+ * do lado Core/elétrico, ao `PackageDynamicPinGroup` que a Extension já usa pro desenho
+ * (`ui/webview/model.ts`). Os dois são formatos INDEPENDENTES (Core nunca lê `package`/JSON de
+ * desenho, ver `.skill/lasecsimul.skill`) que devem chegar ao MESMO conjunto de ids pro mesmo
+ * device -- combinação verificada por teste, não pelo tipo. */
+struct DynamicPinGroupSpec {
+    std::string idPrefix = "pin-";
+    std::string countProperty;
+    DynamicPinCountFn countFn = DynamicPinCountFn::Value;
+};
+
+/** Declaração completa de como o `pins()` de um componente é derivado das propriedades da
+ * instância -- dado, não código: nenhum device (built-in ou plugin) escreve uma fórmula própria,
+ * só declara `fixedPinIds` (sempre presentes, nesta ordem) + `dynamicGroups` (anexados depois, na
+ * ordem declarada, ids sequenciais cruzando todos os grupos). Ver `resolveDynamicPins`. */
+struct ComponentPinSpec {
+    std::vector<std::string> fixedPinIds;
+    std::vector<DynamicPinGroupSpec> dynamicGroups;
+};
+
+/** Único intérprete de `ComponentPinSpec` do projeto inteiro -- usado por `SimulidePassiveState`
+ * (built-ins) e pelo bridge de plugin nativo (`NativeDeviceProxy`/`PluginRuntime`), nunca
+ * duplicado. `properties` ausente/sem a chave de um grupo conta como 0 (grupo vazio, não erro --
+ * mesmo comportamento default-seguro do lado Extension em `materializePinGroup`). */
+inline std::vector<Pin> resolveDynamicPins(const ComponentPinSpec& spec,
+                                           const std::unordered_map<std::string, PropertyValue>& properties) {
+    std::vector<Pin> pins;
+    pins.reserve(spec.fixedPinIds.size());
+    for (const std::string& id : spec.fixedPinIds) pins.push_back(Pin{id, 0.0, 0.0});
+
+    const auto propertyNumber = [&properties](const std::string& name) -> double {
+        const auto it = properties.find(name);
+        if (it == properties.end()) return 0.0;
+        if (const double* value = std::get_if<double>(&it->second)) return *value;
+        return 0.0;
+    };
+
+    for (const DynamicPinGroupSpec& group : spec.dynamicGroups) {
+        const double raw = propertyNumber(group.countProperty);
+        size_t count = 0;
+        if (group.countFn == DynamicPinCountFn::Log2Ceil) {
+            count = raw > 1.0 ? static_cast<size_t>(std::ceil(std::log2(raw))) : 0;
+        } else {
+            count = raw > 0.0 ? static_cast<size_t>(raw) : 0;
+        }
+        for (size_t i = 0; i < count; ++i) {
+            pins.push_back(Pin{group.idPrefix + std::to_string(pins.size() + 1), 0.0, 0.0});
+        }
+    }
+    return pins;
+}
 
 /** Como a UI deve interpretar os bytes de leitura de um componente (`getComponentState`/instrumento)
  * sem precisar conhecer o typeId -- ABI v2, ver .spec/lasecsimul-native-devices.spec. Declarado pelo
@@ -129,6 +198,17 @@ struct ComponentMeta {
     /** `limits.stepTimeoutMs` do `.lsdevice` -- 0 == sem watchdog (chamada roda sem limite de
      * tempo, comportamento de hoje). Ver .spec/lasecsimul-native-devices.spec, seção 13. */
     uint32_t stepTimeoutMs = 0;
+    /** `pinSpec` opcional do `.lsdevice` -- caminho declarativo pra pino dinâmico de plugin, SEM
+     * escrever `pin_declare` na unha em C. Quando presente, `PluginRuntime::createDeviceInstance`
+     * usa `resolveDynamicPins` (não `pins` acima, que vira só fallback pra manifesto sem `pinSpec`)
+     * pra semear `declaredPins`, e `NativeDeviceProxy` recomputa a cada propriedade
+     * `AffectsPinCount` editada -- mesmo mecanismo/vocabulário dos built-ins (`switches.keypad` e
+     * companhia, `CoreApplication.cpp`), nunca duplicado. Um plugin ainda PODE chamar `pin_declare`
+     * na mão (escotilha de escape pra formas que não cabem no vocabulário `ComponentPinSpec`) --
+     * os dois caminhos escrevem no mesmo `declaredPins`, nunca coexistem simultaneamente pro mesmo
+     * device (`pinSpec` presente = plugin não deveria chamar `pin_declare`, mas nada TÉCNICO
+     * impede; a última escrita vence, como qualquer outra mutação). */
+    std::optional<ComponentPinSpec> pinSpec;
 };
 
 struct ComponentEvent {

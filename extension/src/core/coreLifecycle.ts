@@ -34,10 +34,27 @@ export function registerCoreIdsForComponent(componentId: string, typeId: string,
   if (catalogEntry?.mcuHost === true) mcuTargetCoreIdByComponentId.set(componentId, response.instanceId);
 }
 
+let coreMutationQueue: Promise<unknown> = Promise.resolve();
+
+/** Serializador único para qualquer mutação do Core que leia/escreva `coreInstanceIdByComponentId`
+ * ou altere o grafo elétrico. EX-E: rebuild completo, sync por snapshot e pushes incrementais agora
+ * entram na mesma fila; nenhuma chamada incremental pode intercalar com `removeComponent`/`addComponent`
+ * de um rebuild em andamento. */
+export function enqueueCoreMutation<T>(operation: () => Promise<T> | T): Promise<T> {
+  const queued = coreMutationQueue
+    .catch(() => undefined)
+    .then(operation);
+  coreMutationQueue = queued.then(
+    () => undefined,
+    () => undefined
+  );
+  return queued;
+}
+
 /** Cria a instância no Core e só resolve depois que o id da instância foi registrado. Chamadores que
  * não dependem da ordem podem continuar usando `void pushComponentToCore(...)`; fluxos que inserem
  * fios na mesma transação devem aguardar isto antes de chamar `pushWireToCore`. */
-export async function pushComponentToCore(
+async function pushComponentToCoreNow(
   componentId: string,
   typeId: string,
   properties: Record<string, unknown>,
@@ -54,7 +71,16 @@ export async function pushComponentToCore(
   }
 }
 
-export async function pushWireToCore(wire: WebviewWireModel): Promise<boolean> {
+export function pushComponentToCore(
+  componentId: string,
+  typeId: string,
+  properties: Record<string, unknown>,
+  pins: Array<{ id: string; x: number; y: number }>
+): Promise<boolean> {
+  return enqueueCoreMutation(() => pushComponentToCoreNow(componentId, typeId, properties, pins));
+}
+
+async function pushWireToCoreNow(wire: WebviewWireModel): Promise<boolean> {
   if (!state.coreClient) return false;
   const coreA = coreInstanceIdByComponentId.get(wire.from.componentId);
   const coreB = coreInstanceIdByComponentId.get(wire.to.componentId);
@@ -68,6 +94,10 @@ export async function pushWireToCore(wire: WebviewWireModel): Promise<boolean> {
   }
 }
 
+export function pushWireToCore(wire: WebviewWireModel): Promise<boolean> {
+  return enqueueCoreMutation(() => pushWireToCoreNow(wire));
+}
+
 /** Inverso de `pushWireToCore` (EX-6.1/EX-6.2) -- remove só ESTE fio via `disconnectWire` (IPC
  * incremental), nunca reconstrói o circuito inteiro. Sem isto, apagar N fios selecionados
  * (`deleteSelectedItems` com seleção múltipla manda um `requestRemoveWire` por fio) disparava N
@@ -77,14 +107,21 @@ export async function pushWireToCore(wire: WebviewWireModel): Promise<boolean> {
  * deixa o fio "preso" no Core) se algum dos dois lados ainda não tem instância resolvida (ex: bloco
  * de subcircuito não localizado) -- mesmo espírito do `if (!coreA || !coreB) return` acima. */
 export function pushRemoveWireToCore(wire: WebviewWireModel | undefined): void {
-  if (!state.coreClient || !wire) return;
-  const coreA = coreInstanceIdByComponentId.get(wire.from.componentId);
-  const coreB = coreInstanceIdByComponentId.get(wire.to.componentId);
-  if (!coreA || !coreB) {
-    void queueCoreRebuild();
-    return;
-  }
-  state.coreClient.disconnectWire(coreA, wire.from.pinId, coreB, wire.to.pinId).catch((err) => reportCoreWarning("remover fio", err));
+  if (!wire) return;
+  void enqueueCoreMutation(async () => {
+    if (!state.coreClient) return;
+    const coreA = coreInstanceIdByComponentId.get(wire.from.componentId);
+    const coreB = coreInstanceIdByComponentId.get(wire.to.componentId);
+    if (!coreA || !coreB) {
+      await rebuildCoreFromSchematicStateNow();
+      return;
+    }
+    try {
+      await state.coreClient.disconnectWire(coreA, wire.from.pinId, coreB, wire.to.pinId);
+    } catch (err) {
+      reportCoreWarning("remover fio", err);
+    }
+  });
 }
 
 export function isUiOnlyRuntimeProperty(component: WebviewComponentModel | undefined, name: string): boolean {
@@ -98,29 +135,50 @@ export function isUiOnlyRuntimeProperty(component: WebviewComponentModel | undef
 }
 
 export function pushPropertyToCore(componentId: string, name: string, value: string | number | boolean): void {
-  if (!state.coreClient) return;
-  const component = state.schematicState.components.find((entry) => entry.id === componentId);
-  if (isUiOnlyRuntimeProperty(component, name)) return;
-  const coreId = coreInstanceIdByComponentId.get(componentId);
-  if (!coreId) return;
-  state.coreClient
-    .setProperty(coreId, name, value)
-    .then(({ requiresRestart }) => {
+  void enqueueCoreMutation(async () => {
+    if (!state.coreClient) return;
+    const component = state.schematicState.components.find((entry) => entry.id === componentId);
+    if (isUiOnlyRuntimeProperty(component, name)) return;
+    const coreId = coreInstanceIdByComponentId.get(componentId);
+    if (!coreId) return;
+    try {
+      const { requiresRestart } = await state.coreClient.setProperty(coreId, name, value);
       if (requiresRestart) {
         vscode.window.showInformationMessage(
           `LasecSimul: a propriedade "${name}" só terá efeito completo depois que o componente for recriado.`
         );
       }
-    })
-    .catch((err) => reportCoreWarning(`atualizar propriedade "${name}"`, err));
+    } catch (err) {
+      reportCoreWarning(`atualizar propriedade "${name}"`, err);
+    }
+  });
 }
 
 export function pushRemoveToCore(componentId: string): void {
-  if (!state.coreClient) return;
   const coreId = coreInstanceIdByComponentId.get(componentId);
   if (!coreId) return;
-  state.coreClient.removeComponent(coreId).catch((err) => reportCoreWarning("remover componente", err));
   mcuTargetCoreIdByComponentId.delete(componentId);
+  void enqueueCoreMutation(async () => {
+    if (!state.coreClient) return;
+    try {
+      await state.coreClient.removeComponent(coreId);
+    } catch (err) {
+      reportCoreWarning("remover componente", err);
+    }
+  });
+}
+
+export function pushTunnelNameToCore(componentId: string, pinId: string, oldName: string, newName: string): void {
+  void enqueueCoreMutation(async () => {
+    if (!state.coreClient) return;
+    const coreId = coreInstanceIdByComponentId.get(componentId);
+    if (!coreId) return;
+    try {
+      await state.coreClient.setTunnelName(coreId, pinId, oldName, newName);
+    } catch (err) {
+      reportCoreWarning("renomear túnel", err);
+    }
+  });
 }
 
 /** Lookup único de catálogo por typeId -- usado pelos 3 decodificadores genéricos abaixo (ABI v2,
@@ -428,10 +486,9 @@ let rebuildScheduled = false;
 export function queueCoreRebuild(): Promise<void> {
   if (rebuildScheduled) return rebuildQueue;
   rebuildScheduled = true;
-  rebuildQueue = rebuildQueue
-    .then(() => {
+  rebuildQueue = enqueueCoreMutation(async () => {
       rebuildScheduled = false;
-      return rebuildCoreFromSchematicState();
+      await rebuildCoreFromSchematicStateNow();
     })
     .catch(() => {
       rebuildScheduled = false;
@@ -439,7 +496,11 @@ export function queueCoreRebuild(): Promise<void> {
   return rebuildQueue;
 }
 
-export async function rebuildCoreFromSchematicState(): Promise<void> {
+export function rebuildCoreFromSchematicState(): Promise<void> {
+  return queueCoreRebuild();
+}
+
+async function rebuildCoreFromSchematicStateNow(): Promise<void> {
   if (!state.coreClient) return;
 
   const runningBeforeRebuild = state.simulationStatus === "running";
@@ -510,11 +571,11 @@ export async function rebuildCoreFromSchematicState(): Promise<void> {
  * Aceita tanto `ProjectComponent` (`.lsproj`) quanto `WebviewComponentModel` (já em memória) --
  * as duas têm `typeId`/`subcircuitRef?` no mesmo shape, e ambas precisam do mesmo fallback ao
  * reconstruir pinos pro Core (`rebuildCoreFromSchematicState` reconstrói do zero a cada rebuild). */
-export function pinsForProjectComponent(component: { typeId: string; subcircuitRef?: { lastKnownPinIds?: string[] } }): Array<{ id: string; x: number; y: number }> {
+export function pinsForProjectComponent(component: { typeId: string; subcircuitRef?: { lastKnownPinIds?: string[] }; properties?: Record<string, unknown> }): Array<{ id: string; x: number; y: number }> {
   const descriptor = state.schematicState.catalog.find((item) => item.typeId === component.typeId);
   const lastKnownPinIds = component.subcircuitRef?.lastKnownPinIds;
   if (!descriptor && lastKnownPinIds && lastKnownPinIds.length > 0) {
     return lastKnownPinIds.map((id, index) => ({ id, x: 0, y: index * 12 }));
   }
-  return pinsForTypeId(component.typeId);
+  return pinsForTypeId(component.typeId, component.properties);
 }

@@ -10,6 +10,101 @@
 > **Nada foi implementado nesta etapa.** Este documento é só investigação/proposta, para o usuário decidir
 > o que fazer e em que ordem.
 
+## Atualização pós-implementação (2026-07-07)
+
+Esta seção registra o estado final depois da sequência de correções executada após a auditoria. O corpo
+do documento abaixo permanece como histórico do diagnóstico original.
+
+- **TR-8 fechado**: removidos os fallbacks mortos em `componentSymbols.ts` para built-ins já migrados para
+  `package`; os built-ins restantes devem passar pelo mesmo pipeline declarativo (`component-catalog.json`
+  -> `packageSanitizers`/parser -> `registerPackage` -> renderer), sem helpers internos por device.
+- **HARD-1 fechado**: a normalização compartilhada de manifesto em `registeredSources.ts` foi extraída
+  para helpers comuns (`manifestFolderPath`, `manifestIconFields`, `manifestDefaultProperties`) e usada
+  nos caminhos de subcircuito/ABI.
+- **PERF-1/PERF-2 fechados**: `main.ts` passou a indexar fios por componente para atualização localizada
+  durante drag e consolidou os passes de `render()` sobre `state.components`.
+- **OPT-1/OPT-2 fechados**: `UnifiedCatalog.ts` recebeu cache de leitura por `mtimeMs`, invalidado ao
+  salvar fontes registradas, e a paleta passou a usar texto localizado para singular/plural de pinos.
+- **TR-9 fechado após decisão explícita do usuário**: `switches.keypad` agora usa `dynamicLayout` no
+  próprio `package`, com `rows`/`columns` vivos no parser/renderer e pinGroups dinâmicos conforme o
+  SimulIDE (`C:\SourceCode\simulide_2\src\components\switches\keypad.cpp`). A geometria/pinos são
+  materializados por instância a partir do package, não por fallback hardcoded.
+- **HARD-2 fechado**: `extractPackageForEditing` deixou de reimplementar o parser de `package` e agora
+  delega para `sanitizePackage`, preservando o pipeline compartilhado de `background.asset`,
+  `dynamicLayout`, `viewSpec`, shapes e pins.
+- **EX-B fechado**: `registerAdhocSubcircuit` ganhou modo `returnPayload: false` no Core, exposto pela
+  Extension como `registerAdhocSubcircuitDefinition`, para registrar definições quando o payload rico seria
+  descartado.
+- **EX-E fechado após decisão explícita do usuário**: as mutações do Core na Extension agora passam por uma
+  fila compartilhada em `coreLifecycle.ts`, incluindo add/remove component, connect/disconnect wire,
+  propriedades, túnel e rebuild.
+- **FMT-1 fechado**: subcircuitos avulsos sem `library.json` permanecem habilitados e registram o
+  manifesto direto no Core (`adhocSubcircuitPathToRegister`), coberto por teste em `registeredSources`.
+- **PC-19 fechado**: o diálogo de propriedades usa `componentVisualFlags`/metadado para atualizar toggles
+  e fonte fixa, não mais checks locais por `typeId` literal no handler de edição.
+- **UI-DUP fechado**: `wireConnections.ts` concentra a montagem de fio pino→pino e pino→fio, usado tanto
+  por `extension.ts` quanto pela Webview em modo de autoria, com teste dedicado.
+- **UI-TXT fechado**: `normalizeSelectedTextLabel()` roda junto de `normalizeSelectedWireSegment()` e
+  `normalizeSelectedWireCorner()` no início de `render()`.
+- **PC-20/PC-21 fechados**: a contribuição morta `view/item/context` não existe mais no `package.json`, e a
+  mensagem de catálogo integrado já está com acentuação correta.
+- **SPEC/DOC fechados**: `.spec/lasecsimul.spec`, `.spec/lasecsimul-subcircuits.spec`,
+  `docs/07-extension-typescript.md`, `docs/08-ui-webview.md`, `docs/11-qemu-esp32.md` e
+  `docs/mvp-limitacoes.md` foram alinhados ao estado atual de paleta, subcircuito, undo/redo,
+  copiar/colar e flip.
+- **EX-9 terceira etapa concluída**: além de `project/projectCommands.ts`, foram extraídos
+  `catalog/catalogCommands.ts` (registro/remoção/refresh de catálogo), `mcu/mcuCommands.ts` (firmware,
+  monitor serial e overlay Modo Placa) e `symbolAuthoring/symbolCommands.ts` (edição, troca de vista,
+  carregamento e salvamento de package/símbolo). `extension.ts` caiu para 1273 linhas e ficou concentrado
+  no dispatcher/orquestração do editor, seleção/criação de subcircuito, sincronização com Core e exportação
+  de instrumentos.
+- **TR-9 generalizado (pino dinâmico, além do que o item original pedia)**: a pedido explícito do
+  usuário, o mecanismo virou genérico — `ComponentPinSpec`/`resolveDynamicPins` (Core,
+  `core/include/lasecsimul/Types.hpp`), único intérprete usado tanto por built-ins
+  (`SimulidePassiveState`) quanto por plugin nativo (`NativeDeviceProxy`/`PluginRuntime`). Aplicado a
+  4 built-ins (`switches.keypad`, `outputs.led_matrix`, `outputs.led_bar`, `active.analog_mux` —
+  auditados TODOS os `PropertySchemaAffectsTopology` existentes contra o SimulIDE real pra achar quem
+  de fato precisa). ABI de plugin: `pin_declare` (existia desde a major 3, mas era vestigial — nunca
+  afetava a topologia elétrica) agora funciona de verdade, de `init()` ou de dentro do próprio
+  `set_property()`, **sem nenhuma mudança de assinatura de ABI**; existe também um caminho 100%
+  declarativo (`pinSpec` no `.lsdevice`) pra quem não quer escrever C. `Netlist::reregisterComponentPins`
+  segue a mesma filosofia append-only de `removeComponent`. Ver `.spec/lasecsimul-native-devices.spec`
+  seção 7.1 pro desenho completo e [[project_lasecsimul_dynamic_pins]] na memória.
+  - **Gap visual fechado nesta mesma tarefa**: `outputs.led_matrix`/`outputs.led_bar`/`active.analog_mux`
+    ganharam `package.dynamicLayout`/`simulidePaint` completos (só `switches.keypad` tinha antes),
+    derivados linha a linha do SimulIDE real (`ledmatrix.cpp`/`ledbar.cpp`/`mux_analog.cpp`).
+    `active.analog_mux` exigiu estender a linguagem declarativa da Extension com `countFn`/`transform:
+    "log2Ceil"` (`PackageDynamicPinGroup`/`PackageNumberExpression`, `model.ts`), espelhando
+    `DynamicPinCountFn::Log2Ceil` do Core, porque a posição do pino `En` e a contagem do grupo `addr-`
+    dependem de `ceil(log2(channels))`, não expressável só com multiplicador/offset lineares.
+    **⚠️ Valores de pixel NÃO verificados numa sessão interativa** (sem GUI/harness de DOM neste
+    projeto) — a fórmula foi conferida por leitura direta do código-fonte real do SimulIDE e por 3
+    testes de regressão novos (`componentSymbols.test.ts`, 46/46 passando), mas nunca vista renderizada
+    de verdade. Recomendo abrir o Extension Development Host e comparar visualmente antes de considerar
+    isto no mesmo nível de confiança que o `switches.keypad` (que teve o mesmo trabalho feito por outra
+    sessão, também sem confirmação de que foi visualmente checado).
+- **Validação final**:
+  - `npm test` passou; após as extrações de `catalogCommands.ts`, `mcuCommands.ts` e
+    `symbolAuthoring/symbolCommands.ts`, passou novamente.
+  - `npx tsc -p tsconfig.json --noEmit` passou duas vezes na terceira etapa: uma logo após conectar a
+    extração de autoria de símbolo e outra na rodada final.
+  - `npx tsc -p tsconfig.webview.json --noEmit` passou.
+  - `npx tsc -p tsconfig.test.json --noEmit` passou.
+  - `npx --yes mocha "out-test/**/*.test.js"` saiu com código 0. Observação: os testes atuais são scripts
+    autoexecutáveis, não specs Mocha nativas; por isso o rodapé do Mocha mostra `0 passing`, enquanto os
+    próprios scripts imprimem seus blocos com `0 falharam`.
+  - `node scripts/build-core.js --config=Debug` passou.
+  - `ctest --test-dir core/build -C Debug --output-on-failure -E "esp32_devkitc_subcircuit"` passou 27/27.
+  - `ctest --test-dir core/build -C Debug --output-on-failure` passou até `esp32_adapter` e ficou travado
+    sem saída no teste `esp32_devkitc_subcircuit`; o processo foi encerrado manualmente para não deixar a
+    sessão pendurada.
+
+Memória de continuidade: built-ins migrados não devem ganhar helpers internos paralelos; qualquer novo
+comportamento visual/pinagem precisa entrar como dado de `package` e ser interpretado pelo parser/renderer
+compartilhado. Para os casos arquiteturais restantes de Fase D, pedir decisão explícita antes de alterar
+fluxo global. A terceira etapa de EX-9 já extraiu `symbolAuthoring/symbolCommands.ts`; não reabrir este
+cluster dentro de `extension.ts` em trabalhos futuros.
+
 ## Método
 
 5 agentes de investigação em paralelo, cada um com escopo de domínio, acesso ao código atual, às specs
@@ -610,6 +705,10 @@ API pública. As únicas mudanças com risco arquitetural real são:
   cluster novo identificado nesta rodada: `catalog/catalogCommands.ts` — linhas 1612-1882 de
   `extension.ts`, ~270 linhas de `registerCatalogFileCommand`/`removeRegisteredCatalogItemCommand`/
   `refreshUnifiedCatalogState`/`attachPropertySchemas`/`inferSourcesFromSelectedFile`).
+
+> Pós-implementação: a decisão explícita do usuário já foi dada para TR-9, EX-E e EX-9; estes itens, junto
+> de UI-DUP, foram implementados na sequência registrada no topo deste documento. Esta lista permanece como
+> histórico do plano original da auditoria.
 
 ---
 

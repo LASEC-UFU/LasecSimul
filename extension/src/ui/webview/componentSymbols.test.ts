@@ -65,6 +65,7 @@ import { PackageDescriptor } from "./model";
   });
 
   await test("other.ground replica sources/ground.cpp: caixa, pino no topo do lead e barras com stroke 2.5", () => {
+    catalogPackage("other.ground");
     const box = componentBox("other.ground");
     assert(box.width === 16 && box.height === 18, `Ground deveria usar caixa compacta 16x18, recebido {${box.width},${box.height}}`);
     const pin = pinLocalPosition("pin", 0, 1, "other.ground");
@@ -830,19 +831,19 @@ import { PackageDescriptor } from "./model";
     catalogPackage("switches.keypad");
     const props = { rows: 4, columns: 4, keyLabels: "123A456B789C*0#D" };
     const box = componentBox("switches.keypad", props);
-    assert(box.width === 76 && box.height === 76, `KeyPad 4x4 deveria incluir m_area 72x72 + leads de 4px, recebido ${JSON.stringify(box)}`);
+    assert(box.width === 80 && box.height === 76, `KeyPad 4x4 deveria incluir m_area 72x72 + leads SimulIDE, recebido ${JSON.stringify(box)}`);
 
     const rowPin0 = pinLocalPosition("pin-1", 0, 8, "switches.keypad", props);
     const rowPin3 = pinLocalPosition("pin-4", 3, 8, "switches.keypad", props);
     const colPin0 = pinLocalPosition("pin-5", 4, 8, "switches.keypad", props);
     const colPin3 = pinLocalPosition("pin-8", 7, 8, "switches.keypad", props);
-    assert(near(rowPin0.x, 0) && near(rowPin0.y, 16), `1o pino de linha deveria ficar na ponta do lead esquerdo, recebido ${JSON.stringify(rowPin0)}`);
-    assert(near(rowPin3.x, 0) && near(rowPin3.y, 64), `4o pino de linha deveria ficar na ponta do lead esquerdo, recebido ${JSON.stringify(rowPin3)}`);
-    assert(near(colPin0.x, 16) && near(colPin0.y, 0), `1o pino de coluna deveria ficar na ponta do lead superior, recebido ${JSON.stringify(colPin0)}`);
-    assert(near(colPin3.x, 64) && near(colPin3.y, 0), `4o pino de coluna deveria ficar na ponta do lead superior, recebido ${JSON.stringify(colPin3)}`);
+    assert(near(rowPin0.x, 80) && near(rowPin0.y, 12), `1o pino de linha deveria ficar na ponta do lead direito, recebido ${JSON.stringify(rowPin0)}`);
+    assert(near(rowPin3.x, 80) && near(rowPin3.y, 60), `4o pino de linha deveria ficar na ponta do lead direito, recebido ${JSON.stringify(rowPin3)}`);
+    assert(near(colPin0.x, 12) && near(colPin0.y, 72), `1o pino de coluna deveria ficar na ponta do lead inferior, recebido ${JSON.stringify(colPin0)}`);
+    assert(near(colPin3.x, 60) && near(colPin3.y, 72), `4o pino de coluna deveria ficar na ponta do lead inferior, recebido ${JSON.stringify(colPin3)}`);
 
     const svg = componentSymbolSvg("switches.keypad", props);
-    assert(svg.includes('fill="#fffef0"'), `Corpo do KeyPad deveria seguir a referencia SimulIDE clara, markup: ${svg}`);
+    assert(svg.includes('fill="#324664"'), `Corpo do KeyPad deveria seguir QColor(50,70,100) do SimulIDE, markup: ${svg}`);
     assert((svg.match(/<rect/g) ?? []).length === 17, `Deveria desenhar 1 corpo + 16 teclas (4x4), recebido ${(svg.match(/<rect/g) ?? []).length}`);
     assert(svg.includes(">A<") && svg.includes(">D<") && svg.includes(">*<"), `Rótulos das teclas deveriam vir de keyLabels real ("123A456B789C*0#D"), markup: ${svg}`);
 
@@ -851,8 +852,107 @@ import { PackageDescriptor } from "./model";
     // hit-test que main.ts desenha à parte pra todo componente, package ou não).
     const leadLines = svg.match(/<line[^>]*stroke-width="3"[^>]*\/>/g) ?? [];
     assert(leadLines.length === 8, `KeyPad 4x4 deveria desenhar 8 leads grossos (4 linhas + 4 colunas), recebido ${leadLines.length}: ${svg}`);
-    assert(svg.includes('x1="4.0" y1="16.0" x2="0.7" y2="16.0"'), `Lead da 1a linha deveria sair da borda esquerda ate o pino, markup: ${svg}`);
-    assert(svg.includes('x1="16.0" y1="4.0" x2="16.0" y2="0.7"'), `Lead da 1a coluna deveria sair da borda superior ate o pino, markup: ${svg}`);
+    assert(svg.includes('x1="76.0" y1="12.0" x2="79.3" y2="12.0"'), `Lead da 1a linha deveria sair da borda direita ate o pino, markup: ${svg}`);
+    assert(svg.includes('x1="12.0" y1="76.0" x2="12.0" y2="72.7"'), `Lead da 1a coluna deveria sair da borda inferior ate o pino, markup: ${svg}`);
+
+    const wideProps = { rows: 2, columns: 5, keyLabels: "ABCDEFGHIJ" };
+    const wideBox = componentBox("switches.keypad", wideProps);
+    const lastCol = pinLocalPosition("pin-7", 6, 7, "switches.keypad", wideProps);
+    const wideSvg = componentSymbolSvg("switches.keypad", wideProps);
+    assert(wideBox.width === 96 && wideBox.height === 44, `KeyPad 2x5 deveria recalcular caixa por rows/columns, recebido ${JSON.stringify(wideBox)}`);
+    assert(near(lastCol.x, 76) && near(lastCol.y, 40), `Ultimo pino de coluna 2x5 deveria vir do pinGroup dinamico, recebido ${JSON.stringify(lastCol)}`);
+    assert((wideSvg.match(/<rect/g) ?? []).length === 11, `KeyPad 2x5 deveria desenhar 1 corpo + 10 teclas, markup: ${wideSvg}`);
+  });
+
+  // Pino dinâmico (2026-07-07) -- dynamicLayout de outputs.led_matrix/led_bar/active.analog_mux,
+  // valores derivados do SimulIDE real (ledmatrix.cpp/ledbar.cpp/mux_analog.cpp), NÃO verificados
+  // visualmente numa sessão interativa (sem GUI/harness de DOM neste projeto) -- ver
+  // .spec/lasecsimul-native-devices.spec seção 7.1 e docs/22. Estes testes cobrem a FÓRMULA (caixa
+  // cresce/encolhe certo, pinos de grupos consecutivos ficam no grid step certo, countFn/transform
+  // "log2Ceil" resolve a contagem/posição certas) -- não substituem a conferência visual pendente.
+  await test("outputs.led_matrix vem de package com dynamicLayout rows+columns (m_pin[row]/m_pin[rows+col], ledmatrix.cpp)", () => {
+    catalogPackage("outputs.led_matrix");
+    const props = { rows: 8, columns: 8 };
+    const box = componentBox("outputs.led_matrix", props);
+    // m_area real é 72x72 (cols*8+8/rows*8+8), mas componentBox() inclui a extensão do LEAD (row
+    // pin sai 8px pra esquerda do corpo, angle=180) -- mesmo comportamento já existente pro keypad
+    // (box.width sempre > m_area quando algum lead se projeta pra fora do corpo).
+    assert(box.width === 88 && box.height === 72, `LedMatrix 8x8: m_area 72x72 + lead de 8px do pino de linha (angle 180) = 88 de largura, recebido ${JSON.stringify(box)}`);
+
+    const row0 = pinLocalPosition("pin-1", 0, 16, "outputs.led_matrix", props);
+    const row1 = pinLocalPosition("pin-2", 1, 16, "outputs.led_matrix", props);
+    assert(near(row1.y - row0.y, 8) && near(row1.x, row0.x),
+      `Pinos de linha consecutivos devem diferir 8px só em y (grid step real do LedMatrix), recebido row0=${JSON.stringify(row0)} row1=${JSON.stringify(row1)}`);
+
+    const col0 = pinLocalPosition("pin-9", 8, 16, "outputs.led_matrix", props);
+    const col1 = pinLocalPosition("pin-10", 9, 16, "outputs.led_matrix", props);
+    assert(near(col1.x - col0.x, 8) && near(col1.y, col0.y),
+      `Pinos de coluna consecutivos devem diferir 8px só em x, recebido col0=${JSON.stringify(col0)} col1=${JSON.stringify(col1)}`);
+
+    const smallProps = { rows: 4, columns: 3 };
+    const smallBox = componentBox("outputs.led_matrix", smallProps);
+    assert(smallBox.width === 48 && smallBox.height === 40, `LedMatrix 4x3 deveria encolher a caixa junto (cols*8+8=32 + lead 16 = 48, rows*8+8=40), recebido ${JSON.stringify(smallBox)}`);
+
+    const svg = componentSymbolSvg("outputs.led_matrix", smallProps);
+    assert((svg.match(/<rect/g) ?? []).length === 1 + 4 * 3, `LedMatrix 4x3 deveria desenhar 1 corpo + 12 LEDs, recebido ${(svg.match(/<rect/g) ?? []).length}: ${svg}`);
+  });
+
+  await test("outputs.led_bar vem de package com dynamicLayout size (par P/N por LED, ledbar.cpp)", () => {
+    catalogPackage("outputs.led_bar");
+    const props = { size: 8 };
+    const box = componentBox("outputs.led_bar", props);
+    // m_area real é 16x64, mas os pinos P (y indo até -24) e N (tip.x=16, coincide com a borda,
+    // sem expandir X) puxam o topo do box pra fora do corpo -- altura final inclui essa margem.
+    assert(box.width === 32 && box.height === 88, `LedBar size=8: largura 16 + lead 16 (P estende 8px além de cada borda) = 32, altura 64 + margem do primeiro pino (y=-24) = 88, recebido ${JSON.stringify(box)}`);
+
+    const p0 = pinLocalPosition("pin-P1", 0, 16, "outputs.led_bar", props);
+    const p1 = pinLocalPosition("pin-P2", 1, 16, "outputs.led_bar", props);
+    assert(near(p1.y - p0.y, 8) && near(p1.x, p0.x), `Pinos P consecutivos devem diferir 8px só em y, recebido p0=${JSON.stringify(p0)} p1=${JSON.stringify(p1)}`);
+
+    // Numeração de id CRUZA os dois grupos (mesmo padrão do Core, resolveDynamicPins) -- o grupo N
+    // continua a partir de onde o grupo P parou (size=8 -> N começa em pin-N9), nunca reinicia em 1.
+    const n0 = pinLocalPosition("pin-N9", 0, 16, "outputs.led_bar", props);
+    // P (tip x=-16) e N (tip x=+16) ficam nas pontas OPOSTAS dos leads, não nas bordas do corpo --
+    // 32px de distância entre as PONTAS (16 de cada lado), não os 16px de largura do corpo em si.
+    assert(near(n0.x - p0.x, 32), `Pino N deveria ficar na ponta do lead oposto (P tip=-16, N tip=+16, 32px de distância), recebido p0=${JSON.stringify(p0)} n0=${JSON.stringify(n0)}`);
+
+    const smallProps = { size: 4 };
+    const smallBox = componentBox("outputs.led_bar", smallProps);
+    assert(smallBox.width === 32 && smallBox.height === 56, `LedBar size=4: largura fica igual (independe de size), altura encolhe (m_area 32 + margem do 1o pino em y=-24 = 56), recebido ${JSON.stringify(smallBox)}`);
+  });
+
+  await test("active.analog_mux vem de package com dynamicLayout channels + countFn/transform log2Ceil (mux_analog.cpp)", () => {
+    catalogPackage("active.analog_mux");
+    const props = { channels: 8 };
+    const box = componentBox("active.analog_mux", props);
+    // m_area real é 32x72, mas Z/En/Addr (angle=180, length=8) estendem 8px além da borda esquerda
+    // (corpo em x=-16 -> tip em x=-24) -- box final inclui essa margem, altura já cabe no corpo.
+    assert(box.width === 56 && box.height === 72, `AnalogMux 8 canais: área 32x72 + lead de 8px (Z/En/Addr) na borda esquerda = 56 de largura, recebido ${JSON.stringify(box)}`);
+
+    // Z/En são pinos ESTÁTICOS (replacePins=false) -- sempre presentes, independente de channels.
+    const z = pinLocalPosition("z", 0, 13, "active.analog_mux", props);
+    const en = pinLocalPosition("en", 1, 13, "active.analog_mux", props);
+    assert(near(en.x, z.x), `Z e En devem ficar na mesma borda (esquerda), recebido z=${JSON.stringify(z)} en=${JSON.stringify(en)}`);
+
+    // 8 canais -> ceil(log2(8))=3 bits de endereço -- grupo "addr-" (countFn log2Ceil) deve ter
+    // exatamente 3 pinos (addr-3..addr-5, numeração cruzando z/en fixos), grupo "chan-" (countFn
+    // default) deve ter exatamente 8 (chan-6..chan-13, idStart via transform log2Ceil = 3+3=6).
+    const addr0 = pinLocalPosition("addr-3", 0, 13, "active.analog_mux", props);
+    const addr2 = pinLocalPosition("addr-5", 2, 13, "active.analog_mux", props);
+    assert(near(addr2.y - addr0.y, 16), `3 pinos addr (ceil(log2(8))=3) devem cobrir 2 steps de 8px, recebido addr-3=${JSON.stringify(addr0)} addr-5=${JSON.stringify(addr2)}`);
+
+    const chan0 = pinLocalPosition("chan-6", 0, 13, "active.analog_mux", props);
+    const chan7 = pinLocalPosition("chan-13", 7, 13, "active.analog_mux", props);
+    assert(near(chan7.y - chan0.y, 56), `8 pinos chan (channels=8) devem cobrir 7 steps de 8px, recebido chan-6=${JSON.stringify(chan0)} chan-13=${JSON.stringify(chan7)}`);
+    assert(!near(chan0.x, addr0.x), `Canais ficam na borda OPOSTA aos endereços (chan angle=0 direita, addr angle=180 esquerda), recebido chan-6=${JSON.stringify(chan0)} addr-3=${JSON.stringify(addr0)}`);
+
+    // channels=4 -> ceil(log2(4))=2 bits -- MENOS pinos de endereço, ids deslocam (addr-3/4,
+    // chan-5..chan-8) -- prova que countFn/idStart recalculam juntos, não travam no valor default.
+    const smallProps = { channels: 4 };
+    const smallAddr1 = pinLocalPosition("addr-4", 1, 9, "active.analog_mux", smallProps);
+    const smallChan0 = pinLocalPosition("chan-5", 0, 9, "active.analog_mux", smallProps);
+    assert(near(smallAddr1.y, 32), `2o (ultimo) pino addr com channels=4 (2 bits) deveria ficar em y=24+1*8=32, recebido ${JSON.stringify(smallAddr1)}`);
+    assert(near(smallChan0.y, 8), `1o pino chan com channels=4 deveria continuar em y=8 (offset do grupo, independente da contagem de bits), recebido ${JSON.stringify(smallChan0)}`);
   });
 
   registerPackage("test.example", undefined);

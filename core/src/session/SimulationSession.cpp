@@ -85,6 +85,7 @@ void SimulationSession::registerKnownPluginTypes() {
             if (const registry::ComponentMetadata* metadata = m_globalCache.metadata().find(typeId)) {
                 meta.propertySchema = metadata->propertySchema;
                 meta.stepTimeoutMs = metadata->stepTimeoutMs;
+                meta.pinSpec = metadata->pinSpec;
             }
             return m_pluginRuntime.createDeviceInstance(typeId, std::move(meta), params, m_scheduler);
         });
@@ -95,6 +96,23 @@ void SimulationSession::registerKnownMcuTypes() {
     for (const std::string& chipId : m_globalCache.knownMcuChipIds()) {
         m_mcus.replaceFactory(chipId, [this, chipId] { return m_pluginRuntime.createMcuAdapter(chipId); });
     }
+}
+
+void SimulationSession::reregisterPinsIfChanged(uint32_t componentIndex, IComponentModel* instance) {
+    std::vector<std::string> newPinIds;
+    for (const Pin& pin : instance->pins()) newPinIds.push_back(pin.id);
+
+    const std::unordered_map<std::string, uint32_t>& currentSlots = m_netlist.pinSlotsOf(componentIndex);
+    bool changed = currentSlots.size() != newPinIds.size();
+    if (!changed) {
+        for (const std::string& id : newPinIds) {
+            if (currentSlots.find(id) == currentSlots.end()) {
+                changed = true;
+                break;
+            }
+        }
+    }
+    if (changed) m_netlist.reregisterComponentPins(componentIndex, newPinIds);
 }
 
 uint32_t SimulationSession::addComponent(const std::string& typeId, const registry::ComponentParams& params) {
@@ -189,7 +207,8 @@ std::optional<std::string> SimulationSession::setProperty(uint32_t component, co
         }
 
         descriptor.set(value);
-        if ((schema.flags & PropertySchemaAffectsTopology) != 0) m_topologyDirty = true;
+        if ((schema.flags & PropertySchemaAffectsPinCount) != 0) reregisterPinsIfChanged(component, instance);
+        if ((schema.flags & (PropertySchemaAffectsTopology | PropertySchemaAffectsPinCount)) != 0) m_topologyDirty = true;
         m_scheduler.markDirty(component); // editar propriedade sempre exige re-stamp
         return std::nullopt;
     }

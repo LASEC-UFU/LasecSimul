@@ -4,6 +4,10 @@ import { fileExists, normalizeAbsolutePath } from "../pathUtils";
 import {
   ComponentViewSpec,
   PackageDescriptor,
+  PackageDynamicLayout,
+  PackageDynamicPinGroup,
+  PackageNumberExpression,
+  PackageNumberValue,
   PackagePin,
   PackageShape,
   SimulidePaintGradient,
@@ -51,6 +55,28 @@ export function sanitizePackageShape(value: unknown): PackageShape | undefined {
 
 export function finiteNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function sanitizeNumberValue(value: unknown): PackageNumberValue | undefined {
+  const direct = finiteNumber(value);
+  if (direct !== undefined) return direct;
+  if (typeof value !== "object" || value === null) return undefined;
+  const raw = value as Record<string, unknown>;
+  const prop = typeof raw.prop === "string" && raw.prop.trim() ? raw.prop.trim() : undefined;
+  const index = typeof raw.index === "string" && raw.index.trim() ? raw.index.trim() : undefined;
+  if (!prop && !index) return undefined;
+  const out: PackageNumberExpression = {
+    ...(prop ? { prop } : {}),
+    ...(index ? { index } : {}),
+    ...(finiteNumber(raw.multiplier) !== undefined ? { multiplier: finiteNumber(raw.multiplier) } : {}),
+    ...(finiteNumber(raw.offset) !== undefined ? { offset: finiteNumber(raw.offset) } : {}),
+    ...(finiteNumber(raw.fallback) !== undefined ? { fallback: finiteNumber(raw.fallback) } : {}),
+    ...(finiteNumber(raw.min) !== undefined ? { min: finiteNumber(raw.min) } : {}),
+    ...(finiteNumber(raw.max) !== undefined ? { max: finiteNumber(raw.max) } : {}),
+    ...(raw.round === "trunc" || raw.round === "round" || raw.round === "floor" || raw.round === "ceil" ? { round: raw.round } : {}),
+    ...(raw.transform === "log2Ceil" ? { transform: raw.transform } : {}),
+  };
+  return out;
 }
 
 export function sanitizePointList(value: unknown): Array<{ x: number; y: number }> | undefined {
@@ -244,25 +270,25 @@ export function sanitizeSimulidePaintPrimitive(value: unknown): SimulidePaintPri
   const stateAttrs = { ...(stateFill ? { stateFill } : {}), ...(stateVisible ? { stateVisible } : {}) };
 
   if (raw.kind === "line") {
-    const x1 = finiteNumber(raw.x1), y1 = finiteNumber(raw.y1), x2 = finiteNumber(raw.x2), y2 = finiteNumber(raw.y2);
+    const x1 = sanitizeNumberValue(raw.x1), y1 = sanitizeNumberValue(raw.y1), x2 = sanitizeNumberValue(raw.x2), y2 = sanitizeNumberValue(raw.y2);
     return x1 !== undefined && y1 !== undefined && x2 !== undefined && y2 !== undefined ? { kind: "line", x1, y1, x2, y2, ...stateAttrs, ...style } : undefined;
   }
   if (raw.kind === "rect" || raw.kind === "roundedRect") {
-    const x = finiteNumber(raw.x), y = finiteNumber(raw.y), w = finiteNumber(raw.w), h = finiteNumber(raw.h);
+    const x = sanitizeNumberValue(raw.x), y = sanitizeNumberValue(raw.y), w = sanitizeNumberValue(raw.w), h = sanitizeNumberValue(raw.h);
     if (x === undefined || y === undefined || w === undefined || h === undefined) return undefined;
-    const rx = finiteNumber(raw.rx);
-    const ry = finiteNumber(raw.ry);
+    const rx = sanitizeNumberValue(raw.rx);
+    const ry = sanitizeNumberValue(raw.ry);
     return raw.kind === "roundedRect"
       ? { kind: "roundedRect", x, y, w, h, rx: rx ?? 0, ry: ry ?? rx ?? 0, ...stateAttrs, ...style }
       : { kind: "rect", x, y, w, h, ...(rx !== undefined ? { rx } : {}), ...(ry !== undefined ? { ry } : {}), ...stateAttrs, ...style };
   }
   if (raw.kind === "ellipse") {
-    const cx = finiteNumber(raw.cx), cy = finiteNumber(raw.cy), rx = finiteNumber(raw.rx), ry = finiteNumber(raw.ry);
+    const cx = sanitizeNumberValue(raw.cx), cy = sanitizeNumberValue(raw.cy), rx = sanitizeNumberValue(raw.rx), ry = sanitizeNumberValue(raw.ry);
     return cx !== undefined && cy !== undefined && rx !== undefined && ry !== undefined ? { kind: "ellipse", cx, cy, rx, ry, ...stateAttrs, ...style } : undefined;
   }
   if (raw.kind === "arc") {
-    const x = finiteNumber(raw.x), y = finiteNumber(raw.y), w = finiteNumber(raw.w), h = finiteNumber(raw.h);
-    const startDeg = finiteNumber(raw.startDeg), spanDeg = finiteNumber(raw.spanDeg);
+    const x = sanitizeNumberValue(raw.x), y = sanitizeNumberValue(raw.y), w = sanitizeNumberValue(raw.w), h = sanitizeNumberValue(raw.h);
+    const startDeg = sanitizeNumberValue(raw.startDeg), spanDeg = sanitizeNumberValue(raw.spanDeg);
     return x !== undefined && y !== undefined && w !== undefined && h !== undefined && startDeg !== undefined && spanDeg !== undefined
       ? { kind: "arc", x, y, w, h, startDeg, spanDeg, ...stateAttrs, ...style }
       : undefined;
@@ -275,7 +301,7 @@ export function sanitizeSimulidePaintPrimitive(value: unknown): SimulidePaintPri
     return points ? { kind: raw.kind, points, ...stateAttrs, ...style } : undefined;
   }
   if (raw.kind === "text") {
-    const x = finiteNumber(raw.x), y = finiteNumber(raw.y);
+    const x = sanitizeNumberValue(raw.x), y = sanitizeNumberValue(raw.y);
     if (x === undefined || y === undefined || typeof raw.value !== "string") return undefined;
     const textAnchor = raw.textAnchor === "start" || raw.textAnchor === "middle" || raw.textAnchor === "end" ? raw.textAnchor : undefined;
     return {
@@ -283,7 +309,7 @@ export function sanitizeSimulidePaintPrimitive(value: unknown): SimulidePaintPri
       x,
       y,
       value: raw.value,
-      ...(finiteNumber(raw.fontSize) !== undefined ? { fontSize: finiteNumber(raw.fontSize) } : {}),
+      ...(sanitizeNumberValue(raw.fontSize) !== undefined ? { fontSize: sanitizeNumberValue(raw.fontSize) } : {}),
       ...(textAnchor ? { textAnchor } : {}),
       ...(sanitizeDominantBaseline(raw.dominantBaseline) ? { dominantBaseline: sanitizeDominantBaseline(raw.dominantBaseline) } : {}),
       ...(sanitizeOptionalString(raw.fontFamily) ? { fontFamily: sanitizeOptionalString(raw.fontFamily) } : {}),
@@ -293,7 +319,7 @@ export function sanitizeSimulidePaintPrimitive(value: unknown): SimulidePaintPri
       ...style,
     };
   }
-  const x = finiteNumber(raw.x), y = finiteNumber(raw.y), w = finiteNumber(raw.w), h = finiteNumber(raw.h);
+  const x = sanitizeNumberValue(raw.x), y = sanitizeNumberValue(raw.y), w = sanitizeNumberValue(raw.w), h = sanitizeNumberValue(raw.h);
   if (x === undefined || y === undefined || w === undefined || h === undefined || typeof raw.href !== "string" || !raw.href.trim()) return undefined;
   const stateHref = sanitizeSimulidePaintStateHref(raw.stateHref);
   return { kind: "image", x, y, w, h, href: raw.href, ...(sanitizeOptionalString(raw.preserveAspectRatio) ? { preserveAspectRatio: sanitizeOptionalString(raw.preserveAspectRatio) } : {}), ...stateAttrs, ...(stateHref ? { stateHref } : {}), ...style };
@@ -733,41 +759,94 @@ export function sanitizeComponentViewSpec(value: unknown): ComponentViewSpec | u
  * (são manifestos de primeira parte ou já passaram por consentimento de plugin antes de chegar aqui,
  * ver `extension.ts::ensureLibraryTrusted`) — valida só a forma estrutural mínima (presença e tipo
  * dos campos numéricos obrigatórios), não cada combinação de campo por `kind`. */
+function sanitizeDynamicPinGroup(value: unknown): PackageDynamicPinGroup | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const raw = value as Record<string, unknown>;
+  const countProp = sanitizeOptionalString(raw.countProp);
+  const x = sanitizeNumberValue(raw.x);
+  const y = sanitizeNumberValue(raw.y);
+  if (!countProp || x === undefined || y === undefined) return undefined;
+  return {
+    countProp,
+    ...(raw.countFn === "log2Ceil" ? { countFn: raw.countFn } : {}),
+    ...(sanitizeOptionalString(raw.indexName) ? { indexName: sanitizeOptionalString(raw.indexName) } : {}),
+    ...(sanitizeOptionalString(raw.idPrefix) ? { idPrefix: sanitizeOptionalString(raw.idPrefix) } : {}),
+    ...(sanitizeNumberValue(raw.idStart) !== undefined ? { idStart: sanitizeNumberValue(raw.idStart) } : {}),
+    x,
+    y,
+    ...(sanitizeNumberValue(raw.angle) !== undefined ? { angle: sanitizeNumberValue(raw.angle) } : {}),
+    ...(sanitizeNumberValue(raw.length) !== undefined ? { length: sanitizeNumberValue(raw.length) } : {}),
+    ...(sanitizeNumberValue(raw.leadEndTrim) !== undefined ? { leadEndTrim: sanitizeNumberValue(raw.leadEndTrim) } : {}),
+    ...(raw.leadOrigin === "terminal" || raw.leadOrigin === "body" ? { leadOrigin: raw.leadOrigin } : {}),
+    ...(sanitizeOptionalString(raw.leadColor) ? { leadColor: sanitizeOptionalString(raw.leadColor) } : {}),
+    ...(typeof raw.label === "string" ? { label: raw.label } : {}),
+  };
+}
+
+function sanitizeDynamicLayout(value: unknown): PackageDynamicLayout | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const raw = value as Record<string, unknown>;
+  const boundsRaw = typeof raw.simulideBounds === "object" && raw.simulideBounds !== null ? raw.simulideBounds as Record<string, unknown> : {};
+  const simulideBounds = {
+    ...(sanitizeNumberValue(boundsRaw.x) !== undefined ? { x: sanitizeNumberValue(boundsRaw.x) } : {}),
+    ...(sanitizeNumberValue(boundsRaw.y) !== undefined ? { y: sanitizeNumberValue(boundsRaw.y) } : {}),
+    ...(sanitizeNumberValue(boundsRaw.w) !== undefined ? { w: sanitizeNumberValue(boundsRaw.w) } : {}),
+    ...(sanitizeNumberValue(boundsRaw.h) !== undefined ? { h: sanitizeNumberValue(boundsRaw.h) } : {}),
+  };
+  const pinGroups = Array.isArray(raw.pinGroups)
+    ? raw.pinGroups.map(sanitizeDynamicPinGroup).filter((group): group is PackageDynamicPinGroup => Boolean(group))
+    : [];
+  const out: PackageDynamicLayout = {
+    ...(sanitizeNumberValue(raw.width) !== undefined ? { width: sanitizeNumberValue(raw.width) } : {}),
+    ...(sanitizeNumberValue(raw.height) !== undefined ? { height: sanitizeNumberValue(raw.height) } : {}),
+    ...(sanitizeNumberValue(raw.schematicWidth) !== undefined ? { schematicWidth: sanitizeNumberValue(raw.schematicWidth) } : {}),
+    ...(sanitizeNumberValue(raw.schematicHeight) !== undefined ? { schematicHeight: sanitizeNumberValue(raw.schematicHeight) } : {}),
+    ...(Object.keys(simulideBounds).length > 0 ? { simulideBounds } : {}),
+    ...(typeof raw.replacePins === "boolean" ? { replacePins: raw.replacePins } : {}),
+    ...(pinGroups.length > 0 ? { pinGroups } : {}),
+  };
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 export function sanitizePackage(value: unknown, assetBasePath?: string): PackageDescriptor | undefined {
   if (typeof value !== "object" || value === null) return undefined;
   const raw = value as Record<string, unknown>;
-  if (typeof raw.width !== "number" || typeof raw.height !== "number" || !Array.isArray(raw.pins)) return undefined;
+  if (typeof raw.width !== "number" || typeof raw.height !== "number") return undefined;
+  const dynamicLayout = sanitizeDynamicLayout(raw.dynamicLayout);
+  const rawPins = Array.isArray(raw.pins) ? raw.pins : [];
 
   const pins: PackagePin[] = [];
-  for (const pinValue of raw.pins) {
+  for (const pinValue of rawPins) {
     if (typeof pinValue !== "object" || pinValue === null) continue;
     const pin = pinValue as Record<string, unknown>;
     if (typeof pin.id !== "string" || !pin.id.trim()) continue;
-    if (typeof pin.x !== "number" || typeof pin.y !== "number") continue;
+    const x = sanitizeNumberValue(pin.x);
+    const y = sanitizeNumberValue(pin.y);
+    if (x === undefined || y === undefined) continue;
     pins.push({
       id: pin.id,
       aliases: Array.isArray(pin.aliases) ? pin.aliases.filter((alias): alias is string => typeof alias === "string" && Boolean(alias.trim())) : undefined,
       stateVisible: sanitizeSimulidePaintStateVisible(pin.stateVisible),
       kind: typeof pin.kind === "string" ? pin.kind : undefined,
-      x: pin.x,
-      y: pin.y,
-      angle: typeof pin.angle === "number" ? pin.angle : 0,
-      length: typeof pin.length === "number" ? pin.length : 8,
+      x,
+      y,
+      angle: sanitizeNumberValue(pin.angle) ?? 0,
+      length: sanitizeNumberValue(pin.length) ?? 8,
       leadOrigin: pin.leadOrigin === "terminal" || pin.leadOrigin === "body" ? pin.leadOrigin : undefined,
-      leadEndTrim: typeof pin.leadEndTrim === "number" ? pin.leadEndTrim : undefined,
+      leadEndTrim: sanitizeNumberValue(pin.leadEndTrim),
       leadColor: typeof pin.leadColor === "string" ? pin.leadColor : undefined,
       label: typeof pin.label === "string" ? pin.label : undefined,
       labelColor: typeof pin.labelColor === "string" ? pin.labelColor : undefined,
-      labelFontSize: typeof pin.labelFontSize === "number" ? pin.labelFontSize : undefined,
-      labelSpace: typeof pin.labelSpace === "number" ? pin.labelSpace : undefined,
+      labelFontSize: sanitizeNumberValue(pin.labelFontSize),
+      labelSpace: sanitizeNumberValue(pin.labelSpace),
       labelStateVisible: sanitizeSimulidePaintStateVisible(pin.labelStateVisible),
       labelTextAnchor: pin.labelTextAnchor === "start" || pin.labelTextAnchor === "middle" || pin.labelTextAnchor === "end" ? pin.labelTextAnchor : undefined,
       labelDominantBaseline: sanitizeDominantBaseline(pin.labelDominantBaseline),
-      labelX: typeof pin.labelX === "number" ? pin.labelX : undefined,
-      labelY: typeof pin.labelY === "number" ? pin.labelY : undefined,
+      labelX: sanitizeNumberValue(pin.labelX),
+      labelY: sanitizeNumberValue(pin.labelY),
     });
   }
-  if (pins.length === 0) return undefined;
+  if (pins.length === 0 && !dynamicLayout?.pinGroups?.length) return undefined;
 
   const shapes: PackageShape[] = [];
   if (Array.isArray(raw.shapes)) {
@@ -800,6 +879,7 @@ export function sanitizePackage(value: unknown, assetBasePath?: string): Package
     shapes,
     simulidePaint,
     qtWidget,
+    dynamicLayout,
     viewSpec,
     valueLabel: sanitizePackageValueLabel(raw.valueLabel),
     pins,

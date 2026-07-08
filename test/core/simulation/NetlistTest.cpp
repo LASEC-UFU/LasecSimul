@@ -188,6 +188,89 @@ int main() {
         ok &= expect(!removed, "disconnectWire should report false when no such edge exists (idempotent)");
     }
 
+    // reregisterComponentPins (pino dinâmico, ex: switches.keypad rows/columns) -- crescer contagem.
+    {
+        Netlist netlist;
+        netlist.registerComponent(0, {"pin-1", "pin-2"});
+        netlist.reregisterComponentPins(0, {"pin-1", "pin-2", "pin-3", "pin-4"});
+        const auto& slots = netlist.pinSlotsOf(0);
+        ok &= expect(slots.size() == 4, "reregister should reflect the new pin count");
+        ok &= expect(slots.find("pin-3") != slots.end() && slots.find("pin-4") != slots.end(),
+                     "reregister should add the new pin ids");
+        const Topology topology = netlist.rebuildTopology();
+        // Não checa `topology.groups.size()` no total: os 2 slots ANTIGOS (órfãos desde o
+        // reregister) ainda formam seus próprios grupos-fantasma de 1 nó cada -- mesmo
+        // comportamento, já pré-existente, de um `removeComponent()` (nenhum dos dois "limpa" o
+        // grupo, só o esvazia de qualquer fiação/listener real; `CircuitGroup::singular()` já trata
+        // um grupo de 1 nó sem estampa como inerte, sem risco). O que importa é achar o grupo REAL
+        // (via um pino que ainda existe) e conferir que ele tem os 4 pinos atuais, nada a mais.
+        const uint32_t liveGroup = topology.resolutionBySlot[slots.at("pin-1")].groupIndex;
+        ok &= expect(topology.groups[liveGroup].nodeIndices().size() == 4,
+                     "the component's live group should contain exactly its 4 current pins");
+    }
+
+    // reregisterComponentPins -- encolher contagem com um fio ligado ao pino que some: o fio some
+    // junto (órfão), nunca sobrevive apontando pra um slot morto.
+    {
+        Netlist netlist;
+        const auto a = netlist.registerComponent(0, {"pin-1", "pin-2", "pin-3"});
+        const auto b = netlist.registerComponent(1, {"p1"});
+        netlist.connectWire(a.at("pin-3"), b.at("p1")); // liga o pino que vai sumir no reregister
+        netlist.reregisterComponentPins(0, {"pin-1", "pin-2"});
+        const Topology topology = netlist.rebuildTopology();
+        ok &= expect(netlist.pinSlotsOf(0).size() == 2, "pinSlotsOf should only report the surviving pins");
+        // Grupo do componente 0 (2 pinos sobreviventes, nunca ligados entre si) precisa ser
+        // DIFERENTE do grupo do componente 1 -- prova que o fio que tocava o pino removido não
+        // sobrevive (senão os dois ainda estariam no mesmo grupo). Não checa `groups.size()` total
+        // pelo mesmo motivo do bloco acima (slot órfão vira grupo-fantasma de 1 nó, inofensivo).
+        const auto& survivingSlots = netlist.pinSlotsOf(0);
+        const uint32_t groupOfComponent0 = topology.resolutionBySlot[survivingSlots.at("pin-1")].groupIndex;
+        const uint32_t groupOfComponent1 = topology.resolutionBySlot[b.at("p1")].groupIndex;
+        ok &= expect(groupOfComponent0 != groupOfComponent1,
+                     "shrinking pins should silently drop the wire touching the removed pin, splitting the groups back");
+        ok &= expect(topology.groups[groupOfComponent0].nodeIndices().size() == 2,
+                     "component 0's surviving pins (unconnected to each other) should form a 2-node group");
+    }
+
+    // reregisterComponentPins -- slot órfão nunca reaparece em listener/pinRef mesmo o dono vivo.
+    {
+        Netlist netlist;
+        const auto a = netlist.registerComponent(0, {"pin-1", "pin-2"});
+        netlist.reregisterComponentPins(0, {"pin-1"}); // pin-2 vira órfão
+        const Topology topology = netlist.rebuildTopology();
+        size_t totalListeners = 0;
+        for (const auto& listeners : topology.listenersByNode) totalListeners += listeners.size();
+        ok &= expect(totalListeners == 1, "orphaned slot must never appear as a topology listener");
+        size_t totalPinRefs = 0;
+        for (const auto& refs : topology.pinRefsByNode) totalPinRefs += refs.size();
+        ok &= expect(totalPinRefs == 1, "orphaned slot must never appear in pinRefsByNode");
+        ok &= expect(netlist.pinSlotsOf(0).find("pin-2") == netlist.pinSlotsOf(0).end(),
+                     "pinSlotsOf must not expose the orphaned pin id anymore");
+        (void)a;
+    }
+
+    ok &= expectThrowsOutOfRange(
+        [] {
+            Netlist netlist;
+            netlist.reregisterComponentPins(0, {"pin-1"});
+        },
+        "reregisterComponentPins should reject an unknown component index");
+    ok &= expectThrowsInvalidArgument(
+        [] {
+            Netlist netlist;
+            netlist.registerComponent(0, {"pin-1"});
+            netlist.removeComponent(0);
+            netlist.reregisterComponentPins(0, {"pin-1"});
+        },
+        "reregisterComponentPins should reject a removed component");
+    ok &= expectThrowsInvalidArgument(
+        [] {
+            Netlist netlist;
+            netlist.registerComponent(0, {"pin-1"});
+            netlist.reregisterComponentPins(0, {"a", "a"});
+        },
+        "reregisterComponentPins should reject duplicate pin ids, same as registerComponent");
+
     if (ok) std::printf("OK: Netlist topology cases passed.\n");
     return ok ? 0 : 1;
 }

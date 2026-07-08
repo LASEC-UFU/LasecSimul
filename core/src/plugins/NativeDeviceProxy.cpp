@@ -230,14 +230,28 @@ std::vector<PropertyDescriptor> NativeDeviceProxy::propertyDescriptors() {
                 if (it != m_hostContext->properties.end()) return it->second;
                 return fallbackValue;
             },
-            [this, propertyId = schema.id](const PropertyValue& value) {
+            [this, propertyId = schema.id, affectsPinCount = (schema.flags & PropertySchemaAffectsPinCount) != 0](
+                const PropertyValue& value) {
                 m_hostContext->properties[propertyId] = value;
                 const LsdnDeviceVTable* vt = m_module->deviceVTable();
-                if (!vt->set_property) return;
-                LsdnPropertyValue abiValue{};
-                if (!writeAbiPropertyValue(value, &abiValue)) return;
-                const bool ok = CrashGuard::call(m_meta.typeId, [&] { vt->set_property(m_handle, propertyId.c_str(), &abiValue); });
-                if (!ok) m_health = PluginHealthStatus::Faulted;
+                if (vt->set_property) {
+                    LsdnPropertyValue abiValue{};
+                    if (writeAbiPropertyValue(value, &abiValue)) {
+                        const bool ok =
+                            CrashGuard::call(m_meta.typeId, [&] { vt->set_property(m_handle, propertyId.c_str(), &abiValue); });
+                        if (!ok) m_health = PluginHealthStatus::Faulted;
+                    }
+                }
+                // `pinSpec` declarativo (manifesto, sem C nenhum) -- recomputa aqui, DEPOIS do
+                // `set_property` acima (que pode ser um no-op pra um device puramente
+                // pinSpec-driven, sem vtable de verdade fazendo nada com a propriedade). Um plugin
+                // que em vez disso chama `pin_declare` na mão de dentro do próprio `set_property()`
+                // já escreveu em `declaredPins` na chamada acima -- este bloco só roda de novo se
+                // `pinSpec` também estiver presente (ver ComponentMeta::pinSpec: não deveriam
+                // coexistir, mas não há necessidade de impedir).
+                if (affectsPinCount && m_meta.pinSpec) {
+                    m_hostContext->declaredPins = resolveDynamicPins(*m_meta.pinSpec, m_hostContext->properties);
+                }
             },
             std::move(descriptorSchema),
         });

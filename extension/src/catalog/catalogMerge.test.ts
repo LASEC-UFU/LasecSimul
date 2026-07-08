@@ -24,6 +24,7 @@ function schemaDto(overrides: Partial<PropertySchemaDto> = {}): PropertySchemaDt
     readOnly: false,
     noCopy: false,
     affectsTopology: false,
+    affectsPinCount: false,
     requiresRestart: false,
     showOnSymbol: true,
     ...overrides,

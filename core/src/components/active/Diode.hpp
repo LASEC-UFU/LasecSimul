@@ -22,11 +22,23 @@ namespace lasecsimul::components {
  * iterações consecutivas é limitado a `2*Vt` quando o ponto anterior já passou de `vCrit` — sem
  * isso, exp(Vd/Vt) diverge pra infinito antes do laço de Newton-Raphson conseguir convergir,
  * para qualquer circuito que force uma estimativa inicial de Vd grande.
+ *
+ * `breakdownVoltage` (opcional, 0 = desativado, comportamento de `active.diode` intocado):
+ * ruptura reversa tipo zener -- um SEGUNDO ramo exponencial espelhado, ativo quando
+ * `-vd > breakdownVoltage`, na MESMA base `saturationCurrent`/`thermalVoltage` do ramo direto (não
+ * introduz parâmetros novos pro usuário além do próprio `breakdownVoltage`). Simplificação
+ * DELIBERADA frente ao `eDiode::voltChanged()` real do SimulIDE (`e-diode.cpp`): sem o offset
+ * logarítmico de suavização do joelho (`m_zOfset`) nem o `emCoef`/`gmin` variável por passo -- captura
+ * o comportamento físico essencial (clampeamento de tensão perto da ruptura) sem replicar as
+ * constantes exatas de arredondamento do SimulIDE. Documentado, não escondido -- ver
+ * `.spec/lasecsimul.spec` seção 7.4 e memória do projeto.
  */
 class Diode final : public IComponentModel {
 public:
-    explicit Diode(std::array<Pin, 2> pins, double saturationCurrent = 1e-12, double thermalVoltage = 0.02585)
-        : m_pins(std::move(pins)), m_saturationCurrent(validate(saturationCurrent)), m_thermalVoltage(thermalVoltage) {}
+    explicit Diode(std::array<Pin, 2> pins, double saturationCurrent = 1e-12, double thermalVoltage = 0.02585,
+                   double breakdownVoltage = 0.0, bool supportsBreakdown = false)
+        : m_pins(std::move(pins)), m_saturationCurrent(validate(saturationCurrent)), m_thermalVoltage(thermalVoltage),
+          m_breakdownVoltage(std::max(breakdownVoltage, 0.0)), m_supportsBreakdown(supportsBreakdown) {}
 
     const char* typeId() const override { return "active.diode"; }
     std::span<Pin> pins() override { return m_pins; }
@@ -39,10 +51,23 @@ public:
         vd = dampedVoltage(vd);
 
         const double expTerm = std::exp(vd / m_thermalVoltage);
-        const double id = m_saturationCurrent * (expTerm - 1.0);
+        double id = m_saturationCurrent * (expTerm - 1.0);
         // Gd nunca cai a zero (mesmo em polarização reversa funda) -- evita admitância nula numa
         // ponta do componente, o que deixaria o nó sem nenhuma referência e a matriz quase singular.
-        const double gd = std::max((m_saturationCurrent / m_thermalVoltage) * expTerm, 1e-15);
+        double gd = std::max((m_saturationCurrent / m_thermalVoltage) * expTerm, 1e-15);
+
+        if (m_breakdownVoltage > 0.0 && vd < 0.0) {
+            // vz = quanto a tensão reversa já passou do ponto de ruptura -- cresce rápido uma vez
+            // que a "ruptura" começa a conduzir, por isso o clamp em kMaxBreakdownOvershoot (o
+            // amortecimento de `dampedVoltage` já limita o passo por iteração, isto é só uma
+            // segunda rede de segurança contra overflow de exp() em circuitos patológicos).
+            const double vz = std::min(-vd - m_breakdownVoltage, kMaxBreakdownOvershoot);
+            if (vz > 0.0) {
+                const double expZ = std::exp(vz / m_thermalVoltage);
+                id -= m_saturationCurrent * expZ;
+                gd += (m_saturationCurrent / m_thermalVoltage) * expZ;
+            }
+        }
         const double ieq = id - gd * vd;
 
         matrix.addConductance(m_pins[0], m_pins[1], gd);
@@ -71,11 +96,22 @@ public:
             [this](const PropertyValue& v) {
                 if (const double* d = std::get_if<double>(&v)) setSaturationCurrent(*d);
             }};
-        descriptor.schema = propertySchema().front();
-        return {descriptor};
+        descriptor.schema = propertySchema(m_supportsBreakdown).front();
+        if (!m_supportsBreakdown) return {descriptor};
+
+        PropertyDescriptor breakdown{
+            "breakdownVoltage", "V", [this] { return PropertyValue{m_breakdownVoltage}; },
+            [this](const PropertyValue& v) {
+                if (const double* d = std::get_if<double>(&v)) m_breakdownVoltage = std::max(*d, 0.0);
+            }};
+        breakdown.schema = propertySchema(m_supportsBreakdown).back();
+        return {descriptor, breakdown};
     }
 
-    static std::vector<PropertySchema> propertySchema() {
+    /** `withBreakdown`: `active.zener` registra com `true` (schema de 2 campos, ver
+     * `CoreApplication.cpp`); `active.diode` registra com `false` (só `saturationCurrent`, schema
+     * idêntico ao de antes desta mudança -- comportamento/UI de `active.diode` intocados). */
+    static std::vector<PropertySchema> propertySchema(bool withBreakdown = false) {
         PropertySchema schema;
         schema.id = "saturationCurrent";
         schema.label = "Corrente de Saturação";
@@ -86,13 +122,30 @@ public:
         schema.defaultValue = 1e-12;
         schema.minValue = 1e-18;
         schema.step = 1e-12;
-        return {schema};
+        if (!withBreakdown) return {schema};
+
+        PropertySchema breakdown;
+        breakdown.id = "breakdownVoltage";
+        breakdown.label = "Tensão de Ruptura (Zener)";
+        breakdown.group = "Elétrica";
+        breakdown.unit = "V";
+        breakdown.valueKind = PropertyValueKind::Number;
+        breakdown.editor = "number";
+        breakdown.defaultValue = 5.1;
+        breakdown.minValue = 0.0;
+        breakdown.step = 0.1;
+        return {schema, breakdown};
     }
 
     void setSaturationCurrent(double amperes) { m_saturationCurrent = validate(amperes); }
 
 private:
     static constexpr double kVoltageTolerance = 1e-6;
+    // Limite absoluto de quanto o ramo de ruptura pode ultrapassar breakdownVoltage antes de
+    // saturar o cálculo -- rede de segurança contra overflow de exp() em circuito patológico
+    // (fonte reversa absurdamente alta sem resistor limitador); amortecimento por iteração
+    // (dampedVoltage) já é a defesa PRINCIPAL, isto é só o teto final.
+    static constexpr double kMaxBreakdownOvershoot = 2.0;
 
     static double validate(double amperes) {
         if (!std::isfinite(amperes) || amperes <= 0.0) {
@@ -103,14 +156,28 @@ private:
 
     double dampedVoltage(double vd) const {
         const double vCrit = m_thermalVoltage * std::log(m_thermalVoltage / (std::sqrt(2.0) * m_saturationCurrent));
-        if (vd <= vCrit) return vd;
-        if (m_lastVd <= vCrit) return vCrit; // primeira vez cruzando vCrit: entra exatamente no limiar
-        return std::min(vd, m_lastVd + 2.0 * m_thermalVoltage); // passo de Newton amortecido
+        if (vd > vCrit) {
+            if (m_lastVd <= vCrit) return vCrit; // primeira vez cruzando vCrit: entra exatamente no limiar
+            return std::min(vd, m_lastVd + 2.0 * m_thermalVoltage); // passo de Newton amortecido
+        }
+        if (m_breakdownVoltage > 0.0) {
+            // Espelho do amortecimento acima, ancorado no limiar de ruptura reversa em vez de vCrit
+            // -- sem isto, o ramo de ruptura (stamp()) teria a MESMA divergência exponencial que o
+            // ramo direto tinha antes do amortecimento existir.
+            const double vCritNeg = -(m_breakdownVoltage + vCrit);
+            if (vd < vCritNeg) {
+                if (m_lastVd >= vCritNeg) return vCritNeg;
+                return std::max(vd, m_lastVd - 2.0 * m_thermalVoltage);
+            }
+        }
+        return vd;
     }
 
     std::array<Pin, 2> m_pins;
     double m_saturationCurrent;
     double m_thermalVoltage;
+    double m_breakdownVoltage;
+    bool m_supportsBreakdown;
     double m_lastVd = 0.0;
     double m_lastCurrent = 0.0;
     bool m_converged = false;

@@ -174,6 +174,12 @@ public:
 private:
     void rebuildTopologyIfNeeded();
     SubcircuitExpansionResult expandSubcircuit(const std::string& typeId, std::vector<std::string>& expansionStack);
+    /** Relê `instance->pins()` (já com a contagem nova, resolvida por quem implementa
+     * `IComponentModel` -- `SimulidePassiveState`/`NativeDeviceProxy`, nunca aqui) e reregistra no
+     * `Netlist` só se o conjunto de ids mudou de verdade -- evita `reregisterComponentPins` (que
+     * sempre gera slots novos, nunca reciclados) em toda edição de propriedade com
+     * `AffectsPinCount`, mesmo quando o valor não mudou o suficiente pra alterar a contagem. */
+    void reregisterPinsIfChanged(uint32_t componentIndex, IComponentModel* instance);
 
     plugins::GlobalPluginCache& m_globalCache;
     registry::ComponentRegistry m_components;

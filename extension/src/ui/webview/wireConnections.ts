@@ -60,23 +60,22 @@ export function buildPinToWireConnection(params: {
   newWirePoints: WebviewPoint[] | undefined;
 }): PinToWireConnectionResult {
   const junction = junctionComponentAt(params.junctionPoint, params.junctionId);
-  const junctionRef: WirePinRef = { componentId: junction.id, pinId: "pin-1" };
   const firstWire: WebviewWireModel = {
     id: params.firstWireId,
     from: params.existingWire.from,
-    to: junctionRef,
+    to: { componentId: junction.id, pinId: "pin-1" },
     points: params.existingWireFirstPoints,
   };
   const secondWire: WebviewWireModel = {
     id: params.secondWireId,
-    from: junctionRef,
+    from: { componentId: junction.id, pinId: "pin-1" },
     to: params.existingWire.to,
     points: params.existingWireSecondPoints,
   };
   const newWire: WebviewWireModel = {
     id: params.newWireId,
     from: params.from,
-    to: junctionRef,
+    to: { componentId: junction.id, pinId: "pin-1" },
     points: params.newWirePoints,
   };
   return { junction, firstWire, secondWire, newWire };

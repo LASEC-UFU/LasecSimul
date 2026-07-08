@@ -927,7 +927,7 @@
     {
       "typeId": "switches.keypad",
       "label": "KeyPad",
-      "pinCount": 8,
+      "pinCount": 7,
       "icon": "keypad",
       "folderPath": [
         "Interruptores"
@@ -936,8 +936,8 @@
         "diodes": false,
         "diodesDirection": false,
         "rows": 4,
-        "columns": 4,
-        "keyLabels": "123A456B789C*0#D"
+        "columns": 3,
+        "keyLabels": "123456789*0#"
       },
       "pinIds": [
         "pin-1",
@@ -946,11 +946,10 @@
         "pin-4",
         "pin-5",
         "pin-6",
-        "pin-7",
-        "pin-8"
+        "pin-7"
       ],
       "package": {
-        "width": 72,
+        "width": 56,
         "height": 72,
         "border": false,
         "background": {
@@ -962,12 +961,12 @@
             "file": "src/components/switches/keypad.cpp",
             "className": "KeyPad",
             "method": "paint + setupButtons/createSwitches",
-            "notes": "keypad.cpp nao localizado no workspace atual; IR reconstruido a partir da captura SimulIDE fornecida e das notas existentes de m_area=QRectF(-12,-4,16*cols+8,16*rows+8), botoes 16x16 repetidos e pinos de linha/coluna. Usa repeat.countProp/indexName + stateText.propertyChar do render, sem listar tecla por tecla."
+            "notes": "KeyPad::setupButtons() creates m_area=QRectF(-12,-4,16*cols+8,16*rows+8), row pins at QPoint(cols*16,8+row*16) with angle 0/length 4, and column pins at QPoint(col*16,rows*16+8) with angle 270/length 4. dynamicLayout keeps rows/columns live in the package parser."
           },
           "bounds": {
             "x": -12,
             "y": -4,
-            "w": 72,
+            "w": 56,
             "h": 72
           },
           "defaultStroke": "#303840",
@@ -978,11 +977,23 @@
               "kind": "roundedRect",
               "x": -12,
               "y": -4,
-              "w": 72,
-              "h": 72,
+              "w": {
+                "prop": "columns",
+                "multiplier": 16,
+                "offset": 8,
+                "min": 24,
+                "round": "trunc"
+              },
+              "h": {
+                "prop": "rows",
+                "multiplier": 16,
+                "offset": 8,
+                "min": 24,
+                "round": "trunc"
+              },
               "rx": 2,
               "ry": 2,
-              "fill": "#fffef0",
+              "fill": "#324664",
               "stroke": "#303840",
               "strokeWidth": 2.8
             },
@@ -1006,9 +1017,9 @@
                       "h": 16,
                       "rx": 2,
                       "ry": 2,
-                      "fill": "#fffef0",
-                      "stroke": "#303840",
-                      "strokeWidth": 2.4
+                      "fill": "#e6e6e6",
+                      "stroke": "#777777",
+                      "strokeWidth": 1.5
                     },
                     {
                       "kind": "text",
@@ -1037,36 +1048,36 @@
         "pins": [
           {
             "id": "pin-1",
-            "x": 0,
+            "x": 60,
             "y": 12,
-            "angle": 180,
+            "angle": 0,
             "length": 4,
             "leadEndTrim": 0.7,
             "label": ""
           },
           {
             "id": "pin-2",
-            "x": 0,
+            "x": 60,
             "y": 28,
-            "angle": 180,
+            "angle": 0,
             "length": 4,
             "leadEndTrim": 0.7,
             "label": ""
           },
           {
             "id": "pin-3",
-            "x": 0,
+            "x": 60,
             "y": 44,
-            "angle": 180,
+            "angle": 0,
             "length": 4,
             "leadEndTrim": 0.7,
             "label": ""
           },
           {
             "id": "pin-4",
-            "x": 0,
+            "x": 60,
             "y": 60,
-            "angle": 180,
+            "angle": 0,
             "length": 4,
             "leadEndTrim": 0.7,
             "label": ""
@@ -1074,7 +1085,7 @@
           {
             "id": "pin-5",
             "x": 12,
-            "y": 0,
+            "y": 76,
             "angle": 270,
             "length": 4,
             "leadEndTrim": 0.7,
@@ -1083,7 +1094,7 @@
           {
             "id": "pin-6",
             "x": 28,
-            "y": 0,
+            "y": 76,
             "angle": 270,
             "length": 4,
             "leadEndTrim": 0.7,
@@ -1092,22 +1103,94 @@
           {
             "id": "pin-7",
             "x": 44,
-            "y": 0,
-            "angle": 270,
-            "length": 4,
-            "leadEndTrim": 0.7,
-            "label": ""
-          },
-          {
-            "id": "pin-8",
-            "x": 60,
-            "y": 0,
+            "y": 76,
             "angle": 270,
             "length": 4,
             "leadEndTrim": 0.7,
             "label": ""
           }
-        ]
+        ],
+        "dynamicLayout": {
+          "width": {
+            "prop": "columns",
+            "multiplier": 16,
+            "offset": 8,
+            "min": 24,
+            "round": "trunc"
+          },
+          "height": {
+            "prop": "rows",
+            "multiplier": 16,
+            "offset": 8,
+            "min": 24,
+            "round": "trunc"
+          },
+          "simulideBounds": {
+            "w": {
+              "prop": "columns",
+              "multiplier": 16,
+              "offset": 8,
+              "min": 24,
+              "round": "trunc"
+            },
+            "h": {
+              "prop": "rows",
+              "multiplier": 16,
+              "offset": 8,
+              "min": 24,
+              "round": "trunc"
+            }
+          },
+          "replacePins": true,
+          "pinGroups": [
+            {
+              "countProp": "rows",
+              "indexName": "row",
+              "idPrefix": "pin-",
+              "idStart": 1,
+              "x": {
+                "prop": "columns",
+                "multiplier": 16,
+                "offset": 12,
+                "round": "trunc"
+              },
+              "y": {
+                "index": "row",
+                "multiplier": 16,
+                "offset": 12
+              },
+              "angle": 0,
+              "length": 4,
+              "leadEndTrim": 0.7,
+              "label": ""
+            },
+            {
+              "countProp": "columns",
+              "indexName": "col",
+              "idPrefix": "pin-",
+              "idStart": {
+                "prop": "rows",
+                "offset": 1,
+                "round": "trunc"
+              },
+              "x": {
+                "index": "col",
+                "multiplier": 16,
+                "offset": 12
+              },
+              "y": {
+                "prop": "rows",
+                "multiplier": 16,
+                "offset": 12,
+                "round": "trunc"
+              },
+              "angle": 270,
+              "length": 4,
+              "leadEndTrim": 0.7,
+              "label": ""
+            }
+          ]
+        }
       },
       "graphical": true
     },
@@ -1318,6 +1401,210 @@
       ],
       "defaultProperties": {
         "resistance": 10000
+      },
+      "pinIds": [
+        "pin-1",
+        "pin-2"
+      ],
+      "package": {
+        "width": 32,
+        "height": 14,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/passive/resistors/varresistor.cpp + varresbase.cpp",
+            "className": "VarResistor",
+            "method": "paint",
+            "notes": "VarResBase pins (-16,0)/(16,0), setLength(4.4) => effective lead 3.7. paint draws Resistor::drawAnsi or rect(-11,-4.5,22,9), plus variable arrow lines (-6,6)->(8,-8)->(6,-8)."
+          },
+          "bounds": {
+            "x": -16,
+            "y": -8,
+            "w": 32,
+            "h": 14
+          },
+          "defaultStroke": "#000",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 1.5,
+          "primitives": [
+            {
+              "kind": "rect",
+              "x": -11,
+              "y": -4.5,
+              "w": 22,
+              "h": 9,
+              "fill": "#ffffff",
+              "strokeWidth": 1.5,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "false",
+                    "undefined"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -12,
+              "y1": 0,
+              "x2": -10,
+              "y2": -4,
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -10,
+              "y1": -4,
+              "x2": -6,
+              "y2": 4,
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -6,
+              "y1": 4,
+              "x2": -2,
+              "y2": -4,
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -2,
+              "y1": -4,
+              "x2": 2,
+              "y2": 4,
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": 2,
+              "y1": 4,
+              "x2": 6,
+              "y2": -4,
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": 6,
+              "y1": -4,
+              "x2": 10,
+              "y2": 4,
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": 10,
+              "y1": 4,
+              "x2": 12,
+              "y2": 0,
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -6,
+              "y1": 6,
+              "x2": 8,
+              "y2": -8,
+              "strokeWidth": 1.5
+            },
+            {
+              "kind": "line",
+              "x1": 8,
+              "y1": -6,
+              "x2": 8,
+              "y2": -8,
+              "strokeWidth": 1.5
+            },
+            {
+              "kind": "line",
+              "x1": 8,
+              "y1": -8,
+              "x2": 6,
+              "y2": -8,
+              "strokeWidth": 1.5
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "aliases": [
+              "p1",
+              "lPin"
+            ],
+            "x": 3.7,
+            "y": 8,
+            "angle": 180,
+            "length": 3.7,
+            "label": ""
+          },
+          {
+            "id": "pin-2",
+            "aliases": [
+              "p2",
+              "rPin"
+            ],
+            "x": 28.3,
+            "y": 8,
+            "angle": 0,
+            "length": 3.7,
+            "label": ""
+          }
+        ]
       }
     },
     {
@@ -1358,6 +1645,192 @@
       ],
       "defaultProperties": {
         "resistance": 1000
+      },
+      "pinIds": [
+        "pin-1",
+        "pin-2"
+      ],
+      "package": {
+        "width": 32,
+        "height": 15.5,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/passive/resist_sensors/ldr.cpp + varresbase.cpp",
+            "className": "Ldr",
+            "method": "paint",
+            "notes": "VarResBase pins (-16,0)/(16,0), effective lead 3.7. paint draws resistor body plus two light arrows at (-5,-11)->(-1,-7) and (1,-11)->(5,-7)."
+          },
+          "bounds": {
+            "x": -16,
+            "y": -11,
+            "w": 32,
+            "h": 15.5
+          },
+          "defaultStroke": "#000",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 1.5,
+          "primitives": [
+            {
+              "kind": "rect",
+              "x": -11,
+              "y": -4.5,
+              "w": 22,
+              "h": 9,
+              "fill": "#ffffff",
+              "strokeWidth": 1.5,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "false",
+                    "undefined"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -12,
+              "y1": 0,
+              "x2": -10,
+              "y2": -4,
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -10,
+              "y1": -4,
+              "x2": -6,
+              "y2": 4,
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -6,
+              "y1": 4,
+              "x2": -2,
+              "y2": -4,
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -2,
+              "y1": -4,
+              "x2": 2,
+              "y2": 4,
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": 2,
+              "y1": 4,
+              "x2": 6,
+              "y2": -4,
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": 6,
+              "y1": -4,
+              "x2": 10,
+              "y2": 4,
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": 10,
+              "y1": 4,
+              "x2": 12,
+              "y2": 0,
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "path",
+              "d": "M -5 -11 L -1 -7 M -1 -7 L -1 -9 M -1 -7 L -3 -7 M 1 -11 L 5 -7 M 5 -7 L 5 -9 M 5 -7 L 3 -7",
+              "fill": "none",
+              "strokeWidth": 1.5
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "aliases": [
+              "p1",
+              "lPin"
+            ],
+            "x": 3.7,
+            "y": 11,
+            "angle": 180,
+            "length": 3.7,
+            "label": ""
+          },
+          {
+            "id": "pin-2",
+            "aliases": [
+              "p2",
+              "rPin"
+            ],
+            "x": 28.3,
+            "y": 11,
+            "angle": 0,
+            "length": 3.7,
+            "label": ""
+          }
+        ]
       }
     },
     {
@@ -1371,6 +1844,192 @@
       ],
       "defaultProperties": {
         "resistance": 10000
+      },
+      "pinIds": [
+        "pin-1",
+        "pin-2"
+      ],
+      "package": {
+        "width": 32,
+        "height": 14,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/passive/resist_sensors/thermistor.cpp + thermistorbase.cpp + varresbase.cpp",
+            "className": "Thermistor",
+            "method": "paint",
+            "notes": "ThermistorBase inherits VarResBase pins (-16,0)/(16,0), effective lead 3.7. paint draws resistor body plus line (-8,6)->(6,-8)->(10,-8)."
+          },
+          "bounds": {
+            "x": -16,
+            "y": -8,
+            "w": 32,
+            "h": 14
+          },
+          "defaultStroke": "#000",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 1.5,
+          "primitives": [
+            {
+              "kind": "rect",
+              "x": -11,
+              "y": -4.5,
+              "w": 22,
+              "h": 9,
+              "fill": "#ffffff",
+              "strokeWidth": 1.5,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "false",
+                    "undefined"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -12,
+              "y1": 0,
+              "x2": -10,
+              "y2": -4,
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -10,
+              "y1": -4,
+              "x2": -6,
+              "y2": 4,
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -6,
+              "y1": 4,
+              "x2": -2,
+              "y2": -4,
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -2,
+              "y1": -4,
+              "x2": 2,
+              "y2": 4,
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": 2,
+              "y1": 4,
+              "x2": 6,
+              "y2": -4,
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": 6,
+              "y1": -4,
+              "x2": 10,
+              "y2": 4,
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": 10,
+              "y1": 4,
+              "x2": 12,
+              "y2": 0,
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "path",
+              "d": "M -8 6 L 6 -8 L 10 -8",
+              "fill": "none",
+              "strokeWidth": 1.5
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "aliases": [
+              "p1",
+              "lPin"
+            ],
+            "x": 3.7,
+            "y": 8,
+            "angle": 180,
+            "length": 3.7,
+            "label": ""
+          },
+          {
+            "id": "pin-2",
+            "aliases": [
+              "p2",
+              "rPin"
+            ],
+            "x": 28.3,
+            "y": 8,
+            "angle": 0,
+            "length": 3.7,
+            "label": ""
+          }
+        ]
       }
     },
     {
@@ -1384,6 +2043,204 @@
       ],
       "defaultProperties": {
         "resistance": 100
+      },
+      "pinIds": [
+        "pin-1",
+        "pin-2"
+      ],
+      "package": {
+        "width": 32,
+        "height": 14,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/passive/resist_sensors/rtd.cpp + thermistorbase.cpp + varresbase.cpp",
+            "className": "RTD",
+            "method": "paint",
+            "notes": "RTD inherits VarResBase pins (-16,0)/(16,0), effective lead 3.7. paint draws resistor body, diagonal (-6,6)->(8,-8), and text +t degrees at (-8,-6) with pixel size 8."
+          },
+          "bounds": {
+            "x": -16,
+            "y": -8,
+            "w": 32,
+            "h": 14
+          },
+          "defaultStroke": "#000",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 1.5,
+          "primitives": [
+            {
+              "kind": "rect",
+              "x": -11,
+              "y": -4.5,
+              "w": 22,
+              "h": 9,
+              "fill": "#ffffff",
+              "strokeWidth": 1.5,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "false",
+                    "undefined"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -12,
+              "y1": 0,
+              "x2": -10,
+              "y2": -4,
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -10,
+              "y1": -4,
+              "x2": -6,
+              "y2": 4,
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -6,
+              "y1": 4,
+              "x2": -2,
+              "y2": -4,
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -2,
+              "y1": -4,
+              "x2": 2,
+              "y2": 4,
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": 2,
+              "y1": 4,
+              "x2": 6,
+              "y2": -4,
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": 6,
+              "y1": -4,
+              "x2": 10,
+              "y2": 4,
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": 10,
+              "y1": 4,
+              "x2": 12,
+              "y2": 0,
+              "strokeWidth": 2,
+              "stateVisible": {
+                "when": {
+                  "ansiSymbol": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "line",
+              "x1": -6,
+              "y1": 6,
+              "x2": 8,
+              "y2": -8,
+              "strokeWidth": 1.5
+            },
+            {
+              "kind": "text",
+              "x": -8,
+              "y": -6,
+              "value": "+t°",
+              "fontSize": 8,
+              "textAnchor": "middle",
+              "fill": "#000",
+              "stroke": "none"
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "aliases": [
+              "p1",
+              "lPin"
+            ],
+            "x": 3.7,
+            "y": 8,
+            "angle": 180,
+            "length": 3.7,
+            "label": ""
+          },
+          {
+            "id": "pin-2",
+            "aliases": [
+              "p2",
+              "rPin"
+            ],
+            "x": 28.3,
+            "y": 8,
+            "angle": 0,
+            "length": 3.7,
+            "label": ""
+          }
+        ]
       }
     },
     {
@@ -1397,6 +2254,132 @@
       ],
       "defaultProperties": {
         "resistance": 350
+      },
+      "pinIds": [
+        "pin-1",
+        "pin-2"
+      ],
+      "package": {
+        "width": 32,
+        "height": 24,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/passive/resist_sensors/strain.cpp + varresbase.cpp",
+            "className": "Strain",
+            "method": "paint",
+            "notes": "Strain overrides m_area to QRectF(-12,-20,24,24) but keeps VarResBase pins (-16,0)/(16,0), effective lead 3.7. paint draws body, two filled tabs, and the 8-point strain track polyline."
+          },
+          "bounds": {
+            "x": -16,
+            "y": -20,
+            "w": 32,
+            "h": 24
+          },
+          "defaultStroke": "#000",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 1.5,
+          "primitives": [
+            {
+              "kind": "rect",
+              "x": -11,
+              "y": -20,
+              "w": 22,
+              "h": 24,
+              "fill": "none",
+              "strokeWidth": 1.5
+            },
+            {
+              "kind": "rect",
+              "x": -8,
+              "y": -2,
+              "w": 4,
+              "h": 4,
+              "fill": "#000",
+              "stroke": "none"
+            },
+            {
+              "kind": "rect",
+              "x": 4,
+              "y": -2,
+              "w": 4,
+              "h": 4,
+              "fill": "#000",
+              "stroke": "none"
+            },
+            {
+              "kind": "polyline",
+              "points": [
+                {
+                  "x": -6,
+                  "y": 0
+                },
+                {
+                  "x": -6,
+                  "y": -16
+                },
+                {
+                  "x": -2,
+                  "y": -16
+                },
+                {
+                  "x": -2,
+                  "y": -4
+                },
+                {
+                  "x": 2,
+                  "y": -4
+                },
+                {
+                  "x": 2,
+                  "y": -16
+                },
+                {
+                  "x": 6,
+                  "y": -16
+                },
+                {
+                  "x": 6,
+                  "y": 0
+                }
+              ],
+              "fill": "none",
+              "strokeWidth": 1.5,
+              "strokeLinecap": "round",
+              "strokeLinejoin": "round"
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "aliases": [
+              "p1",
+              "lPin"
+            ],
+            "x": 3.7,
+            "y": 20,
+            "angle": 180,
+            "length": 3.7,
+            "label": ""
+          },
+          {
+            "id": "pin-2",
+            "aliases": [
+              "p2",
+              "rPin"
+            ],
+            "x": 28.3,
+            "y": 20,
+            "angle": 0,
+            "length": 3.7,
+            "label": ""
+          }
+        ]
       }
     },
     {
@@ -1409,7 +2392,7 @@
         "Reactive"
       ],
       "defaultProperties": {
-        "capacitance": 0.000001
+        "capacitance": 1e-06
       },
       "help": {
         "description": "Capacitor ideal. Valor de capacitância configurável em Farads. Armazena energia no campo elétrico."
@@ -1501,7 +2484,101 @@
         "Reactive"
       ],
       "defaultProperties": {
-        "capacitance": 0.000001
+        "capacitance": 1e-06
+      },
+      "pinIds": [
+        "pin-1",
+        "pin-2"
+      ],
+      "package": {
+        "width": 32,
+        "height": 16,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/passive/reactive/elcapacitor.cpp + capacitorbase.cpp + comp2pin.cpp",
+            "className": "elCapacitor",
+            "method": "paint",
+            "notes": "CapacitorBase m_area=QRectF(-10,-8,20,16), Comp2Pin pins (-16,0)/(16,0), setLength(12) => effective lead 11.3. paint pen width 3 draws right plate and left bucket-shaped plate."
+          },
+          "bounds": {
+            "x": -16,
+            "y": -8,
+            "w": 32,
+            "h": 16
+          },
+          "defaultStroke": "#000",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 1.5,
+          "primitives": [
+            {
+              "kind": "line",
+              "x1": 3,
+              "y1": -7,
+              "x2": 3,
+              "y2": 7,
+              "strokeWidth": 3,
+              "strokeLinecap": "round"
+            },
+            {
+              "kind": "line",
+              "x1": -3,
+              "y1": -7,
+              "x2": 3,
+              "y2": -7,
+              "strokeWidth": 3,
+              "strokeLinecap": "round"
+            },
+            {
+              "kind": "line",
+              "x1": -3,
+              "y1": 7,
+              "x2": 3,
+              "y2": 7,
+              "strokeWidth": 3,
+              "strokeLinecap": "round"
+            },
+            {
+              "kind": "line",
+              "x1": -3,
+              "y1": -3,
+              "x2": -3,
+              "y2": 3,
+              "strokeWidth": 3,
+              "strokeLinecap": "round"
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "aliases": [
+              "p1",
+              "lPin"
+            ],
+            "x": 11.3,
+            "y": 8,
+            "angle": 180,
+            "length": 11.3,
+            "label": ""
+          },
+          {
+            "id": "pin-2",
+            "aliases": [
+              "p2",
+              "rPin"
+            ],
+            "x": 20.7,
+            "y": 8,
+            "angle": 0,
+            "length": 11.3,
+            "label": ""
+          }
+        ]
       }
     },
     {
@@ -1618,7 +2695,107 @@
         "Reactive"
       ],
       "defaultProperties": {
-        "capacitance": 0.000001
+        "capacitance": 1e-06
+      },
+      "pinIds": [
+        "pin-1",
+        "pin-2"
+      ],
+      "package": {
+        "width": 32,
+        "height": 16,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/passive/reactive/varcapacitor.cpp",
+            "className": "VarCapacitor",
+            "method": "paint",
+            "notes": "Pins (-16,0)/(16,0), setLength(12) => effective lead 11.3. paint draws variable arrow first, then capacitor plates with pen width 3."
+          },
+          "bounds": {
+            "x": -16,
+            "y": -8,
+            "w": 32,
+            "h": 16
+          },
+          "defaultStroke": "#000",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 1.5,
+          "primitives": [
+            {
+              "kind": "line",
+              "x1": -8,
+              "y1": 6,
+              "x2": 8,
+              "y2": -6,
+              "strokeWidth": 1.5
+            },
+            {
+              "kind": "line",
+              "x1": 9,
+              "y1": -5,
+              "x2": 9,
+              "y2": -7,
+              "strokeWidth": 1.5
+            },
+            {
+              "kind": "line",
+              "x1": 9,
+              "y1": -7,
+              "x2": 7,
+              "y2": -7,
+              "strokeWidth": 1.5
+            },
+            {
+              "kind": "line",
+              "x1": -3,
+              "y1": -6,
+              "x2": -3,
+              "y2": 6,
+              "strokeWidth": 3,
+              "strokeLinecap": "round"
+            },
+            {
+              "kind": "line",
+              "x1": 3,
+              "y1": -6,
+              "x2": 3,
+              "y2": 6,
+              "strokeWidth": 3,
+              "strokeLinecap": "round"
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "aliases": [
+              "p1",
+              "lPin"
+            ],
+            "x": 11.3,
+            "y": 8,
+            "angle": 180,
+            "length": 11.3,
+            "label": ""
+          },
+          {
+            "id": "pin-2",
+            "aliases": [
+              "p2",
+              "rPin"
+            ],
+            "x": 20.7,
+            "y": 8,
+            "angle": 0,
+            "length": 11.3,
+            "label": ""
+          }
+        ]
       }
     },
     {
@@ -1632,6 +2809,121 @@
       ],
       "defaultProperties": {
         "inductance": 0.001
+      },
+      "pinIds": [
+        "pin-1",
+        "pin-2"
+      ],
+      "package": {
+        "width": 32,
+        "height": 14,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/passive/reactive/varinductor.cpp",
+            "className": "VarInductor",
+            "method": "paint",
+            "notes": "Pins (-16,0)/(16,0), setLength(4) => effective lead 3.3. paint draws variable arrow and the same three inductor arcs as Inductor."
+          },
+          "bounds": {
+            "x": -16,
+            "y": -8,
+            "w": 32,
+            "h": 14
+          },
+          "defaultStroke": "#000",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 1.5,
+          "primitives": [
+            {
+              "kind": "line",
+              "x1": -6,
+              "y1": 6,
+              "x2": 8,
+              "y2": -8,
+              "strokeWidth": 1.5
+            },
+            {
+              "kind": "line",
+              "x1": 8,
+              "y1": -6,
+              "x2": 8,
+              "y2": -8,
+              "strokeWidth": 1.5
+            },
+            {
+              "kind": "line",
+              "x1": 8,
+              "y1": -8,
+              "x2": 6,
+              "y2": -8,
+              "strokeWidth": 1.5
+            },
+            {
+              "kind": "arc",
+              "x": -12,
+              "y": -4.5,
+              "w": 10,
+              "h": 10,
+              "startDeg": -45,
+              "spanDeg": 220,
+              "strokeWidth": 2,
+              "fill": "none"
+            },
+            {
+              "kind": "arc",
+              "x": -5,
+              "y": -4.5,
+              "w": 10,
+              "h": 10,
+              "startDeg": 225,
+              "spanDeg": -270,
+              "strokeWidth": 2,
+              "fill": "none"
+            },
+            {
+              "kind": "arc",
+              "x": 2,
+              "y": -4.5,
+              "w": 10,
+              "h": 10,
+              "startDeg": 225,
+              "spanDeg": -220,
+              "strokeWidth": 2,
+              "fill": "none"
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "aliases": [
+              "p1",
+              "lPin"
+            ],
+            "x": 3.3,
+            "y": 8,
+            "angle": 180,
+            "length": 3.3,
+            "label": ""
+          },
+          {
+            "id": "pin-2",
+            "aliases": [
+              "p2",
+              "rPin"
+            ],
+            "x": 28.7,
+            "y": 8,
+            "angle": 0,
+            "length": 3.3,
+            "label": ""
+          }
+        ]
       }
     },
     {
@@ -1690,14 +2982,266 @@
     {
       "typeId": "active.analog_mux",
       "label": "Analog Mux",
-      "pinCount": 5,
+      "pinCount": 13,
       "icon": "1to3-c",
       "folderPath": [
         "Ativos",
         "Other Active"
       ],
       "defaultProperties": {
-        "channels": 3
+        "channels": 8
+      },
+      "pinIds": [
+        "z",
+        "en",
+        "addr-3",
+        "addr-4",
+        "addr-5",
+        "chan-6",
+        "chan-7",
+        "chan-8",
+        "chan-9",
+        "chan-10",
+        "chan-11",
+        "chan-12",
+        "chan-13"
+      ],
+      "package": {
+        "width": 32,
+        "height": 72,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/active/mux_analog.cpp",
+            "className": "MuxAnalog",
+            "method": "paint + setAddrBits/createAddrBits/createResistors",
+            "notes": "m_area=QRect(-16,0,32,max(channels*8+8,40+bits*8)) com channels=2^bits (setAddrBits); esta estimativa usa só channels*8+8 (termo dominante pra channels>=~5, caso default) -- NAO cobre bits*8+40 dominando em contagens de canal muito pequenas (ex: channels=2). Z pin QPoint(-24,8) fixo; En QPoint(-24,32+bits*8) MOVE com addrBits; Addr[i] QPoint(-24,24+i*8); Chan[i] QPoint(24,8+i*8); todos angle 180 (Z/En/Addr) ou 0 (Chan), length 8 (default Pin length). Estimativa NAO verificada visualmente (sem GUI interativa nesta sessao) -- conferir no Extension Development Host antes de confiar no pixel exato."
+          },
+          "bounds": {
+            "x": -16,
+            "y": 0,
+            "w": 32,
+            "h": 72
+          },
+          "defaultStroke": "#303840",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 2,
+          "primitives": [
+            {
+              "kind": "rect",
+              "x": -16,
+              "y": 0,
+              "w": 32,
+              "h": {
+                "prop": "channels",
+                "multiplier": 8,
+                "offset": 8,
+                "min": 24,
+                "round": "trunc"
+              },
+              "fill": "none",
+              "stroke": "#303840",
+              "strokeWidth": 2
+            },
+            {
+              "kind": "text",
+              "x": 0,
+              "y": 12,
+              "value": "MUX",
+              "fontSize": 8,
+              "textAnchor": "middle",
+              "dominantBaseline": "central",
+              "fontFamily": "Segoe UI,Arial,sans-serif",
+              "fill": "#303840"
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "z",
+            "x": -16,
+            "y": 8,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "Z"
+          },
+          {
+            "id": "en",
+            "x": -16,
+            "y": {
+              "prop": "channels",
+              "transform": "log2Ceil",
+              "multiplier": 8,
+              "offset": 32
+            },
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "En"
+          },
+          {
+            "id": "addr-3",
+            "x": -16,
+            "y": 24,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "A0"
+          },
+          {
+            "id": "addr-4",
+            "x": -16,
+            "y": 32,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "A1"
+          },
+          {
+            "id": "addr-5",
+            "x": -16,
+            "y": 40,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "A2"
+          },
+          {
+            "id": "chan-6",
+            "x": 16,
+            "y": 8,
+            "angle": 0,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "Y0"
+          },
+          {
+            "id": "chan-7",
+            "x": 16,
+            "y": 16,
+            "angle": 0,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "Y1"
+          },
+          {
+            "id": "chan-8",
+            "x": 16,
+            "y": 24,
+            "angle": 0,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "Y2"
+          },
+          {
+            "id": "chan-9",
+            "x": 16,
+            "y": 32,
+            "angle": 0,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "Y3"
+          },
+          {
+            "id": "chan-10",
+            "x": 16,
+            "y": 40,
+            "angle": 0,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "Y4"
+          },
+          {
+            "id": "chan-11",
+            "x": 16,
+            "y": 48,
+            "angle": 0,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "Y5"
+          },
+          {
+            "id": "chan-12",
+            "x": 16,
+            "y": 56,
+            "angle": 0,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "Y6"
+          },
+          {
+            "id": "chan-13",
+            "x": 16,
+            "y": 64,
+            "angle": 0,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "Y7"
+          }
+        ],
+        "dynamicLayout": {
+          "height": {
+            "prop": "channels",
+            "multiplier": 8,
+            "offset": 8,
+            "min": 24,
+            "round": "trunc"
+          },
+          "simulideBounds": {
+            "h": {
+              "prop": "channels",
+              "multiplier": 8,
+              "offset": 8,
+              "min": 24,
+              "round": "trunc"
+            }
+          },
+          "replacePins": false,
+          "pinGroups": [
+            {
+              "countProp": "channels",
+              "countFn": "log2Ceil",
+              "indexName": "i",
+              "idPrefix": "addr-",
+              "idStart": 3,
+              "x": -16,
+              "y": {
+                "index": "i",
+                "multiplier": 8,
+                "offset": 24
+              },
+              "angle": 180,
+              "length": 8,
+              "leadEndTrim": 0.7,
+              "label": ""
+            },
+            {
+              "countProp": "channels",
+              "indexName": "i",
+              "idPrefix": "chan-",
+              "idStart": {
+                "prop": "channels",
+                "transform": "log2Ceil",
+                "offset": 3
+              },
+              "x": 16,
+              "y": {
+                "index": "i",
+                "multiplier": 8,
+                "offset": 8
+              },
+              "angle": 0,
+              "length": 8,
+              "leadEndTrim": 0.7,
+              "label": ""
+            }
+          ]
+        }
       }
     },
     {
@@ -1754,7 +3298,290 @@
       "defaultProperties": {
         "size": 8
       },
-      "graphical": true
+      "graphical": true,
+      "pinIds": [
+        "pin-P1",
+        "pin-P2",
+        "pin-P3",
+        "pin-P4",
+        "pin-P5",
+        "pin-P6",
+        "pin-P7",
+        "pin-P8",
+        "pin-N9",
+        "pin-N10",
+        "pin-N11",
+        "pin-N12",
+        "pin-N13",
+        "pin-N14",
+        "pin-N15",
+        "pin-N16"
+      ],
+      "package": {
+        "width": 16,
+        "height": 64,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/outputs/leds/ledbar.cpp",
+            "className": "LedBar",
+            "method": "paint + createLeds/setSize",
+            "notes": "m_area=QRect(-8,-28,16,size*8) (width SEMPRE 16, so altura muda); LED i: QRectF(0,0,4,4) em setPos(0,-28+2+i*8); pin P QPoint(-16,-24+i*8) angle 180; pin N QPoint(16,-24+i*8) angle 0; ambos length 8 (default Pin length, sem setLength explicito). Estimativa NAO verificada visualmente (sem GUI interativa nesta sessao) -- conferir no Extension Development Host antes de confiar no pixel exato."
+          },
+          "bounds": {
+            "x": -8,
+            "y": -28,
+            "w": 16,
+            "h": 64
+          },
+          "defaultStroke": "#303840",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 2,
+          "primitives": [
+            {
+              "kind": "rect",
+              "x": -8,
+              "y": -28,
+              "w": 16,
+              "h": {
+                "prop": "size",
+                "multiplier": 8,
+                "offset": 0,
+                "min": 8,
+                "round": "trunc"
+              },
+              "fill": "none",
+              "stroke": "#303840",
+              "strokeWidth": 2
+            },
+            {
+              "kind": "repeat",
+              "countProp": "size",
+              "indexName": "i",
+              "stepY": 8,
+              "primitives": [
+                {
+                  "kind": "rect",
+                  "x": 0,
+                  "y": -26,
+                  "w": 4,
+                  "h": 4,
+                  "fill": "#e6e6e6",
+                  "stroke": "#777777",
+                  "strokeWidth": 1
+                }
+              ]
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-P1",
+            "x": -8,
+            "y": -24,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-P2",
+            "x": -8,
+            "y": -16,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-P3",
+            "x": -8,
+            "y": -8,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-P4",
+            "x": -8,
+            "y": 0,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-P5",
+            "x": -8,
+            "y": 8,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-P6",
+            "x": -8,
+            "y": 16,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-P7",
+            "x": -8,
+            "y": 24,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-P8",
+            "x": -8,
+            "y": 32,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-N9",
+            "x": 8,
+            "y": -24,
+            "angle": 0,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-N10",
+            "x": 8,
+            "y": -16,
+            "angle": 0,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-N11",
+            "x": 8,
+            "y": -8,
+            "angle": 0,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-N12",
+            "x": 8,
+            "y": 0,
+            "angle": 0,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-N13",
+            "x": 8,
+            "y": 8,
+            "angle": 0,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-N14",
+            "x": 8,
+            "y": 16,
+            "angle": 0,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-N15",
+            "x": 8,
+            "y": 24,
+            "angle": 0,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-N16",
+            "x": 8,
+            "y": 32,
+            "angle": 0,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": ""
+          }
+        ],
+        "dynamicLayout": {
+          "height": {
+            "prop": "size",
+            "multiplier": 8,
+            "offset": 0,
+            "min": 8,
+            "round": "trunc"
+          },
+          "simulideBounds": {
+            "h": {
+              "prop": "size",
+              "multiplier": 8,
+              "offset": 0,
+              "min": 8,
+              "round": "trunc"
+            }
+          },
+          "replacePins": true,
+          "pinGroups": [
+            {
+              "countProp": "size",
+              "indexName": "i",
+              "idPrefix": "pin-P",
+              "idStart": 1,
+              "x": -8,
+              "y": {
+                "index": "i",
+                "multiplier": 8,
+                "offset": -24
+              },
+              "angle": 180,
+              "length": 8,
+              "leadEndTrim": 0.7,
+              "label": ""
+            },
+            {
+              "countProp": "size",
+              "indexName": "i",
+              "idPrefix": "pin-N",
+              "idStart": {
+                "prop": "size",
+                "offset": 1,
+                "round": "trunc"
+              },
+              "x": 8,
+              "y": {
+                "index": "i",
+                "multiplier": 8,
+                "offset": -24
+              },
+              "angle": 0,
+              "length": 8,
+              "leadEndTrim": 0.7,
+              "label": ""
+            }
+          ]
+        }
+      }
     },
     {
       "typeId": "outputs.led_matrix",
@@ -1769,7 +3596,325 @@
         "rows": 8,
         "columns": 8
       },
-      "graphical": true
+      "graphical": true,
+      "pinIds": [
+        "pin-1",
+        "pin-2",
+        "pin-3",
+        "pin-4",
+        "pin-5",
+        "pin-6",
+        "pin-7",
+        "pin-8",
+        "pin-9",
+        "pin-10",
+        "pin-11",
+        "pin-12",
+        "pin-13",
+        "pin-14",
+        "pin-15",
+        "pin-16"
+      ],
+      "package": {
+        "width": 72,
+        "height": 72,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/outputs/leds/ledmatrix.cpp",
+            "className": "LedMatrix",
+            "method": "paint + createMatrix",
+            "notes": "createMatrix(): m_area=QRect(-8,-8,cols*8+8,rows*8+8) (m_verticalPins=false default); LED squares QRectF(-2,-2,4,4) at (col*8,row*8); row pins QPoint(-16,row*8) angle 180 length 8 (default Pin length); col pins QPoint(col*8,rows*8+8) angle 270 length 8. Estimativa NAO verificada visualmente (sem GUI interativa nesta sessao) -- conferir no Extension Development Host antes de confiar no pixel exato."
+          },
+          "bounds": {
+            "x": -8,
+            "y": -8,
+            "w": 72,
+            "h": 72
+          },
+          "defaultStroke": "#303840",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 2,
+          "primitives": [
+            {
+              "kind": "roundedRect",
+              "x": -8,
+              "y": -8,
+              "w": {
+                "prop": "columns",
+                "multiplier": 8,
+                "offset": 8,
+                "min": 16,
+                "round": "trunc"
+              },
+              "h": {
+                "prop": "rows",
+                "multiplier": 8,
+                "offset": 8,
+                "min": 16,
+                "round": "trunc"
+              },
+              "rx": 2,
+              "ry": 2,
+              "fill": "none",
+              "stroke": "#303840",
+              "strokeWidth": 2
+            },
+            {
+              "kind": "repeat",
+              "countProp": "rows",
+              "indexName": "row",
+              "stepY": 8,
+              "primitives": [
+                {
+                  "kind": "repeat",
+                  "countProp": "columns",
+                  "indexName": "col",
+                  "stepX": 8,
+                  "primitives": [
+                    {
+                      "kind": "rect",
+                      "x": -2,
+                      "y": -2,
+                      "w": 4,
+                      "h": 4,
+                      "fill": "#e6e6e6",
+                      "stroke": "#777777",
+                      "strokeWidth": 1
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "x": -8,
+            "y": 0,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-2",
+            "x": -8,
+            "y": 8,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-3",
+            "x": -8,
+            "y": 16,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-4",
+            "x": -8,
+            "y": 24,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-5",
+            "x": -8,
+            "y": 32,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-6",
+            "x": -8,
+            "y": 40,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-7",
+            "x": -8,
+            "y": 48,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-8",
+            "x": -8,
+            "y": 56,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-9",
+            "x": 0,
+            "y": 64,
+            "angle": 270,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-10",
+            "x": 8,
+            "y": 64,
+            "angle": 270,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-11",
+            "x": 16,
+            "y": 64,
+            "angle": 270,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-12",
+            "x": 24,
+            "y": 64,
+            "angle": 270,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-13",
+            "x": 32,
+            "y": 64,
+            "angle": 270,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-14",
+            "x": 40,
+            "y": 64,
+            "angle": 270,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-15",
+            "x": 48,
+            "y": 64,
+            "angle": 270,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": ""
+          },
+          {
+            "id": "pin-16",
+            "x": 56,
+            "y": 64,
+            "angle": 270,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": ""
+          }
+        ],
+        "dynamicLayout": {
+          "width": {
+            "prop": "columns",
+            "multiplier": 8,
+            "offset": 8,
+            "min": 16,
+            "round": "trunc"
+          },
+          "height": {
+            "prop": "rows",
+            "multiplier": 8,
+            "offset": 8,
+            "min": 16,
+            "round": "trunc"
+          },
+          "simulideBounds": {
+            "w": {
+              "prop": "columns",
+              "multiplier": 8,
+              "offset": 8,
+              "min": 16,
+              "round": "trunc"
+            },
+            "h": {
+              "prop": "rows",
+              "multiplier": 8,
+              "offset": 8,
+              "min": 16,
+              "round": "trunc"
+            }
+          },
+          "replacePins": true,
+          "pinGroups": [
+            {
+              "countProp": "rows",
+              "indexName": "row",
+              "idPrefix": "pin-",
+              "idStart": 1,
+              "x": -8,
+              "y": {
+                "index": "row",
+                "multiplier": 8,
+                "offset": 0
+              },
+              "angle": 180,
+              "length": 8,
+              "leadEndTrim": 0.7,
+              "label": ""
+            },
+            {
+              "countProp": "columns",
+              "indexName": "col",
+              "idPrefix": "pin-",
+              "idStart": {
+                "prop": "rows",
+                "offset": 1,
+                "round": "trunc"
+              },
+              "x": {
+                "index": "col",
+                "multiplier": 8,
+                "offset": 0
+              },
+              "y": {
+                "prop": "rows",
+                "multiplier": 8,
+                "offset": 0,
+                "round": "trunc"
+              },
+              "angle": 270,
+              "length": 8,
+              "leadEndTrim": 0.7,
+              "label": ""
+            }
+          ]
+        }
+      }
     },
     {
       "typeId": "outputs.seven_segment",
@@ -2139,7 +4284,7 @@
         "Medidores"
       ],
       "defaultProperties": {
-        "resistance": 0.000001
+        "resistance": 1e-06
       },
       "help": {
         "description": "Amperímetro de baixa resistência série. Conecte em série no ramo para medir a corrente que passa por ele."
@@ -2688,6 +4833,125 @@
       },
       "help": {
         "description": "Fonte de tensão CC ideal com dois pinos (+ e −). A tensão configurada é mantida constante independente da corrente."
+      },
+      "pinIds": [
+        "pin-1",
+        "pin-2"
+      ],
+      "package": {
+        "width": 64,
+        "height": 48,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "LasecSimul ideal DC two-pin source",
+            "className": "DcVoltageSource",
+            "method": "declarative package migrated from WebView fallback",
+            "notes": "No exact two-pin native SimulIDE counterpart exists in simulide_2; SimulIDE Voltage Source is a one-pin VarSource with dial. This package preserves the LasecSimul ideal two-pin DC symbol through the parser instead of a componentSymbols switch case."
+          },
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 48
+          },
+          "defaultStroke": "#000",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 1.5,
+          "primitives": [
+            {
+              "kind": "line",
+              "x1": 0,
+              "y1": 24,
+              "x2": 18,
+              "y2": 24,
+              "strokeWidth": 1.5
+            },
+            {
+              "kind": "line",
+              "x1": 46,
+              "y1": 24,
+              "x2": 64,
+              "y2": 24,
+              "strokeWidth": 1.5
+            },
+            {
+              "kind": "ellipse",
+              "cx": 32,
+              "cy": 24,
+              "rx": 14,
+              "ry": 14,
+              "fill": "none",
+              "strokeWidth": 1.5
+            },
+            {
+              "kind": "text",
+              "x": 25,
+              "y": 29,
+              "value": "+",
+              "fontSize": 11,
+              "textAnchor": "middle",
+              "fill": "#000",
+              "stroke": "none"
+            },
+            {
+              "kind": "text",
+              "x": 39,
+              "y": 29,
+              "value": "−",
+              "fontSize": 11,
+              "textAnchor": "middle",
+              "fill": "#000",
+              "stroke": "none"
+            },
+            {
+              "kind": "line",
+              "x1": 6,
+              "y1": 17,
+              "x2": 6,
+              "y2": 31,
+              "stroke": "#c65252",
+              "strokeWidth": 1.5
+            },
+            {
+              "kind": "line",
+              "x1": 52,
+              "y1": 24,
+              "x2": 64,
+              "y2": 24,
+              "stroke": "#888888",
+              "strokeWidth": 1.5
+            }
+          ]
+        },
+        "pins": [
+          {
+            "id": "pin-1",
+            "aliases": [
+              "p1"
+            ],
+            "x": 0,
+            "y": 24,
+            "angle": 180,
+            "length": 0,
+            "label": ""
+          },
+          {
+            "id": "pin-2",
+            "aliases": [
+              "p2"
+            ],
+            "x": 64,
+            "y": 24,
+            "angle": 0,
+            "length": 0,
+            "label": ""
+          }
+        ]
       }
     },
     {

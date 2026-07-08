@@ -228,6 +228,20 @@ target_include_directories(passive_components_test PRIVATE include src)
 target_link_libraries(passive_components_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
 add_test(NAME passive_components COMMAND passive_components_test)
 
+# Pino dinâmico (rows/columns de switches.keypad/outputs.led_matrix/led_bar, canais de
+# active.analog_mux) -- resolveDynamicPins puro, SimulidePassiveState com ComponentPinSpec, e
+# integração ponta a ponta via SimulationSession::addComponent/setProperty + Netlist real.
+add_executable(dynamic_pins_test
+    ../test/core/components/DynamicPinsTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(dynamic_pins_test PRIVATE include src)
+target_link_libraries(dynamic_pins_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+if(NOT WIN32)
+    target_link_libraries(dynamic_pins_test PRIVATE dl)
+endif()
+add_test(NAME dynamic_pins COMMAND dynamic_pins_test)
+
 # Teste dos componentes de lógica built-in (catálogo: logic.button)
 add_executable(logic_components_test
     ../test/core/components/LogicComponentsTest.cpp

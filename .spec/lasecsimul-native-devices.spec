@@ -528,6 +528,113 @@ intermediário, sem cópia:
 | `BIDIR` | direção corrente decide qual comportamento acima se aplica |
 | `POWER` | referência; não participa de `stamp()` como sinal |
 
+### 7.1 Contagem de pinos dinâmica — `ComponentPinSpec` (2026-07-07)
+
+Até esta rodada, o número de pinos de um componente (built-in ou plugin) era fixo desde a criação da
+instância — mudar uma propriedade como `rows`/`columns` de um `switches.keypad` alterava o desenho na
+Webview mas nunca o número REAL de pinos elétricos no `Netlist` do Core (bug TR-9, corrigido nesta
+rodada, generalizado pra todo device com essa característica, não só o keypad).
+
+**Vocabulário declarativo** (`core/include/lasecsimul/Types.hpp`), nunca uma fórmula escrita à mão por
+device:
+
+```cpp
+enum class DynamicPinCountFn : uint32_t { Value = 0, Log2Ceil = 1 };
+
+struct DynamicPinGroupSpec {
+    std::string idPrefix = "pin-";
+    std::string countProperty;      // nome da propriedade numérica que decide o tamanho deste grupo
+    DynamicPinCountFn countFn = DynamicPinCountFn::Value; // Value: leitura direta; Log2Ceil: ceil(log2(valor))
+};
+
+struct ComponentPinSpec {
+    std::vector<std::string> fixedPinIds;         // sempre presentes, nesta ordem
+    std::vector<DynamicPinGroupSpec> dynamicGroups; // anexados depois, ids sequenciais CRUZANDO todos os grupos
+};
+```
+
+`resolveDynamicPins(spec, properties)` é o único intérprete deste vocabulário no projeto inteiro —
+reaproveitado por built-ins (`SimulidePassiveState`) e por plugin nativo (`NativeDeviceProxy`/
+`PluginRuntime`), nunca duplicado. Devices reais registrados com isto (`CoreApplication.cpp`):
+`switches.keypad`/`outputs.led_matrix` (`rows`+`columns`, fórmula idêntica a `keypad.cpp`/
+`ledmatrix.cpp` do SimulIDE real — `m_pin[m_rows+col]`, nunca `rows*columns`), `outputs.led_bar`
+(2 grupos independentes na mesma propriedade `size`, par P/N por LED — `ledbar.cpp`), `active.analog_mux`
+(pinos fixos `z`/`en` + grupo `Log2Ceil` de endereço + grupo linear de canais — `mux_analog.cpp`, onde
+`m_addrBits = ceil(log2(canais))`).
+
+**Novo flag de schema**: `PropertySchemaAffectsPinCount` (`Types.hpp`) — separado de
+`PropertySchemaAffectsTopology` porque só ESTE dispara `Netlist::reregisterComponentPins` (o outro só
+rewiring). Uma propriedade com este flag SEMPRE também dispara `m_topologyDirty`.
+
+**Orquestração** (`SimulationSession::setProperty`, `core/src/session/SimulationSession.cpp`): depois de
+`descriptor.set(value)`, se o schema tem `AffectsPinCount`, relê `instance->pins()` (a instância já
+resolveu a nova contagem sozinha — `SimulationSession` nunca sabe a fórmula) e chama
+`Netlist::reregisterComponentPins` só se o conjunto de ids realmente mudou.
+
+**`Netlist::reregisterComponentPins(componentIndex, novosPinIds)`** — mesma filosofia append-only/nunca-
+reciclado de `registerComponent`/`removeComponent`: desconecta fio/túnel dos slots antigos, marca-os
+órfãos (`m_slotOrphaned`, nunca mais aparecem em nó/grupo/listener/pinRef depois de `rebuildTopology()`
+— mesmo tratamento que um componente removido já recebe), aloca os slots novos no final do array global.
+Slots órfãos formam grupos-fantasma de 1 nó, inertes (`CircuitGroup::singular()` já trata isso com
+segurança) — custo aceito pela mesma razão que `componentIndex` nunca é reciclado.
+
+**Built-in** (`SimulidePassiveState`, `core/src/components/SimulideBuiltins.hpp`): construtor opcional
+recebe `initialProperties` (normalmente `ComponentParams::properties`, refletindo o valor REAL da
+instância — projeto salvo com `rows=6`, não o default do schema) + `ComponentPinSpec` opcional. Quando
+presente, `pins()` é resolvido na criação E recomputado a cada edição de propriedade `AffectsPinCount`
+via `propertyDescriptors()`.
+
+**Plugin nativo — dois caminhos, SEM mudança de ABI**:
+1. **Imperativo**: `LsdnHostApi::pin_declare(host_ctx, index, kind, name)` já existia na ABI (major 3)
+   mas era vestigial — só escrevia num array de nomes cosmético (`pin_write`/`pin_read`/`pin_name`),
+   nunca afetava `NativeDeviceProxy::pins()` de verdade. Agora escreve em
+   `NativeDeviceHostContext::declaredPins` (a lista REAL) — chamável de `init()` OU de dentro do próprio
+   `set_property()`, sem restrição nova. `NativeDeviceProxy::pins()` devolve `declaredPins`, nunca mais
+   `ComponentMeta::pins` (que vira só semente pra plugin que nunca chama `pin_declare` — comportamento
+   preservado).
+2. **Declarativo**: campo opcional `pinSpec` no `.lsdevice` (mesmo JSON de `fixedPinIds`/`dynamicGroups`
+   acima), pra plugin que não quer/precisa escrever `pin_declare` em C:
+   ```json
+   "pinSpec": {
+     "fixedPinIds": ["z", "en"],
+     "dynamicGroups": [
+       {"idPrefix": "addr-", "countProperty": "channels", "countFn": "log2Ceil"},
+       {"idPrefix": "chan-", "countProperty": "channels"}
+     ]
+   }
+   ```
+   `PluginRuntime::createDeviceInstance` usa isto pra semear `declaredPins` na criação;
+   `NativeDeviceProxy` recomputa a cada propriedade `affectsPinCount` editada, mesmo sem nenhum código C
+   custom no `set_property` do plugin.
+
+Propriedade de manifesto ganha a chave `"affectsPinCount": true` (`.lsdevice`, espelhando
+`"affectsTopology"` já existente) — propagada ao Core (`CoreApplication.cpp::parsePropertyFlags`/
+`propertySchemaToJson`) e à Extension (`ipc/types.ts::PropertySchemaDto.affectsPinCount`,
+`model.ts::PropertySchemaEntry.affectsPinCount`).
+
+**Extension** (`extension.ts`, handler `"requestUpdateProperty"`): quando a propriedade editada tem
+`affectsPinCount` no schema do catálogo, recalcula `pinsForTypeId(typeId, novasProperties)` (mesma
+fórmula de `dynamicLayout.pinGroups` já usada pro desenho, `ui/webview/componentSymbols.ts::
+materializePinGroup`, exportada e reaproveitada aqui — nunca duplicada), reconcilia
+`component.pins[]` e remove qualquer fio que apontava pra um pino que deixou de existir. O Core faz a
+MESMA reconciliação do lado dele, de forma independente (via `pushPropertyToCore` normal) — não há
+verbo IPC novo nem sincronização explícita entre os dois lados além do valor da propriedade em si.
+
+**Limitação conhecida, não introduzida por esta mudança**: a contagem de pinos só é recomputada na
+CRIAÇÃO da instância e em EDIÇÃO de propriedade subsequente — não existe (aqui nem em nenhuma outra
+propriedade `AffectsTopology` do projeto, ex: `switches.switch_dip::poles`) um mecanismo de "destruir e
+recriar a instância" fora desses dois pontos; não é necessário, porque `setProperty` já cobre o caso de
+edição pós-criação.
+
+**Gap conhecido, não fechado nesta rodada**: `outputs.led_matrix`/`outputs.led_bar`/`active.analog_mux`
+não têm `package.dynamicLayout.pinGroups` no catálogo da Extension (`project/schema/
+component-catalog.json`) — só `switches.keypad` tem (trabalho de outra sessão). O lado ELÉTRICO
+(Core) já está correto e autossuficiente pros quatro (o Core nunca lê os pinos que a Extension manda em
+`addComponent`, sempre recomputa via `ComponentPinSpec` própria) — o gap é só VISUAL/UX: o desenho e a
+lista `component.pins[]` da Webview para esses 3 devices continuam usando a contagem estática do
+catálogo até alguém escrever o `dynamicLayout` deles, mesmo trabalho de verificação pixel a pixel contra
+o SimulIDE real que já foi feito pro keypad.
+
 ## 8. Modelo de comunicação I2C, SPI, UART e GPIO — decodificação bit a bit, sem módulo de barramento
 
 **O desenho anterior desta seção (módulo de barramento genérico, `BusController`/`IBusParticipant`,

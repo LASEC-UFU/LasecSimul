@@ -34,6 +34,9 @@ struct ComponentMetadata {
      * estruturada"/"sem interação especial"), não um estado "ainda não migrado". */
     std::optional<ReadoutFormat> readoutFormat;
     std::optional<InteractionKind> interactionKind;
+    /** `pinSpec` declarativo do `.lsdevice` -- ver `ComponentMeta::pinSpec` (Types.hpp) pro
+     * contrato completo. Ausente == pino fixo de sempre (`pins` acima). */
+    std::optional<ComponentPinSpec> pinSpec;
 };
 
 class ComponentMetadataRegistry {

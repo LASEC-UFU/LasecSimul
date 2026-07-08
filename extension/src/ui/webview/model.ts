@@ -109,6 +109,13 @@ export interface PropertySchemaEntry {
   hidden?: boolean;
   readOnly?: boolean;
   showOnSymbol?: boolean;
+  /** Espelha `PropertySchemaAffectsPinCount` do Core (`CoreApplication.cpp::propertySchemaToJson`)
+   * -- editar esta propriedade muda o NÚMERO de pinos do componente (ex: `rows`/`columns` de
+   * `switches.keypad`), não só a fiação. `extension.ts` usa isto no handler
+   * `"requestUpdateProperty"` pra recalcular `pinsForTypeId` e reconciliar `component.pins[]` +
+   * remover fios que apontavam pra um pino que deixou de existir. Ausente == `false` (a maioria das
+   * propriedades). */
+  affectsPinCount?: boolean;
 }
 
 /** Pino declarado em `package.pins[]` (`.lsdevice`/`.lssubcircuit`, ver
@@ -117,22 +124,72 @@ export interface PropertySchemaEntry {
  * `x + cos(angle)*length, y + sin(angle)*length`. `id` deve bater com o `pin.id` real devolvido pelo
  * Core — é por `id`, nunca por posição no array, que o renderizador casa pino declarado com pino
  * real (um `McuComponent`/subcircuito pode devolver pinos em ordem diferente da declarada). */
+export interface PackageNumberExpression {
+  prop?: string;
+  index?: string;
+  multiplier?: number;
+  offset?: number;
+  fallback?: number;
+  min?: number;
+  max?: number;
+  round?: "trunc" | "round" | "floor" | "ceil";
+  /** Aplicado ao valor bruto de `prop`/`index` ANTES de `multiplier`/`offset`/`round` -- só
+   * `"log2Ceil"` existe hoje (`ceil(log2(valor))`, valor<=1 vira 0), espelha
+   * `DynamicPinCountFn::Log2Ceil` do lado Core (`Types.hpp`). Ex: `active.analog_mux` -- posição Y
+   * do pino `En` depende de `ceil(log2(channels))` linhas de endereço já desenhadas, não de
+   * `channels` diretamente; sem isto não dá pra expressar essa posição só com multiplicador/offset
+   * lineares. */
+  transform?: "log2Ceil";
+}
+
+export type PackageNumberValue = number | PackageNumberExpression;
+
+export interface PackageDynamicPinGroup {
+  countProp: string;
+  /** Como `countProp` vira a CONTAGEM de pinos deste grupo -- ausente/`"value"` é leitura direta
+   * (default de sempre); `"log2Ceil"` é `ceil(log2(valor))`, espelha `DynamicPinCountFn::Log2Ceil`
+   * do Core (`active.analog_mux`: grupo de endereço tem `ceil(log2(channels))` pinos, não
+   * `channels` pinos). */
+  countFn?: "value" | "log2Ceil";
+  indexName?: string;
+  idPrefix?: string;
+  idStart?: PackageNumberValue;
+  x: PackageNumberValue;
+  y: PackageNumberValue;
+  angle?: PackageNumberValue;
+  length?: PackageNumberValue;
+  leadEndTrim?: PackageNumberValue;
+  leadOrigin?: "body" | "terminal";
+  leadColor?: string;
+  label?: string;
+}
+
+export interface PackageDynamicLayout {
+  width?: PackageNumberValue;
+  height?: PackageNumberValue;
+  schematicWidth?: PackageNumberValue;
+  schematicHeight?: PackageNumberValue;
+  simulideBounds?: Partial<Record<"x" | "y" | "w" | "h", PackageNumberValue>>;
+  replacePins?: boolean;
+  pinGroups?: PackageDynamicPinGroup[];
+}
+
 export interface PackagePin {
   id: string;
   aliases?: string[];
   stateVisible?: SimulidePaintStateVisible;
   kind?: string;
-  x: number;
-  y: number;
-  angle: number;
-  length: number;
+  x: PackageNumberValue;
+  y: PackageNumberValue;
+  angle: PackageNumberValue;
+  length: PackageNumberValue;
   leadOrigin?: "body" | "terminal";
-  leadEndTrim?: number;
+  leadEndTrim?: PackageNumberValue;
   leadColor?: string;
   label?: string;
   labelColor?: string;
-  labelFontSize?: number;
-  labelSpace?: number;
+  labelFontSize?: PackageNumberValue;
+  labelSpace?: PackageNumberValue;
   labelStateVisible?: SimulidePaintStateVisible;
   labelTextAnchor?: "start" | "middle" | "end";
   labelDominantBaseline?: "auto" | "middle" | "central" | "hanging" | "text-before-edge" | "text-after-edge";
@@ -144,8 +201,8 @@ export interface PackagePin {
    * sempre, nunca quebra um `package` escrito antes deste campo existir. Editado arrastando um
    * `graphics.text` vinculado na sessão de autoria (`other.package_pin`/`symbolAuthoring.ts`), nunca
    * uma alça nova. */
-  labelX?: number;
-  labelY?: number;
+  labelX?: PackageNumberValue;
+  labelY?: PackageNumberValue;
 }
 
 /** Uma forma declarativa de `package.shapes[]` — mesmo vocabulário de
@@ -285,16 +342,16 @@ export type SimulidePaintGradient =
     };
 
 export type SimulidePaintPrimitive =
-  | ({ kind: "line"; x1: number; y1: number; x2: number; y2: number; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible } & SimulidePaintStyle)
-  | ({ kind: "rect"; x: number; y: number; w: number; h: number; rx?: number; ry?: number; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible } & SimulidePaintStyle)
-  | ({ kind: "roundedRect"; x: number; y: number; w: number; h: number; rx: number; ry: number; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible } & SimulidePaintStyle)
-  | ({ kind: "ellipse"; cx: number; cy: number; rx: number; ry: number; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible } & SimulidePaintStyle)
-  | ({ kind: "arc"; x: number; y: number; w: number; h: number; startDeg: number; spanDeg: number; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible } & SimulidePaintStyle)
+  | ({ kind: "line"; x1: PackageNumberValue; y1: PackageNumberValue; x2: PackageNumberValue; y2: PackageNumberValue; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible } & SimulidePaintStyle)
+  | ({ kind: "rect"; x: PackageNumberValue; y: PackageNumberValue; w: PackageNumberValue; h: PackageNumberValue; rx?: PackageNumberValue; ry?: PackageNumberValue; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible } & SimulidePaintStyle)
+  | ({ kind: "roundedRect"; x: PackageNumberValue; y: PackageNumberValue; w: PackageNumberValue; h: PackageNumberValue; rx: PackageNumberValue; ry: PackageNumberValue; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible } & SimulidePaintStyle)
+  | ({ kind: "ellipse"; cx: PackageNumberValue; cy: PackageNumberValue; rx: PackageNumberValue; ry: PackageNumberValue; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible } & SimulidePaintStyle)
+  | ({ kind: "arc"; x: PackageNumberValue; y: PackageNumberValue; w: PackageNumberValue; h: PackageNumberValue; startDeg: PackageNumberValue; spanDeg: PackageNumberValue; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible } & SimulidePaintStyle)
   | ({ kind: "path"; d: string; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible } & SimulidePaintStyle)
   | ({ kind: "polygon"; points: Array<{ x: number; y: number }>; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible } & SimulidePaintStyle)
   | ({ kind: "polyline"; points: Array<{ x: number; y: number }>; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible } & SimulidePaintStyle)
-  | ({ kind: "text"; x: number; y: number; value: string; fontSize?: number; textAnchor?: PackageShape["textAnchor"]; dominantBaseline?: PackageShape["dominantBaseline"]; fontFamily?: string; fontWeight?: string | number; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible; stateText?: SimulidePaintStateText } & SimulidePaintStyle)
-  | ({ kind: "image"; x: number; y: number; w: number; h: number; href: string; preserveAspectRatio?: string; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible; stateHref?: SimulidePaintStateHref } & SimulidePaintStyle)
+  | ({ kind: "text"; x: PackageNumberValue; y: PackageNumberValue; value: string; fontSize?: PackageNumberValue; textAnchor?: PackageShape["textAnchor"]; dominantBaseline?: PackageShape["dominantBaseline"]; fontFamily?: string; fontWeight?: string | number; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible; stateText?: SimulidePaintStateText } & SimulidePaintStyle)
+  | ({ kind: "image"; x: PackageNumberValue; y: PackageNumberValue; w: PackageNumberValue; h: PackageNumberValue; href: string; preserveAspectRatio?: string; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible; stateHref?: SimulidePaintStateHref } & SimulidePaintStyle)
   /** Duplica `primitives[]` `count` vezes, deslocando `stepX`/`stepY` (coordenadas ORIGINAIS, mesma
    * unidade de `bounds`) por repetição -- traduz diretamente os laços `for` que o SimulIDE real usa
    * pra desenhar N sub-widgets iguais (ex: `SwitchDip::createSwitches` cria 1 QPushButton 6x6 por
@@ -535,6 +592,7 @@ export interface PackageDescriptor {
    * so migrated symbols can be audited against the original C++ paint() source. */
   simulidePaint?: SimulidePaintSpec;
   qtWidget?: SimulideQtWidgetSpec;
+  dynamicLayout?: PackageDynamicLayout;
   /** ViewSpec declarativo (P2) — quando presente, tem prioridade sobre `shapes[]`. Suporta
    * gradientes escopados por instância e stateProjection. */
   viewSpec?: ComponentViewSpec;

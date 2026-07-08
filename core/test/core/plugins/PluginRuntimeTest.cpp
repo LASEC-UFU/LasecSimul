@@ -68,6 +68,55 @@ void destroyDevice1(LsdnDevice* dev) {
     delete reinterpret_cast<DeviceState*>(dev);
 }
 
+// device3: prova que `pin_declare` (device_abi.h) hoje afeta de verdade a topologia elétrica
+// (`NativeDeviceProxy::pins()`), tanto em `init()` quanto depois, de dentro do próprio
+// `set_property()` -- sem NENHUMA mudança de ABI, um plugin de terceiro ganha pino dinâmico só
+// chamando isto. `pin_declare` já existia na ABI mas era vestigial (só escrevia num array de nomes
+// cosmético, nunca alimentava a lista real) até esta mudança.
+struct Device3State {
+    const LsdnHostApi* api = nullptr;
+    void* hostCtx = nullptr;
+};
+
+LsdnDevice* createDevice3(void* hostCtx, const LsdnHostApi* api) {
+    auto* state = new Device3State{api, hostCtx};
+    return reinterpret_cast<LsdnDevice*>(state);
+}
+void initDevice3(LsdnDevice* dev) {
+    auto* state = reinterpret_cast<Device3State*>(dev);
+    // Declara 2 pinos na criação -- diferente da semente do manifesto (prova que a semente é só
+    // fallback, `pin_declare` durante init() já sobrescreve).
+    state->api->pin_declare(state->hostCtx, 0, LSDN_PIN_DIGITAL_OUT, "out0");
+    state->api->pin_declare(state->hostCtx, 1, LSDN_PIN_DIGITAL_OUT, "out1");
+}
+void stampDevice3(LsdnDevice*, LsdnMatrixView*) {}
+void postStepDevice3(LsdnDevice*, uint64_t) {}
+uint32_t getPropertyDevice3(LsdnDevice*, const char*, LsdnPropertyValue*) { return 0; }
+uint32_t setPropertyDevice3(LsdnDevice* dev, const char* name, const LsdnPropertyValue* value) {
+    if (std::string(name) != "count") return 0;
+    auto* state = reinterpret_cast<Device3State*>(dev);
+    const int newCount = static_cast<int>(value->number_value);
+    for (int i = 0; i < newCount; ++i) {
+        state->api->pin_declare(state->hostCtx, static_cast<uint32_t>(i), LSDN_PIN_DIGITAL_OUT,
+                                ("out" + std::to_string(i)).c_str());
+    }
+    return 1;
+}
+uint32_t getStateDevice3(LsdnDevice*, uint8_t*, uint32_t) { return 0; }
+void setStateDevice3(LsdnDevice*, const uint8_t*, uint32_t) {}
+void destroyDevice3(LsdnDevice* dev) { delete reinterpret_cast<Device3State*>(dev); }
+
+const LsdnDeviceVTable kDeviceVTable3 = {
+    &createDevice3, &initDevice3, &stampDevice3, &postStepDevice3, &onEventDevice, &getPropertyDevice3,
+    &setPropertyDevice3, &getStateDevice3, &setStateDevice3, &destroyDevice3,
+};
+const LsdnDeviceVTable* getDeviceVTable3(uint32_t* major, uint32_t* minor) {
+    *major = LSDN_ABI_VERSION_MAJOR;
+    *minor = LSDN_ABI_VERSION_MINOR;
+    return &kDeviceVTable3;
+}
+const LsdnDeviceVTable* getDeviceVTable3Wrapper(uint32_t* major, uint32_t* minor) { return getDeviceVTable3(major, minor); }
+
 LsdnDevice* createDevice2(void*, const LsdnHostApi*) { return reinterpret_cast<LsdnDevice*>(new DeviceState{}); }
 void initDevice2(LsdnDevice*) {}
 void stampDevice2(LsdnDevice*, LsdnMatrixView* matrix) {
@@ -183,6 +232,44 @@ int main() {
     const QemuLaunchSpec spec = mcu->buildLaunchArgs("firmware.bin");
     ok &= expect(spec.binary == "qemu-fake", "MCU launch binary preserved");
     ok &= expect(spec.args.size() == 2, "MCU launch args preserved");
+
+    // Pino dinâmico de plugin (pin_declare -> NativeDeviceProxy::pins() de verdade, não só a
+    // semente do manifesto).
+    {
+        auto module3 = PluginLoader::createDeviceModuleFromExports(nullptr, &getDeviceVTable3Wrapper, "device.v3");
+        cache.setActiveDeviceModule("test.dynamic_device", module3);
+        // `affectsPinCount` aqui é só documental para este teste (NativeDeviceProxy::setProperty
+        // real acontece via SimulationSession, não testado aqui) -- o que este bloco prova é que
+        // `NativeDeviceProxy::propertyDescriptors()`/`pins()` refletem `pin_declare` de verdade,
+        // a peça nova; a orquestração de reregistro no Netlist já foi provada genérica (não
+        // específica de plugin) pelos testes de `SimulidePassiveState`/`SimulationSession` acima.
+        PropertySchema countSchema;
+        countSchema.id = "count";
+        countSchema.valueKind = PropertyValueKind::Number;
+        countSchema.defaultValue = 2.0;
+        countSchema.flags = PropertySchemaAffectsPinCount;
+        ComponentMeta seedMeta{"test.dynamic_device", {Pin{"seed1"}, Pin{"seed2"}}, {countSchema}};
+        registry::ComponentParams dynParams;
+        auto proxy3 = runtime.createDeviceInstance("test.dynamic_device", seedMeta, dynParams, scheduler);
+
+        std::vector<std::string> initialIds;
+        for (const Pin& pin : proxy3->pins()) initialIds.push_back(pin.id);
+        ok &= expect(initialIds == std::vector<std::string>{"out0", "out1"},
+                     "pin_declare em init() deve sobrescrever a semente do manifesto (seed1/seed2 -> out0/out1)");
+
+        bool foundCount = false;
+        for (PropertyDescriptor& descriptor : proxy3->propertyDescriptors()) {
+            if (descriptor.name != "count") continue;
+            foundCount = true;
+            descriptor.set(PropertyValue{4.0});
+        }
+        ok &= expect(foundCount, "device3 deveria expor 'count' via get_property/set_property (schema mínimo do PluginRuntime)");
+
+        std::vector<std::string> afterIds;
+        for (const Pin& pin : proxy3->pins()) afterIds.push_back(pin.id);
+        ok &= expect(afterIds == std::vector<std::string>({"out0", "out1", "out2", "out3"}),
+                     "pin_declare chamado de DENTRO de set_property() deve mudar pins() na hora, sem recriar a instância");
+    }
 
     proxy1.reset();
     ok &= expect(weak1.expired(), "module v1 can unload after proxy destruction");

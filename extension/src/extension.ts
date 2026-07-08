@@ -7,36 +7,20 @@ import { TrustStore } from "./trust/TrustStore";
 import { isPreApproved, isPreBlocked, resolveConsentChoice, shouldLoadLibrary, decisionToPersist } from "./trust/trustDecision";
 import { SchematicPanel } from "./ui/panels/SchematicPanel";
 import { createInitialWebviewState } from "./ui/webview/catalog";
-import { InteractionKindEntry, JUNCTION_TYPE_ID, PackageDescriptor, PackagePin, PackageShape, PropertySchemaEntry, TUNNEL_TYPE_ID, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./ui/webview/model";
+import { TUNNEL_TYPE_ID, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./ui/webview/model";
 import { buildPinToPinWire, buildPinToWireConnection } from "./ui/webview/wireConnections";
-import { InternalComponentSnapshot, WebviewToHostMessage } from "./ui/webview/messages";
+import { WebviewToHostMessage } from "./ui/webview/messages";
 import { ComponentPaletteViewProvider } from "./ui/views/ComponentPaletteViewProvider";
-import { componentLocalOrigin } from "./ui/webview/componentSymbols";
-import { ProjectSerializer } from "./project/ProjectSerializer";
-import { ProjectComponent, ProjectDocument, createEmptyProject } from "./project/ProjectTypes";
+import { materializePinGroup } from "./ui/webview/componentSymbols";
+import { absoluteSubcircuitRefPath, openProjectCommand, saveProjectCommand } from "./project/projectCommands";
 import { loadUnifiedCatalog, RegisteredSource, saveRegisteredSources } from "./catalog/UnifiedCatalog";
-import { extractSimulideSubcircuitScene, translateSimulideSubcircuitAuthoringScene } from "./catalog/simulideSceneTranslator";
-import {
-  compileSubcircuitInternalComponents,
-  compileSymbolAuthoringComponents,
-  InternalComponentSeed,
-  InternalWireSeed,
-  seedSubcircuitInternalComponents,
-  seedSymbolAuthoringComponents,
-  VisualPosition,
-} from "./catalog/symbolAuthoring";
-import { hasShowOnSymbolProperty, mergePropertySchemas, nextIndexedLabel } from "./catalog/catalogMerge";
-import { sanitizeManifestDefaultProperties, sanitizePackage, sanitizePackageBackground } from "./catalog/packageSanitizers";
-import { LasecSimulLanguage } from "./language";
+import { refreshUnifiedCatalogState, registerCatalogFileCommand, removeRegisteredCatalogItemCommand } from "./catalog/catalogCommands";
+import { InternalWireSeed } from "./catalog/symbolAuthoring";
+import { hasShowOnSymbolProperty, nextIndexedLabel } from "./catalog/catalogMerge";
+import { sanitizeManifestDefaultProperties } from "./catalog/packageSanitizers";
 import { fileExists, normalizeAbsolutePath, readJsonFile } from "./pathUtils";
 import { currentLasecSimulLanguage } from "./currentLanguage";
 import {
-  RegisteredItemKind,
-  inferLibraryPathForDevice,
-  sanitizeFolderPathSegments,
-  folderPathFromManifestFile,
-  localizedAbiFailure,
-  knownPinIdsForManifest,
   parseSubcircuitManifest,
   resolveRegisteredItem,
   resolveRegisteredItems,
@@ -45,17 +29,15 @@ import {
   state,
   coreInstanceIdByComponentId,
   mcuTargetCoreIdByComponentId,
-  mcuSerialMonitorByKey,
-  projectSerializer,
 } from "./state";
 import {
   reportCoreWarning,
-  registerCoreIdsForComponent,
   pushComponentToCore,
   pushWireToCore,
   pushRemoveWireToCore,
   pushPropertyToCore,
   pushRemoveToCore,
+  pushTunnelNameToCore,
   sendInstrumentHistory,
   pollInstrumentReadouts,
   pollWireVoltages,
@@ -67,8 +49,30 @@ import {
   shouldSyncComponentToCore,
   queueCoreRebuild,
   rebuildCoreFromSchematicState,
-  pinsForProjectComponent,
 } from "./core/coreLifecycle";
+import {
+  chooseExposedMcuFirmwareCommand,
+  chooseMcuFirmwareCommand,
+  closeAllMcuSerialMonitors,
+  closeMcuSerialMonitor,
+  openExposedMcuSerialMonitorCommand,
+  openMcuSerialMonitorCommand,
+  reloadExposedMcuFirmwareCommand,
+  reloadMcuFirmwareCommand,
+  requestBoardOverlayDataCommand,
+  updateBoardOverlayPropertyCommand,
+  updateBoardOverlayVisualCommand,
+  updateExposedComponentPropertyCommand,
+} from "./mcu/mcuCommands";
+import {
+  editPackageSymbolCommand,
+  gatherInternalComponentSnapshots,
+  loadPackageCommand,
+  resolveSourceFilePath,
+  savePackageCommand,
+  saveSymbolCommand,
+  switchSymbolViewCommand,
+} from "./symbolAuthoring/symbolCommands";
 
 function setSchematicOpenContext(isOpen: boolean): Thenable<void> {
   return vscode.commands.executeCommand("setContext", "lasecsimul.schematicOpen", isOpen);
@@ -248,18 +252,26 @@ async function loadConfiguredDeviceLibraries(
   return failures;
 }
 
-/** Clique num componente do overlay de Modo Placa (botão EN/BOOT etc. desenhados sobre a foto da
- * placa no circuito PRINCIPAL) -- `outerComponentId` é a instância do subcircuito já mapeada em
- * `coreInstanceIdByComponentId`; `innerComponentId` é o id LOCAL do `.lssubcircuit` (ex:
- * "button_en"), resolvido pelo Core via `findSubcircuitChildByLocalId` (ver
- * `CoreApplication.cpp::"setSubcircuitChildProperty"`). */
-function updateBoardOverlayPropertyCommand(outerComponentId: string, innerComponentId: string, name: string, value: string | number | boolean): void {
-  if (!state.coreClient) return;
-  const coreId = coreInstanceIdByComponentId.get(outerComponentId);
-  if (!coreId) return;
-  state.coreClient
-    .setSubcircuitChildProperty(coreId, innerComponentId, name, value)
-    .catch((err) => reportCoreWarning(`atualizar "${innerComponentId}.${name}" (Modo Placa)`, err));
+function catalogCommandOptions(): Parameters<typeof refreshUnifiedCatalogState>[1] {
+  return { loadConfiguredDeviceLibraries, setEffectiveCatalog };
+}
+
+function mcuCommandOptions(): Parameters<typeof chooseMcuFirmwareCommand>[1] {
+  return {
+    syncSchematicPanel,
+    reportCoreWarning,
+    gatherInternalComponentSnapshots,
+    resolveSourceFilePath,
+    refreshUnifiedCatalogState: (loadLibrariesInCore) => refreshUnifiedCatalogState(loadLibrariesInCore, catalogCommandOptions()),
+  };
+}
+
+function symbolCommandOptions(): Parameters<typeof editPackageSymbolCommand>[1] {
+  return {
+    openSchematicEditor,
+    pinsForInternalComponent,
+    refreshUnifiedCatalogState: (loadLibrariesInCore) => refreshUnifiedCatalogState(loadLibrariesInCore, catalogCommandOptions()),
+  };
 }
 
 function getComponentById(componentId: string): WebviewComponentModel | undefined {
@@ -268,106 +280,6 @@ function getComponentById(componentId: string): WebviewComponentModel | undefine
 
 function componentLabel(componentId: string): string {
   return getComponentById(componentId)?.label ?? componentId;
-}
-
-function resolveMcuTargetCoreId(componentId: string): string | undefined {
-  return mcuTargetCoreIdByComponentId.get(componentId) ?? coreInstanceIdByComponentId.get(componentId);
-}
-
-function resolveSourceIdForComponent(componentId: string): string | undefined {
-  const component = getComponentById(componentId);
-  if (!component) return undefined;
-  return state.schematicState.catalog.find((entry) => entry.typeId === component.typeId)?.registeredSourceId;
-}
-
-function resolveSubcircuitChildCoreId(outerComponentId: string, innerComponentId: string): Promise<string | undefined> {
-  const outerCoreId = coreInstanceIdByComponentId.get(outerComponentId);
-  if (!state.coreClient || !outerCoreId) return Promise.resolve(undefined);
-  return state.coreClient.getSubcircuitChildInstanceId(outerCoreId, innerComponentId).catch(() => undefined);
-}
-
-function closeMcuSerialMonitor(componentId: string, usartIndex?: number): void {
-  for (const [key, monitor] of mcuSerialMonitorByKey) {
-    const parts = key.split(":");
-    const currentComponentId = parts[0];
-    const currentUsartIndex = parts[parts.length - 1];
-    if (currentComponentId !== componentId) continue;
-    if (usartIndex !== undefined && Number(currentUsartIndex) !== usartIndex) continue;
-    clearInterval(monitor.timer);
-    monitor.channel.dispose();
-    mcuSerialMonitorByKey.delete(key);
-  }
-}
-
-function closeAllMcuSerialMonitors(): void {
-  for (const [key, monitor] of mcuSerialMonitorByKey) {
-    clearInterval(monitor.timer);
-    monitor.channel.dispose();
-    mcuSerialMonitorByKey.delete(key);
-  }
-}
-
-async function chooseMcuFirmwareCommand(componentId: string): Promise<void> {
-  const component = getComponentById(componentId);
-  if (!component) return;
-  const picked = await vscode.window.showOpenDialog({
-    canSelectMany: false,
-    filters: { Firmware: ["bin", "elf", "hex"] },
-    title: `Selecionar firmware para ${component.label}`,
-  });
-  const selected = picked?.[0];
-  if (!selected) return;
-
-  const firmwarePath = selected.fsPath;
-  const qemuBinaryOverride = typeof component.properties.qemuBinaryOverride === "string" ? component.properties.qemuBinaryOverride : "";
-  state.schematicState = {
-    ...state.schematicState,
-    components: state.schematicState.components.map((entry) =>
-      entry.id === componentId
-        ? { ...entry, properties: { ...entry.properties, firmwarePath } }
-        : entry
-    ),
-  };
-  syncSchematicPanel();
-
-  if (state.simulationStatus === "running") {
-    const targetCoreId = resolveMcuTargetCoreId(componentId);
-    if (state.coreClient && targetCoreId) {
-      try {
-        await state.coreClient.loadMcuFirmware(targetCoreId, firmwarePath, qemuBinaryOverride || undefined);
-      } catch (err) {
-        reportCoreWarning(`carregar firmware de "${component.label}"`, err);
-      }
-    }
-  }
-}
-
-async function chooseExposedMcuFirmwareCommand(outerComponentId: string, innerComponentId: string): Promise<void> {
-  const sourceId = resolveSourceIdForComponent(outerComponentId);
-  const inner = sourceId ? gatherInternalComponentSnapshots(sourceId)?.find((entry) => entry.id === innerComponentId) : undefined;
-  const label = inner?.label ?? innerComponentId;
-  const picked = await vscode.window.showOpenDialog({
-    canSelectMany: false,
-    filters: { Firmware: ["bin", "elf", "hex"] },
-    title: `Selecionar firmware para ${label}`,
-  });
-  const selected = picked?.[0];
-  if (!selected || !sourceId) return;
-
-  const firmwarePath = selected.fsPath;
-  const qemuBinaryOverride = typeof inner?.properties.qemuBinaryOverride === "string" ? inner.properties.qemuBinaryOverride : "";
-  await updateExposedComponentPropertyCommand(outerComponentId, sourceId, innerComponentId, "firmwarePath", firmwarePath);
-
-  if (state.simulationStatus === "running") {
-    const targetCoreId = await resolveSubcircuitChildCoreId(outerComponentId, innerComponentId);
-    if (state.coreClient && targetCoreId) {
-      try {
-        await state.coreClient.loadMcuFirmware(targetCoreId, firmwarePath, qemuBinaryOverride || undefined);
-      } catch (err) {
-        reportCoreWarning(`carregar firmware de "${label}"`, err);
-      }
-    }
-  }
 }
 
 /** Bloco genérico de subcircuito por caminho (`subcircuits.external`, ou qualquer typeId já
@@ -399,7 +311,7 @@ async function chooseSubcircuitFileCommand(componentId: string): Promise<void> {
   }
 
   try {
-    await state.coreClient.registerAdhocSubcircuit(absolutePath, { replace: Boolean(component.subcircuitRef?.lastKnownTypeId) });
+    await state.coreClient.registerAdhocSubcircuitDefinition(absolutePath, { replace: Boolean(component.subcircuitRef?.lastKnownTypeId) });
   } catch (err) {
     vscode.window.showErrorMessage(`Não foi possível ler ${absolutePath}: ${err instanceof Error ? err.message : String(err)}`);
     return;
@@ -478,9 +390,8 @@ async function chooseSubcircuitFileCommand(componentId: string): Promise<void> {
   coreInstanceIdByComponentId.delete(componentId);
   mcuTargetCoreIdByComponentId.delete(componentId);
   if (state.coreClient && shouldSyncComponentToCore(parsed.typeId)) {
-    try {
-      const response = await state.coreClient.addComponent(parsed.typeId, updatedComponent.properties, newPins);
-      registerCoreIdsForComponent(componentId, parsed.typeId, response);
+    const created = await pushComponentToCore(componentId, parsed.typeId, updatedComponent.properties, newPins);
+    if (created) {
       for (const wire of state.schematicState.wires) {
         if (wire.from.componentId === componentId || wire.to.componentId === componentId) await pushWireToCore(wire);
       }
@@ -488,8 +399,6 @@ async function chooseSubcircuitFileCommand(componentId: string): Promise<void> {
         void pollInstrumentReadouts();
         void pollWireVoltages();
       }
-    } catch (err) {
-      reportCoreWarning(`registrar subcircuito "${label}"`, err);
     }
   }
 
@@ -499,152 +408,32 @@ async function chooseSubcircuitFileCommand(componentId: string): Promise<void> {
   }
 }
 
-async function reloadMcuFirmwareCommand(componentId: string): Promise<void> {
-  const component = getComponentById(componentId);
-  if (!component) return;
-  const firmwarePath = typeof component.properties.firmwarePath === "string" ? component.properties.firmwarePath.trim() : "";
-  const qemuBinaryOverride = typeof component.properties.qemuBinaryOverride === "string" ? component.properties.qemuBinaryOverride.trim() : "";
-  if (!firmwarePath) {
-    vscode.window.showWarningMessage(`Defina o firmware do componente "${component.label}" primeiro.`);
-    return;
-  }
-  const targetCoreId = resolveMcuTargetCoreId(componentId);
-  if (!state.coreClient || !targetCoreId) {
-    vscode.window.showWarningMessage(`O MCU de "${component.label}" ainda nao esta disponivel no Core.`);
-    return;
-  }
-  try {
-    await state.coreClient.loadMcuFirmware(targetCoreId, firmwarePath, qemuBinaryOverride || undefined);
-  } catch (err) {
-    reportCoreWarning(`recarregar firmware de "${component.label}"`, err);
-  }
-}
-
-async function reloadExposedMcuFirmwareCommand(outerComponentId: string, innerComponentId: string): Promise<void> {
-  const sourceId = resolveSourceIdForComponent(outerComponentId);
-  const inner = sourceId ? gatherInternalComponentSnapshots(sourceId)?.find((entry) => entry.id === innerComponentId) : undefined;
-  const label = inner?.label ?? innerComponentId;
-  const firmwarePath = typeof inner?.properties.firmwarePath === "string" ? inner.properties.firmwarePath.trim() : "";
-  const qemuBinaryOverride = typeof inner?.properties.qemuBinaryOverride === "string" ? inner.properties.qemuBinaryOverride.trim() : "";
-  if (!firmwarePath) {
-    vscode.window.showWarningMessage(`Defina o firmware do componente "${label}" primeiro.`);
-    return;
-  }
-  const targetCoreId = await resolveSubcircuitChildCoreId(outerComponentId, innerComponentId);
-  if (!state.coreClient || !targetCoreId) {
-    vscode.window.showWarningMessage(`O MCU de "${label}" ainda nao esta disponivel no Core.`);
-    return;
-  }
-  try {
-    await state.coreClient.loadMcuFirmware(targetCoreId, firmwarePath, qemuBinaryOverride || undefined);
-  } catch (err) {
-    reportCoreWarning(`recarregar firmware de "${label}"`, err);
-  }
-}
-
-function serialPortLabelForTypeId(typeId: string | undefined, usartIndex: 0 | 1 | 2): string | undefined {
-  if (!typeId) return undefined;
-  const entry = state.schematicState.catalog.find((item) => item.typeId === typeId);
-  return entry?.serialPorts?.find((port) => port.usartIndex === usartIndex)?.label;
-}
-
-function openMcuSerialMonitorCommand(componentId: string, usartIndex: 0 | 1 | 2): void {
-  const targetCoreId = resolveMcuTargetCoreId(componentId);
-  const component = getComponentById(componentId);
-  const serialPortLabel = serialPortLabelForTypeId(component?.typeId, usartIndex);
-  if (!state.coreClient || !targetCoreId || !component || !serialPortLabel) {
-    vscode.window.showWarningMessage("Monitor serial indisponivel para este componente.");
-    return;
-  }
-  const key = `${componentId}:${usartIndex}`;
-  const existing = mcuSerialMonitorByKey.get(key);
-  if (existing) {
-    existing.channel.show(true);
-    return;
-  }
-
-  const channel = vscode.window.createOutputChannel(`LasecSimul ${serialPortLabel} - ${component.label}`);
-  channel.appendLine(`[${new Date().toLocaleString()}] Monitor serial aberto para ${component.label} (${serialPortLabel}).`);
-  channel.appendLine("Observacao: por enquanto o monitor espelha os logs/saida do QEMU expostos pelo Core.");
-
-  const pollLogs = async (): Promise<void> => {
-    try {
-      const logs = await state.coreClient!.getMcuLogs(targetCoreId);
-      const monitor = mcuSerialMonitorByKey.get(key);
-      if (!monitor) return;
-      const delta = logs.slice(monitor.lastLength);
-      if (delta) {
-        channel.append(delta);
-        monitor.lastLength = logs.length;
-      } else if (logs.length < monitor.lastLength) {
-        channel.appendLine(`\n[${new Date().toLocaleTimeString()}] logs reiniciados`);
-        if (logs) channel.append(logs);
-        monitor.lastLength = logs.length;
-      }
-    } catch (err) {
-      channel.appendLine(`\n[erro] ${err instanceof Error ? err.message : String(err)}`);
-    }
-  };
-
-  const timer = setInterval(() => void pollLogs(), 500);
-  mcuSerialMonitorByKey.set(key, { channel, timer, lastLength: 0 });
-  channel.show(true);
-  void pollLogs();
-}
-
-async function openExposedMcuSerialMonitorCommand(outerComponentId: string, innerComponentId: string, usartIndex: 0 | 1 | 2): Promise<void> {
-  const sourceId = resolveSourceIdForComponent(outerComponentId);
-  const inner = sourceId ? gatherInternalComponentSnapshots(sourceId)?.find((entry) => entry.id === innerComponentId) : undefined;
-  const label = inner?.label ?? innerComponentId;
-  const serialPortLabel = serialPortLabelForTypeId(inner?.typeId, usartIndex);
-  const targetCoreId = await resolveSubcircuitChildCoreId(outerComponentId, innerComponentId);
-  if (!state.coreClient || !targetCoreId || !serialPortLabel) {
-    vscode.window.showWarningMessage("Monitor serial indisponivel para este componente.");
-    return;
-  }
-  const key = `${outerComponentId}:${innerComponentId}:${usartIndex}`;
-  const existing = mcuSerialMonitorByKey.get(key);
-  if (existing) {
-    existing.channel.show(true);
-    return;
-  }
-
-  const channel = vscode.window.createOutputChannel(`LasecSimul ${serialPortLabel} - ${label}`);
-  channel.appendLine(`[${new Date().toLocaleString()}] Monitor serial aberto para ${label} (${serialPortLabel}).`);
-  channel.appendLine("Observacao: por enquanto o monitor espelha os logs/saida do QEMU expostos pelo Core.");
-
-  const pollLogs = async (): Promise<void> => {
-    try {
-      const logs = await state.coreClient!.getMcuLogs(targetCoreId);
-      const monitor = mcuSerialMonitorByKey.get(key);
-      if (!monitor) return;
-      const delta = logs.slice(monitor.lastLength);
-      if (delta) {
-        channel.append(delta);
-        monitor.lastLength = logs.length;
-      } else if (logs.length < monitor.lastLength) {
-        channel.appendLine(`\n[${new Date().toLocaleTimeString()}] logs reiniciados`);
-        if (logs) channel.append(logs);
-        monitor.lastLength = logs.length;
-      }
-    } catch (err) {
-      channel.appendLine(`\n[erro] ${err instanceof Error ? err.message : String(err)}`);
-    }
-  };
-
-  const timer = setInterval(() => void pollLogs(), 500);
-  mcuSerialMonitorByKey.set(key, { channel, timer, lastLength: 0 });
-  channel.show(true);
-  void pollLogs();
-}
-
 /** `pinIds` (quando presente) é o contrato elétrico REAL na ordem que o Core espera -- plugins usam
  * o id enviado aqui diretamente (`NativeDeviceProxy`/`McuComponent`, ver `CoreApplication.cpp`,
  * `addComponent`), nunca um `pin-N` genérico sem relação com nada real. Sem `pinIds` (built-ins sem
  * schema próprio), mantém o numerador genérico de sempre. Ver `model.ts::
- * WebviewComponentCatalogEntry.pinIds`. */
-export function pinsForTypeId(typeId: string): Array<{ id: string; x: number; y: number }> {
+ * WebviewComponentCatalogEntry.pinIds`.
+ *
+ * `properties`: quando o `package.dynamicLayout.pinGroups` do typeId existe (ex: `switches.keypad`,
+ * TR-9), o número/id REAL de pinos depende da INSTÂNCIA (`rows`/`columns`), não só do typeId -- usa
+ * `materializePinGroup` (mesma fórmula do desenho em `componentSymbols.ts`, nunca duplicada aqui) com
+ * as propriedades atuais. Sem `properties` (chamador não tem a instância ainda, ex: seed de
+ * componente interno de autoria), cai em `descriptor.defaultProperties` -- produz exatamente os
+ * `pinIds` estáticos já cadastrados no catálogo pro caso default, sem regressão pros chamadores que
+ * não foram atualizados pra passar a instância real. */
+export function pinsForTypeId(typeId: string, properties?: Record<string, unknown>): Array<{ id: string; x: number; y: number }> {
   const descriptor = state.schematicState.catalog.find((item) => item.typeId === typeId);
+  const dynamicGroups = descriptor?.package?.dynamicLayout?.pinGroups;
+  if (dynamicGroups && dynamicGroups.length > 0) {
+    const effectiveProperties = properties ?? descriptor?.defaultProperties ?? {};
+    const replacePins = descriptor?.package?.dynamicLayout?.replacePins ?? false;
+    const staticPins = replacePins ? [] : (descriptor?.package?.pins ?? []);
+    const combined = [
+      ...staticPins.map((pin) => ({ id: pin.id })),
+      ...dynamicGroups.flatMap((group) => materializePinGroup(group, effectiveProperties).map((pin) => ({ id: pin.id }))),
+    ];
+    if (combined.length > 0) return combined.map((pin, index) => ({ id: pin.id, x: 0, y: index * 12 }));
+  }
   const pinCount = descriptor?.pinCount ?? 2;
   if (descriptor?.pinIds && descriptor.pinIds.length === pinCount) {
     return descriptor.pinIds.map((id, index) => ({ id, x: 0, y: index * 12 }));
@@ -680,221 +469,6 @@ function pinsForInternalComponent(componentId: string, typeId: string, wires: In
     x: 0,
     y: index * 12,
   }));
-}
-
-/** Roda logo depois de `projectToWebviewState` num `openProjectCommand`, ANTES de
- * `rebuildCoreFromSchematicState` (o typeId precisa estar certo e o Core precisar já ter a
- * definição avulsa registrada antes do rebuild tentar `addComponent`). Pra cada componente com
- * `subcircuitRef`: se o arquivo `.lssubcircuit` (resolvido relativo ao diretório do `.lsproj`, ou
- * absoluto) existir, resolve normalmente e registra a definição no Core -- SILENCIOSO, igual à
- * resolução de qualquer `RegisteredSource` hoje. Se não existir, preserva o componente como
- * placeholder (posição/propriedades/`lastKnownPinIds` intactos, ver `pinsForProjectComponent`) SEM
- * tentar `addComponent` -- nunca corrompe o schematic, só avisa UMA VEZ no final (nunca um toast por
- * componente). Ver `.spec/lasecsimul-subcircuits.spec` seção 12. */
-async function resolveProjectSubcircuitReferences(projectDir: string): Promise<void> {
-  const componentsWithRef = state.schematicState.components.filter((component) => component.subcircuitRef);
-  if (componentsWithRef.length === 0) return;
-
-  const language = currentLasecSimulLanguage();
-  const newCatalogEntries: WebviewComponentCatalogEntry[] = [];
-  const updatedComponents = new Map<string, WebviewComponentModel>();
-  let missingCount = 0;
-
-  for (const component of componentsWithRef) {
-    const ref = component.subcircuitRef!;
-    const absolutePath = normalizeAbsolutePath(projectDir, ref.path);
-    if (!fileExists(absolutePath)) {
-      missingCount++;
-      continue;
-    }
-
-    if (!state.coreClient) {
-      missingCount++;
-      continue;
-    }
-
-    try {
-      await state.coreClient.registerAdhocSubcircuit(absolutePath);
-    } catch {
-      missingCount++;
-      continue;
-    }
-    const parsed = parseSubcircuitManifest(
-      readJsonFile(absolutePath) as Record<string, unknown>,
-      path.dirname(absolutePath),
-      language,
-      new Set(state.schematicState.catalog.filter((entry) => entry.registeredSourceKind === "mcu-adapter").map((entry) => entry.typeId))
-    );
-    if (!parsed.typeId) {
-      missingCount++;
-      continue;
-    }
-
-    const newPinIds = parsed.pinIds.length > 0 ? parsed.pinIds : Array.from({ length: parsed.pinCount }, (_, index) => `pin-${index + 1}`);
-    const label = parsed.label || parsed.typeId;
-    newCatalogEntries.push({
-      typeId: parsed.typeId,
-      label,
-      category: "Subcircuitos",
-      hidden: true,
-      pinCount: parsed.pinCount,
-      pinIds: parsed.pinIds.length > 0 ? parsed.pinIds : undefined,
-      defaultProperties: parsed.defaultProperties,
-      icon: parsed.icon,
-      iconFilePath: parsed.iconFilePath,
-      iconSvgInline: parsed.iconSvgInline,
-      package: parsed.package,
-      logicSymbolPackage: parsed.logicSymbolPackage,
-      disabled: false,
-      mcuHost: parsed.mcuHost,
-      serialPorts: parsed.serialPorts,
-    });
-    updatedComponents.set(component.id, {
-      ...component,
-      typeId: parsed.typeId,
-      pins: newPinIds.map((id, index) => ({ id, x: 0, y: index * 12 })),
-      subcircuitRef: { path: ref.path, lastKnownTypeId: parsed.typeId, lastKnownPinIds: newPinIds },
-    });
-  }
-
-  if (newCatalogEntries.length === 0 && updatedComponents.size === 0) {
-    if (missingCount > 0) {
-      vscode.window.showWarningMessage(
-        `${missingCount} subcircuito(s) não encontrado(s). Clique com o botão direito no bloco para localizar o arquivo.`
-      );
-    }
-    return;
-  }
-
-  const catalogTypeIds = new Set(newCatalogEntries.map((entry) => entry.typeId));
-  state.schematicState = {
-    ...state.schematicState,
-    catalog: [...state.schematicState.catalog.filter((entry) => !catalogTypeIds.has(entry.typeId)), ...newCatalogEntries],
-    components: state.schematicState.components.map((component) => updatedComponents.get(component.id) ?? component),
-  };
-
-  if (missingCount > 0) {
-    vscode.window.showWarningMessage(
-      `${missingCount} subcircuito(s) não encontrado(s). Clique com o botão direito no bloco para localizar o arquivo.`
-    );
-  }
-}
-
-/** Recria um projeto carregado de disco no Core, na ordem certa (todo componente antes de qualquer
- * fio) — diferente do caminho interativo, aqui é preciso aguardar cada chamada porque connectWire
- * depende do instanceId que addComponent ainda não tinha devolvido. */
-async function pushProjectToCore(project: ProjectDocument): Promise<void> {
-  if (!state.coreClient) return;
-  coreInstanceIdByComponentId.clear();
-  mcuTargetCoreIdByComponentId.clear();
-  for (const component of project.components) {
-    if (!shouldSyncComponentToCore(component.typeId)) continue;
-    try {
-      const response = await state.coreClient.addComponent(
-        component.typeId,
-        component.properties,
-        pinsForTypeId(component.typeId)
-      );
-      registerCoreIdsForComponent(component.id, component.typeId, response);
-    } catch (err) {
-      reportCoreWarning(`criar "${component.typeId}" (${component.id})`, err);
-    }
-  }
-  for (const wire of project.wires) {
-    const coreA = coreInstanceIdByComponentId.get(wire.from.componentId);
-    const coreB = coreInstanceIdByComponentId.get(wire.to.componentId);
-    if (!coreA || !coreB) continue;
-    try {
-      await state.coreClient.connectWire(coreA, wire.from.pinId, coreB, wire.to.pinId);
-    } catch (err) {
-      reportCoreWarning(`conectar fio "${wire.id}"`, err);
-    }
-  }
-}
-
-function webviewComponentToProjectComponent(component: WebviewComponentModel): ProjectComponent {
-  return {
-    id: component.id,
-    typeId: component.typeId,
-    properties: component.properties,
-    label: component.label,
-    showId: component.showId,
-    showValue: component.showValue,
-    flipH: component.flipH,
-    flipV: component.flipV,
-    visual: { x: component.x, y: component.y, rotation: component.rotation },
-    subcircuitRef: component.subcircuitRef,
-  };
-}
-
-function validVisualPoints(points: unknown): Array<{ x: number; y: number }> {
-  if (!Array.isArray(points)) return [];
-  return points
-    .filter((point): point is { x: number; y: number } =>
-      typeof point === "object" &&
-      point !== null &&
-      "x" in point &&
-      "y" in point &&
-      Number.isFinite(point.x) &&
-      Number.isFinite(point.y)
-    )
-    .map((point) => ({ x: point.x, y: point.y }));
-}
-
-function projectToWebviewState(project: ProjectDocument): WebviewProjectState {
-  const catalog = state.schematicState.catalog;
-  const visualWirePoints = new Map(
-    project.visual.wires.map((wire) => [
-      wire.id,
-      validVisualPoints(wire.points),
-    ])
-  );
-  const components: WebviewComponentModel[] = project.components.map((component) => {
-    const descriptor = catalog.find((item) => item.typeId === component.typeId);
-    return {
-      id: component.id,
-      typeId: component.typeId,
-      // Projeto salvo antes desta versão não tem `label` -- cai pro catálogo, igual sempre foi.
-      label: component.label ?? descriptor?.label ?? component.typeId,
-      // `connectors.junction` SEMPRE nasce `hidden: true` (ver `junctionComponentAt`) -- um ponto de
-      // fiação sem símbolo/rótulo visível, igual ao SimulIDE real. `ProjectComponent` (`.lsproj`) não
-      // tem campo `hidden` pra persistir isso (só `descriptor?.hidden`, que é sobre esconder o
-      // typeId da PALETA -- "Junção" é colocável manualmente de propósito, ver
-      // `component-catalog.json`, então não pode virar `hidden` ali) -- sem esta exceção, reabrir um
-      // projeto com uma junção virava um ponto/círculo visível que nunca deveria aparecer (mesma
-      // causa raiz do bug real corrigido em `symbolAuthoring.ts::seedSubcircuitInternalComponents`
-      // pro circuito INTERNO de um subcircuito).
-      hidden: component.typeId === JUNCTION_TYPE_ID ? true : (descriptor?.hidden ?? false),
-      showId: component.showId,
-      showValue: component.showValue ?? hasShowOnSymbolProperty(descriptor),
-      flipH: component.flipH,
-      flipV: component.flipV,
-      x: component.visual?.x ?? 0,
-      y: component.visual?.y ?? 0,
-      rotation: component.visual?.rotation ?? 0,
-      pins: pinsForProjectComponent(component),
-      properties: component.properties as Record<string, string | number | boolean>,
-      subcircuitRef: component.subcircuitRef,
-    };
-  });
-  const wires: WebviewWireModel[] = project.wires.map((wire) => {
-    const points = visualWirePoints.get(wire.id);
-    return {
-      id: wire.id,
-      from: wire.from,
-      to: wire.to,
-      ...(points && points.length > 0 ? { points } : {}),
-    };
-  });
-  return {
-    locale: currentLasecSimulLanguage(),
-    catalog,
-    components,
-    wires,
-    viewport: project.visual.viewport,
-    selectedComponentIds: [],
-    selectedWireIds: [],
-  };
 }
 
 function sameWireEndpoints(a: WebviewWireModel, b: WebviewWireModel): boolean {
@@ -961,12 +535,8 @@ async function syncProjectSnapshotToCore(previous: WebviewProjectState, next: We
       const value = component.properties[name];
       if (value === undefined) continue;
       if (name === "name" && component.typeId === TUNNEL_TYPE_ID) {
-        const coreId = coreInstanceIdByComponentId.get(component.id);
-        if (state.coreClient && coreId) {
-          const pinId = component.pins[0]?.id ?? "pin";
-          state.coreClient.setTunnelName(coreId, pinId, String(before.properties[name] ?? ""), String(value))
-            .catch((err: unknown) => reportCoreWarning("renomear túnel", err));
-        }
+        const pinId = component.pins[0]?.id ?? "pin";
+        pushTunnelNameToCore(component.id, pinId, String(before.properties[name] ?? ""), String(value));
       } else {
         pushPropertyToCore(component.id, name, value);
       }
@@ -1013,7 +583,7 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
     case "requestAddComponent": {
       const descriptor = state.schematicState.catalog.find((item) => item.typeId === message.typeId);
       const componentId = nextId("component");
-      const pins = pinsForTypeId(message.typeId);
+      const pins = pinsForTypeId(message.typeId, descriptor?.defaultProperties);
       const baseLabel = descriptor?.label ?? message.typeId;
       const component: WebviewComponentModel = {
         id: componentId,
@@ -1199,23 +769,46 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
     }
     case "requestUpdateProperty": {
       const prevComponent = state.schematicState.components.find((c) => c.id === message.componentId);
+      const updatedProperties = { ...prevComponent?.properties, [message.name]: message.value };
+      // Propriedade `affectsPinCount` (ex: rows/columns do switches.keypad, TR-9): o número de
+      // pinos da instância pode ter mudado -- recalcula via a MESMA fórmula que o Core usa
+      // (`pinsForTypeId`, dynamicLayout.pinGroups), reconcilia `component.pins[]` e derruba
+      // qualquer fio que apontava pra um pino que deixou de existir. O Core faz a MESMA
+      // reconciliação do lado dele sozinho (`SimulationSession::setProperty` ->
+      // `reregisterComponentPins`, disparado pelo `pushPropertyToCore` abaixo) -- não é preciso
+      // mandar `disconnectWire` explícito pra esses fios, já saem do Netlist junto.
+      const catalogEntry = prevComponent ? state.schematicState.catalog.find((item) => item.typeId === prevComponent.typeId) : undefined;
+      const affectsPinCount = catalogEntry?.propertySchema?.find((schema) => schema.id === message.name)?.affectsPinCount ?? false;
+      const newPins = prevComponent && affectsPinCount ? pinsForTypeId(prevComponent.typeId, updatedProperties) : undefined;
+      const newPinIds = newPins ? new Set(newPins.map((pin) => pin.id)) : undefined;
+
+      const nextWires = newPinIds
+        ? state.schematicState.wires.filter((wire) => {
+            const touchesRemovedPin =
+              (wire.from.componentId === message.componentId && !newPinIds.has(wire.from.pinId)) ||
+              (wire.to.componentId === message.componentId && !newPinIds.has(wire.to.pinId));
+            return !touchesRemovedPin;
+          })
+        : state.schematicState.wires;
+
       state.schematicState = {
         ...state.schematicState,
         components: state.schematicState.components.map((component) =>
           component.id === message.componentId
-            ? { ...component, properties: { ...component.properties, [message.name]: message.value } }
+            ? { ...component, properties: updatedProperties, ...(newPins ? { pins: newPins } : {}) }
             : component
         ),
+        wires: nextWires,
+        selectedWireIds:
+          nextWires === state.schematicState.wires
+            ? state.schematicState.selectedWireIds
+            : state.schematicState.selectedWireIds.filter((id) => nextWires.some((wire) => wire.id === id)),
       };
       // Túnel: nome precisa de setTunnelName (rebuilda topologia do Netlist), não setProperty.
       if (message.name === "name" && prevComponent?.typeId === TUNNEL_TYPE_ID) {
-        const coreId = coreInstanceIdByComponentId.get(message.componentId);
-        if (state.coreClient && coreId) {
-          const pinId = prevComponent.pins[0]?.id ?? "pin";
-          const oldName = String(prevComponent.properties["name"] ?? "");
-          state.coreClient.setTunnelName(coreId, pinId, oldName, String(message.value))
-            .catch((err: unknown) => reportCoreWarning("renomear túnel", err));
-        }
+        const pinId = prevComponent.pins[0]?.id ?? "pin";
+        const oldName = String(prevComponent.properties["name"] ?? "");
+        pushTunnelNameToCore(message.componentId, pinId, oldName, String(message.value));
       } else {
         pushPropertyToCore(message.componentId, message.name, message.value);
       }
@@ -1245,31 +838,38 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       void saveProjectCommand();
       return;
     case "requestOpenProject":
-      if (state.extensionContext) void openProjectCommand(state.extensionContext);
+      if (state.extensionContext) {
+        void openProjectCommand({
+          extensionUri: state.extensionContext.extensionUri,
+          beforeOpen: closeAllMcuSerialMonitors,
+          openSchematicEditor,
+          syncSchematicPanel,
+        });
+      }
       return;
     case "requestSaveSymbol":
-      void saveSymbolCommand(message.filePath, message.typeId, message.kind, message.view, message.components, message.wires);
+      void saveSymbolCommand(message.filePath, message.typeId, message.kind, message.view, message.components, message.wires, symbolCommandOptions());
       return;
     case "requestEditSymbol":
-      void editPackageSymbolCommand({ sourceId: message.sourceId });
+      void editPackageSymbolCommand({ sourceId: message.sourceId }, symbolCommandOptions());
       return;
     case "requestChooseMcuFirmware":
-      void chooseMcuFirmwareCommand(message.componentId);
+      void chooseMcuFirmwareCommand(message.componentId, mcuCommandOptions());
       return;
     case "requestChooseExposedMcuFirmware":
-      void chooseExposedMcuFirmwareCommand(message.outerComponentId, message.innerComponentId);
+      void chooseExposedMcuFirmwareCommand(message.outerComponentId, message.innerComponentId, mcuCommandOptions());
       return;
     case "requestReloadMcuFirmware":
-      void reloadMcuFirmwareCommand(message.componentId);
+      void reloadMcuFirmwareCommand(message.componentId, mcuCommandOptions());
       return;
     case "requestReloadExposedMcuFirmware":
-      void reloadExposedMcuFirmwareCommand(message.outerComponentId, message.innerComponentId);
+      void reloadExposedMcuFirmwareCommand(message.outerComponentId, message.innerComponentId, mcuCommandOptions());
       return;
     case "requestOpenMcuSerialMonitor":
       openMcuSerialMonitorCommand(message.componentId, message.usartIndex);
       return;
     case "requestOpenExposedMcuSerialMonitor":
-      void openExposedMcuSerialMonitorCommand(message.outerComponentId, message.innerComponentId, message.usartIndex);
+      void openExposedMcuSerialMonitorCommand(message.outerComponentId, message.innerComponentId, message.usartIndex, mcuCommandOptions());
       return;
     case "requestSwitchSymbolView":
       void switchSymbolViewCommand(message.filePath, message.typeId, message.kind, message.toView, message.internalComponents, message.internalWires);
@@ -1281,22 +881,22 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       void sendInstrumentHistory(message.componentId);
       return;
     case "requestLoadPackage":
-      void loadPackageCommand(message.sourceId);
+      void loadPackageCommand(message.sourceId, symbolCommandOptions());
       return;
     case "requestSavePackage":
       void savePackageCommand(message.sourceId);
       return;
     case "requestUpdateBoardOverlayProperty":
-      updateBoardOverlayPropertyCommand(message.outerComponentId, message.innerComponentId, message.name, message.value);
+      updateBoardOverlayPropertyCommand(message.outerComponentId, message.innerComponentId, message.name, message.value, mcuCommandOptions());
       return;
     case "requestBoardOverlayData":
-      void requestBoardOverlayDataCommand(message.componentId, message.sourceId);
+      void requestBoardOverlayDataCommand(message.componentId, message.sourceId, mcuCommandOptions());
       return;
     case "requestUpdateBoardOverlayVisual":
-      void updateBoardOverlayVisualCommand(message.sourceId, message.innerComponentId, message.x, message.y);
+      void updateBoardOverlayVisualCommand(message.sourceId, message.innerComponentId, message.x, message.y, mcuCommandOptions());
       return;
     case "requestUpdateExposedComponentProperty":
-      void updateExposedComponentPropertyCommand(message.outerComponentId, message.sourceId, message.innerComponentId, message.name, message.value);
+      void updateExposedComponentPropertyCommand(message.outerComponentId, message.sourceId, message.innerComponentId, message.name, message.value, mcuCommandOptions());
       return;
     case "requestCreateSubcircuitFromSelection":
       void createSubcircuitFromSelectionHandler(message.componentIds);
@@ -1441,7 +1041,7 @@ async function createSubcircuitFromSelectionHandler(componentIds: string[]): Pro
   }
   if (state.coreClient) {
     try {
-      await state.coreClient.registerAdhocSubcircuit(normalizedPath);
+      await state.coreClient.registerAdhocSubcircuitDefinition(normalizedPath);
     } catch (err) {
       vscode.window.showErrorMessage(`Não foi possível registrar o subcircuito no Core: ${err instanceof Error ? err.message : String(err)}`);
       return;
@@ -1457,14 +1057,14 @@ async function createSubcircuitFromSelectionHandler(componentIds: string[]): Pro
     folderPath: ["Meus Subcircuitos"],
   };
   saveRegisteredSources(state.extensionContext.extensionPath, [...unifiedCatalog.registeredSources, newSource]);
-  await refreshUnifiedCatalogState(false);
+  await refreshUnifiedCatalogState(false, catalogCommandOptions());
 
   // 9. Inserir instância do subcircuito no esquemático, no centro da bounding box
   const newCompId = nextId("component");
   const centerX = Math.round((minX + maxX) / 2);
   const centerY = Math.round((minY + (minY + (selectedComponents.length - 1) * 16)) / 2);
-  const newPins = pinsForTypeId(typeId);
   const catalogEntry = state.schematicState.catalog.find((e) => e.typeId === typeId);
+  const newPins = pinsForTypeId(typeId, catalogEntry?.defaultProperties);
   const newComponent: WebviewComponentModel = {
     id: newCompId,
     typeId,
@@ -1530,1039 +1130,6 @@ async function exportInstrumentDataCommand(suggestedFileName: string, csvContent
   }
 }
 
-function absoluteSubcircuitRefPath(refPath: string): string {
-  if (path.isAbsolute(refPath)) return path.normalize(refPath);
-  const baseDir = state.currentProjectFilePath ? path.dirname(state.currentProjectFilePath) : process.cwd();
-  return path.resolve(baseDir, refPath);
-}
-
-function projectWithRelativeSubcircuitRefs(project: ProjectDocument, targetProjectPath: string): ProjectDocument {
-  const targetDir = path.dirname(targetProjectPath);
-  return {
-    ...project,
-    components: project.components.map((component) => {
-      if (!component.subcircuitRef?.path) return component;
-      const absolutePath = absoluteSubcircuitRefPath(component.subcircuitRef.path);
-      const relativePath = path.relative(targetDir, absolutePath);
-      const portablePath = relativePath && !path.isAbsolute(relativePath) ? relativePath : absolutePath;
-      return {
-        ...component,
-        subcircuitRef: {
-          ...component.subcircuitRef,
-          path: portablePath,
-        },
-      };
-    }),
-  };
-}
-
-async function saveProjectCommand(): Promise<void> {
-  const uri = await vscode.window.showSaveDialog({ filters: { "LasecSimul Project": ["lsproj"] } });
-  if (!uri) return;
-  const project: ProjectDocument = projectWithRelativeSubcircuitRefs({
-    ...createEmptyProject(),
-    components: state.schematicState.components.map(webviewComponentToProjectComponent),
-    wires: state.schematicState.wires.map((wire) => ({ id: wire.id, from: wire.from, to: wire.to })),
-    visual: {
-      wires: state.schematicState.wires
-        .filter((wire) => wire.points && wire.points.length > 0)
-        .map((wire) => ({ id: wire.id, points: wire.points })),
-      viewport: state.schematicState.viewport,
-    },
-  }, uri.fsPath);
-  await projectSerializer.save(uri.fsPath, project);
-  state.currentProjectFilePath = uri.fsPath;
-  vscode.window.showInformationMessage(`Projeto LasecSimul salvo em ${uri.fsPath}`);
-}
-
-async function openProjectCommand(context: vscode.ExtensionContext): Promise<void> {
-  const uris = await vscode.window.showOpenDialog({
-    filters: { "LasecSimul Project": ["lsproj"] },
-    canSelectMany: false,
-  });
-  const selected = uris?.[0];
-  if (!selected) return;
-  closeAllMcuSerialMonitors();
-  const project = await projectSerializer.load(selected.fsPath);
-  state.currentProjectFilePath = selected.fsPath;
-  state.schematicState = projectToWebviewState(project);
-  await resolveProjectSubcircuitReferences(path.dirname(selected.fsPath));
-  if (!state.schematicPanel) openSchematicEditor(context.extensionUri);
-  syncSchematicPanel();
-  await rebuildCoreFromSchematicState();
-}
-
-function nextSourceId(): string {
-  return `registered-source-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
-}
-
-function inferSourcesFromSelectedFile(extensionPath: string, selectedPath: string): RegisteredSource[] {
-  const absoluteSelectedPath = normalizeAbsolutePath(extensionPath, selectedPath);
-  const fileName = path.basename(absoluteSelectedPath).toLowerCase();
-  const sources: RegisteredSource[] = [];
-
-  const json = readJsonFile(absoluteSelectedPath) as Record<string, unknown>;
-
-  if (fileName === "library.json") {
-    const abiEntries = Array.isArray(json.devices) ? json.devices : [];
-    for (const value of abiEntries) {
-      if (typeof value !== "object" || value === null) continue;
-      const deviceEntry = value as { manifest?: unknown };
-      if (typeof deviceEntry.manifest !== "string" || !deviceEntry.manifest.trim()) continue;
-      const manifestPath = path.resolve(path.dirname(absoluteSelectedPath), deviceEntry.manifest);
-      sources.push({
-        id: nextSourceId(),
-        kind: "abi-device",
-        filePath: manifestPath,
-        libraryPath: absoluteSelectedPath,
-        folderPath: folderPathFromManifestFile(manifestPath),
-      });
-    }
-
-    const mcuEntries = Array.isArray(json.mcus) ? json.mcus : [];
-    for (const value of mcuEntries) {
-      if (typeof value !== "object" || value === null) continue;
-      const mcuEntry = value as { manifest?: unknown };
-      if (typeof mcuEntry.manifest !== "string" || !mcuEntry.manifest.trim()) continue;
-      const manifestPath = path.resolve(path.dirname(absoluteSelectedPath), mcuEntry.manifest);
-      sources.push({
-        id: nextSourceId(),
-        kind: "mcu-adapter",
-        filePath: manifestPath,
-        libraryPath: absoluteSelectedPath,
-        folderPath: folderPathFromManifestFile(manifestPath),
-      });
-    }
-
-    const subEntries = Array.isArray(json.subcircuits) ? json.subcircuits : [];
-    for (const value of subEntries) {
-      if (typeof value !== "object" || value === null) continue;
-      const subEntry = value as { manifest?: unknown };
-      if (typeof subEntry.manifest !== "string" || !subEntry.manifest.trim()) continue;
-      const manifestPath = path.resolve(path.dirname(absoluteSelectedPath), subEntry.manifest);
-      sources.push({
-        id: nextSourceId(),
-        kind: "subcircuit-file",
-        filePath: manifestPath,
-        folderPath: folderPathFromManifestFile(manifestPath),
-      });
-    }
-
-    return sources;
-  }
-
-  if (fileName.endsWith(".lssubcircuit")) {
-    sources.push({
-      id: nextSourceId(),
-      kind: "subcircuit-file",
-      filePath: absoluteSelectedPath,
-      folderPath: sanitizeFolderPathSegments(json.folderPath),
-    });
-    return sources;
-  }
-
-  const hasChipId = typeof json.chipId === "string" && json.chipId.trim().length > 0;
-  const hasNativeEntry = typeof json.nativeEntry === "object" && json.nativeEntry !== null;
-  // Devices sem basename fixo (ex: "ssd1306.lsdevice") caem no sniff estrutural
-  // (`hasChipId`/`hasNativeEntry`), extension-agnostic.
-  if (fileName === "mcu.lsdevice" || hasChipId) {
-    sources.push({
-      id: nextSourceId(),
-      kind: "mcu-adapter",
-      filePath: absoluteSelectedPath,
-      libraryPath: inferLibraryPathForDevice(absoluteSelectedPath),
-      folderPath: sanitizeFolderPathSegments(json.folderPath),
-    });
-    return sources;
-  }
-
-  if (fileName === "device.lsdevice" || hasNativeEntry) {
-    sources.push({
-      id: nextSourceId(),
-      kind: "abi-device",
-      filePath: absoluteSelectedPath,
-      libraryPath: inferLibraryPathForDevice(absoluteSelectedPath),
-      folderPath: sanitizeFolderPathSegments(json.folderPath),
-    });
-    return sources;
-  }
-
-  const looksLikeSubcircuit = Array.isArray(json.components) && Array.isArray(json.wires) && Array.isArray(json.interface);
-  if (looksLikeSubcircuit) {
-    sources.push({
-      id: nextSourceId(),
-      kind: "subcircuit-file",
-      filePath: absoluteSelectedPath,
-      folderPath: sanitizeFolderPathSegments(json.folderPath),
-    });
-  }
-
-  return sources;
-}
-
-async function refreshUnifiedCatalogState(loadLibrariesInCore: boolean): Promise<void> {
-  if (!state.extensionContext) return;
-  const unifiedCatalog = loadUnifiedCatalog(state.extensionContext.extensionPath, currentLasecSimulLanguage());
-  const resolved = resolveRegisteredItems(state.extensionContext.extensionPath, unifiedCatalog.registeredSources);
-
-  const requests = new Map<string, { displayPath: string; absolutePath: string }>();
-  const adhocSubcircuits = new Set<string>();
-  for (const relativePath of unifiedCatalog.deviceLibraries) {
-    const absolutePath = normalizeAbsolutePath(state.extensionContext.extensionPath, relativePath);
-    requests.set(absolutePath, { displayPath: relativePath, absolutePath });
-  }
-  for (const item of resolved) {
-    if (!item.libraryPathToLoad) continue;
-    const absolutePath = normalizeAbsolutePath(state.extensionContext.extensionPath, item.libraryPathToLoad);
-    if (!requests.has(absolutePath)) {
-      requests.set(absolutePath, { displayPath: absolutePath, absolutePath });
-    }
-  }
-  for (const item of resolved) {
-    if (item.adhocSubcircuitPathToRegister) {
-      adhocSubcircuits.add(item.adhocSubcircuitPathToRegister);
-    }
-  }
-
-  const failures = loadLibrariesInCore
-    ? await loadConfiguredDeviceLibraries(state.extensionContext.extensionPath, [...requests.values()])
-    : new Map<string, string>();
-  const adhocFailures = new Map<string, string>();
-  if (loadLibrariesInCore && state.coreClient) {
-    for (const absolutePath of adhocSubcircuits) {
-      try {
-        await state.coreClient.registerAdhocSubcircuit(absolutePath);
-      } catch (err) {
-        adhocFailures.set(absolutePath, err instanceof Error ? err.message : String(err));
-      }
-    }
-  }
-
-  const baseTypeIds = new Set(unifiedCatalog.catalog.map((entry) => entry.typeId));
-  const registeredEntries = resolved.flatMap((item) => {
-    const failedReason = item.libraryPathToLoad
-      ? failures.get(normalizeAbsolutePath(state.extensionContext!.extensionPath, item.libraryPathToLoad))
-      : undefined;
-    const adhocFailedReason = item.adhocSubcircuitPathToRegister
-      ? adhocFailures.get(item.adhocSubcircuitPathToRegister)
-      : undefined;
-    if (failedReason) {
-      return [{
-        ...item.entry,
-        disabled: true,
-        disabledReason: localizedAbiFailure(failedReason, currentLasecSimulLanguage()),
-      }];
-    }
-    if (adhocFailedReason) {
-      return [{
-        ...item.entry,
-        disabled: true,
-        disabledReason: currentLasecSimulLanguage() === "en"
-          ? `subcircuit registration failed: ${adhocFailedReason}`
-          : `falha ao registrar subcircuito: ${adhocFailedReason}`,
-      }];
-    }
-    if (baseTypeIds.has(item.entry.typeId)) {
-      // Catálogo base vence: evita duplicata "registrada" com lápis/ícone externo quando o mesmo
-      // typeId já existe como item nativo da paleta (caso do voltímetro).
-      return [];
-    }
-    return [item.entry];
-  });
-
-  const mergedCatalog = [...unifiedCatalog.catalog, ...registeredEntries];
-  setEffectiveCatalog(loadLibrariesInCore ? await attachPropertySchemas(mergedCatalog) : mergedCatalog);
-}
-
-/** Anexa o schema rico de propriedades (grupo/editor/min/max/opções/flags) de cada typeId, vindo do
- * Core via `getPropertySchemas` — só tentado quando `loadLibrariesInCore` (ou seja, quando o
- * `state.coreClient` já deveria estar conectado); best-effort: se falhar (Core ainda não respondeu, por
- * exemplo), o catálogo segue sem schema e o diálogo de propriedades cai pra inferência (ver
- * `resolvePropertyFields` na Webview). Schema é por typeId (catálogo), nunca por instância. */
-async function attachPropertySchemas(
-  catalog: WebviewComponentCatalogEntry[]
-): Promise<WebviewComponentCatalogEntry[]> {
-  if (!state.coreClient) return catalog;
-  let resolved: Awaited<ReturnType<typeof state.coreClient.getPropertySchemas>>;
-  try {
-    resolved = await state.coreClient.getPropertySchemas(currentLasecSimulLanguage());
-  } catch {
-    return catalog; // Core ainda não respondeu -- catálogo sem schema, inferência cobre o resto
-  }
-  return mergePropertySchemas(
-    catalog,
-    resolved.schemasByTypeId,
-    resolved.readoutFormatByTypeId,
-    resolved.interactionKindByTypeId,
-    resolved.pinIdsByTypeId,
-    resolved.serialPortsByTypeId
-  );
-}
-
-async function registerCatalogFileCommand(): Promise<void> {
-  if (!state.extensionContext) return;
-  const ctx = state.extensionContext;
-  const picked = await vscode.window.showOpenDialog({
-    canSelectMany: false,
-    // `lsdevice`/`lssubcircuit` são as extensões oficiais de manifesto; `json` continua na lista
-    // porque `library.json` (índice, nunca renomeado) também é selecionável aqui.
-    filters: {
-      "LasecSimul": ["lsdevice", "lssubcircuit", "json"],
-    },
-    title: "Registrar arquivo ABI/QEMU/Subcircuito no LasecSimul",
-  });
-  const selected = picked?.[0];
-  if (!selected) return;
-
-  let newSources: RegisteredSource[] = [];
-  try {
-    newSources = inferSourcesFromSelectedFile(ctx.extensionPath, selected.fsPath);
-  } catch (err) {
-    vscode.window.showErrorMessage(
-      `Não foi possível registrar arquivo: ${err instanceof Error ? err.message : String(err)}`
-    );
-    return;
-  }
-
-  if (newSources.length === 0) {
-    vscode.window.showWarningMessage("Arquivo não reconhecido como ABI, QEMU (mcu/library) nem subcircuito.");
-    return;
-  }
-
-  const unifiedCatalog = loadUnifiedCatalog(ctx.extensionPath, currentLasecSimulLanguage());
-  const existingKeys = new Set(
-    unifiedCatalog.registeredSources.map((source) => `${source.kind}::${normalizeAbsolutePath(ctx.extensionPath, source.filePath)}`)
-  );
-  const deduped = newSources.filter((source) => {
-    const key = `${source.kind}::${normalizeAbsolutePath(ctx.extensionPath, source.filePath)}`;
-    if (existingKeys.has(key)) return false;
-    existingKeys.add(key);
-    return true;
-  });
-
-  if (deduped.length === 0) {
-    vscode.window.showInformationMessage("Esses itens já estavam registrados na paleta.");
-    return;
-  }
-
-  const mergedSources = [...unifiedCatalog.registeredSources, ...deduped];
-  const savedAt = saveRegisteredSources(ctx.extensionPath, mergedSources);
-  await refreshUnifiedCatalogState(true);
-  vscode.window.showInformationMessage(`Registro concluído (${deduped.length} item(ns)). Catálogo salvo em ${savedAt}.`);
-}
-
-async function removeRegisteredCatalogItemCommand(item?: { sourceId?: string }): Promise<void> {
-  if (!state.extensionContext) return;
-  const sourceId = typeof item?.sourceId === "string" ? item.sourceId : undefined;
-  if (!sourceId) {
-    vscode.window.showWarningMessage("Selecione um item registrado na paleta para remover.");
-    return;
-  }
-
-  const unifiedCatalog = loadUnifiedCatalog(state.extensionContext.extensionPath, currentLasecSimulLanguage());
-  const source = unifiedCatalog.registeredSources.find((value) => value.id === sourceId);
-  if (!source) {
-    vscode.window.showWarningMessage("Item registrado não encontrado no catálogo.");
-    return;
-  }
-
-  if (source.removable === false) {
-    vscode.window.showInformationMessage("Esse item faz parte do catálogo integrado e não pode ser removido pela paleta.");
-    return;
-  }
-
-  const decision = await vscode.window.showWarningMessage(
-    "Remover item registrado da paleta?",
-    { modal: true },
-    "Remover"
-  );
-  if (decision !== "Remover") return;
-
-  const nextSources = unifiedCatalog.registeredSources.filter((value) => value.id !== sourceId);
-  saveRegisteredSources(state.extensionContext.extensionPath, nextSources);
-  await refreshUnifiedCatalogState(true);
-  vscode.window.showInformationMessage("Item removido da paleta de componentes.");
-}
-
-/** PC-16 (.spec/lasecsimul-native-devices.spec): filtra elementos `null`/não-objeto de um array vindo
- * de JSON externo -- `Array.isArray` sozinho não garante que CADA elemento seja utilizável; um
- * `.lsdevice`/`.lssubcircuit` malformado com `"pins":[null]` ou `"shapes":[null]` passava batido
- * (só o container era checado) e derrubava `symbolAuthoring.ts` com `TypeError` não tratado ao abrir
- * "Editar Símbolo Visual"/"Abrir Subcircuito" -- mesmo padrão defensivo que `knownPinIdsForManifest`
- * já usa pros formatos carregados no boot do catálogo, agora também na leitura pra EDIÇÃO. */
-function sanitizeJsonObjectArray(value: unknown): Record<string, unknown>[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((entry): entry is Record<string, unknown> => typeof entry === "object" && entry !== null);
-}
-
-function extractPackageForEditing(json: Record<string, unknown>, key: "package" | "logicSymbolPackage" = "package", assetBasePath?: string): PackageDescriptor {
-  const raw = json[key];
-  if (typeof raw === "object" && raw !== null) {
-    const candidate = raw as Record<string, unknown>;
-    if (typeof candidate.width === "number" && typeof candidate.height === "number") {
-      const viewSpecCandidate = typeof candidate.viewSpec === "object" && candidate.viewSpec !== null
-        ? (candidate.viewSpec as Record<string, unknown>)
-        : undefined;
-      return {
-        width: candidate.width,
-        height: candidate.height,
-        schematicWidth: typeof candidate.schematicWidth === "number" ? candidate.schematicWidth : undefined,
-        schematicHeight: typeof candidate.schematicHeight === "number" ? candidate.schematicHeight : undefined,
-        border: typeof candidate.border === "boolean" ? candidate.border : undefined,
-        background: sanitizePackageBackground(candidate.background, assetBasePath),
-        initialTransform: typeof candidate.initialTransform === "object" && candidate.initialTransform !== null
-          ? (candidate.initialTransform as PackageDescriptor["initialTransform"])
-          : undefined,
-        pinMarker: candidate.pinMarker === "packagePin" ? "packagePin" : undefined,
-        shapes: sanitizeJsonObjectArray(candidate.shapes) as unknown as PackageShape[],
-        simulidePaint: typeof candidate.simulidePaint === "object" && candidate.simulidePaint !== null
-          ? (candidate.simulidePaint as PackageDescriptor["simulidePaint"])
-          : undefined,
-        qtWidget: typeof candidate.qtWidget === "object" && candidate.qtWidget !== null
-          ? (candidate.qtWidget as PackageDescriptor["qtWidget"])
-          : undefined,
-        // `viewSpec.paint` é um array consumido do mesmo jeito que `shapes[]` (ver
-        // `symbolAuthoring.ts::seedSymbolAuthoringComponents`) -- precisa da MESMA sanitização, não
-        // só "viewSpec é um objeto". `paint` ausente/errado vira `[]` explícito aqui (nunca deixado
-        // como estava) porque `pkg.viewSpec?.paint ?? []` no chamador só substitui null/undefined,
-        // não uma string/objeto por engano no lugar do array.
-        viewSpec: viewSpecCandidate
-          ? ({ ...viewSpecCandidate, paint: sanitizeJsonObjectArray(viewSpecCandidate.paint) } as unknown as PackageDescriptor["viewSpec"])
-          : undefined,
-        valueLabel: typeof candidate.valueLabel === "object" && candidate.valueLabel !== null
-          ? (candidate.valueLabel as PackageDescriptor["valueLabel"])
-          : undefined,
-        pins: sanitizeJsonObjectArray(candidate.pins) as unknown as PackagePin[],
-        pinLabelColor: typeof candidate.pinLabelColor === "string" ? candidate.pinLabelColor : undefined,
-      };
-    }
-  }
-  return { width: 80, height: 60, border: true, shapes: [], pins: [] };
-}
-
-function extractSubcircuitInterfaceMap(json: Record<string, unknown>): Map<string, { label?: string; internalTunnel?: string }> {
-  const entries = Array.isArray(json.interface) ? json.interface : [];
-  const result = new Map<string, { label?: string; internalTunnel?: string }>();
-  for (const value of entries) {
-    if (typeof value !== "object" || value === null) continue;
-    const entry = value as Record<string, unknown>;
-    const pinId = typeof entry.pinId === "string" ? entry.pinId.trim() : "";
-    if (!pinId) continue;
-    result.set(pinId, {
-      label: typeof entry.label === "string" && entry.label.trim() ? entry.label.trim() : undefined,
-      internalTunnel: typeof entry.internalTunnel === "string" && entry.internalTunnel.trim() ? entry.internalTunnel.trim() : undefined,
-    });
-  }
-  return result;
-}
-
-function extractInternalTunnelNames(json: Record<string, unknown>): Set<string> {
-  const rawComponents = Array.isArray(json.components) ? json.components : [];
-  return new Set(
-    rawComponents
-      .filter((value): value is Record<string, unknown> => typeof value === "object" && value !== null)
-      .filter((component) => component.typeId === TUNNEL_TYPE_ID)
-      .map((component) => component.properties as Record<string, unknown> | undefined)
-      .map((properties) => typeof properties?.name === "string" ? properties.name.trim() : "")
-      .filter((name) => name.length > 0)
-  );
-}
-
-function inferInternalTunnelForPin(pinId: string, tunnelNames: Set<string>, label?: string): string | undefined {
-  if (tunnelNames.has(pinId)) return pinId;
-  if (/^GND\d+$/i.test(pinId) && tunnelNames.has("GND")) return "GND";
-  const normalizedLabel = typeof label === "string" ? label.trim().toUpperCase() : "";
-  if (normalizedLabel && tunnelNames.has(normalizedLabel)) return normalizedLabel;
-  return undefined;
-}
-
-function applySubcircuitInterfaceToPackageComponents(json: Record<string, unknown>, packageComponents: WebviewComponentModel[]): WebviewComponentModel[] {
-  const interfaceByPinId = extractSubcircuitInterfaceMap(json);
-  const tunnelNames = extractInternalTunnelNames(json);
-  return packageComponents.map((component) => {
-    if (component.typeId !== "other.package_pin") return component;
-    const pinId = typeof component.properties.pinId === "string" ? component.properties.pinId.trim() : "";
-    if (!pinId) return component;
-    const current = interfaceByPinId.get(pinId);
-    const inferredTunnel = current?.internalTunnel ?? inferInternalTunnelForPin(pinId, tunnelNames, current?.label);
-    if (!inferredTunnel) return component;
-    return {
-      ...component,
-      properties: {
-        ...component.properties,
-        internalTunnel: inferredTunnel,
-      },
-    };
-  });
-}
-
-function sanitizeVisualPosition(value: unknown): VisualPosition | undefined {
-  if (typeof value !== "object" || value === null) return undefined;
-  const raw = value as Record<string, unknown>;
-  if (typeof raw.x !== "number" || typeof raw.y !== "number") return undefined;
-  const rotation = raw.rotation === 90 || raw.rotation === 180 || raw.rotation === 270 ? raw.rotation : 0;
-  return {
-    x: raw.x,
-    y: raw.y,
-    rotation,
-    flipH: typeof raw.flipH === "boolean" ? raw.flipH : undefined,
-    flipV: typeof raw.flipV === "boolean" ? raw.flipV : undefined,
-  };
-}
-
-/** Lê `components[]`/`wires[]` REAIS de um `.lssubcircuit` (`visual`/`boardVisual`/`points` são campos
- * novos, aditivos -- `core/src/registry/SubcircuitRegistry.hpp::SubcircuitComponentDef`/
- * `SubcircuitWireDef` só leem campos nomeados, ignoram o resto, então isto nunca quebra o Core, ver
- * `.spec/lasecsimul-subcircuits.spec`). Só usado pra "Abrir Subcircuito" (kind === "subcircuit-file"
- * -- `.lsdevice` não tem circuito interno, "Package ≠ Subcircuit"). */
-function extractInternalCircuit(json: Record<string, unknown>): { components: InternalComponentSeed[]; wires: InternalWireSeed[] } {
-  const componentsRaw = Array.isArray(json.components) ? json.components : [];
-  const components: InternalComponentSeed[] = componentsRaw
-    .filter((value): value is Record<string, unknown> => typeof value === "object" && value !== null)
-    .map((value) => ({
-      id: typeof value.id === "string" ? value.id : "",
-      typeId: typeof value.typeId === "string" ? value.typeId : "",
-      properties: typeof value.properties === "object" && value.properties !== null ? (value.properties as Record<string, unknown>) : {},
-      visual: sanitizeVisualPosition(value.visual),
-      boardVisual: sanitizeVisualPosition(value.boardVisual),
-      exposed: value.exposed === true,
-      label: typeof value.label === "string" && value.label.trim() ? value.label : undefined,
-      showId: typeof value.showId === "boolean" ? value.showId : undefined,
-      showValue: typeof value.showValue === "boolean" ? value.showValue : undefined,
-    }))
-    .filter((component) => component.id && component.typeId);
-
-  const wiresRaw = Array.isArray(json.wires) ? json.wires : [];
-  const wires: InternalWireSeed[] = wiresRaw
-    .filter((value): value is Record<string, unknown> => typeof value === "object" && value !== null)
-    .map((value) => {
-      const from = value.from as Record<string, unknown> | undefined;
-      const to = value.to as Record<string, unknown> | undefined;
-      const points = Array.isArray(value.points)
-        ? (value.points as unknown[])
-            .filter((point): point is Record<string, unknown> => typeof point === "object" && point !== null && typeof (point as Record<string, unknown>).x === "number" && typeof (point as Record<string, unknown>).y === "number")
-            .map((point) => ({ x: point.x as number, y: point.y as number }))
-        : undefined;
-      return {
-        from: { componentId: typeof from?.componentId === "string" ? from.componentId : "", pinId: typeof from?.pinId === "string" ? from.pinId : "" },
-        to: { componentId: typeof to?.componentId === "string" ? to.componentId : "", pinId: typeof to?.pinId === "string" ? to.pinId : "" },
-        points,
-      };
-    })
-    .filter((wire) => wire.from.componentId && wire.to.componentId);
-
-  return { components, wires };
-}
-
-/** Resolve um `sourceId` (`RegisteredSource.id`, igual ao usado por `editPackageSymbolCommand`) pro
- * caminho absoluto do manifesto -- compartilhado pelos comandos de "Carregar/Salvar pacote" e
- * "Selecione os Componentes expostos", que precisam todos do mesmo manifesto (`.lssubcircuit`/
- * `.lsdevice`) do item clicado. */
-function resolveSourceFilePath(ctx: vscode.ExtensionContext, sourceId: string): string | undefined {
-  const unifiedCatalog = loadUnifiedCatalog(ctx.extensionPath, currentLasecSimulLanguage());
-  const source = unifiedCatalog.registeredSources.find((value) => value.id === sourceId);
-  if (!source) {
-    vscode.window.showWarningMessage("Item registrado não encontrado no catálogo.");
-    return undefined;
-  }
-  return normalizeAbsolutePath(ctx.extensionPath, source.filePath);
-}
-
-/** "Carregar pacote" -- mesmo destino de "Abrir Subcircuito"/"Editar Símbolo" (reaproveita
- * `editPackageSymbolCommand` tal qual), só com rótulo de menu diferente (ver `subpackage.cpp::
- * loadPackage()` real, que também abre a edição do package ao "carregar"). */
-async function loadPackageCommand(sourceId: string): Promise<void> {
-  await editPackageSymbolCommand({ sourceId });
-}
-
-/** "Salvar pacote" -- exporta só a chave `package` do manifesto pra um arquivo separado escolhido
- * pelo usuário (mesmo papel de `SubPackage::slotSave()` real, formato simplificado pra JSON puro
- * em vez do `.package` binário do SimulIDE). */
-async function savePackageCommand(sourceId: string): Promise<void> {
-  if (!state.extensionContext) return;
-  const ctx = state.extensionContext;
-  const absoluteFilePath = resolveSourceFilePath(ctx, sourceId);
-  if (!absoluteFilePath || !fileExists(absoluteFilePath)) return;
-
-  let json: Record<string, unknown>;
-  try {
-    json = readJsonFile(absoluteFilePath) as Record<string, unknown>;
-  } catch (err) {
-    vscode.window.showErrorMessage(`Não foi possível ler ${absoluteFilePath}: ${err instanceof Error ? err.message : String(err)}`);
-    return;
-  }
-
-  const pkg = json.package;
-  if (typeof pkg !== "object" || pkg === null) {
-    vscode.window.showWarningMessage("Este item não tem um \"package\" pra salvar.");
-    return;
-  }
-
-  const defaultName = `${path.basename(absoluteFilePath).replace(/\.json$/i, "")}.pkg.json`;
-  const target = await vscode.window.showSaveDialog({
-    filters: { JSON: ["json"] },
-    defaultUri: vscode.Uri.file(path.join(path.dirname(absoluteFilePath), defaultName)),
-    title: "Salvar pacote",
-  });
-  if (!target) return;
-
-  try {
-    fs.writeFileSync(target.fsPath, `${JSON.stringify(pkg, null, 2)}\n`, "utf8");
-    vscode.window.showInformationMessage(`Pacote salvo em ${target.fsPath}.`);
-  } catch (err) {
-    vscode.window.showErrorMessage(`Não foi possível salvar ${target.fsPath}: ${err instanceof Error ? err.message : String(err)}`);
-  }
-}
-
-/** Lê o circuito interno do `.lssubcircuit` (`sourceId`) e monta a lista de componentes candidatos a
- * "expostos" -- alimenta o overlay de Modo Placa E o submenu por componente exposto do menu de
- * contexto (`main.ts::buildExposedComponentMenuItems`). "Exposto" é marcado/desmarcado DENTRO da
- * sessão "Abrir Subcircuito" (não daqui de fora) e persistido via "Salvar Subcircuito" -- esta
- * função só LÊ o que já foi salvo. Filtra `connectors.tunnel`/`connectors.junction` -- são fiação
- * interna, não "componentes" expostos úteis (mesmo critério de `m_graphical` do SimulIDE: só itens
- * com presença visual/funcional fazem sentido aqui). */
-function gatherInternalComponentSnapshots(sourceId: string): InternalComponentSnapshot[] | undefined {
-  if (!state.extensionContext) return undefined;
-  const absoluteFilePath = resolveSourceFilePath(state.extensionContext, sourceId);
-  if (!absoluteFilePath || !fileExists(absoluteFilePath)) return undefined;
-
-  let json: Record<string, unknown>;
-  try {
-    json = readJsonFile(absoluteFilePath) as Record<string, unknown>;
-  } catch (err) {
-    vscode.window.showErrorMessage(`Não foi possível ler ${absoluteFilePath}: ${err instanceof Error ? err.message : String(err)}`);
-    return undefined;
-  }
-
-  const internal = extractInternalCircuit(json);
-  return internal.components
-    .filter((component) => component.typeId !== TUNNEL_TYPE_ID && component.typeId !== JUNCTION_TYPE_ID)
-    .map((component) => {
-      const catalogEntry = state.schematicState.catalog.find((entry) => entry.typeId === component.typeId);
-      return {
-        id: component.id,
-        typeId: component.typeId,
-        label: component.id,
-        graphical: catalogEntry?.graphical === true,
-        exposed: component.exposed === true,
-        boardVisual: component.boardVisual
-          ? { x: component.boardVisual.x, y: component.boardVisual.y, rotation: component.boardVisual.rotation ?? 0, flipH: component.boardVisual.flipH, flipV: component.boardVisual.flipV }
-          : undefined,
-        properties: component.properties as Record<string, string | number | boolean>,
-      };
-    });
-}
-
-/** Dados pro overlay de Modo Placa no circuito principal E pro submenu por componente exposto do
- * menu de contexto -- pedido pela Webview ao renderizar qualquer instância de subcircuito (ver
- * `main.ts::ensureBoardOverlayData`) ou quando o catálogo muda. */
-async function requestBoardOverlayDataCommand(componentId: string, sourceId: string): Promise<void> {
-  if (!state.schematicPanel) return;
-  const items = gatherInternalComponentSnapshots(sourceId);
-  if (!items) return;
-  state.schematicPanel.postMessage({ version: 1, type: "boardOverlayData", componentId, items });
-}
-
-/** Atualiza uma propriedade REAL de um componente interno exposto a partir do submenu externo do
- * subcircuito. Persiste no `.lssubcircuit` e, se a instância já estiver expandida no Core, tenta
- * aplicar em runtime também (mesmo mecanismo de `setSubcircuitChildProperty` usado pelo overlay de
- * Modo Placa). */
-async function updateExposedComponentPropertyCommand(
-  outerComponentId: string,
-  sourceId: string | undefined,
-  innerComponentId: string,
-  name: string,
-  value: string | number | boolean,
-): Promise<void> {
-  if (!state.extensionContext || !sourceId) return;
-  const absoluteFilePath = resolveSourceFilePath(state.extensionContext, sourceId);
-  if (!absoluteFilePath || !fileExists(absoluteFilePath)) return;
-
-  let json: Record<string, unknown>;
-  try {
-    json = readJsonFile(absoluteFilePath) as Record<string, unknown>;
-  } catch (err) {
-    vscode.window.showErrorMessage(`Não foi possível ler ${absoluteFilePath}: ${err instanceof Error ? err.message : String(err)}`);
-    return;
-  }
-
-  if (Array.isArray(json.components)) {
-    json.components = json.components.map((entry) => {
-      if (typeof entry !== "object" || entry === null) return entry;
-      const component = entry as Record<string, unknown>;
-      if (component.id !== innerComponentId) return component;
-      const properties = typeof component.properties === "object" && component.properties !== null
-        ? (component.properties as Record<string, unknown>)
-        : {};
-      return { ...component, properties: { ...properties, [name]: value } };
-    });
-  }
-
-  try {
-    fs.writeFileSync(absoluteFilePath, `${JSON.stringify(json, null, 2)}\n`, "utf8");
-  } catch (err) {
-    vscode.window.showErrorMessage(`Não foi possível salvar ${absoluteFilePath}: ${err instanceof Error ? err.message : String(err)}`);
-    return;
-  }
-
-  updateBoardOverlayPropertyCommand(outerComponentId, innerComponentId, name, value);
-  await requestBoardOverlayDataCommand(outerComponentId, sourceId);
-}
-
-/** Arrastar um componente do overlay de Modo Placa direto no circuito principal -- grava
- * `boardVisual` em `components[]` do `.lssubcircuit` (`sourceId`), preservando `rotation`/`flipH`/
- * `flipV` já existentes (só `x`/`y` mudam; girar continua sendo coisa de "Abrir Subcircuito" por
- * enquanto). Edição cirúrgica, mesmo padrão de `updateExposedComponentsCommand`. */
-async function updateBoardOverlayVisualCommand(sourceId: string, innerComponentId: string, x: number, y: number): Promise<void> {
-  if (!state.extensionContext) return;
-  const ctx = state.extensionContext;
-  const absoluteFilePath = resolveSourceFilePath(ctx, sourceId);
-  if (!absoluteFilePath || !fileExists(absoluteFilePath)) return;
-
-  let json: Record<string, unknown>;
-  try {
-    json = readJsonFile(absoluteFilePath) as Record<string, unknown>;
-  } catch (err) {
-    vscode.window.showErrorMessage(`Não foi possível ler ${absoluteFilePath}: ${err instanceof Error ? err.message : String(err)}`);
-    return;
-  }
-
-  if (Array.isArray(json.components)) {
-    json.components = json.components.map((value) => {
-      if (typeof value !== "object" || value === null) return value;
-      const component = value as Record<string, unknown>;
-      if (component.id !== innerComponentId) return component;
-      const previousBoardVisual = typeof component.boardVisual === "object" && component.boardVisual !== null
-        ? (component.boardVisual as Record<string, unknown>)
-        : undefined;
-      return {
-        ...component,
-        boardVisual: { x, y, rotation: previousBoardVisual?.rotation ?? 0, flipH: previousBoardVisual?.flipH, flipV: previousBoardVisual?.flipV },
-      };
-    });
-  }
-
-  try {
-    fs.writeFileSync(absoluteFilePath, `${JSON.stringify(json, null, 2)}\n`, "utf8");
-  } catch (err) {
-    vscode.window.showErrorMessage(`Não foi possível salvar ${absoluteFilePath}: ${err instanceof Error ? err.message : String(err)}`);
-    return;
-  }
-  await refreshUnifiedCatalogState(true);
-}
-
-function detectManifestKind(absoluteFilePath: string, json: Record<string, unknown>): RegisteredItemKind {
-  const fileName = path.basename(absoluteFilePath).toLowerCase();
-  if (fileName.endsWith(".lssubcircuit")) return "subcircuit-file";
-  const hasChipId = typeof json.chipId === "string" && json.chipId.trim().length > 0;
-  if (fileName === "mcu.lsdevice" || hasChipId) return "mcu-adapter";
-  return "abi-device";
-}
-
-/** Comando "Editar Símbolo Visual"/"Abrir Subcircuito" (Épico G, parte de escrita) -- com
- * `item.sourceId`, edita o item JÁ registrado na paleta (botão "✎" em `palette.ts`, ou botão direito
- * numa instância já no circuito, `requestEditSymbol`); sem `sourceId` (botão da barra de título,
- * `lasecsimul.palette.editSymbol` sem argumento), abre um seletor de arquivo pra editar QUALQUER
- * `.lsdevice`/`.lssubcircuit`, registrado ou não. Em todos os casos abre o MESMO webview
- * do esquemático (`openSchematicEditor`), só que numa sessão de autoria -- nunca um painel novo
- * (ver `.spec/lasecsimul-native-devices.spec` seção 21.3, `.spec/lasecsimul-subcircuits.spec`
- * seção 4). `view` escolhe qual aparência abrir ("logicSymbol" só existe pra `mcu-adapter`/
- * `subcircuit-file`, ver seção 21.3 -- ignorado silenciosamente pra `abi-device`, que não tem essa
- * variante). Subcircuito (`kind === "subcircuit-file"`) semeia TAMBÉM o circuito interno real
- * (`components[]`/`wires[]`) na MESMA sessão, junto com o `package` -- "Open Subcircuit" do
- * SimulIDE real mostra os dois juntos na mesma cena, não dois painéis separados. */
-async function editPackageSymbolCommand(item?: { sourceId?: string; view?: "default" | "logicSymbol" }): Promise<void> {
-  if (!state.extensionContext) return;
-  const ctx = state.extensionContext;
-
-  let absoluteFilePath: string | undefined;
-  const sourceId = typeof item?.sourceId === "string" ? item.sourceId : undefined;
-  if (sourceId) {
-    const unifiedCatalog = loadUnifiedCatalog(ctx.extensionPath, currentLasecSimulLanguage());
-    const source = unifiedCatalog.registeredSources.find((value) => value.id === sourceId);
-    if (!source) {
-      vscode.window.showWarningMessage("Item registrado não encontrado no catálogo.");
-      return;
-    }
-    absoluteFilePath = normalizeAbsolutePath(ctx.extensionPath, source.filePath);
-  } else {
-    const picked = await vscode.window.showOpenDialog({
-      canSelectMany: false,
-      filters: { "LasecSimul": ["lsdevice", "lssubcircuit"] },
-      title: "Editar símbolo visual de um .lsdevice/.lssubcircuit",
-    });
-    absoluteFilePath = picked?.[0]?.fsPath;
-  }
-  if (!absoluteFilePath) return;
-
-  if (!fileExists(absoluteFilePath)) {
-    vscode.window.showErrorMessage(`Arquivo não encontrado: ${absoluteFilePath}`);
-    return;
-  }
-
-  let json: Record<string, unknown>;
-  try {
-    json = readJsonFile(absoluteFilePath) as Record<string, unknown>;
-  } catch (err) {
-    vscode.window.showErrorMessage(
-      `Não foi possível ler ${absoluteFilePath}: ${err instanceof Error ? err.message : String(err)}`
-    );
-    return;
-  }
-
-  const kind = detectManifestKind(absoluteFilePath, json);
-  const typeIdKey = kind === "mcu-adapter" ? "chipId" : "typeId";
-  const typeId = typeof json[typeIdKey] === "string" && String(json[typeIdKey]).trim() ? String(json[typeIdKey]).trim() : path.basename(absoluteFilePath);
-
-  const view: "default" | "logicSymbol" = item?.view === "logicSymbol" && kind !== "abi-device" ? "logicSymbol" : "default";
-  const packageKey = view === "logicSymbol" ? "logicSymbolPackage" : "package";
-  let packageComponents = applySubcircuitInterfaceToPackageComponents(json, seedSymbolAuthoringComponents(extractPackageForEditing(json, packageKey, path.dirname(absoluteFilePath)), kind === "subcircuit-file" ? 0 : 140, kind === "subcircuit-file" ? 0 : 140));
-  let components = packageComponents;
-  let wires: WebviewWireModel[] = [];
-
-  if (kind === "subcircuit-file") {
-    const internal = extractInternalCircuit(json);
-    const seededInternal = seedSubcircuitInternalComponents(internal.components, internal.wires);
-    const componentsWithPins = seededInternal.components.map((component) => ({
-      ...component,
-      pins: pinsForInternalComponent(component.id, component.typeId, internal.wires),
-    }));
-    const translated = translateSimulideSubcircuitAuthoringScene(packageComponents, componentsWithPins, seededInternal.wires, extractSimulideSubcircuitScene(json));
-    components = translated.components;
-    wires = translated.wires;
-  }
-
-  if (!state.schematicPanel) openSchematicEditor(ctx.extensionUri);
-  state.schematicPanel?.postMessage({
-    version: 1,
-    type: "enterSymbolAuthoring",
-    filePath: absoluteFilePath,
-    typeId,
-    kind,
-    view,
-    components,
-    wires,
-  });
-}
-
-/** Handler de `requestSwitchSymbolView` (`messages.ts`) -- toggle "Ver: Físico/Símbolo Lógico" na
- * barra da sessão de autoria. Relê o `package`/`logicSymbolPackage` do disco (fresco, não confia no
- * que a Webview tinha) pra semear a NOVA vista, mas preserva o circuito interno EXATAMENTE como a
- * Webview mandou (`internalComponents`/`internalWires`, sessão atual em memória, não relido do
- * disco) -- trocar de vista nunca perde posição/propriedade de componente interno ainda não salvo,
- * só descarta o que foi editado no `package`/`logicSymbolPackage` da vista que está SAINDO (mesmo
- * aviso já mostrado na UI antes de mandar esta mensagem, ver `main.ts::toggleLogicSymbolView`). */
-async function switchSymbolViewCommand(
-  filePath: string,
-  typeId: string,
-  kind: RegisteredItemKind,
-  toView: "default" | "logicSymbol",
-  internalComponents: WebviewComponentModel[],
-  internalWires: WebviewWireModel[]
-): Promise<void> {
-  if (!fileExists(filePath)) {
-    vscode.window.showErrorMessage(`Arquivo não encontrado: ${filePath}`);
-    return;
-  }
-  let json: Record<string, unknown>;
-  try {
-    json = readJsonFile(filePath) as Record<string, unknown>;
-  } catch (err) {
-    vscode.window.showErrorMessage(`Não foi possível reler ${filePath}: ${err instanceof Error ? err.message : String(err)}`);
-    return;
-  }
-
-  const packageKey = toView === "logicSymbol" ? "logicSymbolPackage" : "package";
-  const seededPackageComponents = applySubcircuitInterfaceToPackageComponents(json, seedSymbolAuthoringComponents(extractPackageForEditing(json, packageKey, path.dirname(filePath)), kind === "subcircuit-file" ? 0 : 140, kind === "subcircuit-file" ? 0 : 140));
-  const packageComponents = kind === "subcircuit-file"
-    ? translateSimulideSubcircuitAuthoringScene(seededPackageComponents, internalComponents, internalWires, extractSimulideSubcircuitScene(json)).components.slice(0, seededPackageComponents.length)
-    : seededPackageComponents;
-
-  state.schematicPanel?.postMessage({
-    version: 1,
-    type: "enterSymbolAuthoring",
-    filePath,
-    typeId,
-    kind,
-    view: toView,
-    components: [...packageComponents, ...internalComponents],
-    wires: internalWires,
-  });
-}
-
-/** `other.package_pin`'s `properties.internalTunnel` é o vínculo com o `connectors.tunnel` interno
- * (`properties.name`), igual a `interface[].internalTunnel` de sempre (ver
- * `subcircuits/esp32_devkitc_v4.lssubcircuit`) -- compilado aqui, não em `symbolAuthoring.ts`
- * (`compileSymbolAuthoringComponents` só sabe do `package`, nunca do circuito interno). Ordem de
- * `compiledPins` é GARANTIDA igual à de `pinComponents` (mesmo array `components`, mesmo filtro,
- * mesma ordem de iteração nos dois lugares). */
-function compileSubcircuitInterface(
-  components: WebviewComponentModel[],
-  compiledPins: PackagePin[],
-  existingInterfaceByPinId: Map<string, { label?: string; internalTunnel?: string }>
-): Array<{ pinId: string; label: string; internalTunnel: string }> {
-  const pinComponents = components.filter((component) => component.typeId === "other.package_pin");
-  return compiledPins.map((pin, index) => ({
-    pinId: pin.id,
-    label: pin.label ?? pin.id,
-    internalTunnel:
-      (typeof pinComponents[index]?.properties.internalTunnel === "string" && (pinComponents[index]!.properties.internalTunnel as string).trim())
-      || existingInterfaceByPinId.get(pin.id)?.internalTunnel
-      || "",
-  }));
-}
-
-function isSymbolAuthoringSceneComponent(typeId: string): boolean {
-  return typeId === "other.package" || typeId === "other.package_pin" || typeId.startsWith("graphics.");
-}
-
-function serializeSubcircuitSceneComponent(component: WebviewComponentModel): {
-  componentId: string;
-  x: number;
-  y: number;
-  rotation?: WebviewComponentModel["rotation"];
-  flipH?: boolean;
-  flipV?: boolean;
-  properties?: Record<string, string | number | boolean>;
-} {
-  const localOrigin = componentLocalOrigin(component.typeId, component.properties);
-  const sceneProperties: Record<string, string | number | boolean> = {};
-  const qtOrigin = component.properties.__simulideQtOrigin;
-  const scaleX = component.properties.__simulideSceneScaleX;
-  const scaleY = component.properties.__simulideSceneScaleY;
-  if (qtOrigin === true || Boolean(localOrigin)) sceneProperties.__simulideQtOrigin = true;
-  if (typeof scaleX === "number" && Number.isFinite(scaleX) && scaleX > 0) sceneProperties.__simulideSceneScaleX = scaleX;
-  if (typeof scaleY === "number" && Number.isFinite(scaleY) && scaleY > 0) sceneProperties.__simulideSceneScaleY = scaleY;
-  const placement = {
-    componentId: component.id,
-    x: Math.round(component.x + (localOrigin?.x ?? 0)),
-    y: Math.round(component.y + (localOrigin?.y ?? 0)),
-    ...(component.rotation !== undefined ? { rotation: component.rotation } : {}),
-    ...(Object.keys(sceneProperties).length > 0 ? { properties: sceneProperties } : {}),
-  };
-  if (component.typeId === TUNNEL_TYPE_ID) {
-    const rotated = component.properties.__simulideTunnelRotated;
-    if (typeof rotated === "boolean") {
-      if (!placement.properties) placement.properties = {};
-      placement.properties.__simulideTunnelRotated = rotated;
-      return { ...placement, flipH: rotated };
-    }
-    return placement;
-  }
-  return {
-    ...placement,
-    ...(typeof component.flipH === "boolean" ? { flipH: component.flipH } : {}),
-    ...(typeof component.flipV === "boolean" ? { flipV: component.flipV } : {}),
-  };
-}
-
-function serializeSubcircuitSceneWire(wire: WebviewWireModel): {
-  from: { componentId: string; pinId: string };
-  to: { componentId: string; pinId: string };
-  points: Array<{ x: number; y: number }>;
-} | undefined {
-  if (!wire.points || wire.points.length === 0) return undefined;
-  return {
-    from: wire.from,
-    to: wire.to,
-    points: wire.points.map((point) => ({ x: point.x, y: point.y })),
-  };
-}
-
-/** Handler de `requestSaveSymbol` (`messages.ts`) -- relê o arquivo do disco (não confia no que a
- * Webview tinha em memória pras OUTRAS chaves, podem ter mudado por fora desde que a sessão de
- * autoria abriu), compila a sessão (`compileSymbolAuthoringComponents`) e substitui só a chave do
- * `package`/`logicSymbolPackage` (conforme `view`) — preservando tudo o mais. Pra subcircuito
- * (`kind === "subcircuit-file"`), TAMBÉM compila e grava `components[]`/`wires[]`/`interface[]`
- * reais (`compileSubcircuitInternalComponents`/`compileSubcircuitInterface`) -- mesmo arquivo que
- * um humano editaria à mão, nunca um formato/estado paralelo (ver `.spec/
- * lasecsimul-native-devices.spec` seção 21.3, `.spec/lasecsimul-subcircuits.spec` seção 4). Avisa
- * (sem bloquear o save) se algum `pinId` digitado num `other.package_pin` não bate com nenhum pino
- * elétrico conhecido (`knownPinIdsForManifest`, melhor-esforço -- vazio pra `mcu-adapter`, pinos
- * vêm do plugin em runtime). */
-function persistSubcircuitAuthoringScene(json: Record<string, unknown>, components: WebviewComponentModel[], wires: WebviewWireModel[]): void {
-  const packageComponent = components.find((component) => component.typeId === "other.package");
-  if (!packageComponent) return;
-  const internalComponents = components
-    .filter((component) => !isSymbolAuthoringSceneComponent(component.typeId))
-    .map(serializeSubcircuitSceneComponent);
-  const internalWires = wires.map(serializeSubcircuitSceneWire).filter((wire): wire is NonNullable<typeof wire> => Boolean(wire));
-  const existing = typeof json.authoringScene === "object" && json.authoringScene !== null
-    ? json.authoringScene as Record<string, unknown>
-    : {};
-  const { transform: _legacyTransform, ...existingWithoutTransform } = existing;
-  json.authoringScene = {
-    ...existingWithoutTransform,
-    package: { x: packageComponent.x, y: packageComponent.y },
-    components: internalComponents,
-    wires: internalWires,
-  };
-}
-
-async function saveSymbolCommand(
-  filePath: string,
-  typeId: string,
-  kind: RegisteredItemKind,
-  view: "default" | "logicSymbol",
-  components: WebviewComponentModel[],
-  wires: WebviewWireModel[]
-): Promise<void> {
-  let json: Record<string, unknown>;
-  try {
-    json = readJsonFile(filePath) as Record<string, unknown>;
-  } catch (err) {
-    vscode.window.showErrorMessage(`Não foi possível reler ${filePath}: ${err instanceof Error ? err.message : String(err)}`);
-    return;
-  }
-
-  const packageKey = view === "logicSymbol" ? "logicSymbolPackage" : "package";
-  const existingPackage = extractPackageForEditing(json, packageKey, path.dirname(filePath));
-  const existingInterfaceByPinId = extractSubcircuitInterfaceMap(json);
-  const existingBackground = existingPackage.background;
-  const result = compileSymbolAuthoringComponents(components, existingBackground, existingPackage);
-  if (!result.package) {
-    vscode.window.showErrorMessage(result.error ?? "Não foi possível compilar o símbolo.");
-    return;
-  }
-
-  const knownPinIds = knownPinIdsForManifest(json, kind);
-  if (knownPinIds.length > 0) {
-    const unknownIds = result.package.pins.map((pin) => pin.id).filter((id) => !knownPinIds.includes(id));
-    if (unknownIds.length > 0) {
-      vscode.window.showWarningMessage(`Pino(s) sem correspondência elétrica conhecida em "${typeId}": ${unknownIds.join(", ")}. Salvando assim mesmo.`);
-    }
-  }
-
-  json[packageKey] = {
-    ...result.package,
-    ...(result.package.schematicWidth === undefined && existingPackage.schematicWidth !== undefined ? { schematicWidth: existingPackage.schematicWidth } : {}),
-    ...(result.package.schematicHeight === undefined && existingPackage.schematicHeight !== undefined ? { schematicHeight: existingPackage.schematicHeight } : {}),
-    ...(existingPackage.initialTransform !== undefined ? { initialTransform: existingPackage.initialTransform } : {}),
-    ...(existingPackage.pinMarker !== undefined ? { pinMarker: existingPackage.pinMarker } : {}),
-    ...(existingPackage.simulidePaint !== undefined ? { simulidePaint: existingPackage.simulidePaint } : {}),
-    ...(existingPackage.qtWidget !== undefined ? { qtWidget: existingPackage.qtWidget } : {}),
-    ...(existingPackage.viewSpec !== undefined ? { viewSpec: existingPackage.viewSpec } : {}),
-    ...(existingPackage.valueLabel !== undefined ? { valueLabel: existingPackage.valueLabel } : {}),
-  };
-
-  if (kind === "subcircuit-file") {
-    const internal = compileSubcircuitInternalComponents(components, wires);
-    persistSubcircuitAuthoringScene(json, components, wires);
-    json.components = internal.components.map((component) => ({ id: component.id, typeId: component.typeId, properties: component.properties, visual: component.visual, boardVisual: component.boardVisual, exposed: component.exposed }));
-    json.wires = internal.wires.map((wire) => ({ from: wire.from, to: wire.to, points: wire.points }));
-    json.interface = compileSubcircuitInterface(components, result.package.pins, existingInterfaceByPinId);
-  }
-
-  try {
-    fs.writeFileSync(filePath, `${JSON.stringify(json, null, 2)}\n`, "utf8");
-  } catch (err) {
-    vscode.window.showErrorMessage(`Não foi possível salvar ${filePath}: ${err instanceof Error ? err.message : String(err)}`);
-    return;
-  }
-  await refreshUnifiedCatalogState(true);
-  vscode.window.showInformationMessage(`Símbolo visual de "${typeId}" salvo em ${filePath}.`);
-}
-
 export function activate(context: vscode.ExtensionContext): void {
   state.extensionContext = context;
   const unifiedCatalog = loadUnifiedCatalog(context.extensionPath, currentLasecSimulLanguage());
@@ -2601,7 +1168,7 @@ export function activate(context: vscode.ExtensionContext): void {
   // Conecta de forma assíncrona — não bloqueia a ativação da extensão
   state.coreClient
     .start()
-    .then(() => refreshUnifiedCatalogState(true))
+    .then(() => refreshUnifiedCatalogState(true, catalogCommandOptions()))
     .catch((err) => {
       vscode.window.showErrorMessage(
         `Falha ao conectar ao LasecSimul Core: ${err instanceof Error ? err.message : String(err)}`
@@ -2618,8 +1185,8 @@ export function activate(context: vscode.ExtensionContext): void {
     state.schematicState.catalog,
     currentLasecSimulLanguage(),
     addPaletteComponent,
-    (item) => removeRegisteredCatalogItemCommand(item),
-    (item) => editPackageSymbolCommand(item)
+    (item) => removeRegisteredCatalogItemCommand(item, catalogCommandOptions()),
+    (item) => editPackageSymbolCommand(item, symbolCommandOptions())
   );
 
   context.subscriptions.push(
@@ -2632,7 +1199,7 @@ export function activate(context: vscode.ExtensionContext): void {
       if (!event.affectsConfiguration("lasecsimul.language")) return;
       state.schematicState = { ...state.schematicState, locale: currentLasecSimulLanguage() };
       state.paletteViewProvider?.setLanguage(currentLasecSimulLanguage());
-      void refreshUnifiedCatalogState(Boolean(state.coreClient));
+      void refreshUnifiedCatalogState(Boolean(state.coreClient), catalogCommandOptions());
       syncSchematicPanel();
     }),
     vscode.workspace.onDidChangeConfiguration((event) => {
@@ -2654,13 +1221,18 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("lasecsimul.pause", () => pauseSimulation()),
     vscode.commands.registerCommand("lasecsimul.stop", () => stopSimulation()),
     vscode.commands.registerCommand("lasecsimul.saveProject", () => saveProjectCommand()),
-    vscode.commands.registerCommand("lasecsimul.openProject", () => openProjectCommand(context)),
-    vscode.commands.registerCommand("lasecsimul.palette.registerFile", () => registerCatalogFileCommand()),
+    vscode.commands.registerCommand("lasecsimul.openProject", () => openProjectCommand({
+      extensionUri: context.extensionUri,
+      beforeOpen: closeAllMcuSerialMonitors,
+      openSchematicEditor,
+      syncSchematicPanel,
+    })),
+    vscode.commands.registerCommand("lasecsimul.palette.registerFile", () => registerCatalogFileCommand(catalogCommandOptions())),
     vscode.commands.registerCommand("lasecsimul.palette.removeRegistered", (item: { sourceId?: string }) =>
-      removeRegisteredCatalogItemCommand(item)
+      removeRegisteredCatalogItemCommand(item, catalogCommandOptions())
     ),
     vscode.commands.registerCommand("lasecsimul.palette.editSymbol", (item?: { sourceId?: string }) =>
-      editPackageSymbolCommand(item)
+      editPackageSymbolCommand(item, symbolCommandOptions())
     ),
     // Keybinding em contributes.keybindings ("when": activeWebviewPanelId == 'lasecsimul.schematic')
     // sobrepõe Ctrl+R/Ctrl+Shift+R do VSCode SÓ enquanto o painel do esquemático está em foco --
@@ -2690,7 +1262,7 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   void setSchematicOpenContext(false);
-  void refreshUnifiedCatalogState(false);
+  void refreshUnifiedCatalogState(false, catalogCommandOptions());
 }
 
 export async function deactivate(): Promise<void> {

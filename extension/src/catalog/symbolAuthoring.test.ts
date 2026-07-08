@@ -100,7 +100,7 @@ import { PackageDescriptor, WebviewWireModel } from "../ui/webview/model";
     // Tolerância de 1 unidade -- `baseComponent` arredonda x/y pra inteiro ao semear (mesmo
     // comportamento de qualquer componente posicionado no canvas), então um `labelY` fracionário
     // como 40 perde um pouquinho de precisão no arredondamento, não é uma regressão real.
-    assert(Math.abs((pin.labelX ?? 0) - 50) < 1 && Math.abs((pin.labelY ?? 0) - 40) < 1, `labelX/labelY deveriam sobreviver ao round-trip (posição arrastada pelo usuário, não a fórmula padrão), recebido {${pin.labelX},${pin.labelY}}`);
+    assert(Math.abs(Number(pin.labelX ?? 0) - 50) < 1 && Math.abs(Number(pin.labelY ?? 0) - 40) < 1, `labelX/labelY deveriam sobreviver ao round-trip (posição arrastada pelo usuário, não a fórmula padrão), recebido {${pin.labelX},${pin.labelY}}`);
   });
 
   await test("seed/compile: cor do rótulo de pino vem de pinLabelColor e sobrevive quando editada no graphics.text vinculado", () => {

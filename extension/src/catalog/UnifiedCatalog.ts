@@ -206,12 +206,19 @@ function sanitizeRegisteredSources(input: unknown): RegisteredSource[] {
   return out;
 }
 
+let unifiedCatalogFileCache: { sourcePath: string; mtimeMs: number; file: UnifiedCatalogFile } | undefined;
+
 function readUnifiedCatalogFile(extensionPath: string): { sourcePath: string; file: UnifiedCatalogFile } {
   const sourcePath = catalogPath(extensionPath);
   try {
+    const mtimeMs = fs.statSync(sourcePath).mtimeMs;
+    if (unifiedCatalogFileCache?.sourcePath === sourcePath && unifiedCatalogFileCache.mtimeMs === mtimeMs) {
+      return { sourcePath, file: unifiedCatalogFileCache.file };
+    }
     const raw = fs.readFileSync(sourcePath, "utf8").replace(/^\uFEFF/, "");
     const parsed = JSON.parse(raw) as UnifiedCatalogFile;
     if (!Array.isArray(parsed.items)) throw new Error("items precisa ser um array");
+    unifiedCatalogFileCache = { sourcePath, mtimeMs, file: parsed };
     return { sourcePath, file: parsed };
   } catch {
     return { sourcePath, file: DEFAULT_CATALOG_FILE };
@@ -242,5 +249,6 @@ export function saveRegisteredSources(extensionPath: string, registeredSources: 
   };
 
   fs.writeFileSync(sourcePath, `${JSON.stringify(output, null, 2)}\n`, "utf8");
+  unifiedCatalogFileCache = undefined;
   return sourcePath;
 }

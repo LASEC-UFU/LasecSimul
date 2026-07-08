@@ -4,8 +4,10 @@
 #include <array>
 #include <cmath>
 #include <cstring>
+#include <optional>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 #include "lasecsimul/IComponentModel.hpp"
@@ -29,7 +31,8 @@ inline PropertySchema numberSchema(std::string id,
                                    double defaultValue,
                                    double minValue,
                                    double step,
-                                   uint32_t flags = PropertySchemaNone) {
+                                   uint32_t flags = PropertySchemaNone,
+                                   std::optional<double> maxValue = std::nullopt) {
     PropertySchema schema;
     schema.id = std::move(id);
     schema.label = std::move(label);
@@ -41,6 +44,7 @@ inline PropertySchema numberSchema(std::string id,
     schema.minValue = minValue;
     schema.step = step;
     schema.flags = flags;
+    schema.maxValue = maxValue;
     return schema;
 }
 
@@ -315,13 +319,34 @@ private:
 
 class SimulidePassiveState final : public IComponentModel {
 public:
-    SimulidePassiveState(std::string typeId, std::vector<Pin> pins, std::vector<PropertySchema> schemas)
-        : m_typeId(std::move(typeId)), m_pins(std::move(pins)), m_schemas(std::move(schemas)) {
+    /** `initialProperties`/`pinSpec` são OPCIONAIS (default vazio/`nullopt`) -- os 7 call sites que
+     * não passam nenhum dos dois continuam com o comportamento de sempre (`m_numbers`/etc. só dos
+     * defaults do schema, pinos fixos em `pins`). Só quem declara `pinSpec` (ex: `switches.keypad`)
+     * ganha: (1) contagem de pino REAL na criação, a partir de `initialProperties` (normalmente
+     * `ComponentParams::properties`, refletindo o que foi de fato salvo/enviado -- não só o default
+     * do schema, que é o que `pins` sozinho representaria); (2) recontagem automática sempre que uma
+     * propriedade com `PropertySchemaAffectsPinCount` for editada depois (`propertyDescriptors()`
+     * abaixo). Nenhuma fórmula por typeId aqui -- só `resolveDynamicPins` (Types.hpp), a mesma pra
+     * qualquer device que declarar `pinSpec`. */
+    SimulidePassiveState(std::string typeId, std::vector<Pin> pins, std::vector<PropertySchema> schemas,
+                         const std::unordered_map<std::string, PropertyValue>& initialProperties = {},
+                         std::optional<ComponentPinSpec> pinSpec = std::nullopt)
+        : m_typeId(std::move(typeId)), m_pins(std::move(pins)), m_schemas(std::move(schemas)),
+          m_pinSpec(std::move(pinSpec)) {
         for (const auto& schema : m_schemas) {
-            if (const double* d = std::get_if<double>(&schema.defaultValue)) m_numbers.push_back(*d);
-            else if (const bool* b = std::get_if<bool>(&schema.defaultValue)) m_bools.push_back(*b ? 1 : 0);
-            else if (const std::string* s = std::get_if<std::string>(&schema.defaultValue)) m_strings.push_back(*s);
+            const auto it = initialProperties.find(schema.id);
+            if (const double* d = std::get_if<double>(&schema.defaultValue)) {
+                const double* override = it != initialProperties.end() ? std::get_if<double>(&it->second) : nullptr;
+                m_numbers.push_back(override ? *override : *d);
+            } else if (const bool* b = std::get_if<bool>(&schema.defaultValue)) {
+                const bool* override = it != initialProperties.end() ? std::get_if<bool>(&it->second) : nullptr;
+                m_bools.push_back((override ? *override : *b) ? 1 : 0);
+            } else if (const std::string* s = std::get_if<std::string>(&schema.defaultValue)) {
+                const std::string* override = it != initialProperties.end() ? std::get_if<std::string>(&it->second) : nullptr;
+                m_strings.push_back(override ? *override : *s);
+            }
         }
+        if (m_pinSpec) m_pins = resolveDynamicPins(*m_pinSpec, currentProperties());
     }
 
     const char* typeId() const override { return m_typeId.c_str(); }
@@ -339,7 +364,23 @@ public:
         size_t s = 0;
         for (const auto& schema : m_schemas) {
             if (schema.valueKind == PropertyValueKind::Number) {
-                descriptors.push_back(detail::numberDescriptor(schema.id, schema, m_numbers[n++], schema.minValue.value_or(0.0)));
+                const size_t index = n++;
+                if (m_pinSpec && (schema.flags & PropertySchemaAffectsPinCount) != 0) {
+                    descriptors.push_back(PropertyDescriptor{
+                        schema.id,
+                        schema.unit,
+                        [this, index] { return PropertyValue{m_numbers[index]}; },
+                        [this, index, minValue = schema.minValue.value_or(0.0)](const PropertyValue& value) {
+                            if (const double* d = std::get_if<double>(&value)) {
+                                m_numbers[index] = detail::clampMin(*d, minValue);
+                                m_pins = resolveDynamicPins(*m_pinSpec, currentProperties());
+                            }
+                        },
+                        schema,
+                    });
+                } else {
+                    descriptors.push_back(detail::numberDescriptor(schema.id, schema, m_numbers[index], schema.minValue.value_or(0.0)));
+                }
             } else if (schema.valueKind == PropertyValueKind::Bool) {
                 descriptors.push_back(PropertyDescriptor{
                     schema.id,
@@ -359,12 +400,27 @@ public:
     }
 
 private:
+    /** Snapshot id->valor pra alimentar `resolveDynamicPins` -- mesma contagem n/b/s de
+     * `propertyDescriptors()`/construtor, então sempre em sincronia com `m_numbers`/`m_bools`/
+     * `m_strings` atuais (não um cache que possa ficar velho). */
+    std::unordered_map<std::string, PropertyValue> currentProperties() const {
+        std::unordered_map<std::string, PropertyValue> result;
+        size_t n = 0, b = 0, s = 0;
+        for (const auto& schema : m_schemas) {
+            if (schema.valueKind == PropertyValueKind::Number) result.emplace(schema.id, PropertyValue{m_numbers[n++]});
+            else if (schema.valueKind == PropertyValueKind::Bool) result.emplace(schema.id, PropertyValue{m_bools[b++] != 0});
+            else if (schema.valueKind == PropertyValueKind::String) result.emplace(schema.id, PropertyValue{m_strings[s++]});
+        }
+        return result;
+    }
+
     std::string m_typeId;
     std::vector<Pin> m_pins;
     std::vector<PropertySchema> m_schemas;
     std::vector<double> m_numbers;
     std::vector<uint8_t> m_bools;
     std::vector<std::string> m_strings;
+    std::optional<ComponentPinSpec> m_pinSpec;
 };
 
 class SimulideDiodeLike final : public IComponentModel {

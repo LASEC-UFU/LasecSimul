@@ -23,6 +23,7 @@ export interface PropertySchemaDto {
   readOnly: boolean;
   noCopy: boolean;
   affectsTopology: boolean;
+  affectsPinCount: boolean;
   requiresRestart: boolean;
   showOnSymbol: boolean;
 }

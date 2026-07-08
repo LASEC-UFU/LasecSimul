@@ -25,6 +25,8 @@ const UI_TEXT = {
     searchPlaceholder: "Search Components",
     unavailable: "indisponivel",
     visual: "visual",
+    pinSingular: "pino",
+    pinPlural: "pinos",
     noResults: "Nenhum componente encontrado para este filtro.",
     removeRegistered: "Remover item registrado",
     editSymbol: "Editar símbolo visual",
@@ -34,6 +36,8 @@ const UI_TEXT = {
     searchPlaceholder: "Search Components",
     unavailable: "unavailable",
     visual: "visual",
+    pinSingular: "pin",
+    pinPlural: "pins",
     noResults: "No components match this filter.",
     removeRegistered: "Remove registered item",
     editSymbol: "Edit visual symbol",
@@ -51,6 +55,10 @@ function isDarkTheme(): boolean {
 
 function currentIcon(node: PaletteComponentNode): string | undefined {
   return isDarkTheme() ? (node.iconDarkUri ?? node.iconLightUri) : (node.iconLightUri ?? node.iconDarkUri);
+}
+
+function pinCountLabel(count: number): string {
+  return `${count} ${count === 1 ? t("pinSingular") : t("pinPlural")}`;
 }
 
 function collectVisibleComponents(nodes: PaletteTreeNode[]): PaletteComponentNode[] {
@@ -111,7 +119,7 @@ function renderTreeNode(node: PaletteTreeNode, depth: number): HTMLElement {
   label.textContent = node.label;
   const meta = document.createElement("div");
   meta.className = "palette-item__meta";
-  meta.textContent = node.disabled ? (node.disabledReason ?? t("unavailable")) : node.pinCount === 0 ? t("visual") : `${node.pinCount} pinos`;
+  meta.textContent = node.disabled ? (node.disabledReason ?? t("unavailable")) : node.pinCount === 0 ? t("visual") : pinCountLabel(node.pinCount);
   text.append(label, meta);
 
   row.title = node.disabled

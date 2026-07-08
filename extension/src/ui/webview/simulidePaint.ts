@@ -1,4 +1,4 @@
-import { PackageShape, SimulidePaintGradient, SimulidePaintPrimitive, SimulidePaintSpec } from "./model.js";
+import { PackageNumberValue, PackageShape, SimulidePaintGradient, SimulidePaintPrimitive, SimulidePaintSpec } from "./model.js";
 
 /** Todas as primitivas desenháveis (têm `SimulidePaintStyle` -- stroke/fill/stateFill/...), exceto
  * `repeat`, que é só um laço de repetição resolvido em `pushPrimitive` antes de chegar aqui. */
@@ -127,6 +127,26 @@ function numericProperty(properties: Record<string, unknown>, prop: string | und
   if (!prop) return fallback;
   const value = Number(properties[prop]);
   return Number.isFinite(value) ? value : fallback;
+}
+
+function numericValue(value: PackageNumberValue | undefined, properties: Record<string, unknown>, context: RepeatContext, fallback = 0): number {
+  if (typeof value === "number") return Number.isFinite(value) ? value : fallback;
+  if (!value) return fallback;
+  const base = value.index
+    ? context[value.index] ?? value.fallback ?? fallback
+    : value.prop
+      ? numericProperty(properties, value.prop, value.fallback ?? fallback)
+      : value.fallback ?? fallback;
+  let out = base * (value.multiplier ?? 1) + (value.offset ?? 0);
+  if (value.min !== undefined) out = Math.max(value.min, out);
+  if (value.max !== undefined) out = Math.min(value.max, out);
+  switch (value.round) {
+    case "round": return Math.round(out);
+    case "floor": return Math.floor(out);
+    case "ceil": return Math.ceil(out);
+    case "trunc": return Math.trunc(out);
+    default: return out;
+  }
 }
 
 function stateTextFor(primitive: SimulidePaintPrimitive, properties: Record<string, unknown>, context: RepeatContext): string | undefined {
@@ -308,26 +328,53 @@ export function simulidePaintToPackageShapes(
     const style = styleFor(spec, primitive, activeTransform, properties, gradientId);
     switch (primitive.kind) {
       case "line":
-        shapes.push({ kind: "line", x1: activeTransform.x(primitive.x1), y1: activeTransform.y(primitive.y1), x2: activeTransform.x(primitive.x2), y2: activeTransform.y(primitive.y2), ...style });
+        shapes.push({
+          kind: "line",
+          x1: activeTransform.x(numericValue(primitive.x1, properties, context)),
+          y1: activeTransform.y(numericValue(primitive.y1, properties, context)),
+          x2: activeTransform.x(numericValue(primitive.x2, properties, context)),
+          y2: activeTransform.y(numericValue(primitive.y2, properties, context)),
+          ...style,
+        });
         break;
       case "rect":
       case "roundedRect":
         shapes.push({
           kind: "rect",
-          x: activeTransform.x(primitive.x),
-          y: activeTransform.y(primitive.y),
-          w: activeTransform.sx(primitive.w),
-          h: activeTransform.sy(primitive.h),
-          rx: primitive.rx === undefined ? undefined : Math.abs(activeTransform.sx(primitive.rx)),
-          ry: primitive.ry === undefined ? undefined : Math.abs(activeTransform.sy(primitive.ry)),
+          x: activeTransform.x(numericValue(primitive.x, properties, context)),
+          y: activeTransform.y(numericValue(primitive.y, properties, context)),
+          w: activeTransform.sx(numericValue(primitive.w, properties, context)),
+          h: activeTransform.sy(numericValue(primitive.h, properties, context)),
+          rx: primitive.rx === undefined ? undefined : Math.abs(activeTransform.sx(numericValue(primitive.rx, properties, context))),
+          ry: primitive.ry === undefined ? undefined : Math.abs(activeTransform.sy(numericValue(primitive.ry, properties, context))),
           ...style,
         });
         break;
       case "ellipse":
-        shapes.push({ kind: "ellipse", cx: activeTransform.x(primitive.cx), cy: activeTransform.y(primitive.cy), rx: Math.abs(activeTransform.sx(primitive.rx)), ry: Math.abs(activeTransform.sy(primitive.ry)), ...style });
+        shapes.push({
+          kind: "ellipse",
+          cx: activeTransform.x(numericValue(primitive.cx, properties, context)),
+          cy: activeTransform.y(numericValue(primitive.cy, properties, context)),
+          rx: Math.abs(activeTransform.sx(numericValue(primitive.rx, properties, context))),
+          ry: Math.abs(activeTransform.sy(numericValue(primitive.ry, properties, context))),
+          ...style,
+        });
         break;
       case "arc":
-        shapes.push({ kind: "path", d: simulidePaintArcPathD(primitive.x, primitive.y, primitive.w, primitive.h, primitive.startDeg, primitive.spanDeg, activeTransform), fill: "none", ...style });
+        shapes.push({
+          kind: "path",
+          d: simulidePaintArcPathD(
+            numericValue(primitive.x, properties, context),
+            numericValue(primitive.y, properties, context),
+            numericValue(primitive.w, properties, context),
+            numericValue(primitive.h, properties, context),
+            numericValue(primitive.startDeg, properties, context),
+            numericValue(primitive.spanDeg, properties, context),
+            activeTransform
+          ),
+          fill: "none",
+          ...style,
+        });
         break;
       case "path":
         shapes.push({ kind: "path", d: transformPathData(primitive.d, activeTransform), ...style });
@@ -341,10 +388,10 @@ export function simulidePaintToPackageShapes(
       case "text":
         shapes.push({
           kind: "text",
-          x: activeTransform.x(primitive.x),
-          y: activeTransform.y(primitive.y),
+          x: activeTransform.x(numericValue(primitive.x, properties, context)),
+          y: activeTransform.y(numericValue(primitive.y, properties, context)),
           value: stateTextFor(primitive, properties, context) ?? primitive.value,
-          fontSize: activeTransform.sw(primitive.fontSize),
+          fontSize: activeTransform.sw(numericValue(primitive.fontSize, properties, context, 11)),
           textAnchor: primitive.textAnchor,
           dominantBaseline: primitive.dominantBaseline,
           color: primitive.fill ?? primitive.stroke ?? spec.defaultStroke ?? "currentColor",
@@ -356,10 +403,10 @@ export function simulidePaintToPackageShapes(
       case "image":
         shapes.push({
           kind: "image",
-          x: activeTransform.x(primitive.x),
-          y: activeTransform.y(primitive.y),
-          w: activeTransform.sx(primitive.w),
-          h: activeTransform.sy(primitive.h),
+          x: activeTransform.x(numericValue(primitive.x, properties, context)),
+          y: activeTransform.y(numericValue(primitive.y, properties, context)),
+          w: activeTransform.sx(numericValue(primitive.w, properties, context)),
+          h: activeTransform.sy(numericValue(primitive.h, properties, context)),
           href: stateHrefFor(primitive, properties) ?? primitive.href,
           preserveAspectRatio: primitive.preserveAspectRatio,
           ...style,
