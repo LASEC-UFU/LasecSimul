@@ -4,6 +4,7 @@
 #include <array>
 #include <optional>
 #include "lasecsimul/IComponentModel.hpp"
+#include "lasecsimul/PropertyDefinition.hpp"
 
 namespace lasecsimul::components {
 
@@ -47,19 +48,32 @@ public:
     size_t getState(uint8_t*, size_t) const override { return 0; }
     void setState(const uint8_t*, size_t) override {}
 
-    std::vector<PropertyDescriptor> propertyDescriptors() override {
-        const auto schemas = propertySchema();
-        PropertyDescriptor voltage{"voltage", "V", [this] { return PropertyValue{m_voltage}; },
-                                    [this](const PropertyValue& v) {
-                                        if (const double* d = std::get_if<double>(&v)) setVoltage(*d);
-                                    }};
-        voltage.schema = schemas[0];
-        PropertyDescriptor resistance{"resistance", "Ω", [this] { return PropertyValue{m_resistance}; },
-                                       [this](const PropertyValue& v) {
-                                           if (const double* d = std::get_if<double>(&v)) setResistance(*d);
-                                       }};
-        resistance.schema = schemas[1];
-        return {voltage, resistance};
+    std::vector<PropertyDescriptor> propertyDescriptors() override { return toPropertyDescriptors(properties()); }
+
+    std::vector<PropertyDefinition> properties() {
+        const std::vector<PropertySchema> schemas = propertySchema();
+        const PropertySchema voltageSchema = schemaById(schemas, "voltage");
+        const PropertySchema resistanceSchema = schemaById(schemas, "resistance");
+        return {
+            PropertyDefinition{
+                voltageSchema,
+                [this] { return PropertyValue{m_voltage}; },
+                [this, voltageSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(voltageSchema, v)) return {false, *error};
+                    setVoltage(std::get<double>(v));
+                    return {true, {}};
+                },
+            },
+            PropertyDefinition{
+                resistanceSchema,
+                [this] { return PropertyValue{m_resistance}; },
+                [this, resistanceSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(resistanceSchema, v)) return {false, *error};
+                    setResistance(std::get<double>(v));
+                    return {true, {}};
+                },
+            },
+        };
     }
 
     static std::vector<PropertySchema> propertySchema() {

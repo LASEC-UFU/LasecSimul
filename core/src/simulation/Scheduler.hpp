@@ -81,6 +81,10 @@ public:
         m_wake.notify_one();
     }
     void stop();
+    /** Leitura pura -- usada por `Probe::pauseOnChange` em teste (confirma que `pause()` chamado de
+     * dentro do próprio `stamp()` realmente registra) e por qualquer chamador externo que precise
+     * saber o estado sem se inscrever em notificação nenhuma. */
+    bool isPaused() const { return m_paused.load(); }
     void reset();
     void runUntil(uint64_t targetTimeNs);
     void step(uint64_t deltaNs);

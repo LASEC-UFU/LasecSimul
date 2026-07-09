@@ -5,6 +5,7 @@
 #include <cmath>
 #include <optional>
 #include "lasecsimul/IComponentModel.hpp"
+#include "lasecsimul/PropertyDefinition.hpp"
 
 namespace lasecsimul::components {
 
@@ -77,39 +78,72 @@ public:
     size_t getState(uint8_t*, size_t) const override { return 0; }
     void setState(const uint8_t*, size_t) override {}
 
-    std::vector<PropertyDescriptor> propertyDescriptors() override {
-        const auto schemas = propertySchema();
-        PropertyDescriptor controlPinsDesc{"controlPins", "", [this] { return PropertyValue{m_controlPins}; },
-                                            [this](const PropertyValue& v) {
-                                                if (const bool* b = std::get_if<bool>(&v)) m_controlPins = *b;
-                                            }};
-        controlPinsDesc.schema = schemas[0];
-        PropertyDescriptor currSourceDesc{"currSource", "", [this] { return PropertyValue{m_currSource}; },
-                                           [this](const PropertyValue& v) {
-                                               if (const bool* b = std::get_if<bool>(&v)) m_currSource = *b;
-                                           }};
-        currSourceDesc.schema = schemas[1];
-        PropertyDescriptor currControlDesc{"currControl", "", [this] { return PropertyValue{m_currControl}; },
-                                            [this](const PropertyValue& v) {
-                                                if (const bool* b = std::get_if<bool>(&v)) m_currControl = *b;
-                                            }};
-        currControlDesc.schema = schemas[2];
-        PropertyDescriptor gainDesc{"gain", "", [this] { return PropertyValue{m_gain}; },
-                                     [this](const PropertyValue& v) {
-                                         if (const double* d = std::get_if<double>(&v)) m_gain = *d;
-                                     }};
-        gainDesc.schema = schemas[3];
-        PropertyDescriptor voltageDesc{"voltage", "V", [this] { return PropertyValue{m_voltage}; },
-                                        [this](const PropertyValue& v) {
-                                            if (const double* d = std::get_if<double>(&v)) m_voltage = *d;
-                                        }};
-        voltageDesc.schema = schemas[4];
-        PropertyDescriptor currentDesc{"current", "A", [this] { return PropertyValue{m_current}; },
-                                        [this](const PropertyValue& v) {
-                                            if (const double* d = std::get_if<double>(&v)) m_current = *d;
-                                        }};
-        currentDesc.schema = schemas[5];
-        return {controlPinsDesc, currSourceDesc, currControlDesc, gainDesc, voltageDesc, currentDesc};
+    std::vector<PropertyDescriptor> propertyDescriptors() override { return toPropertyDescriptors(properties()); }
+
+    std::vector<PropertyDefinition> properties() {
+        const std::vector<PropertySchema> schemas = propertySchema();
+        const PropertySchema controlPinsSchema = schemaById(schemas, "controlPins");
+        const PropertySchema currSourceSchema = schemaById(schemas, "currSource");
+        const PropertySchema currControlSchema = schemaById(schemas, "currControl");
+        const PropertySchema gainSchema = schemaById(schemas, "gain");
+        const PropertySchema voltageSchema = schemaById(schemas, "voltage");
+        const PropertySchema currentSchema = schemaById(schemas, "current");
+        return {
+            PropertyDefinition{
+                controlPinsSchema,
+                [this] { return PropertyValue{m_controlPins}; },
+                [this, controlPinsSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(controlPinsSchema, v)) return {false, *error};
+                    m_controlPins = std::get<bool>(v);
+                    return {true, {}};
+                },
+            },
+            PropertyDefinition{
+                currSourceSchema,
+                [this] { return PropertyValue{m_currSource}; },
+                [this, currSourceSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(currSourceSchema, v)) return {false, *error};
+                    m_currSource = std::get<bool>(v);
+                    return {true, {}};
+                },
+            },
+            PropertyDefinition{
+                currControlSchema,
+                [this] { return PropertyValue{m_currControl}; },
+                [this, currControlSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(currControlSchema, v)) return {false, *error};
+                    m_currControl = std::get<bool>(v);
+                    return {true, {}};
+                },
+            },
+            PropertyDefinition{
+                gainSchema,
+                [this] { return PropertyValue{m_gain}; },
+                [this, gainSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(gainSchema, v)) return {false, *error};
+                    m_gain = std::get<double>(v);
+                    return {true, {}};
+                },
+            },
+            PropertyDefinition{
+                voltageSchema,
+                [this] { return PropertyValue{m_voltage}; },
+                [this, voltageSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(voltageSchema, v)) return {false, *error};
+                    m_voltage = std::get<double>(v);
+                    return {true, {}};
+                },
+            },
+            PropertyDefinition{
+                currentSchema,
+                [this] { return PropertyValue{m_current}; },
+                [this, currentSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(currentSchema, v)) return {false, *error};
+                    m_current = std::get<double>(v);
+                    return {true, {}};
+                },
+            },
+        };
     }
 
     static std::vector<PropertySchema> propertySchema() {

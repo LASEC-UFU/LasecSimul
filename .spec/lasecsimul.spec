@@ -533,11 +533,16 @@ paralelos (um pra built-in, um pra plugin); a fonte é única, só o que a alime
 JSON de manifesto).
 
 `SimulationSession::setProperty(component, id, value)` continua sendo o caminho genérico de edição em
-runtime — localiza o `PropertyDescriptor` pelo nome e chama `set`. **Pendente** (não implementado ainda):
-validação de tipo/faixa contra o schema antes de chamar `set`, e reação automática a `affectsTopology`/
-`requiresRestart` (essas duas flags hoje só viajam até a UI como metadata exibida — nenhum código no Core
-lê `affectsTopology` para decidir reconstruir netlist, nem `requiresRestart` para avisar o usuário; ver
-seção 6.2, item 4).
+runtime — localiza o `PropertyDescriptor` pelo nome e chama `set`. **Implementado** (estava listado como
+pendente aqui até 2026-07-08, quando uma auditoria "pente fino" achou que já tinha sido feito sem a spec
+ser atualizada — mesma classe de drift já documentada pro Newton-Raphson do diodo): validação de
+tipo/faixa/opções contra o schema antes de chamar `set` (`SimulationSession.cpp:184-207`,
+`propertyKindMatches`/`minValue`/`maxValue`/`options`, cada um com seu próprio código de erro) E reação
+automática às duas flags — `affectsTopology`/`affectsPinCount` marcam `m_topologyDirty = true`
+(`SimulationSession.cpp:211`); `requiresRestart` volta `{"requiresRestart": true}` na resposta IPC de
+`setProperty` (`CoreApplication.cpp:1408-1409`), lido por `coreLifecycle.ts` que mostra
+`vscode.window.showInformationMessage(...)` pro usuário — regressão coberta em
+`core/test/core/CoreBootstrapTest.cpp` ("setProperty aplica mudanca em propriedade requiresRestart").
 
 #### 6.1.3 IPC `getPropertySchemas` e fluxo até a Webview — implementado
 
@@ -606,6 +611,59 @@ Lição de um bug real corrigido neste caminho: qualquer componente com pino "de
 de operação) precisa de alguma contribuição na matriz — nunca zero absoluto, ou a linha fica inteiramente
 zerada (matriz singular). `WaveGen` no modo não-bipolar tinha esse bug, corrigido fixando o pino em 0V via
 `addConductanceToGround`.
+
+### 6.1.5 `PropertyDefinition` — schema + get/set num só lugar (implementado 2026-07-09)
+
+Achado de auditoria arquitetural (`docs/25-auditoria-arquitetural-core-2026-07-09.md`; ver também
+ADR 0010): até esta correção, cada built-in implementava **dois** métodos separados —
+`static propertySchema()` (metadado) e `propertyDescriptors()` de instância (get/set) — sempre
+redigitando o `id` de cada propriedade duas vezes, sem vínculo verificado pelo compilador. Isso já
+causou um bug real em `Probe.hpp`: o descriptor pegava schema por ÍNDICE numérico do vetor, então
+reordenar `propertySchema()` quebraria o descriptor errado em silêncio.
+
+`core/include/lasecsimul/PropertyDefinition.hpp` (novo) declara:
+
+```cpp
+struct PropertyDefinition { PropertySchema schema; std::function<PropertyValue()> get;
+                             std::function<PropertyBindResult(const PropertyValue&)> set; };
+
+std::vector<PropertyDescriptor> toPropertyDescriptors(std::vector<PropertyDefinition>);
+std::optional<std::string> validatePropertyValue(const PropertySchema&, const PropertyValue&);
+PropertyValue propertyOrDefault(const std::unordered_map<std::string, PropertyValue>& properties,
+                                 const PropertySchema& schema);
+PropertySchema schemaById(const std::vector<PropertySchema>& schemas, const std::string& id);
+```
+
+Uma classe migrada declara `properties()` (não-estático, schema+get+set casados por `schemaById`,
+nunca por posição) e `propertyDescriptors()` vira `return toPropertyDescriptors(properties());`.
+`propertySchema()` estático continua existindo (usado por `registerBuiltinMetadata`, sem instância
+disponível ainda) — agora é a ÚNICA fonte de schema, `properties()` busca nele por id.
+
+`propertyOrDefault` fecha uma segunda lacuna, mais séria: `ComponentParams::property(name, default)`
+(usado na CRIAÇÃO de um componente, a partir de um `.lsproj` salvo) nunca validava nada contra o
+schema — caía no default do chamador em qualquer mismatch de tipo/faixa, em silêncio total. Já
+causou 2 bugs reais confirmados (`SimulidePassiveState`, `Probe` — `pauseOnChange`/`showVolt`
+perdidos ao reabrir um projeto). `propertyOrDefault` valida o valor salvo contra o schema
+(`validatePropertyValue`, mesma regra que `SimulationSession::setProperty` já usa em runtime) antes
+de aceitar; se inválido, cai no default do SCHEMA (não do chamador) com log em stderr.
+
+**Migração completa (2026-07-09)**: todos os built-ins do Core (`core/src/components/**/*.hpp`,
+incluindo as 8 classes-molde de `SimulideBuiltins.hpp`) foram migrados pro padrão `properties()` --
+não sobra nenhum `descriptor.schema = schemas[N]` (acoplamento posicional) no projeto. Detalhe
+completo por arquivo em `docs/25-auditoria-arquitetural-core-2026-07-09.md` §17.1 e ADR 0010.
+`Probe`/`Resistor`, as duas classes com bug real já confirmado, também tiveram suas fábricas em
+`registerBuiltinComponents` (`CoreApplication.cpp`) convertidas pra `propertyOrDefault` em vez de
+`p.property()` direto -- as demais ~23 fábricas continuam usando `p.property()` (o lado de EDIÇÃO já
+valida via `PropertyDescriptor::set` migrado; só o lado de CRIAÇÃO ainda não converteu pra
+`propertyOrDefault` em todo lugar, gap menor que o original já que o schema agora existe e é
+consistente em toda classe).
+
+Teste dedicado: `core/test/property_definition_test.cpp` (`property_definition` no `ctest`) —
+prova `validatePropertyValue`/`propertyOrDefault` isoladamente e que editar UMA propriedade de
+`Probe`/`Resistor` nunca afeta as outras (a exata classe de bug que o acoplamento posicional antigo
+permitia); `inert_components_fix_test.cpp` cobre o comportamento elétrico de `OpAmp`/`AnalogMux`/
+`ResistorArray`/`DiodeLegArray` (também migrados, junto com `leakagePinIndices()` -- ver seção sobre
+LeakageGuard em `.spec/lasecsimul.spec` §7.3 e ADR 0011).
 
 ### 6.2 Lacunas obrigatórias antes da expansão do catálogo estilo SimulIDE
 
@@ -978,6 +1036,122 @@ MESMOS typeIds via `SimulationSession::registerKnownPluginTypes()`, chamado depo
 plugin (`lib.c`) é um limiar on/off simplificado, não Newton-Raphson real — portar Shockley/Ebers-Moll
 pra estes exigiria mexer no `lib.c` do plugin (fora do escopo desta tarefa), não só no built-in
 inerte.
+
+### 7.5 Auditoria "pente fino" 2026-07-08 — componentes eletricamente inertes corrigidos
+
+Auditoria completa pedida pelo usuário achou que 11 typeIds built-in usavam `SimulidePassiveState`
+(`stamp()` no-op puro, `SimulideBuiltins.hpp:355`) apesar de terem física real e conhecida no
+SimulIDE — ou seja, existiam no catálogo/UI mas eram eletricamente **inertes** (nenhuma corrente
+fluía, nenhuma tensão real era produzida), o bug mais grave possível pra um simulador de circuitos.
+Todos os 11 ganharam `stamp()` real:
+
+- **`active.opamp`/`active.comparator`** — `components::OpAmp` (`core/src/components/active/
+  OpAmp.hpp`), amplificador nullor simplificado: entrada de impedância infinita (nada estampado em
+  in+/in-), saída Norton-pra-terra (`addConductanceToGround`/`addCurrentToGround`, mesma técnica de
+  `Rail`) com valor alvo `clamp(gain*(V+-V-), ±1e6V)`. **Amortecimento por sub-relaxação obrigatório**
+  (`alpha = 1/(1+gain)`) — sem isto, um opamp em realimentação negativa (a config mais comum:
+  buffer/inversor/não-inversor) diverge geometricamente na iteração ingênua (`|derivada| = gain >>
+  1`). Prova algébrica no comentário da classe: com essa escolha de `alpha`, um buffer de ganho
+  unitário converge em UMA iteração, de qualquer ponto de partida. `active.comparator` reaproveita a
+  MESMA classe com ganho default bem mais alto (1e7 vs 1e5), sem typeId nem classe separados.
+  Pinos `powerPos`/`powerNeg` continuam sem física de trilho (simplificação documentada), mas
+  precisam de uma condutância de fuga mínima até a terra (`kLeakageConductance=1e-9`) mesmo assim —
+  ver achado de arquitetura abaixo.
+- **`active.analog_mux`** — `components::AnalogMux` (`core/src/components/active/AnalogMux.hpp`):
+  chaveamento resistivo real por canal (`kOnConductance=1000S` no canal endereçado + habilitado,
+  `kOffConductance=1e-7S` nos demais, mesma ordem de grandeza do `low_imp` real do SimulIDE),
+  endereço decodificado em binário dos pinos `addr-*`, `en` ativo em nível baixo (`voltage<2.5V`),
+  mesma convenção do `mux_analog.cpp` real. Interpreta o MESMO `ComponentPinSpec`/
+  `resolveDynamicPins` já usado pra contagem de pinos, agora também pra semântica elétrica.
+- **`outputs.led_rgb`/`outputs.led_bar`/`outputs.led_matrix`/`outputs.seven_segment`** —
+  `components::DiodeLegArray` (`core/src/components/active/DiodeLegArray.hpp`): N pernas de diodo
+  independentes dentro de UM componente multi-pino (mesma física/amortecimento de `Diode`, sem
+  ruptura reversa, duplicada em vez de reaproveitada pois `Diode` é hardcoded pra 2 pinos), preset
+  "RGY Default" igual a `outputs.led`. `led_rgb`: 3 pernas (R/G/B) pro catodo comum. `led_bar`: pares
+  P_i/N_i independentes (`size` pinos dinâmicos). `led_matrix`: `rows*columns` pernas (uma por
+  interseção linha×coluna, linha=anodo/coluna=catodo, mesma convenção de `ledmatrix.cpp`).
+  `seven_segment`: 8 pernas (a-g+ponto) pro catodo comum — suporta `shortedPairs` (condutância alta
+  entre dois índices de pino SEM diodo) porque o package tem DOIS pinos comuns
+  (`commona`/`commonb`) que no hardware real são o MESMO net, exposto duas vezes só pra solda.
+- **`outputs.dc_motor`/`outputs.incandescent_lamp`** — `components::Resistor` direto (2 pinos,
+  reaproveitado sem mudança). **`outputs.stepper`** — `components::ResistorArray` (2 bobinas
+  independentes, A+/A- e B+/B-). Nenhum modela torque/rotação/back-EMF/resistência variável com
+  temperatura (simplificação documentada) — só a carga resistiva real, elétrica de verdade em vez de
+  circuito aberto.
+- **`switches.keypad`** — `components::Keypad` (`core/src/components/switches/Keypad.hpp`): matriz
+  linha×coluna real (`kClosedConductance`/`kOpenConductance` sem diodo; física de `Diode` em série
+  quando `diodes=true`, direção controlada por `diodesDirection`, mesma topologia do `keypad.cpp`
+  real). Nova propriedade `pressedMask` (bitmask, bit `row*columns+col`) representa o estado de
+  tecla pressionada — substitui o clique interativo do mouse por tecla que o SimulIDE real tem
+  (UI/IPC novos, fora de escopo aqui); a matriz elétrica em si é real, só a FONTE do estado é uma
+  propriedade em vez de um evento de clique.
+
+**`passive.resistor_dip`** (achado relacionado, mesma classe de bug): registrava só os 2 primeiros
+dos 16 pinos declarados no `package` (via `SimulideTwoPinResistor`), os outros 14 ficavam
+eletricamente flutuando — não uma simplificação, uma topologia ERRADA (o símbolo desenhava 8
+resistores independentes, só 1 existia de verdade). Corrigido com `components::ResistorArray`
+(`core/src/components/passive/ResistorArray.hpp`): 8 pares reais, MESMA resistência compartilhada
+entre todos (igual ao `resistordip.cpp` real). Redimensionamento dinâmico e modo "Pullup" (barramento
+com pino direito oculto) do original NÃO implementados — o catálogo atual já declara os 16 pinos como
+fixos, sem `dynamicLayout`, então essa parte do gap nem existia.
+
+**Achado de arquitetura descoberto durante os testes** (não é um bug do `Netlist`, é uma
+característica existente que qualquer componente multi-pino novo precisa respeitar):
+`Netlist::rebuildTopology` funde TODOS os pinos do MESMO componente no MESMO grupo topológico,
+sempre — "Passada 2: nó -> grupo (mesmo componente => mesmo grupo)" (`Netlist.hpp`). Pra um
+componente com sub-redes eletricamente INDEPENDENTES entre si (pares de `ResistorArray`, pernas de
+`DiodeLegArray` sem hub comum, pinos só-lidos-nunca-estampados como `en`/`addr-*` do `AnalogMux` ou
+`powerPos`/`powerNeg` do `OpAmp`), se o usuário só fiar PARTE dessas sub-redes (uso normal — ninguém
+fia os 16 pinos de um DIP sempre), as sub-redes não-fiadas ficam sem NENHUMA equação dentro do MESMO
+grupo das sub-redes que ESTÃO fiadas — isso torna o grupo INTEIRO singular, e o fallback do
+`MnaSolver` zera TODAS as tensões do grupo, inclusive as sub-redes que tinham referência real.
+
+**LeakageGuard centralizado (2026-07-09, substitui o padrão manual descrito acima)**: em vez de cada
+componente chamar `matrix.addConductanceToGround(pin, kLeakageConductance)` dentro do próprio
+`stamp()` (como `OpAmp`/`AnalogMux`/`ResistorArray`/`DiodeLegArray` faziam até esta correção),
+`IComponentModel::leakagePinIndices()` (novo método virtual, default vazio) declara quais índices
+locais de `pins()` precisam da rede de segurança; `SimulationSession::settleStep()` aplica
+`kLeakageGuardConductance=1e-9` (`IComponentModel.hpp`) a eles logo depois de `stamp()` retornar,
+sempre, sem o componente precisar lembrar disso no meio da própria física. Deliberadamente OPT-IN
+(não detecção automática de "diagonal zero após stamp", que mascararia erro de fiação real do
+usuário em qualquer componente, não só nos que precisam): um pino sem estampa que o componente não
+declarou continua produzindo "sistema singular" de verdade. Qualquer novo componente multi-pino com
+sub-redes independentes deve sobrescrever `leakagePinIndices()`, não reimplementar o padrão manual.
+
+**Sensores resistivos falsos removidos** (achado de duplicação, não de física ausente):
+`passive.ldr`/`passive.thermistor`/`passive.rtd`/`passive.force_strain_gauge` eram resistores
+estáticos disfarçados (`SimulideTwoPinResistor`, ZERO resposta a luz/temperatura/força — eletricamente
+indistinguíveis de um `passive.resistor` comum), catalogados em "Passivos > Resistive Sensors",
+DUPLICANDO os sensores REAIS (`sensors.ldr`/`thermistor`/`rtd`/`strain`, física de verdade —
+`devices/simulide-sensors/src/lib.c`, curva gamma real pro LDR — catalogados em "Sensores"). Um
+usuário pegando "LDR" pela pasta óbvia ("Passivos") ganhava o componente ERRADO. Removidos os 4
+builtins falsos e suas entradas de catálogo — `sensors.*` é agora a única fonte pra sensores
+resistivos.
+
+**NAND/NOR/NOT/XNOR** (achado de paridade SimulIDE, não elétrico): `devices/simulide-logic/src/
+lib.c` só tinha AND/OR/XOR/Buffer fixos em 2 entradas, sem flag de inversão — tornando NAND/NOR/
+NOT/XNOR inconstruíveis, apesar de serem portas mais fundamentais em projeto digital real que XOR.
+Mesma solução do SimulIDE real (`gate.cpp`: propriedade booleana "Inverted Outs" na MESMA porta
+AND/OR/XOR/Buffer, não um typeId separado por porta): `stamp_gate()` agora lê `cfg_bool(s,
+"inverted", 0)` e inverte a saída antes de estampar; os 4 `.lsdevice` (`and_gate`/`or_gate`/
+`xor_gate`/`buffer`) ganharam a propriedade `inverted` (checkbox). `logic.buffer` com
+`inverted=true` É o NOT. Testado via DLL real (`core/test/logic_gate_plugin_test.cpp`, mesmo padrão
+`esp32_devkitc_subcircuit_test.cpp`). **Atualização 2026-07-09**: a paridade visual foi implementada
+— os 4 `.lsdevice` ganharam um `partId: "invertBubble"` no `package.viewSpec.paint` com
+`stateProjection: {invertBubble: [{kind:"visible", prop:"inverted"}]}` (mecanismo `ViewSpecProjection`
+já existente, reaproveitado), então o símbolo agora mostra a bolha quando `inverted=true` (ver
+`docs/24-itens-menor-prioridade-2026-07-09.md`). **Atualização final 2026-07-09**: a contagem de
+entradas variável também foi implementada para AND/OR, sem helper interno por `typeId`: o manifesto
+declara `inputs`, `pinSpec.dynamicGroups`, `package.dynamicLayout` e `viewSpec.paint[].statePath`;
+`stamp_gate()` lê N entradas reais no DLL. XOR/Buffer seguem fixos porque a referência SimulIDE 2 não
+expõe `Num_Inputs` nesses dois.
+
+**Verificação editorial (documentação estava desatualizada, achado à parte)**: `.spec/lasecsimul.spec`
+seção 6.1.2 (validação de propriedade + `affectsTopology`/`requiresRestart`), `README.md`, `docs/
+mvp-limitacoes.md` (subcircuitos, Newton-Raphson) e `docs/16-roadmap-pendencias-spec.md` (undo/redo/
+copiar-colar/flip) descreviam funcionalidades JÁ implementadas em rodadas anteriores como pendentes
+ou inexistentes — mesma classe de drift já corrigida uma vez pro diodo (ver nota em 7.4). Todos
+corrigidos nesta auditoria.
 
 ## 8. Fluxo de integração com QEMU
 

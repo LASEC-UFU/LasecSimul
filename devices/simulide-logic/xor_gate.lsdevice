@@ -4,9 +4,12 @@
   "name": "Xor Gate",
   "language": "pt-BR",
   "icon": "xorgate",
-  "folderPath": ["Logicos", "Portas"],
+  "folderPath": [
+    "Logicos",
+    "Portas"
+  ],
   "abiVersion": {
-    "major": 4,
+    "major": 3,
     "minor": 0
   },
   "nativeEntry": {
@@ -28,7 +31,16 @@
       "kind": "DIGITAL_OUT"
     }
   ],
-  "properties": [],
+  "properties": [
+    {
+      "id": "inverted",
+      "label": "Inverter Saída (XNOR)",
+      "group": "Main",
+      "valueKind": "bool",
+      "editor": "checkbox",
+      "default": false
+    }
+  ],
   "limits": {
     "stepTimeoutMs": 4,
     "expectedComplexity": "low"
@@ -37,12 +49,39 @@
     "width": 32,
     "height": 16,
     "border": false,
-    "background": { "kind": "none" },
+    "background": {
+      "kind": "none"
+    },
     "viewSpec": {
       "paint": [
-        { "kind": "path", "d": "M 9 0 Q 23 0 25 8 Q 23 16 9 16 Q 13 8 9 0 Z", "fill": "#ffffff" },
-        { "kind": "path", "d": "M 6 16 Q 10.5 8 6 0", "fill": "none" }
-      ]
+        {
+          "kind": "path",
+          "d": "M 9 0 Q 23 0 25 8 Q 23 16 9 16 Q 13 8 9 0 Z",
+          "fill": "#ffffff"
+        },
+        {
+          "kind": "path",
+          "d": "M 6 16 Q 10.5 8 6 0",
+          "fill": "none"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 27.2,
+          "cy": 8,
+          "rx": 2.2,
+          "ry": 2.2,
+          "fill": "#ffffff",
+          "partId": "invertBubble"
+        }
+      ],
+      "stateProjection": {
+        "invertBubble": [
+          {
+            "kind": "visible",
+            "prop": "inverted"
+          }
+        ]
+      }
     },
     "pins": [
       {

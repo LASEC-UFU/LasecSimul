@@ -6,6 +6,7 @@
 #include <optional>
 #include <stdexcept>
 #include "lasecsimul/IComponentModel.hpp"
+#include "lasecsimul/PropertyDefinition.hpp"
 
 namespace lasecsimul::components {
 
@@ -90,22 +91,40 @@ public:
     size_t getState(uint8_t*, size_t) const override { return 0; }
     void setState(const uint8_t*, size_t) override {}
 
-    std::vector<PropertyDescriptor> propertyDescriptors() override {
-        PropertyDescriptor descriptor{
-            "saturationCurrent", "A", [this] { return PropertyValue{m_saturationCurrent}; },
-            [this](const PropertyValue& v) {
-                if (const double* d = std::get_if<double>(&v)) setSaturationCurrent(*d);
-            }};
-        descriptor.schema = propertySchema(m_supportsBreakdown).front();
-        if (!m_supportsBreakdown) return {descriptor};
+    std::vector<PropertyDescriptor> propertyDescriptors() override { return toPropertyDescriptors(properties()); }
 
-        PropertyDescriptor breakdown{
-            "breakdownVoltage", "V", [this] { return PropertyValue{m_breakdownVoltage}; },
-            [this](const PropertyValue& v) {
-                if (const double* d = std::get_if<double>(&v)) m_breakdownVoltage = std::max(*d, 0.0);
-            }};
-        breakdown.schema = propertySchema(m_supportsBreakdown).back();
-        return {descriptor, breakdown};
+    /** `withBreakdown`: schema tem 1 ou 2 entradas dependendo de `m_supportsBreakdown` (`active.zener`
+     * vs `active.diode`, ver `propertySchema()` abaixo) -- `properties()` busca cada uma por id em
+     * vez de índice fixo, então o número de propriedades varia sem acoplamento posicional. */
+    std::vector<PropertyDefinition> properties() {
+        const std::vector<PropertySchema> schemas = propertySchema(m_supportsBreakdown);
+        const PropertySchema saturationCurrentSchema = schemaById(schemas, "saturationCurrent");
+        std::vector<PropertyDefinition> defs{
+            PropertyDefinition{
+                saturationCurrentSchema,
+                [this] { return PropertyValue{m_saturationCurrent}; },
+                [this, saturationCurrentSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(saturationCurrentSchema, v)) {
+                        return {false, *error};
+                    }
+                    setSaturationCurrent(std::get<double>(v));
+                    return {true, {}};
+                },
+            },
+        };
+        if (!m_supportsBreakdown) return defs;
+
+        const PropertySchema breakdownSchema = schemaById(schemas, "breakdownVoltage");
+        defs.push_back(PropertyDefinition{
+            breakdownSchema,
+            [this] { return PropertyValue{m_breakdownVoltage}; },
+            [this, breakdownSchema](const PropertyValue& v) -> PropertyBindResult {
+                if (const std::optional<std::string> error = validatePropertyValue(breakdownSchema, v)) return {false, *error};
+                m_breakdownVoltage = std::max(std::get<double>(v), 0.0);
+                return {true, {}};
+            },
+        });
+        return defs;
     }
 
     /** `withBreakdown`: `active.zener` registra com `true` (schema de 2 campos, ver

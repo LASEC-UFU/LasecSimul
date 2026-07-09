@@ -12,7 +12,7 @@ import { buildPinToPinWire, buildPinToWireConnection } from "./ui/webview/wireCo
 import { WebviewToHostMessage } from "./ui/webview/messages";
 import { ComponentPaletteViewProvider } from "./ui/views/ComponentPaletteViewProvider";
 import { materializePinGroup } from "./ui/webview/componentSymbols";
-import { absoluteSubcircuitRefPath, openProjectCommand, saveProjectCommand } from "./project/projectCommands";
+import { absoluteSubcircuitRefPath, exportSchematicImageCommand, importProjectCommand, openProjectCommand, openRecentProjectCommand, refreshDirtyIndicator, saveProjectCommand } from "./project/projectCommands";
 import { loadUnifiedCatalog, RegisteredSource, saveRegisteredSources } from "./catalog/UnifiedCatalog";
 import { refreshUnifiedCatalogState, registerCatalogFileCommand, removeRegisteredCatalogItemCommand } from "./catalog/catalogCommands";
 import { InternalWireSeed } from "./catalog/symbolAuthoring";
@@ -147,6 +147,7 @@ function syncSchematicPanel(): void {
   const patch = computeProjectStatePatch();
   if (patch) state.schematicPanel?.postMessage({ version: 1, type: "syncStatePatch", patch });
   state.schematicPanel?.postMessage({ version: 1, type: "simulationStatus", status: state.simulationStatus });
+  refreshDirtyIndicator();
 }
 
 function openSchematicEditor(extensionUri: vscode.Uri): void {
@@ -760,7 +761,12 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
         ...state.schematicState,
         components: state.schematicState.components.map((component) =>
           component.id === message.componentId
-            ? { ...component, showId: message.showId, showValue: message.showValue }
+            ? {
+                ...component,
+                showId: message.showId,
+                showValue: message.showValue,
+                ...(message.valueLabelPropertyKey !== undefined ? { valueLabelPropertyKey: message.valueLabelPropertyKey } : {}),
+              }
             : component
         ),
       };
@@ -846,6 +852,12 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
           syncSchematicPanel,
         });
       }
+      return;
+    case "requestImportCircuit":
+      void importProjectCommand({ syncSchematicPanel });
+      return;
+    case "requestExportSchematicImage":
+      void exportSchematicImageCommand(message.svg);
       return;
     case "requestSaveSymbol":
       void saveSymbolCommand(message.filePath, message.typeId, message.kind, message.view, message.components, message.wires, symbolCommandOptions());
@@ -955,15 +967,12 @@ async function createSubcircuitFromSelectionHandler(componentIds: string[]): Pro
   }
 
   // 4. Bounding box dos componentes selecionados
-  let minX = Infinity, minY = Infinity;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const c of selectedComponents) {
     if (c.x < minX) minX = c.x;
     if (c.y < minY) minY = c.y;
-    if (c.x > 0 || c.y > 0) { /* just need bounds */ }
-  }
-  let maxX = -Infinity;
-  for (const c of selectedComponents) {
     if (c.x > maxX) maxX = c.x;
+    if (c.y > maxY) maxY = c.y;
   }
 
   // 5. Gerar um túnel interno por fio de fronteira
@@ -1062,7 +1071,7 @@ async function createSubcircuitFromSelectionHandler(componentIds: string[]): Pro
   // 9. Inserir instância do subcircuito no esquemático, no centro da bounding box
   const newCompId = nextId("component");
   const centerX = Math.round((minX + maxX) / 2);
-  const centerY = Math.round((minY + (minY + (selectedComponents.length - 1) * 16)) / 2);
+  const centerY = Math.round((minY + maxY) / 2);
   const catalogEntry = state.schematicState.catalog.find((e) => e.typeId === typeId);
   const newPins = pinsForTypeId(typeId, catalogEntry?.defaultProperties);
   const newComponent: WebviewComponentModel = {
@@ -1227,6 +1236,13 @@ export function activate(context: vscode.ExtensionContext): void {
       openSchematicEditor,
       syncSchematicPanel,
     })),
+    vscode.commands.registerCommand("lasecsimul.openRecentProject", () => openRecentProjectCommand({
+      extensionUri: context.extensionUri,
+      beforeOpen: closeAllMcuSerialMonitors,
+      openSchematicEditor,
+      syncSchematicPanel,
+    })),
+    vscode.commands.registerCommand("lasecsimul.importProject", () => importProjectCommand({ syncSchematicPanel })),
     vscode.commands.registerCommand("lasecsimul.palette.registerFile", () => registerCatalogFileCommand(catalogCommandOptions())),
     vscode.commands.registerCommand("lasecsimul.palette.removeRegistered", (item: { sourceId?: string }) =>
       removeRegisteredCatalogItemCommand(item, catalogCommandOptions())

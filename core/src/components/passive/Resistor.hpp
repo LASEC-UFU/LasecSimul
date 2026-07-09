@@ -5,6 +5,7 @@
 #include <optional>
 #include <stdexcept>
 #include "lasecsimul/IComponentModel.hpp"
+#include "lasecsimul/PropertyDefinition.hpp"
 
 namespace lasecsimul::components {
 
@@ -35,19 +36,13 @@ public:
     size_t getState(uint8_t*, size_t) const override { return 0; }
     void setState(const uint8_t*, size_t) override {}
 
-    std::vector<PropertyDescriptor> propertyDescriptors() override {
-        PropertyDescriptor descriptor{"resistance", "ohm", [this] { return PropertyValue{m_resistance}; },
-                                       [this](const PropertyValue& v) {
-                                           if (const double* d = std::get_if<double>(&v)) setResistance(*d);
-                                       }};
-        descriptor.schema = propertySchema().front();
-        return {descriptor};
-    }
+    std::vector<PropertyDescriptor> propertyDescriptors() override { return toPropertyDescriptors(properties()); }
 
-    /** Schema rico estático (grupo/editor/min/step) — usado tanto aqui (preenche `PropertyDescriptor::
-     * schema` de uma instância) quanto em `CoreApplication::registerBuiltinComponents` (registra no
-     * `ComponentMetadataRegistry` por typeId, antes de qualquer instância existir). Mesmo vocabulário
-     * que `.lsdevice` usa pra plugins — ver `.spec/lasecsimul.spec` sobre paridade built-in/plugin. */
+    /** Schema rico estático (grupo/editor/min/step) — usado tanto por `properties()` (busca por id,
+     * nunca por índice -- achado de auditoria arquitetural 2026-07-09, D1) quanto em
+     * `CoreApplication::registerBuiltinComponents` (registra no `ComponentMetadataRegistry` por
+     * typeId, antes de qualquer instância existir). Mesmo vocabulário que `.lsdevice` usa pra
+     * plugins — ver `.spec/lasecsimul.spec` sobre paridade built-in/plugin. */
     static std::vector<PropertySchema> propertySchema() {
         PropertySchema schema;
         schema.id = "resistance";
@@ -61,6 +56,26 @@ public:
         schema.step = 1.0;
         schema.flags |= PropertySchemaShowOnSymbol; // valor formatado aparece perto do símbolo (ex: "1 kΩ")
         return {schema};
+    }
+
+    /** `set` chama `setResistance` (validação extra além do schema: finito e > 0, ver `validate()`
+     * abaixo) DEPOIS de `validatePropertyValue` já ter confirmado o tipo/min contra o schema --
+     * duas camadas deliberadas, não redundância: schema cobre "editável em runtime", `validate()`
+     * cobre o invariante físico do próprio Resistor (nunca aceita NaN/Inf, mesmo se um schema
+     * futuro esquecer `minValue`). */
+    std::vector<PropertyDefinition> properties() {
+        const PropertySchema schema = propertySchema().front();
+        return {
+            PropertyDefinition{
+                schema,
+                [this] { return PropertyValue{m_resistance}; },
+                [this, schema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(schema, v)) return {false, *error};
+                    setResistance(std::get<double>(v));
+                    return {true, {}};
+                },
+            },
+        };
     }
 
     void setResistance(double ohm) { m_resistance = validate(ohm); } // chamador deve marcar o componente "dirty"

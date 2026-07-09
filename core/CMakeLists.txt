@@ -133,6 +133,30 @@ if(NOT WIN32)
 endif()
 add_test(NAME zener_led COMMAND zener_led_test)
 
+# Regressão dos 11 componentes eletricamente inertes achados na auditoria "pente fino" 2026-07-08
+add_executable(inert_components_fix_test
+    test/inert_components_fix_test.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(inert_components_fix_test PRIVATE include src)
+target_link_libraries(inert_components_fix_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+if(NOT WIN32)
+    target_link_libraries(inert_components_fix_test PRIVATE dl)
+endif()
+add_test(NAME inert_components_fix COMMAND inert_components_fix_test)
+
+# "Pause at state change" do Probe -- achado de auditoria de UI 2026-07-09
+add_executable(probe_pause_on_change_test
+    test/probe_pause_on_change_test.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(probe_pause_on_change_test PRIVATE include src)
+target_link_libraries(probe_pause_on_change_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+if(NOT WIN32)
+    target_link_libraries(probe_pause_on_change_test PRIVATE dl)
+endif()
+add_test(NAME probe_pause_on_change COMMAND probe_pause_on_change_test)
+
 # Subcircuitos (Épico F do roadmap de pendências)
 add_executable(subcircuit_test
     test/subcircuit_test.cpp
@@ -240,6 +264,17 @@ target_include_directories(passive_components_test PRIVATE include src)
 target_link_libraries(passive_components_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
 add_test(NAME passive_components COMMAND passive_components_test)
 
+# PropertyDefinition/validatePropertyValue/propertyOrDefault (auditoria arquitetural 2026-07-09,
+# Fase 1.4/2.1) -- Probe e Resistor migrados como demonstração; prova que get/set casam por ID, não
+# por índice (fecha D1/D2), e que construção a partir de ComponentParams agora valida (fecha D4).
+add_executable(property_definition_test
+    test/property_definition_test.cpp
+    src/simulation/Scheduler.cpp
+)
+target_include_directories(property_definition_test PRIVATE include src)
+target_link_libraries(property_definition_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+add_test(NAME property_definition COMMAND property_definition_test)
+
 # Pino dinâmico (rows/columns de switches.keypad/outputs.led_matrix/led_bar, canais de
 # active.analog_mux) -- resolveDynamicPins puro, SimulidePassiveState com ComponentPinSpec, e
 # integração ponta a ponta via SimulationSession::addComponent/setProperty + Netlist real.
@@ -315,6 +350,28 @@ if(NOT WIN32)
 endif()
 add_test(NAME plugin_runtime COMMAND plugin_runtime_test)
 
+# Resiliência de MCU a crash de plugin (auditoria arquitetural 2026-07-09, Fase 3): prova, com
+# vtable sintética que desreferencia ponteiro nulo de propósito, que NativeMcuAdapterProxy/
+# QemuModuleProxy agora contêm o crash (CrashGuard/PluginWatchdog) em vez de derrubar o Core --
+# mesma proteção que NativeDeviceProxy já tinha, ausente pro lado MCU até esta correção. Só roda de
+# verdade no Windows (ver comentário no próprio .cpp); sai com sucesso trivial no POSIX.
+add_executable(mcu_crash_resilience_test
+    test/core/plugins/McuCrashResilienceTest.cpp
+    src/plugins/PluginModule.cpp
+    src/plugins/PluginLoader.cpp
+    src/plugins/PluginRuntime.cpp
+    src/plugins/NativeDeviceProxy.cpp
+    src/plugins/NativeMcuAdapterProxy.cpp
+    src/plugins/CrashGuard.cpp
+    src/simulation/Scheduler.cpp
+)
+target_include_directories(mcu_crash_resilience_test PRIVATE include src)
+target_link_libraries(mcu_crash_resilience_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+if(NOT WIN32)
+    target_link_libraries(mcu_crash_resilience_test PRIVATE dl)
+endif()
+add_test(NAME mcu_crash_resilience COMMAND mcu_crash_resilience_test)
+
 # Testes da ponte QEMU generica (Agente 11)
 add_executable(qemu_process_manager_test
     test/core/mcu/QemuProcessManagerTest.cpp
@@ -362,6 +419,7 @@ add_executable(esp32_adapter_test
     src/simulation/Scheduler.cpp
 )
 target_include_directories(esp32_adapter_test PRIVATE include src)
+target_link_libraries(esp32_adapter_test PRIVATE nlohmann_json::nlohmann_json)
 target_compile_definitions(esp32_adapter_test PRIVATE
     ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
 )
@@ -389,6 +447,29 @@ if(NOT WIN32)
 endif()
 add_test(NAME esp32_devkitc_subcircuit COMMAND esp32_devkitc_subcircuit_test)
 
+# NAND/NOR/NOT/XNOR via propriedade "inverted" no plugin real (achado de auditoria 2026-07-08) --
+# mesmo padrão real-DLL de esp32_devkitc_subcircuit_test, pra devices/simulide-logic/.
+if(WIN32)
+    set(SIMULIDE_LOGIC_ARTIFACT "${CMAKE_CURRENT_SOURCE_DIR}/../devices/simulide-logic/build/win-x64/device.dll")
+elseif(APPLE)
+    set(SIMULIDE_LOGIC_ARTIFACT "${CMAKE_CURRENT_SOURCE_DIR}/../devices/simulide-logic/build/macos-universal/device.dylib")
+else()
+    set(SIMULIDE_LOGIC_ARTIFACT "${CMAKE_CURRENT_SOURCE_DIR}/../devices/simulide-logic/build/linux-x64/device.so")
+endif()
+add_executable(logic_gate_plugin_test
+    test/logic_gate_plugin_test.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(logic_gate_plugin_test PRIVATE include src)
+target_link_libraries(logic_gate_plugin_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(logic_gate_plugin_test PRIVATE
+    SIMULIDE_LOGIC_DLL_PATH="${SIMULIDE_LOGIC_ARTIFACT}"
+)
+if(NOT WIN32)
+    target_link_libraries(logic_gate_plugin_test PRIVATE dl)
+endif()
+add_test(NAME logic_gate_plugin COMMAND logic_gate_plugin_test)
+
 # Orquestrador McuController contra o binário REAL do fork qemu-simulide (não fake) -- pula se o
 # binário não existir no caminho esperado (sibling do repositório, ver docs/mvp-limitacoes.md).
 # Adapter ESP32 agora vem do plugin real (mesmo binário de esp32_adapter_test acima), não built-in.
@@ -407,6 +488,7 @@ add_executable(mcu_controller_real_qemu_test
     src/simulation/Scheduler.cpp
 )
 target_include_directories(mcu_controller_real_qemu_test PRIVATE include src)
+target_link_libraries(mcu_controller_real_qemu_test PRIVATE nlohmann_json::nlohmann_json)
 target_compile_definitions(mcu_controller_real_qemu_test PRIVATE
     QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
     ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"

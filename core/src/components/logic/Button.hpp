@@ -1,7 +1,10 @@
 #pragma once
 
 #include <array>
+#include <optional>
+#include <string>
 #include "lasecsimul/IComponentModel.hpp"
+#include "lasecsimul/PropertyDefinition.hpp"
 
 namespace lasecsimul::components {
 
@@ -29,13 +32,21 @@ public:
     size_t getState(uint8_t*, size_t) const override { return 0; }
     void setState(const uint8_t*, size_t) override {}
 
-    std::vector<PropertyDescriptor> propertyDescriptors() override {
-        PropertyDescriptor descriptor{"pressed", "", [this] { return PropertyValue{m_pressed}; },
-                                       [this](const PropertyValue& v) {
-                                           if (const bool* b = std::get_if<bool>(&v)) m_pressed = *b;
-                                       }};
-        descriptor.schema = propertySchema().front();
-        return {descriptor};
+    std::vector<PropertyDescriptor> propertyDescriptors() override { return toPropertyDescriptors(properties()); }
+
+    std::vector<PropertyDefinition> properties() {
+        const PropertySchema schema = propertySchema().front();
+        return {
+            PropertyDefinition{
+                schema,
+                [this] { return PropertyValue{m_pressed}; },
+                [this, schema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(schema, v)) return {false, *error};
+                    m_pressed = std::get<bool>(v);
+                    return {true, {}};
+                },
+            },
+        };
     }
 
     /** Ver Resistor::propertySchema() — mesmo papel (instância + ComponentMetadataRegistry). */

@@ -398,7 +398,14 @@ function tracePath(history: number[], x: number, y: number, width: number, heigh
     .join(" ");
 }
 
-function packageShapeSvg(shape: PackageShape, extraTransform?: string): string {
+function resolvedPathD(shape: PackageShape, properties?: Record<string, unknown>): string {
+  if (shape.kind !== "path" || !shape.statePath) return shape.d ?? "";
+  const rawValue = properties?.[shape.statePath.prop];
+  const key = rawValue === undefined ? "absent" : String(rawValue);
+  return shape.statePath.map[key] ?? shape.statePath.fallback ?? shape.d ?? "";
+}
+
+function packageShapeSvg(shape: PackageShape, extraTransform?: string, properties?: Record<string, unknown>): string {
   const cls = shape.cssClass ? ` class="${shape.cssClass}"` : "";
   const transform = [shape.transform, extraTransform].filter(Boolean).join(" ");
   const xf = transform ? ` transform="${escapeXmlText(transform)}"` : "";
@@ -423,7 +430,7 @@ function packageShapeSvg(shape: PackageShape, extraTransform?: string): string {
       return `<polygon${cls}${xf} points="${pts}" stroke="${shape.stroke ?? "currentColor"}" fill="${fill}" stroke-width="${shape.strokeWidth ?? 1}"${paintAttrs}/>`;
     }
     case "path":
-      return `<path${cls}${xf} d="${escapeXmlText(shape.d ?? "")}" stroke="${shape.stroke ?? "currentColor"}" fill="${fill}" stroke-width="${shape.strokeWidth ?? 1}"${paintAttrs}/>`;
+      return `<path${cls}${xf} d="${escapeXmlText(resolvedPathD(shape, properties))}" stroke="${shape.stroke ?? "currentColor"}" fill="${fill}" stroke-width="${shape.strokeWidth ?? 1}"${paintAttrs}/>`;
     case "image": {
       const href = safeImageHref(shape.href ?? shape.value);
       return `<image${cls}${xf} x="${shape.x ?? 0}" y="${shape.y ?? 0}" width="${shape.w ?? 0}" height="${shape.h ?? 0}" preserveAspectRatio="${escapeXmlText(shape.preserveAspectRatio ?? "none")}" href="${escapeXmlText(href)}"${paintAttrs}/>`;
@@ -741,8 +748,16 @@ function viewSpecResolvedProjection(partId: string, spec: ComponentViewSpec, pro
       if (dx !== 0 || dy !== 0) transforms.push(`translate(${dx.toFixed(2)},${dy.toFixed(2)})`);
     } else if (proj.kind === "rotate") {
       const pos = numericViewSpecProperty(properties, proj.prop, 0);
-      const stepsPerRev = Math.max(1, numericViewSpecProperty(properties, proj.stepsPerRevProp ?? "", proj.stepsPerRev));
-      const angle = (((pos % stepsPerRev) + stepsPerRev) % stepsPerRev) / stepsPerRev * 360;
+      const angle = proj.propRange && proj.angleRange
+        ? resolveAxisMapping(
+            Math.max(Math.min(pos, Math.max(proj.propRange[0], proj.propRange[1])), Math.min(proj.propRange[0], proj.propRange[1])),
+            proj.propRange,
+            proj.angleRange
+          )
+        : (() => {
+            const stepsPerRev = Math.max(1, numericViewSpecProperty(properties, proj.stepsPerRevProp ?? "", proj.stepsPerRev));
+            return (((pos % stepsPerRev) + stepsPerRev) % stepsPerRev) / stepsPerRev * 360;
+          })();
       if (angle !== 0) transforms.push(`rotate(${angle.toFixed(2)},${proj.cx},${proj.cy})`);
     } else if (proj.kind === "fill") {
       const rawValue = properties[proj.prop];
@@ -825,7 +840,7 @@ function viewSpecBodySvg(pkg: PackageDescriptor, componentId: string, properties
       const resolvedShape: PackageShape = gradientIdMap.has(projectedShape.fill ?? "")
         ? { ...projectedShape, fill: gradientIdMap.get(projectedShape.fill!)! }
         : projectedShape;
-      paintMarkup += packageShapeSvg(resolvedShape, projection.transform);
+      paintMarkup += packageShapeSvg(resolvedShape, projection.transform, properties);
     }
   }
 
@@ -1062,10 +1077,10 @@ function packageBodySvg(resolved: ResolvedPackage, componentId?: string, propert
   } else if (hasViewSpec) {
     markup += viewSpecBodySvg(pkg, componentId!, properties ?? {}) ?? "";
   } else {
-    for (const shape of pkg.shapes ?? []) markup += packageShapeSvg(shape);
+    for (const shape of pkg.shapes ?? []) markup += packageShapeSvg(shape, undefined, properties);
   }
   if (hasViewSpec && (pkg.simulidePaint || pkg.qtWidget)) {
-    markup += viewSpecBodySvg(pkg, componentId!, properties ?? {}, false) ?? "";
+    markup += viewSpecBodySvg(pkg, componentId!, properties ?? {}, pkg.viewSpec?.overlayPaint === true) ?? "";
   }
   if (pkg.initialTransform?.rotateDeg) {
     const cx = pkg.initialTransform.cx ?? pkg.width / 2;

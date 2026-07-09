@@ -21,10 +21,4 @@ struct OutgoingResponse {
     std::string error;       // preenchido apenas quando ok == false
 };
 
-/** Notificação assíncrona enviada ao cliente (sem id, sem resposta esperada). */
-struct OutgoingNotification {
-    std::string type;
-    std::string payloadJson;
-};
-
 } // namespace lasecsimul::ipc

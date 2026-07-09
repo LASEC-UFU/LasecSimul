@@ -1408,7 +1408,7 @@
       ],
       "package": {
         "width": 32,
-        "height": 14,
+        "height": 40,
         "border": false,
         "background": {
           "kind": "none"
@@ -1425,7 +1425,7 @@
             "x": -16,
             "y": -8,
             "w": 32,
-            "h": 14
+            "h": 40
           },
           "defaultStroke": "#000",
           "defaultFill": "none",
@@ -1604,7 +1604,107 @@
             "length": 3.7,
             "label": ""
           }
-        ]
+        ],
+        "viewSpec": {
+          "overlayPaint": true,
+          "gradients": {
+            "dial": {
+              "kind": "radial",
+              "cx": 12,
+              "cy": 18,
+              "r": 14,
+              "gradientUnits": "userSpaceOnUse",
+              "stops": [
+                {
+                  "offset": "0%",
+                  "color": "#ffffff"
+                },
+                {
+                  "offset": "55%",
+                  "color": "#dfdfd6"
+                },
+                {
+                  "offset": "100%",
+                  "color": "#aaa99f"
+                }
+              ]
+            }
+          },
+          "paint": [
+            {
+              "kind": "ellipse",
+              "cx": 16,
+              "cy": 27,
+              "rx": 10,
+              "ry": 10,
+              "fill": "gradient:dial",
+              "stroke": "#464646",
+              "strokeWidth": 1,
+              "cssClass": "encoder-hit-zone"
+            },
+            {
+              "kind": "ellipse",
+              "cx": 16,
+              "cy": 20,
+              "rx": 2,
+              "ry": 2,
+              "fill": "#d2d2c8",
+              "stroke": "#464646",
+              "strokeWidth": 0.5,
+              "cssClass": "encoder-indicator",
+              "partId": "dialIndicator"
+            }
+          ],
+          "hitTest": {
+            "dial": {
+              "kind": "circle",
+              "cx": 16,
+              "cy": 27,
+              "r": 12,
+              "cursor": "grab"
+            }
+          },
+          "interaction": {
+            "dial": {
+              "kind": "dragAngular",
+              "hitTest": "dial",
+              "prop": "resistance",
+              "cx": 16,
+              "cy": 27,
+              "stepsPerRev": 1000,
+              "continuous": true,
+              "limits": "dial"
+            }
+          },
+          "limits": {
+            "dial": {
+              "min": 0,
+              "max": 10000,
+              "minAngleDeg": -150,
+              "maxAngleDeg": 150,
+              "clamp": true
+            }
+          },
+          "stateProjection": {
+            "dialIndicator": [
+              {
+                "kind": "rotate",
+                "prop": "resistance",
+                "stepsPerRev": 1000,
+                "propRange": [
+                  0,
+                  10000
+                ],
+                "angleRange": [
+                  -150,
+                  150
+                ],
+                "cx": 16,
+                "cy": 27
+              }
+            ]
+          }
+        }
       }
     },
     {
@@ -1969,754 +2069,6 @@
       ]
     },
     {
-      "typeId": "passive.ldr",
-      "label": "LDR",
-      "pinCount": 2,
-      "icon": "ldr",
-      "folderPath": [
-        "Passivos",
-        "Resistive Sensors"
-      ],
-      "defaultProperties": {
-        "resistance": 1000
-      },
-      "pinIds": [
-        "pin-1",
-        "pin-2"
-      ],
-      "package": {
-        "width": 32,
-        "height": 15.5,
-        "border": false,
-        "background": {
-          "kind": "none"
-        },
-        "simulidePaint": {
-          "version": 1,
-          "source": {
-            "file": "src/components/passive/resist_sensors/ldr.cpp + varresbase.cpp",
-            "className": "Ldr",
-            "method": "paint",
-            "notes": "VarResBase pins (-16,0)/(16,0), effective lead 3.7. paint draws resistor body plus two light arrows at (-5,-11)->(-1,-7) and (1,-11)->(5,-7)."
-          },
-          "bounds": {
-            "x": -16,
-            "y": -11,
-            "w": 32,
-            "h": 15.5
-          },
-          "defaultStroke": "#000",
-          "defaultFill": "none",
-          "defaultStrokeWidth": 1.5,
-          "primitives": [
-            {
-              "kind": "rect",
-              "x": -11,
-              "y": -4.5,
-              "w": 22,
-              "h": 9,
-              "fill": "#ffffff",
-              "strokeWidth": 1.5,
-              "stateVisible": {
-                "when": {
-                  "ansiSymbol": [
-                    "false",
-                    "undefined"
-                  ]
-                }
-              }
-            },
-            {
-              "kind": "line",
-              "x1": -12,
-              "y1": 0,
-              "x2": -10,
-              "y2": -4,
-              "strokeWidth": 2,
-              "stateVisible": {
-                "when": {
-                  "ansiSymbol": [
-                    "true"
-                  ]
-                }
-              }
-            },
-            {
-              "kind": "line",
-              "x1": -10,
-              "y1": -4,
-              "x2": -6,
-              "y2": 4,
-              "strokeWidth": 2,
-              "stateVisible": {
-                "when": {
-                  "ansiSymbol": [
-                    "true"
-                  ]
-                }
-              }
-            },
-            {
-              "kind": "line",
-              "x1": -6,
-              "y1": 4,
-              "x2": -2,
-              "y2": -4,
-              "strokeWidth": 2,
-              "stateVisible": {
-                "when": {
-                  "ansiSymbol": [
-                    "true"
-                  ]
-                }
-              }
-            },
-            {
-              "kind": "line",
-              "x1": -2,
-              "y1": -4,
-              "x2": 2,
-              "y2": 4,
-              "strokeWidth": 2,
-              "stateVisible": {
-                "when": {
-                  "ansiSymbol": [
-                    "true"
-                  ]
-                }
-              }
-            },
-            {
-              "kind": "line",
-              "x1": 2,
-              "y1": 4,
-              "x2": 6,
-              "y2": -4,
-              "strokeWidth": 2,
-              "stateVisible": {
-                "when": {
-                  "ansiSymbol": [
-                    "true"
-                  ]
-                }
-              }
-            },
-            {
-              "kind": "line",
-              "x1": 6,
-              "y1": -4,
-              "x2": 10,
-              "y2": 4,
-              "strokeWidth": 2,
-              "stateVisible": {
-                "when": {
-                  "ansiSymbol": [
-                    "true"
-                  ]
-                }
-              }
-            },
-            {
-              "kind": "line",
-              "x1": 10,
-              "y1": 4,
-              "x2": 12,
-              "y2": 0,
-              "strokeWidth": 2,
-              "stateVisible": {
-                "when": {
-                  "ansiSymbol": [
-                    "true"
-                  ]
-                }
-              }
-            },
-            {
-              "kind": "path",
-              "d": "M -5 -11 L -1 -7 M -1 -7 L -1 -9 M -1 -7 L -3 -7 M 1 -11 L 5 -7 M 5 -7 L 5 -9 M 5 -7 L 3 -7",
-              "fill": "none",
-              "strokeWidth": 1.5
-            }
-          ]
-        },
-        "pins": [
-          {
-            "id": "pin-1",
-            "aliases": [
-              "p1",
-              "lPin"
-            ],
-            "x": 3.7,
-            "y": 11,
-            "angle": 180,
-            "length": 3.7,
-            "label": ""
-          },
-          {
-            "id": "pin-2",
-            "aliases": [
-              "p2",
-              "rPin"
-            ],
-            "x": 28.3,
-            "y": 11,
-            "angle": 0,
-            "length": 3.7,
-            "label": ""
-          }
-        ]
-      }
-    },
-    {
-      "typeId": "passive.thermistor",
-      "label": "Thermistor",
-      "pinCount": 2,
-      "icon": "thermistor",
-      "folderPath": [
-        "Passivos",
-        "Resistive Sensors"
-      ],
-      "defaultProperties": {
-        "resistance": 10000
-      },
-      "pinIds": [
-        "pin-1",
-        "pin-2"
-      ],
-      "package": {
-        "width": 32,
-        "height": 14,
-        "border": false,
-        "background": {
-          "kind": "none"
-        },
-        "simulidePaint": {
-          "version": 1,
-          "source": {
-            "file": "src/components/passive/resist_sensors/thermistor.cpp + thermistorbase.cpp + varresbase.cpp",
-            "className": "Thermistor",
-            "method": "paint",
-            "notes": "ThermistorBase inherits VarResBase pins (-16,0)/(16,0), effective lead 3.7. paint draws resistor body plus line (-8,6)->(6,-8)->(10,-8)."
-          },
-          "bounds": {
-            "x": -16,
-            "y": -8,
-            "w": 32,
-            "h": 14
-          },
-          "defaultStroke": "#000",
-          "defaultFill": "none",
-          "defaultStrokeWidth": 1.5,
-          "primitives": [
-            {
-              "kind": "rect",
-              "x": -11,
-              "y": -4.5,
-              "w": 22,
-              "h": 9,
-              "fill": "#ffffff",
-              "strokeWidth": 1.5,
-              "stateVisible": {
-                "when": {
-                  "ansiSymbol": [
-                    "false",
-                    "undefined"
-                  ]
-                }
-              }
-            },
-            {
-              "kind": "line",
-              "x1": -12,
-              "y1": 0,
-              "x2": -10,
-              "y2": -4,
-              "strokeWidth": 2,
-              "stateVisible": {
-                "when": {
-                  "ansiSymbol": [
-                    "true"
-                  ]
-                }
-              }
-            },
-            {
-              "kind": "line",
-              "x1": -10,
-              "y1": -4,
-              "x2": -6,
-              "y2": 4,
-              "strokeWidth": 2,
-              "stateVisible": {
-                "when": {
-                  "ansiSymbol": [
-                    "true"
-                  ]
-                }
-              }
-            },
-            {
-              "kind": "line",
-              "x1": -6,
-              "y1": 4,
-              "x2": -2,
-              "y2": -4,
-              "strokeWidth": 2,
-              "stateVisible": {
-                "when": {
-                  "ansiSymbol": [
-                    "true"
-                  ]
-                }
-              }
-            },
-            {
-              "kind": "line",
-              "x1": -2,
-              "y1": -4,
-              "x2": 2,
-              "y2": 4,
-              "strokeWidth": 2,
-              "stateVisible": {
-                "when": {
-                  "ansiSymbol": [
-                    "true"
-                  ]
-                }
-              }
-            },
-            {
-              "kind": "line",
-              "x1": 2,
-              "y1": 4,
-              "x2": 6,
-              "y2": -4,
-              "strokeWidth": 2,
-              "stateVisible": {
-                "when": {
-                  "ansiSymbol": [
-                    "true"
-                  ]
-                }
-              }
-            },
-            {
-              "kind": "line",
-              "x1": 6,
-              "y1": -4,
-              "x2": 10,
-              "y2": 4,
-              "strokeWidth": 2,
-              "stateVisible": {
-                "when": {
-                  "ansiSymbol": [
-                    "true"
-                  ]
-                }
-              }
-            },
-            {
-              "kind": "line",
-              "x1": 10,
-              "y1": 4,
-              "x2": 12,
-              "y2": 0,
-              "strokeWidth": 2,
-              "stateVisible": {
-                "when": {
-                  "ansiSymbol": [
-                    "true"
-                  ]
-                }
-              }
-            },
-            {
-              "kind": "path",
-              "d": "M -8 6 L 6 -8 L 10 -8",
-              "fill": "none",
-              "strokeWidth": 1.5
-            }
-          ]
-        },
-        "pins": [
-          {
-            "id": "pin-1",
-            "aliases": [
-              "p1",
-              "lPin"
-            ],
-            "x": 3.7,
-            "y": 8,
-            "angle": 180,
-            "length": 3.7,
-            "label": ""
-          },
-          {
-            "id": "pin-2",
-            "aliases": [
-              "p2",
-              "rPin"
-            ],
-            "x": 28.3,
-            "y": 8,
-            "angle": 0,
-            "length": 3.7,
-            "label": ""
-          }
-        ]
-      }
-    },
-    {
-      "typeId": "passive.rtd",
-      "label": "RTD",
-      "pinCount": 2,
-      "icon": "rtd",
-      "folderPath": [
-        "Passivos",
-        "Resistive Sensors"
-      ],
-      "defaultProperties": {
-        "resistance": 100
-      },
-      "pinIds": [
-        "pin-1",
-        "pin-2"
-      ],
-      "package": {
-        "width": 32,
-        "height": 14,
-        "border": false,
-        "background": {
-          "kind": "none"
-        },
-        "simulidePaint": {
-          "version": 1,
-          "source": {
-            "file": "src/components/passive/resist_sensors/rtd.cpp + thermistorbase.cpp + varresbase.cpp",
-            "className": "RTD",
-            "method": "paint",
-            "notes": "RTD inherits VarResBase pins (-16,0)/(16,0), effective lead 3.7. paint draws resistor body, diagonal (-6,6)->(8,-8), and text +t degrees at (-8,-6) with pixel size 8."
-          },
-          "bounds": {
-            "x": -16,
-            "y": -8,
-            "w": 32,
-            "h": 14
-          },
-          "defaultStroke": "#000",
-          "defaultFill": "none",
-          "defaultStrokeWidth": 1.5,
-          "primitives": [
-            {
-              "kind": "rect",
-              "x": -11,
-              "y": -4.5,
-              "w": 22,
-              "h": 9,
-              "fill": "#ffffff",
-              "strokeWidth": 1.5,
-              "stateVisible": {
-                "when": {
-                  "ansiSymbol": [
-                    "false",
-                    "undefined"
-                  ]
-                }
-              }
-            },
-            {
-              "kind": "line",
-              "x1": -12,
-              "y1": 0,
-              "x2": -10,
-              "y2": -4,
-              "strokeWidth": 2,
-              "stateVisible": {
-                "when": {
-                  "ansiSymbol": [
-                    "true"
-                  ]
-                }
-              }
-            },
-            {
-              "kind": "line",
-              "x1": -10,
-              "y1": -4,
-              "x2": -6,
-              "y2": 4,
-              "strokeWidth": 2,
-              "stateVisible": {
-                "when": {
-                  "ansiSymbol": [
-                    "true"
-                  ]
-                }
-              }
-            },
-            {
-              "kind": "line",
-              "x1": -6,
-              "y1": 4,
-              "x2": -2,
-              "y2": -4,
-              "strokeWidth": 2,
-              "stateVisible": {
-                "when": {
-                  "ansiSymbol": [
-                    "true"
-                  ]
-                }
-              }
-            },
-            {
-              "kind": "line",
-              "x1": -2,
-              "y1": -4,
-              "x2": 2,
-              "y2": 4,
-              "strokeWidth": 2,
-              "stateVisible": {
-                "when": {
-                  "ansiSymbol": [
-                    "true"
-                  ]
-                }
-              }
-            },
-            {
-              "kind": "line",
-              "x1": 2,
-              "y1": 4,
-              "x2": 6,
-              "y2": -4,
-              "strokeWidth": 2,
-              "stateVisible": {
-                "when": {
-                  "ansiSymbol": [
-                    "true"
-                  ]
-                }
-              }
-            },
-            {
-              "kind": "line",
-              "x1": 6,
-              "y1": -4,
-              "x2": 10,
-              "y2": 4,
-              "strokeWidth": 2,
-              "stateVisible": {
-                "when": {
-                  "ansiSymbol": [
-                    "true"
-                  ]
-                }
-              }
-            },
-            {
-              "kind": "line",
-              "x1": 10,
-              "y1": 4,
-              "x2": 12,
-              "y2": 0,
-              "strokeWidth": 2,
-              "stateVisible": {
-                "when": {
-                  "ansiSymbol": [
-                    "true"
-                  ]
-                }
-              }
-            },
-            {
-              "kind": "line",
-              "x1": -6,
-              "y1": 6,
-              "x2": 8,
-              "y2": -8,
-              "strokeWidth": 1.5
-            },
-            {
-              "kind": "text",
-              "x": -8,
-              "y": -6,
-              "value": "+t°",
-              "fontSize": 8,
-              "textAnchor": "middle",
-              "fill": "#000",
-              "stroke": "none"
-            }
-          ]
-        },
-        "pins": [
-          {
-            "id": "pin-1",
-            "aliases": [
-              "p1",
-              "lPin"
-            ],
-            "x": 3.7,
-            "y": 8,
-            "angle": 180,
-            "length": 3.7,
-            "label": ""
-          },
-          {
-            "id": "pin-2",
-            "aliases": [
-              "p2",
-              "rPin"
-            ],
-            "x": 28.3,
-            "y": 8,
-            "angle": 0,
-            "length": 3.7,
-            "label": ""
-          }
-        ]
-      }
-    },
-    {
-      "typeId": "passive.force_strain_gauge",
-      "label": "Force Strain Gauge",
-      "pinCount": 2,
-      "icon": "strain",
-      "folderPath": [
-        "Passivos",
-        "Resistive Sensors"
-      ],
-      "defaultProperties": {
-        "resistance": 350
-      },
-      "pinIds": [
-        "pin-1",
-        "pin-2"
-      ],
-      "package": {
-        "width": 32,
-        "height": 24,
-        "border": false,
-        "background": {
-          "kind": "none"
-        },
-        "simulidePaint": {
-          "version": 1,
-          "source": {
-            "file": "src/components/passive/resist_sensors/strain.cpp + varresbase.cpp",
-            "className": "Strain",
-            "method": "paint",
-            "notes": "Strain overrides m_area to QRectF(-12,-20,24,24) but keeps VarResBase pins (-16,0)/(16,0), effective lead 3.7. paint draws body, two filled tabs, and the 8-point strain track polyline."
-          },
-          "bounds": {
-            "x": -16,
-            "y": -20,
-            "w": 32,
-            "h": 24
-          },
-          "defaultStroke": "#000",
-          "defaultFill": "none",
-          "defaultStrokeWidth": 1.5,
-          "primitives": [
-            {
-              "kind": "rect",
-              "x": -11,
-              "y": -20,
-              "w": 22,
-              "h": 24,
-              "fill": "none",
-              "strokeWidth": 1.5
-            },
-            {
-              "kind": "rect",
-              "x": -8,
-              "y": -2,
-              "w": 4,
-              "h": 4,
-              "fill": "#000",
-              "stroke": "none"
-            },
-            {
-              "kind": "rect",
-              "x": 4,
-              "y": -2,
-              "w": 4,
-              "h": 4,
-              "fill": "#000",
-              "stroke": "none"
-            },
-            {
-              "kind": "polyline",
-              "points": [
-                {
-                  "x": -6,
-                  "y": 0
-                },
-                {
-                  "x": -6,
-                  "y": -16
-                },
-                {
-                  "x": -2,
-                  "y": -16
-                },
-                {
-                  "x": -2,
-                  "y": -4
-                },
-                {
-                  "x": 2,
-                  "y": -4
-                },
-                {
-                  "x": 2,
-                  "y": -16
-                },
-                {
-                  "x": 6,
-                  "y": -16
-                },
-                {
-                  "x": 6,
-                  "y": 0
-                }
-              ],
-              "fill": "none",
-              "strokeWidth": 1.5,
-              "strokeLinecap": "round",
-              "strokeLinejoin": "round"
-            }
-          ]
-        },
-        "pins": [
-          {
-            "id": "pin-1",
-            "aliases": [
-              "p1",
-              "lPin"
-            ],
-            "x": 3.7,
-            "y": 20,
-            "angle": 180,
-            "length": 3.7,
-            "label": ""
-          },
-          {
-            "id": "pin-2",
-            "aliases": [
-              "p2",
-              "rPin"
-            ],
-            "x": 28.3,
-            "y": 20,
-            "angle": 0,
-            "length": 3.7,
-            "label": ""
-          }
-        ]
-      }
-    },
-    {
       "typeId": "passive.capacitor",
       "label": "Capacitor",
       "pinCount": 2,
@@ -3037,7 +2389,7 @@
       ],
       "package": {
         "width": 32,
-        "height": 16,
+        "height": 40,
         "border": false,
         "background": {
           "kind": "none"
@@ -3054,7 +2406,7 @@
             "x": -16,
             "y": -8,
             "w": 32,
-            "h": 16
+            "h": 40
           },
           "defaultStroke": "#000",
           "defaultFill": "none",
@@ -3129,7 +2481,107 @@
             "length": 11.3,
             "label": ""
           }
-        ]
+        ],
+        "viewSpec": {
+          "overlayPaint": true,
+          "gradients": {
+            "dial": {
+              "kind": "radial",
+              "cx": 12,
+              "cy": 18,
+              "r": 14,
+              "gradientUnits": "userSpaceOnUse",
+              "stops": [
+                {
+                  "offset": "0%",
+                  "color": "#ffffff"
+                },
+                {
+                  "offset": "55%",
+                  "color": "#dfdfd6"
+                },
+                {
+                  "offset": "100%",
+                  "color": "#aaa99f"
+                }
+              ]
+            }
+          },
+          "paint": [
+            {
+              "kind": "ellipse",
+              "cx": 16,
+              "cy": 27,
+              "rx": 10,
+              "ry": 10,
+              "fill": "gradient:dial",
+              "stroke": "#464646",
+              "strokeWidth": 1,
+              "cssClass": "encoder-hit-zone"
+            },
+            {
+              "kind": "ellipse",
+              "cx": 16,
+              "cy": 20,
+              "rx": 2,
+              "ry": 2,
+              "fill": "#d2d2c8",
+              "stroke": "#464646",
+              "strokeWidth": 0.5,
+              "cssClass": "encoder-indicator",
+              "partId": "dialIndicator"
+            }
+          ],
+          "hitTest": {
+            "dial": {
+              "kind": "circle",
+              "cx": 16,
+              "cy": 27,
+              "r": 12,
+              "cursor": "grab"
+            }
+          },
+          "interaction": {
+            "dial": {
+              "kind": "dragAngular",
+              "hitTest": "dial",
+              "prop": "capacitance",
+              "cx": 16,
+              "cy": 27,
+              "stepsPerRev": 1000,
+              "continuous": true,
+              "limits": "dial"
+            }
+          },
+          "limits": {
+            "dial": {
+              "min": 0,
+              "max": 0.00001,
+              "minAngleDeg": -150,
+              "maxAngleDeg": 150,
+              "clamp": true
+            }
+          },
+          "stateProjection": {
+            "dialIndicator": [
+              {
+                "kind": "rotate",
+                "prop": "capacitance",
+                "stepsPerRev": 1000,
+                "propRange": [
+                  0,
+                  0.00001
+                ],
+                "angleRange": [
+                  -150,
+                  150
+                ],
+                "cx": 16,
+                "cy": 27
+              }
+            ]
+          }
+        }
       }
     },
     {
@@ -3150,7 +2602,7 @@
       ],
       "package": {
         "width": 32,
-        "height": 14,
+        "height": 40,
         "border": false,
         "background": {
           "kind": "none"
@@ -3167,7 +2619,7 @@
             "x": -16,
             "y": -8,
             "w": 32,
-            "h": 14
+            "h": 40
           },
           "defaultStroke": "#000",
           "defaultFill": "none",
@@ -3257,7 +2709,107 @@
             "length": 3.3,
             "label": ""
           }
-        ]
+        ],
+        "viewSpec": {
+          "overlayPaint": true,
+          "gradients": {
+            "dial": {
+              "kind": "radial",
+              "cx": 12,
+              "cy": 18,
+              "r": 14,
+              "gradientUnits": "userSpaceOnUse",
+              "stops": [
+                {
+                  "offset": "0%",
+                  "color": "#ffffff"
+                },
+                {
+                  "offset": "55%",
+                  "color": "#dfdfd6"
+                },
+                {
+                  "offset": "100%",
+                  "color": "#aaa99f"
+                }
+              ]
+            }
+          },
+          "paint": [
+            {
+              "kind": "ellipse",
+              "cx": 16,
+              "cy": 27,
+              "rx": 10,
+              "ry": 10,
+              "fill": "gradient:dial",
+              "stroke": "#464646",
+              "strokeWidth": 1,
+              "cssClass": "encoder-hit-zone"
+            },
+            {
+              "kind": "ellipse",
+              "cx": 16,
+              "cy": 20,
+              "rx": 2,
+              "ry": 2,
+              "fill": "#d2d2c8",
+              "stroke": "#464646",
+              "strokeWidth": 0.5,
+              "cssClass": "encoder-indicator",
+              "partId": "dialIndicator"
+            }
+          ],
+          "hitTest": {
+            "dial": {
+              "kind": "circle",
+              "cx": 16,
+              "cy": 27,
+              "r": 12,
+              "cursor": "grab"
+            }
+          },
+          "interaction": {
+            "dial": {
+              "kind": "dragAngular",
+              "hitTest": "dial",
+              "prop": "inductance",
+              "cx": 16,
+              "cy": 27,
+              "stepsPerRev": 1000,
+              "continuous": true,
+              "limits": "dial"
+            }
+          },
+          "limits": {
+            "dial": {
+              "min": 0,
+              "max": 0.01,
+              "minAngleDeg": -150,
+              "maxAngleDeg": 150,
+              "clamp": true
+            }
+          },
+          "stateProjection": {
+            "dialIndicator": [
+              {
+                "kind": "rotate",
+                "prop": "inductance",
+                "stepsPerRev": 1000,
+                "propRange": [
+                  0,
+                  0.01
+                ],
+                "angleRange": [
+                  -150,
+                  150
+                ],
+                "cx": 16,
+                "cy": 27
+              }
+            ]
+          }
+        }
       }
     },
     {

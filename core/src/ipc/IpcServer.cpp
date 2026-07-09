@@ -50,10 +50,6 @@ void IpcServer::shutdown() {
     m_shutdown = true;
 }
 
-void IpcServer::sendNotification(const OutgoingNotification& n) {
-    sendLine(buildNotification(n));
-}
-
 // ── serialização ──────────────────────────────────────────────────────────────
 
 std::string IpcServer::buildResponse(const OutgoingResponse& resp) {
@@ -67,17 +63,6 @@ std::string IpcServer::buildResponse(const OutgoingResponse& resp) {
     }
     if (!resp.ok) {
         j["error"] = resp.error;
-    }
-    return j.dump();
-}
-
-std::string IpcServer::buildNotification(const OutgoingNotification& n) {
-    nlohmann::json j;
-    j["type"] = n.type;
-    if (!n.payloadJson.empty()) {
-        j["payload"] = nlohmann::json::parse(n.payloadJson);
-    } else {
-        j["payload"] = nlohmann::json::object();
     }
     return j.dump();
 }

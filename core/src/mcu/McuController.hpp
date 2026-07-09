@@ -38,8 +38,13 @@ public:
     /** Abre a arena de memória compartilhada (Core sempre cria primeiro) e só então inicia o
      * processo QEMU com o firmware indicado. Lança std::runtime_error se a arena não puder ser
      * criada ou o processo não puder ser iniciado (mesma semântica de QemuArenaBridge::open() e
-     * QemuProcessManager::start()) — chamador decide se tenta de novo ou propaga. */
-    void start(const std::filesystem::path& firmwarePath, const std::string& arenaName);
+     * QemuProcessManager::start()) — chamador decide se tenta de novo ou propaga.
+     * `callSiteBinaryOverride` (opcional), se não vazio, vence o override dado ao construtor —
+     * usado por `McuComponent::loadFirmware`, onde o caminho do binário só é conhecido por
+     * instância/chamada (via IPC `loadMcuFirmware`), não no momento em que o McuController é
+     * criado junto com o componente. */
+    void start(const std::filesystem::path& firmwarePath, const std::string& arenaName,
+               const std::string& callSiteBinaryOverride = {});
 
     /** Para o processo (gracioso até `timeout`, kill() se não responder) e sempre fecha a arena
      * depois, mesmo se o processo já tiver morrido por conta própria. */

@@ -163,6 +163,11 @@ html, body {
   background: #7e8794;
 }
 
+.appbar__status-rate {
+  font-weight: 400;
+  opacity: 0.85;
+}
+
 .canvas {
   position: relative;
   overflow: hidden;
@@ -679,6 +684,31 @@ html, body {
   color: #4a3a0c;
 }
 
+.property-sheet__help-panel {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid #d8d8d8;
+  border-radius: 3px;
+  background: #f7f7f2;
+  color: #303030;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.property-sheet__help-panel p {
+  margin: 0 0 6px;
+}
+
+.property-sheet__help-link {
+  border: none;
+  background: none;
+  color: #1847c7;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+  font-size: 11px;
+}
+
 .property-sheet__show-toggle {
   display: flex;
   align-items: center;
@@ -715,6 +745,32 @@ html, body {
 .property-sheet__file-group .property-sheet__field-input {
   flex: 1;
   min-width: 0;
+}
+
+.property-sheet__unit-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.property-sheet__unit-group .property-sheet__field-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.property-sheet__field-unit-select {
+  height: 24px;
+  padding: 2px 3px;
+  border: 1px solid #b8b8b8;
+  background: #fff;
+  color: #202020;
+  font-size: 11px;
+}
+
+.property-sheet__show-on-symbol {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
 }
 
 .property-sheet__file-browse-button {

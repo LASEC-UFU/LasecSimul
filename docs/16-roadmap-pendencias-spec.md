@@ -590,7 +590,16 @@ A arquitetura para não lineares já foi desenhada; falta transformá-la em comp
   "invalid" no arquivo == deveria rejeitar no load); fixture nova nesse diretório já é coberta sem
   precisar editar o teste.
 
-**Conscientemente não implementado nesta rodada** (decisão de escopo, não esquecimento):
+**Atualização 2026-07-08** (auditoria "pente fino" achou este parágrafo desatualizado, mesma classe
+de drift já documentada em `docs/mvp-limitacoes.md`/`.spec/lasecsimul.spec` pro diode/subcircuitos):
+copiar/colar, undo/redo E flip horizontal/vertical foram TODOS implementados numa rodada posterior a
+esta -- ver `.spec/lasecsimul.spec` seções 13.4 e 17 pro design final (undo/redo por snapshot
+completo via `persistState()`/`syncState`, não o "diff Webview→Core" que o parágrafo original abaixo
+concluía ser necessário -- a solução real contornou esse obstáculo em vez de resolvê-lo). O raciocínio
+abaixo é preservado como registro histórico de POR QUE parecia difícil na época, não como estado atual.
+
+**Conscientemente não implementado NESTA RODADA (histórico, ver atualização acima)** (decisão de
+escopo, não esquecimento):
 - **Copiar/colar e undo/redo** -- a arquitetura atual sincroniza Webview↔Core por AÇÃO específica
   (`requestAddComponent`/`requestRemoveComponent`/`requestConnectPins`/etc.), não por estado
   completo (`projectChanged` só espelha o lado Extension, nunca re-sincroniza o Core). Um undo/redo
@@ -613,11 +622,11 @@ Esses itens não bloqueiam a arquitetura, mas melhoram bastante produtividade do
 ### Pendências
 
 - arrastar rótulo independentemente do símbolo;
-- copiar/colar;
-- flip horizontal;
-- flip vertical;
-- undo/redo;
-- batch test headless de circuitos salvos;
+- ~~copiar/colar~~ -- feito, ver `.spec/lasecsimul.spec` seção 13.4;
+- ~~flip horizontal~~ -- feito, ver `.spec/lasecsimul.spec` seção 13.4;
+- ~~flip vertical~~ -- feito, ver `.spec/lasecsimul.spec` seção 13.4;
+- ~~undo/redo~~ -- feito, ver `.spec/lasecsimul.spec` seção 17;
+- ~~batch test headless de circuitos salvos~~ -- feito, ver início desta seção;
 - eventual shell alternativo além do VSCode, quando o custo fizer sentido.
 
 ### Entregáveis

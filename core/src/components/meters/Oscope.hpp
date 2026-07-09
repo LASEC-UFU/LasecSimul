@@ -3,7 +3,10 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
+#include <optional>
+#include <string>
 #include "lasecsimul/IComponentModel.hpp"
+#include "lasecsimul/PropertyDefinition.hpp"
 #include "simulation/Scheduler.hpp"
 
 namespace lasecsimul::components {
@@ -94,30 +97,54 @@ public:
         // espírito de não reintroduzir estado complexo num caminho pensado pra valores escalares.
     }
 
-    std::vector<PropertyDescriptor> propertyDescriptors() override {
-        const auto schemas = propertySchema();
-        PropertyDescriptor filter{"filter", "V", [this] { return PropertyValue{m_filter}; },
-                                   [this](const PropertyValue& v) {
-                                       if (const double* d = std::get_if<double>(&v)) m_filter = *d;
-                                   }};
-        filter.schema = schemas[0];
-        PropertyDescriptor autoSc{"autoScale", "", [this] { return PropertyValue{m_autoScale}; },
-                                   [this](const PropertyValue& v) {
-                                       if (const bool* b = std::get_if<bool>(&v)) m_autoScale = *b;
-                                   }};
-        autoSc.schema = schemas[1];
-        PropertyDescriptor tracks{"tracks", "", [this] { return PropertyValue{static_cast<double>(m_tracks)}; },
-                                   [this](const PropertyValue& v) {
-                                       if (const double* d = std::get_if<double>(&v)) m_tracks = static_cast<int>(*d);
-                                   }};
-        tracks.schema = schemas[2];
-        PropertyDescriptor sampleInterval{"sampleIntervalNs", "ns",
-                                           [this] { return PropertyValue{static_cast<double>(m_sampleIntervalNs)}; },
-                                           [this](const PropertyValue& v) {
-                                               if (const double* d = std::get_if<double>(&v)) m_sampleIntervalNs = static_cast<uint64_t>(std::max(1.0, *d));
-                                           }};
-        sampleInterval.schema = schemas[3];
-        return {filter, autoSc, tracks, sampleInterval};
+    std::vector<PropertyDescriptor> propertyDescriptors() override { return toPropertyDescriptors(properties()); }
+
+    std::vector<PropertyDefinition> properties() {
+        const std::vector<PropertySchema> schemas = propertySchema();
+        const PropertySchema filterSchema = schemaById(schemas, "filter");
+        const PropertySchema autoScaleSchema = schemaById(schemas, "autoScale");
+        const PropertySchema tracksSchema = schemaById(schemas, "tracks");
+        const PropertySchema sampleIntervalSchema = schemaById(schemas, "sampleIntervalNs");
+        return {
+            PropertyDefinition{
+                filterSchema,
+                [this] { return PropertyValue{m_filter}; },
+                [this, filterSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(filterSchema, v)) return {false, *error};
+                    m_filter = std::get<double>(v);
+                    return {true, {}};
+                },
+            },
+            PropertyDefinition{
+                autoScaleSchema,
+                [this] { return PropertyValue{m_autoScale}; },
+                [this, autoScaleSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(autoScaleSchema, v)) return {false, *error};
+                    m_autoScale = std::get<bool>(v);
+                    return {true, {}};
+                },
+            },
+            PropertyDefinition{
+                tracksSchema,
+                [this] { return PropertyValue{static_cast<double>(m_tracks)}; },
+                [this, tracksSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(tracksSchema, v)) return {false, *error};
+                    m_tracks = static_cast<int>(std::get<double>(v));
+                    return {true, {}};
+                },
+            },
+            PropertyDefinition{
+                sampleIntervalSchema,
+                [this] { return PropertyValue{static_cast<double>(m_sampleIntervalNs)}; },
+                [this, sampleIntervalSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(sampleIntervalSchema, v)) {
+                        return {false, *error};
+                    }
+                    m_sampleIntervalNs = static_cast<uint64_t>(std::max(1.0, std::get<double>(v)));
+                    return {true, {}};
+                },
+            },
+        };
     }
 
     /** ABI v2 (.spec/lasecsimul-native-devices.spec) -- declara que `getState()` começa com 4

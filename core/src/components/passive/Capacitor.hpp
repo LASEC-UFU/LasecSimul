@@ -6,6 +6,7 @@
 #include <optional>
 #include <stdexcept>
 #include "lasecsimul/IComponentModel.hpp"
+#include "lasecsimul/PropertyDefinition.hpp"
 
 namespace lasecsimul::components {
 
@@ -43,13 +44,21 @@ public:
         std::memcpy(&m_voltage, in, sizeof(m_voltage));
     }
 
-    std::vector<PropertyDescriptor> propertyDescriptors() override {
-        PropertyDescriptor descriptor{"capacitance", "F", [this] { return PropertyValue{m_capacitance}; },
-                                       [this](const PropertyValue& v) {
-                                           if (const double* d = std::get_if<double>(&v)) setCapacitance(*d);
-                                       }};
-        descriptor.schema = propertySchema().front();
-        return {descriptor};
+    std::vector<PropertyDescriptor> propertyDescriptors() override { return toPropertyDescriptors(properties()); }
+
+    std::vector<PropertyDefinition> properties() {
+        const PropertySchema schema = propertySchema().front();
+        return {
+            PropertyDefinition{
+                schema,
+                [this] { return PropertyValue{m_capacitance}; },
+                [this, schema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(schema, v)) return {false, *error};
+                    setCapacitance(std::get<double>(v));
+                    return {true, {}};
+                },
+            },
+        };
     }
 
     /** Ver Resistor::propertySchema() — mesmo papel (instância + ComponentMetadataRegistry). */

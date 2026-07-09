@@ -233,18 +233,27 @@ fica para depois do MVP. Ver `docs/14-integracao-final.md` para os critérios de
   (`McuController`/`McuComponent`/`Esp32GpioModule`) já funciona (ver acima).
 - IOMUX/pin-matrix e módulos `Esp32TwiModule`/`Esp32SpiModule`/`Esp32UsartModule` do ESP32 (só GPIO
   existe hoje) — ver `docs/17-pendencias-pos-sessao-qemu-abi.md` seção 3.1.
-- Implementar diodo/transistor com Newton-Raphson real (`IComponentModel::isNonlinear()`) antes de
-  reintroduzir `semiconductors.*`/`logic.led` no catálogo.
+- ~~Implementar diodo/transistor com Newton-Raphson real~~ — feito: `active.diode`/`active.zener`/
+  `outputs.led` compartilham um modelo Shockley com amortecimento de Newton real
+  (`core/src/components/active/Diode.hpp`, `hasConverged()` genuíno, não hardcoded); `active.bjt`/
+  `mosfet`/`jfet` também têm `isNonlinear()==true` (`SimulideTransistorLike`), embora com um modelo
+  mais simples que o SCR/DIAC/TRIAC (achado de auditoria 2026-07-08 confirma esses seis como
+  código morto built-in, sempre sobrescritos pelo plugin `devices/simulide-complex`, cujo modelo
+  próprio também é um limiar simplificado — `.spec/lasecsimul.spec` seção 7.4). Ainda pendente, sem
+  relação com Newton-Raphson: reintroduzir `semiconductors.*`/`logic.led` no catálogo, se ainda fizer
+  sentido dado que `outputs.led`/`active.diode`/`active.zener` já cobrem o mesmo espaço.
 - Próximo instrumento (ex: osciloscópio/traço de pino ao longo do tempo) segue o mesmo padrão do
   voltímetro: plugin em `devices/`, estado lido via `getComponentState` — ver ADR 0006.
 - ~~Corrigir `contributes["lasecsimul.deviceLibraries"]`~~ — feito: consolidado em
   `project/schema/component-catalog.json` (`deviceLibraries[]`), lido por
   `extension/src/catalog/UnifiedCatalog.ts` — ver `.spec/lasecsimul.spec` seção 1.1 e ADR 0007.
-- Implementar subcircuitos (circuito reutilizável definido por `.lssubcircuit`, sem código) — spec
-  completa em `.spec/lasecsimul-subcircuits.spec` e ADR 0008; nada implementado ainda, só
-  especificado. Preparação recomendada antes da implementação: catálogo da Webview aceitar um
-  campo `package` por entrada (renderização data-driven do símbolo, em vez do `switch(typeId)`
-  hardcoded em `componentSymbols.ts` hoje) — beneficia subcircuitos e plugins igualmente.
+- ~~Implementar subcircuitos~~ — feito: circuito reutilizável definido por `.lssubcircuit` (arquivo
+  único, sem código), spec completa em `.spec/lasecsimul-subcircuits.spec`; expansão real via
+  `SimulationSession::addSubcircuitInstance`/`SubcircuitRegistry`, "Criar Subcircuito da Seleção" na
+  Extension, subcircuitos reais em produção (`subcircuits/esp32_devkitc_v4.lssubcircuit`,
+  `esp32_wroom32.lssubcircuit`), testado em `core/test/subcircuit_test.cpp`/
+  `esp32_devkitc_subcircuit_test.cpp`. O catálogo da Webview já aceita `package` por entrada
+  (renderização data-driven, `componentSymbols.ts`), preparação que este item pedia.
 - **Backlog de paridade SimulIDE na Webview** (achado ao investigar a UI do SimulIDE — itens restantes,
   nenhum é pré-requisito de outro):
   - Copiar/colar (Ctrl+C/Ctrl+X/Ctrl+V), flip horizontal/vertical (`H`/`V`) e undo/redo

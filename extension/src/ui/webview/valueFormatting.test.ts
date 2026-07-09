@@ -1,5 +1,5 @@
 import { createTestRunner, assert } from "../../ipc/testSupport/MockCoreServer";
-import { formatEngineeringValue } from "./valueFormatting";
+import { formatEngineeringValue, defaultSiPrefixFactor } from "./valueFormatting";
 
 (async () => {
   const { test, finish } = createTestRunner("valueFormatting — testes puros");
@@ -54,6 +54,30 @@ import { formatEngineeringValue } from "./valueFormatting";
 
   await test("valor negativo preserva o sinal", () => {
     assert(formatEngineeringValue(-1000, "Ω") === "-1.00 kΩ", `recebido: ${formatEngineeringValue(-1000, "Ω")}`);
+  });
+
+  await test("defaultSiPrefixFactor: 0 cai no fator neutro (1, sem prefixo)", () => {
+    assert(defaultSiPrefixFactor(0) === 1, `recebido: ${defaultSiPrefixFactor(0)}`);
+  });
+
+  await test("defaultSiPrefixFactor: 4.7e-6 (4.7µF) escolhe o fator µ (1e-6)", () => {
+    assert(defaultSiPrefixFactor(4.7e-6) === 1e-6, `recebido: ${defaultSiPrefixFactor(4.7e-6)}`);
+  });
+
+  await test("defaultSiPrefixFactor: 1000 (1kΩ) escolhe o fator k (1e3), não o neutro", () => {
+    assert(defaultSiPrefixFactor(1000) === 1e3, `recebido: ${defaultSiPrefixFactor(1000)}`);
+  });
+
+  await test("defaultSiPrefixFactor: 999 fica no fator neutro (1), abaixo do limiar de k", () => {
+    assert(defaultSiPrefixFactor(999) === 1, `recebido: ${defaultSiPrefixFactor(999)}`);
+  });
+
+  await test("defaultSiPrefixFactor: valor negativo usa a magnitude, mesmo fator do positivo", () => {
+    assert(defaultSiPrefixFactor(-4.7e-6) === 1e-6, `recebido: ${defaultSiPrefixFactor(-4.7e-6)}`);
+  });
+
+  await test("defaultSiPrefixFactor: valor menor que pico (1e-15) cai no menor fator da tabela (pico)", () => {
+    assert(defaultSiPrefixFactor(1e-15) === 1e-12, `recebido: ${defaultSiPrefixFactor(1e-15)}`);
   });
 
   const { failed } = finish();

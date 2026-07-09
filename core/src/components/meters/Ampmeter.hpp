@@ -4,6 +4,7 @@
 #include <cstring>
 #include <optional>
 #include "lasecsimul/IComponentModel.hpp"
+#include "lasecsimul/PropertyDefinition.hpp"
 
 namespace lasecsimul::components {
 
@@ -49,15 +50,22 @@ public:
         std::memcpy(&m_lastCurrent, in, sizeof(double));
     }
 
-    std::vector<PropertyDescriptor> propertyDescriptors() override {
-        PropertyDescriptor resistance{"resistance", "Ω", [this] { return PropertyValue{m_resistance}; },
-                                       [this](const PropertyValue& v) {
-                                           if (const double* d = std::get_if<double>(&v)) {
-                                               m_resistance = *d < 1e-12 ? 1e-12 : *d;
-                                           }
-                                       }};
-        resistance.schema = propertySchema().front();
-        return {resistance};
+    std::vector<PropertyDescriptor> propertyDescriptors() override { return toPropertyDescriptors(properties()); }
+
+    std::vector<PropertyDefinition> properties() {
+        const PropertySchema schema = propertySchema().front();
+        return {
+            PropertyDefinition{
+                schema,
+                [this] { return PropertyValue{m_resistance}; },
+                [this, schema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(schema, v)) return {false, *error};
+                    const double d = std::get<double>(v);
+                    m_resistance = d < 1e-12 ? 1e-12 : d; // defesa extra, mesmo com minValue já validado acima
+                    return {true, {}};
+                },
+            },
+        };
     }
 
     /** ABI v2 (.spec/lasecsimul-native-devices.spec) -- `getState()` é 1 double de corrente. */

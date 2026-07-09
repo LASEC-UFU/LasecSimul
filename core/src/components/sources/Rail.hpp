@@ -3,6 +3,7 @@
 #include <array>
 #include <optional>
 #include "lasecsimul/IComponentModel.hpp"
+#include "lasecsimul/PropertyDefinition.hpp"
 
 namespace lasecsimul::components {
 
@@ -40,13 +41,21 @@ public:
     size_t getState(uint8_t*, size_t) const override { return 0; }
     void setState(const uint8_t*, size_t) override {}
 
-    std::vector<PropertyDescriptor> propertyDescriptors() override {
-        PropertyDescriptor descriptor{"voltage", "V", [this] { return PropertyValue{m_voltage}; },
-                                       [this](const PropertyValue& v) {
-                                           if (const double* d = std::get_if<double>(&v)) setVoltage(*d);
-                                       }};
-        descriptor.schema = propertySchema().front();
-        return {descriptor};
+    std::vector<PropertyDescriptor> propertyDescriptors() override { return toPropertyDescriptors(properties()); }
+
+    std::vector<PropertyDefinition> properties() {
+        const PropertySchema schema = propertySchema().front();
+        return {
+            PropertyDefinition{
+                schema,
+                [this] { return PropertyValue{m_voltage}; },
+                [this, schema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(schema, v)) return {false, *error};
+                    setVoltage(std::get<double>(v));
+                    return {true, {}};
+                },
+            },
+        };
     }
 
     static std::vector<PropertySchema> propertySchema() {

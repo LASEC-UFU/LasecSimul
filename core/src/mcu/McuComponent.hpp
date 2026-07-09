@@ -7,8 +7,7 @@
 #include "lasecsimul/IComponentModel.hpp"
 #include "lasecsimul/IMcuAdapter.hpp"
 #include "lasecsimul/QemuModule.hpp"
-#include "qemu/QemuArenaBridge.hpp"
-#include "qemu/QemuProcessManager.hpp"
+#include "mcu/McuController.hpp"
 #include "simulation/Scheduler.hpp"
 
 namespace lasecsimul::mcu {
@@ -43,17 +42,27 @@ public:
     size_t getState(uint8_t*, size_t) const override { return 0; }
     void setState(const uint8_t*, size_t) override {}
 
+    /** Agrega a saúde do adaptador (`create`/`build_launch_args`/`get_memory_regions`/
+     * `get_pin_map`/`create_modules`, ver `NativeMcuAdapterProxy`) com a de cada módulo concreto
+     * (`writeRegister`/`readRegister`/etc, ver `QemuModuleProxy`) -- `Faulted` se qualquer um dos
+     * dois relatar `Faulted`, senão `Lagging` se qualquer um relatar `Lagging`, senão `Ok`. Built-in
+     * (chip nativo compilado no Core, se algum dia existir) nunca sobrescreve nem adapter nem
+     * módulo, então isto sempre devolve `Ok` pra esse caso -- mesma composicionalidade de
+     * `IComponentModel::health()`/`IMcuAdapter::health()`/`QemuModule::health()` (achado de
+     * auditoria arquitetural 2026-07-09: MCU não tinha NENHUMA contenção de crash até esta
+     * correção). */
+    PluginHealthStatus health() const override;
+
     void onAssignedIndex(uint32_t index) override;
 
-    /** Inicia o processo QEMU real com o firmware indicado -- chamado via propriedade/IPC (ainda
-     * não exposto, ver pendência em CoreApplication.cpp). `arenaName` deve ser único por
-     * instância (várias MCUs no mesmo projeto = várias arenas, nunca uma global -- ver
-     * McuRuntimeManager, ainda não implementado). */
+    /** Inicia o processo QEMU real com o firmware indicado -- chamado via IPC `loadMcuFirmware`
+     * (`CoreApplication.cpp`, `extension/src/mcu/mcuCommands.ts`). `arenaName` deve ser único por
+     * instância (várias MCUs no mesmo projeto = várias arenas, nunca uma global). */
     void loadFirmware(const std::filesystem::path& firmwarePath, const std::string& arenaName,
                       const std::string& qemuBinaryOverride = {});
     void stopFirmware();
-    bool firmwareRunning() const { return m_processManager.isRunning(); }
-    std::string qemuLogs() const { return m_processManager.logs(); }
+    bool firmwareRunning() const { return m_controller.isRunning(); }
+    std::string qemuLogs() const { return m_controller.qemuLogs(); }
 
     /** Estado do pino RST (ModuleKind::Reset, ex: EN do ESP32) na última stamp() -- exposto só pra
      * teste confirmar a borda sem precisar reler tensão de matriz. */
@@ -63,10 +72,9 @@ public:
      * registrador manualmente (mesmo papel de QemuArenaBridgeTest), sem precisar de um binário
      * real nem de firmware. Produção sempre usa loadFirmware(), nunca isto direto. */
     void openSyntheticArenaForTesting(const std::string& arenaName) {
-        m_arenaBridge.open(qemu::QemuArenaOpenOptions{arenaName, true});
-        m_arenaOpen = true;
+        m_controller.arenaBridge().open(qemu::QemuArenaOpenOptions{arenaName, true});
     }
-    qemu::QemuArenaBridge& arenaBridge() { return m_arenaBridge; }
+    qemu::QemuArenaBridge& arenaBridge() { return m_controller.arenaBridge(); }
 
 private:
     void scheduleNextPoll();
@@ -94,10 +102,13 @@ private:
     std::vector<uint64_t> m_moduleWakeupDueNs;
     std::vector<uint64_t> m_moduleWakeupGeneration;
     std::vector<uint8_t> m_moduleWakeupPending;
-    qemu::QemuArenaBridge m_arenaBridge;
-    qemu::QemuProcessManager m_processManager;
+    // Dono real do processo QEMU + arena de memória compartilhada -- ver McuController.hpp. Eram
+    // dois membros próprios (QemuArenaBridge/QemuProcessManager) duplicando exatamente o que
+    // McuController já fazia; unificado (achado de auditoria arquitetural 2026-07-09, D11) pra ter
+    // uma só implementação, testada tanto por McuComponentTest (arena sintética) quanto por
+    // McuControllerRealQemuTest (binário QEMU real) contra o MESMO código.
+    McuController m_controller;
     uint32_t m_componentIndex = 0;
-    bool m_arenaOpen = false;
     // ModuleKind::Reset (ex: EN do ESP32) -- nunca tem QemuModule, McuComponent trata direto.
     // Default true: sem fio externo nenhum, o pino fica com polarização fraca pra ALTO (chip roda
     // normalmente) -- inverso do floating genérico de GPIO (que vai fraco pra terra), porque aqui

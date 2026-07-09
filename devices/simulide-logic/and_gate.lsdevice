@@ -4,9 +4,12 @@
   "name": "And Gate",
   "language": "pt-BR",
   "icon": "andgate",
-  "folderPath": ["Logicos", "Portas"],
+  "folderPath": [
+    "Logicos",
+    "Portas"
+  ],
   "abiVersion": {
-    "major": 4,
+    "major": 3,
     "minor": 0
   },
   "nativeEntry": {
@@ -16,19 +19,40 @@
   },
   "pins": [
     {
+      "id": "out",
+      "kind": "DIGITAL_OUT"
+    },
+    {
       "id": "in1",
       "kind": "DIGITAL_IN"
     },
     {
       "id": "in2",
       "kind": "DIGITAL_IN"
-    },
-    {
-      "id": "out",
-      "kind": "DIGITAL_OUT"
     }
   ],
-  "properties": [],
+  "properties": [
+    {
+      "id": "inputs",
+      "label": "Entradas",
+      "group": "Inputs",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 2,
+      "min": 2,
+      "max": 8,
+      "step": 1,
+      "affectsPinCount": true
+    },
+    {
+      "id": "inverted",
+      "label": "Inverter Saida (NAND)",
+      "group": "Outputs",
+      "valueKind": "bool",
+      "editor": "checkbox",
+      "default": false
+    }
+  ],
   "limits": {
     "stepTimeoutMs": 4,
     "expectedComplexity": "low"
@@ -37,36 +61,117 @@
     "width": 32,
     "height": 16,
     "border": false,
-    "background": { "kind": "none" },
+    "background": {
+      "kind": "none"
+    },
     "viewSpec": {
       "paint": [
-        { "kind": "path", "d": "M 7 0 L 12 0 Q 25 0 25 8 Q 25 16 12 16 L 7 16 Z", "fill": "#ffffff" }
-      ]
+        {
+          "kind": "path",
+          "d": "M 7 0 L 12 0 Q 25 0 25 8 Q 25 16 12 16 L 7 16 Z",
+          "fill": "#ffffff",
+          "statePath": {
+            "prop": "inputs",
+            "fallback": "M 7 0 L 12 0 Q 25 0 25 8 Q 25 16 12 16 L 7 16 Z",
+            "map": {
+              "2": "M 7 0 L 12 0 Q 25 0 25 8 Q 25 16 12 16 L 7 16 Z",
+              "3": "M 7 0 L 12 0 Q 25 0 25 12 Q 25 24 12 24 L 7 24 Z",
+              "4": "M 7 0 L 12 0 Q 25 0 25 16 Q 25 32 12 32 L 7 32 Z",
+              "5": "M 7 0 L 12 0 Q 25 0 25 20 Q 25 40 12 40 L 7 40 Z",
+              "6": "M 7 0 L 12 0 Q 25 0 25 24 Q 25 48 12 48 L 7 48 Z",
+              "7": "M 7 0 L 12 0 Q 25 0 25 28 Q 25 56 12 56 L 7 56 Z",
+              "8": "M 7 0 L 12 0 Q 25 0 25 32 Q 25 64 12 64 L 7 64 Z"
+            }
+          }
+        },
+        {
+          "kind": "ellipse",
+          "cx": 27.2,
+          "cy": 8,
+          "rx": 2.2,
+          "ry": 2.2,
+          "fill": "#ffffff",
+          "partId": "invertBubble"
+        }
+      ],
+      "stateProjection": {
+        "invertBubble": [
+          {
+            "kind": "translate",
+            "y": {
+              "prop": "inputs",
+              "propRange": [
+                2,
+                8
+              ],
+              "pixelRange": [
+                0,
+                24
+              ]
+            }
+          },
+          {
+            "kind": "visible",
+            "prop": "inverted"
+          }
+        ]
+      }
     },
     "pins": [
       {
-        "id": "in1",
-        "x": 8,
-        "y": 4,
-        "angle": 180,
-        "length": 8,
-        "label": ""
-      },
-      {
-        "id": "in2",
-        "x": 8,
-        "y": 12,
-        "angle": 180,
-        "length": 8,
-        "label": ""
-      },
-      {
         "id": "out",
         "x": 24,
-        "y": 8,
+        "y": {
+          "prop": "inputs",
+          "multiplier": 4,
+          "fallback": 8,
+          "min": 8,
+          "max": 32
+        },
         "angle": 0,
         "length": 8,
         "label": ""
+      }
+    ],
+    "dynamicLayout": {
+      "height": {
+        "prop": "inputs",
+        "multiplier": 8,
+        "fallback": 16,
+        "min": 16,
+        "max": 64
+      },
+      "pinGroups": [
+        {
+          "countProp": "inputs",
+          "indexName": "i",
+          "idPrefix": "in",
+          "idStart": 1,
+          "x": 8,
+          "y": {
+            "index": "i",
+            "multiplier": 8,
+            "offset": 4
+          },
+          "angle": 180,
+          "length": 8,
+          "label": ""
+        }
+      ]
+    }
+  },
+  "defaultProperties": {
+    "inputs": 2,
+    "inverted": false
+  },
+  "pinSpec": {
+    "fixedPinIds": [
+      "out"
+    ],
+    "dynamicGroups": [
+      {
+        "idPrefix": "in",
+        "countProperty": "inputs"
       }
     ]
   }

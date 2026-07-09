@@ -38,9 +38,6 @@ public:
     /** Sinaliza encerramento limpo. Deve ser chamado dentro do MessageHandler. */
     void shutdown();
 
-    /** Envia uma notificação assíncrona ao cliente conectado. Thread-safe. */
-    void sendNotification(const OutgoingNotification& n);
-
 private:
     std::string m_pipeName;
     MessageHandler m_handler;
@@ -65,7 +62,6 @@ private:
     std::string readLine(bool& eof);
 
     static std::string buildResponse(const OutgoingResponse& resp);
-    static std::string buildNotification(const OutgoingNotification& n);
     static bool parseMessage(const std::string& line, IncomingMessage& out);
 };
 

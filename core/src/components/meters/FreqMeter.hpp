@@ -3,7 +3,10 @@
 #include <array>
 #include <cmath>
 #include <cstring>
+#include <optional>
+#include <string>
 #include "lasecsimul/IComponentModel.hpp"
+#include "lasecsimul/PropertyDefinition.hpp"
 #include "simulation/Scheduler.hpp"
 
 namespace lasecsimul::components {
@@ -67,13 +70,21 @@ public:
         std::memcpy(&m_freqHz, in, sizeof(double));
     }
 
-    std::vector<PropertyDescriptor> propertyDescriptors() override {
-        PropertyDescriptor filter{"filter", "V", [this] { return PropertyValue{m_filter}; },
-                                   [this](const PropertyValue& v) {
-                                       if (const double* d = std::get_if<double>(&v)) m_filter = *d;
-                                   }};
-        filter.schema = propertySchema().front();
-        return {filter};
+    std::vector<PropertyDescriptor> propertyDescriptors() override { return toPropertyDescriptors(properties()); }
+
+    std::vector<PropertyDefinition> properties() {
+        const PropertySchema schema = propertySchema().front();
+        return {
+            PropertyDefinition{
+                schema,
+                [this] { return PropertyValue{m_filter}; },
+                [this, schema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(schema, v)) return {false, *error};
+                    m_filter = std::get<double>(v);
+                    return {true, {}};
+                },
+            },
+        };
     }
 
     /** ABI v2 (.spec/lasecsimul-native-devices.spec) -- `getState()` é 1 double de frequência. */

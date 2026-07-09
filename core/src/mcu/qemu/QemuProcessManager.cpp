@@ -220,9 +220,31 @@ private:
     }
 #endif
 
+    /** Sem limite, `m_logs` cresceria sem parar por toda a sessão de simulação (achado de auditoria
+     * 2026-07-08) -- `logs()` é sondado a cada ~500ms enquanto o monitor serial estiver aberto
+     * (`mcuCommands.ts::pollLogs`) e SEMPRE retorna o buffer INTEIRO (só o delta é usado do lado da
+     * Extension), então memória do Core E dados trafegados na IPC cresciam ambos sem limite (O(n²)
+     * ao longo de uma sessão longa). `kMaxLogBytes` limita memória; a histerese (corta pra METADE
+     * do teto, não só até o teto) evita re-cortar a cada `appendLog` individual uma vez que o limite
+     * é cruzado -- só corta de novo depois de outro kMaxLogBytes/2 de crescimento. Não implementado
+     * (fora de escopo desta correção): protocolo de IPC "desde o offset X" pra nunca retransmitir o
+     * que já foi lido -- mudança de protocolo maior, o cap de memória já resolve o crescimento
+     * ilimitado, que era a parte mais grave do achado. */
     void appendLog(const char* data, size_t len) {
         std::lock_guard<std::mutex> lock(m_logMutex);
         m_logs.write(data, static_cast<std::streamsize>(len));
+        m_logBytes += len;
+        if (m_logBytes > kMaxLogBytes) trimLogsLocked();
+    }
+
+    void trimLogsLocked() {
+        const std::string full = m_logs.str();
+        const size_t keep = kMaxLogBytes / 2;
+        const std::string tail = full.size() > keep ? full.substr(full.size() - keep) : full;
+        m_logs.str({});
+        m_logs.clear();
+        m_logs << tail;
+        m_logBytes = tail.size();
     }
 
     void joinReader() {
@@ -235,6 +257,7 @@ private:
             std::lock_guard<std::mutex> lock(m_logMutex);
             m_logs.str({});
             m_logs.clear();
+            m_logBytes = 0;
         }
         m_running = false;
 #if defined(_WIN32)
@@ -257,9 +280,12 @@ private:
 #endif
     }
 
+    static constexpr size_t kMaxLogBytes = 1u << 20; // 1 MiB -- ver comentário de appendLog()
+
     std::atomic<bool> m_running{false};
     mutable std::mutex m_logMutex;
     std::ostringstream m_logs;
+    size_t m_logBytes = 0;
     std::thread m_reader;
 #if defined(_WIN32)
     PROCESS_INFORMATION m_processInfo{};

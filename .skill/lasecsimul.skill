@@ -178,6 +178,19 @@ remeter a WASM/worker, é desatualizado — confiar nos dois `.spec` acima.
   deliberada (não expõe "name" por aqui — precisa de `setTunnelName`, que rebuilda topologia). Plugin nativo
   já participa (`device_abi.h` tem `set_property`/`get_property` na `LsdnDeviceVTable`) — não tratar isso
   como pendência.
+- **Componente built-in NOVO: declarar `properties()` via `PropertyDefinition`
+  (`lasecsimul/PropertyDefinition.hpp`, seção 6.1.5 do `.spec`), não o par antigo
+  `static propertySchema()` + `propertyDescriptors()` reescrevendo o schema duas vezes.** Ver
+  `Probe.hpp`/`Resistor.hpp` como referência (migrados 2026-07-09, auditoria arquitetural). Na
+  fábrica em `CoreApplication.cpp`, usar `propertyOrDefault(p.properties, schema)` em vez de
+  `p.property(name, default)` — valida contra o schema antes de aceitar um valor salvo, em vez de
+  cair em silêncio num default sem checagem nenhuma.
+- **Plugin de MCU (`mcu_abi.h`) agora tem a MESMA contenção de crash que plugin de dispositivo
+  comum (`device_abi.h`) — não reintroduzir a assimetria.** Chamada fria (construtor/
+  `buildLaunchArgs`/`createModules`/destrutor, `NativeMcuAdapterProxy`) usa `PluginWatchdog` com
+  timeout real; chamada quente (a cada ~50us, `QemuModuleProxy`, chamada por `McuComponent::stamp()`)
+  usa só `CrashGuard` sem thread — nunca colocar um `PluginWatchdog` com timeout>0 no caminho quente,
+  o custo de criar thread por chamada estoura o orçamento de tempo real do poll (ver ADR 0011).
 - **Protocolo (I2C/SPI/etc.) é decodificado bit a bit via `ComponentEvent{kPinChangeEventTag}`, nunca por
   um "módulo de barramento" que entrega byte pronto.** `SimulationSession::settleStep()` detecta borda
   digital (cruzamento de `kDigitalLevelThreshold`, `core/include/lasecsimul/Types.hpp`) e despacha o evento

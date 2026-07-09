@@ -164,6 +164,15 @@ arquiteturais restantes de Fase D, pedir decisão explícita antes de alterar fl
 de EX-9 já extraiu `symbolAuthoring/symbolCommands.ts`; não reabrir este cluster dentro de `extension.ts`
 em trabalhos futuros.
 
+Atualização de continuidade (2026-07-09): a mesma regra foi aplicada aos dois itens finais que ainda
+pareciam "futuros". Gates AND/OR de 2-8 entradas não têm helper interno por `typeId`: usam
+`pinSpec.dynamicGroups`, `package.dynamicLayout` e `viewSpec.paint[].statePath`; o plugin nativo só
+consome a propriedade `inputs` e os pinos declarados. `Dialed` também não virou helper de
+resistor/capacitor/indutor: o renderer ganhou `viewSpec.overlayPaint`, `ViewSpecProjection.rotate` com
+`propRange/angleRange` e `dragAngular.continuous` com `limits`, reaproveitado por R/L/C variável e pelos
+knobs da popup do osciloscópio. Próximos dispositivos com knob/dial devem passar por esse contrato
+declarativo antes de qualquer fallback hardcoded.
+
 ## Método
 
 5 agentes de investigação em paralelo, cada um com escopo de domínio, acesso ao código atual, às specs

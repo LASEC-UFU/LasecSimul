@@ -115,7 +115,12 @@ export class CoreClient {
 
   async run(): Promise<void> { await this.request("start", {}); }
   async pause(): Promise<void> { await this.request("pause", {}); }
-  async step(): Promise<void> { await this.request("step", {}); }
+  /** Avança a simulação por `deltaNs` (default 1000ns) e assenta uma única vez -- `Scheduler::step`
+   * real do Core (achado de auditoria 2026-07-08: o verbo IPC dizia "não implementado" mas o
+   * mecanismo já existia, só não estava ligado). Sem chamador na UI ainda -- um botão "Step" fica
+   * pra um trabalho de UI separado, fora de escopo aqui; o método deixa de ser código morto agora
+   * que a resposta do Core é real. */
+  async step(deltaNs?: number): Promise<void> { await this.request("step", deltaNs !== undefined ? { deltaNs } : {}); }
   /** Para a simulação sem encerrar a conexão IPC. */
   async stopSimulation(): Promise<void> { await this.request("stop", {}); }
 
@@ -252,6 +257,14 @@ export class CoreClient {
   async getNodeVoltage(instanceId: string, pinId: string): Promise<number> {
     const resp = await this.request("getNodeVoltage", { instanceId, pinId });
     return (resp as { voltage: number }).voltage;
+  }
+
+  /** Nanossegundos de tempo SIMULADO decorrido (`Scheduler::nowNs()`) -- base pra calcular a taxa
+   * real de simulação (`Δsimulado/Δparede` entre duas amostras), achado de auditoria de UI
+   * 2026-07-09. Verbo somente-leitura. */
+  async getSimulationTime(): Promise<number> {
+    const resp = await this.request("getSimulationTime", {});
+    return (resp as { simulatedNs: number }).simulatedNs;
   }
 
   async loadMcuFirmware(instanceId: string, firmwarePath: string, qemuBinaryOverride?: string): Promise<void> {

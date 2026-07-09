@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <optional>
 #include "lasecsimul/IComponentModel.hpp"
+#include "lasecsimul/PropertyDefinition.hpp"
 #include "simulation/Scheduler.hpp"
 
 namespace lasecsimul::components {
@@ -60,29 +61,52 @@ public:
         m_state = in[0] != 0;
     }
 
-    std::vector<PropertyDescriptor> propertyDescriptors() override {
-        const auto schemas = propertySchema();
-        PropertyDescriptor voltage{"voltage", "V", [this] { return PropertyValue{m_voltage}; },
-                                    [this](const PropertyValue& v) {
-                                        if (const double* d = std::get_if<double>(&v)) m_voltage = *d;
-                                    }};
-        voltage.schema = schemas[0];
-        PropertyDescriptor freq{"freqHz", "Hz", [this] { return PropertyValue{m_freqHz}; },
-                                 [this](const PropertyValue& v) {
-                                     if (const double* d = std::get_if<double>(&v)) setFreqHz(*d);
-                                 }};
-        freq.schema = schemas[1];
-        PropertyDescriptor alwaysOn{"alwaysOn", "", [this] { return PropertyValue{m_alwaysOn}; },
-                                     [this](const PropertyValue& v) {
-                                         if (const bool* b = std::get_if<bool>(&v)) setAlwaysOn(*b);
-                                     }};
-        alwaysOn.schema = schemas[2];
-        PropertyDescriptor running{"running", "", [this] { return PropertyValue{m_running}; },
-                                    [this](const PropertyValue& v) {
-                                        if (const bool* b = std::get_if<bool>(&v)) setRunning(*b);
-                                    }};
-        running.schema = schemas[3];
-        return {voltage, freq, alwaysOn, running};
+    std::vector<PropertyDescriptor> propertyDescriptors() override { return toPropertyDescriptors(properties()); }
+
+    std::vector<PropertyDefinition> properties() {
+        const std::vector<PropertySchema> schemas = propertySchema();
+        const PropertySchema voltageSchema = schemaById(schemas, "voltage");
+        const PropertySchema freqSchema = schemaById(schemas, "freqHz");
+        const PropertySchema alwaysOnSchema = schemaById(schemas, "alwaysOn");
+        const PropertySchema runningSchema = schemaById(schemas, "running");
+        return {
+            PropertyDefinition{
+                voltageSchema,
+                [this] { return PropertyValue{m_voltage}; },
+                [this, voltageSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(voltageSchema, v)) return {false, *error};
+                    m_voltage = std::get<double>(v);
+                    return {true, {}};
+                },
+            },
+            PropertyDefinition{
+                freqSchema,
+                [this] { return PropertyValue{m_freqHz}; },
+                [this, freqSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(freqSchema, v)) return {false, *error};
+                    setFreqHz(std::get<double>(v));
+                    return {true, {}};
+                },
+            },
+            PropertyDefinition{
+                alwaysOnSchema,
+                [this] { return PropertyValue{m_alwaysOn}; },
+                [this, alwaysOnSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(alwaysOnSchema, v)) return {false, *error};
+                    setAlwaysOn(std::get<bool>(v));
+                    return {true, {}};
+                },
+            },
+            PropertyDefinition{
+                runningSchema,
+                [this] { return PropertyValue{m_running}; },
+                [this, runningSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(runningSchema, v)) return {false, *error};
+                    setRunning(std::get<bool>(v));
+                    return {true, {}};
+                },
+            },
+        };
     }
 
     static std::vector<PropertySchema> propertySchema() {

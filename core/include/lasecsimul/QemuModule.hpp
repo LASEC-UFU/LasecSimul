@@ -63,6 +63,13 @@ public:
     virtual uint64_t nextWakeupDelayNs(uint64_t) const { return nextWakeupDelayNs(); }
     virtual void onWakeup(uint64_t) {}
 
+    /** Default `Ok` -- só `QemuModuleProxy` (plugin de MCU via `mcu_abi.h`) sobrescreve, marcando
+     * `Faulted` se uma chamada pra dentro do plugin crashar (ver `CrashGuard`). Mesmo padrão de
+     * `IComponentModel::health()`; `McuComponent::health()` agrega isto de todo módulo + do próprio
+     * `IMcuAdapter::health()` (achado de auditoria arquitetural 2026-07-09: MCU não tinha contenção
+     * de crash nenhuma até esta correção, ao contrário de `NativeDeviceProxy`). */
+    virtual PluginHealthStatus health() const { return PluginHealthStatus::Ok; }
+
 protected:
     ModuleKind m_kind;
     uint32_t m_index;

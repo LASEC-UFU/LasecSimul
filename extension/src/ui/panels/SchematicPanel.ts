@@ -12,6 +12,8 @@ export class SchematicPanel {
   private readonly panel: vscode.WebviewPanel;
   private ready = false;
   private readonly pendingMessages: unknown[] = [];
+  private language: "pt-BR" | "en" = "pt-BR";
+  private dirty = false;
 
   private constructor(
     panel: vscode.WebviewPanel,
@@ -21,6 +23,7 @@ export class SchematicPanel {
     private readonly onDispose: () => void,
   ) {
     this.panel = panel;
+    this.language = initialState.locale ?? "pt-BR";
     this.panel.onDidDispose(() => {
       SchematicPanel.current = undefined;
       this.onDispose();
@@ -77,7 +80,24 @@ export class SchematicPanel {
   }
 
   setLanguage(language: "pt-BR" | "en"): void {
-    this.panel.title = localizedPanelTitle(language);
+    this.language = language;
+    this.applyTitle();
+  }
+
+  /** Indicador de alteração não salva no título da aba (`"Schematic"` -> `"Schematic ●"`) --
+   * substituto de baixo custo pro diálogo nativo "unsaved changes" que `vscode.WebviewPanel` NÃO
+   * suporta (diferente de `CustomEditorProvider`, que integraria com o prompt nativo do VS Code
+   * via `onDidChangeCustomDocument`/backup -- migrar pra essa API é uma mudança de arquitetura bem
+   * maior, fora de escopo aqui). Ver `projectCommands.ts::isProjectDirty`. */
+  setDirty(dirty: boolean): void {
+    if (this.dirty === dirty) return;
+    this.dirty = dirty;
+    this.applyTitle();
+  }
+
+  private applyTitle(): void {
+    const base = localizedPanelTitle(this.language);
+    this.panel.title = this.dirty ? `${base} ●` : base;
   }
 
   private flushPendingMessages(): void {

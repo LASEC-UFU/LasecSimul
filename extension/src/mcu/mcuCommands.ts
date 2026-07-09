@@ -194,66 +194,11 @@ function serialPortLabelForTypeId(typeId: string | undefined, usartIndex: 0 | 1 
   return entry?.serialPorts?.find((port) => port.usartIndex === usartIndex)?.label;
 }
 
-export function openMcuSerialMonitorCommand(componentId: string, usartIndex: 0 | 1 | 2): void {
-  const targetCoreId = resolveMcuTargetCoreId(componentId);
-  const component = getComponentById(componentId);
-  const serialPortLabel = serialPortLabelForTypeId(component?.typeId, usartIndex);
-  if (!state.coreClient || !targetCoreId || !component || !serialPortLabel) {
-    vscode.window.showWarningMessage("Monitor serial indisponivel para este componente.");
-    return;
-  }
-  const key = `${componentId}:${usartIndex}`;
-  const existing = mcuSerialMonitorByKey.get(key);
-  if (existing) {
-    existing.channel.show(true);
-    return;
-  }
-
-  const channel = vscode.window.createOutputChannel(`LasecSimul ${serialPortLabel} - ${component.label}`);
-  channel.appendLine(`[${new Date().toLocaleString()}] Monitor serial aberto para ${component.label} (${serialPortLabel}).`);
-  channel.appendLine("Observacao: por enquanto o monitor espelha os logs/saida do QEMU expostos pelo Core.");
-
-  const pollLogs = async (): Promise<void> => {
-    try {
-      const logs = await state.coreClient!.getMcuLogs(targetCoreId);
-      const monitor = mcuSerialMonitorByKey.get(key);
-      if (!monitor) return;
-      const delta = logs.slice(monitor.lastLength);
-      if (delta) {
-        channel.append(delta);
-        monitor.lastLength = logs.length;
-      } else if (logs.length < monitor.lastLength) {
-        channel.appendLine(`\n[${new Date().toLocaleTimeString()}] logs reiniciados`);
-        if (logs) channel.append(logs);
-        monitor.lastLength = logs.length;
-      }
-    } catch (err) {
-      channel.appendLine(`\n[erro] ${err instanceof Error ? err.message : String(err)}`);
-    }
-  };
-
-  const timer = setInterval(() => void pollLogs(), 500);
-  mcuSerialMonitorByKey.set(key, { channel, timer, lastLength: 0 });
-  channel.show(true);
-  void pollLogs();
-}
-
-export async function openExposedMcuSerialMonitorCommand(
-  outerComponentId: string,
-  innerComponentId: string,
-  usartIndex: 0 | 1 | 2,
-  options: McuCommandOptions
-): Promise<void> {
-  const sourceId = resolveSourceIdForComponent(outerComponentId);
-  const inner = sourceId ? options.gatherInternalComponentSnapshots(sourceId)?.find((entry) => entry.id === innerComponentId) : undefined;
-  const label = inner?.label ?? innerComponentId;
-  const serialPortLabel = serialPortLabelForTypeId(inner?.typeId, usartIndex);
-  const targetCoreId = await resolveSubcircuitChildCoreId(outerComponentId, innerComponentId);
-  if (!state.coreClient || !targetCoreId || !serialPortLabel) {
-    vscode.window.showWarningMessage("Monitor serial indisponivel para este componente.");
-    return;
-  }
-  const key = `${outerComponentId}:${innerComponentId}:${usartIndex}`;
+/** Corpo compartilhado de `openMcuSerialMonitorCommand`/`openExposedMcuSerialMonitorCommand` --
+ * diferiam só em como `key`/`label`/`targetCoreId` eram resolvidos, com o resto (canal de saída,
+ * polling de log a cada 500ms, cálculo de delta) idêntico e duplicado (achado de auditoria
+ * 2026-07-08). `state.coreClient` já verificado não-nulo pelos dois chamadores antes de entrar aqui. */
+function openSerialMonitor(key: string, label: string, serialPortLabel: string, targetCoreId: string): void {
   const existing = mcuSerialMonitorByKey.get(key);
   if (existing) {
     existing.channel.show(true);
@@ -287,6 +232,35 @@ export async function openExposedMcuSerialMonitorCommand(
   mcuSerialMonitorByKey.set(key, { channel, timer, lastLength: 0 });
   channel.show(true);
   void pollLogs();
+}
+
+export function openMcuSerialMonitorCommand(componentId: string, usartIndex: 0 | 1 | 2): void {
+  const targetCoreId = resolveMcuTargetCoreId(componentId);
+  const component = getComponentById(componentId);
+  const serialPortLabel = serialPortLabelForTypeId(component?.typeId, usartIndex);
+  if (!state.coreClient || !targetCoreId || !component || !serialPortLabel) {
+    vscode.window.showWarningMessage("Monitor serial indisponivel para este componente.");
+    return;
+  }
+  openSerialMonitor(`${componentId}:${usartIndex}`, component.label, serialPortLabel, targetCoreId);
+}
+
+export async function openExposedMcuSerialMonitorCommand(
+  outerComponentId: string,
+  innerComponentId: string,
+  usartIndex: 0 | 1 | 2,
+  options: McuCommandOptions
+): Promise<void> {
+  const sourceId = resolveSourceIdForComponent(outerComponentId);
+  const inner = sourceId ? options.gatherInternalComponentSnapshots(sourceId)?.find((entry) => entry.id === innerComponentId) : undefined;
+  const label = inner?.label ?? innerComponentId;
+  const serialPortLabel = serialPortLabelForTypeId(inner?.typeId, usartIndex);
+  const targetCoreId = await resolveSubcircuitChildCoreId(outerComponentId, innerComponentId);
+  if (!state.coreClient || !targetCoreId || !serialPortLabel) {
+    vscode.window.showWarningMessage("Monitor serial indisponivel para este componente.");
+    return;
+  }
+  openSerialMonitor(`${outerComponentId}:${innerComponentId}:${usartIndex}`, label, serialPortLabel, targetCoreId);
 }
 
 export async function requestBoardOverlayDataCommand(

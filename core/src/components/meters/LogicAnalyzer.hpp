@@ -3,7 +3,10 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
+#include <optional>
+#include <string>
 #include "lasecsimul/IComponentModel.hpp"
+#include "lasecsimul/PropertyDefinition.hpp"
 #include "simulation/Scheduler.hpp"
 
 namespace lasecsimul::components {
@@ -88,25 +91,48 @@ public:
         // Histórico não é restaurado por setState() (snapshot/undo) -- mesma decisão do Oscope.
     }
 
-    std::vector<PropertyDescriptor> propertyDescriptors() override {
-        const auto schemas = propertySchema();
-        PropertyDescriptor thresholdRising{"thresholdRising", "V", [this] { return PropertyValue{m_thresholdRising}; },
-                                            [this](const PropertyValue& v) {
-                                                if (const double* d = std::get_if<double>(&v)) m_thresholdRising = *d;
-                                            }};
-        thresholdRising.schema = schemas[0];
-        PropertyDescriptor thresholdFalling{"thresholdFalling", "V", [this] { return PropertyValue{m_thresholdFalling}; },
-                                             [this](const PropertyValue& v) {
-                                                 if (const double* d = std::get_if<double>(&v)) m_thresholdFalling = *d;
-                                             }};
-        thresholdFalling.schema = schemas[1];
-        PropertyDescriptor sampleInterval{"sampleIntervalNs", "ns",
-                                           [this] { return PropertyValue{static_cast<double>(m_sampleIntervalNs)}; },
-                                           [this](const PropertyValue& v) {
-                                               if (const double* d = std::get_if<double>(&v)) m_sampleIntervalNs = static_cast<uint64_t>(std::max(1.0, *d));
-                                           }};
-        sampleInterval.schema = schemas[2];
-        return {thresholdRising, thresholdFalling, sampleInterval};
+    std::vector<PropertyDescriptor> propertyDescriptors() override { return toPropertyDescriptors(properties()); }
+
+    std::vector<PropertyDefinition> properties() {
+        const std::vector<PropertySchema> schemas = propertySchema();
+        const PropertySchema thresholdRisingSchema = schemaById(schemas, "thresholdRising");
+        const PropertySchema thresholdFallingSchema = schemaById(schemas, "thresholdFalling");
+        const PropertySchema sampleIntervalSchema = schemaById(schemas, "sampleIntervalNs");
+        return {
+            PropertyDefinition{
+                thresholdRisingSchema,
+                [this] { return PropertyValue{m_thresholdRising}; },
+                [this, thresholdRisingSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(thresholdRisingSchema, v)) {
+                        return {false, *error};
+                    }
+                    m_thresholdRising = std::get<double>(v);
+                    return {true, {}};
+                },
+            },
+            PropertyDefinition{
+                thresholdFallingSchema,
+                [this] { return PropertyValue{m_thresholdFalling}; },
+                [this, thresholdFallingSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(thresholdFallingSchema, v)) {
+                        return {false, *error};
+                    }
+                    m_thresholdFalling = std::get<double>(v);
+                    return {true, {}};
+                },
+            },
+            PropertyDefinition{
+                sampleIntervalSchema,
+                [this] { return PropertyValue{static_cast<double>(m_sampleIntervalNs)}; },
+                [this, sampleIntervalSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(sampleIntervalSchema, v)) {
+                        return {false, *error};
+                    }
+                    m_sampleIntervalNs = static_cast<uint64_t>(std::max(1.0, std::get<double>(v)));
+                    return {true, {}};
+                },
+            },
+        };
     }
 
     /** ABI v2 (.spec/lasecsimul-native-devices.spec) -- `getState()` é 1 série temporal de

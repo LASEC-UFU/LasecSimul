@@ -4,7 +4,7 @@
   "name": "7 Segment BCD",
   "language": "pt-BR",
   "abiVersion": {
-    "major": 4,
+    "major": 3,
     "minor": 0
   },
   "nativeEntry": {

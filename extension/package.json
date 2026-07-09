@@ -47,6 +47,8 @@
       },
       { "command": "lasecsimul.saveProject", "title": "LasecSimul: Save Project As..." },
       { "command": "lasecsimul.openProject", "title": "LasecSimul: Open Project..." },
+      { "command": "lasecsimul.openRecentProject", "title": "LasecSimul: Open Recent Project..." },
+      { "command": "lasecsimul.importProject", "title": "LasecSimul: Import Circuit..." },
       { "command": "lasecsimul.rotateSelectionCw", "title": "LasecSimul: Rotate Selection CW" },
       { "command": "lasecsimul.rotateSelectionCcw", "title": "LasecSimul: Rotate Selection CCW" },
       { "command": "lasecsimul.flipSelectionHorizontal", "title": "LasecSimul: Flip Selection Horizontal" },

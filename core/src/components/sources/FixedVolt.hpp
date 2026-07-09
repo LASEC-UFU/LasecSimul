@@ -3,6 +3,7 @@
 #include <array>
 #include <optional>
 #include "lasecsimul/IComponentModel.hpp"
+#include "lasecsimul/PropertyDefinition.hpp"
 
 namespace lasecsimul::components {
 
@@ -37,19 +38,32 @@ public:
     size_t getState(uint8_t*, size_t) const override { return 0; }
     void setState(const uint8_t*, size_t) override {}
 
-    std::vector<PropertyDescriptor> propertyDescriptors() override {
-        const auto schemas = propertySchema();
-        PropertyDescriptor voltage{"voltage", "V", [this] { return PropertyValue{m_voltage}; },
-                                    [this](const PropertyValue& v) {
-                                        if (const double* d = std::get_if<double>(&v)) setVoltage(*d);
-                                    }};
-        voltage.schema = schemas[0];
-        PropertyDescriptor out{"out", "", [this] { return PropertyValue{m_out}; },
-                                [this](const PropertyValue& v) {
-                                    if (const bool* b = std::get_if<bool>(&v)) setOut(*b);
-                                }};
-        out.schema = schemas[1];
-        return {voltage, out};
+    std::vector<PropertyDescriptor> propertyDescriptors() override { return toPropertyDescriptors(properties()); }
+
+    std::vector<PropertyDefinition> properties() {
+        const std::vector<PropertySchema> schemas = propertySchema();
+        const PropertySchema voltageSchema = schemaById(schemas, "voltage");
+        const PropertySchema outSchema = schemaById(schemas, "out");
+        return {
+            PropertyDefinition{
+                voltageSchema,
+                [this] { return PropertyValue{m_voltage}; },
+                [this, voltageSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(voltageSchema, v)) return {false, *error};
+                    setVoltage(std::get<double>(v));
+                    return {true, {}};
+                },
+            },
+            PropertyDefinition{
+                outSchema,
+                [this] { return PropertyValue{m_out}; },
+                [this, outSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(outSchema, v)) return {false, *error};
+                    setOut(std::get<bool>(v));
+                    return {true, {}};
+                },
+            },
+        };
     }
 
     static std::vector<PropertySchema> propertySchema() {
@@ -70,7 +84,11 @@ public:
         out.group = "Elétrica";
         out.valueKind = PropertyValueKind::Bool;
         out.editor = "checkbox";
-        out.defaultValue = false;
+        // `true` -- achado ao converter a fábrica de `sources.fixed_volt` pra `propertyOrDefault`
+        // (auditoria arquitetural 2026-07-09): o schema dizia `false`, mas a fábrica real em
+        // `CoreApplication.cpp` (e todo teste que registra este typeId) sempre usava `true` como
+        // fallback -- os dois nunca bateram. `true` é o comportamento real observado em produção.
+        out.defaultValue = true;
 
         return {voltage, out};
     }

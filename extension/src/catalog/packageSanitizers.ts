@@ -46,10 +46,26 @@ export function sanitizePackageShape(value: unknown): PackageShape | undefined {
   if (typeof value !== "object" || value === null) return undefined;
   const shape = value as Record<string, unknown> & { kind?: unknown };
   if (typeof shape.kind !== "string" || !PACKAGE_SHAPE_KINDS.has(shape.kind)) return undefined;
+  const statePathRaw = typeof shape.statePath === "object" && shape.statePath !== null
+    ? shape.statePath as Record<string, unknown>
+    : undefined;
+  const statePathMap = typeof statePathRaw?.map === "object" && statePathRaw.map !== null
+    ? Object.fromEntries(
+        Object.entries(statePathRaw.map as Record<string, unknown>).filter((entry): entry is [string, string] => typeof entry[1] === "string")
+      )
+    : undefined;
+  const statePath = sanitizeOptionalString(statePathRaw?.prop) && statePathMap && Object.keys(statePathMap).length > 0
+    ? {
+        prop: sanitizeOptionalString(statePathRaw?.prop)!,
+        map: statePathMap,
+        ...(sanitizeOptionalString(statePathRaw?.fallback) ? { fallback: sanitizeOptionalString(statePathRaw?.fallback) } : {}),
+      }
+    : undefined;
   return {
     ...(shape as unknown as PackageShape),
     cssClass: typeof shape.cssClass === "string" && shape.cssClass.trim() ? shape.cssClass.trim() : undefined,
     partId: typeof shape.partId === "string" && shape.partId.trim() ? shape.partId.trim() : undefined,
+    ...(statePath ? { statePath } : {}),
   };
 }
 
@@ -617,6 +633,8 @@ export function sanitizeViewSpecProjection(value: unknown): ViewSpecProjection |
       ...(sanitizeOptionalString(raw.stepsPerRevProp) ? { stepsPerRevProp: sanitizeOptionalString(raw.stepsPerRevProp) } : {}),
       cx: raw.cx,
       cy: raw.cy,
+      ...(isNumberPair(raw.propRange) ? { propRange: raw.propRange } : {}),
+      ...(isNumberPair(raw.angleRange) ? { angleRange: raw.angleRange } : {}),
     };
   }
   if (raw.kind === "fill") {
@@ -746,6 +764,7 @@ export function sanitizeComponentViewSpec(value: unknown): ComponentViewSpec | u
 
   return {
     ...(Object.keys(gradients).length > 0 ? { gradients } : {}),
+    ...(raw.overlayPaint === true ? { overlayPaint: true } : {}),
     ...(Object.keys(parts).length > 0 ? { parts } : {}),
     ...(Object.keys(hitTest).length > 0 ? { hitTest } : {}),
     ...(Object.keys(interaction).length > 0 ? { interaction } : {}),

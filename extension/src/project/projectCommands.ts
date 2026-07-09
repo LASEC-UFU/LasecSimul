@@ -1,3 +1,4 @@
+import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 import { hasShowOnSymbolProperty } from "../catalog/catalogMerge";
@@ -43,6 +44,7 @@ function webviewComponentToProjectComponent(component: WebviewComponentModel): P
     label: component.label,
     showId: component.showId,
     showValue: component.showValue,
+    valueLabelPropertyKey: component.valueLabelPropertyKey,
     flipH: component.flipH,
     flipV: component.flipV,
     visual: { x: component.x, y: component.y, rotation: component.rotation },
@@ -81,6 +83,7 @@ function projectToWebviewState(project: ProjectDocument): WebviewProjectState {
       hidden: component.typeId === JUNCTION_TYPE_ID ? true : (descriptor?.hidden ?? false),
       showId: component.showId,
       showValue: component.showValue ?? hasShowOnSymbolProperty(descriptor),
+      valueLabelPropertyKey: component.valueLabelPropertyKey,
       flipH: component.flipH,
       flipV: component.flipV,
       x: component.visual?.x ?? 0,
@@ -188,6 +191,120 @@ async function resolveProjectSubcircuitReferences(projectDir: string): Promise<v
   }
 }
 
+/** O que `ProjectSerializer` de fato persiste (ver `ProjectSerializer.ts::save`) -- usado tanto pra
+ * gravar o snapshot "salvo por último" (`markProjectSaved`) quanto pra decidir se há alteração não
+ * salva (`isProjectDirty`). Comparação estrutural (`JSON.stringify`) é barata o bastante pro
+ * tamanho típico de um esquemático e evita persistir/computar um diff campo a campo à parte. */
+function projectContentSnapshot(): { components: WebviewProjectState["components"]; wires: WebviewProjectState["wires"] } {
+  return { components: state.schematicState.components, wires: state.schematicState.wires };
+}
+
+function markProjectSaved(): void {
+  state.lastSavedProjectState = projectContentSnapshot();
+  state.schematicPanel?.setDirty(false);
+}
+
+/** `undefined` (projeto novo, nunca salvo) conta como "sujo" assim que há QUALQUER componente --
+ * um esquemático vazio recém-aberto não deve disparar aviso nenhum. */
+export function isProjectDirty(): boolean {
+  const current = projectContentSnapshot();
+  if (!state.lastSavedProjectState) return current.components.length > 0 || current.wires.length > 0;
+  return JSON.stringify(current) !== JSON.stringify(state.lastSavedProjectState);
+}
+
+/** Chamado por `syncSchematicPanel()` (roda depois de toda mutação relevante) -- mantém o indicador
+ * "●" no título da aba em sincronia sem precisar instrumentar cada handler de mutação
+ * individualmente. */
+export function refreshDirtyIndicator(): void {
+  state.schematicPanel?.setDirty(isProjectDirty());
+}
+
+// ── Arquivos recentes (MRU) ─────────────────────────────────────────────────────────────────────
+// Achado de auditoria de UI 2026-07-09: SimulIDE mantém uma lista de até `MaxRecentFiles` circuitos
+// recentes (toolbar/menu dedicados); LasecSimul só tinha o diálogo nativo de Abrir/Salvar avulso.
+// Persistido em `ExtensionContext.globalState` (mesmo padrão de `TrustStore.ts`) -- sobrevive a
+// reinícios do VSCode, local à máquina (não sincroniza, é só uma lista de caminhos de arquivo).
+
+const RECENT_PROJECTS_KEY = "lasecsimul.recentProjectPaths";
+const MAX_RECENT_PROJECTS = 10;
+
+/** Filtra caminhos que não existem mais no disco -- uma lista "recentes" com entradas mortas é pior
+ * que uma lista vazia (usuário clica, dá erro). Não persiste a filtragem de volta aqui (efeito
+ * colateral surpreendente numa função de leitura); quem ESCREVE (`addRecentProjectPath`) já grava
+ * só o que existia no momento. */
+export function recentProjectPaths(): string[] {
+  if (!state.extensionContext) return [];
+  const stored = state.extensionContext.globalState.get<string[]>(RECENT_PROJECTS_KEY, []);
+  return stored.filter((filePath) => fileExists(filePath));
+}
+
+async function addRecentProjectPath(filePath: string): Promise<void> {
+  if (!state.extensionContext) return;
+  const stored = state.extensionContext.globalState.get<string[]>(RECENT_PROJECTS_KEY, []);
+  const deduped = [filePath, ...stored.filter((existing) => existing !== filePath)].slice(0, MAX_RECENT_PROJECTS);
+  await state.extensionContext.globalState.update(RECENT_PROJECTS_KEY, deduped);
+}
+
+/** Comando `lasecsimul.openRecentProject` -- QuickPick nativo do VSCode (sem UI nova na Webview,
+ * mesmo espírito de outros comandos só-Command-Palette do projeto) com os últimos projetos
+ * abertos/salvos. Reaproveita EXATAMENTE o mesmo caminho de carga de `openProjectCommand` (dirty
+ * check, `projectToWebviewState`, resolução de subcircuitos, `rebuildCoreFromSchematicState`) --
+ * só troca de onde o `filePath` vem (QuickPick em vez de `showOpenDialog`). */
+export async function openRecentProjectCommand(options: {
+  extensionUri: vscode.Uri;
+  beforeOpen?: () => void;
+  openSchematicEditor: (extensionUri: vscode.Uri) => void;
+  syncSchematicPanel: () => void;
+}): Promise<void> {
+  const paths = recentProjectPaths();
+  if (paths.length === 0) {
+    vscode.window.showInformationMessage("Nenhum projeto recente ainda.");
+    return;
+  }
+  const picked = await vscode.window.showQuickPick(
+    paths.map((filePath) => ({ label: path.basename(filePath), description: filePath, filePath })),
+    { placeHolder: "Abrir projeto recente" }
+  );
+  if (!picked) return;
+  if (!(await confirmDiscardUnsavedChanges())) return;
+
+  let project: ProjectDocument;
+  try {
+    project = await projectSerializer.load(picked.filePath);
+  } catch (err) {
+    vscode.window.showErrorMessage(`Não foi possível abrir o projeto: ${err instanceof Error ? err.message : String(err)}`);
+    return;
+  }
+  options.beforeOpen?.();
+  state.currentProjectFilePath = picked.filePath;
+  state.schematicState = projectToWebviewState(project);
+  await resolveProjectSubcircuitReferences(path.dirname(picked.filePath));
+  if (!state.schematicPanel) options.openSchematicEditor(options.extensionUri);
+  options.syncSchematicPanel();
+  markProjectSaved();
+  await addRecentProjectPath(picked.filePath);
+  await rebuildCoreFromSchematicState();
+}
+
+/** `true` == usuário confirmou continuar (ou não havia nada pra perder); `false` == cancelou. */
+async function confirmDiscardUnsavedChanges(): Promise<boolean> {
+  if (!isProjectDirty()) return true;
+  const save = "Salvar";
+  const discard = "Descartar";
+  // Sem botão "Cancelar" explícito -- o modal já oferece isso via Escape/X, retornando `undefined`.
+  const choice = await vscode.window.showWarningMessage(
+    "O esquemático atual tem alterações não salvas. O que deseja fazer antes de continuar?",
+    { modal: true },
+    save,
+    discard
+  );
+  if (choice === save) {
+    await saveProjectCommand();
+    return !isProjectDirty(); // usuário pode ter cancelado o diálogo de salvar -- ainda sujo, não continua
+  }
+  return choice === discard;
+}
+
 export async function saveProjectCommand(): Promise<void> {
   const uri = await vscode.window.showSaveDialog({ filters: { "LasecSimul Project": ["lsproj"] } });
   if (!uri) return;
@@ -202,8 +319,15 @@ export async function saveProjectCommand(): Promise<void> {
       viewport: state.schematicState.viewport,
     },
   }, uri.fsPath);
-  await projectSerializer.save(uri.fsPath, project);
+  try {
+    await projectSerializer.save(uri.fsPath, project);
+  } catch (err) {
+    vscode.window.showErrorMessage(`Não foi possível salvar o projeto: ${err instanceof Error ? err.message : String(err)}`);
+    return;
+  }
   state.currentProjectFilePath = uri.fsPath;
+  markProjectSaved();
+  await addRecentProjectPath(uri.fsPath);
   vscode.window.showInformationMessage(`Projeto LasecSimul salvo em ${uri.fsPath}`);
 }
 
@@ -213,18 +337,109 @@ export async function openProjectCommand(options: {
   openSchematicEditor: (extensionUri: vscode.Uri) => void;
   syncSchematicPanel: () => void;
 }): Promise<void> {
+  if (!(await confirmDiscardUnsavedChanges())) return;
   const uris = await vscode.window.showOpenDialog({
     filters: { "LasecSimul Project": ["lsproj"] },
     canSelectMany: false,
   });
   const selected = uris?.[0];
   if (!selected) return;
+  let project: ProjectDocument;
+  try {
+    project = await projectSerializer.load(selected.fsPath);
+  } catch (err) {
+    vscode.window.showErrorMessage(`Não foi possível abrir o projeto: ${err instanceof Error ? err.message : String(err)}`);
+    return;
+  }
   options.beforeOpen?.();
-  const project = await projectSerializer.load(selected.fsPath);
   state.currentProjectFilePath = selected.fsPath;
   state.schematicState = projectToWebviewState(project);
   await resolveProjectSubcircuitReferences(path.dirname(selected.fsPath));
   if (!state.schematicPanel) options.openSchematicEditor(options.extensionUri);
   options.syncSchematicPanel();
+  markProjectSaved();
+  await addRecentProjectPath(selected.fsPath);
   await rebuildCoreFromSchematicState();
+}
+
+let importIdCounter = 0;
+function nextImportedId(prefix: string): string {
+  importIdCounter += 1;
+  return `${prefix}-imported-${Date.now()}-${importIdCounter}`;
+}
+
+/** "Importar Circuito" (achado de auditoria de UI 2026-07-09, paridade com `Circuit::importCircuit()`
+ * real do SimulIDE) -- MESCLA outro `.lsproj` no esquemático ABERTO (diferente de "Abrir Projeto",
+ * que SUBSTITUI). IDs de componente/fio remapeados (mesma técnica de `pasteClipboardItems` na
+ * Webview, agora do lado Extension já que o gatilho é um comando nativo, sem round-trip de IPC
+ * pra montar os itens antes de inserir -- `state.schematicState` é mutado direto, `syncSchematicPanel`
+ * já sabe computar o patch incremental certo). Posições NÃO deslocadas (ao contrário de colar) --
+ * um circuito importado normalmente já tem seu próprio layout coerente; deslocar tudo por um valor
+ * fixo só ajudaria a evitar sobreposição num caso especial (importar o MESMO arquivo duas vezes),
+ * não vale a complexidade extra pra este caso raro. */
+export async function importProjectCommand(options: { syncSchematicPanel: () => void }): Promise<void> {
+  if (!state.schematicPanel) {
+    vscode.window.showInformationMessage("Abra ou crie um esquemático antes de importar um circuito nele.");
+    return;
+  }
+  const uris = await vscode.window.showOpenDialog({ filters: { "LasecSimul Project": ["lsproj"] }, canSelectMany: false });
+  const selected = uris?.[0];
+  if (!selected) return;
+
+  let project: ProjectDocument;
+  try {
+    project = await projectSerializer.load(selected.fsPath);
+  } catch (err) {
+    vscode.window.showErrorMessage(`Não foi possível importar o projeto: ${err instanceof Error ? err.message : String(err)}`);
+    return;
+  }
+
+  const imported = projectToWebviewState(project);
+  const idMap = new Map<string, string>();
+  const components: WebviewComponentModel[] = imported.components.map((component) => {
+    const nextComponentId = nextImportedId("component");
+    idMap.set(component.id, nextComponentId);
+    return { ...component, id: nextComponentId };
+  });
+  const wires: WebviewWireModel[] = imported.wires.flatMap((wire) => {
+    const fromId = idMap.get(wire.from.componentId);
+    const toId = idMap.get(wire.to.componentId);
+    if (!fromId || !toId) return []; // fio apontando pra um componente que o mapeamento acima não cobriu -- não deveria acontecer, mas não trava a importação por causa de 1 fio órfão
+    return [{ ...wire, id: nextImportedId("wire"), from: { ...wire.from, componentId: fromId }, to: { ...wire.to, componentId: toId } }];
+  });
+  if (components.length === 0) {
+    vscode.window.showInformationMessage("O projeto selecionado não tem componentes para importar.");
+    return;
+  }
+
+  state.schematicState = {
+    ...state.schematicState,
+    catalog: [...state.schematicState.catalog, ...imported.catalog.filter((entry) => !state.schematicState.catalog.some((existing) => existing.typeId === entry.typeId))],
+    components: [...state.schematicState.components, ...components],
+    wires: [...state.schematicState.wires, ...wires],
+    selectedComponentIds: components.map((component) => component.id),
+    selectedWireIds: wires.map((wire) => wire.id),
+  };
+  await resolveProjectSubcircuitReferences(path.dirname(selected.fsPath));
+  options.syncSchematicPanel();
+  await rebuildCoreFromSchematicState();
+  vscode.window.showInformationMessage(`${components.length} componente(s) importado(s) de ${path.basename(selected.fsPath)}.`);
+}
+
+/** "Salvar Esquemático como Imagem" (achado de auditoria de UI 2026-07-09) -- a Webview já monta o
+ * SVG completo (`buildSchematicSvgExport` em `main.ts`, clona o `canvas-content` real dentro de um
+ * `<foreignObject>` com o CSS da página embutido), aqui só mostra o diálogo nativo e grava o
+ * arquivo -- MESMA divisão de responsabilidade de `saveProjectCommand` (Webview nunca tem acesso a
+ * `fs`). Só SVG por enquanto -- ver nota em `messages.ts::requestExportSchematicImage`.
+ */
+export async function exportSchematicImageCommand(svg: string): Promise<void> {
+  const uri = await vscode.window.showSaveDialog({ filters: { "Imagem SVG": ["svg"] } });
+  if (!uri) return;
+  try {
+    fs.writeFileSync(uri.fsPath, svg, "utf8");
+  } catch (err) {
+    vscode.window.showErrorMessage(`Não foi possível salvar a imagem: ${err instanceof Error ? err.message : String(err)}`);
+    return;
+  }
+  vscode.window.showInformationMessage(`Esquemático exportado em ${uri.fsPath}`);
 }

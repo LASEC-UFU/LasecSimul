@@ -2,7 +2,6 @@
 
 #include <cstdio>
 #include <future>
-#include <span>
 #include <vector>
 #include "CircuitGroup.hpp"
 
@@ -23,20 +22,6 @@ namespace lasecsimul::simulation {
  */
 class MnaSolver {
 public:
-    void rebuildTopology(std::vector<CircuitGroup>& groups) {
-        for (CircuitGroup& group : groups) group.clearStamps();
-    }
-
-    void stampDirty(std::span<CircuitGroup> groups) {
-        for (CircuitGroup& group : groups) {
-            if (group.admittanceChanged()) group.factor();
-        }
-    }
-
-    void solveDirtyGroups(std::vector<CircuitGroup>& groups, std::vector<double>& nodeVoltages) {
-        solve(groups, nodeVoltages);
-    }
-
     void solve(std::vector<CircuitGroup>& groups, std::vector<double>& nodeVoltages) {
         std::vector<std::future<void>> pending;
         pending.reserve(groups.size());

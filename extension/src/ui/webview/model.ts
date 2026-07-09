@@ -39,6 +39,14 @@ export interface WebviewComponentModel {
    * Ausente == default calculado em runtime (`true` se o typeId tiver uma propriedade
    * `showOnSymbol`, senão `false`) — nunca persistido só pra "ter um valor", ver `componentSystemFlags`. */
   showValue?: boolean;
+  /** QUAL propriedade numérica é exibida no rótulo de valor, quando o typeId tem mais de uma
+   * candidata -- achado de auditoria de UI 2026-07-09: SimulIDE deixa o usuário escolher por
+   * componente (cada `NumVal` tem seu próprio checkbox "Show"); antes disso, LasecSimul só permitia
+   * a ÚNICA propriedade marcada `showOnSymbol` no catálogo (fixo por typeId, nunca por instância).
+   * Ausente == usa o default do catálogo (`findShowOnSymbolSchema`, `main.ts`). Precisa bater com o
+   * `id` de algum item de `propertySchema` do typeId -- se não bater mais (typeId trocou de schema
+   * entre versões), cai de volta pro default silenciosamente, nunca erro. */
+  valueLabelPropertyKey?: string;
   /** Espelha o símbolo no eixo horizontal/vertical -- combinado com `rotation`: o flip é aplicado
    * primeiro no espaço local do símbolo, a rotação depois (mesma ordem no CSS `transform` de
    * `main.ts` e no cálculo de posição de pino, ver `flipPoint`/`rotatePoint`). Ausente == `false`. */
@@ -248,6 +256,10 @@ export interface PackageShape {
    * Quando presente, o renderizador aplica o transform inicial derivado das propriedades do componente
    * (ex: position do encoder → rotate; x_pos/y_pos do joystick → translate). */
   partId?: string;
+  /** Troca declarativa do `d` de um path por propriedade da instância. Útil para símbolos cuja
+   * geometria muda por uma propriedade discreta, sem criar helper TS por `typeId` (ex: gates com
+   * 2..8 entradas). */
+  statePath?: { prop: string; map: Record<string, string>; fallback?: string };
 }
 
 export interface PackageBackground {
@@ -443,7 +455,7 @@ export interface ViewSpecAxisMapping {
  * element visual identificado por `partId` em `paint[]`. */
 export type ViewSpecProjection =
   | { kind: "translate"; x?: ViewSpecAxisMapping; y?: ViewSpecAxisMapping }
-  | { kind: "rotate"; prop: string; stepsPerRev: number; stepsPerRevProp?: string; cx: number; cy: number }
+  | { kind: "rotate"; prop: string; stepsPerRev: number; stepsPerRevProp?: string; cx: number; cy: number; propRange?: [number, number]; angleRange?: [number, number] }
   | { kind: "fill"; prop: string; map: Record<string, string> }
   | { kind: "visible"; prop: string; invert?: boolean };
 
@@ -547,6 +559,9 @@ export type ViewSpecInteraction =
  * Campos `fill: "gradient:name"` nos `paint` items referenciam `gradients[name]` com ID auto-escopado. */
 export interface ComponentViewSpec {
   gradients?: Record<string, ViewSpecGradient>;
+  /** Quando true, `paint[]` e hit-test do ViewSpec sao renderizados por cima de `simulidePaint`/
+   * `qtWidget`. Isso permite widgets/dials declarativos sem duplicar o corpo traduzido do C++. */
+  overlayPaint?: boolean;
   /** Partes semânticas nomeadas; base para reescrita em massa dos módulos com interações móveis. */
   parts?: Record<string, ViewSpecPart>;
   /** Regiões de hit-test reutilizáveis por `parts` e `interaction`. */

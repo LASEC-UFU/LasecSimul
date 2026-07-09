@@ -11,6 +11,16 @@
 
 namespace lasecsimul {
 
+/** Condutância de fuga que `SimulationSession::settleStep()` aplica a todo pino listado por
+ * `IComponentModel::leakagePinIndices()`, logo depois de `stamp()` -- fisicamente insignificante
+ * (corrente na casa de picoampère mesmo em tensão alta), só evita que `Netlist::rebuildTopology`'s
+ * regra "mesmo componente => mesmo grupo topológico" deixe o grupo inteiro singular quando um pino
+ * "decorativo"/opcionalmente flutuante do componente não tem NENHUMA equação própria. Centralizado
+ * aqui (achado de auditoria arquitetural 2026-07-09, D9/LeakageGuard) -- antes cada componente
+ * (OpAmp/AnalogMux/ResistorArray/DiodeLegArray) repetia a mesma constante e o mesmo
+ * `matrix.addConductanceToGround(pin, 1e-9)` manual dentro do próprio `stamp()`. */
+inline constexpr double kLeakageGuardConductance = 1e-9;
+
 /**
  * Descritor de UMA propriedade editável em runtime — padrão equivalente ao `ComProperty`/`StrProp<T>`
  * do SimulIDE-dev (`gui/properties/`), adaptado pra `std::function` em vez de ponteiro-pra-membro
@@ -132,6 +142,17 @@ public:
      * de cada componente (ex: p1->p2 num Resistor). `std::nullopt` pra componente sem essa noção
      * (Ground, Tunnel) ou que ainda não implementa isto -- default. */
     virtual std::optional<double> current() const { return std::nullopt; }
+
+    /** Índices locais (dentro de `pins()`) que `SimulationSession::settleStep()` deve garantir uma
+     * condutância mínima até a terra (`kLeakageGuardConductance`), aplicada pelo FRAMEWORK logo
+     * depois de `stamp()` retornar -- nunca dentro dele. Ver `kLeakageGuardConductance` acima pro
+     * raciocínio completo (LeakageGuard, D9 do relatório de auditoria arquitetural 2026-07-09).
+     * Default vazio -- só quem tem pino genuinamente opcional/decorativo declara (ex: pinos de
+     * alimentação de um opamp, endereço de um mux, pernas independentes de um array). Deliberadamente
+     * opt-in (não detecção automática de "diagonal zero"): um pino sem estampa nenhuma que o
+     * componente NÃO declarou aqui continua produzindo "sistema singular" de verdade -- não mascara
+     * erro de fiação real do usuário em componentes que nunca pediram essa rede de segurança. */
+    virtual std::span<const uint32_t> leakagePinIndices() const { return {}; }
 };
 
 } // namespace lasecsimul

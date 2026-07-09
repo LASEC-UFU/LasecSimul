@@ -4,9 +4,12 @@
   "name": "Buffer",
   "language": "pt-BR",
   "icon": "buffer",
-  "folderPath": ["Logicos", "Portas"],
+  "folderPath": [
+    "Logicos",
+    "Portas"
+  ],
   "abiVersion": {
-    "major": 4,
+    "major": 3,
     "minor": 0
   },
   "nativeEntry": {
@@ -24,7 +27,16 @@
       "kind": "DIGITAL_OUT"
     }
   ],
-  "properties": [],
+  "properties": [
+    {
+      "id": "inverted",
+      "label": "Inverter Saída (NOT)",
+      "group": "Main",
+      "valueKind": "bool",
+      "editor": "checkbox",
+      "default": false
+    }
+  ],
   "limits": {
     "stepTimeoutMs": 4,
     "expectedComplexity": "low"
@@ -33,11 +45,34 @@
     "width": 32,
     "height": 16,
     "border": false,
-    "background": { "kind": "none" },
+    "background": {
+      "kind": "none"
+    },
     "viewSpec": {
       "paint": [
-        { "kind": "path", "d": "M 8 0 L 8 16 L 24 9 L 24 7 Z", "fill": "#ffffff" }
-      ]
+        {
+          "kind": "path",
+          "d": "M 8 0 L 8 16 L 24 9 L 24 7 Z",
+          "fill": "#ffffff"
+        },
+        {
+          "kind": "ellipse",
+          "cx": 26.5,
+          "cy": 8,
+          "rx": 2.2,
+          "ry": 2.2,
+          "fill": "#ffffff",
+          "partId": "invertBubble"
+        }
+      ],
+      "stateProjection": {
+        "invertBubble": [
+          {
+            "kind": "visible",
+            "prop": "inverted"
+          }
+        ]
+      }
     },
     "pins": [
       {

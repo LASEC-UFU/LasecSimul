@@ -54,6 +54,12 @@ public:
      * quais módulos concretos existem pra aquele chip; `McuComponent` só repassa registrador pra
      * eles, sem saber o que cada um significa. */
     virtual std::vector<std::unique_ptr<QemuModule>> createModules() const = 0;
+
+    /** Default `Ok` -- built-in nunca sobrescreve (não tem como crashar por definição); só
+     * `NativeMcuAdapterProxy` (plugin de MCU) sobrescreve, refletindo crash/timeout das chamadas
+     * pra dentro do plugin (`create`/`build_launch_args`/`get_memory_regions`/`get_pin_map`/
+     * `create_modules`) -- mesmo padrão de `IComponentModel::health()`. */
+    virtual PluginHealthStatus health() const { return PluginHealthStatus::Ok; }
 };
 
 } // namespace lasecsimul

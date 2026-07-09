@@ -63,6 +63,10 @@ export type HostToWebviewMessage =
   | { version: number; type: "componentReadout"; readoutsByComponentId: Record<string, ComponentReadoutValue> }
   | { version: number; type: "wireVoltages"; voltagesByWireId: Record<string, number> }
   | { version: number; type: "simulationStatus"; status: SimulationStatus }
+  /** Taxa real alcançada (`(ms simulados)/(ms de parede)`, ver `coreLifecycle.ts::pollSimulationRate`)
+   * -- `undefined` quando parado/sem amostra suficiente ainda (achado de auditoria de UI 2026-07-09,
+   * paridade com `InfoWidget::setRate()` do SimulIDE real). */
+  | { version: number; type: "simulationRate"; rate: number | undefined }
   /** Resposta a `requestInstrumentHistory` -- histórico REAL (tempo simulado), ver
    * `InstrumentHistoryPayload`. */
   | ({ version: number; type: "instrumentHistory" } & InstrumentHistoryPayload)
@@ -124,7 +128,7 @@ export type WebviewToHostMessage =
   | { version: number; type: "requestRotateComponent"; componentId: string; rotation: 0 | 90 | 180 | 270 }
   | { version: number; type: "requestFlipComponent"; componentId: string; flipH: boolean; flipV: boolean }
   | { version: number; type: "requestRenameComponent"; componentId: string; label: string }
-  | { version: number; type: "requestUpdateLabelVisibility"; componentId: string; showId: boolean; showValue: boolean }
+  | { version: number; type: "requestUpdateLabelVisibility"; componentId: string; showId: boolean; showValue: boolean; valueLabelPropertyKey?: string }
   | {
       version: number;
       type: "requestConnectPinToWire";
@@ -150,6 +154,18 @@ export type WebviewToHostMessage =
   | { version: number; type: "requestStopSimulation" }
   | { version: number; type: "requestSaveProject" }
   | { version: number; type: "requestOpenProject" }
+  /** "Importar Circuito" (achado de auditoria de UI 2026-07-09) -- mescla outro `.lsproj` no
+   * esquemático aberto, ver `projectCommands.ts::importProjectCommand`. */
+  | { version: number; type: "requestImportCircuit" }
+  /** "Salvar Esquemático como Imagem" (achado de auditoria de UI 2026-07-09, paridade com
+   * SimulIDE real que exporta PNG/JPEG/BMP/SVG do menu de contexto) -- Webview monta o SVG (clona
+   * `canvas-content` real dentro de um `<foreignObject>`, com o CSS da própria página embutido
+   * inline, pra reaproveitar 100% do rendering já visualmente correto em vez de reconstruir posição/
+   * rotação/flip do zero); a Extension só mostra o diálogo de salvar e grava o arquivo (mesmo
+   * padrão de `requestSaveProject`, sem acesso a `fs` na Webview). Só SVG -- rasterizar pra PNG/
+   * JPEG/BMP dentro da Webview arriscaria "tainted canvas" com um `<foreignObject>`, não
+   * implementado nesta rodada (documentado como limitação, não bug). */
+  | { version: number; type: "requestExportSchematicImage"; svg: string }
   /** Sai do modo de autoria com "Salvar Símbolo"/"Salvar Subcircuito" -- `components`/`wires` é a
    * sessão de autoria completa no momento do clique (não o circuito real, ver
    * `enterSymbolAuthoring`). A Extension compila isso num `PackageDescriptor`

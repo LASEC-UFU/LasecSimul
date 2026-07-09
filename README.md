@@ -41,10 +41,13 @@ Use este mapa para se orientar rapidamente:
 ## Status
 
 MVP funcional de ponta a ponta, com limitações conhecidas documentadas em
-[`docs/mvp-limitacoes.md`](docs/mvp-limitacoes.md). Core compila e passa 19/19 testes via `ctest`
-(Netlist, Scheduler, MnaSolver, passivos, lógica, remoção de componente, plugins — incluindo DLL
-real de `devices/example-blinker` —, QEMU bridge, ESP32 adapter e orquestrador `McuController`
-contra o binário real do QEMU). Extension compila (Host + Webview) e passa 7/7 testes. Extension
+[`docs/mvp-limitacoes.md`](docs/mvp-limitacoes.md). Core compila e passa 34/34 testes via `ctest`
+(Netlist, Scheduler, MnaSolver, passivos, não-lineares (diodo/zener/LED), lógica — incluindo DLL
+real de `devices/simulide-logic` —, remoção de componente, subcircuito ESP32 DevKitC/WROOM-32 real,
+plugins — incluindo DLL real de `devices/example-blinker` —, QEMU bridge, ESP32 adapter,
+orquestrador `McuController` contra o binário real do QEMU, `PropertyDefinition`/contrato de
+propriedade unificado e resiliência de MCU a crash de plugin). Extension compila (Host + Webview) e
+passa 15/15 testes. Extension
 envia componentes/fios desenhados na Webview para o Core via IPC
 (`addComponent`/`connectWire`/`setProperty`/`removeComponent`) e tem comandos para salvar/abrir
 `.lsproj` (`lasecsimul.saveProject`/`lasecsimul.openProject`) — validado manualmente carregando
@@ -66,7 +69,7 @@ envia componentes/fios desenhados na Webview para o Core via IPC
    ABI que a Extension manda o Core carregar (`deviceLibraries`).
 - [Spec principal](.spec/lasecsimul.spec)
 - [Spec de plugins nativos](.spec/lasecsimul-native-devices.spec)
-- [Spec de subcircuitos](.spec/lasecsimul-subcircuits.spec) — terceiro caminho de extensibilidade (dado, não código), ainda não implementado.
+- [Spec de subcircuitos](.spec/lasecsimul-subcircuits.spec) — terceiro caminho de extensibilidade (dado, não código); implementado (`.lssubcircuit` de arquivo único, expansão real via `SimulationSession::addSubcircuitInstance`, testado em `core/test/subcircuit_test.cpp`/`esp32_devkitc_subcircuit_test.cpp`).
 - [Spec WASM superseded](.spec/archive/lasecsimul-wasm-devices.spec), apenas histórico, não usar como arquitetura ativa.
 - [Documentação operacional](docs/00-visao-geral.md)
 - [Tarefas por agente](tasks/agent-01-estrutura-repositorio.md)

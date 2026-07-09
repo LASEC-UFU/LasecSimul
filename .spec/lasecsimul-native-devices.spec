@@ -1536,3 +1536,113 @@ Todos os JSONs de `devices/simulide-sensors/` e `devices/simulide-peripherals/` 
 declarado. O catálogo `project/schema/component-catalog.json` tem `help` nos tipos mais relevantes
 (resistor, capacitor, conectores, fontes, medidores). Device criado sem `help` funciona normalmente —
 o campo é puramente aditivo.
+
+## 23. Auditoria "pente fino" 2026-07-08 — plugins de device
+
+### 23.1 Propriedade `inverted` nas portas lógicas (`devices/simulide-logic/`)
+
+`and_gate.lsdevice`/`or_gate.lsdevice`/`xor_gate.lsdevice`/`buffer.lsdevice` ganharam uma propriedade
+booleana `inverted` (`valueKind: "bool"`, `editor: "checkbox"`, `default: false`) lida em `lib.c` via
+`cfg_bool(s, "inverted", 0)` dentro de `stamp_gate()` — inverte a saída ANTES de `drive_level()`.
+Mesma solução do SimulIDE real (`gate.cpp`: "Inverted Outs" na MESMA porta, não um typeId separado):
+NAND = AND com `inverted=true`, NOR = OR com `inverted=true`, XNOR = XOR com `inverted=true`, NOT =
+Buffer com `inverted=true`. Nenhum manifesto novo, nenhum bump de `abiVersion` — a propriedade é só
+mais um campo em `config_get`, mesmo mecanismo que qualquer outra propriedade de device já usa.
+
+**Não implementado** (feature maior, separada, também real no SimulIDE — `numInputs` variável 2-8):
+a contagem de entradas continua fixa em 2 (`read_level(matrix, 0)`/`read_level(matrix, 1)`,
+`lib.c:140-141`), e o pino de saída continua num índice fixo (1 pro buffer, 2 pros demais) — variar
+isso exigiria pino dinâmico via `pinSpec` declarativo no manifesto (mesmo mecanismo já usado por
+`active.analog_mux`/`switches.keypad` do lado built-in, ver `.spec/lasecsimul.spec` seção "Contagem
+de pinos dinâmica"), mais lógica de leitura/soma em `lib.c` pra N entradas — deferido conscientemente
+(justificativa em `docs/24-itens-menor-prioridade-2026-07-09.md`).
+
+**Atualização 2026-07-09** — a paridade visual da bolha de inversão FOI implementada: os 4
+`.lsdevice` ganharam um shape `partId: "invertBubble"` no `package.viewSpec.paint` com
+`stateProjection: {invertBubble: [{kind:"visible", prop:"inverted"}]}`, então o símbolo agora mostra
+a bolha quando `inverted=true` (ver §24 do relatório de auditoria e `componentSymbols.test.ts`).
+
+Teste real (não vtable sintética): `core/test/logic_gate_plugin_test.cpp` carrega o
+`device.dll`/`.so` de `devices/simulide-logic/` de verdade via `PluginLoader::loadDevicePlugin` +
+`SimulationSession::registerKnownPluginTypes()`, monta um AND real com `inverted=true` e confirma
+NAND(1,1)=LOW / NAND(1,0)=HIGH, e que o AND normal (`inverted=false`) continua LOW/HIGH corretos
+(sem regressão) — mesmo padrão real-DLL de `esp32_devkitc_subcircuit_test.cpp`.
+
+## 24. Auditoria arquitetural 2026-07-09 — carregamento de plugin, `abiVersion`, robustez de MCU
+
+Implementação de `docs/25-auditoria-arquitetural-core-2026-07-09.md` (Fases 1 e 3; ver também ADR
+0010 e ADR 0011). Três mudanças, todas do lado Core — nenhum `.lsdevice`/DLL de terceiro precisa de
+recompilação (ABI C, `device_abi.h`/`mcu_abi.h`, não muda).
+
+### 24.1 `GlobalPluginCache::loadLibrary` substitui `loadDeviceLibraryFile`/`loadMcuLibraryFile`
+
+As duas funções que liam `library.json`+`.lsdevice` e publicavam no cache (antes soltas em
+`CoreApplication.cpp`, quase idênticas uma pra outra) viraram um único método,
+`GlobalPluginCache::loadLibrary(path)` (`core/src/plugins/GlobalPluginCache.hpp`) — é
+`GlobalPluginCache` quem já tem `loader()`+`metadata()`+os mapas `setActive*Module` juntos, não
+`PluginLoader` isolado (cuja responsabilidade continua deliberadamente estreita: validar e carregar
+UM binário, nunca conhecer `ComponentMetadataRegistry`). `PluginLoader::scanDirectory()` continua
+existindo como stub documentado — não é mais o lugar certo pra essa responsabilidade completa.
+
+Os parsers de JSON compartilhados (`jsonToPropertyValue`, `parsePropertySchema(List)`,
+`parseReadoutFormat`, `parseInteractionKind`, `parsePinSpec`, e as funções inversas de serialização)
+saíram de dentro de `CoreApplication.cpp` pra `core/src/registry/PropertyJson.hpp` — usados tanto
+por `GlobalPluginCache::loadLibrary` (parse de manifesto) quanto pelos handlers IPC de
+`CoreApplication.cpp` (`addComponent`/`setProperty`/`getPropertySchemas`), sem duplicar o
+vocabulário.
+
+### 24.2 `abiVersion` do `.lsdevice` — de campo morto a aviso real
+
+Achado: o campo `"abiVersion"` de TODO `.lsdevice`/`mcu.lsdevice` do repositório (68 arquivos)
+declarava `{"major": 4, ...}` enquanto `device_abi.h` real está em major 3 (e o `mcu.lsdevice` do
+ESP32 declarava minor desatualizado) — sem efeito nenhum porque o campo nunca era lido em
+`core/src`. Corrigido em dois passos: (1) os 68 manifestos foram atualizados pra declarar o valor
+REAL (`{"major": 3, "minor": 0}` pra devices, `{"major": 2, "minor": 4}` pro adapter MCU, batendo
+com `LSDN_ABI_VERSION_MAJOR/MINOR`/`LSDN_MCU_ABI_VERSION_MAJOR/MINOR`); (2)
+`GlobalPluginCache::loadLibrary` agora compara o `abiVersion` declarado contra o header compilado a
+cada load, logando um aviso em stderr se divergirem — **não bloqueante**: o gate real de
+compatibilidade continua sendo o par `(abi_major, abi_minor)` que `lsdn_get_vtable()`/
+`lsdn_get_mcu_vtable()` devolve em runtime (`PluginLoader::createDeviceModuleFromExports`/
+`createMcuModuleFromExports`), porque é isso que o binário carregado relata de si mesmo — o
+`abiVersion` do manifesto continua sendo só documentação, agora com um aviso automático se a
+documentação mentir.
+
+### 24.3 Robustez de MCU — `CrashGuard`/`PluginWatchdog` (ver ADR 0011 pro raciocínio completo)
+
+Antes desta correção, `NativeMcuAdapterProxy`/`QemuModuleProxy` (o equivalente, pro lado de plugin
+de MCU, do que `NativeDeviceProxy` já tinha pra dispositivo comum) chamavam a vtable do plugin
+direto, sem nenhuma contenção — um MCU adapter mal escrito podia derrubar o Core inteiro. Fechado
+com duas políticas, escolhidas pelo ponto de chamada (justificativa de desempenho completa na
+ADR 0011, seção 8.1 de `docs/25-auditoria-arquitetural-core-2026-07-09.md`):
+
+- **Caminho quente** (`QemuModuleProxy`, chamado a cada `kPollIntervalNs`=50us por
+  `McuComponent::stamp()`): `CrashGuard::call` puro, sem thread — custo desprezível no caminho feliz
+  (SEH table-based no Windows x64).
+- **Caminho frio** (`NativeMcuAdapterProxy`: construtor/`buildLaunchArgs`/`createModules`/
+  destrutor, todas 1x por instância ou por `loadFirmware`): `PluginWatchdog::call` com timeout real
+  (`kColdCallTimeoutMs`=5000ms) — contém tanto crash quanto travamento (loop infinito).
+
+Novos: `QemuModule::health()`/`IMcuAdapter::health()` (default `Ok`, mesmo padrão de
+`IComponentModel::health()`), `McuComponent::health()` (agrega adapter + todo módulo). Verbo IPC
+`getComponentHealth` (já existente, genérico) agora reflete estado real de MCU também, não só de
+dispositivo comum.
+
+Separadamente: `PluginRuntime::createMcuAdapter` chamava `vt->create(nullptr, nullptr)` — o
+`LsdnMcuHostApi` (`log`/`now_ns`) nunca era de fato passado ao plugin. Corrigido: `kMcuHostApi` real
+(`log`→stderr, `now_ns`→wall-clock `steady_clock`, já que não há `Scheduler` disponível na hora em
+que o adapter é criado).
+
+Teste dedicado (Windows-only — POSIX não contém SEH, ver o próprio arquivo):
+`core/test/core/plugins/McuCrashResilienceTest.cpp` (`mcu_crash_resilience` no `ctest`) — vtable
+sintética que desreferencia um ponteiro nulo de propósito, provando que o processo do Core
+sobrevive tanto a uma chamada fria quanto a uma quente crashando.
+
+### 23.2 Sensores resistivos: `sensors.*` (`devices/simulide-sensors/`) é agora fonte única
+
+`passive.ldr`/`passive.thermistor`/`passive.rtd`/`passive.force_strain_gauge` (built-ins,
+`CoreApplication.cpp`) foram REMOVIDOS por serem resistores estáticos disfarçados — zero resposta a
+luz/temperatura/força, duplicando (sob um typeId/pasta diferente) os sensores REAIS que já existiam
+aqui, em `devices/simulide-sensors/{ldr,thermistor,rtd,strain}.lsdevice` + `src/lib.c` (curva gamma
+real pro LDR, `s->r1 * pow(lux, -s->gamma)`, `lib.c:192`). Nenhuma mudança de código neste plugin —
+o achado era inteiramente do lado built-in (removido, ver `.spec/lasecsimul.spec` seção 7.5); este
+plugin já estava correto e agora é a única fonte pra esses 4 sensores.

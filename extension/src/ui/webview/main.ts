@@ -13,7 +13,7 @@ import {
   snapCoordinate,
   snapToWireGrid,
 } from "./wireGeometry.js";
-import { formatEngineeringValue } from "./valueFormatting.js";
+import { formatEngineeringValue, defaultSiPrefixFactor, SI_PREFIXES } from "./valueFormatting.js";
 import { buildPinToPinWire, buildPinToWireConnection } from "./wireConnections.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -134,6 +134,8 @@ const UI_TEXT = {
     copy: "Copiar",
     cut: "Cortar",
     paste: "Colar",
+    undo: "Desfazer",
+    redo: "Refazer",
     remove: "Remover",
     delete: "Excluir",
     deleteWire: "Excluir fio",
@@ -181,6 +183,11 @@ const UI_TEXT = {
     createSubcircuit: "Criar Subcircuito da Seleção",
     selectAll: "Selecionar tudo",
     unknownComponent: "Componente desconhecido",
+    zoomFitSelection: "Ajustar zoom à seleção",
+    zoomFitAll: "Ajustar zoom a tudo",
+    zoomReset: "Zoom 1:1",
+    exportImage: "Salvar Esquemático como Imagem (SVG)",
+    importCircuit: "Importar Circuito...",
   },
   en: {
     nothingSelected: "Nothing selected",
@@ -201,6 +208,8 @@ const UI_TEXT = {
     copy: "Copy",
     cut: "Cut",
     paste: "Paste",
+    undo: "Undo",
+    redo: "Redo",
     remove: "Remove",
     delete: "Delete",
     deleteWire: "Delete wire",
@@ -248,6 +257,11 @@ const UI_TEXT = {
     createSubcircuit: "Create Subcircuit from Selection",
     selectAll: "Select all",
     unknownComponent: "Unknown component",
+    zoomFitSelection: "Zoom to selection",
+    zoomFitAll: "Zoom to fit all",
+    zoomReset: "Zoom 1:1",
+    exportImage: "Save Schematic as Image (SVG)",
+    importCircuit: "Import Circuit...",
   },
 } as const;
 
@@ -312,6 +326,9 @@ let selectedWireCorner:
     }
   | undefined;
 let simulationStatus: SimulationStatus = "stopped";
+/** Taxa real alcançada (ver `messages.ts::simulationRate`) -- `undefined` == sem leitura ainda ou
+ * simulação parada, mostra só o rótulo de status sem número junto. */
+let simulationRate: number | undefined;
 let activePropertyTarget:
   | { kind: "project"; componentId: string }
   | { kind: "exposed-internal"; outerComponentId: string; sourceId: string; snapshot: InternalComponentSnapshot; model: WebviewComponentModel }
@@ -906,6 +923,21 @@ function toggleWireSelection(wireId: string, segmentIndex?: number): void {
   selectedWireCorner = undefined;
 }
 
+/** "" (nada) parado/sem amostra; senão "(0.9x)"/"(120%)" -- mesmo espírito de `InfoWidget::setRate()`
+ * real do SimulIDE (percentual da velocidade real), achado de auditoria de UI 2026-07-09. */
+function simulationRateText(): string {
+  if (simulationRate === undefined || simulationStatus !== "running") return "";
+  return ` (${Math.round(simulationRate * 100)}%)`;
+}
+
+/** Atualização pontual do número de taxa SEM `render()` completo -- chega a cada ~300ms enquanto
+ * roda, um `render()` inteiro nessa cadência seria desperdício (mesmo raciocínio de
+ * `updateWiresTouchingComponent` em vez de reconstruir tudo). */
+function updateSimulationRateLabel(): void {
+  const rateLabel = appBarElement?.querySelector<HTMLElement>(".appbar__status-rate");
+  if (rateLabel) rateLabel.textContent = simulationRateText();
+}
+
 function selectionLabel(): string {
   if (selectedTextLabel) {
     const activeLabel = selectedTextLabel;
@@ -1245,6 +1277,7 @@ function renderAppBar(): HTMLElement {
   fileGroup.append(
     renderToolbarButton("open", t("openProject"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenProject" })),
     renderToolbarButton("save", t("saveProject"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestSaveProject" })),
+    renderToolbarButton("exportImage", t("exportImage"), () => exportSchematicImage(), state.components.length === 0),
   );
 
   const simGroup = document.createElement("div");
@@ -1267,6 +1300,14 @@ function renderAppBar(): HTMLElement {
     ),
   );
 
+  const viewGroup = document.createElement("div");
+  viewGroup.className = "appbar__group";
+  viewGroup.append(
+    renderToolbarButton("zoomFitSelection", t("zoomFitSelection"), () => zoomToFitSelection(), state.selectedComponentIds.length === 0),
+    renderToolbarButton("zoomFitAll", t("zoomFitAll"), () => zoomToFitAll(), state.components.length === 0),
+    renderToolbarButton("zoomReset", t("zoomReset"), () => zoomReset()),
+  );
+
   const meta = document.createElement("div");
   meta.className = "appbar__meta";
 
@@ -1277,13 +1318,17 @@ function renderAppBar(): HTMLElement {
   const status = document.createElement("div");
   status.className = `appbar__status appbar__status--${simulationStatus}`;
   status.textContent = simulationStatus === "running" ? t("running") : simulationStatus === "paused" ? t("paused") : t("stopped");
+  const rateLabel = document.createElement("span");
+  rateLabel.className = "appbar__status-rate";
+  rateLabel.textContent = simulationRateText();
+  status.appendChild(rateLabel);
 
   meta.append(selection, status);
-  bar.append(fileGroup, simGroup, editGroup, meta);
+  bar.append(fileGroup, simGroup, editGroup, viewGroup, meta);
   return bar;
 }
 
-type ToolbarIconKind = "open" | "save" | "start" | "pause" | "stop" | "properties" | "delete";
+type ToolbarIconKind = "open" | "save" | "start" | "pause" | "stop" | "properties" | "delete" | "zoomFitSelection" | "zoomFitAll" | "zoomReset" | "exportImage";
 
 function renderIcon(kind: ToolbarIconKind): SVGSVGElement {
   const svg = document.createElementNS(SVG_NS, "svg");
@@ -1312,6 +1357,18 @@ function renderIcon(kind: ToolbarIconKind): SVGSVGElement {
       break;
     case "delete":
       svg.innerHTML = '<path d="M6 7h12"></path><path d="M9 7V5h6v2"></path><path d="M8 7l1 11h6l1-11"></path><path d="M10 10v5"></path><path d="M14 10v5"></path>';
+      break;
+    case "zoomFitSelection":
+      svg.innerHTML = '<rect x="7" y="7" width="10" height="10" rx="1"></rect><path d="M3 8V4h4"></path><path d="M21 8V4h-4"></path><path d="M3 16v4h4"></path><path d="M21 16v4h-4"></path>';
+      break;
+    case "zoomFitAll":
+      svg.innerHTML = '<circle cx="11" cy="11" r="6.5"></circle><line x1="20" y1="20" x2="15.5" y2="15.5"></line><path d="M3 8V4h4"></path><path d="M21 8V4h-4"></path><path d="M3 16v4h4"></path>';
+      break;
+    case "zoomReset":
+      svg.innerHTML = '<circle cx="11" cy="11" r="6.5"></circle><line x1="20" y1="20" x2="15.5" y2="15.5"></line><text x="8" y="14.5" font-size="8" stroke="none" fill="currentColor">1:1</text>';
+      break;
+    case "exportImage":
+      svg.innerHTML = '<rect x="4" y="4" width="16" height="16" rx="1.5"></rect><circle cx="9" cy="10" r="1.5"></circle><path d="M4 17l5-5 3 3 4-5 4 5"></path>';
       break;
   }
 
@@ -1379,7 +1436,20 @@ function installCanvasEventHandlers(canvas: HTMLDivElement, canvasContent: HTMLD
     }
     clearSelection();
     render();
-    showContextMenu(event, [{ label: t("selectAll"), onClick: () => selectAll() }]);
+    const history = activeUndoHistory();
+    showContextMenu(event, [
+      { label: t("paste"), onClick: () => pasteClipboardItems(), disabled: !clipboardItems || clipboardItems.components.length === 0, shortcut: "Ctrl+V" },
+      { label: t("undo"), onClick: () => undo(), disabled: history.undoStack.length === 0, shortcut: "Ctrl+Z" },
+      { label: t("redo"), onClick: () => redo(), disabled: history.redoStack.length === 0, shortcut: "Ctrl+Y" },
+      { kind: "separator" },
+      { label: t("selectAll"), onClick: () => selectAll() },
+      { kind: "separator" },
+      { label: t("zoomFitAll"), onClick: () => zoomToFitAll(), disabled: state.components.length === 0 },
+      { label: t("zoomReset"), onClick: () => zoomReset() },
+      { kind: "separator" },
+      { label: t("exportImage"), onClick: () => exportSchematicImage(), disabled: state.components.length === 0 },
+      { label: t("importCircuit"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestImportCircuit" }) },
+    ]);
   });
 
   // Marquee (retângulo de arrasto a partir do fundo vazio) -- seleção por interseção, igual ao
@@ -1494,6 +1564,117 @@ function installCanvasEventHandlers(canvas: HTMLDivElement, canvasContent: HTMLD
     },
     { passive: false }
   );
+}
+
+/** Bounding box aproximada (posição declarada +/- margem fixa, não a caixa exata do símbolo --
+ * mesma simplificação já aceita pelo cálculo de centro do "Criar Subcircuito da Seleção" no lado
+ * Extension) dos componentes informados, em coordenadas de mundo (não de tela). */
+function approximateBoundingBox(components: readonly WebviewComponentModel[]): { minX: number; minY: number; maxX: number; maxY: number } | undefined {
+  if (components.length === 0) return undefined;
+  const margin = 32;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const c of components) {
+    minX = Math.min(minX, c.x - margin);
+    minY = Math.min(minY, c.y - margin);
+    maxX = Math.max(maxX, c.x + margin);
+    maxY = Math.max(maxY, c.y + margin);
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+/** Ajusta `state.viewport` pra enquadrar a bounding box informada dentro da área visível do canvas,
+ * com 10% de margem -- mesmos limites de zoom [0.2, 4] do wheel-zoom (`.spec` seção 13.4), pra
+ * nunca produzir um zoom fora da faixa que o próprio scroll já respeita. */
+function zoomToBoundingBox(box: { minX: number; minY: number; maxX: number; maxY: number }): void {
+  if (!canvasElement) return;
+  const viewWidth = canvasElement.clientWidth;
+  const viewHeight = canvasElement.clientHeight;
+  const width = box.maxX - box.minX;
+  const height = box.maxY - box.minY;
+  if (viewWidth <= 0 || viewHeight <= 0 || width <= 0 || height <= 0) return;
+  const zoom = Math.min(4, Math.max(0.2, Math.min(viewWidth / width, viewHeight / height) * 0.9));
+  const centerX = (box.minX + box.maxX) / 2;
+  const centerY = (box.minY + box.maxY) / 2;
+  state.viewport = { zoom, x: viewWidth / 2 - centerX * zoom, y: viewHeight / 2 - centerY * zoom };
+  if (canvasContentElement) canvasContentElement.style.transform = `translate(${state.viewport.x}px, ${state.viewport.y}px) scale(${zoom})`;
+  persistState();
+}
+
+function zoomToFitAll(): void {
+  const box = approximateBoundingBox(state.components);
+  if (box) zoomToBoundingBox(box);
+}
+
+function zoomToFitSelection(): void {
+  const selectedIds = new Set(state.selectedComponentIds);
+  const box = approximateBoundingBox(state.components.filter((c) => selectedIds.has(c.id)));
+  if (box) zoomToBoundingBox(box);
+}
+
+/** Zoom 1:1 mantendo o CENTRO da área visível fixo -- mesma técnica de "zoom ancorado num ponto de
+ * tela" do wheel-zoom acima, só que ancorado no centro do viewport em vez do cursor. */
+function zoomReset(): void {
+  if (!canvasElement) return;
+  const screenX = canvasElement.clientWidth / 2;
+  const screenY = canvasElement.clientHeight / 2;
+  const oldZoom = state.viewport.zoom || 1;
+  const localX = (screenX - state.viewport.x) / oldZoom;
+  const localY = (screenY - state.viewport.y) / oldZoom;
+  state.viewport = { zoom: 1, x: screenX - localX, y: screenY - localY };
+  if (canvasContentElement) canvasContentElement.style.transform = `translate(${state.viewport.x}px, ${state.viewport.y}px) scale(1)`;
+  persistState();
+}
+
+/** Monta um SVG autocontido do esquemático inteiro (achado de auditoria de UI 2026-07-09 --
+ * SimulIDE exporta PNG/JPEG/BMP/SVG do menu de contexto, LasecSimul não tinha nenhum). Clona o
+ * `canvas-content` REAL (já visualmente correto -- reaproveita posição/rotação/flip/símbolo tal
+ * qual renderizados, em vez de reconstruir do zero e arriscar uma sutil divergência não
+ * verificável sem GUI) dentro de um `<foreignObject>`, com o CSS da própria página embutido
+ * inline (`document.styleSheets`, já que o arquivo exportado é aberto FORA deste contexto, sem
+ * acesso ao `<link>` da Webview). Retorna `undefined` se não há nada pra exportar. */
+function buildSchematicSvgExport(): string | undefined {
+  if (!canvasContentElement) return undefined;
+  const box = approximateBoundingBox(state.components);
+  if (!box) return undefined;
+
+  const margin = 32;
+  const originX = box.minX - margin;
+  const originY = box.minY - margin;
+  const width = box.maxX - box.minX + margin * 2;
+  const height = box.maxY - box.minY + margin * 2;
+
+  const clone = canvasContentElement.cloneNode(true) as HTMLElement;
+  // Overlays efêmeros de interação (marquee/alças de fio/preview de fio pendente) não deveriam
+  // sobreviver até aqui (só existem durante um gesto ativo, não depois de um clique de menu/
+  // toolbar), mas removidos defensivamente da CÓPIA -- nunca da árvore viva.
+  clone.querySelectorAll(".marquee-rect, .wire-corner-handle, .wire-segment-handle, .pending-wire-preview").forEach((el) => el.remove());
+  clone.style.transform = `translate(${-originX}px, ${-originY}px)`;
+
+  let cssText = "";
+  for (const sheet of Array.from(document.styleSheets)) {
+    try {
+      for (const rule of Array.from(sheet.cssRules)) cssText += `${rule.cssText}\n`;
+    } catch {
+      // folha de estilo de outra origem (CSP da Webview não deveria permitir isso acontecer) --
+      // ignora em vez de quebrar a exportação inteira por causa de uma folha que não importa.
+    }
+  }
+
+  const serializer = new XMLSerializer();
+  const clonedMarkup = serializer.serializeToString(clone);
+
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`,
+    `<defs><style><![CDATA[\n${cssText}\n]]></style></defs>`,
+    `<foreignObject width="${width}" height="${height}"><div xmlns="http://www.w3.org/1999/xhtml">${clonedMarkup}</div></foreignObject>`,
+    `</svg>`,
+  ].join("\n");
+}
+
+function exportSchematicImage(): void {
+  const svg = buildSchematicSvgExport();
+  if (!svg) return;
+  send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestExportSchematicImage", svg });
 }
 
 function ensureRenderShell(): { canvas: HTMLDivElement; canvasContent: HTMLDivElement; wireLayer: SVGSVGElement } | undefined {
@@ -1757,6 +1938,46 @@ function copySelectedItems(): boolean {
 function cutSelectedItems(): void {
   if (!copySelectedItems()) return;
   deleteSelectedItems();
+}
+
+/** `Ctrl+Shift`-drag duplica a seleção e arrasta a CÓPIA, deixando os originais parados (mesmo gesto
+ * do SimulIDE real, `circuitview.cpp::mousePressEvent`/`mouseMoveEvent` -- achado de auditoria de UI
+ * 2026-07-09). Cópias nascem NA MESMA posição dos originais (não deslocadas, ao contrário de
+ * `pasteClipboardItems`) porque a posição final é ditada pelo próprio arrasto em andamento, não por
+ * este helper. Mesma lógica de filtro de fio interno de `copySelectedItems`, sem tocar
+ * `clipboardItems`/`state` -- quem chama decide quando inserir no estado global (o gesto de arrasto
+ * NUNCA chama `render()` no meio, ver comentário sobre `setPointerCapture` em `createComponentElement`). */
+function duplicateComponentsForDrag(originals: WebviewComponentModel[]): { components: WebviewComponentModel[]; wires: WebviewWireModel[] } {
+  const originalIds = new Set(originals.map((component) => component.id));
+  const idMap = new Map<string, string>();
+  const stagedComponents = [...state.components];
+  const components = originals.map((source) => {
+    const component = cloneComponent(source);
+    const descriptor = catalogEntryFor(component.typeId);
+    const baseLabel = descriptor?.label ?? component.typeId;
+    const nextId = newComponentId();
+    idMap.set(source.id, nextId);
+    component.id = nextId;
+    component.label = nextIndexedLabel(component.typeId, baseLabel, stagedComponents);
+    if (interactionKindFor(component.typeId) === "momentary") component.properties.closed = false;
+    stagedComponents.push(component);
+    return component;
+  });
+
+  const wires = state.wires
+    .filter((wire) => originalIds.has(wire.from.componentId) && originalIds.has(wire.to.componentId))
+    .flatMap((source) => {
+      const fromId = idMap.get(source.from.componentId);
+      const toId = idMap.get(source.to.componentId);
+      if (!fromId || !toId) return [];
+      const wire = cloneWire(source);
+      wire.id = newWireId();
+      wire.from = { ...wire.from, componentId: fromId };
+      wire.to = { ...wire.to, componentId: toId };
+      return [wire];
+    });
+
+  return { components, wires };
 }
 
 function pasteClipboardItems(): void {
@@ -2671,6 +2892,10 @@ function mapLinear(value: number, from: [number, number], to: [number, number]):
   return to[0] + t * (to[1] - to[0]);
 }
 
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
 function numericComponentProperty(component: WebviewComponentModel, prop: string | undefined, fallback: number): number {
   if (!prop) return fallback;
   const value = Number(component.properties[prop]);
@@ -3047,11 +3272,51 @@ function makeChannelButton(label: string, color: string, active: boolean, onClic
 /** Linha de "knob" (disco visual estático + rótulo + spinner numérico editável) -- réplica do
  * layout QDial+QLabel+PlotSpinBox de `oscwidget.ui` (Divisão/Posição de Tempo/Tensão). O disco é só
  * decorativo nesta rodada (sem arrastar pra girar); o spinner ao lado é o controle real. */
-function makeKnobRow(labelText: string, value: number, step: number, onChange: (value: number) => void): HTMLDivElement {
+function makeKnobRow(
+  labelText: string,
+  value: number,
+  step: number,
+  onChange: (value: number) => void,
+  options?: { dialStep?: (value: number) => number; reverse?: boolean; min?: number }
+): HTMLDivElement {
   const row = document.createElement("div");
   row.className = "instrument-knob-row";
   const dial = document.createElement("span");
   dial.className = "instrument-knob-dial";
+  dial.tabIndex = 0;
+  const dialStep = () => Math.max(1e-12, options?.dialStep?.(value) ?? step);
+  const applyDialDelta = (direction: 1 | -1) => {
+    const signed = options?.reverse ? -direction : direction;
+    const next = Math.max(options?.min ?? -Infinity, value + signed * dialStep());
+    value = next;
+    onChange(next);
+  };
+  dial.addEventListener("wheel", (event) => {
+    event.preventDefault();
+    applyDialDelta(event.deltaY > 0 ? 1 : -1);
+  }, { passive: false });
+  dial.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    let previousY = event.clientY;
+    let accumulated = 0;
+    const onMove = (moveEvent: PointerEvent) => {
+      accumulated += previousY - moveEvent.clientY;
+      previousY = moveEvent.clientY;
+      while (Math.abs(accumulated) >= 4) {
+        applyDialDelta(accumulated > 0 ? 1 : -1);
+        accumulated += accumulated > 0 ? -4 : 4;
+      }
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+    window.addEventListener("pointercancel", onUp, { once: true });
+  });
   const info = document.createElement("div");
   info.className = "instrument-knob-info";
   const label = document.createElement("label");
@@ -3201,10 +3466,27 @@ function buildScopePopup(popup: ScopePopupState, component: WebviewComponentMode
   knobs.className = "instrument-knobs";
   const activeChannelIndex = popup.activeTab === "all" ? 0 : popup.activeTab;
   const activeChannel = popup.channels[activeChannelIndex] ?? popup.channels[0]!;
-  knobs.appendChild(makeKnobRow("Divisão de Tempo (ms)", popup.timeDivMs, 100, (v) => { popup.timeDivMs = Math.max(0.001, v); renderInstrumentPopups(); }));
-  knobs.appendChild(makeKnobRow("Posição de Tempo (ms)", activeChannel.timePosMs, 100, (v) => { activeChannel.timePosMs = v; renderInstrumentPopups(); }));
-  knobs.appendChild(makeKnobRow("Divisão de Tensão (V)", activeChannel.voltDiv, 0.1, (v) => { activeChannel.voltDiv = Math.max(0.001, v); renderInstrumentPopups(); }));
-  knobs.appendChild(makeKnobRow("Posição de Tensão (V)", activeChannel.voltPos, 0.1, (v) => { activeChannel.voltPos = v; renderInstrumentPopups(); }));
+  const applyChannels = (fn: (channel: ScopeChannelSettings) => void) => {
+    if (popup.activeTab === "all") popup.channels.forEach(fn);
+    else fn(activeChannel);
+  };
+  knobs.appendChild(makeKnobRow("Divisão de Tempo (ms)", popup.timeDivMs, 100, (v) => { popup.timeDivMs = Math.max(0.001, v); renderInstrumentPopups(); }, {
+    dialStep: (current) => Math.max(0.001, Math.abs(current) / 100),
+    reverse: true,
+    min: 0.001,
+  }));
+  knobs.appendChild(makeKnobRow("Posição de Tempo (ms)", activeChannel.timePosMs, 100, (v) => { applyChannels((channel) => { channel.timePosMs = v; }); renderInstrumentPopups(); }, {
+    dialStep: () => Math.max(0.001, popup.timeDivMs / 100),
+  }));
+  knobs.appendChild(makeKnobRow("Divisão de Tensão (V)", activeChannel.voltDiv, 0.1, (v) => { const next = Math.max(0.001, v); applyChannels((channel) => { channel.voltDiv = next; }); renderInstrumentPopups(); }, {
+    dialStep: (current) => Math.max(0.001, Math.abs(current) / 100),
+    reverse: true,
+    min: 0.001,
+  }));
+  knobs.appendChild(makeKnobRow("Posição de Tensão (V)", activeChannel.voltPos, 0.1, (v) => { applyChannels((channel) => { channel.voltPos = v; }); renderInstrumentPopups(); }, {
+    dialStep: () => Math.max(0.001, activeChannel.voltDiv / 100),
+    reverse: true,
+  }));
   controls.appendChild(knobs);
 
   controls.appendChild(makeDivider());
@@ -3541,6 +3823,27 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
       const centerX = turn?.cx ?? 20;
       const centerY = turn?.cy ?? 20;
       const currentPos = numericComponentProperty(comp, positionProp, 0);
+      const angularLimit = turn?.limits ? catalogEntryFor(comp.typeId)?.package?.viewSpec?.limits?.[turn.limits] : undefined;
+      if (turn?.continuous) {
+        const propMin = angularLimit?.min ?? 0;
+        const propMax = angularLimit?.max ?? 1000;
+        const propStep = angularLimit?.step ?? 0;
+        const wheelStep = propStep > 0 ? propStep : Math.abs(propMax - propMin) * 25 / 1000;
+        const clamp = angularLimit?.clamp !== false;
+        let newValue = currentPos + (event.deltaY > 0 ? wheelStep : -wheelStep);
+        if (propStep > 0) newValue = Math.round(newValue / propStep) * propStep;
+        if (clamp) newValue = clampNumber(newValue, Math.min(propMin, propMax), Math.max(propMin, propMax));
+        if (Math.abs(newValue - currentPos) < 1e-12) return;
+        comp.properties[positionProp] = newValue;
+        send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: comp.id, name: positionProp, value: newValue });
+        const indicatorEl = el.querySelector<SVGElement>(".encoder-indicator");
+        if (indicatorEl) {
+          const angle = mapLinear(newValue, [propMin, propMax], [angularLimit?.minAngleDeg ?? -150, angularLimit?.maxAngleDeg ?? 150]);
+          indicatorEl.setAttribute("transform", `rotate(${angle}, ${centerX}, ${centerY})`);
+        }
+        persistState();
+        return;
+      }
       const delta = event.deltaY > 0 ? 1 : -1;
       const newPos = currentPos + delta;
       comp.properties[positionProp] = newPos;
@@ -3690,7 +3993,10 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
     if (event.button !== 0) return;
     if (event.target instanceof Element && event.target.closest(".pin-terminal, .meter-expand-button")) return;
     event.stopPropagation();
-    if (event.shiftKey) {
+    // `Ctrl+Shift` junto é o gesto de duplicar-arrastando (checado ANTES do shift-toggle abaixo,
+    // senão nunca chegaria aqui -- shift sozinho sempre alterna seleção e retorna cedo).
+    const isDuplicateDragGesture = event.ctrlKey && event.shiftKey;
+    if (event.shiftKey && !isDuplicateDragGesture) {
       toggleComponentSelection(component.id);
       persistState();
       render();
@@ -3832,6 +4138,53 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
         const comp0 = liveComponent();
         const stepsRevFallback = dragAngular?.stepsPerRev ?? 20;
         const stepsRev = comp0 ? numericComponentProperty(comp0, dragAngular?.stepsPerRevProp ?? "steps_rev", stepsRevFallback) : stepsRevFallback;
+        const angularLimit = dragAngular?.limits ? catalogEntryFor(component.typeId)?.package?.viewSpec?.limits?.[dragAngular.limits] : undefined;
+        if (dragAngular?.continuous) {
+          const propMin = angularLimit?.min ?? 0;
+          const propMax = angularLimit?.max ?? 1000;
+          const propStep = angularLimit?.step ?? 0;
+          const clamp = angularLimit?.clamp !== false;
+          const angleSpanDeg = Math.max(1, Math.abs((angularLimit?.maxAngleDeg ?? 150) - (angularLimit?.minAngleDeg ?? -150)));
+          const angleSpanRad = (angleSpanDeg * Math.PI) / 180;
+          let prevAngle = Math.atan2(dy0, dx0);
+          const onDialMove = (moveEvent: PointerEvent) => {
+            const dx = moveEvent.clientX - kx;
+            const dy = moveEvent.clientY - ky;
+            if (Math.hypot(dx, dy) < 3) return;
+            let dAngle = Math.atan2(dy, dx) - prevAngle;
+            if (dAngle >  Math.PI) dAngle -= 2 * Math.PI;
+            if (dAngle < -Math.PI) dAngle += 2 * Math.PI;
+            prevAngle = Math.atan2(dy, dx);
+
+            const comp = liveComponent();
+            if (!comp) return;
+            const currentValue = numericComponentProperty(comp, positionProp, propMin);
+            let nextValue = currentValue + (dAngle / angleSpanRad) * (propMax - propMin);
+            if (propStep > 0) nextValue = Math.round(nextValue / propStep) * propStep;
+            if (clamp) nextValue = clampNumber(nextValue, Math.min(propMin, propMax), Math.max(propMin, propMax));
+            if (Math.abs(nextValue - currentValue) < 1e-12) return;
+            comp.properties[positionProp] = nextValue;
+            send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: comp.id, name: positionProp, value: nextValue });
+            if (indicatorEl) {
+              const angle = mapLinear(nextValue, [propMin, propMax], [angularLimit?.minAngleDeg ?? -150, angularLimit?.maxAngleDeg ?? 150]);
+              indicatorEl.setAttribute("transform", `rotate(${angle}, ${centerX}, ${centerY})`);
+            }
+            persistState();
+          };
+          const onDialUp = () => {
+            el.removeEventListener("pointermove", onDialMove);
+            el.removeEventListener("pointerup", onDialUp);
+            el.removeEventListener("pointercancel", onDialUp);
+            isDraggingComponent = false;
+            render();
+          };
+          isDraggingComponent = true;
+          el.setPointerCapture(event.pointerId);
+          el.addEventListener("pointermove", onDialMove);
+          el.addEventListener("pointerup", onDialUp, { once: true });
+          el.addEventListener("pointercancel", onDialUp, { once: true });
+          return;
+        }
         const radPerStep = (2 * Math.PI) / stepsRev;
         let prevAngle = Math.atan2(dy0, dx0);
         let accumDelta = 0;
@@ -3986,6 +4339,23 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
       dragStarted = true;
       el.classList.add("dragging");
       if (isPushButton && canToggle) setPushClosed(component, false); // movimento detectado -- isto era arrasto, não aperto
+      if (isDuplicateDragGesture) {
+        // NUNCA chama render() aqui -- reparentear `el` (o elemento sendo arrastado, com
+        // `setPointerCapture` já ativo) no meio do gesto libera a captura implicitamente (mesmo
+        // bug documentado acima sobre `componentElementsById`/telemetria), quebrando o resto do
+        // arrasto. Insere os componentes/fios duplicados diretamente no DOM/estado, sem tocar `el`.
+        const { components: duplicated, wires: duplicatedWires } = duplicateComponentsForDrag(dragTargets.map((target) => target.component));
+        if (duplicated.length > 0 && canvasContentElement) {
+          state = { ...state, components: [...state.components, ...duplicated], wires: [...state.wires, ...duplicatedWires] };
+          for (const dup of duplicated) {
+            const dupEl = createComponentElement(dup);
+            componentElementsById.set(dup.id, dupEl);
+            canvasContentElement.appendChild(dupEl);
+          }
+          dragTargets = duplicated.map((dup) => ({ component: dup, startX: dup.x, startY: dup.y }));
+          send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestInsertItems", components: duplicated, wires: duplicatedWires });
+        }
+      }
     };
 
     const onMove = (moveEvent: PointerEvent) => {
@@ -4016,6 +4386,11 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
       el.removeEventListener("pointercancel", onUp);
       el.classList.remove("dragging");
       isDraggingComponent = false;
+      // Depois de um `Ctrl+Shift`-drag, a seleção passa a ser a CÓPIA recém-solta (não os
+      // originais, que ficaram parados) -- mesmo resultado esperado de "duplicar e mover".
+      if (dragStarted && isDuplicateDragGesture && dragTargets.length > 0) {
+        state.selectedComponentIds = dragTargets.map((target) => target.component.id);
+      }
       dragTargets = [];
       if (!dragStarted && canToggle) {
         if (isPushButton) setPushClosed(component, false);
@@ -4189,6 +4564,10 @@ interface PropertyField {
   max?: number;
   step?: number;
   options?: { value: string; label: string }[];
+  /** Unidade base (ex: "Ω", "F") -- quando presente num campo `number` editável, ativa o seletor de
+   * múltiplo de unidade (pF/nF/µF/.../k/M/G) ao lado do input, mesmo `NumVal::addMultipliers` do
+   * SimulIDE real (achado de auditoria de UI 2026-07-09). */
+  unit?: string;
 }
 
 interface PropertySheetOptions {
@@ -4238,11 +4617,29 @@ function formatLiveReadout(schema: PropertySchemaEntry, component: WebviewCompon
   return `0.000${unit}`;
 }
 
-/** Propriedade do typeId marcada `showOnSymbol` (no máximo uma faz sentido hoje — built-ins/plugins
- * atuais só têm 1 propriedade elétrica cada) — mesma fonte (`propertySchema` do catálogo) usada pelo
- * diálogo de propriedades, ver `resolvePropertyFields`. */
+/** Propriedade do typeId mostrada no rótulo de valor -- `component.valueLabelPropertyKey` (escolha
+ * explícita da instância, ver `model.ts`) tem prioridade quando aponta pra um schema numérico
+ * válido do typeId atual; senão cai pro default do catálogo (`showOnSymbol`). Mesma fonte
+ * (`propertySchema` do catálogo) usada pelo diálogo de propriedades, ver `resolvePropertyFields`. */
 function findShowOnSymbolSchema(component: WebviewComponentModel): PropertySchemaEntry | undefined {
-  return catalogEntryFor(component.typeId)?.propertySchema?.find((schema) => schema.showOnSymbol);
+  const schemas = catalogEntryFor(component.typeId)?.propertySchema;
+  if (!schemas) return undefined;
+  if (component.valueLabelPropertyKey) {
+    const chosen = schemas.find(
+      (schema) => schema.id === component.valueLabelPropertyKey && propertyFieldKindFromEditor(schema.editor) === "number"
+    );
+    if (chosen) return chosen;
+  }
+  return schemas.find((schema) => schema.showOnSymbol);
+}
+
+/** Propriedades numéricas do typeId elegíveis pro rótulo de valor -- usado só pra decidir SE mostra
+ * o seletor de rádio "mostrar no símbolo" (`renderPropertyField`), não pra escolher a propriedade
+ * em si (isso é `findShowOnSymbolSchema`). */
+function numericFieldCandidates(component: WebviewComponentModel): PropertySchemaEntry[] {
+  const schemas = catalogEntryFor(component.typeId)?.propertySchema;
+  if (!schemas) return [];
+  return schemas.filter((schema) => propertyFieldKindFromEditor(schema.editor) === "number" && !schema.hidden);
 }
 
 /** Texto do rótulo de valor (ex: "1 kΩ", ou a leitura ao vivo do voltímetro) — `undefined` quando o
@@ -4439,6 +4836,7 @@ function resolvePropertyFields(component: WebviewComponentModel): PropertyField[
       max: propSchema.max,
       step: propSchema.step,
       options: propSchema.options,
+      unit: propSchema.unit,
     });
   }
   return augmentRuntimePropertyFields(component, fields);
@@ -4577,11 +4975,79 @@ function renderPropertyField(component: WebviewComponentModel, field: PropertyFi
     return row;
   }
 
+  const fieldIsReadonly = field.kind === "readonly" || Boolean(field.readonly);
+  if (field.kind === "number" && field.unit && !fieldIsReadonly) {
+    // Seletor de múltiplo de unidade (pF/nF/µF/.../k/M/G) -- valor ARMAZENADO sempre em unidade base
+    // (sem mudança nenhuma no schema/Core, `applyChange` continua recebendo o número em unidade
+    // base); só a EXIBIÇÃO é escalada. Trocar o múltiplo RE-ESCALA o número mostrado mantendo o
+    // valor absoluto (mesmo comportamento de `NumVal` real do SimulIDE), não multiplica o valor.
+    const baseValue = typeof field.value === "number" ? field.value : Number(field.value) || 0;
+    let currentFactor = defaultSiPrefixFactor(baseValue);
+
+    const numberInput = document.createElement("input");
+    numberInput.className = "property-sheet__field-input";
+    numberInput.type = "number";
+    numberInput.step = field.step !== undefined ? String(field.step) : "any";
+    numberInput.value = String(baseValue / currentFactor);
+
+    const multiplierSelect = document.createElement("select");
+    multiplierSelect.className = "property-sheet__field-unit-select";
+    for (const [factor, prefix] of SI_PREFIXES) {
+      const optionEl = document.createElement("option");
+      optionEl.value = String(factor);
+      optionEl.textContent = `${prefix}${field.unit}`;
+      optionEl.selected = factor === currentFactor;
+      multiplierSelect.appendChild(optionEl);
+    }
+    multiplierSelect.addEventListener("change", () => {
+      const displayed = Number(numberInput.value);
+      const base = Number.isFinite(displayed) ? displayed * currentFactor : baseValue;
+      currentFactor = Number(multiplierSelect.value);
+      numberInput.value = String(base / currentFactor);
+    });
+    numberInput.addEventListener("change", () => {
+      const displayed = Number(numberInput.value);
+      applyChange(Number.isFinite(displayed) ? displayed * currentFactor : 0);
+    });
+
+    const unitGroup = document.createElement("div");
+    unitGroup.className = "property-sheet__unit-group";
+    unitGroup.append(numberInput, multiplierSelect);
+
+    // "Mostrar no símbolo" por propriedade -- achado de auditoria de UI 2026-07-09: SimulIDE deixa
+    // escolher QUAL propriedade aparece perto do símbolo quando há mais de uma candidata numérica;
+    // LasecSimul só permitia a única marcada `showOnSymbol` no catálogo, fixa por typeId. Só faz
+    // sentido mostrar o seletor quando há MAIS de 1 candidato -- com só 1, a pergunta "qual" não
+    // existe. Rádio, não checkbox: só um rótulo de valor por componente (mesma limitação de sempre).
+    const candidates = numericFieldCandidates(component);
+    if (candidates.length > 1) {
+      const radioLabel = document.createElement("label");
+      radioLabel.className = "property-sheet__show-on-symbol";
+      radioLabel.title = t("showValue");
+      const radio = document.createElement("input");
+      radio.type = "radio";
+      radio.name = `show-on-symbol-${component.id}`;
+      radio.checked = (findShowOnSymbolSchema(component)?.id ?? "") === field.key;
+      radio.addEventListener("change", () => {
+        component.valueLabelPropertyKey = field.key;
+        component.showValue = true;
+        send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateLabelVisibility", componentId: component.id, showId: Boolean(component.showId), showValue: true, valueLabelPropertyKey: field.key });
+        persistState();
+        render();
+      });
+      radioLabel.appendChild(radio);
+      unitGroup.appendChild(radioLabel);
+    }
+
+    row.append(caption, unitGroup);
+    return row;
+  }
+
   const input = document.createElement("input");
   input.className = "property-sheet__field-input";
   input.type = field.kind === "number" ? "number" : field.kind === "color" ? "color" : "text";
   input.value = String(field.value);
-  input.readOnly = field.kind === "readonly" || Boolean(field.readonly);
+  input.readOnly = fieldIsReadonly;
   if (field.kind === "number") {
     input.step = field.step !== undefined ? String(field.step) : "any";
     if (field.min !== undefined) input.min = String(field.min);
@@ -4631,12 +5097,33 @@ function renderPropertySheet(component: WebviewComponentModel, options: Property
   helpButton.className = "property-sheet__button";
   helpButton.textContent = t("help");
   helpButton.disabled = !helpInfo;
-  if (helpInfo?.description) helpButton.title = helpInfo.description;
+  // Painel inline expansível (achado de auditoria de UI 2026-07-09, paridade com o painel de ajuda
+  // do `PropDialog` real do SimulIDE) -- antes o botão só abria a URL externa direto (sem handler
+  // NENHUM se o typeId só tinha `help.description`, sem `help.url` -- botão habilitado mas morto,
+  // achado de brinde corrigido aqui). `help.file` (Markdown local) continua fora de escopo -- exige
+  // I/O de arquivo (Webview não tem `fs`) e um parser Markdown->HTML sanitizado, feature maior
+  // separada; `help.description` já é texto simples, seguro de mostrar via `textContent` puro.
+  const helpPanel = document.createElement("div");
+  helpPanel.className = "property-sheet__help-panel";
+  helpPanel.hidden = true;
+  if (helpInfo?.description) {
+    const helpText = document.createElement("p");
+    helpText.textContent = helpInfo.description;
+    helpPanel.appendChild(helpText);
+  }
   if (helpInfo?.url) {
-    helpButton.addEventListener("click", () => {
+    const helpLink = document.createElement("button");
+    helpLink.type = "button";
+    helpLink.className = "property-sheet__help-link";
+    helpLink.textContent = helpInfo.url;
+    helpLink.addEventListener("click", () => {
       send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenExternal", url: helpInfo.url! });
     });
+    helpPanel.appendChild(helpLink);
   }
+  helpButton.addEventListener("click", () => {
+    helpPanel.hidden = !helpPanel.hidden;
+  });
   const showLabel = document.createElement("label");
   showLabel.className = "property-sheet__show-toggle";
   const showText = document.createElement("span");
@@ -4721,7 +5208,7 @@ function renderPropertySheet(component: WebviewComponentModel, options: Property
   };
 
   renderPage();
-  shell.append(titleBar, toolbar);
+  shell.append(titleBar, toolbar, helpPanel);
   if (titleRow) shell.append(titleRow);
   shell.append(tabs, pages);
   return shell;
@@ -4838,9 +5325,15 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
       readoutsByComponentId = {};
       scopeHistoryByComponentId = {};
       logicHistoryByComponentId = {};
+      simulationRate = undefined;
     }
     render();
     refreshOpenPropertyDialog();
+  }
+
+  if (message.type === "simulationRate") {
+    simulationRate = message.rate;
+    updateSimulationRateLabel();
   }
 
   if (message.type === "requestRotateSelection") {

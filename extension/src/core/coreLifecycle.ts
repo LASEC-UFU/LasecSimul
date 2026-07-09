@@ -384,11 +384,41 @@ export async function pollWireVoltages(): Promise<void> {
   state.schematicPanel.postMessage({ version: 1, type: "wireVoltages", voltagesByWireId });
 }
 
+/** Amostra anterior de `(tempo de parede, tempo simulado)` -- base pra calcular a taxa real
+ * alcançada (`Δsimulado/Δparede`) a cada tick do polling já existente, achado de auditoria de UI
+ * 2026-07-09 (paridade com `InfoWidget::setRate()` real do SimulIDE -- taxa ACHADA, não a
+ * configuração estática de `lasecsimul.simulation.targetStepUs`). `undefined` == ainda sem amostra
+ * anterior nesta corrida (primeiro tick depois de `run()`/retomada). */
+let lastRateSample: { wallMs: number; simNs: number } | undefined;
+
+async function pollSimulationRate(): Promise<void> {
+  if (!state.coreClient) return;
+  try {
+    const simNs = await state.coreClient.getSimulationTime();
+    const wallMs = Date.now();
+    if (lastRateSample) {
+      const deltaWallMs = wallMs - lastRateSample.wallMs;
+      const deltaSimNs = simNs - lastRateSample.simNs;
+      // Só reporta com uma janela de tempo de parede não-trivial -- uma amostra de 1-2ms de
+      // diferença entre polls (jitter do `setInterval`) daria uma taxa ruidosa/enganosa.
+      if (deltaWallMs > 50) {
+        const rate = (deltaSimNs / 1e6) / deltaWallMs; // (ms simulados)/(ms de parede) = fator "Nx"
+        state.schematicPanel?.postMessage({ version: 1, type: "simulationRate", rate });
+      }
+    }
+    lastRateSample = { wallMs, simNs };
+  } catch {
+    // Core pode ter parado/desconectado entre o tick e a resposta -- sem taxa neste ciclo, não é erro.
+  }
+}
+
 export function startVoltageReadoutPolling(): void {
   if (state.voltageReadoutTimer) return;
+  lastRateSample = undefined;
   state.voltageReadoutTimer = setInterval(() => {
     void pollInstrumentReadouts();
     void pollWireVoltages();
+    void pollSimulationRate();
   }, 300);
 }
 
@@ -396,10 +426,12 @@ export function stopVoltageReadoutPolling(): void {
   if (!state.voltageReadoutTimer) return;
   clearInterval(state.voltageReadoutTimer);
   state.voltageReadoutTimer = undefined;
+  lastRateSample = undefined;
   // Sem simulação rodando não há tensão "atual" pra mostrar -- volta os fios pra cor neutra em vez
   // de deixar a última cor (vermelho/azul) congelada, o que pareceria que ainda está simulando.
   state.schematicPanel?.postMessage({ version: 1, type: "wireVoltages", voltagesByWireId: {} });
   state.schematicPanel?.postMessage({ version: 1, type: "componentReadout", readoutsByComponentId: {} });
+  state.schematicPanel?.postMessage({ version: 1, type: "simulationRate", rate: undefined });
 }
 
 export function setSimulationStatus(status: SimulationStatus): void {

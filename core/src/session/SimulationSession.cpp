@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <limits>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <nlohmann/json.hpp>
 #include "../mcu/McuComponent.hpp"
@@ -449,6 +450,14 @@ bool SimulationSession::settleStep() {
                                              extraVarBase);
         try {
             component->stamp(view);
+            // LeakageGuard (D9, docs/25-auditoria-arquitetural-core-2026-07-09.md): aplicado pelo
+            // framework, SEMPRE depois de stamp() (nunca antes -- teria que assumir o pino "vazio"
+            // antes mesmo de stamp() decidir se ia estampar de verdade ali ou não; aplicar depois é
+            // seguro porque a condutância de fuga é somada, não substitui nada que já foi estampado).
+            const std::span<Pin> pins = component->pins();
+            for (uint32_t localIndex : component->leakagePinIndices()) {
+                if (localIndex < pins.size()) view.addConductanceToGround(pins[localIndex], kLeakageGuardConductance);
+            }
             view.commit();
         } catch (const std::exception& e) {
             // Fronteira de robustez (não é o CrashGuard de plugin — isso é defesa geral contra

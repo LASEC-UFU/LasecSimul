@@ -8,6 +8,7 @@
 #include <optional>
 #include <string>
 #include "lasecsimul/IComponentModel.hpp"
+#include "lasecsimul/PropertyDefinition.hpp"
 #include "simulation/Scheduler.hpp"
 
 namespace lasecsimul::components {
@@ -87,65 +88,114 @@ public:
     size_t getState(uint8_t*, size_t) const override { return 0; }
     void setState(const uint8_t*, size_t) override {}
 
-    std::vector<PropertyDescriptor> propertyDescriptors() override {
-        const auto schemas = propertySchema();
-        PropertyDescriptor waveType{"waveType", "", [this] { return PropertyValue{waveTypeToString(m_waveType)}; },
-                                     [this](const PropertyValue& v) {
-                                         if (const std::string* s = std::get_if<std::string>(&v)) setWaveType(*s);
-                                     }};
-        waveType.schema = schemas[0];
-        PropertyDescriptor freq{"freqHz", "Hz", [this] { return PropertyValue{m_freqHz}; },
-                                 [this](const PropertyValue& v) {
-                                     if (const double* d = std::get_if<double>(&v)) m_freqHz = *d;
-                                 }};
-        freq.schema = schemas[1];
-        PropertyDescriptor phase{"phaseShift", "º", [this] { return PropertyValue{m_phaseShift}; },
-                                  [this](const PropertyValue& v) {
-                                      if (const double* d = std::get_if<double>(&v)) m_phaseShift = *d;
-                                  }};
-        phase.schema = schemas[2];
-        PropertyDescriptor duty{"duty", "%", [this] { return PropertyValue{m_duty}; },
-                                 [this](const PropertyValue& v) {
-                                     if (const double* d = std::get_if<double>(&v)) m_duty = std::min(100.0, *d);
-                                 }};
-        duty.schema = schemas[3];
-        PropertyDescriptor file{"file", "", [this] { return PropertyValue{m_file}; },
-                                 [this](const PropertyValue& v) {
-                                     if (const std::string* s = std::get_if<std::string>(&v)) m_file = *s;
-                                 }};
-        file.schema = schemas[4];
-        PropertyDescriptor alwaysOn{"alwaysOn", "", [this] { return PropertyValue{m_alwaysOn}; },
-                                     [this](const PropertyValue& v) {
-                                         if (const bool* b = std::get_if<bool>(&v)) m_alwaysOn = *b;
-                                     }};
-        alwaysOn.schema = schemas[5];
-        PropertyDescriptor bipolar{"bipolar", "", [this] { return PropertyValue{m_bipolar}; },
-                                    [this](const PropertyValue& v) {
-                                        if (const bool* b = std::get_if<bool>(&v)) m_bipolar = *b;
-                                    }};
-        bipolar.schema = schemas[6];
-        PropertyDescriptor floating{"floating", "", [this] { return PropertyValue{m_floating}; },
-                                     [this](const PropertyValue& v) {
-                                         if (const bool* b = std::get_if<bool>(&v)) m_floating = *b;
-                                     }};
-        floating.schema = schemas[7];
-        PropertyDescriptor semiAmpli{"semiAmplitude", "V", [this] { return PropertyValue{m_semiAmplitude}; },
-                                      [this](const PropertyValue& v) {
-                                          if (const double* d = std::get_if<double>(&v)) {
-                                              m_semiAmplitude = *d;
-                                              recomputeBase();
-                                          }
-                                      }};
-        semiAmpli.schema = schemas[8];
-        PropertyDescriptor midVolt{"midVoltage", "V", [this] { return PropertyValue{m_midVoltage}; },
-                                    [this](const PropertyValue& v) {
-                                        if (const double* d = std::get_if<double>(&v)) {
-                                            m_midVoltage = *d;
-                                            recomputeBase();
-                                        }
-                                    }};
-        midVolt.schema = schemas[9];
-        return {waveType, freq, phase, duty, file, alwaysOn, bipolar, floating, semiAmpli, midVolt};
+    std::vector<PropertyDescriptor> propertyDescriptors() override { return toPropertyDescriptors(properties()); }
+
+    std::vector<PropertyDefinition> properties() {
+        const std::vector<PropertySchema> schemas = propertySchema();
+        const PropertySchema waveTypeSchema = schemaById(schemas, "waveType");
+        const PropertySchema freqSchema = schemaById(schemas, "freqHz");
+        const PropertySchema phaseSchema = schemaById(schemas, "phaseShift");
+        const PropertySchema dutySchema = schemaById(schemas, "duty");
+        const PropertySchema fileSchema = schemaById(schemas, "file");
+        const PropertySchema alwaysOnSchema = schemaById(schemas, "alwaysOn");
+        const PropertySchema bipolarSchema = schemaById(schemas, "bipolar");
+        const PropertySchema floatingSchema = schemaById(schemas, "floating");
+        const PropertySchema semiAmpliSchema = schemaById(schemas, "semiAmplitude");
+        const PropertySchema midVoltSchema = schemaById(schemas, "midVoltage");
+        return {
+            PropertyDefinition{
+                waveTypeSchema,
+                [this] { return PropertyValue{waveTypeToString(m_waveType)}; },
+                [this, waveTypeSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(waveTypeSchema, v)) return {false, *error};
+                    setWaveType(std::get<std::string>(v));
+                    return {true, {}};
+                },
+            },
+            PropertyDefinition{
+                freqSchema,
+                [this] { return PropertyValue{m_freqHz}; },
+                [this, freqSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(freqSchema, v)) return {false, *error};
+                    m_freqHz = std::get<double>(v);
+                    return {true, {}};
+                },
+            },
+            PropertyDefinition{
+                phaseSchema,
+                [this] { return PropertyValue{m_phaseShift}; },
+                [this, phaseSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(phaseSchema, v)) return {false, *error};
+                    m_phaseShift = std::get<double>(v);
+                    return {true, {}};
+                },
+            },
+            PropertyDefinition{
+                dutySchema,
+                [this] { return PropertyValue{m_duty}; },
+                [this, dutySchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(dutySchema, v)) return {false, *error};
+                    m_duty = std::min(100.0, std::get<double>(v));
+                    return {true, {}};
+                },
+            },
+            PropertyDefinition{
+                fileSchema,
+                [this] { return PropertyValue{m_file}; },
+                [this, fileSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(fileSchema, v)) return {false, *error};
+                    m_file = std::get<std::string>(v);
+                    return {true, {}};
+                },
+            },
+            PropertyDefinition{
+                alwaysOnSchema,
+                [this] { return PropertyValue{m_alwaysOn}; },
+                [this, alwaysOnSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(alwaysOnSchema, v)) return {false, *error};
+                    m_alwaysOn = std::get<bool>(v);
+                    return {true, {}};
+                },
+            },
+            PropertyDefinition{
+                bipolarSchema,
+                [this] { return PropertyValue{m_bipolar}; },
+                [this, bipolarSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(bipolarSchema, v)) return {false, *error};
+                    m_bipolar = std::get<bool>(v);
+                    return {true, {}};
+                },
+            },
+            PropertyDefinition{
+                floatingSchema,
+                [this] { return PropertyValue{m_floating}; },
+                [this, floatingSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(floatingSchema, v)) return {false, *error};
+                    m_floating = std::get<bool>(v);
+                    return {true, {}};
+                },
+            },
+            PropertyDefinition{
+                semiAmpliSchema,
+                [this] { return PropertyValue{m_semiAmplitude}; },
+                [this, semiAmpliSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(semiAmpliSchema, v)) return {false, *error};
+                    m_semiAmplitude = std::get<double>(v);
+                    recomputeBase();
+                    return {true, {}};
+                },
+            },
+            PropertyDefinition{
+                midVoltSchema,
+                [this] { return PropertyValue{m_midVoltage}; },
+                [this, midVoltSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(midVoltSchema, v)) return {false, *error};
+                    m_midVoltage = std::get<double>(v);
+                    recomputeBase();
+                    return {true, {}};
+                },
+            },
+        };
     }
 
     static std::vector<PropertySchema> propertySchema() {

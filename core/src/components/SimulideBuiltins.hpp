@@ -11,6 +11,7 @@
 #include <utility>
 #include <vector>
 #include "lasecsimul/IComponentModel.hpp"
+#include "lasecsimul/PropertyDefinition.hpp"
 
 namespace lasecsimul::components {
 
@@ -74,44 +75,51 @@ inline PropertySchema textSchema(std::string id, std::string label, std::string 
     return schema;
 }
 
-inline PropertyDescriptor numberDescriptor(std::string name, PropertySchema schema, double& target,
-                                           double minValue) {
-    PropertyDescriptor descriptor{
-        name,
-        schema.unit,
+/** `numberProperty`/`boolProperty`/`textProperty`: mesmo papel dos antigos `numberDescriptor`/
+ * `boolDescriptor`/`textDescriptor` (schema + referência direta ao membro, sem escrever get/set à
+ * mão) -- agora devolvendo `PropertyDefinition` (validado via `validatePropertyValue`, mesma regra
+ * de `SimulationSession::setProperty`) em vez de `PropertyDescriptor` cru. Captura `target` por
+ * REFERÊNCIA (mesmo espírito de antes): seguro porque o `PropertyDefinition` devolvido é consumido
+ * na hora por `toPropertyDescriptors()` dentro do próprio `propertyDescriptors()` da instância --
+ * `target` (membro de `this`) continua vivo por toda a vida do componente. Achado de auditoria
+ * arquitetural 2026-07-09 (D1/D2): as classes abaixo indexavam `schemas[0]`/`[1]`/... por posição
+ * pra casar com estes descriptors -- agora cada `properties()` busca por id via `schemaById`,
+ * imune a reordenação. */
+inline PropertyDefinition numberProperty(PropertySchema schema, double& target) {
+    const double minValue = schema.minValue.value_or(0.0);
+    return PropertyDefinition{
+        schema,
         [&target] { return PropertyValue{target}; },
-        [&target, minValue](const PropertyValue& value) {
-            if (const double* d = std::get_if<double>(&value)) target = clampMin(*d, minValue);
+        [&target, schema, minValue](const PropertyValue& value) -> PropertyBindResult {
+            if (const std::optional<std::string> error = validatePropertyValue(schema, value)) return {false, *error};
+            target = clampMin(std::get<double>(value), minValue);
+            return {true, {}};
         },
-        std::move(schema),
     };
-    return descriptor;
 }
 
-inline PropertyDescriptor boolDescriptor(std::string name, PropertySchema schema, bool& target) {
-    PropertyDescriptor descriptor{
-        name,
-        "",
+inline PropertyDefinition boolProperty(PropertySchema schema, bool& target) {
+    return PropertyDefinition{
+        schema,
         [&target] { return PropertyValue{target}; },
-        [&target](const PropertyValue& value) {
-            if (const bool* b = std::get_if<bool>(&value)) target = *b;
+        [&target, schema](const PropertyValue& value) -> PropertyBindResult {
+            if (const std::optional<std::string> error = validatePropertyValue(schema, value)) return {false, *error};
+            target = std::get<bool>(value);
+            return {true, {}};
         },
-        std::move(schema),
     };
-    return descriptor;
 }
 
-inline PropertyDescriptor textDescriptor(std::string name, PropertySchema schema, std::string& target) {
-    PropertyDescriptor descriptor{
-        name,
-        "",
+inline PropertyDefinition textProperty(PropertySchema schema, std::string& target) {
+    return PropertyDefinition{
+        schema,
         [&target] { return PropertyValue{target}; },
-        [&target](const PropertyValue& value) {
-            if (const std::string* s = std::get_if<std::string>(&value)) target = *s;
+        [&target, schema](const PropertyValue& value) -> PropertyBindResult {
+            if (const std::optional<std::string> error = validatePropertyValue(schema, value)) return {false, *error};
+            target = std::get<std::string>(value);
+            return {true, {}};
         },
-        std::move(schema),
     };
-    return descriptor;
 }
 
 } // namespace detail
@@ -134,8 +142,10 @@ public:
     size_t getState(uint8_t*, size_t) const override { return 0; }
     void setState(const uint8_t*, size_t) override {}
 
-    std::vector<PropertyDescriptor> propertyDescriptors() override {
-        return {detail::numberDescriptor("resistance", m_schema.front(), m_resistance, 1e-9)};
+    std::vector<PropertyDescriptor> propertyDescriptors() override { return toPropertyDescriptors(properties()); }
+
+    std::vector<PropertyDefinition> properties() {
+        return {detail::numberProperty(schemaById(m_schema, "resistance"), m_resistance)};
     }
 
 private:
@@ -165,10 +175,12 @@ public:
     size_t getState(uint8_t*, size_t) const override { return 0; }
     void setState(const uint8_t*, size_t) override {}
 
-    std::vector<PropertyDescriptor> propertyDescriptors() override {
-        auto schemas = propertySchema();
-        return {detail::numberDescriptor("resistance", schemas[0], m_resistance, 1e-9),
-                detail::numberDescriptor("position", schemas[1], m_position, 0.0)};
+    std::vector<PropertyDescriptor> propertyDescriptors() override { return toPropertyDescriptors(properties()); }
+
+    std::vector<PropertyDefinition> properties() {
+        const std::vector<PropertySchema> schemas = propertySchema();
+        return {detail::numberProperty(schemaById(schemas, "resistance"), m_resistance),
+                detail::numberProperty(schemaById(schemas, "position"), m_position)};
     }
 
     static std::vector<PropertySchema> propertySchema() {
@@ -209,18 +221,20 @@ public:
     size_t getState(uint8_t*, size_t) const override { return 0; }
     void setState(const uint8_t*, size_t) override {}
 
-    std::vector<PropertyDescriptor> propertyDescriptors() override {
+    std::vector<PropertyDescriptor> propertyDescriptors() override { return toPropertyDescriptors(properties()); }
+
+    std::vector<PropertyDefinition> properties() {
         if (m_typeId == "switches.push") {
-            auto schemas = pushPropertySchema();
-            return {detail::boolDescriptor("closed", schemas[0], m_closed),
-                    detail::boolDescriptor("normallyClosed", schemas[1], m_normallyClosed),
-                    detail::boolDescriptor("doubleThrow", schemas[2], m_doubleThrow),
-                    detail::numberDescriptor("poles", schemas[3], m_poles, 1.0),
-                    detail::textDescriptor("key", schemas[4], m_key)};
+            const std::vector<PropertySchema> schemas = pushPropertySchema();
+            return {detail::boolProperty(schemaById(schemas, "closed"), m_closed),
+                    detail::boolProperty(schemaById(schemas, "normallyClosed"), m_normallyClosed),
+                    detail::boolProperty(schemaById(schemas, "doubleThrow"), m_doubleThrow),
+                    detail::numberProperty(schemaById(schemas, "poles"), m_poles),
+                    detail::textProperty(schemaById(schemas, "key"), m_key)};
         }
-        auto schemas = propertySchema();
-        return {detail::boolDescriptor("closed", schemas[0], m_closed),
-                detail::boolDescriptor("normallyClosed", schemas[1], m_normallyClosed)};
+        const std::vector<PropertySchema> schemas = propertySchema();
+        return {detail::boolProperty(schemaById(schemas, "closed"), m_closed),
+                detail::boolProperty(schemaById(schemas, "normallyClosed"), m_normallyClosed)};
     }
 
     static std::vector<PropertySchema> propertySchema() {
@@ -296,11 +310,13 @@ public:
         std::memcpy(&m_energized, in, sizeof(m_energized));
     }
 
-    std::vector<PropertyDescriptor> propertyDescriptors() override {
-        auto schemas = propertySchema();
-        return {detail::boolDescriptor("normallyClosed", schemas[0], m_normallyClosed),
-                detail::numberDescriptor("iOn", schemas[1], m_iOn, 0.0),
-                detail::numberDescriptor("iOff", schemas[2], m_iOff, 0.0)};
+    std::vector<PropertyDescriptor> propertyDescriptors() override { return toPropertyDescriptors(properties()); }
+
+    std::vector<PropertyDefinition> properties() {
+        const std::vector<PropertySchema> schemas = propertySchema();
+        return {detail::boolProperty(schemaById(schemas, "normallyClosed"), m_normallyClosed),
+                detail::numberProperty(schemaById(schemas, "iOn"), m_iOn),
+                detail::numberProperty(schemaById(schemas, "iOff"), m_iOff)};
     }
 
     static std::vector<PropertySchema> propertySchema() {
@@ -357,46 +373,51 @@ public:
     size_t getState(uint8_t*, size_t) const override { return 0; }
     void setState(const uint8_t*, size_t) override {}
 
-    std::vector<PropertyDescriptor> propertyDescriptors() override {
-        std::vector<PropertyDescriptor> descriptors;
+    std::vector<PropertyDescriptor> propertyDescriptors() override { return toPropertyDescriptors(properties()); }
+
+    /** Lista dinâmica (tamanho/tipos só conhecidos em runtime, vindos de `m_schemas`) -- não dá pra
+     * declarar cada `PropertyDefinition` nomeada à mão como as outras classes deste arquivo fazem;
+     * cada `get`/`set` fecha sobre `this` + o índice certo dentro de `m_numbers`/`m_bools`/
+     * `m_strings`, mesma estrutura de antes, agora validando via `validatePropertyValue` (mesma
+     * regra de `SimulationSession::setProperty`) antes de mutar. */
+    std::vector<PropertyDefinition> properties() {
+        std::vector<PropertyDefinition> definitions;
         size_t n = 0;
         size_t b = 0;
         size_t s = 0;
-        for (const auto& schema : m_schemas) {
+        for (const PropertySchema& schema : m_schemas) {
             if (schema.valueKind == PropertyValueKind::Number) {
                 const size_t index = n++;
                 if (m_pinSpec && (schema.flags & PropertySchemaAffectsPinCount) != 0) {
-                    descriptors.push_back(PropertyDescriptor{
-                        schema.id,
-                        schema.unit,
-                        [this, index] { return PropertyValue{m_numbers[index]}; },
-                        [this, index, minValue = schema.minValue.value_or(0.0)](const PropertyValue& value) {
-                            if (const double* d = std::get_if<double>(&value)) {
-                                m_numbers[index] = detail::clampMin(*d, minValue);
-                                m_pins = resolveDynamicPins(*m_pinSpec, currentProperties());
-                            }
-                        },
+                    definitions.push_back(PropertyDefinition{
                         schema,
+                        [this, index] { return PropertyValue{m_numbers[index]}; },
+                        [this, index, schema, minValue = schema.minValue.value_or(0.0)](const PropertyValue& value) -> PropertyBindResult {
+                            if (const std::optional<std::string> error = validatePropertyValue(schema, value)) return {false, *error};
+                            m_numbers[index] = detail::clampMin(std::get<double>(value), minValue);
+                            m_pins = resolveDynamicPins(*m_pinSpec, currentProperties());
+                            return {true, {}};
+                        },
                     });
                 } else {
-                    descriptors.push_back(detail::numberDescriptor(schema.id, schema, m_numbers[index], schema.minValue.value_or(0.0)));
+                    definitions.push_back(detail::numberProperty(schema, m_numbers[index]));
                 }
             } else if (schema.valueKind == PropertyValueKind::Bool) {
-                descriptors.push_back(PropertyDescriptor{
-                    schema.id,
-                    "",
-                    [this, b] { return PropertyValue{m_bools[b] != 0}; },
-                    [this, b](const PropertyValue& value) {
-                        if (const bool* flag = std::get_if<bool>(&value)) m_bools[b] = *flag ? 1 : 0;
-                    },
+                definitions.push_back(PropertyDefinition{
                     schema,
+                    [this, b] { return PropertyValue{m_bools[b] != 0}; },
+                    [this, b, schema](const PropertyValue& value) -> PropertyBindResult {
+                        if (const std::optional<std::string> error = validatePropertyValue(schema, value)) return {false, *error};
+                        m_bools[b] = std::get<bool>(value) ? 1 : 0;
+                        return {true, {}};
+                    },
                 });
                 ++b;
             } else if (schema.valueKind == PropertyValueKind::String) {
-                descriptors.push_back(detail::textDescriptor(schema.id, schema, m_strings[s++]));
+                definitions.push_back(detail::textProperty(schema, m_strings[s++]));
             }
         }
-        return descriptors;
+        return definitions;
     }
 
 private:
@@ -445,10 +466,12 @@ public:
     size_t getState(uint8_t*, size_t) const override { return 0; }
     void setState(const uint8_t*, size_t) override {}
 
-    std::vector<PropertyDescriptor> propertyDescriptors() override {
-        auto schemas = propertySchema(m_forwardVoltage, m_resistance);
-        return {detail::numberDescriptor("threshold", schemas[0], m_forwardVoltage, 0.0),
-                detail::numberDescriptor("resistance", schemas[1], m_resistance, 1e-9)};
+    std::vector<PropertyDescriptor> propertyDescriptors() override { return toPropertyDescriptors(properties()); }
+
+    std::vector<PropertyDefinition> properties() {
+        const std::vector<PropertySchema> schemas = propertySchema(m_forwardVoltage, m_resistance);
+        return {detail::numberProperty(schemaById(schemas, "threshold"), m_forwardVoltage),
+                detail::numberProperty(schemaById(schemas, "resistance"), m_resistance)};
     }
 
     static std::vector<PropertySchema> propertySchema(double threshold = 0.7, double resistance = 1.0) {
@@ -484,8 +507,10 @@ public:
     size_t getState(uint8_t*, size_t) const override { return 0; }
     void setState(const uint8_t*, size_t) override {}
 
-    std::vector<PropertyDescriptor> propertyDescriptors() override {
-        return {detail::numberDescriptor("beta", propertySchema().front(), m_beta, 1.0)};
+    std::vector<PropertyDescriptor> propertyDescriptors() override { return toPropertyDescriptors(properties()); }
+
+    std::vector<PropertyDefinition> properties() {
+        return {detail::numberProperty(propertySchema().front(), m_beta)};
     }
 
     static std::vector<PropertySchema> propertySchema() {
@@ -516,8 +541,10 @@ public:
     size_t getState(uint8_t*, size_t) const override { return 0; }
     void setState(const uint8_t*, size_t) override {}
 
-    std::vector<PropertyDescriptor> propertyDescriptors() override {
-        return {detail::numberDescriptor("voltage", propertySchema().front(), m_voltage, 0.0)};
+    std::vector<PropertyDescriptor> propertyDescriptors() override { return toPropertyDescriptors(properties()); }
+
+    std::vector<PropertyDefinition> properties() {
+        return {detail::numberProperty(propertySchema().front(), m_voltage)};
     }
 
     static std::vector<PropertySchema> propertySchema() {

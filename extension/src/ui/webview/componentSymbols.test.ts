@@ -607,6 +607,130 @@ import { PackageDescriptor } from "./model";
     assert(!svgB.includes("knob-component_A"), "segunda instância não deveria reutilizar ID da primeira");
   });
 
+  await test("ViewSpec 'visible' stateProjection esconde/mostra a bolha de inversão (NAND/NOR/NOT/XNOR, auditoria 2026-07-09)", () => {
+    // Mesmo padrão real de devices/simulide-logic/and_gate.lsdevice (achado de auditoria: gates
+    // ganharam a propriedade `inverted`, mas o símbolo não mudava visualmente -- corrigido com uma
+    // bolha `partId: "invertBubble"` só visível quando `inverted=true`).
+    const gatePkg: PackageDescriptor = {
+      width: 32,
+      height: 16,
+      background: { kind: "none" },
+      pins: [
+        { id: "in1", x: 8, y: 4, angle: 180, length: 8, label: "" },
+        { id: "in2", x: 8, y: 12, angle: 180, length: 8, label: "" },
+        { id: "out", x: 24, y: 8, angle: 0, length: 8, label: "" },
+      ],
+      viewSpec: {
+        paint: [
+          { kind: "path", d: "M 7 0 L 12 0 Q 25 0 25 8 Q 25 16 12 16 L 7 16 Z", fill: "#ffffff" },
+          { kind: "ellipse", cx: 27.2, cy: 8, rx: 2.2, ry: 2.2, fill: "#ffffff", partId: "invertBubble" },
+        ],
+        stateProjection: {
+          invertBubble: [{ kind: "visible", prop: "inverted" }],
+        },
+      },
+    };
+    registerPackage("test.viewspec.gate-inverted", gatePkg);
+
+    const svgNormal = packageSymbolSvg("test.viewspec.gate-inverted", { inverted: false }, "gate-and") ?? "";
+    assert(!svgNormal.includes('cx="27.2"'), `AND normal (inverted=false) não deveria desenhar a bolha, markup: ${svgNormal}`);
+
+    const svgInverted = packageSymbolSvg("test.viewspec.gate-inverted", { inverted: true }, "gate-nand") ?? "";
+    assert(svgInverted.includes('cx="27.2"'), `NAND (inverted=true) deveria desenhar a bolha, markup: ${svgInverted}`);
+
+    const svgDefault = packageSymbolSvg("test.viewspec.gate-inverted", {}, "gate-default") ?? "";
+    assert(!svgDefault.includes('cx="27.2"'), `sem a propriedade 'inverted' presente (default do schema é false) a bolha não deveria aparecer, markup: ${svgDefault}`);
+  });
+
+  await test("ViewSpec path aceita statePath declarativo por propriedade, sem case por typeId", () => {
+    const gatePkg: PackageDescriptor = {
+      width: 32,
+      height: 24,
+      background: { kind: "none" },
+      pins: [
+        { id: "out", x: 24, y: { prop: "inputs", multiplier: 4, fallback: 8 }, angle: 0, length: 8, label: "" },
+      ],
+      viewSpec: {
+        paint: [
+          {
+            kind: "path",
+            d: "M 7 0 L 12 0 Q 25 0 25 8 Q 25 16 12 16 L 7 16 Z",
+            fill: "#ffffff",
+            statePath: {
+              prop: "inputs",
+              fallback: "M fallback",
+              map: {
+                "2": "M 7 0 L 12 0 Q 25 0 25 8 Q 25 16 12 16 L 7 16 Z",
+                "3": "M 7 0 L 12 0 Q 25 0 25 12 Q 25 24 12 24 L 7 24 Z",
+              },
+            },
+          },
+        ],
+      },
+    };
+    registerPackage("test.viewspec.state-path", gatePkg);
+
+    const svg2 = packageSymbolSvg("test.viewspec.state-path", { inputs: 2 }, "gate-2") ?? "";
+    assert(svg2.includes("Q 25 0 25 8"), `inputs=2 deveria escolher path compacto, markup: ${svg2}`);
+
+    const svg3 = packageSymbolSvg("test.viewspec.state-path", { inputs: 3 }, "gate-3") ?? "";
+    assert(svg3.includes("Q 25 0 25 12"), `inputs=3 deveria escolher path alto, markup: ${svg3}`);
+
+    const svgDefault = packageSymbolSvg("test.viewspec.state-path", { inputs: 8 }, "gate-default") ?? "";
+    assert(svgDefault.includes("M fallback"), `valor sem map deveria cair no fallback declarativo, markup: ${svgDefault}`);
+  });
+
+  await test("ViewSpec overlayPaint desenha dial por cima de simulidePaint", () => {
+    const dialPkg: PackageDescriptor = {
+      width: 32,
+      height: 40,
+      background: { kind: "none" },
+      pins: [{ id: "p1", x: 0, y: 8, angle: 180, length: 8, label: "" }],
+      simulidePaint: {
+        version: 1,
+        source: { file: "test.cpp", className: "Body", method: "paint" },
+        bounds: { x: 0, y: 0, w: 32, h: 40 },
+        primitives: [{ kind: "rect", x: 4, y: 4, w: 8, h: 8, fill: "#ff0000" }],
+      },
+      viewSpec: {
+        overlayPaint: true,
+        paint: [{ kind: "ellipse", cx: 16, cy: 27, rx: 10, ry: 10, fill: "#00ff00", cssClass: "encoder-hit-zone" }],
+        hitTest: { dial: { kind: "circle", cx: 16, cy: 27, r: 12, cursor: "grab" } },
+        interaction: { dial: { kind: "dragAngular", hitTest: "dial", prop: "resistance", cx: 16, cy: 27, continuous: true, limits: "dial" } },
+        limits: { dial: { min: 0, max: 10000, minAngleDeg: -150, maxAngleDeg: 150, clamp: true } },
+      },
+    };
+    registerPackage("test.viewspec.overlay-dial", dialPkg);
+    const svg = packageSymbolSvg("test.viewspec.overlay-dial", { resistance: 5000 }, "dial-overlay") ?? "";
+    assert(svg.includes('fill="#ff0000"'), `simulidePaint base deveria continuar desenhado, markup: ${svg}`);
+    assert(svg.includes('fill="#00ff00"'), `overlayPaint deveria desenhar o dial do ViewSpec, markup: ${svg}`);
+    assert(svg.includes("viewspec-interaction-dragAngular"), `hit-test dragAngular deveria continuar presente, markup: ${svg}`);
+  });
+
+  await test("ViewSpec rotate aceita propRange/angleRange para Dialed contínuo", () => {
+    const dialPkg: PackageDescriptor = {
+      width: 32,
+      height: 40,
+      background: { kind: "none" },
+      pins: [{ id: "p1", x: 0, y: 20, angle: 180, length: 8, label: "" }],
+      viewSpec: {
+        paint: [
+          { kind: "ellipse", cx: 16, cy: 20, rx: 2, ry: 2, fill: "#d2d2c8", cssClass: "encoder-indicator", partId: "dialIndicator" },
+        ],
+        stateProjection: {
+          dialIndicator: [{ kind: "rotate", prop: "resistance", stepsPerRev: 1000, propRange: [0, 10000], angleRange: [-150, 150], cx: 16, cy: 27 }],
+        },
+      },
+    };
+    registerPackage("test.viewspec.rotate-range", dialPkg);
+    const svg = packageSymbolSvg("test.viewspec.rotate-range", { resistance: 5000 }, "dial-range") ?? "";
+    assert(svg.includes('class="encoder-indicator"'), `indicador deveria ser desenhado, markup: ${svg}`);
+    assert(!svg.includes("rotate("), `valor no meio da faixa deveria mapear para 0 graus sem transform redundante, markup: ${svg}`);
+
+    const svgMax = packageSymbolSvg("test.viewspec.rotate-range", { resistance: 10000 }, "dial-range-max") ?? "";
+    assert(svgMax.includes('transform="rotate(150.00,16,27)"'), `valor máximo deveria mapear para +150 graus, markup: ${svgMax}`);
+  });
+
   await test("ViewSpec preserva background image antes do paint interativo", () => {
     const viewSpecWithBackgroundPkg: PackageDescriptor = {
       width: 24,

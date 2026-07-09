@@ -5,7 +5,7 @@ namespace lasecsimul::mcu {
 
 McuComponent::McuComponent(std::unique_ptr<IMcuAdapter> adapter, simulation::Scheduler& scheduler,
                            std::span<const Pin> requestedPins)
-    : m_adapter(std::move(adapter)), m_scheduler(scheduler) {
+    : m_adapter(std::move(adapter)), m_scheduler(scheduler), m_controller(*m_adapter) {
     m_modules = m_adapter->createModules();
     m_moduleWakeupDueNs.assign(m_modules.size(), QemuModule::kNoWakeup);
     m_moduleWakeupGeneration.assign(m_modules.size(), 0);
@@ -23,7 +23,17 @@ McuComponent::McuComponent(std::unique_ptr<IMcuAdapter> adapter, simulation::Sch
         }
         m_pins.push_back(Pin{pinMap[index].pinId});
     }
-    m_arenaBridge.setMemoryRegions(m_adapter->memoryRegions());
+    // m_controller já chamou setMemoryRegions(m_adapter->memoryRegions()) no próprio construtor.
+}
+
+PluginHealthStatus McuComponent::health() const {
+    PluginHealthStatus worst = m_adapter->health();
+    for (const std::unique_ptr<QemuModule>& module : m_modules) {
+        const PluginHealthStatus moduleHealth = module->health();
+        if (moduleHealth == PluginHealthStatus::Faulted) return PluginHealthStatus::Faulted;
+        if (moduleHealth == PluginHealthStatus::Lagging && worst == PluginHealthStatus::Ok) worst = PluginHealthStatus::Lagging;
+    }
+    return worst;
 }
 
 void McuComponent::onAssignedIndex(uint32_t index) {
@@ -86,9 +96,10 @@ QemuModule* McuComponent::findModule(uint64_t address) const {
 }
 
 void McuComponent::pollAndDispatchPendingEvents() {
-    if (!m_arenaOpen) return;
+    qemu::QemuArenaBridge& arenaBridge = m_controller.arenaBridge();
+    if (!arenaBridge.isOpen()) return;
     for (int i = 0; i < kMaxEventsPerStamp; ++i) {
-        const qemu::QemuPollResult result = m_arenaBridge.poll();
+        const qemu::QemuPollResult result = arenaBridge.poll();
         if (!result.hasEvent || !result.event) break;
         const qemu::QemuArenaEvent& event = *result.event;
 
@@ -96,16 +107,16 @@ void McuComponent::pollAndDispatchPendingEvents() {
             if (QemuModule* module = findModule(event.regAddr)) {
                 module->writeRegisterAt(event.regAddr, event.regData, m_scheduler.nowNsUnlocked());
             }
-            m_arenaBridge.acknowledgeWrite();
+            arenaBridge.acknowledgeWrite();
         } else if (event.simuAction == LSDN_SIM_READ) {
             uint64_t value = 0;
             if (QemuModule* module = findModule(event.regAddr)) value = module->readRegister(event.regAddr);
-            m_arenaBridge.acknowledgeRead(value);
+            arenaBridge.acknowledgeRead(value);
         } else {
             // SIM_FREQ/SIM_EVENT/SIM_INTERRUPT/SIM_I2C/SIM_SPI/SIM_USART/SIM_TIMER/SIM_GPIO_IN:
             // fora de escopo desta versão (Blink Real só precisa de SIM_READ/SIM_WRITE) -- só
             // confirma pra não travar o QEMU esperando uma resposta que nunca vem.
-            m_arenaBridge.acknowledgeWrite();
+            arenaBridge.acknowledgeWrite();
         }
     }
 }
@@ -171,28 +182,17 @@ void McuComponent::loadFirmware(const std::filesystem::path& firmwarePath, const
     m_lastFirmwarePath = firmwarePath;
     m_lastArenaName = arenaName;
 
-    if (m_processManager.isRunning()) stopFirmware();
-    if (m_arenaOpen) {
-        m_arenaBridge.close();
-        m_arenaOpen = false;
-    }
+    if (m_controller.isRunning() || m_controller.arenaBridge().isOpen()) stopFirmware();
     resetModulesAndWakeups();
 
-    QemuLaunchSpec spec = m_adapter->buildLaunchArgs(firmwarePath.string());
-    if (!qemuBinaryOverride.empty()) spec.binary = qemuBinaryOverride;
-    spec.args.insert(spec.args.begin(), arenaName); // argv[1] = chave da arena, ver McuController
-
-    m_arenaBridge.open(qemu::QemuArenaOpenOptions{arenaName, true});
-    m_arenaOpen = true;
-    m_processManager.start(spec);
+    // McuController::start() já cobre a sequência "Core cria a arena antes de o QEMU poder
+    // anexá-la, depois inicia o processo" (mesmo código exercitado por McuControllerRealQemuTest
+    // contra o binário QEMU de verdade) -- ver comentário do membro m_controller no .hpp.
+    m_controller.start(firmwarePath, arenaName, qemuBinaryOverride);
     m_scheduler.markDirty(m_componentIndex);
 }
 
-void McuComponent::stopFirmware() {
-    m_processManager.stop();
-    m_arenaBridge.close();
-    m_arenaOpen = false;
-}
+void McuComponent::stopFirmware() { m_controller.stop(); }
 
 void McuComponent::resetModulesAndWakeups() {
     for (const std::unique_ptr<QemuModule>& m : m_modules) m->reset();

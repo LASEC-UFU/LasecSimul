@@ -7,9 +7,11 @@ McuController::McuController(const IMcuAdapter& adapter, std::string qemuBinaryO
     m_arenaBridge.setMemoryRegions(m_adapter.memoryRegions());
 }
 
-void McuController::start(const std::filesystem::path& firmwarePath, const std::string& arenaName) {
+void McuController::start(const std::filesystem::path& firmwarePath, const std::string& arenaName,
+                           const std::string& callSiteBinaryOverride) {
     QemuLaunchSpec spec = m_adapter.buildLaunchArgs(firmwarePath.string());
-    if (!m_qemuBinaryOverride.empty()) spec.binary = m_qemuBinaryOverride;
+    const std::string& effectiveOverride = !callSiteBinaryOverride.empty() ? callSiteBinaryOverride : m_qemuBinaryOverride;
+    if (!effectiveOverride.empty()) spec.binary = effectiveOverride;
 
     // argv[1] do processo = chave da shared memory, confirmado lendo simuMain() em
     // simuliface.c (C:\SourceCode\qemu_simulide): `shMemKey = argv[1]; argv = &argv[2];` -- o

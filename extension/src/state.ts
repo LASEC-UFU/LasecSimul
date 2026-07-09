@@ -29,6 +29,11 @@ export const state = {
   trustStore: undefined as TrustStore | undefined,
   lastSyncedProjectState: undefined as WebviewProjectState | undefined,
   voltageReadoutTimer: undefined as ReturnType<typeof setInterval> | undefined,
+  /** Snapshot de `{components, wires}` (o que `ProjectSerializer` de fato persiste, ver
+   * `ProjectSerializer.ts`/`projectCommands.ts`) tirado logo após um save/load bem-sucedido --
+   * comparado contra `schematicState` atual pra decidir se há alteração não salva (`isProjectDirty`
+   * em `projectCommands.ts`). `undefined` == projeto novo/vazio ainda sem save nenhum. */
+  lastSavedProjectState: undefined as { components: WebviewProjectState["components"]; wires: WebviewProjectState["wires"] } | undefined,
 };
 
 /**

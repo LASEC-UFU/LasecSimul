@@ -1,4 +1,5 @@
 #include "PluginRuntime.hpp"
+#include <chrono>
 #include <cstdio>
 #include <string>
 #include <utility>
@@ -6,6 +7,25 @@
 namespace lasecsimul::plugins {
 
 namespace {
+
+// LsdnMcuHostApi (mcu_abi.h): achado de auditoria arquitetural 2026-07-09 -- host_ctx/host_api
+// eram sempre nullptr/nullptr em createMcuAdapter, então um plugin de MCU que tentasse chamar
+// host_api->log/now_ns (recebidos em create()) sofria null-pointer dereference. now_ns aqui é
+// wall-clock (steady_clock), não tempo simulado: IMcuAdapter é criado 1x, ANTES de existir
+// McuComponent/Scheduler pra essa instância -- tempo simulado de verdade só existe depois, via
+// Scheduler::nowNsUnlocked() dentro de McuComponent/QemuModule. Nenhum plugin de MCU shipado hoje
+// usa now_ns pra mais que log/timestamp de inicialização, então essa simplificação é segura.
+uint64_t hostMcuNowNs(void*) {
+    return static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch())
+            .count());
+}
+
+void hostMcuLog(void*, int32_t level, const char* msg) {
+    std::fprintf(stderr, "[NativeMcuHost][%d] %s\n", level, msg ? msg : "");
+}
+
+const LsdnMcuHostApi kMcuHostApi = {&hostMcuLog, &hostMcuNowNs};
 
 // Até esta mudança, `pin_declare` só escrevia em `pinNames` (usado só por `pin_write`/`pin_read`/
 // `pin_name`) -- `NativeDeviceProxy::pins()` continuava devolvendo `ComponentMeta::pins`, fixo
@@ -176,7 +196,9 @@ std::unique_ptr<IMcuAdapter> PluginRuntime::createMcuAdapter(const std::string& 
     }
 
     const LsdnMcuVTable* vt = module->mcuVTable();
-    LsdnMcuAdapter* handle = vt->create(nullptr, nullptr);
+    // host_ctx = nullptr (as duas funções acima não precisam de estado próprio, mesmo padrão de
+    // hostLog do lado device); host_api = kMcuHostApi de verdade agora, não mais nullptr.
+    LsdnMcuAdapter* handle = vt->create(nullptr, &kMcuHostApi);
     if (!handle) {
         throw std::runtime_error("Plugin MCU create() retornou nullptr para chipId: " + chipId);
     }

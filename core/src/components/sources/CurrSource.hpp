@@ -4,6 +4,7 @@
 #include <array>
 #include <optional>
 #include "lasecsimul/IComponentModel.hpp"
+#include "lasecsimul/PropertyDefinition.hpp"
 
 namespace lasecsimul::components {
 
@@ -32,24 +33,42 @@ public:
     size_t getState(uint8_t*, size_t) const override { return 0; }
     void setState(const uint8_t*, size_t) override {}
 
-    std::vector<PropertyDescriptor> propertyDescriptors() override {
-        const auto schemas = propertySchema();
-        PropertyDescriptor value{"value", "A", [this] { return PropertyValue{m_value}; },
-                                  [this](const PropertyValue& v) {
-                                      if (const double* d = std::get_if<double>(&v)) setValue(*d);
-                                  }};
-        value.schema = schemas[0];
-        PropertyDescriptor maxValue{"maxValue", "A", [this] { return PropertyValue{m_maxValue}; },
-                                     [this](const PropertyValue& v) {
-                                         if (const double* d = std::get_if<double>(&v)) setMaxValue(*d);
-                                     }};
-        maxValue.schema = schemas[1];
-        PropertyDescriptor minValue{"minValue", "A", [this] { return PropertyValue{m_minValue}; },
-                                     [this](const PropertyValue& v) {
-                                         if (const double* d = std::get_if<double>(&v)) setMinValue(*d);
-                                     }};
-        minValue.schema = schemas[2];
-        return {value, maxValue, minValue};
+    std::vector<PropertyDescriptor> propertyDescriptors() override { return toPropertyDescriptors(properties()); }
+
+    std::vector<PropertyDefinition> properties() {
+        const std::vector<PropertySchema> schemas = propertySchema();
+        const PropertySchema valueSchema = schemaById(schemas, "value");
+        const PropertySchema maxValueSchema = schemaById(schemas, "maxValue");
+        const PropertySchema minValueSchema = schemaById(schemas, "minValue");
+        return {
+            PropertyDefinition{
+                valueSchema,
+                [this] { return PropertyValue{m_value}; },
+                [this, valueSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(valueSchema, v)) return {false, *error};
+                    setValue(std::get<double>(v));
+                    return {true, {}};
+                },
+            },
+            PropertyDefinition{
+                maxValueSchema,
+                [this] { return PropertyValue{m_maxValue}; },
+                [this, maxValueSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(maxValueSchema, v)) return {false, *error};
+                    setMaxValue(std::get<double>(v));
+                    return {true, {}};
+                },
+            },
+            PropertyDefinition{
+                minValueSchema,
+                [this] { return PropertyValue{m_minValue}; },
+                [this, minValueSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(minValueSchema, v)) return {false, *error};
+                    setMinValue(std::get<double>(v));
+                    return {true, {}};
+                },
+            },
+        };
     }
 
     static std::vector<PropertySchema> propertySchema() {

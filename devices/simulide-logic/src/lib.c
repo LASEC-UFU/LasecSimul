@@ -136,13 +136,33 @@ static uint32_t seven_seg(uint32_t value) {
     return map[value & 0x0f];
 }
 
+/* NAND/NOR/XNOR/NOT não são typeIds separados -- mesma solução do SimulIDE real
+ * (`gate.cpp`/`gate_and.cpp`: propriedade "Inverted Outs" na MESMA porta AND/OR/XOR/Buffer, achado
+ * de auditoria 2026-07-08 -- LasecSimul não tinha essa flag, tornando NAND/NOR/NOT/XNOR
+ * inconstruíveis). `logic.buffer` com `inverted=true` É o NOT. AND/OR também seguem o SimulIDE real
+ * em `Num_Inputs` 2-8: o manifesto declara `out` primeiro e `in1..inN` dinamicamente; este stamp
+ * lê essas N entradas. XOR/Buffer continuam fixos porque a referência SimulIDE 2 não expõe
+ * `Num_Inputs` nesses dois. */
 static void stamp_gate(LogicDevice* s, LsdnMatrixView* matrix) {
+    if (streq(s, "logic.and_gate") || streq(s, "logic.or_gate")) {
+        uint32_t inputs = (uint32_t)cfg_num(s, "inputs", 2);
+        if (inputs < 2) inputs = 2;
+        if (inputs > 8) inputs = 8;
+        uint32_t high = 0;
+        for (uint32_t i = 0; i < inputs; ++i) {
+            if (read_level(matrix, i + 1)) high++;
+        }
+        int out = streq(s, "logic.and_gate") ? (high == inputs) : (high > 0);
+        if (cfg_bool(s, "inverted", 0)) out = !out;
+        drive_level(matrix, 0, out);
+        return;
+    }
+
     const int a = read_level(matrix, 0);
     const int b = read_level(matrix, 1);
     int out = a;
-    if (streq(s, "logic.and_gate")) out = a && b;
-    else if (streq(s, "logic.or_gate")) out = a || b;
-    else if (streq(s, "logic.xor_gate")) out = !!(a ^ b);
+    if (streq(s, "logic.xor_gate")) out = !!(a ^ b);
+    if (cfg_bool(s, "inverted", 0)) out = !out;
     drive_level(matrix, streq(s, "logic.buffer") ? 1 : 2, out);
 }
 
