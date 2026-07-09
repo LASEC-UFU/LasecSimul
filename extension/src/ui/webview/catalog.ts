@@ -14,7 +14,12 @@ export const defaultComponentCatalog: WebviewComponentCatalogEntry[] = [
   { typeId: "passive.capacitor", label: "Capacitor", category: "Passivos", subcategory: "Reativo", folderPath: ["Passivos", "Reativo"], icon: "capacitor", pinCount: 2, defaultProperties: { capacitance: 1e-6 } },
   { typeId: "passive.inductor", label: "Indutor", category: "Passivos", subcategory: "Reativo", folderPath: ["Passivos", "Reativo"], icon: "inductor", pinCount: 2, defaultProperties: { inductance: 1e-3 } },
   { typeId: "connectors.bus", label: "Barramento", category: "Conectores", folderPath: ["Conectores"], icon: "bus", pinCount: 1, defaultProperties: {} },
-  { typeId: "connectors.tunnel", label: "Tunel", category: "Conectores", folderPath: ["Conectores"], icon: "tunel", pinCount: 1, defaultProperties: {} },
+  // `pinIds: ["pin"]` -- todo `.lssubcircuit` (gravado por `createSubcircuitFromSelectionHandler` OU
+  // autorado à mão) referencia o pino do túnel como `pinId: "pin"` (singular, sem sufixo numérico) em
+  // `wires[]`. Sem isto aqui, `pinsForTypeId` cairia no genérico `pin-1`, e toda instância viva de um
+  // túnel (ex: "Abrir Subcircuito", `extension.ts::openSubcircuitForEditingCommand`) teria seus fios
+  // de fronteira órfãos -- `pinScenePosition` (main.ts) casa por STRING exata do id.
+  { typeId: "connectors.tunnel", label: "Tunel", category: "Conectores", folderPath: ["Conectores"], icon: "tunel", pinCount: 1, pinIds: ["pin"], defaultProperties: {} },
   { typeId: "connectors.socket", label: "Soquete", category: "Conectores", folderPath: ["Conectores"], icon: "socket", pinCount: 8, defaultProperties: {} },
   { typeId: "connectors.header", label: "Cabecalho", category: "Conectores", folderPath: ["Conectores"], icon: "header", pinCount: 8, defaultProperties: {} },
   { typeId: "graphics.image", label: "Imagem", category: "Grafico", folderPath: ["Grafico"], icon: "graphic-image", pinCount: 0, defaultProperties: { path: "" } },

@@ -53,7 +53,14 @@ export type HostToWebviewMessage =
    * (nunca `undefined`) pra "limpar" -- `undefined` some silenciosamente de um `JSON.stringify`
    * (chave nem aparece no objeto resultante), então "voltou a `undefined`" ficaria indistinguível de
    * "não mudou" se não fosse por um sentinela serializável; `null` sobrevive o round-trip inteiro. */
-  | { version: number; type: "syncStatePatch"; patch: Omit<Partial<WebviewProjectState>, "pendingConnection"> & { pendingConnection?: WebviewProjectState["pendingConnection"] | null } }
+  | {
+      version: number;
+      type: "syncStatePatch";
+      patch: Omit<Partial<WebviewProjectState>, "pendingConnection" | "subcircuitEditingContext"> & {
+        pendingConnection?: WebviewProjectState["pendingConnection"] | null;
+        subcircuitEditingContext?: WebviewProjectState["subcircuitEditingContext"] | null;
+      };
+    }
   | { version: number; type: "componentReadout"; readoutsByComponentId: Record<string, ComponentReadoutValue> }
   | { version: number; type: "wireVoltages"; voltagesByWireId: Record<string, number> }
   | { version: number; type: "simulationStatus"; status: SimulationStatus }
@@ -177,7 +184,17 @@ export type WebviewToHostMessage =
   /** Envia a seleção atual pro host pra criar um `.lssubcircuit` — disparado pelo item do menu de
    * contexto de multi-seleção OU pela resposta da Webview a `triggerCreateSubcircuitFromSelection`.
    * `componentIds`: IDs dos componentes selecionados. */
-  | { version: number; type: "requestCreateSubcircuitFromSelection"; componentIds: string[] };
+  | { version: number; type: "requestCreateSubcircuitFromSelection"; componentIds: string[] }
+  /** "Abrir Subcircuito" no menu de contexto de uma instância `subcircuit-file` já registrada --
+   * troca `components`/`wires` no painel pelo circuito INTERNO do `.lssubcircuit` apontado por
+   * `sourceId` (mesmo `RegisteredSource.id` do catálogo), empilhando o circuito atual pra restaurar
+   * depois. Ver `extension.ts::openSubcircuitForEditingCommand`/`WebviewProjectState.
+   * subcircuitEditingContext`. */
+  | { version: number; type: "requestOpenSubcircuit"; sourceId: string }
+  /** "Voltar ao Circuito Principal" -- grava `components`/`wires` atuais de volta no `.lssubcircuit`
+   * da sessão em andamento (topo da pilha) e restaura o circuito empilhado. No-op se nenhuma sessão
+   * estiver ativa. */
+  | { version: number; type: "requestCloseSubcircuitEditor" };
 
 export function isHostMessage(value: unknown): value is HostToWebviewMessage {
   return typeof value === "object" && value !== null && "type" in value && "version" in value;

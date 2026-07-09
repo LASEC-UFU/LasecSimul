@@ -34,6 +34,27 @@ export const state = {
    * comparado contra `schematicState` atual pra decidir se há alteração não salva (`isProjectDirty`
    * em `projectCommands.ts`). `undefined` == projeto novo/vazio ainda sem save nenhum. */
   lastSavedProjectState: undefined as { components: WebviewProjectState["components"]; wires: WebviewProjectState["wires"] } | undefined,
+  /** Pilha de sessões "Abrir Subcircuito" em andamento (ver `extension.ts::
+   * openSubcircuitForEditingCommand`/`closeSubcircuitEditorCommand`) -- empilha em vez de um único
+   * slot pra suportar abrir um subcircuito DENTRO de outro já em edição. `originalManifest` é o JSON
+   * bruto lido do `.lssubcircuit` no momento da abertura, com `components`/`wires` sobrescritos na
+   * hora de gravar de volta -- preserva TODAS as outras chaves (`package`, `interface`,
+   * `translations`, ...) sem precisar conhecê-las aqui. */
+  subcircuitEditingStack: [] as Array<{
+    sourceId: string;
+    filePath: string;
+    originalManifest: Record<string, unknown>;
+    outerSchematicState: WebviewProjectState;
+    outerProjectFilePath: string | undefined;
+    /** `components`/`wires` como ficaram logo após a conversão do `.lssubcircuit` (antes de
+     * qualquer edição do usuário nesta sessão) -- comparado contra `state.schematicState.
+     * components/wires` atuais em `closeSubcircuitEditorCommand` pra decidir se há alteração não
+     * salva (mesmo princípio de `projectCommands.ts::isProjectDirty`). Nunca mutado depois de
+     * empilhado (todo mutador de `schematicState` sempre troca o array por um novo, nunca edita in-
+     * place -- guardar a referência aqui é seguro). */
+    initialComponents: WebviewProjectState["components"];
+    initialWires: WebviewProjectState["wires"];
+  }>,
 };
 
 /**

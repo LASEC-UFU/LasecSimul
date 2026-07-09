@@ -127,6 +127,30 @@ html, body {
   fill: currentColor;
 }
 
+.appbar__group--subcircuit {
+  background: #fff2cc;
+  border: 1px solid #d9b23c;
+  border-radius: 4px;
+  padding: 3px 8px;
+}
+
+.appbar__group--subcircuit:empty {
+  display: none;
+  padding: 0;
+  border: none;
+}
+
+.appbar__subcircuit-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b5405;
+  white-space: nowrap;
+}
+
+.appbar__button--back {
+  color: #6b5405;
+}
+
 .appbar__meta {
   margin-left: auto;
   display: flex;
@@ -263,9 +287,16 @@ html, body {
   filter: drop-shadow(0 0 3px rgba(244, 185, 66, 0.9));
 }
 
+/* Alça de canto (arrastar cotovelo de um fio ortogonal) -- `fill: transparent` (não `none`) mantém a
+   área clicável/arrastável (`pointer-events` só ignora "none", "transparent" ainda conta como
+   pintado, mesmo truque de `.pin-terminal` acima) sem desenhar bola nenhuma sobre o fio -- real
+   SimulIDE também não marca cotovelo nenhum até o usuário selecionar; `cursor: move` já basta de
+   affordance no hover. Só fica visível (`--selected`, aplicada via JS em `isWireCornerSelected`,
+   main.ts) quando o usuário de fato seleciona aquele cotovelo -- nunca permanente (bug relatado
+   2026-07-09: bola azul grande sempre visível em todo cotovelo de fio, mesmo sem seleção). */
 .wire-layer__corner-handle {
-  fill: #eef5ff;
-  stroke: #5b7fd1;
+  fill: transparent;
+  stroke: transparent;
   stroke-width: 1.5;
   cursor: move;
 }

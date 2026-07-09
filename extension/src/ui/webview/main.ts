@@ -183,6 +183,8 @@ const UI_TEXT = {
     zoomReset: "Zoom 1:1",
     exportImage: "Salvar Esquemático como Imagem (SVG)",
     importCircuit: "Importar Circuito...",
+    editingSubcircuit: "Editando subcircuito:",
+    backToMainCircuit: "Voltar ao Circuito Principal",
   },
   en: {
     nothingSelected: "Nothing selected",
@@ -254,6 +256,8 @@ const UI_TEXT = {
     zoomReset: "Zoom 1:1",
     exportImage: "Save Schematic as Image (SVG)",
     importCircuit: "Import Circuit...",
+    editingSubcircuit: "Editing subcircuit:",
+    backToMainCircuit: "Back to Main Circuit",
   },
 } as const;
 
@@ -1077,13 +1081,30 @@ function renderAppBar(): HTMLElement {
   const bar = document.createElement("div");
   bar.className = "appbar";
 
+  // Abrir/Salvar Projeto usam o formato `.lsproj`, incompatível com o circuito INTERNO de um
+  // `.lssubcircuit` em edição (ver `subcircuitEditingContext`/`extension.ts::
+  // warnIfEditingSubcircuit`) -- desabilitados aqui só reforça visualmente o que o host já recusa.
+  const editingSubcircuit = Boolean(state.subcircuitEditingContext);
+
   const fileGroup = document.createElement("div");
   fileGroup.className = "appbar__group";
   fileGroup.append(
-    renderToolbarButton("open", t("openProject"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenProject" })),
-    renderToolbarButton("save", t("saveProject"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestSaveProject" })),
+    renderToolbarButton("open", t("openProject"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenProject" }), editingSubcircuit),
+    renderToolbarButton("save", t("saveProject"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestSaveProject" }), editingSubcircuit),
     renderToolbarButton("exportImage", t("exportImage"), () => exportSchematicImage(), state.components.length === 0),
   );
+
+  const subcircuitGroup = document.createElement("div");
+  subcircuitGroup.className = "appbar__group appbar__group--subcircuit";
+  if (state.subcircuitEditingContext) {
+    const label = document.createElement("span");
+    label.className = "appbar__subcircuit-label";
+    label.textContent = `${t("editingSubcircuit")} ${state.subcircuitEditingContext.name}`;
+    subcircuitGroup.append(
+      label,
+      renderToolbarButton("back", t("backToMainCircuit"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestCloseSubcircuitEditor" })),
+    );
+  }
 
   const simGroup = document.createElement("div");
   simGroup.className = "appbar__group";
@@ -1129,11 +1150,11 @@ function renderAppBar(): HTMLElement {
   status.appendChild(rateLabel);
 
   meta.append(selection, status);
-  bar.append(fileGroup, simGroup, editGroup, viewGroup, meta);
+  bar.append(fileGroup, simGroup, editGroup, viewGroup, subcircuitGroup, meta);
   return bar;
 }
 
-type ToolbarIconKind = "open" | "save" | "start" | "pause" | "stop" | "properties" | "delete" | "zoomFitSelection" | "zoomFitAll" | "zoomReset" | "exportImage";
+type ToolbarIconKind = "open" | "save" | "start" | "pause" | "stop" | "properties" | "delete" | "zoomFitSelection" | "zoomFitAll" | "zoomReset" | "exportImage" | "back";
 
 function renderIcon(kind: ToolbarIconKind): SVGSVGElement {
   const svg = document.createElementNS(SVG_NS, "svg");
@@ -1174,6 +1195,9 @@ function renderIcon(kind: ToolbarIconKind): SVGSVGElement {
       break;
     case "exportImage":
       svg.innerHTML = '<rect x="4" y="4" width="16" height="16" rx="1.5"></rect><circle cx="9" cy="10" r="1.5"></circle><path d="M4 17l5-5 3 3 4-5 4 5"></path>';
+      break;
+    case "back":
+      svg.innerHTML = '<path d="M19 12H5"></path><path d="m11 18-6-6 6-6"></path>';
       break;
   }
 
@@ -3660,6 +3684,12 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
     // aqui; os componentes internos expostos aparecem em submenus separados.
     const isSubcircuitWithPackage = !isGroup && Boolean(sourceId) && catalogEntry?.registeredSourceKind === "subcircuit-file";
     const exposedSubmenuItems: ContextMenuItem[] = !isGroup && isSubcircuitWithPackage ? buildExposedComponentMenuItems(component) : [];
+    // "Abrir Subcircuito" -- entra no circuito INTERNO do `.lssubcircuit` já registrado (ver
+    // `extension.ts::openSubcircuitForEditingCommand`); fica logo após o(s) submenu(s) de
+    // componente(s) expostos, ainda antes de Copiar/Cortar/Remover.
+    const openSubcircuitMenuItems: ContextMenuItem[] = isSubcircuitWithPackage
+      ? [{ label: t("openSubcircuit"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenSubcircuit", sourceId: sourceId! }) }]
+      : [];
     const mcuMenuItems: ContextMenuItem[] = !isGroup && !isSubcircuitWithPackage && isMcuHostComponent(component)
       ? [
           { kind: "separator" },
@@ -3693,7 +3723,8 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
       : [];
     const menuItems: ContextMenuItem[] = [
       ...exposedSubmenuItems,
-      ...(exposedSubmenuItems.length > 0 ? [{ kind: "separator" } satisfies ContextMenuItem] : []),
+      ...openSubcircuitMenuItems,
+      ...(exposedSubmenuItems.length > 0 || openSubcircuitMenuItems.length > 0 ? [{ kind: "separator" } satisfies ContextMenuItem] : []),
       { label: t("copy"), icon: "copy", shortcut: "Ctrl+C", onClick: () => copySelectedItems() },
       { label: t("cut"), icon: "cut", shortcut: "Ctrl+X", onClick: () => cutSelectedItems() },
       { label: isGroup ? t("deleteSelectedItems") : t("remove"), icon: "remove", shortcut: "Del", onClick: () => deleteSelectedItems() },
@@ -4954,9 +4985,10 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
   // PC-1/EX-7: versão incremental de "syncState" -- `patch` só tem os campos de `WebviewProjectState`
   // que mudaram desde o último sync (ver `extension.ts::computeProjectStatePatch`), nunca substitui
   // `state` por inteiro (campo ausente == sem mudança, não "esvaziar"). Mesmo pós-processamento do
-  // handler de "syncState" acima, exceto `resetUndoHistory` (nunca é um "1º load"). `syncPackageRegistry`
-  // só roda quando `catalog` de fato veio no patch -- reduz ainda mais o retrabalho quando só
-  // posição/propriedade de componente mudou.
+  // handler de "syncState" acima, exceto `resetUndoHistory` (nunca é um "1º load") -- COM UMA
+  // EXCEÇÃO, ver `enteringOrLeavingSubcircuitSession` abaixo. `syncPackageRegistry` só roda quando
+  // `catalog` de fato veio no patch -- reduz ainda mais o retrabalho quando só posição/propriedade de
+  // componente mudou.
   if (message.type === "syncStatePatch") {
     // `pendingConnection: null` é o sentinela de "limpar" (ver `extension.ts::computeProjectStatePatch`
     // -- `undefined` não sobrevive a um JSON.stringify, a chave some sem deixar rastro) -- convertido
@@ -4965,9 +4997,22 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
       ...state,
       ...message.patch,
       pendingConnection: message.patch.pendingConnection === null ? undefined : message.patch.pendingConnection ?? state.pendingConnection,
+      subcircuitEditingContext: message.patch.subcircuitEditingContext === null ? undefined : message.patch.subcircuitEditingContext ?? state.subcircuitEditingContext,
     };
-    recordUndoTransition(undoContentKey(merged), () => snapshotOfProjectState(merged));
+    // `openSubcircuitForEditingCommand`/`closeSubcircuitEditorCommand` (`extension.ts`) trocam
+    // `components`/`wires` por um circuito INTERNO completamente diferente via `syncStatePatch` (não
+    // `"init"`, que é só pra 1ª carga do painel) -- sem este caso especial, `recordUndoTransition`
+    // empilharia essa troca de contexto como se fosse uma edição normal, e um Ctrl+Z dentro da sessão
+    // pularia de volta pro circuito de FORA (mesma pilha única, ver seção 17.3 do spec) com
+    // `subcircuitEditingContext` ainda apontando pra dentro -- tela mostrando um circuito, faixa
+    // dizendo outro, e o próximo "Voltar ao Circuito Principal" salvaria o conteúdo ERRADO no
+    // arquivo. `"subcircuitEditingContext" in message.patch` (chave presente, não o valor) cobre
+    // tanto entrar (objeto) quanto sair (sentinela `null`) -- reseta o histórico em vez de registrar
+    // transição, mesmo tratamento de `"init"`.
+    const enteringOrLeavingSubcircuitSession = "subcircuitEditingContext" in message.patch;
+    if (!enteringOrLeavingSubcircuitSession) recordUndoTransition(undoContentKey(merged), () => snapshotOfProjectState(merged));
     state = merged;
+    if (enteringOrLeavingSubcircuitSession) resetUndoHistory(mainUndoHistory);
     if (message.patch.catalog) syncPackageRegistry(state.catalog);
     if (!state.pendingConnection) {
       pendingWirePreviewTarget = undefined;

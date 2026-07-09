@@ -5598,6 +5598,7 @@
       "typeId": "connectors.tunnel",
       "label": "Tunnel.",
       "pinCount": 1,
+      "pinIds": ["pin"],
       "icon": "tunel",
       "folderPath": [
         "Connectors"

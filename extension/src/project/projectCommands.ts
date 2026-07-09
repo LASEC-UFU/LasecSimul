@@ -256,6 +256,7 @@ export async function openRecentProjectCommand(options: {
   openSchematicEditor: (extensionUri: vscode.Uri) => void;
   syncSchematicPanel: () => void;
 }): Promise<void> {
+  if (!warnIfEditingSubcircuit()) return;
   const paths = recentProjectPaths();
   if (paths.length === 0) {
     vscode.window.showInformationMessage("Nenhum projeto recente ainda.");
@@ -286,6 +287,18 @@ export async function openRecentProjectCommand(options: {
   await rebuildCoreFromSchematicState();
 }
 
+/** Abrir/Salvar/Importar Projeto usam o formato `.lsproj` (`ProjectDocument`), incompatível com o
+ * circuito INTERNO de um `.lssubcircuit` sendo editado via "Abrir Subcircuito" (ver `state.
+ * subcircuitEditingStack`/`extension.ts::openSubcircuitForEditingCommand`) -- rodar qualquer um deles
+ * nessa hora sobrescreveria a sessão de edição sem gravá-la de volta primeiro. `true` == pode seguir. */
+function warnIfEditingSubcircuit(): boolean {
+  if (state.subcircuitEditingStack.length === 0) return true;
+  vscode.window.showWarningMessage(
+    "Termine a edição do subcircuito atual (\"Voltar ao Circuito Principal\") antes de abrir, salvar ou importar um projeto."
+  );
+  return false;
+}
+
 /** `true` == usuário confirmou continuar (ou não havia nada pra perder); `false` == cancelou. */
 async function confirmDiscardUnsavedChanges(): Promise<boolean> {
   if (!isProjectDirty()) return true;
@@ -306,6 +319,7 @@ async function confirmDiscardUnsavedChanges(): Promise<boolean> {
 }
 
 export async function saveProjectCommand(): Promise<void> {
+  if (!warnIfEditingSubcircuit()) return;
   const uri = await vscode.window.showSaveDialog({ filters: { "LasecSimul Project": ["lsproj"] } });
   if (!uri) return;
   const project: ProjectDocument = projectWithRelativeSubcircuitRefs({
@@ -337,6 +351,7 @@ export async function openProjectCommand(options: {
   openSchematicEditor: (extensionUri: vscode.Uri) => void;
   syncSchematicPanel: () => void;
 }): Promise<void> {
+  if (!warnIfEditingSubcircuit()) return;
   if (!(await confirmDiscardUnsavedChanges())) return;
   const uris = await vscode.window.showOpenDialog({
     filters: { "LasecSimul Project": ["lsproj"] },
@@ -378,6 +393,7 @@ function nextImportedId(prefix: string): string {
  * fixo só ajudaria a evitar sobreposição num caso especial (importar o MESMO arquivo duas vezes),
  * não vale a complexidade extra pra este caso raro. */
 export async function importProjectCommand(options: { syncSchematicPanel: () => void }): Promise<void> {
+  if (!warnIfEditingSubcircuit()) return;
   if (!state.schematicPanel) {
     vscode.window.showInformationMessage("Abra ou crie um esquemático antes de importar um circuito nele.");
     return;

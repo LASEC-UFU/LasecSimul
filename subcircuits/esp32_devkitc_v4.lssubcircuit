@@ -66,7 +66,8 @@
         "x": 468,
         "y": 265,
         "rotation": 0,
-        "flipH": true
+        "flipH": true,
+        "flipV": false
       },
       "exposed": false
     },
@@ -83,7 +84,9 @@
       "visual": {
         "x": 641,
         "y": 381,
-        "rotation": 90
+        "rotation": 90,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     },
@@ -709,7 +712,8 @@
         "x": 480,
         "y": 103,
         "rotation": 270,
-        "flipH": true
+        "flipH": true,
+        "flipV": false
       },
       "exposed": false
     },
@@ -723,7 +727,9 @@
       "visual": {
         "x": 514,
         "y": 103,
-        "rotation": 90
+        "rotation": 90,
+        "flipH": false,
+        "flipV": false
       },
       "exposed": false
     }
@@ -1039,99 +1045,245 @@
       "points": []
     },
     {
-      "from": { "componentId": "tunnel_G00", "pinId": "pin" },
-      "to": { "componentId": "mcu1", "pinId": "GPIO0" },
+      "from": {
+        "componentId": "tunnel_G00",
+        "pinId": "pin"
+      },
+      "to": {
+        "componentId": "mcu1",
+        "pinId": "GPIO0"
+      },
       "points": []
     },
     {
-      "from": { "componentId": "tunnel_G02", "pinId": "pin" },
-      "to": { "componentId": "mcu1", "pinId": "GPIO2" },
+      "from": {
+        "componentId": "tunnel_G02",
+        "pinId": "pin"
+      },
+      "to": {
+        "componentId": "mcu1",
+        "pinId": "GPIO2"
+      },
       "points": []
     },
     {
-      "from": { "componentId": "tunnel_G04", "pinId": "pin" },
-      "to": { "componentId": "mcu1", "pinId": "GPIO4" },
+      "from": {
+        "componentId": "tunnel_G04",
+        "pinId": "pin"
+      },
+      "to": {
+        "componentId": "mcu1",
+        "pinId": "GPIO4"
+      },
       "points": []
     },
     {
-      "from": { "componentId": "tunnel_G12", "pinId": "pin" },
-      "to": { "componentId": "mcu1", "pinId": "GPIO12" },
+      "from": {
+        "componentId": "tunnel_G12",
+        "pinId": "pin"
+      },
+      "to": {
+        "componentId": "mcu1",
+        "pinId": "GPIO12"
+      },
       "points": []
     },
     {
-      "from": { "componentId": "tunnel_G13", "pinId": "pin" },
-      "to": { "componentId": "mcu1", "pinId": "GPIO13" },
+      "from": {
+        "componentId": "tunnel_G13",
+        "pinId": "pin"
+      },
+      "to": {
+        "componentId": "mcu1",
+        "pinId": "GPIO13"
+      },
       "points": []
     },
     {
-      "from": { "componentId": "tunnel_G14", "pinId": "pin" },
-      "to": { "componentId": "mcu1", "pinId": "GPIO14" },
+      "from": {
+        "componentId": "tunnel_G14",
+        "pinId": "pin"
+      },
+      "to": {
+        "componentId": "mcu1",
+        "pinId": "GPIO14"
+      },
       "points": []
     },
     {
-      "from": { "componentId": "tunnel_G15", "pinId": "pin" },
-      "to": { "componentId": "mcu1", "pinId": "GPIO15" },
+      "from": {
+        "componentId": "tunnel_G15",
+        "pinId": "pin"
+      },
+      "to": {
+        "componentId": "mcu1",
+        "pinId": "GPIO15"
+      },
       "points": []
     },
     {
-      "from": { "componentId": "tunnel_G25", "pinId": "pin" },
-      "to": { "componentId": "mcu1", "pinId": "GPIO25" },
+      "from": {
+        "componentId": "tunnel_G25",
+        "pinId": "pin"
+      },
+      "to": {
+        "componentId": "mcu1",
+        "pinId": "GPIO25"
+      },
       "points": []
     },
     {
-      "from": { "componentId": "tunnel_G26", "pinId": "pin" },
-      "to": { "componentId": "mcu1", "pinId": "GPIO26" },
+      "from": {
+        "componentId": "tunnel_G26",
+        "pinId": "pin"
+      },
+      "to": {
+        "componentId": "mcu1",
+        "pinId": "GPIO26"
+      },
       "points": []
     },
     {
-      "from": { "componentId": "tunnel_G27", "pinId": "pin" },
-      "to": { "componentId": "mcu1", "pinId": "GPIO27" },
+      "from": {
+        "componentId": "tunnel_G27",
+        "pinId": "pin"
+      },
+      "to": {
+        "componentId": "mcu1",
+        "pinId": "GPIO27"
+      },
       "points": []
     },
     {
-      "from": { "componentId": "tunnel_G33", "pinId": "pin" },
-      "to": { "componentId": "mcu1", "pinId": "GPIO33" },
+      "from": {
+        "componentId": "tunnel_G33",
+        "pinId": "pin"
+      },
+      "to": {
+        "componentId": "mcu1",
+        "pinId": "GPIO33"
+      },
       "points": []
     },
     {
-      "from": { "componentId": "tunnel_gnd", "pinId": "pin" },
-      "to": { "componentId": "gnd1", "pinId": "pin" },
+      "from": {
+        "componentId": "tunnel_gnd",
+        "pinId": "pin"
+      },
+      "to": {
+        "componentId": "gnd1",
+        "pinId": "pin"
+      },
       "points": []
     },
     {
-      "from": { "componentId": "pullup_en", "pinId": "p1" },
-      "to": { "componentId": "component-1783345154513-836838", "pinId": "out" },
+      "from": {
+        "componentId": "pullup_en",
+        "pinId": "p1"
+      },
+      "to": {
+        "componentId": "component-1783345154513-836838",
+        "pinId": "out"
+      },
       "points": []
     },
     {
-      "from": { "componentId": "button_en", "pinId": "pin-1" },
-      "to": { "componentId": "tunnel_EN", "pinId": "pin" },
+      "from": {
+        "componentId": "button_en",
+        "pinId": "pin-1"
+      },
+      "to": {
+        "componentId": "tunnel_EN",
+        "pinId": "pin"
+      },
       "points": []
     },
     {
-      "from": { "componentId": "button_en", "pinId": "pin-2" },
-      "to": { "componentId": "gnd1", "pinId": "pin" },
+      "from": {
+        "componentId": "button_en",
+        "pinId": "pin-2"
+      },
+      "to": {
+        "componentId": "gnd1",
+        "pinId": "pin"
+      },
       "points": []
     },
     {
-      "from": { "componentId": "pullup_boot", "pinId": "p1" },
-      "to": { "componentId": "component-1783345154513-836838", "pinId": "out" },
+      "from": {
+        "componentId": "pullup_boot",
+        "pinId": "p1"
+      },
+      "to": {
+        "componentId": "component-1783345154513-836838",
+        "pinId": "out"
+      },
       "points": []
     },
     {
-      "from": { "componentId": "pullup_boot", "pinId": "p2" },
-      "to": { "componentId": "tunnel_G00", "pinId": "pin" },
+      "from": {
+        "componentId": "pullup_boot",
+        "pinId": "p2"
+      },
+      "to": {
+        "componentId": "tunnel_G00",
+        "pinId": "pin"
+      },
       "points": []
     },
     {
-      "from": { "componentId": "button_boot", "pinId": "pin-1" },
-      "to": { "componentId": "tunnel_G00", "pinId": "pin" },
+      "from": {
+        "componentId": "button_boot",
+        "pinId": "pin-1"
+      },
+      "to": {
+        "componentId": "tunnel_G00",
+        "pinId": "pin"
+      },
       "points": []
     },
     {
-      "from": { "componentId": "button_boot", "pinId": "pin-2" },
-      "to": { "componentId": "gnd1", "pinId": "pin" },
+      "from": {
+        "componentId": "button_boot",
+        "pinId": "pin-2"
+      },
+      "to": {
+        "componentId": "gnd1",
+        "pinId": "pin"
+      },
       "points": []
+    },
+    {
+      "from": {
+        "componentId": "tunnel_3v3",
+        "pinId": "pin"
+      },
+      "to": {
+        "componentId": "component-1783345154513-836838",
+        "pinId": "pin-1"
+      },
+      "points": [
+        {
+          "x": 473,
+          "y": 121
+        }
+      ]
+    },
+    {
+      "from": {
+        "componentId": "tunnel_5v",
+        "pinId": "pin"
+      },
+      "to": {
+        "componentId": "component-1783345270243-110688",
+        "pinId": "pin-1"
+      },
+      "points": [
+        {
+          "x": 524,
+          "y": 159
+        }
+      ]
     }
   ],
   "interface": [

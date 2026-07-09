@@ -1922,3 +1922,38 @@ undoable e restaura a seleção anterior, pilhas de autoria/principal independen
 Recomenda-se confirmar visualmente: mover/rotacionar/apagar/colar itens no schematic real e dentro de
 "Abrir Subcircuito", Ctrl+Z/Ctrl+Y em cada caso, incluindo com o foco alternando entre o painel do
 esquemático e outros painéis do VSCode.
+
+## 18. Bug corrigido: bola azul grande permanente nas alças de canto de fio ortogonal (2026-07-09)
+
+**Sintoma relatado** (com screenshot do circuito interno do ESP32 DevKitC dentro de "Abrir
+Subcircuito", ver `lasecsimul-subcircuits.spec` seção 16): alguns encontros/cotovelos de fio
+mostravam uma bola azul grande, permanente, poluindo visualmente o esquemático -- padrão diferente
+do SimulIDE real, que não desenha marcador nenhum sobre fio fora de interação ativa.
+
+**Causa raiz**: `renderWireCornerHandles()` (`extension/src/ui/webview/main.ts`) desenha um
+`<circle class="wire-layer__corner-handle">` em CADA ponto interior (cotovelo) de TODO fio ortogonal
+com 3+ pontos -- chamada incondicionalmente pro loop principal de render (`main.ts`) e pra
+`updateWireVisual` (atualização incremental), nunca gated por seleção/hover. A classe base
+`.wire-layer__corner-handle` (`styles.css`) tinha `fill: #eef5ff; stroke: #5b7fd1` (azul claro)
+como cor PADRÃO, só trocando pra âmbar (`--selected`, `#f4b942`) quando aquele cotovelo específico
+estava selecionado -- ou seja, todo cotovelo de todo fio multi-segmento ficava permanentemente
+visível em azul, não só o selecionado. Isso não é o mesmo marcador que `.junction-dot` (nó elétrico
+real de `connectors.junction`, âmbar 8px, ver seção 15 do spec de subcircuitos) -- é uma alça de UI
+pra ARRASTAR o cotovelo, sem relação nenhuma com topologia elétrica.
+
+**Correção** (`extension/src/ui/webview/styles.css`): base de `.wire-layer__corner-handle` virou
+`fill: transparent; stroke: transparent` (igual ao padrão já estabelecido em `.pin-terminal`, mesmo
+bloco de comentário histórico "bola grande na cor de destaque" de 2026-07-04) -- `fill: transparent`
+(não `none`) preserva 100% da área clicável/arrastável (`pointer-events` só ignora `none`;
+"transparente" ainda conta como pintado), então NENHUMA lógica de drag/roteamento/reconciliação foi
+tocada, só a cor. `.wire-layer__corner-handle--selected` continua âmbar como antes -- único estado em
+que a alça fica visível, exatamente quando o usuário já selecionou aquele cotovelo especificamente
+(mesmo princípio de `.wire-layer__segment-highlight`, que também só aparece com
+`isWireSegmentSelected`, nunca por hover passivo). `cursor: move` (inalterado) já basta de affordance
+antes de clicar.
+
+**Verificação**: compilação limpa (`tsc` webview + test) e suíte de testes completa (154 testes) sem
+regressão -- nenhum teste depende de cor/preenchimento de alça de fio. Mudança é puramente CSS (uma
+troca de `fill`/`stroke` na regra base), zero linha de TypeScript tocada nesta correção. Sem GUI
+disponível neste ambiente pra confirmar visualmente; recomenda-se reabrir um esquemático com fios
+roteados em L/Z e confirmar que nenhuma bola aparece até selecionar o fio.

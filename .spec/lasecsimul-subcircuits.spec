@@ -758,3 +758,96 @@ dedicado (função privada, não exportada, arquivo sem suíte de testes -- cons
 `extension.ts`) -- verificado só por leitura/compilação. Sem GUI neste ambiente pra confirmar
 visualmente no VSCode real; recomenda-se reabrir o subcircuito ESP32 DevKitC e um projeto principal
 com uma junção criada por fio→fio pra confirmar que nenhum círculo/rótulo aparece mais.
+
+## 16. "Abrir Subcircuito" reinstaurado, sem o antigo editor de símbolo, com Salvar/Cancelar/Descartar (2026-07-09)
+
+Continuação da **Revogação em 2026-07-09** (fim da seção 4): naquele mesmo dia, depois de remover
+todo `symbolAuthoring.ts`/`symbolCommands.ts` (autoria de símbolo visual), o usuário pediu de volta
+só a parte de **editar o circuito INTERNO** de um `.lssubcircuit` já registrado -- não o símbolo
+visual, que permanece somente leitura pela decisão da Revogação. Reimplementado do zero (não é
+revert do código antigo), sem `SymbolAuthoringKind`/sessão de autoria genérica compartilhada com
+`.lsdevice`.
+
+### 16.1 Arquitetura: pilha na Extension, não sessão paralela na Webview
+
+`state.subcircuitEditingStack` (`extension/src/state.ts`) -- array, não um único slot, pra suportar
+abrir um subcircuito DENTRO de outro já em edição (nesting). Cada entrada guarda: `sourceId`/
+`filePath`, `originalManifest` (JSON bruto lido do arquivo, preservado por inteiro exceto
+`components`/`wires` na hora de salvar -- `package`/`interface`/`translations`/`authoringScene`
+nunca são tocados por esta sessão), `outerSchematicState`/`outerProjectFilePath` (snapshot completo
+do circuito de fora, restaurado ao sair) e `initialComponents`/`initialWires` (baseline pra
+dirty-check, ver 16.3).
+
+**"Abrir Subcircuito"** (`extension.ts::openSubcircuitForEditingCommand`, mensagem Webview→Host
+`requestOpenSubcircuit{sourceId}`): lê o `.lssubcircuit`, converte `components[]`/`wires[]` (mesmo
+shape `visual.x/y/rotation/flipH/flipV` de `ProjectComponent`) pra `WebviewComponentModel[]`/
+`WebviewWireModel[]` (espelha `projectToWebviewState`, `projectCommands.ts`), empilha o circuito
+ATUAL e troca `state.schematicState` pelo circuito interno. Nada é perdido em disco -- é uma troca
+NA MEMÓRIA, diferente de "Abrir Projeto".
+
+Diferente do fluxo de 2026-06-29 (histórico, seção 4): NÃO semeia `package`/Modo Placa/Logic Symbol
+na mesma sessão -- só o circuito elétrico interno (`components`/`wires`). Overlay de Modo Placa
+(seção 4.1) continua existindo, mas como recurso independente do circuito principal, sem precisar
+"entrar" nesta sessão pra editar posição de placa.
+
+### 16.2 Abrir/Salvar/Importar Projeto bloqueados durante a sessão
+
+`.lsproj` (formato de "Abrir/Salvar/Importar Projeto") é incompatível com o circuito interno de um
+`.lssubcircuit` em edição -- `projectCommands.ts::warnIfEditingSubcircuit()` bloqueia os 3 comandos
+(`openProjectCommand`/`saveProjectCommand`/`importProjectCommand`) com aviso explícito enquanto
+`state.subcircuitEditingStack.length > 0`. A toolbar do esquemático (`main.ts::renderAppBar`)
+desabilita visualmente os botões Abrir/Salvar Projeto no mesmo caso, e mostra uma faixa
+`"Editando subcircuito: <nome>"` com botão **"Voltar ao Circuito Principal"** -- só ela sai da
+sessão.
+
+### 16.3 Sair da sessão: Salvar / Cancelar / Descartar Alterações
+
+Achado de auditoria 2026-07-09 (feedback direto do usuário): a versão inicial desta reimplementação
+sempre gravava ao sair, sem opção de cancelar/descartar -- gerava insegurança ("não sei se minha
+mudança foi aplicada"). Corrigido com dirty-check + diálogo modal de 3 opções
+(`extension.ts::closeSubcircuitEditorCommand`):
+
+- **Sem alteração** (`isSubcircuitEditingSessionDirty` compara `components`/`wires` ATUAIS contra
+  `initialComponents`/`initialWires` da sessão, serializados -- mesmo princípio de
+  `projectCommands.ts::isProjectDirty`): sai direto, sem perguntar nada.
+- **Com alteração**: `vscode.window.showWarningMessage` modal com 3 botões explícitos -- **Salvar**
+  (grava no `.lssubcircuit`, reregistra no Core, volta ao circuito de fora), **Descartar
+  Alterações** (volta ao circuito de fora SEM gravar -- mudanças da sessão são perdidas de propósito,
+  escolha informada do usuário) e **Cancelar** (ou fechar o diálogo/Escape -- não muda nada, sessão
+  continua ativa, usuário pode seguir editando). Nenhum botão tem ação implícita/default -- as 3
+  opções aparecem sempre que há algo pra decidir.
+
+### 16.4 Bugs encontrados durante a reimplementação (não pré-existentes na sessão de autoria antiga)
+
+1. **`connectors.tunnel` sem `pinIds` declarado**: nunca tinha sido instanciado "ao vivo" na Webview
+   antes (só existia como JSON cru dentro de `.lssubcircuit`) -- o catálogo não declarava `pinIds`,
+   então `pinsForTypeId` cairia no genérico `pin-1`, mas todo `.lssubcircuit` real (inclusive os
+   gerados por `createSubcircuitFromSelectionHandler`) usa `pinId: "pin"` (sem sufixo) nos fios que
+   tocam um túnel -- os fios de fronteira ficariam visualmente órfãos/desconectados dentro da sessão.
+   Corrigido em `catalog.ts` (seed/fallback) E em `project/schema/component-catalog.json` (catálogo
+   REAL usado em runtime).
+2. **`boardVisual` perdido ao salvar**: campo de posição do overlay de Modo Placa (independente de
+   `visual`, o circuito elétrico) que esta sessão nunca expõe/edita -- reconstruir cada componente do
+   zero ao salvar apagaria esse campo silenciosamente pra quem já tinha posicionado o overlay antes.
+   `closeSubcircuitEditorCommand` agora parte do objeto ORIGINAL de cada componente (por id) e só
+   sobrescreve os campos que de fato passam pelo `WebviewComponentModel` desta sessão.
+3. **Undo/redo cruzando contexto**: a pilha única do esquemático (seção 17.3 de `lasecsimul.spec`)
+   trata QUALQUER `syncStatePatch` como uma transição normal -- sem tratamento especial, entrar/sair
+   da sessão empilharia a troca de circuito inteiro como se fosse uma edição comum, e um Ctrl+Z
+   dentro da sessão pularia de volta pro circuito de FORA enquanto a faixa "Editando subcircuito"
+   continuava mostrando o de dentro (tela e contexto dessincronizados; o próximo "Voltar ao Circuito
+   Principal" salvaria o conteúdo ERRADO no arquivo). Corrigido em `main.ts`: um patch que muda
+   `subcircuitEditingContext` (chave presente, entrando OU saindo) reseta o histórico de undo/redo em
+   vez de registrar transição -- mesmo tratamento que `"init"` já recebia.
+
+### 16.5 Verificação
+
+Compilação limpa (`tsc` main + webview + test) e suíte de testes completa (154 testes) sem
+regressão. Simulação numérica (Node, fora do DOM) do round-trip abrir→editar→fechar sobre o arquivo
+REAL `esp32_devkitc_v4.lssubcircuit` confirmando equivalência semântica (mesmos componentes/fios/
+`package`/`interface`/`authoringScene` preservados, única diferença é `flipH`/`flipV` passando a
+ficar explícitos em vez de omitidos quando `false` -- normalização inofensiva). Sem GUI disponível
+neste ambiente pra confirmar interativamente no VSCode real; recomenda-se: abrir o ESP32 DevKitC,
+editar algo, tentar "Voltar ao Circuito Principal" e confirmar que as 3 opções aparecem: Cancelar
+mantém a sessão, Descartar Alterações volta sem gravar, Salvar grava e reabrir confirma a mudança
+persistida.

@@ -708,4 +708,11 @@ export interface WebviewProjectState {
   selectedComponentIds: string[];
   selectedWireIds: string[];
   pendingConnection?: { componentId: string; pinId: string };
+  /** Presente enquanto `components`/`wires` representam o circuito INTERNO de um `.lssubcircuit`
+   * aberto via "Abrir Subcircuito" (menu de contexto de uma instância `subcircuit-file`), não o
+   * circuito principal do usuário -- ver `extension.ts::openSubcircuitForEditingCommand`. A Webview
+   * usa isto pra mostrar a faixa "Editando subcircuito" com o botão "Voltar ao Circuito Principal" e
+   * desabilitar Abrir/Salvar/Importar Projeto (formatos incompatíveis: `.lsproj` vs `.lssubcircuit`)
+   * enquanto durar a sessão. */
+  subcircuitEditingContext?: { sourceId: string; typeId: string; name: string };
 }

@@ -7,7 +7,7 @@ import { TrustStore } from "./trust/TrustStore";
 import { isPreApproved, isPreBlocked, resolveConsentChoice, shouldLoadLibrary, decisionToPersist } from "./trust/trustDecision";
 import { SchematicPanel } from "./ui/panels/SchematicPanel";
 import { createInitialWebviewState } from "./ui/webview/catalog";
-import { TUNNEL_TYPE_ID, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./ui/webview/model";
+import { JUNCTION_TYPE_ID, TUNNEL_TYPE_ID, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./ui/webview/model";
 import { buildPinToPinWire, buildPinToWireConnection } from "./ui/webview/wireConnections";
 import { WebviewToHostMessage } from "./ui/webview/messages";
 import { ComponentPaletteViewProvider } from "./ui/views/ComponentPaletteViewProvider";
@@ -48,6 +48,7 @@ import {
   shouldSyncComponentToCore,
   queueCoreRebuild,
   rebuildCoreFromSchematicState,
+  pinsForProjectComponent,
 } from "./core/coreLifecycle";
 import {
   chooseExposedMcuFirmwareCommand,
@@ -87,6 +88,7 @@ function cloneState(): WebviewProjectState {
 
 const PROJECT_STATE_KEYS = [
   "locale", "catalog", "components", "wires", "viewport", "selectedComponentIds", "selectedWireIds", "pendingConnection",
+  "subcircuitEditingContext",
 ] as const satisfies readonly (keyof WebviewProjectState)[];
 
 /** Último `state.schematicState` já mandado pra Webview (via `syncState`/`syncStatePatch`) -- `undefined`
@@ -105,8 +107,9 @@ const PROJECT_STATE_KEYS = [
  * typeId registrado, tipicamente o maior pedaço do estado) quase nunca muda, então a maioria das
  * chamadas nem chega a tocar nele. Devolve `undefined` quando nada mudou (chamador não manda
  * mensagem nenhuma nesse caso -- nunca um patch vazio). */
-type ProjectStatePatch = Omit<Partial<WebviewProjectState>, "pendingConnection"> & {
+type ProjectStatePatch = Omit<Partial<WebviewProjectState>, "pendingConnection" | "subcircuitEditingContext"> & {
   pendingConnection?: WebviewProjectState["pendingConnection"] | null;
+  subcircuitEditingContext?: WebviewProjectState["subcircuitEditingContext"] | null;
 };
 
 function computeProjectStatePatch(): ProjectStatePatch | undefined {
@@ -125,6 +128,10 @@ function computeProjectStatePatch(): ProjectStatePatch | undefined {
     // chave nem aparece no resultado), então sem o sentinela `null` explícito aqui "voltou a
     // undefined" ficaria indistinguível de "não mudou" pro merge do lado da Webview.
     if (key === "pendingConnection" && state.schematicState.pendingConnection === undefined) {
+      toClone[key] = null;
+      continue;
+    }
+    if (key === "subcircuitEditingContext" && state.schematicState.subcircuitEditingContext === undefined) {
       toClone[key] = null;
       continue;
     }
@@ -854,6 +861,12 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
     case "requestCreateSubcircuitFromSelection":
       void createSubcircuitFromSelectionHandler(message.componentIds);
       return;
+    case "requestOpenSubcircuit":
+      void openSubcircuitForEditingCommand(message.sourceId);
+      return;
+    case "requestCloseSubcircuitEditor":
+      void closeSubcircuitEditorCommand();
+      return;
   }
 }
 
@@ -1062,6 +1075,201 @@ async function createSubcircuitFromSelectionHandler(componentIds: string[]): Pro
   syncSchematicPanel();
   void queueCoreRebuild();
   vscode.window.showInformationMessage(`Subcircuito '${baseName}' criado e registrado na paleta em 'Meus Subcircuitos'.`);
+}
+
+/** "Abrir Subcircuito" no menu de contexto de uma instância `subcircuit-file` -- troca `state.
+ * schematicState` pelo circuito INTERNO do `.lssubcircuit` apontado por `sourceId`, empilhando o
+ * circuito atual em `state.subcircuitEditingStack` pra restaurar depois (ver
+ * `closeSubcircuitEditorCommand`). Diferente de "Abrir Projeto": nada é perdido/substituído em
+ * disco, só trocado NA MEMÓRIA -- o circuito de fora fica intacto até "Voltar ao Circuito Principal".
+ * `components`/`wires` do `.lssubcircuit` já usam o mesmo shape de campo (`visual.x/y/rotation/
+ * flipH/flipV`) de `ProjectComponent`, então a conversão pra `WebviewComponentModel` espelha
+ * `projectToWebviewState` (`projectCommands.ts`). */
+async function openSubcircuitForEditingCommand(sourceId: string): Promise<void> {
+  const filePath = resolveSourceFilePath(sourceId);
+  if (!filePath || !fileExists(filePath)) {
+    vscode.window.showWarningMessage("Arquivo do subcircuito não encontrado.");
+    return;
+  }
+
+  let manifest: Record<string, unknown>;
+  try {
+    manifest = readJsonFile(filePath) as Record<string, unknown>;
+  } catch (err) {
+    vscode.window.showErrorMessage(`Não foi possível ler ${filePath}: ${err instanceof Error ? err.message : String(err)}`);
+    return;
+  }
+
+  const rawComponents = Array.isArray(manifest.components) ? manifest.components : [];
+  const rawWires = Array.isArray(manifest.wires) ? manifest.wires : [];
+  const components: WebviewComponentModel[] = rawComponents
+    .filter((value): value is Record<string, unknown> => typeof value === "object" && value !== null)
+    .map((raw) => {
+      const visual = (typeof raw.visual === "object" && raw.visual !== null ? raw.visual : {}) as Record<string, unknown>;
+      const properties = (typeof raw.properties === "object" && raw.properties !== null ? raw.properties : {}) as Record<string, string | number | boolean>;
+      const typeId = String(raw.typeId ?? "");
+      const descriptor = state.schematicState.catalog.find((entry) => entry.typeId === typeId);
+      const component = {
+        id: String(raw.id ?? ""),
+        typeId,
+        label: String(raw.id ?? ""),
+        hidden: typeId === JUNCTION_TYPE_ID ? true : (descriptor?.hidden ?? false),
+        showValue: hasShowOnSymbolProperty(descriptor),
+        x: typeof visual.x === "number" ? visual.x : 0,
+        y: typeof visual.y === "number" ? visual.y : 0,
+        rotation: (visual.rotation === 90 || visual.rotation === 180 || visual.rotation === 270 ? visual.rotation : 0) as 0 | 90 | 180 | 270,
+        flipH: typeof visual.flipH === "boolean" ? visual.flipH : undefined,
+        flipV: typeof visual.flipV === "boolean" ? visual.flipV : undefined,
+        exposed: raw.exposed === true,
+        properties,
+        pins: [] as Array<{ id: string; x: number; y: number }>,
+      };
+      component.pins = pinsForProjectComponent(component);
+      return component;
+    })
+    .filter((component) => component.id && component.typeId);
+
+  const wires: WebviewWireModel[] = rawWires
+    .filter((value): value is Record<string, unknown> => typeof value === "object" && value !== null)
+    .map((raw) => {
+      const from = raw.from as { componentId: string; pinId: string };
+      const to = raw.to as { componentId: string; pinId: string };
+      const points = Array.isArray(raw.points) ? (raw.points as Array<{ x: number; y: number }>) : [];
+      return { id: nextId("wire"), from, to, ...(points.length > 0 ? { points } : {}) };
+    })
+    .filter((wire) => wire.from?.componentId && wire.to?.componentId);
+
+  state.subcircuitEditingStack.push({
+    sourceId,
+    filePath,
+    originalManifest: manifest,
+    outerSchematicState: state.schematicState,
+    outerProjectFilePath: state.currentProjectFilePath,
+    initialComponents: components,
+    initialWires: wires,
+  });
+
+  state.schematicState = {
+    ...state.schematicState,
+    components,
+    wires,
+    viewport: { x: 0, y: 0, zoom: 1 },
+    selectedComponentIds: [],
+    selectedWireIds: [],
+    pendingConnection: undefined,
+    subcircuitEditingContext: {
+      sourceId,
+      typeId: String(manifest.typeId ?? ""),
+      name: String(manifest.name ?? manifest.typeId ?? filePath),
+    },
+  };
+  syncSchematicPanel();
+  await rebuildCoreFromSchematicState();
+}
+
+type SubcircuitEditingSession = (typeof state.subcircuitEditingStack)[number];
+
+/** Mesmo princípio de `projectCommands.ts::isProjectDirty`, só que a "baseline" é `initialComponents/
+ * Wires` (estado logo após abrir a sessão, ver `openSubcircuitForEditingCommand`) em vez do último
+ * save do `.lsproj`. */
+function isSubcircuitEditingSessionDirty(session: SubcircuitEditingSession): boolean {
+  const current = JSON.stringify({ components: state.schematicState.components, wires: state.schematicState.wires });
+  const initial = JSON.stringify({ components: session.initialComponents, wires: session.initialWires });
+  return current !== initial;
+}
+
+/** Grava `components`/`wires` atuais de volta no `.lssubcircuit` da sessão (preservando todas as
+ * outras chaves do manifesto original, ex: `package`/`interface`/`translations`) e reregistra no
+ * Core. Não mexe em `state.subcircuitEditingStack`/`schematicState` -- só o efeito colateral em
+ * disco, chamado pelo branch "Salvar" de `closeSubcircuitEditorCommand`. */
+async function writeSubcircuitEditingSessionBack(session: SubcircuitEditingSession): Promise<void> {
+  // `boardVisual` (posição no overlay de Modo Placa, ver `WebviewComponentModel.boardX/Y`) é uma
+  // propriedade do componente que esta sessão de edição NUNCA expõe/toca -- reconstruir cada
+  // componente do zero (só com `id`/`typeId`/`properties`/`visual`/`exposed`) apagaria esse campo
+  // silenciosamente pra quem já tinha posicionado o overlay antes. Parte do objeto ORIGINAL de cada
+  // componente que sobreviveu à sessão, sobrescrevendo só os campos que de fato passam por
+  // `WebviewComponentModel` -- um componente novo (criado durante a sessão) não tem original, cai no
+  // shape simples de sempre.
+  const originalComponents = Array.isArray(session.originalManifest.components)
+    ? (session.originalManifest.components as Array<Record<string, unknown>>)
+    : [];
+  const originalComponentById = new Map(originalComponents.map((raw) => [String(raw.id ?? ""), raw]));
+  const components = state.schematicState.components.map((component) => ({
+    ...(originalComponentById.get(component.id) ?? {}),
+    id: component.id,
+    typeId: component.typeId,
+    properties: { ...component.properties },
+    visual: {
+      x: component.x,
+      y: component.y,
+      rotation: component.rotation,
+      flipH: component.flipH ?? false,
+      flipV: component.flipV ?? false,
+    },
+    exposed: component.exposed === true,
+  }));
+  const wires = state.schematicState.wires.map((wire) => ({
+    from: wire.from,
+    to: wire.to,
+    points: wire.points ?? [],
+  }));
+  const updatedManifest = { ...session.originalManifest, components, wires };
+
+  try {
+    fs.writeFileSync(session.filePath, `${JSON.stringify(updatedManifest, null, 2)}\n`, "utf8");
+  } catch (err) {
+    vscode.window.showErrorMessage(`Não foi possível salvar o subcircuito: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  if (state.coreClient) {
+    try {
+      await state.coreClient.registerAdhocSubcircuitDefinition(session.filePath, { replace: true });
+    } catch (err) {
+      vscode.window.showErrorMessage(`Não foi possível reregistrar o subcircuito no Core: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+}
+
+/** Restaura o circuito empilhado por `openSubcircuitForEditingCommand`, sem tocar no arquivo --
+ * usado tanto pelo branch "Descartar Alterações" quanto, após `writeSubcircuitEditingSessionBack`,
+ * pelo branch "Salvar". */
+async function restoreOuterCircuitFromSession(session: SubcircuitEditingSession): Promise<void> {
+  state.schematicState = session.outerSchematicState;
+  state.currentProjectFilePath = session.outerProjectFilePath;
+  syncSchematicPanel();
+  await rebuildCoreFromSchematicState();
+}
+
+/** "Voltar ao Circuito Principal" -- sem alteração desde a abertura da sessão, sai direto (nada pra
+ * perguntar). Com alteração, pergunta Salvar/Descartar Alterações/Cancelar (modal, sem default
+ * implícito no Escape -- "Cancelar" é uma opção explícita que mantém o usuário na sessão de edição,
+ * sem perder nada). "Salvar" grava no `.lssubcircuit` e volta; "Descartar Alterações" só volta,
+ * ignorando as mudanças; "Cancelar" (ou fechar o diálogo) não muda nada, sessão continua ativa.
+ * No-op se nenhuma sessão estiver ativa. */
+async function closeSubcircuitEditorCommand(): Promise<void> {
+  const session = state.subcircuitEditingStack[state.subcircuitEditingStack.length - 1];
+  if (!session) return;
+
+  if (isSubcircuitEditingSessionDirty(session)) {
+    const save = "Salvar";
+    const discard = "Descartar Alterações";
+    const cancel = "Cancelar";
+    const subcircuitName = state.schematicState.subcircuitEditingContext?.name ?? session.sourceId;
+    const choice = await vscode.window.showWarningMessage(
+      `O subcircuito "${subcircuitName}" tem alterações não salvas. O que deseja fazer antes de voltar ao circuito principal?`,
+      { modal: true },
+      save,
+      discard,
+      cancel
+    );
+    if (choice === undefined || choice === cancel) return; // permanece na sessão de edição, nada muda
+    state.subcircuitEditingStack.pop();
+    if (choice === save) await writeSubcircuitEditingSessionBack(session);
+    await restoreOuterCircuitFromSession(session);
+    return;
+  }
+
+  state.subcircuitEditingStack.pop();
+  await restoreOuterCircuitFromSession(session);
 }
 
 /** "Exportar Dados" da janela "Expande" (osciloscópio/analisador lógico) -- o CSV já vem formatado
