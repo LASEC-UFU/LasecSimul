@@ -2,6 +2,21 @@ name: Package Installers
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Versão (tag) ex.: v0.0.1"
+        required: true
+        type: string
+      tag_repository:
+        description: "Criar e enviar tag?"
+        required: true
+        default: true
+        type: boolean
+      publish_release:
+        description: "Publicar Release?"
+        required: true
+        default: true
+        type: boolean
   push:
     tags:
       - "v*"
@@ -66,3 +81,41 @@ jobs:
           name: lasecsimul-${{ matrix.target }}
           path: dist/release/${{ matrix.target }}
           if-no-files-found: error
+
+  release:
+    name: Tag and Release
+    needs: package
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: lasecsimul-*
+          path: artifacts
+
+      - name: Create Git Tag
+        if: ${{ inputs.tag_repository }}
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git tag ${{ inputs.version }}
+          git push origin ${{ inputs.version }}
+
+      - name: Publish Release
+        if: ${{ inputs.publish_release }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.version }}
+          name: "LasecSimul ${{ inputs.version }}"
+          files: artifacts/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
