@@ -1,74 +1,265 @@
 {
   "schemaVersion": 1,
   "typeId": "peripherals.serialport",
-  "name": "Porta Serial (COM/TTY)",
+  "name": "Serial Port",
   "language": "pt-BR",
   "icon": "serialport",
-  "folderPath": ["Periféricos"],
+  "folderPath": [
+    "Periféricos"
+  ],
   "translations": {
     "en": {
       "name": "Serial Port (COM/TTY)",
       "properties": {
-        "port_name": { "label": "Port name (COM1/ttyUSB0)", "group": "Serial" },
-        "baudrate":  { "label": "Baud rate",                "group": "Serial" },
-        "data_bits": { "label": "Data bits",                "group": "Serial" },
-        "stop_bits": { "label": "Stop bits",                "group": "Serial" },
-        "auto_open": { "label": "Auto open on simulate",    "group": "Serial" }
+        "port_name": {
+          "label": "Port name (COM1/ttyUSB0)",
+          "group": "Serial"
+        },
+        "baudrate": {
+          "label": "Baud rate",
+          "group": "Serial"
+        },
+        "data_bits": {
+          "label": "Data bits",
+          "group": "Serial"
+        },
+        "stop_bits": {
+          "label": "Stop bits",
+          "group": "Serial"
+        },
+        "auto_open": {
+          "label": "Auto open on simulate",
+          "group": "Serial"
+        }
       }
     }
   },
-  "abiVersion": { "major": 3, "minor": 0 },
+  "abiVersion": {
+    "major": 3,
+    "minor": 0
+  },
   "nativeEntry": {
-    "win32-x64":        "build-msvc/device.dll",
-    "linux-x64":        "build/linux-x64/device.so",
+    "win32-x64": "build-msvc/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
     "darwin-universal": "build/macos-universal/device.dylib"
   },
   "package": {
     "width": 160,
     "height": 32,
     "border": false,
-    "background": { "kind": "color", "value": "transparent" },
+    "background": {
+      "kind": "color",
+      "value": "transparent"
+    },
     "shapes": [
-      { "kind": "rect", "x": 0,  "y": 0,  "w": 160, "h": 32, "rx": 4, "ry": 4, "stroke": "#00006b", "fill": "#00008b", "strokeWidth": 1 },
-      { "kind": "rect", "x": 11, "y": 5,  "w": 8,   "h": 6,  "rx": 2, "ry": 2, "stroke": "none",    "fill": "#000000" },
-      { "kind": "rect", "x": 11, "y": 21, "w": 8,   "h": 6,  "rx": 2, "ry": 2, "stroke": "none",    "fill": "#000000" },
-      { "kind": "rect", "x": 24, "y": 6,  "w": 44,  "h": 20, "rx": 3, "ry": 3, "stroke": "#888888", "fill": "#c0c0c0", "strokeWidth": 1 },
-      { "kind": "text", "x": 46, "y": 20, "value": "Abrir", "fontSize": 11, "color": "#000000" }
+      {
+        "kind": "rect",
+        "x": 0,
+        "y": 0,
+        "w": 160,
+        "h": 32,
+        "rx": 4,
+        "ry": 4,
+        "stroke": "#00006b",
+        "fill": "#00008b",
+        "strokeWidth": 1
+      },
+      {
+        "kind": "rect",
+        "x": 11,
+        "y": 5,
+        "w": 8,
+        "h": 6,
+        "rx": 2,
+        "ry": 2,
+        "stroke": "none",
+        "fill": "#000000"
+      },
+      {
+        "kind": "rect",
+        "x": 11,
+        "y": 21,
+        "w": 8,
+        "h": 6,
+        "rx": 2,
+        "ry": 2,
+        "stroke": "none",
+        "fill": "#000000"
+      },
+      {
+        "kind": "rect",
+        "x": 24,
+        "y": 6,
+        "w": 44,
+        "h": 20,
+        "rx": 3,
+        "ry": 3,
+        "stroke": "#888888",
+        "fill": "#c0c0c0",
+        "strokeWidth": 1
+      },
+      {
+        "kind": "text",
+        "x": 46,
+        "y": 20,
+        "value": "Abrir",
+        "fontSize": 11,
+        "color": "#000000"
+      }
     ],
     "pinLabelColor": "#FAFAC8",
     "pins": [
-      { "id": "tx", "x": 0, "y": 8,  "angle": 180, "length": 8, "label": "Tx", "labelX": 6, "labelY": 10 },
-      { "id": "rx", "x": 0, "y": 24, "angle": 180, "length": 8, "label": "Rx", "labelX": 6, "labelY": 26 }
+      {
+        "id": "tx",
+        "x": 0,
+        "y": 8,
+        "angle": 180,
+        "length": 8,
+        "label": "Tx",
+        "labelX": 6,
+        "labelY": 10
+      },
+      {
+        "id": "rx",
+        "x": 0,
+        "y": 24,
+        "angle": 180,
+        "length": 8,
+        "label": "Rx",
+        "labelX": 6,
+        "labelY": 26
+      }
     ]
   },
   "pins": [
-    { "id": "tx", "kind": "DIGITAL_OUT", "x": 0, "y": 8,  "angle": 180, "length": 8, "label": "Tx" },
-    { "id": "rx", "kind": "DIGITAL_IN",  "x": 0, "y": 24, "angle": 180, "length": 8, "label": "Rx" }
+    {
+      "id": "tx",
+      "kind": "DIGITAL_OUT",
+      "x": 0,
+      "y": 8,
+      "angle": 180,
+      "length": 8,
+      "label": "Tx"
+    },
+    {
+      "id": "rx",
+      "kind": "DIGITAL_IN",
+      "x": 0,
+      "y": 24,
+      "angle": 180,
+      "length": 8,
+      "label": "Rx"
+    }
   ],
   "properties": [
-    { "id": "port_name", "label": "Nome da porta",          "group": "Serial", "valueKind": "string", "editor": "text",   "default": "COM1"  },
-    { "id": "baudrate",  "label": "Baud rate",              "group": "Serial", "valueKind": "number", "editor": "select", "default": 9600,
+    {
+      "id": "port_name",
+      "label": "Nome da porta",
+      "group": "Serial",
+      "valueKind": "string",
+      "editor": "text",
+      "default": "COM1"
+    },
+    {
+      "id": "baudrate",
+      "label": "Baud rate",
+      "group": "Serial",
+      "valueKind": "number",
+      "editor": "select",
+      "default": 9600,
       "options": [
-        {"label":"1200",   "value":1200},
-        {"label":"2400",   "value":2400},
-        {"label":"4800",   "value":4800},
-        {"label":"9600",   "value":9600},
-        {"label":"19200",  "value":19200},
-        {"label":"38400",  "value":38400},
-        {"label":"57600",  "value":57600},
-        {"label":"115200", "value":115200}
+        {
+          "label": "1200",
+          "value": 1200
+        },
+        {
+          "label": "2400",
+          "value": 2400
+        },
+        {
+          "label": "4800",
+          "value": 4800
+        },
+        {
+          "label": "9600",
+          "value": 9600
+        },
+        {
+          "label": "19200",
+          "value": 19200
+        },
+        {
+          "label": "38400",
+          "value": 38400
+        },
+        {
+          "label": "57600",
+          "value": 57600
+        },
+        {
+          "label": "115200",
+          "value": 115200
+        }
       ]
     },
-    { "id": "data_bits", "label": "Bits de dados",         "group": "Serial", "valueKind": "number", "editor": "select", "default": 8,
-      "options": [{"label":"5","value":5},{"label":"6","value":6},{"label":"7","value":7},{"label":"8","value":8}]
+    {
+      "id": "data_bits",
+      "label": "Bits de dados",
+      "group": "Serial",
+      "valueKind": "number",
+      "editor": "select",
+      "default": 8,
+      "options": [
+        {
+          "label": "5",
+          "value": 5
+        },
+        {
+          "label": "6",
+          "value": 6
+        },
+        {
+          "label": "7",
+          "value": 7
+        },
+        {
+          "label": "8",
+          "value": 8
+        }
+      ]
     },
-    { "id": "stop_bits", "label": "Bits de parada",        "group": "Serial", "valueKind": "number", "editor": "select", "default": 1,
-      "options": [{"label":"1","value":1},{"label":"2","value":2}]
+    {
+      "id": "stop_bits",
+      "label": "Bits de parada",
+      "group": "Serial",
+      "valueKind": "number",
+      "editor": "select",
+      "default": 1,
+      "options": [
+        {
+          "label": "1",
+          "value": 1
+        },
+        {
+          "label": "2",
+          "value": 2
+        }
+      ]
     },
-    { "id": "auto_open", "label": "Abrir automaticamente", "group": "Serial", "valueKind": "bool",   "editor": "bool",   "default": true  }
+    {
+      "id": "auto_open",
+      "label": "Abrir automaticamente",
+      "group": "Serial",
+      "valueKind": "bool",
+      "editor": "bool",
+      "default": true
+    }
   ],
   "help": {
-    "description": "Ponte entre o circuito simulado e uma porta serial real do host (COM no Windows, /dev/ttyUSB0 no Linux). Útil para comunicação com hardware físico durante a simulação. Configure nome da porta e baud rate."
+    "description": "Porta serial conectada ao sistema host."
   },
-  "limits": { "stepTimeoutMs": 1, "expectedComplexity": "high" }
+  "limits": {
+    "stepTimeoutMs": 1,
+    "expectedComplexity": "high"
+  }
 }

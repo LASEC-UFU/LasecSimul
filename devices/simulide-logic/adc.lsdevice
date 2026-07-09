@@ -177,5 +177,8 @@
   ],
   "defaultProperties": {
     "vref": 5
+  },
+  "help": {
+    "description": "Conversor analógico-digital para representar amostragem de sinais."
   }
 }

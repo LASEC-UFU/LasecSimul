@@ -186,5 +186,8 @@
   "folderPath": [
     "Logicos",
     "Aritmeticos"
-  ]
+  ],
+  "help": {
+    "description": "Comparador de magnitude entre palavras digitais."
+  }
 }

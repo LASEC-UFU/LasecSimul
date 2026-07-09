@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "typeId": "logic.memory",
-  "name": "Memory",
+  "name": "Ram/Rom",
   "language": "pt-BR",
   "abiVersion": {
     "major": 3,
@@ -234,5 +234,8 @@
   "folderPath": [
     "Logicos",
     "Memorias"
-  ]
+  ],
+  "help": {
+    "description": "Memória RAM/ROM genérica."
+  }
 }

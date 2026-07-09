@@ -183,5 +183,8 @@
   "folderPath": [
     "Saidas",
     "Displays"
-  ]
+  ],
+  "help": {
+    "description": "Display gráfico colorido baseado no controlador PCF8833."
+  }
 }

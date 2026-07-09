@@ -161,8 +161,8 @@ npm run test:core
 # equivalente manual: ctest --test-dir core/build --output-on-failure
 ```
 
-Extension tem 7 testes reais (`CoreClient` IPC + `ProjectSerializer`), sem framework externo —
-compila e roda via `node`:
+Extension tem suites TypeScript/headless para projeto, IPC, catalogo, paleta, geometria de fios,
+renderizacao de componentes e decisao de trust, sem framework externo. Compila e roda via `node`:
 
 ```powershell
 cd LasecSimul/extension
@@ -183,6 +183,10 @@ integração/E2E formalizados em `test/integration/`/`test/e2e/` — ver `docs/m
 6. `LasecSimul: Save Project As...` / `LasecSimul: Open Project...` salvam/abrem `.lsproj` e, ao
    abrir, recriam o circuito no Core na ordem certa (componentes antes dos fios). Ver
    `examples/mvp-passive.lsproj` para um projeto de exemplo já validado.
+
+O simbolo grafico de dispositivos registrados e carregado do `package` declarado no `.lsdevice`/
+`.lssubcircuit`. Nesta etapa nao ha fluxo de edicao manual de simbolo pela UI; alteracoes de simbolo
+devem ser feitas no manifesto versionado.
 
 ## Roadmap resumido
 

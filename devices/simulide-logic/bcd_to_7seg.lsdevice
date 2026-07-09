@@ -186,5 +186,8 @@
   "folderPath": [
     "Logicos",
     "Conversores"
-  ]
+  ],
+  "help": {
+    "description": "Conversor BCD para sinais de display de sete segmentos."
+  }
 }

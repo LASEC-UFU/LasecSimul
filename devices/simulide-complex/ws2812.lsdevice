@@ -139,5 +139,8 @@
   "defaultProperties": {
     "rows": 1,
     "columns": 1
+  },
+  "help": {
+    "description": "LED RGB endereçável compatível com protocolo WS2812."
   }
 }

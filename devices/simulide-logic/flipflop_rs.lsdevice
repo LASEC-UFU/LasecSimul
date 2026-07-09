@@ -102,5 +102,8 @@
   "folderPath": [
     "Logicos",
     "Memorias"
-  ]
+  ],
+  "help": {
+    "description": "Flip-flop RS para latch de estado lógico."
+  }
 }

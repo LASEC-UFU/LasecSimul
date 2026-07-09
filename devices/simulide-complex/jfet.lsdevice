@@ -177,5 +177,8 @@
   ],
   "defaultProperties": {
     "beta": 100
+  },
+  "help": {
+    "description": "Transistor de efeito de campo de junção para controle por tensão."
   }
 }

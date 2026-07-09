@@ -132,5 +132,8 @@
   "defaultProperties": {
     "threshold": 0.8,
     "resistance": 1
+  },
+  "help": {
+    "description": "Retificador controlado de silício para chaveamento unidirecional."
   }
 }

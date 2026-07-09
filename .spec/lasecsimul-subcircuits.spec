@@ -196,6 +196,13 @@ Sem ferramenta nova — reaproveita o canvas do `SchematicEditorPanel` que já e
    seção 21.3 do spec de plugins nativos).
 5. O novo subcircuito aparece na paleta de componentes da mesma forma que um built-in ou plugin — ver seção 7.
 
+**Revogação em 2026-07-09**: a UI não oferece mais editor manual de símbolo/package. Qualquer menção
+abaixo a `lasecsimul.palette.editSymbol`, `symbolAuthoring.ts`, "Editar Símbolo Visual", "Salvar
+Símbolo" ou sessão de autoria é histórico do fluxo removido. O contrato vigente é: o símbolo visual de
+subcircuito/dispositivo vem do `package`/`logicSymbolPackage` persistido no `.lssubcircuit`/`.lsdevice`;
+o esquemático só carrega e renderiza esses dados. O código mantido para subcircuitos lê `components[]`,
+`wires[]`, `visual` e `boardVisual` para instância/overlay, sem editar `package`.
+
 **Status em 2026-06-29** (revisado de novo no mesmo dia — depois de fechar o editor de `package`
 sozinho, o usuário pediu pra ir além e cobrir o que SimulIDE chama de "Open Subcircuit": editar o
 circuito INTERNO real de um subcircuito, não só o símbolo visual). Passo 3 ficou mais completo:

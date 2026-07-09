@@ -109,5 +109,8 @@
         "label": ""
       }
     ]
+  },
+  "help": {
+    "description": "Porta lógica XOR."
   }
 }

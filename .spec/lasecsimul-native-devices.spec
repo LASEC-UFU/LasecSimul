@@ -1125,7 +1125,7 @@ referência pendente (o problema que o SimulIDE evita ao embutir).
 | `pins[].length` | `length` | tamanho do traço do terminal, em px |
 | `pins[].label` | `label` | texto exibido junto ao pino; se omitido, usa `id` |
 | `pins[].labelX`/`labelY` | (texto de pino arrastável independente, ver `PackagePin`/`PackagePin::editPos` real) | posição do RÓTULO, independente da posição do pino (mesmo espaço de `x`/`y`) — ausente == posição padrão calculada (ponta do lead + 9px na direção de `angle`); 2026-06-29, ver seção 21.3 |
-| `package.pinLabelColor` | (cor fixa de tema do SimulIDE, aqui configurável por package) | cor (hex) de TODOS os rótulos de pino do `package` — opcional, ausente usa a cor padrão do tema ativo (`currentColor`); setado/editado pelo editor de autoria (`symbolAuthoring.ts::seedPinLabelComponent`/`compileSubcircuitInternalComponents`, cada rótulo de pino é um `graphics.text` vinculado cuja `properties.color` é semeada/lida de volta neste campo no round-trip seed→compile) |
+| `package.pinLabelColor` | (cor fixa de tema do SimulIDE, aqui configurável por package) | cor (hex) de TODOS os rótulos de pino do `package` — opcional, ausente usa a cor padrão do tema ativo (`currentColor`); lido exclusivamente do manifesto, sem editor de autoria na UI |
 
 Nenhum campo novo aqui é lido pelo Core — `package`/`pins[].angle|length|label|labelX|labelY` são consumidos **só pela
 Extension** (ela já lê `.lsdevice` direto do disco para popular a paleta/painel de propriedades; não
@@ -1153,7 +1153,34 @@ O campo `icon` do `.lsdevice` (ver seção 15) define a miniatura da paleta de d
 (2026-07-02). O corpo completo desenhado no canvas continua sendo o campo `package` (diferente do ícone
 da paleta — mesma separação que o SimulIDE faz entre ícone da árvore e o pacote do componente).
 
-### 21.3 Editor de pacote na Extension — mesmo princípio do SimulIDE, não uma ferramenta nova
+### 21.3 Editor de pacote na Extension — REVOGADO em 2026-07-09
+
+Decisão vigente: o símbolo gráfico de um componente/dispositivo **não é editável manualmente pela UI**
+nesta etapa. A fonte de verdade é exclusivamente o `package`/`logicSymbolPackage` declarado no próprio
+`.lsdevice` (ou `.lssubcircuit` para subcircuitos). A Extension deve carregar e renderizar esse payload
+como está no manifesto, sem comando, botão, mensagem IPC, menu de contexto, import/export de pacote ou
+sessão de autoria que escreva o símbolo de volta.
+
+O fluxo implementado anteriormente ("Editar Símbolo Visual", `lasecsimul.palette.editSymbol`,
+`requestEditSymbol`, `requestSaveSymbol`, `requestLoadPackage`, `requestSavePackage`,
+`extension/src/symbolAuthoring/symbolCommands.ts` e o round-trip `catalog/symbolAuthoring.ts`) foi
+removido. O módulo mantido para subcircuitos (`catalog/subcircuitInternals.ts`) só lê `components[]` e
+`boardVisual` para overlay/MCU exposto; ele não abre editor e não grava `package`.
+
+Regra normativa atual:
+
+1. `package`/`logicSymbolPackage` só entram pela leitura do manifesto (`.lsdevice`/`.lssubcircuit`).
+2. Alterar símbolo significa alterar o manifesto por ferramentas externas/versionadas, não pela UI do
+   esquemático.
+3. A Webview pode renderizar `package`, `simulidePaint`, `viewSpec`, `qtWidget`, `pins[]` e assets
+   declarativos, mas não pode oferecer autoria direta desse símbolo.
+
+#### Histórico anterior revogado
+
+O texto abaixo descreve o fluxo antigo e fica mantido apenas como histórico de auditoria; não é mais
+contrato vigente.
+
+### 21.3.1 Editor de pacote revogado — histórico até 2026-07-08
 
 **Implementado em 2026-06-29** (segunda versão — a primeira, de 2026-06-28, era um canvas SVG bespoke
 com alças de arrastar feitas à mão; descartada depois de revisão com captura de tela real mostrando

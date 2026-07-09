@@ -177,5 +177,8 @@
   ],
   "defaultProperties": {
     "vref": 5
+  },
+  "help": {
+    "description": "Conversor digital-analógico para gerar tensão proporcional ao valor digital."
   }
 }

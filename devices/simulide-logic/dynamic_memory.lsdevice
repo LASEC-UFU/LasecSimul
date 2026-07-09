@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "typeId": "logic.dynamic_memory",
-  "name": "Dynamic Memory",
+  "name": "Dynamic Ram",
   "language": "pt-BR",
   "abiVersion": {
     "major": 3,
@@ -234,5 +234,8 @@
   "folderPath": [
     "Logicos",
     "Memorias"
-  ]
+  ],
+  "help": {
+    "description": "Memória dinâmica simulada."
+  }
 }

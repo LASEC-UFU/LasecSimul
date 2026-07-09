@@ -1,88 +1,471 @@
 {
   "schemaVersion": 1,
   "typeId": "peripherals.ds1307",
-  "name": "DS1307 — RTC I2C",
+  "name": "DS1307",
   "language": "pt-BR",
   "icon": "ds1307",
-  "folderPath": ["Periféricos"],
+  "folderPath": [
+    "Periféricos"
+  ],
   "translations": {
     "en": {
       "name": "DS1307 — Real Time Clock I2C",
       "properties": {
-        "year":         { "label": "Year (2000-2099)",   "group": "RTC" },
-        "month":        { "label": "Month (1-12)",       "group": "RTC" },
-        "day":          { "label": "Day (1-31)",         "group": "RTC" },
-        "hour":         { "label": "Hour (0-23)",        "group": "RTC" },
-        "minute":       { "label": "Minute (0-59)",      "group": "RTC" },
-        "second":       { "label": "Second (0-59)",      "group": "RTC" },
-        "sqw_freq":     { "label": "SQW Frequency",      "group": "RTC" },
-        "time_updated": { "label": "Time updated by I2C","group": "RTC" }
+        "year": {
+          "label": "Year (2000-2099)",
+          "group": "RTC"
+        },
+        "month": {
+          "label": "Month (1-12)",
+          "group": "RTC"
+        },
+        "day": {
+          "label": "Day (1-31)",
+          "group": "RTC"
+        },
+        "hour": {
+          "label": "Hour (0-23)",
+          "group": "RTC"
+        },
+        "minute": {
+          "label": "Minute (0-59)",
+          "group": "RTC"
+        },
+        "second": {
+          "label": "Second (0-59)",
+          "group": "RTC"
+        },
+        "sqw_freq": {
+          "label": "SQW Frequency",
+          "group": "RTC"
+        },
+        "time_updated": {
+          "label": "Time updated by I2C",
+          "group": "RTC"
+        }
       }
     }
   },
-  "abiVersion": { "major": 3, "minor": 0 },
+  "abiVersion": {
+    "major": 3,
+    "minor": 0
+  },
   "nativeEntry": {
-    "win32-x64":        "build-msvc/device.dll",
-    "linux-x64":        "build/linux-x64/device.so",
+    "win32-x64": "build-msvc/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
     "darwin-universal": "build/macos-universal/device.dylib"
   },
   "package": {
     "width": 56,
     "height": 40,
     "border": false,
-    "background": { "kind": "color", "value": "transparent" },
+    "background": {
+      "kind": "color",
+      "value": "transparent"
+    },
     "shapes": [
-      { "kind": "svg", "value": "<defs><linearGradient id=\"ds1307-xtal\" x1=\"0\" y1=\"0.5\" x2=\"1\" y2=\"0.5\" gradientUnits=\"objectBoundingBox\"><stop offset=\"0%\" stop-color=\"#555\"/><stop offset=\"35%\" stop-color=\"#999\"/><stop offset=\"55%\" stop-color=\"#cccccc\"/><stop offset=\"75%\" stop-color=\"#999\"/><stop offset=\"100%\" stop-color=\"#555\"/></linearGradient></defs>" },
-      { "kind": "rect",    "x": 0,  "y": 0,  "w": 56, "h": 40, "rx": 2, "ry": 2, "stroke": "#111", "fill": "#1c1e14", "strokeWidth": 1.5 },
-      { "kind": "rect",    "x": 18, "y": 2,  "w": 6,  "h": 3,  "rx": 1, "ry": 1, "stroke": "none", "fill": "#4a6c4a" },
-      { "kind": "rect",    "x": 7,  "y": 8,  "w": 16, "h": 24, "rx": 1, "ry": 1, "stroke": "#3a3c38", "fill": "#282c24", "strokeWidth": 0.5 },
-      { "kind": "rect",    "x": 3,  "y": 10, "w": 4,  "h": 3,  "stroke": "none", "fill": "#4a6c4a" },
-      { "kind": "rect",    "x": 3,  "y": 15, "w": 4,  "h": 3,  "stroke": "none", "fill": "#4a6c4a" },
-      { "kind": "rect",    "x": 3,  "y": 20, "w": 4,  "h": 3,  "stroke": "none", "fill": "#4a6c4a" },
-      { "kind": "rect",    "x": 3,  "y": 25, "w": 4,  "h": 3,  "stroke": "none", "fill": "#4a6c4a" },
-      { "kind": "rect",    "x": 23, "y": 10, "w": 4,  "h": 3,  "stroke": "none", "fill": "#4a6c4a" },
-      { "kind": "rect",    "x": 23, "y": 15, "w": 4,  "h": 3,  "stroke": "none", "fill": "#4a6c4a" },
-      { "kind": "rect",    "x": 23, "y": 20, "w": 4,  "h": 3,  "stroke": "none", "fill": "#4a6c4a" },
-      { "kind": "rect",    "x": 23, "y": 25, "w": 4,  "h": 3,  "stroke": "none", "fill": "#4a6c4a" },
-      { "kind": "rect",    "x": 30, "y": 5,  "w": 11, "h": 30, "rx": 3, "ry": 5, "stroke": "#444", "fill": "url(#ds1307-xtal)", "strokeWidth": 0.5 },
-      { "kind": "rect",    "x": 43, "y": 3,  "w": 3,  "h": 3,  "stroke": "none", "fill": "#4a6c4a" },
-      { "kind": "rect",    "x": 47, "y": 3,  "w": 3,  "h": 3,  "stroke": "none", "fill": "#4a6c4a" },
-      { "kind": "rect",    "x": 51, "y": 3,  "w": 3,  "h": 3,  "stroke": "none", "fill": "#4a6c4a" },
-      { "kind": "rect",    "x": 43, "y": 7,  "w": 3,  "h": 3,  "stroke": "none", "fill": "#4a6c4a" },
-      { "kind": "rect",    "x": 47, "y": 7,  "w": 3,  "h": 3,  "stroke": "none", "fill": "#4a6c4a" },
-      { "kind": "rect",    "x": 51, "y": 7,  "w": 3,  "h": 3,  "stroke": "none", "fill": "#4a6c4a" },
-      { "kind": "rect",    "x": 44, "y": 24, "w": 5,  "h": 3,  "stroke": "none", "fill": "#4a6c4a" },
-      { "kind": "rect",    "x": 44, "y": 29, "w": 5,  "h": 3,  "stroke": "none", "fill": "#4a6c4a" },
-      { "kind": "rect",    "x": 44, "y": 34, "w": 5,  "h": 3,  "stroke": "none", "fill": "#4a6c4a" }
+      {
+        "kind": "svg",
+        "value": "<defs><linearGradient id=\"ds1307-xtal\" x1=\"0\" y1=\"0.5\" x2=\"1\" y2=\"0.5\" gradientUnits=\"objectBoundingBox\"><stop offset=\"0%\" stop-color=\"#555\"/><stop offset=\"35%\" stop-color=\"#999\"/><stop offset=\"55%\" stop-color=\"#cccccc\"/><stop offset=\"75%\" stop-color=\"#999\"/><stop offset=\"100%\" stop-color=\"#555\"/></linearGradient></defs>"
+      },
+      {
+        "kind": "rect",
+        "x": 0,
+        "y": 0,
+        "w": 56,
+        "h": 40,
+        "rx": 2,
+        "ry": 2,
+        "stroke": "#111",
+        "fill": "#1c1e14",
+        "strokeWidth": 1.5
+      },
+      {
+        "kind": "rect",
+        "x": 18,
+        "y": 2,
+        "w": 6,
+        "h": 3,
+        "rx": 1,
+        "ry": 1,
+        "stroke": "none",
+        "fill": "#4a6c4a"
+      },
+      {
+        "kind": "rect",
+        "x": 7,
+        "y": 8,
+        "w": 16,
+        "h": 24,
+        "rx": 1,
+        "ry": 1,
+        "stroke": "#3a3c38",
+        "fill": "#282c24",
+        "strokeWidth": 0.5
+      },
+      {
+        "kind": "rect",
+        "x": 3,
+        "y": 10,
+        "w": 4,
+        "h": 3,
+        "stroke": "none",
+        "fill": "#4a6c4a"
+      },
+      {
+        "kind": "rect",
+        "x": 3,
+        "y": 15,
+        "w": 4,
+        "h": 3,
+        "stroke": "none",
+        "fill": "#4a6c4a"
+      },
+      {
+        "kind": "rect",
+        "x": 3,
+        "y": 20,
+        "w": 4,
+        "h": 3,
+        "stroke": "none",
+        "fill": "#4a6c4a"
+      },
+      {
+        "kind": "rect",
+        "x": 3,
+        "y": 25,
+        "w": 4,
+        "h": 3,
+        "stroke": "none",
+        "fill": "#4a6c4a"
+      },
+      {
+        "kind": "rect",
+        "x": 23,
+        "y": 10,
+        "w": 4,
+        "h": 3,
+        "stroke": "none",
+        "fill": "#4a6c4a"
+      },
+      {
+        "kind": "rect",
+        "x": 23,
+        "y": 15,
+        "w": 4,
+        "h": 3,
+        "stroke": "none",
+        "fill": "#4a6c4a"
+      },
+      {
+        "kind": "rect",
+        "x": 23,
+        "y": 20,
+        "w": 4,
+        "h": 3,
+        "stroke": "none",
+        "fill": "#4a6c4a"
+      },
+      {
+        "kind": "rect",
+        "x": 23,
+        "y": 25,
+        "w": 4,
+        "h": 3,
+        "stroke": "none",
+        "fill": "#4a6c4a"
+      },
+      {
+        "kind": "rect",
+        "x": 30,
+        "y": 5,
+        "w": 11,
+        "h": 30,
+        "rx": 3,
+        "ry": 5,
+        "stroke": "#444",
+        "fill": "url(#ds1307-xtal)",
+        "strokeWidth": 0.5
+      },
+      {
+        "kind": "rect",
+        "x": 43,
+        "y": 3,
+        "w": 3,
+        "h": 3,
+        "stroke": "none",
+        "fill": "#4a6c4a"
+      },
+      {
+        "kind": "rect",
+        "x": 47,
+        "y": 3,
+        "w": 3,
+        "h": 3,
+        "stroke": "none",
+        "fill": "#4a6c4a"
+      },
+      {
+        "kind": "rect",
+        "x": 51,
+        "y": 3,
+        "w": 3,
+        "h": 3,
+        "stroke": "none",
+        "fill": "#4a6c4a"
+      },
+      {
+        "kind": "rect",
+        "x": 43,
+        "y": 7,
+        "w": 3,
+        "h": 3,
+        "stroke": "none",
+        "fill": "#4a6c4a"
+      },
+      {
+        "kind": "rect",
+        "x": 47,
+        "y": 7,
+        "w": 3,
+        "h": 3,
+        "stroke": "none",
+        "fill": "#4a6c4a"
+      },
+      {
+        "kind": "rect",
+        "x": 51,
+        "y": 7,
+        "w": 3,
+        "h": 3,
+        "stroke": "none",
+        "fill": "#4a6c4a"
+      },
+      {
+        "kind": "rect",
+        "x": 44,
+        "y": 24,
+        "w": 5,
+        "h": 3,
+        "stroke": "none",
+        "fill": "#4a6c4a"
+      },
+      {
+        "kind": "rect",
+        "x": 44,
+        "y": 29,
+        "w": 5,
+        "h": 3,
+        "stroke": "none",
+        "fill": "#4a6c4a"
+      },
+      {
+        "kind": "rect",
+        "x": 44,
+        "y": 34,
+        "w": 5,
+        "h": 3,
+        "stroke": "none",
+        "fill": "#4a6c4a"
+      }
     ],
     "pinLabelColor": "#FAFAC8",
     "pins": [
-      { "id": "sda", "x": 0, "y": 8,  "angle": 180, "length": 8, "label": "SDA", "labelX": 8, "labelY": 10 },
-      { "id": "scl", "x": 0, "y": 20, "angle": 180, "length": 8, "label": "SCL", "labelX": 8, "labelY": 22 },
-      { "id": "sqw", "x": 0, "y": 32, "angle": 180, "length": 8, "label": "SQW", "labelX": 8, "labelY": 34 }
+      {
+        "id": "sda",
+        "x": 0,
+        "y": 8,
+        "angle": 180,
+        "length": 8,
+        "label": "SDA",
+        "labelX": 8,
+        "labelY": 10
+      },
+      {
+        "id": "scl",
+        "x": 0,
+        "y": 20,
+        "angle": 180,
+        "length": 8,
+        "label": "SCL",
+        "labelX": 8,
+        "labelY": 22
+      },
+      {
+        "id": "sqw",
+        "x": 0,
+        "y": 32,
+        "angle": 180,
+        "length": 8,
+        "label": "SQW",
+        "labelX": 8,
+        "labelY": 34
+      }
     ]
   },
   "pins": [
-    { "id": "sda",  "kind": "DIGITAL_BIDIR", "x": 0,  "y": 8,  "angle": 180, "length": 8, "label": "SDA"  },
-    { "id": "scl",  "kind": "DIGITAL_IN",    "x": 0,  "y": 20, "angle": 180, "length": 8, "label": "SCL"  },
-    { "id": "sqw",  "kind": "DIGITAL_OUT",   "x": 0,  "y": 32, "angle": 180, "length": 8, "label": "SQW"  },
-    { "id": "vcc",  "kind": "POWER",         "x": 56, "y": 8,  "angle": 0,   "length": 8, "label": "VCC"  },
-    { "id": "bat",  "kind": "POWER",         "x": 56, "y": 20, "angle": 0,   "length": 8, "label": "VBAT" },
-    { "id": "gnd",  "kind": "POWER",         "x": 56, "y": 32, "angle": 0,   "length": 8, "label": "GND"  }
+    {
+      "id": "sda",
+      "kind": "DIGITAL_BIDIR",
+      "x": 0,
+      "y": 8,
+      "angle": 180,
+      "length": 8,
+      "label": "SDA"
+    },
+    {
+      "id": "scl",
+      "kind": "DIGITAL_IN",
+      "x": 0,
+      "y": 20,
+      "angle": 180,
+      "length": 8,
+      "label": "SCL"
+    },
+    {
+      "id": "sqw",
+      "kind": "DIGITAL_OUT",
+      "x": 0,
+      "y": 32,
+      "angle": 180,
+      "length": 8,
+      "label": "SQW"
+    },
+    {
+      "id": "vcc",
+      "kind": "POWER",
+      "x": 56,
+      "y": 8,
+      "angle": 0,
+      "length": 8,
+      "label": "VCC"
+    },
+    {
+      "id": "bat",
+      "kind": "POWER",
+      "x": 56,
+      "y": 20,
+      "angle": 0,
+      "length": 8,
+      "label": "VBAT"
+    },
+    {
+      "id": "gnd",
+      "kind": "POWER",
+      "x": 56,
+      "y": 32,
+      "angle": 0,
+      "length": 8,
+      "label": "GND"
+    }
   ],
   "properties": [
-    { "id": "year",         "label": "Ano",                "group": "RTC", "valueKind": "number", "editor": "number", "default": 2024, "min": 2000, "max": 2099, "step": 1 },
-    { "id": "month",        "label": "Mês",                "group": "RTC", "valueKind": "number", "editor": "number", "default": 1,    "min": 1,    "max": 12,   "step": 1 },
-    { "id": "day",          "label": "Dia",                "group": "RTC", "valueKind": "number", "editor": "number", "default": 1,    "min": 1,    "max": 31,   "step": 1 },
-    { "id": "hour",         "label": "Hora",               "group": "RTC", "valueKind": "number", "editor": "number", "default": 0,    "min": 0,    "max": 23,   "step": 1 },
-    { "id": "minute",       "label": "Minuto",             "group": "RTC", "valueKind": "number", "editor": "number", "default": 0,    "min": 0,    "max": 59,   "step": 1 },
-    { "id": "second",       "label": "Segundo",            "group": "RTC", "valueKind": "number", "editor": "number", "default": 0,    "min": 0,    "max": 59,   "step": 1 },
-    { "id": "sqw_freq",     "label": "Frequência SQW",     "group": "RTC", "valueKind": "number", "editor": "select", "default": 1,
-      "options": [{"label":"1 Hz","value":1},{"label":"4.096 kHz","value":2},{"label":"8.192 kHz","value":3},{"label":"32.768 kHz","value":4}] },
-    { "id": "time_updated", "label": "Hora atualizada",   "group": "RTC", "valueKind": "bool",   "editor": "bool",   "default": false }
+    {
+      "id": "year",
+      "label": "Ano",
+      "group": "RTC",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 2024,
+      "min": 2000,
+      "max": 2099,
+      "step": 1
+    },
+    {
+      "id": "month",
+      "label": "Mês",
+      "group": "RTC",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 1,
+      "min": 1,
+      "max": 12,
+      "step": 1
+    },
+    {
+      "id": "day",
+      "label": "Dia",
+      "group": "RTC",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 1,
+      "min": 1,
+      "max": 31,
+      "step": 1
+    },
+    {
+      "id": "hour",
+      "label": "Hora",
+      "group": "RTC",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 0,
+      "min": 0,
+      "max": 23,
+      "step": 1
+    },
+    {
+      "id": "minute",
+      "label": "Minuto",
+      "group": "RTC",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 0,
+      "min": 0,
+      "max": 59,
+      "step": 1
+    },
+    {
+      "id": "second",
+      "label": "Segundo",
+      "group": "RTC",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 0,
+      "min": 0,
+      "max": 59,
+      "step": 1
+    },
+    {
+      "id": "sqw_freq",
+      "label": "Frequência SQW",
+      "group": "RTC",
+      "valueKind": "number",
+      "editor": "select",
+      "default": 1,
+      "options": [
+        {
+          "label": "1 Hz",
+          "value": 1
+        },
+        {
+          "label": "4.096 kHz",
+          "value": 2
+        },
+        {
+          "label": "8.192 kHz",
+          "value": 3
+        },
+        {
+          "label": "32.768 kHz",
+          "value": 4
+        }
+      ]
+    },
+    {
+      "id": "time_updated",
+      "label": "Hora atualizada",
+      "group": "RTC",
+      "valueKind": "bool",
+      "editor": "bool",
+      "default": false
+    }
   ],
   "help": {
-    "description": "RTC DS1307 com interface I2C. Mantém data/hora com bateria de backup (VBAT). Saída SQW configurável (1 Hz a 32 kHz). Configure data/hora iniciais e frequência SQW."
+    "description": "Relógio de tempo real I2C DS1307."
   },
-  "limits": { "stepTimeoutMs": 2, "expectedComplexity": "medium" }
+  "limits": {
+    "stepTimeoutMs": 2,
+    "expectedComplexity": "medium"
+  }
 }

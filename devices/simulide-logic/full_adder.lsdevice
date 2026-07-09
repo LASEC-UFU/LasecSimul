@@ -4,7 +4,10 @@
   "name": "Full Adder",
   "language": "pt-BR",
   "icon": "2to2",
-  "folderPath": ["Logicos", "Aritmeticos"],
+  "folderPath": [
+    "Logicos",
+    "Aritmeticos"
+  ],
   "abiVersion": {
     "major": 3,
     "minor": 0
@@ -45,11 +48,27 @@
     "width": 40,
     "height": 32,
     "border": false,
-    "background": { "kind": "none" },
+    "background": {
+      "kind": "none"
+    },
     "viewSpec": {
       "paint": [
-        { "kind": "rect", "x": 8, "y": 0, "w": 24, "h": 32, "fill": "#ffffff" },
-        { "kind": "text", "x": 20, "y": -4, "value": "__label", "fontSize": 5, "color": "#0000aa" }
+        {
+          "kind": "rect",
+          "x": 8,
+          "y": 0,
+          "w": 24,
+          "h": 32,
+          "fill": "#ffffff"
+        },
+        {
+          "kind": "text",
+          "x": 20,
+          "y": -4,
+          "value": "__label",
+          "fontSize": 5,
+          "color": "#0000aa"
+        }
       ]
     },
     "pins": [
@@ -94,5 +113,8 @@
         "label": "CO"
       }
     ]
+  },
+  "help": {
+    "description": "Somador completo de 1 bit com carry."
   }
 }

@@ -4,7 +4,10 @@
   "name": "LM555",
   "language": "pt-BR",
   "icon": "ic2",
-  "folderPath": ["Logicos", "Outros logicos"],
+  "folderPath": [
+    "Logicos",
+    "Outros logicos"
+  ],
   "abiVersion": {
     "major": 3,
     "minor": 0
@@ -57,12 +60,34 @@
     "width": 48,
     "height": 40,
     "border": false,
-    "background": { "kind": "none" },
+    "background": {
+      "kind": "none"
+    },
     "viewSpec": {
       "paint": [
-        { "kind": "rect", "x": 8, "y": 0, "w": 32, "h": 40, "rx": 1, "ry": 1, "fill": "#ffffff" },
-        { "kind": "path", "d": "M 18 0 A 4 4 0 0 0 26 0", "fill": "none" },
-        { "kind": "text", "x": 24, "y": 22, "value": "__label", "fontSize": 6, "color": "#0000aa" }
+        {
+          "kind": "rect",
+          "x": 8,
+          "y": 0,
+          "w": 32,
+          "h": 40,
+          "rx": 1,
+          "ry": 1,
+          "fill": "#ffffff"
+        },
+        {
+          "kind": "path",
+          "d": "M 18 0 A 4 4 0 0 0 26 0",
+          "fill": "none"
+        },
+        {
+          "kind": "text",
+          "x": 24,
+          "y": 22,
+          "value": "__label",
+          "fontSize": 6,
+          "color": "#0000aa"
+        }
       ]
     },
     "pins": [
@@ -131,5 +156,8 @@
         "label": "CV"
       }
     ]
+  },
+  "help": {
+    "description": "Temporizador LM555 para astável/monoestável conforme circuito externo."
   }
 }

@@ -126,5 +126,8 @@
   "folderPath": [
     "Logicos",
     "Aritmeticos"
-  ]
+  ],
+  "help": {
+    "description": "Contador binário com saídas digitais."
+  }
 }

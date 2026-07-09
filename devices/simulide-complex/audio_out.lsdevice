@@ -136,5 +136,8 @@
   "folderPath": [
     "Saidas",
     "Other Outputs"
-  ]
+  ],
+  "help": {
+    "description": "Saída de áudio para observar ou encaminhar sinais sonoros simulados."
+  }
 }

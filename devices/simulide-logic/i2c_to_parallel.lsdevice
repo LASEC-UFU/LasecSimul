@@ -249,5 +249,8 @@
   "defaultProperties": {
     "controlCode": 80,
     "frequencyKHz": 100
+  },
+  "help": {
+    "description": "Expansor que converte comandos I2C em saídas paralelas."
   }
 }

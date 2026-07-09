@@ -174,5 +174,8 @@
         "countProperty": "inputs"
       }
     ]
+  },
+  "help": {
+    "description": "Porta lógica AND com quantidade configurável de entradas."
   }
 }

@@ -104,5 +104,8 @@
   ],
   "defaultProperties": {
     "maxValue": 1
+  },
+  "help": {
+    "description": "Contador lógico simples."
   }
 }

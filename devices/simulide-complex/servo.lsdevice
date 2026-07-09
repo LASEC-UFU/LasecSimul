@@ -154,5 +154,8 @@
   "defaultProperties": {
     "minPulse": 1000,
     "maxPulse": 2000
+  },
+  "help": {
+    "description": "Servo motor controlado por sinal PWM."
   }
 }

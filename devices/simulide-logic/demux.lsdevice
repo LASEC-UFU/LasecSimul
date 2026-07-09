@@ -77,8 +77,36 @@
     "shapes": [],
     "viewSpec": {
       "paint": [
-        { "kind": "polygon", "points": [{"x":0,"y":24},{"x":0,"y":90},{"x":50,"y":108},{"x":50,"y":6}], "fill": "#ffffff" },
-        { "kind": "text", "x": 25, "y": -4, "value": "__label", "fontSize": 5, "color": "#0000aa" }
+        {
+          "kind": "polygon",
+          "points": [
+            {
+              "x": 0,
+              "y": 24
+            },
+            {
+              "x": 0,
+              "y": 90
+            },
+            {
+              "x": 50,
+              "y": 108
+            },
+            {
+              "x": 50,
+              "y": 6
+            }
+          ],
+          "fill": "#ffffff"
+        },
+        {
+          "kind": "text",
+          "x": 25,
+          "y": -4,
+          "value": "__label",
+          "fontSize": 5,
+          "color": "#0000aa"
+        }
       ]
     },
     "pins": [
@@ -184,5 +212,8 @@
   "folderPath": [
     "Logicos",
     "Conversores"
-  ]
+  ],
+  "help": {
+    "description": "Demultiplexador lógico."
+  }
 }

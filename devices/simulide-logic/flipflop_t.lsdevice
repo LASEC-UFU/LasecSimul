@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "typeId": "logic.flipflop_t",
-  "name": "FlipFlopT",
+  "name": "FlipFlop T",
   "language": "pt-BR",
   "abiVersion": {
     "major": 3,
@@ -126,5 +126,8 @@
   "folderPath": [
     "Logicos",
     "Memorias"
-  ]
+  ],
+  "help": {
+    "description": "Flip-flop tipo T para alternância de estado."
+  }
 }

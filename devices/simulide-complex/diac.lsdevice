@@ -182,5 +182,8 @@
   "defaultProperties": {
     "threshold": 30,
     "resistance": 1
+  },
+  "help": {
+    "description": "Dispositivo bidirecional de disparo usado com TRIACs e circuitos AC."
   }
 }

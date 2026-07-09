@@ -171,5 +171,8 @@
   ],
   "defaultProperties": {
     "beta": 100
+  },
+  "help": {
+    "description": "Transistor bipolar de junção para estágios de chaveamento ou amplificação."
   }
 }

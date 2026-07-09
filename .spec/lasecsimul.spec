@@ -296,7 +296,7 @@ LasecSimul/
 │       │   ├── UnifiedCatalog.ts    # carrega/mescla component-catalog.json + registeredSources[]
 │       │   ├── catalogMerge.ts      # normalização compartilhada (nextIndexedLabel etc.)
 │       │   ├── simulideSceneTranslator.ts  # tradutor de cena `.sim2` real (import de subcircuito)
-│       │   └── symbolAuthoring.ts   # seed/compile PackageDescriptor <-> sessão de autoria visual
+│       │   └── subcircuitInternals.ts # leitura de circuito interno/overlay de subcircuitos registrados
 │       ├── project/
 │       │   ├── ProjectTypes.ts      # schema do `.lsproj` (ProjectDocument/ProjectComponent/ProjectWire)
 │       │   └── ProjectSerializer.ts # load/save com validação real de campo (não JSON.parse otimista)
@@ -1890,17 +1890,12 @@ não são realmente "ações do usuário" (mudança só de seleção, que també
 em vários call sites, nunca conta pra fins de undo -- comparação usa só `components`+`wires`, nunca
 `selectedComponentIds`/`selectedWireIds`).
 
-### 17.3 Duas pilhas (principal x autoria), independentes
+### 17.3 Uma pilha do esquemático
 
-`enterSymbolAuthoring()`/`exitSymbolAuthoring()` (`main.ts`) trocam a variável `state` inteira (o
-circuito real vira `realCircuitState`, `state` passa a apontar pro `package`/circuito interno sendo
-editado). Duas `UndoHistory` separadas (`mainUndoHistory`/`authoringUndoHistory`), escolhidas em
-runtime por `activeUndoHistory()` (checa `symbolAuthoringContext`) -- desfazer dentro da sessão de
-autoria nunca enxerga o histórico do circuito principal, e vice-versa. `authoringUndoHistory` é
-resetada (`resetUndoHistory`) toda vez que `enterSymbolAuthoring()` roda (entrar na sessão, ou trocar
-de vista Físico/Símbolo Lógico) -- cada sessão de autoria começa com histórico limpo, de propósito
-(não haveria como desfazer "para fora" de uma sessão anterior já fechada). `mainUndoHistory` é
-resetada só em `"init"` (1ª carga/reload do painel).
+Desde 2026-07-09 não existe sessão de autoria visual de símbolo/package dentro do webview. O undo/redo
+é uma única `UndoHistory` (`mainUndoHistory`) do esquemático real, e `activeUndoHistory()` sempre retorna
+essa pilha. `mainUndoHistory` é resetada só em `"init"` (1ª carga/reload do painel); alterações
+confirmadas por `"syncState"`/`"syncStatePatch"` entram nessa mesma história.
 
 ### 17.4 Atalho de teclado -- mesmo caminho do Ctrl+R (não o `keydown` da Webview)
 

@@ -126,5 +126,8 @@
   "folderPath": [
     "Logicos",
     "Memorias"
-  ]
+  ],
+  "help": {
+    "description": "Flip-flop tipo D para armazenar um bit."
+  }
 }

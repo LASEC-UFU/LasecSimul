@@ -1,64 +1,248 @@
 {
   "schemaVersion": 1,
   "typeId": "sensors.dht22",
-  "name": "DHT22/11 — Sensor de Temperatura e Umidade",
+  "name": "DHt22/11",
   "language": "pt-BR",
   "icon": "dht22",
-  "folderPath": ["Sensores"],
+  "folderPath": [
+    "Sensores"
+  ],
   "translations": {
     "en": {
       "name": "DHT22/11 — Temperature & Humidity Sensor",
       "properties": {
-        "model":    { "label": "Model (11 or 22)",   "group": "Main" },
-        "temp":     { "label": "Temperature (°C)",   "group": "Main" },
-        "humi":     { "label": "Humidity (%RH)",     "group": "Main" },
-        "temp_inc": { "label": "Temp rate (°C/s)",   "group": "Main" },
-        "humi_inc": { "label": "Humidity rate (%/s)","group": "Main" }
+        "model": {
+          "label": "Model (11 or 22)",
+          "group": "Main"
+        },
+        "temp": {
+          "label": "Temperature (°C)",
+          "group": "Main"
+        },
+        "humi": {
+          "label": "Humidity (%RH)",
+          "group": "Main"
+        },
+        "temp_inc": {
+          "label": "Temp rate (°C/s)",
+          "group": "Main"
+        },
+        "humi_inc": {
+          "label": "Humidity rate (%/s)",
+          "group": "Main"
+        }
       }
     }
   },
-  "abiVersion": { "major": 3, "minor": 0 },
+  "abiVersion": {
+    "major": 3,
+    "minor": 0
+  },
   "nativeEntry": {
-    "win32-x64":        "build-msvc/device.dll",
-    "linux-x64":        "build/linux-x64/device.so",
+    "win32-x64": "build-msvc/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
     "darwin-universal": "build/macos-universal/device.dylib"
   },
   "package": {
     "width": 40,
     "height": 72,
     "border": false,
-    "background": { "kind": "color", "value": "transparent" },
+    "background": {
+      "kind": "color",
+      "value": "transparent"
+    },
     "shapes": [
-      { "kind": "rect", "x": 4, "y": 0, "w": 32, "h": 58, "stroke": "#224", "fill": "#4a6aa0", "strokeWidth": 2 },
-      { "kind": "rect", "x": 4, "y": 0, "w": 32, "h": 10, "stroke": "none", "fill": "#5a7ab0" },
-      { "kind": "text", "x": 9,  "y": 26, "value": "DHT",  "fontSize": 10, "color": "#FAFAC8" },
-      { "kind": "text", "x": 9,  "y": 40, "value": "22",   "fontSize": 12, "color": "#fff"    },
-      { "kind": "text", "x": 8,  "y": 54, "value": "T°H%", "fontSize": 7,  "color": "#cce"    }
+      {
+        "kind": "rect",
+        "x": 4,
+        "y": 0,
+        "w": 32,
+        "h": 58,
+        "stroke": "#224",
+        "fill": "#4a6aa0",
+        "strokeWidth": 2
+      },
+      {
+        "kind": "rect",
+        "x": 4,
+        "y": 0,
+        "w": 32,
+        "h": 10,
+        "stroke": "none",
+        "fill": "#5a7ab0"
+      },
+      {
+        "kind": "text",
+        "x": 9,
+        "y": 26,
+        "value": "DHT",
+        "fontSize": 10,
+        "color": "#FAFAC8"
+      },
+      {
+        "kind": "text",
+        "x": 9,
+        "y": 40,
+        "value": "22",
+        "fontSize": 12,
+        "color": "#fff"
+      },
+      {
+        "kind": "text",
+        "x": 8,
+        "y": 54,
+        "value": "T°H%",
+        "fontSize": 7,
+        "color": "#cce"
+      }
     ],
     "pinLabelColor": "#FAFAC8",
     "pins": [
-      { "id": "vcc",  "x": 8,  "y": 72, "angle": 90, "length": 14, "label": "VCC"  },
-      { "id": "data", "x": 20, "y": 72, "angle": 90, "length": 14, "label": "DATA" },
-      { "id": "nc",   "x": 28, "y": 72, "angle": 90, "length": 14, "label": "NC"   },
-      { "id": "gnd",  "x": 36, "y": 72, "angle": 90, "length": 14, "label": "GND"  }
+      {
+        "id": "vcc",
+        "x": 8,
+        "y": 72,
+        "angle": 90,
+        "length": 14,
+        "label": "VCC"
+      },
+      {
+        "id": "data",
+        "x": 20,
+        "y": 72,
+        "angle": 90,
+        "length": 14,
+        "label": "DATA"
+      },
+      {
+        "id": "nc",
+        "x": 28,
+        "y": 72,
+        "angle": 90,
+        "length": 14,
+        "label": "NC"
+      },
+      {
+        "id": "gnd",
+        "x": 36,
+        "y": 72,
+        "angle": 90,
+        "length": 14,
+        "label": "GND"
+      }
     ]
   },
   "pins": [
-    { "id": "vcc",  "kind": "POWER",         "x": 8,  "y": 72, "angle": 90, "length": 14, "label": "VCC"  },
-    { "id": "data", "kind": "DIGITAL_BIDIR", "x": 20, "y": 72, "angle": 90, "length": 14, "label": "DATA" },
-    { "id": "nc",   "kind": "POWER",         "x": 28, "y": 72, "angle": 90, "length": 14, "label": "NC"   },
-    { "id": "gnd",  "kind": "POWER",         "x": 36, "y": 72, "angle": 90, "length": 14, "label": "GND"  }
+    {
+      "id": "vcc",
+      "kind": "POWER",
+      "x": 8,
+      "y": 72,
+      "angle": 90,
+      "length": 14,
+      "label": "VCC"
+    },
+    {
+      "id": "data",
+      "kind": "DIGITAL_BIDIR",
+      "x": 20,
+      "y": 72,
+      "angle": 90,
+      "length": 14,
+      "label": "DATA"
+    },
+    {
+      "id": "nc",
+      "kind": "POWER",
+      "x": 28,
+      "y": 72,
+      "angle": 90,
+      "length": 14,
+      "label": "NC"
+    },
+    {
+      "id": "gnd",
+      "kind": "POWER",
+      "x": 36,
+      "y": 72,
+      "angle": 90,
+      "length": 14,
+      "label": "GND"
+    }
   ],
   "properties": [
-    { "id": "model",    "label": "Modelo",            "group": "Main", "valueKind": "number", "editor": "select", "default": 22,
-      "options": [{"label":"DHT11","value":11},{"label":"DHT22","value":22}] },
-    { "id": "temp",     "label": "Temperatura (°C)", "group": "Main", "valueKind": "number", "editor": "number", "default": 25.0,  "min": -40,  "max": 80,   "step": 0.1, "unit": "°C" },
-    { "id": "humi",     "label": "Umidade (%RH)",    "group": "Main", "valueKind": "number", "editor": "number", "default": 50.0,  "min": 0,    "max": 100,  "step": 0.1, "unit": "%"  },
-    { "id": "temp_inc", "label": "Taxa Temp (°C/s)", "group": "Main", "valueKind": "number", "editor": "number", "default": 0.0,   "min": -10,  "max": 10,   "step": 0.1, "unit": "°C/s" },
-    { "id": "humi_inc", "label": "Taxa Umidade (%/s)","group":"Main", "valueKind": "number", "editor": "number", "default": 0.0,   "min": -10,  "max": 10,   "step": 0.1, "unit": "%/s" }
+    {
+      "id": "model",
+      "label": "Modelo",
+      "group": "Main",
+      "valueKind": "number",
+      "editor": "select",
+      "default": 22,
+      "options": [
+        {
+          "label": "DHT11",
+          "value": 11
+        },
+        {
+          "label": "DHT22",
+          "value": 22
+        }
+      ]
+    },
+    {
+      "id": "temp",
+      "label": "Temperatura (°C)",
+      "group": "Main",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 25,
+      "min": -40,
+      "max": 80,
+      "step": 0.1,
+      "unit": "°C"
+    },
+    {
+      "id": "humi",
+      "label": "Umidade (%RH)",
+      "group": "Main",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 50,
+      "min": 0,
+      "max": 100,
+      "step": 0.1,
+      "unit": "%"
+    },
+    {
+      "id": "temp_inc",
+      "label": "Taxa Temp (°C/s)",
+      "group": "Main",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 0,
+      "min": -10,
+      "max": 10,
+      "step": 0.1,
+      "unit": "°C/s"
+    },
+    {
+      "id": "humi_inc",
+      "label": "Taxa Umidade (%/s)",
+      "group": "Main",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 0,
+      "min": -10,
+      "max": 10,
+      "step": 0.1,
+      "unit": "%/s"
+    }
   ],
   "help": {
-    "description": "Sensor de temperatura e umidade relativa DHT22 (ou DHT11). Interface 1-wire digital proprietária. Configure temperatura (°C) e umidade (%) para simular leituras do sensor."
+    "description": "Sensor digital de temperatura e umidade DHT22/DHT11."
   },
-  "limits": { "stepTimeoutMs": 2, "expectedComplexity": "medium" }
+  "limits": {
+    "stepTimeoutMs": 2,
+    "expectedComplexity": "medium"
+  }
 }

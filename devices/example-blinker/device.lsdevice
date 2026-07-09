@@ -1,4 +1,4 @@
-﻿{
+{
   "schemaVersion": 1,
   "typeId": "example.blinker",
   "name": "Blinker (exemplo de dispositivo nativo)",
@@ -14,7 +14,10 @@
       }
     }
   },
-  "abiVersion": { "major": 3, "minor": 0 },
+  "abiVersion": {
+    "major": 3,
+    "minor": 0
+  },
   "nativeEntry": {
     "win32-x64": "build-msvc/device.dll",
     "linux-x64": "build/linux-x64/device.so",
@@ -24,15 +27,49 @@
     "width": 60,
     "height": 40,
     "border": true,
-    "background": { "kind": "color", "value": "#ffffff" },
+    "background": {
+      "kind": "color",
+      "value": "#ffffff"
+    },
     "shapes": [
-      { "kind": "text", "x": 8, "y": 16, "value": "BLINK", "fontSize": 9, "color": "#000000" }
+      {
+        "kind": "text",
+        "x": 8,
+        "y": 16,
+        "value": "BLINK",
+        "fontSize": 9,
+        "color": "#000000"
+      }
     ]
   },
   "pins": [
-    { "id": "out", "kind": "DIGITAL_OUT", "x": 60, "y": 20, "angle": 0, "length": 8, "label": "OUT" },
-    { "id": "vcc", "kind": "POWER", "x": 0, "y": 10, "angle": 180, "length": 8, "label": "VCC" },
-    { "id": "gnd", "kind": "POWER", "x": 0, "y": 30, "angle": 180, "length": 8, "label": "GND" }
+    {
+      "id": "out",
+      "kind": "DIGITAL_OUT",
+      "x": 60,
+      "y": 20,
+      "angle": 0,
+      "length": 8,
+      "label": "OUT"
+    },
+    {
+      "id": "vcc",
+      "kind": "POWER",
+      "x": 0,
+      "y": 10,
+      "angle": 180,
+      "length": 8,
+      "label": "VCC"
+    },
+    {
+      "id": "gnd",
+      "kind": "POWER",
+      "x": 0,
+      "y": 30,
+      "angle": 180,
+      "length": 8,
+      "label": "GND"
+    }
   ],
   "properties": [
     {
@@ -48,5 +85,11 @@
     }
   ],
   "buses": [],
-  "limits": { "stepTimeoutMs": 4, "expectedComplexity": "low" }
+  "limits": {
+    "stepTimeoutMs": 4,
+    "expectedComplexity": "low"
+  },
+  "help": {
+    "description": "Dispositivo nativo de exemplo que alterna um pino de saída em intervalo configurável."
+  }
 }

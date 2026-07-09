@@ -17,8 +17,7 @@ interface PaletteHostState {
 type PaletteWebviewMessage =
   | { type: "webviewReady" }
   | { type: "startPlacingComponent"; typeId: string }
-  | { type: "removeRegistered"; sourceId: string }
-  | { type: "editSymbol"; sourceId: string };
+  | { type: "removeRegistered"; sourceId: string };
 
 type IconUriPair = { light: vscode.Uri; dark: vscode.Uri };
 
@@ -32,7 +31,6 @@ export class ComponentPaletteViewProvider implements vscode.WebviewViewProvider 
     private language: LasecSimulLanguage,
     private readonly onAddComponent: (typeId: string) => void,
     private readonly onRemoveRegistered: (item: { sourceId?: string }) => void | Promise<void>,
-    private readonly onEditSymbol: (item: { sourceId?: string }) => void | Promise<void>,
   ) {
     this.catalog = [...catalog];
   }
@@ -86,9 +84,6 @@ export class ComponentPaletteViewProvider implements vscode.WebviewViewProvider 
       void this.onRemoveRegistered({ sourceId: message.sourceId });
       return;
     }
-    if (message.type === "editSymbol") {
-      void this.onEditSymbol({ sourceId: message.sourceId });
-    }
   }
 
   private postState(): Thenable<boolean> {
@@ -118,7 +113,7 @@ export class ComponentPaletteViewProvider implements vscode.WebviewViewProvider 
         <head>
           <meta charset="UTF-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';" />
+          <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'nonce-${nonce}';" />
           <link rel="stylesheet" href="${styleUri}" />
           <title>LasecSimul Palette</title>
         </head>

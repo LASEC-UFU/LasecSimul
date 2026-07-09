@@ -55,23 +55,16 @@ export interface WebviewComponentModel {
   pins: WebviewPinModel[];
   properties: Record<string, string | number | boolean>;
   /** Posição/orientação na PLACA (Board Mode) — independente de `x`/`y`/`rotation`/`flipH`/`flipV`
-   * (posição no CIRCUITO), igual a `circPos`/`boardPos` do SimulIDE real (`SubPackage::
-   * setBoardMode()`, `simulide_2/src/components/other/subpackage.cpp`): cada componente tem 2
-   * posições independentes, um toggle alterna qual está "ativa" -- mover num modo nunca afeta a
-   * posição no outro. Só usado dentro de uma sessão de "Abrir Subcircuito" com Modo Placa
-   * (`main.ts::toggleBoardMode`); ausente até o usuário entrar em Modo Placa a primeira vez.
-   * Convenção: os campos `x`/`y`/`rotation`/`flipH`/`flipV` de sempre SEMPRE refletem a posição
-   * "ativa" no momento (igual ao SimulIDE) -- entrar/sair de Modo Placa faz SWAP com estes campos,
-   * nunca lê os dois ao mesmo tempo pra desenhar. */
+   * (posição no CIRCUITO), igual a `circPos`/`boardPos` do SimulIDE real. Persistido no
+   * `.lssubcircuit` e usado pelo overlay de instâncias com `boardModeEnabled`; ausente significa que
+   * o overlay escolhe uma posição inicial padrão. */
   boardX?: number;
   boardY?: number;
   boardRotation?: 0 | 90 | 180 | 270;
   boardFlipH?: boolean;
   boardFlipV?: boolean;
-  /** "Selecione os Componentes expostos" -- só relevante pra componentes do circuito INTERNO de um
-   * subcircuito (`isSymbolAuthoringTypeId` é sempre `false`/irrelevante aqui). Sobrevive ao
-   * round-trip de "Abrir Subcircuito" via `InternalComponentSeed.exposed` (ver
-   * `symbolAuthoring.ts`). Ausente == `false`. */
+  /** "Selecione os Componentes expostos" -- só relevante para componentes internos persistidos no
+   * `.lssubcircuit`. Ausente == `false`. */
   exposed?: boolean;
   /** Presença deste campo (independente do `typeId` atual) é o marcador de "isto é um bloco
    * genérico de subcircuito por caminho" -- mesmo shape de `ProjectSubcircuitRef`
@@ -206,9 +199,7 @@ export interface PackagePin {
    * Em coordenadas ORIGINAIS do package (mesmo espaço de `x`/`y`, antes do deslocamento de
    * `resolvePackageLayout`). Ausente == posição padrão calculada (ponta do lead + 9 unidades na
    * direção do `angle`, com rótulo girado -90° se o lead for vertical) -- mesmo comportamento de
-   * sempre, nunca quebra um `package` escrito antes deste campo existir. Editado arrastando um
-   * `graphics.text` vinculado na sessão de autoria (`other.package_pin`/`symbolAuthoring.ts`), nunca
-   * uma alça nova. */
+   * sempre, nunca quebra um `package` escrito antes deste campo existir. */
   labelX?: PackageNumberValue;
   labelY?: PackageNumberValue;
 }
@@ -410,7 +401,7 @@ export interface SimulideQtWidgetSpec {
 export const SIMULIDE_PACKAGE_GRID_UNIT = 8;
 
 /** typeId de `connectors.tunnel` -- ponto único (TR-7, .spec/lasecsimul-native-devices.spec), usado
- * nos vários lugares (symbolAuthoring.ts/main.ts/componentSymbols.ts/extension.ts) que tratam este
+ * nos vários lugares (main.ts/componentSymbols.ts/extension.ts) que tratam este
  * conector como exceção (rótulo derivado ao vivo do nome do net, geometria variável, id embutido no
  * próprio SVG) -- cada exceção continua com sua própria lógica/justificativa local (não são cópias
  * do mesmo comportamento, ver histórico de cada call site), só a STRING do typeId é compartilhada
@@ -654,9 +645,8 @@ export interface WebviewComponentCatalogEntry {
    * mesmos pinos elétricos nos dois (não validado à força, só aviso, ver `saveSymbolCommand`). */
   logicSymbolPackage?: PackageDescriptor;
   /** Igual ao `m_graphical` do SimulIDE real (setado por classe em `component.cpp`) -- typeIds "de
-   * interação do usuário" (LED, motor, display, switch, ...) que continuam visíveis em Modo Placa
-   * dentro de uma sessão de "Abrir Subcircuito"; o resto (resistor, MCU, fonte fixa, lógica pura)
-   * fica oculto nesse modo, ver `main.ts::toggleBoardMode`. Ausente == `false`. */
+   * interação do usuário" (LED, motor, display, switch, ...) que podem aparecer no overlay de Modo
+   * Placa de uma instância de subcircuito. Ausente == `false`. */
   graphical?: boolean;
   pinCount: number;
   /** Ids elétricos REAIS na ordem que o Core espera (`abi-device`: `.lsdevice` `pins[].id`;
@@ -684,8 +674,8 @@ export interface WebviewComponentCatalogEntry {
   registeredSourceId?: string;
   /** False quando o item é integrado ao catálogo base e não pode ser removido pela UI. */
   registeredSourceRemovable?: boolean;
-  /** Tipo da fonte registrada que originou esta entrada -- usado pela Webview para ajustar menu
-   * de contexto ("Abrir Subcircuito" vs "Editar Símbolo") e ações específicas de MCU/QEMU. */
+  /** Tipo da fonte registrada que originou esta entrada -- usado pela Webview para ajustar menus e
+   * ações específicas de subcircuito/MCU/QEMU. */
   registeredSourceKind?: "abi-device" | "mcu-adapter" | "subcircuit-file";
   /** `true` quando esta entrada representa um MCU direto (`mcu-adapter`) OU um subcircuito que
    * hospeda um MCU interno (ex: DevKit/WROOM com ESP32 QEMU dentro). */

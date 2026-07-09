@@ -1,67 +1,277 @@
 {
   "schemaVersion": 1,
   "typeId": "sensors.ds1621",
-  "name": "DS1621 — Termômetro Digital I2C",
+  "name": "DS1621",
   "language": "pt-BR",
   "icon": "ds1621",
-  "folderPath": ["Sensores"],
+  "folderPath": [
+    "Sensores"
+  ],
   "translations": {
     "en": {
       "name": "DS1621 — Digital Thermometer I2C",
       "properties": {
-        "temp": { "label": "Temperature (°C)", "group": "Sensor" },
-        "th":   { "label": "T-High setpoint",  "group": "Sensor" },
-        "tl":   { "label": "T-Low setpoint",   "group": "Sensor" }
+        "temp": {
+          "label": "Temperature (°C)",
+          "group": "Sensor"
+        },
+        "th": {
+          "label": "T-High setpoint",
+          "group": "Sensor"
+        },
+        "tl": {
+          "label": "T-Low setpoint",
+          "group": "Sensor"
+        }
       }
     }
   },
-  "abiVersion": { "major": 3, "minor": 0 },
+  "abiVersion": {
+    "major": 3,
+    "minor": 0
+  },
   "nativeEntry": {
-    "win32-x64":        "build-msvc/device.dll",
-    "linux-x64":        "build/linux-x64/device.so",
+    "win32-x64": "build-msvc/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
     "darwin-universal": "build/macos-universal/device.dylib"
   },
   "package": {
     "width": 56,
     "height": 56,
     "border": false,
-    "background": { "kind": "color", "value": "transparent" },
+    "background": {
+      "kind": "color",
+      "value": "transparent"
+    },
     "shapes": [
-      { "kind": "rect", "x": 0, "y": 0, "w": 56, "h": 56, "stroke": "#333", "fill": "#1a1a2e", "strokeWidth": 2 },
-      { "kind": "line", "x1": 4, "y1": 0, "x2": 4, "y2": 56, "stroke": "#2a2a3e" },
-      { "kind": "text", "x": 8,  "y": 24, "value": "DS",    "fontSize": 9,  "color": "#FAFAC8" },
-      { "kind": "text", "x": 8,  "y": 36, "value": "1621",  "fontSize": 9,  "color": "#FAFAC8" },
-      { "kind": "text", "x": 8,  "y": 48, "value": "I2C T°","fontSize": 7,  "color": "#aaa"    }
+      {
+        "kind": "rect",
+        "x": 0,
+        "y": 0,
+        "w": 56,
+        "h": 56,
+        "stroke": "#333",
+        "fill": "#1a1a2e",
+        "strokeWidth": 2
+      },
+      {
+        "kind": "line",
+        "x1": 4,
+        "y1": 0,
+        "x2": 4,
+        "y2": 56,
+        "stroke": "#2a2a3e"
+      },
+      {
+        "kind": "text",
+        "x": 8,
+        "y": 24,
+        "value": "DS",
+        "fontSize": 9,
+        "color": "#FAFAC8"
+      },
+      {
+        "kind": "text",
+        "x": 8,
+        "y": 36,
+        "value": "1621",
+        "fontSize": 9,
+        "color": "#FAFAC8"
+      },
+      {
+        "kind": "text",
+        "x": 8,
+        "y": 48,
+        "value": "I2C T°",
+        "fontSize": 7,
+        "color": "#aaa"
+      }
     ],
     "pinLabelColor": "#FAFAC8",
     "pins": [
-      { "id": "sda",  "x": 0,  "y": 8,  "angle": 180, "length": 8, "label": "SDA"  },
-      { "id": "scl",  "x": 0,  "y": 20, "angle": 180, "length": 8, "label": "SCL"  },
-      { "id": "tout", "x": 0,  "y": 32, "angle": 180, "length": 8, "label": "TOUT" },
-      { "id": "gnd",  "x": 0,  "y": 44, "angle": 180, "length": 8, "label": "GND"  },
-      { "id": "vdd",  "x": 56, "y": 8,  "angle": 0,   "length": 8, "label": "VDD"  },
-      { "id": "a2",   "x": 56, "y": 20, "angle": 0,   "length": 8, "label": "A2"   },
-      { "id": "a1",   "x": 56, "y": 32, "angle": 0,   "length": 8, "label": "A1"   },
-      { "id": "a0",   "x": 56, "y": 44, "angle": 0,   "length": 8, "label": "A0"   }
+      {
+        "id": "sda",
+        "x": 0,
+        "y": 8,
+        "angle": 180,
+        "length": 8,
+        "label": "SDA"
+      },
+      {
+        "id": "scl",
+        "x": 0,
+        "y": 20,
+        "angle": 180,
+        "length": 8,
+        "label": "SCL"
+      },
+      {
+        "id": "tout",
+        "x": 0,
+        "y": 32,
+        "angle": 180,
+        "length": 8,
+        "label": "TOUT"
+      },
+      {
+        "id": "gnd",
+        "x": 0,
+        "y": 44,
+        "angle": 180,
+        "length": 8,
+        "label": "GND"
+      },
+      {
+        "id": "vdd",
+        "x": 56,
+        "y": 8,
+        "angle": 0,
+        "length": 8,
+        "label": "VDD"
+      },
+      {
+        "id": "a2",
+        "x": 56,
+        "y": 20,
+        "angle": 0,
+        "length": 8,
+        "label": "A2"
+      },
+      {
+        "id": "a1",
+        "x": 56,
+        "y": 32,
+        "angle": 0,
+        "length": 8,
+        "label": "A1"
+      },
+      {
+        "id": "a0",
+        "x": 56,
+        "y": 44,
+        "angle": 0,
+        "length": 8,
+        "label": "A0"
+      }
     ]
   },
   "pins": [
-    { "id": "sda",  "kind": "DIGITAL_BIDIR", "x": 0,  "y": 8,  "angle": 180, "length": 8, "label": "SDA"  },
-    { "id": "scl",  "kind": "DIGITAL_IN",    "x": 0,  "y": 20, "angle": 180, "length": 8, "label": "SCL"  },
-    { "id": "tout", "kind": "DIGITAL_OUT",   "x": 0,  "y": 32, "angle": 180, "length": 8, "label": "TOUT" },
-    { "id": "gnd",  "kind": "POWER",         "x": 0,  "y": 44, "angle": 180, "length": 8, "label": "GND"  },
-    { "id": "vdd",  "kind": "POWER",         "x": 56, "y": 8,  "angle": 0,   "length": 8, "label": "VDD"  },
-    { "id": "a2",   "kind": "DIGITAL_IN",    "x": 56, "y": 20, "angle": 0,   "length": 8, "label": "A2"   },
-    { "id": "a1",   "kind": "DIGITAL_IN",    "x": 56, "y": 32, "angle": 0,   "length": 8, "label": "A1"   },
-    { "id": "a0",   "kind": "DIGITAL_IN",    "x": 56, "y": 44, "angle": 0,   "length": 8, "label": "A0"   }
+    {
+      "id": "sda",
+      "kind": "DIGITAL_BIDIR",
+      "x": 0,
+      "y": 8,
+      "angle": 180,
+      "length": 8,
+      "label": "SDA"
+    },
+    {
+      "id": "scl",
+      "kind": "DIGITAL_IN",
+      "x": 0,
+      "y": 20,
+      "angle": 180,
+      "length": 8,
+      "label": "SCL"
+    },
+    {
+      "id": "tout",
+      "kind": "DIGITAL_OUT",
+      "x": 0,
+      "y": 32,
+      "angle": 180,
+      "length": 8,
+      "label": "TOUT"
+    },
+    {
+      "id": "gnd",
+      "kind": "POWER",
+      "x": 0,
+      "y": 44,
+      "angle": 180,
+      "length": 8,
+      "label": "GND"
+    },
+    {
+      "id": "vdd",
+      "kind": "POWER",
+      "x": 56,
+      "y": 8,
+      "angle": 0,
+      "length": 8,
+      "label": "VDD"
+    },
+    {
+      "id": "a2",
+      "kind": "DIGITAL_IN",
+      "x": 56,
+      "y": 20,
+      "angle": 0,
+      "length": 8,
+      "label": "A2"
+    },
+    {
+      "id": "a1",
+      "kind": "DIGITAL_IN",
+      "x": 56,
+      "y": 32,
+      "angle": 0,
+      "length": 8,
+      "label": "A1"
+    },
+    {
+      "id": "a0",
+      "kind": "DIGITAL_IN",
+      "x": 56,
+      "y": 44,
+      "angle": 0,
+      "length": 8,
+      "label": "A0"
+    }
   ],
   "properties": [
-    { "id": "temp", "label": "Temperatura (°C)", "group": "Sensor", "valueKind": "number", "editor": "number", "default": 25,  "min": -55, "max": 125, "step": 0.5, "unit": "°C" },
-    { "id": "th",   "label": "Limite TH (°C)",  "group": "Sensor", "valueKind": "number", "editor": "number", "default": 80,  "min": -55, "max": 125, "step": 1,   "unit": "°C" },
-    { "id": "tl",   "label": "Limite TL (°C)",  "group": "Sensor", "valueKind": "number", "editor": "number", "default": 20,  "min": -55, "max": 125, "step": 1,   "unit": "°C" }
+    {
+      "id": "temp",
+      "label": "Temperatura (°C)",
+      "group": "Sensor",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 25,
+      "min": -55,
+      "max": 125,
+      "step": 0.5,
+      "unit": "°C"
+    },
+    {
+      "id": "th",
+      "label": "Limite TH (°C)",
+      "group": "Sensor",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 80,
+      "min": -55,
+      "max": 125,
+      "step": 1,
+      "unit": "°C"
+    },
+    {
+      "id": "tl",
+      "label": "Limite TL (°C)",
+      "group": "Sensor",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 20,
+      "min": -55,
+      "max": 125,
+      "step": 1,
+      "unit": "°C"
+    }
   ],
   "help": {
-    "description": "Termômetro digital DS1621 com interface I2C. Resolução de 0,5°C, saída de alarme TOUT configurável via limites TH/TL. Endereço I2C selecionado pelos pinos A0/A1/A2."
+    "description": "Termômetro digital I2C DS1621."
   },
-  "limits": { "stepTimeoutMs": 2, "expectedComplexity": "medium" }
+  "limits": {
+    "stepTimeoutMs": 2,
+    "expectedComplexity": "medium"
+  }
 }

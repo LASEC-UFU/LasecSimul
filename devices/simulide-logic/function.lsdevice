@@ -102,5 +102,8 @@
   ],
   "defaultProperties": {
     "functions": "i0 | i1"
+  },
+  "help": {
+    "description": "Bloco lógico programável por expressão."
   }
 }

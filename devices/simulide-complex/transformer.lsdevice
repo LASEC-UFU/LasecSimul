@@ -187,5 +187,8 @@
   "defaultProperties": {
     "coupling": 0.99,
     "baseInductance": 1
+  },
+  "help": {
+    "description": "Transformador para acoplamento e relação de tensão em circuitos AC."
   }
 }

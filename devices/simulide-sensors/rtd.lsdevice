@@ -1,62 +1,236 @@
 {
   "schemaVersion": 1,
   "typeId": "sensors.rtd",
-  "name": "RTD — Detector de Temperatura Resistivo",
+  "name": "RTD",
   "language": "pt-BR",
   "icon": "rtd",
-  "folderPath": ["Sensores"],
+  "folderPath": [
+    "Sensores"
+  ],
   "translations": {
     "en": {
       "name": "RTD — Resistance Temperature Detector",
       "properties": {
-        "temp":    { "label": "Temperature (°C)", "group": "Main"       },
-        "min_temp":{ "label": "Min Temp (°C)",    "group": "Main"       },
-        "max_temp":{ "label": "Max Temp (°C)",    "group": "Main"       },
-        "r0":      { "label": "R0 (Ω at 0°C)",   "group": "Parameters" }
+        "temp": {
+          "label": "Temperature (°C)",
+          "group": "Main"
+        },
+        "min_temp": {
+          "label": "Min Temp (°C)",
+          "group": "Main"
+        },
+        "max_temp": {
+          "label": "Max Temp (°C)",
+          "group": "Main"
+        },
+        "r0": {
+          "label": "R0 (Ω at 0°C)",
+          "group": "Parameters"
+        }
       }
     }
   },
-  "abiVersion": { "major": 3, "minor": 0 },
+  "abiVersion": {
+    "major": 3,
+    "minor": 0
+  },
   "nativeEntry": {
-    "win32-x64":        "build-msvc/device.dll",
-    "linux-x64":        "build/linux-x64/device.so",
+    "win32-x64": "build-msvc/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
     "darwin-universal": "build/macos-universal/device.dylib"
   },
   "package": {
     "width": 56,
     "height": 24,
     "border": false,
-    "background": { "kind": "color", "value": "transparent" },
+    "background": {
+      "kind": "color",
+      "value": "transparent"
+    },
     "shapes": [
-      { "kind": "line", "x1": 10, "y1": 16, "x2": 14, "y2": 16, "stroke": "#444" },
-      { "kind": "line", "x1": 14, "y1": 16, "x2": 17, "y2": 10, "stroke": "#444" },
-      { "kind": "line", "x1": 17, "y1": 10, "x2": 23, "y2": 22, "stroke": "#444" },
-      { "kind": "line", "x1": 23, "y1": 22, "x2": 28, "y2": 10, "stroke": "#444" },
-      { "kind": "line", "x1": 28, "y1": 10, "x2": 33, "y2": 22, "stroke": "#444" },
-      { "kind": "line", "x1": 33, "y1": 22, "x2": 39, "y2": 10, "stroke": "#444" },
-      { "kind": "line", "x1": 39, "y1": 10, "x2": 42, "y2": 16, "stroke": "#444" },
-      { "kind": "line", "x1": 42, "y1": 16, "x2": 46, "y2": 16, "stroke": "#444" },
-      { "kind": "line", "x1": 20, "y1": 22, "x2": 34, "y2": 8,  "stroke": "#444" },
-      { "kind": "line", "x1": 34, "y1": 8,  "x2": 38, "y2": 8,  "stroke": "#444" },
-      { "kind": "text", "x": 20, "y": 10, "value": "+tº", "fontSize": 6, "color": "#444" }
+      {
+        "kind": "line",
+        "x1": 10,
+        "y1": 16,
+        "x2": 14,
+        "y2": 16,
+        "stroke": "#444"
+      },
+      {
+        "kind": "line",
+        "x1": 14,
+        "y1": 16,
+        "x2": 17,
+        "y2": 10,
+        "stroke": "#444"
+      },
+      {
+        "kind": "line",
+        "x1": 17,
+        "y1": 10,
+        "x2": 23,
+        "y2": 22,
+        "stroke": "#444"
+      },
+      {
+        "kind": "line",
+        "x1": 23,
+        "y1": 22,
+        "x2": 28,
+        "y2": 10,
+        "stroke": "#444"
+      },
+      {
+        "kind": "line",
+        "x1": 28,
+        "y1": 10,
+        "x2": 33,
+        "y2": 22,
+        "stroke": "#444"
+      },
+      {
+        "kind": "line",
+        "x1": 33,
+        "y1": 22,
+        "x2": 39,
+        "y2": 10,
+        "stroke": "#444"
+      },
+      {
+        "kind": "line",
+        "x1": 39,
+        "y1": 10,
+        "x2": 42,
+        "y2": 16,
+        "stroke": "#444"
+      },
+      {
+        "kind": "line",
+        "x1": 42,
+        "y1": 16,
+        "x2": 46,
+        "y2": 16,
+        "stroke": "#444"
+      },
+      {
+        "kind": "line",
+        "x1": 20,
+        "y1": 22,
+        "x2": 34,
+        "y2": 8,
+        "stroke": "#444"
+      },
+      {
+        "kind": "line",
+        "x1": 34,
+        "y1": 8,
+        "x2": 38,
+        "y2": 8,
+        "stroke": "#444"
+      },
+      {
+        "kind": "text",
+        "x": 20,
+        "y": 10,
+        "value": "+tº",
+        "fontSize": 6,
+        "color": "#444"
+      }
     ],
     "pins": [
-      { "id": "a", "x": 0,  "y": 16, "angle": 180, "length": 10, "label": "" },
-      { "id": "b", "x": 56, "y": 16, "angle": 0,   "length": 10, "label": "" }
+      {
+        "id": "a",
+        "x": 0,
+        "y": 16,
+        "angle": 180,
+        "length": 10,
+        "label": ""
+      },
+      {
+        "id": "b",
+        "x": 56,
+        "y": 16,
+        "angle": 0,
+        "length": 10,
+        "label": ""
+      }
     ]
   },
   "pins": [
-    { "id": "a", "kind": "ANALOG_IN", "x": 0,  "y": 16, "angle": 180, "length": 10, "label": "" },
-    { "id": "b", "kind": "ANALOG_IN", "x": 56, "y": 16, "angle": 0,   "length": 10, "label": "" }
+    {
+      "id": "a",
+      "kind": "ANALOG_IN",
+      "x": 0,
+      "y": 16,
+      "angle": 180,
+      "length": 10,
+      "label": ""
+    },
+    {
+      "id": "b",
+      "kind": "ANALOG_IN",
+      "x": 56,
+      "y": 16,
+      "angle": 0,
+      "length": 10,
+      "label": ""
+    }
   ],
   "properties": [
-    { "id": "temp",     "label": "Temperatura (°C)", "group": "Main",       "valueKind": "number", "editor": "number", "default": 25,  "min": -200, "max": 850, "step": 0.5, "unit": "°C" },
-    { "id": "min_temp", "label": "Mín. Temp (°C)",   "group": "Main",       "valueKind": "number", "editor": "number", "default": -200,"min": -200, "max": 850, "step": 1,   "unit": "°C" },
-    { "id": "max_temp", "label": "Máx. Temp (°C)",   "group": "Main",       "valueKind": "number", "editor": "number", "default": 200, "min": 0,    "max": 850, "step": 1,   "unit": "°C" },
-    { "id": "r0",       "label": "R0 (Ω a 0°C)",    "group": "Parameters", "valueKind": "number", "editor": "number", "default": 100, "min": 1,    "max": 10000,"step": 1,  "unit": "Ω" }
+    {
+      "id": "temp",
+      "label": "Temperatura (°C)",
+      "group": "Main",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 25,
+      "min": -200,
+      "max": 850,
+      "step": 0.5,
+      "unit": "°C"
+    },
+    {
+      "id": "min_temp",
+      "label": "Mín. Temp (°C)",
+      "group": "Main",
+      "valueKind": "number",
+      "editor": "number",
+      "default": -200,
+      "min": -200,
+      "max": 850,
+      "step": 1,
+      "unit": "°C"
+    },
+    {
+      "id": "max_temp",
+      "label": "Máx. Temp (°C)",
+      "group": "Main",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 200,
+      "min": 0,
+      "max": 850,
+      "step": 1,
+      "unit": "°C"
+    },
+    {
+      "id": "r0",
+      "label": "R0 (Ω a 0°C)",
+      "group": "Parameters",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 100,
+      "min": 1,
+      "max": 10000,
+      "step": 1,
+      "unit": "Ω"
+    }
   ],
   "help": {
-    "description": "RTD (Resistance Temperature Detector): resistência varia linearmente com a temperatura. Modela PT100/PT1000 via R0 a 0°C e coeficiente α. Configure temperatura, faixa de operação e R0."
+    "description": "Sensor resistivo de temperatura."
   },
-  "limits": { "stepTimeoutMs": 4, "expectedComplexity": "low" }
+  "limits": {
+    "stepTimeoutMs": 4,
+    "expectedComplexity": "low"
+  }
 }

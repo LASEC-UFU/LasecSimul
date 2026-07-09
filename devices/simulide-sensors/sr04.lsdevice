@@ -1,57 +1,196 @@
 {
   "schemaVersion": 1,
   "typeId": "sensors.sr04",
-  "name": "HC-SR04 — Sensor Ultrassônico",
+  "name": "HC-SR04",
   "language": "pt-BR",
   "icon": "sr04",
-  "folderPath": ["Sensores"],
+  "folderPath": [
+    "Sensores"
+  ],
   "translations": {
     "en": {
       "name": "HC-SR04 — Ultrasonic Distance Sensor",
       "properties": {
-        "distance_m":  { "label": "Distance (m)",      "group": "Sensor" },
-        "use_analog":  { "label": "Analog voltage out","group": "Sensor" }
+        "distance_m": {
+          "label": "Distance (m)",
+          "group": "Sensor"
+        },
+        "use_analog": {
+          "label": "Analog voltage out",
+          "group": "Sensor"
+        }
       }
     }
   },
-  "abiVersion": { "major": 3, "minor": 0 },
+  "abiVersion": {
+    "major": 3,
+    "minor": 0
+  },
   "nativeEntry": {
-    "win32-x64":        "build-msvc/device.dll",
-    "linux-x64":        "build/linux-x64/device.so",
+    "win32-x64": "build-msvc/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
     "darwin-universal": "build/macos-universal/device.dylib"
   },
   "package": {
     "width": 168,
     "height": 72,
     "border": true,
-    "background": { "kind": "color", "value": "#e8f8e8" },
+    "background": {
+      "kind": "color",
+      "value": "#e8f8e8"
+    },
     "shapes": [
-      { "kind": "ellipse", "cx": 48,  "cy": 36, "rx": 18, "ry": 18, "stroke": "#558", "fill": "#b0c4de" },
-      { "kind": "ellipse", "cx": 120, "cy": 36, "rx": 18, "ry": 18, "stroke": "#558", "fill": "#b0c4de" },
-      { "kind": "text",    "x": 60,   "y": 20,  "value": "HC-SR04",  "fontSize": 9,  "color": "#224" },
-      { "kind": "text",    "x": 36,   "y": 40,  "value": "T",        "fontSize": 10, "color": "#fff" },
-      { "kind": "text",    "x": 108,  "y": 40,  "value": "R",        "fontSize": 10, "color": "#fff" },
-      { "kind": "text",    "x": 61,   "y": 58,  "value": "Ultrasonic","fontSize": 7, "color": "#446" }
+      {
+        "kind": "ellipse",
+        "cx": 48,
+        "cy": 36,
+        "rx": 18,
+        "ry": 18,
+        "stroke": "#558",
+        "fill": "#b0c4de"
+      },
+      {
+        "kind": "ellipse",
+        "cx": 120,
+        "cy": 36,
+        "rx": 18,
+        "ry": 18,
+        "stroke": "#558",
+        "fill": "#b0c4de"
+      },
+      {
+        "kind": "text",
+        "x": 60,
+        "y": 20,
+        "value": "HC-SR04",
+        "fontSize": 9,
+        "color": "#224"
+      },
+      {
+        "kind": "text",
+        "x": 36,
+        "y": 40,
+        "value": "T",
+        "fontSize": 10,
+        "color": "#fff"
+      },
+      {
+        "kind": "text",
+        "x": 108,
+        "y": 40,
+        "value": "R",
+        "fontSize": 10,
+        "color": "#fff"
+      },
+      {
+        "kind": "text",
+        "x": 61,
+        "y": 58,
+        "value": "Ultrasonic",
+        "fontSize": 7,
+        "color": "#446"
+      }
     ],
     "pins": [
-      { "id": "vcc",  "x": 40,  "y": 72, "angle": 90, "length": 8, "label": "VCC"  },
-      { "id": "trig", "x": 72,  "y": 72, "angle": 90, "length": 8, "label": "TRIG" },
-      { "id": "echo", "x": 104, "y": 72, "angle": 90, "length": 8, "label": "ECHO" },
-      { "id": "gnd",  "x": 136, "y": 72, "angle": 90, "length": 8, "label": "GND"  }
+      {
+        "id": "vcc",
+        "x": 40,
+        "y": 72,
+        "angle": 90,
+        "length": 8,
+        "label": "VCC"
+      },
+      {
+        "id": "trig",
+        "x": 72,
+        "y": 72,
+        "angle": 90,
+        "length": 8,
+        "label": "TRIG"
+      },
+      {
+        "id": "echo",
+        "x": 104,
+        "y": 72,
+        "angle": 90,
+        "length": 8,
+        "label": "ECHO"
+      },
+      {
+        "id": "gnd",
+        "x": 136,
+        "y": 72,
+        "angle": 90,
+        "length": 8,
+        "label": "GND"
+      }
     ]
   },
   "pins": [
-    { "id": "vcc",  "kind": "POWER",       "x": 40,  "y": 72, "angle": 90, "length": 8, "label": "VCC"  },
-    { "id": "trig", "kind": "DIGITAL_IN",  "x": 72,  "y": 72, "angle": 90, "length": 8, "label": "TRIG" },
-    { "id": "echo", "kind": "DIGITAL_OUT", "x": 104, "y": 72, "angle": 90, "length": 8, "label": "ECHO" },
-    { "id": "gnd",  "kind": "POWER",       "x": 136, "y": 72, "angle": 90, "length": 8, "label": "GND"  }
+    {
+      "id": "vcc",
+      "kind": "POWER",
+      "x": 40,
+      "y": 72,
+      "angle": 90,
+      "length": 8,
+      "label": "VCC"
+    },
+    {
+      "id": "trig",
+      "kind": "DIGITAL_IN",
+      "x": 72,
+      "y": 72,
+      "angle": 90,
+      "length": 8,
+      "label": "TRIG"
+    },
+    {
+      "id": "echo",
+      "kind": "DIGITAL_OUT",
+      "x": 104,
+      "y": 72,
+      "angle": 90,
+      "length": 8,
+      "label": "ECHO"
+    },
+    {
+      "id": "gnd",
+      "kind": "POWER",
+      "x": 136,
+      "y": 72,
+      "angle": 90,
+      "length": 8,
+      "label": "GND"
+    }
   ],
   "properties": [
-    { "id": "distance_m", "label": "Distância (m)",         "group": "Sensor", "valueKind": "number", "editor": "number", "default": 0.5,  "min": 0.02,  "max": 4.0, "step": 0.01, "unit": "m" },
-    { "id": "use_analog", "label": "Saída de tensão analógica", "group": "Sensor", "valueKind": "bool", "editor": "bool", "default": false }
+    {
+      "id": "distance_m",
+      "label": "Distância (m)",
+      "group": "Sensor",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 0.5,
+      "min": 0.02,
+      "max": 4,
+      "step": 0.01,
+      "unit": "m"
+    },
+    {
+      "id": "use_analog",
+      "label": "Saída de tensão analógica",
+      "group": "Sensor",
+      "valueKind": "bool",
+      "editor": "bool",
+      "default": false
+    }
   ],
   "help": {
-    "description": "Sensor ultrassônico HC-SR04 de distância. Emite pulso TRIG e mede o tempo de retorno no ECHO para calcular distância (2 cm a 4 m). Configure a distância simulada em metros."
+    "description": "Sensor ultrassônico de distância HC-SR04."
   },
-  "limits": { "stepTimeoutMs": 2, "expectedComplexity": "medium" }
+  "limits": {
+    "stepTimeoutMs": 2,
+    "expectedComplexity": "medium"
+  }
 }

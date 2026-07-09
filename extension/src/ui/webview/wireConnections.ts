@@ -1,12 +1,7 @@
 /** Montagem pura de fio/junção para os dois fluxos de conexão de pino (pino→pino, pino→fio
  * existente) — sem DOM, sem `vscode.*`, só transforma pontos/refs já calculados em
- * `WebviewComponentModel`/`WebviewWireModel`. Compilado tanto pelo host (`extension.ts`, via
- * `tsconfig.json`) quanto pela Webview (`main.ts`, via `tsconfig.webview.json`): o host usa isto nos
- * handlers `"requestConnectPins"`/`"requestConnectPinToWire"`; a Webview usa a MESMA lógica dentro de
- * `symbolAuthoringContext`, onde `send()` é no-op e a conexão precisa ser aplicada localmente ao
- * `state` em vez de delegada ao host. Extraído para eliminar a duplicação que já causou um bug real
- * (ver "Symbol-authoring wire edit bug", 2026-07-06) — qualquer mudança na regra de conexão só precisa
- * ser feita aqui, nunca replicada manualmente nos dois lados. */
+ * `WebviewComponentModel`/`WebviewWireModel`. O host usa isto nos handlers
+ * `"requestConnectPins"`/`"requestConnectPinToWire"` para manter a regra de conexão em um ponto só. */
 
 import { JUNCTION_TYPE_ID, WebviewComponentModel, WebviewPoint, WebviewWireModel } from "./model";
 

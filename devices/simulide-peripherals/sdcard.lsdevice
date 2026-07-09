@@ -1,54 +1,175 @@
 {
   "schemaVersion": 1,
   "typeId": "peripherals.sdcard",
-  "name": "Cartão SD (SPI)",
+  "name": "SD Card Reader",
   "language": "pt-BR",
   "icon": "sdcard",
-  "folderPath": ["Periféricos"],
+  "folderPath": [
+    "Periféricos"
+  ],
   "translations": {
     "en": {
       "name": "SD Card (SPI)",
       "properties": {
-        "file": { "label": "SD image file path", "group": "SD Card" }
+        "file": {
+          "label": "SD image file path",
+          "group": "SD Card"
+        }
       }
     }
   },
-  "abiVersion": { "major": 3, "minor": 0 },
+  "abiVersion": {
+    "major": 3,
+    "minor": 0
+  },
   "nativeEntry": {
-    "win32-x64":        "build-msvc/device.dll",
-    "linux-x64":        "build/linux-x64/device.so",
+    "win32-x64": "build-msvc/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
     "darwin-universal": "build/macos-universal/device.dylib"
   },
   "package": {
     "width": 64,
     "height": 40,
     "border": false,
-    "background": { "kind": "color", "value": "transparent" },
+    "background": {
+      "kind": "color",
+      "value": "transparent"
+    },
     "shapes": [
-      { "kind": "polygon",
-        "points": [{"x":0,"y":0},{"x":56,"y":0},{"x":64,"y":8},{"x":64,"y":40},{"x":0,"y":40}],
-        "stroke": "#888888", "fill": "#ffffff", "strokeWidth": 1 },
-      { "kind": "text", "x": 40, "y": 24, "value": "SD", "fontSize": 12, "color": "#444444" }
+      {
+        "kind": "polygon",
+        "points": [
+          {
+            "x": 0,
+            "y": 0
+          },
+          {
+            "x": 56,
+            "y": 0
+          },
+          {
+            "x": 64,
+            "y": 8
+          },
+          {
+            "x": 64,
+            "y": 40
+          },
+          {
+            "x": 0,
+            "y": 40
+          }
+        ],
+        "stroke": "#888888",
+        "fill": "#ffffff",
+        "strokeWidth": 1
+      },
+      {
+        "kind": "text",
+        "x": 40,
+        "y": 24,
+        "value": "SD",
+        "fontSize": 12,
+        "color": "#444444"
+      }
     ],
     "pinLabelColor": "#444444",
     "pins": [
-      { "id": "cs", "x": 0, "y": 8,  "angle": 180, "length": 8, "label": "CS", "labelX": 10, "labelY": 10 },
-      { "id": "di", "x": 0, "y": 16, "angle": 180, "length": 8, "label": "DI", "labelX": 10, "labelY": 18 },
-      { "id": "ck", "x": 0, "y": 24, "angle": 180, "length": 8, "label": "CK", "labelX": 10, "labelY": 26 },
-      { "id": "do", "x": 0, "y": 32, "angle": 180, "length": 8, "label": "DO", "labelX": 10, "labelY": 34 }
+      {
+        "id": "cs",
+        "x": 0,
+        "y": 8,
+        "angle": 180,
+        "length": 8,
+        "label": "CS",
+        "labelX": 10,
+        "labelY": 10
+      },
+      {
+        "id": "di",
+        "x": 0,
+        "y": 16,
+        "angle": 180,
+        "length": 8,
+        "label": "DI",
+        "labelX": 10,
+        "labelY": 18
+      },
+      {
+        "id": "ck",
+        "x": 0,
+        "y": 24,
+        "angle": 180,
+        "length": 8,
+        "label": "CK",
+        "labelX": 10,
+        "labelY": 26
+      },
+      {
+        "id": "do",
+        "x": 0,
+        "y": 32,
+        "angle": 180,
+        "length": 8,
+        "label": "DO",
+        "labelX": 10,
+        "labelY": 34
+      }
     ]
   },
   "pins": [
-    { "id": "cs",  "kind": "DIGITAL_IN",  "x": 0, "y": 8,  "angle": 180, "length": 8, "label": "CS"  },
-    { "id": "di",  "kind": "DIGITAL_IN",  "x": 0, "y": 16, "angle": 180, "length": 8, "label": "DI"  },
-    { "id": "ck",  "kind": "DIGITAL_IN",  "x": 0, "y": 24, "angle": 180, "length": 8, "label": "CK"  },
-    { "id": "do",  "kind": "DIGITAL_OUT", "x": 0, "y": 32, "angle": 180, "length": 8, "label": "DO"  }
+    {
+      "id": "cs",
+      "kind": "DIGITAL_IN",
+      "x": 0,
+      "y": 8,
+      "angle": 180,
+      "length": 8,
+      "label": "CS"
+    },
+    {
+      "id": "di",
+      "kind": "DIGITAL_IN",
+      "x": 0,
+      "y": 16,
+      "angle": 180,
+      "length": 8,
+      "label": "DI"
+    },
+    {
+      "id": "ck",
+      "kind": "DIGITAL_IN",
+      "x": 0,
+      "y": 24,
+      "angle": 180,
+      "length": 8,
+      "label": "CK"
+    },
+    {
+      "id": "do",
+      "kind": "DIGITAL_OUT",
+      "x": 0,
+      "y": 32,
+      "angle": 180,
+      "length": 8,
+      "label": "DO"
+    }
   ],
   "properties": [
-    { "id": "file", "label": "Arquivo de imagem SD", "group": "SD Card", "valueKind": "string", "editor": "text", "default": "" }
+    {
+      "id": "file",
+      "label": "Arquivo de imagem SD",
+      "group": "SD Card",
+      "valueKind": "string",
+      "editor": "text",
+      "default": ""
+    }
   ],
   "help": {
-    "description": "Cartão SD via SPI (CS/DI/CK/DO). Aponta para um arquivo de imagem FAT no disco do host para leitura/escrita simulada. Informe o caminho completo do arquivo de imagem SD."
+    "description": "Leitor de cartão SD via SPI."
   },
-  "limits": { "stepTimeoutMs": 1, "expectedComplexity": "high" }
+  "limits": {
+    "stepTimeoutMs": 1,
+    "expectedComplexity": "high"
+  }
 }

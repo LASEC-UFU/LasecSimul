@@ -3,8 +3,12 @@
   "displayName": "LasecSimul",
   "description": "Simulador de circuitos eletrônicos com MCUs emulados via QEMU, inspirado no SimulIDE.",
   "version": "0.0.1",
-  "engines": { "vscode": "^1.85.0" },
-  "categories": ["Other"],
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
   "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
@@ -15,10 +19,22 @@
         "icon": "$(go-to-file)",
         "enablement": "!lasecsimul.schematicOpen"
       },
-      { "command": "lasecsimul.run", "title": "LasecSimul: Run Simulation" },
-      { "command": "lasecsimul.pause", "title": "LasecSimul: Pause Simulation" },
-      { "command": "lasecsimul.stop", "title": "LasecSimul: Stop Simulation" },
-      { "command": "lasecsimul.palette.addComponent", "title": "LasecSimul: Add Palette Component" },
+      {
+        "command": "lasecsimul.run",
+        "title": "LasecSimul: Run Simulation"
+      },
+      {
+        "command": "lasecsimul.pause",
+        "title": "LasecSimul: Pause Simulation"
+      },
+      {
+        "command": "lasecsimul.stop",
+        "title": "LasecSimul: Stop Simulation"
+      },
+      {
+        "command": "lasecsimul.palette.addComponent",
+        "title": "LasecSimul: Add Palette Component"
+      },
       {
         "command": "lasecsimul.palette.registerFile",
         "title": "LasecSimul: Registrar Dispositivo ABI/QEMU/Subcircuito",
@@ -41,20 +57,45 @@
         "title": "LasecSimul: Remover Dispositivo Registrado"
       },
       {
-        "command": "lasecsimul.palette.editSymbol",
-        "title": "LasecSimul: Editar Símbolo Visual...",
-        "icon": "$(symbol-color)"
+        "command": "lasecsimul.saveProject",
+        "title": "LasecSimul: Save Project As..."
       },
-      { "command": "lasecsimul.saveProject", "title": "LasecSimul: Save Project As..." },
-      { "command": "lasecsimul.openProject", "title": "LasecSimul: Open Project..." },
-      { "command": "lasecsimul.openRecentProject", "title": "LasecSimul: Open Recent Project..." },
-      { "command": "lasecsimul.importProject", "title": "LasecSimul: Import Circuit..." },
-      { "command": "lasecsimul.rotateSelectionCw", "title": "LasecSimul: Rotate Selection CW" },
-      { "command": "lasecsimul.rotateSelectionCcw", "title": "LasecSimul: Rotate Selection CCW" },
-      { "command": "lasecsimul.flipSelectionHorizontal", "title": "LasecSimul: Flip Selection Horizontal" },
-      { "command": "lasecsimul.flipSelectionVertical", "title": "LasecSimul: Flip Selection Vertical" },
-      { "command": "lasecsimul.undo", "title": "LasecSimul: Undo" },
-      { "command": "lasecsimul.redo", "title": "LasecSimul: Redo" }
+      {
+        "command": "lasecsimul.openProject",
+        "title": "LasecSimul: Open Project..."
+      },
+      {
+        "command": "lasecsimul.openRecentProject",
+        "title": "LasecSimul: Open Recent Project..."
+      },
+      {
+        "command": "lasecsimul.importProject",
+        "title": "LasecSimul: Import Circuit..."
+      },
+      {
+        "command": "lasecsimul.rotateSelectionCw",
+        "title": "LasecSimul: Rotate Selection CW"
+      },
+      {
+        "command": "lasecsimul.rotateSelectionCcw",
+        "title": "LasecSimul: Rotate Selection CCW"
+      },
+      {
+        "command": "lasecsimul.flipSelectionHorizontal",
+        "title": "LasecSimul: Flip Selection Horizontal"
+      },
+      {
+        "command": "lasecsimul.flipSelectionVertical",
+        "title": "LasecSimul: Flip Selection Vertical"
+      },
+      {
+        "command": "lasecsimul.undo",
+        "title": "LasecSimul: Undo"
+      },
+      {
+        "command": "lasecsimul.redo",
+        "title": "LasecSimul: Redo"
+      }
     ],
     "viewsContainers": {
       "activitybar": [
@@ -79,7 +120,11 @@
       "properties": {
         "lasecsimul.language": {
           "type": "string",
-          "enum": ["system", "pt-BR", "en"],
+          "enum": [
+            "system",
+            "pt-BR",
+            "en"
+          ],
           "default": "system",
           "description": "Language used by the LasecSimul editor, palette and property sheets."
         },
@@ -120,11 +165,6 @@
           "command": "lasecsimul.palette.registerFile",
           "when": "view == lasecsimul.componentPalette",
           "group": "navigation@2"
-        },
-        {
-          "command": "lasecsimul.palette.editSymbol",
-          "when": "view == lasecsimul.componentPalette",
-          "group": "navigation@3"
         },
         {
           "command": "lasecsimul.newSubcircuit",
@@ -181,7 +221,7 @@
     "watch": "tsc -p ./ -w",
     "watch:webview": "tsc -p ./tsconfig.webview.json -w",
     "pretest": "npm run compile && tsc -p ./tsconfig.test.json",
-    "test": "node out-test/test/project/ProjectSerializer.test.js && node out-test/src/ipc/CoreClient.test.js && node out-test/src/catalog/UnifiedCatalog.test.js && node out-test/src/catalog/registeredSources.test.js && node out-test/src/catalog/catalogMerge.test.js && node out-test/src/language.test.js && node out-test/src/ui/webview/paletteTree.test.js && node out-test/src/ui/webview/wireGeometry.test.js && node out-test/src/ui/webview/wireConnections.test.js && node out-test/src/ui/webview/valueFormatting.test.js && node out-test/src/ui/webview/componentSymbols.test.js && node out-test/src/ui/webview/instrumentTrigger.test.js && node out-test/src/catalog/symbolAuthoring.test.js && node out-test/src/catalog/simulideSceneTranslator.test.js && node out-test/src/trust/trustDecision.test.js"
+    "test": "node out-test/test/project/ProjectSerializer.test.js && node out-test/src/ipc/CoreClient.test.js && node out-test/src/catalog/UnifiedCatalog.test.js && node out-test/src/catalog/registeredSources.test.js && node out-test/src/catalog/catalogMerge.test.js && node out-test/src/language.test.js && node out-test/src/ui/webview/paletteTree.test.js && node out-test/src/ui/webview/wireGeometry.test.js && node out-test/src/ui/webview/wireConnections.test.js && node out-test/src/ui/webview/valueFormatting.test.js && node out-test/src/ui/webview/componentSymbols.test.js && node out-test/src/ui/webview/instrumentTrigger.test.js && node out-test/src/catalog/simulideSceneTranslator.test.js && node out-test/src/trust/trustDecision.test.js"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

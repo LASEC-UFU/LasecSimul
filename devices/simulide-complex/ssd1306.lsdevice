@@ -78,13 +78,38 @@
     "width": 140,
     "height": 88,
     "border": false,
-    "background": { "kind": "none" },
+    "background": {
+      "kind": "none"
+    },
     "shapes": [],
     "viewSpec": {
       "paint": [
-        { "kind": "rect", "x": 0, "y": 0, "w": 140, "h": 88, "rx": 2, "ry": 2, "fill": "#324664" },
-        { "kind": "rect", "x": 6, "y": 6, "w": 128, "h": 64, "fill": "#000000" },
-        { "kind": "text", "x": 70, "y": -4, "value": "__label", "fontSize": 6, "color": "#0000aa" }
+        {
+          "kind": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 140,
+          "h": 88,
+          "rx": 2,
+          "ry": 2,
+          "fill": "#324664"
+        },
+        {
+          "kind": "rect",
+          "x": 6,
+          "y": 6,
+          "w": 128,
+          "h": 64,
+          "fill": "#000000"
+        },
+        {
+          "kind": "text",
+          "x": 70,
+          "y": -4,
+          "value": "__label",
+          "fontSize": 6,
+          "color": "#0000aa"
+        }
       ]
     },
     "pins": [
@@ -110,5 +135,8 @@
   "folderPath": [
     "Saidas",
     "Displays"
-  ]
+  ],
+  "help": {
+    "description": "Display OLED gráfico baseado no controlador SSD1306."
+  }
 }

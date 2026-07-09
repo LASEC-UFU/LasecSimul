@@ -1524,9 +1524,8 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
       // lead saindo pra DIREITA -- mesma convenção de ângulo 0=direita do renderizador de leitura
       // (`packagePinLeadSvg`). `component.rotation` (0/90/180/270, CSS) faz o papel do `angle` real
       // de um `PackagePin` sem nenhum campo novo -- reaproveita rotação genérica (teclado/toolbar).
-      // SEM texto aqui -- o rótulo é um `graphics.text` vinculado separado (`linkedPinComponentId`),
-      // arrastável independente da posição do pino, igual ao SimulIDE real (ver
-      // `symbolAuthoring.ts`/`main.ts::requestAddComponent`).
+      // SEM texto aqui -- o rótulo é definido pelos dados do package (`labelX`/`labelY`) e renderizado
+      // separadamente, igual ao SimulIDE real.
       const length = typeof properties?.length === "number" ? properties.length : 8;
       const tipX = midX + length;
       return (

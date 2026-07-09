@@ -1,63 +1,246 @@
 {
   "schemaVersion": 1,
   "typeId": "sensors.strain",
-  "name": "Extensômetro (Strain Gauge)",
+  "name": "Force Strain Gauge",
   "language": "pt-BR",
   "icon": "strain",
-  "folderPath": ["Sensores"],
+  "folderPath": [
+    "Sensores"
+  ],
   "translations": {
     "en": {
       "name": "Strain Gauge",
       "properties": {
-        "force_n":   { "label": "Force (N)",         "group": "Main"       },
-        "min_force": { "label": "Min Force (N)",     "group": "Main"       },
-        "max_force": { "label": "Max Force (N)",     "group": "Main"       },
-        "gf":        { "label": "Gauge Factor",      "group": "Parameters" },
-        "r0":        { "label": "R0 (Ω, no stress)", "group": "Parameters" }
+        "force_n": {
+          "label": "Force (N)",
+          "group": "Main"
+        },
+        "min_force": {
+          "label": "Min Force (N)",
+          "group": "Main"
+        },
+        "max_force": {
+          "label": "Max Force (N)",
+          "group": "Main"
+        },
+        "gf": {
+          "label": "Gauge Factor",
+          "group": "Parameters"
+        },
+        "r0": {
+          "label": "R0 (Ω, no stress)",
+          "group": "Parameters"
+        }
       }
     }
   },
-  "abiVersion": { "major": 3, "minor": 0 },
+  "abiVersion": {
+    "major": 3,
+    "minor": 0
+  },
   "nativeEntry": {
-    "win32-x64":        "build-msvc/device.dll",
-    "linux-x64":        "build/linux-x64/device.so",
+    "win32-x64": "build-msvc/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
     "darwin-universal": "build/macos-universal/device.dylib"
   },
   "package": {
     "width": 64,
     "height": 48,
     "border": false,
-    "background": { "kind": "color", "value": "transparent" },
+    "background": {
+      "kind": "color",
+      "value": "transparent"
+    },
     "shapes": [
-      { "kind": "rect", "x": 16, "y": 12, "w": 32, "h": 24, "stroke": "#666", "fill": "none" },
-      { "kind": "rect", "x": 16, "y": 22, "w": 4,  "h": 4,  "stroke": "#222", "fill": "#222" },
-      { "kind": "rect", "x": 44, "y": 22, "w": 4,  "h": 4,  "stroke": "#222", "fill": "#222" },
-      { "kind": "line", "x1": 20, "y1": 24, "x2": 20, "y2": 14, "stroke": "#a44" },
-      { "kind": "line", "x1": 20, "y1": 14, "x2": 28, "y2": 14, "stroke": "#a44" },
-      { "kind": "line", "x1": 28, "y1": 14, "x2": 28, "y2": 34, "stroke": "#a44" },
-      { "kind": "line", "x1": 28, "y1": 34, "x2": 36, "y2": 34, "stroke": "#a44" },
-      { "kind": "line", "x1": 36, "y1": 34, "x2": 36, "y2": 14, "stroke": "#a44" },
-      { "kind": "line", "x1": 36, "y1": 14, "x2": 44, "y2": 14, "stroke": "#a44" },
-      { "kind": "line", "x1": 44, "y1": 14, "x2": 44, "y2": 24, "stroke": "#a44" }
+      {
+        "kind": "rect",
+        "x": 16,
+        "y": 12,
+        "w": 32,
+        "h": 24,
+        "stroke": "#666",
+        "fill": "none"
+      },
+      {
+        "kind": "rect",
+        "x": 16,
+        "y": 22,
+        "w": 4,
+        "h": 4,
+        "stroke": "#222",
+        "fill": "#222"
+      },
+      {
+        "kind": "rect",
+        "x": 44,
+        "y": 22,
+        "w": 4,
+        "h": 4,
+        "stroke": "#222",
+        "fill": "#222"
+      },
+      {
+        "kind": "line",
+        "x1": 20,
+        "y1": 24,
+        "x2": 20,
+        "y2": 14,
+        "stroke": "#a44"
+      },
+      {
+        "kind": "line",
+        "x1": 20,
+        "y1": 14,
+        "x2": 28,
+        "y2": 14,
+        "stroke": "#a44"
+      },
+      {
+        "kind": "line",
+        "x1": 28,
+        "y1": 14,
+        "x2": 28,
+        "y2": 34,
+        "stroke": "#a44"
+      },
+      {
+        "kind": "line",
+        "x1": 28,
+        "y1": 34,
+        "x2": 36,
+        "y2": 34,
+        "stroke": "#a44"
+      },
+      {
+        "kind": "line",
+        "x1": 36,
+        "y1": 34,
+        "x2": 36,
+        "y2": 14,
+        "stroke": "#a44"
+      },
+      {
+        "kind": "line",
+        "x1": 36,
+        "y1": 14,
+        "x2": 44,
+        "y2": 14,
+        "stroke": "#a44"
+      },
+      {
+        "kind": "line",
+        "x1": 44,
+        "y1": 14,
+        "x2": 44,
+        "y2": 24,
+        "stroke": "#a44"
+      }
     ],
     "pins": [
-      { "id": "a", "x": 0,  "y": 24, "angle": 180, "length": 16, "label": "" },
-      { "id": "b", "x": 64, "y": 24, "angle": 0,   "length": 16, "label": "" }
+      {
+        "id": "a",
+        "x": 0,
+        "y": 24,
+        "angle": 180,
+        "length": 16,
+        "label": ""
+      },
+      {
+        "id": "b",
+        "x": 64,
+        "y": 24,
+        "angle": 0,
+        "length": 16,
+        "label": ""
+      }
     ]
   },
   "pins": [
-    { "id": "a", "kind": "ANALOG_IN", "x": 0,  "y": 24, "angle": 180, "length": 16, "label": "" },
-    { "id": "b", "kind": "ANALOG_IN", "x": 64, "y": 24, "angle": 0,   "length": 16, "label": "" }
+    {
+      "id": "a",
+      "kind": "ANALOG_IN",
+      "x": 0,
+      "y": 24,
+      "angle": 180,
+      "length": 16,
+      "label": ""
+    },
+    {
+      "id": "b",
+      "kind": "ANALOG_IN",
+      "x": 64,
+      "y": 24,
+      "angle": 0,
+      "length": 16,
+      "label": ""
+    }
   ],
   "properties": [
-    { "id": "force_n",   "label": "Força (N)",             "group": "Main",       "valueKind": "number", "editor": "number", "default": 0,    "min": -1000000, "max": 1000000, "step": 1,    "unit": "N"  },
-    { "id": "min_force", "label": "Força Mín (N)",         "group": "Main",       "valueKind": "number", "editor": "number", "default": -1000,"min": -1000000, "max": 0,       "step": 1,    "unit": "N"  },
-    { "id": "max_force", "label": "Força Máx (N)",         "group": "Main",       "valueKind": "number", "editor": "number", "default": 1000, "min": 0,        "max": 1000000, "step": 1,    "unit": "N"  },
-    { "id": "gf",        "label": "Fator de Gauge",        "group": "Parameters", "valueKind": "number", "editor": "number", "default": 2.0,  "min": 0.1,      "max": 200,     "step": 0.01         },
-    { "id": "r0",        "label": "R0 sem tensão (Ω)",    "group": "Parameters", "valueKind": "number", "editor": "number", "default": 120,  "min": 1,        "max": 100000,  "step": 1,    "unit": "Ω"  }
+    {
+      "id": "force_n",
+      "label": "Força (N)",
+      "group": "Main",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 0,
+      "min": -1000000,
+      "max": 1000000,
+      "step": 1,
+      "unit": "N"
+    },
+    {
+      "id": "min_force",
+      "label": "Força Mín (N)",
+      "group": "Main",
+      "valueKind": "number",
+      "editor": "number",
+      "default": -1000,
+      "min": -1000000,
+      "max": 0,
+      "step": 1,
+      "unit": "N"
+    },
+    {
+      "id": "max_force",
+      "label": "Força Máx (N)",
+      "group": "Main",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 1000,
+      "min": 0,
+      "max": 1000000,
+      "step": 1,
+      "unit": "N"
+    },
+    {
+      "id": "gf",
+      "label": "Fator de Gauge",
+      "group": "Parameters",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 2,
+      "min": 0.1,
+      "max": 200,
+      "step": 0.01
+    },
+    {
+      "id": "r0",
+      "label": "R0 sem tensão (Ω)",
+      "group": "Parameters",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 120,
+      "min": 1,
+      "max": 100000,
+      "step": 1,
+      "unit": "Ω"
+    }
   ],
   "help": {
-    "description": "Extensômetro (Strain Gauge): resistência varia com a deformação mecânica. Configure força (N), faixa, fator de gauge e R0 sem tensão. Use em ponte de Wheatstone para máxima sensibilidade."
+    "description": "Extensômetro resistivo para força/deformação."
   },
-  "limits": { "stepTimeoutMs": 4, "expectedComplexity": "low" }
+  "limits": {
+    "stepTimeoutMs": 4,
+    "expectedComplexity": "low"
+  }
 }

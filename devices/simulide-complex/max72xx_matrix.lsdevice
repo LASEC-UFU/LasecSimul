@@ -2215,5 +2215,8 @@
   "defaultProperties": {
     "rows": 8,
     "columns": 8
+  },
+  "help": {
+    "description": "Matriz de LEDs controlada por driver MAX72xx."
   }
 }

@@ -102,5 +102,8 @@
   "folderPath": [
     "Logicos",
     "Memorias"
-  ]
+  ],
+  "help": {
+    "description": "Latch tipo D sensível ao nível."
+  }
 }

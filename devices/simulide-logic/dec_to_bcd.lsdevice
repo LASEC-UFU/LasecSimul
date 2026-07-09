@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "typeId": "logic.dec_to_bcd",
-  "name": "Dec To Bcd",
+  "name": "Encoder(10/16 to 4)",
   "language": "pt-BR",
   "abiVersion": {
     "major": 3,
@@ -222,5 +222,8 @@
   "folderPath": [
     "Logicos",
     "Conversores"
-  ]
+  ],
+  "help": {
+    "description": "Codificador de entradas decimais/hexadecimais para 4 bits."
+  }
 }

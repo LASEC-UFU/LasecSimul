@@ -163,5 +163,8 @@
     "controlCode": 80,
     "frequencyKHz": 100,
     "persistent": false
+  },
+  "help": {
+    "description": "Memória RAM acessada por barramento I2C."
   }
 }

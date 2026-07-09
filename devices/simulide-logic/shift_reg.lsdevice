@@ -186,5 +186,8 @@
   "folderPath": [
     "Logicos",
     "Aritmeticos"
-  ]
+  ],
+  "help": {
+    "description": "Registrador de deslocamento."
+  }
 }

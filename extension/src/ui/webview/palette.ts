@@ -29,7 +29,6 @@ const UI_TEXT = {
     pinPlural: "pinos",
     noResults: "Nenhum componente encontrado para este filtro.",
     removeRegistered: "Remover item registrado",
-    editSymbol: "Editar símbolo visual",
     addHint: "Clique para adicionar",
   },
   en: {
@@ -40,7 +39,6 @@ const UI_TEXT = {
     pinPlural: "pins",
     noResults: "No components match this filter.",
     removeRegistered: "Remove registered item",
-    editSymbol: "Edit visual symbol",
     addHint: "Click to add",
   },
 } as const;
@@ -127,20 +125,6 @@ function renderTreeNode(node: PaletteTreeNode, depth: number): HTMLElement {
     : `${node.typeId}\n${node.pathSegments.join(" > ")}\n${t("addHint")}`;
 
   row.append(icon, text);
-
-  if (node.isRegistered && node.registeredSourceId) {
-    const editButton = document.createElement("button");
-    editButton.type = "button";
-    editButton.className = "palette-item__edit";
-    editButton.title = t("editSymbol");
-    editButton.textContent = "✎";
-    editButton.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      vscode?.postMessage({ type: "editSymbol", sourceId: node.registeredSourceId });
-    });
-    row.appendChild(editButton);
-  }
 
   if (node.isRegistered && node.registeredSourceRemovable && node.registeredSourceId) {
     const removeButton = document.createElement("button");

@@ -99,10 +99,11 @@ remeter a WASM/worker, é desatualizado — confiar nos dois `.spec` acima.
    device E/OU fica duplicada em outro lugar" (ver regra 6 acima e `.spec/lasecsimul.spec` seção 11).
    Built-in novo SEM relação com um grupo já existente ganha arquivo próprio; built-in novo
    RELACIONADO a um grupo existente (ex: mais um tipo de switch) pode entrar no mesmo módulo do grupo.
-8. **Na UI/webview, `authoringScene`/`package` é sempre consumido via parser/tradutor genérico
-  compatível com construção SimulIDE.** Não implementar helper ad-hoc por device nem `if/switch`
-  por `typeId` para reconstruir geometria, placement, pinos ou wire-route quando o dado já está no
-  payload declarativo. Mapeamento visual hardcoded por device é OUT OF SCOPE.
+8. **Na UI/webview, `package`/`logicSymbolPackage` é somente leitura nesta etapa.** O símbolo gráfico
+  do componente/dispositivo deve ser carregado exatamente do `.lsdevice`/`.lssubcircuit`; não recriar
+  comando, botão, menu, mensagem IPC ou sessão de autoria para editar/salvar o símbolo pela UI. A
+  renderização continua via parser/tradutor genérico compatível com SimulIDE, sem helper ad-hoc por
+  device nem `if/switch` por `typeId` para geometria já declarada no payload.
 
 ## Como agir por tipo de tarefa
 
@@ -118,10 +119,9 @@ remeter a WASM/worker, é desatualizado — confiar nos dois `.spec` acima.
 - **UI precisa de schema/ícone/propriedades de um `typeId`** → consultar `ComponentMetadataRegistry`
   (`GlobalPluginCache`), nunca instanciar via `ComponentRegistry` só para ler metadado.
 - **Corpo visual/pinos desenhados de um device (não a parte elétrica)** → bloco `package` dentro do mesmo
-  `device.json` (`lasecsimul-native-devices.spec`, seção 21) — nunca um arquivo/formato separado (sem XML,
+  `.lsdevice` (`lasecsimul-native-devices.spec`, seção 21) — nunca um arquivo/formato separado (sem XML,
   sem SVG externo; imagem de fundo é embutida como string no próprio JSON). É lido só pela Extension; o Core
-  nunca processa `package`. Um eventual "editor de pacote" é o mesmo webview do esquemático com um modo
-  especial — não uma ferramenta nova.
+  nunca processa `package`. Não existe editor de pacote/símbolo na UI nesta etapa.
 - **Renderização de subcircuito/símbolo no webview** → passar por tradutor/parser único (ex:
   `extractSimulideSubcircuitScene` + `translateSimulideSubcircuitAuthoringScene`) e evoluir esse pipeline,
   não espalhar heurística por componente.

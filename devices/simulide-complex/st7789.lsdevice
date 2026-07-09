@@ -183,5 +183,8 @@
   "folderPath": [
     "Saidas",
     "Displays"
-  ]
+  ],
+  "help": {
+    "description": "Display TFT colorido baseado no controlador ST7789."
+  }
 }

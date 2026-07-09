@@ -200,5 +200,8 @@
   "folderPath": [
     "Saidas",
     "Displays"
-  ]
+  ],
+  "help": {
+    "description": "Display TFT colorido baseado no controlador ILI9341."
+  }
 }

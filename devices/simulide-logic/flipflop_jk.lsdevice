@@ -138,5 +138,8 @@
   "folderPath": [
     "Logicos",
     "Memorias"
-  ]
+  ],
+  "help": {
+    "description": "Flip-flop JK com entradas set/reset conforme configuração."
+  }
 }

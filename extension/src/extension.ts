@@ -15,7 +15,6 @@ import { materializePinGroup } from "./ui/webview/componentSymbols";
 import { absoluteSubcircuitRefPath, exportSchematicImageCommand, importProjectCommand, openProjectCommand, openRecentProjectCommand, refreshDirtyIndicator, saveProjectCommand } from "./project/projectCommands";
 import { loadUnifiedCatalog, RegisteredSource, saveRegisteredSources } from "./catalog/UnifiedCatalog";
 import { refreshUnifiedCatalogState, registerCatalogFileCommand, removeRegisteredCatalogItemCommand } from "./catalog/catalogCommands";
-import { InternalWireSeed } from "./catalog/symbolAuthoring";
 import { hasShowOnSymbolProperty, nextIndexedLabel } from "./catalog/catalogMerge";
 import { sanitizeManifestDefaultProperties } from "./catalog/packageSanitizers";
 import { fileExists, normalizeAbsolutePath, readJsonFile } from "./pathUtils";
@@ -65,14 +64,9 @@ import {
   updateExposedComponentPropertyCommand,
 } from "./mcu/mcuCommands";
 import {
-  editPackageSymbolCommand,
   gatherInternalComponentSnapshots,
-  loadPackageCommand,
   resolveSourceFilePath,
-  savePackageCommand,
-  saveSymbolCommand,
-  switchSymbolViewCommand,
-} from "./symbolAuthoring/symbolCommands";
+} from "./catalog/subcircuitInternals";
 
 function setSchematicOpenContext(isOpen: boolean): Thenable<void> {
   return vscode.commands.executeCommand("setContext", "lasecsimul.schematicOpen", isOpen);
@@ -267,14 +261,6 @@ function mcuCommandOptions(): Parameters<typeof chooseMcuFirmwareCommand>[1] {
   };
 }
 
-function symbolCommandOptions(): Parameters<typeof editPackageSymbolCommand>[1] {
-  return {
-    openSchematicEditor,
-    pinsForInternalComponent,
-    refreshUnifiedCatalogState: (loadLibrariesInCore) => refreshUnifiedCatalogState(loadLibrariesInCore, catalogCommandOptions()),
-  };
-}
-
 function getComponentById(componentId: string): WebviewComponentModel | undefined {
   return state.schematicState.components.find((component) => component.id === componentId);
 }
@@ -440,36 +426,6 @@ export function pinsForTypeId(typeId: string, properties?: Record<string, unknow
     return descriptor.pinIds.map((id, index) => ({ id, x: 0, y: index * 12 }));
   }
   return Array.from({ length: pinCount }, (_, index) => ({ id: `pin-${index + 1}`, x: 0, y: index * 12 }));
-}
-
-/** `pinsForTypeId` já devolve o id elétrico REAL (`p1`/`p2`/`pin`/`out`...) pros builtins que o Core
- * declara via `getPropertySchemas` (ver `CoreApplication.cpp::registerBuiltinMetadata`, EX-4.2) --
- * cai no numerador genérico (`pin-1`/`pin-2`...) só quando o catálogo AINDA não tem `pinIds` pra
- * este typeId (ex: `switches.push`, que não declara id canônico fixo; ou o catálogo ainda não
- * terminou de sincronizar com o Core). Este `realIds` abaixo é a rede de segurança pra esse caso
- * residual: `.lssubcircuit::wires[]` de um subcircuito no disco já usa o id elétrico real, e sem
- * correspondência `pinScenePosition` (main.ts) nunca acha o pino certo no componente seedado e a
- * wire some da tela (raiz do "não tem linha nenhuma" reportado ao abrir um subcircuito pra editar).
- * Substitui cada id genérico pelo id real encontrado em QUALQUER wire que toque este componente, na
- * MESMA posição/índice (geometria de `pinLocalPosition` é por índice pra typeIds sem `package`,
- * então a troca de string não move nada na tela -- só agora bate com o que a wire espera); typeIds
- * COM `package`/`pinIds` já corretos (ex: `espressif.esp32`, e agora os builtins canônicos também)
- * têm o id "real" encontrado aqui sempre redundante/igual, nunca pior. */
-function pinsForInternalComponent(componentId: string, typeId: string, wires: InternalWireSeed[]): Array<{ id: string; x: number; y: number }> {
-  const generic = pinsForTypeId(typeId);
-  const realIds: string[] = [];
-  for (const wire of wires) {
-    if (wire.from.componentId === componentId && wire.from.pinId && !realIds.includes(wire.from.pinId)) realIds.push(wire.from.pinId);
-    if (wire.to.componentId === componentId && wire.to.pinId && !realIds.includes(wire.to.pinId)) realIds.push(wire.to.pinId);
-  }
-  if (realIds.length === 0) return generic;
-
-  const count = Math.max(generic.length, realIds.length);
-  return Array.from({ length: count }, (_, index) => ({
-    id: realIds[index] ?? generic[index]?.id ?? `pin-${index + 1}`,
-    x: 0,
-    y: index * 12,
-  }));
 }
 
 function sameWireEndpoints(a: WebviewWireModel, b: WebviewWireModel): boolean {
@@ -859,12 +815,6 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
     case "requestExportSchematicImage":
       void exportSchematicImageCommand(message.svg);
       return;
-    case "requestSaveSymbol":
-      void saveSymbolCommand(message.filePath, message.typeId, message.kind, message.view, message.components, message.wires, symbolCommandOptions());
-      return;
-    case "requestEditSymbol":
-      void editPackageSymbolCommand({ sourceId: message.sourceId }, symbolCommandOptions());
-      return;
     case "requestChooseMcuFirmware":
       void chooseMcuFirmwareCommand(message.componentId, mcuCommandOptions());
       return;
@@ -883,20 +833,11 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
     case "requestOpenExposedMcuSerialMonitor":
       void openExposedMcuSerialMonitorCommand(message.outerComponentId, message.innerComponentId, message.usartIndex, mcuCommandOptions());
       return;
-    case "requestSwitchSymbolView":
-      void switchSymbolViewCommand(message.filePath, message.typeId, message.kind, message.toView, message.internalComponents, message.internalWires);
-      return;
     case "requestExportInstrumentData":
       void exportInstrumentDataCommand(message.suggestedFileName, message.csvContent);
       return;
     case "requestInstrumentHistory":
       void sendInstrumentHistory(message.componentId);
-      return;
-    case "requestLoadPackage":
-      void loadPackageCommand(message.sourceId, symbolCommandOptions());
-      return;
-    case "requestSavePackage":
-      void savePackageCommand(message.sourceId);
       return;
     case "requestUpdateBoardOverlayProperty":
       updateBoardOverlayPropertyCommand(message.outerComponentId, message.innerComponentId, message.name, message.value, mcuCommandOptions());
@@ -1194,8 +1135,7 @@ export function activate(context: vscode.ExtensionContext): void {
     state.schematicState.catalog,
     currentLasecSimulLanguage(),
     addPaletteComponent,
-    (item) => removeRegisteredCatalogItemCommand(item, catalogCommandOptions()),
-    (item) => editPackageSymbolCommand(item, symbolCommandOptions())
+    (item) => removeRegisteredCatalogItemCommand(item, catalogCommandOptions())
   );
 
   context.subscriptions.push(
@@ -1246,9 +1186,6 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("lasecsimul.palette.registerFile", () => registerCatalogFileCommand(catalogCommandOptions())),
     vscode.commands.registerCommand("lasecsimul.palette.removeRegistered", (item: { sourceId?: string }) =>
       removeRegisteredCatalogItemCommand(item, catalogCommandOptions())
-    ),
-    vscode.commands.registerCommand("lasecsimul.palette.editSymbol", (item?: { sourceId?: string }) =>
-      editPackageSymbolCommand(item, symbolCommandOptions())
     ),
     // Keybinding em contributes.keybindings ("when": activeWebviewPanelId == 'lasecsimul.schematic')
     // sobrepõe Ctrl+R/Ctrl+Shift+R do VSCode SÓ enquanto o painel do esquemático está em foco --

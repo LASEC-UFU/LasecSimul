@@ -73,14 +73,48 @@
     "width": 104,
     "height": 84,
     "border": false,
-    "background": { "kind": "none" },
+    "background": {
+      "kind": "none"
+    },
     "shapes": [],
     "viewSpec": {
       "paint": [
-        { "kind": "rect", "x": 0, "y": 0, "w": 104, "h": 84, "rx": 2, "ry": 2, "fill": "#324664" },
-        { "kind": "rect", "x": 4, "y": 4, "w": 96, "h": 60, "rx": 8, "ry": 8, "fill": "#c8dcb4" },
-        { "kind": "rect", "x": 10, "y": 10, "w": 84, "h": 48, "fill": "#000000" },
-        { "kind": "text", "x": 52, "y": -4, "value": "__label", "fontSize": 6, "color": "#0000aa" }
+        {
+          "kind": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 104,
+          "h": 84,
+          "rx": 2,
+          "ry": 2,
+          "fill": "#324664"
+        },
+        {
+          "kind": "rect",
+          "x": 4,
+          "y": 4,
+          "w": 96,
+          "h": 60,
+          "rx": 8,
+          "ry": 8,
+          "fill": "#c8dcb4"
+        },
+        {
+          "kind": "rect",
+          "x": 10,
+          "y": 10,
+          "w": 84,
+          "h": 48,
+          "fill": "#000000"
+        },
+        {
+          "kind": "text",
+          "x": 52,
+          "y": -4,
+          "value": "__label",
+          "fontSize": 6,
+          "color": "#0000aa"
+        }
       ]
     },
     "pins": [
@@ -130,5 +164,8 @@
   "folderPath": [
     "Saidas",
     "Displays"
-  ]
+  ],
+  "help": {
+    "description": "Display LCD gráfico compatível com PCD8544/Nokia 5110."
+  }
 }

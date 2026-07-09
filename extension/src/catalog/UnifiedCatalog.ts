@@ -26,6 +26,7 @@ export interface UnifiedCatalogItem {
   symbolSvg?: string;
   package?: PackageDescriptor;
   propertySchema?: PropertySchemaEntry[];
+  help?: { description?: string; url?: string; file?: string };
   folderPath?: string[];
   category?: string;
   subcategory?: string;
@@ -128,6 +129,7 @@ export function entryToWebview(item: UnifiedCatalogItem): WebviewComponentCatalo
     symbolSvg: item.symbolSvg,
     package: item.package,
     propertySchema: item.propertySchema,
+    help: item.help,
     pinCount: item.pinCount,
     pinIds: sanitizeStringArray(item.pinIds),
     defaultProperties: item.defaultProperties ?? {},

@@ -232,6 +232,7 @@ export interface ParsedSubcircuitManifest {
   iconSvgInline: string | undefined;
   iconFilePath: string | undefined;
   defaultProperties: Record<string, string | number | boolean>;
+  help?: WebviewComponentCatalogEntry["help"];
   folderPath: string[] | undefined;
   mcuHost: boolean;
   serialPorts: ReturnType<typeof sanitizeMcuSerialPorts>;
@@ -254,6 +255,16 @@ function manifestIconFields(json: Record<string, unknown>, manifestDir: string):
     iconSvgInline,
     iconFilePath,
   };
+}
+
+function manifestHelpFields(json: Record<string, unknown>): WebviewComponentCatalogEntry["help"] {
+  const raw = json.help;
+  if (typeof raw !== "object" || raw === null) return undefined;
+  const help = raw as Record<string, unknown>;
+  const description = typeof help.description === "string" && help.description.trim() ? help.description : undefined;
+  const url = typeof help.url === "string" && help.url.trim() ? help.url : undefined;
+  const file = typeof help.file === "string" && help.file.trim() ? help.file : undefined;
+  return description || url || file ? { description, url, file } : undefined;
 }
 
 function manifestDefaultProperties(json: Record<string, unknown>, logicSymbolPackage: PackageDescriptor | undefined): Record<string, string | number | boolean> {
@@ -291,6 +302,7 @@ export function parseSubcircuitManifest(json: Record<string, unknown>, manifestD
     logicSymbolPackage,
     ...iconFields,
     defaultProperties: manifestDefaultProperties(json, logicSymbolPackage),
+    help: manifestHelpFields(json),
     folderPath,
     mcuHost: manifestHostsMcu(json, mcuAdapterTypeIds),
     serialPorts: sanitizeMcuSerialPorts(json.serialPorts),
@@ -367,6 +379,7 @@ export function resolveRegisteredItem(source: RegisteredSource, extensionPath: s
         ...iconFields,
         package: packageDescriptor,
         logicSymbolPackage,
+        help: manifestHelpFields(json),
         disabled: false,
         isRegistered: true,
         registeredSourceId: source.id,
@@ -441,6 +454,7 @@ export function resolveRegisteredItem(source: RegisteredSource, extensionPath: s
       iconSvgInline: parsed.iconSvgInline,
       package: parsed.package,
       logicSymbolPackage: parsed.logicSymbolPackage,
+      help: parsed.help,
       disabled: false,
       isRegistered: true,
       registeredSourceId: source.id,

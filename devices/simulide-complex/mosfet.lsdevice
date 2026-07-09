@@ -201,5 +201,8 @@
   ],
   "defaultProperties": {
     "beta": 100
+  },
+  "help": {
+    "description": "Transistor MOSFET para chaveamento ou controle por tensão."
   }
 }

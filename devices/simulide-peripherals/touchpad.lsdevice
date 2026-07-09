@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "typeId": "peripherals.touchpad",
-  "name": "TouchPad — Tela Sensível ao Toque",
+  "name": "TouchPad (Resistive)",
   "language": "pt-BR",
   "icon": "touchpad",
   "folderPath": [
@@ -131,34 +131,150 @@
         }
       },
       "paint": [
-        { "kind": "rect",    "x": 0,  "y": 0,   "w": 120, "h": 168, "rx": 2, "ry": 2, "stroke": "#8a8a8a", "fill": "#f4f4f4", "strokeWidth": 1 },
-        { "kind": "rect",    "x": 40, "y": 154,  "w": 40,  "h": 14,  "rx": 2, "ry": 2, "stroke": "#333333", "fill": "#2a3050", "strokeWidth": 0.5 },
-        { "kind": "ellipse", "cx": 4, "cy": 4,   "rx": 3,  "ry": 3,  "stroke": "#cc3333", "fill": "#ff6666", "strokeWidth": 0.5, "cssClass": "touch-indicator", "partId": "indicator" }
+        {
+          "kind": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 120,
+          "h": 168,
+          "rx": 2,
+          "ry": 2,
+          "stroke": "#8a8a8a",
+          "fill": "#f4f4f4",
+          "strokeWidth": 1
+        },
+        {
+          "kind": "rect",
+          "x": 40,
+          "y": 154,
+          "w": 40,
+          "h": 14,
+          "rx": 2,
+          "ry": 2,
+          "stroke": "#333333",
+          "fill": "#2a3050",
+          "strokeWidth": 0.5
+        },
+        {
+          "kind": "ellipse",
+          "cx": 4,
+          "cy": 4,
+          "rx": 3,
+          "ry": 3,
+          "stroke": "#cc3333",
+          "fill": "#ff6666",
+          "strokeWidth": 0.5,
+          "cssClass": "touch-indicator",
+          "partId": "indicator"
+        }
       ],
       "stateProjection": {
         "indicator": [
           {
             "kind": "translate",
-            "x": { "prop": "touch_x", "propRange": [0, 240], "pixelRange": [0, 112] },
-            "y": { "prop": "touch_y", "propRange": [0, 320], "pixelRange": [0, 136] }
+            "x": {
+              "prop": "touch_x",
+              "propRange": [
+                0,
+                240
+              ],
+              "pixelRange": [
+                0,
+                112
+              ]
+            },
+            "y": {
+              "prop": "touch_y",
+              "propRange": [
+                0,
+                320
+              ],
+              "pixelRange": [
+                0,
+                136
+              ]
+            }
           },
-          { "kind": "visible", "prop": "pressed" }
+          {
+            "kind": "visible",
+            "prop": "pressed"
+          }
         ]
       }
     },
     "pinLabelColor": "#224",
     "pins": [
-      { "id": "xp", "x": 48, "y": 168, "angle": 90, "length": 14, "label": "XP" },
-      { "id": "xm", "x": 56, "y": 168, "angle": 90, "length": 14, "label": "XM" },
-      { "id": "yp", "x": 64, "y": 168, "angle": 90, "length": 14, "label": "YP" },
-      { "id": "ym", "x": 72, "y": 168, "angle": 90, "length": 14, "label": "YM" }
+      {
+        "id": "xp",
+        "x": 48,
+        "y": 168,
+        "angle": 90,
+        "length": 14,
+        "label": "XP"
+      },
+      {
+        "id": "xm",
+        "x": 56,
+        "y": 168,
+        "angle": 90,
+        "length": 14,
+        "label": "XM"
+      },
+      {
+        "id": "yp",
+        "x": 64,
+        "y": 168,
+        "angle": 90,
+        "length": 14,
+        "label": "YP"
+      },
+      {
+        "id": "ym",
+        "x": 72,
+        "y": 168,
+        "angle": 90,
+        "length": 14,
+        "label": "YM"
+      }
     ]
   },
   "pins": [
-    { "id": "xp", "kind": "ANALOG_IN",  "x": 48, "y": 168, "angle": 90, "length": 14, "label": "XP" },
-    { "id": "xm", "kind": "ANALOG_IN",  "x": 56, "y": 168, "angle": 90, "length": 14, "label": "XM" },
-    { "id": "yp", "kind": "ANALOG_IN",  "x": 64, "y": 168, "angle": 90, "length": 14, "label": "YP" },
-    { "id": "ym", "kind": "ANALOG_IN",  "x": 72, "y": 168, "angle": 90, "length": 14, "label": "YM" }
+    {
+      "id": "xp",
+      "kind": "ANALOG_IN",
+      "x": 48,
+      "y": 168,
+      "angle": 90,
+      "length": 14,
+      "label": "XP"
+    },
+    {
+      "id": "xm",
+      "kind": "ANALOG_IN",
+      "x": 56,
+      "y": 168,
+      "angle": 90,
+      "length": 14,
+      "label": "XM"
+    },
+    {
+      "id": "yp",
+      "kind": "ANALOG_IN",
+      "x": 64,
+      "y": 168,
+      "angle": 90,
+      "length": 14,
+      "label": "YP"
+    },
+    {
+      "id": "ym",
+      "kind": "ANALOG_IN",
+      "x": 72,
+      "y": 168,
+      "angle": 90,
+      "length": 14,
+      "label": "YM"
+    }
   ],
   "properties": [
     {
@@ -271,7 +387,7 @@
     }
   ],
   "help": {
-    "description": "Touchscreen resistivo de 4 fios (XP/XM/YP/YM). Simula toque por coordenadas (X, Y) e estado pressed. Configure resolução, posição do toque e resistências dos eixos para calibrar o modelo elétrico."
+    "description": "Tela sensível ao toque resistiva."
   },
   "limits": {
     "stepTimeoutMs": 4,

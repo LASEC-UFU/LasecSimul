@@ -127,14 +127,48 @@
     "width": 148,
     "height": 100,
     "border": false,
-    "background": { "kind": "none" },
+    "background": {
+      "kind": "none"
+    },
     "shapes": [],
     "viewSpec": {
       "paint": [
-        { "kind": "rect", "x": 0, "y": 8, "w": 148, "h": 92, "rx": 2, "ry": 2, "fill": "#324664" },
-        { "kind": "rect", "x": 8, "y": 18, "w": 132, "h": 74, "rx": 8, "ry": 8, "fill": "#c8dcb4" },
-        { "kind": "rect", "x": 14, "y": 24, "w": 120, "h": 62, "fill": "#000000" },
-        { "kind": "text", "x": 74, "y": 4, "value": "__label", "fontSize": 6, "color": "#0000aa" }
+        {
+          "kind": "rect",
+          "x": 0,
+          "y": 8,
+          "w": 148,
+          "h": 92,
+          "rx": 2,
+          "ry": 2,
+          "fill": "#324664"
+        },
+        {
+          "kind": "rect",
+          "x": 8,
+          "y": 18,
+          "w": 132,
+          "h": 74,
+          "rx": 8,
+          "ry": 8,
+          "fill": "#c8dcb4"
+        },
+        {
+          "kind": "rect",
+          "x": 14,
+          "y": 24,
+          "w": 120,
+          "h": 62,
+          "fill": "#000000"
+        },
+        {
+          "kind": "text",
+          "x": 74,
+          "y": 4,
+          "value": "__label",
+          "fontSize": 6,
+          "color": "#0000aa"
+        }
       ]
     },
     "pins": [
@@ -232,5 +266,8 @@
   "folderPath": [
     "Saidas",
     "Displays"
-  ]
+  ],
+  "help": {
+    "description": "Display gráfico LCD baseado no controlador KS0108."
+  }
 }

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "typeId": "logic.seven_segment_bcd",
-  "name": "7 Segment BCD",
+  "name": "7 Seg BCD",
   "language": "pt-BR",
   "abiVersion": {
     "major": 3,
@@ -186,5 +186,8 @@
   "folderPath": [
     "Logicos",
     "Outros logicos"
-  ]
+  ],
+  "help": {
+    "description": "Display/decodificador BCD para sete segmentos."
+  }
 }

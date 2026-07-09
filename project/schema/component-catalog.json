@@ -17,7 +17,7 @@
           ]
         },
         "connectors.tunnel": {
-          "label": "Tunnel",
+          "label": "Tunnel.",
           "folderPath": [
             "Connectors"
           ]
@@ -35,7 +35,7 @@
           ]
         },
         "sources.dc_voltage": {
-          "label": "DC Voltage Source",
+          "label": "Voltage Source",
           "folderPath": [
             "Sources"
           ]
@@ -79,25 +79,25 @@
         "other.package": {
           "label": "Package",
           "folderPath": [
-            "Others"
+            "Other"
           ]
         },
         "other.package_pin": {
           "label": "Package Pin",
           "folderPath": [
-            "Others"
+            "Other"
           ]
         },
         "other.test_unit": {
           "label": "Test Unit",
           "folderPath": [
-            "Others"
+            "Other"
           ]
         },
         "other.dial": {
           "label": "Dial",
           "folderPath": [
-            "Others"
+            "Other"
           ]
         },
         "meters.probe": {
@@ -113,7 +113,7 @@
           ]
         },
         "meters.freqmeter": {
-          "label": "FreqMeter",
+          "label": "Frequency Meter",
           "folderPath": [
             "Meters"
           ]
@@ -131,7 +131,7 @@
           ]
         },
         "sources.fixed_volt": {
-          "label": "Fixed Volt.",
+          "label": "Fixed Voltage",
           "folderPath": [
             "Sources"
           ]
@@ -143,7 +143,7 @@
           ]
         },
         "sources.wave_gen": {
-          "label": "Wave Gen.",
+          "label": "Wave Generator",
           "folderPath": [
             "Sources"
           ]
@@ -177,6 +177,209 @@
           "folderPath": [
             "Sources"
           ]
+        },
+        "switches.push": {
+          "label": "Push",
+          "folderPath": [
+            "Switches"
+          ]
+        },
+        "switches.switch": {
+          "label": "Switch (all)",
+          "folderPath": [
+            "Switches"
+          ]
+        },
+        "switches.switch_dip": {
+          "label": "Switch Dip",
+          "folderPath": [
+            "Switches"
+          ]
+        },
+        "switches.relay": {
+          "label": "Relay (all)",
+          "folderPath": [
+            "Switches"
+          ]
+        },
+        "switches.keypad": {
+          "label": "KeyPad",
+          "folderPath": [
+            "Switches"
+          ]
+        },
+        "passive.resistor": {
+          "label": "Resistor",
+          "folderPath": [
+            "Passive",
+            "Resistors"
+          ]
+        },
+        "passive.variable_resistor": {
+          "label": "Variable Resistor",
+          "folderPath": [
+            "Passive",
+            "Resistors"
+          ]
+        },
+        "passive.potentiometer": {
+          "label": "Potentiometer",
+          "folderPath": [
+            "Passive",
+            "Resistors"
+          ]
+        },
+        "passive.resistor_dip": {
+          "label": "ResistorDip",
+          "folderPath": [
+            "Passive",
+            "Resistors"
+          ]
+        },
+        "passive.capacitor": {
+          "label": "Capacitor",
+          "folderPath": [
+            "Passive",
+            "Reactive"
+          ]
+        },
+        "passive.electrolytic_capacitor": {
+          "label": "Electrolytic Capacitor",
+          "folderPath": [
+            "Passive",
+            "Reactive"
+          ]
+        },
+        "passive.inductor": {
+          "label": "Inductor",
+          "folderPath": [
+            "Passive",
+            "Reactive"
+          ]
+        },
+        "passive.variable_capacitor": {
+          "label": "Variable Capacitor",
+          "folderPath": [
+            "Passive",
+            "Reactive"
+          ]
+        },
+        "passive.variable_inductor": {
+          "label": "Variable Inductor",
+          "folderPath": [
+            "Passive",
+            "Reactive"
+          ]
+        },
+        "active.diode": {
+          "label": "Diode",
+          "folderPath": [
+            "Active",
+            "Rectifiers"
+          ]
+        },
+        "active.zener": {
+          "label": "Zener Diode",
+          "folderPath": [
+            "Active",
+            "Rectifiers"
+          ]
+        },
+        "active.opamp": {
+          "label": "OpAmp",
+          "folderPath": [
+            "Active",
+            "Other Active"
+          ]
+        },
+        "active.comparator": {
+          "label": "Comparator",
+          "folderPath": [
+            "Active",
+            "Other Active"
+          ]
+        },
+        "active.analog_mux": {
+          "label": "Analog Mux",
+          "folderPath": [
+            "Active",
+            "Other Active"
+          ]
+        },
+        "active.volt_regulator": {
+          "label": "Volt. Regulator",
+          "folderPath": [
+            "Active",
+            "Other Active"
+          ]
+        },
+        "outputs.led": {
+          "label": "Led",
+          "folderPath": [
+            "Outputs",
+            "Leds"
+          ]
+        },
+        "outputs.led_rgb": {
+          "label": "Led Rgb",
+          "folderPath": [
+            "Outputs",
+            "Leds"
+          ]
+        },
+        "outputs.led_bar": {
+          "label": "Led Bar",
+          "folderPath": [
+            "Outputs",
+            "Leds"
+          ]
+        },
+        "outputs.led_matrix": {
+          "label": "LedMatrix",
+          "folderPath": [
+            "Outputs",
+            "Leds"
+          ]
+        },
+        "outputs.seven_segment": {
+          "label": "7 Segment",
+          "folderPath": [
+            "Outputs",
+            "Leds"
+          ]
+        },
+        "outputs.dc_motor": {
+          "label": "Dc Motor",
+          "folderPath": [
+            "Outputs",
+            "Motors"
+          ]
+        },
+        "outputs.stepper": {
+          "label": "Stepper",
+          "folderPath": [
+            "Outputs",
+            "Motors"
+          ]
+        },
+        "outputs.incandescent_lamp": {
+          "label": "Incandescent lamp",
+          "folderPath": [
+            "Outputs",
+            "Other Outputs"
+          ]
+        },
+        "subcircuits.external": {
+          "label": "Subcircuit",
+          "folderPath": [
+            "Subcircuits"
+          ]
+        },
+        "instruments.voltmeter": {
+          "label": "Voltmeter",
+          "folderPath": [
+            "Meters"
+          ]
         }
       }
     }
@@ -197,7 +400,7 @@
       ],
       "icon": "push",
       "folderPath": [
-        "Interruptores"
+        "Switches"
       ],
       "defaultProperties": {
         "closed": false,
@@ -361,7 +564,8 @@
             "label": ""
           }
         ]
-      }
+      },
+      "category": "Switches"
     },
     {
       "typeId": "switches.switch",
@@ -373,7 +577,7 @@
       ],
       "icon": "switch",
       "folderPath": [
-        "Interruptores"
+        "Switches"
       ],
       "defaultProperties": {
         "closed": false,
@@ -537,7 +741,8 @@
             "label": ""
           }
         ]
-      }
+      },
+      "category": "Switches"
     },
     {
       "typeId": "switches.switch_dip",
@@ -563,7 +768,7 @@
       ],
       "icon": "switchdip",
       "folderPath": [
-        "Interruptores"
+        "Switches"
       ],
       "defaultProperties": {
         "closed": false
@@ -764,7 +969,8 @@
             "label": ""
           }
         ]
-      }
+      },
+      "category": "Switches"
     },
     {
       "typeId": "switches.relay",
@@ -778,7 +984,7 @@
       ],
       "icon": "relay-spst",
       "folderPath": [
-        "Interruptores"
+        "Switches"
       ],
       "defaultProperties": {
         "iOn": 15,
@@ -922,7 +1128,8 @@
             "label": ""
           }
         ]
-      }
+      },
+      "category": "Switches"
     },
     {
       "typeId": "switches.keypad",
@@ -930,7 +1137,7 @@
       "pinCount": 7,
       "icon": "keypad",
       "folderPath": [
-        "Interruptores"
+        "Switches"
       ],
       "defaultProperties": {
         "diodes": false,
@@ -1192,7 +1399,11 @@
           ]
         }
       },
-      "graphical": true
+      "graphical": true,
+      "category": "Switches",
+      "help": {
+        "description": "Matriz de teclas para entrada digital por linhas e colunas."
+      }
     },
     {
       "typeId": "passive.resistor",
@@ -1200,7 +1411,7 @@
       "pinCount": 2,
       "icon": "resistor",
       "folderPath": [
-        "Passivos",
+        "Passive",
         "Resistors"
       ],
       "defaultProperties": {
@@ -1388,7 +1599,9 @@
             "label": ""
           }
         ]
-      }
+      },
+      "category": "Passive",
+      "subcategory": "Resistors"
     },
     {
       "typeId": "passive.variable_resistor",
@@ -1396,7 +1609,7 @@
       "pinCount": 2,
       "icon": "varresistor",
       "folderPath": [
-        "Passivos",
+        "Passive",
         "Resistors"
       ],
       "defaultProperties": {
@@ -1705,6 +1918,11 @@
             ]
           }
         }
+      },
+      "category": "Passive",
+      "subcategory": "Resistors",
+      "help": {
+        "description": "Resistor ajustável por controle gráfico ou propriedade."
       }
     },
     {
@@ -1713,7 +1931,7 @@
       "pinCount": 3,
       "icon": "potentiometer",
       "folderPath": [
-        "Passivos",
+        "Passive",
         "Resistors"
       ],
       "defaultProperties": {
@@ -1837,7 +2055,12 @@
         "pin-1",
         "pin-2",
         "pin-3"
-      ]
+      ],
+      "category": "Passive",
+      "subcategory": "Resistors",
+      "help": {
+        "description": "Divisor resistivo ajustável com terminal cursor."
+      }
     },
     {
       "typeId": "passive.resistor_dip",
@@ -1845,7 +2068,7 @@
       "pinCount": 16,
       "icon": "resistordip",
       "folderPath": [
-        "Passivos",
+        "Passive",
         "Resistors"
       ],
       "defaultProperties": {
@@ -2066,7 +2289,12 @@
         "pin-14",
         "pin-15",
         "pin-16"
-      ]
+      ],
+      "category": "Passive",
+      "subcategory": "Resistors",
+      "help": {
+        "description": "Rede de resistores em encapsulamento DIP."
+      }
     },
     {
       "typeId": "passive.capacitor",
@@ -2074,7 +2302,7 @@
       "pinCount": 2,
       "icon": "capacitor",
       "folderPath": [
-        "Passivos",
+        "Passive",
         "Reactive"
       ],
       "defaultProperties": {
@@ -2158,7 +2386,9 @@
             "label": ""
           }
         ]
-      }
+      },
+      "category": "Passive",
+      "subcategory": "Reactive"
     },
     {
       "typeId": "passive.electrolytic_capacitor",
@@ -2166,7 +2396,7 @@
       "pinCount": 2,
       "icon": "elcapacitor",
       "folderPath": [
-        "Passivos",
+        "Passive",
         "Reactive"
       ],
       "defaultProperties": {
@@ -2265,6 +2495,11 @@
             "label": ""
           }
         ]
+      },
+      "category": "Passive",
+      "subcategory": "Reactive",
+      "help": {
+        "description": "Capacitor polarizado para armazenamento de carga."
       }
     },
     {
@@ -2273,7 +2508,7 @@
       "pinCount": 2,
       "icon": "inductor",
       "folderPath": [
-        "Passivos",
+        "Passive",
         "Reactive"
       ],
       "defaultProperties": {
@@ -2369,6 +2604,11 @@
             "label": ""
           }
         ]
+      },
+      "category": "Passive",
+      "subcategory": "Reactive",
+      "help": {
+        "description": "Indutor para armazenamento de energia em campo magnético."
       }
     },
     {
@@ -2377,7 +2617,7 @@
       "pinCount": 2,
       "icon": "varcapacitor",
       "folderPath": [
-        "Passivos",
+        "Passive",
         "Reactive"
       ],
       "defaultProperties": {
@@ -2582,6 +2822,11 @@
             ]
           }
         }
+      },
+      "category": "Passive",
+      "subcategory": "Reactive",
+      "help": {
+        "description": "Capacitor ajustável."
       }
     },
     {
@@ -2590,7 +2835,7 @@
       "pinCount": 2,
       "icon": "varinductor",
       "folderPath": [
-        "Passivos",
+        "Passive",
         "Reactive"
       ],
       "defaultProperties": {
@@ -2810,6 +3055,11 @@
             ]
           }
         }
+      },
+      "category": "Passive",
+      "subcategory": "Reactive",
+      "help": {
+        "description": "Indutor ajustável."
       }
     },
     {
@@ -2818,7 +3068,7 @@
       "pinCount": 2,
       "icon": "diode",
       "folderPath": [
-        "Ativos",
+        "Active",
         "Rectifiers"
       ],
       "defaultProperties": {
@@ -2911,7 +3161,12 @@
       "pinIds": [
         "anode",
         "cathode"
-      ]
+      ],
+      "category": "Active",
+      "subcategory": "Rectifiers",
+      "help": {
+        "description": "Diodo semicondutor para condução preferencial em um sentido."
+      }
     },
     {
       "typeId": "active.zener",
@@ -2919,7 +3174,7 @@
       "pinCount": 2,
       "icon": "zener",
       "folderPath": [
-        "Ativos",
+        "Active",
         "Rectifiers"
       ],
       "defaultProperties": {
@@ -3029,7 +3284,12 @@
       "pinIds": [
         "anode",
         "cathode"
-      ]
+      ],
+      "category": "Active",
+      "subcategory": "Rectifiers",
+      "help": {
+        "description": "Diodo Zener usado como referência ou limitador de tensão."
+      }
     },
     {
       "typeId": "active.opamp",
@@ -3037,7 +3297,7 @@
       "pinCount": 5,
       "icon": "opamp",
       "folderPath": [
-        "Ativos",
+        "Active",
         "Other Active"
       ],
       "defaultProperties": {
@@ -3172,7 +3432,12 @@
         "pin-3",
         "pin-4",
         "pin-5"
-      ]
+      ],
+      "category": "Active",
+      "subcategory": "Other Active",
+      "help": {
+        "description": "Amplificador operacional idealizado."
+      }
     },
     {
       "typeId": "active.comparator",
@@ -3180,7 +3445,7 @@
       "pinCount": 5,
       "icon": "opamp",
       "folderPath": [
-        "Ativos",
+        "Active",
         "Other Active"
       ],
       "defaultProperties": {
@@ -3315,7 +3580,12 @@
         "pin-3",
         "pin-4",
         "pin-5"
-      ]
+      ],
+      "category": "Active",
+      "subcategory": "Other Active",
+      "help": {
+        "description": "Comparador analógico que produz saída digital conforme a diferença de entrada."
+      }
     },
     {
       "typeId": "active.analog_mux",
@@ -3323,7 +3593,7 @@
       "pinCount": 13,
       "icon": "1to3-c",
       "folderPath": [
-        "Ativos",
+        "Active",
         "Other Active"
       ],
       "defaultProperties": {
@@ -3580,6 +3850,11 @@
             }
           ]
         }
+      },
+      "category": "Active",
+      "subcategory": "Other Active",
+      "help": {
+        "description": "Multiplexador analógico para selecionar um entre vários canais."
       }
     },
     {
@@ -3588,7 +3863,7 @@
       "pinCount": 3,
       "icon": "voltreg",
       "folderPath": [
-        "Ativos",
+        "Active",
         "Other Active"
       ],
       "defaultProperties": {
@@ -3675,7 +3950,12 @@
         "pin-1",
         "pin-2",
         "pin-3"
-      ]
+      ],
+      "category": "Active",
+      "subcategory": "Other Active",
+      "help": {
+        "description": "Regulador de tensão para fornecer saída estabilizada."
+      }
     },
     {
       "typeId": "outputs.led",
@@ -3683,7 +3963,7 @@
       "pinCount": 2,
       "icon": "led",
       "folderPath": [
-        "Saidas",
+        "Outputs",
         "Leds"
       ],
       "defaultProperties": {
@@ -3797,7 +4077,12 @@
       "pinIds": [
         "anode",
         "cathode"
-      ]
+      ],
+      "category": "Outputs",
+      "subcategory": "Leds",
+      "help": {
+        "description": "Diodo emissor de luz controlado pela corrente/tensão aplicada."
+      }
     },
     {
       "typeId": "outputs.led_rgb",
@@ -3805,7 +4090,7 @@
       "pinCount": 4,
       "icon": "ledrgb",
       "folderPath": [
-        "Saidas",
+        "Outputs",
         "Leds"
       ],
       "defaultProperties": {
@@ -3939,7 +4224,12 @@
         "pin-2",
         "pin-3",
         "pin-4"
-      ]
+      ],
+      "category": "Outputs",
+      "subcategory": "Leds",
+      "help": {
+        "description": "LED RGB com canais de cor independentes."
+      }
     },
     {
       "typeId": "outputs.led_bar",
@@ -3947,7 +4237,7 @@
       "pinCount": 16,
       "icon": "ledbar",
       "folderPath": [
-        "Saidas",
+        "Outputs",
         "Leds"
       ],
       "defaultProperties": {
@@ -4236,6 +4526,11 @@
             }
           ]
         }
+      },
+      "category": "Outputs",
+      "subcategory": "Leds",
+      "help": {
+        "description": "Barra de LEDs para indicação visual de níveis ou estados."
       }
     },
     {
@@ -4244,7 +4539,7 @@
       "pinCount": 16,
       "icon": "ledmatrix",
       "folderPath": [
-        "Saidas",
+        "Outputs",
         "Leds"
       ],
       "defaultProperties": {
@@ -4569,6 +4864,11 @@
             }
           ]
         }
+      },
+      "category": "Outputs",
+      "subcategory": "Leds",
+      "help": {
+        "description": "Matriz de LEDs endereçada por linhas e colunas."
       }
     },
     {
@@ -4577,7 +4877,7 @@
       "pinCount": 10,
       "icon": "seven_segment",
       "folderPath": [
-        "Saidas",
+        "Outputs",
         "Leds"
       ],
       "defaultProperties": {
@@ -4852,7 +5152,12 @@
         "pin-8",
         "pin-9",
         "pin-10"
-      ]
+      ],
+      "category": "Outputs",
+      "subcategory": "Leds",
+      "help": {
+        "description": "Display de sete segmentos para dígitos e símbolos simples."
+      }
     },
     {
       "typeId": "outputs.dc_motor",
@@ -4860,7 +5165,7 @@
       "pinCount": 2,
       "icon": "dcmotor",
       "folderPath": [
-        "Saidas",
+        "Outputs",
         "Motors"
       ],
       "defaultProperties": {
@@ -4989,7 +5294,12 @@
       "pinIds": [
         "pin-1",
         "pin-2"
-      ]
+      ],
+      "category": "Outputs",
+      "subcategory": "Motors",
+      "help": {
+        "description": "Motor DC para representar carga eletromecânica simples."
+      }
     },
     {
       "typeId": "outputs.stepper",
@@ -4997,7 +5307,7 @@
       "pinCount": 4,
       "icon": "steeper",
       "folderPath": [
-        "Saidas",
+        "Outputs",
         "Motors"
       ],
       "defaultProperties": {
@@ -5145,7 +5455,12 @@
         "pin-2",
         "pin-3",
         "pin-4"
-      ]
+      ],
+      "category": "Outputs",
+      "subcategory": "Motors",
+      "help": {
+        "description": "Motor de passo controlado por bobinas/fases."
+      }
     },
     {
       "typeId": "outputs.incandescent_lamp",
@@ -5153,7 +5468,7 @@
       "pinCount": 2,
       "icon": "lamp",
       "folderPath": [
-        "Saidas",
+        "Outputs",
         "Other Outputs"
       ],
       "defaultProperties": {
@@ -5244,53 +5559,64 @@
       "pinIds": [
         "pin-1",
         "pin-2"
-      ]
+      ],
+      "category": "Outputs",
+      "subcategory": "Other Outputs",
+      "help": {
+        "description": "Lâmpada incandescente como carga visual/resistiva."
+      }
     },
     {
       "typeId": "connectors.junction",
-      "label": "Juncao",
+      "label": "Junction",
       "pinCount": 1,
       "icon": "tunel",
       "folderPath": [
-        "Conectores"
+        "Connectors"
       ],
       "defaultProperties": {},
       "help": {
         "description": "Ponto de junção elétrica entre 3 ou mais fios. Coloque sobre um fio para criar uma derivação."
-      }
+      },
+      "category": "Connectors"
     },
     {
       "typeId": "connectors.bus",
-      "label": "Barramento",
+      "label": "Bus",
       "pinCount": 1,
       "icon": "bus",
       "folderPath": [
-        "Conectores"
+        "Connectors"
       ],
-      "defaultProperties": {}
+      "defaultProperties": {},
+      "category": "Connectors",
+      "help": {
+        "description": "Conector gráfico para agrupar ou organizar linhas de sinal no esquemático."
+      }
     },
     {
       "typeId": "connectors.tunnel",
-      "label": "Tunel",
+      "label": "Tunnel.",
       "pinCount": 1,
       "icon": "tunel",
       "folderPath": [
-        "Conectores"
+        "Connectors"
       ],
       "defaultProperties": {
         "name": "NetA"
       },
       "help": {
         "description": "Conecta pinos por nome compartilhado em vez de fio desenhado. Dois túneis com o mesmo nome formam um nó elétrico."
-      }
+      },
+      "category": "Connectors"
     },
     {
       "typeId": "subcircuits.external",
-      "label": "Subcircuito (arquivo externo)",
+      "label": "Subcircuit",
       "pinCount": 0,
       "icon": "package",
       "folderPath": [
-        "Subcircuitos"
+        "Subcircuits"
       ],
       "defaultProperties": {},
       "propertySchema": [
@@ -5305,15 +5631,16 @@
       ],
       "help": {
         "description": "Bloco generico que aponta para um arquivo .lssubcircuit escolhido nas propriedades. Forma, pinos e icone sao assumidos automaticamente do arquivo escolhido."
-      }
+      },
+      "category": "Subcircuits"
     },
     {
       "typeId": "connectors.socket",
-      "label": "Soquete",
+      "label": "Socket",
       "pinCount": 8,
       "icon": "socket",
       "folderPath": [
-        "Conectores"
+        "Connectors"
       ],
       "defaultProperties": {},
       "package": {
@@ -5455,15 +5782,19 @@
         "pin-6",
         "pin-7",
         "pin-8"
-      ]
+      ],
+      "category": "Connectors",
+      "help": {
+        "description": "Conector genérico multipino para organizar interfaces de circuito."
+      }
     },
     {
       "typeId": "connectors.header",
-      "label": "Cabecalho",
+      "label": "Header",
       "pinCount": 8,
       "icon": "header",
       "folderPath": [
-        "Conectores"
+        "Connectors"
       ],
       "defaultProperties": {},
       "package": {
@@ -5605,41 +5936,53 @@
         "pin-6",
         "pin-7",
         "pin-8"
-      ]
+      ],
+      "category": "Connectors",
+      "help": {
+        "description": "Barra de pinos genérica usada para representar conectores de placas e módulos."
+      }
     },
     {
       "typeId": "graphics.image",
-      "label": "Imagem",
+      "label": "Image",
       "pinCount": 0,
       "icon": "graphic-image",
       "folderPath": [
-        "Grafico"
+        "Graphical"
       ],
       "defaultProperties": {
         "path": ""
+      },
+      "category": "Graphical",
+      "help": {
+        "description": "Elemento gráfico para inserir uma imagem de referência no esquemático."
       }
     },
     {
       "typeId": "graphics.text",
-      "label": "Texto",
+      "label": "Text",
       "pinCount": 0,
       "icon": "graphic-text",
       "folderPath": [
-        "Grafico"
+        "Graphical"
       ],
       "defaultProperties": {
         "text": "Texto",
         "fontSize": 11,
         "color": "#1f2937"
+      },
+      "category": "Graphical",
+      "help": {
+        "description": "Elemento gráfico de texto livre para anotações no esquemático."
       }
     },
     {
       "typeId": "graphics.rectangle",
-      "label": "Retangulo",
+      "label": "Rectangle",
       "pinCount": 0,
       "icon": "graphic-rectangle",
       "folderPath": [
-        "Grafico"
+        "Graphical"
       ],
       "defaultProperties": {
         "width": 60,
@@ -5647,94 +5990,122 @@
         "stroke": "#94a3b8",
         "fill": "none",
         "strokeWidth": 1
+      },
+      "category": "Graphical",
+      "help": {
+        "description": "Forma gráfica retangular sem função elétrica."
       }
     },
     {
       "typeId": "graphics.ellipse",
-      "label": "Elipse",
+      "label": "Ellipse",
       "pinCount": 0,
       "icon": "graphic-ellipse",
       "folderPath": [
-        "Grafico"
+        "Graphical"
       ],
       "defaultProperties": {
         "width": 40,
         "height": 40,
         "stroke": "#94a3b8",
         "fill": "none"
+      },
+      "category": "Graphical",
+      "help": {
+        "description": "Forma gráfica elíptica sem função elétrica."
       }
     },
     {
       "typeId": "graphics.line",
-      "label": "Linha",
+      "label": "Line",
       "pinCount": 0,
       "icon": "graphic-line",
       "folderPath": [
-        "Grafico"
+        "Graphical"
       ],
       "defaultProperties": {
         "length": 40,
         "stroke": "#94a3b8"
+      },
+      "category": "Graphical",
+      "help": {
+        "description": "Linha gráfica sem função elétrica, usada para anotações visuais."
       }
     },
     {
       "typeId": "other.package",
-      "label": "Pacote",
+      "label": "Package",
       "pinCount": 0,
       "icon": "package",
       "folderPath": [
-        "Outros"
+        "Other"
       ],
       "defaultProperties": {
         "width": 80,
         "height": 60,
         "border": true,
         "backgroundColor": "#ffffff"
+      },
+      "category": "Other",
+      "help": {
+        "description": "Símbolo de pacote carregado de manifesto. Nesta etapa não é editável manualmente pela UI."
       }
     },
     {
       "typeId": "other.package_pin",
-      "label": "Pino de Pacote",
+      "label": "Package Pin",
       "pinCount": 0,
       "icon": "package-pin",
       "folderPath": [
-        "Outros"
+        "Other"
       ],
       "defaultProperties": {
         "pinId": "pin1",
         "length": 8,
         "internalTunnel": ""
+      },
+      "category": "Other",
+      "help": {
+        "description": "Pino visual de pacote carregado de manifesto. Nesta etapa não é editável manualmente pela UI."
       }
     },
     {
       "typeId": "other.test_unit",
-      "label": "Unidade de Teste",
+      "label": "Test Unit",
       "pinCount": 0,
       "icon": "test-unit",
       "folderPath": [
-        "Outros"
+        "Other"
       ],
       "defaultProperties": {},
-      "hidden": true
+      "hidden": true,
+      "category": "Other",
+      "help": {
+        "description": "Componente auxiliar de teste interno."
+      }
     },
     {
       "typeId": "other.dial",
-      "label": "Rotativo",
+      "label": "Dial",
       "pinCount": 0,
       "icon": "dial",
       "folderPath": [
-        "Outros"
+        "Other"
       ],
       "defaultProperties": {},
-      "hidden": true
+      "hidden": true,
+      "category": "Other",
+      "help": {
+        "description": "Controle gráfico rotativo auxiliar."
+      }
     },
     {
       "typeId": "meters.probe",
-      "label": "Sonda",
+      "label": "Probe",
       "pinCount": 1,
       "icon": "sonda",
       "folderPath": [
-        "Medidores"
+        "Meters"
       ],
       "defaultProperties": {
         "threshold": 2.5,
@@ -5827,15 +6198,16 @@
             "notes": "setValLabelPos(16,0,45) translated by bounds (-22,-8) => (38,8), then rotated -45deg around pivot (22,8) to match package.initialTransform (labels are positioned in the same pre-rotation frame as the pins/body in real SimulIDE, so they rotate together). Own label rotation of 45 still not representable by the external label rotation enum (0/90/180/270/-90)."
           }
         }
-      }
+      },
+      "category": "Meters"
     },
     {
       "typeId": "meters.ampmeter",
-      "label": "Amperimetro",
+      "label": "Ampmeter",
       "pinCount": 3,
       "icon": "amperimetro",
       "folderPath": [
-        "Medidores"
+        "Meters"
       ],
       "defaultProperties": {
         "resistance": 0.000001
@@ -5941,15 +6313,16 @@
             "leadEndTrim": 0.7
           }
         ]
-      }
+      },
+      "category": "Meters"
     },
     {
       "typeId": "instruments.voltmeter",
-      "label": "Voltimetro",
+      "label": "Voltmeter",
       "pinCount": 3,
       "icon": "voltimetro",
       "folderPath": [
-        "Medidores"
+        "Meters"
       ],
       "defaultProperties": {},
       "help": {
@@ -6053,15 +6426,16 @@
             "leadEndTrim": 0.7
           }
         ]
-      }
+      },
+      "category": "Meters"
     },
     {
       "typeId": "meters.freqmeter",
-      "label": "Frequencimetro",
+      "label": "Frequency Meter",
       "pinCount": 1,
       "icon": "frequencimetro",
       "folderPath": [
-        "Medidores"
+        "Meters"
       ],
       "defaultProperties": {
         "filter": 0.1
@@ -6139,15 +6513,16 @@
             "leadEndTrim": 0.7
           }
         ]
-      }
+      },
+      "category": "Meters"
     },
     {
       "typeId": "meters.oscope",
-      "label": "Osciloscopio",
+      "label": "Oscope",
       "pinCount": 4,
       "icon": "osciloscopio",
       "folderPath": [
-        "Medidores"
+        "Meters"
       ],
       "defaultProperties": {
         "filter": 0,
@@ -6230,15 +6605,16 @@
             "leadEndTrim": 0.7
           }
         ]
-      }
+      },
+      "category": "Meters"
     },
     {
       "typeId": "meters.logic_analyzer",
-      "label": "Analisador Logico",
+      "label": "Logic Analyzer",
       "pinCount": 8,
       "icon": "analisador-logico",
       "folderPath": [
-        "Medidores"
+        "Meters"
       ],
       "defaultProperties": {
         "thresholdRising": 2.5,
@@ -6372,15 +6748,16 @@
             "leadEndTrim": 0.7
           }
         ]
-      }
+      },
+      "category": "Meters"
     },
     {
       "typeId": "sources.dc_voltage",
-      "label": "Fonte de Tensao",
+      "label": "Voltage Source",
       "pinCount": 2,
       "icon": "fonte-de-tensao",
       "folderPath": [
-        "Fontes"
+        "Sources"
       ],
       "defaultProperties": {
         "voltage": 5
@@ -6506,18 +6883,19 @@
             "label": ""
           }
         ]
-      }
+      },
+      "category": "Sources"
     },
     {
       "typeId": "sources.fixed_volt",
-      "label": "Tensao Fixa",
+      "label": "Fixed Voltage",
       "pinCount": 1,
       "pinIds": [
         "out"
       ],
       "icon": "tensao-fixa",
       "folderPath": [
-        "Fontes"
+        "Sources"
       ],
       "defaultProperties": {
         "voltage": 5,
@@ -6605,7 +6983,8 @@
       },
       "help": {
         "description": "Fonte de tensão fixa de um pino referenciada ao GND. Útil como trilho de alimentação (VCC, 3.3 V, etc.)."
-      }
+      },
+      "category": "Sources"
     },
     {
       "typeId": "sources.clock",
@@ -6613,7 +6992,7 @@
       "pinCount": 1,
       "icon": "clock",
       "folderPath": [
-        "Fontes"
+        "Sources"
       ],
       "defaultProperties": {
         "voltage": 5,
@@ -6741,15 +7120,16 @@
             "label": ""
           }
         ]
-      }
+      },
+      "category": "Sources"
     },
     {
       "typeId": "sources.wave_gen",
-      "label": "Gerador de Onda",
+      "label": "Wave Generator",
       "pinCount": 2,
       "icon": "gerador-de-onda",
       "folderPath": [
-        "Fontes"
+        "Sources"
       ],
       "defaultProperties": {
         "waveType": "Sine",
@@ -6895,15 +7275,16 @@
             }
           }
         ]
-      }
+      },
+      "category": "Sources"
     },
     {
       "typeId": "sources.voltage_source",
-      "label": "Fonte de Tensao Variavel",
+      "label": "Voltage Source",
       "pinCount": 1,
       "icon": "fonte-tensao-variavel",
       "folderPath": [
-        "Fontes"
+        "Sources"
       ],
       "defaultProperties": {
         "value": 5,
@@ -7296,15 +7677,16 @@
             "label": ""
           }
         ]
-      }
+      },
+      "category": "Sources"
     },
     {
       "typeId": "sources.current_source",
-      "label": "Fonte de Corrente",
+      "label": "Current Source",
       "pinCount": 1,
       "icon": "fonte-de-corrente",
       "folderPath": [
-        "Fontes"
+        "Sources"
       ],
       "defaultProperties": {
         "value": 1,
@@ -7697,15 +8079,16 @@
             "label": ""
           }
         ]
-      }
+      },
+      "category": "Sources"
     },
     {
       "typeId": "sources.controlled_source",
-      "label": "Fonte Controlada",
+      "label": "Controlled Source",
       "pinCount": 4,
       "icon": "fonte-controlada",
       "folderPath": [
-        "Fontes"
+        "Sources"
       ],
       "defaultProperties": {
         "controlPins": true,
@@ -8078,15 +8461,16 @@
           "default": 1,
           "showOnSymbol": true
         }
-      ]
+      ],
+      "category": "Sources"
     },
     {
       "typeId": "sources.battery",
-      "label": "Bateria",
+      "label": "Battery",
       "pinCount": 2,
       "icon": "bateria",
       "folderPath": [
-        "Fontes"
+        "Sources"
       ],
       "defaultProperties": {
         "voltage": 5,
@@ -8204,15 +8588,16 @@
             "label": ""
           }
         ]
-      }
+      },
+      "category": "Sources"
     },
     {
       "typeId": "sources.rail",
-      "label": "Trilho",
+      "label": "Rail",
       "pinCount": 1,
       "icon": "trilho",
       "folderPath": [
-        "Fontes"
+        "Sources"
       ],
       "defaultProperties": {
         "voltage": 5
@@ -8296,18 +8681,19 @@
             "label": ""
           }
         ]
-      }
+      },
+      "category": "Sources"
     },
     {
       "typeId": "other.ground",
-      "label": "Terra (0 V)",
+      "label": "Ground (0 V)",
       "pinCount": 1,
       "pinIds": [
         "pin"
       ],
       "icon": "terra",
       "folderPath": [
-        "Fontes"
+        "Sources"
       ],
       "defaultProperties": {},
       "package": {
@@ -8383,7 +8769,8 @@
       },
       "help": {
         "description": "Referência de 0 V (GND/terra) do circuito. Todo circuito precisa de pelo menos um terra para o solver MNA funcionar."
-      }
+      },
+      "category": "Sources"
     }
   ],
   "registeredSources": [

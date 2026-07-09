@@ -158,5 +158,8 @@
   "defaultProperties": {
     "threshold": 0.8,
     "resistance": 1
+  },
+  "help": {
+    "description": "Chave semicondutora bidirecional para controle em AC."
   }
 }

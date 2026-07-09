@@ -92,5 +92,8 @@
         "label": ""
       }
     ]
+  },
+  "help": {
+    "description": "Buffer lógico, com opção de inversão quando configurada."
   }
 }
