@@ -4297,15 +4297,18 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
   }
 
   if (isComponentSelected(component.id)) {
-    // `0%/100%` (não `box.width/height` fixo) -- resolve contra o `viewBox` ATUAL do `svg`, que já é
-    // a caixa rotacionada (`rotatedBox` acima). Antes disto, este retângulo sempre cobria só a caixa
-    // CANÔNICA (rotation=0), sem girar junto com `bodyGroup` -- exatamente o destaque cinza
-    // desalinhado relatado (ele é irmão de `bodyGroup` dentro de `svg`, nunca herdou a rotação).
+    // Coordenadas ABSOLUTAS de `rotatedBox` (não `0%/100%`) -- percentual de POSIÇÃO em SVG (`x`/`y`)
+    // não compensa um `viewBox` com `minX`/`minY` deslocado: `x="0%"` sempre resolve pra coordenada
+    // absoluta 0, não pro canto visível do viewport (só `width`/`height` percentual escalam certo
+    // contra o tamanho do viewport -- posição não). Como o `viewBox` agora começa em
+    // `rotatedBox.x/y` (não-zero pra qualquer rotação/flip real), um retângulo em `0%,0%` ficava
+    // fora da janela visível -- exatamente o destaque cinza desalinhado relatado (2ª rodada). Usar os
+    // MESMOS `rotatedBox.x/y/width/height` do `viewBox` cobre a janela inteira de verdade.
     const overlay = document.createElementNS(SVG_NS, "rect");
-    overlay.setAttribute("x", "0%");
-    overlay.setAttribute("y", "0%");
-    overlay.setAttribute("width", "100%");
-    overlay.setAttribute("height", "100%");
+    overlay.setAttribute("x", String(rotatedBox.x));
+    overlay.setAttribute("y", String(rotatedBox.y));
+    overlay.setAttribute("width", String(rotatedBox.width));
+    overlay.setAttribute("height", String(rotatedBox.height));
     overlay.setAttribute("class", "selection-overlay");
     svg.appendChild(overlay);
   }
