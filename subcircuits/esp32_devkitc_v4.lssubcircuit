@@ -516,8 +516,8 @@
         "__simulideTunnelRotated": false
       },
       "visual": {
-        "x": 593,
-        "y": 341,
+        "x": 593.2000007629395,
+        "y": 340.8999938964844,
         "rotation": 270,
         "flipH": false,
         "flipV": false

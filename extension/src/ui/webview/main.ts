@@ -1668,7 +1668,14 @@ function applyMarqueeSelection(start: Point, end: Point, additive: boolean): voi
     .filter((component) => {
       if (component.hidden) return false;
       const box = componentBox(component.typeId, component.properties);
-      return component.x < right && component.x + box.width > left && component.y < bottom && component.y + box.height > top;
+      // Caixa já rotacionada/espelhada (ver `rotatedComponentLocalBox`) -- sem isto, um componente
+      // com caixa bem mais larga que alta (ex: `connectors.tunnel`) girado 90/270° testava
+      // interseção contra a caixa CANÔNICA, bem longe de onde o símbolo visualmente está.
+      const origin = componentLocalOrigin(component.typeId, component.properties);
+      const rotatedBox = rotatedComponentLocalBox(box, component.rotation, Boolean(component.flipH), Boolean(component.flipV), origin);
+      const boxLeft = component.x + rotatedBox.x;
+      const boxTop = component.y + rotatedBox.y;
+      return boxLeft < right && boxLeft + rotatedBox.width > left && boxTop < bottom && boxTop + rotatedBox.height > top;
     })
     .map((component) => component.id);
 
@@ -1964,6 +1971,55 @@ function rotatePoint(local: Point, box: { width: number; height: number }, rotat
     default:
       return local;
   }
+}
+
+/** Bounding box canvas-local do símbolo já rotacionado/espelhado -- `componentBox()` sempre devolve a
+ * caixa CANÔNICA (rotation=0), então qualquer código que precise saber ONDE o desenho realmente
+ * ocupa espaço na tela (hit-box do `<div class="component">` em `updateComponentElement`, teste de
+ * interseção de `applyMarqueeSelection`) usava a caixa canônica direto -- certo só quando width≈height
+ * ou o pivô é o centro da caixa. Bug relatado 2026-07-09: girar um `connectors.tunnel` (caixa bem
+ * mais larga que alta, pivô numa PONTA via `tunnelOrigin`, não no centro) deixava a área clicável
+ * bem longe do desenho visualmente rotacionado -- clicar perto do símbolo selecionava o vizinho
+ * errado. Roda os 4 cantos da caixa canônica pelo MESMO par flip+rotate (mesma ordem -- flip
+ * primeiro, rotate depois -- de `componentPinLocalPosition`/`svgBodyTransform`) e agrega o min/max:
+ * nunca duplica a fórmula de rotação/flip, só descobre o retângulo que os 4 cantos transformados
+ * ocupam. */
+function rotatedComponentLocalBox(
+  box: { width: number; height: number },
+  rotation: 0 | 90 | 180 | 270,
+  flipH: boolean,
+  flipV: boolean,
+  origin?: Point
+): { x: number; y: number; width: number; height: number } {
+  if (rotation === 0 && !flipH && !flipV) return { x: 0, y: 0, width: box.width, height: box.height };
+  const corners = [
+    { x: 0, y: 0 },
+    { x: box.width, y: 0 },
+    { x: box.width, y: box.height },
+    { x: 0, y: box.height },
+  ].map((corner) => rotatePoint(flipPoint(corner, box, flipH, flipV, origin), box, rotation, origin));
+  const xs = corners.map((corner) => corner.x);
+  const ys = corners.map((corner) => corner.y);
+  const minX = Math.min(...xs);
+  const minY = Math.min(...ys);
+  return { x: minX, y: minY, width: Math.max(...xs) - minX, height: Math.max(...ys) - minY };
+}
+
+/** `x`/`y` de `rotatedComponentLocalBox` pra este componente -- o deslocamento que soma em
+ * `component.x`/`y` pra achar o `left`/`top` real do `<div>` (ver `updateComponentElement`). Extraído
+ * pra função própria porque tem DOIS chamadores que precisam do MESMO valor: o render completo E o
+ * "fast path" de arrasto (`onMove` do `pointerdown` de componente) -- que só atualiza `style.left/top`
+ * direto, sem passar por `updateComponentElement`, por performance (evita reconstruir o `<svg>`
+ * inteiro a cada `pointermove`). Sem isto no fast path, o `<div>` de um componente rotacionado
+ * "pulava" de volta pro offset ERRADO (zero) assim que o arrasto começava, mesmo o `<svg>` interno
+ * continuando corretamente rotacionado -- bug relatado 2026-07-09 (2ª rodada): destaque cinza
+ * deslocado horizontalmente do túnel de verdade depois de mover/rotacionar. */
+function componentDivOffset(component: WebviewComponentModel): Point {
+  const box = componentBox(component.typeId, component.properties);
+  if (component.rotation === 0 && !component.flipH && !component.flipV) return { x: 0, y: 0 };
+  const origin = componentLocalOrigin(component.typeId, component.properties);
+  const rotatedBox = rotatedComponentLocalBox(box, component.rotation, Boolean(component.flipH), Boolean(component.flipV), origin);
+  return { x: rotatedBox.x, y: rotatedBox.y };
 }
 
 function svgBodyTransform(box: { width: number; height: number }, rotation: 0 | 90 | 180 | 270, flipH: boolean, flipV: boolean, origin?: Point): string {
@@ -3744,7 +3800,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
 
   let dragStartX = 0;
   let dragStartY = 0;
-  let dragTargets: Array<{ component: WebviewComponentModel; startX: number; startY: number }> = [];
+  let dragTargets: Array<{ component: WebviewComponentModel; startX: number; startY: number; offsetX: number; offsetY: number }> = [];
 
   el.addEventListener("pointerdown", (event) => {
     const component = liveComponent();
@@ -3764,7 +3820,10 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
     if (!isComponentSelected(component.id)) selectOnlyComponent(component.id);
     dragStartX = event.clientX;
     dragStartY = event.clientY;
-    dragTargets = dragSelectionWithLinkedPinLabels().map((selected) => ({ component: selected, startX: selected.x, startY: selected.y }));
+    dragTargets = dragSelectionWithLinkedPinLabels().map((selected) => {
+      const offset = componentDivOffset(selected);
+      return { component: selected, startX: selected.x, startY: selected.y, offsetX: offset.x, offsetY: offset.y };
+    });
     el.setPointerCapture(event.pointerId);
     // Bloqueia render() de telemetria DESDE O POINTERDOWN, não só depois do limiar de arrasto
     // (`startDragging` abaixo) -- com reconciliação (`componentElementsById`), `el` é REAPROVEITADO
@@ -4111,7 +4170,10 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
             componentElementsById.set(dup.id, dupEl);
             canvasContentElement.appendChild(dupEl);
           }
-          dragTargets = duplicated.map((dup) => ({ component: dup, startX: dup.x, startY: dup.y }));
+          dragTargets = duplicated.map((dup) => {
+            const offset = componentDivOffset(dup);
+            return { component: dup, startX: dup.x, startY: dup.y, offsetX: offset.x, offsetY: offset.y };
+          });
           send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestInsertItems", components: duplicated, wires: duplicatedWires });
         }
       }
@@ -4132,8 +4194,8 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
         // cada `pointermove`, potencialmente muitas vezes por segundo com vários componentes selecionados.
         const targetEl = componentElementsById.get(target.component.id);
         if (targetEl) {
-          targetEl.style.left = `${target.component.x}px`;
-          targetEl.style.top = `${target.component.y}px`;
+          targetEl.style.left = `${target.component.x + target.offsetX}px`;
+          targetEl.style.top = `${target.component.y + target.offsetY}px`;
         }
         updateWiresTouchingComponent(target.component.id);
       }
@@ -4186,11 +4248,23 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
   const isUnknownComponent = !catalogEntry && !component.subcircuitRef;
   const meterClass = isMeter ? `component--meter component--${component.typeId.replace(/[._]/g, "-")}` : "";
 
+  // CSS aplica da direita pra esquerda: scale (flip) primeiro, rotate depois -- mesma ordem usada
+  // em flipPoint/rotatePoint pra calcular posição de pino, ver componentPinLocalPosition.
+  const scaleX = component.flipH ? -1 : 1;
+  const scaleY = component.flipV ? -1 : 1;
+  const symbolProperties = runtimeSymbolProperties(component);
+  const localOrigin = componentLocalOrigin(component.typeId, symbolProperties);
+  // Caixa REAL (canvas-local, já rotacionada/espelhada) -- usada pro hit-box do `<div>` (o que o
+  // navegador de fato considera clicável) e pro `viewBox`, ver `rotatedComponentLocalBox`. `bodyGroup`
+  // continua desenhando na caixa CANÔNICA de sempre (rotation=0) -- só a JANELA em volta dele (`div`+
+  // `viewBox`) passa a acompanhar a rotação, então nenhuma posição de pino/fio muda.
+  const rotatedBox = rotatedComponentLocalBox(box, component.rotation, Boolean(component.flipH), Boolean(component.flipV), localOrigin);
+
   el.className = `component ${isComponentSelected(component.id) ? "selected" : ""} ${hasPackageVisual ? "component--package" : ""} ${isVoltmeter ? "component--voltmeter" : ""} ${isPushButton ? "component--push" : ""} ${isSwitchToggle ? "component--switch" : ""} ${isFixedVolt ? "component--fixed-volt" : ""} ${isRail ? "component--rail" : ""} ${isTunnel ? "component--tunnel" : ""} ${meterClass} ${isMissingSubcircuitRef ? "component--subcircuit-missing" : ""} ${isUnknownComponent ? "component--unknown" : ""}`;
-  el.style.left = `${component.x}px`;
-  el.style.top = `${component.y}px`;
-  el.style.width = `${box.width}px`;
-  el.style.height = `${box.height}px`;
+  el.style.left = `${component.x + rotatedBox.x}px`;
+  el.style.top = `${component.y + rotatedBox.y}px`;
+  el.style.width = `${rotatedBox.width}px`;
+  el.style.height = `${rotatedBox.height}px`;
   el.title = isMissingSubcircuitRef
     ? `${component.label} -- ${t("locateSubcircuitFile")}\n${component.subcircuitRef?.path ?? ""}`
     : isUnknownComponent
@@ -4199,15 +4273,9 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
 
   const svg = document.createElementNS(SVG_NS, "svg");
   svg.classList.add("component__symbol");
-  svg.setAttribute("viewBox", `0 0 ${box.width} ${box.height}`);
+  svg.setAttribute("viewBox", `${rotatedBox.x} ${rotatedBox.y} ${rotatedBox.width} ${rotatedBox.height}`);
   const bodyGroup = document.createElementNS(SVG_NS, "g");
   bodyGroup.classList.add("component__symbol-body");
-  // CSS aplica da direita pra esquerda: scale (flip) primeiro, rotate depois -- mesma ordem usada
-  // em flipPoint/rotatePoint pra calcular posição de pino, ver componentPinLocalPosition.
-  const scaleX = component.flipH ? -1 : 1;
-  const scaleY = component.flipV ? -1 : 1;
-  const symbolProperties = runtimeSymbolProperties(component);
-  const localOrigin = componentLocalOrigin(component.typeId, symbolProperties);
   bodyGroup.setAttribute("transform", svgBodyTransform(box, component.rotation, Boolean(component.flipH), Boolean(component.flipV), localOrigin));
   // Estado aberto/fechado de push/switch/switch_dip agora vem de `stateFill`/`stateVisible` no
   // `package.simulidePaint` (primitivas diferentes por valor de `properties.closed`, reconstruídas a
@@ -4229,9 +4297,15 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
   }
 
   if (isComponentSelected(component.id)) {
+    // `0%/100%` (não `box.width/height` fixo) -- resolve contra o `viewBox` ATUAL do `svg`, que já é
+    // a caixa rotacionada (`rotatedBox` acima). Antes disto, este retângulo sempre cobria só a caixa
+    // CANÔNICA (rotation=0), sem girar junto com `bodyGroup` -- exatamente o destaque cinza
+    // desalinhado relatado (ele é irmão de `bodyGroup` dentro de `svg`, nunca herdou a rotação).
     const overlay = document.createElementNS(SVG_NS, "rect");
-    overlay.setAttribute("width", String(box.width));
-    overlay.setAttribute("height", String(box.height));
+    overlay.setAttribute("x", "0%");
+    overlay.setAttribute("y", "0%");
+    overlay.setAttribute("width", "100%");
+    overlay.setAttribute("height", "100%");
     overlay.setAttribute("class", "selection-overlay");
     svg.appendChild(overlay);
   }
