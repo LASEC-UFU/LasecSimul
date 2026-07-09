@@ -161,7 +161,6 @@ const UI_TEXT = {
     noSubcircuitFileChosen: "(nenhum)",
     locateSubcircuitFile: "Localizar arquivo do subcircuito...",
     loadFirmware: "Carregar firmware",
-    reloadFirmware: "Recarregar firmware",
     openSerialMonitor: "Abrir monitor serial",
     firmwareGroup: "Firmware",
     firmwarePath: "Firmware (.bin/.elf)",
@@ -234,7 +233,6 @@ const UI_TEXT = {
     noSubcircuitFileChosen: "(none)",
     locateSubcircuitFile: "Locate subcircuit file...",
     loadFirmware: "Load firmware",
-    reloadFirmware: "Reload firmware",
     openSerialMonitor: "Open serial monitor",
     firmwareGroup: "Firmware",
     firmwarePath: "Firmware (.bin/.elf)",
@@ -3750,7 +3748,6 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
       ? [
           { kind: "separator" },
           { label: t("loadFirmware"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestChooseMcuFirmware", componentId: component.id }) },
-          { label: t("reloadFirmware"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestReloadMcuFirmware", componentId: component.id }) },
           ...serialPortsForTypeId(component.typeId).map((port) => ({
             label: `${t("openSerialMonitor")} ${port.label}`,
             onClick: () => send({
@@ -4577,7 +4574,6 @@ function buildExposedComponentMenuItems(component: WebviewComponentModel): Conte
       if (isMcuHostTypeId(item.typeId)) {
         actions.push(
           { label: t("loadFirmware"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestChooseExposedMcuFirmware", outerComponentId: component.id, innerComponentId: item.id }) },
-          { label: t("reloadFirmware"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestReloadExposedMcuFirmware", outerComponentId: component.id, innerComponentId: item.id }) },
           ...serialPortsForTypeId(item.typeId).map((port) => ({
             label: `${t("openSerialMonitor")} ${port.label}`,
             onClick: () => send({

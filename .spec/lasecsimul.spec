@@ -1330,9 +1330,16 @@ SimulIDE nunca atualiza a simulação até o usuário clicar manualmente. O Lase
    sem necessidade de detectar "arquivo parou de crescer".
 
 ```
-core/src/mcu/FirmwareWatcher.{h,cpp}   // poll(folder) -> optional<caminho mais recente>; QemuProcessManager
-                                        // chama em cada tick e compara com o caminho/mtime já carregado
+core/src/mcu/qemu/FirmwareWatcher.{hpp,cpp}   // poll(folder) -> optional<caminho mais recente>
 ```
+
+**Status real (corrigido 2026-07-09, ver seção 19)**: implementado e testado
+(`core/test/core/mcu/FirmwareWatcherTest.cpp`), mas **nunca foi ligado** a `QemuProcessManager`/
+`McuComponent` nem a nenhum outro chamador -- `poll()` nunca roda em produção. A UI seguiu exigindo
+clique manual em "Recarregar Firmware" até 2026-07-09, quando a recarga automática foi implementada
+de outra forma (Extension, arquivo único verificado só antes de "Run" -- não pasta, não polling
+contínuo). Este design (itens 1-4 acima) permanece só como REFERÊNCIA/intenção original, não descreve
+o comportamento atual -- ver seção 19 pro que de fato roda hoje.
 
 ## 9. Estratégia para adicionar novos componentes eletrônicos
 
@@ -1957,3 +1964,62 @@ regressão -- nenhum teste depende de cor/preenchimento de alça de fio. Mudanç
 troca de `fill`/`stroke` na regra base), zero linha de TypeScript tocada nesta correção. Sem GUI
 disponível neste ambiente pra confirmar visualmente; recomenda-se reabrir um esquemático com fios
 roteados em L/Z e confirmar que nenhuma bola aparece até selecionar o fio.
+
+## 19. "Recarregar Firmware" removido da UI -- recarga automática antes de "Run" (2026-07-09)
+
+**Pedido**: o usuário não deveria precisar clicar manualmente em "Recarregar Firmware" (menu de
+contexto, MCU direto ou exposto dentro de um subcircuito) toda vez que recompilava o `.bin` fora do
+LasecSimul -- ver seção 8.3 (`FirmwareWatcher`) pra contexto: aquele mecanismo (Core, polling de
+PASTA) foi ESPECIFICADO em 2026-06-28 mas **nunca chegou a ser ligado em lugar nenhum** (confirmado
+de novo nesta sessão: `grep` por `FirmwareWatcher` fora de `FirmwareWatcher.{hpp,cpp}`/seu teste
+próprio não acha nenhuma chamada -- zero uso em `QemuProcessManager`/`McuComponent`). A UI sempre
+exigiu o clique manual documentado como "nunca deveria acontecer" -- a seção 8.3 descrevia uma
+INTENÇÃO de design, não o comportamento real até esta sessão.
+
+**Decisão de arquitetura**: em vez de finalmente ligar o `FirmwareWatcher` nativo (pasta + polling
+contínuo, muito mais invasivo -- exigiria trocar o seletor de arquivo por seletor de PASTA, mexer em
+`QemuProcessManager`, recompilar o Core), a recarga automática foi implementada na Extension, no
+formato que o pedido descreveu (arquivo único escolhido pelo usuário, verificado só no momento de
+"Run", não continuamente):
+
+- `extension/src/mcu/mcuCommands.ts::ensureAllMcuFirmwareUpToDate` -- roda ANTES de toda "Run"
+  (`extension.ts::runSimulationWithFirmwareCheck`, os dois pontos de entrada: mensagem
+  `requestRunSimulation` da Webview E comando `lasecsimul.run`). Para cada MCU/CPU com
+  `properties.firmwarePath` configurado (`collectMcuFirmwareTargets` -- direto, `mcuHost: true` no
+  catálogo, OU exposto dentro de uma instância `subcircuit-file`, via
+  `gatherInternalComponentSnapshots`): confirma que o arquivo existe (`fileExists`), lê `mtimeMs`/
+  `size` (`fs.statSync`) e compara contra `state.ts::lastLoadedFirmwareByCoreId` (novo `Map`, chave =
+  `instanceId` do Core, não `componentId` -- uma instância NOVA, criada por
+  `rebuildCoreFromSchematicState`, nunca está no mapa, então sempre recebe o firmware pelo menos uma
+  vez, mesmo no PRIMEIRO Run; uma instância que sobrevive a Parar/Rodar sem edição estrutural no meio
+  mantém a marca e pula o push se nada mudou).
+- Idêntico (mesmo, mesmo tamanho) → pula, não chama `loadMcuFirmware` de novo (sem reiniciar o
+  processo QEMU à toa). Diferente ou nunca carregado → chama `loadMcuFirmware` (mesmo verbo IPC de
+  sempre -- Core trata como reset, seção 8 item 10, nenhuma lógica nova nele) e atualiza o mapa.
+  Arquivo ausente/inacessível OU a própria recarga falhando → devolve `{ok:false, message}`, o Run
+  inteiro é abortado com `vscode.window.showErrorMessage`, nada roda com firmware potencialmente
+  desatualizado.
+- "Carregar firmware" (escolher um NOVO arquivo, ação que continua existindo -- só "Recarregar" foi
+  removida) empurra imediatamente se a simulação já estiver rodando (comportamento pré-existente,
+  inalterado) e agora também grava em `lastLoadedFirmwareByCoreId`
+  (`mcuCommands.ts::recordFirmwareLoaded`) -- sem isto, trocar o firmware ao vivo e depois Parar/Rodar
+  recarregaria o MESMO arquivo de novo à toa no próximo Run.
+- Removido da UI: itens de menu "Recarregar firmware" (`main.ts`, topo E submenu de MCU exposto),
+  mensagens `requestReloadMcuFirmware`/`requestReloadExposedMcuFirmware` (`messages.ts`), funções
+  `reloadMcuFirmwareCommand`/`reloadExposedMcuFirmwareCommand` (`mcuCommands.ts`) -- sem substituto
+  nem no menu nem em nenhum comando de paleta de comandos, a recarga não é mais uma ação que existe
+  pro usuário disparar.
+
+**O que NÃO mudou**: como o `.bin` é escolhido inicialmente ("Carregar firmware", ainda um seletor de
+ARQUIVO único, não pasta -- diferente do `FirmwareWatcher` especificado, que assumia pasta de build
+variável); o verbo IPC (`loadMcuFirmware`, mesmo path+`instanceId`); o efeito no Core (mesmo kill+
+respawn de sempre). `FirmwareWatcher` (seção 8.3) permanece implementado e testado, porém morto --
+não foi removido (nenhuma instrução pra isso), só continua sem nenhuma chamada real.
+
+**Verificação**: compilação limpa (`tsc` main + webview + test) e suíte completa (154 testes) sem
+regressão. Sem GUI disponível neste ambiente pra confirmar interativamente com um MCU real; a lógica
+de dedup (mtime+tamanho, chave por `instanceId`) foi revisada por leitura, sem simulação numérica
+dedicada (não há cálculo geométrico/matricial aqui pra valer a pena simular fora do DOM, diferente das
+seções 17/18). Recomenda-se: escolher um `.bin`, rodar, recompilar o mesmo arquivo fora do LasecSimul,
+rodar de novo (deve recarregar sozinho, sem clique manual) e rodar uma 3ª vez sem tocar no arquivo
+(não deve reiniciar o processo QEMU).

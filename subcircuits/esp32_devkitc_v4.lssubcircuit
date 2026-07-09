@@ -420,8 +420,8 @@
         "__simulideTunnelRotated": false
       },
       "visual": {
-        "x": 570,
-        "y": 324,
+        "x": 569.0248039571742,
+        "y": 322.90288585114877,
         "rotation": 270,
         "flipH": false,
         "flipV": false
@@ -484,8 +484,8 @@
         "__simulideTunnelRotated": false
       },
       "visual": {
-        "x": 585,
-        "y": 324,
+        "x": 584.8000030517578,
+        "y": 324.5,
         "rotation": 270,
         "flipH": false,
         "flipV": false

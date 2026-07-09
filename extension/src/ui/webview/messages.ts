@@ -145,14 +145,15 @@ export type WebviewToHostMessage =
    * implementado nesta rodada (documentado como limitação, não bug). */
   | { version: number; type: "requestExportSchematicImage"; svg: string }
   | { version: number; type: "requestChooseMcuFirmware"; componentId: string }
-  | { version: number; type: "requestReloadMcuFirmware"; componentId: string }
   | { version: number; type: "requestOpenMcuSerialMonitor"; componentId: string; usartIndex: 0 | 1 | 2 }
   /** Mesmas ações do MCU de topo, mas disparadas a partir do submenu de um componente INTERNO
    * exposto de um subcircuito no esquemático principal. `outerComponentId` é a instância do
    * subcircuito colocada no circuito; `innerComponentId` é o id local salvo no `.lssubcircuit`
-   * (ex: "mcu1"). O host resolve isso para a instância real do filho no Core. */
+   * (ex: "mcu1"). O host resolve isso para a instância real do filho no Core.
+   * "Recarregar firmware" (manual) removido 2026-07-09 -- ver `mcuCommands.ts::
+   * ensureAllMcuFirmwareUpToDate`, chamado automaticamente antes de "Run" (`extension.ts::
+   * runSimulationWithFirmwareCheck`), nunca mais uma ação exposta ao usuário. */
   | { version: number; type: "requestChooseExposedMcuFirmware"; outerComponentId: string; innerComponentId: string }
-  | { version: number; type: "requestReloadExposedMcuFirmware"; outerComponentId: string; innerComponentId: string }
   | { version: number; type: "requestOpenExposedMcuSerialMonitor"; outerComponentId: string; innerComponentId: string; usartIndex: 0 | 1 | 2 }
   /** "Exportar Dados" da janela "Expande" do osciloscópio/analisador lógico -- o CSV já vem PRONTO
    * (formatado em main.ts, que é quem tem o histórico/configuração de canais) pra extension.ts só

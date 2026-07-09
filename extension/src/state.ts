@@ -65,5 +65,14 @@ export const state = {
  */
 export const coreInstanceIdByComponentId = new Map<string, string>();
 export const mcuTargetCoreIdByComponentId = new Map<string, string>();
+/** Último firmware efetivamente empurrado (`CoreClient.loadMcuFirmware`) por instância REAL do Core --
+ * chave é o `instanceId` do MCU (não `componentId`: uma reconstrução -- `rebuildCoreFromSchematicState`
+ * -- destrói e recria toda instância, então uma instância nova nunca está aqui e recebe o firmware de
+ * novo automaticamente; entradas de instâncias mortas só ficam paradas no mapa, nunca mais batem com
+ * nada, sem custo prático de limpar cedo). Usado por `mcuCommands.ts::ensureAllMcuFirmwareUpToDate`
+ * (chamado antes de "Run") pra decidir se o `.bin`/`.elf`/`.hex` mudou (mtime+tamanho) desde a última
+ * carga -- sem isto, cada Run recarregaria (mata+sobe o processo QEMU de novo) mesmo sem mudança
+ * nenhuma no arquivo. */
+export const lastLoadedFirmwareByCoreId = new Map<string, { path: string; mtimeMs: number; size: number }>();
 export const mcuSerialMonitorByKey = new Map<string, { channel: vscode.OutputChannel; timer: ReturnType<typeof setInterval>; lastLength: number }>();
 export const projectSerializer = new ProjectSerializer();

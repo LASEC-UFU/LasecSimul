@@ -55,10 +55,9 @@ import {
   chooseMcuFirmwareCommand,
   closeAllMcuSerialMonitors,
   closeMcuSerialMonitor,
+  ensureAllMcuFirmwareUpToDate,
   openExposedMcuSerialMonitorCommand,
   openMcuSerialMonitorCommand,
-  reloadExposedMcuFirmwareCommand,
-  reloadMcuFirmwareCommand,
   requestBoardOverlayDataCommand,
   updateBoardOverlayPropertyCommand,
   updateBoardOverlayVisualCommand,
@@ -266,6 +265,24 @@ function mcuCommandOptions(): Parameters<typeof chooseMcuFirmwareCommand>[1] {
     resolveSourceFilePath,
     refreshUnifiedCatalogState: (loadLibrariesInCore) => refreshUnifiedCatalogState(loadLibrariesInCore, catalogCommandOptions()),
   };
+}
+
+/** Substitui a chamada direta a `runSimulation()` nos dois pontos de entrada de "Run" (mensagem
+ * `requestRunSimulation` da Webview E comando `lasecsimul.run`) -- achado de auditoria 2026-07-09:
+ * "Recarregar Firmware" era uma ação manual que o usuário precisava lembrar de clicar toda vez que
+ * recompilava o `.bin` fora do LasecSimul; removida da interface (`main.ts`), o recarregamento agora
+ * é sempre automático, verificado aqui ANTES de rodar. `ensureAllMcuFirmwareUpToDate` só empurra
+ * firmware pro Core quando o arquivo mudou (mtime+tamanho) desde a última carga daquela instância --
+ * nunca recarrega à toa, nem no caso comum (nada mudou). Se QUALQUER MCU/CPU tiver firmware ausente/
+ * inacessível ou a recarga falhar, a simulação NÃO inicia -- erro claro em vez de rodar com firmware
+ * potencialmente desatualizado ou o processo QEMU num estado inconsistente. */
+async function runSimulationWithFirmwareCheck(): Promise<void> {
+  const result = await ensureAllMcuFirmwareUpToDate(mcuCommandOptions());
+  if (!result.ok) {
+    vscode.window.showErrorMessage(`Não foi possível iniciar a simulação: ${result.message}`);
+    return;
+  }
+  runSimulation();
 }
 
 function getComponentById(componentId: string): WebviewComponentModel | undefined {
@@ -795,7 +812,7 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       void vscode.env.openExternal(vscode.Uri.parse(message.url));
       return;
     case "requestRunSimulation":
-      runSimulation();
+      void runSimulationWithFirmwareCheck();
       return;
     case "requestPauseSimulation":
       pauseSimulation();
@@ -827,12 +844,6 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       return;
     case "requestChooseExposedMcuFirmware":
       void chooseExposedMcuFirmwareCommand(message.outerComponentId, message.innerComponentId, mcuCommandOptions());
-      return;
-    case "requestReloadMcuFirmware":
-      void reloadMcuFirmwareCommand(message.componentId, mcuCommandOptions());
-      return;
-    case "requestReloadExposedMcuFirmware":
-      void reloadExposedMcuFirmwareCommand(message.outerComponentId, message.innerComponentId, mcuCommandOptions());
       return;
     case "requestOpenMcuSerialMonitor":
       openMcuSerialMonitorCommand(message.componentId, message.usartIndex);
@@ -1374,7 +1385,7 @@ export function activate(context: vscode.ExtensionContext): void {
       void vscode.commands.executeCommand("workbench.action.openSettings", "lasecsimul.");
     }),
     vscode.commands.registerCommand("lasecsimul.palette.addComponent", (typeId: string) => addPaletteComponent(typeId)),
-    vscode.commands.registerCommand("lasecsimul.run", () => runSimulation()),
+    vscode.commands.registerCommand("lasecsimul.run", () => void runSimulationWithFirmwareCheck()),
     vscode.commands.registerCommand("lasecsimul.pause", () => pauseSimulation()),
     vscode.commands.registerCommand("lasecsimul.stop", () => stopSimulation()),
     vscode.commands.registerCommand("lasecsimul.saveProject", () => saveProjectCommand()),

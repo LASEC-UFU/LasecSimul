@@ -235,11 +235,17 @@ remeter a WASM/worker, é desatualizado — confiar nos dois `.spec` acima.
   duplo-clique) — decisão revertida na prática (esta linha dizia "painel persistente, nunca modal"; um
   painel lateral fixo ocupava espaço permanente e duplicava a paleta, avaliado e descartado, ver
   `.spec/lasecsimul.spec` seção 13).
-- **Firmware é vigiado por pasta, recarrega sozinho — nunca exige ação manual como o `slotReload()` do
-  SimulIDE (confirmado: zero uso de `QFileSystemWatcher` em todo o projeto real).** `FirmwareWatcher` (seção
-  8.3 do `.spec`) faz polling de `mtime` (não API de evento nativa por SO — simplicidade deliberada, latência
-  de 1-2s é aceitável); ao detectar mudança, reaproveita o mesmo kill+respawn já especificado pro pino de
-  reset (seção 8, item 10). Recarregar firmware nunca é caminho de código separado de "reset".
+- **Firmware recarrega sozinho antes de "Run" — nunca exige ação manual como o `slotReload()` do
+  SimulIDE.** Corrigido 2026-07-09: a UI teve um botão manual "Recarregar Firmware" até essa data (o
+  `FirmwareWatcher` nativo pra isso, seção 8.3 do `.spec`, foi especificado em 2026-06-28 mas nunca
+  chegou a ser ligado a nada — dead code testado isoladamente, confirmar antes de assumir que algo
+  descrito no `.spec` está de fato rodando). A recarga automática de verdade vive na Extension, não no
+  Core: `mcuCommands.ts::ensureAllMcuFirmwareUpToDate` roda antes de toda "Run" (`extension.ts::
+  runSimulationWithFirmwareCheck`), compara `mtime`+tamanho do `.bin`/`.elf`/`.hex` configurado contra
+  o que foi empurrado por último pra cada instância do Core (`state.ts::lastLoadedFirmwareByCoreId`,
+  chave por `instanceId` — instância nova nunca está lá, então sempre recebe firmware pelo menos uma
+  vez) e só chama `loadMcuFirmware` (mesmo kill+respawn de sempre, seção 8 item 10) quando algo
+  mudou. Arquivo ausente ou recarga falhando aborta o Run inteiro com mensagem clara — ver seção 19.
 - **Cross-platform é checado a cada trecho de código gerado, não só revisado depois (RNF07).** Antes de
   escrever uma chamada de API, perguntar se ela é específica de SO; se for, isolar num shim
   `#ifdef _WIN32`/POSIX no próprio arquivo (padrão de `PluginLoader.cpp`/`CrashGuard.cpp`), nunca espalhar a
