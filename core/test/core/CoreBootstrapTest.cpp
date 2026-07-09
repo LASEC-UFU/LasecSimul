@@ -377,10 +377,10 @@ static void testGetNodeVoltageOverIpc() {
         const std::string r2 = send("addComponent", {{"typeId", "passive.resistor"}, {"properties", {{"resistance", 1000.0}}}})["payload"]["instanceId"];
         const std::string ground = send("addComponent", {{"typeId", "other.ground"}, {"properties", nlohmann::json::object()}})["payload"]["instanceId"];
 
-        send("connectWire", {{"componentA", source}, {"pinIdA", "p1"}, {"componentB", r1}, {"pinIdB", "p1"}});
-        send("connectWire", {{"componentA", r1}, {"pinIdA", "p2"}, {"componentB", r2}, {"pinIdB", "p1"}});
-        send("connectWire", {{"componentA", r2}, {"pinIdA", "p2"}, {"componentB", source}, {"pinIdB", "p2"}});
-        send("connectWire", {{"componentA", source}, {"pinIdA", "p2"}, {"componentB", ground}, {"pinIdB", "pin"}});
+        send("connectWire", {{"from", {{"componentId", source}, {"pinId", "p1"}}}, {"to", {{"componentId", r1}, {"pinId", "p1"}}}});
+        send("connectWire", {{"from", {{"componentId", r1}, {"pinId", "p2"}}}, {"to", {{"componentId", r2}, {"pinId", "p1"}}}});
+        send("connectWire", {{"from", {{"componentId", r2}, {"pinId", "p2"}}}, {"to", {{"componentId", source}, {"pinId", "p2"}}}});
+        send("connectWire", {{"from", {{"componentId", source}, {"pinId", "p2"}}}, {"to", {{"componentId", ground}, {"pinId", "pin"}}}});
 
         send("start", nlohmann::json::object());
 
@@ -454,10 +454,10 @@ static void testGetComponentCurrentOverIpc() {
         const std::string r2 = send("addComponent", {{"typeId", "passive.resistor"}, {"properties", {{"resistance", 1000.0}}}})["payload"]["instanceId"];
         const std::string ground = send("addComponent", {{"typeId", "other.ground"}, {"properties", nlohmann::json::object()}})["payload"]["instanceId"];
 
-        send("connectWire", {{"componentA", source}, {"pinIdA", "p1"}, {"componentB", r1}, {"pinIdB", "p1"}});
-        send("connectWire", {{"componentA", r1}, {"pinIdA", "p2"}, {"componentB", r2}, {"pinIdB", "p1"}});
-        send("connectWire", {{"componentA", r2}, {"pinIdA", "p2"}, {"componentB", source}, {"pinIdB", "p2"}});
-        send("connectWire", {{"componentA", source}, {"pinIdA", "p2"}, {"componentB", ground}, {"pinIdB", "pin"}});
+        send("connectWire", {{"from", {{"componentId", source}, {"pinId", "p1"}}}, {"to", {{"componentId", r1}, {"pinId", "p1"}}}});
+        send("connectWire", {{"from", {{"componentId", r1}, {"pinId", "p2"}}}, {"to", {{"componentId", r2}, {"pinId", "p1"}}}});
+        send("connectWire", {{"from", {{"componentId", r2}, {"pinId", "p2"}}}, {"to", {{"componentId", source}, {"pinId", "p2"}}}});
+        send("connectWire", {{"from", {{"componentId", source}, {"pinId", "p2"}}}, {"to", {{"componentId", ground}, {"pinId", "pin"}}}});
 
         send("start", nlohmann::json::object());
 
@@ -638,9 +638,9 @@ static void testRegisterAdhocSubcircuitOverIpc() {
         const std::string source = send("addComponent", {{"typeId", "sources.dc_voltage"}, {"properties", {{"voltage", 10.0}}}})["payload"]["instanceId"];
         const std::string ground = send("addComponent", {{"typeId", "other.ground"}, {"properties", nlohmann::json::object()}})["payload"]["instanceId"];
 
-        send("connectWire", {{"componentA", source}, {"pinIdA", "p1"}, {"componentB", vin}, {"pinIdB", "pin"}});
-        send("connectWire", {{"componentA", source}, {"pinIdA", "p2"}, {"componentB", ground}, {"pinIdB", "pin"}});
-        send("connectWire", {{"componentA", gnd}, {"pinIdA", "pin"}, {"componentB", ground}, {"pinIdB", "pin"}});
+        send("connectWire", {{"from", {{"componentId", source}, {"pinId", "p1"}}}, {"to", {{"componentId", vin}, {"pinId", "pin"}}}});
+        send("connectWire", {{"from", {{"componentId", source}, {"pinId", "p2"}}}, {"to", {{"componentId", ground}, {"pinId", "pin"}}}});
+        send("connectWire", {{"from", {{"componentId", gnd}, {"pinId", "pin"}}}, {"to", {{"componentId", ground}, {"pinId", "pin"}}}});
 
         send("start", nlohmann::json::object());
 

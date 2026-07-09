@@ -48,6 +48,19 @@ inline void warnIfAbiVersionMismatch(const nlohmann::json& manifest, const std::
                  manifestLabel.c_str(), declaredMajor, declaredMinor, compiledMajor, compiledMinor);
 }
 
+/** `checksums` de `library.json` mapeia caminho relativo ao diretório do próprio `library.json` (não
+ * ao `.lsdevice`) -> SHA-256 hex esperado. Placeholder ainda comum enquanto o build não populou o
+ * hash real (`"PREENCHER_NO_BUILD_SHA256"`, ver `devices/library.json`/`mcu-adapters/library.json`)
+ * ou entrada simplesmente ausente -- ambos tratados como "sem checksum declarado", que
+ * `PluginLoader::verifyChecksum` já trata como opt-out silencioso; a validação de formato real
+ * mora ali, aqui só repassamos o texto bruto (ou vazio) do JSON. */
+inline std::string checksumFor(const nlohmann::json& checksums, const std::filesystem::path& libraryDir,
+                                const std::filesystem::path& binaryPath) {
+    const std::string key = std::filesystem::relative(binaryPath, libraryDir).generic_string();
+    if (!checksums.is_object() || !checksums.contains(key)) return {};
+    return checksums.value(key, std::string{});
+}
+
 } // namespace detail
 
 /**
@@ -77,12 +90,13 @@ public:
         nlohmann::json library;
         libraryFile >> library;
         const std::filesystem::path libraryDir = libraryJsonPath.parent_path();
+        const nlohmann::json checksums = library.value("checksums", nlohmann::json::object());
 
         if (library.contains("devices") && library["devices"].is_array()) {
-            for (const auto& deviceEntry : library["devices"]) loadDeviceEntry(deviceEntry, libraryDir);
+            for (const auto& deviceEntry : library["devices"]) loadDeviceEntry(deviceEntry, libraryDir, checksums);
         }
         if (library.contains("mcus") && library["mcus"].is_array()) {
-            for (const auto& mcuEntry : library["mcus"]) loadMcuEntry(mcuEntry, libraryDir);
+            for (const auto& mcuEntry : library["mcus"]) loadMcuEntry(mcuEntry, libraryDir, checksums);
         }
     }
 
@@ -122,7 +136,8 @@ public:
     }
 
 private:
-    void loadDeviceEntry(const nlohmann::json& deviceEntry, const std::filesystem::path& libraryDir) {
+    void loadDeviceEntry(const nlohmann::json& deviceEntry, const std::filesystem::path& libraryDir,
+                          const nlohmann::json& checksums) {
         const std::string typeId = deviceEntry.value("typeId", std::string{});
         const std::string manifestRelative = deviceEntry.value("manifest", std::string{});
         if (typeId.empty() || manifestRelative.empty()) return;
@@ -167,7 +182,8 @@ private:
         }
         m_metadata.registerMetadata(std::move(metadata));
 
-        std::shared_ptr<PluginModule> module = m_loader.loadDevicePlugin(binaryPath);
+        const std::string expectedSha256Hex = detail::checksumFor(checksums, libraryDir, binaryPath);
+        std::shared_ptr<PluginModule> module = m_loader.loadDevicePlugin(binaryPath, expectedSha256Hex);
         setActiveDeviceModule(typeId, module);
     }
 
@@ -178,7 +194,8 @@ private:
      * catálogo de propriedades editáveis genérico (ver `.spec/lasecsimul-native-devices.spec`
      * seção 22 e a auditoria arquitetural 2026-07-09, seção 10 do relatório: `McuComponent` não
      * expõe `propertyDescriptors()` hoje). */
-    void loadMcuEntry(const nlohmann::json& mcuEntry, const std::filesystem::path& libraryDir) {
+    void loadMcuEntry(const nlohmann::json& mcuEntry, const std::filesystem::path& libraryDir,
+                       const nlohmann::json& checksums) {
         const std::string chipId = mcuEntry.value("chipId", std::string{});
         const std::string manifestRelative = mcuEntry.value("manifest", std::string{});
         if (chipId.empty() || manifestRelative.empty()) return;

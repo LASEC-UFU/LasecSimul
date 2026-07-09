@@ -178,8 +178,18 @@ export class CoreClient {
     await this.request("setSimulationConfig", config);
   }
 
+  /** Forma JSON de "fio" na IPC: `{from:{componentId,pinId}, to:{componentId,pinId}}` -- mesma
+   * forma aninhada do arquivo `.lssubcircuit` e do modelo interno `WebviewWireModel.from`/`.to`
+   * (ver `coreLifecycle.ts`). Antes esta chamada montava uma forma achatada própria
+   * (`componentA`/`pinIdA`/`componentB`/`pinIdB`) -- duas formas de JSON pra mesma entidade lógica
+   * coexistindo no Core (achado de auditoria arquitetural 2026-07-09, D14). Assinatura do método
+   * continua com 4 parâmetros posicionais (sem mudança nos call sites de `coreLifecycle.ts`); só a
+   * forma enviada pela IPC mudou. */
   async connectWire(componentA: string, pinIdA: string, componentB: string, pinIdB: string): Promise<void> {
-    await this.request("connectWire", { componentA, pinIdA, componentB, pinIdB });
+    await this.request("connectWire", {
+      from: { componentId: componentA, pinId: pinIdA },
+      to: { componentId: componentB, pinId: pinIdB },
+    });
   }
 
   /** Inverso de `connectWire` (EX-6.1/EX-6.2) -- remove só ESTE fio no Core, sem precisar
@@ -187,7 +197,10 @@ export class CoreClient {
    * componentes, ver `extension.ts::rebuildCoreFromSchematicState`). Devolve `false` (sem lançar)
    * se o par de pinos já não estava conectado -- idempotente, igual a `removeComponent`. */
   async disconnectWire(componentA: string, pinIdA: string, componentB: string, pinIdB: string): Promise<boolean> {
-    const resp = await this.request("disconnectWire", { componentA, pinIdA, componentB, pinIdB });
+    const resp = await this.request("disconnectWire", {
+      from: { componentId: componentA, pinId: pinIdA },
+      to: { componentId: componentB, pinId: pinIdB },
+    });
     return (resp as { removed?: boolean }).removed === true;
   }
 

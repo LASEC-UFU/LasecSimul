@@ -762,3 +762,127 @@ o padrão manual original) continua passando sem nenhuma alteração no próprio
 necessário, os já existentes já cobrem o comportamento elétrico; `property_definition_test` já
 cobria `Probe`/`Resistor`, que usam exatamente o mesmo mecanismo agora aplicado às outras 23
 classes). Dois builds completos (Debug + Release) limpos, sem warning novo.
+
+---
+
+## 18. Terceira rodada de implementação (2026-07-09) — verifyChecksum real, fábricas restantes, unificação de JSON de fio
+
+Pedido do usuário: "O que ficou de fora, registrado explicitamente: unificação da forma JSON de
+'fio' (cross-cutting com a Extension), verifyChecksum real, e a conversão das ~23 fábricas restantes
+em CoreApplication.cpp para propertyOrDefault". Os 3 itens que a seção 16 tinha deixado
+explicitamente de fora (linhas 672, 682 e o parágrafo de 724-730) foram fechados nesta rodada.
+
+### 18.1 Conversão das ~23 fábricas restantes para `propertyOrDefault`
+
+Todas as fábricas de `registerBuiltinComponents` (`CoreApplication.cpp`) que ainda liam a
+propriedade de criação via `p.property(name, literal)` (sem passar pelo schema/validação, mesma
+classe de risco do D4 original) foram convertidas para `propertyOrDefault(p.properties,
+schemaById(schemas, "..."))`: `passive.capacitor`, `passive.inductor`, `sources.dc_voltage`,
+`active.diode`, `logic.button`, `passive.variable_resistor`/`resistor_dip`/`potentiometer`/
+`electrolytic_capacitor`/`variable_capacitor`/`variable_inductor`, `logic.push`/`switch`/
+`switch_dip`, `switches.relay`/`keypad`, `active.diac`/`scr`/`triac`/`zener`, `active.bjt`/
+`mosfet`/`jfet`, `active.opamp`/`comparator`/`analog_mux`/`volt_regulator`, `outputs.led`/
+`led_matrix`/`dc_motor`/`stepper`/`incandescent_lamp`, `sources.battery`/`rail`/`fixed_volt`/
+`voltage_source`/`current_source`/`controlled_source`/`clock`/`wave_gen`, `meters.ampmeter`/
+`freqmeter`/`logic_analyzer` (`meters.probe`/`passive.resistor` já tinham sido convertidos numa
+rodada anterior). Só 2 leituras continuam com `p.property()` direto (`Diode::thermalVoltage`,
+`WaveGen` além de `freqHz`) — não têm `PropertySchema` dedicado; documentado como gap
+pré-existente separado, fora deste escopo.
+
+Três divergências reais entre o default declarado no schema e o literal que a fábrica de fato usava
+foram achadas e corrigidas durante a conversão (a conversão ingênua teria preservado ou mascarado o
+bug em vez de corrigi-lo):
+- `outputs.dc_motor`/`outputs.incandescent_lamp` registravam metadados com
+  `Resistor::propertySchema()` (default 1000Ω) enquanto a fábrica literal usava 10.0Ω/100.0Ω —
+  criados `dcMotorSchema`/`incandescentLampSchema` dedicados, com o default fisicamente correto,
+  usados tanto pelo registro de metadados quanto por `propertyOrDefault`.
+- `sources.fixed_volt`: `FixedVolt::propertySchema()` declarava `out.defaultValue = false`, mas a
+  fábrica real e todo teste que instancia o componente (5 arquivos) esperavam `true` — corrigido no
+  schema (a fonte com evidência esmagadora do lado correto), não na fábrica.
+- `registerSwitchLike` (`push`/`switch`/`switch_dip`) usava
+  `SimulideSwitch::propertySchemaFor(typeId)` — um SUBCONJUNTO por typeId (2 campos pra
+  switch/switch_dip, 5 pra push) — como fonte pra TODOS os campos do construtor, que sempre precisa
+  dos 5 independente do typeId; `schemaById` caía no fallback (`valueKind` string) pros campos
+  ausentes do subconjunto, e `std::get<double>()` no default lançaria `bad_variant_access`. Corrigido
+  usando `SimulideSwitch::pushPropertySchema()` (o superset completo) como fonte de validação de
+  construção pra todos os 3 typeIds.
+
+### 18.2 `verifyChecksum` real (SHA-256)
+
+Implementado `lasecsimul::Sha256` (`core/include/lasecsimul/Sha256.hpp`) — FIPS 180-4 autocontido,
+sem dependência externa, `update()`/`finalizeHex()`/`reset()`/`hashFile()` estático (lê em blocos de
+64KB, nunca carrega o arquivo inteiro na memória). Verificado contra os vetores oficiais do NIST
+(string vazia, `"abc"`, string de 56 bytes que cruza o padding de bloco) mais dois testes próprios
+(acúmulo entre chamadas pequenas de `update()`, reuso via `reset()`) — `sha256_test`, 5/5.
+
+`PluginLoader::verifyChecksum` deixou de ser um stub `return true;` incondicional:
+```cpp
+bool verifyChecksum(const std::filesystem::path& binaryPath, const std::string& expectedSha256Hex) {
+    if (!looksLikeSha256Hex(expectedSha256Hex)) return true; // opt-in: ausente/placeholder = pula
+    const std::string actual = Sha256::hashFile(binaryPath);
+    if (actual.empty()) return false;
+    return /* comparação case-insensitive */;
+}
+```
+`loadDevicePlugin`/`loadMcuPlugin` ganharam um parâmetro `expectedSha256Hex` (default `{}`, mesma
+semântica opt-in). `GlobalPluginCache::loadLibrary` extrai `library["checksums"]` uma vez e repassa
+pra `loadDeviceEntry`/`loadMcuEntry`, que computam a chave (`std::filesystem::relative(binaryPath,
+libraryDir)`) e buscam o hash esperado antes de chamar o loader — mesmo padrão de "ausência não é
+erro" que o resto do sistema de propriedades já usa.
+
+`devices/library.json`/`mcu-adapters/library.json` tinham chave stale (`build/win-x64/device.dll`,
+não batia com o `nativeEntry` real do manifesto, `build-msvc/device.dll`) e valor placeholder
+(`"PREENCHER_NO_BUILD_SHA256"`) — corrigidos para a chave real e o SHA-256 de verdade dos binários
+compilados localmente.
+
+**Cobertura de teste nova** (`plugin_checksum_test`, 13 asserções) — nenhum teste existente chamava
+`GlobalPluginCache::loadLibrary()` nem passava um hash esperado pra `loadDevicePlugin`/
+`loadMcuPlugin`, então a checagem em si não tinha nenhuma cobertura antes deste teste: hash correto
+aceita, hash errado (1 char adulterado) rejeita com `runtime_error`, string vazia e placeholder não-
+hex pulam a checagem, comparação case-insensitive, `GlobalPluginCache::loadLibrary` contra
+`devices/library.json`/`mcu-adapters/library.json` REAIS de produção (prova que a chave relativa
+computada bate com a chave gravada), e um `library.json` sintético (apontando via `nativeEntry`
+absoluto pro mesmo binário real) com hash corrompido — prova que a rejeição se propaga pelo fio
+completo `loadLibrary` → `checksumFor` → `loadDeviceEntry` → `loadDevicePlugin`, não só a chamada
+direta. Pula graciosamente (`exit 0`) se os binários de `example-blinker`/`espressif-esp32` não
+foram compilados ainda (`npm run build:devices`), mesmo padrão de `plugin_loader_real_dll_test`.
+
+### 18.3 Unificação da forma JSON de "fio" (D14 fechado)
+
+Duas formas de JSON pra mesma entidade lógica coexistiam: IPC ao vivo (`connectWire`/
+`disconnectWire`) usava forma achatada (`componentA`/`pinIdA`/`componentB`/`pinIdB`); manifesto
+`.lssubcircuit` (`wires[]`) usava forma aninhada (`from:{componentId,pinId}`/`to:{...}`) — e o
+próprio Core tinha DOIS parsers independentes pra elas (`registerSubcircuitFromManifestRich` e os
+handlers IPC), não só a Extension.
+
+Escolhida a forma aninhada como única (era o que a seção 15 já recomendava): já é o formato do
+arquivo `.lssubcircuit`, já é o modelo interno de fio da Webview (`WebviewWireModel.from`/`.to`,
+`coreLifecycle.ts`) e já é o que `.spec/lasecsimul-subcircuits.spec` documenta — eliminar a forma
+achatada, não escolher "a melhor" das duas do zero.
+
+- `CoreApplication.cpp`: novo `parseWireEndpoints(wireJson, context)` (ao lado de
+  `requiredString`/`requiredArray`) extrai `{fromComponentId, fromPinId, toComponentId, toPinId}` da
+  forma aninhada; usado tanto pelo parser de `.lssubcircuit` quanto pelos handlers IPC
+  `connectWire`/`disconnectWire` (que antes liam `payload.value("componentA", ...)` etc. diretamente).
+- `extension/src/ipc/CoreClient.ts`: `connectWire`/`disconnectWire` mantêm a MESMA assinatura
+  TypeScript (4 parâmetros posicionais) — só o payload que montam internamente mudou de
+  `{componentA, pinIdA, componentB, pinIdB}` para `{from:{componentId,pinId}, to:{componentId,
+  pinId}}`. Como `coreLifecycle.ts` já chamava esses métodos com `wire.from.pinId`/`wire.to.pinId`
+  desmembrados, os 3 call sites (`pushWireToCoreNow`, `pushRemoveWireToCore`,
+  `rebuildCoreFromSchematicStateNow`) não precisaram de nenhuma mudança.
+- `core/test/core/CoreBootstrapTest.cpp`: os 7 `send("connectWire", {...})` que montavam a forma
+  achatada diretamente (teste de IPC real, não passa pelo `SimulationSession` C++) migrados pra
+  forma aninhada.
+
+Nenhuma forma de compatibilidade dupla foi mantida — o projeto está em fase beta (autorização
+explícita do usuário em rodada anterior desta mesma sessão), então a forma achatada foi removida por
+completo, não deprecada.
+
+### 18.4 Verificação
+
+`ctest -C Debug`/`-C Release`: **34→36/36** (+2: `sha256`, `plugin_checksum`; nenhum teste existente
+precisou de asserção nova além dos 7 call sites de `CoreBootstrapTest.cpp` já contados dentro do
+teste `core_bootstrap`, que também exercita `parseWireEndpoints` via IPC real). Extension: `tsc`
+limpo (`npm run compile`, main + webview) e `npm test` — **15 suítes, 175 asserções, 0 falhas**,
+incluindo `symbolAuthoring`/`simulideSceneTranslator` que dependem indiretamente do mesmo
+`WebviewWireModel.from`/`.to` agora espelhado 1:1 pela IPC.

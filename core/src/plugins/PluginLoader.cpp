@@ -1,5 +1,8 @@
 #include "PluginLoader.hpp"
+#include <algorithm>
+#include <cctype>
 #include <stdexcept>
+#include "lasecsimul/Sha256.hpp"
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -19,10 +22,25 @@ void* loadNativeLibrary(const std::filesystem::path& path) { return dlopen(path.
 void* resolveSymbol(void* handle, const char* name) { return dlsym(handle, name); }
 #endif
 
-// Estrutura inicial: recalculo de SHA-256 do binario e comparacao com o hash assinado em
-// library.json (defesa em profundidade, ver .spec/lasecsimul-native-devices.spec, secao 12 item 1)
-// fica para a implementacao completa — aqui so o ponto de entrada esperado.
-bool verifyChecksum(const std::filesystem::path&) { return true; }
+bool looksLikeSha256Hex(const std::string& value) {
+    if (value.size() != 64) return false;
+    return std::all_of(value.begin(), value.end(), [](unsigned char c) { return std::isxdigit(c) != 0; });
+}
+
+// `expectedSha256Hex` vazio ou que não parece um SHA-256 de verdade (ex: o placeholder literal
+// "PREENCHER_NO_BUILD_SHA256" que ainda sobra em alguns library.json não populados -- ver achado
+// de auditoria arquitetural 2026-07-09) pula a checagem em silêncio: checksum é opt-in, ausência
+// não é erro. Só quando um hash de 64 hex chars foi de fato declarado é que a comparação vira
+// obrigatória -- essa é a "defesa em profundidade" real (.spec/lasecsimul-native-devices.spec,
+// seção 12 item 1), não confiando cegamente na decisão de confiança que a Extension já tomou.
+bool verifyChecksum(const std::filesystem::path& binaryPath, const std::string& expectedSha256Hex) {
+    if (!looksLikeSha256Hex(expectedSha256Hex)) return true;
+    const std::string actual = lasecsimul::Sha256::hashFile(binaryPath);
+    if (actual.empty()) return false; // arquivo não abriu -- LoadLibrary/dlopen vai falhar de qualquer forma
+    return std::equal(actual.begin(), actual.end(), expectedSha256Hex.begin(), expectedSha256Hex.end(),
+                       [](char a, char b) { return std::tolower(static_cast<unsigned char>(a)) ==
+                                                    std::tolower(static_cast<unsigned char>(b)); });
+}
 
 } // namespace
 
@@ -70,8 +88,9 @@ void PluginLoader::scanDirectory(const std::filesystem::path& libraryJsonPath) {
     (void)libraryJsonPath;
 }
 
-std::shared_ptr<PluginModule> PluginLoader::loadDevicePlugin(const std::filesystem::path& binaryPath) {
-    if (!verifyChecksum(binaryPath)) {
+std::shared_ptr<PluginModule> PluginLoader::loadDevicePlugin(const std::filesystem::path& binaryPath,
+                                                               const std::string& expectedSha256Hex) {
+    if (!verifyChecksum(binaryPath, expectedSha256Hex)) {
         throw std::runtime_error("Checksum nao corresponde ao manifesto: " + binaryPath.string());
     }
 
@@ -84,8 +103,9 @@ std::shared_ptr<PluginModule> PluginLoader::loadDevicePlugin(const std::filesyst
     return createDeviceModuleFromExports(handle, getVTable, binaryPath);
 }
 
-std::shared_ptr<PluginModule> PluginLoader::loadMcuPlugin(const std::filesystem::path& binaryPath) {
-    if (!verifyChecksum(binaryPath)) {
+std::shared_ptr<PluginModule> PluginLoader::loadMcuPlugin(const std::filesystem::path& binaryPath,
+                                                            const std::string& expectedSha256Hex) {
+    if (!verifyChecksum(binaryPath, expectedSha256Hex)) {
         throw std::runtime_error("Checksum nao corresponde ao manifesto: " + binaryPath.string());
     }
 

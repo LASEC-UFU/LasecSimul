@@ -1637,6 +1637,37 @@ Teste dedicado (Windows-only — POSIX não contém SEH, ver o próprio arquivo)
 sintética que desreferencia um ponteiro nulo de propósito, provando que o processo do Core
 sobrevive tanto a uma chamada fria quanto a uma quente crashando.
 
+### 24.4 `verifyChecksum` real (SHA-256) — item 1 da seção 12 deixa de ser stub
+
+O item 1 da seção 12 ("Binário com hash divergente é rejeitado antes de `LoadLibrary`") descrevia o
+desenho pretendido desde a v0.1 deste spec, mas `PluginLoader::verifyChecksum` era um stub
+(`return true;` incondicional) até esta rodada — o texto da seção 12 já estava correto como
+especificação, só não como implementação. Fechado com `lasecsimul::Sha256`
+(`core/include/lasecsimul/Sha256.hpp`, FIPS 180-4 autocontido, testado contra vetores oficiais do
+NIST em `sha256_test`) mais o fio completo `library.json["checksums"]` →
+`GlobalPluginCache::loadDeviceEntry`/`loadMcuEntry` → `PluginLoader::loadDevicePlugin`/
+`loadMcuPlugin(path, expectedSha256Hex)` → `verifyChecksum`. Checksum continua opt-in: ausente ou
+placeholder não-hex (ex.: `"PREENCHER_NO_BUILD_SHA256"`) pula a checagem sem erro; só um hash de 64
+hex chars declarado e divergente lança `std::runtime_error` (comparação case-insensitive). Cobertura
+completa (hash correto/errado/ausente/placeholder, `loadLibrary` contra `devices/library.json`/
+`mcu-adapters/library.json` reais, e um `library.json` sintético com hash corrompido apontando pro
+mesmo binário real) em `plugin_checksum_test` — detalhe completo em §18.2 de
+`docs/25-auditoria-arquitetural-core-2026-07-09.md`.
+
+### 24.5 Unificação da forma JSON de "fio" (D14)
+
+IPC ao vivo (`connectWire`/`disconnectWire`) usava uma forma achatada própria
+(`componentA`/`pinIdA`/`componentB`/`pinIdB`), diferente da forma aninhada
+(`from:{componentId,pinId}`/`to:{...}`) que o manifesto `.lssubcircuit` (`wires[]`) já usava — o
+próprio Core tinha dois parsers pra mesma entidade lógica, não só a Extension. Unificado na forma
+aninhada (já era o formato do arquivo, do `WebviewWireModel` da Webview e do que
+`.spec/lasecsimul-subcircuits.spec` documenta): `CoreApplication.cpp` ganhou `parseWireEndpoints`
+compartilhado entre o parser de `.lssubcircuit` e os handlers IPC; `CoreClient.ts` passou a montar
+`{from:{componentId,pinId},to:{componentId,pinId}}` (mesma assinatura TypeScript de 4 parâmetros
+posicionais, só o payload IPC mudou — zero call site de `coreLifecycle.ts` precisou mudar). Forma
+achatada removida por completo, não deprecada (projeto em fase beta) — detalhe completo em §18.3 de
+`docs/25-auditoria-arquitetural-core-2026-07-09.md`.
+
 ### 23.2 Sensores resistivos: `sensors.*` (`devices/simulide-sensors/`) é agora fonte única
 
 `passive.ldr`/`passive.thermistor`/`passive.rtd`/`passive.force_strain_gauge` (built-ins,

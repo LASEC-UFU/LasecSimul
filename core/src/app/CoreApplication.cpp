@@ -964,6 +964,35 @@ const nlohmann::json& requiredArray(const nlohmann::json& object, const char* ke
     return object[key];
 }
 
+struct WireEndpointsJson {
+    std::string fromComponentId;
+    std::string fromPinId;
+    std::string toComponentId;
+    std::string toPinId;
+};
+
+/** Forma única de "fio" em JSON -- `{from:{componentId,pinId}, to:{componentId,pinId}}` -- usada
+ * tanto pelo manifesto `.lssubcircuit` (`wires[]`) quanto pelos verbos IPC ao vivo
+ * `connectWire`/`disconnectWire`. Antes existiam DUAS formas (achado de auditoria arquitetural
+ * 2026-07-09, D14): a IPC ao vivo usava uma forma achatada própria
+ * (`componentA`/`pinIdA`/`componentB`/`pinIdB`) enquanto o arquivo já usava esta forma aninhada --
+ * mesma entidade lógica, dois parsers. Unificado nesta forma (não a achatada) porque já era o
+ * formato do arquivo, já é o modelo interno de fio da Webview (`WebviewWireModel.from`/`.to`) e já
+ * é o que `.spec/lasecsimul-subcircuits.spec` documenta -- eliminar a segunda forma, não escolher
+ * a "melhor" das duas do zero. */
+WireEndpointsJson parseWireEndpoints(const nlohmann::json& wireJson, const std::string& context) {
+    if (!wireJson.contains("from") || !wireJson["from"].is_object() || !wireJson.contains("to") ||
+        !wireJson["to"].is_object()) {
+        throw std::runtime_error(context + " sem endpoints from/to objetos");
+    }
+    WireEndpointsJson endpoints;
+    endpoints.fromComponentId = requiredString(wireJson["from"], "componentId", context + ".from");
+    endpoints.fromPinId = requiredString(wireJson["from"], "pinId", context + ".from");
+    endpoints.toComponentId = requiredString(wireJson["to"], "componentId", context + ".to");
+    endpoints.toPinId = requiredString(wireJson["to"], "pinId", context + ".to");
+    return endpoints;
+}
+
 RegisteredSubcircuitInfo registerSubcircuitFromManifestRich(const std::filesystem::path& manifestPath,
                                                             registry::SubcircuitRegistry& subcircuits,
                                                             const std::string& typeIdOverride = {},
@@ -1026,14 +1055,12 @@ RegisteredSubcircuitInfo registerSubcircuitFromManifestRich(const std::filesyste
 
     for (const auto& wireJson : wiresJson) {
         if (!wireJson.is_object()) throw std::runtime_error("wires[] deve conter objetos em " + sourcePath);
-        if (!wireJson.contains("from") || !wireJson["from"].is_object() || !wireJson.contains("to") || !wireJson["to"].is_object()) {
-            throw std::runtime_error("wire sem endpoints from/to objetos em " + sourcePath);
-        }
+        const WireEndpointsJson endpoints = parseWireEndpoints(wireJson, "wire em " + sourcePath);
         registry::SubcircuitWireDef wire;
-        wire.fromComponentId = requiredString(wireJson["from"], "componentId", "wire.from");
-        wire.fromPinId = requiredString(wireJson["from"], "pinId", "wire.from");
-        wire.toComponentId = requiredString(wireJson["to"], "componentId", "wire.to");
-        wire.toPinId = requiredString(wireJson["to"], "pinId", "wire.to");
+        wire.fromComponentId = endpoints.fromComponentId;
+        wire.fromPinId = endpoints.fromPinId;
+        wire.toComponentId = endpoints.toComponentId;
+        wire.toPinId = endpoints.toPinId;
         if (!componentIds.contains(wire.fromComponentId)) {
             throw std::runtime_error("wire referencia componente inexistente: " + wire.fromComponentId);
         }
@@ -1621,10 +1648,10 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
         try {
             const nlohmann::json payload =
                 msg.payloadJson.empty() ? nlohmann::json::object() : nlohmann::json::parse(msg.payloadJson);
-            const uint32_t componentA = static_cast<uint32_t>(std::stoul(payload.value("componentA", std::string{"0"})));
-            const uint32_t componentB = static_cast<uint32_t>(std::stoul(payload.value("componentB", std::string{"0"})));
-            session.connectWire(componentA, payload.value("pinIdA", std::string{}), componentB,
-                                 payload.value("pinIdB", std::string{}));
+            const WireEndpointsJson endpoints = parseWireEndpoints(payload, "connectWire");
+            const uint32_t componentA = static_cast<uint32_t>(std::stoul(endpoints.fromComponentId));
+            const uint32_t componentB = static_cast<uint32_t>(std::stoul(endpoints.toComponentId));
+            session.connectWire(componentA, endpoints.fromPinId, componentB, endpoints.toPinId);
             resp.ok = true;
         } catch (const std::exception& e) {
             resp.ok = false;
@@ -1639,10 +1666,10 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
         try {
             const nlohmann::json payload =
                 msg.payloadJson.empty() ? nlohmann::json::object() : nlohmann::json::parse(msg.payloadJson);
-            const uint32_t componentA = static_cast<uint32_t>(std::stoul(payload.value("componentA", std::string{"0"})));
-            const uint32_t componentB = static_cast<uint32_t>(std::stoul(payload.value("componentB", std::string{"0"})));
-            const bool removed = session.disconnectWire(componentA, payload.value("pinIdA", std::string{}), componentB,
-                                                          payload.value("pinIdB", std::string{}));
+            const WireEndpointsJson endpoints = parseWireEndpoints(payload, "disconnectWire");
+            const uint32_t componentA = static_cast<uint32_t>(std::stoul(endpoints.fromComponentId));
+            const uint32_t componentB = static_cast<uint32_t>(std::stoul(endpoints.toComponentId));
+            const bool removed = session.disconnectWire(componentA, endpoints.fromPinId, componentB, endpoints.toPinId);
             resp.ok = true;
             resp.payloadJson = nlohmann::json{{"removed", removed}}.dump();
         } catch (const std::exception& e) {

@@ -275,6 +275,6 @@
     }
   ],
   "checksums": {
-    "example-blinker/build/win-x64/device.dll": "PREENCHER_NO_BUILD_SHA256"
+    "example-blinker/build-msvc/device.dll": "f5f479cc7bcef6ce1c5d191159f71178d1515f97fb1928f7a835847f139e79d7"
   }
 }

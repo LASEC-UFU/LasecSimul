@@ -256,6 +256,12 @@ target_include_directories(mna_solver_test PRIVATE include src)
 target_link_libraries(mna_solver_test PRIVATE Eigen3::Eigen)
 add_test(NAME mna_solver COMMAND mna_solver_test)
 
+# SHA-256 autocontido (achado de auditoria arquitetural 2026-07-09: verifyChecksum() de
+# PluginLoader era um stub sempre-true; contra vetores oficiais NIST antes de confiar nele).
+add_executable(sha256_test test/sha256_test.cpp)
+target_include_directories(sha256_test PRIVATE include src)
+add_test(NAME sha256 COMMAND sha256_test)
+
 # Teste dos passivos built-in (Agente 08)
 add_executable(passive_components_test
     ../test/core/components/PassiveComponentsTest.cpp
@@ -332,6 +338,27 @@ if(NOT WIN32)
     target_link_libraries(plugin_loader_real_dll_test PRIVATE dl)
 endif()
 add_test(NAME plugin_loader_real_dll COMMAND plugin_loader_real_dll_test)
+
+# verifyChecksum real (SHA-256) contra os binários REAIS de example-blinker/espressif-esp32 e
+# contra devices/library.json + mcu-adapters/library.json de produção -- achado de auditoria
+# arquitetural 2026-07-09: nenhum teste existente chamava GlobalPluginCache::loadLibrary() nem
+# passava um hash esperado pra loadDevicePlugin/loadMcuPlugin, então essa cobertura não existia.
+add_executable(plugin_checksum_test
+    test/core/plugins/PluginChecksumTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(plugin_checksum_test PRIVATE include src)
+target_link_libraries(plugin_checksum_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(plugin_checksum_test PRIVATE
+    EXAMPLE_BLINKER_MSVC_DLL_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/example-blinker/build-msvc/device.dll"
+    ESP32_ADAPTER_MSVC_DLL_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../mcu-adapters/espressif-esp32/build-msvc/adapter.dll"
+    REAL_DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
+    REAL_MCU_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../mcu-adapters/library.json"
+)
+if(NOT WIN32)
+    target_link_libraries(plugin_checksum_test PRIVATE dl)
+endif()
+add_test(NAME plugin_checksum COMMAND plugin_checksum_test)
 
 add_executable(plugin_runtime_test
     test/core/plugins/PluginRuntimeTest.cpp

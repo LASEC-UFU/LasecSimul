@@ -8,6 +8,6 @@
     { "chipId": "espressif.esp32", "manifest": "espressif-esp32/mcu.lsdevice" }
   ],
   "checksums": {
-    "espressif-esp32/build/win-x64/adapter.dll": "PREENCHER_NO_BUILD_SHA256"
+    "espressif-esp32/build-msvc/adapter.dll": "d3e05101b972a88f53ec44a2583f6f0c8bbd5759aac56afaf38d0e0e6299e8ee"
   }
 }
