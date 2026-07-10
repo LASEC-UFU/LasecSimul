@@ -196,12 +196,16 @@ Sem ferramenta nova — reaproveita o canvas do `SchematicEditorPanel` que já e
    seção 21.3 do spec de plugins nativos).
 5. O novo subcircuito aparece na paleta de componentes da mesma forma que um built-in ou plugin — ver seção 7.
 
-**Revogação em 2026-07-09**: a UI não oferece mais editor manual de símbolo/package. Qualquer menção
-abaixo a `lasecsimul.palette.editSymbol`, `symbolAuthoring.ts`, "Editar Símbolo Visual", "Salvar
-Símbolo" ou sessão de autoria é histórico do fluxo removido. O contrato vigente é: o símbolo visual de
-subcircuito/dispositivo vem do `package`/`logicSymbolPackage` persistido no `.lssubcircuit`/`.lsdevice`;
-o esquemático só carrega e renderiza esses dados. O código mantido para subcircuitos lê `components[]`,
-`wires[]`, `visual` e `boardVisual` para instância/overlay, sem editar `package`.
+**Revogação em 2026-07-09**: a UI não oferece mais um EDITOR SEPARADO/modo dedicado de símbolo/package
+(`lasecsimul.palette.editSymbol`, `symbolAuthoring.ts`, "Editar Símbolo Visual", "Salvar Símbolo",
+sessão de autoria própria) -- essa decisão continua de pé, nunca revertida. Qualquer menção abaixo a
+esses nomes é histórico do fluxo removido. **Atualização 2026-07-10 (seção 17)**: dentro da MESMA
+sessão "Abrir Subcircuito" (seção 16, sem editor/modo novo nenhum), passou a ser possível colocar
+componentes normais (`other.package`/`other.package_pin`/`graphics.image`) que representam
+visualmente o `package`/ícone e são compilados de volta ao salvar -- não é o editor revogado voltando,
+é o `package` deixando de ser 100% somente-leitura, editado com as mesmas ferramentas do circuito
+interno. Pra `.lsdevice` (fora de subcircuito) e pra `logicSymbolPackage`, a revogação permanece
+integral: continuam somente-leitura, sem nenhum caminho de edição.
 
 **Status em 2026-06-29** (revisado de novo no mesmo dia — depois de fechar o editor de `package`
 sozinho, o usuário pediu pra ir além e cobrir o que SimulIDE chama de "Open Subcircuit": editar o
@@ -851,3 +855,211 @@ neste ambiente pra confirmar interativamente no VSCode real; recomenda-se: abrir
 editar algo, tentar "Voltar ao Circuito Principal" e confirmar que as 3 opções aparecem: Cancelar
 mantém a sessão, Descartar Alterações volta sem gravar, Salvar grava e reabrir confirma a mudança
 persistida.
+
+## 17. Autoria visual do ícone (Figura) e do Package do SimulIDE, DENTRO da sessão "Abrir
+Subcircuito" (2026-07-10)
+
+**Decisão explícita**: isto NÃO é a "Revogação em 2026-07-09" (fim da seção 4) sendo desfeita, nem um
+retorno ao antigo `symbolAuthoring.ts`/`symbolCommands.ts` (removido no commit `6c9e185`, que tinha
+seu PRÓPRIO modo/toolbar de autoria, separado do circuito interno). O símbolo visual continua sem
+nenhum editor dedicado -- o que existe agora é a possibilidade de colocar, na MESMA cena da seção 16
+(mesmo canvas, mesmos fios/túneis/seleção/zoom/undo-redo/salvamento), componentes NORMAIS que
+representam o `package`/ícone do subcircuito, compilados de volta ao salvar. Nenhum código do
+subsistema removido foi restaurado, revertido ou copiado -- construído do zero sobre a arquitetura
+atual (`extension/src/catalog/subcircuitPackageAuthoring.ts`, novo módulo puro, testável sem DOM,
+`subcircuitPackageAuthoring.test.ts`).
+
+### 17.1 O conceito de `Package` do SimulIDE real
+
+Investigado no código-fonte real (`C:\SourceCode\simulide_2\src`): o "Package" do SimulIDE não é um
+arquivo/objeto separado do subcircuito -- é a classe `SubPackage`
+(`src/components/other/subpackage.h`/`.cpp`), um `Chip` normal que desenha seu próprio corpo (retângulo
++ fundo opcional) e possui uma lista de `PackagePin` (`packagepin.h`) posicionados em coordenadas
+LOCAIS relativas à origem do próprio Package. Pinos são adicionados por manipulação direta no corpo
+(Shift+hover perto da borda mostra um pino-fantasma encaixado na grade; clicar cria um `PackagePin`
+real e abre um diálogo pra id/label/ângulo). `SubCircuit` (`subcircuit.h`/`.cpp`) NÃO possui o
+`SubPackage` como objeto embutido -- ele parseia um bloco `.package`/`<packageB>` UMA VEZ na
+construção, e cada `PackagePin` daquela lista vira um `Tunnel` dentro do circuito interno, casado POR
+STRING DE ID (`tunnel->setTunnelUid(id)`, `subcircuit.cpp` ~305-345). **Não existe ícone separado**:
+`SubPackage::paint()` desenha o mesmo corpo em qualquer contexto -- o que aparece expandido é
+EXATAMENTE o que aparece no circuito pai, nunca uma imagem "de resumo" à parte.
+
+Esta feature replica esse conceito com o vocabulário já existente do LasecSimul (`PackageDescriptor`/
+`PackagePin`, `model.ts`) em vez de inventar um formato paralelo:
+
+- **`other.package`** (typeId já existente no catálogo, antes um "código morto" render-only da era
+  `symbolAuthoring.ts`) = o corpo do `SubPackage` -- largura/altura/borda/cor de fundo, um objeto por
+  sessão.
+- **`other.package_pin`** (idem) = um `PackagePin` -- posição/ângulo (via `component.rotation`, os
+  mesmos 4 cardeais que qualquer outro componente já usa pra girar -- SEM campo novo, mesma convenção
+  documentada em `componentSymbols.ts`), comprimento, identificador (`properties.pinId`).
+- O RÓTULO de cada pino é um `graphics.text` companheiro, linkado por
+  `properties.linkedPinComponentId` -- infraestrutura que JÁ EXISTIA viva (não desta feature; ver
+  `main.ts::componentsToAddForTypeId`/`dragSelectionWithLinkedPinLabels`, arrastar um `other.
+  package_pin` da paleta já criava esse rótulo companheiro antes desta sessão sequer materializar um
+  Package existente).
+
+### 17.2 A Figura/ícone = a MESMA imagem que `package.background` já suportava
+
+`PackageDescriptor.background` (`model.ts`) já existia com `{kind: "image", data, mime}` -- o
+"ícone"/corpo visual que aparece quando o subcircuito é colocado no circuito pai (ex:
+`esp32_devkitc_v4.lssubcircuit`, uma foto real da placa). Antes desta feature, ISSO só podia ser
+escrito à mão no JSON -- não havia jeito de trocar visualmente. Em vez de inventar um objeto novo, a
+Figura reaproveita o typeId `graphics.image` JÁ EXISTENTE no catálogo geral (usado em qualquer
+esquemático pra anotação visual) -- marcado, só durante a sessão, por um campo novo
+`WebviewComponentModel.packageIconRole?: true` (mesmo estilo "marcador de papel especial" que
+`subcircuitRef` já usa; nunca serializado no `.lssubcircuit` -- a fonte de verdade persistida
+continua sendo `package.background`).
+
+Trancada na mesma posição/tamanho do `other.package` (mesma decisão de design de `Estágio 3` do
+plano de implementação): o que é compilado sempre esticado pro `width×height` do Package, então o
+que aparece na cena de autoria precisa bater com isso, sem enganar visualmente.
+
+Como PRÉ-REQUISITO desta feature (Estágios 1/2 do plano), `graphics.image`:
+
+1. Ganhou `width`/`height` como propriedades reais (`propertyDrivenBox`, `componentSymbols.ts`) --
+   antes tinha caixa fixa 80x80, sem jeito de redimensionar.
+2. Passou a RENDERIZAR a imagem de verdade (`<image href="data:...">`) quando
+   `properties.imageData`/`imageMime` estão presentes -- antes só desenhava um glifo decorativo
+   "foto" fixo, em qualquer instância, independente do que fosse escolhido.
+3. O editor de propriedade `filePath` (`main.ts`), antes hard-coded só pro caso único
+   `subcircuits.external.subcircuitPath`, foi generalizado: qualquer `propertySchema` com
+   `editor: "filePath"` que NÃO seja esse campo específico grava direto em
+   `properties[propertyKey]` via a nova mensagem `requestChooseFile` (`extension.ts::
+   chooseFilePropertyCommand`) -- o caso especial de `subcircuitPath` continua 100% intocado.
+
+### 17.3 Vínculo pino↔túnel: identificador estável, nunca o nome editável
+
+Diferente da convenção antiga de `interface[].internalTunnel` (nome do túnel, casado por STRING --
+quebra se o túnel for renomeado, nunca detectado/avisado), esta feature adiciona
+`interface[].internalTunnelId?: string`, o `id` ESTÁVEL do componente-túnel (o mesmo id usado em
+`wires[].from/to.componentId`, nunca muda com rename). Contrato:
+
+- `internalTunnelId` é a fonte de verdade do vínculo durante a autoria (`other.package_pin.
+  properties.tunnelComponentId`, setado via menu de contexto **"Vincular a túnel..."** -- lista os
+  túneis presentes na cena, com um "Desvincular túnel" quando já há vínculo).
+- `internalTunnel` (nome) continua existindo e sendo OBRIGATÓRIO pro Core
+  (`CoreApplication.cpp:1078-1106`/`SimulationSession.cpp:300-311` -- confirmado no código real: sem
+  esse campo, ou apontando pra um nome que não existe, o Core REJEITA o arquivo inteiro com
+  `throw std::runtime_error`) -- mas passa a ser RE-DERIVADO automaticamente do nome ATUAL do túnel
+  a cada compilação (`compilePackageAuthoringComponents`), nunca mais escrito à mão. Renomear um
+  túnel dentro da sessão e salvar já atualiza `internalTunnel` sozinho -- o bug que motivou a
+  mudança.
+- **Pino sem túnel associado**: excluído do `package.pins[]`/`interface[]` compilados (o Core rejeita
+  um `internalTunnel` vazio/inexistente -- não dá pra gravar um pino "órfão" de qualquer jeito),
+  warning não-bloqueante, salva normalmente.
+- **Vários pinos (com `pinId` DIFERENTE) apontando pro mesmo túnel**: PERMITIDO, nunca erro --
+  padrão comum em hardware real (ex: `esp32_devkitc_v4.lssubcircuit` tem `GND1`/`GND2`/`GND3`, 3
+  pinos físicos na placa, todos na mesma malha de terra interna). **Correção 2026-07-10 (bug real de
+  produção)**: a versão original desta feature tratava isso como erro bloqueante, por suposição
+  errada de que só podia significar engano do usuário -- bloqueava salvar um arquivo já válido no
+  mundo real. Confirmado contra `CoreApplication.cpp`: o Core só rejeita `pinId` duplicado
+  (`interfacePinIds.insert(...)`), NUNCA verifica se dois `interface[]` diferentes repetem o mesmo
+  `internalTunnel`. Removida a checagem; o único jeito de "aliasar 2 pinos externos na mesma rede"
+  continua existindo (é exatamente o que múltiplos GND fazem, de propósito), só deixou de ser tratado
+  como engano por padrão.
+- **`pinId` duplicado entre pinos**, **mais de um `other.package` na cena**, **mais de uma Figura
+  marcada como ícone** (ex: colar por engano -- `cloneComponent`, `main.ts`, já limpa
+  `packageIconRole` de toda cópia, mas um usuário poderia arrastar um segundo `graphics.image` e
+  marcar manualmente por engano se algum dia existir essa opção -- por ora só a seed cria um):
+  erro BLOQUEANTE.
+
+### 17.4 Validação ANTES de gravar, nunca depois
+
+Achado durante o design (não um bug já em produção, uma armadilha que esta feature introduziria se
+não fosse tratada): antes desta mudança, `writeSubcircuitEditingSessionBack` gravava
+`fs.writeFileSync` incondicionalmente e só DEPOIS validava no Core (`registerAdhocSubcircuitDefinition`,
+falha só virava um toast -- o arquivo já estava em disco). Com um compilador que pode produzir
+`package`/`interface` genuinamente inválidos (pinId duplicado, vínculo duplicado), esse padrão
+gravaria um `.lssubcircuit` inconsistente no disco. Corrigido: `compilePackageAuthoringComponents`
+roda e é validado em MEMÓRIA antes de qualquer `fs.writeFileSync`; erros bloqueantes abortam o
+salvamento (`writeSubcircuitEditingSessionBack` devolve `false`), e
+`closeSubcircuitEditorCommand` NÃO desempilha a sessão nesse caso -- o usuário permanece na sessão de
+edição, corrige, tenta salvar de novo. Nenhuma escrita parcial/inconsistente é possível.
+
+### 17.5 Compatibilidade com arquivos antigos
+
+`seedPackageAuthoringComponents` NUNCA sintetiza um `other.package` do zero quando `manifest.package`
+está ausente ou não sanitiza -- um arquivo antigo sem Package não ganha um gratuitamente só por ser
+aberto (evita diff espúrio em todo `.lssubcircuit` existente na primeira vez que alguém abre e fecha
+sem editar nada). Migração de `interface[].internalTunnel` (nome) pra `internalTunnelId` (id) é por
+melhor esforço na abertura (casa o nome salvo contra os túneis carregados no circuito interno) --
+nunca falha a abertura se não achar; só fica com aquele pino sem vínculo (warning), até o usuário
+vincular manualmente. Ao salvar, o arquivo ganha `internalTunnelId` daí em diante -- migração forward
+natural, sem comando dedicado. `compilePackageAuthoringComponents` também distingue explicitamente
+"sessão nunca tocou em autoria de Package" (cena sem nenhum `other.package`/`other.package_pin`/
+ícone -- `package`/`interface` do manifesto ficam 100% intocados) de "sessão removeu o Package
+deliberadamente" (existiam componentes de autoria antes, cena atual tem zero `other.package` --
+`package`/`interface` são apagados do manifesto).
+
+### 17.6 O que NÃO mudou
+
+Mesma cena, mesmos componentes elétricos, mesmo sistema de fios/túneis/seleção/zoom/undo-redo/cópia/
+salvamento da seção 16 -- os componentes de autoria (`other.package`/`other.package_pin`/o
+`graphics.image` marcado) são só MAIS componentes na lista `state.schematicState.components`, com
+`pinCount: 0` (nunca vão pro Core, `coreLifecycle.ts::shouldSyncComponentToCore`), sujeitos às MESMAS
+ferramentas genéricas (arrastar, rotacionar, copiar, desfazer) sem nenhum código dedicado extra pra
+isso. A renderização do subcircuito no circuito PAI (`registeredSources.ts`/`sanitizePackage`) não
+mudou -- lê `package`/`interface` do mesmo arquivo de sempre; só precisa que o compilador produza
+esses campos no formato exato que ela já esperava.
+
+### 17.7 Verificação
+
+Compilação limpa (`tsc` main + webview + test) e suíte de testes completa (169 testes) sem regressão.
+Testes cobrem: seed materializa Package/pinos/rótulos/ícone corretamente a partir de um manifesto
+real; seed NÃO sintetiza nada sem `manifest.package`; seed converte corretamente do espaço nativo
+pro espaço exibido quando `schematicWidth`/`schematicHeight` existem (bug real corrigido, ver seção
+18); round-trip seed→compile preserva dimensões/pinos/interface; renomear um túnel entre seed e
+compile é refletido no `internalTunnel` re-derivado (o bug-alvo); pino sem túnel vira warning +
+exclusão (nunca gravado órfão); vários pinos DIFERENTES no mesmo túnel são PERMITIDOS (bug real
+corrigido, ver acima -- cenário de teste é literalmente GND1/GND2/GND3 do ESP32 DevKitC);
+`pinId` duplicado/Package duplicado/ícone duplicado continuam erros bloqueantes; cena sem autoria não
+toca `package`/`interface`; `isPackageAuthoringComponent` distingue rótulo linkado (meta) de anotação
+solta (real, preservada); ângulo não-cardeal escrito à mão é ajustado com aviso, não quebra. Sem GUI
+disponível neste ambiente pra confirmar drag visual de pino, menu de contexto "Vincular a túnel..."
+ou copiar/colar pela UI real -- recomenda-se verificação manual no VSCode real: abrir um subcircuito
+com `package.background` de imagem (ex: `esp32_devkitc_v4.lssubcircuit`), confirmar que a Figura
+aparece na cena, mover um pino, vincular/desvincular um túnel pelo menu de contexto, salvar, reabrir
+e confirmar que tudo persistiu; confirmar que o corpo/pinos/ícone aparecem no circuito PAI exatamente
+como editado.
+
+## 18. Bugs reais encontrados testando a feature da seção 17 no ESP32 DevKitC (2026-07-10)
+
+Achados de teste manual real (usuário abriu `esp32_devkitc_v4.lssubcircuit` pra editar), cada um
+corrigido no mesmo dia:
+
+1. **Package nascia com o tamanho NATIVO em vez do exibido**: `seedPackageAuthoringComponents` usava
+   `packageDescriptor.width/height` (espaço nativo, pixels da foto -- 308x601 no ESP32 DevKitC) direto
+   pro `other.package`, ignorando `schematicWidth`/`schematicHeight` (88x176, o que de fato aparece no
+   esquemático). Corrigido: seed agora calcula `scaleX`/`scaleY` (mesma fórmula de
+   `resolvePackageLayout`, `componentSymbols.ts:221-222`) e aplica no tamanho do corpo E na
+   posição/comprimento de cada pino.
+2. **Fios "flutuantes" pré-existentes no arquivo**: nada a ver com a feature da seção 17 -- o próprio
+   `esp32_devkitc_v4.lssubcircuit` tinha `wires[]` referenciando `pinId` desatualizado (`"p1"`/`"p2"`
+   nos resistores de pull-up, quando o catálogo atual usa `"pin-1"`/`"pin-2"`) e 2 fios duplicados/
+   mortos usando um `pinId` (`"out"`) que nunca existiu nos trilhos de tensão -- por baixo já havia uma
+   cópia correta de cada um. Corrigido diretamente no arquivo (não é bug de código, é dado
+   inconsistente herdado).
+3. **Pino `RST` do MCU não conectava**: o Core (`McuComponent::stampResetPin`) e o adaptador nativo
+   (`Esp32Adapter.cpp`, `LSDN_MODULE_RESET` no índice 42) já tinham suporte COMPLETO e funcional pra um
+   pino de reset -- só o `mcu-adapters/espressif-esp32/mcu.lsdevice`'s `pinMap` JSON (o que a Extension
+   lê pra saber quais pinos desenhar/deixar conectar) nunca listava `"RST"`. Corrigido: adicionado
+   `"RST": {"moduleKind": "Reset", "moduleIndex": 0}` como a 43ª entrada (bate com o índice 42 do
+   adaptador nativo). O circuito de reset do DevKitC (`button_en`/`pullup_en`, já existente mas sem
+   nunca alcançar o chip) foi ligado ao novo pino `mcu1.RST`.
+4. **Vínculo pino↔túnel duplicado bloqueava um arquivo já válido**: `compilePackageAuthoringComponents`
+   tratava "dois pinos apontando pro mesmo túnel" como erro bloqueante (suposição errada de que só
+   podia ser engano) -- o ESP32 DevKitC real tem `GND1`/`GND2`/`GND3` (3 pinos físicos, mesma malha de
+   terra), um padrão VÁLIDO e comum em hardware real que o Core sempre permitiu. Bloqueava salvar até
+   uma edição trivial. Corrigido removendo essa checagem (ver seção 17.3 acima, atualizada).
+5. **Mensagem de erro cortada no toast do VSCode**: `vscode.window.showErrorMessage`/
+   `showWarningMessage` sem `{modal:true}` corta o texto num toast estreito -- o achado 4 acima só foi
+   diagnosticável depois de trocar pra diálogo modal (`detail` com uma linha por erro/aviso, nunca
+   corta). Aplicado nos 3 pontos que juntam `errors[]`/`warnings[]` em `extension.ts`
+   (`openSubcircuitForEditingCommand`, `writeSubcircuitEditingSessionBack` x2).
+
+**Verificação**: compilação limpa e suíte completa (169 testes) sem regressão após cada correção;
+script Node ad-hoc revalidando o `esp32_devkitc_v4.lssubcircuit` real (0 problemas de pinId, `pinMap`
+com 43 entradas incluindo RST, seed produzindo Package 88x176 com 38 pinos e 0 avisos). Sem GUI
+disponível neste ambiente -- todas as correções foram reportadas pelo usuário testando manualmente no
+VSCode real; recomenda-se continuar essa verificação até fechar o roteiro da seção 17.7.

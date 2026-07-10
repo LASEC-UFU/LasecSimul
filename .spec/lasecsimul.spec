@@ -2023,3 +2023,227 @@ dedicada (não há cálculo geométrico/matricial aqui pra valer a pena simular 
 seções 17/18). Recomenda-se: escolher um `.bin`, rodar, recompilar o mesmo arquivo fora do LasecSimul,
 rodar de novo (deve recarregar sozinho, sem clique manual) e rodar uma 3ª vez sem tocar no arquivo
 (não deve reiniciar o processo QEMU).
+
+## 20. Knob "Dial" -- porta fiel de `CustomDial::paintEvent` e correção dos dependentes (2026-07-09)
+
+**Pedido**: o usuário identificou que SimulIDE tem um widget "Dial" reutilizado como base de vários
+dispositivos (inclusive os knobs de ajuste do osciloscópio) e pediu uma porta fiel + atualização de
+tudo que depende dele.
+
+**Achado de arquitetura real (`gui/customdial.cpp`, `gui/dialwidget.cpp`, `gui/circuitwidget/
+dialed.cpp`, `components/other/dial.cpp`, todos em `C:\SourceCode\simulide_2`)**: existem DOIS
+"dials" diferentes no SimulIDE real, não um só --
+1. **`CustomDial`** (`QDial` com `paintEvent` customizado, pintado à mão) -- base de `Dialed`,
+   usado por `Dial` (`other.dial`), `Potentiometer`, `VarResBase`/`VarInductor`/`VarCapacitor`
+   (resistor/indutor/capacitor variável) e o `SourceWidget` de fonte controlada. Geometria: arco de
+   300° a partir de 240° (sem wrapping) ou 360° a partir de 270° (com wrapping); marcas de escala
+   (contagem = `maximum/singleStep`, limitada a espaçamento mínimo de 4px, sempre par) com a
+   PRIMEIRA sempre vermelha (referência de zero); gradiente radial quase-branco com centro
+   deslocado pro canto superior-esquerdo (`0%→#fff, 80%→#e6e6e1, 83%→#dcdcd7, 100%→#c8c8c3`); nub de
+   valor (halo + corpo, círculos concêntricos) que se move ao longo do arco via `ângulo(ratio) =
+   ratio*spanDeg - startDeg` -- MESMA fórmula pras marcas E pro nub, nunca duas separadas.
+2. **`QDial` nativo sem subclasse** -- usado SÓ pelos 4 knobs do osciloscópio/analisador lógico
+   (`oscwidget.ui`/`lawidget.ui`: `timeDivDial`/`timePosDial`/`voltDivDial`/`voltPosDial`), chrome
+   do próprio SO, sem paint customizado. `wrapping=true`, e o valor muda por DIREÇÃO relativa (~1%
+   do valor atual por "clique" do encoder, `OscWidget::on_timeDivDial_valueChanged`) -- nunca por
+   ângulo absoluto; não existe posição real pra refletir (µs↔s não cabe numa rotação fixa).
+
+**Implementação** (`extension/src/ui/webview/componentSymbols.ts::dialKnobSvg`, antiga
+`qDialKnobSvg` renomeada e reescrita): porta fiel da geometria de `CustomDial::paintEvent` acima,
+parametrizada por raio total do widget + `ratio`/`wrapping`/`tickCount` opcionais. **Dois bugs reais
+corrigidos na função antiga**: (a) fórmula das marcas usava `startDeg + spanDeg*i/n` (SEM o sinal
+negativo de `painter.rotate(-startAngle)` do real) -- marcas ficavam sistematicamente fora de
+posição; (b) o nub tinha uma fórmula TOTALMENTE separada, decorativa, sempre travado no meio do
+curso -- as duas agora usam a mesma `ângulo(ratio) = ratio*spanDeg - startDeg`, verificada por
+rederivação manual da matriz de rotação real do Qt (`painter.rotate()`, convenção Y-pra-baixo, mesma
+já usada por `rotatePoint`/`svgBodyTransform` no resto do projeto).
+
+**Dependentes atualizados**:
+- `other.dial` (`componentSymbols.ts`): usa `dialKnobSvg` com `ratio: 0.5` (valor padrão real do
+  `QDial` recém-criado, `setValue(500)` sobre range 0-1000) -- sem `properties` modeladas ainda
+  nesta rodada (catálogo não declara min/max/valor), não há estado real além disso pra refletir.
+  Comentário anterior ("widget do SO, não dá pra reproduzir em SVG") corrigido -- factualmente
+  invertido, é o CONTRÁRIO que é verdade (`CustomDial` é pintado à mão pelo próprio SimulIDE, 100%
+  reproduzível; é o `QDial` do osciloscópio que é nativo/não reproduzível com fidelidade 1:1).
+- `passive.variable_resistor`/`variable_capacitor`/`variable_inductor` (`project/schema/
+  component-catalog.json`, `viewSpec` declarativo dos 3, blocos idênticos): gradiente corrigido
+  pros stops reais (`0/80/83/100%`, antes `0/55/100%` com cores mais escuras/erradas); nub ganhou o
+  halo que faltava (2º `<ellipse>` sem preenchimento, MESMO `partId: "dialIndicator"` do nub
+  original -- `viewSpecResolvedProjection` (`componentSymbols.ts:734`) é chamada POR FORMA, não uma
+  vez por `partId` único, então múltiplas formas com o mesmo `partId` recebem a MESMA projeção
+  computada e se movem juntas em sincronia, verificado por leitura antes de aplicar). Interação/
+  hit-test/limites (`dragAngular`, `stepsPerRev`, `-150°..150°`) intocados -- zero risco à
+  funcionalidade já testada (`ViewSpec rotate aceita propRange/angleRange para Dialed contínuo`).
+  Marcas de escala (ticks) NÃO adicionadas nesta rodada -- exigiriam enumerar ~15-20 formas de linha
+  à mão por componente (`ComponentViewSpec.paint` usa `PackageShape[]`, sem a primitiva `repeat` que
+  `simulidePaint.primitives[]` tem); risco/esforço vs. ganho visual não pareceu valer nesta rodada,
+  registrado como pendência.
+- Knobs do osciloscópio/analisador lógico (`main.ts::makeKnobRow`): trocado o círculo CSS estático
+  (gradiente + entalhe fixo que nunca girava) pelo `dialKnobSvg` real, com `wrapping: true` (igual
+  ao `QDial` real desses 4 controles). Como o valor NÃO mapeia pra ângulo absoluto (ver ponto 2
+  acima), o nub gira por um contador de posição PRÓPRIO (`knobDialPositions`, módulo-level, mesmo
+  modelo 0-1000 do `QDial` interno real) incrementado a cada interação (roda do mouse/arrasto) --
+  puramente feedback visual de "girei o botão", nunca uma representação do valor físico (µs↔s não
+  caberia numa posição fixa sem pular loucamente a cada refresh). Interação real (wheel/drag
+  ajustando o spinner numérico ao lado) inalterada.
+
+**Verificação**: compilação limpa (`tsc` main + webview + test) e suíte completa (154 testes) sem
+regressão, incluindo os 2 testes existentes que cobrem os 3 componentes `viewSpec.dial`
+(`ViewSpec overlayPaint desenha dial por cima de simulidePaint`, `ViewSpec rotate aceita propRange/
+angleRange para Dialed contínuo`) -- nenhum deles asserta contagem exata de `stops`/formas do nub, o
+que teria quebrado com estas mudanças se fosse o caso. Fórmula angular verificada por rederivação
+manual da matriz de rotação (não simulação numérica automatizada desta vez -- ver seções 17/18 pro
+padrão quando compensa). Sem GUI disponível neste ambiente pra confirmar visualmente; recomenda-se
+abrir um `other.dial`, um resistor/indutor/capacitor variável (arrastar o knob, confirmar que ainda
+ajusta o valor normalmente) e a janela "Expande" do osciloscópio, e comparar visualmente com o
+`CustomDial` real do SimulIDE.
+
+## 21. Bug corrigido: corpo do símbolo deslocado, desconectado dos pinos (2026-07-10)
+
+**Sintoma relatado**: depois de adicionar o dial ao Potenciômetro (seção 20), o usuário reportou
+"resíduo" -- na verdade era o corpo INTEIRO (dial, retângulo, fio do cursor) desenhado ~16 unidades
+deslocado dos 3 pinos, restos "flutuando" desconectados na tela.
+
+**Causa raiz** (`extension/src/ui/webview/componentSymbols.ts`): todo `package` com `simulidePaint`
+passa por DOIS deslocamentos que deveriam ser UM só:
+1. `simulidePaintToPackageShapes`/`transformFor` (`simulidePaint.ts`) já desloca coordenadas locais
+   do `QPainter` (`bounds.x`/`bounds.y`, tipicamente negativas) pro espaço positivo da caixa.
+2. `packageSymbolSvg` (`componentSymbols.ts:1107`) SEMPRE envolve o corpo inteiro num
+   `<g transform="translate(offsetX,offsetY)">`, onde `offsetX/Y` vem de `resolvePackageLayout`
+   (baseado na extensão real dos PINOS, não do `simulidePaint`).
+
+Pra QUALQUER `typeId` cujos pinos usam coordenada "local" (mesmo espaço negativo do `simulidePaint`,
+ex: `active.diode` pino ânodo em `x:-10`, espelhando `bounds.x:-10`) em vez de já-no-espaço-da-caixa
+(convenção usada por `passive.variable_resistor`/`sources.voltage_source`/etc, pinos sempre ≥0), o
+passo 2 RECALCULA `offsetX` a partir do próprio pino negativo -- deslocando o corpo (que o passo 1 JÁ
+tinha posicionado certo) uma SEGUNDA vez pela MESMA quantidade. Pinos (que não passam pelo passo 1)
+recebem só o deslocamento certo (passo 2) -- resultado: corpo e pinos acabam em referenciais
+diferentes, sempre que `offsetX`/`offsetY` calculado a partir dos pinos for diferente de zero.
+
+**Por que só apareceu agora**: o Potenciômetro sempre teve esse bug (`pin-1.x: -11`, deslocamento de
+16 unidades) -- só nunca foi notado porque, sem o dial novo pra comparar, um retângulo cinza
+levemente deslocado passava despercebido. Auditando TODOS os `typeId` com `simulidePaint` (medindo o
+`translate(...)` real de cada um via script), achei **19 suspeitos** por terem caixa calculada maior
+que a declarada -- sinal AMBÍGUO por si só (folga de lead também aumenta a caixa, de propósito).
+Renderizando cada um por completo, confirmei **17 com o bug de verdade** (corpo genuinamente
+desconectado dos pinos: `active.diode`/`zener`, `active.opamp`/`comparator`, `active.volt_regulator`,
+`outputs.led`/`led_rgb`/`seven_segment`/`dc_motor`/`stepper`/`incandescent_lamp`,
+`connectors.socket`/`header`, `passive.resistor_dip`, `passive.potentiometer` -- e **2 falsos
+positivos** (`switches.keypad`, `meters.probe`, offset já `0` -- caixa maior só por folga de lead
+mesmo, não bug).
+
+**Correção**: em vez de mexer na função compartilhada (arriscado -- `simulidePaintToPackageShapes`
+também é usada por `builtinPaintSvg`/símbolos built-in tipo `other.ground`/`sources.battery`, que
+NÃO passam pelo `offsetX` do passo 2 e QUEBRARIAM se eu removesse o deslocamento de lá), migrei os
+pinos dos 17 componentes pra convenção "já no espaço da caixa" -- a MESMA que `variable_resistor`/
+`voltage_source`/etc já usam com sucesso -- deslocando cada `pin.x`/`pin.y` (e `pinGroups`/
+`labelX`/`labelY` quando presentes, inclusive o caso de `active.analog_mux`/`x1PackageNumberValue`
+como fórmula com `offset`, não número puro) pela quantidade exata medida (`translate(...)` real de
+cada um, script dedicado, não um valor genérico). Verificado com `offsetX/Y === 0` no re-render de
+cada um dos 17 antes de aceitar como corrigido.
+
+**3 componentes com estratégia diferente** (`outputs.led_matrix`, `outputs.led_bar`,
+`active.analog_mux`): também apareceram no primeiro escaneamento (offset `[16,0]`/`[16,24]`/`[24,0]`),
+mas os 3 têm `dynamicLayout` E teste dedicado (`componentSymbols.test.ts`) que exige EXPLICITAMENTE
+uma largura/altura maior que a declarada (folga de lead intencional, calculada a partir da posição do
+PINO, docstring do teste faz as contas). A migração de pinos usada nos outros 15 (estratégia B) muda
+exatamente essa folga -- aplicá-la quebra os 3 testes (`box.width`/`height` batendo errado). Primeira
+tentativa: reverti os 3 do `git HEAD` pro estado original, mas SÓ voltei a corrigir `led_matrix` e
+`led_bar` depois -- reli mal a saída do teste na hora e achei, incorretamente, que `analog_mux` já
+tinha sido corrigido com sucesso no primeiro lote; na verdade os 3 continuavam quebrados.
+
+**Correção final dos 3** (estratégia A, distinta da B): não mexer em pino nenhum (preserva a folga
+que o teste exige). Em vez disso, inspecionando cada `simulidePaint.primitives[]`, a forma principal
+(retângulo do corpo) tem coordenada bruta EXATAMENTE igual ao `bounds.x`/`bounds.y` original do
+próprio componente (`led_matrix`: `rect.x:-8` = `bounds.x:-8`; `led_bar`: `rect.x:-8,y:-28` =
+`bounds.x:-8,y:-28`; `analog_mux`: `rect.x:-16` = `bounds.x:-16`, `bounds.y` já era `0`). Como
+`transformFor` desloca por `(valor - bounds.x)`, zerar só `bounds.x`/`bounds.y` (sem tocar nas
+primitivas nem nos pinos) faz o corpo cair no MESMO espaço "local" que os pinos já usam -- o único
+`offsetX/offsetY` do passo 2 (calculado a partir dos pinos, intocado, preservando a folga do teste)
+alinha os dois corretamente. Verificado por renderização direta: em `led_matrix`, a borda esquerda do
+retângulo do corpo e a ponta do pino de linha caem exatamente na mesma coordenada final (x=8, sem
+gap); mesma checagem em `led_bar` e `analog_mux`.
+
+**Verificação**: compilação limpa (`tsc` webview + test) e suíte completa (154 testes) sem
+regressão -- incluindo os 3 testes dedicados de `dynamicLayout` (`led_matrix`/`led_bar`/
+`analog_mux`), que voltaram a passar com a estratégia A. Renderização direta de cada um dos 18
+componentes corrigidos (15 via estratégia B + 3 via estratégia A) via `packageSymbolSvg` chamado fora
+do DOM (script Node ad-hoc, mesmo princípio das seções 17/18) confirmando alinhamento corpo↔pino em
+todos. Sem GUI disponível neste ambiente; recomenda-se abrir um diodo, LED, amp-op, o potenciômetro,
+a matriz de LED, a barra de LED e o mux analógico no esquemático real e confirmar que o corpo aparece
+exatamente onde os fios/pinos esperam, sem gap nem sobreposição estranha.
+
+## 22. Bloco genérico de subcircuito (`subcircuits.external`): vínculo pelo clique direito + forma
+placeholder própria (2026-07-10)
+
+**Contexto**: o bloco genérico "aponta pra `.lssubcircuit` por caminho" (seção do épico de
+subcircuito por caminho, `extension.ts::chooseSubcircuitFileCommand`) tinha 2 problemas antes de
+qualquer arquivo ser vinculado a ele.
+
+**Problema 1 -- vínculo só pelo painel de propriedades**: o item de menu de contexto
+"Localizar arquivo do subcircuito..." (`main.ts`, `subcircuitRefMenuItems`) só aparecia quando
+`component.subcircuitRef` já existia -- ou seja, só depois de UMA vinculação anterior (mesmo que
+quebrada, arquivo movido/apagado). Um bloco `subcircuits.external` recém-colocado, NUNCA vinculado
+(sem `subcircuitRef` nenhum ainda), não tinha esse campo -- a única forma de escolher o
+`.lssubcircuit` era abrir o painel de propriedades e achar o editor `filePath` da propriedade
+"Arquivo do subcircuito". `chooseSubcircuitFileCommand` (`extension.ts:296`) já tratava os dois casos
+igual (comentário próprio: "serve pra escolha inicial e pra 'relink'"), então bastou alargar a
+condição do item de menu:
+```ts
+const subcircuitRefMenuItems: ContextMenuItem[] = !isGroup && (component.subcircuitRef || component.typeId === "subcircuits.external")
+  ? [...]
+  : [];
+```
+Nenhuma mudança no handler foi necessária -- ele já troca `typeId`/pinos/`package` da instância pro
+do arquivo escolhido (`parsed.typeId`/`parsed.package`, ver seção 21 do
+`.spec/lasecsimul-subcircuits.spec` referenciada no próprio comentário do handler), então a forma
+final já reflete o conteúdo do `.lssubcircuit` normalmente -- isso nunca esteve quebrado, só o ponto
+de entrada pelo clique direito é que faltava pro caso "ainda não vinculado".
+
+**Problema 2 -- forma placeholder parecia um resistor**: a entrada de catálogo `subcircuits.external`
+(`project/schema/component-catalog.json`) não declara `package` nenhum (forma só existe DEPOIS de
+vinculado, injetada como catálogo efêmero pelo handler acima). Sem `package`, a renderização caía no
+`default:` genérico de `componentSymbolSvg` (`componentSymbols.ts`) -- `horizontalLeads(box,yMid)` +
+um retângulo fino de 20px de altura -- a MESMA composição (leads + corpo retangular fino) que dá a
+silhueta de um resistor sem zigzag, numa caixa `DEFAULT_BOX` de 70x40. Corrigido com um `case`
+dedicado pro typeId, igual ao padrão já usado por `other.test_unit`/`other.dial`:
+- `builtinComponentBox`: `case "subcircuits.external": return { width: 56, height: 40 }` (retângulo
+  "de tamanho médio" -- não os 70x40 do fallback genérico nem os 32x9 de um resistor real).
+- `componentSymbolSvg`: `case "subcircuits.external"` desenha só
+  `<rect x="2" y="2" width="52" height="36" rx="4" class="symbol-stroke" fill="none"/>` -- SEM leads
+  (não há pino nenhum, `pinCount:0` no catálogo até ser vinculado), cantos arredondados pra
+  diferenciar visualmente de qualquer corpo de componente real.
+
+**Verificação**: compilação limpa (`tsc` webview + test) e suíte completa (154 testes) sem regressão.
+Script Node ad-hoc chamando `componentBox`/`componentSymbolSvg` diretamente confirmou a caixa
+`{width:56,height:40}` e o SVG exato do retângulo (sem leads, sem parecer resistor). Sem GUI
+disponível neste ambiente; recomenda-se colocar um bloco "Subcircuit" novo no esquemático real,
+confirmar visualmente o retângulo neutro, clicar com o botão direito nele (sem nenhum arquivo
+vinculado ainda) e confirmar que "Localizar arquivo do subcircuito..." aparece e, ao escolher um
+`.lssubcircuit`, a forma muda pra do arquivo escolhido.
+
+## 23. Autoria visual de ícone (Figura) + Package do SimulIDE dentro de "Abrir Subcircuito"
+(2026-07-10)
+
+Detalhamento completo em `.spec/lasecsimul-subcircuits.spec` seção 17 (conceito de `SubPackage`/
+`PackagePin` do SimulIDE real, distinção Figura×Package, formato de persistência, vínculo
+pino↔túnel, migração/compat, decisão de estender a arquitetura atual em vez de restaurar a antiga).
+Resumo: dentro da MESMA cena já usada pra editar o circuito interno de um subcircuito (seção 16 do
+spec de subcircuitos, nenhum editor/modo novo), passou a ser possível colocar `other.package`/
+`other.package_pin` (typeIds já existentes no catálogo, antes código morto sem compilador nenhum) +
+UMA instância de `graphics.image` marcada como ícone (`WebviewComponentModel.packageIconRole`) --
+`extension/src/catalog/subcircuitPackageAuthoring.ts` (novo, `seedPackageAuthoringComponents`/
+`compilePackageAuthoringComponents`, puro/testável sem DOM) materializa esses componentes ao abrir a
+sessão e compila de volta pra `package`/`interface[]` ao salvar, validando ANTES de qualquer escrita
+em disco (pinId/vínculo de túnel duplicado, Package/ícone duplicado = erro bloqueante; pino sem
+túnel = excluído + aviso). Vínculo pino↔túnel agora usa `interface[].internalTunnelId` (id ESTÁVEL do
+componente-túnel) como fonte de verdade -- `internalTunnel` (nome, exigido pelo Core) é re-derivado
+automaticamente a cada save, corrigindo o problema de quebrar ao renomear um túnel. Pré-requisitos
+implementados junto: `graphics.image` ganhou `width`/`height` reais e passou a renderizar a imagem de
+verdade (antes só um glifo decorativo); o editor de propriedade `filePath` foi generalizado pra
+qualquer campo (antes hard-coded só pro bloco genérico de subcircuito).
+
+**Verificação**: compilação limpa e suíte completa (168 testes: 154 anteriores + 14 novos de
+`subcircuitPackageAuthoring.test.ts`) sem regressão. Sem GUI disponível neste ambiente pra confirmar
+drag visual de pino/menu "Vincular a túnel..."/copiar-colar pela UI real -- recomenda-se verificação
+manual no VSCode real (ver seção 17.7 do spec de subcircuitos pro roteiro completo).

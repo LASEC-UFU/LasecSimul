@@ -1,6 +1,6 @@
 import { WEBVIEW_MESSAGE_VERSION, ComponentReadoutValue, HostToWebviewMessage, InternalComponentSnapshot, SimulationStatus, WebviewToHostMessage } from "./messages.js";
 import { InteractionKindEntry, JUNCTION_TYPE_ID, McuSerialPortEntry, PropertySchemaEntry, TUNNEL_TYPE_ID, ViewSpecInteraction, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./model.js";
-import { ComponentBox, PIN_RADIUS, componentBox, componentLocalOrigin, componentSymbolSvg, hasRealPinPosition, missingSubcircuitPlaceholderSvg, packageSymbolSvg, pinLocalPosition, registerPackage } from "./componentSymbols.js";
+import { ComponentBox, PIN_RADIUS, componentBox, componentLocalOrigin, componentSymbolSvg, dialKnobSvg, hasRealPinPosition, missingSubcircuitPlaceholderSvg, packageSymbolSvg, pinLocalPosition, registerPackage } from "./componentSymbols.js";
 import { detectChannelTrigger, findTriggerAnchorIndex, triggerAlignedWindowEndNs, visibleSampleWindowByTime } from "./instrumentTrigger.js";
 import {
   Point,
@@ -160,6 +160,9 @@ const UI_TEXT = {
     chooseSubcircuitFile: "Procurar...",
     noSubcircuitFileChosen: "(nenhum)",
     locateSubcircuitFile: "Localizar arquivo do subcircuito...",
+    linkToTunnel: "Vincular a túnel...",
+    unlinkTunnel: "Desvincular túnel",
+    noTunnelsInScene: "(nenhum túnel na cena)",
     loadFirmware: "Carregar firmware",
     openSerialMonitor: "Abrir monitor serial",
     firmwareGroup: "Firmware",
@@ -232,6 +235,9 @@ const UI_TEXT = {
     chooseSubcircuitFile: "Browse...",
     noSubcircuitFileChosen: "(none)",
     locateSubcircuitFile: "Locate subcircuit file...",
+    linkToTunnel: "Link to tunnel...",
+    unlinkTunnel: "Unlink tunnel",
+    noTunnelsInScene: "(no tunnels in scene)",
     loadFirmware: "Load firmware",
     openSerialMonitor: "Open serial monitor",
     firmwareGroup: "Firmware",
@@ -1427,8 +1433,26 @@ function zoomToBoundingBox(box: { minX: number; minY: number; maxX: number; maxY
   persistState();
 }
 
+/** Componentes de autoria de Package/ícone (`.spec/lasecsimul.spec` seção 23) -- espelha
+ * `isPackageAuthoringComponent` (`extension/src/catalog/subcircuitPackageAuthoring.ts`, código de
+ * host, não importável aqui) só na parte que "Zoom Tudo" precisa: NUNCA entram na bounding box de
+ * "zoom pra caber tudo", senão a área reservada do Package (deliberadamente afastada do circuito
+ * interno, ver `reservedAuthoringOrigin`) dobra o tamanho do enquadramento e encolhe o circuito
+ * interno (e os fios) a um zoom bem menor do que antes desta feature existir -- achado real
+ * (usuário reportou "clico em Zoom e os fios somem": não sumiram, ficaram finos demais num zoom bem
+ * mais afastado). */
+function isPackageAuthoringComponentForZoom(component: WebviewComponentModel): boolean {
+  if (component.typeId === "other.package" || component.typeId === "other.package_pin") return true;
+  if (component.typeId === "graphics.image" && component.packageIconRole === true) return true;
+  // Rótulo de pino do Package (`graphics.text` linkado por `linkedPinComponentId`) fica na MESMA
+  // área reservada do pino que representa -- sem excluir aqui também, o bbox continuaria inflado
+  // quase do mesmo jeito.
+  if (component.typeId === "graphics.text" && typeof component.properties.linkedPinComponentId === "string" && component.properties.linkedPinComponentId) return true;
+  return false;
+}
+
 function zoomToFitAll(): void {
-  const box = approximateBoundingBox(state.components);
+  const box = approximateBoundingBox(state.components.filter((c) => !isPackageAuthoringComponentForZoom(c)));
   if (box) zoomToBoundingBox(box);
 }
 
@@ -1707,8 +1731,13 @@ function deleteSelectedItems(): void {
 }
 
 function cloneComponent(component: WebviewComponentModel): WebviewComponentModel {
+  // `packageIconRole` marca a ÚNICA Figura que representa o ícone do Package sendo editado
+  // (`.spec/lasecsimul.spec`, autoria de subcircuito) -- uma cópia NUNCA herda esse papel (senão
+  // "colar" duplicaria o ícone, erro bloqueante em `compilePackageAuthoringComponents` no save). A
+  // cópia vira um `graphics.image` comum, sem papel especial.
+  const { packageIconRole: _packageIconRole, ...rest } = component;
   return {
-    ...component,
+    ...rest,
     pins: component.pins.map((pin) => ({ ...pin })),
     properties: { ...component.properties },
   };
@@ -2873,6 +2902,17 @@ interface LogicPopupState {
 type InstrumentPopupState = ScopePopupState | LogicPopupState;
 
 const instrumentPopups = new Map<string, InstrumentPopupState>();
+/** Posição bruta 0-1000 do `QDial` por knob (`makeKnobRow`), chave `${componentId}:${labelText}` --
+ * MESMO modelo do real (`QDial` interno sempre 0-1000, `CustomDial::CustomDial` -- ver docstring de
+ * `dialKnobSvg`, `componentSymbols.ts`). Os knobs de Divisão/Posição de Tempo/Tensão do osciloscópio
+ * são `wrapping=true` no real (`oscwidget.ui`) e NUNCA representam o valor físico diretamente (ver
+ * `OscWidget::on_timeDivDial_valueChanged` -- só a DIREÇÃO do movimento importa, aplicada como ~1%
+ * do valor atual); esta posição existe só pra desenhar o nub girando visualmente a cada interação,
+ * igual ao encoder "infinito" real -- nunca derivada do valor físico (µs↔s teria que pular loucamente
+ * de posição a cada refresh). Sobrevive a re-renders (módulo, não escopo de função) até a janela
+ * fechar; nunca limpo por componente removido (leak inofensivo, mesma classe de decisão de
+ * `state.ts::lastLoadedFirmwareByCoreId`). */
+const knobDialPositions = new Map<string, number>();
 // Cores EXATAS do SimulIDE real (plotbase.cpp: m_color[0..3] = RGB(240,240,100)/(220,220,255)/
 // (255,210,90)/(0,245,160)) -- canais 4-7 do analisador lógico reusam as mesmas 4 cores (i % 4).
 const INSTRUMENT_CHANNEL_COLORS = ["#f0f064", "#dcdcff", "#ffd25a", "#00f5a0", "#f0f064", "#dcdcff", "#ffd25a", "#00f5a0"];
@@ -2988,8 +3028,10 @@ function instrumentPlotGridSvg(plotW: number, plotH: number, divisions = 10, row
  * de `popup` durante o render, mesma semântica de "os botões/diais se movem sozinhos" do osciloscópio
  * de bancada real enquanto "Auto" está ativo. */
 function renderScopePopupPlot(popup: ScopePopupState, channels: Array<{ timestampsNs: number[]; values: number[] }>): SVGSVGElement {
+  // 560x448 -- MESMO tamanho de `.instrument-plot-svg` (styles.css), pra 10x8 divisões ficarem
+  // quadradas (56x56px cada) em vez de esticadas -- bug corrigido 2026-07-09, ver comentário lá.
   const plotW = 560;
-  const plotH = 280;
+  const plotH = 448;
   const svg = document.createElementNS(SVG_NS, "svg");
   svg.setAttribute("viewBox", `0 0 ${plotW} ${plotH}`);
   svg.classList.add("instrument-plot-svg");
@@ -3036,8 +3078,10 @@ function renderScopePopupPlot(popup: ScopePopupState, channels: Array<{ timestam
  * DIRETAMENTE -- a borda de disparo cai exatamente na borda direita da tela, sem encaixe de
  * período (mesma fidelidade, função mais simples porque o sinal de origem é mais simples). */
 function renderLogicPopupPlot(popup: LogicPopupState, history: { timestampsNs: number[]; masks: number[] }): SVGSVGElement {
-  const plotW = 700;
-  const plotH = 320;
+  // 560x448 -- MESMO tamanho de `.instrument-plot-svg` (styles.css) e do osciloscópio
+  // (`renderScopePopupPlot`), pra 10x8 divisões ficarem quadradas -- bug corrigido 2026-07-09.
+  const plotW = 560;
+  const plotH = 448;
   const svg = document.createElementNS(SVG_NS, "svg");
   svg.setAttribute("viewBox", `0 0 ${plotW} ${plotH}`);
   svg.classList.add("instrument-plot-svg");
@@ -3108,10 +3152,22 @@ function makeChannelButton(label: string, color: string, active: boolean, onClic
   return button;
 }
 
-/** Linha de "knob" (disco visual estático + rótulo + spinner numérico editável) -- réplica do
- * layout QDial+QLabel+PlotSpinBox de `oscwidget.ui` (Divisão/Posição de Tempo/Tensão). O disco é só
- * decorativo nesta rodada (sem arrastar pra girar); o spinner ao lado é o controle real. */
+/** Knob visual do osciloscópio/analisador lógico -- usa `dialKnobSvg` (`componentSymbols.ts`) no
+ * modo **contínuo/múltiplas voltas** (`wrapping: true`), NÃO no modo limitado de uma volta só que
+ * `other.dial`/Potenciômetro/Resistor-Indutor-Capacitor Variável usam (ver a distinção completa dos
+ * dois modelos na docstring de `dialKnobSvg`) -- pedido explícito do usuário 2026-07-09: "no
+ * osciloscópio ele pode girar várias vezes e cada ciclo vai incrementando, não com um valor de
+ * máximo e mínimo em uma volta". Confirma a fidelidade com o real: `timeDivDial`/`timePosDial`/
+ * `voltDivDial`/`voltPosDial` de `oscwidget.ui` são `QDial` nativos `wrapping=true`, e o valor muda
+ * por DIREÇÃO relativa (~1% do valor atual por "clique" do encoder,
+ * `OscWidget::on_timeDivDial_valueChanged`) -- SEM min/max nenhum, cresce/encolhe indefinidamente
+ * conforme o usuário continua girando (só `options.min`, quando presente, evita valor negativo/zero
+ * onde não faz sentido físico, ex: Divisão de Tempo). O nub gira a cada interação via
+ * `knobDialPositions` (módulo-level, mesmo modelo 0-1000 do `QDial` interno real, dá uma volta
+ * visual completa a cada ~25 "cliques" do encoder) -- é feedback de "girei o botão", nunca uma
+ * leitura do valor físico (não existe ângulo que representaria µs↔s numa volta só). */
 function makeKnobRow(
+  knobKey: string,
   labelText: string,
   value: number,
   step: number,
@@ -3120,15 +3176,29 @@ function makeKnobRow(
 ): HTMLDivElement {
   const row = document.createElement("div");
   row.className = "instrument-knob-row";
+
   const dial = document.createElement("span");
   dial.className = "instrument-knob-dial";
   dial.tabIndex = 0;
+
+  const renderDial = (): void => {
+    const dialPos = knobDialPositions.get(knobKey) ?? 500;
+    dial.innerHTML = `<svg viewBox="0 0 32 32" class="instrument-knob-dial__svg">${dialKnobSvg(16, 16, 15, { ratio: dialPos / 1000, wrapping: true, idSeed: knobKey.replace(/[^a-zA-Z0-9]/g, "-") })}</svg>`;
+  };
+  renderDial();
+
   const dialStep = () => Math.max(1e-12, options?.dialStep?.(value) ?? step);
+  const spinDial = (direction: 1 | -1): void => {
+    const previous = knobDialPositions.get(knobKey) ?? 500;
+    knobDialPositions.set(knobKey, ((previous + direction * 40) % 1000 + 1000) % 1000);
+    renderDial();
+  };
   const applyDialDelta = (direction: 1 | -1) => {
     const signed = options?.reverse ? -direction : direction;
     const next = Math.max(options?.min ?? -Infinity, value + signed * dialStep());
     value = next;
     onChange(next);
+    spinDial(direction);
   };
   dial.addEventListener("wheel", (event) => {
     event.preventDefault();
@@ -3273,8 +3343,18 @@ function makePopupChrome(title: string, popup: InstrumentPopupState): { containe
   return { container, body };
 }
 
+/** Índice numérico do rótulo indexado (`nextIndexedLabel`, ex: "Osciloscópio-2" -> "2") -- usado pra
+ * montar o título da janela "Expande" no formato curto real do SimulIDE (`Oscope-1`/`LAnalizer-1`,
+ * ver `oscwidget.ui`/`lawidget.ui`), independente do texto de rótulo do catálogo (localizável,
+ * "Logic Analyzer" aqui vs "LAnalizer" lá). Bug corrigido 2026-07-09: o título prefixava o rótulo
+ * JÁ indexado inteiro (`Oscope-${component.label}` com `label` = "Oscope-1" → "Oscope-Oscope-1"). */
+function instrumentPopupIndexSuffix(component: WebviewComponentModel): string {
+  const match = /-(\d+)$/.exec(component.label);
+  return match ? match[1]! : (component.label || component.id);
+}
+
 function buildScopePopup(popup: ScopePopupState, component: WebviewComponentModel): HTMLDivElement {
-  const { container, body } = makePopupChrome(`Oscope-${component.label || component.id}`, popup);
+  const { container, body } = makePopupChrome(`Oscope-${instrumentPopupIndexSuffix(component)}`, popup);
 
   const plotWrap = document.createElement("div");
   plotWrap.className = "instrument-popup__plot";
@@ -3309,20 +3389,20 @@ function buildScopePopup(popup: ScopePopupState, component: WebviewComponentMode
     if (popup.activeTab === "all") popup.channels.forEach(fn);
     else fn(activeChannel);
   };
-  knobs.appendChild(makeKnobRow("Divisão de Tempo (ms)", popup.timeDivMs, 100, (v) => { popup.timeDivMs = Math.max(0.001, v); renderInstrumentPopups(); }, {
+  knobs.appendChild(makeKnobRow(`${component.id}:timeDiv`, "Divisão de Tempo (ms)", popup.timeDivMs, 100, (v) => { popup.timeDivMs = Math.max(0.001, v); renderInstrumentPopups(); }, {
     dialStep: (current) => Math.max(0.001, Math.abs(current) / 100),
     reverse: true,
     min: 0.001,
   }));
-  knobs.appendChild(makeKnobRow("Posição de Tempo (ms)", activeChannel.timePosMs, 100, (v) => { applyChannels((channel) => { channel.timePosMs = v; }); renderInstrumentPopups(); }, {
+  knobs.appendChild(makeKnobRow(`${component.id}:timePos`, "Posição de Tempo (ms)", activeChannel.timePosMs, 100, (v) => { applyChannels((channel) => { channel.timePosMs = v; }); renderInstrumentPopups(); }, {
     dialStep: () => Math.max(0.001, popup.timeDivMs / 100),
   }));
-  knobs.appendChild(makeKnobRow("Divisão de Tensão (V)", activeChannel.voltDiv, 0.1, (v) => { const next = Math.max(0.001, v); applyChannels((channel) => { channel.voltDiv = next; }); renderInstrumentPopups(); }, {
+  knobs.appendChild(makeKnobRow(`${component.id}:voltDiv`, "Divisão de Tensão (V)", activeChannel.voltDiv, 0.1, (v) => { const next = Math.max(0.001, v); applyChannels((channel) => { channel.voltDiv = next; }); renderInstrumentPopups(); }, {
     dialStep: (current) => Math.max(0.001, Math.abs(current) / 100),
     reverse: true,
     min: 0.001,
   }));
-  knobs.appendChild(makeKnobRow("Posição de Tensão (V)", activeChannel.voltPos, 0.1, (v) => { applyChannels((channel) => { channel.voltPos = v; }); renderInstrumentPopups(); }, {
+  knobs.appendChild(makeKnobRow(`${component.id}:voltPos`, "Posição de Tensão (V)", activeChannel.voltPos, 0.1, (v) => { applyChannels((channel) => { channel.voltPos = v; }); renderInstrumentPopups(); }, {
     dialStep: () => Math.max(0.001, activeChannel.voltDiv / 100),
     reverse: true,
   }));
@@ -3367,7 +3447,7 @@ function buildScopePopup(popup: ScopePopupState, component: WebviewComponentMode
 }
 
 function buildLogicPopup(popup: LogicPopupState, component: WebviewComponentModel): HTMLDivElement {
-  const { container, body } = makePopupChrome(`LAnalizer-${component.label || component.id}`, popup);
+  const { container, body } = makePopupChrome(`LAnalizer-${instrumentPopupIndexSuffix(component)}`, popup);
   const history = logicChannelFor(component.id);
 
   const plotWrap = document.createElement("div");
@@ -3379,8 +3459,8 @@ function buildLogicPopup(popup: LogicPopupState, component: WebviewComponentMode
 
   const knobs = document.createElement("div");
   knobs.className = "instrument-knobs";
-  knobs.appendChild(makeKnobRow("Divisão de Tempo (ms)", popup.timeDivMs, 100, (v) => { popup.timeDivMs = Math.max(10, v); renderInstrumentPopups(); }));
-  knobs.appendChild(makeKnobRow("Posição de Tempo (ms)", popup.timePosMs, 100, (v) => { popup.timePosMs = v; renderInstrumentPopups(); }));
+  knobs.appendChild(makeKnobRow(`${component.id}:timeDiv`, "Divisão de Tempo (ms)", popup.timeDivMs, 100, (v) => { popup.timeDivMs = Math.max(10, v); renderInstrumentPopups(); }));
+  knobs.appendChild(makeKnobRow(`${component.id}:timePos`, "Posição de Tempo (ms)", popup.timePosMs, 100, (v) => { popup.timePosMs = v; renderInstrumentPopups(); }));
   controls.appendChild(knobs);
 
   const busLabel = document.createElement("div");
@@ -3765,14 +3845,48 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
           { label: t("createSubcircuit"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestCreateSubcircuitFromSelection", componentIds: state.selectedComponentIds }) },
         ]
       : [];
-    // Bloco genérico de subcircuito por caminho (`subcircuitRef` presente, resolvido ou não) --
-    // mesmo comando da propriedade "Arquivo do subcircuito"/botão "Procurar...", só mais acessível
-    // quando o bloco já está marcado visualmente como "ausente" (ver `updateComponentElement`).
-    const subcircuitRefMenuItems: ContextMenuItem[] = !isGroup && component.subcircuitRef
+    // Bloco genérico de subcircuito por caminho -- mesmo comando da propriedade "Arquivo do
+    // subcircuito"/botão "Procurar...", só mais acessível direto no clique direito. Cobre os 2
+    // casos: `subcircuitRef` já presente (resolvido ou "ausente", ver `updateComponentElement`) E
+    // o bloco AINDA não vinculado (typeId ainda `subcircuits.external`, recém-colocado, sem
+    // `subcircuitRef` nenhum) -- sem isto, a única forma de vincular um bloco novo era abrir o
+    // painel de propriedades e achar o botão "Procurar...".
+    const subcircuitRefMenuItems: ContextMenuItem[] = !isGroup && (component.subcircuitRef || component.typeId === "subcircuits.external")
       ? [
           { kind: "separator" },
           { label: t("locateSubcircuitFile"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestChooseSubcircuitFile", componentId: component.id }) },
         ]
+      : [];
+    // Autoria de Package (Estágio 5, `.spec/lasecsimul.spec`) -- vínculo pino-do-Package↔Túnel
+    // interno por IDENTIFICADOR ESTÁVEL (`properties.tunnelComponentId`, o id do componente-túnel,
+    // nunca o nome dele que pode ser renomeado) em vez de escolher/editar isso no painel de
+    // propriedades genérico (que não sabe listar "só os túneis presentes nesta cena"). Só aparece
+    // pra `other.package_pin` (typeId literal -- este módulo webview não importa
+    // `extension/src/catalog/subcircuitPackageAuthoring.ts`, que é código de host/Node).
+    const packagePinLinkMenuItems: ContextMenuItem[] = !isGroup && component.typeId === "other.package_pin"
+      ? (() => {
+          const tunnels = state.components.filter((c) => c.typeId === TUNNEL_TYPE_ID);
+          const currentTunnelId = typeof component.properties.tunnelComponentId === "string" ? component.properties.tunnelComponentId : "";
+          const tunnelItems: ContextMenuItem[] = tunnels.map((tunnelComponent) => ({
+            label: String(tunnelComponent.properties.name ?? tunnelComponent.label),
+            checked: tunnelComponent.id === currentTunnelId,
+            onClick: () =>
+              send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name: "tunnelComponentId", value: tunnelComponent.id }),
+          }));
+          if (currentTunnelId) {
+            tunnelItems.push(
+              { kind: "separator" },
+              { label: t("unlinkTunnel"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name: "tunnelComponentId", value: "" }) }
+            );
+          }
+          return [
+            { kind: "separator" },
+            {
+              label: t("linkToTunnel"),
+              items: tunnelItems.length > 0 ? tunnelItems : [{ label: t("noTunnelsInScene"), onClick: () => {}, disabled: true }],
+            } satisfies ContextMenuItem,
+          ];
+        })()
       : [];
     const menuItems: ContextMenuItem[] = [
       ...exposedSubmenuItems,
@@ -3791,6 +3905,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
       ...mcuMenuItems,
       ...createSubcircuitMenuItems,
       ...subcircuitRefMenuItems,
+      ...packagePinLinkMenuItems,
     ];
     showContextMenu(event, menuItems);
   });
@@ -3955,8 +4070,11 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
         const stepsRev = comp0 ? numericComponentProperty(comp0, dragAngular?.stepsPerRevProp ?? "steps_rev", stepsRevFallback) : stepsRevFallback;
         const angularLimit = dragAngular?.limits ? catalogEntryFor(component.typeId)?.package?.viewSpec?.limits?.[dragAngular.limits] : undefined;
         if (dragAngular?.continuous) {
-          const propMin = angularLimit?.min ?? 0;
-          const propMax = angularLimit?.max ?? 1000;
+          // `minProp`/`maxProp` (achado 2026-07-10): fontes de tensão/corrente controladas têm
+          // `minValue`/`maxValue` EDITÁVEIS pelo usuário -- ler ao vivo da instância em vez de um
+          // `min`/`max` fixo, senão o dial ficaria preso no range do momento em que foi desenhado.
+          const propMin = comp0 && angularLimit?.minProp ? numericComponentProperty(comp0, angularLimit.minProp, angularLimit?.min ?? 0) : (angularLimit?.min ?? 0);
+          const propMax = comp0 && angularLimit?.maxProp ? numericComponentProperty(comp0, angularLimit.maxProp, angularLimit?.max ?? 1000) : (angularLimit?.max ?? 1000);
           const propStep = angularLimit?.step ?? 0;
           const clamp = angularLimit?.clamp !== false;
           const angleSpanDeg = Math.max(1, Math.abs((angularLimit?.maxAngleDeg ?? 150) - (angularLimit?.minAngleDeg ?? -150)));
@@ -4632,13 +4750,18 @@ function resolvePropertyFields(component: WebviewComponentModel): PropertyField[
     if (propSchema.hidden && !propertyDialogShowAll) continue;
     const kind = propertyFieldKindFromEditor(propSchema.editor);
     const isLiveReadout = kind === "readonly" && Boolean(propSchema.showOnSymbol);
-    // "filePath" (bloco genérico de subcircuito) nunca guarda o caminho em `properties` -- vem de
+    // "filePath" tem 2 fontes possíveis: o caso especial único `subcircuitPath` (bloco genérico de
+    // subcircuito por caminho) nunca guarda o caminho em `properties` -- vem de
     // `component.subcircuitRef.path` (ver model.ts), a mesma referência usada pra resolver
-    // pinos/package/relink, nunca duplicada num segundo lugar.
+    // pinos/package/relink, nunca duplicada num segundo lugar. Qualquer OUTRO campo `filePath`
+    // (ex: `graphics.image.path`) é genérico e guarda direto em `properties[id]`, como qualquer
+    // outra propriedade -- ver `renderPropertyField`/`requestChooseFile`.
     const value = isLiveReadout
       ? formatLiveReadout(propSchema, component)
       : kind === "filePath"
-        ? (component.subcircuitRef?.path ?? "")
+        ? propSchema.id === "subcircuitPath"
+          ? (component.subcircuitRef?.path ?? "")
+          : (component.properties[propSchema.id] ?? propSchema.default ?? "")
         : component.properties[propSchema.id] ?? propSchema.default;
     fields.push({
       key: propSchema.id,
@@ -4706,11 +4829,15 @@ function renderPropertyField(component: WebviewComponentModel, field: PropertyFi
     refreshOpenPropertyDialog();
   };
   if (field.kind === "filePath") {
-    // Bloco genérico de subcircuito por caminho -- NUNCA edita `component.properties[field.key]`
-    // direto (o campo é só leitura + botão), o caminho de verdade mora em `component.subcircuitRef`
-    // (ver `resolvePropertyFields`). Escolher/trocar arquivo é um fluxo assíncrono no host (parse +
-    // troca de typeId/pinos/package + registro no Core) -- mesmo comando usado pelo menu de
-    // contexto "Localizar arquivo do subcircuito...".
+    // Bloco genérico de subcircuito por caminho (`field.key === "subcircuitPath"`) -- NUNCA edita
+    // `component.properties[field.key]` direto (o campo é só leitura + botão), o caminho de verdade
+    // mora em `component.subcircuitRef` (ver `resolvePropertyFields`). Escolher/trocar arquivo é um
+    // fluxo assíncrono no host (parse + troca de typeId/pinos/package + registro no Core) -- mesmo
+    // comando usado pelo menu de contexto "Localizar arquivo do subcircuito...". Qualquer OUTRO
+    // campo `filePath` (ex: `graphics.image.path`, usado pela Figura/ícone da autoria de Package,
+    // `.spec/lasecsimul.spec`) é genérico: `requestChooseFile` lê o arquivo no host e grava o
+    // resultado direto em `properties[propertyKey]` -- sem trocar typeId/pinos/nada mais.
+    const isSubcircuitRefPath = field.key === "subcircuitPath";
     const row = document.createElement("label");
     row.className = "property-sheet__field-row";
     const caption = document.createElement("span");
@@ -4729,7 +4856,11 @@ function renderPropertyField(component: WebviewComponentModel, field: PropertyFi
     browseButton.className = "property-sheet__file-browse-button";
     browseButton.textContent = t("chooseSubcircuitFile");
     browseButton.addEventListener("click", () => {
-      send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestChooseSubcircuitFile", componentId: component.id });
+      if (isSubcircuitRefPath) {
+        send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestChooseSubcircuitFile", componentId: component.id });
+      } else {
+        send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestChooseFile", componentId: component.id, propertyKey: field.key });
+      }
     });
     fileGroup.append(pathText, browseButton);
     row.append(caption, fileGroup);

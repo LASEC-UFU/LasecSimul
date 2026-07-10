@@ -649,7 +649,7 @@ export function sanitizeViewSpecProjection(value: unknown): ViewSpecProjection |
   return { kind: "visible", prop: raw.prop, invert: typeof raw.invert === "boolean" ? raw.invert : undefined };
 }
 
-function imageMimeForFile(filePath: string): string {
+export function imageMimeForFile(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
   if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
   if (ext === ".svg") return "image/svg+xml";

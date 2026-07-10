@@ -99,11 +99,17 @@ remeter a WASM/worker, é desatualizado — confiar nos dois `.spec` acima.
    device E/OU fica duplicada em outro lugar" (ver regra 6 acima e `.spec/lasecsimul.spec` seção 11).
    Built-in novo SEM relação com um grupo já existente ganha arquivo próprio; built-in novo
    RELACIONADO a um grupo existente (ex: mais um tipo de switch) pode entrar no mesmo módulo do grupo.
-8. **Na UI/webview, `package`/`logicSymbolPackage` é somente leitura nesta etapa.** O símbolo gráfico
-  do componente/dispositivo deve ser carregado exatamente do `.lsdevice`/`.lssubcircuit`; não recriar
-  comando, botão, menu, mensagem IPC ou sessão de autoria para editar/salvar o símbolo pela UI. A
-  renderização continua via parser/tradutor genérico compatível com SimulIDE, sem helper ad-hoc por
-  device nem `if/switch` por `typeId` para geometria já declarada no payload.
+8. **Na UI/webview, `package`/`logicSymbolPackage` é somente leitura pra `.lsdevice` (e pra
+  `logicSymbolPackage` de qualquer typeId).** O símbolo gráfico desses casos deve ser carregado
+  exatamente do manifesto; não recriar comando, botão, menu, mensagem IPC ou sessão de autoria
+  SEPARADA pra editar/salvar esse símbolo pela UI. A renderização continua via parser/tradutor
+  genérico compatível com SimulIDE, sem helper ad-hoc por device nem `if/switch` por `typeId` para
+  geometria já declarada no payload. **Exceção explícita (2026-07-10, `.spec/lasecsimul-subcircuits.spec`
+  seção 17)**: o `package`/ícone de um `.lssubcircuit` PODE ser editado, mas só DENTRO da sessão
+  "Abrir Subcircuito" já existente (seção 16 do mesmo spec) via componentes normais na mesma cena
+  (`other.package`/`other.package_pin`/`graphics.image` marcado, compilados por
+  `extension/src/catalog/subcircuitPackageAuthoring.ts`) -- nunca um editor/modo/toolbar separado. Não
+  confundir essa exceção com uma licença geral pra reabrir edição de símbolo em `.lsdevice`.
 
 ## Como agir por tipo de tarefa
 

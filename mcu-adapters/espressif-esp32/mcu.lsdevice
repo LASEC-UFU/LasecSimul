@@ -306,6 +306,10 @@
       "moduleKind": "USART",
       "moduleIndex": 0,
       "line": "tx"
+    },
+    "RST": {
+      "moduleKind": "Reset",
+      "moduleIndex": 0
     }
   },
   "package": {

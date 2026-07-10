@@ -16,7 +16,8 @@ import { absoluteSubcircuitRefPath, exportSchematicImageCommand, importProjectCo
 import { loadUnifiedCatalog, RegisteredSource, saveRegisteredSources } from "./catalog/UnifiedCatalog";
 import { refreshUnifiedCatalogState, registerCatalogFileCommand, removeRegisteredCatalogItemCommand } from "./catalog/catalogCommands";
 import { hasShowOnSymbolProperty, nextIndexedLabel } from "./catalog/catalogMerge";
-import { sanitizeManifestDefaultProperties } from "./catalog/packageSanitizers";
+import { imageMimeForFile, sanitizeManifestDefaultProperties } from "./catalog/packageSanitizers";
+import { compilePackageAuthoringComponents, seedPackageAuthoringComponents } from "./catalog/subcircuitPackageAuthoring";
 import { fileExists, normalizeAbsolutePath, readJsonFile } from "./pathUtils";
 import { currentLasecSimulLanguage } from "./currentLanguage";
 import {
@@ -419,6 +420,47 @@ async function chooseSubcircuitFileCommand(componentId: string): Promise<void> {
   }
 }
 
+/** Editor de propriedade `filePath` GENÉRICO (Estágio 1 da autoria de Package/ícone dentro de "Abrir
+ * Subcircuito", `.spec/lasecsimul.spec`) -- ao contrário de `chooseSubcircuitFileCommand` (nunca
+ * grava em `properties`, troca typeId/pinos/package inteiros da instância), este comando só lê o
+ * arquivo escolhido e grava em `component.properties[propertyKey]`. Quando o campo é
+ * `graphics.image.path`, também resolve `imageData`/`imageMime` (base64, mesmo padrão de
+ * `packageSanitizers.ts::sanitizePackageBackground`) pra renderização real na Webview
+ * (`componentSymbols.ts`) -- sem isso a imagem escolhida nunca apareceria no canvas, só o caminho
+ * cru guardado. */
+async function chooseFilePropertyCommand(componentId: string, propertyKey: string): Promise<void> {
+  const component = getComponentById(componentId);
+  if (!component) return;
+
+  const isImagePath = component.typeId === "graphics.image" && propertyKey === "path";
+  const picked = await vscode.window.showOpenDialog({
+    canSelectMany: false,
+    filters: isImagePath ? { Imagem: ["png", "jpg", "jpeg", "svg"] } : { "Todos os arquivos": ["*"] },
+    title: `Selecionar arquivo para ${component.label}`,
+  });
+  const selected = picked?.[0];
+  if (!selected) return;
+  const absolutePath = selected.fsPath;
+
+  const updatedProperties: Record<string, string | number | boolean> = { ...component.properties, [propertyKey]: absolutePath };
+  if (isImagePath) {
+    try {
+      updatedProperties.imageData = fs.readFileSync(absolutePath).toString("base64");
+      updatedProperties.imageMime = imageMimeForFile(absolutePath);
+    } catch (err) {
+      vscode.window.showErrorMessage(`Não foi possível ler ${absolutePath}: ${err instanceof Error ? err.message : String(err)}`);
+      return;
+    }
+  }
+
+  state.schematicState = {
+    ...state.schematicState,
+    components: state.schematicState.components.map((c) => (c.id === componentId ? { ...c, properties: updatedProperties } : c)),
+  };
+  pushPropertyToCore(componentId, propertyKey, absolutePath);
+  syncSchematicPanel();
+}
+
 /** `pinIds` (quando presente) é o contrato elétrico REAL na ordem que o Core espera -- plugins usam
  * o id enviado aqui diretamente (`NativeDeviceProxy`/`McuComponent`, ver `CoreApplication.cpp`,
  * `addComponent`), nunca um `pin-N` genérico sem relação com nada real. Sem `pinIds` (built-ins sem
@@ -808,6 +850,9 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
     case "requestChooseSubcircuitFile":
       void chooseSubcircuitFileCommand(message.componentId);
       return;
+    case "requestChooseFile":
+      void chooseFilePropertyCommand(message.componentId, message.propertyKey);
+      return;
     case "requestOpenExternal":
       void vscode.env.openExternal(vscode.Uri.parse(message.url));
       return;
@@ -1113,7 +1158,7 @@ async function openSubcircuitForEditingCommand(sourceId: string): Promise<void> 
 
   const rawComponents = Array.isArray(manifest.components) ? manifest.components : [];
   const rawWires = Array.isArray(manifest.wires) ? manifest.wires : [];
-  const components: WebviewComponentModel[] = rawComponents
+  const internalComponents: WebviewComponentModel[] = rawComponents
     .filter((value): value is Record<string, unknown> => typeof value === "object" && value !== null)
     .map((raw) => {
       const visual = (typeof raw.visual === "object" && raw.visual !== null ? raw.visual : {}) as Record<string, unknown>;
@@ -1139,6 +1184,25 @@ async function openSubcircuitForEditingCommand(sourceId: string): Promise<void> 
       return component;
     })
     .filter((component) => component.id && component.typeId);
+
+  // Autoria visual de ícone/Package (Estágio 3/4, `.spec/lasecsimul.spec`) -- materializa
+  // `other.package`/`other.package_pin`/a Figura marcada como ícone a partir de `manifest.package`/
+  // `manifest.interface` DENTRO da mesma lista `components` usada tanto por
+  // `session.initialComponents` quanto por `state.schematicState.components` (mesma referência,
+  // abaixo) -- se esses dois usassem arrays diferentes, a sessão abriria "suja" mesmo sem o usuário
+  // ter tocado em nada (ver `isSubcircuitEditingSessionDirty`). Nunca sintetiza nada quando
+  // `manifest.package` está ausente/não sanitiza -- arquivo antigo sem Package não ganha um
+  // gratuitamente só por ser aberto.
+  const packageAuthoringSeed = seedPackageAuthoringComponents(manifest, internalComponents, path.dirname(filePath), () => nextId("pkgauth"));
+  const components: WebviewComponentModel[] = [...internalComponents, ...packageAuthoringSeed.components];
+  if (packageAuthoringSeed.warnings.length > 0) {
+    // Modal (não toast) -- mesmo motivo do erro de save: uma lista com vários avisos cortava com
+    // "..." num toast, sem jeito de ler o resto.
+    void vscode.window.showWarningMessage(
+      "Subcircuito aberto com avisos no Package.",
+      { modal: true, detail: packageAuthoringSeed.warnings.map((warning) => `• ${warning}`).join("\n") }
+    );
+  }
 
   const wires: WebviewWireModel[] = rawWires
     .filter((value): value is Record<string, unknown> => typeof value === "object" && value !== null)
@@ -1190,10 +1254,37 @@ function isSubcircuitEditingSessionDirty(session: SubcircuitEditingSession): boo
 }
 
 /** Grava `components`/`wires` atuais de volta no `.lssubcircuit` da sessão (preservando todas as
- * outras chaves do manifesto original, ex: `package`/`interface`/`translations`) e reregistra no
- * Core. Não mexe em `state.subcircuitEditingStack`/`schematicState` -- só o efeito colateral em
- * disco, chamado pelo branch "Salvar" de `closeSubcircuitEditorCommand`. */
-async function writeSubcircuitEditingSessionBack(session: SubcircuitEditingSession): Promise<void> {
+ * outras chaves do manifesto original, ex: `translations`) e reregistra no Core. Não mexe em
+ * `state.subcircuitEditingStack`/`schematicState` -- só o efeito colateral em disco, chamado pelo
+ * branch "Salvar" de `closeSubcircuitEditorCommand`. Devolve `false` (sem gravar NADA em disco) numa
+ * condição fatal pro Core (pinId duplicado, Package/ícone duplicado, vínculo de túnel duplicado) --
+ * a chamadora mantém a sessão aberta nesse caso, nunca escreve um `.lssubcircuit` inconsistente. */
+async function writeSubcircuitEditingSessionBack(session: SubcircuitEditingSession): Promise<boolean> {
+  // Autoria visual de ícone/Package (Estágio 3/4/5, `.spec/lasecsimul.spec`) -- compila
+  // `other.package`/`other.package_pin`/a Figura marcada como ícone da cena ATUAL de volta pra
+  // `package`/`interface[]`, ANTES de qualquer `fs.writeFileSync` (nunca depois -- um resultado
+  // inválido não pode chegar a tocar o disco). `remainingComponents` já vem SEM os componentes de
+  // autoria -- precisa ser a base do merge de `boardVisual` abaixo, não `state.schematicState.
+  // components` bruto, senão um `other.package_pin` vazaria pra dentro de `components[]` do
+  // circuito interno de verdade (mesma classe de bug já corrigida uma vez nesta área).
+  const compiled = compilePackageAuthoringComponents(state.schematicState.components);
+  if (compiled.errors.length > 0) {
+    // Modal (não um toast) -- uma lista de erros pode ser longa o bastante pra um toast cortar com
+    // "..." sem dar jeito de ler o resto (achado real: usuário só via a mensagem truncada, sem
+    // saber qual era o erro de verdade). Modal sempre mostra o texto inteiro, sem limite de altura.
+    void vscode.window.showErrorMessage(
+      "Não foi possível salvar o subcircuito -- corrija antes de tentar de novo.",
+      { modal: true, detail: compiled.errors.map((error) => `• ${error}`).join("\n") }
+    );
+    return false;
+  }
+  if (compiled.warnings.length > 0) {
+    void vscode.window.showWarningMessage(
+      "Subcircuito salvo com avisos.",
+      { modal: true, detail: compiled.warnings.map((warning) => `• ${warning}`).join("\n") }
+    );
+  }
+
   // `boardVisual` (posição no overlay de Modo Placa, ver `WebviewComponentModel.boardX/Y`) é uma
   // propriedade do componente que esta sessão de edição NUNCA expõe/toca -- reconstruir cada
   // componente do zero (só com `id`/`typeId`/`properties`/`visual`/`exposed`) apagaria esse campo
@@ -1205,7 +1296,7 @@ async function writeSubcircuitEditingSessionBack(session: SubcircuitEditingSessi
     ? (session.originalManifest.components as Array<Record<string, unknown>>)
     : [];
   const originalComponentById = new Map(originalComponents.map((raw) => [String(raw.id ?? ""), raw]));
-  const components = state.schematicState.components.map((component) => ({
+  const components = compiled.remainingComponents.map((component) => ({
     ...(originalComponentById.get(component.id) ?? {}),
     id: component.id,
     typeId: component.typeId,
@@ -1219,25 +1310,44 @@ async function writeSubcircuitEditingSessionBack(session: SubcircuitEditingSessi
     },
     exposed: component.exposed === true,
   }));
-  const wires = state.schematicState.wires.map((wire) => ({
-    from: wire.from,
-    to: wire.to,
-    points: wire.points ?? [],
-  }));
-  const updatedManifest = { ...session.originalManifest, components, wires };
+  // Fios que tocam um componente de autoria (nunca deveria acontecer -- `other.package`/
+  // `other.package_pin`/a Figura têm `pinCount: 0`, sem pino nenhum pra desenhar fio até) são
+  // filtrados por defesa em profundidade, nunca gravados apontando pra um id que não existe mais em
+  // `components[]`.
+  const remainingIds = new Set(compiled.remainingComponents.map((component) => component.id));
+  const wires = state.schematicState.wires
+    .filter((wire) => remainingIds.has(wire.from.componentId) && remainingIds.has(wire.to.componentId))
+    .map((wire) => ({
+      from: wire.from,
+      to: wire.to,
+      points: wire.points ?? [],
+    }));
+  const updatedManifest: Record<string, unknown> = { ...session.originalManifest, components, wires };
+  if (compiled.touchedPackageAuthoring) {
+    if (compiled.hasPackage && compiled.package) {
+      updatedManifest.package = compiled.package;
+      updatedManifest.interface = compiled.interfaceEntries ?? [];
+    } else {
+      delete updatedManifest.package;
+      delete updatedManifest.interface;
+    }
+  }
 
   try {
     fs.writeFileSync(session.filePath, `${JSON.stringify(updatedManifest, null, 2)}\n`, "utf8");
   } catch (err) {
     vscode.window.showErrorMessage(`Não foi possível salvar o subcircuito: ${err instanceof Error ? err.message : String(err)}`);
+    return false;
   }
   if (state.coreClient) {
     try {
       await state.coreClient.registerAdhocSubcircuitDefinition(session.filePath, { replace: true });
     } catch (err) {
       vscode.window.showErrorMessage(`Não foi possível reregistrar o subcircuito no Core: ${err instanceof Error ? err.message : String(err)}`);
+      return false;
     }
   }
+  return true;
 }
 
 /** Restaura o circuito empilhado por `openSubcircuitForEditingCommand`, sem tocar no arquivo --
@@ -1273,8 +1383,14 @@ async function closeSubcircuitEditorCommand(): Promise<void> {
       cancel
     );
     if (choice === undefined || choice === cancel) return; // permanece na sessão de edição, nada muda
+    if (choice === save) {
+      // Valida/grava ANTES de desempilhar -- numa condição fatal (ver `writeSubcircuitEditingSessionBack`),
+      // a sessão PRECISA continuar ativa (nada foi escrito em disco), nunca desempilhar como se o
+      // "Salvar" tivesse funcionado.
+      const saved = await writeSubcircuitEditingSessionBack(session);
+      if (!saved) return;
+    }
     state.subcircuitEditingStack.pop();
-    if (choice === save) await writeSubcircuitEditingSessionBack(session);
     await restoreOuterCircuitFromSession(session);
     return;
   }

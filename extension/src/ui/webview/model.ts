@@ -74,6 +74,14 @@ export interface WebviewComponentModel {
     lastKnownTypeId?: string;
     lastKnownPinIds?: string[];
   };
+  /** Marca a ÚNICA instância de `graphics.image` (dentro de uma sessão "Abrir Subcircuito") que
+   * representa a Figura/ícone do Package sendo editado -- campo SÓ DE SESSÃO, nunca serializado
+   * direto no `.lssubcircuit` (a fonte de verdade persistida é `package.background`, ver
+   * `PackageDescriptor`). Materializado por `seedPackageAuthoringComponents` a partir de
+   * `package.background.kind === "image"`; lido de volta por `compilePackageAuthoringComponents` ao
+   * salvar (`extension/src/catalog/subcircuitPackageAuthoring.ts`, `.spec/lasecsimul.spec`). Mesmo
+   * estilo de campo "marcador de papel especial" que `subcircuitRef` já usa. */
+  packageIconRole?: true;
 }
 
 export interface WebviewPoint {
@@ -446,7 +454,11 @@ export interface ViewSpecAxisMapping {
  * element visual identificado por `partId` em `paint[]`. */
 export type ViewSpecProjection =
   | { kind: "translate"; x?: ViewSpecAxisMapping; y?: ViewSpecAxisMapping }
-  | { kind: "rotate"; prop: string; stepsPerRev: number; stepsPerRevProp?: string; cx: number; cy: number; propRange?: [number, number]; angleRange?: [number, number] }
+  /** `propRangeMinProp`/`propRangeMaxProp` (achado 2026-07-10, mesmo motivo de `ViewSpecLimit.
+   * minProp/maxProp`): quando presentes, sobrescrevem `propRange[0]`/`propRange[1]` com o valor AO
+   * VIVO dessas propriedades -- pra desenhar o nub na posição certa (ex: fontes controladas com
+   * `minValue`/`maxValue` editáveis) já no primeiro render, não só durante um arrasto ativo. */
+  | { kind: "rotate"; prop: string; stepsPerRev: number; stepsPerRevProp?: string; cx: number; cy: number; propRange?: [number, number]; propRangeMinProp?: string; propRangeMaxProp?: string; angleRange?: [number, number] }
   | { kind: "fill"; prop: string; map: Record<string, string> }
   | { kind: "visible"; prop: string; invert?: boolean };
 
@@ -460,10 +472,18 @@ export type ViewSpecHitTest =
   | { kind: "path"; d: string; cursor?: string };
 
 /** Limite físico/numérico reutilizável por interações. Exemplos: raio máximo do joystick, intervalo
- * angular de um knob, faixa em pixels de um slider, min/max/step de propriedade. */
+ * angular de um knob, faixa em pixels de um slider, min/max/step de propriedade. `minProp`/`maxProp`
+ * (achado 2026-07-10 -- fontes de tensão/corrente controladas): quando presentes, o min/max real é
+ * lido AO VIVO das `properties` da instância (mesmo nome de propriedade, ex: `minValue`/`maxValue`
+ * de `sources.voltage_source`/`current_source`) em vez do `min`/`max` fixo daqui -- necessário pra
+ * dispositivos cujo range é editável pelo usuário (diferente de `passive.variable_resistor`/etc,
+ * cujo 0-10000 nunca muda). `min`/`max` continuam servindo de FALLBACK se a propriedade não existir
+ * ainda na instância. Mesmo padrão já usado por `ViewSpecInteraction.dragAngular.stepsPerRevProp`. */
 export interface ViewSpecLimit {
   min?: number;
   max?: number;
+  minProp?: string;
+  maxProp?: string;
   step?: number;
   center?: number;
   radius?: number;

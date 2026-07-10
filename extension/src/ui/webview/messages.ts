@@ -124,6 +124,15 @@ export type WebviewToHostMessage =
    * `library.json`). Mesmo comando serve pra escolha inicial e pra "relink" (arquivo ausente ou
    * trocar de arquivo depois de já resolvido) -- ver `.spec/lasecsimul-subcircuits.spec` seção 12. */
   | { version: number; type: "requestChooseSubcircuitFile"; componentId: string }
+  /** Editor de propriedade `filePath` GENÉRICO -- ao contrário de `requestChooseSubcircuitFile`
+   * (caso especial único, nunca grava em `properties`, troca typeId/pinos/package da instância),
+   * este comando serve QUALQUER `propertySchema` com `editor: "filePath"` cujo campo NÃO seja
+   * `subcircuitPath`: abre o seletor, lê o arquivo e grava o resultado direto em
+   * `component.properties[propertyKey]` (mais campos auxiliares resolvidos quando aplicável, ex:
+   * `imageData`/`imageMime` pra `graphics.image.path` -- ver `extension.ts`). Usado hoje pelo objeto
+   * Figura/ícone da autoria de Package (`.spec/lasecsimul.spec`), reaproveitável por qualquer futuro
+   * campo `filePath` sem precisar de mais um caso especial. */
+  | { version: number; type: "requestChooseFile"; componentId: string; propertyKey: string; filters?: Record<string, string[]> }
   /** Abre URL no browser externo — disparado pelo botão "Ajuda" do diálogo de propriedades quando
    * o componente tem `help.url` declarado no catálogo. */
   | { version: number; type: "requestOpenExternal"; url: string }
