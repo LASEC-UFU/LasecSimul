@@ -1833,12 +1833,16 @@
                   "color": "#ffffff"
                 },
                 {
-                  "offset": "55%",
-                  "color": "#dfdfd6"
+                  "offset": "80%",
+                  "color": "#e6e6e1"
+                },
+                {
+                  "offset": "83%",
+                  "color": "#dcdcd7"
                 },
                 {
                   "offset": "100%",
-                  "color": "#aaa99f"
+                  "color": "#c8c8c3"
                 }
               ]
             }
@@ -1859,11 +1863,23 @@
               "kind": "ellipse",
               "cx": 16,
               "cy": 20,
+              "rx": 2.5,
+              "ry": 2.5,
+              "fill": "none",
+              "stroke": "#f0f0e6",
+              "strokeWidth": 1,
+              "cssClass": "encoder-indicator-halo",
+              "partId": "dialIndicator"
+            },
+            {
+              "kind": "ellipse",
+              "cx": 16,
+              "cy": 20,
               "rx": 2,
               "ry": 2,
               "fill": "#d2d2c8",
               "stroke": "#464646",
-              "strokeWidth": 0.5,
+              "strokeWidth": 1,
               "cssClass": "encoder-indicator",
               "partId": "dialIndicator"
             }
@@ -2737,12 +2753,16 @@
                   "color": "#ffffff"
                 },
                 {
-                  "offset": "55%",
-                  "color": "#dfdfd6"
+                  "offset": "80%",
+                  "color": "#e6e6e1"
+                },
+                {
+                  "offset": "83%",
+                  "color": "#dcdcd7"
                 },
                 {
                   "offset": "100%",
-                  "color": "#aaa99f"
+                  "color": "#c8c8c3"
                 }
               ]
             }
@@ -2763,11 +2783,23 @@
               "kind": "ellipse",
               "cx": 16,
               "cy": 20,
+              "rx": 2.5,
+              "ry": 2.5,
+              "fill": "none",
+              "stroke": "#f0f0e6",
+              "strokeWidth": 1,
+              "cssClass": "encoder-indicator-halo",
+              "partId": "dialIndicator"
+            },
+            {
+              "kind": "ellipse",
+              "cx": 16,
+              "cy": 20,
               "rx": 2,
               "ry": 2,
               "fill": "#d2d2c8",
               "stroke": "#464646",
-              "strokeWidth": 0.5,
+              "strokeWidth": 1,
               "cssClass": "encoder-indicator",
               "partId": "dialIndicator"
             }
@@ -2970,12 +3002,16 @@
                   "color": "#ffffff"
                 },
                 {
-                  "offset": "55%",
-                  "color": "#dfdfd6"
+                  "offset": "80%",
+                  "color": "#e6e6e1"
+                },
+                {
+                  "offset": "83%",
+                  "color": "#dcdcd7"
                 },
                 {
                   "offset": "100%",
-                  "color": "#aaa99f"
+                  "color": "#c8c8c3"
                 }
               ]
             }
@@ -2996,11 +3032,23 @@
               "kind": "ellipse",
               "cx": 16,
               "cy": 20,
+              "rx": 2.5,
+              "ry": 2.5,
+              "fill": "none",
+              "stroke": "#f0f0e6",
+              "strokeWidth": 1,
+              "cssClass": "encoder-indicator-halo",
+              "partId": "dialIndicator"
+            },
+            {
+              "kind": "ellipse",
+              "cx": 16,
+              "cy": 20,
               "rx": 2,
               "ry": 2,
               "fill": "#d2d2c8",
               "stroke": "#464646",
-              "strokeWidth": 0.5,
+              "strokeWidth": 1,
               "cssClass": "encoder-indicator",
               "partId": "dialIndicator"
             }

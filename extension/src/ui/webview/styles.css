@@ -1063,11 +1063,16 @@ html, body {
   flex: 0 0 auto;
 }
 
-/* SimulIDE real (oscwidget.ui): janela default 765x496, área de plot ocupa a maior parte --
-   altura aumentada de 280 pra 380 pra bater com a proporção real (antes ficava "achatado"). */
+/* Grade real do osciloscópio/analisador lógico é 10 colunas x 8 linhas (`instrumentPlotGridSvg`,
+   main.ts) -- 560x448 dá divisão QUADRADA (56x56px cada), igual ao instrumento real do SimulIDE.
+   Bug corrigido 2026-07-09: este `height` tinha sido ajustado (280 -> 380) numa sessão anterior pra
+   corrigir o mesmo "achatado", mas o `viewBox` de `renderScopePopupPlot`/`renderLogicPopupPlot`
+   (main.ts) nunca foi atualizado pra bater -- o mismatch viewBox/CSS esticava tudo (grade E traços)
+   de forma NÃO-uniforme, ainda distorcido, só que de um jeito diferente. `width`/`height` aqui
+   precisam bater EXATAMENTE com `plotW`/`plotH` dos dois `viewBox` (main.ts), senão o SVG reescala. */
 .instrument-plot-svg {
   width: 560px;
-  height: 380px;
+  height: 448px;
   border: 2px solid #444;
   border-radius: 4px;
   background: #000;
@@ -1128,9 +1133,11 @@ html, body {
   padding: 6px;
 }
 
-/** Linha de "knob" (dial visual estático + rótulo + spinner editável) -- réplica do layout
- * QDial+QLabel+PlotSpinBox de `oscwidget.ui` (Divisão/Posição de Tempo/Tensão). O disco é só visual
- * (sem arrastar pra girar nesta rodada); o spinner ao lado é o controle real, igual antes. */
+/** Linha de "knob" (dial `dialKnobSvg` + rótulo + spinner editável) -- réplica do layout
+ * QDial+QLabel+PlotSpinBox de `oscwidget.ui` (Divisão/Posição de Tempo/Tensão). O disco gira
+ * visualmente a cada roda-do-mouse/arrasto (`makeKnobRow::spinDial`, main.ts), puramente decorativo
+ * (o `QDial` real aqui também não representa o valor físico, ver docstring de `makeKnobRow`); o
+ * spinner ao lado é o controle real, igual antes. */
 .instrument-knob-row {
   display: flex;
   align-items: center;
@@ -1141,21 +1148,13 @@ html, body {
   width: 32px;
   height: 32px;
   flex: 0 0 auto;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #f7f7f8, #c7c9cd 65%, #989ba1);
-  border: 1px solid #6b6f76;
-  position: relative;
+  cursor: grab;
 }
 
-.instrument-knob-dial::after {
-  content: "";
-  position: absolute;
-  top: 3px;
-  left: 50%;
-  width: 2px;
-  height: 10px;
-  background: #3a3d42;
-  transform: translateX(-50%);
+.instrument-knob-dial__svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
 }
 
 .instrument-knob-info {

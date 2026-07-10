@@ -2023,3 +2023,77 @@ dedicada (não há cálculo geométrico/matricial aqui pra valer a pena simular 
 seções 17/18). Recomenda-se: escolher um `.bin`, rodar, recompilar o mesmo arquivo fora do LasecSimul,
 rodar de novo (deve recarregar sozinho, sem clique manual) e rodar uma 3ª vez sem tocar no arquivo
 (não deve reiniciar o processo QEMU).
+
+## 20. Knob "Dial" -- porta fiel de `CustomDial::paintEvent` e correção dos dependentes (2026-07-09)
+
+**Pedido**: o usuário identificou que SimulIDE tem um widget "Dial" reutilizado como base de vários
+dispositivos (inclusive os knobs de ajuste do osciloscópio) e pediu uma porta fiel + atualização de
+tudo que depende dele.
+
+**Achado de arquitetura real (`gui/customdial.cpp`, `gui/dialwidget.cpp`, `gui/circuitwidget/
+dialed.cpp`, `components/other/dial.cpp`, todos em `C:\SourceCode\simulide_2`)**: existem DOIS
+"dials" diferentes no SimulIDE real, não um só --
+1. **`CustomDial`** (`QDial` com `paintEvent` customizado, pintado à mão) -- base de `Dialed`,
+   usado por `Dial` (`other.dial`), `Potentiometer`, `VarResBase`/`VarInductor`/`VarCapacitor`
+   (resistor/indutor/capacitor variável) e o `SourceWidget` de fonte controlada. Geometria: arco de
+   300° a partir de 240° (sem wrapping) ou 360° a partir de 270° (com wrapping); marcas de escala
+   (contagem = `maximum/singleStep`, limitada a espaçamento mínimo de 4px, sempre par) com a
+   PRIMEIRA sempre vermelha (referência de zero); gradiente radial quase-branco com centro
+   deslocado pro canto superior-esquerdo (`0%→#fff, 80%→#e6e6e1, 83%→#dcdcd7, 100%→#c8c8c3`); nub de
+   valor (halo + corpo, círculos concêntricos) que se move ao longo do arco via `ângulo(ratio) =
+   ratio*spanDeg - startDeg` -- MESMA fórmula pras marcas E pro nub, nunca duas separadas.
+2. **`QDial` nativo sem subclasse** -- usado SÓ pelos 4 knobs do osciloscópio/analisador lógico
+   (`oscwidget.ui`/`lawidget.ui`: `timeDivDial`/`timePosDial`/`voltDivDial`/`voltPosDial`), chrome
+   do próprio SO, sem paint customizado. `wrapping=true`, e o valor muda por DIREÇÃO relativa (~1%
+   do valor atual por "clique" do encoder, `OscWidget::on_timeDivDial_valueChanged`) -- nunca por
+   ângulo absoluto; não existe posição real pra refletir (µs↔s não cabe numa rotação fixa).
+
+**Implementação** (`extension/src/ui/webview/componentSymbols.ts::dialKnobSvg`, antiga
+`qDialKnobSvg` renomeada e reescrita): porta fiel da geometria de `CustomDial::paintEvent` acima,
+parametrizada por raio total do widget + `ratio`/`wrapping`/`tickCount` opcionais. **Dois bugs reais
+corrigidos na função antiga**: (a) fórmula das marcas usava `startDeg + spanDeg*i/n` (SEM o sinal
+negativo de `painter.rotate(-startAngle)` do real) -- marcas ficavam sistematicamente fora de
+posição; (b) o nub tinha uma fórmula TOTALMENTE separada, decorativa, sempre travado no meio do
+curso -- as duas agora usam a mesma `ângulo(ratio) = ratio*spanDeg - startDeg`, verificada por
+rederivação manual da matriz de rotação real do Qt (`painter.rotate()`, convenção Y-pra-baixo, mesma
+já usada por `rotatePoint`/`svgBodyTransform` no resto do projeto).
+
+**Dependentes atualizados**:
+- `other.dial` (`componentSymbols.ts`): usa `dialKnobSvg` com `ratio: 0.5` (valor padrão real do
+  `QDial` recém-criado, `setValue(500)` sobre range 0-1000) -- sem `properties` modeladas ainda
+  nesta rodada (catálogo não declara min/max/valor), não há estado real além disso pra refletir.
+  Comentário anterior ("widget do SO, não dá pra reproduzir em SVG") corrigido -- factualmente
+  invertido, é o CONTRÁRIO que é verdade (`CustomDial` é pintado à mão pelo próprio SimulIDE, 100%
+  reproduzível; é o `QDial` do osciloscópio que é nativo/não reproduzível com fidelidade 1:1).
+- `passive.variable_resistor`/`variable_capacitor`/`variable_inductor` (`project/schema/
+  component-catalog.json`, `viewSpec` declarativo dos 3, blocos idênticos): gradiente corrigido
+  pros stops reais (`0/80/83/100%`, antes `0/55/100%` com cores mais escuras/erradas); nub ganhou o
+  halo que faltava (2º `<ellipse>` sem preenchimento, MESMO `partId: "dialIndicator"` do nub
+  original -- `viewSpecResolvedProjection` (`componentSymbols.ts:734`) é chamada POR FORMA, não uma
+  vez por `partId` único, então múltiplas formas com o mesmo `partId` recebem a MESMA projeção
+  computada e se movem juntas em sincronia, verificado por leitura antes de aplicar). Interação/
+  hit-test/limites (`dragAngular`, `stepsPerRev`, `-150°..150°`) intocados -- zero risco à
+  funcionalidade já testada (`ViewSpec rotate aceita propRange/angleRange para Dialed contínuo`).
+  Marcas de escala (ticks) NÃO adicionadas nesta rodada -- exigiriam enumerar ~15-20 formas de linha
+  à mão por componente (`ComponentViewSpec.paint` usa `PackageShape[]`, sem a primitiva `repeat` que
+  `simulidePaint.primitives[]` tem); risco/esforço vs. ganho visual não pareceu valer nesta rodada,
+  registrado como pendência.
+- Knobs do osciloscópio/analisador lógico (`main.ts::makeKnobRow`): trocado o círculo CSS estático
+  (gradiente + entalhe fixo que nunca girava) pelo `dialKnobSvg` real, com `wrapping: true` (igual
+  ao `QDial` real desses 4 controles). Como o valor NÃO mapeia pra ângulo absoluto (ver ponto 2
+  acima), o nub gira por um contador de posição PRÓPRIO (`knobDialPositions`, módulo-level, mesmo
+  modelo 0-1000 do `QDial` interno real) incrementado a cada interação (roda do mouse/arrasto) --
+  puramente feedback visual de "girei o botão", nunca uma representação do valor físico (µs↔s não
+  caberia numa posição fixa sem pular loucamente a cada refresh). Interação real (wheel/drag
+  ajustando o spinner numérico ao lado) inalterada.
+
+**Verificação**: compilação limpa (`tsc` main + webview + test) e suíte completa (154 testes) sem
+regressão, incluindo os 2 testes existentes que cobrem os 3 componentes `viewSpec.dial`
+(`ViewSpec overlayPaint desenha dial por cima de simulidePaint`, `ViewSpec rotate aceita propRange/
+angleRange para Dialed contínuo`) -- nenhum deles asserta contagem exata de `stops`/formas do nub, o
+que teria quebrado com estas mudanças se fosse o caso. Fórmula angular verificada por rederivação
+manual da matriz de rotação (não simulação numérica automatizada desta vez -- ver seções 17/18 pro
+padrão quando compensa). Sem GUI disponível neste ambiente pra confirmar visualmente; recomenda-se
+abrir um `other.dial`, um resistor/indutor/capacitor variável (arrastar o knob, confirmar que ainda
+ajusta o valor normalmente) e a janela "Expande" do osciloscópio, e comparar visualmente com o
+`CustomDial` real do SimulIDE.

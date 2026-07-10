@@ -970,12 +970,21 @@ function svgRound(value: number): number {
 function qtButtonSvg(x: number, y: number, w: number, h: number, text: string, id: string): string {
   const gradId = `${id}-button-grad`;
   const innerH = h - 2;
+  // Envolve os 3 elementos num `<g class="meter-expand-button">` -- NÃO a classe direto em cada um
+  // (colocaria `.meter-expand-button { fill:#ededed; stroke:#999 }`, do CSS, por cima do
+  // gradiente/borda destes atributos: presentation attribute sempre perde pra regra de CSS na
+  // cascata). `<g>` não tem fill/stroke próprio pra sobrescrever nada -- só serve de alvo pro
+  // `event.target.closest(".meter-expand-button")` do handler de clique (`main.ts`,
+  // `isExpandableInstrument`). Sem isto (nenhum elemento carregava a classe antes), o botão
+  // "Expande" nunca respondia a clique nenhum -- bug relatado 2026-07-09.
   return (
     `<defs><linearGradient id="${gradId}" x1="${x + w / 2}" y1="${y}" x2="${x + w / 2}" y2="${y + innerH}" gradientUnits="userSpaceOnUse">` +
     `<stop offset="0%" stop-color="#ffffff"/><stop offset="100%" stop-color="#c8c8c8"/></linearGradient></defs>` +
+    `<g class="meter-expand-button">` +
     `<rect x="${x + 0.8}" y="${y + 0.8}" width="${w - 1.6}" height="${innerH + 0.4}" rx="2" ry="2" fill="none" stroke="#6e6e6e" stroke-width="1"/>` +
     `<rect x="${x + 1}" y="${y + 1}" width="${w - 2}" height="${innerH}" rx="2" ry="2" fill="url(#${gradId})" stroke="none"/>` +
-    `<text x="${x + w / 2}" y="${y + h / 2}" text-anchor="middle" dominant-baseline="central" font-family="Segoe UI,Arial,sans-serif" font-size="9" font-weight="700" fill="#000014">${escapeXmlText(text)}</text>`
+    `<text x="${x + w / 2}" y="${y + h / 2}" text-anchor="middle" dominant-baseline="central" font-family="Segoe UI,Arial,sans-serif" font-size="9" font-weight="700" fill="#000014">${escapeXmlText(text)}</text>` +
+    `</g>`
   );
 }
 
@@ -1290,40 +1299,89 @@ function horizontalLeads(box: ComponentBox, yMid: number): string {
   );
 }
 
-/** Estilização vetorial de um `QDial` NATIVO do Qt (widget do SO, ver `gui/customdial.cpp` --
- * `CustomDial::paintEvent` real, não aproximação livre) -- usado por `other.dial` e
- * `sources.voltage_source`/`current_source` pra ficarem visualmente consistentes entre si (mesmo
- * widget real por trás dos três). Geometria fiel ao paintEvent: arco de 300° começando em 240°,
- * marcas cinza (110,110,110) a cada passo + a PRIMEIRA marca (240°, início da faixa) sempre
- * VERMELHA -- essa marca vermelha é uma referência FIXA de zero, não o indicador de valor real (o
- * indicador de valor é um "nub" circular separado, que se move ao longo do mesmo arco conforme
- * value/maximum). Gradiente radial quase branco (só (200,200,195) na borda, não um cinza forte). */
-function qDialKnobSvg(cx: number, cy: number, r: number): string {
-  const gradientId = `dial-grad-${Math.round(cx)}-${Math.round(cy)}-${Math.round(r)}`;
-  const tickCount = 20;
+/** Porta fiel de `CustomDial::paintEvent` (SimulIDE real, `gui/customdial.cpp`) -- o knob rotativo
+ * que `Dialed` (`gui/circuitwidget/dialed.cpp`) monta pra QUALQUER dispositivo com controle
+ * giratório: `Dial` (`other.dial`), `Potentiometer`, `VarResBase`/`VarInductor`/`VarCapacitor`
+ * (resistor/indutor/capacitor variável), fonte de tensão/corrente controlada (`SourceWidget`) e o
+ * encoder `KY040` -- todos o MESMO widget real, nunca aproximações diferentes por typeId.
+ *
+ * Geometria (todas as proporções derivadas de `r`, o raio TOTAL do widget -- equivalente a
+ * `width/2`/`height/2` do `QDial` real, NÃO só o círculo visível; as marcas de escala vivem na
+ * margem entre o círculo visível e essa borda):
+ * - `d = r/6`, `faceR = r-d-1` (raio do círculo visível, `fi/2` no real).
+ * - Arco de `spanDeg`/`startDeg`: SEM wrapping (padrão) = 300° a partir de 240°; COM wrapping
+ *   (osciloscópio/analisador lógico, `QDial::wrapping()=true` real) = 360° a partir de 270°.
+ * - `ângulo(ratio) = ratio*spanDeg - startDeg` -- MESMA fórmula pras marcas (`ratio=i/tickCount`,
+ *   `Dialed::` real via `painter.rotate(-startAngle)` seguido de `N` rotações de `spanAngle/ticks`
+ *   cada) E pro nub de valor (`ratio = QDial::value()/QDial::maximum()` real) -- nunca duas
+ *   fórmulas separadas por engano (bug corrigido 2026-07-09: a versão anterior usava só
+ *   `startDeg + spanDeg*i/n`, SEM o sinal negativo de `painter.rotate(-startAngle)` -- marcas
+ *   ficavam ~120° fora de posição real, e o nub tinha uma fórmula totalmente diferente/decorativa,
+ *   sempre travado no meio do curso).
+ * - Marcas: contagem real = `maximum/singleStep` (`QDial` padrão do SimulIDE: 1000/25=40),
+ *   limitada a espaçamento mínimo de 4px ao longo da circunferência (`(fi*PI)/ticks &gt;= 4`,
+ *   senão vira faixa preta ilegível em tamanho pequeno) e sempre PAR. Marca 0 (referência fixa de
+ *   zero, não o valor atual) é VERMELHA e um pouco mais LONGA (`r-3` até `r+1`, poking pra fora do
+ *   anel); as demais são cinza `rgb(110,110,110)`, `r-3` até `r` (rente ao anel) -- mesma
+ *   stroke-width 1 nas duas, só o comprimento difere.
+ * - Anel externo: stroke `#464646` em `faceR`. Círculo interno (a "cara" do botão): stroke branco +
+ *   preenchimento gradiente radial quase-branco, centro DESLOCADO pro canto superior-esquerdo
+ *   (`QRadialGradient(QPoint(dx,dy), fi)` real -- luz vindo de cima-esquerda, não centrado) com
+ *   paradas `0%→#fff, 80%→#e6e6e1, 83%→#dcdcd7, 100%→#c8c8c3`.
+ * - Nub de valor: halo (stroke `rgb(240,240,230)`, sem preenchimento, raio `knobRadius+0.5`) +
+ *   corpo (preenchimento `rgb(210,210,200)`, stroke `rgb(70,70,70)`, raio `knobRadius=faceR/6`),
+ *   a `faceR-knobRadius*2.5` do centro. `ratio` ausente = sem nub (caso puramente decorativo, sem
+ *   valor pra refletir). */
+export function dialKnobSvg(cx: number, cy: number, r: number, options?: { ratio?: number; wrapping?: boolean; tickCount?: number; idSeed?: string }): string {
+  const wrapping = options?.wrapping === true;
+  const d = r / 6;
+  const faceR = r - d - 1;
+  const knobRadius = faceR / 6;
+  const spanDeg = wrapping ? 360 : 300;
+  const startDeg = wrapping ? 270 : 240;
+  const angleDegFor = (ratio: number) => ratio * spanDeg - startDeg;
+
+  const spacingCap = Math.floor((faceR * 2 * Math.PI) / 4);
+  let tickCount = Math.min(options?.tickCount ?? 40, spacingCap);
+  if (tickCount % 2 !== 0) tickCount -= 1;
+  tickCount = Math.max(2, tickCount);
+
   let ticks = "";
   for (let i = 0; i <= tickCount; i++) {
-    const angleDeg = 240 + (300 / tickCount) * i;
-    const rad = (angleDeg * Math.PI) / 180;
-    const inner = r - 4;
+    const rad = (angleDegFor(i / tickCount) * Math.PI) / 180;
+    const cosA = Math.cos(rad);
+    const sinA = Math.sin(rad);
     const isZeroRef = i === 0;
+    const innerR = r - 3;
+    const outerR = isZeroRef ? r + 1 : r;
     ticks +=
-      `<line x1="${(cx + Math.cos(rad) * inner).toFixed(1)}" y1="${(cy + Math.sin(rad) * inner).toFixed(1)}" ` +
-      `x2="${(cx + Math.cos(rad) * r).toFixed(1)}" y2="${(cy + Math.sin(rad) * r).toFixed(1)}" ` +
-      `stroke="${isZeroRef ? "#e02020" : "#6e6e6e"}" stroke-width="${isZeroRef ? 2 : 1}"/>`;
+      `<line x1="${(cx + cosA * innerR).toFixed(1)}" y1="${(cy + sinA * innerR).toFixed(1)}" ` +
+      `x2="${(cx + cosA * outerR).toFixed(1)}" y2="${(cy + sinA * outerR).toFixed(1)}" ` +
+      `stroke="${isZeroRef ? "#ff0000" : "#6e6e6e"}" stroke-width="1"/>`;
   }
-  // Nub de valor decorativo no meio do curso (50%) -- widget interativo real, sem estado de
-  // "posição atual" reproduzido aqui, ver docstring da função.
-  const valueRad = ((240 + 300 * 0.5) * Math.PI) / 180;
-  const knobR = r / 6;
-  const nubX = cx + Math.cos(valueRad) * (r - knobR * 2.5);
-  const nubY = cy + Math.sin(valueRad) * (r - knobR * 2.5);
+
+  const gradId = `dial-grad-${options?.idSeed ?? `${Math.round(cx)}-${Math.round(cy)}-${Math.round(r)}`}`;
+  const gradCx = cx - faceR;
+  const gradCy = cy - faceR;
+
+  let nub = "";
+  if (options?.ratio !== undefined) {
+    const rad = (angleDegFor(Math.min(1, Math.max(0, options.ratio))) * Math.PI) / 180;
+    const nubDist = faceR - knobRadius * 2.5;
+    const nubX = cx + Math.cos(rad) * nubDist;
+    const nubY = cy + Math.sin(rad) * nubDist;
+    nub =
+      `<circle cx="${nubX.toFixed(1)}" cy="${nubY.toFixed(1)}" r="${(knobRadius + 0.5).toFixed(1)}" fill="none" stroke="rgb(240,240,230)" stroke-width="1"/>` +
+      `<circle cx="${nubX.toFixed(1)}" cy="${nubY.toFixed(1)}" r="${knobRadius.toFixed(1)}" fill="rgb(210,210,200)" stroke="rgb(70,70,70)" stroke-width="1"/>`;
+  }
+
   return (
-    `<defs><radialGradient id="${gradientId}" cx="50%" cy="50%" r="50%">` +
-    `<stop offset="0%" stop-color="#ffffff"/><stop offset="80%" stop-color="#e6e6e1"/><stop offset="100%" stop-color="#c8c8c3"/></radialGradient></defs>` +
-    `<circle cx="${cx}" cy="${cy}" r="${r}" fill="url(#${gradientId})" stroke="#464646" stroke-width="1"/>` +
+    `<defs><radialGradient id="${gradId}" cx="${gradCx}" cy="${gradCy}" r="${(faceR * 2).toFixed(1)}" gradientUnits="userSpaceOnUse">` +
+    `<stop offset="0%" stop-color="#ffffff"/><stop offset="80%" stop-color="#e6e6e1"/><stop offset="83%" stop-color="#dcdcd7"/><stop offset="100%" stop-color="#c8c8c3"/></radialGradient></defs>` +
     ticks +
-    `<circle cx="${nubX.toFixed(1)}" cy="${nubY.toFixed(1)}" r="${knobR.toFixed(1)}" fill="#d2d2c8" stroke="#464646" stroke-width="1"/>`
+    `<circle cx="${cx}" cy="${cy}" r="${faceR.toFixed(1)}" fill="none" stroke="#464646" stroke-width="1"/>` +
+    `<circle cx="${cx}" cy="${cy}" r="${(faceR - 1).toFixed(1)}" fill="url(#${gradId})" stroke="#ffffff" stroke-width="1"/>` +
+    nub
   );
 }
 
@@ -1540,11 +1598,14 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
       return `<rect x="2" y="2" width="${box.width - 4}" height="${box.height - 4}" class="symbol-stroke" fill="none"/>`;
 
     case "other.dial":
-      // dial.cpp: o knob de verdade é um `QDial` NATIVO do Qt (widget do SO, não dá pra reproduzir
-      // em SVG) -- usa a MESMA estilização de `sources.voltage_source`/`current_source`
-      // (`qDialKnobSvg`), já que é o mesmo widget real por trás dos dois, em vez de manter dois
-      // desenhos diferentes pra aproximar a mesma peça.
-      return qDialKnobSvg(midX, yMid, Math.min(midX, yMid) - 2);
+      // dial.cpp: o knob de verdade É `CustomDial` (gui/customdial.cpp), o widget PRÓPRIO do
+      // SimulIDE reaproveitado por `Dialed` em vários dispositivos (ver docstring de
+      // `dialKnobSvg`) -- plenamente reproduzível em SVG, ao contrário do que um comentário
+      // anterior aqui afirmava. `ratio: 0.5` replica o valor padrão real do `QDial` recém-criado
+      // (`setValue(500)` sobre um range 0-1000, `CustomDial::CustomDial`) -- sem `properties`
+      // modeladas ainda pra este typeId (catálogo não declara min/max/valor), não há estado real
+      // pra refletir além disso.
+      return dialKnobSvg(midX, yMid, Math.min(midX, yMid) - 2, { ratio: 0.5 });
 
     case "logic.button": {
       const rise = box.height / 2 - 5;

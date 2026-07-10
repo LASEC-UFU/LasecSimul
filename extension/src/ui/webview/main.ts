@@ -1,6 +1,6 @@
 import { WEBVIEW_MESSAGE_VERSION, ComponentReadoutValue, HostToWebviewMessage, InternalComponentSnapshot, SimulationStatus, WebviewToHostMessage } from "./messages.js";
 import { InteractionKindEntry, JUNCTION_TYPE_ID, McuSerialPortEntry, PropertySchemaEntry, TUNNEL_TYPE_ID, ViewSpecInteraction, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./model.js";
-import { ComponentBox, PIN_RADIUS, componentBox, componentLocalOrigin, componentSymbolSvg, hasRealPinPosition, missingSubcircuitPlaceholderSvg, packageSymbolSvg, pinLocalPosition, registerPackage } from "./componentSymbols.js";
+import { ComponentBox, PIN_RADIUS, componentBox, componentLocalOrigin, componentSymbolSvg, dialKnobSvg, hasRealPinPosition, missingSubcircuitPlaceholderSvg, packageSymbolSvg, pinLocalPosition, registerPackage } from "./componentSymbols.js";
 import { detectChannelTrigger, findTriggerAnchorIndex, triggerAlignedWindowEndNs, visibleSampleWindowByTime } from "./instrumentTrigger.js";
 import {
   Point,
@@ -2873,6 +2873,17 @@ interface LogicPopupState {
 type InstrumentPopupState = ScopePopupState | LogicPopupState;
 
 const instrumentPopups = new Map<string, InstrumentPopupState>();
+/** Posição bruta 0-1000 do `QDial` por knob (`makeKnobRow`), chave `${componentId}:${labelText}` --
+ * MESMO modelo do real (`QDial` interno sempre 0-1000, `CustomDial::CustomDial` -- ver docstring de
+ * `dialKnobSvg`, `componentSymbols.ts`). Os knobs de Divisão/Posição de Tempo/Tensão do osciloscópio
+ * são `wrapping=true` no real (`oscwidget.ui`) e NUNCA representam o valor físico diretamente (ver
+ * `OscWidget::on_timeDivDial_valueChanged` -- só a DIREÇÃO do movimento importa, aplicada como ~1%
+ * do valor atual); esta posição existe só pra desenhar o nub girando visualmente a cada interação,
+ * igual ao encoder "infinito" real -- nunca derivada do valor físico (µs↔s teria que pular loucamente
+ * de posição a cada refresh). Sobrevive a re-renders (módulo, não escopo de função) até a janela
+ * fechar; nunca limpo por componente removido (leak inofensivo, mesma classe de decisão de
+ * `state.ts::lastLoadedFirmwareByCoreId`). */
+const knobDialPositions = new Map<string, number>();
 // Cores EXATAS do SimulIDE real (plotbase.cpp: m_color[0..3] = RGB(240,240,100)/(220,220,255)/
 // (255,210,90)/(0,245,160)) -- canais 4-7 do analisador lógico reusam as mesmas 4 cores (i % 4).
 const INSTRUMENT_CHANNEL_COLORS = ["#f0f064", "#dcdcff", "#ffd25a", "#00f5a0", "#f0f064", "#dcdcff", "#ffd25a", "#00f5a0"];
@@ -2988,8 +2999,10 @@ function instrumentPlotGridSvg(plotW: number, plotH: number, divisions = 10, row
  * de `popup` durante o render, mesma semântica de "os botões/diais se movem sozinhos" do osciloscópio
  * de bancada real enquanto "Auto" está ativo. */
 function renderScopePopupPlot(popup: ScopePopupState, channels: Array<{ timestampsNs: number[]; values: number[] }>): SVGSVGElement {
+  // 560x448 -- MESMO tamanho de `.instrument-plot-svg` (styles.css), pra 10x8 divisões ficarem
+  // quadradas (56x56px cada) em vez de esticadas -- bug corrigido 2026-07-09, ver comentário lá.
   const plotW = 560;
-  const plotH = 280;
+  const plotH = 448;
   const svg = document.createElementNS(SVG_NS, "svg");
   svg.setAttribute("viewBox", `0 0 ${plotW} ${plotH}`);
   svg.classList.add("instrument-plot-svg");
@@ -3036,8 +3049,10 @@ function renderScopePopupPlot(popup: ScopePopupState, channels: Array<{ timestam
  * DIRETAMENTE -- a borda de disparo cai exatamente na borda direita da tela, sem encaixe de
  * período (mesma fidelidade, função mais simples porque o sinal de origem é mais simples). */
 function renderLogicPopupPlot(popup: LogicPopupState, history: { timestampsNs: number[]; masks: number[] }): SVGSVGElement {
-  const plotW = 700;
-  const plotH = 320;
+  // 560x448 -- MESMO tamanho de `.instrument-plot-svg` (styles.css) e do osciloscópio
+  // (`renderScopePopupPlot`), pra 10x8 divisões ficarem quadradas -- bug corrigido 2026-07-09.
+  const plotW = 560;
+  const plotH = 448;
   const svg = document.createElementNS(SVG_NS, "svg");
   svg.setAttribute("viewBox", `0 0 ${plotW} ${plotH}`);
   svg.classList.add("instrument-plot-svg");
@@ -3111,7 +3126,17 @@ function makeChannelButton(label: string, color: string, active: boolean, onClic
 /** Linha de "knob" (disco visual estático + rótulo + spinner numérico editável) -- réplica do
  * layout QDial+QLabel+PlotSpinBox de `oscwidget.ui` (Divisão/Posição de Tempo/Tensão). O disco é só
  * decorativo nesta rodada (sem arrastar pra girar); o spinner ao lado é o controle real. */
+/** Knob visual do osciloscópio/analisador lógico -- `timeDivDial`/`timePosDial`/`voltDivDial`/
+ * `voltPosDial` de `oscwidget.ui` real são `QDial` NATIVOS `wrapping=true` (chrome do próprio SO,
+ * sem paint customizado -- diferente de `CustomDial`, ver docstring de `dialKnobSvg`), e o valor
+ * muda por DIREÇÃO relativa (~1% do valor atual por "clique" do encoder,
+ * `OscWidget::on_timeDivDial_valueChanged`), nunca por ângulo absoluto -- não existe uma "posição"
+ * real pra mostrar aqui. Ainda assim usa o MESMO desenho `dialKnobSvg` (consistência visual entre
+ * TODOS os knobs do app, achado 2026-07-09) com wrapping=true, girando o nub a cada interação via
+ * `knobDialPositions` (módulo-level, mesmo modelo 0-1000 do `QDial` interno real) -- puramente pra
+ * feedback visual de "girei o botão", nunca pra representar o valor físico. */
 function makeKnobRow(
+  knobKey: string,
   labelText: string,
   value: number,
   step: number,
@@ -3120,15 +3145,29 @@ function makeKnobRow(
 ): HTMLDivElement {
   const row = document.createElement("div");
   row.className = "instrument-knob-row";
+
   const dial = document.createElement("span");
   dial.className = "instrument-knob-dial";
   dial.tabIndex = 0;
+
+  const renderDial = (): void => {
+    const dialPos = knobDialPositions.get(knobKey) ?? 500;
+    dial.innerHTML = `<svg viewBox="0 0 32 32" class="instrument-knob-dial__svg">${dialKnobSvg(16, 16, 15, { ratio: dialPos / 1000, wrapping: true, idSeed: knobKey.replace(/[^a-zA-Z0-9]/g, "-") })}</svg>`;
+  };
+  renderDial();
+
   const dialStep = () => Math.max(1e-12, options?.dialStep?.(value) ?? step);
+  const spinDial = (direction: 1 | -1): void => {
+    const previous = knobDialPositions.get(knobKey) ?? 500;
+    knobDialPositions.set(knobKey, ((previous + direction * 40) % 1000 + 1000) % 1000);
+    renderDial();
+  };
   const applyDialDelta = (direction: 1 | -1) => {
     const signed = options?.reverse ? -direction : direction;
     const next = Math.max(options?.min ?? -Infinity, value + signed * dialStep());
     value = next;
     onChange(next);
+    spinDial(direction);
   };
   dial.addEventListener("wheel", (event) => {
     event.preventDefault();
@@ -3273,8 +3312,18 @@ function makePopupChrome(title: string, popup: InstrumentPopupState): { containe
   return { container, body };
 }
 
+/** Índice numérico do rótulo indexado (`nextIndexedLabel`, ex: "Osciloscópio-2" -> "2") -- usado pra
+ * montar o título da janela "Expande" no formato curto real do SimulIDE (`Oscope-1`/`LAnalizer-1`,
+ * ver `oscwidget.ui`/`lawidget.ui`), independente do texto de rótulo do catálogo (localizável,
+ * "Logic Analyzer" aqui vs "LAnalizer" lá). Bug corrigido 2026-07-09: o título prefixava o rótulo
+ * JÁ indexado inteiro (`Oscope-${component.label}` com `label` = "Oscope-1" → "Oscope-Oscope-1"). */
+function instrumentPopupIndexSuffix(component: WebviewComponentModel): string {
+  const match = /-(\d+)$/.exec(component.label);
+  return match ? match[1]! : (component.label || component.id);
+}
+
 function buildScopePopup(popup: ScopePopupState, component: WebviewComponentModel): HTMLDivElement {
-  const { container, body } = makePopupChrome(`Oscope-${component.label || component.id}`, popup);
+  const { container, body } = makePopupChrome(`Oscope-${instrumentPopupIndexSuffix(component)}`, popup);
 
   const plotWrap = document.createElement("div");
   plotWrap.className = "instrument-popup__plot";
@@ -3309,20 +3358,20 @@ function buildScopePopup(popup: ScopePopupState, component: WebviewComponentMode
     if (popup.activeTab === "all") popup.channels.forEach(fn);
     else fn(activeChannel);
   };
-  knobs.appendChild(makeKnobRow("Divisão de Tempo (ms)", popup.timeDivMs, 100, (v) => { popup.timeDivMs = Math.max(0.001, v); renderInstrumentPopups(); }, {
+  knobs.appendChild(makeKnobRow(`${component.id}:timeDiv`, "Divisão de Tempo (ms)", popup.timeDivMs, 100, (v) => { popup.timeDivMs = Math.max(0.001, v); renderInstrumentPopups(); }, {
     dialStep: (current) => Math.max(0.001, Math.abs(current) / 100),
     reverse: true,
     min: 0.001,
   }));
-  knobs.appendChild(makeKnobRow("Posição de Tempo (ms)", activeChannel.timePosMs, 100, (v) => { applyChannels((channel) => { channel.timePosMs = v; }); renderInstrumentPopups(); }, {
+  knobs.appendChild(makeKnobRow(`${component.id}:timePos`, "Posição de Tempo (ms)", activeChannel.timePosMs, 100, (v) => { applyChannels((channel) => { channel.timePosMs = v; }); renderInstrumentPopups(); }, {
     dialStep: () => Math.max(0.001, popup.timeDivMs / 100),
   }));
-  knobs.appendChild(makeKnobRow("Divisão de Tensão (V)", activeChannel.voltDiv, 0.1, (v) => { const next = Math.max(0.001, v); applyChannels((channel) => { channel.voltDiv = next; }); renderInstrumentPopups(); }, {
+  knobs.appendChild(makeKnobRow(`${component.id}:voltDiv`, "Divisão de Tensão (V)", activeChannel.voltDiv, 0.1, (v) => { const next = Math.max(0.001, v); applyChannels((channel) => { channel.voltDiv = next; }); renderInstrumentPopups(); }, {
     dialStep: (current) => Math.max(0.001, Math.abs(current) / 100),
     reverse: true,
     min: 0.001,
   }));
-  knobs.appendChild(makeKnobRow("Posição de Tensão (V)", activeChannel.voltPos, 0.1, (v) => { applyChannels((channel) => { channel.voltPos = v; }); renderInstrumentPopups(); }, {
+  knobs.appendChild(makeKnobRow(`${component.id}:voltPos`, "Posição de Tensão (V)", activeChannel.voltPos, 0.1, (v) => { applyChannels((channel) => { channel.voltPos = v; }); renderInstrumentPopups(); }, {
     dialStep: () => Math.max(0.001, activeChannel.voltDiv / 100),
     reverse: true,
   }));
@@ -3367,7 +3416,7 @@ function buildScopePopup(popup: ScopePopupState, component: WebviewComponentMode
 }
 
 function buildLogicPopup(popup: LogicPopupState, component: WebviewComponentModel): HTMLDivElement {
-  const { container, body } = makePopupChrome(`LAnalizer-${component.label || component.id}`, popup);
+  const { container, body } = makePopupChrome(`LAnalizer-${instrumentPopupIndexSuffix(component)}`, popup);
   const history = logicChannelFor(component.id);
 
   const plotWrap = document.createElement("div");
@@ -3379,8 +3428,8 @@ function buildLogicPopup(popup: LogicPopupState, component: WebviewComponentMode
 
   const knobs = document.createElement("div");
   knobs.className = "instrument-knobs";
-  knobs.appendChild(makeKnobRow("Divisão de Tempo (ms)", popup.timeDivMs, 100, (v) => { popup.timeDivMs = Math.max(10, v); renderInstrumentPopups(); }));
-  knobs.appendChild(makeKnobRow("Posição de Tempo (ms)", popup.timePosMs, 100, (v) => { popup.timePosMs = v; renderInstrumentPopups(); }));
+  knobs.appendChild(makeKnobRow(`${component.id}:timeDiv`, "Divisão de Tempo (ms)", popup.timeDivMs, 100, (v) => { popup.timeDivMs = Math.max(10, v); renderInstrumentPopups(); }));
+  knobs.appendChild(makeKnobRow(`${component.id}:timePos`, "Posição de Tempo (ms)", popup.timePosMs, 100, (v) => { popup.timePosMs = v; renderInstrumentPopups(); }));
   controls.appendChild(knobs);
 
   const busLabel = document.createElement("div");
