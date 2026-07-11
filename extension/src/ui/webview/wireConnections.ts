@@ -3,7 +3,7 @@
  * `WebviewComponentModel`/`WebviewWireModel`. O host usa isto nos handlers
  * `"requestConnectPins"`/`"requestConnectPinToWire"` para manter a regra de conexão em um ponto só. */
 
-import { JUNCTION_TYPE_ID, WebviewComponentModel, WebviewPoint, WebviewWireModel } from "./model";
+import { JUNCTION_TYPE_ID, WebviewComponentModel, WebviewPoint, WebviewWireModel } from "./model.js";
 
 export type WirePinRef = { componentId: string; pinId: string };
 

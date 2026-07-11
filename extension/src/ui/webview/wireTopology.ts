@@ -18,10 +18,10 @@ import {
   normalizeOrthogonalPath,
   samePoint,
   splitWireRouteAtPoint,
-} from "./wireGeometry";
-import { JUNCTION_TYPE_ID, WebviewComponentModel, WebviewWireModel } from "./model";
-import { buildPinToPinWire, buildPinToWireConnection, WirePinRef } from "./wireConnections";
-import { componentBox, componentLocalOrigin, pinLocalPosition } from "./componentSymbols";
+} from "./wireGeometry.js";
+import { JUNCTION_TYPE_ID, WebviewComponentModel, WebviewWireModel } from "./model.js";
+import { buildPinToPinWire, buildPinToWireConnection, WirePinRef } from "./wireConnections.js";
+import { componentBox, componentLocalOrigin, pinLocalPosition } from "./componentSymbols.js";
 
 export interface TopologySnapshot {
   components: WebviewComponentModel[];
