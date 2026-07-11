@@ -21,6 +21,7 @@
     "src/ui/webview/componentSymbols.ts",
     "src/ui/webview/wireGeometry.ts",
     "src/ui/webview/wireConnections.ts",
+    "src/ui/webview/wireTopology.ts",
     "src/ui/webview/valueFormatting.ts"
   ]
 }

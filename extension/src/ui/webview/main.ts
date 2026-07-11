@@ -7,13 +7,21 @@ import {
   WIRE_GRID_SIZE,
   appendPoint,
   buildOrthogonalPath,
+  moveOrthogonalWireCorner,
+  moveOrthogonalWireSegment,
+  nearestPointOnOrthogonalSegment,
+  nearestSnappedPointOnOrthogonalSegment,
   normalizeOrthogonalPath,
   orthogonalSegmentPoints,
   samePoint,
   snapCoordinate,
   snapToWireGrid,
+  splitWireRouteAtPoint,
+  wireConnectCornerIndexLikeSimulIDE,
+  wireCornerIndexNearSegmentPoint,
 } from "./wireGeometry.js";
 import { formatEngineeringValue, defaultSiPrefixFactor, SI_PREFIXES } from "./valueFormatting.js";
+import { isJunctionVisible } from "./wireTopology.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const FINE_WIRE_STEP = WIRE_GRID_SIZE / 10;
@@ -325,6 +333,13 @@ let selectedWireCorner:
       pointIndex: number;
     }
   | undefined;
+/** Um arrasto real (canto/segmento com `drag.moved === true`) dispara um `click` sintético logo
+ * depois em alguns navegadores/plataformas mesmo com bastante deslocamento -- sem esta trava, esse
+ * clique cairia no novo gesto "clicar num fio sempre inicia uma derivação" (ver
+ * `renderWireCornerHandles`/`renderWireSegmentHandles`) e criaria uma junção indesejada logo após
+ * mover um fio. Setado no `finish()` de cada arrasto quando `moved===true`, consumido (e resetado)
+ * no início do próximo `click`. */
+let suppressNextWireInteractionClick = false;
 let simulationStatus: SimulationStatus = "stopped";
 /** Taxa real alcançada (ver `messages.ts::simulationRate`) -- `undefined` == sem leitura ainda ou
  * simulação parada, mostra só o rótulo de status sem número junto. */
@@ -781,21 +796,6 @@ function toggleComponentSelection(componentId: string): void {
   state.selectedComponentIds = isComponentSelected(componentId)
     ? state.selectedComponentIds.filter((id) => id !== componentId)
     : [...state.selectedComponentIds, componentId];
-}
-
-function toggleWireSelection(wireId: string, segmentIndex?: number): void {
-  state.selectedComponentIds = [];
-  selectedTextLabel = undefined;
-  if (isWireSelected(wireId)) {
-    state.selectedWireIds = state.selectedWireIds.filter((id) => id !== wireId);
-    if (selectedWireSegment?.wireId === wireId) selectedWireSegment = undefined;
-    if (selectedWireCorner?.wireId === wireId) selectedWireCorner = undefined;
-    return;
-  }
-
-  state.selectedWireIds = [...state.selectedWireIds, wireId];
-  selectedWireSegment = segmentIndex === undefined ? undefined : { wireId, segmentIndex };
-  selectedWireCorner = undefined;
 }
 
 /** "" (nada) parado/sem amostra; senão "(0.9x)"/"(120%)" -- mesmo espírito de `InfoWidget::setRate()`
@@ -1620,7 +1620,14 @@ function render(): void {
   const boardModeComponents: WebviewComponentModel[] = [];
   const junctionComponents: WebviewComponentModel[] = [];
   for (const component of state.components) {
-    if (component.typeId === JUNCTION_TYPE_ID) junctionComponents.push(component);
+    // Só desenha o pontinho de junção quando ela tem significado elétrico real (grau >= 3, um T ou
+    // mais) -- grau 0/1/2 são casos que `removeOrphanNodes` deveria ter colapsado/removido, mas por
+    // segurança (ex: estado ainda não normalizado) o pontinho nunca aparece pra eles de qualquer
+    // jeito. Corrige a "bola laranja" permanente: antes, TODA junção entrava aqui incondicionalmente.
+    if (component.typeId === JUNCTION_TYPE_ID) {
+      if (isJunctionVisible(state.wires, component.id)) junctionComponents.push(component);
+      continue;
+    }
     if (component.hidden) continue;
     visibleComponents.push(component);
     if (component.properties.boardModeEnabled) boardModeComponents.push(component);
@@ -2086,22 +2093,6 @@ function updateWireFromFullPath(wire: WebviewWireModel, fullPoints: Point[]): vo
   else delete wire.points;
 }
 
-function moveOrthogonalWireSegment(fullPoints: Point[], segmentIndex: number, coordinate: number): Point[] {
-  const moved = fullPoints.map((point) => ({ ...point }));
-  const from = moved[segmentIndex];
-  const to = moved[segmentIndex + 1];
-  if (!from || !to) return moved;
-
-  if (Math.abs(from.y - to.y) < 0.5) {
-    from.y = coordinate;
-    to.y = coordinate;
-  } else if (Math.abs(from.x - to.x) < 0.5) {
-    from.x = coordinate;
-    to.x = coordinate;
-  }
-  return normalizeOrthogonalPath(moved);
-}
-
 function duplicateEditableEndpointForSegmentMove(
   fullPoints: Point[],
   segmentIndex: number
@@ -2115,66 +2106,6 @@ function duplicateEditableEndpointForSegmentMove(
     duplicated.push({ ...duplicated[duplicated.length - 1]! });
   }
   return { points: duplicated, segmentIndex };
-}
-
-function wireCornerIndexNearSegmentPoint(points: Point[], segmentIndex: number, point: Point, tolerance = 8): number | undefined {
-  const from = points[segmentIndex];
-  const to = points[segmentIndex + 1];
-  if (!from || !to) return undefined;
-
-  const distanceFrom = Math.hypot(point.x - from.x, point.y - from.y);
-  if (distanceFrom <= tolerance && segmentIndex > 0) return segmentIndex;
-
-  const distanceTo = Math.hypot(point.x - to.x, point.y - to.y);
-  if (distanceTo <= tolerance && segmentIndex + 1 < points.length - 1) return segmentIndex + 1;
-
-  return undefined;
-}
-
-function wireConnectCornerIndexLikeSimulIDE(
-  points: Point[],
-  segmentIndex: number,
-  point: Point,
-  tolerance = 8
-): number | undefined {
-  const from = points[segmentIndex];
-  const to = points[segmentIndex + 1];
-  if (!from || !to) return undefined;
-
-  const isHorizontal = Math.abs(from.y - to.y) < 0.5;
-  const isVertical = Math.abs(from.x - to.x) < 0.5;
-  if (!isHorizontal && !isVertical) return undefined;
-
-  if (isHorizontal) {
-    if (Math.abs(point.x - to.x) < tolerance && segmentIndex < points.length - 2) return segmentIndex + 1;
-    if (Math.abs(point.x - from.x) < tolerance && segmentIndex > 0) return segmentIndex;
-    return undefined;
-  }
-
-  if (Math.abs(point.y - to.y) < tolerance && segmentIndex < points.length - 2) return segmentIndex + 1;
-  if (Math.abs(point.y - from.y) < tolerance && segmentIndex > 0) return segmentIndex;
-  return undefined;
-}
-
-function moveOrthogonalWireCorner(fullPoints: Point[], pointIndex: number, target: Point): Point[] {
-  const moved = fullPoints.map((point) => ({ ...point }));
-  const prev = moved[pointIndex - 1];
-  const current = moved[pointIndex];
-  const next = moved[pointIndex + 1];
-  if (!prev || !current || !next) return moved;
-
-  const prevVertical = Math.abs(prev.x - current.x) < 0.5;
-  const nextVertical = Math.abs(current.x - next.x) < 0.5;
-  current.x = target.x;
-  current.y = target.y;
-
-  if (prevVertical) prev.x = target.x;
-  else prev.y = target.y;
-
-  if (nextVertical) next.x = target.x;
-  else next.y = target.y;
-
-  return normalizeOrthogonalPath(moved);
 }
 
 function renderWireCornerHandles(wireLayer: SVGSVGElement, wire: WebviewWireModel, points: Point[]): void {
@@ -2193,9 +2124,36 @@ function renderWireCornerHandles(wireLayer: SVGSVGElement, wire: WebviewWireMode
     );
     handle.addEventListener("click", (event) => {
       event.stopPropagation();
-      if (event.shiftKey) toggleWireSelection(wire.id);
-      else selectOnlyWireCorner(wire.id, index);
-      persistState();
+      if (suppressNextWireInteractionClick) {
+        suppressNextWireInteractionClick = false;
+        return;
+      }
+
+      if (state.pendingConnection) {
+        // Termina a derivação em andamento exatamente neste canto -- mesma lógica de "clicar num
+        // fio" (`splitWireRouteAtPoint` local + `requestConnectPinToWire`), só que o ponto já é
+        // exato (canto real, sem projeção/snap necessários).
+        const split = splitWireRouteAtPoint(wirePolylinePoints(wire), point);
+        send({
+          version: WEBVIEW_MESSAGE_VERSION,
+          type: "requestConnectPinToWire",
+          from: state.pendingConnection,
+          wireId: wire.id,
+          point,
+          points: pendingWirePointsForTarget(point),
+          existingWireFirstPoints: split.first,
+          existingWireSecondPoints: split.second,
+        });
+        clearPendingWire();
+        vscode?.setState(state);
+        render();
+        return;
+      }
+
+      // Sem conexão pendente: clicar num canto de fio existente sempre inicia uma nova derivação
+      // daquele ponto (fiel ao SimulIDE) -- seleção de fio inteiro passa a ser só via marquee.
+      send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestStartWireFromWire", wireId: wire.id, point });
+      vscode?.setState(state);
       render();
     });
     handle.addEventListener("contextmenu", (event) => {
@@ -2244,7 +2202,10 @@ function renderWireCornerHandles(wireLayer: SVGSVGElement, wire: WebviewWireMode
         window.removeEventListener("pointercancel", finish);
         const drag = wireCornerDrag;
         wireCornerDrag = undefined;
-        if (drag?.moved) persistState();
+        if (drag?.moved) {
+          persistState();
+          suppressNextWireInteractionClick = true;
+        }
       };
 
       window.addEventListener("pointermove", onMove);
@@ -2288,15 +2249,20 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
     );
     handle.addEventListener("click", (event) => {
       event.stopPropagation();
+      if (suppressNextWireInteractionClick) {
+        suppressNextWireInteractionClick = false;
+        return;
+      }
+
       const canvasEl = handle.closest<HTMLElement>(".canvas");
       if (!canvasEl) return;
       const clickPoint = eventToCanvasPoint(event, canvasEl);
+      const cornerIndex = wireConnectCornerIndexLikeSimulIDE(points, index, clickPoint);
+      const target =
+        cornerIndex !== undefined ? points[cornerIndex]! : nearestSnappedPointOnOrthogonalSegment(clickPoint, from, to, WIRE_GRID_SIZE);
 
       if (state.pendingConnection) {
-        const cornerIndex = wireConnectCornerIndexLikeSimulIDE(points, index, clickPoint);
-        const target =
-          cornerIndex !== undefined ? points[cornerIndex]! : nearestSnappedPointOnOrthogonalSegment(clickPoint, from, to, WIRE_GRID_SIZE);
-        const split = splitWireRouteAtPoint(wire, target);
+        const split = splitWireRouteAtPoint(wirePolylinePoints(wire), target);
         send({
           version: WEBVIEW_MESSAGE_VERSION,
           type: "requestConnectPinToWire",
@@ -2313,11 +2279,11 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
         return;
       }
 
-      const cornerIndex = wireCornerIndexNearSegmentPoint(points, index, clickPoint);
-      if (event.shiftKey && cornerIndex !== undefined) selectOnlyWireCorner(wire.id, cornerIndex);
-      else if (event.shiftKey) toggleWireSelection(wire.id, index);
-      else selectOnlyWire(wire.id, index);
-      persistState();
+      // Sem conexão pendente: clicar em qualquer trecho de um fio existente sempre inicia uma nova
+      // derivação daquele ponto (fiel ao SimulIDE) -- seleção de fio inteiro passa a ser só via
+      // marquee (`applyMarqueeSelection` já cobre isso, ver `.spec` seção do refactor de fios).
+      send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestStartWireFromWire", wireId: wire.id, point: target });
+      vscode?.setState(state);
       render();
     });
     handle.addEventListener("contextmenu", (event) => {
@@ -2369,7 +2335,10 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
           window.removeEventListener("pointercancel", finishCorner);
           const drag = wireCornerDrag;
           wireCornerDrag = undefined;
-          if (drag?.moved) persistState();
+          if (drag?.moved) {
+            persistState();
+            suppressNextWireInteractionClick = true;
+          }
         };
 
         window.addEventListener("pointermove", onCornerMove);
@@ -2419,7 +2388,10 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
         window.removeEventListener("pointercancel", finish);
         const drag = wireSegmentDrag;
         wireSegmentDrag = undefined;
-        if (drag?.moved) persistState();
+        if (drag?.moved) {
+          persistState();
+          suppressNextWireInteractionClick = true;
+        }
       };
 
       window.addEventListener("pointermove", onMove);
@@ -2501,69 +2473,6 @@ function pendingWirePointsForTarget(target: Point): Point[] {
   const segment = orthogonalSegmentPoints(anchor, target);
   for (const routePoint of segment.slice(1, -1)) appendPoint(points, routePoint);
   return points;
-}
-
-function nearestPointOnOrthogonalSegment(point: Point, from: Point, to: Point): Point {
-  if (Math.abs(from.x - to.x) < 0.5) {
-    return {
-      x: from.x,
-      y: Math.max(Math.min(point.y, Math.max(from.y, to.y)), Math.min(from.y, to.y)),
-    };
-  }
-  return {
-    x: Math.max(Math.min(point.x, Math.max(from.x, to.x)), Math.min(from.x, to.x)),
-    y: from.y,
-  };
-}
-
-function nearestSnappedPointOnOrthogonalSegment(point: Point, from: Point, to: Point, step: number): Point {
-  const nearest = nearestPointOnOrthogonalSegment(point, from, to);
-  if (Math.abs(from.x - to.x) < 0.5) {
-    return {
-      x: from.x,
-      y: Math.max(Math.min(snapCoordinate(nearest.y, step), Math.max(from.y, to.y)), Math.min(from.y, to.y)),
-    };
-  }
-
-  return {
-    x: Math.max(Math.min(snapCoordinate(nearest.x, step), Math.max(from.x, to.x)), Math.min(from.x, to.x)),
-    y: from.y,
-  };
-}
-
-function squaredDistance(a: Point, b: Point): number {
-  const dx = a.x - b.x;
-  const dy = a.y - b.y;
-  return dx * dx + dy * dy;
-}
-
-function splitWireRouteAtPoint(wire: WebviewWireModel, splitPoint: Point): { first: Point[]; second: Point[] } {
-  const full = wirePolylinePoints(wire);
-  if (full.length < 2) return { first: [], second: [] };
-
-  const withSplit: Point[] = [full[0]!];
-  let inserted = false;
-  for (let index = 1; index < full.length; index += 1) {
-    const from = withSplit[withSplit.length - 1]!;
-    const to = full[index]!;
-    if (!inserted) {
-      const nearest = nearestPointOnOrthogonalSegment(splitPoint, from, to);
-      if (squaredDistance(nearest, splitPoint) < 1) {
-        appendPoint(withSplit, nearest);
-        if (!samePoint(nearest, to)) appendPoint(withSplit, to);
-        inserted = true;
-        continue;
-      }
-    }
-    appendPoint(withSplit, to);
-  }
-
-  const splitIndex = withSplit.findIndex((point) => samePoint(point, splitPoint));
-  if (splitIndex <= 0 || splitIndex >= withSplit.length - 1) return { first: [], second: [] };
-  return {
-    first: withSplit.slice(1, splitIndex),
-    second: withSplit.slice(splitIndex + 1, withSplit.length - 1),
-  };
 }
 
 function selectedWireSegmentInfo():
@@ -2662,6 +2571,60 @@ function pinScenePosition(component: WebviewComponentModel, pinId: string): Poin
   if (pinIndex < 0) return undefined;
   const local = componentPinLocalPosition(component, pinIndex);
   return { x: component.x + local.x, y: component.y + local.y };
+}
+
+/** Depois de soltar um arrasto de componente, verifica se algum dos pinos dele agora encosta
+ * EXATAMENTE (não só "perto") em cima de um fio que ainda não toca esse componente -- se sim, cria a
+ * junção automaticamente, igual ao clique-pra-derivar (`requestConnectPinToWire`). Corrige "parece
+ * conectado mas não está" ao arrastar um componente por cima de um fio existente. Tolerância pequena
+ * de propósito (só overlap real, não "nas redondezas") -- diferente do hit-test de clique explícito
+ * (`WIRE_GRID_SIZE`), já que este gatilho é automático/passivo, não uma ação deliberada do usuário. */
+function maybeAutoJunctionForDraggedComponents(componentIds: string[]): void {
+  for (const componentId of componentIds) {
+    const component = state.components.find((entry) => entry.id === componentId);
+    if (!component) continue;
+    const touchingWireIds = new Set(
+      state.wires.filter((wire) => wire.from.componentId === componentId || wire.to.componentId === componentId).map((wire) => wire.id)
+    );
+    for (const pin of component.pins) {
+      const pinPos = pinScenePosition(component, pin.id);
+      if (!pinPos) continue;
+
+      let matchedWire: WebviewWireModel | undefined;
+      let matchedTarget: Point | undefined;
+      for (const wire of state.wires) {
+        if (touchingWireIds.has(wire.id)) continue;
+        const points = wirePolylinePoints(wire);
+        for (let index = 0; index < points.length - 1; index += 1) {
+          const from = points[index]!;
+          const to = points[index + 1]!;
+          const isHorizontal = Math.abs(from.y - to.y) < 0.5;
+          const isVertical = Math.abs(from.x - to.x) < 0.5;
+          if (!isHorizontal && !isVertical) continue;
+          const projected = nearestPointOnOrthogonalSegment(pinPos, from, to);
+          if (Math.hypot(projected.x - pinPos.x, projected.y - pinPos.y) < 0.5) {
+            matchedWire = wire;
+            matchedTarget = projected;
+            break;
+          }
+        }
+        if (matchedWire) break;
+      }
+      if (!matchedWire || !matchedTarget) continue;
+
+      const split = splitWireRouteAtPoint(wirePolylinePoints(matchedWire), matchedTarget);
+      send({
+        version: WEBVIEW_MESSAGE_VERSION,
+        type: "requestConnectPinToWire",
+        from: { componentId, pinId: pin.id },
+        wireId: matchedWire.id,
+        point: matchedTarget,
+        existingWireFirstPoints: split.first,
+        existingWireSecondPoints: split.second,
+      });
+      touchingWireIds.add(matchedWire.id); // não tenta o mesmo fio de novo pra outro pino desta mesma passada
+    }
+  }
 }
 
 let wiresByComponentCacheKey = "";
@@ -4326,6 +4289,9 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
       // originais, que ficaram parados) -- mesmo resultado esperado de "duplicar e mover".
       if (dragStarted && isDuplicateDragGesture && dragTargets.length > 0) {
         state.selectedComponentIds = dragTargets.map((target) => target.component.id);
+      }
+      if (dragStarted && dragTargets.length > 0) {
+        maybeAutoJunctionForDraggedComponents(dragTargets.map((target) => target.component.id));
       }
       dragTargets = [];
       if (!dragStarted && canToggle) {

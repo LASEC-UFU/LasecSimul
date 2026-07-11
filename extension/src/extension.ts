@@ -9,6 +9,7 @@ import { SchematicPanel } from "./ui/panels/SchematicPanel";
 import { createInitialWebviewState } from "./ui/webview/catalog";
 import { JUNCTION_TYPE_ID, TUNNEL_TYPE_ID, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./ui/webview/model";
 import { buildPinToPinWire, buildPinToWireConnection } from "./ui/webview/wireConnections";
+import { normalizeWireGeometry, removeOrphanNodes, splitSegmentAtPoint } from "./ui/webview/wireTopology";
 import { WebviewToHostMessage } from "./ui/webview/messages";
 import { ComponentPaletteViewProvider } from "./ui/views/ComponentPaletteViewProvider";
 import { materializePinGroup } from "./ui/webview/componentSymbols";
@@ -604,6 +605,10 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       return;
     }
     case "requestAddComponent": {
+      // Junção só pode nascer automaticamente de uma divisão real de fio (ver `wireTopology.ts`
+      // `splitSegmentAtPoint`) -- nunca colocável manualmente, mesmo que uma mensagem IPC tente
+      // forçar isso (defesa em profundidade; a paleta já filtra por `hidden:true` no catálogo).
+      if (message.typeId === JUNCTION_TYPE_ID) return;
       const descriptor = state.schematicState.catalog.find((item) => item.typeId === message.typeId);
       const componentId = nextId("component");
       const pins = pinsForTypeId(message.typeId, descriptor?.defaultProperties);
@@ -620,14 +625,23 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
         pins,
         properties: { ...(descriptor?.defaultProperties ?? {}) },
       };
-      state.schematicState = {
-        ...state.schematicState,
-        components: [...state.schematicState.components, component],
-        selectedComponentIds: [componentId],
-        selectedWireIds: [],
-      };
-      void pushComponentToCore(componentId, component.typeId, component.properties, component.pins);
-      syncSchematicPanel();
+      void (async () => {
+        // Só aguarda confirmação do Core quando ele de fato vai tentar sincronizar este componente
+        // -- um componente sem pino elétrico (decorativo) ou sem Core conectado nunca tenta push, e
+        // não deve ficar bloqueado esperando por algo que nunca aconteceria (`shouldSyncComponentToCore`).
+        const willSync = Boolean(state.coreClient) && shouldSyncComponentToCore(message.typeId);
+        if (willSync) {
+          const ok = await pushComponentToCore(componentId, component.typeId, component.properties, component.pins);
+          if (!ok) return; // Core recusou/falhou -- a tela nunca chega a mostrar um componente que o Core não tem.
+        }
+        state.schematicState = {
+          ...state.schematicState,
+          components: [...state.schematicState.components, component],
+          selectedComponentIds: [componentId],
+          selectedWireIds: [],
+        };
+        syncSchematicPanel();
+      })();
       return;
     }
     case "requestInsertItems": {
@@ -660,51 +674,92 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       pushRemoveToCore(message.componentId);
       coreInstanceIdByComponentId.delete(message.componentId);
       mcuTargetCoreIdByComponentId.delete(message.componentId);
-      const removedWireIds = new Set(
-        state.schematicState.wires
-          .filter((wire) => wire.from.componentId === message.componentId || wire.to.componentId === message.componentId)
-          .map((wire) => wire.id)
-      );
-      state.schematicState = {
-        ...state.schematicState,
+      const afterRemoval = {
         components: state.schematicState.components.filter((component) => component.id !== message.componentId),
         wires: state.schematicState.wires.filter((wire) => wire.from.componentId !== message.componentId && wire.to.componentId !== message.componentId),
+      };
+      // Apagar um componente pode derrubar o grau de uma junção que ele tocava (ou de uma
+      // encadeada além dela) pra <=2 -- `removeOrphanNodes` cascateia a limpeza/colapso pra nunca
+      // deixar uma junção "bola laranja" órfã presa no esquemático (ver `.spec` seção do refactor
+      // de fios).
+      const normalized = removeOrphanNodes(afterRemoval);
+      const topologyChangedBeyondDirectRemoval =
+        normalized.components.length !== afterRemoval.components.length || normalized.wires.length !== afterRemoval.wires.length;
+      const survivingWireIds = new Set(normalized.wires.map((wire) => wire.id));
+      state.schematicState = {
+        ...state.schematicState,
+        components: normalized.components,
+        wires: normalized.wires,
         selectedComponentIds: state.schematicState.selectedComponentIds.filter((id) => id !== message.componentId),
-        selectedWireIds: state.schematicState.selectedWireIds.filter((id) => !removedWireIds.has(id)),
+        selectedWireIds: state.schematicState.selectedWireIds.filter((id) => survivingWireIds.has(id)),
         pendingConnection:
           state.schematicState.pendingConnection?.componentId === message.componentId ? undefined : state.schematicState.pendingConnection,
       };
       syncSchematicPanel();
-      if (state.simulationStatus === "running") void pollWireVoltages();
+      if (topologyChangedBeyondDirectRemoval) {
+        // Colapso/cascata de junção órfã: mais seguro reconstruir o Core do zero do que tentar
+        // diferenciar incrementalmente quais fios sumiram/nasceram nessa fusão (operação rara).
+        void queueCoreRebuild().then(() => {
+          if (state.simulationStatus === "running") {
+            void pollInstrumentReadouts();
+            void pollWireVoltages();
+          }
+        });
+      } else if (state.simulationStatus === "running") {
+        void pollWireVoltages();
+      }
       return;
     }
     case "requestRemoveWire": {
       const removedWire = state.schematicState.wires.find((wire) => wire.id === message.wireId);
+      const afterRemoval = {
+        components: state.schematicState.components,
+        wires: state.schematicState.wires.filter((wire) => wire.id !== message.wireId),
+      };
+      const normalized = removeOrphanNodes(afterRemoval);
+      const topologyChangedBeyondDirectRemoval =
+        normalized.components.length !== afterRemoval.components.length || normalized.wires.length !== afterRemoval.wires.length;
+      const survivingWireIds = new Set(normalized.wires.map((wire) => wire.id));
       state.schematicState = {
         ...state.schematicState,
-        wires: state.schematicState.wires.filter((wire) => wire.id !== message.wireId),
-        selectedWireIds: state.schematicState.selectedWireIds.filter((id) => id !== message.wireId),
+        components: normalized.components,
+        wires: normalized.wires,
+        selectedWireIds: state.schematicState.selectedWireIds.filter((id) => survivingWireIds.has(id)),
       };
       syncSchematicPanel();
-      pushRemoveWireToCore(removedWire);
-      if (state.simulationStatus === "running") {
-        void pollInstrumentReadouts();
-        void pollWireVoltages();
+      if (topologyChangedBeyondDirectRemoval) {
+        void queueCoreRebuild().then(() => {
+          if (state.simulationStatus === "running") {
+            void pollInstrumentReadouts();
+            void pollWireVoltages();
+          }
+        });
+      } else {
+        pushRemoveWireToCore(removedWire);
+        if (state.simulationStatus === "running") {
+          void pollInstrumentReadouts();
+          void pollWireVoltages();
+        }
       }
       return;
     }
     case "requestConnectPins": {
       const wire = buildPinToPinWire({ id: nextId("wire"), from: message.from, to: message.to, points: message.points });
-      state.schematicState = {
-        ...state.schematicState,
-        wires: [...state.schematicState.wires, wire],
-        selectedComponentIds: [],
-        selectedWireIds: [wire.id],
-        pendingConnection: undefined,
-      };
-      void pushWireToCore(wire);
-      syncSchematicPanel();
-      if (state.simulationStatus === "running") void pollWireVoltages();
+      void (async () => {
+        if (state.coreClient) {
+          const ok = await pushWireToCore(wire);
+          if (!ok) return; // Core recusou/falhou -- não deixa a tela mostrar um fio que o Core não conectou.
+        }
+        state.schematicState = {
+          ...state.schematicState,
+          wires: [...state.schematicState.wires, wire],
+          selectedComponentIds: [],
+          selectedWireIds: [wire.id],
+          pendingConnection: undefined,
+        };
+        syncSchematicPanel();
+        if (state.simulationStatus === "running") void pollWireVoltages();
+      })();
       return;
     }
     case "requestConnectPinToWire": {
@@ -722,26 +777,85 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
         existingWireSecondPoints: message.existingWireSecondPoints,
         newWirePoints: message.points,
       });
-      state.schematicState = {
-        ...state.schematicState,
-        components: [...state.schematicState.components, junction],
-        wires: [
-          ...state.schematicState.wires.filter((wire) => wire.id !== message.wireId),
-          firstWire,
-          secondWire,
-          newWire,
-        ],
-        selectedComponentIds: [],
-        selectedWireIds: [newWire.id],
-        pendingConnection: undefined,
-      };
-      syncSchematicPanel();
-      void queueCoreRebuild().then(() => {
+      void (async () => {
+        // Operação composta (junção + até 3 fios): qualquer falha no Core reverte tudo, nunca
+        // deixa uma junção "meio criada" na tela sem os fios que deveriam sair dela.
+        if (state.coreClient) {
+          const componentOk = await pushComponentToCore(junction.id, junction.typeId, junction.properties, junction.pins);
+          if (!componentOk) return;
+          const wiresOk = await Promise.all([firstWire, secondWire, newWire].map((wire) => pushWireToCore(wire)));
+          if (wiresOk.some((ok) => !ok)) {
+            pushRemoveToCore(junction.id); // desfaz o componente já aceito -- Core não fica com meia-junção
+            return;
+          }
+        }
+        state.schematicState = {
+          ...state.schematicState,
+          components: [...state.schematicState.components, junction],
+          wires: [
+            ...state.schematicState.wires.filter((wire) => wire.id !== message.wireId),
+            firstWire,
+            secondWire,
+            newWire,
+          ],
+          selectedComponentIds: [],
+          selectedWireIds: [newWire.id],
+          pendingConnection: undefined,
+        };
+        syncSchematicPanel();
         if (state.simulationStatus === "running") {
           void pollInstrumentReadouts();
           void pollWireVoltages();
         }
-      });
+      })();
+      return;
+    }
+    case "requestStartWireFromWire": {
+      // Clique num trecho qualquer de um fio, sem conexão pendente -- inicia uma derivação
+      // diretamente daquele ponto (fiel ao SimulIDE). Todo o cálculo de split/reuso de junção
+      // já existente vive em `wireTopology.ts`, única fonte de verdade tanto pra este verbo quanto
+      // pra `requestConnectPinToWire` acima.
+      const split = splitSegmentAtPoint(
+        { components: state.schematicState.components, wires: state.schematicState.wires },
+        message.wireId,
+        message.point,
+        { junctionId: nextId("junction"), firstWireId: nextId("wire"), secondWireId: nextId("wire") }
+      );
+      if (!split) return;
+      const junctionId = split.firstWire.to.componentId;
+      void (async () => {
+        // Mesma regra de rollback composto de `requestConnectPinToWire`: se reusa uma junção já
+        // existente, `split.junction` é `undefined` e não há componente novo pra criar/desfazer no
+        // Core -- só os dois fios do split precisam ser confirmados.
+        if (state.coreClient) {
+          if (split.junction) {
+            const componentOk = await pushComponentToCore(split.junction.id, split.junction.typeId, split.junction.properties, split.junction.pins);
+            if (!componentOk) return;
+          }
+          const wiresOk = await Promise.all([split.firstWire, split.secondWire].map((wire) => pushWireToCore(wire)));
+          if (wiresOk.some((ok) => !ok)) {
+            if (split.junction) pushRemoveToCore(split.junction.id);
+            return;
+          }
+        }
+        state.schematicState = {
+          ...state.schematicState,
+          components: split.junction ? [...state.schematicState.components, split.junction] : state.schematicState.components,
+          wires: [...state.schematicState.wires.filter((wire) => wire.id !== message.wireId), split.firstWire, split.secondWire],
+          selectedComponentIds: [],
+          selectedWireIds: [],
+          // Arma a conexão pendente na junção recém-criada (ou reusada) -- o pino dela é um pino
+          // REAL, então todo o mecanismo de preview/arrasto de fio pendente já existente na Webview
+          // funciona sem nenhuma mudança (`pendingConnectionPosition` resolve por componentId/pinId
+          // igual a qualquer outro componente).
+          pendingConnection: { componentId: junctionId, pinId: "pin-1" },
+        };
+        syncSchematicPanel();
+        if (state.simulationStatus === "running") {
+          void pollInstrumentReadouts();
+          void pollWireVoltages();
+        }
+      })();
       return;
     }
     case "requestRotateComponent": {
@@ -1204,7 +1318,7 @@ async function openSubcircuitForEditingCommand(sourceId: string): Promise<void> 
     );
   }
 
-  const wires: WebviewWireModel[] = rawWires
+  const rawWiresParsed: WebviewWireModel[] = rawWires
     .filter((value): value is Record<string, unknown> => typeof value === "object" && value !== null)
     .map((raw) => {
       const from = raw.from as { componentId: string; pinId: string };
@@ -1214,19 +1328,25 @@ async function openSubcircuitForEditingCommand(sourceId: string): Promise<void> 
     })
     .filter((wire) => wire.from?.componentId && wire.to?.componentId);
 
+  // Autocorrige `.lssubcircuit` salvo antes do refactor de fios (junção órfã/duplicada, fio de
+  // comprimento zero) -- roda ANTES de virar `initialComponents`/`initialWires` (a baseline de
+  // "sujo"), pra um arquivo recém-autocurado não abrir a sessão já marcada como alterada.
+  const normalized = normalizeWireGeometry({ components, wires: rawWiresParsed });
+  const wires = normalized.wires;
+
   state.subcircuitEditingStack.push({
     sourceId,
     filePath,
     originalManifest: manifest,
     outerSchematicState: state.schematicState,
     outerProjectFilePath: state.currentProjectFilePath,
-    initialComponents: components,
-    initialWires: wires,
+    initialComponents: normalized.components,
+    initialWires: normalized.wires,
   });
 
   state.schematicState = {
     ...state.schematicState,
-    components,
+    components: normalized.components,
     wires,
     viewport: { x: 0, y: 0, zoom: 1 },
     selectedComponentIds: [],

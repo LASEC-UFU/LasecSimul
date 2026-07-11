@@ -6340,8 +6340,9 @@
         "Connectors"
       ],
       "defaultProperties": {},
+      "hidden": true,
       "help": {
-        "description": "Ponto de junção elétrica entre 3 ou mais fios. Coloque sobre um fio para criar uma derivação."
+        "description": "Ponto de junção elétrica entre 3 ou mais fios. Nasce automaticamente ao clicar/terminar sobre um fio existente -- não é colocável manualmente."
       },
       "category": "Connectors"
     },

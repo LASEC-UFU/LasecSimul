@@ -9,6 +9,7 @@ import { state, projectSerializer } from "../state";
 import { rebuildCoreFromSchematicState, pinsForProjectComponent } from "../core/coreLifecycle";
 import { JUNCTION_TYPE_ID, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "../ui/webview/model";
 import { ProjectComponent, ProjectDocument, createEmptyProject } from "./ProjectTypes";
+import { normalizeWireGeometry } from "../ui/webview/wireTopology";
 
 export function absoluteSubcircuitRefPath(refPath: string): string {
   if (path.isAbsolute(refPath)) return path.normalize(refPath);
@@ -103,11 +104,16 @@ function projectToWebviewState(project: ProjectDocument): WebviewProjectState {
       ...(points && points.length > 0 ? { points } : {}),
     };
   });
+  // Autocorrige arquivos salvos antes do refactor de fios (junção órfã/duplicada, fio de
+  // comprimento zero, referência pendurada) -- idempotente, então um arquivo já normalizado nunca
+  // regride. Cobre TODO ponto de entrada de `.lsproj` (abrir/importar), já que os três chamam esta
+  // função.
+  const normalized = normalizeWireGeometry({ components, wires });
   return {
     locale: currentLasecSimulLanguage(),
     catalog,
-    components,
-    wires,
+    components: normalized.components,
+    wires: normalized.wires,
     viewport: project.visual.viewport,
     selectedComponentIds: [],
     selectedWireIds: [],
