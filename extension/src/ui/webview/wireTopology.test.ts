@@ -1,5 +1,6 @@
 import { createTestRunner, assert } from "../../ipc/testSupport/MockCoreServer";
-import { JUNCTION_TYPE_ID, WebviewComponentModel, WebviewWireModel } from "./model";
+import { JUNCTION_TYPE_ID, PackageDescriptor, WebviewComponentModel, WebviewWireModel } from "./model";
+import { registerPackage } from "./componentSymbols";
 import {
   connectEndpointToNode,
   findAtPosition,
@@ -55,6 +56,42 @@ function wire(id: string, from: { componentId: string; pinId: string }, to: { co
     assert(points.length === 2, `esperado 2 pontos (reta), recebido ${points.length}`);
     assert(points[0]!.x === 0 && points[0]!.y === 0, "primeiro ponto deveria ser a extremidade 'a'");
     assert(points[1]!.x === 100 && points[1]!.y === 0, "último ponto deveria ser a extremidade 'b'");
+  });
+
+  await test("pinScenePosition usa o layout de PACKAGE registrado, não o fallback genérico (regressão 2026-07-11: host sem pacotes registrados quebrava split de fio)", () => {
+    // Reproduz o bug real: `wireTopology.ts` roda tanto no host quanto na Webview, mas
+    // `componentSymbols.ts` é compilado em DUAS instâncias de módulo separadas (`registerPackage`
+    // só popula a instância deste processo) -- se o host nunca chamar `registerPackage`, toda
+    // geometria de pino cai no algoritmo genérico, divergindo do que a Webview mostra. Este teste
+    // fixa o CONTRATO: com um package real registrado, `pinScenePosition` reflete o layout real
+    // (`x`/`y`/`angle`/`length` do pino), não a posição genérica de 2 pinos esquerda/direita.
+    const pkg: PackageDescriptor = {
+      width: 60,
+      height: 40,
+      pins: [
+        { id: "out", x: 60, y: 20, angle: 0, length: 8, label: "OUT" },
+        { id: "vcc", x: 0, y: 10, angle: 180, length: 8, label: "VCC" },
+      ],
+    };
+    registerPackage("test.wireTopologyPackage", pkg);
+    const component: WebviewComponentModel = {
+      id: "pkg1",
+      typeId: "test.wireTopologyPackage",
+      label: "pkg1",
+      x: 100,
+      y: 100,
+      rotation: 0,
+      pins: [
+        { id: "out", x: 0, y: 0 },
+        { id: "vcc", x: 0, y: 0 },
+      ],
+      properties: {},
+    };
+    const outPos = pinScenePosition([component], "pkg1", "out")!;
+    const genericFallbackWidth = 70; // DEFAULT_BOX -- se pinScenePosition caísse no fallback genérico, a posição dependeria disso, não do package
+    assert(Math.abs(outPos.x - (100 + genericFallbackWidth)) > 1, "posição não pode bater com o box genérico -- sinal de que caiu no fallback em vez de usar o package");
+    assert(Math.abs(outPos.x - 176) < 1e-6 && Math.abs(outPos.y - 120) < 1e-6, `esperado {176,120} (geometria real do package, verificado contra componentSymbols.ts), recebido {${outPos.x},${outPos.y}}`);
+    registerPackage("test.wireTopologyPackage", undefined);
   });
 
   await test("wirePolylinePoints devolve vazio quando um endpoint é referência órfã", () => {

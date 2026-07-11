@@ -12,7 +12,7 @@ import { buildPinToPinWire, buildPinToWireConnection } from "./ui/webview/wireCo
 import { normalizeWireGeometry, removeOrphanNodes, splitSegmentAtPoint } from "./ui/webview/wireTopology";
 import { WebviewToHostMessage } from "./ui/webview/messages";
 import { ComponentPaletteViewProvider } from "./ui/views/ComponentPaletteViewProvider";
-import { materializePinGroup } from "./ui/webview/componentSymbols";
+import { materializePinGroup, registerPackage } from "./ui/webview/componentSymbols";
 import { absoluteSubcircuitRefPath, exportSchematicImageCommand, importProjectCommand, openProjectCommand, openRecentProjectCommand, refreshDirtyIndicator, saveProjectCommand } from "./project/projectCommands";
 import { loadUnifiedCatalog, RegisteredSource, saveRegisteredSources } from "./catalog/UnifiedCatalog";
 import { refreshUnifiedCatalogState, registerCatalogFileCommand, removeRegisteredCatalogItemCommand } from "./catalog/catalogCommands";
@@ -189,6 +189,14 @@ function resolveCoreExecutablePath(extensionPath: string): string {
 
 function setEffectiveCatalog(entries: WebviewComponentCatalogEntry[]): void {
   state.schematicState = { ...state.schematicState, catalog: entries };
+  // `componentSymbols.ts` é compilado duas vezes (host via `out/`, Webview via `out-webview/`) --
+  // são DUAS instâncias de módulo totalmente separadas, cada uma com seu próprio registro de
+  // pacotes em memória (`PACKAGE_BY_TYPE_ID`). Sem espelhar aqui o `syncPackageRegistry` que
+  // `main.ts` já faz do lado da Webview, `componentBox`/`pinLocalPosition` do lado do HOST caem
+  // silenciosamente no algoritmo genérico pra QUALQUER typeId com package real -- geometria de pino
+  // diferente da que a Webview mostra, quebrando `wireTopology.ts` (split de fio no ponto errado,
+  // clique no meio de um fio não faz nada -- bug real encontrado 2026-07-11).
+  for (const entry of entries) registerPackage(entry.typeId, entry.package, entry.logicSymbolPackage);
   state.paletteViewProvider?.setCatalog(entries);
   syncSchematicPanel();
 }
