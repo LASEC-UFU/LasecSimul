@@ -3,9 +3,9 @@
   "$id": "https://lasecsimul.dev/schema/lsproj.schema.json",
   "title": "LasecSimul Project",
   "type": "object",
-  "required": ["schemaVersion", "components", "wires", "visual", "simulationSettings"],
+  "required": ["schemaVersion", "components", "topology", "visual", "simulationSettings"],
   "properties": {
-    "schemaVersion": { "const": 1 },
+    "schemaVersion": { "const": 2 },
     "components": {
       "type": "array",
       "items": {
@@ -28,39 +28,56 @@
         "additionalProperties": true
       }
     },
-    "wires": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": ["id", "from", "to"],
-        "properties": {
-          "id": { "type": "string", "minLength": 1 },
-          "from": {
+    "topology": {
+      "type": "object",
+      "description": "Fonte canônica v2 de conectividade -- substitui o antigo array `wires[]` (schemaVersion 1). Nós topológicos (junções de grau N) não são mais componentes de simulação -- ver .spec/lasecsimul.spec, ADR sobre remoção de connectors.junction do Core.",
+      "required": ["revision", "nodes", "conductors"],
+      "properties": {
+        "revision": { "type": "integer", "minimum": 0 },
+        "nodes": {
+          "type": "array",
+          "items": {
             "type": "object",
-            "required": ["componentId", "pinId"],
+            "required": ["id", "position"],
             "properties": {
-              "componentId": { "type": "string", "minLength": 1 },
-              "pinId": { "type": "string", "minLength": 1 }
-            }
-          },
-          "to": {
-            "type": "object",
-            "required": ["componentId", "pinId"],
-            "properties": {
-              "componentId": { "type": "string", "minLength": 1 },
-              "pinId": { "type": "string", "minLength": 1 }
-            }
+              "id": { "type": "string", "minLength": 1 },
+              "position": {
+                "type": "object",
+                "required": ["x", "y"],
+                "properties": { "x": { "type": "number" }, "y": { "type": "number" } }
+              }
+            },
+            "additionalProperties": false
           }
         },
-        "additionalProperties": true
-      }
+        "conductors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "from", "to"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "from": { "$ref": "#/$defs/topologyEndpoint" },
+              "to": { "$ref": "#/$defs/topologyEndpoint" },
+              "vertices": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["x", "y"],
+                  "properties": { "x": { "type": "number" }, "y": { "type": "number" } }
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
     },
     "visual": {
       "type": "object",
-      "required": ["components", "wires", "viewport"],
+      "required": ["viewport"],
       "properties": {
-        "components": { "type": "array" },
-        "wires": { "type": "array" },
         "viewport": {
           "type": "object",
           "required": ["x", "y", "zoom"],
@@ -70,10 +87,35 @@
             "zoom": { "type": "number" }
           }
         }
-      }
+      },
+      "additionalProperties": true
     },
     "simulationSettings": { "type": "object" },
     "mcuFirmware": { "type": "array" }
   },
-  "additionalProperties": true
+  "additionalProperties": true,
+  "$defs": {
+    "topologyEndpoint": {
+      "type": "object",
+      "oneOf": [
+        {
+          "required": ["kind", "componentId", "pinId"],
+          "properties": {
+            "kind": { "const": "port" },
+            "componentId": { "type": "string", "minLength": 1 },
+            "pinId": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        },
+        {
+          "required": ["kind", "nodeId"],
+          "properties": {
+            "kind": { "const": "node" },
+            "nodeId": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
 }

@@ -1945,8 +1945,11 @@ com 3+ pontos -- chamada incondicionalmente pro loop principal de render (`main.
 como cor PADRÃO, só trocando pra âmbar (`--selected`, `#f4b942`) quando aquele cotovelo específico
 estava selecionado -- ou seja, todo cotovelo de todo fio multi-segmento ficava permanentemente
 visível em azul, não só o selecionado. Isso não é o mesmo marcador que `.junction-dot` (nó elétrico
-real de `connectors.junction`, âmbar 8px, ver seção 15 do spec de subcircuitos) -- é uma alça de UI
-pra ARRASTAR o cotovelo, sem relação nenhuma com topologia elétrica.
+real de nó de topologia, âmbar 8px, ver seção 15 do spec de subcircuitos) -- é uma alça de UI
+pra ARRASTAR o cotovelo, sem relação nenhuma com topologia elétrica. **Nota 2026-07-11** (seção 24):
+na época desta seção, aquele nó elétrico ainda era o componente `connectors.junction`; desde a
+reconstrução do sistema de fios ele é um `topologyNode` puramente visual, nunca um componente do
+Core -- o resto desta seção (o bug da alça de canto azul) não muda em nada.
 
 **Correção** (`extension/src/ui/webview/styles.css`): base de `.wire-layer__corner-handle` virou
 `fill: transparent; stroke: transparent` (igual ao padrão já estabelecido em `.pin-terminal`, mesmo
@@ -2247,3 +2250,301 @@ qualquer campo (antes hard-coded só pro bloco genérico de subcircuito).
 `subcircuitPackageAuthoring.test.ts`) sem regressão. Sem GUI disponível neste ambiente pra confirmar
 drag visual de pino/menu "Vincular a túnel..."/copiar-colar pela UI real -- recomenda-se verificação
 manual no VSCode real (ver seção 17.7 do spec de subcircuitos pro roteiro completo).
+
+## 24. Reconstrução do sistema de fios/junções: grafo de topologia canônico, transação atômica no
+Core, `connectors.junction` removido (2026-07-11)
+
+Decisão de arquitetura tomada a partir de `docs/auditoria-tecnica-fios-simulide-2026-07-11.md`
+(auditoria técnica comparando a implementação de fios/junções do LasecSimul contra o SimulIDE-dev
+real) -- **Alternativa D** da auditoria (reconstruir a cadeia, por substituição controlada e
+fatiada, sem adaptador legado permanente), executada por partes: kernel de topologia + transação
+atômica no Core + índice espacial + persistência v2. Não implementado (deliberadamente fora de
+escopo desta rodada, ver seção 24.5): Command Bus/FSM explícito e documento canônico headless como
+camada separada -- o mesmo efeito (nenhuma mutação de modelo/Core até o gesto terminar, transação
+atômica, sem resíduo em cancelamento) foi alcançado direto em `extension.ts`/`main.ts` sem introduzir
+essa camada nova.
+
+### 24.1 Junção deixa de ser um `IComponentModel` do Core
+
+`connectors.junction` (`core/src/components/connectors/Junction.hpp`) foi **removido por inteiro** --
+não existe mais fábrica registrada em `CoreApplication.cpp::registerBuiltinComponents`. Uma junção de
+grau N (T, cruzamento com derivação, etc.) nunca mais chega ao Core como um componente de 1 pino; em
+vez disso, ela é **achatada** numa árvore de N-1 arestas porta-a-porta ANTES de o Core ver qualquer
+coisa -- o Core só enxerga `IComponentModel`s reais conectados diretamente entre si. Dois lugares
+independentes fazem essa mesma transformação, cada um no seu domínio:
+
+- **Projeto principal** (Webview/Extension host): `electricalEdgesForProject`
+  (`extension/src/core/coreLifecycle.ts`) -- percorre `wires[]` + `topologyNodes[]`, decompõe em
+  redes conexas por BFS, e para cada rede emite N-1 arestas entre os pinos de componente REAIS
+  daquela rede (ignorando os nós de topologia como vértices de passagem). Usado por
+  `rebuildCoreFromSchematicStateNow` (rebuild completo) -- o Core nunca recebe um nó de topologia
+  como endpoint de `connectWire`.
+- **Subcircuitos** (`.lssubcircuit`, Core): mesmo algoritmo, dentro do próprio Core, em
+  `CoreApplication.cpp::registerSubcircuitFromManifestRich` -- decompõe `topologyNodeIds` (ver 24.4)
+  + `def.wires` num grafo de adjacência, faz BFS por rede, emite N-1 arestas entre portas reais.
+  Comentário no código: "Junction é sintaxe topológica do arquivo, nunca componente de simulação."
+
+Consequência prática: `connectors.bus` (que reusava a classe `Junction` como implementação) passou a
+usar `SimulidePassiveState` com o mesmo pino único -- mesmo comportamento elétrico (nó de
+passagem), sem depender da classe removida.
+
+### 24.2 Webview/host: `topologyNodes` substitui a junção-como-componente-oculto no caminho vivo
+
+`WebviewProjectState`/`schematicState` ganhou um array paralelo, `topologyNodes: Array<{id, x, y}>`,
+separado de `components`/`wires`. Um nó de topologia (T, cruzamento com derivação) vive **só** nesse
+array -- nunca mais nasce como `WebviewComponentModel{typeId: "connectors.junction", hidden: true}`
+no caminho de edição vivo. `JUNCTION_TYPE_ID` (`model.ts`) continua existindo só como forma de
+projeção legada usada nas bordas (ver 24.6).
+
+`extension/src/ui/webview/topologyDocument.ts` (novo) define um documento canônico
+(`CanonicalTopologyDocument{revision, nodes[], conductors[]}`, endpoints
+`{kind:"port",componentId,pinId}|{kind:"node",nodeId}`) com validação de invariantes
+(`assertTopologyInvariants` -- nó/condutor duplicado, endpoint órfão, condutor de comprimento
+topológico zero, vértices duplicados). **Não é o modelo de edição vivo** -- é usado só nas bordas
+(persistência, seção 24.6; rebuild do Core) como ponte determinística entre o par
+`components+wires+topologyNodes` (formato vivo) e o par `topology{nodes,conductors}` (formato
+canônico/persistido). O comentário no código chama isso explicitamente de "ponte determinística
+temporária".
+
+### 24.3 IPC: transação atômica de fio + revisão otimista
+
+Novo verbo `applyWireTopologyTransaction` (`CoreApplication.cpp`, handler `msg.type ==
+"applyWireTopologyTransaction"`; `SimulationSession::applyWireTopologyTransaction`,
+`SimulationSession.hpp/cpp`): aplica um lote de operações `connect`/`disconnect` como uma única
+mutação observável. `baseRevision` precisa bater com `SimulationSession::wireTopologyRevision()`
+(contador incrementado a cada `connectWire`/`disconnectWire`/transação bem-sucedida) -- divergência
+lança `topology_revision_conflict` sem tocar em nada. Internamente, a transação faz uma cópia barata
+do `Netlist` (staging), aplica cada operação, e se qualquer uma falhar restaura `Netlist`/
+`m_topologyDirty`/`m_wireTopologyRevision` para o estado anterior por inteiro -- nunca deixa o Core
+com metade das arestas aplicadas. `connectWire`/`disconnectWire` (verbos IPC já existentes) passaram
+a devolver `topologyRevision` na resposta também, e resolvem pino por id exato primeiro, com
+fallback posicional `pin-N` (`resolveSlot` em `SimulationSession::connectWire`) para arquivos de
+autoria antigos/packages genéricos.
+
+Do lado da Extension: `CoreClient.applyWireTopologyTransaction` (`ipc/CoreClient.ts`) guarda
+`wireTopologyRevision` localmente, atualizado a cada resposta; `pushWireTopologyTransaction`
+(`coreLifecycle.ts`) resolve `componentId` webview -> `instanceId` Core e chama o verbo. Usado em
+`syncProjectSnapshotToCore` (`extension.ts`) quando só endpoints de fio mudaram (sem nó de topologia
+envolvido) -- substitui o antigo padrão de mandar `connectWire`/`disconnectWire` um a um sem garantia
+de atomicidade entre eles.
+
+### 24.4 Verbos antigos removidos: gesto vira transação, split para de ser commitado cedo
+
+`requestConnectPins`/`requestConnectPinToWire` (mensagens Webview->Host) foram **removidos**, junto
+com `wireConnections.ts` (arquivo inteiro deletado -- `buildPinToPinWire`/`buildPinToWireConnection`).
+Substituídos por um único verbo, `requestConnectEndpoints`, carregando `baseRevision`
+(`state.schematicState.topologyRevision`) -- se o host detecta que o cliente trabalhou sobre uma
+revisão desatualizada, republica o estado canônico via `syncState` completo em vez de tentar mesclar
+por heurística (`extension.ts`, handler `"requestConnectEndpoints"`). A computação pura de split/
+reuso de junção existente vive em `connectEndpointToNode` (`wireTopology.ts`), que devolve
+`newNodes`/`newWires`/`replacedWireIds` -- o host aplica o resultado ao `schematicState`, dispara
+`queueCoreRebuild()` uma vez, e só publica a `syncState` nova depois do Core confirmar (rollback pro
+estado anterior se o rebuild falhar).
+
+**Bug histórico corrigido (o mais citado na auditoria)**: `requestStartWireFromWire` (iniciar uma
+derivação clicando no MEIO de um fio já existente) deixou de fazer split/criar junção/tocar no Core
+nesse momento -- é um DRAFT PURO (`pendingConnection: {kind:"wire", wireId, point}`), sem nenhuma
+mutação de modelo. Esc, botão direito ou trocar de ferramenta simplesmente limpam
+`pendingConnection` sem deixar nenhum resíduo (nem no Core, nem em `components`/`wires`). O split/
+criação de nó só acontece quando o gesto de fato termina em outro ponto, dentro do mesmo
+`requestConnectEndpoints` transacional acima.
+
+### 24.5 `Netlist::rebuildTopology`: full-rebuild continua sendo o único oracle (decisão revertida)
+
+Uma otimização de cache incremental de conectividade dentro de `Netlist` (union-find comprimido
+reaproveitado entre chamadas, com invalidação por slot dirty) foi implementada, testada
+(diferencial de 250 mutações aleatórias contra um `Netlist` de referência, mais um teste dedicado de
+contagem de slots revisitados) e **revertida no mesmo dia** -- risco de correção desproporcional ao
+ganho: união via union-find não é uma operação desfazível (remover uma aresta pode precisar separar
+nós que estavam fundidos; renomear um túnel idem), e um cache incremental hand-rolled é uma
+superfície de bug sutil bem maior que o benefício, considerando que:
+
+- `rebuildTopology()` já só roda quando `m_topologyDirty` está setado
+  (`SimulationSession::rebuildTopologyIfNeeded`, `SimulationSession.cpp:450`) -- ou seja, "um rebuild
+  por lote de edição" já é garantido de graça pelo gate existente, com ou sem cache incremental
+  dentro do `Netlist`; o cache só ajudaria no caso estreito de múltiplos ciclos dirty consecutivos
+  com pouca mudança entre eles.
+- Componentes ativos/não-lineares podem precisar de reestabilização completa depois de qualquer
+  mudança estrutural -- `core/test/diode_test.cpp` ganhou um teste de regressão específico (settle
+  de uma rede com diodo depois de um split/restauração via `applyWireTopologyTransaction`) que
+  travava com o cache incremental.
+
+`Netlist::rebuildTopology` (`core/src/simulation/Netlist.hpp`) permanece um union-find puro,
+recalculado do zero a cada chamada -- documentado no comentário de classe como "sempre do zero --
+nunca incremental" com a justificativa acima.
+
+**Gap conhecido, não fechado nesta rodada**: `SimulationSession::rebuildTopologyIfNeeded()` marca
+**todos** os componentes vivos como dirty no `Scheduler` a cada rebuild de topologia
+(`SimulationSession.cpp:467-469`), não só os que de fato trocaram de `CircuitGroup`. Essa é a
+otimização de maior retorno e menor risco ainda disponível (usar a filiação de grupo antes/depois do
+rebuild pra popular `m_scheduler.dirtySet()` seletivamente, em vez de tudo) -- não implementada
+ainda; qualquer sessão futura que for atacar performance de re-stamp deveria começar por aqui, não
+por reintroduzir cache de conectividade.
+
+### 24.6 Persistência `.lsproj` v2: `topology{revision,nodes,conductors}` substitui `wires[]`
+
+`ProjectTypes.ts::LS_PROJ_SCHEMA_VERSION` subiu de 1 para 2. `ProjectDocument.topology`
+(`ProjectTopology{revision, nodes[], conductors[]}`, mesmo formato do `CanonicalTopologyDocument` da
+seção 24.2) é agora **obrigatório** e é a fonte de verdade gravada em disco -- `ProjectSerializer.save`
+não grava mais `wires[]` nem `visual.wires`/`visual.components` (só `visual.viewport`).
+`ProjectSerializer.load` valida `topology` (`validateTopology`, endpoints tipados, nó/condutor
+duplicado, referência a componente/nó inexistente) e deriva `wires[]` em memória só como projeção de
+compatibilidade interna (não persistida). **Sem adaptador de leitura pra `schemaVersion` 1** -- um
+`.lsproj` antigo sem bloco `topology` falha ao carregar (consistente com a política do projeto de
+não manter compat retroativa preventiva, ver seção sobre isso mais adiante neste documento).
+`project/schema/lsproj.schema.json` foi atualizado pra `schemaVersion: {const: 2}` + bloco `topology`
++ `visual` só com `viewport` obrigatório (documentação/referência -- nada no código valida
+runtime contra este arquivo hoje, `ProjectSerializer.ts` tem sua própria validação manual).
+
+O mesmo formato `topology{...}` substitui `wires[]` dentro de `.lssubcircuit` também --
+`.spec/lasecsimul-subcircuits.spec` seção 19 tem o contrato completo (parsing no Core, achatamento de
+junção, e uma regressão real encontrada/corrigida num parser de teste duplicado).
+
+### 24.7 Índice espacial de fios (`WireSpatialIndex`)
+
+`extension/src/ui/webview/wireSpatialIndex.ts` (novo) -- spatial hash mutável (`cellSize` padrão 64),
+`upsertWire`/`removeWire` O(células tocadas), `queryPoint`/`queryConnectionPoints` idem. Integrado em
+`wireTopology.ts::findAtPosition`/`buildWireSpatialIndex` (índice opcional -- sem ele, cai pro scan
+linear anterior, usado só nos testes puros que não montam um índice) e mantido incrementalmente no
+`render()` de `main.ts` (`wireSpatialIndex.upsertWire` só quando a polilinha de um fio muda de
+verdade, comparado por assinatura de pontos) -- usado tanto pro hit-test de clique quanto por
+`maybeAutoJunctionForDraggedComponents` (consulta `queryPoint` pra detectar overlap pino-sobre-fio
+depois de arrastar um componente).
+
+### 24.8 Regressão encontrada e corrigida: parser de teste duplicado não migrado
+
+`core/test/esp32_devkitc_subcircuit_test.cpp` mantém propositalmente um `parseLssubJson` PRÓPRIO,
+independente de `CoreApplication.cpp` (comentário no código: "mesmo mapeamento de campos... mantido
+em sincronia manualmente"). Ao migrar `subcircuits/esp32_devkitc_v4.lssubcircuit` pro formato
+`topology{...}` (seção 24.6), esse parser de teste NÃO foi atualizado -- continuou lendo
+`manifest["wires"]`, chave que o arquivo migrado não tem mais, resultando em **zero fios**
+registrados silenciosamente (só os nós unidos por `connectors.tunnel`, que não depende de `wires[]`,
+sobreviviam). Sintoma: `ctest` reportando `esp32_devkitc_subcircuit` falho, com várias tensões de
+rede (3V3/5V/EN) caindo pra 0V por sistema singular. Corrigido replicando a mesma branch
+`canonicalTopology` de `CoreApplication.cpp` neste parser de teste. Um segundo problema, encontrado
+na mesma investigação e não relacionado à migração: o teste só dava 5 iterações de
+`session.settleStep()` antes de ler tensão -- suficiente com a topologia antiga (efetivamente vazia),
+insuficiente para o circuito real totalmente conectado; aumentado para 200 (mesma ordem de grandeza
+de `diode_test.cpp::settleWithin`). Lição: qualquer teste que reimplemente parsing de manifesto por
+razões de isolamento precisa ser tratado como uma segunda fonte de verdade que PODE divergir -- exatamente
+o débito "regras diferentes entre serializers/loaders" que a auditoria já apontava (seção de débitos
+técnicos, `docs/auditoria-tecnica-fios-simulide-2026-07-11.md`), reproduzido de novo dentro da própria
+correção.
+
+## 25. Roteamento de edição de fio pela transação atômica + FSM leve + validação de invariante em
+toda edição (2026-07-11, plano em `docs/27-analise-critica-fios-vs-auditoria-2026-07-11.md`)
+
+Continuação direta da seção 24 -- a análise crítica em `docs/27-...` achou que
+`applyWireTopologyTransaction` (24.3) ficava **inatingível na prática** assim que um projeto tinha
+qualquer nó de topologia, porque `syncProjectSnapshotToCore`/`requestConnectEndpoints` sempre caíam
+em `queueCoreRebuild()` (full teardown+recreate sequencial, O(componentes+fios) round-trips de IPC)
+pra esse caso -- o caminho DEFAULT de qualquer edição de fio num circuito real, não uma exceção. Esta
+seção fecha essa lacuna.
+
+### 25.1 EX-F: diff de arestas achatadas substitui full-rebuild como caminho default
+
+`electricalEdgesForProject`/`diffElectricalEdges` (movidos de `coreLifecycle.ts` pra
+`wireTopology.ts` -- são funções puras, cabem na "fonte única de verdade" que o arquivo já é;
+`coreLifecycle.ts` reexporta pra não quebrar import site nenhum) -- o diff compara duas listas JÁ
+ACHATADAS (saída de `electricalEdgesForProject`, antes/depois) por identidade de PAR DE PINOS REAIS
+(chave `componentId::pinId`, ordem-independente), nunca por id sintético (`electrical-N` muda de
+índice a cada chamada). Como o achatamento é determinístico por rede não tocada, o diff fica
+naturalmente restrito à(s) rede(s) que a edição de fato afetou -- **não precisa de um algoritmo
+incremental à parte**, só recomputar a árvore inteira duas vezes (barato, é um BFS em memória) e
+comparar os dois conjuntos resultantes.
+
+Roteamento atualizado:
+- `syncProjectSnapshotToCore` (`extension.ts`): a antiga condição "há nó de topologia E (geometria OU
+  componente mudou) → `queueCoreRebuild()`" virou duas condições separadas -- `componentSetChanged`
+  continua indo pro rebuild completo (registrar/desregistrar instância Core exige isso mesmo);
+  só-topologia-mudou agora usa o diff achatado + `pushWireTopologyTransaction`.
+- `requestConnectEndpoints`: nunca muda o CONJUNTO de componentes (só fios/nós) -- sempre usa o diff
+  achatado agora; `queueCoreRebuild()` fica reservado pra quando a transação é rejeitada (conflito de
+  revisão etc.), não mais o caminho feliz.
+- `requestRemoveWire`/`requestRemoveComponent`: mesmo diff achatado. Para remoção de COMPONENTE, o
+  "antes" achatado é computado sobre `afterRemoval.wires` (já excluindo os fios que tocavam o
+  componente removido) -- nunca sobre a lista completa anterior, porque o Core já desconectou esses
+  fios sozinho dentro de `Netlist::removeComponent` (`pushRemoveToCore` já rodou); incluir esses
+  endpoints no diff falharia a resolver `coreInstanceIdByComponentId` (mapeamento já apagado) e
+  derrubaria a transação inteira à toa.
+- `pushWireTopologyTransaction` (`coreLifecycle.ts`) passou a capturar qualquer exceção internamente
+  (inclusive `topology_revision_conflict`) e devolver `false` -- nenhum chamador precisa mais de
+  try/catch próprio pra tratar rejeição de transação; todos caem no mesmo padrão "`if (!applied) await
+  queueCoreRebuild()`".
+
+**Correção não é garantida ser mínima, só é garantida ser correta**: se a inserção de uma porta nova
+muda qual porta é escolhida como raiz da estrela do achatamento, o diff pode incluir mais
+`connect`/`disconnect` do que o estritamente necessário (a rede inteira "reconecta" em vez de só o
+ramo novo) -- mas o resultado final é sempre eletricamente equivalente. Testado explicitamente:
+`wireTopology.test.ts` ("root da estrela muda de porta -- diff ainda cobre a rede inteira
+corretamente"), que reconstrói a rede a partir do diff e confere via union-find que nenhuma
+conectividade se perde, mesmo no pior caso.
+
+**Testes de regressão** (`wireTopology.test.ts`, 5 casos novos): sem nó (1 aresta por fio), T de 3
+ramos achata em N-1 sem nunca referenciar o nó, adicionar um ramo gera só 1 `connect` e não toca rede
+não relacionada, colapso de nó grau-2 em fio direto não gera operação nenhuma (já é a mesma aresta),
+e o caso de troca de raiz acima.
+
+### 25.2 FSM leve: ferramentas de fio e posicionamento de componente nunca mais coexistem
+
+Achado real na análise (`docs/27-...`, seção "Análise da FSM"): `enterPlacementMode()` não verificava
+`state.pendingConnection`, e o handler de Esc tinha um `return` antecipado que, com os dois estados
+combinados, só cancelava um dos dois -- exigia um SEGUNDO Esc. Investigação mais funda durante a
+correção achou mais 3 pontos com a MESMA classe de bug (clique em alça de canto de fio, clique em
+alça de segmento de fio, clique em pino -- todos os três chamam `stopPropagation()`, então nunca
+delegavam a decisão pro handler de fundo do canvas que já tratava `placingTypeId`).
+
+Correção: dois funis únicos de entrada (`extension/src/ui/webview/main.ts`) --
+`beginWireDraft(origin)` (cancela posicionamento de componente ativo antes de armar um draft de fio)
+e `enterPlacementMode(typeId)` (cancela draft de fio ativo antes de entrar em posicionamento) -- e um
+funil único de saída, `cancelActiveTool()` (chamado por Esc, incondicional, sem `return` antecipado
+escondendo o segundo caso). Os 4 pontos de entrada adicionais (clique em pino, canto, segmento,
+botão-direito-no-canvas) ganharam a mesma guarda (`if (placingTypeId) return;` logo após
+`stopPropagation()` -- clique é descartado, nunca inicia derivação por baixo da ferramenta ativa).
+
+**Escopo deliberadamente contido**: não virou uma FSM formal genérica cobrindo TAMBÉM marquee-select
+e arrasto de segmento/canto -- esses dois já são estruturalmente protegidos por `pointerCapture`
+(exclusivos por construção dentro de um único gesto contínuo de ponteiro, não podem vazar pra outro
+modo entre cliques discretos como `pendingConnection`/`placingTypeId` podiam). A correção mira
+exatamente a classe de bug encontrada (estados que persistem ENTRE cliques discretos), não todo
+estado de interação do editor.
+
+### 25.3 Validação de invariante antes de commitar (não só em save/load)
+
+`requestConnectEndpoints`/`requestRemoveWire`/`requestRemoveComponent` (`extension.ts`) passaram a
+chamar `canonicalTopologyFromLegacy(...)` (que já roda `assertTopologyInvariants` como efeito
+colateral, `topologyDocument.ts`) sobre o resultado ANTES de commitar em `state.schematicState` --
+descarta o documento canônico resultante, só a validação importa aqui. Duas políticas diferentes
+deliberadas:
+- `requestConnectEndpoints`: falha BLOQUEIA a mutação (`return` antes de tocar `state.schematicState`)
+  -- nada irreversível aconteceu ainda no Core nesse ponto, seguro rejeitar.
+- `requestRemoveWire`/`requestRemoveComponent`: falha só AVISA (`reportCoreWarning`, sem `return`) --
+  pra remoção de componente, o Core já processou `pushRemoveToCore` antes desse ponto (irreversível);
+  bloquear a atualização do lado Webview deixaria os dois lados mais divergentes, não menos.
+
+### 25.4 Consolidação parcial (não a migração completa pro modelo canônico vivo)
+
+A análise recomendava (seção "Recomendação arquitetural") promover `CanonicalTopologyDocument` a
+modelo vivo por inteiro -- `WebviewWireModel.from/to` virando `CanonicalEndpoint`
+(`{kind:"port"|"node",...}`) em vez de `{componentId,pinId}` plano, e `state.wires`/`state.topologyNodes`
+virando um único `state.topology`. Avaliado nesta rodada e **conscientemente não executado por
+inteiro**: essa retipagem tocaria centenas de call sites em `main.ts` (render, hit-test, drag,
+undo/redo) que hoje assumem endpoint plano, sem nenhuma cobertura de teste de GUI possível neste
+ambiente pra confirmar visualmente que nada quebrou -- risco desproporcional ao ganho, que é de
+manutenção futura (a duplicação hoje é gerenciável, não um bug ativo), não de correção presente.
+
+O que FOI feito desta frente, com risco baixo e valor real e verificável: consolidado
+`main.ts::wirePolylinePoints` (chamado em TODO `render()`, hot path) pra delegar em
+`wireTopology.ts::pinScenePosition` em vez de reimplementar a distinção porta-vs-nó pela terceira vez
+no projeto (as outras duas cópias já reduzidas a `Set.has()` de uma linha em
+`electricalEdgesForProject`/`voltageProbesForProject`, risco de divergência bem menor que uma função
+inteira duplicada). `topologyNodes` continua um array paralelo a `wires`; `topologyDocument.ts`
+continua sendo ponte de borda -- ambos permanecem trabalho futuro caso uma feature nova (barramentos
+tipados, rótulo de rede) force a mão, não uma dívida bloqueante hoje.
+
+**Verificação**: suíte completa da Extension (223 casos, incluindo os 5 novos de 25.1) e suíte
+completa do Core (36/36) sem regressão. Sem GUI disponível neste ambiente pra confirmar
+interativamente os 6 pontos de FSM corrigidos (25.2) nem o comportamento visual do roteamento novo
+(25.1) -- ambos verificados por rastreamento direto de código + testes puros onde o código é
+testável; recomenda-se sessão manual no VSCode real cobrindo exatamente os 6 cenários de estado
+combinado desta seção antes de considerar 25.2 encerrado.

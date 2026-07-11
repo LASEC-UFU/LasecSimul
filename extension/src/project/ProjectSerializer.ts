@@ -5,6 +5,8 @@ import {
   ProjectComponent,
   ProjectDocument,
   ProjectSubcircuitRef,
+  ProjectTopology,
+  ProjectTopologyEndpoint,
   ProjectWire,
   createEmptyProject,
 } from "./ProjectTypes";
@@ -93,6 +95,53 @@ function validateWire(wire: unknown, index: number): ProjectWire {
   };
 }
 
+function validateTopologyEndpoint(value: unknown, context: string): ProjectTopologyEndpoint {
+  if (!isObject(value)) throw new Error(`${context} inválido`);
+  if (value.kind === "node") {
+    const nodeId = asString(value.nodeId);
+    if (!nodeId) throw new Error(`${context}.nodeId ausente`);
+    return { kind: "node", nodeId };
+  }
+  if (value.kind === "port") {
+    const componentId = asString(value.componentId);
+    const pinId = asString(value.pinId);
+    if (!componentId || !pinId) throw new Error(`${context} precisa de componentId/pinId`);
+    return { kind: "port", componentId, pinId };
+  }
+  throw new Error(`${context}.kind inválido`);
+}
+
+function validateTopology(value: unknown, componentIds: ReadonlySet<string>): ProjectTopology {
+  if (!isObject(value)) throw new Error("topology ausente/inválida");
+  const nodes = Array.isArray(value.nodes) ? value.nodes.map((entry, index) => {
+    if (!isObject(entry) || !isObject(entry.position)) throw new Error(`topology.nodes[${index}] inválido`);
+    const id = asString(entry.id); const x = asNumber(entry.position.x); const y = asNumber(entry.position.y);
+    if (!id || x === undefined || y === undefined) throw new Error(`topology.nodes[${index}] incompleto`);
+    return { id, position: { x, y } };
+  }) : [];
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  if (nodeIds.size !== nodes.length) throw new Error("topology contém nós duplicados");
+  const conductors = Array.isArray(value.conductors) ? value.conductors.map((entry, index) => {
+    if (!isObject(entry)) throw new Error(`topology.conductors[${index}] inválido`);
+    const id = asString(entry.id); if (!id) throw new Error(`topology.conductors[${index}].id ausente`);
+    const from = validateTopologyEndpoint(entry.from, `topology.conductors[${index}].from`);
+    const to = validateTopologyEndpoint(entry.to, `topology.conductors[${index}].to`);
+    const vertices = Array.isArray(entry.vertices) ? entry.vertices.map((point, pointIndex) => {
+      if (!isObject(point)) throw new Error(`topology.conductors[${index}].vertices[${pointIndex}] inválido`);
+      const x = asNumber(point.x); const y = asNumber(point.y);
+      if (x === undefined || y === undefined) throw new Error(`topology.conductors[${index}].vertices[${pointIndex}] inválido`);
+      return { x, y };
+    }) : [];
+    for (const endpoint of [from, to]) {
+      if (endpoint.kind === "node" && !nodeIds.has(endpoint.nodeId)) throw new Error(`conductor ${id} referencia nó inexistente`);
+      if (endpoint.kind === "port" && !componentIds.has(endpoint.componentId)) throw new Error(`conductor ${id} referencia componente inexistente`);
+    }
+    return { id, from, to, vertices };
+  }) : [];
+  if (new Set(conductors.map((c) => c.id)).size !== conductors.length) throw new Error("topology contém condutores duplicados");
+  return { revision: asNumber(value.revision) ?? 0, nodes, conductors };
+}
+
 export class ProjectSerializer {
   async load(filePath: string): Promise<ProjectDocument> {
     const raw = await fs.readFile(filePath, "utf8");
@@ -103,16 +152,17 @@ export class ProjectSerializer {
     }
     const components = Array.isArray(parsed.components) ? parsed.components.map(validateComponent) : [];
     const componentIds = new Set(components.map((c) => c.id));
-    const wires = Array.isArray(parsed.wires) ? parsed.wires.map(validateWire) : [];
-    for (const wire of wires) {
-      if (!componentIds.has(wire.from.componentId) || !componentIds.has(wire.to.componentId)) {
-        throw new Error(`wire ${wire.id} referencia componente inexistente`);
-      }
-    }
+    const topology = validateTopology(parsed.topology, componentIds);
+    const wires: ProjectWire[] = topology.conductors.map((conductor) => ({
+      id: conductor.id,
+      from: conductor.from.kind === "port" ? conductor.from : { componentId: conductor.from.nodeId, pinId: "pin-1" },
+      to: conductor.to.kind === "port" ? conductor.to : { componentId: conductor.to.nodeId, pinId: "pin-1" },
+    }));
     return {
       schemaVersion: LS_PROJ_SCHEMA_VERSION,
       components,
       wires,
+      topology,
       visual: isObject(parsed.visual)
         ? {
             wires: Array.isArray(parsed.visual.wires)
@@ -145,11 +195,11 @@ export class ProjectSerializer {
   }
 
   async save(filePath: string, project: ProjectDocument): Promise<void> {
-    const normalized: ProjectDocument = {
+    const normalized = {
       schemaVersion: LS_PROJ_SCHEMA_VERSION,
       components: project.components,
-      wires: project.wires,
-      visual: project.visual,
+      topology: project.topology,
+      visual: { viewport: project.visual.viewport },
       simulationSettings: project.simulationSettings,
       mcuFirmware: project.mcuFirmware,
     };

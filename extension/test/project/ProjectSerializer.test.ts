@@ -13,7 +13,7 @@ import { createEmptyProject } from "../../src/project/ProjectTypes";
   const project = createEmptyProject();
   await serializer.save(emptyPath, project);
   const loaded = await serializer.load(emptyPath);
-  assert.strictEqual(loaded.schemaVersion, 1);
+  assert.strictEqual(loaded.schemaVersion, 2);
   assert.strictEqual(loaded.components.length, 0);
   assert.strictEqual(loaded.wires.length, 0);
 
@@ -42,6 +42,23 @@ import { createEmptyProject } from "../../src/project/ProjectTypes";
   const roundTrip = await serializer.load(roundTripPath);
   assert.deepStrictEqual(roundTrip.components.map((component) => component.id), ["r1", "c1", "l1"]);
   assert.deepStrictEqual(roundTrip.wires.map((wire) => wire.id), ["w1", "w2"]);
+  assert.deepStrictEqual(roundTrip.topology.conductors.map((wire) => wire.id), ["w1", "w2"]);
+
+  const junctionFree = createEmptyProject();
+  junctionFree.components.push({ id: "a", typeId: "test.a", properties: {} }, { id: "b", typeId: "test.b", properties: {} });
+  junctionFree.topology = {
+    revision: 7,
+    nodes: [{ id: "n1", position: { x: 40, y: 24 } }],
+    conductors: [
+      { id: "w1", from: { kind: "port", componentId: "a", pinId: "out" }, to: { kind: "node", nodeId: "n1" }, vertices: [] },
+      { id: "w2", from: { kind: "node", nodeId: "n1" }, to: { kind: "port", componentId: "b", pinId: "in" }, vertices: [{ x: 60, y: 24 }] },
+    ],
+  };
+  const junctionFreePath = path.join(tmpDir, "junction-free-v2.lsproj");
+  await serializer.save(junctionFreePath, junctionFree);
+  const junctionFreeRaw = JSON.parse(await fs.readFile(junctionFreePath, "utf8"));
+  assert.strictEqual(junctionFreeRaw.components.some((component: { typeId?: string }) => component.typeId === "connectors.junction"), false);
+  assert.strictEqual(junctionFreeRaw.topology.nodes[0].id, "n1");
 
   // Regressão: label/showId/showValue precisam sobreviver a um ciclo save→load (ver Épico E do
   // roadmap de pendências — `validateComponent` já dropou esses campos no passado).

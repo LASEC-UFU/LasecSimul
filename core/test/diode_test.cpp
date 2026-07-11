@@ -22,6 +22,11 @@ namespace {
 
 bool nearlyEqual(double a, double b, double eps) { return std::abs(a - b) < eps; }
 
+bool settleWithin(SimulationSession& session, int limit = 200) {
+    for (int i = 0; i < limit; ++i) if (!session.settleStep()) return true;
+    return false;
+}
+
 void registerTestComponents(ComponentRegistry& components) {
     components.registerFactory("sources.dc_voltage", [](const ComponentParams& params) {
         return std::make_unique<components::DcVoltageSource>(std::array<Pin, 2>{Pin{"p1"}, Pin{"p2"}},
@@ -70,10 +75,7 @@ int main() {
     session.connectWire(diode, "cathode", source, "p2");  // catodo do diodo -- fonte(-)
     session.connectWire(source, "p2", ground, "pin");     // GND -- terra
 
-    bool settled = false;
-    for (int i = 0; i < 200; ++i) {
-        if (!session.settleStep()) { settled = true; break; }
-    }
+    const bool settled = settleWithin(session);
 
     const double voltA = session.nodeVoltageOfPin(source, "p1");
     const double voltB = session.nodeVoltageOfPin(r1, "p2"); // == tensão do anodo
@@ -112,6 +114,27 @@ int main() {
                      "FALHOU: KCL violado -- corrente do resistor (%.6e A) deveria bater com a equação do diodo "
                      "na mesma Vd (%.6e A)\n",
                      currentThroughResistor, diodeEquationCurrent);
+        ok = false;
+    }
+
+
+    // Regressão: cachear union-find comprimido entre revisões fazia o segundo settle de circuitos
+    // ativos prender. Cada lote agora invalida a topologia uma vez e o rebuild integral funciona como
+    // oracle tanto no split quanto na restauração da rede.
+    session.applyWireTopologyTransaction(session.wireTopologyRevision(), {
+        {WireTopologyOperation::Kind::Disconnect, {r1, "p2"}, {diode, "anode"}},
+        {WireTopologyOperation::Kind::Connect, {r1, "p2"}, {ground, "pin"}},
+    });
+    if (!settleWithin(session)) {
+        std::fprintf(stderr, "FALHOU: rede ativa não estabilizou depois do split transacional.\n");
+        ok = false;
+    }
+    session.applyWireTopologyTransaction(session.wireTopologyRevision(), {
+        {WireTopologyOperation::Kind::Disconnect, {r1, "p2"}, {ground, "pin"}},
+        {WireTopologyOperation::Kind::Connect, {r1, "p2"}, {diode, "anode"}},
+    });
+    if (!settleWithin(session)) {
+        std::fprintf(stderr, "FALHOU: rede ativa não estabilizou depois de restaurar a topologia.\n");
         ok = false;
     }
 

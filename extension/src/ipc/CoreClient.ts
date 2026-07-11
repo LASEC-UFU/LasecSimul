@@ -52,6 +52,7 @@ interface PendingRequest {
  * Toda a UI fala com CoreClient; nenhum outro módulo abre socket/pipe diretamente.
  */
 export class CoreClient {
+  private wireTopologyRevision = 0;
   private socket: net.Socket | undefined;
   private readonly pending = new Map<string, PendingRequest>();
   private readonly notificationHandlers: NotificationHandler[] = [];
@@ -186,10 +187,11 @@ export class CoreClient {
    * continua com 4 parâmetros posicionais (sem mudança nos call sites de `coreLifecycle.ts`); só a
    * forma enviada pela IPC mudou. */
   async connectWire(componentA: string, pinIdA: string, componentB: string, pinIdB: string): Promise<void> {
-    await this.request("connectWire", {
+    const response = await this.request("connectWire", {
       from: { componentId: componentA, pinId: pinIdA },
       to: { componentId: componentB, pinId: pinIdB },
     });
+    this.wireTopologyRevision = (response as { topologyRevision?: number }).topologyRevision ?? this.wireTopologyRevision + 1;
   }
 
   /** Inverso de `connectWire` (EX-6.1/EX-6.2) -- remove só ESTE fio no Core, sem precisar
@@ -201,7 +203,18 @@ export class CoreClient {
       from: { componentId: componentA, pinId: pinIdA },
       to: { componentId: componentB, pinId: pinIdB },
     });
-    return (resp as { removed?: boolean }).removed === true;
+    const payload = resp as { removed?: boolean; topologyRevision?: number };
+    this.wireTopologyRevision = payload.topologyRevision ?? this.wireTopologyRevision;
+    return payload.removed === true;
+  }
+
+  async applyWireTopologyTransaction(operations: Array<{
+    kind: "connect" | "disconnect";
+    from: { componentId: string; pinId: string };
+    to: { componentId: string; pinId: string };
+  }>): Promise<void> {
+    const response = await this.request("applyWireTopologyTransaction", { baseRevision: this.wireTopologyRevision, operations });
+    this.wireTopologyRevision = (response as { topologyRevision: number }).topologyRevision;
   }
 
   async removeComponent(instanceId: string): Promise<void> {

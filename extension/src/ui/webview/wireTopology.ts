@@ -20,13 +20,16 @@ import {
   splitWireRouteAtPoint,
 } from "./wireGeometry.js";
 import { JUNCTION_TYPE_ID, WebviewComponentModel, WebviewWireModel } from "./model.js";
-import { buildPinToPinWire, buildPinToWireConnection, WirePinRef } from "./wireConnections.js";
 import { componentBox, componentLocalOrigin, pinLocalPosition } from "./componentSymbols.js";
+import { WireSpatialIndex } from "./wireSpatialIndex.js";
 
 export interface TopologySnapshot {
   components: WebviewComponentModel[];
   wires: WebviewWireModel[];
+  nodes?: Array<{ id: string; x: number; y: number }>;
 }
+
+type WirePinRef = { componentId: string; pinId: string };
 
 /** Espelha `componentPinLocalPosition`/`pinScenePosition` de `main.ts` (mesma matemática de
  * box/origem/flip/rotação), reimplementado aqui pra que este módulo funcione tanto no host
@@ -62,9 +65,12 @@ function rotateLocalPoint(local: Point, box: { width: number; height: number }, 
 
 /** Posição em cena (canvas) do pino `pinId` do componente `componentId`, ou `undefined` se o
  * componente/pino não existir em `components`. */
-export function pinScenePosition(components: WebviewComponentModel[], componentId: string, pinId: string): Point | undefined {
+export function pinScenePosition(components: WebviewComponentModel[], componentId: string, pinId: string, nodes: TopologySnapshot["nodes"] = []): Point | undefined {
   const component = components.find((entry) => entry.id === componentId);
-  if (!component) return undefined;
+  if (!component) {
+    const node = nodes?.find((entry) => entry.id === componentId);
+    return node && pinId === "pin-1" ? { x: node.x, y: node.y } : undefined;
+  }
   const pinIndex = component.pins.findIndex((pin) => pin.id === pinId);
   if (pinIndex < 0) return undefined;
   const box = componentBox(component.typeId, component.properties);
@@ -77,9 +83,9 @@ export function pinScenePosition(components: WebviewComponentModel[], componentI
 
 /** Polilinha completa do fio (com as duas extremidades reais resolvidas), ou `[]` se algum dos dois
  * pinos não existir mais (referência órfã -- ver `normalizeWireGeometry`). */
-export function wirePolylinePoints(components: WebviewComponentModel[], wire: WebviewWireModel): Point[] {
-  const fromPos = pinScenePosition(components, wire.from.componentId, wire.from.pinId);
-  const toPos = pinScenePosition(components, wire.to.componentId, wire.to.pinId);
+export function wirePolylinePoints(components: WebviewComponentModel[], wire: WebviewWireModel, nodes: TopologySnapshot["nodes"] = []): Point[] {
+  const fromPos = pinScenePosition(components, wire.from.componentId, wire.from.pinId, nodes);
+  const toPos = pinScenePosition(components, wire.to.componentId, wire.to.pinId, nodes);
   if (!fromPos || !toPos) return [];
   return buildOrthogonalPath([fromPos, ...(wire.points ?? []), toPos]);
 }
@@ -106,9 +112,9 @@ export function isJunctionVisible(wires: WebviewWireModel[], componentId: string
 
 /** Reusa uma junção já existente exatamente na posição `point` (mesma tolerância de coincidência de
  * `samePoint`), em vez de criar uma duplicata sobreposta. */
-export function findExistingJunctionAt(components: WebviewComponentModel[], point: Point): string | undefined {
+export function findExistingJunctionAt(components: WebviewComponentModel[], point: Point, nodes: TopologySnapshot["nodes"] = []): string | undefined {
   const found = components.find((component) => component.typeId === JUNCTION_TYPE_ID && samePoint({ x: component.x, y: component.y }, point));
-  return found?.id;
+  return found?.id ?? nodes?.find((node) => samePoint({ x: node.x, y: node.y }, point))?.id;
 }
 
 export type HitTestResult =
@@ -122,10 +128,27 @@ export type HitTestResult =
  * discordar sobre o que foi clicado (bug antigo: `wireConnectCornerIndexLikeSimulIDE` só era chamado
  * ao TERMINAR, nunca ao iniciar). `toleranceCanvasPx` casa com a tolerância de snap de canto já usada
  * em `main.ts` (`WIRE_GRID_SIZE` = 8px). */
-export function findAtPosition(snapshot: TopologySnapshot, scenePoint: Point, toleranceCanvasPx: number = WIRE_GRID_SIZE): HitTestResult {
-  for (const component of snapshot.components) {
+export function buildWireSpatialIndex(snapshot: TopologySnapshot, cellSize = 64): WireSpatialIndex {
+  const index = new WireSpatialIndex(cellSize);
+  for (const component of snapshot.components) for (const pin of component.pins) {
+    const point = pinScenePosition(snapshot.components, component.id, pin.id, snapshot.nodes);
+    if (point) index.upsertConnectionPoint({ id: `${component.id}:${pin.id}`, kind: component.typeId === JUNCTION_TYPE_ID ? "junction" : "pin", componentId: component.id, pinId: pin.id, point });
+  }
+  for (const node of snapshot.nodes ?? []) index.upsertConnectionPoint({ id: `${node.id}:pin-1`, kind: "junction", componentId: node.id, pinId: "pin-1", point: { x: node.x, y: node.y } });
+  for (const wire of snapshot.wires) index.upsertWire(wire.id, wirePolylinePoints(snapshot.components, wire, snapshot.nodes));
+  return index;
+}
+
+export function findAtPosition(snapshot: TopologySnapshot, scenePoint: Point, toleranceCanvasPx: number = WIRE_GRID_SIZE, spatialIndex?: WireSpatialIndex): HitTestResult {
+  if (spatialIndex) {
+    const points = spatialIndex.queryConnectionPoints(scenePoint, toleranceCanvasPx).sort((a, b) => (a.kind === "pin" ? 0 : 1) - (b.kind === "pin" ? 0 : 1));
+    const hit = points[0];
+    if (hit) return hit.kind === "junction"
+      ? { kind: "junction", componentId: hit.componentId, point: hit.point }
+      : { kind: "pin", componentId: hit.componentId, pinId: hit.pinId!, point: hit.point };
+  } else for (const component of snapshot.components) {
     for (const pin of component.pins) {
-      const pos = pinScenePosition(snapshot.components, component.id, pin.id);
+      const pos = pinScenePosition(snapshot.components, component.id, pin.id, snapshot.nodes);
       if (!pos) continue;
       if (Math.hypot(pos.x - scenePoint.x, pos.y - scenePoint.y) <= toleranceCanvasPx) {
         if (component.typeId === JUNCTION_TYPE_ID) return { kind: "junction", componentId: component.id, point: pos };
@@ -134,19 +157,20 @@ export function findAtPosition(snapshot: TopologySnapshot, scenePoint: Point, to
     }
   }
 
-  for (const wire of snapshot.wires) {
-    const points = wirePolylinePoints(snapshot.components, wire);
-    for (let index = 0; index < points.length - 1; index += 1) {
-      const from = points[index]!;
-      const to = points[index + 1]!;
+  const candidates = spatialIndex ? spatialIndex.queryPoint(scenePoint, toleranceCanvasPx) : snapshot.wires.flatMap((wire) => {
+    const points = wirePolylinePoints(snapshot.components, wire, snapshot.nodes);
+    return points.slice(0, -1).map((from, segmentIndex) => ({ wireId: wire.id, segmentIndex, from, to: points[segmentIndex + 1]! }));
+  });
+  for (const candidate of candidates) {
+      const from = candidate.from;
+      const to = candidate.to;
       const isHorizontal = Math.abs(from.y - to.y) < 0.5;
       const isVertical = Math.abs(from.x - to.x) < 0.5;
       if (!isHorizontal && !isVertical) continue;
       const projected = nearestSnappedPointOnOrthogonalSegment(scenePoint, from, to, WIRE_GRID_SIZE);
       if (Math.hypot(projected.x - scenePoint.x, projected.y - scenePoint.y) <= toleranceCanvasPx) {
-        return { kind: "segment", wireId: wire.id, segmentIndex: index, point: projected };
+        return { kind: "segment", wireId: candidate.wireId, segmentIndex: candidate.segmentIndex, point: projected };
       }
-    }
   }
 
   return { kind: "empty" };
@@ -159,9 +183,8 @@ export interface SplitSegmentIds {
 }
 
 export interface SplitSegmentResult {
-  /** `undefined` quando um nó já existia exatamente no ponto de split -- nada a adicionar em
-   * `components`, os dois novos fios apontam pro nó reusado. */
-  junction: WebviewComponentModel | undefined;
+  /** `undefined` quando o nó topológico já existia exatamente no ponto de split. */
+  node: { id: string; x: number; y: number } | undefined;
   firstWire: WebviewWireModel;
   secondWire: WebviewWireModel;
 }
@@ -174,7 +197,7 @@ export interface SplitSegmentResult {
 export function splitSegmentAtPoint(snapshot: TopologySnapshot, wireId: string, rawPoint: Point, ids: SplitSegmentIds): SplitSegmentResult | undefined {
   const wire = snapshot.wires.find((entry) => entry.id === wireId);
   if (!wire) return undefined;
-  const fullPoints = wirePolylinePoints(snapshot.components, wire);
+  const fullPoints = wirePolylinePoints(snapshot.components, wire, snapshot.nodes);
   if (fullPoints.length < 2) return undefined;
 
   let splitPoint: Point | undefined;
@@ -199,9 +222,9 @@ export function splitSegmentAtPoint(snapshot: TopologySnapshot, wireId: string, 
   }
 
   const split = splitWireRouteAtPoint(fullPoints, splitPoint);
-  const existingJunctionId = findExistingJunctionAt(snapshot.components, splitPoint);
+  const existingJunctionId = findExistingJunctionAt(snapshot.components, splitPoint, snapshot.nodes);
   const junctionId = existingJunctionId ?? ids.junctionId;
-  const junction = existingJunctionId ? undefined : buildJunctionAt(splitPoint, junctionId);
+  const node = existingJunctionId ? undefined : { id: junctionId, x: splitPoint.x, y: splitPoint.y };
 
   const firstWire: WebviewWireModel = {
     id: ids.firstWireId,
@@ -215,21 +238,7 @@ export function splitSegmentAtPoint(snapshot: TopologySnapshot, wireId: string, 
     to: wire.to,
     points: split.second.length > 0 ? split.second : undefined,
   };
-  return { junction, firstWire, secondWire };
-}
-
-function buildJunctionAt(point: Point, id: string): WebviewComponentModel {
-  return {
-    id,
-    typeId: JUNCTION_TYPE_ID,
-    label: "Junction",
-    hidden: true,
-    x: point.x,
-    y: point.y,
-    rotation: 0,
-    pins: [{ id: "pin-1", x: 0, y: 0 }],
-    properties: {},
-  };
+  return { node, firstWire, secondWire };
 }
 
 export type ConnectionEndpoint = { kind: "pin"; componentId: string; pinId: string } | { kind: "wire"; wireId: string; point: Point };
@@ -241,7 +250,7 @@ export interface ConnectEndpointIds {
 }
 
 export interface ConnectEndpointResult {
-  newComponents: WebviewComponentModel[];
+  newNodes: Array<{ id: string; x: number; y: number }>;
   newWires: WebviewWireModel[];
   /** Ids de fios existentes que devem ser removidos (substituídos pelas duas metades do split). */
   replacedWireIds: string[];
@@ -260,7 +269,7 @@ export function connectEndpointToNode(
   routePoints: Point[] | undefined,
   ids: ConnectEndpointIds
 ): ConnectEndpointResult {
-  const newComponents: WebviewComponentModel[] = [];
+  const newNodes: Array<{ id: string; x: number; y: number }> = [];
   const newWires: WebviewWireModel[] = [];
   const replacedWireIds: string[] = [];
   let working: TopologySnapshot = snapshot;
@@ -275,26 +284,27 @@ export function connectEndpointToNode(
     if (!split) {
       // Ponto não caiu sobre um segmento real (ex: já é uma extremidade) -- trata como se já fosse a
       // junção/pino existente naquela posição.
-      const existing = findExistingJunctionAt(working.components, endpoint.point);
+      const existing = findExistingJunctionAt(working.components, endpoint.point, working.nodes);
       if (existing) return { componentId: existing, pinId: "pin-1" };
       throw new Error("connectEndpointToNode: ponto do meio-de-fio não corresponde a nenhum segmento nem junção existente");
     }
-    if (split.junction) newComponents.push(split.junction);
+    if (split.node) newNodes.push(split.node);
     newWires.push(split.firstWire, split.secondWire);
     replacedWireIds.push(endpoint.wireId);
     working = {
-      components: split.junction ? [...working.components, split.junction] : working.components,
+      components: working.components,
       wires: [...working.wires.filter((wire) => wire.id !== endpoint.wireId), split.firstWire, split.secondWire],
+      nodes: split.node ? [...(working.nodes ?? []), split.node] : working.nodes,
     };
-    return { componentId: split.junction?.id ?? findExistingJunctionAt(working.components, endpoint.point)!, pinId: "pin-1" };
+    return { componentId: split.node?.id ?? findExistingJunctionAt(working.components, endpoint.point, working.nodes)!, pinId: "pin-1" };
   };
 
   const fromRef = resolveEndpoint(from);
   const toRef = resolveEndpoint(to);
-  const connectingWire = buildPinToPinWire({ id: ids.newWireId, from: fromRef, to: toRef, points: routePoints });
+  const connectingWire: WebviewWireModel = { id: ids.newWireId, from: fromRef, to: toRef, points: routePoints };
   newWires.push(connectingWire);
 
-  return { newComponents, newWires, replacedWireIds };
+  return { newNodes, newWires, replacedWireIds };
 }
 
 /** Funde segmentos colineares entre fios DIFERENTES que se encontram num nó de grau 2 (diferente de
@@ -465,4 +475,66 @@ export function normalizeWireGeometry(snapshot: TopologySnapshot): TopologySnaps
 
   const merged = mergeCollinearSegments({ components: dedupedComponents, wires: cleanedWires });
   return removeOrphanNodes(merged);
+}
+
+export interface ElectricalProject {
+  wires: WebviewWireModel[];
+  topologyNodes?: Array<{ id: string; x: number; y: number }>;
+}
+
+/** Achata o grafo canônico (portas + nós de topologia) numa árvore de arestas entre pinos reais. Nó
+ * de topologia nunca vira componente/aresta crua enviada ao Core -- N portas na mesma rede exigem só
+ * N-1 arestas (estrela a partir da primeira porta encontrada). Determinístico por rede não tocada:
+ * uma rede cujos membros não mudaram produz sempre os mesmos N-1 arestas, o que é o que permite
+ * `diffElectricalEdges` ficar restrito só à(s) rede(s) que uma edição de fato tocou (EX-F). */
+export function electricalEdgesForProject(project: ElectricalProject): WebviewWireModel[] {
+  type Vertex = { kind: "port"; componentId: string; pinId: string } | { kind: "node"; nodeId: string };
+  const vertices = new Map<string, Vertex>();
+  const adjacency = new Map<string, Set<string>>();
+  const nodeIds = new Set((project.topologyNodes ?? []).map((node) => node.id));
+  const vertexFor = (ref: { componentId: string; pinId: string }): Vertex => nodeIds.has(ref.componentId)
+    ? { kind: "node", nodeId: ref.componentId }
+    : { kind: "port", componentId: ref.componentId, pinId: ref.pinId };
+  const keyOf = (vertex: Vertex): string => vertex.kind === "node" ? `n:${vertex.nodeId}` : `p:${JSON.stringify([vertex.componentId, vertex.pinId])}`;
+  for (const wire of project.wires) {
+    const a = vertexFor(wire.from); const b = vertexFor(wire.to); const ka = keyOf(a); const kb = keyOf(b);
+    vertices.set(ka, a); vertices.set(kb, b);
+    (adjacency.get(ka) ?? (adjacency.set(ka, new Set()), adjacency.get(ka)!)).add(kb);
+    (adjacency.get(kb) ?? (adjacency.set(kb, new Set()), adjacency.get(kb)!)).add(ka);
+  }
+  const seen = new Set<string>(); const edges: WebviewWireModel[] = []; let edgeIndex = 0;
+  for (const start of vertices.keys()) {
+    if (seen.has(start)) continue;
+    const queue = [start]; seen.add(start); const ports: Array<{ componentId: string; pinId: string }> = [];
+    while (queue.length) {
+      const key = queue.pop()!; const vertex = vertices.get(key)!;
+      if (vertex.kind === "port") ports.push({ componentId: vertex.componentId, pinId: vertex.pinId });
+      for (const next of adjacency.get(key) ?? []) if (!seen.has(next)) { seen.add(next); queue.push(next); }
+    }
+    const root = ports[0]; if (!root) continue;
+    for (const port of ports.slice(1)) edges.push({ id: `electrical-${edgeIndex++}`, from: root, to: port });
+  }
+  return edges;
+}
+
+function electricalEdgeKey(wire: WebviewWireModel): string {
+  const a = `${wire.from.componentId}::${wire.from.pinId}`;
+  const b = `${wire.to.componentId}::${wire.to.pinId}`;
+  return a < b ? `${a}|${b}` : `${b}|${a}`;
+}
+
+/** Diff de duas listas JÁ ACHATADAS (saída de `electricalEdgesForProject`) por identidade de par de
+ * pinos reais, não por id sintético (`electrical-N` muda de índice a cada recomputação, nunca é
+ * estável entre chamadas). Usado pra rotear conexão/edição de fio pela transação atômica do Core
+ * (`applyWireTopologyTransaction`) em vez de `queueCoreRebuild()` -- ver `.spec` seção sobre o
+ * roteamento EX-F: o diff fica naturalmente restrito à(s) rede(s) tocada(s) pela edição. */
+export function diffElectricalEdges(
+  before: WebviewWireModel[],
+  after: WebviewWireModel[]
+): { connect: WebviewWireModel[]; disconnect: WebviewWireModel[] } {
+  const beforeByKey = new Map(before.map((wire) => [electricalEdgeKey(wire), wire]));
+  const afterByKey = new Map(after.map((wire) => [electricalEdgeKey(wire), wire]));
+  const disconnect = [...beforeByKey.entries()].filter(([key]) => !afterByKey.has(key)).map(([, wire]) => wire);
+  const connect = [...afterByKey.entries()].filter(([key]) => !beforeByKey.has(key)).map(([, wire]) => wire);
+  return { connect, disconnect };
 }

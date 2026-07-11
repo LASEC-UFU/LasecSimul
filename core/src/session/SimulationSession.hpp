@@ -32,6 +32,18 @@ struct SubcircuitExpansionResult {
     std::optional<uint32_t> primaryMcuInstanceId;
 };
 
+struct WireEndpointRef {
+    uint32_t component;
+    std::string pinId;
+};
+
+struct WireTopologyOperation {
+    enum class Kind { Connect, Disconnect };
+    Kind kind;
+    WireEndpointRef from;
+    WireEndpointRef to;
+};
+
 /**
  * Unidade de isolamento lógico de um projeto aberto: dona de ComponentRegistry, McuRegistry,
  * PluginRuntime, Netlist, MnaSolver e Scheduler.
@@ -81,6 +93,11 @@ public:
      * a `removeComponent`. Marca a topologia como suja só quando de fato removeu algo. */
     bool disconnectWire(uint32_t componentA, const std::string& pinIdA, uint32_t componentB,
                          const std::string& pinIdB);
+
+    /** Aplica um lote de arestas como uma única mutação observável. Todos os endpoints são
+     * validados antes; uma exceção restaura integralmente Netlist/topologyDirty. */
+    uint64_t applyWireTopologyTransaction(uint64_t baseRevision, const std::vector<WireTopologyOperation>& operations);
+    uint64_t wireTopologyRevision() const { return m_wireTopologyRevision; }
 
     /** Renomeia (ou remove, se newName vazio) o nome de túnel do pino `pinId` da instância
      * `component` — ver .spec, seção 7.2. Marca a topologia como suja. */
@@ -205,6 +222,7 @@ private:
      * settleStep(). */
     std::vector<uint64_t> m_lastEdgeTimeNs;
     bool m_topologyDirty = true;
+    uint64_t m_wireTopologyRevision = 0;
     uint32_t m_nonlinearIterations = 0; // ver kMaxNonlinearIterations em SimulationSession.cpp
 };
 

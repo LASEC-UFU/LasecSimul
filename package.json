@@ -12,7 +12,8 @@
     "package:release": "node scripts/package-release.js",
     "watch:extension": "node scripts/build-extension.js --watch",
     "test:core": "node scripts/test-core.js",
-    "test:extension": "npm --prefix extension test"
+    "test:extension": "npm --prefix extension test",
+    "benchmark:wires": "npm run build:extension && node scripts/benchmark-wire-topology.mjs"
   },
   "engines": {
     "node": ">=18.0.0"

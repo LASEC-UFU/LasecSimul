@@ -1,5 +1,9 @@
 import { WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./model";
 
+type WireEndpoint =
+  | { kind: "pin"; componentId: string; pinId: string }
+  | { kind: "wire"; wireId: string; point: { x: number; y: number } };
+
 export const WEBVIEW_MESSAGE_VERSION = 1 as const;
 
 export type SimulationStatus = "stopped" | "running" | "paused";
@@ -107,22 +111,14 @@ export type WebviewToHostMessage =
   | { version: number; type: "requestFlipComponent"; componentId: string; flipH: boolean; flipV: boolean }
   | { version: number; type: "requestRenameComponent"; componentId: string; label: string }
   | { version: number; type: "requestUpdateLabelVisibility"; componentId: string; showId: boolean; showValue: boolean; valueLabelPropertyKey?: string }
-  | {
-      version: number;
-      type: "requestConnectPinToWire";
-      from: { componentId: string; pinId: string };
-      wireId: string;
-      point: { x: number; y: number };
-      points?: Array<{ x: number; y: number }>;
-      existingWireFirstPoints?: Array<{ x: number; y: number }>;
-      existingWireSecondPoints?: Array<{ x: number; y: number }>;
-    }
-  | { version: number; type: "requestConnectPins"; from: { componentId: string; pinId: string }; to: { componentId: string; pinId: string }; points?: Array<{ x: number; y: number }> }
+  /** Commit único de uma conexão cujo início pode ser um segmento ainda não dividido. O host
+   * materializa todos os splits, nós e o ramo somente depois deste verbo. */
+  | { version: number; type: "requestConnectEndpoints"; baseRevision: number; from: WireEndpoint; to: WireEndpoint; points?: Array<{ x: number; y: number }> }
   /** Clique num trecho QUALQUER de um fio existente, sem conexão pendente ainda -- inicia uma nova
    * derivação diretamente daquele ponto (fiel ao SimulIDE, ver refactor de fios). O Host faz TODO o
    * cálculo de split via `wireTopology.ts::splitSegmentAtPoint` (projeção+snap, reuso de junção já
    * existente se houver uma exatamente ali) -- o Webview só manda o ponto bruto do clique, nunca
-   * precisa pré-calcular os dois pedaços como `requestConnectPinToWire` faz. */
+   * precisa pré-calcular os dois pedaços. */
   | { version: number; type: "requestStartWireFromWire"; wireId: string; point: { x: number; y: number } }
   | { version: number; type: "requestUpdateProperty"; componentId: string; name: string; value: string | number | boolean }
   /** Bloco genérico de subcircuito por caminho -- abre um seletor de `.lssubcircuit`, resolve

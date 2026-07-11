@@ -188,6 +188,45 @@ int main() {
         ok &= expect(!removed, "disconnectWire should report false when no such edge exists (idempotent)");
     }
 
+    // Diferencial determinístico: a cada mutação, compara o oracle com uma Netlist nova que
+    // reconstrói independentemente o mesmo conjunto de arestas.
+    {
+        constexpr uint32_t count = 30;
+        Netlist edited;
+        for (uint32_t i = 0; i < count; ++i) edited.registerComponent(i, {"pin"});
+        std::vector<std::pair<uint32_t, uint32_t>> edges;
+        uint32_t randomState = 0x51a7c3u;
+        const auto nextRandom = [&]() { randomState = randomState * 1664525u + 1013904223u; return randomState; };
+        for (uint32_t step = 0; step < 250; ++step) {
+            uint32_t a = nextRandom() % count;
+            uint32_t b = nextRandom() % count;
+            if (a == b) b = (b + 1) % count;
+            if ((nextRandom() & 1u) != 0 || edges.empty()) {
+                edited.connectWire(a, b);
+                edges.emplace_back(a, b);
+            } else {
+                const size_t index = nextRandom() % edges.size();
+                const auto edge = edges[index];
+                ok &= expect(edited.disconnectWire(edge.first, edge.second),
+                             "differential setup should remove an existing edge");
+                edges.erase(edges.begin() + static_cast<std::ptrdiff_t>(index));
+            }
+            const Topology actual = edited.rebuildTopology();
+            Netlist reference;
+            for (uint32_t i = 0; i < count; ++i) reference.registerComponent(i, {"pin"});
+            for (const auto& edge : edges) reference.connectWire(edge.first, edge.second);
+            const Topology expected = reference.rebuildTopology();
+            for (uint32_t left = 0; left < count; ++left) for (uint32_t right = 0; right < count; ++right) {
+                const bool actualConnected = actual.slotToNode[left] == actual.slotToNode[right];
+                const bool expectedConnected = expected.slotToNode[left] == expected.slotToNode[right];
+                if (actualConnected != expectedConnected) {
+                    ok &= expect(false, "edited connectivity must match an independent full rebuild after every random edit");
+                    left = count; break;
+                }
+            }
+        }
+    }
+
     // reregisterComponentPins (pino dinâmico, ex: switches.keypad rows/columns) -- crescer contagem.
     {
         Netlist netlist;
@@ -270,6 +309,7 @@ int main() {
             netlist.reregisterComponentPins(0, {"a", "a"});
         },
         "reregisterComponentPins should reject duplicate pin ids, same as registerComponent");
+
 
     if (ok) std::printf("OK: Netlist topology cases passed.\n");
     return ok ? 0 : 1;

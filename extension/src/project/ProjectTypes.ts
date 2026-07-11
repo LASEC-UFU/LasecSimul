@@ -1,4 +1,4 @@
-export const LS_PROJ_SCHEMA_VERSION = 1 as const;
+export const LS_PROJ_SCHEMA_VERSION = 2 as const;
 
 export interface ProjectSimulationSettings {
   frequencyHz?: number;
@@ -10,6 +10,21 @@ export interface ProjectWire {
   id: string;
   from: { componentId: string; pinId: string };
   to: { componentId: string; pinId: string };
+}
+
+export type ProjectTopologyEndpoint =
+  | { kind: "port"; componentId: string; pinId: string }
+  | { kind: "node"; nodeId: string };
+
+export interface ProjectTopology {
+  revision: number;
+  nodes: Array<{ id: string; position: { x: number; y: number } }>;
+  conductors: Array<{
+    id: string;
+    from: ProjectTopologyEndpoint;
+    to: ProjectTopologyEndpoint;
+    vertices: Array<{ x: number; y: number }>;
+  }>;
 }
 
 /** Referência do "bloco genérico de subcircuito" a um `.lssubcircuit` escolhido por caminho (fora
@@ -58,6 +73,9 @@ export interface ProjectDocument {
   schemaVersion: number;
   components: ProjectComponent[];
   wires: ProjectWire[];
+  /** Fonte canônica v2. `wires` permanece temporariamente apenas como projeção interna durante a
+   * migração da Webview e não é gravado pelo serializer v2. */
+  topology: ProjectTopology;
   visual: {
     wires: Array<{ id: string; selected?: boolean; points?: { x: number; y: number }[] }>;
     viewport: { x: number; y: number; zoom: number };
@@ -71,6 +89,7 @@ export function createEmptyProject(): ProjectDocument {
     schemaVersion: LS_PROJ_SCHEMA_VERSION,
     components: [],
     wires: [],
+    topology: { revision: 0, nodes: [], conductors: [] },
     visual: {
       wires: [],
       viewport: { x: 0, y: 0, zoom: 1 },

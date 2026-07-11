@@ -1,5 +1,5 @@
 import { WEBVIEW_MESSAGE_VERSION, ComponentReadoutValue, HostToWebviewMessage, InternalComponentSnapshot, SimulationStatus, WebviewToHostMessage } from "./messages.js";
-import { InteractionKindEntry, JUNCTION_TYPE_ID, McuSerialPortEntry, PropertySchemaEntry, TUNNEL_TYPE_ID, ViewSpecInteraction, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./model.js";
+import { InteractionKindEntry, McuSerialPortEntry, PropertySchemaEntry, TUNNEL_TYPE_ID, ViewSpecInteraction, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./model.js";
 import { ComponentBox, PIN_RADIUS, componentBox, componentLocalOrigin, componentSymbolSvg, dialKnobSvg, hasRealPinPosition, missingSubcircuitPlaceholderSvg, packageSymbolSvg, pinLocalPosition, registerPackage } from "./componentSymbols.js";
 import { detectChannelTrigger, findTriggerAnchorIndex, triggerAlignedWindowEndNs, visibleSampleWindowByTime } from "./instrumentTrigger.js";
 import {
@@ -21,7 +21,8 @@ import {
   wireCornerIndexNearSegmentPoint,
 } from "./wireGeometry.js";
 import { formatEngineeringValue, defaultSiPrefixFactor, SI_PREFIXES } from "./valueFormatting.js";
-import { isJunctionVisible } from "./wireTopology.js";
+import { isJunctionVisible, pinScenePosition as resolveEndpointScenePosition } from "./wireTopology.js";
+import { WireSpatialIndex } from "./wireSpatialIndex.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const FINE_WIRE_STEP = WIRE_GRID_SIZE / 10;
@@ -115,6 +116,8 @@ const componentElementsById = new Map<string, HTMLElement>();
  * capturando `points`/`index` da chamada atual, mexer nisso é um risco de interação bem maior pra um
  * ganho bem menor (poucas alças por fio vs. potencialmente centenas de fios). */
 const wirePolylineElementsById = new Map<string, SVGPolylineElement>();
+const wireSpatialIndex = new WireSpatialIndex(64);
+const wireSpatialSignatures = new Map<string, string>();
 let appBarElement: HTMLElement | undefined;
 let canvasElement: HTMLDivElement | undefined;
 let canvasContentElement: HTMLDivElement | undefined;
@@ -567,6 +570,7 @@ function renderBoardOverlaysFor(component: WebviewComponentModel): HTMLElement[]
 interface UndoSnapshot {
   components: WebviewComponentModel[];
   wires: WebviewWireModel[];
+  topologyNodes: NonNullable<WebviewProjectState["topologyNodes"]>;
   selectedComponentIds: string[];
   selectedWireIds: string[];
 }
@@ -590,10 +594,11 @@ function activeUndoHistory(): UndoHistory {
   return mainUndoHistory;
 }
 
-function snapshotOfProjectState(project: Pick<WebviewProjectState, "components" | "wires" | "selectedComponentIds" | "selectedWireIds">): UndoSnapshot {
+function snapshotOfProjectState(project: Pick<WebviewProjectState, "components" | "wires" | "topologyNodes" | "selectedComponentIds" | "selectedWireIds">): UndoSnapshot {
   return {
     components: structuredClone(project.components),
     wires: structuredClone(project.wires),
+    topologyNodes: structuredClone(project.topologyNodes ?? []),
     selectedComponentIds: [...project.selectedComponentIds],
     selectedWireIds: [...project.selectedWireIds],
   };
@@ -604,8 +609,8 @@ function captureUndoSnapshot(): UndoSnapshot {
 }
 
 /** Chave de comparação -- só `components`/`wires` (NUNCA seleção, ver comentário da seção). */
-function undoContentKey(snapshot: Pick<UndoSnapshot, "components" | "wires">): string {
-  return JSON.stringify([snapshot.components, snapshot.wires]);
+function undoContentKey(snapshot: { components: WebviewComponentModel[]; wires: WebviewWireModel[]; topologyNodes?: WebviewProjectState["topologyNodes"] }): string {
+  return JSON.stringify([snapshot.components, snapshot.wires, snapshot.topologyNodes ?? []]);
 }
 
 /** Reseta o histórico (undo E redo) pro estado ATUAL de `state` -- chamado ao entrar/sair da sessão
@@ -667,6 +672,7 @@ function applyUndoSnapshot(snapshot: UndoSnapshot): void {
   try {
     state.components = snapshot.components;
     state.wires = snapshot.wires;
+    state.topologyNodes = snapshot.topologyNodes;
     state.selectedComponentIds = snapshot.selectedComponentIds;
     state.selectedWireIds = snapshot.selectedWireIds;
     clearPendingWire();
@@ -839,6 +845,29 @@ function clearSelection(): void {
 function clearPendingWire(): void {
   state.pendingConnection = undefined;
   pendingWirePreviewTarget = undefined;
+  pendingWireRoute = [];
+  pendingWireBendLengths = [];
+}
+
+/** Ponto único de cancelamento da ferramenta ativa (derivação de fio EM ANDAMENTO ou posicionamento
+ * de componente) -- Esc/botão direito/troca de ferramenta chamam SÓ isto, nunca mexem nas duas flags
+ * na mão. Antes desta função, entrar em modo de posicionamento não cancelava um draft de fio em
+ * andamento (nem o inverso) -- os dois podiam coexistir, e o primeiro Esc só derrubava um dos dois
+ * (achado real de auditoria: `docs/27-analise-critica-fios-vs-auditoria-2026-07-11.md`, seção "Análise
+ * da FSM" -- preview de fio ficava visível sobre o componente recém-posicionado até um SEGUNDO Esc).
+ * As duas ferramentas são MUTUAMENTE EXCLUSIVAS por construção agora: nenhum caminho de entrada em
+ * uma delas (`beginWireDraft`/`beginPlacementMode` abaixo) deixa a outra ativa. */
+function cancelActiveTool(): void {
+  clearPendingWire();
+  exitPlacementMode();
+}
+
+/** Único ponto de entrada em "derivar fio" (clique num pino livre ou em cima de outro fio) --
+ * cancela posicionamento de componente em andamento antes, pra nunca deixar as duas ferramentas
+ * simultaneamente ativas (ver `cancelActiveTool`). */
+function beginWireDraft(origin: NonNullable<WebviewProjectState["pendingConnection"]>): void {
+  if (placingTypeId) exitPlacementMode();
+  state.pendingConnection = origin;
   pendingWireRoute = [];
   pendingWireBendLengths = [];
 }
@@ -1256,6 +1285,13 @@ function installCanvasEventHandlers(canvas: HTMLDivElement, canvasContent: HTMLD
     // nunca substitui um menu mais específico pelo genérico "Selecionar tudo".
     if (event.defaultPrevented) return;
     event.preventDefault();
+    if (placingTypeId) {
+      // Mesmo padrão de Esc: botão direito cancela a ferramenta ativa, nunca deixa o modo de
+      // posicionamento aberto por baixo do menu de contexto genérico.
+      exitPlacementMode();
+      render();
+      return;
+    }
     if (state.pendingConnection) {
       if (pendingWireBendLengths.length > 0) {
         undoPendingWireBend();
@@ -1594,6 +1630,11 @@ function render(): void {
   for (const wire of state.wires) {
     const points = wirePolylinePoints(wire);
     if (points.length < 2) continue;
+    const spatialSignature = points.map((point) => `${point.x},${point.y}`).join(";");
+    if (wireSpatialSignatures.get(wire.id) !== spatialSignature) {
+      wireSpatialIndex.upsertWire(wire.id, points);
+      wireSpatialSignatures.set(wire.id, spatialSignature);
+    }
     visibleWireIds.add(wire.id);
     let polyline = wirePolylineElementsById.get(wire.id);
     if (!polyline) {
@@ -1612,22 +1653,15 @@ function render(): void {
     if (visibleWireIds.has(id)) continue;
     polyline.remove();
     wirePolylineElementsById.delete(id);
+    wireSpatialIndex.removeWire(id);
+    wireSpatialSignatures.delete(id);
   }
   renderPendingWirePreview(wireLayer);
 
   const visibleComponents: WebviewComponentModel[] = [];
   const subcircuitFileComponents: WebviewComponentModel[] = [];
   const boardModeComponents: WebviewComponentModel[] = [];
-  const junctionComponents: WebviewComponentModel[] = [];
   for (const component of state.components) {
-    // Só desenha o pontinho de junção quando ela tem significado elétrico real (grau >= 3, um T ou
-    // mais) -- grau 0/1/2 são casos que `removeOrphanNodes` deveria ter colapsado/removido, mas por
-    // segurança (ex: estado ainda não normalizado) o pontinho nunca aparece pra eles de qualquer
-    // jeito. Corrige a "bola laranja" permanente: antes, TODA junção entrava aqui incondicionalmente.
-    if (component.typeId === JUNCTION_TYPE_ID) {
-      if (isJunctionVisible(state.wires, component.id)) junctionComponents.push(component);
-      continue;
-    }
     if (component.hidden) continue;
     visibleComponents.push(component);
     if (component.properties.boardModeEnabled) boardModeComponents.push(component);
@@ -1677,8 +1711,8 @@ function render(): void {
     if (valueLabel) canvasContent.appendChild(valueLabel);
   }
 
-  for (const component of junctionComponents) {
-    canvasContent.appendChild(renderJunction(component));
+  for (const node of state.topologyNodes ?? []) {
+    if (isJunctionVisible(state.wires, node.id)) canvasContent.appendChild(renderJunction(node.id, node.x, node.y));
   }
 
   renderInstrumentPopups();
@@ -2078,10 +2112,12 @@ function setPolylinePoints(polyline: SVGPolylineElement, points: Point[]): void 
 }
 
 function wirePolylinePoints(wire: WebviewWireModel): Point[] {
-  const from = state.components.find((component) => component.id === wire.from.componentId);
-  const to = state.components.find((component) => component.id === wire.to.componentId);
-  const fromPos = from && pinScenePosition(from, wire.from.pinId);
-  const toPos = to && pinScenePosition(to, wire.to.pinId);
+  // Resolução porta-ou-nó de topologia é SEMPRE a mesma regra (`wireTopology.ts::pinScenePosition`,
+  // fonte única) -- antes desta rodada, main.ts reimplementava essa distinção à mão, uma 3ª cópia
+  // independente da mesma lógica (`electricalEdgesForProject`/`voltageProbesForProject` já tinham
+  // cada uma a sua, ver `docs/27-analise-critica-fios-vs-auditoria-2026-07-11.md`).
+  const fromPos = resolveEndpointScenePosition(state.components, wire.from.componentId, wire.from.pinId, state.topologyNodes);
+  const toPos = resolveEndpointScenePosition(state.components, wire.to.componentId, wire.to.pinId, state.topologyNodes);
   if (!fromPos || !toPos) return [];
   return buildOrthogonalPath([fromPos, ...(wire.points ?? []), toPos]);
 }
@@ -2186,6 +2222,11 @@ function renderWireCornerHandles(wireLayer: SVGSVGElement, wire: WebviewWireMode
     );
     handle.addEventListener("click", (event) => {
       event.stopPropagation();
+      // Em modo de posicionamento de componente, ignora clique em alça de fio -- nunca inicia uma
+      // derivação por baixo da ferramenta ativa (mesma classe de bug de `cancelActiveTool`, ver
+      // `docs/27-analise-critica-fios-vs-auditoria-2026-07-11.md`, seção "FSM"). `stopPropagation`
+      // já rodou, então não cai pro handler do canvas de fundo -- o clique só é descartado.
+      if (placingTypeId) return;
       if (suppressNextWireInteractionClick) {
         suppressNextWireInteractionClick = false;
         return;
@@ -2193,18 +2234,17 @@ function renderWireCornerHandles(wireLayer: SVGSVGElement, wire: WebviewWireMode
 
       if (state.pendingConnection) {
         // Termina a derivação em andamento exatamente neste canto -- mesma lógica de "clicar num
-        // fio" (`splitWireRouteAtPoint` local + `requestConnectPinToWire`), só que o ponto já é
+        // fio" (split local da rota), só que o ponto já é
         // exato (canto real, sem projeção/snap necessários).
-        const split = splitWireRouteAtPoint(wirePolylinePoints(wire), point);
         send({
           version: WEBVIEW_MESSAGE_VERSION,
-          type: "requestConnectPinToWire",
-          from: state.pendingConnection,
-          wireId: wire.id,
-          point,
+          type: "requestConnectEndpoints",
+          baseRevision: state.topologyRevision ?? 0,
+          from: state.pendingConnection.kind === "wire"
+            ? state.pendingConnection
+            : { kind: "pin", componentId: state.pendingConnection.componentId, pinId: state.pendingConnection.pinId },
+          to: { kind: "wire", wireId: wire.id, point },
           points: pendingWirePointsForTarget(point),
-          existingWireFirstPoints: split.first,
-          existingWireSecondPoints: split.second,
         });
         clearPendingWire();
         vscode?.setState(state);
@@ -2332,6 +2372,9 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
     );
     handle.addEventListener("click", (event) => {
       event.stopPropagation();
+      // Mesma guarda do handle de canto (ver ali) -- nunca inicia derivação por baixo do
+      // posicionamento de componente ativo.
+      if (placingTypeId) return;
       if (suppressNextWireInteractionClick) {
         suppressNextWireInteractionClick = false;
         return;
@@ -2345,16 +2388,15 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
         cornerIndex !== undefined ? points[cornerIndex]! : nearestSnappedPointOnOrthogonalSegment(clickPoint, from, to, WIRE_GRID_SIZE);
 
       if (state.pendingConnection) {
-        const split = splitWireRouteAtPoint(wirePolylinePoints(wire), target);
         send({
           version: WEBVIEW_MESSAGE_VERSION,
-          type: "requestConnectPinToWire",
-          from: state.pendingConnection,
-          wireId: wire.id,
-          point: target,
+          type: "requestConnectEndpoints",
+          baseRevision: state.topologyRevision ?? 0,
+          from: state.pendingConnection.kind === "wire"
+            ? state.pendingConnection
+            : { kind: "pin", componentId: state.pendingConnection.componentId, pinId: state.pendingConnection.pinId },
+          to: { kind: "wire", wireId: wire.id, point: target },
           points: pendingWirePointsForTarget(target),
-          existingWireFirstPoints: split.first,
-          existingWireSecondPoints: split.second,
         });
         clearPendingWire();
         vscode?.setState(state);
@@ -2522,6 +2564,7 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
 function pendingConnectionPosition(): Point | undefined {
   const pending = state.pendingConnection;
   if (!pending) return undefined;
+  if (pending.kind === "wire") return pending.point;
   const component = state.components.find((item) => item.id === pending.componentId);
   return component && pinScenePosition(component, pending.pinId);
 }
@@ -2692,7 +2735,7 @@ function pinScenePosition(component: WebviewComponentModel, pinId: string): Poin
 
 /** Depois de soltar um arrasto de componente, verifica se algum dos pinos dele agora encosta
  * EXATAMENTE (não só "perto") em cima de um fio que ainda não toca esse componente -- se sim, cria a
- * junção automaticamente, igual ao clique-pra-derivar (`requestConnectPinToWire`). Corrige "parece
+ * junção automaticamente, igual ao clique-pra-derivar. Corrige "parece
  * conectado mas não está" ao arrastar um componente por cima de um fio existente. Tolerância pequena
  * de propósito (só overlap real, não "nas redondezas") -- diferente do hit-test de clique explícito
  * (`WIRE_GRID_SIZE`), já que este gatilho é automático/passivo, não uma ação deliberada do usuário. */
@@ -2709,12 +2752,12 @@ function maybeAutoJunctionForDraggedComponents(componentIds: string[]): void {
 
       let matchedWire: WebviewWireModel | undefined;
       let matchedTarget: Point | undefined;
-      for (const wire of state.wires) {
-        if (touchingWireIds.has(wire.id)) continue;
-        const points = wirePolylinePoints(wire);
-        for (let index = 0; index < points.length - 1; index += 1) {
-          const from = points[index]!;
-          const to = points[index + 1]!;
+      for (const candidate of wireSpatialIndex.queryPoint(pinPos, 0.5)) {
+          if (touchingWireIds.has(candidate.wireId)) continue;
+          const wire = state.wires.find((entry) => entry.id === candidate.wireId);
+          if (!wire) continue;
+          const from = candidate.from;
+          const to = candidate.to;
           const isHorizontal = Math.abs(from.y - to.y) < 0.5;
           const isVertical = Math.abs(from.x - to.x) < 0.5;
           if (!isHorizontal && !isVertical) continue;
@@ -2724,20 +2767,16 @@ function maybeAutoJunctionForDraggedComponents(componentIds: string[]): void {
             matchedTarget = projected;
             break;
           }
-        }
         if (matchedWire) break;
       }
       if (!matchedWire || !matchedTarget) continue;
 
-      const split = splitWireRouteAtPoint(wirePolylinePoints(matchedWire), matchedTarget);
       send({
         version: WEBVIEW_MESSAGE_VERSION,
-        type: "requestConnectPinToWire",
-        from: { componentId, pinId: pin.id },
-        wireId: matchedWire.id,
-        point: matchedTarget,
-        existingWireFirstPoints: split.first,
-        existingWireSecondPoints: split.second,
+        type: "requestConnectEndpoints",
+        baseRevision: state.topologyRevision ?? 0,
+        from: { kind: "pin", componentId, pinId: pin.id },
+        to: { kind: "wire", wireId: matchedWire.id, point: matchedTarget },
       });
       touchingWireIds.add(matchedWire.id); // não tenta o mesmo fio de novo pra outro pino desta mesma passada
     }
@@ -4534,7 +4573,7 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
     // tem ponto de solda aí.
     if (!hasRealPinPosition(component.typeId, pin.id, component.properties)) return;
     const local = componentPinLocalPosition(component, index);
-    const isActive = state.pendingConnection?.componentId === component.id && state.pendingConnection?.pinId === pin.id;
+    const isActive = state.pendingConnection?.kind !== "wire" && state.pendingConnection?.componentId === component.id && state.pendingConnection?.pinId === pin.id;
     const circle = document.createElementNS(SVG_NS, "circle");
     circle.setAttribute("cx", String(local.x));
     circle.setAttribute("cy", String(local.y));
@@ -4546,18 +4585,19 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
 
     circle.addEventListener("click", (event) => {
       event.stopPropagation();
+      // Mesma guarda de `cancelActiveTool` -- nunca inicia derivação por baixo do posicionamento de
+      // componente ativo (clique é descartado, `stopPropagation` já rodou).
+      if (placingTypeId) return;
       const canvas = circle.closest<HTMLElement>(".canvas");
       if (!state.pendingConnection) {
-        state.pendingConnection = { componentId: component.id, pinId: pin.id };
+        beginWireDraft({ kind: "pin", componentId: component.id, pinId: pin.id });
         selectOnlyComponent(component.id);
-        pendingWireRoute = [];
-        pendingWireBendLengths = [];
         pendingWirePreviewTarget = canvas ? eventToCanvasPoint(event, canvas) : undefined;
         persistState();
         render();
         return;
       }
-      if (state.pendingConnection.componentId === component.id && state.pendingConnection.pinId === pin.id) {
+      if (state.pendingConnection.kind !== "wire" && state.pendingConnection.componentId === component.id && state.pendingConnection.pinId === pin.id) {
         clearPendingWire();
         persistState();
         render();
@@ -4567,9 +4607,12 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
       const newConnectionPoints = toPos ? pendingWirePointsForTarget(toPos) : pendingWireRoute;
       send({
         version: WEBVIEW_MESSAGE_VERSION,
-        type: "requestConnectPins",
-        from: state.pendingConnection,
-        to: { componentId: component.id, pinId: pin.id },
+        type: "requestConnectEndpoints",
+        baseRevision: state.topologyRevision ?? 0,
+        from: state.pendingConnection.kind === "wire"
+          ? state.pendingConnection
+          : { kind: "pin", componentId: state.pendingConnection.componentId, pinId: state.pendingConnection.pinId },
+        to: { kind: "pin", componentId: component.id, pinId: pin.id },
         points: newConnectionPoints,
       });
       clearPendingWire();
@@ -5434,6 +5477,10 @@ function nextIndexedLabel(typeId: string, baseLabel: string, components: Webview
 /** Entra no modo de posicionamento de componente. A posição de rótulos de pinos do package vem do
  * próprio manifesto (`labelX`/`labelY`) e não é editada pelo esquemático. */
 function enterPlacementMode(typeId: string): void {
+  // Cancela qualquer derivação de fio em andamento primeiro -- as duas ferramentas nunca ficam
+  // ativas ao mesmo tempo (ver `cancelActiveTool`). Sem isto, colocar um componente novo enquanto um
+  // fio está em desenho deixava o preview/pino de origem pendurados na tela.
+  if (state.pendingConnection) clearPendingWire();
   placingTypeId = typeId;
   if (!placementGhostEl) {
     placementGhostEl = document.createElement("div");
@@ -5596,12 +5643,12 @@ function handlePushShortcut(event: KeyboardEvent, closed: boolean): boolean {
   return handled;
 }
 
-function renderJunction(component: WebviewComponentModel): HTMLElement {
+function renderJunction(id: string, x: number, y: number): HTMLElement {
   const dot = document.createElement("div");
   dot.className = "junction-dot";
-  dot.style.left = `${component.x - 4}px`;
-  dot.style.top = `${component.y - 4}px`;
-  dot.dataset.componentId = component.id;
+  dot.style.left = `${x - 4}px`;
+  dot.style.top = `${y - 4}px`;
+  dot.dataset.componentId = id;
   return dot;
 }
 
@@ -5774,13 +5821,16 @@ window.addEventListener("keydown", (event) => {
 
   if (event.key === "Escape") {
     hideContextMenu();
-    if (placingTypeId) { exitPlacementMode(); return; }
-  }
-
-  if (event.key === "Escape" && state.pendingConnection) {
-    clearPendingWire();
-    persistState();
-    render();
+    // As duas ferramentas nunca coexistem (ver `cancelActiveTool`), mas um único Esc cancela
+    // qualquer uma que esteja ativa -- sem `return` antecipado que pule a outra checagem (bug real
+    // corrigido: entrar em posicionamento de componente durante um draft de fio exigia DOIS Esc pra
+    // limpar tudo, ver `docs/27-analise-critica-fios-vs-auditoria-2026-07-11.md`, seção "FSM").
+    const hadActiveTool = placingTypeId !== null || state.pendingConnection !== undefined;
+    cancelActiveTool();
+    if (hadActiveTool) {
+      persistState();
+      render();
+    }
   }
 });
 

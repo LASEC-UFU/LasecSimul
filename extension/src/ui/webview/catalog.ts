@@ -5,7 +5,6 @@ import { WebviewComponentCatalogEntry, WebviewProjectState } from "./model";
 // do SimulIDE que o LasecSimul ainda nao implementa). Ao adicionar um componente novo, achar a
 // categoria correspondente la ANTES de inventar uma nova aqui.
 export const defaultComponentCatalog: WebviewComponentCatalogEntry[] = [
-  { typeId: "connectors.junction", label: "Juncao", category: "Conectores", folderPath: ["Conectores"], icon: "tunel", pinCount: 1, defaultProperties: {}, hidden: true },
   { typeId: "sources.dc_voltage", label: "Fonte de Tensao", category: "Fontes", folderPath: ["Fontes"], icon: "fonte-de-tensao", pinCount: 2, defaultProperties: { voltage: 5 } },
   { typeId: "other.ground", label: "Terra (0 V)", category: "Fontes", folderPath: ["Fontes"], icon: "terra", pinCount: 1, defaultProperties: {} },
   { typeId: "logic.button", label: "Botao", category: "Interruptores", folderPath: ["Interruptores"], icon: "botao", pinCount: 2, defaultProperties: { pressed: false } },

@@ -54,6 +54,7 @@ export const state = {
      * place -- guardar a referência aqui é seguro). */
     initialComponents: WebviewProjectState["components"];
     initialWires: WebviewProjectState["wires"];
+    initialTopologyNodes: NonNullable<WebviewProjectState["topologyNodes"]>;
   }>,
 };
 

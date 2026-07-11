@@ -3,8 +3,11 @@ import { JUNCTION_TYPE_ID, PackageDescriptor, WebviewComponentModel, WebviewWire
 import { registerPackage } from "./componentSymbols";
 import {
   connectEndpointToNode,
+  diffElectricalEdges,
+  electricalEdgesForProject,
   findAtPosition,
   findExistingJunctionAt,
+  buildWireSpatialIndex,
   isJunctionVisible,
   mergeCollinearSegments,
   normalizeWireGeometry,
@@ -127,6 +130,15 @@ function wire(id: string, from: { componentId: string; pinId: string }, to: { co
     const farFromSegment = findAtPosition(snapshot, { x: 50, y: 30 }, 8);
     assert(farFromSegment.kind === "empty", "ponto fora da tolerância não deveria achar o segmento");
   });
+  await test("índice espacial preserva o resultado do hit-test e atualiza fio localmente", () => {
+    const snapshot = baseSnapshot();
+    const index = buildWireSpatialIndex(snapshot, 32);
+    const indexed = findAtPosition(snapshot, { x: 50, y: 2 }, 8, index);
+    assert(indexed.kind === "segment" && indexed.wireId === "w1", "índice deveria devolver o mesmo segmento");
+    index.removeWire("w1");
+    const removed = findAtPosition(snapshot, { x: 50, y: 2 }, 8, index);
+    assert(removed.kind === "empty", "remoção incremental deveria tirar o fio do índice");
+  });
 
   await test("wireDegree conta fios distintos tocando o componente", () => {
     const wires: WebviewWireModel[] = [
@@ -159,9 +171,8 @@ function wire(id: string, from: { componentId: string; pinId: string }, to: { co
     const snapshot = baseSnapshot();
     const result = splitSegmentAtPoint(snapshot, "w1", { x: 48, y: 2 }, { junctionId: "j-new", firstWireId: "w1a", secondWireId: "w1b" });
     assert(result !== undefined, "split no meio do segmento deveria funcionar");
-    assert(result!.junction !== undefined && result!.junction!.id === "j-new", "deveria criar uma junção nova");
-    assert(result!.junction!.x === 48 && result!.junction!.y === 0, "junção deveria nascer projetada+snapada sobre o segmento");
-    assert(result!.junction!.hidden === true, "junção nova deve nascer oculta");
+    assert(result!.node !== undefined && result!.node!.id === "j-new", "deveria criar um nó topológico novo");
+    assert(result!.node!.x === 48 && result!.node!.y === 0, "nó deveria nascer projetado+snapado sobre o segmento");
     assert(result!.firstWire.from.componentId === "a" && result!.firstWire.to.componentId === "j-new", "primeira metade vai de 'a' até a junção");
     assert(result!.secondWire.from.componentId === "j-new" && result!.secondWire.to.componentId === "b", "segunda metade vai da junção até 'b'");
   });
@@ -173,7 +184,7 @@ function wire(id: string, from: { componentId: string; pinId: string }, to: { co
     };
     const result = splitSegmentAtPoint(snapshot, "w1", { x: 48, y: 0 }, { junctionId: "would-be-new", firstWireId: "w1a", secondWireId: "w1b" });
     assert(result !== undefined, "split deveria funcionar");
-    assert(result!.junction === undefined, "não deveria criar uma junção nova quando já existe uma no ponto");
+    assert(result!.node === undefined, "não deveria criar um nó novo quando já existe um no ponto");
     assert(result!.firstWire.to.componentId === "existing", "metade deveria apontar pra junção reusada");
     assert(result!.secondWire.from.componentId === "existing", "outra metade deveria apontar pra junção reusada");
   });
@@ -199,7 +210,7 @@ function wire(id: string, from: { componentId: string; pinId: string }, to: { co
       undefined,
       { newWireId: "w-new", nextJunctionId: () => "unused-j", nextWireId: () => "unused-w" }
     );
-    assert(result.newComponents.length === 0, "pino->pino não deveria criar nenhum componente novo");
+    assert(result.newNodes.length === 0, "pino->pino não deveria criar nenhum nó novo");
     assert(result.newWires.length === 1 && result.newWires[0]!.id === "w-new", "deveria criar exatamente 1 fio novo");
     assert(result.replacedWireIds.length === 0, "pino->pino não substitui nenhum fio existente");
   });
@@ -218,12 +229,12 @@ function wire(id: string, from: { componentId: string; pinId: string }, to: { co
       [{ x: 48, y: 50 }],
       { newWireId: "w-new", nextJunctionId: () => `j${++junctionSeq}`, nextWireId: () => `sw${++wireSeq}` }
     );
-    assert(result.newComponents.length === 1 && result.newComponents[0]!.typeId === JUNCTION_TYPE_ID, "deveria criar 1 junção nova pro split do fio de destino");
+    assert(result.newNodes.length === 1, "deveria criar 1 nó novo pro split do fio de destino");
     assert(result.replacedWireIds.includes("w1"), "fio original deveria ser marcado pra substituição");
     assert(result.newWires.length === 3, "deveria produzir as 2 metades do split + o fio novo ligando 'c'");
     const connecting = result.newWires.find((entry) => entry.id === "w-new")!;
     assert(connecting.from.componentId === "c", "fio novo deveria sair de 'c'");
-    assert(connecting.to.componentId === result.newComponents[0]!.id, "fio novo deveria terminar na junção recém-criada");
+    assert(connecting.to.componentId === result.newNodes[0]!.id, "fio novo deveria terminar no nó recém-criado");
   });
 
   await test("connectEndpointToNode: meio-de-fio->meio-de-fio divide os dois fios e liga as duas junções", () => {
@@ -243,7 +254,7 @@ function wire(id: string, from: { componentId: string; pinId: string }, to: { co
       [],
       { newWireId: "w-new", nextJunctionId: () => `j${++junctionSeq}`, nextWireId: () => `sw${++wireSeq}` }
     );
-    assert(result.newComponents.length === 2, "deveria criar 2 junções (uma por fio dividido)");
+    assert(result.newNodes.length === 2, "deveria criar 2 nós (um por fio dividido)");
     assert(result.replacedWireIds.length === 2 && result.replacedWireIds.includes("w1") && result.replacedWireIds.includes("w2"), "os dois fios originais deveriam ser substituídos");
     assert(result.newWires.length === 5, "2 metades de w1 + 2 metades de w2 + o fio novo ligando as duas junções");
   });
@@ -412,6 +423,100 @@ function wire(id: string, from: { componentId: string; pinId: string }, to: { co
     const once = normalizeWireGeometry(snapshot);
     const twice = normalizeWireGeometry(once);
     assert(JSON.stringify(once) === JSON.stringify(twice), "reaplicar normalizeWireGeometry sobre a própria saída não deveria mudar nada");
+  });
+
+  await test("electricalEdgesForProject: sem nó de topologia, cada fio simples vira 1 aresta entre portas reais", () => {
+    const edges = electricalEdgesForProject({
+      wires: [wire("w1", { componentId: "a", pinId: "pin-1" }, { componentId: "b", pinId: "pin-1" })],
+    });
+    assert(edges.length === 1, "1 fio sem nó deveria virar exatamente 1 aresta");
+    assert(edges[0]!.from.componentId === "a" && edges[0]!.to.componentId === "b", "aresta deveria conectar as duas portas reais do fio original");
+  });
+
+  await test("electricalEdgesForProject: rede com nó de topologia (T de 3 ramos) achata em N-1 arestas entre portas reais, nunca referencia o nó", () => {
+    const edges = electricalEdgesForProject({
+      wires: [
+        wire("w1", { componentId: "a", pinId: "pin-1" }, { componentId: "n1", pinId: "pin-1" }),
+        wire("w2", { componentId: "n1", pinId: "pin-1" }, { componentId: "b", pinId: "pin-1" }),
+        wire("w3", { componentId: "n1", pinId: "pin-1" }, { componentId: "c", pinId: "pin-1" }),
+      ],
+      topologyNodes: [{ id: "n1", x: 50, y: 0 }],
+    });
+    assert(edges.length === 2, "T de 3 portas reais deveria achatar em N-1=2 arestas");
+    const referencedComponentIds = new Set(edges.flatMap((edge) => [edge.from.componentId, edge.to.componentId]));
+    assert(!referencedComponentIds.has("n1"), "o nó de topologia nunca deveria aparecer como endpoint de uma aresta achatada (Core nunca vê nó)");
+    assert(referencedComponentIds.has("a") && referencedComponentIds.has("b") && referencedComponentIds.has("c"), "as 3 portas reais deveriam estar cobertas pelas arestas achatadas");
+  });
+
+  await test("diffElectricalEdges: adicionar um ramo a uma rede existente gera só 1 connect, nunca mexe numa rede não tocada", () => {
+    const untouched = wire("wxy", { componentId: "x", pinId: "pin-1" }, { componentId: "y", pinId: "pin-1" });
+    const before = electricalEdgesForProject({
+      wires: [wire("w1", { componentId: "a", pinId: "pin-1" }, { componentId: "n1", pinId: "pin-1" }), wire("w2", { componentId: "n1", pinId: "pin-1" }, { componentId: "b", pinId: "pin-1" }), untouched],
+      topologyNodes: [{ id: "n1", x: 50, y: 0 }],
+    });
+    const after = electricalEdgesForProject({
+      wires: [
+        wire("w1", { componentId: "a", pinId: "pin-1" }, { componentId: "n1", pinId: "pin-1" }),
+        wire("w2", { componentId: "n1", pinId: "pin-1" }, { componentId: "b", pinId: "pin-1" }),
+        wire("w3", { componentId: "n1", pinId: "pin-1" }, { componentId: "c", pinId: "pin-1" }),
+        untouched,
+      ],
+      topologyNodes: [{ id: "n1", x: 50, y: 0 }],
+    });
+    const diff = diffElectricalEdges(before, after);
+    assert(diff.disconnect.length === 0, `adicionar um ramo não deveria exigir desconectar nada preexistente, recebido ${JSON.stringify(diff.disconnect)}`);
+    assert(diff.connect.length === 1, `adicionar um ramo deveria gerar exatamente 1 connect, recebido ${diff.connect.length}`);
+    const newEdge = diff.connect[0]!;
+    assert([newEdge.from.componentId, newEdge.to.componentId].includes("c"), "a única aresta nova deveria envolver a porta 'c' recém-conectada");
+    assert(![newEdge.from.componentId, newEdge.to.componentId].some((id) => id === "x" || id === "y"), "a rede não tocada (x-y) nunca deveria aparecer no diff");
+  });
+
+  await test("diffElectricalEdges: remover uma porta de um T colapsa pra fio direto, diff mostra só a diferença real", () => {
+    // Simula requestRemoveComponent: 'b' foi removido, a rede restante (a, c) já colapsou (via
+    // normalizeRuntimeTopology, testado à parte) num fio direto sem nó -- exatamente o padrão que
+    // extension.ts monta pra chamar diffElectricalEdges.
+    const beforeExcludingRemoved = electricalEdgesForProject({
+      wires: [
+        wire("w1", { componentId: "a", pinId: "pin-1" }, { componentId: "n1", pinId: "pin-1" }),
+        wire("w3", { componentId: "n1", pinId: "pin-1" }, { componentId: "c", pinId: "pin-1" }),
+      ],
+      topologyNodes: [{ id: "n1", x: 50, y: 0 }],
+    });
+    const afterNormalized = electricalEdgesForProject({
+      wires: [wire("w1", { componentId: "a", pinId: "pin-1" }, { componentId: "c", pinId: "pin-1" })],
+    });
+    const diff = diffElectricalEdges(beforeExcludingRemoved, afterNormalized);
+    assert(diff.connect.length === 0 && diff.disconnect.length === 0, "colapso de nó grau-2 em fio direto entre os MESMOS 2 pontos não deveria gerar nenhuma operação (já é a mesma aresta elétrica a-c)");
+  });
+
+  await test("diffElectricalEdges: root da estrela muda de porta -- diff ainda cobre a rede inteira corretamente (nunca perde conectividade)", () => {
+    // Insere uma porta ANTES da que hoje é root (ordem de inserção no Map determina root) --
+    // mesmo pior caso citado na análise: o diff pode não ser mínimo, mas tem que continuar correto.
+    const before = electricalEdgesForProject({
+      wires: [wire("w1", { componentId: "a", pinId: "pin-1" }, { componentId: "n1", pinId: "pin-1" }), wire("w2", { componentId: "n1", pinId: "pin-1" }, { componentId: "b", pinId: "pin-1" })],
+      topologyNodes: [{ id: "n1", x: 50, y: 0 }],
+    });
+    const after = electricalEdgesForProject({
+      wires: [
+        wire("w0", { componentId: "z", pinId: "pin-1" }, { componentId: "n1", pinId: "pin-1" }),
+        wire("w1", { componentId: "a", pinId: "pin-1" }, { componentId: "n1", pinId: "pin-1" }),
+        wire("w2", { componentId: "n1", pinId: "pin-1" }, { componentId: "b", pinId: "pin-1" }),
+      ],
+      topologyNodes: [{ id: "n1", x: 50, y: 0 }],
+    });
+    const diff = diffElectricalEdges(before, after);
+    // Reconstrói a rede resultante (arestas sobreviventes + connect) e confere que a, b, z acabam
+    // todos no mesmo componente conexo -- é essa a garantia de correção, não o tamanho do diff.
+    const survivingKeys = new Set(before.map((w) => `${w.from.componentId}::${w.from.pinId}|${w.to.componentId}::${w.to.pinId}`));
+    for (const removed of diff.disconnect) survivingKeys.delete(`${removed.from.componentId}::${removed.from.pinId}|${removed.to.componentId}::${removed.to.pinId}`);
+    const finalEdges = [...diff.connect, ...before.filter((w) => survivingKeys.has(`${w.from.componentId}::${w.from.pinId}|${w.to.componentId}::${w.to.pinId}`))];
+    const parent = new Map<string, string>();
+    const find = (x: string): string => (parent.get(x) === x || !parent.has(x) ? (parent.set(x, x), x) : (parent.set(x, find(parent.get(x)!)), parent.get(x)!));
+    for (const edge of finalEdges) {
+      const a = `${edge.from.componentId}::${edge.from.pinId}`; const b = `${edge.to.componentId}::${edge.to.pinId}`;
+      parent.set(find(a), find(b));
+    }
+    assert(find("a::pin-1") === find("z::pin-1") && find("b::pin-1") === find("z::pin-1"), "a, b e z deveriam continuar todos na mesma rede elétrica depois de aplicar o diff, mesmo que a root da estrela tenha mudado");
   });
 
   const { failed } = finish();

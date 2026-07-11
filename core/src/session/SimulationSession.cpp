@@ -143,10 +143,27 @@ void SimulationSession::connectWire(uint32_t componentA, const std::string& pinI
                                      const std::string& pinIdB) {
     if (m_netlist.isComponentRemoved(componentA) || m_netlist.isComponentRemoved(componentB))
         throw std::invalid_argument("SimulationSession::connectWire: componente removido");
-    const uint32_t slotA = m_netlist.pinSlotsOf(componentA).at(pinIdA);
-    const uint32_t slotB = m_netlist.pinSlotsOf(componentB).at(pinIdB);
+    // Arquivos de autoria antigos e alguns packages genéricos usam `pin-N`, enquanto a factory
+    // elétrica pode publicar ids semânticos (`p1`, `p2`, `out`...). Preserve primeiro o id exato;
+    // o fallback posicional só é aceito para o formato genérico estrito e dentro do span real.
+    const auto resolveSlot = [this](uint32_t component, const std::string& pinId) -> uint32_t {
+        const auto& slots = m_netlist.pinSlotsOf(component);
+        if (const auto exact = slots.find(pinId); exact != slots.end()) return exact->second;
+        constexpr std::string_view prefix{"pin-"};
+        if (!pinId.starts_with(prefix)) throw std::out_of_range("pin inexistente: " + pinId);
+        size_t consumed = 0;
+        const unsigned long oneBased = std::stoul(pinId.substr(prefix.size()), &consumed);
+        if (consumed != pinId.size() - prefix.size() || oneBased == 0)
+            throw std::out_of_range("pin inexistente: " + pinId);
+        const std::span<Pin> pins = m_componentInstances.at(component)->pins();
+        if (oneBased > pins.size()) throw std::out_of_range("pin inexistente: " + pinId);
+        return slots.at(pins[oneBased - 1].id);
+    };
+    const uint32_t slotA = resolveSlot(componentA, pinIdA);
+    const uint32_t slotB = resolveSlot(componentB, pinIdB);
     m_netlist.connectWire(slotA, slotB);
     m_topologyDirty = true;
+    ++m_wireTopologyRevision;
 }
 
 bool SimulationSession::disconnectWire(uint32_t componentA, const std::string& pinIdA, uint32_t componentB,
@@ -156,8 +173,35 @@ bool SimulationSession::disconnectWire(uint32_t componentA, const std::string& p
     const uint32_t slotA = m_netlist.pinSlotsOf(componentA).at(pinIdA);
     const uint32_t slotB = m_netlist.pinSlotsOf(componentB).at(pinIdB);
     const bool removed = m_netlist.disconnectWire(slotA, slotB);
-    if (removed) m_topologyDirty = true;
+    if (removed) { m_topologyDirty = true; ++m_wireTopologyRevision; }
     return removed;
+}
+
+uint64_t SimulationSession::applyWireTopologyTransaction(uint64_t baseRevision, const std::vector<WireTopologyOperation>& operations) {
+    if (baseRevision != m_wireTopologyRevision)
+        throw std::runtime_error("topology_revision_conflict: esperado " + std::to_string(m_wireTopologyRevision) +
+                                 ", recebido " + std::to_string(baseRevision));
+    // Primeiro valida sem mutar. `connectWire` contém aliases posicionais; repetir a resolução aqui
+    // seria uma segunda regra, então uma cópia barata do Netlist funciona também como staging.
+    simulation::Netlist staged = m_netlist;
+    const bool dirtyBefore = m_topologyDirty;
+    const uint64_t revisionBefore = m_wireTopologyRevision;
+    try {
+        for (const WireTopologyOperation& operation : operations) {
+            if (operation.kind == WireTopologyOperation::Kind::Connect) {
+                connectWire(operation.from.component, operation.from.pinId, operation.to.component, operation.to.pinId);
+            } else {
+                disconnectWire(operation.from.component, operation.from.pinId, operation.to.component, operation.to.pinId);
+            }
+        }
+    } catch (...) {
+        m_netlist = std::move(staged);
+        m_topologyDirty = dirtyBefore;
+        m_wireTopologyRevision = revisionBefore;
+        throw;
+    }
+    m_wireTopologyRevision = revisionBefore + 1;
+    return m_wireTopologyRevision;
 }
 
 void SimulationSession::setTunnelName(uint32_t component, const std::string& pinId, const std::string& oldName,
@@ -292,7 +336,13 @@ SubcircuitExpansionResult SimulationSession::expandSubcircuit(const std::string&
         if (fromIt == componentIndexByLocalId.end() || toIt == componentIndexByLocalId.end()) {
             throw std::runtime_error("subcircuito '" + typeId + "': fio interno referencia componente inexistente");
         }
-        connectWire(fromIt->second, wireDef.fromPinId, toIt->second, wireDef.toPinId);
+        try {
+            connectWire(fromIt->second, wireDef.fromPinId, toIt->second, wireDef.toPinId);
+        } catch (const std::exception& err) {
+            throw std::runtime_error(
+                "subcircuito '" + typeId + "': fio interno inválido " + wireDef.fromComponentId + "." +
+                wireDef.fromPinId + " -> " + wireDef.toComponentId + "." + wireDef.toPinId + ": " + err.what());
+        }
     }
 
     std::unordered_map<std::string, SubcircuitExposedPin> exposedPins;

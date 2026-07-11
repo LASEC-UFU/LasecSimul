@@ -14,6 +14,8 @@
 #include <nlohmann/json.hpp>
 #include "components/SimulideBuiltins.hpp"
 #include "components/connectors/Tunnel.hpp"
+#include <unordered_set>
+#include <unordered_map>
 #include "components/other/Ground.hpp"
 #include "components/passive/Resistor.hpp"
 #include "components/sources/FixedVolt.hpp"
@@ -99,20 +101,65 @@ SubcircuitDefinition parseLssubJson(const std::filesystem::path& path) {
     def.name = manifest.value("name", def.typeId);
     def.packageJson = manifest.contains("package") ? manifest["package"].dump() : "{}";
 
+    // Manifesto canônico v2 (ver ProjectTypes.ts::ProjectTopology) move os fios pra
+    // `topology.conductors[]` -- endpoints usam `{kind:"port"|"node", ...}` em vez de
+    // `{componentId,pinId}` direto, e junções viram `topology.nodes[]` em vez de componentes
+    // `connectors.junction`. Sem esta branch, `manifest["wires"]` simplesmente não existe no
+    // arquivo migrado e este parser silenciosamente registra ZERO fios (regressão real: fez
+    // 3V3/5V/EN do esp32_devkitc_v4.lssubcircuit flutuarem, só GND sobrevivia por ser unido via
+    // nome de túnel, não por fio) -- mesma branch de CoreApplication.cpp::registerSubcircuitFromManifestRich.
+    const bool canonicalTopology = manifest.contains("topology") && manifest["topology"].is_object();
+
+    std::unordered_set<std::string> topologyNodes;
     for (const auto& compJson : manifest["components"]) {
         SubcircuitComponentDef comp;
         comp.id = compJson.value("id", std::string{});
         comp.typeId = compJson.value("typeId", std::string{});
         comp.propertiesJson = compJson.contains("properties") ? compJson["properties"].dump() : "{}";
-        def.components.push_back(std::move(comp));
+        if (comp.typeId == "connectors.junction") topologyNodes.insert(comp.id);
+        else def.components.push_back(std::move(comp));
     }
-    for (const auto& wireJson : manifest["wires"]) {
+    if (canonicalTopology) {
+        for (const auto& nodeJson : manifest["topology"].value("nodes", nlohmann::json::array()))
+            topologyNodes.insert(nodeJson.value("id", std::string{}));
+    }
+    const auto endpointComponentId = [](const nlohmann::json& endpoint) {
+        return endpoint.value("kind", std::string{}) == "node" ? endpoint.value("nodeId", std::string{})
+                                                                 : endpoint.value("componentId", std::string{});
+    };
+    const auto endpointPinId = [](const nlohmann::json& endpoint) {
+        return endpoint.value("kind", std::string{}) == "node" ? std::string{"pin-1"} : endpoint.value("pinId", std::string{});
+    };
+    const nlohmann::json& wiresJson = canonicalTopology ? manifest["topology"]["conductors"] : manifest["wires"];
+    for (const auto& wireJson : wiresJson) {
         SubcircuitWireDef wire;
-        wire.fromComponentId = wireJson["from"].value("componentId", std::string{});
-        wire.fromPinId = wireJson["from"].value("pinId", std::string{});
-        wire.toComponentId = wireJson["to"].value("componentId", std::string{});
-        wire.toPinId = wireJson["to"].value("pinId", std::string{});
+        wire.fromComponentId = endpointComponentId(wireJson.at("from"));
+        wire.fromPinId = endpointPinId(wireJson.at("from"));
+        wire.toComponentId = endpointComponentId(wireJson.at("to"));
+        wire.toPinId = endpointPinId(wireJson.at("to"));
         def.wires.push_back(std::move(wire));
+    }
+    if (!topologyNodes.empty()) {
+        constexpr char sep = '\x1f';
+        const auto key = [sep](const std::string& component, const std::string& pin) { return component + std::string(1, sep) + pin; };
+        std::unordered_map<std::string, std::vector<std::string>> adjacency;
+        for (const auto& wire : def.wires) {
+            const auto a = key(wire.fromComponentId, wire.fromPinId); const auto b = key(wire.toComponentId, wire.toPinId);
+            adjacency[a].push_back(b); adjacency[b].push_back(a);
+        }
+        std::unordered_set<std::string> visited; std::vector<SubcircuitWireDef> flattened;
+        for (const auto& [start, unused] : adjacency) {
+            (void)unused; if (visited.contains(start)) continue;
+            std::vector<std::string> stack{start}; visited.insert(start); std::vector<std::pair<std::string, std::string>> ports;
+            while (!stack.empty()) {
+                auto current = std::move(stack.back()); stack.pop_back(); const auto split = current.find(sep);
+                auto component = current.substr(0, split); auto pin = current.substr(split + 1);
+                if (!topologyNodes.contains(component)) ports.emplace_back(std::move(component), std::move(pin));
+                for (const auto& next : adjacency[current]) if (visited.insert(next).second) stack.push_back(next);
+            }
+            for (size_t i = 1; i < ports.size(); ++i) flattened.push_back({ports[0].first, ports[0].second, ports[i].first, ports[i].second});
+        }
+        def.wires = std::move(flattened);
     }
     for (const auto& ifaceJson : manifest["interface"]) {
         SubcircuitInterfaceDef iface;
@@ -173,7 +220,7 @@ int runTest() {
                 "trilhas 3V3 e 5V expostas");
     TEST_ASSERT(expansion.exposedPins.count("EN") == 1, "pino EN exposto");
 
-    for (int i = 0; i < 5 && session.settleStep(); ++i) {}
+    for (int i = 0; i < 200 && session.settleStep(); ++i) {}
 
     const auto& gnd1 = expansion.exposedPins.at("GND1");
     const auto& gnd2 = expansion.exposedPins.at("GND2");

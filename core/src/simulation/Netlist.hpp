@@ -206,7 +206,9 @@ public:
     Topology rebuildTopology(const std::vector<uint32_t>& extraVarCountByComponent = {}) const {
         const size_t slotCount = m_slotOwner.size();
 
-        // Passada 1: pino/slot -> nó global
+        // Passada 1: pino/slot -> nó global. Este rebuild integral é o oracle de conectividade:
+        // union-find comprimido não é reutilizado entre revisões porque remoções/splits não são
+        // reversíveis e componentes ativos podem depender de uma reestabilização completa.
         UnionFind pinUnion(slotCount);
         for (const auto& [a, b] : m_wireEdges) {
             validateSlot(a, "Netlist::rebuildTopology");

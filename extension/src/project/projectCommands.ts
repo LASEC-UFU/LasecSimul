@@ -10,6 +10,7 @@ import { rebuildCoreFromSchematicState, pinsForProjectComponent } from "../core/
 import { JUNCTION_TYPE_ID, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "../ui/webview/model";
 import { ProjectComponent, ProjectDocument, createEmptyProject } from "./ProjectTypes";
 import { normalizeWireGeometry } from "../ui/webview/wireTopology";
+import { canonicalTopologyFromLegacy, legacyTopologyFromCanonical } from "../ui/webview/topologyDocument";
 
 export function absoluteSubcircuitRefPath(refPath: string): string {
   if (path.isAbsolute(refPath)) return path.normalize(refPath);
@@ -75,6 +76,7 @@ function projectToWebviewState(project: ProjectDocument): WebviewProjectState {
       validVisualPoints(wire.points),
     ])
   );
+  const projectedTopology = legacyTopologyFromCanonical(project.topology);
   const components: WebviewComponentModel[] = project.components.map((component) => {
     const descriptor = catalog.find((item) => item.typeId === component.typeId);
     return {
@@ -95,8 +97,8 @@ function projectToWebviewState(project: ProjectDocument): WebviewProjectState {
       subcircuitRef: component.subcircuitRef,
     };
   });
-  const wires: WebviewWireModel[] = project.wires.map((wire) => {
-    const points = visualWirePoints.get(wire.id);
+  const wires: WebviewWireModel[] = projectedTopology.wires.map((wire) => {
+    const points = wire.points ?? visualWirePoints.get(wire.id);
     return {
       id: wire.id,
       from: wire.from,
@@ -108,12 +110,13 @@ function projectToWebviewState(project: ProjectDocument): WebviewProjectState {
   // comprimento zero, referência pendurada) -- idempotente, então um arquivo já normalizado nunca
   // regride. Cobre TODO ponto de entrada de `.lsproj` (abrir/importar), já que os três chamam esta
   // função.
-  const normalized = normalizeWireGeometry({ components, wires });
   return {
     locale: currentLasecSimulLanguage(),
     catalog,
-    components: normalized.components,
-    wires: normalized.wires,
+    components,
+    wires,
+    topologyNodes: project.topology.nodes.map((node) => ({ id: node.id, x: node.position.x, y: node.position.y })),
+    topologyRevision: project.topology.revision,
     viewport: project.visual.viewport,
     selectedComponentIds: [],
     selectedWireIds: [],
@@ -328,10 +331,12 @@ export async function saveProjectCommand(): Promise<void> {
   if (!warnIfEditingSubcircuit()) return;
   const uri = await vscode.window.showSaveDialog({ filters: { "LasecSimul Project": ["lsproj"] } });
   if (!uri) return;
+  const canonicalTopology = canonicalTopologyFromLegacy(state.schematicState.components, state.schematicState.wires, state.schematicState.topologyRevision ?? 0, state.schematicState.topologyNodes ?? []);
   const project: ProjectDocument = projectWithRelativeSubcircuitRefs({
     ...createEmptyProject(),
-    components: state.schematicState.components.map(webviewComponentToProjectComponent),
-    wires: state.schematicState.wires.map((wire) => ({ id: wire.id, from: wire.from, to: wire.to })),
+    components: state.schematicState.components.filter((component) => component.typeId !== JUNCTION_TYPE_ID).map(webviewComponentToProjectComponent),
+    wires: [],
+    topology: canonicalTopology,
     visual: {
       wires: state.schematicState.wires
         .filter((wire) => wire.points && wire.points.length > 0)

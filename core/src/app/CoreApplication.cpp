@@ -29,7 +29,6 @@
 #include "../components/sources/VoltSource.hpp"
 #include "../components/sources/WaveGen.hpp"
 #include "../components/connectors/Tunnel.hpp"
-#include "../components/connectors/Junction.hpp"
 #include "../components/logic/Button.hpp"
 #include "../components/other/Ground.hpp"
 #include "../components/passive/Capacitor.hpp"
@@ -187,19 +186,10 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
         R"json({"en":{"name":"Tunnel"}})json",
         std::nullopt, std::nullopt, std::vector<std::string>{"pin"});
 
-    reg.registerFactory("connectors.junction", [](const ComponentParams& p) {
-        const auto pos = p.pins<1>();
-        return std::make_unique<components::Junction>(Pin{pos[0].id.empty() ? "pin" : pos[0].id, pos[0].x, pos[0].y});
-    });
-    registerBuiltinMetadata(
-        "connectors.junction",
-        "Junção",
-        std::vector<PropertySchema>{},
-        R"json({"en":{"name":"Junction"}})json");
-
     reg.registerFactory("connectors.bus", [](const ComponentParams& p) {
         const auto pos = p.pins<1>();
-        return std::make_unique<components::Junction>(Pin{pos[0].id.empty() ? "pin" : pos[0].id, pos[0].x, pos[0].y});
+        std::vector<Pin> pins{Pin{pos[0].id.empty() ? "pin" : pos[0].id, pos[0].x, pos[0].y}};
+        return std::make_unique<components::SimulidePassiveState>("connectors.bus", std::move(pins), std::vector<PropertySchema>{});
     });
     registerBuiltinMetadata(
         "connectors.bus",
@@ -1023,7 +1013,10 @@ RegisteredSubcircuitInfo registerSubcircuitFromManifestRich(const std::filesyste
     const bool replacing = existing != nullptr;
 
     const nlohmann::json& componentsJson = requiredArray(manifest, "components", "manifesto de subcircuito");
-    const nlohmann::json& wiresJson = requiredArray(manifest, "wires", "manifesto de subcircuito");
+    const bool canonicalTopology = manifest.contains("topology") && manifest["topology"].is_object();
+    const nlohmann::json wiresJson = canonicalTopology
+        ? requiredArray(manifest["topology"], "conductors", "topology de subcircuito")
+        : requiredArray(manifest, "wires", "manifesto de subcircuito");
     const nlohmann::json& interfaceJson = requiredArray(manifest, "interface", "manifesto de subcircuito");
 
     registry::SubcircuitDefinition def;
@@ -1033,6 +1026,7 @@ RegisteredSubcircuitInfo registerSubcircuitFromManifestRich(const std::filesyste
     def.packageJson = manifest.contains("package") ? manifest["package"].dump() : "{}";
 
     std::unordered_set<std::string> componentIds;
+    std::unordered_set<std::string> topologyNodeIds;
     std::unordered_set<std::string> tunnelNames;
     for (const auto& compJson : componentsJson) {
         if (!compJson.is_object()) throw std::runtime_error("components[] deve conter objetos em " + sourcePath);
@@ -1050,12 +1044,34 @@ RegisteredSubcircuitInfo registerSubcircuitFromManifestRich(const std::filesyste
                 tunnelNames.insert(properties["name"].get<std::string>());
             }
         }
-        def.components.push_back(std::move(comp));
+        if (comp.typeId == "connectors.junction") topologyNodeIds.insert(comp.id);
+        else def.components.push_back(std::move(comp));
+    }
+
+    if (canonicalTopology) {
+        for (const auto& nodeJson : requiredArray(manifest["topology"], "nodes", "topology de subcircuito")) {
+            const std::string nodeId = requiredString(nodeJson, "id", "topology.nodes[]");
+            if (!componentIds.insert(nodeId).second) throw std::runtime_error("id topológico duplicado: " + nodeId);
+            topologyNodeIds.insert(nodeId);
+        }
     }
 
     for (const auto& wireJson : wiresJson) {
         if (!wireJson.is_object()) throw std::runtime_error("wires[] deve conter objetos em " + sourcePath);
-        const WireEndpointsJson endpoints = parseWireEndpoints(wireJson, "wire em " + sourcePath);
+        WireEndpointsJson endpoints;
+        if (canonicalTopology) {
+            const auto parseEndpoint = [&](const nlohmann::json& endpoint, const char* side, std::string& componentId, std::string& pinId) {
+                if (!endpoint.is_object()) throw std::runtime_error(std::string("endpoint ") + side + " inválido");
+                const std::string kind = endpoint.value("kind", std::string{});
+                if (kind == "node") { componentId = requiredString(endpoint, "nodeId", side); pinId = "pin-1"; }
+                else if (kind == "port") { componentId = requiredString(endpoint, "componentId", side); pinId = requiredString(endpoint, "pinId", side); }
+                else throw std::runtime_error(std::string("endpoint ") + side + " com kind inválido");
+            };
+            parseEndpoint(wireJson.at("from"), "from", endpoints.fromComponentId, endpoints.fromPinId);
+            parseEndpoint(wireJson.at("to"), "to", endpoints.toComponentId, endpoints.toPinId);
+        } else {
+            endpoints = parseWireEndpoints(wireJson, "wire em " + sourcePath);
+        }
         registry::SubcircuitWireDef wire;
         wire.fromComponentId = endpoints.fromComponentId;
         wire.fromPinId = endpoints.fromPinId;
@@ -1068,6 +1084,40 @@ RegisteredSubcircuitInfo registerSubcircuitFromManifestRich(const std::filesyste
             throw std::runtime_error("wire referencia componente inexistente: " + wire.toComponentId);
         }
         def.wires.push_back(std::move(wire));
+    }
+
+    // Junction é sintaxe topológica do arquivo, nunca componente de simulação. Achata cada rede em
+    // uma árvore de N-1 arestas entre portas reais e remove todos os endpoints de nó artificial.
+    if (!topologyNodeIds.empty()) {
+        constexpr char separator = '\x1f';
+        const auto key = [separator](const std::string& componentId, const std::string& pinId) {
+            return componentId + std::string(1, separator) + pinId;
+        };
+        std::unordered_map<std::string, std::vector<std::string>> adjacency;
+        for (const auto& wire : def.wires) {
+            const std::string a = key(wire.fromComponentId, wire.fromPinId);
+            const std::string b = key(wire.toComponentId, wire.toPinId);
+            adjacency[a].push_back(b); adjacency[b].push_back(a);
+        }
+        std::unordered_set<std::string> visited;
+        std::vector<registry::SubcircuitWireDef> flattened;
+        for (const auto& [start, unused] : adjacency) {
+            (void)unused;
+            if (visited.contains(start)) continue;
+            std::vector<std::string> stack{start}; visited.insert(start);
+            std::vector<std::pair<std::string, std::string>> ports;
+            while (!stack.empty()) {
+                std::string current = std::move(stack.back()); stack.pop_back();
+                const size_t split = current.find(separator);
+                const std::string componentId = current.substr(0, split);
+                const std::string pinId = current.substr(split + 1);
+                if (!topologyNodeIds.contains(componentId)) ports.emplace_back(componentId, pinId);
+                for (const std::string& next : adjacency[current]) if (visited.insert(next).second) stack.push_back(next);
+            }
+            if (ports.size() < 2) continue;
+            for (size_t i = 1; i < ports.size(); ++i) flattened.push_back({ports[0].first, ports[0].second, ports[i].first, ports[i].second});
+        }
+        def.wires = std::move(flattened);
     }
 
     nlohmann::json exportedInterface = nlohmann::json::array();
@@ -1653,6 +1703,7 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
             const uint32_t componentB = static_cast<uint32_t>(std::stoul(endpoints.toComponentId));
             session.connectWire(componentA, endpoints.fromPinId, componentB, endpoints.toPinId);
             resp.ok = true;
+            resp.payloadJson = nlohmann::json{{"topologyRevision", session.wireTopologyRevision()}}.dump();
         } catch (const std::exception& e) {
             resp.ok = false;
             resp.error = std::string("connectWire falhou: ") + e.what();
@@ -1671,10 +1722,39 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
             const uint32_t componentB = static_cast<uint32_t>(std::stoul(endpoints.toComponentId));
             const bool removed = session.disconnectWire(componentA, endpoints.fromPinId, componentB, endpoints.toPinId);
             resp.ok = true;
-            resp.payloadJson = nlohmann::json{{"removed", removed}}.dump();
+            resp.payloadJson = nlohmann::json{{"removed", removed}, {"topologyRevision", session.wireTopologyRevision()}}.dump();
         } catch (const std::exception& e) {
             resp.ok = false;
             resp.error = std::string("disconnectWire falhou: ") + e.what();
+        }
+        return resp;
+    }
+    if (msg.type == "applyWireTopologyTransaction") {
+        try {
+            const nlohmann::json payload =
+                msg.payloadJson.empty() ? nlohmann::json::object() : nlohmann::json::parse(msg.payloadJson);
+            if (!payload.contains("operations") || !payload["operations"].is_array())
+                throw std::invalid_argument("operations precisa ser array");
+            std::vector<session::WireTopologyOperation> operations;
+            operations.reserve(payload["operations"].size());
+            for (const auto& operationJson : payload["operations"]) {
+                const WireEndpointsJson endpoints = parseWireEndpoints(operationJson, "applyWireTopologyTransaction");
+                const std::string kind = operationJson.value("kind", std::string{});
+                session::WireTopologyOperation operation;
+                if (kind == "connect") operation.kind = session::WireTopologyOperation::Kind::Connect;
+                else if (kind == "disconnect") operation.kind = session::WireTopologyOperation::Kind::Disconnect;
+                else throw std::invalid_argument("kind precisa ser connect ou disconnect");
+                operation.from = {static_cast<uint32_t>(std::stoul(endpoints.fromComponentId)), endpoints.fromPinId};
+                operation.to = {static_cast<uint32_t>(std::stoul(endpoints.toComponentId)), endpoints.toPinId};
+                operations.push_back(std::move(operation));
+            }
+            const uint64_t baseRevision = payload.value("baseRevision", uint64_t{0});
+            const uint64_t topologyRevision = session.applyWireTopologyTransaction(baseRevision, operations);
+            resp.ok = true;
+            resp.payloadJson = nlohmann::json{{"applied", operations.size()}, {"topologyRevision", topologyRevision}}.dump();
+        } catch (const std::exception& e) {
+            resp.ok = false;
+            resp.error = std::string("applyWireTopologyTransaction falhou: ") + e.what();
         }
         return resp;
     }

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "components": [
     {
       "id": "r1",
@@ -20,10 +20,14 @@
       "visual": { "x": 400, "y": 160, "rotation": 0 }
     }
   ],
-  "wires": [
-    { "id": "w1", "from": { "componentId": "r1", "pinId": "p2" }, "to": { "componentId": "c1", "pinId": "p1" } },
-    { "id": "w2", "from": { "componentId": "c1", "pinId": "p2" }, "to": { "componentId": "l1", "pinId": "p1" } }
-  ],
+  "topology": {
+    "revision": 0,
+    "nodes": [],
+    "conductors": [
+      { "id": "w1", "from": { "kind": "port", "componentId": "r1", "pinId": "p2" }, "to": { "kind": "port", "componentId": "c1", "pinId": "p1" }, "vertices": [] },
+      { "id": "w2", "from": { "kind": "port", "componentId": "c1", "pinId": "p2" }, "to": { "kind": "port", "componentId": "l1", "pinId": "p1" }, "vertices": [] }
+    ]
+  },
   "visual": {
     "components": [],
     "wires": [],

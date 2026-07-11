@@ -147,6 +147,22 @@ int main() {
     // Religa o circuito sem r2: fonte -- r1 -- terra direto (sem o segundo resistor da malha).
     session.connectWire(r1, "p2", source, "p2");
 
+    // Transação inválida deve restaurar inclusive uma remoção já executada antes da falha.
+    bool transactionRejected = false;
+    try {
+        session.applyWireTopologyTransaction(session.wireTopologyRevision(), {
+            {WireTopologyOperation::Kind::Disconnect, {r1, "p2"}, {source, "p2"}},
+            {WireTopologyOperation::Kind::Connect, {r1, "pin-inexistente"}, {source, "p2"}},
+        });
+    } catch (const std::exception&) {
+        transactionRejected = true;
+    }
+    if (!transactionRejected || !session.disconnectWire(r1, "p2", source, "p2")) {
+        std::fprintf(stderr, "FALHOU: transacao de fios rejeitada nao restaurou a aresta anterior\n");
+        ok = false;
+    }
+    session.connectWire(r1, "p2", source, "p2");
+
     settle(session);
 
     const double voltA = session.nodeVoltageOfPin(source, "p1");

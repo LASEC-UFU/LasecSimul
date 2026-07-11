@@ -763,6 +763,12 @@ dedicado (função privada, não exportada, arquivo sem suíte de testes -- cons
 visualmente no VSCode real; recomenda-se reabrir o subcircuito ESP32 DevKitC e um projeto principal
 com uma junção criada por fio→fio pra confirmar que nenhum círculo/rótulo aparece mais.
 
+**Superseded em 2026-07-11** (seção 19): `connectors.junction` deixou de ser um componente
+registrado no Core -- toda esta classe de bug (entidade de topologia persistida/serializada como se
+fosse um componente de catálogo) ficou estruturalmente impossível a partir dali, não só mitigada no
+render. Registro histórico mantido porque o sintoma e o diagnóstico continuam corretos para a
+arquitetura da época.
+
 ## 16. "Abrir Subcircuito" reinstaurado, sem o antigo editor de símbolo, com Salvar/Cancelar/Descartar (2026-07-09)
 
 Continuação da **Revogação em 2026-07-09** (fim da seção 4): naquele mesmo dia, depois de remover
@@ -1063,3 +1069,69 @@ script Node ad-hoc revalidando o `esp32_devkitc_v4.lssubcircuit` real (0 problem
 com 43 entradas incluindo RST, seed produzindo Package 88x176 com 38 pinos e 0 avisos). Sem GUI
 disponível neste ambiente -- todas as correções foram reportadas pelo usuário testando manualmente no
 VSCode real; recomenda-se continuar essa verificação até fechar o roteiro da seção 17.7.
+
+## 19. Manifesto `.lssubcircuit` v2: `topology{nodes,conductors}` substitui `wires[]`; junção deixa
+de ser componente (2026-07-11)
+
+Continuação de `.spec/lasecsimul.spec` seção 24 (reconstrução do sistema de fios/junções a partir de
+`docs/auditoria-tecnica-fios-simulide-2026-07-11.md`) -- esta seção documenta a parte específica de
+subcircuito: formato de arquivo e algoritmo de achatamento de junção no Core.
+
+### 19.1 Formato do bloco `components`/`wires` (seção 1) substituído por `topology`
+
+`.lssubcircuit` ganhou `schemaVersion: 2` e um bloco `topology{revision, nodes[], conductors[]}` --
+mesmo formato de `ProjectTopology` (`.spec/lasecsimul.spec` seção 24.6). `conductors[].from`/`.to`
+usam `{kind:"port", componentId, pinId}` ou `{kind:"node", nodeId}` em vez do antigo
+`{componentId, pinId}` fixo. `topology.nodes[]` (posição visual de cada nó de topologia) substitui os
+componentes `connectors.junction` que antes apareciam em `components[]` -- um nó de topologia nunca
+mais é um item de `components[]`. Exemplo real migrado: `subcircuits/esp32_devkitc_v4.lssubcircuit`
+(1 nó em `topology.nodes[]`, 45 condutores). `createSubcircuitFromSelectionHandler`
+(`extension.ts`, seção 11) já grava `.lssubcircuit` novos direto no formato v2.
+
+### 19.2 Parsing no Core: `CoreApplication.cpp::registerSubcircuitFromManifestRich`
+
+Detecta o formato pelo campo raiz: `canonicalTopology = manifest.contains("topology") &&
+manifest["topology"].is_object()`. Se presente, lê `topology.conductors[]` (em vez de `wires[]`) com
+endpoints tipados (`kind: "node"` resolve pro pino sintético `pin-1` do nó; `kind: "port"` resolve
+`componentId`/`pinId` normalmente) e junta `topology.nodes[].id` ao mesmo conjunto `topologyNodeIds`
+que já recebia `id` de componentes `typeId == "connectors.junction"` -- **os dois formatos de nó de
+topologia (componente `connectors.junction` antigo E `topology.nodes[]` novo) são aceitos ao mesmo
+tempo**, pra continuar lendo `.lssubcircuit` mais antigos que ainda não foram migrados, sem exigir
+migração de arquivo em lote. Se `topology` estiver ausente, cai pro parsing antigo (`wires[]` +
+componentes `connectors.junction` em `components[]`) inalterado.
+
+### 19.3 Achatamento: junção nunca chega ao Core como aresta com nó de passagem
+
+Depois de coletar `topologyNodeIds` (de qualquer uma das duas fontes acima) e o grafo bruto de
+arestas (`def.wires`, já no formato interno comum `{fromComponentId,fromPinId,toComponentId,
+toPinId}`), um passo de achatamento roda ANTES de `def.wires` ser usado pra `connectWire` de
+verdade: monta um grafo de adjacência por `(componentId,pinId)`, decompõe em redes conexas (BFS),
+e para cada rede com 2+ portas REAIS (ignorando `topologyNodeIds` como vértices de passagem)
+emite N-1 arestas em estrela a partir da primeira porta encontrada. O comentário no código resume a
+motivação: "Junction é sintaxe topológica do arquivo, nunca componente de simulação." Uma rede com
+menos de 2 portas reais (ex: um nó de topologia sem nenhum fio de verdade saindo dele) não gera
+nenhuma aresta -- não é erro, só não tem o que achatar.
+
+### 19.4 Duplicação deliberada em teste, e uma regressão real que ela causou
+
+`core/test/esp32_devkitc_subcircuit_test.cpp` mantém um `parseLssubJson` PRÓPRIO (comentário no
+código: "mesmo mapeamento de campos que `CoreApplication.cpp::loadSubcircuitLibraryFile` -- mantido
+em sincronia manualmente"), com a MESMA lógica de achatamento replicada à mão -- decisão deliberada
+pra manter esse teste isolado de `CoreApplication.cpp` (ele registra suas próprias factories
+mínimas de componente, sem depender do bootstrap completo do Core). O custo dessa duplicação se
+concretizou em 2026-07-11: ao migrar `esp32_devkitc_v4.lssubcircuit` pro formato `topology{...}`
+(seção 19.1), o parser duplicado do teste não foi atualizado junto -- continuou lendo
+`manifest["wires"]` (chave que não existe mais no arquivo migrado), registrando silenciosamente ZERO
+fios e fazendo os testes de tensão de rede (3V3/5V/EN) falharem por sistema singular (só GND
+sobrevivia, por depender de `connectors.tunnel`/nome, não de `wires[]`). Corrigido replicando a
+mesma branch `canonicalTopology` da seção 19.2 neste parser de teste -- se este arquivo for tocado de
+novo no futuro, qualquer mudança de formato em `registerSubcircuitFromManifestRich` precisa ser
+espelhada aqui também, manualmente, do jeito que o comentário já avisava.
+
+### 19.5 O que NÃO muda
+
+`Tunnel`/`setTunnelName` (seção 2), a regra "pino externo é o pino do Tunnel, não um proxy" (seção
+5.2), expansão recursiva/nesting (seção 5.3) e remoção em cascata (seção 5.4) continuam exatamente
+como especificado -- só a representação de nó de topologia (junção) dentro do arquivo/parsing
+mudou. Um subcircuito sem nenhum nó de topologia (a maioria dos exemplos deste documento, ex: seção
+1) não é afetado por nada desta seção.

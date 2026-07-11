@@ -1,7 +1,7 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "components": [],
-  "wires": [],
+  "topology": { "revision": 0, "nodes": [], "conductors": [] },
   "visual": {
     "components": [],
     "wires": [],

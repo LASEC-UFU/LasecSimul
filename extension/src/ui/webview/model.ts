@@ -715,6 +715,12 @@ export interface WebviewComponentCatalogEntry {
 }
 
 export interface WebviewProjectState {
+  /** Revisão monotônica do documento topológico confirmada pelo host. Não é persistida como estado
+   * transitório da ferramenta; comandos usam este valor como compare-and-swap. */
+  topologyRevision?: number;
+  /** Nós topológicos não são componentes. Campo aditivo durante a migração; `wires` continua sendo
+   * a projeção geométrica editável e pode referenciar estes IDs em seus endpoints. */
+  topologyNodes?: Array<{ id: string; x: number; y: number }>;
   locale?: "pt-BR" | "en";
   catalog: WebviewComponentCatalogEntry[];
   components: WebviewComponentModel[];
@@ -727,7 +733,12 @@ export interface WebviewProjectState {
    * (mais simples de testar que opcional). Substituiu `selectedComponentId?: string` singular. */
   selectedComponentIds: string[];
   selectedWireIds: string[];
-  pendingConnection?: { componentId: string; pinId: string };
+  /** Origem transitória da ferramenta de fios. Uma origem sobre segmento permanece apenas como
+   * draft: o fio alvo não é dividido até o usuário confirmar o destino. `kind` é opcional no caso
+   * pin para manter estados de Webview já armazenados compatíveis. */
+  pendingConnection?:
+    | { kind?: "pin"; componentId: string; pinId: string }
+    | { kind: "wire"; wireId: string; point: WebviewPoint };
   /** Presente enquanto `components`/`wires` representam o circuito INTERNO de um `.lssubcircuit`
    * aberto via "Abrir Subcircuito" (menu de contexto de uma instância `subcircuit-file`), não o
    * circuito principal do usuário -- ver `extension.ts::openSubcircuitForEditingCommand`. A Webview

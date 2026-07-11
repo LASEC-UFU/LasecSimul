@@ -8,8 +8,8 @@ import { isPreApproved, isPreBlocked, resolveConsentChoice, shouldLoadLibrary, d
 import { SchematicPanel } from "./ui/panels/SchematicPanel";
 import { createInitialWebviewState } from "./ui/webview/catalog";
 import { JUNCTION_TYPE_ID, TUNNEL_TYPE_ID, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./ui/webview/model";
-import { buildPinToPinWire, buildPinToWireConnection } from "./ui/webview/wireConnections";
-import { normalizeWireGeometry, removeOrphanNodes, splitSegmentAtPoint } from "./ui/webview/wireTopology";
+import { connectEndpointToNode, normalizeWireGeometry, removeOrphanNodes, splitSegmentAtPoint } from "./ui/webview/wireTopology";
+import { canonicalTopologyFromLegacy } from "./ui/webview/topologyDocument";
 import { WebviewToHostMessage } from "./ui/webview/messages";
 import { ComponentPaletteViewProvider } from "./ui/views/ComponentPaletteViewProvider";
 import { materializePinGroup, registerPackage } from "./ui/webview/componentSymbols";
@@ -35,6 +35,7 @@ import {
   reportCoreWarning,
   pushComponentToCore,
   pushWireToCore,
+  pushWireTopologyTransaction,
   pushRemoveWireToCore,
   pushPropertyToCore,
   pushRemoveToCore,
@@ -51,6 +52,8 @@ import {
   queueCoreRebuild,
   rebuildCoreFromSchematicState,
   pinsForProjectComponent,
+  electricalEdgesForProject,
+  diffElectricalEdges,
 } from "./core/coreLifecycle";
 import {
   chooseExposedMcuFirmwareCommand,
@@ -78,6 +81,18 @@ function nextId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
 }
 
+function normalizeRuntimeTopology(components: WebviewComponentModel[], wires: WebviewWireModel[], nodes: NonNullable<WebviewProjectState["topologyNodes"]> = []): {
+  components: WebviewComponentModel[]; wires: WebviewWireModel[]; nodes: NonNullable<WebviewProjectState["topologyNodes"]>;
+} {
+  const synthetic = nodes.map((node): WebviewComponentModel => ({ id: node.id, typeId: JUNCTION_TYPE_ID, label: "Junction", hidden: true, x: node.x, y: node.y, rotation: 0, pins: [{ id: "pin-1", x: 0, y: 0 }], properties: {} }));
+  const normalized = normalizeWireGeometry({ components: [...components, ...synthetic], wires });
+  return {
+    components: normalized.components.filter((component) => component.typeId !== JUNCTION_TYPE_ID),
+    nodes: normalized.components.filter((component) => component.typeId === JUNCTION_TYPE_ID).map((component) => ({ id: component.id, x: component.x, y: component.y })),
+    wires: normalized.wires,
+  };
+}
+
 /** `catalog` NUNCA é mutado in-place (só substituído por inteiro via `setEffectiveCatalog`, ver lá)
  * -- excluído do round-trip `JSON.stringify`/`JSON.parse` abaixo e reanexado por referência depois.
  * Usado só pro snapshot COMPLETO inicial (`openSchematicEditor`/painel recriado) -- ver
@@ -88,7 +103,7 @@ function cloneState(): WebviewProjectState {
 }
 
 const PROJECT_STATE_KEYS = [
-  "locale", "catalog", "components", "wires", "viewport", "selectedComponentIds", "selectedWireIds", "pendingConnection",
+  "locale", "catalog", "components", "wires", "viewport", "selectedComponentIds", "selectedWireIds", "pendingConnection", "topologyRevision", "topologyNodes",
   "subcircuitEditingContext",
 ] as const satisfies readonly (keyof WebviewProjectState)[];
 
@@ -145,6 +160,12 @@ function computeProjectStatePatch(): ProjectStatePatch | undefined {
 }
 
 function syncSchematicPanel(): void {
+  const lastSynced = state.lastSyncedProjectState;
+  if (lastSynced &&
+      (lastSynced.components !== state.schematicState.components || lastSynced.wires !== state.schematicState.wires) &&
+      (state.schematicState.topologyRevision ?? 0) <= (lastSynced.topologyRevision ?? 0)) {
+    state.schematicState = { ...state.schematicState, topologyRevision: (lastSynced.topologyRevision ?? 0) + 1 };
+  }
   state.schematicPanel?.setLanguage(state.schematicState.locale ?? currentLasecSimulLanguage());
   const patch = computeProjectStatePatch();
   if (patch) state.schematicPanel?.postMessage({ version: 1, type: "syncStatePatch", patch });
@@ -525,6 +546,43 @@ async function syncProjectSnapshotToCore(previous: WebviewProjectState, next: We
   const nextComponentsById = new Map(next.components.map((component) => [component.id, component]));
   const previousWiresById = new Map(previous.wires.map((wire) => [wire.id, wire]));
   const nextWiresById = new Map(next.wires.map((wire) => [wire.id, wire]));
+  const componentSetChanged = previous.components.some((component) => !nextComponentsById.has(component.id)) ||
+    next.components.some((component) => !previousComponentsById.has(component.id));
+  const geometricTopologyChanged = JSON.stringify([previous.wires, previous.topologyNodes ?? []]) !==
+    JSON.stringify([next.wires, next.topologyNodes ?? []]);
+
+  // A projeção elétrica de uma rede com nós não tem correspondência 1:1 com os condutores
+  // geométricos -- um wire pode apontar pra um `topologyNode`, que o Core nunca viu. Quando só a
+  // topologia mexeu (nenhum componente entrou/saiu), achata os dois lados (antes/depois) em arestas
+  // de pino real (`electricalEdgesForProject`, mesma função usada no rebuild completo) e manda só a
+  // DIFERENÇA como uma transação atômica -- o diff fica naturalmente restrito à(s) rede(s) tocada(s)
+  // pela edição, nunca ao projeto inteiro (EX-F). Rebuild completo vira exceção (componente
+  // adicionado/removido, que exige registrar/desregistrar instância mesmo), não mais o caminho
+  // default de qualquer edição de fio assim que existe 1 nó de topologia no projeto.
+  const hasTopologyNodes = (previous.topologyNodes?.length ?? 0) > 0 || (next.topologyNodes?.length ?? 0) > 0;
+  if (hasTopologyNodes && componentSetChanged) {
+    await queueCoreRebuild();
+    if (state.simulationStatus === "running") {
+      void pollInstrumentReadouts();
+      void pollWireVoltages();
+    }
+    return;
+  }
+  if (hasTopologyNodes && geometricTopologyChanged) {
+    const edgeDiff = diffElectricalEdges(electricalEdgesForProject(previous), electricalEdgesForProject(next));
+    if (edgeDiff.connect.length > 0 || edgeDiff.disconnect.length > 0) {
+      const applied = await pushWireTopologyTransaction([
+        ...edgeDiff.disconnect.map((wire) => ({ kind: "disconnect" as const, wire })),
+        ...edgeDiff.connect.map((wire) => ({ kind: "connect" as const, wire })),
+      ]);
+      if (!applied) await queueCoreRebuild();
+    }
+    if (state.simulationStatus === "running") {
+      void pollInstrumentReadouts();
+      void pollWireVoltages();
+    }
+    return;
+  }
 
   const typeChanged = next.components.some((component) => {
     const before = previousComponentsById.get(component.id);
@@ -536,6 +594,23 @@ async function syncProjectSnapshotToCore(previous: WebviewProjectState, next: We
       void pollInstrumentReadouts();
       void pollWireVoltages();
     }
+    return;
+  }
+
+  const removedWireEdges = previous.wires.filter((wire) => {
+    const nextWire = nextWiresById.get(wire.id);
+    return !nextWire || !sameWireEndpoints(wire, nextWire);
+  });
+  const addedWireEdges = next.wires.filter((wire) => {
+    const previousWire = previousWiresById.get(wire.id);
+    return !previousWire || !sameWireEndpoints(previousWire, wire);
+  });
+  if (!componentSetChanged && (removedWireEdges.length > 0 || addedWireEdges.length > 0)) {
+    const applied = await pushWireTopologyTransaction([
+      ...removedWireEdges.map((wire) => ({ kind: "disconnect" as const, wire })),
+      ...addedWireEdges.map((wire) => ({ kind: "connect" as const, wire })),
+    ]);
+    if (!applied) await queueCoreRebuild();
     return;
   }
 
@@ -608,8 +683,13 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       // Vários fluxos client-side mutam `state` na Webview e mandam o snapshot inteiro aqui. O diff
       // precisa cobrir também propriedades/endpoints, porque undo/redo passa por este caminho.
       const previous = state.schematicState;
-      state.schematicState = message.project;
-      enqueueProjectSnapshotSync(previous, message.project);
+      const topologyChanged = JSON.stringify([previous.components, previous.wires, previous.topologyNodes ?? []]) !==
+        JSON.stringify([message.project.components, message.project.wires, message.project.topologyNodes ?? []]);
+      state.schematicState = topologyChanged
+        ? { ...message.project, topologyRevision: (previous.topologyRevision ?? 0) + 1 }
+        : { ...message.project, topologyRevision: previous.topologyRevision ?? 0 };
+      enqueueProjectSnapshotSync(previous, state.schematicState);
+      if (topologyChanged) syncSchematicPanel();
       return;
     }
     case "requestAddComponent": {
@@ -679,35 +759,54 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
     }
     case "requestRemoveComponent": {
       closeMcuSerialMonitor(message.componentId);
-      pushRemoveToCore(message.componentId);
+      pushRemoveToCore(message.componentId); // remove a instância; Netlist::removeComponent já desconecta os fios dela no Core
       coreInstanceIdByComponentId.delete(message.componentId);
       mcuTargetCoreIdByComponentId.delete(message.componentId);
+      const previousWires = state.schematicState.wires;
+      const previousNodes = state.schematicState.topologyNodes;
       const afterRemoval = {
         components: state.schematicState.components.filter((component) => component.id !== message.componentId),
-        wires: state.schematicState.wires.filter((wire) => wire.from.componentId !== message.componentId && wire.to.componentId !== message.componentId),
+        wires: previousWires.filter((wire) => wire.from.componentId !== message.componentId && wire.to.componentId !== message.componentId),
       };
       // Apagar um componente pode derrubar o grau de uma junção que ele tocava (ou de uma
       // encadeada além dela) pra <=2 -- `removeOrphanNodes` cascateia a limpeza/colapso pra nunca
       // deixar uma junção "bola laranja" órfã presa no esquemático (ver `.spec` seção do refactor
       // de fios).
-      const normalized = removeOrphanNodes(afterRemoval);
-      const topologyChangedBeyondDirectRemoval =
-        normalized.components.length !== afterRemoval.components.length || normalized.wires.length !== afterRemoval.wires.length;
+      const normalized = normalizeRuntimeTopology(afterRemoval.components, afterRemoval.wires, previousNodes);
+      // Valida antes de commitar -- defesa em profundidade contra um bug futuro em
+      // `normalizeRuntimeTopology`/`removeOrphanNodes` deixar referência órfã (EX-G); o componente
+      // já foi removido no Core acima independentemente do resultado desta checagem.
+      try {
+        canonicalTopologyFromLegacy(normalized.components, normalized.wires, state.schematicState.topologyRevision ?? 0, normalized.nodes);
+      } catch (err) {
+        reportCoreWarning("validar topologia após remoção de componente", err);
+      }
       const survivingWireIds = new Set(normalized.wires.map((wire) => wire.id));
       state.schematicState = {
         ...state.schematicState,
         components: normalized.components,
+        topologyNodes: normalized.nodes,
         wires: normalized.wires,
         selectedComponentIds: state.schematicState.selectedComponentIds.filter((id) => id !== message.componentId),
         selectedWireIds: state.schematicState.selectedWireIds.filter((id) => survivingWireIds.has(id)),
         pendingConnection:
-          state.schematicState.pendingConnection?.componentId === message.componentId ? undefined : state.schematicState.pendingConnection,
+          state.schematicState.pendingConnection?.kind !== "wire" &&
+          state.schematicState.pendingConnection?.componentId === message.componentId
+            ? undefined
+            : state.schematicState.pendingConnection,
       };
       syncSchematicPanel();
-      if (topologyChangedBeyondDirectRemoval) {
-        // Colapso/cascata de junção órfã: mais seguro reconstruir o Core do zero do que tentar
-        // diferenciar incrementalmente quais fios sumiram/nasceram nessa fusão (operação rara).
-        void queueCoreRebuild().then(() => {
+      // Achata ANTES ("depois de tirar os fios do componente removido, antes do colapso de cascata")
+      // e DEPOIS (já normalizado) e manda só a diferença -- nunca inclui aresta tocando o componente
+      // removido (o Core já não tem mais essa instância pra resolver `componentId`, ver EX-F).
+      const beforeEdges = electricalEdgesForProject({ wires: afterRemoval.wires, topologyNodes: previousNodes });
+      const afterEdges = electricalEdgesForProject({ wires: normalized.wires, topologyNodes: normalized.nodes });
+      const edgeDiff = diffElectricalEdges(beforeEdges, afterEdges);
+      if (edgeDiff.connect.length > 0 || edgeDiff.disconnect.length > 0) {
+        void pushWireTopologyTransaction([
+          ...edgeDiff.disconnect.map((wire) => ({ kind: "disconnect" as const, wire })),
+          ...edgeDiff.connect.map((wire) => ({ kind: "connect" as const, wire })),
+        ]).then((applied) => (applied ? undefined : queueCoreRebuild())).then(() => {
           if (state.simulationStatus === "running") {
             void pollInstrumentReadouts();
             void pollWireVoltages();
@@ -720,23 +819,35 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
     }
     case "requestRemoveWire": {
       const removedWire = state.schematicState.wires.find((wire) => wire.id === message.wireId);
+      const previousWires = state.schematicState.wires;
+      const previousNodes = state.schematicState.topologyNodes;
       const afterRemoval = {
         components: state.schematicState.components,
-        wires: state.schematicState.wires.filter((wire) => wire.id !== message.wireId),
+        wires: previousWires.filter((wire) => wire.id !== message.wireId),
       };
-      const normalized = removeOrphanNodes(afterRemoval);
-      const topologyChangedBeyondDirectRemoval =
-        normalized.components.length !== afterRemoval.components.length || normalized.wires.length !== afterRemoval.wires.length;
+      const normalized = normalizeRuntimeTopology(afterRemoval.components, afterRemoval.wires, previousNodes);
+      try {
+        canonicalTopologyFromLegacy(normalized.components, normalized.wires, state.schematicState.topologyRevision ?? 0, normalized.nodes);
+      } catch (err) {
+        reportCoreWarning("validar topologia após remoção de fio", err);
+      }
       const survivingWireIds = new Set(normalized.wires.map((wire) => wire.id));
       state.schematicState = {
         ...state.schematicState,
         components: normalized.components,
+        topologyNodes: normalized.nodes,
         wires: normalized.wires,
         selectedWireIds: state.schematicState.selectedWireIds.filter((id) => survivingWireIds.has(id)),
       };
       syncSchematicPanel();
-      if (topologyChangedBeyondDirectRemoval) {
-        void queueCoreRebuild().then(() => {
+      const beforeEdges = electricalEdgesForProject({ wires: previousWires, topologyNodes: previousNodes });
+      const afterEdges = electricalEdgesForProject({ wires: normalized.wires, topologyNodes: normalized.nodes });
+      const edgeDiff = diffElectricalEdges(beforeEdges, afterEdges);
+      if (edgeDiff.connect.length > 0 || edgeDiff.disconnect.length > 0) {
+        void pushWireTopologyTransaction([
+          ...edgeDiff.disconnect.map((wire) => ({ kind: "disconnect" as const, wire })),
+          ...edgeDiff.connect.map((wire) => ({ kind: "connect" as const, wire })),
+        ]).then((applied) => (applied ? undefined : queueCoreRebuild())).then(() => {
           if (state.simulationStatus === "running") {
             void pollInstrumentReadouts();
             void pollWireVoltages();
@@ -751,119 +862,97 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       }
       return;
     }
-    case "requestConnectPins": {
-      const wire = buildPinToPinWire({ id: nextId("wire"), from: message.from, to: message.to, points: message.points });
-      void (async () => {
-        if (state.coreClient) {
-          const ok = await pushWireToCore(wire);
-          if (!ok) return; // Core recusou/falhou -- não deixa a tela mostrar um fio que o Core não conectou.
-        }
-        state.schematicState = {
-          ...state.schematicState,
-          wires: [...state.schematicState.wires, wire],
-          selectedComponentIds: [],
-          selectedWireIds: [wire.id],
-          pendingConnection: undefined,
-        };
-        syncSchematicPanel();
-        if (state.simulationStatus === "running") void pollWireVoltages();
-      })();
-      return;
-    }
-    case "requestConnectPinToWire": {
-      const existingWire = state.schematicState.wires.find((wire) => wire.id === message.wireId);
-      if (!existingWire) return;
-      const { junction, firstWire, secondWire, newWire } = buildPinToWireConnection({
-        existingWire,
-        junctionId: nextId("junction"),
-        junctionPoint: message.point,
-        from: message.from,
-        newWireId: nextId("wire"),
-        firstWireId: nextId("wire"),
-        secondWireId: nextId("wire"),
-        existingWireFirstPoints: message.existingWireFirstPoints,
-        existingWireSecondPoints: message.existingWireSecondPoints,
-        newWirePoints: message.points,
-      });
-      void (async () => {
-        // Operação composta (junção + até 3 fios): qualquer falha no Core reverte tudo, nunca
-        // deixa uma junção "meio criada" na tela sem os fios que deveriam sair dela.
-        if (state.coreClient) {
-          const componentOk = await pushComponentToCore(junction.id, junction.typeId, junction.properties, junction.pins);
-          if (!componentOk) return;
-          const wiresOk = await Promise.all([firstWire, secondWire, newWire].map((wire) => pushWireToCore(wire)));
-          if (wiresOk.some((ok) => !ok)) {
-            pushRemoveToCore(junction.id); // desfaz o componente já aceito -- Core não fica com meia-junção
-            return;
+    case "requestConnectEndpoints": {
+      const currentRevision = state.schematicState.topologyRevision ?? 0;
+      if (message.baseRevision !== currentRevision) {
+        // O cliente trabalhou sobre uma projeção antiga. Não tenta mesclar geometria por heurística:
+        // republica a revisão canônica e deixa o usuário repetir o gesto sobre o estado atual.
+        state.schematicPanel?.postMessage({ version: 1, type: "syncState", project: state.schematicState });
+        return;
+      }
+      let connected;
+      try {
+        connected = connectEndpointToNode(
+          { components: state.schematicState.components, wires: state.schematicState.wires, nodes: state.schematicState.topologyNodes },
+          message.from,
+          message.to,
+          message.points,
+          {
+            newWireId: nextId("wire"),
+            nextJunctionId: () => nextId("junction"),
+            nextWireId: () => nextId("wire"),
           }
-        }
-        state.schematicState = {
-          ...state.schematicState,
-          components: [...state.schematicState.components, junction],
-          wires: [
-            ...state.schematicState.wires.filter((wire) => wire.id !== message.wireId),
-            firstWire,
-            secondWire,
-            newWire,
-          ],
-          selectedComponentIds: [],
-          selectedWireIds: [newWire.id],
-          pendingConnection: undefined,
-        };
-        syncSchematicPanel();
-        if (state.simulationStatus === "running") {
-          void pollInstrumentReadouts();
-          void pollWireVoltages();
+        );
+      } catch (err) {
+        reportCoreWarning("conectar extremos do fio", err);
+        return;
+      }
+      const replaced = new Set(connected.replacedWireIds);
+      const nextState: WebviewProjectState = {
+        ...state.schematicState,
+        topologyNodes: [...(state.schematicState.topologyNodes ?? []), ...connected.newNodes],
+        wires: [...state.schematicState.wires.filter((wire) => !replaced.has(wire.id)), ...connected.newWires],
+        selectedComponentIds: [],
+        selectedWireIds: connected.newWires.length > 0 ? [connected.newWires[connected.newWires.length - 1]!.id] : [],
+        pendingConnection: undefined,
+        topologyRevision: currentRevision + 1,
+      };
+      try {
+        // Valida ANTES de aceitar a mutação -- nó/condutor duplicado, endpoint órfão, condutor de
+        // comprimento topológico zero -- em vez de só na borda de save/load (EX-G). `assertTopologyInvariants`
+        // roda como efeito colateral de `canonicalTopologyFromLegacy`; o resultado em si é descartado
+        // aqui, só a validação importa.
+        canonicalTopologyFromLegacy(nextState.components, nextState.wires, nextState.topologyRevision ?? 0, nextState.topologyNodes ?? []);
+      } catch (err) {
+        reportCoreWarning("validar topologia resultante", err);
+        return;
+      }
+      void (async () => {
+        // Publica a revisão visual somente depois de o Core confirmar a transação. Isso evita expor
+        // a sequência intermediária junction/metades/ramo dos verbos antigos. Este verbo nunca muda o
+        // CONJUNTO de componentes (só fios/nós de topologia) -- o diff achatado (EX-F) sempre cabe
+        // numa única transação atômica; `queueCoreRebuild()` fica reservado pra quando a transação é
+        // rejeitada (conflito de revisão, endpoint que ainda não resolveu no Core, etc.), não mais
+        // pro caminho feliz.
+        const previous = state.schematicState;
+        const edgeDiff = diffElectricalEdges(electricalEdgesForProject(previous), electricalEdgesForProject(nextState));
+        state.schematicState = nextState;
+        try {
+          const applied = edgeDiff.connect.length === 0 && edgeDiff.disconnect.length === 0
+            ? true
+            : await pushWireTopologyTransaction([
+                ...edgeDiff.disconnect.map((wire) => ({ kind: "disconnect" as const, wire })),
+                ...edgeDiff.connect.map((wire) => ({ kind: "connect" as const, wire })),
+              ]);
+          if (!applied) await queueCoreRebuild();
+          syncSchematicPanel();
+          if (state.simulationStatus === "running") {
+            void pollInstrumentReadouts();
+            void pollWireVoltages();
+          }
+        } catch (err) {
+          state.schematicState = previous;
+          // A transação (ou o rebuild de fallback) pode ter falhado depois de mexer em parte do
+          // estado anterior no Core. Restaura o estado canônico e agenda uma segunda reconstrução
+          // best-effort antes de voltar a aceitar mutações subsequentes.
+          void queueCoreRebuild();
+          reportCoreWarning("aplicar transação de fio", err);
         }
       })();
       return;
     }
     case "requestStartWireFromWire": {
-      // Clique num trecho qualquer de um fio, sem conexão pendente -- inicia uma derivação
-      // diretamente daquele ponto (fiel ao SimulIDE). Todo o cálculo de split/reuso de junção
-      // já existente vive em `wireTopology.ts`, única fonte de verdade tanto pra este verbo quanto
-      // pra `requestConnectPinToWire` acima.
-      const split = splitSegmentAtPoint(
-        { components: state.schematicState.components, wires: state.schematicState.wires },
-        message.wireId,
-        message.point,
-        { junctionId: nextId("junction"), firstWireId: nextId("wire"), secondWireId: nextId("wire") }
-      );
-      if (!split) return;
-      const junctionId = split.firstWire.to.componentId;
-      void (async () => {
-        // Mesma regra de rollback composto de `requestConnectPinToWire`: se reusa uma junção já
-        // existente, `split.junction` é `undefined` e não há componente novo pra criar/desfazer no
-        // Core -- só os dois fios do split precisam ser confirmados.
-        if (state.coreClient) {
-          if (split.junction) {
-            const componentOk = await pushComponentToCore(split.junction.id, split.junction.typeId, split.junction.properties, split.junction.pins);
-            if (!componentOk) return;
-          }
-          const wiresOk = await Promise.all([split.firstWire, split.secondWire].map((wire) => pushWireToCore(wire)));
-          if (wiresOk.some((ok) => !ok)) {
-            if (split.junction) pushRemoveToCore(split.junction.id);
-            return;
-          }
-        }
-        state.schematicState = {
-          ...state.schematicState,
-          components: split.junction ? [...state.schematicState.components, split.junction] : state.schematicState.components,
-          wires: [...state.schematicState.wires.filter((wire) => wire.id !== message.wireId), split.firstWire, split.secondWire],
-          selectedComponentIds: [],
-          selectedWireIds: [],
-          // Arma a conexão pendente na junção recém-criada (ou reusada) -- o pino dela é um pino
-          // REAL, então todo o mecanismo de preview/arrasto de fio pendente já existente na Webview
-          // funciona sem nenhuma mudança (`pendingConnectionPosition` resolve por componentId/pinId
-          // igual a qualquer outro componente).
-          pendingConnection: { componentId: junctionId, pinId: "pin-1" },
-        };
-        syncSchematicPanel();
-        if (state.simulationStatus === "running") {
-          void pollInstrumentReadouts();
-          void pollWireVoltages();
-        }
-      })();
+      // Draft puro: não divide o fio, não cria Junction e não toca no Core. Esc/botão direito/troca
+      // de estado podem simplesmente limpar `pendingConnection` sem deixar qualquer resíduo.
+      const hit = state.schematicState.wires.some((wire) => wire.id === message.wireId);
+      if (!hit) return;
+      state.schematicState = {
+        ...state.schematicState,
+        selectedComponentIds: [],
+        selectedWireIds: [],
+        pendingConnection: { kind: "wire", wireId: message.wireId, point: message.point },
+      };
+      syncSchematicPanel();
       return;
     }
     case "requestRotateComponent": {
@@ -1164,12 +1253,21 @@ async function createSubcircuitFromSelectionHandler(componentIds: string[]): Pro
   }));
 
   const lssubJson = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     typeId,
     name: baseName,
     language: "pt-BR",
     components: [...internalCompObjects, ...tunnelCompObjects],
-    wires: [...internalWireObjects, ...stubWireObjects],
+    topology: {
+      revision: 0,
+      nodes: [],
+      conductors: [...internalWireObjects, ...stubWireObjects].map((wire, index) => ({
+        id: `wire-${index + 1}`,
+        from: { kind: "port", ...wire.from },
+        to: { kind: "port", ...wire.to },
+        vertices: "points" in wire ? wire.points ?? [] : [],
+      })),
+    },
     interface: interfaceEntries,
   };
 
@@ -1279,7 +1377,9 @@ async function openSubcircuitForEditingCommand(sourceId: string): Promise<void> 
   }
 
   const rawComponents = Array.isArray(manifest.components) ? manifest.components : [];
-  const rawWires = Array.isArray(manifest.wires) ? manifest.wires : [];
+  const manifestTopology = typeof manifest.topology === "object" && manifest.topology !== null ? manifest.topology as Record<string, unknown> : undefined;
+  const rawWires = manifestTopology && Array.isArray(manifestTopology.conductors) ? manifestTopology.conductors : Array.isArray(manifest.wires) ? manifest.wires : [];
+  const rawTopologyNodes = manifestTopology && Array.isArray(manifestTopology.nodes) ? manifestTopology.nodes : [];
   const internalComponents: WebviewComponentModel[] = rawComponents
     .filter((value): value is Record<string, unknown> => typeof value === "object" && value !== null)
     .map((raw) => {
@@ -1329,17 +1429,25 @@ async function openSubcircuitForEditingCommand(sourceId: string): Promise<void> 
   const rawWiresParsed: WebviewWireModel[] = rawWires
     .filter((value): value is Record<string, unknown> => typeof value === "object" && value !== null)
     .map((raw) => {
-      const from = raw.from as { componentId: string; pinId: string };
-      const to = raw.to as { componentId: string; pinId: string };
-      const points = Array.isArray(raw.points) ? (raw.points as Array<{ x: number; y: number }>) : [];
-      return { id: nextId("wire"), from, to, ...(points.length > 0 ? { points } : {}) };
+      const endpoint = (value: unknown): { componentId: string; pinId: string } => {
+        const item = value as Record<string, unknown>;
+        return item?.kind === "node" ? { componentId: String(item.nodeId ?? ""), pinId: "pin-1" } : { componentId: String(item?.componentId ?? ""), pinId: String(item?.pinId ?? "") };
+      };
+      const from = endpoint(raw.from); const to = endpoint(raw.to);
+      const pointsRaw = Array.isArray(raw.vertices) ? raw.vertices : Array.isArray(raw.points) ? raw.points : [];
+      const points = pointsRaw as Array<{ x: number; y: number }>;
+      return { id: String(raw.id ?? nextId("wire")), from, to, ...(points.length > 0 ? { points } : {}) };
     })
     .filter((wire) => wire.from?.componentId && wire.to?.componentId);
 
   // Autocorrige `.lssubcircuit` salvo antes do refactor de fios (junção órfã/duplicada, fio de
   // comprimento zero) -- roda ANTES de virar `initialComponents`/`initialWires` (a baseline de
   // "sujo"), pra um arquivo recém-autocurado não abrir a sessão já marcada como alterada.
-  const normalized = normalizeWireGeometry({ components, wires: rawWiresParsed });
+  const loadedNodes = rawTopologyNodes.filter((value): value is Record<string, unknown> => typeof value === "object" && value !== null).map((node) => {
+    const position = typeof node.position === "object" && node.position !== null ? node.position as Record<string, unknown> : {};
+    return { id: String(node.id ?? ""), x: Number(position.x ?? 0), y: Number(position.y ?? 0) };
+  }).filter((node) => node.id);
+  const normalized = normalizeRuntimeTopology(components, rawWiresParsed, loadedNodes);
   const wires = normalized.wires;
 
   state.subcircuitEditingStack.push({
@@ -1350,12 +1458,15 @@ async function openSubcircuitForEditingCommand(sourceId: string): Promise<void> 
     outerProjectFilePath: state.currentProjectFilePath,
     initialComponents: normalized.components,
     initialWires: normalized.wires,
+    initialTopologyNodes: normalized.nodes,
   });
 
   state.schematicState = {
     ...state.schematicState,
     components: normalized.components,
     wires,
+    topologyNodes: normalized.nodes,
+    topologyRevision: Number(manifestTopology?.revision ?? 0),
     viewport: { x: 0, y: 0, zoom: 1 },
     selectedComponentIds: [],
     selectedWireIds: [],
@@ -1376,8 +1487,8 @@ type SubcircuitEditingSession = (typeof state.subcircuitEditingStack)[number];
  * Wires` (estado logo após abrir a sessão, ver `openSubcircuitForEditingCommand`) em vez do último
  * save do `.lsproj`. */
 function isSubcircuitEditingSessionDirty(session: SubcircuitEditingSession): boolean {
-  const current = JSON.stringify({ components: state.schematicState.components, wires: state.schematicState.wires });
-  const initial = JSON.stringify({ components: session.initialComponents, wires: session.initialWires });
+  const current = JSON.stringify({ components: state.schematicState.components, wires: state.schematicState.wires, nodes: state.schematicState.topologyNodes });
+  const initial = JSON.stringify({ components: session.initialComponents, wires: session.initialWires, nodes: session.initialTopologyNodes });
   return current !== initial;
 }
 
@@ -1442,15 +1553,9 @@ async function writeSubcircuitEditingSessionBack(session: SubcircuitEditingSessi
   // `other.package_pin`/a Figura têm `pinCount: 0`, sem pino nenhum pra desenhar fio até) são
   // filtrados por defesa em profundidade, nunca gravados apontando pra um id que não existe mais em
   // `components[]`.
-  const remainingIds = new Set(compiled.remainingComponents.map((component) => component.id));
-  const wires = state.schematicState.wires
-    .filter((wire) => remainingIds.has(wire.from.componentId) && remainingIds.has(wire.to.componentId))
-    .map((wire) => ({
-      from: wire.from,
-      to: wire.to,
-      points: wire.points ?? [],
-    }));
-  const updatedManifest: Record<string, unknown> = { ...session.originalManifest, components, wires };
+  const topology = canonicalTopologyFromLegacy(compiled.remainingComponents, state.schematicState.wires, state.schematicState.topologyRevision ?? 0, state.schematicState.topologyNodes ?? []);
+  const updatedManifest: Record<string, unknown> = { ...session.originalManifest, components, topology };
+  delete updatedManifest.wires;
   if (compiled.touchedPackageAuthoring) {
     if (compiled.hasPackage && compiled.package) {
       updatedManifest.package = compiled.package;
