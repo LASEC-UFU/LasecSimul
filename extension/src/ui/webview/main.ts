@@ -2093,6 +2093,68 @@ function updateWireFromFullPath(wire: WebviewWireModel, fullPoints: Point[]): vo
   else delete wire.points;
 }
 
+/** "Ramo" de fio (canto ou segmento) capturado no início de um arrasto de GRUPO -- move junto com
+ * componente(s) selecionado(s), qualquer que seja o elemento que o usuário agarrou pra iniciar o
+ * arrasto (componente OU o próprio ramo). Mesmo espírito do `m_lineMoveList`/`m_compMoveList` do
+ * SimulIDE real (`Component::mouseMoveEvent`): tudo que está selecionado se move pelo MESMO delta
+ * contínuo do mouse, sem snap de grade durante o arrasto (só ao soltar, via `normalizeOrthogonalPath`
+ * já embutido em `updateWireFromFullPath`). */
+type GroupWireDragTarget =
+  | { kind: "corner"; wireId: string; pointIndex: number; startFullPoints: Point[] }
+  | { kind: "segment"; wireId: string; segmentIndex: number; startFullPoints: Point[] };
+
+/** Ponta solta de um fio (índice 0 ou último de `wirePolylinePoints`, o pino real) nunca é alterada
+ * de fato -- `moveOrthogonalWireCorner`/`moveOrthogonalWireSegment` podem tocar nela internamente,
+ * mas `updateWireFromFullPath` já descarta índice 0/último do que é persistido (`slice(1,-1)`), então
+ * ela sempre volta a refletir a posição REAL do pino no próximo render, atrelada ou não a um
+ * componente que também esteja se movendo no mesmo arrasto. */
+function currentGroupWireSelection(): GroupWireDragTarget | undefined {
+  if (selectedWireSegment) {
+    const wire = state.wires.find((entry) => entry.id === selectedWireSegment!.wireId);
+    if (!wire) return undefined;
+    return { kind: "segment", wireId: wire.id, segmentIndex: selectedWireSegment.segmentIndex, startFullPoints: wirePolylinePoints(wire) };
+  }
+  if (selectedWireCorner) {
+    const wire = state.wires.find((entry) => entry.id === selectedWireCorner!.wireId);
+    if (!wire) return undefined;
+    return { kind: "corner", wireId: wire.id, pointIndex: selectedWireCorner.pointIndex, startFullPoints: wirePolylinePoints(wire) };
+  }
+  return undefined;
+}
+
+function applyGroupWireDelta(target: GroupWireDragTarget, dx: number, dy: number): void {
+  const wire = state.wires.find((entry) => entry.id === target.wireId);
+  if (!wire) return;
+  if (target.kind === "corner") {
+    const start = target.startFullPoints[target.pointIndex];
+    if (!start) return;
+    updateWireFromFullPath(wire, moveOrthogonalWireCorner(target.startFullPoints, target.pointIndex, { x: start.x + dx, y: start.y + dy }));
+  } else {
+    const from = target.startFullPoints[target.segmentIndex];
+    const to = target.startFullPoints[target.segmentIndex + 1];
+    if (!from || !to) return;
+    const isHorizontal = Math.abs(from.y - to.y) < 0.5;
+    const coordinate = isHorizontal ? from.y + dy : from.x + dx;
+    updateWireFromFullPath(wire, moveOrthogonalWireSegment(target.startFullPoints, target.segmentIndex, coordinate));
+  }
+  updateWireVisual(wire.id);
+}
+
+/** Reflete `component.x/y` (já atualizado pelo chamador) na posição DOM + reroteia os fios que
+ * tocam esse componente -- versão reusável do que o loop principal de arrasto de componente já faz
+ * inline, usada pelos gestos de arrasto de GRUPO iniciados pelo lado do FIO (`applyGroupWireDelta`
+ * é o inverso: grupo iniciado pelo lado do componente). Recalcula o offset de rotação/flip a cada
+ * chamada em vez de cachear -- poucos componentes num grupo misto, custo desprezível. */
+function updateComponentPosition(component: WebviewComponentModel): void {
+  const offset = componentDivOffset(component);
+  const targetEl = componentElementsById.get(component.id);
+  if (targetEl) {
+    targetEl.style.left = `${component.x + offset.x}px`;
+    targetEl.style.top = `${component.y + offset.y}px`;
+  }
+  updateWiresTouchingComponent(component.id);
+}
+
 function duplicateEditableEndpointForSegmentMove(
   fullPoints: Point[],
   segmentIndex: number
@@ -2182,6 +2244,17 @@ function renderWireCornerHandles(wireLayer: SVGSVGElement, wire: WebviewWireMode
         startFullPoints: points.map((entry) => ({ ...entry })),
         moved: false,
       };
+      // "Selecionar um ramo de fio + um dispositivo e mover juntos", começando o arrasto pelo
+      // PRÓPRIO ramo: se `state.selectedComponentIds` já tinha componente(s) junto (seleção mista
+      // prévia via marquee/shift-click -- `selectOnlyWireCorner` acima só reseta pra solo quando o
+      // canto NÃO estava selecionado ainda), eles acompanham pelo mesmo delta.
+      const groupComponentTargets = dragSelectionWithLinkedPinLabels().map((selected) => ({
+        component: selected,
+        startX: selected.x,
+        startY: selected.y,
+      }));
+      const groupStartClientX = event.clientX;
+      const groupStartClientY = event.clientY;
 
       const onMove = (moveEvent: PointerEvent): void => {
         const drag = wireCornerDrag;
@@ -2194,6 +2267,16 @@ function renderWireCornerHandles(wireLayer: SVGSVGElement, wire: WebviewWireMode
         updateWireFromFullPath(wireToMove, moveOrthogonalWireCorner(drag.startFullPoints, drag.pointIndex, target));
         drag.moved = true;
         updateWireVisual(wire.id);
+        if (groupComponentTargets.length > 0) {
+          const zoom = state.viewport.zoom || 1;
+          const groupDx = (moveEvent.clientX - groupStartClientX) / zoom;
+          const groupDy = (moveEvent.clientY - groupStartClientY) / zoom;
+          for (const groupTarget of groupComponentTargets) {
+            groupTarget.component.x = groupTarget.startX + groupDx;
+            groupTarget.component.y = groupTarget.startY + groupDy;
+            updateComponentPosition(groupTarget.component);
+          }
+        }
       };
 
       const finish = (): void => {
@@ -2315,6 +2398,13 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
           startFullPoints: points.map((entry) => ({ ...entry })),
           moved: false,
         };
+        const groupComponentTargets = dragSelectionWithLinkedPinLabels().map((selected) => ({
+          component: selected,
+          startX: selected.x,
+          startY: selected.y,
+        }));
+        const groupStartClientX = event.clientX;
+        const groupStartClientY = event.clientY;
 
         const onCornerMove = (moveEvent: PointerEvent): void => {
           const drag = wireCornerDrag;
@@ -2327,6 +2417,16 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
           updateWireFromFullPath(wireToMove, moveOrthogonalWireCorner(drag.startFullPoints, drag.pointIndex, target));
           drag.moved = true;
           updateWireVisual(wire.id);
+          if (groupComponentTargets.length > 0) {
+            const zoom = state.viewport.zoom || 1;
+            const groupDx = (moveEvent.clientX - groupStartClientX) / zoom;
+            const groupDy = (moveEvent.clientY - groupStartClientY) / zoom;
+            for (const groupTarget of groupComponentTargets) {
+              groupTarget.component.x = groupTarget.startX + groupDx;
+              groupTarget.component.y = groupTarget.startY + groupDy;
+              updateComponentPosition(groupTarget.component);
+            }
+          }
         };
 
         const finishCorner = (): void => {
@@ -2361,6 +2461,13 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
         startFullPoints: prepared.points,
         moved: false,
       };
+      const groupComponentTargets = dragSelectionWithLinkedPinLabels().map((selected) => ({
+        component: selected,
+        startX: selected.x,
+        startY: selected.y,
+      }));
+      const groupStartClientX = event.clientX;
+      const groupStartClientY = event.clientY;
 
       const onMove = (moveEvent: PointerEvent): void => {
         const drag = wireSegmentDrag;
@@ -2380,6 +2487,16 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
         drag.moved = true;
         selectedWireSegment = { wireId: wire.id, segmentIndex: drag.segmentIndex };
         updateWireVisual(wire.id);
+        if (groupComponentTargets.length > 0) {
+          const zoom = state.viewport.zoom || 1;
+          const groupDx = (moveEvent.clientX - groupStartClientX) / zoom;
+          const groupDy = (moveEvent.clientY - groupStartClientY) / zoom;
+          for (const groupTarget of groupComponentTargets) {
+            groupTarget.component.x = groupTarget.startX + groupDx;
+            groupTarget.component.y = groupTarget.startY + groupDy;
+            updateComponentPosition(groupTarget.component);
+          }
+        }
       };
 
       const finish = (): void => {
@@ -3876,6 +3993,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
   let dragStartX = 0;
   let dragStartY = 0;
   let dragTargets: Array<{ component: WebviewComponentModel; startX: number; startY: number; offsetX: number; offsetY: number }> = [];
+  let groupWireDragTarget: GroupWireDragTarget | undefined;
 
   el.addEventListener("pointerdown", (event) => {
     const component = liveComponent();
@@ -3899,6 +4017,10 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
       const offset = componentDivOffset(selected);
       return { component: selected, startX: selected.x, startY: selected.y, offsetX: offset.x, offsetY: offset.y };
     });
+    // "Selecionar um ramo de fio + um dispositivo e mover juntos": se um canto/segmento de fio
+    // também estava selecionado (marquee, ou clique anterior no ramo), ele acompanha o(s)
+    // componente(s) pelo MESMO delta -- ver `applyGroupWireDelta`.
+    groupWireDragTarget = currentGroupWireSelection();
     el.setPointerCapture(event.pointerId);
     // Bloqueia render() de telemetria DESDE O POINTERDOWN, não só depois do limiar de arrasto
     // (`startDragging` abaixo) -- com reconciliação (`componentElementsById`), `el` é REAPROVEITADO
@@ -4277,6 +4399,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
         }
         updateWiresTouchingComponent(target.component.id);
       }
+      if (groupWireDragTarget) applyGroupWireDelta(groupWireDragTarget, dx, dy);
     };
 
     const onUp = () => {
@@ -4292,6 +4415,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
       }
       const draggedComponentIds = dragStarted ? dragTargets.map((target) => target.component.id) : [];
       dragTargets = [];
+      groupWireDragTarget = undefined;
       if (!dragStarted && canToggle) {
         if (isPushButton) setPushClosed(component, false);
         else if (isToggleClickable) setSwitchClosed(component, component.properties.closed !== true);
