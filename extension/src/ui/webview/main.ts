@@ -4290,9 +4290,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
       if (dragStarted && isDuplicateDragGesture && dragTargets.length > 0) {
         state.selectedComponentIds = dragTargets.map((target) => target.component.id);
       }
-      if (dragStarted && dragTargets.length > 0) {
-        maybeAutoJunctionForDraggedComponents(dragTargets.map((target) => target.component.id));
-      }
+      const draggedComponentIds = dragStarted ? dragTargets.map((target) => target.component.id) : [];
       dragTargets = [];
       if (!dragStarted && canToggle) {
         if (isPushButton) setPushClosed(component, false);
@@ -4301,6 +4299,16 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
       }
       persistState();
       render();
+      // Roda DEPOIS de persistir/renderizar o movimento em si -- é um bônus best-effort (conectar
+      // automaticamente se algum pino ficou em cima de um fio), nunca pode arriscar deixar o
+      // movimento em si sem persistir se algo aqui der errado.
+      if (draggedComponentIds.length > 0) {
+        try {
+          maybeAutoJunctionForDraggedComponents(draggedComponentIds);
+        } catch (err) {
+          console.error("maybeAutoJunctionForDraggedComponents falhou (movimento já persistido, sem impacto)", err);
+        }
+      }
     };
 
     el.addEventListener("pointermove", onMove);
