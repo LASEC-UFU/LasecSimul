@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "typeId": "outputs.aip31068_i2c",
+  "graphical": true,
   "name": "Aip31068 I2C",
   "language": "pt-BR",
   "translations": {

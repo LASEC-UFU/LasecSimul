@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "typeId": "sensors.thermistor",
+  "graphical": true,
   "name": "Thermistor",
   "language": "pt-BR",
   "icon": "thermistor",

@@ -2756,3 +2756,284 @@ acompanhava seu próprio arrasto, só os fios tocando ela) + testes puros onde o
 recomenda-se sessão manual no VSCode real cobrindo os 4 cenários desta seção (derivar do meio de um
 fio, conectar um 4º fio numa junção existente, arrastar uma junção, selecionar componente+fio e
 mover juntos) antes de considerar 25.9 encerrado.
+
+### 25.10 Auditoria pente fino da camada de interação de fios/junções (2026-07-12)
+
+Pedido explícito do usuário: varredura de código morto, duplicação e regras repetidas em toda a
+camada de desenho/edição/interação de fios (`main.ts`, `wireTopology.ts`, `wireGeometry.ts`,
+`wireSpatialIndex.ts`, `messages.ts`, `extension.ts`, `coreLifecycle.ts`), consolidando em fonte
+única sem alterar comportamento. Cada remoção/consolidação abaixo foi confirmada por grep de TODOS
+os call sites antes de agir (não só leitura) -- ver `[[feedback_review_build_and_test_before_reporting]]`.
+
+**Bug real encontrado e corrigido (não era só limpeza)**: no arrasto de componente,
+`groupWireDragTarget` (canto/segmento especificamente selecionado) e `groupWireMoveTargets` (toda
+`selectedWireIds`) podiam mirar o MESMO fio simultaneamente -- `selectOnlyWire`/
+`selectOnlyWireCorner` sempre colocam o fio em `selectedWireIds` como efeito colateral de selecionar
+um canto/segmento dele. Os dois mecanismos escreviam em `wire.points` na mesma rodada de `onMove`,
+o segundo (`applyGroupMoveWireDelta`, mais grosseiro -- desloca TODOS os pontos internos por igual)
+sobrescrevendo silenciosamente o ajuste preciso do primeiro (`applyGroupWireDelta`, que respeita o
+eixo do canto/segmento). Corrigido excluindo o fio de `groupWireDragTarget` da computação de
+`groupWireMoveTargets` nesse ponto de entrada (`computeGroupMoveWireTargets(groupWireDragTarget?.wireId)`).
+
+**Código morto removido:**
+- `findAtPosition`/`buildWireSpatialIndex`/`HitTestResult` (`wireTopology.ts`) -- motor de hit-test
+  unificado, correto e testado, mas ZERO call sites fora dos próprios testes: `main.ts` nunca
+  adotou esse caminho, construiu 4 alças DOM independentes (pino/segmento/canto/junção) com
+  hit-test nativo do browser em vez disso (ver 25.9). Removido junto: a metade de
+  `WireSpatialIndex` que só existia pra sustentar isso (`upsertConnectionPoint`/
+  `removeConnectionPoint`/`queryConnectionPoints`/`IndexedConnectionPoint`/`clear()`) -- a metade de
+  SEGMENTOS (`upsertWire`/`removeWire`/`queryPoint`) continua em uso real
+  (`maybeAutoJunctionForDraggedComponents`). Cobertura de teste do que sobrou da classe reescrita
+  pra testar `WireSpatialIndex` direto, sem depender de `findAtPosition`.
+- `rebuildElectricalNet` (`wireTopology.ts`) -- união-busca sobre endpoints, zero call sites de
+  produção (só os próprios testes); a invariante que ela verificava ("cruzamento sem nó fica
+  eletricamente separado") foi PORTADA pra um teste novo em cima de `electricalEdgesForProject`
+  (o mecanismo que de fato roda em produção), não simplesmente descartada.
+- Um condicional morto (`if (matchedWire) break;`) em `maybeAutoJunctionForDraggedComponents` --
+  inalcançável (o `break` de dentro do `if` anterior já garante que `matchedWire` nunca chega
+  `truthy` nesse ponto do laço).
+- Verbo IPC `requestStartWireFromWire` já tinha sido removido na sessão anterior (25.9); confirmado
+  sem nenhum resíduo nesta varredura.
+
+**Duplicação consolidada em fonte única:**
+- `applyGroupTagAlongDelta` (`main.ts`, nova) -- as 4 alças de arrasto que tocam fio/junção (canto,
+  canto via Shift-no-segmento, segmento, junção) repetiam byte a byte o mesmo bloco de ~10 linhas
+  pra aplicar o delta de grupo (componentes + fios co-selecionados acompanhando o elemento
+  agarrado). Agora cada uma só calcula `groupDx`/`groupDy` e delega.
+- `startWireDragListeners` (`main.ts`, nova) -- as mesmas 4 alças repetiam a fiação de
+  `pointermove`/`pointerup`/`pointercancel` em `window` com um `finish` nomeado só pra poder se
+  referenciar nos próprios listeners. Agora é uma função (`onMove, onFinish`) reutilizada nas 4;
+  cada `onFinish` continua sendo o código específico de cada uma (limpa a referência de arrasto
+  certa -- `wireCornerDrag`/`wireSegmentDrag`/variável local da junção -- e decide
+  persistir/suprimir o próximo clique), deliberadamente NÃO generalizado (tipos de referência de
+  arrasto diferentes entre si, generalizar exigiria um genérico sem ganho real).
+- `electricalOperationsDiff` (`coreLifecycle.ts`, nova) -- `extension.ts` repetia, em 4 handlers
+  (sync genérico de `projectChanged`, `requestRemoveComponent`, `requestRemoveWire`,
+  `requestConnectEndpoints`), o cálculo "achata antes/depois em arestas de pino real
+  (`electricalEdgesForProject`) e monta a lista de operações connect/disconnect
+  (`diffElectricalEdges`)". Extraída só essa PARTE mecânica (idêntica nos 4); a orquestração de
+  cada verbo (aguardar ou disparar sem esperar, fallback quando não há diferença nenhuma,
+  granularidade de polling) continua no call site -- são genuinamente diferentes entre si (ver
+  "problema estrutural" abaixo) e forçar uma fusão total arriscaria alterar comportamento de
+  rollback/erro que hoje é intencional.
+- `WireEndpoint` (`messages.ts`) e `ConnectionEndpoint` (`wireTopology.ts`) eram dois tipos
+  estruturalmente IDÊNTICOS (`{kind:"pin",componentId,pinId} | {kind:"wire",wireId,point}`)
+  definidos em paralelo -- exemplo literal de "regra de conexão repetida em arquivo diferente".
+  `WireEndpoint` agora é um alias de `ConnectionEndpoint` (import direto, sem redefinição), os dois
+  lados do protocolo (mensagem IPC e motor de topologia) nunca mais podem divergir por acidente.
+
+**Duplicação avaliada e mantida DELIBERADAMENTE (não é remendo, é fronteira arquitetural real):**
+`flipLocalPoint`/`rotateLocalPoint` (`wireTopology.ts`) duplicam `flipPoint`/`rotatePoint`
+(`main.ts`), mesma matemática de box/origem/flip/rotação, ~15 linhas. Já documentado como deliberado
+numa sessão anterior: `wireTopology.ts` roda tanto no Host (Node, sem DOM) quanto na Webview, e
+`main.ts` é Webview-only (não pode ser importado pelo Host). Extrair um 3º módulo compartilhado só
+pra ~15 linhas usadas por exatamente 2 consumidores, um dos quais é o "original", seria abstração
+desproporcional ao ganho -- mantido como está, documentado aqui de novo pra não ser "redescoberto"
+como duplicação ingênua numa auditoria futura.
+
+**Problemas estruturais encontrados (não corrigidos nesta rodada -- mudança de comportamento, fora
+do escopo de "não alterar funcionalidades existentes"):**
+1. **"Reconexão" de extremidade de fio não existe como gesto dedicado.** O pedido do usuário lista
+   reconexão entre as operações que precisam de fonte única de verdade, mas não há hoje nenhum
+   caminho de UI pra arrastar a PONTA de um fio existente (pino ou nó real, índice 0/último de
+   `wirePolylinePoints`) pra outro pino -- `renderWireCornerHandles` deliberadamente pula esses dois
+   índices (`for (let index = 1; index < points.length - 1; ...)`), só cobre pontos INTERNOS. O
+   único caminho hoje é apagar o fio e desenhar outro. O modelo de dados já suporta a mudança
+   (`WebviewWireModel.from`/`.to` são campos comuns, nada os torna imutáveis) -- o que falta é o
+   gesto interativo em si (handle no índice 0/último com hit-test especial, arrasto que solta sobre
+   um pino/segmento/junção e reescreve só aquele endpoint). Fica como trabalho futuro explícito, não
+   implementado aqui por ser funcionalidade NOVA, não consolidação.
+2. **Os 4 handlers de `extension.ts` que chamam `electricalOperationsDiff` têm orquestração
+   pós-diff genuinely diferente** (aguardar vs. disparar sem esperar, fallback quando o diff vem
+   vazio, granularidade de polling, rollback em erro). Isso É uma duplicação de FORMA (todos seguem
+   "computa diff → decide o que fazer") mas não de CONTEÚDO -- uma fusão total exigiria um
+   parâmetro de estratégia (callback/enum) que ganha pouco e arrisca alterar o comportamento de
+   recuperação de erro de cada verbo, hoje ajustado individualmente. Candidato a uma passada futura
+   SE esses 4 comportamentos forem intencionalmente unificados por decisão de produto (não é uma
+   decisão de limpeza de código).
+
+**Verificação**: os 3 tsconfigs compilam sem erro; suíte completa da Extension, 218/218, 0 falhas
+(mesmo total de 25.9 -- nenhum teste foi perdido, `rebuildElectricalNet` teve sua invariante
+portada, não descartada). ~146 linhas líquidas removidas nesta rodada (321 remoções, 175 inserções,
+7 arquivos). Sem GUI disponível neste ambiente -- verificação das operações de conexão feita por
+rastreamento de código (cada função consolidada foi comparada campo a campo com as N cópias que
+substituiu antes de remover as originais) e pela suíte automatizada; recomenda-se sessão manual no
+VSCode real cobrindo criação de fio (pino→pino, pino→segmento, segmento→segmento), arrasto de
+canto/segmento/junção com e sem seleção mista, e remoção de fio/componente com simulação rodando
+antes de considerar 25.10 encerrado.
+
+## 26. Auditoria de Modo Placa e Componentes Expostos (2026-07-12)
+
+Pedido explícito do usuário: auditoria minuciosa de "Modo Placa" e "Selecionar componentes
+expostos" durante edição de subcircuito, usando o SimulIDE real como referência (fonte estudada:
+`subpackage.cpp`/`subpackage.h`, `linker.cpp`/`linker.h`, `component.cpp`/`component.h`, branch
+`simulide_2`).
+
+### 26.1 Como o SimulIDE real funciona (pesquisa de código, não suposição)
+
+Dois mecanismos SEPARADOS e ortogonais, ambos vivendo em `SubPackage` (item que representa o
+símbolo/pacote externo de um subcircuito, análogo ao `other.package` do LasecSimul):
+
+- **`SubPackage::setBoardMode(bool)`** (ação de menu "Board Mode", checkable): opera sobre TODOS os
+  componentes da CENA atualmente aberta (equivalente a estar dentro de "Abrir Subcircuito" no
+  LasecSimul). Ao entrar: salva posição/rotação/flip atuais em `circPos`/`circRot`/etc, e SE já
+  existia uma posição de placa salva (`boardRot() != -1e6`, sentinela de "nunca definido"), aplica
+  `boardPos`/`boardRot`/etc. Ao sair: salva a posição atual (de placa) em `boardPos`/etc, restaura
+  `circPos`/etc. `Component::setHidden(mode,...)` esconde o corpo INTEIRO de todo componente
+  NÃO-`m_graphical`; componentes `m_graphical` só têm os PINOS escondidos (corpo visual continua
+  visível) -- ou seja, **só quem é `m_graphical` aparece no Modo Placa**, sem exceção, sem seleção
+  adicional.
+- **`m_graphical`** (`Component`, `component.h`): flag booleana **hardcoded por CLASSE de
+  componente** no construtor de cada subclasse (LEDs, switches, motores, displays, medidores,
+  sensores, MCU, potenciômetro, `shape`/`textcomponent`, `dial`, o próprio `SubPackage` etc, ~40
+  classes) -- **NUNCA uma propriedade editável pelo usuário por instância**. É um traço do TIPO,
+  não do componente individual.
+- **`Linker`/`m_isMainComp`** ("Select Exposed Components", outra ação de menu em `SubPackage`):
+  clique-para-alternar (`startLinking()`/`compSelected()`) quais componentes internos são "Main
+  Components". Persistido via `getLinks()`/`setLinks()` (lista de UIDs separada por vírgula,
+  resolvida de volta em `createLinks()` no carregamento). Destaque visual: azul+número durante a
+  seleção ativa, amarelo permanente fora dela (`Component::paintSelected`).
+- **Achado importante**: `m_isMainComp` **NÃO controla visibilidade no Modo Placa** (`setBoardMode`
+  nunca consulta `isMainComp()`) -- os dois mecanismos são estruturalmente independentes no C++
+  real. O uso real de `isMainComp` encontrado é dar acesso rápido às propriedades do componente
+  interno a partir de fora (`Component::contextMenu`, `if (!event && m_isMainComp)`), não gate de
+  Modo Placa.
+- **Achado importante #2**: `SubPackage::paint()` só desenha `Chip::paint()` (fundo/pinos do
+  pacote) -- **não existe, no SimulIDE real, nenhuma renderização de componentes internos
+  "espiando" por cima do símbolo externo quando visto de FORA do subcircuito** (isto é, a partir do
+  circuito PAI, sem abrir o subcircuito). Esse recurso (pressionar um botão exposto de uma
+  instância direto no circuito principal, sem abrir o subcircuito) é uma **invenção do
+  LasecSimul**, sem equivalente no SimulIDE -- mantida por ser funcionalidade real e útil (ex:
+  apertar o botão RESET de uma instância de ESP32 durante a simulação sem precisar entrar no
+  subcircuito), não removida, mas identificada explicitamente aqui para não ser confundida com
+  paridade de SimulIDE.
+- **Achado importante #3** (responde à seção 2 do pedido do usuário, "representação diferente no
+  Modo Placa"): não foi encontrada NENHUMA representação visual alternativa/distinta pro Modo Placa
+  em componente nenhum -- `Component::m_boardMode` (flag estática) só é lida em MAIS UM lugar do
+  código inteiro (`component.cpp:174`, um modificador de evento de mouse, não desenho). Um
+  componente `m_graphical` usa o MESMO `paint()` tanto no esquemático quanto no Modo Placa -- Modo
+  Placa muda só POSIÇÃO e VISIBILIDADE, nunca a forma de desenhar. **Não foi implementada** uma
+  "representação Board-Mode distinta por componente" porque ela não existe no SimulIDE real que o
+  pedido pede pra usar como referência -- ver seção 26.4 (comportamento não-equivalente/decisão) pra
+  transparência completa sobre esse ponto.
+
+### 26.2 Mapeamento do que já existia no LasecSimul (dois mecanismos, nomeados aqui pra clareza)
+
+- **Mecanismo A** (`subcircuitBoardMode.ts` + `main.ts::setSubcircuitBoardMode`/
+  `isBoardModeVisible`): Modo Placa de verdade, só ativo DENTRO de uma sessão "Abrir Subcircuito"
+  -- já era uma porta fiel de `SubPackage::setBoardMode` (`captureCircuitTransforms`/
+  `applyBoardTransforms`/`captureBoardTransforms`/`restoreCircuitTransforms`, mesmo padrão
+  circPos/boardPos). Reaproveita o pipeline de renderização/interação normal do esquemático (mesmos
+  `state.components`, só reposicionados) -- por construção, mover/rotacionar/espelhar/multi-
+  selecionar/arrastar já funcionavam SEM nenhum código adicional, confirmado por leitura (nenhum
+  gate de `subcircuitBoardMode` nos handlers de seleção/arrasto/rotação/flip).
+- **Mecanismo B** (`main.ts::renderBoardOverlaysFor` + `boardModeEnabled` property + IPC
+  `requestBoardOverlayData`/`requestUpdateBoardOverlayVisual`/`requestUpdateBoardOverlayProperty`):
+  overlay interativo no circuito PRINCIPAL sobre uma instância de subcircuito com Modo Placa
+  ligado -- funcionalidade LasecSimul-específica (ver 26.1), não existe no SimulIDE.
+
+### 26.3 Bug crítico real encontrado e corrigido: dois armazenamentos paralelos nunca sincronizados
+
+`WebviewComponentModel` (`model.ts`) já tinha os campos PLANOS corretos, persistidos e usados pelo
+Mecanismo A: `boardX`/`boardY`/`boardRotation`/`boardFlipH`/`boardFlipV`. Mas o Mecanismo B lia e
+escrevia um campo **completamente diferente e nunca lido por mais ninguém**:
+`subcircuitInternals.ts::extractInternalComponents` lia `value.boardVisual` (objeto aninhado
+`{x,y,rotation,flipH,flipV}`) direto do JSON cru -- campo que o Mecanismo A **nunca escreveu** (só
+escreve os campos planos). E `mcuCommands.ts::updateBoardOverlayVisualCommand` (chamado ao
+ARRASTAR o overlay no circuito principal) escrevia justamente nesse `boardVisual` aninhado, nunca
+nos campos planos.
+
+Consequência real: posicionar um componente com o Modo Placa DE VERDADE (Mecanismo A, dentro de
+"Abrir Subcircuito") nunca aparecia no overlay da instância no circuito principal (Mecanismo B
+sempre lia `undefined`, caindo no posicionamento padrão em coluna); e arrastar o overlay no
+circuito principal nunca refletia de volta no Modo Placa real. Exatamente o "array paralelo sem
+sincronização" que a seção 5 do pedido pede pra caçar -- este era o mais grave encontrado.
+
+**Corrigido**: `subcircuitInternals.ts` ganhou `boardVisualFromFlatFields`, que deriva o
+`boardVisual` (agrupamento só de conveniência pro payload IPC `InternalComponentSnapshot`, não mais
+fonte de verdade) a partir dos MESMOS campos planos que o Mecanismo A grava.
+`updateBoardOverlayVisualCommand` agora escreve direto em `boardX`/`boardY`. Fonte única de verdade
+persistida: os 5 campos planos em `WebviewComponentModel`, os mesmos de sempre -- nenhuma migração
+necessária (nenhum arquivo real no repositório tinha `boardVisual` OU `boardX` escritos ainda,
+confirmado por grep em `subcircuits/`/`devices/` antes da correção).
+
+### 26.4 Comportamento que permanece NÃO-equivalente ao SimulIDE (decisão consciente, documentada)
+
+- **Representação visual distinta no Modo Placa** (seção 2 do pedido): não implementada -- ver
+  26.1, achado #3. O SimulIDE real não tem esse recurso; implementá-lo seria inventar
+  comportamento sem lastro na referência pedida. Se o usuário quiser isso mesmo assim como recurso
+  PRÓPRIO do LasecSimul (não paridade SimulIDE), é uma decisão de produto nova, não uma correção de
+  divergência -- fica pendente de confirmação explícita antes de qualquer implementação futura.
+- **Mecanismo B (overlay no circuito principal)** continua sem equivalente no SimulIDE -- mantido
+  por ser funcionalidade real já usada (não removida, matching "não remover funcionalidades
+  existentes"), agora corretamente sincronizado com o Mecanismo A (26.3).
+- **`isMainComp`/exposed não gatilha Modo Placa no SimulIDE real, mas gatilha no LasecSimul**
+  (filtro `item.exposed && item.graphical` em `renderBoardOverlaysFor`) -- decisão deliberada de
+  MANTER o comportamento atual do LasecSimul (dá controle de curadoria que o SimulIDE não tem: nem
+  todo componente `graphical` de um subcircuito precisa aparecer no overlay externo) em vez de
+  replicar a independência total do SimulIDE, que teria o overlay mostrando TODO componente
+  gráfico sem nenhuma curadoria possível -- pior UX, não melhor paridade que valha a pena.
+- **Grade/snap ao arrastar componente** (dentro OU fora do Modo Placa): LasecSimul não tem snap de
+  grade no arrasto de componente (só fios têm `WIRE_GRID_SIZE`/`snapCoordinate`) -- isto NÃO é uma
+  lacuna introduzida ou específica do Modo Placa, é como TODO arrasto de componente já funciona no
+  editor hoje; não alterado aqui pra não introduzir uma inconsistência nova (componente ganhando
+  snap só dentro do Modo Placa, diferente do resto do editor).
+
+### 26.5 Outras correções desta auditoria
+
+- `main.ts`: "Modo Placa"/"Selecionar Componentes Expostos" só apareciam no menu de contexto de um
+  componente já existente -- numa folha de subcircuito recém-criada (zero componentes), não havia
+  NENHUM jeito de entrar em Modo Placa. Adicionadas as mesmas 2 entradas ao menu do fundo vazio do
+  canvas, condicionadas a `state.subcircuitEditingContext` (igual ao menu por componente).
+  Resolve "entrada e saída do Modo Placa" (seção 1) pra qualquer estado do canvas.
+- `main.ts::pasteClipboardItems`: colar uma cópia de um componente já posicionado no Modo Placa
+  deslocava `x`/`y` (esquemático) pelo grid, mas NUNCA `boardX`/`boardY` -- a cópia nascia
+  exatamente empilhada sobre o original na visão de placa. Mesmo deslocamento aplicado aos dois
+  agora.
+- `isBoardModeVisible` (antes função local em `main.ts`, acoplada a `catalogEntryFor`) extraída pra
+  `subcircuitBoardMode.ts` como função pura (recebe `isGraphicalTypeId` injetado) -- resolve
+  "responsabilidades misturadas entre UI e modelo" (seção 5) pro cálculo de visibilidade
+  especificamente, e torna a regra "só `graphical` (ou `other.package`/ícone) aparece" testável
+  diretamente, sem precisar montar um catálogo inteiro pro teste.
+
+### 26.6 Segurança contra duplicação/referência órfã (verificado, não precisou de correção)
+
+- `exposed`/`boardX`/`boardY`/`boardRotation`/`boardFlipH`/`boardFlipV` são campos ESCALARES
+  (`number`/`boolean`) direto em `WebviewComponentModel` -- `cloneComponent` (`{...rest}`) já os
+  copia por valor, sem risco de referência compartilhada entre original e cópia/colagem.
+  `exposed` É copiado através de cópia/colagem deliberadamente (mesmo comportamento esperado de
+  `BoolProp` no SimulIDE real, que copia todas as propriedades registradas ao colar).
+- **Sem array paralelo de "ids expostos"**: `exposed` é uma flag NO PRÓPRIO componente, não uma
+  lista separada referenciando ids (diferente do `Linker::m_linkedComp`/UID-string do SimulIDE
+  real) -- excluir ou renomear um componente exposto nunca deixa referência órfã, por construção
+  (não existe uma segunda estrutura de dados que precise ser limpa à parte). Isto é estruturalmente
+  MAIS robusto contra órfãos do que o mecanismo original do SimulIDE.
+- **Duas instâncias do mesmo subcircuito**: layout de Modo Placa e conjunto de expostos são
+  propriedades do ARQUIVO `.lssubcircuit` (definição compartilhada), não da instância -- duas
+  instâncias mostram o MESMO layout de placa por design (igual ao SimulIDE: `SubPackage`/Board Mode
+  pertence à cena INTERNA do subcircuito, não à instância externa). `boardModeEnabled` (se o
+  overlay está LIGADO) é uma property PER-INSTANCE (`component.properties`, objeto próprio por
+  instância via `cloneComponent`), então ligar o overlay numa instância nunca liga na outra --
+  testado por leitura de código, comportamento correto confirmado.
+
+### 26.7 Testes adicionados
+
+`subcircuitBoardMode.test.ts`: +5 casos -- `isBoardModeVisible` (gráfico/não-gráfico/`other.package`/
+ícone), seleção múltipla incremental (marcar 3, desmarcar 1, os outros 2 continuam), componente sem
+posição de placa salva nunca pula pra `(0,0)` (arquivo antigo/1ª vez), rotação+espelhamento
+sobrevivem a um ciclo completo entrar/sair do Modo Placa, e duas capturas independentes (2
+"instâncias") nunca compartilham objeto de transform por referência. `subcircuitInternals.ts`/
+`mcuCommands.ts` (o outro lado do fix) não têm suíte própria porque importam `vscode` no escopo do
+módulo -- mesma limitação estrutural de QUALQUER arquivo do lado Extension que toca a API do VS
+Code neste projeto (sem shim de `vscode` no test runner atual); verificado por compilação limpa +
+leitura campo a campo comparando com o padrão já testado em `subcircuitBoardMode.ts`.
+
+**Verificação**: os 3 tsconfigs compilam sem erro; suíte completa, 223/223 (5 novos), 0 falhas. Sem
+GUI disponível neste ambiente -- "comparação visual com o SimulIDE" (item 19 dos testes pedidos)
+feita por leitura direta do código-fonte real do SimulIDE (`C:\SourceCode\simulide_2\src`, branch
+`simulide_2`, já usado numa auditoria anterior -- ver `[[reference_simulide_schematic_analysis]]`),
+não por captura de tela (sem GUI aqui pra rodar nenhum dos dois programas). Recomenda-se sessão
+manual no VSCode real cobrindo: abrir/fechar Modo Placa numa folha de subcircuito vazia (via o novo
+menu de fundo), posicionar um componente gráfico e confirmar que a MESMA posição aparece no overlay
+da instância no circuito principal (e vice-versa, arrastando o overlay e reabrindo o subcircuito),
+colar uma cópia de um item posicionado na placa, e desfazer/refazer um ciclo de Modo Placa.

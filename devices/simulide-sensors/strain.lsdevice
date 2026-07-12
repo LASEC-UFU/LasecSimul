@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "typeId": "sensors.strain",
+  "graphical": true,
   "name": "Force Strain Gauge",
   "language": "pt-BR",
   "icon": "strain",

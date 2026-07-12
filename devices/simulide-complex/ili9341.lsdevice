@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "typeId": "outputs.ili9341",
+  "graphical": true,
   "name": "Ili9341",
   "language": "pt-BR",
   "translations": {

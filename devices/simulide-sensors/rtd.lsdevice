@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "typeId": "sensors.rtd",
+  "graphical": true,
   "name": "RTD",
   "language": "pt-BR",
   "icon": "rtd",

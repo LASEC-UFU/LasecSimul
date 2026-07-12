@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "typeId": "peripherals.ds1307",
+  "graphical": true,
   "name": "DS1307",
   "language": "pt-BR",
   "icon": "ds1307",

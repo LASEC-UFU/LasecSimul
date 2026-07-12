@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "typeId": "peripherals.serialterm",
+  "graphical": true,
   "name": "Serial Terminal",
   "language": "pt-BR",
   "icon": "serialterm",

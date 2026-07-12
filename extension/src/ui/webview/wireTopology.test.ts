@@ -1,19 +1,17 @@
 import { createTestRunner, assert } from "../../ipc/testSupport/MockCoreServer";
 import { PackageDescriptor, TopologyNode, WebviewComponentModel, WebviewWireModel, endpointId, endpointPinId, nodeEndpoint, portEndpoint } from "./model";
 import { registerPackage } from "./componentSymbols";
+import { WireSpatialIndex } from "./wireSpatialIndex";
 import {
   connectEndpointToNode,
   diffElectricalEdges,
   electricalEdgesForProject,
-  findAtPosition,
   findExistingJunctionAt,
-  buildWireSpatialIndex,
   isJunctionVisible,
   mergeCollinearSegments,
   movableTopologyNodeIds,
   normalizeWireGeometry,
   pinScenePosition,
-  rebuildElectricalNet,
   removeOrphanNodes,
   splitSegmentAtPoint,
   TopologySnapshot,
@@ -113,42 +111,14 @@ function portWire(id: string, fromComponentId: string, toComponentId: string, pi
     assert(wirePolylinePoints(snapshot.components, orphanWire, snapshot.nodes).length === 0, "endpoint inexistente deveria devolver polilinha vazia");
   });
 
-  await test("findAtPosition: prioridade pino > segmento > vazio", () => {
-    const snapshot = baseSnapshot();
-    const onSegment = findAtPosition(snapshot, { x: 50, y: 0 });
-    assert(onSegment.kind === "segment" && onSegment.wireId === "w1", `clique no meio deveria achar o segmento, recebido ${onSegment.kind}`);
-
-    const onJunctionEndpoint = findAtPosition(snapshot, { x: 0, y: 0 });
-    assert(onJunctionEndpoint.kind === "junction" && onJunctionEndpoint.componentId === "a", "clique na extremidade 'a' deveria achar a junção/nó ali, não o segmento");
-
-    const empty = findAtPosition(snapshot, { x: 500, y: 500 });
-    assert(empty.kind === "empty", "clique longe de tudo deveria devolver vazio");
-  });
-
-  await test("findAtPosition: pino de componente real (não-nó) tem prioridade sobre segmento", () => {
-    const snapshot: TopologySnapshot = {
-      components: [resistorComponent("r1", 0, 0)],
-      nodes: [topologyNode("b", 100, 0)],
-      wires: [{ id: "w1", from: portEndpoint("r1", "pin-1"), to: nodeEndpoint("b") }],
-    };
-    const pinPos = pinScenePosition(snapshot.components, "r1", "pin-1")!;
-    const hit = findAtPosition(snapshot, pinPos);
-    assert(hit.kind === "pin" && hit.componentId === "r1" && hit.pinId === "pin-1", `esperado pino de r1, recebido ${JSON.stringify(hit)}`);
-  });
-
-  await test("findAtPosition respeita a tolerância informada", () => {
-    const snapshot = baseSnapshot();
-    const farFromSegment = findAtPosition(snapshot, { x: 50, y: 30 }, 8);
-    assert(farFromSegment.kind === "empty", "ponto fora da tolerância não deveria achar o segmento");
-  });
-  await test("índice espacial preserva o resultado do hit-test e atualiza fio localmente", () => {
-    const snapshot = baseSnapshot();
-    const index = buildWireSpatialIndex(snapshot, 32);
-    const indexed = findAtPosition(snapshot, { x: 50, y: 2 }, 8, index);
-    assert(indexed.kind === "segment" && indexed.wireId === "w1", "índice deveria devolver o mesmo segmento");
+  await test("WireSpatialIndex: upsertWire indexa os segmentos, removeWire tira do índice (mesmo espírito da antiga cobertura via findAtPosition, removido por ser código morto -- ver .spec seção 25.10; classe continua em uso real por maybeAutoJunctionForDraggedComponents)", () => {
+    const index = new WireSpatialIndex(32);
+    index.upsertWire("w1", [{ x: 0, y: 0 }, { x: 100, y: 0 }]);
+    const hit = index.queryPoint({ x: 50, y: 2 }, 8);
+    assert(hit.length === 1 && hit[0]!.wireId === "w1", "ponto sobre o segmento indexado deveria achar w1");
     index.removeWire("w1");
-    const removed = findAtPosition(snapshot, { x: 50, y: 2 }, 8, index);
-    assert(removed.kind === "empty", "remoção incremental deveria tirar o fio do índice");
+    const afterRemoval = index.queryPoint({ x: 50, y: 2 }, 8);
+    assert(afterRemoval.length === 0, "remoção deveria tirar o fio do índice");
   });
 
   await test("wireDegree conta fios distintos tocando o nó", () => {
@@ -356,24 +326,19 @@ function portWire(id: string, fromComponentId: string, toComponentId: string, pi
     assert(result.wires.length === 3, "os 3 fios deveriam permanecer intocados");
   });
 
-  await test("rebuildElectricalNet: fios ligados por um nó formam uma única rede", () => {
-    const snapshot: TopologySnapshot = {
-      components: [],
-      nodes: [topologyNode("j", 50, 0), topologyNode("a", 0, 0), topologyNode("b", 100, 0)],
-      wires: [nodeWire("w1", "a", "j"), nodeWire("w2", "j", "b")],
-    };
-    const net = rebuildElectricalNet(snapshot);
-    assert(net.get("a:pin-1") === net.get("b:pin-1"), "'a' e 'b' deveriam estar na mesma rede via o nó");
-  });
-
-  await test("rebuildElectricalNet: cruzamento SEM nó compartilhado fica em redes separadas", () => {
-    const snapshot: TopologySnapshot = {
-      components: [],
-      nodes: [topologyNode("a", 0, 0), topologyNode("b", 100, 0), topologyNode("c", 50, -50), topologyNode("d", 50, 50)],
-      wires: [nodeWire("w1", "a", "b"), nodeWire("w2", "c", "d")],
-    };
-    const net = rebuildElectricalNet(snapshot);
-    assert(net.get("a:pin-1") !== net.get("c:pin-1"), "fios que só se cruzam visualmente (sem nó) devem ficar em redes diferentes");
+  await test("electricalEdgesForProject: cruzamento SEM nó compartilhado nunca gera aresta entre as duas redes (mesma garantia elétrica que a antiga rebuildElectricalNet checava -- código morto removido, ver .spec seção 25.10; invariante portado pra cima do mecanismo que de fato roda em produção)", () => {
+    const edges = electricalEdgesForProject({
+      topologyNodes: [],
+      wires: [portWire("w1", "a", "b"), portWire("w2", "c", "d")],
+    });
+    const crossesNetworks = edges.some((edge) => {
+      const fromInFirst = endpointId(edge.from) === "a" || endpointId(edge.from) === "b";
+      const toInSecond = endpointId(edge.to) === "c" || endpointId(edge.to) === "d";
+      const fromInSecond = endpointId(edge.from) === "c" || endpointId(edge.from) === "d";
+      const toInFirst = endpointId(edge.to) === "a" || endpointId(edge.to) === "b";
+      return (fromInFirst && toInSecond) || (fromInSecond && toInFirst);
+    });
+    assert(!crossesNetworks, "fios que só se cruzam visualmente (sem nó) nunca podem virar aresta elétrica entre si");
   });
 
   await test("normalizeWireGeometry: deduplica nós coincidentes e redireciona os fios", () => {

@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "typeId": "sensors.dht22",
+  "graphical": true,
   "name": "DHt22/11",
   "language": "pt-BR",
   "icon": "dht22",

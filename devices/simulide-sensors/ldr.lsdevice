@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "typeId": "sensors.ldr",
+  "graphical": true,
   "name": "LDR",
   "language": "pt-BR",
   "icon": "ldr",

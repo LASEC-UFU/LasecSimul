@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "typeId": "outputs.hd44780",
+  "graphical": true,
   "name": "Hd44780",
   "language": "pt-BR",
   "translations": {

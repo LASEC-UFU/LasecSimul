@@ -27,7 +27,6 @@ import {
 } from "./wireGeometry.js";
 import { CanonicalEndpoint, TopologyNode, WebviewComponentModel, WebviewWireModel, endpointId, endpointPinId, nodeEndpoint, portEndpoint } from "./model.js";
 import { componentBox, componentLocalOrigin, pinLocalPosition } from "./componentSymbols.js";
-import { WireSpatialIndex } from "./wireSpatialIndex.js";
 
 export interface TopologySnapshot {
   components: WebviewComponentModel[];
@@ -148,72 +147,6 @@ export function movableTopologyNodeIds(snapshot: TopologySnapshot, wireIds: Read
     if (touchesAny && allSelected) result.add(node.id);
   }
   return result;
-}
-
-export type HitTestResult =
-  | { kind: "pin"; componentId: string; pinId: string; point: Point }
-  | { kind: "junction"; componentId: string; point: Point }
-  | { kind: "segment"; wireId: string; segmentIndex: number; point: Point }
-  | { kind: "empty" };
-
-/** Hit-test único com prioridade pino > junção/canto existente > segmento > vazio -- usado de forma
- * IDÊNTICA tanto pra iniciar quanto pra terminar uma derivação, pra que os dois gestos nunca possam
- * discordar sobre o que foi clicado (bug antigo: `wireConnectCornerIndexLikeSimulIDE` só era chamado
- * ao TERMINAR, nunca ao iniciar). `toleranceCanvasPx` casa com a tolerância de snap de canto já usada
- * em `main.ts` (`WIRE_GRID_SIZE` = 8px). */
-export function buildWireSpatialIndex(snapshot: TopologySnapshot, cellSize = 64): WireSpatialIndex {
-  const index = new WireSpatialIndex(cellSize);
-  for (const component of snapshot.components) for (const pin of component.pins) {
-    const point = pinScenePosition(snapshot.components, component.id, pin.id, snapshot.nodes);
-    if (point) index.upsertConnectionPoint({ id: `${component.id}:${pin.id}`, kind: "pin", componentId: component.id, pinId: pin.id, point });
-  }
-  for (const node of snapshot.nodes) index.upsertConnectionPoint({ id: `${node.id}:pin-1`, kind: "junction", componentId: node.id, pinId: "pin-1", point: { x: node.position.x, y: node.position.y } });
-  for (const wire of snapshot.wires) index.upsertWire(wire.id, wirePolylinePoints(snapshot.components, wire, snapshot.nodes));
-  return index;
-}
-
-export function findAtPosition(snapshot: TopologySnapshot, scenePoint: Point, toleranceCanvasPx: number = WIRE_GRID_SIZE, spatialIndex?: WireSpatialIndex): HitTestResult {
-  if (spatialIndex) {
-    const points = spatialIndex.queryConnectionPoints(scenePoint, toleranceCanvasPx).sort((a, b) => (a.kind === "pin" ? 0 : 1) - (b.kind === "pin" ? 0 : 1));
-    const hit = points[0];
-    if (hit) return hit.kind === "junction"
-      ? { kind: "junction", componentId: hit.componentId, point: hit.point }
-      : { kind: "pin", componentId: hit.componentId, pinId: hit.pinId!, point: hit.point };
-  } else {
-    for (const component of snapshot.components) {
-      for (const pin of component.pins) {
-        const pos = pinScenePosition(snapshot.components, component.id, pin.id, snapshot.nodes);
-        if (!pos) continue;
-        if (Math.hypot(pos.x - scenePoint.x, pos.y - scenePoint.y) <= toleranceCanvasPx) {
-          return { kind: "pin", componentId: component.id, pinId: pin.id, point: pos };
-        }
-      }
-    }
-    for (const node of snapshot.nodes) {
-      const pos = { x: node.position.x, y: node.position.y };
-      if (Math.hypot(pos.x - scenePoint.x, pos.y - scenePoint.y) <= toleranceCanvasPx) {
-        return { kind: "junction", componentId: node.id, point: pos };
-      }
-    }
-  }
-
-  const candidates = spatialIndex ? spatialIndex.queryPoint(scenePoint, toleranceCanvasPx) : snapshot.wires.flatMap((wire) => {
-    const points = wirePolylinePoints(snapshot.components, wire, snapshot.nodes);
-    return points.slice(0, -1).map((from, segmentIndex) => ({ wireId: wire.id, segmentIndex, from, to: points[segmentIndex + 1]! }));
-  });
-  for (const candidate of candidates) {
-      const from = candidate.from;
-      const to = candidate.to;
-      const isHorizontal = Math.abs(from.y - to.y) < 0.5;
-      const isVertical = Math.abs(from.x - to.x) < 0.5;
-      if (!isHorizontal && !isVertical) continue;
-      const projected = nearestSnappedPointOnOrthogonalSegment(scenePoint, from, to, WIRE_GRID_SIZE);
-      if (Math.hypot(projected.x - scenePoint.x, projected.y - scenePoint.y) <= toleranceCanvasPx) {
-        return { kind: "segment", wireId: candidate.wireId, segmentIndex: candidate.segmentIndex, point: projected };
-      }
-  }
-
-  return { kind: "empty" };
 }
 
 export interface SplitSegmentIds {
@@ -430,37 +363,6 @@ export function removeOrphanNodes(snapshot: TopologySnapshot): TopologySnapshot 
   }
 
   return { components: snapshot.components, wires, nodes };
-}
-
-/** União-busca pura sobre endpoints (porta OU nó), espelhando o `UnionFind` de `Netlist.hpp` do lado
- * TS -- usado pra validar que a rede que o Core recebeu bate com a conectividade exibida na tela, e
- * pros testes de "cruzamento sem junção fica eletricamente separado". Chave do mapa devolvido:
- * `endpointId:endpointPinId`. */
-export function rebuildElectricalNet(snapshot: TopologySnapshot): Map<string, string> {
-  const parent = new Map<string, string>();
-  const key = (endpoint: CanonicalEndpoint): string => `${endpointId(endpoint)}:${endpointPinId(endpoint)}`;
-
-  const find = (node: string): string => {
-    let root = node;
-    while (parent.get(root) && parent.get(root) !== root) root = parent.get(root)!;
-    parent.set(node, root);
-    return root;
-  };
-  const union = (a: string, b: string): void => {
-    if (!parent.has(a)) parent.set(a, a);
-    if (!parent.has(b)) parent.set(b, b);
-    const rootA = find(a);
-    const rootB = find(b);
-    if (rootA !== rootB) parent.set(rootA, rootB);
-  };
-
-  for (const wire of snapshot.wires) {
-    union(key(wire.from), key(wire.to));
-  }
-
-  const result = new Map<string, string>();
-  for (const node of parent.keys()) result.set(node, find(node));
-  return result;
 }
 
 /** Passe de migração/autocorreção aplicado em TODO carregamento (`.lsproj` e `.lssubcircuit`):

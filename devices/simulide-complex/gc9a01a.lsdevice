@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "typeId": "outputs.gc9a01a",
+  "graphical": true,
   "name": "GC9A01A",
   "language": "pt-BR",
   "translations": {

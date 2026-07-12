@@ -403,18 +403,19 @@ export async function updateBoardOverlayVisualCommand(
     return;
   }
 
+  // Escreve nos MESMOS campos planos que `subcircuitBoardMode.ts::captureBoardTransforms` grava ao
+  // sair do Modo Placa dentro da edição do subcircuito (`boardX`/`boardY`/`boardRotation`/
+  // `boardFlipH`/`boardFlipV`, mesmo shape de `WebviewComponentModel`) -- nunca um campo `boardVisual`
+  // aninhado à parte, que ficava permanentemente dessincronizado da posição real (bug corrigido,
+  // ver `subcircuitInternals.ts::boardVisualFromFlatFields`). Preserva rotação/espelhamento já
+  // salvos (idem ao comportamento anterior via `previousBoardVisual`), só x/y mudam aqui -- este
+  // comando só cobre arrasto no overlay do circuito principal, nunca rotação/espelhamento.
   if (Array.isArray(json.components)) {
     json.components = json.components.map((value) => {
       if (typeof value !== "object" || value === null) return value;
       const component = value as Record<string, unknown>;
       if (component.id !== innerComponentId) return component;
-      const previousBoardVisual = typeof component.boardVisual === "object" && component.boardVisual !== null
-        ? (component.boardVisual as Record<string, unknown>)
-        : undefined;
-      return {
-        ...component,
-        boardVisual: { x, y, rotation: previousBoardVisual?.rotation ?? 0, flipH: previousBoardVisual?.flipH, flipV: previousBoardVisual?.flipV },
-      };
+      return { ...component, boardX: x, boardY: y };
     });
   }
 

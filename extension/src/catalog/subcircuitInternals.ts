@@ -22,17 +22,26 @@ interface InternalComponentSeed {
   exposed?: boolean;
 }
 
-function sanitizeVisualPosition(value: unknown): VisualPosition | undefined {
-  if (typeof value !== "object" || value === null) return undefined;
-  const raw = value as Record<string, unknown>;
-  if (typeof raw.x !== "number" || typeof raw.y !== "number") return undefined;
-  const rotation = raw.rotation === 90 || raw.rotation === 180 || raw.rotation === 270 ? raw.rotation : 0;
+/** Deriva a posição de Modo Placa dos campos PLANOS realmente persistidos em cada componente
+ * (`boardX`/`boardY`/`boardRotation`/`boardFlipH`/`boardFlipV`, mesmo shape de
+ * `WebviewComponentModel` -- ver `model.ts` e `subcircuitBoardMode.ts::captureBoardTransforms`,
+ * que é quem escreve isso ao sair do Modo Placa DENTRO da edição do subcircuito). Bug real
+ * corrigido aqui: esta função lia um campo aninhado `boardVisual` que NUNCA existiu no arquivo --
+ * só `updateBoardOverlayVisualCommand` (mcuCommands.ts) escrevia nesse campo fantasma, então a
+ * posição definida editando o subcircuito por dentro (Modo Placa real) nunca aparecia no overlay
+ * da instância no circuito principal, e vice-versa -- dois armazenamentos paralelos da MESMA
+ * posição, nunca sincronizados (`.spec` seção sobre a auditoria de Modo Placa). `boardVisual` no
+ * `InternalComponentSnapshot` (mensagem IPC) continua existindo só como agrupamento de
+ * conveniência pro protocolo -- a fonte de verdade persistida é sempre os campos planos. */
+function boardVisualFromFlatFields(value: Record<string, unknown>): VisualPosition | undefined {
+  if (typeof value.boardX !== "number" || typeof value.boardY !== "number") return undefined;
+  const rotation = value.boardRotation === 90 || value.boardRotation === 180 || value.boardRotation === 270 ? value.boardRotation : 0;
   return {
-    x: raw.x,
-    y: raw.y,
+    x: value.boardX,
+    y: value.boardY,
     rotation,
-    flipH: typeof raw.flipH === "boolean" ? raw.flipH : undefined,
-    flipV: typeof raw.flipV === "boolean" ? raw.flipV : undefined,
+    flipH: typeof value.boardFlipH === "boolean" ? value.boardFlipH : undefined,
+    flipV: typeof value.boardFlipV === "boolean" ? value.boardFlipV : undefined,
   };
 }
 
@@ -44,7 +53,7 @@ function extractInternalComponents(json: Record<string, unknown>): InternalCompo
       id: typeof value.id === "string" ? value.id : "",
       typeId: typeof value.typeId === "string" ? value.typeId : "",
       properties: typeof value.properties === "object" && value.properties !== null ? (value.properties as Record<string, unknown>) : {},
-      boardVisual: sanitizeVisualPosition(value.boardVisual),
+      boardVisual: boardVisualFromFlatFields(value),
       exposed: value.exposed === true,
     }))
     .filter((component) => component.id && component.typeId);

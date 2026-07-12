@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "typeId": "outputs.ks0108",
+  "graphical": true,
   "name": "KS0108",
   "language": "pt-BR",
   "translations": {

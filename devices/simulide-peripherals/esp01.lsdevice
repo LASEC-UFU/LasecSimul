@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "typeId": "peripherals.esp01",
+  "graphical": true,
   "name": "Esp01 (TCP)",
   "language": "pt-BR",
   "icon": "esp01",

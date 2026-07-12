@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "typeId": "sensors.sr04",
+  "graphical": true,
   "name": "HC-SR04",
   "language": "pt-BR",
   "icon": "sr04",

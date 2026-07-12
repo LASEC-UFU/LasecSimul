@@ -1,12 +1,37 @@
 import * as vscode from "vscode";
 import { IpcError } from "../ipc/protocol";
 import { ComponentReadoutValue, InstrumentHistoryPayload, SimulationStatus } from "../ui/webview/messages";
-import { CanonicalEndpoint, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewWireModel, endpointId, endpointPinId } from "../ui/webview/model";
+import { CanonicalEndpoint, TopologyNode, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewWireModel, endpointId, endpointPinId } from "../ui/webview/model";
 import { state, coreInstanceIdByComponentId, mcuTargetCoreIdByComponentId } from "../state";
 import { pinsForTypeId } from "../extension";
 import { electricalEdgesForProject, diffElectricalEdges } from "../ui/webview/wireTopology";
 
 export { electricalEdgesForProject, diffElectricalEdges };
+
+/** Fonte única de verdade pra "o que mudou eletricamente entre duas topologias" -- achata
+ * antes/depois em arestas de pino real (`electricalEdgesForProject`) e devolve a diferença já no
+ * formato que `pushWireTopologyTransaction` espera. Este cálculo (achatar + diferenciar + montar a
+ * lista de operações connect/disconnect) era repetido, byte a byte, em 4 lugares de `extension.ts`
+ * (sync genérico de `projectChanged`, `requestRemoveComponent`, `requestRemoveWire`,
+ * `requestConnectEndpoints`) -- cada um decidindo de um jeito DIFERENTE o que fazer com o resultado
+ * (aguardar ou disparar sem esperar, fallback quando não há diferença nenhuma, granularidade de
+ * polling), por isso só a PARTE mecânica (idêntica nos 4) foi extraída pra cá; a orquestração de
+ * cada verbo continua no call site, que já tinha motivo pra divergir. */
+export function electricalOperationsDiff(
+  beforeWires: WebviewWireModel[],
+  beforeNodes: TopologyNode[],
+  afterWires: WebviewWireModel[],
+  afterNodes: TopologyNode[]
+): Array<{ kind: "connect" | "disconnect"; wire: WebviewWireModel }> {
+  const edgeDiff = diffElectricalEdges(
+    electricalEdgesForProject({ wires: beforeWires, topologyNodes: beforeNodes }),
+    electricalEdgesForProject({ wires: afterWires, topologyNodes: afterNodes })
+  );
+  return [
+    ...edgeDiff.disconnect.map((wire) => ({ kind: "disconnect" as const, wire })),
+    ...edgeDiff.connect.map((wire) => ({ kind: "connect" as const, wire })),
+  ];
+}
 
 /** Camada de comunicação com o Core (push de mutações, polling de leitura, ciclo de vida da
  * simulação) -- extraída de `extension.ts` (EX-9, .spec/lasecsimul-native-devices.spec). Todo

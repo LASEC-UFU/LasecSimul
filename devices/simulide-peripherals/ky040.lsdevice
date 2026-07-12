@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "typeId": "peripherals.ky040",
+  "graphical": true,
   "name": "Rotary Encoder (relative)",
   "language": "pt-BR",
   "icon": "ky040",

@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "typeId": "outputs.sh1107",
+  "graphical": true,
   "name": "Sh1107",
   "language": "pt-BR",
   "translations": {

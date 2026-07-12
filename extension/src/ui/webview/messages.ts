@@ -1,8 +1,11 @@
 import { WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./model";
+import { ConnectionEndpoint } from "./wireTopology";
 
-type WireEndpoint =
-  | { kind: "pin"; componentId: string; pinId: string }
-  | { kind: "wire"; wireId: string; point: { x: number; y: number } };
+/** Mesma forma de `ConnectionEndpoint` (`wireTopology.ts`) -- eram dois tipos idênticos definidos em
+ * paralelo (achado real de duplicação: "regras de conexão repetidas em diferentes arquivos").
+ * Alias, não redefinição, pra que os dois lados do protocolo (mensagem IPC e motor de topologia)
+ * nunca possam divergir de novo por acidente. */
+type WireEndpoint = ConnectionEndpoint;
 
 export const WEBVIEW_MESSAGE_VERSION = 1 as const;
 

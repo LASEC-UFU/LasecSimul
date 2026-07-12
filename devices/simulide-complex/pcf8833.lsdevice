@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "typeId": "outputs.pcf8833",
+  "graphical": true,
   "name": "Pcf8833",
   "language": "pt-BR",
   "translations": {

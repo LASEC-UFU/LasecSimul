@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "typeId": "outputs.ssd1306",
+  "graphical": true,
   "name": "SSD1306",
   "language": "pt-BR",
   "translations": {

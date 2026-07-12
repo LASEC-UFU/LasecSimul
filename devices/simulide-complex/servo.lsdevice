@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "typeId": "outputs.servo",
+  "graphical": true,
   "name": "Servo Motor",
   "language": "pt-BR",
   "translations": {

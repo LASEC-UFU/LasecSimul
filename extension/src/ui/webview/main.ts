@@ -21,9 +21,9 @@ import {
   wireCornerIndexNearSegmentPoint,
 } from "./wireGeometry.js";
 import { formatEngineeringValue, defaultSiPrefixFactor, SI_PREFIXES } from "./valueFormatting.js";
-import { findAtPosition, isJunctionVisible, movableTopologyNodeIds, endpointScenePosition as resolveEndpointScenePosition } from "./wireTopology.js";
+import { isJunctionVisible, movableTopologyNodeIds, endpointScenePosition as resolveEndpointScenePosition } from "./wireTopology.js";
 import { WireSpatialIndex } from "./wireSpatialIndex.js";
-import { applyBoardTransforms, applyExposedSelection, captureBoardTransforms, captureCircuitTransforms, ComponentTransform, restoreCircuitTransforms } from "./subcircuitBoardMode.js";
+import { applyBoardTransforms, applyExposedSelection, captureBoardTransforms, captureCircuitTransforms, ComponentTransform, isBoardModeVisible as isBoardModeVisibleShared, restoreCircuitTransforms } from "./subcircuitBoardMode.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const FINE_WIRE_STEP = WIRE_GRID_SIZE / 10;
@@ -386,8 +386,7 @@ let subcircuitBoardMode = false;
 const circuitTransformByComponentId = new Map<string, ComponentTransform>();
 
 function isBoardModeVisible(component: WebviewComponentModel): boolean {
-  return catalogEntryFor(component.typeId)?.graphical === true ||
-    component.typeId === "other.package" || component.packageIconRole === true;
+  return isBoardModeVisibleShared(component, (typeId) => catalogEntryFor(typeId)?.graphical === true);
 }
 
 function syncBoardVisualFromLiveComponents(): void {
@@ -1480,7 +1479,19 @@ function installCanvasEventHandlers(canvas: HTMLDivElement, canvasContent: HTMLD
     clearSelection();
     render();
     const history = activeUndoHistory();
+    // "Modo Placa"/"Selecionar Componentes Expostos" também precisam ser alcançáveis do fundo
+    // vazio -- antes só apareciam no menu de um componente específico já existente (bug real de
+    // descoberta: numa folha de subcircuito recém-criada, sem nenhum componente ainda, não havia
+    // NENHUM jeito de entrar em Modo Placa). Mesmas duas entradas, mesmo comportamento.
+    const internalAuthoringItems: ContextMenuItem[] = state.subcircuitEditingContext
+      ? [
+          { label: t("boardMode"), checked: subcircuitBoardMode, onClick: () => setSubcircuitBoardMode(!subcircuitBoardMode) },
+          { label: t("selectExposedComponents"), onClick: () => openExposedComponentsDialog() },
+          { kind: "separator" },
+        ]
+      : [];
     showContextMenu(event, [
+      ...internalAuthoringItems,
       { label: t("paste"), onClick: () => pasteClipboardItems(), disabled: !clipboardItems || clipboardItems.components.length === 0, shortcut: "Ctrl+V" },
       { label: t("undo"), onClick: () => undo(), disabled: history.undoStack.length === 0, shortcut: "Ctrl+Z" },
       { label: t("redo"), onClick: () => redo(), disabled: history.redoStack.length === 0, shortcut: "Ctrl+Y" },
@@ -2055,6 +2066,12 @@ function pasteClipboardItems(): void {
     component.label = nextIndexedLabel(component.typeId, baseLabel, stagedComponents);
     component.x += WIRE_GRID_SIZE;
     component.y += WIRE_GRID_SIZE;
+    // Mesmo deslocamento pra posição de Modo Placa, quando existir -- sem isto, colar uma cópia de
+    // um componente já posicionado na placa (exposto+gráfico) fazia a cópia nascer exatamente em
+    // cima do original ali (só `x`/`y` do esquemático eram deslocados), com duas peças empilhadas
+    // até o usuário notar e arrastar manualmente.
+    if (component.boardX !== undefined) component.boardX += WIRE_GRID_SIZE;
+    if (component.boardY !== undefined) component.boardY += WIRE_GRID_SIZE;
     if (interactionKindFor(component.typeId) === "momentary") component.properties.closed = false;
     stagedComponents.push(component);
     return component;
@@ -2426,6 +2443,29 @@ function updateComponentPosition(component: WebviewComponentModel): void {
   updateWiresTouchingComponent(component.id);
 }
 
+/** Fonte única de verdade pra aplicar o delta de "arrasto de grupo" (componente(s) e/ou fio(s)
+ * co-selecionados acompanhando o elemento que o usuário de fato agarrou -- componente, canto,
+ * segmento ou junção) -- as 4 alças interativas que iniciam um arrasto (`renderWireCornerHandles`,
+ * `renderWireSegmentHandles` x2 -- caso Shift+canto embutido e caso segmento direto --, o handler de
+ * componente, e `renderJunction`) capturavam `groupComponentTargets`/`groupWireMoveTargets` no
+ * início do gesto e repetiam EXATAMENTE este mesmo bloco de aplicação no `onMove` de cada uma.
+ * Extraído aqui: cada chamador só precisa calcular `groupDx`/`groupDy` (delta do mouse desde o
+ * início do gesto, já dividido pelo zoom) e delegar. */
+function applyGroupTagAlongDelta(
+  groupComponentTargets: { component: WebviewComponentModel; startX: number; startY: number }[],
+  groupWireMoveTargets: GroupMoveWireTargets,
+  groupDx: number,
+  groupDy: number
+): void {
+  if (groupComponentTargets.length === 0 && groupWireMoveTargets.wires.length === 0) return;
+  for (const groupTarget of groupComponentTargets) {
+    groupTarget.component.x = groupTarget.startX + groupDx;
+    groupTarget.component.y = groupTarget.startY + groupDy;
+    updateComponentPosition(groupTarget.component);
+  }
+  applyGroupMoveWireDelta(groupWireMoveTargets, groupDx, groupDy);
+}
+
 function duplicateEditableEndpointForSegmentMove(
   fullPoints: Point[],
   segmentIndex: number
@@ -2439,6 +2479,26 @@ function duplicateEditableEndpointForSegmentMove(
     duplicated.push({ ...duplicated[duplicated.length - 1]! });
   }
   return { points: duplicated, segmentIndex };
+}
+
+/** Fonte única de verdade pra ligar/desligar os 3 listeners de arrasto em `window`
+ * (pointermove/pointerup/pointercancel) -- os 4 gestos de arrasto que tocam fio/junção (canto,
+ * canto via Shift-no-segmento, segmento, junção) repetiam esta fiação idêntica, cada um com seu
+ * próprio `finish` nomeado só pra poder se referenciar nos 3 listeners. `onFinish` roda uma única
+ * vez, no primeiro de pointerup/pointercancel (`{once:true}` nos dois) -- cabe ao chamador limpar
+ * sua própria referência de drag (`wireCornerDrag`/`wireSegmentDrag`/etc, cada uma de um tipo
+ * diferente, por isso não dá pra generalizar esse pedaço aqui sem um genérico desnecessário) e
+ * decidir persistir/suprimir o próximo clique. */
+function startWireDragListeners(onMove: (event: PointerEvent) => void, onFinish: () => void): void {
+  const finish = (): void => {
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", finish);
+    window.removeEventListener("pointercancel", finish);
+    onFinish();
+  };
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", finish, { once: true });
+  window.addEventListener("pointercancel", finish, { once: true });
 }
 
 function renderWireCornerHandles(wireLayer: SVGSVGElement, wire: WebviewWireModel, points: Point[]): void {
@@ -2521,34 +2581,23 @@ function renderWireCornerHandles(wireLayer: SVGSVGElement, wire: WebviewWireMode
         updateWireFromFullPath(wireToMove, moveOrthogonalWireCorner(drag.startFullPoints, drag.pointIndex, target));
         drag.moved = true;
         updateWireVisual(wire.id);
-        if (groupComponentTargets.length > 0 || groupWireMoveTargets.wires.length > 0) {
-          const zoom = state.viewport.zoom || 1;
-          const groupDx = (moveEvent.clientX - groupStartClientX) / zoom;
-          const groupDy = (moveEvent.clientY - groupStartClientY) / zoom;
-          for (const groupTarget of groupComponentTargets) {
-            groupTarget.component.x = groupTarget.startX + groupDx;
-            groupTarget.component.y = groupTarget.startY + groupDy;
-            updateComponentPosition(groupTarget.component);
-          }
-          applyGroupMoveWireDelta(groupWireMoveTargets, groupDx, groupDy);
-        }
+        const zoom = state.viewport.zoom || 1;
+        applyGroupTagAlongDelta(
+          groupComponentTargets,
+          groupWireMoveTargets,
+          (moveEvent.clientX - groupStartClientX) / zoom,
+          (moveEvent.clientY - groupStartClientY) / zoom
+        );
       };
 
-      const finish = (): void => {
-        window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerup", finish);
-        window.removeEventListener("pointercancel", finish);
+      startWireDragListeners(onMove, () => {
         const drag = wireCornerDrag;
         wireCornerDrag = undefined;
         if (drag?.moved) {
           persistState();
           suppressNextWireInteractionClick = true;
         }
-      };
-
-      window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", finish, { once: true });
-      window.addEventListener("pointercancel", finish, { once: true });
+      });
     });
     wireLayer.appendChild(handle);
   }
@@ -2650,34 +2699,23 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
           updateWireFromFullPath(wireToMove, moveOrthogonalWireCorner(drag.startFullPoints, drag.pointIndex, target));
           drag.moved = true;
           updateWireVisual(wire.id);
-          if (groupComponentTargets.length > 0 || groupWireMoveTargets.wires.length > 0) {
-            const zoom = state.viewport.zoom || 1;
-            const groupDx = (moveEvent.clientX - groupStartClientX) / zoom;
-            const groupDy = (moveEvent.clientY - groupStartClientY) / zoom;
-            for (const groupTarget of groupComponentTargets) {
-              groupTarget.component.x = groupTarget.startX + groupDx;
-              groupTarget.component.y = groupTarget.startY + groupDy;
-              updateComponentPosition(groupTarget.component);
-            }
-            applyGroupMoveWireDelta(groupWireMoveTargets, groupDx, groupDy);
-          }
+          const zoom = state.viewport.zoom || 1;
+          applyGroupTagAlongDelta(
+            groupComponentTargets,
+            groupWireMoveTargets,
+            (moveEvent.clientX - groupStartClientX) / zoom,
+            (moveEvent.clientY - groupStartClientY) / zoom
+          );
         };
 
-        const finishCorner = (): void => {
-          window.removeEventListener("pointermove", onCornerMove);
-          window.removeEventListener("pointerup", finishCorner);
-          window.removeEventListener("pointercancel", finishCorner);
+        startWireDragListeners(onCornerMove, () => {
           const drag = wireCornerDrag;
           wireCornerDrag = undefined;
           if (drag?.moved) {
             persistState();
             suppressNextWireInteractionClick = true;
           }
-        };
-
-        window.addEventListener("pointermove", onCornerMove);
-        window.addEventListener("pointerup", finishCorner, { once: true });
-        window.addEventListener("pointercancel", finishCorner, { once: true });
+        });
         return;
       }
 
@@ -2720,34 +2758,23 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
         drag.moved = true;
         selectedWireSegment = { wireId: wire.id, segmentIndex: drag.segmentIndex };
         updateWireVisual(wire.id);
-        if (groupComponentTargets.length > 0 || groupWireMoveTargets.wires.length > 0) {
-          const zoom = state.viewport.zoom || 1;
-          const groupDx = (moveEvent.clientX - groupStartClientX) / zoom;
-          const groupDy = (moveEvent.clientY - groupStartClientY) / zoom;
-          for (const groupTarget of groupComponentTargets) {
-            groupTarget.component.x = groupTarget.startX + groupDx;
-            groupTarget.component.y = groupTarget.startY + groupDy;
-            updateComponentPosition(groupTarget.component);
-          }
-          applyGroupMoveWireDelta(groupWireMoveTargets, groupDx, groupDy);
-        }
+        const zoom = state.viewport.zoom || 1;
+        applyGroupTagAlongDelta(
+          groupComponentTargets,
+          groupWireMoveTargets,
+          (moveEvent.clientX - groupStartClientX) / zoom,
+          (moveEvent.clientY - groupStartClientY) / zoom
+        );
       };
 
-      const finish = (): void => {
-        window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerup", finish);
-        window.removeEventListener("pointercancel", finish);
+      startWireDragListeners(onMove, () => {
         const drag = wireSegmentDrag;
         wireSegmentDrag = undefined;
         if (drag?.moved) {
           persistState();
           suppressNextWireInteractionClick = true;
         }
-      };
-
-      window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", finish, { once: true });
-      window.addEventListener("pointercancel", finish, { once: true });
+      });
     });
     wireLayer.appendChild(handle);
   }
@@ -2945,21 +2972,20 @@ function maybeAutoJunctionForDraggedComponents(componentIds: string[]): void {
       let matchedWire: WebviewWireModel | undefined;
       let matchedTarget: Point | undefined;
       for (const candidate of wireSpatialIndex.queryPoint(pinPos, 0.5)) {
-          if (touchingWireIds.has(candidate.wireId)) continue;
-          const wire = state.topology.conductors.find((entry) => entry.id === candidate.wireId);
-          if (!wire) continue;
-          const from = candidate.from;
-          const to = candidate.to;
-          const isHorizontal = Math.abs(from.y - to.y) < 0.5;
-          const isVertical = Math.abs(from.x - to.x) < 0.5;
-          if (!isHorizontal && !isVertical) continue;
-          const projected = nearestPointOnOrthogonalSegment(pinPos, from, to);
-          if (Math.hypot(projected.x - pinPos.x, projected.y - pinPos.y) < 0.5) {
-            matchedWire = wire;
-            matchedTarget = projected;
-            break;
-          }
-        if (matchedWire) break;
+        if (touchingWireIds.has(candidate.wireId)) continue;
+        const wire = state.topology.conductors.find((entry) => entry.id === candidate.wireId);
+        if (!wire) continue;
+        const from = candidate.from;
+        const to = candidate.to;
+        const isHorizontal = Math.abs(from.y - to.y) < 0.5;
+        const isVertical = Math.abs(from.x - to.x) < 0.5;
+        if (!isHorizontal && !isVertical) continue;
+        const projected = nearestPointOnOrthogonalSegment(pinPos, from, to);
+        if (Math.hypot(projected.x - pinPos.x, projected.y - pinPos.y) < 0.5) {
+          matchedWire = wire;
+          matchedTarget = projected;
+          break;
+        }
       }
       if (!matchedWire || !matchedTarget) continue;
 
@@ -4262,10 +4288,15 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
     // "Selecionar um ramo de fio + um dispositivo e mover juntos": se um canto/segmento de fio
     // também estava selecionado (marquee, ou clique anterior no ramo), ele acompanha o(s)
     // componente(s) pelo MESMO delta -- ver `applyGroupWireDelta`. `groupWireMoveTargets` cobre o
-    // caso GERAL: qualquer fio inteiro co-selecionado (`state.selectedWireIds`, não só um
-    // canto/segmento específico) também acompanha -- ver `computeGroupMoveWireTargets`.
+    // caso GERAL: qualquer OUTRO fio inteiro co-selecionado (`state.selectedWireIds`, não só um
+    // canto/segmento específico) também acompanha -- ver `computeGroupMoveWireTargets`. O fio de
+    // `groupWireDragTarget` (se houver) é EXCLUÍDO daqui -- `selectOnlyWire`/`selectOnlyWireCorner`
+    // sempre colocam esse mesmo fio em `selectedWireIds` como efeito colateral, e sem a exclusão os
+    // dois mecanismos brigariam pelo mesmo `wire.points` neste `onMove` (bug real encontrado nesta
+    // auditoria: o shift em bloco de `applyGroupMoveWireDelta`, por rodar DEPOIS, sobrescrevia
+    // silenciosamente o ajuste preciso de canto/segmento de `applyGroupWireDelta`).
     groupWireDragTarget = currentGroupWireSelection();
-    groupWireMoveTargets = computeGroupMoveWireTargets();
+    groupWireMoveTargets = computeGroupMoveWireTargets(groupWireDragTarget?.wireId);
     el.setPointerCapture(event.pointerId);
     // Bloqueia render() de telemetria DESDE O POINTERDOWN, não só depois do limiar de arrasto
     // (`startDragging` abaixo) -- com reconciliação (`componentElementsById`), `el` é REAPROVEITADO
@@ -5916,34 +5947,23 @@ function renderJunction(id: string, x: number, y: number): SVGGElement {
       dot.setAttribute("cy", String(node.position.y));
       updateWiresTouchingComponent(id);
 
-      if (groupComponentTargets.length > 0 || groupWireMoveTargets.wires.length > 0) {
-        const zoom = state.viewport.zoom || 1;
-        const groupDx = (moveEvent.clientX - groupStartClientX) / zoom;
-        const groupDy = (moveEvent.clientY - groupStartClientY) / zoom;
-        for (const groupTarget of groupComponentTargets) {
-          groupTarget.component.x = groupTarget.startX + groupDx;
-          groupTarget.component.y = groupTarget.startY + groupDy;
-          updateComponentPosition(groupTarget.component);
-        }
-        applyGroupMoveWireDelta(groupWireMoveTargets, groupDx, groupDy);
-      }
+      const zoom = state.viewport.zoom || 1;
+      applyGroupTagAlongDelta(
+        groupComponentTargets,
+        groupWireMoveTargets,
+        (moveEvent.clientX - groupStartClientX) / zoom,
+        (moveEvent.clientY - groupStartClientY) / zoom
+      );
     };
 
-    const finish = (): void => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", finish);
-      window.removeEventListener("pointercancel", finish);
+    startWireDragListeners(onMove, () => {
       if (moved) {
         persistState();
         suppressNextWireInteractionClick = true;
       } else {
         node.position = { x: startX, y: startY }; // sem movimento real -- nunca deixa arredondamento residual
       }
-    };
-
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", finish, { once: true });
-    window.addEventListener("pointercancel", finish, { once: true });
+    });
   });
 
   return group;

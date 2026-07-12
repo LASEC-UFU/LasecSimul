@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "typeId": "peripherals.ky023",
+  "graphical": true,
   "name": "Joystick Dual Axis",
   "language": "pt-BR",
   "icon": "ky023",

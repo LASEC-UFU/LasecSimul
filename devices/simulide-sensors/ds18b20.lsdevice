@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "typeId": "sensors.ds18b20",
+  "graphical": true,
   "name": "DS18B20",
   "language": "pt-BR",
   "icon": "ds18b20",

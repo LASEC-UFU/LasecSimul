@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "typeId": "peripherals.serialport",
+  "graphical": true,
   "name": "Serial Port",
   "language": "pt-BR",
   "icon": "serialport",

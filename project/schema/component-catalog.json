@@ -1608,6 +1608,7 @@
       "label": "Variable Resistor",
       "pinCount": 2,
       "icon": "varresistor",
+      "graphical": true,
       "folderPath": [
         "Passive",
         "Resistors"
@@ -2096,6 +2097,7 @@
       "label": "Potentiometer",
       "pinCount": 3,
       "icon": "potentiometer",
+      "graphical": true,
       "folderPath": [
         "Passive",
         "Resistors"
@@ -3049,6 +3051,7 @@
       "label": "Variable Capacitor",
       "pinCount": 2,
       "icon": "varcapacitor",
+      "graphical": true,
       "folderPath": [
         "Passive",
         "Reactive"
@@ -3433,6 +3436,7 @@
       "label": "Variable Inductor",
       "pinCount": 2,
       "icon": "varinductor",
+      "graphical": true,
       "folderPath": [
         "Passive",
         "Reactive"
@@ -6408,6 +6412,7 @@
       "label": "Socket",
       "pinCount": 8,
       "icon": "socket",
+      "graphical": true,
       "folderPath": [
         "Connectors"
       ],
@@ -6562,6 +6567,7 @@
       "label": "Header",
       "pinCount": 8,
       "icon": "header",
+      "graphical": true,
       "folderPath": [
         "Connectors"
       ],
@@ -6716,6 +6722,7 @@
       "label": "Image",
       "pinCount": 0,
       "icon": "graphic-image",
+      "graphical": true,
       "folderPath": [
         "Graphical"
       ],
@@ -6760,6 +6767,7 @@
       "label": "Text",
       "pinCount": 0,
       "icon": "graphic-text",
+      "graphical": true,
       "folderPath": [
         "Graphical"
       ],
@@ -6778,6 +6786,7 @@
       "label": "Rectangle",
       "pinCount": 0,
       "icon": "graphic-rectangle",
+      "graphical": true,
       "folderPath": [
         "Graphical"
       ],
@@ -6798,6 +6807,7 @@
       "label": "Ellipse",
       "pinCount": 0,
       "icon": "graphic-ellipse",
+      "graphical": true,
       "folderPath": [
         "Graphical"
       ],
@@ -6817,6 +6827,7 @@
       "label": "Line",
       "pinCount": 0,
       "icon": "graphic-line",
+      "graphical": true,
       "folderPath": [
         "Graphical"
       ],
@@ -6834,6 +6845,7 @@
       "label": "Package",
       "pinCount": 0,
       "icon": "package",
+      "graphical": true,
       "folderPath": [
         "Other"
       ],
@@ -6913,6 +6925,7 @@
       "label": "Dial",
       "pinCount": 0,
       "icon": "dial",
+      "graphical": true,
       "folderPath": [
         "Other"
       ],
@@ -7030,6 +7043,7 @@
       "label": "Ampmeter",
       "pinCount": 3,
       "icon": "amperimetro",
+      "graphical": true,
       "folderPath": [
         "Meters"
       ],
@@ -7145,6 +7159,7 @@
       "label": "Voltmeter",
       "pinCount": 3,
       "icon": "voltimetro",
+      "graphical": true,
       "folderPath": [
         "Meters"
       ],
@@ -7258,6 +7273,7 @@
       "label": "Frequency Meter",
       "pinCount": 1,
       "icon": "frequencimetro",
+      "graphical": true,
       "folderPath": [
         "Meters"
       ],
@@ -7345,6 +7361,7 @@
       "label": "Oscope",
       "pinCount": 4,
       "icon": "osciloscopio",
+      "graphical": true,
       "folderPath": [
         "Meters"
       ],
@@ -7437,6 +7454,7 @@
       "label": "Logic Analyzer",
       "pinCount": 8,
       "icon": "analisador-logico",
+      "graphical": true,
       "folderPath": [
         "Meters"
       ],
@@ -7718,6 +7736,7 @@
         "out"
       ],
       "icon": "tensao-fixa",
+      "graphical": true,
       "folderPath": [
         "Sources"
       ],
@@ -7815,6 +7834,7 @@
       "label": "Clock",
       "pinCount": 1,
       "icon": "clock",
+      "graphical": true,
       "folderPath": [
         "Sources"
       ],
@@ -7952,6 +7972,7 @@
       "label": "Wave Generator",
       "pinCount": 2,
       "icon": "gerador-de-onda",
+      "graphical": true,
       "folderPath": [
         "Sources"
       ],
@@ -8107,6 +8128,7 @@
       "label": "Voltage Source",
       "pinCount": 1,
       "icon": "fonte-tensao-variavel",
+      "graphical": true,
       "folderPath": [
         "Sources"
       ],
@@ -8562,6 +8584,7 @@
       "label": "Current Source",
       "pinCount": 1,
       "icon": "fonte-de-corrente",
+      "graphical": true,
       "folderPath": [
         "Sources"
       ],

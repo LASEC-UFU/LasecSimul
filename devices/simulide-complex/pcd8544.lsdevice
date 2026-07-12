@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "typeId": "outputs.pcd8544",
+  "graphical": true,
   "name": "Pcd8544",
   "language": "pt-BR",
   "translations": {

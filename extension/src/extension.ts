@@ -52,8 +52,7 @@ import {
   queueCoreRebuild,
   rebuildCoreFromSchematicState,
   pinsForProjectComponent,
-  electricalEdgesForProject,
-  diffElectricalEdges,
+  electricalOperationsDiff,
 } from "./core/coreLifecycle";
 import {
   chooseExposedMcuFirmwareCommand,
@@ -561,15 +560,9 @@ async function syncProjectSnapshotToCore(previous: WebviewProjectState, next: We
     return;
   }
   if (geometricTopologyChanged) {
-    const edgeDiff = diffElectricalEdges(
-      electricalEdgesForProject({ wires: previous.topology.conductors, topologyNodes: previous.topology.nodes }),
-      electricalEdgesForProject({ wires: next.topology.conductors, topologyNodes: next.topology.nodes })
-    );
-    if (edgeDiff.connect.length > 0 || edgeDiff.disconnect.length > 0) {
-      const applied = await pushWireTopologyTransaction([
-        ...edgeDiff.disconnect.map((wire) => ({ kind: "disconnect" as const, wire })),
-        ...edgeDiff.connect.map((wire) => ({ kind: "connect" as const, wire })),
-      ]);
+    const operations = electricalOperationsDiff(previous.topology.conductors, previous.topology.nodes, next.topology.conductors, next.topology.nodes);
+    if (operations.length > 0) {
+      const applied = await pushWireTopologyTransaction(operations);
       if (!applied) await queueCoreRebuild();
     }
     if (state.simulationStatus === "running") {
@@ -778,14 +771,9 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       // Achata ANTES ("depois de tirar os fios do componente removido, antes do colapso de cascata")
       // e DEPOIS (já normalizado) e manda só a diferença -- nunca inclui aresta tocando o componente
       // removido (o Core já não tem mais essa instância pra resolver `componentId`, ver EX-F).
-      const beforeEdges = electricalEdgesForProject({ wires: afterRemoval.wires, topologyNodes: previousNodes });
-      const afterEdges = electricalEdgesForProject({ wires: normalized.wires, topologyNodes: normalized.nodes });
-      const edgeDiff = diffElectricalEdges(beforeEdges, afterEdges);
-      if (edgeDiff.connect.length > 0 || edgeDiff.disconnect.length > 0) {
-        void pushWireTopologyTransaction([
-          ...edgeDiff.disconnect.map((wire) => ({ kind: "disconnect" as const, wire })),
-          ...edgeDiff.connect.map((wire) => ({ kind: "connect" as const, wire })),
-        ]).then((applied) => (applied ? undefined : queueCoreRebuild())).then(() => {
+      const operations = electricalOperationsDiff(afterRemoval.wires, previousNodes, normalized.wires, normalized.nodes);
+      if (operations.length > 0) {
+        void pushWireTopologyTransaction(operations).then((applied) => (applied ? undefined : queueCoreRebuild())).then(() => {
           if (state.simulationStatus === "running") {
             void pollInstrumentReadouts();
             void pollWireVoltages();
@@ -821,14 +809,9 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
         selectedWireIds: state.schematicState.selectedWireIds.filter((id) => survivingWireIds.has(id)),
       };
       syncSchematicPanel();
-      const beforeEdges = electricalEdgesForProject({ wires: previousWires, topologyNodes: previousNodes });
-      const afterEdges = electricalEdgesForProject({ wires: normalized.wires, topologyNodes: normalized.nodes });
-      const edgeDiff = diffElectricalEdges(beforeEdges, afterEdges);
-      if (edgeDiff.connect.length > 0 || edgeDiff.disconnect.length > 0) {
-        void pushWireTopologyTransaction([
-          ...edgeDiff.disconnect.map((wire) => ({ kind: "disconnect" as const, wire })),
-          ...edgeDiff.connect.map((wire) => ({ kind: "connect" as const, wire })),
-        ]).then((applied) => (applied ? undefined : queueCoreRebuild())).then(() => {
+      const operations = electricalOperationsDiff(previousWires, previousNodes, normalized.wires, normalized.nodes);
+      if (operations.length > 0) {
+        void pushWireTopologyTransaction(operations).then((applied) => (applied ? undefined : queueCoreRebuild())).then(() => {
           if (state.simulationStatus === "running") {
             void pollInstrumentReadouts();
             void pollWireVoltages();
@@ -897,18 +880,10 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
         // rejeitada (conflito de revisão, endpoint que ainda não resolveu no Core, etc.), não mais
         // pro caminho feliz.
         const previous = state.schematicState;
-        const edgeDiff = diffElectricalEdges(
-          electricalEdgesForProject({ wires: previous.topology.conductors, topologyNodes: previous.topology.nodes }),
-          electricalEdgesForProject({ wires: nextTopology.conductors, topologyNodes: nextTopology.nodes })
-        );
+        const operations = electricalOperationsDiff(previous.topology.conductors, previous.topology.nodes, nextTopology.conductors, nextTopology.nodes);
         state.schematicState = nextState;
         try {
-          const applied = edgeDiff.connect.length === 0 && edgeDiff.disconnect.length === 0
-            ? true
-            : await pushWireTopologyTransaction([
-                ...edgeDiff.disconnect.map((wire) => ({ kind: "disconnect" as const, wire })),
-                ...edgeDiff.connect.map((wire) => ({ kind: "connect" as const, wire })),
-              ]);
+          const applied = operations.length === 0 ? true : await pushWireTopologyTransaction(operations);
           if (!applied) await queueCoreRebuild();
           syncSchematicPanel();
           if (state.simulationStatus === "running") {

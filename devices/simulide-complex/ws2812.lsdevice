@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "typeId": "outputs.ws2812",
+  "graphical": true,
   "name": "WS2812 Led",
   "language": "pt-BR",
   "translations": {

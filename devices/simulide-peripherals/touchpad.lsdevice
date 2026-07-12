@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "typeId": "peripherals.touchpad",
+  "graphical": true,
   "name": "TouchPad (Resistive)",
   "language": "pt-BR",
   "icon": "touchpad",

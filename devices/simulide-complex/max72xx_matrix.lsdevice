@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "typeId": "outputs.max72xx_matrix",
+  "graphical": true,
   "name": "Max72xx matrix",
   "language": "pt-BR",
   "translations": {
