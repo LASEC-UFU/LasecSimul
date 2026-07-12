@@ -72,7 +72,7 @@ export function createInitialWebviewState(catalog: WebviewComponentCatalogEntry[
     locale: "pt-BR",
     catalog,
     components: [],
-    wires: [],
+    topology: { revision: 0, nodes: [], conductors: [] },
     viewport: { x: 0, y: 0, zoom: 1 },
     selectedComponentIds: [],
     selectedWireIds: [],

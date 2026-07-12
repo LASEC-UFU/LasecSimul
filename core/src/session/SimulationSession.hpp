@@ -190,6 +190,13 @@ public:
 
 private:
     void rebuildTopologyIfNeeded();
+    /** Reaproveita `CircuitGroup` (matriz/fatoração já estampada) de `previous` pra qualquer rede
+     * cujo conjunto de componentes vivos E mapeamento pino->índice local não mudaram -- sem isso,
+     * `Netlist::rebuildTopology()` sempre aloca `CircuitGroup` novo/vazio pra TUDO (deliberado,
+     * .spec seção 24.5), então qualquer mudança de topologia em QUALQUER ilha do circuito forçava
+     * re-stamp de todo componente vivo do projeto inteiro, não só da ilha tocada. Só marca dirty os
+     * componentes de grupos que NÃO puderam ser reaproveitados. */
+    void reuseUnaffectedCircuitGroups(simulation::Topology& previous, const std::vector<double>& previousNodeVoltages);
     SubcircuitExpansionResult expandSubcircuit(const std::string& typeId, std::vector<std::string>& expansionStack);
     /** Relê `instance->pins()` (já com a contagem nova, resolvida por quem implementa
      * `IComponentModel` -- `SimulidePassiveState`/`NativeDeviceProxy`, nunca aqui) e reregistra no
@@ -222,6 +229,9 @@ private:
      * settleStep(). */
     std::vector<uint64_t> m_lastEdgeTimeNs;
     bool m_topologyDirty = true;
+    /** Verdadeiro somente enquanto a revisão pendente contém EXCLUSIVAMENTE adições de fios.
+     * Qualquer operação capaz de separar/reindexar rede desabilita reuso de matrizes neste rebuild. */
+    bool m_topologyReuseSafe = false;
     uint64_t m_wireTopologyRevision = 0;
     uint32_t m_nonlinearIterations = 0; // ver kMaxNonlinearIterations em SimulationSession.cpp
 };

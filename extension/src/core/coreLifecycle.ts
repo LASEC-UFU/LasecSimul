@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { IpcError } from "../ipc/protocol";
 import { ComponentReadoutValue, InstrumentHistoryPayload, SimulationStatus } from "../ui/webview/messages";
-import { WebviewComponentCatalogEntry, WebviewComponentModel, WebviewWireModel } from "../ui/webview/model";
+import { CanonicalEndpoint, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewWireModel, endpointId, endpointPinId } from "../ui/webview/model";
 import { state, coreInstanceIdByComponentId, mcuTargetCoreIdByComponentId } from "../state";
 import { pinsForTypeId } from "../extension";
 import { electricalEdgesForProject, diffElectricalEdges } from "../ui/webview/wireTopology";
@@ -40,17 +40,15 @@ export function registerCoreIdsForComponent(componentId: string, typeId: string,
 /** Escolhe um pino real por rede e o associa a cada condutor geométrico dessa rede. Assim a
  * telemetria nunca tenta consultar um topologyNode no Core e continua usando os IDs visuais. */
 export function voltageProbesForProject(
-  project: Pick<typeof state.schematicState, "wires" | "topologyNodes">
+  project: Pick<typeof state.schematicState.topology, "conductors">
 ): Array<{ wireId: string; componentId: string; pinId: string }> {
-  const nodeIds = new Set((project.topologyNodes ?? []).map((node) => node.id));
-  const key = (ref: { componentId: string; pinId: string }): string =>
-    nodeIds.has(ref.componentId) ? `n:${ref.componentId}` : `p:${JSON.stringify([ref.componentId, ref.pinId])}`;
+  const key = (endpoint: CanonicalEndpoint): string => endpoint.kind === "node" ? `n:${endpoint.nodeId}` : `p:${JSON.stringify([endpoint.componentId, endpoint.pinId])}`;
   const refs = new Map<string, { componentId: string; pinId: string }>();
   const adjacency = new Map<string, Set<string>>();
-  for (const wire of project.wires) {
+  for (const wire of project.conductors) {
     const a = key(wire.from); const b = key(wire.to);
-    if (!nodeIds.has(wire.from.componentId)) refs.set(a, wire.from);
-    if (!nodeIds.has(wire.to.componentId)) refs.set(b, wire.to);
+    if (wire.from.kind === "port") refs.set(a, wire.from);
+    if (wire.to.kind === "port") refs.set(b, wire.to);
     (adjacency.get(a) ?? (adjacency.set(a, new Set()), adjacency.get(a)!)).add(b);
     (adjacency.get(b) ?? (adjacency.set(b, new Set()), adjacency.get(b)!)).add(a);
   }
@@ -66,7 +64,7 @@ export function voltageProbesForProject(
     }
     if (probe) for (const vertex of network) probeByVertex.set(vertex, probe);
   }
-  return project.wires.flatMap((wire) => {
+  return project.conductors.flatMap((wire) => {
     const probe = probeByVertex.get(key(wire.from)) ?? probeByVertex.get(key(wire.to));
     return probe ? [{ wireId: wire.id, ...probe }] : [];
   });
@@ -120,11 +118,11 @@ export function pushComponentToCore(
 
 async function pushWireToCoreNow(wire: WebviewWireModel): Promise<boolean> {
   if (!state.coreClient) return false;
-  const coreA = coreInstanceIdByComponentId.get(wire.from.componentId);
-  const coreB = coreInstanceIdByComponentId.get(wire.to.componentId);
+  const coreA = coreInstanceIdByComponentId.get(endpointId(wire.from));
+  const coreB = coreInstanceIdByComponentId.get(endpointId(wire.to));
   if (!coreA || !coreB) return false; // um dos lados não existe no Core (typeId não suportado ou ainda não resolvido)
   try {
-    await state.coreClient.connectWire(coreA, wire.from.pinId, coreB, wire.to.pinId);
+    await state.coreClient.connectWire(coreA, endpointPinId(wire.from), coreB, endpointPinId(wire.to));
     return true;
   } catch (err) {
     reportCoreWarning("conectar fio", err);
@@ -145,10 +143,10 @@ export function pushWireTopologyTransaction(operations: Array<{ kind: "connect" 
     if (!state.coreClient) return false;
     if (operations.length === 0) return true;
     const resolved = operations.map(({ kind, wire }) => {
-      const componentA = coreInstanceIdByComponentId.get(wire.from.componentId);
-      const componentB = coreInstanceIdByComponentId.get(wire.to.componentId);
+      const componentA = coreInstanceIdByComponentId.get(endpointId(wire.from));
+      const componentB = coreInstanceIdByComponentId.get(endpointId(wire.to));
       if (!componentA || !componentB) return undefined;
-      return { kind, from: { componentId: componentA, pinId: wire.from.pinId }, to: { componentId: componentB, pinId: wire.to.pinId } };
+      return { kind, from: { componentId: componentA, pinId: endpointPinId(wire.from) }, to: { componentId: componentB, pinId: endpointPinId(wire.to) } };
     });
     if (resolved.some((operation) => operation === undefined)) return false;
     try {
@@ -177,14 +175,14 @@ export function pushRemoveWireToCore(wire: WebviewWireModel | undefined): void {
   if (!wire) return;
   void enqueueCoreMutation(async () => {
     if (!state.coreClient) return;
-    const coreA = coreInstanceIdByComponentId.get(wire.from.componentId);
-    const coreB = coreInstanceIdByComponentId.get(wire.to.componentId);
+    const coreA = coreInstanceIdByComponentId.get(endpointId(wire.from));
+    const coreB = coreInstanceIdByComponentId.get(endpointId(wire.to));
     if (!coreA || !coreB) {
       await rebuildCoreFromSchematicStateNow();
       return;
     }
     try {
-      await state.coreClient.disconnectWire(coreA, wire.from.pinId, coreB, wire.to.pinId);
+      await state.coreClient.disconnectWire(coreA, endpointPinId(wire.from), coreB, endpointPinId(wire.to));
     } catch (err) {
       reportCoreWarning("remover fio", err);
     }
@@ -432,10 +430,10 @@ export async function pollInstrumentReadouts(): Promise<void> {
  * senão, só enquanto a simulação está "animada"/rodando). */
 export async function pollWireVoltages(): Promise<void> {
   if (!state.coreClient || !state.schematicPanel) return;
-  if (state.schematicState.wires.length === 0) return;
+  if (state.schematicState.topology.conductors.length === 0) return;
 
   const voltagesByWireId: Record<string, number> = {};
-  for (const probe of voltageProbesForProject(state.schematicState)) {
+  for (const probe of voltageProbesForProject(state.schematicState.topology)) {
     const coreId = coreInstanceIdByComponentId.get(probe.componentId);
     try {
       if (coreId) voltagesByWireId[probe.wireId] = await state.coreClient.getNodeVoltage(coreId, probe.pinId);
@@ -633,12 +631,12 @@ async function rebuildCoreFromSchematicStateNow(): Promise<void> {
     }
   }
 
-  for (const wire of electricalEdgesForProject(state.schematicState)) {
-    const coreA = coreInstanceIdByComponentId.get(wire.from.componentId);
-    const coreB = coreInstanceIdByComponentId.get(wire.to.componentId);
+  for (const wire of electricalEdgesForProject({ wires: state.schematicState.topology.conductors, topologyNodes: state.schematicState.topology.nodes })) {
+    const coreA = coreInstanceIdByComponentId.get(endpointId(wire.from));
+    const coreB = coreInstanceIdByComponentId.get(endpointId(wire.to));
     if (!coreA || !coreB) continue;
     try {
-      await state.coreClient.connectWire(coreA, wire.from.pinId, coreB, wire.to.pinId);
+      await state.coreClient.connectWire(coreA, endpointPinId(wire.from), coreB, endpointPinId(wire.to));
     } catch (err) {
       reportCoreWarning(`recriar fio "${wire.id}"`, err);
     }

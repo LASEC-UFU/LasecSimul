@@ -1,30 +1,53 @@
 import { createTestRunner } from "../../ipc/testSupport/MockCoreServer";
-import { JUNCTION_TYPE_ID, WebviewComponentModel, WebviewWireModel } from "./model";
-import { assertTopologyInvariants, canonicalTopologyFromLegacy, legacyTopologyFromCanonical } from "./topologyDocument";
+import { CanonicalTopologyDocument } from "./model";
+import { assertTopologyInvariants } from "./topologyDocument";
 
-const { test, finish } = createTestRunner("topologyDocument — modelo canônico v2");
-const component = (id: string): WebviewComponentModel => ({ id, typeId: "test.component", label: id, hidden: false, x: 0, y: 0, rotation: 0, pins: [{ id: "p", x: 0, y: 0 }], properties: {} });
-const junction = (id: string): WebviewComponentModel => ({ id, typeId: JUNCTION_TYPE_ID, label: id, hidden: true, x: 40, y: 24, rotation: 0, pins: [{ id: "pin-1", x: 0, y: 0 }], properties: {} });
+const { test, finish } = createTestRunner("topologyDocument — validação de invariantes (modelo canônico v2)");
 
 void (async () => {
-  await test("conversão remove junction da lista de componentes e preserva nó/rotas", () => {
-    const components = [component("a"), component("b"), junction("n")];
-    const wires: WebviewWireModel[] = [
-      { id: "w1", from: { componentId: "a", pinId: "p" }, to: { componentId: "n", pinId: "pin-1" } },
-      { id: "w2", from: { componentId: "n", pinId: "pin-1" }, to: { componentId: "b", pinId: "p" }, points: [{ x: 56, y: 24 }] },
-    ];
-    const canonical = canonicalTopologyFromLegacy(components, wires, 3);
-    if (canonical.nodes.length !== 1 || canonical.conductors.length !== 2 || canonical.revision !== 3) throw new Error("conversão canônica incompleta");
-    const projected = legacyTopologyFromCanonical(canonical);
-    if (projected.junctions.length !== 1 || projected.wires[1]?.points?.[0]?.x !== 56) throw new Error("round-trip perdeu geometria");
+  await test("documento válido (T de 3 ramos) passa sem lançar", () => {
+    const document: CanonicalTopologyDocument = {
+      revision: 3,
+      nodes: [{ id: "n", position: { x: 40, y: 24 } }],
+      conductors: [
+        { id: "w1", from: { kind: "port", componentId: "a", pinId: "p" }, to: { kind: "node", nodeId: "n" } },
+        { id: "w2", from: { kind: "node", nodeId: "n" }, to: { kind: "port", componentId: "b", pinId: "p" }, points: [{ x: 56, y: 24 }] },
+      ],
+    };
+    assertTopologyInvariants(document, new Set(["a", "b"]));
   });
+
   await test("invariantes rejeitam nó duplicado e endpoint órfão", () => {
     let duplicateRejected = false;
     try { assertTopologyInvariants({ revision: 0, nodes: [{ id: "n", position: { x: 0, y: 0 } }, { id: "n", position: { x: 1, y: 1 } }], conductors: [] }); } catch { duplicateRejected = true; }
     if (!duplicateRejected) throw new Error("nó duplicado aceito");
     let orphanRejected = false;
-    try { assertTopologyInvariants({ revision: 0, nodes: [], conductors: [{ id: "w", from: { kind: "node", nodeId: "missing" }, to: { kind: "port", componentId: "a", pinId: "p" }, vertices: [] }] }); } catch { orphanRejected = true; }
+    try { assertTopologyInvariants({ revision: 0, nodes: [], conductors: [{ id: "w", from: { kind: "node", nodeId: "missing" }, to: { kind: "port", componentId: "a", pinId: "p" } }] }); } catch { orphanRejected = true; }
     if (!orphanRejected) throw new Error("endpoint órfão aceito");
   });
+
+  await test("invariantes rejeitam endpoint de porta apontando pra componente fora do conjunto informado", () => {
+    let rejected = false;
+    try {
+      assertTopologyInvariants(
+        { revision: 0, nodes: [], conductors: [{ id: "w", from: { kind: "port", componentId: "a", pinId: "p" }, to: { kind: "port", componentId: "ghost", pinId: "p" } }] },
+        new Set(["a"])
+      );
+    } catch { rejected = true; }
+    if (!rejected) throw new Error("componente fora do conjunto informado foi aceito");
+  });
+
+  await test("invariantes rejeitam condutor de comprimento topológico zero (mesmo endpoint nas duas pontas)", () => {
+    let rejected = false;
+    try {
+      assertTopologyInvariants({
+        revision: 0,
+        nodes: [],
+        conductors: [{ id: "w", from: { kind: "port", componentId: "a", pinId: "p" }, to: { kind: "port", componentId: "a", pinId: "p" } }],
+      }, new Set(["a"]));
+    } catch { rejected = true; }
+    if (!rejected) throw new Error("condutor de comprimento zero aceito");
+  });
+
   finish();
 })();

@@ -109,6 +109,18 @@ if(NOT WIN32)
 endif()
 add_test(NAME voltage_divider COMMAND voltage_divider_test)
 
+# Reaproveitamento de CircuitGroup entre rebuilds de topologia (.spec seção 25.5)
+add_executable(circuit_group_reuse_test
+    test/circuit_group_reuse_test.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(circuit_group_reuse_test PRIVATE include src)
+target_link_libraries(circuit_group_reuse_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+if(NOT WIN32)
+    target_link_libraries(circuit_group_reuse_test PRIVATE dl)
+endif()
+add_test(NAME circuit_group_reuse COMMAND circuit_group_reuse_test)
+
 # Primeiro componente não linear real (Épico H do roadmap de pendências)
 add_executable(diode_test
     test/diode_test.cpp

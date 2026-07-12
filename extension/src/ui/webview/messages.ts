@@ -114,12 +114,6 @@ export type WebviewToHostMessage =
   /** Commit único de uma conexão cujo início pode ser um segmento ainda não dividido. O host
    * materializa todos os splits, nós e o ramo somente depois deste verbo. */
   | { version: number; type: "requestConnectEndpoints"; baseRevision: number; from: WireEndpoint; to: WireEndpoint; points?: Array<{ x: number; y: number }> }
-  /** Clique num trecho QUALQUER de um fio existente, sem conexão pendente ainda -- inicia uma nova
-   * derivação diretamente daquele ponto (fiel ao SimulIDE, ver refactor de fios). O Host faz TODO o
-   * cálculo de split via `wireTopology.ts::splitSegmentAtPoint` (projeção+snap, reuso de junção já
-   * existente se houver uma exatamente ali) -- o Webview só manda o ponto bruto do clique, nunca
-   * precisa pré-calcular os dois pedaços. */
-  | { version: number; type: "requestStartWireFromWire"; wireId: string; point: { x: number; y: number } }
   | { version: number; type: "requestUpdateProperty"; componentId: string; name: string; value: string | number | boolean }
   /** Bloco genérico de subcircuito por caminho -- abre um seletor de `.lssubcircuit`, resolve
    * typeId/pinos/package do arquivo escolhido e registra no Core (verbo IPC avulso, sem

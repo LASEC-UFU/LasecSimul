@@ -2373,13 +2373,9 @@ superfície de bug sutil bem maior que o benefício, considerando que:
 recalculado do zero a cada chamada -- documentado no comentário de classe como "sempre do zero --
 nunca incremental" com a justificativa acima.
 
-**Gap conhecido, não fechado nesta rodada**: `SimulationSession::rebuildTopologyIfNeeded()` marca
-**todos** os componentes vivos como dirty no `Scheduler` a cada rebuild de topologia
-(`SimulationSession.cpp:467-469`), não só os que de fato trocaram de `CircuitGroup`. Essa é a
-otimização de maior retorno e menor risco ainda disponível (usar a filiação de grupo antes/depois do
-rebuild pra popular `m_scheduler.dirtySet()` seletivamente, em vez de tudo) -- não implementada
-ainda; qualquer sessão futura que for atacar performance de re-stamp deveria começar por aqui, não
-por reintroduzir cache de conectividade.
+O reaproveitamento seletivo posterior é descrito em 25.5. Ele não altera este contrato: o grafo é
+sempre reconstruído integralmente; somente matrizes de ilhas lineares comprovadamente idênticas
+podem sobreviver, e apenas depois de uma adição pura de aresta.
 
 ### 24.6 Persistência `.lsproj` v2: `topology{revision,nodes,conductors}` substitui `wires[]`
 
@@ -2548,3 +2544,215 @@ interativamente os 6 pontos de FSM corrigidos (25.2) nem o comportamento visual 
 (25.1) -- ambos verificados por rastreamento direto de código + testes puros onde o código é
 testável; recomenda-se sessão manual no VSCode real cobrindo exatamente os 6 cenários de estado
 combinado desta seção antes de considerar 25.2 encerrado.
+
+**SUPERSEDIDO pela seção 25.6**: a decisão de escopo contido acima (não retipar
+`WebviewWireModel.from/to`, não unificar `state.wires`/`state.topologyNodes`) foi revisada na mesma
+sessão seguinte -- decisão explícita de que tamanho de mudança não é critério negativo por si só, só
+qualidade técnica/funcional do resultado. A migração completa foi feita; ver 25.6.
+
+### 25.5 Core: `reuseUnaffectedCircuitGroups` -- não marca todo componente vivo como dirty a cada
+rebuild de topologia (2026-07-11)
+
+Lacuna deixada explícita em 25.1 como conhecida, não escondida: `rebuildTopologyIfNeeded()`
+(`SimulationSession.cpp`) reconstruía a topologia inteira do zero a cada mudança (correto, união não é
+desfazível -- ver `Netlist.hpp`), mas depois marcava **todo componente vivo** como dirty,
+independente de estar ou não na rede afetada -- efeito prático: editar um fio em QUALQUER lugar do
+circuito re-estampava (e refatorava, se a admitância mudasse) TODOS os `CircuitGroup`, mesmo os de
+redes eletricamente desconexas e intocadas. Maior retorno/menor risco que sobrava do plano original
+de `docs/27-...`.
+
+**Política de segurança (revisada em 2026-07-12)**: o reuso só é elegível quando a revisão
+pendente contém exclusivamente adições de fio. Deleção, split, mudança de túnel, pinos,
+componente ou propriedade topológica executa rebuild + restamp global. Grupos que contenham qualquer
+`isNonlinear()` nunca são reaproveitados. O flag `m_topologyReuseSafe` acumula essa classificação
+durante o lote e também participa do rollback transacional.
+
+**Mecanismo**: `reuseUnaffectedCircuitGroups(previous, previousNodeVoltages)`, chamada de dentro de
+`rebuildTopologyIfNeeded()` logo após o rebuild, compara a topologia ANTIGA (capturada por
+`std::move` antes do rebuild) com a NOVA por **assinatura de grupo** (conjunto ordenado de
+`componentIndex` vivos que caem em cada grupo). Grupo cujo conjunto de componentes bate dos dois
+lados só é reaproveitado se, ALÉM disso, todo pino de todo membro cair no MESMO `localIndex` (linha/
+coluna da matriz) nos dois lados -- conjunto de componentes igual não basta (A-B + B-C virar A-B +
+B-C + A-C encolhe de 3 nós pra 2 sem o conjunto mudar, mas a fiação real mudou). Só quando as duas
+condições batem, os vetores de índices globais de nó também precisam ser idênticos; então o
+`CircuitGroup` antigo (com toda a estampa acumulada e a fatoração LU em cache) é
+literalmente `std::move`ido pro slot do grupo novo, e SÓ os componentes de grupos NÃO reaproveitados
+entram no `dirtySet()` do `Scheduler`.
+
+Índices globais não são presumidos estáveis: uma fusão anterior na ordem de slots pode deslocar a
+numeração densa de redes posteriores. Por isso `nodeIndices()` antigo e novo são comparados por
+igualdade exata; qualquer deslocamento cai no restamp seguro.
+
+**Bug real encontrado e corrigido durante a verificação** (não presumir "compilou, deve estar certo"
+-- ver `[[feedback_review_build_and_test_before_reporting]]`): a primeira versão reaproveitava o
+`CircuitGroup` corretamente, mas `rebuildTopologyIfNeeded()` continuava fazendo
+`m_nodeVoltages.assign(novoTamanho, 0.0)` incondicionalmente pra TODO o array a cada rebuild.
+`MnaSolver::solve()` pula grupo não-dirty (`if (!group.dirty()) continue;`, `MnaSolver.hpp`) -- um
+grupo reaproveitado nunca é dirty (suas flags já estavam limpas desde a última solve antes do
+rebuild), então nunca seria resolvido de novo, e sua leitura de tensão ficava travada em 0.0 pra
+sempre (até a rede voltar a ficar dirty por outro motivo). Sintoma: `circuit_group_reuse_test`
+(abaixo) falhava JÁ na primeira rodada -- ilha elétrica nunca tocada caía de 5V pra 0V assim que
+QUALQUER outra rede do circuito era editada. Corrigido capturando
+`previousNodeVoltages = std::move(m_nodeVoltages)` antes do reset e, dentro de
+`reuseUnaffectedCircuitGroups`, copiando `previousNodeVoltages[nodeIndex]` pra
+`m_nodeVoltages[nodeIndex]` de cada nó do grupo reaproveitado -- os índices são os mesmos dos dois
+lados (parágrafo acima), então a cópia é direta, sem remapeamento.
+
+**Teste de regressão**: `core/test/circuit_group_reuse_test.cpp` (novo, registrado em
+`CMakeLists.txt` como `circuit_group_reuse`) -- duas ilhas elétricas independentes (divisores de
+tensão), ilha 1 nunca tocada depois do settle inicial, ilha 2 editada 20 vezes seguidas (liga/desliga
+um resistor em T). Cada rodada confere BIT-A-BIT que a tensão da ilha 1 não mudou (prova que
+reaproveitamento não vaza estampa velha nem perde a tensão já resolvida) e que a ilha 2 continua
+fisicamente correta pra topologia atual (prova que a rede que DEVERIA ser re-estampada foi).
+
+**Verificação**: suíte completa do Core, 37/37 (36 anteriores + `circuit_group_reuse`).
+
+### 25.6 Fase C completa: `CanonicalEndpoint` promovido a modelo vivo único (2026-07-11)
+
+Revisão da decisão de escopo contido em 25.4 (marcada como superseded acima) -- instrução explícita
+de que tamanho de refatoração não é critério negativo por si só, só qualidade técnica/funcional do
+resultado. Migração completa executada nesta sessão:
+
+- `WebviewWireModel.from`/`.to`: de `{componentId, pinId}` plano pra `CanonicalEndpoint`
+  (`{kind:"port", componentId, pinId} | {kind:"node", nodeId}`, `model.ts`) -- elimina a suposição
+  implícita de que nó de topologia e componente real compartilhavam o mesmo espaço de string por
+  convenção (`componentId` de um endpoint-nó era na verdade um `nodeId`).
+- `WebviewProjectState`: campos separados `wires[]`/`topologyNodes?[]`/`topologyRevision?` viram um
+  único `topology: CanonicalTopologyDocument` (`{revision, nodes: TopologyNode[], conductors:
+  WebviewWireModel[]}`) -- fonte única de verdade, viva E persistida (não existe mais um formato de
+  runtime e outro de disco).
+- Helpers centralizados em `model.ts` (`endpointId`, `endpointPinId`, `portEndpoint`, `nodeEndpoint`,
+  `remapEndpoint`) substituem acesso direto a `.componentId`/`.pinId` em toda a base -- ponto único
+  de verdade sobre "qual é o id/pino do outro lado deste endpoint", nunca reimplementado por chamador.
+- `topologyDocument.ts`: as funções-ponte `canonicalTopologyFromLegacy`/`legacyTopologyFromCanonical`
+  foram REMOVIDAS por inteiro (não fazem mais sentido -- não existe mais um lado "legado" separado
+  pra converter). Arquivo ficou só com `assertTopologyInvariants`, operando nativamente sobre os tipos
+  de `model.ts`.
+- `wireTopology.ts` inteiro (todas as funções: `pinScenePosition`, `wirePolylinePoints`,
+  `findExistingJunctionAt`, `findAtPosition`, `splitSegmentAtPoint`, `connectEndpointToNode`,
+  `removeOrphanNodes`, `normalizeWireGeometry`, `rebuildElectricalNet`, `electricalEdgesForProject`,
+  `diffElectricalEdges`) reescrito pra operar sobre `TopologyNode[]`/`CanonicalEndpoint` diretamente
+  -- elimina todo tratamento de `JUNCTION_TYPE_ID` como se fosse um componente disfarçado dentro
+  dessas funções (a distinção porta-vs-nó agora é o `kind` do endpoint, não uma checagem de typeId).
+- `extension.ts::normalizeRuntimeTopology` (função-ponte que sintetizava componentes
+  `connectors.junction` a partir de `topologyNodes[]` pros 3 call sites que ainda esperavam o formato
+  antigo) foi DELETADA -- os 3 call sites chamam `normalizeWireGeometry` direto.
+- `projectCommands.ts::importProjectCommand`: bug PRÉ-EXISTENTE encontrado e corrigido durante a
+  migração -- nós de topologia importados eram silenciosamente descartados (só componentes/fios
+  passavam por remapeamento de id); agora `remapEndpoint` também é aplicado aos nós.
+- Todos os arquivos de teste (`topologyDocument.test.ts`, `wireTopology.test.ts` -- 34 casos,
+  `junctionComponent()` substituído por `topologyNode()`+`nodeWire()`/`portWire()` --,
+  `simulideSceneTranslator.test.ts`) reescritos pro novo shape.
+
+**Verificação**: os 3 tsconfigs (`tsconfig.json`/`tsconfig.webview.json`/`tsconfig.test.json`)
+compilam sem erro; suíte completa da Extension, 214/214 casos, 0 falhas.
+
+### 25.7 Fase E: varredura de código morto -- conclusão é que não sobrou nada pra remover (2026-07-11)
+
+Varredura final de referências a `JUNCTION_TYPE_ID` fora de teste, pra confirmar que a migração de
+25.6 não deixou nenhum tratamento especial de "junção como componente" sobrevivendo por inércia.
+Resultado, arquivo por arquivo -- todos os 6 usos são LEGÍTIMOS, nenhum removido:
+
+- `subcircuitInternals.ts`/`extension.ts` (parsing de manifesto de subcircuito/device): NÃO é
+  compat especulativa -- existem arquivos REAIS no repositório hoje ainda no formato antigo
+  (`subcircuits/esp32_wroom32.lssubcircuit` usa `wires[]` direto, não `topology.conductors[]`; a
+  grande maioria de `devices/*.lsdevice` idem) que o parser do Core (`parseLssubJson`,
+  `esp32_devkitc_subcircuit_test.cpp`, mesma lógica de `CoreApplication.cpp`) também aceita via
+  fallback deliberado, não removido. Testado e exercitado de verdade pelo teste
+  `esp32_devkitc_subcircuit` (carrega os DOIS arquivos, migrado e não-migrado, no mesmo run).
+- `extension.ts:677` (`requestAddComponent`): defesa em profundidade documentada em comentário --
+  junção só nasce de split de fio real, nunca de mensagem IPC direta; guarda contra mensagem
+  malformada/webview desatualizada, não relacionado a formato de arquivo.
+- `componentSymbols.ts` (`builtinComponentBox`/anchor): `connectors.junction` continua um typeId de
+  catálogo válido e registrado (`hidden:true`, filtrado da paleta, não deletado do sistema) -- a
+  entrada de tabela de 1 linha devolvendo caixa 0x0 é consistente com isso, não é resíduo morto.
+
+Nenhuma remoção feita nesta seção -- ver `[[feedback_no_preemptive_compat_during_production_phase]]`
+antes de reconsiderar: a distinção que importa é "arquivo real existente hoje" vs. "formato
+hipotético futuro", não "código que menciona um formato antigo" por si só.
+
+### 25.8 Bug pré-existente corrigido durante a verificação: pull-up do EN do ESP32 DevKitC não
+tocava 3V3 (2026-07-11)
+
+Achado ao investigar por que `esp32_devkitc_subcircuit_test` falhava mesmo depois de 25.5/25.6 --
+confirmado por instrumentação temporária que o reaproveitamento de `CircuitGroup` (25.5) NUNCA
+disparava neste teste (é o primeiro rebuild da sessão, `previous` sempre vazio), então a causa era
+outra: bug de fiação real em `subcircuits/esp32_devkitc_v4.lssubcircuit`, não uma regressão desta
+sessão.
+
+`pullup_en` (resistor de 10k) tinha o pino 1 ligado ao MESMO nó de `mcu1.RST`/`button_en` (em vez de
+à trilha 3V3) e o pino 2 ligado direto ao pino exposto `EN` -- ou seja, o resistor ficava EM SÉRIE
+dentro da própria rede EN/RST, sem nenhuma ponta tocando 3.3V; o "pull-up" não puxava pra lugar
+nenhum. Comparado contra o padrão do circuito irmão (BOOT/GPIO0, com fiação correta:
+`pullup_boot.pin-1` -- 3V3, `pullup_boot.pin-2` -- {GPIO0, button}) pra derivar a topologia certa.
+Corrigido trocando o destino de 2 condutores no `.lssubcircuit`: `pullup_en.pin-1` agora liga na
+junção 3V3 (mesma junção de `tunnel_3v3`/`pullup_boot.pin-1`), e `tunnel_EN` ganhou um condutor extra
+direto pra junção RST/button (em vez de só tocar `pullup_en.pin-2`) -- resultado:
+3V3 -[pullup_en]- {EN, RST, button_en} -[button_en]- GND, mesmo padrão do BOOT.
+
+**Verificação**: `esp32_devkitc_subcircuit_test` (assert `nodeVoltageOfPin(EN) > 3.0` com botão
+solto) passa; suíte completa do Core, 37/37, 0 falhas.
+
+### 25.9 Reestruturação da interação de fios/junções: motor de hit-test unificado, junção
+interativa, mover-em-grupo generalizado (2026-07-12)
+
+Pedido explícito do usuário, com autorização de mudança disruptiva ("não me preocupo em mudanças
+robustas desde que o ganho seja grande") e 4 queixas concretas de uso real: (1) clicar no meio de um
+fio pra iniciar uma derivação não funcionava de forma confiável, (2) a marca visual da junção era
+grande e inadequada, (3) impossível conectar corretamente um 4º+ fio no mesmo ponto, (4) selecionar
+um componente + um fio e movê-los juntos não funcionava fora do caso de um único canto/segmento já
+selecionado. Investigação encontrou uma causa raiz comum em `main.ts`: interação de fio nunca usava
+o motor de hit-test unificado que `wireTopology.ts` já tinha (pronto e testado, mas código morto --
+`findAtPosition`/`buildWireSpatialIndex` sem NENHUM call site fora dos próprios testes), e em vez
+disso cada tipo de alça (pino/segmento/canto) reimplementava sua própria cópia quase idêntica da
+lógica de "iniciar vs. terminar uma derivação". Junção especificamente nunca teve handler nenhum
+(`.junction-dot` era `pointer-events:none`) -- não havia COMO clicar numa junção existente, só por
+acidente via a borda de um segmento adjacente.
+
+**25.9.1 Junção virou elemento SVG interativo real.** `renderJunction` (antes um `<div>` decorativo
+solto em `canvasContent`) agora é um `<g>` dentro do MESMO `wire-layer` SVG que pino/segmento/canto,
+com dois círculos concêntricos: um alvo de clique/arrasto maior e invisível (`r=8`,
+`.wire-layer__junction-hit`) e a marca visual pequena por cima (`r=2.5`,
+`.wire-layer__junction-dot`, `pointer-events:none` -- todo o hit-test fica no círculo de baixo). Isso
+resolve (2) diretamente (marca pequena, fiel ao SimulIDE) e (3): clique na junção passa pelo MESMO
+`handleWireGestureClick` de pino/segmento/canto usando `{kind:"wire", wireId: <qualquer fio que já
+toca a junção>, point: <posição do nó>}` -- **sem precisar de um `kind:"junction"` novo no
+protocolo**: como o ponto clicado já É uma extremidade real daquele fio (a própria junção),
+`splitSegmentAtPoint` cai no caminho "ponto já é extremidade, não divide" e `connectEndpointToNode`
+resolve via `findExistingJunctionAt` pro MESMO nó -- reaproveita 100% da máquina já existente e
+testada (`.spec` seção 24), zero mudança de modelo/mensagem IPC. Junção também ganhou arrasto (mover
+`node.position` direto -- mais simples que canto/segmento, os fios tocando o nó se re-roteiam
+sozinhos via `wirePolylinePoints`/`buildOrthogonalPath`, igual a mover um componente) e menu de
+contexto (seleciona os fios tocando + `deleteSelectedItems`).
+
+**25.9.2 `handleWireGestureClick` consolida pino/segmento/canto/junção numa função só.** Único
+ponto de decisão "clicar num alvo de conexão já existente" -- início de derivação é SEMPRE local
+(`beginWireDraft`, nunca mais um round-trip pela Extension só pra armar `pendingConnection`, que é
+estado 100% transitório da Webview); terminar SEMPRE passa por `requestConnectEndpoints` no Core (o
+único momento em que a topologia de verdade muda). O verbo IPC `requestStartWireFromWire`
+(round-trip que servia SÓ pra armar o draft, sem tocar no Core -- redundante com o padrão já usado
+pro pino) foi removido por inteiro (`messages.ts`, `extension.ts`, `main.ts`) -- resolve (1): a causa
+raiz mais provável do "clique não inicia derivação" era a combinação de um round-trip assíncrono
+desnecessário com uma seleção `render()`-síncrona disparada dentro do PRÓPRIO `pointerdown` que
+recriava o DOM do alvo antes do `click` nativo do browser ter chance de disparar nele.
+
+**25.9.3 Mover-em-grupo generalizado pra `selectedWireIds` inteiro.** `currentGroupWireSelection`/
+`applyGroupWireDelta` (pré-existente) só cobriam UM canto ou segmento individualmente selecionado
+acompanhando um arrasto de componente -- não cobria fio inteiro selecionado via marquee. Nova dupla
+`computeGroupMoveWireTargets`/`applyGroupMoveWireDelta` (esta última reaproveitando o mesmo nome de
+função de uma versão anterior mais restrita, agora generalizada) cobre TODA a seleção múltipla de
+fios: cada fio selecionado translada seus pontos internos pelo delta; um nó de topologia só
+translada junto se `movableTopologyNodeIds` (`wireTopology.ts`, nova função pura, testada) confirmar
+que TODOS os fios que o tocam também estão selecionados -- senão um T com só um ramo selecionado
+rasgaria os outros dois. Aplicado simetricamente nos 4 pontos de entrada de arrasto (componente,
+canto, segmento, junção) -- resolve (4): arrastar QUALQUER elemento cuja seleção inclua
+componente(s) e/ou fio(s) move tudo junto, não só o caso estreito de antes.
+
+**Verificação**: os 3 tsconfigs compilam sem erro; suíte completa da Extension, 218/218 (4 novos
+casos de `movableTopologyNodeIds`), 0 falhas. Sem GUI disponível neste ambiente pra confirmar
+interativamente os 4 gestos corrigidos -- verificado por rastreamento direto de código (incluindo
+correção de um bug real encontrado durante a própria implementação: a marca visual da junção não
+acompanhava seu próprio arrasto, só os fios tocando ela) + testes puros onde o código é testável;
+recomenda-se sessão manual no VSCode real cobrindo os 4 cenários desta seção (derivar do meio de um
+fio, conectar um 4º fio numa junção existente, arrastar uma junção, selecionar componente+fio e
+mover juntos) antes de considerar 25.9 encerrado.

@@ -89,10 +89,74 @@ export interface WebviewPoint {
   y: number;
 }
 
+/** Endpoint tipado de um condutor -- `port` é um pino real de componente, `node` é um nó de
+ * topologia (derivado de junção de grau N, nunca um componente do Core, ver `.spec` seção 24.1).
+ * Fonte única de verdade tanto no documento persistido (`.lsproj`/`.lssubcircuit`, `topology.*`)
+ * quanto no modelo vivo (`WebviewProjectState.topology`) -- ver `.spec` seção 25.6 (Fase C completa:
+ * antes desta rodada existiam DUAS representações, uma viva com `componentId` plano assumindo que
+ * nó e porta compartilhavam o mesmo espaço de string por convenção, e esta aqui só usada nas bordas
+ * de save/load). */
+export type CanonicalEndpoint =
+  | { kind: "port"; componentId: string; pinId: string }
+  | { kind: "node"; nodeId: string };
+
+export interface TopologyNode {
+  id: string;
+  position: WebviewPoint;
+}
+
+/** Documento canônico de topologia -- substitui `wires[]`/`topologyNodes[]` separados como fonte
+ * única de verdade, tanto persistida quanto viva. `revision` é o contador de CAS otimista entre
+ * Webview/Host/Core (ver `requestConnectEndpoints`/`applyWireTopologyTransaction`). `conductors` usa
+ * o MESMO `WebviewWireModel` (definido abaixo) que todo o resto do projeto já manipula -- não existe
+ * um tipo `TopologyConductor` separado; seriam campo-por-campo idênticos (`id`/`from`/`to`/
+ * geometria), então um tipo só. */
+export interface CanonicalTopologyDocument {
+  revision: number;
+  nodes: TopologyNode[];
+  conductors: WebviewWireModel[];
+}
+
+/** Id do outro lado do endpoint -- pra um `port`, é o `componentId` real; pra um `node`, é o
+ * `nodeId` do nó de topologia. Os dois espaços de id nunca colidem (ids gerados por `nextId(...)`
+ * com prefixo diferente, `component-`/`junction-`) -- por isso é seguro usar isto como chave de
+ * lookup uniforme em `components`/`topologyNodes` conforme o `kind`. */
+export function endpointId(endpoint: CanonicalEndpoint): string {
+  return endpoint.kind === "node" ? endpoint.nodeId : endpoint.componentId;
+}
+
+/** Pino do endpoint -- pra um `node`, é sempre `"pin-1"` (todo nó de topologia tem exatamente um
+ * pino sintético compartilhado por N condutores, ver `.spec` seção 24.1); pra um `port`, é o pino
+ * real declarado pelo componente. */
+export function endpointPinId(endpoint: CanonicalEndpoint): string {
+  return endpoint.kind === "node" ? "pin-1" : endpoint.pinId;
+}
+
+export function portEndpoint(componentId: string, pinId: string): CanonicalEndpoint {
+  return { kind: "port", componentId, pinId };
+}
+
+export function nodeEndpoint(nodeId: string): CanonicalEndpoint {
+  return { kind: "node", nodeId };
+}
+
+/** Reescreve o id de um endpoint conforme `idMap` (ex: duplicar/colar/importar um sub-grafo com ids
+ * novos), preservando `kind` -- `undefined` quando o id referenciado não está no mapa (o chamador
+ * decide o que fazer: tipicamente excluir o condutor, mesma regra de hoje pra endpoint fora da
+ * seleção copiada). */
+export function remapEndpoint(endpoint: CanonicalEndpoint, idMap: ReadonlyMap<string, string>): CanonicalEndpoint | undefined {
+  if (endpoint.kind === "node") {
+    const mapped = idMap.get(endpoint.nodeId);
+    return mapped ? nodeEndpoint(mapped) : undefined;
+  }
+  const mapped = idMap.get(endpoint.componentId);
+  return mapped ? portEndpoint(mapped, endpoint.pinId) : undefined;
+}
+
 export interface WebviewWireModel {
   id: string;
-  from: { componentId: string; pinId: string };
-  to: { componentId: string; pinId: string };
+  from: CanonicalEndpoint;
+  to: CanonicalEndpoint;
   points?: WebviewPoint[];
 }
 
@@ -715,16 +779,17 @@ export interface WebviewComponentCatalogEntry {
 }
 
 export interface WebviewProjectState {
-  /** Revisão monotônica do documento topológico confirmada pelo host. Não é persistida como estado
-   * transitório da ferramenta; comandos usam este valor como compare-and-swap. */
-  topologyRevision?: number;
-  /** Nós topológicos não são componentes. Campo aditivo durante a migração; `wires` continua sendo
-   * a projeção geométrica editável e pode referenciar estes IDs em seus endpoints. */
-  topologyNodes?: Array<{ id: string; x: number; y: number }>;
+  /** Fonte única de verdade de conectividade+geometria de fio -- substitui os antigos `wires[]`/
+   * `topologyNodes[]`/`topologyRevision` separados (Fase C completa, `.spec` seção 25.6).
+   * `topology.revision` é o contador de CAS otimista entre Webview/Host/Core; `topology.nodes` são
+   * nós de topologia (nunca componentes); `topology.conductors` é a lista de fios -- mesmo objeto
+   * que era `wires` antes, só que agora vive dentro de `topology` e usa `CanonicalEndpoint` tipado
+   * em vez de `{componentId,pinId}` plano assumindo por convenção que nó e porta compartilham o
+   * mesmo espaço de string. */
+  topology: CanonicalTopologyDocument;
   locale?: "pt-BR" | "en";
   catalog: WebviewComponentCatalogEntry[];
   components: WebviewComponentModel[];
-  wires: WebviewWireModel[];
   /** `x`/`y` = pan, `zoom` = escala — aplicado via CSS transform no wrapper `.canvas-content`
    * (`main.ts`), com `eventToCanvasPoint` invertendo a transformação pra todo cálculo de coordenada
    * tela→canvas continuar correto em qualquer zoom (ver `.spec/lasecsimul.spec` seção 13.4). */

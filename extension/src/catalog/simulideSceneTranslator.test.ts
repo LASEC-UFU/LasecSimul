@@ -22,8 +22,8 @@ import { registerPackage } from "../ui/webview/componentSymbols";
         ],
         wires: [
           {
-            from: { componentId: "a", pinId: "p1" },
-            to: { componentId: "b", pinId: "p2" },
+            from: { kind: "port", componentId: "a", pinId: "p1" },
+            to: { kind: "port", componentId: "b", pinId: "p2" },
             points: [{ x: 10, y: 20 }],
           },
         ],
@@ -45,7 +45,7 @@ import { registerPackage } from "../ui/webview/componentSymbols";
       { id: "mcu1", typeId: "espressif.esp32", label: "mcu1", hidden: false, x: 640, y: 160, rotation: 0, pins: [], properties: {} },
     ];
     const wires: WebviewWireModel[] = [
-      { id: "w1", from: { componentId: "mcu1", pinId: "GPIO23" }, to: { componentId: "tunnel_G23", pinId: "pin" }, points: [{ x: 700, y: 200 }] },
+      { id: "w1", from: { kind: "port", componentId: "mcu1", pinId: "GPIO23" }, to: { kind: "port", componentId: "tunnel_G23", pinId: "pin" }, points: [{ x: 700, y: 200 }] },
     ];
 
     const translated = translateSimulideSubcircuitAuthoringScene(packageComponents, internalComponents, wires, { package: { x: 70, y: 232 } });
@@ -61,8 +61,8 @@ import { registerPackage } from "../ui/webview/componentSymbols";
 
   await test("translateSimulideSubcircuitAuthoringScene: aplica points declarados por endpoint do fio", () => {
     const wires: WebviewWireModel[] = [
-      { id: "internal-wire-0", from: { componentId: "a", pinId: "p1" }, to: { componentId: "b", pinId: "p2" } },
-      { id: "internal-wire-1", from: { componentId: "c", pinId: "p1" }, to: { componentId: "d", pinId: "p2" } },
+      { id: "internal-wire-0", from: { kind: "port", componentId: "a", pinId: "p1" }, to: { kind: "port", componentId: "b", pinId: "p2" } },
+      { id: "internal-wire-1", from: { kind: "port", componentId: "c", pinId: "p1" }, to: { kind: "port", componentId: "d", pinId: "p2" } },
     ];
     const translated = translateSimulideSubcircuitAuthoringScene([], [], wires, {
       wires: [
@@ -132,7 +132,7 @@ import { registerPackage } from "../ui/webview/componentSymbols";
     const scene = {
       transform: { scaleX: 2, scaleY: 3 },
       components: [{ componentId: "chip", x: 124, y: -60, rotation: 0 as const }],
-      wires: [{ from: { componentId: "chip", pinId: "p1" }, to: { componentId: "other", pinId: "p2" }, points: [{ x: 999, y: 999 }] }],
+      wires: [{ from: { kind: "port", componentId: "chip", pinId: "p1" }, to: { kind: "port", componentId: "other", pinId: "p2" }, points: [{ x: 999, y: 999 }] }],
     };
 
     // 1ª sessão: componente recém-importado (sem marcador ainda) -- a tradução DEVE aplicar.
@@ -140,7 +140,7 @@ import { registerPackage } from "../ui/webview/componentSymbols";
       { id: "chip", typeId: "test.qt-package-2", label: "chip", hidden: false, x: 0, y: 0, rotation: 0, pins: [{ id: "p1", x: 0, y: 0 }], properties: {} },
     ];
     const freshWires: WebviewWireModel[] = [
-      { id: "w1", from: { componentId: "chip", pinId: "p1" }, to: { componentId: "other", pinId: "p2" } },
+      { id: "w1", from: { kind: "port", componentId: "chip", pinId: "p1" }, to: { kind: "port", componentId: "other", pinId: "p2" } },
     ];
     const firstOpen = translateSimulideSubcircuitAuthoringScene([], freshComponents, freshWires, scene);
     const chipFirstOpen = firstOpen.components.find((component) => component.id === "chip")!;
@@ -156,7 +156,7 @@ import { registerPackage } from "../ui/webview/componentSymbols";
       { ...chipFirstOpen, x: 555, y: 777 },
     ];
     const editedWires: WebviewWireModel[] = [
-      { id: "w1", from: { componentId: "chip", pinId: "p1" }, to: { componentId: "other", pinId: "p2" }, points: [{ x: 1, y: 2 }] },
+      { id: "w1", from: { kind: "port", componentId: "chip", pinId: "p1" }, to: { kind: "port", componentId: "other", pinId: "p2" }, points: [{ x: 1, y: 2 }] },
     ];
     const secondOpen = translateSimulideSubcircuitAuthoringScene([], editedAfterFirstSave, editedWires, scene);
     const chipSecondOpen = secondOpen.components.find((component) => component.id === "chip")!;

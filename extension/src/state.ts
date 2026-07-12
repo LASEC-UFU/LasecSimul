@@ -33,7 +33,7 @@ export const state = {
    * `ProjectSerializer.ts`/`projectCommands.ts`) tirado logo após um save/load bem-sucedido --
    * comparado contra `schematicState` atual pra decidir se há alteração não salva (`isProjectDirty`
    * em `projectCommands.ts`). `undefined` == projeto novo/vazio ainda sem save nenhum. */
-  lastSavedProjectState: undefined as { components: WebviewProjectState["components"]; wires: WebviewProjectState["wires"] } | undefined,
+  lastSavedProjectState: undefined as { components: WebviewProjectState["components"]; topology: WebviewProjectState["topology"] } | undefined,
   /** Pilha de sessões "Abrir Subcircuito" em andamento (ver `extension.ts::
    * openSubcircuitForEditingCommand`/`closeSubcircuitEditorCommand`) -- empilha em vez de um único
    * slot pra suportar abrir um subcircuito DENTRO de outro já em edição. `originalManifest` é o JSON
@@ -53,8 +53,8 @@ export const state = {
      * empilhado (todo mutador de `schematicState` sempre troca o array por um novo, nunca edita in-
      * place -- guardar a referência aqui é seguro). */
     initialComponents: WebviewProjectState["components"];
-    initialWires: WebviewProjectState["wires"];
-    initialTopologyNodes: NonNullable<WebviewProjectState["topologyNodes"]>;
+    initialWires: WebviewProjectState["topology"]["conductors"];
+    initialTopologyNodes: WebviewProjectState["topology"]["nodes"];
   }>,
 };
 

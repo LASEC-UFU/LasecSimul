@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdio>
 #include <limits>
+#include <map>
 #include <optional>
 #include <span>
 #include <stdexcept>
@@ -135,6 +136,7 @@ uint32_t SimulationSession::addComponent(const std::string& typeId, const regist
     instance->onAssignedIndex(componentIndex);
     m_componentInstances.push_back(std::move(instance));
     m_topologyDirty = true;
+    m_topologyReuseSafe = false;
     m_scheduler.markDirty(componentIndex);
     return componentIndex;
 }
@@ -161,8 +163,10 @@ void SimulationSession::connectWire(uint32_t componentA, const std::string& pinI
     };
     const uint32_t slotA = resolveSlot(componentA, pinIdA);
     const uint32_t slotB = resolveSlot(componentB, pinIdB);
+    const bool wasDirty = m_topologyDirty;
     m_netlist.connectWire(slotA, slotB);
     m_topologyDirty = true;
+    if (!wasDirty) m_topologyReuseSafe = true;
     ++m_wireTopologyRevision;
 }
 
@@ -173,7 +177,7 @@ bool SimulationSession::disconnectWire(uint32_t componentA, const std::string& p
     const uint32_t slotA = m_netlist.pinSlotsOf(componentA).at(pinIdA);
     const uint32_t slotB = m_netlist.pinSlotsOf(componentB).at(pinIdB);
     const bool removed = m_netlist.disconnectWire(slotA, slotB);
-    if (removed) { m_topologyDirty = true; ++m_wireTopologyRevision; }
+    if (removed) { m_topologyDirty = true; m_topologyReuseSafe = false; ++m_wireTopologyRevision; }
     return removed;
 }
 
@@ -185,6 +189,7 @@ uint64_t SimulationSession::applyWireTopologyTransaction(uint64_t baseRevision, 
     // seria uma segunda regra, então uma cópia barata do Netlist funciona também como staging.
     simulation::Netlist staged = m_netlist;
     const bool dirtyBefore = m_topologyDirty;
+    const bool reuseSafeBefore = m_topologyReuseSafe;
     const uint64_t revisionBefore = m_wireTopologyRevision;
     try {
         for (const WireTopologyOperation& operation : operations) {
@@ -197,6 +202,7 @@ uint64_t SimulationSession::applyWireTopologyTransaction(uint64_t baseRevision, 
     } catch (...) {
         m_netlist = std::move(staged);
         m_topologyDirty = dirtyBefore;
+        m_topologyReuseSafe = reuseSafeBefore;
         m_wireTopologyRevision = revisionBefore;
         throw;
     }
@@ -211,6 +217,7 @@ void SimulationSession::setTunnelName(uint32_t component, const std::string& pin
     const uint32_t slot = m_netlist.pinSlotsOf(component).at(pinId);
     m_netlist.setTunnelName(slot, oldName, newName);
     m_topologyDirty = true;
+    m_topologyReuseSafe = false;
 }
 
 std::optional<std::string> SimulationSession::setProperty(uint32_t component, const std::string& propertyName,
@@ -253,7 +260,10 @@ std::optional<std::string> SimulationSession::setProperty(uint32_t component, co
 
         descriptor.set(value);
         if ((schema.flags & PropertySchemaAffectsPinCount) != 0) reregisterPinsIfChanged(component, instance);
-        if ((schema.flags & (PropertySchemaAffectsTopology | PropertySchemaAffectsPinCount)) != 0) m_topologyDirty = true;
+        if ((schema.flags & (PropertySchemaAffectsTopology | PropertySchemaAffectsPinCount)) != 0) {
+            m_topologyDirty = true;
+            m_topologyReuseSafe = false;
+        }
         m_scheduler.markDirty(component); // editar propriedade sempre exige re-stamp
         return std::nullopt;
     }
@@ -282,6 +292,7 @@ void SimulationSession::removeComponent(uint32_t componentIndex) {
     m_componentInstances[componentIndex].reset();
     m_scheduler.dirtySet().remove(componentIndex);
     m_topologyDirty = true;
+    m_topologyReuseSafe = false;
 }
 
 bool SimulationSession::isSubcircuitInstance(uint32_t instanceId) const {
@@ -455,17 +466,119 @@ void SimulationSession::rebuildTopologyIfNeeded() {
         if (m_componentInstances[i]) extraVarCountByComponent[i] = m_componentInstances[i]->extraVariableCount();
     }
 
+    const bool allowReuse = m_topologyReuseSafe;
+    m_topologyReuseSafe = false;
+    simulation::Topology previous = std::move(m_topology);
+    std::vector<double> previousNodeVoltages = std::move(m_nodeVoltages);
     m_topology = m_netlist.rebuildTopology(extraVarCountByComponent);
     m_nodeVoltages.assign(m_topology.listenersByNode.size(), 0.0);
-    m_previousNodeVoltages = m_nodeVoltages;
     m_lastEdgeTimeNs.assign(m_topology.listenersByNode.size(), 0);
     m_topologyDirty = false;
 
-    // Topologia mudou: todo componente vivo precisa re-estampar contra os grupos novos — o que
-    // existia antes pode ter ido para um CircuitGroup diferente (ou o mesmo grupo, mas com outros
-    // vizinhos). Componente removido (instância nula) nunca volta a ficar dirty.
-    for (uint32_t i = 0; i < m_componentInstances.size(); ++i) {
-        if (m_componentInstances[i]) m_scheduler.dirtySet().insert(i);
+    // Preenche m_nodeVoltages ANTES do reset acima ter zerado tudo: grupo reaproveitado não passa
+    // por MnaSolver::solve() de novo (`dirty()` continua false, ver CircuitGroup.hpp) -- sem isto,
+    // a tensão de uma rede intocada cairia pra 0 no primeiro rebuild depois de qualquer edição em
+    // OUTRA rede, porque o array inteiro acabou de ser zerado e ninguém reescreveria essas posições.
+    if (allowReuse) {
+        reuseUnaffectedCircuitGroups(previous, previousNodeVoltages);
+    } else {
+        // Deleção/split/túnel/pinos/componente: rebuild integral + restamp integral é o oracle.
+        for (uint32_t i = 0; i < m_componentInstances.size(); ++i)
+            if (m_componentInstances[i]) m_scheduler.dirtySet().insert(i);
+    }
+    m_previousNodeVoltages = m_nodeVoltages;
+}
+
+void SimulationSession::reuseUnaffectedCircuitGroups(simulation::Topology& previous,
+                                                       const std::vector<double>& previousNodeVoltages) {
+    // Agrupa componentIndex vivos por groupIndex, de um lado (`previous` ou `m_topology`) por vez.
+    // `pinSlotsOf` nunca muda de número pra um componente já registrado (slot é append-only, nunca
+    // reciclado -- .spec seção 7.2) -- por isso o MESMO slot de um componente vivo é um índice válido
+    // tanto em `previous.resolutionBySlot` quanto em `m_topology.resolutionBySlot`, desde que o
+    // componente já existisse na topologia anterior (checado abaixo por bounds).
+    const auto groupComponentSignatures = [this](const simulation::Topology& topology) {
+        std::map<uint32_t, std::vector<uint32_t>> byGroup;
+        for (uint32_t componentIndex = 0; componentIndex < m_componentInstances.size(); ++componentIndex) {
+            if (!m_componentInstances[componentIndex]) continue;
+            const auto& slots = m_netlist.pinSlotsOf(componentIndex);
+            if (slots.empty()) continue;
+            const uint32_t anySlot = slots.begin()->second;
+            if (anySlot >= topology.resolutionBySlot.size()) continue; // registrado depois desta topologia
+            byGroup[topology.resolutionBySlot[anySlot].groupIndex].push_back(componentIndex);
+        }
+        std::map<std::vector<uint32_t>, uint32_t> bySignature;
+        for (auto& [groupIndex, members] : byGroup) {
+            std::sort(members.begin(), members.end());
+            bySignature.emplace(std::move(members), groupIndex);
+        }
+        return bySignature;
+    };
+
+    const std::map<std::vector<uint32_t>, uint32_t> oldBySignature = groupComponentSignatures(previous);
+    const std::map<std::vector<uint32_t>, uint32_t> newBySignature = groupComponentSignatures(m_topology);
+
+    std::vector<bool> groupReused(m_topology.groups.size(), false);
+    for (const auto& [members, newGroupIndex] : newBySignature) {
+        const auto oldIt = oldBySignature.find(members);
+        if (oldIt == oldBySignature.end()) continue; // conjunto de componentes mudou -- rede nova/afetada
+        const uint32_t oldGroupIndex = oldIt->second;
+
+        // Estado iterativo de componente não linear nunca atravessa uma revisão topológica, mesmo
+        // quando a ilha parece estruturalmente idêntica. Ele deve reestabilizar contra o novo oracle.
+        if (std::any_of(members.begin(), members.end(), [this](uint32_t componentIndex) {
+                return m_componentInstances[componentIndex]->isNonlinear();
+            })) continue;
+
+        // Mesmo conjunto de componentes não basta: a MESMA fiação entre eles pode ainda assim ter
+        // mudado (ex: A-B e B-C viram A-B, B-C E A-C -- 4 nós encolhem pra 3 sem o conjunto de
+        // componentes mudar). Só reaproveita se TODO pino de TODO membro caiu no MESMO índice local
+        // (linha/coluna da matriz) nos dois lados -- aí sim a estampa acumulada continua válida.
+        bool sameStructure = true;
+        for (uint32_t componentIndex : members) {
+            for (const auto& [pinId, slot] : m_netlist.pinSlotsOf(componentIndex)) {
+                (void)pinId;
+                if (previous.resolutionBySlot[slot].localIndex != m_topology.resolutionBySlot[slot].localIndex) {
+                    sameStructure = false;
+                    break;
+                }
+            }
+            if (!sameStructure) break;
+            const uint32_t extraCount = m_componentInstances[componentIndex]->extraVariableCount();
+            if (extraCount > 0 &&
+                previous.extraVariablesByComponent[componentIndex].baseLocalIndex !=
+                    m_topology.extraVariablesByComponent[componentIndex].baseLocalIndex) {
+                sameStructure = false;
+            }
+            if (!sameStructure) break;
+        }
+        if (!sameStructure) continue;
+        if (previous.groups[oldGroupIndex].totalSize() != m_topology.groups[newGroupIndex].totalSize()) continue; // defensivo, não deveria divergir se sameStructure
+        // Compactar union-find pode deslocar IDs GLOBAIS de redes posteriores quando uma adição
+        // funde duas redes anteriores na ordem de slots. CircuitGroup carrega esses IDs; sem igualdade
+        // exata, mover a matriz escreveria tensões nos nós errados mesmo com índices locais iguais.
+        if (previous.groups[oldGroupIndex].nodeIndices() != m_topology.groups[newGroupIndex].nodeIndices()) continue;
+
+        m_topology.groups[newGroupIndex] = std::move(previous.groups[oldGroupIndex]);
+        groupReused[newGroupIndex] = true;
+
+        // O grupo reaproveitado não vai passar por solve() de novo (não está dirty) -- sem isto a
+        // leitura de tensão desses nós ficaria em 0.0 (valor do assign() em rebuildTopologyIfNeeded)
+        // até a rede voltar a ficar dirty por algum outro motivo. Índices são os mesmos dos dois
+        // lados por construção (sameStructure já garantiu que nada mudou nessa rede).
+        for (uint32_t nodeIndex : m_topology.groups[newGroupIndex].nodeIndices()) {
+            if (nodeIndex < previousNodeVoltages.size()) m_nodeVoltages[nodeIndex] = previousNodeVoltages[nodeIndex];
+        }
+    }
+
+    // Só marca dirty quem está num grupo NÃO reaproveitado -- grupo reaproveitado já tem a estampa
+    // certa (nada mudou na rede dele), re-stampar seria trabalho jogado fora sem efeito no resultado.
+    for (uint32_t componentIndex = 0; componentIndex < m_componentInstances.size(); ++componentIndex) {
+        if (!m_componentInstances[componentIndex]) continue;
+        const auto& slots = m_netlist.pinSlotsOf(componentIndex);
+        if (slots.empty()) continue;
+        const uint32_t anySlot = slots.begin()->second;
+        const uint32_t groupIndex = m_topology.resolutionBySlot[anySlot].groupIndex;
+        if (!groupReused[groupIndex]) m_scheduler.dirtySet().insert(componentIndex);
     }
 }
 

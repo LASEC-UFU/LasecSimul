@@ -597,13 +597,20 @@ html, body {
   background: rgba(255, 255, 255, 0.68);
 }
 
-.junction-dot {
-  position: absolute;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #f4b942;
-  box-shadow: 0 0 0 1px #101114;
+/* Junção como `<g>` SVG dentro de `.wire-layer` (não mais `<div>` solto em `canvasContent`) -- dois
+   círculos concêntricos: `--hit` é o alvo de clique/arrasto de verdade (raio maior, sempre
+   invisível), `--dot` é só a marca visual pequena por cima, fiel ao tamanho discreto do SimulIDE
+   (nunca uma bola grande dominando o desenho, ver `.wire-layer__corner-handle` acima pro mesmo
+   princípio). `pointer-events: none` no dot deixa todo o hit-test pro círculo de baixo, sem
+   double-handling. */
+.wire-layer__junction-hit {
+  fill: transparent;
+  stroke: transparent;
+  cursor: move;
+}
+
+.wire-layer__junction-dot {
+  fill: var(--muted);
   pointer-events: none;
 }
 
@@ -638,7 +645,52 @@ html, body {
 }
 
 .exposed-components-dialog::backdrop {
-  background: transparent;
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.exposed-components-form {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.exposed-components-form h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.exposed-components-list {
+  display: grid;
+  gap: 2px;
+  max-height: min(55vh, 430px);
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid #c7c7c7;
+  background: #fff;
+}
+
+.exposed-components-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
+.exposed-components-row:hover {
+  background: #e8f1ff;
+}
+
+.exposed-components-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.exposed-components-actions button {
+  min-width: 82px;
+  min-height: 27px;
 }
 
 .property-dialog::backdrop {

@@ -7,9 +7,9 @@ import { TrustStore } from "./trust/TrustStore";
 import { isPreApproved, isPreBlocked, resolveConsentChoice, shouldLoadLibrary, decisionToPersist } from "./trust/trustDecision";
 import { SchematicPanel } from "./ui/panels/SchematicPanel";
 import { createInitialWebviewState } from "./ui/webview/catalog";
-import { JUNCTION_TYPE_ID, TUNNEL_TYPE_ID, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./ui/webview/model";
+import { CanonicalEndpoint, CanonicalTopologyDocument, JUNCTION_TYPE_ID, TopologyNode, TUNNEL_TYPE_ID, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, endpointId, endpointPinId, portEndpoint } from "./ui/webview/model";
 import { connectEndpointToNode, normalizeWireGeometry, removeOrphanNodes, splitSegmentAtPoint } from "./ui/webview/wireTopology";
-import { canonicalTopologyFromLegacy } from "./ui/webview/topologyDocument";
+import { assertTopologyInvariants } from "./ui/webview/topologyDocument";
 import { WebviewToHostMessage } from "./ui/webview/messages";
 import { ComponentPaletteViewProvider } from "./ui/views/ComponentPaletteViewProvider";
 import { materializePinGroup, registerPackage } from "./ui/webview/componentSymbols";
@@ -81,18 +81,6 @@ function nextId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
 }
 
-function normalizeRuntimeTopology(components: WebviewComponentModel[], wires: WebviewWireModel[], nodes: NonNullable<WebviewProjectState["topologyNodes"]> = []): {
-  components: WebviewComponentModel[]; wires: WebviewWireModel[]; nodes: NonNullable<WebviewProjectState["topologyNodes"]>;
-} {
-  const synthetic = nodes.map((node): WebviewComponentModel => ({ id: node.id, typeId: JUNCTION_TYPE_ID, label: "Junction", hidden: true, x: node.x, y: node.y, rotation: 0, pins: [{ id: "pin-1", x: 0, y: 0 }], properties: {} }));
-  const normalized = normalizeWireGeometry({ components: [...components, ...synthetic], wires });
-  return {
-    components: normalized.components.filter((component) => component.typeId !== JUNCTION_TYPE_ID),
-    nodes: normalized.components.filter((component) => component.typeId === JUNCTION_TYPE_ID).map((component) => ({ id: component.id, x: component.x, y: component.y })),
-    wires: normalized.wires,
-  };
-}
-
 /** `catalog` NUNCA é mutado in-place (só substituído por inteiro via `setEffectiveCatalog`, ver lá)
  * -- excluído do round-trip `JSON.stringify`/`JSON.parse` abaixo e reanexado por referência depois.
  * Usado só pro snapshot COMPLETO inicial (`openSchematicEditor`/painel recriado) -- ver
@@ -103,7 +91,7 @@ function cloneState(): WebviewProjectState {
 }
 
 const PROJECT_STATE_KEYS = [
-  "locale", "catalog", "components", "wires", "viewport", "selectedComponentIds", "selectedWireIds", "pendingConnection", "topologyRevision", "topologyNodes",
+  "locale", "catalog", "components", "topology", "viewport", "selectedComponentIds", "selectedWireIds", "pendingConnection",
   "subcircuitEditingContext",
 ] as const satisfies readonly (keyof WebviewProjectState)[];
 
@@ -162,9 +150,9 @@ function computeProjectStatePatch(): ProjectStatePatch | undefined {
 function syncSchematicPanel(): void {
   const lastSynced = state.lastSyncedProjectState;
   if (lastSynced &&
-      (lastSynced.components !== state.schematicState.components || lastSynced.wires !== state.schematicState.wires) &&
-      (state.schematicState.topologyRevision ?? 0) <= (lastSynced.topologyRevision ?? 0)) {
-    state.schematicState = { ...state.schematicState, topologyRevision: (lastSynced.topologyRevision ?? 0) + 1 };
+      (lastSynced.components !== state.schematicState.components || lastSynced.topology.conductors !== state.schematicState.topology.conductors) &&
+      state.schematicState.topology.revision <= lastSynced.topology.revision) {
+    state.schematicState = { ...state.schematicState, topology: { ...state.schematicState.topology, revision: lastSynced.topology.revision + 1 } };
   }
   state.schematicPanel?.setLanguage(state.schematicState.locale ?? currentLasecSimulLanguage());
   const patch = computeProjectStatePatch();
@@ -378,14 +366,14 @@ async function chooseSubcircuitFileCommand(componentId: string): Promise<void> {
   // nunca perde fio em silêncio.
   const survivingWireIds = new Set<string>();
   let droppedWireCount = 0;
-  for (const wire of state.schematicState.wires) {
-    const touchesFrom = wire.from.componentId === componentId;
-    const touchesTo = wire.to.componentId === componentId;
+  for (const wire of state.schematicState.topology.conductors) {
+    const touchesFrom = endpointId(wire.from) === componentId;
+    const touchesTo = endpointId(wire.to) === componentId;
     if (!touchesFrom && !touchesTo) {
       survivingWireIds.add(wire.id);
       continue;
     }
-    const ownPinId = touchesFrom ? wire.from.pinId : wire.to.pinId;
+    const ownPinId = touchesFrom ? endpointPinId(wire.from) : endpointPinId(wire.to);
     if (newPinIdSet.has(ownPinId)) survivingWireIds.add(wire.id);
     else droppedWireCount++;
   }
@@ -422,7 +410,7 @@ async function chooseSubcircuitFileCommand(componentId: string): Promise<void> {
     ...state.schematicState,
     catalog: [...state.schematicState.catalog.filter((entry) => entry.typeId !== parsed.typeId), ephemeralEntry],
     components: state.schematicState.components.map((entry) => (entry.id === componentId ? updatedComponent : entry)),
-    wires: state.schematicState.wires.filter((wire) => survivingWireIds.has(wire.id)),
+    topology: { ...state.schematicState.topology, conductors: state.schematicState.topology.conductors.filter((wire) => survivingWireIds.has(wire.id)) },
   };
 
   // Recria no Core: o typeId pode ter mudado (pino fixo desde a construção, não dá pra
@@ -434,8 +422,8 @@ async function chooseSubcircuitFileCommand(componentId: string): Promise<void> {
   if (state.coreClient && shouldSyncComponentToCore(parsed.typeId)) {
     const created = await pushComponentToCore(componentId, parsed.typeId, updatedComponent.properties, newPins);
     if (created) {
-      for (const wire of state.schematicState.wires) {
-        if (wire.from.componentId === componentId || wire.to.componentId === componentId) await pushWireToCore(wire);
+      for (const wire of state.schematicState.topology.conductors) {
+        if (endpointId(wire.from) === componentId || endpointId(wire.to) === componentId) await pushWireToCore(wire);
       }
       if (state.simulationStatus === "running") {
         void pollInstrumentReadouts();
@@ -525,10 +513,10 @@ export function pinsForTypeId(typeId: string, properties?: Record<string, unknow
 }
 
 function sameWireEndpoints(a: WebviewWireModel, b: WebviewWireModel): boolean {
-  return a.from.componentId === b.from.componentId
-    && a.from.pinId === b.from.pinId
-    && a.to.componentId === b.to.componentId
-    && a.to.pinId === b.to.pinId;
+  return endpointId(a.from) === endpointId(b.from)
+    && endpointPinId(a.from) === endpointPinId(b.from)
+    && endpointId(a.to) === endpointId(b.to)
+    && endpointPinId(a.to) === endpointPinId(b.to);
 }
 
 function changedPropertyNames(
@@ -544,23 +532,27 @@ async function syncProjectSnapshotToCore(previous: WebviewProjectState, next: We
 
   const previousComponentsById = new Map(previous.components.map((component) => [component.id, component]));
   const nextComponentsById = new Map(next.components.map((component) => [component.id, component]));
-  const previousWiresById = new Map(previous.wires.map((wire) => [wire.id, wire]));
-  const nextWiresById = new Map(next.wires.map((wire) => [wire.id, wire]));
+  const previousWiresById = new Map(previous.topology.conductors.map((wire) => [wire.id, wire]));
+  const nextWiresById = new Map(next.topology.conductors.map((wire) => [wire.id, wire]));
   const componentSetChanged = previous.components.some((component) => !nextComponentsById.has(component.id)) ||
     next.components.some((component) => !previousComponentsById.has(component.id));
-  const geometricTopologyChanged = JSON.stringify([previous.wires, previous.topologyNodes ?? []]) !==
-    JSON.stringify([next.wires, next.topologyNodes ?? []]);
+  // Só CONECTIVIDADE (endpoints + quais nós existem), nunca geometria (`points`) -- arrastar um
+  // cotovelo de fio não deveria disparar nenhuma sincronização com o Core (ele não conhece rota
+  // visual). Comparar `topology` inteiro (com `points`) faria uma edição puramente visual entrar no
+  // branch de baixo à toa.
+  const connectivityKey = (topology: WebviewProjectState["topology"]) =>
+    JSON.stringify([topology.nodes, topology.conductors.map((wire) => ({ id: wire.id, from: wire.from, to: wire.to }))]);
+  const geometricTopologyChanged = connectivityKey(previous.topology) !== connectivityKey(next.topology);
 
   // A projeção elétrica de uma rede com nós não tem correspondência 1:1 com os condutores
-  // geométricos -- um wire pode apontar pra um `topologyNode`, que o Core nunca viu. Quando só a
+  // geométricos -- um wire pode apontar pra um nó de topologia, que o Core nunca viu. Quando só a
   // topologia mexeu (nenhum componente entrou/saiu), achata os dois lados (antes/depois) em arestas
   // de pino real (`electricalEdgesForProject`, mesma função usada no rebuild completo) e manda só a
   // DIFERENÇA como uma transação atômica -- o diff fica naturalmente restrito à(s) rede(s) tocada(s)
-  // pela edição, nunca ao projeto inteiro (EX-F). Rebuild completo vira exceção (componente
-  // adicionado/removido, que exige registrar/desregistrar instância mesmo), não mais o caminho
-  // default de qualquer edição de fio assim que existe 1 nó de topologia no projeto.
-  const hasTopologyNodes = (previous.topologyNodes?.length ?? 0) > 0 || (next.topologyNodes?.length ?? 0) > 0;
-  if (hasTopologyNodes && componentSetChanged) {
+  // pela edição, nunca ao projeto inteiro (`.spec` seção 25.1). Rebuild completo vira exceção
+  // (componente adicionado/removido, que exige registrar/desregistrar instância mesmo), não mais o
+  // caminho default de qualquer edição de fio.
+  if (componentSetChanged) {
     await queueCoreRebuild();
     if (state.simulationStatus === "running") {
       void pollInstrumentReadouts();
@@ -568,8 +560,11 @@ async function syncProjectSnapshotToCore(previous: WebviewProjectState, next: We
     }
     return;
   }
-  if (hasTopologyNodes && geometricTopologyChanged) {
-    const edgeDiff = diffElectricalEdges(electricalEdgesForProject(previous), electricalEdgesForProject(next));
+  if (geometricTopologyChanged) {
+    const edgeDiff = diffElectricalEdges(
+      electricalEdgesForProject({ wires: previous.topology.conductors, topologyNodes: previous.topology.nodes }),
+      electricalEdgesForProject({ wires: next.topology.conductors, topologyNodes: next.topology.nodes })
+    );
     if (edgeDiff.connect.length > 0 || edgeDiff.disconnect.length > 0) {
       const applied = await pushWireTopologyTransaction([
         ...edgeDiff.disconnect.map((wire) => ({ kind: "disconnect" as const, wire })),
@@ -597,24 +592,7 @@ async function syncProjectSnapshotToCore(previous: WebviewProjectState, next: We
     return;
   }
 
-  const removedWireEdges = previous.wires.filter((wire) => {
-    const nextWire = nextWiresById.get(wire.id);
-    return !nextWire || !sameWireEndpoints(wire, nextWire);
-  });
-  const addedWireEdges = next.wires.filter((wire) => {
-    const previousWire = previousWiresById.get(wire.id);
-    return !previousWire || !sameWireEndpoints(previousWire, wire);
-  });
-  if (!componentSetChanged && (removedWireEdges.length > 0 || addedWireEdges.length > 0)) {
-    const applied = await pushWireTopologyTransaction([
-      ...removedWireEdges.map((wire) => ({ kind: "disconnect" as const, wire })),
-      ...addedWireEdges.map((wire) => ({ kind: "connect" as const, wire })),
-    ]);
-    if (!applied) await queueCoreRebuild();
-    return;
-  }
-
-  for (const previousWire of previous.wires) {
+  for (const previousWire of previous.topology.conductors) {
     const nextWire = nextWiresById.get(previousWire.id);
     if (!nextWire || !sameWireEndpoints(previousWire, nextWire)) {
       pushRemoveWireToCore(previousWire);
@@ -650,7 +628,7 @@ async function syncProjectSnapshotToCore(previous: WebviewProjectState, next: We
     }
   }
 
-  const addedOrChangedWires = next.wires.filter((wire) => {
+  const addedOrChangedWires = next.topology.conductors.filter((wire) => {
     const previousWire = previousWiresById.get(wire.id);
     return !previousWire || !sameWireEndpoints(previousWire, wire);
   });
@@ -683,11 +661,11 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       // Vários fluxos client-side mutam `state` na Webview e mandam o snapshot inteiro aqui. O diff
       // precisa cobrir também propriedades/endpoints, porque undo/redo passa por este caminho.
       const previous = state.schematicState;
-      const topologyChanged = JSON.stringify([previous.components, previous.wires, previous.topologyNodes ?? []]) !==
-        JSON.stringify([message.project.components, message.project.wires, message.project.topologyNodes ?? []]);
+      const topologyChanged = JSON.stringify([previous.components, previous.topology]) !==
+        JSON.stringify([message.project.components, message.project.topology]);
       state.schematicState = topologyChanged
-        ? { ...message.project, topologyRevision: (previous.topologyRevision ?? 0) + 1 }
-        : { ...message.project, topologyRevision: previous.topologyRevision ?? 0 };
+        ? { ...message.project, topology: { ...message.project.topology, revision: previous.topology.revision + 1 } }
+        : { ...message.project, topology: { ...message.project.topology, revision: previous.topology.revision } };
       enqueueProjectSnapshotSync(previous, state.schematicState);
       if (topologyChanged) syncSchematicPanel();
       return;
@@ -734,19 +712,19 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
     }
     case "requestInsertItems": {
       const existingComponentIds = new Set(state.schematicState.components.map((component) => component.id));
-      const existingWireIds = new Set(state.schematicState.wires.map((wire) => wire.id));
+      const existingWireIds = new Set(state.schematicState.topology.conductors.map((wire) => wire.id));
       const components = message.components.filter((component) => !existingComponentIds.has(component.id));
       const insertedComponentIds = new Set(components.map((component) => component.id));
       const wires = message.wires.filter((wire) =>
         !existingWireIds.has(wire.id) &&
-        (existingComponentIds.has(wire.from.componentId) || insertedComponentIds.has(wire.from.componentId)) &&
-        (existingComponentIds.has(wire.to.componentId) || insertedComponentIds.has(wire.to.componentId))
+        (existingComponentIds.has(endpointId(wire.from)) || insertedComponentIds.has(endpointId(wire.from))) &&
+        (existingComponentIds.has(endpointId(wire.to)) || insertedComponentIds.has(endpointId(wire.to)))
       );
 
       state.schematicState = {
         ...state.schematicState,
         components: [...state.schematicState.components, ...components],
-        wires: [...state.schematicState.wires, ...wires],
+        topology: { ...state.schematicState.topology, conductors: [...state.schematicState.topology.conductors, ...wires] },
         selectedComponentIds: components.map((component) => component.id),
         selectedWireIds: wires.map((wire) => wire.id),
       };
@@ -762,22 +740,24 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       pushRemoveToCore(message.componentId); // remove a instância; Netlist::removeComponent já desconecta os fios dela no Core
       coreInstanceIdByComponentId.delete(message.componentId);
       mcuTargetCoreIdByComponentId.delete(message.componentId);
-      const previousWires = state.schematicState.wires;
-      const previousNodes = state.schematicState.topologyNodes;
+      const previousWires = state.schematicState.topology.conductors;
+      const previousNodes = state.schematicState.topology.nodes;
       const afterRemoval = {
         components: state.schematicState.components.filter((component) => component.id !== message.componentId),
-        wires: previousWires.filter((wire) => wire.from.componentId !== message.componentId && wire.to.componentId !== message.componentId),
+        wires: previousWires.filter((wire) => endpointId(wire.from) !== message.componentId && endpointId(wire.to) !== message.componentId),
       };
-      // Apagar um componente pode derrubar o grau de uma junção que ele tocava (ou de uma
-      // encadeada além dela) pra <=2 -- `removeOrphanNodes` cascateia a limpeza/colapso pra nunca
-      // deixar uma junção "bola laranja" órfã presa no esquemático (ver `.spec` seção do refactor
-      // de fios).
-      const normalized = normalizeRuntimeTopology(afterRemoval.components, afterRemoval.wires, previousNodes);
+      // Apagar um componente pode derrubar o grau de um nó de topologia que ele tocava (ou de um
+      // encadeado além dele) pra <=2 -- `removeOrphanNodes` cascateia a limpeza/colapso pra nunca
+      // deixar uma "bola laranja" órfã presa no esquemático (ver `.spec` seção 24/25).
+      const normalized = normalizeWireGeometry({ components: afterRemoval.components, wires: afterRemoval.wires, nodes: previousNodes });
       // Valida antes de commitar -- defesa em profundidade contra um bug futuro em
-      // `normalizeRuntimeTopology`/`removeOrphanNodes` deixar referência órfã (EX-G); o componente
-      // já foi removido no Core acima independentemente do resultado desta checagem.
+      // `normalizeWireGeometry`/`removeOrphanNodes` deixar referência órfã (`.spec` seção 25.3); o
+      // componente já foi removido no Core acima independentemente do resultado desta checagem.
       try {
-        canonicalTopologyFromLegacy(normalized.components, normalized.wires, state.schematicState.topologyRevision ?? 0, normalized.nodes);
+        assertTopologyInvariants(
+          { revision: state.schematicState.topology.revision, nodes: normalized.nodes, conductors: normalized.wires },
+          new Set(normalized.components.map((component) => component.id))
+        );
       } catch (err) {
         reportCoreWarning("validar topologia após remoção de componente", err);
       }
@@ -785,8 +765,7 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       state.schematicState = {
         ...state.schematicState,
         components: normalized.components,
-        topologyNodes: normalized.nodes,
-        wires: normalized.wires,
+        topology: { ...state.schematicState.topology, nodes: normalized.nodes, conductors: normalized.wires },
         selectedComponentIds: state.schematicState.selectedComponentIds.filter((id) => id !== message.componentId),
         selectedWireIds: state.schematicState.selectedWireIds.filter((id) => survivingWireIds.has(id)),
         pendingConnection:
@@ -818,16 +797,19 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       return;
     }
     case "requestRemoveWire": {
-      const removedWire = state.schematicState.wires.find((wire) => wire.id === message.wireId);
-      const previousWires = state.schematicState.wires;
-      const previousNodes = state.schematicState.topologyNodes;
+      const removedWire = state.schematicState.topology.conductors.find((wire) => wire.id === message.wireId);
+      const previousWires = state.schematicState.topology.conductors;
+      const previousNodes = state.schematicState.topology.nodes;
       const afterRemoval = {
         components: state.schematicState.components,
         wires: previousWires.filter((wire) => wire.id !== message.wireId),
       };
-      const normalized = normalizeRuntimeTopology(afterRemoval.components, afterRemoval.wires, previousNodes);
+      const normalized = normalizeWireGeometry({ components: afterRemoval.components, wires: afterRemoval.wires, nodes: previousNodes });
       try {
-        canonicalTopologyFromLegacy(normalized.components, normalized.wires, state.schematicState.topologyRevision ?? 0, normalized.nodes);
+        assertTopologyInvariants(
+          { revision: state.schematicState.topology.revision, nodes: normalized.nodes, conductors: normalized.wires },
+          new Set(normalized.components.map((component) => component.id))
+        );
       } catch (err) {
         reportCoreWarning("validar topologia após remoção de fio", err);
       }
@@ -835,8 +817,7 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       state.schematicState = {
         ...state.schematicState,
         components: normalized.components,
-        topologyNodes: normalized.nodes,
-        wires: normalized.wires,
+        topology: { ...state.schematicState.topology, nodes: normalized.nodes, conductors: normalized.wires },
         selectedWireIds: state.schematicState.selectedWireIds.filter((id) => survivingWireIds.has(id)),
       };
       syncSchematicPanel();
@@ -863,7 +844,7 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       return;
     }
     case "requestConnectEndpoints": {
-      const currentRevision = state.schematicState.topologyRevision ?? 0;
+      const currentRevision = state.schematicState.topology.revision;
       if (message.baseRevision !== currentRevision) {
         // O cliente trabalhou sobre uma projeção antiga. Não tenta mesclar geometria por heurística:
         // republica a revisão canônica e deixa o usuário repetir o gesto sobre o estado atual.
@@ -873,7 +854,7 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       let connected;
       try {
         connected = connectEndpointToNode(
-          { components: state.schematicState.components, wires: state.schematicState.wires, nodes: state.schematicState.topologyNodes },
+          { components: state.schematicState.components, wires: state.schematicState.topology.conductors, nodes: state.schematicState.topology.nodes },
           message.from,
           message.to,
           message.points,
@@ -888,21 +869,22 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
         return;
       }
       const replaced = new Set(connected.replacedWireIds);
+      const nextTopology: CanonicalTopologyDocument = {
+        revision: currentRevision + 1,
+        nodes: [...state.schematicState.topology.nodes, ...connected.newNodes],
+        conductors: [...state.schematicState.topology.conductors.filter((wire) => !replaced.has(wire.id)), ...connected.newWires],
+      };
       const nextState: WebviewProjectState = {
         ...state.schematicState,
-        topologyNodes: [...(state.schematicState.topologyNodes ?? []), ...connected.newNodes],
-        wires: [...state.schematicState.wires.filter((wire) => !replaced.has(wire.id)), ...connected.newWires],
+        topology: nextTopology,
         selectedComponentIds: [],
         selectedWireIds: connected.newWires.length > 0 ? [connected.newWires[connected.newWires.length - 1]!.id] : [],
         pendingConnection: undefined,
-        topologyRevision: currentRevision + 1,
       };
       try {
         // Valida ANTES de aceitar a mutação -- nó/condutor duplicado, endpoint órfão, condutor de
-        // comprimento topológico zero -- em vez de só na borda de save/load (EX-G). `assertTopologyInvariants`
-        // roda como efeito colateral de `canonicalTopologyFromLegacy`; o resultado em si é descartado
-        // aqui, só a validação importa.
-        canonicalTopologyFromLegacy(nextState.components, nextState.wires, nextState.topologyRevision ?? 0, nextState.topologyNodes ?? []);
+        // comprimento topológico zero -- em vez de só na borda de save/load (`.spec` seção 25.3).
+        assertTopologyInvariants(nextTopology, new Set(nextState.components.map((component) => component.id)));
       } catch (err) {
         reportCoreWarning("validar topologia resultante", err);
         return;
@@ -915,7 +897,10 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
         // rejeitada (conflito de revisão, endpoint que ainda não resolveu no Core, etc.), não mais
         // pro caminho feliz.
         const previous = state.schematicState;
-        const edgeDiff = diffElectricalEdges(electricalEdgesForProject(previous), electricalEdgesForProject(nextState));
+        const edgeDiff = diffElectricalEdges(
+          electricalEdgesForProject({ wires: previous.topology.conductors, topologyNodes: previous.topology.nodes }),
+          electricalEdgesForProject({ wires: nextTopology.conductors, topologyNodes: nextTopology.nodes })
+        );
         state.schematicState = nextState;
         try {
           const applied = edgeDiff.connect.length === 0 && edgeDiff.disconnect.length === 0
@@ -939,20 +924,6 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
           reportCoreWarning("aplicar transação de fio", err);
         }
       })();
-      return;
-    }
-    case "requestStartWireFromWire": {
-      // Draft puro: não divide o fio, não cria Junction e não toca no Core. Esc/botão direito/troca
-      // de estado podem simplesmente limpar `pendingConnection` sem deixar qualquer resíduo.
-      const hit = state.schematicState.wires.some((wire) => wire.id === message.wireId);
-      if (!hit) return;
-      state.schematicState = {
-        ...state.schematicState,
-        selectedComponentIds: [],
-        selectedWireIds: [],
-        pendingConnection: { kind: "wire", wireId: message.wireId, point: message.point },
-      };
-      syncSchematicPanel();
       return;
     }
     case "requestRotateComponent": {
@@ -1022,13 +993,13 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       const newPinIds = newPins ? new Set(newPins.map((pin) => pin.id)) : undefined;
 
       const nextWires = newPinIds
-        ? state.schematicState.wires.filter((wire) => {
+        ? state.schematicState.topology.conductors.filter((wire) => {
             const touchesRemovedPin =
-              (wire.from.componentId === message.componentId && !newPinIds.has(wire.from.pinId)) ||
-              (wire.to.componentId === message.componentId && !newPinIds.has(wire.to.pinId));
+              (endpointId(wire.from) === message.componentId && !newPinIds.has(endpointPinId(wire.from))) ||
+              (endpointId(wire.to) === message.componentId && !newPinIds.has(endpointPinId(wire.to)));
             return !touchesRemovedPin;
           })
-        : state.schematicState.wires;
+        : state.schematicState.topology.conductors;
 
       state.schematicState = {
         ...state.schematicState,
@@ -1037,9 +1008,9 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
             ? { ...component, properties: updatedProperties, ...(newPins ? { pins: newPins } : {}) }
             : component
         ),
-        wires: nextWires,
+        topology: { ...state.schematicState.topology, conductors: nextWires },
         selectedWireIds:
-          nextWires === state.schematicState.wires
+          nextWires === state.schematicState.topology.conductors
             ? state.schematicState.selectedWireIds
             : state.schematicState.selectedWireIds.filter((id) => nextWires.some((wire) => wire.id === id)),
       };
@@ -1177,12 +1148,12 @@ async function createSubcircuitFromSelectionHandler(componentIds: string[]): Pro
   const typeId = `subcircuits.${safeSlug}`;
 
   // 3. Categorizar fios
-  const allWires = state.schematicState.wires;
+  const allWires = state.schematicState.topology.conductors;
   const internalWires: WebviewWireModel[] = [];
   const boundaryWires: WebviewWireModel[] = [];
   for (const wire of allWires) {
-    const fromIn = selectedSet.has(wire.from.componentId);
-    const toIn = selectedSet.has(wire.to.componentId);
+    const fromIn = selectedSet.has(endpointId(wire.from));
+    const toIn = selectedSet.has(endpointId(wire.to));
     if (fromIn && toIn) internalWires.push(wire);
     else if (fromIn || toIn) boundaryWires.push(wire);
   }
@@ -1209,14 +1180,14 @@ async function createSubcircuitFromSelectionHandler(componentIds: string[]): Pro
   }
   const tunnels: TunnelEntry[] = boundaryWires.map((wire, i) => {
     const pinName = `P${i + 1}`;
-    const fromIn = selectedSet.has(wire.from.componentId);
+    const fromIn = selectedSet.has(endpointId(wire.from));
     return {
       id: `tunnel_${pinName.toLowerCase()}`,
       name: pinName,
       x: minX - 64,
       y: minY + i * 16,
-      internalComponentId: fromIn ? wire.from.componentId : wire.to.componentId,
-      internalPinId: fromIn ? wire.from.pinId : wire.to.pinId,
+      internalComponentId: fromIn ? endpointId(wire.from) : endpointId(wire.to),
+      internalPinId: fromIn ? endpointPinId(wire.from) : endpointPinId(wire.to),
       isFromInside: fromIn,
       wireId: wire.id,
     };
@@ -1238,8 +1209,8 @@ async function createSubcircuitFromSelectionHandler(componentIds: string[]): Pro
     exposed: false,
   }));
   const internalWireObjects = internalWires.map((w) => ({
-    from: { componentId: w.from.componentId, pinId: w.from.pinId },
-    to: { componentId: w.to.componentId, pinId: w.to.pinId },
+    from: { componentId: endpointId(w.from), pinId: endpointPinId(w.from) },
+    to: { componentId: endpointId(w.to), pinId: endpointPinId(w.to) },
     ...(w.points ? { points: w.points } : {}),
   }));
   const stubWireObjects = tunnels.map((t) => ({
@@ -1318,24 +1289,22 @@ async function createSubcircuitFromSelectionHandler(componentIds: string[]): Pro
   // 10. Reconectar fios de fronteira ao novo subcircuito
   const newBoundaryWires: WebviewWireModel[] = tunnels.map((t) => {
     const original = boundaryWires.find((w) => w.id === t.wireId)!;
-    const externalEndpoint = t.isFromInside
-      ? { componentId: original.to.componentId, pinId: original.to.pinId }
-      : { componentId: original.from.componentId, pinId: original.from.pinId };
+    const externalEndpoint = t.isFromInside ? original.to : original.from;
     return {
       id: nextId("wire"),
-      from: { componentId: newCompId, pinId: t.name },
+      from: portEndpoint(newCompId, t.name),
       to: externalEndpoint,
     };
   });
 
   // 11. Remover componentes e fios selecionados do esquemático
   const removedWireIds = new Set(
-    allWires.filter((w) => selectedSet.has(w.from.componentId) || selectedSet.has(w.to.componentId)).map((w) => w.id)
+    allWires.filter((w) => selectedSet.has(endpointId(w.from)) || selectedSet.has(endpointId(w.to))).map((w) => w.id)
   );
   state.schematicState = {
     ...state.schematicState,
     components: [...state.schematicState.components.filter((c) => !selectedSet.has(c.id)), newComponent],
-    wires: [...state.schematicState.wires.filter((w) => !removedWireIds.has(w.id)), ...newBoundaryWires],
+    topology: { ...state.schematicState.topology, conductors: [...state.schematicState.topology.conductors.filter((w) => !removedWireIds.has(w.id)), ...newBoundaryWires] },
     selectedComponentIds: [newCompId],
     selectedWireIds: [],
   };
@@ -1380,8 +1349,20 @@ async function openSubcircuitForEditingCommand(sourceId: string): Promise<void> 
   const manifestTopology = typeof manifest.topology === "object" && manifest.topology !== null ? manifest.topology as Record<string, unknown> : undefined;
   const rawWires = manifestTopology && Array.isArray(manifestTopology.conductors) ? manifestTopology.conductors : Array.isArray(manifest.wires) ? manifest.wires : [];
   const rawTopologyNodes = manifestTopology && Array.isArray(manifestTopology.nodes) ? manifestTopology.nodes : [];
+  // Formato antigo (pré-migração, `.spec` seção 19.2): nó de topologia gravado como componente
+  // `connectors.junction` dentro de `components[]`, em vez de `topology.nodes[]`. Convertido aqui
+  // pra `TopologyNode`, nunca deixado passar como componente vivo -- o resto do sistema (`main.ts`/
+  // `wireTopology.ts`) não sabe mais tratar `connectors.junction` como nó de topologia desde a Fase
+  // C completa (`.spec` seção 25.6).
+  const legacyJunctionNodes: TopologyNode[] = rawComponents
+    .filter((value): value is Record<string, unknown> => typeof value === "object" && value !== null && value.typeId === JUNCTION_TYPE_ID)
+    .map((raw) => {
+      const visual = (typeof raw.visual === "object" && raw.visual !== null ? raw.visual : {}) as Record<string, unknown>;
+      return { id: String(raw.id ?? ""), position: { x: typeof visual.x === "number" ? visual.x : 0, y: typeof visual.y === "number" ? visual.y : 0 } };
+    })
+    .filter((node) => node.id);
   const internalComponents: WebviewComponentModel[] = rawComponents
-    .filter((value): value is Record<string, unknown> => typeof value === "object" && value !== null)
+    .filter((value): value is Record<string, unknown> => typeof value === "object" && value !== null && value.typeId !== JUNCTION_TYPE_ID)
     .map((raw) => {
       const visual = (typeof raw.visual === "object" && raw.visual !== null ? raw.visual : {}) as Record<string, unknown>;
       const properties = (typeof raw.properties === "object" && raw.properties !== null ? raw.properties : {}) as Record<string, string | number | boolean>;
@@ -1391,7 +1372,7 @@ async function openSubcircuitForEditingCommand(sourceId: string): Promise<void> 
         id: String(raw.id ?? ""),
         typeId,
         label: String(raw.id ?? ""),
-        hidden: typeId === JUNCTION_TYPE_ID ? true : (descriptor?.hidden ?? false),
+        hidden: descriptor?.hidden ?? false,
         showValue: hasShowOnSymbolProperty(descriptor),
         x: typeof visual.x === "number" ? visual.x : 0,
         y: typeof visual.y === "number" ? visual.y : 0,
@@ -1426,28 +1407,37 @@ async function openSubcircuitForEditingCommand(sourceId: string): Promise<void> 
     );
   }
 
+  const legacyJunctionNodeIds = new Set(legacyJunctionNodes.map((node) => node.id));
   const rawWiresParsed: WebviewWireModel[] = rawWires
     .filter((value): value is Record<string, unknown> => typeof value === "object" && value !== null)
     .map((raw) => {
-      const endpoint = (value: unknown): { componentId: string; pinId: string } => {
+      const endpoint = (value: unknown): CanonicalEndpoint => {
         const item = value as Record<string, unknown>;
-        return item?.kind === "node" ? { componentId: String(item.nodeId ?? ""), pinId: "pin-1" } : { componentId: String(item?.componentId ?? ""), pinId: String(item?.pinId ?? "") };
+        if (item?.kind === "node") return { kind: "node", nodeId: String(item.nodeId ?? "") };
+        const componentId = String(item?.componentId ?? "");
+        // Formato antigo: wire referencia o id do componente `connectors.junction` direto, sem
+        // `kind` -- reescreve pra `node` agora que esse id só existe em `legacyJunctionNodes`.
+        if (legacyJunctionNodeIds.has(componentId)) return { kind: "node", nodeId: componentId };
+        return { kind: "port", componentId, pinId: String(item?.pinId ?? "") };
       };
       const from = endpoint(raw.from); const to = endpoint(raw.to);
       const pointsRaw = Array.isArray(raw.vertices) ? raw.vertices : Array.isArray(raw.points) ? raw.points : [];
       const points = pointsRaw as Array<{ x: number; y: number }>;
       return { id: String(raw.id ?? nextId("wire")), from, to, ...(points.length > 0 ? { points } : {}) };
     })
-    .filter((wire) => wire.from?.componentId && wire.to?.componentId);
+    .filter((wire) => endpointId(wire.from) && endpointId(wire.to));
 
   // Autocorrige `.lssubcircuit` salvo antes do refactor de fios (junção órfã/duplicada, fio de
   // comprimento zero) -- roda ANTES de virar `initialComponents`/`initialWires` (a baseline de
   // "sujo"), pra um arquivo recém-autocurado não abrir a sessão já marcada como alterada.
-  const loadedNodes = rawTopologyNodes.filter((value): value is Record<string, unknown> => typeof value === "object" && value !== null).map((node) => {
-    const position = typeof node.position === "object" && node.position !== null ? node.position as Record<string, unknown> : {};
-    return { id: String(node.id ?? ""), x: Number(position.x ?? 0), y: Number(position.y ?? 0) };
-  }).filter((node) => node.id);
-  const normalized = normalizeRuntimeTopology(components, rawWiresParsed, loadedNodes);
+  const loadedNodes: TopologyNode[] = [
+    ...rawTopologyNodes.filter((value): value is Record<string, unknown> => typeof value === "object" && value !== null).map((node) => {
+      const position = typeof node.position === "object" && node.position !== null ? node.position as Record<string, unknown> : {};
+      return { id: String(node.id ?? ""), position: { x: Number(position.x ?? 0), y: Number(position.y ?? 0) } };
+    }).filter((node) => node.id),
+    ...legacyJunctionNodes,
+  ];
+  const normalized = normalizeWireGeometry({ components, wires: rawWiresParsed, nodes: loadedNodes });
   const wires = normalized.wires;
 
   state.subcircuitEditingStack.push({
@@ -1464,9 +1454,7 @@ async function openSubcircuitForEditingCommand(sourceId: string): Promise<void> 
   state.schematicState = {
     ...state.schematicState,
     components: normalized.components,
-    wires,
-    topologyNodes: normalized.nodes,
-    topologyRevision: Number(manifestTopology?.revision ?? 0),
+    topology: { revision: Number(manifestTopology?.revision ?? 0), nodes: normalized.nodes, conductors: wires },
     viewport: { x: 0, y: 0, zoom: 1 },
     selectedComponentIds: [],
     selectedWireIds: [],
@@ -1487,7 +1475,7 @@ type SubcircuitEditingSession = (typeof state.subcircuitEditingStack)[number];
  * Wires` (estado logo após abrir a sessão, ver `openSubcircuitForEditingCommand`) em vez do último
  * save do `.lsproj`. */
 function isSubcircuitEditingSessionDirty(session: SubcircuitEditingSession): boolean {
-  const current = JSON.stringify({ components: state.schematicState.components, wires: state.schematicState.wires, nodes: state.schematicState.topologyNodes });
+  const current = JSON.stringify({ components: state.schematicState.components, wires: state.schematicState.topology.conductors, nodes: state.schematicState.topology.nodes });
   const initial = JSON.stringify({ components: session.initialComponents, wires: session.initialWires, nodes: session.initialTopologyNodes });
   return current !== initial;
 }
@@ -1524,13 +1512,9 @@ async function writeSubcircuitEditingSessionBack(session: SubcircuitEditingSessi
     );
   }
 
-  // `boardVisual` (posição no overlay de Modo Placa, ver `WebviewComponentModel.boardX/Y`) é uma
-  // propriedade do componente que esta sessão de edição NUNCA expõe/toca -- reconstruir cada
-  // componente do zero (só com `id`/`typeId`/`properties`/`visual`/`exposed`) apagaria esse campo
-  // silenciosamente pra quem já tinha posicionado o overlay antes. Parte do objeto ORIGINAL de cada
-  // componente que sobreviveu à sessão, sobrescrevendo só os campos que de fato passam por
-  // `WebviewComponentModel` -- um componente novo (criado durante a sessão) não tem original, cai no
-  // shape simples de sempre.
+  // `boardVisual` é independente de `visual`: a sessão agora o edita de verdade em Modo Placa.
+  // O spread preserva arquivos antigos quando nunca houve posição de placa; quando boardX/Y estão
+  // presentes, a disposição confirmada na Webview substitui atomicamente o valor anterior.
   const originalComponents = Array.isArray(session.originalManifest.components)
     ? (session.originalManifest.components as Array<Record<string, unknown>>)
     : [];
@@ -1547,13 +1531,35 @@ async function writeSubcircuitEditingSessionBack(session: SubcircuitEditingSessi
       flipH: component.flipH ?? false,
       flipV: component.flipV ?? false,
     },
+    ...(component.boardX !== undefined && component.boardY !== undefined
+      ? {
+          boardVisual: {
+            x: component.boardX,
+            y: component.boardY,
+            rotation: component.boardRotation ?? 0,
+            flipH: component.boardFlipH ?? false,
+            flipV: component.boardFlipV ?? false,
+          },
+        }
+      : {}),
     exposed: component.exposed === true,
   }));
   // Fios que tocam um componente de autoria (nunca deveria acontecer -- `other.package`/
   // `other.package_pin`/a Figura têm `pinCount: 0`, sem pino nenhum pra desenhar fio até) são
-  // filtrados por defesa em profundidade, nunca gravados apontando pra um id que não existe mais em
-  // `components[]`.
-  const topology = canonicalTopologyFromLegacy(compiled.remainingComponents, state.schematicState.wires, state.schematicState.topologyRevision ?? 0, state.schematicState.topologyNodes ?? []);
+  // rejeitados por defesa em profundidade, nunca gravados apontando pra um id que não existe mais em
+  // `components[]` -- `state.schematicState.topology` JÁ é o documento canônico (Fase C completa,
+  // `.spec` seção 25.6), só falta validar contra o conjunto de componentes SOBREVIVENTE (sem os de
+  // autoria) antes de escrever em disco.
+  const topology = state.schematicState.topology;
+  try {
+    assertTopologyInvariants(topology, new Set(compiled.remainingComponents.map((component) => component.id)));
+  } catch (err) {
+    void vscode.window.showErrorMessage(
+      "Não foi possível salvar o subcircuito -- topologia inválida.",
+      { modal: true, detail: err instanceof Error ? err.message : String(err) }
+    );
+    return false;
+  }
   const updatedManifest: Record<string, unknown> = { ...session.originalManifest, components, topology };
   delete updatedManifest.wires;
   if (compiled.touchedPackageAuthoring) {

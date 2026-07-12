@@ -1,5 +1,5 @@
 import { WEBVIEW_MESSAGE_VERSION, ComponentReadoutValue, HostToWebviewMessage, InternalComponentSnapshot, SimulationStatus, WebviewToHostMessage } from "./messages.js";
-import { InteractionKindEntry, McuSerialPortEntry, PropertySchemaEntry, TUNNEL_TYPE_ID, ViewSpecInteraction, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./model.js";
+import { CanonicalEndpoint, CanonicalTopologyDocument, InteractionKindEntry, McuSerialPortEntry, PropertySchemaEntry, TUNNEL_TYPE_ID, ViewSpecInteraction, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, endpointId, endpointPinId, nodeEndpoint, portEndpoint, remapEndpoint } from "./model.js";
 import { ComponentBox, PIN_RADIUS, componentBox, componentLocalOrigin, componentSymbolSvg, dialKnobSvg, hasRealPinPosition, missingSubcircuitPlaceholderSvg, packageSymbolSvg, pinLocalPosition, registerPackage } from "./componentSymbols.js";
 import { detectChannelTrigger, findTriggerAnchorIndex, triggerAlignedWindowEndNs, visibleSampleWindowByTime } from "./instrumentTrigger.js";
 import {
@@ -21,8 +21,9 @@ import {
   wireCornerIndexNearSegmentPoint,
 } from "./wireGeometry.js";
 import { formatEngineeringValue, defaultSiPrefixFactor, SI_PREFIXES } from "./valueFormatting.js";
-import { isJunctionVisible, pinScenePosition as resolveEndpointScenePosition } from "./wireTopology.js";
+import { findAtPosition, isJunctionVisible, movableTopologyNodeIds, endpointScenePosition as resolveEndpointScenePosition } from "./wireTopology.js";
 import { WireSpatialIndex } from "./wireSpatialIndex.js";
+import { applyBoardTransforms, applyExposedSelection, captureBoardTransforms, captureCircuitTransforms, ComponentTransform, restoreCircuitTransforms } from "./subcircuitBoardMode.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const FINE_WIRE_STEP = WIRE_GRID_SIZE / 10;
@@ -41,7 +42,7 @@ function createEmptyState(): WebviewProjectState {
     locale: "pt-BR",
     catalog: [],
     components: [],
-    wires: [],
+    topology: { revision: 0, nodes: [], conductors: [] },
     viewport: { x: 0, y: 0, zoom: 1 },
     selectedComponentIds: [],
     selectedWireIds: [],
@@ -381,6 +382,111 @@ let selectedTextLabel: { componentId: string; kind: ExternalLabelKind } | undefi
 let placingTypeId: string | null = null;
 let placementGhostEl: HTMLElement | null = null;
 
+let subcircuitBoardMode = false;
+const circuitTransformByComponentId = new Map<string, ComponentTransform>();
+
+function isBoardModeVisible(component: WebviewComponentModel): boolean {
+  return catalogEntryFor(component.typeId)?.graphical === true ||
+    component.typeId === "other.package" || component.packageIconRole === true;
+}
+
+function syncBoardVisualFromLiveComponents(): void {
+  if (!subcircuitBoardMode) return;
+  captureBoardTransforms(state.components, isBoardModeVisible);
+}
+
+function projectCircuitTransformsForHost(): WebviewProjectState {
+  if (!subcircuitBoardMode) return state;
+  syncBoardVisualFromLiveComponents();
+  const projected = structuredClone(state);
+  restoreCircuitTransforms(projected.components, circuitTransformByComponentId);
+  return projected;
+}
+
+function setSubcircuitBoardMode(enabled: boolean): void {
+  if (!state.subcircuitEditingContext || enabled === subcircuitBoardMode) return;
+  cancelActiveTool();
+  clearSelection();
+  if (enabled) {
+    circuitTransformByComponentId.clear();
+    for (const [id, transform] of captureCircuitTransforms(state.components)) circuitTransformByComponentId.set(id, transform);
+    applyBoardTransforms(state.components, isBoardModeVisible);
+    subcircuitBoardMode = true;
+  } else {
+    syncBoardVisualFromLiveComponents();
+    restoreCircuitTransforms(state.components, circuitTransformByComponentId);
+    subcircuitBoardMode = false;
+    circuitTransformByComponentId.clear();
+    persistState();
+  }
+  render();
+}
+
+function restoreBoardViewAfterHostSync(): void {
+  if (!subcircuitBoardMode) return;
+  if (!state.subcircuitEditingContext) {
+    subcircuitBoardMode = false;
+    circuitTransformByComponentId.clear();
+    return;
+  }
+  circuitTransformByComponentId.clear();
+  for (const [id, transform] of captureCircuitTransforms(state.components)) circuitTransformByComponentId.set(id, transform);
+  applyBoardTransforms(state.components, isBoardModeVisible);
+}
+
+function openExposedComponentsDialog(): void {
+  if (!state.subcircuitEditingContext) return;
+  const dialog = document.createElement("dialog");
+  dialog.className = "exposed-components-dialog";
+  const form = document.createElement("form");
+  form.method = "dialog";
+  form.className = "exposed-components-form";
+  const title = document.createElement("h2");
+  title.textContent = t("exposedComponentsDialogTitle");
+  form.appendChild(title);
+  const list = document.createElement("div");
+  list.className = "exposed-components-list";
+  const choices = new Map<string, HTMLInputElement>();
+  for (const component of state.components.filter((entry) => !entry.hidden && entry.typeId !== "other.package" && !entry.packageIconRole)) {
+    const row = document.createElement("label");
+    row.className = "exposed-components-row";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = component.exposed === true;
+    choices.set(component.id, input);
+    const text = document.createElement("span");
+    text.textContent = `${component.label} (${component.id})${catalogEntryFor(component.typeId)?.graphical === true ? "" : ` ${t("notGraphicalHint")}`}`;
+    row.append(input, text);
+    list.appendChild(row);
+  }
+  form.appendChild(list);
+  const actions = document.createElement("div");
+  actions.className = "exposed-components-actions";
+  const selectAll = document.createElement("button");
+  selectAll.type = "button"; selectAll.textContent = t("exposedComponentsSelectAll");
+  selectAll.onclick = () => choices.forEach((input) => { input.checked = true; });
+  const clearAll = document.createElement("button");
+  clearAll.type = "button"; clearAll.textContent = t("exposedComponentsClearAll");
+  clearAll.onclick = () => choices.forEach((input) => { input.checked = false; });
+  const cancel = document.createElement("button");
+  cancel.type = "button"; cancel.textContent = t("exposedComponentsCancel"); cancel.onclick = () => dialog.close("cancel");
+  const confirm = document.createElement("button");
+  confirm.type = "submit"; confirm.value = "confirm"; confirm.textContent = t("exposedComponentsConfirm");
+  actions.append(selectAll, clearAll, cancel, confirm);
+  form.appendChild(actions);
+  dialog.appendChild(form);
+  dialog.addEventListener("close", () => {
+    if (dialog.returnValue === "confirm") {
+      applyExposedSelection(state.components, new Set([...choices].filter(([, input]) => input.checked).map(([id]) => id)));
+      persistState();
+      render();
+    }
+    dialog.remove();
+  });
+  document.body.appendChild(dialog);
+  dialog.showModal();
+}
+
 const propertyDialog = document.createElement("dialog");
 propertyDialog.className = "property-dialog";
 document.body.appendChild(propertyDialog);
@@ -569,8 +675,7 @@ function renderBoardOverlaysFor(component: WebviewComponentModel): HTMLElement[]
 // senão clicar pra selecionar algo viraria uma ação desfazível).
 interface UndoSnapshot {
   components: WebviewComponentModel[];
-  wires: WebviewWireModel[];
-  topologyNodes: NonNullable<WebviewProjectState["topologyNodes"]>;
+  topology: CanonicalTopologyDocument;
   selectedComponentIds: string[];
   selectedWireIds: string[];
 }
@@ -594,11 +699,10 @@ function activeUndoHistory(): UndoHistory {
   return mainUndoHistory;
 }
 
-function snapshotOfProjectState(project: Pick<WebviewProjectState, "components" | "wires" | "topologyNodes" | "selectedComponentIds" | "selectedWireIds">): UndoSnapshot {
+function snapshotOfProjectState(project: Pick<WebviewProjectState, "components" | "topology" | "selectedComponentIds" | "selectedWireIds">): UndoSnapshot {
   return {
     components: structuredClone(project.components),
-    wires: structuredClone(project.wires),
-    topologyNodes: structuredClone(project.topologyNodes ?? []),
+    topology: structuredClone(project.topology),
     selectedComponentIds: [...project.selectedComponentIds],
     selectedWireIds: [...project.selectedWireIds],
   };
@@ -608,9 +712,9 @@ function captureUndoSnapshot(): UndoSnapshot {
   return snapshotOfProjectState(state);
 }
 
-/** Chave de comparação -- só `components`/`wires` (NUNCA seleção, ver comentário da seção). */
-function undoContentKey(snapshot: { components: WebviewComponentModel[]; wires: WebviewWireModel[]; topologyNodes?: WebviewProjectState["topologyNodes"] }): string {
-  return JSON.stringify([snapshot.components, snapshot.wires, snapshot.topologyNodes ?? []]);
+/** Chave de comparação -- só `components`/`topology` (NUNCA seleção, ver comentário da seção). */
+function undoContentKey(snapshot: { components: WebviewComponentModel[]; topology: CanonicalTopologyDocument }): string {
+  return JSON.stringify([snapshot.components, snapshot.topology]);
 }
 
 /** Reseta o histórico (undo E redo) pro estado ATUAL de `state` -- chamado ao entrar/sair da sessão
@@ -671,8 +775,7 @@ function applyUndoSnapshot(snapshot: UndoSnapshot): void {
   isApplyingUndoSnapshot = true;
   try {
     state.components = snapshot.components;
-    state.wires = snapshot.wires;
-    state.topologyNodes = snapshot.topologyNodes;
+    state.topology = snapshot.topology;
     state.selectedComponentIds = snapshot.selectedComponentIds;
     state.selectedWireIds = snapshot.selectedWireIds;
     clearPendingWire();
@@ -709,9 +812,11 @@ function redo(): void {
 // ────────────────────────────────────────────────────────────────────────────────────────────────
 
 function persistState(): void {
+  syncBoardVisualFromLiveComponents();
   recordUndoSnapshotIfChanged();
-  vscode?.setState(state);
-  const outbound: WebviewToHostMessage = { version: WEBVIEW_MESSAGE_VERSION, type: "projectChanged", project: state };
+  const persisted = projectCircuitTransformsForHost();
+  vscode?.setState(persisted);
+  const outbound: WebviewToHostMessage = { version: WEBVIEW_MESSAGE_VERSION, type: "projectChanged", project: persisted };
   vscode?.postMessage(outbound);
 }
 
@@ -795,13 +900,24 @@ function selectOnlyTextLabel(componentId: string, kind: ExternalLabelKind): void
 /** Shift+click: alterna um componente dentro/fora de uma seleção múltipla já existente — convenção
  * comum de desktop, não verificada item-a-item contra o SimulIDE (ver `.spec` seção 13.4). */
 function toggleComponentSelection(componentId: string): void {
-  state.selectedWireIds = [];
   selectedWireSegment = undefined;
   selectedWireCorner = undefined;
   selectedTextLabel = undefined;
   state.selectedComponentIds = isComponentSelected(componentId)
     ? state.selectedComponentIds.filter((id) => id !== componentId)
     : [...state.selectedComponentIds, componentId];
+}
+
+/** Shift/Ctrl+click em fio preserva componentes já selecionados, permitindo mover uma seleção
+ * heterogênea como um grupo. Segmento/canto individual deixa de ser o modelo de seleção neste
+ * gesto; o condutor inteiro entra ou sai da seleção. */
+function toggleWireSelection(wireId: string): void {
+  selectedWireSegment = undefined;
+  selectedWireCorner = undefined;
+  selectedTextLabel = undefined;
+  state.selectedWireIds = isWireSelected(wireId)
+    ? state.selectedWireIds.filter((id) => id !== wireId)
+    : [...state.selectedWireIds, wireId];
 }
 
 /** "" (nada) parado/sem amostra; senão "(0.9x)"/"(120%)" -- mesmo espírito de `InfoWidget::setRate()`
@@ -870,6 +986,64 @@ function beginWireDraft(origin: NonNullable<WebviewProjectState["pendingConnecti
   state.pendingConnection = origin;
   pendingWireRoute = [];
   pendingWireBendLengths = [];
+}
+
+type WireGestureOrigin =
+  | { kind: "pin"; componentId: string; pinId: string; point: Point }
+  | { kind: "wire"; wireId: string; point: Point };
+
+/** Ponto único de decisão pra clicar num alvo de conexão JÁ EXISTENTE (pino, meio-de-segmento,
+ * canto, ou junção) -- antes desta função, cada um dos quatro handles tinha sua PRÓPRIA cópia quase
+ * idêntica desta lógica (checar `placingTypeId`, checar `suppressNextWireInteractionClick`, decidir
+ * "terminar a conexão pendente aqui" vs "começar um draft novo daqui"), e só o pino tratava
+ * corretamente o caso de re-clicar na própria origem pra cancelar. Início de draft é SEMPRE local
+ * (nunca mais um round-trip `requestStartWireFromWire` pela Extension só pra armar
+ * `pendingConnection` -- é estado 100% transitório da Webview, `beginWireDraft` já bastava pro caso
+ * de pino, agora serve pros quatro). Terminar (`state.pendingConnection` já setado) SEMPRE passa
+ * pelo Core via `requestConnectEndpoints` -- isso sim precisa de round-trip, é o único momento em
+ * que a topologia de verdade muda. */
+function handleWireGestureClick(target: WireGestureOrigin): void {
+  if (placingTypeId) return;
+  if (suppressNextWireInteractionClick) {
+    suppressNextWireInteractionClick = false;
+    return;
+  }
+
+  if (!state.pendingConnection) {
+    if (target.kind === "pin") {
+      beginWireDraft({ kind: "pin", componentId: target.componentId, pinId: target.pinId });
+      selectOnlyComponent(target.componentId);
+    } else {
+      beginWireDraft({ kind: "wire", wireId: target.wireId, point: target.point });
+      clearSelection();
+    }
+    pendingWirePreviewTarget = target.point;
+    persistState();
+    render();
+    return;
+  }
+
+  const pending = state.pendingConnection;
+  if (target.kind === "pin" && pending.kind !== "wire" && pending.componentId === target.componentId && pending.pinId === target.pinId) {
+    // Re-clicar na MESMA origem cancela o draft -- só faz sentido pra pino (um ponto discreto e
+    // nomeado); meio-de-fio/junção não tem essa noção de "clicar 2x no mesmo lugar", Esc já cobre.
+    clearPendingWire();
+    persistState();
+    render();
+    return;
+  }
+
+  send({
+    version: WEBVIEW_MESSAGE_VERSION,
+    type: "requestConnectEndpoints",
+    baseRevision: state.topology.revision ?? 0,
+    from: pending.kind === "wire" ? pending : { kind: "pin", componentId: pending.componentId, pinId: pending.pinId },
+    to: target.kind === "pin" ? { kind: "pin", componentId: target.componentId, pinId: target.pinId } : { kind: "wire", wireId: target.wireId, point: target.point },
+    points: pendingWirePointsForTarget(target.point),
+  });
+  clearPendingWire();
+  vscode?.setState(state);
+  render();
 }
 
 function openSelectedProperties(): void {
@@ -1601,8 +1775,7 @@ function clearEphemeralCanvasChildren(canvasContent: HTMLDivElement): void {
     if (!(child instanceof HTMLElement)) continue;
     if (
       child.classList.contains("component--board-overlay") ||
-      child.classList.contains("component-floating-label") ||
-      child.classList.contains("junction-dot")
+      child.classList.contains("component-floating-label")
     ) {
       child.remove();
     }
@@ -1627,7 +1800,7 @@ function render(): void {
   }
 
   const visibleWireIds = new Set<string>();
-  for (const wire of state.wires) {
+  for (const wire of subcircuitBoardMode ? [] : state.topology.conductors) {
     const points = wirePolylinePoints(wire);
     if (points.length < 2) continue;
     const spatialSignature = points.map((point) => `${point.x},${point.y}`).join(";");
@@ -1645,7 +1818,7 @@ function render(): void {
     }
     setPolylinePoints(polyline, points);
     polyline.setAttribute("class", wireClass(wire.id));
-    wireLayer.appendChild(polyline); // reordena pro fim (no-op se já era o último) -- mantém a ordem de state.wires
+    wireLayer.appendChild(polyline); // reordena pro fim (no-op se já era o último) -- mantém a ordem de state.topology.conductors
     renderWireSegmentHandles(wireLayer, wire, points);
     renderWireCornerHandles(wireLayer, wire, points);
   }
@@ -1656,13 +1829,14 @@ function render(): void {
     wireSpatialIndex.removeWire(id);
     wireSpatialSignatures.delete(id);
   }
-  renderPendingWirePreview(wireLayer);
+  if (!subcircuitBoardMode) renderPendingWirePreview(wireLayer);
 
   const visibleComponents: WebviewComponentModel[] = [];
   const subcircuitFileComponents: WebviewComponentModel[] = [];
   const boardModeComponents: WebviewComponentModel[] = [];
   for (const component of state.components) {
     if (component.hidden) continue;
+    if (subcircuitBoardMode && !isBoardModeVisible(component)) continue;
     visibleComponents.push(component);
     if (component.properties.boardModeEnabled) boardModeComponents.push(component);
     if (catalogEntryFor(component.typeId)?.registeredSourceKind === "subcircuit-file") subcircuitFileComponents.push(component);
@@ -1711,8 +1885,15 @@ function render(): void {
     if (valueLabel) canvasContent.appendChild(valueLabel);
   }
 
-  for (const node of state.topologyNodes ?? []) {
-    if (isJunctionVisible(state.wires, node.id)) canvasContent.appendChild(renderJunction(node.id, node.x, node.y));
+  for (const node of state.topology.nodes) {
+    // Dentro do `wireLayer` (SVG), não mais `canvasContent` (`<div>`) -- mesmo espaço de coordenadas
+    // dos dois jeitos (ambos herdam o transform de zoom/pan de `canvasContent`), mas como SVG a
+    // junção fica no MESMO documento das alças de canto/segmento (pintadas por último = por cima,
+    // ordem de inserção natural já que este loop roda depois do loop de fios) e ganha hit-test nativo
+    // consistente com elas -- antes era um `<div>` com `pointer-events:none`, nunca clicável/
+    // arrastável (bug real: impossível conectar um 4º fio a uma junção existente, só por acidente
+    // via a borda de um segmento adjacente).
+    if (isJunctionVisible(state.topology.conductors, node.id)) wireLayer.appendChild(renderJunction(node.id, node.position.x, node.position.y));
   }
 
   renderInstrumentPopups();
@@ -1742,7 +1923,7 @@ function applyMarqueeSelection(start: Point, end: Point, additive: boolean): voi
     })
     .map((component) => component.id);
 
-  const hitWireIds = state.wires
+  const hitWireIds = state.topology.conductors
     .filter((wire) => wireIntersectsRect(wire, left, top, right, bottom))
     .map((wire) => wire.id);
 
@@ -1806,13 +1987,8 @@ function copySelectedItems(): boolean {
   const components = state.components.filter((component) => selectedComponentIds.has(component.id)).map(cloneComponent);
   if (components.length === 0) return false;
 
-  const selectedWireIds = new Set(state.selectedWireIds);
-  const wires = state.wires
-    .filter((wire) =>
-      (selectedWireIds.has(wire.id) || (selectedComponentIds.has(wire.from.componentId) && selectedComponentIds.has(wire.to.componentId))) &&
-      selectedComponentIds.has(wire.from.componentId) &&
-      selectedComponentIds.has(wire.to.componentId)
-    )
+  const wires = state.topology.conductors
+    .filter((wire) => selectedComponentIds.has(endpointId(wire.from)) && selectedComponentIds.has(endpointId(wire.to)))
     .map(cloneWire);
 
   clipboardItems = { components, wires };
@@ -1848,16 +2024,16 @@ function duplicateComponentsForDrag(originals: WebviewComponentModel[]): { compo
     return component;
   });
 
-  const wires = state.wires
-    .filter((wire) => originalIds.has(wire.from.componentId) && originalIds.has(wire.to.componentId))
+  const wires = state.topology.conductors
+    .filter((wire) => originalIds.has(endpointId(wire.from)) && originalIds.has(endpointId(wire.to)))
     .flatMap((source) => {
-      const fromId = idMap.get(source.from.componentId);
-      const toId = idMap.get(source.to.componentId);
-      if (!fromId || !toId) return [];
+      const from = remapEndpoint(source.from, idMap);
+      const to = remapEndpoint(source.to, idMap);
+      if (!from || !to) return [];
       const wire = cloneWire(source);
       wire.id = newWireId();
-      wire.from = { ...wire.from, componentId: fromId };
-      wire.to = { ...wire.to, componentId: toId };
+      wire.from = from;
+      wire.to = to;
       return [wire];
     });
 
@@ -1885,13 +2061,13 @@ function pasteClipboardItems(): void {
   });
 
   const wires = clipboardItems.wires.flatMap((source) => {
-    const fromId = idMap.get(source.from.componentId);
-    const toId = idMap.get(source.to.componentId);
-    if (!fromId || !toId) return [];
+    const from = remapEndpoint(source.from, idMap);
+    const to = remapEndpoint(source.to, idMap);
+    if (!from || !to) return [];
     const wire = cloneWire(source);
     wire.id = newWireId();
-    wire.from = { ...wire.from, componentId: fromId };
-    wire.to = { ...wire.to, componentId: toId };
+    wire.from = from;
+    wire.to = to;
     wire.points = wire.points?.map((point) => ({ x: point.x + WIRE_GRID_SIZE, y: point.y + WIRE_GRID_SIZE }));
     return [wire];
   });
@@ -1899,7 +2075,7 @@ function pasteClipboardItems(): void {
   state = {
     ...state,
     components: [...state.components, ...components],
-    wires: [...state.wires, ...wires],
+    topology: { ...state.topology, conductors: [...state.topology.conductors, ...wires] },
     selectedComponentIds: components.map((component) => component.id),
     selectedWireIds: wires.map((wire) => wire.id),
   };
@@ -1922,7 +2098,7 @@ function wireClass(wireId: string): string {
 
 function normalizeSelectedWireSegment(): void {
   if (!selectedWireSegment) return;
-  const wire = state.wires.find((entry) => entry.id === selectedWireSegment?.wireId);
+  const wire = state.topology.conductors.find((entry) => entry.id === selectedWireSegment?.wireId);
   if (!wire || !isWireSelected(wire.id)) {
     selectedWireSegment = undefined;
     return;
@@ -1936,7 +2112,7 @@ function normalizeSelectedWireSegment(): void {
 
 function normalizeSelectedWireCorner(): void {
   if (!selectedWireCorner) return;
-  const wire = state.wires.find((entry) => entry.id === selectedWireCorner?.wireId);
+  const wire = state.topology.conductors.find((entry) => entry.id === selectedWireCorner?.wireId);
   if (!wire || !isWireSelected(wire.id)) {
     selectedWireCorner = undefined;
     return;
@@ -1988,7 +2164,7 @@ function firstWireSegmentIntersectingRect(
   right: number,
   bottom: number
 ): { wireId: string; segmentIndex: number } | undefined {
-  const wire = state.wires.find((entry) => entry.id === wireId);
+  const wire = state.topology.conductors.find((entry) => entry.id === wireId);
   if (!wire) return undefined;
 
   const points = wirePolylinePoints(wire);
@@ -2116,8 +2292,8 @@ function wirePolylinePoints(wire: WebviewWireModel): Point[] {
   // fonte única) -- antes desta rodada, main.ts reimplementava essa distinção à mão, uma 3ª cópia
   // independente da mesma lógica (`electricalEdgesForProject`/`voltageProbesForProject` já tinham
   // cada uma a sua, ver `docs/27-analise-critica-fios-vs-auditoria-2026-07-11.md`).
-  const fromPos = resolveEndpointScenePosition(state.components, wire.from.componentId, wire.from.pinId, state.topologyNodes);
-  const toPos = resolveEndpointScenePosition(state.components, wire.to.componentId, wire.to.pinId, state.topologyNodes);
+  const fromPos = resolveEndpointScenePosition(state.components, wire.from, state.topology.nodes);
+  const toPos = resolveEndpointScenePosition(state.components, wire.to, state.topology.nodes);
   if (!fromPos || !toPos) return [];
   return buildOrthogonalPath([fromPos, ...(wire.points ?? []), toPos]);
 }
@@ -2146,12 +2322,12 @@ type GroupWireDragTarget =
  * componente que também esteja se movendo no mesmo arrasto. */
 function currentGroupWireSelection(): GroupWireDragTarget | undefined {
   if (selectedWireSegment) {
-    const wire = state.wires.find((entry) => entry.id === selectedWireSegment!.wireId);
+    const wire = state.topology.conductors.find((entry) => entry.id === selectedWireSegment!.wireId);
     if (!wire) return undefined;
     return { kind: "segment", wireId: wire.id, segmentIndex: selectedWireSegment.segmentIndex, startFullPoints: wirePolylinePoints(wire) };
   }
   if (selectedWireCorner) {
-    const wire = state.wires.find((entry) => entry.id === selectedWireCorner!.wireId);
+    const wire = state.topology.conductors.find((entry) => entry.id === selectedWireCorner!.wireId);
     if (!wire) return undefined;
     return { kind: "corner", wireId: wire.id, pointIndex: selectedWireCorner.pointIndex, startFullPoints: wirePolylinePoints(wire) };
   }
@@ -2159,7 +2335,7 @@ function currentGroupWireSelection(): GroupWireDragTarget | undefined {
 }
 
 function applyGroupWireDelta(target: GroupWireDragTarget, dx: number, dy: number): void {
-  const wire = state.wires.find((entry) => entry.id === target.wireId);
+  const wire = state.topology.conductors.find((entry) => entry.id === target.wireId);
   if (!wire) return;
   if (target.kind === "corner") {
     const start = target.startFullPoints[target.pointIndex];
@@ -2174,6 +2350,65 @@ function applyGroupWireDelta(target: GroupWireDragTarget, dx: number, dy: number
     updateWireFromFullPath(wire, moveOrthogonalWireSegment(target.startFullPoints, target.segmentIndex, coordinate));
   }
   updateWireVisual(wire.id);
+}
+
+/** Generaliza `GroupWireDragTarget` (que só cobre UM canto/segmento ativamente arrastado) pra TODA a
+ * seleção múltipla de fios (`state.selectedWireIds`, populada por marquee/Ctrl+click) -- "selecionar
+ * um componente E um fio inteiro (ou vários) e arrastar qualquer um dos dois move tudo junto"
+ * (queixa real do usuário: antes só funcionava se o fio tivesse um canto/segmento individualmente
+ * selecionado, nunca pra seleção de fio inteiro via marquee). Cada fio selecionado translada seus
+ * pontos INTERNOS pelo delta; as duas extremidades reais (índice 0/último de `wirePolylinePoints`)
+ * nunca entram aqui porque são sempre recalculadas dinamicamente da posição do pino/nó (ver
+ * `wirePolylinePoints`) -- só o NÓ DE TOPOLOGIA em si precisa ser deslocado explicitamente quando
+ * `movableTopologyNodeIds` confirma que TODOS os fios que o tocam também estão selecionados (senão
+ * arrastaria um T inteiro por causa de só um dos ramos, rasgando os outros). `excludeWireId` evita
+ * mover em dobro o fio cujo canto/segmento específico já está sendo arrastado por
+ * `applyGroupWireDelta` (tratado à parte, com eixo/snap próprios). */
+interface GroupMoveWireTargets {
+  wires: { wireId: string; startFullPoints: Point[] }[];
+  nodes: { nodeId: string; startX: number; startY: number }[];
+}
+
+function computeGroupMoveWireTargets(excludeWireId?: string, excludeNodeId?: string): GroupMoveWireTargets {
+  const wireIds = new Set(state.selectedWireIds.filter((id) => id !== excludeWireId));
+  const wires: GroupMoveWireTargets["wires"] = [];
+  for (const wireId of wireIds) {
+    const wire = state.topology.conductors.find((entry) => entry.id === wireId);
+    if (!wire) continue;
+    wires.push({ wireId, startFullPoints: wirePolylinePoints(wire) });
+  }
+  if (wires.length === 0) return { wires: [], nodes: [] };
+
+  const snapshot = { components: state.components, wires: state.topology.conductors, nodes: state.topology.nodes };
+  const movableNodeIds = movableTopologyNodeIds(snapshot, wireIds);
+  const nodes: GroupMoveWireTargets["nodes"] = [];
+  for (const nodeId of movableNodeIds) {
+    if (nodeId === excludeNodeId) continue; // já sendo movido pelo arrasto direto da própria junção
+    const node = state.topology.nodes.find((entry) => entry.id === nodeId);
+    if (node) nodes.push({ nodeId, startX: node.position.x, startY: node.position.y });
+  }
+  return { wires, nodes };
+}
+
+function applyGroupMoveWireDelta(targets: GroupMoveWireTargets, dx: number, dy: number): void {
+  for (const { wireId, startFullPoints } of targets.wires) {
+    const wire = state.topology.conductors.find((entry) => entry.id === wireId);
+    if (!wire || startFullPoints.length < 2) continue;
+    const shifted = startFullPoints.map((point, index) =>
+      index === 0 || index === startFullPoints.length - 1 ? point : { x: point.x + dx, y: point.y + dy }
+    );
+    updateWireFromFullPath(wire, shifted);
+  }
+  for (const { nodeId, startX, startY } of targets.nodes) {
+    const node = state.topology.nodes.find((entry) => entry.id === nodeId);
+    if (node) node.position = { x: startX + dx, y: startY + dy };
+  }
+  // Um fio pode ter as duas pontas em nós movidos (ex: dois nós private do mesmo ramo selecionado
+  // junto) -- atualiza TODOS os fios afetados só depois de toda posição já ter sido escrita, nunca
+  // intercalado, senão um fio leria a posição ANTIGA do segundo nó ainda não processado nesta rodada.
+  const touchedWireIds = new Set(targets.wires.map((entry) => entry.wireId));
+  for (const { nodeId } of targets.nodes) for (const wire of wiresByComponentId().get(nodeId) ?? []) touchedWireIds.add(wire.id);
+  for (const wireId of touchedWireIds) updateWireVisual(wireId);
 }
 
 /** Reflete `component.x/y` (já atualizado pelo chamador) na posição DOM + reroteia os fios que
@@ -2222,41 +2457,17 @@ function renderWireCornerHandles(wireLayer: SVGSVGElement, wire: WebviewWireMode
     );
     handle.addEventListener("click", (event) => {
       event.stopPropagation();
-      // Em modo de posicionamento de componente, ignora clique em alça de fio -- nunca inicia uma
-      // derivação por baixo da ferramenta ativa (mesma classe de bug de `cancelActiveTool`, ver
-      // `docs/27-analise-critica-fios-vs-auditoria-2026-07-11.md`, seção "FSM"). `stopPropagation`
-      // já rodou, então não cai pro handler do canvas de fundo -- o clique só é descartado.
-      if (placingTypeId) return;
-      if (suppressNextWireInteractionClick) {
-        suppressNextWireInteractionClick = false;
-        return;
-      }
-
-      if (state.pendingConnection) {
-        // Termina a derivação em andamento exatamente neste canto -- mesma lógica de "clicar num
-        // fio" (split local da rota), só que o ponto já é
-        // exato (canto real, sem projeção/snap necessários).
-        send({
-          version: WEBVIEW_MESSAGE_VERSION,
-          type: "requestConnectEndpoints",
-          baseRevision: state.topologyRevision ?? 0,
-          from: state.pendingConnection.kind === "wire"
-            ? state.pendingConnection
-            : { kind: "pin", componentId: state.pendingConnection.componentId, pinId: state.pendingConnection.pinId },
-          to: { kind: "wire", wireId: wire.id, point },
-          points: pendingWirePointsForTarget(point),
-        });
-        clearPendingWire();
-        vscode?.setState(state);
+      // Toggle de seleção múltipla é resolvido AQUI, fora de `handleWireGestureClick` -- é uma
+      // preocupação ortogonal (seleção) à decisão "iniciar/terminar derivação" que a função unificada
+      // cobre (ver seu docstring). `placingTypeId`/`suppressNextWireInteractionClick` já são
+      // verificados lá dentro, não precisa duplicar aqui.
+      if (!placingTypeId && !suppressNextWireInteractionClick && (event.shiftKey || event.ctrlKey || event.metaKey)) {
+        toggleWireSelection(wire.id);
+        persistState();
         render();
         return;
       }
-
-      // Sem conexão pendente: clicar num canto de fio existente sempre inicia uma nova derivação
-      // daquele ponto (fiel ao SimulIDE) -- seleção de fio inteiro passa a ser só via marquee.
-      send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestStartWireFromWire", wireId: wire.id, point });
-      vscode?.setState(state);
-      render();
+      handleWireGestureClick({ kind: "wire", wireId: wire.id, point });
     });
     handle.addEventListener("contextmenu", (event) => {
       if (!isWireSelected(wire.id) || !isWireCornerSelected(wire.id, index)) selectOnlyWireCorner(wire.id, index);
@@ -2268,14 +2479,13 @@ function renderWireCornerHandles(wireLayer: SVGSVGElement, wire: WebviewWireMode
       if (event.button !== 0 || state.pendingConnection) return;
       event.preventDefault();
       event.stopPropagation();
+      if (event.shiftKey || event.ctrlKey || event.metaKey) return;
 
       const canvasEl = handle.closest<HTMLElement>(".canvas");
       if (!canvasEl) return;
 
       if (!isWireSelected(wire.id) || !isWireCornerSelected(wire.id, index)) {
         selectOnlyWireCorner(wire.id, index);
-        persistState();
-        render();
       }
 
       wireCornerDrag = {
@@ -2287,19 +2497,23 @@ function renderWireCornerHandles(wireLayer: SVGSVGElement, wire: WebviewWireMode
       // "Selecionar um ramo de fio + um dispositivo e mover juntos", começando o arrasto pelo
       // PRÓPRIO ramo: se `state.selectedComponentIds` já tinha componente(s) junto (seleção mista
       // prévia via marquee/shift-click -- `selectOnlyWireCorner` acima só reseta pra solo quando o
-      // canto NÃO estava selecionado ainda), eles acompanham pelo mesmo delta.
+      // canto NÃO estava selecionado ainda), eles acompanham pelo mesmo delta. `groupWireMoveTargets`
+      // (`wire.id` excluído -- este fio já está sendo movido pelo `wireCornerDrag` acima, com seu
+      // próprio eixo/snap) cobre o caso GERAL: qualquer OUTRO fio inteiro co-selecionado (marquee)
+      // também acompanha.
       const groupComponentTargets = dragSelectionWithLinkedPinLabels().map((selected) => ({
         component: selected,
         startX: selected.x,
         startY: selected.y,
       }));
+      const groupWireMoveTargets = computeGroupMoveWireTargets(wire.id);
       const groupStartClientX = event.clientX;
       const groupStartClientY = event.clientY;
 
       const onMove = (moveEvent: PointerEvent): void => {
         const drag = wireCornerDrag;
         if (!drag || drag.wireId !== wire.id || drag.pointIndex !== index) return;
-        const wireToMove = state.wires.find((entry) => entry.id === drag.wireId);
+        const wireToMove = state.topology.conductors.find((entry) => entry.id === drag.wireId);
         if (!wireToMove) return;
         const raw = eventToCanvasPoint(moveEvent, canvasEl);
         const step = moveEvent.shiftKey ? FINE_WIRE_STEP : WIRE_GRID_SIZE;
@@ -2307,7 +2521,7 @@ function renderWireCornerHandles(wireLayer: SVGSVGElement, wire: WebviewWireMode
         updateWireFromFullPath(wireToMove, moveOrthogonalWireCorner(drag.startFullPoints, drag.pointIndex, target));
         drag.moved = true;
         updateWireVisual(wire.id);
-        if (groupComponentTargets.length > 0) {
+        if (groupComponentTargets.length > 0 || groupWireMoveTargets.wires.length > 0) {
           const zoom = state.viewport.zoom || 1;
           const groupDx = (moveEvent.clientX - groupStartClientX) / zoom;
           const groupDy = (moveEvent.clientY - groupStartClientY) / zoom;
@@ -2316,6 +2530,7 @@ function renderWireCornerHandles(wireLayer: SVGSVGElement, wire: WebviewWireMode
             groupTarget.component.y = groupTarget.startY + groupDy;
             updateComponentPosition(groupTarget.component);
           }
+          applyGroupMoveWireDelta(groupWireMoveTargets, groupDx, groupDy);
         }
       };
 
@@ -2372,11 +2587,10 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
     );
     handle.addEventListener("click", (event) => {
       event.stopPropagation();
-      // Mesma guarda do handle de canto (ver ali) -- nunca inicia derivação por baixo do
-      // posicionamento de componente ativo.
-      if (placingTypeId) return;
-      if (suppressNextWireInteractionClick) {
-        suppressNextWireInteractionClick = false;
+      if (!placingTypeId && !suppressNextWireInteractionClick && (event.shiftKey || event.ctrlKey || event.metaKey)) {
+        toggleWireSelection(wire.id);
+        persistState();
+        render();
         return;
       }
 
@@ -2386,30 +2600,7 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
       const cornerIndex = wireConnectCornerIndexLikeSimulIDE(points, index, clickPoint);
       const target =
         cornerIndex !== undefined ? points[cornerIndex]! : nearestSnappedPointOnOrthogonalSegment(clickPoint, from, to, WIRE_GRID_SIZE);
-
-      if (state.pendingConnection) {
-        send({
-          version: WEBVIEW_MESSAGE_VERSION,
-          type: "requestConnectEndpoints",
-          baseRevision: state.topologyRevision ?? 0,
-          from: state.pendingConnection.kind === "wire"
-            ? state.pendingConnection
-            : { kind: "pin", componentId: state.pendingConnection.componentId, pinId: state.pendingConnection.pinId },
-          to: { kind: "wire", wireId: wire.id, point: target },
-          points: pendingWirePointsForTarget(target),
-        });
-        clearPendingWire();
-        vscode?.setState(state);
-        render();
-        return;
-      }
-
-      // Sem conexão pendente: clicar em qualquer trecho de um fio existente sempre inicia uma nova
-      // derivação daquele ponto (fiel ao SimulIDE) -- seleção de fio inteiro passa a ser só via
-      // marquee (`applyMarqueeSelection` já cobre isso, ver `.spec` seção do refactor de fios).
-      send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestStartWireFromWire", wireId: wire.id, point: target });
-      vscode?.setState(state);
-      render();
+      handleWireGestureClick({ kind: "wire", wireId: wire.id, point: target });
     });
     handle.addEventListener("contextmenu", (event) => {
       if (!isWireSelected(wire.id) || !isWireSegmentSelected(wire.id, index)) selectOnlyWire(wire.id, index);
@@ -2421,6 +2612,7 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
       if (event.button !== 0 || state.pendingConnection) return;
       event.preventDefault();
       event.stopPropagation();
+      if (event.shiftKey || event.ctrlKey || event.metaKey) return;
 
       const canvasEl = handle.closest<HTMLElement>(".canvas");
       if (!canvasEl) return;
@@ -2430,8 +2622,6 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
       if (cornerIndex !== undefined) {
         if (!isWireSelected(wire.id) || !isWireCornerSelected(wire.id, cornerIndex)) {
           selectOnlyWireCorner(wire.id, cornerIndex);
-          persistState();
-          render();
         }
 
         wireCornerDrag = {
@@ -2445,13 +2635,14 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
           startX: selected.x,
           startY: selected.y,
         }));
+        const groupWireMoveTargets = computeGroupMoveWireTargets(wire.id);
         const groupStartClientX = event.clientX;
         const groupStartClientY = event.clientY;
 
         const onCornerMove = (moveEvent: PointerEvent): void => {
           const drag = wireCornerDrag;
           if (!drag || drag.wireId !== wire.id || drag.pointIndex !== cornerIndex) return;
-          const wireToMove = state.wires.find((entry) => entry.id === drag.wireId);
+          const wireToMove = state.topology.conductors.find((entry) => entry.id === drag.wireId);
           if (!wireToMove) return;
           const raw = eventToCanvasPoint(moveEvent, canvasEl);
           const step = moveEvent.shiftKey ? FINE_WIRE_STEP : WIRE_GRID_SIZE;
@@ -2459,7 +2650,7 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
           updateWireFromFullPath(wireToMove, moveOrthogonalWireCorner(drag.startFullPoints, drag.pointIndex, target));
           drag.moved = true;
           updateWireVisual(wire.id);
-          if (groupComponentTargets.length > 0) {
+          if (groupComponentTargets.length > 0 || groupWireMoveTargets.wires.length > 0) {
             const zoom = state.viewport.zoom || 1;
             const groupDx = (moveEvent.clientX - groupStartClientX) / zoom;
             const groupDy = (moveEvent.clientY - groupStartClientY) / zoom;
@@ -2468,6 +2659,7 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
               groupTarget.component.y = groupTarget.startY + groupDy;
               updateComponentPosition(groupTarget.component);
             }
+            applyGroupMoveWireDelta(groupWireMoveTargets, groupDx, groupDy);
           }
         };
 
@@ -2491,8 +2683,6 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
 
       if (!isWireSelected(wire.id) || !isWireSegmentSelected(wire.id, index)) {
         selectOnlyWire(wire.id, index);
-        persistState();
-        render();
       }
 
       const prepared = duplicateEditableEndpointForSegmentMove(points, index);
@@ -2508,6 +2698,7 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
         startX: selected.x,
         startY: selected.y,
       }));
+      const groupWireMoveTargets = computeGroupMoveWireTargets(wire.id);
       const groupStartClientX = event.clientX;
       const groupStartClientY = event.clientY;
 
@@ -2517,7 +2708,7 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
         // (duplicateEditableEndpointForSegmentMove insere um ponto duplicado antes e desloca o índice
         // de 0 pra 1) -- comparar contra `prepared.segmentIndex`, não `index` original.
         if (!drag || drag.wireId !== wire.id || drag.segmentIndex !== prepared.segmentIndex) return;
-        const wireToMove = state.wires.find((entry) => entry.id === drag.wireId);
+        const wireToMove = state.topology.conductors.find((entry) => entry.id === drag.wireId);
         if (!wireToMove) return;
         const current = eventToCanvasPoint(moveEvent, canvasEl);
         const step = moveEvent.shiftKey ? FINE_WIRE_STEP : WIRE_GRID_SIZE;
@@ -2529,7 +2720,7 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
         drag.moved = true;
         selectedWireSegment = { wireId: wire.id, segmentIndex: drag.segmentIndex };
         updateWireVisual(wire.id);
-        if (groupComponentTargets.length > 0) {
+        if (groupComponentTargets.length > 0 || groupWireMoveTargets.wires.length > 0) {
           const zoom = state.viewport.zoom || 1;
           const groupDx = (moveEvent.clientX - groupStartClientX) / zoom;
           const groupDy = (moveEvent.clientY - groupStartClientY) / zoom;
@@ -2538,6 +2729,7 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
             groupTarget.component.y = groupTarget.startY + groupDy;
             updateComponentPosition(groupTarget.component);
           }
+          applyGroupMoveWireDelta(groupWireMoveTargets, groupDx, groupDy);
         }
       };
 
@@ -2640,7 +2832,7 @@ function selectedWireSegmentInfo():
   | undefined {
   normalizeSelectedWireSegment();
   if (!selectedWireSegment) return undefined;
-  const wire = state.wires.find((entry) => entry.id === selectedWireSegment?.wireId);
+  const wire = state.topology.conductors.find((entry) => entry.id === selectedWireSegment?.wireId);
   if (!wire) return undefined;
   const points = wirePolylinePoints(wire);
   const from = points[selectedWireSegment.segmentIndex];
@@ -2680,7 +2872,7 @@ function moveSelectedWireSegmentByArrow(key: string, step: number): boolean {
 function moveSelectedWireCornerByArrow(key: string, step: number): boolean {
   normalizeSelectedWireCorner();
   if (!selectedWireCorner) return false;
-  const wire = state.wires.find((entry) => entry.id === selectedWireCorner?.wireId);
+  const wire = state.topology.conductors.find((entry) => entry.id === selectedWireCorner?.wireId);
   if (!wire) return false;
 
   const points = wirePolylinePoints(wire);
@@ -2744,7 +2936,7 @@ function maybeAutoJunctionForDraggedComponents(componentIds: string[]): void {
     const component = state.components.find((entry) => entry.id === componentId);
     if (!component) continue;
     const touchingWireIds = new Set(
-      state.wires.filter((wire) => wire.from.componentId === componentId || wire.to.componentId === componentId).map((wire) => wire.id)
+      state.topology.conductors.filter((wire) => endpointId(wire.from) === componentId || endpointId(wire.to) === componentId).map((wire) => wire.id)
     );
     for (const pin of component.pins) {
       const pinPos = pinScenePosition(component, pin.id);
@@ -2754,7 +2946,7 @@ function maybeAutoJunctionForDraggedComponents(componentIds: string[]): void {
       let matchedTarget: Point | undefined;
       for (const candidate of wireSpatialIndex.queryPoint(pinPos, 0.5)) {
           if (touchingWireIds.has(candidate.wireId)) continue;
-          const wire = state.wires.find((entry) => entry.id === candidate.wireId);
+          const wire = state.topology.conductors.find((entry) => entry.id === candidate.wireId);
           if (!wire) continue;
           const from = candidate.from;
           const to = candidate.to;
@@ -2774,7 +2966,7 @@ function maybeAutoJunctionForDraggedComponents(componentIds: string[]): void {
       send({
         version: WEBVIEW_MESSAGE_VERSION,
         type: "requestConnectEndpoints",
-        baseRevision: state.topologyRevision ?? 0,
+        baseRevision: state.topology.revision ?? 0,
         from: { kind: "pin", componentId, pinId: pin.id },
         to: { kind: "wire", wireId: matchedWire.id, point: matchedTarget },
       });
@@ -2787,17 +2979,19 @@ let wiresByComponentCacheKey = "";
 let wiresByComponentCache = new Map<string, WebviewWireModel[]>();
 
 function wiresByComponentId(): Map<string, WebviewWireModel[]> {
-  const key = state.wires.map((wire) => `${wire.id}:${wire.from.componentId}>${wire.to.componentId}`).join("|");
+  const key = state.topology.conductors.map((wire) => `${wire.id}:${endpointId(wire.from)}>${endpointId(wire.to)}`).join("|");
   if (key === wiresByComponentCacheKey) return wiresByComponentCache;
   const next = new Map<string, WebviewWireModel[]>();
-  for (const wire of state.wires) {
-    const fromList = next.get(wire.from.componentId) ?? [];
+  for (const wire of state.topology.conductors) {
+    const fromKey = endpointId(wire.from);
+    const toKey = endpointId(wire.to);
+    const fromList = next.get(fromKey) ?? [];
     fromList.push(wire);
-    next.set(wire.from.componentId, fromList);
-    if (wire.to.componentId !== wire.from.componentId) {
-      const toList = next.get(wire.to.componentId) ?? [];
+    next.set(fromKey, fromList);
+    if (toKey !== fromKey) {
+      const toList = next.get(toKey) ?? [];
       toList.push(wire);
-      next.set(wire.to.componentId, toList);
+      next.set(toKey, toList);
     }
   }
   wiresByComponentCacheKey = key;
@@ -2828,7 +3022,7 @@ function updateWiresTouchingComponent(componentId: string): void {
  * "atualizar" em vez de recriar exigiria reatribuir os 5 listeners também; reconstruir só ESTE fio é
  * barato o bastante, o caro era reconstruir os OUTROS fios/componentes junto). */
 function updateWireVisual(wireId: string): void {
-  const wire = state.wires.find((entry) => entry.id === wireId);
+  const wire = state.topology.conductors.find((entry) => entry.id === wireId);
   const wireLayer = document.querySelector<SVGSVGElement>(".wire-layer");
   if (!wire || !wireLayer) return;
   const points = wirePolylinePoints(wire);
@@ -3929,6 +4123,13 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
     render();
     const selectedComponents = getSelectedComponents();
     const isGroup = selectedComponents.length > 1;
+    const internalAuthoringItems: ContextMenuItem[] = state.subcircuitEditingContext
+      ? [
+          { label: t("boardMode"), checked: subcircuitBoardMode, onClick: () => setSubcircuitBoardMode(!subcircuitBoardMode) },
+          { label: t("selectExposedComponents"), onClick: () => openExposedComponentsDialog() },
+          { kind: "separator" },
+        ]
+      : [];
     const sourceId = catalogEntry?.registeredSourceId;
     const propertyMenuItems: ContextMenuItem[] = isGroup
       ? []
@@ -4008,6 +4209,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
         })()
       : [];
     const menuItems: ContextMenuItem[] = [
+      ...internalAuthoringItems,
       ...exposedSubmenuItems,
       ...openSubcircuitMenuItems,
       ...(exposedSubmenuItems.length > 0 || openSubcircuitMenuItems.length > 0 ? [{ kind: "separator" } satisfies ContextMenuItem] : []),
@@ -4033,6 +4235,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
   let dragStartY = 0;
   let dragTargets: Array<{ component: WebviewComponentModel; startX: number; startY: number; offsetX: number; offsetY: number }> = [];
   let groupWireDragTarget: GroupWireDragTarget | undefined;
+  let groupWireMoveTargets: GroupMoveWireTargets | undefined;
 
   el.addEventListener("pointerdown", (event) => {
     const component = liveComponent();
@@ -4058,8 +4261,11 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
     });
     // "Selecionar um ramo de fio + um dispositivo e mover juntos": se um canto/segmento de fio
     // também estava selecionado (marquee, ou clique anterior no ramo), ele acompanha o(s)
-    // componente(s) pelo MESMO delta -- ver `applyGroupWireDelta`.
+    // componente(s) pelo MESMO delta -- ver `applyGroupWireDelta`. `groupWireMoveTargets` cobre o
+    // caso GERAL: qualquer fio inteiro co-selecionado (`state.selectedWireIds`, não só um
+    // canto/segmento específico) também acompanha -- ver `computeGroupMoveWireTargets`.
     groupWireDragTarget = currentGroupWireSelection();
+    groupWireMoveTargets = computeGroupMoveWireTargets();
     el.setPointerCapture(event.pointerId);
     // Bloqueia render() de telemetria DESDE O POINTERDOWN, não só depois do limiar de arrasto
     // (`startDragging` abaixo) -- com reconciliação (`componentElementsById`), `el` é REAPROVEITADO
@@ -4403,7 +4609,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
         // arrasto. Insere os componentes/fios duplicados diretamente no DOM/estado, sem tocar `el`.
         const { components: duplicated, wires: duplicatedWires } = duplicateComponentsForDrag(dragTargets.map((target) => target.component));
         if (duplicated.length > 0 && canvasContentElement) {
-          state = { ...state, components: [...state.components, ...duplicated], wires: [...state.wires, ...duplicatedWires] };
+          state = { ...state, components: [...state.components, ...duplicated], topology: { ...state.topology, conductors: [...state.topology.conductors, ...duplicatedWires] } };
           for (const dup of duplicated) {
             const dupEl = createComponentElement(dup);
             componentElementsById.set(dup.id, dupEl);
@@ -4439,6 +4645,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
         updateWiresTouchingComponent(target.component.id);
       }
       if (groupWireDragTarget) applyGroupWireDelta(groupWireDragTarget, dx, dy);
+      if (groupWireMoveTargets) applyGroupMoveWireDelta(groupWireMoveTargets, dx, dy);
     };
 
     const onUp = () => {
@@ -4455,6 +4662,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
       const draggedComponentIds = dragStarted ? dragTargets.map((target) => target.component.id) : [];
       dragTargets = [];
       groupWireDragTarget = undefined;
+      groupWireMoveTargets = undefined;
       if (!dragStarted && canToggle) {
         if (isPushButton) setPushClosed(component, false);
         else if (isToggleClickable) setSwitchClosed(component, component.properties.closed !== true);
@@ -4585,39 +4793,10 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
 
     circle.addEventListener("click", (event) => {
       event.stopPropagation();
-      // Mesma guarda de `cancelActiveTool` -- nunca inicia derivação por baixo do posicionamento de
-      // componente ativo (clique é descartado, `stopPropagation` já rodou).
-      if (placingTypeId) return;
-      const canvas = circle.closest<HTMLElement>(".canvas");
-      if (!state.pendingConnection) {
-        beginWireDraft({ kind: "pin", componentId: component.id, pinId: pin.id });
-        selectOnlyComponent(component.id);
-        pendingWirePreviewTarget = canvas ? eventToCanvasPoint(event, canvas) : undefined;
-        persistState();
-        render();
-        return;
-      }
-      if (state.pendingConnection.kind !== "wire" && state.pendingConnection.componentId === component.id && state.pendingConnection.pinId === pin.id) {
-        clearPendingWire();
-        persistState();
-        render();
-        return;
-      }
-      const toPos = pinScenePosition(component, pin.id);
-      const newConnectionPoints = toPos ? pendingWirePointsForTarget(toPos) : pendingWireRoute;
-      send({
-        version: WEBVIEW_MESSAGE_VERSION,
-        type: "requestConnectEndpoints",
-        baseRevision: state.topologyRevision ?? 0,
-        from: state.pendingConnection.kind === "wire"
-          ? state.pendingConnection
-          : { kind: "pin", componentId: state.pendingConnection.componentId, pinId: state.pendingConnection.pinId },
-        to: { kind: "pin", componentId: component.id, pinId: pin.id },
-        points: newConnectionPoints,
-      });
-      clearPendingWire();
-      vscode?.setState(state);
-      render();
+      // `handleWireGestureClick` já cobre a guarda de `placingTypeId` -- clique é descartado,
+      // `stopPropagation` já rodou.
+      const point = pinScenePosition(component, pin.id)!;
+      handleWireGestureClick({ kind: "pin", componentId: component.id, pinId: pin.id, point });
     });
     svg.appendChild(circle);
   });
@@ -5315,6 +5494,7 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
       recordUndoTransition(undoContentKey(message.project), () => snapshotOfProjectState(message.project));
     }
     state = message.project;
+    restoreBoardViewAfterHostSync();
     syncPackageRegistry(state.catalog);
     if (!state.pendingConnection) {
       pendingWirePreviewTarget = undefined;
@@ -5357,6 +5537,7 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     const enteringOrLeavingSubcircuitSession = "subcircuitEditingContext" in message.patch;
     if (!enteringOrLeavingSubcircuitSession) recordUndoTransition(undoContentKey(merged), () => snapshotOfProjectState(merged));
     state = merged;
+    restoreBoardViewAfterHostSync();
     if (enteringOrLeavingSubcircuitSession) resetUndoHistory(mainUndoHistory);
     if (message.patch.catalog) syncPackageRegistry(state.catalog);
     if (!state.pendingConnection) {
@@ -5643,13 +5824,129 @@ function handlePushShortcut(event: KeyboardEvent, closed: boolean): boolean {
   return handled;
 }
 
-function renderJunction(id: string, x: number, y: number): HTMLElement {
-  const dot = document.createElement("div");
-  dot.className = "junction-dot";
-  dot.style.left = `${x - 4}px`;
-  dot.style.top = `${y - 4}px`;
-  dot.dataset.componentId = id;
-  return dot;
+/** Junção (nó de topologia com 3+ fios) como elemento SVG interativo -- antes um `<div>` puramente
+ * decorativo (`pointer-events:none`), impossível de clicar ou arrastar: não dava pra conectar um 4º
+ * fio a uma junção existente (só por acidente via a borda de um segmento adjacente, quando dava
+ * certo) nem mover a própria junção. `<g>` com dois círculos: um alvo de clique maior e invisível
+ * (`r=8`, mesmo princípio de pino/canto -- "alvo de clique maior que a marca visual", ver
+ * `docs/prompt_mestre_editor_esquematico_vscode.md` seção 9.2) e o marcador pequeno visível por
+ * cima (`r=2.5`, tamanho fiel ao SimulIDE -- ver CSS). Clique passa pelo MESMO
+ * `handleWireGestureClick` de pino/segmento/canto (`kind:"wire"`, usando qualquer fio que já toca a
+ * junção -- `splitSegmentAtPoint`/`findExistingJunctionAt` reconhecem que o ponto já É a extremidade
+ * daquele fio e resolvem pra este MESMO nó em vez de dividir, sem precisar de um `kind:"junction"`
+ * separado no protocolo). Arrasto move `node.position` direto (mais simples que arrasto de
+ * canto/segmento: não há `moveOrthogonalWireCorner` -- os fios tocando o nó se re-roteiam sozinhos,
+ * `wirePolylinePoints`/`buildOrthogonalPath` já resolvem a posição do nó dinamicamente a cada
+ * chamada, igual a mover um componente). */
+function renderJunction(id: string, x: number, y: number): SVGGElement {
+  const group = document.createElementNS(SVG_NS, "g");
+  group.dataset.wireId = id; // reaproveita a mesma convenção de `dataset.wireId` pra limpeza incremental (ver `updateWireVisual`)
+  group.setAttribute("class", "wire-layer__junction");
+
+  const hitTarget = document.createElementNS(SVG_NS, "circle");
+  hitTarget.setAttribute("cx", String(x));
+  hitTarget.setAttribute("cy", String(y));
+  hitTarget.setAttribute("r", "8");
+  hitTarget.setAttribute("class", "wire-layer__junction-hit");
+  group.appendChild(hitTarget);
+
+  const dot = document.createElementNS(SVG_NS, "circle");
+  dot.setAttribute("cx", String(x));
+  dot.setAttribute("cy", String(y));
+  dot.setAttribute("r", "2.5");
+  dot.setAttribute("class", "wire-layer__junction-dot");
+  group.appendChild(dot);
+
+  const anyTouchingWireId = (): string | undefined => wiresByComponentId().get(id)?.[0]?.id;
+
+  group.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const wireId = anyTouchingWireId();
+    if (!wireId) return; // nó sem fio de verdade não deveria existir (ver removeOrphanNodes), defensivo
+    handleWireGestureClick({ kind: "wire", wireId, point: { x, y } });
+  });
+
+  group.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    const touching = wiresByComponentId().get(id) ?? [];
+    if (touching.length === 0) return;
+    state.selectedComponentIds = [];
+    state.selectedWireIds = touching.map((wire) => wire.id);
+    selectedWireSegment = undefined;
+    selectedWireCorner = undefined;
+    persistState();
+    render();
+    showContextMenu(event, [{ label: t("deleteSelectedItems"), onClick: () => deleteSelectedItems() }]);
+  });
+
+  group.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0 || state.pendingConnection || event.shiftKey || event.ctrlKey || event.metaKey) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    const canvasEl = group.closest<HTMLElement>(".canvas");
+    if (!canvasEl) return;
+
+    const node = state.topology.nodes.find((entry) => entry.id === id);
+    if (!node) return;
+    const startX = node.position.x;
+    const startY = node.position.y;
+    let moved = false;
+
+    const groupComponentTargets = dragSelectionWithLinkedPinLabels().map((selected) => ({
+      component: selected,
+      startX: selected.x,
+      startY: selected.y,
+    }));
+    const groupWireMoveTargets = computeGroupMoveWireTargets(undefined, id);
+    const groupStartClientX = event.clientX;
+    const groupStartClientY = event.clientY;
+
+    const onMove = (moveEvent: PointerEvent): void => {
+      const raw = eventToCanvasPoint(moveEvent, canvasEl);
+      const step = moveEvent.shiftKey ? FINE_WIRE_STEP : WIRE_GRID_SIZE;
+      node.position = { x: snapCoordinate(raw.x, step), y: snapCoordinate(raw.y, step) };
+      moved = true;
+      // `updateWiresTouchingComponent` só redesenha os FIOS tocando o nó -- a própria marca visual da
+      // junção (este `<g>`) não é um fio, precisa ser movida à parte (senão o nó "salta" de volta pra
+      // posição antiga no próximo render(), com os fios já mostrando a posição nova nesse meio-tempo).
+      hitTarget.setAttribute("cx", String(node.position.x));
+      hitTarget.setAttribute("cy", String(node.position.y));
+      dot.setAttribute("cx", String(node.position.x));
+      dot.setAttribute("cy", String(node.position.y));
+      updateWiresTouchingComponent(id);
+
+      if (groupComponentTargets.length > 0 || groupWireMoveTargets.wires.length > 0) {
+        const zoom = state.viewport.zoom || 1;
+        const groupDx = (moveEvent.clientX - groupStartClientX) / zoom;
+        const groupDy = (moveEvent.clientY - groupStartClientY) / zoom;
+        for (const groupTarget of groupComponentTargets) {
+          groupTarget.component.x = groupTarget.startX + groupDx;
+          groupTarget.component.y = groupTarget.startY + groupDy;
+          updateComponentPosition(groupTarget.component);
+        }
+        applyGroupMoveWireDelta(groupWireMoveTargets, groupDx, groupDy);
+      }
+    };
+
+    const finish = (): void => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", finish);
+      window.removeEventListener("pointercancel", finish);
+      if (moved) {
+        persistState();
+        suppressNextWireInteractionClick = true;
+      } else {
+        node.position = { x: startX, y: startY }; // sem movimento real -- nunca deixa arredondamento residual
+      }
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", finish, { once: true });
+    window.addEventListener("pointercancel", finish, { once: true });
+  });
+
+  return group;
 }
 
 function renderExternalLabel(component: WebviewComponentModel, kind: ExternalLabelKind): HTMLElement | undefined {
@@ -5732,7 +6029,7 @@ function renderExternalLabel(component: WebviewComponentModel, kind: ExternalLab
 /** Seleciona todo componente/fio não oculto (`Ctrl+A`, `circuit.cpp::keyPressEvent` do SimulIDE). */
 function selectAll(): void {
   state.selectedComponentIds = state.components.filter((component) => !component.hidden).map((component) => component.id);
-  state.selectedWireIds = state.wires.map((wire) => wire.id);
+  state.selectedWireIds = state.topology.conductors.map((wire) => wire.id);
   persistState();
   render();
 }

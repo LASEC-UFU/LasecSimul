@@ -1,4 +1,4 @@
-import { WebviewComponentModel, WebviewWireModel } from "../ui/webview/model";
+import { CanonicalEndpoint, WebviewComponentModel, WebviewWireModel, endpointId, endpointPinId } from "../ui/webview/model";
 import { componentLocalOrigin } from "../ui/webview/componentSymbols";
 
 export interface SimulideSubcircuitScenePlacement {
@@ -145,9 +145,11 @@ function endpointKey(endpoint: WireEndpoint): string {
   return `${endpoint.componentId}:${endpoint.pinId}`;
 }
 
-function wireRouteKey(from: WireEndpoint, to: WireEndpoint): string {
-  const a = endpointKey(from);
-  const b = endpointKey(to);
+function wireRouteKey(from: WireEndpoint | CanonicalEndpoint, to: WireEndpoint | CanonicalEndpoint): string {
+  const keyOf = (endpoint: WireEndpoint | CanonicalEndpoint) =>
+    "kind" in endpoint ? `${endpointId(endpoint)}:${endpointPinId(endpoint)}` : endpointKey(endpoint);
+  const a = keyOf(from);
+  const b = keyOf(to);
   return a < b ? `${a}|${b}` : `${b}|${a}`;
 }
 

@@ -7,10 +7,9 @@ import { currentLasecSimulLanguage } from "../currentLanguage";
 import { fileExists, normalizeAbsolutePath, readJsonFile } from "../pathUtils";
 import { state, projectSerializer } from "../state";
 import { rebuildCoreFromSchematicState, pinsForProjectComponent } from "../core/coreLifecycle";
-import { JUNCTION_TYPE_ID, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "../ui/webview/model";
-import { ProjectComponent, ProjectDocument, createEmptyProject } from "./ProjectTypes";
-import { normalizeWireGeometry } from "../ui/webview/wireTopology";
-import { canonicalTopologyFromLegacy, legacyTopologyFromCanonical } from "../ui/webview/topologyDocument";
+import { CanonicalTopologyDocument, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, nodeEndpoint, portEndpoint } from "../ui/webview/model";
+import { ProjectComponent, ProjectDocument, ProjectTopology, createEmptyProject } from "./ProjectTypes";
+import { assertTopologyInvariants } from "../ui/webview/topologyDocument";
 
 export function absoluteSubcircuitRefPath(refPath: string): string {
   if (path.isAbsolute(refPath)) return path.normalize(refPath);
@@ -76,14 +75,13 @@ function projectToWebviewState(project: ProjectDocument): WebviewProjectState {
       validVisualPoints(wire.points),
     ])
   );
-  const projectedTopology = legacyTopologyFromCanonical(project.topology);
   const components: WebviewComponentModel[] = project.components.map((component) => {
     const descriptor = catalog.find((item) => item.typeId === component.typeId);
     return {
       id: component.id,
       typeId: component.typeId,
       label: component.label ?? descriptor?.label ?? component.typeId,
-      hidden: component.typeId === JUNCTION_TYPE_ID ? true : (descriptor?.hidden ?? false),
+      hidden: descriptor?.hidden ?? false,
       showId: component.showId,
       showValue: component.showValue ?? hasShowOnSymbolProperty(descriptor),
       valueLabelPropertyKey: component.valueLabelPropertyKey,
@@ -97,26 +95,32 @@ function projectToWebviewState(project: ProjectDocument): WebviewProjectState {
       subcircuitRef: component.subcircuitRef,
     };
   });
-  const wires: WebviewWireModel[] = projectedTopology.wires.map((wire) => {
-    const points = wire.points ?? visualWirePoints.get(wire.id);
-    return {
-      id: wire.id,
-      from: wire.from,
-      to: wire.to,
-      ...(points && points.length > 0 ? { points } : {}),
-    };
-  });
-  // Autocorrige arquivos salvos antes do refactor de fios (junção órfã/duplicada, fio de
-  // comprimento zero, referência pendurada) -- idempotente, então um arquivo já normalizado nunca
-  // regride. Cobre TODO ponto de entrada de `.lsproj` (abrir/importar), já que os três chamam esta
-  // função.
+  // `ProjectTopology` (`ProjectTypes.ts`, formato persistido) e `CanonicalTopologyDocument`
+  // (`model.ts`, modelo vivo) têm a MESMA forma de endpoint (`{kind:"port"|"node",...}`) desde a
+  // Fase C completa (`.spec` seção 25.6) -- só o nome do campo de geometria difere (`vertices` no
+  // arquivo, `points` no vivo, por convenção já estabelecida em cada camada). Conversão direta,
+  // sem ponte/função auxiliar.
+  const topology: CanonicalTopologyDocument = {
+    revision: project.topology.revision,
+    nodes: project.topology.nodes,
+    conductors: project.topology.conductors.map((conductor): WebviewWireModel => {
+      const points = (conductor.vertices.length > 0 ? conductor.vertices : visualWirePoints.get(conductor.id));
+      return {
+        id: conductor.id,
+        from: conductor.from,
+        to: conductor.to,
+        ...(points && points.length > 0 ? { points } : {}),
+      };
+    }),
+  };
+  // Validação de invariante (nó/condutor duplicado, endpoint órfão, comprimento zero) já rodou no
+  // load -- `ProjectSerializer.ts::validateTopology` rejeita o arquivo antes de chegar aqui; esta
+  // função só projeta o documento já validado pro shape vivo, não normaliza nada de novo.
   return {
     locale: currentLasecSimulLanguage(),
     catalog,
     components,
-    wires,
-    topologyNodes: project.topology.nodes.map((node) => ({ id: node.id, x: node.position.x, y: node.position.y })),
-    topologyRevision: project.topology.revision,
+    topology,
     viewport: project.visual.viewport,
     selectedComponentIds: [],
     selectedWireIds: [],
@@ -204,8 +208,8 @@ async function resolveProjectSubcircuitReferences(projectDir: string): Promise<v
  * gravar o snapshot "salvo por último" (`markProjectSaved`) quanto pra decidir se há alteração não
  * salva (`isProjectDirty`). Comparação estrutural (`JSON.stringify`) é barata o bastante pro
  * tamanho típico de um esquemático e evita persistir/computar um diff campo a campo à parte. */
-function projectContentSnapshot(): { components: WebviewProjectState["components"]; wires: WebviewProjectState["wires"] } {
-  return { components: state.schematicState.components, wires: state.schematicState.wires };
+function projectContentSnapshot(): { components: WebviewProjectState["components"]; topology: WebviewProjectState["topology"] } {
+  return { components: state.schematicState.components, topology: state.schematicState.topology };
 }
 
 function markProjectSaved(): void {
@@ -217,7 +221,7 @@ function markProjectSaved(): void {
  * um esquemático vazio recém-aberto não deve disparar aviso nenhum. */
 export function isProjectDirty(): boolean {
   const current = projectContentSnapshot();
-  if (!state.lastSavedProjectState) return current.components.length > 0 || current.wires.length > 0;
+  if (!state.lastSavedProjectState) return current.components.length > 0 || current.topology.conductors.length > 0;
   return JSON.stringify(current) !== JSON.stringify(state.lastSavedProjectState);
 }
 
@@ -331,14 +335,30 @@ export async function saveProjectCommand(): Promise<void> {
   if (!warnIfEditingSubcircuit()) return;
   const uri = await vscode.window.showSaveDialog({ filters: { "LasecSimul Project": ["lsproj"] } });
   if (!uri) return;
-  const canonicalTopology = canonicalTopologyFromLegacy(state.schematicState.components, state.schematicState.wires, state.schematicState.topologyRevision ?? 0, state.schematicState.topologyNodes ?? []);
+  // `state.schematicState.topology` JÁ é o documento canônico (Fase C completa, `.spec` seção
+  // 25.6) -- só falta validar antes de gravar e renomear `points` (campo vivo) pra `vertices`
+  // (campo persistido, mesma convenção já usada por `ProjectTopology`).
+  const canonicalTopology: ProjectTopology = {
+    revision: state.schematicState.topology.revision,
+    nodes: state.schematicState.topology.nodes,
+    conductors: state.schematicState.topology.conductors.map((wire) => ({ id: wire.id, from: wire.from, to: wire.to, vertices: wire.points ?? [] })),
+  };
+  try {
+    assertTopologyInvariants(
+      { revision: canonicalTopology.revision, nodes: canonicalTopology.nodes, conductors: state.schematicState.topology.conductors },
+      new Set(state.schematicState.components.map((component) => component.id))
+    );
+  } catch (err) {
+    vscode.window.showErrorMessage(`Não foi possível salvar o projeto: topologia inválida (${err instanceof Error ? err.message : String(err)})`);
+    return;
+  }
   const project: ProjectDocument = projectWithRelativeSubcircuitRefs({
     ...createEmptyProject(),
-    components: state.schematicState.components.filter((component) => component.typeId !== JUNCTION_TYPE_ID).map(webviewComponentToProjectComponent),
+    components: state.schematicState.components.map(webviewComponentToProjectComponent),
     wires: [],
     topology: canonicalTopology,
     visual: {
-      wires: state.schematicState.wires
+      wires: state.schematicState.topology.conductors
         .filter((wire) => wire.points && wire.points.length > 0)
         .map((wire) => ({ id: wire.id, points: wire.points })),
       viewport: state.schematicState.viewport,
@@ -428,11 +448,27 @@ export async function importProjectCommand(options: { syncSchematicPanel: () => 
     idMap.set(component.id, nextComponentId);
     return { ...component, id: nextComponentId };
   });
-  const wires: WebviewWireModel[] = imported.wires.flatMap((wire) => {
-    const fromId = idMap.get(wire.from.componentId);
-    const toId = idMap.get(wire.to.componentId);
-    if (!fromId || !toId) return []; // fio apontando pra um componente que o mapeamento acima não cobriu -- não deveria acontecer, mas não trava a importação por causa de 1 fio órfão
-    return [{ ...wire, id: nextImportedId("wire"), from: { ...wire.from, componentId: fromId }, to: { ...wire.to, componentId: toId } }];
+  // Nó de topologia tem seu próprio espaço de id, remapeado à parte (mesmo motivo de `components`
+  // acima -- não pode colidir com um nó já existente no projeto atual).
+  const nodeIdMap = new Map<string, string>();
+  const nodes = imported.topology.nodes.map((node) => {
+    const nextNodeId = nextImportedId("junction");
+    nodeIdMap.set(node.id, nextNodeId);
+    return { ...node, id: nextNodeId };
+  });
+  const remapImportedEndpoint = (endpoint: WebviewWireModel["from"]): WebviewWireModel["from"] | undefined => {
+    if (endpoint.kind === "node") {
+      const nextNodeId = nodeIdMap.get(endpoint.nodeId);
+      return nextNodeId ? nodeEndpoint(nextNodeId) : undefined;
+    }
+    const nextComponentId = idMap.get(endpoint.componentId);
+    return nextComponentId ? portEndpoint(nextComponentId, endpoint.pinId) : undefined;
+  };
+  const wires: WebviewWireModel[] = imported.topology.conductors.flatMap((wire) => {
+    const from = remapImportedEndpoint(wire.from);
+    const to = remapImportedEndpoint(wire.to);
+    if (!from || !to) return []; // fio apontando pra algo que o mapeamento acima não cobriu -- não deveria acontecer, mas não trava a importação por causa de 1 fio órfão
+    return [{ ...wire, id: nextImportedId("wire"), from, to }];
   });
   if (components.length === 0) {
     vscode.window.showInformationMessage("O projeto selecionado não tem componentes para importar.");
@@ -443,7 +479,11 @@ export async function importProjectCommand(options: { syncSchematicPanel: () => 
     ...state.schematicState,
     catalog: [...state.schematicState.catalog, ...imported.catalog.filter((entry) => !state.schematicState.catalog.some((existing) => existing.typeId === entry.typeId))],
     components: [...state.schematicState.components, ...components],
-    wires: [...state.schematicState.wires, ...wires],
+    topology: {
+      ...state.schematicState.topology,
+      nodes: [...state.schematicState.topology.nodes, ...nodes],
+      conductors: [...state.schematicState.topology.conductors, ...wires],
+    },
     selectedComponentIds: components.map((component) => component.id),
     selectedWireIds: wires.map((wire) => wire.id),
   };
