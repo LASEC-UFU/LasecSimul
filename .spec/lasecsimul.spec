@@ -1565,9 +1565,60 @@ Regras normativas (MUST/NEVER):
   geometria, pinos, placement ou wire routes quando essa informação existir no payload declarativo
   (`authoringScene`/`package`/metadata).
 14. Mapeamento hardcoded por dispositivo para rendering/placement é OUT OF SCOPE; a única exceção
-  permitida é infraestrutura genérica do próprio parser/tradutor (normalização, validação, fallback
-  sintático), sem regra de negócio acoplada a `typeId` específico.
+   permitida é infraestrutura genérica do próprio parser/tradutor (normalização, validação, fallback
+   sintático), sem regra de negócio acoplada a `typeId` específico.
     localizável em `extension.ts`.
+
+### 13.1.1 Contrato normativo único de geometria (`simulide-terminal-v1`)
+
+Este contrato é a fonte normativa para geometria de componentes e substitui qualquer descrição
+histórica conflitante nesta especificação. O relatório
+`docs/28-geometria-simulide-terminal-unico-2026-07-13.md` contém evidências, referências de linha e
+resultados da investigação; ele não cria uma segunda definição do contrato.
+
+1. `PackagePin.x`/`y` MUST representar sempre, em coordenadas locais do componente, o **terminal
+   elétrico externo**: o mesmo ponto onde começa visualmente o lead e onde o wire se conecta.
+   Corpo, renderer e topologia MUST NOT manter coordenadas independentes para esse ponto.
+2. O contato interno com o corpo MUST ser derivado exclusivamente do terminal, de `angle` e de
+   `length`, seguindo a semântica do SimulIDE (`Pin::setRotation(180-angle)`). `leadOrigin` é legado e
+   MUST NOT existir no catálogo canônico, em `PackagePin` ou no modelo interno. O sanitizador de
+   entrada MAY aceitar somente payload legado explicitamente marcado como origem no corpo, convertê-lo
+   imediatamente para terminal e descartar a marca.
+3. Flip local, rotação em torno da origem local, translação para a cena, transformação inversa,
+   cálculo dos cantos transformados e snap MUST usar a infraestrutura comum
+   `extension/src/ui/webview/componentGeometry.ts`. Renderer, wire topology, hit-test, seleção e
+   dispositivos MUST NOT reimplementar fórmulas próprias equivalentes.
+4. A ordem normativa é: geometria local -> espelhamento local -> rotação local -> translação de cena.
+   A conversão cena->local MUST ser a inversa exata dessa composição. Arredondamento ou snap MUST
+   ocorrer somente em eventos de placement/edição no espaço da cena, nunca durante `paint`/SVG nem
+   durante a transformação dos pinos.
+5. `boundingRect`/bounds resolvidos MUST ser derivados do corpo, shapes e extremos visuais dos leads,
+   com margem de stroke explícita e mínima. Labels só integram os limites quando a política declarada
+   assim determinar. Área de seleção/`shape` MAY ser mais tolerante, mas MUST NOT alterar a geometria,
+   a origem, o snap ou o endpoint elétrico.
+6. Rotação e espelhamento MUST usar a mesma origem local declarada para corpo e pinos. Escala/zoom da
+   view MUST NOT mudar coordenadas lógicas, comprimentos de terminais ou endpoints elétricos.
+7. Componentes repetitivos MUST derivar corpo, células e pinagem de uma única descrição paramétrica
+   (`dynamicLayout`/`pinGroups` e `simulidePaint.repeat`, ou sucessor genérico equivalente): linhas,
+   colunas, célula, espaçamento, margens, ordem e orientação. Coordenadas especiais por célula ou por
+   dispositivo são proibidas quando puderem ser obtidas desses parâmetros.
+8. Esquemático e Modo Placa MAY ter desenhos e bounds visuais diferentes, mas MUST compartilhar
+   identidade dos pinos, endpoint elétrico, transformação, rotação/flip, serialização e estado de
+   simulação. Uma variante visual não cria uma segunda implementação elétrica.
+9. O catálogo canônico MUST declarar `geometryConvention: "simulide-terminal-v1"`. A migração/check
+   `scripts/migrate-package-pin-terminals.mjs --check` MUST rejeitar coordenadas legadas ou ambíguas.
+10. A aceitação MUST cobrir, no mínimo: quatro rotações, ambos os flips, round-trip local/cena,
+    coincidência entre extremo visual e wire endpoint, bounds sem corte/margem excessiva, layout
+    repetitivo uniforme, snap, zoom e persistência após salvar/reabrir. Novos dispositivos entram na
+    auditoria geral; não recebem offset corretivo por `typeId`.
+
+Referência arquitetural confirmada no SimulIDE: `Component : QGraphicsItem` e `m_area` em
+`src/components/component.h`; `Component::boundingRect`, flip com `QTransform::fromScale` e rotação
+do item em `src/components/component.cpp`; `Pin` como item filho, `setPos`, `setRotation(180-angle)`,
+`scenePos` como conexão elétrica e lead desenhado a partir de `(0,0)` em
+`src/components/connector/pin.cpp`; snap/grid em `src/utils.cpp` e `src/gui/circuitwidget/circuit.cpp`;
+zoom via `QGraphicsView::scale` em `src/gui/circuitwidget/circuitview.cpp`. O commit de referência é
+`ed253d6612b1293a320d68d6e27968cd7e6523c4`; linhas exatas ficam registradas no relatório citado.
 
 ### 13.2 Achado fora do mapeamento de painel: `BatchTest` — regressão headless de circuitos
 
@@ -3172,7 +3223,7 @@ um pino de teste com `angle:180,length:8` se estendia 8px para fora da caixa 32x
 `resolvePackageLayout` corretamente EXPANDE o bounding box calculado para caber qualquer lead que
 ultrapasse `width`/`height` (comportamento correto e pré-existente, não uma regressão desta rodada)
 -- o box observado (40x28) misturava a largura esperada do board package (40) só por coincidência
-numérica. Corrigido trocando o pino da fixture por um `leadOrigin:"terminal"`, `length:0`, exatamente
+numérica. Corrigido trocando o pino da fixture por um terminal canônico (`x`/`y`) com `length:0`, exatamente
 na borda declarada (não estica o box), preservando a exigência de `registerPackage` de pelo menos 1
 pino para tratar o package como "real".
 
@@ -3427,11 +3478,10 @@ simulação pra ~1.8V de verdade (não é rótulo decorativo).
 - **`switches.switch_dip`**: default `closed:false` deveria ser `true` (`switchdip.cpp:194`, todas as
   8 posições nascem fechadas no real); housing desenhava `fill:"none"`, real é preenchido `#646478`
   (`QColor(100,100,120)`, `switchdip.cpp:47` + `Component::paint()` real sempre pinta com `m_color`).
-- **`switches.keypad`**: faltava `leadOrigin:"terminal"` em todos os 7 pinos estáticos + nos 2
-  `pinGroups` dinâmicos -- sem isso, o ponto de fiação ficava 4px deslocado do buraco/traço desenhado
-  (confirmado comparando contra os outros 7 typeIds do catálogo que já usam esse campo certo).
-  Corrigido; testes que validavam a geometria ANTIGA (com o erro) atualizados pra validar a posição
-  real.
+- **`switches.keypad`**: os 7 pinos estáticos e os 2 `pinGroups` dinâmicos foram migrados para
+  coordenadas canônicas de terminal; antes, o ponto de fiação ficava 4px deslocado do buraco/traço
+  desenhado. Corrigido pelo contrato comum `simulide-terminal-v1`, sem flag ou regra específica do
+  keypad; testes que validavam a geometria ANTIGA foram atualizados para validar a posição real.
 - **`sources.rail`**: faltava `package.initialTransform` (rotação 90° -- `Rail::Rail()` sempre chama
   `setRotation(90)` no construtor, `rail.cpp:43`) -- mesmo mecanismo já usado por `meters.probe`
   (pivô `(-bounds.x,-bounds.y)`, aqui `(4,8)`).
@@ -3534,13 +3584,19 @@ permanecem apenas como historico da auditoria e da investigacao.
 #### 29.8.1 Geometria e referencia de coordenadas
 
 Confirmou-se que a causa raiz do deslocamento visual nao era uma translacao arbitraria do renderer,
-mas a mistura de duas convencoes no catalogo: algumas coordenadas descreviam a origem do corpo do
-lead e outras ja descreviam o terminal eletrico. O renderer respeitava a declaracao recebida; portanto,
-a correcao correta foi tornar a referencia explicita por componente.
+mas a mistura de duas convencoes no catalogo: algumas coordenadas descreviam o contato com o corpo e
+outras ja descreviam o terminal eletrico. A correcao sistemica e o contrato
+`simulide-terminal-v1`, definido em 13.1.1: toda coordenada `PackagePin.x/y` e o terminal eletrico,
+enquanto o contato com o corpo e derivado de `angle`/`length` pela infraestrutura comum. Nao existe
+flag por dispositivo, `leadOrigin` no modelo canonico nem helper geometrico duplicado.
 
-- `active.diode`, `active.zener`, `active.opamp`, `active.comparator` e
-  `active.volt_regulator` agora usam `leadOrigin: "terminal"` e as coordenadas dos terminais reais
-  do SimulIDE. O ponto visual e o ponto logico coincidem nas rotacoes 0, 90, 180 e 270 graus.
+- `active.diode`, `active.zener`, `active.opamp`, `active.comparator`,
+  `active.volt_regulator`, `outputs.led`, `outputs.led_rgb`, `outputs.led_bar`,
+  `outputs.led_matrix` e `outputs.seven_segment` foram migrados como consumidores do mesmo contrato;
+  nao constituem excecoes. O ponto visual e o ponto logico coincidem nas rotacoes 0, 90, 180 e 270
+  graus e sob espelhamento.
+- Em `led_bar`/`led_matrix`, o layout parametrico tambem corrige a caixa resolvida: os pinos deixam de
+  puxar artificialmente o topo do componente e expandem apenas os lados/borda onde o terminal existe.
 - `active.comparator` deixou de reutilizar o modelo de `OpAmp` de cinco pinos. Passou a ser um
   comparador real de tres pinos (`in+`, `in-`, `out`), com `outputHighVoltage` e `inverted` ligados
   ao comportamento eletrico.

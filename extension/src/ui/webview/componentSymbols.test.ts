@@ -12,9 +12,9 @@ import { PackageDescriptor } from "./model";
     height: 40,
     border: true,
     pins: [
-      { id: "out", x: 60, y: 20, angle: 0, length: 8, label: "OUT" },
-      { id: "vcc", x: 0, y: 10, angle: 180, length: 8, label: "VCC" },
-      { id: "gnd", x: 0, y: 30, angle: 180, length: 8, label: "GND" },
+      { id: "out", x: 68, y: 20, angle: 0, length: 8, label: "OUT" },
+      { id: "vcc", x: -8, y: 10, angle: 180, length: 8, label: "VCC" },
+      { id: "gnd", x: -8, y: 30, angle: 180, length: 8, label: "GND" },
     ],
   };
 
@@ -226,7 +226,7 @@ import { PackageDescriptor } from "./model";
       height: 22,
       schematicWidth: 11 * 8,
       schematicHeight: 22 * 8,
-      pins: [{ id: "GPIO0", x: 11, y: 10, angle: 0, length: 8, label: "GPIO0" }],
+      pins: [{ id: "GPIO0", x: 19, y: 10, angle: 0, length: 8, label: "GPIO0" }],
     };
     registerPackage("community.abi-device-sem-case", abiPkg);
 
@@ -295,7 +295,7 @@ import { PackageDescriptor } from "./model";
     const richPkg: PackageDescriptor = {
       width: 40,
       height: 40,
-      pins: [{ id: "p1", x: 0, y: 20, angle: 180, length: 8, label: "P1" }],
+      pins: [{ id: "p1", x: -8, y: 20, angle: 180, length: 8, label: "P1" }],
       shapes: [
         { kind: "path", d: "M 2 2 L 20 8 L 2 14 Z", fill: "#222", stroke: "#111", strokeWidth: 0.5, cssClass: "simulide-path" },
         { kind: "image", x: 4, y: 4, w: 16, h: 12, href: "data:image/png;base64,AAAA", preserveAspectRatio: "xMidYMid meet", cssClass: "simulide-image" },
@@ -827,7 +827,7 @@ import { PackageDescriptor } from "./model";
     registerPackage("test.packagepin-marker", packagePinPkg);
     const svg = packageSymbolSvg("test.packagepin-marker") ?? "";
     assert(svg.includes('stroke="#d3d3d3" stroke-width="0.5"'), `PackagePin::paint deveria gerar marcador cinza, markup: ${svg}`);
-    assert(svg.includes('<line x1="7.0" y1="20.0" x2="9.0" y2="20.0"'), `marcador deveria ficar no ponto de origem do pino, markup: ${svg}`);
+    assert(svg.includes('<line x1="-1.0" y1="20.0" x2="1.0" y2="20.0"'), `marcador deveria ficar no terminal elétrico, markup: ${svg}`);
     registerPackage("test.packagepin-marker", undefined);
   });
 
@@ -933,12 +933,12 @@ import { PackageDescriptor } from "./model";
   });
 
   await test("boardPackage: componente do Modo Placa (Épico Modo Placa/`.spec` seção 27) -- sem variant, esquemático continua idêntico; com variant \"board\", usa a aparência própria", () => {
-    // pin com length:0 no leadOrigin "terminal", exatamente na borda da caixa -- não estica o
+    // pin com length:0, exatamente na borda da caixa -- não estica o
     // bounding box calculado por resolvePackageLayout (que expande width/height pra caber qualquer
     // lead que ultrapasse o `width`/`height` declarado). Precisa de >=1 pino pra `registerPackage`
     // aceitar isto como package "real" (mesma guarda de `pkg.pins.length > 0`); este teste é só
     // sobre qual package é ESCOLHIDO (schematic vs board), não sobre geometria de pino.
-    const schematicPkg: PackageDescriptor = { width: 32, height: 28, pins: [{ id: "pin-1", x: 32, y: 14, angle: 0, length: 0, label: "", leadOrigin: "terminal" }] };
+    const schematicPkg: PackageDescriptor = { width: 32, height: 28, pins: [{ id: "pin-1", x: 32, y: 14, angle: 0, length: 0, label: "" }] };
     const boardPkg: PackageDescriptor = { width: 40, height: 40, pins: [] };
     registerPackage("test.dualBoard", schematicPkg, undefined, boardPkg);
 
@@ -1030,11 +1030,11 @@ import { PackageDescriptor } from "./model";
     catalogPackage("switches.keypad");
     const props = { rows: 4, columns: 4, keyLabels: "123A456B789C*0#D" };
     const box = componentBox("switches.keypad", props);
-    // `leadOrigin:"terminal"` adicionado na auditoria de dispositivos 2026-07-13 -- antes o ponto
+    // Convenção terminal canônica adicionada na auditoria de dispositivos 2026-07-13 -- antes o ponto
     // elétrico somava `length` (4px) por cima do `QPoint(cols*16,...)`/`QPoint(...,rows*16,...)`
     // real (`keypad.cpp:157,193`), desalinhando o ponto de fiação do buraco/traço desenhado por 4px
     // (achado da auditoria, confirmado comparando contra os outros 7 typeIds que já usam
-    // `leadOrigin:"terminal"` corretamente). Box agora reflete o ponto real (76x76, sem o
+    // terminal corretamente). Box agora reflete o ponto real (76x76, sem o
     // overshoot), não mais 80x76.
     assert(box.width === 76 && box.height === 76, `KeyPad 4x4 deveria incluir m_area 72x72 + leads SimulIDE, recebido ${JSON.stringify(box)}`);
 
@@ -1057,7 +1057,7 @@ import { PackageDescriptor } from "./model";
     // hit-test que main.ts desenha à parte pra todo componente, package ou não).
     const leadLines = svg.match(/<line[^>]*stroke-width="3"[^>]*\/>/g) ?? [];
     assert(leadLines.length === 8, `KeyPad 4x4 deveria desenhar 8 leads grossos (4 linhas + 4 colunas), recebido ${leadLines.length}: ${svg}`);
-    assert(svg.includes('x1="76.0" y1="12.0" x2="72.7" y2="12.0"'), `Lead da 1a linha deveria sair do pino (ponto elétrico real, leadOrigin:"terminal") de volta até a borda do corpo, markup: ${svg}`);
+    assert(svg.includes('x1="76.0" y1="12.0" x2="72.7" y2="12.0"'), `Lead da 1a linha deveria sair do terminal elétrico de volta até a borda do corpo, markup: ${svg}`);
     assert(svg.includes('x1="12.0" y1="76.0" x2="12.0" y2="72.7"'), `Lead da 1a coluna deveria sair da borda inferior ate o pino, markup: ${svg}`);
 
     const wideProps = { rows: 2, columns: 5, keyLabels: "ABCDEFGHIJ" };
@@ -1079,10 +1079,9 @@ import { PackageDescriptor } from "./model";
     catalogPackage("outputs.led_matrix");
     const props = { rows: 8, columns: 8 };
     const box = componentBox("outputs.led_matrix", props);
-    // m_area real é 72x72 (cols*8+8/rows*8+8), mas componentBox() inclui a extensão do LEAD (row
-    // pin sai 8px pra esquerda do corpo, angle=180) -- mesmo comportamento já existente pro keypad
-    // (box.width sempre > m_area quando algum lead se projeta pra fora do corpo).
-    assert(box.width === 88 && box.height === 72, `LedMatrix 8x8: m_area 72x72 + lead de 8px do pino de linha (angle 180) = 88 de largura, recebido ${JSON.stringify(box)}`);
+    // Terminais agora são declarados diretamente no ponto ELÉTRICO real: linhas
+    // estendem 8px à esquerda do corpo e colunas 8px abaixo, então a caixa cresce em AMBOS os eixos.
+    assert(box.width === 80 && box.height === 80, `LedMatrix 8x8: m_area 72x72 + terminal real esquerdo/baixo = 80x80, recebido ${JSON.stringify(box)}`);
 
     const row0 = pinLocalPosition("pin-1", 0, 16, "outputs.led_matrix", props);
     const row1 = pinLocalPosition("pin-2", 1, 16, "outputs.led_matrix", props);
@@ -1096,7 +1095,7 @@ import { PackageDescriptor } from "./model";
 
     const smallProps = { rows: 4, columns: 3 };
     const smallBox = componentBox("outputs.led_matrix", smallProps);
-    assert(smallBox.width === 48 && smallBox.height === 40, `LedMatrix 4x3 deveria encolher a caixa junto (cols*8+8=32 + lead 16 = 48, rows*8+8=40), recebido ${JSON.stringify(smallBox)}`);
+    assert(smallBox.width === 40 && smallBox.height === 48, `LedMatrix 4x3 deveria encolher junto mantendo terminais reais à esquerda/baixo, recebido ${JSON.stringify(smallBox)}`);
 
     const svg = componentSymbolSvg("outputs.led_matrix", smallProps);
     assert((svg.match(/<rect/g) ?? []).length === 1 + 4 * 3, `LedMatrix 4x3 deveria desenhar 1 corpo + 12 LEDs, recebido ${(svg.match(/<rect/g) ?? []).length}: ${svg}`);
@@ -1106,9 +1105,9 @@ import { PackageDescriptor } from "./model";
     catalogPackage("outputs.led_bar");
     const props = { size: 8 };
     const box = componentBox("outputs.led_bar", props);
-    // m_area real é 16x64, mas os pinos P (y indo até -24) e N (tip.x=16, coincide com a borda,
-    // sem expandir X) puxam o topo do box pra fora do corpo -- altura final inclui essa margem.
-    assert(box.width === 32 && box.height === 88, `LedBar size=8: largura 16 + lead 16 (P estende 8px além de cada borda) = 32, altura 64 + margem do primeiro pino (y=-24) = 88, recebido ${JSON.stringify(box)}`);
+    // Com terminal real declarado, os pinos ficam distribuídos dentro da altura do corpo e só
+    // expandem a largura (8px em cada lado).
+    assert(box.width === 32 && box.height === 64, `LedBar size=8: largura 16 + terminais reais laterais = 32, altura igual ao corpo 64, recebido ${JSON.stringify(box)}`);
 
     const p0 = pinLocalPosition("pin-P1", 0, 16, "outputs.led_bar", props);
     const p1 = pinLocalPosition("pin-P2", 1, 16, "outputs.led_bar", props);
@@ -1123,7 +1122,7 @@ import { PackageDescriptor } from "./model";
 
     const smallProps = { size: 4 };
     const smallBox = componentBox("outputs.led_bar", smallProps);
-    assert(smallBox.width === 32 && smallBox.height === 56, `LedBar size=4: largura fica igual (independe de size), altura encolhe (m_area 32 + margem do 1o pino em y=-24 = 56), recebido ${JSON.stringify(smallBox)}`);
+    assert(smallBox.width === 32 && smallBox.height === 32, `LedBar size=4: largura fica igual e a altura acompanha só o corpo (4*8), recebido ${JSON.stringify(smallBox)}`);
   });
 
   await test("active.analog_mux vem de package com dynamicLayout channels + countFn/transform log2Ceil (mux_analog.cpp)", () => {
@@ -1205,7 +1204,6 @@ import { PackageDescriptor } from "./model";
       const svg = packageSymbolSvg(id, {}, `geometry-${id}`) ?? "";
       const box = componentBox(id);
       for (const [index, declared] of activePackage.pins.entries()) {
-        assert(declared.leadOrigin === "terminal", `${id}.${declared.id}: coordenada deve ser do terminal elétrico`);
         const logical = pinLocalPosition(declared.id, index, activePackage.pins.length, id);
         assert(svg.includes(`<line x1="${logical.x.toFixed(1)}" y1="${logical.y.toFixed(1)}"`),
           `${id}.${declared.id}: lead visual deve iniciar no ponto lógico ${JSON.stringify(logical)}`);
@@ -1221,6 +1219,32 @@ import { PackageDescriptor } from "./model";
         }
       }
     }
+  });
+
+  await test("familia LED declara o terminal eletrico real no proprio render/package", () => {
+    const led = catalogPackage("outputs.led");
+    const ledRgb = catalogPackage("outputs.led_rgb");
+    const sevenSegment = catalogPackage("outputs.seven_segment");
+    catalogPackage("outputs.led_bar");
+    catalogPackage("outputs.led_matrix");
+
+    const ledSvg = packageSymbolSvg("outputs.led", {}, "geometry-outputs-led") ?? "";
+    const ledAnode = pinLocalPosition("anode", 0, 2, "outputs.led");
+    const ledCathode = pinLocalPosition("cathode", 1, 2, "outputs.led");
+    assert(ledSvg.includes(`<line x1="${ledAnode.x.toFixed(1)}" y1="${ledAnode.y.toFixed(1)}"`), `outputs.led.anode deveria iniciar o lead no terminal lógico ${JSON.stringify(ledAnode)}`);
+    assert(ledSvg.includes(`<line x1="${ledCathode.x.toFixed(1)}" y1="${ledCathode.y.toFixed(1)}"`), `outputs.led.cathode deveria iniciar o lead no terminal lógico ${JSON.stringify(ledCathode)}`);
+
+    const rgbSvg = packageSymbolSvg("outputs.led_rgb", {}, "geometry-outputs-led-rgb") ?? "";
+    const rgbR = pinLocalPosition("pin-1", 0, 4, "outputs.led_rgb");
+    const rgbC = pinLocalPosition("pin-4", 3, 4, "outputs.led_rgb");
+    assert(rgbSvg.includes(`<line x1="${rgbR.x.toFixed(1)}" y1="${rgbR.y.toFixed(1)}"`), `outputs.led_rgb.pin-1 deveria iniciar o lead no terminal lógico ${JSON.stringify(rgbR)}`);
+    assert(rgbSvg.includes(`<line x1="${rgbC.x.toFixed(1)}" y1="${rgbC.y.toFixed(1)}"`), `outputs.led_rgb.pin-4 deveria iniciar o lead no terminal lógico ${JSON.stringify(rgbC)}`);
+
+    const sevenSegmentSvg = packageSymbolSvg("outputs.seven_segment", {}, "geometry-outputs-seven-segment") ?? "";
+    const sevenA = pinLocalPosition("pin-1", 0, 10, "outputs.seven_segment");
+    const sevenCommon = pinLocalPosition("pin-10", 9, 10, "outputs.seven_segment");
+    assert(sevenSegmentSvg.includes(`<line x1="${sevenA.x.toFixed(1)}" y1="${sevenA.y.toFixed(1)}"`), `outputs.seven_segment.pin-1 deveria iniciar o lead no terminal lógico ${JSON.stringify(sevenA)}`);
+    assert(sevenSegmentSvg.includes(`<line x1="${sevenCommon.x.toFixed(1)}" y1="${sevenCommon.y.toFixed(1)}"`), `outputs.seven_segment.pin-10 deveria iniciar o lead no terminal lógico ${JSON.stringify(sevenCommon)}`);
   });
 
   await test("potenciômetro e resistor DIP alinham corpo, bounds e terminais do SimulIDE", () => {
@@ -1255,6 +1279,30 @@ import { PackageDescriptor } from "./model";
       assert(near(pin.y, bit * 8), `bit-${bit} fora da ordem LSB-first: ${JSON.stringify(pin)}`);
     }
     assert(hasRealPinPosition("connectors.bus", "bus-in", props) && hasRealPinPosition("connectors.bus", "bus-out", props), "endpoints vetoriais devem existir");
+  });
+
+  await test("auditoria do catálogo: todo lead estático nasce no mesmo ponto usado pelo wire", () => {
+    const catalogPath = [
+      path.resolve(process.cwd(), "..", "project", "schema", "component-catalog.json"),
+      path.resolve(process.cwd(), "project", "schema", "component-catalog.json"),
+    ].find((candidate) => fs.existsSync(candidate))!;
+    const catalog = JSON.parse(fs.readFileSync(catalogPath, "utf8")) as { items?: Array<{ typeId: string; package?: PackageDescriptor }> };
+    let checked = 0;
+    for (const item of catalog.items ?? []) {
+      const descriptor = item.package;
+      if (!descriptor) continue;
+      if (descriptor.dynamicLayout?.replacePins) continue;
+      registerPackage(item.typeId, descriptor);
+      const svg = packageSymbolSvg(item.typeId, {}, `audit-${item.typeId}`) ?? "";
+      descriptor.pins.forEach((pin, index) => {
+        if (typeof pin.x !== "number" || typeof pin.y !== "number" || typeof pin.length !== "number" || pin.length <= 0 || pin.stateVisible) return;
+        const endpoint = pinLocalPosition(pin.id, index, descriptor.pins.length, item.typeId);
+        assert(svg.includes(`<line x1="${endpoint.x.toFixed(1)}" y1="${endpoint.y.toFixed(1)}"`),
+          `${item.typeId}.${pin.id}: lead visual e endpoint elétrico divergiram em ${JSON.stringify(endpoint)}`);
+        checked += 1;
+      });
+    }
+    assert(checked >= 120, `auditoria deveria cobrir os packages estáticos; apenas ${checked} terminais foram verificados`);
   });
 
   registerPackage("test.example", undefined);

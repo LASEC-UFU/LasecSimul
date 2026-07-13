@@ -1,6 +1,7 @@
 import { WEBVIEW_MESSAGE_VERSION, ComponentReadoutValue, HostToWebviewMessage, InternalComponentSnapshot, SimulationStatus, WebviewToHostMessage } from "./messages.js";
 import { CanonicalEndpoint, CanonicalTopologyDocument, InteractionKindEntry, McuSerialPortEntry, PropertySchemaEntry, TUNNEL_TYPE_ID, ViewSpecInteraction, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, endpointId, endpointPinId, nodeEndpoint, portEndpoint, remapEndpoint } from "./model.js";
 import { ComponentBox, PIN_RADIUS, componentBox, componentLocalOrigin, componentSymbolSvg, dialKnobSvg, hasRealPinPosition, missingSubcircuitPlaceholderSvg, packageSymbolSvg, pinLocalPosition, registerPackage } from "./componentSymbols.js";
+import { svgLocalTransform, transformLocalPoint, transformedLocalBounds } from "./componentGeometry.js";
 import { detectChannelTrigger, findTriggerAnchorIndex, triggerAlignedWindowEndNs, visibleSampleWindowByTime } from "./instrumentTrigger.js";
 import {
   Point,
@@ -2226,35 +2227,7 @@ function eventToCanvasPoint(event: PointerEvent | MouseEvent, canvas: HTMLElemen
   };
 }
 
-/** Espelha o ponto local antes da rotação -- mesma ordem do CSS `transform: rotate(...) scale(...)`
- * em `renderComponent` (transform aplica da direita pra esquerda: scale primeiro, rotate depois). */
-function flipPoint(local: Point, box: { width: number; height: number }, flipH: boolean, flipV: boolean, origin?: Point): Point {
-  const pivot = origin ?? { x: box.width / 2, y: box.height / 2 };
-  return {
-    x: flipH ? pivot.x - (local.x - pivot.x) : local.x,
-    y: flipV ? pivot.y - (local.y - pivot.y) : local.y,
-  };
-}
-
-function rotatePoint(local: Point, box: { width: number; height: number }, rotation: 0 | 90 | 180 | 270, origin?: Point): Point {
-  const pivot = origin ?? { x: box.width / 2, y: box.height / 2 };
-  const cx = pivot.x;
-  const cy = pivot.y;
-  const dx = local.x - cx;
-  const dy = local.y - cy;
-  switch (rotation) {
-    case 90:
-      return { x: cx - dy, y: cy + dx };
-    case 180:
-      return { x: cx - dx, y: cy - dy };
-    case 270:
-      return { x: cx + dy, y: cy - dx };
-    case 0:
-    default:
-      return local;
-  }
-}
-
+/** Bounds transformados pela mesma matemática usada para pinos, fios e SVG. */
 /** Bounding box canvas-local do símbolo já rotacionado/espelhado -- `componentBox()` sempre devolve a
  * caixa CANÔNICA (rotation=0), então qualquer código que precise saber ONDE o desenho realmente
  * ocupa espaço na tela (hit-box do `<div class="component">` em `updateComponentElement`, teste de
@@ -2273,18 +2246,7 @@ function rotatedComponentLocalBox(
   flipV: boolean,
   origin?: Point
 ): { x: number; y: number; width: number; height: number } {
-  if (rotation === 0 && !flipH && !flipV) return { x: 0, y: 0, width: box.width, height: box.height };
-  const corners = [
-    { x: 0, y: 0 },
-    { x: box.width, y: 0 },
-    { x: box.width, y: box.height },
-    { x: 0, y: box.height },
-  ].map((corner) => rotatePoint(flipPoint(corner, box, flipH, flipV, origin), box, rotation, origin));
-  const xs = corners.map((corner) => corner.x);
-  const ys = corners.map((corner) => corner.y);
-  const minX = Math.min(...xs);
-  const minY = Math.min(...ys);
-  return { x: minX, y: minY, width: Math.max(...xs) - minX, height: Math.max(...ys) - minY };
+  return transformedLocalBounds({ size: box, rotation, flipH, flipV, origin });
 }
 
 /** `x`/`y` de `rotatedComponentLocalBox` pra este componente -- o deslocamento que soma em
@@ -2305,20 +2267,14 @@ function componentDivOffset(component: WebviewComponentModel): Point {
 }
 
 function svgBodyTransform(box: { width: number; height: number }, rotation: 0 | 90 | 180 | 270, flipH: boolean, flipV: boolean, origin?: Point): string {
-  const pivot = origin ?? { x: box.width / 2, y: box.height / 2 };
-  const cx = pivot.x;
-  const cy = pivot.y;
-  const scaleX = flipH ? -1 : 1;
-  const scaleY = flipV ? -1 : 1;
-  return `translate(${cx} ${cy}) rotate(${rotation}) scale(${scaleX} ${scaleY}) translate(${-cx} ${-cy})`;
+  return svgLocalTransform({ size: box, rotation, flipH, flipV, origin });
 }
 
 function componentPinLocalPosition(component: WebviewComponentModel, pinIndex: number): Point {
   const box = componentBox(component.typeId, component.properties);
   const origin = componentLocalOrigin(component.typeId, component.properties);
   const base = pinLocalPosition(component.pins[pinIndex]?.id ?? "", pinIndex, component.pins.length, component.typeId, component.properties);
-  const flipped = flipPoint(base, box, Boolean(component.flipH), Boolean(component.flipV), origin);
-  return rotatePoint(flipped, box, component.rotation, origin);
+  return transformLocalPoint(base, { size: box, rotation: component.rotation, flipH: Boolean(component.flipH), flipV: Boolean(component.flipV), origin });
 }
 
 function setPolylinePoints(polyline: SVGPolylineElement, points: Point[]): void {

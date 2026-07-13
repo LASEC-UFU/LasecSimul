@@ -80,8 +80,8 @@ function portWire(id: string, fromComponentId: string, toComponentId: string, pi
       width: 60,
       height: 40,
       pins: [
-        { id: "out", x: 60, y: 20, angle: 0, length: 8, label: "OUT" },
-        { id: "vcc", x: 0, y: 10, angle: 180, length: 8, label: "VCC" },
+        { id: "out", x: 68, y: 20, angle: 0, length: 8, label: "OUT" },
+        { id: "vcc", x: -8, y: 10, angle: 180, length: 8, label: "VCC" },
       ],
     };
     registerPackage("test.wireTopologyPackage", pkg);

@@ -1,5 +1,6 @@
 {
   "schemaVersion": 1,
+  "geometryConvention": "simulide-terminal-v1",
   "language": "pt-BR",
   "translations": {
     "en": {
@@ -549,15 +550,15 @@
         "pins": [
           {
             "id": "pin-1",
-            "x": 8,
-            "y": 8,
+            "x": 0,
+            "y": 8.000000000000002,
             "angle": 180,
             "length": 8,
             "label": ""
           },
           {
             "id": "pin-2",
-            "x": 24,
+            "x": 32,
             "y": 8,
             "angle": 0,
             "length": 8,
@@ -726,15 +727,15 @@
         "pins": [
           {
             "id": "pin-1",
-            "x": 8,
-            "y": 8,
+            "x": 0,
+            "y": 8.000000000000002,
             "angle": 180,
             "length": 8,
             "label": ""
           },
           {
             "id": "pin-2",
-            "x": 24,
+            "x": 32,
             "y": 8,
             "angle": 0,
             "length": 8,
@@ -842,15 +843,15 @@
         "pins": [
           {
             "id": "pin-1",
-            "x": 5,
-            "y": 4,
+            "x": 0,
+            "y": 4.000000000000001,
             "angle": 180,
             "length": 5,
             "label": ""
           },
           {
             "id": "pin-2",
-            "x": 19,
+            "x": 24,
             "y": 4,
             "angle": 0,
             "length": 5,
@@ -858,7 +859,7 @@
           },
           {
             "id": "pin-3",
-            "x": 5,
+            "x": 0,
             "y": 12,
             "angle": 180,
             "length": 5,
@@ -866,7 +867,7 @@
           },
           {
             "id": "pin-4",
-            "x": 19,
+            "x": 24,
             "y": 12,
             "angle": 0,
             "length": 5,
@@ -874,7 +875,7 @@
           },
           {
             "id": "pin-5",
-            "x": 5,
+            "x": 0,
             "y": 20,
             "angle": 180,
             "length": 5,
@@ -882,7 +883,7 @@
           },
           {
             "id": "pin-6",
-            "x": 19,
+            "x": 24,
             "y": 20,
             "angle": 0,
             "length": 5,
@@ -890,7 +891,7 @@
           },
           {
             "id": "pin-7",
-            "x": 5,
+            "x": 0,
             "y": 28,
             "angle": 180,
             "length": 5,
@@ -898,7 +899,7 @@
           },
           {
             "id": "pin-8",
-            "x": 19,
+            "x": 24,
             "y": 28,
             "angle": 0,
             "length": 5,
@@ -906,7 +907,7 @@
           },
           {
             "id": "pin-9",
-            "x": 5,
+            "x": 0,
             "y": 36,
             "angle": 180,
             "length": 5,
@@ -914,7 +915,7 @@
           },
           {
             "id": "pin-10",
-            "x": 19,
+            "x": 24,
             "y": 36,
             "angle": 0,
             "length": 5,
@@ -922,7 +923,7 @@
           },
           {
             "id": "pin-11",
-            "x": 5,
+            "x": 0,
             "y": 44,
             "angle": 180,
             "length": 5,
@@ -930,7 +931,7 @@
           },
           {
             "id": "pin-12",
-            "x": 19,
+            "x": 24,
             "y": 44,
             "angle": 0,
             "length": 5,
@@ -938,7 +939,7 @@
           },
           {
             "id": "pin-13",
-            "x": 5,
+            "x": 0,
             "y": 52,
             "angle": 180,
             "length": 5,
@@ -946,7 +947,7 @@
           },
           {
             "id": "pin-14",
-            "x": 19,
+            "x": 24,
             "y": 52,
             "angle": 0,
             "length": 5,
@@ -954,7 +955,7 @@
           },
           {
             "id": "pin-15",
-            "x": 5,
+            "x": 0,
             "y": 60,
             "angle": 180,
             "length": 5,
@@ -962,7 +963,7 @@
           },
           {
             "id": "pin-16",
-            "x": 19,
+            "x": 24,
             "y": 60,
             "angle": 0,
             "length": 5,
@@ -1097,7 +1098,7 @@
         "pins": [
           {
             "id": "pin-1",
-            "x": 8,
+            "x": 0,
             "y": 28,
             "angle": 180,
             "length": 8,
@@ -1105,7 +1106,7 @@
           },
           {
             "id": "pin-2",
-            "x": 24,
+            "x": 32,
             "y": 28,
             "angle": 0,
             "length": 8,
@@ -1113,15 +1114,15 @@
           },
           {
             "id": "pin-3",
-            "x": 8,
-            "y": 12,
+            "x": 0,
+            "y": 12.000000000000002,
             "angle": 180,
             "length": 8,
             "label": ""
           },
           {
             "id": "pin-4",
-            "x": 24,
+            "x": 32,
             "y": 12,
             "angle": 0,
             "length": 8,
@@ -1259,7 +1260,6 @@
             "y": 12,
             "angle": 0,
             "length": 4,
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": ""
           },
@@ -1269,7 +1269,6 @@
             "y": 28,
             "angle": 0,
             "length": 4,
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": ""
           },
@@ -1279,7 +1278,6 @@
             "y": 44,
             "angle": 0,
             "length": 4,
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": ""
           },
@@ -1289,7 +1287,6 @@
             "y": 60,
             "angle": 0,
             "length": 4,
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": ""
           },
@@ -1299,7 +1296,6 @@
             "y": 76,
             "angle": 270,
             "length": 4,
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": ""
           },
@@ -1309,7 +1305,6 @@
             "y": 76,
             "angle": 270,
             "length": 4,
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": ""
           },
@@ -1319,7 +1314,6 @@
             "y": 76,
             "angle": 270,
             "length": 4,
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": ""
           }
@@ -1375,7 +1369,6 @@
               },
               "angle": 0,
               "length": 4,
-              "leadOrigin": "terminal",
               "leadEndTrim": 0.7,
               "label": ""
             },
@@ -1401,7 +1394,6 @@
               },
               "angle": 270,
               "length": 4,
-              "leadOrigin": "terminal",
               "leadEndTrim": 0.7,
               "label": ""
             }
@@ -1589,8 +1581,8 @@
               "p1",
               "lPin"
             ],
-            "x": 3.7,
-            "y": 4.5,
+            "x": 0,
+            "y": 4.500000000000001,
             "angle": 180,
             "length": 3.7,
             "label": ""
@@ -1601,7 +1593,7 @@
               "p2",
               "rPin"
             ],
-            "x": 28.3,
+            "x": 32,
             "y": 4.5,
             "angle": 0,
             "length": 3.7,
@@ -1809,7 +1801,7 @@
               "p1",
               "lPin"
             ],
-            "x": 3.7,
+            "x": 0,
             "y": 8,
             "angle": 180,
             "length": 3.7,
@@ -1821,7 +1813,7 @@
               "p2",
               "rPin"
             ],
-            "x": 28.3,
+            "x": 32,
             "y": 8,
             "angle": 0,
             "length": 3.7,
@@ -2189,7 +2181,7 @@
         "pins": [
           {
             "id": "pin-1",
-            "x": 5,
+            "x": 0,
             "y": 28,
             "angle": 180,
             "length": 5,
@@ -2203,8 +2195,8 @@
           {
             "id": "pin-2",
             "x": 16,
-            "y": 36,
-            "angle": 90,
+            "y": 44,
+          "angle": 270,
             "length": 8,
             "leadEndTrim": 0.7,
             "label": "",
@@ -2215,7 +2207,7 @@
           },
           {
             "id": "pin-3",
-            "x": 27,
+            "x": 32,
             "y": 28,
             "angle": 0,
             "length": 5,
@@ -2572,8 +2564,8 @@
         "pins": [
           {
             "id": "pin-1",
-            "x": 1,
-            "y": 6,
+            "x": -6,
+            "y": 6.000000000000001,
             "angle": 180,
             "length": 7,
             "leadEndTrim": 0.7,
@@ -2581,7 +2573,7 @@
           },
           {
             "id": "pin-2",
-            "x": 19,
+            "x": 26,
             "y": 6,
             "angle": 0,
             "length": 7,
@@ -2590,7 +2582,7 @@
           },
           {
             "id": "pin-3",
-            "x": 1,
+            "x": -6,
             "y": 14,
             "angle": 180,
             "length": 7,
@@ -2599,7 +2591,7 @@
           },
           {
             "id": "pin-4",
-            "x": 19,
+            "x": 26,
             "y": 14,
             "angle": 0,
             "length": 7,
@@ -2608,7 +2600,7 @@
           },
           {
             "id": "pin-5",
-            "x": 1,
+            "x": -6,
             "y": 22,
             "angle": 180,
             "length": 7,
@@ -2617,7 +2609,7 @@
           },
           {
             "id": "pin-6",
-            "x": 19,
+            "x": 26,
             "y": 22,
             "angle": 0,
             "length": 7,
@@ -2626,7 +2618,7 @@
           },
           {
             "id": "pin-7",
-            "x": 1,
+            "x": -6,
             "y": 30,
             "angle": 180,
             "length": 7,
@@ -2635,7 +2627,7 @@
           },
           {
             "id": "pin-8",
-            "x": 19,
+            "x": 26,
             "y": 30,
             "angle": 0,
             "length": 7,
@@ -2644,7 +2636,7 @@
           },
           {
             "id": "pin-9",
-            "x": 1,
+            "x": -6,
             "y": 38,
             "angle": 180,
             "length": 7,
@@ -2653,7 +2645,7 @@
           },
           {
             "id": "pin-10",
-            "x": 19,
+            "x": 26,
             "y": 38,
             "angle": 0,
             "length": 7,
@@ -2662,7 +2654,7 @@
           },
           {
             "id": "pin-11",
-            "x": 1,
+            "x": -6,
             "y": 46,
             "angle": 180,
             "length": 7,
@@ -2671,7 +2663,7 @@
           },
           {
             "id": "pin-12",
-            "x": 19,
+            "x": 26,
             "y": 46,
             "angle": 0,
             "length": 7,
@@ -2680,7 +2672,7 @@
           },
           {
             "id": "pin-13",
-            "x": 1,
+            "x": -6,
             "y": 54,
             "angle": 180,
             "length": 7,
@@ -2689,7 +2681,7 @@
           },
           {
             "id": "pin-14",
-            "x": 19,
+            "x": 26,
             "y": 54,
             "angle": 0,
             "length": 7,
@@ -2698,7 +2690,7 @@
           },
           {
             "id": "pin-15",
-            "x": 1,
+            "x": -6,
             "y": 62,
             "angle": 180,
             "length": 7,
@@ -2707,7 +2699,7 @@
           },
           {
             "id": "pin-16",
-            "x": 19,
+            "x": 26,
             "y": 62,
             "angle": 0,
             "length": 7,
@@ -2811,8 +2803,8 @@
               "p1",
               "lPin"
             ],
-            "x": 11.3,
-            "y": 8,
+            "x": 0,
+            "y": 8.000000000000002,
             "angle": 180,
             "length": 11.3,
             "label": ""
@@ -2823,7 +2815,7 @@
               "p2",
               "rPin"
             ],
-            "x": 20.7,
+            "x": 32,
             "y": 8,
             "angle": 0,
             "length": 11.3,
@@ -2920,8 +2912,8 @@
               "p1",
               "lPin"
             ],
-            "x": 11.3,
-            "y": 8,
+            "x": 0,
+            "y": 8.000000000000002,
             "angle": 180,
             "length": 11.3,
             "label": ""
@@ -2932,7 +2924,7 @@
               "p2",
               "rPin"
             ],
-            "x": 20.7,
+            "x": 32,
             "y": 8,
             "angle": 0,
             "length": 11.3,
@@ -3029,7 +3021,7 @@
               "p1",
               "lPin"
             ],
-            "x": 3.3,
+            "x": 0,
             "y": 6,
             "angle": 180,
             "length": 3.3,
@@ -3041,7 +3033,7 @@
               "p2",
               "rPin"
             ],
-            "x": 28.7,
+            "x": 32,
             "y": 6,
             "angle": 0,
             "length": 3.3,
@@ -3148,8 +3140,8 @@
               "p1",
               "lPin"
             ],
-            "x": 11.3,
-            "y": 8,
+            "x": 0,
+            "y": 8.000000000000002,
             "angle": 180,
             "length": 11.3,
             "label": ""
@@ -3160,7 +3152,7 @@
               "p2",
               "rPin"
             ],
-            "x": 20.7,
+            "x": 32,
             "y": 8,
             "angle": 0,
             "length": 11.3,
@@ -3548,7 +3540,7 @@
               "p1",
               "lPin"
             ],
-            "x": 3.3,
+            "x": 0,
             "y": 8,
             "angle": 180,
             "length": 3.3,
@@ -3560,7 +3552,7 @@
               "p2",
               "rPin"
             ],
-            "x": 28.7,
+            "x": 32,
             "y": 8,
             "angle": 0,
             "length": 3.3,
@@ -3912,7 +3904,6 @@
             "y": 8,
             "angle": 180,
             "length": 8,
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": "",
             "aliases": [
@@ -3927,7 +3918,6 @@
             "y": 8,
             "angle": 0,
             "length": 9,
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": "",
             "aliases": [
@@ -4037,7 +4027,6 @@
             "y": 8,
             "angle": 180,
             "length": 8,
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": "",
             "aliases": [
@@ -4052,7 +4041,6 @@
             "y": 8,
             "angle": 0,
             "length": 9,
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": "",
             "aliases": [
@@ -4142,7 +4130,6 @@
             "y": 8,
             "angle": 180,
             "length": 8,
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": "+",
             "aliases": [
@@ -4158,7 +4145,6 @@
             "y": 24,
             "angle": 180,
             "length": 8,
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": "-",
             "aliases": [
@@ -4173,7 +4159,6 @@
             "y": 16,
             "angle": 0,
             "length": 8,
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": "",
             "aliases": [
@@ -4186,7 +4171,6 @@
             "y": 0,
             "angle": 90,
             "length": 8,
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": "+",
             "aliases": [
@@ -4202,7 +4186,6 @@
             "y": 32,
             "angle": 270,
             "length": 8,
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": "-",
             "aliases": [
@@ -4296,7 +4279,6 @@
             "y": 8,
             "angle": 180,
             "length": 8,
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": "+",
             "aliases": [
@@ -4312,7 +4294,6 @@
             "y": 24,
             "angle": 180,
             "length": 8,
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": "-",
             "aliases": [
@@ -4327,7 +4308,6 @@
             "y": 16,
             "angle": 0,
             "length": 8,
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": "",
             "aliases": [
@@ -4431,8 +4411,8 @@
         "pins": [
           {
             "id": "z",
-            "x": -16,
-            "y": 8,
+            "x": -24,
+            "y": 8.000000000000002,
             "angle": 180,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -4440,7 +4420,7 @@
           },
           {
             "id": "en",
-            "x": -16,
+            "x": -24,
             "y": {
               "prop": "channels",
               "transform": "log2Ceil",
@@ -4454,7 +4434,7 @@
           },
           {
             "id": "addr-3",
-            "x": -16,
+            "x": -24,
             "y": 24,
             "angle": 180,
             "length": 8,
@@ -4463,7 +4443,7 @@
           },
           {
             "id": "addr-4",
-            "x": -16,
+            "x": -24,
             "y": 32,
             "angle": 180,
             "length": 8,
@@ -4472,7 +4452,7 @@
           },
           {
             "id": "addr-5",
-            "x": -16,
+            "x": -24,
             "y": 40,
             "angle": 180,
             "length": 8,
@@ -4481,7 +4461,7 @@
           },
           {
             "id": "chan-6",
-            "x": 16,
+            "x": 24,
             "y": 8,
             "angle": 0,
             "length": 8,
@@ -4490,7 +4470,7 @@
           },
           {
             "id": "chan-7",
-            "x": 16,
+            "x": 24,
             "y": 16,
             "angle": 0,
             "length": 8,
@@ -4499,7 +4479,7 @@
           },
           {
             "id": "chan-8",
-            "x": 16,
+            "x": 24,
             "y": 24,
             "angle": 0,
             "length": 8,
@@ -4508,7 +4488,7 @@
           },
           {
             "id": "chan-9",
-            "x": 16,
+            "x": 24,
             "y": 32,
             "angle": 0,
             "length": 8,
@@ -4517,7 +4497,7 @@
           },
           {
             "id": "chan-10",
-            "x": 16,
+            "x": 24,
             "y": 40,
             "angle": 0,
             "length": 8,
@@ -4526,7 +4506,7 @@
           },
           {
             "id": "chan-11",
-            "x": 16,
+            "x": 24,
             "y": 48,
             "angle": 0,
             "length": 8,
@@ -4535,7 +4515,7 @@
           },
           {
             "id": "chan-12",
-            "x": 16,
+            "x": 24,
             "y": 56,
             "angle": 0,
             "length": 8,
@@ -4544,7 +4524,7 @@
           },
           {
             "id": "chan-13",
-            "x": 16,
+            "x": 24,
             "y": 64,
             "angle": 0,
             "length": 8,
@@ -4577,7 +4557,7 @@
               "indexName": "i",
               "idPrefix": "addr-",
               "idStart": 3,
-              "x": -16,
+              "x": -24,
               "y": {
                 "index": "i",
                 "multiplier": 8,
@@ -4597,7 +4577,7 @@
                 "transform": "log2Ceil",
                 "offset": 3
               },
-              "x": 16,
+              "x": 24,
               "y": {
                 "index": "i",
                 "multiplier": 8,
@@ -4671,7 +4651,6 @@
             "y": 8,
             "angle": 180,
             "length": 5,
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": "I",
             "aliases": [
@@ -4685,7 +4664,6 @@
             "y": 8,
             "angle": 0,
             "length": 5,
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": "O",
             "aliases": [
@@ -4699,7 +4677,6 @@
             "y": 24,
             "angle": 270,
             "length": 5,
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": "R",
             "aliases": [
@@ -4812,8 +4789,8 @@
         "pins": [
           {
             "id": "anode",
-            "x": 10,
-            "y": 0,
+            "x": -8,
+            "y": 10,
             "angle": 180,
             "length": 10,
             "leadEndTrim": 0.7,
@@ -4825,8 +4802,8 @@
           },
           {
             "id": "cathode",
-            "x": 26,
-            "y": 0,
+            "x": 24,
+            "y": 10,
             "angle": 0,
             "length": 6,
             "leadEndTrim": 0.7,
@@ -4942,8 +4919,8 @@
         "pins": [
           {
             "id": "pin-1",
-            "x": 8,
-            "y": 0,
+            "x": -8,
+            "y": 2,
             "angle": 180,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -4953,8 +4930,8 @@
           },
           {
             "id": "pin-2",
-            "x": 8,
-            "y": 8,
+            "x": -8,
+            "y": 10,
             "angle": 180,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -4964,8 +4941,8 @@
           },
           {
             "id": "pin-3",
-            "x": 8,
-            "y": 16,
+            "x": -8,
+            "y": 18,
             "angle": 180,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -4975,8 +4952,8 @@
           },
           {
             "id": "pin-4",
-            "x": 28,
-            "y": 8,
+            "x": 24,
+            "y": 10,
             "angle": 0,
             "length": 4,
             "leadEndTrim": 0.7,
@@ -5096,7 +5073,7 @@
           {
             "id": "pin-P1",
             "x": -8,
-            "y": -24,
+            "y": 4,
             "angle": 180,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -5105,7 +5082,7 @@
           {
             "id": "pin-P2",
             "x": -8,
-            "y": -16,
+            "y": 12,
             "angle": 180,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -5114,7 +5091,7 @@
           {
             "id": "pin-P3",
             "x": -8,
-            "y": -8,
+            "y": 20,
             "angle": 180,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -5123,7 +5100,7 @@
           {
             "id": "pin-P4",
             "x": -8,
-            "y": 0,
+            "y": 28,
             "angle": 180,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -5132,7 +5109,7 @@
           {
             "id": "pin-P5",
             "x": -8,
-            "y": 8,
+            "y": 36,
             "angle": 180,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -5141,7 +5118,7 @@
           {
             "id": "pin-P6",
             "x": -8,
-            "y": 16,
+            "y": 44,
             "angle": 180,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -5150,7 +5127,7 @@
           {
             "id": "pin-P7",
             "x": -8,
-            "y": 24,
+            "y": 52,
             "angle": 180,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -5159,7 +5136,7 @@
           {
             "id": "pin-P8",
             "x": -8,
-            "y": 32,
+            "y": 60,
             "angle": 180,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -5167,8 +5144,8 @@
           },
           {
             "id": "pin-N9",
-            "x": 8,
-            "y": -24,
+            "x": 24,
+            "y": 4,
             "angle": 0,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -5176,8 +5153,8 @@
           },
           {
             "id": "pin-N10",
-            "x": 8,
-            "y": -16,
+            "x": 24,
+            "y": 12,
             "angle": 0,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -5185,8 +5162,8 @@
           },
           {
             "id": "pin-N11",
-            "x": 8,
-            "y": -8,
+            "x": 24,
+            "y": 20,
             "angle": 0,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -5194,8 +5171,8 @@
           },
           {
             "id": "pin-N12",
-            "x": 8,
-            "y": 0,
+            "x": 24,
+            "y": 28,
             "angle": 0,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -5203,8 +5180,8 @@
           },
           {
             "id": "pin-N13",
-            "x": 8,
-            "y": 8,
+            "x": 24,
+            "y": 36,
             "angle": 0,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -5212,8 +5189,8 @@
           },
           {
             "id": "pin-N14",
-            "x": 8,
-            "y": 16,
+            "x": 24,
+            "y": 44,
             "angle": 0,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -5221,8 +5198,8 @@
           },
           {
             "id": "pin-N15",
-            "x": 8,
-            "y": 24,
+            "x": 24,
+            "y": 52,
             "angle": 0,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -5230,8 +5207,8 @@
           },
           {
             "id": "pin-N16",
-            "x": 8,
-            "y": 32,
+            "x": 24,
+            "y": 60,
             "angle": 0,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -5266,7 +5243,7 @@
               "y": {
                 "index": "i",
                 "multiplier": 8,
-                "offset": -24
+                "offset": 4
               },
               "angle": 180,
               "length": 8,
@@ -5282,11 +5259,11 @@
                 "offset": 1,
                 "round": "trunc"
               },
-              "x": 8,
+              "x": 24,
               "y": {
                 "index": "i",
                 "multiplier": 8,
-                "offset": -24
+                "offset": 4
               },
               "angle": 0,
               "length": 8,
@@ -5418,7 +5395,7 @@
           {
             "id": "pin-1",
             "x": -8,
-            "y": 0,
+            "y": 8,
             "angle": 180,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -5427,7 +5404,7 @@
           {
             "id": "pin-2",
             "x": -8,
-            "y": 8,
+            "y": 16,
             "angle": 180,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -5436,7 +5413,7 @@
           {
             "id": "pin-3",
             "x": -8,
-            "y": 16,
+            "y": 24,
             "angle": 180,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -5445,7 +5422,7 @@
           {
             "id": "pin-4",
             "x": -8,
-            "y": 24,
+            "y": 32,
             "angle": 180,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -5454,7 +5431,7 @@
           {
             "id": "pin-5",
             "x": -8,
-            "y": 32,
+            "y": 40,
             "angle": 180,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -5463,7 +5440,7 @@
           {
             "id": "pin-6",
             "x": -8,
-            "y": 40,
+            "y": 48,
             "angle": 180,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -5472,7 +5449,7 @@
           {
             "id": "pin-7",
             "x": -8,
-            "y": 48,
+            "y": 56,
             "angle": 180,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -5481,7 +5458,7 @@
           {
             "id": "pin-8",
             "x": -8,
-            "y": 56,
+            "y": 64,
             "angle": 180,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -5489,8 +5466,8 @@
           },
           {
             "id": "pin-9",
-            "x": 0,
-            "y": 64,
+            "x": 8,
+            "y": 80,
             "angle": 270,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -5498,8 +5475,8 @@
           },
           {
             "id": "pin-10",
-            "x": 8,
-            "y": 64,
+            "x": 16,
+            "y": 80,
             "angle": 270,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -5507,8 +5484,8 @@
           },
           {
             "id": "pin-11",
-            "x": 16,
-            "y": 64,
+            "x": 24,
+            "y": 80,
             "angle": 270,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -5516,8 +5493,8 @@
           },
           {
             "id": "pin-12",
-            "x": 24,
-            "y": 64,
+            "x": 32,
+            "y": 80,
             "angle": 270,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -5525,8 +5502,8 @@
           },
           {
             "id": "pin-13",
-            "x": 32,
-            "y": 64,
+            "x": 40,
+            "y": 80,
             "angle": 270,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -5534,8 +5511,8 @@
           },
           {
             "id": "pin-14",
-            "x": 40,
-            "y": 64,
+            "x": 48,
+            "y": 80,
             "angle": 270,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -5543,8 +5520,8 @@
           },
           {
             "id": "pin-15",
-            "x": 48,
-            "y": 64,
+            "x": 56,
+            "y": 80,
             "angle": 270,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -5552,8 +5529,8 @@
           },
           {
             "id": "pin-16",
-            "x": 56,
-            "y": 64,
+            "x": 64,
+            "y": 80,
             "angle": 270,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -5602,7 +5579,7 @@
               "y": {
                 "index": "row",
                 "multiplier": 8,
-                "offset": 0
+                "offset": 8
               },
               "angle": 180,
               "length": 8,
@@ -5621,12 +5598,12 @@
               "x": {
                 "index": "col",
                 "multiplier": 8,
-                "offset": 0
+                "offset": 8
               },
               "y": {
                 "prop": "rows",
                 "multiplier": 8,
-                "offset": 0,
+                "offset": 16,
                 "round": "trunc"
               },
               "angle": 270,
@@ -5776,7 +5753,7 @@
         "pins": [
           {
             "id": "pin-1",
-            "x": 8,
+            "x": 0,
             "y": 0,
             "angle": 180,
             "length": 8,
@@ -5790,7 +5767,7 @@
           },
           {
             "id": "pin-2",
-            "x": 8,
+            "x": 0,
             "y": 8,
             "angle": 180,
             "length": 8,
@@ -5804,7 +5781,7 @@
           },
           {
             "id": "pin-3",
-            "x": 8,
+            "x": 0,
             "y": 16,
             "angle": 180,
             "length": 8,
@@ -5818,7 +5795,7 @@
           },
           {
             "id": "pin-4",
-            "x": 8,
+            "x": 0,
             "y": 24,
             "angle": 180,
             "length": 8,
@@ -5832,7 +5809,7 @@
           },
           {
             "id": "pin-5",
-            "x": 8,
+            "x": 0,
             "y": 32,
             "angle": 180,
             "length": 8,
@@ -5846,7 +5823,7 @@
           },
           {
             "id": "pin-6",
-            "x": 8,
+            "x": 0,
             "y": 40,
             "angle": 180,
             "length": 8,
@@ -5860,7 +5837,7 @@
           },
           {
             "id": "pin-7",
-            "x": 8,
+            "x": 0,
             "y": 48,
             "angle": 180,
             "length": 8,
@@ -5875,7 +5852,7 @@
           {
             "id": "pin-8",
             "x": 16,
-            "y": 48,
+            "y": 56,
             "angle": 90,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -5889,7 +5866,7 @@
           {
             "id": "pin-9",
             "x": 32,
-            "y": 48,
+            "y": 56,
             "angle": 90,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -5903,7 +5880,7 @@
           {
             "id": "pin-10",
             "x": 48,
-            "y": 48,
+            "y": 56,
             "angle": 90,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -6038,7 +6015,7 @@
         "pins": [
           {
             "id": "pin-1",
-            "x": 4,
+            "x": 0,
             "y": 0,
             "angle": 180,
             "length": 4,
@@ -6052,7 +6029,7 @@
           },
           {
             "id": "pin-2",
-            "x": 76,
+            "x": 80,
             "y": 0,
             "angle": 0,
             "length": 4,
@@ -6177,7 +6154,7 @@
         "pins": [
           {
             "id": "pin-1",
-            "x": 8,
+            "x": 0,
             "y": 0,
             "angle": 180,
             "length": 8,
@@ -6189,7 +6166,7 @@
           },
           {
             "id": "pin-2",
-            "x": 8,
+            "x": 0,
             "y": 48,
             "angle": 180,
             "length": 8,
@@ -6201,7 +6178,7 @@
           },
           {
             "id": "pin-3",
-            "x": 8,
+            "x": 0,
             "y": 16,
             "angle": 180,
             "length": 8,
@@ -6213,7 +6190,7 @@
           },
           {
             "id": "pin-4",
-            "x": 8,
+            "x": 0,
             "y": 64,
             "angle": 180,
             "length": 8,
@@ -6305,7 +6282,7 @@
         "pins": [
           {
             "id": "pin-1",
-            "x": 6,
+            "x": 0,
             "y": 0,
             "angle": 180,
             "length": 6,
@@ -6318,7 +6295,7 @@
           },
           {
             "id": "pin-2",
-            "x": 26,
+            "x": 32,
             "y": 0,
             "angle": 0,
             "length": 6,
@@ -6372,7 +6349,9 @@
         "width": 24,
         "height": 64,
         "border": false,
-        "background": { "kind": "none" },
+        "background": {
+          "kind": "none"
+        },
         "simulidePaint": {
           "version": 1,
           "source": {
@@ -6381,41 +6360,90 @@
             "method": "setNumLines + paint + registerEnode",
             "notes": "Tronco vertical com Num_Bits linhas escalares; bus-in e bus-out transportam o mesmo vetor, bit-0 e o LSB."
           },
-          "bounds": { "x": 0, "y": 0, "w": 24, "h": 64 },
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "w": 24,
+            "h": 64
+          },
           "defaultStroke": "#303840",
           "defaultFill": "none",
           "defaultStrokeWidth": 2,
           "primitives": [
-            { "kind": "line", "x1": 16, "y1": 0, "x2": 16, "y2": { "prop": "width", "multiplier": 8, "offset": -8 }, "strokeWidth": 3 },
+            {
+              "kind": "line",
+              "x1": 16,
+              "y1": 0,
+              "x2": 16,
+              "y2": {
+                "prop": "width",
+                "multiplier": 8,
+                "offset": -8
+              },
+              "strokeWidth": 3
+            },
             {
               "kind": "repeat",
               "countProp": "width",
               "indexName": "i",
               "stepY": 8,
               "primitives": [
-                { "kind": "line", "x1": 0, "y1": 0, "x2": 16, "y2": 0, "strokeWidth": 1 }
+                {
+                  "kind": "line",
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 16,
+                  "y2": 0,
+                  "strokeWidth": 1
+                }
               ]
             }
           ]
         },
         "pins": [
-          { "id": "bus-in", "x": 16, "y": 0, "angle": 90, "length": 1, "leadOrigin": "terminal", "label": "" },
-          { "id": "bus-out", "x": 16, "y": { "prop": "width", "multiplier": 8, "offset": -8 }, "angle": 270, "length": 1, "leadOrigin": "terminal", "label": "" }
+          {
+            "id": "bus-in",
+            "x": 16,
+            "y": 0,
+            "angle": 90,
+            "length": 1,
+            "label": ""
+          },
+          {
+            "id": "bus-out",
+            "x": 16,
+            "y": {
+              "prop": "width",
+              "multiplier": 8,
+              "offset": -8
+            },
+            "angle": 270,
+            "length": 1,
+            "label": ""
+          }
         ],
         "dynamicLayout": {
-          "height": { "prop": "width", "multiplier": 8, "min": 8 },
+          "height": {
+            "prop": "width",
+            "multiplier": 8,
+            "min": 8
+          },
           "replacePins": false,
           "pinGroups": [
             {
               "countProp": "width",
               "indexName": "i",
               "idPrefix": "bit-",
-              "idStart": { "prop": "startBit" },
+              "idStart": {
+                "prop": "startBit"
+              },
               "x": 0,
-              "y": { "index": "i", "multiplier": 8 },
+              "y": {
+                "index": "i",
+                "multiplier": 8
+              },
               "angle": 180,
               "length": 8,
-              "leadOrigin": "terminal",
               "leadEndTrim": 0.7,
               "label": ""
             }
@@ -7084,7 +7112,6 @@
             "angle": 180,
             "length": 14,
             "label": "",
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7
           }
         ],
@@ -7129,7 +7156,7 @@
             "file": "src/components/meters/meter.cpp + ampmeter.cpp",
             "className": "Ampmeter",
             "method": "Meter::paint/updateStep",
-            "notes": "Meter::paint draws a black rounded rect at QRectF(-24,-24,48,32). QGraphicsSimpleTextItem is Ubuntu Mono bold pixelSize 13, yellow, pos(-22,-22). Pins are Pin(270,QPoint(-8,16)), Pin(270,QPoint(8,16)) and IoPin(0,QPoint(32,-8)); these QPoint values are the electrical terminal positions, so package pins use leadOrigin=terminal and Pin::paint trim 0.7."
+            "notes": "Meter::paint draws a black rounded rect at QRectF(-24,-24,48,32). QGraphicsSimpleTextItem is Ubuntu Mono bold pixelSize 13, yellow, pos(-22,-22). Pins are Pin(270,QPoint(-8,16)), Pin(270,QPoint(8,16)) and IoPin(0,QPoint(32,-8)); these QPoint values are the electrical terminal positions and Pin::paint uses trim 0.7."
           },
           "bounds": {
             "x": -24,
@@ -7183,7 +7210,6 @@
             "angle": 270,
             "length": 8,
             "label": "",
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "leadColor": "#ff0000"
           },
@@ -7197,7 +7223,6 @@
             "angle": 270,
             "length": 8,
             "label": "",
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7
           },
           {
@@ -7210,7 +7235,6 @@
             "angle": 0,
             "length": 8,
             "label": "",
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7
           }
         ]
@@ -7297,7 +7321,6 @@
             "angle": 270,
             "length": 8,
             "label": "",
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "leadColor": "#ff0000"
           },
@@ -7311,7 +7334,6 @@
             "angle": 270,
             "length": 8,
             "label": "",
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7
           },
           {
@@ -7324,7 +7346,6 @@
             "angle": 0,
             "length": 8,
             "label": "",
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7
           }
         ]
@@ -7412,7 +7433,6 @@
             "angle": 180,
             "length": 8,
             "label": "",
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7
           }
         ]
@@ -7467,7 +7487,6 @@
             "angle": 180,
             "length": 8,
             "label": "",
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7
           },
           {
@@ -7480,7 +7499,6 @@
             "angle": 180,
             "length": 8,
             "label": "",
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7
           },
           {
@@ -7493,7 +7511,6 @@
             "angle": 180,
             "length": 8,
             "label": "",
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7
           },
           {
@@ -7506,7 +7523,6 @@
             "angle": 180,
             "length": 8,
             "label": "",
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7
           },
           {
@@ -7520,7 +7536,6 @@
             "angle": 180,
             "length": 8,
             "label": "G",
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7
           }
         ]
@@ -7580,7 +7595,6 @@
             "angle": 180,
             "length": 8,
             "label": "",
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7
           },
           {
@@ -7593,7 +7607,6 @@
             "angle": 180,
             "length": 8,
             "label": "",
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7
           },
           {
@@ -7606,7 +7619,6 @@
             "angle": 180,
             "length": 8,
             "label": "",
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7
           },
           {
@@ -7619,7 +7631,6 @@
             "angle": 180,
             "length": 8,
             "label": "",
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7
           },
           {
@@ -7632,7 +7643,6 @@
             "angle": 180,
             "length": 8,
             "label": "",
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7
           },
           {
@@ -7645,7 +7655,6 @@
             "angle": 180,
             "length": 8,
             "label": "",
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7
           },
           {
@@ -7658,7 +7667,6 @@
             "angle": 180,
             "length": 8,
             "label": "",
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7
           },
           {
@@ -7671,7 +7679,6 @@
             "angle": 180,
             "length": 8,
             "label": "",
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7
           }
         ]
@@ -9411,7 +9418,6 @@
                 ]
               }
             },
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7
           },
           {
@@ -9448,7 +9454,6 @@
                 ]
               }
             },
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7
           },
           {
@@ -9461,7 +9466,6 @@
             "angle": 90,
             "length": 8,
             "label": "",
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7
           },
           {
@@ -9474,7 +9478,6 @@
             "angle": 270,
             "length": 8,
             "label": "",
-            "leadOrigin": "terminal",
             "leadEndTrim": 0.7
           }
         ],

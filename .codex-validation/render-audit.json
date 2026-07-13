@@ -1,23 +1,23 @@
 {
-  "generatedAt": "2026-07-05T09:45:06.243Z",
+  "generatedAt": "2026-07-13T14:03:18.108Z",
   "simulideSourceRoot": ".codex-simulide-src",
   "summary": {
-    "total": 132,
+    "total": 129,
     "byScope": {
-      "built-in": 62,
+      "built-in": 59,
       "abi-device": 67,
       "mcu-adapter": 1,
       "subcircuit": 2
     },
     "byOrigin": {
-      "componentSymbols/fallback": 50,
-      "simulidePaint": 12,
-      "package.shapes": 17,
+      "simulidePaint": 45,
+      "componentSymbols/fallback": 12,
+      "package.shapes": 19,
       "viewSpec": 53
     },
     "byStatus": {
-      "divergent-by-architecture": 120,
-      "candidate-needs-visual-proof": 12
+      "candidate-needs-visual-proof": 45,
+      "divergent-by-architecture": 84
     }
   },
   "items": [
@@ -26,13 +26,13 @@
       "typeId": "switches.push",
       "label": "Push",
       "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/switches/push.cpp + push_base.cpp + switch_base.cpp + mech_contact.cpp",
       "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
       ]
     },
     {
@@ -40,13 +40,13 @@
       "typeId": "switches.switch",
       "label": "Switch (all)",
       "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/switches/switch.cpp + switch_base.cpp + mech_contact.cpp",
       "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
       ]
     },
     {
@@ -54,13 +54,13 @@
       "typeId": "switches.switch_dip",
       "label": "Switch Dip",
       "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/switches/switchdip.cpp",
       "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
       ]
     },
     {
@@ -68,13 +68,13 @@
       "typeId": "switches.relay",
       "label": "Relay (all)",
       "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/switches/relay.cpp + mech_contact.cpp + passive/reactive/inductor.cpp",
       "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
       ]
     },
     {
@@ -82,13 +82,13 @@
       "typeId": "switches.keypad",
       "label": "KeyPad",
       "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/switches/keypad.cpp",
       "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
       ]
     },
     {
@@ -110,13 +110,13 @@
       "typeId": "passive.variable_resistor",
       "label": "Variable Resistor",
       "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/passive/resistors/varresistor.cpp + varresbase.cpp",
       "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
       ]
     },
     {
@@ -124,13 +124,13 @@
       "typeId": "passive.potentiometer",
       "label": "Potentiometer",
       "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/passive/resistors/potentiometer.cpp",
       "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
       ]
     },
     {
@@ -138,69 +138,13 @@
       "typeId": "passive.resistor_dip",
       "label": "ResistorDip",
       "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/passive/resistors/resistordip.cpp",
       "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
-      ]
-    },
-    {
-      "scope": "built-in",
-      "typeId": "passive.ldr",
-      "label": "LDR",
-      "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
-      "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
-      ]
-    },
-    {
-      "scope": "built-in",
-      "typeId": "passive.thermistor",
-      "label": "Thermistor",
-      "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
-      "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
-      ]
-    },
-    {
-      "scope": "built-in",
-      "typeId": "passive.rtd",
-      "label": "RTD",
-      "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
-      "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
-      ]
-    },
-    {
-      "scope": "built-in",
-      "typeId": "passive.force_strain_gauge",
-      "label": "Force Strain Gauge",
-      "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
-      "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
       ]
     },
     {
@@ -222,13 +166,13 @@
       "typeId": "passive.electrolytic_capacitor",
       "label": "Electrolytic Capacitor",
       "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/passive/reactive/elcapacitor.cpp + capacitorbase.cpp + comp2pin.cpp",
       "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
       ]
     },
     {
@@ -250,13 +194,13 @@
       "typeId": "passive.variable_capacitor",
       "label": "Variable Capacitor",
       "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/passive/reactive/varcapacitor.cpp",
       "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
       ]
     },
     {
@@ -264,13 +208,13 @@
       "typeId": "passive.variable_inductor",
       "label": "Variable Inductor",
       "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/passive/reactive/varinductor.cpp",
       "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
       ]
     },
     {
@@ -278,13 +222,13 @@
       "typeId": "active.diode",
       "label": "Diode",
       "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/active/diode.cpp",
       "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
       ]
     },
     {
@@ -292,13 +236,13 @@
       "typeId": "active.zener",
       "label": "Zener Diode",
       "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/active/diode.cpp + zener.cpp",
       "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
       ]
     },
     {
@@ -306,13 +250,13 @@
       "typeId": "active.opamp",
       "label": "OpAmp",
       "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/active/op_amp.cpp",
       "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
       ]
     },
     {
@@ -320,13 +264,13 @@
       "typeId": "active.comparator",
       "label": "Comparator",
       "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/active/comparator.cpp",
       "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
       ]
     },
     {
@@ -334,13 +278,13 @@
       "typeId": "active.analog_mux",
       "label": "Analog Mux",
       "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/active/mux_analog.cpp",
       "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
       ]
     },
     {
@@ -348,13 +292,13 @@
       "typeId": "active.volt_regulator",
       "label": "Volt. Regulator",
       "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/active/volt_reg.cpp",
       "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
       ]
     },
     {
@@ -362,13 +306,13 @@
       "typeId": "outputs.led",
       "label": "Led",
       "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/outputs/leds/led.cpp + ledbase.cpp",
       "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
       ]
     },
     {
@@ -376,13 +320,13 @@
       "typeId": "outputs.led_rgb",
       "label": "Led Rgb",
       "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/outputs/leds/ledrgb.cpp",
       "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
       ]
     },
     {
@@ -390,13 +334,13 @@
       "typeId": "outputs.led_bar",
       "label": "Led Bar",
       "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/outputs/leds/ledbar.cpp",
       "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
       ]
     },
     {
@@ -404,13 +348,13 @@
       "typeId": "outputs.led_matrix",
       "label": "LedMatrix",
       "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/outputs/leds/ledmatrix.cpp",
       "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
       ]
     },
     {
@@ -418,13 +362,13 @@
       "typeId": "outputs.seven_segment",
       "label": "7 Segment",
       "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/outputs/leds/sevensegment.cpp",
       "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
       ]
     },
     {
@@ -432,13 +376,13 @@
       "typeId": "outputs.dc_motor",
       "label": "Dc Motor",
       "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/outputs/motors/dcmotor.cpp",
       "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
       ]
     },
     {
@@ -446,13 +390,13 @@
       "typeId": "outputs.stepper",
       "label": "Stepper",
       "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/outputs/motors/stepper.cpp",
       "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
       ]
     },
     {
@@ -460,19 +404,19 @@
       "typeId": "outputs.incandescent_lamp",
       "label": "Incandescent lamp",
       "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/outputs/lamp.cpp",
       "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
       ]
     },
     {
       "scope": "built-in",
       "typeId": "connectors.junction",
-      "label": "Juncao",
+      "label": "Junction",
       "manifestPath": "project\\schema\\component-catalog.json",
       "visualOrigin": "componentSymbols/fallback",
       "fidelityStatus": "divergent-by-architecture",
@@ -486,7 +430,21 @@
     {
       "scope": "built-in",
       "typeId": "connectors.bus",
-      "label": "Barramento",
+      "label": "Bus",
+      "manifestPath": "project\\schema\\component-catalog.json",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/logic/bus.cpp",
+      "missingDetails": [
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
+      ]
+    },
+    {
+      "scope": "built-in",
+      "typeId": "connectors.tunnel",
+      "label": "Tunnel.",
       "manifestPath": "project\\schema\\component-catalog.json",
       "visualOrigin": "componentSymbols/fallback",
       "fidelityStatus": "divergent-by-architecture",
@@ -499,8 +457,8 @@
     },
     {
       "scope": "built-in",
-      "typeId": "connectors.tunnel",
-      "label": "Tunel",
+      "typeId": "subcircuits.external",
+      "label": "Subcircuit",
       "manifestPath": "project\\schema\\component-catalog.json",
       "visualOrigin": "componentSymbols/fallback",
       "fidelityStatus": "divergent-by-architecture",
@@ -514,35 +472,35 @@
     {
       "scope": "built-in",
       "typeId": "connectors.socket",
-      "label": "Soquete",
+      "label": "Socket",
       "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/gui/circuitwidget/connbase.cpp + src/components/connectors/socket.cpp",
       "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
       ]
     },
     {
       "scope": "built-in",
       "typeId": "connectors.header",
-      "label": "Cabecalho",
+      "label": "Header",
       "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/gui/circuitwidget/connbase.cpp + src/components/connectors/header.cpp",
       "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
       ]
     },
     {
       "scope": "built-in",
       "typeId": "graphics.image",
-      "label": "Imagem",
+      "label": "Image",
       "manifestPath": "project\\schema\\component-catalog.json",
       "visualOrigin": "componentSymbols/fallback",
       "fidelityStatus": "divergent-by-architecture",
@@ -556,7 +514,7 @@
     {
       "scope": "built-in",
       "typeId": "graphics.text",
-      "label": "Texto",
+      "label": "Text",
       "manifestPath": "project\\schema\\component-catalog.json",
       "visualOrigin": "componentSymbols/fallback",
       "fidelityStatus": "divergent-by-architecture",
@@ -570,7 +528,7 @@
     {
       "scope": "built-in",
       "typeId": "graphics.rectangle",
-      "label": "Retangulo",
+      "label": "Rectangle",
       "manifestPath": "project\\schema\\component-catalog.json",
       "visualOrigin": "componentSymbols/fallback",
       "fidelityStatus": "divergent-by-architecture",
@@ -584,7 +542,7 @@
     {
       "scope": "built-in",
       "typeId": "graphics.ellipse",
-      "label": "Elipse",
+      "label": "Ellipse",
       "manifestPath": "project\\schema\\component-catalog.json",
       "visualOrigin": "componentSymbols/fallback",
       "fidelityStatus": "divergent-by-architecture",
@@ -598,7 +556,7 @@
     {
       "scope": "built-in",
       "typeId": "graphics.line",
-      "label": "Linha",
+      "label": "Line",
       "manifestPath": "project\\schema\\component-catalog.json",
       "visualOrigin": "componentSymbols/fallback",
       "fidelityStatus": "divergent-by-architecture",
@@ -612,7 +570,7 @@
     {
       "scope": "built-in",
       "typeId": "other.package",
-      "label": "Pacote",
+      "label": "Package",
       "manifestPath": "project\\schema\\component-catalog.json",
       "visualOrigin": "componentSymbols/fallback",
       "fidelityStatus": "divergent-by-architecture",
@@ -626,7 +584,7 @@
     {
       "scope": "built-in",
       "typeId": "other.package_pin",
-      "label": "Pino de Pacote",
+      "label": "Package Pin",
       "manifestPath": "project\\schema\\component-catalog.json",
       "visualOrigin": "componentSymbols/fallback",
       "fidelityStatus": "divergent-by-architecture",
@@ -640,7 +598,7 @@
     {
       "scope": "built-in",
       "typeId": "other.test_unit",
-      "label": "Unidade de Teste",
+      "label": "Test Unit",
       "manifestPath": "project\\schema\\component-catalog.json",
       "visualOrigin": "componentSymbols/fallback",
       "fidelityStatus": "divergent-by-architecture",
@@ -654,7 +612,7 @@
     {
       "scope": "built-in",
       "typeId": "other.dial",
-      "label": "Rotativo",
+      "label": "Dial",
       "manifestPath": "project\\schema\\component-catalog.json",
       "visualOrigin": "componentSymbols/fallback",
       "fidelityStatus": "divergent-by-architecture",
@@ -668,105 +626,107 @@
     {
       "scope": "built-in",
       "typeId": "meters.probe",
-      "label": "Sonda",
+      "label": "Probe",
       "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/meters/probe.cpp",
       "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
       ]
     },
     {
       "scope": "built-in",
       "typeId": "meters.ampmeter",
-      "label": "Amperimetro",
+      "label": "Ampmeter",
       "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/meters/meter.cpp + ampmeter.cpp",
       "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
       ]
     },
     {
       "scope": "built-in",
       "typeId": "instruments.voltmeter",
-      "label": "Voltimetro",
+      "label": "Voltmeter",
       "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/meters/meter.cpp + voltmeter.cpp",
       "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
       ]
     },
     {
       "scope": "built-in",
       "typeId": "meters.freqmeter",
-      "label": "Frequencimetro",
+      "label": "Frequency Meter",
       "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "src/components/meters/freqmeter.cpp",
       "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
       ]
     },
     {
       "scope": "built-in",
       "typeId": "meters.oscope",
-      "label": "Osciloscopio",
+      "label": "Oscope",
       "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
+      "visualOrigin": "package.shapes",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
       "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
+        "paint() C++ nao traduzido",
+        "estado visual dinamico possivelmente ausente",
+        "hit-test real nao localizado",
+        "labels/pinos dependem do package manual"
       ]
     },
     {
       "scope": "built-in",
       "typeId": "meters.logic_analyzer",
-      "label": "Analisador Logico",
+      "label": "Logic Analyzer",
       "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
+      "visualOrigin": "package.shapes",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
       "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
+        "paint() C++ nao traduzido",
+        "estado visual dinamico possivelmente ausente",
+        "hit-test real nao localizado",
+        "labels/pinos dependem do package manual"
       ]
     },
     {
       "scope": "built-in",
       "typeId": "sources.dc_voltage",
-      "label": "Fonte de Tensao",
+      "label": "Voltage Source",
       "manifestPath": "project\\schema\\component-catalog.json",
-      "visualOrigin": "componentSymbols/fallback",
-      "fidelityStatus": "divergent-by-architecture",
-      "simulideSource": "nao localizado",
+      "visualOrigin": "simulidePaint",
+      "fidelityStatus": "candidate-needs-visual-proof",
+      "simulideSource": "LasecSimul ideal DC two-pin source",
       "missingDetails": [
-        "fallback generico",
-        "geometria SimulIDE nao localizada",
-        "pinos/bounding box/hit-test por heuristica"
+        "validar pixel contra SimulIDE",
+        "validar hit-test/shape",
+        "validar comportamento eletrico"
       ]
     },
     {
       "scope": "built-in",
       "typeId": "sources.fixed_volt",
-      "label": "Tensao Fixa",
+      "label": "Fixed Voltage",
       "manifestPath": "project\\schema\\component-catalog.json",
       "visualOrigin": "simulidePaint",
       "fidelityStatus": "candidate-needs-visual-proof",
@@ -794,7 +754,7 @@
     {
       "scope": "built-in",
       "typeId": "sources.wave_gen",
-      "label": "Gerador de Onda",
+      "label": "Wave Generator",
       "manifestPath": "project\\schema\\component-catalog.json",
       "visualOrigin": "simulidePaint",
       "fidelityStatus": "candidate-needs-visual-proof",
@@ -808,7 +768,7 @@
     {
       "scope": "built-in",
       "typeId": "sources.voltage_source",
-      "label": "Fonte de Tensao Variavel",
+      "label": "Voltage Source",
       "manifestPath": "project\\schema\\component-catalog.json",
       "visualOrigin": "simulidePaint",
       "fidelityStatus": "candidate-needs-visual-proof",
@@ -822,7 +782,7 @@
     {
       "scope": "built-in",
       "typeId": "sources.current_source",
-      "label": "Fonte de Corrente",
+      "label": "Current Source",
       "manifestPath": "project\\schema\\component-catalog.json",
       "visualOrigin": "simulidePaint",
       "fidelityStatus": "candidate-needs-visual-proof",
@@ -836,7 +796,7 @@
     {
       "scope": "built-in",
       "typeId": "sources.controlled_source",
-      "label": "Fonte Controlada",
+      "label": "Controlled Source",
       "manifestPath": "project\\schema\\component-catalog.json",
       "visualOrigin": "simulidePaint",
       "fidelityStatus": "candidate-needs-visual-proof",
@@ -850,7 +810,7 @@
     {
       "scope": "built-in",
       "typeId": "sources.battery",
-      "label": "Bateria",
+      "label": "Battery",
       "manifestPath": "project\\schema\\component-catalog.json",
       "visualOrigin": "simulidePaint",
       "fidelityStatus": "candidate-needs-visual-proof",
@@ -864,7 +824,7 @@
     {
       "scope": "built-in",
       "typeId": "sources.rail",
-      "label": "Trilho",
+      "label": "Rail",
       "manifestPath": "project\\schema\\component-catalog.json",
       "visualOrigin": "simulidePaint",
       "fidelityStatus": "candidate-needs-visual-proof",
@@ -878,7 +838,7 @@
     {
       "scope": "built-in",
       "typeId": "other.ground",
-      "label": "Terra (0 V)",
+      "label": "Ground (0 V)",
       "manifestPath": "project\\schema\\component-catalog.json",
       "visualOrigin": "simulidePaint",
       "fidelityStatus": "candidate-needs-visual-proof",
@@ -893,7 +853,7 @@
       "scope": "abi-device",
       "typeId": "example.blinker",
       "label": "Blinker (exemplo de dispositivo nativo)",
-      "manifestPath": "devices\\example-blinker\\device.json",
+      "manifestPath": "devices\\example-blinker\\device.lsdevice",
       "visualOrigin": "package.shapes",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -908,7 +868,7 @@
       "scope": "abi-device",
       "typeId": "outputs.ssd1306",
       "label": "SSD1306",
-      "manifestPath": "devices\\simulide-complex\\ssd1306.json",
+      "manifestPath": "devices\\simulide-complex\\ssd1306.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -923,7 +883,7 @@
       "scope": "abi-device",
       "typeId": "outputs.sh1107",
       "label": "Sh1107",
-      "manifestPath": "devices\\simulide-complex\\sh1107.json",
+      "manifestPath": "devices\\simulide-complex\\sh1107.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -938,7 +898,7 @@
       "scope": "abi-device",
       "typeId": "outputs.hd44780",
       "label": "Hd44780",
-      "manifestPath": "devices\\simulide-complex\\hd44780.json",
+      "manifestPath": "devices\\simulide-complex\\hd44780.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -953,7 +913,7 @@
       "scope": "abi-device",
       "typeId": "outputs.aip31068_i2c",
       "label": "Aip31068 I2C",
-      "manifestPath": "devices\\simulide-complex\\aip31068_i2c.json",
+      "manifestPath": "devices\\simulide-complex\\aip31068_i2c.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -968,7 +928,7 @@
       "scope": "abi-device",
       "typeId": "outputs.ili9341",
       "label": "Ili9341",
-      "manifestPath": "devices\\simulide-complex\\ili9341.json",
+      "manifestPath": "devices\\simulide-complex\\ili9341.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -983,7 +943,7 @@
       "scope": "abi-device",
       "typeId": "outputs.st7735",
       "label": "St7735",
-      "manifestPath": "devices\\simulide-complex\\st7735.json",
+      "manifestPath": "devices\\simulide-complex\\st7735.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -998,7 +958,7 @@
       "scope": "abi-device",
       "typeId": "outputs.st7789",
       "label": "St7789",
-      "manifestPath": "devices\\simulide-complex\\st7789.json",
+      "manifestPath": "devices\\simulide-complex\\st7789.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1013,7 +973,7 @@
       "scope": "abi-device",
       "typeId": "outputs.gc9a01a",
       "label": "GC9A01A",
-      "manifestPath": "devices\\simulide-complex\\gc9a01a.json",
+      "manifestPath": "devices\\simulide-complex\\gc9a01a.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1028,7 +988,7 @@
       "scope": "abi-device",
       "typeId": "outputs.pcf8833",
       "label": "Pcf8833",
-      "manifestPath": "devices\\simulide-complex\\pcf8833.json",
+      "manifestPath": "devices\\simulide-complex\\pcf8833.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1043,7 +1003,7 @@
       "scope": "abi-device",
       "typeId": "outputs.pcd8544",
       "label": "Pcd8544",
-      "manifestPath": "devices\\simulide-complex\\pcd8544.json",
+      "manifestPath": "devices\\simulide-complex\\pcd8544.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1058,7 +1018,7 @@
       "scope": "abi-device",
       "typeId": "outputs.ks0108",
       "label": "KS0108",
-      "manifestPath": "devices\\simulide-complex\\ks0108.json",
+      "manifestPath": "devices\\simulide-complex\\ks0108.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1073,7 +1033,7 @@
       "scope": "abi-device",
       "typeId": "outputs.max72xx_matrix",
       "label": "Max72xx matrix",
-      "manifestPath": "devices\\simulide-complex\\max72xx_matrix.json",
+      "manifestPath": "devices\\simulide-complex\\max72xx_matrix.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1088,7 +1048,7 @@
       "scope": "abi-device",
       "typeId": "outputs.ws2812",
       "label": "WS2812 Led",
-      "manifestPath": "devices\\simulide-complex\\ws2812.json",
+      "manifestPath": "devices\\simulide-complex\\ws2812.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1103,7 +1063,7 @@
       "scope": "abi-device",
       "typeId": "outputs.servo",
       "label": "Servo Motor",
-      "manifestPath": "devices\\simulide-complex\\servo.json",
+      "manifestPath": "devices\\simulide-complex\\servo.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1118,7 +1078,7 @@
       "scope": "abi-device",
       "typeId": "outputs.audio_out",
       "label": "Audio Out",
-      "manifestPath": "devices\\simulide-complex\\audio_out.json",
+      "manifestPath": "devices\\simulide-complex\\audio_out.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1133,7 +1093,7 @@
       "scope": "abi-device",
       "typeId": "passive.transformer",
       "label": "Transformer",
-      "manifestPath": "devices\\simulide-complex\\transformer.json",
+      "manifestPath": "devices\\simulide-complex\\transformer.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1148,7 +1108,7 @@
       "scope": "abi-device",
       "typeId": "active.diac",
       "label": "Diac",
-      "manifestPath": "devices\\simulide-complex\\diac.json",
+      "manifestPath": "devices\\simulide-complex\\diac.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1163,7 +1123,7 @@
       "scope": "abi-device",
       "typeId": "active.scr",
       "label": "SCR",
-      "manifestPath": "devices\\simulide-complex\\scr.json",
+      "manifestPath": "devices\\simulide-complex\\scr.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1178,7 +1138,7 @@
       "scope": "abi-device",
       "typeId": "active.triac",
       "label": "Triac",
-      "manifestPath": "devices\\simulide-complex\\triac.json",
+      "manifestPath": "devices\\simulide-complex\\triac.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1193,7 +1153,7 @@
       "scope": "abi-device",
       "typeId": "active.bjt",
       "label": "BJT",
-      "manifestPath": "devices\\simulide-complex\\bjt.json",
+      "manifestPath": "devices\\simulide-complex\\bjt.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1208,7 +1168,7 @@
       "scope": "abi-device",
       "typeId": "active.mosfet",
       "label": "Mosfet",
-      "manifestPath": "devices\\simulide-complex\\mosfet.json",
+      "manifestPath": "devices\\simulide-complex\\mosfet.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1223,7 +1183,7 @@
       "scope": "abi-device",
       "typeId": "active.jfet",
       "label": "Jfet",
-      "manifestPath": "devices\\simulide-complex\\jfet.json",
+      "manifestPath": "devices\\simulide-complex\\jfet.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1238,7 +1198,7 @@
       "scope": "abi-device",
       "typeId": "logic.buffer",
       "label": "Buffer",
-      "manifestPath": "devices\\simulide-logic\\buffer.json",
+      "manifestPath": "devices\\simulide-logic\\buffer.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1253,7 +1213,7 @@
       "scope": "abi-device",
       "typeId": "logic.and_gate",
       "label": "And Gate",
-      "manifestPath": "devices\\simulide-logic\\and_gate.json",
+      "manifestPath": "devices\\simulide-logic\\and_gate.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1268,7 +1228,7 @@
       "scope": "abi-device",
       "typeId": "logic.or_gate",
       "label": "Or Gate",
-      "manifestPath": "devices\\simulide-logic\\or_gate.json",
+      "manifestPath": "devices\\simulide-logic\\or_gate.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1283,7 +1243,7 @@
       "scope": "abi-device",
       "typeId": "logic.xor_gate",
       "label": "Xor Gate",
-      "manifestPath": "devices\\simulide-logic\\xor_gate.json",
+      "manifestPath": "devices\\simulide-logic\\xor_gate.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1298,7 +1258,7 @@
       "scope": "abi-device",
       "typeId": "logic.counter",
       "label": "Simple Counter",
-      "manifestPath": "devices\\simulide-logic\\counter.json",
+      "manifestPath": "devices\\simulide-logic\\counter.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1313,7 +1273,7 @@
       "scope": "abi-device",
       "typeId": "logic.bin_counter",
       "label": "Binary Counter",
-      "manifestPath": "devices\\simulide-logic\\bin_counter.json",
+      "manifestPath": "devices\\simulide-logic\\bin_counter.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1328,7 +1288,7 @@
       "scope": "abi-device",
       "typeId": "logic.full_adder",
       "label": "Full Adder",
-      "manifestPath": "devices\\simulide-logic\\full_adder.json",
+      "manifestPath": "devices\\simulide-logic\\full_adder.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1343,7 +1303,7 @@
       "scope": "abi-device",
       "typeId": "logic.magnitude_comp",
       "label": "Magnitude Comparator",
-      "manifestPath": "devices\\simulide-logic\\magnitude_comp.json",
+      "manifestPath": "devices\\simulide-logic\\magnitude_comp.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1358,7 +1318,7 @@
       "scope": "abi-device",
       "typeId": "logic.shift_reg",
       "label": "Shift Register",
-      "manifestPath": "devices\\simulide-logic\\shift_reg.json",
+      "manifestPath": "devices\\simulide-logic\\shift_reg.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1373,7 +1333,7 @@
       "scope": "abi-device",
       "typeId": "logic.function",
       "label": "Function",
-      "manifestPath": "devices\\simulide-logic\\function.json",
+      "manifestPath": "devices\\simulide-logic\\function.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1388,7 +1348,7 @@
       "scope": "abi-device",
       "typeId": "logic.flipflop_d",
       "label": "FlipFlopD",
-      "manifestPath": "devices\\simulide-logic\\flipflop_d.json",
+      "manifestPath": "devices\\simulide-logic\\flipflop_d.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1402,8 +1362,8 @@
     {
       "scope": "abi-device",
       "typeId": "logic.flipflop_t",
-      "label": "FlipFlopT",
-      "manifestPath": "devices\\simulide-logic\\flipflop_t.json",
+      "label": "FlipFlop T",
+      "manifestPath": "devices\\simulide-logic\\flipflop_t.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1418,7 +1378,7 @@
       "scope": "abi-device",
       "typeId": "logic.flipflop_rs",
       "label": "FlipFlop RS",
-      "manifestPath": "devices\\simulide-logic\\flipflop_rs.json",
+      "manifestPath": "devices\\simulide-logic\\flipflop_rs.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1433,7 +1393,7 @@
       "scope": "abi-device",
       "typeId": "logic.flipflop_jk",
       "label": "FlipFlop JK",
-      "manifestPath": "devices\\simulide-logic\\flipflop_jk.json",
+      "manifestPath": "devices\\simulide-logic\\flipflop_jk.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1448,7 +1408,7 @@
       "scope": "abi-device",
       "typeId": "logic.latch_d",
       "label": "Latch",
-      "manifestPath": "devices\\simulide-logic\\latch_d.json",
+      "manifestPath": "devices\\simulide-logic\\latch_d.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1462,8 +1422,8 @@
     {
       "scope": "abi-device",
       "typeId": "logic.memory",
-      "label": "Memory",
-      "manifestPath": "devices\\simulide-logic\\memory.json",
+      "label": "Ram/Rom",
+      "manifestPath": "devices\\simulide-logic\\memory.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1477,8 +1437,8 @@
     {
       "scope": "abi-device",
       "typeId": "logic.dynamic_memory",
-      "label": "Dynamic Memory",
-      "manifestPath": "devices\\simulide-logic\\dynamic_memory.json",
+      "label": "Dynamic Ram",
+      "manifestPath": "devices\\simulide-logic\\dynamic_memory.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1493,7 +1453,7 @@
       "scope": "abi-device",
       "typeId": "logic.i2c_ram",
       "label": "I2C Ram",
-      "manifestPath": "devices\\simulide-logic\\i2c_ram.json",
+      "manifestPath": "devices\\simulide-logic\\i2c_ram.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1508,7 +1468,7 @@
       "scope": "abi-device",
       "typeId": "logic.mux",
       "label": "Mux",
-      "manifestPath": "devices\\simulide-logic\\mux.json",
+      "manifestPath": "devices\\simulide-logic\\mux.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1523,7 +1483,7 @@
       "scope": "abi-device",
       "typeId": "logic.demux",
       "label": "Demux",
-      "manifestPath": "devices\\simulide-logic\\demux.json",
+      "manifestPath": "devices\\simulide-logic\\demux.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1537,8 +1497,8 @@
     {
       "scope": "abi-device",
       "typeId": "logic.bcd_to_dec",
-      "label": "Bcd To Dec",
-      "manifestPath": "devices\\simulide-logic\\bcd_to_dec.json",
+      "label": "Decoder(4 to 10/16)",
+      "manifestPath": "devices\\simulide-logic\\bcd_to_dec.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1552,8 +1512,8 @@
     {
       "scope": "abi-device",
       "typeId": "logic.dec_to_bcd",
-      "label": "Dec To Bcd",
-      "manifestPath": "devices\\simulide-logic\\dec_to_bcd.json",
+      "label": "Encoder(10/16 to 4)",
+      "manifestPath": "devices\\simulide-logic\\dec_to_bcd.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1568,7 +1528,7 @@
       "scope": "abi-device",
       "typeId": "logic.bcd_to_7seg",
       "label": "Bcd To 7S.",
-      "manifestPath": "devices\\simulide-logic\\bcd_to_7seg.json",
+      "manifestPath": "devices\\simulide-logic\\bcd_to_7seg.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1583,7 +1543,7 @@
       "scope": "abi-device",
       "typeId": "logic.i2c_to_parallel",
       "label": "I2C to Parallel",
-      "manifestPath": "devices\\simulide-logic\\i2c_to_parallel.json",
+      "manifestPath": "devices\\simulide-logic\\i2c_to_parallel.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1598,7 +1558,7 @@
       "scope": "abi-device",
       "typeId": "logic.adc",
       "label": "ADC",
-      "manifestPath": "devices\\simulide-logic\\adc.json",
+      "manifestPath": "devices\\simulide-logic\\adc.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1613,7 +1573,7 @@
       "scope": "abi-device",
       "typeId": "logic.dac",
       "label": "DAC",
-      "manifestPath": "devices\\simulide-logic\\dac.json",
+      "manifestPath": "devices\\simulide-logic\\dac.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1627,8 +1587,8 @@
     {
       "scope": "abi-device",
       "typeId": "logic.seven_segment_bcd",
-      "label": "7 Segment BCD",
-      "manifestPath": "devices\\simulide-logic\\seven_segment_bcd.json",
+      "label": "7 Seg BCD",
+      "manifestPath": "devices\\simulide-logic\\seven_segment_bcd.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1643,7 +1603,7 @@
       "scope": "abi-device",
       "typeId": "logic.lm555",
       "label": "LM555",
-      "manifestPath": "devices\\simulide-logic\\lm555.json",
+      "manifestPath": "devices\\simulide-logic\\lm555.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1657,8 +1617,8 @@
     {
       "scope": "abi-device",
       "typeId": "sensors.ldr",
-      "label": "LDR — Fotorresistor",
-      "manifestPath": "devices\\simulide-sensors\\ldr.json",
+      "label": "LDR",
+      "manifestPath": "devices\\simulide-sensors\\ldr.lsdevice",
       "visualOrigin": "package.shapes",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1672,8 +1632,8 @@
     {
       "scope": "abi-device",
       "typeId": "sensors.thermistor",
-      "label": "Termistor NTC/PTC",
-      "manifestPath": "devices\\simulide-sensors\\thermistor.json",
+      "label": "Thermistor",
+      "manifestPath": "devices\\simulide-sensors\\thermistor.lsdevice",
       "visualOrigin": "package.shapes",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1687,8 +1647,8 @@
     {
       "scope": "abi-device",
       "typeId": "sensors.rtd",
-      "label": "RTD — Detector de Temperatura Resistivo",
-      "manifestPath": "devices\\simulide-sensors\\rtd.json",
+      "label": "RTD",
+      "manifestPath": "devices\\simulide-sensors\\rtd.lsdevice",
       "visualOrigin": "package.shapes",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1702,8 +1662,8 @@
     {
       "scope": "abi-device",
       "typeId": "sensors.strain",
-      "label": "Extensômetro (Strain Gauge)",
-      "manifestPath": "devices\\simulide-sensors\\strain.json",
+      "label": "Force Strain Gauge",
+      "manifestPath": "devices\\simulide-sensors\\strain.lsdevice",
       "visualOrigin": "package.shapes",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1717,8 +1677,8 @@
     {
       "scope": "abi-device",
       "typeId": "sensors.sr04",
-      "label": "HC-SR04 — Sensor Ultrassônico",
-      "manifestPath": "devices\\simulide-sensors\\sr04.json",
+      "label": "HC-SR04",
+      "manifestPath": "devices\\simulide-sensors\\sr04.lsdevice",
       "visualOrigin": "package.shapes",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1732,8 +1692,8 @@
     {
       "scope": "abi-device",
       "typeId": "sensors.dht22",
-      "label": "DHT22/11 — Sensor de Temperatura e Umidade",
-      "manifestPath": "devices\\simulide-sensors\\dht22.json",
+      "label": "DHt22/11",
+      "manifestPath": "devices\\simulide-sensors\\dht22.lsdevice",
       "visualOrigin": "package.shapes",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1747,8 +1707,8 @@
     {
       "scope": "abi-device",
       "typeId": "sensors.ds1621",
-      "label": "DS1621 — Termômetro Digital I2C",
-      "manifestPath": "devices\\simulide-sensors\\ds1621.json",
+      "label": "DS1621",
+      "manifestPath": "devices\\simulide-sensors\\ds1621.lsdevice",
       "visualOrigin": "package.shapes",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1762,8 +1722,8 @@
     {
       "scope": "abi-device",
       "typeId": "sensors.ds18b20",
-      "label": "DS18B20 — Termômetro Digital 1-Wire",
-      "manifestPath": "devices\\simulide-sensors\\ds18b20.json",
+      "label": "DS18B20",
+      "manifestPath": "devices\\simulide-sensors\\ds18b20.lsdevice",
       "visualOrigin": "package.shapes",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1777,8 +1737,8 @@
     {
       "scope": "abi-device",
       "typeId": "peripherals.ky023",
-      "label": "KY-023 — Joystick Analógico",
-      "manifestPath": "devices\\simulide-peripherals\\ky023.json",
+      "label": "Joystick Dual Axis",
+      "manifestPath": "devices\\simulide-peripherals\\ky023.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1792,8 +1752,8 @@
     {
       "scope": "abi-device",
       "typeId": "peripherals.ky040",
-      "label": "KY-040 — Encoder Rotativo",
-      "manifestPath": "devices\\simulide-peripherals\\ky040.json",
+      "label": "Rotary Encoder (relative)",
+      "manifestPath": "devices\\simulide-peripherals\\ky040.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1807,8 +1767,8 @@
     {
       "scope": "abi-device",
       "typeId": "peripherals.touchpad",
-      "label": "TouchPad — Tela Sensível ao Toque",
-      "manifestPath": "devices\\simulide-peripherals\\touchpad.json",
+      "label": "TouchPad (Resistive)",
+      "manifestPath": "devices\\simulide-peripherals\\touchpad.lsdevice",
       "visualOrigin": "viewSpec",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1822,8 +1782,8 @@
     {
       "scope": "abi-device",
       "typeId": "peripherals.ds1307",
-      "label": "DS1307 — RTC I2C",
-      "manifestPath": "devices\\simulide-peripherals\\ds1307.json",
+      "label": "DS1307",
+      "manifestPath": "devices\\simulide-peripherals\\ds1307.lsdevice",
       "visualOrigin": "package.shapes",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1837,8 +1797,8 @@
     {
       "scope": "abi-device",
       "typeId": "peripherals.serialterm",
-      "label": "Terminal Serial",
-      "manifestPath": "devices\\simulide-peripherals\\serialterm.json",
+      "label": "Serial Terminal",
+      "manifestPath": "devices\\simulide-peripherals\\serialterm.lsdevice",
       "visualOrigin": "package.shapes",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1852,8 +1812,8 @@
     {
       "scope": "abi-device",
       "typeId": "peripherals.serialport",
-      "label": "Porta Serial (COM/TTY)",
-      "manifestPath": "devices\\simulide-peripherals\\serialport.json",
+      "label": "Serial Port",
+      "manifestPath": "devices\\simulide-peripherals\\serialport.lsdevice",
       "visualOrigin": "package.shapes",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1867,8 +1827,8 @@
     {
       "scope": "abi-device",
       "typeId": "peripherals.sdcard",
-      "label": "Cartão SD (SPI)",
-      "manifestPath": "devices\\simulide-peripherals\\sdcard.json",
+      "label": "SD Card Reader",
+      "manifestPath": "devices\\simulide-peripherals\\sdcard.lsdevice",
       "visualOrigin": "package.shapes",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1882,8 +1842,8 @@
     {
       "scope": "abi-device",
       "typeId": "peripherals.esp01",
-      "label": "ESP-01 — Módulo Wi-Fi AT",
-      "manifestPath": "devices\\simulide-peripherals\\esp01.json",
+      "label": "Esp01 (TCP)",
+      "manifestPath": "devices\\simulide-peripherals\\esp01.lsdevice",
       "visualOrigin": "package.shapes",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1897,8 +1857,8 @@
     {
       "scope": "mcu-adapter",
       "typeId": "espressif.esp32",
-      "label": "Espressif ESP32 (QEMU)",
-      "manifestPath": "mcu-adapters\\espressif-esp32\\mcu.json",
+      "label": "QemuDevice",
+      "manifestPath": "mcu-adapters\\espressif-esp32\\mcu.lsdevice",
       "visualOrigin": "package.shapes",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1913,7 +1873,7 @@
       "scope": "subcircuit",
       "typeId": "subcircuits.esp32_devkitc_v4",
       "label": "ESP32 DevKitC V4 (placa completa)",
-      "manifestPath": "subcircuits\\esp32_devkitc_v4.lssub.json",
+      "manifestPath": "subcircuits\\esp32_devkitc_v4.lssubcircuit",
       "visualOrigin": "package.shapes",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",
@@ -1928,7 +1888,7 @@
       "scope": "subcircuit",
       "typeId": "subcircuits.esp32_wroom32",
       "label": "ESP32-WROOM-32 (modulo)",
-      "manifestPath": "subcircuits\\esp32_wroom32.lssub.json",
+      "manifestPath": "subcircuits\\esp32_wroom32.lssubcircuit",
       "visualOrigin": "package.shapes",
       "fidelityStatus": "divergent-by-architecture",
       "simulideSource": "nao localizado",

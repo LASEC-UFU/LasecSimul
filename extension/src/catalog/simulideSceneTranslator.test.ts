@@ -98,7 +98,7 @@ import { registerPackage } from "../ui/webview/componentSymbols";
       width: 60,
       height: 40,
       border: true,
-      pins: [{ id: "p1", x: -8, y: 20, angle: 180, length: 8, label: "P1", leadOrigin: "terminal" }],
+      pins: [{ id: "p1", x: -8, y: 20, angle: 180, length: 8, label: "P1" }],
     };
     registerPackage("test.qt-package", pkg);
     const components: WebviewComponentModel[] = [
@@ -126,7 +126,7 @@ import { registerPackage } from "../ui/webview/componentSymbols";
       width: 60,
       height: 40,
       border: true,
-      pins: [{ id: "p1", x: -8, y: 20, angle: 180, length: 8, label: "P1", leadOrigin: "terminal" }],
+      pins: [{ id: "p1", x: -8, y: 20, angle: 180, length: 8, label: "P1" }],
     };
     registerPackage("test.qt-package-2", pkg);
     const scene = {

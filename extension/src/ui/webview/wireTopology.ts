@@ -27,6 +27,7 @@ import {
 } from "./wireGeometry.js";
 import { CanonicalEndpoint, TopologyNode, WebviewComponentModel, WebviewWireModel, endpointId, endpointPinId, nodeEndpoint, portEndpoint } from "./model.js";
 import { componentBox, componentLocalOrigin, pinLocalPosition } from "./componentSymbols.js";
+import { localToScene } from "./componentGeometry.js";
 
 export interface TopologySnapshot {
   components: WebviewComponentModel[];
@@ -34,38 +35,7 @@ export interface TopologySnapshot {
   nodes: TopologyNode[];
 }
 
-/** Espelha `componentPinLocalPosition`/`pinScenePosition` de `main.ts` (mesma matemática de
- * box/origem/flip/rotação), reimplementado aqui pra que este módulo funcione tanto no host
- * (`extension.ts`, sem os outros helpers locais de `main.ts`) quanto na Webview, sem forçar
- * `main.ts` a mudar a assinatura das suas próprias funções (usadas em dezenas de call sites já
- * testados). Pequena duplicação deliberada de ~15 linhas de matemática pura -- ver docstring do
- * módulo. */
-function flipLocalPoint(local: Point, box: { width: number; height: number }, flipH: boolean, flipV: boolean, origin?: Point): Point {
-  const pivot = origin ?? { x: box.width / 2, y: box.height / 2 };
-  return {
-    x: flipH ? pivot.x - (local.x - pivot.x) : local.x,
-    y: flipV ? pivot.y - (local.y - pivot.y) : local.y,
-  };
-}
-
-function rotateLocalPoint(local: Point, box: { width: number; height: number }, rotation: 0 | 90 | 180 | 270, origin?: Point): Point {
-  const pivot = origin ?? { x: box.width / 2, y: box.height / 2 };
-  const cx = pivot.x;
-  const cy = pivot.y;
-  const dx = local.x - cx;
-  const dy = local.y - cy;
-  switch (rotation) {
-    case 90:
-      return { x: cx - dy, y: cy + dx };
-    case 180:
-      return { x: cx - dx, y: cy - dy };
-    case 270:
-      return { x: cx + dy, y: cy - dx };
-    default:
-      return { x: cx + dx, y: cy + dy };
-  }
-}
-
+/** A conversão local→cena abaixo usa `componentGeometry.ts`, a mesma fonte do renderer. */
 /** Posição em cena (canvas) do pino `pinId` do componente `componentId`, ou do nó de topologia
  * `componentId` (quando não bate com nenhum componente real -- `pinId` precisa ser `"pin-1"` nesse
  * caso). `undefined` se nem componente nem nó existirem. */
@@ -80,9 +50,14 @@ export function pinScenePosition(components: WebviewComponentModel[], componentI
   const box = componentBox(component.typeId, component.properties);
   const origin = componentLocalOrigin(component.typeId, component.properties);
   const base = pinLocalPosition(component.pins[pinIndex]?.id ?? "", pinIndex, component.pins.length, component.typeId, component.properties);
-  const flipped = flipLocalPoint(base, box, Boolean(component.flipH), Boolean(component.flipV), origin);
-  const rotated = rotateLocalPoint(flipped, box, component.rotation, origin);
-  return { x: component.x + rotated.x, y: component.y + rotated.y };
+  return localToScene(base, {
+    size: box,
+    position: { x: component.x, y: component.y },
+    rotation: component.rotation,
+    flipH: Boolean(component.flipH),
+    flipV: Boolean(component.flipV),
+    origin,
+  });
 }
 
 /** Posição em cena de um endpoint tipado -- mesma resolução acima, só que a partir de

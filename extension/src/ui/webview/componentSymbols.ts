@@ -29,9 +29,9 @@ const SMALL_METER_BOX: ComponentBox = { width: 56, height: 40 };
 // ── Símbolo declarativo real (Épico G) ──────────────────────────────────────────────────────────
 // Quando um typeId tem `package` (.lsdevice/.lssubcircuit, ver model.ts), cada pino é desenhado na
 // posição REAL declarada (qualquer lado, com nome) -- nunca o algoritmo genérico esquerda/direita
-// abaixo, que existe só pra built-ins sem package. `x`/`y` de um PackagePin é onde o "lead" toca o
-// corpo; a ponta real (onde o fio conecta) é `x + cos(angle)*length, y + sin(angle)*length` -- pode
-// cair fora de `0..width`/`0..height` (lead saindo da borda), por isso o layout é "resolvido" uma
+// abaixo, que existe só pra built-ins sem package. `x`/`y` de um PackagePin é o terminal elétrico
+// real, exatamente como `Pin::pos()` no SimulIDE. O contato com o corpo é derivado por
+// `length` na direção local `180-angle`; ambos podem cair fora de `0..width`/`0..height`, por isso o layout é "resolvido" uma
 // vez (desloca tudo pra um espaço sem coordenada negativa) em vez de usar `width`/`height` crus.
 interface MaterializedPackagePin extends Omit<PackagePin, "x" | "y" | "angle" | "length" | "leadEndTrim" | "labelFontSize" | "labelSpace" | "labelX" | "labelY"> {
   x: number;
@@ -133,7 +133,6 @@ export function materializePinGroup(group: PackageDynamicPinGroup, properties?: 
       angle: numericPackageValue(group.angle, properties, context, 0),
       length: numericPackageValue(group.length, properties, context, 8),
       leadEndTrim: group.leadEndTrim === undefined ? undefined : numericPackageValue(group.leadEndTrim, properties, context),
-      leadOrigin: group.leadOrigin,
       leadColor: group.leadColor,
       label: group.label,
     });
@@ -176,9 +175,8 @@ function materializePackage(pkg: PackageDescriptor, properties?: Record<string, 
  * no construtor, algo que o modelo de rotação do schematic do LasecSimul -- só 0/90/180/270 -- não
  * representa). Gira os PINOS aqui (posição + ângulo) em volta do pivô declarado; a rotação do CORPO
  * visual (primitivas) é aplicada à parte, via `<g transform="rotate(...)">` em `packageBodySvg`, pra
- * não precisar reescrever geometria de cada tipo de `PackageShape` na mão. `leadOrigin:"terminal"`
- * usa a fórmula `180-angle` (não `angle` direto) pra achar o visualEnd -- rotacionar o VETOR
- * resultante corretamente exige SUBTRAIR `rotateDeg` do ângulo nesse modo (não somar); ver dedução em
+ * não precisar reescrever geometria de cada tipo de `PackageShape` na mão. O vetor terminal→corpo
+ * usa a fórmula `180-angle`; rotacioná-lo exige SUBTRAIR `rotateDeg` do ângulo; ver dedução em
  * `docs/20-diagnostico-renderizacao-simulide.md`. */
 function applyInitialTransformToPins(pkg: MaterializedPackageDescriptor): MaterializedPackagePin[] {
   const transform = pkg.initialTransform;
@@ -188,7 +186,7 @@ function applyInitialTransformToPins(pkg: MaterializedPackageDescriptor): Materi
   const cy = transform.cy ?? pkg.height / 2;
   return pkg.pins.map((pin) => {
     const rotated = rotatePoint(pin.x, pin.y, cx, cy, rotateDeg);
-    const angle = pin.leadOrigin === "terminal" ? pin.angle - rotateDeg : pin.angle + rotateDeg;
+    const angle = pin.angle - rotateDeg;
     return { ...pin, x: rotated.x, y: rotated.y, angle };
   });
 }
@@ -253,19 +251,13 @@ function resolvePackageLayout(pkgInput: MaterializedPackageDescriptor): Resolved
  * pinos capturados em coordenada de pixel da foto, sem equivalente no SimulIDE real onde pinos já
  * nascem autorados direto no espaço final) -- ver `docs/20-diagnostico-renderizacao-simulide.md`. */
 function packagePinElectricalPoint(pin: MaterializedPackagePin): { x: number; y: number } {
-  if (pin.leadOrigin === "terminal") return { x: pin.x, y: pin.y };
-  const rad = (pin.angle * Math.PI) / 180;
-  return { x: pin.x + Math.cos(rad) * pin.length, y: pin.y + Math.sin(rad) * pin.length };
+  return { x: pin.x, y: pin.y };
 }
 
 function packagePinVisualEnd(pin: MaterializedPackagePin): { x: number; y: number } {
   if (pin.length === 0) return { x: pin.x, y: pin.y };
   const visualLength = Math.max(0, pin.length - (pin.leadEndTrim ?? 0));
-  if (pin.leadOrigin === "terminal") {
-    const rad = ((180 - pin.angle) * Math.PI) / 180;
-    return { x: pin.x + Math.cos(rad) * visualLength, y: pin.y + Math.sin(rad) * visualLength };
-  }
-  const rad = (pin.angle * Math.PI) / 180;
+  const rad = ((180 - pin.angle) * Math.PI) / 180;
   return { x: pin.x + Math.cos(rad) * visualLength, y: pin.y + Math.sin(rad) * visualLength };
 }
 
@@ -914,7 +906,7 @@ function packagePinLeadSvg(pin: MaterializedPackagePin, resolved: ResolvedPackag
   let textAnchor = pin.labelTextAnchor ?? "middle";
   let labelRotation: number | undefined;
   let labelDominantBaseline = pin.labelDominantBaseline;
-  if (!hasCustomLabelPos && pin.leadOrigin === "terminal") {
+  if (!hasCustomLabelPos) {
     const offset = pin.length + (pin.labelSpace ?? Math.max(2, labelFontSize / 2));
     labelDominantBaseline = labelDominantBaseline ?? "middle";
     switch (pin.angle) {
@@ -957,8 +949,7 @@ function packagePinLeadSvg(pin: MaterializedPackagePin, resolved: ResolvedPackag
   // aplica na posição PADRÃO (calculada) -- uma vez que o usuário arrastou o rótulo pra um lugar
   // próprio (`labelX`/`labelY`, ver model.ts), a rotação automática pra encaixe apertado não faz
   // mais sentido (ele já escolheu onde e como cabe).
-  const isVerticalLead = !hasCustomLabelPos && pin.leadOrigin !== "terminal" && (pin.angle === 90 || pin.angle === 270);
-  const rotateDeg = labelRotation ?? (isVerticalLead ? -90 : undefined);
+  const rotateDeg = labelRotation;
   const rotateAttr = rotateDeg === undefined ? "" : ` transform="rotate(${rotateDeg} ${labelX.toFixed(1)} ${labelY.toFixed(1)})"`;
   const resolvedLabelColor = pin.labelColor ?? labelColor;
   const fillAttr = resolvedLabelColor === "currentColor" ? ` class="symbol-text"` : ` fill="${resolvedLabelColor}"`;
@@ -1135,7 +1126,7 @@ function packageBodySvg(resolved: ResolvedPackage, componentId?: string, propert
     `<g transform="scale(${resolved.scaleX.toFixed(6)},${resolved.scaleY.toFixed(6)})">${markup}</g>` +
     `</g>`;
   const pinLabelColor = pkg.pinLabelColor ?? "currentColor";
-  const pinsMarkup = pkg.pins
+  const pinsMarkup = resolved.pins
     .filter((pin) => stateVisibleMatches(pin.stateVisible, properties))
     .map((pin) => packagePinLeadSvg(pin, resolved, pinLabelColor, properties))
     .join("");

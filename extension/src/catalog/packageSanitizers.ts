@@ -785,21 +785,44 @@ function sanitizeDynamicPinGroup(value: unknown): PackageDynamicPinGroup | undef
   const x = sanitizeNumberValue(raw.x);
   const y = sanitizeNumberValue(raw.y);
   if (!countProp || x === undefined || y === undefined) return undefined;
+  const angle = sanitizeNumberValue(raw.angle) ?? 0;
+  const length = sanitizeNumberValue(raw.length) ?? 8;
+  const terminalX = legacyBodyCoordinate(x, angle, length, "x", raw.leadOrigin);
+  const terminalY = legacyBodyCoordinate(y, angle, length, "y", raw.leadOrigin);
   return {
     countProp,
     ...(raw.countFn === "log2Ceil" ? { countFn: raw.countFn } : {}),
     ...(sanitizeOptionalString(raw.indexName) ? { indexName: sanitizeOptionalString(raw.indexName) } : {}),
     ...(sanitizeOptionalString(raw.idPrefix) ? { idPrefix: sanitizeOptionalString(raw.idPrefix) } : {}),
     ...(sanitizeNumberValue(raw.idStart) !== undefined ? { idStart: sanitizeNumberValue(raw.idStart) } : {}),
-    x,
-    y,
-    ...(sanitizeNumberValue(raw.angle) !== undefined ? { angle: sanitizeNumberValue(raw.angle) } : {}),
-    ...(sanitizeNumberValue(raw.length) !== undefined ? { length: sanitizeNumberValue(raw.length) } : {}),
+    x: terminalX,
+    y: terminalY,
+    ...(sanitizeNumberValue(raw.angle) !== undefined ? { angle } : {}),
+    ...(sanitizeNumberValue(raw.length) !== undefined ? { length } : {}),
     ...(sanitizeNumberValue(raw.leadEndTrim) !== undefined ? { leadEndTrim: sanitizeNumberValue(raw.leadEndTrim) } : {}),
-    ...(raw.leadOrigin === "terminal" || raw.leadOrigin === "body" ? { leadOrigin: raw.leadOrigin } : {}),
     ...(sanitizeOptionalString(raw.leadColor) ? { leadColor: sanitizeOptionalString(raw.leadColor) } : {}),
     ...(typeof raw.label === "string" ? { label: raw.label } : {}),
   };
+}
+
+/** Adaptador de entrada para manifestos antigos que declaravam explicitamente o contato no corpo.
+ * O restante do sistema nunca recebe essa dupla semântica: daqui em diante `x/y` é terminal. */
+function legacyBodyCoordinate(
+  value: PackageNumberValue,
+  angle: PackageNumberValue,
+  length: PackageNumberValue,
+  axis: "x" | "y",
+  legacyOrigin: unknown,
+): PackageNumberValue {
+  if (legacyOrigin !== "body") return value;
+  if (typeof angle !== "number" || typeof length !== "number") return value;
+  const radians = angle * Math.PI / 180;
+  // `Pin::paint`: terminal→corpo é rotacionado por `180-angle`; portanto corpo→terminal é
+  // `(cos(angle), -sin(angle)) * length` nas coordenadas Qt/SVG (Y cresce para baixo).
+  const delta = (axis === "x" ? Math.cos(radians) : -Math.sin(radians)) * length;
+  if (Math.abs(delta) < 1e-12) return value;
+  if (typeof value === "number") return value + delta;
+  return { ...value, offset: (value.offset ?? 0) + delta };
 }
 
 function sanitizeDynamicLayout(value: unknown): PackageDynamicLayout | undefined {
@@ -842,16 +865,17 @@ export function sanitizePackage(value: unknown, assetBasePath?: string): Package
     const x = sanitizeNumberValue(pin.x);
     const y = sanitizeNumberValue(pin.y);
     if (x === undefined || y === undefined) continue;
+    const angle = sanitizeNumberValue(pin.angle) ?? 0;
+    const length = sanitizeNumberValue(pin.length) ?? 8;
     pins.push({
       id: pin.id,
       aliases: Array.isArray(pin.aliases) ? pin.aliases.filter((alias): alias is string => typeof alias === "string" && Boolean(alias.trim())) : undefined,
       stateVisible: sanitizeSimulidePaintStateVisible(pin.stateVisible),
       kind: typeof pin.kind === "string" ? pin.kind : undefined,
-      x,
-      y,
-      angle: sanitizeNumberValue(pin.angle) ?? 0,
-      length: sanitizeNumberValue(pin.length) ?? 8,
-      leadOrigin: pin.leadOrigin === "terminal" || pin.leadOrigin === "body" ? pin.leadOrigin : undefined,
+      x: legacyBodyCoordinate(x, angle, length, "x", pin.leadOrigin),
+      y: legacyBodyCoordinate(y, angle, length, "y", pin.leadOrigin),
+      angle,
+      length,
       leadEndTrim: sanitizeNumberValue(pin.leadEndTrim),
       leadColor: typeof pin.leadColor === "string" ? pin.leadColor : undefined,
       label: typeof pin.label === "string" ? pin.label : undefined,

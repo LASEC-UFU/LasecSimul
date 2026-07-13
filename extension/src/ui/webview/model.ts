@@ -240,7 +240,6 @@ export interface PackageDynamicPinGroup {
   angle?: PackageNumberValue;
   length?: PackageNumberValue;
   leadEndTrim?: PackageNumberValue;
-  leadOrigin?: "body" | "terminal";
   leadColor?: string;
   label?: string;
 }
@@ -260,11 +259,12 @@ export interface PackagePin {
   aliases?: string[];
   stateVisible?: SimulidePaintStateVisible;
   kind?: string;
+  /** Ponto elétrico real em coordenadas locais. É também o início visual do lead e o ponto usado
+   * pelo wire; o contato com o corpo é derivado exclusivamente de `angle` + `length`. */
   x: PackageNumberValue;
   y: PackageNumberValue;
   angle: PackageNumberValue;
   length: PackageNumberValue;
-  leadOrigin?: "body" | "terminal";
   leadEndTrim?: PackageNumberValue;
   leadColor?: string;
   label?: string;
