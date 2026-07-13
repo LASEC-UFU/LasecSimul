@@ -97,6 +97,44 @@ function writeFile(filePath, content, mode) {
   if (mode !== undefined) fs.chmodSync(filePath, mode);
 }
 
+function resolveLicenseSource() {
+  const candidates = ["LICENSE", "LICENSE.md", "LICENSE.txt", "license", "license.md", "license.txt", "COPYING", "COPYING.txt"];
+  for (const candidate of candidates) {
+    const candidatePath = path.join(repoRoot, candidate);
+    if (fs.existsSync(candidatePath) && fs.statSync(candidatePath).isFile()) {
+      return candidatePath;
+    }
+  }
+  return null;
+}
+
+function createFallbackLicenseText() {
+  const year = new Date().getFullYear();
+  return [
+    "LasecSimul",
+    "",
+    `Copyright (c) ${year} LasecSimul contributors.`,
+    "",
+    "All rights reserved.",
+    "",
+    "No license file was present in the repository at packaging time.",
+    "Until the project maintainers publish a specific license grant, use, copying,",
+    "modification, and redistribution of this software are not permitted except",
+    "as allowed by applicable law or by prior written permission from the authors.",
+    "",
+  ].join("\n");
+}
+
+function stageLicenseFile() {
+  const resolvedLicensePath = resolveLicenseSource();
+  const stagedLicensePath = path.join(stagingExtensionDir, "LICENSE.txt");
+  if (resolvedLicensePath) {
+    copyFileTo(resolvedLicensePath, stagedLicensePath);
+    return;
+  }
+  writeFile(stagedLicensePath, createFallbackLicenseText());
+}
+
 function sha256(filePath) {
   const hash = crypto.createHash("sha256");
   hash.update(fs.readFileSync(filePath));
@@ -150,6 +188,7 @@ function stageExtensionFiles() {
   }
 
   writeFile(path.join(stagingExtensionDir, "README.md"), createReleaseReadme());
+  stageLicenseFile();
 }
 
 function createReleaseReadme() {
@@ -209,7 +248,8 @@ function rewriteStagedPackageJson() {
       { libraryManifest: "./bundled/subcircuits/library.json" },
     ];
   }
-  pkg.files = ["out/**/*", "out-webview/**/*", "media/**/*", "bundled/**/*", "README.md", "src/ui/webview/styles.css", "src/ui/palette/styles.css"];
+  pkg.license = "SEE LICENSE IN LICENSE.txt";
+  pkg.files = ["out/**/*", "out-webview/**/*", "media/**/*", "bundled/**/*", "README.md", "LICENSE.txt", "src/ui/webview/styles.css", "src/ui/palette/styles.css"];
   writeFile(stagedPackageJsonPath, `${JSON.stringify(pkg, null, 2)}\n`);
 }
 
