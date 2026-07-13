@@ -110,6 +110,39 @@ function materializePin(pin: PackagePin, properties?: Record<string, unknown>, c
   };
 }
 
+/** Converte terminal, contato com o corpo e label pela mesma transformação de `m_area` usada pelo
+ * paint. A direção e o comprimento finais são reconstruídos dos dois pontos transformados, inclusive
+ * sob escala não uniforme; nenhum dispositivo precisa subtrair a origem do bounds manualmente. */
+function normalizeSimulideLocalPin(
+  pin: MaterializedPackagePin,
+  bounds: { x: number; y: number; w: number; h: number },
+  width: number,
+  height: number,
+): MaterializedPackagePin {
+  const sx = width / Math.max(1e-9, bounds.w);
+  const sy = height / Math.max(1e-9, bounds.h);
+  const mapX = (x: number): number => (x - bounds.x) * sx;
+  const mapY = (y: number): number => (y - bounds.y) * sy;
+  const nativeBody = packagePinVisualEnd({ ...pin, leadEndTrim: 0 });
+  const x = mapX(pin.x);
+  const y = mapY(pin.y);
+  const dx = mapX(nativeBody.x) - x;
+  const dy = mapY(nativeBody.y) - y;
+  const length = Math.hypot(dx, dy);
+  const angle = ((180 - Math.atan2(dy, dx) * 180 / Math.PI) % 360 + 360) % 360;
+  const lengthScale = pin.length > 0 ? length / pin.length : 1;
+  return {
+    ...pin,
+    x,
+    y,
+    angle,
+    length,
+    leadEndTrim: pin.leadEndTrim === undefined ? undefined : pin.leadEndTrim * lengthScale,
+    labelX: pin.labelX === undefined ? undefined : mapX(pin.labelX),
+    labelY: pin.labelY === undefined ? undefined : mapY(pin.labelY),
+  };
+}
+
 /** Exportado pra ser reaproveitado por `extension.ts::pinsForTypeId` -- o número/id REAL de pinos
  * elétricos que o Core recebe em `addComponent` precisa da MESMA fórmula usada aqui pro desenho
  * (`dynamicLayout.pinGroups`), senão a Webview desenha um pino que não existe de verdade no Core
@@ -144,7 +177,7 @@ function materializePackage(pkg: PackageDescriptor, properties?: Record<string, 
   const dynamic = pkg.dynamicLayout;
   const width = dynamic?.width === undefined ? pkg.width : numericPackageValue(dynamic.width, properties, {}, pkg.width);
   const height = dynamic?.height === undefined ? pkg.height : numericPackageValue(dynamic.height, properties, {}, pkg.height);
-  const pins = [
+  let pins = [
     ...(dynamic?.replacePins ? [] : pkg.pins.map((pin) => materializePin(pin, properties))),
     ...(dynamic?.pinGroups ?? []).flatMap((group) => materializePinGroup(group, properties)),
   ];
@@ -159,6 +192,9 @@ function materializePackage(pkg: PackageDescriptor, properties?: Record<string, 
         },
       }
     : pkg.simulidePaint;
+  if (pkg.coordinateSpace === "simulide-local" && simulidePaint) {
+    pins = pins.map((pin) => normalizeSimulideLocalPin(pin, simulidePaint.bounds, width, height));
+  }
   return {
     ...pkg,
     width,

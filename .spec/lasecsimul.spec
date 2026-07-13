@@ -1070,9 +1070,9 @@ Todos os 11 ganharam `stamp()` real:
   "RGY Default" igual a `outputs.led`. `led_rgb`: 3 pernas (R/G/B) pro catodo comum. `led_bar`: pares
   P_i/N_i independentes (`size` pinos dinâmicos). `led_matrix`: `rows*columns` pernas (uma por
   interseção linha×coluna, linha=anodo/coluna=catodo, mesma convenção de `ledmatrix.cpp`).
-  `seven_segment`: 8 pernas (a-g+ponto) pro catodo comum — suporta `shortedPairs` (condutância alta
-  entre dois índices de pino SEM diodo) porque o package tem DOIS pinos comuns
-  (`commona`/`commonb`) que no hardware real são o MESMO net, exposto duas vezes só pra solda.
+  `seven_segment`: 8 pernas (a-g+ponto) para um pino comum por display, igual a
+  `SevenSegment::createDisplay()` do SimulIDE. `shortedPairs` continua disponível como recurso
+  genérico do modelo, mas não é usado para inventar um segundo comum no display padrão.
 - **`outputs.dc_motor`/`outputs.incandescent_lamp`** — `components::Resistor` direto (2 pinos,
   reaproveitado sem mudança). **`outputs.stepper`** — `components::ResistorArray` (2 bobinas
   independentes, A+/A- e B+/B-). Nenhum modela torque/rotação/back-EMF/resistência variável com
@@ -1584,6 +1584,9 @@ resultados da investigação; ele não cria uma segunda definição do contrato.
    MUST NOT existir no catálogo canônico, em `PackagePin` ou no modelo interno. O sanitizador de
    entrada MAY aceitar somente payload legado explicitamente marcado como origem no corpo, convertê-lo
    imediatamente para terminal e descartar a marca.
+   Packages portados do `paint()` real SHOULD declarar `coordinateSpace: "simulide-local"`: nesse
+   modo, `pins`, labels e primitivas usam diretamente os `QPoint` locais da fonte e
+   `simulidePaint.bounds`/`m_area` fornece a única origem de normalização para corpo e terminais.
 3. Flip local, rotação em torno da origem local, translação para a cena, transformação inversa,
    cálculo dos cantos transformados e snap MUST usar a infraestrutura comum
    `extension/src/ui/webview/componentGeometry.ts`. Renderer, wire topology, hit-test, seleção e
@@ -1602,6 +1605,8 @@ resultados da investigação; ele não cria uma segunda definição do contrato.
    (`dynamicLayout`/`pinGroups` e `simulidePaint.repeat`, ou sucessor genérico equivalente): linhas,
    colunas, célula, espaçamento, margens, ordem e orientação. Coordenadas especiais por célula ou por
    dispositivo são proibidas quando puderem ser obtidas desses parâmetros.
+   Quando `dynamicLayout.replacePins` for `true`, `package.pins` MUST estar vazio; manter uma cópia
+   estática do mesmo layout é erro de catálogo e MUST ser rejeitado pelo check de migração.
 8. Esquemático e Modo Placa MAY ter desenhos e bounds visuais diferentes, mas MUST compartilhar
    identidade dos pinos, endpoint elétrico, transformação, rotação/flip, serialização e estado de
    simulação. Uma variante visual não cria uma segunda implementação elétrica.

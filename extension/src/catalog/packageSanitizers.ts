@@ -907,6 +907,7 @@ export function sanitizePackage(value: unknown, assetBasePath?: string): Package
   return {
     width: raw.width,
     height: raw.height,
+    coordinateSpace: raw.coordinateSpace === "simulide-local" ? raw.coordinateSpace : undefined,
     schematicWidth: typeof raw.schematicWidth === "number" ? raw.schematicWidth : undefined,
     schematicHeight: typeof raw.schematicHeight === "number" ? raw.schematicHeight : undefined,
     initialTransform: typeof raw.initialTransform === "object" && raw.initialTransform !== null

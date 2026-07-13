@@ -1101,6 +1101,26 @@ import { PackageDescriptor } from "./model";
     assert((svg.match(/<rect/g) ?? []).length === 1 + 4 * 3, `LedMatrix 4x3 deveria desenhar 1 corpo + 12 LEDs, recebido ${(svg.match(/<rect/g) ?? []).length}: ${svg}`);
   });
 
+  await test("coordinateSpace simulide-local normaliza corpo e pinos pela mesma origem m_area", () => {
+    registerPackage("test.simulide-local", {
+      width: 40,
+      height: 20,
+      coordinateSpace: "simulide-local",
+      simulidePaint: {
+        version: 1,
+        bounds: { x: -10, y: -20, w: 40, h: 20 },
+        primitives: [{ kind: "rect", x: -10, y: -20, w: 40, h: 20 }],
+      },
+      pins: [{ id: "left", x: -18, y: -10, angle: 180, length: 8 }],
+    });
+    const box = componentBox("test.simulide-local");
+    const pin = pinLocalPosition("left", 0, 1, "test.simulide-local");
+    const svg = packageSymbolSvg("test.simulide-local", {}, "native-space") ?? "";
+    assert(box.width === 48 && box.height === 20, `m_area 40x20 + terminal externo de 8 deve resultar 48x20, recebido ${JSON.stringify(box)}`);
+    assert(near(pin.x, 0) && near(pin.y, 10), `QPoint(-18,-10) deve ser o endpoint elétrico normalizado, recebido ${JSON.stringify(pin)}`);
+    assert(svg.includes('x1="0.0" y1="10.0" x2="8.0" y2="10.0"'), `lead e corpo devem compartilhar a mesma origem transformada: ${svg}`);
+  });
+
   await test("outputs.led_bar vem de package com dynamicLayout size (par P/N por LED, ledbar.cpp)", () => {
     catalogPackage("outputs.led_bar");
     const props = { size: 8 };
@@ -1241,10 +1261,10 @@ import { PackageDescriptor } from "./model";
     assert(rgbSvg.includes(`<line x1="${rgbC.x.toFixed(1)}" y1="${rgbC.y.toFixed(1)}"`), `outputs.led_rgb.pin-4 deveria iniciar o lead no terminal lógico ${JSON.stringify(rgbC)}`);
 
     const sevenSegmentSvg = packageSymbolSvg("outputs.seven_segment", {}, "geometry-outputs-seven-segment") ?? "";
-    const sevenA = pinLocalPosition("pin-1", 0, 10, "outputs.seven_segment");
-    const sevenCommon = pinLocalPosition("pin-10", 9, 10, "outputs.seven_segment");
+    const sevenA = pinLocalPosition("pin-1", 0, 9, "outputs.seven_segment");
+    const sevenCommon = pinLocalPosition("pin-9", 8, 9, "outputs.seven_segment");
     assert(sevenSegmentSvg.includes(`<line x1="${sevenA.x.toFixed(1)}" y1="${sevenA.y.toFixed(1)}"`), `outputs.seven_segment.pin-1 deveria iniciar o lead no terminal lógico ${JSON.stringify(sevenA)}`);
-    assert(sevenSegmentSvg.includes(`<line x1="${sevenCommon.x.toFixed(1)}" y1="${sevenCommon.y.toFixed(1)}"`), `outputs.seven_segment.pin-10 deveria iniciar o lead no terminal lógico ${JSON.stringify(sevenCommon)}`);
+    assert(sevenSegmentSvg.includes(`<line x1="${sevenCommon.x.toFixed(1)}" y1="${sevenCommon.y.toFixed(1)}"`), `outputs.seven_segment.pin-9 deveria iniciar o lead no terminal lógico ${JSON.stringify(sevenCommon)}`);
   });
 
   await test("potenciômetro e resistor DIP alinham corpo, bounds e terminais do SimulIDE", () => {

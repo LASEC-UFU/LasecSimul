@@ -200,9 +200,10 @@ export interface PropertySchemaEntry {
 }
 
 /** Pino declarado em `package.pins[]` (`.lsdevice`/`.lssubcircuit`, ver
- * `.spec/lasecsimul-native-devices.spec` seção 21.2) — `x`/`y` é o ponto onde o "lead" toca o corpo
- * do símbolo (não a ponta do fio); a ponta real (onde o fio conecta) fica em
- * `x + cos(angle)*length, y + sin(angle)*length`. `id` deve bater com o `pin.id` real devolvido pelo
+ * `.spec/lasecsimul-native-devices.spec` seção 21.2). `x`/`y` é sempre o terminal elétrico; quando
+ * `PackageDescriptor.coordinateSpace` é `simulide-local`, usa diretamente o espaço local do
+ * `QGraphicsItem`/`m_area` original e é normalizado junto com o corpo pelo resolvedor comum. `id`
+ * deve bater com o `pin.id` real devolvido pelo
  * Core — é por `id`, nunca por posição no array, que o renderizador casa pino declarado com pino
  * real (um `McuComponent`/subcircuito pode devolver pinos em ordem diferente da declarada). */
 export interface PackageNumberExpression {
@@ -671,6 +672,10 @@ export interface ComponentViewSpec {
 export interface PackageDescriptor {
   width: number;
   height: number;
+  /** `simulide-local`: pinos, labels e `simulidePaint.primitives` compartilham as coordenadas locais
+   * reais do QGraphicsItem. `simulidePaint.bounds` (`m_area`) é a única origem usada para converter
+   * todos eles para a caixa de exibição. Ausente preserva packages autorados em 0..width/height. */
+  coordinateSpace?: "simulide-local";
   /** Tamanho EXTERNO no esquemático, independente da malha interna usada por `pins[]`/`shapes[]`.
    * Porta o comportamento do SimulIDE para placas/imagens reais: o package tem um espaço nativo
    * (ex: pixels da foto/placa, usado por `boardPos` e pinos), mas a instância no esquemático ocupa

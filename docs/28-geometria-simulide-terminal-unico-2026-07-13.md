@@ -43,6 +43,13 @@ O renderer web já possuía `PackageDescriptor`, mas atribuía duas semânticas 
 Essa ambiguidade explica deslocamentos de exatamente um comprimento de lead, bounds com folga,
 divergência após rotação e correções locais recorrentes. A causa não era device pixel ratio nem zoom.
 
+Uma validação visual posterior revelou uma segunda normalização antiga ainda ativa nos dados:
+`simulidePaintToPackageShapes` normalizava `m_area`, mas alguns pinos e `bounds` já tinham sido
+deslocados manualmente para `0..width/height`. Corpo e terminal acabavam usando origens diferentes;
+na matriz isso produzia exatamente uma célula vazia entre a borda inferior e os leads. O novo modo
+genérico `coordinateSpace:"simulide-local"` elimina essa camada: primitivas, labels e pinos guardam
+os `QPoint` nativos e passam uma única vez pela transformação de `m_area`.
+
 ## Infraestrutura implementada
 
 1. `PackagePin.x/y` agora tem uma única definição: terminal elétrico local. O lead começa nesse ponto;
@@ -54,14 +61,18 @@ divergência após rotação e correções locais recorrentes. A causa não era 
    transformados, transform SVG e snap. `main.ts` e `wireTopology.ts` deixaram de ter matrizes próprias.
 4. O sanitizador converte somente manifestos legados que declarem explicitamente
    `leadOrigin:"body"` na borda de entrada; o restante da aplicação só vê terminais canônicos.
-5. O catálogo recebeu `geometryConvention:"simulide-terminal-v1"`; 212 entradas estáticas/dinâmicas
+5. O catálogo recebeu `geometryConvention:"simulide-terminal-v1"`; 172 entradas estáticas/dinâmicas
    foram normalizadas. A ferramenta `scripts/migrate-package-pin-terminals.mjs --check` impede a
-   reintrodução da convenção antiga.
+   reintrodução da convenção antiga e rejeita arrays estáticos quando `dynamicLayout.replacePins`
+   já é a fonte paramétrica da pinagem.
 6. Layout repetitivo continua declarativo e comum: `dynamicLayout.pinGroups` deriva quantidade,
    id, posição e pitch; `simulidePaint.repeat` deriva células/segmentos. Matriz, barra, keypad,
    resistor DIP, bus e mux já passam por esse mecanismo.
 7. Modo Placa continua selecionando outra aparência (`boardPackage`) sem duplicar pinos, topologia,
    persistência ou estado elétrico.
+8. LED, LED RGB, barra, matriz, potenciômetro, stepper e sete-segmentos agora consomem coordenadas
+   locais reais da fonte por `coordinateSpace:"simulide-local"`. O sete-segmentos padrão foi corrigido
+   para os 9 pinos de `createDisplay(0)`; o décimo terminal artificial foi removido também do Core.
 
 Após a migração geral, um erro de dado foi confirmado contra o upstream: o pino central do
 potenciômetro é `Pin(270,QPoint(0,16),...)` (`potentiometer.cpp:32-35`), não 90°. Esse ângulo foi

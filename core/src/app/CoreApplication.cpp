@@ -647,20 +647,18 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
     registerOutputState("outputs.ws2812", "WS2812 Led", 3,
                         {components::detail::numberSchema("rows", "Linhas", "Leds", 1.0, 1.0, 1.0),
                          components::detail::numberSchema("columns", "Colunas", "Leds", 1.0, 1.0, 1.0)});
-    // `stamp()` real -- 8 pernas de LED (a-g + ponto decimal, `pin-1..pin-8`), catodo comum
-    // (`pin-9`/`pin-10`, os DOIS pinos comuns do package -- unidos entre si por uma condutância
-    // alta, `shortedPairs`, porque no hardware real são o MESMO net exposto duas vezes pra solda,
-    // ver `sevensegment.cpp` real). Cor/Tensão/Resistência uniformes pros 8 segmentos (real
+    // `stamp()` real -- 8 pernas de LED (a-g + ponto decimal, `pin-1..pin-8`) e um comum
+    // (`pin-9`) por display, exatamente como `createDisplay(0)` em sevensegment.cpp. Cor/Tensão/
+    // Resistência uniformes pros 8 segmentos (real
     // `SevenSegment` também aplica um único Threshold/MaxCurrent/Resistance/Color ao display
     // inteiro). `NumDisplays`/`Vertical_Pins`/`CommonCathode` do real `SevenSegment` NÃO portados
     // aqui -- documentado como pendência em `.spec` seção 29, não escondido.
     reg.registerFactory("outputs.seven_segment", [applyLedProperties](const ComponentParams& p) {
-        std::vector<Pin> pins = makePinVector(p, 10);
+        std::vector<Pin> pins = makePinVector(p, 9);
         std::vector<components::DiodeLegArray::Leg> legs;
         for (size_t i = 0; i < 8; ++i) legs.push_back({i, 8}); // segmentos a-g + ponto -> commona (pin-9, índice 8)
         auto model = std::make_unique<components::DiodeLegArray>("outputs.seven_segment", std::move(pins), std::move(legs),
-                                                                   2.4, 0.6,
-                                                                   std::vector<std::pair<size_t, size_t>>{{8, 9}});
+                                                                   2.4, 0.6);
         applyLedProperties(*model, p);
         return model;
     });

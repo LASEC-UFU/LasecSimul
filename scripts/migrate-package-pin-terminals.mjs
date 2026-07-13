@@ -11,6 +11,8 @@ const convention = "simulide-terminal-v1";
 const isCanonicalDocument = document.geometryConvention === convention;
 let migrated = 0;
 let canonical = 0;
+let redundantStaticLayouts = 0;
+let simulideLocalPackages = 0;
 
 function shifted(value, delta) {
   if (delta === 0) return value;
@@ -45,6 +47,17 @@ for (const item of document.items ?? []) {
   for (const packageKey of ["package", "logicSymbolPackage", "boardPackage"]) {
     const descriptor = item[packageKey];
     if (!descriptor) continue;
+    if (descriptor.coordinateSpace === "simulide-local") {
+      const bounds = descriptor.simulidePaint?.bounds;
+      if (!bounds || ![bounds.x, bounds.y, bounds.w, bounds.h].every(Number.isFinite) || bounds.w <= 0 || bounds.h <= 0) {
+        throw new Error(`${item.typeId}.${packageKey}: simulide-local exige simulidePaint.bounds finito e positivo`);
+      }
+      simulideLocalPackages += 1;
+    }
+    if (descriptor.dynamicLayout?.replacePins === true && (descriptor.pins?.length ?? 0) > 0) {
+      redundantStaticLayouts += 1;
+      if (!checkOnly) descriptor.pins = [];
+    }
     for (const pin of descriptor.pins ?? []) migratePin(pin, `${item.typeId}.${packageKey}.${pin.id}`);
     for (const [index, group] of (descriptor.dynamicLayout?.pinGroups ?? []).entries()) {
       migratePin(group, `${item.typeId}.${packageKey}.pinGroups[${index}]`);
@@ -56,8 +69,9 @@ document.geometryConvention = convention;
 
 if (checkOnly) {
   if (migrated > 0) throw new Error(`${migrated} pino(s) ainda usam a convenção legada body-contact`);
-  console.log(`${canonical} pino(s) canônicos; nenhuma coordenada legada encontrada`);
+  if (redundantStaticLayouts > 0) throw new Error(`${redundantStaticLayouts} package(s) repetem pinos estáticos apesar de dynamicLayout.replacePins`);
+  console.log(`${canonical} pino(s) canônicos; ${simulideLocalPackages} package(s) em espaço local SimulIDE; nenhuma duplicação legada encontrada`);
 } else {
   fs.writeFileSync(file, `${JSON.stringify(document, null, 2)}\n`, "utf8");
-  console.log(`${migrated} body-contact→terminal; ${canonical} já eram terminais`);
+  console.log(`${migrated} body-contact→terminal; ${canonical} já eram terminais; ${redundantStaticLayouts} layout(s) estático(s) redundante(s) removido(s); ${simulideLocalPackages} package(s) em espaço local SimulIDE`);
 }

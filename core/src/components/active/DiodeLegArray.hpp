@@ -50,10 +50,8 @@ public:
     };
 
     /** `shortedPairs`: pares de índice de pino unidos por uma condutância alta (sem diodo entre
-     * eles) -- uso real: `outputs.seven_segment` tem DOIS pinos comuns (`commona`/`commonb`) que no
-     * hardware real são o MESMO net (só exposto duas vezes pra facilitar solda), então precisam
-     * ficar unidos mesmo sem o usuário desenhar um fio entre eles (mesma técnica de `Ground`,
-     * `kShortConductance`). `threshold`/`resistance` default (2.4V/0.6Ω) == `eLed::eLed()` real
+     * eles). Recurso genérico para arrays futuros; o SevenSegment do SimulIDE usa um único comum
+     * por display e não precisa desta aproximação. `threshold`/`resistance` default (2.4V/0.6Ω) == `eLed::eLed()` real
      * (`e-led.cpp:16-17`, cor "Yellow" default). */
     DiodeLegArray(std::string typeId, std::vector<Pin> pins, std::vector<Leg> legs, double threshold = 2.4,
                   double resistance = 0.6, std::vector<std::pair<size_t, size_t>> shortedPairs = {})
