@@ -541,63 +541,82 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
         });
         registerBuiltinMetadata(typeId, label, schema, englishName(label));
     };
-    // LED: mesma classe `Diode` real (não `SimulideDiodeLike`) que `active.zener` acima --
-    // `saturationCurrent`/`thermalVoltage` iguais ao preset real "RGY Default" do SimulIDE
-    // (`e-diode.cpp::getModels()`: satCurr=0.0932nA, emCoef=3.73 -> thermalVoltage efetivo =
-    // emCoef*Vt = 3.73*0.025865 ≈ 0.0965V) -- dá o joelho de tensão bem mais alto que um diodo
-    // comum (~1.8-2V vs ~0.6V), sem precisar de um parâmetro `emCoef` separado nesta classe (já
-    // embutido em `thermalVoltage`). Sem ruptura reversa (LED não teria breakdown modelado aqui,
-    // `supportsBreakdown=false`, igual ao preset "RGY Default" real, `brkDown=0`).
-    reg.registerFactory("outputs.led", [](const ComponentParams& p) {
+    // Família LED inteira (led/led_rgb/led_bar/led_matrix/seven_segment) migrada da equação
+    // exponencial de `Diode`/`DiodeLegArray` antiga pro modelo piecewise REAL do LED
+    // (`eLed::voltChanged()`), com propriedades Cor/Tensão Direta/Resistência de verdade -- achado
+    // da auditoria de dispositivos 2026-07-13 (`.spec` seção 29): nenhum dos 5 tinha essas
+    // propriedades antes (LED simples usava `Diode` puro, só com `saturationCurrent`; os outros 4
+    // tinham `propertyDescriptors()` vazio). `applyLedProperties` aplica Color->Threshold->
+    // Resistance NESSA ORDEM em cima de UM componente recém-construído -- Color tem efeito colateral
+    // de re-derivar Threshold (igual ao `LedBase::setColorStr` real), então Threshold precisa vir
+    // DEPOIS pra um valor customizado/salvo do usuário nunca ser sobrescrito pelo preset da cor (só o
+    // valor de Threshold que sobrevive é o realmente salvo/editado, nunca um recálculo silencioso).
+    auto applyLedProperties = [](components::DiodeLegArray& model, const ComponentParams& p) {
+        const std::vector<PropertySchema> schema = components::DiodeLegArray::propertySchema();
+        bindPropertyByName(model.properties(), "color", propertyOrDefault(p.properties, schemaById(schema, "color")));
+        bindPropertyByName(model.properties(), "threshold",
+                            propertyOrDefault(p.properties, schemaById(schema, "threshold")));
+        bindPropertyByName(model.properties(), "resistance",
+                            propertyOrDefault(p.properties, schemaById(schema, "resistance")));
+    };
+    // `outputs.led`: 1 perna só (2 pinos) da MESMA `DiodeLegArray` que os displays -- unifica a
+    // família inteira numa só classe (nunca uma por typeId) e ganha `current()` de verdade (só
+    // existe leitura de corrente por `getComponentCurrent`/IPC quando `legs.size()==1`).
+    reg.registerFactory("outputs.led", [applyLedProperties](const ComponentParams& p) {
         const auto pos = p.pins<2>();
-        // `saturationCurrent` tem schema (validado via propertyOrDefault); `thermalVoltage` NUNCA
-        // teve entrada em `Diode::propertySchema()` (não é editável na UI, só parâmetro de
-        // construção) -- `p.property()` direto continua correto aqui, não há schema pra validar contra.
-        const double saturationCurrent =
-            std::get<double>(propertyOrDefault(p.properties, components::Diode::propertySchema().front()));
-        return std::make_unique<components::Diode>(
-            std::array<Pin, 2>{Pin{pos[0].id.empty() ? "anode" : pos[0].id, pos[0].x, pos[0].y},
-                                Pin{pos[1].id.empty() ? "cathode" : pos[1].id, pos[1].x, pos[1].y}},
-            saturationCurrent, p.property("thermalVoltage", 0.0965));
+        std::vector<Pin> pins{Pin{pos[0].id.empty() ? "anode" : pos[0].id, pos[0].x, pos[0].y},
+                              Pin{pos[1].id.empty() ? "cathode" : pos[1].id, pos[1].x, pos[1].y}};
+        auto model = std::make_unique<components::DiodeLegArray>(
+            "outputs.led", std::move(pins), std::vector<components::DiodeLegArray::Leg>{{0, 1}});
+        applyLedProperties(*model, p);
+        return model;
     });
-    registerBuiltinMetadata("outputs.led", "Led", components::Diode::propertySchema(), englishName("Led"));
-    // `stamp()` real (3 pernas de diodo reais, ver `components::DiodeLegArray`) -- antes usava
-    // `SimulidePassiveState` (no-op), ficando eletricamente inerte (achado de auditoria 2026-07-08).
-    // Pinos fixos `[R, G, B, C]` (ver `component-catalog.json`) -- `C` é CATODO comum (`ledrgb.cpp`
-    // real, `setComCathode(true)` é o default), R/G/B são os 3 anodos. Modo "Common Anode" (bool
-    // `CommonCathode=false` no original) não exposto como propriedade aqui -- fora de escopo,
-    // documentado.
-    reg.registerFactory("outputs.led_rgb", [](const ComponentParams& p) {
+    registerBuiltinMetadata("outputs.led", "Led", components::DiodeLegArray::propertySchema(), englishName("Led"));
+    // `stamp()` real (3 pernas de LED reais). Pinos fixos `[R, G, B, C]` (ver `component-catalog.json`)
+    // -- `C` é CATODO comum (`ledrgb.cpp` real, `setComCathode(true)` é o default), R/G/B são os 3
+    // anodos. Simplificação DOCUMENTADA (não escondida, `.spec` seção 29): real `LedRgb` tem
+    // `Threshold_R/G/B`/`MaxCurrent_R/G/B`/`Resistance_R/G/B` (9 propriedades por-canal) +
+    // `CommonCathode` (toggle pra Common Anode) -- aqui um único Cor/Tensão/Resistência uniforme pros
+    // 3 canais, catodo comum fixo (sem modo Common Anode).
+    reg.registerFactory("outputs.led_rgb", [applyLedProperties](const ComponentParams& p) {
         std::vector<Pin> pins = makePinVector(p, 4);
         std::vector<components::DiodeLegArray::Leg> legs{{0, 3}, {1, 3}, {2, 3}};
-        return std::make_unique<components::DiodeLegArray>("outputs.led_rgb", std::move(pins), std::move(legs));
+        auto model = std::make_unique<components::DiodeLegArray>("outputs.led_rgb", std::move(pins), std::move(legs));
+        applyLedProperties(*model, p);
+        return model;
     });
-    registerBuiltinMetadata("outputs.led_rgb", "Led Rgb", {}, englishName("Led Rgb"));
+    registerBuiltinMetadata("outputs.led_rgb", "Led Rgb", components::DiodeLegArray::propertySchema(), englishName("Led Rgb"));
     // `ledbar.cpp` real: `m_pin.resize(m_size*2)` -- par P/N por LED (`pinP`/`pinN`), nunca 1 pino
     // por LED. Dois grupos independentes na MESMA propriedade `size`, ids `pin-P1..PN`/`pin-N1..NN`
     // (ordem P1..PN,N1..NN -- difere da intercalação do SimulIDE real, P1,N1,P2,N2,..., mas o `id`
     // é opaco pro Core; quem intercala pra bater com o desenho é o `dynamicLayout` da Extension,
     // que é livre pra escolher a própria ordem contanto que os MESMOS ids apareçam dos dois lados).
-    // `stamp()` real -- cada par P_i/N_i vira uma perna de diodo real (`DiodeLegArray`), anodo=P,
-    // catodo=N (mesma convenção de `ledbar.cpp`: `eLed` entre par P/N por índice).
+    // `stamp()` real -- cada par P_i/N_i vira uma perna de LED real, anodo=P, catodo=N (mesma
+    // convenção de `ledbar.cpp`: `eLed` entre par P/N por índice). Cor/Tensão/Resistência uniformes
+    // pra TODOS os segmentos de uma vez -- fiel ao real (`LedBar::setColorStr` aplica a MESMA cor a
+    // todo `m_led[i]`, nunca por-segmento individual, ver `DiodeLegArray.hpp`).
     {
         const ComponentPinSpec ledBarPinSpec{{}, {{"pin-P", "size"}, {"pin-N", "size"}}};
         std::vector<PropertySchema> ledBarSchema{components::detail::numberSchema(
             "size", "Tamanho", "Leds", 8.0, 1.0, 1.0, PropertySchemaAffectsTopology | PropertySchemaAffectsPinCount, 32.0)};
-        reg.registerFactory("outputs.led_bar", [ledBarPinSpec](const ComponentParams& p) {
+        for (const PropertySchema& ledSchema : components::DiodeLegArray::propertySchema()) ledBarSchema.push_back(ledSchema);
+        reg.registerFactory("outputs.led_bar", [ledBarPinSpec, applyLedProperties](const ComponentParams& p) {
             std::vector<Pin> pins = resolveDynamicPins(ledBarPinSpec, p.properties);
             const size_t size = pins.size() / 2;
             std::vector<components::DiodeLegArray::Leg> legs;
             legs.reserve(size);
             for (size_t i = 0; i < size; ++i) legs.push_back({i, size + i});
-            return std::make_unique<components::DiodeLegArray>("outputs.led_bar", std::move(pins), std::move(legs));
+            auto model = std::make_unique<components::DiodeLegArray>("outputs.led_bar", std::move(pins), std::move(legs));
+            applyLedProperties(*model, p);
+            return model;
         });
         registerBuiltinMetadata("outputs.led_bar", "Led Bar", ledBarSchema, englishName("Led Bar"));
     }
     // `ledmatrix.cpp` real: `m_pin[row]`/`m_pin[m_rows+col]` -- MESMA fórmula do `switches.keypad`
-    // (rows+columns, nunca rows*columns). `stamp()` real: 1 perna de diodo por INTERSEÇÃO
-    // linha×coluna (`rows*columns` pernas, `getEpin(0)`=linha/anodo, `getEpin(1)`=coluna/catodo,
-    // mesma convenção de `ledmatrix.cpp:87-88`), nunca uma perna por pino.
+    // (rows+columns, nunca rows*columns). `stamp()` real: 1 perna de LED por INTERSEÇÃO linha×coluna
+    // (`rows*columns` pernas, `getEpin(0)`=linha/anodo, `getEpin(1)`=coluna/catodo, mesma convenção
+    // de `ledmatrix.cpp:87-88`), nunca uma perna por pino. Cor/Tensão/Resistência uniformes (real
+    // `LedMatrix` também aplica um único Cor/Threshold/MaxCurrent/Resistance pra matriz inteira).
     {
         const ComponentPinSpec ledMatrixPinSpec{{}, {{"pin-", "rows"}, {"pin-", "columns"}}};
         std::vector<PropertySchema> ledMatrixSchema{
@@ -605,7 +624,8 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
                                              PropertySchemaAffectsTopology | PropertySchemaAffectsPinCount, 16.0),
             components::detail::numberSchema("columns", "Colunas", "Leds", 8.0, 1.0, 1.0,
                                              PropertySchemaAffectsTopology | PropertySchemaAffectsPinCount, 16.0)};
-        reg.registerFactory("outputs.led_matrix", [ledMatrixPinSpec, ledMatrixSchema](const ComponentParams& p) {
+        for (const PropertySchema& ledSchema : components::DiodeLegArray::propertySchema()) ledMatrixSchema.push_back(ledSchema);
+        reg.registerFactory("outputs.led_matrix", [ledMatrixPinSpec, ledMatrixSchema, applyLedProperties](const ComponentParams& p) {
             const size_t rows = static_cast<size_t>(
                 std::max(0.0, std::get<double>(propertyOrDefault(p.properties, schemaById(ledMatrixSchema, "rows")))));
             std::vector<Pin> pins = resolveDynamicPins(ledMatrixPinSpec, p.properties);
@@ -614,7 +634,9 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
             legs.reserve(rows * columns);
             for (size_t row = 0; row < rows; ++row)
                 for (size_t col = 0; col < columns; ++col) legs.push_back({row, rows + col});
-            return std::make_unique<components::DiodeLegArray>("outputs.led_matrix", std::move(pins), std::move(legs));
+            auto model = std::make_unique<components::DiodeLegArray>("outputs.led_matrix", std::move(pins), std::move(legs));
+            applyLedProperties(*model, p);
+            return model;
         });
         registerBuiltinMetadata("outputs.led_matrix", "LedMatrix", ledMatrixSchema, englishName("LedMatrix"));
     }
@@ -624,20 +646,25 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
     registerOutputState("outputs.ws2812", "WS2812 Led", 3,
                         {components::detail::numberSchema("rows", "Linhas", "Leds", 1.0, 1.0, 1.0),
                          components::detail::numberSchema("columns", "Colunas", "Leds", 1.0, 1.0, 1.0)});
-    // `stamp()` real -- 8 pernas de diodo (a-g + ponto decimal, `pin-1..pin-8`), catodo comum
+    // `stamp()` real -- 8 pernas de LED (a-g + ponto decimal, `pin-1..pin-8`), catodo comum
     // (`pin-9`/`pin-10`, os DOIS pinos comuns do package -- unidos entre si por uma condutância
     // alta, `shortedPairs`, porque no hardware real são o MESMO net exposto duas vezes pra solda,
-    // ver `sevensegment.cpp` real). Antes eletricamente inerte (`SimulidePassiveState`, achado de
-    // auditoria 2026-07-08).
-    reg.registerFactory("outputs.seven_segment", [](const ComponentParams& p) {
+    // ver `sevensegment.cpp` real). Cor/Tensão/Resistência uniformes pros 8 segmentos (real
+    // `SevenSegment` também aplica um único Threshold/MaxCurrent/Resistance/Color ao display
+    // inteiro). `NumDisplays`/`Vertical_Pins`/`CommonCathode` do real `SevenSegment` NÃO portados
+    // aqui -- documentado como pendência em `.spec` seção 29, não escondido.
+    reg.registerFactory("outputs.seven_segment", [applyLedProperties](const ComponentParams& p) {
         std::vector<Pin> pins = makePinVector(p, 10);
         std::vector<components::DiodeLegArray::Leg> legs;
         for (size_t i = 0; i < 8; ++i) legs.push_back({i, 8}); // segmentos a-g + ponto -> commona (pin-9, índice 8)
-        return std::make_unique<components::DiodeLegArray>("outputs.seven_segment", std::move(pins), std::move(legs),
-                                                             9.32e-11, 0.0965,
-                                                             std::vector<std::pair<size_t, size_t>>{{8, 9}});
+        auto model = std::make_unique<components::DiodeLegArray>("outputs.seven_segment", std::move(pins), std::move(legs),
+                                                                   2.4, 0.6,
+                                                                   std::vector<std::pair<size_t, size_t>>{{8, 9}});
+        applyLedProperties(*model, p);
+        return model;
     });
-    registerBuiltinMetadata("outputs.seven_segment", "7 Segment", {}, englishName("7 Segment"));
+    registerBuiltinMetadata("outputs.seven_segment", "7 Segment", components::DiodeLegArray::propertySchema(),
+                            englishName("7 Segment"));
     registerOutputState("outputs.hd44780", "Hd44780", 16, {});
     registerOutputState("outputs.aip31068_i2c", "Aip31068 I2C", 4, {});
     registerOutputState("outputs.pcd8544", "Pcd8544", 8, {});

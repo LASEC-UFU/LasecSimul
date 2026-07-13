@@ -3343,3 +3343,184 @@ correspondente em `media/components/{light,dark}/` -- caía silenciosamente no f
 `generic-component`. Criados `package-pin.svg` (light e dark), mesmo estilo/paleta de cores do
 `package.svg` existente (retângulo do encapsulamento + 1 pino em destaque com um ponto de solda).
 Bug pré-existente, presente igualmente em dev e instalado (não relacionado à causa raiz de 28.1).
+
+## 29. Auditoria completa dos 59 dispositivos vs SimulIDE real (2026-07-13)
+
+Pedido explícito do usuário: varredura completa de TODA categoria/dispositivo registrado, comparando
+representação esquemática, Modo Placa, propriedades configuráveis, comportamento elétrico e
+persistência contra o SimulIDE real, com evidências concretas (2 screenshots de `outputs.led_bar`
+mostrando propriedades ausentes: Cor, lógica de acionamento, GND/VCC do comum, estado visual).
+
+### 29.1 Metodologia
+
+Dado o tamanho (59 dispositivos, 15 categorias), a pesquisa foi paralelizada: 7 agentes em background
+(um por categoria: Switches, Motors/Other Outputs, Active, Passive, Sources, Meters, Connectors+Other+
+Graphical), cada um lendo o C++ real do SimulIDE (`C:\SourceCode\simulide_2\src`) e comparando contra
+`component-catalog.json`/`core/src/app/CoreApplication.cpp`/`core/src/components/**`, devolvendo
+achados citados por arquivo:linha (nunca "poderia melhorar" vago). Em paralelo, eu mesmo fiz um
+mergulho profundo e uma reescrita real na categoria com evidência concreta do usuário (Leds). Depois
+dos 7 relatórios prontos, apliquei um subconjunto de correções de ALTA confiança (JSON/constante
+isolada, sem redesenho de arquitetura) diretamente; o resto fica documentado como pendência com
+justificativa técnica precisa (não uma correção rasa/forçada só pra "fechar item").
+
+**Achado transversal repetido em quase toda categoria** (não é um bug isolado, é um padrão): muitos
+componentes (`dc_motor`/`stepper`/`incandescent_lamp`, `outputs.led` antes desta rodada, `active.diode`
+parcialmente) são modelados no Core como um `Resistor`/`ResistorArray` genérico, sem NENHUM estado
+dinâmico (ângulo do rotor, brilho, corrente máxima) exposto -- então o `package.simulidePaint`
+correspondente é necessariamente estático, mesmo quando o `paint()` real do SimulIDE é dinâmico. Corrigir
+isso caso a caso não escala; o padrão certo (aplicado em 29.2) é generalizar no MODELO ELÉTRICO
+primeiro (Core), não inventar bindings visuais sem dado real por trás.
+
+### 29.2 Outputs > Leds -- reescrita real (led, led_rgb, led_bar, led_matrix, seven_segment)
+
+**Causa raiz encontrada**: `outputs.led` usava a classe `Diode` (exponencial de Shockley, certa pra
+`active.diode`/`active.zener`, ERRADA pro LED real). O LED real do SimulIDE (`eLed::voltChanged()`,
+`simulator/elements/outputs/e-led.cpp`) é um modelo PIECEWISE totalmente diferente: abaixo de
+`threshold` a perna está essencialmente aberta (condutância de fuga `1e-9`); acima, conduz como um
+resistor linear (`resistance`) ancorado exatamente no joelho `(threshold, 0)` via uma fonte de corrente
+companion. `led_rgb`/`led_bar`/`led_matrix`/`seven_segment` usavam `DiodeLegArray` (mesma exponencial,
+N pernas) com `propertyDescriptors()` retornando `{}` -- ZERO propriedades editáveis, confirmando
+exatamente o que o usuário reportou pro Led Bar (sem Cor, sem lógica de acionamento, sem indicar
+GND/VCC do comum).
+
+**Corrigido**: `core/src/components/active/DiodeLegArray.hpp` reescrita -- `stamp()` agora usa o modelo
+piecewise real (não a exponencial), com propriedades REAIS `Color` (enum, 7 cores, mesmos labels de
+`LedBase::getColorList()`), `Threshold` (V, também setável direto, Color só é um preset -- Threshold
+salvo pelo usuário nunca é sobrescrito num reload, ver `applyLedProperties` em
+`CoreApplication.cpp`), `Resistance` (Ω) -- as MESMAS 3 propriedades pros 5 typeIds de uma vez só
+(generalização no sistema comum, não 5 correções isoladas). `outputs.led` migrado de `Diode` (2 pinos
+dedicados) pra `DiodeLegArray` com 1 perna só -- unifica a família inteira numa classe e ganha
+`current()` de verdade (só existe leitura de corrente via `getComponentCurrent`/IPC quando
+`legs.size()==1`, honesto sobre não fingir uma leitura por segmento nos outros 4).
+
+**Simplificações documentadas (não escondidas)**: `Color`/`Threshold`/`Resistance` são UNIFORMES pro
+componente inteiro -- fiel ao real `LedBar`/`LedMatrix`/`SevenSegment` (que também aplicam um único
+valor a todos os segmentos de uma vez, `ledbar.cpp::setColorStr` propaga a MESMA cor a cada `m_led[i]`,
+nunca por-segmento individual -- então "cor individual por LED" que o usuário pediu como opção NÃO é
+sequer um recurso do SimulIDE real pra estes tipos, só "geral" existe). `led_rgb` real tem
+`Threshold_R/G/B`/`MaxCurrent_R/G/B`/`Resistance_R/G/B` (9 propriedades por-canal) + `CommonCathode`
+(toggle Common Anode) -- aqui simplificado pra um valor uniforme + catodo comum fixo, documentado como
+pendência (não implementado). `seven_segment` real tem `NumDisplays`/`Vertical_Pins`/`CommonCathode`
+-- não portados. `MaxCurrent`/`Grounded` do LED real (que dirigem só a visual de brilho/GND, sem
+efeito na equação `stamp()`) foram DELIBERADAMENTE deixados de fora desta rodada -- adicionar uma
+propriedade sem efeito observável nenhum ainda violaria a regra do próprio pedido do usuário
+("garanta que cada propriedade esteja realmente conectada ao comportamento"); a leitura viva de
+brilho (`current()`→intensidade→`stateFill`) que daria sentido a `MaxCurrent` é um recurso de telemetria
+NOVO que não existe hoje pra nenhum componente arbitrário (só instrumentos com `readoutFormat`
+registrado têm sincronização ao vivo -- ver 29.9).
+
+**Catálogo**: `defaultProperties` dos 5 typeIds atualizado (`color:"Yellow"`, `threshold:2.4`,
+`resistance:0.6`, batendo com os defaults reais de `eLed::eLed()`) -- removidos os pares
+`threshold`/`resistance` "mortos" que existiam antes sem NENHUM backing real (`outputs.led` tinha
+`{threshold:2,resistance:1}` mas o Core só lia `saturationCurrent`; `outputs.led_rgb` tinha só
+`{threshold:2}` sem nenhuma propriedade real atrás).
+
+**Testes**: `core/test/zener_led_test.cpp` reescrito -- `testLedForwardVoltage` agora valida o joelho
+piecewise real (Vd converge em ~2.4046V com R=1k+fonte 10V, não mais a faixa larga 1.0-3.0V do modelo
+exponencial antigo); novo `testLedColorChangesThreshold` prova que `Color="Red"` muda o threshold de
+simulação pra ~1.8V de verdade (não é rótulo decorativo).
+
+### 29.3 Correções aplicadas em outras categorias (alta confiança, baixo risco)
+
+- **`switches.push`**: barra do atuador solto desenhava em y=-8, real é y=-6 (`push.cpp:125`) --
+  corrigido no `package.simulidePaint` e no teste.
+- **`switches.switch_dip`**: default `closed:false` deveria ser `true` (`switchdip.cpp:194`, todas as
+  8 posições nascem fechadas no real); housing desenhava `fill:"none"`, real é preenchido `#646478`
+  (`QColor(100,100,120)`, `switchdip.cpp:47` + `Component::paint()` real sempre pinta com `m_color`).
+- **`switches.keypad`**: faltava `leadOrigin:"terminal"` em todos os 7 pinos estáticos + nos 2
+  `pinGroups` dinâmicos -- sem isso, o ponto de fiação ficava 4px deslocado do buraco/traço desenhado
+  (confirmado comparando contra os outros 7 typeIds do catálogo que já usam esse campo certo).
+  Corrigido; testes que validavam a geometria ANTIGA (com o erro) atualizados pra validar a posição
+  real.
+- **`sources.rail`**: faltava `package.initialTransform` (rotação 90° -- `Rail::Rail()` sempre chama
+  `setRotation(90)` no construtor, `rail.cpp:43`) -- mesmo mecanismo já usado por `meters.probe`
+  (pivô `(-bounds.x,-bounds.y)`, aqui `(4,8)`).
+- **`other.ground`**: ângulo do pino salvo como 270, real é 90 (`ground.cpp:33`, `IoPin(90,...)`) --
+  corrigido por fidelidade de fonte, embora `length:0` torne isto sem efeito visual observável hoje.
+- **`instruments.voltmeter`**: impedância de entrada 10x abaixo do real (`kInputConductance=1e-6`
+  = 1MΩ; real `high_imp=1e7` = 10MΩ, `voltmeter.cpp:29`) -- corrigido em `Voltmeter.hpp`.
+
+### 29.4 Bug pré-existente encontrado (não introduzido nesta sessão, documentado e parcialmente corrigido)
+
+`core/test/esp32_devkitc_subcircuit_test.cpp` tem seu PRÓPRIO registro mínimo de componentes
+(`registerNeededBuiltins`, independente de `CoreApplication.cpp`) que nunca incluía `outputs.led_bar`
+-- confirmado por `git diff` que este arquivo estava intocado antes desta sessão, e por já existir
+NO MESMO ARQUIVO um comentário idêntico sobre `sources.rail` ter tido o mesmo problema antes
+("faltava aqui, causando 'Unknown component typeId'"). Corrigido o registro (`DiodeLegArray` com
+pernas resolvidas de `p.pinList`) e a derivação de id `pin-P{i}`/`pin-N{i}` (o `.lssubcircuit` real
+não embute id por pino em `properties`, só x/y -- confirmado que sem essa derivação os ids ficam
+vazios/genéricos, nunca batendo com o que os fios do arquivo referenciam).
+
+**Pendência restante** (mesmo teste, mais funda): mesmo com o id forçado corretamente, o teste ainda
+falha com `fio interno inválido component-X.pin-P1 -> component-Y.pin-1: invalid stoul argument` --
+rastreado até `SimulationSession::connectWire`/`resolveSlot` (`SimulationSession.cpp:198-210`): o
+match exato (`slots.find(pinId)`) não está encontrando "pin-P1" nos slots do componente mesmo com o
+`Pin.id` correto no vetor construído pela fábrica, caindo no fallback posicional genérico `pin-N`
+(que exige sufixo NUMÉRICO puro via `std::stoul`, e "P1" não é). Não investigado mais fundo por
+tempo -- pode ser (a) `m_netlist.pinSlotsOf()` construindo slots a partir de outra fonte que não
+`component->pins()` no momento do `addComponent`, ou (b) uma diferença sutil entre o pinList que
+`ComponentParams` entrega e o que a fábrica de fato usa. Este teste ISOLADO (só ele, dos 40) segue
+falhando -- não é regressão desta sessão (já falhava antes, por um motivo diferente e mais raso),
+mas também não foi totalmente resolvido. Ver 29.9.
+
+### 29.5 Achados documentados, SEM correção aplicada (fora do escopo desta rodada -- pendências reais)
+
+Resumo por categoria, prioridade e citação -- detalhe completo nos relatórios dos 7 agentes (não
+reproduzidos aqui por tamanho; refazer a mesma pesquisa é barato se necessário, os prompts usados
+citam arquivo:linha tanto do SimulIDE real quanto do LasecSimul).
+
+- **Active** (`opamp`/`comparator`/`analog_mux`/`volt_regulator`/`diode`/`zener`): **achado de maior
+  severidade potencial de toda a auditoria, NÃO verificado visualmente, NÃO corrigido por precaução**
+  -- padrão sistemático em 5 de 6 dispositivos onde o ponto elétrico de cada pino parece estar
+  deslocado pelo próprio `length` do lead (ex: `active.diode` pino calculado em `(0,32)` quando devia
+  ser `(-6,26)`) -- se confirmado numa sessão com GUI, é um bug de fiação real (fios conectariam no
+  lugar errado). `active.comparator` reusa a classe `OpAmp` (5 pinos, ganho) em vez de modelar um
+  comparador digital de verdade (real: 3 pinos, sem `Gain`, com `Out_High_V`/`Inverted`/etc) --
+  mudança de arquitetura, não catalogada aqui. `active.zener`: `defaultProperties` usa chaves
+  (`threshold`/`resistance`) que não correspondem a NENHUMA propriedade real do Core
+  (`saturationCurrent`/`breakdownVoltage`) -- silenciosamente ignoradas.
+- **Passive**: 2 bugs de geometria CONFIRMADOS rodando o renderer de verdade (não só lidos): pinos de
+  `passive.potentiometer` e `passive.resistor_dip` renderizam deslocados do corpo (fios pareceriam
+  sair do lugar errado). Família "Dialed" (`variable_resistor`/`variable_capacitor`/
+  `variable_inductor`) e família Reactive inteira (`capacitor`/`electrolytic_capacitor`/`inductor`)
+  não têm ESR (`Resistance`)/`InitVolt` que o real expõe -- Core só modela capacitância/indutância
+  pura.
+- **Sources**: `sources.wave_gen` nasce ligado por padrão (`alwaysOn=true`), real nasce desligado.
+  `sources.voltage_source`/`sources.current_source` não têm nenhum toggle liga/desliga (fonte sempre
+  ativa desde que colocada) -- documentado como simplificação intencional já existente, não nova.
+- **Meters**: `meters.oscope` falta o 5º pino de referência (`PinG`) que o real usa pra leitura
+  DIFERENCIAL -- LasecSimul lê tensão absoluta ao terra em vez de V(canal)-V(ref); além disso
+  `filter`/`autoScale`/`tracks`/`sampleIntervalNs` são descartados silenciosamente a cada reload
+  (fábrica nunca lê essas properties de volta). `meters.probe`'s `negativeThreshold` é uma propriedade
+  "morta" (só usada no lado visual, sem schema real no Core, nunca editável/sincronizada).
+- **Connectors/Other/Graphical**: `connectors.bus` é um stub decorativo de 1 pino sem NENHUMA
+  semântica de fan-out multi-bit do `Bus` real (achado de maior severidade da categoria).
+  `connectors.socket`/`connectors.header` têm o ponto elétrico dos pinos deslocado +24px e no ângulo
+  errado em relação aos buracos desenhados (confirmado, mesma classe de bug do Active). 5 tipos
+  `graphics.*` faltam `Opacity` (todos) e `Border`/`strokeWidth` configurável (`ellipse` especificamente,
+  inconsistente com `rectangle` que já tem).
+
+### 29.6 Verificação final
+
+Extension: suíte completa **228/228 passando** (2 testes reescritos pra refletir geometria corrigida
+de push/keypad, contagem final igual), 3 tsconfigs compilando limpos. Core: **39/40 testes passando**
+(`zener_led`/`voltmeter`/`diode` cobrindo as mudanças desta rodada, todos verdes; único vermelho é
+`esp32_devkitc_subcircuit`, pré-existente e parcialmente investigado, ver 29.4). Sem GUI disponível
+neste ambiente -- os 2 bugs de geometria de Passive foram confirmados executando o renderer de
+verdade (não visual), os 5 do Active NÃO foram confirmados visualmente e por isso não foram corrigidos
+às cegas.
+
+### 29.7 Pendências e recomendação de próxima rodada
+
+Por ordem de valor esperado:
+1. Verificar visualmente (sessão com GUI/Extension Development Host) o padrão sistemático de pinos
+   deslocados do Active (5 dispositivos) -- se confirmado, é a correção de maior impacto restante
+   (fiação visualmente errada, não só cosmético).
+2. Corrigir os 2 bugs de geometria confirmados do Passive (`potentiometer`/`resistor_dip`) -- mesma
+   classe de bug do Active, já com posições corretas calculadas nos relatórios dos agentes.
+3. Investigar a fundo `SimulationSession::connectWire`/`resolveSlot` (29.4) -- possível bug real de
+   resolução de pino por id fora do fallback puramente numérico, não só um problema do teste.
+4. Telemetria de corrente/intensidade genérica (não só pros LEDs) -- generalizaria o binding visual
+   dinâmico pra motor/lâmpada/LED de uma vez, resolvendo o achado transversal da seção 29.1.
+5. `connectors.bus` como componente real (fan-out multi-bit) -- maior gap funcional isolado
+   encontrado.

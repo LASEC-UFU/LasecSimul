@@ -907,7 +907,7 @@ import { PackageDescriptor } from "./model";
 
     const pushOpen = packageSymbolSvg("switches.push", { closed: false, normallyClosed: false, key: "A" }, "push-open") ?? "";
     const pushPressed = packageSymbolSvg("switches.push", { closed: true, normallyClosed: false, key: "A" }, "push-pressed") ?? "";
-    assert(pushOpen.includes('y1="0" x2="25" y2="0"'), `Push solto deveria desenhar a barra em y=-8 (Push::paint), markup: ${pushOpen}`);
+    assert(pushOpen.includes('y1="2" x2="25" y2="2"'), `Push solto deveria desenhar a barra em y=-6 (push.cpp:125, corrigido 2026-07-13 -- estava -8), markup: ${pushOpen}`);
     assert(pushPressed.includes('y1="6" x2="25" y2="6"'), `Push pressionado deveria desenhar a barra em y=-2, markup: ${pushPressed}`);
     assert(pushPressed.includes('fill="#62d67b"') && pushOpen.includes('fill="#dddddd"'), `Botao proxy deveria mudar de cor com \`closed\`, markups: ${pushOpen} | ${pushPressed}`);
     assert(pushOpen.includes(">A<"), "Push deveria ecoar properties.key no rotulo do botao (SwitchBase::setKey/CustomButton)");
@@ -915,7 +915,7 @@ import { PackageDescriptor } from "./model";
     // Norm_Close inverte a POSIÇÃO VISUAL (m_closed real = onbuttonPressed/Released XOR Norm_Close),
     // mas NÃO a cor do botão (CustomButton::isChecked reflete o `closed` cru, sem XOR).
     const pushNcPressed = packageSymbolSvg("switches.push", { closed: true, normallyClosed: true, key: "" }, "push-nc-pressed") ?? "";
-    assert(pushNcPressed.includes('y1="0" x2="25" y2="0"'), `Push Norm_Close pressionado deveria desenhar a barra na posição SOLTA (XOR), markup: ${pushNcPressed}`);
+    assert(pushNcPressed.includes('y1="2" x2="25" y2="2"'), `Push Norm_Close pressionado deveria desenhar a barra na posição SOLTA (XOR), markup: ${pushNcPressed}`);
     assert(pushNcPressed.includes('fill="#62d67b"'), "Botao deveria continuar verde (closed=true cru) mesmo com Norm_Close invertendo a posicao visual");
 
     const switchClosed = packageSymbolSvg("switches.switch", { closed: true, normallyClosed: false }, "switch-closed") ?? "";
@@ -1030,16 +1030,22 @@ import { PackageDescriptor } from "./model";
     catalogPackage("switches.keypad");
     const props = { rows: 4, columns: 4, keyLabels: "123A456B789C*0#D" };
     const box = componentBox("switches.keypad", props);
-    assert(box.width === 80 && box.height === 76, `KeyPad 4x4 deveria incluir m_area 72x72 + leads SimulIDE, recebido ${JSON.stringify(box)}`);
+    // `leadOrigin:"terminal"` adicionado na auditoria de dispositivos 2026-07-13 -- antes o ponto
+    // elétrico somava `length` (4px) por cima do `QPoint(cols*16,...)`/`QPoint(...,rows*16,...)`
+    // real (`keypad.cpp:157,193`), desalinhando o ponto de fiação do buraco/traço desenhado por 4px
+    // (achado da auditoria, confirmado comparando contra os outros 7 typeIds que já usam
+    // `leadOrigin:"terminal"` corretamente). Box agora reflete o ponto real (76x76, sem o
+    // overshoot), não mais 80x76.
+    assert(box.width === 76 && box.height === 76, `KeyPad 4x4 deveria incluir m_area 72x72 + leads SimulIDE, recebido ${JSON.stringify(box)}`);
 
     const rowPin0 = pinLocalPosition("pin-1", 0, 8, "switches.keypad", props);
     const rowPin3 = pinLocalPosition("pin-4", 3, 8, "switches.keypad", props);
     const colPin0 = pinLocalPosition("pin-5", 4, 8, "switches.keypad", props);
     const colPin3 = pinLocalPosition("pin-8", 7, 8, "switches.keypad", props);
-    assert(near(rowPin0.x, 80) && near(rowPin0.y, 12), `1o pino de linha deveria ficar na ponta do lead direito, recebido ${JSON.stringify(rowPin0)}`);
-    assert(near(rowPin3.x, 80) && near(rowPin3.y, 60), `4o pino de linha deveria ficar na ponta do lead direito, recebido ${JSON.stringify(rowPin3)}`);
-    assert(near(colPin0.x, 12) && near(colPin0.y, 72), `1o pino de coluna deveria ficar na ponta do lead inferior, recebido ${JSON.stringify(colPin0)}`);
-    assert(near(colPin3.x, 60) && near(colPin3.y, 72), `4o pino de coluna deveria ficar na ponta do lead inferior, recebido ${JSON.stringify(colPin3)}`);
+    assert(near(rowPin0.x, 76) && near(rowPin0.y, 12), `1o pino de linha deveria ficar no ponto elétrico real (sem overshoot de length), recebido ${JSON.stringify(rowPin0)}`);
+    assert(near(rowPin3.x, 76) && near(rowPin3.y, 60), `4o pino de linha deveria ficar no ponto elétrico real (sem overshoot de length), recebido ${JSON.stringify(rowPin3)}`);
+    assert(near(colPin0.x, 12) && near(colPin0.y, 76), `1o pino de coluna deveria ficar no ponto elétrico real (sem overshoot de length), recebido ${JSON.stringify(colPin0)}`);
+    assert(near(colPin3.x, 60) && near(colPin3.y, 76), `4o pino de coluna deveria ficar no ponto elétrico real (sem overshoot de length), recebido ${JSON.stringify(colPin3)}`);
 
     const svg = componentSymbolSvg("switches.keypad", props);
     assert(svg.includes('fill="#324664"'), `Corpo do KeyPad deveria seguir QColor(50,70,100) do SimulIDE, markup: ${svg}`);
@@ -1051,15 +1057,15 @@ import { PackageDescriptor } from "./model";
     // hit-test que main.ts desenha à parte pra todo componente, package ou não).
     const leadLines = svg.match(/<line[^>]*stroke-width="3"[^>]*\/>/g) ?? [];
     assert(leadLines.length === 8, `KeyPad 4x4 deveria desenhar 8 leads grossos (4 linhas + 4 colunas), recebido ${leadLines.length}: ${svg}`);
-    assert(svg.includes('x1="76.0" y1="12.0" x2="79.3" y2="12.0"'), `Lead da 1a linha deveria sair da borda direita ate o pino, markup: ${svg}`);
+    assert(svg.includes('x1="76.0" y1="12.0" x2="72.7" y2="12.0"'), `Lead da 1a linha deveria sair do pino (ponto elétrico real, leadOrigin:"terminal") de volta até a borda do corpo, markup: ${svg}`);
     assert(svg.includes('x1="12.0" y1="76.0" x2="12.0" y2="72.7"'), `Lead da 1a coluna deveria sair da borda inferior ate o pino, markup: ${svg}`);
 
     const wideProps = { rows: 2, columns: 5, keyLabels: "ABCDEFGHIJ" };
     const wideBox = componentBox("switches.keypad", wideProps);
     const lastCol = pinLocalPosition("pin-7", 6, 7, "switches.keypad", wideProps);
     const wideSvg = componentSymbolSvg("switches.keypad", wideProps);
-    assert(wideBox.width === 96 && wideBox.height === 44, `KeyPad 2x5 deveria recalcular caixa por rows/columns, recebido ${JSON.stringify(wideBox)}`);
-    assert(near(lastCol.x, 76) && near(lastCol.y, 40), `Ultimo pino de coluna 2x5 deveria vir do pinGroup dinamico, recebido ${JSON.stringify(lastCol)}`);
+    assert(wideBox.width === 92 && wideBox.height === 44, `KeyPad 2x5 deveria recalcular caixa por rows/columns, recebido ${JSON.stringify(wideBox)}`);
+    assert(near(lastCol.x, 76) && near(lastCol.y, 44), `Ultimo pino de coluna 2x5 deveria vir do pinGroup dinamico, recebido ${JSON.stringify(lastCol)}`);
     assert((wideSvg.match(/<rect/g) ?? []).length === 11, `KeyPad 2x5 deveria desenhar 1 corpo + 10 teclas, markup: ${wideSvg}`);
   });
 

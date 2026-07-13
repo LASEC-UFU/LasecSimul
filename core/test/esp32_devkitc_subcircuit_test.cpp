@@ -13,6 +13,7 @@
 #include <memory>
 #include <nlohmann/json.hpp>
 #include "components/SimulideBuiltins.hpp"
+#include "components/active/DiodeLegArray.hpp"
 #include "components/connectors/Tunnel.hpp"
 #include <unordered_set>
 #include <unordered_map>
@@ -85,6 +86,29 @@ void registerNeededBuiltins(ComponentRegistry& components) {
         return std::make_unique<components::SimulideSwitch>("switches.push", std::move(pins),
                                                               p.property("closed", false),
                                                               p.property("normallyClosed", false));
+    });
+    // DevKitC real também tem uma barra de LED (outputs.led_bar) -- faltava aqui pela mesma razão
+    // documentada acima pro "sources.rail" (registro mínimo deste teste nunca foi atualizado quando
+    // o typeId passou a aparecer no `.lssubcircuit` real). Mesma classe/modelo elétrico de
+    // `CoreApplication.cpp` (auditoria de dispositivos 2026-07-13, `DiodeLegArray` com o par P/N por
+    // LED já resolvido em `p.pinList` -- não precisa do `ComponentPinSpec` dinâmico aqui, o
+    // subcircuito real já vem com os pinos concretos).
+    components.registerFactory("outputs.led_bar", [](const ComponentParams& p) {
+        // `p.pinList[i].id` vem vazio quando o `.lssubcircuit` real não embute id por pino em
+        // `properties` (o de-facto comum -- o catálogo/`ComponentPinSpec` é quem deriva o id
+        // "pin-P{i}"/"pin-N{i}" de verdade em CoreApplication.cpp, ver `ledBarPinSpec`). Faltava essa
+        // mesma derivação aqui -- SEM ela os fios do `.lssubcircuit` (que referenciam "pin-P1" etc)
+        // nunca batiam com o id real do pino, achado da auditoria de dispositivos 2026-07-13.
+        std::vector<Pin> pins = p.pinList;
+        const size_t size = pins.size() / 2;
+        for (size_t i = 0; i < size; ++i) {
+            pins[i].id = "pin-P" + std::to_string(i + 1);
+            pins[size + i].id = "pin-N" + std::to_string(i + 1);
+        }
+        std::vector<components::DiodeLegArray::Leg> legs;
+        legs.reserve(size);
+        for (size_t i = 0; i < size; ++i) legs.push_back({i, size + i});
+        return std::make_unique<components::DiodeLegArray>("outputs.led_bar", std::move(pins), std::move(legs));
     });
 }
 

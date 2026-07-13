@@ -1,12 +1,16 @@
-// Teste de integração da extensão de ruptura reversa da classe `Diode` (mesmo componente não
-// linear real usado por active.diode, agora reaproveitado por active.zener e outputs.led com
-// parâmetros diferentes -- ver core/src/components/active/Diode.hpp e CoreApplication.cpp).
-// Mesmo padrão de diode_test.cpp: sem framework de teste, settleStep() chamado direto.
+// Teste de integração da extensão de ruptura reversa da classe `Diode` (componente não linear real
+// usado por active.diode/active.zener -- ver core/src/components/active/Diode.hpp e
+// CoreApplication.cpp) e do modelo piecewise real do LED (`DiodeLegArray`, migrado da equação
+// exponencial de Shockley pro modelo REAL de `eLed::voltChanged()` na auditoria de dispositivos
+// 2026-07-13 -- outputs.led/led_rgb/led_bar/led_matrix/seven_segment usam TODOS a mesma classe
+// agora, ver `.spec` seção 29). Mesmo padrão de diode_test.cpp: sem framework de teste, settleStep()
+// chamado direto.
 #include <array>
 #include <cmath>
 #include <cstdio>
 #include <memory>
 #include "components/active/Diode.hpp"
+#include "components/active/DiodeLegArray.hpp"
 #include "components/other/Ground.hpp"
 #include "components/passive/Resistor.hpp"
 #include "components/sources/DcVoltageSource.hpp"
@@ -38,9 +42,14 @@ void registerTestComponents(ComponentRegistry& components) {
             params.property("breakdownVoltage", 5.1), true);
     });
     components.registerFactory("outputs.led", [](const ComponentParams& params) {
-        return std::make_unique<components::Diode>(std::array<Pin, 2>{Pin{"anode"}, Pin{"cathode"}},
-                                                     params.property("saturationCurrent", 9.32e-11),
-                                                     params.property("thermalVoltage", 0.0965));
+        std::vector<Pin> pins{Pin{"anode"}, Pin{"cathode"}};
+        auto model = std::make_unique<components::DiodeLegArray>(
+            "outputs.led", std::move(pins), std::vector<components::DiodeLegArray::Leg>{{0, 1}},
+            params.property("threshold", 2.4), params.property("resistance", 0.6));
+        if (const auto it = params.properties.find("color"); it != params.properties.end()) {
+            bindPropertyByName(model->properties(), "color", it->second);
+        }
+        return model;
     });
     components.registerFactory("other.ground", [](const ComponentParams&) {
         return std::make_unique<components::Ground>(Pin{"pin"});
@@ -134,9 +143,11 @@ bool testZenerBreakdown() {
     return ok;
 }
 
-// LED com os parâmetros reais do preset "RGY Default" do SimulIDE (satCurr maior, thermalVoltage
-// efetivo maior que um diodo comum) -- o joelho de condução direta deve ficar bem mais alto
-// (~1.5-2.5V) que o de active.diode (~0.3-1.0V, já validado em diode_test.cpp).
+// LED com o modelo piecewise REAL (`eLed::voltChanged()`, ver DiodeLegArray.hpp): abaixo do
+// threshold (2.4V default, cor "Yellow") a perna está essencialmente aberta; acima, conduz como um
+// resistor linear (0.6Ω default) ancorado no joelho exato -- ao contrário do diodo exponencial
+// (~0.3-1.0V, joelho suave, diode_test.cpp), o LED converge bem PERTO do threshold nominal (joelho
+// duro), nunca numa faixa larga.
 bool testLedForwardVoltage() {
     GlobalPluginCache cache;
     SimulationSession session(cache);
@@ -160,22 +171,72 @@ bool testLedForwardVoltage() {
     const double voltB = session.nodeVoltageOfPin(r1, "p2");
     const double voltCathode = session.nodeVoltageOfPin(led, "cathode");
     const double vd = voltB - voltCathode;
+    const double currentThroughResistor = (session.nodeVoltageOfPin(source, "p1") - voltB) / 1000.0;
 
-    std::printf("[led] settled=%d Vd=%.4f\n", settled, vd);
+    std::printf("[led] settled=%d Vd=%.4f I_R=%.6e\n", settled, vd, currentThroughResistor);
 
     bool ok = true;
     if (!settled) {
         std::fprintf(stderr, "FALHOU (led): settle-loop não estabilizou em 200 iterações.\n");
         ok = false;
     }
-    if (!(vd > 1.0 && vd < 3.0)) {
-        std::fprintf(stderr,
-                     "FALHOU (led): Vd deveria estar na faixa de condução direta de um LED real "
-                     "(1.0-3.0V), deu %.4f\n",
-                     vd);
+    // Joelho duro (piecewise, não exponencial): Vd deveria ficar bem perto de 2.4V (threshold
+    // "Yellow" default), não numa faixa larga -- KCL com R=1k e fonte de 10V: I=(10-2.4)/(1000+0.6)
+    // ≈ 7.6mA, Vd = threshold + I*0.6 ≈ 2.4046V. Tolerância generosa (0.05V) só pra folga de
+    // convergência numérica, não porque o modelo real tem margem física.
+    if (!nearlyEqual(vd, 2.4046, 0.05)) {
+        std::fprintf(stderr, "FALHOU (led): Vd deveria convergir perto do joelho piecewise (~2.4046V), deu %.4f\n", vd);
         ok = false;
     }
-    if (ok) std::printf("OK: LED convergiu com tensão direta plausível.\n");
+    if (!nearlyEqual(currentThroughResistor, 0.0076, 0.001)) {
+        std::fprintf(stderr,
+                     "FALHOU (led): corrente deveria bater com o modelo piecewise (~7.6mA), deu %.6e\n",
+                     currentThroughResistor);
+        ok = false;
+    }
+    if (ok) std::printf("OK: LED (modelo piecewise real) convergiu no joelho de tensão esperado.\n");
+    return ok;
+}
+
+// Propriedade `Color` real (`LedBase::setColorStr`, ledbase.cpp): trocar pra "Red" deveria mudar o
+// threshold pra 1.8V (não mais 2.4V) -- prova que o binding Color->Threshold (auditoria 2026-07-13)
+// de fato afeta a simulação, não é só um rótulo decorativo.
+bool testLedColorChangesThreshold() {
+    GlobalPluginCache cache;
+    SimulationSession session(cache);
+    registerTestComponents(session.components());
+
+    ComponentParams redLed;
+    redLed.properties["color"] = std::string{"Red"};
+    const uint32_t source = session.addComponent("sources.dc_voltage", withVoltage(10.0));
+    const uint32_t r1 = session.addComponent("passive.resistor", withResistance(1000.0));
+    const uint32_t led = session.addComponent("outputs.led", redLed);
+    const uint32_t ground = session.addComponent("other.ground", {});
+
+    session.connectWire(source, "p1", r1, "p1");
+    session.connectWire(r1, "p2", led, "anode");
+    session.connectWire(led, "cathode", source, "p2");
+    session.connectWire(source, "p2", ground, "pin");
+
+    bool settled = false;
+    for (int i = 0; i < 200; ++i) {
+        if (!session.settleStep()) { settled = true; break; }
+    }
+
+    const double vd = session.nodeVoltageOfPin(r1, "p2") - session.nodeVoltageOfPin(led, "cathode");
+    std::printf("[led-color] settled=%d Vd(Red)=%.4f\n", settled, vd);
+
+    bool ok = true;
+    if (!settled) {
+        std::fprintf(stderr, "FALHOU (led-color): settle-loop não estabilizou.\n");
+        ok = false;
+    }
+    // Red -> threshold 1.8V (thresholdForColor real), não mais 2.4V (Yellow default).
+    if (!(vd > 1.6 && vd < 2.0)) {
+        std::fprintf(stderr, "FALHOU (led-color): Color=\"Red\" deveria mudar o threshold pra ~1.8V, Vd deu %.4f\n", vd);
+        ok = false;
+    }
+    if (ok) std::printf("OK: Color=\"Red\" mudou o threshold de simulação de verdade (não é decorativo).\n");
     return ok;
 }
 
@@ -184,5 +245,6 @@ bool testLedForwardVoltage() {
 int main() {
     const bool zenerOk = testZenerBreakdown();
     const bool ledOk = testLedForwardVoltage();
-    return (zenerOk && ledOk) ? 0 : 1;
+    const bool ledColorOk = testLedColorChangesThreshold();
+    return (zenerOk && ledOk && ledColorOk) ? 0 : 1;
 }

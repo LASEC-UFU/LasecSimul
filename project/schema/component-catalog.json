@@ -424,7 +424,7 @@
             "file": "src/components/switches/push.cpp + push_base.cpp + switch_base.cpp + mech_contact.cpp",
             "className": "Push",
             "method": "paint",
-            "notes": "SetupSwitches(1,1) com m_pin0=0 da m_area=QRectF(-12,-8,24,12) -- usado só pra boundingRect()/shape() (hit-test), Push::paint() NUNCA desenha esse retângulo (Component::paint() não pinta nada, só seta pen/brush) -- não adicionar um `rect` visual aqui. Pinos reais (MechContact::SetupSwitches) em QPoint(-16,0)/(16,0), comprimento padrao do Pin (8). m_button (CustomButton 16x16, checkable) fica em (-8,4) (SwitchBase::m_proxy, Push::Push sobrescreve setPos). Push::paint desenha SÓ a barra do atuador em y=-2 quando m_closed (pressionado) e y=-8 quando solto, pen width 3; m_closed reflete onbuttonPressed/onbuttonReleased XOR Norm_Close (mesma logica dos 4 stateVisible da barra abaixo)."
+            "notes": "SetupSwitches(1,1) com m_pin0=0 da m_area=QRectF(-12,-8,24,12) -- usado só pra boundingRect()/shape() (hit-test), Push::paint() NUNCA desenha esse retângulo (Component::paint() não pinta nada, só seta pen/brush) -- não adicionar um `rect` visual aqui. Pinos reais (MechContact::SetupSwitches) em QPoint(-16,0)/(16,0), comprimento padrao do Pin (8). m_button (CustomButton 16x16, checkable) fica em (-8,4) (SwitchBase::m_proxy, Push::Push sobrescreve setPos). Push::paint desenha SÓ a barra do atuador em y=-2 quando m_closed (pressionado) e y=-6 quando solto (push.cpp:125, corrigido 2026-07-13 -- estava -8 antes, achado da auditoria de dispositivos), pen width 3; m_closed reflete onbuttonPressed/onbuttonReleased XOR Norm_Close (mesma logica dos 4 stateVisible da barra abaixo)."
           },
           "bounds": {
             "x": -16,
@@ -509,9 +509,9 @@
             {
               "kind": "line",
               "x1": -9,
-              "y1": -8,
+              "y1": -6,
               "x2": 9,
-              "y2": -8,
+              "y2": -6,
               "strokeWidth": 3,
               "stateVisible": {
                 "when": {
@@ -529,9 +529,9 @@
             {
               "kind": "line",
               "x1": -9,
-              "y1": -8,
+              "y1": -6,
               "x2": 9,
-              "y2": -8,
+              "y2": -6,
               "strokeWidth": 3,
               "stateVisible": {
                 "when": {
@@ -771,7 +771,7 @@
         "Switches"
       ],
       "defaultProperties": {
-        "closed": false
+        "closed": true
       },
       "graphical": true,
       "help": {
@@ -808,7 +808,7 @@
               "y": -28,
               "w": 14,
               "h": 64,
-              "fill": "none"
+              "fill": "#646478"
             },
             {
               "kind": "repeat",
@@ -1259,6 +1259,7 @@
             "y": 12,
             "angle": 0,
             "length": 4,
+            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": ""
           },
@@ -1268,6 +1269,7 @@
             "y": 28,
             "angle": 0,
             "length": 4,
+            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": ""
           },
@@ -1277,6 +1279,7 @@
             "y": 44,
             "angle": 0,
             "length": 4,
+            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": ""
           },
@@ -1286,6 +1289,7 @@
             "y": 60,
             "angle": 0,
             "length": 4,
+            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": ""
           },
@@ -1295,6 +1299,7 @@
             "y": 76,
             "angle": 270,
             "length": 4,
+            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": ""
           },
@@ -1304,6 +1309,7 @@
             "y": 76,
             "angle": 270,
             "length": 4,
+            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": ""
           },
@@ -1313,6 +1319,7 @@
             "y": 76,
             "angle": 270,
             "length": 4,
+            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": ""
           }
@@ -1368,6 +1375,7 @@
               },
               "angle": 0,
               "length": 4,
+              "leadOrigin": "terminal",
               "leadEndTrim": 0.7,
               "label": ""
             },
@@ -1393,6 +1401,7 @@
               },
               "angle": 270,
               "length": 4,
+              "leadOrigin": "terminal",
               "leadEndTrim": 0.7,
               "label": ""
             }
@@ -4736,8 +4745,9 @@
         "Leds"
       ],
       "defaultProperties": {
-        "threshold": 2,
-        "resistance": 1
+        "color": "Yellow",
+        "threshold": 2.4,
+        "resistance": 0.6
       },
       "graphical": true,
       "package": {
@@ -4863,7 +4873,9 @@
         "Leds"
       ],
       "defaultProperties": {
-        "threshold": 2
+        "color": "Yellow",
+        "threshold": 2.4,
+        "resistance": 0.6
       },
       "graphical": true,
       "package": {
@@ -5010,7 +5022,10 @@
         "Leds"
       ],
       "defaultProperties": {
-        "size": 8
+        "size": 8,
+        "color": "Yellow",
+        "threshold": 2.4,
+        "resistance": 0.6
       },
       "graphical": true,
       "pinIds": [
@@ -5313,7 +5328,10 @@
       ],
       "defaultProperties": {
         "rows": 8,
-        "columns": 8
+        "columns": 8,
+        "color": "Yellow",
+        "threshold": 2.4,
+        "resistance": 0.6
       },
       "graphical": true,
       "pinIds": [
@@ -5650,7 +5668,10 @@
         "Leds"
       ],
       "defaultProperties": {
-        "size": 8
+        "size": 8,
+        "color": "Yellow",
+        "threshold": 2.4,
+        "resistance": 0.6
       },
       "graphical": true,
       "package": {
@@ -9568,13 +9589,18 @@
         "background": {
           "kind": "none"
         },
+        "initialTransform": {
+          "rotateDeg": 90,
+          "cx": 4,
+          "cy": 8
+        },
         "simulidePaint": {
           "version": 1,
           "source": {
             "file": "src/components/sources/rail.cpp",
             "className": "Rail",
             "method": "paint",
-            "notes": "m_area=QRect(-2,-8,12,16); IoPin(0,QPoint(16,0)); setRotation(90); paint polygon points (-1.5,-6.5),(-1.5,6.5),(9,1),(9,-1), brush #ffa600. Lasec package keeps the local paint geometry and exposes the pin at the translated QPoint(16,0)."
+            "notes": "m_area=QRect(-2,-8,12,16); IoPin(0,QPoint(16,0)); setRotation(90); paint polygon points (-1.5,-6.5),(-1.5,6.5),(9,1),(9,-1), brush #ffa600. Rail::Rail() sempre chama setRotation(90) no construtor (rail.cpp:43) -- representado via package.initialTransform (rotateDeg=90 em torno da origem local real (0,0), que neste frame de bounds/shift é (4,8), achado da auditoria de dispositivos 2026-07-13). Lasec package keeps the local paint geometry and exposes the pin at the translated QPoint(16,0)."
           },
           "bounds": {
             "x": -4,
@@ -9714,7 +9740,7 @@
             ],
             "x": 8,
             "y": 0,
-            "angle": 270,
+            "angle": 90,
             "length": 0,
             "label": ""
           }

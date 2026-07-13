@@ -1,0 +1,605 @@
+===== connectors.junction =====
+{
+  "typeId": "connectors.junction",
+  "label": "Junction",
+  "pinCount": 1,
+  "icon": "tunel",
+  "folderPath": [
+    "Connectors"
+  ],
+  "defaultProperties": {},
+  "hidden": true,
+  "help": {
+    "description": "Ponto de junção elétrica entre 3 ou mais fios. Nasce automaticamente ao clicar/terminar sobre um fio existente -- não é colocável manualmente."
+  },
+  "category": "Connectors"
+}
+
+===== connectors.bus =====
+{
+  "typeId": "connectors.bus",
+  "label": "Bus",
+  "pinCount": 1,
+  "icon": "bus",
+  "folderPath": [
+    "Connectors"
+  ],
+  "defaultProperties": {},
+  "category": "Connectors",
+  "help": {
+    "description": "Conector gráfico para agrupar ou organizar linhas de sinal no esquemático."
+  }
+}
+
+===== connectors.tunnel =====
+{
+  "typeId": "connectors.tunnel",
+  "label": "Tunnel.",
+  "pinCount": 1,
+  "pinIds": [
+    "pin"
+  ],
+  "icon": "tunel",
+  "folderPath": [
+    "Connectors"
+  ],
+  "defaultProperties": {
+    "name": "NetA"
+  },
+  "help": {
+    "description": "Conecta pinos por nome compartilhado em vez de fio desenhado. Dois túneis com o mesmo nome formam um nó elétrico."
+  },
+  "category": "Connectors"
+}
+
+===== connectors.socket =====
+{
+  "typeId": "connectors.socket",
+  "label": "Socket",
+  "pinCount": 8,
+  "icon": "socket",
+  "graphical": true,
+  "folderPath": [
+    "Connectors"
+  ],
+  "defaultProperties": {},
+  "package": {
+    "width": 8,
+    "height": 64,
+    "border": false,
+    "background": {
+      "kind": "none"
+    },
+    "simulidePaint": {
+      "version": 1,
+      "source": {
+        "file": "src/gui/circuitwidget/connbase.cpp + src/components/connectors/socket.cpp",
+        "className": "Socket",
+        "method": "ConnBase::paint + Socket::updatePixmap",
+        "notes": "Default setSize(8): m_area=QRectF(-4,-28,8,64). Pixmap holes are represented as small circles, one per socket pin."
+      },
+      "bounds": {
+        "x": -4,
+        "y": -28,
+        "w": 8,
+        "h": 64
+      },
+      "defaultStroke": "#303840",
+      "defaultFill": "none",
+      "defaultStrokeWidth": 2,
+      "primitives": [
+        {
+          "kind": "roundedRect",
+          "x": -4,
+          "y": -28,
+          "w": 8,
+          "h": 64,
+          "rx": 4,
+          "ry": 4,
+          "fill": "none",
+          "strokeWidth": 1
+        },
+        {
+          "kind": "repeat",
+          "count": 8,
+          "indexName": "i",
+          "stepY": 8,
+          "primitives": [
+            {
+              "kind": "ellipse",
+              "cx": 0,
+              "cy": -24,
+              "rx": 2,
+              "ry": 2,
+              "fill": "none",
+              "strokeWidth": 1
+            }
+          ]
+        }
+      ]
+    },
+    "pins": [
+      {
+        "id": "pin-1",
+        "x": 0,
+        "y": 0,
+        "angle": 270,
+        "length": 0,
+        "leadEndTrim": 0.7,
+        "label": ""
+      },
+      {
+        "id": "pin-2",
+        "x": 0,
+        "y": 8,
+        "angle": 270,
+        "length": 0,
+        "leadEndTrim": 0.7,
+        "label": ""
+      },
+      {
+        "id": "pin-3",
+        "x": 0,
+        "y": 16,
+        "angle": 270,
+        "length": 0,
+        "leadEndTrim": 0.7,
+        "label": ""
+      },
+      {
+        "id": "pin-4",
+        "x": 0,
+        "y": 24,
+        "angle": 270,
+        "length": 0,
+        "leadEndTrim": 0.7,
+        "label": ""
+      },
+      {
+        "id": "pin-5",
+        "x": 0,
+        "y": 32,
+        "angle": 270,
+        "length": 0,
+        "leadEndTrim": 0.7,
+        "label": ""
+      },
+      {
+        "id": "pin-6",
+        "x": 0,
+        "y": 40,
+        "angle": 270,
+        "length": 0,
+        "leadEndTrim": 0.7,
+        "label": ""
+      },
+      {
+        "id": "pin-7",
+        "x": 0,
+        "y": 48,
+        "angle": 270,
+        "length": 0,
+        "leadEndTrim": 0.7,
+        "label": ""
+      },
+      {
+        "id": "pin-8",
+        "x": 0,
+        "y": 56,
+        "angle": 270,
+        "length": 0,
+        "leadEndTrim": 0.7,
+        "label": ""
+      }
+    ]
+  },
+  "pinIds": [
+    "pin-1",
+    "pin-2",
+    "pin-3",
+    "pin-4",
+    "pin-5",
+    "pin-6",
+    "pin-7",
+    "pin-8"
+  ],
+  "category": "Connectors",
+  "help": {
+    "description": "Conector genérico multipino para organizar interfaces de circuito."
+  }
+}
+
+===== connectors.header =====
+{
+  "typeId": "connectors.header",
+  "label": "Header",
+  "pinCount": 8,
+  "icon": "header",
+  "graphical": true,
+  "folderPath": [
+    "Connectors"
+  ],
+  "defaultProperties": {},
+  "package": {
+    "width": 8,
+    "height": 64,
+    "border": false,
+    "background": {
+      "kind": "none"
+    },
+    "simulidePaint": {
+      "version": 1,
+      "source": {
+        "file": "src/gui/circuitwidget/connbase.cpp + src/components/connectors/header.cpp",
+        "className": "Header",
+        "method": "ConnBase::paint + Header::updatePixmap",
+        "notes": "Default setSize(8): m_area=QRectF(-4,-28,8,64). Header pixmap pins represented as short horizontal bars."
+      },
+      "bounds": {
+        "x": -4,
+        "y": -28,
+        "w": 8,
+        "h": 64
+      },
+      "defaultStroke": "#303840",
+      "defaultFill": "none",
+      "defaultStrokeWidth": 2,
+      "primitives": [
+        {
+          "kind": "roundedRect",
+          "x": -4,
+          "y": -28,
+          "w": 8,
+          "h": 64,
+          "rx": 4,
+          "ry": 4,
+          "fill": "none",
+          "strokeWidth": 1
+        },
+        {
+          "kind": "repeat",
+          "count": 8,
+          "indexName": "i",
+          "stepY": 8,
+          "primitives": [
+            {
+              "kind": "line",
+              "x1": -3,
+              "y1": -24,
+              "x2": 3,
+              "y2": -24,
+              "strokeWidth": 2,
+              "strokeLinecap": "round"
+            }
+          ]
+        }
+      ]
+    },
+    "pins": [
+      {
+        "id": "pin-1",
+        "x": 0,
+        "y": 0,
+        "angle": 270,
+        "length": 0,
+        "leadEndTrim": 0.7,
+        "label": ""
+      },
+      {
+        "id": "pin-2",
+        "x": 0,
+        "y": 8,
+        "angle": 270,
+        "length": 0,
+        "leadEndTrim": 0.7,
+        "label": ""
+      },
+      {
+        "id": "pin-3",
+        "x": 0,
+        "y": 16,
+        "angle": 270,
+        "length": 0,
+        "leadEndTrim": 0.7,
+        "label": ""
+      },
+      {
+        "id": "pin-4",
+        "x": 0,
+        "y": 24,
+        "angle": 270,
+        "length": 0,
+        "leadEndTrim": 0.7,
+        "label": ""
+      },
+      {
+        "id": "pin-5",
+        "x": 0,
+        "y": 32,
+        "angle": 270,
+        "length": 0,
+        "leadEndTrim": 0.7,
+        "label": ""
+      },
+      {
+        "id": "pin-6",
+        "x": 0,
+        "y": 40,
+        "angle": 270,
+        "length": 0,
+        "leadEndTrim": 0.7,
+        "label": ""
+      },
+      {
+        "id": "pin-7",
+        "x": 0,
+        "y": 48,
+        "angle": 270,
+        "length": 0,
+        "leadEndTrim": 0.7,
+        "label": ""
+      },
+      {
+        "id": "pin-8",
+        "x": 0,
+        "y": 56,
+        "angle": 270,
+        "length": 0,
+        "leadEndTrim": 0.7,
+        "label": ""
+      }
+    ]
+  },
+  "pinIds": [
+    "pin-1",
+    "pin-2",
+    "pin-3",
+    "pin-4",
+    "pin-5",
+    "pin-6",
+    "pin-7",
+    "pin-8"
+  ],
+  "category": "Connectors",
+  "help": {
+    "description": "Barra de pinos genérica usada para representar conectores de placas e módulos."
+  }
+}
+
+===== other.package =====
+{
+  "typeId": "other.package",
+  "label": "Package",
+  "pinCount": 0,
+  "icon": "package",
+  "graphical": true,
+  "folderPath": [
+    "Other"
+  ],
+  "defaultProperties": {
+    "width": 80,
+    "height": 60,
+    "border": true,
+    "backgroundColor": "#ffffff"
+  },
+  "category": "Other",
+  "help": {
+    "description": "Corpo externo do Package do subcircuito (conceito do SimulIDE), editado dentro da sessao 'Abrir Subcircuito' -- deve haver no maximo um por subcircuito."
+  }
+}
+
+===== other.package_pin =====
+{
+  "typeId": "other.package_pin",
+  "label": "Package Pin",
+  "pinCount": 0,
+  "icon": "package-pin",
+  "folderPath": [
+    "Other"
+  ],
+  "defaultProperties": {
+    "pinId": "pin1",
+    "length": 8,
+    "tunnelComponentId": ""
+  },
+  "propertySchema": [
+    {
+      "id": "pinId",
+      "label": "Identificador do pino",
+      "group": "Geral",
+      "unit": "",
+      "editor": "text",
+      "default": "pin1"
+    },
+    {
+      "id": "length",
+      "label": "Comprimento do terminal",
+      "group": "Geral",
+      "unit": "px",
+      "editor": "number",
+      "default": 8
+    },
+    {
+      "id": "tunnelComponentId",
+      "label": "Tunel vinculado (id interno)",
+      "group": "Geral",
+      "unit": "",
+      "editor": "text",
+      "default": "",
+      "hidden": true
+    }
+  ],
+  "category": "Other",
+  "help": {
+    "description": "Pino externo do Package, editado dentro da sessao 'Abrir Subcircuito' (mesma cena do circuito interno). Vinculado a um Tunnel interno via menu de contexto 'Vincular a tunel...'."
+  }
+}
+
+===== other.test_unit =====
+{
+  "typeId": "other.test_unit",
+  "label": "Test Unit",
+  "pinCount": 0,
+  "icon": "test-unit",
+  "folderPath": [
+    "Other"
+  ],
+  "defaultProperties": {},
+  "hidden": true,
+  "category": "Other",
+  "help": {
+    "description": "Componente auxiliar de teste interno."
+  }
+}
+
+===== other.dial =====
+{
+  "typeId": "other.dial",
+  "label": "Dial",
+  "pinCount": 0,
+  "icon": "dial",
+  "graphical": true,
+  "folderPath": [
+    "Other"
+  ],
+  "defaultProperties": {},
+  "hidden": true,
+  "category": "Other",
+  "help": {
+    "description": "Controle gráfico rotativo auxiliar."
+  }
+}
+
+===== graphics.image =====
+{
+  "typeId": "graphics.image",
+  "label": "Image",
+  "pinCount": 0,
+  "icon": "graphic-image",
+  "graphical": true,
+  "folderPath": [
+    "Graphical"
+  ],
+  "defaultProperties": {
+    "path": "",
+    "width": 80,
+    "height": 80
+  },
+  "propertySchema": [
+    {
+      "id": "path",
+      "label": "Arquivo de imagem",
+      "group": "Geral",
+      "unit": "",
+      "editor": "filePath",
+      "default": ""
+    },
+    {
+      "id": "width",
+      "label": "Largura",
+      "group": "Geral",
+      "unit": "px",
+      "editor": "number",
+      "default": 80
+    },
+    {
+      "id": "height",
+      "label": "Altura",
+      "group": "Geral",
+      "unit": "px",
+      "editor": "number",
+      "default": 80
+    }
+  ],
+  "category": "Graphical",
+  "help": {
+    "description": "Elemento gráfico para inserir uma imagem de referência no esquemático."
+  }
+}
+
+===== graphics.text =====
+{
+  "typeId": "graphics.text",
+  "label": "Text",
+  "pinCount": 0,
+  "icon": "graphic-text",
+  "graphical": true,
+  "folderPath": [
+    "Graphical"
+  ],
+  "defaultProperties": {
+    "text": "Texto",
+    "fontSize": 11,
+    "color": "#1f2937"
+  },
+  "category": "Graphical",
+  "help": {
+    "description": "Elemento gráfico de texto livre para anotações no esquemático."
+  }
+}
+
+===== graphics.rectangle =====
+{
+  "typeId": "graphics.rectangle",
+  "label": "Rectangle",
+  "pinCount": 0,
+  "icon": "graphic-rectangle",
+  "graphical": true,
+  "folderPath": [
+    "Graphical"
+  ],
+  "defaultProperties": {
+    "width": 60,
+    "height": 40,
+    "stroke": "#94a3b8",
+    "fill": "none",
+    "strokeWidth": 1
+  },
+  "category": "Graphical",
+  "help": {
+    "description": "Forma gráfica retangular sem função elétrica."
+  }
+}
+
+===== graphics.ellipse =====
+{
+  "typeId": "graphics.ellipse",
+  "label": "Ellipse",
+  "pinCount": 0,
+  "icon": "graphic-ellipse",
+  "graphical": true,
+  "folderPath": [
+    "Graphical"
+  ],
+  "defaultProperties": {
+    "width": 40,
+    "height": 40,
+    "stroke": "#94a3b8",
+    "fill": "none"
+  },
+  "category": "Graphical",
+  "help": {
+    "description": "Forma gráfica elíptica sem função elétrica."
+  }
+}
+
+===== graphics.line =====
+{
+  "typeId": "graphics.line",
+  "label": "Line",
+  "pinCount": 0,
+  "icon": "graphic-line",
+  "graphical": true,
+  "folderPath": [
+    "Graphical"
+  ],
+  "defaultProperties": {
+    "length": 40,
+    "stroke": "#94a3b8"
+  },
+  "category": "Graphical",
+  "help": {
+    "description": "Linha gráfica sem função elétrica, usada para anotações visuais."
+  }
+}
+

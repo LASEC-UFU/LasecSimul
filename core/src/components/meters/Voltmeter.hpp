@@ -7,9 +7,10 @@
 namespace lasecsimul::components {
 
 /**
- * Voltímetro de alta impedância: 1 MΩ entre os terminais (kLeft/kRight), leitura V(+) − V(−).
- * kOut reproduz a leitura como tensão analógica (mesmo padrão do Ampmeter/Probe — outros
- * componentes podem ler esse pino).
+ * Voltímetro de alta impedância: 10 MΩ entre os terminais (kLeft/kRight), leitura V(+) − V(−) --
+ * `high_imp=1e7` real (`voltmeter.cpp:29`, `e-element.h:37`), corrigido 2026-07-13 (auditoria de
+ * dispositivos -- estava 1e-6/1MΩ, 10x abaixo do real). kOut reproduz a leitura como tensão
+ * analógica (mesmo padrão do Ampmeter/Probe — outros componentes podem ler esse pino).
  */
 class Voltmeter final : public IComponentModel {
 public:
@@ -52,7 +53,7 @@ private:
     static constexpr size_t kLeft  = 0;
     static constexpr size_t kRight = 1;
     static constexpr size_t kOut   = 2;
-    static constexpr double kInputConductance = 1e-6; // 1 MΩ
+    static constexpr double kInputConductance = 1e-7; // 10 MΩ (real: 1e7 ohm, voltmeter.cpp:29)
     static constexpr double kOutConductance   = 1e9;
 
     std::array<Pin, 3> m_pins;
