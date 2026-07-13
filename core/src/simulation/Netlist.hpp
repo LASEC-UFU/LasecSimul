@@ -198,6 +198,13 @@ public:
         return m_componentPinSlots.at(componentIndex);
     }
 
+    bool isPinExternallyConnected(uint32_t componentIndex, const std::string& pinId) const {
+        const uint32_t slot = m_componentPinSlots.at(componentIndex).at(pinId);
+        if (!m_tunnelNameBySlot[slot].empty()) return true;
+        return std::any_of(m_wireEdges.begin(), m_wireEdges.end(),
+                           [slot](const auto& edge) { return edge.first == slot || edge.second == slot; });
+    }
+
     /** Recomputa tudo do zero — só deve ser chamado quando a topologia muda (fio/túnel/componente
      * adicionado ou removido), nunca a cada passo de simulação. `extraVarCountByComponent` (mesma
      * ordem/índice de componentIndex que registerComponent) vem de

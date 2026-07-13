@@ -174,6 +174,16 @@ uint32_t SimulationSession::addComponent(const std::string& typeId, const regist
         instance = m_components.create(typeId, params);
     }
 
+    // Caminho único de hidratação: toda propriedade declarada é reaplicada pelo descriptor da
+    // instância. Assim factories só precisam dos argumentos indispensáveis ao construtor e nenhum
+    // medidor perde campos ao reabrir um projeto.
+    for (PropertyDescriptor& descriptor : instance->propertyDescriptors()) {
+        const auto value = params.properties.find(descriptor.name);
+        if (value != params.properties.end() && propertyKindMatches(value->second, descriptor.schema.valueKind)) {
+            descriptor.set(value->second);
+        }
+    }
+
     const uint32_t componentIndex = static_cast<uint32_t>(m_componentInstances.size());
 
     std::vector<std::string> pinIds;
@@ -201,17 +211,33 @@ void SimulationSession::connectWire(uint32_t componentA, const std::string& pinI
         constexpr std::string_view prefix{"pin-"};
         if (!pinId.starts_with(prefix)) throw std::out_of_range("pin inexistente: " + pinId);
         size_t consumed = 0;
-        const unsigned long oneBased = std::stoul(pinId.substr(prefix.size()), &consumed);
+        unsigned long oneBased = 0;
+        try { oneBased = std::stoul(pinId.substr(prefix.size()), &consumed); }
+        catch (const std::exception&) { throw std::out_of_range("pin inexistente: " + pinId); }
         if (consumed != pinId.size() - prefix.size() || oneBased == 0)
             throw std::out_of_range("pin inexistente: " + pinId);
         const std::span<Pin> pins = m_componentInstances.at(component)->pins();
         if (oneBased > pins.size()) throw std::out_of_range("pin inexistente: " + pinId);
         return slots.at(pins[oneBased - 1].id);
     };
-    const uint32_t slotA = resolveSlot(componentA, pinIdA);
-    const uint32_t slotB = resolveSlot(componentB, pinIdB);
+    const auto resolveEndpoint = [&](uint32_t component, const std::string& pinId) {
+        std::vector<uint32_t> slots;
+        if (const auto busPins = m_componentInstances.at(component)->busEndpointPinIds(pinId)) {
+            slots.reserve(busPins->size());
+            for (const std::string& bitPin : *busPins) slots.push_back(resolveSlot(component, bitPin));
+        } else {
+            slots.push_back(resolveSlot(component, pinId));
+        }
+        return slots;
+    };
+    const std::vector<uint32_t> slotsA = resolveEndpoint(componentA, pinIdA);
+    const std::vector<uint32_t> slotsB = resolveEndpoint(componentB, pinIdB);
+    if (slotsA.size() != slotsB.size()) {
+        throw std::invalid_argument("larguras de barramento incompatíveis: " + std::to_string(slotsA.size()) +
+                                    " e " + std::to_string(slotsB.size()));
+    }
     const bool wasDirty = m_topologyDirty;
-    m_netlist.connectWire(slotA, slotB);
+    for (size_t i = 0; i < slotsA.size(); ++i) m_netlist.connectWire(slotsA[i], slotsB[i]);
     m_topologyDirty = true;
     if (!wasDirty) m_topologyReuseSafe = true;
     ++m_wireTopologyRevision;
@@ -221,9 +247,22 @@ bool SimulationSession::disconnectWire(uint32_t componentA, const std::string& p
                                         const std::string& pinIdB) {
     if (m_netlist.isComponentRemoved(componentA) || m_netlist.isComponentRemoved(componentB))
         throw std::invalid_argument("SimulationSession::disconnectWire: componente removido");
-    const uint32_t slotA = m_netlist.pinSlotsOf(componentA).at(pinIdA);
-    const uint32_t slotB = m_netlist.pinSlotsOf(componentB).at(pinIdB);
-    const bool removed = m_netlist.disconnectWire(slotA, slotB);
+    const auto endpointSlots = [&](uint32_t component, const std::string& pinId) {
+        std::vector<uint32_t> slots;
+        const auto& byId = m_netlist.pinSlotsOf(component);
+        if (const auto busPins = m_componentInstances.at(component)->busEndpointPinIds(pinId)) {
+            for (const std::string& bitPin : *busPins) slots.push_back(byId.at(bitPin));
+        } else {
+            slots.push_back(byId.at(pinId));
+        }
+        return slots;
+    };
+    const std::vector<uint32_t> slotsA = endpointSlots(componentA, pinIdA);
+    const std::vector<uint32_t> slotsB = endpointSlots(componentB, pinIdB);
+    if (slotsA.size() != slotsB.size())
+        throw std::invalid_argument("larguras de barramento incompatíveis ao desconectar");
+    bool removed = false;
+    for (size_t i = 0; i < slotsA.size(); ++i) removed = m_netlist.disconnectWire(slotsA[i], slotsB[i]) || removed;
     if (removed) { m_topologyDirty = true; m_topologyReuseSafe = false; ++m_wireTopologyRevision; }
     return removed;
 }
@@ -331,6 +370,15 @@ std::optional<PropertySchema> SimulationSession::propertySchemaOf(uint32_t compo
     return std::nullopt;
 }
 
+std::optional<PropertyValue> SimulationSession::propertyValueOf(uint32_t component,
+                                                                  const std::string& propertyName) const {
+    if (component >= m_componentInstances.size() || !m_componentInstances[component]) return std::nullopt;
+    for (PropertyDescriptor& descriptor : m_componentInstances[component]->propertyDescriptors()) {
+        if (descriptor.name == propertyName) return descriptor.get();
+    }
+    return std::nullopt;
+}
+
 void SimulationSession::removeComponent(uint32_t componentIndex) {
     IComponentModel* instance = m_componentInstances.at(componentIndex).get();
     if (!instance) return; // já removido, idempotente
@@ -376,7 +424,24 @@ SubcircuitExpansionResult SimulationSession::expandSubcircuit(const std::string&
             if (!primaryMcuInstanceId && nested.primaryMcuInstanceId) primaryMcuInstanceId = nested.primaryMcuInstanceId;
             continue; // sem componentIndexByLocalId pra ele: wires nunca miram um subcircuito direto
         }
-        const registry::ComponentParams params = paramsFromPropertiesJson(compDef.propertiesJson);
+        registry::ComponentParams params = paramsFromPropertiesJson(compDef.propertiesJson);
+        // Subcircuitos armazenam endpoints nos wires, não uma cópia redundante de `pinList` em
+        // cada componente. Reconstitui primeiro pelos metadados e completa com todo ID realmente
+        // referenciado. Isso preserva IDs semânticos (pin-P1, GPIO23...) sem fallback hardcoded.
+        if (const registry::ComponentMetadata* metadata = m_globalCache.metadata().find(compDef.typeId)) {
+            params.pinList = metadata->pinSpec ? resolveDynamicPins(*metadata->pinSpec, params.properties)
+                                               : metadata->pins;
+        }
+        const auto appendReferencedPin = [&](const std::string& id) {
+            if (id.empty()) return;
+            const bool exists = std::any_of(params.pinList.begin(), params.pinList.end(),
+                                            [&](const Pin& pin) { return pin.id == id; });
+            if (!exists) params.pinList.push_back(Pin{id});
+        };
+        for (const registry::SubcircuitWireDef& wire : def->wires) {
+            if (wire.fromComponentId == compDef.id) appendReferencedPin(wire.fromPinId);
+            if (wire.toComponentId == compDef.id) appendReferencedPin(wire.toPinId);
+        }
         const uint32_t childIndex = addComponent(compDef.typeId, params);
         componentIndexByLocalId[compDef.id] = childIndex;
         childComponentIndices.push_back(childIndex);
@@ -522,7 +587,13 @@ void SimulationSession::rebuildTopologyIfNeeded() {
 
     std::vector<uint32_t> extraVarCountByComponent(m_componentInstances.size());
     for (size_t i = 0; i < m_componentInstances.size(); ++i) {
-        if (m_componentInstances[i]) extraVarCountByComponent[i] = m_componentInstances[i]->extraVariableCount();
+        if (!m_componentInstances[i]) continue;
+        extraVarCountByComponent[i] = m_componentInstances[i]->extraVariableCount();
+        const std::span<Pin> pins = m_componentInstances[i]->pins();
+        for (size_t local = 0; local < pins.size(); ++local) {
+            m_componentInstances[i]->onPinConnectionChanged(
+                local, m_netlist.isPinExternallyConnected(static_cast<uint32_t>(i), pins[local].id));
+        }
     }
 
     const bool allowReuse = m_topologyReuseSafe;

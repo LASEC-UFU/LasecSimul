@@ -523,6 +523,14 @@ if(NOT WIN32)
 endif()
 add_test(NAME esp32_devkitc_subcircuit COMMAND esp32_devkitc_subcircuit_test)
 
+add_executable(bus_test test/bus_test.cpp ${TEST_COMMON_SOURCES})
+target_include_directories(bus_test PRIVATE include src)
+target_link_libraries(bus_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+if(NOT WIN32)
+    target_link_libraries(bus_test PRIVATE dl)
+endif()
+add_test(NAME bus COMMAND bus_test)
+
 # NAND/NOR/NOT/XNOR via propriedade "inverted" no plugin real (achado de auditoria 2026-07-08) --
 # mesmo padrão real-DLL de esp32_devkitc_subcircuit_test, pra devices/simulide-logic/.
 if(WIN32)

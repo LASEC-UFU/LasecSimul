@@ -362,23 +362,41 @@ void testOscopeRecordsTimestampedHistoryWithWraparound() {
     SimulationSession session(cache);
     registerCommon(session.components());
     session.components().registerFactory("meters.oscope", [&session](const ComponentParams& p) {
-        const auto pos = p.pins<4>();
+        const auto pos = p.pins<5>();
         return std::make_unique<components::Oscope>(
-            session.scheduler(), std::array<Pin, 4>{Pin{pos[0].id.empty() ? "ch0" : pos[0].id},
+            session.scheduler(), std::array<Pin, 5>{Pin{pos[0].id.empty() ? "ch0" : pos[0].id},
                                                      Pin{pos[1].id.empty() ? "ch1" : pos[1].id},
                                                      Pin{pos[2].id.empty() ? "ch2" : pos[2].id},
-                                                     Pin{pos[3].id.empty() ? "ch3" : pos[3].id}});
+                                                     Pin{pos[3].id.empty() ? "ch3" : pos[3].id},
+                                                     Pin{pos[4].id.empty() ? "ref" : pos[4].id}});
     });
     session.components().registerFactory("sources.dc_voltage", [](const ComponentParams& p) {
         return std::make_unique<components::DcVoltageSource>(std::array<Pin, 2>{Pin{"p1"}, Pin{"p2"}}, p.property("voltage", 5.0));
     });
 
-    const uint32_t oscope = session.addComponent("meters.oscope", {});
+    ComponentParams oscopeParams;
+    oscopeParams.properties["filter"] = 0.27;
+    oscopeParams.properties["autoScale"] = false;
+    oscopeParams.properties["tracks"] = 3.0;
+    oscopeParams.properties["sampleIntervalNs"] = 50'000.0;
+    const uint32_t oscope = session.addComponent("meters.oscope", oscopeParams);
+    check(std::get<double>(*session.propertyValueOf(oscope, "filter")) == 0.27 &&
+          !std::get<bool>(*session.propertyValueOf(oscope, "autoScale")) &&
+          std::get<double>(*session.propertyValueOf(oscope, "tracks")) == 3.0 &&
+          std::get<double>(*session.propertyValueOf(oscope, "sampleIntervalNs")) == 50'000.0,
+          "Oscope: todas as propriedades declaradas são hidratadas genericamente ao reabrir");
     const uint32_t source = session.addComponent("sources.dc_voltage", withProp("voltage", 3.3));
     const uint32_t ground = session.addComponent("other.ground", {});
     session.connectWire(source, "p1", oscope, "ch0");
     session.connectWire(source, "p2", ground, "pin");
 
+    for (int i = 0; i < 10 && session.settleStep(); ++i) {}
+    check(nearlyEqual(readF64(session.getComponentState(oscope), 0), 3.3, 1e-6),
+          "Oscope: referência desconectada mantém compatibilidade e mede em relação ao GND");
+
+    const uint32_t reference = session.addComponent("sources.dc_voltage", withProp("voltage", 1.3));
+    session.connectWire(reference, "p1", oscope, "ref");
+    session.connectWire(reference, "p2", ground, "pin");
     for (int i = 0; i < 10 && session.settleStep(); ++i) {}
 
     // Intervalo padrao de amostra e' 50000ns -- avanca de 60000ns em 60000ns (sempre > intervalo,
@@ -393,7 +411,7 @@ void testOscopeRecordsTimestampedHistoryWithWraparound() {
 
     const std::vector<uint8_t> state = session.getComponentState(oscope);
     check(state.size() >= sizeof(double) * 4 + sizeof(uint32_t), "Oscope: getState() devolve pelo menos o cabecalho (4 doubles + contagem)");
-    check(nearlyEqual(readF64(state, 0), 3.3, 1e-6), "Oscope: getState() primeiros 32 bytes = ultima leitura real (ch0=3.3V)");
+    check(nearlyEqual(readF64(state, 0), 2.0, 1e-6), "Oscope: canal mede diferencialmente 3.3V - referência 1.3V = 2.0V");
 
     const uint32_t sampleCount = readU32(state, sizeof(double) * 4);
     check(sampleCount == components::Oscope::kHistoryCapacity,
@@ -405,7 +423,7 @@ void testOscopeRecordsTimestampedHistoryWithWraparound() {
     const uint64_t lastTimestamp = readU64(state, historyOffset + (sampleCount - 1) * 16);
     check(secondTimestamp > firstTimestamp, "Oscope: timestamps do historico avancam em ordem cronologica (tempo SIMULADO real)");
     check(lastTimestamp > firstTimestamp, "Oscope: timestamp mais recente > timestamp mais antigo ainda no buffer");
-    check(nearlyEqual(readF64(state, historyOffset + 8), 3.3, 1e-6), "Oscope: valor gravado no historico bate com a tensao real (3.3V)");
+    check(nearlyEqual(readF64(state, historyOffset + 8), 2.0, 1e-6), "Oscope: histórico preserva a leitura diferencial de 2.0V");
     std::printf("[info] Oscope: %u amostras, timestamps [%llu .. %llu] ns (passo nominal %lluns)\n",
                 sampleCount, static_cast<unsigned long long>(firstTimestamp), static_cast<unsigned long long>(lastTimestamp),
                 static_cast<unsigned long long>(kStepNs));

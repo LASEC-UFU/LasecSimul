@@ -177,6 +177,7 @@ public:
     std::optional<uint32_t> findSubcircuitChildByLocalId(uint32_t subcircuitInstanceId, const std::string& localId) const;
 
     std::optional<PropertySchema> propertySchemaOf(uint32_t component, const std::string& propertyName) const;
+    std::optional<PropertyValue> propertyValueOf(uint32_t component, const std::string& propertyName) const;
 
     /** Chamado pelo Scheduler (na thread dele, já com o mutex do Scheduler tomado — ver
      * Scheduler.cpp). Não chamar diretamente fora desse contexto. */

@@ -111,6 +111,40 @@ import { createEmptyProject } from "../../src/project/ProjectTypes";
   // valor default pra quem nunca teve essa referência.
   assert.strictEqual(labeledRoundTrip.components[0]?.subcircuitRef, undefined);
 
+  // Propriedades de medidores são um mapa aberto e devem sobreviver sem whitelist por typeId.
+  const meterProject = createEmptyProject();
+  const meterProperties: Record<string, Record<string, string | number | boolean>> = {
+    "meters.oscope": { filter: 0.27, autoScale: false, tracks: 3, sampleIntervalNs: 12345,
+      timebase: 0.002, trigger: "channel2", offset: -1.25, channel1Color: "#12ab34" },
+    "meters.probe": { threshold: 1.8, negativeThreshold: 0.7, showVolt: false, pauseOnChange: true },
+    "meters.logic_analyzer": { thresholdRising: 3.1, thresholdFalling: 1.4, sampleIntervalNs: 3210 },
+    "meters.freqmeter": { filter: 0.42 },
+    "meters.ampmeter": { resistance: 0.015 },
+    "instruments.voltmeter": { unit: "mV", gain: 1000, min: -2500, max: 2500 },
+  };
+  for (const [typeId, properties] of Object.entries(meterProperties)) {
+    meterProject.components.push({ id: `meter-${meterProject.components.length}`, typeId, properties });
+  }
+  const metersPath = path.join(tmpDir, "meters-roundtrip.lsproj");
+  await serializer.save(metersPath, meterProject);
+  const metersRoundTrip = await serializer.load(metersPath);
+  for (const component of metersRoundTrip.components) {
+    assert.deepStrictEqual(component.properties, meterProperties[component.typeId], `${component.typeId} perdeu propriedades no round-trip`);
+  }
+
+  const geometryProject = createEmptyProject();
+  const geometryTypes = ["active.diode", "active.zener", "active.opamp", "active.comparator",
+    "active.volt_regulator", "passive.potentiometer", "passive.resistor_dip"];
+  geometryTypes.forEach((typeId, index) => geometryProject.components.push({
+    id: `geometry-${index}`, typeId, properties: {},
+    visual: { x: 20 + index * 11, y: 30 + index * 7, rotation: ([0, 90, 180, 270] as const)[index % 4] },
+  }));
+  const geometryPath = path.join(tmpDir, "geometry-roundtrip.lsproj");
+  await serializer.save(geometryPath, geometryProject);
+  const geometryRoundTrip = await serializer.load(geometryPath);
+  assert.deepStrictEqual(geometryRoundTrip.components.map((component) => component.visual),
+    geometryProject.components.map((component) => component.visual), "posição/rotação geométrica mudou após salvar e reabrir");
+
   // `subcircuitRef` sem `path` (malformado) é ignorado, não quebra o load do resto do componente.
   const malformedRefPath = path.join(tmpDir, "malformed-subcircuit-ref.lsproj");
   await fs.writeFile(

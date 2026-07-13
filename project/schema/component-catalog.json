@@ -2190,7 +2190,7 @@
           {
             "id": "pin-1",
             "x": 5,
-            "y": 0,
+            "y": 28,
             "angle": 180,
             "length": 5,
             "leadEndTrim": 0.7,
@@ -2203,7 +2203,7 @@
           {
             "id": "pin-2",
             "x": 16,
-            "y": 8,
+            "y": 36,
             "angle": 90,
             "length": 8,
             "leadEndTrim": 0.7,
@@ -2216,7 +2216,7 @@
           {
             "id": "pin-3",
             "x": 27,
-            "y": 0,
+            "y": 28,
             "angle": 0,
             "length": 5,
             "leadEndTrim": 0.7,
@@ -2572,8 +2572,8 @@
         "pins": [
           {
             "id": "pin-1",
-            "x": 7,
-            "y": 0,
+            "x": 1,
+            "y": 6,
             "angle": 180,
             "length": 7,
             "leadEndTrim": 0.7,
@@ -2581,8 +2581,8 @@
           },
           {
             "id": "pin-2",
-            "x": 25,
-            "y": 0,
+            "x": 19,
+            "y": 6,
             "angle": 0,
             "length": 7,
             "leadEndTrim": 0.7,
@@ -2590,8 +2590,8 @@
           },
           {
             "id": "pin-3",
-            "x": 7,
-            "y": 8,
+            "x": 1,
+            "y": 14,
             "angle": 180,
             "length": 7,
             "leadEndTrim": 0.7,
@@ -2599,8 +2599,8 @@
           },
           {
             "id": "pin-4",
-            "x": 25,
-            "y": 8,
+            "x": 19,
+            "y": 14,
             "angle": 0,
             "length": 7,
             "leadEndTrim": 0.7,
@@ -2608,8 +2608,8 @@
           },
           {
             "id": "pin-5",
-            "x": 7,
-            "y": 16,
+            "x": 1,
+            "y": 22,
             "angle": 180,
             "length": 7,
             "leadEndTrim": 0.7,
@@ -2617,8 +2617,8 @@
           },
           {
             "id": "pin-6",
-            "x": 25,
-            "y": 16,
+            "x": 19,
+            "y": 22,
             "angle": 0,
             "length": 7,
             "leadEndTrim": 0.7,
@@ -2626,8 +2626,8 @@
           },
           {
             "id": "pin-7",
-            "x": 7,
-            "y": 24,
+            "x": 1,
+            "y": 30,
             "angle": 180,
             "length": 7,
             "leadEndTrim": 0.7,
@@ -2635,8 +2635,8 @@
           },
           {
             "id": "pin-8",
-            "x": 25,
-            "y": 24,
+            "x": 19,
+            "y": 30,
             "angle": 0,
             "length": 7,
             "leadEndTrim": 0.7,
@@ -2644,8 +2644,8 @@
           },
           {
             "id": "pin-9",
-            "x": 7,
-            "y": 32,
+            "x": 1,
+            "y": 38,
             "angle": 180,
             "length": 7,
             "leadEndTrim": 0.7,
@@ -2653,8 +2653,8 @@
           },
           {
             "id": "pin-10",
-            "x": 25,
-            "y": 32,
+            "x": 19,
+            "y": 38,
             "angle": 0,
             "length": 7,
             "leadEndTrim": 0.7,
@@ -2662,8 +2662,8 @@
           },
           {
             "id": "pin-11",
-            "x": 7,
-            "y": 40,
+            "x": 1,
+            "y": 46,
             "angle": 180,
             "length": 7,
             "leadEndTrim": 0.7,
@@ -2671,8 +2671,8 @@
           },
           {
             "id": "pin-12",
-            "x": 25,
-            "y": 40,
+            "x": 19,
+            "y": 46,
             "angle": 0,
             "length": 7,
             "leadEndTrim": 0.7,
@@ -2680,8 +2680,8 @@
           },
           {
             "id": "pin-13",
-            "x": 7,
-            "y": 48,
+            "x": 1,
+            "y": 54,
             "angle": 180,
             "length": 7,
             "leadEndTrim": 0.7,
@@ -2689,8 +2689,8 @@
           },
           {
             "id": "pin-14",
-            "x": 25,
-            "y": 48,
+            "x": 19,
+            "y": 54,
             "angle": 0,
             "length": 7,
             "leadEndTrim": 0.7,
@@ -2698,8 +2698,8 @@
           },
           {
             "id": "pin-15",
-            "x": 7,
-            "y": 56,
+            "x": 1,
+            "y": 62,
             "angle": 180,
             "length": 7,
             "leadEndTrim": 0.7,
@@ -2707,8 +2707,8 @@
           },
           {
             "id": "pin-16",
-            "x": 25,
-            "y": 56,
+            "x": 19,
+            "y": 62,
             "angle": 0,
             "length": 7,
             "leadEndTrim": 0.7,
@@ -3908,10 +3908,11 @@
         "pins": [
           {
             "id": "anode",
-            "x": 6,
-            "y": 0,
+            "x": -6,
+            "y": 8,
             "angle": 180,
-            "length": 6,
+            "length": 8,
+            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": "",
             "aliases": [
@@ -3923,9 +3924,10 @@
           {
             "id": "cathode",
             "x": 26,
-            "y": 0,
+            "y": 8,
             "angle": 0,
-            "length": 6,
+            "length": 9,
+            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": "",
             "aliases": [
@@ -4031,10 +4033,11 @@
         "pins": [
           {
             "id": "anode",
-            "x": 6,
-            "y": 0,
+            "x": -6,
+            "y": 8,
             "angle": 180,
-            "length": 6,
+            "length": 8,
+            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": "",
             "aliases": [
@@ -4046,9 +4049,10 @@
           {
             "id": "cathode",
             "x": 26,
-            "y": 0,
+            "y": 8,
             "angle": 0,
-            "length": 6,
+            "length": 9,
+            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": "",
             "aliases": [
@@ -4134,10 +4138,11 @@
         "pins": [
           {
             "id": "pin-1",
-            "x": 8,
-            "y": 16,
+            "x": -8,
+            "y": 8,
             "angle": 180,
             "length": 8,
+            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": "+",
             "aliases": [
@@ -4149,10 +4154,11 @@
           },
           {
             "id": "pin-2",
-            "x": 8,
-            "y": 32,
+            "x": -8,
+            "y": 24,
             "angle": 180,
             "length": 8,
+            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": "-",
             "aliases": [
@@ -4164,9 +4170,10 @@
           {
             "id": "pin-3",
             "x": 40,
-            "y": 24,
+            "y": 16,
             "angle": 0,
             "length": 8,
+            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": "",
             "aliases": [
@@ -4175,10 +4182,11 @@
           },
           {
             "id": "pin-4",
-            "x": 24,
-            "y": 8,
-            "angle": 270,
+            "x": 16,
+            "y": 0,
+            "angle": 90,
             "length": 8,
+            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": "+",
             "aliases": [
@@ -4190,10 +4198,11 @@
           },
           {
             "id": "pin-5",
-            "x": 24,
-            "y": 40,
-            "angle": 90,
+            "x": 16,
+            "y": 32,
+            "angle": 270,
             "length": 8,
+            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": "-",
             "aliases": [
@@ -4220,14 +4229,15 @@
     {
       "typeId": "active.comparator",
       "label": "Comparator",
-      "pinCount": 5,
+      "pinCount": 3,
       "icon": "opamp",
       "folderPath": [
         "Active",
         "Other Active"
       ],
       "defaultProperties": {
-        "gain": 100000
+        "outputHighVoltage": 5,
+        "inverted": false
       },
       "package": {
         "width": 32,
@@ -4242,7 +4252,7 @@
             "file": "src/components/active/comparator.cpp",
             "className": "Comparator",
             "method": "paint + constructor pins",
-            "notes": "m_area=QRect(-18,-16,36,32); body polygon (-16,-16),(-16,16),(16,1),(16,-1). Inputs at QPoint(-24,-8)/( -24,8), output at QPoint(24,0), supply pins shown here to preserve the 5-pin built-in contract."
+            "notes": "m_area=QRect(-18,-16,36,32); body polygon (-16,-16),(-16,16),(16,1),(16,-1). Inputs at QPoint(-24,-8)/(-24,8), output at QPoint(24,0); Comparator real possui exatamente 3 pinos."
           },
           "bounds": {
             "x": -16,
@@ -4282,10 +4292,11 @@
         "pins": [
           {
             "id": "pin-1",
-            "x": 8,
-            "y": 16,
+            "x": -8,
+            "y": 8,
             "angle": 180,
             "length": 8,
+            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": "+",
             "aliases": [
@@ -4297,10 +4308,11 @@
           },
           {
             "id": "pin-2",
-            "x": 8,
-            "y": 32,
+            "x": -8,
+            "y": 24,
             "angle": 180,
             "length": 8,
+            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": "-",
             "aliases": [
@@ -4312,52 +4324,22 @@
           {
             "id": "pin-3",
             "x": 40,
-            "y": 24,
+            "y": 16,
             "angle": 0,
             "length": 8,
+            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": "",
             "aliases": [
               "output"
             ]
-          },
-          {
-            "id": "pin-4",
-            "x": 24,
-            "y": 8,
-            "angle": 270,
-            "length": 8,
-            "leadEndTrim": 0.7,
-            "label": "+",
-            "aliases": [
-              "powerPos"
-            ],
-            "labelColor": "#c83232",
-            "labelFontSize": 9,
-            "labelSpace": 1.7
-          },
-          {
-            "id": "pin-5",
-            "x": 24,
-            "y": 40,
-            "angle": 90,
-            "length": 8,
-            "leadEndTrim": 0.7,
-            "label": "-",
-            "aliases": [
-              "powerNeg"
-            ],
-            "labelFontSize": 9,
-            "labelSpace": 1.7
           }
         ]
       },
       "pinIds": [
         "pin-1",
         "pin-2",
-        "pin-3",
-        "pin-4",
-        "pin-5"
+        "pin-3"
       ],
       "category": "Active",
       "subcategory": "Other Active",
@@ -4685,10 +4667,11 @@
         "pins": [
           {
             "id": "pin-1",
-            "x": 5,
-            "y": 0,
+            "x": -5,
+            "y": 8,
             "angle": 180,
             "length": 5,
+            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": "I",
             "aliases": [
@@ -4699,9 +4682,10 @@
           {
             "id": "pin-2",
             "x": 27,
-            "y": 0,
+            "y": 8,
             "angle": 0,
             "length": 5,
+            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": "O",
             "aliases": [
@@ -4711,10 +4695,11 @@
           },
           {
             "id": "pin-3",
-            "x": 16,
-            "y": 11,
-            "angle": 90,
+            "x": 11,
+            "y": 24,
+            "angle": 270,
             "length": 5,
+            "leadOrigin": "terminal",
             "leadEndTrim": 0.7,
             "label": "R",
             "aliases": [
@@ -6374,12 +6359,69 @@
     {
       "typeId": "connectors.bus",
       "label": "Bus",
-      "pinCount": 1,
+      "pinCount": 10,
       "icon": "bus",
       "folderPath": [
         "Connectors"
       ],
-      "defaultProperties": {},
+      "defaultProperties": {
+        "width": 8,
+        "startBit": 0
+      },
+      "package": {
+        "width": 24,
+        "height": 64,
+        "border": false,
+        "background": { "kind": "none" },
+        "simulidePaint": {
+          "version": 1,
+          "source": {
+            "file": "src/components/logic/bus.cpp",
+            "className": "Bus",
+            "method": "setNumLines + paint + registerEnode",
+            "notes": "Tronco vertical com Num_Bits linhas escalares; bus-in e bus-out transportam o mesmo vetor, bit-0 e o LSB."
+          },
+          "bounds": { "x": 0, "y": 0, "w": 24, "h": 64 },
+          "defaultStroke": "#303840",
+          "defaultFill": "none",
+          "defaultStrokeWidth": 2,
+          "primitives": [
+            { "kind": "line", "x1": 16, "y1": 0, "x2": 16, "y2": { "prop": "width", "multiplier": 8, "offset": -8 }, "strokeWidth": 3 },
+            {
+              "kind": "repeat",
+              "countProp": "width",
+              "indexName": "i",
+              "stepY": 8,
+              "primitives": [
+                { "kind": "line", "x1": 0, "y1": 0, "x2": 16, "y2": 0, "strokeWidth": 1 }
+              ]
+            }
+          ]
+        },
+        "pins": [
+          { "id": "bus-in", "x": 16, "y": 0, "angle": 90, "length": 1, "leadOrigin": "terminal", "label": "" },
+          { "id": "bus-out", "x": 16, "y": { "prop": "width", "multiplier": 8, "offset": -8 }, "angle": 270, "length": 1, "leadOrigin": "terminal", "label": "" }
+        ],
+        "dynamicLayout": {
+          "height": { "prop": "width", "multiplier": 8, "min": 8 },
+          "replacePins": false,
+          "pinGroups": [
+            {
+              "countProp": "width",
+              "indexName": "i",
+              "idPrefix": "bit-",
+              "idStart": { "prop": "startBit" },
+              "x": 0,
+              "y": { "index": "i", "multiplier": 8 },
+              "angle": 180,
+              "length": 8,
+              "leadOrigin": "terminal",
+              "leadEndTrim": 0.7,
+              "label": ""
+            }
+          ]
+        }
+      },
       "category": "Connectors",
       "help": {
         "description": "Conector gráfico para agrupar ou organizar linhas de sinal no esquemático."
@@ -7380,7 +7422,7 @@
     {
       "typeId": "meters.oscope",
       "label": "Oscope",
-      "pinCount": 4,
+      "pinCount": 5,
       "icon": "osciloscopio",
       "graphical": true,
       "folderPath": [
@@ -7389,7 +7431,8 @@
       "defaultProperties": {
         "filter": 0,
         "autoScale": true,
-        "tracks": 4
+        "tracks": 4,
+        "sampleIntervalNs": 50000
       },
       "help": {
         "description": "Osciloscópio de até 4 canais. Conecte os pinos CH1–CH4 para visualizar formas de onda analógicas em tempo real."
@@ -7465,9 +7508,30 @@
             "label": "",
             "leadOrigin": "terminal",
             "leadEndTrim": 0.7
+          },
+          {
+            "id": "pin-5",
+            "aliases": [
+              "PinG",
+              "reference"
+            ],
+            "x": 0,
+            "y": 137,
+            "angle": 180,
+            "length": 8,
+            "label": "G",
+            "leadOrigin": "terminal",
+            "leadEndTrim": 0.7
           }
         ]
       },
+      "pinIds": [
+        "pin-1",
+        "pin-2",
+        "pin-3",
+        "pin-4",
+        "pin-5"
+      ],
       "category": "Meters"
     },
     {

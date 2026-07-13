@@ -38,22 +38,29 @@ namespace lasecsimul::components {
 class Oscope final : public IComponentModel {
 public:
     static constexpr size_t kChannelCount = 4;
+    static constexpr size_t kPinCount = kChannelCount + 1;
     static constexpr size_t kHistoryCapacity = 512;
 
-    explicit Oscope(simulation::Scheduler& scheduler, std::array<Pin, kChannelCount> pins)
+    explicit Oscope(simulation::Scheduler& scheduler, std::array<Pin, kPinCount> pins)
         : m_scheduler(scheduler), m_pins(std::move(pins)) {}
 
     const char* typeId() const override { return "meters.oscope"; }
     std::span<Pin> pins() override { return m_pins; }
+    void onPinConnectionChanged(size_t pinIndex, bool connected) override {
+        if (pinIndex == kReferencePin) m_referenceConnected = connected;
+    }
 
     void stamp(MnaMatrixView& matrix) override {
         const uint64_t now = m_scheduler.nowNs();
         const bool dueSample = now - m_lastSampleNs >= m_sampleIntervalNs;
+        const double reference = m_referenceConnected ? matrix.getNodeVoltage(m_pins[kReferencePin]) : 0.0;
         for (size_t ch = 0; ch < kChannelCount; ++ch) {
-            m_lastVoltages[ch] = matrix.getNodeVoltage(m_pins[ch]);
-            matrix.addConductanceToGround(m_pins[ch], kInputConductance);
+            m_lastVoltages[ch] = matrix.getNodeVoltage(m_pins[ch]) - reference;
+            if (m_referenceConnected) matrix.addConductance(m_pins[ch], m_pins[kReferencePin], kInputConductance);
+            else matrix.addConductanceToGround(m_pins[ch], kInputConductance);
             if (dueSample) m_history[ch][m_writeIndex] = Sample{now, m_lastVoltages[ch]};
         }
+        matrix.addConductanceToGround(m_pins[kReferencePin], kInputConductance);
         if (dueSample) {
             m_lastSampleNs = now;
             m_writeIndex = (m_writeIndex + 1) % kHistoryCapacity;
@@ -214,7 +221,8 @@ private:
     }
 
     simulation::Scheduler& m_scheduler;
-    std::array<Pin, kChannelCount> m_pins;
+    static constexpr size_t kReferencePin = kChannelCount;
+    std::array<Pin, kPinCount> m_pins;
     std::array<double, kChannelCount> m_lastVoltages{};
     std::array<std::array<Sample, kHistoryCapacity>, kChannelCount> m_history{};
     size_t m_writeIndex = 0;
@@ -224,6 +232,7 @@ private:
     double m_filter = 0.0;
     bool m_autoScale = true;
     int m_tracks = 4;
+    bool m_referenceConnected = false;
 };
 
 } // namespace lasecsimul::components

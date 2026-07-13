@@ -123,7 +123,9 @@ export function materializePinGroup(group: PackageDynamicPinGroup, properties?: 
   const pins: MaterializedPackagePin[] = [];
   for (let index = 0; index < count; index += 1) {
     const context = group.indexName ? { [group.indexName]: index } : { index };
-    const idNumber = Math.max(1, Math.trunc(numericPackageValue(group.idStart, properties, context, 1) + index));
+    // Barramentos usam índice canônico zero-based (`bit-0` = LSB). Grupos que não declaram
+    // `idStart` continuam começando em 1 pelo fallback; um zero explícito não pode ser alterado.
+    const idNumber = Math.max(0, Math.trunc(numericPackageValue(group.idStart, properties, context, 1) + index));
     pins.push({
       id: `${group.idPrefix ?? "pin-"}${idNumber}`,
       x: numericPackageValue(group.x, properties, context),

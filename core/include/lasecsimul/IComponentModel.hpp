@@ -6,6 +6,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 #include "Types.hpp"
 #include "Transient.hpp"
@@ -86,6 +87,16 @@ public:
 
     virtual const char* typeId() const = 0;
     virtual std::span<Pin> pins() = 0;
+
+    /** Um endpoint visual pode representar mais de um pino elétrico (barramento). A ordem do
+     * vetor é a ordem canônica dos bits, do menos significativo para o mais significativo.
+     * Componentes escalares mantêm o default vazio. */
+    virtual std::optional<std::vector<std::string>> busEndpointPinIds(std::string_view) const {
+        return std::nullopt;
+    }
+    /** Notificação de reconstrução topológica; permite que instrumentos tratem um terminal
+     * opcional desconectado sem inferir conectividade a partir de tensão. */
+    virtual void onPinConnectionChanged(size_t, bool) {}
 
     /** Quantas incógnitas extras (correntes de ramo) este componente precisa no CircuitGroup —
      * 0 para tudo que não seja fonte de tensão ideal/dependente. Resolvido uma vez por rebuild de

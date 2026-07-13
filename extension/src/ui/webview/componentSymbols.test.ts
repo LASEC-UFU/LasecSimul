@@ -1198,6 +1198,65 @@ import { PackageDescriptor } from "./model";
     assert((sevenSegment.match(/stroke="#3a1414"/g) ?? []).length >= 8, `outputs.seven_segment deveria desenhar segmentos e ponto pelo package, markup: ${sevenSegment}`);
   });
 
+  await test("terminais dos cinco ativos coincidem com o ponto lógico em todas as rotações", () => {
+    const ids = ["active.diode", "active.zener", "active.opamp", "active.comparator", "active.volt_regulator"];
+    for (const id of ids) {
+      const activePackage = catalogPackage(id);
+      const svg = packageSymbolSvg(id, {}, `geometry-${id}`) ?? "";
+      const box = componentBox(id);
+      for (const [index, declared] of activePackage.pins.entries()) {
+        assert(declared.leadOrigin === "terminal", `${id}.${declared.id}: coordenada deve ser do terminal elétrico`);
+        const logical = pinLocalPosition(declared.id, index, activePackage.pins.length, id);
+        assert(svg.includes(`<line x1="${logical.x.toFixed(1)}" y1="${logical.y.toFixed(1)}"`),
+          `${id}.${declared.id}: lead visual deve iniciar no ponto lógico ${JSON.stringify(logical)}`);
+        for (const angle of [0, 90, 180, 270]) {
+          const rad = angle * Math.PI / 180; const cx = box.width / 2; const cy = box.height / 2;
+          const dx = logical.x - cx; const dy = logical.y - cy;
+          const rx = cx + dx * Math.cos(rad) - dy * Math.sin(rad);
+          const ry = cy + dx * Math.sin(rad) + dy * Math.cos(rad);
+          const inv = -rad;
+          const ix = cx + (rx - cx) * Math.cos(inv) - (ry - cy) * Math.sin(inv);
+          const iy = cy + (rx - cx) * Math.sin(inv) + (ry - cy) * Math.cos(inv);
+          assert(near(ix, logical.x) && near(iy, logical.y), `${id}.${declared.id}: rotação ${angle}° deslocou o terminal`);
+        }
+      }
+    }
+  });
+
+  await test("potenciômetro e resistor DIP alinham corpo, bounds e terminais do SimulIDE", () => {
+    catalogPackage("passive.potentiometer");
+    const potBox = componentBox("passive.potentiometer", { resistance: 10000, position: 0.5 });
+    assert(potBox.width === 32 && potBox.height === 44, `Potentiometer deveria ocupar 32x44, recebido ${JSON.stringify(potBox)}`);
+    const potA = pinLocalPosition("pin-1", 0, 3, "passive.potentiometer");
+    const potM = pinLocalPosition("pin-2", 1, 3, "passive.potentiometer");
+    const potB = pinLocalPosition("pin-3", 2, 3, "passive.potentiometer");
+    assert(near(potA.x, 0) && near(potA.y, 28) && near(potB.x, 32) && near(potB.y, 28), `terminais A/B incorretos: ${JSON.stringify({ potA, potB })}`);
+    assert(near(potM.x, 16) && near(potM.y, 44), `cursor deveria coincidir com QPoint(0,16): ${JSON.stringify(potM)}`);
+
+    catalogPackage("passive.resistor_dip");
+    const dipBox = componentBox("passive.resistor_dip");
+    assert(dipBox.width === 32 && dipBox.height === 68, `ResistorDip deveria ocupar 32x68, recebido ${JSON.stringify(dipBox)}`);
+    for (let pair = 0; pair < 8; pair += 1) {
+      const left = pinLocalPosition(`pin-${pair * 2 + 1}`, pair * 2, 16, "passive.resistor_dip");
+      const right = pinLocalPosition(`pin-${pair * 2 + 2}`, pair * 2 + 1, 16, "passive.resistor_dip");
+      assert(near(left.x, 0) && near(right.x, 32) && near(left.y, 6 + pair * 8) && near(right.y, left.y), `par ${pair} desalinhado: ${JSON.stringify({ left, right })}`);
+    }
+    const dipSvg = packageSymbolSvg("passive.resistor_dip", {}, "dip-geometry") ?? "";
+    assert(dipSvg.includes('transform="translate(6.000,0.000)"') && dipSvg.includes('<rect x="1" y="2" width="18" height="64"'),
+      `corpo DIP deve receber o mesmo offset de layout dos leads, markup: ${dipSvg}`);
+  });
+
+  await test("barramento materializa 8 bits em ordem LSB-first", () => {
+    catalogPackage("connectors.bus");
+    const props = { width: 8, startBit: 0 };
+    for (let bit = 0; bit < 8; bit += 1) {
+      assert(hasRealPinPosition("connectors.bus", `bit-${bit}`, props), `bit-${bit} deveria existir`);
+      const pin = pinLocalPosition(`bit-${bit}`, bit, 10, "connectors.bus", props);
+      assert(near(pin.y, bit * 8), `bit-${bit} fora da ordem LSB-first: ${JSON.stringify(pin)}`);
+    }
+    assert(hasRealPinPosition("connectors.bus", "bus-in", props) && hasRealPinPosition("connectors.bus", "bus-out", props), "endpoints vetoriais devem existir");
+  });
+
   registerPackage("test.example", undefined);
   registerPackage("test.scaled", undefined);
   registerPackage("test.vertical", undefined);

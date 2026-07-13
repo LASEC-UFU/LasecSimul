@@ -161,8 +161,12 @@ public:
     void setRunning(bool running) {
         const bool wasRunning = m_running;
         m_running = running && m_freqHz > 0;
-        m_scheduler.markDirty(m_componentIndex);
-        if (m_running && !wasRunning) scheduleNextToggle(); // religou: reagenda o ciclo
+        // Durante a hidratação inicial de propriedades a instância ainda não recebeu índice.
+        // Nunca encaminhar o sentinela UINT32_MAX ao SparseSet (tentaria alocar bilhões de slots).
+        if (m_componentIndex != kNoIndex) {
+            m_scheduler.markDirty(m_componentIndex);
+            if (m_running && !wasRunning) scheduleNextToggle(); // religou: reagenda o ciclo
+        }
     }
 
 private:

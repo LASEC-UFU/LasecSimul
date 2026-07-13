@@ -3524,3 +3524,114 @@ Por ordem de valor esperado:
    dinâmico pra motor/lâmpada/LED de uma vez, resolvendo o achado transversal da seção 29.1.
 5. `connectors.bus` como componente real (fan-out multi-bit) -- maior gap funcional isolado
    encontrado.
+
+### 29.8 Errata normativa e fechamento das pendencias prioritarias (2026-07-13)
+
+Esta secao registra o estado final posterior a 29.4--29.7 e **substitui expressamente** as indicacoes
+de pendencia e os resultados de testes ali documentados para os itens abaixo. As secoes anteriores
+permanecem apenas como historico da auditoria e da investigacao.
+
+#### 29.8.1 Geometria e referencia de coordenadas
+
+Confirmou-se que a causa raiz do deslocamento visual nao era uma translacao arbitraria do renderer,
+mas a mistura de duas convencoes no catalogo: algumas coordenadas descreviam a origem do corpo do
+lead e outras ja descreviam o terminal eletrico. O renderer respeitava a declaracao recebida; portanto,
+a correcao correta foi tornar a referencia explicita por componente.
+
+- `active.diode`, `active.zener`, `active.opamp`, `active.comparator` e
+  `active.volt_regulator` agora usam `leadOrigin: "terminal"` e as coordenadas dos terminais reais
+  do SimulIDE. O ponto visual e o ponto logico coincidem nas rotacoes 0, 90, 180 e 270 graus.
+- `active.comparator` deixou de reutilizar o modelo de `OpAmp` de cinco pinos. Passou a ser um
+  comparador real de tres pinos (`in+`, `in-`, `out`), com `outputHighVoltage` e `inverted` ligados
+  ao comportamento eletrico.
+- `passive.potentiometer` teve os dois terminais laterais e o terminal do cursor alinhados ao desenho
+  real; `passive.resistor_dip` teve as origens de corpo/lead corrigidas e normalizadas pelo bounds.
+- Rotacao, posicao e propriedades desses tipos continuam persistidas e reconstruidas sem alterar a
+  topologia eletrica.
+
+As coordenadas foram derivadas diretamente das fontes do SimulIDE para diodo, amplificador
+operacional, comparador, regulador, potenciometro e resistor DIP, e validadas pelo mesmo resolvedor
+usado pela Webview, incluindo limites do simbolo e coincidencia terminal/logica.
+
+#### 29.8.2 Barramento funcional (`connectors.bus`)
+
+`connectors.bus` deixa de ser um stub decorativo e passa a ser um endpoint vetorial real. A convencao
+normativa e:
+
+- largura configuravel de 1 a 64 bits e propriedade `startBit`;
+- ordem LSB-first: o indice interno 0 representa `bit-startBit`; visualmente o vetor representa
+  `[startBit + width - 1 : startBit]`;
+- `bus-in` e `bus-out` sao aliases vetoriais equivalentes para os mesmos bits escalares ordenados;
+- conexao vetor-vetor exige larguras iguais e expande, na compilacao da topologia, para pares de
+  slots escalares; incompatibilidade de largura e rejeitada com erro explicito;
+- split e merge sao feitos conectando `bit-N` individualmente ou conectando os endpoints vetoriais;
+- bits desconectados permanecem em nivel baixo pela condutancia de fuga do modelo, sem estado
+  indefinido; a leitura de estado expoe uma mascara digital de 64 bits com limiar de 2,5 V;
+- alteracoes de `width` ou `startBit` afetam pinagem/topologia e exigem a recompilacao normal do
+  grafo; conexao, desconexao e rebuild preservam o mapeamento deterministico;
+- largura, bit inicial e fios sao persistidos pelo mecanismo generico do projeto. A representacao
+  visual gera `bit-0` corretamente (sem o antigo fallback indevido para `bit-1`).
+
+Essa solucao evita copiar valores por evento entre objetos: o barramento e resolvido para os mesmos
+nos/slots escalares na topologia MNA, mantendo o caminho de simulacao compacto e sem alocacao por
+passo.
+
+#### 29.8.3 Osciloscopio e persistencia generica de instrumentos
+
+`meters.oscope` agora possui os cinco pinos do SimulIDE: quatro canais e a referencia comum. Quando o
+quinto pino esta conectado, cada canal mede `V(canal) - V(ref)` e os companions de entrada sao
+carimbados entre canal e referencia. Quando ele esta desconectado, o comportamento legado e mantido:
+a referencia equivale ao GND, evitando quebrar projetos antigos de quatro fios.
+
+A hidratacao inicial de propriedades em `SimulationSession::addComponent` foi generalizada: todo
+parametro cujo nome corresponda a um descritor do componente e aplicado ao modelo. Com isso,
+`filter`, `autoScale`, `tracks`, `sampleIntervalNs` e as propriedades equivalentes dos demais meters
+nao dependem mais de whitelists por fabrica e sobrevivem ao ciclo salvar/carregar.
+
+#### 29.8.4 Subcircuitos, identificadores semanticos e ciclo de vida
+
+A falha de `esp32_devkitc_subcircuit_test` foi eliminada. A causa raiz era a perda de `pinList` antes
+da instanciacao do componente interno: os fios conservavam identificadores como `pin-P1`, mas o
+netlist so possuia a pinagem generica reconstruida. A expansao de subcircuito agora recompõe a lista
+de pinos a partir dos metadados, da especificacao de pinos e de todos os identificadores semanticos
+referenciados pelos fios antes de criar o modelo. O fallback numerico de `connectWire` tambem valida
+o sufixo e retorna erro de pino inexistente, em vez de deixar escapar `std::stoul`.
+
+Durante a validacao foi encontrada e corrigida uma segunda causa independente: a hidratacao generica
+podia aplicar `Clock.alwaysOn` antes de o componente receber um indice, marcando `UINT32_MAX` como
+dirty e fazendo a estrutura esparsa tentar crescer excessivamente. `Clock` agora agenda/marca apenas
+depois de ter indice valido. O pool de memoria deixa de ser pressionado por essa inicializacao.
+
+#### 29.8.5 Contratos de arquitetura
+
+O contrato de componente ganhou dois pontos deliberadamente pequenos e gerais:
+
+- `busEndpointPinIds(endpoint)` descreve, quando aplicavel, a expansao ordenada de um endpoint
+  vetorial; componentes escalares continuam retornando vazio e nao sofrem custo adicional;
+- `onPinConnectionChanged(pinIndex, connected)` informa o estado de conexao externa apos cada rebuild,
+  permitindo ao osciloscopio escolher referencia diferencial ou compatibilidade com GND sem consultar
+  objetos da interface.
+
+Esses contratos mantem a resolucao no Core, separada da Webview, e nao introduzem `new`, tarefas ou
+IPC no loop de simulacao.
+
+#### 29.8.6 Validacao final que substitui 29.6
+
+- build completo do Core em Debug concluido com sucesso (MSVC, paralelismo 2);
+- suite completa do Core: **41/41 testes passando**, incluindo o teste ESP32/subcircuito antes
+  vermelho e a nova cobertura de barramento;
+- barramento coberto por padrao de 8 bits `0xA5`, leitura/escrita por bit, vetor de mesma largura,
+  rejeicao 8-vs-4, split/merge, desconexao/reconexao, rebuild e mascara de estado;
+- osciloscopio coberto em modo legado (referencia desconectada) e diferencial (`3,3 - 1,3 = 2,0 V`),
+  alem de historico e hidratacao de propriedades;
+- suite completa da Extension concluida sem falhas, com os tres tsconfigs compilando; testes do
+  renderer de simbolos: **58/58 passando**, incluindo os cinco ativos nas quatro rotacoes, as duas
+  geometrias passivas e os bits visuais do barramento;
+- serializacao cobre round-trip generico das propriedades de todos os meters e round-trip de
+  posicao/rotacao das geometrias alteradas.
+
+Nao restam pendencias funcionais dentro do escopo solicitado nesta rodada: geometria dos cinco ativos
+e dos dois passivos, barramento multi-bit, referencia diferencial do osciloscopio, persistencia de
+meters e falha do subcircuito ESP32 estao implementados e cobertos. Itens mais amplos ja listados em
+29.5 (por exemplo telemetria visual generica de motores/lampadas ou novas propriedades de familias
+reativas) continuam sendo evolucoes separadas e nao bloqueiam este fechamento.

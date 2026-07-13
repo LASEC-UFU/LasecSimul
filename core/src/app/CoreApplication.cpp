@@ -10,6 +10,7 @@
 #include "../components/SimulideBuiltins.hpp"
 #include "../components/active/Diode.hpp"
 #include "../components/active/OpAmp.hpp"
+#include "../components/active/Comparator.hpp"
 #include "../components/active/AnalogMux.hpp"
 #include "../components/active/DiodeLegArray.hpp"
 #include "../components/passive/ResistorArray.hpp"
@@ -29,6 +30,7 @@
 #include "../components/sources/VoltSource.hpp"
 #include "../components/sources/WaveGen.hpp"
 #include "../components/connectors/Tunnel.hpp"
+#include "../components/connectors/Bus.hpp"
 #include "../components/logic/Button.hpp"
 #include "../components/other/Ground.hpp"
 #include "../components/passive/Capacitor.hpp"
@@ -187,15 +189,16 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
         std::nullopt, std::nullopt, std::vector<std::string>{"pin"});
 
     reg.registerFactory("connectors.bus", [](const ComponentParams& p) {
-        const auto pos = p.pins<1>();
-        std::vector<Pin> pins{Pin{pos[0].id.empty() ? "pin" : pos[0].id, pos[0].x, pos[0].y}};
-        return std::make_unique<components::SimulidePassiveState>("connectors.bus", std::move(pins), std::vector<PropertySchema>{});
+        const auto schemas = components::Bus::propertySchema();
+        const size_t width = static_cast<size_t>(std::get<double>(propertyOrDefault(p.properties, schemaById(schemas, "width"))));
+        const size_t startBit = static_cast<size_t>(std::get<double>(propertyOrDefault(p.properties, schemaById(schemas, "startBit"))));
+        return std::make_unique<components::Bus>(width, startBit);
     });
     registerBuiltinMetadata(
         "connectors.bus",
         "Barramento",
-        std::vector<PropertySchema>{},
-        R"json({"en":{"name":"Bus"}})json");
+        components::Bus::propertySchema(),
+        R"json({"en":{"name":"Bus","properties":{"width":{"label":"Width","group":"Bus"},"startBit":{"label":"Start bit","group":"Bus"}}}})json");
 
     reg.registerFactory("connectors.socket", [](const ComponentParams& p) {
         return std::make_unique<components::SimulidePassiveState>("connectors.socket", makePinVector(p, 8),
@@ -494,14 +497,12 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
         return std::make_unique<components::OpAmp>(std::array<Pin, 5>{pos[0], pos[1], pos[2], pos[3], pos[4]}, gain);
     });
     registerBuiltinMetadata("active.opamp", "OpAmp", opAmpSchema, englishName("OpAmp"));
-    // Comparador: mesma classe, ganho default bem mais alto (aproxima transição quase digital sem
-    // precisar de um modelo de saturação de trilho separado -- ver OpAmp.hpp).
-    std::vector<PropertySchema> comparatorSchema{
-        components::detail::numberSchema("gain", "Ganho", "", 1e7, 1.0, 1000.0)};
+    const auto comparatorSchema = components::Comparator::propertySchema();
     reg.registerFactory("active.comparator", [comparatorSchema](const ComponentParams& p) {
-        const auto pos = makePinVector(p, 5);
-        const double gain = std::get<double>(propertyOrDefault(p.properties, comparatorSchema.front()));
-        return std::make_unique<components::OpAmp>(std::array<Pin, 5>{pos[0], pos[1], pos[2], pos[3], pos[4]}, gain);
+        const auto pos = makePinVector(p, 3);
+        const double high = std::get<double>(propertyOrDefault(p.properties, schemaById(comparatorSchema, "outputHighVoltage")));
+        const bool inverted = std::get<bool>(propertyOrDefault(p.properties, schemaById(comparatorSchema, "inverted")));
+        return std::make_unique<components::Comparator>(std::array<Pin, 3>{pos[0], pos[1], pos[2]}, high, inverted);
     });
     registerBuiltinMetadata("active.comparator", "Comparator", comparatorSchema, englishName("Comparator"));
 
@@ -854,9 +855,9 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
                             englishName("Frequency Meter"), components::FreqMeter::readoutFormat());
 
     reg.registerFactory("meters.oscope", [&scheduler](const ComponentParams& p) {
-        const auto pos = makePinVector(p, components::Oscope::kChannelCount);
+        const auto pos = makePinVector(p, components::Oscope::kPinCount);
         return std::make_unique<components::Oscope>(
-            scheduler, std::array<Pin, components::Oscope::kChannelCount>{pos[0], pos[1], pos[2], pos[3]});
+            scheduler, std::array<Pin, components::Oscope::kPinCount>{pos[0], pos[1], pos[2], pos[3], pos[4]});
     });
     registerBuiltinMetadata("meters.oscope", "Osciloscópio", components::Oscope::propertySchema(),
                             englishName("Oscilloscope"), components::Oscope::readoutFormat());
