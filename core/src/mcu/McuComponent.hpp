@@ -59,7 +59,8 @@ public:
      * (`CoreApplication.cpp`, `extension/src/mcu/mcuCommands.ts`). `arenaName` deve ser único por
      * instância (várias MCUs no mesmo projeto = várias arenas, nunca uma global). */
     void loadFirmware(const std::filesystem::path& firmwarePath, const std::string& arenaName,
-                      const std::string& qemuBinaryOverride = {});
+                      const std::string& qemuBinaryOverride = {}, McuDebugOptions debug = {});
+    uint16_t gdbPort() const { return m_gdbPort; }
     void stopFirmware();
     bool firmwareRunning() const { return m_controller.isRunning(); }
     std::string qemuLogs() const { return m_controller.qemuLogs(); }
@@ -116,6 +117,9 @@ private:
     bool m_resetPinHigh = true;
     std::filesystem::path m_lastFirmwarePath;
     std::string m_lastArenaName;
+    std::string m_lastQemuBinaryOverride;
+    McuDebugOptions m_lastDebugOptions;
+    uint16_t m_gdbPort = 0;
 };
 
 } // namespace lasecsimul::mcu

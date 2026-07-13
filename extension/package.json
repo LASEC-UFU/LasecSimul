@@ -32,6 +32,11 @@
         "title": "LasecSimul: Stop Simulation"
       },
       {
+        "command": "lasecsimul.debugFirmware",
+        "title": "LasecSimul: Debug Firmware",
+        "icon": "$(debug-alt)"
+      },
+      {
         "command": "lasecsimul.palette.addComponent",
         "title": "LasecSimul: Add Palette Component"
       },
@@ -141,6 +146,40 @@
           "minimum": 0,
           "maximum": 1000,
           "markdownDescription": "Limite de iterações não-lineares por passo de liquidação. `0` = ilimitado. Reduzir pode evitar loops em circuitos oscilatórios, com alguma perda de precisão."
+        },
+        "lasecsimul.simulation.integrationMethod": {
+          "type": "string",
+          "enum": ["automatic", "backwardEuler", "trapezoidal", "gear2"],
+          "default": "automatic",
+          "description": "Método de integração transiente."
+        },
+        "lasecsimul.simulation.adaptiveTimeStep": {
+          "type": "boolean", "default": true,
+          "description": "Adapta e rejeita passos conforme o erro dos estados reativos."
+        },
+        "lasecsimul.simulation.initialStepNs": {
+          "type": "number", "default": 100, "minimum": 1
+        },
+        "lasecsimul.simulation.minimumStepNs": {
+          "type": "number", "default": 1, "minimum": 1
+        },
+        "lasecsimul.simulation.maximumStepNs": {
+          "type": "number", "default": 100000, "minimum": 1
+        },
+        "lasecsimul.simulation.relativeTolerance": {
+          "type": "number", "default": 0.0001, "exclusiveMinimum": 0
+        },
+        "lasecsimul.simulation.absoluteTolerance": {
+          "type": "number", "default": 1e-9, "exclusiveMinimum": 0
+        },
+        "lasecsimul.simulation.telemetryRateHz": {
+          "type": "number", "default": 10, "minimum": 1, "maximum": 60,
+          "description": "Taxa de atualização visual. Leituras são enviadas em lote e não alteram a frequência do solver."
+        },
+        "lasecsimul.debug.gdbPath": {
+          "type": "string",
+          "default": "xtensa-esp32-elf-gdb",
+          "description": "Caminho do GDB compatível com a CPU emulada pelo QEMU."
         },
         "lasecsimul.ui.showComponentIds": {
           "type": "boolean",

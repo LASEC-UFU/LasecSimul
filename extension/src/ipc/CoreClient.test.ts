@@ -167,6 +167,26 @@ const { test, finish } = createTestRunner("CoreClient — testes de IPC");
     await new Promise<void>((r) => srv.close(() => { cleanup(name); r(); }));
   });
 
+  await test("Debug MCU envia porta GDB e comando resume", async () => {
+    const name = `lasecsimul-test-debug-${process.pid}`;
+    const received: RequestEnvelope[] = [];
+    const server = new MockCoreServer(name, PROTOCOL_VERSION, (msg) => {
+      received.push(msg);
+      return { id: msg.id, ok: true, payload: msg.type === "loadMcuFirmware" ? { gdbPort: 3333, debug: true } : {} };
+    });
+    await server.start();
+    const client = new CoreClient(name, { requestTimeoutMs: 1_000 });
+    await client.start();
+    const result = await client.loadMcuFirmware("7", "blink.bin", "qemu.exe", { gdbPort: 3333, startPaused: true });
+    await client.resume();
+    const load = received.find((message) => message.type === "loadMcuFirmware");
+    assert(result.debug && result.gdbPort === 3333, "resposta deve preservar metadados GDB");
+    assert((load?.payload as { gdbPort?: number }).gdbPort === 3333, "payload deve transportar a porta GDB");
+    assert(received.some((message) => message.type === "resume"), "continue DAP deve usar resume");
+    await client.stop();
+    await server.stop();
+  });
+
   const { failed } = finish();
   process.exitCode = failed > 0 ? 1 : 0;
 })();

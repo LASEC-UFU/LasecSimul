@@ -51,6 +51,31 @@ jobs:
           cache: npm
           cache-dependency-path: extension/package-lock.json
 
+      - name: Sync extension version with release tag
+        shell: bash
+        run: |
+          RAW_VERSION="${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}"
+          VERSION="${RAW_VERSION#v}"
+          node -e "
+            const fs = require('fs');
+            const version = process.argv[1];
+
+            const pkgPath = 'extension/package.json';
+            const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+            pkg.version = version;
+            fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+
+            // npm ci valida que package-lock.json bate com package.json -- sem isto aqui, ci falha
+            // com 'package.json and package-lock.json ... are in sync' assim que a versao muda.
+            const lockPath = 'extension/package-lock.json';
+            const lock = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
+            lock.version = version;
+            if (lock.packages && lock.packages[''] ) lock.packages[''].version = version;
+            fs.writeFileSync(lockPath, JSON.stringify(lock, null, 2) + '\n');
+
+            console.log('extension version set to', version);
+          " "$VERSION"
+
       - name: Install extension dependencies
         run: npm --prefix extension ci
 

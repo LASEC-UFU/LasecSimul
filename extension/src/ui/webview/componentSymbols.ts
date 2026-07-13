@@ -274,23 +274,47 @@ const PACKAGE_BY_TYPE_ID = new Map<string, PackageDescriptor>();
  * `resolvedPackageFor` pela propriedade `logicSymbol` da INSTÂNCIA, ver model.ts
  * `WebviewComponentCatalogEntry.logicSymbolPackage`. */
 const LOGIC_SYMBOL_PACKAGE_BY_TYPE_ID = new Map<string, PackageDescriptor>();
+/** Aparência do Modo Placa -- SEM equivalente no SimulIDE real (ver model.ts
+ * `WebviewComponentCatalogEntry.boardPackage` pro porquê). Mapa SEPARADO, escolhido não por
+ * propriedade da instância (como `logicSymbol`) mas por CONTEXTO de renderização (`variant:"board"`
+ * explícito em `resolvedPackageFor`/`componentBox`/`packageSymbolSvg`) -- quem decide o contexto é
+ * `main.ts` (dentro do Modo Placa real, ou no overlay da instância no circuito principal), nunca
+ * este módulo. */
+const BOARD_PACKAGE_BY_TYPE_ID = new Map<string, PackageDescriptor>();
+
+export type PackageVariant = "board";
 
 /** Chamado quando o catálogo chega/atualiza (ver `main.ts`) -- registra o descriptor original.
  * O layout é materializado em `resolvedPackageFor` por instância, porque packages como KeyPad dependem
  * de `properties` (`rows`/`columns`) para largura, altura e pinGroups. `undefined` remove (typeId sem
- * package mais, ou catálogo recarregado do zero). */
-export function registerPackage(typeId: string, pkg: PackageDescriptor | undefined, logicSymbolPkg?: PackageDescriptor): void {
+ * package mais, ou catálogo recarregado do zero). `boardPkg` não exige pino nenhum pra registrar
+ * (guarda mais frouxa que `pkg`/`logicSymbolPkg`) -- ao contrário do esquemático, o Modo Placa nunca
+ * desenha fio/terminal, então uma aparência puramente decorativa (0 pinos) é o caso normal, não uma
+ * entrada malformada. */
+export function registerPackage(typeId: string, pkg: PackageDescriptor | undefined, logicSymbolPkg?: PackageDescriptor, boardPkg?: PackageDescriptor): void {
   if (pkg && (pkg.pins.length > 0 || pkg.dynamicLayout?.pinGroups?.length)) PACKAGE_BY_TYPE_ID.set(typeId, pkg);
   else PACKAGE_BY_TYPE_ID.delete(typeId);
 
   if (logicSymbolPkg && (logicSymbolPkg.pins.length > 0 || logicSymbolPkg.dynamicLayout?.pinGroups?.length)) LOGIC_SYMBOL_PACKAGE_BY_TYPE_ID.set(typeId, logicSymbolPkg);
   else LOGIC_SYMBOL_PACKAGE_BY_TYPE_ID.delete(typeId);
+
+  if (boardPkg) BOARD_PACKAGE_BY_TYPE_ID.set(typeId, boardPkg);
+  else BOARD_PACKAGE_BY_TYPE_ID.delete(typeId);
 }
 
-/** `properties.logicSymbol === true` E existe uma variante Logic Symbol registrada pra este typeId
- * -> usa ela; qualquer outro caso (sem variante, propriedade ausente/falsa, ou sem `properties`
- * nenhuma -- chamadas legadas que só passam typeId) -> cai no `package` padrão de sempre. */
-function resolvedPackageFor(typeId: string, properties?: Record<string, unknown>): ResolvedPackage | undefined {
+/** `variant==="board"` E existe uma aparência de Modo Placa registrada pra este typeId -> usa ela
+ * (nunca combinada com `logicSymbol` -- Modo Placa tem prioridade, é o contexto de renderização
+ * mais específico). Sem variante de Modo Placa registrada pra este typeId, cai no caminho normal
+ * (`logicSymbol`/`package` de sempre) -- Modo Placa reusa a mesma aparência do esquemático, igual
+ * ao comportamento de antes desta funcionalidade existir. `properties.logicSymbol === true` E existe
+ * uma variante Logic Symbol registrada pra este typeId -> usa ela; qualquer outro caso (sem
+ * variante, propriedade ausente/falsa, ou sem `properties` nenhuma -- chamadas legadas que só
+ * passam typeId) -> cai no `package` padrão de sempre. */
+function resolvedPackageFor(typeId: string, properties?: Record<string, unknown>, variant?: PackageVariant): ResolvedPackage | undefined {
+  if (variant === "board") {
+    const boardPackage = BOARD_PACKAGE_BY_TYPE_ID.get(typeId);
+    if (boardPackage) return resolvePackageLayout(materializePackage(boardPackage, properties));
+  }
   if (properties?.logicSymbol === true) {
     const logicSymbolPackage = LOGIC_SYMBOL_PACKAGE_BY_TYPE_ID.get(typeId);
     if (logicSymbolPackage) return resolvePackageLayout(materializePackage(logicSymbolPackage, properties));
@@ -326,8 +350,8 @@ function stateVisibleMatches(stateVisible: PackagePin["stateVisible"] | undefine
  * de sempre, só com `package` real entrando ANTES de symbolSvg).
  * `componentId` é opcional mas necessário para ativar o ViewSpec renderer (gradientes escopados + stateProjection).
  * Chamadas sem `componentId` (ex: testes, paleta) usam o caminho legado `shapes[]`. */
-export function packageSymbolSvg(typeId: string, properties?: Record<string, unknown>, componentId?: string): string | undefined {
-  const resolved = resolvedPackageFor(typeId, properties);
+export function packageSymbolSvg(typeId: string, properties?: Record<string, unknown>, componentId?: string, variant?: PackageVariant): string | undefined {
+  const resolved = resolvedPackageFor(typeId, properties, variant);
   return resolved ? packageBodySvg(resolved, componentId, properties) : undefined;
 }
 
@@ -1198,8 +1222,8 @@ function propertyDrivenBox(typeId: string, properties: Record<string, unknown> |
  * leads que saem fora de `0..width`/`0..height`), nunca da tabela estática abaixo. `properties` (a
  * instância, não o typeId) tem prioridade sobre `package`/tabela estática quando presente -- só os
  * típicos "de autoria de símbolo" (`propertyDrivenBox`) realmente usam isso hoje. */
-export function componentBox(typeId: string, properties?: Record<string, unknown>): ComponentBox {
-  const resolved = resolvedPackageFor(typeId, properties);
+export function componentBox(typeId: string, properties?: Record<string, unknown>, variant?: PackageVariant): ComponentBox {
+  const resolved = resolvedPackageFor(typeId, properties, variant);
   if (resolved) {
     const instanceScale = packageInstanceScale(properties);
     return { width: resolved.width * instanceScale.x, height: resolved.height * instanceScale.y };

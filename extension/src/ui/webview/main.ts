@@ -74,7 +74,7 @@ function normalizeProjectState(raw: WebviewProjectState): WebviewProjectState {
  * importado uma vez, sobrevive a troca de `state`) -- precisa ser re-sincronizado toda vez que o
  * catálogo chega de novo (Épico G: cada item registrado pode trazer um `package` real). */
 function syncPackageRegistry(catalog: WebviewProjectState["catalog"]): void {
-  for (const entry of catalog) registerPackage(entry.typeId, entry.package, entry.logicSymbolPackage);
+  for (const entry of catalog) registerPackage(entry.typeId, entry.package, entry.logicSymbolPackage, entry.boardPackage);
 }
 
 const initialWindowState = (window as WindowWithInitialState).__LASECSIMUL_INITIAL_STATE__;
@@ -389,6 +389,19 @@ function isBoardModeVisible(component: WebviewComponentModel): boolean {
   return isBoardModeVisibleShared(component, (typeId) => catalogEntryFor(typeId)?.graphical === true);
 }
 
+/** Qual variante de `PackageDescriptor` usar pra desenhar `component` AGORA -- `"board"` só quando
+ * o Modo Placa real está ativo (dentro de "Abrir Subcircuito") E o typeId declarou uma aparência
+ * própria pra ele (`catalogEntry.boardPackage`, ver model.ts). Sem isto, cai em `undefined`
+ * (esquemático normal, comportamento de sempre) -- inclui o caso "Modo Placa ligado mas este typeId
+ * não tem `boardPackage`", que continua reusando a MESMA aparência do esquemático (compatibilidade
+ * com typeIds ainda não portados, ver `.spec` seção 27). Não precisa checar `isBoardModeVisible`
+ * aqui: quem chama isto só itera componentes JÁ filtrados por ela (ver `render()`). Usado tanto pelo
+ * Modo Placa de verdade (`updateComponentElement`) quanto pelo overlay da instância no circuito
+ * principal (`renderBoardOverlaysFor`, que está SEMPRE em contexto de Modo Placa por definição). */
+function boardPackageVariantFor(typeId: string): "board" | undefined {
+  return catalogEntryFor(typeId)?.boardPackage ? "board" : undefined;
+}
+
 function syncBoardVisualFromLiveComponents(): void {
   if (!subcircuitBoardMode) return;
   captureBoardTransforms(state.components, isBoardModeVisible);
@@ -571,8 +584,16 @@ function renderBoardOverlaysFor(component: WebviewComponentModel): HTMLElement[]
   for (const item of items) {
     if (!item.exposed || !item.graphical) continue;
     const boardVisual = item.boardVisual ?? { ...fallbackBoardVisualPosition(packageBox, fallbackIndex++), rotation: 0 as const };
-    const properties: Record<string, string | number | boolean> = { closed: false };
-    const box = componentBox(item.typeId, properties);
+    // Estado real (cor/intensidade de LED, `closed` de switch/push, etc.) vem de `item.properties`
+    // (as properties do componente interno de verdade, lidas do `.lssubcircuit` -- ver
+    // `subcircuitInternals.ts::gatherInternalComponentSnapshots`) -- bug real corrigido aqui: antes
+    // este overlay SEMPRE renderizava com `{closed:false}` fixo, ignorando `item.properties` por
+    // inteiro, então um switch com `closed:true` salvo no arquivo aparecia aberto no overlay mesmo
+    // assim. `boardVariant` troca pra aparência de Modo Placa quando este typeId declarou uma
+    // (`.spec` seção 27) -- mesma resolução de `updateComponentElement`, nunca uma 2ª lógica.
+    const properties: Record<string, string | number | boolean> = { closed: false, ...item.properties };
+    const boardVariant = boardPackageVariantFor(item.typeId);
+    const box = componentBox(item.typeId, properties, boardVariant);
     const el = document.createElement("div");
     el.className = "component component--board-overlay";
     el.style.left = `${component.x + boardVisual.x}px`;
@@ -585,7 +606,7 @@ function renderBoardOverlaysFor(component: WebviewComponentModel): HTMLElement[]
     const svg = document.createElementNS(SVG_NS, "svg");
     svg.setAttribute("viewBox", `0 0 ${box.width} ${box.height}`);
     svg.classList.add("component__symbol");
-    svg.innerHTML = packageSymbolSvg(item.typeId, properties, item.id) ?? componentSymbolSvg(item.typeId, properties);
+    svg.innerHTML = packageSymbolSvg(item.typeId, properties, item.id, boardVariant) ?? componentSymbolSvg(item.typeId, properties);
     el.appendChild(svg);
 
     const isPushButton = interactionKindFor(item.typeId) === "momentary";
@@ -4729,7 +4750,25 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
  * do resto do SVG -- sempre frescos, sem risco de capturar `component` desatualizado (diferente dos
  * listeners de `el`, que sobrevivem a vários renders). */
 function updateComponentElement(el: HTMLElement, component: WebviewComponentModel): void {
-  const box = componentBox(component.typeId, component.properties);
+  // Modo Placa (Mecanismo A, `.spec` seção 27): quando este typeId declarou uma aparência própria
+  // (`catalogEntry.boardPackage`) E o Modo Placa está de fato ligado, troca a variante de `package`
+  // resolvida em TODA função de `componentSymbols.ts` chamada abaixo -- nunca no esquemático normal
+  // (`subcircuitBoardMode` só é `true` dentro de "Abrir Subcircuito" com Modo Placa ligado, ver
+  // `setSubcircuitBoardMode`). `boardWidth`/`boardHeight` (tamanho PRÓPRIO do Modo Placa, ver
+  // model.ts) são aplicados reaproveitando o MESMO mecanismo de escala por instância que packages
+  // já usavam (`__simulideSceneScaleX/Y`, ver `componentSymbols.ts::packageInstanceScale`) -- nunca
+  // uma segunda forma de escalar em paralelo.
+  const boardVariant = subcircuitBoardMode ? boardPackageVariantFor(component.typeId) : undefined;
+  let symbolProperties = runtimeSymbolProperties(component);
+  if (boardVariant === "board" && (component.boardWidth !== undefined || component.boardHeight !== undefined)) {
+    const naturalBoardBox = componentBox(component.typeId, symbolProperties, boardVariant);
+    symbolProperties = {
+      ...symbolProperties,
+      ...(component.boardWidth !== undefined && naturalBoardBox.width > 0 ? { __simulideSceneScaleX: component.boardWidth / naturalBoardBox.width } : {}),
+      ...(component.boardHeight !== undefined && naturalBoardBox.height > 0 ? { __simulideSceneScaleY: component.boardHeight / naturalBoardBox.height } : {}),
+    };
+  }
+  const box = componentBox(component.typeId, symbolProperties, boardVariant);
   // Bloco genérico de subcircuito por caminho cujo `.lssubcircuit` não foi encontrado (arquivo
   // movido/apagado, ver `chooseSubcircuitFileCommand`/carregamento de projeto) -- `subcircuitRef`
   // presente mas o typeId atual não tem entrada no catálogo desta sessão.
@@ -4743,7 +4782,6 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
   // em flipPoint/rotatePoint pra calcular posição de pino, ver componentPinLocalPosition.
   const scaleX = component.flipH ? -1 : 1;
   const scaleY = component.flipV ? -1 : 1;
-  const symbolProperties = runtimeSymbolProperties(component);
   const localOrigin = componentLocalOrigin(component.typeId, symbolProperties);
   // Caixa REAL (canvas-local, já rotacionada/espelhada) -- usada pro hit-box do `<div>` (o que o
   // navegador de fato considera clicável) e pro `viewBox`, ver `rotatedComponentLocalBox`. `bodyGroup`
@@ -4778,7 +4816,7 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
   }
   bodyGroup.innerHTML = isMissingSubcircuitRef || isUnknownComponent
     ? missingSubcircuitPlaceholderSvg(box)
-    : packageSymbolSvg(component.typeId, symbolProperties, component.id) ?? catalogEntry?.symbolSvg ?? componentSymbolSvg(component.typeId, symbolProperties);
+    : packageSymbolSvg(component.typeId, symbolProperties, component.id, boardVariant) ?? catalogEntry?.symbolSvg ?? componentSymbolSvg(component.typeId, symbolProperties);
   svg.appendChild(bodyGroup);
   const tunnelLabel = bodyGroup.querySelector<SVGTextElement>(".tunnel-name");
   if (tunnelLabel && (component.flipH || component.flipV)) {
@@ -4804,7 +4842,19 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
     svg.appendChild(overlay);
   }
 
-  component.pins.forEach((pin, index) => {
+  // Modo Placa nunca desenha fio (ver `render()`, `subcircuitBoardMode ? [] : state.topology.conductors`)
+  // -- terminal de pino clicável não tem propósito ali. Gate é `graphical` (igual ao `Component::
+  // setHidden` real: TODO componente `m_graphical` tem os PINOS escondidos no Modo Placa -- ver `.spec`
+  // seção 27.9, correção de 2026-07-12: `boardVariant==="board"` sozinho era gate ERRADO aqui, escondia
+  // pino só nos poucos typeIds com `boardPackage` registrado e deixava todos os OUTROS `m_graphical`
+  // (motores, displays, LEDs etc) com pino visível/clicável no Modo Placa, divergindo do SimulIDE
+  // real). Se ALGUM typeId futuro voltar a ter `boardPackage` (seção 27.10: nenhum tem hoje --
+  // `switches.push`/`switches.switch`/`outputs.led` foram revertidos por serem redundantes com o
+  // package esquemático, que já é físico/dinâmico), esconder o pino junto continua certo pelo mesmo
+  // motivo de sempre: coordenadas de `componentPinLocalPosition` são as do PACKAGE ESQUEMÁTICO, nunca
+  // as do `boardPackage` (forma/tamanho podem divergir).
+  const pinsHiddenInBoardMode = subcircuitBoardMode && catalogEntry?.graphical === true;
+  if (!pinsHiddenInBoardMode) component.pins.forEach((pin, index) => {
     // Pino elétrico real sem lead físico no encapsulamento (ex: GPIO20/24/28-31/UART0_RX/TX do chip
     // ESP32 nu) -- nunca desenha terminal genérico por cima do desenho real dos outros, ver
     // `componentSymbols.ts::hasRealPinPosition`. Continua existindo em `component.pins[]` (contrato

@@ -59,13 +59,13 @@
         "resistance": 10000,
         "__ui_idLabelX": -17,
         "__ui_idLabelY": -33,
-        "__ui_valueLabelX": -7,
-        "__ui_valueLabelY": -16
+        "__ui_valueLabelX": -33,
+        "__ui_valueLabelY": -6
       },
       "visual": {
-        "x": 397.3422486326998,
-        "y": 264.413618507489,
-        "rotation": 0,
+        "x": 473.34224863269986,
+        "y": 208.41361850748896,
+        "rotation": 90,
         "flipH": true,
         "flipV": false
       },
@@ -728,6 +728,21 @@
         "x": 518.1999969482422,
         "y": 103.5,
         "rotation": 90,
+        "flipH": false,
+        "flipV": false
+      },
+      "exposed": false
+    },
+    {
+      "id": "component-1783937576339-406282",
+      "typeId": "outputs.led_bar",
+      "properties": {
+        "size": 1
+      },
+      "visual": {
+        "x": 538.2620346738242,
+        "y": 130.65106705986702,
+        "rotation": 0,
         "flipH": false,
         "flipV": false
       },
@@ -1900,20 +1915,13 @@
   "icon": "board",
   "iconPath": "esp32_devkitc_v4_icon.png",
   "topology": {
-    "revision": 107,
+    "revision": 144,
     "nodes": [
       {
         "id": "junction-1783811970598-570810",
         "position": {
           "x": 490,
           "y": 144
-        }
-      },
-      {
-        "id": "junction-1783812005812-299846",
-        "position": {
-          "x": 456,
-          "y": 270
         }
       },
       {
@@ -1935,6 +1943,27 @@
         "position": {
           "x": 568.3999938964844,
           "y": 480
+        }
+      },
+      {
+        "id": "junction-1783937479328-38781",
+        "position": {
+          "x": 488,
+          "y": 270
+        }
+      },
+      {
+        "id": "junction-1783937482993-68341",
+        "position": {
+          "x": 456,
+          "y": 270
+        }
+      },
+      {
+        "id": "junction-1783937660099-941826",
+        "position": {
+          "x": 528,
+          "y": 130.5
         }
       }
     ],
@@ -2403,37 +2432,6 @@
         }
       },
       {
-        "id": "wire-1783811954653-357048",
-        "from": {
-          "kind": "port",
-          "componentId": "tunnel_EN",
-          "pinId": "pin"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "pullup_en",
-          "pinId": "pin-2"
-        }
-      },
-      {
-        "id": "wire-1783812005812-en-rst-bridge",
-        "from": {
-          "kind": "port",
-          "componentId": "tunnel_EN",
-          "pinId": "pin"
-        },
-        "to": {
-          "kind": "node",
-          "nodeId": "junction-1783812005812-299846"
-        },
-        "points": [
-          {
-            "x": 456,
-            "y": 269.30781881411406
-          }
-        ]
-      },
-      {
         "id": "wire-1783811970598-952794",
         "from": {
           "kind": "node",
@@ -2456,58 +2454,6 @@
           "kind": "node",
           "nodeId": "junction-1783811970598-570810"
         }
-      },
-      {
-        "id": "wire-1783812005812-569598",
-        "from": {
-          "kind": "port",
-          "componentId": "mcu1",
-          "pinId": "RST"
-        },
-        "to": {
-          "kind": "node",
-          "nodeId": "junction-1783812005812-299846"
-        }
-      },
-      {
-        "id": "wire-1783812005812-774226",
-        "from": {
-          "kind": "node",
-          "nodeId": "junction-1783811970598-570810"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "pullup_en",
-          "pinId": "pin-1"
-        },
-        "points": [
-          {
-            "x": 490,
-            "y": 270
-          },
-          {
-            "x": 429.3422486326998,
-            "y": 270
-          }
-        ]
-      },
-      {
-        "id": "wire-1783812005812-134988",
-        "from": {
-          "kind": "port",
-          "componentId": "button_en",
-          "pinId": "pin-1"
-        },
-        "to": {
-          "kind": "node",
-          "nodeId": "junction-1783812005812-299846"
-        },
-        "points": [
-          {
-            "x": 456,
-            "y": 422
-          }
-        ]
       },
       {
         "id": "wire-1783846285946-454624",
@@ -2617,29 +2563,139 @@
         }
       },
       {
-        "id": "wire-1783846373599-696039",
+        "id": "wire-1783937474967-381380",
+        "from": {
+          "kind": "port",
+          "componentId": "pullup_en",
+          "pinId": "pin-2"
+        },
+        "to": {
+          "kind": "node",
+          "nodeId": "junction-1783811970598-570810"
+        },
+        "points": [
+          {
+            "x": 489.34224863269986,
+            "y": 144
+          }
+        ]
+      },
+      {
+        "id": "wire-1783937479328-250182",
+        "from": {
+          "kind": "port",
+          "componentId": "mcu1",
+          "pinId": "RST"
+        },
+        "to": {
+          "kind": "node",
+          "nodeId": "junction-1783937479328-38781"
+        }
+      },
+      {
+        "id": "wire-1783937479328-540948",
+        "from": {
+          "kind": "port",
+          "componentId": "pullup_en",
+          "pinId": "pin-1"
+        },
+        "to": {
+          "kind": "node",
+          "nodeId": "junction-1783937479328-38781"
+        },
+        "points": [
+          {
+            "x": 489.34224863269986,
+            "y": 270
+          }
+        ]
+      },
+      {
+        "id": "wire-1783937482993-386970",
+        "from": {
+          "kind": "node",
+          "nodeId": "junction-1783937479328-38781"
+        },
+        "to": {
+          "kind": "node",
+          "nodeId": "junction-1783937482993-68341"
+        }
+      },
+      {
+        "id": "wire-1783937482993-989517",
+        "from": {
+          "kind": "node",
+          "nodeId": "junction-1783937482993-68341"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "button_en",
+          "pinId": "pin-1"
+        },
+        "points": [
+          {
+            "x": 456,
+            "y": 422
+          }
+        ]
+      },
+      {
+        "id": "wire-1783937482993-849696",
+        "from": {
+          "kind": "port",
+          "componentId": "tunnel_EN",
+          "pinId": "pin"
+        },
+        "to": {
+          "kind": "node",
+          "nodeId": "junction-1783937482993-68341"
+        },
+        "points": [
+          {
+            "x": 456,
+            "y": 269.30781881411406
+          }
+        ]
+      },
+      {
+        "id": "wire-1783937660099-436622",
         "from": {
           "kind": "port",
           "componentId": "tunnel_5v",
           "pinId": "pin"
         },
         "to": {
+          "kind": "node",
+          "nodeId": "junction-1783937660099-941826"
+        }
+      },
+      {
+        "id": "wire-1783937660099-858304",
+        "from": {
+          "kind": "node",
+          "nodeId": "junction-1783937660099-941826"
+        },
+        "to": {
           "kind": "port",
           "componentId": "component-1783345270243-110688",
           "pinId": "pin-1"
+        }
+      },
+      {
+        "id": "wire-1783937660098-805483",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1783937576339-406282",
+          "pinId": "pin-P1"
+        },
+        "to": {
+          "kind": "node",
+          "nodeId": "junction-1783937660099-941826"
         },
         "points": [
           {
             "x": 528,
-            "y": 130.5
-          },
-          {
-            "x": 528,
-            "y": 128
-          },
-          {
-            "x": 528,
-            "y": 121
+            "y": 129.851067059867
           }
         ]
       }

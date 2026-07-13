@@ -76,7 +76,54 @@ std::string tunnelNameFromPropertiesJson(const std::string& propertiesJson) {
 
 SimulationSession::SimulationSession(plugins::GlobalPluginCache& globalCache, size_t componentCapacity)
     : m_globalCache(globalCache), m_pluginRuntime(globalCache),
-      m_scheduler(componentCapacity, [this] { return settleStep(); }) {}
+      m_scheduler(componentCapacity, [this] { return settleStep(); }) {
+    m_scheduler.setTimeStepCallbacks(
+        [this](uint64_t previous, uint64_t current) {
+            const TransientStepContext context{current, current - previous, m_transientSettings.method,
+                                               m_acceptedTransientSteps};
+            for (uint32_t i = 0; i < m_componentInstances.size(); ++i) {
+                IComponentModel* component = m_componentInstances[i].get();
+                if (!component || !component->isReactive()) continue;
+                component->beginTransientStep(context);
+                m_scheduler.dirtySet().insert(i);
+            }
+        },
+        [this](uint64_t previous, uint64_t current, bool eventBoundary) -> simulation::Scheduler::TimeStepDecision {
+            double maximumError = 0.0;
+            if (m_transientSettings.adaptiveTimeStep && !eventBoundary) {
+                for (const auto& component : m_componentInstances) {
+                    if (component && component->isReactive()) {
+                        maximumError = std::max(maximumError, component->transientErrorRatio(
+                            m_transientSettings.absoluteTolerance, m_transientSettings.relativeTolerance));
+                    }
+                }
+            }
+            if (!m_scheduler.lastSettleConvergedUnlocked()) maximumError = std::max(maximumError, 2.0);
+            const bool atMinimumStep = current - previous <= m_transientSettings.minimumStepNs;
+            const bool accept = eventBoundary || atMinimumStep || !m_transientSettings.adaptiveTimeStep || maximumError <= 1.0;
+            for (const auto& component : m_componentInstances) {
+                if (!component || !component->isReactive()) continue;
+                if (accept) component->commitTransientStep();
+                else component->rollbackTransientStep();
+            }
+            if (accept) ++m_acceptedTransientSteps;
+            else ++m_rejectedTransientSteps;
+            return {accept, maximumError};
+        });
+    setTransientSettings(m_transientSettings);
+}
+
+void SimulationSession::setTransientSettings(const TransientSettings& settings) {
+    if (settings.minimumStepNs == 0 || settings.maximumStepNs < settings.minimumStepNs ||
+        settings.initialStepNs < settings.minimumStepNs || settings.initialStepNs > settings.maximumStepNs ||
+        !(settings.relativeTolerance > 0.0) || !(settings.absoluteTolerance > 0.0)) {
+        throw std::invalid_argument("configuracao transiente invalida");
+    }
+    m_transientSettings = settings;
+    m_scheduler.setMaximumTimeStepNs(settings.maximumStepNs);
+    m_scheduler.configureAdaptiveTimeStep(settings.initialStepNs, settings.minimumStepNs, settings.adaptiveTimeStep);
+    m_scheduler.setMaxNonLinearIterations(settings.maximumNewtonIterations);
+}
 
 void SimulationSession::registerKnownPluginTypes() {
     for (const std::string& typeId : m_globalCache.knownDeviceTypeIds()) {
@@ -408,6 +455,7 @@ std::optional<uint32_t> SimulationSession::findSubcircuitChildByLocalId(uint32_t
 }
 
 std::vector<uint8_t> SimulationSession::getComponentState(uint32_t componentIndex) const {
+    return m_scheduler.synchronized([&] {
     IComponentModel* instance = m_componentInstances.at(componentIndex).get();
     if (!instance) throw std::runtime_error("getComponentState: componente removido");
 
@@ -419,6 +467,7 @@ std::vector<uint8_t> SimulationSession::getComponentState(uint32_t componentInde
     const size_t written = instance->getState(buffer.data(), buffer.size());
     buffer.resize(written);
     return buffer;
+    });
 }
 
 PluginHealthStatus SimulationSession::componentHealth(uint32_t componentIndex) const {
@@ -428,19 +477,29 @@ PluginHealthStatus SimulationSession::componentHealth(uint32_t componentIndex) c
 }
 
 std::optional<double> SimulationSession::componentCurrent(uint32_t componentIndex) const {
+    return m_scheduler.synchronized([&]() -> std::optional<double> {
     if (componentIndex >= m_componentInstances.size()) return std::nullopt;
     IComponentModel* instance = m_componentInstances[componentIndex].get();
     if (!instance) return std::nullopt;
     return instance->current();
+    });
 }
 
 void SimulationSession::loadMcuFirmware(uint32_t componentIndex, const std::filesystem::path& firmwarePath,
-                                        const std::string& arenaName, const std::string& qemuBinaryOverride) {
+                                         const std::string& arenaName, const std::string& qemuBinaryOverride,
+                                         McuDebugOptions debug) {
     IComponentModel* instance = m_componentInstances.at(componentIndex).get();
     if (!instance) throw std::runtime_error("loadMcuFirmware: componente removido");
     auto* mcu = dynamic_cast<mcu::McuComponent*>(instance);
     if (!mcu) throw std::runtime_error("loadMcuFirmware: componente nao e MCU/QEMU");
-    mcu->loadFirmware(firmwarePath, arenaName, qemuBinaryOverride);
+    mcu->loadFirmware(firmwarePath, arenaName, qemuBinaryOverride, debug);
+}
+
+void SimulationSession::stopMcuFirmware(uint32_t componentIndex) {
+    IComponentModel* instance = m_componentInstances.at(componentIndex).get();
+    auto* mcu = dynamic_cast<mcu::McuComponent*>(instance);
+    if (!mcu) throw std::runtime_error("stopMcuFirmware: componente nao e MCU/QEMU");
+    mcu->stopFirmware();
 }
 
 std::string SimulationSession::mcuLogs(uint32_t componentIndex) const {

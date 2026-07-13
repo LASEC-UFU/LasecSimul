@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include "Types.hpp"
+#include "Transient.hpp"
 
 namespace lasecsimul {
 
@@ -113,6 +114,14 @@ public:
 
     /** Hot path por passo — só chamado para componentes registrados como dinâmicos (ver Scheduler). */
     virtual void postStep(uint64_t timeNs) = 0;
+
+    /** Contrato transiente em duas fases. begin nunca confirma historico; commit so ocorre depois
+     * de o passo MNA convergir. rollback descarta o candidato quando o passo for rejeitado. */
+    virtual bool isReactive() const { return false; }
+    virtual void beginTransientStep(const TransientStepContext&) {}
+    virtual void commitTransientStep() {}
+    virtual void rollbackTransientStep() {}
+    virtual double transientErrorRatio(double, double) const { return 0.0; }
 
     virtual void onEvent(const ComponentEvent&) {}
 

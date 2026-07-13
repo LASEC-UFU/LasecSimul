@@ -66,6 +66,10 @@ public:
     plugins::PluginRuntime& pluginRuntime() { return m_pluginRuntime; }
     simulation::Netlist& netlist() { return m_netlist; }
     simulation::Scheduler& scheduler() { return m_scheduler; }
+    void setTransientSettings(const TransientSettings& settings);
+    const TransientSettings& transientSettings() const { return m_transientSettings; }
+    uint64_t acceptedTransientSteps() const { return m_acceptedTransientSteps; }
+    uint64_t rejectedTransientSteps() const { return m_rejectedTransientSteps; }
 
     /** Registra, no ComponentRegistry desta sessão, uma factory delegando ao PluginRuntime para
      * cada typeId com PluginModule ativo no GlobalPluginCache. Componentes built-in (ex: Resistor)
@@ -148,7 +152,9 @@ public:
      * foi removido. Nunca dispara solve novo, mesmo princípio de `nodeVoltageOfPin`. */
     std::optional<double> componentCurrent(uint32_t componentIndex) const;
     void loadMcuFirmware(uint32_t componentIndex, const std::filesystem::path& firmwarePath,
-                         const std::string& arenaName, const std::string& qemuBinaryOverride);
+                         const std::string& arenaName, const std::string& qemuBinaryOverride,
+                         McuDebugOptions debug = {});
+    void stopMcuFirmware(uint32_t componentIndex);
     std::string mcuLogs(uint32_t componentIndex) const;
 
     void sendComponentEvent(uint32_t componentIndex, const ComponentEvent& event);
@@ -180,12 +186,14 @@ public:
      * resolvido. Usado por instrumentos/telemetria e por testes — nunca dispara um solve novo,
      * só lê o que já foi calculado. */
     double nodeVoltageOfPin(uint32_t component, const std::string& pinId) const {
+        return m_scheduler.synchronized([&] {
         const uint32_t slot = m_netlist.pinSlotsOf(component).at(pinId);
         // .at() em vez de operator[]: se ainda não houve nenhum settleStep() (ex: chamado via IPC
         // antes do "start"), m_topology/m_nodeVoltages estão vazios — sem isso seria acesso fora
         // dos limites (UB), não uma exceção limpa que o chamador (ex: handler de IPC) já trata.
         const uint32_t node = m_topology.slotToNode.at(slot);
         return m_nodeVoltages.at(node);
+        });
     }
 
 private:
@@ -234,6 +242,9 @@ private:
     bool m_topologyReuseSafe = false;
     uint64_t m_wireTopologyRevision = 0;
     uint32_t m_nonlinearIterations = 0; // ver kMaxNonlinearIterations em SimulationSession.cpp
+    TransientSettings m_transientSettings;
+    uint64_t m_acceptedTransientSteps = 0;
+    uint64_t m_rejectedTransientSteps = 0;
 };
 
 } // namespace lasecsimul::session

@@ -38,6 +38,9 @@ export interface UnifiedCatalogItem {
    * true` já presente em `component-catalog.json` nunca chegava na Webview -- bug encontrado ao
    * implementar o overlay de Modo Placa no circuito principal. */
   graphical?: boolean;
+  /** Ver `model.ts::WebviewComponentCatalogEntry.boardPackage` -- aparência específica do Modo
+   * Placa, opcional, mesmo formato de `package`. */
+  boardPackage?: PackageDescriptor;
   serialPorts?: McuSerialPortEntry[];
 }
 
@@ -128,6 +131,7 @@ export function entryToWebview(item: UnifiedCatalogItem): WebviewComponentCatalo
     iconFilePath: item.iconFilePath,
     symbolSvg: item.symbolSvg,
     package: item.package,
+    boardPackage: item.boardPackage,
     propertySchema: item.propertySchema,
     help: item.help,
     pinCount: item.pinCount,

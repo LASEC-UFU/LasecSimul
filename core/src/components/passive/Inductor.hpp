@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <optional>
@@ -22,6 +23,25 @@ public:
     std::span<Pin> pins() override { return m_pins; }
 
     void stamp(MnaMatrixView& matrix) override {
+        if (m_stepActive) {
+            const double dt = m_step.deltaSeconds();
+            if (!(dt > 0.0)) return;
+            double conductance = dt / m_inductance;
+            double historyCurrent = m_current;
+            if (effectiveMethod() == IntegrationMethod::Trapezoidal) {
+                conductance *= 0.5;
+                historyCurrent = m_current + conductance * m_voltage;
+            } else if (effectiveMethod() == IntegrationMethod::Gear2 && m_step.acceptedStepIndex > 0) {
+                conductance = 2.0 * dt / (3.0 * m_inductance);
+                historyCurrent = (4.0 * m_current - m_olderCurrent) / 3.0;
+            }
+            const double voltage = matrix.getNodeVoltage(m_pins[0]) - matrix.getNodeVoltage(m_pins[1]);
+            m_candidateVoltage = voltage;
+            m_candidateCurrent = conductance * voltage + historyCurrent;
+            matrix.addConductance(m_pins[0], m_pins[1], conductance);
+            matrix.addCurrent(m_pins[0], m_pins[1], historyCurrent);
+            return;
+        }
         // Modelo inicial DC: indutor em regime permanente se aproxima de curto. O solver ainda nao
         // expoe fonte de corrente historica/dt para o modelo dinamico completo. Corrente lida da
         // ÚLTIMA solve() antes de re-estampar -- mesma técnica de Resistor/plano de leitura de
@@ -31,7 +51,31 @@ public:
     }
 
     void postStep(uint64_t) override {
-        // Estado dinamico reservado, mas ainda nao atualizavel sem dt + tensao/corrente do passo.
+    }
+
+    bool isReactive() const override { return true; }
+    void beginTransientStep(const TransientStepContext& step) override { m_step = step; m_stepActive = true; }
+    void commitTransientStep() override {
+        if (!m_stepActive) return;
+        m_olderCurrent = m_current;
+        m_current = m_candidateCurrent;
+        m_voltage = m_candidateVoltage;
+        m_previousDeltaNs = m_step.deltaNs;
+        m_stepActive = false;
+    }
+    void rollbackTransientStep() override { m_stepActive = false; }
+    double transientErrorRatio(double absoluteTolerance, double relativeTolerance) const override {
+        if (m_step.acceptedStepIndex < 1 || m_previousDeltaNs == 0) {
+            const double delta = m_candidateCurrent - m_current;
+            const double magnitude = std::max({std::abs(m_candidateCurrent), std::abs(m_current),
+                                               absoluteTolerance / relativeTolerance, 1e-3});
+            const double scale = absoluteTolerance + relativeTolerance * magnitude;
+            return 0.5 * delta * delta / (magnitude * scale);
+        }
+        const double ratio = static_cast<double>(m_step.deltaNs) / static_cast<double>(m_previousDeltaNs);
+        const double predicted = m_current + ratio * (m_current - m_olderCurrent);
+        const double scale = absoluteTolerance + relativeTolerance * std::max(std::abs(m_candidateCurrent), std::abs(m_current));
+        return std::abs(m_candidateCurrent - predicted) / (3.0 * scale);
     }
 
     /** Corrente de p1 pra p2 (convenção do stamp()) na última solve(). */
@@ -84,6 +128,11 @@ public:
     void setInductance(double henry) { m_inductance = validate(henry); } // chamador deve marcar dirty
 
 private:
+    IntegrationMethod effectiveMethod() const {
+        if (m_step.acceptedStepIndex == 0) return IntegrationMethod::BackwardEuler;
+        if (m_step.method != IntegrationMethod::Automatic) return m_step.method;
+        return IntegrationMethod::Trapezoidal;
+    }
     static double validate(double henry) {
         if (!std::isfinite(henry) || henry <= 0.0) {
             throw std::invalid_argument("inductance deve ser > 0 H");
@@ -94,6 +143,13 @@ private:
     std::array<Pin, 2> m_pins;
     double m_inductance;
     double m_current = 0.0;
+    double m_olderCurrent = 0.0;
+    double m_voltage = 0.0;
+    double m_candidateCurrent = 0.0;
+    double m_candidateVoltage = 0.0;
+    TransientStepContext m_step;
+    bool m_stepActive = false;
+    uint64_t m_previousDeltaNs = 0;
 };
 
 } // namespace lasecsimul::components

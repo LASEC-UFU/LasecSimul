@@ -116,6 +116,9 @@ export class CoreClient {
 
   async run(): Promise<void> { await this.request("start", {}); }
   async pause(): Promise<void> { await this.request("pause", {}); }
+  async resume(): Promise<void> { await this.request("resume", {}); }
+  async settleMcuDebug(instanceId: string): Promise<void> { await this.request("settleMcuDebug", { instanceId }); }
+  async stopMcuFirmware(instanceId: string): Promise<void> { await this.request("stopMcuFirmware", { instanceId }); }
   /** Avança a simulação por `deltaNs` (default 1000ns) e assenta uma única vez -- `Scheduler::step`
    * real do Core (achado de auditoria 2026-07-08: o verbo IPC dizia "não implementado" mas o
    * mecanismo já existia, só não estava ligado). Sem chamador na UI ainda -- um botão "Step" fica
@@ -175,7 +178,18 @@ export class CoreClient {
   /** Configura parâmetros operacionais do Scheduler em runtime.
    * `targetStepUs`: duração mínima (µs) de cada cycle de liquidação; 0 = ilimitado (default).
    * `maxNonLinearIterations`: limite de iterações de settle por passo; 0 = ilimitado (default). */
-  async setSimulationConfig(config: { targetStepUs?: number; maxNonLinearIterations?: number }): Promise<void> {
+  async setSimulationConfig(config: {
+    targetStepUs?: number;
+    maxNonLinearIterations?: number;
+    integrationMethod?: "automatic" | "backwardEuler" | "trapezoidal" | "gear2";
+    initialStepNs?: number;
+    minimumStepNs?: number;
+    maximumStepNs?: number;
+    relativeTolerance?: number;
+    absoluteTolerance?: number;
+    maximumNewtonIterations?: number;
+    adaptiveTimeStep?: boolean;
+  }): Promise<void> {
     await this.request("setSimulationConfig", config);
   }
 
@@ -257,6 +271,12 @@ export class CoreClient {
     return Buffer.from(stateHex, "hex");
   }
 
+  async getComponentStates(items: Array<{ key: string; instanceId: string }>): Promise<Record<string, Buffer>> {
+    const resp = await this.request("getComponentStates", { items });
+    const encoded = (resp as { states: Record<string, string> }).states;
+    return Object.fromEntries(Object.entries(encoded).map(([key, hex]) => [key, Buffer.from(hex, "hex")]));
+  }
+
   /** Saúde operacional da instância (`"ok" | "lagging" | "faulted"`) -- watchdog/CrashGuard do
    * lado do plugin nativo, ver `.spec/lasecsimul-native-devices.spec` seção 13. Built-ins sempre
    * respondem `"ok"`. */
@@ -285,6 +305,11 @@ export class CoreClient {
     return (resp as { voltage: number }).voltage;
   }
 
+  async getNodeVoltages(probes: Array<{ key: string; instanceId: string; pinId: string }>): Promise<Record<string, number>> {
+    const resp = await this.request("getNodeVoltages", { probes });
+    return (resp as { values: Record<string, number> }).values;
+  }
+
   /** Nanossegundos de tempo SIMULADO decorrido (`Scheduler::nowNs()`) -- base pra calcular a taxa
    * real de simulação (`Δsimulado/Δparede` entre duas amostras), achado de auditoria de UI
    * 2026-07-09. Verbo somente-leitura. */
@@ -293,8 +318,13 @@ export class CoreClient {
     return (resp as { simulatedNs: number }).simulatedNs;
   }
 
-  async loadMcuFirmware(instanceId: string, firmwarePath: string, qemuBinaryOverride?: string): Promise<void> {
-    await this.request("loadMcuFirmware", { instanceId, firmwarePath, qemuBinaryOverride });
+  async loadMcuFirmware(instanceId: string, firmwarePath: string, qemuBinaryOverride?: string,
+    debug?: { gdbPort: number; startPaused?: boolean }): Promise<{ gdbPort: number; debug: boolean }> {
+    return await this.request("loadMcuFirmware", {
+      instanceId, firmwarePath, qemuBinaryOverride,
+      gdbPort: debug?.gdbPort,
+      startPaused: debug?.startPaused ?? false,
+    }) as { gdbPort: number; debug: boolean };
   }
 
   async getMcuLogs(instanceId: string): Promise<string> {

@@ -39,6 +39,20 @@ import { PackageDescriptor } from "./model";
     return item.package;
   }
 
+  /** Mesmo princípio de `catalogPackage`, mas pra `boardPackage` (aparência do Modo Placa) --
+   * `undefined` quando o typeId ainda não tem uma (nem todo componente `graphical` precisa ter,
+   * ver `.spec` seção 27). */
+  function catalogEntryBoardPackage(typeId: string): PackageDescriptor | undefined {
+    const candidates = [
+      path.resolve(process.cwd(), "..", "project", "schema", "component-catalog.json"),
+      path.resolve(process.cwd(), "project", "schema", "component-catalog.json"),
+    ];
+    const catalogPath = candidates.find((candidate) => fs.existsSync(candidate));
+    if (!catalogPath) throw new Error("component-catalog.json nao localizado para teste de renderer");
+    const catalog = JSON.parse(fs.readFileSync(catalogPath, "utf8")) as { items?: Array<{ typeId?: string; boardPackage?: PackageDescriptor }> };
+    return catalog.items?.find((entry) => entry.typeId === typeId)?.boardPackage;
+  }
+
   await test("sem package registrado, componentBox cai pro algoritmo genérico (fallback)", () => {
     registerPackage("test.example", undefined);
     const box = componentBox("test.example");
@@ -916,6 +930,67 @@ import { PackageDescriptor } from "./model";
     // real x LasecSimul: a alavanca aparecia "presa numa caixa" que não deveria existir).
     assert(!pushOpen.includes("<rect") || !/<rect[^>]*x="4"[^>]*y="0"/.test(pushOpen), `Push NÃO deveria desenhar um rect de corpo em volta da barra (m_area é só hit-test), markup: ${pushOpen}`);
     assert(!switchOpen.includes("<rect") || !/<rect[^>]*x="4"[^>]*y="0"/.test(switchOpen), `Switch NÃO deveria desenhar um rect de corpo em volta da alavanca (m_area é só hit-test), markup: ${switchOpen}`);
+  });
+
+  await test("boardPackage: componente do Modo Placa (Épico Modo Placa/`.spec` seção 27) -- sem variant, esquemático continua idêntico; com variant \"board\", usa a aparência própria", () => {
+    // pin com length:0 no leadOrigin "terminal", exatamente na borda da caixa -- não estica o
+    // bounding box calculado por resolvePackageLayout (que expande width/height pra caber qualquer
+    // lead que ultrapasse o `width`/`height` declarado). Precisa de >=1 pino pra `registerPackage`
+    // aceitar isto como package "real" (mesma guarda de `pkg.pins.length > 0`); este teste é só
+    // sobre qual package é ESCOLHIDO (schematic vs board), não sobre geometria de pino.
+    const schematicPkg: PackageDescriptor = { width: 32, height: 28, pins: [{ id: "pin-1", x: 32, y: 14, angle: 0, length: 0, label: "", leadOrigin: "terminal" }] };
+    const boardPkg: PackageDescriptor = { width: 40, height: 40, pins: [] };
+    registerPackage("test.dualBoard", schematicPkg, undefined, boardPkg);
+
+    const schematicBox = componentBox("test.dualBoard");
+    assert(schematicBox.width === 32 && schematicBox.height === 28, `sem variant, deveria usar o package esquemático (compatibilidade -- não muda o modo esquemático), recebido ${JSON.stringify(schematicBox)}`);
+
+    const boardBox = componentBox("test.dualBoard", undefined, "board");
+    assert(boardBox.width === 40 && boardBox.height === 40, `com variant "board", deveria usar boardPackage, recebido ${JSON.stringify(boardBox)}`);
+
+    registerPackage("test.dualBoard", undefined);
+  });
+
+  await test("boardPackage: typeId SEM aparência de Modo Placa registrada reusa o package esquemático mesmo pedindo variant \"board\" (compatibilidade -- typeId ainda não portado)", () => {
+    registerPackage("test.example", pkg); // sem 4º argumento
+    const schematicBox = componentBox("test.example");
+    const boardBox = componentBox("test.example", undefined, "board");
+    assert(boardBox.width === schematicBox.width && boardBox.height === schematicBox.height, "sem boardPackage registrado, variant \"board\" deveria cair no package normal, nunca ficar sem aparência nenhuma");
+  });
+
+  await test("switches.push/switches.switch: SEM boardPackage (revertido 2026-07-12, `.spec` seção 27.9) -- Push::paint()/CustomButton do SimulIDE real já é a ÚNICA aparência, física e dinâmica (muda de cor com `closed`), usada em ambos os modos; o package ESQUEMÁTICO já porta isso fielmente, então Modo Placa cai nele mesmo pedindo variant \"board\" (reaproveita via boardX/boardY, sem package próprio)", () => {
+    const pushSchematic = catalogPackage("switches.push");
+    assert(catalogEntryBoardPackage("switches.push") === undefined, "switches.push NÃO deveria ter boardPackage no catálogo (revertido -- o esquemático já é a aparência física dinâmica real do SimulIDE)");
+    registerPackage("switches.push", pushSchematic);
+    const switchSchematic = catalogPackage("switches.switch");
+    assert(catalogEntryBoardPackage("switches.switch") === undefined, "switches.switch NÃO deveria ter boardPackage no catálogo (mesmo motivo)");
+    registerPackage("switches.switch", switchSchematic);
+
+    const pushSchematicBox = componentBox("switches.push");
+    const pushBoardBox = componentBox("switches.push", undefined, "board");
+    assert(pushSchematicBox.width === pushBoardBox.width && pushSchematicBox.height === pushBoardBox.height, "sem boardPackage, variant \"board\" deveria cair no MESMO box do esquemático (reaproveita, não duplica)");
+
+    // O botão-proxy do esquemático (CustomButton::paintEvent real, roundedRect com stateFill em
+    // `closed`) já É dinâmico -- reaproveitado tal e qual pelo Modo Placa, sem precisar de uma 2ª
+    // aparência: confirma que o SVG resolvido com variant "board" muda de cor com `closed`, igual ao
+    // esquemático puro.
+    const pushBoardOpen = packageSymbolSvg("switches.push", { closed: false, key: "e" }, "push-board-open", "board") ?? "";
+    const pushBoardClosed = packageSymbolSvg("switches.push", { closed: true, key: "e" }, "push-board-closed", "board") ?? "";
+    assert(pushBoardOpen !== pushBoardClosed, "botão-proxy (reaproveitado do esquemático) deveria continuar mudando de cor com `closed` no Modo Placa, sem precisar de boardPackage próprio");
+    assert(pushBoardClosed.includes("toggle-hit-zone"), "clicável pelo MESMO mecanismo genérico de toggle, sem 2ª lógica");
+
+    const switchBoardOpen = packageSymbolSvg("switches.switch", { closed: false }, "switch-board-open", "board") ?? "";
+    const switchBoardClosed = packageSymbolSvg("switches.switch", { closed: true }, "switch-board-closed", "board") ?? "";
+    assert(switchBoardOpen !== switchBoardClosed, "chave báscula (reaproveitada do esquemático) deveria continuar refletindo `closed` no Modo Placa");
+  });
+
+  await test("outputs.led: SEM boardPackage (revertido 2026-07-12, `.spec` seção 27.10) -- LedBase::paint() do SimulIDE real já é diodo+círculo redondo colorido por `m_intensity`; um `boardPackage` estático não resolveria \"LED acende/apaga\" (nem o esquemático reflete corrente real hoje), então cai no esquemático mesmo pedindo variant \"board\"", () => {
+    const ledSchematic = catalogPackage("outputs.led");
+    assert(catalogEntryBoardPackage("outputs.led") === undefined, "outputs.led NÃO deveria ter boardPackage no catálogo (revertido -- estático demais pra justificar existir, gap real é intensidade no Core)");
+    registerPackage("outputs.led", ledSchematic);
+    const schematicBox = componentBox("outputs.led");
+    const boardBox = componentBox("outputs.led", undefined, "board");
+    assert(schematicBox.width === boardBox.width && schematicBox.height === boardBox.height, "sem boardPackage, variant \"board\" deveria cair no MESMO box do esquemático (reaproveita, não duplica)");
   });
 
   await test("switches.switch_dip vem de package.simulidePaint com 8 posicoes e 16 pinos reais (switchdip.cpp)", () => {

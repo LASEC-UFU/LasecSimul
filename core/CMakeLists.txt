@@ -282,6 +282,34 @@ target_include_directories(passive_components_test PRIVATE include src)
 target_link_libraries(passive_components_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
 add_test(NAME passive_components COMMAND passive_components_test)
 
+add_executable(transient_rc_test
+    test/transient_rc_test.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(transient_rc_test PRIVATE include src)
+target_link_libraries(transient_rc_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+if(NOT WIN32)
+    target_link_libraries(transient_rc_test PRIVATE dl)
+endif()
+add_test(NAME transient_rc COMMAND transient_rc_test)
+add_executable(transient_rlc_test test/transient_rlc_test.cpp ${TEST_COMMON_SOURCES})
+target_include_directories(transient_rlc_test PRIVATE include src)
+target_link_libraries(transient_rlc_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+if(NOT WIN32)
+    target_link_libraries(transient_rlc_test PRIVATE dl)
+endif()
+add_test(NAME transient_rlc COMMAND transient_rlc_test)
+
+add_executable(solver_benchmark benchmark/solver_benchmark.cpp)
+target_include_directories(solver_benchmark PRIVATE include src)
+target_link_libraries(solver_benchmark PRIVATE Eigen3::Eigen)
+add_executable(transient_benchmark benchmark/transient_benchmark.cpp ${TEST_COMMON_SOURCES})
+target_include_directories(transient_benchmark PRIVATE include src)
+target_link_libraries(transient_benchmark PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+if(NOT WIN32)
+    target_link_libraries(transient_benchmark PRIVATE dl)
+endif()
+
 # PropertyDefinition/validatePropertyValue/propertyOrDefault (auditoria arquitetural 2026-07-09,
 # Fase 1.4/2.1) -- Probe e Resistor migrados como demonstração; prova que get/set casam por ID, não
 # por índice (fecha D1/D2), e que construção a partir de ComponentParams agora valida (fecha D4).
@@ -421,6 +449,15 @@ if(WIN32)
     target_compile_definitions(qemu_process_manager_test PRIVATE _CRT_SECURE_NO_WARNINGS)
 endif()
 add_test(NAME qemu_process_manager COMMAND qemu_process_manager_test)
+
+add_executable(mcu_debug_launch_test
+    test/core/mcu/McuDebugLaunchTest.cpp
+    src/mcu/McuController.cpp
+    src/mcu/qemu/QemuProcessManager.cpp
+    src/mcu/qemu/QemuArenaBridge.cpp
+)
+target_include_directories(mcu_debug_launch_test PRIVATE include src)
+add_test(NAME mcu_debug_launch COMMAND mcu_debug_launch_test)
 
 add_executable(qemu_arena_bridge_test
     test/core/mcu/QemuArenaBridgeTest.cpp

@@ -8,6 +8,7 @@
 #include <mutex>
 #include <queue>
 #include <thread>
+#include <utility>
 #include <vector>
 #include "SparseSet.hpp"
 
@@ -29,11 +30,26 @@ struct ScheduledEventOrder {
 
 class Scheduler {
 public:
+    struct TimeStepDecision { bool accept = true; double errorRatio = 0.0; };
     using SettleStepFn = std::function<bool()>;
     using EventCallback = std::function<void()>;
+    using TimeStepBeginFn = std::function<void(uint64_t, uint64_t)>;
+    using TimeStepCommitFn = std::function<TimeStepDecision(uint64_t, uint64_t, bool)>;
 
     Scheduler(size_t componentCapacity, SettleStepFn settleStep)
         : m_dirty(componentCapacity), m_settleStep(std::move(settleStep)) {}
+
+    void setTimeStepCallbacks(TimeStepBeginFn begin, TimeStepCommitFn commit) {
+        m_beginTimeStep = std::move(begin);
+        m_commitTimeStep = std::move(commit);
+    }
+    void setMaximumTimeStepNs(uint64_t ns) { m_maximumTimeStepNs.store(ns, std::memory_order_relaxed); }
+    uint64_t maximumTimeStepNs() const { return m_maximumTimeStepNs.load(std::memory_order_relaxed); }
+    void configureAdaptiveTimeStep(uint64_t initialNs, uint64_t minimumNs, bool adaptive) {
+        m_currentTimeStepNs = initialNs;
+        m_minimumTimeStepNs = minimumNs;
+        m_adaptiveTimeStep = adaptive;
+    }
 
     ~Scheduler() { stop(); }
 
@@ -54,6 +70,10 @@ public:
     size_t dirtyCount() const;
     size_t pendingEventCount() const;
     uint64_t nowNs() const;
+    template <class Fn> decltype(auto) synchronized(Fn&& fn) const {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return std::forward<Fn>(fn)();
+    }
 
     // Direct access is only safe from the scheduler-owned settle callback or single-threaded tests.
     SparseSet<uint32_t>& dirtySet() { return m_dirty; }
@@ -63,6 +83,7 @@ public:
      * `nowNs()` de lá faria dead-lock no mesmo `std::mutex` não-reentrante. Mesma categoria de
      * `dirtySet()` acima. */
     uint64_t nowNsUnlocked() const { return m_nowNs; }
+    bool lastSettleConvergedUnlocked() const { return m_lastSettleConverged; }
 
     /** Mesmo papel de `scheduleEvent(delayNs, callback)`, sem tomar `m_mutex` -- mesma categoria de
      * `nowNsUnlocked()`/`dirtySet()`: só chamar de dentro do callback de settle (stamp()/onEvent()
@@ -110,6 +131,8 @@ private:
     uint64_t m_nowNs = 0;
     uint64_t m_nextSequence = 0;
     SettleStepFn m_settleStep;
+    TimeStepBeginFn m_beginTimeStep;
+    TimeStepCommitFn m_commitTimeStep;
 
     std::thread m_thread;
     mutable std::mutex m_mutex;
@@ -118,6 +141,11 @@ private:
     std::atomic<bool> m_paused{false};
     std::atomic<uint64_t> m_targetStepUs{0};
     std::atomic<size_t> m_maxNonLinearIterations{0};
+    std::atomic<uint64_t> m_maximumTimeStepNs{0};
+    uint64_t m_currentTimeStepNs = 0;
+    uint64_t m_minimumTimeStepNs = 1;
+    bool m_adaptiveTimeStep = false;
+    bool m_lastSettleConverged = true;
 };
 
 } // namespace lasecsimul::simulation

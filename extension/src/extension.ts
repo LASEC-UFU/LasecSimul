@@ -67,6 +67,7 @@ import {
   updateBoardOverlayVisualCommand,
   updateExposedComponentPropertyCommand,
 } from "./mcu/mcuCommands";
+import { debugMcuFirmwareCommand, registerMcuDebugTracking } from "./mcu/mcuDebug";
 import {
   gatherInternalComponentSnapshots,
   resolveSourceFilePath,
@@ -1630,6 +1631,7 @@ async function exportInstrumentDataCommand(suggestedFileName: string, csvContent
 }
 
 export function activate(context: vscode.ExtensionContext): void {
+  registerMcuDebugTracking(context);
   state.extensionContext = context;
   const unifiedCatalog = loadUnifiedCatalog(context.extensionPath, currentLasecSimulLanguage());
   const initialResolved = resolveRegisteredItems(context.extensionPath, unifiedCatalog.registeredSources);
@@ -1706,7 +1708,17 @@ export function activate(context: vscode.ExtensionContext): void {
       const cfg = vscode.workspace.getConfiguration("lasecsimul.simulation");
       const targetStepUs = cfg.get<number>("targetStepUs", 0);
       const maxNonLinearIterations = cfg.get<number>("maxNonLinearIterations", 0);
-      state.coreClient.setSimulationConfig({ targetStepUs, maxNonLinearIterations })
+      state.coreClient.setSimulationConfig({
+        targetStepUs,
+        maxNonLinearIterations,
+        integrationMethod: cfg.get("integrationMethod", "automatic"),
+        adaptiveTimeStep: cfg.get("adaptiveTimeStep", true),
+        initialStepNs: cfg.get("initialStepNs", 100),
+        minimumStepNs: cfg.get("minimumStepNs", 1),
+        maximumStepNs: cfg.get("maximumStepNs", 100_000),
+        relativeTolerance: cfg.get("relativeTolerance", 1e-4),
+        absoluteTolerance: cfg.get("absoluteTolerance", 1e-9),
+      })
         .catch((err: unknown) => reportCoreWarning("configurar simulação", err));
     }),
     vscode.commands.registerCommand("lasecsimul.openSchematicEditor", () => openSchematicEditor(context.extensionUri)),
@@ -1716,6 +1728,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand("lasecsimul.palette.addComponent", (typeId: string) => addPaletteComponent(typeId)),
     vscode.commands.registerCommand("lasecsimul.run", () => void runSimulationWithFirmwareCheck()),
+    vscode.commands.registerCommand("lasecsimul.debugFirmware", () => void debugMcuFirmwareCommand(mcuCommandOptions())),
     vscode.commands.registerCommand("lasecsimul.pause", () => pauseSimulation()),
     vscode.commands.registerCommand("lasecsimul.stop", () => stopSimulation()),
     vscode.commands.registerCommand("lasecsimul.saveProject", () => saveProjectCommand()),

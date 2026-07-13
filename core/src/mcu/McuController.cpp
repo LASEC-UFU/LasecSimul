@@ -7,30 +7,31 @@ McuController::McuController(const IMcuAdapter& adapter, std::string qemuBinaryO
     m_arenaBridge.setMemoryRegions(m_adapter.memoryRegions());
 }
 
-void McuController::start(const std::filesystem::path& firmwarePath, const std::string& arenaName,
-                           const std::string& callSiteBinaryOverride) {
+QemuLaunchSpec McuController::buildLaunchSpec(const std::filesystem::path& firmwarePath,
+                                               const std::string& arenaName,
+                                               const std::string& callSiteBinaryOverride,
+                                               McuDebugOptions debug) const {
     QemuLaunchSpec spec = m_adapter.buildLaunchArgs(firmwarePath.string());
-    const std::string& effectiveOverride = !callSiteBinaryOverride.empty() ? callSiteBinaryOverride : m_qemuBinaryOverride;
-    if (!effectiveOverride.empty()) spec.binary = effectiveOverride;
-
-    // argv[1] do processo = chave da shared memory, confirmado lendo simuMain() em
-    // simuliface.c (C:\SourceCode\qemu_simulide): `shMemKey = argv[1]; argv = &argv[2];` -- o
-    // resto de spec.args (já incluindo o argv[0] convencional "qemu-system-xtensa" que o adapter
-    // monta) segue intacto pro qemu_init(). McuController decide o NOME da arena (não o
-    // adapter), então é aqui que ela entra na lista, sempre na frente.
+    const std::string& overridePath = !callSiteBinaryOverride.empty() ? callSiteBinaryOverride : m_qemuBinaryOverride;
+    if (!overridePath.empty()) spec.binary = overridePath;
+    if (debug.enabled()) {
+        if (debug.startPaused) spec.args.push_back("-S");
+        spec.args.push_back("-gdb");
+        spec.args.push_back("tcp:127.0.0.1:" + std::to_string(debug.gdbPort));
+    }
+    // O fork consome a chave da arena como argv[1], antes dos argumentos normais do QEMU.
     spec.args.insert(spec.args.begin(), arenaName);
+    return spec;
+}
 
-    // Core cria a arena ANTES de iniciar o processo -- QEMU só pode abrir uma região já existente
-    // (ver qemu_arena_abi.h e QemuArenaBridge::open/createIfMissing).
+void McuController::start(const std::filesystem::path& firmwarePath, const std::string& arenaName,
+                          const std::string& callSiteBinaryOverride, McuDebugOptions debug) {
+    const QemuLaunchSpec spec = buildLaunchSpec(firmwarePath, arenaName, callSiteBinaryOverride, debug);
     m_arenaBridge.open(qemu::QemuArenaOpenOptions{arenaName, true});
     m_processManager.start(spec);
 }
 
-void McuController::stop() {
-    m_processManager.stop();
-    m_arenaBridge.close();
-}
-
+void McuController::stop() { m_processManager.stop(); m_arenaBridge.close(); }
 bool McuController::isRunning() const { return m_processManager.isRunning(); }
 std::string McuController::qemuLogs() const { return m_processManager.logs(); }
 

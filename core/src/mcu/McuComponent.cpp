@@ -178,9 +178,11 @@ void McuComponent::stamp(MnaMatrixView& matrix) {
 }
 
 void McuComponent::loadFirmware(const std::filesystem::path& firmwarePath, const std::string& arenaName,
-                                const std::string& qemuBinaryOverride) {
+                                 const std::string& qemuBinaryOverride, McuDebugOptions debug) {
     m_lastFirmwarePath = firmwarePath;
     m_lastArenaName = arenaName;
+    m_lastQemuBinaryOverride = qemuBinaryOverride;
+    m_lastDebugOptions = debug;
 
     if (m_controller.isRunning() || m_controller.arenaBridge().isOpen()) stopFirmware();
     resetModulesAndWakeups();
@@ -188,7 +190,8 @@ void McuComponent::loadFirmware(const std::filesystem::path& firmwarePath, const
     // McuController::start() já cobre a sequência "Core cria a arena antes de o QEMU poder
     // anexá-la, depois inicia o processo" (mesmo código exercitado por McuControllerRealQemuTest
     // contra o binário QEMU de verdade) -- ver comentário do membro m_controller no .hpp.
-    m_controller.start(firmwarePath, arenaName, qemuBinaryOverride);
+    m_gdbPort = debug.gdbPort;
+    m_controller.start(firmwarePath, arenaName, qemuBinaryOverride, debug);
     m_scheduler.markDirty(m_componentIndex);
 }
 
@@ -231,8 +234,10 @@ void McuComponent::stampResetPin(MnaMatrixView& matrix, const Pin& pin) {
         if (!m_lastFirmwarePath.empty()) {
             const std::filesystem::path firmwarePath = m_lastFirmwarePath;
             const std::string arenaName = m_lastArenaName;
-            m_scheduler.scheduleEventUnlocked(0, [this, firmwarePath, arenaName] {
-                loadFirmware(firmwarePath, arenaName);
+            const std::string qemuOverride = m_lastQemuBinaryOverride;
+            const McuDebugOptions debug = m_lastDebugOptions;
+            m_scheduler.scheduleEventUnlocked(0, [this, firmwarePath, arenaName, qemuOverride, debug] {
+                loadFirmware(firmwarePath, arenaName, qemuOverride, debug);
             });
         }
     }

@@ -436,11 +436,20 @@ export async function pollInstrumentReadouts(): Promise<void> {
   if (instruments.length === 0) return;
 
   const readoutsByComponentId: Record<string, ComponentReadoutValue> = {};
+  const stateItems = instruments.flatMap((component) => {
+    const instanceId = coreInstanceIdByComponentId.get(component.id);
+    return instanceId ? [{ key: component.id, instanceId }] : [];
+  });
+  let batchedStates: Record<string, Buffer>;
+  try {
+    batchedStates = await state.coreClient.getComponentStates(stateItems);
+  } catch {
+    return;
+  }
   for (const component of instruments) {
-    const coreId = coreInstanceIdByComponentId.get(component.id);
-    if (!coreId) continue;
+    const coreState = batchedStates[component.id];
+    if (!coreState) continue;
     try {
-      const coreState = await state.coreClient.getComponentState(coreId);
       const readout = decodeComponentReadout(component.typeId, coreState);
       if (readout !== undefined) readoutsByComponentId[component.id] = readout;
     } catch {
@@ -458,13 +467,15 @@ export async function pollWireVoltages(): Promise<void> {
   if (state.schematicState.topology.conductors.length === 0) return;
 
   const voltagesByWireId: Record<string, number> = {};
+  const batch: Array<{ key: string; instanceId: string; pinId: string }> = [];
   for (const probe of voltageProbesForProject(state.schematicState.topology)) {
     const coreId = coreInstanceIdByComponentId.get(probe.componentId);
-    try {
-      if (coreId) voltagesByWireId[probe.wireId] = await state.coreClient.getNodeVoltage(coreId, probe.pinId);
-    } catch {
+    if (coreId) batch.push({ key: probe.wireId, instanceId: coreId, pinId: probe.pinId });
+  }
+  try {
+    Object.assign(voltagesByWireId, await state.coreClient.getNodeVoltages(batch));
+  } catch {
       // nó ainda não resolvido (settle loop não rodou pra esse trecho ainda) -- ignora neste tick
-    }
   }
   state.schematicPanel.postMessage({ version: 1, type: "wireVoltages", voltagesByWireId });
 }
@@ -500,11 +511,13 @@ async function pollSimulationRate(): Promise<void> {
 export function startVoltageReadoutPolling(): void {
   if (state.voltageReadoutTimer) return;
   lastRateSample = undefined;
+  const telemetryRateHz = Math.min(60, Math.max(1,
+    vscode.workspace.getConfiguration("lasecsimul.simulation").get("telemetryRateHz", 10)));
   state.voltageReadoutTimer = setInterval(() => {
     void pollInstrumentReadouts();
     void pollWireVoltages();
     void pollSimulationRate();
-  }, 300);
+  }, Math.round(1000 / telemetryRateHz));
 }
 
 export function stopVoltageReadoutPolling(): void {
@@ -619,6 +632,19 @@ export function rebuildCoreFromSchematicState(): Promise<void> {
 
 async function rebuildCoreFromSchematicStateNow(): Promise<void> {
   if (!state.coreClient) return;
+
+  const simulation = vscode.workspace.getConfiguration("lasecsimul.simulation");
+  await state.coreClient.setSimulationConfig({
+    targetStepUs: simulation.get("targetStepUs", 0),
+    maxNonLinearIterations: simulation.get("maxNonLinearIterations", 0),
+    integrationMethod: simulation.get("integrationMethod", "automatic"),
+    adaptiveTimeStep: simulation.get("adaptiveTimeStep", true),
+    initialStepNs: simulation.get("initialStepNs", 100),
+    minimumStepNs: simulation.get("minimumStepNs", 1),
+    maximumStepNs: simulation.get("maximumStepNs", 100_000),
+    relativeTolerance: simulation.get("relativeTolerance", 1e-4),
+    absoluteTolerance: simulation.get("absoluteTolerance", 1e-9),
+  });
 
   const runningBeforeRebuild = state.simulationStatus === "running";
   if (runningBeforeRebuild) {

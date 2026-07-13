@@ -191,6 +191,12 @@ struct QemuLaunchSpec {
     std::vector<std::string> args;
 };
 
+struct McuDebugOptions {
+    uint16_t gdbPort = 0;
+    bool startPaused = true;
+    bool enabled() const { return gdbPort != 0; }
+};
+
 struct ComponentMeta {
     std::string typeId;
     std::vector<Pin> pins;

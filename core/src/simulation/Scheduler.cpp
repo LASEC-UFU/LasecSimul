@@ -1,5 +1,7 @@
 #include "Scheduler.hpp"
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <utility>
 
 namespace lasecsimul::simulation {
@@ -70,6 +72,7 @@ bool Scheduler::settleUntilStableLocked() {
         hadWork = true;
         if (!m_settleStep || !m_settleStep()) break;
     }
+    m_lastSettleConverged = m_dirty.empty();
     return hadWork;
 }
 
@@ -94,14 +97,43 @@ bool Scheduler::processNextEventUntilLocked(std::unique_lock<std::mutex>& lock, 
 
 void Scheduler::runUntil(uint64_t targetTimeNs) {
     std::unique_lock<std::mutex> lock(m_mutex);
-
-    while (m_running.load() || !m_thread.joinable()) {
-        settleUntilStableLocked();
-        if (!processNextEventUntilLocked(lock, targetTimeNs)) break;
-    }
-
     settleUntilStableLocked();
-    if (m_nowNs < targetTimeNs) m_nowNs = targetTimeNs;
+
+    while (m_nowNs < targetTimeNs) {
+        uint64_t nextTime = targetTimeNs;
+        const uint64_t maxStep = m_maximumTimeStepNs.load(std::memory_order_relaxed);
+        const uint64_t selectedStep = m_adaptiveTimeStep && m_currentTimeStepNs > 0
+            ? std::min(maxStep, m_currentTimeStepNs) : maxStep;
+        if (selectedStep > 0 && targetTimeNs - m_nowNs > selectedStep) nextTime = m_nowNs + selectedStep;
+        if (!m_events.empty() && m_events.top().timeNs < nextTime) nextTime = m_events.top().timeNs;
+
+        const uint64_t previousTime = m_nowNs;
+        const bool eventBoundary = !m_events.empty() && m_events.top().timeNs == nextTime;
+        m_nowNs = nextTime;
+        if (m_beginTimeStep && nextTime > previousTime) m_beginTimeStep(previousTime, nextTime);
+
+        while (!m_events.empty() && m_events.top().timeNs <= nextTime) {
+            processNextEventUntilLocked(lock, nextTime);
+        }
+        settleUntilStableLocked();
+        if (m_commitTimeStep && nextTime > previousTime) {
+            const TimeStepDecision decision = m_commitTimeStep(previousTime, nextTime, eventBoundary);
+            const uint64_t attempted = nextTime - previousTime;
+            if (!decision.accept && !eventBoundary && attempted > m_minimumTimeStepNs) {
+                m_nowNs = previousTime;
+                const double factor = std::clamp(0.9 / std::sqrt(std::max(decision.errorRatio, 1e-12)), 0.2, 0.8);
+                m_currentTimeStepNs = std::max<uint64_t>(m_minimumTimeStepNs,
+                    static_cast<uint64_t>(static_cast<double>(attempted) * factor));
+                continue;
+            }
+            if (m_adaptiveTimeStep) {
+                const double factor = decision.errorRatio > 1e-12
+                    ? std::clamp(0.9 / std::sqrt(decision.errorRatio), 0.5, 2.0) : 2.0;
+                m_currentTimeStepNs = std::clamp<uint64_t>(
+                    static_cast<uint64_t>(static_cast<double>(attempted) * factor), m_minimumTimeStepNs, maxStep);
+            }
+        }
+    }
 }
 
 void Scheduler::step(uint64_t deltaNs) {

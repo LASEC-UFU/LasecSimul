@@ -3037,3 +3037,309 @@ manual no VSCode real cobrindo: abrir/fechar Modo Placa numa folha de subcircuit
 menu de fundo), posicionar um componente gráfico e confirmar que a MESMA posição aparece no overlay
 da instância no circuito principal (e vice-versa, arrastando o overlay e reabrindo o subcircuito),
 colar uma cópia de um item posicionado na placa, e desfazer/refazer um ciclo de Modo Placa.
+
+## 27. Representação visual própria do Modo Placa (2026-07-12)
+
+Pedido explícito do usuário, respondendo diretamente à "decisão pendente" registrada em 26.4/26.1
+achado #3: confirmar (com duas imagens de referência de um ESP32 DevKitC -- vista "placa física" com
+botões redondos "e"/"b", e vista "esquemático/fiação" com os mesmos botões ao lado dos pinos
+elétricos reais) que o LasecSimul deve implementar uma aparência de Modo Placa DISTINTA da
+aparência esquemática, como recurso PRÓPRIO do LasecSimul (não paridade SimulIDE -- ver 26.1/26.4:
+o SimulIDE real usa o MESMO `paint()` nos dois contextos, só muda posição/visibilidade).
+
+### 27.1 Requisito e por que não é paridade SimulIDE
+
+Requisitos explícitos do pedido: (1) aparência distinta por componente no Modo Placa; (2)
+posicionamento independente (já existia, `boardX`/`boardY`/etc, seção 26); (3) tamanho/orientação
+próprios do Modo Placa; (4) vínculo com o MESMO componente/estado, nunca uma cópia paralela; (5)
+interação (clique/estado) durante simulação usando os MESMOS pinos/propriedades; (6) persistência;
+(7) não alterar o comportamento do modo esquemático, não duplicar lógica elétrica/simulação.
+
+Como 26.1 já documentou que `Component::m_boardMode` só é lido fora do `paint()` no SimulIDE real,
+este recurso não tem onde "portar de" -- é autoria nova, seguindo o MESMO formato declarativo
+(`package.simulidePaint`, primitivas ellipse/rect/roundedRect/polygon/line/text/repeat com
+`stateFill`/`stateVisible`/`stateText`) já usado para portar os símbolos elétricos reais, só que sem
+fonte C++ para copiar -- as imagens anexadas pelo usuário foram a referência visual usada.
+
+### 27.2 Arquitetura: 3º slot de package, escolhido por CONTEXTO de renderização (não por propriedade)
+
+Extensão direta do padrão já existente para "Chip or Logic Symbol"
+(`LOGIC_SYMBOL_PACKAGE_BY_TYPE_ID`, escolhido por `properties.logicSymbol === true`, uma propriedade
+da INSTÂNCIA): `componentSymbols.ts` ganhou `BOARD_PACKAGE_BY_TYPE_ID` (mapa separado) e um novo
+parâmetro `variant?: "board"` em `resolvedPackageFor`/`componentBox`/`packageSymbolSvg`, propagado
+por `registerPackage(typeId, pkg, logicSymbolPkg?, boardPkg?)`. Diferença deliberada do Logic
+Symbol: Board-Mode-ness é uma decisão de QUEM está renderizando (`main.ts`, dentro do Modo Placa
+real -- Mecanismo A -- ou no overlay da instância -- Mecanismo B), nunca um estado gravado no
+componente; por isso é um parâmetro explícito passado a cada chamada, não uma property lida de
+dentro de `componentSymbols.ts`. Prioridade quando ambos existem: `variant==="board"` vence sobre
+`logicSymbol` (contexto de renderização mais específico). Sem `boardPackage` registrado pro typeId,
+cai no `package` esquemático de sempre -- Modo Placa nunca fica sem aparência nenhuma, e nenhum
+typeId existente muda de comportamento sem ser explicitamente portado.
+
+`registerPackage` aceita `boardPkg` sem exigir nenhum pino (guarda mais frouxa que `pkg`/
+`logicSymbolPkg`, que exigem `pins.length > 0`): ao contrário do esquemático, o Modo Placa nunca
+desenha fio/terminal (26.1: pinos ficam ESCONDIDOS pra componentes `m_graphical` em Board Mode, só o
+corpo visual continua) -- uma aparência com 0 pinos é o caso NORMAL aqui, não uma entrada malformada.
+
+Consequência direta em `main.ts::updateComponentElement`: quando `boardVariant==="board"`, o laço
+que desenha terminal/pino de fio é pulado inteiramente (`if (boardVariant !== "board") { ...laço de
+pinos... }`) -- coordenadas de pino do package esquemático não fariam sentido sobre uma forma/
+tamanho de package diferente, e replica o comportamento real do `Component::setHidden` (26.1) de
+esconder pinos em componentes gráficos durante Board Mode.
+
+### 27.3 Tamanho/orientação próprios (`boardWidth`/`boardHeight`)
+
+Reaproveita o mecanismo de escala por-instância já existente (`__simulideSceneScaleX/Y`, lido por
+`packageInstanceScale`, já usado noutro fluxo de escala de package) em vez de inventar um 2º sistema
+de geometria: `main.ts` calcula a razão entre `component.boardWidth`/`boardHeight` (novos campos em
+`WebviewComponentModel`, mesma família de `boardX`/`boardY`/`boardRotation`/`boardFlipH`/
+`boardFlipV`) e o tamanho NATURAL do `boardPackage` (via `componentBox(typeId, props, "board")`), e
+injeta o fator resultante num objeto de properties SINTÉTICO passado ao renderer -- nunca mutando
+`component.properties` em memória (risco identificado proativamente: `runtimeSymbolProperties` pode
+devolver a referência VIVA de `component.properties`; o código sempre espalha `{...symbolProperties,
+...}` numa cópia nova antes de injetar o fator de escala). Ausente (`undefined`) == usa o tamanho
+natural do `boardPackage`, sem nenhuma escala aplicada. Rotação/flip do Modo Placa já eram cobertos
+por `boardRotation`/`boardFlipH`/`boardFlipV` (seção 26), reaproveitados sem alteração.
+
+### 27.4 Vínculo com o componente real / interação unificada
+
+Nenhuma cópia paralela de componente ou de estado: o `boardPackage` é só uma FORMA DIFERENTE de
+desenhar o MESMO `component.properties`/`component.pins`, resolvida a cada `render()` a partir do
+mesmo `state.components` de sempre -- mesmo princípio já usado por `logicSymbol`. As primitivas do
+`boardPackage` de `switches.push`/`switches.switch` usam `cssClass: "toggle-hit-zone"`, a MESMA
+classe CSS que o handler de clique genérico em `main.ts` já procura (`event.target.closest(
+".toggle-hit-zone")`, linha ~4646) para decidir `canToggle`/chamar `setSwitchClosed(component,
+component.properties.closed !== true)` (linha ~4720) -- verificado por leitura direta do fluxo
+clique→toggle: não existe (nem foi criado) nenhum 2º caminho de clique específico do Modo Placa;
+clicar no botão físico do Modo Placa aciona exatamente o mesmo `closed` que o símbolo elétrico do
+esquemático leria, e a mudança aparece nos dois (schematic + board) no próximo `render()`, porque
+ambos leem o mesmo `component.properties.closed` -- só a `stateFill` do binding SVG muda.
+
+### 27.5 Componentes portados nesta rodada e limitações documentadas
+
+- **`switches.push`**: botão físico redondo (referência: botões EN/Boot do ESP32 DevKitC).
+  `stateFill` em `closed` (verde/cinza), `stateText` ecoando `key` (mesmo rótulo do esquemático).
+- **`switches.switch`**: chave/rocker física, dois "thumbs" com `stateVisible` opostos em `closed`.
+- **`outputs.led`**: LED físico redondo (vermelho fixo). **Limitação conhecida e documentada no
+  próprio `component-catalog.json` (`source.notes`)**: o Core ainda não expõe corrente/intensidade
+  real como propriedade pra `outputs.led` -- o símbolo ESQUEMÁTICO também não reflete estado hoje.
+  A aparência do Modo Placa é estática (mesma cor sempre) até esse dado existir; quando existir, o
+  binding é só adicionar `stateFill`/`stateProjection` aqui, sem mexer no resto da arquitetura.
+- **Fora de escopo desta rodada** (decisão deliberada, não pressa): `passive.potentiometer` e
+  `outputs.seven_segment` não ganharam `boardPackage` -- typeIds sem `boardPackage` registrado
+  simplesmente continuam reusando o package esquemático no Modo Placa (27.2), nenhum comportamento
+  quebrado, só menos "físico" visualmente até serem portados numa rodada futura.
+- **`registeredSources.ts`** (manifesto `.lsdevice`/`.lssubcircuit`, que já tem seu próprio
+  `logicSymbolPackage` via `sanitizePackage`) deliberadamente NÃO ganhou `boardPackage` nesta
+  rodada -- os typeIds pedidos pelo usuário são todos do catálogo base (`component-catalog.json`),
+  não de device/subcircuito externo; extensão do manifesto fica pendente de necessidade real.
+
+### 27.6 Bug real encontrado e corrigido de passagem (Mecanismo B, overlay no circuito principal)
+
+`renderBoardOverlaysFor` montava `properties` como `{ closed: false }` **hardcoded**, descartando
+`item.properties` inteiramente -- um switch salvo com `closed: true` sempre desenhava aberto no
+overlay da instância no circuito principal (Mecanismo B), mesmo com o Modo Placa real (Mecanismo A)
+mostrando o estado correto. Corrigido para `{ closed: false, ...item.properties }` (default só para
+typeIds sem a propriedade, nunca sobrescrevendo o valor real salvo). Diretamente relevante ao
+requisito "5. Interação durante simulação -- estado deve refletir imediatamente" do pedido: sem essa
+correção, a NOVA aparência física do Modo Placa herdaria o mesmo bug de estado errado no overlay.
+
+### 27.7 Dados novos / formato
+
+- `PackageDescriptor` (formato já existente, sem mudança de schema) usado como o TIPO do novo campo
+  `boardPackage?: PackageDescriptor` em `WebviewComponentCatalogEntry` (`model.ts`) e
+  `UnifiedCatalogItem`/`entryToWebview` (`UnifiedCatalog.ts`) -- mesmo shape de `package`.
+- `WebviewComponentModel` ganha `boardWidth?: number`/`boardHeight?: number` (persistidos junto dos
+  demais campos escalares `boardX`/`boardY`/etc, mesma família, mesma garantia de cópia por valor em
+  `cloneComponent` -- seção 26.6 já cobre essa garantia estrutural, reaproveitada sem mudança).
+- `component-catalog.json`: `boardPackage.simulidePaint.source.file` marcado explicitamente como
+  `"N/A -- aparência própria do Modo Placa do LasecSimul, sem equivalente no paint() real do
+  SimulIDE"` em cada entrada nova, para nunca ser confundido com os OUTROS `simulidePaint` do mesmo
+  arquivo, que são portes fiéis de `paint()` C++ reais.
+
+### 27.8 Testes e verificação
+
+`componentSymbols.test.ts`: +5 casos -- seleção do package certo por `variant` (sem variant reusa o
+esquemático; com `variant:"board"` e `boardPackage` registrado usa o board; com `variant:"board"` mas
+SEM `boardPackage` registrado cai no esquemático, nunca fica sem aparência); os 3 typeIds portados
+(`switches.push`/`switches.switch`/`outputs.led`) lidos DIRETO do `component-catalog.json` real (não
+fixture) confirmando SVG do Modo Placa visualmente diferente do esquemático, `key`/`closed`
+continuam ecoados (mesmo estado, nunca duplicado), e presença de `toggle-hit-zone` (clicável pelo
+mesmo mecanismo genérico).
+
+Um dos 5 testes inicialmente falhou por um erro na PRÓPRIA fixture do teste (não na implementação):
+um pino de teste com `angle:180,length:8` se estendia 8px para fora da caixa 32x28 declarada, e
+`resolvePackageLayout` corretamente EXPANDE o bounding box calculado para caber qualquer lead que
+ultrapasse `width`/`height` (comportamento correto e pré-existente, não uma regressão desta rodada)
+-- o box observado (40x28) misturava a largura esperada do board package (40) só por coincidência
+numérica. Corrigido trocando o pino da fixture por um `leadOrigin:"terminal"`, `length:0`, exatamente
+na borda declarada (não estica o box), preservando a exigência de `registerPackage` de pelo menos 1
+pino para tratar o package como "real".
+
+**Verificação**: os 3 tsconfigs (`tsconfig.json`/`tsconfig.webview.json`/`tsconfig.test.json`)
+compilam sem erro; suíte completa, 228/228 (5 novos sobre os 223 anteriores), 0 falhas. Sem GUI
+disponível neste ambiente -- comparação feita por leitura de código (fluxo clique→toggle→render,
+binding `stateFill`/`stateText`), não por captura de tela real; recomenda-se sessão manual no VSCode
+cobrindo: entrar no Modo Placa de um subcircuito com `switches.push`/`switches.switch`/`outputs.led`,
+confirmar visual físico (botão redondo, chave rocker, LED bulbo) distinto do esquemático, clicar no
+botão/chave físicos durante simulação e confirmar que o pino elétrico correspondente reage no
+esquemático (mesma rede), redimensionar via `boardWidth`/`boardHeight` numa propriedade futura de UI
+(ainda sem editor dedicado nesta rodada -- os campos existem e persistem, mas não há um controle
+"Largura na Placa"/"Altura na Placa" na paleta de propriedades ainda), salvar e reabrir o arquivo
+confirmando que posição/tamanho/orientação do Modo Placa sobrevivem.
+
+### 27.9 Correção: `switches.push`/`switches.switch` NÃO precisam de `boardPackage` (2026-07-12)
+
+Usuário questionou a afirmação de 27.1 ("SimulIDE não tem representação distinta") pedindo análise
+mais profunda -- achado real, não estava certo pela metade.
+
+**O que a 1ª pesquisa (seção 26/27.1) confirmou certo**: `Component::m_boardMode` só é lido em
+`freeMove()` e `SubPackage::setBoardMode()` -- nunca dentro de um `paint()`. Um componente NUNCA
+redesenha a si mesmo diferente por causa do Modo Placa.
+
+**O que a 1ª pesquisa deixou passar**: `Push::paint()` (`components/switches/push.cpp:110-135`)
+desenha a barra do atuador usando um `QGraphicsProxyWidget` de fundo, `CustomButton`
+(`gui/custombutton.cpp`), cujo `paintEvent()` **já muda de gradiente sozinho** com
+`isDown()||isChecked()` -- e `LedBase::paint()` (`components/outputs/leds/ledbase.cpp:152-187`) **já
+calcula a cor a partir de `m_intensity`** (corrente real) a cada frame. Ou seja: pra estes tipos
+`m_graphical`, a ÚNICA aparência que existe já É física (botão com gradiente 3D, LED redondo colorido)
+e já É dinâmica (muda com o estado) -- desde SEMPRE, no esquemático inclusive, não é um recurso do
+Modo Placa. Conferido contra o `component-catalog.json` REAL (não o `boardPackage` novo): o package
+ESQUEMÁTICO de `switches.push` já tem `stateFill` em `closed` (`"#62d67b"`/`"#dddddd"`, porte fiel do
+`CustomButton`) -- **já era dinâmico antes desta sessão**.
+
+**Conclusão**: o `boardPackage` circular que autorei pra `switches.push`/`switches.switch` era
+redundante -- duplicava (com forma diferente, sem lastro em nenhum C++ real) uma dinâmica que o
+package esquemático já tinha. **Revertido**: `boardPackage` removido de ambos no
+`component-catalog.json`; Modo Placa agora reaproveita o package ESQUEMÁTICO (já físico, já dinâmico)
+via `boardX`/`boardY`/etc (mecanismo independente desde a seção 26), sem package próprio -- exatamente
+como o SimulIDE real funciona pra estes dois tipos. Mecanismo `boardPackage` (`componentSymbols.ts`)
+continua no código, disponível pra typeIds que precisarem de fato de uma forma diferente (nenhum caso
+concreto identificado ainda).
+
+**Bug real encontrado e corrigido nesta mesma revisão** (`main.ts::updateComponentElement`): o
+esconde-pino do Modo Placa estava gated em `boardVariant === "board"` (só os typeIds com
+`boardPackage` registrado), não em `catalogEntry?.graphical === true` como o `Component::setHidden`
+real -- ou seja, TODO OUTRO componente `m_graphical` sem `boardPackage` (motores, displays, sensores,
+LED antes desta rodada, etc, ~40 classes) ficava com pino visível/clicável no Modo Placa, divergindo
+do SimulIDE. Corrigido pra `const pinsHiddenInBoardMode = subcircuitBoardMode && catalogEntry?.graphical
+=== true`, cobrindo TODO componente gráfico, não só os poucos com aparência própria.
+
+**`outputs.led` mantinha `boardPackage`** logo depois desta correção, como única exceção -- mas com a
+MESMA ressalva: é igualmente estático ao package esquemático (nenhum dos dois reflete `m_intensity`/
+corrente real, gap genuíno do Core, não resolvido por nenhum dos dois packages), então não resolvia o
+"LED acende/apaga" que o usuário perguntou. **Decisão do usuário (mesma sessão, minutos depois):
+remover também, por consistência** -- ver seção 27.10.
+
+**Testes**: `componentSymbols.test.ts` -- o teste de `switches.push`/`switches.switch` reescrito pra
+confirmar exatamente o comportamento revertido (SEM `boardPackage` no catálogo, `componentBox`/
+`packageSymbolSvg` com `variant:"board"` caem no package esquemático, que já muda de cor com `closed`).
+Suíte completa após a correção: 228/228, 0 falhas (mesma contagem de antes -- teste substituído, não
+removido). 3 tsconfigs compilam limpos.
+
+### 27.10 `outputs.led` também revertido -- os 3 tipos originais ficam sem `boardPackage` (2026-07-12)
+
+Usuário confirmou (mesma sessão): remover `boardPackage` de `outputs.led` também, pela mesma lógica de
+27.9 -- não resolve o problema real (LED não acende porque falta intensidade real do Core, não porque
+falta forma redonda), e mantê-lo só pelos outros dois terem sido revertidos criaria inconsistência sem
+motivo (um typeId com aparência própria estática, os outros dois reaproveitando o esquemático).
+
+**Estado final desta rodada**: `component-catalog.json` não tem MAIS NENHUM `boardPackage` registrado
+(nenhum dos 59 itens) -- `switches.push`/`switches.switch`/`outputs.led` todos caem no package
+esquemático (já físico onde já era físico no SimulIDE real, ainda abstrato/estático onde o SimulIDE
+real também é, caso do LED) via `boardX`/`boardY`/etc, exatamente como o SimulIDE faz. O MECANISMO
+`boardPackage` (`componentSymbols.ts::BOARD_PACKAGE_BY_TYPE_ID`, `registerPackage`'s 4º argumento,
+`variant?: "board"` em `resolvedPackageFor`/`componentBox`/`packageSymbolSvg`, `boardWidth`/
+`boardHeight` em `WebviewComponentModel`) **continua no código, funcional e testado** (seção 27.8) --
+não foi removido, só ficou sem nenhum usuário real no catálogo por ora. Antes de registrar um
+`boardPackage` pra um typeId futuro, confirmar primeiro (27.9) se o `paint()` real do SimulIDE pra essa
+classe já é físico e dinâmico por si só (a maioria dos `m_graphical` é) -- só vale a pena inventar uma
+aparência nova quando o símbolo esquemático real for genuinamente abstrato/elétrico E não existir
+nenhuma foto/forma física correspondente em lugar nenhum do C++ real pra reaproveitar.
+
+**Correção de processo registrada em memória** (não `.spec`, mas relevante pra sessões futuras): ao
+reverter o `boardPackage` do LED, um round-trip via `json.dump()` do Python (só pra remover 2 campos)
+reformatou números não relacionados no arquivo inteiro (notação científica), e o reflexo de rodar
+`git checkout --` pra desfazer só esse efeito colateral apagou TODO o trabalho não commitado da sessão
+no arquivo (não só o efeito colateral) -- recuperado manualmente porque o conteúdo tinha acabado de
+aparecer num `git diff` anterior. Reversões subsequentes usaram edição cirúrgica de texto (Edit tool),
+nunca mais um round-trip de arquivo inteiro nem `git checkout` em arquivo com trabalho não commitado.
+
+**Verificação final**: suíte completa 228/228 (2 testes a mais reescritos, mesma contagem), 3
+tsconfigs compilando limpos, `component-catalog.json` validado como JSON íntegro (59 itens) após as
+duas remoções cirúrgicas.
+
+## 28. Bug de empacotamento: CSS dos webviews ausente no VSIX gerado pelo workflow (2026-07-12)
+
+Usuário reportou (2 screenshots comparando lado a lado): a paleta de componentes compilada localmente
+(F5/Extension Development Host) mostra uma LISTA de 1 coluna; a mesma paleta, instalada a partir do
+`.vsix` gerado pelo `package-installers.yml` (mesmo commit, confirmado via `gh run view` -- não é
+questão de versão desatualizada), aparece como uma GRADE de vários ícones por linha, sem nenhum
+estilo aparente.
+
+### 28.1 Causa raiz
+
+`SchematicPanel.ts:115` e `ComponentPaletteViewProvider.ts:107` montam o HTML do webview **em tempo de
+execução** referenciando o CSS DIRETO da pasta `src/` do código-fonte:
+
+```ts
+vscode.Uri.joinPath(this.extensionUri, "src", "ui", "webview", "styles.css")   // SchematicPanel.ts
+vscode.Uri.joinPath(this.extensionUri, "src", "ui", "palette", "styles.css")   // ComponentPaletteViewProvider.ts
+```
+
+Isso funciona em DEV (F5) porque `extensionUri` aponta direto pra pasta `extension/` do repositório --
+`src/ui/webview/styles.css` existe ali, sempre atualizado. Mas o `compile` do `extension/package.json`
+é só `tsc -p ./ && tsc -p ./tsconfig.webview.json` -- `tsc` NUNCA copia `.css`, só processa `.ts`/
+`.tsx`. E `scripts/package-release.js::stageExtensionFiles()` só copiava `out`/`out-webview`/`media`
+pro pacote staged -- **nunca `src/`**. `rewriteStagedPackageJson()`'s `pkg.files` (o que `vsce package`
+de fato inclui no `.vsix`) também nunca tinha um glob pra `src/**`. Resultado: os dois `styles.css`
+NUNCA existiram no `.vsix` publicado -- só no repositório fonte. No pacote instalado, `<link
+rel="stylesheet" href="...">` aponta pra um recurso inexistente, o webview carrega SEM NENHUM CSS
+custom, e o navegador cai no layout padrão: `<button class="palette-item">` sem `display:flex`
+declarado vira `inline-block` (padrão de `<button>`), e vários botões inline-block em sequência
+naturalmente quebram linha e "empilham" em grade -- exatamente a grade vista no screenshot, sem
+precisar de nenhuma regra CSS própria pra isso, é só o navegador sem estilo nenhum. O MESMO bug afeta
+o editor de esquemático principal (`SchematicPanel.ts`), não só a paleta -- provavelmente também
+aparece sem estilo algum na versão instalada, mesmo sem o usuário ter reportado ainda.
+
+### 28.2 Correção
+
+`scripts/package-release.js::stageExtensionFiles()` -- adicionados os 2 arquivos à lista `filesToCopy`
+(`src/ui/webview/styles.css`, `src/ui/palette/styles.css`), copiados pro staging preservando o MESMO
+caminho relativo `src/ui/...` (não precisa mudar nenhum `vscode.Uri.joinPath` em runtime, só garantir
+que o arquivo exista onde o código já espera). `rewriteStagedPackageJson()`'s `pkg.files` ganhou os 2
+caminhos explícitos, pra `vsce package` de fato incluir esses arquivos no `.vsix` (globs `out/**/*` etc
+não cobririam `src/`).
+
+Verificado por simulação isolada da lógica de cópia (Node ad-hoc, fora do pipeline completo -- rodar
+`package-release.js` de ponta a ponta exige compilar Core/devices/MCU adapters nativos, pesado demais
+pra esta verificação pontual): os 2 arquivos existem nos caminhos fonte esperados e a cópia produz o
+destino correto. `node --check scripts/package-release.js` confirma sintaxe válida.
+
+### 28.3 Correção relacionada: versão do pacote nunca refletia a tag da release
+
+Investigação paralela (antes de achar a causa real acima) revelou um problema de processo genuíno,
+mesmo não sendo a causa principal deste bug: `extension/package.json` ficava travado em `0.0.1`
+independente da tag Git da release (`v0.0.1`, `v0.0.3` etc) -- o job `release` de
+`package-installers.yml` só cria a tag no Git (`git tag`/`git push`), nunca escreve a versão de volta
+em `package.json`. Corrigido: novo passo "Sync extension version with release tag" no job `package`,
+que escreve a versão (do input `workflow_dispatch` ou de `github.ref_name` no push de tag, sem o
+prefixo `v`) em `extension/package.json` **e** `extension/package-lock.json` (`npm ci` valida que os
+dois batem, senão falha com "not in sync") -- só no checkout efêmero do runner, nunca commitado de
+volta ao repositório. Relevante porque, mesmo corrigido o CSS, o VS Code só detecta uma extensão como
+"atualizada" (e força reload de webviews abertos) quando o número de versão muda de verdade.
+
+### 28.4 Ação imediata recomendada ao usuário (independente do fix de código)
+
+Reinstalar via `code --install-extension ... --force` reescreve os arquivos em disco mas NÃO recarrega
+um VS Code já aberto -- extension host e `WebviewView` continuam servindo o conteúdo antigo em memória
+até "Developer: Reload Window" ou reiniciar o editor inteiro. Recomendado fechar todas as janelas do VS
+Code e reabrir após qualquer reinstalação, não confiar só no `--force` do instalador.
+
+### 28.5 Bug menor encontrado de bônus: ícone ausente de `other.package_pin`
+
+`other.package_pin` referenciava `icon: "package-pin"`, sem nenhum arquivo `.svg`/`.png`
+correspondente em `media/components/{light,dark}/` -- caía silenciosamente no fallback
+`generic-component`. Criados `package-pin.svg` (light e dark), mesmo estilo/paleta de cores do
+`package.svg` existente (retângulo do encapsulamento + 1 pino em destaque com um ponto de solda).
+Bug pré-existente, presente igualmente em dev e instalado (não relacionado à causa raiz de 28.1).

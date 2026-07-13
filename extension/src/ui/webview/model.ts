@@ -63,6 +63,14 @@ export interface WebviewComponentModel {
   boardRotation?: 0 | 90 | 180 | 270;
   boardFlipH?: boolean;
   boardFlipV?: boolean;
+  /** Tamanho na PLACA (Board Mode) -- SEM equivalente no `x`/`y`/`rotation` do esquemático, que
+   * nunca redimensiona um componente por instância (só `boardPackage.width`/`.height` natural, ver
+   * `model.ts::WebviewComponentCatalogEntry.boardPackage`). Ausente == usa o tamanho natural do
+   * `boardPackage` (ou de `package`, se não houver `boardPackage`) sem escala nenhuma. Puramente um
+   * fator de escala aplicado sobre o corpo renderizado, nunca reinterpretado como grid/pinos --
+   * evita ter que re-derivar geometria de pino pra um tamanho arbitrário. */
+  boardWidth?: number;
+  boardHeight?: number;
   /** "Selecione os Componentes expostos" -- só relevante para componentes internos persistidos no
    * `.lssubcircuit`. Ausente == `false`. */
   exposed?: boolean;
@@ -728,6 +736,18 @@ export interface WebviewComponentCatalogEntry {
    * a instância ganha a propriedade `logicSymbol` (boolean) que escolhe entre este e `package` —
    * mesmos pinos elétricos nos dois (não validado à força, só aviso, ver `saveSymbolCommand`). */
   logicSymbolPackage?: PackageDescriptor;
+  /** Aparência ESPECÍFICA do Modo Placa -- SEM equivalente no SimulIDE real (lá, `m_graphical`
+   * escolhe só POSIÇÃO/visibilidade, nunca uma forma de desenho diferente; pesquisado a fundo em
+   * `subpackage.cpp`/`component.cpp`, ver `.spec` seção 26.1/27). Recurso PRÓPRIO do LasecSimul,
+   * pedido explicitamente pelo usuário depois dessa auditoria: um componente `graphical` pode
+   * declarar uma segunda `PackageDescriptor` (mesmo formato de `package`, incluindo `simulidePaint`/
+   * estado via `stateFill`/`stateVisible`) usada SÓ quando renderizado em contexto de Modo Placa
+   * (dentro da edição do subcircuito com Modo Placa ligado, OU no overlay da instância no circuito
+   * principal) -- nunca no esquemático normal, que continua usando `package`/`logicSymbolPackage`
+   * de sempre. Ausente == Modo Placa reusa o mesmo `package` do esquemático (comportamento anterior,
+   * preservado). Mesma instância/estado/pinos elétricos o tempo todo -- isto troca só QUAL
+   * `PackageDescriptor` é usado pra desenhar, nunca cria um componente/cópia paralela. */
+  boardPackage?: PackageDescriptor;
   /** Igual ao `m_graphical` do SimulIDE real (setado por classe em `component.cpp`) -- typeIds "de
    * interação do usuário" (LED, motor, display, switch, ...) que podem aparecer no overlay de Modo
    * Placa de uma instância de subcircuito. Ausente == `false`. */

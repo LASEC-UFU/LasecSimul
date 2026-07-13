@@ -95,6 +95,12 @@ function validateWire(wire: unknown, index: number): ProjectWire {
   };
 }
 
+function asIntegrationMethod(value: unknown): "automatic" | "backwardEuler" | "trapezoidal" | "gear2" | undefined {
+  return value === "automatic" || value === "backwardEuler" || value === "trapezoidal" || value === "gear2"
+    ? value
+    : undefined;
+}
+
 function validateTopologyEndpoint(value: unknown, context: string): ProjectTopologyEndpoint {
   if (!isObject(value)) throw new Error(`${context} inválido`);
   if (value.kind === "node") {
@@ -182,6 +188,16 @@ export class ProjectSerializer {
             frequencyHz: asNumber(parsed.simulationSettings.frequencyHz),
             timeScale: asNumber(parsed.simulationSettings.timeScale),
             paused: typeof parsed.simulationSettings.paused === "boolean" ? parsed.simulationSettings.paused : undefined,
+            integrationMethod: asIntegrationMethod(parsed.simulationSettings.integrationMethod),
+            initialStepSeconds: asNumber(parsed.simulationSettings.initialStepSeconds),
+            minimumStepSeconds: asNumber(parsed.simulationSettings.minimumStepSeconds),
+            maximumStepSeconds: asNumber(parsed.simulationSettings.maximumStepSeconds),
+            relativeTolerance: asNumber(parsed.simulationSettings.relativeTolerance),
+            absoluteTolerance: asNumber(parsed.simulationSettings.absoluteTolerance),
+            maximumNewtonIterations: asNumber(parsed.simulationSettings.maximumNewtonIterations),
+            threadCount: asNumber(parsed.simulationSettings.threadCount),
+            telemetryRateHz: asNumber(parsed.simulationSettings.telemetryRateHz),
+            adaptiveTimeStep: asBoolean(parsed.simulationSettings.adaptiveTimeStep),
           }
         : {},
       mcuFirmware: Array.isArray(parsed.mcuFirmware)

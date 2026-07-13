@@ -1473,6 +1473,55 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
     }
     // Saúde operacional (watchdog/CrashGuard) de uma instância -- visibilidade pra Extension
     // decidir se avisa o usuário (.spec/lasecsimul-native-devices.spec seção 13). Só leitura.
+    if (msg.type == "getComponentStates") {
+        try {
+            const nlohmann::json payload = nlohmann::json::parse(msg.payloadJson);
+            nlohmann::json states = nlohmann::json::object();
+            static const char digits[] = "0123456789abcdef";
+            for (const auto& item : payload.at("items")) {
+                const std::string key = item.at("key").get<std::string>();
+                const uint32_t id = static_cast<uint32_t>(std::stoul(item.at("instanceId").get<std::string>()));
+                const std::vector<uint8_t> bytes = session.getComponentState(id);
+                std::string hex; hex.reserve(bytes.size() * 2);
+                for (uint8_t byte : bytes) { hex.push_back(digits[byte >> 4]); hex.push_back(digits[byte & 15]); }
+                states[key] = std::move(hex);
+            }
+            resp.ok = true; resp.payloadJson = nlohmann::json{{"states", states}}.dump();
+        } catch (const std::exception& e) {
+            resp.ok = false; resp.error = std::string("getComponentStates falhou: ") + e.what();
+        }
+        return resp;
+    }
+    if (msg.type == "resume") {
+        session.scheduler().start();
+        session.scheduler().resume();
+        resp.ok = true;
+        return resp;
+    }
+    if (msg.type == "settleMcuDebug") {
+        try {
+            const nlohmann::json payload = nlohmann::json::parse(msg.payloadJson);
+            const uint32_t instanceId = static_cast<uint32_t>(std::stoul(payload.at("instanceId").get<std::string>()));
+            session.scheduler().markDirty(instanceId);
+            session.scheduler().step(0);
+            resp.ok = true;
+        } catch (const std::exception& e) {
+            resp.ok = false;
+            resp.error = std::string("settleMcuDebug falhou: ") + e.what();
+        }
+        return resp;
+    }
+    if (msg.type == "stopMcuFirmware") {
+        try {
+            const nlohmann::json payload = nlohmann::json::parse(msg.payloadJson);
+            const uint32_t instanceId = static_cast<uint32_t>(std::stoul(payload.at("instanceId").get<std::string>()));
+            session.stopMcuFirmware(instanceId);
+            resp.ok = true;
+        } catch (const std::exception& e) {
+            resp.ok = false; resp.error = std::string("stopMcuFirmware falhou: ") + e.what();
+        }
+        return resp;
+    }
     if (msg.type == "getComponentHealth") {
         try {
             const nlohmann::json payload =
@@ -1550,6 +1599,23 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
         }
         return resp;
     }
+    if (msg.type == "getNodeVoltages") {
+        try {
+            const nlohmann::json payload = nlohmann::json::parse(msg.payloadJson);
+            nlohmann::json values = nlohmann::json::object();
+            for (const auto& probe : payload.at("probes")) {
+                const std::string key = probe.at("key").get<std::string>();
+                const uint32_t instanceId = static_cast<uint32_t>(std::stoul(probe.at("instanceId").get<std::string>()));
+                values[key] = session.nodeVoltageOfPin(instanceId, probe.at("pinId").get<std::string>());
+            }
+            resp.ok = true;
+            resp.payloadJson = nlohmann::json{{"values", values}}.dump();
+        } catch (const std::exception& e) {
+            resp.ok = false;
+            resp.error = std::string("getNodeVoltages falhou: ") + e.what();
+        }
+        return resp;
+    }
     if (msg.type == "loadMcuFirmware") {
         try {
             const nlohmann::json payload =
@@ -1557,10 +1623,15 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
             const uint32_t instanceId = static_cast<uint32_t>(std::stoul(payload.value("instanceId", std::string{"0"})));
             const std::string firmwarePath = payload.value("firmwarePath", std::string{});
             const std::string qemuBinaryOverride = payload.value("qemuBinaryOverride", std::string{});
+            McuDebugOptions debug;
+            if (payload.contains("gdbPort")) debug.gdbPort = payload["gdbPort"].get<uint16_t>();
+            debug.startPaused = payload.value("startPaused", true);
             if (firmwarePath.empty()) throw std::runtime_error("caminho do firmware vazio");
             const std::string arenaName = "lasecsimul-mcu-" + std::to_string(instanceId);
-            session.loadMcuFirmware(instanceId, firmwarePath, arenaName, qemuBinaryOverride);
+            if (debug.enabled() && debug.startPaused) session.scheduler().pause();
+            session.loadMcuFirmware(instanceId, firmwarePath, arenaName, qemuBinaryOverride, debug);
             resp.ok = true;
+            resp.payloadJson = nlohmann::json{{"gdbPort", debug.gdbPort}, {"debug", debug.enabled()}}.dump();
         } catch (const std::exception& e) {
             resp.ok = false;
             resp.error = std::string("loadMcuFirmware falhou: ") + e.what();
@@ -1685,8 +1756,25 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
                 msg.payloadJson.empty() ? nlohmann::json::object() : nlohmann::json::parse(msg.payloadJson);
             if (payload.contains("targetStepUs") && payload["targetStepUs"].is_number())
                 session.scheduler().setTargetStepUs(payload["targetStepUs"].get<uint64_t>());
+            TransientSettings transient = session.transientSettings();
             if (payload.contains("maxNonLinearIterations") && payload["maxNonLinearIterations"].is_number())
-                session.scheduler().setMaxNonLinearIterations(static_cast<size_t>(payload["maxNonLinearIterations"].get<uint64_t>()));
+                transient.maximumNewtonIterations = payload["maxNonLinearIterations"].get<uint32_t>();
+            if (payload.contains("integrationMethod") && payload["integrationMethod"].is_string()) {
+                const std::string method = payload["integrationMethod"].get<std::string>();
+                if (method == "automatic") transient.method = IntegrationMethod::Automatic;
+                else if (method == "backwardEuler") transient.method = IntegrationMethod::BackwardEuler;
+                else if (method == "trapezoidal") transient.method = IntegrationMethod::Trapezoidal;
+                else if (method == "gear2") transient.method = IntegrationMethod::Gear2;
+                else throw std::invalid_argument("integrationMethod desconhecido");
+            }
+            if (payload.contains("initialStepNs")) transient.initialStepNs = payload["initialStepNs"].get<uint64_t>();
+            if (payload.contains("minimumStepNs")) transient.minimumStepNs = payload["minimumStepNs"].get<uint64_t>();
+            if (payload.contains("maximumStepNs")) transient.maximumStepNs = payload["maximumStepNs"].get<uint64_t>();
+            if (payload.contains("relativeTolerance")) transient.relativeTolerance = payload["relativeTolerance"].get<double>();
+            if (payload.contains("absoluteTolerance")) transient.absoluteTolerance = payload["absoluteTolerance"].get<double>();
+            if (payload.contains("maximumNewtonIterations")) transient.maximumNewtonIterations = payload["maximumNewtonIterations"].get<uint32_t>();
+            if (payload.contains("adaptiveTimeStep")) transient.adaptiveTimeStep = payload["adaptiveTimeStep"].get<bool>();
+            session.setTransientSettings(transient);
             resp.ok = true;
         } catch (const std::exception& e) {
             resp.ok = false;

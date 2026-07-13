@@ -162,7 +162,7 @@ export async function chooseExposedMcuFirmwareCommand(
   }
 }
 
-interface McuFirmwareTarget {
+export interface McuFirmwareTarget {
   label: string;
   firmwarePath: string;
   qemuBinaryOverride: string | undefined;
@@ -179,7 +179,7 @@ function isMcuHostTypeId(typeId: string): boolean {
  * antes de "Run", ver `extension.ts::runSimulationWithFirmwareCheck`) -- substitui os antigos
  * comandos manuais "Recarregar firmware" (removidos do menu 2026-07-09): o recarregamento agora é
  * sempre automático, nunca uma ação que o usuário precisa lembrar de clicar. */
-function collectMcuFirmwareTargets(options: McuCommandOptions): McuFirmwareTarget[] {
+export function collectMcuFirmwareTargets(options: McuCommandOptions): McuFirmwareTarget[] {
   const targets: McuFirmwareTarget[] = [];
   for (const component of state.schematicState.components) {
     const catalogEntry = state.schematicState.catalog.find((entry) => entry.typeId === component.typeId);

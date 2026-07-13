@@ -122,7 +122,19 @@ function resolveCoreExecutable() {
 }
 
 function stageExtensionFiles() {
-  const filesToCopy = ["package.json", "package-lock.json"];
+  const filesToCopy = [
+    "package.json",
+    "package-lock.json",
+    // `SchematicPanel.ts`/`ComponentPaletteViewProvider.ts` referenciam esses 2 CSS direto de
+    // `src/ui/...` em tempo de execucao (vscode.Uri.joinPath(this.extensionUri, "src", "ui", ...)) --
+    // nunca copiados/compilados pra `out`/`out-webview`/`media` por nenhum passo do `tsc` (que so
+    // processa .ts). Sem isto aqui, o VSIX empacotado nunca tinha esses arquivos: o webview carregava
+    // sem NENHUM CSS custom, caindo no layout padrao do navegador (ex: <button> vira inline-block e
+    // "empilha" em grade, em vez da lista de 1 coluna esperada) -- bug real reportado pelo usuario
+    // comparando a extensao instalada via workflow com o compile local (paleta em grade vs. lista).
+    path.join("src", "ui", "webview", "styles.css"),
+    path.join("src", "ui", "palette", "styles.css"),
+  ];
 
   for (const relativePath of filesToCopy) {
     const sourcePath = path.join(extensionDir, relativePath);
@@ -197,7 +209,7 @@ function rewriteStagedPackageJson() {
       { libraryManifest: "./bundled/subcircuits/library.json" },
     ];
   }
-  pkg.files = ["out/**/*", "out-webview/**/*", "media/**/*", "bundled/**/*", "README.md"];
+  pkg.files = ["out/**/*", "out-webview/**/*", "media/**/*", "bundled/**/*", "README.md", "src/ui/webview/styles.css", "src/ui/palette/styles.css"];
   writeFile(stagedPackageJsonPath, `${JSON.stringify(pkg, null, 2)}\n`);
 }
 

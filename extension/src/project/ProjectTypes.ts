@@ -4,6 +4,16 @@ export interface ProjectSimulationSettings {
   frequencyHz?: number;
   timeScale?: number;
   paused?: boolean;
+  integrationMethod?: "automatic" | "backwardEuler" | "trapezoidal" | "gear2";
+  initialStepSeconds?: number;
+  minimumStepSeconds?: number;
+  maximumStepSeconds?: number;
+  relativeTolerance?: number;
+  absoluteTolerance?: number;
+  maximumNewtonIterations?: number;
+  threadCount?: number;
+  telemetryRateHz?: number;
+  adaptiveTimeStep?: boolean;
 }
 
 export interface ProjectWire {

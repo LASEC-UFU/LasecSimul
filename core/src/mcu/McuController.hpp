@@ -44,7 +44,9 @@ public:
      * instância/chamada (via IPC `loadMcuFirmware`), não no momento em que o McuController é
      * criado junto com o componente. */
     void start(const std::filesystem::path& firmwarePath, const std::string& arenaName,
-               const std::string& callSiteBinaryOverride = {});
+               const std::string& callSiteBinaryOverride = {}, McuDebugOptions debug = {});
+    QemuLaunchSpec buildLaunchSpec(const std::filesystem::path& firmwarePath, const std::string& arenaName,
+                                   const std::string& callSiteBinaryOverride = {}, McuDebugOptions debug = {}) const;
 
     /** Para o processo (gracioso até `timeout`, kill() se não responder) e sempre fecha a arena
      * depois, mesmo se o processo já tiver morrido por conta própria. */
