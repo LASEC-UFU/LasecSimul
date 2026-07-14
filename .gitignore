@@ -70,8 +70,11 @@ _deps/
 *.ilk
 *.pdb
 
-# Pacotes e caches locais opcionais
-/devices/qemu-esp32/bin/
+# QEMU vendorizado (devices/qemu-esp32/bin/) -- PRECISA ser versionado: sem isto no checkout do CI,
+# scripts/package-release.js::stageBundledAssets() copia uma pasta vazia e o instalador gerado pelo
+# workflow sai sem QEMU (bug real reportado pelo usuario). Sobrescreve as regras genericas *.exe/*.dll
+# acima só pra esta pasta -- o resto do repo continua nunca versionando artefato de build comum.
+!/devices/qemu-esp32/bin/**
 
 # Saida de build/empacotamento (gerada por scripts/build-all.js e scripts/package-release.js)
 /dist/
