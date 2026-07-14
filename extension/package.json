@@ -2,6 +2,7 @@
   "name": "lasecsimul",
   "displayName": "LasecSimul",
   "description": "Simulador de circuitos eletrônicos com MCUs emulados via QEMU, inspirado no SimulIDE.",
+  "publisher": "josuemoraisgh",
   "license": "SEE LICENSE IN LICENSE.txt",
   "version": "0.0.1",
   "engines": {
