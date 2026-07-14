@@ -15,8 +15,15 @@
 #include <cstdint>
 #include <deque>
 #include <cstring>
+#include <filesystem>
 #include <string>
 #include <vector>
+
+#if defined(_WIN32)
+#include <windows.h>
+#else
+#include <dlfcn.h>
+#endif
 
 namespace {
 
@@ -945,6 +952,50 @@ const LsdnMemoryRegion kMemoryRegions[] = {
     {kUart2Start, kUart2End, LSDN_MODULE_USART, 2},
 };
 
+/** Caminho ABSOLUTO do próprio módulo (.dll/.so) carregado, ou vazio se a resolução falhar. Usa a
+ * API nativa de cada SO (nunca `argv[0]`/CWD do processo host, que aqui é o Core, um executável
+ * DIFERENTE deste plugin). */
+std::string resolveOwnModuleDirectory() {
+#if defined(_WIN32)
+    HMODULE module = nullptr;
+    if (!GetModuleHandleExA(
+            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+            reinterpret_cast<LPCSTR>(&resolveOwnModuleDirectory), &module)) {
+        return {};
+    }
+    char buffer[MAX_PATH] = {};
+    const DWORD length = GetModuleFileNameA(module, buffer, MAX_PATH);
+    if (length == 0 || length == MAX_PATH) return {};
+    return std::filesystem::path(buffer).parent_path().string();
+#else
+    Dl_info info{};
+    if (!dladdr(reinterpret_cast<void*>(&resolveOwnModuleDirectory), &info) || !info.dli_fname) return {};
+    return std::filesystem::path(info.dli_fname).parent_path().string();
+#endif
+}
+
+/** ROM do QEMU (`-L`, ver `buildLaunchArgs` abaixo) mora em `devices/qemu-esp32/bin/esp32/rom/bin`,
+ * SEMPRE irmão de `mcu-adapters/` -- tanto no repo de desenvolvimento quanto dentro de `bundled/` no
+ * pacote instalado (`scripts/package-release.js::stageBundledAssets` copia os dois como irmãos sob a
+ * mesma raiz). Esse adaptador (.dll/.so) é sempre buildado/copiado em
+ * `mcu-adapters/espressif-esp32/build/<plataforma>/adapter.{dll,so}`
+ * (`scripts/build-mcu-adapters.js`) -- 4 níveis acima da raiz comum, de onde desce de volta pra
+ * `devices/qemu-esp32/bin/esp32/rom/bin`.
+ *
+ * Bug real corrigido aqui: o valor antigo era um caminho relativo FIXO
+ * (`"devices/qemu-esp32/bin/esp32/rom/bin"`), relativo ao diretório de trabalho do processo do
+ * CORE (não deste plugin) -- que é `dirname` do executável do Core
+ * (`CoreProcess.ts::spawnOpts.cwd`), nunca a pasta de instalação real. Calculado a partir do
+ * caminho REAL do próprio módulo carregado em vez disso. Cai pro caminho relativo antigo só se a
+ * resolução do próprio módulo falhar (nunca pior que o comportamento de antes). */
+std::string resolveDefaultRomDir() {
+    const std::string ownDir = resolveOwnModuleDirectory();
+    if (ownDir.empty()) return "devices/qemu-esp32/bin/esp32/rom/bin";
+    const std::filesystem::path romPath = std::filesystem::path(ownDir) / ".." / ".." / ".." / ".."
+        / "devices" / "qemu-esp32" / "bin" / "esp32" / "rom" / "bin";
+    return romPath.lexically_normal().string();
+}
+
 struct Esp32AdapterState {
     void* hostCtx = nullptr;
     const LsdnMcuHostApi* api = nullptr;
@@ -953,7 +1004,7 @@ struct Esp32AdapterState {
     std::vector<LsdnPinMapping> pinMapStorage;
     std::vector<std::string> launchArgStorage;
     std::vector<const char*> launchArgs;
-    std::string romDir = "devices/qemu-esp32/bin/esp32/rom/bin";
+    std::string romDir = resolveDefaultRomDir();
 };
 
 void buildPinMap(Esp32AdapterState* state) {

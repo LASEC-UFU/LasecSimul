@@ -1,4 +1,5 @@
 import * as fs from "fs";
+import * as path from "path";
 import * as vscode from "vscode";
 import { fileExists, readJsonFile } from "../pathUtils";
 import {
@@ -25,6 +26,43 @@ function getComponentById(componentId: string): WebviewComponentModel | undefine
 
 export function resolveMcuTargetCoreId(componentId: string): string | undefined {
   return mcuTargetCoreIdByComponentId.get(componentId) ?? coreInstanceIdByComponentId.get(componentId);
+}
+
+/** Caminho DEFAULT do QEMU vendorizado (`devices/qemu-esp32/bin/`), calculado a partir de onde a
+ * Extension foi carregada -- mesmo princípio de `extension.ts::resolveCoreExecutablePath` (2 layouts
+ * possíveis: repo de desenvolvimento, `extensionPath/../devices/...`; pacote instalado via VSIX,
+ * `extensionPath/bundled/devices/...`, ver `scripts/package-release.js::stageBundledAssets`). Sem
+ * isto, `qemuBinaryOverride` ficava SEMPRE vazio a menos que o usuário colasse o caminho manualmente
+ * por componente MCU -- bug real: o binário vinha corretamente empacotado (depois do fix de
+ * `.gitignore`), mas o Core nunca sabia onde achá-lo, então caía no nome nu `"qemu-system-xtensa"`
+ * (só resolve via PATH do SO, que nunca aponta pra dentro da pasta da extensão). Só binário Windows
+ * é vendorizado hoje -- em outra plataforma isto sempre devolve `undefined` (sem candidato existe),
+ * caindo pro comportamento de sempre (nome nu, depende do QEMU do sistema estar no PATH). Calculado
+ * uma vez e cacheado -- `extensionPath` não muda durante a sessão da Extension. */
+let cachedDefaultQemuBinaryPath: string | undefined | null = null;
+
+function resolveDefaultQemuBinaryPath(): string | undefined {
+  if (cachedDefaultQemuBinaryPath !== null) return cachedDefaultQemuBinaryPath;
+  const extensionPath = state.extensionContext?.extensionPath;
+  if (!extensionPath) return undefined;
+
+  const binaryName = process.platform === "win32" ? "qemu-system-xtensa.exe" : "qemu-system-xtensa";
+  const candidates = [
+    path.join(extensionPath, "..", "devices", "qemu-esp32", "bin", binaryName),
+    path.join(extensionPath, "bundled", "devices", "qemu-esp32", "bin", binaryName),
+  ];
+  cachedDefaultQemuBinaryPath = candidates.find((candidate) => fileExists(candidate));
+  return cachedDefaultQemuBinaryPath;
+}
+
+/** Lê `qemuBinaryOverride` das `properties` de um componente MCU -- valor digitado manualmente pelo
+ * usuário sempre ganha; vazio cai pro binário vendorizado default (`resolveDefaultQemuBinaryPath`)
+ * em vez de ficar `undefined` (nome nu, dependente do PATH do SO). Centraliza a mesma leitura antes
+ * duplicada em 4 lugares (`chooseMcuFirmwareCommand`, `chooseExposedMcuFirmwareCommand`,
+ * `collectMcuFirmwareTargets` x2). */
+function resolveQemuBinaryOverride(properties: Record<string, unknown>): string | undefined {
+  const configured = typeof properties.qemuBinaryOverride === "string" ? properties.qemuBinaryOverride.trim() : "";
+  return configured || resolveDefaultQemuBinaryPath();
 }
 
 function resolveSourceIdForComponent(componentId: string): string | undefined {
@@ -105,7 +143,7 @@ export async function chooseMcuFirmwareCommand(componentId: string, options: Mcu
   if (!selected) return;
 
   const firmwarePath = selected.fsPath;
-  const qemuBinaryOverride = typeof component.properties.qemuBinaryOverride === "string" ? component.properties.qemuBinaryOverride : "";
+  const qemuBinaryOverride = resolveQemuBinaryOverride(component.properties);
   state.schematicState = {
     ...state.schematicState,
     components: state.schematicState.components.map((entry) =>
@@ -120,7 +158,7 @@ export async function chooseMcuFirmwareCommand(componentId: string, options: Mcu
     const targetCoreId = resolveMcuTargetCoreId(componentId);
     if (state.coreClient && targetCoreId) {
       try {
-        await state.coreClient.loadMcuFirmware(targetCoreId, firmwarePath, qemuBinaryOverride || undefined);
+        await state.coreClient.loadMcuFirmware(targetCoreId, firmwarePath, qemuBinaryOverride);
         recordFirmwareLoaded(targetCoreId, firmwarePath);
       } catch (err) {
         options.reportCoreWarning(`carregar firmware de "${component.label}"`, err);
@@ -146,14 +184,14 @@ export async function chooseExposedMcuFirmwareCommand(
   if (!selected || !sourceId) return;
 
   const firmwarePath = selected.fsPath;
-  const qemuBinaryOverride = typeof inner?.properties.qemuBinaryOverride === "string" ? inner.properties.qemuBinaryOverride : "";
+  const qemuBinaryOverride = inner ? resolveQemuBinaryOverride(inner.properties) : resolveDefaultQemuBinaryPath();
   await updateExposedComponentPropertyCommand(outerComponentId, sourceId, innerComponentId, "firmwarePath", firmwarePath, options);
 
   if (state.simulationStatus === "running") {
     const targetCoreId = await resolveSubcircuitChildCoreId(outerComponentId, innerComponentId);
     if (state.coreClient && targetCoreId) {
       try {
-        await state.coreClient.loadMcuFirmware(targetCoreId, firmwarePath, qemuBinaryOverride || undefined);
+        await state.coreClient.loadMcuFirmware(targetCoreId, firmwarePath, qemuBinaryOverride);
         recordFirmwareLoaded(targetCoreId, firmwarePath);
       } catch (err) {
         options.reportCoreWarning(`carregar firmware de "${label}"`, err);
@@ -193,11 +231,10 @@ export function collectMcuFirmwareTargets(options: McuCommandOptions): McuFirmwa
         if (!isMcuHostTypeId(inner.typeId)) continue;
         const firmwarePath = typeof inner.properties.firmwarePath === "string" ? inner.properties.firmwarePath.trim() : "";
         if (!firmwarePath) continue;
-        const qemuBinaryOverride = typeof inner.properties.qemuBinaryOverride === "string" ? inner.properties.qemuBinaryOverride.trim() : "";
         targets.push({
           label: inner.label,
           firmwarePath,
-          qemuBinaryOverride: qemuBinaryOverride || undefined,
+          qemuBinaryOverride: resolveQemuBinaryOverride(inner.properties),
           resolveCoreId: () => resolveSubcircuitChildCoreId(component.id, inner.id),
         });
       }
@@ -206,11 +243,10 @@ export function collectMcuFirmwareTargets(options: McuCommandOptions): McuFirmwa
     if (!isMcuHostTypeId(component.typeId)) continue;
     const firmwarePath = typeof component.properties.firmwarePath === "string" ? component.properties.firmwarePath.trim() : "";
     if (!firmwarePath) continue;
-    const qemuBinaryOverride = typeof component.properties.qemuBinaryOverride === "string" ? component.properties.qemuBinaryOverride.trim() : "";
     targets.push({
       label: component.label,
       firmwarePath,
-      qemuBinaryOverride: qemuBinaryOverride || undefined,
+      qemuBinaryOverride: resolveQemuBinaryOverride(component.properties),
       resolveCoreId: () => Promise.resolve(resolveMcuTargetCoreId(component.id)),
     });
   }
