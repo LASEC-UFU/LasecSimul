@@ -7,7 +7,7 @@
     "minor": 4
   },
   "nativeEntry": {
-    "win32-x64": "build-msvc/adapter.dll",
+    "win32-x64": "build/win-x64/adapter.dll",
     "linux-x64": "build/linux-x64/adapter.so",
     "darwin-universal": "build/macos-universal/adapter.dylib"
   },
