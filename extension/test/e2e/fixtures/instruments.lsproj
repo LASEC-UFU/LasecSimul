@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 2,
+  "components": [
+    { "id": "clk", "typeId": "sources.clock", "label": "CLK", "properties": { "voltage": 5, "freqHz": 1000, "alwaysOn": true }, "visual": { "x": 80, "y": 80, "rotation": 0 } },
+    { "id": "scope", "typeId": "meters.oscope", "label": "Oscope-E2E", "properties": { "tunnels": "CLK,,,", "__ui_instrumentView": "{\"version\":1,\"kind\":\"oscope\",\"width\":820,\"height\":570,\"timeDivMs\":1,\"tracks\":1,\"channels\":[{\"hidden\":false,\"voltDiv\":1,\"voltPos\":0,\"timePosMs\":0},{\"hidden\":false,\"voltDiv\":1,\"voltPos\":0,\"timePosMs\":0},{\"hidden\":false,\"voltDiv\":1,\"voltPos\":0,\"timePosMs\":0},{\"hidden\":false,\"voltDiv\":1,\"voltPos\":0,\"timePosMs\":0}],\"triggerSource\":0,\"autoScaleChannel\":\"none\",\"filterThreshold\":0.05}" }, "visual": { "x": 180, "y": 80, "rotation": 0 } },
+    { "id": "logic", "typeId": "meters.logic_analyzer", "label": "Analyzer-E2E", "properties": { "thresholdRising": 2.5, "thresholdFalling": 2.0, "sampleIntervalNs": 1000, "signalChannels": "[{\"id\":\"CLK\",\"source\":\"CLK.pin-1\",\"label\":\"CLK\",\"kind\":\"digital\"},{\"id\":\"DATA\",\"source\":\"DATA[7:0]\",\"label\":\"DATA\",\"kind\":\"unsigned\"}]", "__ui_instrumentView": "{\"version\":1,\"kind\":\"logic\",\"width\":820,\"height\":520,\"timeDivMs\":1,\"timePosMs\":0,\"hiddenChannels\":[false,false,false,false,false,false,false,false,false],\"expandedBusChannels\":[\"DATA\"],\"triggerChannel\":0,\"triggerCondition\":\"1 == 1\",\"thresholdUp\":2.5,\"thresholdDown\":2.0}" }, "visual": { "x": 180, "y": 280, "rotation": 0 } },
+    { "id": "data", "typeId": "connectors.bus", "label": "DATA", "properties": { "width": 8, "startBit": 0 }, "visual": { "x": 80, "y": 300, "rotation": 0 } },
+    { "id": "b0", "typeId": "sources.rail", "label": "B0", "properties": { "voltage": 5 }, "visual": { "x": 30, "y": 380, "rotation": 0 } },
+    { "id": "b1", "typeId": "sources.rail", "label": "B1", "properties": { "voltage": 0 }, "visual": { "x": 30, "y": 400, "rotation": 0 } },
+    { "id": "b2", "typeId": "sources.rail", "label": "B2", "properties": { "voltage": 5 }, "visual": { "x": 30, "y": 420, "rotation": 0 } },
+    { "id": "b3", "typeId": "sources.rail", "label": "B3", "properties": { "voltage": 0 }, "visual": { "x": 30, "y": 440, "rotation": 0 } },
+    { "id": "b4", "typeId": "sources.rail", "label": "B4", "properties": { "voltage": 0 }, "visual": { "x": 30, "y": 460, "rotation": 0 } },
+    { "id": "b5", "typeId": "sources.rail", "label": "B5", "properties": { "voltage": 5 }, "visual": { "x": 30, "y": 480, "rotation": 0 } },
+    { "id": "b6", "typeId": "sources.rail", "label": "B6", "properties": { "voltage": 0 }, "visual": { "x": 30, "y": 500, "rotation": 0 } },
+    { "id": "b7", "typeId": "sources.rail", "label": "B7", "properties": { "voltage": 5 }, "visual": { "x": 30, "y": 520, "rotation": 0 } }
+  ],
+  "topology": {
+    "revision": 0,
+    "nodes": [],
+    "conductors": [
+      { "id": "wclk", "from": { "kind": "port", "componentId": "clk", "pinId": "pin-1" }, "to": { "kind": "port", "componentId": "scope", "pinId": "pin-1" }, "vertices": [] },
+      { "id": "wb0", "from": { "kind": "port", "componentId": "b0", "pinId": "out" }, "to": { "kind": "port", "componentId": "data", "pinId": "bit-0" }, "vertices": [] },
+      { "id": "wb1", "from": { "kind": "port", "componentId": "b1", "pinId": "out" }, "to": { "kind": "port", "componentId": "data", "pinId": "bit-1" }, "vertices": [] },
+      { "id": "wb2", "from": { "kind": "port", "componentId": "b2", "pinId": "out" }, "to": { "kind": "port", "componentId": "data", "pinId": "bit-2" }, "vertices": [] },
+      { "id": "wb3", "from": { "kind": "port", "componentId": "b3", "pinId": "out" }, "to": { "kind": "port", "componentId": "data", "pinId": "bit-3" }, "vertices": [] },
+      { "id": "wb4", "from": { "kind": "port", "componentId": "b4", "pinId": "out" }, "to": { "kind": "port", "componentId": "data", "pinId": "bit-4" }, "vertices": [] },
+      { "id": "wb5", "from": { "kind": "port", "componentId": "b5", "pinId": "out" }, "to": { "kind": "port", "componentId": "data", "pinId": "bit-5" }, "vertices": [] },
+      { "id": "wb6", "from": { "kind": "port", "componentId": "b6", "pinId": "out" }, "to": { "kind": "port", "componentId": "data", "pinId": "bit-6" }, "vertices": [] },
+      { "id": "wb7", "from": { "kind": "port", "componentId": "b7", "pinId": "out" }, "to": { "kind": "port", "componentId": "data", "pinId": "bit-7" }, "vertices": [] }
+    ]
+  },
+  "visual": { "components": [], "wires": [], "viewport": { "x": 0, "y": 0, "zoom": 1 } },
+  "simulationSettings": { "frequencyHz": 1000, "timeScale": 1, "paused": false }
+}

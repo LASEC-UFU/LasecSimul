@@ -150,31 +150,50 @@
         },
         "lasecsimul.simulation.integrationMethod": {
           "type": "string",
-          "enum": ["automatic", "backwardEuler", "trapezoidal", "gear2"],
+          "enum": [
+            "automatic",
+            "backwardEuler",
+            "trapezoidal",
+            "gear2"
+          ],
           "default": "automatic",
           "description": "Método de integração transiente."
         },
         "lasecsimul.simulation.adaptiveTimeStep": {
-          "type": "boolean", "default": true,
+          "type": "boolean",
+          "default": true,
           "description": "Adapta e rejeita passos conforme o erro dos estados reativos."
         },
         "lasecsimul.simulation.initialStepNs": {
-          "type": "number", "default": 100, "minimum": 1
+          "type": "number",
+          "default": 100,
+          "minimum": 1
         },
         "lasecsimul.simulation.minimumStepNs": {
-          "type": "number", "default": 1, "minimum": 1
+          "type": "number",
+          "default": 1,
+          "minimum": 1
         },
         "lasecsimul.simulation.maximumStepNs": {
-          "type": "number", "default": 100000, "minimum": 1
+          "type": "number",
+          "default": 100000,
+          "minimum": 1
         },
         "lasecsimul.simulation.relativeTolerance": {
-          "type": "number", "default": 0.0001, "exclusiveMinimum": 0
+          "type": "number",
+          "default": 0.0001,
+          "exclusiveMinimum": 0
         },
         "lasecsimul.simulation.absoluteTolerance": {
-          "type": "number", "default": 1e-9, "exclusiveMinimum": 0
+          "type": "number",
+          "default": 1e-9,
+          "exclusiveMinimum": 0
         },
         "lasecsimul.simulation.telemetryRateHz": {
-          "type": "number", "default": 10, "minimum": 1, "maximum": 60,
+          "type": "number",
+          "default": 10,
+          "minimum": 1,
+          "maximum": 60,
           "description": "Taxa de atualização visual. Leituras são enviadas em lote e não alteram a frequência do solver."
         },
         "lasecsimul.debug.gdbPath": {
@@ -261,11 +280,18 @@
     "watch": "tsc -p ./ -w",
     "watch:webview": "tsc -p ./tsconfig.webview.json -w",
     "pretest": "npm run compile && tsc -p ./tsconfig.test.json",
-    "test": "node out-test/test/project/ProjectSerializer.test.js && node out-test/src/ipc/CoreClient.test.js && node out-test/src/catalog/UnifiedCatalog.test.js && node out-test/src/catalog/registeredSources.test.js && node out-test/src/catalog/catalogMerge.test.js && node out-test/src/catalog/simulideGraphicalCatalog.test.js && node out-test/src/language.test.js && node out-test/src/ui/webview/paletteTree.test.js && node out-test/src/ui/webview/wireGeometry.test.js && node out-test/src/ui/webview/componentGeometry.test.js && node out-test/src/ui/webview/wireTopology.test.js && node out-test/src/ui/webview/topologyDocument.test.js && node out-test/src/ui/webview/subcircuitBoardMode.test.js && node out-test/src/ui/webview/valueFormatting.test.js && node out-test/src/ui/webview/componentSymbols.test.js && node out-test/src/ui/webview/instrumentTrigger.test.js && node out-test/src/catalog/simulideSceneTranslator.test.js && node out-test/src/trust/trustDecision.test.js && node out-test/src/catalog/subcircuitPackageAuthoring.test.js"
+    "test": "node out-test/test/project/ProjectSerializer.test.js && node out-test/src/ipc/CoreClient.test.js && node out-test/src/catalog/UnifiedCatalog.test.js && node out-test/src/catalog/registeredSources.test.js && node out-test/src/catalog/catalogMerge.test.js && node out-test/src/catalog/simulideGraphicalCatalog.test.js && node out-test/src/language.test.js && node out-test/src/ui/webview/paletteTree.test.js && node out-test/src/ui/webview/wireGeometry.test.js && node out-test/src/ui/webview/componentGeometry.test.js && node out-test/src/ui/webview/wireTopology.test.js && node out-test/src/ui/webview/topologyDocument.test.js && node out-test/src/ui/webview/subcircuitBoardMode.test.js && node out-test/src/ui/webview/valueFormatting.test.js && node out-test/src/ui/webview/componentSymbols.test.js && node out-test/src/ui/webview/batchProperties.test.js && node out-test/src/ui/webview/instrumentTrigger.test.js && node out-test/src/ui/webview/instrumentViewport.test.js && node out-test/src/catalog/simulideSceneTranslator.test.js && node out-test/src/trust/trustDecision.test.js && node out-test/src/catalog/subcircuitPackageAuthoring.test.js",
+    "test:e2e": "npm run compile && node test/e2e/run-webview-e2e.cjs",
+    "test:e2e:update": "npm run compile && set UPDATE_SNAPSHOTS=1&& node test/e2e/run-webview-e2e.cjs"
   },
   "devDependencies": {
+    "@playwright/test": "^1.54.1",
     "@types/node": "^20.0.0",
+    "@types/pngjs": "^6.0.5",
     "@types/vscode": "^1.85.0",
+    "@vscode/test-electron": "^2.5.2",
+    "pixelmatch": "^7.1.0",
+    "pngjs": "^7.0.0",
     "typescript": "^5.4.0"
   }
 }

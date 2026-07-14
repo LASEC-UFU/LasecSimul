@@ -1,6 +1,10 @@
 #pragma once
 #include <functional>
 #include <string>
+#include <mutex>
+#include <condition_variable>
+#include <deque>
+#include <thread>
 #include "Protocol.hpp"
 
 namespace lasecsimul::ipc {
@@ -37,6 +41,7 @@ public:
 
     /** Sinaliza encerramento limpo. Deve ser chamado dentro do MessageHandler. */
     void shutdown();
+    bool sendNotification(const std::string& type, const std::string& payloadJson);
 
 private:
     std::string m_pipeName;
@@ -46,6 +51,12 @@ private:
     // lê em blocos (ver IpcServer.cpp) em vez de 1 byte por syscall, então o que vier depois do
     // último '\n' de um bloco fica aqui até o próximo readLine() completar a linha.
     std::string m_readBuffer;
+    std::mutex m_sendMutex;
+    std::mutex m_notificationMutex;
+    std::condition_variable m_notificationWake;
+    std::deque<std::string> m_notificationQueue;
+    bool m_notificationStop = false;
+    std::thread m_notificationThread;
 
 #ifdef _WIN32
     void* m_pipe = nullptr; // HANDLE
@@ -59,6 +70,7 @@ private:
     bool acceptClient();
     void processLoop();
     bool sendLine(const std::string& line);
+    void notificationLoop();
     std::string readLine(bool& eof);
 
     static std::string buildResponse(const OutgoingResponse& resp);

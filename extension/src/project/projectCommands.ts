@@ -48,6 +48,8 @@ function webviewComponentToProjectComponent(component: WebviewComponentModel): P
     valueLabelPropertyKey: component.valueLabelPropertyKey,
     flipH: component.flipH,
     flipV: component.flipV,
+    locked: component.locked,
+    hiddenByUser: component.hiddenByUser,
     visual: { x: component.x, y: component.y, rotation: component.rotation },
     subcircuitRef: component.subcircuitRef,
   };
@@ -87,6 +89,8 @@ function projectToWebviewState(project: ProjectDocument): WebviewProjectState {
       valueLabelPropertyKey: component.valueLabelPropertyKey,
       flipH: component.flipH,
       flipV: component.flipV,
+      locked: component.locked,
+      hiddenByUser: component.hiddenByUser,
       x: component.visual?.x ?? 0,
       y: component.visual?.y ?? 0,
       rotation: component.visual?.rotation ?? 0,
@@ -390,21 +394,32 @@ export async function openProjectCommand(options: {
   });
   const selected = uris?.[0];
   if (!selected) return;
+  await openProjectFile(selected.fsPath, options);
+}
+
+/** Abertura não-interativa pelo mesmo pipeline de produção. O harness E2E usa este ponto em vez
+ * de falsificar estado dentro da Webview. */
+export async function openProjectFile(filePath: string, options: {
+  extensionUri: vscode.Uri;
+  beforeOpen?: () => void;
+  openSchematicEditor: (extensionUri: vscode.Uri) => void;
+  syncSchematicPanel: () => void;
+}): Promise<void> {
   let project: ProjectDocument;
   try {
-    project = await projectSerializer.load(selected.fsPath);
+    project = await projectSerializer.load(filePath);
   } catch (err) {
     vscode.window.showErrorMessage(`Não foi possível abrir o projeto: ${err instanceof Error ? err.message : String(err)}`);
     return;
   }
   options.beforeOpen?.();
-  state.currentProjectFilePath = selected.fsPath;
+  state.currentProjectFilePath = filePath;
   state.schematicState = projectToWebviewState(project);
-  await resolveProjectSubcircuitReferences(path.dirname(selected.fsPath));
+  await resolveProjectSubcircuitReferences(path.dirname(filePath));
   if (!state.schematicPanel) options.openSchematicEditor(options.extensionUri);
   options.syncSchematicPanel();
   markProjectSaved();
-  await addRecentProjectPath(selected.fsPath);
+  await addRecentProjectPath(filePath);
   await rebuildCoreFromSchematicState();
 }
 

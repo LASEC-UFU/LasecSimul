@@ -10,6 +10,7 @@ import {
   HelloResponsePayload,
   IpcError,
   errorCodeFromPayload,
+  errorDetailsFromPayload,
 } from "./protocol";
 import { InteractionKindDto, McuSerialPortDto, PropertySchemaDto, ReadoutFormatDto, TelemetrySample } from "./types";
 
@@ -116,6 +117,7 @@ export class CoreClient {
 
   async run(): Promise<void> { await this.request("start", {}); }
   async pause(): Promise<void> { await this.request("pause", {}); }
+  async setPauseCondition(ownerId: string, expression: string): Promise<void> { await this.request("setPauseCondition", { ownerId, expression }); }
   async resume(): Promise<void> { await this.request("resume", {}); }
   async settleMcuDebug(instanceId: string): Promise<void> { await this.request("settleMcuDebug", { instanceId }); }
   async stopMcuFirmware(instanceId: string): Promise<void> { await this.request("stopMcuFirmware", { instanceId }); }
@@ -137,9 +139,11 @@ export class CoreClient {
   async addComponent(
     typeId: string,
     properties: Record<string, unknown>,
-    pins: Array<{ id: string; x: number; y: number }> = []
+    pins: Array<{ id: string; x: number; y: number }> = [],
+    instanceName = "",
+    signalAliases: string[] = []
   ): Promise<{ instanceId: string; primaryMcuInstanceId?: string }> {
-    const resp = await this.request("addComponent", { typeId, properties, pins });
+    const resp = await this.request("addComponent", { typeId, properties, pins, instanceName, signalAliases });
     return resp as { instanceId: string; primaryMcuInstanceId?: string };
   }
 
@@ -437,7 +441,7 @@ export class CoreClient {
       if (!p) return;
       clearTimeout(p.timer);
       this.pending.delete(r.id);
-      r.ok ? p.resolve(r.payload) : p.reject(new IpcError(r.error ?? "Erro no Core", errorCodeFromPayload(r.payload)));
+      r.ok ? p.resolve(r.payload) : p.reject(new IpcError(r.error ?? "Erro no Core", errorCodeFromPayload(r.payload), errorDetailsFromPayload(r.payload)));
     } else {
       const n = msg as NotificationEnvelope;
       this.notificationHandlers.forEach((h) => h(n));

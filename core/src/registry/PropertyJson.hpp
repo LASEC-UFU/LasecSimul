@@ -133,6 +133,9 @@ inline std::optional<ReadoutFormat> parseReadoutFormat(const nlohmann::json& dev
     } else if (kind == "bitmaskHistory") {
         format.kind = ReadoutKind::BitmaskHistory;
         format.channels = readout.value("channels", 0u);
+    } else if (kind == "vectorHistory") {
+        format.kind = ReadoutKind::VectorHistory;
+        format.channels = readout.value("channels", 0u);
     } else {
         format.kind = ReadoutKind::Scalar;
         format.unit = readout.value("unit", std::string{});
@@ -242,6 +245,8 @@ inline nlohmann::json readoutFormatToJson(const ReadoutFormat& format) {
             return nlohmann::json{{"kind", "channelHistory"}, {"channels", format.channels}};
         case ReadoutKind::BitmaskHistory:
             return nlohmann::json{{"kind", "bitmaskHistory"}, {"channels", format.channels}};
+        case ReadoutKind::VectorHistory:
+            return nlohmann::json{{"kind", "vectorHistory"}, {"channels", format.channels}, {"formatVersion", 2}};
         case ReadoutKind::Scalar:
         default:
             return nlohmann::json{{"kind", "scalar"}, {"unit", format.unit}};

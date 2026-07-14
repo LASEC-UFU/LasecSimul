@@ -12,6 +12,7 @@
 #include "components/active/DiodeLegArray.hpp"
 #include "components/active/OpAmp.hpp"
 #include "components/other/Ground.hpp"
+#include "components/outputs/StepperWindings.hpp"
 #include "components/passive/Resistor.hpp"
 #include "components/passive/ResistorArray.hpp"
 #include "components/sources/DcVoltageSource.hpp"
@@ -227,6 +228,44 @@ bool testResistorDip() {
     return ok;
 }
 
+// Stepper unipolar: cada terminal de fase deve fechar uma meia-bobina real pelo quinto pino Co.
+// Com 10 ohm em série e meia-bobina de 10 ohm, A+ deve ficar no meio da fonte de 5 V.
+bool testStepperCommonPin() {
+    GlobalPluginCache cache;
+    SimulationSession session(cache);
+    registerCommon(session.components());
+    session.components().registerFactory("outputs.stepper", [](const ComponentParams& p) {
+        std::vector<Pin> pins;
+        for (int i = 1; i <= 5; ++i) {
+            pins.push_back(static_cast<size_t>(i) <= p.pinList.size()
+                ? p.pinList[i - 1]
+                : Pin{"pin-" + std::to_string(i)});
+        }
+        return std::make_unique<components::StepperWindings>(std::move(pins),
+                                                               p.property("resistance", 10.0));
+    });
+
+    const uint32_t source = session.addComponent("sources.dc_voltage", withVoltage(5.0));
+    const uint32_t series = session.addComponent("passive.resistor", withResistance(10.0));
+    const uint32_t stepper = session.addComponent("outputs.stepper", withResistance(10.0));
+    const uint32_t ground = session.addComponent("other.ground", {});
+
+    session.connectWire(source, "p1", series, "p1");
+    session.connectWire(series, "p2", stepper, "pin-1");
+    session.connectWire(stepper, "pin-5", ground, "pin");
+    session.connectWire(source, "p2", ground, "pin");
+
+    bool settled = false;
+    for (int i = 0; i < 50; ++i) {
+        if (!session.settleStep()) { settled = true; break; }
+    }
+    const double phaseVoltage = session.nodeVoltageOfPin(stepper, "pin-1");
+    std::fprintf(stderr, "[stepper] settled=%d V(A+)=%.4f (esperado ~2.5V via Co)\n", settled, phaseVoltage);
+    CHECK(settled, "stepper: settle-loop convergiu");
+    CHECK(nearlyEqual(phaseVoltage, 2.5, 0.05), "stepper: A+ conduz pela meia-bobina até o pino Co");
+    return settled && nearlyEqual(phaseVoltage, 2.5, 0.05);
+}
+
 // Keypad: tecla (row0,col0) marcada em pressedMask deve curto-circuitar row0<->col0 (baixa
 // impedância); tecla NÃO pressionada (row0,col1) deve continuar em alta impedância.
 bool testKeypad() {
@@ -273,8 +312,9 @@ int main() {
     const bool r2 = testAnalogMux();
     const bool r3 = testLedRgb();
     const bool r4 = testResistorDip();
-    const bool r5 = testKeypad();
+    const bool r5 = testStepperCommonPin();
+    const bool r6 = testKeypad();
     if (failures == 0) std::fprintf(stderr, "\nTodos os testes passaram.\n");
     else std::fprintf(stderr, "\n%d asserção(ões) FALHARAM.\n", failures);
-    return (r1 && r2 && r3 && r4 && r5 && failures == 0) ? 0 : 1;
+    return (r1 && r2 && r3 && r4 && r5 && r6 && failures == 0) ? 0 : 1;
 }

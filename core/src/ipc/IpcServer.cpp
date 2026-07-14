@@ -19,9 +19,15 @@ namespace lasecsimul::ipc {
 // ── construtor / destrutor ─────────────────────────────────────────────────────
 
 IpcServer::IpcServer(std::string pipeName)
-    : m_pipeName(std::move(pipeName)) {}
+    : m_pipeName(std::move(pipeName)), m_notificationThread([this] { notificationLoop(); }) {}
 
 IpcServer::~IpcServer() {
+    {
+        std::lock_guard<std::mutex> lock(m_notificationMutex);
+        m_notificationStop = true;
+    }
+    m_notificationWake.notify_one();
+    if (m_notificationThread.joinable()) m_notificationThread.join();
 #ifdef _WIN32
     if (m_pipe && m_pipe != INVALID_HANDLE_VALUE) {
         CloseHandle(static_cast<HANDLE>(m_pipe));
@@ -48,6 +54,32 @@ int IpcServer::run() {
 
 void IpcServer::shutdown() {
     m_shutdown = true;
+}
+
+bool IpcServer::sendNotification(const std::string& type, const std::string& payloadJson) {
+    nlohmann::json message{{"type", type}};
+    message["payload"] = payloadJson.empty() ? nlohmann::json::object() : nlohmann::json::parse(payloadJson);
+    {
+        std::lock_guard<std::mutex> lock(m_notificationMutex);
+        if (m_notificationStop) return false;
+        m_notificationQueue.push_back(message.dump());
+    }
+    m_notificationWake.notify_one();
+    return true;
+}
+
+void IpcServer::notificationLoop() {
+    for (;;) {
+        std::string message;
+        {
+            std::unique_lock<std::mutex> lock(m_notificationMutex);
+            m_notificationWake.wait(lock, [this] { return m_notificationStop || !m_notificationQueue.empty(); });
+            if (m_notificationStop && m_notificationQueue.empty()) return;
+            message = std::move(m_notificationQueue.front());
+            m_notificationQueue.pop_front();
+        }
+        (void)sendLine(message);
+    }
 }
 
 // ── serialização ──────────────────────────────────────────────────────────────
@@ -112,6 +144,7 @@ bool IpcServer::acceptClient() {
 }
 
 bool IpcServer::sendLine(const std::string& line) {
+    std::lock_guard<std::mutex> guard(m_sendMutex);
     const std::string msg = line + "\n";
     DWORD written = 0;
     return WriteFile(static_cast<HANDLE>(m_pipe), msg.data(),
@@ -181,6 +214,7 @@ bool IpcServer::acceptClient() {
 }
 
 bool IpcServer::sendLine(const std::string& line) {
+    std::lock_guard<std::mutex> guard(m_sendMutex);
     const std::string msg = line + "\n";
     ssize_t total = 0;
     const ssize_t len = static_cast<ssize_t>(msg.size());

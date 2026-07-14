@@ -35,6 +35,7 @@ public:
     using EventCallback = std::function<void()>;
     using TimeStepBeginFn = std::function<void(uint64_t, uint64_t)>;
     using TimeStepCommitFn = std::function<TimeStepDecision(uint64_t, uint64_t, bool)>;
+    using StableStepFn = std::function<void(uint64_t)>;
 
     Scheduler(size_t componentCapacity, SettleStepFn settleStep)
         : m_dirty(componentCapacity), m_settleStep(std::move(settleStep)) {}
@@ -43,6 +44,7 @@ public:
         m_beginTimeStep = std::move(begin);
         m_commitTimeStep = std::move(commit);
     }
+    void setStableStepCallback(StableStepFn callback) { m_stableStep = std::move(callback); }
     void setMaximumTimeStepNs(uint64_t ns) { m_maximumTimeStepNs.store(ns, std::memory_order_relaxed); }
     uint64_t maximumTimeStepNs() const { return m_maximumTimeStepNs.load(std::memory_order_relaxed); }
     void configureAdaptiveTimeStep(uint64_t initialNs, uint64_t minimumNs, bool adaptive) {
@@ -133,6 +135,7 @@ private:
     SettleStepFn m_settleStep;
     TimeStepBeginFn m_beginTimeStep;
     TimeStepCommitFn m_commitTimeStep;
+    StableStepFn m_stableStep;
 
     std::thread m_thread;
     mutable std::mutex m_mutex;

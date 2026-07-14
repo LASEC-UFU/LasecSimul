@@ -4294,6 +4294,7 @@
       "package": {
         "width": 32,
         "height": 72,
+        "coordinateSpace": "simulide-local",
         "border": false,
         "background": {
           "kind": "none"
@@ -4307,7 +4308,7 @@
             "notes": "m_area=QRect(-16,0,32,max(channels*8+8,40+bits*8)) com channels=2^bits (setAddrBits); esta estimativa usa só channels*8+8 (termo dominante pra channels>=~5, caso default) -- NAO cobre bits*8+40 dominando em contagens de canal muito pequenas (ex: channels=2). Z pin QPoint(-24,8) fixo; En QPoint(-24,32+bits*8) MOVE com addrBits; Addr[i] QPoint(-24,24+i*8); Chan[i] QPoint(24,8+i*8); todos angle 180 (Z/En/Addr) ou 0 (Chan), length 8 (default Pin length). Estimativa NAO verificada visualmente (sem GUI interativa nesta sessao) -- conferir no Extension Development Host antes de confiar no pixel exato."
           },
           "bounds": {
-            "x": 0,
+            "x": -16,
             "y": 0,
             "w": 32,
             "h": 72
@@ -4368,105 +4369,6 @@
             "length": 8,
             "leadEndTrim": 0.7,
             "label": "En"
-          },
-          {
-            "id": "addr-3",
-            "x": -24,
-            "y": 24,
-            "angle": 180,
-            "length": 8,
-            "leadEndTrim": 0.7,
-            "label": "A0"
-          },
-          {
-            "id": "addr-4",
-            "x": -24,
-            "y": 32,
-            "angle": 180,
-            "length": 8,
-            "leadEndTrim": 0.7,
-            "label": "A1"
-          },
-          {
-            "id": "addr-5",
-            "x": -24,
-            "y": 40,
-            "angle": 180,
-            "length": 8,
-            "leadEndTrim": 0.7,
-            "label": "A2"
-          },
-          {
-            "id": "chan-6",
-            "x": 24,
-            "y": 8,
-            "angle": 0,
-            "length": 8,
-            "leadEndTrim": 0.7,
-            "label": "Y0"
-          },
-          {
-            "id": "chan-7",
-            "x": 24,
-            "y": 16,
-            "angle": 0,
-            "length": 8,
-            "leadEndTrim": 0.7,
-            "label": "Y1"
-          },
-          {
-            "id": "chan-8",
-            "x": 24,
-            "y": 24,
-            "angle": 0,
-            "length": 8,
-            "leadEndTrim": 0.7,
-            "label": "Y2"
-          },
-          {
-            "id": "chan-9",
-            "x": 24,
-            "y": 32,
-            "angle": 0,
-            "length": 8,
-            "leadEndTrim": 0.7,
-            "label": "Y3"
-          },
-          {
-            "id": "chan-10",
-            "x": 24,
-            "y": 40,
-            "angle": 0,
-            "length": 8,
-            "leadEndTrim": 0.7,
-            "label": "Y4"
-          },
-          {
-            "id": "chan-11",
-            "x": 24,
-            "y": 48,
-            "angle": 0,
-            "length": 8,
-            "leadEndTrim": 0.7,
-            "label": "Y5"
-          },
-          {
-            "id": "chan-12",
-            "x": 24,
-            "y": 56,
-            "angle": 0,
-            "length": 8,
-            "leadEndTrim": 0.7,
-            "label": "Y6"
-          },
-          {
-            "id": "chan-13",
-            "x": 24,
-            "y": 64,
-            "angle": 0,
-            "length": 8,
-            "leadEndTrim": 0.7,
-            "label": "Y7"
           }
         ],
         "dynamicLayout": {
@@ -4961,7 +4863,7 @@
             "file": "src/components/outputs/leds/ledbar.cpp",
             "className": "LedBar",
             "method": "paint + createLeds/setSize",
-            "notes": "m_area=QRect(-8,-28,16,size*8) (width SEMPRE 16, so altura muda); LED i: QRectF(0,0,4,4) em setPos(0,-28+2+i*8); pin P QPoint(-16,-24+i*8) angle 180; pin N QPoint(16,-24+i*8) angle 0; ambos length 8 (default Pin length, sem setLength explicito). Estimativa NAO verificada visualmente (sem GUI interativa nesta sessao) -- conferir no Extension Development Host antes de confiar no pixel exato."
+            "notes": "m_area=QRect(-8,-28,16,size*8) (width SEMPRE 16, so altura muda); LED i: QRectF(0,0,4,4) em setPos(0,-28+2+i*8); pin P QPoint(-16,-24+i*8) angle 180; pin N QPoint(16,-24+i*8) angle 0; ambos length 8 (default Pin length, sem setLength explicito). Verificado diretamente em ledbar.cpp:70-101,137-150,210-219."
           },
           "bounds": {
             "x": -8,
@@ -4975,7 +4877,7 @@
           "primitives": [
             {
               "kind": "rect",
-              "x": -16,
+              "x": -8,
               "y": -28,
               "w": 16,
               "h": {
@@ -5123,7 +5025,7 @@
             "file": "src/components/outputs/leds/ledmatrix.cpp",
             "className": "LedMatrix",
             "method": "paint + createMatrix",
-            "notes": "createMatrix(): m_area=QRect(-8,-8,cols*8+8,rows*8+8) (m_verticalPins=false default); LED squares QRectF(-2,-2,4,4) at (col*8,row*8); row pins QPoint(-16,row*8) angle 180 length 8 (default Pin length); col pins QPoint(col*8,rows*8+8) angle 270 length 8. Estimativa NAO verificada visualmente (sem GUI interativa nesta sessao) -- conferir no Extension Development Host antes de confiar no pixel exato."
+            "notes": "createMatrix(): m_area=QRect(-8,-8,cols*8+8,rows*8+8) (m_verticalPins=false default); LED squares QRectF(-2,-2,4,4) at (col*8,row*8); row pins QPoint(-16,row*8) angle 180 length 8 (default Pin length); col pins QPoint(col*8,rows*8+8) angle 270 length 8. Verificado diretamente em ledmatrix.cpp:98-148,274-281."
           },
           "bounds": {
             "x": -8,
@@ -5137,7 +5039,7 @@
           "primitives": [
             {
               "kind": "roundedRect",
-              "x": -16,
+              "x": -8,
               "y": -8,
               "w": {
                 "prop": "columns",
@@ -5564,6 +5466,7 @@
       "package": {
         "width": 80,
         "height": 66,
+        "coordinateSpace": "simulide-local",
         "border": false,
         "background": {
           "kind": "none"
@@ -5652,7 +5555,7 @@
         "pins": [
           {
             "id": "pin-1",
-            "x": 0,
+            "x": -40,
             "y": 0,
             "angle": 180,
             "length": 4,
@@ -5666,7 +5569,7 @@
           },
           {
             "id": "pin-2",
-            "x": 80,
+            "x": 40,
             "y": 0,
             "angle": 0,
             "length": 4,
@@ -5693,7 +5596,7 @@
     {
       "typeId": "outputs.stepper",
       "label": "Stepper",
-      "pinCount": 4,
+      "pinCount": 5,
       "icon": "steeper",
       "folderPath": [
         "Outputs",
@@ -5717,7 +5620,7 @@
             "file": "src/components/outputs/motors/stepper.cpp",
             "className": "Stepper",
             "method": "paint",
-            "notes": "m_area=QRectF(-64,-50,114,100). Real SimulIDE has 5 pins including Co; LasecSimul built-in currently exposes 4, so this package maps the four coil pins and keeps the connector strip visual."
+            "notes": "m_area=QRectF(-64,-50,114,100). Five native terminals: A+, B+, Co, A-, B- on the left connector strip. LasecSimul preserves the legacy ids of the four phase terminals and adds pin-5 for Co."
           },
           "bounds": {
             "x": -64,
@@ -5837,6 +5740,18 @@
             "aliases": [
               "PinB2"
             ]
+          },
+          {
+            "id": "pin-5",
+            "x": -72,
+            "y": 0,
+            "angle": 180,
+            "length": 8,
+            "leadEndTrim": 0.7,
+            "label": "Co",
+            "aliases": [
+              "PinCo"
+            ]
           }
         ]
       },
@@ -5844,7 +5759,8 @@
         "pin-1",
         "pin-2",
         "pin-3",
-        "pin-4"
+        "pin-4",
+        "pin-5"
       ],
       "category": "Outputs",
       "subcategory": "Motors",
@@ -5868,6 +5784,7 @@
       "package": {
         "width": 20,
         "height": 20,
+        "coordinateSpace": "simulide-local",
         "border": false,
         "background": {
           "kind": "none"
@@ -5920,10 +5837,10 @@
         "pins": [
           {
             "id": "pin-1",
-            "x": 0,
+            "x": -16,
             "y": 0,
             "angle": 180,
-            "length": 6,
+            "length": 8,
             "leadEndTrim": 0.7,
             "label": "",
             "aliases": [
@@ -5933,10 +5850,10 @@
           },
           {
             "id": "pin-2",
-            "x": 32,
+            "x": 16,
             "y": 0,
             "angle": 0,
-            "length": 6,
+            "length": 8,
             "leadEndTrim": 0.7,
             "label": "",
             "aliases": [
@@ -7090,10 +7007,11 @@
         "filter": 0,
         "autoScale": true,
         "tracks": 4,
-        "sampleIntervalNs": 50000
+        "sampleIntervalNs": 50000,
+        "tunnels": ""
       },
       "help": {
-        "description": "Osciloscópio de até 4 canais. Conecte os pinos CH1–CH4 para visualizar formas de onda analógicas em tempo real."
+        "description": "Osciloscópio de até 4 canais. Conecte CH1–CH4 por fio ou digite nos campos coloridos o nome de um Tunnel existente. O fio físico tem prioridade."
       },
       "package": {
         "width": 227,
@@ -7198,10 +7116,11 @@
       ],
       "defaultProperties": {
         "thresholdRising": 2.5,
-        "thresholdFalling": 2.5
+        "thresholdFalling": 2.5,
+        "tunnels": ""
       },
       "help": {
-        "description": "Analisador lógico de 8 canais digitais. Captura e exibe transições de sinal com timestamp em nanosegundos."
+        "description": "Analisador lógico de 8 canais digitais. Conecte cada canal por fio ou digite no campo colorido o nome de um Tunnel existente. O fio físico tem prioridade."
       },
       "package": {
         "width": 227,

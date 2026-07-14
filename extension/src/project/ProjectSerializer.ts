@@ -61,6 +61,8 @@ function validateComponent(component: unknown, index: number): ProjectComponent 
     valueLabelPropertyKey: asString(component.valueLabelPropertyKey),
     flipH: asBoolean(component.flipH),
     flipV: asBoolean(component.flipV),
+    locked: asBoolean(component.locked),
+    hiddenByUser: asBoolean(component.hiddenByUser),
     visual: visual
       ? {
           x: asNumber(visual.x),

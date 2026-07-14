@@ -17,6 +17,8 @@ using lasecsimul::PropertyValue; // mesmo tipo usado por PropertyDescriptor (ICo
  * `SimulationSession::addComponent`, a partir do que chegou da Extension via IPC.
  */
 struct ComponentParams {
+    std::string instanceName;
+    std::vector<std::string> signalAliases;
     std::vector<lasecsimul::Pin> pinList;
     std::unordered_map<std::string, PropertyValue> properties;
 

@@ -53,6 +53,8 @@ Não existe teste confirmando que `interaction: "encoder"` no JSON do manifesto 
 - **paint(QPainter)** por componente — imperativo, stateful
 
 - Widgets Qt nativos: `JoystickWidget`, `CustomDial`, `CustomSlider`, `UpDoButton`, `TouchPadWidget`, `CustomButton`
+- Na porta SVG de `CustomButton`, `QPainter::drawText` corresponde a `fill` com `stroke="none"`.
+  Estilos de borda não podem ficar no grupo de hit-test, pois `stroke` é herdado pelo texto SVG.
 
 - Hit-test por shape() / boundingRect() — nativo, preciso
 
@@ -379,3 +381,34 @@ O inventário acontece como tarefa de pesquisa/documentação enquanto P1 estabi
 - **B — Inventário completo antes de P1/P2**
 
 Garante que nenhuma surpresa aparece antes da implementação, mas atrasa o pré-requisito técnico mais importante: estabilizar o render. Só faz sentido se a equipe quiser congelar qualquer mudança estrutural até terminar a pesquisa completa.
+
+## Interface expandida dos instrumentos (2026-07-13)
+
+O osciloscópio e o analisador lógico agora usam um único sistema visual para o popup expandido. A
+organização do SimulIDE foi preservada — plot 10×8, controles laterais, seleção por canal, escala,
+posição e trigger — com um acabamento escuro de maior contraste, cabeçalho de aquisição, legenda de
+canais e agrupamento explícito dos controles.
+
+A grade é gerada pelo renderer com cinco subdivisões menores por divisão principal. O analisador
+lógico deixou de ligar amostras por diagonais: `digitalStepPath` produz patamares horizontais e
+arestas verticais, que representam corretamente sinais digitais. Em telas estreitas, a área de
+controles passa para baixo do plot e o SVG mantém sua proporção, evitando o corte observado no popup
+antigo. Ambos os instrumentos continuam usando o mesmo estado, persistência e telemetria existentes;
+esta alteração é de apresentação e não duplica o modelo elétrico.
+
+### Entrada de canais por Tunnel
+
+Os campos coloridos do osciloscópio e do analisador lógico agora são inputs reais. Como no
+SimulIDE (`datawidget.cpp`, `datalawidget.cpp`, `oscope.cpp` e `logicanalizer.cpp`), pode-se escrever
+o nome de um componente Tunnel existente para observar aquela rede sem desenhar um fio até o
+instrumento. A resolução ocorre no `Netlist`, não no renderer: nome inexistente permanece
+desconectado, fio físico tem prioridade e remover o fio reativa o nome previamente informado.
+
+Os nomes são persistidos na propriedade `tunnels`, aparecem tanto no componente compacto quanto no
+popup expandido e sobrevivem ao ciclo salvar/reabrir. O mesmo mecanismo comum serve aos quatro
+canais analógicos e aos oito canais digitais.
+
+O empilhamento compacto do analisador lógico segue diretamente `datalawidget.ui`: campos 60×14,
+espaçamento vertical 2 e botão 60×16 após o oitavo canal. A posição do botão passou a ser calculada
+pela quantidade de canais, altura e espaçamento; isso remove a sobreposição de duas unidades que
+colocava “Expande” sobre o último campo verde.

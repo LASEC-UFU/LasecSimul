@@ -626,14 +626,12 @@ propriedade `AffectsTopology` do projeto, ex: `switches.switch_dip::poles`) um m
 recriar a instância" fora desses dois pontos; não é necessário, porque `setProperty` já cobre o caso de
 edição pós-criação.
 
-**Gap conhecido, não fechado nesta rodada**: `outputs.led_matrix`/`outputs.led_bar`/`active.analog_mux`
-não têm `package.dynamicLayout.pinGroups` no catálogo da Extension (`project/schema/
-component-catalog.json`) — só `switches.keypad` tem (trabalho de outra sessão). O lado ELÉTRICO
-(Core) já está correto e autossuficiente pros quatro (o Core nunca lê os pinos que a Extension manda em
-`addComponent`, sempre recomputa via `ComponentPinSpec` própria) — o gap é só VISUAL/UX: o desenho e a
-lista `component.pins[]` da Webview para esses 3 devices continuam usando a contagem estática do
-catálogo até alguém escrever o `dynamicLayout` deles, mesmo trabalho de verificação pixel a pixel contra
-o SimulIDE real que já foi feito pro keypad.
+**Gap fechado em 2026-07-13**: `outputs.led_matrix`, `outputs.led_bar` e `active.analog_mux` usam
+`package.dynamicLayout.pinGroups`. Grupos paramétricos não podem ser repetidos em `package.pins[]`;
+com `replacePins:true`, a lista estática fica vazia, e no mux ficam estáticos somente `z`/`en`.
+O preview de colocação usa as mesmas `defaultProperties` da criação. Na ausência legítima de uma
+propriedade, o fallback final do campo não volta a passar por `multiplier/offset`; isso evita caixas
+fantasma como `72*8+8=584` para a matriz e `64*8=512` para a barra.
 
 ## 8. Modelo de comunicação I2C, SPI, UART e GPIO — decodificação bit a bit, sem módulo de barramento
 
@@ -1319,25 +1317,24 @@ O visual deve representar **o que o componente faz**, não apenas o que ele é f
 
 ### 21.5.3 Escala 1:1 com o SimulIDE
 
-`package.width`/`height` devem corresponder às dimensões reais do componente no SimulIDE.
-1 grid unit do SimulIDE = 8 px no LasecSimul (`SIMULIDE_PACKAGE_GRID_UNIT`).
+`package.width`/`height` devem corresponder às dimensões lógicas reais do componente no SimulIDE.
+O passo padrão do grid do SimulIDE é 8 unidades de cena; pixels físicos dependem de zoom e
+`devicePixelRatio` e não podem ser usados como unidade do catálogo (`SIMULIDE_PACKAGE_GRID_UNIT`).
 
 O touchpad correto usa `240×350` px — não uma versão compacta do componente real. Sempre verificar
 as dimensões do componente no SimulIDE (`C:\SourceCode\simulide_2`) antes de definir `width`/`height`.
 
 ### 21.5.4 Âncora dos elementos visuais nos pinos reais
 
-Os pinos declarados em `package.pins[]` já estão nas coordenadas corretas. O corpo do `viewSpec` deve
-**coincidir** com essas coordenadas, não ser desenhado independentemente.
+Pinos, corpo, labels e contatos devem nascer no mesmo referencial. Para portas diretas do SimulIDE,
+usar `coordinateSpace: "simulide-local"`, conservar os `QPoint` dos pinos e o `QRect m_area` em
+`simulidePaint.bounds`, e deixar a infraestrutura normalizar tudo uma única vez.
 
-Cálculo obrigatório antes de posicionar qualquer elemento de paint:
-
-- Pino lateral (`angle: 180`, sai pela esquerda): o terminal está em `x=0`; o corpo começa em
-  `x = pin.length` (ex: `length: 8` → corpo começa em `x=8`).
-- Pino inferior (`angle: 90`, sai pela base): o terminal está em `y = package.height`; o corpo termina
-  em `y = package.height - pin.length`.
-- Labels de pino no paint devem estar junto ao terminal, não ao centro do corpo: `x ≈ pin.length + 2`
-  (para pinos esquerdos), `fontSize` 4–5 px.
+Não se presume que um terminal esquerdo esteja em `x=0` nem que um terminal inferior esteja em
+`y=package.height`: essas são coordenadas resultantes, não dados de origem. O ângulo e o comprimento
+definem o contato interno a partir do único endpoint elétrico; por exemplo, os pinos inferiores da
+matriz e do display real usam `angle: 270`. Labels seguem a mesma transformação comum e jamais devem
+alterar o `boundingRect` elétrico.
 
 ### 21.5.5 Token `__label`
 
@@ -1403,8 +1400,8 @@ type ReadoutFormat =
   | { kind: "scalar"; unit: string }            // 1 double (amperímetro, frequencímetro, sonda)
   | { kind: "channelHistory"; channels: number } // N séries independentes de double, channel-major
                                                   // (osciloscópio: canal 0 inteiro, depois canal 1, ...)
-  | { kind: "bitmaskHistory"; channels: number }; // 1 série de {timestamp, bitmask}, cada amostra
-                                                   // captura todos os canais de uma vez (analisador lógico)
+  | { kind: "bitmaskHistory"; channels: number } // formato legado, somente leitura/migração
+  | { kind: "vectorHistory"; channels: number }; // descritores dimensionais + amostras compactadas
 ```
 
 Declaração:
@@ -1419,7 +1416,7 @@ Declaração:
 ```json
 { "readout": { "kind": "scalar", "unit": "V" } }
 { "readout": { "kind": "channelHistory", "channels": 4 } }
-{ "readout": { "kind": "bitmaskHistory", "channels": 8 } }
+{ "readout": { "kind": "vectorHistory", "channels": 8 } }
 ```
 
 Ausência (`std::optional<ReadoutFormat>` em `ComponentMetadata`, campo ausente no JSON de resposta) é

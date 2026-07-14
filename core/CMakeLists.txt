@@ -64,6 +64,7 @@ set(CORE_SOURCES
     src/mcu/McuComponent.cpp
     src/simulation/Scheduler.cpp
     src/session/SimulationSession.cpp
+    src/session/PauseExpression.cpp
 )
 
 add_executable(lasecsimul-core ${CORE_SOURCES})
@@ -78,6 +79,15 @@ endif()
 
 # ── Testes ──────────────────────────────────────────────────────────────────────
 enable_testing()
+
+add_executable(pause_expression_test test/pause_expression_test.cpp src/session/PauseExpression.cpp)
+target_include_directories(pause_expression_test PRIVATE include src)
+add_test(NAME pause_expression COMMAND pause_expression_test)
+
+add_executable(logic_analyzer_vector_test test/logic_analyzer_vector_test.cpp src/simulation/Scheduler.cpp)
+target_include_directories(logic_analyzer_vector_test PRIVATE include src)
+target_link_libraries(logic_analyzer_vector_test PRIVATE nlohmann_json::nlohmann_json)
+add_test(NAME logic_analyzer_vector COMMAND logic_analyzer_vector_test)
 
 set(TEST_COMMON_SOURCES
     src/app/CoreApplication.cpp
@@ -95,6 +105,7 @@ set(TEST_COMMON_SOURCES
     src/mcu/McuComponent.cpp
     src/simulation/Scheduler.cpp
     src/session/SimulationSession.cpp
+    src/session/PauseExpression.cpp
 )
 
 # Teste de divisor de tensão (existente)

@@ -3,7 +3,7 @@
 
 namespace lasecsimul::ipc {
 
-constexpr int PROTOCOL_VERSION = 1;
+constexpr int PROTOCOL_VERSION = 2;
 
 /** Mensagem recebida do cliente (Extension), após parse do JSON de linha. */
 struct IncomingMessage {

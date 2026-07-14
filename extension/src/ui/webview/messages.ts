@@ -12,6 +12,25 @@ export const WEBVIEW_MESSAGE_VERSION = 1 as const;
 export type SimulationStatus = "stopped" | "running" | "paused";
 export type ComponentReadoutValue = number | number[];
 
+export interface AnalyzerChannelDescriptor {
+  channelId: string;
+  label: string;
+  source: string;
+  kind: "analog" | "digital" | "unsigned";
+  width: number;
+  msb: number;
+  lsb: number;
+}
+
+export interface AnalyzerVectorHistory {
+  formatVersion: 2;
+  channels: AnalyzerChannelDescriptor[];
+  timestampsNs: number[];
+  /** Uma linha por amostra e uma coluna por canal. Decimal textual preserva uint64 sem a perda de
+   * precisão de `number` no structured-clone Webview. */
+  values: string[][];
+}
+
 /** Histórico REAL (tempo simulado de verdade, `Scheduler::nowNs()` do Core -- ver `core/src/
  * components/meters/Oscope.hpp`/`LogicAnalyzer.hpp`) pra janela "Expande" -- diferente do
  * `ComponentReadoutValue` acima, que só carrega a ÚLTIMA leitura (usado pela pré-visualização
@@ -23,7 +42,7 @@ export type ComponentReadoutValue = number | number[];
 export interface InstrumentHistoryPayload {
   componentId: string;
   oscope?: { channels: Array<{ timestampsNs: number[]; values: number[] }> };
-  logic?: { timestampsNs: number[]; masks: number[] };
+  logic?: AnalyzerVectorHistory;
 }
 
 /** Um componente do circuito INTERNO de um `.lssubcircuit` -- alimenta o overlay de Modo Placa no
@@ -71,6 +90,8 @@ export type HostToWebviewMessage =
   | { version: number; type: "componentReadout"; readoutsByComponentId: Record<string, ComponentReadoutValue> }
   | { version: number; type: "wireVoltages"; voltagesByWireId: Record<string, number> }
   | { version: number; type: "simulationStatus"; status: SimulationStatus }
+  | { version: number; type: "pauseConditionTriggered"; ownerId: string; simulationTimeNs: number; expression: string; resolvedValues: Record<string, number | boolean | string>; error?: string }
+  | { version: number; type: "pauseConditionValidation"; componentId: string; valid: boolean; error?: string; column?: number }
   /** Taxa real alcançada (`(ms simulados)/(ms de parede)`, ver `coreLifecycle.ts::pollSimulationRate`)
    * -- `undefined` quando parado/sem amostra suficiente ainda (achado de auditoria de UI 2026-07-09,
    * paridade com `InfoWidget::setRate()` do SimulIDE real). */
@@ -137,6 +158,7 @@ export type WebviewToHostMessage =
   | { version: number; type: "requestOpenExternal"; url: string }
   | { version: number; type: "requestRunSimulation" }
   | { version: number; type: "requestPauseSimulation" }
+  | { version: number; type: "requestSetPauseCondition"; componentId: string; expression: string }
   | { version: number; type: "requestStopSimulation" }
   | { version: number; type: "requestSaveProject" }
   | { version: number; type: "requestOpenProject" }

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <limits>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -85,6 +86,7 @@ public:
             m_slotOwner.push_back(componentIndex);
             m_slotOrphaned.push_back(false);
             m_tunnelNameBySlot.emplace_back();
+            m_fallbackTunnelNameBySlot.emplace_back();
             slotsByPinId.emplace(pinId, slot);
         }
         m_componentPinSlots.push_back(std::move(slotsByPinId));
@@ -148,6 +150,7 @@ public:
             m_slotOwner.push_back(componentIndex);
             m_slotOrphaned.push_back(false);
             m_tunnelNameBySlot.emplace_back();
+            m_fallbackTunnelNameBySlot.emplace_back();
             slotsByPinId.emplace(pinId, slot);
         }
         m_componentPinSlots[componentIndex] = std::move(slotsByPinId);
@@ -194,15 +197,40 @@ public:
         if (!newName.empty()) m_tunnelGroups[newName].push_back(slot);
     }
 
+    /** Entrada por nome com precedência menor que fio físico. Diferente de setTunnelName(), este
+     * slot não cria um grupo: ele apenas se associa a um grupo de Tunnel real já existente. */
+    void setFallbackTunnelName(uint32_t slot, const std::string& newName) {
+        validateSlot(slot, "Netlist::setFallbackTunnelName");
+        std::string& currentName = m_fallbackTunnelNameBySlot[slot];
+        if (currentName == newName) return;
+        if (!currentName.empty()) {
+            auto it = m_fallbackTunnelGroups.find(currentName);
+            if (it != m_fallbackTunnelGroups.end()) {
+                auto& slots = it->second;
+                slots.erase(std::remove(slots.begin(), slots.end(), slot), slots.end());
+                if (slots.empty()) m_fallbackTunnelGroups.erase(it);
+            }
+        }
+        currentName = newName;
+        if (!newName.empty()) m_fallbackTunnelGroups[newName].push_back(slot);
+    }
+
     const std::unordered_map<std::string, uint32_t>& pinSlotsOf(uint32_t componentIndex) const {
         return m_componentPinSlots.at(componentIndex);
+    }
+
+    std::optional<uint32_t> tunnelSlot(std::string_view name) const {
+        const auto it = m_tunnelGroups.find(std::string(name));
+        if (it == m_tunnelGroups.end() || it->second.empty()) return std::nullopt;
+        return it->second.front();
     }
 
     bool isPinExternallyConnected(uint32_t componentIndex, const std::string& pinId) const {
         const uint32_t slot = m_componentPinSlots.at(componentIndex).at(pinId);
         if (!m_tunnelNameBySlot[slot].empty()) return true;
-        return std::any_of(m_wireEdges.begin(), m_wireEdges.end(),
-                           [slot](const auto& edge) { return edge.first == slot || edge.second == slot; });
+        if (hasWire(slot)) return true;
+        const std::string& fallback = m_fallbackTunnelNameBySlot[slot];
+        return !fallback.empty() && m_tunnelGroups.contains(fallback);
     }
 
     /** Recomputa tudo do zero — só deve ser chamado quando a topologia muda (fio/túnel/componente
@@ -223,11 +251,21 @@ public:
             pinUnion.unite(a, b);
         }
         for (const auto& [name, slots] : m_tunnelGroups) {
-            (void)name;
             if (!slots.empty()) validateSlot(slots[0], "Netlist::rebuildTopology");
             for (size_t i = 1; i < slots.size(); ++i) {
                 validateSlot(slots[i], "Netlist::rebuildTopology");
                 pinUnion.unite(slots[0], slots[i]);
+            }
+            // Mesmo contrato de Oscope/LAnalizer do SimulIDE: o nome digitado só vale quando o
+            // canal não tem connector físico e quando Tunnel::getEnode(name) encontraria uma rede.
+            if (!slots.empty()) {
+                const auto fallbacks = m_fallbackTunnelGroups.find(name);
+                if (fallbacks != m_fallbackTunnelGroups.end()) {
+                    for (uint32_t fallbackSlot : fallbacks->second) {
+                        validateSlot(fallbackSlot, "Netlist::rebuildTopology fallback tunnel");
+                        if (!hasWire(fallbackSlot)) pinUnion.unite(slots[0], fallbackSlot);
+                    }
+                }
             }
         }
         const std::vector<uint32_t> slotToNode = pinUnion.compress();
@@ -318,6 +356,11 @@ public:
     }
 
 private:
+    bool hasWire(uint32_t slot) const {
+        return std::any_of(m_wireEdges.begin(), m_wireEdges.end(),
+                           [slot](const auto& edge) { return edge.first == slot || edge.second == slot; });
+    }
+
     void validateSlot(uint32_t slot, const char* operation) const {
         if (slot >= m_slotOwner.size()) throw std::out_of_range(std::string(operation) + ": invalid pin slot");
     }
@@ -328,6 +371,7 @@ private:
      * dois (ou nenhum, não há terceiro caso hoje). */
     void disconnectSlot(uint32_t slot) {
         if (!m_tunnelNameBySlot[slot].empty()) setTunnelName(slot, m_tunnelNameBySlot[slot], "");
+        if (!m_fallbackTunnelNameBySlot[slot].empty()) setFallbackTunnelName(slot, "");
         const auto touchesSlot = [slot](const auto& edge) { return edge.first == slot || edge.second == slot; };
         m_wireEdges.erase(std::remove_if(m_wireEdges.begin(), m_wireEdges.end(), touchesSlot), m_wireEdges.end());
     }
@@ -338,7 +382,9 @@ private:
     std::vector<std::unordered_map<std::string, uint32_t>> m_componentPinSlots; // por componente: pinId -> slot
     std::vector<std::pair<uint32_t, uint32_t>> m_wireEdges;
     std::unordered_map<std::string, std::vector<uint32_t>> m_tunnelGroups;
+    std::unordered_map<std::string, std::vector<uint32_t>> m_fallbackTunnelGroups;
     std::vector<std::string> m_tunnelNameBySlot;
+    std::vector<std::string> m_fallbackTunnelNameBySlot;
     std::vector<bool> m_componentRemoved; // por componente: true se removeComponent() já foi chamado
 };
 

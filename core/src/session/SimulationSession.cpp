@@ -1,12 +1,14 @@
 #include "SimulationSession.hpp"
 #include <algorithm>
 #include <cmath>
+#include <cctype>
 #include <cstdio>
 #include <limits>
 #include <map>
 #include <optional>
 #include <span>
 #include <stdexcept>
+#include <unordered_map>
 #include <nlohmann/json.hpp>
 #include "../mcu/McuComponent.hpp"
 
@@ -110,6 +112,7 @@ SimulationSession::SimulationSession(plugins::GlobalPluginCache& globalCache, si
             else ++m_rejectedTransientSteps;
             return {accept, maximumError};
         });
+    m_scheduler.setStableStepCallback([this](uint64_t timestampNs) { onStableStepUnlocked(timestampNs); });
     setTransientSettings(m_transientSettings);
 }
 
@@ -189,13 +192,201 @@ uint32_t SimulationSession::addComponent(const std::string& typeId, const regist
     std::vector<std::string> pinIds;
     for (const Pin& pin : instance->pins()) pinIds.push_back(pin.id);
     m_netlist.registerComponent(componentIndex, pinIds);
+    for (const Pin& pin : instance->pins()) {
+        const std::optional<std::string> tunnel = instance->fallbackTunnelNameForPin(pin.id);
+        if (tunnel) m_netlist.setFallbackTunnelName(m_netlist.pinSlotsOf(componentIndex).at(pin.id), *tunnel);
+    }
 
     instance->onAssignedIndex(componentIndex);
+    if (!instance->signalSubscriptions().empty()) m_signalSubscribers.push_back(componentIndex);
     m_componentInstances.push_back(std::move(instance));
+    if (!params.instanceName.empty()) m_signalAliases[params.instanceName] = componentIndex;
+    for (const std::string& alias : params.signalAliases) if (!alias.empty()) m_signalAliases[alias] = componentIndex;
     m_topologyDirty = true;
     m_topologyReuseSafe = false;
     m_scheduler.markDirty(componentIndex);
     return componentIndex;
+}
+
+ResolvedSignal SimulationSession::resolveSignal(const std::string& reference, std::optional<uint32_t> self) const {
+    return m_scheduler.synchronized([&] { return resolveSignalUnlocked(reference, self); });
+}
+
+ResolvedSignal SimulationSession::resolveSignalUnlocked(const std::string& reference, std::optional<uint32_t> self) const {
+    std::string text;
+    for (char c : reference) if (!std::isspace(static_cast<unsigned char>(c))) text.push_back(c);
+    if (text.empty()) throw std::invalid_argument("referencia de sinal vazia");
+
+    std::optional<int> msb;
+    std::optional<int> lsb;
+    const size_t bracket = text.find('[');
+    std::string base = bracket == std::string::npos ? text : text.substr(0, bracket);
+    if (bracket != std::string::npos) {
+        if (text.back() != ']') throw std::invalid_argument("slice sem ] em " + reference);
+        const std::string slice = text.substr(bracket + 1, text.size() - bracket - 2);
+        const size_t colon = slice.find(':');
+        try {
+            msb = std::stoi(slice.substr(0, colon));
+            lsb = colon == std::string::npos ? *msb : std::stoi(slice.substr(colon + 1));
+        } catch (...) { throw std::invalid_argument("indice de barramento invalido em " + reference); }
+        if (*msb < 0 || *lsb < 0 || *msb > 63 || *lsb > 63) throw std::out_of_range("indice de barramento fora de 0..63 em " + reference);
+    }
+
+    std::optional<uint32_t> component;
+    std::string pinId;
+    if (base.starts_with("@self.")) {
+        if (!self) throw std::invalid_argument("@self usado fora de um componente");
+        component = *self;
+        pinId = base.substr(6);
+    } else if (const size_t dot = base.find('.'); dot != std::string::npos) {
+        const auto alias = m_signalAliases.find(base.substr(0, dot));
+        if (alias == m_signalAliases.end()) throw std::invalid_argument("componente desconhecido: " + base.substr(0, dot));
+        component = alias->second;
+        pinId = base.substr(dot + 1);
+    } else if (const auto alias = m_signalAliases.find(base); alias != m_signalAliases.end()) {
+        component = alias->second;
+    }
+
+    std::vector<uint32_t> slots;
+    std::vector<int> bitIndices;
+    if (component) {
+        const auto& byId = m_netlist.pinSlotsOf(*component);
+        if (!pinId.empty()) {
+            const auto pin = byId.find(pinId);
+            if (pin == byId.end()) throw std::invalid_argument("pino desconhecido: " + base);
+            slots.push_back(pin->second);
+        } else if (msb) {
+            const int step = *msb >= *lsb ? 1 : -1;
+            for (int bit = *lsb;; bit += step) {
+                const auto pin = byId.find("bit-" + std::to_string(bit));
+                if (pin == byId.end()) throw std::out_of_range("bit " + std::to_string(bit) + " inexistente em " + base);
+                slots.push_back(pin->second);
+                bitIndices.push_back(bit);
+                if (bit == *msb) break;
+            }
+        } else {
+            for (int bit = 0; bit < 64; ++bit) {
+                const auto pin = byId.find("bit-" + std::to_string(bit));
+                if (pin == byId.end()) break;
+                slots.push_back(pin->second);
+                bitIndices.push_back(bit);
+            }
+            if (slots.empty() && byId.size() == 1) slots.push_back(byId.begin()->second);
+            if (slots.empty()) throw std::invalid_argument("componente nao representa sinal unico/barramento: " + base);
+        }
+    } else if (const auto tunnel = m_netlist.tunnelSlot(base)) {
+        if (msb && (*msb != 0 || *lsb != 0)) throw std::out_of_range("sinal escalar nao possui esse indice: " + reference);
+        slots.push_back(*tunnel);
+    } else {
+        for (uint32_t i = 0; i < m_componentInstances.size(); ++i) {
+            if (!m_componentInstances[i]) continue;
+            const auto& byId = m_netlist.pinSlotsOf(i);
+            const auto pin = byId.find(base);
+            if (pin == byId.end()) continue;
+            if (!slots.empty()) throw std::invalid_argument("sinal ambiguo: " + base);
+            slots.push_back(pin->second);
+        }
+        if (slots.empty()) throw std::invalid_argument("sinal nao encontrado: " + base);
+    }
+
+    ResolvedSignal result;
+    result.descriptor.source = reference;
+    result.descriptor.label = reference;
+    result.descriptor.width = static_cast<uint16_t>(slots.size());
+    result.descriptor.msb = static_cast<int16_t>(msb.value_or(static_cast<int>(slots.size()) - 1));
+    result.descriptor.lsb = static_cast<int16_t>(lsb.value_or(0));
+    result.descriptor.kind = slots.size() == 1 ? SignalValueKind::Analog : SignalValueKind::Unsigned;
+    result.elements.reserve(slots.size());
+    for (uint32_t slot : slots) {
+        if (slot >= m_topology.slotToNode.size()) throw std::runtime_error("topologia ainda nao resolvida para " + reference);
+        result.elements.push_back(m_nodeVoltages.at(m_topology.slotToNode[slot]));
+    }
+    return result;
+}
+
+void SimulationSession::acquireSubscribedSignalsUnlocked(uint64_t timestampNs) {
+    for (uint32_t componentIndex : m_signalSubscribers) {
+        IComponentModel* component = m_componentInstances[componentIndex].get();
+        if (!component || !component->wantsResolvedSignalSample(timestampNs)) continue;
+        const std::vector<SignalSubscription> subscriptions = component->signalSubscriptions();
+        if (subscriptions.empty()) continue;
+        std::vector<ResolvedSignal> values;
+        values.reserve(subscriptions.size());
+        for (const SignalSubscription& subscription : subscriptions) {
+            ResolvedSignal value = resolveSignalUnlocked(subscription.source, componentIndex);
+            value.descriptor.channelId = subscription.channelId;
+            value.descriptor.label = subscription.label.empty() ? subscription.source : subscription.label;
+            value.descriptor.kind = subscription.requestedKind;
+            values.push_back(std::move(value));
+        }
+        component->onResolvedSignalSample(timestampNs, values);
+    }
+}
+
+void SimulationSession::setPauseCondition(const std::string& ownerId, const std::string& expression) {
+    PauseExpression compiled = PauseExpression::compile(expression);
+    m_scheduler.synchronized([&] {
+        if (!compiled.empty()) {
+            // Validação semântica antes de iniciar; não arma bordas com esta leitura.
+            compiled.evaluate([this](PauseSignalMode mode, const std::string& reference) -> PauseScalar {
+                if (mode == PauseSignalMode::Current) {
+                    const auto alias = m_signalAliases.find(reference);
+                    if (alias == m_signalAliases.end()) throw std::invalid_argument("componente de corrente não encontrado: " + reference);
+                    IComponentModel* component = m_componentInstances.at(alias->second).get();
+                    const auto current = component ? component->current() : std::nullopt;
+                    if (!current) throw std::invalid_argument("componente não expõe corrente: " + reference);
+                    return *current;
+                }
+                const ResolvedSignal signal = resolveSignalUnlocked(reference, std::nullopt);
+                if (mode == PauseSignalMode::Digital || mode == PauseSignalMode::Rising || mode == PauseSignalMode::Falling)
+                    return signal.unsignedValue() != 0;
+                if (signal.elements.size() == 1) return signal.elements.front();
+                return signal.unsignedValue();
+            });
+            compiled.resetEdges();
+        }
+        if (compiled.empty()) m_pauseConditions.erase(ownerId);
+        else m_pauseConditions[ownerId] = PauseConditionState{std::move(compiled), false, false};
+    });
+}
+
+void SimulationSession::onStableStepUnlocked(uint64_t timestampNs) {
+    acquireSubscribedSignalsUnlocked(timestampNs);
+    for (auto& [ownerId, condition] : m_pauseConditions) try {
+        PauseEvaluation evaluation = condition.expression.evaluate([this](PauseSignalMode mode, const std::string& reference) -> PauseScalar {
+            if (mode == PauseSignalMode::Current) {
+                const auto alias = m_signalAliases.find(reference);
+                if (alias == m_signalAliases.end()) throw std::invalid_argument("componente de corrente não encontrado: " + reference);
+                IComponentModel* component = m_componentInstances.at(alias->second).get();
+                const auto current = component ? component->current() : std::nullopt;
+                if (!current) throw std::invalid_argument("componente não expõe corrente: " + reference);
+                return *current;
+            }
+            const ResolvedSignal signal = resolveSignalUnlocked(reference, std::nullopt);
+            if (mode == PauseSignalMode::Digital || mode == PauseSignalMode::Rising || mode == PauseSignalMode::Falling)
+                return signal.unsignedValue() != 0;
+            if (signal.elements.size() == 1) return signal.elements.front();
+            return signal.unsignedValue();
+        });
+        if (evaluation.value && !condition.wasTrue) {
+            m_scheduler.pause();
+            if (m_pauseTriggeredCallback) m_pauseTriggeredCallback({ownerId, timestampNs, condition.expression.source(), std::move(evaluation.resolvedValues)});
+        }
+        condition.wasTrue = evaluation.value;
+        condition.errorReported = false;
+    } catch (const PauseExpressionError& error) {
+        m_scheduler.pause();
+        if (!condition.errorReported && m_pauseTriggeredCallback) {
+            m_pauseTriggeredCallback({ownerId, timestampNs, condition.expression.source(), {},
+                "coluna " + std::to_string(error.column) + ": " + error.what()});
+        }
+        condition.errorReported = true;
+    } catch (const std::exception& error) {
+        m_scheduler.pause();
+        if (!condition.errorReported && m_pauseTriggeredCallback) m_pauseTriggeredCallback({ownerId, timestampNs, condition.expression.source(), {}, error.what()});
+        condition.errorReported = true;
+        std::fprintf(stderr, "[PauseCondition] avaliação falhou em %llu ns: %s\n", static_cast<unsigned long long>(timestampNs), error.what());
+    }
 }
 
 void SimulationSession::connectWire(uint32_t componentA, const std::string& pinIdA, uint32_t componentB,
@@ -344,9 +535,25 @@ std::optional<std::string> SimulationSession::setProperty(uint32_t component, co
             }
         }
 
+        std::unordered_map<std::string, std::string> oldFallbackTunnels;
+        for (const Pin& pin : instance->pins()) {
+            if (const std::optional<std::string> name = instance->fallbackTunnelNameForPin(pin.id)) {
+                oldFallbackTunnels.emplace(pin.id, *name);
+            }
+        }
+
         descriptor.set(value);
         if ((schema.flags & PropertySchemaAffectsPinCount) != 0) reregisterPinsIfChanged(component, instance);
-        if ((schema.flags & (PropertySchemaAffectsTopology | PropertySchemaAffectsPinCount)) != 0) {
+
+        bool fallbackTunnelChanged = false;
+        for (const Pin& pin : instance->pins()) {
+            const std::optional<std::string> name = instance->fallbackTunnelNameForPin(pin.id);
+            if (!name) continue;
+            const auto old = oldFallbackTunnels.find(pin.id);
+            if (old == oldFallbackTunnels.end() || old->second != *name) fallbackTunnelChanged = true;
+            m_netlist.setFallbackTunnelName(m_netlist.pinSlotsOf(component).at(pin.id), *name);
+        }
+        if ((schema.flags & (PropertySchemaAffectsTopology | PropertySchemaAffectsPinCount)) != 0 || fallbackTunnelChanged) {
             m_topologyDirty = true;
             m_topologyReuseSafe = false;
         }

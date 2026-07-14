@@ -53,6 +53,34 @@ function packagePinBoxSide(length: number): number {
   return Math.max(24, length * 2 + 16);
 }
 
+/** Duplica `PACKAGE_PIN_LABEL_FONT_SIZE` (`componentSymbols.ts`) -- mesmo motivo de
+ * `packagePinBoxSide` acima: este módulo roda no host, sem acesso ao código de renderização da
+ * Webview. */
+const DEFAULT_PACKAGE_PIN_LABEL_FONT_SIZE = 7;
+
+/** Espelha EXATAMENTE o ramo `!hasCustomLabelPos` de `packagePinLeadSvg` (`componentSymbols.ts`) --
+ * mesma fórmula de offset (`length + (labelSpace ?? max(2, fontSize/2))`) e mesma posição/rotação
+ * por `angle` cardeal. Usada tanto pro seed (quando o pino ainda não tem `labelX`/`labelY` no
+ * arquivo) quanto, implicitamente, como a "verdade" que o preview do editor precisa reproduzir --
+ * se as duas fórmulas divergirem, o editor mostra uma posição que o esquemático final não respeita.
+ * Em espaço NATIVO (mesmo de `pin.x`/`pin.y`), não escalado. */
+function defaultLabelNativePosition(
+  anchorX: number,
+  anchorY: number,
+  angle: 0 | 90 | 180 | 270,
+  length: number,
+  labelSpace: number | undefined,
+  fontSize: number
+): { x: number; y: number; rotation: 0 | 90 | 270 } {
+  const offset = length + (labelSpace ?? Math.max(2, fontSize / 2));
+  switch (angle) {
+    case 0: return { x: anchorX - offset, y: anchorY, rotation: 0 };
+    case 90: return { x: anchorX, y: anchorY + offset, rotation: 90 };
+    case 180: return { x: anchorX + offset, y: anchorY, rotation: 0 };
+    case 270: return { x: anchorX, y: anchorY - offset, rotation: 270 };
+  }
+}
+
 /** Caixa de `graphics.text`, mesma fórmula de `propertyDrivenBox` -- usada só pra centralizar o
  * rótulo seedado do pino na posição inicial (o usuário pode arrastar depois). */
 function labelBoxSize(text: string, fontSize: number): { width: number; height: number } {
@@ -249,10 +277,21 @@ export function seedPackageAuthoringComponents(
     });
 
     const labelText = pin.label ?? pin.id;
-    const fontSize = 7;
-    const rad = (rotation * Math.PI) / 180;
-    const labelAnchorX = anchorX + Math.cos(rad) * (length + 9);
-    const labelAnchorY = anchorY + Math.sin(rad) * (length + 9);
+    const fontSize = typeof pin.labelFontSize === "number" ? pin.labelFontSize : DEFAULT_PACKAGE_PIN_LABEL_FONT_SIZE;
+    // `pin.labelX`/`labelY` (espaço NATIVO, ver model.ts) ganham de qualquer fórmula padrão -- uma
+    // vez que o arquivo tem posição explícita de rótulo, ela é a fonte de verdade (nunca recalculada
+    // aqui). Só cai no `defaultLabelNativePosition` (mesma fórmula de `packagePinLeadSvg`) quando o
+    // pino NUNCA foi editado por este editor -- garante que o preview do editor bate com o que o
+    // esquemático já renderiza por padrão, mesmo antes de qualquer arraste do usuário.
+    const hasCustomLabelPos = typeof pin.labelX === "number" && typeof pin.labelY === "number";
+    const nativeAnchorX = typeof pin.x === "number" ? pin.x : 0;
+    const nativeAnchorY = typeof pin.y === "number" ? pin.y : 0;
+    const labelSpaceNative = typeof pin.labelSpace === "number" ? pin.labelSpace : undefined;
+    const nativeLabel = hasCustomLabelPos
+      ? { x: pin.labelX as number, y: pin.labelY as number, rotation: 0 as 0 | 90 | 270 }
+      : defaultLabelNativePosition(nativeAnchorX, nativeAnchorY, rotation, rawLength, labelSpaceNative, fontSize);
+    const labelAnchorX = origin.x + nativeLabel.x * scaleX;
+    const labelAnchorY = origin.y + nativeLabel.y * scaleY;
     const labelBox = labelBoxSize(labelText, fontSize);
     components.push({
       id: idFactory(),
@@ -260,7 +299,7 @@ export function seedPackageAuthoringComponents(
       label: "graphics.text",
       x: Math.round(labelAnchorX - labelBox.width / 2),
       y: Math.round(labelAnchorY - labelBox.height / 2),
-      rotation: 0,
+      rotation: hasCustomLabelPos ? nearestCardinalRotation(typeof pin.labelRotation === "number" ? pin.labelRotation : 0) : nativeLabel.rotation,
       pins: [],
       properties: { text: labelText, fontSize, color: "#1f2937", linkedPinComponentId: pinComponentId },
     });
@@ -333,13 +372,17 @@ export function compilePackageAuthoringComponents(components: readonly WebviewCo
     return { remainingComponents, touchedPackageAuthoring, hasPackage: false, errors, warnings };
   }
   const tunnelsById = new Map(components.filter((c) => c.typeId === TUNNEL_TYPE_ID).map((c) => [c.id, c]));
-  const labelByPinComponentId = new Map<string, string>();
+  // Guarda o componente `graphics.text` INTEIRO (não só o texto) -- a posição/rotação/fontSize
+  // arrastados pelo usuário no editor precisam sobreviver ao compile, ver `labelBoxSize` abaixo.
+  // Antes desta mudança, só o texto era lido de volta: qualquer reposicionamento de rótulo feito no
+  // editor era descartado silenciosamente a cada save (bug real, motivo de este bloco existir).
+  const labelByPinComponentId = new Map<string, WebviewComponentModel>();
   for (const c of components) {
     if (c.typeId !== "graphics.text") continue;
     const linked = c.properties.linkedPinComponentId;
     if (typeof linked === "string" && linked) {
       const text = typeof c.properties.text === "string" ? c.properties.text : undefined;
-      if (text) labelByPinComponentId.set(linked, text);
+      if (text) labelByPinComponentId.set(linked, c);
     }
   }
 
@@ -381,21 +424,37 @@ export function compilePackageAuthoringComponents(components: readonly WebviewCo
     const box = packagePinBoxSide(length);
     const anchorX = pinComp.x + box / 2;
     const anchorY = pinComp.y + box / 2;
-    const label = labelByPinComponentId.get(pinComp.id) ?? pinId;
+    const labelComponent = labelByPinComponentId.get(pinComp.id);
+    const label = (typeof labelComponent?.properties.text === "string" ? labelComponent.properties.text : undefined) ?? pinId;
     const tunnelName = typeof tunnel.properties.name === "string" ? tunnel.properties.name : "";
     if (!tunnelName) {
       warnings.push(`Túnel interno vinculado ao pino "${pinId}" não tem nome -- não será exposto no circuito principal.`);
       continue;
     }
 
-    pins.push({
+    const pinEntry: PackagePin = {
       id: pinId,
       x: anchorX - packageComponent.x,
       y: anchorY - packageComponent.y,
       angle: pinComp.rotation,
       length,
       label,
-    });
+    };
+    // Posição do rótulo é SEMPRE persistida a partir de onde o `graphics.text` linkado está
+    // AGORA na cena (arrastado ou não) -- vira a fonte de verdade pro esquemático a partir deste
+    // save, igual ao `x`/`y` do próprio pino. Mesma fórmula de caixa (`labelBoxSize`) usada pra
+    // seedar a posição inicial, ver `seedPackageAuthoringComponents`.
+    if (labelComponent) {
+      const labelFontSize = typeof labelComponent.properties.fontSize === "number" ? labelComponent.properties.fontSize : DEFAULT_PACKAGE_PIN_LABEL_FONT_SIZE;
+      const labelBox = labelBoxSize(label, labelFontSize);
+      pinEntry.labelX = labelComponent.x + labelBox.width / 2 - packageComponent.x;
+      pinEntry.labelY = labelComponent.y + labelBox.height / 2 - packageComponent.y;
+      pinEntry.labelFontSize = labelFontSize;
+      pinEntry.labelTextAnchor = "middle";
+      pinEntry.labelDominantBaseline = "middle";
+      if (labelComponent.rotation) pinEntry.labelRotation = labelComponent.rotation;
+    }
+    pins.push(pinEntry);
     interfaceEntries.push({ pinId, label, internalTunnel: tunnelName, internalTunnelId: tunnel.id });
   }
 

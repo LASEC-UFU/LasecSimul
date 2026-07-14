@@ -4,6 +4,7 @@
  * Sem framework de testes externo: usa assert() + código de saída 1 em falha.
  * Executa em CI sem VSCode.
  */
+#include <algorithm>
 #include <cassert>
 #include <chrono>
 #include <cmath>
@@ -14,6 +15,7 @@
 #include <fstream>
 #include <thread>
 #include <string>
+#include <vector>
 
 #include "app/CoreApplication.hpp"
 #include "ipc/IpcServer.hpp"
@@ -835,7 +837,7 @@ static void testGetPropertySchemasOverIpc() {
         TEST_ASSERT(oscopeReadout.value("channels", 0u) == 4u, "oscope: readout.channels == 4");
 
         const nlohmann::json& logicAnalyzerReadout = readoutByTypeId["meters.logic_analyzer"];
-        TEST_ASSERT(logicAnalyzerReadout.value("kind", std::string{}) == "bitmaskHistory", "logic_analyzer: readout.kind == bitmaskHistory");
+        TEST_ASSERT(logicAnalyzerReadout.value("kind", std::string{}) == "vectorHistory", "logic_analyzer: readout.kind == vectorHistory");
         TEST_ASSERT(logicAnalyzerReadout.value("channels", 0u) == 8u, "logic_analyzer: readout.channels == 8");
 
         const nlohmann::json& ampmeterReadout = readoutByTypeId["meters.ampmeter"];
@@ -1046,6 +1048,66 @@ static void testCoreShutdown() {
     TEST_ASSERT(serverResult == 0, "shutdown encerrou servidor com código 0");
 }
 
+// Integração temporal real: condição registrada pelo protocolo, avaliada pelo
+// worker do Scheduler e devolvida como notificação assíncrona no mesmo pipe.
+static void testPauseConditionNotificationOverIpc() {
+    std::fprintf(stderr, "\n[T4g] condicao de pausa dispara notificacao IPC no passo do Core\n");
+    const std::string pipeName = "lasecsimul-bootstrap-test-pause-condition";
+    int serverResult = -1;
+    std::thread serverThread([&] {
+        lasecsimul::app::CoreApplication app({pipeName});
+        serverResult = app.run();
+    });
+#ifdef _WIN32
+    void* conn = clientConnect(pipeName);
+    const bool connected = conn != INVALID_HANDLE_VALUE;
+#else
+    int conn = clientConnect(pipeName);
+    const bool connected = conn >= 0;
+#endif
+    TEST_ASSERT(connected, "cliente conectou para teste de pausa");
+    if (connected) {
+        int nextId = 1;
+        std::vector<nlohmann::json> notifications;
+        auto send = [&](const std::string& type, const nlohmann::json& payload) {
+            const std::string id = std::to_string(nextId++);
+            clientWriteLine(conn, nlohmann::json{{"id",id},{"type",type},{"payload",payload},
+                {"protocolVersion",lasecsimul::ipc::PROTOCOL_VERSION}}.dump());
+            for (;;) {
+                const nlohmann::json message = nlohmann::json::parse(clientReadLine(conn));
+                if (message.contains("id") && message.value("id", std::string{}) == id) return message;
+                notifications.push_back(message);
+            }
+        };
+        send("hello", {{"clientVersion","0.1.0"}});
+        send("addComponent", {{"typeId","sources.clock"},{"instanceName","CLK"},
+            {"properties",{{"freqHz",1000.0},{"voltage",5.0},{"alwaysOn",true}}}});
+        const nlohmann::json condition = send("setPauseCondition", {{"ownerId","analyzer"},{"expression","rising(CLK.out)"}});
+        if (!condition.value("ok", false)) std::fprintf(stderr, "  [info] rejeicao: %s\n", condition.dump().c_str());
+        TEST_ASSERT(condition.value("ok", false), "Core aceita e compila a condicao pelo IPC");
+        send("start", nlohmann::json::object());
+
+        // O start pode responder antes da notificacao. Uma requisicao sincronizadora
+        // posterior permite consumir qualquer notificacao que tenha sido enfileirada.
+        for (int attempt = 0; attempt < 20 && notifications.empty(); ++attempt) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            send("getSimulationTime", nlohmann::json::object());
+        }
+        const auto triggered = std::find_if(notifications.begin(), notifications.end(), [](const nlohmann::json& n) {
+            return n.value("type", std::string{}) == "pauseConditionTriggered";
+        });
+        TEST_ASSERT(triggered != notifications.end(), "Core envia pauseConditionTriggered sem polling da UI");
+        if (triggered != notifications.end()) {
+            TEST_ASSERT((*triggered)["payload"].value("ownerId", std::string{}) == "analyzer", "evento preserva ownerId");
+            TEST_ASSERT((*triggered)["payload"].value("simulationTimeNs", uint64_t{0}) > 0, "evento informa instante simulado exato");
+        }
+        send("shutdown", nlohmann::json::object());
+        clientClose(conn);
+    }
+    serverThread.join();
+    TEST_ASSERT(serverResult == 0, "servidor encerrou apos teste de pausa");
+}
+
 // ── main ───────────────────────────────────────────────────────────────────────
 
 int main() {
@@ -1060,6 +1122,7 @@ int main() {
     testSimulideComplexAbiEventsOverIpc();
     testGetPropertySchemasOverIpc();
     testSetPropertyValidationOverIpc();
+    testPauseConditionNotificationOverIpc();
     testCoreShutdown();
 
     if (failures == 0) {

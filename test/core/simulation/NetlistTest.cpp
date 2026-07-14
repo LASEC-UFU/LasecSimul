@@ -133,6 +133,37 @@ int main() {
 
     {
         Netlist netlist;
+        const auto tunnel = netlist.registerComponent(0, {"pin"});
+        const auto instrument = netlist.registerComponent(1, {"ch0"});
+        const auto physicalSource = netlist.registerComponent(2, {"out"});
+        netlist.setTunnelName(tunnel.at("pin"), "", "SIGNAL");
+        netlist.setFallbackTunnelName(instrument.at("ch0"), "SIGNAL");
+
+        Topology topology = netlist.rebuildTopology();
+        ok &= expect(topology.slotToNode[tunnel.at("pin")] == topology.slotToNode[instrument.at("ch0")],
+                     "instrument fallback should observe a real tunnel with the same name");
+
+        netlist.connectWire(instrument.at("ch0"), physicalSource.at("out"));
+        topology = netlist.rebuildTopology();
+        ok &= expect(topology.slotToNode[instrument.at("ch0")] == topology.slotToNode[physicalSource.at("out")],
+                     "physical wire should connect the instrument channel");
+        ok &= expect(topology.slotToNode[instrument.at("ch0")] != topology.slotToNode[tunnel.at("pin")],
+                     "physical wire should take precedence over the typed tunnel name");
+
+        netlist.disconnectWire(instrument.at("ch0"), physicalSource.at("out"));
+        topology = netlist.rebuildTopology();
+        ok &= expect(topology.slotToNode[tunnel.at("pin")] == topology.slotToNode[instrument.at("ch0")],
+                     "removing the physical wire should reactivate the tunnel fallback");
+
+        Netlist noRealTunnel;
+        const auto loneInstrument = noRealTunnel.registerComponent(0, {"ch0"});
+        noRealTunnel.setFallbackTunnelName(loneInstrument.at("ch0"), "MISSING");
+        ok &= expect(!noRealTunnel.isPinExternallyConnected(0, "ch0"),
+                     "typed name without a real Tunnel must remain disconnected like Tunnel::getEnode");
+    }
+
+    {
+        Netlist netlist;
         const auto a = netlist.registerComponent(0, {"p1", "p2"});
         const auto b = netlist.registerComponent(1, {"p1", "p2"});
         Topology topology = netlist.rebuildTopology();

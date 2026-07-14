@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { IpcError } from "../ipc/protocol";
 import { ComponentReadoutValue, InstrumentHistoryPayload, SimulationStatus } from "../ui/webview/messages";
-import { CanonicalEndpoint, TopologyNode, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewWireModel, endpointId, endpointPinId } from "../ui/webview/model";
+import { CanonicalEndpoint, TopologyNode, TUNNEL_TYPE_ID, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewWireModel, endpointId, endpointPinId } from "../ui/webview/model";
 import { state, coreInstanceIdByComponentId, mcuTargetCoreIdByComponentId } from "../state";
 import { pinsForTypeId } from "../extension";
 import { electricalEdgesForProject, diffElectricalEdges } from "../ui/webview/wireTopology";
@@ -123,8 +123,13 @@ async function pushComponentToCoreNow(
 ): Promise<boolean> {
   if (!state.coreClient || !shouldSyncComponentToCore(typeId)) return false;
   try {
-    const response = await state.coreClient.addComponent(typeId, properties, pins);
+    const model = state.schematicState.components.find((component) => component.id === componentId);
+    const response = await state.coreClient.addComponent(typeId, properties, pins, componentId, model?.label ? [model.label] : []);
     registerCoreIdsForComponent(componentId, typeId, response);
+    if (typeId === TUNNEL_TYPE_ID) {
+      const name = String(properties.name ?? "");
+      if (name) await state.coreClient.setTunnelName(response.instanceId, pins[0]?.id ?? "pin", "", name);
+    }
     return true;
   } catch (err) {
     reportCoreWarning(`criar "${typeId}"`, err);
@@ -295,6 +300,11 @@ export function decodeComponentReadout(typeId: string, state: Buffer): Component
   if (readoutFormat?.kind === "bitmaskHistory") {
     return state.length >= 4 ? state.readUInt32LE(0) : undefined;
   }
+  if (readoutFormat?.kind === "vectorHistory") {
+    // O prefixo de compatibilidade é deliberado: mantém o símbolo compacto e projetos/clients V1
+    // operacionais enquanto o popup consome o payload vetorial completo abaixo.
+    return state.length >= 4 ? state.readUInt32LE(0) : undefined;
+  }
   // Fallback legado -- typeId sem readoutFormat no catálogo ainda.
   if (
     typeId === "instruments.voltmeter" ||
@@ -353,7 +363,59 @@ export function decodeInstrumentHistory(typeId: string, state: Buffer): Instrume
       masks.push(state.readUInt32LE(offset + 8));
       offset += 12;
     }
-    return { timestampsNs, masks };
+    return legacyMasksToVectorHistory(timestampsNs, masks, readoutFormat.channels);
+  }
+  if (readoutFormat?.kind === "vectorHistory") {
+    // LA V2: latest legacy mask, magic/version/count, descritores variáveis e amostras uint64.
+    // Todos os acessos são precedidos por bounds checks: estado vindo de plugin/Core incompatível
+    // falha fechado em vez de deslocar offsets e fabricar canais.
+    const magic = 0x3256414c;
+    if (state.length < 12 || state.readUInt32LE(4) !== magic || state.readUInt16LE(8) !== 2) return undefined;
+    const channelCount = state.readUInt16LE(10);
+    if (channelCount > 32) return undefined;
+    let offset = 12;
+    const channels: NonNullable<InstrumentHistoryPayload["logic"]>["channels"] = [];
+    const readU16 = (): number | undefined => {
+      if (offset + 2 > state.length) return undefined;
+      const value = state.readUInt16LE(offset); offset += 2; return value;
+    };
+    for (let channel = 0; channel < channelCount; channel++) {
+      const idLength = readU16();
+      const labelLength = readU16();
+      const sourceLength = readU16();
+      const width = readU16();
+      const msb = readU16();
+      const lsb = readU16();
+      if ([idLength, labelLength, sourceLength, width, msb, lsb].some((v) => v === undefined) || offset + 2 > state.length) return undefined;
+      const kindByte = state.readUInt8(offset); offset += 2; // kind + reserved
+      const textBytes = idLength! + labelLength! + sourceLength!;
+      if (offset + textBytes > state.length || width! < 1 || width! > 64) return undefined;
+      const channelId = state.toString("utf8", offset, offset + idLength!); offset += idLength!;
+      const label = state.toString("utf8", offset, offset + labelLength!); offset += labelLength!;
+      const source = state.toString("utf8", offset, offset + sourceLength!); offset += sourceLength!;
+      channels.push({
+        channelId, label, source, width: width!, msb: msb!, lsb: lsb!,
+        kind: kindByte === 0 ? "analog" : kindByte === 1 ? "digital" : "unsigned",
+      });
+    }
+    if (offset + 4 > state.length) return undefined;
+    const sampleCount = state.readUInt32LE(offset); offset += 4;
+    const packedWidths = channels.map((channel) => Math.max(1, Math.ceil(channel.width / 8)));
+    const bytesPerSample = 8 + packedWidths.reduce((sum, width) => sum + width, 0);
+    if (sampleCount > 1_000_000 || offset + sampleCount * bytesPerSample > state.length) return undefined;
+    const timestampsNs: number[] = [];
+    const values: string[][] = [];
+    for (let sample = 0; sample < sampleCount; sample++) {
+      timestampsNs.push(Number(state.readBigUInt64LE(offset))); offset += 8;
+      const row: string[] = [];
+      for (let channel = 0; channel < channelCount; channel++) {
+        let value = 0n;
+        for (let byte = 0; byte < packedWidths[channel]!; byte++) value |= BigInt(state.readUInt8(offset++)) << BigInt(byte * 8);
+        row.push(value.toString(10));
+      }
+      values.push(row);
+    }
+    return { formatVersion: 2, channels, timestampsNs, values };
   }
   // Fallback legado -- typeId sem readoutFormat no catálogo ainda.
   if (typeId === "meters.oscope") {
@@ -384,9 +446,27 @@ export function decodeInstrumentHistory(typeId: string, state: Buffer): Instrume
       masks.push(state.readUInt32LE(offset + 8));
       offset += 12;
     }
-    return { timestampsNs, masks };
+    return legacyMasksToVectorHistory(timestampsNs, masks, 8);
   }
   return undefined;
+}
+
+export function legacyMasksToVectorHistory(timestampsNs: number[], masks: number[], width = 8): NonNullable<InstrumentHistoryPayload["logic"]> {
+  const safeWidth = Math.max(1, Math.min(32, Math.trunc(width)));
+  return {
+    formatVersion: 2,
+    channels: Array.from({ length: safeWidth }, (_, index) => ({
+      channelId: `D${index}`,
+      label: `D${index}`,
+      source: `@self.${index + 1}`,
+      kind: "digital" as const,
+      width: 1,
+      msb: 0,
+      lsb: 0,
+    })),
+    timestampsNs: [...timestampsNs],
+    values: masks.map((mask) => Array.from({ length: safeWidth }, (_, bit) => String((mask >>> bit) & 1))),
+  };
 }
 
 export async function sendInstrumentHistory(componentId: string): Promise<void> {
@@ -543,15 +623,23 @@ export function setSimulationStatus(status: SimulationStatus): void {
  * persistidos, então é isto que tem que mandar pro Core ao reabrir um projeto. */
 export function runSimulation(): void {
   if (!state.coreClient) return;
+  // Publish "running" before the request. A condition can fire in the Core's
+  // first converged step, before the start response returns; in that race the
+  // asynchronous "paused" notification must be the last state, never be
+  // overwritten by the start promise continuation.
+  startVoltageReadoutPolling();
+  setSimulationStatus("running");
   state.coreClient
     .run()
     .then(() => {
-      startVoltageReadoutPolling();
-      setSimulationStatus("running");
       void pollInstrumentReadouts();
       void pollWireVoltages();
     })
-    .catch((err) => reportCoreWarning("iniciar simulação", err));
+    .catch((err) => {
+      stopVoltageReadoutPolling();
+      setSimulationStatus("stopped");
+      reportCoreWarning("iniciar simulação", err);
+    });
 }
 
 export function pauseSimulation(): void {
@@ -674,9 +762,15 @@ async function rebuildCoreFromSchematicStateNow(): Promise<void> {
       const response = await state.coreClient.addComponent(
         component.typeId,
         component.properties,
-        pinsForProjectComponent(component)
+        pinsForProjectComponent(component),
+        component.id,
+        component.label ? [component.label] : []
       );
       registerCoreIdsForComponent(component.id, component.typeId, response);
+      if (component.typeId === TUNNEL_TYPE_ID) {
+        const name = String(component.properties.name ?? "");
+        if (name) await state.coreClient.setTunnelName(response.instanceId, component.pins[0]?.id ?? "pin", "", name);
+      }
     } catch (err) {
       reportCoreWarning(`recriar "${component.typeId}" (${component.id})`, err);
     }

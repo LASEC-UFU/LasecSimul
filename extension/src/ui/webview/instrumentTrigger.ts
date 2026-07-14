@@ -27,6 +27,23 @@ export function findTriggerAnchorIndex(history: number[], thresholdUp: number): 
   return undefined;
 }
 
+/** Constrói um traço digital sample-and-hold: mantém o nível anterior horizontalmente até a nova
+ * amostra e então faz uma aresta vertical. Uma polilinha comum ligaria 0→1 por uma diagonal e
+ * inventaria valores analógicos que não existem num analisador lógico. */
+export function digitalStepPath(masks: number[], bit: number, width: number, high: number, low: number): string {
+  let path = "";
+  let previousY: number | undefined;
+  masks.forEach((mask, index) => {
+    const x = (index / Math.max(1, masks.length - 1)) * width;
+    const y = ((mask >>> bit) & 1) === 1 ? high : low;
+    if (index === 0) path = `M ${x.toFixed(1)} ${y.toFixed(1)}`;
+    else if (previousY === y) path += ` L ${x.toFixed(1)} ${y.toFixed(1)}`;
+    else path += ` L ${x.toFixed(1)} ${(previousY ?? y).toFixed(1)} L ${x.toFixed(1)} ${y.toFixed(1)}`;
+    previousY = y;
+  });
+  return path;
+}
+
 /** Porta fiel de `OscopeChannel::voltChanged()`/`updateStep()` (SimulIDE-dev real) -- rastreia
  * mínimo/máximo ao longo dos ciclos e detecta a borda de subida cruzando o PONTO MÉDIO da
  * amplitude do próprio sinal (não um nível fixo arbitrário) -- mesmo princípio de "Auto Trigger

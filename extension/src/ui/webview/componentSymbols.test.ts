@@ -204,12 +204,20 @@ import { PackageDescriptor } from "./model";
 
     const probeHigh = packageSymbolSvg("meters.probe", { __readout: 5, threshold: 2.5, negativeThreshold: -2.5 }, "probe-render") ?? "";
     const probeLow = packageSymbolSvg("meters.probe", { __readout: -5, threshold: 2.5, negativeThreshold: -2.5 }, "probe-render-low") ?? "";
-    const scopeSvg = packageSymbolSvg("meters.oscope", {}, "scope-render") ?? "";
-    const logicSvg = packageSymbolSvg("meters.logic_analyzer", {}, "logic-render") ?? "";
+    const scopeSvg = packageSymbolSvg("meters.oscope", { tunnels: "SINAL_A,,," }, "scope-render") ?? "";
+    const logicSvg = packageSymbolSvg("meters.logic_analyzer", { tunnels: "CLK,DATA" }, "logic-render") ?? "";
     assert(probeHigh.includes('fill="#ffa600"'), `Probe acima do threshold deveria ficar laranja por stateFill numerico, markup: ${probeHigh}`);
     assert(probeLow.includes('fill="#0064ff"'), `Probe abaixo do threshold negativo deveria ficar azul por stateFill numerico, markup: ${probeLow}`);
     assert(scopeSvg.includes('width="219" height="153"') && scopeSvg.includes(">0 Hz</text>"), `Oscope deveria renderizar DataWidget/PlotDisplay colapsado, markup: ${scopeSvg}`);
-    assert(logicSvg.includes('width="219" height="153"') && logicSvg.includes('width="60" height="14"'), `Logic analyzer deveria renderizar DataLaWidget/PlotDisplay colapsado, markup: ${logicSvg}`);
+    assert(logicSvg.includes('width="219" height="153"') && logicSvg.includes('class="meter-channel-input"'), `Logic analyzer deveria renderizar DataLaWidget/PlotDisplay colapsado, markup: ${logicSvg}`);
+    assert(scopeSvg.includes('data-instrument-channel="0"') && scopeSvg.includes('value="SINAL_A"'), `QLineEdit CH1 deveria exibir o túnel persistido: ${scopeSvg}`);
+    assert(logicSvg.includes('value="CLK"') && logicSvg.includes('value="DATA"'), `QLineEdit digitais deveriam exibir os túneis persistidos: ${logicSvg}`);
+    assert(logicSvg.includes('data-instrument-channel="7"') && logicSvg.includes('y="120" width="60" height="14"'),
+      `oitavo QLineEdit deveria ocupar y=120..134 conforme DataLaWidget.ui: ${logicSvg}`);
+    assert(logicSvg.includes('y="136.8" width="58.4" height="14.4"'),
+      `Expande deveria começar depois dos 8 canais, sem sobrepor channel7: ${logicSvg}`);
+    assert(scopeSvg.includes('font-size="9" font-weight="700" fill="#000014" stroke="none">Expande</text>'),
+      `texto do CustomButton deve ter fill do QPen sem herdar stroke cinza do hit-target: ${scopeSvg}`);
   });
 
   await test("com package registrado, componentBox usa o layout resolvido (com folga pra leads)", () => {
@@ -1082,6 +1090,9 @@ import { PackageDescriptor } from "./model";
     // Terminais agora são declarados diretamente no ponto ELÉTRICO real: linhas
     // estendem 8px à esquerda do corpo e colunas 8px abaixo, então a caixa cresce em AMBOS os eixos.
     assert(box.width === 80 && box.height === 80, `LedMatrix 8x8: m_area 72x72 + terminal real esquerdo/baixo = 80x80, recebido ${JSON.stringify(box)}`);
+    const missingPropertiesBox = componentBox("outputs.led_matrix", {});
+    assert(missingPropertiesBox.width === 72 && missingPropertiesBox.height === 72,
+      `fallback sem rows/columns deve preservar m_area 72x72, nunca reaplicar *8 e virar 584: ${JSON.stringify(missingPropertiesBox)}`);
 
     const row0 = pinLocalPosition("pin-1", 0, 16, "outputs.led_matrix", props);
     const row1 = pinLocalPosition("pin-2", 1, 16, "outputs.led_matrix", props);
@@ -1099,6 +1110,8 @@ import { PackageDescriptor } from "./model";
 
     const svg = componentSymbolSvg("outputs.led_matrix", smallProps);
     assert((svg.match(/<rect/g) ?? []).length === 1 + 4 * 3, `LedMatrix 4x3 deveria desenhar 1 corpo + 12 LEDs, recebido ${(svg.match(/<rect/g) ?? []).length}: ${svg}`);
+    assert(svg.includes('<g transform="translate(8.000,0.000)"><g transform="scale(1.000000,1.000000)"><rect x="0" y="0"'),
+      `m_area da matriz deve começar após o lead esquerdo, não sobre o endpoint elétrico: ${svg}`);
   });
 
   await test("coordinateSpace simulide-local normaliza corpo e pinos pela mesma origem m_area", () => {
@@ -1128,6 +1141,9 @@ import { PackageDescriptor } from "./model";
     // Com terminal real declarado, os pinos ficam distribuídos dentro da altura do corpo e só
     // expandem a largura (8px em cada lado).
     assert(box.width === 32 && box.height === 64, `LedBar size=8: largura 16 + terminais reais laterais = 32, altura igual ao corpo 64, recebido ${JSON.stringify(box)}`);
+    const missingPropertiesBox = componentBox("outputs.led_bar", {});
+    assert(missingPropertiesBox.width === 16 && missingPropertiesBox.height === 64,
+      `fallback sem size deve preservar o corpo 16x64, nunca reaplicar *8 e virar 512: ${JSON.stringify(missingPropertiesBox)}`);
 
     const p0 = pinLocalPosition("pin-P1", 0, 16, "outputs.led_bar", props);
     const p1 = pinLocalPosition("pin-P2", 1, 16, "outputs.led_bar", props);
@@ -1139,6 +1155,9 @@ import { PackageDescriptor } from "./model";
     // P (tip x=-16) e N (tip x=+16) ficam nas pontas OPOSTAS dos leads, não nas bordas do corpo --
     // 32px de distância entre as PONTAS (16 de cada lado), não os 16px de largura do corpo em si.
     assert(near(n0.x - p0.x, 32), `Pino N deveria ficar na ponta do lead oposto (P tip=-16, N tip=+16, 32px de distância), recebido p0=${JSON.stringify(p0)} n0=${JSON.stringify(n0)}`);
+    const svg = packageSymbolSvg("outputs.led_bar", props, "bar-aligned") ?? "";
+    assert(svg.includes('<g transform="translate(8.000,0.000)"><g transform="scale(1.000000,1.000000)"><rect x="0" y="0" width="16"'),
+      `corpo da barra deve ocupar x=8..24 entre os terminais x=0/32: ${svg}`);
 
     const smallProps = { size: 4 };
     const smallBox = componentBox("outputs.led_bar", smallProps);
@@ -1149,9 +1168,9 @@ import { PackageDescriptor } from "./model";
     catalogPackage("active.analog_mux");
     const props = { channels: 8 };
     const box = componentBox("active.analog_mux", props);
-    // m_area real é 32x72, mas Z/En/Addr (angle=180, length=8) estendem 8px além da borda esquerda
-    // (corpo em x=-16 -> tip em x=-24) -- box final inclui essa margem, altura já cabe no corpo.
-    assert(box.width === 56 && box.height === 72, `AnalogMux 8 canais: área 32x72 + lead de 8px (Z/En/Addr) na borda esquerda = 56 de largura, recebido ${JSON.stringify(box)}`);
+    // m_area real é 32x72; as pontas ficam 8px fora de cada lado (-24..24), portanto a caixa total
+    // mede 48. O valor legado 56 denunciava a segunda translação do corpo.
+    assert(box.width === 48 && box.height === 72, `AnalogMux 8 canais: terminais -24..24 em uma única origem devem produzir 48x72, recebido ${JSON.stringify(box)}`);
 
     // Z/En são pinos ESTÁTICOS (replacePins=false) -- sempre presentes, independente de channels.
     const z = pinLocalPosition("z", 0, 13, "active.analog_mux", props);
@@ -1288,6 +1307,40 @@ import { PackageDescriptor } from "./model";
     const dipSvg = packageSymbolSvg("passive.resistor_dip", {}, "dip-geometry") ?? "";
     assert(dipSvg.includes('transform="translate(6.000,0.000)"') && dipSvg.includes('<rect x="1" y="2" width="18" height="64"'),
       `corpo DIP deve receber o mesmo offset de layout dos leads, markup: ${dipSvg}`);
+  });
+
+  await test("motores alinham terminais nativos ao corpo e Stepper expõe o comum Co", () => {
+    catalogPackage("outputs.dc_motor");
+    const dcBox = componentBox("outputs.dc_motor");
+    const dcLeft = pinLocalPosition("pin-1", 0, 2, "outputs.dc_motor");
+    const dcRight = pinLocalPosition("pin-2", 1, 2, "outputs.dc_motor");
+    assert(dcBox.width === 80 && dcBox.height === 66, `DcMotor deveria ocupar 80x66, recebido ${JSON.stringify(dcBox)}`);
+    assert(near(dcLeft.x, 0) && near(dcLeft.y, 33) && near(dcRight.x, 80) && near(dcRight.y, 33),
+      `terminais do DcMotor devem cruzar o centro y=33, recebido ${JSON.stringify({ dcLeft, dcRight })}`);
+
+    catalogPackage("outputs.stepper");
+    const expected = [
+      ["pin-1", 18], ["pin-3", 34], ["pin-5", 50], ["pin-2", 66], ["pin-4", 82],
+    ] as const;
+    for (const [id, y] of expected) {
+      const pin = pinLocalPosition(id, Number(id.slice(4)) - 1, 5, "outputs.stepper");
+      assert(near(pin.x, 0) && near(pin.y, y), `${id} do Stepper desalinhado: ${JSON.stringify(pin)}`);
+    }
+    const stepperSvg = packageSymbolSvg("outputs.stepper", {}, "stepper-five-pins") ?? "";
+    assert(stepperSvg.includes(">Co<"), `Stepper deveria desenhar o terminal comum Co, markup: ${stepperSvg}`);
+  });
+
+  await test("lâmpada incandescente usa Comp2Pin nativo e encosta leads na elipse", () => {
+    catalogPackage("outputs.incandescent_lamp");
+    const box = componentBox("outputs.incandescent_lamp");
+    const left = pinLocalPosition("pin-1", 0, 2, "outputs.incandescent_lamp");
+    const right = pinLocalPosition("pin-2", 1, 2, "outputs.incandescent_lamp");
+    assert(box.width === 32 && box.height === 20, `Lamp deve ocupar terminais -16..16 e m_area 20: ${JSON.stringify(box)}`);
+    assert(near(left.x, 0) && near(left.y, 10) && near(right.x, 32) && near(right.y, 10),
+      `terminais Comp2Pin da Lamp devem cruzar o centro da elipse: ${JSON.stringify({ left, right })}`);
+    const svg = packageSymbolSvg("outputs.incandescent_lamp", {}, "lamp-native") ?? "";
+    assert(svg.includes('<g transform="translate(6.000,0.000)"><g transform="scale(1.000000,1.000000)"><ellipse cx="10" cy="10" rx="8" ry="8"'),
+      `elipse deve ficar entre contatos internos x=8/24, usando a mesma origem dos leads: ${svg}`);
   });
 
   await test("barramento materializa 8 bits em ordem LSB-first", () => {

@@ -2,6 +2,7 @@
 // Medidores/Fontes da paleta original) — Battery, Rail, FixedVolt, VoltSource, CurrSource,
 // Csource, Clock, Ampmeter, Oscope, LogicAnalyzer. Mesmo padrão de voltage_divider_test.cpp/
 // diode_test.cpp: settleStep() chamado direto, sem framework de teste.
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdio>
@@ -11,6 +12,7 @@
 #include "components/meters/Ampmeter.hpp"
 #include "components/meters/LogicAnalyzer.hpp"
 #include "components/meters/Oscope.hpp"
+#include "components/connectors/Tunnel.hpp"
 #include "components/other/Ground.hpp"
 #include "components/passive/Resistor.hpp"
 #include "components/sources/Battery.hpp"
@@ -346,6 +348,12 @@ uint32_t readU32(const std::vector<uint8_t>& bytes, size_t offset) {
     std::memcpy(&value, bytes.data() + offset, sizeof(value));
     return value;
 }
+
+uint16_t readU16(const std::vector<uint8_t>& bytes, size_t offset) {
+    uint16_t value = 0;
+    if (offset + sizeof(value) <= bytes.size()) std::memcpy(&value, bytes.data() + offset, sizeof(value));
+    return value;
+}
 double readF64(const std::vector<uint8_t>& bytes, size_t offset) {
     double value = 0;
     std::memcpy(&value, bytes.data() + offset, sizeof(value));
@@ -429,7 +437,48 @@ void testOscopeRecordsTimestampedHistoryWithWraparound() {
                 static_cast<unsigned long long>(kStepNs));
 }
 
-/** Mesma prova de `LogicAnalyzer`, formato mais simples (bitmask em vez de 4 doubles). */
+void testInstrumentChannelUsesNamedTunnelWithPhysicalWirePrecedence() {
+    GlobalPluginCache cache;
+    SimulationSession session(cache);
+    registerCommon(session.components());
+    session.components().registerFactory("connectors.tunnel", [](const ComponentParams&) {
+        return std::make_unique<components::Tunnel>(Pin{"pin"});
+    });
+    session.components().registerFactory("sources.rail", [](const ComponentParams& p) {
+        return std::make_unique<components::Rail>(Pin{"out"}, p.property("voltage", 5.0));
+    });
+    session.components().registerFactory("meters.oscope", [&session](const ComponentParams&) {
+        return std::make_unique<components::Oscope>(
+            session.scheduler(), std::array<Pin, 5>{Pin{"ch0"}, Pin{"ch1"}, Pin{"ch2"}, Pin{"ch3"}, Pin{"ref"}});
+    });
+
+    const uint32_t namedSource = session.addComponent("sources.rail", withProp("voltage", 3.3));
+    const uint32_t tunnel = session.addComponent("connectors.tunnel", {});
+    session.setTunnelName(tunnel, "pin", "", "SIGNAL");
+    session.connectWire(namedSource, "out", tunnel, "pin");
+
+    ComponentParams scopeParams;
+    scopeParams.properties["tunnels"] = std::string{"SIGNAL,,,"};
+    const uint32_t scope = session.addComponent("meters.oscope", scopeParams);
+    for (int i = 0; i < 10 && session.settleStep(); ++i) {}
+    check(nearlyEqual(readF64(session.getComponentState(scope), 0), 3.3, 1e-6),
+          "Oscope: nome digitado no CH1 observa o Tunnel SIGNAL sem fio visual");
+    check(std::get<std::string>(*session.propertyValueOf(scope, "tunnels")) == "SIGNAL,,,",
+          "Oscope: lista de túneis é propriedade persistente normalizada por canal");
+
+    const uint32_t physicalSource = session.addComponent("sources.rail", withProp("voltage", 1.2));
+    session.connectWire(physicalSource, "out", scope, "ch0");
+    for (int i = 0; i < 10 && session.settleStep(); ++i) {}
+    check(nearlyEqual(readF64(session.getComponentState(scope), 0), 1.2, 1e-6),
+          "Oscope: fio físico no CH1 tem prioridade sobre o nome de túnel");
+
+    session.disconnectWire(physicalSource, "out", scope, "ch0");
+    for (int i = 0; i < 10 && session.settleStep(); ++i) {}
+    check(nearlyEqual(readF64(session.getComponentState(scope), 0), 3.3, 1e-6),
+          "Oscope: remover fio físico reativa automaticamente o túnel digitado");
+}
+
+/** Prova o contrato vetorial V2 mantendo o primeiro uint32 como compatibilidade legada. */
 void testLogicAnalyzerRecordsTimestampedHistory() {
     GlobalPluginCache cache;
     SimulationSession session(cache);
@@ -458,18 +507,32 @@ void testLogicAnalyzerRecordsTimestampedHistory() {
     }
 
     const std::vector<uint8_t> state = session.getComponentState(analyzer);
-    check(state.size() >= sizeof(uint32_t) * 2, "LogicAnalyzer: getState() devolve pelo menos o cabecalho");
+    check(state.size() >= 12, "LogicAnalyzer: getState() devolve o cabecalho vetorial V2");
     const uint32_t latestMask = readU32(state, 0);
     check((latestMask & 1u) == 1u, "LogicAnalyzer: bitmask mais recente marca ch0 em alto (5V > limiar de 2.5V)");
+    check(readU32(state, 4) == components::LogicAnalyzer::kVectorMagic,
+          "LogicAnalyzer: payload declara magic LAV2");
+    check(readU16(state, 8) == 2 && readU16(state, 10) == 8,
+          "LogicAnalyzer: payload declara versao 2 e oito canais escalares legados");
 
-    const uint32_t sampleCount = readU32(state, sizeof(uint32_t));
+    size_t descriptorOffset = 12;
+    size_t packedBytesPerSample = sizeof(uint64_t);
+    for (uint16_t channel = 0; channel < readU16(state, 10); ++channel) {
+        const uint16_t idLength = readU16(state, descriptorOffset);
+        const uint16_t labelLength = readU16(state, descriptorOffset + 2);
+        const uint16_t sourceLength = readU16(state, descriptorOffset + 4);
+        const uint16_t width = readU16(state, descriptorOffset + 6);
+        packedBytesPerSample += std::max<size_t>(1, (width + 7) / 8);
+        descriptorOffset += 14 + idLength + labelLength + sourceLength;
+    }
+    const uint32_t sampleCount = readU32(state, descriptorOffset);
     check(sampleCount >= 5, "LogicAnalyzer: gravou pelo menos uma amostra por rodada de avanco de tempo");
-    const size_t historyOffset = sizeof(uint32_t) * 2;
+    const size_t historyOffset = descriptorOffset + sizeof(uint32_t);
     const uint64_t firstTimestamp = readU64(state, historyOffset);
-    const uint64_t lastTimestamp = readU64(state, historyOffset + (sampleCount - 1) * 12);
+    const uint64_t lastTimestamp = readU64(state, historyOffset + (sampleCount - 1) * packedBytesPerSample);
     check(lastTimestamp > firstTimestamp, "LogicAnalyzer: timestamps do historico avancam em tempo simulado real");
-    const uint32_t firstMask = readU32(state, historyOffset + 8);
-    check((firstMask & 1u) == 1u, "LogicAnalyzer: bitmask gravado no historico reflete o canal em alto");
+    check((state[historyOffset + sizeof(uint64_t)] & 1u) == 1u,
+          "LogicAnalyzer: primeiro canal empacotado no historico reflete nivel alto");
 }
 
 /** Prova a histerese de 2 limiares (porta de `LaChannel::voltChanged()`'s `thresholdR`/
@@ -497,6 +560,7 @@ void testLogicAnalyzerHysteresisHoldsStateInDeadZone() {
     session.connectWire(source, "p2", ground, "pin");
 
     auto readCh0 = [&]() {
+        session.scheduler().runUntil(session.scheduler().nowNs() + 60'000);
         for (int i = 0; i < 10 && session.settleStep(); ++i) {}
         const std::vector<uint8_t> state = session.getComponentState(analyzer);
         return (readU32(state, 0) & 1u) != 0;
@@ -530,6 +594,7 @@ int main() {
     testClockTogglesOverTime();
     testWaveGenSquareWaveOutputsExpectedVoltageAndCurrent();
     testOscopeRecordsTimestampedHistoryWithWraparound();
+    testInstrumentChannelUsesNamedTunnelWithPhysicalWirePrecedence();
     testLogicAnalyzerRecordsTimestampedHistory();
     testLogicAnalyzerHysteresisHoldsStateInDeadZone();
 

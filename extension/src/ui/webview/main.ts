@@ -1,8 +1,9 @@
-import { WEBVIEW_MESSAGE_VERSION, ComponentReadoutValue, HostToWebviewMessage, InternalComponentSnapshot, SimulationStatus, WebviewToHostMessage } from "./messages.js";
+import { WEBVIEW_MESSAGE_VERSION, AnalyzerVectorHistory, ComponentReadoutValue, HostToWebviewMessage, InternalComponentSnapshot, SimulationStatus, WebviewToHostMessage } from "./messages.js";
 import { CanonicalEndpoint, CanonicalTopologyDocument, InteractionKindEntry, McuSerialPortEntry, PropertySchemaEntry, TUNNEL_TYPE_ID, ViewSpecInteraction, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, endpointId, endpointPinId, nodeEndpoint, portEndpoint, remapEndpoint } from "./model.js";
 import { ComponentBox, PIN_RADIUS, componentBox, componentLocalOrigin, componentSymbolSvg, dialKnobSvg, hasRealPinPosition, missingSubcircuitPlaceholderSvg, packageSymbolSvg, pinLocalPosition, registerPackage } from "./componentSymbols.js";
 import { svgLocalTransform, transformLocalPoint, transformedLocalBounds } from "./componentGeometry.js";
-import { detectChannelTrigger, findTriggerAnchorIndex, triggerAlignedWindowEndNs, visibleSampleWindowByTime } from "./instrumentTrigger.js";
+import { detectChannelTrigger, digitalStepPath, findTriggerAnchorIndex, triggerAlignedWindowEndNs, visibleSampleWindowByTime } from "./instrumentTrigger.js";
+import { analogSampleHoldPath, clampInstrumentWindow, decodeInstrumentState, encodeInstrumentState, panInstrumentTime, zoomInstrumentTimeAt } from "./instrumentViewport.js";
 import {
   Point,
   WIRE_GRID_SIZE,
@@ -25,6 +26,7 @@ import { formatEngineeringValue, defaultSiPrefixFactor, SI_PREFIXES } from "./va
 import { isJunctionVisible, movableTopologyNodeIds, endpointScenePosition as resolveEndpointScenePosition } from "./wireTopology.js";
 import { WireSpatialIndex } from "./wireSpatialIndex.js";
 import { applyBoardTransforms, applyExposedSelection, captureBoardTransforms, captureCircuitTransforms, ComponentTransform, isBoardModeVisible as isBoardModeVisibleShared, restoreCircuitTransforms } from "./subcircuitBoardMode.js";
+import { BatchPropertyPatch, PropertyField, PropertyFieldKind, SharedPropertyField, computeGenericInstanceFields, computeSharedPropertyFields, planBatchPropertyChange } from "./batchProperties.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const FINE_WIRE_STEP = WIRE_GRID_SIZE / 10;
@@ -200,6 +202,17 @@ const UI_TEXT = {
     importCircuit: "Importar Circuito...",
     editingSubcircuit: "Editando subcircuito:",
     backToMainCircuit: "Voltar ao Circuito Principal",
+    componentsSelected: "componentes selecionados",
+    mixedValuePlaceholder: "(vários valores)",
+    batchNoSharedFields: "Nenhuma propriedade compartilhada entre os itens selecionados.",
+    batchApplyRejected: "Valor não aceito por todos os componentes selecionados -- nada foi alterado.",
+    genericFieldGroup: "Geral",
+    genericFieldX: "Posição X",
+    genericFieldY: "Posição Y",
+    genericFieldRotation: "Rotação",
+    genericFieldLocked: "Bloqueado",
+    genericFieldHidden: "Oculto",
+    multipleTypesLabel: "tipos diferentes",
   },
   en: {
     nothingSelected: "Nothing selected",
@@ -275,6 +288,17 @@ const UI_TEXT = {
     importCircuit: "Import Circuit...",
     editingSubcircuit: "Editing subcircuit:",
     backToMainCircuit: "Back to Main Circuit",
+    componentsSelected: "components selected",
+    mixedValuePlaceholder: "(multiple values)",
+    batchNoSharedFields: "No property shared between the selected items.",
+    batchApplyRejected: "Value not accepted by every selected component -- nothing was changed.",
+    genericFieldGroup: "General",
+    genericFieldX: "Position X",
+    genericFieldY: "Position Y",
+    genericFieldRotation: "Rotation",
+    genericFieldLocked: "Locked",
+    genericFieldHidden: "Hidden",
+    multipleTypesLabel: "different types",
   },
 } as const;
 
@@ -304,7 +328,7 @@ const INSTRUMENT_HISTORY_DEPTH = 600;
 // pra quem não abriu a janela). Resolve a limitação documentada antes desta data: o eixo de tempo
 // da janela "Expande" agora é de verdade, não uma aproximação sobre o intervalo de poll de IPC.
 const realScopeHistoryByComponentId = new Map<string, Array<{ timestampsNs: number[]; values: number[] }>>();
-const realLogicHistoryByComponentId = new Map<string, { timestampsNs: number[]; masks: number[] }>();
+const realLogicHistoryByComponentId = new Map<string, AnalyzerVectorHistory>();
 let voltagesByWireId: Record<string, number> = {};
 let pendingWirePreviewTarget: Point | undefined;
 let pendingWireRoute: Point[] = [];
@@ -351,8 +375,13 @@ let simulationStatus: SimulationStatus = "stopped";
 let simulationRate: number | undefined;
 let activePropertyTarget:
   | { kind: "project"; componentId: string }
+  | { kind: "project-batch"; componentIds: string[] }
   | { kind: "exposed-internal"; outerComponentId: string; sourceId: string; snapshot: InternalComponentSnapshot; model: WebviewComponentModel }
   | undefined;
+/** Mensagem de rejeição (rule 10/11) da ÚLTIMA tentativa de aplicar um campo em lote -- exibida
+ * dentro do próprio diálogo (sem mecanismo de toast/notificação genérico na Webview hoje, ver
+ * `applyBatchChange`); limpa ao reabrir/atualizar o diálogo com sucesso. */
+let activeBatchPropertyError: string | undefined;
 let propertyDialogShowAll = false;
 let clipboardItems: { components: WebviewComponentModel[]; wires: WebviewWireModel[] } | undefined;
 const activePushShortcutIds = new Set<string>();
@@ -519,7 +548,11 @@ document.body.appendChild(contextMenu);
 document.addEventListener("pointermove", (event) => {
   if (!placingTypeId || !placementGhostEl) return;
   const zoom = state.viewport.zoom || 1;
-  const box = componentBox(placingTypeId, {});
+  // O preview precisa materializar exatamente os mesmos defaults usados por
+  // `makeComponentFromTypeId`. Passar `{}` fazia layouts dinâmicos perderem rows/columns/size e
+  // calcularem uma caixa diferente da instância criada logo depois.
+  const descriptor = catalogEntryFor(placingTypeId);
+  const box = componentBox(placingTypeId, descriptor?.defaultProperties ?? {});
   const w = box.width * zoom;
   const h = box.height * zoom;
   placementGhostEl.style.left = `${event.clientX - w / 2}px`;
@@ -1068,8 +1101,9 @@ function handleWireGestureClick(target: WireGestureOrigin): void {
 }
 
 function openSelectedProperties(): void {
-  const component = getSelectedComponent();
-  if (component) openPropertyDialog(component);
+  const components = getSelectedComponents();
+  if (components.length > 1) openBatchPropertyDialog(components);
+  else if (components.length === 1) openPropertyDialog(components[0]!);
 }
 
 function openPropertyDialog(component: WebviewComponentModel): void {
@@ -1077,6 +1111,23 @@ function openPropertyDialog(component: WebviewComponentModel): void {
   propertyDialog.innerHTML = "";
   propertyDialog.append(renderPropertySheet(component));
   if (!propertyDialog.open) propertyDialog.showModal();
+}
+
+function renderBatchDialogContents(components: WebviewComponentModel[]): void {
+  propertyDialog.innerHTML = "";
+  propertyDialog.append(renderBatchPropertySheet(components));
+  if (!propertyDialog.open) propertyDialog.showModal();
+}
+
+/** Edição em lote (rule 1-11): 2+ componentes selecionados, mesmo tipo ou não. Só guarda o
+ * conjunto de ids -- `refreshOpenPropertyDialog` sempre relê os componentes VIVOS de `state.components`
+ * por id, nunca guarda os objetos (mesmo cuidado do caso `"project"` de sempre). Reseta o erro de
+ * validação da tentativa anterior (só faz sentido dentro da MESMA sessão de diálogo aberto) -- ver
+ * `applyBatchChange`, que re-renderiza SEM passar por aqui quando quer preservar o erro. */
+function openBatchPropertyDialog(components: WebviewComponentModel[]): void {
+  activePropertyTarget = { kind: "project-batch", componentIds: components.map((component) => component.id) };
+  activeBatchPropertyError = undefined;
+  renderBatchDialogContents(components);
 }
 
 function snapshotToDialogComponent(snapshot: InternalComponentSnapshot): WebviewComponentModel {
@@ -1129,6 +1180,19 @@ function refreshOpenPropertyDialog(): void {
       return;
     }
     openPropertyDialog(component);
+    return;
+  }
+  if (target.kind === "project-batch") {
+    // Relê os componentes VIVOS por id -- um deles pode ter sido apagado por fora do diálogo (ex:
+    // Delete enquanto o diálogo estava aberto); menos de 2 restantes não é mais "lote", fecha.
+    const components = target.componentIds
+      .map((id) => state.components.find((entry) => entry.id === id))
+      .filter((component): component is WebviewComponentModel => component !== undefined);
+    if (components.length < 2) {
+      propertyDialog.close();
+      return;
+    }
+    openBatchPropertyDialog(components);
     return;
   }
   openExposedInternalPropertyDialog(
@@ -1868,7 +1932,7 @@ function render(): void {
   const subcircuitFileComponents: WebviewComponentModel[] = [];
   const boardModeComponents: WebviewComponentModel[] = [];
   for (const component of state.components) {
-    if (component.hidden) continue;
+    if (component.hidden || component.hiddenByUser) continue;
     if (subcircuitBoardMode && !isBoardModeVisible(component)) continue;
     visibleComponents.push(component);
     if (component.properties.boardModeEnabled) boardModeComponents.push(component);
@@ -1929,7 +1993,8 @@ function render(): void {
     if (isJunctionVisible(state.topology.conductors, node.id)) wireLayer.appendChild(renderJunction(node.id, node.position.x, node.position.y));
   }
 
-  renderInstrumentPopups();
+  // Popups vivem numa camada independente do canvas. Renderizações frequentes do esquemático
+  // (telemetria, seleção, fios) não recriam janelas, inputs ou resize handles.
 }
 
 /** Componentes/fios cujas caixas (canvas-local, sem zoom) se sobrepõem ao retângulo do marquee --
@@ -1943,7 +2008,7 @@ function applyMarqueeSelection(start: Point, end: Point, additive: boolean): voi
 
   const hitComponentIds = state.components
     .filter((component) => {
-      if (component.hidden) return false;
+      if (component.hidden || component.hiddenByUser) return false;
       const box = componentBox(component.typeId, component.properties);
       // Caixa já rotacionada/espelhada (ver `rotatedComponentLocalBox`) -- sem isto, um componente
       // com caixa bem mais larga que alta (ex: `connectors.tunnel`) girado 90/270° testava
@@ -1979,7 +2044,12 @@ function deleteSelectedItems(): void {
   for (const wireId of state.selectedWireIds) {
     send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestRemoveWire", wireId });
   }
+  // Bloqueio (`component.locked`): sobrevive a um apagar em lote -- os DEMAIS componentes
+  // co-selecionados (não bloqueados) continuam sendo removidos normalmente, só o(s) bloqueado(s)
+  // ficam de fora do loop (enforcement mínimo acordado, ver `batchProperties.ts`).
+  const lockedIds = new Set(state.components.filter((component) => component.locked).map((component) => component.id));
   for (const componentId of state.selectedComponentIds) {
+    if (lockedIds.has(componentId)) continue;
     send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestRemoveComponent", componentId });
   }
   clearSelection();
@@ -3104,9 +3174,9 @@ function usesEmbeddedValueLabel(typeId: string): boolean {
  * histórico e de que FORMA" -- sem isto, um instrumento de terceiros (device/plugin) com o mesmo
  * `readoutFormat.kind` nunca ganharia popup "Expande"/rastreamento de histórico, só os 2 builtins.
  * Fallback legado pros mesmos 2 typeIds cobre o catálogo ainda não ter chegado do Core. */
-function instrumentHistoryKind(typeId: string): "channelHistory" | "bitmaskHistory" | undefined {
+function instrumentHistoryKind(typeId: string): "channelHistory" | "bitmaskHistory" | "vectorHistory" | undefined {
   const readoutFormat = catalogEntryFor(typeId)?.readoutFormat;
-  if (readoutFormat?.kind === "channelHistory" || readoutFormat?.kind === "bitmaskHistory") return readoutFormat.kind;
+  if (readoutFormat?.kind === "channelHistory" || readoutFormat?.kind === "bitmaskHistory" || readoutFormat?.kind === "vectorHistory") return readoutFormat.kind;
   if (readoutFormat) return undefined;
   // Fallback legado -- typeId sem readoutFormat no catálogo ainda.
   if (typeId === "meters.oscope") return "channelHistory";
@@ -3152,7 +3222,7 @@ function updateReadoutHistories(readouts: Record<string, ComponentReadoutValue>)
         return history.slice(-INSTRUMENT_HISTORY_DEPTH);
       });
     }
-    if (instrumentHistoryKind(component.typeId) === "bitmaskHistory" && typeof readout === "number") {
+    if ((instrumentHistoryKind(component.typeId) === "bitmaskHistory" || instrumentHistoryKind(component.typeId) === "vectorHistory") && typeof readout === "number") {
       const history = [...(logicHistoryByComponentId[component.id] ?? []), readout >>> 0];
       logicHistories[component.id] = history.slice(-INSTRUMENT_HISTORY_DEPTH);
     }
@@ -3162,7 +3232,10 @@ function updateReadoutHistories(readouts: Record<string, ComponentReadoutValue>)
   // Mesmo ritmo do poll de telemetria pequena (~300ms) -- só pros componentes com janela "Expande"
   // aberta agora, ver doc de `realScopeHistoryByComponentId` acima.
   for (const componentId of instrumentPopups.keys()) requestInstrumentHistoryRefresh(componentId);
-  renderInstrumentPopups();
+  // Telemetria é hot path: mantém janela/inputs/resize no DOM e troca somente o framebuffer SVG.
+  // Reconstruir o popup inteiro a cada amostra perdia foco e tornava screenshots/interações
+  // não-determinísticos quando vários canais estavam ativos.
+  refreshInstrumentPopupPlots();
 }
 
 // ════════════════════════════════════════════════════════════════════════════════════════════
@@ -3193,6 +3266,10 @@ interface ScopePopupState {
   componentId: string;
   x: number;
   y: number;
+  width: number;
+  height: number;
+  timeZeroRatio: number;
+  cursor?: { x: number; y: number };
   activeTab: 0 | 1 | 2 | 3 | "all";
   timeDivMs: number;
   tracks: 1 | 2 | 4;
@@ -3207,17 +3284,27 @@ interface LogicPopupState {
   componentId: string;
   x: number;
   y: number;
+  width: number;
+  height: number;
+  timeZeroRatio: number;
+  cursor?: { x: number; y: number };
   timeDivMs: number;
   timePosMs: number;
   hiddenChannels: boolean[];
+  expandedBusChannels: string[];
   triggerChannel: number | "none";
+  triggerCondition: string;
   thresholdUp: number;
   thresholdDown: number;
+  pauseValidationError?: string;
+  pauseEvent?: { simulationTimeNs: number; expression: string; resolvedValues: Record<string, number | boolean | string>; error?: string };
 }
 
 type InstrumentPopupState = ScopePopupState | LogicPopupState;
 
 const instrumentPopups = new Map<string, InstrumentPopupState>();
+const instrumentPersistTimers = new Map<string, number>();
+const INSTRUMENT_VIEW_PROPERTY = "__ui_instrumentView";
 /** Posição bruta 0-1000 do `QDial` por knob (`makeKnobRow`), chave `${componentId}:${labelText}` --
  * MESMO modelo do real (`QDial` interno sempre 0-1000, `CustomDial::CustomDial` -- ver docstring de
  * `dialKnobSvg`, `componentSymbols.ts`). Os knobs de Divisão/Posição de Tempo/Tensão do osciloscópio
@@ -3237,20 +3324,26 @@ const instrumentPopupLayer = document.createElement("div");
 instrumentPopupLayer.className = "instrument-popup-layer";
 document.body.appendChild(instrumentPopupLayer);
 
-function defaultScopePopupState(componentId: string, x: number, y: number): ScopePopupState {
-  return {
+function defaultScopePopupState(component: WebviewComponentModel, x: number, y: number): ScopePopupState {
+  const fallback: ScopePopupState = {
     kind: "oscope",
-    componentId,
+    componentId: component.id,
     x,
     y,
+    width: 820,
+    height: 570,
+    timeZeroRatio: 0.5,
     activeTab: "all",
-    timeDivMs: 1000,
-    tracks: 4,
+    timeDivMs: 1,
+    tracks: 1,
     channels: [0, 1, 2, 3].map(() => ({ hidden: false, voltDiv: 1, voltPos: 0, timePosMs: 0 })),
     triggerSource: "none",
     autoScaleChannel: "none",
     filterThreshold: 0.05,
   };
+  const restored = decodeInstrumentState(component.properties[INSTRUMENT_VIEW_PROPERTY], fallback);
+  const size = clampInstrumentWindow(restored.width, restored.height);
+  return { ...fallback, ...restored, ...size, componentId: component.id, kind: "oscope", cursor: undefined };
 }
 
 /** `thresholdUp`/`thresholdDown` espelham as propriedades REAIS do componente no Core
@@ -3258,18 +3351,41 @@ function defaultScopePopupState(componentId: string, x: number, y: number): Scop
  * (não um padrão fixo do popup) e gravadas de volta via `requestUpdateProperty` quando editadas
  * aqui (ver `buildLogicPopup`), pra editar a histerese de verdade, não só um valor decorativo. */
 function defaultLogicPopupState(component: WebviewComponentModel, x: number, y: number): LogicPopupState {
-  return {
+  const fallback: LogicPopupState = {
     kind: "logic",
     componentId: component.id,
     x,
     y,
-    timeDivMs: 1000,
+    width: 820,
+    height: 430,
+    timeZeroRatio: 0.5,
+    timeDivMs: 1,
     timePosMs: 0,
     hiddenChannels: Array.from({ length: 8 }, () => false),
+    expandedBusChannels: [],
     triggerChannel: "none",
+    triggerCondition: "",
     thresholdUp: Number(component.properties.thresholdRising ?? 2.5),
     thresholdDown: Number(component.properties.thresholdFalling ?? 2.5),
   };
+  const restored = decodeInstrumentState(component.properties[INSTRUMENT_VIEW_PROPERTY], fallback);
+  const size = clampInstrumentWindow(restored.width, restored.height);
+  return { ...fallback, ...restored, ...size, componentId: component.id, kind: "logic", cursor: undefined };
+}
+
+function persistInstrumentPopup(popup: InstrumentPopupState): void {
+  const previous = instrumentPersistTimers.get(popup.componentId);
+  if (previous !== undefined) window.clearTimeout(previous);
+  instrumentPersistTimers.set(popup.componentId, window.setTimeout(() => {
+    instrumentPersistTimers.delete(popup.componentId);
+    const component = state.components.find((entry) => entry.id === popup.componentId);
+    if (!component) return;
+    const { cursor: _cursor, ...serializable } = popup;
+    const value = encodeInstrumentState(serializable);
+    component.properties[INSTRUMENT_VIEW_PROPERTY] = value;
+    send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: popup.componentId, name: INSTRUMENT_VIEW_PROPERTY, value });
+    persistState();
+  }, 180));
 }
 
 function requestInstrumentHistoryRefresh(componentId: string): void {
@@ -3278,6 +3394,7 @@ function requestInstrumentHistoryRefresh(componentId: string): void {
 
 function toggleInstrumentPopup(component: WebviewComponentModel): void {
   if (instrumentPopups.has(component.id)) {
+    persistInstrumentPopup(instrumentPopups.get(component.id)!);
     instrumentPopups.delete(component.id);
     realScopeHistoryByComponentId.delete(component.id);
     realLogicHistoryByComponentId.delete(component.id);
@@ -3285,8 +3402,8 @@ function toggleInstrumentPopup(component: WebviewComponentModel): void {
     const cascadeOffset = (instrumentPopups.size % 6) * 28;
     const historyKind = instrumentHistoryKind(component.typeId);
     if (historyKind === "channelHistory") {
-      instrumentPopups.set(component.id, defaultScopePopupState(component.id, 90 + cascadeOffset, 90 + cascadeOffset));
-    } else if (historyKind === "bitmaskHistory") {
+      instrumentPopups.set(component.id, defaultScopePopupState(component, 90 + cascadeOffset, 90 + cascadeOffset));
+    } else if (historyKind === "bitmaskHistory" || historyKind === "vectorHistory") {
       instrumentPopups.set(component.id, defaultLogicPopupState(component, 90 + cascadeOffset, 90 + cascadeOffset));
     }
     requestInstrumentHistoryRefresh(component.id);
@@ -3295,6 +3412,8 @@ function toggleInstrumentPopup(component: WebviewComponentModel): void {
 }
 
 function closeInstrumentPopup(componentId: string): void {
+  const popup = instrumentPopups.get(componentId);
+  if (popup) persistInstrumentPopup(popup);
   instrumentPopups.delete(componentId);
   renderInstrumentPopups();
 }
@@ -3311,21 +3430,57 @@ function scopeChannelsFor(componentId: string): Array<{ timestampsNs: number[]; 
   return approx.map((values) => ({ values, timestampsNs: values.map((_, i) => i * INSTRUMENT_POLL_INTERVAL_MS * 1e6) }));
 }
 
-function logicChannelFor(componentId: string): { timestampsNs: number[]; masks: number[] } {
+function logicChannelFor(componentId: string): AnalyzerVectorHistory {
   const real = realLogicHistoryByComponentId.get(componentId);
   if (real) return real;
   const approx = logicHistoryByComponentId[componentId] ?? [];
-  return { masks: approx, timestampsNs: approx.map((_, i) => i * INSTRUMENT_POLL_INTERVAL_MS * 1e6) };
+  return {
+    formatVersion: 2,
+    channels: Array.from({ length: 8 }, (_, index) => ({ channelId: `D${index}`, label: `D${index}`, source: `@self.${index + 1}`, kind: "digital" as const, width: 1, msb: 0, lsb: 0 })),
+    timestampsNs: approx.map((_, i) => i * INSTRUMENT_POLL_INTERVAL_MS * 1e6),
+    values: approx.map((mask) => Array.from({ length: 8 }, (_, bit) => String((mask >>> bit) & 1))),
+  };
 }
 
-function instrumentPlotPolyline(samples: number[], plotW: number, valueToY: (value: number) => number): string {
-  if (samples.length === 0) return "";
-  return samples
-    .map((value, index) => `${(index === 0 ? "M" : "L")} ${((index / Math.max(1, samples.length - 1)) * plotW).toFixed(1)} ${valueToY(value).toFixed(1)}`)
-    .join(" ");
+interface AnalyzerBitTrace { key: string; label: string; channelIndex: number; bitIndex: number; values: number[] }
+
+function escapeInstrumentMarkup(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[character] ?? character);
+}
+
+function analyzerBitTraces(history: AnalyzerVectorHistory): AnalyzerBitTrace[] {
+  const traces: AnalyzerBitTrace[] = [];
+  history.channels.forEach((channel, channelIndex) => {
+    // O valor serializado é a palavra do canal; expandir aqui evita transformar barramento em oito
+    // canais no Core/IPC, mas oferece a visão DATA[n] solicitada na camada estritamente visual.
+    const width = Math.max(1, Math.min(64, channel.width));
+    for (let localBit = width - 1; localBit >= 0; localBit--) {
+      const bitNumber = channel.width === 1 ? channel.lsb : channel.lsb + localBit;
+      traces.push({
+        key: `${channel.channelId}:${localBit}`,
+        label: channel.width === 1 ? (channel.label || channel.channelId) : `${channel.label || channel.channelId}[${bitNumber}]`,
+        channelIndex,
+        bitIndex: localBit,
+        values: history.values.map((row) => Number((BigInt(row[channelIndex] ?? "0") >> BigInt(localBit)) & 1n)),
+      });
+    }
+  });
+  return traces;
 }
 
 function instrumentPlotGridSvg(plotW: number, plotH: number, divisions = 10, rows = 8): string {
+  const minorCols = Array.from({ length: divisions * 5 - 1 }, (_, i) => i + 1)
+    .filter((i) => i % 5 !== 0)
+    .map((i) => {
+      const x = (i * plotW) / (divisions * 5);
+      return `<line x1="${x.toFixed(1)}" y1="0" x2="${x.toFixed(1)}" y2="${plotH}" class="instrument-plot-grid instrument-plot-grid--minor"/>`;
+    }).join("");
+  const minorRows = Array.from({ length: rows * 5 - 1 }, (_, i) => i + 1)
+    .filter((i) => i % 5 !== 0)
+    .map((i) => {
+      const y = (i * plotH) / (rows * 5);
+      return `<line x1="0" y1="${y.toFixed(1)}" x2="${plotW}" y2="${y.toFixed(1)}" class="instrument-plot-grid instrument-plot-grid--minor"/>`;
+    }).join("");
   const cols = Array.from({ length: divisions + 1 }, (_, i) => {
     const x = (i * plotW) / divisions;
     return `<line x1="${x.toFixed(1)}" y1="0" x2="${x.toFixed(1)}" y2="${plotH}" class="instrument-plot-grid${i === divisions / 2 ? " instrument-plot-grid--center" : ""}"/>`;
@@ -3334,7 +3489,7 @@ function instrumentPlotGridSvg(plotW: number, plotH: number, divisions = 10, row
     const y = (i * plotH) / rows;
     return `<line x1="0" y1="${y.toFixed(1)}" x2="${plotW}" y2="${y.toFixed(1)}" class="instrument-plot-grid${i === rows / 2 ? " instrument-plot-grid--center" : ""}"/>`;
   }).join("");
-  return cols + rowLines;
+  return minorCols + minorRows + cols + rowLines;
 }
 
 /** Porta fiel de `Oscope::updateStep()`+`setTrigger()`/`setAutoSC()` -- UMA fonte de trigger
@@ -3351,7 +3506,7 @@ function renderScopePopupPlot(popup: ScopePopupState, channels: Array<{ timestam
   const svg = document.createElementNS(SVG_NS, "svg");
   svg.setAttribute("viewBox", `0 0 ${plotW} ${plotH}`);
   svg.classList.add("instrument-plot-svg");
-  let markup = `<rect x="0" y="0" width="${plotW}" height="${plotH}" fill="#050505"/>` + instrumentPlotGridSvg(plotW, plotH);
+  let markup = `<rect x="0" y="0" width="${plotW}" height="${plotH}" class="instrument-plot-background"/>` + instrumentPlotGridSvg(plotW, plotH, 10, 10 * popup.tracks);
 
   if (popup.autoScaleChannel !== "none") {
     const autoChannel = channels[popup.autoScaleChannel];
@@ -3379,11 +3534,23 @@ function renderScopePopupPlot(popup: ScopePopupState, channels: Array<{ timestam
     const fullHistory = channels[channel] ?? { timestampsNs: [], values: [] };
     const windowEndNs = sharedWindowEndNs + settings.timePosMs * 1e6;
     const { start, end } = visibleSampleWindowByTime(fullHistory.timestampsNs, windowEndNs, timeFrameNs);
+    const timestamps = fullHistory.timestampsNs.slice(start, end + 1);
     const samples = fullHistory.values.slice(start, end + 1);
     const voltsPerPx = (settings.voltDiv * 8) / plotH; // 8 divisões verticais
-    const valueToY = (value: number) => plotH / 2 - (value + settings.voltPos) / voltsPerPx;
-    markup += `<path d="${instrumentPlotPolyline(samples, plotW, valueToY)}" fill="none" stroke="${INSTRUMENT_CHANNEL_COLORS[channel]}" stroke-width="2"/>`;
+    const trackH = plotH / popup.tracks;
+    const centerY = (channel % popup.tracks + 0.5) * trackH;
+    const valueToY = (value: number) => centerY - (value + settings.voltPos) / ((settings.voltDiv * 10) / trackH);
+    const path = analogSampleHoldPath(timestamps, samples, windowEndNs - timeFrameNs, windowEndNs, plotW, valueToY);
+    markup += `<path d="${path}" class="instrument-trace" fill="none" stroke="${INSTRUMENT_CHANNEL_COLORS[channel]}" stroke-width="2"/>`;
+    if (samples.length > 0) {
+      const maximum = samples.reduce((value, sample) => Math.max(value, sample), -Infinity);
+      const minimum = samples.reduce((value, sample) => Math.min(value, sample), Infinity);
+      const color = INSTRUMENT_CHANNEL_COLORS[channel];
+      markup += `<line x1="0" y1="${valueToY(maximum).toFixed(1)}" x2="${plotW}" y2="${valueToY(maximum).toFixed(1)}" class="instrument-measure-line" stroke="${color}"/><line x1="0" y1="${valueToY(minimum).toFixed(1)}" x2="${plotW}" y2="${valueToY(minimum).toFixed(1)}" class="instrument-measure-line" stroke="${color}"/><text x="5" y="${Math.max(12, valueToY(maximum) - 3).toFixed(1)}" class="instrument-measure-label" fill="${color}">CH${channel + 1} ${maximum.toPrecision(4)} V</text>`;
+    }
   }
+  const zeroX = Math.min(plotW, Math.max(0, popup.timeZeroRatio * plotW));
+  markup += `<line x1="${zeroX}" y1="0" x2="${zeroX}" y2="${plotH}" class="instrument-time-zero"/>${instrumentCursorMarkup(plotW, plotH)}`;
   svg.innerHTML = markup;
   return svg;
 }
@@ -3393,7 +3560,7 @@ function renderScopePopupPlot(popup: ScopePopupState, channels: Array<{ timestam
  * risEdge-delta` (encaixe de período); `LAnalizer::updateStep()` faz `simTime = risEdge`
  * DIRETAMENTE -- a borda de disparo cai exatamente na borda direita da tela, sem encaixe de
  * período (mesma fidelidade, função mais simples porque o sinal de origem é mais simples). */
-function renderLogicPopupPlot(popup: LogicPopupState, history: { timestampsNs: number[]; masks: number[] }): SVGSVGElement {
+function renderLogicPopupPlot(popup: LogicPopupState, history: AnalyzerVectorHistory): SVGSVGElement {
   // 560x448 -- MESMO tamanho de `.instrument-plot-svg` (styles.css) e do osciloscópio
   // (`renderScopePopupPlot`), pra 10x8 divisões ficarem quadradas -- bug corrigido 2026-07-09.
   const plotW = 560;
@@ -3401,37 +3568,104 @@ function renderLogicPopupPlot(popup: LogicPopupState, history: { timestampsNs: n
   const svg = document.createElementNS(SVG_NS, "svg");
   svg.setAttribute("viewBox", `0 0 ${plotW} ${plotH}`);
   svg.classList.add("instrument-plot-svg");
-  let markup = `<rect x="0" y="0" width="${plotW}" height="${plotH}" fill="#050505"/>` + instrumentPlotGridSvg(plotW, plotH, 10, 8);
+  let markup = `<rect x="0" y="0" width="${plotW}" height="${plotH}" class="instrument-plot-background"/>` + instrumentPlotGridSvg(plotW, plotH, 10, 8);
 
-  const visibleChannels = INSTRUMENT_CHANNEL_COLORS.map((_, ch) => ch).filter((ch) => !popup.hiddenChannels[ch]);
+  const traces = analyzerBitTraces(history);
+  while (popup.hiddenChannels.length < traces.length) popup.hiddenChannels.push(false);
+  const visibleChannels = traces.map((_, ch) => ch).filter((ch) => !popup.hiddenChannels[ch]);
   const rowH = plotH / Math.max(1, visibleChannels.length);
   const timeFrameNs = Math.max(1, popup.timeDivMs) * 1e6 * 10;
   const latestSampleNs = history.timestampsNs[history.timestampsNs.length - 1] ?? 0;
   let windowEndNs = latestSampleNs;
   if (popup.triggerChannel !== "none") {
-    const bits = history.masks.map((mask) => (mask >>> (popup.triggerChannel as number)) & 1);
+    const bits = traces[popup.triggerChannel as number]?.values ?? [];
     const edgeIndex = findTriggerAnchorIndex(bits, 1);
     if (edgeIndex !== undefined) windowEndNs = history.timestampsNs[edgeIndex]!;
   }
   windowEndNs += popup.timePosMs * 1e6;
   const { start, end } = visibleSampleWindowByTime(history.timestampsNs, windowEndNs, timeFrameNs);
-  const samples = history.masks.slice(start, end + 1);
-
   visibleChannels.forEach((channel, row) => {
     const rowTop = row * rowH;
     const high = rowTop + rowH * 0.25;
     const low = rowTop + rowH * 0.75;
-    const points = samples
-      .map((mask, index) => {
-        const x = (index / Math.max(1, samples.length - 1)) * plotW;
-        const y = ((mask >>> channel) & 1) === 1 ? high : low;
-        return `${index === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
-      })
-      .join(" ");
-    markup += `<path d="${points}" fill="none" stroke="${INSTRUMENT_CHANNEL_COLORS[channel]}" stroke-width="2"/>`;
+    const samples = (traces[channel]?.values ?? []).slice(start, end + 1);
+    const masks = samples.map((value) => value ? 1 : 0);
+    const points = digitalStepPath(masks, 0, plotW, high, low);
+    const color = INSTRUMENT_CHANNEL_COLORS[traces[channel]?.channelIndex ?? channel % INSTRUMENT_CHANNEL_COLORS.length] ?? "#ddd";
+    markup += `<path d="${points}" class="instrument-trace instrument-trace--digital" fill="none" stroke="${color}" stroke-width="2"/>`;
+    markup += `<text x="5" y="${(rowTop + 13).toFixed(1)}" class="instrument-measure-label" fill="${color}">${escapeInstrumentMarkup(traces[channel]?.label ?? `D${channel}`)}</text>`;
   });
+  const zeroX = Math.min(plotW, Math.max(0, popup.timeZeroRatio * plotW));
+  markup += `<line x1="${zeroX}" y1="0" x2="${zeroX}" y2="${plotH}" class="instrument-time-zero"/>${instrumentCursorMarkup(plotW, plotH)}`;
   svg.innerHTML = markup;
   return svg;
+}
+
+function instrumentCursorMarkup(plotW: number, plotH: number): string {
+  return `<g class="instrument-cursor" visibility="hidden"><line class="instrument-cursor-x" x1="0" y1="0" x2="0" y2="${plotH}"/><line class="instrument-cursor-y" x1="0" y1="0" x2="${plotW}" y2="0"/><rect class="instrument-cursor-label-bg" x="5" y="5" width="150" height="18" rx="3"/><text class="instrument-cursor-label" x="10" y="18">0 ms</text></g>`;
+}
+
+/** Wheel, pan e cursor compartilhados; equivalente aos eventos de PlotDisplay/OscWidget/LaWidget. */
+function attachInstrumentPlotInteraction(svg: SVGSVGElement, popup: InstrumentPopupState): void {
+  const point = (event: PointerEvent | WheelEvent) => {
+    const rect = svg.getBoundingClientRect();
+    return { x: Math.min(560, Math.max(0, (event.clientX - rect.left) / Math.max(1, rect.width) * 560)), y: Math.min(448, Math.max(0, (event.clientY - rect.top) / Math.max(1, rect.height) * 448)), ratio: Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(1, rect.width))), cssWidth: rect.width };
+  };
+  svg.addEventListener("wheel", (event) => {
+    event.preventDefault();
+    const p = point(event);
+    if (popup.kind === "logic") Object.assign(popup, zoomInstrumentTimeAt(popup, p.ratio, event.deltaY < 0));
+    else {
+      const base = popup.channels[0]?.timePosMs ?? 0;
+      const next = zoomInstrumentTimeAt({ timeDivMs: popup.timeDivMs, timePosMs: base }, p.ratio, event.deltaY < 0);
+      popup.timeDivMs = next.timeDivMs;
+      popup.channels.forEach((channel) => { channel.timePosMs += next.timePosMs - base; });
+    }
+    persistInstrumentPopup(popup);
+    renderInstrumentPopups();
+  }, { passive: false });
+  svg.addEventListener("pointermove", (event) => {
+    const p = point(event);
+    svg.querySelector(".instrument-cursor")?.setAttribute("visibility", "visible");
+    const xLine = svg.querySelector<SVGLineElement>(".instrument-cursor-x");
+    const yLine = svg.querySelector<SVGLineElement>(".instrument-cursor-y");
+    xLine?.setAttribute("x1", String(p.x)); xLine?.setAttribute("x2", String(p.x));
+    yLine?.setAttribute("y1", String(p.y)); yLine?.setAttribute("y2", String(p.y));
+    const label = svg.querySelector<SVGTextElement>(".instrument-cursor-label");
+    const pos = popup.kind === "logic" ? popup.timePosMs : (popup.channels[0]?.timePosMs ?? 0);
+    const timeText = `${(pos - (1 - p.ratio) * popup.timeDivMs * 10).toLocaleString("pt-BR", { maximumFractionDigits: 4 })} ms`;
+    if (label && popup.kind === "oscope") {
+      const channelIndex = popup.activeTab === "all" ? 0 : popup.activeTab;
+      const channel = popup.channels[channelIndex] ?? popup.channels[0]!;
+      const trackH = 448 / popup.tracks;
+      const centerY = (channelIndex % popup.tracks + 0.5) * trackH;
+      const voltage = (centerY - p.y) * ((channel.voltDiv * 10) / trackH) - channel.voltPos;
+      label.textContent = `${timeText} · ${voltage.toLocaleString("pt-BR", { maximumFractionDigits: 4 })} V`;
+    } else if (label) label.textContent = timeText;
+  });
+  svg.addEventListener("pointerleave", () => svg.querySelector(".instrument-cursor")?.setAttribute("visibility", "hidden"));
+  svg.addEventListener("pointerdown", (event) => {
+    if (event.button === 1) {
+      popup.timeZeroRatio = point(event).ratio;
+      persistInstrumentPopup(popup);
+      renderInstrumentPopups();
+      return;
+    }
+    if (event.button !== 0) return;
+    event.preventDefault();
+    let previousX = event.clientX;
+    const width = point(event).cssWidth;
+    const onMove = (moveEvent: PointerEvent) => {
+      const dx = moveEvent.clientX - previousX;
+      previousX = moveEvent.clientX;
+      if (popup.kind === "logic") popup.timePosMs = panInstrumentTime(popup.timePosMs, popup.timeDivMs, dx, width);
+      else popup.channels.forEach((channel) => { channel.timePosMs = panInstrumentTime(channel.timePosMs, popup.timeDivMs, dx, width); });
+      renderInstrumentPopups();
+    };
+    const onUp = () => { window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); persistInstrumentPopup(popup); };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+  });
 }
 
 function makeFieldRow(labelText: string, input: HTMLElement): HTMLDivElement {
@@ -3551,10 +3785,141 @@ function makeKnobRow(
   return row;
 }
 
-function makeDivider(): HTMLHRElement {
-  const hr = document.createElement("hr");
-  hr.className = "instrument-divider";
-  return hr;
+function makeInstrumentSectionLabel(text: string): HTMLDivElement {
+  const label = document.createElement("div");
+  label.className = "instrument-section-label";
+  label.textContent = text;
+  return label;
+}
+
+function makeInstrumentPlotHeader(kind: "oscope" | "logic", summary: string): HTMLDivElement {
+  const header = document.createElement("div");
+  header.className = "instrument-plot-header";
+  const status = document.createElement("span");
+  status.className = `instrument-acquisition-status instrument-acquisition-status--${simulationStatus}`;
+  const dot = document.createElement("span");
+  dot.className = "instrument-acquisition-status__dot";
+  const label = document.createElement("span");
+  const mode = simulationStatus === "running" ? "EXECUTANDO" : simulationStatus === "paused" ? "PAUSADO" : "PARADO";
+  label.textContent = `${kind === "oscope" ? "AQUISIÇÃO" : "CAPTURA DIGITAL"} · ${mode}`;
+  status.append(dot, label);
+  const detail = document.createElement("span");
+  detail.className = "instrument-plot-header__detail";
+  detail.textContent = summary;
+  header.append(status, detail);
+  return header;
+}
+
+function bindInstrumentControlPersistence(controls: HTMLElement, popup: InstrumentPopupState): void {
+  const persist = () => persistInstrumentPopup(popup);
+  controls.addEventListener("change", persist);
+  controls.addEventListener("click", persist);
+  controls.addEventListener("wheel", persist, { passive: true });
+}
+
+function makeInstrumentLegend(
+  channelCount: number,
+  hidden: readonly boolean[],
+  labels?: readonly string[],
+  colorIndices?: readonly number[],
+): HTMLDivElement {
+  const legend = document.createElement("div");
+  legend.className = "instrument-legend";
+  for (let channel = 0; channel < channelCount; channel += 1) {
+    const item = document.createElement("span");
+    item.className = `instrument-legend__item${hidden[channel] ? " instrument-legend__item--hidden" : ""}`;
+    const swatch = document.createElement("span");
+    swatch.className = "instrument-legend__swatch";
+    const channelColor = INSTRUMENT_CHANNEL_COLORS[colorIndices?.[channel] ?? channel] ?? "#888";
+    swatch.style.background = channelColor;
+    swatch.style.color = channelColor;
+    item.append(swatch, document.createTextNode(labels?.[channel] ?? (channelCount === 4 ? `CH${channel + 1}` : `D${channel}`)));
+    legend.appendChild(item);
+  }
+  return legend;
+}
+
+function instrumentTunnelNames(component: WebviewComponentModel, channelCount: number): string[] {
+  const serialized = typeof component.properties.tunnels === "string" ? component.properties.tunnels : "";
+  const names = serialized.split(",");
+  return Array.from({ length: channelCount }, (_, channel) => names[channel] ?? "");
+}
+
+function updateInstrumentTunnel(component: WebviewComponentModel, channel: number, channelCount: number, rawName: string): void {
+  const names = instrumentTunnelNames(component, channelCount);
+  names[channel] = rawName.replace(/,/g, "").trim();
+  send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name: "tunnels", value: names.join(",") });
+}
+
+function makeInstrumentTunnelRows(component: WebviewComponentModel, channelCount: number): HTMLDivElement {
+  const rows = document.createElement("div");
+  rows.className = "instrument-tunnel-rows";
+  const names = instrumentTunnelNames(component, channelCount);
+  for (let channel = 0; channel < channelCount; channel += 1) {
+    const label = document.createElement("label");
+    label.className = "instrument-tunnel-row";
+    const caption = document.createElement("span");
+    caption.textContent = channelCount === 4 ? `CH${channel + 1}` : `D${channel}`;
+    const input = document.createElement("input");
+    input.type = "text";
+    input.maxLength = 64;
+    input.value = names[channel] ?? "";
+    input.placeholder = "nome do túnel";
+    input.style.setProperty("--channel-color", INSTRUMENT_CHANNEL_COLORS[channel] ?? "#888");
+    input.title = "Usado quando o canal não possui fio físico";
+    input.addEventListener("change", () => updateInstrumentTunnel(component, channel, channelCount, input.value));
+    label.append(caption, input);
+    rows.appendChild(label);
+  }
+  return rows;
+}
+
+function analyzerConfiguredChannels(component: WebviewComponentModel, history: AnalyzerVectorHistory): Array<{ id: string; source: string; label: string; kind: "analog" | "digital" | "unsigned" }> {
+  const raw = component.properties.signalChannels;
+  if (typeof raw === "string" && raw.trim()) {
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (Array.isArray(parsed)) return parsed.flatMap((item) => {
+        if (typeof item !== "object" || item === null) return [];
+        const record = item as Record<string, unknown>;
+        const source = typeof record.source === "string" ? record.source : "";
+        if (!source) return [];
+        const id = typeof record.id === "string" && record.id ? record.id : `CH${String(record.source)}`;
+        const kind = record.kind === "analog" || record.kind === "unsigned" ? record.kind : "digital";
+        return [{ id, source, label: typeof record.label === "string" ? record.label : id, kind }];
+      });
+    } catch { /* propriedade inválida é reportada pelo Core; usa descritores da última aquisição */ }
+  }
+  return history.channels.map((channel) => ({ id: channel.channelId, source: channel.source, label: channel.label, kind: channel.kind }));
+}
+
+function makeAnalyzerSourceRows(component: WebviewComponentModel, history: AnalyzerVectorHistory): HTMLDivElement {
+  const rows = document.createElement("div");
+  rows.className = "instrument-tunnel-rows";
+  const channels = analyzerConfiguredChannels(component, history);
+  channels.forEach((channel, index) => {
+    const label = document.createElement("label");
+    label.className = "instrument-tunnel-row";
+    const caption = document.createElement("span");
+    caption.textContent = channel.label || channel.id;
+    const input = document.createElement("input");
+    input.type = "text";
+    input.maxLength = 128;
+    input.value = channel.source;
+    input.placeholder = "CLK, DATA[3] ou BUS[7:4]";
+    input.style.setProperty("--channel-color", INSTRUMENT_CHANNEL_COLORS[index % INSTRUMENT_CHANNEL_COLORS.length] ?? "#888");
+    input.title = "Sinal, pino, nó, barramento, elemento ou intervalo";
+    input.addEventListener("change", () => {
+      channels[index] = { ...channel, source: input.value.trim() };
+      const value = JSON.stringify(channels.filter((entry) => entry.source));
+      component.properties.signalChannels = value;
+      send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name: "signalChannels", value });
+      persistState();
+    });
+    label.append(caption, input);
+    rows.appendChild(label);
+  });
+  return rows;
 }
 
 /** Linha "Auto"/"Trigger" -- seleção EXCLUSIVA de 1 canal (ou nenhum), uma bolinha colorida por
@@ -3614,23 +3979,36 @@ function makeToggleDotRow(labelText: string, hiddenByChannel: boolean[], onToggl
  * esquemático principal, ver `instrumentPopupLayer`). */
 function makePopupChrome(title: string, popup: InstrumentPopupState): { container: HTMLDivElement; body: HTMLDivElement } {
   const container = document.createElement("div");
-  container.className = "instrument-popup";
+  container.className = `instrument-popup instrument-popup--${popup.kind}`;
+  container.dataset.componentId = popup.componentId;
   container.style.left = `${popup.x}px`;
   container.style.top = `${popup.y}px`;
+  container.style.width = `${popup.width}px`;
+  container.style.height = `${popup.height}px`;
 
   const titlebar = document.createElement("div");
   titlebar.className = "instrument-popup__titlebar";
+  const identity = document.createElement("span");
+  identity.className = "instrument-popup__identity";
+  const icon = document.createElement("span");
+  icon.className = "instrument-popup__icon";
+  icon.textContent = popup.kind === "oscope" ? "∿" : "▱";
   const titleText = document.createElement("span");
+  titleText.className = "instrument-popup__title";
   titleText.textContent = title;
+  const instrumentKind = document.createElement("span");
+  instrumentKind.className = "instrument-popup__kind";
+  instrumentKind.textContent = popup.kind === "oscope" ? "OSCILOSCÓPIO" : "ANALISADOR LÓGICO";
+  identity.append(icon, titleText, instrumentKind);
   const closeButton = document.createElement("button");
   closeButton.type = "button";
   closeButton.className = "instrument-popup__close";
-  closeButton.textContent = "✕";
+  closeButton.textContent = "×";
   closeButton.addEventListener("click", (event) => {
     event.stopPropagation();
     closeInstrumentPopup(popup.componentId);
   });
-  titlebar.append(titleText, closeButton);
+  titlebar.append(identity, closeButton);
 
   titlebar.addEventListener("pointerdown", (event) => {
     if (event.target === closeButton) return;
@@ -3648,6 +4026,7 @@ function makePopupChrome(title: string, popup: InstrumentPopupState): { containe
     const onUp = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      persistInstrumentPopup(popup);
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp, { once: true });
@@ -3656,6 +4035,14 @@ function makePopupChrome(title: string, popup: InstrumentPopupState): { containe
   const body = document.createElement("div");
   body.className = "instrument-popup__body";
   container.append(titlebar, body);
+  container.addEventListener("pointerup", () => {
+    const rect = container.getBoundingClientRect();
+    const size = clampInstrumentWindow(rect.width, rect.height);
+    if (size.width === popup.width && size.height === popup.height) return;
+    popup.width = size.width;
+    popup.height = size.height;
+    persistInstrumentPopup(popup);
+  });
   return { container, body };
 }
 
@@ -3674,10 +4061,17 @@ function buildScopePopup(popup: ScopePopupState, component: WebviewComponentMode
 
   const plotWrap = document.createElement("div");
   plotWrap.className = "instrument-popup__plot";
-  plotWrap.appendChild(renderScopePopupPlot(popup, scopeChannelsFor(component.id)));
+  const plot = renderScopePopupPlot(popup, scopeChannelsFor(component.id));
+  attachInstrumentPlotInteraction(plot, popup);
+  plotWrap.append(
+    makeInstrumentPlotHeader("oscope", `${popup.timeDivMs.toLocaleString("pt-BR", { maximumFractionDigits: 3 })} ms/div · 10 × 8 div`),
+    plot,
+    makeInstrumentLegend(4, popup.channels.map((channel) => channel.hidden)),
+  );
 
   const controls = document.createElement("div");
   controls.className = "instrument-popup__controls";
+  bindInstrumentControlPersistence(controls, popup);
 
   // Botões Ch1-Ch4/All -- cor de fundo do PRÓPRIO canal, igual `oscwidget.ui` real (ver
   // makeChannelButton). Trocar a aba ativa também troca qual canal os knobs de Posição de
@@ -3695,6 +4089,7 @@ function buildScopePopup(popup: ScopePopupState, component: WebviewComponentMode
     renderInstrumentPopups();
   }));
   controls.appendChild(tabs);
+  controls.append(makeInstrumentSectionLabel("Túneis dos canais"), makeInstrumentTunnelRows(component, 4));
 
   // Knobs (disco + spinner) -- réplica do layout QDial+QLabel+PlotSpinBox de `oscwidget.ui`.
   const knobs = document.createElement("div");
@@ -3705,38 +4100,37 @@ function buildScopePopup(popup: ScopePopupState, component: WebviewComponentMode
     if (popup.activeTab === "all") popup.channels.forEach(fn);
     else fn(activeChannel);
   };
-  knobs.appendChild(makeKnobRow(`${component.id}:timeDiv`, "Divisão de Tempo (ms)", popup.timeDivMs, 100, (v) => { popup.timeDivMs = Math.max(0.001, v); renderInstrumentPopups(); }, {
+  knobs.appendChild(makeKnobRow(`${component.id}:timeDiv`, "Divisão de Tempo (ms)", popup.timeDivMs, 100, (v) => { popup.timeDivMs = Math.max(0.001, v); persistInstrumentPopup(popup); renderInstrumentPopups(); }, {
     dialStep: (current) => Math.max(0.001, Math.abs(current) / 100),
     reverse: true,
     min: 0.001,
   }));
-  knobs.appendChild(makeKnobRow(`${component.id}:timePos`, "Posição de Tempo (ms)", activeChannel.timePosMs, 100, (v) => { applyChannels((channel) => { channel.timePosMs = v; }); renderInstrumentPopups(); }, {
+  knobs.appendChild(makeKnobRow(`${component.id}:timePos`, "Posição de Tempo (ms)", activeChannel.timePosMs, 100, (v) => { applyChannels((channel) => { channel.timePosMs = v; }); persistInstrumentPopup(popup); renderInstrumentPopups(); }, {
     dialStep: () => Math.max(0.001, popup.timeDivMs / 100),
   }));
-  knobs.appendChild(makeKnobRow(`${component.id}:voltDiv`, "Divisão de Tensão (V)", activeChannel.voltDiv, 0.1, (v) => { const next = Math.max(0.001, v); applyChannels((channel) => { channel.voltDiv = next; }); renderInstrumentPopups(); }, {
+  knobs.appendChild(makeKnobRow(`${component.id}:voltDiv`, "Divisão de Tensão (V)", activeChannel.voltDiv, 0.1, (v) => { const next = Math.max(0.001, v); applyChannels((channel) => { channel.voltDiv = next; }); persistInstrumentPopup(popup); renderInstrumentPopups(); }, {
     dialStep: (current) => Math.max(0.001, Math.abs(current) / 100),
     reverse: true,
     min: 0.001,
   }));
-  knobs.appendChild(makeKnobRow(`${component.id}:voltPos`, "Posição de Tensão (V)", activeChannel.voltPos, 0.1, (v) => { applyChannels((channel) => { channel.voltPos = v; }); renderInstrumentPopups(); }, {
+  knobs.appendChild(makeKnobRow(`${component.id}:voltPos`, "Posição de Tensão (V)", activeChannel.voltPos, 0.1, (v) => { applyChannels((channel) => { channel.voltPos = v; }); persistInstrumentPopup(popup); renderInstrumentPopups(); }, {
     dialStep: () => Math.max(0.001, activeChannel.voltDiv / 100),
     reverse: true,
   }));
-  controls.appendChild(knobs);
+  controls.append(makeInstrumentSectionLabel("Escala e posição"), knobs);
 
-  controls.appendChild(makeDivider());
+  controls.appendChild(makeInstrumentSectionLabel("Aquisição"));
   controls.appendChild(makeFieldRow("Filtro (V)", makeNumberInput(popup.filterThreshold, 0.01, (v) => { popup.filterThreshold = Math.max(0, v); renderInstrumentPopups(); })));
 
   // Auto/Trigger/Esconder -- bolinhas coloridas por canal, igual `oscwidget.ui` real (réplica de
   // `autoGroup`/`triggerGroup`/`hideGroup`, ver makeExclusiveDotRow/makeToggleDotRow).
-  controls.appendChild(makeDivider());
   controls.appendChild(makeExclusiveDotRow("Auto", popup.autoScaleChannel, (value) => { popup.autoScaleChannel = value; renderInstrumentPopups(); }));
   controls.appendChild(makeExclusiveDotRow("Trigger", popup.triggerSource, (value) => { popup.triggerSource = value; renderInstrumentPopups(); }));
   controls.appendChild(makeToggleDotRow("Esconder", popup.channels.map((c) => c.hidden), (channel) => {
     popup.channels[channel]!.hidden = !popup.channels[channel]!.hidden;
     renderInstrumentPopups();
   }));
-  controls.appendChild(makeDivider());
+  controls.appendChild(makeInstrumentSectionLabel("Visualização"));
 
   const tracksRow = document.createElement("div");
   tracksRow.className = "instrument-field";
@@ -3765,33 +4159,47 @@ function buildScopePopup(popup: ScopePopupState, component: WebviewComponentMode
 function buildLogicPopup(popup: LogicPopupState, component: WebviewComponentModel): HTMLDivElement {
   const { container, body } = makePopupChrome(`LAnalizer-${instrumentPopupIndexSuffix(component)}`, popup);
   const history = logicChannelFor(component.id);
+  const bitTraces = analyzerBitTraces(history);
 
   const plotWrap = document.createElement("div");
   plotWrap.className = "instrument-popup__plot";
-  plotWrap.appendChild(renderLogicPopupPlot(popup, history));
+  const plot = renderLogicPopupPlot(popup, history);
+  attachInstrumentPlotInteraction(plot, popup);
+  plotWrap.append(
+    makeInstrumentPlotHeader("logic", `${popup.timeDivMs.toLocaleString("pt-BR", { maximumFractionDigits: 3 })} ms/div · ${history.timestampsNs.length} amostras`),
+    plot,
+    makeInstrumentLegend(
+      Math.max(1, bitTraces.length),
+      popup.hiddenChannels,
+      bitTraces.map((trace) => trace.label),
+      bitTraces.map((trace) => trace.channelIndex),
+    ),
+  );
 
   const controls = document.createElement("div");
   controls.className = "instrument-popup__controls";
+  bindInstrumentControlPersistence(controls, popup);
 
   const knobs = document.createElement("div");
   knobs.className = "instrument-knobs";
-  knobs.appendChild(makeKnobRow(`${component.id}:timeDiv`, "Divisão de Tempo (ms)", popup.timeDivMs, 100, (v) => { popup.timeDivMs = Math.max(10, v); renderInstrumentPopups(); }));
-  knobs.appendChild(makeKnobRow(`${component.id}:timePos`, "Posição de Tempo (ms)", popup.timePosMs, 100, (v) => { popup.timePosMs = v; renderInstrumentPopups(); }));
-  controls.appendChild(knobs);
+  knobs.appendChild(makeKnobRow(`${component.id}:timeDiv`, "Divisão de Tempo (ms)", popup.timeDivMs, 0.1, (v) => { popup.timeDivMs = Math.max(0.000001, v); persistInstrumentPopup(popup); renderInstrumentPopups(); }, {
+    dialStep: (current) => Math.max(0.000001, Math.abs(current) / 100), reverse: true, min: 0.000001,
+  }));
+  knobs.appendChild(makeKnobRow(`${component.id}:timePos`, "Posição de Tempo (ms)", popup.timePosMs, 100, (v) => { popup.timePosMs = v; persistInstrumentPopup(popup); renderInstrumentPopups(); }));
+  controls.append(makeInstrumentSectionLabel("Base de tempo"), knobs);
 
-  const busLabel = document.createElement("div");
-  busLabel.className = "instrument-section-label";
-  busLabel.textContent = "Barramento";
-  controls.appendChild(busLabel);
+  controls.appendChild(makeInstrumentSectionLabel("Canais digitais"));
 
   const channelRows = document.createElement("div");
   channelRows.className = "instrument-channel-rows";
-  popup.hiddenChannels.forEach((hidden, channel) => {
+  while (popup.hiddenChannels.length < bitTraces.length) popup.hiddenChannels.push(false);
+  bitTraces.forEach((trace, channel) => {
+    const hidden = popup.hiddenChannels[channel] ?? false;
     const row = document.createElement("div");
     row.className = "instrument-channel-row";
     const swatch = document.createElement("span");
     swatch.className = "instrument-channel-swatch";
-    swatch.style.background = INSTRUMENT_CHANNEL_COLORS[channel] ?? "#888";
+    swatch.style.background = INSTRUMENT_CHANNEL_COLORS[trace.channelIndex] ?? "#888";
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
     checkbox.checked = !hidden;
@@ -3799,10 +4207,13 @@ function buildLogicPopup(popup: LogicPopupState, component: WebviewComponentMode
       popup.hiddenChannels[channel] = !checkbox.checked;
       renderInstrumentPopups();
     });
-    row.append(swatch, checkbox, document.createTextNode(`Ch${channel}`));
+    row.append(swatch, checkbox, document.createTextNode(trace.label));
     channelRows.appendChild(row);
   });
   controls.appendChild(channelRows);
+  controls.append(makeInstrumentSectionLabel("Fontes / barramentos"), makeAnalyzerSourceRows(component, history));
+
+  controls.appendChild(makeInstrumentSectionLabel("Disparo"));
 
   const triggerRow = document.createElement("div");
   triggerRow.className = "instrument-field";
@@ -3813,10 +4224,10 @@ function buildLogicPopup(popup: LogicPopupState, component: WebviewComponentMode
   noneOption.value = "none";
   noneOption.textContent = "Nenhum";
   triggerSelect.appendChild(noneOption);
-  for (let channel = 0; channel < 8; channel++) {
+  for (let channel = 0; channel < bitTraces.length; channel++) {
     const option = document.createElement("option");
     option.value = String(channel);
-    option.textContent = `Ch${channel}`;
+    option.textContent = bitTraces[channel]?.label ?? `Ch${channel}`;
     triggerSelect.appendChild(option);
   }
   triggerSelect.value = popup.triggerChannel === "none" ? "none" : String(popup.triggerChannel);
@@ -3825,7 +4236,33 @@ function buildLogicPopup(popup: LogicPopupState, component: WebviewComponentMode
     renderInstrumentPopups();
   });
   triggerRow.append(triggerLabel, triggerSelect);
-  controls.appendChild(triggerRow);
+  const footer = document.createElement("div");
+  footer.className = "instrument-popup__footer";
+  footer.appendChild(triggerRow);
+  const condition = document.createElement("input");
+  condition.type = "text";
+  condition.className = "instrument-trigger-condition";
+  condition.placeholder = "Condição / nome do sinal";
+  condition.value = popup.triggerCondition;
+  if (popup.pauseValidationError) {
+    condition.setCustomValidity(popup.pauseValidationError);
+    condition.title = popup.pauseValidationError;
+  }
+  condition.addEventListener("change", () => {
+    popup.triggerCondition = condition.value.trim();
+    persistInstrumentPopup(popup);
+    send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestSetPauseCondition", componentId: component.id, expression: popup.triggerCondition });
+  });
+  footer.appendChild(condition);
+  if (popup.pauseEvent) {
+    const eventLabel = document.createElement("span");
+    eventLabel.className = "instrument-pause-event";
+    eventLabel.textContent = popup.pauseEvent.error
+      ? `Erro no Core: ${popup.pauseEvent.error}`
+      : `Pausa em ${(popup.pauseEvent.simulationTimeNs / 1e6).toLocaleString("pt-BR", { maximumFractionDigits: 6 })} ms`;
+    eventLabel.title = JSON.stringify(popup.pauseEvent.resolvedValues);
+    footer.appendChild(eventLabel);
+  }
 
   controls.appendChild(makeFieldRow("Limiar ↑ (V)", makeNumberInput(popup.thresholdUp, 0.1, (v) => {
     popup.thresholdUp = v;
@@ -3842,26 +4279,40 @@ function buildLogicPopup(popup: LogicPopupState, component: WebviewComponentMode
   exportButton.type = "button";
   exportButton.className = "instrument-export-button";
   exportButton.textContent = "Exportar Dados";
-  exportButton.addEventListener("click", () => exportInstrumentData(component, popup, history));
-  controls.appendChild(exportButton);
+  exportButton.addEventListener("click", () => exportLogicVcd(component, popup, history));
+  footer.appendChild(exportButton);
 
-  body.append(plotWrap, controls);
+  body.append(plotWrap, controls, footer);
   return container;
+}
+
+function exportLogicVcd(component: WebviewComponentModel, popup: LogicPopupState, history: AnalyzerVectorHistory): void {
+  const traces = analyzerBitTraces(history).filter((_, channel) => !popup.hiddenChannels[channel]);
+  const identifiers = "!\"#$%&'()*+,-./:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
+  const lines = ["$date", `  ${new Date().toISOString()}`, "$end", "$timescale 1ns $end", "$scope module LasecSimul $end"];
+  traces.forEach((trace, index) => lines.push(`$var wire 1 ${identifiers[index] ?? `v${index}`} ${trace.label.replace(/\s+/g, "_")} $end`));
+  lines.push("$upscope $end", "$enddefinitions $end");
+  history.timestampsNs.forEach((timestamp, sampleIndex) => {
+    lines.push(`#${Math.max(0, Math.round(timestamp))}`);
+    traces.forEach((trace, index) => lines.push(`${trace.values[sampleIndex] ?? 0}${identifiers[index] ?? `v${index}`}`));
+  });
+  const content = lines.join("\n") + "\n";
+  send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestExportInstrumentData", suggestedFileName: `${component.label || component.id}.vcd`, csvContent: content });
 }
 
 /** CSV com timestamp REAL (tempo simulado, convertido pra ms -- `timestampsNs[i] / 1e6`) quando o
  * histórico real já chegou (ver `realLogicHistoryByComponentId`/`realScopeHistoryByComponentId`);
  * cai pro timestamp aproximado (intervalo de poll) só se a janela acabou de abrir e a resposta de
  * `requestInstrumentHistory` ainda não chegou. */
-function exportInstrumentData(component: WebviewComponentModel, popup: InstrumentPopupState, history: { timestampsNs: number[]; masks: number[] } | Array<{ timestampsNs: number[]; values: number[] }>): void {
+function exportInstrumentData(component: WebviewComponentModel, popup: InstrumentPopupState, history: AnalyzerVectorHistory | Array<{ timestampsNs: number[]; values: number[] }>): void {
   const lines: string[] = [];
   if (popup.kind === "logic") {
-    const logic = history as { timestampsNs: number[]; masks: number[] };
-    const visibleChannels = popup.hiddenChannels.map((hidden, ch) => (hidden ? -1 : ch)).filter((ch) => ch >= 0);
-    lines.push(["tempo_ms", ...visibleChannels.map((ch) => `ch${ch}`)].join(","));
-    logic.masks.forEach((mask, index) => {
+    const logic = history as AnalyzerVectorHistory;
+    const traces = analyzerBitTraces(logic).filter((_, channel) => !popup.hiddenChannels[channel]);
+    lines.push(["tempo_ms", ...traces.map((trace) => trace.label)].join(","));
+    logic.timestampsNs.forEach((_, index) => {
       const timeMs = (logic.timestampsNs[index] ?? index * INSTRUMENT_POLL_INTERVAL_MS * 1e6) / 1e6;
-      lines.push([timeMs, ...visibleChannels.map((ch) => (mask >>> ch) & 1)].join(","));
+      lines.push([timeMs, ...traces.map((trace) => trace.values[index] ?? 0)].join(","));
     });
   } else {
     const channels = history as Array<{ timestampsNs: number[]; values: number[] }>;
@@ -3880,10 +4331,8 @@ function exportInstrumentData(component: WebviewComponentModel, popup: Instrumen
   });
 }
 
-/** Reconstrói TODAS as janelas "Expande" abertas a partir de `instrumentPopups` -- chamado depois
- * de qualquer mudança de estado relevante (novo readout, abrir/fechar, editar um controle). Sempre
- * reconstrói do zero (mesmo brute-force de `render()` pro canvas principal) -- volume baixo (no
- * máximo algumas janelas abertas por vez), não compensa otimizar com diff incremental. */
+/** Reconstrói as janelas somente em mudanças estruturais ou de controles. A telemetria usa
+ * `refreshInstrumentPopupPlots`, preservando DOM, foco, resize e gestos no hot path. */
 function renderInstrumentPopups(): void {
   instrumentPopupLayer.innerHTML = "";
   for (const popup of instrumentPopups.values()) {
@@ -3894,6 +4343,21 @@ function renderInstrumentPopups(): void {
     }
     const element = popup.kind === "oscope" ? buildScopePopup(popup, component) : buildLogicPopup(popup, component);
     instrumentPopupLayer.appendChild(element);
+  }
+}
+
+/** Atualiza somente o framebuffer e preserva foco, resize e gesto da janela. */
+function refreshInstrumentPopupPlots(): void {
+  const containers = Array.from(instrumentPopupLayer.querySelectorAll<HTMLElement>(".instrument-popup"));
+  for (const popup of instrumentPopups.values()) {
+    const container = containers.find((element) => element.dataset.componentId === popup.componentId);
+    const current = container?.querySelector<SVGSVGElement>(".instrument-plot-svg");
+    if (!current) continue;
+    const next = popup.kind === "oscope"
+      ? renderScopePopupPlot(popup, scopeChannelsFor(popup.componentId))
+      : renderLogicPopupPlot(popup, logicChannelFor(popup.componentId));
+    attachInstrumentPlotInteraction(next, popup);
+    current.replaceWith(next);
   }
 }
 
@@ -4134,9 +4598,13 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
         ]
       : [];
     const sourceId = catalogEntry?.registeredSourceId;
-    const propertyMenuItems: ContextMenuItem[] = isGroup
-      ? []
-      : [{ label: t("properties"), icon: "properties", onClick: () => openPropertyDialog(component) }];
+    // Edição em lote (rule 1-11, `batchProperties.ts`): seleção múltipla agora abre o diálogo em
+    // lote em vez de esconder "Propriedades" (comportamento antigo -- só o 1º componente era
+    // editável, o resto silenciosamente ignorado). Ações de instância única abaixo (submenu de
+    // subcircuito exposto, "Abrir Subcircuito") continuam gated por `isGroup`, sem sentido em lote.
+    const propertyMenuItems: ContextMenuItem[] = [
+      { label: t("properties"), icon: "properties", onClick: () => (isGroup ? openBatchPropertyDialog(selectedComponents) : openPropertyDialog(component)) },
+    ];
     // Menu da instância do subcircuito no circuito principal: ações da própria instância ficam
     // aqui; os componentes internos expostos aparecem em submenus separados.
     const isSubcircuitWithPackage = !isGroup && Boolean(sourceId) && catalogEntry?.registeredSourceKind === "subcircuit-file";
@@ -4256,6 +4724,11 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
       return;
     }
     if (!isComponentSelected(component.id)) selectOnlyComponent(component.id);
+    // Bloqueio (`component.locked`, ver `batchProperties.ts`/model.ts): permanece SELECIONÁVEL
+    // (seleção já sincronizada acima) -- só o ARRASTO em si é bloqueado, enforcement mínimo acordado
+    // (não bloqueia edição de propriedades, nem o próprio campo `locked`, que precisa continuar
+    // editável pra destravar).
+    if (component.locked) return;
     dragStartX = event.clientX;
     dragStartY = event.clientY;
     dragTargets = dragSelectionWithLinkedPinLabels().map((selected) => {
@@ -4773,6 +5246,26 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
   bodyGroup.innerHTML = isMissingSubcircuitRef || isUnknownComponent
     ? missingSubcircuitPlaceholderSvg(box)
     : packageSymbolSvg(component.typeId, symbolProperties, component.id, boardVariant) ?? catalogEntry?.symbolSvg ?? componentSymbolSvg(component.typeId, symbolProperties);
+  bodyGroup.querySelectorAll<HTMLInputElement>(".meter-channel-input").forEach((input) => {
+    const stopComponentGesture = (event: Event) => event.stopPropagation();
+    input.addEventListener("pointerdown", stopComponentGesture);
+    input.addEventListener("click", stopComponentGesture);
+    input.addEventListener("dblclick", stopComponentGesture);
+    input.addEventListener("keydown", (event) => {
+      event.stopPropagation();
+      if (event.key === "Enter") input.blur();
+      if (event.key === "Escape") {
+        const count = instrumentHistoryKind(component.typeId) === "channelHistory" ? 4 : 8;
+        input.value = instrumentTunnelNames(component, count)[Number(input.dataset.instrumentChannel ?? 0)] ?? "";
+        input.blur();
+      }
+    });
+    input.addEventListener("change", () => {
+      const channel = Number(input.dataset.instrumentChannel);
+      const count = instrumentHistoryKind(component.typeId) === "channelHistory" ? 4 : 8;
+      if (Number.isInteger(channel) && channel >= 0 && channel < count) updateInstrumentTunnel(component, channel, count, input.value);
+    });
+  });
   svg.appendChild(bodyGroup);
   const tunnelLabel = bodyGroup.querySelector<SVGTextElement>(".tunnel-name");
   if (tunnelLabel && (component.flipH || component.flipV)) {
@@ -4842,24 +5335,8 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
   el.appendChild(svg);
 }
 
-type PropertyFieldKind = "boolean" | "number" | "text" | "readonly" | "select" | "filePath" | "color" | "textarea";
-
-interface PropertyField {
-  key: string;
-  label: string;
-  kind: PropertyFieldKind;
-  value: string | number | boolean;
-  readonly?: boolean;
-  group: string;
-  min?: number;
-  max?: number;
-  step?: number;
-  options?: { value: string; label: string }[];
-  /** Unidade base (ex: "Ω", "F") -- quando presente num campo `number` editável, ativa o seletor de
-   * múltiplo de unidade (pF/nF/µF/.../k/M/G) ao lado do input, mesmo `NumVal::addMultipliers` do
-   * SimulIDE real (achado de auditoria de UI 2026-07-09). */
-  unit?: string;
-}
+// `PropertyFieldKind`/`PropertyField` agora moram em `batchProperties.ts` (roda em Node nos testes,
+// sem DOM) -- este arquivo importa de lá em vez de duplicar, ver import no topo do arquivo.
 
 interface PropertySheetOptions {
   titleText?: string;
@@ -5517,6 +5994,251 @@ function renderPropertySheet(component: WebviewComponentModel, options: Property
   return shell;
 }
 
+/** Rótulo dos campos genéricos (`source: "instance"`, ver `batchProperties.ts`) -- só existem aqui
+ * (nunca em `properties[key]`), então nunca vêm de `propertySchema`/i18n do catálogo; reaproveita as
+ * chaves de tradução já existentes pra flip (mesmo texto do menu de contexto) e adiciona só as novas
+ * (X/Y/Rotação/Bloqueado/Oculto). */
+function genericFieldLabel(key: string): string {
+  switch (key) {
+    case "x": return t("genericFieldX");
+    case "y": return t("genericFieldY");
+    case "rotation": return t("genericFieldRotation");
+    case "flipH": return t("flipHorizontal");
+    case "flipV": return t("flipVertical");
+    case "locked": return t("genericFieldLocked");
+    case "hiddenByUser": return t("genericFieldHidden");
+    default: return key;
+  }
+}
+
+/** Widget de UM campo compartilhado no diálogo de edição em lote -- variante simplificada de
+ * `renderPropertyField` (mesmas classes CSS, mesmo `kind`), sem os 2 recursos que só fazem sentido
+ * pra UM componente por vez (seletor de múltiplo de unidade SI, rádio "mostrar no símbolo" -- aqui
+ * `number` é sempre um input plano). `boolean` usa `indeterminate` nativo pro estado misto; `select`
+ * ganha uma opção sintética "(vários valores)"; `number`/`text`/`color` mostram vazio/placeholder
+ * quando misto, mas só aplicam de fato se o usuário REALMENTE tocou o campo (`userEdited` -- `<input
+ * type=color>` nunca fica vazio de verdade, então "valor vazio == intocado" não é confiável pra ele;
+ * o mesmo rastreamento explícito cobre todos os kinds sem precisar de um caso especial só pra cor,
+ * ver rule 9 do pedido original). Cada edição chama `applyBatchChange` -- rule 4/6: aplica no
+ * `change` (não em cada tecla), rule 7: `applyBatchChange` já re-renderiza o diálogo depois. */
+function renderBatchPropertyField(components: WebviewComponentModel[], field: SharedPropertyField): HTMLElement {
+  const label = field.source === "instance" ? genericFieldLabel(field.key) : field.label;
+
+  if (field.kind === "boolean") {
+    const row = document.createElement("label");
+    row.className = "property-sheet__check-row";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    if (field.value.state === "common") input.checked = field.value.value === true;
+    else input.indeterminate = true;
+    input.addEventListener("change", () => applyBatchChange(components, field, input.checked));
+    const text = document.createElement("span");
+    text.textContent = label;
+    row.append(input, text);
+    return row;
+  }
+
+  const row = document.createElement("label");
+  row.className = "property-sheet__field-row";
+  const caption = document.createElement("span");
+  caption.className = "property-sheet__field-label";
+  caption.textContent = `${label}:`;
+
+  if (field.kind === "select") {
+    const select = document.createElement("select");
+    select.className = "property-sheet__field-input";
+    if (field.value.state === "mixed") {
+      const mixedOption = document.createElement("option");
+      mixedOption.value = "";
+      mixedOption.textContent = t("mixedValuePlaceholder");
+      mixedOption.selected = true;
+      select.appendChild(mixedOption);
+    }
+    for (const option of field.options ?? []) {
+      const optionEl = document.createElement("option");
+      optionEl.value = option.value;
+      optionEl.textContent = option.label;
+      optionEl.selected = field.value.state === "common" && option.value === String(field.value.value);
+      select.appendChild(optionEl);
+    }
+    select.addEventListener("change", () => {
+      if (select.value === "") return; // ainda na opção sintética de "misto" -- usuário não escolheu nada de verdade
+      const isNumeric = [...field.perComponent.values()].every((ownField) => typeof ownField.value === "number");
+      applyBatchChange(components, field, isNumeric ? Number(select.value) : select.value);
+    });
+    row.append(caption, select);
+    return row;
+  }
+
+  const input = document.createElement("input");
+  input.className = "property-sheet__field-input";
+  input.type = field.kind === "number" ? "number" : field.kind === "color" ? "color" : "text";
+  if (field.value.state === "common") {
+    input.value = String(field.value.value);
+  } else {
+    input.value = field.kind === "color" ? "#000000" : "";
+    if (field.kind !== "color") input.placeholder = t("mixedValuePlaceholder");
+  }
+  if (field.kind === "number") {
+    if (field.step !== undefined) input.step = String(field.step);
+    if (field.min !== undefined) input.min = String(field.min);
+    if (field.max !== undefined) input.max = String(field.max);
+  }
+  let userEdited = false;
+  input.addEventListener("input", () => { userEdited = true; });
+  input.addEventListener("change", () => {
+    if (field.value.state === "mixed" && !userEdited) return;
+    const value = field.kind === "number" ? Number(input.value) : input.value;
+    applyBatchChange(components, field, value);
+  });
+  row.append(caption, input);
+  return row;
+}
+
+/** Diálogo de Propriedades pra N (>1) componentes selecionados (rule 1-9). Campos genéricos
+ * (`computeGenericInstanceFields`) sempre aparecem primeiro (disponíveis pra qualquer typeId);
+ * campos específicos por typeId (`computeSharedPropertyFields`, reaproveitando `resolvePropertyFields`
+ * -- mesma resolução de schema/inferência de sempre, nunca duplicada) só aparecem quando TODOS os
+ * componentes selecionados os têm, com o MESMO `kind`. Mesmas classes CSS de `renderPropertySheet`
+ * (sem tabs -- lote não tem grupos ricos o bastante pra justificar, um `<fieldset>` por grupo já
+ * basta). */
+function renderBatchPropertySheet(components: WebviewComponentModel[]): HTMLElement {
+  const shell = document.createElement("section");
+  shell.className = "property-sheet";
+
+  const titleBar = document.createElement("div");
+  titleBar.className = "property-sheet__titlebar";
+  const uid = document.createElement("div");
+  uid.className = "property-sheet__uid";
+  uid.textContent = `${components.length} ${t("componentsSelected")}`;
+  const closeButton = document.createElement("button");
+  closeButton.type = "button";
+  closeButton.className = "property-sheet__window-close";
+  closeButton.textContent = "x";
+  closeButton.addEventListener("click", () => propertyDialog.close());
+  titleBar.append(uid, closeButton);
+
+  const toolbar = document.createElement("div");
+  toolbar.className = "property-sheet__toolbar";
+  const typeText = document.createElement("div");
+  typeText.className = "property-sheet__type";
+  const typeIds = new Set(components.map((component) => component.typeId));
+  typeText.textContent = typeIds.size === 1
+    ? `${t("type")}: ${componentTypeLabel(components[0]!)}`
+    : `${t("type")}: ${typeIds.size} ${t("multipleTypesLabel")}`;
+  toolbar.append(typeText);
+
+  const errorBanner = document.createElement("p");
+  errorBanner.className = "property-sheet__batch-error";
+  if (activeBatchPropertyError) {
+    errorBanner.textContent = activeBatchPropertyError;
+  } else {
+    errorBanner.hidden = true;
+  }
+
+  const genericFields = computeGenericInstanceFields(components);
+  const sharedFields = computeSharedPropertyFields(components, resolvePropertyFields);
+  const allFields = [...genericFields, ...sharedFields];
+
+  const groups = new Map<string, SharedPropertyField[]>();
+  for (const field of allFields) {
+    const list = groups.get(field.group) ?? [];
+    list.push(field);
+    groups.set(field.group, list);
+  }
+
+  const pages = document.createElement("div");
+  pages.className = "property-sheet__pages";
+  if (allFields.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "property-sheet__empty";
+    empty.textContent = t("batchNoSharedFields");
+    pages.appendChild(empty);
+  } else {
+    for (const [groupName, fields] of groups) {
+      const fieldset = document.createElement("fieldset");
+      fieldset.className = "property-sheet__group";
+      const legend = document.createElement("legend");
+      legend.textContent = groupName === "generic" ? t("genericFieldGroup") : groupName;
+      fieldset.appendChild(legend);
+      for (const field of fields) fieldset.appendChild(renderBatchPropertyField(components, field));
+      pages.appendChild(fieldset);
+    }
+  }
+
+  shell.append(titleBar, toolbar, errorBanner, pages);
+  return shell;
+}
+
+/** Aplica `value` de `field` a TODOS os `components` de uma vez (rule 4/6): valida contra o campo
+ * PRÓPRIO de cada componente primeiro (`planBatchPropertyChange`, tudo ou nada -- rule 10/11); se
+ * `ok:false`, mostra o erro inline (sem toast genérico na Webview, ver `activeBatchPropertyError`) e
+ * NÃO toca em nada. Se `ok:true`, aplica cada patch diretamente no `state.components` VIVO -- campo
+ * `source:"instance"` muta o campo top-level direto (mesmo estilo de `moveSelectedComponentsByArrow`,
+ * sem verbo IPC -- a sincronização `"projectChanged"` genérica já persiste/reconcilia esses campos,
+ * mesma prova usada hoje por `flipH`/`showId`); campo `source:"properties"` muta
+ * `component.properties[key]` E manda `requestUpdateProperty` (verbo já existente, reaproveitado em
+ * loop -- mesmo princípio de `deleteSelectedItems`, nunca um verbo em lote novo) pra rodar
+ * `affectsPinCount`/renomeação de túnel no host igual a uma edição de 1 componente só. `persistState()`
+ * roda UMA vez no final -- vira 1 único passo de Undo/Redo pro lote inteiro (rule 6), mesmo mecanismo
+ * de diff-de-conteúdo já usado por qualquer edição de propriedade hoje. */
+function applyBatchChange(components: WebviewComponentModel[], field: SharedPropertyField, value: string | number | boolean): void {
+  const plan = planBatchPropertyChange(components, field, value);
+  if (!plan.ok) {
+    activeBatchPropertyError = t("batchApplyRejected");
+    renderBatchDialogContents(components);
+    return;
+  }
+  activeBatchPropertyError = undefined;
+
+  const patchesByComponentId = new Map<string, BatchPropertyPatch>(plan.patches.map((patch) => [patch.componentId, patch]));
+  for (const component of state.components) {
+    const patch = patchesByComponentId.get(component.id);
+    if (!patch) continue;
+    if (patch.source === "instance") {
+      applyGenericInstanceFieldPatch(component, patch.key, patch.value);
+    } else {
+      component.properties[patch.key] = patch.value;
+      send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name: patch.key, value: patch.value });
+    }
+  }
+  persistState();
+  render();
+  refreshOpenPropertyDialog();
+}
+
+/** Escreve um patch `source:"instance"` no campo TOP-LEVEL correspondente -- `key` já vem restrito
+ * aos 7 campos declarados em `GENERIC_INSTANCE_FIELD_SPECS` (`batchProperties.ts`), então o `switch`
+ * cobre todo caso possível sem precisar de um cast genérico (`Record<string,unknown>`) pro
+ * `WebviewComponentModel` inteiro. */
+function applyGenericInstanceFieldPatch(component: WebviewComponentModel, key: string, value: string | number | boolean): void {
+  switch (key) {
+    case "x":
+      if (typeof value === "number") component.x = value;
+      return;
+    case "y":
+      if (typeof value === "number") component.y = value;
+      return;
+    case "rotation": {
+      const rotation = Number(value);
+      if (rotation === 0 || rotation === 90 || rotation === 180 || rotation === 270) component.rotation = rotation;
+      return;
+    }
+    case "flipH":
+      if (typeof value === "boolean") component.flipH = value;
+      return;
+    case "flipV":
+      if (typeof value === "boolean") component.flipV = value;
+      return;
+    case "locked":
+      if (typeof value === "boolean") component.locked = value;
+      return;
+    case "hiddenByUser":
+      if (typeof value === "boolean") component.hiddenByUser = value;
+      return;
+  }
+}
+
 window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) => {
   const message = event.data;
   if (!message || message.version !== WEBVIEW_MESSAGE_VERSION) return;
@@ -5621,7 +6343,23 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
   if (message.type === "instrumentHistory") {
     if (message.oscope) realScopeHistoryByComponentId.set(message.componentId, message.oscope.channels);
     if (message.logic) realLogicHistoryByComponentId.set(message.componentId, message.logic);
-    renderInstrumentPopups();
+    refreshInstrumentPopupPlots();
+  }
+
+  if (message.type === "pauseConditionValidation") {
+    const popup = instrumentPopups.get(message.componentId);
+    if (popup?.kind === "logic") {
+      popup.pauseValidationError = message.valid ? undefined : message.error ?? "Condição inválida";
+      renderInstrumentPopups();
+    }
+  }
+
+  if (message.type === "pauseConditionTriggered") {
+    const popup = instrumentPopups.get(message.ownerId);
+    if (popup?.kind === "logic") {
+      popup.pauseEvent = { simulationTimeNs: message.simulationTimeNs, expression: message.expression, resolvedValues: message.resolvedValues, error: message.error };
+      renderInstrumentPopups();
+    }
   }
 
   if (message.type === "boardOverlayData") {
@@ -5640,9 +6378,12 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
       readoutsByComponentId = {};
       scopeHistoryByComponentId = {};
       logicHistoryByComponentId = {};
+      realScopeHistoryByComponentId.clear();
+      realLogicHistoryByComponentId.clear();
       simulationRate = undefined;
     }
     render();
+    renderInstrumentPopups();
     refreshOpenPropertyDialog();
   }
 
@@ -6054,7 +6795,7 @@ function renderExternalLabel(component: WebviewComponentModel, kind: ExternalLab
 
 /** Seleciona todo componente/fio não oculto (`Ctrl+A`, `circuit.cpp::keyPressEvent` do SimulIDE). */
 function selectAll(): void {
-  state.selectedComponentIds = state.components.filter((component) => !component.hidden).map((component) => component.id);
+  state.selectedComponentIds = state.components.filter((component) => !component.hidden && !component.hiddenByUser).map((component) => component.id);
   state.selectedWireIds = state.topology.conductors.map((wire) => wire.id);
   persistState();
   render();

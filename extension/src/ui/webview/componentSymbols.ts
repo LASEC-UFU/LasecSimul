@@ -77,11 +77,23 @@ function rotatePoint(x: number, y: number, cx: number, cy: number, deg: number):
 function numericPackageValue(value: PackageNumberValue | undefined, properties: Record<string, unknown> | undefined, context: Record<string, number>, fallback = 0): number {
   if (typeof value === "number") return Number.isFinite(value) ? value : fallback;
   if (!value) return fallback;
-  const rawBase = value.index
-    ? context[value.index] ?? value.fallback ?? fallback
-    : value.prop
-      ? (Number.isFinite(Number(properties?.[value.prop])) ? Number(properties?.[value.prop]) : value.fallback ?? fallback)
-      : value.fallback ?? fallback;
+  // `fallback` do argumento é o valor FINAL do campo (por exemplo, package.width), não um valor
+  // bruto da propriedade que ainda deva receber multiplier/offset. Reaplicá-lo na expressão fazia
+  // um layout sem properties transformar width=72 em 72*8+8=584. Somente `value.fallback`, quando
+  // declarado dentro da própria expressão, representa uma base bruta substituta.
+  let rawBase: number;
+  if (value.index) {
+    const contextual = context[value.index];
+    if (typeof contextual === "number" && Number.isFinite(contextual)) rawBase = contextual;
+    else if (value.fallback !== undefined) rawBase = value.fallback;
+    else return fallback;
+  } else if (value.prop) {
+    const propertyValue = Number(properties?.[value.prop]);
+    if (Number.isFinite(propertyValue)) rawBase = propertyValue;
+    else if (value.fallback !== undefined) rawBase = value.fallback;
+    else return fallback;
+  } else if (value.fallback !== undefined) rawBase = value.fallback;
+  else return fallback;
   const base = value.transform === "log2Ceil" ? (rawBase > 1 ? Math.ceil(Math.log2(rawBase)) : 0) : rawBase;
   let out = base * (value.multiplier ?? 1) + (value.offset ?? 0);
   if (value.min !== undefined) out = Math.max(value.min, out);
@@ -940,7 +952,7 @@ function packagePinLeadSvg(pin: MaterializedPackagePin, resolved: ResolvedPackag
   let labelNativeX = pin.labelX ?? tipNativeX + Math.cos(rad) * labelSpace;
   let labelNativeY = pin.labelY ?? tipNativeY + Math.sin(rad) * labelSpace;
   let textAnchor = pin.labelTextAnchor ?? "middle";
-  let labelRotation: number | undefined;
+  let labelRotation: number | undefined = hasCustomLabelPos && typeof pin.labelRotation === "number" ? pin.labelRotation : undefined;
   let labelDominantBaseline = pin.labelDominantBaseline;
   if (!hasCustomLabelPos) {
     const offset = pin.length + (pin.labelSpace ?? Math.max(2, labelFontSize / 2));
@@ -1027,10 +1039,9 @@ function svgRound(value: number): number {
 function qtButtonSvg(x: number, y: number, w: number, h: number, text: string, id: string): string {
   const gradId = `${id}-button-grad`;
   const innerH = h - 2;
-  // Envolve os 3 elementos num `<g class="meter-expand-button">` -- NÃO a classe direto em cada um
-  // (colocaria `.meter-expand-button { fill:#ededed; stroke:#999 }`, do CSS, por cima do
-  // gradiente/borda destes atributos: presentation attribute sempre perde pra regra de CSS na
-  // cascata). `<g>` não tem fill/stroke próprio pra sobrescrever nada -- só serve de alvo pro
+  // Envolve os 3 elementos num `<g class="meter-expand-button">`. O CSS limita fill/stroke aos
+  // fallbacks `rect.meter-expand-button`; o grupo atual carrega somente cursor/hit-test, evitando
+  // que stroke de borda seja herdado pelo texto. O grupo serve de alvo pro
   // `event.target.closest(".meter-expand-button")` do handler de clique (`main.ts`,
   // `isExpandableInstrument`). Sem isto (nenhum elemento carregava a classe antes), o botão
   // "Expande" nunca respondia a clique nenhum -- bug relatado 2026-07-09.
@@ -1040,8 +1051,28 @@ function qtButtonSvg(x: number, y: number, w: number, h: number, text: string, i
     `<g class="meter-expand-button">` +
     `<rect x="${x + 0.8}" y="${y + 0.8}" width="${w - 1.6}" height="${innerH + 0.4}" rx="2" ry="2" fill="none" stroke="#6e6e6e" stroke-width="1"/>` +
     `<rect x="${x + 1}" y="${y + 1}" width="${w - 2}" height="${innerH}" rx="2" ry="2" fill="url(#${gradId})" stroke="none"/>` +
-    `<text x="${x + w / 2}" y="${y + h / 2}" text-anchor="middle" dominant-baseline="central" font-family="Segoe UI,Arial,sans-serif" font-size="9" font-weight="700" fill="#000014">${escapeXmlText(text)}</text>` +
+    // QPainter::drawText usa a cor do QPen, mas não contorna os glifos. Em SVG, herdar `stroke`
+    // do grupo desenhava um segundo contorno cinza sobre o fill e deixava "Expande" borrado.
+    `<text x="${x + w / 2}" y="${y + h / 2}" text-anchor="middle" dominant-baseline="central" font-family="Segoe UI,Arial,sans-serif" font-size="9" font-weight="700" fill="#000014" stroke="none">${escapeXmlText(text)}</text>` +
     `</g>`
+  );
+}
+
+function instrumentTunnelNames(properties: Record<string, unknown>, channels: number): string[] {
+  const serialized = typeof properties.tunnels === "string" ? properties.tunnels : "";
+  const names = serialized.split(",");
+  return Array.from({ length: channels }, (_, channel) => names[channel] ?? "");
+}
+
+/** QLineEdit colorido de DataWidget/DataLaWidget. foreignObject mantém um input HTML editável
+ * dentro do mesmo sistema local/transform do símbolo SVG; o handler elétrico fica em main.ts. */
+function qtTunnelInputSvg(x: number, y: number, width: number, height: number, channel: number, color: string, value: string): string {
+  return (
+    `<foreignObject x="${x}" y="${y}" width="${width}" height="${height}" class="meter-channel-field">` +
+    `<input xmlns="http://www.w3.org/1999/xhtml" class="meter-channel-input" data-instrument-channel="${channel}" ` +
+    `aria-label="Túnel do canal ${channel + 1}" title="Nome do túnel (fio físico tem prioridade)" ` +
+    `style="--channel-color:${color}" value="${escapeXmlText(value)}" maxlength="64" spellcheck="false"/>` +
+    `</foreignObject>`
   );
 }
 
@@ -1096,6 +1127,7 @@ function simulideQtWidgetSvg(widget: SimulideQtWidgetSpec, properties: Record<st
   const logicHistory = symbolHistoryArray(properties);
   const latest = symbolReadoutArray(properties);
   const colors = ["#c8c83c", "#b4b4d7", "#c0a05f", "#00c864", "#c8c83c", "#b4b4d7", "#c0a05f", "#00c864"];
+  const tunnelNames = instrumentTunnelNames(properties, isLogic ? 8 : 4);
   const widgetX = 10;
   const widgetY = 2;
   const displayX = widgetX + 72;
@@ -1105,11 +1137,17 @@ function simulideQtWidgetSvg(widget: SimulideQtWidgetSpec, properties: Record<st
   let markup = `<rect x="8" y="0" width="219" height="153" rx="4" ry="4" fill="#f4f4f4" stroke="#606060" stroke-width="1.5"/>`;
 
   if (isLogic) {
+    // DataLaWidget.ui: QLineEdit 60x14 e QVBoxLayout spacing=2. O botão começa DEPOIS da oitava
+    // linha; a fórmula comum evita a antiga constante y=132, que invadia 2 unidades do channel7.
+    const channelTop = widgetY + 6;
+    const channelHeight = 14;
+    const channelSpacing = 2;
     for (let i = 0; i < 8; i += 1) {
-      const y = widgetY + 6 + i * 16;
-      markup += `<rect x="${widgetX + 8}" y="${y}" width="60" height="14" rx="2" ry="2" fill="${colors[i]}" stroke="#777" stroke-width="1"/>`;
+      const y = channelTop + i * (channelHeight + channelSpacing);
+      markup += qtTunnelInputSvg(widgetX + 8, y, 60, channelHeight, i, colors[i] ?? "#ddd", tunnelNames[i] ?? "");
     }
-    markup += qtButtonSvg(widgetX + 8, widgetY + 130, 60, 16, "Expande", `${scopeId}-logic`);
+    const expandY = channelTop + 8 * channelHeight + 7 * channelSpacing + channelSpacing;
+    markup += qtButtonSvg(widgetX + 8, expandY, 60, 16, "Expande", `${scopeId}-logic`);
     markup += plotDisplaySvg(displayX, displayY, displayW, displayH, 8, 8, [], logicHistory, colors, false);
   } else {
     for (let i = 0; i < 4; i += 1) {
@@ -1117,7 +1155,7 @@ function simulideQtWidgetSvg(widget: SimulideQtWidgetSpec, properties: Record<st
       const latestValue = latest[i];
       const label = typeof latestValue === "number" && latestValue !== 0 ? `${formatRailVoltage(latestValue)} Hz` : "0 Hz";
       markup += `<text x="${widgetX + 8}" y="${y}" font-family="Segoe UI,Arial,sans-serif" font-size="9" font-weight="700" fill="#000">${escapeXmlText(label)}</text>`;
-      markup += `<rect x="${widgetX + 8}" y="${y + 5}" width="60" height="15" rx="2" ry="2" fill="${colors[i]}" stroke="#777" stroke-width="1"/>`;
+      markup += qtTunnelInputSvg(widgetX + 8, y + 5, 60, 15, i, colors[i] ?? "#ddd", tunnelNames[i] ?? "");
     }
     markup += qtButtonSvg(widgetX + 8, widgetY + 130, 60, 16, "Expande", `${scopeId}-scope`);
     markup += plotDisplaySvg(displayX, displayY, displayW, displayH, 4, widget.tracks ?? 1, histories, [], ["#00c864", "#f6f65a", "#ffd06a", "#d9d7ff"], false);

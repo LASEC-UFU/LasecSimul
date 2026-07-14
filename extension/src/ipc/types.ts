@@ -33,7 +33,8 @@ export interface PropertySchemaDto {
 export type ReadoutFormatDto =
   | { kind: "scalar"; unit: string }
   | { kind: "channelHistory"; channels: number }
-  | { kind: "bitmaskHistory"; channels: number };
+  | { kind: "bitmaskHistory"; channels: number }
+  | { kind: "vectorHistory"; channels: number };
 
 /** Espelha 1:1 `interactionKindToJson` em `CoreApplication.cpp`, mais valores Extension-side
  * ("joystick", "encoder", "touchpad") que o Core não conhece mas a Extension lê do .lsdevice. */

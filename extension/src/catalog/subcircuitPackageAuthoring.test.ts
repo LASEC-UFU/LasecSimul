@@ -139,6 +139,111 @@ const manifestWithPackage = (overrides: Record<string, unknown> = {}) => ({
     assert(icon?.properties.width === 56 && icon?.properties.height === 40, "ícone deveria ter o mesmo tamanho do Package");
   });
 
+  await test("compile persiste posição arrastada do rótulo como labelX/labelY + textAnchor/baseline 'middle' (bug real: posição do rótulo era descartada em todo save, só o texto sobrevivia)", () => {
+    const manifest = manifestWithPackage();
+    const internalComponents = [tunnel("t1", "TUN1"), tunnel("t2", "TUN2")];
+    const seeded = seedPackageAuthoringComponents(manifest, internalComponents, "/tmp", makeIdFactory("seed"));
+    const pkg = seeded.components.find((c) => c.typeId === PACKAGE_TYPE_ID);
+    const pin1 = seeded.components.find((c) => c.typeId === PACKAGE_PIN_TYPE_ID && c.properties.pinId === "P1");
+    const label1 = seeded.components.find((c) => c.typeId === "graphics.text" && c.properties.linkedPinComponentId === pin1?.id);
+    assert(pkg !== undefined && pin1 !== undefined && label1 !== undefined, "seed deveria produzir Package + pino P1 + rótulo linkado");
+
+    const dragged: WebviewComponentModel = { ...label1!, x: 999, y: 888 };
+    const fullScene = [...internalComponents, ...seeded.components.filter((c) => c.id !== label1!.id), dragged];
+
+    const compiled = compilePackageAuthoringComponents(fullScene);
+    assert(compiled.errors.length === 0, `não deveria ter erros: ${compiled.errors.join(" | ")}`);
+    const p1 = compiled.package?.pins.find((p) => p.id === "P1");
+    const w = Math.max(24, "P1".length * 7 * 0.62 + 12);
+    const h = 7 + 14;
+    const expectedLabelX = 999 + w / 2 - (pkg?.x ?? 0);
+    const expectedLabelY = 888 + h / 2 - (pkg?.y ?? 0);
+    assert(Math.abs((p1?.labelX as number) - expectedLabelX) < 0.01, `labelX deveria refletir a posição arrastada, recebido ${p1?.labelX}, esperado ${expectedLabelX}`);
+    assert(Math.abs((p1?.labelY as number) - expectedLabelY) < 0.01, `labelY deveria refletir a posição arrastada, recebido ${p1?.labelY}, esperado ${expectedLabelY}`);
+    assert(p1?.labelTextAnchor === "middle", "labelTextAnchor deveria ser 'middle' (mesma renderização centralizada do editor)");
+    assert(p1?.labelDominantBaseline === "middle", "labelDominantBaseline deveria ser 'middle'");
+  });
+
+  await test("seed usa labelX/labelY explícitos do arquivo diretamente, nunca recalcula (WYSIWYG pra arquivo já autorado)", () => {
+    const manifest = manifestWithPackage({
+      package: {
+        width: 56,
+        height: 40,
+        border: true,
+        pins: [{ id: "P1", x: 0, y: 12, angle: 180, length: 8, label: "P1", labelX: 30, labelY: 5 }],
+      },
+      interface: [{ pinId: "P1", label: "P1", internalTunnel: "TUN1" }],
+    });
+    const { components } = seedPackageAuthoringComponents(manifest, [tunnel("t1", "TUN1")], "/tmp", makeIdFactory("seed"));
+    const pkg = components.find((c) => c.typeId === PACKAGE_TYPE_ID);
+    const label = components.find((c) => c.typeId === "graphics.text");
+    assert(label !== undefined, "deveria seedar o rótulo linkado");
+    const w = Math.max(24, "P1".length * 7 * 0.62 + 12);
+    const h = 7 + 14;
+    const centerX = label!.x + w / 2;
+    const centerY = label!.y + h / 2;
+    const expectedCenterX = (pkg?.x ?? 0) + 30;
+    const expectedCenterY = (pkg?.y ?? 0) + 5;
+    assert(Math.abs(centerX - expectedCenterX) < 0.6, `centro do rótulo deveria bater com labelX explícito, recebido ${centerX}, esperado ${expectedCenterX}`);
+    assert(Math.abs(centerY - expectedCenterY) < 0.6, `centro do rótulo deveria bater com labelY explícito, recebido ${centerY}, esperado ${expectedCenterY}`);
+  });
+
+  await test("seed sem labelX/labelY usa a MESMA fórmula padrão de packagePinLeadSvg (preview do editor bate com o esquemático antes de qualquer arraste)", () => {
+    const manifest = manifestWithPackage(); // P1 angle180 x0,y12,length8; P2 angle0 x56,y12,length8
+    const { components } = seedPackageAuthoringComponents(manifest, [tunnel("t1", "TUN1"), tunnel("t2", "TUN2")], "/tmp", makeIdFactory("seed"));
+    const pin1 = components.find((c) => c.typeId === PACKAGE_PIN_TYPE_ID && c.properties.pinId === "P1");
+    const pin2 = components.find((c) => c.typeId === PACKAGE_PIN_TYPE_ID && c.properties.pinId === "P2");
+    const label1 = components.find((c) => c.typeId === "graphics.text" && c.properties.linkedPinComponentId === pin1?.id);
+    const label2 = components.find((c) => c.typeId === "graphics.text" && c.properties.linkedPinComponentId === pin2?.id);
+    assert(label1 !== undefined && label2 !== undefined, "deveria seedar os 2 rótulos");
+    const w = Math.max(24, "P1".length * 7 * 0.62 + 12);
+    const h = 7 + 14;
+    const center1X = label1!.x + w / 2;
+    const center1Y = label1!.y + h / 2;
+    const center2X = label2!.x + w / 2;
+    const center2Y = label2!.y + h / 2;
+    // offset = length(8) + max(2, fontSize(7)/2=3.5) = 11.5; origin = {x:200,y:40} (maxX das 2
+    // tunnels em x=0, +200); P1 angle180 x=0,y=12 -> nativo (11.5,12) -> exibido (211.5,52); P2
+    // angle0 x=56,y=12 -> nativo (56-11.5,12)=(44.5,12) -> exibido (244.5,52).
+    assert(Math.abs(center1X - 211.5) < 0.6, `rótulo P1 (angle180) deveria ficar em x~211.5 (mesma fórmula do renderizador), recebido ${center1X}`);
+    assert(Math.abs(center1Y - 52) < 0.6, `rótulo P1 deveria ficar em y~52 (mesmo y do pino), recebido ${center1Y}`);
+    assert(Math.abs(center2X - 244.5) < 0.6, `rótulo P2 (angle0) deveria ficar em x~244.5, recebido ${center2X}`);
+    assert(Math.abs(center2Y - 52) < 0.6, `rótulo P2 deveria ficar em y~52, recebido ${center2Y}`);
+  });
+
+  await test("seed -> compile -> seed é idempotente (abrir/salvar repetido não move rótulos)", () => {
+    const manifest = manifestWithPackage();
+    const internalComponents = [tunnel("t1", "TUN1"), tunnel("t2", "TUN2")];
+    const seeded1 = seedPackageAuthoringComponents(manifest, internalComponents, "/tmp", makeIdFactory("seed1"));
+    const compiled1 = compilePackageAuthoringComponents([...internalComponents, ...seeded1.components]);
+    assert(compiled1.errors.length === 0, `não deveria ter erros: ${compiled1.errors.join(" | ")}`);
+
+    const manifest2 = { ...manifest, package: compiled1.package, interface: compiled1.interfaceEntries };
+    const seeded2 = seedPackageAuthoringComponents(manifest2, internalComponents, "/tmp", makeIdFactory("seed2"));
+    const compiled2 = compilePackageAuthoringComponents([...internalComponents, ...seeded2.components]);
+    assert(compiled2.errors.length === 0, `não deveria ter erros na segunda rodada: ${compiled2.errors.join(" | ")}`);
+
+    const p1a = compiled1.package?.pins.find((p) => p.id === "P1");
+    const p1b = compiled2.package?.pins.find((p) => p.id === "P1");
+    assert(Math.abs((p1a?.labelX as number) - (p1b?.labelX as number)) < 0.01, `labelX deveria ser estável entre save/reload, recebido ${p1a?.labelX} vs ${p1b?.labelX}`);
+    assert(Math.abs((p1a?.labelY as number) - (p1b?.labelY as number)) < 0.01, `labelY deveria ser estável entre save/reload, recebido ${p1a?.labelY} vs ${p1b?.labelY}`);
+  });
+
+  await test("compile persiste labelRotation quando o rótulo foi rotacionado (pino vertical, angle 90) -- sem isso, um rótulo vertical vira horizontal no primeiro save", () => {
+    const manifest = manifestWithPackage({
+      package: { width: 56, height: 40, border: true, pins: [{ id: "P1", x: 20, y: 40, angle: 90, length: 8, label: "P1" }] },
+      interface: [{ pinId: "P1", label: "P1", internalTunnel: "TUN1" }],
+    });
+    const seeded = seedPackageAuthoringComponents(manifest, [tunnel("t1", "TUN1")], "/tmp", makeIdFactory("seed"));
+    const label = seeded.components.find((c) => c.typeId === "graphics.text");
+    assert(label?.rotation === 90, `preview do editor deveria já nascer rotacionado 90 (mesma fórmula do renderizador pra angle=90), recebido ${label?.rotation}`);
+
+    const compiled = compilePackageAuthoringComponents([tunnel("t1", "TUN1"), ...seeded.components]);
+    assert(compiled.errors.length === 0, `não deveria ter erros: ${compiled.errors.join(" | ")}`);
+    const p1 = compiled.package?.pins.find((p) => p.id === "P1");
+    assert(p1?.labelRotation === 90, `labelRotation deveria sobreviver ao compile, recebido ${p1?.labelRotation}`);
+  });
+
   await test("round-trip seed -> compile produz package/interface equivalentes ao original", () => {
     const manifest = manifestWithPackage();
     const internalComponents = [tunnel("t1", "TUN1"), tunnel("t2", "TUN2")];

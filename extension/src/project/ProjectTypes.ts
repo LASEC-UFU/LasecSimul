@@ -65,6 +65,13 @@ export interface ProjectComponent {
   valueLabelPropertyKey?: string;
   flipH?: boolean;
   flipV?: boolean;
+  /** Bloqueio de edição em lote (ver `ui/webview/model.ts::WebviewComponentModel.locked`) --
+   * distinto de qualquer conceito do Core, nunca sincronizado via `setProperty`. Ausente == `false`. */
+  locked?: boolean;
+  /** Visibilidade escolhida pelo usuário (ver `ui/webview/model.ts::WebviewComponentModel.hiddenByUser`)
+   * -- distinto do `hidden` derivado do catálogo (nunca persistido, sempre recalculado do typeId).
+   * Ausente == `false`. */
+  hiddenByUser?: boolean;
   visual?: {
     x?: number;
     y?: number;

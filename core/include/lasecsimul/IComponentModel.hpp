@@ -10,6 +10,7 @@
 #include <vector>
 #include "Types.hpp"
 #include "Transient.hpp"
+#include "Signal.hpp"
 
 namespace lasecsimul {
 
@@ -97,6 +98,21 @@ public:
     /** Notificação de reconstrução topológica; permite que instrumentos tratem um terminal
      * opcional desconectado sem inferir conectividade a partir de tensão. */
     virtual void onPinConnectionChanged(size_t, bool) {}
+
+    /** Nome de túnel usado como entrada virtual somente quando este pino não possui fio físico.
+     * É o equivalente geral de PlotBase/DataChannel do SimulIDE: instrumentos podem observar uma
+     * rede nomeada sem criar um segundo componente Tunnel visual. O Netlist mantém a precedência
+     * do fio físico e só ativa o fallback quando existe um Tunnel real com o mesmo nome. */
+    virtual std::optional<std::string> fallbackTunnelNameForPin(std::string_view) const {
+        return std::nullopt;
+    }
+
+    /** Aquisição declarativa executada pela sessão somente após o passo convergir. */
+    virtual std::vector<SignalSubscription> signalSubscriptions() const { return {}; }
+    /** Consulta barata antes de resolver nós/barramentos. Evita trabalho no hot path quando o
+     * intervalo próprio do instrumento ainda não venceu. */
+    virtual bool wantsResolvedSignalSample(uint64_t) const { return false; }
+    virtual void onResolvedSignalSample(uint64_t, std::span<const ResolvedSignal>) {}
 
     /** Quantas incógnitas extras (correntes de ramo) este componente precisa no CircuitGroup —
      * 0 para tudo que não seja fonte de tensão ideal/dependente. Resolvido uma vez por rebuild de

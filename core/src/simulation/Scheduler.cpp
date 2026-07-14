@@ -97,7 +97,8 @@ bool Scheduler::processNextEventUntilLocked(std::unique_lock<std::mutex>& lock, 
 
 void Scheduler::runUntil(uint64_t targetTimeNs) {
     std::unique_lock<std::mutex> lock(m_mutex);
-    settleUntilStableLocked();
+    const bool initialWork = settleUntilStableLocked();
+    if (initialWork && m_lastSettleConverged && m_stableStep) m_stableStep(m_nowNs);
 
     while (m_nowNs < targetTimeNs) {
         uint64_t nextTime = targetTimeNs;
@@ -116,8 +117,10 @@ void Scheduler::runUntil(uint64_t targetTimeNs) {
             processNextEventUntilLocked(lock, nextTime);
         }
         settleUntilStableLocked();
+        bool accepted = true;
         if (m_commitTimeStep && nextTime > previousTime) {
             const TimeStepDecision decision = m_commitTimeStep(previousTime, nextTime, eventBoundary);
+            accepted = decision.accept;
             const uint64_t attempted = nextTime - previousTime;
             if (!decision.accept && !eventBoundary && attempted > m_minimumTimeStepNs) {
                 m_nowNs = previousTime;
@@ -133,6 +136,7 @@ void Scheduler::runUntil(uint64_t targetTimeNs) {
                     static_cast<uint64_t>(static_cast<double>(attempted) * factor), m_minimumTimeStepNs, maxStep);
             }
         }
+        if (accepted && m_lastSettleConverged && m_stableStep) m_stableStep(m_nowNs);
     }
 }
 
@@ -170,7 +174,8 @@ void Scheduler::start() {
             bool processedEvent = false;
             {
                 std::unique_lock<std::mutex> lock(m_mutex);
-                settleUntilStableLocked();
+                const bool settledWork = settleUntilStableLocked();
+                if (settledWork && m_lastSettleConverged && m_stableStep) m_stableStep(m_nowNs);
 
                 if (!m_events.empty()) {
                     const uint64_t nextTimeNs = m_events.top().timeNs;

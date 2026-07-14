@@ -8,6 +8,7 @@
 #include "lasecsimul/IComponentModel.hpp"
 #include "lasecsimul/PropertyDefinition.hpp"
 #include "simulation/Scheduler.hpp"
+#include "InstrumentTunnels.hpp"
 
 namespace lasecsimul::components {
 
@@ -46,6 +47,12 @@ public:
 
     const char* typeId() const override { return "meters.oscope"; }
     std::span<Pin> pins() override { return m_pins; }
+    std::optional<std::string> fallbackTunnelNameForPin(std::string_view pinId) const override {
+        for (size_t channel = 0; channel < kChannelCount; ++channel) {
+            if (m_pins[channel].id == pinId) return m_tunnelNames[channel];
+        }
+        return std::nullopt;
+    }
     void onPinConnectionChanged(size_t pinIndex, bool connected) override {
         if (pinIndex == kReferencePin) m_referenceConnected = connected;
     }
@@ -112,6 +119,7 @@ public:
         const PropertySchema autoScaleSchema = schemaById(schemas, "autoScale");
         const PropertySchema tracksSchema = schemaById(schemas, "tracks");
         const PropertySchema sampleIntervalSchema = schemaById(schemas, "sampleIntervalNs");
+        const PropertySchema tunnelsSchema = schemaById(schemas, "tunnels");
         return {
             PropertyDefinition{
                 filterSchema,
@@ -148,6 +156,15 @@ public:
                         return {false, *error};
                     }
                     m_sampleIntervalNs = static_cast<uint64_t>(std::max(1.0, std::get<double>(v)));
+                    return {true, {}};
+                },
+            },
+            PropertyDefinition{
+                tunnelsSchema,
+                [this] { return PropertyValue{instrument_tunnels::serialize(m_tunnelNames)}; },
+                [this, tunnelsSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(tunnelsSchema, v)) return {false, *error};
+                    m_tunnelNames = instrument_tunnels::parse<kChannelCount>(std::get<std::string>(v));
                     return {true, {}};
                 },
             },
@@ -201,7 +218,7 @@ public:
         sampleInterval.defaultValue = 50000.0;
         sampleInterval.minValue = 1.0;
 
-        return {filter, autoSc, tracks, sampleInterval};
+        return {filter, autoSc, tracks, sampleInterval, instrument_tunnels::schema()};
     }
 
 private:
@@ -232,6 +249,7 @@ private:
     double m_filter = 0.0;
     bool m_autoScale = true;
     int m_tracks = 4;
+    std::array<std::string, kChannelCount> m_tunnelNames{};
     bool m_referenceConnected = false;
 };
 

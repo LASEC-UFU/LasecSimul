@@ -14,6 +14,7 @@
 #include "../components/active/AnalogMux.hpp"
 #include "../components/active/DiodeLegArray.hpp"
 #include "../components/passive/ResistorArray.hpp"
+#include "../components/outputs/StepperWindings.hpp"
 #include "../components/switches/Keypad.hpp"
 #include "../components/meters/Ampmeter.hpp"
 #include "../components/meters/Voltmeter.hpp"
@@ -42,6 +43,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <type_traits>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -693,14 +695,14 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
         return std::make_unique<components::Resistor>(pos, resistance);
     });
     registerBuiltinMetadata("outputs.dc_motor", "Dc Motor", dcMotorSchema, englishName("Dc Motor"));
-    // Idem, 2 bobinas independentes (A+/A-, B+/B-) via `ResistorArray` -- sem modelo de passo/torque
-    // (`stepper.cpp` real tem isso), só as duas bobinas eletricamente presentes.
+    // Quatro meias-bobinas ligadas ao terminal comum, como o Stepper unipolar real. O modelo
+    // continua resistivo (sem torque/back-EMF), mas preserva os cinco terminais elétricos.
     reg.registerFactory("outputs.stepper", [](const ComponentParams& p) {
-        std::vector<Pin> pins = makePinVector(p, 4);
-        const double resistance = std::get<double>(propertyOrDefault(p.properties, components::ResistorArray::propertySchema(10.0).front()));
-        return std::make_unique<components::ResistorArray>("outputs.stepper", std::move(pins), resistance);
+        std::vector<Pin> pins = makePinVector(p, 5);
+        const double resistance = std::get<double>(propertyOrDefault(p.properties, components::StepperWindings::propertySchema(10.0).front()));
+        return std::make_unique<components::StepperWindings>(std::move(pins), resistance);
     });
-    registerBuiltinMetadata("outputs.stepper", "Stepper", components::ResistorArray::propertySchema(10.0),
+    registerBuiltinMetadata("outputs.stepper", "Stepper", components::StepperWindings::propertySchema(10.0),
                             englishName("Stepper"));
     registerOutputState("outputs.servo", "Servo Motor", 3,
                         {components::detail::numberSchema("minPulse", "Pulso Minimo", "us", 1000.0, 1.0, 10.0),
@@ -867,7 +869,14 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
         const std::vector<PropertySchema> schemas = components::LogicAnalyzer::propertySchema();
         const double thresholdRising = std::get<double>(propertyOrDefault(p.properties, schemaById(schemas, "thresholdRising")));
         const double thresholdFalling = std::get<double>(propertyOrDefault(p.properties, schemaById(schemas, "thresholdFalling")));
-        return std::make_unique<components::LogicAnalyzer>(scheduler, pins, thresholdRising, thresholdFalling);
+        auto analyzer = std::make_unique<components::LogicAnalyzer>(scheduler, pins, thresholdRising, thresholdFalling);
+        for (const char* property : {"sampleIntervalNs", "tunnels", "signalChannels"}) {
+            const auto value = p.properties.find(property);
+            if (value == p.properties.end()) continue;
+            const PropertyBindResult result = bindPropertyByName(analyzer->properties(), property, value->second);
+            if (!result.applied) throw std::invalid_argument(std::string(property) + ": " + result.error);
+        }
+        return analyzer;
     });
     registerBuiltinMetadata("meters.logic_analyzer", "Analisador Lógico", components::LogicAnalyzer::propertySchema(),
                             englishName("Logic Analyzer"), components::LogicAnalyzer::readoutFormat());
@@ -1255,6 +1264,9 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
 
     // ── controle de simulação ──────────────────────────────────────────────────
     if (msg.type == "start") {
+        // start() is idempotent while the worker is already running, so a
+        // Core-side pause must be released explicitly before restarting it.
+        session.scheduler().resume();
         session.scheduler().start();
         resp.ok = true;
         return resp;
@@ -1262,6 +1274,26 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
     if (msg.type == "pause") {
         session.scheduler().pause();
         resp.ok = true;
+        return resp;
+    }
+    if (msg.type == "setPauseCondition") {
+        try {
+            const nlohmann::json payload = nlohmann::json::parse(msg.payloadJson.empty() ? "{}" : msg.payloadJson);
+            session.scheduler().step(0); // resolve topologia/ponto inicial antes da validação semântica
+            const std::string ownerId = payload.value("ownerId", std::string{"global"});
+            const std::string expression = payload.value("expression", std::string{});
+            session.setPauseCondition(ownerId, expression);
+            resp.ok = true;
+            resp.payloadJson = nlohmann::json{{"ownerId", ownerId}, {"expression", expression}}.dump();
+        } catch (const PauseExpressionError& error) {
+            resp.ok = false;
+            resp.error = "Erro na condição de pausa, coluna " + std::to_string(error.column) + ": " + error.what();
+            resp.payloadJson = nlohmann::json{{"errorCode","pause_condition_syntax"},{"column",error.column}}.dump();
+        } catch (const std::exception& error) {
+            resp.ok = false;
+            resp.error = std::string("Erro na condição de pausa: ") + error.what();
+            resp.payloadJson = nlohmann::json{{"errorCode","pause_condition_symbol"}}.dump();
+        }
         return resp;
     }
     if (msg.type == "stop") {
@@ -1305,6 +1337,9 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
             const nlohmann::json payload =
                 msg.payloadJson.empty() ? nlohmann::json::object() : nlohmann::json::parse(msg.payloadJson);
             ComponentParams params;
+            params.instanceName = payload.value("instanceName", std::string{});
+            if (payload.contains("signalAliases") && payload["signalAliases"].is_array())
+                for (const auto& alias : payload["signalAliases"]) if (alias.is_string()) params.signalAliases.push_back(alias.get<std::string>());
             if (payload.contains("properties") && payload["properties"].is_object()) {
                 for (const auto& [key, value] : payload["properties"].items()) {
                     params.properties[key] = jsonToPropertyValue(value);
@@ -1891,6 +1926,22 @@ CoreApplication::CoreApplication(CoreConfig config)
 
     m_impl->ipcServer.setMessageHandler([this](const IncomingMessage& msg) {
         return handleMessage(msg, m_impl->session, m_impl->ipcServer, m_impl->pluginCache);
+    });
+    m_impl->session.setPauseConditionTriggeredCallback([this](const PauseConditionTriggered& event) {
+        nlohmann::json values=nlohmann::json::object();
+        for(const auto& [name,value]:event.resolvedValues) {
+            std::visit([&](const auto& v) {
+                using T = std::decay_t<decltype(v)>;
+                if constexpr (std::is_same_v<T, uint64_t>) {
+                    // Preserve all 64 bus bits across JSON/JavaScript (whose
+                    // numeric integer precision is limited to 53 bits).
+                    values[name] = std::to_string(v);
+                } else {
+                    values[name] = v;
+                }
+            }, value);
+        }
+        m_impl->ipcServer.sendNotification("pauseConditionTriggered", nlohmann::json{{"ownerId",event.ownerId},{"simulationTimeNs",event.simulationTimeNs},{"expression",event.expression},{"resolvedValues",values},{"error",event.error}}.dump());
     });
 }
 

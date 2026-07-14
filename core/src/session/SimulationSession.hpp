@@ -16,6 +16,7 @@
 #include "../simulation/Netlist.hpp"
 #include "../simulation/Scheduler.hpp"
 #include "lasecsimul/IComponentModel.hpp"
+#include "PauseExpression.hpp"
 
 namespace lasecsimul::session {
 
@@ -42,6 +43,14 @@ struct WireTopologyOperation {
     Kind kind;
     WireEndpointRef from;
     WireEndpointRef to;
+};
+
+struct PauseConditionTriggered {
+    std::string ownerId;
+    uint64_t simulationTimeNs = 0;
+    std::string expression;
+    std::unordered_map<std::string, PauseScalar> resolvedValues;
+    std::string error;
 };
 
 /**
@@ -179,6 +188,13 @@ public:
     std::optional<PropertySchema> propertySchemaOf(uint32_t component, const std::string& propertyName) const;
     std::optional<PropertyValue> propertyValueOf(uint32_t component, const std::string& propertyName) const;
 
+    /** Resolvedor canônico usado por aquisição vetorial e condições de pausa. */
+    ResolvedSignal resolveSignal(const std::string& reference, std::optional<uint32_t> self = std::nullopt) const;
+    void setPauseCondition(const std::string& ownerId, const std::string& expression);
+    void setPauseConditionTriggeredCallback(std::function<void(const PauseConditionTriggered&)> callback) {
+        m_pauseTriggeredCallback = std::move(callback);
+    }
+
     /** Chamado pelo Scheduler (na thread dele, já com o mutex do Scheduler tomado — ver
      * Scheduler.cpp). Não chamar diretamente fora desse contexto. */
     bool settleStep();
@@ -198,6 +214,9 @@ public:
     }
 
 private:
+    ResolvedSignal resolveSignalUnlocked(const std::string& reference, std::optional<uint32_t> self) const;
+    void acquireSubscribedSignalsUnlocked(uint64_t timestampNs);
+    void onStableStepUnlocked(uint64_t timestampNs);
     void rebuildTopologyIfNeeded();
     /** Reaproveita `CircuitGroup` (matriz/fatoração já estampada) de `previous` pra qualquer rede
      * cujo conjunto de componentes vivos E mapeamento pino->índice local não mudaram -- sem isso,
@@ -230,6 +249,11 @@ private:
     simulation::Scheduler m_scheduler;
 
     std::vector<std::unique_ptr<IComponentModel>> m_componentInstances;
+    std::vector<uint32_t> m_signalSubscribers;
+    std::unordered_map<std::string, uint32_t> m_signalAliases;
+    struct PauseConditionState { PauseExpression expression; bool wasTrue = false; bool errorReported = false; };
+    std::unordered_map<std::string, PauseConditionState> m_pauseConditions;
+    std::function<void(const PauseConditionTriggered&)> m_pauseTriggeredCallback;
     simulation::Topology m_topology;
     std::vector<double> m_nodeVoltages;
     std::vector<double> m_previousNodeVoltages;

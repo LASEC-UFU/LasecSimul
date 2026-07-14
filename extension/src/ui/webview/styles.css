@@ -536,12 +536,46 @@ html, body {
 }
 
 .meter-expand-button {
-  fill: #ededed;
-  stroke: #999;
   cursor: pointer;
 }
 
-.meter-expand-button:hover {
+/* QLineEdit dos canais de Oscope/DataLaWidget: input real, não retângulo decorativo. Vive em um
+   foreignObject do SVG para acompanhar translação/rotação/espelhamento do componente. */
+.meter-channel-field {
+  overflow: visible;
+}
+
+.meter-channel-input {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  padding: 0 3px;
+  border: 1px solid #73777b;
+  border-radius: 2px;
+  outline: none;
+  background: var(--channel-color, #ddd);
+  color: #101418;
+  font: 700 8px/1 "Segoe UI", Arial, sans-serif;
+  text-align: left;
+  cursor: text;
+  pointer-events: auto;
+}
+
+.meter-channel-input:focus {
+  border-color: #187ca7;
+  box-shadow: 0 0 0 1px #fff, 0 0 0 2px #187ca7;
+}
+
+/* Os fallbacks SVG antigos colocam a classe diretamente no rect. O qtButtonSvg atual coloca a
+   classe no grupo para hit-test; fill/stroke no grupo seriam herdados pelo texto e o borrariam. */
+rect.meter-expand-button {
+  fill: #ededed;
+  stroke: #999;
+}
+
+rect.meter-expand-button:hover {
   fill: #d8d8d8;
 }
 
@@ -962,6 +996,17 @@ html, body {
   font-size: 13px;
 }
 
+/** Rejeição de `planBatchPropertyChange` (rule 10/11) -- sem mecanismo de toast genérico na Webview
+ * hoje, exibido inline dentro do próprio diálogo de propriedades em lote. */
+.property-sheet__batch-error {
+  margin: 4px 8px;
+  padding: 4px 8px;
+  border: 1px solid #c0392b;
+  background: #fdecea;
+  color: #922b21;
+  font-size: 12px;
+}
+
 .context-menu {
   position: fixed;
   z-index: 30;
@@ -1064,12 +1109,18 @@ html, body {
   pointer-events: auto;
   display: flex;
   flex-direction: column;
-  background: #cfd3da;
-  border: 1px solid #6b6f76;
-  border-radius: 4px;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  background: #101820;
+  border: 1px solid #34495b;
+  border-radius: 10px;
+  box-shadow: 0 18px 55px rgba(0, 0, 0, 0.52), 0 0 0 1px rgba(131, 180, 216, 0.08) inset;
   font-size: 12px;
-  color: #1c1e22;
+  color: #dce8f2;
+  overflow: hidden;
+  resize: both;
+  min-width: 620px;
+  min-height: 390px;
+  max-width: calc(100vw - 12px);
+  max-height: calc(100vh - 12px);
 }
 
 /** Barra de título CLARA (cinza, igual chrome de janela nativa do Qt no SimulIDE real --
@@ -1079,40 +1130,133 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 8px;
-  background: linear-gradient(180deg, #f5f6f8, #e2e4e8);
-  color: #2c2f35;
+  min-height: 34px;
+  padding: 4px 8px 4px 10px;
+  background: linear-gradient(180deg, #fafafa, #e7e7e7);
+  color: #202020;
   font-weight: 700;
   cursor: move;
-  border-radius: 4px 4px 0 0;
-  border-bottom: 1px solid #aeb1b6;
+  border-radius: 10px 10px 0 0;
+  border-bottom: 1px solid #b8b8b8;
+  user-select: none;
+}
+
+.instrument-popup__identity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.instrument-popup__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid #4d6a80;
+  border-radius: 6px;
+  background: #0d151c;
+  color: #62d4ff;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.instrument-popup__title {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.instrument-popup__kind {
+  color: #687078;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
 }
 
 .instrument-popup__close {
-  width: 18px;
-  height: 18px;
-  border: 1px solid #9a9ea5;
-  border-radius: 2px;
-  background: #e2e4e8;
-  color: #2c2f35;
+  width: 24px;
+  height: 24px;
+  border: 1px solid #4a6072;
+  border-radius: 6px;
+  background: #111b24;
+  color: #b9c8d5;
   cursor: pointer;
   line-height: 1;
 }
 
 .instrument-popup__close:hover {
-  background: #d33;
-  border-color: #a02020;
+  background: #d9464f;
+  border-color: #ff7279;
   color: #fff;
 }
 
 .instrument-popup__body {
   display: flex;
-  gap: 8px;
-  padding: 8px;
+  gap: 12px;
+  padding: 12px;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: #d8dce2;
 }
 
 .instrument-popup__plot {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+  min-width: 320px;
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 8px;
+  border: 1px solid #2c3e4d;
+  border-radius: 8px;
+  background: #080d12;
+  box-shadow: 0 0 0 1px #05080b inset, 0 8px 22px rgba(0, 0, 0, 0.3);
+}
+
+.instrument-plot-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 20px;
+  padding: 0 3px;
+  color: #8fa7b9;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+}
+
+.instrument-acquisition-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #b9cbd8;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.instrument-acquisition-status__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #31e981;
+  box-shadow: 0 0 8px rgba(49, 233, 129, 0.85);
+}
+
+.instrument-acquisition-status--paused .instrument-acquisition-status__dot {
+  background: #f2c94c;
+  box-shadow: 0 0 8px rgba(242, 201, 76, 0.7);
+}
+
+.instrument-acquisition-status--stopped .instrument-acquisition-status__dot {
+  background: #8c99a3;
+  box-shadow: none;
+}
+
+.instrument-plot-header__detail {
+  font-variant-numeric: tabular-nums;
 }
 
 /* Grade real do osciloscópio/analisador lógico é 10 colunas x 8 linhas (`instrumentPlotGridSvg`,
@@ -1123,32 +1267,186 @@ html, body {
    de forma NÃO-uniforme, ainda distorcido, só que de um jeito diferente. `width`/`height` aqui
    precisam bater EXATAMENTE com `plotW`/`plotH` dos dois `viewBox` (main.ts), senão o SVG reescala. */
 .instrument-plot-svg {
-  width: 560px;
-  height: 448px;
-  border: 2px solid #444;
-  border-radius: 4px;
-  background: #000;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
+  border: 1px solid #425769;
+  border-radius: 3px;
+  background: #05090d;
+  box-shadow: 0 0 0 2px #020406, 0 0 24px rgba(21, 121, 164, 0.08);
+}
+
+.instrument-time-zero {
+  stroke: #c8c8c8;
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.instrument-cursor line {
+  stroke: #e8eef2;
+  stroke-width: 0.8;
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.instrument-cursor-label-bg {
+  fill: rgba(8, 13, 18, 0.88);
+  stroke: #768894;
+  stroke-width: 0.7;
+}
+
+.instrument-cursor-label {
+  fill: #f4f7f9;
+  font: 11px "Segoe UI", sans-serif;
+  pointer-events: none;
+}
+
+.instrument-plot-background {
+  fill: #05090d;
 }
 
 .instrument-plot-grid {
-  stroke: #2e2e2e;
+  stroke: #263744;
   stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+.instrument-plot-grid--minor {
+  stroke: #14212a;
+  stroke-width: 0.6;
 }
 
 .instrument-plot-grid--center {
-  stroke: #4a4a4a;
+  stroke: #526978;
+  stroke-width: 1.2;
+  stroke-dasharray: 4 3;
+}
+
+.instrument-trace {
+  vector-effect: non-scaling-stroke;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 1.5px rgba(255, 255, 255, 0.32));
+}
+
+.instrument-trace--digital {
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+  shape-rendering: geometricPrecision;
+}
+
+.instrument-measure-line {
+  stroke-width: 0.65;
+  stroke-dasharray: 4 4;
+  opacity: 0.45;
+  vector-effect: non-scaling-stroke;
+}
+
+.instrument-measure-label {
+  font: 700 9px "Segoe UI", sans-serif;
+  paint-order: stroke;
+  stroke: #05090d;
+  stroke-width: 2px;
+  pointer-events: none;
+}
+
+.instrument-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 12px;
+  min-height: 18px;
+  padding: 1px 3px 0;
+}
+
+.instrument-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #b8c9d6;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.instrument-legend__item--hidden {
+  opacity: 0.3;
+  text-decoration: line-through;
+}
+
+.instrument-legend__swatch {
+  width: 16px;
+  height: 3px;
+  border-radius: 3px;
+  box-shadow: 0 0 5px currentColor;
 }
 
 .instrument-popup__controls {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  min-width: 190px;
+  gap: 7px;
+  flex: 0 0 198px;
+  min-width: 198px;
+  overflow: auto;
+  padding: 9px;
+  border: 1px solid #304352;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #1a2732, #141f28);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.025) inset;
+}
+
+.instrument-popup--logic .instrument-popup__controls {
+  flex-basis: 176px;
+  min-width: 176px;
+}
+
+.instrument-popup--logic .instrument-popup__body {
+  display: grid;
+  grid-template-columns: minmax(320px, 1fr) 176px;
+  grid-template-rows: minmax(240px, 1fr) auto;
+}
+
+.instrument-popup--logic .instrument-popup__plot {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.instrument-popup--logic .instrument-popup__controls {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.instrument-popup__footer {
+  grid-column: 1;
+  grid-row: 2;
+  display: grid;
+  grid-template-columns: auto minmax(120px, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  min-height: 31px;
+  color: #17212a;
+}
+
+.instrument-popup__footer .instrument-field {
+  color: #17212a;
+}
+
+.instrument-trigger-condition {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 25px;
+  border: 1px solid #82909a;
+  border-radius: 3px;
+  padding: 2px 6px;
 }
 
 .instrument-tabs {
   display: flex;
-  gap: 2px;
+  gap: 4px;
+  padding-bottom: 2px;
 }
 
 /** Botões Ch1-Ch4/All -- cor de fundo do PRÓPRIO canal, borda "inset" quando ativo (igual
@@ -1158,31 +1456,38 @@ html, body {
 .instrument-tab,
 .instrument-channel-button {
   flex: 1;
-  padding: 3px 4px;
-  border: 1px solid #6b6f76;
+  padding: 5px 4px;
+  border: 1px solid #536572;
   background: #e6e8ec;
   cursor: pointer;
   font-size: 11px;
   font-weight: 700;
-  border-radius: 2px;
-  color: #1c1e22;
+  border-radius: 5px;
+  color: #101820;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.28), 0 1px 0 rgba(255, 255, 255, 0.55) inset;
+  transition: transform 80ms ease, filter 80ms ease;
+}
+
+.instrument-channel-button:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
 }
 
 .instrument-tab--active,
 .instrument-channel-button--active {
-  border: 2px solid #555;
-  border-style: inset;
+  border: 2px solid #f5fbff;
   font-weight: 700;
+  box-shadow: 0 0 0 2px #3d5566, 0 0 10px rgba(118, 209, 255, 0.25);
+  transform: translateY(1px);
 }
 
 .instrument-knobs {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  background: #e6e8ec;
-  border: 1px solid #8a8e96;
-  border-radius: 3px;
-  padding: 6px;
+  gap: 5px;
+  background: transparent;
+  border: 0;
+  padding: 0;
 }
 
 /** Linha de "knob" (dial `dialKnobSvg` + rótulo + spinner editável) -- réplica do layout
@@ -1193,12 +1498,17 @@ html, body {
 .instrument-knob-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
+  min-height: 45px;
+  padding: 5px 7px;
+  border: 1px solid #344a5b;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #22313d, #1a2731);
 }
 
 .instrument-knob-dial {
-  width: 32px;
-  height: 32px;
+  width: 38px;
+  height: 38px;
   flex: 0 0 auto;
   cursor: grab;
 }
@@ -1220,10 +1530,11 @@ html, body {
   font-size: 10px;
   font-weight: 700;
   white-space: nowrap;
+  color: #d8e4ed;
 }
 
 .instrument-knob-info input[type="number"] {
-  width: 78px;
+  width: 92px;
 }
 
 .instrument-divider {
@@ -1238,11 +1549,13 @@ html, body {
   align-items: center;
   justify-content: space-between;
   gap: 6px;
+  min-height: 26px;
 }
 
 .instrument-field label {
   font-size: 11px;
   flex: 1;
+  color: #b9cad7;
 }
 
 .instrument-field input[type="number"] {
@@ -1250,15 +1563,20 @@ html, body {
 }
 
 .instrument-section-label {
-  font-weight: 700;
-  font-size: 11px;
-  margin-top: 2px;
+  margin-top: 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #344958;
+  color: #67cffa;
+  font-weight: 800;
+  font-size: 9px;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
 }
 
 .instrument-channel-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
 }
 
 .instrument-channel-row {
@@ -1266,6 +1584,10 @@ html, body {
   align-items: center;
   gap: 6px;
   font-size: 11px;
+  padding: 4px 6px;
+  border: 1px solid #304453;
+  border-radius: 5px;
+  background: #111b23;
 }
 
 .instrument-channel-row label {
@@ -1291,41 +1613,131 @@ html, body {
   align-items: center;
   gap: 6px;
   font-size: 11px;
+  min-height: 22px;
 }
 
 .instrument-radio-row__label {
   width: 52px;
   flex: 0 0 auto;
   font-weight: 700;
+  color: #c5d3de;
 }
 
 .instrument-radio-dot {
   width: 13px;
   height: 13px;
   border-radius: 50%;
-  border: 1px solid #555;
+  border: 1px solid #83929c;
   cursor: pointer;
   flex: 0 0 auto;
   box-sizing: border-box;
 }
 
 .instrument-radio-dot--selected {
-  border: 2px solid #1c1e22;
-  box-shadow: 0 0 0 1px #fff inset;
+  border: 2px solid #f4fbff;
+  box-shadow: 0 0 0 2px #294354, 0 0 8px rgba(102, 211, 255, 0.4);
+}
+
+.instrument-tunnel-rows {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+}
+
+.instrument-tunnel-row {
+  display: grid;
+  grid-template-columns: 25px minmax(0, 1fr);
+  align-items: center;
+  gap: 4px;
+  color: #c5d3de;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.instrument-popup__controls .instrument-tunnel-row input[type="text"] {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 24px;
+  padding: 2px 5px;
+  border: 1px solid var(--channel-color);
+  border-radius: 4px;
+  outline: none;
+  background: #0c141b;
+  color: #f3f9fc;
+  font: 700 10px "Segoe UI", sans-serif;
+  box-shadow: 3px 0 0 var(--channel-color) inset;
+}
+
+.instrument-popup__controls .instrument-tunnel-row input[type="text"]:focus {
+  border-color: var(--channel-color);
+  box-shadow: 3px 0 0 var(--channel-color) inset, 0 0 0 2px rgba(79, 199, 245, 0.18);
 }
 
 .instrument-export-button {
   margin-top: 4px;
   padding: 5px 8px;
-  border: 1px solid #6b6f76;
-  border-radius: 3px;
-  background: #e6e8ec;
+  border: 1px solid #3e8db1;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #1682ae, #10668b);
+  color: #f4fbff;
   cursor: pointer;
   font-weight: 700;
 }
 
 .instrument-export-button:hover {
-  background: #d4d7dc;
+  background: linear-gradient(180deg, #20a0d2, #1682ae);
+}
+
+.instrument-popup__controls input[type="number"],
+.instrument-popup__controls select {
+  box-sizing: border-box;
+  height: 24px;
+  border: 1px solid #4b6171;
+  border-radius: 4px;
+  background: #0c141b;
+  color: #eef7ff;
+  padding: 2px 5px;
+  font: 11px "Segoe UI", sans-serif;
+  font-variant-numeric: tabular-nums;
+  outline: none;
+}
+
+.instrument-popup__controls input[type="number"]:focus,
+.instrument-popup__controls select:focus {
+  border-color: #4fc7f5;
+  box-shadow: 0 0 0 2px rgba(79, 199, 245, 0.18);
+}
+
+.instrument-popup__controls input[type="checkbox"],
+.instrument-popup__controls input[type="radio"] {
+  accent-color: #39bde9;
+}
+
+@media (max-width: 860px) {
+  .instrument-popup__body {
+    flex-direction: column;
+  }
+
+  .instrument-popup__controls {
+    flex: 0 0 auto;
+    min-width: 0;
+    max-height: 42%;
+  }
+
+  .instrument-popup--logic .instrument-popup__body {
+    display: flex;
+  }
+
+  .instrument-popup__footer {
+    display: grid;
+    grid-template-columns: auto minmax(90px, 1fr) auto;
+  }
+
+  .instrument-plot-svg {
+    width: 100%;
+    height: 100%;
+  }
 }
 
 /* Modo de posicionamento de componente (SimulIDE-style drag-and-drop) */

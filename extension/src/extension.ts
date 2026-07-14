@@ -2,6 +2,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { CoreClient } from "./ipc/CoreClient";
+import { IpcError } from "./ipc/protocol";
 import { CoreProcess } from "./ipc/CoreProcess";
 import { TrustStore } from "./trust/TrustStore";
 import { isPreApproved, isPreBlocked, resolveConsentChoice, shouldLoadLibrary, decisionToPersist } from "./trust/trustDecision";
@@ -13,7 +14,7 @@ import { assertTopologyInvariants } from "./ui/webview/topologyDocument";
 import { WebviewToHostMessage } from "./ui/webview/messages";
 import { ComponentPaletteViewProvider } from "./ui/views/ComponentPaletteViewProvider";
 import { materializePinGroup, registerPackage } from "./ui/webview/componentSymbols";
-import { absoluteSubcircuitRefPath, exportSchematicImageCommand, importProjectCommand, openProjectCommand, openRecentProjectCommand, refreshDirtyIndicator, saveProjectCommand } from "./project/projectCommands";
+import { absoluteSubcircuitRefPath, exportSchematicImageCommand, importProjectCommand, openProjectCommand, openProjectFile, openRecentProjectCommand, refreshDirtyIndicator, saveProjectCommand } from "./project/projectCommands";
 import { loadUnifiedCatalog, RegisteredSource, saveRegisteredSources } from "./catalog/UnifiedCatalog";
 import { refreshUnifiedCatalogState, registerCatalogFileCommand, removeRegisteredCatalogItemCommand } from "./catalog/catalogCommands";
 import { hasShowOnSymbolProperty, nextIndexedLabel } from "./catalog/catalogMerge";
@@ -301,7 +302,33 @@ async function runSimulationWithFirmwareCheck(): Promise<void> {
     vscode.window.showErrorMessage(`Não foi possível iniciar a simulação: ${result.message}`);
     return;
   }
-  runSimulation();
+  await registerAllPauseConditions().then((valid) => valid ? runSimulation() : undefined);
+}
+
+function persistedPauseCondition(component: WebviewComponentModel): string {
+  const raw = component.properties.__ui_instrumentView;
+  if (typeof raw !== "string" || raw.length > 32_768) return "";
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    return parsed.version === 1 && typeof parsed.triggerCondition === "string" ? parsed.triggerCondition.trim() : "";
+  } catch { return ""; }
+}
+
+async function registerAllPauseConditions(): Promise<boolean> {
+  if (!state.coreClient) return false;
+  for (const component of state.schematicState.components) {
+    if (component.typeId !== "meters.logic_analyzer") continue;
+    try {
+      await state.coreClient.setPauseCondition(component.id, persistedPauseCondition(component));
+      state.schematicPanel?.postMessage({ version: 1, type: "pauseConditionValidation", componentId: component.id, valid: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      state.schematicPanel?.postMessage({ version: 1, type: "pauseConditionValidation", componentId: component.id, valid: false, error: message });
+      vscode.window.showErrorMessage(`Condição de pausa de ${component.label || component.id}: ${message}`);
+      return false;
+    }
+  }
+  return true;
 }
 
 function getComponentById(componentId: string): WebviewComponentModel | undefined {
@@ -1020,6 +1047,11 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
     case "requestPauseSimulation":
       pauseSimulation();
       return;
+    case "requestSetPauseCondition":
+      void state.coreClient?.setPauseCondition(message.componentId, message.expression)
+        .then(() => state.schematicPanel?.postMessage({ version: 1, type: "pauseConditionValidation", componentId: message.componentId, valid: true }))
+        .catch((err) => state.schematicPanel?.postMessage({ version: 1, type: "pauseConditionValidation", componentId: message.componentId, valid: false, error: err instanceof Error ? err.message : String(err), column: err instanceof IpcError ? err.column : undefined }));
+      return;
     case "requestStopSimulation":
       stopSimulation();
       return;
@@ -1666,10 +1698,41 @@ export function activate(context: vscode.ExtensionContext): void {
   });
 
   state.coreClient = new CoreClient(pipeName);
+  state.coreClient.onNotification((notification) => {
+    if (notification.type !== "pauseConditionTriggered") return;
+    const payload = notification.payload as {
+      ownerId?: string;
+      simulationTimeNs?: number;
+      expression?: string;
+      resolvedValues?: Record<string, number | boolean | string>;
+      error?: string;
+    };
+    stopVoltageReadoutPolling();
+    setSimulationStatus("paused");
+    state.schematicPanel?.postMessage({
+      version: 1,
+      type: "pauseConditionTriggered",
+      ownerId: payload.ownerId ?? "",
+      simulationTimeNs: Number(payload.simulationTimeNs ?? 0),
+      expression: payload.expression ?? "",
+      resolvedValues: payload.resolvedValues ?? {},
+      ...(payload.error ? { error: payload.error } : {}),
+    });
+  });
   // Conecta de forma assíncrona — não bloqueia a ativação da extensão
   state.coreClient
     .start()
-    .then(() => refreshUnifiedCatalogState(true, catalogCommandOptions()))
+    .then(async () => {
+      await refreshUnifiedCatalogState(true, catalogCommandOptions());
+      if (process.env.LASECSIMUL_E2E === "1" && process.env.LASECSIMUL_E2E_FIXTURE) {
+        await openProjectFile(process.env.LASECSIMUL_E2E_FIXTURE, {
+          extensionUri: context.extensionUri,
+          beforeOpen: closeAllMcuSerialMonitors,
+          openSchematicEditor,
+          syncSchematicPanel,
+        });
+      }
+    })
     .catch((err) => {
       vscode.window.showErrorMessage(
         `Falha ao conectar ao LasecSimul Core: ${err instanceof Error ? err.message : String(err)}`
@@ -1775,6 +1838,21 @@ export function activate(context: vscode.ExtensionContext): void {
       state.schematicPanel?.postMessage({ version: 1, type: "requestRedo" });
     }),
   );
+
+  // Comando deliberadamente ausente em produção: permite ao E2E carregar fixture pelo pipeline
+  // real (serializer -> Core -> Webview), sem file picker e sem injetar HTML/estado artificial.
+  if (process.env.LASECSIMUL_E2E === "1") {
+    context.subscriptions.push(vscode.commands.registerCommand("lasecsimul.e2e.openFixture", async (fixturePath?: string) => {
+      const selected = fixturePath || process.env.LASECSIMUL_E2E_FIXTURE;
+      if (!selected) throw new Error("LASECSIMUL_E2E_FIXTURE ausente");
+      await openProjectFile(selected, {
+        extensionUri: context.extensionUri,
+        beforeOpen: closeAllMcuSerialMonitors,
+        openSchematicEditor,
+        syncSchematicPanel,
+      });
+    }));
+  }
 
   void setSchematicOpenContext(false);
   void refreshUnifiedCatalogState(false, catalogCommandOptions());

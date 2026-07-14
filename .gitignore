@@ -75,5 +75,7 @@ _deps/
 
 # Saida de build/empacotamento (gerada por scripts/build-all.js e scripts/package-release.js)
 /dist/
+/extension/.vscode-test/
+/extension/test/e2e/artifacts/
 /packaging/*/obj/
 /packaging/*/bin/

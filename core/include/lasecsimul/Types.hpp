@@ -138,6 +138,7 @@ enum class ReadoutKind : uint32_t {
     BitmaskHistory = 2, // 1 série temporal de {timestamp, bitmask uint32}, cada amostra captura todos
                         // os canais digitais de uma vez (ex: analisador lógico) -- `channels` = nº de
                         // bits válidos do bitmask
+    VectorHistory = 3,
 };
 
 struct ReadoutFormat {

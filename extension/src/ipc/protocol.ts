@@ -1,4 +1,4 @@
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 /** Envelope de requisição: Extension → Core (newline-delimited JSON). */
 export interface RequestEnvelope {
@@ -29,12 +29,20 @@ export interface NotificationEnvelope {
  * só devolvem `error` (texto livre), o que mantém quem só lê `.message` funcionando sem mudança. */
 export class IpcError extends Error {
   readonly code?: string;
+  readonly details?: Record<string, unknown>;
+  readonly column?: number;
 
-  constructor(message: string, code?: string) {
+  constructor(message: string, code?: string, details?: Record<string, unknown>) {
     super(message);
     this.name = "IpcError";
     this.code = code;
+    this.details = details;
+    this.column = typeof details?.column === "number" ? details.column : undefined;
   }
+}
+
+export function errorDetailsFromPayload(payload: unknown): Record<string, unknown> | undefined {
+  return typeof payload === "object" && payload !== null ? payload as Record<string, unknown> : undefined;
 }
 
 export function errorCodeFromPayload(payload: unknown): string | undefined {

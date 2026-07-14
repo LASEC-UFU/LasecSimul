@@ -1,5 +1,5 @@
 import { createTestRunner, assert } from "../../ipc/testSupport/MockCoreServer";
-import { detectChannelTrigger, findTriggerAnchorIndex, triggerAlignedWindowEndNs, visibleSampleWindowByTime } from "./instrumentTrigger";
+import { detectChannelTrigger, digitalStepPath, findTriggerAnchorIndex, triggerAlignedWindowEndNs, visibleSampleWindowByTime } from "./instrumentTrigger";
 
 (async () => {
   const { test, finish } = createTestRunner("instrumentTrigger — testes puros (porta do trigger real do SimulIDE)");
@@ -49,6 +49,12 @@ import { detectChannelTrigger, findTriggerAnchorIndex, triggerAlignedWindowEndNs
   await test("findTriggerAnchorIndex: sem nenhuma transição devolve undefined", () => {
     const index = findTriggerAnchorIndex([0, 0, 0, 0], 1);
     assert(index === undefined, "sem transição deveria devolver undefined");
+  });
+
+  await test("digitalStepPath: transições lógicas são ortogonais, nunca diagonais", () => {
+    const path = digitalStepPath([0, 1, 1, 0], 0, 90, 10, 30);
+    assert(path === "M 0.0 30.0 L 30.0 30.0 L 30.0 10.0 L 60.0 10.0 L 90.0 10.0 L 90.0 30.0",
+      `traço digital deveria manter nível e criar aresta vertical: ${path}`);
   });
 
   await test("triggerAlignedWindowEndNs: sem período detectado, cai pro free-running (mostra a amostra mais recente)", () => {

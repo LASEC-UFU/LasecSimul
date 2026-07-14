@@ -62,6 +62,9 @@ import { createEmptyProject } from "../../src/project/ProjectTypes";
 
   // Regressão: label/showId/showValue precisam sobreviver a um ciclo save→load (ver Épico E do
   // roadmap de pendências — `validateComponent` já dropou esses campos no passado).
+  // `locked`/`hiddenByUser` (edição em lote, ver `ui/webview/batchProperties.ts`) seguem o MESMO
+  // padrão de `flipH`/`flipV` -- campos top-level novos, precisam sobreviver ao ciclo igual aos
+  // demais (rule 12: preservar persistência).
   const labeledProject = createEmptyProject();
   labeledProject.components.push({
     id: "r1",
@@ -72,6 +75,8 @@ import { createEmptyProject } from "../../src/project/ProjectTypes";
     showValue: false,
     flipH: true,
     flipV: false,
+    locked: true,
+    hiddenByUser: true,
   });
   const labeledPath = path.join(tmpDir, "labeled.lsproj");
   await serializer.save(labeledPath, labeledProject);
@@ -81,6 +86,32 @@ import { createEmptyProject } from "../../src/project/ProjectTypes";
   assert.strictEqual(labeledRoundTrip.components[0]?.showValue, false);
   assert.strictEqual(labeledRoundTrip.components[0]?.flipH, true);
   assert.strictEqual(labeledRoundTrip.components[0]?.flipV, false);
+  assert.strictEqual(labeledRoundTrip.components[0]?.locked, true);
+  assert.strictEqual(labeledRoundTrip.components[0]?.hiddenByUser, true);
+
+  // Projeto sem `locked`/`hiddenByUser` (arquivo salvo antes desta versão) continua carregando --
+  // ausente, nunca um default `true` inventado.
+  const unlockedProject = createEmptyProject();
+  unlockedProject.components.push({ id: "r2", typeId: "core.resistor", properties: { resistance: 100 } });
+  const unlockedPath = path.join(tmpDir, "unlocked.lsproj");
+  await serializer.save(unlockedPath, unlockedProject);
+  const unlockedRoundTrip = await serializer.load(unlockedPath);
+  assert.strictEqual(unlockedRoundTrip.components[0]?.locked, undefined);
+  assert.strictEqual(unlockedRoundTrip.components[0]?.hiddenByUser, undefined);
+
+  // Edição em lote de `properties[key]` (ex: `color` de vários `graphics.text`, ver
+  // `batchProperties.test.ts`) é só mais uma escrita no bag genérico de `properties` -- precisa
+  // sobreviver ao ciclo save→load igual qualquer outra propriedade, sem whitelist por typeId.
+  const batchColorProject = createEmptyProject();
+  batchColorProject.components.push(
+    { id: "t1", typeId: "graphics.text", properties: { text: "A", fontSize: 11, color: "#ff0000" } },
+    { id: "t2", typeId: "graphics.text", properties: { text: "B", fontSize: 14, color: "#ff0000" } },
+  );
+  const batchColorPath = path.join(tmpDir, "batch-color.lsproj");
+  await serializer.save(batchColorPath, batchColorProject);
+  const batchColorRoundTrip = await serializer.load(batchColorPath);
+  assert.deepStrictEqual(batchColorRoundTrip.components.map((component) => component.properties.color), ["#ff0000", "#ff0000"]);
+  assert.deepStrictEqual(batchColorRoundTrip.components.map((component) => component.properties.fontSize), [11, 14], "fontSize (não editado em lote) deveria continuar individual por componente");
 
   // `subcircuitRef` (bloco genérico de subcircuito por caminho, ver .spec/lasecsimul-subcircuits.spec
   // seção 9) precisa sobreviver a save→load igual label/showId/showValue -- é a ÚNICA exceção
@@ -115,9 +146,9 @@ import { createEmptyProject } from "../../src/project/ProjectTypes";
   const meterProject = createEmptyProject();
   const meterProperties: Record<string, Record<string, string | number | boolean>> = {
     "meters.oscope": { filter: 0.27, autoScale: false, tracks: 3, sampleIntervalNs: 12345,
-      timebase: 0.002, trigger: "channel2", offset: -1.25, channel1Color: "#12ab34" },
+      timebase: 0.002, trigger: "channel2", offset: -1.25, channel1Color: "#12ab34", tunnels: "CLK,DATA,," },
     "meters.probe": { threshold: 1.8, negativeThreshold: 0.7, showVolt: false, pauseOnChange: true },
-    "meters.logic_analyzer": { thresholdRising: 3.1, thresholdFalling: 1.4, sampleIntervalNs: 3210 },
+    "meters.logic_analyzer": { thresholdRising: 3.1, thresholdFalling: 1.4, sampleIntervalNs: 3210, tunnels: "D0,D1,D2,,,,," },
     "meters.freqmeter": { filter: 0.42 },
     "meters.ampmeter": { resistance: 0.015 },
     "instruments.voltmeter": { unit: "mV", gain: 1000, min: -2500, max: 2500 },

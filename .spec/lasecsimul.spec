@@ -1074,8 +1074,9 @@ Todos os 11 ganharam `stamp()` real:
   `SevenSegment::createDisplay()` do SimulIDE. `shortedPairs` continua disponível como recurso
   genérico do modelo, mas não é usado para inventar um segundo comum no display padrão.
 - **`outputs.dc_motor`/`outputs.incandescent_lamp`** — `components::Resistor` direto (2 pinos,
-  reaproveitado sem mudança). **`outputs.stepper`** — `components::ResistorArray` (2 bobinas
-  independentes, A+/A- e B+/B-). Nenhum modela torque/rotação/back-EMF/resistência variável com
+  reaproveitado sem mudança). **`outputs.stepper`** — `components::StepperWindings` (quatro
+  meias-bobinas resistivas ligadas ao terminal comum `Co`, preservando os cinco pinos do Stepper
+  unipolar real). Nenhum modela torque/rotação/back-EMF/resistência variável com
   temperatura (simplificação documentada) — só a carga resistiva real, elétrica de verdade em vez de
   circuito aberto.
 - **`switches.keypad`** — `components::Keypad` (`core/src/components/switches/Keypad.hpp`): matriz
@@ -1607,6 +1608,11 @@ resultados da investigação; ele não cria uma segunda definição do contrato.
    dispositivo são proibidas quando puderem ser obtidas desses parâmetros.
    Quando `dynamicLayout.replacePins` for `true`, `package.pins` MUST estar vazio; manter uma cópia
    estática do mesmo layout é erro de catálogo e MUST ser rejeitado pelo check de migração.
+   O `fallback` interno de uma `PackageNumberExpression` é uma base bruta que ainda recebe
+   `multiplier/offset`. Já o fallback fornecido pelo campo (`package.width`/`height` ou bounds
+   declarado) é o resultado final e MUST NOT passar novamente pela expressão. Previews de inserção
+   MUST materializar as mesmas `defaultProperties` usadas para criar a instância antes de calcular
+   `componentBox`.
 8. Esquemático e Modo Placa MAY ter desenhos e bounds visuais diferentes, mas MUST compartilhar
    identidade dos pinos, endpoint elétrico, transformação, rotação/flip, serialização e estado de
    simulação. Uma variante visual não cria uma segunda implementação elétrica.
@@ -2157,6 +2163,12 @@ abrir um `other.dial`, um resistor/indutor/capacitor variável (arrastar o knob,
 ajusta o valor normalmente) e a janela "Expande" do osciloscópio, e comparar visualmente com o
 `CustomDial` real do SimulIDE.
 
+**Errata visual do `CustomButton` (2026-07-13)**: `CustomButton::paintEvent()` configura um `QPen`
+escuro e chama `QPainter::drawText`; isso colore os glifos, não cria contorno. Na tradução SVG, o
+grupo `.meter-expand-button` MUST ser somente hit-target/cursor e MUST NOT declarar `fill`/`stroke`
+herdáveis. O `<text>` MUST usar `stroke="none"`. Bordas e gradiente pertencem exclusivamente aos
+retângulos do botão. Aplicar `stroke:#999` ao grupo produz texto duplo/borrado em qualquer DPI.
+
 ## 21. Bug corrigido: corpo do símbolo deslocado, desconectado dos pinos (2026-07-10)
 
 **Sintoma relatado**: depois de adicionar o dial ao Potenciômetro (seção 20), o usuário reportou
@@ -2191,46 +2203,21 @@ desconectado dos pinos: `active.diode`/`zener`, `active.opamp`/`comparator`, `ac
 positivos** (`switches.keypad`, `meters.probe`, offset já `0` -- caixa maior só por folga de lead
 mesmo, não bug).
 
-**Correção**: em vez de mexer na função compartilhada (arriscado -- `simulidePaintToPackageShapes`
-também é usada por `builtinPaintSvg`/símbolos built-in tipo `other.ground`/`sources.battery`, que
-NÃO passam pelo `offsetX` do passo 2 e QUEBRARIAM se eu removesse o deslocamento de lá), migrei os
-pinos dos 17 componentes pra convenção "já no espaço da caixa" -- a MESMA que `variable_resistor`/
-`voltage_source`/etc já usam com sucesso -- deslocando cada `pin.x`/`pin.y` (e `pinGroups`/
-`labelX`/`labelY` quando presentes, inclusive o caso de `active.analog_mux`/`x1PackageNumberValue`
-como fórmula com `offset`, não número puro) pela quantidade exata medida (`translate(...)` real de
-cada um, script dedicado, não um valor genérico). Verificado com `offsetX/Y === 0` no re-render de
-cada um dos 17 antes de aceitar como corrigido.
+**Errata normativa (2026-07-13)**: a correção descrita originalmente abaixo como “estratégia A/B”
+era um workaround por componente e está **revogada** pela convenção única da seção 13.1.1. Não se
+deve deslocar manualmente `pin.x/y`, zerar `simulidePaint.bounds.x/y` nem medir um `translate(...)`
+particular para fazer corpo e terminais coincidirem.
 
-**3 componentes com estratégia diferente** (`outputs.led_matrix`, `outputs.led_bar`,
-`active.analog_mux`): também apareceram no primeiro escaneamento (offset `[16,0]`/`[16,24]`/`[24,0]`),
-mas os 3 têm `dynamicLayout` E teste dedicado (`componentSymbols.test.ts`) que exige EXPLICITAMENTE
-uma largura/altura maior que a declarada (folga de lead intencional, calculada a partir da posição do
-PINO, docstring do teste faz as contas). A migração de pinos usada nos outros 15 (estratégia B) muda
-exatamente essa folga -- aplicá-la quebra os 3 testes (`box.width`/`height` batendo errado). Primeira
-tentativa: reverti os 3 do `git HEAD` pro estado original, mas SÓ voltei a corrigir `led_matrix` e
-`led_bar` depois -- reli mal a saída do teste na hora e achei, incorretamente, que `analog_mux` já
-tinha sido corrigido com sucesso no primeiro lote; na verdade os 3 continuavam quebrados.
+Pacotes portados de `paint()` usam `coordinateSpace: "simulide-local"`: primitivas, pinos, labels e
+contatos permanecem nos `QPoint/QRect m_area` originais, e o renderer normaliza todos uma única vez
+usando `simulidePaint.bounds`. A folga dos terminais é consequência geométrica desses mesmos pontos,
+não uma margem criada por teste ou por offset. `outputs.led_matrix`, `outputs.led_bar` e
+`active.analog_mux` foram migrados para esse contrato; no mux, somente `z`/`en` são estáticos e os
+endereços/canais vêm exclusivamente de `dynamicLayout.pinGroups`, eliminando a declaração duplicada.
 
-**Correção final dos 3** (estratégia A, distinta da B): não mexer em pino nenhum (preserva a folga
-que o teste exige). Em vez disso, inspecionando cada `simulidePaint.primitives[]`, a forma principal
-(retângulo do corpo) tem coordenada bruta EXATAMENTE igual ao `bounds.x`/`bounds.y` original do
-próprio componente (`led_matrix`: `rect.x:-8` = `bounds.x:-8`; `led_bar`: `rect.x:-8,y:-28` =
-`bounds.x:-8,y:-28`; `analog_mux`: `rect.x:-16` = `bounds.x:-16`, `bounds.y` já era `0`). Como
-`transformFor` desloca por `(valor - bounds.x)`, zerar só `bounds.x`/`bounds.y` (sem tocar nas
-primitivas nem nos pinos) faz o corpo cair no MESMO espaço "local" que os pinos já usam -- o único
-`offsetX/offsetY` do passo 2 (calculado a partir dos pinos, intocado, preservando a folga do teste)
-alinha os dois corretamente. Verificado por renderização direta: em `led_matrix`, a borda esquerda do
-retângulo do corpo e a ponta do pino de linha caem exatamente na mesma coordenada final (x=8, sem
-gap); mesma checagem em `led_bar` e `analog_mux`.
-
-**Verificação**: compilação limpa (`tsc` webview + test) e suíte completa (154 testes) sem
-regressão -- incluindo os 3 testes dedicados de `dynamicLayout` (`led_matrix`/`led_bar`/
-`analog_mux`), que voltaram a passar com a estratégia A. Renderização direta de cada um dos 18
-componentes corrigidos (15 via estratégia B + 3 via estratégia A) via `packageSymbolSvg` chamado fora
-do DOM (script Node ad-hoc, mesmo princípio das seções 17/18) confirmando alinhamento corpo↔pino em
-todos. Sem GUI disponível neste ambiente; recomenda-se abrir um diodo, LED, amp-op, o potenciômetro,
-a matriz de LED, a barra de LED e o mux analógico no esquemático real e confirmar que o corpo aparece
-exatamente onde os fios/pinos esperam, sem gap nem sobreposição estranha.
+O texto anterior desta seção permanece útil apenas como diagnóstico histórico da dupla translação.
+Qualquer dado ou teste que exija as antigas estratégias A/B deve ser corrigido para a seção 13.1.1,
+e não perpetuar a exceção.
 
 ## 22. Bloco genérico de subcircuito (`subcircuits.external`): vínculo pelo clique direito + forma
 placeholder própria (2026-07-10)
@@ -3593,7 +3580,10 @@ mas a mistura de duas convencoes no catalogo: algumas coordenadas descreviam o c
 outras ja descreviam o terminal eletrico. A correcao sistemica e o contrato
 `simulide-terminal-v1`, definido em 13.1.1: toda coordenada `PackagePin.x/y` e o terminal eletrico,
 enquanto o contato com o corpo e derivado de `angle`/`length` pela infraestrutura comum. Nao existe
-flag por dispositivo, `leadOrigin` no modelo canonico nem helper geometrico duplicado.
+flag que altere a semantica eletrica por dispositivo, `leadOrigin` no modelo canonico nem helper
+geometrico duplicado. `coordinateSpace: "simulide-local"` apenas declara que todo o pacote conserva
+o referencial nativo (`QPoint`/`m_area`); ele aciona a mesma normalizacao de corpo, pinos e labels e
+nao constitui uma formula ou offset especial do dispositivo.
 
 - `active.diode`, `active.zener`, `active.opamp`, `active.comparator`,
   `active.volt_regulator`, `outputs.led`, `outputs.led_rgb`, `outputs.led_bar`,
@@ -3696,3 +3686,175 @@ e dos dois passivos, barramento multi-bit, referencia diferencial do osciloscopi
 meters e falha do subcircuito ESP32 estao implementados e cobertos. Itens mais amplos ja listados em
 29.5 (por exemplo telemetria visual generica de motores/lampadas ou novas propriedades de familias
 reativas) continuam sendo evolucoes separadas e nao bloqueiam este fechamento.
+
+### 29.9 Interface expandida comum dos instrumentos (2026-07-13)
+
+Os popups de `meters.oscope` e `meters.logic_analyzer` compartilham obrigatoriamente a mesma
+infraestrutura visual (`instrument-popup`, chassis, cabecalho, bezel do plot, secoes de controle,
+legenda e comportamento responsivo). Eles nao devem voltar a manter layouts ou temas independentes.
+A estrutura funcional do SimulIDE permanece como referencia: plot 10 x 8, controles laterais,
+canais identificados por cor, base/posicao de tempo, escala/posicao de tensao e disparo.
+
+Contrato do renderer de instrumentos:
+
+- a grade possui divisoes principais, cinco subdivisoes menores e eixos centrais distintos;
+- traces analogicos sao continuos e traces digitais usam sample-and-hold ortogonal, sem diagonais
+  entre estados logicos;
+- a legenda deriva das mesmas cores e do mesmo estado de visibilidade usados pelo trace;
+- os controles continuam ligados ao estado persistente existente; a reformulacao visual nao cria
+  uma segunda fonte de estado nem altera o protocolo Core/Webview;
+- em viewport estreito os controles passam para baixo do plot e o SVG preserva a proporcao 10:8,
+  sem corte ou overflow horizontal obrigatorio;
+- novas funcoes comuns devem ser adicionadas aos helpers de instrumentos em `main.ts` ou
+  `instrumentTrigger.ts`, nunca copiadas separadamente para os dois popups.
+
+`digitalStepPath` e coberto por teste puro que exige arestas verticais e patamares horizontais. A
+suite completa da Extension, incluindo compilacao dos tres tsconfigs, deve permanecer verde.
+
+### 29.10 Canais de instrumentos por nome de Tunnel (2026-07-13)
+
+Oscope e Logic Analyzer devem aceitar, em cada campo colorido, o nome de um `connectors.tunnel` da
+mesma sessao. A referencia normativa e o SimulIDE real:
+
+- `src/gui/dataplotwidget/datawidget.cpp:71-88`: `QLineEdit::editingFinished` chama
+  `Oscope::channelChanged`, e `setTunnel` restaura o texto;
+- `src/gui/dataplotwidget/datalawidget.cpp:54-83`: mecanismo identico nos oito canais digitais;
+- `src/gui/dataplotwidget/plotbase.h:86` e `plotbase.cpp:239-244`: cada `DataChannel` guarda
+  `m_chTunnel` e a propriedade `Tunnels` serializa a lista;
+- `src/components/meters/oscope.cpp:129-141` e `logicanalizer.cpp:139-153`: primeiro verifica o
+  conector fisico; somente se estiver desconectado chama `Tunnel::getEnode(nome)`;
+- `src/components/meters/oscope.cpp:210-217` e `logicanalizer.cpp:292-299`: `setTunnels` hidrata os
+  canais e os campos ao reabrir.
+
+No LasecSimul, `IComponentModel::fallbackTunnelNameForPin` e `Netlist::setFallbackTunnelName`
+generalizam essa semantica. Um fallback nao cria uma rede sozinho: ele so se une a um grupo criado
+por Tunnel real do mesmo nome. Um fio fisico no pino desativa o fallback; ao remover o fio, o nome
+persistido volta a valer automaticamente. A propriedade `tunnels` e uma lista CSV com exatamente
+um campo por canal e participa do salvar/carregar generico.
+
+Os campos compactos sao inputs reais em `foreignObject`, portanto acompanham as transformacoes SVG
+do componente. As janelas expandidas expoem os mesmos valores, sem segunda fonte de estado. Testes
+obrigatorios cobrem nome existente, nome inexistente, prioridade de fio, reativacao apos desconectar,
+round-trip e renderizacao dos inputs.
+
+#### 29.10.1 Layout compacto do Logic Analyzer
+
+`DataLaWidget.ui` e a fonte normativa do empilhamento: oito `QLineEdit` de 60 x 14 e
+`QVBoxLayout::spacing = 2`, seguidos por `CustomButton` de 60 x 16. A posicao vertical deve ser
+derivada desses valores. Para o layout nativo atual, o oitavo canal ocupa `y=120..134` e o botao
+comeca em `y=136`. A antiga constante `y=132` era incorreta e sobrepunha duas unidades do ultimo
+campo verde. Teste de markup deve impedir a reintroducao dessa sobreposicao.
+
+### 29.11 Janelas expandidas de instrumentos em tempo real (2026-07-13)
+
+Esta secao substitui o escopo apenas visual de 29.9 por um contrato funcional verificavel. O
+baseline anterior a implementacao foi comparado diretamente com o SimulIDE local de referencia:
+
+| Aspecto | SimulIDE | baseline do LasecSimul | requisito normativo |
+|---|---|---|---|
+| composicao | `OscWidget`/`LaWidget` (`QDialog` + `.ui`) hospedam um `PlotDisplay` comum | popup DOM com SVG fixo de 560 x 448 | chassis responsivo e viewport comum, dimensionado pelo espaco real |
+| desenho | `PlotDisplay::paintEvent` usa `QPainter`, `QPen` e antialiasing | SVG recriado integralmente em cada atualizacao | camada de plot reutilizavel, sem bloquear a thread da Webview |
+| grade | 10 divisoes de tempo, trilhas/8 linhas e marcas centrais | 10 x 8 com subdivisoes, mas dimensao rigida | 10 divisoes, eixos e marcas conservados em qualquer tamanho |
+| navegacao | `wheelEvent` altera `timeDiv` em 20% e ancora o tempo sob o cursor; arrasto horizontal altera `timePos` | somente knobs/campos | wheel ancorado, pan horizontal e reposicionamento do zero de tempo |
+| medicoes | cursor, tempo e tensao sob o mouse; maximos/minimos analogicos | sem cursor nem leituras no plot | crosshair e leituras derivados da mesma transformacao tempo/valor |
+| traces | sample-and-hold e decimacao min/max; digital ortogonal; barramento com hexadecimal | analogico diagonal; digital ortogonal | analogico sample-and-hold com envelope por pixel; digital/bus sem diagonais |
+| redimensionamento | layouts Qt e `PlotDisplay::updateValues()` usam `width()`/`height()` correntes | tamanho fixo, apenas fallback CSS estreito | resize livre, limites minimos e nenhum controle sobreposto |
+| persistencia | propriedades do `PlotBase`/instrumento guardam escalas, posicoes, trigger, canais e tunnels | a maior parte do estado vive apenas no `Map` aberto | estado de viewport/controles/janela serializado no componente |
+| ciclo de simulacao | o componente atualiza o buffer; a janela apenas apresenta; ao pausar o ultimo quadro permanece | polling IPC assincrono ja desacoplado | preservar polling assincrono, congelar na pausa e continuar/reiniciar sem timer de UI concorrente |
+
+Referencias normativas exatas do SimulIDE:
+
+- `src/gui/dataplotwidget/plotdisplay.cpp:19-60`, construcao, cores, fontes e mouse tracking;
+- `plotdisplay.cpp:67-105`, janela temporal e geometria recalculada pelo tamanho real;
+- `plotdisplay.cpp:108-132`, zoom de wheel ancorado no cursor;
+- `plotdisplay.cpp:135-179`, grade, eixos, trilhas e marcas;
+- `plotdisplay.cpp:181-340`, pintura, cursor, sample-and-hold e decimacao min/max;
+- `oscwidget.h:15` e `lawidget.h:16`, dialogs Qt; `oscwidget.cpp:13-81` e
+  `lawidget.cpp:15-41`, grupos de canais e controles;
+- `oscwidget.cpp:378-399` e `lawidget.cpp:180-201`, pan e zero de tempo;
+- `oscope.cpp:160-178` e `logicanalizer.cpp:172-190`, transferencia do mesmo display entre modo
+  compacto e expandido;
+- `lawidget.cpp:161-170`, exportacao VCD.
+
+A implementacao no LasecSimul deve usar um unico `InstrumentViewport` puro para conversao
+tempo/valor/pixel, zoom, pan, cursor e limites; um unico codec versionado de estado persistente; e
+um unico chassis responsivo. Osciloscopio e analisador so fornecem configuracao de canais e o
+renderer analogico/digital. O estado de UI deve ser salvo numa propriedade reservada `__ui_` para
+participar do `.lsproj` sem atravessar nem acoplar o Core de simulacao.
+
+#### 29.11.1 Estado implementado e validacao
+
+`instrumentViewport.ts` e a implementacao comum. A janela usa resize nativo com bounds, o plot
+preenche o espaco flexivel, wheel preserva o tempo sob o cursor, arrasto faz pan e botao central
+reposiciona o zero. O cursor informa tempo e, no osciloscopio, tensao. Traces analogicos usam
+sample-and-hold com envelope min/max limitado por coluna de pixel; digitais permanecem ortogonais.
+Atualizacoes de historico substituem apenas o SVG, nunca toda a janela. A propriedade versionada
+`__ui_instrumentView` persiste controles e geometria sem atravessar o Core. Stop limpa buffers, pause
+conserva o quadro e o analisador exporta VCD em 1 ns.
+
+Validacao obrigatoria cumprida: build Debug do Core concluido; Core 41/41; suite completa da
+Extension verde, incluindo `instrumentViewport` (zoom ancorado, pan, clamp, codec, sample-and-hold,
+preservacao de pico e VCD), `instrumentTrigger` 11/11 e renderer 63/63.
+
+As antigas pendencias de barramento vetorial, condicao executada no Core e validacao visual real
+foram fechadas pelo contrato normativo 29.12 abaixo; este paragrafo nao deve voltar a descrever o
+estado anterior como limitacao atual.
+
+### 29.12 Sinais vetoriais, pausa deterministica e E2E real (2026-07-13)
+
+Esta secao substitui as pendencias finais de 29.11.1. A fonte unica de resolucao e o contrato Core
+`SignalSubscription` -> `ResolvedSignal`/`SignalDescriptor`; Analyzer e expressoes de pausa nao podem
+manter resolvers paralelos. Uma referencia aceita componente/pino, alias, tunnel, barramento inteiro,
+elemento (`BUS[3]`) ou intervalo (`BUS[7:4]`). O vetor interno permanece LSB-first; `msb`/`lsb` no
+descritor conservam a apresentacao solicitada.
+
+#### 29.12.1 Protocolo IPC v2 e Analyzer vetorial
+
+- `PROTOCOL_VERSION` e 2 nos dois processos; v1 e recusado pelo handshake com mensagem explicita.
+- `ReadoutKind::VectorHistory`/`vectorHistory` substitui `bitmaskHistory` para o Analyzer. O legado
+  continua decodificavel e vira canais de largura 1 ao carregar; projetos antigos sem
+  `signalChannels` materializam os oito pinos fisicos como oito subscriptions escalares.
+- `signalChannels` e JSON persistido com `id`, `source`, `label` e `kind`; admite 1..32 canais, cada
+  um com 1..64 bits. A UI expande visualmente `DATA` em `DATA[n]`, sem converter o contrato Core em
+  canais escalares hardcoded.
+- O blob V2 contem mascara escalar legada, magic `LAV2`, versao, descritores (id/label/source/kind,
+  width/msb/lsb), quantidade e amostras `{timestampNs, packedValues}`. Cada valor usa exatamente
+  `ceil(width/8)` bytes; inteiros de 64 bits atravessam JSON de eventos como decimal string para nao
+  perder precisao no JavaScript.
+- A aquisicao so percorre `m_signalSubscribers`; `wantsResolvedSignalSample(timestamp)` e consultado
+  antes de resolver/alocar vetores. Nao ha varredura global nem trabalho de barramento antes do
+  intervalo. IPC de notificacao usa fila dedicada, nunca bloqueia o scheduler.
+
+#### 29.12.2 Linguagem e instante semantico da pausa
+
+`PauseExpression` implementa lexer, parser, AST e avaliador deterministico, sem `eval`. Gramática:
+literais decimais/hex/booleanos; `!`, `&&`, `||`; `==`, `!=`, `<`, `<=`, `>`, `>=`; parenteses;
+referencias; `V(x)`, `digital(x)`, `I(x)`, `rising(x)` e `falling(x)`. Erros informam coluna e
+contexto; simbolos, indices e tipos sao validados pelo mesmo resolver de sinais do Analyzer.
+
+A expressao e avaliada no Core depois de os componentes atualizarem e o settle convergir, depois do
+commit do passo aceito e antes do proximo passo. Ao ocorrer `false -> true`, o scheduler pausa
+preservando aquele estado e publica `pauseConditionTriggered` com owner, expressao, timestamp e
+valores resolvidos. Condicao nivel-alto nao redispara ate voltar a falso. `rising`/`falling` mantem
+estado anterior por execucao e e resetado ao registrar/reiniciar. Condicao vazia remove o registro;
+erro em runtime (sinal removido/largura alterada) pausa e e notificado uma vez. Retomar libera o
+scheduler antes de `start`; a UI publica running antes do request para uma pausa no primeiro passo
+nao ser sobrescrita pela resposta tardia de start.
+
+#### 29.12.3 Harness visual normativo
+
+`extension/test/e2e/run-webview-e2e.cjs` deve executar a extensao numa distribuicao VS Code 1.128.0
+isolada por `@vscode/test-electron`, abrir a Webview real, carregar a fixture pelo serializer/Core
+reais, abrir os dois instrumentos, iniciar sinais deterministas, observar pausa do Core, redimensionar
+e reabrir. HTML isolado nao satisfaz este contrato.
+
+Viewport e DPR sao 1440x1000 e 1. Fontes sao aguardadas; animacoes sao desativadas. Baselines
+versionados ficam em `extension/test/e2e/snapshots`. `pixelmatch` usa threshold 0,12, ignora AA e
+aceita no maximo 0,5% de pixels; expected/actual/diff e `results.json` sao artefatos. Atualizacao de
+baseline so ocorre com `UPDATE_SNAPSHOTS=1`; a execucao normal deve comparar sem sobrescrever.
+
+Validacao desta versao: build Debug completo; Core 43/43; Extension completa verde; E2E normal com
+0 pixels diferentes nos dois snapshots. Carga Debug de 32 canais x 64 bits x 1024 amostras:
+271078 bytes serializados e 49102 us de aquisicao total (aprox. 48 us por amostra extrema). Esse
+numero e baseline de regressao, nao promessa de Release; qualquer mudanca deve preservar os gates
+de assinantes, intervalo e packing e repetir a medicao.

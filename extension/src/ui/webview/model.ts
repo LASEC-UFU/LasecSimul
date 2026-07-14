@@ -11,7 +11,8 @@ export interface WebviewPinModel {
 export type ReadoutFormatEntry =
   | { kind: "scalar"; unit: string }
   | { kind: "channelHistory"; channels: number }
-  | { kind: "bitmaskHistory"; channels: number };
+  | { kind: "bitmaskHistory"; channels: number }
+  | { kind: "vectorHistory"; channels: number };
 
 /** Mesma convenção de `ReadoutFormatEntry`, pra como a UI trata clique/arrasto sem checar typeId. */
 export type InteractionKindEntry = "momentary" | "toggle" | "none" | "joystick" | "encoder" | "touchpad";
@@ -52,6 +53,16 @@ export interface WebviewComponentModel {
    * `main.ts` e no cálculo de posição de pino, ver `flipPoint`/`rotatePoint`). Ausente == `false`. */
   flipH?: boolean;
   flipV?: boolean;
+  /** Bloqueio de edição (bloco genérico de edição em lote, ver `batchProperties.ts`) -- distinto de
+   * `hidden` (derivado do catálogo, nunca setável pelo usuário). Ausente == `false`. Enforcement
+   * mínimo: bloqueia iniciar arrasto e apagar (`main.ts`); NÃO bloqueia edição de propriedades (o
+   * próprio campo `locked` precisa continuar editável pra poder destravar). */
+  locked?: boolean;
+  /** Visibilidade escolhida pelo usuário (bloco genérico de edição em lote) -- distinto de `hidden`
+   * (recalculado do catálogo a cada load, ver `projectToWebviewState`; sempre `false` pra tipos que
+   * não são conectores). Ausente == `false`. Some do render/hit-test igual a `hidden`, mas persiste
+   * por instância (`.lsproj`) em vez de ser re-derivado do typeId. */
+  hiddenByUser?: boolean;
   pins: WebviewPinModel[];
   properties: Record<string, string | number | boolean>;
   /** Posição/orientação na PLACA (Board Mode) — independente de `x`/`y`/`rotation`/`flipH`/`flipV`
@@ -283,6 +294,10 @@ export interface PackagePin {
    * sempre, nunca quebra um `package` escrito antes deste campo existir. */
   labelX?: PackageNumberValue;
   labelY?: PackageNumberValue;
+  /** Rotação (graus, CSS) do texto do rótulo -- só tem efeito junto de `labelX`/`labelY` (posição
+   * customizada); o cálculo automático (sem `labelX`/`labelY`) já deriva sua própria rotação do
+   * `angle` do pino, ver `packagePinLeadSvg`. */
+  labelRotation?: PackageNumberValue;
 }
 
 /** Uma forma declarativa de `package.shapes[]` — mesmo vocabulário de
