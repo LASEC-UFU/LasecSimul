@@ -5,6 +5,7 @@ import {
   PACKAGE_PIN_TYPE_ID,
   PACKAGE_TYPE_ID,
   compilePackageAuthoringComponents,
+  extractPackageNativeScale,
   isPackageAuthoringComponent,
   seedPackageAuthoringComponents,
 } from "./subcircuitPackageAuthoring";
@@ -261,6 +262,47 @@ const manifestWithPackage = (overrides: Record<string, unknown> = {}) => ({
     assert(p1?.internalTunnel === "TUN1", "internalTunnel deveria ser re-derivado do nome atual do túnel");
     assert(p1?.internalTunnelId === "t1", "internalTunnelId deveria apontar pro id estável do túnel");
     assert(compiled.remainingComponents.every((c) => internalComponents.some((ic) => ic.id === c.id)), "remainingComponents não deveria conter componentes de autoria");
+  });
+
+  await test("round-trip seed -> compile preserva width/height NATIVOS + schematicWidth/Height quando o package foi capturado em pixel de foto (bug real: ESP32-WROOM colapsava pro tamanho exibido e perdia schematicWidth/Height no primeiro save via 'Abrir Subcircuito')", () => {
+    const manifest = {
+      schemaVersion: 1,
+      typeId: "subcircuits.local_test",
+      name: "Local Test",
+      components: [],
+      wires: [],
+      interface: [{ pinId: "GND1", label: "Gnd", internalTunnel: "GND" }],
+      package: {
+        width: 343,
+        height: 487,
+        schematicWidth: 104,
+        schematicHeight: 160,
+        border: false,
+        background: { kind: "image", data: "QUJD", mime: "image/png" },
+        pins: [{ id: "GND1", x: 0, y: 31, angle: 180, length: 8, label: "Gnd" }],
+      },
+    };
+    const internalComponents = [tunnel("t1", "GND")];
+    const seeded = seedPackageAuthoringComponents(manifest, internalComponents, "/tmp", makeIdFactory("seed"));
+    const fullScene = [...internalComponents, ...seeded.components];
+
+    const compiled = compilePackageAuthoringComponents(fullScene, extractPackageNativeScale(manifest));
+    assert(compiled.errors.length === 0, `não deveria ter erros: ${compiled.errors.join(" | ")}`);
+    assert(compiled.package?.width === 343 && compiled.package?.height === 487, `width/height nativos deveriam sobreviver ao round-trip, recebido ${compiled.package?.width}x${compiled.package?.height}`);
+    assert(compiled.package?.schematicWidth === 104 && compiled.package?.schematicHeight === 160, `schematicWidth/Height deveriam sobreviver ao round-trip, recebido ${compiled.package?.schematicWidth}x${compiled.package?.schematicHeight}`);
+    const pin = compiled.package?.pins.find((p) => p.id === "GND1");
+    const pinY = typeof pin?.y === "number" ? pin.y : NaN;
+    assert(Math.abs(pinY - 31) < 0.01, `pino deveria voltar pro espaço NATIVO (y~31), recebido ${pin?.y}`);
+    assert(compiled.package?.background?.data === "QUJD", "background de imagem deveria sobreviver ao round-trip");
+  });
+
+  await test("compile sem originalScale (package novo/sem foto) mantém comportamento antigo -- width/height ficam no tamanho exibido, sem schematicWidth/Height", () => {
+    const manifest = manifestWithPackage();
+    const internalComponents = [tunnel("t1", "TUN1"), tunnel("t2", "TUN2")];
+    const seeded = seedPackageAuthoringComponents(manifest, internalComponents, "/tmp", makeIdFactory("seed"));
+    const compiled = compilePackageAuthoringComponents([...internalComponents, ...seeded.components]);
+    assert(compiled.package?.width === 56 && compiled.package?.height === 40, "sem originalScale, width/height deveriam ficar no tamanho exibido (comportamento pré-existente)");
+    assert(compiled.package?.schematicWidth === undefined && compiled.package?.schematicHeight === undefined, "sem distinção nativo/esquemático original, schematicWidth/Height não deveriam ser introduzidos");
   });
 
   await test("rename do túnel entre seed e compile é refletido no internalTunnel re-derivado (o bug que a feature resolve)", () => {

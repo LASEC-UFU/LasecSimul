@@ -1157,3 +1157,50 @@ espelhada aqui também, manualmente, do jeito que o comentário já avisava.
 como especificado -- só a representação de nó de topologia (junção) dentro do arquivo/parsing
 mudou. Um subcircuito sem nenhum nó de topologia (a maioria dos exemplos deste documento, ex: seção
 1) não é afetado por nada desta seção.
+
+## 20. Dois bugs reais encontrados testando "Abrir Subcircuito" no ESP32-WROOM-32 (2026-07-15)
+
+Achados de teste manual real (usuário reportou: edição do subcircuito não persistia e o Package
+editado não ficava igual fora do editor), ambos corrigidos no mesmo dia:
+
+1. **`other.package`/`other.package_pin` visíveis e arrastáveis na paleta geral**: os dois typeIds de
+   autoria (seção 17) são componentes NORMAIS da cena (`pinCount: 0`), mas seus registros em
+   `project/schema/component-catalog.json::items[]` não tinham `hidden: true` -- ao contrário de
+   outros componentes internos/auxiliares do mesmo `folderPath: ["Other"]`
+   (`other.test_unit`/`other.dial`, que já tinham). Um usuário podia arrastar "Package"/"Package Pin"
+   da paleta pro esquemático NORMAL de um projeto (fora de "Abrir Subcircuito"), criando um bloco
+   decorativo sem NENHUMA ligação com o `package` real de nenhum subcircuito -- exatamente o sintoma
+   reportado (bloco achatado, rótulos cortados, texto "PKG" de fallback visível, ver
+   `componentSymbols.ts` caso `other.package` quando `backgroundImageData` está ausente). Corrigido:
+   `"hidden": true` adicionado às duas entradas -- só `seedPackageAuthoringComponents` (seção 17) pode
+   materializá-los agora, nunca a paleta.
+2. **`compilePackageAuthoringComponents` colapsava `width`/`height` NATIVOS pro tamanho EXIBIDO e
+   descartava `schematicWidth`/`schematicHeight`**: a cena de autoria vive inteira em espaço exibido
+   (seção 17.5/18 item 1), mas a compilação de volta pra `package` gravava `packageComponent.
+   properties.width/height` (já no espaço exibido, ex: 104x160) DIRETO como `package.width/height`,
+   sobrescrevendo o tamanho nativo real da foto (ex: 343x487 no ESP32-WROOM-32) e nunca escrevendo
+   `schematicWidth`/`schematicHeight` de volta -- pinos/labels ficavam permanentemente presos na
+   resolução de exibição a partir do primeiro save. Reproduzido com o arquivo real
+   `esp32_wroom32.lssubcircuit` (script Node ad-hoc): 343x487 virava 104x160, os dois campos
+   somiam. Não causava distorção visível (a re-renderização ficava autoconsistente, `scaleX`/`scaleY`
+   caindo pra 1 na ausência de `schematicWidth`/`schematicHeight`), mas violava o contrato documentado
+   de `PackageDescriptor.schematicWidth`/`schematicHeight` (`model.ts`) e destruía a distinção
+   nativo/esquemático do arquivo pra sempre. Corrigido: `compilePackageAuthoringComponents` recebe um
+   `PackageNativeScale` opcional (`extractPackageNativeScale(session.originalManifest)`, chamado por
+   `writeSubcircuitEditingSessionBack`) com o `width`/`height`/`schematicWidth`/`schematicHeight`
+   ORIGINAIS do arquivo; quando presentes, `package.width/height` gravado volta a ser o nativo
+   preservado, `schematicWidth`/`schematicHeight` gravados refletem o tamanho exibido ATUAL (permite
+   redimensionar o Package na cena), e cada `pin.x/y/length`/`labelX/labelY` é reprojetado de volta
+   pro espaço nativo via o inverso exato do `scaleX`/`scaleY` de `seedPackageAuthoringComponents`.
+   `labelFontSize` nunca escala (mesmo motivo do comentário em `componentSymbols.ts`). Sem
+   `originalScale` (package novo criado nesta sessão, ou sem foto/sem `schematicWidth` original), o
+   comportamento antigo (escala 1:1) é preservado -- nenhuma regressão nos ~20 testes pré-existentes
+   de `subcircuitPackageAuthoring.test.ts`.
+
+**Verificação**: `npm test` completo (extensão) sem regressão, incluindo 2 testes novos: round-trip
+com `schematicWidth`/`schematicHeight` reais do ESP32-WROOM-32 (preserva nativo, reprojeta pino pro
+espaço original, sobrevive `background.data`) e round-trip sem `originalScale` (confirma que o
+comportamento pré-existente pra packages sem foto continua idêntico). Sem GUI disponível neste
+ambiente pra confirmar visualmente que "Package"/"Package Pin" não aparecem mais na busca da paleta
+nem que o ESP32-WROOM-32 renderiza igual dentro/fora do editor após uma edição real -- recomenda-se
+verificação manual no VSCode real.

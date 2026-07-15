@@ -308,6 +308,36 @@ export function seedPackageAuthoringComponents(
   return { components, warnings };
 }
 
+/** `width`/`height`/`schematicWidth`/`schematicHeight` do `package` ORIGINAL do manifesto (antes de
+ * qualquer edição desta sessão) -- o suficiente pra `compilePackageAuthoringComponents` saber se
+ * existe uma distinção nativo/esquemático (foto capturada em pixel nativo, ex: ESP32 DevKitC/WROOM)
+ * a preservar no save. */
+export interface PackageNativeScale {
+  width: number;
+  height: number;
+  schematicWidth?: number;
+  schematicHeight?: number;
+}
+
+/** Extrai `PackageNativeScale` de `manifest.package` -- não usa `sanitizePackage` (que resolve
+ * `background`/`pins` também), só os 4 campos numéricos importam aqui. Chamado com
+ * `session.originalManifest` ANTES do seed, pra que o valor reflita o arquivo em disco, nunca a
+ * cena já editada. */
+export function extractPackageNativeScale(manifest: Record<string, unknown>): PackageNativeScale | undefined {
+  const raw = manifest.package;
+  if (typeof raw !== "object" || raw === null) return undefined;
+  const pkg = raw as Record<string, unknown>;
+  const width = typeof pkg.width === "number" ? pkg.width : undefined;
+  const height = typeof pkg.height === "number" ? pkg.height : undefined;
+  if (width === undefined || height === undefined) return undefined;
+  return {
+    width,
+    height,
+    schematicWidth: typeof pkg.schematicWidth === "number" ? pkg.schematicWidth : undefined,
+    schematicHeight: typeof pkg.schematicHeight === "number" ? pkg.schematicHeight : undefined,
+  };
+}
+
 export interface PackageAuthoringCompileResult {
   /** Componentes REAIS (não-autoria) que vão pra `components[]` do manifesto -- mesma lista de
    * entrada, filtrada. */
@@ -334,7 +364,10 @@ export interface PackageAuthoringCompileResult {
  * pra `package`/`interface[]` -- chamado por `writeSubcircuitEditingSessionBack` ANTES de
  * `fs.writeFileSync` (nunca depois: um resultado inválido não pode chegar a tocar o disco, ver
  * riscos de regressão do plano). Nunca lança exceção -- condições fatais viram `errors[]`. */
-export function compilePackageAuthoringComponents(components: readonly WebviewComponentModel[]): PackageAuthoringCompileResult {
+export function compilePackageAuthoringComponents(
+  components: readonly WebviewComponentModel[],
+  originalScale?: PackageNativeScale
+): PackageAuthoringCompileResult {
   const errors: string[] = [];
   const warnings: string[] = [];
 
@@ -386,9 +419,31 @@ export function compilePackageAuthoringComponents(components: readonly WebviewCo
     }
   }
 
-  const width = typeof packageComponent.properties.width === "number" ? packageComponent.properties.width : 56;
-  const height = typeof packageComponent.properties.height === "number" ? packageComponent.properties.height : 40;
+  // `packageComponent.properties.width/height` é o tamanho EXIBIDO na cena de autoria (espaço
+  // esquemático, ver `seedPackageAuthoringComponents`) -- quando o `package` original tinha
+  // `schematicWidth`/`schematicHeight` distintos de `width`/`height` (foto capturada em pixel
+  // nativo, ex: ESP32 DevKitC/WROOM), reprojeta de volta pro espaço NATIVO da foto antes de
+  // gravar, senão `width`/`height`/pinos ficam presos na resolução de exibição e
+  // `schematicWidth`/`schematicHeight` somem do arquivo pra sempre (bug real: ESP32-WROOM perdia
+  // a distinção nativo/esquemático no primeiro save via "Abrir Subcircuito", mesmo sem nenhuma
+  // edição deliberada de posição). Ausente `originalScale` (package novo, criado nesta sessão, ou
+  // package sem foto) preserva o comportamento antigo: escala 1:1, sem `schematicWidth`/Height.
+  const displayWidth = typeof packageComponent.properties.width === "number" ? packageComponent.properties.width : 56;
+  const displayHeight = typeof packageComponent.properties.height === "number" ? packageComponent.properties.height : 40;
   const border = packageComponent.properties.border !== false;
+
+  const hasNativeScale = originalScale !== undefined
+    && typeof originalScale.schematicWidth === "number" && originalScale.schematicWidth > 0
+    && typeof originalScale.schematicHeight === "number" && originalScale.schematicHeight > 0
+    && originalScale.width > 0 && originalScale.height > 0;
+  const width = hasNativeScale ? originalScale!.width : displayWidth;
+  const height = hasNativeScale ? originalScale!.height : displayHeight;
+  // Inverso EXATO de `scaleX`/`scaleY` em `seedPackageAuthoringComponents` -- lá,
+  // `displayValue = nativeValue * scaleX` (`scaleX = schematicWidth/width`); aqui,
+  // `nativeValue = displayValue * inverseScaleX` (`inverseScaleX = width/schematicWidth atual`,
+  // usa o `displayWidth` ATUAL pra respeitar um redimensionamento do Package feito nesta sessão).
+  const inverseScaleX = hasNativeScale ? width / displayWidth : 1;
+  const inverseScaleY = hasNativeScale ? height / displayHeight : 1;
 
   const seenPinIds = new Set<string>();
   const pins: PackagePin[] = [];
@@ -420,8 +475,12 @@ export function compilePackageAuthoringComponents(components: readonly WebviewCo
     // isso como erro, impedindo salvar um arquivo já válido (3 pinos de GND legítimos).
     seenPinIds.add(pinId);
 
-    const length = typeof pinComp.properties.length === "number" ? pinComp.properties.length : 8;
-    const box = packagePinBoxSide(length);
+    // `length` (lead do pino) trafega em espaço EXIBIDO na cena (mesmo espaço de `pinComp.x/y`,
+    // ver `seedPackageAuthoringComponents`) -- `box`/`anchorX/Y` usam o valor EXIBIDO (posição real
+    // do componente na cena); só o valor GRAVADO no arquivo (`pinEntry.length` abaixo) volta pro
+    // espaço nativo via `inverseScaleX`.
+    const displayLength = typeof pinComp.properties.length === "number" ? pinComp.properties.length : 8;
+    const box = packagePinBoxSide(displayLength);
     const anchorX = pinComp.x + box / 2;
     const anchorY = pinComp.y + box / 2;
     const labelComponent = labelByPinComponentId.get(pinComp.id);
@@ -434,21 +493,25 @@ export function compilePackageAuthoringComponents(components: readonly WebviewCo
 
     const pinEntry: PackagePin = {
       id: pinId,
-      x: anchorX - packageComponent.x,
-      y: anchorY - packageComponent.y,
+      x: (anchorX - packageComponent.x) * inverseScaleX,
+      y: (anchorY - packageComponent.y) * inverseScaleY,
       angle: pinComp.rotation,
-      length,
+      length: Math.max(1, displayLength * inverseScaleX),
       label,
     };
     // Posição do rótulo é SEMPRE persistida a partir de onde o `graphics.text` linkado está
     // AGORA na cena (arrastado ou não) -- vira a fonte de verdade pro esquemático a partir deste
     // save, igual ao `x`/`y` do próprio pino. Mesma fórmula de caixa (`labelBoxSize`) usada pra
-    // seedar a posição inicial, ver `seedPackageAuthoringComponents`.
+    // seedar a posição inicial, ver `seedPackageAuthoringComponents`. `labelFontSize` NUNCA escala
+    // (mesmo motivo documentado em `componentSymbols.ts::packagePinElectricalPoint` -- fonte/traço
+    // são constantes fixas no SimulIDE real, só posição comprime com `scaleX`/`scaleY`).
     if (labelComponent) {
       const labelFontSize = typeof labelComponent.properties.fontSize === "number" ? labelComponent.properties.fontSize : DEFAULT_PACKAGE_PIN_LABEL_FONT_SIZE;
       const labelBox = labelBoxSize(label, labelFontSize);
-      pinEntry.labelX = labelComponent.x + labelBox.width / 2 - packageComponent.x;
-      pinEntry.labelY = labelComponent.y + labelBox.height / 2 - packageComponent.y;
+      const displayLabelX = labelComponent.x + labelBox.width / 2 - packageComponent.x;
+      const displayLabelY = labelComponent.y + labelBox.height / 2 - packageComponent.y;
+      pinEntry.labelX = displayLabelX * inverseScaleX;
+      pinEntry.labelY = displayLabelY * inverseScaleY;
       pinEntry.labelFontSize = labelFontSize;
       pinEntry.labelTextAnchor = "middle";
       pinEntry.labelDominantBaseline = "middle";
@@ -479,6 +542,7 @@ export function compilePackageAuthoringComponents(components: readonly WebviewCo
   const packageDescriptor: PackageDescriptor = {
     width,
     height,
+    ...(hasNativeScale ? { schematicWidth: displayWidth, schematicHeight: displayHeight } : {}),
     border,
     ...(background ? { background } : {}),
     pins,

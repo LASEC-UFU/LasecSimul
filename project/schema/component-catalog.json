@@ -6501,6 +6501,7 @@
         "border": true,
         "backgroundColor": "#ffffff"
       },
+      "hidden": true,
       "category": "Other",
       "help": {
         "description": "Corpo externo do Package do subcircuito (conceito do SimulIDE), editado dentro da sessao 'Abrir Subcircuito' -- deve haver no maximo um por subcircuito."
@@ -6519,6 +6520,7 @@
         "length": 8,
         "tunnelComponentId": ""
       },
+      "hidden": true,
       "propertySchema": [
         {
           "id": "pinId",

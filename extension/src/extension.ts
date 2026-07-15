@@ -19,7 +19,7 @@ import { loadUnifiedCatalog, RegisteredSource, saveRegisteredSources } from "./c
 import { refreshUnifiedCatalogState, registerCatalogFileCommand, removeRegisteredCatalogItemCommand } from "./catalog/catalogCommands";
 import { hasShowOnSymbolProperty, nextIndexedLabel } from "./catalog/catalogMerge";
 import { imageMimeForFile, sanitizeManifestDefaultProperties } from "./catalog/packageSanitizers";
-import { compilePackageAuthoringComponents, seedPackageAuthoringComponents } from "./catalog/subcircuitPackageAuthoring";
+import { compilePackageAuthoringComponents, extractPackageNativeScale, seedPackageAuthoringComponents } from "./catalog/subcircuitPackageAuthoring";
 import { fileExists, normalizeAbsolutePath, readJsonFile } from "./pathUtils";
 import { currentLasecSimulLanguage } from "./currentLanguage";
 import {
@@ -1502,7 +1502,10 @@ async function writeSubcircuitEditingSessionBack(session: SubcircuitEditingSessi
   // autoria -- precisa ser a base do merge de `boardVisual` abaixo, não `state.schematicState.
   // components` bruto, senão um `other.package_pin` vazaria pra dentro de `components[]` do
   // circuito interno de verdade (mesma classe de bug já corrigida uma vez nesta área).
-  const compiled = compilePackageAuthoringComponents(state.schematicState.components);
+  const compiled = compilePackageAuthoringComponents(
+    state.schematicState.components,
+    extractPackageNativeScale(session.originalManifest)
+  );
   if (compiled.errors.length > 0) {
     // Modal (não um toast) -- uma lista de erros pode ser longa o bastante pra um toast cortar com
     // "..." sem dar jeito de ler o resto (achado real: usuário só via a mensagem truncada, sem
