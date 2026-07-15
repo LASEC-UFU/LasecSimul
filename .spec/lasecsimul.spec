@@ -1569,6 +1569,24 @@ Regras normativas (MUST/NEVER):
    permitida é infraestrutura genérica do próprio parser/tradutor (normalização, validação, fallback
    sintático), sem regra de negócio acoplada a `typeId` específico.
     localizável em `extension.ts`.
+15. `registeredSources[]` (opcional, não mostrado no bloco de campos mínimos acima) MUST apontar só pra
+    arquivos/diretórios — bibliotecas inteiras ou um registro avulso feito pelo usuário via "Registrar
+    arquivo..." — NUNCA enumerar manualmente cada dispositivo já coberto por uma entrada de
+    `deviceLibraries[]`. A Extension deriva as entradas de paleta automaticamente expandindo cada
+    `library.json` de `deviceLibraries[]` (`registeredSources.ts::expandLibraryJsonToSources`,
+    `catalogCommands.ts::refreshUnifiedCatalogState`) — um `library.json` já é, sozinho, o "arquivo
+    canônico que declara 1 ou vários dispositivos" (`lasecsimul-native-devices.spec` seção 14, "Unicidade
+    global de device ID"). Achado real corrigido 2026-07-15: os ~69 dispositivos de
+    `devices/library.json`/`mcu-adapters/library.json`/`subcircuits/library.json` estavam TAMBÉM
+    hand-authored em `registeredSources[]`, mascarando um bug de empacotamento (`package-release.js`
+    zerava esse array antes de gerar o VSIX) que fazia NENHUM deles aparecer numa instalação real.
+16. Cada `typeId`/`chipId` MUST pertencer a exatamente um arquivo canônico (`.lsdevice`/`.lssubcircuit`),
+    descoberto uma única vez pelo sistema inteiro. Duplicidade entre `items[]` estático,
+    `deviceLibraries[]` expandido e `registeredSources[]` avulso é erro arquitetural, nunca
+    first-wins/last-wins/overwrite silencioso — reportado por `deviceUniqueness.ts::checkDeviceIdUniqueness`
+    (Extension, `vscode.window.showErrorMessage` nomeando as duas definições) e rejeitado por
+    `GlobalPluginCache::loadLibrary` (Core, lança `std::runtime_error`). Recarregar o MESMO arquivo de
+    novo (mesmo caminho canônico) é reload idempotente, não conflito.
 
 ### 13.1.1 Contrato normativo único de geometria (`simulide-terminal-v1`)
 

@@ -848,6 +848,23 @@ cada dispositivo. Tudo o que a UI precisa — ícone da paleta, pasta de exibiç
 desse arquivo único. Nenhum arquivo `.lsconfig` ou `icon.svg` separado é criado; `.lsdevice` é a fonte de
 verdade completa.
 
+**Unicidade global de device ID** (corrigido 2026-07-15, achado real: `registeredSources[]` duplicava
+manualmente ~69 dispositivos já declarados em `devices/library.json`/`mcu-adapters/library.json` — nenhum
+deles aparecia no pacote instalado): um arquivo canônico (`library.json`) pode declarar um ou vários
+dispositivos — cada entrada de `"devices"`/`"mcus"` é `{typeId ou chipId, manifest}`, apontando pro próprio
+`.lsdevice` que de fato define aquele dispositivo (pins, `nativeEntry`, `folderPath`, etc). O que NÃO é
+permitido é o mesmo `typeId`/`chipId` aparecer declarado a partir de DOIS `.lsdevice` diferentes — isso é
+erro arquitetural, detectado e rejeitado (nunca first-wins/last-wins/overwrite silencioso) em dois pontos:
+`GlobalPluginCache::loadLibrary` (Core, lança `std::runtime_error` nomeando as duas definições) e
+`refreshUnifiedCatalogState` (Extension, via `deviceUniqueness.ts::checkDeviceIdUniqueness`). Recarregar o
+MESMO `.lsdevice` de novo (mesmo caminho canônico) continua sendo reload idempotente, não um conflito —
+necessário porque `loadDeviceLibrary` é re-executado a cada refresh de catálogo.
+`registeredSources[]` do catálogo unificado NUNCA deve enumerar dispositivos individualmente pra bibliotecas
+já cobertas por `deviceLibraries[]` — a Extension deriva as entradas de paleta expandindo cada
+`library.json` de `deviceLibraries[]` automaticamente (`registeredSources.ts::expandLibraryJsonToSources`);
+`registeredSources[]` existe só pra registros avulsos feitos pelo usuário ("Registrar arquivo...") que
+ainda não fazem parte de nenhuma biblioteca empacotada.
+
 ## 15. Exemplo de manifesto do dispositivo (`.lsdevice`)
 
 Inclui o bloco `package` (corpo + pinos visuais) — schema completo e justificativa na seção 21.
@@ -1000,7 +1017,9 @@ static void on_event(LsdnDevice* dev, const LsdnEvent* ev) {
    suportada como camada adicional opcional, não obrigatória no v0.1.
 5. **Empacotamento**: pasta da biblioteca compactada. A descoberta em runtime é registrada no catálogo
   unificado do projeto (`LasecSimul/project/schema/component-catalog.json`, campo `deviceLibraries[]`),
-  apontando para o `library.json` da biblioteca.
+  apontando para o `library.json` da biblioteca — que já é, sozinho, o arquivo canônico "1 arquivo → N
+  dispositivos" (seção 14, "Unicidade global de device ID"); a paleta deriva suas entradas expandindo esse
+  arquivo, nunca de uma segunda lista manual.
 6. **Instalação**, descoberta pela Extension (não pelo Core diretamente) em três origens: `~/.lasecsimul/libraries/`,
    extensões VSCode instaladas, e `./lasecsimul-devices/` do workspace.
 7. **Carregamento**: Extension verifica hash/publisher → se necessário, solicita consentimento do usuário

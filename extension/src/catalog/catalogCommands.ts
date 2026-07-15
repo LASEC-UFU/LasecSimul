@@ -9,10 +9,11 @@ import { loadUnifiedCatalog, RegisteredSource, saveRegisteredSources } from "./U
 import {
   inferLibraryPathForDevice,
   sanitizeFolderPathSegments,
-  folderPathFromManifestFile,
+  expandLibraryJsonToSources,
   localizedAbiFailure,
   resolveRegisteredItems,
 } from "./registeredSources";
+import { checkDeviceIdUniqueness, DeviceIdOwner, formatDeviceIdConflict } from "./deviceUniqueness";
 
 type LoadConfiguredDeviceLibraries = (
   extensionPath: string,
@@ -36,51 +37,17 @@ function inferSourcesFromSelectedFile(extensionPath: string, selectedPath: strin
   const json = readJsonFile(absoluteSelectedPath) as Record<string, unknown>;
 
   if (fileName === "library.json") {
-    const abiEntries = Array.isArray(json.devices) ? json.devices : [];
-    for (const value of abiEntries) {
-      if (typeof value !== "object" || value === null) continue;
-      const deviceEntry = value as { manifest?: unknown };
-      if (typeof deviceEntry.manifest !== "string" || !deviceEntry.manifest.trim()) continue;
-      const manifestPath = path.resolve(path.dirname(absoluteSelectedPath), deviceEntry.manifest);
-      sources.push({
-        id: nextSourceId(),
-        kind: "abi-device",
-        filePath: manifestPath,
-        libraryPath: absoluteSelectedPath,
-        folderPath: folderPathFromManifestFile(manifestPath),
-      });
-    }
-
-    const mcuEntries = Array.isArray(json.mcus) ? json.mcus : [];
-    for (const value of mcuEntries) {
-      if (typeof value !== "object" || value === null) continue;
-      const mcuEntry = value as { manifest?: unknown };
-      if (typeof mcuEntry.manifest !== "string" || !mcuEntry.manifest.trim()) continue;
-      const manifestPath = path.resolve(path.dirname(absoluteSelectedPath), mcuEntry.manifest);
-      sources.push({
-        id: nextSourceId(),
-        kind: "mcu-adapter",
-        filePath: manifestPath,
-        libraryPath: absoluteSelectedPath,
-        folderPath: folderPathFromManifestFile(manifestPath),
-      });
-    }
-
-    const subEntries = Array.isArray(json.subcircuits) ? json.subcircuits : [];
-    for (const value of subEntries) {
-      if (typeof value !== "object" || value === null) continue;
-      const subEntry = value as { manifest?: unknown };
-      if (typeof subEntry.manifest !== "string" || !subEntry.manifest.trim()) continue;
-      const manifestPath = path.resolve(path.dirname(absoluteSelectedPath), subEntry.manifest);
-      sources.push({
-        id: nextSourceId(),
-        kind: "subcircuit-file",
-        filePath: manifestPath,
-        folderPath: folderPathFromManifestFile(manifestPath),
-      });
-    }
-
-    return sources;
+    // Registro manual ("Registrar arquivo...") de uma biblioteca inteira -- diferente da expansão
+    // automática de `deviceLibraries[]` (`refreshUnifiedCatalogState`), aqui os dispositivos viram
+    // `removable: true` (usuário pode desfazer o registro individualmente depois), então não
+    // reaproveita os ids/removable fixos de `expandLibraryJsonToSources` -- só a extração das 3
+    // listas (devices/mcus/subcircuits), reatribuindo id único por clique e removable de volta ao
+    // default (`undefined` == removível, ver `ResolvedRegisteredItem.entry.registeredSourceRemovable`).
+    return expandLibraryJsonToSources(absoluteSelectedPath).map((source) => ({
+      ...source,
+      id: nextSourceId(),
+      removable: undefined,
+    }));
   }
 
   if (fileName.endsWith(".lssubcircuit")) {
@@ -150,23 +117,48 @@ async function attachPropertySchemas(
   );
 }
 
+/** Expande cada `deviceLibraries[]` (arquivo canônico -- `library.json` pode declarar 1 ou vários
+ * dispositivos) em `RegisteredSource[]`, um por dispositivo -- `deviceLibraries[]` deixa de ser
+ * "só o Core carrega, a paleta não vê" (bug real corrigido aqui: era a causa de portas lógicas,
+ * sensores, displays e o adaptador ESP32/QEMU nunca aparecerem sozinhos na paleta de um pacote
+ * instalado, mascarado por uma lista de 69 `registeredSources[]` manualmente duplicada -- ver
+ * memória do projeto). Arquivo ilegível/ausente é ignorado aqui (mesma resiliência de sempre --
+ * `loadConfiguredDeviceLibraries` já reporta o erro real de load pro Core separadamente). */
+function expandDeviceLibraries(extensionPath: string, deviceLibraries: readonly string[]): RegisteredSource[] {
+  const sources: RegisteredSource[] = [];
+  for (const relativePath of deviceLibraries) {
+    const absolutePath = normalizeAbsolutePath(extensionPath, relativePath);
+    try {
+      sources.push(...expandLibraryJsonToSources(absolutePath));
+    } catch {
+      // arquivo ausente/invalido -- loadConfiguredDeviceLibraries reporta o erro de carregar a
+      // biblioteca no Core; aqui so nao contribui nenhuma entrada de paleta pra ela.
+    }
+  }
+  return sources;
+}
+
 export async function refreshUnifiedCatalogState(
   loadLibrariesInCore: boolean,
   options: CatalogCommandOptions
 ): Promise<void> {
   if (!state.extensionContext) return;
-  const unifiedCatalog = loadUnifiedCatalog(state.extensionContext.extensionPath, currentLasecSimulLanguage());
-  const resolved = resolveRegisteredItems(state.extensionContext.extensionPath, unifiedCatalog.registeredSources);
+  const extensionPath = state.extensionContext.extensionPath;
+  const unifiedCatalog = loadUnifiedCatalog(extensionPath, currentLasecSimulLanguage());
+  const expandedSources = expandDeviceLibraries(extensionPath, unifiedCatalog.deviceLibraries);
+  const allSources = [...expandedSources, ...unifiedCatalog.registeredSources];
+  const sourceFileById = new Map(allSources.map((source) => [source.id, normalizeAbsolutePath(extensionPath, source.filePath)]));
+  const resolved = resolveRegisteredItems(extensionPath, allSources);
 
   const requests = new Map<string, { displayPath: string; absolutePath: string }>();
   const adhocSubcircuits = new Set<string>();
   for (const relativePath of unifiedCatalog.deviceLibraries) {
-    const absolutePath = normalizeAbsolutePath(state.extensionContext.extensionPath, relativePath);
+    const absolutePath = normalizeAbsolutePath(extensionPath, relativePath);
     requests.set(absolutePath, { displayPath: relativePath, absolutePath });
   }
   for (const item of resolved) {
     if (!item.libraryPathToLoad) continue;
-    const absolutePath = normalizeAbsolutePath(state.extensionContext.extensionPath, item.libraryPathToLoad);
+    const absolutePath = normalizeAbsolutePath(extensionPath, item.libraryPathToLoad);
     if (!requests.has(absolutePath)) {
       requests.set(absolutePath, { displayPath: absolutePath, absolutePath });
     }
@@ -178,7 +170,7 @@ export async function refreshUnifiedCatalogState(
   }
 
   const failures = loadLibrariesInCore
-    ? await options.loadConfiguredDeviceLibraries(state.extensionContext.extensionPath, [...requests.values()])
+    ? await options.loadConfiguredDeviceLibraries(extensionPath, [...requests.values()])
     : new Map<string, string>();
   const adhocFailures = new Map<string, string>();
   if (loadLibrariesInCore && state.coreClient) {
@@ -191,10 +183,30 @@ export async function refreshUnifiedCatalogState(
     }
   }
 
+  // Unicidade global de device ID (princípio arquitetural: cada typeId pertence a exatamente um
+  // arquivo canônico, descoberto uma única vez) -- constrói o índice typeId->arquivo com o catálogo
+  // ESTÁTICO primeiro (sempre "dono" de seu próprio typeId, é o arquivo fonte do próprio
+  // `component-catalog.json`) e depois cada item resolvido (dono = o `.lsdevice`/`.lssubcircuit`
+  // que de fato o declara, nunca o `library.json` que só aponta pra ele). Diferente do
+  // `if (baseTypeIds.has(...)) return [];` de antes (skip silencioso, sem aviso nenhum), todo
+  // conflito agora é reportado -- mantém só a PRIMEIRA definição no catálogo mesclado (a extensão
+  // continua utilizável) mas nunca esconde a duplicidade do usuário.
+  const owners: DeviceIdOwner[] = unifiedCatalog.catalog.map((entry) => ({ typeId: entry.typeId, sourceFile: unifiedCatalog.sourcePath }));
+  for (const item of resolved) {
+    const sourceFile = sourceFileById.get(item.sourceId);
+    if (sourceFile) owners.push({ typeId: item.entry.typeId, sourceFile });
+  }
+  const conflicts = checkDeviceIdUniqueness(owners);
+  for (const conflict of conflicts) {
+    void vscode.window.showErrorMessage(formatDeviceIdConflict(conflict));
+  }
+  const conflictingTypeIds = new Set(conflicts.map((conflict) => conflict.typeId));
+
   const baseTypeIds = new Set(unifiedCatalog.catalog.map((entry) => entry.typeId));
+  const seenRegisteredTypeIds = new Set<string>();
   const registeredEntries = resolved.flatMap((item) => {
     const failedReason = item.libraryPathToLoad
-      ? failures.get(normalizeAbsolutePath(state.extensionContext!.extensionPath, item.libraryPathToLoad))
+      ? failures.get(normalizeAbsolutePath(extensionPath, item.libraryPathToLoad))
       : undefined;
     const adhocFailedReason = item.adhocSubcircuitPathToRegister
       ? adhocFailures.get(item.adhocSubcircuitPathToRegister)
@@ -216,6 +228,13 @@ export async function refreshUnifiedCatalogState(
       }];
     }
     if (baseTypeIds.has(item.entry.typeId)) return [];
+    // Conflito entre 2 fontes registradas (nunca contra o catálogo base, já coberto acima): mantém
+    // só a primeira ocorrência na ordem de `resolved` -- mesma semântica de `checkDeviceIdUniqueness`
+    // (primeira definição sobrevive, demais são só reportadas, nunca aplicadas silenciosamente).
+    if (conflictingTypeIds.has(item.entry.typeId)) {
+      if (seenRegisteredTypeIds.has(item.entry.typeId)) return [];
+      seenRegisteredTypeIds.add(item.entry.typeId);
+    }
     return [item.entry];
   });
 

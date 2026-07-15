@@ -258,6 +258,67 @@ function stageBundledAssets() {
   copyFileTo(coreExecutable, path.join(bundledRoot, "core", "build", coreRelative));
 }
 
+/** Extrai só `{typeId ou chipId, arquivo}` de cada dispositivo declarado num `library.json` --
+ * versão MÍNIMA de `registeredSources.ts::expandLibraryJsonToSources` pra uso FORA do host da
+ * Extension (este script roda em Node puro; o módulo real importa `currentLanguage.ts`, que exige
+ * `vscode`, indisponível aqui). Não resolve ícone/folderPath/label -- só o suficiente pra checar
+ * unicidade de ID, que é tudo que este gate precisa. */
+function readDeviceIdsFromLibrary(absoluteLibraryPath) {
+  const library = JSON.parse(fs.readFileSync(absoluteLibraryPath, "utf8"));
+  const libraryDir = path.dirname(absoluteLibraryPath);
+  const owners = [];
+  const collect = (entries, idKey) => {
+    for (const entry of entries || []) {
+      if (!entry || typeof entry.manifest !== "string" || !entry.manifest.trim()) continue;
+      const manifestPath = path.resolve(libraryDir, entry.manifest);
+      if (!fs.existsSync(manifestPath)) continue;
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+      const typeId = typeof manifest[idKey] === "string" ? manifest[idKey] : entry[idKey];
+      if (typeId) owners.push({ typeId, sourceFile: manifestPath });
+    }
+  };
+  collect(library.devices, "typeId");
+  collect(library.mcus, "chipId");
+  collect(library.subcircuits, "typeId");
+  return owners;
+}
+
+/** Unicidade global de device ID (ver `.spec/lasecsimul-native-devices.spec` seção 14, `lasecsimul.spec`
+ * seção 13.1.1 regra 16) -- gate de EMPACOTAMENTO: nenhum pacote deve sair com o mesmo typeId/chipId
+ * declarado por dois arquivos canonicos diferentes (`items[]` estatico, `deviceLibraries[]` expandido,
+ * `registeredSources[]` avulso). A checagem em si (`checkDeviceIdUniqueness`) é a MESMA função pura
+ * que a Extension usa em runtime (`out/catalog/deviceUniqueness.js`, sem dependência de `vscode`) --
+ * só a extração dos `owners` é uma versão mínima local (ver `readDeviceIdsFromLibrary`). Aborta o
+ * empacotamento (não só avisa) quando encontra conflito -- "deve interromper... o empacotamento". */
+function validateDeviceIdUniqueness() {
+  const { checkDeviceIdUniqueness, formatDeviceIdConflict } = require(
+    path.join(stagingExtensionDir, "out", "catalog", "deviceUniqueness.js")
+  );
+
+  const catalogPath = path.join(bundledRoot, "project", "schema", "component-catalog.json");
+  const catalog = JSON.parse(fs.readFileSync(catalogPath, "utf8"));
+  const owners = catalog.items.map((item) => ({ typeId: item.typeId, sourceFile: catalogPath }));
+
+  for (const relativeLibraryPath of catalog.deviceLibraries || []) {
+    const absoluteLibraryPath = path.join(stagingExtensionDir, relativeLibraryPath);
+    if (!fs.existsSync(absoluteLibraryPath)) continue;
+    owners.push(...readDeviceIdsFromLibrary(absoluteLibraryPath));
+  }
+  for (const source of catalog.registeredSources || []) {
+    const absoluteFilePath = path.join(stagingExtensionDir, source.filePath);
+    if (!fs.existsSync(absoluteFilePath)) continue;
+    const manifest = JSON.parse(fs.readFileSync(absoluteFilePath, "utf8"));
+    const typeId = source.kind === "mcu-adapter" ? manifest.chipId : manifest.typeId;
+    if (typeId) owners.push({ typeId, sourceFile: absoluteFilePath });
+  }
+
+  const conflicts = checkDeviceIdUniqueness(owners);
+  if (conflicts.length === 0) return;
+  console.error(`[package-release] ${conflicts.length} conflito(s) de device ID -- empacotamento abortado:\n`);
+  for (const conflict of conflicts) console.error(`${formatDeviceIdConflict(conflict)}\n`);
+  process.exit(1);
+}
+
 function rewriteStagedPackageJson() {
   const stagedPackageJsonPath = path.join(stagingExtensionDir, "package.json");
   const pkg = JSON.parse(fs.readFileSync(stagedPackageJsonPath, "utf8"));
@@ -422,6 +483,7 @@ resetDir(stagingRoot);
 stageExtensionFiles();
 stageBundledCatalog();
 stageBundledAssets();
+validateDeviceIdUniqueness();
 rewriteStagedPackageJson();
 
 const vsixFileName = `${extensionPackage.name}-${packageVersion}-${target.vsceTarget}.vsix`;

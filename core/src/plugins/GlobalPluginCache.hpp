@@ -61,6 +61,27 @@ inline std::string checksumFor(const nlohmann::json& checksums, const std::files
     return checksums.value(key, std::string{});
 }
 
+/** Unicidade global de device ID: cada typeId/chipId deve pertencer a exatamente um arquivo
+ * canônico (`.lsdevice`), descoberto uma única vez por todo o sistema -- carregar o MESMO arquivo
+ * de novo pra um id já conhecido é reload idempotente (`SimulationSession::registerKnownPluginTypes/
+ * registerKnownMcuTypes` chamam `loadLibrary` de novo a cada `loadDeviceLibrary` IPC, sempre
+ * legítimo), mas um id já conhecido aparecendo num arquivo DIFERENTE é um erro arquitetural --
+ * nunca first-wins/last-wins/overwrite silencioso. `manifestPath` já foi confirmado existente por
+ * quem chama (o `ifstream` já abriu com sucesso), então `canonical()` nunca lança aqui. */
+inline void assertOwnershipOrThrow(std::unordered_map<std::string, std::string>& owners, const std::string& id,
+                                   const std::filesystem::path& manifestPath) {
+    const std::string canonicalPath = std::filesystem::canonical(manifestPath).string();
+    const auto it = owners.find(id);
+    if (it == owners.end()) {
+        owners.emplace(id, canonicalPath);
+        return;
+    }
+    if (it->second == canonicalPath) return; // mesmo arquivo, reload idempotente -- nao e conflito
+    throw std::runtime_error("Duplicate device ID: " + id +
+                              "\n\nFirst definition:\n" + it->second +
+                              "\n\nConflicting definition:\n" + canonicalPath);
+}
+
 } // namespace detail
 
 /**
@@ -156,6 +177,8 @@ private:
         const std::filesystem::path binaryPath =
             manifestPath.parent_path() / device["nativeEntry"][detail::kPlatformKey].get<std::string>();
 
+        detail::assertOwnershipOrThrow(m_deviceOwnerByTypeId, typeId, manifestPath);
+
         registry::ComponentMetadata metadata;
         metadata.typeId = typeId;
         metadata.displayName = device.value("name", typeId);
@@ -214,6 +237,8 @@ private:
         const std::filesystem::path binaryPath =
             manifestPath.parent_path() / mcu["nativeEntry"][detail::kPlatformKey].get<std::string>();
 
+        detail::assertOwnershipOrThrow(m_mcuOwnerByChipId, chipId, manifestPath);
+
         std::shared_ptr<PluginModule> module = m_loader.loadMcuPlugin(binaryPath);
         setActiveMcuModule(chipId, module);
     }
@@ -222,6 +247,10 @@ private:
     registry::ComponentMetadataRegistry m_metadata;
     std::unordered_map<std::string, std::shared_ptr<PluginModule>> m_deviceModules;
     std::unordered_map<std::string, std::shared_ptr<PluginModule>> m_mcuModules;
+    /** typeId/chipId -> caminho canônico do `.lsdevice` que primeiro o declarou -- ver
+     * `detail::assertOwnershipOrThrow`. */
+    std::unordered_map<std::string, std::string> m_deviceOwnerByTypeId;
+    std::unordered_map<std::string, std::string> m_mcuOwnerByChipId;
 };
 
 } // namespace lasecsimul::plugins

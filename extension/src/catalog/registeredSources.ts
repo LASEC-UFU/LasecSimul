@@ -26,6 +26,71 @@ export interface ResolvedRegisteredItem {
   adhocSubcircuitPathToRegister?: string;
 }
 
+/** Expande UM `library.json` (arquivo canônico que pode declarar 1 ou vários dispositivos, ver
+ * princípio de unicidade global de device ID) nos `RegisteredSource[]` de cada dispositivo que ele
+ * declara -- mesma lógica que `catalogCommands.ts::inferSourcesFromSelectedFile` já tinha só pro
+ * fluxo interativo "Registrar arquivo..." (extraída pra cá pra ser reutilizada também
+ * automaticamente por TODO `deviceLibraries[]`, ver `refreshUnifiedCatalogState`). `id` é
+ * DETERMINÍSTICO (derivado do path absoluto do manifesto, não `Date.now()`) -- expansão roda de
+ * novo a cada refresh do catálogo, um id instável quebraria qualquer estado de UI que dependa de
+ * `registeredSourceId` entre refreshes. `removable: false` -- dispositivo vindo de uma biblioteca
+ * empacotada nunca é removível individualmente pela paleta (só a biblioteca inteira, editando
+ * `deviceLibraries[]`). */
+export function expandLibraryJsonToSources(absoluteLibraryPath: string): RegisteredSource[] {
+  const json = readJsonFile(absoluteLibraryPath) as Record<string, unknown>;
+  const libraryDir = path.dirname(absoluteLibraryPath);
+  const sources: RegisteredSource[] = [];
+
+  const abiEntries = Array.isArray(json.devices) ? json.devices : [];
+  for (const value of abiEntries) {
+    if (typeof value !== "object" || value === null) continue;
+    const deviceEntry = value as { manifest?: unknown };
+    if (typeof deviceEntry.manifest !== "string" || !deviceEntry.manifest.trim()) continue;
+    const manifestPath = path.resolve(libraryDir, deviceEntry.manifest);
+    sources.push({
+      id: `bundled:abi-device:${manifestPath}`,
+      kind: "abi-device",
+      filePath: manifestPath,
+      libraryPath: absoluteLibraryPath,
+      folderPath: folderPathFromManifestFile(manifestPath),
+      removable: false,
+    });
+  }
+
+  const mcuEntries = Array.isArray(json.mcus) ? json.mcus : [];
+  for (const value of mcuEntries) {
+    if (typeof value !== "object" || value === null) continue;
+    const mcuEntry = value as { manifest?: unknown };
+    if (typeof mcuEntry.manifest !== "string" || !mcuEntry.manifest.trim()) continue;
+    const manifestPath = path.resolve(libraryDir, mcuEntry.manifest);
+    sources.push({
+      id: `bundled:mcu-adapter:${manifestPath}`,
+      kind: "mcu-adapter",
+      filePath: manifestPath,
+      libraryPath: absoluteLibraryPath,
+      folderPath: folderPathFromManifestFile(manifestPath),
+      removable: false,
+    });
+  }
+
+  const subEntries = Array.isArray(json.subcircuits) ? json.subcircuits : [];
+  for (const value of subEntries) {
+    if (typeof value !== "object" || value === null) continue;
+    const subEntry = value as { manifest?: unknown };
+    if (typeof subEntry.manifest !== "string" || !subEntry.manifest.trim()) continue;
+    const manifestPath = path.resolve(libraryDir, subEntry.manifest);
+    sources.push({
+      id: `bundled:subcircuit-file:${manifestPath}`,
+      kind: "subcircuit-file",
+      filePath: manifestPath,
+      folderPath: folderPathFromManifestFile(manifestPath),
+      removable: false,
+    });
+  }
+
+  return sources;
+}
+
 export function inferLibraryPathForDevice(deviceFilePath: string): string | undefined {
   const candidate = path.resolve(path.dirname(deviceFilePath), "..", "library.json");
   return fileExists(candidate) ? candidate : undefined;

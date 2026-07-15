@@ -405,12 +405,27 @@ manifesto): subcircuito é um arquivo só, então `library.json` referencia o `.
 `subcircuits/`, sem subpasta — menos estrutura do que dispositivos nativos exigem, porque não há nada além
 do JSON pra versionar junto.
 
-### 7.1 Registro canônico na paleta (princípio do arquivo único)
+### 7.1 Registro canônico na paleta (princípio do arquivo único + unicidade global de device ID)
 
 O registro aponta SOMENTE para o arquivo do subcircuito — sem duplicar metadados. A Extension lê
 `folderPath`, `icon`, e `label` diretamente do `.lssubcircuit` ao resolver o item de paleta.
 
-Em `LasecSimul/project/schema/component-catalog.json`, um subcircuito é registrado assim:
+**Corrigido 2026-07-15** (achado real: os dois subcircuitos ESP32 estavam TAMBÉM hand-authored em
+`registeredSources[]`, duplicando o que `subcircuits/library.json` já declarava — mascarava um bug de
+empacotamento que fazia nenhum dos dois aparecer numa instalação real, ver `lasecsimul-native-devices.spec`
+seção 14 "Unicidade global de device ID" e `lasecsimul.spec` seção 13.1.1 regras 15/16): um subcircuito
+bundled NUNCA ganha uma entrada manual em `registeredSources[]` — `subcircuits/library.json` já é, sozinho,
+o arquivo canônico que declara todos os subcircuitos da distribuição:
+
+```json
+{ "subcircuits": [ { "typeId": "subcircuits.divisor_5v", "manifest": "divisor_5v.lssubcircuit" } ] }
+```
+
+A Extension expande esse array automaticamente em entradas de paleta
+(`registeredSources.ts::expandLibraryJsonToSources`, chamado por
+`catalogCommands.ts::refreshUnifiedCatalogState` pra cada caminho em `deviceLibraries[]`) — o exemplo
+abaixo (uma entrada solta de `RegisteredSource`) só se aplica a um registro AVULSO feito pelo usuário via
+"Registrar arquivo..." pra um `.lssubcircuit` que ainda não faz parte de nenhuma `library.json` empacotada:
 
 ```json
 {
@@ -422,12 +437,15 @@ Em `LasecSimul/project/schema/component-catalog.json`, um subcircuito é registr
 ```
 
 Toda informação de paleta (`folderPath`, `icon`, `label`) vem do `.lssubcircuit` — nunca repetida no catálogo.
-O catálogo é apenas um ponteiro para o arquivo; o arquivo é a fonte de verdade completa.
+O catálogo (`library.json` ou, no caso avulso, `registeredSources[]`) é apenas um ponteiro para o arquivo; o
+arquivo é a fonte de verdade completa.
 
 Regras normativas:
 
-1. Subcircuito NÃO ganha caminho de cadastro alternativo na UI; entra nos `registeredSources[]` do catálogo
-  unificado como `"kind": "subcircuit-file"`.
+1. Subcircuito bundled (parte de uma `library.json` já listada em `deviceLibraries[]`) NUNCA ganha entrada
+  manual em `registeredSources[]` — a paleta deriva a entrada expandindo a `library.json` automaticamente.
+  Um `.lssubcircuit` avulso (ainda sem `library.json`), registrado via "Registrar arquivo...", entra nos
+  `registeredSources[]` do catálogo unificado como `"kind": "subcircuit-file"`.
 2. A pasta/subpasta exibida na paleta vem de `folderPath` no `.lssubcircuit` e pode ter profundidade arbitrária.
 3. O ícone da paleta vem do campo `icon` do `.lssubcircuit` (SVG inline de 20×20px começando com `<svg`).
 4. A Extension usa o `icon`/`folderPath` do `.lssubcircuit` com precedência máxima; se ausentes, cai para
@@ -435,6 +453,10 @@ Regras normativas:
 5. `typeId` do `.lssubcircuit` é o identificador único; o catálogo não declara typeId — só caminho do arquivo.
 6. Bibliotecas de subcircuito MUST ser registradas em `deviceLibraries[]` do catálogo quando fizerem parte
   da distribuição ativa.
+7. Cada `typeId` de subcircuito MUST pertencer a exatamente um `.lssubcircuit` canônico. O mesmo `typeId`
+  aparecendo em dois `.lssubcircuit`/duas entradas de `library.json` diferentes é erro arquitetural — ver
+  `lasecsimul.spec` seção 13.1.1 regra 16 (`deviceUniqueness.ts::checkDeviceIdUniqueness` reporta,
+  `GlobalPluginCache`/registro equivalente do Core rejeita).
 
 ## 8. Comparação com SimulIDE-dev
 

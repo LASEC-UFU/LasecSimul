@@ -411,6 +411,23 @@ if(NOT WIN32)
 endif()
 add_test(NAME plugin_checksum COMMAND plugin_checksum_test)
 
+# Unicidade global de device ID (plano "single source of truth per device ID"): o mesmo typeId
+# declarado por 2 arquivos .lsdevice DIFERENTES deve fazer GlobalPluginCache::loadLibrary lancar,
+# nomeando as duas definicoes -- recarregar o MESMO arquivo (idempotente) continua funcionando.
+add_executable(plugin_duplicate_device_id_test
+    test/core/plugins/PluginDuplicateDeviceIdTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(plugin_duplicate_device_id_test PRIVATE include src)
+target_link_libraries(plugin_duplicate_device_id_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(plugin_duplicate_device_id_test PRIVATE
+    EXAMPLE_BLINKER_MSVC_DLL_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/example-blinker/build/win-x64/device.dll"
+)
+if(NOT WIN32)
+    target_link_libraries(plugin_duplicate_device_id_test PRIVATE dl)
+endif()
+add_test(NAME plugin_duplicate_device_id COMMAND plugin_duplicate_device_id_test)
+
 add_executable(plugin_runtime_test
     test/core/plugins/PluginRuntimeTest.cpp
     src/plugins/PluginModule.cpp
