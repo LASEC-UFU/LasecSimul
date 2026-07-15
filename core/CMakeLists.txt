@@ -401,8 +401,8 @@ add_executable(plugin_checksum_test
 target_include_directories(plugin_checksum_test PRIVATE include src)
 target_link_libraries(plugin_checksum_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
 target_compile_definitions(plugin_checksum_test PRIVATE
-    EXAMPLE_BLINKER_MSVC_DLL_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/example-blinker/build-msvc/device.dll"
-    ESP32_ADAPTER_MSVC_DLL_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../mcu-adapters/espressif-esp32/build-msvc/adapter.dll"
+    EXAMPLE_BLINKER_MSVC_DLL_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/example-blinker/build/win-x64/device.dll"
+    ESP32_ADAPTER_MSVC_DLL_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../mcu-adapters/espressif-esp32/build/win-x64/adapter.dll"
     REAL_DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
     REAL_MCU_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../mcu-adapters/library.json"
 )

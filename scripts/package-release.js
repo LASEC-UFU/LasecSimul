@@ -214,6 +214,14 @@ function createReleaseReadme() {
   ].join("\n");
 }
 
+// Caminhos de `component-catalog.json` (dev) sao relativos a `extensionPath` (mesma convencao de
+// `deviceLibraries`, ver `UnifiedCatalog.ts`/`catalogCommands.ts`) -- em dev isso e "../devices/...",
+// em pacote instalado vira "./bundled/devices/...". So reescreve o prefixo "../", nunca inventa um
+// caminho novo.
+function rewriteToBundledPath(relativePath) {
+  return relativePath.startsWith("../") ? `./bundled/${relativePath.slice(3)}` : relativePath;
+}
+
 function stageBundledCatalog() {
   const sourceCatalogPath = path.join(repoRoot, "project", "schema", "component-catalog.json");
   const catalog = JSON.parse(fs.readFileSync(sourceCatalogPath, "utf8"));
@@ -222,7 +230,19 @@ function stageBundledCatalog() {
     "./bundled/mcu-adapters/library.json",
     "./bundled/subcircuits/library.json",
   ];
-  catalog.registeredSources = [];
+  // Bug real corrigido aqui: isto ZERAVA os ~68 dispositivos embutidos (portas logicas, sensores,
+  // displays, adaptador ESP32/QEMU -- tudo que nao esta em `items[]` estatico) toda vez que um
+  // pacote era gerado -- eles so aparecem na paleta via `registeredSources[]`
+  // (`catalogCommands.ts::refreshUnifiedCatalogState` le DAI, nunca de `deviceLibraries[]`, que so
+  // manda o Core CARREGAR o plugin pra fins de simulacao). Reescreve os caminhos pro layout
+  // empacotado em vez de descartar as entradas.
+  catalog.registeredSources = Array.isArray(catalog.registeredSources)
+    ? catalog.registeredSources.map((source) => ({
+        ...source,
+        ...(typeof source.filePath === "string" ? { filePath: rewriteToBundledPath(source.filePath) } : {}),
+        ...(typeof source.libraryPath === "string" ? { libraryPath: rewriteToBundledPath(source.libraryPath) } : {}),
+      }))
+    : [];
   const destPath = path.join(bundledRoot, "project", "schema", "component-catalog.json");
   writeFile(destPath, `${JSON.stringify(catalog, null, 2)}\n`);
 }
