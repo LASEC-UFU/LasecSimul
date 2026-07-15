@@ -951,6 +951,21 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       syncSchematicPanel();
       return;
     }
+    case "requestSetPackageShapeRole": {
+      state.schematicState = {
+        ...state.schematicState,
+        components: state.schematicState.components.map((component) => {
+          if (component.id !== message.componentId) return component;
+          if (!message.value) {
+            const { packageShapeRole: _packageShapeRole, ...rest } = component;
+            return rest;
+          }
+          return { ...component, packageShapeRole: true };
+        }),
+      };
+      syncSchematicPanel();
+      return;
+    }
     case "requestRenameComponent": {
       state.schematicState = {
         ...state.schematicState,
@@ -1639,6 +1654,15 @@ async function closeSubcircuitEditorCommand(): Promise<void> {
       // "Salvar" tivesse funcionado.
       const saved = await writeSubcircuitEditingSessionBack(session);
       if (!saved) return;
+      // Sem isto, `PACKAGE_BY_TYPE_ID` (host E Webview, `componentSymbols.ts`) mantém o `package`
+      // ANTIGO deste typeId em memória -- qualquer instância já colocada no esquemático (deste
+      // projeto ou de outro aberto depois) continua desenhando o Package de antes da edição até um
+      // reload completo da janela (bug real: "editar o subcircuito não persiste visualmente").
+      // `loadLibrariesInCore: false` -- `writeSubcircuitEditingSessionBack` já reregistrou no Core
+      // (`registerAdhocSubcircuitDefinition`) logo acima; só falta reler o arquivo e reregistrar o
+      // pacote pro lado da Extension/Webview, mesmo padrão já usado em `extension.ts:1278` logo após
+      // escrever um `.lssubcircuit` novo.
+      await refreshUnifiedCatalogState(false, catalogCommandOptions());
     }
     state.subcircuitEditingStack.pop();
     await restoreOuterCircuitFromSession(session);

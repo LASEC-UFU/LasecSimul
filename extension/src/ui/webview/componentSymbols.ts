@@ -10,7 +10,7 @@
  * layout de pino são calculados a partir da caixa do tipo, nunca de uma constante global de tamanho.
  */
 
-import { ComponentViewSpec, JUNCTION_TYPE_ID, PackageDescriptor, PackageDynamicPinGroup, PackageNumberValue, PackagePin, PackageShape, SIMULIDE_PACKAGE_GRID_UNIT, SimulidePaintSpec, SimulideQtWidgetSpec, TUNNEL_TYPE_ID, ViewSpecHitTest } from "./model.js";
+import { ComponentViewSpec, JUNCTION_TYPE_ID, PACKAGE_SHAPE_ORDER_PROPERTY_KEY, PACKAGE_SHAPE_TYPE_IDS, PackageDescriptor, PackageDynamicPinGroup, PackageNumberValue, PackagePin, PackageShape, SIMULIDE_PACKAGE_GRID_UNIT, SimulidePaintSpec, SimulideQtWidgetSpec, TUNNEL_TYPE_ID, ViewSpecHitTest, WebviewComponentModel } from "./model.js";
 import { simulidePaintToPackageShapes } from "./simulidePaint.js";
 
 export interface ComponentBox {
@@ -302,11 +302,217 @@ function packagePinElectricalPoint(pin: MaterializedPackagePin): { x: number; y:
   return { x: pin.x, y: pin.y };
 }
 
-function packagePinVisualEnd(pin: MaterializedPackagePin): { x: number; y: number } {
+export function packagePinVisualEnd(pin: MaterializedPackagePin): { x: number; y: number } {
   if (pin.length === 0) return { x: pin.x, y: pin.y };
   const visualLength = Math.max(0, pin.length - (pin.leadEndTrim ?? 0));
   const rad = ((180 - pin.angle) * Math.PI) / 180;
   return { x: pin.x + Math.cos(rad) * visualLength, y: pin.y + Math.sin(rad) * visualLength };
+}
+
+/** `transform="rotate(deg cx cy)"` -- mesmo pivô (centro do elemento) que TODO componente de cena já
+ * usa via `svgLocalTransform` (`componentGeometry.ts`). Espelha `shapeRotationTransform`
+ * (`subcircuitPackageAuthoring.ts`, host/Node -- não importável aqui) byte-a-byte; mudar uma fórmula
+ * exige mudar a outra (mesmo princípio de `packagePinBoxSide`/`labelBoxSize`, já duplicados nos dois
+ * módulos por este mesmo motivo de fronteira host/Webview). */
+function livePreviewShapeTransform(rotation: 0 | 90 | 180 | 270, cx: number, cy: number): string | undefined {
+  return rotation === 0 ? undefined : `rotate(${rotation} ${cx} ${cy})`;
+}
+
+/** Espelha `derivePackageShape` (`subcircuitPackageAuthoring.ts`) com `inverseScaleX`/`inverseScaleY`
+ * FIXOS em 1 -- a prévia ao vivo nunca aplica a conversão nativo/esquemático (só relevante na
+ * gravação em disco, ver `PackageNativeScale`); ela renderiza EXATAMENTE a posição atual da cena,
+ * relativa à origem do Package. Ver `buildLivePackagePreview` abaixo. */
+function deriveLivePackageShape(component: WebviewComponentModel, packageComponent: WebviewComponentModel): PackageShape | undefined {
+  const rotation = component.rotation;
+  switch (component.typeId) {
+    case "graphics.rectangle": {
+      const width = typeof component.properties.width === "number" ? component.properties.width : 0;
+      const height = typeof component.properties.height === "number" ? component.properties.height : 0;
+      const nx = component.x - packageComponent.x;
+      const ny = component.y - packageComponent.y;
+      const pivotX = nx + width / 2;
+      const pivotY = ny + height / 2;
+      return {
+        kind: "rect",
+        x: nx,
+        y: ny,
+        w: width,
+        h: height,
+        stroke: typeof component.properties.stroke === "string" ? component.properties.stroke : undefined,
+        fill: typeof component.properties.fill === "string" ? component.properties.fill : undefined,
+        strokeWidth: typeof component.properties.strokeWidth === "number" ? component.properties.strokeWidth : undefined,
+        transform: livePreviewShapeTransform(rotation, pivotX, pivotY),
+      };
+    }
+    case "graphics.ellipse": {
+      const width = typeof component.properties.width === "number" ? component.properties.width : 0;
+      const height = typeof component.properties.height === "number" ? component.properties.height : 0;
+      const nx = component.x - packageComponent.x;
+      const ny = component.y - packageComponent.y;
+      const cx = nx + width / 2;
+      const cy = ny + height / 2;
+      return {
+        kind: "ellipse",
+        cx,
+        cy,
+        rx: width / 2,
+        ry: height / 2,
+        stroke: typeof component.properties.stroke === "string" ? component.properties.stroke : undefined,
+        fill: typeof component.properties.fill === "string" ? component.properties.fill : undefined,
+        transform: livePreviewShapeTransform(rotation, cx, cy),
+      };
+    }
+    case "graphics.line": {
+      const length = typeof component.properties.length === "number" ? component.properties.length : 40;
+      const box = Math.max(20, length + 12);
+      const centerX = component.x + box / 2 - packageComponent.x;
+      const centerY = component.y + box / 2 - packageComponent.y;
+      const halfLength = length / 2;
+      return {
+        kind: "line",
+        x1: centerX - halfLength,
+        y1: centerY,
+        x2: centerX + halfLength,
+        y2: centerY,
+        stroke: typeof component.properties.stroke === "string" ? component.properties.stroke : undefined,
+        transform: livePreviewShapeTransform(rotation, centerX, centerY),
+      };
+    }
+    case "graphics.image": {
+      const width = typeof component.properties.width === "number" ? component.properties.width : 0;
+      const height = typeof component.properties.height === "number" ? component.properties.height : 0;
+      const nx = component.x - packageComponent.x;
+      const ny = component.y - packageComponent.y;
+      const pivotX = nx + width / 2;
+      const pivotY = ny + height / 2;
+      const imageData = typeof component.properties.imageData === "string" ? component.properties.imageData : undefined;
+      const imageMime = typeof component.properties.imageMime === "string" ? component.properties.imageMime : "image/png";
+      return {
+        kind: "image",
+        x: nx,
+        y: ny,
+        w: width,
+        h: height,
+        href: imageData ? `data:${imageMime};base64,${imageData}` : undefined,
+        preserveAspectRatio: "none",
+        transform: livePreviewShapeTransform(rotation, pivotX, pivotY),
+      };
+    }
+    case "graphics.text": {
+      const text = typeof component.properties.text === "string" ? component.properties.text : "";
+      const fontSize = typeof component.properties.fontSize === "number" ? component.properties.fontSize : 11;
+      const boxWidth = Math.max(24, text.length * fontSize * 0.62 + 12);
+      const boxHeight = fontSize + 14;
+      const cx = component.x + boxWidth / 2 - packageComponent.x;
+      const cy = component.y + boxHeight / 2 - packageComponent.y;
+      return {
+        kind: "text",
+        x: cx,
+        y: cy,
+        value: text,
+        fontSize,
+        textAnchor: "middle",
+        dominantBaseline: "middle",
+        color: typeof component.properties.color === "string" ? component.properties.color : undefined,
+        transform: livePreviewShapeTransform(rotation, cx, cy),
+      };
+    }
+    default:
+      return undefined;
+  }
+}
+
+/** Prévia AO VIVO do Package sendo editado em "Abrir Subcircuito" -- compila a cena ATUAL (mesmo
+ * conjunto de componentes que `compilePackageAuthoringComponents` levaria pro arquivo, ver
+ * `subcircuitPackageAuthoring.ts`) numa `PackageDescriptor` pronta pra `resolvePackageLayout` +
+ * `packageBodySvg`, o MESMO pipeline que desenha um dispositivo colocado -- em vez do switch
+ * genérico por-componente de `componentSymbolSvg` (`other.package`/`other.package_pin` cada um
+ * desenhado independentemente). Isso elimina a divergência de "dois renderizadores" pela raiz: o
+ * corpo/pinos/rótulos/formas do Package na tela de autoria são pixel-a-pixel o que
+ * `packageBodySvg` produziria pro dispositivo real, porque É a mesma chamada.
+ *
+ * NUNCA aplica a conversão nativo/esquemático (`schematicWidth`/`schematicHeight` ficam de fora,
+ * `resolvePackageLayout` cai no fallback escala=1) -- a cena de autoria já vive inteira no espaço
+ * EXIBIDO (mesmo espaço de `component.x/y`), então rende KEXATAMENTE a posição atual da cena, sem
+ * risco de descompasso de escala durante o arrasto. NUNCA lança/bloqueia -- pino sem túnel ainda
+ * aparece (rótulo = pinId), a única condição que retorna `undefined` é a ausência total de um
+ * `other.package` na cena (edição normal, sem sessão de Package ativa). Espelha (mas não reusa,
+ * fronteira host/Webview) o mesmo pareamento pino↔rótulo de `compilePackageAuthoringComponents`. */
+export function buildLivePackagePreview(components: readonly WebviewComponentModel[]): PackageDescriptor | undefined {
+  const packageComponent = components.find((c) => c.typeId === "other.package");
+  if (!packageComponent) return undefined;
+
+  const width = typeof packageComponent.properties.width === "number" ? packageComponent.properties.width : 56;
+  const height = typeof packageComponent.properties.height === "number" ? packageComponent.properties.height : 40;
+  const border = packageComponent.properties.border !== false;
+
+  const icon = components.find((c) => c.typeId === "graphics.image" && c.packageIconRole === true);
+  const background: PackageDescriptor["background"] = icon
+    ? {
+        kind: "image",
+        data: typeof icon.properties.imageData === "string" ? icon.properties.imageData : undefined,
+        mime: typeof icon.properties.imageMime === "string" ? icon.properties.imageMime : "image/png",
+      }
+    : typeof packageComponent.properties.backgroundColor === "string" && packageComponent.properties.backgroundColor
+      ? { kind: "color", value: packageComponent.properties.backgroundColor }
+      : undefined;
+
+  const labelByPinComponentId = new Map<string, WebviewComponentModel>();
+  for (const c of components) {
+    if (c.typeId !== "graphics.text") continue;
+    const linked = c.properties.linkedPinComponentId;
+    if (typeof linked === "string" && linked) labelByPinComponentId.set(linked, c);
+  }
+
+  const pins: PackagePin[] = components
+    .filter((c) => c.typeId === "other.package_pin")
+    .map((pinComp) => {
+      const pinId = typeof pinComp.properties.pinId === "string" && pinComp.properties.pinId.trim() ? pinComp.properties.pinId.trim() : pinComp.id;
+      const length = typeof pinComp.properties.length === "number" ? pinComp.properties.length : 8;
+      const box = Math.max(24, length * 2 + 16);
+      const anchorX = pinComp.x + box / 2;
+      const anchorY = pinComp.y + box / 2;
+      const labelComponent = labelByPinComponentId.get(pinComp.id);
+      const label = (typeof labelComponent?.properties.text === "string" ? labelComponent.properties.text : undefined) ?? pinId;
+      const pinEntry: PackagePin = {
+        id: pinId,
+        x: anchorX - packageComponent.x,
+        y: anchorY - packageComponent.y,
+        angle: (180 - pinComp.rotation + 360) % 360,
+        length,
+        label,
+      };
+      if (labelComponent) {
+        const labelFontSize = typeof labelComponent.properties.fontSize === "number" ? labelComponent.properties.fontSize : PACKAGE_PIN_LABEL_FONT_SIZE;
+        const labelBoxWidth = Math.max(24, label.length * labelFontSize * 0.62 + 12);
+        const labelBoxHeight = labelFontSize + 14;
+        pinEntry.labelX = labelComponent.x + labelBoxWidth / 2 - packageComponent.x;
+        pinEntry.labelY = labelComponent.y + labelBoxHeight / 2 - packageComponent.y;
+        pinEntry.labelFontSize = labelFontSize;
+        pinEntry.labelTextAnchor = "middle";
+        pinEntry.labelDominantBaseline = "middle";
+        if (labelComponent.rotation) pinEntry.labelRotation = labelComponent.rotation;
+      }
+      return pinEntry;
+    });
+
+  const orderOf = (c: WebviewComponentModel): number =>
+    typeof c.properties[PACKAGE_SHAPE_ORDER_PROPERTY_KEY] === "number" ? (c.properties[PACKAGE_SHAPE_ORDER_PROPERTY_KEY] as number) : Number.MAX_SAFE_INTEGER;
+  const shapes = components
+    .filter((c) => c.packageShapeRole === true && (PACKAGE_SHAPE_TYPE_IDS as readonly string[]).includes(c.typeId))
+    .slice()
+    .sort((a, b) => orderOf(a) - orderOf(b))
+    .map((shapeComp) => deriveLivePackageShape(shapeComp, packageComponent))
+    .filter((shape): shape is PackageShape => shape !== undefined);
+
+  return {
+    width,
+    height,
+    border,
+    ...(background ? { background } : {}),
+    ...(shapes.length > 0 ? { shapes } : {}),
+    pins,
+  };
 }
 
 const PACKAGE_BY_TYPE_ID = new Map<string, PackageDescriptor>();
@@ -395,6 +601,20 @@ function stateVisibleMatches(stateVisible: PackagePin["stateVisible"] | undefine
 export function packageSymbolSvg(typeId: string, properties?: Record<string, unknown>, componentId?: string, variant?: PackageVariant): string | undefined {
   const resolved = resolvedPackageFor(typeId, properties, variant);
   return resolved ? packageBodySvg(resolved, componentId, properties) : undefined;
+}
+
+/** Igual a `packageSymbolSvg`, mas recebe um `PackageDescriptor` DIRETO em vez de buscar por typeId
+ * em `PACKAGE_BY_TYPE_ID` -- usado pela prévia ao vivo do Package (`buildLivePackagePreview`,
+ * `main.ts`) durante "Abrir Subcircuito", que não tem (e não deveria precisar de) um registro global
+ * por typeId pra um Package sendo editado nesse instante. Mesmo pipeline (`materializePackage` +
+ * `resolvePackageLayout` + `packageBodySvg`) que desenha um dispositivo colocado -- garante que a
+ * prévia da autoria e o dispositivo final são PIXEL-A-PIXEL a mesma coisa, porque é a mesma chamada.
+ * Devolve também `box` (tamanho REAL resolvido, `resolved.width/height` -- pode exceder
+ * `pkg.width/height` quando pinos/rótulos protrudem, ver `resolvePackageLayout`) pra quem chama saber
+ * o viewBox/hit-box correto do elemento consolidado. */
+export function livePackagePreviewSymbolSvg(pkg: PackageDescriptor, componentId?: string, properties?: Record<string, unknown>): { svg: string; box: { width: number; height: number } } {
+  const resolved = resolvePackageLayout(materializePackage(pkg, properties));
+  return { svg: packageBodySvg(resolved, componentId, properties), box: { width: resolved.width, height: resolved.height } };
 }
 
 function escapeXmlText(value: string): string {

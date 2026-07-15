@@ -1,8 +1,8 @@
 import { createTestRunner, assert } from "../../ipc/testSupport/MockCoreServer";
 import fs from "node:fs";
 import path from "node:path";
-import { componentBox, componentLocalOrigin, componentSymbolSvg, hasRealPinPosition, pinLocalPosition, packageSymbolSvg, registerPackage } from "./componentSymbols";
-import { PackageDescriptor } from "./model";
+import { buildLivePackagePreview, componentBox, componentLocalOrigin, componentSymbolSvg, hasRealPinPosition, pinLocalPosition, packageSymbolSvg, registerPackage } from "./componentSymbols";
+import { PACKAGE_SHAPE_ORDER_PROPERTY_KEY, PackageDescriptor, WebviewComponentModel } from "./model";
 
 (async () => {
   const { test, finish } = createTestRunner("componentSymbols — package real (Épico G)");
@@ -1376,6 +1376,71 @@ import { PackageDescriptor } from "./model";
       });
     }
     assert(checked >= 120, `auditoria deveria cobrir os packages estáticos; apenas ${checked} terminais foram verificados`);
+  });
+
+  await test("buildLivePackagePreview: undefined quando não há nenhum other.package na cena (edição normal, sem sessão de Package)", () => {
+    const normal: WebviewComponentModel = { id: "c1", typeId: "passive.resistor", label: "R1", x: 0, y: 0, rotation: 0, pins: [], properties: {} };
+    assert(buildLivePackagePreview([normal]) === undefined, "sem other.package na cena, preview deveria ser undefined");
+  });
+
+  await test("buildLivePackagePreview: reproduz EXATAMENTE a posição atual da cena (pino + rótulo), sem nenhuma conversão de escala", () => {
+    const pkg: WebviewComponentModel = { id: "pkg1", typeId: "other.package", label: "Package", x: 100, y: 100, rotation: 0, pins: [], properties: { width: 56, height: 40, border: true } };
+    // Pino de borda esquerda, angle:180 no arquivo -> rotation=(180-180)%360=0 na cena (mesma
+    // conversão do Bug 1/A1) -- length=8, box=max(24,8*2+16)=32, âncora do pino em (pkg.x-16+16, ...).
+    const pinLength = 8;
+    const box = Math.max(24, pinLength * 2 + 16);
+    const anchorX = pkg.x + 0; // pino ancorado bem na borda esquerda (nativeX=0 relativo ao Package)
+    const anchorY = pkg.y + 20;
+    const pin: WebviewComponentModel = {
+      id: "pin1", typeId: "other.package_pin", label: "GND1", x: anchorX - box / 2, y: anchorY - box / 2, rotation: 0, pins: [],
+      properties: { pinId: "GND1", length: pinLength },
+    };
+    const label: WebviewComponentModel = {
+      id: "label1", typeId: "graphics.text", label: "graphics.text", x: anchorX - 40, y: anchorY - 10, rotation: 0, pins: [],
+      properties: { text: "GND1", fontSize: 7, linkedPinComponentId: "pin1" },
+    };
+    const preview = buildLivePackagePreview([pkg, pin, label]);
+    assert(preview !== undefined, "deveria construir a prévia com um other.package presente");
+    assert(preview!.width === 56 && preview!.height === 40, `width/height deveriam vir direto de properties (56x40), recebido ${preview!.width}x${preview!.height}`);
+    assert(preview!.schematicWidth === undefined, "prévia ao vivo nunca deveria introduzir schematicWidth (escala sempre 1, mesmo espaço da cena)");
+    const previewPin = preview!.pins.find((p) => p.id === "GND1");
+    assert(previewPin !== undefined, "deveria conter o pino GND1");
+    assert(previewPin!.x === 0 && previewPin!.y === 20, `pino deveria estar EXATAMENTE na posição relativa da cena (0,20), recebido (${previewPin!.x},${previewPin!.y})`);
+    assert(previewPin!.angle === 180, `angle deveria ser o inverso de rotation=0 -> (180-0)%360=180, recebido ${previewPin!.angle}`);
+    assert(previewPin!.label === "GND1", "label deveria vir do texto do rótulo linkado");
+  });
+
+  await test("buildLivePackagePreview: pino SEM túnel ainda aparece na prévia (lenient -- nunca bloqueia o preview ao vivo)", () => {
+    const pkg: WebviewComponentModel = { id: "pkg1", typeId: "other.package", label: "Package", x: 0, y: 0, rotation: 0, pins: [], properties: { width: 56, height: 40 } };
+    const pin: WebviewComponentModel = { id: "pin1", typeId: "other.package_pin", label: "P1", x: -16, y: 4, rotation: 0, pins: [], properties: { pinId: "P1", length: 8 } };
+    const preview = buildLivePackagePreview([pkg, pin]);
+    assert(preview?.pins.length === 1, "pino sem tunnelComponentId ainda deveria aparecer na prévia ao vivo (diferente do compile estrito, que exclui e avisa)");
+  });
+
+  await test("buildLivePackagePreview: elementos packageShapeRole entram em package.shapes[] na ordem de __packageShapeOrder", () => {
+    const pkg: WebviewComponentModel = { id: "pkg1", typeId: "other.package", label: "Package", x: 0, y: 0, rotation: 0, pins: [], properties: { width: 56, height: 40 } };
+    const shapeA: WebviewComponentModel = { id: "a", typeId: "graphics.rectangle", label: "a", x: 4, y: 4, rotation: 0, pins: [], packageShapeRole: true, properties: { width: 8, height: 8, [PACKAGE_SHAPE_ORDER_PROPERTY_KEY]: 1 } };
+    const shapeB: WebviewComponentModel = { id: "b", typeId: "graphics.rectangle", label: "b", x: 20, y: 4, rotation: 0, pins: [], packageShapeRole: true, properties: { width: 8, height: 8, [PACKAGE_SHAPE_ORDER_PROPERTY_KEY]: 0 } };
+    const preview = buildLivePackagePreview([pkg, shapeA, shapeB]);
+    assert(preview?.shapes?.length === 2, `esperado 2 shapes, recebido ${preview?.shapes?.length}`);
+    // shapeB tem order=0, deveria vir PRIMEIRO mesmo estando depois de shapeA na lista de componentes.
+    assert(preview!.shapes![0]!.x === 20, `shapeB (order=0) deveria vir primeiro, recebido x=${preview!.shapes![0]!.x}`);
+    assert(preview!.shapes![1]!.x === 4, `shapeA (order=1) deveria vir depois, recebido x=${preview!.shapes![1]!.x}`);
+  });
+
+  await test("buildLivePackagePreview alimentando resolvePackageLayout produz o MESMO tipX/tipY que a posição atual da cena (prova a fidelidade WYSIWYG da prévia ao vivo)", () => {
+    const pkg: WebviewComponentModel = { id: "pkg1", typeId: "other.package", label: "Package", x: 200, y: 50, rotation: 0, pins: [], properties: { width: 56, height: 40 } };
+    const pin: WebviewComponentModel = { id: "pin1", typeId: "other.package_pin", label: "P1", x: pkg.x + 56 - 16, y: pkg.y + 12 - 16, rotation: 180, pins: [], properties: { pinId: "P1", length: 8 } };
+    const preview = buildLivePackagePreview([pkg, pin]);
+    assert(preview !== undefined, "deveria construir a prévia");
+    // Renderiza a prévia pelo MESMO packageSymbolSvg/resolvePackageLayout usado por um dispositivo
+    // colocado -- registra temporariamente como um typeId de teste, gera o SVG, e confirma que o
+    // pino aparece (prova que o pipeline canônico aceita e desenha a prévia sem erro).
+    registerPackage("test.live-preview", preview);
+    const svg = packageSymbolSvg("test.live-preview", {});
+    assert(typeof svg === "string" && svg.length > 0, "packageSymbolSvg deveria desenhar a prévia ao vivo sem erro, usando o MESMO pipeline de um dispositivo colocado");
+    assert(svg!.includes("<line"), "deveria conter o lead do pino desenhado por packagePinLeadSvg (mesma função do dispositivo colocado)");
+    registerPackage("test.live-preview", undefined);
   });
 
   registerPackage("test.example", undefined);

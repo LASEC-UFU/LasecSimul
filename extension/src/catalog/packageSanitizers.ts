@@ -887,6 +887,7 @@ export function sanitizePackage(value: unknown, assetBasePath?: string): Package
       labelDominantBaseline: sanitizeDominantBaseline(pin.labelDominantBaseline),
       labelX: sanitizeNumberValue(pin.labelX),
       labelY: sanitizeNumberValue(pin.labelY),
+      labelRotation: sanitizeNumberValue(pin.labelRotation),
     });
   }
   if (pins.length === 0 && !dynamicLayout?.pinGroups?.length) return undefined;

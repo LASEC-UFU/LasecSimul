@@ -1,6 +1,6 @@
 import { WEBVIEW_MESSAGE_VERSION, AnalyzerVectorHistory, ComponentReadoutValue, HostToWebviewMessage, InternalComponentSnapshot, SimulationStatus, WebviewToHostMessage } from "./messages.js";
-import { CanonicalEndpoint, CanonicalTopologyDocument, InteractionKindEntry, McuSerialPortEntry, PropertySchemaEntry, TUNNEL_TYPE_ID, ViewSpecInteraction, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, endpointId, endpointPinId, nodeEndpoint, portEndpoint, remapEndpoint } from "./model.js";
-import { ComponentBox, PIN_RADIUS, componentBox, componentLocalOrigin, componentSymbolSvg, dialKnobSvg, hasRealPinPosition, missingSubcircuitPlaceholderSvg, packageSymbolSvg, pinLocalPosition, registerPackage } from "./componentSymbols.js";
+import { CanonicalEndpoint, CanonicalTopologyDocument, InteractionKindEntry, McuSerialPortEntry, PACKAGE_SHAPE_ORDER_PROPERTY_KEY, PACKAGE_SHAPE_TYPE_IDS, PropertySchemaEntry, TUNNEL_TYPE_ID, ViewSpecInteraction, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, endpointId, endpointPinId, nodeEndpoint, portEndpoint, remapEndpoint } from "./model.js";
+import { ComponentBox, PIN_RADIUS, buildLivePackagePreview, componentBox, componentLocalOrigin, componentSymbolSvg, dialKnobSvg, hasRealPinPosition, livePackagePreviewSymbolSvg, missingSubcircuitPlaceholderSvg, packageSymbolSvg, pinLocalPosition, registerPackage } from "./componentSymbols.js";
 import { svgLocalTransform, transformLocalPoint, transformedLocalBounds } from "./componentGeometry.js";
 import { detectChannelTrigger, digitalStepPath, findTriggerAnchorIndex, triggerAlignedWindowEndNs, visibleSampleWindowByTime } from "./instrumentTrigger.js";
 import { analogSampleHoldPath, clampInstrumentWindow, decodeInstrumentState, encodeInstrumentState, panInstrumentTime, zoomInstrumentTimeAt } from "./instrumentViewport.js";
@@ -178,6 +178,10 @@ const UI_TEXT = {
     linkToTunnel: "Vincular a túnel...",
     unlinkTunnel: "Desvincular túnel",
     noTunnelsInScene: "(nenhum túnel na cena)",
+    markAsPackageShape: "Marcar como elemento do Package",
+    unmarkAsPackageShape: "Desmarcar como elemento do Package",
+    bringPackageShapeForward: "Trazer para frente",
+    sendPackageShapeBackward: "Enviar para trás",
     loadFirmware: "Carregar firmware",
     openSerialMonitor: "Abrir monitor serial",
     firmwareGroup: "Firmware",
@@ -264,6 +268,10 @@ const UI_TEXT = {
     linkToTunnel: "Link to tunnel...",
     unlinkTunnel: "Unlink tunnel",
     noTunnelsInScene: "(no tunnels in scene)",
+    markAsPackageShape: "Mark as Package element",
+    unmarkAsPackageShape: "Unmark as Package element",
+    bringPackageShapeForward: "Bring forward",
+    sendPackageShapeBackward: "Send backward",
     loadFirmware: "Load firmware",
     openSerialMonitor: "Open serial monitor",
     firmwareGroup: "Firmware",
@@ -4679,6 +4687,53 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
           ];
         })()
       : [];
+    // Elementos decorativos extras do Package (linha/figura/texto/retângulo/elipse marcados com
+    // `packageShapeRole`, `subcircuitPackageAuthoring.ts`) -- typeIds/chave de ordem compartilhados
+    // via `model.ts` (`PACKAGE_SHAPE_TYPE_IDS`/`PACKAGE_SHAPE_ORDER_PROPERTY_KEY`, sem dependência de
+    // Node). Só aparece dentro de "Abrir Subcircuito", nunca em edição normal, e nunca pro ícone
+    // auto-gerenciado (`packageIconRole`) nem pro rótulo linkado de um pino
+    // (`linkedPinComponentId`) -- esses dois já têm papel especial próprio.
+    const isPackageShapeEligible =
+      !isGroup &&
+      Boolean(state.subcircuitEditingContext) &&
+      (PACKAGE_SHAPE_TYPE_IDS as readonly string[]).includes(component.typeId) &&
+      component.packageIconRole !== true &&
+      typeof component.properties.linkedPinComponentId !== "string";
+    const packageShapeMenuItems: ContextMenuItem[] = isPackageShapeEligible
+      ? (() => {
+          const isMarked = component.packageShapeRole === true;
+          const items: ContextMenuItem[] = [
+            {
+              label: isMarked ? t("unmarkAsPackageShape") : t("markAsPackageShape"),
+              checked: isMarked,
+              onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestSetPackageShapeRole", componentId: component.id, value: !isMarked }),
+            },
+          ];
+          if (isMarked) {
+            // Renumera TODOS os elementos marcados pela ordem atual (`__packageShapeOrder` ausente
+            // vira "0" na comparação, então shapes recém-marcados sem ordem definida ainda ficam
+            // ordenáveis) antes de trocar o alvo com o vizinho -- garante números sempre contíguos
+            // (0,1,2...), nunca duplicados/faltando após várias reordenações.
+            const orderOf = (c: WebviewComponentModel): number => (typeof c.properties[PACKAGE_SHAPE_ORDER_PROPERTY_KEY] === "number" ? (c.properties[PACKAGE_SHAPE_ORDER_PROPERTY_KEY] as number) : 0);
+            const markedShapes = [...state.components].filter((c) => c.packageShapeRole === true).sort((a, b) => orderOf(a) - orderOf(b));
+            const currentIndex = markedShapes.findIndex((c) => c.id === component.id);
+            const swapWithNeighbor = (neighborIndex: number) => {
+              const neighbor = markedShapes[neighborIndex];
+              if (!neighbor) return;
+              markedShapes.forEach((c, index) => {
+                send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: c.id, name: PACKAGE_SHAPE_ORDER_PROPERTY_KEY, value: index });
+              });
+              send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name: PACKAGE_SHAPE_ORDER_PROPERTY_KEY, value: neighborIndex });
+              send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: neighbor.id, name: PACKAGE_SHAPE_ORDER_PROPERTY_KEY, value: currentIndex });
+            };
+            items.push(
+              { label: t("bringPackageShapeForward"), disabled: currentIndex >= markedShapes.length - 1, onClick: () => swapWithNeighbor(currentIndex + 1) },
+              { label: t("sendPackageShapeBackward"), disabled: currentIndex <= 0, onClick: () => swapWithNeighbor(currentIndex - 1) }
+            );
+          }
+          return [{ kind: "separator" } satisfies ContextMenuItem, ...items];
+        })()
+      : [];
     const menuItems: ContextMenuItem[] = [
       ...internalAuthoringItems,
       ...exposedSubmenuItems,
@@ -5243,9 +5298,26 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
     svg.classList.add("component__symbol--fixed-volt");
     if (component.properties.out === true) svg.classList.add("component__symbol--fixed-volt-on");
   }
+  // Prévia ao vivo do Package sendo editado em "Abrir Subcircuito" (`buildLivePackagePreview`,
+  // `componentSymbols.ts`) -- unifica o corpo/pinos/rótulos/formas do `other.package` desta cena com
+  // o MESMO pipeline (`resolvePackageLayout`/`packageBodySvg`) que desenha um dispositivo colocado,
+  // em vez do switch genérico por-componente (`componentSymbolSvg`). Só computado pros 3 typeIds
+  // envolvidos -- o resto da cena nunca paga esse custo. Os pinos/formas MARCADOS ficam com o corpo
+  // visível VAZIO (só hit-box, `rotatedBox`/seleção continuam intactos, ver overlay de seleção
+  // abaixo) porque o corpo consolidado do Package já desenha tudo -- elimina "dois renderizadores
+  // pro mesmo package" pela raiz, não só cosmeticamente.
+  const isPackageAuthoringVisual =
+    component.typeId === "other.package" ||
+    component.typeId === "other.package_pin" ||
+    component.packageShapeRole === true;
+  const livePackagePreview = isPackageAuthoringVisual ? buildLivePackagePreview(state.components) : undefined;
   bodyGroup.innerHTML = isMissingSubcircuitRef || isUnknownComponent
     ? missingSubcircuitPlaceholderSvg(box)
-    : packageSymbolSvg(component.typeId, symbolProperties, component.id, boardVariant) ?? catalogEntry?.symbolSvg ?? componentSymbolSvg(component.typeId, symbolProperties);
+    : livePackagePreview && component.typeId === "other.package"
+      ? livePackagePreviewSymbolSvg(livePackagePreview, component.id, symbolProperties).svg
+      : livePackagePreview && (component.typeId === "other.package_pin" || component.packageShapeRole === true)
+        ? ""
+        : packageSymbolSvg(component.typeId, symbolProperties, component.id, boardVariant) ?? catalogEntry?.symbolSvg ?? componentSymbolSvg(component.typeId, symbolProperties);
   bodyGroup.querySelectorAll<HTMLInputElement>(".meter-channel-input").forEach((input) => {
     const stopComponentGesture = (event: Event) => event.stopPropagation();
     input.addEventListener("pointerdown", stopComponentGesture);

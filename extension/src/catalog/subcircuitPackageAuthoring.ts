@@ -1,5 +1,17 @@
-import { PackageDescriptor, PackagePin, TUNNEL_TYPE_ID, WebviewComponentModel } from "../ui/webview/model";
+import {
+  PACKAGE_SHAPE_ORDER_PROPERTY_KEY,
+  PACKAGE_SHAPE_TYPE_IDS,
+  PackageDescriptor,
+  PackagePin,
+  PackageShape,
+  PackageShapeTypeId,
+  TUNNEL_TYPE_ID,
+  WebviewComponentModel,
+} from "../ui/webview/model";
 import { sanitizePackage } from "./packageSanitizers";
+
+export { PACKAGE_SHAPE_ORDER_PROPERTY_KEY, PACKAGE_SHAPE_TYPE_IDS };
+export type { PackageShapeTypeId };
 
 /** Autoria visual do ícone (Figura) e do Package (corpo + pinos) do SimulIDE, DENTRO da mesma cena
  * já usada por "Abrir Subcircuito" (`extension.ts::openSubcircuitForEditingCommand`) -- nunca um
@@ -23,6 +35,10 @@ export const PACKAGE_PIN_TYPE_ID = "other.package_pin";
  * Ver seção 5 do pedido original: "reutilize o objeto Figura já existente... não crie uma segunda
  * implementação concorrente". */
 export const PACKAGE_ICON_TYPE_ID = "graphics.image";
+
+function isPackageShapeEligibleTypeId(typeId: string): typeId is PackageShapeTypeId {
+  return (PACKAGE_SHAPE_TYPE_IDS as readonly string[]).includes(typeId);
+}
 
 /** Espelha `manifest.interface[]` (`.lssubcircuit`) -- `internalTunnel` (nome) continua sendo o
  * único campo que o Core (`CoreApplication.cpp`/`SimulationSession.cpp`) de fato consome e valida
@@ -87,6 +103,295 @@ function labelBoxSize(text: string, fontSize: number): { width: number; height: 
   return { width: Math.max(24, text.length * fontSize * 0.62 + 12), height: fontSize + 14 };
 }
 
+/** Caixa quadrada de `graphics.line`, espelhando `propertyDrivenBox` (`componentSymbols.ts`) --
+ * mesmo motivo de duplicação de `packagePinBoxSide` acima (host sem DOM). */
+function packageLineBoxSide(length: number): number {
+  return Math.max(20, length + 12);
+}
+
+/** `PackageShape.transform` só é usado por esta feature pra carregar rotação (`rotate(deg cx cy)`,
+ * mesmo pivô -- centro do elemento -- que TODO componente de cena já usa via o wrapper CSS/SVG
+ * genérico, `componentGeometry.ts::svgLocalTransform`). Escrito SEMPRE neste formato exato por
+ * `derivePackageShape` abaixo; só precisa reconhecer o próprio formato de volta, não qualquer
+ * `transform` arbitrário que um arquivo hand-authored possa ter (nesse caso, cai no padrão
+ * `rotation: 0` -- nunca quebra o seed, só não recupera uma rotação em formato desconhecido). */
+function parseShapeRotationTransform(transform: string | undefined): 0 | 90 | 180 | 270 {
+  if (!transform) return 0;
+  const match = /^rotate\(\s*(-?\d+(?:\.\d+)?)/.exec(transform.trim());
+  if (!match) return 0;
+  return nearestCardinalRotation(Number(match[1]));
+}
+
+function shapeRotationTransform(rotation: 0 | 90 | 180 | 270, cx: number, cy: number): string | undefined {
+  return rotation === 0 ? undefined : `rotate(${rotation} ${cx} ${cy})`;
+}
+
+/** Materializa 1 `package.shapes[]` (linha/figura/texto/retângulo/elipse) num componente de cena
+ * marcado com `packageShapeRole: true` -- espelha exatamente o mesmo espaço NATIVO->EXIBIDO que o
+ * Package/pinos já usam (`scaleX`/`scaleY`), e recupera a rotação (sempre cardeal, ver
+ * `WebviewComponentModel.rotation`) do `shape.transform` escrito por `derivePackageShape`. Retorna
+ * `undefined` pra kinds sem contraparte de cena (`polygon`/`path`/`svg`), fora de escopo desta
+ * feature -- o shape original nesses casos NUNCA é seedado como componente editável, mas sobrevive
+ * intocado no arquivo enquanto a sessão não tocar em autoria (`touchedPackageAuthoring`), e é
+ * perdido apenas se e quando o usuário efetivamente editar/salvar o Package por esta feature (mesma
+ * limitação documentada no plano -- fora de escopo, não uma perda silenciosa por omissão). */
+function materializePackageShape(
+  shape: PackageShape,
+  order: number,
+  scaleX: number,
+  scaleY: number,
+  origin: { x: number; y: number },
+  idFactory: () => string
+): WebviewComponentModel | undefined {
+  const rotation = parseShapeRotationTransform(shape.transform);
+  const baseProperties = { [PACKAGE_SHAPE_ORDER_PROPERTY_KEY]: order };
+  switch (shape.kind) {
+    case "rect": {
+      const nx = shape.x ?? 0;
+      const ny = shape.y ?? 0;
+      const nw = shape.w ?? 0;
+      const nh = shape.h ?? 0;
+      return {
+        id: idFactory(),
+        typeId: "graphics.rectangle",
+        label: "graphics.rectangle",
+        x: origin.x + nx * scaleX,
+        y: origin.y + ny * scaleY,
+        rotation,
+        pins: [],
+        packageShapeRole: true,
+        properties: {
+          ...baseProperties,
+          width: nw * scaleX,
+          height: nh * scaleY,
+          ...(shape.stroke ? { stroke: shape.stroke } : {}),
+          ...(shape.fill ? { fill: shape.fill } : {}),
+          ...(shape.strokeWidth !== undefined ? { strokeWidth: shape.strokeWidth } : {}),
+        },
+      };
+    }
+    case "ellipse": {
+      const rx = shape.rx ?? 0;
+      const ry = shape.ry ?? 0;
+      const ncx = shape.cx ?? 0;
+      const ncy = shape.cy ?? 0;
+      return {
+        id: idFactory(),
+        typeId: "graphics.ellipse",
+        label: "graphics.ellipse",
+        x: origin.x + (ncx - rx) * scaleX,
+        y: origin.y + (ncy - ry) * scaleY,
+        rotation,
+        pins: [],
+        packageShapeRole: true,
+        properties: {
+          ...baseProperties,
+          width: rx * 2 * scaleX,
+          height: ry * 2 * scaleY,
+          ...(shape.stroke ? { stroke: shape.stroke } : {}),
+          ...(shape.fill ? { fill: shape.fill } : {}),
+        },
+      };
+    }
+    case "line": {
+      const x1 = shape.x1 ?? 0;
+      const y1 = shape.y1 ?? 0;
+      const x2 = shape.x2 ?? 0;
+      const y2 = shape.y2 ?? 0;
+      const length = Math.max(4, Math.hypot(x2 - x1, y2 - y1) * scaleX);
+      const midXNative = (x1 + x2) / 2;
+      const midYNative = (y1 + y2) / 2;
+      const box = packageLineBoxSide(length);
+      const anchorX = origin.x + midXNative * scaleX;
+      const anchorY = origin.y + midYNative * scaleY;
+      return {
+        id: idFactory(),
+        typeId: "graphics.line",
+        label: "graphics.line",
+        x: anchorX - box / 2,
+        y: anchorY - box / 2,
+        rotation,
+        pins: [],
+        packageShapeRole: true,
+        properties: {
+          ...baseProperties,
+          length,
+          ...(shape.stroke ? { stroke: shape.stroke } : {}),
+        },
+      };
+    }
+    case "image": {
+      const nx = shape.x ?? 0;
+      const ny = shape.y ?? 0;
+      const nw = shape.w ?? 0;
+      const nh = shape.h ?? 0;
+      const href = shape.href ?? shape.value ?? "";
+      const dataUriMatch = /^data:([^;]+);base64,(.*)$/s.exec(href);
+      return {
+        id: idFactory(),
+        typeId: "graphics.image",
+        label: "graphics.image",
+        x: origin.x + nx * scaleX,
+        y: origin.y + ny * scaleY,
+        rotation,
+        pins: [],
+        packageShapeRole: true,
+        properties: {
+          ...baseProperties,
+          path: "",
+          width: nw * scaleX,
+          height: nh * scaleY,
+          ...(dataUriMatch ? { imageData: dataUriMatch[2]!, imageMime: dataUriMatch[1]! } : {}),
+        },
+      };
+    }
+    case "text": {
+      const text = shape.value ?? "";
+      const fontSize = shape.fontSize ?? 11;
+      const ncx = shape.x ?? 0;
+      const ncy = shape.y ?? 0;
+      const box = labelBoxSize(text, fontSize);
+      const anchorX = origin.x + ncx * scaleX;
+      const anchorY = origin.y + ncy * scaleY;
+      return {
+        id: idFactory(),
+        typeId: "graphics.text",
+        label: "graphics.text",
+        x: Math.round(anchorX - box.width / 2),
+        y: Math.round(anchorY - box.height / 2),
+        rotation,
+        pins: [],
+        packageShapeRole: true,
+        properties: {
+          ...baseProperties,
+          text,
+          fontSize,
+          ...(shape.color ? { color: shape.color } : {}),
+        },
+      };
+    }
+    default:
+      return undefined;
+  }
+}
+
+/** Inverso de `materializePackageShape` -- lê um componente `packageShapeRole` de volta pro espaço
+ * NATIVO (`inverseScaleX`/`inverseScaleY`, mesmo par usado pra pinos/Package, ver
+ * `compilePackageAuthoringComponents`) e produz o `PackageShape` equivalente. `pivotX`/`pivotY`
+ * (centro do elemento em espaço NATIVO) é sempre o pivô do `transform` de rotação -- mesmo ponto que
+ * o wrapper CSS/SVG genérico já usa pra girar QUALQUER componente da cena (nunca um pivô diferente
+ * escondido). Retorna `undefined` só se o componente não tiver dados suficientes (nunca deveria
+ * acontecer pra um componente seedado por esta mesma feature). */
+function derivePackageShape(
+  component: WebviewComponentModel,
+  inverseScaleX: number,
+  inverseScaleY: number,
+  packageComponent: WebviewComponentModel
+): PackageShape | undefined {
+  const rotation = component.rotation;
+  switch (component.typeId) {
+    case "graphics.rectangle": {
+      const width = typeof component.properties.width === "number" ? component.properties.width : 0;
+      const height = typeof component.properties.height === "number" ? component.properties.height : 0;
+      const nx = (component.x - packageComponent.x) * inverseScaleX;
+      const ny = (component.y - packageComponent.y) * inverseScaleY;
+      const nw = width * inverseScaleX;
+      const nh = height * inverseScaleY;
+      const pivotX = nx + nw / 2;
+      const pivotY = ny + nh / 2;
+      return {
+        kind: "rect",
+        x: nx,
+        y: ny,
+        w: nw,
+        h: nh,
+        stroke: typeof component.properties.stroke === "string" ? component.properties.stroke : undefined,
+        fill: typeof component.properties.fill === "string" ? component.properties.fill : undefined,
+        strokeWidth: typeof component.properties.strokeWidth === "number" ? component.properties.strokeWidth : undefined,
+        transform: shapeRotationTransform(rotation, pivotX, pivotY),
+      };
+    }
+    case "graphics.ellipse": {
+      const width = typeof component.properties.width === "number" ? component.properties.width : 0;
+      const height = typeof component.properties.height === "number" ? component.properties.height : 0;
+      const nx = (component.x - packageComponent.x) * inverseScaleX;
+      const ny = (component.y - packageComponent.y) * inverseScaleY;
+      const nw = width * inverseScaleX;
+      const nh = height * inverseScaleY;
+      const cx = nx + nw / 2;
+      const cy = ny + nh / 2;
+      return {
+        kind: "ellipse",
+        cx,
+        cy,
+        rx: nw / 2,
+        ry: nh / 2,
+        stroke: typeof component.properties.stroke === "string" ? component.properties.stroke : undefined,
+        fill: typeof component.properties.fill === "string" ? component.properties.fill : undefined,
+        transform: shapeRotationTransform(rotation, cx, cy),
+      };
+    }
+    case "graphics.line": {
+      const displayLength = typeof component.properties.length === "number" ? component.properties.length : 40;
+      const box = packageLineBoxSide(displayLength);
+      const centerX = (component.x + box / 2 - packageComponent.x) * inverseScaleX;
+      const centerY = (component.y + box / 2 - packageComponent.y) * inverseScaleY;
+      const halfLengthNative = (displayLength * inverseScaleX) / 2;
+      return {
+        kind: "line",
+        x1: centerX - halfLengthNative,
+        y1: centerY,
+        x2: centerX + halfLengthNative,
+        y2: centerY,
+        stroke: typeof component.properties.stroke === "string" ? component.properties.stroke : undefined,
+        transform: shapeRotationTransform(rotation, centerX, centerY),
+      };
+    }
+    case "graphics.image": {
+      const width = typeof component.properties.width === "number" ? component.properties.width : 0;
+      const height = typeof component.properties.height === "number" ? component.properties.height : 0;
+      const nx = (component.x - packageComponent.x) * inverseScaleX;
+      const ny = (component.y - packageComponent.y) * inverseScaleY;
+      const nw = width * inverseScaleX;
+      const nh = height * inverseScaleY;
+      const pivotX = nx + nw / 2;
+      const pivotY = ny + nh / 2;
+      const imageData = typeof component.properties.imageData === "string" ? component.properties.imageData : undefined;
+      const imageMime = typeof component.properties.imageMime === "string" ? component.properties.imageMime : "image/png";
+      return {
+        kind: "image",
+        x: nx,
+        y: ny,
+        w: nw,
+        h: nh,
+        href: imageData ? `data:${imageMime};base64,${imageData}` : undefined,
+        preserveAspectRatio: "none",
+        transform: shapeRotationTransform(rotation, pivotX, pivotY),
+      };
+    }
+    case "graphics.text": {
+      const text = typeof component.properties.text === "string" ? component.properties.text : "";
+      const fontSize = typeof component.properties.fontSize === "number" ? component.properties.fontSize : 11;
+      const box = labelBoxSize(text, fontSize);
+      const cx = (component.x + box.width / 2 - packageComponent.x) * inverseScaleX;
+      const cy = (component.y + box.height / 2 - packageComponent.y) * inverseScaleY;
+      return {
+        kind: "text",
+        x: cx,
+        y: cy,
+        value: text,
+        fontSize,
+        textAnchor: "middle",
+        dominantBaseline: "middle",
+        color: typeof component.properties.color === "string" ? component.properties.color : undefined,
+        transform: shapeRotationTransform(rotation, cx, cy),
+      };
+    }
+    default:
+      return undefined;
+  }
+}
+
 /** Todo componente de autoria de Package/ícone/rótulo-de-pino presente na cena -- usado tanto por
  * `compilePackageAuthoringComponents` (pra separar do circuito interno real) quanto por quem monta
  * a cena inicial (`openSubcircuitForEditingCommand`, pra saber se uma sessão "tocou" em autoria).
@@ -96,6 +401,7 @@ function labelBoxSize(text: string, fontSize: number): { width: number; height: 
 export function isPackageAuthoringComponent(component: WebviewComponentModel, pinComponentIds: ReadonlySet<string>): boolean {
   if (component.typeId === PACKAGE_TYPE_ID || component.typeId === PACKAGE_PIN_TYPE_ID) return true;
   if (component.typeId === PACKAGE_ICON_TYPE_ID && component.packageIconRole === true) return true;
+  if (component.packageShapeRole === true) return true;
   if (component.typeId === "graphics.text") {
     const linked = component.properties.linkedPinComponentId;
     if (typeof linked === "string" && linked && pinComponentIds.has(linked)) return true;
@@ -242,9 +548,27 @@ export function seedPackageAuthoringComponents(
     }
 
     const rawAngle = typeof pin.angle === "number" ? pin.angle : 0;
-    const rotation = nearestCardinalRotation(rawAngle);
-    if (((rawAngle % 360) + 360) % 360 !== rotation) {
-      warnings.push(`Pino "${pin.id}" tinha ângulo não-cardeal (${rawAngle}°) e foi ajustado para ${rotation}°.`);
+    const rawAngleNormalized = ((rawAngle % 360) + 360) % 360;
+    // `PackagePin.angle` (espaço do ARQUIVO) e `WebviewComponentModel.rotation` (espaço da CENA) são
+    // convenções DIFERENTES, não a mesma coisa com nome diferente: o lead real é
+    // `rad=(180-angle)*PI/180` (`packagePinVisualEnd`, componentSymbols.ts), mas o desenho canônico
+    // de `other.package_pin` aponta pra +X e é girado pelo wrapper CSS genérico (rotação padrão) --
+    // pra bater visualmente, `rotation` precisa ser `(180-angle) mod 360`, NUNCA `angle` direto (bug
+    // real, verificado numericamente: a identidade fazia todo pino de borda esquerda/direita, angle
+    // 0/180, desenhar o lead 180° invertido -- ESP32 GND/3V3/EN, todos angle:180, apontavam pra fora
+    // do corpo em vez de pra dentro). `fileCardinalAngle` (SEM a conversão) é o valor que
+    // `defaultLabelNativePosition` precisa logo abaixo -- seu switch espelha `packagePinLeadSvg`, que
+    // decide o lado do rótulo por `pin.angle` real, nunca pela rotação de cena.
+    const convertedAngle = (180 - rawAngleNormalized + 360) % 360;
+    const rotation = nearestCardinalRotation(convertedAngle);
+    const fileCardinalAngle = nearestCardinalRotation(rawAngleNormalized);
+    if (rawAngleNormalized % 90 !== 0) {
+      // Reporta o ângulo derivado do `rotation` REALMENTE gravado (não de `fileCardinalAngle`
+      // independente) -- nos 4 casos de empate exato (45/135/225/315°) o arredondamento de
+      // `Math.round` em lados opostos da reflexão `180-x` pode divergir, e a mensagem precisa
+      // sempre bater com o que foi de fato salvo.
+      const adjustedFileAngle = (180 - rotation + 360) % 360;
+      warnings.push(`Pino "${pin.id}" tinha ângulo não-cardeal (${rawAngle}°) e foi ajustado para ${adjustedFileAngle}°.`);
     }
     // Mesma conversão nativo->exibido do Package acima -- `pin.x/y` vêm no espaço NATIVO
     // (`packageDescriptor.width/height`), `length` idem (é o que `resolvePackageLayout` usa pra
@@ -289,7 +613,7 @@ export function seedPackageAuthoringComponents(
     const labelSpaceNative = typeof pin.labelSpace === "number" ? pin.labelSpace : undefined;
     const nativeLabel = hasCustomLabelPos
       ? { x: pin.labelX as number, y: pin.labelY as number, rotation: 0 as 0 | 90 | 270 }
-      : defaultLabelNativePosition(nativeAnchorX, nativeAnchorY, rotation, rawLength, labelSpaceNative, fontSize);
+      : defaultLabelNativePosition(nativeAnchorX, nativeAnchorY, fileCardinalAngle, rawLength, labelSpaceNative, fontSize);
     const labelAnchorX = origin.x + nativeLabel.x * scaleX;
     const labelAnchorY = origin.y + nativeLabel.y * scaleY;
     const labelBox = labelBoxSize(labelText, fontSize);
@@ -304,6 +628,16 @@ export function seedPackageAuthoringComponents(
       properties: { text: labelText, fontSize, color: "#1f2937", linkedPinComponentId: pinComponentId },
     });
   }
+
+  // Elementos decorativos extras (linha/figura/texto/retângulo/elipse) marcados com
+  // `packageShapeRole` -- `package.shapes[]` array order vira `__packageShapeOrder` (0,1,2...),
+  // único sinal de z-order que sobrevive (`PackageShape` não tem `id`/`zIndex`). Kinds sem
+  // contraparte de cena (`polygon`/`path`/`svg`) não são seedados (ver `materializePackageShape`).
+  const rawShapes = Array.isArray(packageDescriptor.shapes) ? packageDescriptor.shapes : [];
+  rawShapes.forEach((shape, index) => {
+    const shapeComponent = materializePackageShape(shape, index, scaleX, scaleY, origin, idFactory);
+    if (shapeComponent) components.push(shapeComponent);
+  });
 
   return { components, warnings };
 }
@@ -375,9 +709,10 @@ export function compilePackageAuthoringComponents(
   const packageComps = components.filter((c) => c.typeId === PACKAGE_TYPE_ID);
   const pinComps = components.filter((c) => c.typeId === PACKAGE_PIN_TYPE_ID);
   const iconComps = components.filter((c) => c.typeId === PACKAGE_ICON_TYPE_ID && c.packageIconRole === true);
+  const shapeComps = components.filter((c) => c.packageShapeRole === true && isPackageShapeEligibleTypeId(c.typeId));
   const remainingComponents = components.filter((c) => !isPackageAuthoringComponent(c, pinComponentIds));
 
-  const touchedPackageAuthoring = packageComps.length > 0 || pinComps.length > 0 || iconComps.length > 0;
+  const touchedPackageAuthoring = packageComps.length > 0 || pinComps.length > 0 || iconComps.length > 0 || shapeComps.length > 0;
   if (!touchedPackageAuthoring) {
     return { remainingComponents, touchedPackageAuthoring: false, hasPackage: false, errors, warnings };
   }
@@ -390,6 +725,9 @@ export function compilePackageAuthoringComponents(
   }
   if (packageComps.length === 0 && pinComps.length > 0) {
     errors.push(`${pinComps.length} pino(s) de Package encontrado(s) sem nenhum objeto Package na cena.`);
+  }
+  if (packageComps.length === 0 && shapeComps.length > 0) {
+    errors.push(`${shapeComps.length} elemento(s) do Package encontrado(s) sem nenhum objeto Package na cena.`);
   }
   if (errors.length > 0) {
     return { remainingComponents, touchedPackageAuthoring, hasPackage: packageComps.length > 0, errors, warnings };
@@ -495,7 +833,10 @@ export function compilePackageAuthoringComponents(
       id: pinId,
       x: (anchorX - packageComponent.x) * inverseScaleX,
       y: (anchorY - packageComponent.y) * inverseScaleY,
-      angle: pinComp.rotation,
+      // Inverso EXATO da conversão em seedPackageAuthoringComponents (`rotation=(180-angle)%360`) --
+      // `pinComp.rotation` já é garantidamente cardeal (`WebviewComponentModel.rotation: 0|90|180|270`),
+      // então não precisa de `nearestCardinalRotation` aqui, só a mesma reflexão.
+      angle: (180 - pinComp.rotation + 360) % 360,
       length: Math.max(1, displayLength * inverseScaleX),
       label,
     };
@@ -539,12 +880,27 @@ export function compilePackageAuthoringComponents(
       ? { kind: "color", value: packageComponent.properties.backgroundColor }
       : undefined;
 
+  // Elementos decorativos extras, na MESMA ordem de pintura escolhida pelo usuário ("Trazer pra
+  // frente"/"Enviar pra trás", `main.ts`) -- `__packageShapeOrder` é o único sinal de z-order que
+  // sobrevive (`PackageShape` não tem `id`/`zIndex`). Componentes sem essa propriedade (nunca
+  // deveria acontecer pra algo seedado por esta feature, mas não trava o save) vão pro fim, na
+  // ordem em que aparecem em `components`.
+  const shapes = [...shapeComps]
+    .sort((a, b) => {
+      const orderA = typeof a.properties[PACKAGE_SHAPE_ORDER_PROPERTY_KEY] === "number" ? (a.properties[PACKAGE_SHAPE_ORDER_PROPERTY_KEY] as number) : Number.MAX_SAFE_INTEGER;
+      const orderB = typeof b.properties[PACKAGE_SHAPE_ORDER_PROPERTY_KEY] === "number" ? (b.properties[PACKAGE_SHAPE_ORDER_PROPERTY_KEY] as number) : Number.MAX_SAFE_INTEGER;
+      return orderA - orderB;
+    })
+    .map((shapeComp) => derivePackageShape(shapeComp, inverseScaleX, inverseScaleY, packageComponent))
+    .filter((shape): shape is PackageShape => shape !== undefined);
+
   const packageDescriptor: PackageDescriptor = {
     width,
     height,
     ...(hasNativeScale ? { schematicWidth: displayWidth, schematicHeight: displayHeight } : {}),
     border,
     ...(background ? { background } : {}),
+    ...(shapes.length > 0 ? { shapes } : {}),
     pins,
   };
 

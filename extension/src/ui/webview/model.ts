@@ -101,6 +101,15 @@ export interface WebviewComponentModel {
    * salvar (`extension/src/catalog/subcircuitPackageAuthoring.ts`, `.spec/lasecsimul.spec`). Mesmo
    * estilo de campo "marcador de papel especial" que `subcircuitRef` já usa. */
   packageIconRole?: true;
+  /** Marca uma instância de `graphics.line`/`graphics.image`/`graphics.text`/`graphics.rectangle`/
+   * `graphics.ellipse` (dentro de uma sessão "Abrir Subcircuito") como um ELEMENTO DECORATIVO do
+   * Package sendo editado -- compilado pra `package.shapes[]` ao salvar, em vez de ir pro circuito
+   * interno real (`components[]`). Independente de `packageIconRole` (que é a ÚNICA Figura de fundo
+   * travada no tamanho do Package; um elemento com `packageShapeRole` é um extra qualquer -- linha,
+   * forma, texto livre, segunda imagem -- posicionado livremente sobre o Package). Campo SÓ DE
+   * SESSÃO, nunca serializado direto (a fonte de verdade persistida é `package.shapes[]`). Ver
+   * `subcircuitPackageAuthoring.ts`. */
+  packageShapeRole?: true;
 }
 
 export interface WebviewPoint {
@@ -503,6 +512,25 @@ export const SIMULIDE_PACKAGE_GRID_UNIT = 8;
  * do mesmo comportamento, ver histórico de cada call site), só a STRING do typeId é compartilhada
  * aqui em vez de repetida como literal em cada arquivo. */
 export const TUNNEL_TYPE_ID = "connectors.tunnel";
+
+/** typeIds elegíveis pra marcar como elemento decorativo do Package durante "Abrir Subcircuito"
+ * (`WebviewComponentModel.packageShapeRole: true`) -- cada um já é um componente NORMAL, visível na
+ * paleta geral (`graphics.*`, categoria "Graphical"), com contraparte direta em `PackageShape.kind`.
+ * `polygon`/`path`/`svg` (formatos de arquivo sem typeId de cena equivalente) ficam de fora -- sem
+ * precedente de autoria, fora de escopo. Compartilhado entre `subcircuitPackageAuthoring.ts` (host)
+ * e `main.ts` (Webview) -- mesmo motivo de `TUNNEL_TYPE_ID` acima, `model.ts` não tem dependência de
+ * Node. */
+export const PACKAGE_SHAPE_TYPE_IDS = ["graphics.line", "graphics.image", "graphics.text", "graphics.rectangle", "graphics.ellipse"] as const;
+export type PackageShapeTypeId = (typeof PACKAGE_SHAPE_TYPE_IDS)[number];
+
+/** Propriedade numérica interna (mesmo estilo `__ui_packageUnit`/`__simulideTunnelRotated` já usado
+ * nesta base) que guarda a ordem de pintura entre os elementos marcados com `packageShapeRole` --
+ * `PackageShape` não tem `id`/`zIndex` (ver mais abaixo), então a ordem do array `package.shapes[]`
+ * É o único sinal de z-order; a posição do componente em `state.components` sozinha não é confiável
+ * (fica intercalada com componentes do circuito interno). Mutada só pelos comandos "Trazer pra
+ * frente"/"Enviar pra trás" (`main.ts`), lida por `compilePackageAuthoringComponents`
+ * (`subcircuitPackageAuthoring.ts`). */
+export const PACKAGE_SHAPE_ORDER_PROPERTY_KEY = "__packageShapeOrder";
 
 /** typeId de `connectors.junction` -- mesmo princípio de `TUNNEL_TYPE_ID`, ponto elétrico sem
  * símbolo/rótulo visível (sempre `hidden: true`), tratado como exceção nos mesmos arquivos. */

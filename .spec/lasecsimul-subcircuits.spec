@@ -1204,3 +1204,128 @@ comportamento pré-existente pra packages sem foto continua idêntico). Sem GUI 
 ambiente pra confirmar visualmente que "Package"/"Package Pin" não aparecem mais na busca da paleta
 nem que o ESP32-WROOM-32 renderiza igual dentro/fora do editor após uma edição real -- recomenda-se
 verificação manual no VSCode real.
+
+**Nota (2026-07-15, mesmo dia, seção 21 abaixo)**: a seção 20 acima corrigiu 2 bugs reais, mas o
+usuário reportou que a divergência visual PERSISTIU (e piorou) mesmo depois -- os fixes acima eram
+necessários, mas não suficientes. A causa raiz de verdade (convenção de ângulo invertida) e a
+unificação completa do renderizador estão documentadas na seção 21.
+
+## 21. Causa raiz real da divergência editor↔esquemático + unificação do renderizador (2026-07-15)
+
+Auditoria completa do pipeline (edição visual → modelo do editor → serialização → compilação →
+registro → carregamento → renderização → save/reload), pedida explicitamente pelo usuário depois que
+a seção 20 não resolveu o problema relatado. Achados confirmados numericamente, não especulação:
+
+### 21.1 Causa raiz: convenção de ângulo de pino invertida entre autoria e renderização final
+
+`seedPackageAuthoringComponents`/`compilePackageAuthoringComponents` tratavam
+`WebviewComponentModel.rotation` (espaço da CENA) como IDÊNTICO a `PackagePin.angle` (espaço do
+ARQUIVO). São convenções DIFERENTES: o lead real de um pino colocado é computado por
+`packagePinVisualEnd` (`componentSymbols.ts`) via `rad=(180-angle)*PI/180`, mas a cena de autoria
+desenha o lead canônico apontando pra `+X` e confia no wrapper CSS/SVG genérico (`rotation` aplicado
+como rotação padrão) pra orientar. Verificado numericamente (script Node): as duas convenções
+COINCIDEM em angle 90/270, mas são 180° OPOSTAS em angle 0/180 -- ou seja, todo pino de borda
+esquerda/direita (a maioria dos pinos reais -- inclusive GND1/3V3/EN do ESP32-WROOM-32 e DevKitC,
+todos `angle:180`) desenhava o lead apontando pro lado ERRADO durante a autoria (pra fora do corpo em
+vez de pra dentro, ou vice-versa), enquanto o rótulo (calculado por uma fórmula separada,
+coincidentemente já correta) ficava do lado certo -- uma combinação pino-errado/rótulo-certo
+visualmente quebrada e confusa. Esta é, com alta confiança, a causa dominante do sintoma relatado.
+
+Corrigido: `rotation = (180 - angle + 360) % 360` na seed, e a conversão inversa exata no compile.
+`defaultLabelNativePosition` (decide o lado padrão do rótulo, com switch espelhando
+`packagePinLeadSvg`) precisa continuar recebendo o ângulo NO ESPAÇO DO ARQUIVO (não a `rotation` de
+cena, agora diferente) -- corrigido separadamente no call site. `labelRotation` (rotação literal do
+TEXTO do rótulo, CSS puro, sem a trigonometria `180-angle`) NÃO precisava de nenhuma correção --
+confirmado que os dois lados (escrita e leitura) já tratavam esse campo como valor literal.
+
+### 21.2 `sanitizePackage` descartava `pins[].labelRotation`
+
+Todo outro campo de rótulo (`labelX`/`labelY`/`labelFontSize`/`labelTextAnchor`/
+`labelDominantBaseline`) já passava por `packageSanitizers.ts`; `labelRotation` nunca era lido de
+volta, apesar de `compilePackageAuthoringComponents` sempre escrevê-lo. Uma rotação de rótulo
+customizada pelo usuário sobrevivia à ESCRITA mas era descartada silenciosamente na LEITURA -- tanto
+reabrindo o MESMO subcircuito pra editar de novo quanto renderizando como dispositivo colocado (os
+dois caminhos usam `sanitizePackage`). Corrigido com uma linha, mesmo padrão dos campos vizinhos.
+
+### 21.3 Cache de `package` em memória não era invalidado depois de salvar um subcircuito
+
+`PACKAGE_BY_TYPE_ID` (host E Webview, `componentSymbols.ts` -- duas instâncias de módulo separadas)
+só é atualizado por `registerPackage`, chamado de `setEffectiveCatalog`/`refreshUnifiedCatalogState`.
+Salvar um subcircuito editado (`writeSubcircuitEditingSessionBack`) grava o novo `package` em disco e
+reregistra no CORE (`registerAdhocSubcircuitDefinition`, só topologia elétrica -- o Core trata
+`package{}` como JSON opaco, nunca interpreta geometria, só valida `pins[].id` contra
+`interface[]`), mas NUNCA chamava `refreshUnifiedCatalogState`. Resultado: qualquer instância JÁ
+COLOCADA daquele typeId no esquemático continuava mostrando o `package` ANTIGO até um reload completo
+da janela -- muito provavelmente a causa literal do "a edição não persiste visualmente" relatado,
+independente de qualquer bug de renderização. Corrigido: `closeSubcircuitEditorCommand` (branch
+"Salvar") agora chama `refreshUnifiedCatalogState(false, ...)` logo após o save bem-sucedido -- mesmo
+padrão já usado em `extension.ts` logo depois de escrever um `.lssubcircuit` novo
+(`loadLibrariesInCore: false` evita reload do Core/diálogos de consentimento desnecessários, já
+tratados pelo save).
+
+### 21.4 Nova feature: autoria de elementos decorativos do Package (linha/figura/texto/retângulo/elipse)
+
+Até aqui, "Abrir Subcircuito" só permitia editar o corpo do Package, pinos e rótulos de pino --
+`package.shapes[]` já existia como conceito de ARQUIVO (renderizado por `packageShapeSvg` em
+dispositivos com `shapes[]`, ex: alguns built-ins), mas não tinha nenhuma autoria visual. Implementado
+do zero, a pedido do usuário:
+
+- `WebviewComponentModel.packageShapeRole?: true` (`model.ts`) -- mesmo estilo de marcador que
+  `packageIconRole` já usa, mas independente (um elemento decorativo qualquer, não a ÚNICA
+  Figura/ícone de fundo). `PACKAGE_SHAPE_TYPE_IDS` (`graphics.line`/`image`/`text`/`rectangle`/
+  `ellipse` -- os 5 kinds com contraparte de cena; `polygon`/`path`/`svg` ficam de fora, sem
+  precedente de autoria) e `PACKAGE_SHAPE_ORDER_PROPERTY_KEY` (`"__packageShapeOrder"`, único sinal
+  de z-order já que `PackageShape` não tem `id`/`zIndex`) também vivem em `model.ts` -- compartilhados
+  entre host (`subcircuitPackageAuthoring.ts`) e Webview (`main.ts`) sem duplicação de string.
+- `seedPackageAuthoringComponents`/`compilePackageAuthoringComponents` (`subcircuitPackageAuthoring.
+  ts`) materializam/compilam `package.shapes[]` de/para componentes de cena marcados, com a MESMA
+  conversão nativo↔exibido de pinos/Package. Rotação de cada elemento vira `transform="rotate(deg cx
+  cy)"` no `PackageShape` compilado (mesmo pivô -- centro do elemento -- que o wrapper CSS/SVG
+  genérico já usa pra girar QUALQUER componente), parseado de volta no seed via regex controlada
+  (formato sempre escrito pela própria feature, nunca um `transform` arbitrário externo).
+- Menu de contexto (`main.ts`, só dentro de "Abrir Subcircuito", só pros 5 typeIds elegíveis, nunca
+  pro ícone auto-gerenciado nem pro rótulo linkado de um pino): "Marcar/Desmarcar como elemento do
+  Package" (novo verbo IPC `requestSetPackageShapeRole`) e, só quando marcado, "Trazer para
+  frente"/"Enviar para trás" (reordena `__packageShapeOrder` via o verbo `requestUpdateProperty`
+  já existente -- nenhum verbo novo precisou ser criado pra isso).
+
+### 21.5 Unificação do renderizador: autoria e dispositivo colocado usam o MESMO pipeline
+
+Antes: a cena de autoria desenhava `other.package`/`other.package_pin` via o switch genérico
+`componentSymbolSvg` (linha+círculo simples, sem `pinMarker`, sem `leadColor` real), enquanto um
+dispositivo colocado usa `resolvePackageLayout`→`packageBodySvg`/`packagePinLeadSvg` -- dois
+renderizadores INDEPENDENTES, hand-sincronizados, exatamente o "duas interpretações do mesmo package"
+que o pedido original proíbe. Corrigido: `buildLivePackagePreview` (`componentSymbols.ts`, módulo
+compartilhado host/Webview) compila a cena ATUAL de autoria (Package + pinos + rótulos + elementos
+marcados) numa `PackageDescriptor` sintética -- SEMPRE em escala 1:1 (nunca aplica a conversão
+nativo/esquemático, só relevante na gravação em disco), nunca bloqueia (pino sem túnel ainda
+aparece), e é alimentada em `resolvePackageLayout`/`packageBodySvg` via a nova
+`livePackagePreviewSymbolSvg` -- o MESMO pipeline, chamado com os MESMOS parâmetros, que desenha um
+dispositivo colocado. `main.ts`'s `updateComponentElement` agora, só quando existe um `other.package`
+na cena: desenha o corpo consolidado (Package + todos os pinos/rótulos/formas de uma vez) no elemento
+`other.package`, e SUPRIME o conteúdo visível de cada `other.package_pin`/elemento marcado
+individualmente (o corpo consolidado já desenha tudo) -- cada um continua sendo seu próprio elemento
+DOM arrastável/selecionável (o overlay de seleção cinza é um `<rect>` independente do conteúdo do
+corpo, não afetado). Isso elimina a divergência pela RAIZ arquitetural, não por aparência: não existe
+mais um segundo código de desenho pra pino/rótulo/forma dentro da autoria, só um preview ao vivo do
+MESMO resultado final.
+
+### 21.6 Testes
+
+Cobertura pura (sem GUI, mas provando as invariantes numéricas): cross-check direto entre o lead
+computado na autoria e `packagePinVisualEnd` (exportada de `componentSymbols.ts`) pros 4 ângulos
+cardeais; round-trip `seed→compile` de `angle` exato; regressão com o arquivo REAL
+`esp32_wroom32.lssubcircuit` (GND1, `angle:180` real, confirma `rotation` corrigido de 180→0 e o
+vetor do lead batendo com `packagePinVisualEnd`); ciclo completo `compile→sanitize→seed` provando que
+`labelRotation` sobrevive; round-trip por kind de elemento decorativo (retângulo/elipse/linha/imagem/
+texto), reordenação (`__packageShapeOrder`), idempotência; `buildLivePackagePreview` alimentando
+`resolvePackageLayout`/`packageSymbolSvg` de fato (não só a estrutura de dados) produz um SVG válido
+usando o mesmo pipeline de um dispositivo colocado.
+
+**Sem GUI disponível neste ambiente** pra confirmar visualmente: (1) que os leads do ESP32
+DevKitC/WROOM agora apontam pro lado certo durante a autoria; (2) que uma instância já colocada
+atualiza sem reload depois de salvar; (3) que marcar/reordenar um elemento decorativo aparece
+corretamente dentro E fora do editor; (4) que arrastar pino/rótulo/forma e clicar/selecionar cada um
+continua funcionando com o corpo consolidado. Recomenda-se fortemente verificação manual completa no
+VSCode real (extensão reempacotada/reinstalada) antes de considerar a feature definitivamente
+fechada, conforme os critérios de aceitação do pedido original.

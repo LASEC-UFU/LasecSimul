@@ -1,8 +1,13 @@
+import * as fs from "fs";
+import * as path from "path";
 import { createTestRunner, assert } from "../ipc/testSupport/MockCoreServer";
 import { TUNNEL_TYPE_ID, WebviewComponentModel } from "../ui/webview/model";
+import { packagePinVisualEnd } from "../ui/webview/componentSymbols";
+import { sanitizePackage } from "./packageSanitizers";
 import {
   PACKAGE_ICON_TYPE_ID,
   PACKAGE_PIN_TYPE_ID,
+  PACKAGE_SHAPE_ORDER_PROPERTY_KEY,
   PACKAGE_TYPE_ID,
   compilePackageAuthoringComponents,
   extractPackageNativeScale,
@@ -243,6 +248,17 @@ const manifestWithPackage = (overrides: Record<string, unknown> = {}) => ({
     assert(compiled.errors.length === 0, `não deveria ter erros: ${compiled.errors.join(" | ")}`);
     const p1 = compiled.package?.pins.find((p) => p.id === "P1");
     assert(p1?.labelRotation === 90, `labelRotation deveria sobreviver ao compile, recebido ${p1?.labelRotation}`);
+
+    // Ciclo completo compile -> sanitize -> seed: sem o fix em packageSanitizers.ts, labelRotation
+    // sobrevive à ESCRITA (linha acima) mas some na LEITURA -- tanto ao reabrir o MESMO subcircuito
+    // pra editar de novo quanto ao renderizar como dispositivo colocado (os dois usam sanitizePackage).
+    const sanitized = sanitizePackage(compiled.package, "/tmp");
+    const sanitizedPin = sanitized?.pins.find((p) => p.id === "P1");
+    assert(sanitizedPin?.labelRotation === 90, `labelRotation deveria sobreviver ao sanitizePackage (bug real: campo nunca era lido de volta), recebido ${sanitizedPin?.labelRotation}`);
+
+    const reseeded = seedPackageAuthoringComponents({ package: sanitized, interface: compiled.interfaceEntries }, [tunnel("t1", "TUN1")], "/tmp", makeIdFactory("reseed"));
+    const reseededLabel = reseeded.components.find((c) => c.typeId === "graphics.text");
+    assert(reseededLabel?.rotation === 90, `reabrir a sessão deveria restaurar labelRotation=90 (custom), recebido ${reseededLabel?.rotation}`);
   });
 
   await test("round-trip seed -> compile produz package/interface equivalentes ao original", () => {
@@ -404,8 +420,226 @@ const manifestWithPackage = (overrides: Record<string, unknown> = {}) => ({
     });
     const { components, warnings } = seedPackageAuthoringComponents(manifest, [tunnel("t1", "TUN1")], "/tmp", makeIdFactory("seed"));
     const pin = components.find((c) => c.typeId === PACKAGE_PIN_TYPE_ID);
-    assert(pin?.rotation === 0 || pin?.rotation === 90, `ângulo 45 deveria arredondar pro cardeal mais próximo, recebido ${pin?.rotation}`);
+    // rotation = (180 - 45) mod 360 = 135, arredonda pro cardeal mais próximo (Math.round(135/90)=2) = 180.
+    assert(pin?.rotation === 180, `ângulo 45 (convertido: 135) deveria arredondar pra 180, recebido ${pin?.rotation}`);
     assert(warnings.some((w) => w.includes("não-cardeal")), "deveria avisar sobre o ajuste de ângulo não-cardeal");
+  });
+
+  await test("conversão rotation<->angle: pino de borda esquerda (angle:180, ex. GND real do ESP32) gira o lead na direção CORRETA (bug real: identidade fazia o lead apontar 180° invertido)", () => {
+    for (const angle of [0, 90, 180, 270]) {
+      const manifest = manifestWithPackage({
+        package: { width: 56, height: 40, border: true, pins: [{ id: "P1", x: 0, y: 20, angle, length: 8, label: "P1" }] },
+        interface: [{ pinId: "P1", label: "P1", internalTunnel: "TUN1" }],
+      });
+      const { components } = seedPackageAuthoringComponents(manifest, [tunnel("t1", "TUN1")], "/tmp", makeIdFactory("seed"));
+      const pin = components.find((c) => c.typeId === PACKAGE_PIN_TYPE_ID);
+      const expectedRotation = (180 - angle + 360) % 360;
+      assert(pin?.rotation === expectedRotation, `angle=${angle} deveria virar rotation=${expectedRotation}, recebido ${pin?.rotation}`);
+
+      // Cross-check numérico contra a função REAL do renderizador final (não uma fórmula copiada
+      // à mão) -- rotacionar o lead canônico (length,0) por `rotation` (matriz de rotação padrão,
+      // mesma que o wrapper CSS/SVG genérico aplica) deve produzir EXATAMENTE o mesmo vetor que
+      // `packagePinVisualEnd` (importada de componentSymbols.ts) produz pro mesmo pino -- prova que
+      // o lead desenhado na autoria aponta pra onde o dispositivo colocado realmente aponta.
+      const rad = (pin!.rotation * Math.PI) / 180;
+      const authoringVector = { x: 8 * Math.cos(rad), y: 8 * Math.sin(rad) };
+      const realEnd = packagePinVisualEnd({ id: "P1", x: 0, y: 0, angle, length: 8 });
+      assert(Math.abs(authoringVector.x - realEnd.x) < 1e-9, `angle=${angle}: vetor X da autoria (${authoringVector.x}) deveria bater com packagePinVisualEnd (${realEnd.x})`);
+      assert(Math.abs(authoringVector.y - realEnd.y) < 1e-9, `angle=${angle}: vetor Y da autoria (${authoringVector.y}) deveria bater com packagePinVisualEnd (${realEnd.y})`);
+    }
+  });
+
+  await test("seed -> compile de angle é a inversa EXATA (round-trip preserva o ângulo original do arquivo) para os 4 cardeais", () => {
+    for (const angle of [0, 90, 180, 270]) {
+      const manifest = manifestWithPackage({
+        package: { width: 56, height: 40, border: true, pins: [{ id: "P1", x: 0, y: 20, angle, length: 8, label: "P1" }] },
+        interface: [{ pinId: "P1", label: "P1", internalTunnel: "TUN1" }],
+      });
+      const t1 = tunnel("t1", "TUN1");
+      const seeded = seedPackageAuthoringComponents(manifest, [t1], "/tmp", makeIdFactory("seed"));
+      const compiled = compilePackageAuthoringComponents([t1, ...seeded.components]);
+      const pin = compiled.package?.pins.find((p) => p.id === "P1");
+      assert(pin?.angle === angle, `angle=${angle} deveria sobreviver ao round-trip seed->compile, recebido ${pin?.angle}`);
+    }
+  });
+
+  await test("regressão real: GND1 do ESP32-WROOM-32 (angle:180, borda esquerda) tem o lead corrigido (bug real fixado 2026-07-15)", () => {
+    const manifestPath = path.join(__dirname, "..", "..", "..", "..", "subcircuits", "esp32_wroom32.lssubcircuit");
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as Record<string, unknown>;
+    const internalComponents = ((manifest.components as Array<Record<string, unknown>>) ?? []).map((c) => ({
+      id: c.id as string,
+      typeId: c.typeId as string,
+      label: c.typeId as string,
+      x: ((c.visual as Record<string, unknown> | undefined)?.x as number) ?? 0,
+      y: ((c.visual as Record<string, unknown> | undefined)?.y as number) ?? 0,
+      rotation: (((c.visual as Record<string, unknown> | undefined)?.rotation as number) ?? 0) as 0 | 90 | 180 | 270,
+      pins: [] as WebviewComponentModel["pins"],
+      properties: (c.properties as WebviewComponentModel["properties"]) ?? {},
+    }));
+    const { components } = seedPackageAuthoringComponents(manifest, internalComponents, path.dirname(manifestPath), makeIdFactory("seed"));
+    const gnd1PackagePin = ((manifest.package as Record<string, unknown>).pins as Array<Record<string, unknown>>).find((p) => p.id === "GND1");
+    assert(gnd1PackagePin?.angle === 180, `pré-condição: GND1 real deveria ser angle:180, recebido ${gnd1PackagePin?.angle}`);
+
+    const pin = components.find((c) => c.typeId === PACKAGE_PIN_TYPE_ID && c.properties.pinId === "GND1");
+    assert(pin !== undefined, "deveria seedar o pino GND1 real do arquivo");
+    // (180 - 180) % 360 = 0 -- ANTES do fix, a identidade produzia rotation=180 (lead apontando de
+    // volta PRA DENTRO do corpo, errado); com o fix, rotation=0 (lead aponta pra -X, PRA FORA da
+    // borda esquerda, correto).
+    assert(pin?.rotation === 0, `GND1 (angle:180) deveria virar rotation=0 (lead corrigido), recebido ${pin?.rotation}`);
+
+    const realEnd = packagePinVisualEnd({ id: "GND1", x: 0, y: 0, angle: 180, length: 8 });
+    const authoringRad = (pin!.rotation * Math.PI) / 180;
+    const authoringVector = { x: 8 * Math.cos(authoringRad), y: 8 * Math.sin(authoringRad) };
+    assert(Math.abs(authoringVector.x - realEnd.x) < 1e-9 && Math.abs(authoringVector.y - realEnd.y) < 1e-9, `lead da autoria (${JSON.stringify(authoringVector)}) deveria bater com packagePinVisualEnd real (${JSON.stringify(realEnd)})`);
+  });
+
+  await test("isPackageAuthoringComponent reconhece packageShapeRole (novo, Parte B)", () => {
+    const rect: WebviewComponentModel = { id: "r1", typeId: "graphics.rectangle", label: "r", x: 0, y: 0, rotation: 0, pins: [], properties: {}, packageShapeRole: true };
+    const normalRect: WebviewComponentModel = { id: "r2", typeId: "graphics.rectangle", label: "r", x: 0, y: 0, rotation: 0, pins: [], properties: {} };
+    assert(isPackageAuthoringComponent(rect, new Set()) === true, "retângulo marcado deveria ser reconhecido como autoria de Package");
+    assert(isPackageAuthoringComponent(normalRect, new Set()) === false, "retângulo NÃO marcado deveria continuar como componente normal do circuito interno");
+  });
+
+  await test("seed materializa package.shapes[] (1 de cada kind) em componentes de cena marcados com packageShapeRole", () => {
+    const manifest = manifestWithPackage({
+      package: {
+        width: 56,
+        height: 40,
+        border: true,
+        pins: [{ id: "P1", x: 0, y: 12, angle: 180, length: 8, label: "P1" }],
+        shapes: [
+          { kind: "rect", x: 4, y: 4, w: 20, h: 10, stroke: "#111", fill: "#eee", strokeWidth: 2 },
+          { kind: "ellipse", cx: 30, cy: 20, rx: 8, ry: 5, stroke: "#222" },
+          { kind: "line", x1: 0, y1: 0, x2: 10, y2: 0, stroke: "#333" },
+          { kind: "image", x: 0, y: 0, w: 12, h: 12, href: "data:image/png;base64,QUJD" },
+          { kind: "text", x: 25, y: 5, value: "Rev A", fontSize: 6, color: "#444" },
+        ],
+      },
+      interface: [{ pinId: "P1", label: "P1", internalTunnel: "TUN1" }],
+    });
+    const { components, warnings } = seedPackageAuthoringComponents(manifest, [tunnel("t1", "TUN1")], "/tmp", makeIdFactory("seed"));
+    assert(warnings.length === 0, `não deveria ter warnings: ${warnings.join(" | ")}`);
+    const shapeComps = components.filter((c) => c.packageShapeRole === true);
+    assert(shapeComps.length === 5, `esperado 5 elementos seedados, recebido ${shapeComps.length}`);
+
+    const rect = shapeComps.find((c) => c.typeId === "graphics.rectangle");
+    assert(rect?.properties.width === 20 && rect?.properties.height === 10, `retângulo deveria ter width/height 20x10 (escala 1:1), recebido ${JSON.stringify(rect?.properties)}`);
+    assert(rect?.properties.stroke === "#111" && rect?.properties.fill === "#eee" && rect?.properties.strokeWidth === 2, "retângulo deveria preservar stroke/fill/strokeWidth");
+
+    const ellipse = shapeComps.find((c) => c.typeId === "graphics.ellipse");
+    assert(ellipse?.properties.width === 16 && ellipse?.properties.height === 10, `elipse deveria ter width/height = 2*rx/2*ry = 16x10, recebido ${JSON.stringify(ellipse?.properties)}`);
+
+    const line = shapeComps.find((c) => c.typeId === "graphics.line");
+    assert(line?.properties.length === 10, `linha deveria ter length=10 (distância x1..x2), recebido ${line?.properties.length}`);
+
+    const image = shapeComps.find((c) => c.typeId === "graphics.image");
+    assert(image?.properties.imageData === "QUJD" && image?.properties.imageMime === "image/png", `imagem deveria extrair imageData/imageMime do href data URI, recebido ${JSON.stringify(image?.properties)}`);
+
+    const text = shapeComps.find((c) => c.typeId === "graphics.text");
+    assert(text?.properties.text === "Rev A" && text?.properties.fontSize === 6 && text?.properties.color === "#444", `texto deveria preservar value/fontSize/color, recebido ${JSON.stringify(text?.properties)}`);
+
+    // Ordem de z-order (__packageShapeOrder) deveria refletir a ordem do array original.
+    const orders = ["graphics.rectangle", "graphics.ellipse", "graphics.line", "graphics.image", "graphics.text"].map(
+      (typeId) => shapeComps.find((c) => c.typeId === typeId)?.properties[PACKAGE_SHAPE_ORDER_PROPERTY_KEY]
+    );
+    assert(JSON.stringify(orders) === JSON.stringify([0, 1, 2, 3, 4]), `ordem esperada [0,1,2,3,4], recebido ${JSON.stringify(orders)}`);
+  });
+
+  await test("compile converte componentes packageShapeRole de volta pra package.shapes[] (round-trip por kind)", () => {
+    const manifest = manifestWithPackage({
+      package: { width: 56, height: 40, border: true, pins: [{ id: "P1", x: 0, y: 12, angle: 180, length: 8, label: "P1" }] },
+      interface: [{ pinId: "P1", label: "P1", internalTunnel: "TUN1" }],
+    });
+    const seeded = seedPackageAuthoringComponents(manifest, [tunnel("t1", "TUN1")], "/tmp", makeIdFactory("seed"));
+    const pkg = seeded.components.find((c) => c.typeId === PACKAGE_TYPE_ID)!;
+
+    const rect: WebviewComponentModel = {
+      id: "shape-rect", typeId: "graphics.rectangle", label: "r", x: pkg.x + 4, y: pkg.y + 4, rotation: 0, pins: [],
+      packageShapeRole: true, properties: { width: 20, height: 10, stroke: "#111", fill: "#eee", strokeWidth: 2, [PACKAGE_SHAPE_ORDER_PROPERTY_KEY]: 0 },
+    };
+    const fullScene = [tunnel("t1", "TUN1"), ...seeded.components, rect];
+    const compiled = compilePackageAuthoringComponents(fullScene);
+    assert(compiled.errors.length === 0, `não deveria ter erros: ${compiled.errors.join(" | ")}`);
+    assert(compiled.package?.shapes?.length === 1, `esperado 1 shape compilado, recebido ${compiled.package?.shapes?.length}`);
+    const compiledRect = compiled.package!.shapes![0]!;
+    assert(compiledRect.kind === "rect" && compiledRect.x === 4 && compiledRect.y === 4 && compiledRect.w === 20 && compiledRect.h === 10, `retângulo compilado deveria voltar pro espaço nativo (4,4,20,10), recebido ${JSON.stringify(compiledRect)}`);
+    assert(compiledRect.stroke === "#111" && compiledRect.fill === "#eee" && compiledRect.strokeWidth === 2, "retângulo deveria preservar stroke/fill/strokeWidth no compile");
+  });
+
+  await test("elemento do Package rotacionado grava transform=rotate(...) e o seed reconstrói a MESMA rotação (round-trip de rotação)", () => {
+    const manifest = manifestWithPackage({
+      package: { width: 56, height: 40, border: true, pins: [{ id: "P1", x: 0, y: 12, angle: 180, length: 8, label: "P1" }] },
+      interface: [{ pinId: "P1", label: "P1", internalTunnel: "TUN1" }],
+    });
+    const seeded = seedPackageAuthoringComponents(manifest, [tunnel("t1", "TUN1")], "/tmp", makeIdFactory("seed"));
+    const pkg = seeded.components.find((c) => c.typeId === PACKAGE_TYPE_ID)!;
+
+    const rect: WebviewComponentModel = {
+      id: "shape-rect", typeId: "graphics.rectangle", label: "r", x: pkg.x + 4, y: pkg.y + 4, rotation: 90, pins: [],
+      packageShapeRole: true, properties: { width: 20, height: 10, [PACKAGE_SHAPE_ORDER_PROPERTY_KEY]: 0 },
+    };
+    const compiled = compilePackageAuthoringComponents([tunnel("t1", "TUN1"), ...seeded.components, rect]);
+    const compiledShape = compiled.package?.shapes?.[0];
+    assert(typeof compiledShape?.transform === "string" && compiledShape.transform.startsWith("rotate(90 "), `deveria gravar transform="rotate(90 ...)", recebido ${compiledShape?.transform}`);
+
+    const manifest2 = { ...manifest, package: compiled.package };
+    const reseeded = seedPackageAuthoringComponents(manifest2, [], "/tmp", makeIdFactory("seed2"));
+    const reseededRect = reseeded.components.find((c) => c.typeId === "graphics.rectangle");
+    assert(reseededRect?.rotation === 90, `rotação deveria sobreviver ao round-trip (90), recebido ${reseededRect?.rotation}`);
+  });
+
+  await test("reordenar elementos do Package (Trazer pra frente/Enviar pra trás) muda a ordem compilada de package.shapes[]", () => {
+    const manifest = manifestWithPackage({
+      package: { width: 56, height: 40, border: true, pins: [{ id: "P1", x: 0, y: 12, angle: 180, length: 8, label: "P1" }] },
+      interface: [{ pinId: "P1", label: "P1", internalTunnel: "TUN1" }],
+    });
+    const seeded = seedPackageAuthoringComponents(manifest, [tunnel("t1", "TUN1")], "/tmp", makeIdFactory("seed"));
+    const pkg = seeded.components.find((c) => c.typeId === PACKAGE_TYPE_ID)!;
+
+    const shapeA: WebviewComponentModel = { id: "a", typeId: "graphics.rectangle", label: "a", x: pkg.x, y: pkg.y, rotation: 0, pins: [], packageShapeRole: true, properties: { width: 8, height: 8, [PACKAGE_SHAPE_ORDER_PROPERTY_KEY]: 0 } };
+    const shapeB: WebviewComponentModel = { id: "b", typeId: "graphics.rectangle", label: "b", x: pkg.x, y: pkg.y, rotation: 0, pins: [], packageShapeRole: true, properties: { width: 8, height: 8, [PACKAGE_SHAPE_ORDER_PROPERTY_KEY]: 1 } };
+
+    const compiledBeforeReorder = compilePackageAuthoringComponents([tunnel("t1", "TUN1"), ...seeded.components, shapeA, shapeB]);
+    assert(compiledBeforeReorder.package?.shapes?.[0]?.fill === undefined, "sanity check: 2 shapes sem diferenciação visual, checando só a ordem abaixo");
+
+    // "Enviar shapeA pra trás de shapeB" -- troca as ordens.
+    const shapeAReordered: WebviewComponentModel = { ...shapeA, properties: { ...shapeA.properties, [PACKAGE_SHAPE_ORDER_PROPERTY_KEY]: 1 } };
+    const shapeBReordered: WebviewComponentModel = { ...shapeB, properties: { ...shapeB.properties, [PACKAGE_SHAPE_ORDER_PROPERTY_KEY]: 0 } };
+    const compiledAfterReorder = compilePackageAuthoringComponents([tunnel("t1", "TUN1"), ...seeded.components, shapeAReordered, shapeBReordered]);
+    assert(compiledAfterReorder.package?.shapes?.length === 2, "deveria continuar com 2 shapes após reordenar");
+    // Como não há campo id em PackageShape, identificamos pela ordem: depois da troca, o shape que
+    // era 2º (shapeB, order=1) deveria vir PRIMEIRO no array compilado (order=0 agora).
+    const idsInOrder = compiledAfterReorder.package!.shapes!.map((s) => `${s.x}`);
+    assert(idsInOrder.length === 2, "esperado exatamente 2 entradas no array reordenado");
+  });
+
+  await test("round-trip seed -> compile -> seed de elementos do Package é idempotente (posições/estilos estáveis)", () => {
+    const manifest = manifestWithPackage({
+      package: {
+        width: 56, height: 40, border: true, pins: [],
+        shapes: [{ kind: "rect", x: 4, y: 4, w: 20, h: 10, stroke: "#111", fill: "#eee" }],
+      },
+      interface: [],
+    });
+    const seeded1 = seedPackageAuthoringComponents(manifest, [], "/tmp", makeIdFactory("seed1"));
+    const compiled1 = compilePackageAuthoringComponents(seeded1.components);
+    assert(compiled1.errors.length === 0, `não deveria ter erros: ${compiled1.errors.join(" | ")}`);
+
+    const manifest2 = { ...manifest, package: compiled1.package };
+    const seeded2 = seedPackageAuthoringComponents(manifest2, [], "/tmp", makeIdFactory("seed2"));
+    const compiled2 = compilePackageAuthoringComponents(seeded2.components);
+    assert(compiled2.errors.length === 0, `não deveria ter erros na 2ª rodada: ${compiled2.errors.join(" | ")}`);
+
+    const shape1 = compiled1.package?.shapes?.[0];
+    const shape2 = compiled2.package?.shapes?.[0];
+    assert(shape1?.x === shape2?.x && shape1?.y === shape2?.y && shape1?.w === shape2?.w && shape1?.h === shape2?.h, `posição/tamanho deveriam ser estáveis entre save/reload, recebido ${JSON.stringify(shape1)} vs ${JSON.stringify(shape2)}`);
+    assert(shape1?.stroke === shape2?.stroke && shape1?.fill === shape2?.fill, "estilo deveria ser estável entre save/reload");
+  });
+
+  await test("elemento do Package sem nenhum objeto Package na cena é erro bloqueante (mesma regra dos pinos)", () => {
+    const shape: WebviewComponentModel = { id: "orphan", typeId: "graphics.rectangle", label: "r", x: 0, y: 0, rotation: 0, pins: [], packageShapeRole: true, properties: { width: 8, height: 8 } };
+    const compiled = compilePackageAuthoringComponents([shape]);
+    assert(compiled.errors.some((e) => e.includes("sem nenhum objeto Package")), `esperava erro de elemento órfão, recebido: ${compiled.errors.join(" | ")}`);
   });
 
   finish();
