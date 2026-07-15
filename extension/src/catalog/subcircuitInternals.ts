@@ -5,6 +5,7 @@ import { state } from "../state";
 import { InternalComponentSnapshot } from "../ui/webview/messages";
 import { JUNCTION_TYPE_ID, TUNNEL_TYPE_ID } from "../ui/webview/model";
 import { loadUnifiedCatalog } from "./UnifiedCatalog";
+import { findRegisteredSourceById } from "./catalogCommands";
 
 interface VisualPosition {
   x: number;
@@ -62,7 +63,7 @@ function extractInternalComponents(json: Record<string, unknown>): InternalCompo
 export function resolveSourceFilePath(sourceId: string): string | undefined {
   if (!state.extensionContext) return undefined;
   const unifiedCatalog = loadUnifiedCatalog(state.extensionContext.extensionPath, currentLasecSimulLanguage());
-  const source = unifiedCatalog.registeredSources.find((value) => value.id === sourceId);
+  const source = findRegisteredSourceById(state.extensionContext.extensionPath, unifiedCatalog, sourceId);
   if (!source) {
     vscode.window.showWarningMessage("Item registrado nao encontrado no catalogo.");
     return undefined;

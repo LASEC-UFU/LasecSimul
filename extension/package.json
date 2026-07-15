@@ -202,6 +202,14 @@
           "default": "xtensa-esp32-elf-gdb",
           "description": "Caminho do GDB compatível com a CPU emulada pelo QEMU."
         },
+        "lasecsimul.network.namespace": {
+          "type": "integer",
+          "default": -1,
+          "minimum": -1,
+          "maximum": 255,
+          "scope": "window",
+          "markdownDescription": "Namespace IPv4 desta instância/aluno. `-1` seleciona automaticamente. De `0` a `255`, cada ESP32 recebe uma rede `10.<namespace>.<instância>.0/24` e normalmente o IP `10.<namespace>.<instância>.15`. Em thin clients, atribua um valor exclusivo a cada aluno quando IPs visualmente distintos forem necessários. Recarregue a janela após alterar."
+        },
         "lasecsimul.ui.showComponentIds": {
           "type": "boolean",
           "default": false,
@@ -281,7 +289,7 @@
     "watch": "tsc -p ./ -w",
     "watch:webview": "tsc -p ./tsconfig.webview.json -w",
     "pretest": "npm run compile && tsc -p ./tsconfig.test.json",
-    "test": "node out-test/test/project/ProjectSerializer.test.js && node out-test/src/ipc/CoreClient.test.js && node out-test/src/catalog/UnifiedCatalog.test.js && node out-test/src/catalog/registeredSources.test.js && node out-test/src/catalog/deviceUniqueness.test.js && node out-test/src/catalog/catalogMerge.test.js && node out-test/src/catalog/simulideGraphicalCatalog.test.js && node out-test/src/language.test.js && node out-test/src/ui/webview/paletteTree.test.js && node out-test/src/ui/webview/wireGeometry.test.js && node out-test/src/ui/webview/componentGeometry.test.js && node out-test/src/ui/webview/wireTopology.test.js && node out-test/src/ui/webview/topologyDocument.test.js && node out-test/src/ui/webview/subcircuitBoardMode.test.js && node out-test/src/ui/webview/valueFormatting.test.js && node out-test/src/ui/webview/componentSymbols.test.js && node out-test/src/ui/webview/batchProperties.test.js && node out-test/src/ui/webview/instrumentTrigger.test.js && node out-test/src/ui/webview/instrumentViewport.test.js && node out-test/src/catalog/simulideSceneTranslator.test.js && node out-test/src/trust/trustDecision.test.js && node out-test/src/catalog/subcircuitPackageAuthoring.test.js",
+    "test": "node out-test/test/project/ProjectSerializer.test.js && node out-test/src/ipc/CoreClient.test.js && node out-test/src/catalog/UnifiedCatalog.test.js && node out-test/src/catalog/registeredSources.test.js && node out-test/src/catalog/catalogCommands.test.js && node out-test/src/catalog/deviceUniqueness.test.js && node out-test/src/catalog/catalogMerge.test.js && node out-test/src/catalog/simulideGraphicalCatalog.test.js && node out-test/src/language.test.js && node out-test/src/ui/webview/paletteTree.test.js && node out-test/src/ui/webview/wireGeometry.test.js && node out-test/src/ui/webview/componentGeometry.test.js && node out-test/src/ui/webview/wireTopology.test.js && node out-test/src/ui/webview/topologyDocument.test.js && node out-test/src/ui/webview/subcircuitBoardMode.test.js && node out-test/src/ui/webview/valueFormatting.test.js && node out-test/src/ui/webview/componentSymbols.test.js && node out-test/src/ui/webview/batchProperties.test.js && node out-test/src/ui/webview/instrumentTrigger.test.js && node out-test/src/ui/webview/instrumentViewport.test.js && node out-test/src/catalog/simulideSceneTranslator.test.js && node out-test/src/trust/trustDecision.test.js && node out-test/src/catalog/subcircuitPackageAuthoring.test.js",
     "test:e2e": "npm run compile && node test/e2e/run-webview-e2e.cjs",
     "test:e2e:update": "npm run compile && set UPDATE_SNAPSHOTS=1&& node test/e2e/run-webview-e2e.cjs"
   },

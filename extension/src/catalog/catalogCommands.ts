@@ -5,7 +5,7 @@ import { normalizeAbsolutePath, readJsonFile } from "../pathUtils";
 import { state } from "../state";
 import { WebviewComponentCatalogEntry } from "../ui/webview/model";
 import { mergePropertySchemas } from "./catalogMerge";
-import { loadUnifiedCatalog, RegisteredSource, saveRegisteredSources } from "./UnifiedCatalog";
+import { LoadedUnifiedCatalog, loadUnifiedCatalog, RegisteredSource, saveRegisteredSources } from "./UnifiedCatalog";
 import {
   inferLibraryPathForDevice,
   sanitizeFolderPathSegments,
@@ -136,6 +136,19 @@ function expandDeviceLibraries(extensionPath: string, deviceLibraries: readonly 
     }
   }
   return sources;
+}
+
+/** Acha UM `RegisteredSource` por `id`, olhando tanto `unifiedCatalog.registeredSources[]`
+ * (registros manuais/avulsos) quanto os expandidos de `deviceLibraries[]` (`expandDeviceLibraries`,
+ * mesma lógica de `refreshUnifiedCatalogState`) -- pesquisar só `registeredSources[]` direto (bug
+ * real corrigido aqui) nunca encontra um `sourceId` de qualquer dispositivo/subcircuito vindo de
+ * `deviceLibraries[]` (ESP32 DevKitC/WROOM, portas lógicas, sensores, etc. -- a imensa maioria dos
+ * itens desde a unificação de `registeredSources[]`, ver memória do projeto), quebrando "Abrir
+ * Subcircuito" e "Remover da paleta" pra eles com "Item registrado não encontrado no catálogo"
+ * mesmo com o item plenamente resolvido e funcionando na paleta. */
+export function findRegisteredSourceById(extensionPath: string, unifiedCatalog: LoadedUnifiedCatalog, sourceId: string): RegisteredSource | undefined {
+  const expanded = expandDeviceLibraries(extensionPath, unifiedCatalog.deviceLibraries);
+  return [...expanded, ...unifiedCatalog.registeredSources].find((source) => source.id === sourceId);
 }
 
 export async function refreshUnifiedCatalogState(
@@ -304,7 +317,7 @@ export async function removeRegisteredCatalogItemCommand(
   }
 
   const unifiedCatalog = loadUnifiedCatalog(state.extensionContext.extensionPath, currentLasecSimulLanguage());
-  const source = unifiedCatalog.registeredSources.find((value) => value.id === sourceId);
+  const source = findRegisteredSourceById(state.extensionContext.extensionPath, unifiedCatalog, sourceId);
   if (!source) {
     vscode.window.showWarningMessage("Item registrado não encontrado no catálogo.");
     return;
