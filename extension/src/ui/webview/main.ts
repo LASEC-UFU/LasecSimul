@@ -842,11 +842,18 @@ function hideContextMenu(): void {
 window.addEventListener("click", () => hideContextMenu());
 window.addEventListener("blur", () => hideContextMenu());
 
-/** Overlay de Modo Placa no circuito PRINCIPAL -- componentes "graphical" expostos de uma instância com
- * `properties.boardModeEnabled === true` são desenhados sobre a foto do package, na posição
- * `boardVisual`, e ficam clicáveis durante a simulação (ver `subpackage.cpp::setBoardMode()` real).
- * Cache por componentId OUTER -- buscado sob demanda (`ensureBoardOverlayData`) só quando Modo
- * Placa está ligado pra aquela instância, nunca pra todo subcircuito do projeto. */
+/** Overlay de Modo Placa no circuito PRINCIPAL -- todo componente "graphical" marcado como exposto no
+ * Símbolo (`exposedComponents[]`, ver seção 22 do `.spec` de subcircuitos) é desenhado sobre a foto
+ * do package de QUALQUER instância de subcircuito colocada, na posição salva, e fica clicável durante
+ * a simulação (ver `subpackage.cpp::setBoardMode()` real). Cache por componentId OUTER -- buscado sob
+ * demanda (`ensureBoardOverlayData`) uma vez por instância `subcircuit-file` visível.
+ *
+ * **Correção 2026-07-16**: existia um gate extra `properties.boardModeEnabled === true` (Mecanismo
+ * A/B distintos, ver `.spec/lasecsimul.spec` seção 26) que nunca foi de fato alcançável pela UI --
+ * nenhum checkbox/propriedade/menu jamais setava esse campo, então o overlay nunca aparecia em
+ * NENHUMA instância colocada de NENHUM subcircuito, apesar dos dados serem buscados normalmente.
+ * `renderBoardOverlaysFor` já retorna vazio sozinho quando não há nada exposto/gráfico -- o gate era
+ * redundante além de inalcançável, removido por inteiro. */
 const boardOverlayDataByComponentId = new Map<string, InternalComponentSnapshot[]>();
 
 function ensureBoardOverlayData(component: WebviewComponentModel): void {
@@ -2335,11 +2342,9 @@ function render(): void {
 
   const visibleComponents: WebviewComponentModel[] = [];
   const subcircuitFileComponents: WebviewComponentModel[] = [];
-  const boardModeComponents: WebviewComponentModel[] = [];
   for (const component of activeSceneComponents()) {
     if (component.hidden || component.hiddenByUser) continue;
     visibleComponents.push(component);
-    if (component.properties.boardModeEnabled) boardModeComponents.push(component);
     if (catalogEntryFor(component.typeId)?.registeredSourceKind === "subcircuit-file") subcircuitFileComponents.push(component);
   }
 
@@ -2368,9 +2373,6 @@ function render(): void {
 
   for (const component of subcircuitFileComponents) {
     ensureBoardOverlayData(component);
-  }
-
-  for (const component of boardModeComponents) {
     for (const overlayEl of renderBoardOverlaysFor(component)) canvasContent.appendChild(overlayEl);
   }
 
