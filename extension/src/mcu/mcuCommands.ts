@@ -439,20 +439,22 @@ export async function updateBoardOverlayVisualCommand(
     return;
   }
 
-  // Escreve nos MESMOS campos planos que `subcircuitBoardMode.ts::captureBoardTransforms` grava ao
-  // sair do Modo Placa dentro da edição do subcircuito (`boardX`/`boardY`/`boardRotation`/
-  // `boardFlipH`/`boardFlipV`, mesmo shape de `WebviewComponentModel`) -- nunca um campo `boardVisual`
-  // aninhado à parte, que ficava permanentemente dessincronizado da posição real (bug corrigido,
-  // ver `subcircuitInternals.ts::boardVisualFromFlatFields`). Preserva rotação/espelhamento já
-  // salvos (idem ao comportamento anterior via `previousBoardVisual`), só x/y mudam aqui -- este
-  // comando só cobre arrasto no overlay do circuito principal, nunca rotação/espelhamento.
-  if (Array.isArray(json.components)) {
-    json.components = json.components.map((value) => {
-      if (typeof value !== "object" || value === null) return value;
-      const component = value as Record<string, unknown>;
-      if (component.id !== innerComponentId) return component;
-      return { ...component, boardX: x, boardY: y };
-    });
+  // Escreve em `exposedComponents[]` (schemaVersion 3, `catalog/subcircuitDocument.ts`) -- só x/y
+  // mudam aqui (este comando só cobre arrasto no overlay do circuito principal, nunca rotação/
+  // espelhamento/escala, ajustáveis dentro de "Abrir Subcircuito", Modo Símbolo). Preserva
+  // rotação/espelhamento/escala/camada já salvos, cria a entrada com os padrões de sempre só se
+  // ainda não existir (nunca deveria acontecer -- só se expõe algo que já tinha entrada -- mas
+  // nunca quebra o arrasto se acontecer).
+  if (Array.isArray(json.exposedComponents)) {
+    const existing = json.exposedComponents.find(
+      (entry): entry is Record<string, unknown> => typeof entry === "object" && entry !== null && (entry as Record<string, unknown>).componentId === innerComponentId
+    );
+    const updatedEntry = { rotation: 0, flipH: false, flipV: false, scale: 1, layer: 0, ...existing, componentId: innerComponentId, x, y };
+    json.exposedComponents = existing
+      ? json.exposedComponents.map((entry) => (entry === existing ? updatedEntry : entry))
+      : [...json.exposedComponents, updatedEntry];
+  } else {
+    json.exposedComponents = [{ componentId: innerComponentId, x, y, rotation: 0, flipH: false, flipV: false, scale: 1, layer: 0 }];
   }
 
   try {

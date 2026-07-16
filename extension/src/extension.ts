@@ -991,21 +991,6 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       syncSchematicPanel();
       return;
     }
-    case "requestSetPackageShapeRole": {
-      state.schematicState = {
-        ...state.schematicState,
-        components: state.schematicState.components.map((component) => {
-          if (component.id !== message.componentId) return component;
-          if (!message.value) {
-            const { packageShapeRole: _packageShapeRole, ...rest } = component;
-            return rest;
-          }
-          return { ...component, packageShapeRole: true };
-        }),
-      };
-      syncSchematicPanel();
-      return;
-    }
     case "requestRenameComponent": {
       const updated = updateElement(state.schematicState, message.componentId, { label: message.label });
       if (!updated.ok) return;

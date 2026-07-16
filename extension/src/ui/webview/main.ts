@@ -1,6 +1,6 @@
 import { WEBVIEW_MESSAGE_VERSION, AnalyzerVectorHistory, ComponentReadoutValue, HostToWebviewMessage, InternalComponentSnapshot, SimulationStatus, WebviewToHostMessage } from "./messages.js";
-import { CanonicalEndpoint, CanonicalTopologyDocument, InteractionKindEntry, McuSerialPortEntry, PACKAGE_SHAPE_ORDER_PROPERTY_KEY, PACKAGE_SHAPE_TYPE_IDS, PropertySchemaEntry, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, ViewSpecInteraction, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, endpointId, endpointPinId, nodeEndpoint, portEndpoint, remapEndpoint } from "./model.js";
-import { ComponentBox, PIN_RADIUS, buildLivePackagePreview, componentBox, componentLocalOrigin, componentSymbolSvg, dialKnobSvg, hasRealPinPosition, isLivePackageAuthoringVisual, livePackagePreviewSymbolSvg, missingSubcircuitPlaceholderSvg, packageSymbolSvg, pinLocalPosition, registerPackage } from "./componentSymbols.js";
+import { CanonicalEndpoint, CanonicalTopologyDocument, InteractionKindEntry, McuSerialPortEntry, PropertySchemaEntry, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, ViewSpecInteraction, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, endpointId, endpointPinId, nodeEndpoint, portEndpoint, remapEndpoint } from "./model.js";
+import { ComponentBox, PIN_RADIUS, componentBox, componentLocalOrigin, componentSymbolSvg, dialKnobSvg, hasRealPinPosition, livePackagePreviewSymbolSvg, missingSubcircuitPlaceholderSvg, packageSymbolSvg, pinLocalPosition, registerPackage } from "./componentSymbols.js";
 import { svgLocalTransform, transformLocalPoint, transformedLocalBounds } from "./componentGeometry.js";
 import { detectChannelTrigger, digitalStepPath, findTriggerAnchorIndex, triggerAlignedWindowEndNs, visibleSampleWindowByTime } from "./instrumentTrigger.js";
 import { analogSampleHoldPath, clampInstrumentWindow, decodeInstrumentState, encodeInstrumentState, panInstrumentTime, zoomInstrumentTimeAt } from "./instrumentViewport.js";
@@ -25,7 +25,6 @@ import {
 import { formatEngineeringValue, defaultSiPrefixFactor, SI_PREFIXES } from "./valueFormatting.js";
 import { isJunctionVisible, movableTopologyNodeIds, endpointScenePosition as resolveEndpointScenePosition } from "./wireTopology.js";
 import { WireSpatialIndex } from "./wireSpatialIndex.js";
-import { applyBoardTransforms, applyExposedSelection, captureBoardTransforms, captureCircuitTransforms, ComponentTransform, isBoardModeVisible as isBoardModeVisibleShared, restoreCircuitTransforms } from "./subcircuitBoardMode.js";
 import { BatchPropertyPatch, PropertyField, PropertyFieldKind, SharedPropertyField, computeGenericInstanceFields, computeSharedPropertyFields, planBatchPropertyChange } from "./batchProperties.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -442,14 +441,12 @@ let selectedTextLabel: { componentId: string; kind: ExternalLabelKind } | undefi
 let placingTypeId: string | null = null;
 let placementGhostEl: HTMLElement | null = null;
 
-let subcircuitBoardMode = false;
-
 /** Refatoração Subcircuito/Símbolo/Ícone: qual cena o motor genérico (seleção/hit-test/arrastar/
  * rotacionar/painel de propriedades/copiar-colar/apagar/undo-redo/z-order/adicionar-da-paleta) está
- * editando AGORA. Mesmo precedente de `subcircuitBoardMode` -- puramente estado de UI em memória da
- * Webview, nunca sincronizado com o host, sempre resetado pra `"circuit"` fora de uma sessão de
- * "Abrir Subcircuito". Trocar o modo NUNCA salva nem recarrega o documento (só troca qual array o
- * motor genérico enxerga). */
+ * editando AGORA -- puramente estado de UI em memória da Webview, nunca sincronizado com o host,
+ * sempre resetado pra `"circuit"` fora de uma sessão de "Abrir Subcircuito". Trocar o modo NUNCA
+ * salva nem recarrega o documento (só troca qual array o motor genérico enxerga, ver
+ * `activeSceneComponents()`). */
 type SubcircuitEditorMode = "circuit" | "symbol" | "icon";
 let subcircuitEditorMode: SubcircuitEditorMode = "circuit";
 
@@ -597,120 +594,12 @@ function toggleExposedComponentCommand(componentId: string): void {
   render();
 }
 
-const circuitTransformByComponentId = new Map<string, ComponentTransform>();
-
-function isBoardModeVisible(component: WebviewComponentModel): boolean {
-  return isBoardModeVisibleShared(component, (typeId) => catalogEntryFor(typeId)?.graphical === true);
-}
-
-/** Qual variante de `PackageDescriptor` usar pra desenhar `component` AGORA -- `"board"` só quando
- * o Modo Placa real está ativo (dentro de "Abrir Subcircuito") E o typeId declarou uma aparência
- * própria pra ele (`catalogEntry.boardPackage`, ver model.ts). Sem isto, cai em `undefined`
- * (esquemático normal, comportamento de sempre) -- inclui o caso "Modo Placa ligado mas este typeId
- * não tem `boardPackage`", que continua reusando a MESMA aparência do esquemático (compatibilidade
- * com typeIds ainda não portados, ver `.spec` seção 27). Não precisa checar `isBoardModeVisible`
- * aqui: quem chama isto só itera componentes JÁ filtrados por ela (ver `render()`). Usado tanto pelo
- * Modo Placa de verdade (`updateComponentElement`) quanto pelo overlay da instância no circuito
+/** Qual variante de `PackageDescriptor` usar pra desenhar `component` AGORA -- `"board"` só quando o
+ * typeId declarou uma aparência própria pro Modo Placa (`catalogEntry.boardPackage`, ver model.ts).
+ * Sem isto, cai em `undefined` (esquemático normal). Usado pelo overlay da instância no circuito
  * principal (`renderBoardOverlaysFor`, que está SEMPRE em contexto de Modo Placa por definição). */
 function boardPackageVariantFor(typeId: string): "board" | undefined {
   return catalogEntryFor(typeId)?.boardPackage ? "board" : undefined;
-}
-
-function syncBoardVisualFromLiveComponents(): void {
-  if (!subcircuitBoardMode) return;
-  captureBoardTransforms(state.components, isBoardModeVisible);
-}
-
-function projectCircuitTransformsForHost(): WebviewProjectState {
-  if (!subcircuitBoardMode) return state;
-  syncBoardVisualFromLiveComponents();
-  const projected = structuredClone(state);
-  restoreCircuitTransforms(projected.components, circuitTransformByComponentId);
-  return projected;
-}
-
-function setSubcircuitBoardMode(enabled: boolean): void {
-  if (!state.subcircuitEditingContext || enabled === subcircuitBoardMode) return;
-  cancelActiveTool();
-  clearSelection();
-  if (enabled) {
-    circuitTransformByComponentId.clear();
-    for (const [id, transform] of captureCircuitTransforms(state.components)) circuitTransformByComponentId.set(id, transform);
-    applyBoardTransforms(state.components, isBoardModeVisible);
-    subcircuitBoardMode = true;
-  } else {
-    syncBoardVisualFromLiveComponents();
-    restoreCircuitTransforms(state.components, circuitTransformByComponentId);
-    subcircuitBoardMode = false;
-    circuitTransformByComponentId.clear();
-    persistState();
-  }
-  render();
-}
-
-function restoreBoardViewAfterHostSync(): void {
-  if (!subcircuitBoardMode) return;
-  if (!state.subcircuitEditingContext) {
-    subcircuitBoardMode = false;
-    circuitTransformByComponentId.clear();
-    return;
-  }
-  circuitTransformByComponentId.clear();
-  for (const [id, transform] of captureCircuitTransforms(state.components)) circuitTransformByComponentId.set(id, transform);
-  applyBoardTransforms(state.components, isBoardModeVisible);
-}
-
-function openExposedComponentsDialog(): void {
-  if (!state.subcircuitEditingContext) return;
-  const dialog = document.createElement("dialog");
-  dialog.className = "exposed-components-dialog";
-  const form = document.createElement("form");
-  form.method = "dialog";
-  form.className = "exposed-components-form";
-  const title = document.createElement("h2");
-  title.textContent = t("exposedComponentsDialogTitle");
-  form.appendChild(title);
-  const list = document.createElement("div");
-  list.className = "exposed-components-list";
-  const choices = new Map<string, HTMLInputElement>();
-  for (const component of state.components.filter((entry) => !entry.hidden && entry.typeId !== "other.package" && !entry.packageIconRole)) {
-    const row = document.createElement("label");
-    row.className = "exposed-components-row";
-    const input = document.createElement("input");
-    input.type = "checkbox";
-    input.checked = component.exposed === true;
-    choices.set(component.id, input);
-    const text = document.createElement("span");
-    text.textContent = `${component.label} (${component.id})${catalogEntryFor(component.typeId)?.graphical === true ? "" : ` ${t("notGraphicalHint")}`}`;
-    row.append(input, text);
-    list.appendChild(row);
-  }
-  form.appendChild(list);
-  const actions = document.createElement("div");
-  actions.className = "exposed-components-actions";
-  const selectAll = document.createElement("button");
-  selectAll.type = "button"; selectAll.textContent = t("exposedComponentsSelectAll");
-  selectAll.onclick = () => choices.forEach((input) => { input.checked = true; });
-  const clearAll = document.createElement("button");
-  clearAll.type = "button"; clearAll.textContent = t("exposedComponentsClearAll");
-  clearAll.onclick = () => choices.forEach((input) => { input.checked = false; });
-  const cancel = document.createElement("button");
-  cancel.type = "button"; cancel.textContent = t("exposedComponentsCancel"); cancel.onclick = () => dialog.close("cancel");
-  const confirm = document.createElement("button");
-  confirm.type = "submit"; confirm.value = "confirm"; confirm.textContent = t("exposedComponentsConfirm");
-  actions.append(selectAll, clearAll, cancel, confirm);
-  form.appendChild(actions);
-  dialog.appendChild(form);
-  dialog.addEventListener("close", () => {
-    if (dialog.returnValue === "confirm") {
-      applyExposedSelection(state.components, new Set([...choices].filter(([, input]) => input.checked).map(([id]) => id)));
-      persistState();
-      render();
-    }
-    dialog.remove();
-  });
-  document.body.appendChild(dialog);
-  dialog.showModal();
 }
 
 const propertyDialog = document.createElement("dialog");
@@ -1153,11 +1042,9 @@ function redo(): void {
 // ────────────────────────────────────────────────────────────────────────────────────────────────
 
 function persistState(): void {
-  syncBoardVisualFromLiveComponents();
   recordUndoSnapshotIfChanged();
-  const persisted = projectCircuitTransformsForHost();
-  vscode?.setState(persisted);
-  const outbound: WebviewToHostMessage = { version: WEBVIEW_MESSAGE_VERSION, type: "projectChanged", project: persisted };
+  vscode?.setState(state);
+  const outbound: WebviewToHostMessage = { version: WEBVIEW_MESSAGE_VERSION, type: "projectChanged", project: state };
   vscode?.postMessage(outbound);
 }
 
@@ -1187,17 +1074,6 @@ function isTextLabelSelected(componentId: string, kind: ExternalLabelKind): bool
 
 function getSelectedComponents(): WebviewComponentModel[] {
   return activeSceneComponents().filter((component) => state.selectedComponentIds.includes(component.id));
-}
-
-function dragSelectionWithLinkedPinLabels(): WebviewComponentModel[] {
-  const selected = getSelectedComponents();
-  const byId = new Map(selected.map((component) => [component.id, component]));
-  for (const component of selected) {
-    if (component.typeId !== "other.package_pin") continue;
-    const linkedLabel = state.components.find((candidate) => candidate.typeId === "graphics.text" && candidate.properties.linkedPinComponentId === component.id);
-    if (linkedLabel && !byId.has(linkedLabel.id)) byId.set(linkedLabel.id, linkedLabel);
-  }
-  return [...byId.values()];
 }
 
 /** Primeiro componente selecionado — usado por operações que só fazem sentido pra UM (atalho `r` sem
@@ -1886,29 +1762,7 @@ function installCanvasEventHandlers(canvas: HTMLDivElement, canvasContent: HTMLD
     clearSelection();
     render();
     const history = activeUndoHistory();
-    // "Modo Placa"/"Selecionar Componentes Expostos" também precisam ser alcançáveis do fundo
-    // vazio -- antes só apareciam no menu de um componente específico já existente (bug real de
-    // descoberta: numa folha de subcircuito recém-criada, sem nenhum componente ainda, não havia
-    // NENHUM jeito de entrar em Modo Placa). Mesmas duas entradas, mesmo comportamento.
-    // Detecta duplicata ANTES de montar o menu -- item some (não fica só desabilitado) quando a
-    // cena já está correta, pra não poluir o menu de todo subcircuito sem problema nenhum.
-    const hasPackageDuplicate = (() => {
-      if (!state.subcircuitEditingContext) return false;
-      const packageCount = state.components.filter((c) => c.typeId === "other.package").length;
-      if (packageCount > 1) return true;
-      const pinIds = state.components.filter((c) => c.typeId === "other.package_pin").map((c) => (typeof c.properties.pinId === "string" && c.properties.pinId.trim() ? c.properties.pinId.trim() : c.id));
-      return new Set(pinIds).size !== pinIds.length;
-    })();
-    const internalAuthoringItems: ContextMenuItem[] = state.subcircuitEditingContext
-      ? [
-          { label: t("boardMode"), checked: subcircuitBoardMode, onClick: () => setSubcircuitBoardMode(!subcircuitBoardMode) },
-          { label: t("selectExposedComponents"), onClick: () => openExposedComponentsDialog() },
-          ...(hasPackageDuplicate ? [{ label: t("cleanupDuplicatePackage"), onClick: () => cleanupDuplicatePackageAuthoring() } satisfies ContextMenuItem] : []),
-          { kind: "separator" },
-        ]
-      : [];
     showContextMenu(event, [
-      ...internalAuthoringItems,
       { label: t("paste"), onClick: () => pasteClipboardItems(), disabled: !clipboardItems || clipboardItems.components.length === 0, shortcut: "Ctrl+V" },
       { label: t("undo"), onClick: () => undo(), disabled: history.undoStack.length === 0, shortcut: "Ctrl+Z" },
       { label: t("redo"), onClick: () => redo(), disabled: history.redoStack.length === 0, shortcut: "Ctrl+Y" },
@@ -2071,26 +1925,8 @@ function zoomToBoundingBox(box: { minX: number; minY: number; maxX: number; maxY
   persistState();
 }
 
-/** Componentes de autoria de Package/ícone (`.spec/lasecsimul.spec` seção 23) -- espelha
- * `isPackageAuthoringComponent` (`extension/src/catalog/subcircuitPackageAuthoring.ts`, código de
- * host, não importável aqui) só na parte que "Zoom Tudo" precisa: NUNCA entram na bounding box de
- * "zoom pra caber tudo", senão a área reservada do Package (deliberadamente afastada do circuito
- * interno, ver `reservedAuthoringOrigin`) dobra o tamanho do enquadramento e encolhe o circuito
- * interno (e os fios) a um zoom bem menor do que antes desta feature existir -- achado real
- * (usuário reportou "clico em Zoom e os fios somem": não sumiram, ficaram finos demais num zoom bem
- * mais afastado). */
-function isPackageAuthoringComponentForZoom(component: WebviewComponentModel): boolean {
-  if (component.typeId === "other.package" || component.typeId === "other.package_pin") return true;
-  if (component.typeId === "graphics.image" && component.packageIconRole === true) return true;
-  // Rótulo de pino do Package (`graphics.text` linkado por `linkedPinComponentId`) fica na MESMA
-  // área reservada do pino que representa -- sem excluir aqui também, o bbox continuaria inflado
-  // quase do mesmo jeito.
-  if (component.typeId === "graphics.text" && typeof component.properties.linkedPinComponentId === "string" && component.properties.linkedPinComponentId) return true;
-  return false;
-}
-
 function zoomToFitAll(): void {
-  const box = approximateBoundingBox(activeSceneComponents().filter((c) => !isPackageAuthoringComponentForZoom(c)));
+  const box = approximateBoundingBox(activeSceneComponents());
   if (box) zoomToBoundingBox(box);
 }
 
@@ -2228,8 +2064,11 @@ function render(): void {
     if (!(child instanceof SVGPolylineElement) || !trackedPolylines.has(child)) child.remove();
   }
 
+  // Fios/topologia só existem no circuito interno REAL -- nunca aparecem em Modo Símbolo/Ícone
+  // (pedido original: "Modo Subcircuito nunca mostra o Símbolo" e vice-versa, cada cena mostra só o
+  // que lhe pertence).
   const visibleWireIds = new Set<string>();
-  for (const wire of subcircuitBoardMode ? [] : state.topology.conductors) {
+  for (const wire of subcircuitEditorMode === "circuit" ? state.topology.conductors : []) {
     const points = wirePolylinePoints(wire);
     if (points.length < 2) continue;
     const spatialSignature = points.map((point) => `${point.x},${point.y}`).join(";");
@@ -2258,14 +2097,13 @@ function render(): void {
     wireSpatialIndex.removeWire(id);
     wireSpatialSignatures.delete(id);
   }
-  if (!subcircuitBoardMode) renderPendingWirePreview(wireLayer);
+  if (subcircuitEditorMode === "circuit") renderPendingWirePreview(wireLayer);
 
   const visibleComponents: WebviewComponentModel[] = [];
   const subcircuitFileComponents: WebviewComponentModel[] = [];
   const boardModeComponents: WebviewComponentModel[] = [];
   for (const component of activeSceneComponents()) {
     if (component.hidden || component.hiddenByUser) continue;
-    if (subcircuitBoardMode && !isBoardModeVisible(component)) continue;
     visibleComponents.push(component);
     if (component.properties.boardModeEnabled) boardModeComponents.push(component);
     if (catalogEntryFor(component.typeId)?.registeredSourceKind === "subcircuit-file") subcircuitFileComponents.push(component);
@@ -2389,51 +2227,9 @@ function deleteSelectedItems(): void {
   clearSelection();
 }
 
-/** Remove Package(s)/pino(s)/rótulo(s) duplicados da cena de autoria -- rede de segurança pra uma
- * sessão que já ficou num estado inválido (2+ `other.package`, ou 2+ `other.package_pin` com o
- * MESMO `pinId`), seja de antes desta feature existir, seja de qualquer jeito futuro ainda não
- * coberto por `copySelectedItems`/`duplicateComponentsForDrag` (que só previnem duplicar o Package
- * em si, nunca pinos -- duplicar um pino pra depois renomear o `pinId` é o único jeito de criar um
- * pino NOVO hoje, já que `other.package_pin` é `hidden` na paleta geral). Mantém sempre a PRIMEIRA
- * ocorrência (ordem de `state.components`) de cada duplicata, remove as demais + o rótulo linkado de
- * cada pino removido -- nunca mexe em nada que já esteja correto (0 duplicatas == no-op). Só
- * aparece no menu de contexto do fundo vazio dentro de uma sessão "Abrir Subcircuito"
- * (`state.subcircuitEditingContext`). */
-function cleanupDuplicatePackageAuthoring(): void {
-  const packageComps = state.components.filter((component) => component.typeId === "other.package");
-  const pinComps = state.components.filter((component) => component.typeId === "other.package_pin");
-
-  const idsToRemove = new Set<string>();
-  for (const extraPackage of packageComps.slice(1)) idsToRemove.add(extraPackage.id);
-
-  const seenPinIds = new Set<string>();
-  for (const pin of pinComps) {
-    const pinId = typeof pin.properties.pinId === "string" && pin.properties.pinId.trim() ? pin.properties.pinId.trim() : pin.id;
-    if (seenPinIds.has(pinId)) idsToRemove.add(pin.id);
-    else seenPinIds.add(pinId);
-  }
-
-  for (const component of state.components) {
-    if (component.typeId !== "graphics.text") continue;
-    const linked = component.properties.linkedPinComponentId;
-    if (typeof linked === "string" && idsToRemove.has(linked)) idsToRemove.add(component.id);
-  }
-
-  if (idsToRemove.size === 0) return;
-  for (const componentId of idsToRemove) {
-    send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestRemoveComponent", componentId });
-  }
-  state.selectedComponentIds = state.selectedComponentIds.filter((id) => !idsToRemove.has(id));
-}
-
 function cloneComponent(component: WebviewComponentModel): WebviewComponentModel {
-  // `packageIconRole` marca a ÚNICA Figura que representa o ícone do Package sendo editado
-  // (`.spec/lasecsimul.spec`, autoria de subcircuito) -- uma cópia NUNCA herda esse papel (senão
-  // "colar" duplicaria o ícone, erro bloqueante em `compilePackageAuthoringComponents` no save). A
-  // cópia vira um `graphics.image` comum, sem papel especial.
-  const { packageIconRole: _packageIconRole, ...rest } = component;
   return {
-    ...rest,
+    ...component,
     pins: component.pins.map((pin) => ({ ...pin })),
     properties: { ...component.properties },
   };
@@ -2456,17 +2252,37 @@ function newWireId(): string {
   return `wire-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
 }
 
+/** Copiar/colar/duplicar (Ctrl+Shift-arrastar) um `symbol.pin` (Modo Símbolo) SEMPRE mina um pinId
+ * NOVO + um túnel interno NOVO -- nunca reaproveita o `pinId`/túnel do original (pedido original,
+ * regra explícita, mesma semântica de `subcircuitPinModel.ts::duplicatePin` só que operando na cena
+ * VIVA da Webview em vez do documento serializado). Devolve os elementos (já com `pinId` remapeado)
+ * + os túneis NOVOS a inserir separadamente em `state.components` (SEMPRE o circuito interno real,
+ * mesmo quando os pinos em si vão para `symbolElements`). Componentes que não são `symbol.pin`
+ * passam intocados. */
+function remintPinIdsAndBuildTunnels(components: readonly WebviewComponentModel[]): { components: WebviewComponentModel[]; newTunnels: WebviewComponentModel[] } {
+  const newTunnels: WebviewComponentModel[] = [];
+  const remapped = components.map((component) => {
+    if (component.typeId !== SYMBOL_PIN_TYPE_ID) return component;
+    const newPinId = newComponentId();
+    newTunnels.push({
+      id: newComponentId(),
+      typeId: TUNNEL_TYPE_ID,
+      label: newPinId,
+      x: 0,
+      y: 0,
+      rotation: 0,
+      pins: [],
+      properties: { name: newPinId, pinId: newPinId },
+    });
+    return { ...component, properties: { ...component.properties, pinId: newPinId } };
+  });
+  return { components: remapped, newTunnels };
+}
+
 function copySelectedItems(): boolean {
   const selectedComponentIds = new Set(state.selectedComponentIds);
-  // `other.package` (o CORPO do Package sendo editado em "Abrir Subcircuito") precisa ser um
-  // singleton -- `compilePackageAuthoringComponents` já bloqueia o SAVE com "Mais de um objeto
-  // Package encontrado na cena" quando há 2+, mas isso só avisa NA HORA de salvar, depois de já ter
-  // ficado confuso na tela (bug real reportado: usuário via 2 boards renderizados lado a lado,
-  // idênticos em conteúdo mas em tamanhos diferentes, sem entender a causa). Nunca deixa entrar no
-  // clipboard -- Copiar/Recortar/Colar e "Ctrl+Shift"-arrastar (`duplicateComponentsForDrag`) NUNCA
-  // duplicam o Package, prevenindo o estado inválido em vez de só detectar depois.
   const components = activeSceneComponents()
-    .filter((component) => selectedComponentIds.has(component.id) && component.typeId !== "other.package")
+    .filter((component) => selectedComponentIds.has(component.id))
     .map(cloneComponent);
   if (components.length === 0) return false;
 
@@ -2491,13 +2307,10 @@ function cutSelectedItems(): void {
  * `clipboardItems`/`state` -- quem chama decide quando inserir no estado global (o gesto de arrasto
  * NUNCA chama `render()` no meio, ver comentário sobre `setPointerCapture` em `createComponentElement`). */
 function duplicateComponentsForDrag(originals: WebviewComponentModel[]): { components: WebviewComponentModel[]; wires: WebviewWireModel[] } {
-  // `other.package` nunca duplica -- mesmo motivo/comentário de `copySelectedItems` (singleton
-  // exigido por `compilePackageAuthoringComponents`, prevenido aqui em vez de só detectado no save).
-  const dedupedOriginals = originals.filter((component) => component.typeId !== "other.package");
-  const originalIds = new Set(dedupedOriginals.map((component) => component.id));
+  const originalIds = new Set(originals.map((component) => component.id));
   const idMap = new Map<string, string>();
   const stagedComponents = [...activeSceneComponents()];
-  const components = dedupedOriginals.map((source) => {
+  const components = originals.map((source) => {
     const component = cloneComponent(source);
     const descriptor = catalogEntryFor(component.typeId);
     const baseLabel = descriptor?.label ?? component.typeId;
@@ -2541,12 +2354,6 @@ function pasteClipboardItems(): void {
     component.label = nextIndexedLabel(component.typeId, baseLabel, stagedComponents);
     component.x += WIRE_GRID_SIZE;
     component.y += WIRE_GRID_SIZE;
-    // Mesmo deslocamento pra posição de Modo Placa, quando existir -- sem isto, colar uma cópia de
-    // um componente já posicionado na placa (exposto+gráfico) fazia a cópia nascer exatamente em
-    // cima do original ali (só `x`/`y` do esquemático eram deslocados), com duas peças empilhadas
-    // até o usuário notar e arrastar manualmente.
-    if (component.boardX !== undefined) component.boardX += WIRE_GRID_SIZE;
-    if (component.boardY !== undefined) component.boardY += WIRE_GRID_SIZE;
     if (interactionKindFor(component.typeId) === "momentary") component.properties.closed = false;
     stagedComponents.push(component);
     return component;
@@ -2564,15 +2371,18 @@ function pasteClipboardItems(): void {
     return [wire];
   });
 
-  setActiveSceneComponents([...activeSceneComponents(), ...components]);
+  const { components: remintedComponents, newTunnels } = remintPinIdsAndBuildTunnels(components);
+  setActiveSceneComponents([...activeSceneComponents(), ...remintedComponents]);
   state = {
     ...state,
+    components: [...state.components, ...newTunnels],
     topology: { ...state.topology, conductors: [...state.topology.conductors, ...wires] },
-    selectedComponentIds: components.map((component) => component.id),
+    selectedComponentIds: remintedComponents.map((component) => component.id),
     selectedWireIds: wires.map((wire) => wire.id),
   };
   vscode?.setState(state);
-  send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestInsertItems", scope: currentElementScope(), components, wires });
+  send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestInsertItems", scope: currentElementScope(), components: remintedComponents, wires });
+  if (newTunnels.length > 0) send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestInsertItems", scope: "schematic", components: newTunnels, wires: [] });
   render();
 }
 
@@ -2991,7 +2801,7 @@ function renderWireCornerHandles(wireLayer: SVGSVGElement, wire: WebviewWireMode
       // (`wire.id` excluído -- este fio já está sendo movido pelo `wireCornerDrag` acima, com seu
       // próprio eixo/snap) cobre o caso GERAL: qualquer OUTRO fio inteiro co-selecionado (marquee)
       // também acompanha.
-      const groupComponentTargets = dragSelectionWithLinkedPinLabels().map((selected) => ({
+      const groupComponentTargets = getSelectedComponents().map((selected) => ({
         component: selected,
         startX: selected.x,
         startY: selected.y,
@@ -3109,7 +2919,7 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
           startFullPoints: points.map((entry) => ({ ...entry })),
           moved: false,
         };
-        const groupComponentTargets = dragSelectionWithLinkedPinLabels().map((selected) => ({
+        const groupComponentTargets = getSelectedComponents().map((selected) => ({
           component: selected,
           startX: selected.x,
           startY: selected.y,
@@ -3161,7 +2971,7 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
         startFullPoints: prepared.points,
         moved: false,
       };
-      const groupComponentTargets = dragSelectionWithLinkedPinLabels().map((selected) => ({
+      const groupComponentTargets = getSelectedComponents().map((selected) => ({
         component: selected,
         startX: selected.x,
         startY: selected.y,
@@ -4973,13 +4783,6 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
     render();
     const selectedComponents = getSelectedComponents();
     const isGroup = selectedComponents.length > 1;
-    const internalAuthoringItems: ContextMenuItem[] = state.subcircuitEditingContext
-      ? [
-          { label: t("boardMode"), checked: subcircuitBoardMode, onClick: () => setSubcircuitBoardMode(!subcircuitBoardMode) },
-          { label: t("selectExposedComponents"), onClick: () => openExposedComponentsDialog() },
-          { kind: "separator" },
-        ]
-      : [];
     const sourceId = catalogEntry?.registeredSourceId;
     // Edição em lote (rule 1-11, `batchProperties.ts`): seleção múltipla agora abre o diálogo em
     // lote em vez de esconder "Propriedades" (comportamento antigo -- só o 1º componente era
@@ -5031,84 +4834,6 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
           { label: t("locateSubcircuitFile"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestChooseSubcircuitFile", componentId: component.id }) },
         ]
       : [];
-    // Autoria de Package (Estágio 5, `.spec/lasecsimul.spec`) -- vínculo pino-do-Package↔Túnel
-    // interno por IDENTIFICADOR ESTÁVEL (`properties.tunnelComponentId`, o id do componente-túnel,
-    // nunca o nome dele que pode ser renomeado) em vez de escolher/editar isso no painel de
-    // propriedades genérico (que não sabe listar "só os túneis presentes nesta cena"). Só aparece
-    // pra `other.package_pin` (typeId literal -- este módulo webview não importa
-    // `extension/src/catalog/subcircuitPackageAuthoring.ts`, que é código de host/Node).
-    const packagePinLinkMenuItems: ContextMenuItem[] = !isGroup && component.typeId === "other.package_pin"
-      ? (() => {
-          const tunnels = state.components.filter((c) => c.typeId === TUNNEL_TYPE_ID);
-          const currentTunnelId = typeof component.properties.tunnelComponentId === "string" ? component.properties.tunnelComponentId : "";
-          const tunnelItems: ContextMenuItem[] = tunnels.map((tunnelComponent) => ({
-            label: String(tunnelComponent.properties.name ?? tunnelComponent.label),
-            checked: tunnelComponent.id === currentTunnelId,
-            onClick: () =>
-              send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name: "tunnelComponentId", value: tunnelComponent.id }),
-          }));
-          if (currentTunnelId) {
-            tunnelItems.push(
-              { kind: "separator" },
-              { label: t("unlinkTunnel"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name: "tunnelComponentId", value: "" }) }
-            );
-          }
-          return [
-            { kind: "separator" },
-            {
-              label: t("linkToTunnel"),
-              items: tunnelItems.length > 0 ? tunnelItems : [{ label: t("noTunnelsInScene"), onClick: () => {}, disabled: true }],
-            } satisfies ContextMenuItem,
-          ];
-        })()
-      : [];
-    // Elementos decorativos extras do Package (linha/figura/texto/retângulo/elipse marcados com
-    // `packageShapeRole`, `subcircuitPackageAuthoring.ts`) -- typeIds/chave de ordem compartilhados
-    // via `model.ts` (`PACKAGE_SHAPE_TYPE_IDS`/`PACKAGE_SHAPE_ORDER_PROPERTY_KEY`, sem dependência de
-    // Node). Só aparece dentro de "Abrir Subcircuito", nunca em edição normal, e nunca pro ícone
-    // auto-gerenciado (`packageIconRole`) nem pro rótulo linkado de um pino
-    // (`linkedPinComponentId`) -- esses dois já têm papel especial próprio.
-    const isPackageShapeEligible =
-      !isGroup &&
-      Boolean(state.subcircuitEditingContext) &&
-      (PACKAGE_SHAPE_TYPE_IDS as readonly string[]).includes(component.typeId) &&
-      component.packageIconRole !== true &&
-      typeof component.properties.linkedPinComponentId !== "string";
-    const packageShapeMenuItems: ContextMenuItem[] = isPackageShapeEligible
-      ? (() => {
-          const isMarked = component.packageShapeRole === true;
-          const items: ContextMenuItem[] = [
-            {
-              label: isMarked ? t("unmarkAsPackageShape") : t("markAsPackageShape"),
-              checked: isMarked,
-              onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestSetPackageShapeRole", componentId: component.id, value: !isMarked }),
-            },
-          ];
-          if (isMarked) {
-            // Renumera TODOS os elementos marcados pela ordem atual (`__packageShapeOrder` ausente
-            // vira "0" na comparação, então shapes recém-marcados sem ordem definida ainda ficam
-            // ordenáveis) antes de trocar o alvo com o vizinho -- garante números sempre contíguos
-            // (0,1,2...), nunca duplicados/faltando após várias reordenações.
-            const orderOf = (c: WebviewComponentModel): number => (typeof c.properties[PACKAGE_SHAPE_ORDER_PROPERTY_KEY] === "number" ? (c.properties[PACKAGE_SHAPE_ORDER_PROPERTY_KEY] as number) : 0);
-            const markedShapes = [...state.components].filter((c) => c.packageShapeRole === true).sort((a, b) => orderOf(a) - orderOf(b));
-            const currentIndex = markedShapes.findIndex((c) => c.id === component.id);
-            const swapWithNeighbor = (neighborIndex: number) => {
-              const neighbor = markedShapes[neighborIndex];
-              if (!neighbor) return;
-              markedShapes.forEach((c, index) => {
-                send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: c.id, name: PACKAGE_SHAPE_ORDER_PROPERTY_KEY, value: index });
-              });
-              send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name: PACKAGE_SHAPE_ORDER_PROPERTY_KEY, value: neighborIndex });
-              send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: neighbor.id, name: PACKAGE_SHAPE_ORDER_PROPERTY_KEY, value: currentIndex });
-            };
-            items.push(
-              { label: t("bringPackageShapeForward"), disabled: currentIndex >= markedShapes.length - 1, onClick: () => swapWithNeighbor(currentIndex + 1) },
-              { label: t("sendPackageShapeBackward"), disabled: currentIndex <= 0, onClick: () => swapWithNeighbor(currentIndex - 1) }
-            );
-          }
-          return [{ kind: "separator" } satisfies ContextMenuItem, ...items];
-        })()
-      : [];
     // Túnel adicional pro pino selecionado -- ação explícita, distinta da criação do próprio pino
     // (pedido original). Só aparece pro typeId dedicado de pino do Modo Símbolo.
     const symbolPinMenuItems: ContextMenuItem[] =
@@ -5130,7 +4855,6 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
           })()
         : [];
     const menuItems: ContextMenuItem[] = [
-      ...internalAuthoringItems,
       ...exposedSubmenuItems,
       ...openSubcircuitMenuItems,
       ...(exposedSubmenuItems.length > 0 || openSubcircuitMenuItems.length > 0 ? [{ kind: "separator" } satisfies ContextMenuItem] : []),
@@ -5147,7 +4871,6 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
       ...mcuMenuItems,
       ...createSubcircuitMenuItems,
       ...subcircuitRefMenuItems,
-      ...packagePinLinkMenuItems,
       ...symbolPinMenuItems,
       ...exposeComponentMenuItems,
     ];
@@ -5183,7 +4906,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
     if (component.locked) return;
     dragStartX = event.clientX;
     dragStartY = event.clientY;
-    dragTargets = dragSelectionWithLinkedPinLabels().map((selected) => {
+    dragTargets = getSelectedComponents().map((selected) => {
       const offset = componentDivOffset(selected);
       return { component: selected, startX: selected.x, startY: selected.y, offsetX: offset.x, offsetY: offset.y };
     });
@@ -5540,10 +5263,11 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
         // `setPointerCapture` já ativo) no meio do gesto libera a captura implicitamente (mesmo
         // bug documentado acima sobre `componentElementsById`/telemetria), quebrando o resto do
         // arrasto. Insere os componentes/fios duplicados diretamente no DOM/estado, sem tocar `el`.
-        const { components: duplicated, wires: duplicatedWires } = duplicateComponentsForDrag(dragTargets.map((target) => target.component));
+        const { components: duplicatedRaw, wires: duplicatedWires } = duplicateComponentsForDrag(dragTargets.map((target) => target.component));
+        const { components: duplicated, newTunnels } = remintPinIdsAndBuildTunnels(duplicatedRaw);
         if (duplicated.length > 0 && canvasContentElement) {
           setActiveSceneComponents([...activeSceneComponents(), ...duplicated]);
-          state = { ...state, topology: { ...state.topology, conductors: [...state.topology.conductors, ...duplicatedWires] } };
+          state = { ...state, components: [...state.components, ...newTunnels], topology: { ...state.topology, conductors: [...state.topology.conductors, ...duplicatedWires] } };
           for (const dup of duplicated) {
             const dupEl = createComponentElement(dup);
             componentElementsById.set(dup.id, dupEl);
@@ -5554,6 +5278,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
             return { component: dup, startX: dup.x, startY: dup.y, offsetX: offset.x, offsetY: offset.y };
           });
           send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestInsertItems", scope: currentElementScope(), components: duplicated, wires: duplicatedWires });
+          if (newTunnels.length > 0) send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestInsertItems", scope: "schematic", components: newTunnels, wires: [] });
         }
       }
     };
@@ -5632,15 +5357,10 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
  * do resto do SVG -- sempre frescos, sem risco de capturar `component` desatualizado (diferente dos
  * listeners de `el`, que sobrevivem a vários renders). */
 function updateComponentElement(el: HTMLElement, component: WebviewComponentModel): void {
-  // Modo Placa (Mecanismo A, `.spec` seção 27): quando este typeId declarou uma aparência própria
-  // (`catalogEntry.boardPackage`) E o Modo Placa está de fato ligado, troca a variante de `package`
-  // resolvida em TODA função de `componentSymbols.ts` chamada abaixo -- nunca no esquemático normal
-  // (`subcircuitBoardMode` só é `true` dentro de "Abrir Subcircuito" com Modo Placa ligado, ver
-  // `setSubcircuitBoardMode`). `boardWidth`/`boardHeight` (tamanho PRÓPRIO do Modo Placa, ver
-  // model.ts) são aplicados reaproveitando o MESMO mecanismo de escala por instância que packages
-  // já usavam (`__simulideSceneScaleX/Y`, ver `componentSymbols.ts::packageInstanceScale`) -- nunca
-  // uma segunda forma de escalar em paralelo.
-  const boardVariant = subcircuitBoardMode ? boardPackageVariantFor(component.typeId) : undefined;
+  // Componentes da cena (circuito interno/Símbolo/Ícone) sempre renderizam no esquemático normal --
+  // a variante "board" (`catalogEntry.boardPackage`) só se aplica ao overlay de uma INSTÂNCIA
+  // colocada no circuito principal (`renderBoardOverlaysFor`, cálculo próprio e independente).
+  const boardVariant: "board" | undefined = undefined;
   let symbolProperties = runtimeSymbolProperties(component);
   if (boardVariant === "board" && (component.boardWidth !== undefined || component.boardHeight !== undefined)) {
     const naturalBoardBox = componentBox(component.typeId, symbolProperties, boardVariant);
@@ -5696,24 +5416,9 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
     svg.classList.add("component__symbol--fixed-volt");
     if (component.properties.out === true) svg.classList.add("component__symbol--fixed-volt-on");
   }
-  // Prévia ao vivo do Package sendo editado em "Abrir Subcircuito" (`buildLivePackagePreview`,
-  // `componentSymbols.ts`) -- unifica o corpo/pinos/rótulos/formas do `other.package` desta cena com
-  // o MESMO pipeline (`resolvePackageLayout`/`packageBodySvg`) que desenha um dispositivo colocado,
-  // em vez do switch genérico por-componente (`componentSymbolSvg`). Só computado pros componentes
-  // de autoria envolvidos -- o resto da cena nunca paga esse custo. Pinos, formas e a Figura do
-  // ícone ficam com o corpo
-  // visível VAZIO (só hit-box, `rotatedBox`/seleção continuam intactos, ver overlay de seleção
-  // abaixo) porque o corpo consolidado do Package já desenha tudo -- elimina "dois renderizadores
-  // pro mesmo package" pela raiz, não só cosmeticamente.
-  const isPackageAuthoringVisual = isLivePackageAuthoringVisual(component);
-  const livePackagePreview = isPackageAuthoringVisual ? buildLivePackagePreview(state.components) : undefined;
   bodyGroup.innerHTML = isMissingSubcircuitRef || isUnknownComponent
     ? missingSubcircuitPlaceholderSvg(box)
-    : livePackagePreview && component.typeId === "other.package"
-      ? livePackagePreviewSymbolSvg(livePackagePreview, component.id, symbolProperties).svg
-      : livePackagePreview && isPackageAuthoringVisual
-        ? ""
-        : packageSymbolSvg(component.typeId, symbolProperties, component.id, boardVariant) ?? catalogEntry?.symbolSvg ?? componentSymbolSvg(component.typeId, symbolProperties);
+    : packageSymbolSvg(component.typeId, symbolProperties, component.id, boardVariant) ?? catalogEntry?.symbolSvg ?? componentSymbolSvg(component.typeId, symbolProperties);
   bodyGroup.querySelectorAll<HTMLInputElement>(".meter-channel-input").forEach((input) => {
     const stopComponentGesture = (event: Event) => event.stopPropagation();
     input.addEventListener("pointerdown", stopComponentGesture);
@@ -5759,19 +5464,7 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
     svg.appendChild(overlay);
   }
 
-  // Modo Placa nunca desenha fio (ver `render()`, `subcircuitBoardMode ? [] : state.topology.conductors`)
-  // -- terminal de pino clicável não tem propósito ali. Gate é `graphical` (igual ao `Component::
-  // setHidden` real: TODO componente `m_graphical` tem os PINOS escondidos no Modo Placa -- ver `.spec`
-  // seção 27.9, correção de 2026-07-12: `boardVariant==="board"` sozinho era gate ERRADO aqui, escondia
-  // pino só nos poucos typeIds com `boardPackage` registrado e deixava todos os OUTROS `m_graphical`
-  // (motores, displays, LEDs etc) com pino visível/clicável no Modo Placa, divergindo do SimulIDE
-  // real). Se ALGUM typeId futuro voltar a ter `boardPackage` (seção 27.10: nenhum tem hoje --
-  // `switches.push`/`switches.switch`/`outputs.led` foram revertidos por serem redundantes com o
-  // package esquemático, que já é físico/dinâmico), esconder o pino junto continua certo pelo mesmo
-  // motivo de sempre: coordenadas de `componentPinLocalPosition` são as do PACKAGE ESQUEMÁTICO, nunca
-  // as do `boardPackage` (forma/tamanho podem divergir).
-  const pinsHiddenInBoardMode = subcircuitBoardMode && catalogEntry?.graphical === true;
-  if (!pinsHiddenInBoardMode) component.pins.forEach((pin, index) => {
+  component.pins.forEach((pin, index) => {
     // Pino elétrico real sem lead físico no encapsulamento (ex: GPIO20/24/28-31/UART0_RX/TX do chip
     // ESP32 nu) -- nunca desenha terminal genérico por cima do desenho real dos outros, ver
     // `componentSymbols.ts::hasRealPinPosition`. Continua existindo em `component.pins[]` (contrato
@@ -6754,7 +6447,6 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     if (message.type === "init" || previousSubcircuitEditingContext?.sourceId !== state.subcircuitEditingContext?.sourceId) {
       subcircuitEditorMode = "circuit";
     }
-    restoreBoardViewAfterHostSync();
     syncPackageRegistry(state.catalog);
     if (!state.pendingConnection) {
       pendingWirePreviewTarget = undefined;
@@ -6802,7 +6494,6 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     // Mesmo motivo do handler de "init"/"syncState" acima: sempre volta pra Subcircuito ao
     // entrar/sair da sessão, nunca num patch incremental dentro da MESMA sessão.
     if (enteringOrLeavingSubcircuitSession) subcircuitEditorMode = "circuit";
-    restoreBoardViewAfterHostSync();
     if (enteringOrLeavingSubcircuitSession) resetUndoHistory(mainUndoHistory);
     if (message.patch.catalog) syncPackageRegistry(state.catalog);
     if (!state.pendingConnection) {
@@ -6965,30 +6656,7 @@ function exitPlacementMode(): void {
 }
 
 function componentsToAddForTypeId(typeId: string): WebviewComponentModel[] {
-  const component = makeComponentFromTypeId(typeId);
-  if (typeId !== "other.package_pin") return [component];
-
-  const box = componentBox(component.typeId, component.properties);
-  const anchorX = component.x + box.width / 2;
-  const anchorY = component.y + box.height / 2;
-  const length = typeof component.properties.length === "number" ? component.properties.length : 8;
-  const rad = (component.rotation * Math.PI) / 180;
-  const labelX = anchorX + Math.cos(rad) * (length + 9);
-  const labelY = anchorY + Math.sin(rad) * (length + 9);
-  const pinId = typeof component.properties.pinId === "string" ? component.properties.pinId : component.id;
-  const labelBox = componentBox("graphics.text", { text: pinId, fontSize: 7 });
-  const label: WebviewComponentModel = {
-    id: `component-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}-label`,
-    typeId: "graphics.text",
-    label: "graphics.text",
-    hidden: false,
-    x: Math.round(labelX - labelBox.width / 2),
-    y: Math.round(labelY - labelBox.height / 2),
-    rotation: 0,
-    pins: [],
-    properties: { text: pinId, fontSize: 7, color: "#1f2937", linkedPinComponentId: component.id },
-  };
-  return [component, label];
+  return [makeComponentFromTypeId(typeId)];
 }
 
 function makeComponentFromTypeId(typeId: string): WebviewComponentModel {
@@ -7177,7 +6845,7 @@ function renderJunction(id: string, x: number, y: number): SVGGElement {
     const startY = node.position.y;
     let moved = false;
 
-    const groupComponentTargets = dragSelectionWithLinkedPinLabels().map((selected) => ({
+    const groupComponentTargets = getSelectedComponents().map((selected) => ({
       component: selected,
       startX: selected.x,
       startY: selected.y,

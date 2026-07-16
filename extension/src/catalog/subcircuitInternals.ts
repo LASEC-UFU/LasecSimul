@@ -23,40 +23,44 @@ interface InternalComponentSeed {
   exposed?: boolean;
 }
 
-/** Deriva a posição de Modo Placa dos campos PLANOS realmente persistidos em cada componente
- * (`boardX`/`boardY`/`boardRotation`/`boardFlipH`/`boardFlipV`, mesmo shape de
- * `WebviewComponentModel` -- ver `model.ts` e `subcircuitBoardMode.ts::captureBoardTransforms`,
- * que é quem escreve isso ao sair do Modo Placa DENTRO da edição do subcircuito). Bug real
- * corrigido aqui: esta função lia um campo aninhado `boardVisual` que NUNCA existiu no arquivo --
- * só `updateBoardOverlayVisualCommand` (mcuCommands.ts) escrevia nesse campo fantasma, então a
- * posição definida editando o subcircuito por dentro (Modo Placa real) nunca aparecia no overlay
- * da instância no circuito principal, e vice-versa -- dois armazenamentos paralelos da MESMA
- * posição, nunca sincronizados (`.spec` seção sobre a auditoria de Modo Placa). `boardVisual` no
- * `InternalComponentSnapshot` (mensagem IPC) continua existindo só como agrupamento de
- * conveniência pro protocolo -- a fonte de verdade persistida é sempre os campos planos. */
-function boardVisualFromFlatFields(value: Record<string, unknown>): VisualPosition | undefined {
-  if (typeof value.boardX !== "number" || typeof value.boardY !== "number") return undefined;
-  const rotation = value.boardRotation === 90 || value.boardRotation === 180 || value.boardRotation === 270 ? value.boardRotation : 0;
+/** Deriva a posição de Modo Placa de `exposedComponents[]` (schemaVersion 3,
+ * `catalog/subcircuitDocument.ts`) -- array de nível superior, indexado por `componentId`, nunca
+ * mais campos planos `boardX`/`boardY`/... dentro do próprio componente (formato antigo, removido).
+ * `boardVisual` no `InternalComponentSnapshot` (mensagem IPC) continua existindo só como agrupamento
+ * de conveniência pro protocolo. */
+function exposedEntryFor(componentId: string, exposedComponents: ReadonlyArray<Record<string, unknown>>): Record<string, unknown> | undefined {
+  return exposedComponents.find((entry) => entry.componentId === componentId);
+}
+
+function boardVisualFromExposedEntry(entry: Record<string, unknown> | undefined): VisualPosition | undefined {
+  if (!entry || typeof entry.x !== "number" || typeof entry.y !== "number") return undefined;
+  const rotation = entry.rotation === 90 || entry.rotation === 180 || entry.rotation === 270 ? entry.rotation : 0;
   return {
-    x: value.boardX,
-    y: value.boardY,
+    x: entry.x,
+    y: entry.y,
     rotation,
-    flipH: typeof value.boardFlipH === "boolean" ? value.boardFlipH : undefined,
-    flipV: typeof value.boardFlipV === "boolean" ? value.boardFlipV : undefined,
+    flipH: typeof entry.flipH === "boolean" ? entry.flipH : undefined,
+    flipV: typeof entry.flipV === "boolean" ? entry.flipV : undefined,
   };
 }
 
 function extractInternalComponents(json: Record<string, unknown>): InternalComponentSeed[] {
   const componentsRaw = Array.isArray(json.components) ? json.components : [];
+  const exposedComponentsRaw = (Array.isArray(json.exposedComponents) ? json.exposedComponents : [])
+    .filter((value): value is Record<string, unknown> => typeof value === "object" && value !== null);
   return componentsRaw
     .filter((value): value is Record<string, unknown> => typeof value === "object" && value !== null)
-    .map((value) => ({
-      id: typeof value.id === "string" ? value.id : "",
-      typeId: typeof value.typeId === "string" ? value.typeId : "",
-      properties: typeof value.properties === "object" && value.properties !== null ? (value.properties as Record<string, unknown>) : {},
-      boardVisual: boardVisualFromFlatFields(value),
-      exposed: value.exposed === true,
-    }))
+    .map((value) => {
+      const id = typeof value.id === "string" ? value.id : "";
+      const exposedEntry = exposedEntryFor(id, exposedComponentsRaw);
+      return {
+        id,
+        typeId: typeof value.typeId === "string" ? value.typeId : "",
+        properties: typeof value.properties === "object" && value.properties !== null ? (value.properties as Record<string, unknown>) : {},
+        boardVisual: boardVisualFromExposedEntry(exposedEntry),
+        exposed: exposedEntry !== undefined,
+      };
+    })
     .filter((component) => component.id && component.typeId);
 }
 

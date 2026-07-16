@@ -141,13 +141,6 @@ export type WebviewToHostMessage =
   | { version: number; type: "requestRemoveWire"; wireId: string }
   | { version: number; type: "requestRotateComponent"; componentId: string; rotation: 0 | 90 | 180 | 270 }
   | { version: number; type: "requestFlipComponent"; componentId: string; flipH: boolean; flipV: boolean }
-  /** Marca/desmarca uma instância de `graphics.line`/`graphics.image`/`graphics.text`/
-   * `graphics.rectangle`/`graphics.ellipse` como elemento decorativo do Package sendo editado
-   * (`WebviewComponentModel.packageShapeRole`, `.spec/lasecsimul-subcircuits.spec`) -- compilado pra
-   * `package.shapes[]` ao salvar (`compilePackageAuthoringComponents`), em vez de ir pro circuito
-   * interno real. Só disponível dentro de uma sessão "Abrir Subcircuito" (ver
-   * `state.subcircuitEditingContext` em `main.ts`). */
-  | { version: number; type: "requestSetPackageShapeRole"; componentId: string; value: boolean }
   | { version: number; type: "requestRenameComponent"; componentId: string; label: string }
   | { version: number; type: "requestUpdateLabelVisibility"; componentId: string; showId: boolean; showValue: boolean; valueLabelPropertyKey?: string }
   /** Commit único de uma conexão cujo início pode ser um segmento ainda não dividido. O host

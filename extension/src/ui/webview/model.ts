@@ -65,26 +65,16 @@ export interface WebviewComponentModel {
   hiddenByUser?: boolean;
   pins: WebviewPinModel[];
   properties: Record<string, string | number | boolean>;
-  /** Posição/orientação na PLACA (Board Mode) — independente de `x`/`y`/`rotation`/`flipH`/`flipV`
-   * (posição no CIRCUITO), igual a `circPos`/`boardPos` do SimulIDE real. Persistido no
-   * `.lssubcircuit` e usado pelo overlay de instâncias com `boardModeEnabled`; ausente significa que
-   * o overlay escolhe uma posição inicial padrão. */
-  boardX?: number;
-  boardY?: number;
-  boardRotation?: 0 | 90 | 180 | 270;
-  boardFlipH?: boolean;
-  boardFlipV?: boolean;
   /** Tamanho na PLACA (Board Mode) -- SEM equivalente no `x`/`y`/`rotation` do esquemático, que
    * nunca redimensiona um componente por instância (só `boardPackage.width`/`.height` natural, ver
    * `model.ts::WebviewComponentCatalogEntry.boardPackage`). Ausente == usa o tamanho natural do
    * `boardPackage` (ou de `package`, se não houver `boardPackage`) sem escala nenhuma. Puramente um
    * fator de escala aplicado sobre o corpo renderizado, nunca reinterpretado como grid/pinos --
-   * evita ter que re-derivar geometria de pino pra um tamanho arbitrário. */
+   * evita ter que re-derivar geometria de pino pra um tamanho arbitrário. Distinto da posição/
+   * orientação de exposição, que agora vive em `WebviewProjectState.exposedComponents[]`
+   * (schemaVersion 3), nunca mais campos planos por componente. */
   boardWidth?: number;
   boardHeight?: number;
-  /** "Selecione os Componentes expostos" -- só relevante para componentes internos persistidos no
-   * `.lssubcircuit`. Ausente == `false`. */
-  exposed?: boolean;
   /** Presença deste campo (independente do `typeId` atual) é o marcador de "isto é um bloco
    * genérico de subcircuito por caminho" -- mesmo shape de `ProjectSubcircuitRef`
    * (`ProjectTypes.ts`). Ausente == componente normal, resolvido só por `typeId`/catálogo. */
@@ -93,23 +83,6 @@ export interface WebviewComponentModel {
     lastKnownTypeId?: string;
     lastKnownPinIds?: string[];
   };
-  /** Marca a ÚNICA instância de `graphics.image` (dentro de uma sessão "Abrir Subcircuito") que
-   * representa a Figura/ícone do Package sendo editado -- campo SÓ DE SESSÃO, nunca serializado
-   * direto no `.lssubcircuit` (a fonte de verdade persistida é `package.background`, ver
-   * `PackageDescriptor`). Materializado por `seedPackageAuthoringComponents` a partir de
-   * `package.background.kind === "image"`; lido de volta por `compilePackageAuthoringComponents` ao
-   * salvar (`extension/src/catalog/subcircuitPackageAuthoring.ts`, `.spec/lasecsimul.spec`). Mesmo
-   * estilo de campo "marcador de papel especial" que `subcircuitRef` já usa. */
-  packageIconRole?: true;
-  /** Marca uma instância de `graphics.line`/`graphics.image`/`graphics.text`/`graphics.rectangle`/
-   * `graphics.ellipse` (dentro de uma sessão "Abrir Subcircuito") como um ELEMENTO DECORATIVO do
-   * Package sendo editado -- compilado pra `package.shapes[]` ao salvar, em vez de ir pro circuito
-   * interno real (`components[]`). Independente de `packageIconRole` (que é a ÚNICA Figura de fundo
-   * travada no tamanho do Package; um elemento com `packageShapeRole` é um extra qualquer -- linha,
-   * forma, texto livre, segunda imagem -- posicionado livremente sobre o Package). Campo SÓ DE
-   * SESSÃO, nunca serializado direto (a fonte de verdade persistida é `package.shapes[]`). Ver
-   * `subcircuitPackageAuthoring.ts`. */
-  packageShapeRole?: true;
 }
 
 export interface WebviewPoint {
@@ -521,25 +494,6 @@ export const TUNNEL_TYPE_ID = "connectors.tunnel";
  * -- mesmo precedente de `TUNNEL_TYPE_ID` acima, já que `main.ts` nunca pode importar de `catalog/`
  * (fora do `rootDir` de `tsconfig.webview.json`). */
 export const SYMBOL_PIN_TYPE_ID = "symbol.pin";
-
-/** typeIds elegíveis pra marcar como elemento decorativo do Package durante "Abrir Subcircuito"
- * (`WebviewComponentModel.packageShapeRole: true`) -- cada um já é um componente NORMAL, visível na
- * paleta geral (`graphics.*`, categoria "Graphical"), com contraparte direta em `PackageShape.kind`.
- * `polygon`/`path`/`svg` (formatos de arquivo sem typeId de cena equivalente) ficam de fora -- sem
- * precedente de autoria, fora de escopo. Compartilhado entre `subcircuitPackageAuthoring.ts` (host)
- * e `main.ts` (Webview) -- mesmo motivo de `TUNNEL_TYPE_ID` acima, `model.ts` não tem dependência de
- * Node. */
-export const PACKAGE_SHAPE_TYPE_IDS = ["graphics.line", "graphics.image", "graphics.text", "graphics.rectangle", "graphics.ellipse"] as const;
-export type PackageShapeTypeId = (typeof PACKAGE_SHAPE_TYPE_IDS)[number];
-
-/** Propriedade numérica interna (mesmo estilo `__ui_packageUnit`/`__simulideTunnelRotated` já usado
- * nesta base) que guarda a ordem de pintura entre os elementos marcados com `packageShapeRole` --
- * `PackageShape` não tem `id`/`zIndex` (ver mais abaixo), então a ordem do array `package.shapes[]`
- * É o único sinal de z-order; a posição do componente em `state.components` sozinha não é confiável
- * (fica intercalada com componentes do circuito interno). Mutada só pelos comandos "Trazer pra
- * frente"/"Enviar pra trás" (`main.ts`), lida por `compilePackageAuthoringComponents`
- * (`subcircuitPackageAuthoring.ts`). */
-export const PACKAGE_SHAPE_ORDER_PROPERTY_KEY = "__packageShapeOrder";
 
 /** typeId de `connectors.junction` -- mesmo princípio de `TUNNEL_TYPE_ID`, ponto elétrico sem
  * símbolo/rótulo visível (sempre `hidden: true`), tratado como exceção nos mesmos arquivos. */
