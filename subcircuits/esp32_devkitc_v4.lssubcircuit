@@ -692,8 +692,8 @@
         "__simulideTunnelRotated": false
       },
       "visual": {
-        "x": 413.56063349790577,
-        "y": 263.9807791788338,
+        "x": 419.0588078328178,
+        "y": 263.77519049917265,
         "rotation": 0,
         "flipH": false,
         "flipV": false
@@ -2106,7 +2106,7 @@
   "icon": "board",
   "iconPath": "esp32_devkitc_v4_icon.png",
   "topology": {
-    "revision": 169,
+    "revision": 175,
     "nodes": [
       {
         "id": "junction-1783811970598-570810",
@@ -2897,5 +2897,9 @@
         ]
       }
     ]
+  },
+  "packageAuthoringOrigin": {
+    "x": 288.37238590590505,
+    "y": 162.7221993003206
   }
 }
