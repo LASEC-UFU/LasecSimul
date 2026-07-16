@@ -1,5 +1,5 @@
 import { PackageDescriptor } from "../ui/webview/model";
-import { ProjectComponent, ProjectTopology } from "../project/ProjectTypes";
+import { ProjectComponent, ProjectTopology, ProjectTopologyEndpoint } from "../project/ProjectTypes";
 import { sanitizePackage } from "./packageSanitizers";
 
 /** Refatoração completa do editor de subcircuitos (Subcircuito/Símbolo/Ícone) -- substitui o modelo
@@ -119,13 +119,34 @@ function parseExposedComponentEntry(raw: unknown): ExposedComponentEntry | undef
   };
 }
 
+/** `.lssubcircuit` grava os pontos de dobra de cada condutor sob a chave `points` (convenção histórica
+ * do formato, distinta de `.lsproj`, que usa `vertices` -- Core nunca lê nenhuma das duas, é só
+ * geometria visual). `ProjectTopology.conductors[].vertices` é o nome de campo CANÔNICO usado pelo
+ * resto do código (`openSubcircuitForEditingCommand`, `wireTopology.ts`, etc.) -- sem esta conversão
+ * explícita, um cast direto do JSON cru deixava `.vertices` sempre `undefined` (bug real: `.length`
+ * de `undefined` derrubava "Abrir Subcircuito" com qualquer arquivo real). */
+function parseTopologyConductor(raw: unknown): ProjectTopology["conductors"][number] | undefined {
+  if (typeof raw !== "object" || raw === null) return undefined;
+  const entry = raw as Record<string, unknown>;
+  const id = typeof entry.id === "string" ? entry.id : "";
+  if (!id || typeof entry.from !== "object" || entry.from === null || typeof entry.to !== "object" || entry.to === null) return undefined;
+  const rawVertices = Array.isArray(entry.points) ? entry.points : Array.isArray(entry.vertices) ? entry.vertices : [];
+  const vertices = rawVertices.filter(
+    (point): point is { x: number; y: number } =>
+      typeof point === "object" && point !== null && typeof (point as { x?: unknown }).x === "number" && typeof (point as { y?: unknown }).y === "number"
+  );
+  return { id, from: entry.from as ProjectTopologyEndpoint, to: entry.to as ProjectTopologyEndpoint, vertices };
+}
+
 function parseTopology(raw: unknown): ProjectTopology {
   if (typeof raw !== "object" || raw === null) return { revision: 0, nodes: [], conductors: [] };
   const topology = raw as Record<string, unknown>;
   return {
     revision: typeof topology.revision === "number" ? topology.revision : 0,
     nodes: Array.isArray(topology.nodes) ? (topology.nodes as ProjectTopology["nodes"]) : [],
-    conductors: Array.isArray(topology.conductors) ? (topology.conductors as ProjectTopology["conductors"]) : [],
+    conductors: Array.isArray(topology.conductors)
+      ? topology.conductors.map(parseTopologyConductor).filter((conductor): conductor is ProjectTopology["conductors"][number] => conductor !== undefined)
+      : [],
   };
 }
 
@@ -182,7 +203,12 @@ export function serializeSubcircuitDocument(document: SubcircuitDocument): Recor
     ...(document.translations ? { translations: document.translations } : {}),
     ...(document.serialPorts ? { serialPorts: document.serialPorts } : {}),
     components: document.components,
-    topology: document.topology,
+    topology: {
+      revision: document.topology.revision,
+      nodes: document.topology.nodes,
+      // `points`, não `vertices` -- convenção de arquivo do `.lssubcircuit` (ver `parseTopologyConductor`).
+      conductors: document.topology.conductors.map(({ id, from, to, vertices }) => ({ id, from, to, points: vertices })),
+    },
     interface: document.interface,
     ...(document.symbol ? { symbol: document.symbol } : {}),
     exposedComponents: document.exposedComponents,

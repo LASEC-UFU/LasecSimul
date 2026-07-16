@@ -22,7 +22,13 @@ function fullDocument(): SubcircuitDocument {
       tunnel("tun_vcc", "VCC"),
       tunnel("tun_gnd", "GND"),
     ],
-    topology: { revision: 1, nodes: [], conductors: [] },
+    topology: {
+      revision: 1,
+      nodes: [],
+      conductors: [
+        { id: "w1", from: { kind: "port", componentId: "r1", pinId: "pin-1" }, to: { kind: "port", componentId: "tun_vcc", pinId: "pin" }, vertices: [{ x: 10, y: 20 }] },
+      ],
+    },
     interface: [
       { pinId: "VCC", label: "VCC", internalTunnel: "VCC" },
       { pinId: "GND", label: "GND", internalTunnel: "GND" },
@@ -82,6 +88,21 @@ function fullDocument(): SubcircuitDocument {
       assert(reparsed.document.interface.length === original.interface.length, "interface[] deveria sobreviver ao round-trip");
       assert(reparsed.document.symbol?.pins.length === 2, "symbol.pins[] deveria sobreviver ao round-trip");
       assert(reparsed.document.icon?.width === 24, "icon deveria sobreviver ao round-trip");
+    }
+  });
+
+  await test("topology.conductors[].vertices grava/lê como 'points' no arquivo (convenção real do .lssubcircuit), nunca vira undefined", () => {
+    const original = fullDocument();
+    const raw = serializeSubcircuitDocument(original) as { topology: { conductors: Array<Record<string, unknown>> } };
+    assert(Array.isArray(raw.topology.conductors[0]!.points), "arquivo serializado deveria gravar a chave 'points', não 'vertices'");
+    assert(raw.topology.conductors[0]!.vertices === undefined, "arquivo serializado NUNCA deveria conter a chave 'vertices' (bug real: cast direto sem conversão)");
+    const reparsed = parseSubcircuitDocument(raw, "/tmp");
+    assert(reparsed.ok === true, "documento com condutor real deveria parsear com sucesso");
+    if (reparsed.ok) {
+      const conductor = reparsed.document.topology.conductors[0];
+      assert(conductor !== undefined, "condutor deveria sobreviver ao round-trip");
+      assert(Array.isArray(conductor!.vertices) && conductor!.vertices.length === 1, "vertices[] deveria sobreviver ao round-trip (não undefined)");
+      assert(conductor!.vertices[0]!.x === 10 && conductor!.vertices[0]!.y === 20, "coordenadas do vértice deveriam sobreviver intactas");
     }
   });
 
