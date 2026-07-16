@@ -73,6 +73,10 @@ function packagePinBoxSide(length: number): number {
  * `packagePinBoxSide` acima: este módulo roda no host, sem acesso ao código de renderização da
  * Webview. */
 const DEFAULT_PACKAGE_PIN_LABEL_FONT_SIZE = 7;
+/** Cor padrão de um rótulo de pino recém-seedado (sem `pin.labelColor` no arquivo) -- mesmo valor
+ * hardcoded que este editor sempre usou pra rótulos novos; `pin.labelColor` explícito sempre ganha
+ * (ver seed abaixo). */
+const DEFAULT_PACKAGE_PIN_LABEL_COLOR = "#1f2937";
 
 /** Espelha EXATAMENTE o ramo `!hasCustomLabelPos` de `packagePinLeadSvg` (`componentSymbols.ts`) --
  * mesma fórmula de offset (`length + (labelSpace ?? max(2, fontSize/2))`) e mesma posição/rotação
@@ -602,6 +606,11 @@ export function seedPackageAuthoringComponents(
 
     const labelText = pin.label ?? pin.id;
     const fontSize = typeof pin.labelFontSize === "number" ? pin.labelFontSize : DEFAULT_PACKAGE_PIN_LABEL_FONT_SIZE;
+    // `pin.labelColor` (ausente == cor padrão do editor, `#1f2937`) -- bug real corrigido aqui: o
+    // seed sempre gravava a cor padrão HARDCODED, nunca a cor de fato salva no arquivo, então uma
+    // cor de rótulo customizada pelo usuário revertia pra cinza-escuro toda vez que a sessão de
+    // autoria era reaberta (mesma classe de bug já corrigida uma vez pra `labelRotation`).
+    const labelColor = typeof pin.labelColor === "string" ? pin.labelColor : DEFAULT_PACKAGE_PIN_LABEL_COLOR;
     // `pin.labelX`/`labelY` (espaço NATIVO, ver model.ts) ganham de qualquer fórmula padrão -- uma
     // vez que o arquivo tem posição explícita de rótulo, ela é a fonte de verdade (nunca recalculada
     // aqui). Só cai no `defaultLabelNativePosition` (mesma fórmula de `packagePinLeadSvg`) quando o
@@ -625,7 +634,7 @@ export function seedPackageAuthoringComponents(
       y: Math.round(labelAnchorY - labelBox.height / 2),
       rotation: hasCustomLabelPos ? nearestCardinalRotation(typeof pin.labelRotation === "number" ? pin.labelRotation : 0) : nativeLabel.rotation,
       pins: [],
-      properties: { text: labelText, fontSize, color: "#1f2937", linkedPinComponentId: pinComponentId },
+      properties: { text: labelText, fontSize, color: labelColor, linkedPinComponentId: pinComponentId },
     });
   }
 
@@ -857,6 +866,12 @@ export function compilePackageAuthoringComponents(
       pinEntry.labelTextAnchor = "middle";
       pinEntry.labelDominantBaseline = "middle";
       if (labelComponent.rotation) pinEntry.labelRotation = labelComponent.rotation;
+      // Bug real corrigido aqui: a cor do rótulo (editável via "Propriedades" no `graphics.text`
+      // linkado) nunca era lida de volta -- sobrevivia na cena, mas sumia (voltava pra cor padrão)
+      // a cada save, já que nada aqui gravava `pinEntry.labelColor`.
+      if (typeof labelComponent.properties.color === "string" && labelComponent.properties.color !== DEFAULT_PACKAGE_PIN_LABEL_COLOR) {
+        pinEntry.labelColor = labelComponent.properties.color;
+      }
     }
     pins.push(pinEntry);
     interfaceEntries.push({ pinId, label, internalTunnel: tunnelName, internalTunnelId: tunnel.id });

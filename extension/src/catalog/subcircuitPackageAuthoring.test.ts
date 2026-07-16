@@ -261,6 +261,33 @@ const manifestWithPackage = (overrides: Record<string, unknown> = {}) => ({
     assert(reseededLabel?.rotation === 90, `reabrir a sessão deveria restaurar labelRotation=90 (custom), recebido ${reseededLabel?.rotation}`);
   });
 
+  await test("compile persiste a cor customizada do rótulo do pino (bug real: mudar a cor na sessão de autoria não sobrevivia ao save -- seed sempre gravava a cor padrão hardcoded)", () => {
+    const manifest = manifestWithPackage({
+      package: { width: 56, height: 40, border: true, pins: [{ id: "P1", x: 0, y: 12, angle: 180, length: 8, label: "P1" }] },
+      interface: [{ pinId: "P1", label: "P1", internalTunnel: "TUN1" }],
+    });
+    const seeded = seedPackageAuthoringComponents(manifest, [tunnel("t1", "TUN1")], "/tmp", makeIdFactory("seed"));
+    const label = seeded.components.find((c) => c.typeId === "graphics.text")!;
+    assert(label.properties.color === "#1f2937", `sem labelColor no arquivo, deveria nascer com a cor padrão, recebido ${label.properties.color}`);
+
+    // Usuário muda a cor do rótulo (equivalente ao diálogo de Propriedades) e salva.
+    const recolored: WebviewComponentModel = { ...label, properties: { ...label.properties, color: "#e11d48" } };
+    const fullScene = [tunnel("t1", "TUN1"), ...seeded.components.filter((c) => c.id !== label.id), recolored];
+    const compiled = compilePackageAuthoringComponents(fullScene);
+    assert(compiled.errors.length === 0, `não deveria ter erros: ${compiled.errors.join(" | ")}`);
+    const p1 = compiled.package?.pins.find((p) => p.id === "P1");
+    assert(p1?.labelColor === "#e11d48", `labelColor deveria sobreviver ao compile, recebido ${p1?.labelColor}`);
+
+    // Ciclo completo compile -> sanitize -> seed, mesmo padrão do teste de labelRotation acima.
+    const sanitized = sanitizePackage(compiled.package, "/tmp");
+    const sanitizedPin = sanitized?.pins.find((p) => p.id === "P1");
+    assert(sanitizedPin?.labelColor === "#e11d48", `labelColor deveria sobreviver ao sanitizePackage, recebido ${sanitizedPin?.labelColor}`);
+
+    const reseeded = seedPackageAuthoringComponents({ package: sanitized, interface: compiled.interfaceEntries }, [tunnel("t1", "TUN1")], "/tmp", makeIdFactory("reseed"));
+    const reseededLabel = reseeded.components.find((c) => c.typeId === "graphics.text");
+    assert(reseededLabel?.properties.color === "#e11d48", `reabrir a sessão deveria restaurar a cor customizada, recebido ${reseededLabel?.properties.color}`);
+  });
+
   await test("round-trip seed -> compile produz package/interface equivalentes ao original", () => {
     const manifest = manifestWithPackage();
     const internalComponents = [tunnel("t1", "TUN1"), tunnel("t2", "TUN2")];

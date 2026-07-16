@@ -492,6 +492,7 @@ export function buildLivePackagePreview(components: readonly WebviewComponentMod
         pinEntry.labelTextAnchor = "middle";
         pinEntry.labelDominantBaseline = "middle";
         if (labelComponent.rotation) pinEntry.labelRotation = labelComponent.rotation;
+        if (typeof labelComponent.properties.color === "string") pinEntry.labelColor = labelComponent.properties.color;
       }
       return pinEntry;
     });
