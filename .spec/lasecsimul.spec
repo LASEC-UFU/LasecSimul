@@ -2289,7 +2289,12 @@ vinculado ainda) e confirmar que "Localizar arquivo do subcircuito..." aparece e
 ## 23. Autoria visual de ícone (Figura) + Package do SimulIDE dentro de "Abrir Subcircuito"
 (2026-07-10)
 
-Detalhamento completo em `.spec/lasecsimul-subcircuits.spec` seção 17 (conceito de `SubPackage`/
+**Superseded em 2026-07-16**: todo o mecanismo descrito nesta seção (`other.package`/
+`other.package_pin`/`packageIconRole`, `subcircuitPackageAuthoring.ts`) foi removido e substituído
+por um modo de editor dedicado ("Símbolo"/"Ícone", `schemaVersion 3`) — ver
+`.spec/lasecsimul-subcircuits.spec` seção 22 pro modelo atual. Registro histórico mantido abaixo.
+
+Detalhamento completo (histórico) em `.spec/lasecsimul-subcircuits.spec` seção 17 (conceito de `SubPackage`/
 `PackagePin` do SimulIDE real, distinção Figura×Package, formato de persistência, vínculo
 pino↔túnel, migração/compat, decisão de estender a arquitetura atual em vez de restaurar a antiga).
 Resumo: dentro da MESMA cena já usada pra editar o circuito interno de um subcircuito (seção 16 do
@@ -2924,6 +2929,15 @@ canto/segmento/junção com e sem seleção mista, e remoção de fio/componente
 antes de considerar 25.10 encerrado.
 
 ## 26. Auditoria de Modo Placa e Componentes Expostos (2026-07-12)
+
+**Nota 2026-07-16**: o "Mecanismo A" descrito na seção 26.2 abaixo (`subcircuitBoardMode.ts`, toggle
+DENTRO da sessão de edição) foi removido e absorvido pelo modo de editor "Símbolo" — ver
+`.spec/lasecsimul-subcircuits.spec` seção 22.5. O "Mecanismo B" (overlay na instância JÁ COLOCADA,
+`renderBoardOverlaysFor`/`boardOverlayData`) continua vivo e ativo, só re-cabeado pra ler/escrever
+`exposedComponents[]` (array de nível superior do `.lssubcircuit`, schemaVersion 3) em vez dos
+campos planos `boardX`/`boardY`/... descritos na seção 26.3 — o bug de dois-armazenamentos-paralelos
+ali documentado não existe mais estruturalmente (só há UM array de exposição agora, não dois
+formatos concorrentes). Registro histórico mantido abaixo.
 
 Pedido explícito do usuário: auditoria minuciosa de "Modo Placa" e "Selecionar componentes
 expostos" durante edição de subcircuito, usando o SimulIDE real como referência (fonte estudada:

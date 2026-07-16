@@ -247,6 +247,13 @@ extensão), salvar, e instâncias já no esquemático só veem a versão nova na
 Hot-reload de subcircuito em uso fica como refinamento futuro, mesmo espírito do *versioned swap* de plugins
 (RF09) mas não implementado agora.
 
+**Superseded em 2026-07-16 (seção 22)**: o campo `component.exposed`/`boardVisual` (flat/aninhado,
+seção 4.1 abaixo) foi substituído por um array `exposedComponents[]` de nível superior no
+`.lssubcircuit` (schemaVersion 3) — mesmo conceito ("quais componentes internos ficam visíveis/
+posicionáveis por fora"), formato diferente e agora com sua PRÓPRIA seção de modo no editor
+("Símbolo"), não mais um toggle avulso dentro de uma sessão sem modo. Registro histórico mantido
+porque o conceito e a motivação original continuam corretos; só o formato de persistência mudou.
+
 ### 4.1 Selecionar componentes expostos (dentro da sessão de edição) e usá-los na instância colocada
 (implementado 2026-06-29/30, documentado aqui pela primeira vez)
 
@@ -884,6 +891,18 @@ editar algo, tentar "Voltar ao Circuito Principal" e confirmar que as 3 opções
 mantém a sessão, Descartar Alterações volta sem gravar, Salvar grava e reabrir confirma a mudança
 persistida.
 
+**Superseded por INTEIRO em 2026-07-16 (seção 22)**: todo o mecanismo descrito nas seções 17-21
+(`other.package`/`other.package_pin` como objetos ocultos dentro de `state.schematicState.components`,
+`packageIconRole`/`packageShapeRole`, `subcircuitPackageAuthoring.ts`, `buildLivePackagePreview`/
+`isLivePackageAuthoringVisual`) foi REMOVIDO e substituído por um modo de editor dedicado ("Símbolo"),
+com pinos/formas/ícone vivendo em arrays canônicos próprios (`symbol.pins[]`/`symbol.shapes[]`,
+`icon{}`), nunca mais interleaved com `components[]` do circuito interno. Nenhum dos typeIds
+`other.package`/`other.package_pin` existe mais no catálogo. As seções 17-21 abaixo ficam mantidas
+como registro histórico do design anterior (útil pra entender POR QUE certas regras do novo modelo
+existem — ex: o vínculo pino↔túnel por identificador estável da seção 17.3 é o ancestral direto de
+`schematicModel.ts::removeElement`'s cascata de hoje), mas não são mais o comportamento vigente. Ver
+seção 22 para o modelo atual completo.
+
 ## 17. Autoria visual do ícone (Figura) e do Package do SimulIDE, DENTRO da sessão "Abrir
 Subcircuito" (2026-07-10)
 
@@ -1329,3 +1348,259 @@ corretamente dentro E fora do editor; (4) que arrastar pino/rótulo/forma e clic
 continua funcionando com o corpo consolidado. Recomenda-se fortemente verificação manual completa no
 VSCode real (extensão reempacotada/reinstalada) antes de considerar a feature definitivamente
 fechada, conforme os critérios de aceitação do pedido original.
+
+## 22. Refatoração completa: editor de três modos Subcircuito/Símbolo/Ícone, schemaVersion 3
+(2026-07-16)
+
+Substitui POR INTEIRO o mecanismo das seções 17-21 (`other.package`/`other.package_pin` como objetos
+ocultos dentro de `components[]`, marcadores `packageIconRole`/`packageShapeRole`,
+`subcircuitPackageAuthoring.ts`). Motivação (pedido explícito do usuário): a mesma sessão desta
+refatoração produziu uma cadeia de bugs reais (seções 18/20/21) todos com a mesma raiz — o símbolo
+visual não era um conceito de primeira classe, modelado à parte; era contrabandeado no MESMO array do
+circuito elétrico real via flags-marcador e uma convenção de "objeto único" que o motor nunca
+verificava perto da criação. Ruptura de compatibilidade autorizada explicitamente (sem migração
+automática, sem ferramenta de conversão) — um arquivo `schemaVersion` antigo é rejeitado com mensagem
+acionável, nunca aberto parcialmente.
+
+### 22.1 Três modos no MESMO editor, nunca uma janela nova
+
+O painel "Abrir Subcircuito" (seção 16) ganhou um ComboBox de modo na barra (`renderAppBar`,
+`main.ts`), substituindo a antiga faixa "Editando subcircuito: `<nome>`":
+
+- **Subcircuito** — o circuito interno elétrico real (`components[]`/`topology`), exatamente como a
+  seção 16 já descrevia. Modo padrão ao abrir.
+- **Símbolo** — corpo/formas/pinos do símbolo visual (WYSIWYG), MAIS a projeção de componentes
+  internos "expostos" (absorve a antiga "Modo Placa", seção 4.1/4).
+- **Ícone** — corpo/formas do ícone de catálogo (sem pinos), o vetor mostrado na paleta e na árvore.
+
+Trocar de modo é **puramente estado de UI em memória da Webview** (`subcircuitEditorMode`,
+`main.ts`) — nunca dispara save/reload/reabertura de painel, nunca sincroniza com o host. Cada modo
+opera sobre seu PRÓPRIO array de elementos (`state.components` pro Subcircuito,
+`state.symbolElements`/`state.iconElements` pros outros dois) através de um único ponto de indireção,
+`activeSceneComponents()`/`setActiveSceneComponents()` — todo o motor genérico (seleção, hit-test,
+arrastar, rotacionar, painel de propriedades, copiar/colar, apagar, undo/redo, z-order, adicionar da
+paleta, zoom/exportar SVG) passa por esse ponto, nunca lê `state.components` direto para "a cena
+atual". Fios/topologia continuam sendo um conceito exclusivo do circuito interno — `render()` esconde
+fios/preview de fio pendente sempre que `subcircuitEditorMode !== "circuit"` (correção deliberada:
+antes desta indireção, um modo de autoria nunca deveria ter mostrado fios, mas a condição vivia presa
+a uma variável de Modo Placa separada e desatualizada).
+
+### 22.2 Novo schema do `.lssubcircuit` (`schemaVersion 3`)
+
+```jsonc
+{
+  "schemaVersion": 3,
+  "typeId": "subcircuits.demo_flasher",
+  "name": "Demo LED Flasher",
+  "folderPath": ["Meus Subcircuitos"],
+
+  // Circuito interno (Subcircuito) -- MESMO formato de sempre (seção 1/19), inalterado.
+  "components": [
+    { "id": "r1", "typeId": "passive.resistor", "properties": { "resistance": 220 }, "visual": { "x": 80, "y": 40, "rotation": 0 } },
+    { "id": "led1", "typeId": "outputs.led", "properties": { "color": "red" }, "visual": { "x": 160, "y": 40, "rotation": 0 } },
+    // Tunnels: properties.pinId é o NOVO campo -- o join key com symbol.pins[].id. properties.name é
+    // FORÇADO a igualar properties.pinId sempre que pinId está presente (renameCanonicalTunnelNames,
+    // rodado antes de TODO save -- nunca hand-editado, nunca parcialmente corrigido).
+    { "id": "tun_vcc", "typeId": "connectors.tunnel", "properties": { "name": "VCC", "pinId": "VCC" }, "visual": { "x": 20, "y": 40, "rotation": 0 } },
+    { "id": "tun_gnd", "typeId": "connectors.tunnel", "properties": { "name": "GND", "pinId": "GND" }, "visual": { "x": 240, "y": 40, "rotation": 0 } }
+  ],
+  "topology": { "revision": 3, "nodes": [], "conductors": [ /* seção 19, inalterado */ ] },
+
+  // interface[]: contrato do Core INALTERADO (pinId/label/internalTunnel), mas agora 100%
+  // MÁQUINA-DERIVADO a cada save a partir de symbol.pins[] -- internalTunnel é SEMPRE o próprio
+  // pinId (subcircuitPinModel.ts::deriveInterfaceEntries). Nunca hand-authored, nunca patch parcial.
+  "interface": [
+    { "pinId": "VCC", "label": "VCC", "internalTunnel": "VCC" },
+    { "pinId": "GND", "label": "GND", "internalTunnel": "GND" }
+  ],
+
+  // Símbolo (Modo Símbolo) -- corpo + pinos. Tipado como PackageDescriptor (seção 3/21 de
+  // native-devices.spec) -- MESMO tipo, reaproveitado, nunca renomeado/redesenhado. Única mudança de
+  // schema: a CHAVE raiz vira "symbol" (era "package").
+  "symbol": {
+    "width": 64, "height": 32, "border": true,
+    "background": { "kind": "color", "value": "#2b2f36" },
+    "shapes": [ { "kind": "rect", "x": 2, "y": 2, "w": 60, "h": 28, "stroke": "#9aa4b2" } ],
+    "pins": [
+      { "id": "VCC", "label": "VCC", "kind": "POWER", "x": 0, "y": 8, "angle": 180, "length": 8 },
+      { "id": "GND", "label": "GND", "kind": "POWER", "x": 0, "y": 24, "angle": 180, "length": 8 }
+    ]
+  },
+
+  // Componentes expostos (Modo Símbolo, absorve "Modo Placa" -- seção 4.1). Array de nível
+  // superior, referencia components[].id por id PERSISTENTE, nunca copia propriedades/estado --
+  // apresentação pura, o componente interno real continua sendo a única fonte de estado.
+  "exposedComponents": [
+    { "componentId": "led1", "x": 40, "y": 12, "rotation": 0, "flipH": false, "flipV": false, "scale": 1, "layer": 0 }
+  ],
+
+  // Ícone (Modo Ícone) -- vetor canônico no PRÓPRIO arquivo, substitui iconPath (PNG externo). Mesmo
+  // vocabulário de shapes, nunca pinos.
+  "icon": {
+    "width": 24, "height": 24,
+    "shapes": [ { "kind": "rect", "x": 1, "y": 4, "w": 22, "h": 16, "fill": "#2b2f36" } ]
+  }
+}
+```
+
+Nenhum `other.package`, `other.package_pin`, `packageIconRole` ou `packageShapeRole` existe neste
+schema. `iconPath` (referência a PNG externo) deixou de ser lido — todo ícone é vetor inline.
+
+### 22.3 Modelo canônico de domínio, host-side (`schematicModel.ts`)
+
+Decisão mandatória do usuário durante esta refatoração, verbatim (resumo): NÃO fazer uma correção
+pragmática limitada a alguns verbos IPC, NÃO implementar um helper que procure sequencialmente em
+`components[]`/`symbolElements[]`/`iconElements[]` (isso ocultaria a fragmentação sem corrigir o
+modelo) — construir uma API canônica de domínio, com escopo proprietário explícito por elemento e
+unicidade global de id garantida, e migrar TODOS os handlers IPC afetados pra usá-la, nunca acessando
+os arrays de persistência diretamente.
+
+Implementado em `extension/src/core/schematicModel.ts` (host-side, sem import de `vscode`, puro/
+testável): `ElementScope = "schematic" | "symbol" | "icon"`, `getElement(state, id)` (acha um elemento
+em QUALQUER escopo sem quem chama saber qual array), `updateElement`/`removeElement`/`moveElement`
+(patch/remoção/realocação de escopo, sempre devolvendo um resultado tipado — nunca um no-op
+silencioso em id inexistente), `findDuplicateElementIds` (garante unicidade global), mais
+`getExposedComponentEntry`/`setExposedComponentEntry`/`removeExposedComponentEntry` pro array
+`exposedComponents[]`. `removeElement` de um pino já cascateia removendo TODO túnel interno ligado ao
+mesmo `pinId` e bloqueia apagar o último túnel de um pino com mensagem acionável — o mesmo verbo IPC
+genérico `requestRemoveComponent` (usado pra qualquer componente do circuito) funciona sem mudança
+pra pino/túnel também, sem precisar de 2 verbos novos dedicados.
+
+Auditados e reescritos para usar esta API (não mais indexação direta em
+`state.schematicState.components`/`symbolElements`/`iconElements`): `requestRemoveComponent`,
+`requestUpdateProperty`, `requestRotateComponent`, `requestFlipComponent`, `requestRenameComponent`,
+`requestUpdateLabelVisibility`, `chooseFilePropertyCommand`, `getComponentById`,
+`chooseSubcircuitFileCommand`, `requestInsertItems`, além de `openSubcircuitForEditingCommand`/
+`writeSubcircuitEditingSessionBack` reescritos por inteiro contra o novo `SubcircuitDocument`
+(`subcircuitDocument.ts`).
+
+### 22.4 Pino/túnel — vínculo por `pinId`, criação/cópia mintam sempre um novo
+
+- **Vínculo**: `tunnel.properties.pinId` é o join key com `symbol.pins[].id` — não mais um nome de
+  túnel casado por string livre (ancestral: seção 17.3, `internalTunnelId`). Um pino sem NENHUM túnel
+  associado é erro bloqueante de validação (`subcircuitValidation.ts`); múltiplos túneis (>=1) podem
+  compartilhar o mesmo `pinId` — "N túneis por 1 pino" continua permitido e útil (mesmo caso de uso
+  real de GND1/GND2/GND3 — seção 22.7).
+- **Criação**: `createSymbolPinCommand` (`main.ts`, comando dedicado — não existe typeId de pino na
+  paleta geral) mina um `pinId` NUNCA derivado de posição/índice, e cria transacionalmente o túnel
+  obrigatório correspondente (`createPin`, `subcircuitPinModel.ts`).
+  `createAdditionalTunnelCommand` adiciona explicitamente mais um túnel pro MESMO `pinId`.
+- **Cópia/colar/duplicar** (requisito original explícito, achado como lacuna durante a limpeza do
+  código morto de `other.package_pin`): copiar um `symbol.pin` SEMPRE mina um `pinId` novo + túnel
+  novo, nunca reaproveita o original — `remintPinIdsAndBuildTunnels()` (`main.ts`), acionado no
+  `pasteClipboardItems` e no arrastar-com-Ctrl+Shift (duplicar).
+- **Renomear/salvar**: `renameCanonicalTunnelNames` roda incondicionalmente antes de todo save,
+  forçando `properties.name === properties.pinId` em todo túnel ligado — neutraliza edição manual
+  acidental do nome via painel de Propriedades (mesmo espírito da seção 17.3, agora garantido pelo
+  modelo, não por uma checagem isolada).
+- **`interface[]`**: 100% re-derivado a cada save (`deriveInterfaceEntries`/
+  `finalizeSubcircuitDocumentForSave`), idempotente (rodar 2x produz o mesmo resultado) — nunca
+  hand-authored, nunca patch parcial (requisito herdado da seção 17.4/17.5).
+
+### 22.5 Componentes expostos — `exposedComponents[]` substitui "Modo Placa"
+
+Absorve por completo a feature da seção 4.1: marcar/desmarcar exposição vira um toggle de menu de
+contexto por componente interno (`toggleExposedComponentCommand`), a projeção do componente exposto
+aparece dentro do canvas de Símbolo (`renderExposedComponentProjections`) usando as propriedades AO
+VIVO do componente interno real (nunca uma cópia congelada), arrastável (`rotateExposedComponent`
+pra orientação). O overlay de Modo Placa NA INSTÂNCIA JÁ COLOCADA (fora de qualquer sessão de edição
+— seção 4.1, `renderBoardOverlaysFor`/`boardOverlayData`) continua existindo tal e qual, só
+re-cabeado pra ler/escrever `exposedComponents[]` em vez dos campos planos antigos
+(`subcircuitInternals.ts::extractInternalComponents`, `mcuCommands.ts::updateBoardOverlayVisualCommand`)
+— são DUAS features distintas com o mesmo nome histórico ("Modo Placa"), já eram distintas antes
+desta refatoração (ver aviso na seção 4.1), e continuam distintas agora.
+
+### 22.6 Ícone de catálogo — vetor inline, mesmo pipeline de renderização de um símbolo real
+
+`registeredSources.ts::manifestIconFields` passou a reconhecer `icon` como OBJETO (schemaVersion 3,
+`PackageDescriptor` sem pinos) e convertê-lo em SVG inline via `iconDescriptorToSvgInline` — MESMO
+pipeline (`resolvePackageLayout`+`packageBodySvg`, via `livePackagePreviewSymbolSvg`,
+`componentSymbols.ts`) que desenha qualquer símbolo/dispositivo real, garantindo que o ícone do
+catálogo é literalmente a mesma renderização, nunca uma segunda implementação divergente. `icon`
+como string (nome curto/SVG inline, formato antigo de `.lsdevice`/subcircuitos anteriores) continua
+suportado à parte, sem mudança — só subcircuitos passam a ter a opção de `icon{}` vetor.
+
+### 22.7 Conversão dos dois arquivos ESP32 shipados
+
+`subcircuits/esp32_devkitc_v4.lssubcircuit`/`esp32_wroom32.lssubcircuit` (schemaVersion 1,
+`other.package`) convertidos à mão pra schemaVersion 3 nesta mesma rodada (script Node ad-hoc,
+descartado depois de uso — não faz parte do produto): `package` → `symbol` (dado preservado byte-a-
+byte, incluindo a foto de fundo em base64), `interface[]` re-derivado, `iconPath` (PNG externo)
+substituído por um `icon{}` vetor canônico (silhueta simples — placa azul com pinos pros dois lados
+pro DevKitC, módulo cinza com pinos na base pro WROOM — sem pretensão de fidelidade pixel-a-pixel,
+só reconhecível), `exposedComponents: []` (com uma entrada pro `mcu1` do DevKitC, que já era
+`exposed: true` no formato antigo).
+
+**Achado real durante a conversão**: os dois arquivos têm `GND1`/`GND2`/`GND3` — 3 pinos externos
+distintos que, no formato ANTIGO, compartilhavam um ÚNICO componente-túnel interno (`tunnel_gnd`,
+`properties.name: "GND"` — nome que não batia com NENHUM dos 3 `pinId`s). O novo modelo (22.4) exige
+que cada `symbol.pin` tenha ao menos um túnel com `pinId` IGUAL ao seu próprio id — um único túnel
+compartilhado por 3 pinos externos com nomes diferentes não é mais representável diretamente. Para
+preservar o comportamento elétrico EXATO (as 3 saídas continuam sendo o mesmo net interno), o túnel
+original foi mantido para `GND1` e DOIS túneis novos foram criados (`GND2`/`GND3`), cada um com seu
+próprio `pinId`, e fiados internamente ao MESMO nó/componente que o túnel original já usava (o nó de
+topologia existente no DevKitC, o componente `other.ground` já existente no WROOM) — o net final é
+idêntico ao de antes, só a representação de arquivo mudou de "1 túnel, 3 nomes de interface" para "3
+túneis, 1 net comum por fiação interna".
+
+### 22.8 Rejeição de arquivo antigo — sem abertura parcial
+
+`schemaVersionRejectionMessage`/`parseSubcircuitDocument` (`subcircuitDocument.ts`) rejeitam qualquer
+`schemaVersion !== 3` imediatamente, antes de qualquer outro campo ser lido — mesma mensagem acionável
+em todos os pontos de entrada (`openSubcircuitForEditingCommand`, `registeredSources.ts::
+resolveRegisteredItem`'s branch `subcircuit-file`, resolução de bloco genérico por caminho — seção
+12): "Este subcircuito usa uma versão de formato antiga (schemaVersion N) e precisa ser convertido
+para o novo modelo (schemaVersion 3)." Um arquivo velho na paleta aparece como entrada DESABILITADA
+com essa mensagem (`disabledReason`, mesmo padrão de dispositivo com dependência ausente), nunca
+some silenciosamente nem abre pela metade. Sem ferramenta de migração automática nesta rodada —
+decisão explícita do usuário (ruptura autorizada).
+
+### 22.9 Validação (`subcircuitValidation.ts`)
+
+Lista obrigatória rodada antes de todo save: ids duplicados entre `components[]`/`symbol.pins[]`/
+`exposedComponents[]` (mesmo namespace, checado junto — unicidade global, seção 22.3); pino sem
+nenhum túnel associado; túnel referenciando um `pinId` inexistente; `pinId` vazio/inválido;
+`exposedComponents[]` com referência órfã (componente removido) ou exposição duplicada do mesmo
+componente — os dois últimos viram warning + auto-fix seguro (mantém só a primeira ocorrência,
+nunca escolhe arbitrariamente), nunca erro bloqueante; shape com `kind` não suportado; propriedade
+não serializável (função) num componente interno — erro bloqueante. Determinístico: validar o mesmo
+documento 2x, ou com ordem de array diferente, produz exatamente o mesmo conjunto de
+erros/avisos.
+
+### 22.10 Arquivos removidos / criados / mais afetados
+
+**Removidos por inteiro**: `catalog/subcircuitPackageAuthoring.ts` (+ teste), `ui/webview/
+subcircuitBoardMode.ts` (+ teste) — o toggle "Modo Placa" DENTRO da sessão de edição (distinto do
+overlay na instância colocada, 22.5) deixou de existir como conceito separado, absorvido pelo modo
+Símbolo. `catalog/simulideSceneTranslator.ts` (+ teste) também removido — mecanismo de tradução de
+`authoringScene` (posição congelada de importação de uma cena SimulIDE real) que já estava órfão
+(zero chamador vivo) desde uma refatoração anterior a esta sessão; achado ao auditar referências a
+`other.package` no código, não uma remoção planejada do escopo original.
+
+**Novos**: `catalog/subcircuitDocument.ts` (schema/parse/serialize), `catalog/subcircuitPinModel.ts`
+(CRUD pino/túnel + cascata), `catalog/subcircuitExposedComponents.ts` (validação de referência),
+`catalog/subcircuitValidation.ts` (lista obrigatória), `catalog/subcircuitSymbolScene.ts`
+(materialize/compile WYSIWYG Símbolo/Ícone), `core/schematicModel.ts` (API canônica de domínio,
+22.3).
+
+**Campos removidos de `WebviewComponentModel`** (`model.ts`): `packageIconRole`, `packageShapeRole`,
+`exposed`, `boardX`/`boardY`/`boardRotation`/`boardFlipH`/`boardFlipV` (substituídos por
+`exposedComponents[]`, 22.5). `boardWidth`/`boardHeight` (conceito DISTINTO — tamanho na placa da
+instância COLOCADA, nunca fez parte da autoria) foram preservados sem mudança.
+
+### 22.11 Verificação
+
+`npm test` (extensão) completo sem regressão, incluindo os novos grupos de teste (schemaVersion/
+parse/serialize, CRUD pino/túnel + cascata, exposição por referência, validação obrigatória,
+materialize/compile WYSIWYG, `schematicModel.ts` — ~85 testes novos). Suíte de testes do Core
+(`node scripts/test-core.js --config Release`) completa sem regressão (44/44, incluindo
+`core_bootstrap`/`esp32_devkitc_subcircuit`, ambos com fixtures atualizadas pro schemaVersion 3/chave
+`symbol`). Os dois arquivos ESP32 reais (22.7) verificados via `parseSubcircuitDocument` +
+`validateSubcircuitDocument` (zero erros/avisos), idempotência de `finalizeSubcircuitDocumentForSave`,
+round-trip serialize→parse, e resolução completa de catálogo (`resolveRegisteredItems` — ambos
+resolvem habilitados, `pinCount: 38`, ícone SVG inline gerado). **Sem GUI disponível neste
+ambiente** para confirmar interativamente: o ComboBox de modo em uso real; criar/apagar pino e ver a
+cascata de túnel; arrastar uma projeção de componente exposto; renderização do ícone em light/dark
+na paleta; ciclo completo editor→salvar→fechar→reabrir num `.lsproj`/circuito com uma instância
+colocada. Recomenda-se verificação manual completa no VSCode real antes de considerar a refatoração
+definitivamente fechada.
