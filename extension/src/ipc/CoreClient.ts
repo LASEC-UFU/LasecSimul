@@ -162,6 +162,18 @@ export class CoreClient {
     return resp.value;
   }
 
+  async drainUart(instanceId: string): Promise<{ dataHex: string; simulationTimeNs: number; pending: number; dropped: number }> {
+    return await this.request("drainUart", { instanceId }) as { dataHex: string; simulationTimeNs: number; pending: number; dropped: number };
+  }
+
+  async writeUart(instanceId: string, dataHex: string): Promise<{ pending: number; dropped: number; simulationTimeNs: number }> {
+    return await this.request("writeUart", { instanceId, dataHex }) as { pending: number; dropped: number; simulationTimeNs: number };
+  }
+
+  async getUartStatus(instanceId: string): Promise<{ pending: number; dropped: number }> {
+    return await this.request("getUartStatus", { instanceId }) as { pending: number; dropped: number };
+  }
+
   /** Edita uma propriedade de um componente DENTRO de um subcircuito, endereçando por id local
    * (ex: "button_en") em vez do índice Core -- usado pelo overlay de Modo Placa no circuito
    * principal, ver `core/src/app/CoreApplication.cpp::"setSubcircuitChildProperty"`. */

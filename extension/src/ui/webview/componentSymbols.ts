@@ -453,8 +453,29 @@ function formatHz(value: number | undefined): string {
   return `${Math.round(hz)} Hz`;
 }
 
-function packageTextContent(shape: PackageShape): string {
-  const lines = String(shape.value ?? "").split(/\r?\n/);
+function packageShapeStateFill(shape: PackageShape, properties?: Record<string, unknown>): string | undefined {
+  if (!shape.stateFill) return undefined;
+  const raw = properties?.[shape.stateFill.prop];
+  const mapped = shape.stateFill.map?.[String(raw)];
+  if (mapped !== undefined) return mapped;
+  if (shape.stateFill.numeric) {
+    const value = Number(raw);
+    if (Number.isFinite(value)) {
+      for (const rule of shape.stateFill.numeric) {
+        const compareTo = Number(rule.valueProp ? properties?.[rule.valueProp] : rule.value);
+        if (!Number.isFinite(compareTo)) continue;
+        if ((rule.op === ">" && value > compareTo) || (rule.op === ">=" && value >= compareTo) ||
+            (rule.op === "<" && value < compareTo) || (rule.op === "<=" && value <= compareTo) ||
+            (rule.op === "==" && value === compareTo) || (rule.op === "!=" && value !== compareTo)) return rule.color;
+      }
+    }
+  }
+  return shape.stateFill.fallback;
+}
+
+function packageTextContent(shape: PackageShape, properties?: Record<string, unknown>): string {
+  const dynamicValue = shape.stateText?.kind === "property" ? properties?.[shape.stateText.prop] : undefined;
+  const lines = String(dynamicValue ?? shape.value ?? "").split(/\r?\n/);
   if (lines.length <= 1) return escapeXmlText(lines[0] ?? "");
   const lineHeight = Math.round((shape.fontSize ?? 11) * 1.15 * 1000) / 1000;
   return lines
@@ -489,7 +510,7 @@ function packageShapeSvg(shape: PackageShape, extraTransform?: string, propertie
   const cls = shape.cssClass ? ` class="${shape.cssClass}"` : "";
   const transform = [shape.transform, extraTransform].filter(Boolean).join(" ");
   const xf = transform ? ` transform="${escapeXmlText(transform)}"` : "";
-  const fill = shape.fill ?? "none";
+  const fill = packageShapeStateFill(shape, properties) ?? shape.fill ?? "none";
   const paintAttrs =
     `${shape.strokeLinecap ? ` stroke-linecap="${shape.strokeLinecap}"` : ""}` +
     `${shape.strokeLinejoin ? ` stroke-linejoin="${shape.strokeLinejoin}"` : ""}` +
@@ -517,7 +538,7 @@ function packageShapeSvg(shape: PackageShape, extraTransform?: string, propertie
     }
     case "text":
     default:
-      return `<text${cls}${xf} x="${shape.x ?? 0}" y="${shape.y ?? 0}" text-anchor="${shape.textAnchor ?? "middle"}" font-size="${shape.fontSize ?? 11}"${shape.dominantBaseline ? ` dominant-baseline="${shape.dominantBaseline}"` : ""}${shape.fontFamily ? ` font-family="${escapeXmlText(shape.fontFamily)}"` : ""}${shape.fontWeight ? ` font-weight="${escapeXmlText(String(shape.fontWeight))}"` : ""} fill="${shape.color ?? "currentColor"}"${paintAttrs}>${packageTextContent(shape)}</text>`;
+      return `<text${cls}${xf} x="${shape.x ?? 0}" y="${shape.y ?? 0}" text-anchor="${shape.textAnchor ?? "middle"}" font-size="${shape.fontSize ?? 11}"${shape.dominantBaseline ? ` dominant-baseline="${shape.dominantBaseline}"` : ""}${shape.fontFamily ? ` font-family="${escapeXmlText(shape.fontFamily)}"` : ""}${shape.fontWeight ? ` font-weight="${escapeXmlText(String(shape.fontWeight))}"` : ""} fill="${packageShapeStateFill(shape, properties) ?? shape.color ?? "currentColor"}"${paintAttrs}>${packageTextContent(shape, properties)}</text>`;
   }
 }
 

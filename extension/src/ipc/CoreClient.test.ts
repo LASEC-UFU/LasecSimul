@@ -187,6 +187,25 @@ const { test, finish } = createTestRunner("CoreClient — testes de IPC");
     await server.stop();
   });
 
+  await test("canal UART usa lotes com timestamp/status, nunca uma requisição por byte", async () => {
+    const name = `lasecsimul-test-uart-${process.pid}`;
+    const received: RequestEnvelope[] = [];
+    const server = new MockCoreServer(name, PROTOCOL_VERSION, (msg) => {
+      received.push(msg);
+      if (msg.type === "drainUart") return { id: msg.id, ok: true, payload: { dataHex: "0041ff", simulationTimeNs: 42, pending: 0, dropped: 0 } };
+      return { id: msg.id, ok: true, payload: { pending: 3, dropped: 0 } };
+    });
+    await server.start();
+    const client = new CoreClient(name); await client.start();
+    const batch = await client.drainUart("7");
+    const write = await client.writeUart("7", "0041ff");
+    const status = await client.getUartStatus("7");
+    assert(batch.dataHex === "0041ff" && batch.simulationTimeNs === 42, "lote UART perdeu bytes/timestamp");
+    assert(write.pending === 3 && status.pending === 3, "status UART incorreto");
+    assert(received.filter((message) => message.type === "writeUart").length === 1, "3 bytes viraram mais de uma mensagem IPC");
+    await client.stop(); await server.stop();
+  });
+
   const { failed } = finish();
   process.exitCode = failed > 0 ? 1 : 0;
 })();

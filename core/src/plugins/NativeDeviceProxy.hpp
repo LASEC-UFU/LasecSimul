@@ -35,6 +35,10 @@ struct NativeDeviceHostContext {
     simulation::Scheduler* scheduler = nullptr;
     uint32_t componentIndex = 0;
     NativeDeviceProxy* owner = nullptr;
+    /** `true` somente enquanto um LSDN_EVT_TIMER é entregue pelo callback do Scheduler, que roda
+     * deliberadamente com o mutex liberado. Host calls devem então usar as variantes públicas
+     * sincronizadas; stamp/PIN_CHANGE usam as variantes Unlocked. */
+    bool inUnlockedTimerCallback = false;
 
     std::unordered_map<uint32_t, int32_t> pendingDigitalDrive;
     std::unordered_map<uint32_t, float> pendingAnalogDrive;

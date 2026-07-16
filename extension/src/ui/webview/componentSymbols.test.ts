@@ -299,6 +299,21 @@ import { PackageDescriptor, WebviewComponentModel } from "./model";
       "markup deveria conter o rótulo de cada pino declarado");
   });
 
+  await test("package.shapes resolve stateFill/stateText do .lsdevice sem sobrescrita visual", () => {
+    registerPackage("test.declarative-visual-state", {
+      width: 24,
+      height: 12,
+      pins: [{ id: "p", x: 0, y: 6, angle: 180, length: 0, label: "" }],
+      shapes: [
+        { kind: "rect", x: 0, y: 0, w: 24, h: 12, fill: "#000000", stateFill: { prop: "status", map: { active: "#123456" } } },
+        { kind: "text", x: 12, y: 8, value: "fallback", color: "#abcdef", stateText: { kind: "property", prop: "caption" } },
+      ],
+    });
+    const svg = packageSymbolSvg("test.declarative-visual-state", { status: "active", caption: "Manifesto" }) ?? "";
+    assert(svg.includes('fill="#123456"'), `stateFill declarado no package não foi aplicado: ${svg}`);
+    assert(svg.includes('fill="#abcdef"') && svg.includes(">Manifesto</text>"), `stateText/cor declarados no package não foram aplicados: ${svg}`);
+  });
+
   await test("packageSymbolSvg preserva formas path/image para assets e desenhos SimulIDE", () => {
     const richPkg: PackageDescriptor = {
       width: 40,

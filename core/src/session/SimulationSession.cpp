@@ -499,6 +499,11 @@ void SimulationSession::setTunnelName(uint32_t component, const std::string& pin
 
 std::optional<std::string> SimulationSession::setProperty(uint32_t component, const std::string& propertyName,
                                                           const PropertyValue& value) {
+    return m_scheduler.synchronized([&] { return setPropertyUnlocked(component, propertyName, value); });
+}
+
+std::optional<std::string> SimulationSession::setPropertyUnlocked(uint32_t component, const std::string& propertyName,
+                                                                  const PropertyValue& value) {
     if (component >= m_componentInstances.size()) {
         return validationError("unknown_property", "propriedade desconhecida: " + propertyName);
     }
@@ -525,11 +530,15 @@ std::optional<std::string> SimulationSession::setProperty(uint32_t component, co
             }
         }
         if (!schema.options.empty()) {
-            const std::string* optionValue = std::get_if<std::string>(&value);
-            const bool validOption = optionValue
-                && std::any_of(schema.options.begin(), schema.options.end(), [&](const PropertyOption& option) {
-                       return option.value == *optionValue;
-                   });
+            const bool validOption = std::any_of(schema.options.begin(), schema.options.end(), [&](const PropertyOption& option) {
+                if (const std::string* text = std::get_if<std::string>(&value)) return option.value == *text;
+                if (const bool* flag = std::get_if<bool>(&value)) return option.value == (*flag ? "true" : "false");
+                if (const double* number = std::get_if<double>(&value)) {
+                    try { return std::abs(std::stod(option.value) - *number) <= 1e-12; }
+                    catch (const std::exception&) { return false; }
+                }
+                return false;
+            });
             if (!validOption) {
                 return validationError("invalid_option", "opÃ§Ã£o invÃ¡lida para propriedade: " + propertyName);
             }
@@ -557,7 +566,7 @@ std::optional<std::string> SimulationSession::setProperty(uint32_t component, co
             m_topologyDirty = true;
             m_topologyReuseSafe = false;
         }
-        m_scheduler.markDirty(component); // editar propriedade sempre exige re-stamp
+        m_scheduler.dirtySet().insert(component); // mutex já pertence ao wrapper setProperty()
         return std::nullopt;
     }
 
@@ -579,6 +588,11 @@ std::optional<PropertySchema> SimulationSession::propertySchemaOf(uint32_t compo
 
 std::optional<PropertyValue> SimulationSession::propertyValueOf(uint32_t component,
                                                                   const std::string& propertyName) const {
+    return m_scheduler.synchronized([&] { return propertyValueOfUnlocked(component, propertyName); });
+}
+
+std::optional<PropertyValue> SimulationSession::propertyValueOfUnlocked(uint32_t component,
+                                                                         const std::string& propertyName) const {
     if (component >= m_componentInstances.size() || !m_componentInstances[component]) return std::nullopt;
     for (PropertyDescriptor& descriptor : m_componentInstances[component]->propertyDescriptors()) {
         if (descriptor.name == propertyName) return descriptor.get();

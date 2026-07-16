@@ -27,12 +27,12 @@
       "id": "mcu1",
       "typeId": "espressif.esp32",
       "properties": {},
+      "label": "QemuDevice",
+      "showValue": false,
       "visual": {
         "x": 553,
         "y": 182,
-        "rotation": 0,
-        "flipH": false,
-        "flipV": false
+        "rotation": 0
       }
     },
     {
@@ -42,12 +42,12 @@
         "__ui_idLabelX": -8,
         "__ui_idLabelY": 16
       },
+      "label": "Ground (0 V)",
+      "showValue": false,
       "visual": {
         "x": 560.3999938964844,
         "y": 498.5,
-        "rotation": 0,
-        "flipH": false,
-        "flipV": false
+        "rotation": 0
       }
     },
     {
@@ -60,12 +60,12 @@
         "__ui_valueLabelX": -33,
         "__ui_valueLabelY": -6
       },
+      "label": "Resistor",
+      "showValue": true,
       "visual": {
         "x": 473.34224863269986,
         "y": 208.41361850748896,
-        "rotation": 90,
-        "flipH": true,
-        "flipV": false
+        "rotation": 90
       }
     },
     {
@@ -78,12 +78,12 @@
         "__ui_idLabelX": 28,
         "__ui_idLabelY": -8
       },
+      "label": "Resistor",
+      "showValue": true,
       "visual": {
         "x": 680.9551498129092,
         "y": 380.13677505542273,
-        "rotation": 180,
-        "flipH": false,
-        "flipV": false
+        "rotation": 180
       }
     },
     {
@@ -94,12 +94,12 @@
         "__ui_idLabelY": 30,
         "closed": false
       },
+      "label": "Push",
+      "showValue": false,
       "visual": {
         "x": 528,
         "y": 414,
-        "rotation": 0,
-        "flipH": false,
-        "flipV": false
+        "rotation": 0
       }
     },
     {
@@ -110,12 +110,12 @@
         "__ui_idLabelX": -3,
         "__ui_idLabelY": 33
       },
+      "label": "Push",
+      "showValue": false,
       "visual": {
         "x": 594.0767242614673,
         "y": 414.1421260274812,
-        "rotation": 0,
-        "flipH": false,
-        "flipV": false
+        "rotation": 0
       }
     },
     {
@@ -126,12 +126,12 @@
         "__simulideTunnelRotated": false,
         "pinId": "GND1"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 505.1141484824393,
         "y": 473.8214985722842,
-        "rotation": 0,
-        "flipH": false,
-        "flipV": false
+        "rotation": 0
       }
     },
     {
@@ -142,12 +142,12 @@
         "__simulideTunnelRotated": false,
         "pinId": "3V3"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 451.1579656787299,
         "y": 138.26917593116505,
-        "rotation": 0,
-        "flipH": false,
-        "flipV": false
+        "rotation": 0
       }
     },
     {
@@ -158,12 +158,12 @@
         "__simulideTunnelRotated": false,
         "pinId": "5V"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 498.2000274658203,
         "y": 124.5,
-        "rotation": 0,
-        "flipH": false,
-        "flipV": false
+        "rotation": 0
       }
     },
     {
@@ -174,12 +174,12 @@
         "__simulideTunnelRotated": true,
         "pinId": "G23"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 712,
         "y": 200,
-        "rotation": 0,
-        "flipH": false,
-        "flipV": false
+        "rotation": 0
       }
     },
     {
@@ -190,12 +190,12 @@
         "__simulideTunnelRotated": true,
         "pinId": "G22"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 649,
         "y": 160,
-        "rotation": 270,
-        "flipH": false,
-        "flipV": false
+        "rotation": 270
       }
     },
     {
@@ -206,12 +206,12 @@
         "__simulideTunnelRotated": false,
         "pinId": "VP"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 518,
         "y": 232,
-        "rotation": 0,
-        "flipH": false,
-        "flipV": false
+        "rotation": 0
       }
     },
     {
@@ -222,12 +222,12 @@
         "__simulideTunnelRotated": true,
         "pinId": "TX"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 633,
         "y": 160,
-        "rotation": 270,
-        "flipH": false,
-        "flipV": false
+        "rotation": 270
       }
     },
     {
@@ -238,12 +238,12 @@
         "__simulideTunnelRotated": false,
         "pinId": "VN"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 516,
         "y": 256,
-        "rotation": 0,
-        "flipH": false,
-        "flipV": false
+        "rotation": 0
       }
     },
     {
@@ -254,12 +254,12 @@
         "__simulideTunnelRotated": true,
         "pinId": "RX"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 641,
         "y": 160,
-        "rotation": 270,
-        "flipH": false,
-        "flipV": false
+        "rotation": 270
       }
     },
     {
@@ -270,12 +270,12 @@
         "__simulideTunnelRotated": false,
         "pinId": "G34"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 515,
         "y": 272,
-        "rotation": 0,
-        "flipH": false,
-        "flipV": false
+        "rotation": 0
       }
     },
     {
@@ -286,12 +286,12 @@
         "__simulideTunnelRotated": true,
         "pinId": "G21"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 625,
         "y": 160,
-        "rotation": 270,
-        "flipH": false,
-        "flipV": false
+        "rotation": 270
       }
     },
     {
@@ -302,12 +302,12 @@
         "__simulideTunnelRotated": false,
         "pinId": "G35"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 494,
         "y": 280,
-        "rotation": 0,
-        "flipH": false,
-        "flipV": false
+        "rotation": 0
       }
     },
     {
@@ -318,12 +318,12 @@
         "__simulideTunnelRotated": false,
         "pinId": "G32"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 515,
         "y": 288,
-        "rotation": 0,
-        "flipH": false,
-        "flipV": false
+        "rotation": 0
       }
     },
     {
@@ -334,12 +334,12 @@
         "__simulideTunnelRotated": true,
         "pinId": "G19"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 657,
         "y": 160,
-        "rotation": 270,
-        "flipH": false,
-        "flipV": false
+        "rotation": 270
       }
     },
     {
@@ -350,12 +350,12 @@
         "__simulideTunnelRotated": false,
         "pinId": "G33"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 553,
         "y": 323,
-        "rotation": 270,
-        "flipH": false,
-        "flipV": false
+        "rotation": 270
       }
     },
     {
@@ -366,12 +366,12 @@
         "__simulideTunnelRotated": true,
         "pinId": "G18"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 742,
         "y": 208,
-        "rotation": 0,
-        "flipH": false,
-        "flipV": false
+        "rotation": 0
       }
     },
     {
@@ -382,12 +382,12 @@
         "__simulideTunnelRotated": false,
         "pinId": "G25"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 561,
         "y": 342,
-        "rotation": 270,
-        "flipH": false,
-        "flipV": false
+        "rotation": 270
       }
     },
     {
@@ -398,12 +398,12 @@
         "__simulideTunnelRotated": true,
         "pinId": "G05"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 712,
         "y": 216,
-        "rotation": 0,
-        "flipH": false,
-        "flipV": false
+        "rotation": 0
       }
     },
     {
@@ -414,12 +414,12 @@
         "__simulideTunnelRotated": false,
         "pinId": "G26"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 569.0248039571742,
         "y": 322.90288585114877,
-        "rotation": 270,
-        "flipH": false,
-        "flipV": false
+        "rotation": 270
       }
     },
     {
@@ -430,12 +430,12 @@
         "__simulideTunnelRotated": true,
         "pinId": "G17"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 737,
         "y": 272.8,
-        "rotation": 0,
-        "flipH": false,
-        "flipV": false
+        "rotation": 0
       }
     },
     {
@@ -446,12 +446,12 @@
         "__simulideTunnelRotated": false,
         "pinId": "G27"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 577,
         "y": 342,
-        "rotation": 270,
-        "flipH": false,
-        "flipV": false
+        "rotation": 270
       }
     },
     {
@@ -462,12 +462,12 @@
         "__simulideTunnelRotated": true,
         "pinId": "G16"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 712.3999938964844,
         "y": 287.9000015258789,
-        "rotation": 0,
-        "flipH": false,
-        "flipV": false
+        "rotation": 0
       }
     },
     {
@@ -478,12 +478,12 @@
         "__simulideTunnelRotated": false,
         "pinId": "G14"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 584.8000030517578,
         "y": 324.5,
-        "rotation": 270,
-        "flipH": false,
-        "flipV": false
+        "rotation": 270
       }
     },
     {
@@ -494,12 +494,12 @@
         "__simulideTunnelRotated": false,
         "pinId": "G04"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 641,
         "y": 323,
-        "rotation": 270,
-        "flipH": false,
-        "flipV": false
+        "rotation": 270
       }
     },
     {
@@ -510,12 +510,12 @@
         "__simulideTunnelRotated": false,
         "pinId": "G12"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 593.2000007629395,
         "y": 340.8999938964844,
-        "rotation": 270,
-        "flipH": false,
-        "flipV": false
+        "rotation": 270
       }
     },
     {
@@ -526,12 +526,12 @@
         "__simulideTunnelRotated": false,
         "pinId": "G00"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 632.4528618321319,
         "y": 433.7373679423338,
-        "rotation": 270,
-        "flipH": false,
-        "flipV": false
+        "rotation": 270
       }
     },
     {
@@ -542,12 +542,12 @@
         "__simulideTunnelRotated": false,
         "pinId": "G02"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 625,
         "y": 325,
-        "rotation": 270,
-        "flipH": false,
-        "flipV": false
+        "rotation": 270
       }
     },
     {
@@ -558,12 +558,12 @@
         "__simulideTunnelRotated": false,
         "pinId": "G13"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 609,
         "y": 325,
-        "rotation": 270,
-        "flipH": false,
-        "flipV": false
+        "rotation": 270
       }
     },
     {
@@ -574,12 +574,12 @@
         "__simulideTunnelRotated": false,
         "pinId": "G15"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 617,
         "y": 338,
-        "rotation": 270,
-        "flipH": false,
-        "flipV": false
+        "rotation": 270
       }
     },
     {
@@ -590,12 +590,12 @@
         "__simulideTunnelRotated": true,
         "pinId": "D2"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 715,
         "y": 264,
-        "rotation": 0,
-        "flipH": false,
-        "flipV": false
+        "rotation": 0
       }
     },
     {
@@ -606,12 +606,12 @@
         "__simulideTunnelRotated": true,
         "pinId": "D1"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 743,
         "y": 224,
-        "rotation": 0,
-        "flipH": false,
-        "flipV": false
+        "rotation": 0
       }
     },
     {
@@ -622,12 +622,12 @@
         "__simulideTunnelRotated": true,
         "pinId": "D3"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 741,
         "y": 256,
-        "rotation": 0,
-        "flipH": false,
-        "flipV": false
+        "rotation": 0
       }
     },
     {
@@ -638,12 +638,12 @@
         "__simulideTunnelRotated": true,
         "pinId": "D0"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 715,
         "y": 232,
-        "rotation": 0,
-        "flipH": false,
-        "flipV": false
+        "rotation": 0
       }
     },
     {
@@ -654,12 +654,12 @@
         "__simulideTunnelRotated": true,
         "pinId": "CM"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 715,
         "y": 248,
-        "rotation": 0,
-        "flipH": false,
-        "flipV": false
+        "rotation": 0
       }
     },
     {
@@ -670,12 +670,12 @@
         "__simulideTunnelRotated": true,
         "pinId": "CK"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 742,
         "y": 240,
-        "rotation": 0,
-        "flipH": false,
-        "flipV": false
+        "rotation": 0
       }
     },
     {
@@ -686,12 +686,12 @@
         "__simulideTunnelRotated": false,
         "pinId": "EN"
       },
+      "label": "Tunnel.",
+      "showValue": false,
       "visual": {
         "x": 419.0588078328178,
         "y": 263.77519049917265,
-        "rotation": 0,
-        "flipH": false,
-        "flipV": false
+        "rotation": 0
       }
     },
     {
@@ -702,12 +702,12 @@
         "__ui_idLabelX": -186,
         "__ui_idLabelY": -27
       },
+      "label": "Rail",
+      "showValue": true,
       "visual": {
         "x": 480,
         "y": 103,
-        "rotation": 270,
-        "flipH": true,
-        "flipV": false
+        "rotation": 270
       }
     },
     {
@@ -717,12 +717,12 @@
         "voltage": 5,
         "__ui_idLabelRotation": 0
       },
+      "label": "Rail",
+      "showValue": true,
       "visual": {
         "x": 518.1999969482422,
         "y": 103.5,
-        "rotation": 90,
-        "flipH": false,
-        "flipV": false
+        "rotation": 90
       }
     },
     {
@@ -731,12 +731,12 @@
       "properties": {
         "size": 1
       },
+      "label": "Led Bar",
+      "showValue": false,
       "visual": {
         "x": 538.2620346738242,
         "y": 130.65106705986702,
-        "rotation": 0,
-        "flipH": false,
-        "flipV": false
+        "rotation": 0
       }
     },
     {
@@ -747,12 +747,13 @@
         "pinId": "GND2",
         "__simulideTunnelRotated": false
       },
+      "label": "Tunnel.",
+      "showValue": false,
+      "flipH": true,
       "visual": {
-        "x": 545.1141484824393,
-        "y": 513.8214985722842,
-        "rotation": 0,
-        "flipH": false,
-        "flipV": false
+        "x": 575.2340370733772,
+        "y": 459.36227721001353,
+        "rotation": 0
       }
     },
     {
@@ -763,17 +764,18 @@
         "pinId": "GND3",
         "__simulideTunnelRotated": false
       },
+      "label": "Tunnel.",
+      "showValue": false,
+      "flipH": true,
       "visual": {
-        "x": 585.1141484824393,
-        "y": 553.8214985722842,
-        "rotation": 0,
-        "flipH": false,
-        "flipV": false
+        "x": 574.1882375690243,
+        "y": 472.42337301885084,
+        "rotation": 0
       }
     }
   ],
   "topology": {
-    "revision": 175,
+    "revision": 206,
     "nodes": [
       {
         "id": "junction-1783811970598-570810",
@@ -878,7 +880,8 @@
           "kind": "port",
           "componentId": "tunnel_G21",
           "pinId": "pin"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783806295759-167500",
@@ -891,7 +894,8 @@
           "kind": "port",
           "componentId": "mcu1",
           "pinId": "GPIO1"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783806295759-132499",
@@ -904,7 +908,8 @@
           "kind": "port",
           "componentId": "mcu1",
           "pinId": "GPIO3"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783806295759-58666",
@@ -917,7 +922,8 @@
           "kind": "port",
           "componentId": "mcu1",
           "pinId": "GPIO22"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783806295759-662231",
@@ -930,7 +936,8 @@
           "kind": "port",
           "componentId": "mcu1",
           "pinId": "GPIO19"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783806295759-831310",
@@ -943,7 +950,8 @@
           "kind": "port",
           "componentId": "tunnel_G23",
           "pinId": "pin"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783806295759-578037",
@@ -956,7 +964,8 @@
           "kind": "port",
           "componentId": "tunnel_G18",
           "pinId": "pin"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783806295759-522480",
@@ -969,7 +978,8 @@
           "kind": "port",
           "componentId": "tunnel_G05",
           "pinId": "pin"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783806295759-100866",
@@ -982,7 +992,8 @@
           "kind": "port",
           "componentId": "tunnel_D1",
           "pinId": "pin"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783806295759-958540",
@@ -995,7 +1006,8 @@
           "kind": "port",
           "componentId": "tunnel_D0",
           "pinId": "pin"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783806295759-100362",
@@ -1008,7 +1020,8 @@
           "kind": "port",
           "componentId": "tunnel_CK",
           "pinId": "pin"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783806295759-676881",
@@ -1021,7 +1034,8 @@
           "kind": "port",
           "componentId": "tunnel_CM",
           "pinId": "pin"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783806295759-345442",
@@ -1034,7 +1048,8 @@
           "kind": "port",
           "componentId": "tunnel_D3",
           "pinId": "pin"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783806295759-664379",
@@ -1047,7 +1062,8 @@
           "kind": "port",
           "componentId": "tunnel_D2",
           "pinId": "pin"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783806295759-601890",
@@ -1079,7 +1095,8 @@
           "kind": "port",
           "componentId": "tunnel_G16",
           "pinId": "pin"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783806295759-995444",
@@ -1092,7 +1109,8 @@
           "kind": "port",
           "componentId": "tunnel_G32",
           "pinId": "pin"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783806295759-309855",
@@ -1105,7 +1123,8 @@
           "kind": "port",
           "componentId": "mcu1",
           "pinId": "GPIO35"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783806295759-762753",
@@ -1118,7 +1137,8 @@
           "kind": "port",
           "componentId": "mcu1",
           "pinId": "GPIO34"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783806295759-858946",
@@ -1131,7 +1151,8 @@
           "kind": "port",
           "componentId": "mcu1",
           "pinId": "GPIO39"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783806295759-333497",
@@ -1144,7 +1165,8 @@
           "kind": "port",
           "componentId": "tunnel_VP",
           "pinId": "pin"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783806295759-494937",
@@ -1157,7 +1179,8 @@
           "kind": "port",
           "componentId": "mcu1",
           "pinId": "GPIO2"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783806295759-637543",
@@ -1170,7 +1193,8 @@
           "kind": "port",
           "componentId": "mcu1",
           "pinId": "GPIO4"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783806295759-406799",
@@ -1183,7 +1207,8 @@
           "kind": "port",
           "componentId": "mcu1",
           "pinId": "GPIO12"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783806295759-843209",
@@ -1196,7 +1221,8 @@
           "kind": "port",
           "componentId": "mcu1",
           "pinId": "GPIO13"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783806295759-113446",
@@ -1209,7 +1235,8 @@
           "kind": "port",
           "componentId": "mcu1",
           "pinId": "GPIO14"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783806295759-963660",
@@ -1222,7 +1249,8 @@
           "kind": "port",
           "componentId": "mcu1",
           "pinId": "GPIO15"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783806295759-923187",
@@ -1235,7 +1263,8 @@
           "kind": "port",
           "componentId": "mcu1",
           "pinId": "GPIO25"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783806295759-423820",
@@ -1248,7 +1277,8 @@
           "kind": "port",
           "componentId": "mcu1",
           "pinId": "GPIO26"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783806295759-510435",
@@ -1261,7 +1291,8 @@
           "kind": "port",
           "componentId": "mcu1",
           "pinId": "GPIO27"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783806295759-222542",
@@ -1274,7 +1305,8 @@
           "kind": "port",
           "componentId": "mcu1",
           "pinId": "GPIO33"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783806295759-567293",
@@ -1287,7 +1319,8 @@
           "kind": "port",
           "componentId": "component-1783345154513-836838",
           "pinId": "out"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783811970598-952794",
@@ -1303,7 +1336,7 @@
         "points": [
           {
             "x": 490,
-            "y": 109
+            "y": 121
           }
         ]
       },
@@ -1317,7 +1350,8 @@
         "to": {
           "kind": "node",
           "nodeId": "junction-1783811970598-570810"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783846285946-454624",
@@ -1329,7 +1363,8 @@
         "to": {
           "kind": "node",
           "nodeId": "junction-1783846285946-302187"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783846285946-125771",
@@ -1377,7 +1412,8 @@
         "to": {
           "kind": "node",
           "nodeId": "junction-1783846342610-583536"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783846342610-900096",
@@ -1389,7 +1425,8 @@
           "kind": "port",
           "componentId": "button_boot",
           "pinId": "pin-1"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783846347585-719268",
@@ -1401,7 +1438,8 @@
         "to": {
           "kind": "node",
           "nodeId": "junction-1783846347585-947629"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783846347585-713137",
@@ -1412,7 +1450,8 @@
         "to": {
           "kind": "node",
           "nodeId": "junction-1783846342610-583536"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783846347585-239282",
@@ -1424,7 +1463,8 @@
         "to": {
           "kind": "node",
           "nodeId": "junction-1783846347585-947629"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783937474967-381380",
@@ -1454,7 +1494,8 @@
         "to": {
           "kind": "node",
           "nodeId": "junction-1783937479328-38781"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783937479328-540948",
@@ -1483,7 +1524,8 @@
         "to": {
           "kind": "node",
           "nodeId": "junction-1783937482993-68341"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783937482993-989517",
@@ -1513,7 +1555,8 @@
         "to": {
           "kind": "node",
           "nodeId": "junction-1783937482993-68341"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783937660099-436622",
@@ -1525,7 +1568,8 @@
         "to": {
           "kind": "node",
           "nodeId": "junction-1783937660099-941826"
-        }
+        },
+        "points": []
       },
       {
         "id": "wire-1783937660099-858304",
@@ -1573,7 +1617,13 @@
         "to": {
           "kind": "node",
           "nodeId": "junction-1783846347585-947629"
-        }
+        },
+        "points": [
+          {
+            "x": 573.1141484824393,
+            "y": 480
+          }
+        ]
       },
       {
         "id": "wire-esp32-split-tunnel_GND3",
@@ -1585,7 +1635,13 @@
         "to": {
           "kind": "node",
           "nodeId": "junction-1783846347585-947629"
-        }
+        },
+        "points": [
+          {
+            "x": 613.1141484824393,
+            "y": 480
+          }
+        ]
       }
     ]
   },
@@ -1798,11 +1854,11 @@
         "angle": 0,
         "length": 4,
         "label": "Gnd",
-        "labelX": 80.50999999999999,
-        "labelY": 20.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 80.50999999999999,
+        "labelY": 20.5
       },
       {
         "id": "3V3",
@@ -1811,11 +1867,11 @@
         "angle": 180,
         "length": 4,
         "label": "3V3",
-        "labelX": 7.509999999999991,
-        "labelY": 19.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 7.509999999999991,
+        "labelY": 19.5
       },
       {
         "id": "G23",
@@ -1824,24 +1880,24 @@
         "angle": 0,
         "length": 4,
         "label": "23",
-        "labelX": 81,
-        "labelY": 28.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 81,
+        "labelY": 28.5
       },
       {
         "id": "EN",
-        "x": 1,
-        "y": 28,
+        "x": 0,
+        "y": 26.799999237060547,
         "angle": 180,
         "length": 4,
         "label": "En",
-        "labelX": 9,
-        "labelY": 28.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 8,
+        "labelY": 27.299999237060547
       },
       {
         "id": "G22",
@@ -1850,24 +1906,24 @@
         "angle": 0,
         "length": 4,
         "label": "22",
-        "labelX": 81,
-        "labelY": 37.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 81,
+        "labelY": 37.5
       },
       {
         "id": "VP",
-        "x": 0,
-        "y": 36,
+        "x": -4.086450283416468,
+        "y": 36.59439998310212,
         "angle": 180,
         "length": 4,
         "label": "VP",
-        "labelX": 8,
-        "labelY": 36.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 10.913549716583532,
+        "labelY": 37.59439998310212
       },
       {
         "id": "TX",
@@ -1876,11 +1932,11 @@
         "angle": 0,
         "length": 4,
         "label": "Tx",
-        "labelX": 81,
-        "labelY": 46.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 81,
+        "labelY": 46.5
       },
       {
         "id": "VN",
@@ -1889,11 +1945,11 @@
         "angle": 180,
         "length": 4,
         "label": "VN",
-        "labelX": 8,
-        "labelY": 45.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 8,
+        "labelY": 45.5
       },
       {
         "id": "RX",
@@ -1902,11 +1958,11 @@
         "angle": 0,
         "length": 4,
         "label": "Rx",
-        "labelX": 81,
-        "labelY": 54.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 81,
+        "labelY": 54.5
       },
       {
         "id": "G34",
@@ -1915,11 +1971,11 @@
         "angle": 180,
         "length": 4,
         "label": "34",
-        "labelX": 8,
-        "labelY": 53.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 8,
+        "labelY": 53.5
       },
       {
         "id": "G21",
@@ -1928,11 +1984,11 @@
         "angle": 0,
         "length": 4,
         "label": "21",
-        "labelX": 81,
-        "labelY": 63.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 81,
+        "labelY": 63.5
       },
       {
         "id": "G35",
@@ -1941,11 +1997,11 @@
         "angle": 180,
         "length": 4,
         "label": "35",
-        "labelX": 8,
-        "labelY": 62.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 8,
+        "labelY": 62.5
       },
       {
         "id": "GND2",
@@ -1954,11 +2010,11 @@
         "angle": 0,
         "length": 4,
         "label": "Gnd",
-        "labelX": 80.50999999999999,
-        "labelY": 71.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 80.50999999999999,
+        "labelY": 71.5
       },
       {
         "id": "G32",
@@ -1967,11 +2023,11 @@
         "angle": 180,
         "length": 4,
         "label": "32",
-        "labelX": 8,
-        "labelY": 70.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 8,
+        "labelY": 70.5
       },
       {
         "id": "G19",
@@ -1980,11 +2036,11 @@
         "angle": 0,
         "length": 4,
         "label": "19",
-        "labelX": 81,
-        "labelY": 80.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 81,
+        "labelY": 80.5
       },
       {
         "id": "G33",
@@ -1993,11 +2049,11 @@
         "angle": 180,
         "length": 4,
         "label": "33",
-        "labelX": 8,
-        "labelY": 79.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 8,
+        "labelY": 79.5
       },
       {
         "id": "G18",
@@ -2006,11 +2062,11 @@
         "angle": 0,
         "length": 4,
         "label": "18",
-        "labelX": 80,
-        "labelY": 89.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 80,
+        "labelY": 89.5
       },
       {
         "id": "G25",
@@ -2019,11 +2075,11 @@
         "angle": 180,
         "length": 4,
         "label": "25",
-        "labelX": 8,
-        "labelY": 87.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 8,
+        "labelY": 87.5
       },
       {
         "id": "G05",
@@ -2032,11 +2088,11 @@
         "angle": 0,
         "length": 4,
         "label": "5",
-        "labelX": 81,
-        "labelY": 97.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 81,
+        "labelY": 97.5
       },
       {
         "id": "G26",
@@ -2045,11 +2101,11 @@
         "angle": 180,
         "length": 4,
         "label": "26",
-        "labelX": 8,
-        "labelY": 96.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 8,
+        "labelY": 96.5
       },
       {
         "id": "G17",
@@ -2058,11 +2114,11 @@
         "angle": 0,
         "length": 4,
         "label": "17",
-        "labelX": 81,
-        "labelY": 106.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 81,
+        "labelY": 106.5
       },
       {
         "id": "G27",
@@ -2071,11 +2127,11 @@
         "angle": 180,
         "length": 4,
         "label": "27",
-        "labelX": 8,
-        "labelY": 105.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 8,
+        "labelY": 105.5
       },
       {
         "id": "G16",
@@ -2084,11 +2140,11 @@
         "angle": 0,
         "length": 4,
         "label": "16",
-        "labelX": 81,
-        "labelY": 114.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 81,
+        "labelY": 114.5
       },
       {
         "id": "G14",
@@ -2097,11 +2153,11 @@
         "angle": 180,
         "length": 4,
         "label": "14",
-        "labelX": 9,
-        "labelY": 113.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 9,
+        "labelY": 113.5
       },
       {
         "id": "G04",
@@ -2110,11 +2166,11 @@
         "angle": 0,
         "length": 4,
         "label": "4",
-        "labelX": 81,
-        "labelY": 123.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 81,
+        "labelY": 123.5
       },
       {
         "id": "G12",
@@ -2123,11 +2179,11 @@
         "angle": 180,
         "length": 4,
         "label": "12",
-        "labelX": 8,
-        "labelY": 122.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 8,
+        "labelY": 122.5
       },
       {
         "id": "G00",
@@ -2136,11 +2192,11 @@
         "angle": 0,
         "length": 4,
         "label": "0",
-        "labelX": 81,
-        "labelY": 131.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 81,
+        "labelY": 131.5
       },
       {
         "id": "GND3",
@@ -2149,11 +2205,11 @@
         "angle": 180,
         "length": 4,
         "label": "Gnd",
-        "labelX": 10.509999999999991,
-        "labelY": 130.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
+        "labelX": 10.509999999999991,
+        "labelY": 130.5,
         "labelColor": "#FAFAC8"
       },
       {
@@ -2163,11 +2219,11 @@
         "angle": 0,
         "length": 4,
         "label": "2",
-        "labelX": 81,
-        "labelY": 140.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 81,
+        "labelY": 140.5
       },
       {
         "id": "G13",
@@ -2176,11 +2232,11 @@
         "angle": 180,
         "length": 4,
         "label": "13",
-        "labelX": 12,
-        "labelY": 139.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 12,
+        "labelY": 139.5
       },
       {
         "id": "G15",
@@ -2189,11 +2245,11 @@
         "angle": 0,
         "length": 4,
         "label": "15",
-        "labelX": 81,
-        "labelY": 148.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 81,
+        "labelY": 148.5
       },
       {
         "id": "D2",
@@ -2202,11 +2258,11 @@
         "angle": 180,
         "length": 4,
         "label": "D2",
-        "labelX": 26,
-        "labelY": 145.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 10,
+        "labelY": 148
       },
       {
         "id": "D1",
@@ -2215,11 +2271,11 @@
         "angle": 0,
         "length": 4,
         "label": "D1",
-        "labelX": 81,
-        "labelY": 155.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 81,
+        "labelY": 155.5
       },
       {
         "id": "D3",
@@ -2228,11 +2284,11 @@
         "angle": 180,
         "length": 4,
         "label": "D3",
-        "labelX": 8,
-        "labelY": 156.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 8,
+        "labelY": 156.5
       },
       {
         "id": "D0",
@@ -2241,11 +2297,11 @@
         "angle": 0,
         "length": 4,
         "label": "D0",
-        "labelX": 81,
-        "labelY": 163.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 81,
+        "labelY": 163.5
       },
       {
         "id": "CM",
@@ -2254,11 +2310,11 @@
         "angle": 180,
         "length": 4,
         "label": "Cm",
-        "labelX": 9,
-        "labelY": 164.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 9,
+        "labelY": 164.5
       },
       {
         "id": "CK",
@@ -2267,11 +2323,11 @@
         "angle": 0,
         "length": 4,
         "label": "Ck",
-        "labelX": 81,
-        "labelY": 171.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 81,
+        "labelY": 171.5
       },
       {
         "id": "5V",
@@ -2280,26 +2336,15 @@
         "angle": 180,
         "length": 4,
         "label": "5V",
-        "labelX": 9,
-        "labelY": 172.5,
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
-        "labelDominantBaseline": "middle"
+        "labelDominantBaseline": "middle",
+        "labelX": 9,
+        "labelY": 172.5
       }
     ]
   },
-  "exposedComponents": [
-    {
-      "componentId": "mcu1",
-      "x": 104,
-      "y": 8,
-      "rotation": 0,
-      "flipH": false,
-      "flipV": false,
-      "scale": 1,
-      "layer": 0
-    }
-  ],
+  "exposedComponents": [],
   "icon": {
     "width": 28,
     "height": 40,
@@ -2311,8 +2356,8 @@
         "y": 0,
         "w": 4,
         "h": 4,
-        "fill": "#c8ccd1",
         "stroke": "#5f6672",
+        "fill": "#c8ccd1",
         "strokeWidth": 0.5
       },
       {
@@ -2321,10 +2366,8 @@
         "y": 3,
         "w": 24,
         "h": 36,
-        "rx": 2,
-        "ry": 2,
-        "fill": "#0b2e59",
         "stroke": "#04162c",
+        "fill": "#0b2e59",
         "strokeWidth": 1
       },
       {
@@ -2333,117 +2376,105 @@
         "y": 7,
         "w": 12,
         "h": 14,
-        "fill": "#9aa2ab",
         "stroke": "#5f6672",
+        "fill": "#9aa2ab",
         "strokeWidth": 0.5
       },
       {
         "kind": "line",
-        "x1": 0,
+        "x1": -1,
         "y1": 24,
-        "x2": 2,
+        "x2": 3,
         "y2": 24,
-        "stroke": "#c8ccd1",
-        "strokeWidth": 1
+        "stroke": "#c8ccd1"
       },
       {
         "kind": "line",
-        "x1": 0,
+        "x1": -1,
         "y1": 26.5,
-        "x2": 2,
+        "x2": 3,
         "y2": 26.5,
-        "stroke": "#c8ccd1",
-        "strokeWidth": 1
+        "stroke": "#c8ccd1"
       },
       {
         "kind": "line",
-        "x1": 0,
+        "x1": -1,
         "y1": 29,
-        "x2": 2,
+        "x2": 3,
         "y2": 29,
-        "stroke": "#c8ccd1",
-        "strokeWidth": 1
+        "stroke": "#c8ccd1"
       },
       {
         "kind": "line",
-        "x1": 0,
+        "x1": -1,
         "y1": 31.5,
-        "x2": 2,
+        "x2": 3,
         "y2": 31.5,
-        "stroke": "#c8ccd1",
-        "strokeWidth": 1
+        "stroke": "#c8ccd1"
       },
       {
         "kind": "line",
-        "x1": 0,
+        "x1": -1,
         "y1": 34,
-        "x2": 2,
+        "x2": 3,
         "y2": 34,
-        "stroke": "#c8ccd1",
-        "strokeWidth": 1
+        "stroke": "#c8ccd1"
       },
       {
         "kind": "line",
-        "x1": 0,
+        "x1": -1,
         "y1": 36.5,
-        "x2": 2,
+        "x2": 3,
         "y2": 36.5,
-        "stroke": "#c8ccd1",
-        "strokeWidth": 1
+        "stroke": "#c8ccd1"
       },
       {
         "kind": "line",
-        "x1": 26,
+        "x1": 25,
         "y1": 24,
-        "x2": 28,
+        "x2": 29,
         "y2": 24,
-        "stroke": "#c8ccd1",
-        "strokeWidth": 1
+        "stroke": "#c8ccd1"
       },
       {
         "kind": "line",
-        "x1": 26,
+        "x1": 25,
         "y1": 26.5,
-        "x2": 28,
+        "x2": 29,
         "y2": 26.5,
-        "stroke": "#c8ccd1",
-        "strokeWidth": 1
+        "stroke": "#c8ccd1"
       },
       {
         "kind": "line",
-        "x1": 26,
+        "x1": 25,
         "y1": 29,
-        "x2": 28,
+        "x2": 29,
         "y2": 29,
-        "stroke": "#c8ccd1",
-        "strokeWidth": 1
+        "stroke": "#c8ccd1"
       },
       {
         "kind": "line",
-        "x1": 26,
+        "x1": 25,
         "y1": 31.5,
-        "x2": 28,
+        "x2": 29,
         "y2": 31.5,
-        "stroke": "#c8ccd1",
-        "strokeWidth": 1
+        "stroke": "#c8ccd1"
       },
       {
         "kind": "line",
-        "x1": 26,
+        "x1": 25,
         "y1": 34,
-        "x2": 28,
+        "x2": 29,
         "y2": 34,
-        "stroke": "#c8ccd1",
-        "strokeWidth": 1
+        "stroke": "#c8ccd1"
       },
       {
         "kind": "line",
-        "x1": 26,
+        "x1": 25,
         "y1": 36.5,
-        "x2": 28,
+        "x2": 29,
         "y2": 36.5,
-        "stroke": "#c8ccd1",
-        "strokeWidth": 1
+        "stroke": "#c8ccd1"
       }
     ]
   },

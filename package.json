@@ -13,6 +13,8 @@
     "watch:extension": "node scripts/build-extension.js --watch",
     "test:core": "node scripts/test-core.js",
     "test:extension": "npm --prefix extension test",
+    "test:uart": "npm --prefix extension run compile && node scripts/test-uart-devices.js",
+    "test:serial-port": "npm --prefix extension run compile && node scripts/test-serial-port.js",
     "benchmark:wires": "npm run build:extension && node scripts/benchmark-wire-topology.mjs"
   },
   "engines": {

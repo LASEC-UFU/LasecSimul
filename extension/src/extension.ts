@@ -75,6 +75,8 @@ import {
 import { debugMcuFirmwareCommand, registerMcuDebugTracking } from "./mcu/mcuDebug";
 import { initializeLasecPlot, lasecPlotManager } from "./lasecplot/manager";
 import { LasecSimulInteropApi } from "./lasecplot/api";
+import { initializeSerialTerminal, serialTerminalManager } from "./serialterm/manager";
+import { initializeSerialPort, serialPortManager } from "./serialport/manager";
 import {
   gatherInternalComponentSnapshots,
   resolveSourceFilePath,
@@ -166,6 +168,8 @@ function computeProjectStatePatch(): ProjectStatePatch | undefined {
 
 function syncSchematicPanel(): void {
   lasecPlotManager?.sync();
+  serialTerminalManager?.sync();
+  serialPortManager?.sync();
   const lastSynced = state.lastSyncedProjectState;
   if (lastSynced &&
       (lastSynced.components !== state.schematicState.components || lastSynced.topology.conductors !== state.schematicState.topology.conductors) &&
@@ -1097,17 +1101,35 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       return;
     }
     case "requestToggleLasecPlot": {
-      try {
-        const result = lasecPlotManager?.toggle(message.componentId);
-        if (!result) throw new Error("Integração LasecPlot não inicializada.");
+      void lasecPlotManager?.toggle(message.componentId).then((result) => {
         state.schematicPanel?.postMessage({ version: 1, type: "lasecPlotStatus", componentId: message.componentId, ...result });
-      } catch (error) {
+      }).catch((error) => {
         const text = error instanceof Error ? error.message : String(error);
         state.schematicPanel?.postMessage({ version: 1, type: "lasecPlotStatus", componentId: message.componentId, opened: false, clients: 0, error: text });
         vscode.window.showErrorMessage(`LasecPlot: ${text}`);
-      }
+      });
       return;
     }
+    case "requestToggleSerialTerminal": {
+      try { serialTerminalManager?.toggle(message.componentId); }
+      catch (error) { vscode.window.showErrorMessage(`Serial Terminal: ${error instanceof Error ? error.message : String(error)}`); }
+      return;
+    }
+    case "requestSerialTerminalWrite": {
+      void serialTerminalManager?.write(message.componentId, Uint8Array.from(Buffer.from(message.dataHex, "hex")))
+        .catch((error) => vscode.window.showErrorMessage(`Serial Terminal: ${error instanceof Error ? error.message : String(error)}`));
+      return;
+    }
+    case "requestSerialTerminalLoadFile":
+      void serialTerminalManager?.loadFile(message.componentId);
+      return;
+    case "requestSerialTerminalSaveLog":
+      void serialTerminalManager?.saveLog(message.text);
+      return;
+    case "requestToggleSerialPort":
+      void serialPortManager?.toggle(message.componentId).catch((error) =>
+        vscode.window.showErrorMessage(`Serial Port: ${error instanceof Error ? error.message : String(error)}`));
+      return;
     case "requestChooseSubcircuitFile":
       void chooseSubcircuitFileCommand(message.componentId);
       return;
@@ -1719,6 +1741,8 @@ async function exportInstrumentDataCommand(suggestedFileName: string, csvContent
 
 export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi {
   const lasecPlot = initializeLasecPlot(context);
+  initializeSerialTerminal(context);
+  initializeSerialPort(context);
   registerMcuDebugTracking(context);
   state.extensionContext = context;
   const unifiedCatalog = loadUnifiedCatalog(context.extensionPath, currentLasecSimulLanguage());
@@ -1768,6 +1792,8 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
     for (const component of state.schematicState.components.filter((entry) => entry.typeId === "peripherals.lasecplot")) {
       state.schematicPanel?.postMessage({ version: 1, type: "lasecPlotStatus", componentId: component.id, opened: false, clients: 0, error: "Core encerrado inesperadamente" });
     }
+    serialTerminalManager?.updateSimulationState();
+    serialPortManager?.updateSimulationState();
   });
 
   state.coreClient = new CoreClient(pipeName);

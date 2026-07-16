@@ -1,12 +1,20 @@
 #include "lasecsimul/device_abi.h"
+#include <stddef.h>
 #include <stdint.h>
+
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#else
+#include <errno.h>
+#include <fcntl.h>
+#include <termios.h>
+#include <unistd.h>
+#endif
 
 /* MinGW on Windows: replace CRT so ucrtbase.dll is never loaded alongside ucrtbased.dll.
  * MSVC builds use the normal CRT (matching the Core), no action needed. */
 #if defined(_WIN32) && !defined(_MSC_VER)
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-
 BOOL WINAPI DllMainCRTStartup(HINSTANCE h, DWORD r, LPVOID p) {
     (void)h; (void)r; (void)p; return TRUE;
 }
@@ -107,19 +115,21 @@ typedef struct {
     /* Serial Terminal */
     uint32_t ser_baudrate;
     uint32_t ser_bit_period_ns;
-    int      ser_data_bits, ser_stop_bits;
+    int      ser_data_bits, ser_stop_bits, ser_parity;
     char     ser_rx_buf[256];
     char     ser_tx_buf[256];
     int      ser_tx_pos;
-    int      ser_rx_active, ser_rx_bit_idx;
+    int      ser_rx_active, ser_rx_bit_idx, ser_rx_stop_idx, ser_rx_parity_done;
     uint8_t  ser_rx_byte;
 
     /* Ponte UART genérica usada pelo LasecPlot. O Core drena RX em lotes e enfileira TX. */
     uint8_t  uart_rx_ring[UART_RING_CAP];
     uint32_t uart_rx_head, uart_rx_tail, uart_rx_count;
+    uint32_t uart_rx_dropped;
     uint8_t  uart_tx_ring[UART_RING_CAP];
     uint32_t uart_tx_head, uart_tx_tail, uart_tx_count;
-    int      uart_tx_active, uart_tx_bit_idx;
+    uint32_t uart_tx_dropped;
+    int      uart_tx_active, uart_tx_waiting_stop, uart_tx_bit_idx;
     uint8_t  uart_tx_byte;
     char     uart_hex[(UART_RING_CAP * 2) + 1];
     char     source_name[128];
@@ -131,6 +141,18 @@ typedef struct {
     uint32_t port_baudrate;
     int      port_data_bits, port_stop_bits;
     int      port_auto_open;
+    int      port_open_requested;
+    int      port_is_open;
+    int      port_initialized;
+    int      port_poll_scheduled;
+    uint32_t port_rx_bytes;
+    uint32_t port_tx_bytes;
+    char     port_error[192];
+#if defined(_WIN32)
+    HANDLE   port_handle;
+#else
+    int      port_fd;
+#endif
 
     /* SD Card */
     char sd_file[256];
@@ -142,6 +164,228 @@ typedef struct {
     int      esp_at_pos, esp_rx_active, esp_rx_bit_idx;
     uint8_t  esp_rx_byte;
 } PeriphState;
+
+static uint32_t uart_tx_push(PeriphState *s, uint8_t byte);
+static void uart_start_tx(PeriphState *s);
+static void serial_port_close(PeriphState *s);
+
+static void port_set_error(PeriphState *s, const char *prefix, uint32_t code) {
+    static const char digits[] = "0123456789";
+    char number[16];
+    uint32_t n = code;
+    int pos = 15;
+    size_t used = 0;
+    number[pos] = '\0';
+    do { number[--pos] = digits[n % 10u]; n /= 10u; } while (n && pos > 0);
+    while (prefix[used] && used + 1 < sizeof(s->port_error)) {
+        s->port_error[used] = prefix[used]; used++;
+    }
+    if (used + 2 < sizeof(s->port_error)) { s->port_error[used++] = ' '; s->port_error[used++] = '('; }
+    while (number[pos] && used + 2 < sizeof(s->port_error)) s->port_error[used++] = number[pos++];
+    if (used + 1 < sizeof(s->port_error)) s->port_error[used++] = ')';
+#if defined(_WIN32)
+    if (code && used + 3 < sizeof(s->port_error)) {
+        WCHAR wide_message[96];
+        char utf8_message[128];
+        DWORD wide_length = FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                                           NULL, code, 0, wide_message, sizeof(wide_message) / sizeof(wide_message[0]), NULL);
+        int length = wide_length ? WideCharToMultiByte(CP_UTF8, 0, wide_message, (int)wide_length,
+                                                       utf8_message, sizeof(utf8_message), NULL, NULL) : 0;
+        int i;
+        if (length > 0) {
+            s->port_error[used++] = ':'; s->port_error[used++] = ' ';
+            for (i = 0; i < length && used + 1 < sizeof(s->port_error); ++i) {
+                if (utf8_message[i] != '\r' && utf8_message[i] != '\n') s->port_error[used++] = utf8_message[i];
+            }
+        }
+    }
+#else
+    if (code && used + 3 < sizeof(s->port_error)) {
+        const char *system_message = strerror((int)code);
+        size_t i = 0;
+        s->port_error[used++] = ':'; s->port_error[used++] = ' ';
+        while (system_message[i] && used + 1 < sizeof(s->port_error)) s->port_error[used++] = system_message[i++];
+    }
+#endif
+    s->port_error[used] = '\0';
+}
+
+#if !defined(_WIN32)
+static speed_t serial_port_speed(uint32_t baud) {
+    switch (baud) {
+        case 1200: return B1200;
+        case 2400: return B2400;
+        case 4800: return B4800;
+        case 9600: return B9600;
+        case 19200: return B19200;
+        case 38400: return B38400;
+#ifdef B57600
+        case 57600: return B57600;
+#endif
+#ifdef B115200
+        case 115200: return B115200;
+#endif
+        default: return (speed_t)0;
+    }
+}
+#endif
+
+static int serial_port_open(PeriphState *s) {
+    serial_port_close(s);
+    s->port_open_requested = 1;
+    s->port_error[0] = '\0';
+    if (!s->port_name[0]) {
+        port_set_error(s, "Nome da porta serial vazio", 0);
+        return 0;
+    }
+#if defined(_WIN32)
+    {
+        char path[80] = "\\\\.\\";
+        size_t i = 4, j = 0;
+        DCB dcb;
+        COMMTIMEOUTS timeouts;
+        while (s->port_name[j] && i + 1 < sizeof(path)) path[i++] = s->port_name[j++];
+        path[i] = '\0';
+        s->port_handle = CreateFileA(path, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING,
+                                     FILE_ATTRIBUTE_NORMAL, NULL);
+        if (s->port_handle == INVALID_HANDLE_VALUE) {
+            port_set_error(s, "Nao foi possivel abrir a porta serial; erro do Windows", GetLastError());
+            return 0;
+        }
+        memset(&dcb, 0, sizeof(dcb)); dcb.DCBlength = sizeof(dcb);
+        if (!GetCommState(s->port_handle, &dcb)) {
+            port_set_error(s, "Falha ao consultar a porta serial; erro do Windows", GetLastError());
+            serial_port_close(s); return 0;
+        }
+        dcb.BaudRate = s->port_baudrate;
+        dcb.ByteSize = (BYTE)s->port_data_bits;
+        dcb.Parity = s->ser_parity == 1 ? EVENPARITY : s->ser_parity == 2 ? ODDPARITY : NOPARITY;
+        dcb.StopBits = s->port_stop_bits == 2 ? TWOSTOPBITS : ONESTOPBIT;
+        dcb.fBinary = TRUE; dcb.fParity = s->ser_parity != 0;
+        dcb.fOutxCtsFlow = FALSE; dcb.fOutxDsrFlow = FALSE; dcb.fDtrControl = DTR_CONTROL_DISABLE;
+        dcb.fDsrSensitivity = FALSE; dcb.fOutX = FALSE; dcb.fInX = FALSE;
+        dcb.fRtsControl = RTS_CONTROL_DISABLE; dcb.fAbortOnError = FALSE;
+        if (!SetCommState(s->port_handle, &dcb)) {
+            port_set_error(s, "Configuracao serial invalida; erro do Windows", GetLastError());
+            serial_port_close(s); return 0;
+        }
+        memset(&timeouts, 0, sizeof(timeouts));
+        timeouts.ReadIntervalTimeout = MAXDWORD;
+        if (!SetCommTimeouts(s->port_handle, &timeouts)) {
+            port_set_error(s, "Falha ao configurar I/O serial; erro do Windows", GetLastError());
+            serial_port_close(s); return 0;
+        }
+        SetupComm(s->port_handle, UART_RING_CAP, UART_RING_CAP);
+        PurgeComm(s->port_handle, PURGE_RXCLEAR | PURGE_TXCLEAR);
+    }
+#else
+    {
+        struct termios tty;
+        speed_t speed = serial_port_speed(s->port_baudrate);
+        if (!speed) { port_set_error(s, "Baud rate nao suportado", s->port_baudrate); return 0; }
+        s->port_fd = open(s->port_name, O_RDWR | O_NOCTTY | O_NONBLOCK);
+        if (s->port_fd < 0) { port_set_error(s, "Nao foi possivel abrir a porta serial", (uint32_t)errno); return 0; }
+        if (tcgetattr(s->port_fd, &tty) != 0) {
+            port_set_error(s, "Falha ao consultar a porta serial", (uint32_t)errno); serial_port_close(s); return 0;
+        }
+        tty.c_iflag = 0; tty.c_oflag = 0; tty.c_lflag = 0;
+        tty.c_cflag &= ~(CSIZE | PARENB | PARODD | CSTOPB);
+#ifdef CRTSCTS
+        tty.c_cflag &= ~CRTSCTS;
+#endif
+        tty.c_cflag |= CLOCAL | CREAD;
+        tty.c_cflag |= s->port_data_bits == 5 ? CS5 : s->port_data_bits == 6 ? CS6 : s->port_data_bits == 7 ? CS7 : CS8;
+        if (s->ser_parity) { tty.c_cflag |= PARENB; if (s->ser_parity == 2) tty.c_cflag |= PARODD; }
+        if (s->port_stop_bits == 2) tty.c_cflag |= CSTOPB;
+        tty.c_cc[VMIN] = 0; tty.c_cc[VTIME] = 0;
+        cfsetispeed(&tty, speed); cfsetospeed(&tty, speed);
+        if (tcsetattr(s->port_fd, TCSANOW, &tty) != 0) {
+            port_set_error(s, "Configuracao serial invalida", (uint32_t)errno); serial_port_close(s); return 0;
+        }
+        tcflush(s->port_fd, TCIOFLUSH);
+    }
+#endif
+    s->port_is_open = 1;
+    s->port_error[0] = '\0';
+    return 1;
+}
+
+static void serial_port_close(PeriphState *s) {
+#if defined(_WIN32)
+    if (s->port_handle && s->port_handle != INVALID_HANDLE_VALUE) CloseHandle(s->port_handle);
+    s->port_handle = INVALID_HANDLE_VALUE;
+#else
+    if (s->port_fd >= 0) close(s->port_fd);
+    s->port_fd = -1;
+#endif
+    s->port_is_open = 0;
+}
+
+static void serial_port_pump(PeriphState *s) {
+    uint8_t buffer[512];
+    uint32_t count = 0;
+    if (!s->port_is_open) return;
+#if defined(_WIN32)
+    {
+        DWORD got = 0;
+        if (!ReadFile(s->port_handle, buffer, sizeof(buffer), &got, NULL)) {
+            port_set_error(s, "Erro lendo a porta serial; erro do Windows", GetLastError());
+            serial_port_close(s); return;
+        }
+        count = (uint32_t)got;
+    }
+#else
+    {
+        ssize_t got = read(s->port_fd, buffer, sizeof(buffer));
+        if (got < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+            port_set_error(s, "Erro lendo a porta serial", (uint32_t)errno); serial_port_close(s); return;
+        }
+        if (got > 0) count = (uint32_t)got;
+    }
+#endif
+    {
+        uint32_t i;
+        s->port_tx_bytes += count;
+        for (i = 0; i < count; ++i) uart_tx_push(s, buffer[i]);
+        if (count && !s->uart_tx_active && !s->uart_tx_waiting_stop) uart_start_tx(s);
+    }
+    if (s->uart_rx_count) {
+        uint32_t contiguous = UART_RING_CAP - s->uart_rx_tail;
+        uint32_t wanted = s->uart_rx_count < contiguous ? s->uart_rx_count : contiguous;
+        uint32_t written = 0;
+        if (wanted > sizeof(buffer)) wanted = sizeof(buffer);
+#if defined(_WIN32)
+        {
+            DWORD errors = 0;
+            COMSTAT status;
+            DWORD sent = 0;
+            memset(&status, 0, sizeof(status));
+            if (!ClearCommError(s->port_handle, &errors, &status)) {
+                port_set_error(s, "Erro consultando a porta serial; erro do Windows", GetLastError());
+                serial_port_close(s); return;
+            }
+            if (status.cbOutQue >= UART_RING_CAP) return;
+            if (wanted > UART_RING_CAP - status.cbOutQue) wanted = UART_RING_CAP - status.cbOutQue;
+            if (!WriteFile(s->port_handle, s->uart_rx_ring + s->uart_rx_tail, wanted, &sent, NULL)) {
+                port_set_error(s, "Erro escrevendo na porta serial; erro do Windows", GetLastError());
+                serial_port_close(s); return;
+            }
+            written = (uint32_t)sent;
+        }
+#else
+        {
+            ssize_t sent = write(s->port_fd, s->uart_rx_ring + s->uart_rx_tail, wanted);
+            if (sent < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+                port_set_error(s, "Erro escrevendo na porta serial", (uint32_t)errno); serial_port_close(s); return;
+            }
+            if (sent > 0) written = (uint32_t)sent;
+        }
+#endif
+        s->uart_rx_tail = (s->uart_rx_tail + written) % UART_RING_CAP;
+        s->uart_rx_count -= written;
+        s->port_rx_bytes += written;
+    }
+}
 
 /* ------------------------------------------------------------------ */
 /*  Config helpers                                                      */
@@ -168,6 +412,15 @@ static double cfg_num(PeriphState *s, const char *name, double fallback) {
     return fallback;
 }
 
+static int cfg_bool(PeriphState *s, const char *name, int fallback) {
+    LsdnPropertyValue v;
+    memset(&v, 0, sizeof(v));
+    if (s->api->config_get && s->api->config_get(s->host_ctx, name, &v)
+            && v.kind == LSDN_PROPERTY_BOOL)
+        return v.bool_value != 0;
+    return fallback;
+}
+
 static int hex_value(char c) {
     if (c >= '0' && c <= '9') return c - '0';
     if (c >= 'a' && c <= 'f') return c - 'a' + 10;
@@ -175,18 +428,60 @@ static int hex_value(char c) {
     return -1;
 }
 
+/* UartTR/UsartModule do SimulIDE: uma fila opaca em cada direção, compartilhada pelos consumidores
+ * SerialTerm e LasecPlot. RX aqui significa "recebido do MCU"; TX significa "a transmitir ao MCU". */
 static void uart_rx_push(PeriphState *s, uint8_t byte) {
     if (s->uart_rx_count == UART_RING_CAP) { /* bounded: discard oldest, preserve newest stream */
         s->uart_rx_tail = (s->uart_rx_tail + 1u) % UART_RING_CAP;
         s->uart_rx_count--;
+        s->uart_rx_dropped++;
     }
     s->uart_rx_ring[s->uart_rx_head] = byte;
     s->uart_rx_head = (s->uart_rx_head + 1u) % UART_RING_CAP;
     s->uart_rx_count++;
 }
 
+static uint32_t uart_tx_push(PeriphState *s, uint8_t byte) {
+    if (s->uart_tx_count == UART_RING_CAP) { s->uart_tx_dropped++; return 0; }
+    s->uart_tx_ring[s->uart_tx_head] = byte;
+    s->uart_tx_head = (s->uart_tx_head + 1u) % UART_RING_CAP;
+    s->uart_tx_count++;
+    return 1;
+}
+
+static int uart_parity_bit(PeriphState *s, uint8_t byte) {
+    int parity = 0, i;
+    for (i = 0; i < s->ser_data_bits; ++i) parity ^= (byte >> (unsigned)i) & 1u;
+    return s->ser_parity == 2 ? !parity : parity; /* 1=even, 2=odd */
+}
+
+static uint32_t uart_enqueue_hex(PeriphState *s, const char *p) {
+    uint32_t accepted = 0;
+    while (p && p[0] && p[1]) {
+        int hi = hex_value(p[0]), lo = hex_value(p[1]);
+        if (hi < 0 || lo < 0 || !uart_tx_push(s, (uint8_t)((hi << 4) | lo))) break;
+        accepted++; p += 2;
+    }
+    return accepted;
+}
+
+static const char *uart_drain_hex(PeriphState *s) {
+    static const char digits[] = "0123456789abcdef";
+    uint32_t n = 0;
+    while (s->uart_rx_count && n < UART_RING_CAP) {
+        uint8_t byte = s->uart_rx_ring[s->uart_rx_tail];
+        s->uart_rx_tail = (s->uart_rx_tail + 1u) % UART_RING_CAP;
+        s->uart_rx_count--;
+        s->uart_hex[n*2] = digits[byte >> 4];
+        s->uart_hex[n*2+1] = digits[byte & 15];
+        n++;
+    }
+    s->uart_hex[n*2] = '\0';
+    return s->uart_hex;
+}
+
 static void uart_start_tx(PeriphState *s) {
-    if (s->uart_tx_active || s->uart_tx_count == 0) return;
+    if (s->uart_tx_active || s->uart_tx_waiting_stop || s->uart_tx_count == 0) return;
     s->uart_tx_byte = s->uart_tx_ring[s->uart_tx_tail];
     s->uart_tx_tail = (s->uart_tx_tail + 1u) % UART_RING_CAP;
     s->uart_tx_count--;
@@ -295,6 +590,10 @@ static void periph_init(LsdnDevice *dev) {
     s->ser_bit_period_ns = s->ser_baudrate > 0 ? 1000000000u / s->ser_baudrate : 104167u;
     s->ser_data_bits     = (int)cfg_num(s, "data_bits", 8.0);
     s->ser_stop_bits     = (int)cfg_num(s, "stop_bits", 1.0);
+    {
+        const char *parity = cfg_str(s, "parity", "none");
+        s->ser_parity = !strcmp(parity, "even") ? 1 : !strcmp(parity, "odd") ? 2 : 0;
+    }
     strncpy(s->source_name, cfg_str(s, "source_name", "LasecPlot 1"), sizeof(s->source_name)-1);
     strncpy(s->uart_mode, cfg_str(s, "mode", "read-only"), sizeof(s->uart_mode)-1);
     s->uart_expose = (int)cfg_num(s, "expose", 1.0);
@@ -303,7 +602,13 @@ static void periph_init(LsdnDevice *dev) {
     s->port_baudrate  = (uint32_t)cfg_num(s, "baudrate",   9600.0);
     s->port_data_bits = (int)cfg_num(s, "data_bits", 8.0);
     s->port_stop_bits = (int)cfg_num(s, "stop_bits", 1.0);
-    s->port_auto_open = (int)cfg_num(s, "auto_open", 1.0);
+    s->port_auto_open = cfg_bool(s, "auto_open", 0);
+    s->port_open_requested = s->port_auto_open;
+#if defined(_WIN32)
+    s->port_handle = INVALID_HANDLE_VALUE;
+#else
+    s->port_fd = -1;
+#endif
 
     strncpy(s->sd_file, cfg_str(s, "file", ""), sizeof(s->sd_file) - 1);
 
@@ -318,9 +623,21 @@ static void periph_stamp(LsdnDevice *dev, LsdnMatrixView *m) {
     PeriphState *s = (PeriphState *)dev;
     if (!m) return;
 
-    if (s->kind == KIND_LASECPLOT) {
-        if (!s->uart_tx_active && s->uart_tx_count > 0) uart_start_tx(s);
-        else if (!s->uart_tx_active) s->api->pin_write(s->host_ctx, 0, 1); /* UART idle */
+    if (s->kind == KIND_SERIALTERM || s->kind == KIND_LASECPLOT || s->kind == KIND_SERIALPORT) {
+        /* IoPin(input) do SimulIDE nunca é uma linha matematicamente sem impedância. Sem esta fuga
+         * de 1 GOhm o RX aberto deixa o grupo MNA (que também contém TX) singular e zera a UART.
+         * É parte do modelo de entrada, não um pino/terminal GND do dispositivo. */
+        m->add_conductance_to_ground(m->opaque, 1, 1e-9);
+        if (!s->uart_tx_active && !s->uart_tx_waiting_stop && s->uart_tx_count > 0) uart_start_tx(s);
+        else if (!s->uart_tx_active) s->api->pin_write(s->host_ctx, 0, 1); /* stop/idle UART */
+        if (s->kind == KIND_SERIALPORT && !s->port_initialized) {
+            s->port_initialized = 1;
+            if (s->port_open_requested) serial_port_open(s);
+        }
+        if (s->kind == KIND_SERIALPORT && !s->port_poll_scheduled) {
+            s->port_poll_scheduled = 1;
+            s->api->schedule_event(s->host_ctx, 1000000u, 40u);
+        }
     }
 
     switch (s->kind) {
@@ -371,7 +688,9 @@ static void periph_stamp(LsdnDevice *dev, LsdnMatrixView *m) {
 }
 
 static void periph_post_step(LsdnDevice *dev, uint64_t dt_ns) {
-    (void)dev; (void)dt_ns;
+    PeriphState *s = (PeriphState *)dev;
+    (void)dt_ns;
+    (void)s;
 }
 
 static void periph_on_event(LsdnDevice *dev, const LsdnEvent *ev) {
@@ -395,10 +714,13 @@ static void periph_on_event(LsdnDevice *dev, const LsdnEvent *ev) {
                 break;
             case KIND_SERIALTERM:
             case KIND_LASECPLOT:
+            case KIND_SERIALPORT:
                 /* RX = pin 1; detect start bit (high→low) */
                 if (ev->a == 1 && ev->b == 0 && !s->ser_rx_active) {
                     s->ser_rx_active  = 1;
                     s->ser_rx_bit_idx = 0;
+                    s->ser_rx_stop_idx = 0;
+                    s->ser_rx_parity_done = 0;
                     s->ser_rx_byte    = 0;
                     s->api->schedule_event(s->host_ctx,
                         (uint64_t)(s->ser_bit_period_ns * 3 / 2), 20u);
@@ -431,6 +753,12 @@ static void periph_on_event(LsdnDevice *dev, const LsdnEvent *ev) {
                 break;
             case KIND_SERIALTERM:
             case KIND_LASECPLOT:
+            case KIND_SERIALPORT:
+                if (id == 40u) {
+                    serial_port_pump(s);
+                    s->api->schedule_event(s->host_ctx, 1000000u, 40u);
+                    break;
+                }
                 if (id == 20u) {
                     int data_bits = s->ser_data_bits > 0 ? s->ser_data_bits : 8;
                     if (s->ser_rx_bit_idx < data_bits) {
@@ -438,34 +766,51 @@ static void periph_on_event(LsdnDevice *dev, const LsdnEvent *ev) {
                         if (bit) s->ser_rx_byte |= (1u << (unsigned)s->ser_rx_bit_idx);
                         s->ser_rx_bit_idx++;
                         s->api->schedule_event(s->host_ctx, s->ser_bit_period_ns, 20u);
+                    } else if (s->ser_parity && !s->ser_rx_parity_done) {
+                        int parity = s->api->pin_read(s->host_ctx, 1);
+                        s->ser_rx_parity_done = 1;
+                        if (parity != uart_parity_bit(s, s->ser_rx_byte)) {
+                            s->ser_rx_active = 0; s->ser_rx_bit_idx = 0; break;
+                        }
+                        s->api->schedule_event(s->host_ctx, s->ser_bit_period_ns, 20u);
                     } else {
-                        if (s->kind == KIND_LASECPLOT) uart_rx_push(s, s->ser_rx_byte);
-                        else {
+                        /* Igual UartRx::byteReceived do SimulIDE: stop bit baixo invalida frame. */
+                        if (!s->api->pin_read(s->host_ctx, 1)) {
+                            s->ser_rx_active = 0; s->ser_rx_bit_idx = 0; break;
+                        }
+                        s->ser_rx_stop_idx++;
+                        if (s->ser_rx_stop_idx < (s->ser_stop_bits > 0 ? s->ser_stop_bits : 1)) {
+                            s->api->schedule_event(s->host_ctx, s->ser_bit_period_ns, 20u); break;
+                        }
+                        uart_rx_push(s, s->ser_rx_byte);
+                        /* Compatibilidade com o antigo readout textual do SerialTerm. A ponte real
+                         * usa uart_rx_hex e portanto preserva NUL/0xff e qualquer outro byte. */
+                        if (s->kind == KIND_SERIALTERM) {
                             int pos = s->ser_tx_pos;
-                            if (pos < 255) {
-                                s->ser_tx_buf[pos]   = (char)s->ser_rx_byte;
-                                s->ser_tx_buf[pos+1] = '\0';
-                                s->ser_tx_pos = pos + 1;
-                            }
+                            if (pos < 255) { s->ser_tx_buf[pos] = (char)s->ser_rx_byte; s->ser_tx_buf[pos+1] = '\0'; s->ser_tx_pos = pos + 1; }
                         }
                         s->ser_rx_active  = 0;
                         s->ser_rx_bit_idx = 0;
                     }
                 }
-                if (id == 21u && s->kind == KIND_LASECPLOT && s->uart_tx_active) {
+                if (id == 21u && s->uart_tx_active) {
                     s->uart_tx_bit_idx++;
                     if (s->uart_tx_bit_idx < s->ser_data_bits) {
                         s->api->pin_write(s->host_ctx, 0,
                             (s->uart_tx_byte >> (unsigned)s->uart_tx_bit_idx) & 1u);
                         s->api->schedule_event(s->host_ctx, s->ser_bit_period_ns, 21u);
+                    } else if (s->ser_parity && s->uart_tx_bit_idx == s->ser_data_bits) {
+                        s->api->pin_write(s->host_ctx, 0, uart_parity_bit(s, s->uart_tx_byte));
+                        s->api->schedule_event(s->host_ctx, s->ser_bit_period_ns, 21u);
                     } else {
                         s->api->pin_write(s->host_ctx, 0, 1);
                         s->uart_tx_active = 0;
+                        s->uart_tx_waiting_stop = 1;
                         s->api->schedule_event(s->host_ctx,
                             s->ser_bit_period_ns * (uint64_t)(s->ser_stop_bits > 0 ? s->ser_stop_bits : 1), 22u);
                     }
                 }
-                if (id == 22u && s->kind == KIND_LASECPLOT) uart_start_tx(s);
+                if (id == 22u) { s->uart_tx_waiting_stop = 0; uart_start_tx(s); }
                 break;
             case KIND_ESP01:
                 if (id == 30u) {
@@ -543,31 +888,30 @@ static uint32_t periph_get_property(LsdnDevice *dev, const char *name, LsdnPrope
             if (!strcmp(name,"baudrate"))  RET_NUM(s->ser_baudrate);
             if (!strcmp(name,"data_bits")) RET_NUM(s->ser_data_bits);
             if (!strcmp(name,"stop_bits")) RET_NUM(s->ser_stop_bits);
+            if (!strcmp(name,"parity")) RET_STR(s->ser_parity == 1 ? "even" : s->ser_parity == 2 ? "odd" : "none");
             if (!strcmp(name,"rx_buffer")) RET_STR(s->ser_rx_buf);
             if (!strcmp(name,"tx_bytes"))  RET_STR(s->ser_tx_buf);
+            if (!strcmp(name,"uart_tx_hex")) RET_STR("");
+            if (!strcmp(name,"uart_rx_hex")) RET_STR(uart_drain_hex(s));
+            if (!strcmp(name,"uart_rx_pending")) RET_NUM(s->uart_rx_count);
+            if (!strcmp(name,"uart_tx_pending")) RET_NUM(s->uart_tx_count + ((s->uart_tx_active || s->uart_tx_waiting_stop) ? 1 : 0));
+            if (!strcmp(name,"uart_rx_dropped")) RET_NUM(s->uart_rx_dropped);
+            if (!strcmp(name,"uart_tx_dropped")) RET_NUM(s->uart_tx_dropped);
             break;
         case KIND_LASECPLOT:
             if (!strcmp(name,"source_name")) RET_STR(s->source_name);
             if (!strcmp(name,"baudrate")) RET_NUM(s->ser_baudrate);
             if (!strcmp(name,"data_bits")) RET_NUM(s->ser_data_bits);
             if (!strcmp(name,"stop_bits")) RET_NUM(s->ser_stop_bits);
+            if (!strcmp(name,"parity")) RET_STR(s->ser_parity == 1 ? "even" : s->ser_parity == 2 ? "odd" : "none");
             if (!strcmp(name,"mode")) RET_STR(s->uart_mode);
             if (!strcmp(name,"expose")) RET_BOOL(s->uart_expose);
-            if (!strcmp(name,"interop_tx_hex")) RET_STR("");
-            if (!strcmp(name,"interop_rx_hex")) {
-                static const char digits[] = "0123456789abcdef";
-                uint32_t n = 0;
-                while (s->uart_rx_count && n < UART_RING_CAP) {
-                    uint8_t byte = s->uart_rx_ring[s->uart_rx_tail];
-                    s->uart_rx_tail = (s->uart_rx_tail + 1u) % UART_RING_CAP;
-                    s->uart_rx_count--;
-                    s->uart_hex[n*2] = digits[byte >> 4];
-                    s->uart_hex[n*2+1] = digits[byte & 15];
-                    n++;
-                }
-                s->uart_hex[n*2] = '\0';
-                RET_STR(s->uart_hex);
-            }
+            if (!strcmp(name,"uart_tx_hex") || !strcmp(name,"interop_tx_hex")) RET_STR("");
+            if (!strcmp(name,"uart_rx_hex") || !strcmp(name,"interop_rx_hex")) RET_STR(uart_drain_hex(s));
+            if (!strcmp(name,"uart_rx_pending")) RET_NUM(s->uart_rx_count);
+            if (!strcmp(name,"uart_tx_pending")) RET_NUM(s->uart_tx_count + ((s->uart_tx_active || s->uart_tx_waiting_stop) ? 1 : 0));
+            if (!strcmp(name,"uart_rx_dropped")) RET_NUM(s->uart_rx_dropped);
+            if (!strcmp(name,"uart_tx_dropped")) RET_NUM(s->uart_tx_dropped);
             break;
         case KIND_SERIALPORT:
             if (!strcmp(name,"port_name")) RET_STR(s->port_name);
@@ -575,6 +919,11 @@ static uint32_t periph_get_property(LsdnDevice *dev, const char *name, LsdnPrope
             if (!strcmp(name,"data_bits")) RET_NUM(s->port_data_bits);
             if (!strcmp(name,"stop_bits")) RET_NUM(s->port_stop_bits);
             if (!strcmp(name,"auto_open")) RET_BOOL(s->port_auto_open);
+            if (!strcmp(name,"port_open")) RET_BOOL(s->port_open_requested);
+            if (!strcmp(name,"port_is_open")) RET_BOOL(s->port_is_open);
+            if (!strcmp(name,"port_error")) RET_STR(s->port_error);
+            if (!strcmp(name,"port_rx_bytes")) RET_NUM(s->port_rx_bytes);
+            if (!strcmp(name,"port_tx_bytes")) RET_NUM(s->port_tx_bytes);
             break;
         case KIND_SDCARD:
             if (!strcmp(name,"file")) RET_STR(s->sd_file);
@@ -638,8 +987,18 @@ static uint32_t periph_set_property(LsdnDevice *dev, const char *name, const Lsd
             }
             if (!strcmp(name,"data_bits")) { s->ser_data_bits = (int)n; return 1; }
             if (!strcmp(name,"stop_bits")) { s->ser_stop_bits = (int)n; return 1; }
+            if (!strcmp(name,"parity") && val->kind == LSDN_PROPERTY_STRING && val->string_value) {
+                s->ser_parity = !strcmp(val->string_value,"even") ? 1 : !strcmp(val->string_value,"odd") ? 2 : 0; return 1;
+            }
             if (!strcmp(name,"rx_buffer") && val->kind == LSDN_PROPERTY_STRING && val->string_value) {
-                strncpy(s->ser_rx_buf, val->string_value, sizeof(s->ser_rx_buf)-1); return 1;
+                const char *p = val->string_value;
+                strncpy(s->ser_rx_buf, p, sizeof(s->ser_rx_buf)-1);
+                while (*p) { if (!uart_tx_push(s, (uint8_t)*p)) break; p++; }
+                return 1;
+            }
+            if (!strcmp(name,"uart_rx_hex")) return 1;
+            if (!strcmp(name,"uart_tx_hex") && val->kind == LSDN_PROPERTY_STRING && val->string_value) {
+                uart_enqueue_hex(s, val->string_value); return 1;
             }
             break;
         case KIND_LASECPLOT:
@@ -653,32 +1012,32 @@ static uint32_t periph_set_property(LsdnDevice *dev, const char *name, const Lsd
             }
             if (!strcmp(name,"data_bits")) { s->ser_data_bits = (int)n; return 1; }
             if (!strcmp(name,"stop_bits")) { s->ser_stop_bits = (int)n; return 1; }
+            if (!strcmp(name,"parity") && val->kind == LSDN_PROPERTY_STRING && val->string_value) {
+                s->ser_parity = !strcmp(val->string_value,"even") ? 1 : !strcmp(val->string_value,"odd") ? 2 : 0; return 1;
+            }
             if (!strcmp(name,"mode") && val->kind == LSDN_PROPERTY_STRING && val->string_value) {
                 strncpy(s->uart_mode, val->string_value, sizeof(s->uart_mode)-1); return 1;
             }
             if (!strcmp(name,"expose")) { s->uart_expose = b; return 1; }
-            if (!strcmp(name,"interop_rx_hex")) return 1;
-            if (!strcmp(name,"interop_tx_hex") && val->kind == LSDN_PROPERTY_STRING && val->string_value) {
-                const char *p = val->string_value;
-                while (p[0] && p[1]) {
-                    int hi = hex_value(p[0]), lo = hex_value(p[1]);
-                    if (hi < 0 || lo < 0 || s->uart_tx_count == UART_RING_CAP) break;
-                    s->uart_tx_ring[s->uart_tx_head] = (uint8_t)((hi << 4) | lo);
-                    s->uart_tx_head = (s->uart_tx_head + 1u) % UART_RING_CAP;
-                    s->uart_tx_count++;
-                    p += 2;
-                }
-                return 1;
+            if (!strcmp(name,"uart_rx_hex") || !strcmp(name,"interop_rx_hex")) return 1;
+            if ((!strcmp(name,"uart_tx_hex") || !strcmp(name,"interop_tx_hex")) && val->kind == LSDN_PROPERTY_STRING && val->string_value) {
+                uart_enqueue_hex(s, val->string_value); return 1;
             }
             break;
         case KIND_SERIALPORT:
             if (!strcmp(name,"port_name") && val->kind == LSDN_PROPERTY_STRING && val->string_value) {
                 strncpy(s->port_name, val->string_value, sizeof(s->port_name)-1); return 1;
             }
-            if (!strcmp(name,"baudrate"))  { s->port_baudrate  = (uint32_t)n; return 1; }
-            if (!strcmp(name,"data_bits")) { s->port_data_bits = (int)n;      return 1; }
-            if (!strcmp(name,"stop_bits")) { s->port_stop_bits = (int)n;      return 1; }
+            if (!strcmp(name,"baudrate"))  { s->port_baudrate = s->ser_baudrate = (uint32_t)n; s->ser_bit_period_ns = s->ser_baudrate > 0 ? 1000000000u / s->ser_baudrate : 104167u; return 1; }
+            if (!strcmp(name,"data_bits")) { s->port_data_bits = s->ser_data_bits = (int)n; return 1; }
+            if (!strcmp(name,"stop_bits")) { s->port_stop_bits = s->ser_stop_bits = (int)n; return 1; }
             if (!strcmp(name,"auto_open")) { s->port_auto_open = b;            return 1; }
+            if (!strcmp(name,"port_open")) {
+                s->port_open_requested = b;
+                if (b) serial_port_open(s); else serial_port_close(s);
+                return 1;
+            }
+            if (!strcmp(name,"port_is_open") || !strcmp(name,"port_error") || !strcmp(name,"port_rx_bytes") || !strcmp(name,"port_tx_bytes")) return 1;
             break;
         case KIND_SDCARD:
             if (!strcmp(name,"file") && val->kind == LSDN_PROPERTY_STRING && val->string_value) {
@@ -694,7 +1053,7 @@ static uint32_t periph_set_property(LsdnDevice *dev, const char *name, const Lsd
     return 0;
 }
 
-#define STATE_VERSION 1u
+#define STATE_VERSION 2u
 
 static uint32_t periph_get_state(LsdnDevice *dev, uint8_t *out, uint32_t cap) {
     PeriphState *s = (PeriphState *)dev;
@@ -703,6 +1062,14 @@ static uint32_t periph_get_state(LsdnDevice *dev, uint8_t *out, uint32_t cap) {
     uint32_t ver = STATE_VERSION;
     memcpy(out, &ver, sizeof(ver));
     memcpy(out + sizeof(ver), s, sizeof(PeriphState));
+    memset(out + sizeof(ver) + offsetof(PeriphState, port_is_open), 0, sizeof(s->port_is_open));
+    memset(out + sizeof(ver) + offsetof(PeriphState, port_initialized), 0, sizeof(s->port_initialized));
+    memset(out + sizeof(ver) + offsetof(PeriphState, port_poll_scheduled), 0, sizeof(s->port_poll_scheduled));
+#if defined(_WIN32)
+    memset(out + sizeof(ver) + offsetof(PeriphState, port_handle), 0xff, sizeof(s->port_handle));
+#else
+    memset(out + sizeof(ver) + offsetof(PeriphState, port_fd), 0xff, sizeof(s->port_fd));
+#endif
     return need;
 }
 
@@ -716,13 +1083,26 @@ static void periph_set_state(LsdnDevice *dev, const uint8_t *in, uint32_t len) {
     int kind               = s->kind;
     void *host_ctx         = s->host_ctx;
     const LsdnHostApi *api = s->api;
+    if (kind == KIND_SERIALPORT) serial_port_close(s);
     memcpy(s, in + sizeof(uint32_t), sizeof(PeriphState));
     s->kind     = kind;
     s->host_ctx = host_ctx;
     s->api      = api;
+#if defined(_WIN32)
+    s->port_handle = INVALID_HANDLE_VALUE;
+#else
+    s->port_fd = -1;
+#endif
+    s->port_is_open = 0;
+    s->port_initialized = 0;
+    s->port_poll_scheduled = 0;
 }
 
-static void periph_destroy(LsdnDevice *dev) { free(dev); }
+static void periph_destroy(LsdnDevice *dev) {
+    PeriphState *s = (PeriphState *)dev;
+    if (s && s->kind == KIND_SERIALPORT) serial_port_close(s);
+    free(dev);
+}
 
 static const LsdnDeviceVTable kVTable = {
     periph_create, periph_init, periph_stamp, periph_post_step,

@@ -74,7 +74,8 @@
         "rx": 2,
         "ry": 2,
         "stroke": "none",
-        "fill": "#000000"
+        "fill": "#000000",
+        "stateFill": { "prop": "__serial_tx_state", "map": { "off": "#000000", "idle": "#ff0000", "active": "#ffff00" }, "fallback": "#000000" }
       },
       {
         "kind": "rect",
@@ -85,7 +86,8 @@
         "rx": 2,
         "ry": 2,
         "stroke": "none",
-        "fill": "#000000"
+        "fill": "#000000",
+        "stateFill": { "prop": "__serial_rx_state", "map": { "off": "#000000", "idle": "#ff0000", "active": "#ffff00" }, "fallback": "#000000" }
       },
       {
         "kind": "rect",
@@ -104,8 +106,20 @@
         "x": 46,
         "y": 20,
         "value": "Abrir",
+        "stateText": { "kind": "property", "prop": "__serial_button_label" },
         "fontSize": 11,
-        "color": "#000000"
+        "color": "#000000",
+        "cssClass": "serial-toggle-hit-zone"
+      },
+      {
+        "kind": "text",
+        "x": 72,
+        "y": 21,
+        "textAnchor": "start",
+        "value": "COM1",
+        "stateText": { "kind": "property", "prop": "port_name" },
+        "fontSize": 11,
+        "color": "#FAFAC8"
       }
     ],
     "pinLabelColor": "#FAFAC8",
@@ -253,7 +267,61 @@
       "group": "Serial",
       "valueKind": "bool",
       "editor": "bool",
-      "default": true
+      "default": false
+    },
+    {
+      "id": "port_open",
+      "label": "Solicitar abertura",
+      "group": "Interno",
+      "valueKind": "bool",
+      "editor": "bool",
+      "default": false,
+      "hidden": true,
+      "noCopy": true
+    },
+    {
+      "id": "port_is_open",
+      "label": "Porta aberta",
+      "group": "Diagnóstico",
+      "valueKind": "bool",
+      "editor": "readonly",
+      "default": false,
+      "hidden": true,
+      "readOnly": true,
+      "noCopy": true
+    },
+    {
+      "id": "port_error",
+      "label": "Erro da porta",
+      "group": "Diagnóstico",
+      "valueKind": "string",
+      "editor": "readonly",
+      "default": "",
+      "hidden": true,
+      "readOnly": true,
+      "noCopy": true
+    },
+    {
+      "id": "port_rx_bytes",
+      "label": "Bytes circuito → host",
+      "group": "Diagnóstico",
+      "valueKind": "number",
+      "editor": "readonly",
+      "default": 0,
+      "hidden": true,
+      "readOnly": true,
+      "noCopy": true
+    },
+    {
+      "id": "port_tx_bytes",
+      "label": "Bytes host → circuito",
+      "group": "Diagnóstico",
+      "valueKind": "number",
+      "editor": "readonly",
+      "default": 0,
+      "hidden": true,
+      "readOnly": true,
+      "noCopy": true
     }
   ],
   "help": {

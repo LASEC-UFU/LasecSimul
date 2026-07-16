@@ -65,6 +65,8 @@ export function sanitizePackageShape(value: unknown): PackageShape | undefined {
     ...(shape as unknown as PackageShape),
     cssClass: typeof shape.cssClass === "string" && shape.cssClass.trim() ? shape.cssClass.trim() : undefined,
     partId: typeof shape.partId === "string" && shape.partId.trim() ? shape.partId.trim() : undefined,
+    stateFill: sanitizeSimulidePaintStateFill(shape.stateFill),
+    stateText: shape.kind === "text" ? sanitizeSimulidePaintStateText(shape.stateText) : undefined,
     ...(statePath ? { statePath } : {}),
   };
 }

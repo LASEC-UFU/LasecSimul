@@ -14,7 +14,7 @@ export interface LasecPlotEndpointDescriptor {
   baudRate: number;
   dataBits: number;
   stopBits: number;
-  parity: "none";
+  parity: "none" | "even" | "odd";
   readable: true;
   writable: boolean;
   online: boolean;

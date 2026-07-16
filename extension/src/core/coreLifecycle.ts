@@ -5,6 +5,8 @@ import { CanonicalEndpoint, TopologyNode, TUNNEL_TYPE_ID, WebviewComponentCatalo
 import { state, coreInstanceIdByComponentId, mcuTargetCoreIdByComponentId } from "../state";
 import { pinsForTypeId } from "../extension";
 import { lasecPlotManager } from "../lasecplot/manager";
+import { serialTerminalManager } from "../serialterm/manager";
+import { serialPortManager } from "../serialport/manager";
 import { electricalEdgesForProject, diffElectricalEdges } from "../ui/webview/wireTopology";
 
 export { electricalEdgesForProject, diffElectricalEdges };
@@ -616,6 +618,8 @@ export function stopVoltageReadoutPolling(): void {
 export function setSimulationStatus(status: SimulationStatus): void {
   state.simulationStatus = status;
   lasecPlotManager?.updateSimulationState();
+  serialTerminalManager?.updateSimulationState();
+  serialPortManager?.updateSimulationState();
   state.schematicPanel?.postMessage({ version: 1, type: "simulationStatus", status });
 }
 

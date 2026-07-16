@@ -26,6 +26,7 @@ import { formatEngineeringValue, defaultSiPrefixFactor, SI_PREFIXES } from "./va
 import { isJunctionVisible, movableTopologyNodeIds, endpointScenePosition as resolveEndpointScenePosition } from "./wireTopology.js";
 import { WireSpatialIndex } from "./wireSpatialIndex.js";
 import { BatchPropertyPatch, PropertyField, PropertyFieldKind, SharedPropertyField, computeGenericInstanceFields, computeSharedPropertyFields, planBatchPropertyChange } from "./batchProperties.js";
+import { parseSerialInput, serialFormatBytes, SerialFormat } from "./serialFormat.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const FINE_WIRE_STEP = WIRE_GRID_SIZE / 10;
@@ -428,13 +429,17 @@ let activePropertyTarget:
 let activeBatchPropertyError: string | undefined;
 let propertyDialogShowAll = false;
 const lasecPlotRuntime = new Map<string, { opened: boolean; clients: number; error?: string }>();
-type SerialFormat = "ASCII" | "HEX" | "DEC" | "OCT" | "BIN";
 interface SerialLogChunk { direction: "rx" | "tx"; bytes: number[]; }
 interface SerialTerminalRuntime {
   opened: boolean; online: boolean; error?: string; receiveFormat: SerialFormat; sendFormat: SerialFormat;
   chunks: SerialLogChunk[]; inputText: string; loadedFile?: Uint8Array; rxActivityUntil?: number; txActivityUntil?: number;
 }
 const serialTerminalRuntime = new Map<string, SerialTerminalRuntime>();
+interface SerialPortRuntime {
+  opened: boolean; online: boolean; error?: string; rxBytes: number; txBytes: number;
+  rxActivityUntil: number; txActivityUntil: number;
+}
+const serialPortRuntime = new Map<string, SerialPortRuntime>();
 let serialTerminalLayer: HTMLDivElement | undefined;
 let clipboardItems: { components: WebviewComponentModel[]; wires: WebviewWireModel[] } | undefined;
 const activePushShortcutIds = new Set<string>();
@@ -457,27 +462,6 @@ let isDraggingComponent = false;
  * incremental via `updateWireVisual`, ver UI-2/UI-3) reconstruiria o canvas inteiro à toa. */
 function isInteractiveGestureInProgress(): boolean {
   return isDraggingComponent || wireCornerDrag !== undefined || wireSegmentDrag !== undefined;
-}
-
-function serialFormatBytes(bytes: readonly number[], format: SerialFormat): string {
-  if (format === "ASCII") return bytes.map((value) => String.fromCharCode(value)).join("");
-  const base = format === "HEX" ? 16 : format === "DEC" ? 10 : format === "OCT" ? 8 : 2;
-  const width = format === "HEX" ? 2 : format === "BIN" ? 8 : 3;
-  return bytes.map((value) => value.toString(base).toUpperCase().padStart(width, "0")).join(" ") + (bytes.length ? " " : "");
-}
-
-function parseSerialInput(text: string, format: SerialFormat): Uint8Array {
-  if (format === "ASCII") return new TextEncoder().encode(text);
-  const base = format === "HEX" ? 16 : format === "DEC" ? 10 : format === "OCT" ? 8 : 2;
-  const tokens = text.trim().split(/\s+/).filter(Boolean);
-  const values = tokens.map((token) => {
-    if (!new RegExp(format === "HEX" ? "^[0-9a-fA-F]+$" : format === "DEC" ? "^[0-9]+$" : format === "OCT" ? "^[0-7]+$" : "^[01]+$").test(token))
-      throw new Error(`Valor ${format} inválido: ${token}`);
-    const value = parseInt(token, base);
-    if (!Number.isInteger(value) || value < 0 || value > 255) throw new Error(`Byte fora do intervalo 0..255: ${token}`);
-    return value;
-  });
-  return Uint8Array.from(values);
 }
 
 function serialTerminalLogText(runtime: SerialTerminalRuntime): string {
@@ -3721,9 +3705,32 @@ function runtimeSymbolProperties(component: WebviewComponentModel): Record<strin
   const readout = readoutsByComponentId[component.id];
   const scopeHistory = scopeHistoryByComponentId[component.id];
   const logicHistory = logicHistoryByComponentId[component.id];
-  if (readout === undefined && !scopeHistory && !logicHistory) return component.properties;
+  const serialRuntime = component.typeId === "peripherals.lasecplot"
+    ? lasecPlotRuntime.get(component.id)
+    : component.typeId === "peripherals.serialterm"
+      ? serialTerminalRuntime.get(component.id)
+      : component.typeId === "peripherals.serialport"
+        ? serialPortRuntime.get(component.id)
+        : undefined;
+  const pinConnected = (pinId: string) => state.topology.conductors.some((wire) =>
+    (endpointId(wire.from) === component.id && endpointPinId(wire.from) === pinId) ||
+    (endpointId(wire.to) === component.id && endpointPinId(wire.to) === pinId));
+  const now = Date.now();
+  const serialState = serialRuntime ? {
+    __serial_button_label: serialRuntime.opened ? "Fechar" : "Abrir",
+    __serial_tx_state: component.typeId === "peripherals.serialport"
+      ? (!serialRuntime.opened ? "off" : (serialRuntime as SerialPortRuntime).txActivityUntil > now ? "active" : "idle")
+      : (!pinConnected("tx") ? "off" : component.typeId === "peripherals.serialterm" && ((serialRuntime as SerialTerminalRuntime).txActivityUntil ?? 0) > now ? "active" : "idle"),
+    __serial_rx_state: component.typeId === "peripherals.serialport"
+      ? (!serialRuntime.opened ? "off" : (serialRuntime as SerialPortRuntime).rxActivityUntil > now ? "active" : "idle")
+      : (!pinConnected("rx") ? "off" : component.typeId === "peripherals.serialterm" && ((serialRuntime as SerialTerminalRuntime).rxActivityUntil ?? 0) > now ? "active" : "idle"),
+  } : component.typeId === "peripherals.lasecplot" || component.typeId === "peripherals.serialterm" || component.typeId === "peripherals.serialport"
+    ? { __serial_button_label: "Abrir", __serial_tx_state: "off", __serial_rx_state: "off" }
+    : {};
+  if (readout === undefined && !scopeHistory && !logicHistory && Object.keys(serialState).length === 0) return component.properties;
   return {
     ...component.properties,
+    ...serialState,
     ...(readout === undefined ? {} : { __readout: readout }),
     ...(scopeHistory ? { __history: scopeHistory } : {}),
     ...(logicHistory ? { __history: logicHistory } : {}),
@@ -5752,7 +5759,6 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
   // `--switch-closed` alternada aqui pra trocar a aparência.
   if (isFixedVolt) {
     svg.classList.add("component__symbol--fixed-volt");
-    if (component.properties.out === true) svg.classList.add("component__symbol--fixed-volt-on");
   }
   // `symbol.pin` em Modo Símbolo: o corpo consolidado (`renderSymbolCanvasBackground`,
   // `compileLiveSymbolPins`) já desenha lead+rótulo pelo MESMO pipeline de um dispositivo colocado --
@@ -5767,40 +5773,30 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
       ? missingSubcircuitPlaceholderSvg(box)
       : packageSymbolSvg(component.typeId, symbolProperties, component.id, boardVariant) ?? catalogEntry?.symbolSvg ?? componentSymbolSvg(component.typeId, symbolProperties);
   if (component.typeId === "peripherals.lasecplot") {
-    const runtime = lasecPlotRuntime.get(component.id);
-    bodyGroup.querySelectorAll<SVGTextElement>("text").forEach((text) => {
-      if (text.textContent === "○ Fechado") text.textContent = runtime?.error ? "⚠ Erro" : runtime?.opened
-        ? runtime.clients > 0 ? `● ${runtime.clients} cliente(s)` : "● Aberto"
-        : "○ Fechado";
-      if (text.textContent === "Abrir") {
-        text.textContent = runtime?.opened ? "Fechar" : "Abrir";
-        text.style.cursor = "pointer";
-        text.style.pointerEvents = "all";
-        text.addEventListener("click", (event: MouseEvent) => {
-          event.stopPropagation();
-          send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestToggleLasecPlot", componentId: component.id });
-        });
-      }
+    bodyGroup.querySelectorAll<SVGTextElement>(".serial-toggle-hit-zone").forEach((text) => {
+      text.style.cursor = "pointer";
+      text.style.pointerEvents = "all";
+      text.addEventListener("click", (event: MouseEvent) => {
+        event.stopPropagation();
+        send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestToggleLasecPlot", componentId: component.id });
+      });
     });
   }
   if (component.typeId === "peripherals.serialterm") {
-    const runtime = serialTerminalRuntime.get(component.id);
-    bodyGroup.querySelectorAll<SVGTextElement>("text").forEach((text) => {
-      if (text.textContent === "Abrir") {
-        text.textContent = runtime?.opened ? "Fechar" : "Abrir";
-        text.style.cursor = "pointer"; text.style.pointerEvents = "all";
-        text.addEventListener("click", (event: MouseEvent) => {
-          event.stopPropagation(); send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestToggleSerialTerminal", componentId: component.id });
-        });
-      }
+    bodyGroup.querySelectorAll<SVGTextElement>(".serial-toggle-hit-zone").forEach((text) => {
+      text.style.cursor = "pointer"; text.style.pointerEvents = "all";
+      text.addEventListener("click", (event: MouseEvent) => {
+        event.stopPropagation(); send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestToggleSerialTerminal", componentId: component.id });
+      });
     });
-    const rects = bodyGroup.querySelectorAll<SVGRectElement>("rect");
-    const pinConnected = (pinId: string) => state.topology.conductors.some((wire) =>
-      (endpointId(wire.from) === component.id && endpointPinId(wire.from) === pinId) ||
-      (endpointId(wire.to) === component.id && endpointPinId(wire.to) === pinId));
-    const now = Date.now();
-    if (rects[1]) rects[1].setAttribute("fill", !pinConnected("tx") ? "#000000" : (runtime?.txActivityUntil ?? 0) > now ? "#ffff00" : "#ff0000");
-    if (rects[2]) rects[2].setAttribute("fill", !pinConnected("rx") ? "#000000" : (runtime?.rxActivityUntil ?? 0) > now ? "#ffff00" : "#ff0000");
+  }
+  if (component.typeId === "peripherals.serialport") {
+    bodyGroup.querySelectorAll<SVGTextElement>(".serial-toggle-hit-zone").forEach((text) => {
+      text.style.cursor = "pointer"; text.style.pointerEvents = "all";
+      text.addEventListener("click", (event: MouseEvent) => {
+        event.stopPropagation(); send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestToggleSerialPort", componentId: component.id });
+      });
+    });
   }
   bodyGroup.querySelectorAll<HTMLInputElement>(".meter-channel-input").forEach((input) => {
     const stopComponentGesture = (event: Event) => event.stopPropagation();
@@ -6624,6 +6620,16 @@ function renderPropertySheet(component: WebviewComponentModel, options: Property
     action.addEventListener("click", () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestToggleSerialTerminal", componentId: component.id }));
     const row = document.createElement("div"); row.className = "property-sheet__actions"; row.append(action); shell.append(row);
   }
+  if (component.typeId === "peripherals.serialport") {
+    const runtime = serialPortRuntime.get(component.id);
+    const action = document.createElement("button"); action.type = "button"; action.className = "property-sheet__button";
+    action.textContent = runtime?.opened ? "Fechar porta" : "Abrir porta";
+    action.disabled = simulationStatus === "stopped";
+    action.addEventListener("click", () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestToggleSerialPort", componentId: component.id }));
+    const status = document.createElement("span");
+    status.textContent = runtime?.error ? `⚠ Erro — ${runtime.error}` : runtime?.opened ? "● Porta aberta" : runtime?.online ? "○ Porta fechada" : "○ Inicie a simulação";
+    const row = document.createElement("div"); row.className = "property-sheet__actions"; row.append(action, status); shell.append(row);
+  }
   return shell;
 }
 
@@ -7074,6 +7080,19 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     if (runtime) { runtime.loadedFile = Uint8Array.from(message.dataHex.match(/../g)?.map((pair) => parseInt(pair, 16)) ?? []); renderSerialTerminalWindows(); }
   }
 
+  if (message.type === "serialPortStatus") {
+    const previous = serialPortRuntime.get(message.componentId);
+    const now = Date.now();
+    serialPortRuntime.set(message.componentId, {
+      opened: message.opened, online: message.online, error: message.error,
+      rxBytes: message.rxBytes, txBytes: message.txBytes,
+      rxActivityUntil: previous && message.rxBytes !== previous.rxBytes ? now + 180 : previous?.rxActivityUntil ?? 0,
+      txActivityUntil: previous && message.txBytes !== previous.txBytes ? now + 180 : previous?.txActivityUntil ?? 0,
+    });
+    render(); refreshOpenPropertyDialog();
+    if ((message.rxBytes !== previous?.rxBytes || message.txBytes !== previous?.txBytes) && message.opened) setTimeout(() => render(), 200);
+  }
+
   if (message.type === "simulationRate") {
     simulationRate = message.rate;
     updateSimulationRateLabel();
@@ -7219,14 +7238,8 @@ function updateRenderedToggleState(component: WebviewComponentModel): void {
 }
 
 function updateRenderedFixedVoltState(component: WebviewComponentModel): void {
-  const elements = document.querySelectorAll(".component");
-  for (let index = 0; index < elements.length; index += 1) {
-    const el = elements.item(index) as HTMLElement;
-    if (el.dataset.componentId !== component.id) continue;
-    const svg = el.querySelector(".component__symbol--fixed-volt") as SVGSVGElement | null;
-    svg?.classList.toggle("component__symbol--fixed-volt-on", component.properties.out === true);
-    return;
-  }
+  const el = document.querySelector<HTMLElement>(`.component[data-component-id="${component.id}"]`);
+  if (el) updateComponentElement(el, component);
 }
 
 function setPushClosed(component: WebviewComponentModel, closed: boolean): void {

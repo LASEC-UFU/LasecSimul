@@ -93,6 +93,10 @@ export type HostToWebviewMessage =
   | { version: number; type: "wireVoltages"; voltagesByWireId: Record<string, number> }
   | { version: number; type: "simulationStatus"; status: SimulationStatus }
   | { version: number; type: "lasecPlotStatus"; componentId: string; opened: boolean; clients: number; error?: string }
+  | { version: number; type: "serialTerminalStatus"; componentId: string; opened: boolean; online: boolean; error?: string }
+  | { version: number; type: "serialTerminalData"; componentId: string; dataHex: string; simulationTimeNs: number }
+  | { version: number; type: "serialTerminalLoadedFile"; componentId: string; dataHex: string }
+  | { version: number; type: "serialPortStatus"; componentId: string; opened: boolean; online: boolean; rxBytes: number; txBytes: number; error?: string }
   | { version: number; type: "pauseConditionTriggered"; ownerId: string; simulationTimeNs: number; expression: string; resolvedValues: Record<string, number | boolean | string>; error?: string }
   | { version: number; type: "pauseConditionValidation"; componentId: string; valid: boolean; error?: string; column?: number }
   /** Taxa real alcançada (`(ms simulados)/(ms de parede)`, ver `coreLifecycle.ts::pollSimulationRate`)
@@ -149,6 +153,11 @@ export type WebviewToHostMessage =
   | { version: number; type: "requestConnectEndpoints"; baseRevision: number; from: WireEndpoint; to: WireEndpoint; points?: Array<{ x: number; y: number }> }
   | { version: number; type: "requestUpdateProperty"; componentId: string; name: string; value: string | number | boolean }
   | { version: number; type: "requestToggleLasecPlot"; componentId: string }
+  | { version: number; type: "requestToggleSerialTerminal"; componentId: string }
+  | { version: number; type: "requestSerialTerminalWrite"; componentId: string; dataHex: string }
+  | { version: number; type: "requestSerialTerminalLoadFile"; componentId: string }
+  | { version: number; type: "requestSerialTerminalSaveLog"; text: string }
+  | { version: number; type: "requestToggleSerialPort"; componentId: string }
   /** Bloco genérico de subcircuito por caminho -- abre um seletor de `.lssubcircuit`, resolve
    * typeId/pinos/package do arquivo escolhido e registra no Core (verbo IPC avulso, sem
    * `library.json`). Mesmo comando serve pra escolha inicial e pra "relink" (arquivo ausente ou

@@ -315,6 +315,10 @@ export interface PackageShape {
   strokeDasharray?: string;
   fillRule?: "nonzero" | "evenodd";
   opacity?: number;
+  /** Aparência dinâmica declarada pelo próprio `.lsdevice`; o renderizador apenas fornece
+   * propriedades de estado e nunca escolhe cores ou textos específicos do dispositivo. */
+  stateFill?: SimulidePaintStateFill;
+  stateText?: SimulidePaintStateText;
   transform?: string;
   fontFamily?: string;
   fontWeight?: string | number;

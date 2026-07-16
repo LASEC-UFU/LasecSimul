@@ -20,7 +20,7 @@ class Signal<T> {
 
 export interface LasecPlotTransport {
   read(componentId: string): Promise<{ data: Uint8Array; simulationTimeNs: number }>;
-  write(componentId: string, data: Uint8Array): Promise<void>;
+  write(componentId: string, data: Uint8Array): Promise<number>;
 }
 
 export interface EndpointRegistration {
@@ -32,6 +32,7 @@ export interface EndpointRegistration {
   baudRate: number;
   dataBits: number;
   stopBits: number;
+  parity: "none" | "even" | "odd";
   mode: LasecPlotMode;
 }
 
@@ -58,7 +59,7 @@ class Connection implements LasecPlotConnection {
   deliver(packet: LasecPlotDataPacket): void {
     if (this.closed) return;
     this.packetSignal.fire(packet);
-    this.dataSignal.fire(packet.data.slice());
+    if (packet.direction === "mcu-to-client") this.dataSignal.fire(packet.data.slice());
   }
   async write(data: Uint8Array): Promise<void> {
     if (this.closed) throw new Error("A conexão LasecPlot está fechada.");
@@ -128,7 +129,7 @@ export class LasecPlotBroker implements LasecSimulInteropApi, vscode.Disposable 
     const duplicateName = [...this.endpoints.values()].some((other) => other !== state && other.registration.name === r.name);
     return { id: r.id, name: r.name, displayName: duplicateName ? `LasecSimul — ${r.name} — ${r.componentId}` : `LasecSimul — ${r.name}`, projectId: r.projectId,
       simulationId: r.simulationId, componentId: r.componentId, baudRate: r.baudRate, dataBits: r.dataBits,
-      stopBits: r.stopBits, parity: "none", readable: true, writable: r.mode === "bidirectional",
+      stopBits: r.stopBits, parity: r.parity, readable: true, writable: r.mode === "bidirectional",
       online: state.online, opened: state.published, connectedClients: state.connections.size };
   }
   async listLasecPlotEndpoints(): Promise<LasecPlotEndpointDescriptor[]> {
@@ -148,7 +149,10 @@ export class LasecPlotBroker implements LasecSimulInteropApi, vscode.Disposable 
     if (state.writer !== connection) throw new Error("O cliente não possui a reserva de escrita deste endpoint.");
     if (!state.online || !state.published) throw new Error("O endpoint LasecPlot está fechado.");
     if (data.byteLength === 0) return;
-    await this.transport.write(state.registration.componentId, data.slice());
+    const simulationTimeNs = await this.transport.write(state.registration.componentId, data.slice());
+    const packet: LasecPlotDataPacket = { endpointId: state.registration.id, sequence: state.sequence++, simulationTimeNs,
+      direction: "client-to-mcu", encoding: "binary", data: data.slice() };
+    for (const client of state.connections) client.deliver(packet);
   }
   detach(state: EndpointState, connection: Connection): void {
     state.connections.delete(connection); if (state.writer === connection) state.writer = undefined; this.changed.fire();
@@ -159,7 +163,7 @@ export class LasecPlotBroker implements LasecSimulInteropApi, vscode.Disposable 
     if (this.polling) return; this.polling = true;
     try {
       for (const state of this.endpoints.values()) {
-        if (!state.published || !state.online || state.connections.size === 0) continue;
+        if (!state.online) continue;
         let batch: { data: Uint8Array; simulationTimeNs: number };
         try { batch = await this.transport.read(state.registration.componentId); }
         catch {
@@ -169,6 +173,7 @@ export class LasecPlotBroker implements LasecSimulInteropApi, vscode.Disposable 
           continue;
         }
         if (batch.data.byteLength === 0) continue;
+        if (!state.published || state.connections.size === 0) continue; // fechado/sem cliente: drena e descarta
         const packet: LasecPlotDataPacket = { endpointId: state.registration.id, sequence: state.sequence++,
           simulationTimeNs: batch.simulationTimeNs, direction: "mcu-to-client", encoding: "binary", data: batch.data.slice() };
         for (const connection of state.connections) connection.deliver(packet);

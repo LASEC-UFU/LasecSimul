@@ -24,6 +24,7 @@
     "src/ui/webview/wireTopology.ts",
     "src/ui/webview/topologyDocument.ts",
     "src/ui/webview/wireSpatialIndex.ts",
-    "src/ui/webview/valueFormatting.ts"
+    "src/ui/webview/valueFormatting.ts",
+    "src/ui/webview/serialFormat.ts"
   ]
 }

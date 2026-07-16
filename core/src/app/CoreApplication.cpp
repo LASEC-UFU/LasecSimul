@@ -1450,6 +1450,57 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
         }
         return resp;
     }
+    if (msg.type == "drainUart") {
+        try {
+            const nlohmann::json payload = nlohmann::json::parse(msg.payloadJson.empty() ? "{}" : msg.payloadJson);
+            const uint32_t instanceId = static_cast<uint32_t>(std::stoul(payload.value("instanceId", std::string{"0"})));
+            const auto droppedValue = session.propertyValueOf(instanceId, "uart_rx_dropped");
+            const auto dataValue = session.propertyValueOf(instanceId, "uart_rx_hex"); // getter drena atomicamente no Scheduler
+            const auto pendingValue = session.propertyValueOf(instanceId, "uart_rx_pending");
+            if (!dataValue || !std::holds_alternative<std::string>(*dataValue)) throw std::runtime_error("componente não implementa canal UART");
+            resp.ok = true;
+            resp.payloadJson = nlohmann::json{
+                {"dataHex", std::get<std::string>(*dataValue)},
+                {"simulationTimeNs", session.scheduler().nowNs()},
+                {"pending", pendingValue && std::holds_alternative<double>(*pendingValue) ? std::get<double>(*pendingValue) : 0.0},
+                {"dropped", droppedValue && std::holds_alternative<double>(*droppedValue) ? std::get<double>(*droppedValue) : 0.0},
+            }.dump();
+        } catch (const std::exception& e) { resp.ok = false; resp.error = std::string("drainUart falhou: ") + e.what(); }
+        return resp;
+    }
+    if (msg.type == "writeUart") {
+        try {
+            const nlohmann::json payload = nlohmann::json::parse(msg.payloadJson.empty() ? "{}" : msg.payloadJson);
+            const uint32_t instanceId = static_cast<uint32_t>(std::stoul(payload.value("instanceId", std::string{"0"})));
+            const std::string dataHex = payload.value("dataHex", std::string{});
+            if ((dataHex.size() & 1u) != 0 || dataHex.size() > 8192u || !std::all_of(dataHex.begin(), dataHex.end(), [](unsigned char c) { return std::isxdigit(c) != 0; }))
+                throw std::invalid_argument("dataHex UART inválido ou maior que 4096 bytes");
+            if (const auto error = session.setProperty(instanceId, "uart_tx_hex", PropertyValue{dataHex})) throw std::runtime_error(*error);
+            const auto pending = session.propertyValueOf(instanceId, "uart_tx_pending");
+            const auto dropped = session.propertyValueOf(instanceId, "uart_tx_dropped");
+            resp.ok = true;
+            resp.payloadJson = nlohmann::json{
+                {"pending", pending && std::holds_alternative<double>(*pending) ? std::get<double>(*pending) : 0.0},
+                {"dropped", dropped && std::holds_alternative<double>(*dropped) ? std::get<double>(*dropped) : 0.0},
+                {"simulationTimeNs", session.scheduler().nowNs()},
+            }.dump();
+        } catch (const std::exception& e) { resp.ok = false; resp.error = std::string("writeUart falhou: ") + e.what(); }
+        return resp;
+    }
+    if (msg.type == "getUartStatus") {
+        try {
+            const nlohmann::json payload = nlohmann::json::parse(msg.payloadJson.empty() ? "{}" : msg.payloadJson);
+            const uint32_t instanceId = static_cast<uint32_t>(std::stoul(payload.value("instanceId", std::string{"0"})));
+            const auto pending = session.propertyValueOf(instanceId, "uart_tx_pending");
+            const auto dropped = session.propertyValueOf(instanceId, "uart_tx_dropped");
+            resp.ok = true;
+            resp.payloadJson = nlohmann::json{
+                {"pending", pending && std::holds_alternative<double>(*pending) ? std::get<double>(*pending) : 0.0},
+                {"dropped", dropped && std::holds_alternative<double>(*dropped) ? std::get<double>(*dropped) : 0.0},
+            }.dump();
+        } catch (const std::exception& e) { resp.ok = false; resp.error = std::string("getUartStatus falhou: ") + e.what(); }
+        return resp;
+    }
     if (msg.type == "setSubcircuitChildProperty") {
         // Overlay de Modo Placa no circuito principal -- edita uma propriedade de um componente
         // DENTRO de um subcircuito (ex: "button_en") endereçando por id local em vez do índice Core

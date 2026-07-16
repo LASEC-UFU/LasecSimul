@@ -381,11 +381,6 @@ html, body {
   transition: fill 100ms ease-out, stroke 100ms ease-out;
 }
 
-.component__symbol--fixed-volt-on .fixed-volt-body {
-  fill: #ffa600;
-  stroke: currentColor;
-}
-
 .component__symbol {
   display: block;
   width: 100%;
@@ -1154,6 +1149,20 @@ rect.meter-expand-button:hover {
   pointer-events: none;
   z-index: 20;
 }
+
+/* Terminal do SerialTerm, portado da janela Terminal do SimulIDE: painel recebido escuro,
+   editor de envio claro e toolbars independentes com formato ASCII/HEX/DEC/OCT/BIN. */
+.serial-terminal-layer { position: fixed; inset: 0; z-index: 1250; pointer-events: none; display: flex; align-items: center; justify-content: center; }
+.serial-terminal-window { pointer-events: auto; width: min(520px, calc(100vw - 32px)); height: min(430px, calc(100vh - 48px)); display: grid; grid-template-rows: auto auto 1fr auto minmax(80px, .45fr) auto; gap: 4px; padding: 4px; color: var(--vscode-foreground); background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); border-radius: 5px; box-shadow: 0 10px 32px #0008; }
+.serial-terminal-window__title { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 12px; padding: 5px 8px; background: var(--vscode-titleBar-activeBackground); }
+.serial-terminal-window__title button { font-size: 20px; line-height: 20px; border: 0; background: transparent; color: inherit; cursor: pointer; }
+.serial-terminal-window__toolbar { display: flex; align-items: center; gap: 6px; }
+.serial-terminal-window__toolbar select { margin-left: auto; }
+.serial-terminal-window__output { min-height: 0; overflow: auto; margin: 0; padding: 8px; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.4 "Courier New", monospace; color: #fff; background: #231e3c; border: 1px solid #51486f; }
+.serial-terminal-window__rx { color: #fff; }
+.serial-terminal-window__tx { color: #ffff00; }
+.serial-terminal-window__input { resize: none; width: 100%; min-height: 70px; box-sizing: border-box; padding: 6px; font: 12px/1.4 "Courier New", monospace; color: #111; background: #fcfcf6; }
+.serial-terminal-window__error { min-height: 18px; color: var(--vscode-errorForeground); font-size: 12px; }
 
 .instrument-popup {
   position: absolute;

@@ -53,14 +53,20 @@ void hostPinWrite(void* hostCtx, uint32_t pin, int32_t level) {
     auto* ctx = static_cast<NativeDeviceHostContext*>(hostCtx);
     if (!ctx) return;
     ctx->pendingDigitalDrive[pin] = level;
-    if (ctx->scheduler) ctx->scheduler->dirtySet().insert(ctx->componentIndex);
+    if (ctx->scheduler) {
+        if (ctx->inUnlockedTimerCallback) ctx->scheduler->markDirty(ctx->componentIndex);
+        else ctx->scheduler->dirtySet().insert(ctx->componentIndex);
+    }
 }
 
 void hostPinWriteAnalog(void* hostCtx, uint32_t pin, float volts) {
     auto* ctx = static_cast<NativeDeviceHostContext*>(hostCtx);
     if (!ctx) return;
     ctx->pendingAnalogDrive[pin] = volts;
-    if (ctx->scheduler) ctx->scheduler->dirtySet().insert(ctx->componentIndex);
+    if (ctx->scheduler) {
+        if (ctx->inUnlockedTimerCallback) ctx->scheduler->markDirty(ctx->componentIndex);
+        else ctx->scheduler->dirtySet().insert(ctx->componentIndex);
+    }
 }
 
 // Cache de NativeDeviceProxy::stamp() (toda stamp(), não só quando há pin_write) -- nunca dispara
@@ -86,14 +92,19 @@ void hostScheduleEvent(void* hostCtx, uint64_t delayNs, uint32_t eventId) {
     auto* ctx = static_cast<NativeDeviceHostContext*>(hostCtx);
     if (!ctx || !ctx->scheduler || !ctx->owner) return;
     NativeDeviceProxy* owner = ctx->owner;
-    ctx->scheduler->scheduleEventUnlocked(delayNs, [owner, eventId] {
+    auto deliver = [owner, ctx, eventId] {
+        ctx->inUnlockedTimerCallback = true;
         owner->onEvent(ComponentEvent{kTimerEventTag, eventId, 0, 0});
-    });
+        ctx->inUnlockedTimerCallback = false;
+    };
+    if (ctx->inUnlockedTimerCallback) ctx->scheduler->scheduleEvent(delayNs, std::move(deliver));
+    else ctx->scheduler->scheduleEventUnlocked(delayNs, std::move(deliver));
 }
 
 uint64_t hostNowNs(void* hostCtx) {
     auto* ctx = static_cast<NativeDeviceHostContext*>(hostCtx);
-    return (ctx && ctx->scheduler) ? ctx->scheduler->nowNsUnlocked() : 0;
+    if (!ctx || !ctx->scheduler) return 0;
+    return ctx->inUnlockedTimerCallback ? ctx->scheduler->nowNs() : ctx->scheduler->nowNsUnlocked();
 }
 
 void hostLog(void*, int32_t level, const char* msg) {

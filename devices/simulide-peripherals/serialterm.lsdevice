@@ -24,6 +24,10 @@
           "label": "Stop bits",
           "group": "Serial"
         },
+        "parity": {
+          "label": "Parity",
+          "group": "Serial"
+        },
         "rx_buffer": {
           "label": "RX buffer (send)",
           "group": "Serial"
@@ -74,7 +78,8 @@
         "rx": 2,
         "ry": 2,
         "stroke": "none",
-        "fill": "#000000"
+        "fill": "#000000",
+        "stateFill": { "prop": "__serial_tx_state", "map": { "off": "#000000", "idle": "#ff0000", "active": "#ffff00" }, "fallback": "#000000" }
       },
       {
         "kind": "rect",
@@ -85,7 +90,8 @@
         "rx": 2,
         "ry": 2,
         "stroke": "none",
-        "fill": "#000000"
+        "fill": "#000000",
+        "stateFill": { "prop": "__serial_rx_state", "map": { "off": "#000000", "idle": "#ff0000", "active": "#ffff00" }, "fallback": "#000000" }
       },
       {
         "kind": "rect",
@@ -104,8 +110,10 @@
         "x": 46,
         "y": 20,
         "value": "Abrir",
+        "stateText": { "kind": "property", "prop": "__serial_button_label" },
         "fontSize": 11,
-        "color": "#000000"
+        "color": "#000000",
+        "cssClass": "serial-toggle-hit-zone"
       }
     ],
     "pinLabelColor": "#FAFAC8",
@@ -240,8 +248,21 @@
       ]
     },
     {
+      "id": "parity",
+      "label": "Paridade",
+      "group": "Serial",
+      "valueKind": "string",
+      "editor": "select",
+      "default": "none",
+      "options": [
+        { "label": "Nenhuma", "value": "none" },
+        { "label": "Par", "value": "even" },
+        { "label": "Ímpar", "value": "odd" }
+      ]
+    },
+    {
       "id": "rx_buffer",
-      "label": "Buffer RX (enviar)",
+      "label": "Texto a enviar (compatibilidade)",
       "group": "Serial",
       "valueKind": "string",
       "editor": "text",
@@ -249,12 +270,37 @@
     },
     {
       "id": "tx_bytes",
-      "label": "TX recebido (hex)",
+      "label": "Recebido (compatibilidade)",
       "group": "Serial",
       "valueKind": "string",
       "editor": "text",
-      "default": ""
-    }
+      "default": "",
+      "readOnly": true
+    },
+    {
+      "id": "uart_rx_hex",
+      "label": "UART RX interno",
+      "group": "Interno",
+      "valueKind": "string",
+      "editor": "text",
+      "default": "",
+      "hidden": true,
+      "noCopy": true
+    },
+    {
+      "id": "uart_tx_hex",
+      "label": "UART TX interno",
+      "group": "Interno",
+      "valueKind": "string",
+      "editor": "text",
+      "default": "",
+      "hidden": true,
+      "noCopy": true
+    },
+    { "id": "uart_rx_pending", "label": "RX pendente", "group": "Diagnóstico", "valueKind": "number", "editor": "readonly", "default": 0, "hidden": true, "readOnly": true, "noCopy": true },
+    { "id": "uart_tx_pending", "label": "TX pendente", "group": "Diagnóstico", "valueKind": "number", "editor": "readonly", "default": 0, "hidden": true, "readOnly": true, "noCopy": true },
+    { "id": "uart_rx_dropped", "label": "Bytes RX perdidos", "group": "Diagnóstico", "valueKind": "number", "editor": "readonly", "default": 0, "hidden": true, "readOnly": true, "noCopy": true },
+    { "id": "uart_tx_dropped", "label": "Bytes TX perdidos", "group": "Diagnóstico", "valueKind": "number", "editor": "readonly", "default": 0, "hidden": true, "readOnly": true, "noCopy": true }
   ],
   "help": {
     "description": "Terminal serial virtual para entrada e saída de texto."

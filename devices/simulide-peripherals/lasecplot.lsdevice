@@ -14,16 +14,16 @@
     "darwin-universal": "build/macos-universal/device.dylib"
   },
   "package": {
-    "width": 116, "height": 40, "border": false,
+    "width": 72, "height": 32, "border": false,
     "background": { "kind": "color", "value": "transparent" },
     "shapes": [
-      { "kind": "rect", "x": 0, "y": 0, "w": 116, "h": 40, "rx": 4, "ry": 4, "stroke": "#303f9f", "fill": "#e8eaf6", "strokeWidth": 1 },
-      { "kind": "text", "x": 50, "y": 15, "value": "LasecPlot", "fontSize": 10, "color": "#1a237e" },
-      { "kind": "text", "x": 48, "y": 30, "value": "○ Fechado", "fontSize": 9, "color": "#333333" },
-      { "kind": "rect", "x": 88, "y": 20, "w": 24, "h": 15, "rx": 2, "ry": 2, "stroke": "#555555", "fill": "#eeeeee", "strokeWidth": 1 },
-      { "kind": "text", "x": 100, "y": 31, "value": "Abrir", "fontSize": 8, "color": "#111111" }
+      { "kind": "rect", "x": 0, "y": 0, "w": 72, "h": 32, "rx": 4, "ry": 4, "stroke": "#00006b", "fill": "#00008b", "strokeWidth": 1 },
+      { "kind": "rect", "x": 11, "y": 5, "w": 8, "h": 6, "rx": 2, "ry": 2, "stroke": "none", "fill": "#000000", "stateFill": { "prop": "__serial_tx_state", "map": { "off": "#000000", "idle": "#ff0000", "active": "#ffff00" }, "fallback": "#000000" } },
+      { "kind": "rect", "x": 11, "y": 21, "w": 8, "h": 6, "rx": 2, "ry": 2, "stroke": "none", "fill": "#000000", "stateFill": { "prop": "__serial_rx_state", "map": { "off": "#000000", "idle": "#ff0000", "active": "#ffff00" }, "fallback": "#000000" } },
+      { "kind": "rect", "x": 24, "y": 6, "w": 44, "h": 20, "rx": 3, "ry": 3, "stroke": "#888888", "fill": "#c0c0c0", "strokeWidth": 1 },
+      { "kind": "text", "x": 46, "y": 20, "value": "Abrir", "stateText": { "kind": "property", "prop": "__serial_button_label" }, "fontSize": 11, "color": "#000000", "cssClass": "serial-toggle-hit-zone" }
     ],
-    "pinLabelColor": "#1a237e",
+    "pinLabelColor": "#FAFAC8",
     "pins": [
       { "id": "tx", "x": 0, "y": 8, "angle": 180, "length": 8, "label": "Tx", "labelX": 6, "labelY": 10 },
       { "id": "rx", "x": 0, "y": 24, "angle": 180, "length": 8, "label": "Rx", "labelX": 6, "labelY": 26 }
@@ -41,11 +41,17 @@
       "options": [{"label":"5","value":5},{"label":"6","value":6},{"label":"7","value":7},{"label":"8","value":8}] },
     { "id": "stop_bits", "label": "Bits de parada", "group": "Serial", "valueKind": "number", "editor": "select", "default": 1,
       "options": [{"label":"1","value":1},{"label":"2","value":2}] },
+    { "id": "parity", "label": "Paridade", "group": "Serial", "valueKind": "string", "editor": "select", "default": "none",
+      "options": [{"label":"Nenhuma","value":"none"},{"label":"Par","value":"even"},{"label":"Ímpar","value":"odd"}] },
     { "id": "mode", "label": "Modo", "group": "LasecPlot", "valueKind": "string", "editor": "select", "default": "read-only",
       "options": [{"label":"Somente leitura","value":"read-only"},{"label":"Bidirecional","value":"bidirectional"}] },
     { "id": "expose", "label": "Expor para LasecPlot", "group": "LasecPlot", "valueKind": "bool", "editor": "checkbox", "default": true },
-    { "id": "interop_rx_hex", "label": "Interop RX", "group": "Interno", "valueKind": "string", "editor": "text", "default": "", "hidden": true, "noCopy": true },
-    { "id": "interop_tx_hex", "label": "Interop TX", "group": "Interno", "valueKind": "string", "editor": "text", "default": "", "hidden": true, "noCopy": true }
+    { "id": "uart_rx_hex", "label": "UART RX interno", "group": "Interno", "valueKind": "string", "editor": "text", "default": "", "hidden": true, "noCopy": true },
+    { "id": "uart_tx_hex", "label": "UART TX interno", "group": "Interno", "valueKind": "string", "editor": "text", "default": "", "hidden": true, "noCopy": true },
+    { "id": "uart_rx_pending", "label": "RX pendente", "group": "Diagnóstico", "valueKind": "number", "editor": "readonly", "default": 0, "hidden": true, "readOnly": true, "noCopy": true },
+    { "id": "uart_tx_pending", "label": "TX pendente", "group": "Diagnóstico", "valueKind": "number", "editor": "readonly", "default": 0, "hidden": true, "readOnly": true, "noCopy": true },
+    { "id": "uart_rx_dropped", "label": "Bytes RX perdidos", "group": "Diagnóstico", "valueKind": "number", "editor": "readonly", "default": 0, "hidden": true, "readOnly": true, "noCopy": true },
+    { "id": "uart_tx_dropped", "label": "Bytes TX perdidos", "group": "Diagnóstico", "valueKind": "number", "editor": "readonly", "default": 0, "hidden": true, "readOnly": true, "noCopy": true }
   ],
   "help": { "description": "Ponte UART virtual para a extensão LasecPlot. Possui exclusivamente TX e RX." },
   "limits": { "stepTimeoutMs": 1, "expectedComplexity": "medium" }

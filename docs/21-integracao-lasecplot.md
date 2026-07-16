@@ -8,7 +8,7 @@ O tipo `peripherals.lasecplot` possui exclusivamente `tx` (`DIGITAL_OUT`) e `rx`
 
 O nome do bloco no schematic é também o `Nome da fonte`. Os dois campos são sincronizados: renomear o bloco para `Temperatura do Motor` anuncia `LasecSimul — Temperatura do Motor`. Instâncias novas recebem nomes indexados distintos, e cada uma mantém seu próprio ID interno, stream, sequência e conjunto de clientes.
 
-Baud rate, bits de dados e stop bits participam da decodificação elétrica real. Paridade não é exibida porque ainda não existe no decoder compartilhado. O estado aberto, clientes, buffers e erros são transitórios e não são persistidos no `.lsproj`.
+Baud rate, bits de dados, paridade (`none/even/odd`) e stop bits participam da codificação e decodificação elétrica real. O estado aberto, clientes, buffers e erros são transitórios e não são persistidos no `.lsproj`.
 
 O Core acumula até 4 KiB e a Extension drena lotes a cada 10 ms somente quando há endpoint publicado e consumidor conectado. Os lotes são opacos: linhas fragmentadas, várias linhas e dados binários não são interpretados ou remontados.
 
@@ -74,8 +74,12 @@ Ao pausar, a conexão permanece aberta e nenhum lote novo é produzido. Ao fecha
 
 O transporte Core ↔ Extension reutiliza `setProperty` e o novo verbo `getProperty`:
 
-- `getProperty(instanceId, "interop_rx_hex")`: drena até 4096 bytes MCU → cliente;
-- `setProperty(instanceId, "interop_tx_hex", hex)`: enfileira até 4096 bytes cliente → MCU;
+- `getProperty(instanceId, "uart_rx_hex")`: drena até 4096 bytes MCU → consumidor;
+- `setProperty(instanceId, "uart_tx_hex", hex)`: enfileira bytes consumidor → MCU com backpressure;
 - `getSimulationTime`: associa `simulationTimeNs` ao lote.
 
-A sequência é mantida pelo broker por endpoint e reinicia quando o dispositivo é aberto. O encoding hexadecimal existe apenas na fronteira JSON do IPC; a API entre extensões entrega `Uint8Array`.
+A sequência é mantida pelo broker por endpoint e reinicia quando o dispositivo é aberto. O encoding hexadecimal existe apenas na fronteira JSON do IPC; a API entre extensões entrega `Uint8Array`. Esse canal é a abstração comum também usada pelo Serial Terminal interno.
+
+## Serial Terminal de referência
+
+O Serial Terminal segue diretamente `SerialTerm`/`Terminal`/`UsartModule` do SimulIDE: janela Abrir/Fechar, fila TX, recepção incremental, LEDs TX/RX, limpar, carregar arquivo, salvar log e modos ASCII/HEX/DEC/OCT/BIN. Serial Terminal e LasecPlot usam o mesmo codec elétrico e os mesmos ring buffers; diferem apenas no consumidor dos bytes (janela interna ou API pública).

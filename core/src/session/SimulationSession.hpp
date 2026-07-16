@@ -214,6 +214,9 @@ public:
     }
 
 private:
+    std::optional<std::string> setPropertyUnlocked(uint32_t component, const std::string& propertyName,
+                                                   const PropertyValue& value);
+    std::optional<PropertyValue> propertyValueOfUnlocked(uint32_t component, const std::string& propertyName) const;
     ResolvedSignal resolveSignalUnlocked(const std::string& reference, std::optional<uint32_t> self) const;
     void acquireSubscribedSignalsUnlocked(uint64_t timestampNs);
     void onStableStepUnlocked(uint64_t timestampNs);
