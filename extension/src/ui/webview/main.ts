@@ -1,6 +1,6 @@
 import { WEBVIEW_MESSAGE_VERSION, AnalyzerVectorHistory, ComponentReadoutValue, HostToWebviewMessage, InternalComponentSnapshot, SimulationStatus, WebviewToHostMessage } from "./messages.js";
 import { CanonicalEndpoint, CanonicalTopologyDocument, InteractionKindEntry, McuSerialPortEntry, PACKAGE_SHAPE_ORDER_PROPERTY_KEY, PACKAGE_SHAPE_TYPE_IDS, PropertySchemaEntry, TUNNEL_TYPE_ID, ViewSpecInteraction, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, endpointId, endpointPinId, nodeEndpoint, portEndpoint, remapEndpoint } from "./model.js";
-import { ComponentBox, PIN_RADIUS, buildLivePackagePreview, componentBox, componentLocalOrigin, componentSymbolSvg, dialKnobSvg, hasRealPinPosition, livePackagePreviewSymbolSvg, missingSubcircuitPlaceholderSvg, packageSymbolSvg, pinLocalPosition, registerPackage } from "./componentSymbols.js";
+import { ComponentBox, PIN_RADIUS, buildLivePackagePreview, componentBox, componentLocalOrigin, componentSymbolSvg, dialKnobSvg, hasRealPinPosition, isLivePackageAuthoringVisual, livePackagePreviewSymbolSvg, missingSubcircuitPlaceholderSvg, packageSymbolSvg, pinLocalPosition, registerPackage } from "./componentSymbols.js";
 import { svgLocalTransform, transformLocalPoint, transformedLocalBounds } from "./componentGeometry.js";
 import { detectChannelTrigger, digitalStepPath, findTriggerAnchorIndex, triggerAlignedWindowEndNs, visibleSampleWindowByTime } from "./instrumentTrigger.js";
 import { analogSampleHoldPath, clampInstrumentWindow, decodeInstrumentState, encodeInstrumentState, panInstrumentTime, zoomInstrumentTimeAt } from "./instrumentViewport.js";
@@ -5362,21 +5362,19 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
   // Prévia ao vivo do Package sendo editado em "Abrir Subcircuito" (`buildLivePackagePreview`,
   // `componentSymbols.ts`) -- unifica o corpo/pinos/rótulos/formas do `other.package` desta cena com
   // o MESMO pipeline (`resolvePackageLayout`/`packageBodySvg`) que desenha um dispositivo colocado,
-  // em vez do switch genérico por-componente (`componentSymbolSvg`). Só computado pros 3 typeIds
-  // envolvidos -- o resto da cena nunca paga esse custo. Os pinos/formas MARCADOS ficam com o corpo
+  // em vez do switch genérico por-componente (`componentSymbolSvg`). Só computado pros componentes
+  // de autoria envolvidos -- o resto da cena nunca paga esse custo. Pinos, formas e a Figura do
+  // ícone ficam com o corpo
   // visível VAZIO (só hit-box, `rotatedBox`/seleção continuam intactos, ver overlay de seleção
   // abaixo) porque o corpo consolidado do Package já desenha tudo -- elimina "dois renderizadores
   // pro mesmo package" pela raiz, não só cosmeticamente.
-  const isPackageAuthoringVisual =
-    component.typeId === "other.package" ||
-    component.typeId === "other.package_pin" ||
-    component.packageShapeRole === true;
+  const isPackageAuthoringVisual = isLivePackageAuthoringVisual(component);
   const livePackagePreview = isPackageAuthoringVisual ? buildLivePackagePreview(state.components) : undefined;
   bodyGroup.innerHTML = isMissingSubcircuitRef || isUnknownComponent
     ? missingSubcircuitPlaceholderSvg(box)
     : livePackagePreview && component.typeId === "other.package"
       ? livePackagePreviewSymbolSvg(livePackagePreview, component.id, symbolProperties).svg
-      : livePackagePreview && (component.typeId === "other.package_pin" || component.packageShapeRole === true)
+      : livePackagePreview && isPackageAuthoringVisual
         ? ""
         : packageSymbolSvg(component.typeId, symbolProperties, component.id, boardVariant) ?? catalogEntry?.symbolSvg ?? componentSymbolSvg(component.typeId, symbolProperties);
   bodyGroup.querySelectorAll<HTMLInputElement>(".meter-channel-input").forEach((input) => {

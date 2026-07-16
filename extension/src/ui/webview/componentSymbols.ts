@@ -516,6 +516,17 @@ export function buildLivePackagePreview(components: readonly WebviewComponentMod
   };
 }
 
+/** Identifica cada componente cujo desenho já está consolidado no SVG produzido por
+ * `buildLivePackagePreview`. Esses componentes continuam existindo separadamente na cena para
+ * seleção/arrasto/autoria, mas o renderer individual precisa ficar vazio para não desenhar a mesma
+ * parte do Package duas vezes. */
+export function isLivePackageAuthoringVisual(component: WebviewComponentModel): boolean {
+  return component.typeId === "other.package" ||
+    component.typeId === "other.package_pin" ||
+    component.packageIconRole === true ||
+    component.packageShapeRole === true;
+}
+
 const PACKAGE_BY_TYPE_ID = new Map<string, PackageDescriptor>();
 /** Aparência ALTERNATIVA opcional ("Chip or Logic Symbol", igual ao `SubPackage::Logic_Symbol` do
  * SimulIDE real -- booleano simples, não uma lista de N variantes). Mapa SEPARADO do padrão (não um

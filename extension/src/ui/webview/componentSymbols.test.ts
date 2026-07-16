@@ -1,7 +1,7 @@
 import { createTestRunner, assert } from "../../ipc/testSupport/MockCoreServer";
 import fs from "node:fs";
 import path from "node:path";
-import { buildLivePackagePreview, componentBox, componentLocalOrigin, componentSymbolSvg, hasRealPinPosition, pinLocalPosition, packageSymbolSvg, registerPackage } from "./componentSymbols";
+import { buildLivePackagePreview, componentBox, componentLocalOrigin, componentSymbolSvg, hasRealPinPosition, isLivePackageAuthoringVisual, pinLocalPosition, packageSymbolSvg, registerPackage } from "./componentSymbols";
 import { PACKAGE_SHAPE_ORDER_PROPERTY_KEY, PackageDescriptor, WebviewComponentModel } from "./model";
 
 (async () => {
@@ -1381,6 +1381,18 @@ import { PACKAGE_SHAPE_ORDER_PROPERTY_KEY, PackageDescriptor, WebviewComponentMo
   await test("buildLivePackagePreview: undefined quando não há nenhum other.package na cena (edição normal, sem sessão de Package)", () => {
     const normal: WebviewComponentModel = { id: "c1", typeId: "passive.resistor", label: "R1", x: 0, y: 0, rotation: 0, pins: [], properties: {} };
     assert(buildLivePackagePreview([normal]) === undefined, "sem other.package na cena, preview deveria ser undefined");
+  });
+
+  await test("preview ao vivo consolida também a Figura do ícone para não desenhar dois Packages", () => {
+    const icon: WebviewComponentModel = {
+      id: "icon1", typeId: "graphics.image", label: "Ícone do Subcircuito", x: 0, y: 0,
+      rotation: 0, pins: [], properties: { imageData: "AA==", imageMime: "image/png" }, packageIconRole: true,
+    };
+    const ordinaryImage: WebviewComponentModel = {
+      ...icon, id: "image1", label: "Figura comum", packageIconRole: undefined,
+    };
+    assert(isLivePackageAuthoringVisual(icon), "Figura packageIconRole já incorporada ao background do preview deve ter renderer individual vazio");
+    assert(!isLivePackageAuthoringVisual(ordinaryImage), "Figura comum deve continuar sendo renderizada normalmente");
   });
 
   await test("buildLivePackagePreview: reproduz EXATAMENTE a posição atual da cena (pino + rótulo), sem nenhuma conversão de escala", () => {
