@@ -10,7 +10,7 @@
  * layout de pino são calculados a partir da caixa do tipo, nunca de uma constante global de tamanho.
  */
 
-import { ComponentViewSpec, JUNCTION_TYPE_ID, PACKAGE_SHAPE_ORDER_PROPERTY_KEY, PACKAGE_SHAPE_TYPE_IDS, PackageDescriptor, PackageDynamicPinGroup, PackageNumberValue, PackagePin, PackageShape, SIMULIDE_PACKAGE_GRID_UNIT, SimulidePaintSpec, SimulideQtWidgetSpec, TUNNEL_TYPE_ID, ViewSpecHitTest, WebviewComponentModel } from "./model.js";
+import { ComponentViewSpec, JUNCTION_TYPE_ID, PACKAGE_SHAPE_ORDER_PROPERTY_KEY, PACKAGE_SHAPE_TYPE_IDS, PackageDescriptor, PackageDynamicPinGroup, PackageNumberValue, PackagePin, PackageShape, SIMULIDE_PACKAGE_GRID_UNIT, SimulidePaintSpec, SimulideQtWidgetSpec, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, ViewSpecHitTest, WebviewComponentModel } from "./model.js";
 import { simulidePaintToPackageShapes } from "./simulidePaint.js";
 
 export interface ComponentBox {
@@ -1458,6 +1458,7 @@ function builtinComponentBox(typeId: string): ComponentBox | undefined {
     case "graphics.line": return { width: 86, height: 32 };
     case "other.package": return { width: 84, height: 66 };
     case "other.package_pin": return { width: 24, height: 24 };
+    case SYMBOL_PIN_TYPE_ID: return { width: 24, height: 24 };
     case "other.test_unit": return { width: 32, height: 32 }; // other/testunit.cpp (IoComponent generico)
     case "other.dial": return { width: 40, height: 40 }; // other/dial.cpp: knob nativo (QDial) -- estilizacao vetorial menor que antes
     case "subcircuits.external": return { width: 56, height: 40 }; // bloco generico de subcircuito por caminho, ainda sem arquivo vinculado -- retangulo neutro "de tamanho medio", nunca a silhueta de 2 pinos do fallback generico (ver componentSymbolSvg)
@@ -1501,11 +1502,11 @@ function propertyDrivenBox(typeId: string, properties: Record<string, unknown> |
       const side = Math.max(20, length + 12);
       return { width: side, height: side };
     }
-    case "other.package_pin": {
-      // Espelha EXATAMENTE `packagePinBoxSide` (`subcircuitPackageAuthoring.ts`) -- área de
-      // seleção/arrasto apertada, mesmo espírito de `tunnelBox` (bug real: caixa grande demais
-      // dificultava mover um pino perto de outro). Só a margem encolheu (`+6`, era `+16`); o mínimo
-      // estrutural (`length*2`) continua intacto.
+    case "other.package_pin":
+    case SYMBOL_PIN_TYPE_ID: {
+      // Espelha EXATAMENTE `pinBoxSide` (`catalog/subcircuitSymbolScene.ts`, ex-`packagePinBoxSide`
+      // de `subcircuitPackageAuthoring.ts`) -- área de seleção/arrasto apertada, mesmo espírito de
+      // `tunnelBox` (bug real: caixa grande demais dificultava mover um pino perto de outro).
       const length = numberOf("length") ?? 8;
       const side = Math.max(14, length * 2 + 6);
       return { width: side, height: side };
@@ -1943,13 +1944,16 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
       );
     }
 
-    case "other.package_pin": {
+    case "other.package_pin":
+    case SYMBOL_PIN_TYPE_ID: {
       // Desenho CANÔNICO (rotation=0): âncora no CENTRO da caixa (ponto invariante sob `rotate()`),
       // lead saindo pra DIREITA -- mesma convenção de ângulo 0=direita do renderizador de leitura
       // (`packagePinLeadSvg`). `component.rotation` (0/90/180/270, CSS) faz o papel do `angle` real
       // de um `PackagePin` sem nenhum campo novo -- reaproveita rotação genérica (teclado/toolbar).
-      // SEM texto aqui -- o rótulo é definido pelos dados do package (`labelX`/`labelY`) e renderizado
-      // separadamente, igual ao SimulIDE real.
+      // SEM texto aqui -- o rótulo (`component.label`, ver `SYMBOL_PIN_TYPE_ID`) é renderizado à
+      // parte como um `component-floating-label` arrastável (`main.ts::renderExternalLabel`), igual
+      // a qualquer id-label -- nunca dentro desta caixa local pequena demais pra caber o texto numa
+      // posição arbitrariamente arrastada.
       const length = typeof properties?.length === "number" ? properties.length : 8;
       const tipX = midX + length;
       return (

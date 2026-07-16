@@ -1,4 +1,6 @@
-import { PackageDescriptor, PackagePin, PackageShape, WebviewComponentModel } from "../ui/webview/model";
+import { PackageDescriptor, PackagePin, PackageShape, SYMBOL_PIN_TYPE_ID, WebviewComponentModel } from "../ui/webview/model";
+
+export { SYMBOL_PIN_TYPE_ID };
 
 /** Materializa/compila a cena WYSIWYG do Modo Símbolo/Ícone (`state.symbolElements`/`iconElements`,
  * `main.ts`) a partir de/para um `PackageDescriptor` (`SubcircuitDocument.symbol`/`icon`,
@@ -10,16 +12,25 @@ import { PackageDescriptor, PackagePin, PackageShape, WebviewComponentModel } fr
  *   propriedades do PRÓPRIO DOCUMENTO (`PackageDescriptor`), nunca um componente arrastável/
  *   duplicável/apagável. Isso é estrutural, não uma regra aplicada por validação: não há nenhum
  *   typeId "canvas" pra duplicar em primeiro lugar.
- * - Pino (`SYMBOL_PIN_TYPE_ID`) carrega seu PRÓPRIO rótulo (`PackagePin.label`) como parte do MESMO
- *   objeto de cena -- nunca um `graphics.text` linkado à parte (`linkedPinComponentId`, removido).
+ * - Pino (`SYMBOL_PIN_TYPE_ID`) usa `component.label` como seu PRÓPRIO rótulo -- nunca um
+ *   `graphics.text` linkado à parte (`linkedPinComponentId`, removido). A posição/rotação/cor do
+ *   rótulo (arrastável de verdade no editor, ver `main.ts::renderExternalLabel`) reaproveita o MESMO
+ *   mecanismo genérico de rótulo "id" de QUALQUER componente (`__ui_idLabelX/Y/Rotation/Color`) --
+ *   nenhum sistema de arrasto novo, só uma nova origem padrão (direção do lead) pro pino
+ *   especificamente. Contrato compartilhado com `main.ts` (que nunca pode importar deste arquivo,
+ *   fora do `rootDir` de `tsconfig.webview.json`): os NOMES dessas 4 chaves de propriedade e o
+ *   significado de X/Y (delta relativo a `component.x/y`, o canto superior-esquerdo da caixa do
+ *   pino) são duplicados por necessidade, não acidente -- mudar um lado exige mudar o outro.
  * - Cena começa em (0,0) -- sem "origem reservada"/distinção nativo-vs-exibido (essa complexidade
  *   existia só pra caber ao lado do circuito interno real na MESMA cena; Símbolo/Ícone agora são
  *   cenas próprias e independentes). */
 
-export const SYMBOL_PIN_TYPE_ID = "symbol.pin";
-
 const DEFAULT_LABEL_FONT_SIZE = 7;
 const DEFAULT_LABEL_COLOR = "#1f2937";
+const ID_LABEL_X_KEY = "__ui_idLabelX";
+const ID_LABEL_Y_KEY = "__ui_idLabelY";
+const ID_LABEL_ROTATION_KEY = "__ui_idLabelRotation";
+const ID_LABEL_COLOR_KEY = "__ui_idLabelColor";
 
 function nearestCardinalRotation(angleDeg: number): 0 | 90 | 180 | 270 {
   const normalized = ((angleDeg % 360) + 360) % 360;
@@ -46,26 +57,6 @@ function shapeLineBoxSide(length: number): number {
   return Math.max(20, length + 12);
 }
 
-/** Mesma fórmula de offset de `packagePinLeadSvg` (`componentSymbols.ts`) -- posição PADRÃO do
- * rótulo quando o pino não tem `labelX`/`labelY` explícitos no arquivo (WYSIWYG: o editor precisa
- * mostrar exatamente onde o esquemático final vai desenhar por padrão). */
-function defaultLabelPosition(
-  anchorX: number,
-  anchorY: number,
-  angle: 0 | 90 | 180 | 270,
-  length: number,
-  labelSpace: number | undefined,
-  fontSize: number
-): { x: number; y: number; rotation: 0 | 90 | 270 } {
-  const offset = length + (labelSpace ?? Math.max(2, fontSize / 2));
-  switch (angle) {
-    case 0: return { x: anchorX - offset, y: anchorY, rotation: 0 };
-    case 90: return { x: anchorX, y: anchorY + offset, rotation: 90 };
-    case 180: return { x: anchorX + offset, y: anchorY, rotation: 0 };
-    case 270: return { x: anchorX, y: anchorY - offset, rotation: 270 };
-  }
-}
-
 function shapeRotationTransform(rotation: 0 | 90 | 180 | 270, cx: number, cy: number): string | undefined {
   return rotation === 0 ? undefined : `rotate(${rotation} ${cx} ${cy})`;
 }
@@ -90,31 +81,38 @@ export function materializeSymbolPin(pin: PackagePin, idFactory: () => string): 
   const box = pinBoxSide(length);
   const anchorX = typeof pin.x === "number" ? pin.x : 0;
   const anchorY = typeof pin.y === "number" ? pin.y : 0;
+  const componentX = anchorX - box / 2;
+  const componentY = anchorY - box / 2;
 
   const label = pin.label ?? pin.id;
   const fontSize = typeof pin.labelFontSize === "number" ? pin.labelFontSize : DEFAULT_LABEL_FONT_SIZE;
+  // `pin.labelX/Y` (arquivo) são ABSOLUTOS na mesma cena de `pin.x/y`; `__ui_idLabelX/Y` (cena da
+  // Webview) são um DELTA relativo ao canto superior-esquerdo do próprio pino (`component.x/y`,
+  // contrato de `main.ts::externalLabelOffset`) -- só grava a propriedade quando o arquivo tem
+  // posição EXPLÍCITA (rótulo já arrastado numa sessão anterior); ausente deixa `main.ts` calcular
+  // o padrão (direção do lead) sozinho, nunca duplicando a fórmula como um valor "cravado".
   const hasCustomLabelPos = typeof pin.labelX === "number" && typeof pin.labelY === "number";
-  const labelPos = hasCustomLabelPos
-    ? { x: pin.labelX as number, y: pin.labelY as number, rotation: nearestCardinalRotation(typeof pin.labelRotation === "number" ? pin.labelRotation : 0) as 0 | 90 | 270 }
-    : defaultLabelPosition(anchorX, anchorY, nearestCardinalRotation(angle), length, typeof pin.labelSpace === "number" ? pin.labelSpace : undefined, fontSize);
 
   return {
     id: idFactory(),
     typeId: SYMBOL_PIN_TYPE_ID,
     label,
-    x: anchorX - box / 2,
-    y: anchorY - box / 2,
+    x: componentX,
+    y: componentY,
     rotation,
     pins: [],
     properties: {
       pinId: pin.id,
       length,
-      labelText: label,
-      labelX: labelPos.x,
-      labelY: labelPos.y,
-      labelRotation: labelPos.rotation,
-      labelFontSize: fontSize,
-      labelColor: typeof pin.labelColor === "string" ? pin.labelColor : DEFAULT_LABEL_COLOR,
+      ...(hasCustomLabelPos
+        ? {
+            [ID_LABEL_X_KEY]: (pin.labelX as number) - componentX,
+            [ID_LABEL_Y_KEY]: (pin.labelY as number) - componentY,
+          }
+        : {}),
+      ...(typeof pin.labelRotation === "number" && pin.labelRotation ? { [ID_LABEL_ROTATION_KEY]: nearestCardinalRotation(pin.labelRotation) } : {}),
+      ...(typeof pin.labelColor === "string" && pin.labelColor !== DEFAULT_LABEL_COLOR ? { [ID_LABEL_COLOR_KEY]: pin.labelColor } : {}),
+      ...(fontSize !== DEFAULT_LABEL_FONT_SIZE ? { labelFontSize: fontSize } : {}),
       ...(pin.kind ? { kind: pin.kind } : {}),
     },
   };
@@ -318,7 +316,7 @@ export function compileSymbolScene(elements: readonly WebviewComponentModel[]): 
     const box = pinBoxSide(length);
     const anchorX = component.x + box / 2;
     const anchorY = component.y + box / 2;
-    const label = typeof component.properties.labelText === "string" ? component.properties.labelText : pinId;
+    const label = component.label || pinId;
     const labelFontSize = typeof component.properties.labelFontSize === "number" ? component.properties.labelFontSize : DEFAULT_LABEL_FONT_SIZE;
 
     const pin: PackagePin = {
@@ -332,11 +330,20 @@ export function compileSymbolScene(elements: readonly WebviewComponentModel[]): 
       labelTextAnchor: "middle",
       labelDominantBaseline: "middle",
     };
-    if (typeof component.properties.labelX === "number") pin.labelX = component.properties.labelX;
-    if (typeof component.properties.labelY === "number") pin.labelY = component.properties.labelY;
-    if (typeof component.properties.labelRotation === "number" && component.properties.labelRotation) pin.labelRotation = component.properties.labelRotation;
-    if (typeof component.properties.labelColor === "string" && component.properties.labelColor !== DEFAULT_LABEL_COLOR) {
-      pin.labelColor = component.properties.labelColor;
+    // `__ui_idLabelX/Y` (Webview) só existem quando o usuário efetivamente ARRASTOU o rótulo --
+    // presença aqui é o único sinal de "posição customizada" (mesmo contrato de
+    // `materializeSymbolPin`, delta relativo a `component.x/y`, convertido de volta pro absoluto do
+    // arquivo). Ausente == deixa `pin.labelX/Y` de fora, nunca escreve um valor "cravado" que
+    // coincide por acaso com o padrão calculado.
+    if (typeof component.properties[ID_LABEL_X_KEY] === "number" && typeof component.properties[ID_LABEL_Y_KEY] === "number") {
+      pin.labelX = component.x + (component.properties[ID_LABEL_X_KEY] as number);
+      pin.labelY = component.y + (component.properties[ID_LABEL_Y_KEY] as number);
+    }
+    if (typeof component.properties[ID_LABEL_ROTATION_KEY] === "number" && component.properties[ID_LABEL_ROTATION_KEY]) {
+      pin.labelRotation = component.properties[ID_LABEL_ROTATION_KEY] as number;
+    }
+    if (typeof component.properties[ID_LABEL_COLOR_KEY] === "string" && component.properties[ID_LABEL_COLOR_KEY] !== DEFAULT_LABEL_COLOR) {
+      pin.labelColor = component.properties[ID_LABEL_COLOR_KEY] as string;
     }
     if (typeof component.properties.kind === "string") pin.kind = component.properties.kind;
     pins.push(pin);

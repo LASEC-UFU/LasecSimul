@@ -26,7 +26,7 @@ function makeIdFactory(prefix: string): () => string {
     const pinEl = elements[0]!;
     assert(pinEl.typeId === SYMBOL_PIN_TYPE_ID, "pino deveria usar o typeId dedicado symbol.pin");
     assert(pinEl.properties.pinId === "VCC", "pino deveria carregar seu pinId");
-    assert(pinEl.properties.labelText === "VCC", "pino deveria carregar seu PRÓPRIO rótulo, sem objeto separado");
+    assert(pinEl.label === "VCC", "pino deveria carregar seu PRÓPRIO rótulo (component.label), sem objeto separado");
   });
 
   await test("conversão rotation<->angle do pino bate com packagePinVisualEnd (mesma convenção preservada da autoria antiga)", () => {
@@ -62,6 +62,37 @@ function makeIdFactory(prefix: string): () => string {
       JSON.stringify(typeIds) === JSON.stringify(["graphics.ellipse", "graphics.image", "graphics.line", "graphics.rectangle", "graphics.text"]),
       `typeIds deveriam ser os genéricos já existentes, recebido: ${typeIds.join(",")}`
     );
+  });
+
+  await test("posição de rótulo ARRASTADA (arquivo com labelX/labelY explícitos) sobrevive ao round-trip via __ui_idLabelX/Y (mesmo contrato de main.ts::externalLabelOffset)", () => {
+    const pin: PackagePin = { id: "VCC", x: 0, y: 12, angle: 180, length: 8, label: "VCC", labelX: 999, labelY: 888, labelRotation: 90, labelColor: "#e11d48" };
+    const descriptor: PackageDescriptor = { width: 56, height: 40, pins: [pin] };
+    const elements = materializeSymbolScene(descriptor, makeIdFactory("id"));
+    const pinEl = elements[0]!;
+    // __ui_idLabelX/Y são um DELTA relativo a component.x/y (contrato com main.ts), não a posição
+    // absoluta do arquivo -- verifica que a soma bate com o labelX/Y original.
+    assert(typeof pinEl.properties.__ui_idLabelX === "number" && typeof pinEl.properties.__ui_idLabelY === "number", "pino com labelX/Y explícitos deveria gravar __ui_idLabelX/Y");
+    assert(Math.abs((pinEl.x + (pinEl.properties.__ui_idLabelX as number)) - 999) < 0.01, "componentX + delta deveria bater com labelX absoluto original");
+    assert(Math.abs((pinEl.y + (pinEl.properties.__ui_idLabelY as number)) - 888) < 0.01, "componentY + delta deveria bater com labelY absoluto original");
+    assert(pinEl.properties.__ui_idLabelRotation === 90, "labelRotation deveria sobreviver como __ui_idLabelRotation");
+    assert(pinEl.properties.__ui_idLabelColor === "#e11d48", "labelColor customizado deveria sobreviver como __ui_idLabelColor");
+
+    const compiled = compileSymbolScene(elements);
+    assert(compiled.errors.length === 0, `não deveria ter erros: ${compiled.errors.join(" | ")}`);
+    const compiledPin = compiled.pins[0]!;
+    assert(Math.abs((compiledPin.labelX as number) - 999) < 0.01, `labelX deveria sobreviver ao round-trip, recebido ${compiledPin.labelX}`);
+    assert(Math.abs((compiledPin.labelY as number) - 888) < 0.01, `labelY deveria sobreviver ao round-trip, recebido ${compiledPin.labelY}`);
+    assert(compiledPin.labelRotation === 90, "labelRotation deveria sobreviver ao round-trip");
+    assert(compiledPin.labelColor === "#e11d48", "labelColor deveria sobreviver ao round-trip");
+  });
+
+  await test("pino SEM labelX/Y explícitos no arquivo nunca grava __ui_idLabelX/Y cravado (deixa main.ts calcular o padrão)", () => {
+    const pin: PackagePin = { id: "VCC", x: 0, y: 12, angle: 180, length: 8, label: "VCC" };
+    const elements = materializeSymbolScene({ width: 56, height: 40, pins: [pin] }, makeIdFactory("id"));
+    const pinEl = elements[0]!;
+    assert(pinEl.properties.__ui_idLabelX === undefined && pinEl.properties.__ui_idLabelY === undefined, "sem posição explícita no arquivo, não deveria gravar nenhum __ui_idLabelX/Y");
+    const compiled = compileSymbolScene(elements);
+    assert(compiled.pins[0]!.labelX === undefined && compiled.pins[0]!.labelY === undefined, "sem arrastar o rótulo, compilar não deveria inventar labelX/Y no arquivo");
   });
 
   await test("compileSymbolScene é o inverso EXATO de materializeSymbolScene pro round-trip de um pino (posição/ângulo/rótulo)", () => {

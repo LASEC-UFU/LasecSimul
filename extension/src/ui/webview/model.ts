@@ -513,6 +513,15 @@ export const SIMULIDE_PACKAGE_GRID_UNIT = 8;
  * aqui em vez de repetida como literal em cada arquivo. */
 export const TUNNEL_TYPE_ID = "connectors.tunnel";
 
+/** typeId dedicado de "um pino sendo autorado no Modo Símbolo" (refatoração Subcircuito/Símbolo/
+ * Ícone) -- componente de cena NORMAL (mesmo drag/rotate/copy/undo de qualquer outro), sem
+ * singleton/marker-flag (substitui `other.package_pin`, removido junto do resto de
+ * `subcircuitPackageAuthoring.ts`). Compartilhado entre `main.ts` (Webview, renderização/geometria/
+ * interação) e `catalog/subcircuitSymbolScene.ts` (host, materialize/compile pro `PackageDescriptor`)
+ * -- mesmo precedente de `TUNNEL_TYPE_ID` acima, já que `main.ts` nunca pode importar de `catalog/`
+ * (fora do `rootDir` de `tsconfig.webview.json`). */
+export const SYMBOL_PIN_TYPE_ID = "symbol.pin";
+
 /** typeIds elegíveis pra marcar como elemento decorativo do Package durante "Abrir Subcircuito"
  * (`WebviewComponentModel.packageShapeRole: true`) -- cada um já é um componente NORMAL, visível na
  * paleta geral (`graphics.*`, categoria "Graphical"), com contraparte direta em `PackageShape.kind`.

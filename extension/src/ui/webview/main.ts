@@ -1,5 +1,5 @@
 import { WEBVIEW_MESSAGE_VERSION, AnalyzerVectorHistory, ComponentReadoutValue, HostToWebviewMessage, InternalComponentSnapshot, SimulationStatus, WebviewToHostMessage } from "./messages.js";
-import { CanonicalEndpoint, CanonicalTopologyDocument, InteractionKindEntry, McuSerialPortEntry, PACKAGE_SHAPE_ORDER_PROPERTY_KEY, PACKAGE_SHAPE_TYPE_IDS, PropertySchemaEntry, TUNNEL_TYPE_ID, ViewSpecInteraction, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, endpointId, endpointPinId, nodeEndpoint, portEndpoint, remapEndpoint } from "./model.js";
+import { CanonicalEndpoint, CanonicalTopologyDocument, InteractionKindEntry, McuSerialPortEntry, PACKAGE_SHAPE_ORDER_PROPERTY_KEY, PACKAGE_SHAPE_TYPE_IDS, PropertySchemaEntry, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, ViewSpecInteraction, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, endpointId, endpointPinId, nodeEndpoint, portEndpoint, remapEndpoint } from "./model.js";
 import { ComponentBox, PIN_RADIUS, buildLivePackagePreview, componentBox, componentLocalOrigin, componentSymbolSvg, dialKnobSvg, hasRealPinPosition, isLivePackageAuthoringVisual, livePackagePreviewSymbolSvg, missingSubcircuitPlaceholderSvg, packageSymbolSvg, pinLocalPosition, registerPackage } from "./componentSymbols.js";
 import { svgLocalTransform, transformLocalPoint, transformedLocalBounds } from "./componentGeometry.js";
 import { detectChannelTrigger, digitalStepPath, findTriggerAnchorIndex, triggerAlignedWindowEndNs, visibleSampleWindowByTime } from "./instrumentTrigger.js";
@@ -5637,9 +5637,9 @@ function valueLabelText(component: WebviewComponentModel): string | undefined {
   return typeof raw === "number" ? formatEngineeringValue(raw, schema.unit) : String(raw);
 }
 
-function labelPropertyKey(kind: ExternalLabelKind, suffix: "x" | "y" | "rotation"): string {
+function labelPropertyKey(kind: ExternalLabelKind, suffix: "x" | "y" | "rotation" | "color"): string {
   const prefix = kind === "id" ? "__ui_idLabel" : "__ui_valueLabel";
-  return `${prefix}${suffix === "rotation" ? "Rotation" : suffix.toUpperCase()}`;
+  return `${prefix}${suffix === "x" || suffix === "y" ? suffix.toUpperCase() : suffix[0]!.toUpperCase() + suffix.slice(1)}`;
 }
 
 /** `showValue` efetivo de um componente -- `false` incondicional pra typeId com mostrador embutido
@@ -5654,12 +5654,37 @@ function effectiveShowValue(component: WebviewComponentModel): boolean {
 
 function externalLabelText(component: WebviewComponentModel, kind: ExternalLabelKind): string | undefined {
   if (kind === "id") {
+    // `symbol.pin` (Modo Símbolo) sempre mostra seu rótulo -- diferente de um componente comum
+    // (onde o id-label é opt-in via `showId`), um pino sem rótulo visível não faz sentido nenhum
+    // no editor WYSIWYG (é a própria identidade elétrica exposta pro usuário do subcircuito).
+    if (component.typeId === SYMBOL_PIN_TYPE_ID) return component.hidden ? undefined : component.label;
     return !component.hidden && component.showId ? component.label : undefined;
   }
   return !component.hidden && effectiveShowValue(component) ? valueLabelText(component) : undefined;
 }
 
+/** Espelha a fórmula de offset de `packagePinLeadSvg`/`defaultLabelPosition`
+ * (`catalog/subcircuitSymbolScene.ts`, duplicada aqui pelo mesmo motivo de sempre -- este módulo
+ * roda na Webview, sem acesso a código do host) -- posição PADRÃO do rótulo de um `symbol.pin`
+ * (nenhum `__ui_idLabelX/Y` arrastado ainda), na direção OPOSTA à ponta do lead. Devolvida já como
+ * DELTA relativo a `component.x/y` (canto superior-esquerdo da caixa), mesmo contrato de
+ * `externalLabelOffset`/`setExternalLabelLayout`. */
+function symbolPinDefaultLabelOffset(component: WebviewComponentModel): Point {
+  const length = typeof component.properties.length === "number" ? component.properties.length : 8;
+  const box = componentBox(component.typeId, component.properties);
+  const anchor = { x: box.width / 2, y: box.height / 2 }; // relativo a component.x/y
+  const fileAngle = (180 - component.rotation + 360) % 360;
+  const offset = length + Math.max(2, 3.5); // labelSpace padrão = max(2, fontSize/2), fontSize fixo 7
+  switch (fileAngle) {
+    case 90: return { x: anchor.x, y: anchor.y + offset };
+    case 180: return { x: anchor.x + offset, y: anchor.y };
+    case 270: return { x: anchor.x, y: anchor.y - offset };
+    default: return { x: anchor.x - offset, y: anchor.y }; // 0
+  }
+}
+
 function defaultExternalLabelOffset(component: WebviewComponentModel, kind: ExternalLabelKind): Point {
+  if (kind === "id" && component.typeId === SYMBOL_PIN_TYPE_ID) return symbolPinDefaultLabelOffset(component);
   const packageValueLabel = catalogEntryFor(component.typeId)?.package?.valueLabel;
   if (kind === "value" && packageValueLabel) return { x: packageValueLabel.x, y: packageValueLabel.y };
   const box = componentBox(component.typeId, component.properties);
@@ -6954,6 +6979,13 @@ function renderExternalLabel(component: WebviewComponentModel, kind: ExternalLab
   el.style.left = `${component.x + offset.x}px`;
   el.style.top = `${component.y + offset.y}px`;
   el.style.transform = rotation === 0 ? "" : `rotate(${rotation}deg)`;
+  // `__ui_idLabelColor` -- cor customizada do rótulo (usada por `symbol.pin`, ver
+  // `catalog/subcircuitSymbolScene.ts`), genérica pra qualquer id-label. Ausente == cor padrão do
+  // CSS (`component-floating-label--id`), nunca sobrescrita.
+  if (kind === "id") {
+    const color = component.properties[labelPropertyKey("id", "color")];
+    if (typeof color === "string" && color) el.style.color = color;
+  }
   el.dataset.componentId = component.id;
   el.dataset.labelKind = kind;
 
