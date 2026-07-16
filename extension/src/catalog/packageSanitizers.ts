@@ -890,8 +890,6 @@ export function sanitizePackage(value: unknown, assetBasePath?: string): Package
       labelRotation: sanitizeNumberValue(pin.labelRotation),
     });
   }
-  if (pins.length === 0 && !dynamicLayout?.pinGroups?.length) return undefined;
-
   const shapes: PackageShape[] = [];
   if (Array.isArray(raw.shapes)) {
     for (const shapeValue of raw.shapes) {
@@ -904,6 +902,15 @@ export function sanitizePackage(value: unknown, assetBasePath?: string): Package
   const qtWidget = sanitizeSimulideQtWidgetSpec(raw.qtWidget);
 
   const background = sanitizePackageBackground(raw.background, assetBasePath);
+
+  // Um descritor sem pino algum ainda é válido quando tem OUTRO conteúdo visual real (shapes/
+  // background/viewSpec) -- o Ícone do subcircuito (Modo Ícone) NUNCA tem pinos por definição
+  // (ver `subcircuitDocument.ts`), então exigir pelo menos 1 pino aqui descartaria todo ícone
+  // silenciosamente. Só um descritor totalmente vazio (nem pino, nem forma alguma) é tratado como
+  // ausente/não-autorado.
+  if (pins.length === 0 && !dynamicLayout?.pinGroups?.length && shapes.length === 0 && !background && !viewSpec && !simulidePaint) {
+    return undefined;
+  }
 
   return {
     width: raw.width,
