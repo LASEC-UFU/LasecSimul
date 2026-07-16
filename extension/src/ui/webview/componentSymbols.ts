@@ -1722,12 +1722,13 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
       // parte como um `component-floating-label` arrastável (`main.ts::renderExternalLabel`), igual
       // a qualquer id-label -- nunca dentro desta caixa local pequena demais pra caber o texto numa
       // posição arbitrariamente arrastada.
+      // Mesmo estilo LITERAL de `packagePinLeadSvg` (`stroke="#000"`/`stroke-width="3"`, sem nenhum
+      // círculo/marcador na ponta) -- comparado lado a lado (`livePackagePreviewSymbolSvg` real vs.
+      // este case) durante o achado do bug: `class="symbol-stroke"` (stroke-width:2, currentColor)
+      // desenhava um lead mais fino e uma bolinha extra que o dispositivo colocado nunca tem.
       const length = typeof properties?.length === "number" ? properties.length : 8;
       const tipX = midX + length;
-      return (
-        `<line x1="${midX}" y1="${yMid}" x2="${tipX}" y2="${yMid}" class="symbol-stroke"/>` +
-        `<circle cx="${midX}" cy="${yMid}" r="2" class="symbol-stroke" fill="currentColor"/>`
-      );
+      return `<line x1="${midX}" y1="${yMid}" x2="${tipX}" y2="${yMid}" stroke="#000" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`;
     }
 
     case "other.test_unit":
