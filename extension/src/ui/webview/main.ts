@@ -7360,13 +7360,22 @@ function renderExternalLabel(component: WebviewComponentModel, kind: ExternalLab
     // continua funcionando, mesma posição/tamanho aproximados de antes) -- `color:transparent`
     // apaga só o texto, nunca o contorno/fundo de seleção (que deve continuar visível ao arrastar).
     const labelFontSize = typeof component.properties.labelFontSize === "number" ? component.properties.labelFontSize : 7;
+    // Largura/altura EXPLÍCITAS (mesma fórmula de `catalog/subcircuitSymbolScene.ts::pinLabelBoxSize`,
+    // duplicada aqui pelo mesmo motivo de sempre -- `main.ts` não importa do host) -- o tamanho
+    // NATURAL do `<div>` (dependente de `line-height`/métricas de fonte do navegador, herdadas do
+    // resto da árvore) produzia uma caixa bem mais ALTA que uma única linha de texto (achado real:
+    // a caixa de seleção chegava a cobrir 3 pinos empilhados verticalmente, longe do texto de
+    // verdade). Fixar `width`/`height`/`line-height` explicitamente elimina essa dependência de
+    // herança -- a caixa (e o contorno tracejado de seleção) fica EXATAMENTE do tamanho calculado,
+    // nunca maior.
+    const boxWidth = Math.max(16, text.length * labelFontSize * 0.62 + 4);
+    const boxHeight = labelFontSize + 4;
     el.style.fontSize = `${labelFontSize}px`;
+    el.style.lineHeight = `${boxHeight}px`;
+    el.style.width = `${boxWidth}px`;
+    el.style.height = `${boxHeight}px`;
+    el.style.textAlign = "center";
     el.style.color = "transparent";
-    // `.component-floating-label`'s `padding:1px 2px` genérico (folga confortável pra clicar
-    // qualquer rótulo comum) somado à fonte pequena de pino (7px) deixava a caixa de seleção nitidamente
-    // mais larga/alta que o texto real por baixo -- achado real comparando lado a lado com a caixa
-    // justa de `connectors.tunnel` (`tunnelBox`, seção "área de seleção apertada"). Sem padding aqui:
-    // a caixa (e o contorno tracejado de seleção) encolhe pro tamanho real do texto.
     el.style.padding = "0px";
     el.style.transform = `translate(-50%, -50%)${rotation === 0 ? "" : ` rotate(${rotation}deg)`}`;
   } else {
