@@ -406,9 +406,16 @@ export function packageSymbolSvg(typeId: string, properties?: Record<string, unk
  * Devolve também `box` (tamanho REAL resolvido, `resolved.width/height` -- pode exceder
  * `pkg.width/height` quando pinos/rótulos protrudem, ver `resolvePackageLayout`) pra quem chama saber
  * o viewBox/hit-box correto do elemento consolidado. */
-export function livePackagePreviewSymbolSvg(pkg: PackageDescriptor, componentId?: string, properties?: Record<string, unknown>): { svg: string; box: { width: number; height: number } } {
+export function livePackagePreviewSymbolSvg(pkg: PackageDescriptor, componentId?: string, properties?: Record<string, unknown>): { svg: string; box: { width: number; height: number }; offsetX: number; offsetY: number; scaleX: number; scaleY: number } {
   const resolved = resolvePackageLayout(materializePackage(pkg, properties));
-  return { svg: packageBodySvg(resolved, componentId, properties), box: { width: resolved.width, height: resolved.height } };
+  return {
+    svg: packageBodySvg(resolved, componentId, properties),
+    box: { width: resolved.width, height: resolved.height },
+    offsetX: resolved.offsetX,
+    offsetY: resolved.offsetY,
+    scaleX: resolved.scaleX,
+    scaleY: resolved.scaleY,
+  };
 }
 
 function escapeXmlText(value: string): string {

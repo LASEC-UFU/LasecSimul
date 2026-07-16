@@ -175,6 +175,7 @@ const UI_TEXT = {
     rotateCw: "Girar no sentido horario",
     rotateCcw: "Girar no sentido anti-horario",
     rotate180: "Girar 180°",
+    textLabelColor: "Cor do texto...",
     flipHorizontal: "Inverter horizontalmente",
     flipVertical: "Inverter verticalmente",
     help: "Ajuda",
@@ -274,6 +275,7 @@ const UI_TEXT = {
     rotateCw: "Rotate clockwise",
     rotateCcw: "Rotate counter-clockwise",
     rotate180: "Rotate 180°",
+    textLabelColor: "Text color...",
     flipHorizontal: "Flip horizontally",
     flipVertical: "Flip vertically",
     help: "Help",
@@ -2342,12 +2344,20 @@ function renderSymbolCanvasBackground(canvasContent: HTMLElement): void {
   const canvas = subcircuitEditorMode === "symbol" ? state.symbolCanvas : subcircuitEditorMode === "icon" ? state.iconCanvas : undefined;
   if (!canvas) return;
   const pins = subcircuitEditorMode === "symbol" ? compileLiveSymbolPins(activeSceneComponents()) : [];
-  const { svg, box } = livePackagePreviewSymbolSvg({ width: canvas.width, height: canvas.height, border: canvas.border, background: canvas.background, pins });
+  const { svg, box, offsetX, offsetY, scaleX, scaleY } = livePackagePreviewSymbolSvg({ width: canvas.width, height: canvas.height, border: canvas.border, background: canvas.background, pins });
   const el = document.createElement("div");
   el.className = "component--symbol-canvas-background";
   el.style.position = "absolute";
-  el.style.left = "0px";
-  el.style.top = "0px";
+  // `resolvePackageLayout` desloca tudo que desenha (`offsetX/offsetY`) pra caber leads/rótulos que
+  // protrudem além de `0..width`/`0..height` -- correto pra um dispositivo isolado (auto-contido), mas
+  // aqui o MESMO `symbol.pin` também existe como componente de cena de verdade em `component.x/y`, SEM
+  // esse deslocamento (arrasto/seleção/hit-test dele usam coordenada nativa direta). Sem compensar
+  // aqui, o pino/rótulo DESENHADO (fundo consolidado) ficava deslocado de sua própria caixa de
+  // seleção/arrasto invisível por exatamente `offsetX/offsetY` -- bug real relatado (pino "pra fora"
+  // da caixa tracejada, rótulo "3V3" não centralizado nela). Desloca o `<div>` pelo NEGATIVO do offset
+  // pra cancelar -- `nativeX=0` volta a cair em `left:0px`, igual a qualquer outro elemento da cena.
+  el.style.left = `${-offsetX * scaleX}px`;
+  el.style.top = `${-offsetY * scaleY}px`;
   el.style.width = `${box.width}px`;
   el.style.height = `${box.height}px`;
   el.style.pointerEvents = "none";
@@ -6037,7 +6047,7 @@ function externalLabelRotation(component: WebviewComponentModel, kind: ExternalL
   return raw === 90 || raw === 180 || raw === 270 ? raw : 0;
 }
 
-function setExternalLabelLayout(component: WebviewComponentModel, kind: ExternalLabelKind, patch: Partial<{ x: number; y: number; rotation: 0 | 90 | 180 | 270 }>): void {
+function setExternalLabelLayout(component: WebviewComponentModel, kind: ExternalLabelKind, patch: Partial<{ x: number; y: number; rotation: 0 | 90 | 180 | 270; color: string }>): void {
   if (patch.x !== undefined) {
     component.properties[labelPropertyKey(kind, "x")] = Math.round(patch.x);
     send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name: labelPropertyKey(kind, "x"), value: Math.round(patch.x) });
@@ -6050,6 +6060,41 @@ function setExternalLabelLayout(component: WebviewComponentModel, kind: External
     component.properties[labelPropertyKey(kind, "rotation")] = patch.rotation;
     send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name: labelPropertyKey(kind, "rotation"), value: patch.rotation });
   }
+  if (patch.color !== undefined) {
+    component.properties[labelPropertyKey(kind, "color")] = patch.color;
+    send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name: labelPropertyKey(kind, "color"), value: patch.color });
+  }
+}
+
+/** Cor atual do rótulo externo (mesma leitura de `renderExternalLabel`/`packagePinLeadSvg` -- `#1f2937`
+ * é o `DEFAULT_LABEL_COLOR` espelhado de `catalog/subcircuitSymbolScene.ts`, único lugar que os dois
+ * lados concordam sobre "cor padrão" quando a propriedade nunca foi customizada). */
+function externalLabelColor(component: WebviewComponentModel, kind: ExternalLabelKind): string {
+  const color = component.properties[labelPropertyKey(kind, "color")];
+  return typeof color === "string" && color ? color : "#1f2937";
+}
+
+/** Abre o seletor de cor NATIVO do navegador (`<input type="color">`, nunca inserido na árvore
+ * visível -- só disparado via `.click()`) pra mudar a cor de um rótulo externo (id/value) -- pedido
+ * real: "nem o botão de propriedades deles aparece para eu mudar a cor" (rótulo externo só tinha
+ * rotação no menu de contexto, nenhuma via de mudar cor). */
+function openExternalLabelColorPicker(component: WebviewComponentModel, kind: ExternalLabelKind): void {
+  const input = document.createElement("input");
+  input.type = "color";
+  input.value = externalLabelColor(component, kind);
+  input.style.position = "fixed";
+  input.style.opacity = "0";
+  input.style.pointerEvents = "none";
+  document.body.appendChild(input);
+  input.addEventListener("input", () => {
+    setExternalLabelLayout(component, kind, { color: input.value });
+    render();
+  });
+  input.addEventListener("change", () => {
+    persistState();
+    input.remove();
+  });
+  input.click();
 }
 
 function rotateSelectedTextLabel(steps: 1 | -1 | 2): boolean {
@@ -7438,12 +7483,14 @@ function renderExternalLabel(component: WebviewComponentModel, kind: ExternalLab
   } else {
     el.style.transform = rotation === 0 ? "" : `rotate(${rotation}deg)`;
   }
-  // `__ui_idLabelColor` -- cor customizada do rótulo (usada por `symbol.pin`, ver
-  // `catalog/subcircuitSymbolScene.ts`), genérica pra qualquer id-label. Ausente == cor padrão do
-  // CSS (`component-floating-label--id`), nunca sobrescrita. NUNCA aplicada num `symbol.pin` ao vivo
-  // em Modo Símbolo -- o texto tem que continuar transparente (cor real vem do SVG consolidado).
-  if (kind === "id" && !isLiveSymbolPinIdLabel) {
-    const color = component.properties[labelPropertyKey("id", "color")];
+  // `__ui_idLabelColor`/`__ui_valueLabelColor` -- cor customizada do rótulo (usada por `symbol.pin`,
+  // ver `catalog/subcircuitSymbolScene.ts`), genérica pra qualquer rótulo id/value (pedido real: menu
+  // de contexto do rótulo não tinha NENHUMA via de mudar cor, ver `openExternalLabelColorPicker`).
+  // Ausente == cor padrão do CSS (`component-floating-label--id/--value`), nunca sobrescrita. NUNCA
+  // aplicada num `symbol.pin` ao vivo em Modo Símbolo -- o texto tem que continuar transparente (cor
+  // real vem do SVG consolidado).
+  if (!isLiveSymbolPinIdLabel) {
+    const color = component.properties[labelPropertyKey(kind, "color")];
     if (typeof color === "string" && color) el.style.color = color;
   }
   el.dataset.componentId = component.id;
@@ -7463,6 +7510,8 @@ function renderExternalLabel(component: WebviewComponentModel, kind: ExternalLab
     persistState();
     render();
     showContextMenu(event, [
+      { label: t("textLabelColor"), icon: "properties", onClick: () => openExternalLabelColorPicker(component, kind) },
+      { kind: "separator" },
       { label: t("rotateCw"), icon: "rotateCw", shortcut: "Ctrl+R", onClick: () => rotateSelectedTextLabel(1) },
       { label: t("rotateCcw"), icon: "rotateCcw", shortcut: "Ctrl+Shift+R", onClick: () => rotateSelectedTextLabel(-1) },
       { label: t("rotate180"), icon: "rotate180", onClick: () => rotateSelectedTextLabel(2) },
