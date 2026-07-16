@@ -879,4 +879,13 @@ export interface WebviewProjectState {
    * desabilitar Abrir/Salvar/Importar Projeto (formatos incompatíveis: `.lsproj` vs `.lssubcircuit`)
    * enquanto durar a sessão. */
   subcircuitEditingContext?: { sourceId: string; typeId: string; name: string };
+  /** Cena do Modo Símbolo (refatoração Subcircuito/Símbolo/Ícone) -- elementos gráficos + pinos
+   * externos autorados via WYSIWYG, MESMO vocabulário de componente (`WebviewComponentModel`) que
+   * `components[]`, só que NUNCA misturado a ele (substitui o antigo `other.package`/
+   * `other.package_pin` como objetos ocultos dentro de `components`). Só populado enquanto
+   * `subcircuitEditingContext` está presente; vazio == símbolo ainda sem elementos autorados. */
+  symbolElements: WebviewComponentModel[];
+  /** Cena do Modo Ícone -- mesmo papel de `symbolElements`, pro ícone do catálogo. Nunca tem pinos
+   * (`TUNNEL_TYPE_ID`/pino externo não fazem sentido num ícone, só elementos gráficos). */
+  iconElements: WebviewComponentModel[];
 }

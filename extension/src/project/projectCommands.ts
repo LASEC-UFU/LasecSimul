@@ -128,6 +128,8 @@ function projectToWebviewState(project: ProjectDocument): WebviewProjectState {
     viewport: project.visual.viewport,
     selectedComponentIds: [],
     selectedWireIds: [],
+    symbolElements: [],
+    iconElements: [],
   };
 }
 

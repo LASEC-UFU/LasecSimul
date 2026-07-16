@@ -49,6 +49,8 @@ function createEmptyState(): WebviewProjectState {
     viewport: { x: 0, y: 0, zoom: 1 },
     selectedComponentIds: [],
     selectedWireIds: [],
+    symbolElements: [],
+    iconElements: [],
   };
 }
 
@@ -70,6 +72,8 @@ function normalizeProjectState(raw: WebviewProjectState): WebviewProjectState {
       : legacy.selectedWireId
         ? [legacy.selectedWireId]
         : [],
+    symbolElements: Array.isArray(raw.symbolElements) ? raw.symbolElements : [],
+    iconElements: Array.isArray(raw.iconElements) ? raw.iconElements : [],
   };
 }
 
@@ -423,6 +427,41 @@ let placingTypeId: string | null = null;
 let placementGhostEl: HTMLElement | null = null;
 
 let subcircuitBoardMode = false;
+
+/** Refatoração Subcircuito/Símbolo/Ícone: qual cena o motor genérico (seleção/hit-test/arrastar/
+ * rotacionar/painel de propriedades/copiar-colar/apagar/undo-redo/z-order/adicionar-da-paleta) está
+ * editando AGORA. Mesmo precedente de `subcircuitBoardMode` -- puramente estado de UI em memória da
+ * Webview, nunca sincronizado com o host, sempre resetado pra `"circuit"` fora de uma sessão de
+ * "Abrir Subcircuito". Trocar o modo NUNCA salva nem recarrega o documento (só troca qual array o
+ * motor genérico enxerga). */
+type SubcircuitEditorMode = "circuit" | "symbol" | "icon";
+let subcircuitEditorMode: SubcircuitEditorMode = "circuit";
+
+/** Ponto ÚNICO de indireção pra "a cena que o motor genérico está editando" -- Modo Subcircuito
+ * continua sendo `state.components` (circuito interno real); Modo Símbolo/Ícone passam a ser
+ * `state.symbolElements`/`state.iconElements` (elementos gráficos + pinos externos, NUNCA
+ * misturados a `components[]`). Operações específicas de fio/topologia (que só existem no circuito
+ * real) e de simulação/telemetria continuam usando `state.components` diretamente -- só as
+ * operações genéricas de cena (seleção, hit-test, arrastar, girar, painel de propriedades, copiar/
+ * colar, apagar, undo/redo, z-order, adicionar item da paleta, zoom/exportar) passam por aqui. */
+function activeSceneComponents(): WebviewComponentModel[] {
+  if (subcircuitEditorMode === "symbol") return state.symbolElements;
+  if (subcircuitEditorMode === "icon") return state.iconElements;
+  return state.components;
+}
+
+/** Companheiro de `activeSceneComponents()` pra toda operação que SUBSTITUI o array inteiro (nunca
+ * muta os objetos individuais em-lugar) -- escreve de volta na mesma seção que `activeSceneComponents()`
+ * leria, conforme o modo atual. */
+function setActiveSceneComponents(next: WebviewComponentModel[]): void {
+  if (subcircuitEditorMode === "symbol") {
+    state = { ...state, symbolElements: next };
+  } else if (subcircuitEditorMode === "icon") {
+    state = { ...state, iconElements: next };
+  } else {
+    state = { ...state, components: next };
+  }
+}
 const circuitTransformByComponentId = new Map<string, ComponentTransform>();
 
 function isBoardModeVisible(component: WebviewComponentModel): boolean {
@@ -773,7 +812,7 @@ function snapshotOfProjectState(project: Pick<WebviewProjectState, "components" 
 }
 
 function captureUndoSnapshot(): UndoSnapshot {
-  return snapshotOfProjectState(state);
+  return snapshotOfProjectState({ ...state, components: activeSceneComponents() });
 }
 
 /** Chave de comparação -- só `components`/`topology` (NUNCA seleção, ver comentário da seção). */
@@ -827,7 +866,7 @@ function recordUndoTransition(currentKey: string, captureCurrent: () => UndoSnap
  * mudança de SELEÇÃO apenas (nunca vira entrada de undo, ver `undoContentKey`) -- antes clonava
  * `components`/`wires` inteiros só pra descobrir isso a cada uma. */
 function recordUndoSnapshotIfChanged(): void {
-  const currentKey = undoContentKey(state);
+  const currentKey = undoContentKey({ components: activeSceneComponents(), topology: state.topology });
   recordUndoTransition(currentKey, captureUndoSnapshot);
 }
 
@@ -838,7 +877,7 @@ function recordUndoSnapshotIfChanged(): void {
 function applyUndoSnapshot(snapshot: UndoSnapshot): void {
   isApplyingUndoSnapshot = true;
   try {
-    state.components = snapshot.components;
+    setActiveSceneComponents(snapshot.components);
     state.topology = snapshot.topology;
     state.selectedComponentIds = snapshot.selectedComponentIds;
     state.selectedWireIds = snapshot.selectedWireIds;
@@ -909,7 +948,7 @@ function isTextLabelSelected(componentId: string, kind: ExternalLabelKind): bool
 }
 
 function getSelectedComponents(): WebviewComponentModel[] {
-  return state.components.filter((component) => state.selectedComponentIds.includes(component.id));
+  return activeSceneComponents().filter((component) => state.selectedComponentIds.includes(component.id));
 }
 
 function dragSelectionWithLinkedPinLabels(): WebviewComponentModel[] {
@@ -1002,7 +1041,7 @@ function updateSimulationRateLabel(): void {
 function selectionLabel(): string {
   if (selectedTextLabel) {
     const activeLabel = selectedTextLabel;
-    const component = state.components.find((entry) => entry.id === activeLabel.componentId);
+    const component = activeSceneComponents().find((entry) => entry.id === activeLabel.componentId);
     const suffix = activeLabel.kind === "id" ? "name" : "value";
     return component ? `${component.label} (${suffix})` : t("nothingSelected");
   }
@@ -1184,7 +1223,7 @@ function refreshOpenPropertyDialog(): void {
   if (!propertyDialog.open || !activePropertyTarget) return;
   const target = activePropertyTarget;
   if (target.kind === "project") {
-    const component = state.components.find((entry) => entry.id === target.componentId);
+    const component = activeSceneComponents().find((entry) => entry.id === target.componentId);
     if (!component) {
       propertyDialog.close();
       return;
@@ -1196,7 +1235,7 @@ function refreshOpenPropertyDialog(): void {
     // Relê os componentes VIVOS por id -- um deles pode ter sido apagado por fora do diálogo (ex:
     // Delete enquanto o diálogo estava aberto); menos de 2 restantes não é mais "lote", fecha.
     const components = target.componentIds
-      .map((id) => state.components.find((entry) => entry.id === id))
+      .map((id) => activeSceneComponents().find((entry) => entry.id === id))
       .filter((component): component is WebviewComponentModel => component !== undefined);
     if (components.length < 2) {
       propertyDialog.close();
@@ -1393,7 +1432,7 @@ function renderAppBar(): HTMLElement {
   fileGroup.append(
     renderToolbarButton("open", t("openProject"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenProject" }), editingSubcircuit),
     renderToolbarButton("save", t("saveProject"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestSaveProject" }), editingSubcircuit),
-    renderToolbarButton("exportImage", t("exportImage"), () => exportSchematicImage(), state.components.length === 0),
+    renderToolbarButton("exportImage", t("exportImage"), () => exportSchematicImage(), activeSceneComponents().length === 0),
   );
 
   const subcircuitGroup = document.createElement("div");
@@ -1432,7 +1471,7 @@ function renderAppBar(): HTMLElement {
   viewGroup.className = "appbar__group";
   viewGroup.append(
     renderToolbarButton("zoomFitSelection", t("zoomFitSelection"), () => zoomToFitSelection(), state.selectedComponentIds.length === 0),
-    renderToolbarButton("zoomFitAll", t("zoomFitAll"), () => zoomToFitAll(), state.components.length === 0),
+    renderToolbarButton("zoomFitAll", t("zoomFitAll"), () => zoomToFitAll(), activeSceneComponents().length === 0),
     renderToolbarButton("zoomReset", t("zoomReset"), () => zoomReset()),
   );
 
@@ -1525,7 +1564,7 @@ function installCanvasEventHandlers(canvas: HTMLDivElement, canvasContent: HTMLD
       const snappedY = snapCoordinate(pt.y, WIRE_GRID_SIZE);
       const newComponents = componentsToAddForTypeId(placingTypeId);
       for (const comp of newComponents) { comp.x = snappedX; comp.y = snappedY; }
-      state = { ...state, components: [...state.components, ...newComponents] };
+      setActiveSceneComponents([...activeSceneComponents(), ...newComponents]);
       vscode?.setState(state);
       persistState();
       exitPlacementMode();
@@ -1604,10 +1643,10 @@ function installCanvasEventHandlers(canvas: HTMLDivElement, canvasContent: HTMLD
       { kind: "separator" },
       { label: t("selectAll"), onClick: () => selectAll() },
       { kind: "separator" },
-      { label: t("zoomFitAll"), onClick: () => zoomToFitAll(), disabled: state.components.length === 0 },
+      { label: t("zoomFitAll"), onClick: () => zoomToFitAll(), disabled: activeSceneComponents().length === 0 },
       { label: t("zoomReset"), onClick: () => zoomReset() },
       { kind: "separator" },
-      { label: t("exportImage"), onClick: () => exportSchematicImage(), disabled: state.components.length === 0 },
+      { label: t("exportImage"), onClick: () => exportSchematicImage(), disabled: activeSceneComponents().length === 0 },
       { label: t("importCircuit"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestImportCircuit" }) },
     ]);
   });
@@ -1779,13 +1818,13 @@ function isPackageAuthoringComponentForZoom(component: WebviewComponentModel): b
 }
 
 function zoomToFitAll(): void {
-  const box = approximateBoundingBox(state.components.filter((c) => !isPackageAuthoringComponentForZoom(c)));
+  const box = approximateBoundingBox(activeSceneComponents().filter((c) => !isPackageAuthoringComponentForZoom(c)));
   if (box) zoomToBoundingBox(box);
 }
 
 function zoomToFitSelection(): void {
   const selectedIds = new Set(state.selectedComponentIds);
-  const box = approximateBoundingBox(state.components.filter((c) => selectedIds.has(c.id)));
+  const box = approximateBoundingBox(activeSceneComponents().filter((c) => selectedIds.has(c.id)));
   if (box) zoomToBoundingBox(box);
 }
 
@@ -1812,7 +1851,7 @@ function zoomReset(): void {
  * acesso ao `<link>` da Webview). Retorna `undefined` se não há nada pra exportar. */
 function buildSchematicSvgExport(): string | undefined {
   if (!canvasContentElement) return undefined;
-  const box = approximateBoundingBox(state.components);
+  const box = approximateBoundingBox(activeSceneComponents());
   if (!box) return undefined;
 
   const margin = 32;
@@ -1951,7 +1990,7 @@ function render(): void {
   const visibleComponents: WebviewComponentModel[] = [];
   const subcircuitFileComponents: WebviewComponentModel[] = [];
   const boardModeComponents: WebviewComponentModel[] = [];
-  for (const component of state.components) {
+  for (const component of activeSceneComponents()) {
     if (component.hidden || component.hiddenByUser) continue;
     if (subcircuitBoardMode && !isBoardModeVisible(component)) continue;
     visibleComponents.push(component);
@@ -2026,7 +2065,7 @@ function applyMarqueeSelection(start: Point, end: Point, additive: boolean): voi
   const top = Math.min(start.y, end.y);
   const bottom = Math.max(start.y, end.y);
 
-  const hitComponentIds = state.components
+  const hitComponentIds = activeSceneComponents()
     .filter((component) => {
       if (component.hidden || component.hiddenByUser) return false;
       const box = componentBox(component.typeId, component.properties);
@@ -2067,7 +2106,7 @@ function deleteSelectedItems(): void {
   // Bloqueio (`component.locked`): sobrevive a um apagar em lote -- os DEMAIS componentes
   // co-selecionados (não bloqueados) continuam sendo removidos normalmente, só o(s) bloqueado(s)
   // ficam de fora do loop (enforcement mínimo acordado, ver `batchProperties.ts`).
-  const lockedIds = new Set(state.components.filter((component) => component.locked).map((component) => component.id));
+  const lockedIds = new Set(activeSceneComponents().filter((component) => component.locked).map((component) => component.id));
   for (const componentId of state.selectedComponentIds) {
     if (lockedIds.has(componentId)) continue;
     send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestRemoveComponent", componentId });
@@ -2151,7 +2190,7 @@ function copySelectedItems(): boolean {
   // idênticos em conteúdo mas em tamanhos diferentes, sem entender a causa). Nunca deixa entrar no
   // clipboard -- Copiar/Recortar/Colar e "Ctrl+Shift"-arrastar (`duplicateComponentsForDrag`) NUNCA
   // duplicam o Package, prevenindo o estado inválido em vez de só detectar depois.
-  const components = state.components
+  const components = activeSceneComponents()
     .filter((component) => selectedComponentIds.has(component.id) && component.typeId !== "other.package")
     .map(cloneComponent);
   if (components.length === 0) return false;
@@ -2182,7 +2221,7 @@ function duplicateComponentsForDrag(originals: WebviewComponentModel[]): { compo
   const dedupedOriginals = originals.filter((component) => component.typeId !== "other.package");
   const originalIds = new Set(dedupedOriginals.map((component) => component.id));
   const idMap = new Map<string, string>();
-  const stagedComponents = [...state.components];
+  const stagedComponents = [...activeSceneComponents()];
   const components = dedupedOriginals.map((source) => {
     const component = cloneComponent(source);
     const descriptor = catalogEntryFor(component.typeId);
@@ -2216,7 +2255,7 @@ function pasteClipboardItems(): void {
   if (!clipboardItems || clipboardItems.components.length === 0) return;
 
   const idMap = new Map<string, string>();
-  const stagedComponents = [...state.components];
+  const stagedComponents = [...activeSceneComponents()];
   const components = clipboardItems.components.map((source) => {
     const component = cloneComponent(source);
     const descriptor = catalogEntryFor(component.typeId);
@@ -2250,9 +2289,9 @@ function pasteClipboardItems(): void {
     return [wire];
   });
 
+  setActiveSceneComponents([...activeSceneComponents(), ...components]);
   state = {
     ...state,
-    components: [...state.components, ...components],
     topology: { ...state.topology, conductors: [...state.topology.conductors, ...wires] },
     selectedComponentIds: components.map((component) => component.id),
     selectedWireIds: wires.map((wire) => wire.id),
@@ -2305,7 +2344,7 @@ function normalizeSelectedWireCorner(): void {
 function normalizeSelectedTextLabel(): void {
   if (!selectedTextLabel) return;
   const activeLabel = selectedTextLabel;
-  const component = state.components.find((entry) => entry.id === activeLabel.componentId);
+  const component = activeSceneComponents().find((entry) => entry.id === activeLabel.componentId);
   if (!component || externalLabelText(component, activeLabel.kind) === undefined) {
     selectedTextLabel = undefined;
   }
@@ -4551,7 +4590,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
   el.dataset.typeId = component.typeId;
 
   const liveComponent = (): WebviewComponentModel | undefined =>
-    state.components.find((entry) => entry.id === componentId);
+    activeSceneComponents().find((entry) => entry.id === componentId);
 
   // ABI v2 (.spec/lasecsimul-native-devices.spec): isPushButton vem de interactionKind (genérico);
   // isToggleClickable é o conceito genérico de "clicar no toggle-hit-zone alterna `closed`" -- cobre
@@ -5206,7 +5245,8 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
         // arrasto. Insere os componentes/fios duplicados diretamente no DOM/estado, sem tocar `el`.
         const { components: duplicated, wires: duplicatedWires } = duplicateComponentsForDrag(dragTargets.map((target) => target.component));
         if (duplicated.length > 0 && canvasContentElement) {
-          state = { ...state, components: [...state.components, ...duplicated], topology: { ...state.topology, conductors: [...state.topology.conductors, ...duplicatedWires] } };
+          setActiveSceneComponents([...activeSceneComponents(), ...duplicated]);
+          state = { ...state, topology: { ...state.topology, conductors: [...state.topology.conductors, ...duplicatedWires] } };
           for (const dup of duplicated) {
             const dupEl = createComponentElement(dup);
             componentElementsById.set(dup.id, dupEl);
@@ -5621,7 +5661,7 @@ function setExternalLabelLayout(component: WebviewComponentModel, kind: External
 function rotateSelectedTextLabel(steps: 1 | -1 | 2): boolean {
   if (!selectedTextLabel) return false;
   const activeLabel = selectedTextLabel;
-  const component = state.components.find((entry) => entry.id === activeLabel.componentId);
+  const component = activeSceneComponents().find((entry) => entry.id === activeLabel.componentId);
   if (!component) return false;
   const current = externalLabelRotation(component, activeLabel.kind);
   const delta = steps === 2 ? 180 : steps * 90;
@@ -6323,7 +6363,7 @@ function applyBatchChange(components: WebviewComponentModel[], field: SharedProp
   activeBatchPropertyError = undefined;
 
   const patchesByComponentId = new Map<string, BatchPropertyPatch>(plan.patches.map((patch) => [patch.componentId, patch]));
-  for (const component of state.components) {
+  for (const component of activeSceneComponents()) {
     const patch = patchesByComponentId.get(component.id);
     if (!patch) continue;
     if (patch.source === "instance") {
@@ -6553,7 +6593,7 @@ function escapeRegExp(value: string): string {
 /** Mesmo algoritmo de `extension.ts::nextIndexedLabel` (duplicado de propósito — são dois pontos de
  * criação de componente independentes, ver `.spec`/plano aprovado). Contador por `typeId`, nunca
  * persistido separado: sempre recalculado a partir de quem já existe em `state.components`. */
-function nextIndexedLabel(typeId: string, baseLabel: string, components: WebviewComponentModel[] = state.components): string {
+function nextIndexedLabel(typeId: string, baseLabel: string, components: WebviewComponentModel[] = activeSceneComponents()): string {
   const pattern = new RegExp(`^${escapeRegExp(baseLabel)}-(\\d+)$`);
   let maxIndex = 0;
   for (const component of components) {
@@ -6618,7 +6658,7 @@ function componentsToAddForTypeId(typeId: string): WebviewComponentModel[] {
 
 function makeComponentFromTypeId(typeId: string): WebviewComponentModel {
   const descriptor = catalogEntryFor(typeId);
-  const componentIndex = state.components.length;
+  const componentIndex = activeSceneComponents().length;
   const pinCount = descriptor?.pinCount ?? 2;
   const baseLabel = descriptor?.label ?? typeId;
   // `pinIds` (quando presente) é o id elétrico REAL de cada pino, casando por `id` com
@@ -6926,7 +6966,7 @@ function renderExternalLabel(component: WebviewComponentModel, kind: ExternalLab
 
 /** Seleciona todo componente/fio não oculto (`Ctrl+A`, `circuit.cpp::keyPressEvent` do SimulIDE). */
 function selectAll(): void {
-  state.selectedComponentIds = state.components.filter((component) => !component.hidden && !component.hiddenByUser).map((component) => component.id);
+  state.selectedComponentIds = activeSceneComponents().filter((component) => !component.hidden && !component.hiddenByUser).map((component) => component.id);
   state.selectedWireIds = state.topology.conductors.map((wire) => wire.id);
   persistState();
   render();
