@@ -921,6 +921,29 @@ rect.meter-expand-button:hover {
   min-width: 0;
 }
 
+/* Campo "color" sempre veio só como paleta nativa (`<input type="color">`, sem jeito de digitar um
+   hex direto) -- pedido real: "digitar a cor tipo #FAFAC8 ou escolher na paleta". Texto + paleta lado
+   a lado, sincronizados nos dois sentidos (ver `renderPropertyField`). */
+.property-sheet__color-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.property-sheet__color-group .property-sheet__field-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.property-sheet__color-swatch {
+  width: 24px;
+  height: 24px;
+  padding: 1px;
+  border: 1px solid #b8b8b8;
+  background: #fff;
+  cursor: pointer;
+}
+
 .property-sheet__field-unit-select {
   height: 24px;
   padding: 2px 3px;

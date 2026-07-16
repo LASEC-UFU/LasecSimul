@@ -175,7 +175,8 @@ const UI_TEXT = {
     rotateCw: "Girar no sentido horario",
     rotateCcw: "Girar no sentido anti-horario",
     rotate180: "Girar 180°",
-    textLabelColor: "Cor do texto...",
+    labelColor: "Cor",
+    labelFontSize: "Tamanho da fonte",
     flipHorizontal: "Inverter horizontalmente",
     flipVertical: "Inverter verticalmente",
     help: "Ajuda",
@@ -275,7 +276,8 @@ const UI_TEXT = {
     rotateCw: "Rotate clockwise",
     rotateCcw: "Rotate counter-clockwise",
     rotate180: "Rotate 180°",
-    textLabelColor: "Text color...",
+    labelColor: "Color",
+    labelFontSize: "Font size",
     flipHorizontal: "Flip horizontally",
     flipVertical: "Flip vertically",
     help: "Help",
@@ -424,6 +426,7 @@ let activePropertyTarget:
   | { kind: "project"; componentId: string }
   | { kind: "project-batch"; componentIds: string[] }
   | { kind: "exposed-internal"; outerComponentId: string; sourceId: string; snapshot: InternalComponentSnapshot; model: WebviewComponentModel }
+  | { kind: "text-label"; componentId: string; labelKind: ExternalLabelKind }
   | undefined;
 /** Mensagem de rejeição (rule 10/11) da ÚLTIMA tentativa de aplicar um campo em lote -- exibida
  * dentro do próprio diálogo (sem mecanismo de toast/notificação genérico na Webview hoje, ver
@@ -1549,6 +1552,15 @@ function refreshOpenPropertyDialog(): void {
       return;
     }
     openBatchPropertyDialog(components);
+    return;
+  }
+  if (target.kind === "text-label") {
+    const component = activeSceneComponents().find((entry) => entry.id === target.componentId);
+    if (!component || !externalLabelText(component, target.labelKind)) {
+      propertyDialog.close();
+      return;
+    }
+    openExternalLabelPropertyDialog(component, target.labelKind);
     return;
   }
   openExposedInternalPropertyDialog(
@@ -5895,6 +5907,16 @@ interface PropertySheetOptions {
   onPropertyChange?: (key: string, value: string | number | boolean) => void;
 }
 
+/** Valida/normaliza um hex de cor digitado à mão (`#RGB` ou `#RRGGBB`, `#` opcional) pro formato
+ * `#rrggbb` que `<input type="color">` exige -- `undefined` pra qualquer entrada inválida (nunca
+ * aplica lixo, ver `renderPropertyField`). */
+function normalizeHexColor(value: string): string | undefined {
+  const trimmed = value.trim().replace(/^#/, "");
+  if (/^[0-9a-fA-F]{6}$/.test(trimmed)) return `#${trimmed.toLowerCase()}`;
+  if (/^[0-9a-fA-F]{3}$/.test(trimmed)) return `#${trimmed.toLowerCase().split("").map((char) => char + char).join("")}`;
+  return undefined;
+}
+
 function humanizePropertyName(name: string): string {
   return name
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
@@ -6047,7 +6069,7 @@ function externalLabelRotation(component: WebviewComponentModel, kind: ExternalL
   return raw === 90 || raw === 180 || raw === 270 ? raw : 0;
 }
 
-function setExternalLabelLayout(component: WebviewComponentModel, kind: ExternalLabelKind, patch: Partial<{ x: number; y: number; rotation: 0 | 90 | 180 | 270; color: string }>): void {
+function setExternalLabelLayout(component: WebviewComponentModel, kind: ExternalLabelKind, patch: Partial<{ x: number; y: number; rotation: 0 | 90 | 180 | 270 }>): void {
   if (patch.x !== undefined) {
     component.properties[labelPropertyKey(kind, "x")] = Math.round(patch.x);
     send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name: labelPropertyKey(kind, "x"), value: Math.round(patch.x) });
@@ -6060,10 +6082,6 @@ function setExternalLabelLayout(component: WebviewComponentModel, kind: External
     component.properties[labelPropertyKey(kind, "rotation")] = patch.rotation;
     send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name: labelPropertyKey(kind, "rotation"), value: patch.rotation });
   }
-  if (patch.color !== undefined) {
-    component.properties[labelPropertyKey(kind, "color")] = patch.color;
-    send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name: labelPropertyKey(kind, "color"), value: patch.color });
-  }
 }
 
 /** Cor atual do rótulo externo (mesma leitura de `renderExternalLabel`/`packagePinLeadSvg` -- `#1f2937`
@@ -6074,27 +6092,58 @@ function externalLabelColor(component: WebviewComponentModel, kind: ExternalLabe
   return typeof color === "string" && color ? color : "#1f2937";
 }
 
-/** Abre o seletor de cor NATIVO do navegador (`<input type="color">`, nunca inserido na árvore
- * visível -- só disparado via `.click()`) pra mudar a cor de um rótulo externo (id/value) -- pedido
- * real: "nem o botão de propriedades deles aparece para eu mudar a cor" (rótulo externo só tinha
- * rotação no menu de contexto, nenhuma via de mudar cor). */
-function openExternalLabelColorPicker(component: WebviewComponentModel, kind: ExternalLabelKind): void {
-  const input = document.createElement("input");
-  input.type = "color";
-  input.value = externalLabelColor(component, kind);
-  input.style.position = "fixed";
-  input.style.opacity = "0";
-  input.style.pointerEvents = "none";
-  document.body.appendChild(input);
-  input.addEventListener("input", () => {
-    setExternalLabelLayout(component, kind, { color: input.value });
-    render();
-  });
-  input.addEventListener("change", () => {
-    persistState();
-    input.remove();
-  });
-  input.click();
+/** Fonte atual do rótulo (só `symbol.pin`, único caso com tamanho de fonte customizável hoje -- ver
+ * `compileLiveSymbolPins`/`packagePinLeadSvg`; qualquer outro rótulo usa o `font-size` fixo do CSS). */
+function externalLabelFontSize(component: WebviewComponentModel): number {
+  return typeof component.properties.labelFontSize === "number" ? component.properties.labelFontSize : 7;
+}
+
+/** Monta os campos (cor sempre; tamanho da fonte só quando aplicável) pro diálogo de propriedades de
+ * um rótulo externo (id/value) -- `field.key` já é a chave REAL de `component.properties` (ver
+ * `labelPropertyKey`/`compileLiveSymbolPins`), então `renderPropertyField` aplica direto via seu
+ * caminho padrão (`component.properties[key]=value` + `requestUpdateProperty`), sem precisar de
+ * `onPropertyChange` customizado. */
+function externalLabelPropertyFields(component: WebviewComponentModel, kind: ExternalLabelKind): PropertyField[] {
+  const fields: PropertyField[] = [
+    { key: labelPropertyKey(kind, "color"), label: t("labelColor"), kind: "color", value: externalLabelColor(component, kind), group: t("visual") },
+  ];
+  if (kind === "id" && component.typeId === SYMBOL_PIN_TYPE_ID) {
+    fields.push({ key: "labelFontSize", label: t("labelFontSize"), kind: "number", value: externalLabelFontSize(component), min: 4, max: 32, step: 1, group: t("visual") });
+  }
+  return fields;
+}
+
+/** Diálogo de propriedades de um rótulo externo (id/value) -- pedido real: "nem o botão de
+ * propriedades deles aparece para eu mudar a cor"/"digitar a cor... ou escolher na paleta, mas poder
+ * mudar o tamanho também igual era antes". Reaproveita o MESMO `renderPropertyField`/`propertyDialog`
+ * de qualquer outro componente (nunca um widget novo por fora do fluxo já existente), só com uma
+ * lista de campos menor (o rótulo não é um componente de catálogo próprio). */
+function renderExternalLabelPropertySheet(component: WebviewComponentModel, kind: ExternalLabelKind): HTMLElement {
+  const shell = document.createElement("section");
+  shell.className = "property-sheet";
+  const titleBar = document.createElement("div");
+  titleBar.className = "property-sheet__titlebar";
+  const uid = document.createElement("div");
+  uid.className = "property-sheet__uid";
+  uid.textContent = `${t("properties")}: ${component.label}`;
+  const closeButton = document.createElement("button");
+  closeButton.type = "button";
+  closeButton.className = "property-sheet__window-close";
+  closeButton.textContent = "x";
+  closeButton.addEventListener("click", () => propertyDialog.close());
+  titleBar.append(uid, closeButton);
+  const fieldset = document.createElement("fieldset");
+  fieldset.className = "property-sheet__group";
+  for (const field of externalLabelPropertyFields(component, kind)) fieldset.appendChild(renderPropertyField(component, field));
+  shell.append(titleBar, fieldset);
+  return shell;
+}
+
+function openExternalLabelPropertyDialog(component: WebviewComponentModel, kind: ExternalLabelKind): void {
+  activePropertyTarget = { kind: "text-label", componentId: component.id, labelKind: kind };
+  propertyDialog.innerHTML = "";
+  propertyDialog.append(renderExternalLabelPropertySheet(component, kind));
+  if (!propertyDialog.open) propertyDialog.showModal();
 }
 
 function rotateSelectedTextLabel(steps: 1 | -1 | 2): boolean {
@@ -6410,6 +6459,44 @@ function renderPropertyField(component: WebviewComponentModel, field: PropertyFi
     return row;
   }
 
+  if (field.kind === "color") {
+    // Antes só existia a paleta nativa (`<input type="color">`, sem jeito de digitar um hex direto)
+    // -- pedido real: "digitar a cor tipo #FAFAC8 ou escolher na paleta". Texto + paleta lado a lado,
+    // sincronizados nos dois sentidos: escolher na paleta atualiza o texto; digitar um hex válido
+    // atualiza a paleta; hex inválido volta pro valor anterior (nunca aplica lixo).
+    const group = document.createElement("div");
+    group.className = "property-sheet__color-group";
+    const swatch = document.createElement("input");
+    swatch.type = "color";
+    swatch.className = "property-sheet__color-swatch";
+    const text = document.createElement("input");
+    text.type = "text";
+    text.className = "property-sheet__field-input";
+    text.placeholder = "#RRGGBB";
+    const currentHex = normalizeHexColor(String(field.value)) ?? "#000000";
+    swatch.value = currentHex;
+    text.value = String(field.value);
+    const isReadonly = Boolean(field.readonly);
+    swatch.disabled = isReadonly;
+    text.readOnly = isReadonly;
+    if (!isReadonly) {
+      swatch.addEventListener("input", () => {
+        text.value = swatch.value;
+        applyChange(swatch.value);
+      });
+      text.addEventListener("change", () => {
+        const hex = normalizeHexColor(text.value);
+        if (!hex) { text.value = String(field.value); return; }
+        swatch.value = hex;
+        text.value = hex;
+        applyChange(hex);
+      });
+    }
+    group.append(swatch, text);
+    row.append(caption, group);
+    return row;
+  }
+
   const fieldIsReadonly = field.kind === "readonly" || Boolean(field.readonly);
   if (field.kind === "number" && field.unit && !fieldIsReadonly) {
     // Seletor de múltiplo de unidade (pF/nF/µF/.../k/M/G) -- valor ARMAZENADO sempre em unidade base
@@ -6480,7 +6567,7 @@ function renderPropertyField(component: WebviewComponentModel, field: PropertyFi
 
   const input = document.createElement("input");
   input.className = "property-sheet__field-input";
-  input.type = field.kind === "number" ? "number" : field.kind === "color" ? "color" : "text";
+  input.type = field.kind === "number" ? "number" : "text";
   input.value = String(field.value);
   input.readOnly = fieldIsReadonly;
   if (field.kind === "number") {
@@ -7485,7 +7572,7 @@ function renderExternalLabel(component: WebviewComponentModel, kind: ExternalLab
   }
   // `__ui_idLabelColor`/`__ui_valueLabelColor` -- cor customizada do rótulo (usada por `symbol.pin`,
   // ver `catalog/subcircuitSymbolScene.ts`), genérica pra qualquer rótulo id/value (pedido real: menu
-  // de contexto do rótulo não tinha NENHUMA via de mudar cor, ver `openExternalLabelColorPicker`).
+  // de contexto do rótulo não tinha NENHUMA via de mudar cor, ver `openExternalLabelPropertyDialog`).
   // Ausente == cor padrão do CSS (`component-floating-label--id/--value`), nunca sobrescrita. NUNCA
   // aplicada num `symbol.pin` ao vivo em Modo Símbolo -- o texto tem que continuar transparente (cor
   // real vem do SVG consolidado).
@@ -7510,7 +7597,7 @@ function renderExternalLabel(component: WebviewComponentModel, kind: ExternalLab
     persistState();
     render();
     showContextMenu(event, [
-      { label: t("textLabelColor"), icon: "properties", onClick: () => openExternalLabelColorPicker(component, kind) },
+      { label: t("properties"), icon: "properties", onClick: () => openExternalLabelPropertyDialog(component, kind) },
       { kind: "separator" },
       { label: t("rotateCw"), icon: "rotateCw", shortcut: "Ctrl+R", onClick: () => rotateSelectedTextLabel(1) },
       { label: t("rotateCcw"), icon: "rotateCcw", shortcut: "Ctrl+Shift+R", onClick: () => rotateSelectedTextLabel(-1) },
