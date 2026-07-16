@@ -765,17 +765,20 @@ export function compilePackageAuthoringComponents(
     return { remainingComponents, touchedPackageAuthoring: false, hasPackage: false, errors, warnings };
   }
 
+  // Mensagens ACIONÁVEIS (não só "há um problema") -- clique-direito no fundo vazio da cena tem
+  // "Corrigir Package/pinos duplicados" (`cleanupDuplicatePackageAuthoring`, `main.ts`), que resolve
+  // os 2 primeiros casos automaticamente, mantendo a primeira ocorrência de cada duplicata.
   if (packageComps.length > 1) {
-    errors.push(`Mais de um objeto Package encontrado na cena (${packageComps.length}) -- deve haver no máximo um.`);
+    errors.push(`Mais de um objeto Package encontrado na cena (${packageComps.length}) -- deve haver no máximo um. Clique com o botão direito no fundo vazio da cena e use "Corrigir Package/pinos duplicados" pra remover os extras automaticamente (mantém o primeiro).`);
   }
   if (iconComps.length > 1) {
-    errors.push(`Mais de uma Figura marcada como ícone do subcircuito encontrada (${iconComps.length}) -- deve haver no máximo uma.`);
+    errors.push(`Mais de uma Figura marcada como ícone do subcircuito encontrada (${iconComps.length}) -- deve haver no máximo uma. Selecione e apague a(s) cópia(s) extra(s), mantendo só uma Figura como ícone de fundo.`);
   }
   if (packageComps.length === 0 && pinComps.length > 0) {
-    errors.push(`${pinComps.length} pino(s) de Package encontrado(s) sem nenhum objeto Package na cena.`);
+    errors.push(`${pinComps.length} pino(s) de Package encontrado(s) sem nenhum objeto Package na cena. Se o Package foi apagado por engano, descarte as alterações desta sessão e reabra "Abrir Subcircuito" pra recomeçar do último arquivo salvo.`);
   }
   if (packageComps.length === 0 && shapeComps.length > 0) {
-    errors.push(`${shapeComps.length} elemento(s) do Package encontrado(s) sem nenhum objeto Package na cena.`);
+    errors.push(`${shapeComps.length} elemento(s) do Package encontrado(s) sem nenhum objeto Package na cena. Se o Package foi apagado por engano, descarte as alterações desta sessão e reabra "Abrir Subcircuito" pra recomeçar do último arquivo salvo.`);
   }
   if (errors.length > 0) {
     return { remainingComponents, touchedPackageAuthoring, hasPackage: packageComps.length > 0, errors, warnings };
@@ -842,7 +845,7 @@ export function compilePackageAuthoringComponents(
       continue;
     }
     if (seenPinIds.has(pinId)) {
-      errors.push(`Identificador de pino duplicado: "${pinId}".`);
+      errors.push(`Identificador de pino duplicado: "${pinId}". Renomeie um deles (identificador de pino, no painel de Propriedades) ou use "Corrigir Package/pinos duplicados" (clique direito no fundo vazio da cena) pra remover a cópia extra automaticamente.`);
       continue;
     }
 

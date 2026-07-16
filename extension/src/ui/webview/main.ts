@@ -182,6 +182,7 @@ const UI_TEXT = {
     unmarkAsPackageShape: "Desmarcar como elemento do Package",
     bringPackageShapeForward: "Trazer para frente",
     sendPackageShapeBackward: "Enviar para trás",
+    cleanupDuplicatePackage: "Corrigir Package/pinos duplicados",
     loadFirmware: "Carregar firmware",
     openSerialMonitor: "Abrir monitor serial",
     firmwareGroup: "Firmware",
@@ -272,6 +273,7 @@ const UI_TEXT = {
     unmarkAsPackageShape: "Unmark as Package element",
     bringPackageShapeForward: "Bring forward",
     sendPackageShapeBackward: "Send backward",
+    cleanupDuplicatePackage: "Fix duplicate Package/pins",
     loadFirmware: "Load firmware",
     openSerialMonitor: "Open serial monitor",
     firmwareGroup: "Firmware",
@@ -1577,10 +1579,20 @@ function installCanvasEventHandlers(canvas: HTMLDivElement, canvasContent: HTMLD
     // vazio -- antes só apareciam no menu de um componente específico já existente (bug real de
     // descoberta: numa folha de subcircuito recém-criada, sem nenhum componente ainda, não havia
     // NENHUM jeito de entrar em Modo Placa). Mesmas duas entradas, mesmo comportamento.
+    // Detecta duplicata ANTES de montar o menu -- item some (não fica só desabilitado) quando a
+    // cena já está correta, pra não poluir o menu de todo subcircuito sem problema nenhum.
+    const hasPackageDuplicate = (() => {
+      if (!state.subcircuitEditingContext) return false;
+      const packageCount = state.components.filter((c) => c.typeId === "other.package").length;
+      if (packageCount > 1) return true;
+      const pinIds = state.components.filter((c) => c.typeId === "other.package_pin").map((c) => (typeof c.properties.pinId === "string" && c.properties.pinId.trim() ? c.properties.pinId.trim() : c.id));
+      return new Set(pinIds).size !== pinIds.length;
+    })();
     const internalAuthoringItems: ContextMenuItem[] = state.subcircuitEditingContext
       ? [
           { label: t("boardMode"), checked: subcircuitBoardMode, onClick: () => setSubcircuitBoardMode(!subcircuitBoardMode) },
           { label: t("selectExposedComponents"), onClick: () => openExposedComponentsDialog() },
+          ...(hasPackageDuplicate ? [{ label: t("cleanupDuplicatePackage"), onClick: () => cleanupDuplicatePackageAuthoring() } satisfies ContextMenuItem] : []),
           { kind: "separator" },
         ]
       : [];
@@ -2061,6 +2073,43 @@ function deleteSelectedItems(): void {
     send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestRemoveComponent", componentId });
   }
   clearSelection();
+}
+
+/** Remove Package(s)/pino(s)/rótulo(s) duplicados da cena de autoria -- rede de segurança pra uma
+ * sessão que já ficou num estado inválido (2+ `other.package`, ou 2+ `other.package_pin` com o
+ * MESMO `pinId`), seja de antes desta feature existir, seja de qualquer jeito futuro ainda não
+ * coberto por `copySelectedItems`/`duplicateComponentsForDrag` (que só previnem duplicar o Package
+ * em si, nunca pinos -- duplicar um pino pra depois renomear o `pinId` é o único jeito de criar um
+ * pino NOVO hoje, já que `other.package_pin` é `hidden` na paleta geral). Mantém sempre a PRIMEIRA
+ * ocorrência (ordem de `state.components`) de cada duplicata, remove as demais + o rótulo linkado de
+ * cada pino removido -- nunca mexe em nada que já esteja correto (0 duplicatas == no-op). Só
+ * aparece no menu de contexto do fundo vazio dentro de uma sessão "Abrir Subcircuito"
+ * (`state.subcircuitEditingContext`). */
+function cleanupDuplicatePackageAuthoring(): void {
+  const packageComps = state.components.filter((component) => component.typeId === "other.package");
+  const pinComps = state.components.filter((component) => component.typeId === "other.package_pin");
+
+  const idsToRemove = new Set<string>();
+  for (const extraPackage of packageComps.slice(1)) idsToRemove.add(extraPackage.id);
+
+  const seenPinIds = new Set<string>();
+  for (const pin of pinComps) {
+    const pinId = typeof pin.properties.pinId === "string" && pin.properties.pinId.trim() ? pin.properties.pinId.trim() : pin.id;
+    if (seenPinIds.has(pinId)) idsToRemove.add(pin.id);
+    else seenPinIds.add(pinId);
+  }
+
+  for (const component of state.components) {
+    if (component.typeId !== "graphics.text") continue;
+    const linked = component.properties.linkedPinComponentId;
+    if (typeof linked === "string" && idsToRemove.has(linked)) idsToRemove.add(component.id);
+  }
+
+  if (idsToRemove.size === 0) return;
+  for (const componentId of idsToRemove) {
+    send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestRemoveComponent", componentId });
+  }
+  state.selectedComponentIds = state.selectedComponentIds.filter((id) => !idsToRemove.has(id));
 }
 
 function cloneComponent(component: WebviewComponentModel): WebviewComponentModel {
