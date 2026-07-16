@@ -672,10 +672,14 @@ rect.meter-expand-button:hover {
   z-index: 3;
 }
 
+/* MESMO princípio de `.selection-overlay` (achado no mesmo teste) -- o fundo branco translúcido
+   cobria qualquer texto desenhado ABAIXO na pilha de camadas. Pro rótulo INVISÍVEL de um
+   `symbol.pin` em Modo Símbolo (`main.ts::renderExternalLabel`, `color:transparent`, o texto real
+   fica no fundo consolidado por baixo dele) isso lavava o texto de verdade com branco sempre que o
+   usuário selecionava o rótulo pra arrastar -- só o contorno tracejado, nunca um fundo. */
 .component-floating-label.selected {
   outline: 1px dashed rgba(24, 71, 199, 0.95);
   outline-offset: 1px;
-  background: rgba(255, 255, 255, 0.68);
 }
 
 /* Junção como `<g>` SVG dentro de `.wire-layer` (não mais `<div>` solto em `canvasContent`) -- dois

@@ -7362,6 +7362,12 @@ function renderExternalLabel(component: WebviewComponentModel, kind: ExternalLab
     const labelFontSize = typeof component.properties.labelFontSize === "number" ? component.properties.labelFontSize : 7;
     el.style.fontSize = `${labelFontSize}px`;
     el.style.color = "transparent";
+    // `.component-floating-label`'s `padding:1px 2px` genérico (folga confortável pra clicar
+    // qualquer rótulo comum) somado à fonte pequena de pino (7px) deixava a caixa de seleção nitidamente
+    // mais larga/alta que o texto real por baixo -- achado real comparando lado a lado com a caixa
+    // justa de `connectors.tunnel` (`tunnelBox`, seção "área de seleção apertada"). Sem padding aqui:
+    // a caixa (e o contorno tracejado de seleção) encolhe pro tamanho real do texto.
+    el.style.padding = "0px";
     el.style.transform = `translate(-50%, -50%)${rotation === 0 ? "" : ` rotate(${rotation}deg)`}`;
   } else {
     el.style.transform = rotation === 0 ? "" : `rotate(${rotation}deg)`;
