@@ -2297,15 +2297,24 @@ function render(): void {
     if (valueLabel) canvasContent.appendChild(valueLabel);
   }
 
-  for (const node of state.topology.nodes) {
-    // Dentro do `wireLayer` (SVG), não mais `canvasContent` (`<div>`) -- mesmo espaço de coordenadas
-    // dos dois jeitos (ambos herdam o transform de zoom/pan de `canvasContent`), mas como SVG a
-    // junção fica no MESMO documento das alças de canto/segmento (pintadas por último = por cima,
-    // ordem de inserção natural já que este loop roda depois do loop de fios) e ganha hit-test nativo
-    // consistente com elas -- antes era um `<div>` com `pointer-events:none`, nunca clicável/
-    // arrastável (bug real: impossível conectar um 4º fio a uma junção existente, só por acidente
-    // via a borda de um segmento adjacente).
-    if (isJunctionVisible(state.topology.conductors, node.id)) wireLayer.appendChild(renderJunction(node.id, node.position.x, node.position.y));
+  // Nós de topologia (junções) são um conceito exclusivo do circuito interno REAL -- mesmo princípio
+  // do loop de fios acima ("Modo Símbolo/Ícone nunca mostra o Subcircuito e vice-versa"). Sem este
+  // gate, `state.topology.nodes` (coordenadas do ESPAÇO DO CIRCUITO INTERNO, ex: 400-650px num
+  // subcircuito real) vazava pra dentro do canvas do Símbolo (espaço bem menor, ex: 88x176) como
+  // pontinhos cinza soltos sem nenhuma relação com a cena visível -- bug real encontrado testando
+  // "Abrir Subcircuito" no ESP32 DevKitC (7 junções do circuito interno aparecendo como "dots"
+  // espalhados dentro do Modo Símbolo).
+  if (subcircuitEditorMode === "circuit") {
+    for (const node of state.topology.nodes) {
+      // Dentro do `wireLayer` (SVG), não mais `canvasContent` (`<div>`) -- mesmo espaço de coordenadas
+      // dos dois jeitos (ambos herdam o transform de zoom/pan de `canvasContent`), mas como SVG a
+      // junção fica no MESMO documento das alças de canto/segmento (pintadas por último = por cima,
+      // ordem de inserção natural já que este loop roda depois do loop de fios) e ganha hit-test nativo
+      // consistente com elas -- antes era um `<div>` com `pointer-events:none`, nunca clicável/
+      // arrastável (bug real: impossível conectar um 4º fio a uma junção existente, só por acidente
+      // via a borda de um segmento adjacente).
+      if (isJunctionVisible(state.topology.conductors, node.id)) wireLayer.appendChild(renderJunction(node.id, node.position.x, node.position.y));
+    }
   }
 
   // Popups vivem numa camada independente do canvas. Renderizações frequentes do esquemático
