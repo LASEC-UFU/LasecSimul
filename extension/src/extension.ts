@@ -1654,18 +1654,26 @@ async function closeSubcircuitEditorCommand(): Promise<void> {
       // "Salvar" tivesse funcionado.
       const saved = await writeSubcircuitEditingSessionBack(session);
       if (!saved) return;
+    }
+    state.subcircuitEditingStack.pop();
+    await restoreOuterCircuitFromSession(session);
+    if (choice === save) {
       // Sem isto, `PACKAGE_BY_TYPE_ID` (host E Webview, `componentSymbols.ts`) mantém o `package`
       // ANTIGO deste typeId em memória -- qualquer instância já colocada no esquemático (deste
       // projeto ou de outro aberto depois) continua desenhando o Package de antes da edição até um
       // reload completo da janela (bug real: "editar o subcircuito não persiste visualmente").
+      // PRECISA rodar DEPOIS de `restoreOuterCircuitFromSession` (nunca antes): esta função
+      // SOBRESCREVE `state.schematicState` inteiro com `session.outerSchematicState` (a referência
+      // capturada ANTES da edição, catálogo velho incluído) -- rodar o refresh antes disso faz o
+      // catálogo fresco ser jogado fora no mesmo instante em que é aplicado (bug real: "as mudanças
+      // persistem no editor mas nenhuma aparece no esquemático", já que o `syncSchematicPanel()`
+      // final de `restoreOuterCircuitFromSession` reenviava o catálogo ANTIGO por cima pra Webview).
       // `loadLibrariesInCore: false` -- `writeSubcircuitEditingSessionBack` já reregistrou no Core
-      // (`registerAdhocSubcircuitDefinition`) logo acima; só falta reler o arquivo e reregistrar o
+      // (`registerAdhocSubcircuitDefinition`) antes; só falta reler o arquivo e reregistrar o
       // pacote pro lado da Extension/Webview, mesmo padrão já usado em `extension.ts:1278` logo após
       // escrever um `.lssubcircuit` novo.
       await refreshUnifiedCatalogState(false, catalogCommandOptions());
     }
-    state.subcircuitEditingStack.pop();
-    await restoreOuterCircuitFromSession(session);
     return;
   }
 
@@ -1702,8 +1710,24 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const corePath = resolveCoreExecutablePath(context.extensionPath);
   const pipeName = CoreProcess.defaultPipeName();
+  const networkConfiguration = vscode.workspace.getConfiguration("lasecsimul.network");
+  const configuredNetworkNamespace = networkConfiguration.get<number>("namespace", -1);
+  const configuredNetworkMode = networkConfiguration.get<string>("mode", "lab-bridge");
+  const configuredTapInterface = networkConfiguration.get<string>(
+    "tapInterface",
+    "LasecSimul TAP {namespace}-{instance}"
+  );
+  const coreEnv: NodeJS.ProcessEnv = {
+    // Prevent shared-memory arena collisions between thin-client instances.
+    LASECSIMUL_HOST_INSTANCE_ID: String(process.pid),
+    LASECSIMUL_NETWORK_MODE: configuredNetworkMode === "isolated" ? "isolated" : "lab-bridge",
+    LASECSIMUL_TAP_INTERFACE: configuredTapInterface,
+  };
+  if (Number.isInteger(configuredNetworkNamespace) && configuredNetworkNamespace >= 0 && configuredNetworkNamespace <= 255) {
+    coreEnv.LASECSIMUL_NETWORK_NAMESPACE = String(configuredNetworkNamespace);
+  }
 
-  state.coreProc = new CoreProcess({ executablePath: corePath, pipeName });
+  state.coreProc = new CoreProcess({ executablePath: corePath, pipeName, env: coreEnv });
   state.coreProc.onError((err) => {
     vscode.window.showErrorMessage(
       `LasecSimul Core: não foi possível iniciar "${corePath}" (${err.message}). ` +
