@@ -599,6 +599,12 @@ function setSubcircuitEditorMode(mode: SubcircuitEditorMode): void {
   subcircuitEditorMode = mode;
   resetUndoHistory(mainUndoHistory);
   render();
+  // Centraliza e enquadra automaticamente a cena inteira sempre que o modo troca (pedido original:
+  // "ao abrir Subcircuito, Símbolo ou Ícone, centralize o conteúdo e aplique Ajustar zoom a tudo") --
+  // cada modo é uma cena INDEPENDENTE (circuito real vs. formas do Símbolo vs. do Ícone, seção
+  // "Refatoração Subcircuito/Símbolo/Ícone" acima), então o viewport da cena anterior quase nunca faz
+  // sentido pra próxima.
+  zoomToFitAllDeferred();
 }
 
 const DEFAULT_SYMBOL_CANVAS = { width: 56, height: 40, border: true };
@@ -1830,7 +1836,7 @@ function renderAppBar(): HTMLElement {
   viewGroup.className = "appbar__group";
   viewGroup.append(
     renderToolbarButton("zoomFitSelection", t("zoomFitSelection"), () => zoomToFitSelection(), state.selectedComponentIds.length === 0),
-    renderToolbarButton("zoomFitAll", t("zoomFitAll"), () => zoomToFitAll(), activeSceneComponents().length === 0),
+    renderToolbarButton("zoomFitAll", t("zoomFitAll"), () => zoomToFitAll(), !activeSceneFitBoundingBox()),
     renderToolbarButton("zoomReset", t("zoomReset"), () => zoomReset()),
   );
 
@@ -1980,7 +1986,7 @@ function installCanvasEventHandlers(canvas: HTMLDivElement, canvasContent: HTMLD
       { kind: "separator" },
       { label: t("selectAll"), onClick: () => selectAll() },
       { kind: "separator" },
-      { label: t("zoomFitAll"), onClick: () => zoomToFitAll(), disabled: activeSceneComponents().length === 0 },
+      { label: t("zoomFitAll"), onClick: () => zoomToFitAll(), disabled: !activeSceneFitBoundingBox() },
       { label: t("zoomReset"), onClick: () => zoomReset() },
       { kind: "separator" },
       { label: t("exportImage"), onClick: () => exportSchematicImage(), disabled: activeSceneComponents().length === 0 },
@@ -2106,20 +2112,44 @@ function installCanvasEventHandlers(canvas: HTMLDivElement, canvasContent: HTMLD
   );
 }
 
-/** Bounding box aproximada (posição declarada +/- margem fixa, não a caixa exata do símbolo --
- * mesma simplificação já aceita pelo cálculo de centro do "Criar Subcircuito da Seleção" no lado
- * Extension) dos componentes informados, em coordenadas de mundo (não de tela). */
+/** Bounding box REAL (caixa própria de cada componente -- tamanho/rotação/flip via `componentBox`/
+ * `rotatedComponentLocalBox`, os MESMOS usados pelo render pra posicionar o `<div>` -- nunca mais um
+ * "+-32px" fixo em torno da âncora, que subestimava componentes grandes e superestimava pequenos) em
+ * coordenadas de mundo. */
 function approximateBoundingBox(components: readonly WebviewComponentModel[]): { minX: number; minY: number; maxX: number; maxY: number } | undefined {
   if (components.length === 0) return undefined;
-  const margin = 32;
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const c of components) {
-    minX = Math.min(minX, c.x - margin);
-    minY = Math.min(minY, c.y - margin);
-    maxX = Math.max(maxX, c.x + margin);
-    maxY = Math.max(maxY, c.y + margin);
+    const box = componentBox(c.typeId, c.properties);
+    const origin = componentLocalOrigin(c.typeId, c.properties);
+    const rotated = rotatedComponentLocalBox(box, c.rotation, Boolean(c.flipH), Boolean(c.flipV), origin);
+    minX = Math.min(minX, c.x + rotated.x);
+    minY = Math.min(minY, c.y + rotated.y);
+    maxX = Math.max(maxX, c.x + rotated.x + rotated.width);
+    maxY = Math.max(maxY, c.y + rotated.y + rotated.height);
   }
   return { minX, minY, maxX, maxY };
+}
+
+/** Bounding box da cena ATIVA pra "Ajustar zoom a tudo" -- em Modo Símbolo/Ícone, une o retângulo do
+ * PRÓPRIO canvas (`state.symbolCanvas`/`iconCanvas`, largura/altura do documento) com a caixa de
+ * cada elemento (pinos/formas/projeções de componente exposto podem se estender além do canvas,
+ * ver `fallbackExposedComponentPosition`) -- sem isto, "tudo" ignorava o corpo/fundo do Símbolo
+ * inteiro sempre que a cena tinha poucos elementos nas bordas. Em Modo Subcircuito, só os
+ * componentes reais (sem conceito de "canvas" no circuito interno). */
+function activeSceneFitBoundingBox(): { minX: number; minY: number; maxX: number; maxY: number } | undefined {
+  const componentsBox = approximateBoundingBox(activeSceneComponents());
+  if (subcircuitEditorMode === "circuit") return componentsBox;
+  const canvas = subcircuitEditorMode === "symbol" ? state.symbolCanvas : state.iconCanvas;
+  const canvasBox = canvas ? { minX: 0, minY: 0, maxX: canvas.width, maxY: canvas.height } : undefined;
+  if (!componentsBox) return canvasBox;
+  if (!canvasBox) return componentsBox;
+  return {
+    minX: Math.min(componentsBox.minX, canvasBox.minX),
+    minY: Math.min(componentsBox.minY, canvasBox.minY),
+    maxX: Math.max(componentsBox.maxX, canvasBox.maxX),
+    maxY: Math.max(componentsBox.maxY, canvasBox.maxY),
+  };
 }
 
 /** Ajusta `state.viewport` pra enquadrar a bounding box informada dentro da área visível do canvas,
@@ -2141,8 +2171,17 @@ function zoomToBoundingBox(box: { minX: number; minY: number; maxX: number; maxY
 }
 
 function zoomToFitAll(): void {
-  const box = approximateBoundingBox(activeSceneComponents());
+  const box = activeSceneFitBoundingBox();
   if (box) zoomToBoundingBox(box);
+}
+
+/** Chama `zoomToFitAll()` só depois que o navegador de fato mediu o layout do canvas (`requestAnimationFrame`)
+ * -- `zoomToBoundingBox` lê `canvasElement.clientWidth/Height`, que ainda é 0 se chamado
+ * sincronamente logo após criar/trocar de sessão (o `<div>` do canvas acabou de entrar no DOM, sem
+ * layout ainda) -- sem isto, "ajustar zoom automaticamente ao abrir Símbolo/Ícone/Subcircuito"
+ * (pedido original) silenciosamente não fazia nada na 1ª vez. */
+function zoomToFitAllDeferred(): void {
+  requestAnimationFrame(() => zoomToFitAll());
 }
 
 function zoomToFitSelection(): void {
@@ -6921,6 +6960,11 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     vscode?.setState(state);
     render();
     refreshOpenPropertyDialog();
+    // Ao ENTRAR numa sessão de "Abrir Subcircuito" (nunca ao sair, que já volta pro viewport
+    // estabelecido do circuito de fora) -- mesmo pedido de auto-enquadrar do combobox de modo, ver
+    // `setSubcircuitEditorMode`. A sessão sempre começa em Modo Subcircuito (linha acima), então isto
+    // enquadra o circuito interno logo na abertura.
+    if (enteringOrLeavingSubcircuitSession && merged.subcircuitEditingContext) zoomToFitAllDeferred();
   }
 
   if (message.type === "beginComponentPlacement") {
