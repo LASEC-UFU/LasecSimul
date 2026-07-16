@@ -705,6 +705,87 @@ function toggleExposedComponentCommand(componentId: string): void {
   render();
 }
 
+/** Reconcilia `state.exposedComponents[]` inteiro contra um conjunto de ids selecionados de uma vez
+ * (diálogo "Selecionar Componentes Expostos" abaixo) -- entradas que já existiam e continuam
+ * selecionadas ficam INTOCADAS (posição/rotação/escala já ajustadas pelo usuário sobrevivem); só
+ * adiciona as novas (mesma posição padrão de `toggleExposedComponentCommand`) e remove as
+ * desmarcadas. Espelha `applyExposedSelection` (`subcircuitBoardMode.ts`, removido) -- mesmo
+ * princípio, adaptado pro array `exposedComponents[]` em vez do campo plano `component.exposed`. */
+function applyExposedComponentSelection(selectedIds: ReadonlySet<string>): void {
+  const kept = state.exposedComponents.filter((entry) => selectedIds.has(entry.componentId));
+  const keptIds = new Set(kept.map((entry) => entry.componentId));
+  let maxLayer = kept.reduce((max, entry) => Math.max(max, entry.layer), -1);
+  const added = [...selectedIds]
+    .filter((id) => !keptIds.has(id))
+    .map((componentId, index) => {
+      const position = fallbackExposedComponentPosition(kept.length + index);
+      maxLayer += 1;
+      return { componentId, x: position.x, y: position.y, rotation: 0 as const, flipH: false, flipV: false, scale: 1, layer: maxLayer };
+    });
+  state = { ...state, exposedComponents: [...kept, ...added] };
+  persistState();
+  render();
+}
+
+/** "Selecione os Componentes Expostos" -- diálogo de seleção em lote (absorve "Modo Placa", mesmo
+ * princípio de `openExposedComponentsDialog`/`subcircuitBoardMode.ts`, removido nesta refatoração
+ * mas trazido de volta a pedido do usuário: o toggle por-componente do menu de contexto -- seção
+ * `exposeComponentMenuItems` -- continua existindo, mas só dentro do Modo Subcircuito; este diálogo
+ * é o caminho pra fazer a mesma coisa SEM sair do Modo Símbolo, vendo todos de uma vez). Lista todo
+ * componente interno não-oculto (`state.components`, nunca `activeSceneComponents()` -- exposição só
+ * faz sentido pro circuito real, independente de qual cena está sendo editada agora). */
+function openExposedComponentsDialog(): void {
+  if (!state.subcircuitEditingContext) return;
+  const dialog = document.createElement("dialog");
+  dialog.className = "exposed-components-dialog";
+  const form = document.createElement("form");
+  form.method = "dialog";
+  form.className = "exposed-components-form";
+  const title = document.createElement("h2");
+  title.textContent = t("exposedComponentsDialogTitle");
+  form.appendChild(title);
+  const list = document.createElement("div");
+  list.className = "exposed-components-list";
+  const choices = new Map<string, HTMLInputElement>();
+  const currentlyExposed = new Set(state.exposedComponents.map((entry) => entry.componentId));
+  for (const component of state.components.filter((entry) => !entry.hidden)) {
+    const row = document.createElement("label");
+    row.className = "exposed-components-row";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = currentlyExposed.has(component.id);
+    choices.set(component.id, input);
+    const text = document.createElement("span");
+    text.textContent = `${component.label} (${component.id})${catalogEntryFor(component.typeId)?.graphical === true ? "" : ` ${t("notGraphicalHint")}`}`;
+    row.append(input, text);
+    list.appendChild(row);
+  }
+  form.appendChild(list);
+  const actions = document.createElement("div");
+  actions.className = "exposed-components-actions";
+  const selectAll = document.createElement("button");
+  selectAll.type = "button"; selectAll.textContent = t("exposedComponentsSelectAll");
+  selectAll.onclick = () => choices.forEach((input) => { input.checked = true; });
+  const clearAll = document.createElement("button");
+  clearAll.type = "button"; clearAll.textContent = t("exposedComponentsClearAll");
+  clearAll.onclick = () => choices.forEach((input) => { input.checked = false; });
+  const cancel = document.createElement("button");
+  cancel.type = "button"; cancel.textContent = t("exposedComponentsCancel"); cancel.onclick = () => dialog.close("cancel");
+  const confirm = document.createElement("button");
+  confirm.type = "submit"; confirm.value = "confirm"; confirm.textContent = t("exposedComponentsConfirm");
+  actions.append(selectAll, clearAll, cancel, confirm);
+  form.appendChild(actions);
+  dialog.appendChild(form);
+  dialog.addEventListener("close", () => {
+    if (dialog.returnValue === "confirm") {
+      applyExposedComponentSelection(new Set([...choices].filter(([, input]) => input.checked).map(([id]) => id)));
+    }
+    dialog.remove();
+  });
+  document.body.appendChild(dialog);
+  dialog.showModal();
+}
+
 /** Qual variante de `PackageDescriptor` usar pra desenhar `component` AGORA -- `"board"` só quando o
  * typeId declarou uma aparência própria pro Modo Placa (`catalogEntry.boardPackage`, ver model.ts).
  * Sem isto, cai em `undefined` (esquemático normal). Usado pelo overlay da instância no circuito
@@ -1699,6 +1780,16 @@ function renderAppBar(): HTMLElement {
       createPinButton.textContent = t("createPin");
       createPinButton.addEventListener("click", () => createSymbolPinCommand());
       subcircuitGroup.appendChild(createPinButton);
+
+      // "Selecionar Componentes Expostos" -- pedido explícito do usuário: precisa existir DENTRO do
+      // Modo Símbolo (não só o toggle por-componente no menu de contexto do Modo Subcircuito), pra
+      // escolher/revisar de uma vez quais componentes internos aparecem como projeção aqui.
+      const selectExposedButton = document.createElement("button");
+      selectExposedButton.type = "button";
+      selectExposedButton.className = "appbar__text-button";
+      selectExposedButton.textContent = t("selectExposedComponents");
+      selectExposedButton.addEventListener("click", () => openExposedComponentsDialog());
+      subcircuitGroup.appendChild(selectExposedButton);
     }
 
     subcircuitGroup.appendChild(
