@@ -215,6 +215,10 @@ const UI_TEXT = {
     subcircuitEditorModeCircuit: "Subcircuito",
     subcircuitEditorModeSymbol: "Símbolo",
     subcircuitEditorModeIcon: "Ícone",
+    createPin: "Criar Pino",
+    createAdditionalTunnel: "Criar túnel adicional",
+    exposeComponent: "Expor no Símbolo",
+    unexposeComponent: "Remover exposição no Símbolo",
     backToMainCircuit: "Voltar ao Circuito Principal",
     componentsSelected: "componentes selecionados",
     mixedValuePlaceholder: "(vários valores)",
@@ -309,6 +313,10 @@ const UI_TEXT = {
     subcircuitEditorModeCircuit: "Subcircuit",
     subcircuitEditorModeSymbol: "Symbol",
     subcircuitEditorModeIcon: "Icon",
+    createPin: "Create Pin",
+    createAdditionalTunnel: "Create additional tunnel",
+    exposeComponent: "Expose in Symbol",
+    unexposeComponent: "Remove exposure in Symbol",
     backToMainCircuit: "Back to Main Circuit",
     componentsSelected: "components selected",
     mixedValuePlaceholder: "(multiple values)",
@@ -494,6 +502,101 @@ function setSubcircuitEditorMode(mode: SubcircuitEditorMode): void {
   resetUndoHistory(mainUndoHistory);
   render();
 }
+
+const DEFAULT_SYMBOL_CANVAS = { width: 56, height: 40, border: true };
+
+/** Cria um novo pino no Modo Símbolo -- ação dedicada (comando/botão), nunca um typeId comum da
+ * paleta (pedido original: "sem typeId de pino na paleta geral"). Cria o pino + seu túnel interno
+ * OBRIGATÓRIO atomicamente (`symbolElements`+`components`, nunca um sem o outro) -- puramente local
+ * (sem round-trip pro host: Símbolo/Ícone nunca têm presença no Core, mesmo padrão de
+ * `componentsToAddForTypeId`/paleta). Garante que o CANVAS do Símbolo existe (`state.symbolCanvas`)
+ * -- sem isto, um pino criado antes de qualquer Símbolo ser autorado se perderia ao salvar
+ * (`writeSubcircuitEditingSessionBack` só grava `symbol` quando `symbolCanvas` está definido). */
+function createSymbolPinCommand(): void {
+  if (subcircuitEditorMode !== "symbol") return;
+  const pinId = newComponentId();
+  const tunnelId = newComponentId();
+  const pinComponentId = newComponentId();
+  const length = 8;
+  const box = Math.max(14, length * 2 + 6);
+  const pinElement: WebviewComponentModel = {
+    id: pinComponentId,
+    typeId: SYMBOL_PIN_TYPE_ID,
+    label: pinId,
+    x: -box / 2,
+    y: -box / 2,
+    rotation: 0, // desenho canônico (lead pra +X) -- posição/rotação iniciais arbitrárias, o usuário ajusta arrastando
+    pins: [],
+    properties: { pinId, length },
+  };
+  const tunnelComponent: WebviewComponentModel = {
+    id: tunnelId,
+    typeId: TUNNEL_TYPE_ID,
+    label: pinId,
+    x: 0,
+    y: 0,
+    rotation: 0,
+    pins: [],
+    properties: { name: pinId, pinId },
+  };
+  state = {
+    ...state,
+    symbolCanvas: state.symbolCanvas ?? DEFAULT_SYMBOL_CANVAS,
+    symbolElements: [...state.symbolElements, pinElement],
+    components: [...state.components, tunnelComponent],
+    selectedComponentIds: [pinComponentId],
+    selectedWireIds: [],
+  };
+  persistState();
+  render();
+}
+
+/** Cria um túnel ADICIONAL pro pino `pinComponentId` -- ação explícita, distinta da criação do
+ * próprio pino (pedido original). Mesmo `pinId`/nome do pino (identidade elétrica compartilhada,
+ * união automática pelo Core por nome -- nenhuma mudança no Core precisa disso). */
+function createAdditionalTunnelCommand(pinComponentId: string): void {
+  const pinElement = state.symbolElements.find((element) => element.id === pinComponentId);
+  const pinId = typeof pinElement?.properties.pinId === "string" ? pinElement.properties.pinId : undefined;
+  if (!pinId) return;
+  const tunnelComponent: WebviewComponentModel = {
+    id: newComponentId(),
+    typeId: TUNNEL_TYPE_ID,
+    label: pinId,
+    x: 0,
+    y: 0,
+    rotation: 0,
+    pins: [],
+    properties: { name: pinId, pinId },
+  };
+  state = { ...state, components: [...state.components, tunnelComponent] };
+  persistState();
+  render();
+}
+
+/** Alterna a exposição de um componente interno no Símbolo (absorve "Modo Placa") -- toggle
+ * dedicado por componente (pedido original: "por-componente, primário", diálogo em lote pode
+ * continuar existindo à parte). Puramente local: `exposedComponents[]` já é um campo comum de
+ * `WebviewProjectState`, sincronizado pelo mecanismo genérico `projectChanged` (sem verbo IPC
+ * novo). Posição/rotação/escala/camada iniciais são um palpite razoável (origem, escala 1, camada no
+ * topo) -- ajustáveis depois arrastando a projeção no Modo Símbolo. */
+function toggleExposedComponentCommand(componentId: string): void {
+  const alreadyExposed = state.exposedComponents.some((entry) => entry.componentId === componentId);
+  if (alreadyExposed) {
+    state = { ...state, exposedComponents: state.exposedComponents.filter((entry) => entry.componentId !== componentId) };
+  } else {
+    const maxLayer = state.exposedComponents.reduce((max, entry) => Math.max(max, entry.layer), -1);
+    state = {
+      ...state,
+      exposedComponents: [
+        ...state.exposedComponents,
+        { componentId, x: 0, y: 0, rotation: 0, flipH: false, flipV: false, scale: 1, layer: maxLayer + 1 },
+      ],
+    };
+  }
+  persistState();
+  render();
+}
+
 const circuitTransformByComponentId = new Map<string, ComponentTransform>();
 
 function isBoardModeVisible(component: WebviewComponentModel): boolean {
@@ -1495,9 +1598,20 @@ function renderAppBar(): HTMLElement {
       setSubcircuitEditorMode(modeSelect.value as SubcircuitEditorMode);
     });
 
-    subcircuitGroup.append(
-      label,
-      modeSelect,
+    subcircuitGroup.append(label, modeSelect);
+
+    // "Criar Pino" -- ação dedicada, só em Modo Símbolo (pedido original: nenhum typeId de pino na
+    // paleta geral). Botão de texto simples (não um ícone do conjunto fixo de `ToolbarIconKind`).
+    if (subcircuitEditorMode === "symbol") {
+      const createPinButton = document.createElement("button");
+      createPinButton.type = "button";
+      createPinButton.className = "appbar__text-button";
+      createPinButton.textContent = t("createPin");
+      createPinButton.addEventListener("click", () => createSymbolPinCommand());
+      subcircuitGroup.appendChild(createPinButton);
+    }
+
+    subcircuitGroup.appendChild(
       renderToolbarButton("back", t("backToMainCircuit"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestCloseSubcircuitEditor" })),
     );
   }
@@ -4889,6 +5003,26 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
           return [{ kind: "separator" } satisfies ContextMenuItem, ...items];
         })()
       : [];
+    // Túnel adicional pro pino selecionado -- ação explícita, distinta da criação do próprio pino
+    // (pedido original). Só aparece pro typeId dedicado de pino do Modo Símbolo.
+    const symbolPinMenuItems: ContextMenuItem[] =
+      !isGroup && component.typeId === SYMBOL_PIN_TYPE_ID
+        ? [{ kind: "separator" } satisfies ContextMenuItem, { label: t("createAdditionalTunnel"), onClick: () => createAdditionalTunnelCommand(component.id) }]
+        : [];
+    // Expor/remover exposição de um componente interno no Símbolo (absorve "Modo Placa") -- toggle
+    // por-componente (pedido original: "por-componente, primário"). Só faz sentido pro circuito
+    // interno REAL (Modo Subcircuito) -- um pino/forma do próprio Símbolo nunca é "exposto" (ele JÁ
+    // é o Símbolo).
+    const exposeComponentMenuItems: ContextMenuItem[] =
+      !isGroup && Boolean(state.subcircuitEditingContext) && subcircuitEditorMode === "circuit"
+        ? (() => {
+            const isExposed = state.exposedComponents.some((entry) => entry.componentId === component.id);
+            return [
+              { kind: "separator" } satisfies ContextMenuItem,
+              { label: isExposed ? t("unexposeComponent") : t("exposeComponent"), checked: isExposed, onClick: () => toggleExposedComponentCommand(component.id) },
+            ];
+          })()
+        : [];
     const menuItems: ContextMenuItem[] = [
       ...internalAuthoringItems,
       ...exposedSubmenuItems,
@@ -4908,6 +5042,8 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
       ...createSubcircuitMenuItems,
       ...subcircuitRefMenuItems,
       ...packagePinLinkMenuItems,
+      ...symbolPinMenuItems,
+      ...exposeComponentMenuItems,
     ];
     showContextMenu(event, menuItems);
   });
