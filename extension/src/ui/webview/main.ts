@@ -1,5 +1,5 @@
 import { WEBVIEW_MESSAGE_VERSION, AnalyzerVectorHistory, ComponentReadoutValue, HostToWebviewMessage, InternalComponentSnapshot, SimulationStatus, WebviewToHostMessage } from "./messages.js";
-import { CanonicalEndpoint, CanonicalTopologyDocument, InteractionKindEntry, McuSerialPortEntry, PropertySchemaEntry, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, ViewSpecInteraction, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, endpointId, endpointPinId, nodeEndpoint, portEndpoint, remapEndpoint } from "./model.js";
+import { CanonicalEndpoint, CanonicalTopologyDocument, InteractionKindEntry, McuSerialPortEntry, PackagePin, PropertySchemaEntry, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, ViewSpecInteraction, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, endpointId, endpointPinId, nodeEndpoint, portEndpoint, remapEndpoint } from "./model.js";
 import { ComponentBox, PIN_RADIUS, componentBox, componentLocalOrigin, componentSymbolSvg, dialKnobSvg, hasRealPinPosition, livePackagePreviewSymbolSvg, missingSubcircuitPlaceholderSvg, packageSymbolSvg, pinLocalPosition, registerPackage } from "./componentSymbols.js";
 import { svgLocalTransform, transformLocalPoint, transformedLocalBounds } from "./componentGeometry.js";
 import { detectChannelTrigger, digitalStepPath, findTriggerAnchorIndex, triggerAlignedWindowEndNs, visibleSampleWindowByTime } from "./instrumentTrigger.js";
@@ -2257,19 +2257,63 @@ function clearEphemeralCanvasChildren(canvasContent: HTMLDivElement): void {
   }
 }
 
+/** Compila os `symbol.pin` da cena ATUAL em `PackagePin[]` -- espelha
+ * `catalog/subcircuitSymbolScene.ts::compileSymbolScene` (host, não importável aqui, fronteira de
+ * `tsconfig.webview.json`), MESMA fórmula, duplicada por necessidade (mesmo padrão já estabelecido
+ * de `packagePinBoxSide`/`labelBoxSize` nos dois lados). Usada SÓ pra prévia ao vivo do canvas de
+ * Símbolo/Ícone -- desenhar lead+rótulo pelo MESMO `packagePinLeadSvg` que um dispositivo colocado
+ * usa, em vez de tentar aproximar visualmente com CSS (3 divergências reais encontradas nessa
+ * tentativa: placeholder de erro, tamanho/posição de fonte, espessura/cor do lead -- decidido migrar
+ * pro pipeline real de vez em vez de perseguir cada detalhe via CSS). */
+function compileLiveSymbolPins(elements: readonly WebviewComponentModel[]): PackagePin[] {
+  const pins: PackagePin[] = [];
+  const seenPinIds = new Set<string>();
+  for (const component of elements) {
+    if (component.typeId !== SYMBOL_PIN_TYPE_ID) continue;
+    const pinId = typeof component.properties.pinId === "string" ? component.properties.pinId.trim() : "";
+    if (!pinId || seenPinIds.has(pinId)) continue;
+    seenPinIds.add(pinId);
+    const length = typeof component.properties.length === "number" ? component.properties.length : 8;
+    const box = Math.max(14, length * 2 + 6);
+    const anchorX = component.x + box / 2;
+    const anchorY = component.y + box / 2;
+    const label = component.label || pinId;
+    const labelFontSize = typeof component.properties.labelFontSize === "number" ? component.properties.labelFontSize : 7;
+    const pin: PackagePin = {
+      id: pinId, x: anchorX, y: anchorY,
+      angle: (180 - component.rotation + 360) % 360,
+      length, label, labelFontSize, labelTextAnchor: "middle", labelDominantBaseline: "middle",
+    };
+    if (typeof component.properties["__ui_idLabelX"] === "number" && typeof component.properties["__ui_idLabelY"] === "number") {
+      pin.labelX = component.x + (component.properties["__ui_idLabelX"] as number);
+      pin.labelY = component.y + (component.properties["__ui_idLabelY"] as number);
+    }
+    if (typeof component.properties["__ui_idLabelRotation"] === "number" && component.properties["__ui_idLabelRotation"]) {
+      pin.labelRotation = component.properties["__ui_idLabelRotation"] as number;
+    }
+    if (typeof component.properties["__ui_idLabelColor"] === "string") pin.labelColor = component.properties["__ui_idLabelColor"] as string;
+    if (typeof component.properties.kind === "string") pin.kind = component.properties.kind as string;
+    pins.push(pin);
+  }
+  return pins;
+}
+
 /** Desenha o corpo/fundo do Símbolo/Ícone (`state.symbolCanvas`/`iconCanvas` -- largura/altura/borda/
- * fundo do PRÓPRIO documento, ver `SubcircuitDocument.symbol`/`icon`) como uma camada de fundo, atrás
- * de todo pino/forma da cena. Reaproveita `livePackagePreviewSymbolSvg` (MESMO pipeline
- * `resolvePackageLayout`+`packageBodySvg` que desenha qualquer símbolo/ícone real colocado, já usado
- * pelo ícone do catálogo -- ver `registeredSources.ts::iconDescriptorToSvgInline`) com `pins: []`, só
- * pro corpo/fundo -- os pinos da cena (`symbol.pin`) são elementos PRÓPRIOS, desenhados por cima.
- * Sem isto, a cena de autoria nunca mostrava a foto/cor de fundo declarada (bug real: um subcircuito
- * com `symbol.background` de imagem real, ex. `esp32_devkitc_v4.lssubcircuit`, aparecia sem nenhum
- * corpo -- só os pinos soltos, sem nada indicando os limites do encapsulamento). */
+ * fundo do PRÓPRIO documento, ver `SubcircuitDocument.symbol`/`icon`) MAIS os pinos ao vivo (Modo
+ * Símbolo, `compileLiveSymbolPins`) como uma camada de fundo, atrás de toda forma da cena.
+ * Reaproveita `livePackagePreviewSymbolSvg` (MESMO pipeline `resolvePackageLayout`+`packageBodySvg`
+ * que desenha qualquer símbolo/ícone real colocado, já usado pelo ícone do catálogo -- ver
+ * `registeredSources.ts::iconDescriptorToSvgInline`) -- lead+rótulo de pino são desenhados aqui, NÃO
+ * mais pelo componente `symbol.pin` individual nem por um `component-floating-label` -- elimina a
+ * divergência de "dois renderizadores pro mesmo pino" pela raiz, igual à unificação já feita pro
+ * `other.package` antigo (`.spec` seção 21.5). Sem isto, a cena de autoria nunca mostrava a foto/cor
+ * de fundo declarada (bug real: um subcircuito com `symbol.background` de imagem real, ex.
+ * `esp32_devkitc_v4.lssubcircuit`, aparecia sem nenhum corpo -- só os pinos soltos). */
 function renderSymbolCanvasBackground(canvasContent: HTMLElement): void {
   const canvas = subcircuitEditorMode === "symbol" ? state.symbolCanvas : subcircuitEditorMode === "icon" ? state.iconCanvas : undefined;
   if (!canvas) return;
-  const { svg, box } = livePackagePreviewSymbolSvg({ width: canvas.width, height: canvas.height, border: canvas.border, background: canvas.background, pins: [] });
+  const pins = subcircuitEditorMode === "symbol" ? compileLiveSymbolPins(activeSceneComponents()) : [];
+  const { svg, box } = livePackagePreviewSymbolSvg({ width: canvas.width, height: canvas.height, border: canvas.border, background: canvas.background, pins });
   const el = document.createElement("div");
   el.className = "component--symbol-canvas-background";
   el.style.position = "absolute";
@@ -5665,9 +5709,18 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
     svg.classList.add("component__symbol--fixed-volt");
     if (component.properties.out === true) svg.classList.add("component__symbol--fixed-volt-on");
   }
-  bodyGroup.innerHTML = isMissingSubcircuitRef || isUnknownComponent
-    ? missingSubcircuitPlaceholderSvg(box)
-    : packageSymbolSvg(component.typeId, symbolProperties, component.id, boardVariant) ?? catalogEntry?.symbolSvg ?? componentSymbolSvg(component.typeId, symbolProperties);
+  // `symbol.pin` em Modo Símbolo: o corpo consolidado (`renderSymbolCanvasBackground`,
+  // `compileLiveSymbolPins`) já desenha lead+rótulo pelo MESMO pipeline de um dispositivo colocado --
+  // o conteúdo visível individual do componente fica VAZIO (só hit-box/seleção/arrasto continuam
+  // funcionando, mesmo princípio de `isLivePackageAuthoringVisual` do antigo `other.package`, `.spec`
+  // seção 21.5). Fora do Modo Símbolo (ex: `other.package_pin` legado, se algum dia reaparecer fora
+  // de uma sessão), continua desenhando seu lead simples de sempre.
+  const isLiveSymbolPin = component.typeId === SYMBOL_PIN_TYPE_ID && subcircuitEditorMode === "symbol";
+  bodyGroup.innerHTML = isLiveSymbolPin
+    ? ""
+    : isMissingSubcircuitRef || isUnknownComponent
+      ? missingSubcircuitPlaceholderSvg(box)
+      : packageSymbolSvg(component.typeId, symbolProperties, component.id, boardVariant) ?? catalogEntry?.symbolSvg ?? componentSymbolSvg(component.typeId, symbolProperties);
   if (component.typeId === "peripherals.lasecplot") {
     const runtime = lasecPlotRuntime.get(component.id);
     bodyGroup.querySelectorAll<SVGTextElement>("text").forEach((text) => {
@@ -7236,27 +7289,28 @@ function renderExternalLabel(component: WebviewComponentModel, kind: ExternalLab
   el.textContent = text;
   el.style.left = `${component.x + offset.x}px`;
   el.style.top = `${component.y + offset.y}px`;
-  // `symbol.pin` precisa bater EXATAMENTE com `packagePinLeadSvg` (pipeline real, usado pro
-  // dispositivo colocado) -- duas divergências reais encontradas comparando os dois lado a lado:
-  // (1) `.component-floating-label--id` tem `font-size:11px` fixo no CSS (tamanho genérico de
-  // qualquer rótulo de componente), mas o pino real usa `labelFontSize` (padrão 7px, ver
-  // `subcircuitSymbolScene.ts::DEFAULT_LABEL_FONT_SIZE`) -- sem isto, todo rótulo de pino aparecia
-  // maior do que deveria. (2) o `<div>` flutuante posiciona seu canto SUPERIOR-ESQUERDO em
-  // `left/top`, mas `packagePinLeadSvg` desenha com `text-anchor:middle;dominant-baseline:middle`
-  // (texto CENTRADO nesse mesmo ponto) -- um rótulo mais comprido divergia cada vez mais do centro
-  // real conforme ficava mais largo. `translate(-50%,-50%)` centraliza o `<div>` no mesmo ponto que
-  // o SVG centraliza o texto.
-  if (kind === "id" && component.typeId === SYMBOL_PIN_TYPE_ID) {
+  const isLiveSymbolPinIdLabel = kind === "id" && component.typeId === SYMBOL_PIN_TYPE_ID && subcircuitEditorMode === "symbol";
+  if (isLiveSymbolPinIdLabel) {
+    // Texto de verdade agora é desenhado pelo pipeline REAL (`renderSymbolCanvasBackground`/
+    // `compileLiveSymbolPins`, mesmo `packagePinLeadSvg` de um dispositivo colocado) -- 3 tentativas
+    // de aproximar isto via CSS (font-size, ancoragem central, espessura de traço) sempre deixavam
+    // uma diferença residual visível (esta em especial: motor de texto HTML/CSS transformado
+    // sempre renderiza levemente diferente de texto SVG nativo, principalmente em fontes pequenas).
+    // Este `<div>` continua existindo só como hit-box invisível (clicar/arrastar o rótulo real
+    // continua funcionando, mesma posição/tamanho aproximados de antes) -- `color:transparent`
+    // apaga só o texto, nunca o contorno/fundo de seleção (que deve continuar visível ao arrastar).
     const labelFontSize = typeof component.properties.labelFontSize === "number" ? component.properties.labelFontSize : 7;
     el.style.fontSize = `${labelFontSize}px`;
+    el.style.color = "transparent";
     el.style.transform = `translate(-50%, -50%)${rotation === 0 ? "" : ` rotate(${rotation}deg)`}`;
   } else {
     el.style.transform = rotation === 0 ? "" : `rotate(${rotation}deg)`;
   }
   // `__ui_idLabelColor` -- cor customizada do rótulo (usada por `symbol.pin`, ver
   // `catalog/subcircuitSymbolScene.ts`), genérica pra qualquer id-label. Ausente == cor padrão do
-  // CSS (`component-floating-label--id`), nunca sobrescrita.
-  if (kind === "id") {
+  // CSS (`component-floating-label--id`), nunca sobrescrita. NUNCA aplicada num `symbol.pin` ao vivo
+  // em Modo Símbolo -- o texto tem que continuar transparente (cor real vem do SVG consolidado).
+  if (kind === "id" && !isLiveSymbolPinIdLabel) {
     const color = component.properties[labelPropertyKey("id", "color")];
     if (typeof color === "string" && color) el.style.color = color;
   }
