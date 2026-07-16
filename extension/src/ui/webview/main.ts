@@ -228,6 +228,7 @@ const UI_TEXT = {
     subcircuitEditorModeSymbol: "Símbolo",
     subcircuitEditorModeIcon: "Ícone",
     createPin: "Criar Pino",
+    pinElectricalId: "ID Elétrico do Pino",
     createAdditionalTunnel: "Criar túnel adicional",
     exposeComponent: "Expor no Símbolo",
     unexposeComponent: "Remover exposição no Símbolo",
@@ -326,6 +327,7 @@ const UI_TEXT = {
     subcircuitEditorModeSymbol: "Symbol",
     subcircuitEditorModeIcon: "Icon",
     createPin: "Create Pin",
+    pinElectricalId: "Pin Electrical ID",
     createAdditionalTunnel: "Create additional tunnel",
     exposeComponent: "Expose in Symbol",
     unexposeComponent: "Remove exposure in Symbol",
@@ -6142,9 +6144,14 @@ function inferPropertyFields(component: WebviewComponentModel): PropertyField[] 
   const fields: PropertyField[] = [];
   for (const [key, value] of Object.entries(component.properties)) {
     if (key.startsWith("__ui_")) continue;
+    // `pinId` de `symbol.pin` é a identidade ELÉTRICA (join key com o túnel interno, ver
+    // `renamePinIdCascade`) -- rótulo genérico "Pin Id" ficava fácil de confundir com "Titulo"
+    // (`component.label`, só o texto exibido). Label explícito, mesmo termo do diálogo real do
+    // SimulIDE ("id" do `PackagePin`).
+    const label = component.typeId === SYMBOL_PIN_TYPE_ID && key === "pinId" ? t("pinElectricalId") : humanizePropertyName(key);
     fields.push({
       key,
-      label: humanizePropertyName(key),
+      label,
       kind: typeof value === "boolean" ? "boolean" : typeof value === "number" ? "number" : "text",
       value,
       group: inferPropertyGroup(key),
@@ -6175,8 +6182,48 @@ function groupFields(fields: PropertyField[]): Map<string, PropertyField[]> {
   return groups;
 }
 
+/** Renomeia o `pinId` de um `symbol.pin` e cascateia pro(s) túnel(s) internos ligados a ele --
+ * editar `properties.pinId` como um campo de propriedade GENÉRICO qualquer (`requestUpdateProperty`
+ * comum) mudaria só o pino, deixando o(s) túnel(s) internos (`state.components`, ainda com o pinId
+ * ANTIGO) órfãos -- exatamente o erro bloqueante "Pino sem túnel" que `subcircuitValidation.ts`
+ * detectaria só no próximo save, tarde demais pro usuário entender o que quebrou. Ignora silenciosamente
+ * (mantém o valor anterior) se o novo id for vazio ou já usado por outro pino da mesma cena -- mesmo
+ * espírito de `createPin`/`subcircuitPinModel.ts`, nunca dois pinos com o mesmo id. */
+function renamePinIdCascade(pinComponent: WebviewComponentModel, rawNewPinId: string): void {
+  const newPinId = rawNewPinId.trim();
+  const oldPinId = typeof pinComponent.properties.pinId === "string" ? pinComponent.properties.pinId : "";
+  if (!newPinId || newPinId === oldPinId) {
+    refreshOpenPropertyDialog();
+    return;
+  }
+  const collidesWithAnotherPin = state.symbolElements.some(
+    (el) => el.id !== pinComponent.id && el.typeId === SYMBOL_PIN_TYPE_ID && el.properties.pinId === newPinId
+  );
+  if (collidesWithAnotherPin) {
+    refreshOpenPropertyDialog();
+    return;
+  }
+  pinComponent.properties.pinId = newPinId;
+  send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: pinComponent.id, name: "pinId", value: newPinId });
+  for (const tunnel of state.components) {
+    if (tunnel.typeId !== TUNNEL_TYPE_ID || tunnel.properties.pinId !== oldPinId) continue;
+    tunnel.properties.pinId = newPinId;
+    // `properties.name` é corrigido pra bater com o novo `pinId` automaticamente no próximo save
+    // (`renameCanonicalTunnelNames`, rodado incondicionalmente por `finalizeSubcircuitDocumentForSave`)
+    // -- nunca precisa ser escrito aqui, evita duplicar a regra nos dois lados.
+    send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: tunnel.id, name: "pinId", value: newPinId });
+  }
+  persistState();
+  render();
+  refreshOpenPropertyDialog();
+}
+
 function renderPropertyField(component: WebviewComponentModel, field: PropertyField, options: PropertySheetOptions = {}): HTMLElement {
   const applyChange = (value: string | number | boolean): void => {
+    if (component.typeId === SYMBOL_PIN_TYPE_ID && field.key === "pinId" && typeof value === "string") {
+      renamePinIdCascade(component, value);
+      return;
+    }
     component.properties[field.key] = value;
     if (options.onPropertyChange) {
       options.onPropertyChange(field.key, value);
