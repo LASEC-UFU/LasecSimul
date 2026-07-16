@@ -7,6 +7,7 @@ import { currentLasecSimulLanguage } from "../currentLanguage";
 import { fileExists, normalizeAbsolutePath, readJsonFile } from "../pathUtils";
 import { sanitizeManifestDefaultProperties, sanitizePackage } from "./packageSanitizers";
 import { sanitizeMcuSerialPorts } from "./catalogMetadata";
+import { SUBCIRCUIT_SCHEMA_VERSION, schemaVersionRejectionMessage } from "./subcircuitDocument";
 
 /** EX-9 (.spec/lasecsimul-native-devices.spec): resolução de fontes registradas (`.lsdevice`/
  * `.lssubcircuit`/mcu-adapter) pra entradas de catálogo -- extraído de `extension.ts` por ser um
@@ -289,6 +290,12 @@ export interface ParsedSubcircuitManifest {
   typeId: string;
   /** Nome localizado cru, sem fallback pro typeId -- idem, cada chamador decide. */
   label: string | undefined;
+  /** Presente (com a mensagem acionável) quando o `.lssubcircuit` usa uma versão de formato antiga
+   * (`schemaVersion !== SUBCIRCUIT_SCHEMA_VERSION`, ver `catalog/subcircuitDocument.ts`) -- gate de
+   * migração/rejeição controlada (nunca abre parcialmente). Todo o resto dos campos abaixo continua
+   * calculado da forma antiga quando presente (nunca lança), mas cada chamador DEVE checar este
+   * campo primeiro e tratar como arquivo inválido/desabilitado, nunca registrar/exibir normalmente. */
+  schemaVersionRejected: string | undefined;
   pinIds: string[];
   pinCount: number;
   package: PackageDescriptor | undefined;
@@ -348,11 +355,15 @@ function manifestDefaultProperties(json: Record<string, unknown>, logicSymbolPac
 export function parseSubcircuitManifest(json: Record<string, unknown>, manifestDir: string, language: LasecSimulLanguage, mcuAdapterTypeIds: ReadonlySet<string>): ParsedSubcircuitManifest {
   const typeId = typeof json.typeId === "string" ? json.typeId.trim() : "";
   const label = localizedManifestName(json, language)?.trim();
+  const schemaVersionRejected = json.schemaVersion !== SUBCIRCUIT_SCHEMA_VERSION ? schemaVersionRejectionMessage(json.schemaVersion) : undefined;
   const pinIds = knownPinIdsForManifest(json, "subcircuit-file");
-  const packageDescriptor = sanitizePackage(json.package, manifestDir);
+  // `symbol` (schemaVersion 3, `catalog/subcircuitDocument.ts`) substitui `package` como a chave do
+  // corpo/pinos visuais -- só pra `.lssubcircuit` (nunca `.lsdevice`/`abi-device`/`mcu-adapter`, que
+  // continuam usando `package`, ver `resolveRegisteredItem` mais abaixo, fora desta função).
+  const packageDescriptor = sanitizePackage(json.symbol, manifestDir);
   const packagePins =
-    typeof json.package === "object" && json.package !== null && Array.isArray((json.package as { pins?: unknown[] }).pins)
-      ? ((json.package as { pins: unknown[] }).pins.length || 2)
+    typeof json.symbol === "object" && json.symbol !== null && Array.isArray((json.symbol as { pins?: unknown[] }).pins)
+      ? ((json.symbol as { pins: unknown[] }).pins.length || 2)
       : 2;
   const pinCount = pinIds.length > 0 ? pinIds.length : (packageDescriptor ? packageDescriptor.pins.length : packagePins);
   const folderPath = manifestFolderPath(json);
@@ -361,6 +372,7 @@ export function parseSubcircuitManifest(json: Record<string, unknown>, manifestD
   return {
     typeId,
     label,
+    schemaVersionRejected,
     pinIds,
     pinCount,
     package: packageDescriptor,
@@ -494,6 +506,18 @@ export function resolveRegisteredItem(source: RegisteredSource, extensionPath: s
     // library.json correspondente tenha sido carregado. Mesmo tratamento de disabled/libraryPath
     // que abi-device, não um gate fixo.
     const parsed = parseSubcircuitManifest(json, path.dirname(absoluteFilePath), language, mcuAdapterTypeIds);
+    if (parsed.schemaVersionRejected) {
+      // Gate de migração/rejeição controlada -- arquivo de versão antiga aparece como entrada
+      // DESABILITADA com a razão explicada (nunca silenciosamente ausente, nunca meio-carregado).
+      return createDisabledEntry(
+        source,
+        source.kind,
+        parsed.typeId || `registered.subcircuit.${source.id}`,
+        parsed.label || path.basename(absoluteFilePath),
+        resolveFolderPath(source, localizedRegisteredFolder(source.kind, language)),
+        parsed.schemaVersionRejected
+      );
+    }
     const typeId = parsed.typeId || `registered.subcircuit.${source.id}`;
     const label = parsed.label || typeId;
     const folderPath = resolveFolderPath({

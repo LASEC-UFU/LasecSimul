@@ -78,5 +78,6 @@ export function createInitialWebviewState(catalog: WebviewComponentCatalogEntry[
     selectedWireIds: [],
     symbolElements: [],
     iconElements: [],
+    exposedComponents: [],
   };
 }

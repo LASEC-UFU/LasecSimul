@@ -51,6 +51,7 @@ function createEmptyState(): WebviewProjectState {
     selectedWireIds: [],
     symbolElements: [],
     iconElements: [],
+    exposedComponents: [],
   };
 }
 
@@ -74,6 +75,7 @@ function normalizeProjectState(raw: WebviewProjectState): WebviewProjectState {
         : [],
     symbolElements: Array.isArray(raw.symbolElements) ? raw.symbolElements : [],
     iconElements: Array.isArray(raw.iconElements) ? raw.iconElements : [],
+    exposedComponents: Array.isArray(raw.exposedComponents) ? raw.exposedComponents : [],
   };
 }
 

@@ -37,7 +37,7 @@ function projectWithRelativeSubcircuitRefs(project: ProjectDocument, targetProje
   };
 }
 
-function webviewComponentToProjectComponent(component: WebviewComponentModel): ProjectComponent {
+export function webviewComponentToProjectComponent(component: WebviewComponentModel): ProjectComponent {
   return {
     id: component.id,
     typeId: component.typeId,
@@ -69,6 +69,34 @@ function validVisualPoints(points: unknown): Array<{ x: number; y: number }> {
     .map((point) => ({ x: point.x, y: point.y }));
 }
 
+/** `ProjectComponent` (formato persistido, `.lsproj`/`.lssubcircuit` -- mesmo tipo usado por
+ * `catalog/subcircuitDocument.ts::SubcircuitDocument.components`) -> `WebviewComponentModel` (shape
+ * vivo da Webview). Único ponto de conversão, reaproveitado tanto pelo circuito principal
+ * (`projectToWebviewState`) quanto por "Abrir Subcircuito" (`extension.ts::
+ * openSubcircuitForEditingCommand`) -- os dois carregam a MESMA forma de componente interno. */
+export function projectComponentToWebviewComponent(component: ProjectComponent, catalog: WebviewComponentCatalogEntry[]): WebviewComponentModel {
+  const descriptor = catalog.find((item) => item.typeId === component.typeId);
+  return {
+    id: component.id,
+    typeId: component.typeId,
+    label: component.label ?? descriptor?.label ?? component.typeId,
+    hidden: descriptor?.hidden ?? false,
+    showId: component.showId,
+    showValue: component.showValue ?? hasShowOnSymbolProperty(descriptor),
+    valueLabelPropertyKey: component.valueLabelPropertyKey,
+    flipH: component.flipH,
+    flipV: component.flipV,
+    locked: component.locked,
+    hiddenByUser: component.hiddenByUser,
+    x: component.visual?.x ?? 0,
+    y: component.visual?.y ?? 0,
+    rotation: component.visual?.rotation ?? 0,
+    pins: pinsForProjectComponent(component),
+    properties: component.properties as Record<string, string | number | boolean>,
+    subcircuitRef: component.subcircuitRef,
+  };
+}
+
 function projectToWebviewState(project: ProjectDocument): WebviewProjectState {
   const catalog = state.schematicState.catalog;
   const visualWirePoints = new Map(
@@ -77,28 +105,7 @@ function projectToWebviewState(project: ProjectDocument): WebviewProjectState {
       validVisualPoints(wire.points),
     ])
   );
-  const components: WebviewComponentModel[] = project.components.map((component) => {
-    const descriptor = catalog.find((item) => item.typeId === component.typeId);
-    return {
-      id: component.id,
-      typeId: component.typeId,
-      label: component.label ?? descriptor?.label ?? component.typeId,
-      hidden: descriptor?.hidden ?? false,
-      showId: component.showId,
-      showValue: component.showValue ?? hasShowOnSymbolProperty(descriptor),
-      valueLabelPropertyKey: component.valueLabelPropertyKey,
-      flipH: component.flipH,
-      flipV: component.flipV,
-      locked: component.locked,
-      hiddenByUser: component.hiddenByUser,
-      x: component.visual?.x ?? 0,
-      y: component.visual?.y ?? 0,
-      rotation: component.visual?.rotation ?? 0,
-      pins: pinsForProjectComponent(component),
-      properties: component.properties as Record<string, string | number | boolean>,
-      subcircuitRef: component.subcircuitRef,
-    };
-  });
+  const components: WebviewComponentModel[] = project.components.map((component) => projectComponentToWebviewComponent(component, catalog));
   // `ProjectTopology` (`ProjectTypes.ts`, formato persistido) e `CanonicalTopologyDocument`
   // (`model.ts`, modelo vivo) têm a MESMA forma de endpoint (`{kind:"port"|"node",...}`) desde a
   // Fase C completa (`.spec` seção 25.6) -- só o nome do campo de geometria difere (`vertices` no
@@ -130,6 +137,7 @@ function projectToWebviewState(project: ProjectDocument): WebviewProjectState {
     selectedWireIds: [],
     symbolElements: [],
     iconElements: [],
+    exposedComponents: [],
   };
 }
 
@@ -162,7 +170,9 @@ async function resolveProjectSubcircuitReferences(projectDir: string): Promise<v
       language,
       new Set(state.schematicState.catalog.filter((entry) => entry.registeredSourceKind === "mcu-adapter").map((entry) => entry.typeId))
     );
-    if (!parsed.typeId) {
+    if (parsed.schemaVersionRejected || !parsed.typeId) {
+      // Versão de formato antiga tratada igual a "arquivo ausente" (placeholder/relink) -- nunca
+      // meio-carregado com pinos/símbolo desatualizados.
       missingCount++;
       continue;
     }

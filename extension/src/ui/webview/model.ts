@@ -897,4 +897,26 @@ export interface WebviewProjectState {
   /** Cena do Modo Ícone -- mesmo papel de `symbolElements`, pro ícone do catálogo. Nunca tem pinos
    * (`TUNNEL_TYPE_ID`/pino externo não fazem sentido num ícone, só elementos gráficos). */
   iconElements: WebviewComponentModel[];
+  /** Tamanho/borda/fundo do CANVAS do Símbolo/Ícone -- propriedade do DOCUMENTO
+   * (`SubcircuitDocument.symbol/icon.width/height/border/background`, `catalog/subcircuitDocument.ts`,
+   * host), nunca um componente de cena (não há mais nenhum objeto "corpo do Package" pra duplicar/
+   * apagar por engano -- eliminação estrutural da classe de bug "2 Package na cena"). Ausente ==
+   * ainda sem Símbolo/Ícone autorado (mesmo padrão de `symbolElements`/`iconElements` vazios). */
+  symbolCanvas?: { width: number; height: number; border?: boolean; background?: PackageBackground };
+  iconCanvas?: { width: number; height: number; border?: boolean; background?: PackageBackground };
+  /** Projeções de componentes internos expostos no Símbolo (absorve "Modo Placa") -- espelha
+   * `catalog/subcircuitDocument.ts::ExposedComponentEntry` (mesmo shape, duplicado aqui só porque
+   * `model.ts` nunca pode importar de `catalog/`, que transitivamente depende de `fs`/Node via
+   * `packageSanitizers.ts`). `componentId` referencia `components[].id` por identificador
+   * PERSISTENTE, nunca por índice -- nunca uma cópia do componente interno, só apresentação. */
+  exposedComponents: Array<{
+    componentId: string;
+    x: number;
+    y: number;
+    rotation: 0 | 90 | 180 | 270;
+    flipH: boolean;
+    flipV: boolean;
+    scale: number;
+    layer: number;
+  }>;
 }

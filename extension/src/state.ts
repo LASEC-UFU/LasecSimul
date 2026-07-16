@@ -8,6 +8,7 @@ import { SimulationStatus } from "./ui/webview/messages";
 import { ComponentPaletteViewProvider } from "./ui/views/ComponentPaletteViewProvider";
 import { TrustStore } from "./trust/TrustStore";
 import { ProjectSerializer } from "./project/ProjectSerializer";
+import { SubcircuitDocument } from "./catalog/subcircuitDocument";
 
 /** Estado mutável de nível de módulo de `extension.ts`, extraído (EX-9,
  * .spec/lasecsimul-native-devices.spec) pra um objeto único importável por outros módulos de
@@ -36,25 +37,29 @@ export const state = {
   lastSavedProjectState: undefined as { components: WebviewProjectState["components"]; topology: WebviewProjectState["topology"] } | undefined,
   /** Pilha de sessões "Abrir Subcircuito" em andamento (ver `extension.ts::
    * openSubcircuitForEditingCommand`/`closeSubcircuitEditorCommand`) -- empilha em vez de um único
-   * slot pra suportar abrir um subcircuito DENTRO de outro já em edição. `originalManifest` é o JSON
-   * bruto lido do `.lssubcircuit` no momento da abertura, com `components`/`wires` sobrescritos na
-   * hora de gravar de volta -- preserva TODAS as outras chaves (`package`, `interface`,
-   * `translations`, ...) sem precisar conhecê-las aqui. */
+   * slot pra suportar abrir um subcircuito DENTRO de outro já em edição. `originalDocument` é o
+   * `SubcircuitDocument` já parseado (schemaVersion 3, `catalog/subcircuitDocument.ts`) no momento
+   * da abertura -- preserva os campos que a UI ainda não edita (`translations`, `serialPorts`,
+   * `folderPath`, `defaultProperties`, `propertySchema`, `help`) sem precisar conhecê-los aqui;
+   * `components`/`topology`/`symbol`/`icon`/`exposedComponents` são recompilados a partir da cena
+   * VIVA (`state.schematicState`) na hora de gravar, nunca reaproveitados deste snapshot. */
   subcircuitEditingStack: [] as Array<{
     sourceId: string;
     filePath: string;
-    originalManifest: Record<string, unknown>;
+    originalDocument: SubcircuitDocument;
     outerSchematicState: WebviewProjectState;
     outerProjectFilePath: string | undefined;
-    /** `components`/`wires` como ficaram logo após a conversão do `.lssubcircuit` (antes de
-     * qualquer edição do usuário nesta sessão) -- comparado contra `state.schematicState.
-     * components/wires` atuais em `closeSubcircuitEditorCommand` pra decidir se há alteração não
-     * salva (mesmo princípio de `projectCommands.ts::isProjectDirty`). Nunca mutado depois de
-     * empilhado (todo mutador de `schematicState` sempre troca o array por um novo, nunca edita in-
-     * place -- guardar a referência aqui é seguro). */
+    /** Cada cena como ficou logo após abrir a sessão (antes de qualquer edição do usuário) --
+     * comparada contra `state.schematicState` atual em `isSubcircuitEditingSessionDirty` pra decidir
+     * se há alteração não salva (mesmo princípio de `projectCommands.ts::isProjectDirty`). Nunca
+     * mutada depois de empilhada (todo mutador de `schematicState` sempre troca o array/objeto por
+     * um novo, nunca edita in-place -- guardar a referência aqui é seguro). */
     initialComponents: WebviewProjectState["components"];
     initialWires: WebviewProjectState["topology"]["conductors"];
     initialTopologyNodes: WebviewProjectState["topology"]["nodes"];
+    initialSymbolElements: WebviewProjectState["symbolElements"];
+    initialIconElements: WebviewProjectState["iconElements"];
+    initialExposedComponents: WebviewProjectState["exposedComponents"];
   }>,
 };
 

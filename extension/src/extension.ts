@@ -8,18 +8,22 @@ import { TrustStore } from "./trust/TrustStore";
 import { isPreApproved, isPreBlocked, resolveConsentChoice, shouldLoadLibrary, decisionToPersist } from "./trust/trustDecision";
 import { SchematicPanel } from "./ui/panels/SchematicPanel";
 import { createInitialWebviewState } from "./ui/webview/catalog";
-import { CanonicalEndpoint, CanonicalTopologyDocument, JUNCTION_TYPE_ID, TopologyNode, TUNNEL_TYPE_ID, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, endpointId, endpointPinId, portEndpoint } from "./ui/webview/model";
+import { CanonicalTopologyDocument, JUNCTION_TYPE_ID, PackageDescriptor, TUNNEL_TYPE_ID, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, endpointId, endpointPinId, portEndpoint } from "./ui/webview/model";
 import { connectEndpointToNode, normalizeWireGeometry, removeOrphanNodes, splitSegmentAtPoint } from "./ui/webview/wireTopology";
 import { assertTopologyInvariants } from "./ui/webview/topologyDocument";
 import { WebviewToHostMessage } from "./ui/webview/messages";
 import { ComponentPaletteViewProvider } from "./ui/views/ComponentPaletteViewProvider";
 import { materializePinGroup, registerPackage } from "./ui/webview/componentSymbols";
-import { absoluteSubcircuitRefPath, exportSchematicImageCommand, importProjectCommand, openProjectCommand, openProjectFile, openRecentProjectCommand, refreshDirtyIndicator, saveProjectCommand } from "./project/projectCommands";
+import { absoluteSubcircuitRefPath, exportSchematicImageCommand, importProjectCommand, openProjectCommand, openProjectFile, openRecentProjectCommand, projectComponentToWebviewComponent, refreshDirtyIndicator, saveProjectCommand, webviewComponentToProjectComponent } from "./project/projectCommands";
 import { loadUnifiedCatalog, RegisteredSource, saveRegisteredSources } from "./catalog/UnifiedCatalog";
 import { refreshUnifiedCatalogState, registerCatalogFileCommand, removeRegisteredCatalogItemCommand } from "./catalog/catalogCommands";
 import { hasShowOnSymbolProperty, nextIndexedLabel } from "./catalog/catalogMerge";
 import { imageMimeForFile, sanitizeManifestDefaultProperties } from "./catalog/packageSanitizers";
-import { compilePackageAuthoringComponents, extractPackageNativeScale, seedPackageAuthoringComponents } from "./catalog/subcircuitPackageAuthoring";
+import { SUBCIRCUIT_SCHEMA_VERSION, SubcircuitDocument, parseSubcircuitDocument, schemaVersionRejectionMessage, serializeSubcircuitDocument } from "./catalog/subcircuitDocument";
+import { finalizeSubcircuitDocumentForSave } from "./catalog/subcircuitPinModel";
+import { pruneInvalidExposedComponentRefs } from "./catalog/subcircuitExposedComponents";
+import { validateSubcircuitDocument } from "./catalog/subcircuitValidation";
+import { compileSymbolScene, materializeSymbolScene } from "./catalog/subcircuitSymbolScene";
 import { fileExists, normalizeAbsolutePath, readJsonFile } from "./pathUtils";
 import { currentLasecSimulLanguage } from "./currentLanguage";
 import {
@@ -52,7 +56,6 @@ import {
   shouldSyncComponentToCore,
   queueCoreRebuild,
   rebuildCoreFromSchematicState,
-  pinsForProjectComponent,
   electricalOperationsDiff,
 } from "./core/coreLifecycle";
 import {
@@ -380,6 +383,10 @@ async function chooseSubcircuitFileCommand(componentId: string): Promise<void> {
     currentLasecSimulLanguage(),
     new Set(state.schematicState.catalog.filter((entry) => entry.registeredSourceKind === "mcu-adapter").map((entry) => entry.typeId))
   );
+  if (parsed.schemaVersionRejected) {
+    void vscode.window.showErrorMessage(parsed.schemaVersionRejected, { modal: true });
+    return;
+  }
   if (!parsed.typeId) {
     vscode.window.showErrorMessage(`Arquivo inválido: "${path.basename(absolutePath)}" não declara "typeId".`);
     return;
@@ -1247,7 +1254,7 @@ async function createSubcircuitFromSelectionHandler(componentIds: string[]): Pro
   }));
 
   const lssubJson = {
-    schemaVersion: 2,
+    schemaVersion: SUBCIRCUIT_SCHEMA_VERSION,
     typeId,
     name: baseName,
     language: "pt-BR",
@@ -1263,6 +1270,10 @@ async function createSubcircuitFromSelectionHandler(componentIds: string[]): Pro
       })),
     },
     interface: interfaceEntries,
+    // Símbolo/Ícone ainda não autorados nesta criação -- subcircuito novo abre direto em Modo
+    // Subcircuito, sem nenhum pino externo visual ainda (`interface[]` acima é só o contrato do
+    // Core; o desenho WYSIWYG do Símbolo é responsabilidade do usuário, Modo Símbolo).
+    exposedComponents: [],
   };
 
   // 7. Gravar arquivo
@@ -1360,133 +1371,74 @@ async function openSubcircuitForEditingCommand(sourceId: string): Promise<void> 
     return;
   }
 
-  let manifest: Record<string, unknown>;
+  let raw: unknown;
   try {
-    manifest = readJsonFile(filePath) as Record<string, unknown>;
+    raw = readJsonFile(filePath);
   } catch (err) {
     vscode.window.showErrorMessage(`Não foi possível ler ${filePath}: ${err instanceof Error ? err.message : String(err)}`);
     return;
   }
 
-  const rawComponents = Array.isArray(manifest.components) ? manifest.components : [];
-  const manifestTopology = typeof manifest.topology === "object" && manifest.topology !== null ? manifest.topology as Record<string, unknown> : undefined;
-  const rawWires = manifestTopology && Array.isArray(manifestTopology.conductors) ? manifestTopology.conductors : Array.isArray(manifest.wires) ? manifest.wires : [];
-  const rawTopologyNodes = manifestTopology && Array.isArray(manifestTopology.nodes) ? manifestTopology.nodes : [];
-  // Formato antigo (pré-migração, `.spec` seção 19.2): nó de topologia gravado como componente
-  // `connectors.junction` dentro de `components[]`, em vez de `topology.nodes[]`. Convertido aqui
-  // pra `TopologyNode`, nunca deixado passar como componente vivo -- o resto do sistema (`main.ts`/
-  // `wireTopology.ts`) não sabe mais tratar `connectors.junction` como nó de topologia desde a Fase
-  // C completa (`.spec` seção 25.6).
-  const legacyJunctionNodes: TopologyNode[] = rawComponents
-    .filter((value): value is Record<string, unknown> => typeof value === "object" && value !== null && value.typeId === JUNCTION_TYPE_ID)
-    .map((raw) => {
-      const visual = (typeof raw.visual === "object" && raw.visual !== null ? raw.visual : {}) as Record<string, unknown>;
-      return { id: String(raw.id ?? ""), position: { x: typeof visual.x === "number" ? visual.x : 0, y: typeof visual.y === "number" ? visual.y : 0 } };
-    })
-    .filter((node) => node.id);
-  const internalComponents: WebviewComponentModel[] = rawComponents
-    .filter((value): value is Record<string, unknown> => typeof value === "object" && value !== null && value.typeId !== JUNCTION_TYPE_ID)
-    .map((raw) => {
-      const visual = (typeof raw.visual === "object" && raw.visual !== null ? raw.visual : {}) as Record<string, unknown>;
-      const properties = (typeof raw.properties === "object" && raw.properties !== null ? raw.properties : {}) as Record<string, string | number | boolean>;
-      const typeId = String(raw.typeId ?? "");
-      const descriptor = state.schematicState.catalog.find((entry) => entry.typeId === typeId);
-      const component = {
-        id: String(raw.id ?? ""),
-        typeId,
-        label: String(raw.id ?? ""),
-        hidden: descriptor?.hidden ?? false,
-        showValue: hasShowOnSymbolProperty(descriptor),
-        x: typeof visual.x === "number" ? visual.x : 0,
-        y: typeof visual.y === "number" ? visual.y : 0,
-        rotation: (visual.rotation === 90 || visual.rotation === 180 || visual.rotation === 270 ? visual.rotation : 0) as 0 | 90 | 180 | 270,
-        flipH: typeof visual.flipH === "boolean" ? visual.flipH : undefined,
-        flipV: typeof visual.flipV === "boolean" ? visual.flipV : undefined,
-        exposed: raw.exposed === true,
-        properties,
-        pins: [] as Array<{ id: string; x: number; y: number }>,
-      };
-      component.pins = pinsForProjectComponent(component);
-      return component;
-    })
-    .filter((component) => component.id && component.typeId);
-
-  // Autoria visual de ícone/Package (Estágio 3/4, `.spec/lasecsimul.spec`) -- materializa
-  // `other.package`/`other.package_pin`/a Figura marcada como ícone a partir de `manifest.package`/
-  // `manifest.interface` DENTRO da mesma lista `components` usada tanto por
-  // `session.initialComponents` quanto por `state.schematicState.components` (mesma referência,
-  // abaixo) -- se esses dois usassem arrays diferentes, a sessão abriria "suja" mesmo sem o usuário
-  // ter tocado em nada (ver `isSubcircuitEditingSessionDirty`). Nunca sintetiza nada quando
-  // `manifest.package` está ausente/não sanitiza -- arquivo antigo sem Package não ganha um
-  // gratuitamente só por ser aberto.
-  const packageAuthoringSeed = seedPackageAuthoringComponents(manifest, internalComponents, path.dirname(filePath), () => nextId("pkgauth"));
-  const components: WebviewComponentModel[] = [...internalComponents, ...packageAuthoringSeed.components];
-  if (packageAuthoringSeed.warnings.length > 0) {
-    // Modal (não toast) -- mesmo motivo do erro de save: uma lista com vários avisos cortava com
-    // "..." num toast, sem jeito de ler o resto.
-    void vscode.window.showWarningMessage(
-      "Subcircuito aberto com avisos no Package.",
-      { modal: true, detail: packageAuthoringSeed.warnings.map((warning) => `• ${warning}`).join("\n") }
-    );
+  // Gate de schemaVersion -- rejeita IMEDIATAMENTE um arquivo de versão antiga, antes de qualquer
+  // outra leitura, nunca abre uma sessão parcial (ruptura de compatibilidade autorizada
+  // explicitamente pelo pedido original: sem migração automática nesta etapa).
+  const parsed = parseSubcircuitDocument(raw, path.dirname(filePath));
+  if (!parsed.ok) {
+    void vscode.window.showErrorMessage(parsed.reason, { modal: true });
+    return;
   }
+  const document = parsed.document;
 
-  const legacyJunctionNodeIds = new Set(legacyJunctionNodes.map((node) => node.id));
-  const rawWiresParsed: WebviewWireModel[] = rawWires
-    .filter((value): value is Record<string, unknown> => typeof value === "object" && value !== null)
-    .map((raw) => {
-      const endpoint = (value: unknown): CanonicalEndpoint => {
-        const item = value as Record<string, unknown>;
-        if (item?.kind === "node") return { kind: "node", nodeId: String(item.nodeId ?? "") };
-        const componentId = String(item?.componentId ?? "");
-        // Formato antigo: wire referencia o id do componente `connectors.junction` direto, sem
-        // `kind` -- reescreve pra `node` agora que esse id só existe em `legacyJunctionNodes`.
-        if (legacyJunctionNodeIds.has(componentId)) return { kind: "node", nodeId: componentId };
-        return { kind: "port", componentId, pinId: String(item?.pinId ?? "") };
-      };
-      const from = endpoint(raw.from); const to = endpoint(raw.to);
-      const pointsRaw = Array.isArray(raw.vertices) ? raw.vertices : Array.isArray(raw.points) ? raw.points : [];
-      const points = pointsRaw as Array<{ x: number; y: number }>;
-      return { id: String(raw.id ?? nextId("wire")), from, to, ...(points.length > 0 ? { points } : {}) };
-    })
-    .filter((wire) => endpointId(wire.from) && endpointId(wire.to));
+  const internalComponents: WebviewComponentModel[] = document.components.map((component) => projectComponentToWebviewComponent(component, state.schematicState.catalog));
+  const internalWires: WebviewWireModel[] = document.topology.conductors.map((conductor) => ({
+    id: conductor.id,
+    from: conductor.from,
+    to: conductor.to,
+    ...(conductor.vertices.length > 0 ? { points: conductor.vertices } : {}),
+  }));
+  // Autocorreção defensiva (junção órfã/duplicada, fio de comprimento zero) -- roda ANTES de virar a
+  // baseline "não-alterada" da sessão (`initialComponents`/`initialWires`), pra um arquivo recém-
+  // autocurado não abrir já marcado como sujo.
+  const normalized = normalizeWireGeometry({ components: internalComponents, wires: internalWires, nodes: document.topology.nodes });
 
-  // Autocorrige `.lssubcircuit` salvo antes do refactor de fios (junção órfã/duplicada, fio de
-  // comprimento zero) -- roda ANTES de virar `initialComponents`/`initialWires` (a baseline de
-  // "sujo"), pra um arquivo recém-autocurado não abrir a sessão já marcada como alterada.
-  const loadedNodes: TopologyNode[] = [
-    ...rawTopologyNodes.filter((value): value is Record<string, unknown> => typeof value === "object" && value !== null).map((node) => {
-      const position = typeof node.position === "object" && node.position !== null ? node.position as Record<string, unknown> : {};
-      return { id: String(node.id ?? ""), position: { x: Number(position.x ?? 0), y: Number(position.y ?? 0) } };
-    }).filter((node) => node.id),
-    ...legacyJunctionNodes,
-  ];
-  const normalized = normalizeWireGeometry({ components, wires: rawWiresParsed, nodes: loadedNodes });
-  const wires = normalized.wires;
+  const symbolAuthoringIdFactory = () => nextId("symauth");
+  const symbolElements = materializeSymbolScene(document.symbol, symbolAuthoringIdFactory);
+  const iconElements = materializeSymbolScene(document.icon, symbolAuthoringIdFactory);
+  const symbolCanvas = document.symbol
+    ? { width: document.symbol.width, height: document.symbol.height, border: document.symbol.border, background: document.symbol.background }
+    : undefined;
+  const iconCanvas = document.icon
+    ? { width: document.icon.width, height: document.icon.height, border: document.icon.border, background: document.icon.background }
+    : undefined;
 
   state.subcircuitEditingStack.push({
     sourceId,
     filePath,
-    originalManifest: manifest,
+    originalDocument: document,
     outerSchematicState: state.schematicState,
     outerProjectFilePath: state.currentProjectFilePath,
     initialComponents: normalized.components,
     initialWires: normalized.wires,
     initialTopologyNodes: normalized.nodes,
+    initialSymbolElements: symbolElements,
+    initialIconElements: iconElements,
+    initialExposedComponents: document.exposedComponents,
   });
 
   state.schematicState = {
     ...state.schematicState,
     components: normalized.components,
-    topology: { revision: Number(manifestTopology?.revision ?? 0), nodes: normalized.nodes, conductors: wires },
+    topology: { revision: document.topology.revision, nodes: normalized.nodes, conductors: normalized.wires },
+    symbolElements,
+    iconElements,
+    symbolCanvas,
+    iconCanvas,
+    exposedComponents: document.exposedComponents,
     viewport: { x: 0, y: 0, zoom: 1 },
     selectedComponentIds: [],
     selectedWireIds: [],
     pendingConnection: undefined,
-    subcircuitEditingContext: {
-      sourceId,
-      typeId: String(manifest.typeId ?? ""),
-      name: String(manifest.name ?? manifest.typeId ?? filePath),
-    },
+    subcircuitEditingContext: { sourceId, typeId: document.typeId, name: document.name },
   };
   syncSchematicPanel();
   await rebuildCoreFromSchematicState();
@@ -1494,91 +1446,68 @@ async function openSubcircuitForEditingCommand(sourceId: string): Promise<void> 
 
 type SubcircuitEditingSession = (typeof state.subcircuitEditingStack)[number];
 
-/** Mesmo princípio de `projectCommands.ts::isProjectDirty`, só que a "baseline" é `initialComponents/
- * Wires` (estado logo após abrir a sessão, ver `openSubcircuitForEditingCommand`) em vez do último
- * save do `.lsproj`. */
+/** Mesmo princípio de `projectCommands.ts::isProjectDirty`, só que a "baseline" é o snapshot de
+ * CADA cena logo após abrir a sessão (ver `openSubcircuitForEditingCommand`) em vez do último save
+ * do `.lsproj`. Compara as 4 cenas independentes (circuito interno, Símbolo, Ícone, componentes
+ * expostos) -- uma edição em QUALQUER uma delas torna a sessão suja, mesmo que as outras 3 nunca
+ * tenham sido tocadas. */
 function isSubcircuitEditingSessionDirty(session: SubcircuitEditingSession): boolean {
-  const current = JSON.stringify({ components: state.schematicState.components, wires: state.schematicState.topology.conductors, nodes: state.schematicState.topology.nodes });
-  const initial = JSON.stringify({ components: session.initialComponents, wires: session.initialWires, nodes: session.initialTopologyNodes });
+  const current = JSON.stringify({
+    components: state.schematicState.components,
+    wires: state.schematicState.topology.conductors,
+    nodes: state.schematicState.topology.nodes,
+    symbolElements: state.schematicState.symbolElements,
+    iconElements: state.schematicState.iconElements,
+    exposedComponents: state.schematicState.exposedComponents,
+  });
+  const initial = JSON.stringify({
+    components: session.initialComponents,
+    wires: session.initialWires,
+    nodes: session.initialTopologyNodes,
+    symbolElements: session.initialSymbolElements,
+    iconElements: session.initialIconElements,
+    exposedComponents: session.initialExposedComponents,
+  });
   return current !== initial;
 }
 
-/** Grava `components`/`wires` atuais de volta no `.lssubcircuit` da sessão (preservando todas as
- * outras chaves do manifesto original, ex: `translations`) e reregistra no Core. Não mexe em
- * `state.subcircuitEditingStack`/`schematicState` -- só o efeito colateral em disco, chamado pelo
- * branch "Salvar" de `closeSubcircuitEditorCommand`. Devolve `false` (sem gravar NADA em disco) numa
- * condição fatal pro Core (pinId duplicado, Package/ícone duplicado, vínculo de túnel duplicado) --
+/** Compila uma cena (Símbolo OU Ícone) + seu canvas (dimensões/borda/fundo, propriedade do
+ * DOCUMENTO, nunca um componente) de volta pra um `PackageDescriptor` -- `undefined` quando o
+ * canvas nunca foi autorado nesta sessão (subcircuito ainda sem Símbolo/Ícone, round-trip
+ * preserva "ausente"). */
+function compileSceneToDescriptor(
+  elements: WebviewComponentModel[],
+  canvas: WebviewProjectState["symbolCanvas"]
+): { descriptor: PackageDescriptor | undefined; errors: string[]; warnings: string[] } {
+  if (!canvas) return { descriptor: undefined, errors: [], warnings: [] };
+  const compiled = compileSymbolScene(elements);
+  const descriptor: PackageDescriptor = {
+    width: canvas.width,
+    height: canvas.height,
+    ...(canvas.border !== undefined ? { border: canvas.border } : {}),
+    ...(canvas.background ? { background: canvas.background } : {}),
+    pins: compiled.pins,
+    ...(compiled.shapes.length > 0 ? { shapes: compiled.shapes } : {}),
+  };
+  return { descriptor, errors: compiled.errors, warnings: compiled.warnings };
+}
+
+/** Grava a cena ATUAL (circuito interno + Símbolo + Ícone + componentes expostos) de volta no
+ * `.lssubcircuit` da sessão (preservando os campos que a UI ainda não edita: `translations`,
+ * `serialPorts`, `folderPath`, `defaultProperties`, `propertySchema`, `help`) e reregistra no Core.
+ * Não mexe em `state.subcircuitEditingStack`/`schematicState` -- só o efeito colateral em disco,
+ * chamado pelo branch "Salvar" de `closeSubcircuitEditorCommand`. Devolve `false` (sem gravar NADA
+ * em disco) numa condição fatal (pinId duplicado, tunnel/pin órfão, topologia inválida, ...) --
  * a chamadora mantém a sessão aberta nesse caso, nunca escreve um `.lssubcircuit` inconsistente. */
 async function writeSubcircuitEditingSessionBack(session: SubcircuitEditingSession): Promise<boolean> {
-  // Autoria visual de ícone/Package (Estágio 3/4/5, `.spec/lasecsimul.spec`) -- compila
-  // `other.package`/`other.package_pin`/a Figura marcada como ícone da cena ATUAL de volta pra
-  // `package`/`interface[]`, ANTES de qualquer `fs.writeFileSync` (nunca depois -- um resultado
-  // inválido não pode chegar a tocar o disco). `remainingComponents` já vem SEM os componentes de
-  // autoria -- precisa ser a base do merge de `boardVisual` abaixo, não `state.schematicState.
-  // components` bruto, senão um `other.package_pin` vazaria pra dentro de `components[]` do
-  // circuito interno de verdade (mesma classe de bug já corrigida uma vez nesta área).
-  const compiled = compilePackageAuthoringComponents(
-    state.schematicState.components,
-    extractPackageNativeScale(session.originalManifest)
-  );
-  if (compiled.errors.length > 0) {
-    // Modal (não um toast) -- uma lista de erros pode ser longa o bastante pra um toast cortar com
-    // "..." sem dar jeito de ler o resto (achado real: usuário só via a mensagem truncada, sem
-    // saber qual era o erro de verdade). Modal sempre mostra o texto inteiro, sem limite de altura.
-    void vscode.window.showErrorMessage(
-      "Não foi possível salvar o subcircuito -- corrija antes de tentar de novo.",
-      { modal: true, detail: compiled.errors.map((error) => `• ${error}`).join("\n") }
-    );
-    return false;
-  }
-  if (compiled.warnings.length > 0) {
-    void vscode.window.showWarningMessage(
-      "Subcircuito salvo com avisos.",
-      { modal: true, detail: compiled.warnings.map((warning) => `• ${warning}`).join("\n") }
-    );
-  }
+  const symbolResult = compileSceneToDescriptor(state.schematicState.symbolElements, state.schematicState.symbolCanvas);
+  const iconResult = compileSceneToDescriptor(state.schematicState.iconElements, state.schematicState.iconCanvas);
 
-  // `boardVisual` é independente de `visual`: a sessão agora o edita de verdade em Modo Placa.
-  // O spread preserva arquivos antigos quando nunca houve posição de placa; quando boardX/Y estão
-  // presentes, a disposição confirmada na Webview substitui atomicamente o valor anterior.
-  const originalComponents = Array.isArray(session.originalManifest.components)
-    ? (session.originalManifest.components as Array<Record<string, unknown>>)
-    : [];
-  const originalComponentById = new Map(originalComponents.map((raw) => [String(raw.id ?? ""), raw]));
-  const components = compiled.remainingComponents.map((component) => ({
-    ...(originalComponentById.get(component.id) ?? {}),
-    id: component.id,
-    typeId: component.typeId,
-    properties: { ...component.properties },
-    visual: {
-      x: component.x,
-      y: component.y,
-      rotation: component.rotation,
-      flipH: component.flipH ?? false,
-      flipV: component.flipV ?? false,
-    },
-    ...(component.boardX !== undefined && component.boardY !== undefined
-      ? {
-          boardVisual: {
-            x: component.boardX,
-            y: component.boardY,
-            rotation: component.boardRotation ?? 0,
-            flipH: component.boardFlipH ?? false,
-            flipV: component.boardFlipV ?? false,
-          },
-        }
-      : {}),
-    exposed: component.exposed === true,
-  }));
-  // Fios que tocam um componente de autoria (nunca deveria acontecer -- `other.package`/
-  // `other.package_pin`/a Figura têm `pinCount: 0`, sem pino nenhum pra desenhar fio até) são
-  // rejeitados por defesa em profundidade, nunca gravados apontando pra um id que não existe mais em
-  // `components[]` -- `state.schematicState.topology` JÁ é o documento canônico (Fase C completa,
-  // `.spec` seção 25.6), só falta validar contra o conjunto de componentes SOBREVIVENTE (sem os de
-  // autoria) antes de escrever em disco.
-  const topology = state.schematicState.topology;
+  // `state.schematicState.topology` JÁ é o documento canônico (Fase C completa, `.spec` seção
+  // 25.6) -- só falta validar contra o conjunto de componentes do circuito interno (agora SEM
+  // nenhuma mistura de Símbolo/Ícone, ver `activeSceneComponents()`) antes de escrever em disco.
   try {
-    assertTopologyInvariants(topology, new Set(compiled.remainingComponents.map((component) => component.id)));
+    assertTopologyInvariants(state.schematicState.topology, new Set(state.schematicState.components.map((component) => component.id)));
   } catch (err) {
     void vscode.window.showErrorMessage(
       "Não foi possível salvar o subcircuito -- topologia inválida.",
@@ -1586,28 +1515,57 @@ async function writeSubcircuitEditingSessionBack(session: SubcircuitEditingSessi
     );
     return false;
   }
-  const updatedManifest: Record<string, unknown> = { ...session.originalManifest, components, topology };
-  delete updatedManifest.wires;
-  if (compiled.touchedPackageAuthoring) {
-    if (compiled.hasPackage && compiled.package) {
-      updatedManifest.package = compiled.package;
-      updatedManifest.interface = compiled.interfaceEntries ?? [];
-      // Posição do `other.package` NA CENA DE AUTORIA -- campo IRMÃO de `package` (nunca dentro
-      // dele, `PackageDescriptor` não tem noção de "posição na cena", ver
-      // `PackageAuthoringCompileResult.packageOrigin`). Sem isto, `seedPackageAuthoringComponents`
-      // recalculava um layout padrão do zero em toda sessão, descartando onde o usuário arrastou o
-      // Package pra deixar organizado (bug real: usuário salvava com o Package afastado à esquerda,
-      // reabria e via de volta na posição calculada, à direita do circuito interno).
-      updatedManifest.packageAuthoringOrigin = compiled.packageOrigin;
-    } else {
-      delete updatedManifest.package;
-      delete updatedManifest.interface;
-      delete updatedManifest.packageAuthoringOrigin;
-    }
+
+  const rawDocument: SubcircuitDocument = {
+    schemaVersion: SUBCIRCUIT_SCHEMA_VERSION,
+    typeId: session.originalDocument.typeId,
+    name: session.originalDocument.name,
+    ...(session.originalDocument.language ? { language: session.originalDocument.language } : {}),
+    ...(session.originalDocument.translations ? { translations: session.originalDocument.translations } : {}),
+    ...(session.originalDocument.serialPorts ? { serialPorts: session.originalDocument.serialPorts } : {}),
+    ...(session.originalDocument.folderPath ? { folderPath: session.originalDocument.folderPath } : {}),
+    ...(session.originalDocument.defaultProperties ? { defaultProperties: session.originalDocument.defaultProperties } : {}),
+    ...(session.originalDocument.propertySchema ? { propertySchema: session.originalDocument.propertySchema } : {}),
+    ...(session.originalDocument.help ? { help: session.originalDocument.help } : {}),
+    components: state.schematicState.components.map(webviewComponentToProjectComponent),
+    topology: {
+      revision: state.schematicState.topology.revision,
+      nodes: state.schematicState.topology.nodes,
+      conductors: state.schematicState.topology.conductors.map((wire) => ({ id: wire.id, from: wire.from, to: wire.to, vertices: wire.points ?? [] })),
+    },
+    interface: [], // re-derivado abaixo por finalizeSubcircuitDocumentForSave, nunca hand-authored
+    ...(symbolResult.descriptor ? { symbol: symbolResult.descriptor } : {}),
+    ...(iconResult.descriptor ? { icon: iconResult.descriptor } : {}),
+    exposedComponents: state.schematicState.exposedComponents,
+  };
+
+  // Força `properties.name === properties.pinId` em todo túnel ligado e re-deriva `interface[]`
+  // inteiro a partir de `symbol.pins[]` -- nunca hand-authored, nunca parcialmente corrigido.
+  const finalizedDocument = finalizeSubcircuitDocumentForSave(rawDocument);
+
+  const validation = validateSubcircuitDocument(finalizedDocument);
+  const allErrors = [...symbolResult.errors, ...iconResult.errors, ...validation.errors];
+  if (allErrors.length > 0) {
+    // Modal (não um toast) -- uma lista de erros pode ser longa o bastante pra um toast cortar com
+    // "..." sem dar jeito de ler o resto (achado real: usuário só via a mensagem truncada, sem
+    // saber qual era o erro de verdade). Modal sempre mostra o texto inteiro, sem limite de altura.
+    void vscode.window.showErrorMessage(
+      "Não foi possível salvar o subcircuito -- corrija antes de tentar de novo.",
+      { modal: true, detail: allErrors.map((error) => `• ${error}`).join("\n") }
+    );
+    return false;
+  }
+  const documentToWrite = validation.autoFixed ?? finalizedDocument;
+  const allWarnings = [...symbolResult.warnings, ...iconResult.warnings, ...validation.warnings];
+  if (allWarnings.length > 0) {
+    void vscode.window.showWarningMessage(
+      "Subcircuito salvo com avisos.",
+      { modal: true, detail: allWarnings.map((warning) => `• ${warning}`).join("\n") }
+    );
   }
 
   try {
-    fs.writeFileSync(session.filePath, `${JSON.stringify(updatedManifest, null, 2)}\n`, "utf8");
+    fs.writeFileSync(session.filePath, `${JSON.stringify(serializeSubcircuitDocument(documentToWrite), null, 2)}\n`, "utf8");
   } catch (err) {
     vscode.window.showErrorMessage(`Não foi possível salvar o subcircuito: ${err instanceof Error ? err.message : String(err)}`);
     return false;
@@ -1721,15 +1679,12 @@ export function activate(context: vscode.ExtensionContext): void {
   const networkConfiguration = vscode.workspace.getConfiguration("lasecsimul.network");
   const configuredNetworkNamespace = networkConfiguration.get<number>("namespace", -1);
   const configuredNetworkMode = networkConfiguration.get<string>("mode", "lab-bridge");
-  const configuredTapInterface = networkConfiguration.get<string>(
-    "tapInterface",
-    "LasecSimul TAP {namespace}-{instance}"
-  );
+  const configuredGatewayPort = networkConfiguration.get<number>("gatewayPort", 9011);
   const coreEnv: NodeJS.ProcessEnv = {
     // Prevent shared-memory arena collisions between thin-client instances.
     LASECSIMUL_HOST_INSTANCE_ID: String(process.pid),
     LASECSIMUL_NETWORK_MODE: configuredNetworkMode === "isolated" ? "isolated" : "lab-bridge",
-    LASECSIMUL_TAP_INTERFACE: configuredTapInterface,
+    LASECSIMUL_GATEWAY_PORT: String(configuredGatewayPort),
   };
   if (Number.isInteger(configuredNetworkNamespace) && configuredNetworkNamespace >= 0 && configuredNetworkNamespace <= 255) {
     coreEnv.LASECSIMUL_NETWORK_NAMESPACE = String(configuredNetworkNamespace);

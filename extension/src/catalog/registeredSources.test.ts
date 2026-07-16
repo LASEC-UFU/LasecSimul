@@ -24,12 +24,13 @@ function writeSubcircuitManifest(filePath: string): void {
   fs.writeFileSync(
     filePath,
     JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 3,
       typeId: "subcircuits.local_test",
       name: "Local Test",
       components: [],
-      wires: [],
+      topology: { revision: 0, nodes: [], conductors: [] },
       interface: [{ pinId: "P1", label: "P1", internalTunnel: "P1" }],
+      exposedComponents: [],
     }, null, 2),
     "utf8"
   );
