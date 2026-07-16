@@ -111,6 +111,19 @@ let mainUndoHistory = createUndoHistory();
  * ser restaurado (senão desfazer criaria uma entrada de refazer idêntica à de desfazer, e vice-versa,
  * quebrando a pilha). */
 let isApplyingUndoSnapshot = false;
+
+/** Refatoração Subcircuito/Símbolo/Ícone: qual cena o motor genérico (seleção/hit-test/arrastar/
+ * rotacionar/painel de propriedades/copiar-colar/apagar/undo-redo/z-order/adicionar-da-paleta) está
+ * editando AGORA -- puramente estado de UI em memória da Webview, nunca sincronizado com o host,
+ * sempre resetado pra `"circuit"` fora de uma sessão de "Abrir Subcircuito". Trocar o modo NUNCA
+ * salva nem recarrega o documento (só troca qual array o motor genérico enxerga, ver
+ * `activeSceneComponents()`). Declarado ANTES de `resetUndoHistory(mainUndoHistory)` abaixo --
+ * `captureUndoSnapshot()`/`activeSceneComponents()` leem esta variável, e `let` fica em temporal
+ * dead zone até sua própria linha de declaração executar (bug real: `resetUndoHistory` chamado no
+ * escopo do módulo, antes da declaração, lançava "Cannot access before initialization"). */
+type SubcircuitEditorMode = "circuit" | "symbol" | "icon";
+let subcircuitEditorMode: SubcircuitEditorMode = "circuit";
+
 resetUndoHistory(mainUndoHistory);
 
 /** Reconciliação incremental da camada de render. O shell (`appbar` + `.canvas` + `.canvas-content`)
@@ -441,14 +454,6 @@ let selectedTextLabel: { componentId: string; kind: ExternalLabelKind } | undefi
 let placingTypeId: string | null = null;
 let placementGhostEl: HTMLElement | null = null;
 
-/** Refatoração Subcircuito/Símbolo/Ícone: qual cena o motor genérico (seleção/hit-test/arrastar/
- * rotacionar/painel de propriedades/copiar-colar/apagar/undo-redo/z-order/adicionar-da-paleta) está
- * editando AGORA -- puramente estado de UI em memória da Webview, nunca sincronizado com o host,
- * sempre resetado pra `"circuit"` fora de uma sessão de "Abrir Subcircuito". Trocar o modo NUNCA
- * salva nem recarrega o documento (só troca qual array o motor genérico enxerga, ver
- * `activeSceneComponents()`). */
-type SubcircuitEditorMode = "circuit" | "symbol" | "icon";
-let subcircuitEditorMode: SubcircuitEditorMode = "circuit";
 
 /** Ponto ÚNICO de indireção pra "a cena que o motor genérico está editando" -- Modo Subcircuito
  * continua sendo `state.components` (circuito interno real); Modo Símbolo/Ícone passam a ser
