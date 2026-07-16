@@ -210,6 +210,9 @@ const UI_TEXT = {
     exportImage: "Salvar Esquemático como Imagem (SVG)",
     importCircuit: "Importar Circuito...",
     editingSubcircuit: "Editando subcircuito:",
+    subcircuitEditorModeCircuit: "Subcircuito",
+    subcircuitEditorModeSymbol: "Símbolo",
+    subcircuitEditorModeIcon: "Ícone",
     backToMainCircuit: "Voltar ao Circuito Principal",
     componentsSelected: "componentes selecionados",
     mixedValuePlaceholder: "(vários valores)",
@@ -301,6 +304,9 @@ const UI_TEXT = {
     exportImage: "Save Schematic as Image (SVG)",
     importCircuit: "Import Circuit...",
     editingSubcircuit: "Editing subcircuit:",
+    subcircuitEditorModeCircuit: "Subcircuit",
+    subcircuitEditorModeSymbol: "Symbol",
+    subcircuitEditorModeIcon: "Icon",
     backToMainCircuit: "Back to Main Circuit",
     componentsSelected: "components selected",
     mixedValuePlaceholder: "(multiple values)",
@@ -461,6 +467,22 @@ function setActiveSceneComponents(next: WebviewComponentModel[]): void {
   } else {
     state = { ...state, components: next };
   }
+}
+
+/** Troca o modo do editor de subcircuito -- NUNCA salva, NUNCA recarrega o documento, NUNCA
+ * fecha/reabre a Webview (requisito explícito do pedido original); só troca qual array o motor
+ * genérico enxerga e re-renderiza. Cancela ferramenta ativa/seleção (mesmo padrão de
+ * `setSubcircuitBoardMode`) pra nunca deixar um draft de fio ou posicionamento pendente apontando
+ * pra uma cena que está prestes a sumir da tela. Reseta o histórico de undo/redo -- as 3 cenas são
+ * conteúdos INDEPENDENTES (túneis/componentes reais vs. formas do símbolo vs. formas do ícone);
+ * sem isto, desfazer logo após trocar de modo comparia contra o baseline da cena ANTERIOR. */
+function setSubcircuitEditorMode(mode: SubcircuitEditorMode): void {
+  if (!state.subcircuitEditingContext || mode === subcircuitEditorMode) return;
+  cancelActiveTool();
+  clearSelection();
+  subcircuitEditorMode = mode;
+  resetUndoHistory(mainUndoHistory);
+  render();
 }
 const circuitTransformByComponentId = new Map<string, ComponentTransform>();
 
@@ -1440,9 +1462,32 @@ function renderAppBar(): HTMLElement {
   if (state.subcircuitEditingContext) {
     const label = document.createElement("span");
     label.className = "appbar__subcircuit-label";
-    label.textContent = `${t("editingSubcircuit")} ${state.subcircuitEditingContext.name}`;
+    label.textContent = state.subcircuitEditingContext.name;
+
+    // ComboBox Subcircuito/Símbolo/Ícone -- substitui o texto estático "Editando subcircuito:"
+    // (pedido original). Troca SÓ a cena que o motor genérico enxerga (`setSubcircuitEditorMode`);
+    // nunca salva, nunca recarrega o documento, nunca fecha/reabre este painel.
+    const modeSelect = document.createElement("select");
+    modeSelect.className = "appbar__subcircuit-mode-select";
+    const modeOptions: Array<{ value: SubcircuitEditorMode; label: string }> = [
+      { value: "circuit", label: t("subcircuitEditorModeCircuit") },
+      { value: "symbol", label: t("subcircuitEditorModeSymbol") },
+      { value: "icon", label: t("subcircuitEditorModeIcon") },
+    ];
+    for (const modeOption of modeOptions) {
+      const option = document.createElement("option");
+      option.value = modeOption.value;
+      option.textContent = modeOption.label;
+      modeSelect.appendChild(option);
+    }
+    modeSelect.value = subcircuitEditorMode;
+    modeSelect.addEventListener("change", () => {
+      setSubcircuitEditorMode(modeSelect.value as SubcircuitEditorMode);
+    });
+
     subcircuitGroup.append(
       label,
+      modeSelect,
       renderToolbarButton("back", t("backToMainCircuit"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestCloseSubcircuitEditor" })),
     );
   }
@@ -6423,7 +6468,15 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     if (message.type === "syncState") {
       recordUndoTransition(undoContentKey(message.project), () => snapshotOfProjectState(message.project));
     }
+    const previousSubcircuitEditingContext = state.subcircuitEditingContext;
     state = message.project;
+    // Sempre volta pra Subcircuito ao entrar/sair/trocar de sessão de edição (pedido original: "sempre
+    // começa em Subcircuito") -- nunca reseta à toa em cada `syncState` de dentro da MESMA sessão (ex:
+    // reconciliação de revisão de topologia, `requestConnectEndpoints`), senão editar em Modo Símbolo
+    // seria interrompido por qualquer resync incidental.
+    if (message.type === "init" || previousSubcircuitEditingContext?.sourceId !== state.subcircuitEditingContext?.sourceId) {
+      subcircuitEditorMode = "circuit";
+    }
     restoreBoardViewAfterHostSync();
     syncPackageRegistry(state.catalog);
     if (!state.pendingConnection) {
@@ -6467,6 +6520,9 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     const enteringOrLeavingSubcircuitSession = "subcircuitEditingContext" in message.patch;
     if (!enteringOrLeavingSubcircuitSession) recordUndoTransition(undoContentKey(merged), () => snapshotOfProjectState(merged));
     state = merged;
+    // Mesmo motivo do handler de "init"/"syncState" acima: sempre volta pra Subcircuito ao
+    // entrar/sair da sessão, nunca num patch incremental dentro da MESMA sessão.
+    if (enteringOrLeavingSubcircuitSession) subcircuitEditorMode = "circuit";
     restoreBoardViewAfterHostSync();
     if (enteringOrLeavingSubcircuitSession) resetUndoHistory(mainUndoHistory);
     if (message.patch.catalog) syncPackageRegistry(state.catalog);

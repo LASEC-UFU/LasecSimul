@@ -147,6 +147,16 @@ html, body {
   white-space: nowrap;
 }
 
+.appbar__subcircuit-mode-select {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b5405;
+  background: #fff8e6;
+  border: 1px solid #d8bb63;
+  border-radius: 4px;
+  padding: 2px 4px;
+}
+
 .appbar__button--back {
   color: #6b5405;
 }
