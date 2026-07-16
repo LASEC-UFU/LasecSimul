@@ -505,7 +505,7 @@ static void testRegisterAdhocSubcircuitOverIpc() {
     {
         std::ofstream manifestFile(manifestPath);
         manifestFile << nlohmann::json{
-            {"schemaVersion", 1},
+            {"schemaVersion", 3},
             {"typeId", "subcircuits.divisor_5v_adhoc"},
             {"name", "Divisor 5V avulso (teste IPC)"},
             {"components", {
@@ -526,7 +526,7 @@ static void testRegisterAdhocSubcircuitOverIpc() {
                 {{"pinId", "VOUT"}, {"label", "Saída"}, {"internalTunnel", "VOUT"}},
                 {{"pinId", "GND"}, {"label", "Terra"}, {"internalTunnel", "GND"}},
             }},
-            {"package", {
+            {"symbol", {
                 {"width", 60},
                 {"height", 48},
                 {"pins", {
@@ -535,6 +535,7 @@ static void testRegisterAdhocSubcircuitOverIpc() {
                     {{"id", "GND"}, {"x", 0}, {"y", 24}, {"side", "bottom"}},
                 }},
             }},
+            {"exposedComponents", nlohmann::json::array()},
         }.dump(2);
     }
     const std::filesystem::path invalidSchemaPath = uniqueTempPath("lasecsimul-adhoc-invalid-schema");
@@ -552,7 +553,7 @@ static void testRegisterAdhocSubcircuitOverIpc() {
     {
         std::ofstream manifestFile(duplicateManifestPath);
         manifestFile << nlohmann::json{
-            {"schemaVersion", 1},
+            {"schemaVersion", 3},
             {"typeId", "subcircuits.divisor_5v_adhoc"},
             {"name", "Duplicado em outro arquivo"},
             {"components", {
@@ -562,6 +563,7 @@ static void testRegisterAdhocSubcircuitOverIpc() {
             {"interface", {
                 {{"pinId", "VIN"}, {"label", "Entrada"}, {"internalTunnel", "VIN"}},
             }},
+            {"exposedComponents", nlohmann::json::array()},
         }.dump(2);
     }
 
@@ -611,7 +613,7 @@ static void testRegisterAdhocSubcircuitOverIpc() {
         TEST_ASSERT(registerResp["payload"].value("status", std::string{}) == "registered", "payload informa status registered no primeiro carregamento");
         TEST_ASSERT(registerResp["payload"].value("pinCount", 0) == 3, "payload informa pinCount derivado da interface");
         TEST_ASSERT(registerResp["payload"].contains("interface") && registerResp["payload"]["interface"].size() == 3, "payload inclui interface completa");
-        TEST_ASSERT(registerResp["payload"].contains("package") && registerResp["payload"]["package"].contains("pins"), "payload inclui package visual");
+        TEST_ASSERT(registerResp["payload"].contains("symbol") && registerResp["payload"]["symbol"].contains("pins"), "payload inclui symbol visual");
 
         const nlohmann::json reloadResp = send("registerAdhocSubcircuit", {{"path", manifestPath.string()}});
         TEST_ASSERT(reloadResp.value("ok", false), "recarregar o mesmo arquivo sem replace e permitido");

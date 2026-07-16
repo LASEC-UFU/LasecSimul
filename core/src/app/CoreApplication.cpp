@@ -1039,8 +1039,12 @@ RegisteredSubcircuitInfo registerSubcircuitFromManifestRich(const std::filesyste
         throw std::runtime_error("manifesto de subcircuito sem schemaVersion inteiro: " + manifestPath.string());
     }
     const int schemaVersion = manifest["schemaVersion"].get<int>();
-    if (schemaVersion != 1) {
-        throw std::runtime_error("schemaVersion de subcircuito nao suportado: " + std::to_string(schemaVersion));
+    if (schemaVersion != 3) {
+        // Refatoracao Subcircuito/Simbolo/Icone (ruptura de compatibilidade autorizada, sem migracao
+        // automatica nesta etapa): schemaVersion 1/2 (chave "package", sem exposedComponents[]) e
+        // rejeitado de forma controlada, nunca meio-registrado.
+        throw std::runtime_error("schemaVersion de subcircuito nao suportado (" + std::to_string(schemaVersion) +
+                                  ") -- este subcircuito precisa ser convertido para o novo modelo (schemaVersion 3).");
     }
 
     const std::string typeId = !typeIdOverride.empty() ? typeIdOverride : requiredString(manifest, "typeId", "manifesto de subcircuito");
@@ -1064,7 +1068,9 @@ RegisteredSubcircuitInfo registerSubcircuitFromManifestRich(const std::filesyste
     def.typeId = typeId;
     def.name = manifest.value("name", typeId);
     def.sourcePath = sourcePath;
-    def.packageJson = manifest.contains("package") ? manifest["package"].dump() : "{}";
+    // "symbol" (schemaVersion 3) substitui "package" -- opaco pro Core (só cross-valida pins[] vs
+    // interface[].pinId abaixo, nunca inspeciona geometria/aparência).
+    def.packageJson = manifest.contains("symbol") ? manifest["symbol"].dump() : "{}";
 
     std::unordered_set<std::string> componentIds;
     std::unordered_set<std::string> topologyNodeIds;
@@ -1181,17 +1187,17 @@ RegisteredSubcircuitInfo registerSubcircuitFromManifestRich(const std::filesyste
         def.interfaceDefs.push_back(std::move(iface));
     }
 
-    if (manifest.contains("package")) {
-        if (!manifest["package"].is_object()) throw std::runtime_error("package de subcircuito deve ser objeto: " + typeId);
-        if (manifest["package"].contains("pins")) {
-            const nlohmann::json& packagePins = manifest["package"]["pins"];
-            if (!packagePins.is_array()) throw std::runtime_error("package.pins deve ser array: " + typeId);
-            std::unordered_set<std::string> packagePinIds;
-            for (const auto& pinJson : packagePins) {
-                if (!pinJson.is_object()) throw std::runtime_error("package.pins[] deve conter objetos: " + typeId);
-                const std::string pinId = requiredString(pinJson, "id", "package.pins[]");
-                if (!packagePinIds.insert(pinId).second) throw std::runtime_error("package.pins id duplicado: " + pinId);
-                if (!interfacePinIds.contains(pinId)) throw std::runtime_error("package.pins referencia pin fora da interface: " + pinId);
+    if (manifest.contains("symbol")) {
+        if (!manifest["symbol"].is_object()) throw std::runtime_error("symbol de subcircuito deve ser objeto: " + typeId);
+        if (manifest["symbol"].contains("pins")) {
+            const nlohmann::json& symbolPins = manifest["symbol"]["pins"];
+            if (!symbolPins.is_array()) throw std::runtime_error("symbol.pins deve ser array: " + typeId);
+            std::unordered_set<std::string> symbolPinIds;
+            for (const auto& pinJson : symbolPins) {
+                if (!pinJson.is_object()) throw std::runtime_error("symbol.pins[] deve conter objetos: " + typeId);
+                const std::string pinId = requiredString(pinJson, "id", "symbol.pins[]");
+                if (!symbolPinIds.insert(pinId).second) throw std::runtime_error("symbol.pins id duplicado: " + pinId);
+                if (!interfacePinIds.contains(pinId)) throw std::runtime_error("symbol.pins referencia pin fora da interface: " + pinId);
             }
         }
     }
@@ -1208,7 +1214,10 @@ RegisteredSubcircuitInfo registerSubcircuitFromManifestRich(const std::filesyste
         {"interface", exportedInterface},
         {"pinIds", pinIds},
         {"pinCount", pinIds.size()},
-        {"package", manifest.contains("package") ? manifest["package"] : nlohmann::json(nullptr)},
+        // Só alcançável via `registerAdhocSubcircuit` (payload de resposta) -- sem chamador TS vivo
+        // hoje (`registerAdhocSubcircuitDefinition`, a única em uso, ignora o payload inteiro).
+        // Mantido em paridade de nome com "symbol" só por consistência, não por uso real.
+        {"symbol", manifest.contains("symbol") ? manifest["symbol"] : nlohmann::json(nullptr)},
         {"logicSymbolPackage", manifest.contains("logicSymbolPackage") ? manifest["logicSymbolPackage"] : nlohmann::json(nullptr)},
         {"defaultProperties", manifest.contains("defaultProperties") && manifest["defaultProperties"].is_object() ? manifest["defaultProperties"] : nlohmann::json::object()},
         {"propertySchema", manifest.contains("propertySchema") && manifest["propertySchema"].is_array() ? manifest["propertySchema"] : nlohmann::json::array()},
