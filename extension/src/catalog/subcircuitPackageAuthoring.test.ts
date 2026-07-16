@@ -119,7 +119,7 @@ const manifestWithPackage = (overrides: Record<string, unknown> = {}) => ({
     // pino (packagePinBoxSide) -- subtrai `pkg.x` pra comparar em coordenada relativa ao Package, não
     // à origem absoluta da cena reservada.
     const scaledLength = Math.max(4, 8 * (88 / 308));
-    const box = Math.max(24, scaledLength * 2 + 16);
+    const box = Math.max(14, scaledLength * 2 + 6);
     const anchorXRelativeToPackage = pin!.x + box / 2 - (pkg?.x ?? 0);
     assert(Math.abs(anchorXRelativeToPackage - 88) < 1, `pino deveria ancorar perto de x=88 (borda direita do Package já escalado, relativo ao Package), recebido x=${anchorXRelativeToPackage}`);
   });
@@ -160,8 +160,8 @@ const manifestWithPackage = (overrides: Record<string, unknown> = {}) => ({
     const compiled = compilePackageAuthoringComponents(fullScene);
     assert(compiled.errors.length === 0, `não deveria ter erros: ${compiled.errors.join(" | ")}`);
     const p1 = compiled.package?.pins.find((p) => p.id === "P1");
-    const w = Math.max(24, "P1".length * 7 * 0.62 + 12);
-    const h = 7 + 14;
+    const w = Math.max(16, "P1".length * 7 * 0.62 + 4);
+    const h = 7 + 4;
     const expectedLabelX = 999 + w / 2 - (pkg?.x ?? 0);
     const expectedLabelY = 888 + h / 2 - (pkg?.y ?? 0);
     assert(Math.abs((p1?.labelX as number) - expectedLabelX) < 0.01, `labelX deveria refletir a posição arrastada, recebido ${p1?.labelX}, esperado ${expectedLabelX}`);
@@ -184,8 +184,8 @@ const manifestWithPackage = (overrides: Record<string, unknown> = {}) => ({
     const pkg = components.find((c) => c.typeId === PACKAGE_TYPE_ID);
     const label = components.find((c) => c.typeId === "graphics.text");
     assert(label !== undefined, "deveria seedar o rótulo linkado");
-    const w = Math.max(24, "P1".length * 7 * 0.62 + 12);
-    const h = 7 + 14;
+    const w = Math.max(16, "P1".length * 7 * 0.62 + 4);
+    const h = 7 + 4;
     const centerX = label!.x + w / 2;
     const centerY = label!.y + h / 2;
     const expectedCenterX = (pkg?.x ?? 0) + 30;
@@ -202,8 +202,8 @@ const manifestWithPackage = (overrides: Record<string, unknown> = {}) => ({
     const label1 = components.find((c) => c.typeId === "graphics.text" && c.properties.linkedPinComponentId === pin1?.id);
     const label2 = components.find((c) => c.typeId === "graphics.text" && c.properties.linkedPinComponentId === pin2?.id);
     assert(label1 !== undefined && label2 !== undefined, "deveria seedar os 2 rótulos");
-    const w = Math.max(24, "P1".length * 7 * 0.62 + 12);
-    const h = 7 + 14;
+    const w = Math.max(16, "P1".length * 7 * 0.62 + 4);
+    const h = 7 + 4;
     const center1X = label1!.x + w / 2;
     const center1Y = label1!.y + h / 2;
     const center2X = label2!.x + w / 2;

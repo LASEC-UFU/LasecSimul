@@ -64,9 +64,13 @@ function nearestCardinalRotation(angleDeg: number): 0 | 90 | 180 | 270 {
  * duplicada aqui (não importada) porque `componentSymbols.ts` é código de renderização da Webview,
  * este módulo roda no host (Node), sem DOM. Mudar a fórmula lá exige mudar aqui também (mesmo
  * princípio de `main.ts::componentsToAddForTypeId`, que já tinha essa duplicação antes desta
- * feature). */
+ * feature). Bem mais justa que a versão antiga (`Math.max(24, length*2+16)`) -- área de
+ * seleção/arrasto grande demais dificultava mover um pino perto de outro (bug real reportado),
+ * mesmo espírito de `tunnelBox` (altura fixa em 12, bem apertada). Só a MARGEM (`+6`) encolheu; o
+ * mínimo estrutural (`length*2`) continua intacto -- é o que garante que o lead cabe inteiro nas 4
+ * rotações cardeais sem sair da caixa (ver comentário de `propertyDrivenBox`). */
 function packagePinBoxSide(length: number): number {
-  return Math.max(24, length * 2 + 16);
+  return Math.max(14, length * 2 + 6);
 }
 
 /** Duplica `PACKAGE_PIN_LABEL_FONT_SIZE` (`componentSymbols.ts`) -- mesmo motivo de
@@ -101,10 +105,22 @@ function defaultLabelNativePosition(
   }
 }
 
-/** Caixa de `graphics.text`, mesma fórmula de `propertyDrivenBox` -- usada só pra centralizar o
- * rótulo seedado do pino na posição inicial (o usuário pode arrastar depois). */
+/** Caixa de `graphics.text`, mesma fórmula de `propertyDrivenBox` -- usada pra centralizar um
+ * elemento de TEXTO LIVRE marcado como parte do Package (`packageShapeRole`, Parte B) na posição
+ * inicial. NÃO usada pro rótulo de pino -- ver `pinLabelBoxSize` abaixo, mais justa. */
 function labelBoxSize(text: string, fontSize: number): { width: number; height: number } {
   return { width: Math.max(24, text.length * fontSize * 0.62 + 12), height: fontSize + 14 };
+}
+
+/** Caixa do RÓTULO DE PINO especificamente -- bem mais justa que `labelBoxSize` (usada só pra texto
+ * livre/decorativo, onde uma área de clique confortável é aceitável). Um pino e seu rótulo ficam
+ * fisicamente perto de outros pinos/rótulos vizinhos (mesmo espaçamento apertado de um encapsulamento
+ * real) -- a caixa antiga (`+12`/`+14` de margem) tornava dificílimo arrastar um rótulo sem esbarrar
+ * no vizinho (bug real reportado, mesmo espírito da correção de `packagePinBoxSide` acima e de
+ * `tunnelBox`, que já é bem apertada). Ainda cobre o texto inteiro (sem cortar), só com bem menos
+ * folga ao redor. */
+function pinLabelBoxSize(text: string, fontSize: number): { width: number; height: number } {
+  return { width: Math.max(16, text.length * fontSize * 0.62 + 4), height: fontSize + 4 };
 }
 
 /** Caixa quadrada de `graphics.line`, espelhando `propertyDrivenBox` (`componentSymbols.ts`) --
@@ -625,7 +641,7 @@ export function seedPackageAuthoringComponents(
       : defaultLabelNativePosition(nativeAnchorX, nativeAnchorY, fileCardinalAngle, rawLength, labelSpaceNative, fontSize);
     const labelAnchorX = origin.x + nativeLabel.x * scaleX;
     const labelAnchorY = origin.y + nativeLabel.y * scaleY;
-    const labelBox = labelBoxSize(labelText, fontSize);
+    const labelBox = pinLabelBoxSize(labelText, fontSize);
     components.push({
       id: idFactory(),
       typeId: "graphics.text",
@@ -851,13 +867,13 @@ export function compilePackageAuthoringComponents(
     };
     // Posição do rótulo é SEMPRE persistida a partir de onde o `graphics.text` linkado está
     // AGORA na cena (arrastado ou não) -- vira a fonte de verdade pro esquemático a partir deste
-    // save, igual ao `x`/`y` do próprio pino. Mesma fórmula de caixa (`labelBoxSize`) usada pra
+    // save, igual ao `x`/`y` do próprio pino. Mesma fórmula de caixa (`pinLabelBoxSize`) usada pra
     // seedar a posição inicial, ver `seedPackageAuthoringComponents`. `labelFontSize` NUNCA escala
     // (mesmo motivo documentado em `componentSymbols.ts::packagePinElectricalPoint` -- fonte/traço
     // são constantes fixas no SimulIDE real, só posição comprime com `scaleX`/`scaleY`).
     if (labelComponent) {
       const labelFontSize = typeof labelComponent.properties.fontSize === "number" ? labelComponent.properties.fontSize : DEFAULT_PACKAGE_PIN_LABEL_FONT_SIZE;
-      const labelBox = labelBoxSize(label, labelFontSize);
+      const labelBox = pinLabelBoxSize(label, labelFontSize);
       const displayLabelX = labelComponent.x + labelBox.width / 2 - packageComponent.x;
       const displayLabelY = labelComponent.y + labelBox.height / 2 - packageComponent.y;
       pinEntry.labelX = displayLabelX * inverseScaleX;

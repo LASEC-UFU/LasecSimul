@@ -2095,7 +2095,16 @@ function newWireId(): string {
 
 function copySelectedItems(): boolean {
   const selectedComponentIds = new Set(state.selectedComponentIds);
-  const components = state.components.filter((component) => selectedComponentIds.has(component.id)).map(cloneComponent);
+  // `other.package` (o CORPO do Package sendo editado em "Abrir Subcircuito") precisa ser um
+  // singleton -- `compilePackageAuthoringComponents` já bloqueia o SAVE com "Mais de um objeto
+  // Package encontrado na cena" quando há 2+, mas isso só avisa NA HORA de salvar, depois de já ter
+  // ficado confuso na tela (bug real reportado: usuário via 2 boards renderizados lado a lado,
+  // idênticos em conteúdo mas em tamanhos diferentes, sem entender a causa). Nunca deixa entrar no
+  // clipboard -- Copiar/Recortar/Colar e "Ctrl+Shift"-arrastar (`duplicateComponentsForDrag`) NUNCA
+  // duplicam o Package, prevenindo o estado inválido em vez de só detectar depois.
+  const components = state.components
+    .filter((component) => selectedComponentIds.has(component.id) && component.typeId !== "other.package")
+    .map(cloneComponent);
   if (components.length === 0) return false;
 
   const wires = state.topology.conductors
@@ -2119,10 +2128,13 @@ function cutSelectedItems(): void {
  * `clipboardItems`/`state` -- quem chama decide quando inserir no estado global (o gesto de arrasto
  * NUNCA chama `render()` no meio, ver comentário sobre `setPointerCapture` em `createComponentElement`). */
 function duplicateComponentsForDrag(originals: WebviewComponentModel[]): { components: WebviewComponentModel[]; wires: WebviewWireModel[] } {
-  const originalIds = new Set(originals.map((component) => component.id));
+  // `other.package` nunca duplica -- mesmo motivo/comentário de `copySelectedItems` (singleton
+  // exigido por `compilePackageAuthoringComponents`, prevenido aqui em vez de só detectado no save).
+  const dedupedOriginals = originals.filter((component) => component.typeId !== "other.package");
+  const originalIds = new Set(dedupedOriginals.map((component) => component.id));
   const idMap = new Map<string, string>();
   const stagedComponents = [...state.components];
-  const components = originals.map((source) => {
+  const components = dedupedOriginals.map((source) => {
     const component = cloneComponent(source);
     const descriptor = catalogEntryFor(component.typeId);
     const baseLabel = descriptor?.label ?? component.typeId;

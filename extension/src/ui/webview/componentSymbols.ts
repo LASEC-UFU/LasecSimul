@@ -469,7 +469,7 @@ export function buildLivePackagePreview(components: readonly WebviewComponentMod
     .map((pinComp) => {
       const pinId = typeof pinComp.properties.pinId === "string" && pinComp.properties.pinId.trim() ? pinComp.properties.pinId.trim() : pinComp.id;
       const length = typeof pinComp.properties.length === "number" ? pinComp.properties.length : 8;
-      const box = Math.max(24, length * 2 + 16);
+      const box = Math.max(14, length * 2 + 6);
       const anchorX = pinComp.x + box / 2;
       const anchorY = pinComp.y + box / 2;
       const labelComponent = labelByPinComponentId.get(pinComp.id);
@@ -484,8 +484,8 @@ export function buildLivePackagePreview(components: readonly WebviewComponentMod
       };
       if (labelComponent) {
         const labelFontSize = typeof labelComponent.properties.fontSize === "number" ? labelComponent.properties.fontSize : PACKAGE_PIN_LABEL_FONT_SIZE;
-        const labelBoxWidth = Math.max(24, label.length * labelFontSize * 0.62 + 12);
-        const labelBoxHeight = labelFontSize + 14;
+        const labelBoxWidth = Math.max(16, label.length * labelFontSize * 0.62 + 4);
+        const labelBoxHeight = labelFontSize + 4;
         pinEntry.labelX = labelComponent.x + labelBoxWidth / 2 - packageComponent.x;
         pinEntry.labelY = labelComponent.y + labelBoxHeight / 2 - packageComponent.y;
         pinEntry.labelFontSize = labelFontSize;
@@ -1491,13 +1491,25 @@ function propertyDrivenBox(typeId: string, properties: Record<string, unknown> |
       return { width: side, height: side };
     }
     case "other.package_pin": {
+      // Espelha EXATAMENTE `packagePinBoxSide` (`subcircuitPackageAuthoring.ts`) -- área de
+      // seleção/arrasto apertada, mesmo espírito de `tunnelBox` (bug real: caixa grande demais
+      // dificultava mover um pino perto de outro). Só a margem encolheu (`+6`, era `+16`); o mínimo
+      // estrutural (`length*2`) continua intacto.
       const length = numberOf("length") ?? 8;
-      const side = Math.max(24, length * 2 + 16);
+      const side = Math.max(14, length * 2 + 6);
       return { width: side, height: side };
     }
     case "graphics.text": {
       const text = typeof properties.text === "string" ? properties.text : "Texto";
       const fontSize = numberOf("fontSize") ?? 11;
+      // Rótulo de pino linkado (`linkedPinComponentId`, ver `isPackageAuthoringComponent`) usa uma
+      // caixa bem mais justa que texto livre/decorativo -- espelha `pinLabelBoxSize`
+      // (`subcircuitPackageAuthoring.ts`). Texto livre (anotação normal, ou elemento de Package
+      // marcado com `packageShapeRole`) mantém a caixa antiga, mais confortável de clicar -- não é
+      // espremido entre vizinhos do mesmo jeito que um rótulo de pino.
+      if (typeof properties.linkedPinComponentId === "string" && properties.linkedPinComponentId) {
+        return { width: Math.max(16, text.length * fontSize * 0.62 + 4), height: fontSize + 4 };
+      }
       return { width: Math.max(24, text.length * fontSize * 0.62 + 12), height: fontSize + 14 };
     }
     default:

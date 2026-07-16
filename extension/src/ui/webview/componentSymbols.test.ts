@@ -1386,9 +1386,9 @@ import { PACKAGE_SHAPE_ORDER_PROPERTY_KEY, PackageDescriptor, WebviewComponentMo
   await test("buildLivePackagePreview: reproduz EXATAMENTE a posição atual da cena (pino + rótulo), sem nenhuma conversão de escala", () => {
     const pkg: WebviewComponentModel = { id: "pkg1", typeId: "other.package", label: "Package", x: 100, y: 100, rotation: 0, pins: [], properties: { width: 56, height: 40, border: true } };
     // Pino de borda esquerda, angle:180 no arquivo -> rotation=(180-180)%360=0 na cena (mesma
-    // conversão do Bug 1/A1) -- length=8, box=max(24,8*2+16)=32, âncora do pino em (pkg.x-16+16, ...).
+    // conversão do Bug 1/A1) -- length=8, box=max(14,8*2+6)=22 (caixa apertada, ver packagePinBoxSide).
     const pinLength = 8;
-    const box = Math.max(24, pinLength * 2 + 16);
+    const box = Math.max(14, pinLength * 2 + 6);
     const anchorX = pkg.x + 0; // pino ancorado bem na borda esquerda (nativeX=0 relativo ao Package)
     const anchorY = pkg.y + 20;
     const pin: WebviewComponentModel = {
