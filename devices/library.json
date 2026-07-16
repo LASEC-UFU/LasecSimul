@@ -262,6 +262,10 @@
       "manifest": "simulide-peripherals/serialterm.lsdevice"
     },
     {
+      "typeId": "peripherals.lasecplot",
+      "manifest": "simulide-peripherals/lasecplot.lsdevice"
+    },
+    {
       "typeId": "peripherals.serialport",
       "manifest": "simulide-peripherals/serialport.lsdevice"
     },

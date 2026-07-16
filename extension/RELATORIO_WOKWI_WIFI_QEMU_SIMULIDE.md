@@ -26,12 +26,12 @@ preservados:
 - foi adicionado `examples/esp32-openeth-internet`, que inicializa OpenETH,
   aguarda DHCP, resolve `example.com` e faz uma requisição HTTP usando sockets
   da lwIP.
-- no modo padrão `lab-bridge`, cada ESP32 recebe um MAC local distinto e usa
-  uma TAP exclusiva chamada pelo padrão `LasecSimul TAP {namespace}-{instance}`;
-  quando essa TAP está na bridge física, DHCP, DNS, ARP, broadcast e mDNS são
-  os da LAN real;
+- no modo padrão `lab-bridge`, cada ESP32 recebe um MAC local distinto e se
+  conecta ao gateway central em `127.0.0.1:9011`; o gateway funciona como
+  switch Ethernet para muitos QEMUs e usa uma única `LasecSimul TAP` na bridge
+  física, preservando DHCP, DNS, ARP, broadcast e mDNS da LAN real;
 - a configuração do VS Code expõe `lasecsimul.network.mode`,
-  `lasecsimul.network.tapInterface` e `lasecsimul.network.namespace`.
+  `lasecsimul.network.gatewayPort` e `lasecsimul.network.namespace`.
 
 Limite atual: a máquina de desenvolvimento não possui ESP-IDF instalado, então
 o firmware do exemplo ainda não foi compilado/executado. A NIC e o NAT estão
@@ -47,17 +47,20 @@ repetidos não colidem tecnicamente. Para identificação, o Core usa
 
 No modo padrão `lab-bridge`, o IP não é escolhido pelo Core: o firmware envia
 DHCP pela OpenETH/TAP e recebe um endereço do servidor real do laboratório.
-Cada ESP32 usa um MAC `02:4c:53:<namespace>:<instancia>:01` e uma TAP exclusiva.
+Cada ESP32 usa um MAC local estável `02:4c:<FNV32(namespace:instancia)>` e uma
+conexão TCP local exclusiva com o gateway central.
 Isso permite que ela seja vista como outro dispositivo da LAN, inclusive para
 mDNS, desde que multicast não seja bloqueado pelo switch/AP. O administrador
-precisa provisionar uma TAP por ESP32 e conectá-las à bridge da Ethernet
-física; Wi-Fi físico, port-security, NAC e pools DHCP pequenos podem impedir
-esse uso. O nome da arena compartilhada também inclui o PID da instância host,
+precisa provisionar apenas uma TAP e conectá-la à bridge da Ethernet física;
+Wi-Fi físico, port-security, NAC e pools DHCP pequenos podem impedir esse uso.
+A TAP é aberta pelo gateway instalado como tarefa SYSTEM; o switch interno
+aprende MACs e atende múltiplas sessões/QEMUs. O nome da arena compartilhada
+também inclui o PID da instância host,
 evitando colisão entre Cores simultâneos.
 
 `lasecsimul.network.namespace` aceita `0..255` por aluno/instância ou `-1` para
 seleção automática. Em `lab-bridge`, os valores devem ser exclusivos em todo o
-domínio de broadcast para evitar MACs duplicados. Em `isolated`, futuras portas
+domínio de broadcast para reduzir o risco de MACs duplicados. Em `isolated`, futuras portas
 publicadas no Windows ainda precisam de um alocador central e bind em
 `127.0.0.1` por padrão; em `lab-bridge`, servidores são acessados diretamente
 pelo IP DHCP da ESP32 e não precisam de `hostfwd`.

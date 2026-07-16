@@ -40,6 +40,9 @@ const releaseRoot = path.join(repoRoot, "dist", "release", target.vsceTarget);
 const stagingRoot = path.join(repoRoot, "dist", "staging", target.vsceTarget);
 const stagingExtensionDir = path.join(stagingRoot, "extension");
 const bundledRoot = path.join(stagingExtensionDir, "bundled");
+const tapWindowsVersion = "9.27.0";
+const tapWindowsBinarySha256 = "36e2609b7ceefedcb978ce5c48caf9e0e5af83423717c4e2e3c1d7ebca8f62a5";
+const tapWindowsSourceSha256 = "9348c6142e9a676e8dc0408062957fe4d80baf224d080b8e2b9e519b7ad7f3e8";
 
 function run(command, args, cwd) {
   console.log(`[package-release] ${command} ${args.join(" ")} (cwd=${cwd})`);
@@ -141,6 +144,61 @@ function sha256(filePath) {
   return hash.digest("hex");
 }
 
+function downloadVerified(url, destination, expectedSha256) {
+  fs.mkdirSync(path.dirname(destination), { recursive: true });
+  if (!fs.existsSync(destination) || sha256(destination) !== expectedSha256) {
+    if (fs.existsSync(destination)) fs.rmSync(destination, { force: true });
+    run("curl.exe", ["--fail", "--location", "--output", destination, url], repoRoot);
+  }
+  const actual = sha256(destination);
+  if (actual !== expectedSha256) {
+    console.error(`[package-release] SHA-256 invalido para ${path.basename(destination)}: ${actual}`);
+    process.exit(1);
+  }
+}
+
+function stageTapWindowsPayload(bootstrapperStageDir) {
+  const cacheDir = path.join(repoRoot, "dist", "cache", "tap-windows6", tapWindowsVersion);
+  const binaryZip = path.join(cacheDir, "dist.win10.zip");
+  const sourceZip = path.join(cacheDir, `tap-windows6-${tapWindowsVersion}-source.zip`);
+  downloadVerified(
+    `https://github.com/OpenVPN/tap-windows6/releases/download/${tapWindowsVersion}/dist.win10.zip`,
+    binaryZip,
+    tapWindowsBinarySha256
+  );
+  downloadVerified(
+    `https://github.com/OpenVPN/tap-windows6/archive/refs/tags/${tapWindowsVersion}.zip`,
+    sourceZip,
+    tapWindowsSourceSha256
+  );
+
+  const extractDir = path.join(cacheDir, "extracted");
+  const sourceExtractDir = path.join(cacheDir, "source");
+  resetDir(extractDir);
+  resetDir(sourceExtractDir);
+  run("tar.exe", ["-xf", binaryZip, "-C", extractDir], repoRoot);
+  run("tar.exe", ["-xf", sourceZip, "-C", sourceExtractDir], repoRoot);
+
+  const payloadDir = path.join(bootstrapperStageDir, "tap-windows6");
+  fs.mkdirSync(path.join(payloadDir, "amd64"), { recursive: true });
+  const binaryRoot = path.join(extractDir, "dist.win10", "amd64");
+  for (const fileName of ["devcon.exe", "OemVista.inf", "tap0901.cat", "tap0901.sys"]) {
+    copyFileTo(path.join(binaryRoot, fileName), path.join(payloadDir, "amd64", fileName));
+  }
+  const sourceRoot = path.join(sourceExtractDir, `tap-windows6-${tapWindowsVersion}`);
+  copyFileTo(path.join(sourceRoot, "COPYING"), path.join(payloadDir, "COPYING"));
+  copyFileTo(path.join(sourceRoot, "COPYRIGHT.GPL"), path.join(payloadDir, "COPYRIGHT.GPL"));
+  copyFileTo(sourceZip, path.join(payloadDir, path.basename(sourceZip)));
+  writeFile(path.join(payloadDir, "VERSION.txt"), [
+    `TAP-Windows6 ${tapWindowsVersion}`,
+    `Binary source: https://github.com/OpenVPN/tap-windows6/releases/tag/${tapWindowsVersion}`,
+    `dist.win10.zip SHA-256: ${tapWindowsBinarySha256}`,
+    `source.zip SHA-256: ${tapWindowsSourceSha256}`,
+    "License: GPL-2.0; see COPYING and COPYRIGHT.GPL.",
+    "",
+  ].join("\n"));
+}
+
 function resolveCoreExecutable() {
   const coreBuildDir = path.join(repoRoot, "core", "build");
   const candidates = [
@@ -202,6 +260,7 @@ function createReleaseReadme() {
     "- Extensao VS Code empacotada por plataforma",
     "- Core nativo embutido",
     "- Bibliotecas ABI/QEMU/subcircuitos embutidas",
+    "- No Windows: TAP-Windows6 9.27.0, bridge física e gateway Ethernet central",
     "",
     "## Instalacao",
     "",
@@ -350,6 +409,23 @@ function createWindowsNativeInstaller(vsixPath) {
   resetDir(bootstrapperStageDir);
   copyDirFiltered(bootstrapperTemplateDir, bootstrapperStageDir);
   copyFileTo(vsixPath, path.join(bootstrapperStageDir, "payload.vsix"));
+  stageTapWindowsPayload(bootstrapperStageDir);
+
+  const gatewayPublishDir = path.join(bootstrapperStageDir, "gateway-publish");
+  run(
+    "dotnet",
+    [
+      "publish",
+      path.join(repoRoot, "packaging", "windows-network-gateway", "LasecSimul.NetworkGateway.csproj"),
+      "-c", "Release", "-r", "win-x64", "--self-contained", "true",
+      "-p:PublishSingleFile=true", "-p:PublishTrimmed=false", "-o", gatewayPublishDir,
+    ],
+    repoRoot
+  );
+  copyFileTo(
+    path.join(gatewayPublishDir, "LasecSimul.NetworkGateway.exe"),
+    path.join(bootstrapperStageDir, "network-gateway.exe")
+  );
 
   const publishDir = path.join(bootstrapperStageDir, "publish");
   run(
@@ -365,6 +441,7 @@ function createWindowsNativeInstaller(vsixPath) {
       "true",
       "-p:PublishSingleFile=true",
       "-p:PublishTrimmed=false",
+      `-p:Version=${packageVersion}`,
       "-o",
       publishDir,
     ],

@@ -67,6 +67,28 @@ Comportamento:
    - `PATH`
    - instalacoes padrao de VS Code, VS Code Insiders e VSCodium
 3. executa `code --install-extension <vsix> --force` ou equivalente
+4. solicita elevação UAC apenas para a etapa de rede
+5. instala o TAP-Windows6 9.27.0 assinado e cria `LasecSimul TAP`
+6. seleciona a interface Ethernet física e cria/atualiza a Windows Network Bridge
+7. instala `LasecSimul.NetworkGateway.exe` em `Program Files` e registra uma tarefa de inicialização
+   como SYSTEM; todos os QEMUs usam o switch central em `127.0.0.1:9011`
+
+O mesmo instalador pode ser executado por todos os usuários do servidor. Depois de instalar o VSIX
+no perfil atual, ele verifica a instalação de máquina. Quando TAP, bridge, gateway, tarefa, porta
+9011, configuração e entrada de desinstalação estão saudáveis, encerra sem UAC e sem reiniciar o
+gateway. Se a infraestrutura estiver ausente ou incompleta, solicita UAC e instala/repara a etapa
+global.
+
+A remoção da extensão no VS Code afeta somente o perfil daquele usuário. A infraestrutura global é
+registrada separadamente como **LasecSimul — Componentes da Máquina** em Aplicativos/Painel de
+Controle. A desinstalação global exige administrador, para o gateway, remove sua tarefa, desfaz
+somente a bridge que o LasecSimul criou (ou retira sua TAP de uma bridge preexistente) e remove o
+adaptador. O pacote TAP-Windows permanece no Driver Store para não quebrar OpenVPN ou outro software
+que compartilhe o mesmo driver.
+
+O workflow baixa `dist.win10.zip` e o arquivo-fonte da tag oficial, exige os SHA-256 fixados no
+script, descarta `devcon.exe` e embute somente INF/CAT/SYS, GPLv2, avisos e fonte correspondente.
+Também valida a assinatura Microsoft do `tap0901.sys` e executa o self-test multi-cliente do gateway.
 
 Se a CLI nao for encontrada, o instalador falha com mensagem clara e informa onde o `.vsix` foi
 extraido.
@@ -148,7 +170,7 @@ Triggers atuais:
 
 ## Observacoes e limites conhecidos
 
-- O Windows hoje gera `.exe` nativo; ainda nao ha `.msi`.
+- O Windows gera `.exe` nativo com provisionador SetupAPI; ainda nao ha `.msi`.
 - O Linux hoje gera `.deb`; ainda nao ha `.rpm`.
 - O fluxo limpa `registeredSources` no catalogo embutido para nao levar registros locais de
   desenvolvimento para o release.

@@ -52,11 +52,18 @@ unsigned automaticNetworkNamespace(std::string_view arenaName) {
     return fnv1a(hostPart) & 0xffu;
 }
 
-std::string openEthMacAddress(unsigned networkNamespace, unsigned componentSlot) {
+std::string openEthMacAddress(unsigned networkNamespace, unsigned componentSlot,
+                              std::string_view arenaName) {
+    const std::string stableIdentity = configuredNetworkNamespace().has_value()
+        ? std::to_string(networkNamespace) + ":" + std::to_string(componentSlot)
+        : std::string(arenaName);
+    const uint32_t identityHash = fnv1a(stableIdentity);
     std::ostringstream mac;
     mac << std::hex << std::setfill('0')
-        << "02:4c:53:" << std::setw(2) << networkNamespace
-        << ':' << std::setw(2) << componentSlot << ":01";
+        << "02:4c:" << std::setw(2) << ((identityHash >> 24u) & 0xffu)
+        << ':' << std::setw(2) << ((identityHash >> 16u) & 0xffu)
+        << ':' << std::setw(2) << ((identityHash >> 8u) & 0xffu)
+        << ':' << std::setw(2) << (identityHash & 0xffu);
     return mac.str();
 }
 
@@ -66,7 +73,7 @@ std::string isolatedOpenEthArgument(std::string_view arenaName) {
     const unsigned componentSlot = componentNetworkSlot(arenaName);
     const std::string prefix = "10." + std::to_string(networkNamespace) + "." +
                                std::to_string(componentSlot);
-    return "user,model=open_eth,mac=" + openEthMacAddress(networkNamespace, componentSlot) +
+    return "user,model=open_eth,mac=" + openEthMacAddress(networkNamespace, componentSlot, arenaName) +
            ",net=" + prefix + ".0/24,host=" + prefix +
            ".2,dhcpstart=" + prefix + ".15,dns=" + prefix + ".3";
 }
@@ -76,34 +83,22 @@ std::string environmentValue(const char* name, std::string_view fallback) {
     return value && *value ? std::string(value) : std::string(fallback);
 }
 
-void replaceAll(std::string& value, std::string_view token, std::string_view replacement) {
-    size_t position = 0;
-    while ((position = value.find(token, position)) != std::string::npos) {
-        value.replace(position, token.size(), replacement);
-        position += replacement.size();
-    }
-}
-
 std::string labBridgeOpenEthArgument(std::string_view arenaName) {
     const unsigned networkNamespace = configuredNetworkNamespace().value_or(
         automaticNetworkNamespace(arenaName));
     const unsigned componentSlot = componentNetworkSlot(arenaName);
-    std::string interfaceName = environmentValue(
-        "LASECSIMUL_TAP_INTERFACE", "LasecSimul TAP {namespace}-{instance}");
-    replaceAll(interfaceName, "{namespace}", std::to_string(networkNamespace));
-    replaceAll(interfaceName, "{instance}", std::to_string(componentSlot));
-    if (interfaceName.empty() || interfaceName.find_first_of(",\r\n") != std::string::npos) {
-        throw std::invalid_argument(
-            "LASECSIMUL_TAP_INTERFACE must name one TAP interface and cannot contain commas/newlines");
+    unsigned gatewayPort = 9011;
+    if (const char* configured = std::getenv("LASECSIMUL_GATEWAY_PORT")) {
+        unsigned parsed = 0;
+        const std::string_view text(configured);
+        const auto result = std::from_chars(text.data(), text.data() + text.size(), parsed);
+        if (result.ec == std::errc{} && result.ptr == text.data() + text.size() &&
+            parsed > 0 && parsed <= 65535) {
+            gatewayPort = parsed;
+        }
     }
-
-    std::string argument = "tap,model=open_eth,mac=" +
-                           openEthMacAddress(networkNamespace, componentSlot) +
-                           ",ifname=" + interfaceName;
-#ifndef _WIN32
-    argument += ",script=no,downscript=no";
-#endif
-    return argument;
+    return "socket,model=open_eth,mac=" + openEthMacAddress(networkNamespace, componentSlot, arenaName) +
+           ",connect=127.0.0.1:" + std::to_string(gatewayPort);
 }
 
 void configureNetwork(QemuLaunchSpec& spec, std::string_view arenaName) {
@@ -147,7 +142,8 @@ QemuLaunchSpec McuController::buildLaunchSpec(const std::filesystem::path& firmw
 
 void McuController::start(const std::filesystem::path& firmwarePath, const std::string& arenaName,
                           const std::string& callSiteBinaryOverride, McuDebugOptions debug) {
-    const QemuLaunchSpec spec = buildLaunchSpec(firmwarePath, arenaName, callSiteBinaryOverride, debug);
+    const QemuLaunchSpec spec = buildLaunchSpec(
+        firmwarePath, arenaName, callSiteBinaryOverride, debug);
     m_arenaBridge.open(qemu::QemuArenaOpenOptions{arenaName, true});
     m_processManager.start(spec);
 }

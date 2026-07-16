@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "typeId": "peripherals.lasecplot",
+  "graphical": true,
+  "name": "LasecPlot",
+  "language": "pt-BR",
+  "icon": "serialterm",
+  "folderPath": ["Periféricos"],
+  "translations": { "en": { "name": "LasecPlot" } },
+  "abiVersion": { "major": 3, "minor": 0 },
+  "nativeEntry": {
+    "win32-x64": "build/win-x64/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
+  "package": {
+    "width": 116, "height": 40, "border": false,
+    "background": { "kind": "color", "value": "transparent" },
+    "shapes": [
+      { "kind": "rect", "x": 0, "y": 0, "w": 116, "h": 40, "rx": 4, "ry": 4, "stroke": "#303f9f", "fill": "#e8eaf6", "strokeWidth": 1 },
+      { "kind": "text", "x": 50, "y": 15, "value": "LasecPlot", "fontSize": 10, "color": "#1a237e" },
+      { "kind": "text", "x": 48, "y": 30, "value": "○ Fechado", "fontSize": 9, "color": "#333333" },
+      { "kind": "rect", "x": 88, "y": 20, "w": 24, "h": 15, "rx": 2, "ry": 2, "stroke": "#555555", "fill": "#eeeeee", "strokeWidth": 1 },
+      { "kind": "text", "x": 100, "y": 31, "value": "Abrir", "fontSize": 8, "color": "#111111" }
+    ],
+    "pinLabelColor": "#1a237e",
+    "pins": [
+      { "id": "tx", "x": 0, "y": 8, "angle": 180, "length": 8, "label": "Tx", "labelX": 6, "labelY": 10 },
+      { "id": "rx", "x": 0, "y": 24, "angle": 180, "length": 8, "label": "Rx", "labelX": 6, "labelY": 26 }
+    ]
+  },
+  "pins": [
+    { "id": "tx", "kind": "DIGITAL_OUT", "x": 0, "y": 8, "angle": 180, "length": 8, "label": "Tx" },
+    { "id": "rx", "kind": "DIGITAL_IN", "x": 0, "y": 24, "angle": 180, "length": 8, "label": "Rx" }
+  ],
+  "properties": [
+    { "id": "source_name", "label": "Nome da fonte", "group": "LasecPlot", "valueKind": "string", "editor": "text", "default": "LasecPlot 1" },
+    { "id": "baudrate", "label": "Baud rate", "group": "Serial", "valueKind": "number", "editor": "select", "default": 115200,
+      "options": [{"label":"1200","value":1200},{"label":"2400","value":2400},{"label":"4800","value":4800},{"label":"9600","value":9600},{"label":"19200","value":19200},{"label":"38400","value":38400},{"label":"57600","value":57600},{"label":"115200","value":115200}] },
+    { "id": "data_bits", "label": "Bits de dados", "group": "Serial", "valueKind": "number", "editor": "select", "default": 8,
+      "options": [{"label":"5","value":5},{"label":"6","value":6},{"label":"7","value":7},{"label":"8","value":8}] },
+    { "id": "stop_bits", "label": "Bits de parada", "group": "Serial", "valueKind": "number", "editor": "select", "default": 1,
+      "options": [{"label":"1","value":1},{"label":"2","value":2}] },
+    { "id": "mode", "label": "Modo", "group": "LasecPlot", "valueKind": "string", "editor": "select", "default": "read-only",
+      "options": [{"label":"Somente leitura","value":"read-only"},{"label":"Bidirecional","value":"bidirectional"}] },
+    { "id": "expose", "label": "Expor para LasecPlot", "group": "LasecPlot", "valueKind": "bool", "editor": "checkbox", "default": true },
+    { "id": "interop_rx_hex", "label": "Interop RX", "group": "Interno", "valueKind": "string", "editor": "text", "default": "", "hidden": true, "noCopy": true },
+    { "id": "interop_tx_hex", "label": "Interop TX", "group": "Interno", "valueKind": "string", "editor": "text", "default": "", "hidden": true, "noCopy": true }
+  ],
+  "help": { "description": "Ponte UART virtual para a extensão LasecPlot. Possui exclusivamente TX e RX." },
+  "limits": { "stepTimeoutMs": 1, "expectedComplexity": "medium" }
+}

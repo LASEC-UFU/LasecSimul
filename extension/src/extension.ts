@@ -73,6 +73,8 @@ import {
   updateExposedComponentPropertyCommand,
 } from "./mcu/mcuCommands";
 import { debugMcuFirmwareCommand, registerMcuDebugTracking } from "./mcu/mcuDebug";
+import { initializeLasecPlot, lasecPlotManager } from "./lasecplot/manager";
+import { LasecSimulInteropApi } from "./lasecplot/api";
 import {
   gatherInternalComponentSnapshots,
   resolveSourceFilePath,
@@ -163,6 +165,7 @@ function computeProjectStatePatch(): ProjectStatePatch | undefined {
 }
 
 function syncSchematicPanel(): void {
+  lasecPlotManager?.sync();
   const lastSynced = state.lastSyncedProjectState;
   if (lastSynced &&
       (lastSynced.components !== state.schematicState.components || lastSynced.topology.conductors !== state.schematicState.topology.conductors) &&
@@ -992,9 +995,16 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       return;
     }
     case "requestRenameComponent": {
-      const updated = updateElement(state.schematicState, message.componentId, { label: message.label });
+      const current = getElement(state.schematicState, message.componentId);
+      const isLasecPlot = current?.element.typeId === "peripherals.lasecplot";
+      const updated = updateElement(state.schematicState, message.componentId, {
+        label: message.label,
+        ...(isLasecPlot ? { properties: { ...current!.element.properties, source_name: message.label } } : {}),
+      });
       if (!updated.ok) return;
       state.schematicState = updated.value.state;
+      if (isLasecPlot) pushPropertyToCore(message.componentId, "source_name", message.label);
+      lasecPlotManager?.sync();
       syncSchematicPanel();
       return;
     }
@@ -1015,6 +1025,11 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       const ref = getElement(state.schematicState, message.componentId);
       if (!ref) return;
       const prevComponent = ref.element;
+      if (prevComponent.typeId === "peripherals.lasecplot" && message.name === "source_name" && !String(message.value).trim()) {
+        vscode.window.showErrorMessage("LasecPlot: Nome da fonte não pode ficar vazio.");
+        syncSchematicPanel();
+        return;
+      }
       const updatedProperties = { ...prevComponent.properties, [message.name]: message.value };
 
       if (ref.scope !== "schematic") {
@@ -1048,7 +1063,14 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
           })
         : state.schematicState.topology.conductors;
 
-      const updated = updateElement(state.schematicState, message.componentId, { properties: updatedProperties, ...(newPins ? { pins: newPins } : {}) });
+      const synchronizedSourceName = prevComponent.typeId === "peripherals.lasecplot" && message.name === "source_name"
+        ? String(message.value).trim()
+        : undefined;
+      const updated = updateElement(state.schematicState, message.componentId, {
+        properties: updatedProperties,
+        ...(synchronizedSourceName ? { label: synchronizedSourceName } : {}),
+        ...(newPins ? { pins: newPins } : {}),
+      });
       if (!updated.ok) return;
       state.schematicState = {
         ...updated.value.state,
@@ -1067,9 +1089,22 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
         pushPropertyToCore(message.componentId, message.name, message.value);
       }
       syncSchematicPanel();
+      lasecPlotManager?.sync();
       if (state.simulationStatus === "running") {
         void pollInstrumentReadouts();
         void pollWireVoltages();
+      }
+      return;
+    }
+    case "requestToggleLasecPlot": {
+      try {
+        const result = lasecPlotManager?.toggle(message.componentId);
+        if (!result) throw new Error("Integração LasecPlot não inicializada.");
+        state.schematicPanel?.postMessage({ version: 1, type: "lasecPlotStatus", componentId: message.componentId, ...result });
+      } catch (error) {
+        const text = error instanceof Error ? error.message : String(error);
+        state.schematicPanel?.postMessage({ version: 1, type: "lasecPlotStatus", componentId: message.componentId, opened: false, clients: 0, error: text });
+        vscode.window.showErrorMessage(`LasecPlot: ${text}`);
       }
       return;
     }
@@ -1682,7 +1717,8 @@ async function exportInstrumentDataCommand(suggestedFileName: string, csvContent
   }
 }
 
-export function activate(context: vscode.ExtensionContext): void {
+export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi {
+  const lasecPlot = initializeLasecPlot(context);
   registerMcuDebugTracking(context);
   state.extensionContext = context;
   const unifiedCatalog = loadUnifiedCatalog(context.extensionPath, currentLasecSimulLanguage());
@@ -1728,6 +1764,10 @@ export function activate(context: vscode.ExtensionContext): void {
     // RNF: Core caiu → reiniciar + restaurar snapshot (ver lasecsimul-native-devices.spec §12.5)
     vscode.window.showWarningMessage(`LasecSimul Core terminou (code ${code}). Reinicie a simulação.`);
     state.coreClient = undefined;
+    setSimulationStatus("stopped");
+    for (const component of state.schematicState.components.filter((entry) => entry.typeId === "peripherals.lasecplot")) {
+      state.schematicPanel?.postMessage({ version: 1, type: "lasecPlotStatus", componentId: component.id, opened: false, clients: 0, error: "Core encerrado inesperadamente" });
+    }
   });
 
   state.coreClient = new CoreClient(pipeName);
@@ -1889,6 +1929,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   void setSchematicOpenContext(false);
   void refreshUnifiedCatalogState(false, catalogCommandOptions());
+  return lasecPlot.api;
 }
 
 export async function deactivate(): Promise<void> {

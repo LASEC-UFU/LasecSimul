@@ -22,24 +22,22 @@ int main() {
 #ifdef _WIN32
     _putenv_s("LASECSIMUL_NETWORK_NAMESPACE", "42");
     _putenv_s("LASECSIMUL_NETWORK_MODE", "");
-    _putenv_s("LASECSIMUL_TAP_INTERFACE", "LasecSimul TAP {namespace}-{instance}");
+    _putenv_s("LASECSIMUL_GATEWAY_PORT", "9011");
 #else
     setenv("LASECSIMUL_NETWORK_NAMESPACE", "42", 1);
     unsetenv("LASECSIMUL_NETWORK_MODE");
-    setenv("LASECSIMUL_TAP_INTERFACE", "LasecSimul TAP {namespace}-{instance}", 1);
+    setenv("LASECSIMUL_GATEWAY_PORT", "9011", 1);
 #endif
     FakeAdapter adapter;
     mcu::McuController controller(adapter);
 
     const QemuLaunchSpec defaultBridge = controller.buildLaunchSpec(
         "firmware.bin", "lasecsimul-mcu-1234-7");
-#ifdef _WIN32
     const std::string expectedDefaultBridge =
-        "tap,model=open_eth,mac=02:4c:53:2a:07:01,ifname=LasecSimul TAP 42-7";
+        "socket,model=open_eth,mac=02:4c:7c:7d:b8:e4,connect=127.0.0.1:9011";
+#ifdef _WIN32
     _putenv_s("LASECSIMUL_NETWORK_MODE", "isolated");
 #else
-    const std::string expectedDefaultBridge =
-        "tap,model=open_eth,mac=02:4c:53:2a:07:01,ifname=LasecSimul TAP 42-7,script=no,downscript=no";
     setenv("LASECSIMUL_NETWORK_MODE", "isolated", 1);
 #endif
     assert(std::find(defaultBridge.args.begin(), defaultBridge.args.end(), expectedDefaultBridge) !=
@@ -49,25 +47,18 @@ int main() {
     assert(normal.args.front() == "lasecsimul-mcu-1234-7");
     assert(std::find(normal.args.begin(), normal.args.end(), "-gdb") == normal.args.end());
     assert(std::find(normal.args.begin(), normal.args.end(),
-                     "user,model=open_eth,mac=02:4c:53:2a:07:01,net=10.42.7.0/24,host=10.42.7.2,dhcpstart=10.42.7.15,dns=10.42.7.3") !=
+                     "user,model=open_eth,mac=02:4c:7c:7d:b8:e4,net=10.42.7.0/24,host=10.42.7.2,dhcpstart=10.42.7.15,dns=10.42.7.3") !=
            normal.args.end());
 
 #ifdef _WIN32
     _putenv_s("LASECSIMUL_NETWORK_MODE", "lab-bridge");
-    _putenv_s("LASECSIMUL_TAP_INTERFACE", "LasecSimul TAP {namespace}-{instance}");
 #else
     setenv("LASECSIMUL_NETWORK_MODE", "lab-bridge", 1);
-    setenv("LASECSIMUL_TAP_INTERFACE", "LasecSimul TAP {namespace}-{instance}", 1);
 #endif
     const QemuLaunchSpec bridged = controller.buildLaunchSpec(
         "firmware.bin", "lasecsimul-mcu-1234-7");
-#ifdef _WIN32
     const std::string expectedBridge =
-        "tap,model=open_eth,mac=02:4c:53:2a:07:01,ifname=LasecSimul TAP 42-7";
-#else
-    const std::string expectedBridge =
-        "tap,model=open_eth,mac=02:4c:53:2a:07:01,ifname=LasecSimul TAP 42-7,script=no,downscript=no";
-#endif
+        "socket,model=open_eth,mac=02:4c:7c:7d:b8:e4,connect=127.0.0.1:9011";
     assert(std::find(bridged.args.begin(), bridged.args.end(), expectedBridge) != bridged.args.end());
 
     const QemuLaunchSpec debug = controller.buildLaunchSpec(
@@ -81,11 +72,11 @@ int main() {
 #ifdef _WIN32
     _putenv_s("LASECSIMUL_NETWORK_NAMESPACE", "");
     _putenv_s("LASECSIMUL_NETWORK_MODE", "");
-    _putenv_s("LASECSIMUL_TAP_INTERFACE", "");
+    _putenv_s("LASECSIMUL_GATEWAY_PORT", "");
 #else
     unsetenv("LASECSIMUL_NETWORK_NAMESPACE");
     unsetenv("LASECSIMUL_NETWORK_MODE");
-    unsetenv("LASECSIMUL_TAP_INTERFACE");
+    unsetenv("LASECSIMUL_GATEWAY_PORT");
 #endif
     std::puts("OK: QEMU launch supports isolated and lab-bridge networking; debug args preserved.");
     return 0;

@@ -92,6 +92,7 @@ export type HostToWebviewMessage =
   | { version: number; type: "componentReadout"; readoutsByComponentId: Record<string, ComponentReadoutValue> }
   | { version: number; type: "wireVoltages"; voltagesByWireId: Record<string, number> }
   | { version: number; type: "simulationStatus"; status: SimulationStatus }
+  | { version: number; type: "lasecPlotStatus"; componentId: string; opened: boolean; clients: number; error?: string }
   | { version: number; type: "pauseConditionTriggered"; ownerId: string; simulationTimeNs: number; expression: string; resolvedValues: Record<string, number | boolean | string>; error?: string }
   | { version: number; type: "pauseConditionValidation"; componentId: string; valid: boolean; error?: string; column?: number }
   /** Taxa real alcançada (`(ms simulados)/(ms de parede)`, ver `coreLifecycle.ts::pollSimulationRate`)
@@ -147,6 +148,7 @@ export type WebviewToHostMessage =
    * materializa todos os splits, nós e o ramo somente depois deste verbo. */
   | { version: number; type: "requestConnectEndpoints"; baseRevision: number; from: WireEndpoint; to: WireEndpoint; points?: Array<{ x: number; y: number }> }
   | { version: number; type: "requestUpdateProperty"; componentId: string; name: string; value: string | number | boolean }
+  | { version: number; type: "requestToggleLasecPlot"; componentId: string }
   /** Bloco genérico de subcircuito por caminho -- abre um seletor de `.lssubcircuit`, resolve
    * typeId/pinos/package do arquivo escolhido e registra no Core (verbo IPC avulso, sem
    * `library.json`). Mesmo comando serve pra escolha inicial e pra "relink" (arquivo ausente ou

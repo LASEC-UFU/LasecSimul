@@ -69,7 +69,10 @@ enum {
     KIND_SERIALPORT = 5,
     KIND_SDCARD     = 6,
     KIND_ESP01      = 7,
+    KIND_LASECPLOT  = 8,
 };
+
+#define UART_RING_CAP 4096
 
 typedef struct {
     void *host_ctx;
@@ -111,6 +114,18 @@ typedef struct {
     int      ser_rx_active, ser_rx_bit_idx;
     uint8_t  ser_rx_byte;
 
+    /* Ponte UART genérica usada pelo LasecPlot. O Core drena RX em lotes e enfileira TX. */
+    uint8_t  uart_rx_ring[UART_RING_CAP];
+    uint32_t uart_rx_head, uart_rx_tail, uart_rx_count;
+    uint8_t  uart_tx_ring[UART_RING_CAP];
+    uint32_t uart_tx_head, uart_tx_tail, uart_tx_count;
+    int      uart_tx_active, uart_tx_bit_idx;
+    uint8_t  uart_tx_byte;
+    char     uart_hex[(UART_RING_CAP * 2) + 1];
+    char     source_name[128];
+    char     uart_mode[24];
+    int      uart_expose;
+
     /* Serial Port */
     char     port_name[64];
     uint32_t port_baudrate;
@@ -151,6 +166,34 @@ static double cfg_num(PeriphState *s, const char *name, double fallback) {
             && v.kind == LSDN_PROPERTY_NUMBER)
         return v.number_value;
     return fallback;
+}
+
+static int hex_value(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+}
+
+static void uart_rx_push(PeriphState *s, uint8_t byte) {
+    if (s->uart_rx_count == UART_RING_CAP) { /* bounded: discard oldest, preserve newest stream */
+        s->uart_rx_tail = (s->uart_rx_tail + 1u) % UART_RING_CAP;
+        s->uart_rx_count--;
+    }
+    s->uart_rx_ring[s->uart_rx_head] = byte;
+    s->uart_rx_head = (s->uart_rx_head + 1u) % UART_RING_CAP;
+    s->uart_rx_count++;
+}
+
+static void uart_start_tx(PeriphState *s) {
+    if (s->uart_tx_active || s->uart_tx_count == 0) return;
+    s->uart_tx_byte = s->uart_tx_ring[s->uart_tx_tail];
+    s->uart_tx_tail = (s->uart_tx_tail + 1u) % UART_RING_CAP;
+    s->uart_tx_count--;
+    s->uart_tx_active = 1;
+    s->uart_tx_bit_idx = -1; /* start bit */
+    s->api->pin_write(s->host_ctx, 0, 0);
+    s->api->schedule_event(s->host_ctx, s->ser_bit_period_ns, 21u);
 }
 
 /* ------------------------------------------------------------------ */
@@ -219,6 +262,7 @@ static void periph_init(LsdnDevice *dev) {
     else if (strstr(tid, "serialport")) s->kind = KIND_SERIALPORT;
     else if (strstr(tid, "sdcard"))     s->kind = KIND_SDCARD;
     else if (strstr(tid, "esp01"))      s->kind = KIND_ESP01;
+    else if (strstr(tid, "lasecplot"))  s->kind = KIND_LASECPLOT;
 
     s->joy_x  = (int)cfg_num(s, "x_pos",      512.0);
     s->joy_y  = (int)cfg_num(s, "y_pos",       512.0);
@@ -251,6 +295,9 @@ static void periph_init(LsdnDevice *dev) {
     s->ser_bit_period_ns = s->ser_baudrate > 0 ? 1000000000u / s->ser_baudrate : 104167u;
     s->ser_data_bits     = (int)cfg_num(s, "data_bits", 8.0);
     s->ser_stop_bits     = (int)cfg_num(s, "stop_bits", 1.0);
+    strncpy(s->source_name, cfg_str(s, "source_name", "LasecPlot 1"), sizeof(s->source_name)-1);
+    strncpy(s->uart_mode, cfg_str(s, "mode", "read-only"), sizeof(s->uart_mode)-1);
+    s->uart_expose = (int)cfg_num(s, "expose", 1.0);
 
     strncpy(s->port_name, cfg_str(s, "port_name", "COM1"), sizeof(s->port_name) - 1);
     s->port_baudrate  = (uint32_t)cfg_num(s, "baudrate",   9600.0);
@@ -270,6 +317,11 @@ static void periph_init(LsdnDevice *dev) {
 static void periph_stamp(LsdnDevice *dev, LsdnMatrixView *m) {
     PeriphState *s = (PeriphState *)dev;
     if (!m) return;
+
+    if (s->kind == KIND_LASECPLOT) {
+        if (!s->uart_tx_active && s->uart_tx_count > 0) uart_start_tx(s);
+        else if (!s->uart_tx_active) s->api->pin_write(s->host_ctx, 0, 1); /* UART idle */
+    }
 
     switch (s->kind) {
         case KIND_KY023: {
@@ -342,6 +394,7 @@ static void periph_on_event(LsdnDevice *dev, const LsdnEvent *ev) {
                 }
                 break;
             case KIND_SERIALTERM:
+            case KIND_LASECPLOT:
                 /* RX = pin 1; detect start bit (high→low) */
                 if (ev->a == 1 && ev->b == 0 && !s->ser_rx_active) {
                     s->ser_rx_active  = 1;
@@ -377,6 +430,7 @@ static void periph_on_event(LsdnDevice *dev, const LsdnEvent *ev) {
                 }
                 break;
             case KIND_SERIALTERM:
+            case KIND_LASECPLOT:
                 if (id == 20u) {
                     int data_bits = s->ser_data_bits > 0 ? s->ser_data_bits : 8;
                     if (s->ser_rx_bit_idx < data_bits) {
@@ -385,16 +439,33 @@ static void periph_on_event(LsdnDevice *dev, const LsdnEvent *ev) {
                         s->ser_rx_bit_idx++;
                         s->api->schedule_event(s->host_ctx, s->ser_bit_period_ns, 20u);
                     } else {
-                        int pos = s->ser_tx_pos;
-                        if (pos < 255) {
-                            s->ser_tx_buf[pos]   = (char)s->ser_rx_byte;
-                            s->ser_tx_buf[pos+1] = '\0';
-                            s->ser_tx_pos = pos + 1;
+                        if (s->kind == KIND_LASECPLOT) uart_rx_push(s, s->ser_rx_byte);
+                        else {
+                            int pos = s->ser_tx_pos;
+                            if (pos < 255) {
+                                s->ser_tx_buf[pos]   = (char)s->ser_rx_byte;
+                                s->ser_tx_buf[pos+1] = '\0';
+                                s->ser_tx_pos = pos + 1;
+                            }
                         }
                         s->ser_rx_active  = 0;
                         s->ser_rx_bit_idx = 0;
                     }
                 }
+                if (id == 21u && s->kind == KIND_LASECPLOT && s->uart_tx_active) {
+                    s->uart_tx_bit_idx++;
+                    if (s->uart_tx_bit_idx < s->ser_data_bits) {
+                        s->api->pin_write(s->host_ctx, 0,
+                            (s->uart_tx_byte >> (unsigned)s->uart_tx_bit_idx) & 1u);
+                        s->api->schedule_event(s->host_ctx, s->ser_bit_period_ns, 21u);
+                    } else {
+                        s->api->pin_write(s->host_ctx, 0, 1);
+                        s->uart_tx_active = 0;
+                        s->api->schedule_event(s->host_ctx,
+                            s->ser_bit_period_ns * (uint64_t)(s->ser_stop_bits > 0 ? s->ser_stop_bits : 1), 22u);
+                    }
+                }
+                if (id == 22u && s->kind == KIND_LASECPLOT) uart_start_tx(s);
                 break;
             case KIND_ESP01:
                 if (id == 30u) {
@@ -475,6 +546,29 @@ static uint32_t periph_get_property(LsdnDevice *dev, const char *name, LsdnPrope
             if (!strcmp(name,"rx_buffer")) RET_STR(s->ser_rx_buf);
             if (!strcmp(name,"tx_bytes"))  RET_STR(s->ser_tx_buf);
             break;
+        case KIND_LASECPLOT:
+            if (!strcmp(name,"source_name")) RET_STR(s->source_name);
+            if (!strcmp(name,"baudrate")) RET_NUM(s->ser_baudrate);
+            if (!strcmp(name,"data_bits")) RET_NUM(s->ser_data_bits);
+            if (!strcmp(name,"stop_bits")) RET_NUM(s->ser_stop_bits);
+            if (!strcmp(name,"mode")) RET_STR(s->uart_mode);
+            if (!strcmp(name,"expose")) RET_BOOL(s->uart_expose);
+            if (!strcmp(name,"interop_tx_hex")) RET_STR("");
+            if (!strcmp(name,"interop_rx_hex")) {
+                static const char digits[] = "0123456789abcdef";
+                uint32_t n = 0;
+                while (s->uart_rx_count && n < UART_RING_CAP) {
+                    uint8_t byte = s->uart_rx_ring[s->uart_rx_tail];
+                    s->uart_rx_tail = (s->uart_rx_tail + 1u) % UART_RING_CAP;
+                    s->uart_rx_count--;
+                    s->uart_hex[n*2] = digits[byte >> 4];
+                    s->uart_hex[n*2+1] = digits[byte & 15];
+                    n++;
+                }
+                s->uart_hex[n*2] = '\0';
+                RET_STR(s->uart_hex);
+            }
+            break;
         case KIND_SERIALPORT:
             if (!strcmp(name,"port_name")) RET_STR(s->port_name);
             if (!strcmp(name,"baudrate"))  RET_NUM(s->port_baudrate);
@@ -546,6 +640,35 @@ static uint32_t periph_set_property(LsdnDevice *dev, const char *name, const Lsd
             if (!strcmp(name,"stop_bits")) { s->ser_stop_bits = (int)n; return 1; }
             if (!strcmp(name,"rx_buffer") && val->kind == LSDN_PROPERTY_STRING && val->string_value) {
                 strncpy(s->ser_rx_buf, val->string_value, sizeof(s->ser_rx_buf)-1); return 1;
+            }
+            break;
+        case KIND_LASECPLOT:
+            if (!strcmp(name,"source_name") && val->kind == LSDN_PROPERTY_STRING && val->string_value) {
+                strncpy(s->source_name, val->string_value, sizeof(s->source_name)-1); return 1;
+            }
+            if (!strcmp(name,"baudrate")) {
+                s->ser_baudrate = (uint32_t)n;
+                s->ser_bit_period_ns = s->ser_baudrate > 0 ? 1000000000u / s->ser_baudrate : 8681u;
+                return 1;
+            }
+            if (!strcmp(name,"data_bits")) { s->ser_data_bits = (int)n; return 1; }
+            if (!strcmp(name,"stop_bits")) { s->ser_stop_bits = (int)n; return 1; }
+            if (!strcmp(name,"mode") && val->kind == LSDN_PROPERTY_STRING && val->string_value) {
+                strncpy(s->uart_mode, val->string_value, sizeof(s->uart_mode)-1); return 1;
+            }
+            if (!strcmp(name,"expose")) { s->uart_expose = b; return 1; }
+            if (!strcmp(name,"interop_rx_hex")) return 1;
+            if (!strcmp(name,"interop_tx_hex") && val->kind == LSDN_PROPERTY_STRING && val->string_value) {
+                const char *p = val->string_value;
+                while (p[0] && p[1]) {
+                    int hi = hex_value(p[0]), lo = hex_value(p[1]);
+                    if (hi < 0 || lo < 0 || s->uart_tx_count == UART_RING_CAP) break;
+                    s->uart_tx_ring[s->uart_tx_head] = (uint8_t)((hi << 4) | lo);
+                    s->uart_tx_head = (s->uart_tx_head + 1u) % UART_RING_CAP;
+                    s->uart_tx_count++;
+                    p += 2;
+                }
+                return 1;
             }
             break;
         case KIND_SERIALPORT:

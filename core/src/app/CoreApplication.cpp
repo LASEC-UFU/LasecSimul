@@ -1429,6 +1429,27 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
         }
         return resp;
     }
+    if (msg.type == "getProperty") {
+        try {
+            const nlohmann::json payload =
+                msg.payloadJson.empty() ? nlohmann::json::object() : nlohmann::json::parse(msg.payloadJson);
+            const uint32_t instanceId = static_cast<uint32_t>(std::stoul(payload.value("instanceId", std::string{"0"})));
+            const std::string name = payload.value("name", std::string{});
+            const std::optional<PropertyValue> value = session.propertyValueOf(instanceId, name);
+            if (!value) {
+                resp.ok = false;
+                resp.error = "propriedade desconhecida: " + name;
+                resp.payloadJson = nlohmann::json{{"errorCode", "unknown_property"}}.dump();
+            } else {
+                resp.ok = true;
+                resp.payloadJson = nlohmann::json{{"value", propertyValueToJson(*value)}}.dump();
+            }
+        } catch (const std::exception& e) {
+            resp.ok = false;
+            resp.error = std::string("getProperty falhou: ") + e.what();
+        }
+        return resp;
+    }
     if (msg.type == "setSubcircuitChildProperty") {
         // Overlay de Modo Placa no circuito principal -- edita uma propriedade de um componente
         // DENTRO de um subcircuito (ex: "button_en") endereçando por id local em vez do índice Core

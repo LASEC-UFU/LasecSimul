@@ -157,6 +157,11 @@ export class CoreClient {
     return { requiresRestart: Boolean(resp?.requiresRestart) };
   }
 
+  async getProperty(instanceId: string, name: string): Promise<unknown> {
+    const resp = await this.request("getProperty", { instanceId, name }) as { value: unknown };
+    return resp.value;
+  }
+
   /** Edita uma propriedade de um componente DENTRO de um subcircuito, endereçando por id local
    * (ex: "button_en") em vez do índice Core -- usado pelo overlay de Modo Placa no circuito
    * principal, ver `core/src/app/CoreApplication.cpp::"setSubcircuitChildProperty"`. */

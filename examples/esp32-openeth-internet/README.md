@@ -1,5 +1,8 @@
 # ESP32 OpenETH + internet no LasecSimul
 
+Para compilar com PlatformIO usando `setup()`/`loop()` e bibliotecas Arduino,
+consulte [`PLATFORMIO_ARDUINO.md`](PLATFORMIO_ARDUINO.md).
+
 Este exemplo usa a pilha `esp_netif`/lwIP real do ESP-IDF sobre o MAC virtual
 OpenETH. O modo de rede padrão agora é `lab-bridge`, que conecta a interface a
 uma TAP previamente provisionada e permite obter IP do DHCP real da LAN. Para
@@ -37,10 +40,9 @@ No LasecSimul, selecione
 `build/lasecsimul-openeth-flash.bin` em **Carregar firmware** e inicie a
 simulacao. O monitor UART0 deve registrar:
 
-- aquisicao de IP por DHCP no formato `10.<namespace>.<instancia>.15`;
-- gateway `10.<namespace>.<instancia>.2`;
-- resolucao DNS de `example.com` pelo DNS virtual
-  `10.<namespace>.<instancia>.3`;
+- no modo `lab-bridge`, aquisição de IP, gateway e DNS fornecidos pela rede real;
+- no modo `isolated`, IP `10.<namespace>.<instancia>.15`, gateway `.2` e DNS `.3`;
+- resolução DNS de `example.com`;
 - uma linha de resposta HTTP.
 
 Por padrao, o namespace e escolhido automaticamente por processo LasecSimul.

@@ -1,14 +1,24 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>LasecSimul.Setup</AssemblyName>
     <RootNamespace>LasecSimul.Setup</RootNamespace>
+    <ApplicationIcon Condition="Exists('setup.ico')">setup.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="payload.vsix" LogicalName="PayloadVsix" />
+    <EmbeddedResource Include="network-gateway.exe" LogicalName="NetworkGateway" />
+    <EmbeddedResource Include="tap-windows6\amd64\OemVista.inf" LogicalName="TapWindows.OemVista.inf" />
+    <EmbeddedResource Include="tap-windows6\amd64\devcon.exe" LogicalName="TapWindows.devcon.exe" />
+    <EmbeddedResource Include="tap-windows6\amd64\tap0901.cat" LogicalName="TapWindows.tap0901.cat" />
+    <EmbeddedResource Include="tap-windows6\amd64\tap0901.sys" LogicalName="TapWindows.tap0901.sys" />
+    <EmbeddedResource Include="tap-windows6\COPYING" LogicalName="TapWindows.COPYING" />
+    <EmbeddedResource Include="tap-windows6\COPYRIGHT.GPL" LogicalName="TapWindows.COPYRIGHT.GPL" />
+    <EmbeddedResource Include="tap-windows6\VERSION.txt" LogicalName="TapWindows.VERSION.txt" />
+    <EmbeddedResource Include="tap-windows6\tap-windows6-9.27.0-source.zip" LogicalName="TapWindows.SourceZip" />
   </ItemGroup>
 </Project>

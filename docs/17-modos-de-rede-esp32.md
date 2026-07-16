@@ -8,7 +8,8 @@ O LasecSimul oferece dois backends para a interface OpenETH da ESP32. O modo pad
 Fluxo:
 
 ```text
-ESP-IDF/lwIP -> OpenETH emulada -> QEMU TAP -> bridge do host -> LAN física
+ESP-IDF/lwIP -> OpenETH emulada -> socket TCP local -> gateway central
+              -> uma TAP -> bridge do host -> LAN física
 ```
 
 O DHCP, gateway, DNS, ARP, mDNS e tráfego broadcast são os da rede real. Assim, cada ESP32 obtém
@@ -16,14 +17,14 @@ um IP dinâmico do mesmo servidor DHCP dos computadores e aparece como outro dis
 Servidores HTTP/MQTT dentro da ESP32 são acessados diretamente por esse IP; não há port forwarding
 ou NAT neste modo. mDNS funciona se a rede física permitir multicast IPv4/IPv6 entre os clientes.
 
-No Windows, o backend TAP do QEMU abre a interface com exclusividade. Portanto cada ESP32 simultânea
-precisa de sua própria TAP. O padrão é `LasecSimul TAP {namespace}-{instance}`; por exemplo, namespace
-42 e componente 7 usam `LasecSimul TAP 42-7`. As TAPs devem ser instaladas e adicionadas à bridge da
-interface Ethernet física uma única vez por um administrador. Não reutilize a mesma TAP em dois
-QEMUs.
+No Windows existe apenas uma interface `LasecSimul TAP`, aberta pelo processo central
+`LasecSimul.NetworkGateway.exe`. Todos os QEMUs conectam a `127.0.0.1:9011` usando o protocolo de
+quadros do backend socket do QEMU (comprimento big-endian de 32 bits seguido do quadro Ethernet).
+O gateway aprende endereços MAC, encaminha tráfego local entre ESP32 e envia/recebe tráfego externo
+pela TAP. Assim a exclusividade do driver TAP não limita a quantidade de QEMUs.
 
 Configure um namespace exclusivo para cada aluno dentro do mesmo domínio de broadcast. Ele não fixa
-o IP: identifica a TAP e compõe um MAC local exclusivo. O DHCP do laboratório continua decidindo o IP.
+o IP: compõe parte de um MAC local exclusivo. O DHCP do laboratório continua decidindo o IP.
 Para dezenas de instâncias, reserve endereços suficientes no pool DHCP e confirme que a política do
 switch aceita vários MACs por porta do thin client (port-security/NAC pode bloquear esse cenário).
 
@@ -33,7 +34,7 @@ Configuração do VS Code:
 {
   "lasecsimul.network.mode": "lab-bridge",
   "lasecsimul.network.namespace": 42,
-  "lasecsimul.network.tapInterface": "LasecSimul TAP {namespace}-{instance}"
+  "lasecsimul.network.gatewayPort": 9011
 }
 ```
 
@@ -64,13 +65,20 @@ Ambos os modos transportam Ethernet, não o rádio Wi-Fi da ESP32. O firmware de
 TLS, HTTP, MQTT e mDNS permanecem dentro do firmware. `WiFi.begin()`/`esp_wifi` não selecionam a
 OpenETH e ainda exigiriam a emulação do controlador MAC Wi-Fi proprietário.
 
-## Limites operacionais do bridge direto
+## Instalação e limites operacionais
 
-- A instalação da TAP e a criação/alteração da bridge são operações administrativas; a execução
-  posterior do simulador normalmente não precisa elevar privilégios.
+- O instalador baixa no build o TAP-Windows6 9.27.0 oficial, valida SHA-256 e embute somente
+  INF/CAT/SYS, licença GPLv2 e o código-fonte correspondente. Na instalação, uma etapa UAC instala
+  o driver, cria `LasecSimul TAP`, cria a Windows Network Bridge e registra o gateway para iniciar
+  como SYSTEM no boot. O simulador e os alunos não precisam elevar privilégios depois disso.
+- Em instalações posteriores, cada aluno recebe sua cópia completa da extensão/Core/QEMU no perfil,
+  mas o instalador detecta e reutiliza a infraestrutura global. Desinstalar a extensão no VS Code
+  não remove TAP, bridge ou gateway; esses componentes possuem uma entrada administrativa própria
+  no Painel de Controle.
+- Quando houver mais de uma interface Ethernet física ativa, o instalador pede ao administrador
+  qual delas deve integrar a bridge. Também aceita `--bridge-interface "Ethernet"`.
 - Wi-Fi físico costuma rejeitar bridge Ethernet transparente de múltiplos MACs; prefira a interface
   Ethernet cabeada do thin client.
-- O QEMU falha ao iniciar a NIC se a TAP calculada não existir ou já estiver aberta. Se a infraestrutura
-  TAP ainda não foi provisionada, selecione temporariamente `isolated`.
-- Em escala maior, um futuro switch/gateway central pode multiplexar QEMUs sobre uma única interface
-  do host. O modo atual privilegia fidelidade L2 e isolamento de recursos por TAP.
+- O switch físico precisa aceitar vários MACs na porta do thin client e o DHCP precisa ter endereços
+  suficientes. Port-security/NAC ou isolamento de clientes pode bloquear DHCP, mDNS ou comunicação.
+- Se o gateway central ou a bridge não estiver disponível, selecione temporariamente `isolated`.
