@@ -7236,7 +7236,23 @@ function renderExternalLabel(component: WebviewComponentModel, kind: ExternalLab
   el.textContent = text;
   el.style.left = `${component.x + offset.x}px`;
   el.style.top = `${component.y + offset.y}px`;
-  el.style.transform = rotation === 0 ? "" : `rotate(${rotation}deg)`;
+  // `symbol.pin` precisa bater EXATAMENTE com `packagePinLeadSvg` (pipeline real, usado pro
+  // dispositivo colocado) -- duas divergências reais encontradas comparando os dois lado a lado:
+  // (1) `.component-floating-label--id` tem `font-size:11px` fixo no CSS (tamanho genérico de
+  // qualquer rótulo de componente), mas o pino real usa `labelFontSize` (padrão 7px, ver
+  // `subcircuitSymbolScene.ts::DEFAULT_LABEL_FONT_SIZE`) -- sem isto, todo rótulo de pino aparecia
+  // maior do que deveria. (2) o `<div>` flutuante posiciona seu canto SUPERIOR-ESQUERDO em
+  // `left/top`, mas `packagePinLeadSvg` desenha com `text-anchor:middle;dominant-baseline:middle`
+  // (texto CENTRADO nesse mesmo ponto) -- um rótulo mais comprido divergia cada vez mais do centro
+  // real conforme ficava mais largo. `translate(-50%,-50%)` centraliza o `<div>` no mesmo ponto que
+  // o SVG centraliza o texto.
+  if (kind === "id" && component.typeId === SYMBOL_PIN_TYPE_ID) {
+    const labelFontSize = typeof component.properties.labelFontSize === "number" ? component.properties.labelFontSize : 7;
+    el.style.fontSize = `${labelFontSize}px`;
+    el.style.transform = `translate(-50%, -50%)${rotation === 0 ? "" : ` rotate(${rotation}deg)`}`;
+  } else {
+    el.style.transform = rotation === 0 ? "" : `rotate(${rotation}deg)`;
+  }
   // `__ui_idLabelColor` -- cor customizada do rótulo (usada por `symbol.pin`, ver
   // `catalog/subcircuitSymbolScene.ts`), genérica pra qualquer id-label. Ausente == cor padrão do
   // CSS (`component-floating-label--id`), nunca sobrescrita.
