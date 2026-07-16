@@ -5622,7 +5622,11 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
   const {
     catalogEntry, isPushButton, isSwitchToggle, isFixedVolt, isRail, isTunnel, isMeter, isVoltmeter, hasPackageVisual, isMissingSubcircuitRef,
   } = componentVisualFlags(component);
-  const isUnknownComponent = !catalogEntry && !component.subcircuitRef;
+  // `symbol.pin` (Modo Símbolo) é deliberadamente ausente do catálogo geral (nenhum typeId de pino na
+  // paleta, pedido original) -- sem esta exceção, TODO pino do Símbolo caía em `isUnknownComponent`
+  // e desenhava o placeholder "?" tracejado vermelho de componente desconhecido (bug real: o pino
+  // nunca mostrava seu lead+círculo simples, só o marcador de erro).
+  const isUnknownComponent = !catalogEntry && !component.subcircuitRef && component.typeId !== SYMBOL_PIN_TYPE_ID;
   const meterClass = isMeter ? `component--meter component--${component.typeId.replace(/[._]/g, "-")}` : "";
 
   // CSS aplica da direita pra esquerda: scale (flip) primeiro, rotate depois -- mesma ordem usada
