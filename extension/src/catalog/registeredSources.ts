@@ -8,6 +8,16 @@ import { fileExists, normalizeAbsolutePath, readJsonFile } from "../pathUtils";
 import { sanitizeManifestDefaultProperties, sanitizePackage } from "./packageSanitizers";
 import { sanitizeMcuSerialPorts } from "./catalogMetadata";
 import { SUBCIRCUIT_SCHEMA_VERSION, schemaVersionRejectionMessage } from "./subcircuitDocument";
+import { livePackagePreviewSymbolSvg } from "../ui/webview/componentSymbols";
+
+/** Converte um `icon{}` canônico (`PackageDescriptor`, sem pinos) num `<svg>` autocontido pra usar
+ * como `iconSvgInline` -- MESMO pipeline (`resolvePackageLayout`+`packageBodySvg`, via
+ * `livePackagePreviewSymbolSvg`) que desenha qualquer symbol/package real, garantindo que o ícone do
+ * catálogo é literalmente a mesma renderização, nunca uma segunda implementação divergente. */
+function iconDescriptorToSvgInline(icon: PackageDescriptor): string {
+  const { svg, box } = livePackagePreviewSymbolSvg(icon);
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${box.width} ${box.height}" width="${box.width}" height="${box.height}">${svg}</svg>`;
+}
 
 /** EX-9 (.spec/lasecsimul-native-devices.spec): resolução de fontes registradas (`.lsdevice`/
  * `.lssubcircuit`/mcu-adapter) pra entradas de catálogo -- extraído de `extension.ts` por ser um
@@ -317,6 +327,17 @@ function manifestFolderPath(json: Record<string, unknown>): string[] | undefined
 }
 
 function manifestIconFields(json: Record<string, unknown>, manifestDir: string): Pick<ParsedSubcircuitManifest, "icon" | "iconSvgInline" | "iconFilePath"> {
+  // Ícone vetorial CANÔNICO (schemaVersion 3, `catalog/subcircuitDocument.ts::SubcircuitDocument.icon`)
+  // -- objeto `PackageDescriptor`, nunca string; renderizado direto (MESMO pipeline que desenha
+  // qualquer symbol/package real, `resolvePackageLayout`+`packageBodySvg`) pro catálogo, nunca
+  // dependente de screenshot/arquivo externo gerado manualmente. `.lsdevice` (abi-device/mcu-adapter)
+  // nunca tem `icon` como objeto -- o `typeof` abaixo já distingue os dois casos sem parâmetro extra.
+  if (typeof json.icon === "object" && json.icon !== null) {
+    const iconDescriptor = sanitizePackage(json.icon, manifestDir);
+    if (iconDescriptor) {
+      return { icon: undefined, iconFilePath: undefined, iconSvgInline: iconDescriptorToSvgInline(iconDescriptor) };
+    }
+  }
   const manifestIcon = typeof json.icon === "string" ? json.icon.trim() : undefined;
   const iconSvgInline = manifestIcon?.startsWith("<svg") ? manifestIcon : undefined;
   const iconFilePath = !iconSvgInline && typeof json.iconPath === "string" && json.iconPath.trim()

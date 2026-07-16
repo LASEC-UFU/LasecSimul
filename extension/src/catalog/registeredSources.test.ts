@@ -63,6 +63,35 @@ function sourceFor(filePath: string): RegisteredSource {
       assert(resolved.entry.pinIds?.[0] === "P1", "pinId deve vir de interface[].pinId");
     });
 
+    await test("subcircuito com icon{} vetorial (schemaVersion 3) gera iconSvgInline direto do PackageDescriptor, nunca dependente de arquivo externo", () => {
+      const manifestPath = path.join(tmpDir, "vector-icon.lssubcircuit");
+      fs.writeFileSync(
+        manifestPath,
+        JSON.stringify({
+          schemaVersion: 3,
+          typeId: "subcircuits.vector_icon_test",
+          name: "Vector Icon Test",
+          components: [],
+          topology: { revision: 0, nodes: [], conductors: [] },
+          interface: [],
+          exposedComponents: [],
+          icon: {
+            width: 24,
+            height: 24,
+            pins: [],
+            shapes: [{ kind: "rect", x: 1, y: 1, w: 22, h: 22, fill: "#2b2f36" }],
+          },
+        }, null, 2),
+        "utf8"
+      );
+
+      const resolved = resolveRegisteredItem(sourceFor(manifestPath), tmpDir, "pt-BR", new Set());
+      assert(resolved.entry.disabled !== true, "subcircuito com icon vetorial não deveria nascer desabilitado");
+      assert(typeof resolved.entry.iconSvgInline === "string" && resolved.entry.iconSvgInline.startsWith("<svg"), "iconSvgInline deveria ser um <svg> autocontido gerado do icon{}");
+      assert(resolved.entry.iconSvgInline!.includes("fill=\"#2b2f36\""), "SVG gerado deveria refletir o fill declarado no icon{}");
+      assert(resolved.entry.iconFilePath === undefined, "icon vetorial nunca deveria depender de um arquivo externo");
+    });
+
     await test("subcircuito com library.json preserva carregamento por biblioteca", () => {
       const withLibraryDir = path.join(tmpDir, "with-library");
       fs.mkdirSync(withLibraryDir);
