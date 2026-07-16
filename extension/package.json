@@ -209,18 +209,20 @@
             "isolated"
           ],
           "enumDescriptions": [
-            "Liga a OpenETH a uma interface TAP exclusiva e, quando essa TAP estiver na bridge da rede física, a ESP32 recebe IP do DHCP real do laboratório e participa da mesma LAN.",
+            "Conecta a OpenETH ao gateway central local, que multiplexa todos os QEMUs sobre uma única TAP ligada à bridge física. Cada ESP32 recebe IP próprio do DHCP real.",
             "Usa libslirp/NAT dentro do QEMU; funciona sem administrador e mantém cada ESP32 isolada da LAN e das demais instâncias."
           ],
           "default": "lab-bridge",
           "scope": "window",
-          "markdownDescription": "Modo de rede da ESP32. `lab-bridge` é o padrão e requer uma interface TAP-Windows/Linux previamente criada para cada ESP32 e ligada à bridge da LAN. `isolated` usa SLIRP/NAT e não requer TAP. Recarregue a janela após alterar."
+          "markdownDescription": "Modo de rede da ESP32. `lab-bridge` é o padrão e usa o LasecSimul Network Gateway instalado no computador. `isolated` usa SLIRP/NAT por QEMU. Recarregue a janela após alterar."
         },
-        "lasecsimul.network.tapInterface": {
-          "type": "string",
-          "default": "LasecSimul TAP {namespace}-{instance}",
-          "scope": "window",
-          "markdownDescription": "Nome ou padrão da interface TAP usada por `lab-bridge`. `{namespace}` é substituído pelo namespace do aluno e `{instance}` pelo índice da ESP32. Cada QEMU precisa de uma TAP exclusiva no Windows. Exemplo: `LasecSimul TAP 42-7`."
+        "lasecsimul.network.gatewayPort": {
+          "type": "integer",
+          "default": 9011,
+          "minimum": 1,
+          "maximum": 65535,
+          "scope": "machine",
+          "markdownDescription": "Porta TCP somente-local do gateway central. Todos os QEMUs usam esta porta; normalmente não deve ser alterada."
         },
         "lasecsimul.network.namespace": {
           "type": "integer",
@@ -228,7 +230,7 @@
           "minimum": -1,
           "maximum": 255,
           "scope": "window",
-          "markdownDescription": "Identificador desta instância/aluno. `-1` seleciona automaticamente; de `0` a `255`, use um valor exclusivo no mesmo domínio de broadcast. No modo `isolated`, forma a rede `10.<namespace>.<instância>.0/24`. No modo `lab-bridge`, forma o nome padrão da TAP e parte do MAC `02:4c:53:<namespace>:<instância>:01`; o IP é entregue pelo DHCP real da LAN. Recarregue a janela após alterar."
+          "markdownDescription": "Identificador desta instância/aluno. `-1` seleciona automaticamente; de `0` a `255`, use um valor exclusivo no mesmo domínio de broadcast. No modo `isolated`, forma a rede `10.<namespace>.<instância>.0/24`. No modo `lab-bridge`, namespace e instância geram um MAC local estável `02:4c:<hash-32-bits>`; o IP é entregue pelo DHCP real da LAN. Recarregue a janela após alterar."
         },
         "lasecsimul.ui.showComponentIds": {
           "type": "boolean",
@@ -309,7 +311,7 @@
     "watch": "tsc -p ./ -w",
     "watch:webview": "tsc -p ./tsconfig.webview.json -w",
     "pretest": "npm run compile && tsc -p ./tsconfig.test.json",
-    "test": "node out-test/test/project/ProjectSerializer.test.js && node out-test/src/ipc/CoreClient.test.js && node out-test/src/catalog/UnifiedCatalog.test.js && node out-test/src/catalog/registeredSources.test.js && node out-test/src/catalog/catalogCommands.test.js && node out-test/src/catalog/deviceUniqueness.test.js && node out-test/src/catalog/catalogMerge.test.js && node out-test/src/catalog/simulideGraphicalCatalog.test.js && node out-test/src/language.test.js && node out-test/src/ui/webview/paletteTree.test.js && node out-test/src/ui/webview/wireGeometry.test.js && node out-test/src/ui/webview/componentGeometry.test.js && node out-test/src/ui/webview/wireTopology.test.js && node out-test/src/ui/webview/topologyDocument.test.js && node out-test/src/ui/webview/subcircuitBoardMode.test.js && node out-test/src/ui/webview/valueFormatting.test.js && node out-test/src/ui/webview/componentSymbols.test.js && node out-test/src/ui/webview/batchProperties.test.js && node out-test/src/ui/webview/instrumentTrigger.test.js && node out-test/src/ui/webview/instrumentViewport.test.js && node out-test/src/catalog/simulideSceneTranslator.test.js && node out-test/src/trust/trustDecision.test.js && node out-test/src/catalog/subcircuitPackageAuthoring.test.js && node out-test/src/catalog/subcircuitDocument.test.js && node out-test/src/catalog/subcircuitPinModel.test.js && node out-test/src/catalog/subcircuitExposedComponents.test.js && node out-test/src/catalog/subcircuitValidation.test.js",
+    "test": "node out-test/test/project/ProjectSerializer.test.js && node out-test/src/ipc/CoreClient.test.js && node out-test/src/catalog/UnifiedCatalog.test.js && node out-test/src/catalog/registeredSources.test.js && node out-test/src/catalog/catalogCommands.test.js && node out-test/src/catalog/deviceUniqueness.test.js && node out-test/src/catalog/catalogMerge.test.js && node out-test/src/catalog/simulideGraphicalCatalog.test.js && node out-test/src/language.test.js && node out-test/src/ui/webview/paletteTree.test.js && node out-test/src/ui/webview/wireGeometry.test.js && node out-test/src/ui/webview/componentGeometry.test.js && node out-test/src/ui/webview/wireTopology.test.js && node out-test/src/ui/webview/topologyDocument.test.js && node out-test/src/ui/webview/subcircuitBoardMode.test.js && node out-test/src/ui/webview/valueFormatting.test.js && node out-test/src/ui/webview/componentSymbols.test.js && node out-test/src/ui/webview/batchProperties.test.js && node out-test/src/ui/webview/instrumentTrigger.test.js && node out-test/src/ui/webview/instrumentViewport.test.js && node out-test/src/catalog/simulideSceneTranslator.test.js && node out-test/src/trust/trustDecision.test.js && node out-test/src/catalog/subcircuitPackageAuthoring.test.js && node out-test/src/catalog/subcircuitDocument.test.js && node out-test/src/catalog/subcircuitPinModel.test.js && node out-test/src/catalog/subcircuitExposedComponents.test.js && node out-test/src/catalog/subcircuitValidation.test.js && node out-test/src/catalog/subcircuitSymbolScene.test.js",
     "test:e2e": "npm run compile && node test/e2e/run-webview-e2e.cjs",
     "test:e2e:update": "npm run compile && set UPDATE_SNAPSHOTS=1&& node test/e2e/run-webview-e2e.cjs"
   },
