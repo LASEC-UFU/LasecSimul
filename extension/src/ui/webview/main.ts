@@ -426,6 +426,14 @@ let activePropertyTarget:
 let activeBatchPropertyError: string | undefined;
 let propertyDialogShowAll = false;
 const lasecPlotRuntime = new Map<string, { opened: boolean; clients: number; error?: string }>();
+type SerialFormat = "ASCII" | "HEX" | "DEC" | "OCT" | "BIN";
+interface SerialLogChunk { direction: "rx" | "tx"; bytes: number[]; }
+interface SerialTerminalRuntime {
+  opened: boolean; online: boolean; error?: string; receiveFormat: SerialFormat; sendFormat: SerialFormat;
+  chunks: SerialLogChunk[]; inputText: string; loadedFile?: Uint8Array; rxActivityUntil?: number; txActivityUntil?: number;
+}
+const serialTerminalRuntime = new Map<string, SerialTerminalRuntime>();
+let serialTerminalLayer: HTMLDivElement | undefined;
 let clipboardItems: { components: WebviewComponentModel[]; wires: WebviewWireModel[] } | undefined;
 const activePushShortcutIds = new Set<string>();
 /** `true` durante QUALQUER gesto de arrastar componente em andamento (mouse ainda pressionado) --
@@ -447,6 +455,91 @@ let isDraggingComponent = false;
  * incremental via `updateWireVisual`, ver UI-2/UI-3) reconstruiria o canvas inteiro à toa. */
 function isInteractiveGestureInProgress(): boolean {
   return isDraggingComponent || wireCornerDrag !== undefined || wireSegmentDrag !== undefined;
+}
+
+function serialFormatBytes(bytes: readonly number[], format: SerialFormat): string {
+  if (format === "ASCII") return bytes.map((value) => String.fromCharCode(value)).join("");
+  const base = format === "HEX" ? 16 : format === "DEC" ? 10 : format === "OCT" ? 8 : 2;
+  const width = format === "HEX" ? 2 : format === "BIN" ? 8 : 3;
+  return bytes.map((value) => value.toString(base).toUpperCase().padStart(width, "0")).join(" ") + (bytes.length ? " " : "");
+}
+
+function parseSerialInput(text: string, format: SerialFormat): Uint8Array {
+  if (format === "ASCII") return new TextEncoder().encode(text);
+  const base = format === "HEX" ? 16 : format === "DEC" ? 10 : format === "OCT" ? 8 : 2;
+  const tokens = text.trim().split(/\s+/).filter(Boolean);
+  const values = tokens.map((token) => {
+    if (!new RegExp(format === "HEX" ? "^[0-9a-fA-F]+$" : format === "DEC" ? "^[0-9]+$" : format === "OCT" ? "^[0-7]+$" : "^[01]+$").test(token))
+      throw new Error(`Valor ${format} inválido: ${token}`);
+    const value = parseInt(token, base);
+    if (!Number.isInteger(value) || value < 0 || value > 255) throw new Error(`Byte fora do intervalo 0..255: ${token}`);
+    return value;
+  });
+  return Uint8Array.from(values);
+}
+
+function serialTerminalLogText(runtime: SerialTerminalRuntime): string {
+  return runtime.chunks.map((chunk) => serialFormatBytes(chunk.bytes, runtime.receiveFormat)).join("");
+}
+
+function renderSerialTerminalWindows(): void {
+  if (!serialTerminalLayer) {
+    serialTerminalLayer = document.createElement("div");
+    serialTerminalLayer.className = "serial-terminal-layer";
+    document.body.appendChild(serialTerminalLayer);
+  }
+  serialTerminalLayer.innerHTML = "";
+  for (const [componentId, runtime] of serialTerminalRuntime) {
+    if (!runtime.opened) continue;
+    const component = state.components.find((entry) => entry.id === componentId);
+    if (!component) continue;
+    const windowEl = document.createElement("section"); windowEl.className = "serial-terminal-window";
+    const title = document.createElement("header"); title.className = "serial-terminal-window__title";
+    const identity = document.createElement("strong"); identity.textContent = component.label;
+    const status = document.createElement("span"); status.textContent = runtime.error ? `⚠ ${runtime.error}` : runtime.online ? "● Online" : "○ Simulação parada";
+    const close = document.createElement("button"); close.textContent = "×"; close.title = "Fechar";
+    close.addEventListener("click", () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestToggleSerialTerminal", componentId }));
+    title.append(identity, status, close);
+
+    const receiveBar = document.createElement("div"); receiveBar.className = "serial-terminal-window__toolbar";
+    const save = document.createElement("button"); save.textContent = "Salvar log";
+    const clearReceive = document.createElement("button"); clearReceive.textContent = "Limpar";
+    const receiveSelect = document.createElement("select");
+    for (const mode of ["ASCII", "HEX", "DEC", "OCT", "BIN"] as SerialFormat[]) { const option = document.createElement("option"); option.value = mode; option.textContent = mode; option.selected = mode === runtime.receiveFormat; receiveSelect.append(option); }
+    save.addEventListener("click", () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestSerialTerminalSaveLog", text: serialTerminalLogText(runtime) }));
+    clearReceive.addEventListener("click", () => { runtime.chunks = []; renderSerialTerminalWindows(); });
+    receiveSelect.addEventListener("change", () => { runtime.receiveFormat = receiveSelect.value as SerialFormat; renderSerialTerminalWindows(); });
+    receiveBar.append(save, clearReceive, document.createTextNode("Formato:"), receiveSelect);
+    const output = document.createElement("pre"); output.className = "serial-terminal-window__output";
+    for (const chunk of runtime.chunks) { const span = document.createElement("span"); span.className = `serial-terminal-window__${chunk.direction}`; span.textContent = serialFormatBytes(chunk.bytes, runtime.receiveFormat); output.append(span); }
+
+    const sendBar = document.createElement("div"); sendBar.className = "serial-terminal-window__toolbar";
+    const load = document.createElement("button"); load.textContent = "Carregar arquivo";
+    const clearSend = document.createElement("button"); clearSend.textContent = "Limpar";
+    const sendButton = document.createElement("button"); sendButton.textContent = "Enviar";
+    const sendSelect = document.createElement("select");
+    for (const mode of ["ASCII", "HEX", "DEC", "OCT", "BIN"] as SerialFormat[]) { const option = document.createElement("option"); option.value = mode; option.textContent = mode; option.selected = mode === runtime.sendFormat; sendSelect.append(option); }
+    const input = document.createElement("textarea"); input.className = "serial-terminal-window__input";
+    if (runtime.loadedFile) { runtime.inputText = runtime.sendFormat === "ASCII" ? new TextDecoder().decode(runtime.loadedFile) : serialFormatBytes([...runtime.loadedFile], runtime.sendFormat); runtime.loadedFile = undefined; }
+    input.value = runtime.inputText;
+    input.addEventListener("input", () => { runtime.inputText = input.value; });
+    const error = document.createElement("div"); error.className = "serial-terminal-window__error";
+    load.addEventListener("click", () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestSerialTerminalLoadFile", componentId }));
+    clearSend.addEventListener("click", () => { input.value = ""; runtime.inputText = ""; });
+    sendSelect.addEventListener("change", () => { runtime.sendFormat = sendSelect.value as SerialFormat; });
+    sendButton.addEventListener("click", () => {
+      try {
+        const bytes = parseSerialInput(input.value, runtime.sendFormat);
+        if (!bytes.byteLength) return;
+        runtime.chunks.push({ direction: "tx", bytes: [...bytes] }); runtime.txActivityUntil = Date.now() + 180;
+        send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestSerialTerminalWrite", componentId, dataHex: Array.from(bytes).map((byte) => byte.toString(16).padStart(2, "0")).join("") });
+        render(); renderSerialTerminalWindows();
+      } catch (cause) { error.textContent = cause instanceof Error ? cause.message : String(cause); }
+    });
+    sendBar.append(load, clearSend, sendButton, document.createTextNode("Formato:"), sendSelect);
+    windowEl.append(title, receiveBar, output, sendBar, input, error); serialTerminalLayer.append(windowEl);
+    output.scrollTop = output.scrollHeight;
+  }
 }
 type ExternalLabelKind = "id" | "value";
 let selectedTextLabel: { componentId: string; kind: ExternalLabelKind } | undefined;
@@ -582,17 +675,29 @@ function createAdditionalTunnelCommand(pinComponentId: string): void {
  * `WebviewProjectState`, sincronizado pelo mecanismo genérico `projectChanged` (sem verbo IPC
  * novo). Posição/rotação/escala/camada iniciais são um palpite razoável (origem, escala 1, camada no
  * topo) -- ajustáveis depois arrastando a projeção no Modo Símbolo. */
+/** Posição padrão pra uma exposição RECÉM-marcada -- empilha à DIREITA do canvas do Símbolo (mesmo
+ * princípio de `fallbackBoardVisualPosition`, usado pelo overlay na instância já colocada), nunca em
+ * cima do corpo/fundo do Símbolo. Sem isto, uma exposição nova nascia em (0,0) -- quase sempre DENTRO
+ * da foto/corpo real, um componente de tamanho nativo (ex: o MCU inteiro, 120x120) cobrindo boa parte
+ * de um Símbolo bem menor (ex: 88x176 do ESP32 DevKitC) por padrão, parecendo que "o Símbolo inteiro
+ * virou o componente exposto" antes do usuário sequer arrastar/redimensionar pra posição final. */
+function fallbackExposedComponentPosition(index: number): { x: number; y: number } {
+  const canvasWidth = state.symbolCanvas?.width ?? 0;
+  return { x: canvasWidth + 16, y: 8 + index * 64 };
+}
+
 function toggleExposedComponentCommand(componentId: string): void {
   const alreadyExposed = state.exposedComponents.some((entry) => entry.componentId === componentId);
   if (alreadyExposed) {
     state = { ...state, exposedComponents: state.exposedComponents.filter((entry) => entry.componentId !== componentId) };
   } else {
     const maxLayer = state.exposedComponents.reduce((max, entry) => Math.max(max, entry.layer), -1);
+    const position = fallbackExposedComponentPosition(state.exposedComponents.length);
     state = {
       ...state,
       exposedComponents: [
         ...state.exposedComponents,
-        { componentId, x: 0, y: 0, rotation: 0, flipH: false, flipV: false, scale: 1, layer: maxLayer + 1 },
+        { componentId, x: position.x, y: position.y, rotation: 0, flipH: false, flipV: false, scale: 1, layer: maxLayer + 1 },
       ],
     };
   }
@@ -5474,6 +5579,25 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
       }
     });
   }
+  if (component.typeId === "peripherals.serialterm") {
+    const runtime = serialTerminalRuntime.get(component.id);
+    bodyGroup.querySelectorAll<SVGTextElement>("text").forEach((text) => {
+      if (text.textContent === "Abrir") {
+        text.textContent = runtime?.opened ? "Fechar" : "Abrir";
+        text.style.cursor = "pointer"; text.style.pointerEvents = "all";
+        text.addEventListener("click", (event: MouseEvent) => {
+          event.stopPropagation(); send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestToggleSerialTerminal", componentId: component.id });
+        });
+      }
+    });
+    const rects = bodyGroup.querySelectorAll<SVGRectElement>("rect");
+    const pinConnected = (pinId: string) => state.topology.conductors.some((wire) =>
+      (endpointId(wire.from) === component.id && endpointPinId(wire.from) === pinId) ||
+      (endpointId(wire.to) === component.id && endpointPinId(wire.to) === pinId));
+    const now = Date.now();
+    if (rects[1]) rects[1].setAttribute("fill", !pinConnected("tx") ? "#000000" : (runtime?.txActivityUntil ?? 0) > now ? "#ffff00" : "#ff0000");
+    if (rects[2]) rects[2].setAttribute("fill", !pinConnected("rx") ? "#000000" : (runtime?.rxActivityUntil ?? 0) > now ? "#ffff00" : "#ff0000");
+  }
   bodyGroup.querySelectorAll<HTMLInputElement>(".meter-channel-input").forEach((input) => {
     const stopComponentGesture = (event: Event) => event.stopPropagation();
     input.addEventListener("pointerdown", stopComponentGesture);
@@ -6245,6 +6369,12 @@ function renderPropertySheet(component: WebviewComponentModel, options: Property
       : "○ Fechado";
     const row = document.createElement("div"); row.className = "property-sheet__actions"; row.append(action, status); shell.append(row);
   }
+  if (component.typeId === "peripherals.serialterm") {
+    const action = document.createElement("button"); action.type = "button"; action.className = "property-sheet__button";
+    action.textContent = serialTerminalRuntime.get(component.id)?.opened ? "Fechar terminal" : "Abrir terminal";
+    action.addEventListener("click", () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestToggleSerialTerminal", componentId: component.id }));
+    const row = document.createElement("div"); row.className = "property-sheet__actions"; row.append(action); shell.append(row);
+  }
   return shell;
 }
 
@@ -6656,6 +6786,29 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     lasecPlotRuntime.set(message.componentId, { opened: message.opened, clients: message.clients, error: message.error });
     render();
     refreshOpenPropertyDialog();
+  }
+
+  if (message.type === "serialTerminalStatus") {
+    const previous = serialTerminalRuntime.get(message.componentId);
+    serialTerminalRuntime.set(message.componentId, { opened: message.opened, online: message.online, error: message.error,
+      receiveFormat: previous?.receiveFormat ?? "ASCII", sendFormat: previous?.sendFormat ?? "ASCII",
+      chunks: previous?.chunks ?? [], inputText: previous?.inputText ?? "", rxActivityUntil: previous?.rxActivityUntil, txActivityUntil: previous?.txActivityUntil });
+    render(); renderSerialTerminalWindows(); refreshOpenPropertyDialog();
+  }
+
+  if (message.type === "serialTerminalData") {
+    const runtime = serialTerminalRuntime.get(message.componentId);
+    if (runtime) {
+      const bytes = Array.from(Uint8Array.from(message.dataHex.match(/../g)?.map((pair) => parseInt(pair, 16)) ?? []));
+      runtime.chunks.push({ direction: "rx", bytes }); runtime.rxActivityUntil = Date.now() + 180;
+      if (runtime.chunks.reduce((sum, chunk) => sum + chunk.bytes.length, 0) > 100_000) runtime.chunks.splice(0, Math.max(1, Math.floor(runtime.chunks.length / 10)));
+      render(); renderSerialTerminalWindows(); setTimeout(() => render(), 200);
+    }
+  }
+
+  if (message.type === "serialTerminalLoadedFile") {
+    const runtime = serialTerminalRuntime.get(message.componentId);
+    if (runtime) { runtime.loadedFile = Uint8Array.from(message.dataHex.match(/../g)?.map((pair) => parseInt(pair, 16)) ?? []); renderSerialTerminalWindows(); }
   }
 
   if (message.type === "simulationRate") {
