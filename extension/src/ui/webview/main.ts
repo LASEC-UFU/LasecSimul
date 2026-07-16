@@ -901,6 +901,109 @@ function renderBoardOverlaysFor(component: WebviewComponentModel): HTMLElement[]
   return elements;
 }
 
+/** Gira UMA exposição (Modo Símbolo) em passos de 90° -- mesmo espírito de `rotateSelectedComponents`,
+ * mas escrito direto em `exposedComponents[]` (nunca no componente interno real). */
+function rotateExposedComponent(componentId: string, steps: 1 | -1 | 2): void {
+  state = {
+    ...state,
+    exposedComponents: state.exposedComponents.map((entry) =>
+      entry.componentId === componentId ? { ...entry, rotation: (((entry.rotation + steps * 90) % 360) + 360) % 360 as 0 | 90 | 180 | 270 } : entry
+    ),
+  };
+  persistState();
+  render();
+}
+
+/** Desenha a projeção de cada componente interno exposto (`state.exposedComponents[]`) dentro do
+ * CANVAS do Símbolo -- só em Modo Símbolo (o conceito não existe em Modo Subcircuito/Ícone). Lê
+ * `typeId`/`properties` do componente interno REAL (`state.components`, ao vivo) a cada render --
+ * NUNCA uma cópia congelada; se o componente interno mudar (cor, estado, propriedade), a projeção
+ * reflete na hora, sem nenhuma sincronização própria. Arrastar a projeção move SÓ a entrada de
+ * apresentação (`entry.x/y`) -- nunca o componente interno em si (posição/rotação/estado
+ * FUNCIONAL continuam pertencendo exclusivamente a ele, ver `catalog/subcircuitDocument.ts::
+ * ExposedComponentEntry`). */
+function renderExposedComponentProjections(canvasContent: HTMLElement): void {
+  if (subcircuitEditorMode !== "symbol") return;
+  for (const entry of state.exposedComponents) {
+    const source = state.components.find((component) => component.id === entry.componentId);
+    if (!source) continue; // referência órfã -- nunca deveria sobreviver a um save (validação no host), mas nunca quebra o render
+    const box = componentBox(source.typeId, source.properties);
+    const width = box.width * entry.scale;
+    const height = box.height * entry.scale;
+    const el = document.createElement("div");
+    el.className = "component component--exposed-projection";
+    el.style.left = `${entry.x}px`;
+    el.style.top = `${entry.y}px`;
+    el.style.width = `${width}px`;
+    el.style.height = `${height}px`;
+    el.style.transform = `rotate(${entry.rotation}deg)${entry.flipH ? " scaleX(-1)" : ""}${entry.flipV ? " scaleY(-1)" : ""}`;
+    el.title = source.label;
+
+    const svg = document.createElementNS(SVG_NS, "svg");
+    svg.setAttribute("viewBox", `0 0 ${box.width} ${box.height}`);
+    svg.classList.add("component__symbol");
+    svg.innerHTML = componentSymbolSvg(source.typeId, source.properties);
+    el.appendChild(svg);
+
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let startX = entry.x;
+    let startY = entry.y;
+    el.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      dragStartX = event.clientX;
+      dragStartY = event.clientY;
+      startX = entry.x;
+      startY = entry.y;
+      el.setPointerCapture(event.pointerId);
+      isDraggingComponent = true;
+
+      const onMove = (moveEvent: PointerEvent): void => {
+        const zoom = state.viewport.zoom || 1;
+        const dx = (moveEvent.clientX - dragStartX) / zoom;
+        const dy = (moveEvent.clientY - dragStartY) / zoom;
+        el.style.left = `${startX + dx}px`;
+        el.style.top = `${startY + dy}px`;
+      };
+      const onUp = (upEvent: PointerEvent): void => {
+        el.removeEventListener("pointermove", onMove);
+        el.removeEventListener("pointerup", onUp);
+        el.removeEventListener("pointercancel", onUp);
+        isDraggingComponent = false;
+        const zoom = state.viewport.zoom || 1;
+        const dx = (upEvent.clientX - dragStartX) / zoom;
+        const dy = (upEvent.clientY - dragStartY) / zoom;
+        state = {
+          ...state,
+          exposedComponents: state.exposedComponents.map((e) =>
+            e.componentId === entry.componentId ? { ...e, x: startX + dx, y: startY + dy } : e
+          ),
+        };
+        persistState();
+        render();
+      };
+      el.addEventListener("pointermove", onMove);
+      el.addEventListener("pointerup", onUp, { once: true });
+      el.addEventListener("pointercancel", onUp, { once: true });
+    });
+
+    el.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      showContextMenu(event, [
+        { label: t("rotateCw"), icon: "rotateCw", onClick: () => rotateExposedComponent(entry.componentId, 1) },
+        { label: t("rotateCcw"), icon: "rotateCcw", onClick: () => rotateExposedComponent(entry.componentId, -1) },
+        { label: t("rotate180"), icon: "rotate180", onClick: () => rotateExposedComponent(entry.componentId, 2) },
+        { kind: "separator" },
+        { label: t("unexposeComponent"), onClick: () => toggleExposedComponentCommand(entry.componentId) },
+      ]);
+    });
+
+    canvasContent.appendChild(el);
+  }
+}
+
 // ────────────────────────────────────────────────────────────────────────────────────────────────
 // Undo/Redo (Ctrl+Z/Ctrl+Y) -- 100% client-side, sem verbo IPC dedicado. `state.components`/`wires`
 // são mutados livremente pelo resto do arquivo (às vezes por reatribuição imutável, às vezes campo a
@@ -2100,7 +2203,8 @@ function clearEphemeralCanvasChildren(canvasContent: HTMLDivElement): void {
     if (!(child instanceof HTMLElement)) continue;
     if (
       child.classList.contains("component--board-overlay") ||
-      child.classList.contains("component-floating-label")
+      child.classList.contains("component-floating-label") ||
+      child.classList.contains("component--exposed-projection")
     ) {
       child.remove();
     }
@@ -2197,6 +2301,8 @@ function render(): void {
   for (const component of boardModeComponents) {
     for (const overlayEl of renderBoardOverlaysFor(component)) canvasContent.appendChild(overlayEl);
   }
+
+  renderExposedComponentProjections(canvasContent);
 
   for (const component of visibleComponents) {
     const embedsOwnIdLabel = component.typeId === TUNNEL_TYPE_ID &&
