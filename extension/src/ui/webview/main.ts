@@ -425,6 +425,7 @@ let activePropertyTarget:
  * `applyBatchChange`); limpa ao reabrir/atualizar o diálogo com sucesso. */
 let activeBatchPropertyError: string | undefined;
 let propertyDialogShowAll = false;
+const lasecPlotRuntime = new Map<string, { opened: boolean; clients: number; error?: string }>();
 let clipboardItems: { components: WebviewComponentModel[]; wires: WebviewWireModel[] } | undefined;
 const activePushShortcutIds = new Set<string>();
 /** `true` durante QUALQUER gesto de arrastar componente em andamento (mouse ainda pressionado) --
@@ -2045,11 +2046,42 @@ function clearEphemeralCanvasChildren(canvasContent: HTMLDivElement): void {
     if (
       child.classList.contains("component--board-overlay") ||
       child.classList.contains("component-floating-label") ||
-      child.classList.contains("component--exposed-projection")
+      child.classList.contains("component--exposed-projection") ||
+      child.classList.contains("component--symbol-canvas-background")
     ) {
       child.remove();
     }
   }
+}
+
+/** Desenha o corpo/fundo do Símbolo/Ícone (`state.symbolCanvas`/`iconCanvas` -- largura/altura/borda/
+ * fundo do PRÓPRIO documento, ver `SubcircuitDocument.symbol`/`icon`) como uma camada de fundo, atrás
+ * de todo pino/forma da cena. Reaproveita `livePackagePreviewSymbolSvg` (MESMO pipeline
+ * `resolvePackageLayout`+`packageBodySvg` que desenha qualquer símbolo/ícone real colocado, já usado
+ * pelo ícone do catálogo -- ver `registeredSources.ts::iconDescriptorToSvgInline`) com `pins: []`, só
+ * pro corpo/fundo -- os pinos da cena (`symbol.pin`) são elementos PRÓPRIOS, desenhados por cima.
+ * Sem isto, a cena de autoria nunca mostrava a foto/cor de fundo declarada (bug real: um subcircuito
+ * com `symbol.background` de imagem real, ex. `esp32_devkitc_v4.lssubcircuit`, aparecia sem nenhum
+ * corpo -- só os pinos soltos, sem nada indicando os limites do encapsulamento). */
+function renderSymbolCanvasBackground(canvasContent: HTMLElement): void {
+  const canvas = subcircuitEditorMode === "symbol" ? state.symbolCanvas : subcircuitEditorMode === "icon" ? state.iconCanvas : undefined;
+  if (!canvas) return;
+  const { svg, box } = livePackagePreviewSymbolSvg({ width: canvas.width, height: canvas.height, border: canvas.border, background: canvas.background, pins: [] });
+  const el = document.createElement("div");
+  el.className = "component--symbol-canvas-background";
+  el.style.position = "absolute";
+  el.style.left = "0px";
+  el.style.top = "0px";
+  el.style.width = `${box.width}px`;
+  el.style.height = `${box.height}px`;
+  el.style.pointerEvents = "none";
+  const svgEl = document.createElementNS(SVG_NS, "svg");
+  svgEl.setAttribute("viewBox", `0 0 ${box.width} ${box.height}`);
+  svgEl.setAttribute("width", `${box.width}`);
+  svgEl.setAttribute("height", `${box.height}`);
+  svgEl.innerHTML = svg;
+  el.appendChild(svgEl);
+  canvasContent.insertBefore(el, canvasContent.firstChild);
 }
 
 function render(): void {
@@ -2061,6 +2093,7 @@ function render(): void {
   if (!shell) return;
   const { canvasContent, wireLayer } = shell;
   clearEphemeralCanvasChildren(canvasContent);
+  renderSymbolCanvasBackground(canvasContent);
   // Alças de segmento/canto E o preview de fio pendente (`renderPendingWirePreview`, sempre recriado
   // do zero, nunca reaproveitado) são removidos aqui -- só os `<polyline>` REAIS rastreados em
   // `wirePolylineElementsById` (ver abaixo) sobrevivem entre renders.
@@ -5424,6 +5457,23 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
   bodyGroup.innerHTML = isMissingSubcircuitRef || isUnknownComponent
     ? missingSubcircuitPlaceholderSvg(box)
     : packageSymbolSvg(component.typeId, symbolProperties, component.id, boardVariant) ?? catalogEntry?.symbolSvg ?? componentSymbolSvg(component.typeId, symbolProperties);
+  if (component.typeId === "peripherals.lasecplot") {
+    const runtime = lasecPlotRuntime.get(component.id);
+    bodyGroup.querySelectorAll<SVGTextElement>("text").forEach((text) => {
+      if (text.textContent === "○ Fechado") text.textContent = runtime?.error ? "⚠ Erro" : runtime?.opened
+        ? runtime.clients > 0 ? `● ${runtime.clients} cliente(s)` : "● Aberto"
+        : "○ Fechado";
+      if (text.textContent === "Abrir") {
+        text.textContent = runtime?.opened ? "Fechar" : "Abrir";
+        text.style.cursor = "pointer";
+        text.style.pointerEvents = "all";
+        text.addEventListener("click", (event: MouseEvent) => {
+          event.stopPropagation();
+          send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestToggleLasecPlot", componentId: component.id });
+        });
+      }
+    });
+  }
   bodyGroup.querySelectorAll<HTMLInputElement>(".meter-channel-input").forEach((input) => {
     const stopComponentGesture = (event: Event) => event.stopPropagation();
     input.addEventListener("pointerdown", stopComponentGesture);
@@ -6182,6 +6232,19 @@ function renderPropertySheet(component: WebviewComponentModel, options: Property
   shell.append(titleBar, toolbar, helpPanel);
   if (titleRow) shell.append(titleRow);
   shell.append(tabs, pages);
+  if (component.typeId === "peripherals.lasecplot") {
+    const action = document.createElement("button");
+    action.type = "button";
+    action.className = "property-sheet__button";
+    action.textContent = lasecPlotRuntime.get(component.id)?.opened ? "Fechar" : "Abrir";
+    action.addEventListener("click", () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestToggleLasecPlot", componentId: component.id }));
+    const status = document.createElement("span");
+    const runtime = lasecPlotRuntime.get(component.id);
+    status.textContent = runtime?.error ? `⚠ Erro — ${runtime.error}` : runtime?.opened
+      ? runtime.clients > 0 ? `● ${runtime.clients} cliente(s) conectado(s)` : "● Aberto — aguardando cliente"
+      : "○ Fechado";
+    const row = document.createElement("div"); row.className = "property-sheet__actions"; row.append(action, status); shell.append(row);
+  }
   return shell;
 }
 
@@ -6589,6 +6652,12 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     refreshOpenPropertyDialog();
   }
 
+  if (message.type === "lasecPlotStatus") {
+    lasecPlotRuntime.set(message.componentId, { opened: message.opened, clients: message.clients, error: message.error });
+    render();
+    refreshOpenPropertyDialog();
+  }
+
   if (message.type === "simulationRate") {
     simulationRate = message.rate;
     updateSimulationRateLabel();
@@ -6676,17 +6745,20 @@ function makeComponentFromTypeId(typeId: string): WebviewComponentModel {
   const pins = descriptor?.pinIds && descriptor.pinIds.length === pinCount
     ? descriptor.pinIds.map((id, index) => ({ id, x: 0, y: index * 12 }))
     : Array.from({ length: pinCount }, (_, index) => ({ id: `pin-${index + 1}`, x: 0, y: index * 12 }));
+  const label = nextIndexedLabel(typeId, baseLabel);
+  const properties = { ...(descriptor?.defaultProperties ?? {}) };
+  if (typeId === "peripherals.lasecplot") properties.source_name = label;
   return {
     id: `component-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`,
     typeId,
-    label: nextIndexedLabel(typeId, baseLabel),
+    label,
     hidden: descriptor?.hidden ?? false,
     showValue: usesEmbeddedValueLabel(typeId) ? false : Boolean(descriptor?.propertySchema?.some((schema) => schema.showOnSymbol)),
     x: 140 + componentIndex * 24,
     y: 140 + componentIndex * 24,
     rotation: 0,
     pins,
-    properties: { ...(descriptor?.defaultProperties ?? {}) },
+    properties,
   };
 }
 
