@@ -50,6 +50,12 @@
 #include <string>
 #include <unordered_set>
 
+#ifdef _WIN32
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
+
 namespace lasecsimul::app {
 
 using namespace lasecsimul;
@@ -1688,7 +1694,17 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
             if (payload.contains("gdbPort")) debug.gdbPort = payload["gdbPort"].get<uint16_t>();
             debug.startPaused = payload.value("startPaused", true);
             if (firmwarePath.empty()) throw std::runtime_error("caminho do firmware vazio");
-            const std::string arenaName = "lasecsimul-mcu-" + std::to_string(instanceId);
+            const char* configuredHostId = std::getenv("LASECSIMUL_HOST_INSTANCE_ID");
+#ifdef _WIN32
+            const int coreProcessId = _getpid();
+#else
+            const int coreProcessId = getpid();
+#endif
+            const std::string hostInstanceId = configuredHostId && *configuredHostId
+                ? configuredHostId
+                : std::to_string(coreProcessId);
+            const std::string arenaName = "lasecsimul-mcu-" + hostInstanceId + "-" +
+                                          std::to_string(instanceId);
             if (debug.enabled() && debug.startPaused) session.scheduler().pause();
             session.loadMcuFirmware(instanceId, firmwarePath, arenaName, qemuBinaryOverride, debug);
             resp.ok = true;

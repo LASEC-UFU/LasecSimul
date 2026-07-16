@@ -16,7 +16,24 @@
   "qemuBuild": {
     "required": true,
     "description": "Requer build modificado de QEMU para ESP32/Xtensa com arena de memoria compartilhada para eventos de registrador. QEMU stock nao e suficiente.",
-    "arenaContract": "QemuProcessManager fornece a chave da arena ao processo QEMU; o adapter declara apenas binario, maquina, firmware, regioes MMIO e pinos."
+    "arenaContract": "QemuProcessManager fornece a chave da arena ao processo QEMU; o adapter declara binario, maquina, firmware, rede, regioes MMIO e pinos."
+  },
+  "network": {
+    "model": "open_eth",
+    "defaultMode": "lab-bridge",
+    "modes": [
+      "lab-bridge",
+      "isolated"
+    ],
+    "tapInterfacePattern": "LasecSimul TAP {namespace}-{instance}",
+    "macPattern": "02:4c:53:<namespace>:<instance>:01",
+    "subnet": "10.<namespace>.<instance>.0/24",
+    "gateway": "10.<namespace>.<instance>.2",
+    "dns": "10.<namespace>.<instance>.3",
+    "dhcpStart": "10.<namespace>.<instance>.15",
+    "namespaceSetting": "lasecsimul.network.namespace (-1 automatico, 0..255 configurado por aluno/instancia)",
+    "requiresAdmin": "isolated: nao; lab-bridge: provisionamento inicial da TAP/bridge exige administrador",
+    "firmwareRequirement": "ESP-IDF 5.1.x compilado com CONFIG_ETH_USE_OPENETH=y e inicializacao via esp_eth/esp_netif; WiFi.begin() nao usa esta interface."
   },
   "firmware": {
     "expectedFormats": [

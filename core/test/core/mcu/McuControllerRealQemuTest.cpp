@@ -2,10 +2,9 @@
 // QemuProcessManagerTest/QemuArenaBridgeTest) -- ver docs/mvp-limitacoes.md. O adaptador ESP32 vem
 // do plugin real (mcu_abi.h major 2+, mcu-adapters/espressif-esp32/), não built-in.
 //
-// Escopo deliberadamente limitado: usa um caminho de firmware que NÃO existe, porque não há
-// toolchain xtensa-esp32-elf/ESP-IDF nesta máquina para compilar um blink.bin real (decisão tomada
-// explicitamente para esta rodada -- ver docs/mvp-limitacoes.md). Por isso este teste prova que o
-// McuController consegue:
+// Sem toolchain ESP-IDF local, usa uma imagem de flash apagada de 4 MiB. Ela nao executa uma
+// aplicacao, mas e um MTD valido e permite verificar que a maquina, OpenETH e SLIRP sao
+// inicializados e permanecem vivos. Por isso este teste prova que o McuController consegue:
 //   1. abrir a arena de memória compartilhada do lado do Core, e
 //   2. iniciar de fato o processo qemu-system-xtensa.exe REAL (CreateProcess/exec contra o binário
 //      verdadeiro, não um stub do próprio teste),
@@ -15,8 +14,11 @@
 #include <chrono>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
 #include <memory>
+#include <stdexcept>
 #include <thread>
+#include <vector>
 #include "mcu/McuController.hpp"
 #include "plugins/GlobalPluginCache.hpp"
 #include "plugins/PluginRuntime.hpp"
@@ -43,10 +45,28 @@ std::string uniqueArenaName() {
            std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
 }
 
+std::filesystem::path createBlankFlash() {
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / (uniqueArenaName() + "-flash.bin");
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    const std::vector<char> erasedBlock(64 * 1024, static_cast<char>(0xFF));
+    for (int i = 0; i < 64; ++i) out.write(erasedBlock.data(), erasedBlock.size());
+    if (!out) throw std::runtime_error("nao foi possivel criar flash vazia de teste");
+    return path;
+}
+
 } // namespace
 
 int main() {
     std::fprintf(stderr, "=== McuControllerRealQemuTest ===\n");
+
+    // This host-independent integration test deliberately exercises SLIRP. The product default is
+    // lab-bridge, but CI cannot assume that a privileged TAP adapter has been provisioned.
+#ifdef _WIN32
+    _putenv_s("LASECSIMUL_NETWORK_MODE", "isolated");
+#else
+    setenv("LASECSIMUL_NETWORK_MODE", "isolated", 1);
+#endif
 
 #ifndef QEMU_REAL_BINARY_PATH
 #error "QEMU_REAL_BINARY_PATH precisa ser definido pelo CMakeLists (caminho do qemu-system-xtensa.exe real)"
@@ -82,9 +102,11 @@ int main() {
     McuController controller(*adapter, qemuPath.string());
 
     const std::string arenaName = uniqueArenaName();
+    std::filesystem::path flashPath;
     bool started = false;
     try {
-        controller.start("nonexistent-blink.bin", arenaName);
+        flashPath = createBlankFlash();
+        controller.start(flashPath, arenaName);
         started = true;
     } catch (const std::exception& e) {
         std::fprintf(stderr, "FALHOU: McuController::start lançou: %s\n", e.what());
@@ -92,14 +114,21 @@ int main() {
     TEST_ASSERT(started, "McuController::start abre a arena e inicia o processo QEMU real sem lançar");
     TEST_ASSERT(controller.arenaBridge().isOpen(), "arena de memória compartilhada está aberta do lado do Core");
 
-    // Sem firmware real, o QEMU real tende a sair quase imediatamente (kernel inválido) -- dá tempo
-    // de sobra (o dobro do observado manualmente) antes de seguir para stop(), só por robustez.
+    // A flash apagada nao executa uma aplicacao, mas o QEMU deve permanecer vivo depois de criar
+    // a maquina ESP32, a NIC OpenETH e o backend SLIRP.
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
     std::fprintf(stderr, "  [info] isRunning() antes do stop(): %s\n", controller.isRunning() ? "true" : "false");
     std::fprintf(stderr, "  [info] qemuLogs(): %s\n", controller.qemuLogs().c_str());
+    TEST_ASSERT(controller.isRunning(), "QEMU real permanece vivo com flash MTD valida e OpenETH/SLIRP inicializados");
+    TEST_ASSERT(controller.qemuLogs().find("model=open_eth") != std::string::npos,
+                "logs do processo integrado registram a configuracao OpenETH");
 
     controller.stop();
+    if (!flashPath.empty()) {
+        std::error_code removeError;
+        std::filesystem::remove(flashPath, removeError);
+    }
     TEST_ASSERT(!controller.isRunning(), "processo QEMU real não está mais rodando após stop()");
     TEST_ASSERT(!controller.arenaBridge().isOpen(), "arena foi fechada após stop()");
 

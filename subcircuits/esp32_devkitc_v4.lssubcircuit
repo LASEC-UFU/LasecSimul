@@ -692,8 +692,8 @@
         "__simulideTunnelRotated": false
       },
       "visual": {
-        "x": 350.84167630651507,
-        "y": 263.30781881411406,
+        "x": 413.56063349790577,
+        "y": 263.9807791788338,
         "rotation": 0,
         "flipH": false,
         "flipV": false
@@ -1608,7 +1608,12 @@
         "y": 20,
         "angle": 0,
         "length": 4,
-        "label": "Gnd"
+        "label": "Gnd",
+        "labelX": 80.50999999999999,
+        "labelY": 20.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "3V3",
@@ -1616,7 +1621,12 @@
         "y": 19,
         "angle": 180,
         "length": 4,
-        "label": "3V3"
+        "label": "3V3",
+        "labelX": 7.509999999999991,
+        "labelY": 19.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "G23",
@@ -1624,7 +1634,12 @@
         "y": 28,
         "angle": 0,
         "length": 4,
-        "label": "23"
+        "label": "23",
+        "labelX": 81,
+        "labelY": 28.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "EN",
@@ -1632,7 +1647,12 @@
         "y": 28,
         "angle": 180,
         "length": 4,
-        "label": "En"
+        "label": "En",
+        "labelX": 9,
+        "labelY": 28.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "G22",
@@ -1640,7 +1660,12 @@
         "y": 37,
         "angle": 0,
         "length": 4,
-        "label": "22"
+        "label": "22",
+        "labelX": 81,
+        "labelY": 37.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "VP",
@@ -1648,7 +1673,12 @@
         "y": 36,
         "angle": 180,
         "length": 4,
-        "label": "VP"
+        "label": "VP",
+        "labelX": 8,
+        "labelY": 36.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "TX",
@@ -1656,7 +1686,12 @@
         "y": 46,
         "angle": 0,
         "length": 4,
-        "label": "Tx"
+        "label": "Tx",
+        "labelX": 81,
+        "labelY": 46.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "VN",
@@ -1664,7 +1699,12 @@
         "y": 45,
         "angle": 180,
         "length": 4,
-        "label": "VN"
+        "label": "VN",
+        "labelX": 8,
+        "labelY": 45.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "RX",
@@ -1672,7 +1712,12 @@
         "y": 54,
         "angle": 0,
         "length": 4,
-        "label": "Rx"
+        "label": "Rx",
+        "labelX": 81,
+        "labelY": 54.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "G34",
@@ -1680,7 +1725,12 @@
         "y": 53,
         "angle": 180,
         "length": 4,
-        "label": "34"
+        "label": "34",
+        "labelX": 8,
+        "labelY": 53.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "G21",
@@ -1688,7 +1738,12 @@
         "y": 63,
         "angle": 0,
         "length": 4,
-        "label": "21"
+        "label": "21",
+        "labelX": 81,
+        "labelY": 63.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "G35",
@@ -1696,7 +1751,12 @@
         "y": 62,
         "angle": 180,
         "length": 4,
-        "label": "35"
+        "label": "35",
+        "labelX": 8,
+        "labelY": 62.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "GND2",
@@ -1704,7 +1764,12 @@
         "y": 71,
         "angle": 0,
         "length": 4,
-        "label": "Gnd"
+        "label": "Gnd",
+        "labelX": 80.50999999999999,
+        "labelY": 71.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "G32",
@@ -1712,7 +1777,12 @@
         "y": 70,
         "angle": 180,
         "length": 4,
-        "label": "32"
+        "label": "32",
+        "labelX": 8,
+        "labelY": 70.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "G19",
@@ -1720,7 +1790,12 @@
         "y": 80,
         "angle": 0,
         "length": 4,
-        "label": "19"
+        "label": "19",
+        "labelX": 81,
+        "labelY": 80.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "G33",
@@ -1728,7 +1803,12 @@
         "y": 79,
         "angle": 180,
         "length": 4,
-        "label": "33"
+        "label": "33",
+        "labelX": 8,
+        "labelY": 79.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "G18",
@@ -1736,7 +1816,12 @@
         "y": 89,
         "angle": 0,
         "length": 4,
-        "label": "18"
+        "label": "18",
+        "labelX": 80,
+        "labelY": 89.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "G25",
@@ -1744,7 +1829,12 @@
         "y": 87,
         "angle": 180,
         "length": 4,
-        "label": "25"
+        "label": "25",
+        "labelX": 8,
+        "labelY": 87.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "G05",
@@ -1752,7 +1842,12 @@
         "y": 97,
         "angle": 0,
         "length": 4,
-        "label": "5"
+        "label": "5",
+        "labelX": 81,
+        "labelY": 97.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "G26",
@@ -1760,7 +1855,12 @@
         "y": 96,
         "angle": 180,
         "length": 4,
-        "label": "26"
+        "label": "26",
+        "labelX": 8,
+        "labelY": 96.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "G17",
@@ -1768,7 +1868,12 @@
         "y": 106,
         "angle": 0,
         "length": 4,
-        "label": "17"
+        "label": "17",
+        "labelX": 81,
+        "labelY": 106.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "G27",
@@ -1776,7 +1881,12 @@
         "y": 105,
         "angle": 180,
         "length": 4,
-        "label": "27"
+        "label": "27",
+        "labelX": 8,
+        "labelY": 105.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "G16",
@@ -1784,7 +1894,12 @@
         "y": 114,
         "angle": 0,
         "length": 4,
-        "label": "16"
+        "label": "16",
+        "labelX": 81,
+        "labelY": 114.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "G14",
@@ -1792,7 +1907,12 @@
         "y": 113,
         "angle": 180,
         "length": 4,
-        "label": "14"
+        "label": "14",
+        "labelX": 9,
+        "labelY": 113.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "G04",
@@ -1800,7 +1920,12 @@
         "y": 123,
         "angle": 0,
         "length": 4,
-        "label": "4"
+        "label": "4",
+        "labelX": 81,
+        "labelY": 123.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "G12",
@@ -1808,7 +1933,12 @@
         "y": 122,
         "angle": 180,
         "length": 4,
-        "label": "12"
+        "label": "12",
+        "labelX": 8,
+        "labelY": 122.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "G00",
@@ -1816,7 +1946,12 @@
         "y": 131,
         "angle": 0,
         "length": 4,
-        "label": "0"
+        "label": "0",
+        "labelX": 81,
+        "labelY": 131.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "GND3",
@@ -1824,7 +1959,13 @@
         "y": 130,
         "angle": 180,
         "length": 4,
-        "label": "Gnd"
+        "label": "Gnd",
+        "labelX": 10.509999999999991,
+        "labelY": 130.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle",
+        "labelColor": "#FAFAC8"
       },
       {
         "id": "G02",
@@ -1832,7 +1973,12 @@
         "y": 140,
         "angle": 0,
         "length": 4,
-        "label": "2"
+        "label": "2",
+        "labelX": 81,
+        "labelY": 140.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "G13",
@@ -1840,7 +1986,12 @@
         "y": 139,
         "angle": 180,
         "length": 4,
-        "label": "13"
+        "label": "13",
+        "labelX": 12,
+        "labelY": 139.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "G15",
@@ -1848,7 +1999,12 @@
         "y": 148,
         "angle": 0,
         "length": 4,
-        "label": "15"
+        "label": "15",
+        "labelX": 81,
+        "labelY": 148.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "D2",
@@ -1856,15 +2012,25 @@
         "y": 147,
         "angle": 180,
         "length": 4,
-        "label": "D2"
+        "label": "D2",
+        "labelX": 26,
+        "labelY": 145.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "D1",
         "x": 88,
-        "y": 155.00000000000003,
+        "y": 155,
         "angle": 0,
         "length": 4,
-        "label": "D1"
+        "label": "D1",
+        "labelX": 81,
+        "labelY": 155.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "D3",
@@ -1872,7 +2038,12 @@
         "y": 156,
         "angle": 180,
         "length": 4,
-        "label": "D3"
+        "label": "D3",
+        "labelX": 8,
+        "labelY": 156.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "D0",
@@ -1880,7 +2051,12 @@
         "y": 163,
         "angle": 0,
         "length": 4,
-        "label": "D0"
+        "label": "D0",
+        "labelX": 81,
+        "labelY": 163.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "CM",
@@ -1888,7 +2064,12 @@
         "y": 164,
         "angle": 180,
         "length": 4,
-        "label": "Cm"
+        "label": "Cm",
+        "labelX": 9,
+        "labelY": 164.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "CK",
@@ -1896,7 +2077,12 @@
         "y": 171,
         "angle": 0,
         "length": 4,
-        "label": "Ck"
+        "label": "Ck",
+        "labelX": 81,
+        "labelY": 171.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       },
       {
         "id": "5V",
@@ -1904,7 +2090,12 @@
         "y": 172,
         "angle": 180,
         "length": 4,
-        "label": "5V"
+        "label": "5V",
+        "labelX": 9,
+        "labelY": 172.5,
+        "labelFontSize": 7,
+        "labelTextAnchor": "middle",
+        "labelDominantBaseline": "middle"
       }
     ]
   },
@@ -1915,7 +2106,7 @@
   "icon": "board",
   "iconPath": "esp32_devkitc_v4_icon.png",
   "topology": {
-    "revision": 144,
+    "revision": 169,
     "nodes": [
       {
         "id": "junction-1783811970598-570810",
@@ -2441,7 +2632,13 @@
           "kind": "port",
           "componentId": "component-1783345154513-836838",
           "pinId": "pin-1"
-        }
+        },
+        "points": [
+          {
+            "x": 490,
+            "y": 109
+          }
+        ]
       },
       {
         "id": "wire-1783811970598-149437",
@@ -2649,13 +2846,7 @@
         "to": {
           "kind": "node",
           "nodeId": "junction-1783937482993-68341"
-        },
-        "points": [
-          {
-            "x": 456,
-            "y": 269.30781881411406
-          }
-        ]
+        }
       },
       {
         "id": "wire-1783937660099-436622",
@@ -2679,7 +2870,13 @@
           "kind": "port",
           "componentId": "component-1783345270243-110688",
           "pinId": "pin-1"
-        }
+        },
+        "points": [
+          {
+            "x": 528,
+            "y": 109.5
+          }
+        ]
       },
       {
         "id": "wire-1783937660098-805483",
@@ -2695,7 +2892,7 @@
         "points": [
           {
             "x": 528,
-            "y": 129.851067059867
+            "y": 134.65106705986702
           }
         ]
       }

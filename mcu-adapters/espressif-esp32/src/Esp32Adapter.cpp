@@ -1047,12 +1047,19 @@ LsdnQemuLaunchSpec buildLaunchArgs(LsdnMcuAdapter* adapter, const char* firmware
         "qemu-system-xtensa",
         "-M",
         "esp32-simul",
+        "-display",
+        "none",
         "-L",
         state->romDir,
         "-drive",
         "file=" + std::string(firmwarePath ? firmwarePath : "") + ",if=mtd,format=raw",
         "-icount",
         "shift=4,align=off,sleep=off",
+        // Rede Ethernet virtual do LasecSimul. O firmware continua executando
+        // esp_netif/lwIP e o driver OpenETH do ESP-IDF; o SLIRP do QEMU fornece
+        // DHCP, DNS e NAT sem TAP/TUN nem privilegios administrativos.
+        "-nic",
+        "user,model=open_eth,net=192.168.4.0/24,host=192.168.4.2,dhcpstart=192.168.4.15,dns=192.168.4.3",
     };
     state->launchArgs.clear();
     state->launchArgs.reserve(state->launchArgStorage.size());

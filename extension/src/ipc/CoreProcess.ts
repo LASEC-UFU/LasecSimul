@@ -6,6 +6,8 @@ export interface CoreProcessOptions {
   pipeName: string;
   /** Diretório de trabalho do processo; padrão: diretório do executável. */
   cwd?: string;
+  /** Additional variables inherited by the Core and the QEMU processes it starts. */
+  env?: NodeJS.ProcessEnv;
 }
 
 /**
@@ -30,6 +32,7 @@ export class CoreProcess {
     const spawnOpts: SpawnOptions = {
       stdio: ["ignore", "pipe", "pipe"],
       cwd: this.opts.cwd ?? path.dirname(this.opts.executablePath),
+      env: { ...process.env, ...this.opts.env },
     };
     this.child = spawn(this.opts.executablePath, ["--pipe", this.opts.pipeName], spawnOpts);
     this.child.on("exit", (code) => {

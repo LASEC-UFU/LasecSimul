@@ -75,8 +75,15 @@ int main() {
                 "launch args include conventional argv[0] for QEMU itself");
     TEST_ASSERT(containsArg(launch, "-M"), "launch args include -M flag");
     TEST_ASSERT(containsArg(launch, "esp32-simul"), "launch args include esp32-simul machine");
+    TEST_ASSERT(containsArg(launch, "-display") && containsArg(launch, "none"),
+                "QEMU runs headless and does not depend on a packaged keymap");
     TEST_ASSERT(containsArg(launch, "file=build/blink.bin,if=mtd,format=raw"),
                 "launch args include firmware drive");
+    TEST_ASSERT(containsArg(launch, "-nic"), "launch args enable a QEMU network interface");
+    TEST_ASSERT(containsArg(
+                    launch,
+                    "user,model=open_eth,net=192.168.4.0/24,host=192.168.4.2,dhcpstart=192.168.4.15,dns=192.168.4.3"),
+                "OpenETH is attached to unprivileged SLIRP with stable DHCP, gateway and DNS addresses");
 
     const auto regions = adapter->memoryRegions();
     const auto gpioRegion = std::find_if(regions.begin(), regions.end(), [](const MemoryRegion& region) {
