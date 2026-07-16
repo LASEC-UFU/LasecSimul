@@ -288,6 +288,28 @@ const manifestWithPackage = (overrides: Record<string, unknown> = {}) => ({
     assert(reseededLabel?.properties.color === "#e11d48", `reabrir a sessão deveria restaurar a cor customizada, recebido ${reseededLabel?.properties.color}`);
   });
 
+  await test("compile persiste a posição ATUAL do Package na cena de autoria (bug real: arrastar o Package pra um layout preferido era descartado a cada save -- reabrir sempre recalculava a posição padrão do zero)", () => {
+    const manifest = manifestWithPackage();
+    const internalComponents = [tunnel("t1", "TUN1"), tunnel("t2", "TUN2")];
+    const seeded = seedPackageAuthoringComponents(manifest, internalComponents, "/tmp", makeIdFactory("seed"));
+    const pkg = seeded.components.find((c) => c.typeId === PACKAGE_TYPE_ID)!;
+    assert((manifest as Record<string, unknown>).packageAuthoringOrigin === undefined, "manifesto sem packageAuthoringOrigin ainda não deveria ter esse campo (1ª autoria)");
+
+    // Usuário arrasta o Package pra um canto bem diferente do calculado por padrão.
+    const dragged: WebviewComponentModel = { ...pkg, x: pkg.x - 500, y: pkg.y + 300 };
+    const fullScene = [...internalComponents, ...seeded.components.filter((c) => c.id !== pkg.id), dragged];
+    const compiled = compilePackageAuthoringComponents(fullScene);
+    assert(compiled.errors.length === 0, `não deveria ter erros: ${compiled.errors.join(" | ")}`);
+    assert(compiled.packageOrigin?.x === dragged.x && compiled.packageOrigin?.y === dragged.y, `packageOrigin deveria refletir a posição arrastada, recebido ${JSON.stringify(compiled.packageOrigin)}`);
+
+    // Reabrir a sessão (novo seed) com o manifesto atualizado deveria colocar o Package EXATAMENTE
+    // onde o usuário deixou, não recalcular a posição padrão do zero.
+    const manifest2 = { ...manifest, package: compiled.package, interface: compiled.interfaceEntries, packageAuthoringOrigin: compiled.packageOrigin };
+    const reseeded = seedPackageAuthoringComponents(manifest2, internalComponents, "/tmp", makeIdFactory("reseed"));
+    const reseededPkg = reseeded.components.find((c) => c.typeId === PACKAGE_TYPE_ID);
+    assert(reseededPkg?.x === dragged.x && reseededPkg?.y === dragged.y, `reabrir deveria restaurar a posição arrastada (${dragged.x},${dragged.y}), recebido (${reseededPkg?.x},${reseededPkg?.y})`);
+  });
+
   await test("round-trip seed -> compile produz package/interface equivalentes ao original", () => {
     const manifest = manifestWithPackage();
     const internalComponents = [tunnel("t1", "TUN1"), tunnel("t2", "TUN2")];

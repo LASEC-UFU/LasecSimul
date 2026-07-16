@@ -433,14 +433,28 @@ function pinComponentIdsOf(components: readonly WebviewComponentModel[]): Set<st
   return new Set(components.filter((c) => c.typeId === PACKAGE_PIN_TYPE_ID).map((c) => c.id));
 }
 
-/** Posição de cena reservada pro Package/pinos/ícone -- canto claramente afastado do circuito
- * interno (nunca sobreposto), mesmo princípio conceitual de `boardVisual` (coordenada derivada,
- * resolvida por "modo", nunca perdida no save-back). Determinística (sem `Math.random`) pra ficar
- * estável entre seed→compile→seed no mesmo teste. */
-function reservedAuthoringOrigin(internalComponents: readonly WebviewComponentModel[]): { x: number; y: number } {
+/** Posição de cena reservada pro Package/pinos/ícone -- `persistedOrigin` (de
+ * `manifest.packageAuthoringOrigin`, ver `PackageAuthoringCompileResult.packageOrigin`) SEMPRE ganha
+ * quando presente, é o layout que o usuário efetivamente escolheu numa sessão anterior (arrastar o
+ * Package pra longe do circuito interno, por exemplo). Só cai no cálculo determinístico (canto
+ * afastado do circuito interno, nunca sobreposto) na PRIMEIRA vez que este subcircuito é autorado
+ * (arquivo sem `packageAuthoringOrigin` ainda) -- bug real corrigido aqui: antes disto, TODA sessão
+ * recalculava do zero e descartava silenciosamente onde o usuário tinha deixado o Package. */
+function reservedAuthoringOrigin(internalComponents: readonly WebviewComponentModel[], persistedOrigin?: { x: number; y: number }): { x: number; y: number } {
+  if (persistedOrigin) return persistedOrigin;
   if (internalComponents.length === 0) return { x: 400, y: 40 };
   const maxX = Math.max(...internalComponents.map((c) => c.x));
   return { x: maxX + 200, y: 40 };
+}
+
+/** Lê `manifest.packageAuthoringOrigin` (campo de nível superior, ver comentário de
+ * `PackageAuthoringCompileResult.packageOrigin`) -- `undefined` se ausente/malformado, nunca lança. */
+function readPersistedPackageOrigin(manifest: Record<string, unknown>): { x: number; y: number } | undefined {
+  const raw = manifest.packageAuthoringOrigin;
+  if (typeof raw !== "object" || raw === null) return undefined;
+  const candidate = raw as Record<string, unknown>;
+  if (typeof candidate.x !== "number" || typeof candidate.y !== "number") return undefined;
+  return { x: candidate.x, y: candidate.y };
 }
 
 export interface SeedPackageAuthoringResult {
@@ -489,7 +503,7 @@ export function seedPackageAuthoringComponents(
     if (name && !tunnelsByName.has(name)) tunnelsByName.set(name, c);
   }
 
-  const origin = reservedAuthoringOrigin(internalComponents);
+  const origin = reservedAuthoringOrigin(internalComponents, readPersistedPackageOrigin(manifest));
   const components: WebviewComponentModel[] = [];
 
   // `width`/`height` de um `PackageDescriptor` são o espaço NATIVO (pixels da foto/placa, mesmo
@@ -709,6 +723,15 @@ export interface PackageAuthoringCompileResult {
    * do manifesto. */
   hasPackage: boolean;
   package?: PackageDescriptor;
+  /** Posição ATUAL do `other.package` na cena de autoria -- persistida em
+   * `manifest.packageAuthoringOrigin` (campo de nível superior, IRMÃO de `package`, nunca dentro
+   * dele -- `PackageDescriptor` também descreve `.lsdevice` finais sem noção de "posição na cena de
+   * autoria", então isso não pertence lá) só pra `seedPackageAuthoringComponents` reconstruir a MESMA
+   * posição da próxima vez, em vez de sempre recalcular `reservedAuthoringOrigin` do zero (bug real:
+   * arrastar o Package pra um layout preferido -- ex: afastado à esquerda do circuito interno -- era
+   * descartado a cada save, reaparecendo na posição padrão calculada ao reabrir). Só significativo
+   * quando `hasPackage === true`. */
+  packageOrigin?: { x: number; y: number };
   interfaceEntries?: SubcircuitInterfaceEntry[];
   /** Bloqueante -- salvar deve ser abortado (mantém sessão "suja") quando não-vazio. Espelha as
    * regras que o Core (`CoreApplication.cpp`) rejeitaria de qualquer forma (pinId duplicado,
@@ -940,6 +963,7 @@ export function compilePackageAuthoringComponents(
     touchedPackageAuthoring,
     hasPackage: true,
     package: packageDescriptor,
+    packageOrigin: { x: packageComponent.x, y: packageComponent.y },
     interfaceEntries,
     errors,
     warnings,

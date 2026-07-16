@@ -1592,9 +1592,17 @@ async function writeSubcircuitEditingSessionBack(session: SubcircuitEditingSessi
     if (compiled.hasPackage && compiled.package) {
       updatedManifest.package = compiled.package;
       updatedManifest.interface = compiled.interfaceEntries ?? [];
+      // Posição do `other.package` NA CENA DE AUTORIA -- campo IRMÃO de `package` (nunca dentro
+      // dele, `PackageDescriptor` não tem noção de "posição na cena", ver
+      // `PackageAuthoringCompileResult.packageOrigin`). Sem isto, `seedPackageAuthoringComponents`
+      // recalculava um layout padrão do zero em toda sessão, descartando onde o usuário arrastou o
+      // Package pra deixar organizado (bug real: usuário salvava com o Package afastado à esquerda,
+      // reabria e via de volta na posição calculada, à direita do circuito interno).
+      updatedManifest.packageAuthoringOrigin = compiled.packageOrigin;
     } else {
       delete updatedManifest.package;
       delete updatedManifest.interface;
+      delete updatedManifest.packageAuthoringOrigin;
     }
   }
 
