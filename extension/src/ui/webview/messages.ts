@@ -82,9 +82,11 @@ export type HostToWebviewMessage =
   | {
       version: number;
       type: "syncStatePatch";
-      patch: Omit<Partial<WebviewProjectState>, "pendingConnection" | "subcircuitEditingContext"> & {
+      patch: Omit<Partial<WebviewProjectState>, "pendingConnection" | "subcircuitEditingContext" | "symbolCanvas" | "iconCanvas"> & {
         pendingConnection?: WebviewProjectState["pendingConnection"] | null;
         subcircuitEditingContext?: WebviewProjectState["subcircuitEditingContext"] | null;
+        symbolCanvas?: WebviewProjectState["symbolCanvas"] | null;
+        iconCanvas?: WebviewProjectState["iconCanvas"] | null;
       };
     }
   | { version: number; type: "componentReadout"; readoutsByComponentId: Record<string, ComponentReadoutValue> }
@@ -128,7 +130,13 @@ export type WebviewToHostMessage =
   | { version: number; type: "webviewReady" }
   | { version: number; type: "projectChanged"; project: WebviewProjectState }
   | { version: number; type: "requestAddComponent"; typeId: string }
-  | { version: number; type: "requestInsertItems"; components: WebviewComponentModel[]; wires: WebviewWireModel[] }
+  /** `scope` -- em qual cena inserir (`main.ts::subcircuitEditorMode`, traduzido pro vocabulário do
+   * modelo canônico do host, `core/schematicModel.ts::ElementScope`) -- sem isto, colar/duplicar
+   * (Ctrl+Shift-arrastar) um pino/forma em Modo Símbolo/Ícone inseria erradamente no circuito
+   * interno real E tentava sincronizar com o Core (bug real: nunca deveria acontecer, símbolo/ícone
+   * nunca têm presença no Core). `wires` só é significativo quando `scope === "schematic"` (Símbolo/
+   * Ícone nunca têm fios/topologia). */
+  | { version: number; type: "requestInsertItems"; scope: "schematic" | "symbol" | "icon"; components: WebviewComponentModel[]; wires: WebviewWireModel[] }
   | { version: number; type: "requestRemoveComponent"; componentId: string }
   | { version: number; type: "requestRemoveWire"; wireId: string }
   | { version: number; type: "requestRotateComponent"; componentId: string; rotation: 0 | 90 | 180 | 270 }

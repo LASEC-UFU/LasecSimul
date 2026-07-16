@@ -471,6 +471,14 @@ function setActiveSceneComponents(next: WebviewComponentModel[]): void {
   }
 }
 
+/** Traduz `subcircuitEditorMode` ("circuit"|"symbol"|"icon") pro vocabulário do modelo canônico do
+ * host (`core/schematicModel.ts::ElementScope`, "schematic"|"symbol"|"icon") -- usado pelos verbos
+ * IPC que precisam informar EXPLICITAMENTE em qual cena operar (`requestInsertItems`), já que o host
+ * não pode adivinhar isso a partir de ids ainda inexistentes (itens recém-colados/duplicados). */
+function currentElementScope(): "schematic" | "symbol" | "icon" {
+  return subcircuitEditorMode === "circuit" ? "schematic" : subcircuitEditorMode;
+}
+
 /** Troca o modo do editor de subcircuito -- NUNCA salva, NUNCA recarrega o documento, NUNCA
  * fecha/reabre a Webview (requisito explícito do pedido original); só troca qual array o motor
  * genérico enxerga e re-renderiza. Cancela ferramenta ativa/seleção (mesmo padrão de
@@ -2344,7 +2352,7 @@ function pasteClipboardItems(): void {
     selectedWireIds: wires.map((wire) => wire.id),
   };
   vscode?.setState(state);
-  send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestInsertItems", components, wires });
+  send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestInsertItems", scope: currentElementScope(), components, wires });
   render();
 }
 
@@ -5303,7 +5311,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
             const offset = componentDivOffset(dup);
             return { component: dup, startX: dup.x, startY: dup.y, offsetX: offset.x, offsetY: offset.y };
           });
-          send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestInsertItems", components: duplicated, wires: duplicatedWires });
+          send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestInsertItems", scope: currentElementScope(), components: duplicated, wires: duplicatedWires });
         }
       }
     };
@@ -6533,6 +6541,8 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
       ...message.patch,
       pendingConnection: message.patch.pendingConnection === null ? undefined : message.patch.pendingConnection ?? state.pendingConnection,
       subcircuitEditingContext: message.patch.subcircuitEditingContext === null ? undefined : message.patch.subcircuitEditingContext ?? state.subcircuitEditingContext,
+      symbolCanvas: message.patch.symbolCanvas === null ? undefined : message.patch.symbolCanvas ?? state.symbolCanvas,
+      iconCanvas: message.patch.iconCanvas === null ? undefined : message.patch.iconCanvas ?? state.iconCanvas,
     };
     // `openSubcircuitForEditingCommand`/`closeSubcircuitEditorCommand` (`extension.ts`) trocam
     // `components`/`wires` por um circuito INTERNO completamente diferente via `syncStatePatch` (não

@@ -58,6 +58,7 @@ import {
   rebuildCoreFromSchematicState,
   electricalOperationsDiff,
 } from "./core/coreLifecycle";
+import { ElementCategory, ElementScope, getElement, insertElements, moveElement, removeElement, setExposedComponentEntry, updateElement } from "./core/schematicModel";
 import {
   chooseExposedMcuFirmwareCommand,
   chooseMcuFirmwareCommand,
@@ -96,7 +97,7 @@ function cloneState(): WebviewProjectState {
 
 const PROJECT_STATE_KEYS = [
   "locale", "catalog", "components", "topology", "viewport", "selectedComponentIds", "selectedWireIds", "pendingConnection",
-  "subcircuitEditingContext",
+  "subcircuitEditingContext", "symbolElements", "iconElements", "exposedComponents", "symbolCanvas", "iconCanvas",
 ] as const satisfies readonly (keyof WebviewProjectState)[];
 
 /** Último `state.schematicState` já mandado pra Webview (via `syncState`/`syncStatePatch`) -- `undefined`
@@ -115,9 +116,11 @@ const PROJECT_STATE_KEYS = [
  * typeId registrado, tipicamente o maior pedaço do estado) quase nunca muda, então a maioria das
  * chamadas nem chega a tocar nele. Devolve `undefined` quando nada mudou (chamador não manda
  * mensagem nenhuma nesse caso -- nunca um patch vazio). */
-type ProjectStatePatch = Omit<Partial<WebviewProjectState>, "pendingConnection" | "subcircuitEditingContext"> & {
+type ProjectStatePatch = Omit<Partial<WebviewProjectState>, "pendingConnection" | "subcircuitEditingContext" | "symbolCanvas" | "iconCanvas"> & {
   pendingConnection?: WebviewProjectState["pendingConnection"] | null;
   subcircuitEditingContext?: WebviewProjectState["subcircuitEditingContext"] | null;
+  symbolCanvas?: WebviewProjectState["symbolCanvas"] | null;
+  iconCanvas?: WebviewProjectState["iconCanvas"] | null;
 };
 
 function computeProjectStatePatch(): ProjectStatePatch | undefined {
@@ -140,6 +143,14 @@ function computeProjectStatePatch(): ProjectStatePatch | undefined {
       continue;
     }
     if (key === "subcircuitEditingContext" && state.schematicState.subcircuitEditingContext === undefined) {
+      toClone[key] = null;
+      continue;
+    }
+    if (key === "symbolCanvas" && state.schematicState.symbolCanvas === undefined) {
+      toClone[key] = null;
+      continue;
+    }
+    if (key === "iconCanvas" && state.schematicState.iconCanvas === undefined) {
       toClone[key] = null;
       continue;
     }
@@ -335,7 +346,7 @@ async function registerAllPauseConditions(): Promise<boolean> {
 }
 
 function getComponentById(componentId: string): WebviewComponentModel | undefined {
-  return state.schematicState.components.find((component) => component.id === componentId);
+  return getElement(state.schematicState, componentId)?.element;
 }
 
 function componentLabel(componentId: string): string {
@@ -431,20 +442,20 @@ async function chooseSubcircuitFileCommand(componentId: string): Promise<void> {
     serialPorts: parsed.serialPorts,
   };
 
-  const updatedComponent: WebviewComponentModel = {
-    ...component,
+  const updated = updateElement(state.schematicState, componentId, {
     typeId: parsed.typeId,
     label: component.typeId === parsed.typeId ? component.label : nextIndexedLabel(parsed.typeId, label, state.schematicState.components),
     pins: newPins,
     properties: parsed.defaultProperties,
     subcircuitRef: { path: absolutePath, lastKnownTypeId: parsed.typeId, lastKnownPinIds: newPinIds },
-  };
+  });
+  if (!updated.ok) return; // componentId sumiu entre o início do comando e agora (corrida rara) -- nada a fazer
+  const updatedComponent = updated.value.ref.element;
 
   state.schematicState = {
-    ...state.schematicState,
-    catalog: [...state.schematicState.catalog.filter((entry) => entry.typeId !== parsed.typeId), ephemeralEntry],
-    components: state.schematicState.components.map((entry) => (entry.id === componentId ? updatedComponent : entry)),
-    topology: { ...state.schematicState.topology, conductors: state.schematicState.topology.conductors.filter((wire) => survivingWireIds.has(wire.id)) },
+    ...updated.value.state,
+    catalog: [...updated.value.state.catalog.filter((entry) => entry.typeId !== parsed.typeId), ephemeralEntry],
+    topology: { ...updated.value.state.topology, conductors: updated.value.state.topology.conductors.filter((wire) => survivingWireIds.has(wire.id)) },
   };
 
   // Recria no Core: o typeId pode ter mudado (pino fixo desde a construção, não dá pra
@@ -481,8 +492,9 @@ async function chooseSubcircuitFileCommand(componentId: string): Promise<void> {
  * (`componentSymbols.ts`) -- sem isso a imagem escolhida nunca apareceria no canvas, só o caminho
  * cru guardado. */
 async function chooseFilePropertyCommand(componentId: string, propertyKey: string): Promise<void> {
-  const component = getComponentById(componentId);
-  if (!component) return;
+  const ref = getElement(state.schematicState, componentId);
+  if (!ref) return;
+  const component = ref.element;
 
   const isImagePath = component.typeId === "graphics.image" && propertyKey === "path";
   const picked = await vscode.window.showOpenDialog({
@@ -505,11 +517,11 @@ async function chooseFilePropertyCommand(componentId: string, propertyKey: strin
     }
   }
 
-  state.schematicState = {
-    ...state.schematicState,
-    components: state.schematicState.components.map((c) => (c.id === componentId ? { ...c, properties: updatedProperties } : c)),
-  };
-  pushPropertyToCore(componentId, propertyKey, absolutePath);
+  const updated = updateElement(state.schematicState, componentId, { properties: updatedProperties });
+  if (!updated.ok) return;
+  state.schematicState = updated.value.state;
+  // Core só existe pro circuito interno real -- Símbolo/Ícone nunca sincronizam.
+  if (ref.scope === "schematic") pushPropertyToCore(componentId, propertyKey, absolutePath);
   syncSchematicPanel();
 }
 
@@ -739,10 +751,19 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       return;
     }
     case "requestInsertItems": {
-      const existingComponentIds = new Set(state.schematicState.components.map((component) => component.id));
+      if (message.scope !== "schematic") {
+        // Símbolo/Ícone nunca têm fios/topologia nem presença no Core -- só insere os elementos
+        // (pino/forma) no escopo certo, nunca no circuito interno real.
+        const inserted = insertElements(state.schematicState, message.scope, message.components);
+        state.schematicState = { ...inserted.state, selectedComponentIds: inserted.inserted.map((component) => component.id), selectedWireIds: [] };
+        syncSchematicPanel();
+        return;
+      }
+
       const existingWireIds = new Set(state.schematicState.topology.conductors.map((wire) => wire.id));
-      const components = message.components.filter((component) => !existingComponentIds.has(component.id));
-      const insertedComponentIds = new Set(components.map((component) => component.id));
+      const inserted = insertElements(state.schematicState, "schematic", message.components);
+      const insertedComponentIds = new Set(inserted.inserted.map((component) => component.id));
+      const existingComponentIds = new Set(state.schematicState.components.map((component) => component.id));
       const wires = message.wires.filter((wire) =>
         !existingWireIds.has(wire.id) &&
         (existingComponentIds.has(endpointId(wire.from)) || insertedComponentIds.has(endpointId(wire.from))) &&
@@ -750,20 +771,39 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       );
 
       state.schematicState = {
-        ...state.schematicState,
-        components: [...state.schematicState.components, ...components],
+        ...inserted.state,
         topology: { ...state.schematicState.topology, conductors: [...state.schematicState.topology.conductors, ...wires] },
-        selectedComponentIds: components.map((component) => component.id),
+        selectedComponentIds: inserted.inserted.map((component) => component.id),
         selectedWireIds: wires.map((wire) => wire.id),
       };
       void (async () => {
-        for (const component of components) await pushComponentToCore(component.id, component.typeId, component.properties, component.pins);
+        for (const component of inserted.inserted) await pushComponentToCore(component.id, component.typeId, component.properties, component.pins);
         for (const wire of wires) await pushWireToCore(wire);
       })();
       syncSchematicPanel();
       return;
     }
     case "requestRemoveComponent": {
+      // Ponto único de leitura/mutação por id (`schematicModel.ts`) -- decide sozinho em qual escopo
+      // (circuito interno/Símbolo/Ícone) o elemento vive, aplica a cascata certa pra sua categoria
+      // (pino remove seus túneis; túnel-único-de-um-pino é bloqueado), nunca reimplementado aqui.
+      const removal = removeElement(state.schematicState, message.componentId);
+      if (!removal.ok) {
+        // "Elemento inexistente" nunca é reportado como erro pro usuário (pode ser uma corrida
+        // benigna -- já removido por outra ação); o bloqueio do túnel-único É reportado.
+        if (removal.error.includes("única ligação interna")) {
+          void vscode.window.showWarningMessage(removal.error, { modal: true });
+        }
+        return;
+      }
+      if (removal.value.ref.scope !== "schematic") {
+        // Símbolo/Ícone nunca tocam Core/topologia -- efeito colateral nenhum além de aplicar a
+        // remoção (já cascateada) e sincronizar.
+        state.schematicState = removal.value.state;
+        syncSchematicPanel();
+        return;
+      }
+
       closeMcuSerialMonitor(message.componentId);
       pushRemoveToCore(message.componentId); // remove a instância; Netlist::removeComponent já desconecta os fios dela no Core
       coreInstanceIdByComponentId.delete(message.componentId);
@@ -771,7 +811,7 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       const previousWires = state.schematicState.topology.conductors;
       const previousNodes = state.schematicState.topology.nodes;
       const afterRemoval = {
-        components: state.schematicState.components.filter((component) => component.id !== message.componentId),
+        components: removal.value.state.components,
         wires: previousWires.filter((wire) => endpointId(wire.from) !== message.componentId && endpointId(wire.to) !== message.componentId),
       };
       // Apagar um componente pode derrubar o grau de um nó de topologia que ele tocava (ou de um
@@ -793,6 +833,7 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       state.schematicState = {
         ...state.schematicState,
         components: normalized.components,
+        exposedComponents: removal.value.state.exposedComponents,
         topology: { ...state.schematicState.topology, nodes: normalized.nodes, conductors: normalized.wires },
         selectedComponentIds: state.schematicState.selectedComponentIds.filter((id) => id !== message.componentId),
         selectedWireIds: state.schematicState.selectedWireIds.filter((id) => survivingWireIds.has(id)),
@@ -937,24 +978,16 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       return;
     }
     case "requestRotateComponent": {
-      state.schematicState = {
-        ...state.schematicState,
-        components: state.schematicState.components.map((component) =>
-          component.id === message.componentId ? { ...component, rotation: message.rotation } : component
-        ),
-      };
+      const updated = updateElement(state.schematicState, message.componentId, { rotation: message.rotation });
+      if (!updated.ok) return;
+      state.schematicState = updated.value.state;
       syncSchematicPanel();
       return;
     }
     case "requestFlipComponent": {
-      state.schematicState = {
-        ...state.schematicState,
-        components: state.schematicState.components.map((component) =>
-          component.id === message.componentId
-            ? { ...component, flipH: message.flipH, flipV: message.flipV }
-            : component
-        ),
-      };
+      const updated = updateElement(state.schematicState, message.componentId, { flipH: message.flipH, flipV: message.flipV });
+      if (!updated.ok) return;
+      state.schematicState = updated.value.state;
       syncSchematicPanel();
       return;
     }
@@ -974,37 +1007,41 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       return;
     }
     case "requestRenameComponent": {
-      state.schematicState = {
-        ...state.schematicState,
-        components: state.schematicState.components.map((component) =>
-          component.id === message.componentId ? { ...component, label: message.label } : component
-        ),
-      };
+      const updated = updateElement(state.schematicState, message.componentId, { label: message.label });
+      if (!updated.ok) return;
+      state.schematicState = updated.value.state;
       syncSchematicPanel();
       return;
     }
     case "requestUpdateLabelVisibility": {
       // Puramente visual -- nunca toca o Core (ver `.spec/lasecsimul.spec` seção 6.1.2: visibilidade
       // de rótulo não é uma propriedade elétrica, não tem schema de plugin/built-in nenhum).
-      state.schematicState = {
-        ...state.schematicState,
-        components: state.schematicState.components.map((component) =>
-          component.id === message.componentId
-            ? {
-                ...component,
-                showId: message.showId,
-                showValue: message.showValue,
-                ...(message.valueLabelPropertyKey !== undefined ? { valueLabelPropertyKey: message.valueLabelPropertyKey } : {}),
-              }
-            : component
-        ),
-      };
+      const updated = updateElement(state.schematicState, message.componentId, {
+        showId: message.showId,
+        showValue: message.showValue,
+        ...(message.valueLabelPropertyKey !== undefined ? { valueLabelPropertyKey: message.valueLabelPropertyKey } : {}),
+      });
+      if (!updated.ok) return;
+      state.schematicState = updated.value.state;
       syncSchematicPanel();
       return;
     }
     case "requestUpdateProperty": {
-      const prevComponent = state.schematicState.components.find((c) => c.id === message.componentId);
-      const updatedProperties = { ...prevComponent?.properties, [message.name]: message.value };
+      const ref = getElement(state.schematicState, message.componentId);
+      if (!ref) return;
+      const prevComponent = ref.element;
+      const updatedProperties = { ...prevComponent.properties, [message.name]: message.value };
+
+      if (ref.scope !== "schematic") {
+        // Símbolo/Ícone (pino/forma) nunca têm `affectsPinCount`/Core/túnel -- só a propriedade em
+        // si muda (ex: reordenar z-order via PACKAGE_SHAPE_ORDER_PROPERTY_KEY, ou qualquer campo do
+        // painel de Propriedades pra um `symbol.pin`/`graphics.*`).
+        const updated = updateElement(state.schematicState, message.componentId, { properties: updatedProperties });
+        if (updated.ok) state.schematicState = updated.value.state;
+        syncSchematicPanel();
+        return;
+      }
+
       // Propriedade `affectsPinCount` (ex: rows/columns do switches.keypad, TR-9): o número de
       // pinos da instância pode ter mudado -- recalcula via a MESMA fórmula que o Core usa
       // (`pinsForTypeId`, dynamicLayout.pinGroups), reconcilia `component.pins[]` e derruba
@@ -1012,9 +1049,9 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       // reconciliação do lado dele sozinho (`SimulationSession::setProperty` ->
       // `reregisterComponentPins`, disparado pelo `pushPropertyToCore` abaixo) -- não é preciso
       // mandar `disconnectWire` explícito pra esses fios, já saem do Netlist junto.
-      const catalogEntry = prevComponent ? state.schematicState.catalog.find((item) => item.typeId === prevComponent.typeId) : undefined;
+      const catalogEntry = state.schematicState.catalog.find((item) => item.typeId === prevComponent.typeId);
       const affectsPinCount = catalogEntry?.propertySchema?.find((schema) => schema.id === message.name)?.affectsPinCount ?? false;
-      const newPins = prevComponent && affectsPinCount ? pinsForTypeId(prevComponent.typeId, updatedProperties) : undefined;
+      const newPins = affectsPinCount ? pinsForTypeId(prevComponent.typeId, updatedProperties) : undefined;
       const newPinIds = newPins ? new Set(newPins.map((pin) => pin.id)) : undefined;
 
       const nextWires = newPinIds
@@ -1026,21 +1063,18 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
           })
         : state.schematicState.topology.conductors;
 
+      const updated = updateElement(state.schematicState, message.componentId, { properties: updatedProperties, ...(newPins ? { pins: newPins } : {}) });
+      if (!updated.ok) return;
       state.schematicState = {
-        ...state.schematicState,
-        components: state.schematicState.components.map((component) =>
-          component.id === message.componentId
-            ? { ...component, properties: updatedProperties, ...(newPins ? { pins: newPins } : {}) }
-            : component
-        ),
-        topology: { ...state.schematicState.topology, conductors: nextWires },
+        ...updated.value.state,
+        topology: { ...updated.value.state.topology, conductors: nextWires },
         selectedWireIds:
           nextWires === state.schematicState.topology.conductors
             ? state.schematicState.selectedWireIds
             : state.schematicState.selectedWireIds.filter((id) => nextWires.some((wire) => wire.id === id)),
       };
       // Túnel: nome precisa de setTunnelName (rebuilda topologia do Netlist), não setProperty.
-      if (message.name === "name" && prevComponent?.typeId === TUNNEL_TYPE_ID) {
+      if (message.name === "name" && prevComponent.typeId === TUNNEL_TYPE_ID) {
         const pinId = prevComponent.pins[0]?.id ?? "pin";
         const oldName = String(prevComponent.properties["name"] ?? "");
         pushTunnelNameToCore(message.componentId, pinId, oldName, String(message.value));
