@@ -6842,10 +6842,19 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     // pularia de volta pro circuito de FORA (mesma pilha única, ver seção 17.3 do spec) com
     // `subcircuitEditingContext` ainda apontando pra dentro -- tela mostrando um circuito, faixa
     // dizendo outro, e o próximo "Voltar ao Circuito Principal" salvaria o conteúdo ERRADO no
-    // arquivo. `"subcircuitEditingContext" in message.patch` (chave presente, não o valor) cobre
-    // tanto entrar (objeto) quanto sair (sentinela `null`) -- reseta o histórico em vez de registrar
-    // transição, mesmo tratamento de `"init"`.
-    const enteringOrLeavingSubcircuitSession = "subcircuitEditingContext" in message.patch;
+    // arquivo.
+    //
+    // **Bug real corrigido**: a checagem original era `"subcircuitEditingContext" in message.patch`
+    // (chave PRESENTE, nunca comparava o VALOR) -- qualquer patch incremental que por algum motivo
+    // reincluísse `subcircuitEditingContext` com o MESMO `sourceId` de sempre (ex: editar o texto de
+    // um `symbol.pin`/`graphics.text` dentro do Modo Símbolo, achado real testando esta sessão) já
+    // bastava pra disparar "entrando/saindo" -- resetava `subcircuitEditorMode` pra `"circuit"` (a
+    // ComboBox pulava de volta sozinha pro Modo Subcircuito) E `resetUndoHistory` (desfazer parava de
+    // funcionar) a CADA edição, nunca só ao entrar/sair de verdade. Comparar o `sourceId` de fato
+    // (antes vs. depois do merge) distingue "sessão realmente trocou" de "o campo só veio de novo no
+    // patch com o mesmo conteúdo".
+    const previousSubcircuitSourceId = state.subcircuitEditingContext?.sourceId;
+    const enteringOrLeavingSubcircuitSession = previousSubcircuitSourceId !== merged.subcircuitEditingContext?.sourceId;
     if (!enteringOrLeavingSubcircuitSession) recordUndoTransition(undoContentKey(merged), () => snapshotOfProjectState(merged));
     state = merged;
     // Mesmo motivo do handler de "init"/"syncState" acima: sempre volta pra Subcircuito ao
