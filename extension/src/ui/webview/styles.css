@@ -623,9 +623,18 @@ rect.meter-expand-button:hover {
   font: 20px "Segoe UI", sans-serif;
 }
 
+/* Contorno tracejado, SEM preenchimento (mesma cor de `.component-floating-label.selected`) --
+   antes era um retângulo SÓLIDO (`fill:var(--text); opacity:.35`) cobrindo a caixa inteira do
+   componente, incluindo qualquer texto desenhado ABAIXO dela na pilha de camadas (bug real: o rótulo
+   de um `symbol.pin` em Modo Símbolo, desenhado no fundo consolidado -- ver
+   `main.ts::renderSymbolCanvasBackground` --, ficava escondido atrás do cinza sempre que o pino era
+   selecionado). Contorno nunca esconde nada, seja qual for a camada de baixo. */
 .selection-overlay {
-  fill: var(--text);
-  opacity: 0.35;
+  fill: none;
+  stroke: rgba(24, 71, 199, 0.95);
+  stroke-width: 1.5px;
+  stroke-dasharray: 3 2;
+  vector-effect: non-scaling-stroke;
   pointer-events: none;
 }
 

@@ -2086,10 +2086,14 @@ function installCanvasEventHandlers(canvas: HTMLDivElement, canvasContent: HTMLD
       const screenX = event.clientX - rect.left;
       const screenY = event.clientY - rect.top;
       const oldZoom = state.viewport.zoom || 1;
-      // Mesma fórmula do SimulIDE (CircuitView::wheelEvent: 2^(deltaY/700)); limite [0.2, 4] é
-      // decisão do LasecSimul (SimulIDE real não tem limite codificado), ver `.spec` seção 13.4.
+      // Mesma fórmula do SimulIDE (CircuitView::wheelEvent: 2^(deltaY/700)). Teto ERA 4x, decisão do
+      // LasecSimul (SimulIDE real não tem limite codificado, ver `.spec` seção 13.4) -- baixo demais
+      // pra examinar detalhe fino (ex: rótulo/lead de um `symbol.pin` no Modo Símbolo, pedido real do
+      // usuário). Levantado pra 64x (16× o teto antigo, "praticamente ilimitado" na prática) --
+      // continua finito, nunca `Infinity`, pra não arriscar imprecisão numérica/CSS em escala
+      // extrema.
       const factor = Math.pow(2, -event.deltaY / 700);
-      const newZoom = Math.min(4, Math.max(0.2, oldZoom * factor));
+      const newZoom = Math.min(64, Math.max(0.2, oldZoom * factor));
       const localX = (screenX - state.viewport.x) / oldZoom;
       const localY = (screenY - state.viewport.y) / oldZoom;
       state.viewport.x = screenX - localX * newZoom;
@@ -2119,7 +2123,7 @@ function approximateBoundingBox(components: readonly WebviewComponentModel[]): {
 }
 
 /** Ajusta `state.viewport` pra enquadrar a bounding box informada dentro da área visível do canvas,
- * com 10% de margem -- mesmos limites de zoom [0.2, 4] do wheel-zoom (`.spec` seção 13.4), pra
+ * com 10% de margem -- mesmos limites de zoom [0.2, 64] do wheel-zoom (`.spec` seção 13.4), pra
  * nunca produzir um zoom fora da faixa que o próprio scroll já respeita. */
 function zoomToBoundingBox(box: { minX: number; minY: number; maxX: number; maxY: number }): void {
   if (!canvasElement) return;
@@ -2128,7 +2132,7 @@ function zoomToBoundingBox(box: { minX: number; minY: number; maxX: number; maxY
   const width = box.maxX - box.minX;
   const height = box.maxY - box.minY;
   if (viewWidth <= 0 || viewHeight <= 0 || width <= 0 || height <= 0) return;
-  const zoom = Math.min(4, Math.max(0.2, Math.min(viewWidth / width, viewHeight / height) * 0.9));
+  const zoom = Math.min(64, Math.max(0.2, Math.min(viewWidth / width, viewHeight / height) * 0.9));
   const centerX = (box.minX + box.maxX) / 2;
   const centerY = (box.minY + box.maxY) / 2;
   state.viewport = { zoom, x: viewWidth / 2 - centerX * zoom, y: viewHeight / 2 - centerY * zoom };
