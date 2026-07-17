@@ -25,7 +25,7 @@ import {
 import { formatEngineeringValue, defaultSiPrefixFactor, SI_PREFIXES } from "./valueFormatting.js";
 import { isJunctionVisible, movableTopologyNodeIds, endpointScenePosition as resolveEndpointScenePosition } from "./wireTopology.js";
 import { WireSpatialIndex } from "./wireSpatialIndex.js";
-import { BatchPropertyPatch, PropertyField, PropertyFieldKind, SharedPropertyField, computeGenericInstanceFields, computeSharedPropertyFields, planBatchPropertyChange } from "./batchProperties.js";
+import { BatchPropertyPatch, PropertyField, PropertyFieldKind, SharedFieldValue, SharedPropertyField, computeGenericInstanceFields, computeSharedPropertyFields, planBatchPropertyChange } from "./batchProperties.js";
 import { parseSerialInput, serialFormatBytes, SerialFormat } from "./serialFormat.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -241,6 +241,7 @@ const UI_TEXT = {
     unexposeComponent: "Remover exposição no Símbolo",
     backToMainCircuit: "Voltar ao Circuito Principal",
     componentsSelected: "componentes selecionados",
+    labelsSelected: "rótulos selecionados",
     mixedValuePlaceholder: "(vários valores)",
     batchNoSharedFields: "Nenhuma propriedade compartilhada entre os itens selecionados.",
     batchApplyRejected: "Valor não aceito por todos os componentes selecionados -- nada foi alterado.",
@@ -346,6 +347,7 @@ const UI_TEXT = {
     unexposeComponent: "Remove exposure in Symbol",
     backToMainCircuit: "Back to Main Circuit",
     componentsSelected: "components selected",
+    labelsSelected: "labels selected",
     mixedValuePlaceholder: "(multiple values)",
     batchNoSharedFields: "No property shared between the selected items.",
     batchApplyRejected: "Value not accepted by every selected component -- nothing was changed.",
@@ -435,6 +437,7 @@ let activePropertyTarget:
   | { kind: "project-batch"; componentIds: string[] }
   | { kind: "exposed-internal"; outerComponentId: string; sourceId: string; snapshot: InternalComponentSnapshot; model: WebviewComponentModel }
   | { kind: "text-label"; componentId: string; labelKind: ExternalLabelKind }
+  | { kind: "text-label-batch"; labels: { componentId: string; labelKind: ExternalLabelKind }[] }
   | undefined;
 /** Mensagem de rejeição (rule 10/11) da ÚLTIMA tentativa de aplicar um campo em lote -- exibida
  * dentro do próprio diálogo (sem mecanismo de toast/notificação genérico na Webview hoje, ver
@@ -541,7 +544,13 @@ function renderSerialTerminalWindows(): void {
   }
 }
 type ExternalLabelKind = "id" | "value";
-let selectedTextLabel: { componentId: string; kind: ExternalLabelKind } | undefined;
+/** Seleção múltipla de rótulos externos (id/value) -- pedido real: "preciso selecionar vários textos
+ * independentemente dos pinos". Array (não `Set`) pra preservar ORDEM de seleção real, mesmo
+ * contrato de `state.selectedComponentIds` (ver `selectedComponentsInSelectionOrder`) -- alinhar/
+ * distribuir precisam de "primeiro"/"último" selecionado, nunca ordem de cena. Convive lado a lado
+ * com `state.selectedComponentIds` (NUNCA um substitui o outro) -- mistura rótulo+componente na
+ * mesma seleção é suportada (pedido real: "rótulos + componentes juntos"). */
+let selectedTextLabels: { componentId: string; kind: ExternalLabelKind }[] = [];
 
 // Modo de posicionamento de componente (SimulIDE-style: clicar na paleta → mover → clicar no canvas).
 let placingTypeId: string | null = null;
@@ -1215,7 +1224,7 @@ function applyUndoSnapshot(snapshot: UndoSnapshot): void {
     clearPendingWire();
     selectedWireSegment = undefined;
     selectedWireCorner = undefined;
-    selectedTextLabel = undefined;
+    selectedTextLabels = [];
     hideContextMenu();
     persistState();
     render();
@@ -1272,8 +1281,35 @@ function isWireCornerSelected(wireId: string, pointIndex: number): boolean {
   return selectedWireCorner?.wireId === wireId && selectedWireCorner.pointIndex === pointIndex;
 }
 
+function textLabelSelectionKey(componentId: string, kind: ExternalLabelKind): string {
+  return `${componentId}::${kind}`;
+}
+
 function isTextLabelSelected(componentId: string, kind: ExternalLabelKind): boolean {
-  return selectedTextLabel?.componentId === componentId && selectedTextLabel.kind === kind;
+  return selectedTextLabels.some((entry) => entry.componentId === componentId && entry.kind === kind);
+}
+
+/** Ctrl+clique (pedido real, literal) num rótulo: alterna dentro/fora da seleção de rótulos JÁ
+ * existente -- preserva `state.selectedComponentIds` (mistura rótulo+componente, ver comentário de
+ * `selectedTextLabels`), diferente de `selectOnlyTextLabel` (substitui tudo). */
+function toggleTextLabelSelection(componentId: string, kind: ExternalLabelKind): void {
+  selectedWireSegment = undefined;
+  selectedWireCorner = undefined;
+  selectedTextLabels = isTextLabelSelected(componentId, kind)
+    ? selectedTextLabels.filter((entry) => !(entry.componentId === componentId && entry.kind === kind))
+    : [...selectedTextLabels, { componentId, kind }];
+}
+
+/** Resolve `selectedTextLabels` pros componentes VIVOS (mesmo cuidado de sempre -- um id pode ter
+ * sido apagado por fora), na MESMA ordem de seleção do array. */
+function getSelectedTextLabels(): { component: WebviewComponentModel; kind: ExternalLabelKind }[] {
+  const scene = activeSceneComponents();
+  return selectedTextLabels
+    .map((entry) => {
+      const component = scene.find((candidate) => candidate.id === entry.componentId);
+      return component ? { component, kind: entry.kind } : undefined;
+    })
+    .filter((entry): entry is { component: WebviewComponentModel; kind: ExternalLabelKind } => entry !== undefined);
 }
 
 function getSelectedComponents(): WebviewComponentModel[] {
@@ -1291,7 +1327,7 @@ function selectOnlyComponent(componentId: string): void {
   state.selectedWireIds = [];
   selectedWireSegment = undefined;
   selectedWireCorner = undefined;
-  selectedTextLabel = undefined;
+  selectedTextLabels = [];
 }
 
 function selectOnlyWire(wireId: string, segmentIndex?: number): void {
@@ -1299,7 +1335,7 @@ function selectOnlyWire(wireId: string, segmentIndex?: number): void {
   state.selectedWireIds = [wireId];
   selectedWireSegment = segmentIndex === undefined ? undefined : { wireId, segmentIndex };
   selectedWireCorner = undefined;
-  selectedTextLabel = undefined;
+  selectedTextLabels = [];
 }
 
 function selectOnlyWireCorner(wireId: string, pointIndex: number): void {
@@ -1307,7 +1343,7 @@ function selectOnlyWireCorner(wireId: string, pointIndex: number): void {
   state.selectedWireIds = [wireId];
   selectedWireSegment = undefined;
   selectedWireCorner = { wireId, pointIndex };
-  selectedTextLabel = undefined;
+  selectedTextLabels = [];
 }
 
 function selectOnlyTextLabel(componentId: string, kind: ExternalLabelKind): void {
@@ -1315,15 +1351,16 @@ function selectOnlyTextLabel(componentId: string, kind: ExternalLabelKind): void
   state.selectedWireIds = [];
   selectedWireSegment = undefined;
   selectedWireCorner = undefined;
-  selectedTextLabel = { componentId, kind };
+  selectedTextLabels = [{ componentId, kind }];
 }
 
 /** Shift+click: alterna um componente dentro/fora de uma seleção múltipla já existente — convenção
- * comum de desktop, não verificada item-a-item contra o SimulIDE (ver `.spec` seção 13.4). */
+ * comum de desktop, não verificada item-a-item contra o SimulIDE (ver `.spec` seção 13.4). Preserva
+ * `selectedTextLabels` (pedido real: "rótulos + componentes juntos" -- alternar um componente nunca
+ * derruba rótulos já selecionados). */
 function toggleComponentSelection(componentId: string): void {
   selectedWireSegment = undefined;
   selectedWireCorner = undefined;
-  selectedTextLabel = undefined;
   state.selectedComponentIds = isComponentSelected(componentId)
     ? state.selectedComponentIds.filter((id) => id !== componentId)
     : [...state.selectedComponentIds, componentId];
@@ -1331,11 +1368,11 @@ function toggleComponentSelection(componentId: string): void {
 
 /** Shift/Ctrl+click em fio preserva componentes já selecionados, permitindo mover uma seleção
  * heterogênea como um grupo. Segmento/canto individual deixa de ser o modelo de seleção neste
- * gesto; o condutor inteiro entra ou sai da seleção. */
+ * gesto; o condutor inteiro entra ou sai da seleção. Preserva `selectedTextLabels` (mesmo princípio
+ * de `toggleComponentSelection`). */
 function toggleWireSelection(wireId: string): void {
   selectedWireSegment = undefined;
   selectedWireCorner = undefined;
-  selectedTextLabel = undefined;
   state.selectedWireIds = isWireSelected(wireId)
     ? state.selectedWireIds.filter((id) => id !== wireId)
     : [...state.selectedWireIds, wireId];
@@ -1357,16 +1394,16 @@ function updateSimulationRateLabel(): void {
 }
 
 function selectionLabel(): string {
-  if (selectedTextLabel) {
-    const activeLabel = selectedTextLabel;
-    const component = activeSceneComponents().find((entry) => entry.id === activeLabel.componentId);
-    const suffix = activeLabel.kind === "id" ? "name" : "value";
-    return component ? `${component.label} (${suffix})` : t("nothingSelected");
-  }
+  const labels = getSelectedTextLabels();
   const components = getSelectedComponents();
   const wires = state.selectedWireIds;
-  const total = components.length + wires.length;
+  const total = components.length + wires.length + labels.length;
   if (total === 0) return t("nothingSelected");
+  if (total === 1 && labels.length === 1) {
+    const { component, kind } = labels[0]!;
+    const suffix = kind === "id" ? "name" : "value";
+    return `${component.label} (${suffix})`;
+  }
   if (total === 1) return components[0]?.label ?? `${t("wireLabel")} ${wires[0]}`;
   return `${total} itens selecionados`;
 }
@@ -1376,7 +1413,7 @@ function clearSelection(): void {
   state.selectedWireIds = [];
   selectedWireSegment = undefined;
   selectedWireCorner = undefined;
-  selectedTextLabel = undefined;
+  selectedTextLabels = [];
 }
 
 function clearPendingWire(): void {
@@ -1569,6 +1606,21 @@ function refreshOpenPropertyDialog(): void {
       return;
     }
     openExternalLabelPropertyDialog(component, target.labelKind);
+    return;
+  }
+  if (target.kind === "text-label-batch") {
+    const scene = activeSceneComponents();
+    const labels = target.labels
+      .map((entry) => {
+        const component = scene.find((candidate) => candidate.id === entry.componentId);
+        return component && externalLabelText(component, entry.labelKind) ? { component, kind: entry.labelKind } : undefined;
+      })
+      .filter((entry): entry is LabelRef => entry !== undefined);
+    if (labels.length < 2) {
+      propertyDialog.close();
+      return;
+    }
+    openTextLabelBatchPropertyDialog(labels);
     return;
   }
   openExposedInternalPropertyDialog(
@@ -2394,7 +2446,7 @@ function render(): void {
   if (!app) return;
   normalizeSelectedWireSegment();
   normalizeSelectedWireCorner();
-  normalizeSelectedTextLabel();
+  normalizeSelectedTextLabels();
   const shell = ensureRenderShell();
   if (!shell) return;
   const { canvasContent, wireLayer } = shell;
@@ -2545,16 +2597,35 @@ function applyMarqueeSelection(start: Point, end: Point, additive: boolean): voi
     .filter((wire) => wireIntersectsRect(wire, left, top, right, bottom))
     .map((wire) => wire.id);
 
+  // Rótulos externos (id/value) também entram no laço de seleção (pedido real: "arrastar a caixa de
+  // seleção" deve pegar textos independentemente dos pinos) -- testados PELA CAIXA DE TEXTO, não pela
+  // caixa do componente dono (um rótulo pode estar bem longe do próprio pino, arrastado).
+  const hitLabelRefs: { componentId: string; kind: ExternalLabelKind }[] = [];
+  for (const component of activeSceneComponents()) {
+    if (component.hidden || component.hiddenByUser) continue;
+    for (const kind of ["id", "value"] as const) {
+      const box = externalLabelWorldBox(component, kind);
+      if (!box) continue;
+      if (box.left < right && box.right > left && box.top < bottom && box.bottom > top) {
+        hitLabelRefs.push({ componentId: component.id, kind });
+      }
+    }
+  }
+
   if (additive) {
     state.selectedComponentIds = [...new Set([...state.selectedComponentIds, ...hitComponentIds])];
     state.selectedWireIds = [...new Set([...state.selectedWireIds, ...hitWireIds])];
     if (selectedWireSegment && !state.selectedWireIds.includes(selectedWireSegment.wireId)) selectedWireSegment = undefined;
     if (selectedWireCorner && !state.selectedWireIds.includes(selectedWireCorner.wireId)) selectedWireCorner = undefined;
+    selectedTextLabels = [...selectedTextLabels, ...hitLabelRefs].filter(
+      (entry, index, all) => all.findIndex((candidate) => candidate.componentId === entry.componentId && candidate.kind === entry.kind) === index
+    );
   } else {
     state.selectedComponentIds = hitComponentIds;
     state.selectedWireIds = hitWireIds;
     selectedWireSegment = hitWireIds.length === 1 ? firstWireSegmentIntersectingRect(hitWireIds[0]!, left, top, right, bottom) : undefined;
     selectedWireCorner = undefined;
+    selectedTextLabels = hitLabelRefs;
   }
 }
 
@@ -2774,13 +2845,15 @@ function normalizeSelectedWireCorner(): void {
   }
 }
 
-function normalizeSelectedTextLabel(): void {
-  if (!selectedTextLabel) return;
-  const activeLabel = selectedTextLabel;
-  const component = activeSceneComponents().find((entry) => entry.id === activeLabel.componentId);
-  if (!component || externalLabelText(component, activeLabel.kind) === undefined) {
-    selectedTextLabel = undefined;
-  }
+/** Filtra `selectedTextLabels` pros que ainda existem/mostram texto -- chamado a cada `render()`
+ * (mesmo ponto de sempre), evita reter referência a um rótulo apagado/escondido por fora. */
+function normalizeSelectedTextLabels(): void {
+  if (selectedTextLabels.length === 0) return;
+  const scene = activeSceneComponents();
+  selectedTextLabels = selectedTextLabels.filter((entry) => {
+    const component = scene.find((candidate) => candidate.id === entry.componentId);
+    return component !== undefined && externalLabelText(component, entry.kind) !== undefined;
+  });
 }
 
 function valueWithinRange(value: number, min: number, max: number): boolean {
@@ -3520,13 +3593,23 @@ function moveSelectedWireCornerByArrow(key: string, step: number): boolean {
  * nenhuma notificação pro Core (o Core não usa coordenadas xy). Retorna `false` se nada foi movido. */
 function moveSelectedComponentsByArrow(key: string, step: number): boolean {
   const components = getSelectedComponents();
-  if (components.length === 0) return false;
+  const labels = getSelectedTextLabels();
+  if (components.length === 0 && labels.length === 0) return false;
   const dx = key === "ArrowLeft" ? -step : key === "ArrowRight" ? step : 0;
   const dy = key === "ArrowUp" ? -step : key === "ArrowDown" ? step : 0;
   if (dx === 0 && dy === 0) return false;
   for (const component of components) {
     component.x += dx;
     component.y += dy;
+  }
+  // Rótulo cujo COMPONENTE dono já está entre os selecionados/movidos acima é pulado -- mover o
+  // componente já arrasta o rótulo junto (posição dele é `component.x/y` + offset PRÓPRIO, nunca
+  // absoluta) -- mover os dois somaria o delta 2x (bug de "double move").
+  const movedComponentIds = new Set(components.map((component) => component.id));
+  for (const { component, kind } of labels) {
+    if (movedComponentIds.has(component.id)) continue;
+    const offset = externalLabelOffset(component, kind);
+    setExternalLabelLayout(component, kind, { x: offset.x + dx, y: offset.y + dy });
   }
   persistState();
   render();
@@ -4942,11 +5025,20 @@ function rotateComponent(component: WebviewComponentModel): void {
   render();
 }
 
+/** Girar componentes E rótulos externos (id/value) selecionados numa SÓ ação (pedido real: "isso
+ * deve valer pra tudo, o label poder ser girado") -- Ctrl+R/menu de contexto gira o que estiver
+ * selecionado, dos dois tipos ao mesmo tempo se a seleção for mista. */
 function rotateSelectedComponents(steps: 1 | -1 | 2): void {
-  if (rotateSelectedTextLabel(steps)) return;
   const components = getSelectedComponents();
-  if (components.length === 0) return;
+  const labels = getSelectedTextLabels();
+  if (components.length === 0 && labels.length === 0) return;
   for (const component of components) applyRotation(component, steps);
+  for (const { component, kind } of labels) {
+    const current = externalLabelRotation(component, kind);
+    const delta = steps === 2 ? 180 : steps * 90;
+    const next = ((((current + delta) % 360) + 360) % 360) as 0 | 90 | 180 | 270;
+    setExternalLabelLayout(component, kind, { rotation: next });
+  }
   persistState();
   render();
 }
@@ -4973,12 +5065,35 @@ function applyFlip(component: WebviewComponentModel, axis: "horizontal" | "verti
 }
 
 function flipSelectedComponents(axis: "horizontal" | "vertical"): void {
-  if (selectedTextLabel) return;
   const components = getSelectedComponents();
   if (components.length === 0) return;
   for (const component of components) applyFlip(component, axis);
   persistState();
   render();
+}
+
+/** Item movível genérico -- componente OU rótulo externo (id/value), pedido real: "textos,
+ * independentemente dos pinos" + "rótulos + componentes juntos". Move/alinha/distribui/gira tratam
+ * os dois uniformemente por posição ABSOLUTA (mundo), nunca por `x`/`y` cru de um componente (que
+ * não existe pra um rótulo -- a posição dele é `component.x/y` + offset PRÓPRIO, ver
+ * `externalLabelOffset`). */
+type MovableRef =
+  | { kind: "component"; component: WebviewComponentModel }
+  | { kind: "label"; component: WebviewComponentModel; labelKind: ExternalLabelKind };
+
+function movableRefPosition(ref: MovableRef): Point {
+  if (ref.kind === "component") return { x: ref.component.x, y: ref.component.y };
+  const offset = externalLabelOffset(ref.component, ref.labelKind);
+  return { x: ref.component.x + offset.x, y: ref.component.y + offset.y };
+}
+
+function setMovableRefPosition(ref: MovableRef, pos: Point): void {
+  if (ref.kind === "component") {
+    ref.component.x = pos.x;
+    ref.component.y = pos.y;
+    return;
+  }
+  setExternalLabelLayout(ref.component, ref.labelKind, { x: pos.x - ref.component.x, y: pos.y - ref.component.y });
 }
 
 /** Componentes selecionados na ORDEM DE SELEÇÃO real (`state.selectedComponentIds`, ordem de
@@ -4996,27 +5111,42 @@ function selectedComponentsInSelectionOrder(): WebviewComponentModel[] {
     .filter((component): component is WebviewComponentModel => component !== undefined);
 }
 
+/** União de componentes + rótulos selecionados -- componentes primeiro (na ordem de seleção deles),
+ * rótulos depois (na ordem de seleção deles). Pra seleção PURA de um dos dois tipos (o caso comum:
+ * só rótulos, ou só componentes), a ordem resultante é exatamente a ordem de seleção real -- só uma
+ * seleção MISTA (ambos não-vazios) usa esta concatenação como aproximação razoável de "primeiro/
+ * último", já que os dois tipos têm arrays de ordem próprios e independentes. */
+function selectedMovableRefsInSelectionOrder(): MovableRef[] {
+  const components: MovableRef[] = selectedComponentsInSelectionOrder().map((component) => ({ kind: "component", component }));
+  const labels: MovableRef[] = getSelectedTextLabels().map(({ component, kind }) => ({ kind: "label", component, labelKind: kind }));
+  return [...components, ...labels];
+}
+
 /** Alinhar horizontalmente pelo primeiro item: todo mundo recebe a MESMA posição vertical (`y`) do
  * primeiro selecionado -- `x`/rotação/tamanho/demais propriedades intocados (pedido original:
  * "preserve tamanhos, rotações e demais propriedades"). */
-function alignSelectedComponentsHorizontally(): void {
-  if (selectedTextLabel) return;
-  const components = selectedComponentsInSelectionOrder();
-  if (components.length < 2) return;
-  const firstY = components[0]!.y;
-  for (const component of components) component.y = firstY;
+function alignSelectedItemsHorizontally(): void {
+  const refs = selectedMovableRefsInSelectionOrder();
+  if (refs.length < 2) return;
+  const firstY = movableRefPosition(refs[0]!).y;
+  for (const ref of refs) {
+    const pos = movableRefPosition(ref);
+    setMovableRefPosition(ref, { x: pos.x, y: firstY });
+  }
   persistState();
   render();
 }
 
 /** Alinhar verticalmente pelo primeiro item: todo mundo recebe a MESMA posição horizontal (`x`) do
  * primeiro selecionado. */
-function alignSelectedComponentsVertically(): void {
-  if (selectedTextLabel) return;
-  const components = selectedComponentsInSelectionOrder();
-  if (components.length < 2) return;
-  const firstX = components[0]!.x;
-  for (const component of components) component.x = firstX;
+function alignSelectedItemsVertically(): void {
+  const refs = selectedMovableRefsInSelectionOrder();
+  if (refs.length < 2) return;
+  const firstX = movableRefPosition(refs[0]!).x;
+  for (const ref of refs) {
+    const pos = movableRefPosition(ref);
+    setMovableRefPosition(ref, { x: firstX, y: pos.y });
+  }
   persistState();
   render();
 }
@@ -5026,33 +5156,33 @@ function alignSelectedComponentsVertically(): void {
  * os dois -- só `x` muda, `y`/rotação/tamanho intocados (distribuição É só ao longo de 1 eixo, mesmo
  * princípio de ferramentas de design como Figma/Illustrator). Precisa de pelo menos 3 itens -- com 2,
  * não sobra nenhum "demais" pra espaçar (gate também no menu de contexto). */
-function distributeSelectedComponentsHorizontally(): void {
-  if (selectedTextLabel) return;
-  const components = selectedComponentsInSelectionOrder();
-  if (components.length < 3) return;
-  const first = components[0]!;
-  const last = components[components.length - 1]!;
-  const span = last.x - first.x;
-  const steps = components.length - 1;
-  for (let index = 1; index < components.length - 1; index += 1) {
-    components[index]!.x = first.x + (span * index) / steps;
+function distributeSelectedItemsHorizontally(): void {
+  const refs = selectedMovableRefsInSelectionOrder();
+  if (refs.length < 3) return;
+  const firstPos = movableRefPosition(refs[0]!);
+  const lastPos = movableRefPosition(refs[refs.length - 1]!);
+  const span = lastPos.x - firstPos.x;
+  const steps = refs.length - 1;
+  for (let index = 1; index < refs.length - 1; index += 1) {
+    const pos = movableRefPosition(refs[index]!);
+    setMovableRefPosition(refs[index]!, { x: firstPos.x + (span * index) / steps, y: pos.y });
   }
   persistState();
   render();
 }
 
-/** Distribuir igualmente na vertical: mesmo princípio de `distributeSelectedComponentsHorizontally`,
- * só `y` muda. */
-function distributeSelectedComponentsVertically(): void {
-  if (selectedTextLabel) return;
-  const components = selectedComponentsInSelectionOrder();
-  if (components.length < 3) return;
-  const first = components[0]!;
-  const last = components[components.length - 1]!;
-  const span = last.y - first.y;
-  const steps = components.length - 1;
-  for (let index = 1; index < components.length - 1; index += 1) {
-    components[index]!.y = first.y + (span * index) / steps;
+/** Distribuir igualmente na vertical: mesmo princípio de `distributeSelectedItemsHorizontally`, só
+ * `y` muda. */
+function distributeSelectedItemsVertically(): void {
+  const refs = selectedMovableRefsInSelectionOrder();
+  if (refs.length < 3) return;
+  const firstPos = movableRefPosition(refs[0]!);
+  const lastPos = movableRefPosition(refs[refs.length - 1]!);
+  const span = lastPos.y - firstPos.y;
+  const steps = refs.length - 1;
+  for (let index = 1; index < refs.length - 1; index += 1) {
+    const pos = movableRefPosition(refs[index]!);
+    setMovableRefPosition(refs[index]!, { x: pos.x, y: firstPos.y + (span * index) / steps });
   }
   persistState();
   render();
@@ -5303,18 +5433,20 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
           })()
         : [];
     // Alinhar/distribuir (pedido original: "junto às ações de girar e rotacionar", pra qualquer
-    // elemento selecionável -- pino/texto/figura/componente, todos o mesmo `WebviewComponentModel`).
-    // Alinhar precisa de 2+; distribuir precisa de 3+ (com só 2, primeiro+último já são os únicos,
-    // não sobra "demais" pra espaçar) -- "só devem aparecer quando houver seleção múltipla
+    // elemento selecionável -- pino/texto/figura/componente, todos o mesmo `WebviewComponentModel`,
+    // MISTURANDO com rótulos externos selecionados também, ver `MovableRef`/"rótulos + componentes
+    // juntos"). Alinhar precisa de 2+; distribuir precisa de 3+ (com só 2, primeiro+último já são os
+    // únicos, não sobra "demais" pra espaçar) -- "só devem aparecer quando houver seleção múltipla
     // compatível" do pedido.
-    const alignDistributeMenuItems: ContextMenuItem[] = isGroup
+    const combinedSelectionCount = selectedComponents.length + selectedTextLabels.length;
+    const alignDistributeMenuItems: ContextMenuItem[] = combinedSelectionCount > 1
       ? [
-          { label: t("alignHorizontal"), onClick: () => alignSelectedComponentsHorizontally() },
-          { label: t("alignVertical"), onClick: () => alignSelectedComponentsVertically() },
-          ...(selectedComponents.length >= 3
+          { label: t("alignHorizontal"), onClick: () => alignSelectedItemsHorizontally() },
+          { label: t("alignVertical"), onClick: () => alignSelectedItemsVertically() },
+          ...(combinedSelectionCount >= 3
             ? [
-                { label: t("distributeHorizontal"), onClick: () => distributeSelectedComponentsHorizontally() },
-                { label: t("distributeVertical"), onClick: () => distributeSelectedComponentsVertically() },
+                { label: t("distributeHorizontal"), onClick: () => distributeSelectedItemsHorizontally() },
+                { label: t("distributeVertical"), onClick: () => distributeSelectedItemsVertically() },
               ] satisfies ContextMenuItem[]
             : []),
         ]
@@ -6172,6 +6304,29 @@ function externalLabelRotation(component: WebviewComponentModel, kind: ExternalL
   return raw === 90 || raw === 180 || raw === 270 ? raw : 0;
 }
 
+/** Caixa (mundo, não-rotacionada) de um rótulo externo, pra hit-test de marquee -- `undefined` se o
+ * rótulo não mostra texto agora (mesmo critério de `renderExternalLabel`/`normalizeSelectedTextLabels`,
+ * nunca um rótulo "fantasma" selecionável que não está nem desenhado). Mesma fórmula de tamanho já
+ * usada pro `symbol.pin` ao vivo (`boxWidth`/`boxHeight` de `renderExternalLabel`); pro caso genérico
+ * (`font-size:11px` fixo do CSS `.component-floating-label--id/--value`) usa a mesma fórmula de
+ * estimativa de largura por caractere já estabelecida (`pinLabelBoxSize`/`renderPropertyField`), só
+ * com folga um pouco maior (a caixa REAL do `<div>` genérico tem `padding:1px 2px`, nunca medida via
+ * DOM aqui -- aproximação deliberada, suficiente pra um hit-test de marquee). */
+function externalLabelWorldBox(component: WebviewComponentModel, kind: ExternalLabelKind): { left: number; top: number; right: number; bottom: number } | undefined {
+  const text = externalLabelText(component, kind);
+  if (!text) return undefined;
+  const offset = externalLabelOffset(component, kind);
+  const centerX = component.x + offset.x;
+  const centerY = component.y + offset.y;
+  const isLiveSymbolPinIdLabel = kind === "id" && component.typeId === SYMBOL_PIN_TYPE_ID && subcircuitEditorMode === "symbol";
+  const fontSize = isLiveSymbolPinIdLabel
+    ? (typeof component.properties.labelFontSize === "number" ? component.properties.labelFontSize : 7)
+    : 11;
+  const width = isLiveSymbolPinIdLabel ? Math.max(16, text.length * fontSize * 0.62 + 4) : Math.max(20, text.length * fontSize * 0.62 + 8);
+  const height = fontSize + 6;
+  return { left: centerX - width / 2, top: centerY - height / 2, right: centerX + width / 2, bottom: centerY + height / 2 };
+}
+
 function setExternalLabelLayout(component: WebviewComponentModel, kind: ExternalLabelKind, patch: Partial<{ x: number; y: number; rotation: 0 | 90 | 180 | 270 }>): void {
   if (patch.x !== undefined) {
     component.properties[labelPropertyKey(kind, "x")] = Math.round(patch.x);
@@ -6249,18 +6404,171 @@ function openExternalLabelPropertyDialog(component: WebviewComponentModel, kind:
   if (!propertyDialog.open) propertyDialog.showModal();
 }
 
-function rotateSelectedTextLabel(steps: 1 | -1 | 2): boolean {
-  if (!selectedTextLabel) return false;
-  const activeLabel = selectedTextLabel;
-  const component = activeSceneComponents().find((entry) => entry.id === activeLabel.componentId);
-  if (!component) return false;
-  const current = externalLabelRotation(component, activeLabel.kind);
-  const delta = steps === 2 ? 180 : steps * 90;
-  const next = ((((current + delta) % 360) + 360) % 360) as 0 | 90 | 180 | 270;
-  setExternalLabelLayout(component, activeLabel.kind, { rotation: next });
+interface LabelRef { component: WebviewComponentModel; kind: ExternalLabelKind; }
+
+function labelRefKey(ref: LabelRef): string {
+  return textLabelSelectionKey(ref.component.id, ref.kind);
+}
+
+interface SharedLabelField {
+  key: string;
+  label: string;
+  kind: PropertyFieldKind;
+  min?: number;
+  max?: number;
+  step?: number;
+  value: SharedFieldValue;
+  refs: LabelRef[];
+}
+
+/** Interseção por `key`+`kind` dos campos (`externalLabelPropertyFields`) de CADA rótulo selecionado
+ * -- MESMO princípio de `batchProperties.ts::computeSharedPropertyFields`, reimplementado aqui (não
+ * reaproveitado direto) porque aquela função é indexada por `component.id` (1 entrada por
+ * COMPONENTE) -- um rótulo "id" e um "value" do MESMO componente selecionados juntos colidiriam na
+ * mesma chave. Indexado por `labelRefKey` (componente+kind) em vez disso. */
+function computeSharedLabelPropertyFields(labels: LabelRef[]): SharedLabelField[] {
+  if (labels.length === 0) return [];
+  const perLabelFields = labels.map((ref) => {
+    const fields = new Map<string, PropertyField>();
+    for (const field of externalLabelPropertyFields(ref.component, ref.kind)) fields.set(field.key, field);
+    return fields;
+  });
+  const [firstFields, ...restFields] = perLabelFields;
+  const shared: SharedLabelField[] = [];
+  for (const [key, referenceField] of firstFields!) {
+    const perRef = new Map<string, PropertyField>();
+    perRef.set(labelRefKey(labels[0]!), referenceField);
+    let compatible = true;
+    for (let i = 0; i < restFields.length; i++) {
+      const candidate = restFields[i]!.get(key);
+      if (!candidate || candidate.kind !== referenceField.kind) {
+        compatible = false;
+        break;
+      }
+      perRef.set(labelRefKey(labels[i + 1]!), candidate);
+    }
+    if (!compatible) continue;
+    const values = labels.map((ref) => perRef.get(labelRefKey(ref))!.value);
+    const first = values[0];
+    shared.push({
+      key,
+      label: referenceField.label,
+      kind: referenceField.kind,
+      min: referenceField.min,
+      max: referenceField.max,
+      step: referenceField.step,
+      value: values.every((value) => value === first) ? { state: "common", value: first! } : { state: "mixed" },
+      refs: labels,
+    });
+  }
+  return shared;
+}
+
+/** Aplica `value` de `field` a TODOS os rótulos do lote de uma vez -- mesmo princípio de
+ * `applyBatchChange` (componentes): muta `properties[key]` de cada componente DONO e manda
+ * `requestUpdateProperty` em loop (verbo já existente, reaproveitado), `persistState()` uma única
+ * vez no final (1 passo de Undo/Redo pro lote inteiro). */
+function applyLabelBatchChange(field: SharedLabelField, value: string | number): void {
+  for (const ref of field.refs) {
+    ref.component.properties[field.key] = value;
+    send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: ref.component.id, name: field.key, value });
+  }
   persistState();
   render();
-  return true;
+  refreshOpenPropertyDialog();
+}
+
+function renderLabelBatchField(field: SharedLabelField): HTMLElement {
+  const row = document.createElement("label");
+  row.className = "property-sheet__field-row";
+  const caption = document.createElement("span");
+  caption.className = "property-sheet__field-label";
+  caption.textContent = `${field.label}:`;
+
+  if (field.kind === "color") {
+    const group = document.createElement("div");
+    group.className = "property-sheet__color-group";
+    const swatch = document.createElement("input");
+    swatch.type = "color";
+    swatch.className = "property-sheet__color-swatch";
+    const text = document.createElement("input");
+    text.type = "text";
+    text.className = "property-sheet__field-input";
+    text.placeholder = field.value.state === "mixed" ? t("mixedValuePlaceholder") : "#RRGGBB";
+    const currentValue = field.value.state === "common" ? String(field.value.value) : "";
+    swatch.value = (field.value.state === "common" && normalizeHexColor(currentValue)) || "#000000";
+    text.value = currentValue;
+    swatch.addEventListener("input", () => {
+      text.value = swatch.value;
+      applyLabelBatchChange(field, swatch.value);
+    });
+    text.addEventListener("change", () => {
+      const hex = normalizeHexColor(text.value);
+      if (!hex) {
+        text.value = currentValue;
+        return;
+      }
+      swatch.value = hex;
+      text.value = hex;
+      applyLabelBatchChange(field, hex);
+    });
+    group.append(swatch, text);
+    row.append(caption, group);
+    return row;
+  }
+
+  const input = document.createElement("input");
+  input.className = "property-sheet__field-input";
+  input.type = "number";
+  if (field.min !== undefined) input.min = String(field.min);
+  if (field.max !== undefined) input.max = String(field.max);
+  if (field.step !== undefined) input.step = String(field.step);
+  if (field.value.state === "common") input.value = String(field.value.value);
+  else input.placeholder = t("mixedValuePlaceholder");
+  let userEdited = false;
+  input.addEventListener("input", () => { userEdited = true; });
+  input.addEventListener("change", () => {
+    if (field.value.state === "mixed" && !userEdited) return;
+    applyLabelBatchChange(field, Number(input.value));
+  });
+  row.append(caption, input);
+  return row;
+}
+
+function renderTextLabelBatchPropertySheet(labels: LabelRef[]): HTMLElement {
+  const shell = document.createElement("section");
+  shell.className = "property-sheet";
+  const titleBar = document.createElement("div");
+  titleBar.className = "property-sheet__titlebar";
+  const uid = document.createElement("div");
+  uid.className = "property-sheet__uid";
+  uid.textContent = `${labels.length} ${t("labelsSelected")}`;
+  const closeButton = document.createElement("button");
+  closeButton.type = "button";
+  closeButton.className = "property-sheet__window-close";
+  closeButton.textContent = "x";
+  closeButton.addEventListener("click", () => propertyDialog.close());
+  titleBar.append(uid, closeButton);
+  const fieldset = document.createElement("fieldset");
+  fieldset.className = "property-sheet__group";
+  const fields = computeSharedLabelPropertyFields(labels);
+  if (fields.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "property-sheet__empty";
+    empty.textContent = t("batchNoSharedFields");
+    fieldset.appendChild(empty);
+  } else {
+    for (const field of fields) fieldset.appendChild(renderLabelBatchField(field));
+  }
+  shell.append(titleBar, fieldset);
+  return shell;
+}
+
+function openTextLabelBatchPropertyDialog(labels: LabelRef[]): void {
+  activePropertyTarget = { kind: "text-label-batch", labels: labels.map((ref) => ({ componentId: ref.component.id, labelKind: ref.kind })) };
+  propertyDialog.innerHTML = "";
+  propertyDialog.append(renderTextLabelBatchPropertySheet(labels));
+  if (!propertyDialog.open) propertyDialog.showModal();
 }
 
 function isMcuHostComponent(component: WebviewComponentModel): boolean {
@@ -7567,6 +7875,7 @@ function renderJunction(id: string, x: number, y: number): SVGGElement {
     state.selectedWireIds = touching.map((wire) => wire.id);
     selectedWireSegment = undefined;
     selectedWireCorner = undefined;
+    selectedTextLabels = [];
     persistState();
     render();
     showContextMenu(event, [{ label: t("deleteSelectedItems"), onClick: () => deleteSelectedItems() }]);
@@ -7688,7 +7997,12 @@ function renderExternalLabel(component: WebviewComponentModel, kind: ExternalLab
 
   el.addEventListener("click", (event) => {
     event.stopPropagation();
-    selectOnlyTextLabel(component.id, kind);
+    // Ctrl+clique (pedido real, literal): alterna ESTE rótulo dentro/fora da seleção múltipla de
+    // rótulos, preservando os demais (rótulos E componentes) -- clique simples substitui tudo por
+    // só este rótulo, nunca seleciona o pino/componente dono junto (`selectOnlyTextLabel` já limpa
+    // `state.selectedComponentIds`).
+    if (event.ctrlKey) toggleTextLabelSelection(component.id, kind);
+    else selectOnlyTextLabel(component.id, kind);
     persistState();
     render();
   });
@@ -7696,29 +8010,65 @@ function renderExternalLabel(component: WebviewComponentModel, kind: ExternalLab
   el.addEventListener("contextmenu", (event) => {
     // NUNCA stopPropagation() -- ver comentário equivalente no handler de componente.
     event.preventDefault();
-    selectOnlyTextLabel(component.id, kind);
+    if (!isTextLabelSelected(component.id, kind)) selectOnlyTextLabel(component.id, kind);
     persistState();
     render();
+    const selectedLabels = getSelectedTextLabels();
+    const isLabelGroup = selectedLabels.length > 1;
+    const combinedSelectionCount = getSelectedComponents().length + selectedLabels.length;
     showContextMenu(event, [
-      { label: t("properties"), icon: "properties", onClick: () => openExternalLabelPropertyDialog(component, kind) },
+      {
+        label: t("properties"),
+        icon: "properties",
+        onClick: () => (isLabelGroup ? openTextLabelBatchPropertyDialog(selectedLabels) : openExternalLabelPropertyDialog(component, kind)),
+      },
       { kind: "separator" },
-      { label: t("rotateCw"), icon: "rotateCw", shortcut: "Ctrl+R", onClick: () => rotateSelectedTextLabel(1) },
-      { label: t("rotateCcw"), icon: "rotateCcw", shortcut: "Ctrl+Shift+R", onClick: () => rotateSelectedTextLabel(-1) },
-      { label: t("rotate180"), icon: "rotate180", onClick: () => rotateSelectedTextLabel(2) },
+      { label: t("rotateCw"), icon: "rotateCw", shortcut: "Ctrl+R", onClick: () => rotateSelectedComponents(1) },
+      { label: t("rotateCcw"), icon: "rotateCcw", shortcut: "Ctrl+Shift+R", onClick: () => rotateSelectedComponents(-1) },
+      { label: t("rotate180"), icon: "rotate180", onClick: () => rotateSelectedComponents(2) },
+      ...(combinedSelectionCount > 1
+        ? [
+            { kind: "separator" } satisfies ContextMenuItem,
+            { label: t("alignHorizontal"), onClick: () => alignSelectedItemsHorizontally() },
+            { label: t("alignVertical"), onClick: () => alignSelectedItemsVertically() },
+            ...(combinedSelectionCount >= 3
+              ? [
+                  { label: t("distributeHorizontal"), onClick: () => distributeSelectedItemsHorizontally() },
+                  { label: t("distributeVertical"), onClick: () => distributeSelectedItemsVertically() },
+                ] satisfies ContextMenuItem[]
+              : []),
+          ]
+        : []),
     ]);
   });
 
   let dragStartX = 0;
   let dragStartY = 0;
-  let startOffset = offset;
+  // Arrastar QUALQUER rótulo selecionado move TODOS os rótulos selecionados juntos (pedido real:
+  // "os textos selecionados devem poder ser movidos") -- capturado no início do arrasto (mesmo
+  // padrão de `dragTargets` no pointerdown de componente), cada um com seu PRÓPRIO offset inicial
+  // (rótulos de componentes diferentes têm posições/pais diferentes).
+  let dragTargets: Array<{ component: WebviewComponentModel; kind: ExternalLabelKind; startOffset: Point }> = [];
   el.addEventListener("pointerdown", (event) => {
     if (event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
-    selectOnlyTextLabel(component.id, kind);
+    if (event.ctrlKey) {
+      toggleTextLabelSelection(component.id, kind);
+      persistState();
+      render();
+      return;
+    }
+    if (!isTextLabelSelected(component.id, kind)) selectOnlyTextLabel(component.id, kind);
+    persistState();
+    render();
     dragStartX = event.clientX;
     dragStartY = event.clientY;
-    startOffset = externalLabelOffset(component, kind);
+    dragTargets = getSelectedTextLabels().map(({ component: selected, kind: selectedKind }) => ({
+      component: selected,
+      kind: selectedKind,
+      startOffset: externalLabelOffset(selected, selectedKind),
+    }));
     el.setPointerCapture(event.pointerId);
     isDraggingComponent = true;
 
@@ -7726,8 +8076,14 @@ function renderExternalLabel(component: WebviewComponentModel, kind: ExternalLab
       const zoom = state.viewport.zoom || 1;
       const dx = (moveEvent.clientX - dragStartX) / zoom;
       const dy = (moveEvent.clientY - dragStartY) / zoom;
-      el.style.left = `${component.x + startOffset.x + dx}px`;
-      el.style.top = `${component.y + startOffset.y + dy}px`;
+      for (const target of dragTargets) {
+        const targetEl = document.querySelector<HTMLElement>(
+          `.component-floating-label[data-component-id="${target.component.id}"][data-label-kind="${target.kind}"]`
+        );
+        if (!targetEl) continue;
+        targetEl.style.left = `${target.component.x + target.startOffset.x + dx}px`;
+        targetEl.style.top = `${target.component.y + target.startOffset.y + dy}px`;
+      }
     };
 
     const onUp = (upEvent: PointerEvent): void => {
@@ -7738,7 +8094,10 @@ function renderExternalLabel(component: WebviewComponentModel, kind: ExternalLab
       const zoom = state.viewport.zoom || 1;
       const dx = (upEvent.clientX - dragStartX) / zoom;
       const dy = (upEvent.clientY - dragStartY) / zoom;
-      setExternalLabelLayout(component, kind, { x: startOffset.x + dx, y: startOffset.y + dy });
+      for (const target of dragTargets) {
+        setExternalLabelLayout(target.component, target.kind, { x: target.startOffset.x + dx, y: target.startOffset.y + dy });
+      }
+      dragTargets = [];
       persistState();
       render();
     };
