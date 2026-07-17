@@ -142,6 +142,21 @@ private:
     std::condition_variable m_wake;
     std::atomic<bool> m_running{false};
     std::atomic<bool> m_paused{false};
+    /** Setada por `stop()` ANTES de `m_thread.join()`, checada dentro de `settleUntilStableLocked()`
+     * -- sem isso, um circuito que nunca converge/estabiliza (oscilação sustentada entre dois
+     * estados, ex.: realimentação positiva sem atraso de propagação suficiente) prende a thread do
+     * Scheduler para sempre dentro do `while (!m_dirty.empty())` daquela função: `m_running` só é
+     * checado no topo do laço externo de `start()` (nunca visitado de novo enquanto preso ali dentro),
+     * então `stop()` bloqueia pra sempre em `join()` -- o botão "Parar" da UI nunca responde, e (como
+     * `settleUntilStableLocked` roda com `m_mutex` travado) nenhuma outra requisição IPC que precise
+     * do mutex (ex.: `getSimulationTime`) responde também, travando o pipe inteiro (bug relatado
+     * 2026-07-17: "Run" preso em progresso baixo + "Parar" sem resposta). True só enquanto uma
+     * chamada a `stop()` está ativamente esperando a worker thread terminar (`start()` zera ao
+     * começar, `stop()` rearma pra `false` depois que `join()` retorna) -- chamadores síncronos de
+     * `runUntil()`/`step()` fora desse instante (ex.: `setPauseCondition` resolvendo topologia via
+     * `step(0)` enquanto a simulação está parada) nunca veem esta flag true, então o comportamento
+     * deles não muda. */
+    std::atomic<bool> m_stopRequested{false};
     std::atomic<uint64_t> m_targetStepUs{0};
     std::atomic<size_t> m_maxNonLinearIterations{0};
     std::atomic<uint64_t> m_maximumTimeStepNs{0};

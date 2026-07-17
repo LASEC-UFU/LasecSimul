@@ -451,7 +451,20 @@ export async function updateExposedComponentPropertyCommand(
     return;
   }
 
-  updateBoardOverlayPropertyCommand(outerComponentId, innerComponentId, name, value, options);
+  // `firmwarePath`/`qemuBinaryOverride` são propriedades "UI-only" pro Core (mesma convenção de
+  // `coreLifecycle.ts::isUiOnlyRuntimeProperty`, que só cobre o componente de TOPO -- aqui é o
+  // equivalente pro componente INTERNO exposto em "Modo Placa") -- o Core nunca registra essas
+  // propriedades pra NENHUM componente, só consome firmware via o verbo IPC dedicado
+  // `loadMcuFirmware` (ver `chooseExposedMcuFirmwareCommand`, que já chama isso separadamente).
+  // Bug real 2026-07-17: `chooseExposedMcuFirmwareCommand` chamava esta função pra persistir
+  // `firmwarePath` no `.lssubcircuit`, que por sua vez empurrava a MESMA propriedade pro Core via
+  // `setSubcircuitChildProperty` -- sempre falhava com `unknown_property`, silenciosamente antes do
+  // novo log de simulação existir, agora visível como aviso a cada troca de firmware.
+  const innerTypeId = options.gatherInternalComponentSnapshots(sourceId)?.find((entry) => entry.id === innerComponentId)?.typeId;
+  const isUiOnlyMcuProperty = (name === "firmwarePath" || name === "qemuBinaryOverride") && innerTypeId !== undefined && isMcuHostTypeId(innerTypeId);
+  if (!isUiOnlyMcuProperty) {
+    updateBoardOverlayPropertyCommand(outerComponentId, innerComponentId, name, value, options);
+  }
   await requestBoardOverlayDataCommand(outerComponentId, sourceId, options);
 }
 

@@ -1,4 +1,3 @@
-import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 import { hasShowOnSymbolProperty } from "../catalog/catalogMerge";
@@ -348,13 +347,12 @@ async function confirmDiscardUnsavedChanges(): Promise<boolean> {
   return choice === discard;
 }
 
-export async function saveProjectCommand(): Promise<void> {
-  if (!warnIfEditingSubcircuit()) return;
-  const uri = await vscode.window.showSaveDialog({ filters: { "LasecSimul Project": ["lsproj"] } });
-  if (!uri) return;
-  // `state.schematicState.topology` JÁ é o documento canônico (Fase C completa, `.spec` seção
-  // 25.6) -- só falta validar antes de gravar e renomear `points` (campo vivo) pra `vertices`
-  // (campo persistido, mesma convenção já usada por `ProjectTopology`).
+/** Valida a topologia, monta o `ProjectDocument` e grava em `filePath` -- núcleo compartilhado por
+ * `saveProjectCommand` (grava direto, sem diálogo) e `saveProjectAsCommand` (sempre com diálogo).
+ * `state.schematicState.topology` JÁ é o documento canônico (Fase C completa, `.spec` seção 25.6) --
+ * só falta validar antes de gravar e renomear `points` (campo vivo) pra `vertices` (campo
+ * persistido, mesma convenção já usada por `ProjectTopology`). */
+async function writeProjectToFile(filePath: string): Promise<boolean> {
   const canonicalTopology: ProjectTopology = {
     revision: state.schematicState.topology.revision,
     nodes: state.schematicState.topology.nodes,
@@ -367,7 +365,7 @@ export async function saveProjectCommand(): Promise<void> {
     );
   } catch (err) {
     vscode.window.showErrorMessage(`Não foi possível salvar o projeto: topologia inválida (${err instanceof Error ? err.message : String(err)})`);
-    return;
+    return false;
   }
   const project: ProjectDocument = projectWithRelativeSubcircuitRefs({
     ...createEmptyProject(),
@@ -380,17 +378,51 @@ export async function saveProjectCommand(): Promise<void> {
         .map((wire) => ({ id: wire.id, points: wire.points })),
       viewport: state.schematicState.viewport,
     },
-  }, uri.fsPath);
+  }, filePath);
   try {
-    await projectSerializer.save(uri.fsPath, project);
+    await projectSerializer.save(filePath, project);
   } catch (err) {
     vscode.window.showErrorMessage(`Não foi possível salvar o projeto: ${err instanceof Error ? err.message : String(err)}`);
+    return false;
+  }
+  state.currentProjectFilePath = filePath;
+  markProjectSaved();
+  await addRecentProjectPath(filePath);
+  vscode.window.showInformationMessage(`Projeto LasecSimul salvo em ${filePath}`);
+  return true;
+}
+
+/** Botão "Salvar" da toolbar -- grava direto no arquivo já associado ao projeto
+ * (`state.currentProjectFilePath`), sem diálogo nenhum. Só cai pro fluxo de "Salvar Como" (diálogo
+ * de arquivo) quando ainda não há nenhum arquivo associado (projeto novo, nunca salvo) -- antes
+ * disto, o botão "Salvar" sempre abria o diálogo, igual a "Salvar Como", mesmo pra um projeto já
+ * salvo antes. */
+export async function saveProjectCommand(): Promise<void> {
+  if (!warnIfEditingSubcircuit()) return;
+  if (!state.currentProjectFilePath) {
+    await saveProjectAsCommand();
     return;
   }
-  state.currentProjectFilePath = uri.fsPath;
-  markProjectSaved();
-  await addRecentProjectPath(uri.fsPath);
-  vscode.window.showInformationMessage(`Projeto LasecSimul salvo em ${uri.fsPath}`);
+  await writeProjectToFile(state.currentProjectFilePath);
+}
+
+/** Botão "Salvar Como" da toolbar -- sempre mostra o diálogo de arquivo, mesmo que o projeto já
+ * tenha um arquivo associado. */
+export async function saveProjectAsCommand(): Promise<void> {
+  if (!warnIfEditingSubcircuit()) return;
+  const uri = await vscode.window.showSaveDialog({ filters: { "LasecSimul Project": ["lsproj"] } });
+  if (!uri) return;
+  await writeProjectToFile(uri.fsPath);
+}
+
+/** Mesmo par de guardas antes de qualquer troca de projeto que SUBSTITUI `state.schematicState`
+ * (Abrir Projeto, Abrir Recente, editor personalizado de `.lsproj` no double-click do Explorer) --
+ * extraído pra ficar num só lugar assim que surgiu um 2º chamador, evitando que um deles esqueça uma
+ * das duas checagens (ex: double-click sobrescrevendo silenciosamente uma sessão de edição de
+ * subcircuito ou alterações não salvas). `true` == pode prosseguir com a troca. */
+export async function canReplaceCurrentProject(): Promise<boolean> {
+  if (!warnIfEditingSubcircuit()) return false;
+  return confirmDiscardUnsavedChanges();
 }
 
 export async function openProjectCommand(options: {
@@ -399,8 +431,7 @@ export async function openProjectCommand(options: {
   openSchematicEditor: (extensionUri: vscode.Uri) => void;
   syncSchematicPanel: () => void;
 }): Promise<void> {
-  if (!warnIfEditingSubcircuit()) return;
-  if (!(await confirmDiscardUnsavedChanges())) return;
+  if (!(await canReplaceCurrentProject())) return;
   const uris = await vscode.window.showOpenDialog({
     filters: { "LasecSimul Project": ["lsproj"] },
     canSelectMany: false,
@@ -521,20 +552,3 @@ export async function importProjectCommand(options: { syncSchematicPanel: () => 
   vscode.window.showInformationMessage(`${components.length} componente(s) importado(s) de ${path.basename(selected.fsPath)}.`);
 }
 
-/** "Salvar Esquemático como Imagem" (achado de auditoria de UI 2026-07-09) -- a Webview já monta o
- * SVG completo (`buildSchematicSvgExport` em `main.ts`, clona o `canvas-content` real dentro de um
- * `<foreignObject>` com o CSS da página embutido), aqui só mostra o diálogo nativo e grava o
- * arquivo -- MESMA divisão de responsabilidade de `saveProjectCommand` (Webview nunca tem acesso a
- * `fs`). Só SVG por enquanto -- ver nota em `messages.ts::requestExportSchematicImage`.
- */
-export async function exportSchematicImageCommand(svg: string): Promise<void> {
-  const uri = await vscode.window.showSaveDialog({ filters: { "Imagem SVG": ["svg"] } });
-  if (!uri) return;
-  try {
-    fs.writeFileSync(uri.fsPath, svg, "utf8");
-  } catch (err) {
-    vscode.window.showErrorMessage(`Não foi possível salvar a imagem: ${err instanceof Error ? err.message : String(err)}`);
-    return;
-  }
-  vscode.window.showInformationMessage(`Esquemático exportado em ${uri.fsPath}`);
-}

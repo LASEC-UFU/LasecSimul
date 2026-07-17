@@ -65,6 +65,10 @@
       },
       {
         "command": "lasecsimul.saveProject",
+        "title": "LasecSimul: Save Project"
+      },
+      {
+        "command": "lasecsimul.saveProjectAs",
         "title": "LasecSimul: Save Project As..."
       },
       {
@@ -106,6 +110,18 @@
       {
         "command": "lasecsimul.showSimulationLog",
         "title": "LasecSimul: Show Simulation Log"
+      }
+    ],
+    "customEditors": [
+      {
+        "viewType": "lasecsimul.projectEditor",
+        "displayName": "LasecSimul: Esquemático",
+        "selector": [
+          {
+            "filenamePattern": "*.lsproj"
+          }
+        ],
+        "priority": "default"
       }
     ],
     "viewsContainers": {

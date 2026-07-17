@@ -68,6 +68,7 @@ bool Scheduler::settleUntilStableLocked() {
     size_t iter = 0;
     while (!m_dirty.empty()) {
         if (maxIter > 0 && iter >= maxIter) break;
+        if (m_stopRequested.load()) break; // ver comentário de m_stopRequested em Scheduler.hpp
         ++iter;
         hadWork = true;
         if (!m_settleStep || !m_settleStep()) break;
@@ -162,6 +163,7 @@ void Scheduler::reset() {
 
 void Scheduler::start() {
     if (m_running.exchange(true)) return;
+    m_stopRequested.store(false);
 
     m_thread = std::thread([this] {
         while (m_running.load()) {
@@ -196,9 +198,14 @@ void Scheduler::start() {
 }
 
 void Scheduler::stop() {
+    m_stopRequested.store(true);
     m_running.store(false);
     m_wake.notify_all();
     if (m_thread.joinable() && m_thread.get_id() != std::this_thread::get_id()) m_thread.join();
+    // A worker thread já terminou (join acima) -- rearma pra não quebrar chamadores SÍNCRONOS de
+    // step()/runUntil() feitos depois deste stop() e antes do próximo start() (ex.: `setPauseCondition`
+    // resolvendo topologia via `step(0)` enquanto a simulação está parada, ver comentário em Scheduler.hpp).
+    m_stopRequested.store(false);
 }
 
 } // namespace lasecsimul::simulation

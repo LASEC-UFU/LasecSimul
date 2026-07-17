@@ -108,7 +108,8 @@ html, body {
 }
 
 .appbar__button--open,
-.appbar__button--save {
+.appbar__button--save,
+.appbar__button--saveProjectAs {
   color: #4d5969;
 }
 

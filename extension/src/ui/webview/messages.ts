@@ -184,20 +184,18 @@ export type WebviewToHostMessage =
   | { version: number; type: "requestPauseSimulation" }
   | { version: number; type: "requestSetPauseCondition"; componentId: string; expression: string }
   | { version: number; type: "requestStopSimulation" }
+  /** Grava direto no arquivo já associado ao projeto (`state.currentProjectFilePath`); cai pro
+   * fluxo de "Salvar Como" (diálogo de arquivo) só quando ainda não há nenhum arquivo associado
+   * (projeto novo, nunca salvo) -- ver `projectCommands.ts::saveProjectCommand`. */
   | { version: number; type: "requestSaveProject" }
+  /** Sempre mostra o diálogo de arquivo, mesmo que o projeto já tenha um arquivo associado --
+   * botão "Salvar Como" da toolbar (substituiu "Salvar como SVG" 2026-07-17, exportação de imagem
+   * removida). */
+  | { version: number; type: "requestSaveProjectAs" }
   | { version: number; type: "requestOpenProject" }
   /** "Importar Circuito" (achado de auditoria de UI 2026-07-09) -- mescla outro `.lsproj` no
    * esquemático aberto, ver `projectCommands.ts::importProjectCommand`. */
   | { version: number; type: "requestImportCircuit" }
-  /** "Salvar Esquemático como Imagem" (achado de auditoria de UI 2026-07-09, paridade com
-   * SimulIDE real que exporta PNG/JPEG/BMP/SVG do menu de contexto) -- Webview monta o SVG (clona
-   * `canvas-content` real dentro de um `<foreignObject>`, com o CSS da própria página embutido
-   * inline, pra reaproveitar 100% do rendering já visualmente correto em vez de reconstruir posição/
-   * rotação/flip do zero); a Extension só mostra o diálogo de salvar e grava o arquivo (mesmo
-   * padrão de `requestSaveProject`, sem acesso a `fs` na Webview). Só SVG -- rasterizar pra PNG/
-   * JPEG/BMP dentro da Webview arriscaria "tainted canvas" com um `<foreignObject>`, não
-   * implementado nesta rodada (documentado como limitação, não bug). */
-  | { version: number; type: "requestExportSchematicImage"; svg: string }
   | { version: number; type: "requestChooseMcuFirmware"; componentId: string }
   | { version: number; type: "requestOpenMcuSerialMonitor"; componentId: string; usartIndex: 0 | 1 | 2 }
   /** Mesmas ações do MCU de topo, mas disparadas a partir do submenu de um componente INTERNO

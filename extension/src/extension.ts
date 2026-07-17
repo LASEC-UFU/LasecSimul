@@ -14,7 +14,7 @@ import { assertTopologyInvariants } from "./ui/webview/topologyDocument";
 import { WebviewToHostMessage } from "./ui/webview/messages";
 import { ComponentPaletteViewProvider } from "./ui/views/ComponentPaletteViewProvider";
 import { materializePinGroup, registerPackage } from "./ui/webview/componentSymbols";
-import { absoluteSubcircuitRefPath, exportSchematicImageCommand, importProjectCommand, openProjectCommand, openProjectFile, openRecentProjectCommand, projectComponentToWebviewComponent, refreshDirtyIndicator, saveProjectCommand, webviewComponentToProjectComponent } from "./project/projectCommands";
+import { absoluteSubcircuitRefPath, importProjectCommand, openProjectCommand, openProjectFile, openRecentProjectCommand, projectComponentToWebviewComponent, refreshDirtyIndicator, saveProjectAsCommand, saveProjectCommand, webviewComponentToProjectComponent } from "./project/projectCommands";
 import { loadUnifiedCatalog, RegisteredSource, saveRegisteredSources } from "./catalog/UnifiedCatalog";
 import { refreshUnifiedCatalogState, registerCatalogFileCommand, removeRegisteredCatalogItemCommand } from "./catalog/catalogCommands";
 import { hasShowOnSymbolProperty, nextIndexedLabel } from "./catalog/catalogMerge";
@@ -82,6 +82,7 @@ import {
   resolveSourceFilePath,
 } from "./catalog/subcircuitInternals";
 import { initSimulationLog, logSimulation, noteSimulationStatusChange, showSimulationLogChannel } from "./diagnostics/simulationLog";
+import { ProjectCustomEditorProvider } from "./ui/panels/ProjectCustomEditorProvider";
 
 function setSchematicOpenContext(isOpen: boolean): Thenable<void> {
   return vscode.commands.executeCommand("setContext", "lasecsimul.schematicOpen", isOpen);
@@ -309,6 +310,142 @@ function mcuCommandOptions(): Parameters<typeof chooseMcuFirmwareCommand>[1] {
   };
 }
 
+/** Registra os handlers de ciclo de vida de um `CoreProcess` recém-criado -- extraído de `activate()`
+ * pra ser reaproveitado por `ensureCoreConnected()` (reconexão sob demanda quando o Core morreu). */
+function attachCoreProcessHandlers(proc: CoreProcess, corePath: string): void {
+  proc.onError((err) => {
+    logSimulation(
+      "error",
+      `Não foi possível iniciar "${corePath}": ${err.message}`,
+      {
+        stage: "core-process",
+        detail: "Compile o Core antes (npm run build:core) e confirme que o gerador usado coloca o binário em core/build/ ou core/build/<Config>/.",
+      }
+    );
+  });
+  proc.onExit((code) => {
+    logSimulation("error", `LasecSimul Core terminou (code ${code}).`, { stage: "core-process" });
+    state.coreClient = undefined;
+    setSimulationStatus("stopped");
+    for (const component of state.schematicState.components.filter((entry) => entry.typeId === "peripherals.lasecplot")) {
+      state.schematicPanel?.postMessage({ version: 1, type: "lasecPlotStatus", componentId: component.id, opened: false, clients: 0, error: "Core encerrado inesperadamente" });
+    }
+    serialTerminalManager?.updateSimulationState();
+    serialPortManager?.updateSimulationState();
+  });
+}
+
+/** Registra o handler de notificações assíncronas de um `CoreClient` recém-criado (hoje só
+ * `pauseConditionTriggered`) -- mesmo motivo de `attachCoreProcessHandlers`: reaproveitado por
+ * `ensureCoreConnected()`. */
+function attachCoreClientNotifications(client: CoreClient): void {
+  client.onNotification((notification) => {
+    if (notification.type !== "pauseConditionTriggered") return;
+    const payload = notification.payload as {
+      ownerId?: string;
+      simulationTimeNs?: number;
+      expression?: string;
+      resolvedValues?: Record<string, number | boolean | string>;
+      error?: string;
+    };
+    stopVoltageReadoutPolling();
+    setSimulationStatus("paused");
+    // Erro de AVALIAÇÃO da condição (expressão inválida) acende o indicador de erro em vez do simples
+    // "pausado" -- antes disto o `payload.error` só ia pra Webview (inline no instrumento), sem
+    // nenhum rastro no canal de saída/status bar.
+    if (payload.error) {
+      logSimulation("error", payload.error, { device: componentLabel(payload.ownerId ?? ""), stage: "condição-de-pausa" });
+    } else {
+      noteSimulationStatusChange("paused");
+    }
+    state.schematicPanel?.postMessage({
+      version: 1,
+      type: "pauseConditionTriggered",
+      ownerId: payload.ownerId ?? "",
+      simulationTimeNs: Number(payload.simulationTimeNs ?? 0),
+      expression: payload.expression ?? "",
+      resolvedValues: payload.resolvedValues ?? {},
+      ...(payload.error ? { error: payload.error } : {}),
+    });
+  });
+}
+
+/** Resolve o binário, monta o ambiente e sobe um `CoreProcess` novo em `state.coreProc` -- usado na
+ * ativação da extensão E por `ensureCoreConnected()` pra reiniciar depois que o processo morreu. */
+function launchCoreProcess(extensionPath: string): { corePath: string; pipeName: string } {
+  const corePath = resolveCoreExecutablePath(extensionPath);
+  const pipeName = CoreProcess.defaultPipeName();
+  const networkConfiguration = vscode.workspace.getConfiguration("lasecsimul.network");
+  const configuredNetworkNamespace = networkConfiguration.get<number>("namespace", -1);
+  const configuredNetworkMode = networkConfiguration.get<string>("mode", "lab-bridge");
+  const configuredGatewayPort = networkConfiguration.get<number>("gatewayPort", 9011);
+  const coreEnv: NodeJS.ProcessEnv = {
+    // Prevent shared-memory arena collisions between thin-client instances.
+    LASECSIMUL_HOST_INSTANCE_ID: String(process.pid),
+    LASECSIMUL_NETWORK_MODE: configuredNetworkMode === "isolated" ? "isolated" : "lab-bridge",
+    LASECSIMUL_GATEWAY_PORT: String(configuredGatewayPort),
+  };
+  if (Number.isInteger(configuredNetworkNamespace) && configuredNetworkNamespace >= 0 && configuredNetworkNamespace <= 255) {
+    coreEnv.LASECSIMUL_NETWORK_NAMESPACE = String(configuredNetworkNamespace);
+  }
+
+  state.coreProc = new CoreProcess({ executablePath: corePath, pipeName, env: coreEnv });
+  attachCoreProcessHandlers(state.coreProc, corePath);
+  try {
+    state.coreProc.start();
+  } catch (err) {
+    logSimulation("error", `Falha ao iniciar processo: ${err instanceof Error ? err.message : String(err)}`, { stage: "core-process" });
+  }
+  return { corePath, pipeName };
+}
+
+/** Cria e conecta um `CoreClient` novo ao pipe de um `CoreProcess` já iniciado (handshake incluído). */
+async function connectCoreClient(pipeName: string): Promise<CoreClient> {
+  const client = new CoreClient(pipeName);
+  attachCoreClientNotifications(client);
+  await client.start();
+  return client;
+}
+
+let coreReconnectPromise: Promise<boolean> | undefined;
+
+/** Reconecta ao Core quando `state.coreClient` está ausente (processo caiu -- inclusive derrubado à
+ * força pelo usuário depois de um "Parar" que não respondia -- ou falhou ao conectar na ativação).
+ * ANTES disto, nenhum caminho reiniciava `state.coreProc`/`state.coreClient`: "Run" ficava preso pra
+ * sempre em "O Core ainda não está conectado" até o usuário recarregar a janela inteira do VS Code
+ * (bug relatado 2026-07-17). Reconstrói o circuito inteiro no processo novo a partir de
+ * `state.schematicState` (fonte de verdade já vive na Extension, não no Core) -- é a "restaurar
+ * snapshot" que o comentário antigo em `attachCoreProcessHandlers`/`coreProc.onExit` prometia (RNF,
+ * .spec/lasecsimul-native-devices.spec) mas nunca implementava. Deliberadamente reativo (só tenta
+ * quando o usuário pede "Run" de novo), nunca automático a partir de `onExit` -- um Core que morre
+ * repetidamente (binário quebrado, por exemplo) não deve virar um loop de respawn silencioso em
+ * segundo plano. `coreReconnectPromise` coalesce chamadas concorrentes (ex: duplo-clique em "Run") --
+ * só uma tentativa de reconexão por vez. */
+async function ensureCoreConnected(): Promise<boolean> {
+  if (state.coreClient) return true;
+  if (!state.extensionContext) return false;
+  if (coreReconnectPromise) return coreReconnectPromise;
+  coreReconnectPromise = (async () => {
+    logSimulation("info", "Core desconectado -- reiniciando processo antes de rodar...", { stage: "core-process" });
+    try {
+      const { pipeName } = launchCoreProcess(state.extensionContext!.extensionPath);
+      const client = await connectCoreClient(pipeName);
+      state.coreClient = client;
+      await refreshUnifiedCatalogState(true, catalogCommandOptions());
+      await rebuildCoreFromSchematicState();
+      return true;
+    } catch (err) {
+      logSimulation("error", `Falha ao reconectar ao Core: ${err instanceof Error ? err.message : String(err)}`, { stage: "core-process" });
+      return false;
+    }
+  })();
+  try {
+    return await coreReconnectPromise;
+  } finally {
+    coreReconnectPromise = undefined;
+  }
+}
+
 /** Substitui a chamada direta a `runSimulation()` nos dois pontos de entrada de "Run" (mensagem
  * `requestRunSimulation` da Webview E comando `lasecsimul.run`) -- achado de auditoria 2026-07-09:
  * "Recarregar Firmware" era uma ação manual que o usuário precisava lembrar de clicar toda vez que
@@ -325,7 +462,7 @@ async function runSimulationWithFirmwareCheck(): Promise<void> {
   // devolve `false` no mesmo caso (também sem mensagem nenhuma) -- as duas etapas seguintes rodavam
   // "com sucesso" (nada de errado detectado) e `runSimulation()` nunca era chamado, sem nenhum
   // feedback visível pro usuário sobre o motivo.
-  if (!state.coreClient) {
+  if (!(await ensureCoreConnected())) {
     logSimulation("error", "O Core ainda não está conectado.", { stage: "core" });
     return;
   }
@@ -1165,6 +1302,9 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
     case "requestSaveProject":
       void saveProjectCommand();
       return;
+    case "requestSaveProjectAs":
+      void saveProjectAsCommand();
+      return;
     case "requestOpenProject":
       if (state.extensionContext) {
         void openProjectCommand({
@@ -1177,9 +1317,6 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       return;
     case "requestImportCircuit":
       void importProjectCommand({ syncSchematicPanel });
-      return;
-    case "requestExportSchematicImage":
-      void exportSchematicImageCommand(message.svg);
       return;
     case "requestChooseMcuFirmware":
       void chooseMcuFirmwareCommand(message.componentId, mcuCommandOptions());
@@ -1757,7 +1894,17 @@ async function exportInstrumentDataCommand(suggestedFileName: string, csvContent
 export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi {
   initSimulationLog(context);
   context.subscriptions.push(
-    vscode.commands.registerCommand("lasecsimul.showSimulationLog", () => showSimulationLogChannel())
+    vscode.commands.registerCommand("lasecsimul.showSimulationLog", () => showSimulationLogChannel()),
+    vscode.window.registerCustomEditorProvider(
+      "lasecsimul.projectEditor",
+      new ProjectCustomEditorProvider({
+        extensionUri: context.extensionUri,
+        beforeOpen: closeAllMcuSerialMonitors,
+        openSchematicEditor,
+        syncSchematicPanel,
+      }),
+      { webviewOptions: { retainContextWhenHidden: false } }
+    )
   );
   const lasecPlot = initializeLasecPlot(context);
   initializeSerialTerminal(context);
@@ -1772,80 +1919,10 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
   ]);
   state.schematicState.locale = currentLasecSimulLanguage();
 
-  const corePath = resolveCoreExecutablePath(context.extensionPath);
-  const pipeName = CoreProcess.defaultPipeName();
-  const networkConfiguration = vscode.workspace.getConfiguration("lasecsimul.network");
-  const configuredNetworkNamespace = networkConfiguration.get<number>("namespace", -1);
-  const configuredNetworkMode = networkConfiguration.get<string>("mode", "lab-bridge");
-  const configuredGatewayPort = networkConfiguration.get<number>("gatewayPort", 9011);
-  const coreEnv: NodeJS.ProcessEnv = {
-    // Prevent shared-memory arena collisions between thin-client instances.
-    LASECSIMUL_HOST_INSTANCE_ID: String(process.pid),
-    LASECSIMUL_NETWORK_MODE: configuredNetworkMode === "isolated" ? "isolated" : "lab-bridge",
-    LASECSIMUL_GATEWAY_PORT: String(configuredGatewayPort),
-  };
-  if (Number.isInteger(configuredNetworkNamespace) && configuredNetworkNamespace >= 0 && configuredNetworkNamespace <= 255) {
-    coreEnv.LASECSIMUL_NETWORK_NAMESPACE = String(configuredNetworkNamespace);
-  }
-
-  state.coreProc = new CoreProcess({ executablePath: corePath, pipeName, env: coreEnv });
-  state.coreProc.onError((err) => {
-    logSimulation(
-      "error",
-      `Não foi possível iniciar "${corePath}": ${err.message}`,
-      {
-        stage: "core-process",
-        detail: "Compile o Core antes (npm run build:core) e confirme que o gerador usado coloca o binário em core/build/ ou core/build/<Config>/.",
-      }
-    );
-  });
-  try {
-    state.coreProc.start();
-  } catch (err) {
-    logSimulation("error", `Falha ao iniciar processo: ${err instanceof Error ? err.message : String(err)}`, { stage: "core-process" });
-  }
-  state.coreProc.onExit((code) => {
-    // RNF: Core caiu → reiniciar + restaurar snapshot (ver lasecsimul-native-devices.spec §12.5)
-    logSimulation("error", `LasecSimul Core terminou (code ${code}). Reinicie a simulação.`, { stage: "core-process" });
-    state.coreClient = undefined;
-    setSimulationStatus("stopped");
-    for (const component of state.schematicState.components.filter((entry) => entry.typeId === "peripherals.lasecplot")) {
-      state.schematicPanel?.postMessage({ version: 1, type: "lasecPlotStatus", componentId: component.id, opened: false, clients: 0, error: "Core encerrado inesperadamente" });
-    }
-    serialTerminalManager?.updateSimulationState();
-    serialPortManager?.updateSimulationState();
-  });
+  const { pipeName } = launchCoreProcess(context.extensionPath);
 
   state.coreClient = new CoreClient(pipeName);
-  state.coreClient.onNotification((notification) => {
-    if (notification.type !== "pauseConditionTriggered") return;
-    const payload = notification.payload as {
-      ownerId?: string;
-      simulationTimeNs?: number;
-      expression?: string;
-      resolvedValues?: Record<string, number | boolean | string>;
-      error?: string;
-    };
-    stopVoltageReadoutPolling();
-    setSimulationStatus("paused");
-    // Erro de AVALIAÇÃO da condição (expressão inválida) acende o indicador de erro em vez do simples
-    // "pausado" -- antes disto o `payload.error` só ia pra Webview (inline no instrumento), sem
-    // nenhum rastro no canal de saída/status bar.
-    if (payload.error) {
-      logSimulation("error", payload.error, { device: componentLabel(payload.ownerId ?? ""), stage: "condição-de-pausa" });
-    } else {
-      noteSimulationStatusChange("paused");
-    }
-    state.schematicPanel?.postMessage({
-      version: 1,
-      type: "pauseConditionTriggered",
-      ownerId: payload.ownerId ?? "",
-      simulationTimeNs: Number(payload.simulationTimeNs ?? 0),
-      expression: payload.expression ?? "",
-      resolvedValues: payload.resolvedValues ?? {},
-      ...(payload.error ? { error: payload.error } : {}),
-    });
-  });
+  attachCoreClientNotifications(state.coreClient);
   // Conecta de forma assíncrona — não bloqueia a ativação da extensão
   state.coreClient
     .start()
@@ -1920,6 +1997,7 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
     vscode.commands.registerCommand("lasecsimul.pause", () => pauseSimulation()),
     vscode.commands.registerCommand("lasecsimul.stop", () => stopSimulation()),
     vscode.commands.registerCommand("lasecsimul.saveProject", () => saveProjectCommand()),
+    vscode.commands.registerCommand("lasecsimul.saveProjectAs", () => saveProjectAsCommand()),
     vscode.commands.registerCommand("lasecsimul.openProject", () => openProjectCommand({
       extensionUri: context.extensionUri,
       beforeOpen: closeAllMcuSerialMonitors,

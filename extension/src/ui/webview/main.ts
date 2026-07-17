@@ -234,7 +234,7 @@ const UI_TEXT = {
     zoomFitSelection: "Ajustar zoom à seleção",
     zoomFitAll: "Ajustar zoom a tudo",
     zoomReset: "Zoom 1:1",
-    exportImage: "Salvar Esquemático como Imagem (SVG)",
+    saveProjectAs: "Salvar Como",
     importCircuit: "Importar Circuito...",
     editingSubcircuit: "Editando:",
     subcircuitEditorModeCircuit: "Subcircuito",
@@ -344,7 +344,7 @@ const UI_TEXT = {
     zoomFitSelection: "Zoom to selection",
     zoomFitAll: "Zoom to fit all",
     zoomReset: "Zoom 1:1",
-    exportImage: "Save Schematic as Image (SVG)",
+    saveProjectAs: "Save As",
     importCircuit: "Import Circuit...",
     editingSubcircuit: "Editing:",
     subcircuitEditorModeCircuit: "Subcircuit",
@@ -1919,7 +1919,7 @@ function renderAppBar(): HTMLElement {
   fileGroup.append(
     renderToolbarButton("open", t("openProject"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenProject" }), editingSubcircuit),
     renderToolbarButton("save", t("saveProject"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestSaveProject" }), editingSubcircuit),
-    renderToolbarButton("exportImage", t("exportImage"), () => exportSchematicImage(), activeSceneComponents().length === 0),
+    renderToolbarButton("saveProjectAs", t("saveProjectAs"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestSaveProjectAs" }), editingSubcircuit),
   );
 
   const subcircuitGroup = document.createElement("div");
@@ -2033,7 +2033,7 @@ function renderAppBar(): HTMLElement {
   return bar;
 }
 
-type ToolbarIconKind = "open" | "save" | "start" | "pause" | "stop" | "properties" | "delete" | "zoomFitSelection" | "zoomFitAll" | "zoomReset" | "exportImage" | "back" | "createPin" | "selectExposedComponents" | "selectExportedProperties";
+type ToolbarIconKind = "open" | "save" | "saveProjectAs" | "start" | "pause" | "stop" | "properties" | "delete" | "zoomFitSelection" | "zoomFitAll" | "zoomReset" | "back" | "createPin" | "selectExposedComponents" | "selectExportedProperties";
 
 function renderIcon(kind: ToolbarIconKind): SVGSVGElement {
   const svg = document.createElementNS(SVG_NS, "svg");
@@ -2047,6 +2047,11 @@ function renderIcon(kind: ToolbarIconKind): SVGSVGElement {
       break;
     case "save":
       svg.innerHTML = '<path d="M5 4h11l3 3v13H5z"></path><path d="M8 4v6h8V4"></path><path d="M9 18h6"></path>';
+      break;
+    case "saveProjectAs":
+      // Mesmo disquete de "save", com um asterisco no canto -- convenção comum pra "Salvar Como"
+      // (grava sempre num arquivo novo/escolhido, ao contrário de "Salvar" que grava direto).
+      svg.innerHTML = '<path d="M5 4h9l3 3v13H5z"></path><path d="M8 4v5h6V4"></path><path d="M9 18h4"></path><path d="M18.5 8.5v4"></path><path d="M16.7 9.5l3.6 2"></path><path d="M20.3 9.5l-3.6 2"></path>';
       break;
     case "start":
       svg.innerHTML = '<circle cx="12" cy="12" r="8.25"></circle><line x1="12" y1="4" x2="12" y2="12"></line>';
@@ -2071,9 +2076,6 @@ function renderIcon(kind: ToolbarIconKind): SVGSVGElement {
       break;
     case "zoomReset":
       svg.innerHTML = '<circle cx="11" cy="11" r="6.5"></circle><line x1="20" y1="20" x2="15.5" y2="15.5"></line><text x="8" y="14.5" font-size="8" stroke="none" fill="currentColor">1:1</text>';
-      break;
-    case "exportImage":
-      svg.innerHTML = '<rect x="4" y="4" width="16" height="16" rx="1.5"></rect><circle cx="9" cy="10" r="1.5"></circle><path d="M4 17l5-5 3 3 4-5 4 5"></path>';
       break;
     case "back":
       svg.innerHTML = '<path d="M19 12H5"></path><path d="m11 18-6-6 6-6"></path>';
@@ -2171,7 +2173,6 @@ function installCanvasEventHandlers(canvas: HTMLDivElement, canvasContent: HTMLD
       { label: t("zoomFitAll"), onClick: () => zoomToFitAll(), disabled: !activeSceneFitBoundingBox() },
       { label: t("zoomReset"), onClick: () => zoomReset() },
       { kind: "separator" },
-      { label: t("exportImage"), onClick: () => exportSchematicImage(), disabled: activeSceneComponents().length === 0 },
       { label: t("importCircuit"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestImportCircuit" }) },
     ]);
   });
@@ -2384,58 +2385,6 @@ function zoomReset(): void {
   state.viewport = { zoom: 1, x: screenX - localX, y: screenY - localY };
   if (canvasContentElement) canvasContentElement.style.transform = `translate(${state.viewport.x}px, ${state.viewport.y}px) scale(1)`;
   persistState();
-}
-
-/** Monta um SVG autocontido do esquemático inteiro (achado de auditoria de UI 2026-07-09 --
- * SimulIDE exporta PNG/JPEG/BMP/SVG do menu de contexto, LasecSimul não tinha nenhum). Clona o
- * `canvas-content` REAL (já visualmente correto -- reaproveita posição/rotação/flip/símbolo tal
- * qual renderizados, em vez de reconstruir do zero e arriscar uma sutil divergência não
- * verificável sem GUI) dentro de um `<foreignObject>`, com o CSS da própria página embutido
- * inline (`document.styleSheets`, já que o arquivo exportado é aberto FORA deste contexto, sem
- * acesso ao `<link>` da Webview). Retorna `undefined` se não há nada pra exportar. */
-function buildSchematicSvgExport(): string | undefined {
-  if (!canvasContentElement) return undefined;
-  const box = approximateBoundingBox(activeSceneComponents());
-  if (!box) return undefined;
-
-  const margin = 32;
-  const originX = box.minX - margin;
-  const originY = box.minY - margin;
-  const width = box.maxX - box.minX + margin * 2;
-  const height = box.maxY - box.minY + margin * 2;
-
-  const clone = canvasContentElement.cloneNode(true) as HTMLElement;
-  // Overlays efêmeros de interação (marquee/alças de fio/preview de fio pendente) não deveriam
-  // sobreviver até aqui (só existem durante um gesto ativo, não depois de um clique de menu/
-  // toolbar), mas removidos defensivamente da CÓPIA -- nunca da árvore viva.
-  clone.querySelectorAll(".marquee-rect, .wire-corner-handle, .wire-segment-handle, .pending-wire-preview").forEach((el) => el.remove());
-  clone.style.transform = `translate(${-originX}px, ${-originY}px)`;
-
-  let cssText = "";
-  for (const sheet of Array.from(document.styleSheets)) {
-    try {
-      for (const rule of Array.from(sheet.cssRules)) cssText += `${rule.cssText}\n`;
-    } catch {
-      // folha de estilo de outra origem (CSP da Webview não deveria permitir isso acontecer) --
-      // ignora em vez de quebrar a exportação inteira por causa de uma folha que não importa.
-    }
-  }
-
-  const serializer = new XMLSerializer();
-  const clonedMarkup = serializer.serializeToString(clone);
-
-  return [
-    `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`,
-    `<defs><style><![CDATA[\n${cssText}\n]]></style></defs>`,
-    `<foreignObject width="${width}" height="${height}"><div xmlns="http://www.w3.org/1999/xhtml">${clonedMarkup}</div></foreignObject>`,
-    `</svg>`,
-  ].join("\n");
-}
-
-function exportSchematicImage(): void {
-  const svg = buildSchematicSvgExport();
-  if (!svg) return;
-  send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestExportSchematicImage", svg });
 }
 
 function ensureRenderShell(): { canvas: HTMLDivElement; canvasContent: HTMLDivElement; wireLayer: SVGSVGElement } | undefined {

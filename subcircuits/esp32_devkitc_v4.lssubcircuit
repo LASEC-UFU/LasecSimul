@@ -26,7 +26,9 @@
     {
       "id": "mcu1",
       "typeId": "espressif.esp32",
-      "properties": {},
+      "properties": {
+        "firmwarePath": "g:\\Meu Drive\\Josue\\02 AulasUFU\\01 Aulas_ININD1\\Pratica\\EININDI01_GitHub_VSCode_PIO\\lasecSimul\\merged.bin"
+      },
       "label": "QemuDevice",
       "showValue": false,
       "visual": {
@@ -1671,7 +1673,7 @@
         "from": {
           "kind": "port",
           "componentId": "component-1783937576339-406282",
-          "pinId": "pin-N2"
+          "pinId": "pin-N1"
         },
         "to": {
           "kind": "port",
