@@ -236,7 +236,7 @@ const UI_TEXT = {
     zoomReset: "Zoom 1:1",
     exportImage: "Salvar Esquemático como Imagem (SVG)",
     importCircuit: "Importar Circuito...",
-    editingSubcircuit: "Editando subcircuito:",
+    editingSubcircuit: "Editando:",
     subcircuitEditorModeCircuit: "Subcircuito",
     subcircuitEditorModeSymbol: "Símbolo",
     subcircuitEditorModeIcon: "Ícone",
@@ -346,7 +346,7 @@ const UI_TEXT = {
     zoomReset: "Zoom 1:1",
     exportImage: "Save Schematic as Image (SVG)",
     importCircuit: "Import Circuit...",
-    editingSubcircuit: "Editing subcircuit:",
+    editingSubcircuit: "Editing:",
     subcircuitEditorModeCircuit: "Subcircuit",
     subcircuitEditorModeSymbol: "Symbol",
     subcircuitEditorModeIcon: "Icon",
@@ -1911,7 +1911,11 @@ function renderAppBar(): HTMLElement {
   if (state.subcircuitEditingContext) {
     const label = document.createElement("span");
     label.className = "appbar__subcircuit-label";
-    label.textContent = state.subcircuitEditingContext.name;
+    // "Editando:" fixo (pedido real) -- não mais o NOME do subcircuito aqui, o combobox ao lado já
+    // deixa claro qual sessão/modo está ativo; nome completo continua disponível como `title` do
+    // grupo pra quem quiser conferir sem abrir o combobox.
+    label.textContent = t("editingSubcircuit");
+    subcircuitGroup.title = state.subcircuitEditingContext.name;
 
     // ComboBox Subcircuito/Símbolo/Ícone -- substitui o texto estático "Editando subcircuito:"
     // (pedido original). Troca SÓ a cena que o motor genérico enxerga (`setSubcircuitEditorMode`);
@@ -1936,25 +1940,20 @@ function renderAppBar(): HTMLElement {
 
     subcircuitGroup.append(label, modeSelect);
 
+    // Todo botão depois do combobox é SÓ ÍCONE (pedido real: "todos os botões seguintes devem
+    // exibir apenas ícones... ao passar o mouse, mostre o nome/descrição num tooltip") -- puramente
+    // visual, mesmo `onClick`/condição de cada um de antes, só trocando `appbar__text-button` por
+    // `renderToolbarButton` (mesmo padrão de "Voltar" logo abaixo, que já era ícone-só).
+    //
     // "Criar Pino" -- ação dedicada, só em Modo Símbolo (pedido original: nenhum typeId de pino na
-    // paleta geral). Botão de texto simples (não um ícone do conjunto fixo de `ToolbarIconKind`).
+    // paleta geral).
     if (subcircuitEditorMode === "symbol") {
-      const createPinButton = document.createElement("button");
-      createPinButton.type = "button";
-      createPinButton.className = "appbar__text-button";
-      createPinButton.textContent = t("createPin");
-      createPinButton.addEventListener("click", () => createSymbolPinCommand());
-      subcircuitGroup.appendChild(createPinButton);
+      subcircuitGroup.appendChild(renderToolbarButton("createPin", t("createPin"), () => createSymbolPinCommand()));
 
       // "Selecionar Componentes Expostos" -- pedido explícito do usuário: precisa existir DENTRO do
       // Modo Símbolo (não só o toggle por-componente no menu de contexto do Modo Subcircuito), pra
       // escolher/revisar de uma vez quais componentes internos aparecem como projeção aqui.
-      const selectExposedButton = document.createElement("button");
-      selectExposedButton.type = "button";
-      selectExposedButton.className = "appbar__text-button";
-      selectExposedButton.textContent = t("selectExposedComponents");
-      selectExposedButton.addEventListener("click", () => openExposedComponentsDialog());
-      subcircuitGroup.appendChild(selectExposedButton);
+      subcircuitGroup.appendChild(renderToolbarButton("selectExposedComponents", t("selectExposedComponents"), () => openExposedComponentsDialog()));
     }
 
     // "Selecionar Propriedades Exportadas" -- pedido real: "o selecionar propriedades exportadas é
@@ -1962,12 +1961,7 @@ function renderAppBar(): HTMLElement {
     // Símbolo/apresentação), "propriedades exportadas" é sobre o CIRCUITO INTERNO (mesmo escopo do
     // toggle de contexto `exportPropertyMenuItems`, só em Modo Subcircuito).
     if (subcircuitEditorMode === "circuit") {
-      const selectExportedButton = document.createElement("button");
-      selectExportedButton.type = "button";
-      selectExportedButton.className = "appbar__text-button";
-      selectExportedButton.textContent = t("selectExportedProperties");
-      selectExportedButton.addEventListener("click", () => openExportedPropertiesDialog());
-      subcircuitGroup.appendChild(selectExportedButton);
+      subcircuitGroup.appendChild(renderToolbarButton("selectExportedProperties", t("selectExportedProperties"), () => openExportedPropertiesDialog()));
     }
 
     subcircuitGroup.appendChild(
@@ -2023,7 +2017,7 @@ function renderAppBar(): HTMLElement {
   return bar;
 }
 
-type ToolbarIconKind = "open" | "save" | "start" | "pause" | "stop" | "properties" | "delete" | "zoomFitSelection" | "zoomFitAll" | "zoomReset" | "exportImage" | "back";
+type ToolbarIconKind = "open" | "save" | "start" | "pause" | "stop" | "properties" | "delete" | "zoomFitSelection" | "zoomFitAll" | "zoomReset" | "exportImage" | "back" | "createPin" | "selectExposedComponents" | "selectExportedProperties";
 
 function renderIcon(kind: ToolbarIconKind): SVGSVGElement {
   const svg = document.createElementNS(SVG_NS, "svg");
@@ -2067,6 +2061,15 @@ function renderIcon(kind: ToolbarIconKind): SVGSVGElement {
       break;
     case "back":
       svg.innerHTML = '<path d="M19 12H5"></path><path d="m11 18-6-6 6-6"></path>';
+      break;
+    case "createPin":
+      svg.innerHTML = '<circle cx="8" cy="7" r="2.5"></circle><path d="M8 9.5v7"></path><path d="M8 16.5h6"></path><path d="M17 5v6"></path><path d="M14 8h6"></path>';
+      break;
+    case "selectExposedComponents":
+      svg.innerHTML = '<rect x="4" y="5" width="4" height="4" rx="0.5"></rect><path d="M5 7l1 1 2-2"></path><path d="M11 7h9"></path><rect x="4" y="15" width="4" height="4" rx="0.5"></rect><path d="M5 17l1 1 2-2"></path><path d="M11 17h9"></path>';
+      break;
+    case "selectExportedProperties":
+      svg.innerHTML = '<path d="M4 8h9"></path><path d="M4 12h9"></path><path d="M4 16h6"></path><path d="M17 15V6"></path><path d="M14 9l3-3 3 3"></path>';
       break;
   }
 

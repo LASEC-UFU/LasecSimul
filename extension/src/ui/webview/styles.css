@@ -157,24 +157,11 @@ html, body {
   padding: 2px 4px;
 }
 
-.appbar__button--back {
+.appbar__button--back,
+.appbar__button--createPin,
+.appbar__button--selectExposedComponents,
+.appbar__button--selectExportedProperties {
   color: #6b5405;
-}
-
-.appbar__text-button {
-  font-size: 12px;
-  font-weight: 600;
-  color: #6b5405;
-  background: #fff8e6;
-  border: 1px solid #d8bb63;
-  border-radius: 4px;
-  padding: 3px 8px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.appbar__text-button:hover {
-  background: #fff2cc;
 }
 
 .appbar__meta {
