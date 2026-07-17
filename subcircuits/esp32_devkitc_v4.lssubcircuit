@@ -705,8 +705,8 @@
       "label": "Rail",
       "showValue": true,
       "visual": {
-        "x": 480,
-        "y": 103,
+        "x": 447.12760285601485,
+        "y": 103.49958059638877,
         "rotation": 270
       }
     },
@@ -720,9 +720,9 @@
       "label": "Rail",
       "showValue": true,
       "visual": {
-        "x": 518.1999969482422,
-        "y": 103.5,
-        "rotation": 90
+        "x": 495.21928951435876,
+        "y": 91.90973359412826,
+        "rotation": 270
       }
     },
     {
@@ -735,7 +735,7 @@
       "showValue": false,
       "visual": {
         "x": 538.2620346738242,
-        "y": 130.65106705986702,
+        "y": 131.45106705986703,
         "rotation": 0
       }
     },
@@ -772,10 +772,25 @@
         "y": 472.42337301885084,
         "rotation": 0
       }
+    },
+    {
+      "id": "component-1784281812804-173343",
+      "typeId": "other.ground",
+      "properties": {
+        "__ui_idLabelX": -8,
+        "__ui_idLabelY": 16
+      },
+      "label": "Ground (0 V)-1",
+      "showValue": false,
+      "visual": {
+        "x": 578.4356892329322,
+        "y": 125.97333677732057,
+        "rotation": 270
+      }
     }
   ],
   "topology": {
-    "revision": 294,
+    "revision": 393,
     "nodes": [
       {
         "id": "junction-1783811970598-570810",
@@ -1603,7 +1618,7 @@
         "points": [
           {
             "x": 528,
-            "y": 134.65106705986702
+            "y": 135.45106705986703
           }
         ]
       },
@@ -1650,6 +1665,20 @@
             "y": 480
           }
         ]
+      },
+      {
+        "id": "wire-1784281832273-317263",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1783937576339-406282",
+          "pinId": "pin-N2"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1784281812804-173343",
+          "pinId": "pin"
+        },
+        "points": []
       }
     ]
   },
@@ -1857,16 +1886,17 @@
     "pins": [
       {
         "id": "GND1",
-        "x": 88,
-        "y": 20,
+        "x": 91.56830422395196,
+        "y": 23.27745098039216,
         "angle": 0,
         "length": 4,
         "label": "Gnd",
-        "labelFontSize": 7,
+        "labelFontSize": 6,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 80.50999999999999,
-        "labelY": 20.5
+        "labelX": 80.56830422395196,
+        "labelY": 23.27745098039216,
+        "labelColor": "#fafac8"
       },
       {
         "id": "3V3",
@@ -1879,37 +1909,40 @@
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
         "labelX": 7.76053551892524,
-        "labelY": 23.936243976488313
+        "labelY": 23.936243976488313,
+        "labelColor": "#fafac8"
       },
       {
         "id": "G23",
-        "x": 88,
-        "y": 28,
+        "x": 91.56830422395196,
+        "y": 29.813397800221168,
         "angle": 0,
         "length": 4,
         "label": "23",
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 81,
-        "labelY": 28.5
+        "labelX": 79.56830422395196,
+        "labelY": 31.813397800221168,
+        "labelColor": "#fafac8"
       },
       {
         "id": "EN",
-        "x": -4.264863925509983,
-        "y": 29.49951037986606,
+        "x": -4.23946448107476,
+        "y": 31.12043202573404,
         "angle": 180,
         "length": 4,
         "label": "En",
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 5.735136074490017,
-        "labelY": 30.49951037986606
+        "labelX": 7.76053551892524,
+        "labelY": 32.12043202573404,
+        "labelColor": "#fafac8"
       },
       {
         "id": "G22",
-        "x": 88,
+        "x": 91.56830422395196,
         "y": 37,
         "angle": 0,
         "length": 4,
@@ -1917,25 +1950,27 @@
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 81,
-        "labelY": 37.5
+        "labelX": 79.56830422395196,
+        "labelY": 40,
+        "labelColor": "#fafac8"
       },
       {
         "id": "VP",
-        "x": -4.008997071551075,
-        "y": 36.924791693670215,
+        "x": -4.23946448107476,
+        "y": 39.304620074979766,
         "angle": 180,
         "length": 4,
         "label": "VP",
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 5.991002928448925,
-        "labelY": 37.924791693670215
+        "labelX": 7.76053551892524,
+        "labelY": 40.304620074979766,
+        "labelColor": "#fafac8"
       },
       {
         "id": "TX",
-        "x": 88,
+        "x": 91.56830422395196,
         "y": 46,
         "angle": 0,
         "length": 4,
@@ -1943,25 +1978,27 @@
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 81,
-        "labelY": 46.5
+        "labelX": 79.56830422395196,
+        "labelY": 48,
+        "labelColor": "#fafac8"
       },
       {
         "id": "VN",
-        "x": -3.9297981208388038,
-        "y": 44.706322009120406,
+        "x": -4.23946448107476,
+        "y": 47.488808124225486,
         "angle": 180,
         "length": 4,
         "label": "VN",
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 7.070201879161196,
-        "labelY": 45.706322009120406
+        "labelX": 7.76053551892524,
+        "labelY": 48.488808124225486,
+        "labelColor": "#fafac8"
       },
       {
         "id": "RX",
-        "x": 88,
+        "x": 91.56830422395196,
         "y": 54,
         "angle": 0,
         "length": 4,
@@ -1969,25 +2006,27 @@
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 81,
-        "labelY": 54.5
+        "labelX": 79.56830422395196,
+        "labelY": 56,
+        "labelColor": "#fafac8"
       },
       {
         "id": "G34",
-        "x": 0,
-        "y": 53,
+        "x": -4.23946448107476,
+        "y": 55.67299617347121,
         "angle": 180,
         "length": 4,
         "label": "34",
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 8,
-        "labelY": 54
+        "labelX": 7.76053551892524,
+        "labelY": 56.67299617347121,
+        "labelColor": "#fafac8"
       },
       {
         "id": "G21",
-        "x": 88,
+        "x": 91.56830422395196,
         "y": 63,
         "angle": 0,
         "length": 4,
@@ -1995,51 +2034,55 @@
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 81,
-        "labelY": 63.5
+        "labelX": 79.56830422395196,
+        "labelY": 64,
+        "labelColor": "#fafac8"
       },
       {
         "id": "G35",
-        "x": 0,
-        "y": 62,
+        "x": -4.23946448107476,
+        "y": 63.85718422271694,
         "angle": 180,
         "length": 4,
         "label": "35",
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 8,
-        "labelY": 62.5
+        "labelX": 7.76053551892524,
+        "labelY": 64.85718422271694,
+        "labelColor": "#fafac8"
       },
       {
         "id": "GND2",
-        "x": 88,
+        "x": 91.56830422395196,
         "y": 71,
         "angle": 0,
         "length": 4,
         "label": "Gnd",
-        "labelFontSize": 7,
+        "labelFontSize": 6,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 80.50999999999999,
-        "labelY": 71.5
+        "labelX": 80.56830422395196,
+        "labelY": 72,
+        "labelColor": "#fafac8"
       },
       {
         "id": "G32",
-        "x": 0,
-        "y": 70,
+        "x": -4.23946448107476,
+        "y": 72.04137227196266,
         "angle": 180,
         "length": 4,
         "label": "32",
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 8,
-        "labelY": 70.5
+        "labelX": 7.76053551892524,
+        "labelY": 73.04137227196266,
+        "labelColor": "#fafac8"
       },
       {
         "id": "G19",
-        "x": 88,
+        "x": 91.56830422395196,
         "y": 80,
         "angle": 0,
         "length": 4,
@@ -2047,25 +2090,27 @@
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 81,
-        "labelY": 80.5
+        "labelX": 79.56830422395196,
+        "labelY": 81,
+        "labelColor": "#fafac8"
       },
       {
         "id": "G33",
-        "x": 0,
-        "y": 79,
+        "x": -4.23946448107476,
+        "y": 80.22556032120838,
         "angle": 180,
         "length": 4,
         "label": "33",
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 8,
-        "labelY": 79.5
+        "labelX": 7.76053551892524,
+        "labelY": 81.22556032120838,
+        "labelColor": "#fafac8"
       },
       {
         "id": "G18",
-        "x": 87,
+        "x": 91.56830422395196,
         "y": 89,
         "angle": 0,
         "length": 4,
@@ -2073,25 +2118,27 @@
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 80,
-        "labelY": 89.5
+        "labelX": 79.56830422395196,
+        "labelY": 89,
+        "labelColor": "#fafac8"
       },
       {
         "id": "G25",
-        "x": 0,
-        "y": 87,
+        "x": -4.23946448107476,
+        "y": 88.40974837045411,
         "angle": 180,
         "length": 4,
         "label": "25",
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 8,
-        "labelY": 87.5
+        "labelX": 7.76053551892524,
+        "labelY": 89.40974837045411,
+        "labelColor": "#fafac8"
       },
       {
         "id": "G05",
-        "x": 88,
+        "x": 91.56830422395196,
         "y": 97,
         "angle": 0,
         "length": 4,
@@ -2099,25 +2146,27 @@
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 81,
-        "labelY": 97.5
+        "labelX": 79.56830422395196,
+        "labelY": 97,
+        "labelColor": "#fafac8"
       },
       {
         "id": "G26",
-        "x": 0,
-        "y": 96,
+        "x": -4.23946448107476,
+        "y": 96.59393641969983,
         "angle": 180,
         "length": 4,
         "label": "26",
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 8,
-        "labelY": 96.5
+        "labelX": 7.76053551892524,
+        "labelY": 97.59393641969983,
+        "labelColor": "#fafac8"
       },
       {
         "id": "G17",
-        "x": 88,
+        "x": 91.56830422395196,
         "y": 106,
         "angle": 0,
         "length": 4,
@@ -2125,25 +2174,27 @@
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 81,
-        "labelY": 106.5
+        "labelX": 79.56830422395196,
+        "labelY": 105,
+        "labelColor": "#fafac8"
       },
       {
         "id": "G27",
-        "x": 0,
-        "y": 105,
+        "x": -4.23946448107476,
+        "y": 104.77812446894556,
         "angle": 180,
         "length": 4,
         "label": "27",
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 8,
-        "labelY": 105.5
+        "labelX": 7.76053551892524,
+        "labelY": 105.77812446894556,
+        "labelColor": "#fafac8"
       },
       {
         "id": "G16",
-        "x": 88,
+        "x": 91.56830422395196,
         "y": 114,
         "angle": 0,
         "length": 4,
@@ -2151,25 +2202,27 @@
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 81,
-        "labelY": 114.5
+        "labelX": 79.56830422395196,
+        "labelY": 114,
+        "labelColor": "#fafac8"
       },
       {
         "id": "G14",
-        "x": 1,
-        "y": 113,
+        "x": -4.23946448107476,
+        "y": 112.96231251819127,
         "angle": 180,
         "length": 4,
         "label": "14",
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 9,
-        "labelY": 113.5
+        "labelX": 7.76053551892524,
+        "labelY": 113.96231251819127,
+        "labelColor": "#fafac8"
       },
       {
         "id": "G04",
-        "x": 88,
+        "x": 91.56830422395196,
         "y": 123,
         "angle": 0,
         "length": 4,
@@ -2177,25 +2230,27 @@
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 81,
-        "labelY": 123.5
+        "labelX": 79.56830422395196,
+        "labelY": 122,
+        "labelColor": "#fafac8"
       },
       {
         "id": "G12",
-        "x": 0,
-        "y": 122,
+        "x": -4.23946448107476,
+        "y": 121.146500567437,
         "angle": 180,
         "length": 4,
         "label": "12",
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 8,
-        "labelY": 122.5
+        "labelX": 7.76053551892524,
+        "labelY": 122.146500567437,
+        "labelColor": "#fafac8"
       },
       {
         "id": "G00",
-        "x": 88,
+        "x": 91.56830422395196,
         "y": 131,
         "angle": 0,
         "length": 4,
@@ -2203,26 +2258,27 @@
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 81,
-        "labelY": 131.5
+        "labelX": 79.56830422395196,
+        "labelY": 130,
+        "labelColor": "#fafac8"
       },
       {
         "id": "GND3",
-        "x": 0,
-        "y": 130,
+        "x": -4.23946448107476,
+        "y": 129.33068861668272,
         "angle": 180,
         "length": 4,
         "label": "Gnd",
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 10.509999999999991,
-        "labelY": 130.5,
-        "labelColor": "#FAFAC8"
+        "labelX": 7.76053551892524,
+        "labelY": 130.33068861668272,
+        "labelColor": "#fafac8"
       },
       {
         "id": "G02",
-        "x": 88,
+        "x": 91.56830422395196,
         "y": 140,
         "angle": 0,
         "length": 4,
@@ -2230,25 +2286,27 @@
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 81,
-        "labelY": 140.5
+        "labelX": 79.56830422395196,
+        "labelY": 138,
+        "labelColor": "#fafac8"
       },
       {
         "id": "G13",
-        "x": 0,
-        "y": 139,
+        "x": -4.23946448107476,
+        "y": 137.51487666592845,
         "angle": 180,
         "length": 4,
         "label": "13",
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 12,
-        "labelY": 139.5
+        "labelX": 7.76053551892524,
+        "labelY": 138.51487666592845,
+        "labelColor": "#fafac8"
       },
       {
         "id": "G15",
-        "x": 88,
+        "x": 91.56830422395196,
         "y": 148,
         "angle": 0,
         "length": 4,
@@ -2256,25 +2314,27 @@
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 81,
-        "labelY": 148.5
+        "labelX": 79.56830422395196,
+        "labelY": 147,
+        "labelColor": "#fafac8"
       },
       {
         "id": "D2",
-        "x": 0,
-        "y": 147,
+        "x": -4.23946448107476,
+        "y": 145.6990647151742,
         "angle": 180,
         "length": 4,
         "label": "D2",
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 10,
-        "labelY": 148
+        "labelX": 7.76053551892524,
+        "labelY": 146.6990647151742,
+        "labelColor": "#fafac8"
       },
       {
         "id": "D1",
-        "x": 88,
+        "x": 91.56830422395196,
         "y": 155,
         "angle": 0,
         "length": 4,
@@ -2282,25 +2342,27 @@
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 81,
-        "labelY": 155.5
+        "labelX": 79.56830422395196,
+        "labelY": 155,
+        "labelColor": "#fafac8"
       },
       {
         "id": "D3",
-        "x": 0,
-        "y": 156,
+        "x": -4.23946448107476,
+        "y": 153.88325276441992,
         "angle": 180,
         "length": 4,
         "label": "D3",
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 8,
-        "labelY": 156.5
+        "labelX": 7.76053551892524,
+        "labelY": 154.88325276441992,
+        "labelColor": "#fafac8"
       },
       {
         "id": "D0",
-        "x": 88,
+        "x": 91.56830422395196,
         "y": 163,
         "angle": 0,
         "length": 4,
@@ -2308,51 +2370,86 @@
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 81,
-        "labelY": 163.5
+        "labelX": 79.56830422395196,
+        "labelY": 163,
+        "labelColor": "#fafac8"
       },
       {
         "id": "CM",
-        "x": 1,
-        "y": 164,
+        "x": -4.23946448107476,
+        "y": 162.0674408136656,
         "angle": 180,
         "length": 4,
         "label": "Cm",
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 9,
-        "labelY": 164.5
+        "labelX": 7.76053551892524,
+        "labelY": 163.0674408136656,
+        "labelColor": "#fafac8"
       },
       {
         "id": "CK",
-        "x": 88,
-        "y": 171,
+        "x": 91.56830422395196,
+        "y": 170.16040456958734,
         "angle": 0,
         "length": 4,
         "label": "Ck",
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 81,
-        "labelY": 171.5
+        "labelX": 79.56830422395196,
+        "labelY": 171.16040456958734,
+        "labelColor": "#fafac8"
       },
       {
         "id": "5V",
-        "x": 1,
-        "y": 172,
+        "x": -4.23946448107476,
+        "y": 170.25162886291133,
         "angle": 180,
         "length": 4,
         "label": "5V",
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 9,
-        "labelY": 172.5
+        "labelX": 7.76053551892524,
+        "labelY": 170.25162886291133,
+        "labelColor": "#fafac8"
       }
     ]
   },
-  "exposedComponents": [],
+  "exposedComponents": [
+    {
+      "componentId": "button_en",
+      "x": 50.12940691421322,
+      "y": 139.49062719864165,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 0
+    },
+    {
+      "componentId": "button_boot",
+      "x": 6.337859838025906,
+      "y": 141.16288694239717,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 1
+    },
+    {
+      "componentId": "component-1783937576339-406282",
+      "x": 104,
+      "y": 136,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 2
+    }
+  ],
   "icon": {
     "width": 28,
     "height": 40,
@@ -2360,7 +2457,7 @@
     "shapes": [
       {
         "kind": "rect",
-        "x": 12,
+        "x": 10.399999999999999,
         "y": 0,
         "w": 4,
         "h": 4,
@@ -2380,7 +2477,7 @@
       },
       {
         "kind": "rect",
-        "x": 8,
+        "x": 8.8,
         "y": 7,
         "w": 12,
         "h": 14,
