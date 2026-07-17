@@ -1224,7 +1224,13 @@ function packageBodySvg(resolved: ResolvedPackage, componentId?: string, propert
 
   const hasViewSpec = Boolean(pkg.viewSpec && componentId);
   if (pkg.simulidePaint) {
-    for (const shape of simulidePaintToPackageShapes(pkg.simulidePaint, pkg.width, pkg.height, properties ?? {}, scopeId)) markup += packageShapeSvg(shape);
+    // `hidePins` (variante "board"): pula formas marcadas `hideOnBoard` -- mesmo `m_hidden` real que
+    // faz `Push::paint()`/`Switch::paint()` retornarem sem desenhar a barra do atuador (símbolo
+    // esquemático-apenas), nunca o corpo/texto do widget clicável em si (ver `PackageShape.hideOnBoard`).
+    for (const shape of simulidePaintToPackageShapes(pkg.simulidePaint, pkg.width, pkg.height, properties ?? {}, scopeId)) {
+      if (hidePins && shape.hideOnBoard) continue;
+      markup += packageShapeSvg(shape);
+    }
   } else if (pkg.qtWidget) {
     markup += simulideQtWidgetSvg(pkg.qtWidget, properties ?? {}, scopeId);
   } else if (hasViewSpec) {

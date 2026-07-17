@@ -214,6 +214,7 @@ function styleFor(
     fillRule: primitive.fillRule,
     opacity: primitive.opacity,
     cssClass: primitive.cssClass,
+    hideOnBoard: primitive.hideOnBoard,
   };
 }
 

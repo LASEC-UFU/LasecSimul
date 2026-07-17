@@ -487,7 +487,8 @@
                     "undefined"
                   ]
                 }
-              }
+              },
+              "hideOnBoard": true
             },
             {
               "kind": "line",
@@ -505,7 +506,8 @@
                     "true"
                   ]
                 }
-              }
+              },
+              "hideOnBoard": true
             },
             {
               "kind": "line",
@@ -525,7 +527,8 @@
                     "undefined"
                   ]
                 }
-              }
+              },
+              "hideOnBoard": true
             },
             {
               "kind": "line",
@@ -543,7 +546,8 @@
                     "true"
                   ]
                 }
-              }
+              },
+              "hideOnBoard": true
             }
           ]
         },
@@ -664,7 +668,8 @@
                     "undefined"
                   ]
                 }
-              }
+              },
+              "hideOnBoard": true
             },
             {
               "kind": "line",
@@ -682,7 +687,8 @@
                     "true"
                   ]
                 }
-              }
+              },
+              "hideOnBoard": true
             },
             {
               "kind": "line",
@@ -702,7 +708,8 @@
                     "undefined"
                   ]
                 }
-              }
+              },
+              "hideOnBoard": true
             },
             {
               "kind": "line",
@@ -720,7 +727,8 @@
                     "true"
                   ]
                 }
-              }
+              },
+              "hideOnBoard": true
             }
           ]
         },

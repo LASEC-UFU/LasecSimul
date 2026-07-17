@@ -333,6 +333,14 @@ export interface PackageShape {
    * geometria muda por uma propriedade discreta, sem criar helper TS por `typeId` (ex: gates com
    * 2..8 entradas). */
   statePath?: { prop: string; map: Record<string, string>; fallback?: string };
+  /** Nunca desenhado quando `hidePins`/variante "board" está ativa (projeção de componente exposto,
+   * overlay de instância) -- mesmo princípio de `Component::setHidden(true,...)` real: o `m_hidden`
+   * flag faz `Push::paint()`/`Switch::paint()` (SimulIDE real) retornarem sem desenhar a barra do
+   * atuador (símbolo elétrico esquemático), enquanto o WIDGET clicável (corpo+texto da tecla) é um
+   * `QGraphicsProxyWidget` separado, sempre visível independente disso -- ver `packageBodySvg`. Marca
+   * SÓ as formas que representam esse símbolo esquemático-apenas (ex: as 4 linhas do atuador de
+   * `switches.push`/`switches.switch`), nunca o corpo/texto do widget em si. */
+  hideOnBoard?: boolean;
 }
 
 export interface PackageBackground {
@@ -372,6 +380,10 @@ export interface SimulidePaintStyle {
    * `.toggle-hit-zone` clicável, já que o motor SimulidePaint não tem outro jeito de expressar
    * "isso responde a clique" além de uma classe CSS reconhecida pelo `main.ts`. */
   cssClass?: string;
+  /** Passa direto pro `PackageShape.hideOnBoard` -- ver comentário lá (símbolo esquemático-apenas
+   * que `Push::paint()`/`Switch::paint()` reais não desenham quando `m_hidden`, ex: a barra do
+   * atuador de um push/switch). */
+  hideOnBoard?: boolean;
 }
 
 export interface SimulidePaintStateFill {
