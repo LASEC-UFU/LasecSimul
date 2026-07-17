@@ -73,6 +73,12 @@ struct PropertySchema {
  * contagem fora deste mecanismo (ver `ComponentPinSpec`). */
 enum class DynamicPinCountFn : uint32_t { Value = 0, Log2Ceil = 1 };
 
+/** Define se o sufixo numérico continua contando todos os pinos anteriores ou reinicia em 1
+ * dentro de cada grupo. O modo por grupo atende famílias independentes como P1..PN/N1..NN do
+ * LedBar; o global preserva layouts como keypad, matriz e mux, cujos ids representam a posição
+ * absoluta no vetor de pinos. */
+enum class DynamicPinIndexMode : uint32_t { Global = 0, PerGroup = 1 };
+
 /** Um grupo de N pinos cuja contagem vem de UMA propriedade numérica da instância -- equivalente,
  * do lado Core/elétrico, ao `PackageDynamicPinGroup` que a Extension já usa pro desenho
  * (`ui/webview/model.ts`). Os dois são formatos INDEPENDENTES (Core nunca lê `package`/JSON de
@@ -82,12 +88,14 @@ struct DynamicPinGroupSpec {
     std::string idPrefix = "pin-";
     std::string countProperty;
     DynamicPinCountFn countFn = DynamicPinCountFn::Value;
+    DynamicPinIndexMode indexMode = DynamicPinIndexMode::Global;
 };
 
 /** Declaração completa de como o `pins()` de um componente é derivado das propriedades da
  * instância -- dado, não código: nenhum device (built-in ou plugin) escreve uma fórmula própria,
  * só declara `fixedPinIds` (sempre presentes, nesta ordem) + `dynamicGroups` (anexados depois, na
- * ordem declarada, ids sequenciais cruzando todos os grupos). Ver `resolveDynamicPins`. */
+ * ordem declarada, com numeração global ou por grupo declarada em cada entrada). Ver
+ * `resolveDynamicPins`. */
 struct ComponentPinSpec {
     std::vector<std::string> fixedPinIds;
     std::vector<DynamicPinGroupSpec> dynamicGroups;
@@ -119,7 +127,8 @@ inline std::vector<Pin> resolveDynamicPins(const ComponentPinSpec& spec,
             count = raw > 0.0 ? static_cast<size_t>(raw) : 0;
         }
         for (size_t i = 0; i < count; ++i) {
-            pins.push_back(Pin{group.idPrefix + std::to_string(pins.size() + 1), 0.0, 0.0});
+            const size_t suffix = group.indexMode == DynamicPinIndexMode::PerGroup ? i + 1 : pins.size() + 1;
+            pins.push_back(Pin{group.idPrefix + std::to_string(suffix), 0.0, 0.0});
         }
     }
     return pins;

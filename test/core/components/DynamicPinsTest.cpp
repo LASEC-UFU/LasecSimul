@@ -54,16 +54,23 @@ void testResolveDynamicPinsPureFormulas() {
 
     // outputs.led_bar: 2 grupos independentes na MESMA propriedade (par P/N por LED).
     {
-        const ComponentPinSpec spec{{}, {{"pin-P", "size"}, {"pin-N", "size"}}};
+        const ComponentPinSpec spec{
+            {},
+            {{"pin-P", "size", DynamicPinCountFn::Value, DynamicPinIndexMode::PerGroup},
+             {"pin-N", "size", DynamicPinCountFn::Value, DynamicPinIndexMode::PerGroup}}};
         const auto pins = resolveDynamicPins(spec, {{"size", 4.0}});
         TEST_ASSERT(pins.size() == 8, "led_bar com size=4 deve ter 8 pinos (4 P + 4 N)");
-        // resolveDynamicPins numera sequencialmente CRUZANDO todos os grupos (mesmo contador que faz
-        // columns continuar de onde rows parou no keypad) -- por isso o grupo N continua a partir de
-        // 5, nunca reinicia em 1. Prefixo (P/N) já garante unicidade sozinho; a Extension é livre
-        // pra escolher OUTRA numeração no próprio `dynamicLayout`, contanto que os ids batam com
-        // este lado quando o `pinSpec` do led_bar for escrito.
-        TEST_ASSERT(idsOf(pins) == std::vector<std::string>({"pin-P1", "pin-P2", "pin-P3", "pin-P4", "pin-N5", "pin-N6", "pin-N7", "pin-N8"}),
-                    "grupo N continua a numeracao global a partir de onde o grupo P parou (5), nunca reinicia em 1");
+        TEST_ASSERT(idsOf(pins) == std::vector<std::string>({"pin-P1", "pin-P2", "pin-P3", "pin-P4", "pin-N1", "pin-N2", "pin-N3", "pin-N4"}),
+                    "grupos P/N independentes reiniciam a numeracao, igual ao contrato do LedBar");
+    }
+    {
+        const ComponentPinSpec spec{
+            {},
+            {{"pin-P", "size", DynamicPinCountFn::Value, DynamicPinIndexMode::PerGroup},
+             {"pin-N", "size", DynamicPinCountFn::Value, DynamicPinIndexMode::PerGroup}}};
+        const auto pins = resolveDynamicPins(spec, {{"size", 1.0}});
+        TEST_ASSERT(idsOf(pins) == std::vector<std::string>({"pin-P1", "pin-N1"}),
+                    "led_bar size=1 deve expor exatamente P1/N1 (regressao do ESP32 DevKitC)");
     }
 
     // active.analog_mux: pinos fixos (Z, enable) + endereço (Log2Ceil de canais) + canais.

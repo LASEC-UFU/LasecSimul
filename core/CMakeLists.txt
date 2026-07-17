@@ -320,6 +320,14 @@ target_link_libraries(transient_benchmark PRIVATE Eigen3::Eigen nlohmann_json::n
 if(NOT WIN32)
     target_link_libraries(transient_benchmark PRIVATE dl)
 endif()
+add_executable(simulation_performance_benchmark benchmark/simulation_performance_benchmark.cpp ${TEST_COMMON_SOURCES})
+target_include_directories(simulation_performance_benchmark PRIVATE include src)
+target_link_libraries(simulation_performance_benchmark PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+if(NOT WIN32)
+    target_link_libraries(simulation_performance_benchmark PRIVATE dl)
+endif()
+add_test(NAME simulation_performance_smoke
+         COMMAND simulation_performance_benchmark --sim-ns 10000000 --scale 1 --digital-hz 10000 --require-realtime)
 
 # PropertyDefinition/validatePropertyValue/propertyOrDefault (auditoria arquitetural 2026-07-09,
 # Fase 1.4/2.1) -- Probe e Resistor migrados como demonstração; prova que get/set casam por ID, não

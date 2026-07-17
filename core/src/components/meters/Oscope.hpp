@@ -104,6 +104,11 @@ public:
         }
         return offset;
     }
+    size_t getTelemetryState(uint8_t* out, size_t cap) const override {
+        if (cap < sizeof(m_lastVoltages)) return 0;
+        std::memcpy(out, m_lastVoltages.data(), sizeof(m_lastVoltages));
+        return sizeof(m_lastVoltages);
+    }
     void setState(const uint8_t* in, size_t len) override {
         if (len < sizeof(m_lastVoltages)) return;
         std::memcpy(m_lastVoltages.data(), in, sizeof(m_lastVoltages));

@@ -153,6 +153,10 @@ public:
     virtual void onEvent(const ComponentEvent&) {}
 
     virtual size_t getState(uint8_t* out, size_t cap) const = 0;
+    /** Snapshot pequeno para telemetria periódica. Por padrão preserva a ABI/comportamento de
+     * getState(); instrumentos com histórico sobrescrevem para devolver somente a leitura atual,
+     * evitando serializar o ring buffer inteiro em cada frame visual. */
+    virtual size_t getTelemetryState(uint8_t* out, size_t cap) const { return getState(out, cap); }
     virtual void setState(const uint8_t* in, size_t len) = 0;
 
     /** Propriedades editáveis em runtime (painel de propriedades), separado de getState/setState

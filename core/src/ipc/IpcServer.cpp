@@ -1,5 +1,6 @@
 #include "IpcServer.hpp"
 #include <nlohmann/json.hpp>
+#include <chrono>
 #include <cstdio>
 #include <stdexcept>
 
@@ -56,6 +57,28 @@ void IpcServer::shutdown() {
     m_shutdown = true;
 }
 
+void IpcServer::resetMetrics() {
+    m_requests.store(0, std::memory_order_relaxed);
+    m_notifications.store(0, std::memory_order_relaxed);
+    m_receivedBytes.store(0, std::memory_order_relaxed);
+    m_sentBytes.store(0, std::memory_order_relaxed);
+    m_parseNanoseconds.store(0, std::memory_order_relaxed);
+    m_handlerNanoseconds.store(0, std::memory_order_relaxed);
+    m_serializationNanoseconds.store(0, std::memory_order_relaxed);
+    m_maxNotificationQueueDepth.store(m_notificationQueueDepth.load(std::memory_order_relaxed),
+                                      std::memory_order_relaxed);
+}
+
+IpcServer::MetricsSnapshot IpcServer::metrics() const {
+    return {m_profilingEnabled.load(std::memory_order_relaxed), m_requests.load(std::memory_order_relaxed),
+            m_notifications.load(std::memory_order_relaxed), m_receivedBytes.load(std::memory_order_relaxed),
+            m_sentBytes.load(std::memory_order_relaxed), m_parseNanoseconds.load(std::memory_order_relaxed),
+            m_handlerNanoseconds.load(std::memory_order_relaxed),
+            m_serializationNanoseconds.load(std::memory_order_relaxed),
+            m_notificationQueueDepth.load(std::memory_order_relaxed),
+            m_maxNotificationQueueDepth.load(std::memory_order_relaxed)};
+}
+
 bool IpcServer::sendNotification(const std::string& type, const std::string& payloadJson) {
     nlohmann::json message{{"type", type}};
     message["payload"] = payloadJson.empty() ? nlohmann::json::object() : nlohmann::json::parse(payloadJson);
@@ -63,7 +86,14 @@ bool IpcServer::sendNotification(const std::string& type, const std::string& pay
         std::lock_guard<std::mutex> lock(m_notificationMutex);
         if (m_notificationStop) return false;
         m_notificationQueue.push_back(message.dump());
+        m_notificationQueueDepth.store(m_notificationQueue.size(), std::memory_order_relaxed);
+        uint64_t maximum = m_maxNotificationQueueDepth.load(std::memory_order_relaxed);
+        while (m_notificationQueue.size() > maximum &&
+               !m_maxNotificationQueueDepth.compare_exchange_weak(
+                   maximum, m_notificationQueue.size(), std::memory_order_relaxed)) {}
     }
+    if (m_profilingEnabled.load(std::memory_order_relaxed))
+        m_notifications.fetch_add(1, std::memory_order_relaxed);
     m_notificationWake.notify_one();
     return true;
 }
@@ -77,7 +107,10 @@ void IpcServer::notificationLoop() {
             if (m_notificationStop && m_notificationQueue.empty()) return;
             message = std::move(m_notificationQueue.front());
             m_notificationQueue.pop_front();
+            m_notificationQueueDepth.store(m_notificationQueue.size(), std::memory_order_relaxed);
         }
+        if (m_profilingEnabled.load(std::memory_order_relaxed))
+            m_sentBytes.fetch_add(message.size() + 1, std::memory_order_relaxed);
         (void)sendLine(message);
     }
 }
@@ -261,18 +294,30 @@ void IpcServer::processLoop() {
         }();
         if (trimmed.empty()) continue;
 
+        const bool profile = m_profilingEnabled.load(std::memory_order_relaxed);
+        if (profile) {
+            m_requests.fetch_add(1, std::memory_order_relaxed);
+            m_receivedBytes.fetch_add(line.size() + 1, std::memory_order_relaxed);
+        }
+
         IncomingMessage msg;
+        const auto parseStart = profile ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
         if (!parseMessage(trimmed, msg)) {
             // mensagem malformada — envia erro sem id
             OutgoingResponse errResp;
             errResp.id = "";
             errResp.ok = false;
             errResp.error = "mensagem JSON inválida";
-            sendLine(buildResponse(errResp));
+            const std::string encoded = buildResponse(errResp);
+            sendLine(encoded);
+            if (profile) m_sentBytes.fetch_add(encoded.size() + 1, std::memory_order_relaxed);
             continue;
         }
+        if (profile) m_parseNanoseconds.fetch_add(static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - parseStart).count()), std::memory_order_relaxed);
 
         OutgoingResponse resp;
+        const auto handlerStart = profile ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
         if (m_handler) {
             resp = m_handler(msg);
         } else {
@@ -280,7 +325,16 @@ void IpcServer::processLoop() {
             resp.ok = false;
             resp.error = "nenhum handler registrado";
         }
-        sendLine(buildResponse(resp));
+        if (profile) m_handlerNanoseconds.fetch_add(static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - handlerStart).count()), std::memory_order_relaxed);
+        const auto serializationStart = profile ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+        const std::string encoded = buildResponse(resp);
+        if (profile) {
+            m_serializationNanoseconds.fetch_add(static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now() - serializationStart).count()), std::memory_order_relaxed);
+            m_sentBytes.fetch_add(encoded.size() + 1, std::memory_order_relaxed);
+        }
+        sendLine(encoded);
     }
 }
 

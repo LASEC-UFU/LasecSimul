@@ -1681,20 +1681,6 @@
           "pinId": "pin"
         },
         "points": []
-      },
-      {
-        "id": "wire-1784306103206-984337",
-        "from": {
-          "kind": "port",
-          "componentId": "component-1783937576339-406282",
-          "pinId": "pin-N2"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "component-1784281812804-173343",
-          "pinId": "pin"
-        },
-        "points": []
       }
     ]
   },

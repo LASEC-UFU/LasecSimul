@@ -103,7 +103,8 @@ int main() {
             std::fprintf(stderr, "  (excecao: %s)\n", e.what());
         }
         CHECK(!threw, "GlobalPluginCache::loadLibrary(devices/library.json real) nao lanca");
-        CHECK(cache.activeDeviceModule("example.blinker") != nullptr, "example.blinker fica ativo apos loadLibrary real");
+        CHECK(cache.activeDeviceModule("example.blinker") == nullptr,
+              "example.blinker permanece fora do registro apos loadLibrary real");
     }
 
 #ifdef ESP32_ADAPTER_MSVC_DLL_PATH

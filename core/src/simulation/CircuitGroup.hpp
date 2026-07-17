@@ -60,7 +60,11 @@ public:
           m_admittance(Eigen::MatrixXd::Zero(totalSizeOf(m_nodeIndices, extraVariableCount),
                                               totalSizeOf(m_nodeIndices, extraVariableCount))),
           m_rhs(Eigen::VectorXd::Zero(totalSizeOf(m_nodeIndices, extraVariableCount))),
-          m_lastSolution(Eigen::VectorXd::Zero(totalSizeOf(m_nodeIndices, extraVariableCount))) {}
+          m_lastSolution(Eigen::VectorXd::Zero(totalSizeOf(m_nodeIndices, extraVariableCount))),
+          m_scaledAdmittance(Eigen::MatrixXd::Zero(totalSizeOf(m_nodeIndices, extraVariableCount),
+                                                    totalSizeOf(m_nodeIndices, extraVariableCount))),
+          m_scaledRhs(Eigen::VectorXd::Zero(totalSizeOf(m_nodeIndices, extraVariableCount))),
+          m_scaledSolution(Eigen::VectorXd::Zero(totalSizeOf(m_nodeIndices, extraVariableCount))) {}
 
     size_t size() const { return m_nodeIndices.size(); } // só nós, sem variável extra
     size_t totalSize() const { return m_nodeIndices.size() + m_extraVariableCount; }
@@ -171,10 +175,17 @@ public:
             const double diag = std::abs(m_admittance(i, i));
             if (diag > 0.0) m_scale(i) = 1.0 / std::sqrt(diag);
         }
-        const Eigen::MatrixXd scaled = m_scale.asDiagonal() * m_admittance * m_scale.asDiagonal();
+        // Reutiliza o buffer e escala in-place. A expressão S*A*S criava duas matrizes diagonais
+        // temporárias e um resultado novo em toda refatoração.
+        m_scaledAdmittance = m_admittance;
+        for (Eigen::Index column = 0; column < n; ++column) {
+            const double columnScale = m_scale(column);
+            for (Eigen::Index row = 0; row < n; ++row)
+                m_scaledAdmittance(row, column) *= m_scale(row) * columnScale;
+        }
 
         if (static_cast<size_t>(n) >= kSparseThreshold) {
-            Eigen::SparseMatrix<double> sparse = scaled.sparseView(0.0, 1e-15);
+            Eigen::SparseMatrix<double> sparse = m_scaledAdmittance.sparseView(0.0, 1e-15);
             sparse.makeCompressed();
             size_t patternHash = static_cast<size_t>(sparse.nonZeros());
             for (int outer = 0; outer < sparse.outerSize(); ++outer)
@@ -197,9 +208,12 @@ public:
         }
         m_useSparse = false;
 
-        Eigen::FullPivLU<Eigen::MatrixXd> rankCheck(scaled);
-        m_lastRcond = rankCheck.rcond();
-        if (rankCheck.rank() < scaled.cols() || !std::isfinite(m_lastRcond) || m_lastRcond <= 1e-14) {
+        // PartialPivLU já calcula a fatoração usada pelo solve e fornece rcond(). O código
+        // anterior fazia antes uma FullPivLU O(n³) completa apenas para descartar seu resultado,
+        // duplicando quase todo o custo dos grupos densos.
+        m_factorization.emplace(m_scaledAdmittance);
+        m_lastRcond = m_factorization->rcond();
+        if (!std::isfinite(m_lastRcond) || m_lastRcond <= 1e-14) {
             m_factorization.reset();
             m_lastSolution.setZero();
             m_singular = true;
@@ -207,7 +221,6 @@ public:
             return;
         }
 
-        m_factorization.emplace(scaled);
         m_singular = false;
         m_admittanceChanged = false;
     }
@@ -219,11 +232,10 @@ public:
             return m_lastSolution;
         }
         // Sistema equilibrado: A'=S*A*S, b'=S*b, resolvido pra y; x verdadeiro = S*y (ver factor()).
-        const Eigen::VectorXd scaledRhs = m_scale.cwiseProduct(m_rhs);
-        Eigen::VectorXd y;
-        if (m_useSparse) y = m_sparseFactorization->solve(scaledRhs);
-        else y = m_factorization->solve(scaledRhs);
-        m_lastSolution = m_scale.cwiseProduct(y);
+        m_scaledRhs = m_scale.cwiseProduct(m_rhs);
+        if (m_useSparse) m_scaledSolution = m_sparseFactorization->solve(m_scaledRhs);
+        else m_scaledSolution = m_factorization->solve(m_scaledRhs);
+        m_lastSolution = m_scale.cwiseProduct(m_scaledSolution);
         if (!m_lastSolution.allFinite()) {
             m_lastSolution.setZero();
             m_singular = true;
@@ -247,6 +259,9 @@ private:
     Eigen::VectorXd m_rhs;
     Eigen::VectorXd m_lastSolution;
     Eigen::VectorXd m_scale; // fatores de equilibração da última factor() -- ver factor()/solve()
+    Eigen::MatrixXd m_scaledAdmittance;
+    Eigen::VectorXd m_scaledRhs;
+    Eigen::VectorXd m_scaledSolution;
     std::optional<Eigen::PartialPivLU<Eigen::MatrixXd>> m_factorization;
     using SparseSolver = Eigen::SparseLU<Eigen::SparseMatrix<double>, Eigen::COLAMDOrdering<int>>;
     std::unique_ptr<SparseSolver> m_sparseFactorization;

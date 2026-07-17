@@ -47,6 +47,16 @@ void testStartStopAndLogs(const char* self) {
     assert(manager.logs().find("fake-qemu-ready") != std::string::npos);
 }
 
+void testUtf8AndSpacesInCommandLine(const char* self) {
+    QemuProcessManager manager;
+    // Regressão do heap overflow em widen(): cada argumento reserva e escreve também o NUL.
+    // O firmware real do relato fica em uma árvore com espaços e caracteres não ASCII.
+    manager.start(QemuLaunchSpec{self, {"--fake-short", "a\xC3\xA7\xC3\xA3o com espa\xC3\xA7o"}});
+    waitForLog(manager, "fake-qemu-ready");
+    manager.stop(std::chrono::seconds(2));
+    assert(!manager.isRunning());
+}
+
 void testKillHungProcess(const char* self) {
     QemuProcessManager manager;
     manager.start(QemuLaunchSpec{self, {"--fake-hang"}});
@@ -70,9 +80,10 @@ void testBadFirmwareBinaryReportsError() {
 } // namespace
 
 int main(int argc, char** argv) {
-    if (argc == 2 && std::strncmp(argv[1], "--fake-", 7) == 0) return runFakeChild(argv[1]);
+    if (argc >= 2 && std::strncmp(argv[1], "--fake-", 7) == 0) return runFakeChild(argv[1]);
 
     testStartStopAndLogs(argv[0]);
+    testUtf8AndSpacesInCommandLine(argv[0]);
     testKillHungProcess(argv[0]);
     testBadFirmwareBinaryReportsError();
     std::printf("OK: QemuProcessManager fake process lifecycle passed.\n");

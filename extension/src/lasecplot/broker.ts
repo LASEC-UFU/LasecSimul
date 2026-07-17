@@ -84,9 +84,10 @@ export class LasecPlotBroker implements LasecSimulInteropApi, vscode.Disposable 
   private readonly endpoints = new Map<string, EndpointState>();
   private timer?: ReturnType<typeof setInterval>;
   private polling = false;
+  private readonly pollIntervalMs: number;
 
   constructor(private readonly transport: LasecPlotTransport, pollIntervalMs = 10) {
-    this.timer = setInterval(() => void this.poll(), pollIntervalMs);
+    this.pollIntervalMs = pollIntervalMs;
   }
 
   register(registration: EndpointRegistration): void {
@@ -104,6 +105,7 @@ export class LasecPlotBroker implements LasecSimulInteropApi, vscode.Disposable 
     this.closeConnections(state, "device-removed");
     this.endpoints.delete(id);
     if (state.published) this.changed.fire();
+    this.updatePolling();
   }
   publish(id: string): void {
     const state = this.required(id);
@@ -127,6 +129,7 @@ export class LasecPlotBroker implements LasecSimulInteropApi, vscode.Disposable 
     state.online = online;
     if (!online && state.published) { state.published = false; this.closeConnections(state, "simulation-stopped"); }
     this.changed.fire();
+    this.updatePolling();
   }
   isPublished(id: string): boolean { return this.endpoints.get(id)?.published === true; }
   describe(state: EndpointState): LasecPlotEndpointDescriptor {
@@ -163,6 +166,11 @@ export class LasecPlotBroker implements LasecSimulInteropApi, vscode.Disposable 
     state.connections.delete(connection); if (state.writer === connection) state.writer = undefined; this.changed.fire();
   }
   private required(id: string): EndpointState { const state = this.endpoints.get(id); if (!state) throw new Error(`Endpoint LasecPlot desconhecido: ${id}`); return state; }
+  private updatePolling(): void {
+    const shouldPoll = [...this.endpoints.values()].some((state) => state.online);
+    if (shouldPoll && !this.timer) this.timer = setInterval(() => void this.poll(), this.pollIntervalMs);
+    else if (!shouldPoll && this.timer) { clearInterval(this.timer); this.timer = undefined; }
+  }
   private closeConnections(state: EndpointState, reason: string): void { for (const c of [...state.connections]) c.finish(reason); state.writer = undefined; }
   private async poll(): Promise<void> {
     if (this.polling) return; this.polling = true;

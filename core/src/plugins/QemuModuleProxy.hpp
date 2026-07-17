@@ -34,7 +34,7 @@ inline ModuleKind toCoreModuleKind(LsdnModuleKind kind) {
  * Contenção de crash (achado de auditoria arquitetural 2026-07-09): toda chamada pra dentro do
  * plugin passa por `CrashGuard::call` SEM watchdog de thread (`timeoutMs` implícito = 0, mesmo
  * caminho direto de `PluginWatchdog::call` quando não há orçamento declarado) -- de propósito,
- * porque `McuComponent::stamp()` chama estes métodos a cada `kPollIntervalNs` = 50us
+ * porque `McuComponent` chama estes métodos conforme o passo temporal configurado no Scheduler
  * (`McuComponent.hpp`); no Windows x64, `CrashGuard`/SEH table-based não tem custo mensurável no
  * caminho feliz (sem exceção), então isso fecha a mesma lacuna de robustez que `NativeDeviceProxy`
  * já tinha pra dispositivos ABI comuns, sem competir com o orçamento de tempo real do MCU. Uma

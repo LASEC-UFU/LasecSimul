@@ -1,4 +1,5 @@
 #pragma once
+#include <atomic>
 
 #include <filesystem>
 #include <memory>
@@ -53,6 +54,25 @@ struct PauseConditionTriggered {
     std::string error;
 };
 
+struct SimulationPerformanceSnapshot {
+    bool enabled = false;
+    uint64_t simulatedNanoseconds = 0;
+    uint64_t eventsProcessed = 0;
+    uint64_t timeSteps = 0;
+    uint64_t settleIterations = 0;
+    uint64_t settleNanoseconds = 0;
+    uint64_t componentStamps = 0;
+    uint64_t deviceStampNanoseconds = 0;
+    uint64_t solverCalls = 0;
+    uint64_t solverNanoseconds = 0;
+    uint64_t topologyRebuilds = 0;
+    uint64_t topologyNanoseconds = 0;
+    uint64_t pendingEvents = 0;
+    uint64_t acceptedTransientSteps = 0;
+    uint64_t rejectedTransientSteps = 0;
+    size_t solverThreads = 0;
+};
+
 /**
  * Unidade de isolamento lógico de um projeto aberto: dona de ComponentRegistry, McuRegistry,
  * PluginRuntime, Netlist, MnaSolver e Scheduler.
@@ -77,8 +97,11 @@ public:
     simulation::Scheduler& scheduler() { return m_scheduler; }
     void setTransientSettings(const TransientSettings& settings);
     const TransientSettings& transientSettings() const { return m_transientSettings; }
-    uint64_t acceptedTransientSteps() const { return m_acceptedTransientSteps; }
-    uint64_t rejectedTransientSteps() const { return m_rejectedTransientSteps; }
+    uint64_t acceptedTransientSteps() const { return m_acceptedTransientSteps.load(std::memory_order_relaxed); }
+    uint64_t rejectedTransientSteps() const { return m_rejectedTransientSteps.load(std::memory_order_relaxed); }
+    void setPerformanceProfilingEnabled(bool enabled);
+    void resetPerformanceMetrics();
+    SimulationPerformanceSnapshot performanceMetrics() const;
 
     /** Registra, no ComponentRegistry desta sessão, uma factory delegando ao PluginRuntime para
      * cada typeId com PluginModule ativo no GlobalPluginCache. Componentes built-in (ex: Resistor)
@@ -150,6 +173,10 @@ public:
      * estado em vez de propriedade — plugins ainda não têm getter de propriedade na ABI (ver
      * NativeDeviceProxy.hpp). Lança se a instância já foi removida (ponteiro nulo). */
     std::vector<uint8_t> getComponentState(uint32_t componentIndex) const;
+    std::vector<uint8_t> getComponentTelemetryState(uint32_t componentIndex) const;
+    std::vector<std::vector<uint8_t>> getComponentTelemetryStates(const std::vector<uint32_t>& componentIndices) const;
+    std::vector<double> nodeVoltagesOfPins(
+        const std::vector<std::pair<uint32_t, std::string>>& probes) const;
 
     /** Saúde operacional da instância (`Ok`/`Lagging`/`Faulted`) -- ver
      * `IComponentModel::health()`/`NativeDeviceProxy` e `.spec/lasecsimul-native-devices.spec`
@@ -203,7 +230,7 @@ public:
      * resolvido. Usado por instrumentos/telemetria e por testes — nunca dispara um solve novo,
      * só lê o que já foi calculado. */
     double nodeVoltageOfPin(uint32_t component, const std::string& pinId) const {
-        return m_scheduler.synchronized([&] {
+        auto result = m_scheduler.trySynchronized([&] {
         const uint32_t slot = m_netlist.pinSlotsOf(component).at(pinId);
         // .at() em vez de operator[]: se ainda não houve nenhum settleStep() (ex: chamado via IPC
         // antes do "start"), m_topology/m_nodeVoltages estão vazios — sem isso seria acesso fora
@@ -211,6 +238,8 @@ public:
         const uint32_t node = m_topology.slotToNode.at(slot);
         return m_nodeVoltages.at(node);
         });
+        if (!result) throw std::runtime_error("simulacao ocupada; telemetria adiada");
+        return *result;
     }
 
 private:
@@ -264,6 +293,8 @@ private:
      * pra calcular o `c` (ns desde a última borda) de `ComponentEvent{kPinChangeEventTag,...}`. Ver
      * settleStep(). */
     std::vector<uint64_t> m_lastEdgeTimeNs;
+    /** Scratch reutilizado pelo settle: evita alocar/copiar um vetor novo em toda iteração. */
+    std::vector<uint32_t> m_stampedThisRound;
     bool m_topologyDirty = true;
     /** Verdadeiro somente enquanto a revisão pendente contém EXCLUSIVAMENTE adições de fios.
      * Qualquer operação capaz de separar/reindexar rede desabilita reuso de matrizes neste rebuild. */
@@ -271,8 +302,15 @@ private:
     uint64_t m_wireTopologyRevision = 0;
     uint32_t m_nonlinearIterations = 0; // ver kMaxNonlinearIterations em SimulationSession.cpp
     TransientSettings m_transientSettings;
-    uint64_t m_acceptedTransientSteps = 0;
-    uint64_t m_rejectedTransientSteps = 0;
+    std::atomic<uint64_t> m_acceptedTransientSteps{0};
+    std::atomic<uint64_t> m_rejectedTransientSteps{0};
+    std::atomic<bool> m_performanceProfilingEnabled{false};
+    std::atomic<uint64_t> m_componentStamps{0};
+    std::atomic<uint64_t> m_deviceStampNanoseconds{0};
+    std::atomic<uint64_t> m_solverCalls{0};
+    std::atomic<uint64_t> m_solverNanoseconds{0};
+    std::atomic<uint64_t> m_topologyRebuilds{0};
+    std::atomic<uint64_t> m_topologyNanoseconds{0};
 };
 
 } // namespace lasecsimul::session

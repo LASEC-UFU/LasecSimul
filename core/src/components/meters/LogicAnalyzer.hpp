@@ -113,6 +113,11 @@ public:
         }
         return offset;
     }
+    size_t getTelemetryState(uint8_t* out, size_t cap) const override {
+        if (cap < sizeof(m_lastLevels)) return 0;
+        std::memcpy(out, &m_lastLevels, sizeof(m_lastLevels));
+        return sizeof(m_lastLevels);
+    }
     void setState(const uint8_t* in, size_t len) override {
         if (len >= sizeof(m_lastLevels)) std::memcpy(&m_lastLevels, in, sizeof(m_lastLevels));
     }

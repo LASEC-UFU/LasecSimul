@@ -1,7 +1,9 @@
 #pragma once
 
+#include <atomic>
 #include <filesystem>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 #include "lasecsimul/IComponentModel.hpp"
@@ -22,16 +24,15 @@ namespace lasecsimul::mcu {
  * que cada bit significa (isso é só do módulo concreto, ex: `Esp32GpioModule`). A detecção de
  * qual módulo é dono de cada `regAddr` usa a MESMA `QemuArenaBridge::dispatch()` que já existia.
  *
- * Simplificação documentada (ver `mcu_simulide` mais embaixo): processa cada evento da arena
- * IMEDIATAMENTE no `stamp()` em que é detectado, em vez de agendar pro timestamp exato que o QEMU
- * reportou (`SimulIDE-dev`/`simulide_2` real agenda via fila de eventos própria,
- * `Simulator::addEventAt(nextTime,...)` -- ver qemudevice.cpp `runEvent()`). Pra protocolos de
- * timing fino (largura de pulso, etc.) isso pode divergir um pouco do hardware real; aceitável
- * pra GPIO digital simples (Blink Real), revisitar se precisão de timing se tornar necessária.
+ * A sincronização segue o princípio usado por `QemuDevice::runEvent()` no SimulIDE: o QEMU publica
+ * o próximo timestamp virtual, ações do mesmo instante são drenadas em lote e uma ação futura é
+ * colocada exatamente nesse instante na fila do Scheduler. O passo interno e o refresh visual não
+ * participam desse handshake; assim preservamos timing/determinismo sem polling por passo de MNA.
  */
 class McuComponent final : public IComponentModel {
 public:
     McuComponent(std::unique_ptr<IMcuAdapter> adapter, simulation::Scheduler& scheduler, std::span<const Pin> requestedPins = {});
+    ~McuComponent() override;
 
     const char* typeId() const override { return m_adapter->chipId(); }
     std::span<Pin> pins() override { return m_pins; }
@@ -62,33 +63,39 @@ public:
                       const std::string& qemuBinaryOverride = {}, McuDebugOptions debug = {});
     uint16_t gdbPort() const { return m_gdbPort; }
     void stopFirmware();
-    bool firmwareRunning() const { return m_controller.isRunning(); }
-    std::string qemuLogs() const { return m_controller.qemuLogs(); }
+    bool firmwareRunning() const;
+    std::string qemuLogs() const;
 
     /** Estado do pino RST (ModuleKind::Reset, ex: EN do ESP32) na última stamp() -- exposto só pra
      * teste confirmar a borda sem precisar reler tensão de matriz. */
     bool resetPinHigh() const { return m_resetPinHigh; }
+    uint64_t stampCountForTesting() const { return m_stampCount; }
 
     /** Abre a arena SEM iniciar nenhum processo QEMU -- só pra teste poder simular escritas de
      * registrador manualmente (mesmo papel de QemuArenaBridgeTest), sem precisar de um binário
      * real nem de firmware. Produção sempre usa loadFirmware(), nunca isto direto. */
-    void openSyntheticArenaForTesting(const std::string& arenaName) {
-        m_controller.arenaBridge().open(qemu::QemuArenaOpenOptions{arenaName, true});
-    }
+    void openSyntheticArenaForTesting(const std::string& arenaName);
     qemu::QemuArenaBridge& arenaBridge() { return m_controller.arenaBridge(); }
 
 private:
+    struct CallbackState {
+        mutable std::recursive_mutex mutex;
+        McuComponent* owner = nullptr;
+    };
+    void startPolling();
+    void stopPolling();
     void scheduleNextPoll();
-    void scheduleModuleWakeup(size_t moduleIndex);
-    void scheduleWakeupsForAllModules();
-    void runPendingModuleWakeups();
-    void pollAndDispatchPendingEvents();
+    void schedulePollAt(uint64_t timeNs);
+    void onPollEvent();
+    void scheduleModuleWakeup(size_t moduleIndex, uint64_t nowNs, bool schedulerLockHeld);
+    void scheduleWakeupsForAllModules(uint64_t nowNs, bool schedulerLockHeld);
+    bool pollAndDispatchPendingEvents(uint64_t nowNs);
+    bool dispatchArenaEvent(const qemu::QemuArenaEvent& event, uint64_t eventTimeNs);
+    uint64_t electricalOutputFingerprint() const;
     void stampResetPin(MnaMatrixView& matrix, const Pin& pin);
     void resetModulesAndWakeups();
     QemuModule* findModule(uint64_t address) const;
 
-    static constexpr uint64_t kPollIntervalNs = 50'000; // 50us -- mesma ordem do period_ns real
-    static constexpr int kMaxEventsPerStamp = 64; // limite pra nunca girar pra sempre num round só
     // 1e6/1e-6 (não 1e9/1e-9 como Rail/Probe) -- ver comentário extenso em stamp(): um componente
     // com dezenas de pinos simultaneamente flutuantes precisa de spread seguro pro rcond() do
     // solver, não só "forte"/"fraco" em isolado.
@@ -100,16 +107,22 @@ private:
     simulation::Scheduler& m_scheduler;
     std::vector<Pin> m_pins;
     std::vector<std::unique_ptr<QemuModule>> m_modules;
+    std::vector<QemuModule*> m_moduleByPin;
     std::vector<uint64_t> m_moduleWakeupDueNs;
     std::vector<uint64_t> m_moduleWakeupGeneration;
-    std::vector<uint8_t> m_moduleWakeupPending;
     // Dono real do processo QEMU + arena de memória compartilhada -- ver McuController.hpp. Eram
     // dois membros próprios (QemuArenaBridge/QemuProcessManager) duplicando exatamente o que
     // McuController já fazia; unificado (achado de auditoria arquitetural 2026-07-09, D11) pra ter
     // uma só implementação, testada tanto por McuComponentTest (arena sintética) quanto por
     // McuControllerRealQemuTest (binário QEMU real) contra o MESMO código.
     McuController m_controller;
+    std::shared_ptr<CallbackState> m_callbackState;
     uint32_t m_componentIndex = 0;
+    std::atomic<bool> m_polling{false};
+    bool m_pollEventScheduled = false;
+    bool m_syntheticArenaForTesting = false;
+    uint64_t m_qemuTimeOriginNs = 0;
+    uint64_t m_stampCount = 0;
     // ModuleKind::Reset (ex: EN do ESP32) -- nunca tem QemuModule, McuComponent trata direto.
     // Default true: sem fio externo nenhum, o pino fica com polarização fraca pra ALTO (chip roda
     // normalmente) -- inverso do floating genérico de GPIO (que vai fraco pra terra), porque aqui

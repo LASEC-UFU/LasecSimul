@@ -30,3 +30,14 @@ desempenho para todo circuito.
 Diferença numérica observada entre fatoração densa e esparsa: `2,84e-14`.
 
 Executáveis: `solver_benchmark` e `transient_benchmark`, definidos em `core/CMakeLists.txt`.
+
+## Benchmark integrado da simulação
+
+Desde 2026-07-17, `simulation_performance_benchmark` cobre circuito vazio, passivo, RC analógico,
+transições digitais, instrumentos e escala configurável. O alvo CTest `simulation_performance_smoke`
+detecta regressão abaixo de tempo real nos fixtures simples. O script
+`scripts/benchmark-simulation.ps1` acrescenta amostragem de CPU, threads e memória sem ativar logs no
+caminho quente.
+
+O relatório completo, resultados, limitações e comandos de reprodução estão em
+`docs/28-relatorio-desempenho-simulacao-2026-07-17.md`.

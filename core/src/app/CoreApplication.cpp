@@ -605,7 +605,10 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
     // pra TODOS os segmentos de uma vez -- fiel ao real (`LedBar::setColorStr` aplica a MESMA cor a
     // todo `m_led[i]`, nunca por-segmento individual, ver `DiodeLegArray.hpp`).
     {
-        const ComponentPinSpec ledBarPinSpec{{}, {{"pin-P", "size"}, {"pin-N", "size"}}};
+        const ComponentPinSpec ledBarPinSpec{
+            {},
+            {{"pin-P", "size", DynamicPinCountFn::Value, DynamicPinIndexMode::PerGroup},
+             {"pin-N", "size", DynamicPinCountFn::Value, DynamicPinIndexMode::PerGroup}}};
         std::vector<PropertySchema> ledBarSchema{components::detail::numberSchema(
             "size", "Tamanho", "Leds", 8.0, 1.0, 1.0, PropertySchemaAffectsTopology | PropertySchemaAffectsPinCount, 32.0)};
         for (const PropertySchema& ledSchema : components::DiodeLegArray::propertySchema()) ledBarSchema.push_back(ledSchema);
@@ -1429,6 +1432,35 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
         }
         return resp;
     }
+    if (msg.type == "getPerformanceMetrics") {
+        const session::SimulationPerformanceSnapshot core = session.performanceMetrics();
+        const ipc::IpcServer::MetricsSnapshot ipcMetrics = server.metrics();
+        resp.ok = true;
+        resp.payloadJson = nlohmann::json{
+            {"enabled", core.enabled}, {"simulatedNanoseconds", core.simulatedNanoseconds},
+            {"eventsProcessed", core.eventsProcessed}, {"timeSteps", core.timeSteps},
+            {"settleIterations", core.settleIterations}, {"settleNanoseconds", core.settleNanoseconds},
+            {"componentStamps", core.componentStamps}, {"deviceStampNanoseconds", core.deviceStampNanoseconds},
+            {"solverCalls", core.solverCalls}, {"solverNanoseconds", core.solverNanoseconds},
+            {"topologyRebuilds", core.topologyRebuilds}, {"topologyNanoseconds", core.topologyNanoseconds},
+            {"pendingEvents", core.pendingEvents}, {"acceptedTransientSteps", core.acceptedTransientSteps},
+            {"rejectedTransientSteps", core.rejectedTransientSteps}, {"solverThreads", core.solverThreads},
+            {"ipc", nlohmann::json{{"requests", ipcMetrics.requests}, {"notifications", ipcMetrics.notifications},
+                                   {"receivedBytes", ipcMetrics.receivedBytes}, {"sentBytes", ipcMetrics.sentBytes},
+                                   {"parseNanoseconds", ipcMetrics.parseNanoseconds},
+                                   {"handlerNanoseconds", ipcMetrics.handlerNanoseconds},
+                                   {"serializationNanoseconds", ipcMetrics.serializationNanoseconds},
+                                   {"notificationQueueDepth", ipcMetrics.notificationQueueDepth},
+                                   {"maxNotificationQueueDepth", ipcMetrics.maxNotificationQueueDepth}}}
+        }.dump();
+        return resp;
+    }
+    if (msg.type == "resetPerformanceMetrics") {
+        session.resetPerformanceMetrics();
+        server.resetMetrics();
+        resp.ok = true;
+        return resp;
+    }
     if (msg.type == "getProperty") {
         try {
             const nlohmann::json payload =
@@ -1626,13 +1658,20 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
             const nlohmann::json payload = nlohmann::json::parse(msg.payloadJson);
             nlohmann::json states = nlohmann::json::object();
             static const char digits[] = "0123456789abcdef";
+            std::vector<std::string> keys;
+            std::vector<uint32_t> ids;
+            keys.reserve(payload.at("items").size());
+            ids.reserve(payload.at("items").size());
             for (const auto& item : payload.at("items")) {
-                const std::string key = item.at("key").get<std::string>();
-                const uint32_t id = static_cast<uint32_t>(std::stoul(item.at("instanceId").get<std::string>()));
-                const std::vector<uint8_t> bytes = session.getComponentState(id);
+                keys.push_back(item.at("key").get<std::string>());
+                ids.push_back(static_cast<uint32_t>(std::stoul(item.at("instanceId").get<std::string>())));
+            }
+            const std::vector<std::vector<uint8_t>> batch = session.getComponentTelemetryStates(ids);
+            for (size_t index = 0; index < batch.size(); ++index) {
+                const std::vector<uint8_t>& bytes = batch[index];
                 std::string hex; hex.reserve(bytes.size() * 2);
                 for (uint8_t byte : bytes) { hex.push_back(digits[byte >> 4]); hex.push_back(digits[byte & 15]); }
-                states[key] = std::move(hex);
+                states[keys[index]] = std::move(hex);
             }
             resp.ok = true; resp.payloadJson = nlohmann::json{{"states", states}}.dump();
         } catch (const std::exception& e) {
@@ -1751,11 +1790,17 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
         try {
             const nlohmann::json payload = nlohmann::json::parse(msg.payloadJson);
             nlohmann::json values = nlohmann::json::object();
+            std::vector<std::string> keys;
+            std::vector<std::pair<uint32_t, std::string>> probes;
+            keys.reserve(payload.at("probes").size());
+            probes.reserve(payload.at("probes").size());
             for (const auto& probe : payload.at("probes")) {
-                const std::string key = probe.at("key").get<std::string>();
+                keys.push_back(probe.at("key").get<std::string>());
                 const uint32_t instanceId = static_cast<uint32_t>(std::stoul(probe.at("instanceId").get<std::string>()));
-                values[key] = session.nodeVoltageOfPin(instanceId, probe.at("pinId").get<std::string>());
+                probes.emplace_back(instanceId, probe.at("pinId").get<std::string>());
             }
+            const std::vector<double> batch = session.nodeVoltagesOfPins(probes);
+            for (size_t index = 0; index < batch.size(); ++index) values[keys[index]] = batch[index];
             resp.ok = true;
             resp.payloadJson = nlohmann::json{{"values", values}}.dump();
         } catch (const std::exception& e) {
@@ -1914,6 +1959,11 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
                 msg.payloadJson.empty() ? nlohmann::json::object() : nlohmann::json::parse(msg.payloadJson);
             if (payload.contains("targetStepUs") && payload["targetStepUs"].is_number())
                 session.scheduler().setTargetStepUs(payload["targetStepUs"].get<uint64_t>());
+            if (payload.contains("performanceProfiling") && payload["performanceProfiling"].is_boolean()) {
+                const bool enabled = payload["performanceProfiling"].get<bool>();
+                session.setPerformanceProfilingEnabled(enabled);
+                server.setProfilingEnabled(enabled);
+            }
             TransientSettings transient = session.transientSettings();
             if (payload.contains("maxNonLinearIterations") && payload["maxNonLinearIterations"].is_number())
                 transient.maximumNewtonIterations = payload["maxNonLinearIterations"].get<uint32_t>();

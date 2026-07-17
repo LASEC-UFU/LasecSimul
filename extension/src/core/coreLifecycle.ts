@@ -506,12 +506,19 @@ export function legacyMasksToVectorHistory(timestampsNs: number[], masks: number
   };
 }
 
+const instrumentHistoryRequestsInFlight = new Set<string>();
+
 export async function sendInstrumentHistory(componentId: string): Promise<void> {
   if (!state.coreClient || !state.schematicPanel) return;
+  // A Webview pede histórico a cada frame enquanto o popup está aberto. Se o snapshot anterior
+  // ainda está atravessando Core -> Extension -> Webview, o próximo pedido seria redundante e
+  // faria a fila crescer sem limite sob carga.
+  if (instrumentHistoryRequestsInFlight.has(componentId)) return;
   const component = state.schematicState.components.find((entry) => entry.id === componentId);
   if (!component) return;
   const coreId = coreInstanceIdByComponentId.get(componentId);
   if (!coreId) return;
+  instrumentHistoryRequestsInFlight.add(componentId);
   try {
     const coreState = await state.coreClient.getComponentState(coreId);
     const decoded = decodeInstrumentHistory(component.typeId, coreState);
@@ -528,6 +535,8 @@ export async function sendInstrumentHistory(componentId: string): Promise<void> 
     state.schematicPanel.postMessage({ version: 1, type: "instrumentHistory", ...payload });
   } catch {
     // instância ainda não assentou ou foi removida -- ignora, a próxima tentativa (popup ainda aberto) cobre
+  } finally {
+    instrumentHistoryRequestsInFlight.delete(componentId);
   }
 }
 
@@ -547,7 +556,7 @@ export function isReadableInstrument(typeId: string): boolean {
 /** Lê o estado de cada "instruments.voltmeter" no projeto e manda pra Webview — único instrumento
  * com leitura via Webview hoje (ver .spec/lasecsimul.spec sobre instrumentos como plugin ABI).
  * Generaliza naturalmente pra outros: basta interpretar getComponentState() conforme o typeId. */
-export async function pollInstrumentReadouts(): Promise<void> {
+export async function pollInstrumentReadouts(expectedGeneration?: number): Promise<void> {
   if (!state.coreClient || !state.schematicPanel) return;
   const instruments = state.schematicState.components.filter((component) => isReadableInstrument(component.typeId));
   if (instruments.length === 0) return;
@@ -573,13 +582,14 @@ export async function pollInstrumentReadouts(): Promise<void> {
       // instância ainda não assentou ou foi removida nesse meio tempo -- ignora neste tick, tenta de novo no próximo
     }
   }
+  if (expectedGeneration !== undefined && expectedGeneration !== telemetryGeneration) return;
   state.schematicPanel.postMessage({ version: 1, type: "componentReadout", readoutsByComponentId });
 }
 
 /** Tensão de cada fio (lida em uma das duas pontas — são o mesmo nó elétrico por definição) pra
  * colorir/animar na Webview igual ao SimulIDE (`ConnectorLine::paint`: vermelho se >2.5V, azul
  * senão, só enquanto a simulação está "animada"/rodando). */
-export async function pollWireVoltages(): Promise<void> {
+export async function pollWireVoltages(expectedGeneration?: number): Promise<void> {
   if (!state.coreClient || !state.schematicPanel) return;
   if (state.schematicState.topology.conductors.length === 0) return;
 
@@ -594,6 +604,7 @@ export async function pollWireVoltages(): Promise<void> {
   } catch {
       // nó ainda não resolvido (settle loop não rodou pra esse trecho ainda) -- ignora neste tick
   }
+  if (expectedGeneration !== undefined && expectedGeneration !== telemetryGeneration) return;
   state.schematicPanel.postMessage({ version: 1, type: "wireVoltages", voltagesByWireId });
 }
 
@@ -603,8 +614,10 @@ export async function pollWireVoltages(): Promise<void> {
  * configuração estática de `lasecsimul.simulation.targetStepUs`). `undefined` == ainda sem amostra
  * anterior nesta corrida (primeiro tick depois de `run()`/retomada). */
 let lastRateSample: { wallMs: number; simNs: number } | undefined;
+let telemetryGeneration = 0;
+let telemetryPollInFlight = false;
 
-async function pollSimulationRate(): Promise<void> {
+async function pollSimulationRate(expectedGeneration?: number): Promise<void> {
   if (!state.coreClient) return;
   try {
     const simNs = await state.coreClient.getSimulationTime();
@@ -616,7 +629,9 @@ async function pollSimulationRate(): Promise<void> {
       // diferença entre polls (jitter do `setInterval`) daria uma taxa ruidosa/enganosa.
       if (deltaWallMs > 50) {
         const rate = (deltaSimNs / 1e6) / deltaWallMs; // (ms simulados)/(ms de parede) = fator "Nx"
-        state.schematicPanel?.postMessage({ version: 1, type: "simulationRate", rate });
+        if (expectedGeneration === undefined || expectedGeneration === telemetryGeneration) {
+          state.schematicPanel?.postMessage({ version: 1, type: "simulationRate", rate });
+        }
       }
     }
     lastRateSample = { wallMs, simNs };
@@ -627,17 +642,29 @@ async function pollSimulationRate(): Promise<void> {
 
 export function startVoltageReadoutPolling(): void {
   if (state.voltageReadoutTimer) return;
+  const generation = ++telemetryGeneration;
   lastRateSample = undefined;
-  const telemetryRateHz = Math.min(60, Math.max(1,
-    vscode.workspace.getConfiguration("lasecsimul.simulation").get("telemetryRateHz", 10)));
+  const telemetryRateHz = vscode.workspace
+    .getConfiguration("lasecsimul.simulation")
+    .get<number>("telemetryRateHz");
+  if (telemetryRateHz === undefined || !Number.isFinite(telemetryRateHz) || telemetryRateHz <= 0) {
+    throw new Error("lasecsimul.simulation.telemetryRateHz deve ser uma frequência positiva");
+  }
   state.voltageReadoutTimer = setInterval(() => {
-    void pollInstrumentReadouts();
-    void pollWireVoltages();
-    void pollSimulationRate();
+    // Backpressure: um único frame visual em trânsito. Frames obsoletos podem ser coalescidos;
+    // comandos de controle e estado essencial nunca entram numa fila crescente atrás deles.
+    if (telemetryPollInFlight) return;
+    telemetryPollInFlight = true;
+    void Promise.allSettled([
+      pollInstrumentReadouts(generation),
+      pollWireVoltages(generation),
+      pollSimulationRate(generation),
+    ]).finally(() => { telemetryPollInFlight = false; });
   }, Math.round(1000 / telemetryRateHz));
 }
 
 export function stopVoltageReadoutPolling(): void {
+  ++telemetryGeneration;
   if (!state.voltageReadoutTimer) return;
   clearInterval(state.voltageReadoutTimer);
   state.voltageReadoutTimer = undefined;
@@ -703,8 +730,10 @@ export function pauseSimulation(): void {
 }
 
 export function stopSimulation(): void {
+  // Corta a produção de telemetria no instante do clique, antes de escrever o comando no pipe.
+  // Assim nenhum frame visual novo pode ser enfileirado enquanto a worker está encerrando.
+  stopVoltageReadoutPolling();
   if (!state.coreClient) {
-    stopVoltageReadoutPolling();
     setSimulationStatus("stopped");
     noteSimulationStatusChange("stopped");
     return;
@@ -713,7 +742,6 @@ export function stopSimulation(): void {
     .stopSimulation()
     .catch((err) => reportCoreWarning("parar simulação", err))
     .finally(() => {
-      stopVoltageReadoutPolling();
       setSimulationStatus("stopped");
       noteSimulationStatusChange("stopped");
     });
@@ -781,6 +809,7 @@ async function rebuildCoreFromSchematicStateNow(): Promise<void> {
   await state.coreClient.setSimulationConfig({
     targetStepUs: simulation.get("targetStepUs", 0),
     maxNonLinearIterations: simulation.get("maxNonLinearIterations", 0),
+    performanceProfiling: simulation.get("performanceProfiling", false),
     integrationMethod: simulation.get("integrationMethod", "automatic"),
     adaptiveTimeStep: simulation.get("adaptiveTimeStep", true),
     initialStepNs: simulation.get("initialStepNs", 100),

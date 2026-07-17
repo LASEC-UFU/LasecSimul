@@ -1,5 +1,6 @@
 #include "simulation/Scheduler.hpp"
 #include <cassert>
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
@@ -101,6 +102,74 @@ void testStopDoesNotBlock() {
     assert(elapsed < std::chrono::seconds(1));
 }
 
+void testAsyncModeAdvancesWithoutScheduledEvents() {
+    Scheduler* schedulerPtr = nullptr;
+    std::atomic<uint64_t> stableSteps{0};
+    Scheduler scheduler(2, [&schedulerPtr] {
+        schedulerPtr->dirtySet().clear();
+        return false;
+    });
+    schedulerPtr = &scheduler;
+    scheduler.setMaximumTimeStepNs(100);
+    scheduler.setStableStepCallback([&](uint64_t) { ++stableSteps; });
+    scheduler.start();
+
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+    while (scheduler.nowNs() == 0 && std::chrono::steady_clock::now() < deadline)
+        std::this_thread::yield();
+    scheduler.stop();
+
+    assert(scheduler.nowNs() > 0);
+    assert(stableSteps.load() > 0);
+}
+
+void testRepeatedStartStopDoesNotLeakWorkersOrEvents() {
+    Scheduler* schedulerPtr = nullptr;
+    Scheduler scheduler(2, [&schedulerPtr] {
+        schedulerPtr->dirtySet().clear();
+        return false;
+    });
+    schedulerPtr = &scheduler;
+    scheduler.setMaximumTimeStepNs(100);
+    for (int cycle = 0; cycle < 100; ++cycle) {
+        scheduler.start();
+        const uint64_t before = scheduler.nowNs();
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+        while (scheduler.nowNs() == before && std::chrono::steady_clock::now() < deadline)
+            std::this_thread::yield();
+        assert(scheduler.nowNs() > before);
+        scheduler.stop();
+        assert(scheduler.pendingEventCount() == 0);
+    }
+}
+
+void testControlAndTelemetryStayResponsiveDuringNonConvergentSettle() {
+    std::atomic<int> settleCalls{0};
+    Scheduler scheduler(2, [&] {
+        ++settleCalls;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        return true; // deliberately leaves dirty set unchanged
+    });
+    scheduler.markDirty(1);
+    scheduler.start();
+
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+    while (settleCalls.load() == 0 && std::chrono::steady_clock::now() < deadline)
+        std::this_thread::yield();
+    assert(settleCalls.load() > 0);
+
+    const auto telemetryStart = std::chrono::steady_clock::now();
+    const auto telemetry = scheduler.trySynchronized([] { return 42; });
+    const auto telemetryElapsed = std::chrono::steady_clock::now() - telemetryStart;
+    assert(!telemetry);
+    assert(telemetryElapsed < std::chrono::milliseconds(50));
+
+    scheduler.pause();
+    const auto stopStart = std::chrono::steady_clock::now();
+    scheduler.stop();
+    assert(std::chrono::steady_clock::now() - stopStart < std::chrono::seconds(1));
+}
+
 } // namespace
 
 int main() {
@@ -109,6 +178,9 @@ int main() {
     testDirtyDuplicateOnce();
     testResetClearsEventsAndDirty();
     testStopDoesNotBlock();
+    testAsyncModeAdvancesWithoutScheduledEvents();
+    testRepeatedStartStopDoesNotLeakWorkersOrEvents();
+    testControlAndTelemetryStayResponsiveDuringNonConvergentSettle();
 
     std::printf("OK: Scheduler ordered events, deterministic tie-break, dirty, reset, stop.\n");
     return 0;

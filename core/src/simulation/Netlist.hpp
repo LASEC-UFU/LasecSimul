@@ -26,6 +26,13 @@ struct ExtraVariableResolution {
     uint32_t baseLocalIndex; // primeira linha/coluna de variável extra deste componente, no grupo
 };
 
+/** Resolução pronta para o hot path de stamp(). O mapa depende apenas da topologia e, portanto,
+ * deve ser construído uma vez no rebuild, não novamente a cada passo/iteração do solver. */
+struct ComponentStampResolution {
+    uint32_t groupIndex = std::numeric_limits<uint32_t>::max();
+    std::unordered_map<std::string, uint32_t> localIndexByPinId;
+};
+
 /** Um pino específico de um componente específico, presente num nó — usado pra disparar
  * `ComponentEvent{kPinChangeEventTag,...}` quando esse nó cruza o limiar digital (ver
  * SimulationSession::settleStep()). `localPinIndex` = posição do pino na ordem de declaração
@@ -45,6 +52,7 @@ struct Topology {
     std::vector<std::vector<NodePinRef>> pinRefsByNode;
     std::vector<uint32_t> slotToNode;                   // por slot -> nó global (pós passada 1)
     std::vector<ExtraVariableResolution> extraVariablesByComponent; // por componentIndex (se > 0 vars)
+    std::vector<ComponentStampResolution> stampResolutionByComponent;
 };
 
 /**
@@ -328,6 +336,18 @@ public:
         topology.resolutionBySlot.resize(slotCount);
         for (uint32_t slot = 0; slot < slotCount; ++slot)
             topology.resolutionBySlot[slot] = resolutionByNode[slotToNode[slot]];
+
+        topology.stampResolutionByComponent.resize(m_componentPinSlots.size());
+        for (size_t componentIndex = 0; componentIndex < m_componentPinSlots.size(); ++componentIndex) {
+            if (m_componentRemoved[componentIndex]) continue;
+            ComponentStampResolution& stamp = topology.stampResolutionByComponent[componentIndex];
+            stamp.localIndexByPinId.reserve(m_componentPinSlots[componentIndex].size());
+            for (const auto& [pinId, slot] : m_componentPinSlots[componentIndex]) {
+                const PinSlotResolution& resolution = topology.resolutionBySlot[slot];
+                stamp.groupIndex = resolution.groupIndex;
+                stamp.localIndexByPinId.emplace(pinId, resolution.localIndex);
+            }
+        }
 
         topology.listenersByNode.resize(nodeCount);
         for (uint32_t slot = 0; slot < slotCount; ++slot) {

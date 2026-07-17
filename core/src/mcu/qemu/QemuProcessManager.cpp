@@ -23,8 +23,17 @@ namespace {
 std::wstring widen(const std::string& s) {
     if (s.empty()) return {};
     const int size = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, nullptr, 0);
-    std::wstring out(static_cast<size_t>(size - 1), L'\0');
-    MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, out.data(), size);
+    if (size <= 0) throw std::runtime_error("Invalid UTF-8 in QEMU command line");
+    // `size` includes the trailing NUL because the input length is -1. Reserving `size - 1`
+    // and still asking MultiByteToWideChar to write `size` wchar_t values used to overwrite one
+    // wchar_t past std::wstring's writable range. On Windows that corrupted the heap immediately
+    // before CreateProcessW and surfaced as 0xC0000005 after loading firmware from paths containing
+    // spaces/non-ASCII characters. Keep the terminator in a temporary buffer, then remove it.
+    std::wstring out(static_cast<size_t>(size), L'\0');
+    if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, s.c_str(), -1, out.data(), size) != size) {
+        throw std::runtime_error("Invalid UTF-8 in QEMU command line");
+    }
+    out.pop_back();
     return out;
 }
 

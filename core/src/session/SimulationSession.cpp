@@ -1,7 +1,9 @@
 #include "SimulationSession.hpp"
+#include <array>
 #include <algorithm>
 #include <cmath>
 #include <cctype>
+#include <chrono>
 #include <cstdio>
 #include <limits>
 #include <map>
@@ -82,7 +84,7 @@ SimulationSession::SimulationSession(plugins::GlobalPluginCache& globalCache, si
     m_scheduler.setTimeStepCallbacks(
         [this](uint64_t previous, uint64_t current) {
             const TransientStepContext context{current, current - previous, m_transientSettings.method,
-                                               m_acceptedTransientSteps};
+                                               m_acceptedTransientSteps.load(std::memory_order_relaxed)};
             for (uint32_t i = 0; i < m_componentInstances.size(); ++i) {
                 IComponentModel* component = m_componentInstances[i].get();
                 if (!component || !component->isReactive()) continue;
@@ -126,6 +128,36 @@ void SimulationSession::setTransientSettings(const TransientSettings& settings) 
     m_scheduler.setMaximumTimeStepNs(settings.maximumStepNs);
     m_scheduler.configureAdaptiveTimeStep(settings.initialStepNs, settings.minimumStepNs, settings.adaptiveTimeStep);
     m_scheduler.setMaxNonLinearIterations(settings.maximumNewtonIterations);
+}
+
+void SimulationSession::setPerformanceProfilingEnabled(bool enabled) {
+    m_performanceProfilingEnabled.store(enabled, std::memory_order_relaxed);
+    m_scheduler.setProfilingEnabled(enabled);
+}
+
+void SimulationSession::resetPerformanceMetrics() {
+    m_componentStamps.store(0, std::memory_order_relaxed);
+    m_deviceStampNanoseconds.store(0, std::memory_order_relaxed);
+    m_solverCalls.store(0, std::memory_order_relaxed);
+    m_solverNanoseconds.store(0, std::memory_order_relaxed);
+    m_topologyRebuilds.store(0, std::memory_order_relaxed);
+    m_topologyNanoseconds.store(0, std::memory_order_relaxed);
+    m_scheduler.resetMetrics();
+}
+
+SimulationPerformanceSnapshot SimulationSession::performanceMetrics() const {
+    const simulation::Scheduler::MetricsSnapshot schedulerMetrics = m_scheduler.metrics();
+    return {m_performanceProfilingEnabled.load(std::memory_order_relaxed),
+            m_scheduler.nowNs(), schedulerMetrics.eventsProcessed, schedulerMetrics.timeSteps,
+            schedulerMetrics.settleIterations, schedulerMetrics.settleNanoseconds,
+            m_componentStamps.load(std::memory_order_relaxed),
+            m_deviceStampNanoseconds.load(std::memory_order_relaxed),
+            m_solverCalls.load(std::memory_order_relaxed),
+            m_solverNanoseconds.load(std::memory_order_relaxed),
+            m_topologyRebuilds.load(std::memory_order_relaxed),
+            m_topologyNanoseconds.load(std::memory_order_relaxed), schedulerMetrics.pendingEvents,
+            m_acceptedTransientSteps.load(std::memory_order_relaxed),
+            m_rejectedTransientSteps.load(std::memory_order_relaxed), m_mnaSolver.threadCount()};
 }
 
 void SimulationSession::registerKnownPluginTypes() {
@@ -741,7 +773,7 @@ std::optional<uint32_t> SimulationSession::findSubcircuitChildByLocalId(uint32_t
 }
 
 std::vector<uint8_t> SimulationSession::getComponentState(uint32_t componentIndex) const {
-    return m_scheduler.synchronized([&] {
+    auto result = m_scheduler.trySynchronized([&] {
     IComponentModel* instance = m_componentInstances.at(componentIndex).get();
     if (!instance) throw std::runtime_error("getComponentState: componente removido");
 
@@ -754,6 +786,58 @@ std::vector<uint8_t> SimulationSession::getComponentState(uint32_t componentInde
     buffer.resize(written);
     return buffer;
     });
+    if (!result) throw std::runtime_error("simulacao ocupada; telemetria adiada");
+    return std::move(*result);
+}
+
+std::vector<uint8_t> SimulationSession::getComponentTelemetryState(uint32_t componentIndex) const {
+    auto states = getComponentTelemetryStates({componentIndex});
+    return states.empty() ? std::vector<uint8_t>{} : std::move(states.front());
+}
+
+std::vector<std::vector<uint8_t>> SimulationSession::getComponentTelemetryStates(
+    const std::vector<uint32_t>& componentIndices) const {
+    auto result = m_scheduler.trySynchronized([&] {
+        std::vector<std::vector<uint8_t>> states;
+        states.reserve(componentIndices.size());
+        for (uint32_t componentIndex : componentIndices) {
+            IComponentModel* instance = m_componentInstances.at(componentIndex).get();
+            if (!instance) throw std::runtime_error("getComponentTelemetryStates: componente removido");
+
+            // Estados periódicos built-in cabem neste buffer pequeno sem heap. O fallback mantém
+            // compatibilidade com plugins antigos, cujo default ainda pode devolver um snapshot
+            // grande pelo getState().
+            std::array<uint8_t, 256> compact{};
+            const size_t compactWritten = instance->getTelemetryState(compact.data(), compact.size());
+            if (compactWritten > 0 && compactWritten <= compact.size()) {
+                states.emplace_back(compact.begin(), compact.begin() + compactWritten);
+                continue;
+            }
+            std::vector<uint8_t> fallback(65536);
+            const size_t written = instance->getTelemetryState(fallback.data(), fallback.size());
+            fallback.resize(written);
+            states.push_back(std::move(fallback));
+        }
+        return states;
+    });
+    if (!result) throw std::runtime_error("simulacao ocupada; telemetria adiada");
+    return std::move(*result);
+}
+
+std::vector<double> SimulationSession::nodeVoltagesOfPins(
+    const std::vector<std::pair<uint32_t, std::string>>& probes) const {
+    auto result = m_scheduler.trySynchronized([&] {
+        std::vector<double> values;
+        values.reserve(probes.size());
+        for (const auto& [component, pinId] : probes) {
+            const uint32_t slot = m_netlist.pinSlotsOf(component).at(pinId);
+            const uint32_t node = m_topology.slotToNode.at(slot);
+            values.push_back(m_nodeVoltages.at(node));
+        }
+        return values;
+    });
+    if (!result) throw std::runtime_error("simulacao ocupada; telemetria adiada");
+    return std::move(*result);
 }
 
 PluginHealthStatus SimulationSession::componentHealth(uint32_t componentIndex) const {
@@ -763,12 +847,16 @@ PluginHealthStatus SimulationSession::componentHealth(uint32_t componentIndex) c
 }
 
 std::optional<double> SimulationSession::componentCurrent(uint32_t componentIndex) const {
-    return m_scheduler.synchronized([&]() -> std::optional<double> {
+    auto result = m_scheduler.trySynchronized([&]() -> std::optional<double> {
     if (componentIndex >= m_componentInstances.size()) return std::nullopt;
     IComponentModel* instance = m_componentInstances[componentIndex].get();
     if (!instance) return std::nullopt;
     return instance->current();
     });
+    // Leitura auxiliar/visual: nunca espera atrás da worker nem ocupa o canal de controle. Uma
+    // amostra indisponível neste instante equivale a "sem leitura"; o próximo frame tenta de novo.
+    if (!result) return std::nullopt;
+    return *result;
 }
 
 void SimulationSession::loadMcuFirmware(uint32_t componentIndex, const std::filesystem::path& firmwarePath,
@@ -934,25 +1022,29 @@ void SimulationSession::reuseUnaffectedCircuitGroups(simulation::Topology& previ
 }
 
 bool SimulationSession::settleStep() {
+    const bool profile = m_performanceProfilingEnabled.load(std::memory_order_relaxed);
+    const bool topologyWasDirty = m_topologyDirty;
+    const auto topologyStart = profile && topologyWasDirty ? std::chrono::steady_clock::now()
+                                                            : std::chrono::steady_clock::time_point{};
     rebuildTopologyIfNeeded();
+    if (profile && topologyWasDirty) {
+        m_topologyRebuilds.fetch_add(1, std::memory_order_relaxed);
+        m_topologyNanoseconds.fetch_add(static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - topologyStart).count()), std::memory_order_relaxed);
+    }
 
     if (m_scheduler.dirtySet().empty()) return false; // circuito estável, nada a fazer
 
     // 1. Estampa todo componente dirty — cada um só vê o CircuitGroup a que pertence (passada 2
     //    do Netlist garante que todos os pinos de um componente caem no mesmo grupo).
-    const std::vector<uint32_t> stampedThisRound(m_scheduler.dirtySet().dense().begin(),
-                                                  m_scheduler.dirtySet().dense().end());
-    for (uint32_t componentIndex : stampedThisRound) {
+    const auto dirtyComponents = m_scheduler.dirtySet().dense();
+    m_stampedThisRound.assign(dirtyComponents.begin(), dirtyComponents.end());
+    const auto deviceStart = profile ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+    for (uint32_t componentIndex : m_stampedThisRound) {
         IComponentModel* component = m_componentInstances[componentIndex].get();
-        const auto& slotsByPinId = m_netlist.pinSlotsOf(componentIndex);
-
-        std::unordered_map<std::string, uint32_t> localIndexByPinId;
-        uint32_t groupIndex = UINT32_MAX;
-        for (const auto& [pinId, slot] : slotsByPinId) {
-            const simulation::PinSlotResolution& resolution = m_topology.resolutionBySlot[slot];
-            groupIndex = resolution.groupIndex; // igual para todo pino deste componente, por construção
-            localIndexByPinId[pinId] = resolution.localIndex;
-        }
+        const simulation::ComponentStampResolution& stampResolution =
+            m_topology.stampResolutionByComponent[componentIndex];
+        const uint32_t groupIndex = stampResolution.groupIndex;
         if (groupIndex == UINT32_MAX) continue; // componente sem pinos (não deveria existir)
 
         std::optional<uint32_t> extraVarBase;
@@ -960,7 +1052,7 @@ bool SimulationSession::settleStep() {
             extraVarBase = m_topology.extraVariablesByComponent[componentIndex].baseLocalIndex;
         }
 
-        simulation::ComponentMatrixView view(m_topology.groups[groupIndex], localIndexByPinId, componentIndex,
+        simulation::ComponentMatrixView view(m_topology.groups[groupIndex], stampResolution.localIndexByPinId, componentIndex,
                                              extraVarBase);
         try {
             component->stamp(view);
@@ -981,10 +1073,21 @@ bool SimulationSession::settleStep() {
                          e.what());
         }
     }
+    if (profile) {
+        m_componentStamps.fetch_add(m_stampedThisRound.size(), std::memory_order_relaxed);
+        m_deviceStampNanoseconds.fetch_add(static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - deviceStart).count()), std::memory_order_relaxed);
+    }
     m_scheduler.dirtySet().clear();
 
     // 2. Resolve só os grupos dirty (admitância ou corrente mudou) — em paralelo entre si.
+    const auto solverStart = profile ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
     m_mnaSolver.solve(m_topology.groups, m_nodeVoltages);
+    if (profile) {
+        m_solverCalls.fetch_add(1, std::memory_order_relaxed);
+        m_solverNanoseconds.fetch_add(static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - solverStart).count()), std::memory_order_relaxed);
+    }
 
     // 3. Nó cuja tensão de fato mudou: marca dirty quem tem pino lá (listenersByNode).
     bool anyVoltageChanged = false;
@@ -1027,7 +1130,7 @@ bool SimulationSession::settleStep() {
     //    (critério de convergência, diodo/transistor) fica para depois.
     bool anyNonlinearPending = false;
     if (m_nonlinearIterations < kMaxNonlinearIterations) {
-        for (uint32_t componentIndex : stampedThisRound) {
+        for (uint32_t componentIndex : m_stampedThisRound) {
             IComponentModel* component = m_componentInstances[componentIndex].get();
             if (component->isNonlinear() && !component->hasConverged()) {
                 m_scheduler.dirtySet().insert(componentIndex);
@@ -1037,7 +1140,7 @@ bool SimulationSession::settleStep() {
     } else {
         std::fprintf(stderr, "[SimulationSession] %u componente(s) não convergiram após %u iterações — "
                               "seguindo com último ponto de operação\n",
-                     static_cast<unsigned>(stampedThisRound.size()), kMaxNonlinearIterations);
+                     static_cast<unsigned>(m_stampedThisRound.size()), kMaxNonlinearIterations);
     }
     m_nonlinearIterations = anyNonlinearPending ? m_nonlinearIterations + 1 : 0;
 

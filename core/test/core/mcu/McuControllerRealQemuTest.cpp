@@ -12,6 +12,7 @@
 // ponta a ponta -- isso exige firmware real. Pula (sai com 0) se o binário real do QEMU ou o
 // adapter.dll do plugin não estiverem presentes no caminho esperado.
 #include <chrono>
+#include <cstdlib>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -103,9 +104,18 @@ int main() {
 
     const std::string arenaName = uniqueArenaName();
     std::filesystem::path flashPath;
+    bool ownsFlashPath = false;
     bool started = false;
     try {
-        flashPath = createBlankFlash();
+        const char* configuredFirmware = std::getenv("LASECSIMUL_TEST_FIRMWARE");
+        if (configuredFirmware && *configuredFirmware) {
+            flashPath = std::filesystem::u8path(configuredFirmware);
+            if (!std::filesystem::exists(flashPath))
+                throw std::runtime_error("LASECSIMUL_TEST_FIRMWARE nao existe");
+        } else {
+            flashPath = createBlankFlash();
+            ownsFlashPath = true;
+        }
         controller.start(flashPath, arenaName);
         started = true;
     } catch (const std::exception& e) {
@@ -125,7 +135,7 @@ int main() {
                 "logs do processo integrado registram a configuracao OpenETH");
 
     controller.stop();
-    if (!flashPath.empty()) {
+    if (ownsFlashPath && !flashPath.empty()) {
         std::error_code removeError;
         std::filesystem::remove(flashPath, removeError);
     }

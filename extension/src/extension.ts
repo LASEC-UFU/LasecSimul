@@ -4,6 +4,7 @@ import * as path from "path";
 import { CoreClient } from "./ipc/CoreClient";
 import { IpcError } from "./ipc/protocol";
 import { CoreProcess } from "./ipc/CoreProcess";
+import { resolveCoreExecutablePath } from "./core/coreExecutable";
 import { TrustStore } from "./trust/TrustStore";
 import { isPreApproved, isPreBlocked, resolveConsentChoice, shouldLoadLibrary, decisionToPersist } from "./trust/trustDecision";
 import { SchematicPanel } from "./ui/panels/SchematicPanel";
@@ -208,26 +209,6 @@ function openSchematicEditor(extensionUri: vscode.Uri): void {
   state.lastSyncedProjectState = state.schematicState;
   void setSchematicOpenContext(true);
   setSimulationStatus(state.simulationStatus);
-}
-
-/** Localiza o binário do Core dentro de `core/build/`. Geradores single-config (Ninja simples)
- * colocam o executável direto em `core/build/`; geradores multi-config (Visual Studio, Ninja Multi-
- * Config — os dois caminhos documentados no README para Windows) colocam em `core/build/Debug/` ou
- * `core/build/Release/`. Sem checar os dois, a extensão tenta abrir um arquivo que não existe em
- * qualquer build feito com o gerador padrão do Windows. */
-function resolveCoreExecutablePath(extensionPath: string): string {
-  const coreBin = process.platform === "win32" ? "lasecsimul-core.exe" : "lasecsimul-core";
-  const buildDirs = [
-    path.join(extensionPath, "..", "core", "build"),
-    path.join(extensionPath, "bundled", "core", "build"),
-  ];
-  const candidates = buildDirs.flatMap((buildDir) => [
-    path.join(buildDir, coreBin),
-    path.join(buildDir, "Debug", coreBin),
-    path.join(buildDir, "Release", coreBin),
-    path.join(buildDir, "RelWithDebInfo", coreBin),
-  ]);
-  return candidates.find((candidate) => fs.existsSync(candidate)) ?? candidates[0]!;
 }
 
 function setEffectiveCatalog(entries: WebviewComponentCatalogEntry[]): void {

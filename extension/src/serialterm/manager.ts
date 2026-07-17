@@ -9,10 +9,10 @@ export class SerialTerminalManager implements vscode.Disposable {
   private readonly open = new Set<string>();
   private readonly transport = new CoreUartTransport();
   private readonly hiddenData = new Map<string, number[]>();
-  private readonly timer: ReturnType<typeof setInterval>;
+  private timer: ReturnType<typeof setInterval> | undefined;
   private polling = false;
 
-  constructor() { this.timer = setInterval(() => void this.poll(), 10); }
+  constructor() {}
 
   toggle(componentId: string): void {
     const component = state.schematicState.components.find((entry) => entry.id === componentId && entry.typeId === TYPE_ID);
@@ -55,6 +55,7 @@ export class SerialTerminalManager implements vscode.Disposable {
     for (const id of [...this.open]) if (!present.has(id)) this.open.delete(id);
     for (const id of [...this.hiddenData.keys()]) if (!present.has(id)) this.hiddenData.delete(id);
     for (const id of present) if (this.open.has(id)) this.status(id, true);
+    this.updatePolling();
   }
 
   private status(componentId: string, opened: boolean, error?: string): void {
@@ -82,8 +83,17 @@ export class SerialTerminalManager implements vscode.Disposable {
     } finally { this.polling = false; }
   }
 
-  updateSimulationState(): void { for (const id of this.open) this.status(id, true); }
-  dispose(): void { clearInterval(this.timer); this.open.clear(); }
+  updateSimulationState(): void {
+    for (const id of this.open) this.status(id, true);
+    this.updatePolling();
+  }
+  private updatePolling(): void {
+    const shouldPoll = state.simulationStatus === "running" &&
+      state.schematicState.components.some((entry) => entry.typeId === TYPE_ID);
+    if (shouldPoll && !this.timer) this.timer = setInterval(() => void this.poll(), 10);
+    else if (!shouldPoll && this.timer) { clearInterval(this.timer); this.timer = undefined; }
+  }
+  dispose(): void { if (this.timer) clearInterval(this.timer); this.timer = undefined; this.open.clear(); }
 }
 
 export let serialTerminalManager: SerialTerminalManager | undefined;

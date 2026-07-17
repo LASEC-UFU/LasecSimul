@@ -6,8 +6,10 @@
 #include <functional>
 #include <limits>
 #include <mutex>
+#include <optional>
 #include <queue>
 #include <thread>
+#include <type_traits>
 #include <utility>
 #include <vector>
 #include "SparseSet.hpp"
@@ -30,6 +32,14 @@ struct ScheduledEventOrder {
 
 class Scheduler {
 public:
+    struct MetricsSnapshot {
+        bool enabled = false;
+        uint64_t eventsProcessed = 0;
+        uint64_t timeSteps = 0;
+        uint64_t settleIterations = 0;
+        uint64_t settleNanoseconds = 0;
+        uint64_t pendingEvents = 0;
+    };
     struct TimeStepDecision { bool accept = true; double errorRatio = 0.0; };
     using SettleStepFn = std::function<bool()>;
     using EventCallback = std::function<void()>;
@@ -71,10 +81,34 @@ public:
     bool dirty(uint32_t componentIndex) const;
     size_t dirtyCount() const;
     size_t pendingEventCount() const;
-    uint64_t nowNs() const;
+    void setProfilingEnabled(bool enabled) { m_profilingEnabled.store(enabled, std::memory_order_relaxed); }
+    void resetMetrics() {
+        m_eventsProcessed.store(0, std::memory_order_relaxed);
+        m_timeSteps.store(0, std::memory_order_relaxed);
+        m_settleIterations.store(0, std::memory_order_relaxed);
+        m_settleNanoseconds.store(0, std::memory_order_relaxed);
+    }
+    MetricsSnapshot metrics() const {
+        return {m_profilingEnabled.load(std::memory_order_relaxed),
+                m_eventsProcessed.load(std::memory_order_relaxed),
+                m_timeSteps.load(std::memory_order_relaxed),
+                m_settleIterations.load(std::memory_order_relaxed),
+                m_settleNanoseconds.load(std::memory_order_relaxed),
+                m_pendingEventSnapshot.load(std::memory_order_relaxed)};
+    }
+    /** Snapshot lock-free: telemetry must never queue ahead of a stop IPC request. */
+    uint64_t nowNs() const { return m_nowSnapshotNs.load(std::memory_order_acquire); }
     template <class Fn> decltype(auto) synchronized(Fn&& fn) const {
         std::lock_guard<std::mutex> lock(m_mutex);
         return std::forward<Fn>(fn)();
+    }
+    template <class Fn>
+    auto trySynchronized(Fn&& fn) const -> std::optional<std::invoke_result_t<Fn>> {
+        std::unique_lock<std::mutex> lock(m_mutex, std::try_to_lock);
+        if (!lock.owns_lock()) return std::nullopt;
+        std::optional<std::invoke_result_t<Fn>> result;
+        result.emplace(std::invoke(std::forward<Fn>(fn)));
+        return result;
     }
 
     // Direct access is only safe from the scheduler-owned settle callback or single-threaded tests.
@@ -98,7 +132,10 @@ public:
     }
 
     void start();
-    void pause() { m_paused.store(true); }
+    void pause() {
+        m_paused.store(true, std::memory_order_release);
+        m_wake.notify_all();
+    }
     void resume() {
         m_paused.store(false);
         m_wake.notify_one();
@@ -108,6 +145,7 @@ public:
      * dentro do próprio `stamp()` realmente registra) e por qualquer chamador externo que precise
      * saber o estado sem se inscrever em notificação nenhuma. */
     bool isPaused() const { return m_paused.load(); }
+    bool isRunning() const { return m_running.load(std::memory_order_acquire); }
     void reset();
     void runUntil(uint64_t targetTimeNs);
     void step(uint64_t deltaNs);
@@ -131,6 +169,7 @@ private:
     SparseSet<uint32_t> m_dirty;
     std::priority_queue<ScheduledEvent, std::vector<ScheduledEvent>, ScheduledEventOrder> m_events;
     uint64_t m_nowNs = 0;
+    std::atomic<uint64_t> m_nowSnapshotNs{0};
     uint64_t m_nextSequence = 0;
     SettleStepFn m_settleStep;
     TimeStepBeginFn m_beginTimeStep;
@@ -160,6 +199,12 @@ private:
     std::atomic<uint64_t> m_targetStepUs{0};
     std::atomic<size_t> m_maxNonLinearIterations{0};
     std::atomic<uint64_t> m_maximumTimeStepNs{0};
+    std::atomic<bool> m_profilingEnabled{false};
+    std::atomic<uint64_t> m_eventsProcessed{0};
+    std::atomic<uint64_t> m_timeSteps{0};
+    std::atomic<uint64_t> m_settleIterations{0};
+    std::atomic<uint64_t> m_settleNanoseconds{0};
+    std::atomic<uint64_t> m_pendingEventSnapshot{0};
     uint64_t m_currentTimeStepNs = 0;
     uint64_t m_minimumTimeStepNs = 1;
     bool m_adaptiveTimeStep = false;

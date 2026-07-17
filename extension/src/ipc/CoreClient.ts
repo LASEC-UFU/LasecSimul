@@ -208,6 +208,7 @@ export class CoreClient {
   async setSimulationConfig(config: {
     targetStepUs?: number;
     maxNonLinearIterations?: number;
+    performanceProfiling?: boolean;
     integrationMethod?: "automatic" | "backwardEuler" | "trapezoidal" | "gear2";
     initialStepNs?: number;
     minimumStepNs?: number;
@@ -343,6 +344,14 @@ export class CoreClient {
   async getSimulationTime(): Promise<number> {
     const resp = await this.request("getSimulationTime", {});
     return (resp as { simulatedNs: number }).simulatedNs;
+  }
+
+  async getPerformanceMetrics(): Promise<Record<string, unknown>> {
+    return await this.request("getPerformanceMetrics", {}) as Record<string, unknown>;
+  }
+
+  async resetPerformanceMetrics(): Promise<void> {
+    await this.request("resetPerformanceMetrics", {});
   }
 
   async loadMcuFirmware(instanceId: string, firmwarePath: string, qemuBinaryOverride?: string,

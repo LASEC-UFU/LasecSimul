@@ -8,6 +8,7 @@ namespace lasecsimul::simulation {
 
 void Scheduler::pushEventLocked(uint64_t timeNs, uint32_t componentIndex, EventCallback callback) {
     m_events.push({timeNs, componentIndex, m_nextSequence++, std::move(callback)});
+    m_pendingEventSnapshot.store(m_events.size(), std::memory_order_relaxed);
 }
 
 void Scheduler::scheduleAt(uint64_t timeNs, uint32_t componentIndex) {
@@ -57,23 +58,29 @@ size_t Scheduler::dirtyCount() const {
     return m_dirty.size();
 }
 
-uint64_t Scheduler::nowNs() const {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    return m_nowNs;
-}
-
 bool Scheduler::settleUntilStableLocked() {
+    const bool profile = m_profilingEnabled.load(std::memory_order_relaxed);
+    const auto profileStart = profile ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
     bool hadWork = false;
     const size_t maxIter = m_maxNonLinearIterations.load(std::memory_order_relaxed);
     size_t iter = 0;
     while (!m_dirty.empty()) {
         if (maxIter > 0 && iter >= maxIter) break;
-        if (m_stopRequested.load()) break; // ver comentário de m_stopRequested em Scheduler.hpp
+        // SimulIDE also checks its state inside solveCircuit(), not only in the outer loop.
+        if (m_stopRequested.load(std::memory_order_acquire) ||
+            m_paused.load(std::memory_order_acquire)) break;
         ++iter;
+        if (profile) m_settleIterations.fetch_add(1, std::memory_order_relaxed);
         hadWork = true;
         if (!m_settleStep || !m_settleStep()) break;
     }
     m_lastSettleConverged = m_dirty.empty();
+    if (profile) {
+        const auto elapsed = std::chrono::steady_clock::now() - profileStart;
+        m_settleNanoseconds.fetch_add(
+            static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count()),
+            std::memory_order_relaxed);
+    }
     return hadWork;
 }
 
@@ -82,7 +89,11 @@ bool Scheduler::processNextEventUntilLocked(std::unique_lock<std::mutex>& lock, 
 
     ScheduledEvent event = m_events.top();
     m_events.pop();
+    m_pendingEventSnapshot.store(m_events.size(), std::memory_order_relaxed);
+    if (m_profilingEnabled.load(std::memory_order_relaxed))
+        m_eventsProcessed.fetch_add(1, std::memory_order_relaxed);
     m_nowNs = event.timeNs;
+    m_nowSnapshotNs.store(m_nowNs, std::memory_order_release);
 
     if (event.componentIndex != kNoComponent) m_dirty.insert(event.componentIndex);
 
@@ -102,6 +113,8 @@ void Scheduler::runUntil(uint64_t targetTimeNs) {
     if (initialWork && m_lastSettleConverged && m_stableStep) m_stableStep(m_nowNs);
 
     while (m_nowNs < targetTimeNs) {
+        if (m_stopRequested.load(std::memory_order_acquire) ||
+            m_paused.load(std::memory_order_acquire)) break;
         uint64_t nextTime = targetTimeNs;
         const uint64_t maxStep = m_maximumTimeStepNs.load(std::memory_order_relaxed);
         const uint64_t selectedStep = m_adaptiveTimeStep && m_currentTimeStepNs > 0
@@ -112,9 +125,12 @@ void Scheduler::runUntil(uint64_t targetTimeNs) {
         const uint64_t previousTime = m_nowNs;
         const bool eventBoundary = !m_events.empty() && m_events.top().timeNs == nextTime;
         m_nowNs = nextTime;
+        m_nowSnapshotNs.store(m_nowNs, std::memory_order_release);
         if (m_beginTimeStep && nextTime > previousTime) m_beginTimeStep(previousTime, nextTime);
 
         while (!m_events.empty() && m_events.top().timeNs <= nextTime) {
+            if (m_stopRequested.load(std::memory_order_acquire) ||
+                m_paused.load(std::memory_order_acquire)) break;
             processNextEventUntilLocked(lock, nextTime);
         }
         settleUntilStableLocked();
@@ -125,6 +141,7 @@ void Scheduler::runUntil(uint64_t targetTimeNs) {
             const uint64_t attempted = nextTime - previousTime;
             if (!decision.accept && !eventBoundary && attempted > m_minimumTimeStepNs) {
                 m_nowNs = previousTime;
+                m_nowSnapshotNs.store(m_nowNs, std::memory_order_release);
                 const double factor = std::clamp(0.9 / std::sqrt(std::max(decision.errorRatio, 1e-12)), 0.2, 0.8);
                 m_currentTimeStepNs = std::max<uint64_t>(m_minimumTimeStepNs,
                     static_cast<uint64_t>(static_cast<double>(attempted) * factor));
@@ -138,6 +155,8 @@ void Scheduler::runUntil(uint64_t targetTimeNs) {
             }
         }
         if (accepted && m_lastSettleConverged && m_stableStep) m_stableStep(m_nowNs);
+        if (accepted && m_profilingEnabled.load(std::memory_order_relaxed))
+            m_timeSteps.fetch_add(1, std::memory_order_relaxed);
     }
 }
 
@@ -156,7 +175,9 @@ void Scheduler::reset() {
     std::lock_guard<std::mutex> lock(m_mutex);
     m_dirty.clear();
     m_events = {};
+    m_pendingEventSnapshot.store(0, std::memory_order_relaxed);
     m_nowNs = 0;
+    m_nowSnapshotNs.store(0, std::memory_order_release);
     m_nextSequence = 0;
     m_paused.store(false);
 }
@@ -169,30 +190,40 @@ void Scheduler::start() {
         while (m_running.load()) {
             if (m_paused.load()) {
                 std::unique_lock<std::mutex> lock(m_mutex);
-                m_wake.wait_for(lock, std::chrono::milliseconds(50));
+                m_wake.wait(lock, [this] {
+                    return !m_running.load(std::memory_order_acquire) ||
+                           !m_paused.load(std::memory_order_acquire);
+                });
                 continue;
             }
 
-            bool processedEvent = false;
+            const auto cycleStart = std::chrono::steady_clock::now();
+            uint64_t targetTimeNs = 0;
             {
                 std::unique_lock<std::mutex> lock(m_mutex);
-                const bool settledWork = settleUntilStableLocked();
-                if (settledWork && m_lastSettleConverged && m_stableStep) m_stableStep(m_nowNs);
-
-                if (!m_events.empty()) {
-                    const uint64_t nextTimeNs = m_events.top().timeNs;
-                    processNextEventUntilLocked(lock, nextTimeNs);
-                    processedEvent = true;
+                const uint64_t configuredStepNs = m_maximumTimeStepNs.load(std::memory_order_relaxed);
+                if (configuredStepNs == 0) {
+                    if (m_events.empty() && m_dirty.empty()) {
+                        m_wake.wait(lock, [this] {
+                            return !m_running.load(std::memory_order_acquire) ||
+                                   m_paused.load(std::memory_order_acquire) || !m_events.empty() || !m_dirty.empty();
+                        });
+                        continue;
+                    }
+                    targetTimeNs = m_events.empty() ? m_nowNs : m_events.top().timeNs;
+                } else {
+                    targetTimeNs = configuredStepNs > std::numeric_limits<uint64_t>::max() - m_nowNs
+                        ? std::numeric_limits<uint64_t>::max() : m_nowNs + configuredStepNs;
                 }
-
-                if (!processedEvent && m_dirty.empty())
-                    m_wake.wait_for(lock, std::chrono::milliseconds(10));
             }
 
-            if (processedEvent) {
-                const uint64_t stepUs = m_targetStepUs.load(std::memory_order_relaxed);
-                if (stepUs > 0) std::this_thread::sleep_for(std::chrono::microseconds(stepUs));
-            }
+            // Usa exatamente o mesmo caminho do modo síncrono: callbacks transientes, passo
+            // adaptativo, eventos com timestamp, settle e aquisição de instrumentos.
+            runUntil(targetTimeNs);
+
+            const uint64_t stepUs = m_targetStepUs.load(std::memory_order_relaxed);
+            if (stepUs > 0)
+                std::this_thread::sleep_until(cycleStart + std::chrono::microseconds(stepUs));
         }
     });
 }

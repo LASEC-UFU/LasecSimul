@@ -1,15 +1,26 @@
 #include "McuComponent.hpp"
 #include "lasecsimul/qemu_arena_abi.h"
+#include <limits>
+#include <thread>
 
 namespace lasecsimul::mcu {
 
+namespace {
+uint64_t qemuEventTimeNs(uint64_t originNs, uint64_t virtualTimePs) {
+    const uint64_t deltaNs = virtualTimePs / 1000u + (virtualTimePs % 1000u != 0 ? 1u : 0u);
+    if (deltaNs > std::numeric_limits<uint64_t>::max() - originNs) return std::numeric_limits<uint64_t>::max();
+    return originNs + deltaNs;
+}
+} // namespace
+
 McuComponent::McuComponent(std::unique_ptr<IMcuAdapter> adapter, simulation::Scheduler& scheduler,
                            std::span<const Pin> requestedPins)
-    : m_adapter(std::move(adapter)), m_scheduler(scheduler), m_controller(*m_adapter) {
+    : m_adapter(std::move(adapter)), m_scheduler(scheduler), m_controller(*m_adapter),
+      m_callbackState(std::make_shared<CallbackState>()) {
+    m_callbackState->owner = this;
     m_modules = m_adapter->createModules();
     m_moduleWakeupDueNs.assign(m_modules.size(), QemuModule::kNoWakeup);
     m_moduleWakeupGeneration.assign(m_modules.size(), 0);
-    m_moduleWakeupPending.assign(m_modules.size(), 0);
 
     const auto pinMap = m_adapter->pinMap();
     const bool useRequestedPins = requestedPins.size() == pinMap.size();
@@ -23,10 +34,29 @@ McuComponent::McuComponent(std::unique_ptr<IMcuAdapter> adapter, simulation::Sch
         }
         m_pins.push_back(Pin{pinMap[index].pinId});
     }
+    m_moduleByPin.reserve(pinMap.size());
+    for (const PinMapping& mapping : pinMap) {
+        QemuModule* resolved = nullptr;
+        for (const std::unique_ptr<QemuModule>& module : m_modules) {
+            if (module->kind() == mapping.moduleKind && module->index() == mapping.moduleIndex) {
+                resolved = module.get();
+                break;
+            }
+        }
+        m_moduleByPin.push_back(resolved);
+    }
     // m_controller já chamou setMemoryRegions(m_adapter->memoryRegions()) no próprio construtor.
 }
 
+McuComponent::~McuComponent() {
+    m_polling.store(false, std::memory_order_release);
+    std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
+    m_callbackState->owner = nullptr;
+    m_controller.stop();
+}
+
 PluginHealthStatus McuComponent::health() const {
+    std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
     PluginHealthStatus worst = m_adapter->health();
     for (const std::unique_ptr<QemuModule>& module : m_modules) {
         const PluginHealthStatus moduleHealth = module->health();
@@ -38,20 +68,67 @@ PluginHealthStatus McuComponent::health() const {
 
 void McuComponent::onAssignedIndex(uint32_t index) {
     m_componentIndex = index;
+}
+
+void McuComponent::startPolling() {
+    m_polling.store(true, std::memory_order_release);
     scheduleNextPoll();
 }
 
+void McuComponent::stopPolling() { m_polling.store(false, std::memory_order_release); }
+
 void McuComponent::scheduleNextPoll() {
-    m_scheduler.scheduleEvent(kPollIntervalNs, [this] {
-        m_scheduler.markDirty(m_componentIndex);
-        scheduleNextPoll();
+    schedulePollAt(m_scheduler.nowNs());
+}
+
+void McuComponent::schedulePollAt(uint64_t timeNs) {
+    if (m_pollEventScheduled) return;
+    m_pollEventScheduled = true;
+    const std::weak_ptr<CallbackState> weakState = m_callbackState;
+    m_scheduler.scheduleAt(timeNs, [weakState] {
+        const std::shared_ptr<CallbackState> state = weakState.lock();
+        if (!state) return;
+        std::lock_guard<std::recursive_mutex> lock(state->mutex);
+        McuComponent* self = state->owner;
+        if (!self) return;
+        self->onPollEvent();
     });
 }
 
-void McuComponent::scheduleModuleWakeup(size_t moduleIndex) {
+void McuComponent::onPollEvent() {
+    m_pollEventScheduled = false;
+    qemu::QemuArenaBridge& arena = m_controller.arenaBridge();
+    while (m_polling.load(std::memory_order_acquire) && arena.isOpen()) {
+        const qemu::QemuPollResult result = arena.poll();
+        if (!result.hasEvent || !result.event) {
+            // O QEMU é a fonte do próximo timestamp, como no QemuDevice::runEvent do SimulIDE.
+            // Este callback roda fora do mutex do Scheduler: IPC e Stop continuam livres.
+            if (!m_scheduler.isRunning()) {
+                scheduleNextPoll();
+                return;
+            }
+            std::this_thread::yield();
+            continue;
+        }
+
+        const uint64_t eventNs = qemuEventTimeNs(m_qemuTimeOriginNs, result.event->simuTimePs);
+        const uint64_t nowNs = m_scheduler.nowNs();
+        if (eventNs > nowNs) {
+            // Mantém a ação na arena e agenda uma única entrada exatamente no instante publicado.
+            schedulePollAt(eventNs);
+            return;
+        }
+
+        const bool changed = dispatchArenaEvent(*result.event, eventNs);
+        scheduleWakeupsForAllModules(eventNs, false);
+        if (changed) m_scheduler.markDirty(m_componentIndex);
+        // A próxima iteração agrupa ações do mesmo timestamp; uma ação futura cai no ramo acima.
+    }
+}
+
+void McuComponent::scheduleModuleWakeup(size_t moduleIndex, uint64_t nowNs, bool schedulerLockHeld) {
     if (moduleIndex >= m_modules.size()) return;
 
-    const uint64_t nowNs = m_scheduler.nowNsUnlocked();
     const uint64_t delayNs = m_modules[moduleIndex]->nextWakeupDelayNs(nowNs);
     if (delayNs == QemuModule::kNoWakeup) {
         if (m_moduleWakeupDueNs[moduleIndex] != QemuModule::kNoWakeup) ++m_moduleWakeupGeneration[moduleIndex];
@@ -66,26 +143,29 @@ void McuComponent::scheduleModuleWakeup(size_t moduleIndex) {
 
     m_moduleWakeupDueNs[moduleIndex] = dueNs;
     const uint64_t generation = ++m_moduleWakeupGeneration[moduleIndex];
-    m_scheduler.scheduleEventUnlocked(delayNs, [this, moduleIndex, generation] {
-        if (moduleIndex >= m_moduleWakeupGeneration.size()) return;
-        if (m_moduleWakeupGeneration[moduleIndex] != generation) return;
-        m_moduleWakeupDueNs[moduleIndex] = QemuModule::kNoWakeup;
-        m_moduleWakeupPending[moduleIndex] = 1;
-        m_scheduler.markDirty(m_componentIndex);
-    });
+    const std::weak_ptr<CallbackState> weakState = m_callbackState;
+    auto callback = [weakState, moduleIndex, generation] {
+        const std::shared_ptr<CallbackState> state = weakState.lock();
+        if (!state) return;
+        std::lock_guard<std::recursive_mutex> lock(state->mutex);
+        McuComponent* self = state->owner;
+        if (!self || moduleIndex >= self->m_moduleWakeupGeneration.size()) return;
+        if (self->m_moduleWakeupGeneration[moduleIndex] != generation) return;
+        self->m_moduleWakeupDueNs[moduleIndex] = QemuModule::kNoWakeup;
+        const uint64_t nowNs = self->m_scheduler.nowNs();
+        const uint64_t before = self->electricalOutputFingerprint();
+        self->m_modules[moduleIndex]->onWakeup(nowNs);
+        const bool changed = before != self->electricalOutputFingerprint();
+        self->scheduleModuleWakeup(moduleIndex, nowNs, false);
+        // Mudança de FIFO/RX ou bit TX repetido não altera o circuito elétrico.
+        if (changed) self->m_scheduler.markDirty(self->m_componentIndex);
+    };
+    if (schedulerLockHeld) m_scheduler.scheduleEventUnlocked(delayNs, std::move(callback));
+    else m_scheduler.scheduleEvent(delayNs, std::move(callback));
 }
 
-void McuComponent::scheduleWakeupsForAllModules() {
-    for (size_t i = 0; i < m_modules.size(); ++i) scheduleModuleWakeup(i);
-}
-
-void McuComponent::runPendingModuleWakeups() {
-    const uint64_t nowNs = m_scheduler.nowNsUnlocked();
-    for (size_t i = 0; i < m_modules.size(); ++i) {
-        if (!m_moduleWakeupPending[i]) continue;
-        m_moduleWakeupPending[i] = 0;
-        m_modules[i]->onWakeup(nowNs);
-    }
+void McuComponent::scheduleWakeupsForAllModules(uint64_t nowNs, bool schedulerLockHeld) {
+    for (size_t i = 0; i < m_modules.size(); ++i) scheduleModuleWakeup(i, nowNs, schedulerLockHeld);
 }
 
 QemuModule* McuComponent::findModule(uint64_t address) const {
@@ -95,35 +175,68 @@ QemuModule* McuComponent::findModule(uint64_t address) const {
     return nullptr;
 }
 
-void McuComponent::pollAndDispatchPendingEvents() {
-    qemu::QemuArenaBridge& arenaBridge = m_controller.arenaBridge();
-    if (!arenaBridge.isOpen()) return;
-    for (int i = 0; i < kMaxEventsPerStamp; ++i) {
-        const qemu::QemuPollResult result = arenaBridge.poll();
-        if (!result.hasEvent || !result.event) break;
-        const qemu::QemuArenaEvent& event = *result.event;
-
-        if (event.simuAction == LSDN_SIM_WRITE) {
-            if (QemuModule* module = findModule(event.regAddr)) {
-                module->writeRegisterAt(event.regAddr, event.regData, m_scheduler.nowNsUnlocked());
+uint64_t McuComponent::electricalOutputFingerprint() const {
+    // FNV-1a: estado compacto, sem alocação, suficiente para detectar a mudança que exige
+    // restamp. Inclui a posição implicitamente pela ordem do pinMap.
+    uint64_t fingerprint = 1469598103934665603ull;
+    const std::span<const PinMapping> mappings = m_adapter->pinMap();
+    for (size_t index = 0; index < mappings.size(); ++index) {
+        const PinMapping& mapping = mappings[index];
+        uint8_t value = 0;
+        if (QemuModule* module = m_moduleByPin[index]) {
+            if (module->isOutputEnabled(mapping.bitOrLine)) {
+                value = static_cast<uint8_t>(1u | (module->outputLevel(mapping.bitOrLine) ? 2u : 0u));
             }
-            arenaBridge.acknowledgeWrite();
-        } else if (event.simuAction == LSDN_SIM_READ) {
-            uint64_t value = 0;
-            if (QemuModule* module = findModule(event.regAddr)) value = module->readRegister(event.regAddr);
-            arenaBridge.acknowledgeRead(value);
-        } else {
-            // SIM_FREQ/SIM_EVENT/SIM_INTERRUPT/SIM_I2C/SIM_SPI/SIM_USART/SIM_TIMER/SIM_GPIO_IN:
-            // fora de escopo desta versão (Blink Real só precisa de SIM_READ/SIM_WRITE) -- só
-            // confirma pra não travar o QEMU esperando uma resposta que nunca vem.
-            arenaBridge.acknowledgeWrite();
         }
+        fingerprint ^= value;
+        fingerprint *= 1099511628211ull;
     }
+    return fingerprint;
+}
+
+bool McuComponent::pollAndDispatchPendingEvents(uint64_t nowNs) {
+    qemu::QemuArenaBridge& arenaBridge = m_controller.arenaBridge();
+    if (!arenaBridge.isOpen()) return false;
+    // A arena possui um único slot com handshake: enquanto o Core confirma este evento o QEMU
+    // não pode publicar outro. Portanto, um poll processa no máximo um evento real; um laço com
+    // limite arbitrário apenas criava busy-wait e piorava a latência de controle.
+    const qemu::QemuPollResult result = arenaBridge.poll();
+    if (!result.hasEvent || !result.event) return false;
+    const uint64_t eventNs = qemuEventTimeNs(m_qemuTimeOriginNs, result.event->simuTimePs);
+    // Uma stamp causada por outra parte do circuito não pode antecipar o relógio virtual do QEMU.
+    // O slot permanece intacto; onPollEvent() já está agendado para consumi-lo no instante correto.
+    if (eventNs > nowNs && !m_syntheticArenaForTesting) return false;
+    return dispatchArenaEvent(*result.event, m_syntheticArenaForTesting ? nowNs : eventNs);
+}
+
+bool McuComponent::dispatchArenaEvent(const qemu::QemuArenaEvent& event, uint64_t eventTimeNs) {
+    qemu::QemuArenaBridge& arenaBridge = m_controller.arenaBridge();
+    if (!arenaBridge.isOpen()) return false;
+    const uint64_t before = electricalOutputFingerprint();
+    if (event.simuAction == LSDN_SIM_WRITE) {
+        if (QemuModule* module = findModule(event.regAddr)) {
+            module->writeRegisterAt(event.regAddr, event.regData, eventTimeNs);
+        }
+        arenaBridge.acknowledgeWrite();
+    } else if (event.simuAction == LSDN_SIM_READ) {
+        uint64_t value = 0;
+        if (QemuModule* module = findModule(event.regAddr)) value = module->readRegister(event.regAddr);
+        arenaBridge.acknowledgeRead(value);
+    } else {
+        // SIM_FREQ/SIM_EVENT/SIM_INTERRUPT/SIM_I2C/SIM_SPI/SIM_USART/SIM_TIMER/SIM_GPIO_IN:
+        // confirma para liberar o QEMU mesmo quando não há payload elétrico a aplicar.
+        arenaBridge.acknowledgeWrite();
+    }
+    return before != electricalOutputFingerprint();
 }
 
 void McuComponent::stamp(MnaMatrixView& matrix) {
-    runPendingModuleWakeups();
-    pollAndDispatchPendingEvents();
+    std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
+    ++m_stampCount;
+    // Mantém o contrato de chamadas que marcam o MCU dirty explicitamente (testes sintéticos,
+    // hosts ABI e futuras fontes de interrupção). O poll periódico continua desacoplado do MNA:
+    // ele só marca dirty quando a saída elétrica muda.
+    pollAndDispatchPendingEvents(m_scheduler.nowNsUnlocked());
 
     // Ponte pino<->matriz, genérica (ver doc da classe): pra cada PinMapping, pergunta ao módulo
     // responsável (nunca sabe qual chip é) se aquele bit está em modo saída -- se sim, dirige o
@@ -135,13 +248,7 @@ void McuComponent::stamp(MnaMatrixView& matrix) {
             stampResetPin(matrix, m_pins[i]);
             continue;
         }
-        QemuModule* module = nullptr;
-        for (const std::unique_ptr<QemuModule>& candidate : m_modules) {
-            if (candidate->kind() == mapping.moduleKind && candidate->index() == mapping.moduleIndex) {
-                module = candidate.get();
-                break;
-            }
-        }
+        QemuModule* module = m_moduleByPin[i];
         if (!module) {
             // Sem módulo concreto pra essa faixa ainda (ex: UART0_RX/TX -- só GPIO está
             // implementado nesta versão, ver Esp32Adapter::createModules()) -- mesma rede de
@@ -174,11 +281,14 @@ void McuComponent::stamp(MnaMatrixView& matrix) {
             module->setInputLevelAt(mapping.bitOrLine, voltage > kDigitalLevelThreshold, m_scheduler.nowNsUnlocked());
         }
     }
-    scheduleWakeupsForAllModules();
+    scheduleWakeupsForAllModules(m_scheduler.nowNsUnlocked(), true);
 }
 
 void McuComponent::loadFirmware(const std::filesystem::path& firmwarePath, const std::string& arenaName,
                                  const std::string& qemuBinaryOverride, McuDebugOptions debug) {
+    // Também permite recarregar firmware enquanto o watcher está aguardando o próximo timestamp.
+    stopPolling();
+    std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
     m_lastFirmwarePath = firmwarePath;
     m_lastArenaName = arenaName;
     m_lastQemuBinaryOverride = qemuBinaryOverride;
@@ -191,18 +301,44 @@ void McuComponent::loadFirmware(const std::filesystem::path& firmwarePath, const
     // anexá-la, depois inicia o processo" (mesmo código exercitado por McuControllerRealQemuTest
     // contra o binário QEMU de verdade) -- ver comentário do membro m_controller no .hpp.
     m_gdbPort = debug.gdbPort;
+    m_syntheticArenaForTesting = false;
+    m_qemuTimeOriginNs = m_scheduler.nowNs();
     m_controller.start(firmwarePath, arenaName, qemuBinaryOverride, debug);
+    startPolling();
     m_scheduler.markDirty(m_componentIndex);
 }
 
-void McuComponent::stopFirmware() { m_controller.stop(); }
+void McuComponent::stopFirmware() {
+    // O callback pode estar aguardando o QEMU publicar o próximo timestamp segurando apenas este
+    // mutex de lifetime. Sinalize primeiro para que ele saia; só então serialize o teardown.
+    stopPolling();
+    std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
+    m_controller.stop();
+}
+
+bool McuComponent::firmwareRunning() const {
+    std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
+    return m_controller.isRunning();
+}
+
+std::string McuComponent::qemuLogs() const {
+    std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
+    return m_controller.qemuLogs();
+}
+
+void McuComponent::openSyntheticArenaForTesting(const std::string& arenaName) {
+    std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
+    m_syntheticArenaForTesting = true;
+    m_qemuTimeOriginNs = m_scheduler.nowNs();
+    m_controller.arenaBridge().open(qemu::QemuArenaOpenOptions{arenaName, true});
+    startPolling();
+}
 
 void McuComponent::resetModulesAndWakeups() {
     for (const std::unique_ptr<QemuModule>& m : m_modules) m->reset();
     for (size_t i = 0; i < m_modules.size(); ++i) {
         ++m_moduleWakeupGeneration[i]; // invalida qualquer wakeup já agendado antes do reset
         m_moduleWakeupDueNs[i] = QemuModule::kNoWakeup;
-        m_moduleWakeupPending[i] = 0;
     }
 }
 
@@ -222,10 +358,16 @@ void McuComponent::stampResetPin(MnaMatrixView& matrix, const Pin& pin) {
         // Scheduler::markDirty (toma m_mutex) -- nunca direto de dentro de stamp() (deadlock, ver
         // doc de scheduleEventUnlocked em Scheduler.hpp), por isso agendado.
         m_resetPinHigh = false;
-        m_scheduler.scheduleEventUnlocked(0, [this] {
-            resetModulesAndWakeups();
-            stopFirmware();
-            m_scheduler.markDirty(m_componentIndex);
+        const std::weak_ptr<CallbackState> weakState = m_callbackState;
+        m_scheduler.scheduleEventUnlocked(0, [weakState] {
+            const std::shared_ptr<CallbackState> state = weakState.lock();
+            if (!state) return;
+            std::lock_guard<std::recursive_mutex> lock(state->mutex);
+            McuComponent* self = state->owner;
+            if (!self) return;
+            self->resetModulesAndWakeups();
+            self->stopFirmware();
+            self->m_scheduler.markDirty(self->m_componentIndex);
         });
     } else if (!m_resetPinHigh && levelHigh) {
         // Borda de subida: EN/RST liberado -- reinicia o firmware do zero (mesmo path/arena do
@@ -236,8 +378,12 @@ void McuComponent::stampResetPin(MnaMatrixView& matrix, const Pin& pin) {
             const std::string arenaName = m_lastArenaName;
             const std::string qemuOverride = m_lastQemuBinaryOverride;
             const McuDebugOptions debug = m_lastDebugOptions;
-            m_scheduler.scheduleEventUnlocked(0, [this, firmwarePath, arenaName, qemuOverride, debug] {
-                loadFirmware(firmwarePath, arenaName, qemuOverride, debug);
+            const std::weak_ptr<CallbackState> weakState = m_callbackState;
+            m_scheduler.scheduleEventUnlocked(0, [weakState, firmwarePath, arenaName, qemuOverride, debug] {
+                const std::shared_ptr<CallbackState> state = weakState.lock();
+                if (!state) return;
+                std::lock_guard<std::recursive_mutex> lock(state->mutex);
+                if (state->owner) state->owner->loadFirmware(firmwarePath, arenaName, qemuOverride, debug);
             });
         }
     }

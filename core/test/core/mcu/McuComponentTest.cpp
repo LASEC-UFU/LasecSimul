@@ -107,8 +107,8 @@ int main() {
     // gpio_set_direction()+gpio_set_level() do ESP-IDF emitiriam, confirmado lendo
     // hw/gpio/esp32_gpio.c real.
     // settleStep() só estampa quem está no dirty set -- escrever na arena direto não marca nada
-    // dirty por si só (em produção, McuComponent::scheduleNextPoll() faz isso a cada 50us via
-    // Scheduler; aqui simulamos isso manualmente, sem precisar avançar o relógio).
+    // dirty por si só (em produção, McuComponent::scheduleNextPoll() acompanha o passo temporal
+    // configurado no Scheduler; aqui simulamos isso manualmente, sem precisar avançar o relógio).
     LsdnQemuArena* arena = mcuPtr->arenaBridge().arena();
     simulateQemuWrite(arena, gpioStart + 0x20, 1u << 2);
     session.scheduler().markDirty(mcuIndex);
@@ -167,6 +167,15 @@ int main() {
     check(!mcuPtr->resetPinHigh(), "resetPinHigh() vira false na borda de descida de RST");
     check(session.nodeVoltageOfPin(mcuIndex, "GPIO2") < 0.1,
           "reset de verdade limpa GPIO_ENABLE/GPIO_OUT -- GPIO2 volta a flutuar perto de 0V");
+
+    const size_t pendingBeforeReloads = session.scheduler().pendingEventCount();
+    for (int cycle = 0; cycle < 25; ++cycle) {
+        mcuPtr->stopFirmware();
+        mcuPtr->openSyntheticArenaForTesting(uniqueArenaName());
+    }
+    check(session.scheduler().pendingEventCount() <= pendingBeforeReloads + 1,
+          "recargas repetidas reutilizam um unico poll pendente (fila nao cresce por ciclo)");
+    mcuPtr->stopFirmware();
 
     if (failures == 0) {
         std::printf("\nTodos os testes de McuComponent passaram.\n");

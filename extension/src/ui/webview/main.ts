@@ -7655,9 +7655,12 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
       // reconstruir o SVG inteiro a cada tick. Qualquer outro componente com leitura ao vivo usa só o
       // rótulo de valor FORA do SVG (`refreshReadouts`, texto simples), bem mais barato que um
       // `render()` completo do canvas -- sem isto, `refreshReadouts` nunca era chamado (função morta).
-      const needsFullRender = state.components.some((component) => usesEmbeddedValueLabel(component.typeId));
-      if (needsFullRender) render();
-      else refreshReadouts();
+      for (const component of state.components) {
+        if (!usesEmbeddedValueLabel(component.typeId) || !(component.id in message.readoutsByComponentId)) continue;
+        const el = componentElementsById.get(component.id);
+        if (el) updateComponentElement(el, component);
+      }
+      refreshReadouts();
     }
     refreshOpenPropertyDialog();
   }
@@ -7691,7 +7694,11 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
 
   if (message.type === "wireVoltages") {
     voltagesByWireId = message.voltagesByWireId;
-    if (!isInteractiveGestureInProgress()) render();
+    if (!isInteractiveGestureInProgress()) {
+      for (const [wireId, polyline] of wirePolylineElementsById) {
+        polyline.setAttribute("class", wireClass(wireId));
+      }
+    }
   }
 
   if (message.type === "simulationStatus") {
@@ -7729,7 +7736,9 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
       const bytes = Array.from(Uint8Array.from(message.dataHex.match(/../g)?.map((pair) => parseInt(pair, 16)) ?? []));
       runtime.chunks.push({ direction: "rx", bytes }); runtime.rxActivityUntil = Date.now() + 180;
       if (runtime.chunks.reduce((sum, chunk) => sum + chunk.bytes.length, 0) > 100_000) runtime.chunks.splice(0, Math.max(1, Math.floor(runtime.chunks.length / 10)));
-      render(); renderSerialTerminalWindows(); setTimeout(() => render(), 200);
+      refreshRuntimeComponent(message.componentId);
+      renderSerialTerminalWindows();
+      setTimeout(() => refreshRuntimeComponent(message.componentId), 200);
     }
   }
 
@@ -7747,8 +7756,9 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
       rxActivityUntil: previous && message.rxBytes !== previous.rxBytes ? now + 180 : previous?.rxActivityUntil ?? 0,
       txActivityUntil: previous && message.txBytes !== previous.txBytes ? now + 180 : previous?.txActivityUntil ?? 0,
     });
-    render(); refreshOpenPropertyDialog();
-    if ((message.rxBytes !== previous?.rxBytes || message.txBytes !== previous?.txBytes) && message.opened) setTimeout(() => render(), 200);
+    refreshRuntimeComponent(message.componentId); refreshOpenPropertyDialog();
+    if ((message.rxBytes !== previous?.rxBytes || message.txBytes !== previous?.txBytes) && message.opened)
+      setTimeout(() => refreshRuntimeComponent(message.componentId), 200);
   }
 
   if (message.type === "simulationRate") {
@@ -7875,6 +7885,15 @@ function refreshReadouts(): void {
     valueLabelEl.textContent = text;
     if (!existing) el.appendChild(valueLabelEl);
   }
+}
+
+/** Atualiza somente o símbolo cujo estado de runtime mudou (UART/porta serial), preservando o
+ * restante do canvas e qualquer gesto em andamento. */
+function refreshRuntimeComponent(componentId: string): void {
+  if (isInteractiveGestureInProgress()) return;
+  const component = state.components.find((entry) => entry.id === componentId);
+  const el = componentElementsById.get(componentId);
+  if (component && el) updateComponentElement(el, component);
 }
 
 function pushShortcutKey(component: WebviewComponentModel): string | undefined {

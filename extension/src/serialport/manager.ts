@@ -15,10 +15,10 @@ interface SerialPortStatus {
  * junto do UART simulado, para que bytes do host sejam temporizados pelos pinos TX/RX. */
 export class SerialPortManager implements vscode.Disposable {
   private readonly statusByComponentId = new Map<string, SerialPortStatus>();
-  private readonly timer: ReturnType<typeof setInterval>;
+  private timer: ReturnType<typeof setInterval> | undefined;
   private polling = false;
 
-  constructor() { this.timer = setInterval(() => void this.poll(), 250); }
+  constructor() {}
 
   async toggle(componentId: string): Promise<void> {
     const component = state.schematicState.components.find((entry) => entry.id === componentId && entry.typeId === TYPE_ID);
@@ -39,9 +39,17 @@ export class SerialPortManager implements vscode.Disposable {
       if (coreId && state.simulationStatus !== "stopped") void this.refresh(id, coreId);
       else this.publish(id, { opened: false, online: false, rxBytes: 0, txBytes: 0 });
     }
+    this.updatePolling();
   }
 
   updateSimulationState(): void { this.sync(); }
+
+  private updatePolling(): void {
+    const shouldPoll = state.simulationStatus !== "stopped" &&
+      state.schematicState.components.some((entry) => entry.typeId === TYPE_ID);
+    if (shouldPoll && !this.timer) this.timer = setInterval(() => void this.poll(), 250);
+    else if (!shouldPoll && this.timer) { clearInterval(this.timer); this.timer = undefined; }
+  }
 
   private async poll(): Promise<void> {
     if (this.polling || state.simulationStatus === "stopped") return;
@@ -78,7 +86,7 @@ export class SerialPortManager implements vscode.Disposable {
     state.schematicPanel?.postMessage({ version: 1, type: "serialPortStatus", componentId, ...status });
   }
 
-  dispose(): void { clearInterval(this.timer); this.statusByComponentId.clear(); }
+  dispose(): void { if (this.timer) clearInterval(this.timer); this.timer = undefined; this.statusByComponentId.clear(); }
 }
 
 export let serialPortManager: SerialPortManager | undefined;

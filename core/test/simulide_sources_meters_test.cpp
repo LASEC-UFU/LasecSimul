@@ -419,6 +419,9 @@ void testOscopeRecordsTimestampedHistoryWithWraparound() {
 
     const std::vector<uint8_t> state = session.getComponentState(oscope);
     check(state.size() >= sizeof(double) * 4 + sizeof(uint32_t), "Oscope: getState() devolve pelo menos o cabecalho (4 doubles + contagem)");
+    const std::vector<uint8_t> telemetry = session.getComponentTelemetryState(oscope);
+    check(telemetry.size() == sizeof(double) * 4,
+          "Oscope: telemetria periodica devolve so as leituras atuais, nunca o historico inteiro");
     check(nearlyEqual(readF64(state, 0), 2.0, 1e-6), "Oscope: canal mede diferencialmente 3.3V - referência 1.3V = 2.0V");
 
     const uint32_t sampleCount = readU32(state, sizeof(double) * 4);
@@ -508,6 +511,9 @@ void testLogicAnalyzerRecordsTimestampedHistory() {
 
     const std::vector<uint8_t> state = session.getComponentState(analyzer);
     check(state.size() >= 12, "LogicAnalyzer: getState() devolve o cabecalho vetorial V2");
+    const std::vector<uint8_t> telemetry = session.getComponentTelemetryState(analyzer);
+    check(telemetry.size() == sizeof(uint32_t),
+          "LogicAnalyzer: telemetria periodica devolve so o mask atual");
     const uint32_t latestMask = readU32(state, 0);
     check((latestMask & 1u) == 1u, "LogicAnalyzer: bitmask mais recente marca ch0 em alto (5V > limiar de 2.5V)");
     check(readU32(state, 4) == components::LogicAnalyzer::kVectorMagic,
