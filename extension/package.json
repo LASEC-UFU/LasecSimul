@@ -161,6 +161,12 @@
           "maximum": 1000000,
           "markdownDescription": "Duração mínima (µs) de cada ciclo de liquidação da simulação em tempo real. `0` = ilimitado (máxima velocidade). Aumente para câmera lenta ou para reduzir uso de CPU."
         },
+        "lasecsimul.simulation.realTimeRate": {
+          "type": "number",
+          "default": 1,
+          "minimum": 0,
+          "markdownDescription": "Limite de velocidade em relação ao tempo real. `1` = acompanha o usuário em tempo real; `0` = ilimitado; `0.5` = meia velocidade; `2` = até duas vezes o tempo real."
+        },
         "lasecsimul.simulation.maxNonLinearIterations": {
           "type": "integer",
           "default": 0,

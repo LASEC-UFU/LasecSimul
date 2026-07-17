@@ -805,9 +805,23 @@ export function rebuildCoreFromSchematicState(): Promise<void> {
 async function rebuildCoreFromSchematicStateNow(): Promise<void> {
   if (!state.coreClient) return;
 
+  const runningBeforeRebuild = state.simulationStatus === "running";
+  // Controle vem antes de configuração e mutações. Assim uma reconstrução nunca deixa add/remove
+  // atrás de trabalho normal da simulação nem reproduz o timeout visto ao trocar firmware rodando.
+  if (runningBeforeRebuild) {
+    stopVoltageReadoutPolling();
+    try {
+      await state.coreClient.stopSimulation();
+    } catch (err) {
+      reportCoreWarning("parar simulação antes de reconstruir o circuito", err);
+    }
+    setSimulationStatus("stopped");
+  }
+
   const simulation = vscode.workspace.getConfiguration("lasecsimul.simulation");
   await state.coreClient.setSimulationConfig({
     targetStepUs: simulation.get("targetStepUs", 0),
+    realTimeRate: simulation.get("realTimeRate", 1),
     maxNonLinearIterations: simulation.get("maxNonLinearIterations", 0),
     performanceProfiling: simulation.get("performanceProfiling", false),
     integrationMethod: simulation.get("integrationMethod", "automatic"),
@@ -818,17 +832,6 @@ async function rebuildCoreFromSchematicStateNow(): Promise<void> {
     relativeTolerance: simulation.get("relativeTolerance", 1e-4),
     absoluteTolerance: simulation.get("absoluteTolerance", 1e-9),
   });
-
-  const runningBeforeRebuild = state.simulationStatus === "running";
-  if (runningBeforeRebuild) {
-    try {
-      await state.coreClient.stopSimulation();
-    } catch (err) {
-      reportCoreWarning("parar simulação antes de reconstruir o circuito", err);
-    }
-    stopVoltageReadoutPolling();
-    setSimulationStatus("stopped");
-  }
 
   const existingInstanceIds = [...coreInstanceIdByComponentId.values()];
   for (const instanceId of existingInstanceIds) {

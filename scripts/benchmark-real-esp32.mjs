@@ -16,6 +16,7 @@ const firmwarePath = process.argv[3] ??
 const durationMs = Number(process.argv[4] ?? 5000);
 const corePath = process.argv[5] ?? path.join(repo, "core", "build", "Release", "lasecsimul-core.exe");
 const profiling = process.argv[6] !== "false";
+const realTimeRate = Number(process.argv[7] ?? 0);
 const qemuPath = path.join(repo, "devices", "qemu-esp32", "bin", "qemu-system-xtensa.exe");
 const subcircuitPath = path.join(repo, "subcircuits", "esp32_devkitc_v4.lssubcircuit");
 
@@ -88,6 +89,7 @@ async function main() {
 
   await client.setSimulationConfig({
     targetStepUs: 0,
+    realTimeRate,
     maxNonLinearIterations: 0,
     performanceProfiling: profiling,
     integrationMethod: "automatic",
@@ -137,7 +139,7 @@ async function main() {
   const qemuLogs = await client.getMcuLogs(mcuId);
   const rates = samples.map((sample) => sample.rate);
   const result = {
-    fixture: { projectPath, firmwarePath, boardProjectId, mcuId, durationMs },
+    fixture: { projectPath, firmwarePath, boardProjectId, mcuId, durationMs, realTimeRate },
     rate: {
       average: rates.reduce((sum, value) => sum + value, 0) / rates.length,
       minimum: Math.min(...rates),

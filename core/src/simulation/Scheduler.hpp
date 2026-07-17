@@ -2,12 +2,14 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <cmath>
 #include <cstdint>
 #include <functional>
 #include <limits>
 #include <mutex>
 #include <optional>
 #include <queue>
+#include <stdexcept>
 #include <thread>
 #include <type_traits>
 #include <utility>
@@ -135,6 +137,7 @@ public:
     void pause() {
         m_paused.store(true, std::memory_order_release);
         m_wake.notify_all();
+        m_pacingWake.notify_all();
     }
     void resume() {
         m_paused.store(false);
@@ -154,6 +157,15 @@ public:
      * Thread-safe: lido pela thread do Scheduler, escrito pela thread de IPC. */
     void setTargetStepUs(uint64_t us) { m_targetStepUs.store(us, std::memory_order_relaxed); }
     uint64_t targetStepUs() const { return m_targetStepUs.load(std::memory_order_relaxed); }
+
+    /** Limite de avanço virtual por tempo de parede. 1 = tempo real; 0 = ilimitado. A espera é
+     * derivada do avanço realmente realizado em cada ciclo, portanto funciona com passo adaptativo
+     * e não depende de frequência, quantidade de eventos ou um delay fixo. */
+    void setRealTimeRate(double rate) {
+        if (!std::isfinite(rate) || rate < 0.0) throw std::invalid_argument("realTimeRate invalido");
+        m_realTimeRate.store(rate, std::memory_order_relaxed);
+    }
+    double realTimeRate() const { return m_realTimeRate.load(std::memory_order_relaxed); }
 
     /** Limite de iterações não-lineares por settle cycle. 0 = ilimitado (default). */
     void setMaxNonLinearIterations(size_t n) { m_maxNonLinearIterations.store(n, std::memory_order_relaxed); }
@@ -179,6 +191,8 @@ private:
     std::thread m_thread;
     mutable std::mutex m_mutex;
     std::condition_variable m_wake;
+    std::mutex m_pacingMutex;
+    std::condition_variable m_pacingWake;
     std::atomic<bool> m_running{false};
     std::atomic<bool> m_paused{false};
     /** Setada por `stop()` ANTES de `m_thread.join()`, checada dentro de `settleUntilStableLocked()`
@@ -197,6 +211,7 @@ private:
      * deles não muda. */
     std::atomic<bool> m_stopRequested{false};
     std::atomic<uint64_t> m_targetStepUs{0};
+    std::atomic<double> m_realTimeRate{0.0};
     std::atomic<size_t> m_maxNonLinearIterations{0};
     std::atomic<uint64_t> m_maximumTimeStepNs{0};
     std::atomic<bool> m_profilingEnabled{false};

@@ -226,6 +226,19 @@ do ESP32/QEMU: durante cerca do primeiro segundo real não há avanço publicado
 seguintes, ROM/flash inicializam abaixo de 1x. Isso não é limitação permanente; depois do boot o
 circuito acompanha e supera o tempo real.
 
+Após o diagnóstico de uso interativo, a Extension passou a configurar `realTimeRate=1` por padrão.
+Na mesma montagem, a taxa após o boot ficou entre 0,968x e 1,030x (amostras de 250 ms), sem a fase
+de recuperação a 200%; parada em 0,301 ms. `realTimeRate=0` preserva o modo ilimitado usado pelos
+benchmarks acima, e valores como 0,5/2 permitem câmera lenta/aceleração explícita. O pacing acumula
+tempo virtual conforme a granularidade medida do scheduler do SO; não altera passo, precisão ou
+eventos QEMU.
+
+O firmware fornecido declara `LED_PIN = 34`. No ESP32, GPIO34–39 são somente entrada; o próprio
+adaptador (`Esp32Adapter.cpp`) ignora habilitação de saída nesses bits. Portanto esse firmware não
+pisca o LED no simulador nem em hardware real. Para observar o Blink, circuito e firmware precisam
+usar juntos um GPIO com capacidade de saída, por exemplo um dos GPIO32/33/25/26/27 disponíveis na
+placa, e o binário deve ser recompilado.
+
 ## 6. Testes de regressão e resultados
 
 - 45/45 testes CTest passaram, incluindo CoreBootstrap, solver, transientes, dispositivos, plugins,

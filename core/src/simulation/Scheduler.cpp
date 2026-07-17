@@ -187,6 +187,14 @@ void Scheduler::start() {
     m_stopRequested.store(false);
 
     m_thread = std::thread([this] {
+        // Mede a granularidade efetiva de espera do host. No Windows ela pode ser muito maior que
+        // a resolução anunciada por steady_clock; dormir a cada passo de 100 us faria cada passo
+        // custar ~15,6 ms. O pacing acumula avanço até esta granularidade, sem alterar o passo.
+        std::chrono::steady_clock::duration pacingQuantum{1};
+        bool pacingCalibrated = false;
+        auto pacingWallOrigin = std::chrono::steady_clock::now();
+        uint64_t pacingSimOriginNs = nowNs();
+
         while (m_running.load()) {
             if (m_paused.load()) {
                 std::unique_lock<std::mutex> lock(m_mutex);
@@ -198,6 +206,7 @@ void Scheduler::start() {
             }
 
             const auto cycleStart = std::chrono::steady_clock::now();
+            const uint64_t cycleSimStartNs = nowNs();
             uint64_t targetTimeNs = 0;
             {
                 std::unique_lock<std::mutex> lock(m_mutex);
@@ -221,9 +230,65 @@ void Scheduler::start() {
             // adaptativo, eventos com timestamp, settle e aquisição de instrumentos.
             runUntil(targetTimeNs);
 
-            const uint64_t stepUs = m_targetStepUs.load(std::memory_order_relaxed);
-            if (stepUs > 0)
-                std::this_thread::sleep_until(cycleStart + std::chrono::microseconds(stepUs));
+            const double realTimeRate = m_realTimeRate.load(std::memory_order_relaxed);
+            const uint64_t cycleSimEndNs = nowNs();
+            if (realTimeRate > 0.0 && cycleSimEndNs > cycleSimStartNs) {
+                if (!pacingCalibrated) {
+                    // Uma solicitação não nula revela a resolução real do scheduler do SO; em
+                    // particular, 1 ns pode retornar imediatamente e não medir o tick do Windows.
+                    const auto probeStart = std::chrono::steady_clock::now();
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                    pacingQuantum = std::max(
+                        std::chrono::steady_clock::now() - probeStart,
+                        std::chrono::steady_clock::duration{1});
+                    pacingCalibrated = true;
+                    pacingWallOrigin = std::chrono::steady_clock::now();
+                    pacingSimOriginNs = cycleSimEndNs;
+                    continue;
+                }
+                const auto now = std::chrono::steady_clock::now();
+                const long double requiredWallNs = static_cast<long double>(cycleSimEndNs - pacingSimOriginNs) / realTimeRate;
+                const auto requiredElapsed = std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                    std::chrono::duration<long double, std::nano>(requiredWallNs));
+                const auto actualElapsed = now - pacingWallOrigin;
+
+                if (actualElapsed > requiredElapsed + pacingQuantum) {
+                    // Boot/CPU/QEMU ficou para trás: ancora no estado atual em vez de acelerar a
+                    // 200% para "recuperar" tempo que o usuário não viu.
+                    pacingWallOrigin = now;
+                    pacingSimOriginNs = cycleSimEndNs;
+                } else if (requiredElapsed > actualElapsed && requiredElapsed - actualElapsed >= pacingQuantum) {
+                    const auto deadline = pacingWallOrigin + requiredElapsed;
+                    const auto remaining = requiredElapsed - actualElapsed;
+                    // Usa espera do SO só na parcela que excede a granularidade medida; o trecho
+                    // final usa yield cooperativo. Isso evita tanto busy-wait longo quanto o
+                    // oversleep de um tick inteiro que limitava 1x a aproximadamente 0,6x.
+                    if (remaining >= pacingQuantum * 2) {
+                        std::unique_lock<std::mutex> pacingLock(m_pacingMutex);
+                        m_pacingWake.wait_until(pacingLock, deadline - pacingQuantum, [this] {
+                            return !m_running.load(std::memory_order_acquire) ||
+                                   m_paused.load(std::memory_order_acquire);
+                        });
+                    }
+                    while (m_running.load(std::memory_order_acquire) &&
+                           !m_paused.load(std::memory_order_acquire) &&
+                           std::chrono::steady_clock::now() < deadline) {
+                        std::this_thread::yield();
+                    }
+                }
+            } else if (realTimeRate <= 0.0) {
+                pacingWallOrigin = std::chrono::steady_clock::now();
+                pacingSimOriginNs = cycleSimEndNs;
+            }
+            const auto legacyDelay = std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                std::chrono::microseconds(m_targetStepUs.load(std::memory_order_relaxed)));
+            if (legacyDelay > std::chrono::steady_clock::duration::zero()) {
+                std::unique_lock<std::mutex> pacingLock(m_pacingMutex);
+                m_pacingWake.wait_until(pacingLock, cycleStart + legacyDelay, [this] {
+                    return !m_running.load(std::memory_order_acquire) ||
+                           m_paused.load(std::memory_order_acquire);
+                });
+            }
         }
     });
 }
@@ -232,6 +297,7 @@ void Scheduler::stop() {
     m_stopRequested.store(true);
     m_running.store(false);
     m_wake.notify_all();
+    m_pacingWake.notify_all();
     if (m_thread.joinable() && m_thread.get_id() != std::this_thread::get_id()) m_thread.join();
     // A worker thread já terminou (join acima) -- rearma pra não quebrar chamadores SÍNCRONOS de
     // step()/runUntil() feitos depois deste stop() e antes do próximo start() (ex.: `setPauseCondition`

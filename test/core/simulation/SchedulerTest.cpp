@@ -123,6 +123,26 @@ void testAsyncModeAdvancesWithoutScheduledEvents() {
     assert(stableSteps.load() > 0);
 }
 
+void testRealTimeRateCapsVirtualAdvanceWithoutFixedDelay() {
+    Scheduler* schedulerPtr = nullptr;
+    Scheduler scheduler(2, [&schedulerPtr] {
+        schedulerPtr->dirtySet().clear();
+        return false;
+    });
+    schedulerPtr = &scheduler;
+    scheduler.setMaximumTimeStepNs(1'000'000); // granularidade do fixture, não parâmetro do produto
+    scheduler.setRealTimeRate(1.0);
+
+    scheduler.start();
+    std::this_thread::sleep_for(std::chrono::milliseconds(40));
+    scheduler.stop();
+
+    // A margem absorve a granularidade do host. Uma regressão para ilimitado avança ordens de
+    // grandeza além deste limite; não se exige uma duração absoluta exata da máquina de CI.
+    assert(scheduler.nowNs() > 0);
+    assert(scheduler.nowNs() <= 100'000'000);
+}
+
 void testRepeatedStartStopDoesNotLeakWorkersOrEvents() {
     Scheduler* schedulerPtr = nullptr;
     Scheduler scheduler(2, [&schedulerPtr] {
@@ -179,6 +199,7 @@ int main() {
     testResetClearsEventsAndDirty();
     testStopDoesNotBlock();
     testAsyncModeAdvancesWithoutScheduledEvents();
+    testRealTimeRateCapsVirtualAdvanceWithoutFixedDelay();
     testRepeatedStartStopDoesNotLeakWorkersOrEvents();
     testControlAndTelemetryStayResponsiveDuringNonConvergentSettle();
 

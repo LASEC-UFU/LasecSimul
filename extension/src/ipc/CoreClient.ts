@@ -203,10 +203,13 @@ export class CoreClient {
   }
 
   /** Configura parâmetros operacionais do Scheduler em runtime.
-   * `targetStepUs`: duração mínima (µs) de cada cycle de liquidação; 0 = ilimitado (default).
+   * `targetStepUs`: duração mínima (µs) legada por ciclo; 0 = sem espera fixa.
+   * `realTimeRate`: pacing derivado do avanço virtual; 1 = tempo real, 0 = ilimitado.
    * `maxNonLinearIterations`: limite de iterações de settle por passo; 0 = ilimitado (default). */
   async setSimulationConfig(config: {
     targetStepUs?: number;
+    /** 1 = tempo real; 0 = ilimitado. */
+    realTimeRate?: number;
     maxNonLinearIterations?: number;
     performanceProfiling?: boolean;
     integrationMethod?: "automatic" | "backwardEuler" | "trapezoidal" | "gear2";

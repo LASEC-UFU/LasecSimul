@@ -1951,14 +1951,16 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
         return resp;
     }
     // Configura parâmetros operacionais do Scheduler em runtime. Payload (todos opcionais):
-    // { targetStepUs: number, maxNonLinearIterations: number }
-    // targetStepUs=0: sem throttle (default). maxNonLinearIterations=0: ilimitado (default).
+    // { targetStepUs: number, realTimeRate: number, maxNonLinearIterations: number }
+    // realTimeRate=1: tempo real; 0: ilimitado. Core puro mantém 0 e a Extension escolhe 1.
     if (msg.type == "setSimulationConfig") {
         try {
             const nlohmann::json payload =
                 msg.payloadJson.empty() ? nlohmann::json::object() : nlohmann::json::parse(msg.payloadJson);
             if (payload.contains("targetStepUs") && payload["targetStepUs"].is_number())
                 session.scheduler().setTargetStepUs(payload["targetStepUs"].get<uint64_t>());
+            if (payload.contains("realTimeRate") && payload["realTimeRate"].is_number())
+                session.scheduler().setRealTimeRate(payload["realTimeRate"].get<double>());
             if (payload.contains("performanceProfiling") && payload["performanceProfiling"].is_boolean()) {
                 const bool enabled = payload["performanceProfiling"].get<bool>();
                 session.setPerformanceProfilingEnabled(enabled);

@@ -2186,6 +2186,7 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
       const maxNonLinearIterations = cfg.get<number>("maxNonLinearIterations", 0);
       state.coreClient.setSimulationConfig({
         targetStepUs,
+        realTimeRate: cfg.get("realTimeRate", 1),
         maxNonLinearIterations,
         integrationMethod: cfg.get("integrationMethod", "automatic"),
         adaptiveTimeStep: cfg.get("adaptiveTimeStep", true),
