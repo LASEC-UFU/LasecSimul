@@ -5,6 +5,7 @@ import {
   ProjectComponent,
   ProjectDocument,
   ProjectSubcircuitRef,
+  ProjectDeviceRef,
   ProjectTopology,
   ProjectTopologyEndpoint,
   ProjectWire,
@@ -44,6 +45,18 @@ function validateSubcircuitRef(value: unknown): ProjectSubcircuitRef | undefined
   };
 }
 
+function validateDeviceRef(value: unknown): ProjectDeviceRef | undefined {
+  if (!isObject(value)) return undefined;
+  const path = asString(value.path);
+  if (!path) return undefined;
+  return {
+    path,
+    lastKnownTypeId: asString(value.lastKnownTypeId),
+    lastKnownPinIds: asStringArray(value.lastKnownPinIds),
+    lastKnownMtimeMs: asNumber(value.lastKnownMtimeMs),
+  };
+}
+
 function validateComponent(component: unknown, index: number): ProjectComponent {
   if (!isObject(component)) throw new Error(`components[${index}] inválido`);
   const id = asString(component.id);
@@ -73,6 +86,7 @@ function validateComponent(component: unknown, index: number): ProjectComponent 
         }
       : undefined,
     subcircuitRef: validateSubcircuitRef(component.subcircuitRef),
+    deviceRef: validateDeviceRef(component.deviceRef),
   };
 }
 

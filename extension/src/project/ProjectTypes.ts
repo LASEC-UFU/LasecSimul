@@ -50,6 +50,15 @@ export interface ProjectSubcircuitRef {
   lastKnownPinIds?: string[];
 }
 
+/** Referência não registrada do componente genérico Externos/Device. */
+export interface ProjectDeviceRef {
+  path: string;
+  lastKnownTypeId?: string;
+  lastKnownPinIds?: string[];
+  /** Permite reconstruir o placeholder e detectar alteração do arquivo entre sessões. */
+  lastKnownMtimeMs?: number;
+}
+
 export interface ProjectComponent {
   id: string;
   typeId: string;
@@ -78,6 +87,7 @@ export interface ProjectComponent {
     rotation?: 0 | 90 | 180 | 270;
   };
   subcircuitRef?: ProjectSubcircuitRef;
+  deviceRef?: ProjectDeviceRef;
 }
 
 export interface ProjectFirmwareConfig {

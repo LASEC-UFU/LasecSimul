@@ -100,7 +100,15 @@ Espressif (ESP32 entra aqui), Shields, QemuDevice.
   7-Segmentos, I2C para Paralelo.
 - Outros Lógicos: ADC, DAC, Display 7-Seg BCD, LM555 (Timer).
 
-### Subcircuitos
+### Externos
+
+`Device` e `Subcircuito` aparecem diretamente nesta pasta, sem subpastas intermediárias. O primeiro
+referencia um `.lsdevice`; o segundo referencia um `.lssubcircuit`.
+
+`Subcircuitos` deixou de ser uma categoria de topo. Arquivos e projetos antigos continuam aceitos;
+a mudança é apenas a taxonomia apresentada na paleta e nos novos registros.
+
+#### Compatibilidade: Subcircuitos
 
 SubCircuit — equivalente ao que `.spec/lasecsimul-subcircuits.spec` especifica pro LasecSimul
 (circuito reutilizável definido por `.lssubcircuit`, ver ADR 0008).

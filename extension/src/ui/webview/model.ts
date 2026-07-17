@@ -83,6 +83,13 @@ export interface WebviewComponentModel {
     lastKnownTypeId?: string;
     lastKnownPinIds?: string[];
   };
+  /** Marcador do Device genérico que referencia um .lsdevice sem cadastrá-lo na paleta. */
+  deviceRef?: {
+    path: string;
+    lastKnownTypeId?: string;
+    lastKnownPinIds?: string[];
+    lastKnownMtimeMs?: number;
+  };
 }
 
 export interface WebviewPoint {
@@ -808,6 +815,8 @@ export interface WebviewComponentCatalogEntry {
   /** Tipo da fonte registrada que originou esta entrada -- usado pela Webview para ajustar menus e
    * ações específicas de subcircuito/MCU/QEMU. */
   registeredSourceKind?: "abi-device" | "mcu-adapter" | "subcircuit-file";
+  /** Entrada efêmera criada por Device/Subcircuit genérico; nunca aparece na paleta. */
+  externalReferencePath?: string;
   /** `true` quando esta entrada representa um MCU direto (`mcu-adapter`) OU um subcircuito que
    * hospeda um MCU interno (ex: DevKit/WROOM com ESP32 QEMU dentro). */
   mcuHost?: boolean;

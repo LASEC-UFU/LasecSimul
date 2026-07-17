@@ -9,6 +9,7 @@ import { rebuildCoreFromSchematicState, pinsForProjectComponent } from "../core/
 import { CanonicalTopologyDocument, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, nodeEndpoint, portEndpoint } from "../ui/webview/model";
 import { ProjectComponent, ProjectDocument, ProjectTopology, createEmptyProject } from "./ProjectTypes";
 import { assertTopologyInvariants } from "../ui/webview/topologyDocument";
+import { decideSaveTarget } from "./savePolicy";
 
 export function absoluteSubcircuitRefPath(refPath: string): string {
   if (path.isAbsolute(refPath)) return path.normalize(refPath);
@@ -16,21 +17,28 @@ export function absoluteSubcircuitRefPath(refPath: string): string {
   return path.resolve(baseDir, refPath);
 }
 
-function projectWithRelativeSubcircuitRefs(project: ProjectDocument, targetProjectPath: string): ProjectDocument {
+export const absoluteDeviceRefPath = absoluteSubcircuitRefPath;
+
+function projectWithRelativeExternalRefs(project: ProjectDocument, targetProjectPath: string): ProjectDocument {
   const targetDir = path.dirname(targetProjectPath);
   return {
     ...project,
     components: project.components.map((component) => {
-      if (!component.subcircuitRef?.path) return component;
-      const absolutePath = absoluteSubcircuitRefPath(component.subcircuitRef.path);
-      const relativePath = path.relative(targetDir, absolutePath);
-      const portablePath = relativePath && !path.isAbsolute(relativePath) ? relativePath : absolutePath;
+      const portable = (refPath: string): string => {
+        const absolutePath = absoluteSubcircuitRefPath(refPath);
+        const relativePath = path.relative(targetDir, absolutePath);
+        return relativePath && !path.isAbsolute(relativePath) ? relativePath : absolutePath;
+      };
       return {
         ...component,
-        subcircuitRef: {
+        ...(component.subcircuitRef?.path ? { subcircuitRef: {
           ...component.subcircuitRef,
-          path: portablePath,
-        },
+          path: portable(component.subcircuitRef.path),
+        } } : {}),
+        ...(component.deviceRef?.path ? { deviceRef: {
+          ...component.deviceRef,
+          path: portable(component.deviceRef.path),
+        } } : {}),
       };
     }),
   };
@@ -51,6 +59,7 @@ export function webviewComponentToProjectComponent(component: WebviewComponentMo
     hiddenByUser: component.hiddenByUser,
     visual: { x: component.x, y: component.y, rotation: component.rotation },
     subcircuitRef: component.subcircuitRef,
+    deviceRef: component.deviceRef,
   };
 }
 
@@ -93,6 +102,7 @@ export function projectComponentToWebviewComponent(component: ProjectComponent, 
     pins: pinsForProjectComponent(component),
     properties: component.properties as Record<string, string | number | boolean>,
     subcircuitRef: component.subcircuitRef,
+    deviceRef: component.deviceRef,
   };
 }
 
@@ -282,6 +292,7 @@ async function addRecentProjectPath(filePath: string): Promise<void> {
 export async function openRecentProjectCommand(options: {
   extensionUri: vscode.Uri;
   beforeOpen?: () => void;
+  resolveExternalDeviceReferences?: (projectDir: string) => Promise<void>;
   openSchematicEditor: (extensionUri: vscode.Uri) => void;
   syncSchematicPanel: () => void;
 }): Promise<void> {
@@ -309,6 +320,7 @@ export async function openRecentProjectCommand(options: {
   state.currentProjectFilePath = picked.filePath;
   state.schematicState = projectToWebviewState(project);
   await resolveProjectSubcircuitReferences(path.dirname(picked.filePath));
+  await options.resolveExternalDeviceReferences?.(path.dirname(picked.filePath));
   if (!state.schematicPanel) options.openSchematicEditor(options.extensionUri);
   options.syncSchematicPanel();
   markProjectSaved();
@@ -367,7 +379,7 @@ async function writeProjectToFile(filePath: string): Promise<boolean> {
     vscode.window.showErrorMessage(`Não foi possível salvar o projeto: topologia inválida (${err instanceof Error ? err.message : String(err)})`);
     return false;
   }
-  const project: ProjectDocument = projectWithRelativeSubcircuitRefs({
+  const project: ProjectDocument = projectWithRelativeExternalRefs({
     ...createEmptyProject(),
     components: state.schematicState.components.map(webviewComponentToProjectComponent),
     wires: [],
@@ -399,11 +411,12 @@ async function writeProjectToFile(filePath: string): Promise<boolean> {
  * salvo antes. */
 export async function saveProjectCommand(): Promise<void> {
   if (!warnIfEditingSubcircuit()) return;
-  if (!state.currentProjectFilePath) {
+  const decision = decideSaveTarget(state.currentProjectFilePath);
+  if (decision.kind === "saveAs") {
     await saveProjectAsCommand();
     return;
   }
-  await writeProjectToFile(state.currentProjectFilePath);
+  await writeProjectToFile(decision.filePath);
 }
 
 /** Botão "Salvar Como" da toolbar -- sempre mostra o diálogo de arquivo, mesmo que o projeto já
@@ -428,6 +441,7 @@ export async function canReplaceCurrentProject(): Promise<boolean> {
 export async function openProjectCommand(options: {
   extensionUri: vscode.Uri;
   beforeOpen?: () => void;
+  resolveExternalDeviceReferences?: (projectDir: string) => Promise<void>;
   openSchematicEditor: (extensionUri: vscode.Uri) => void;
   syncSchematicPanel: () => void;
 }): Promise<void> {
@@ -446,6 +460,7 @@ export async function openProjectCommand(options: {
 export async function openProjectFile(filePath: string, options: {
   extensionUri: vscode.Uri;
   beforeOpen?: () => void;
+  resolveExternalDeviceReferences?: (projectDir: string) => Promise<void>;
   openSchematicEditor: (extensionUri: vscode.Uri) => void;
   syncSchematicPanel: () => void;
 }): Promise<void> {
@@ -460,6 +475,7 @@ export async function openProjectFile(filePath: string, options: {
   state.currentProjectFilePath = filePath;
   state.schematicState = projectToWebviewState(project);
   await resolveProjectSubcircuitReferences(path.dirname(filePath));
+  await options.resolveExternalDeviceReferences?.(path.dirname(filePath));
   if (!state.schematicPanel) options.openSchematicEditor(options.extensionUri);
   options.syncSchematicPanel();
   markProjectSaved();
@@ -551,4 +567,3 @@ export async function importProjectCommand(options: { syncSchematicPanel: () => 
   await rebuildCoreFromSchematicState();
   vscode.window.showInformationMessage(`${components.length} componente(s) importado(s) de ${path.basename(selected.fsPath)}.`);
 }
-

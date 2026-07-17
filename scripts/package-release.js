@@ -311,6 +311,7 @@ function stageBundledAssets() {
   copyDirFiltered(path.join(repoRoot, "devices"), path.join(bundledRoot, "devices"), excluded);
   copyDirFiltered(path.join(repoRoot, "mcu-adapters"), path.join(bundledRoot, "mcu-adapters"), excluded);
   copyDirFiltered(path.join(repoRoot, "subcircuits"), path.join(bundledRoot, "subcircuits"), excluded);
+  copyDirFiltered(path.join(repoRoot, "Externos"), path.join(bundledRoot, "Externos"), excluded);
 
   const coreExecutable = resolveCoreExecutable();
   const coreRelative = path.relative(path.join(repoRoot, "core", "build"), coreExecutable);

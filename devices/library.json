@@ -6,10 +6,6 @@
   "license": "MIT",
   "devices": [
     {
-      "typeId": "example.blinker",
-      "manifest": "example-blinker/device.lsdevice"
-    },
-    {
       "typeId": "outputs.ssd1306",
       "manifest": "simulide-complex/ssd1306.lsdevice"
     },
@@ -277,8 +273,5 @@
       "typeId": "peripherals.esp01",
       "manifest": "simulide-peripherals/esp01.lsdevice"
     }
-  ],
-  "checksums": {
-    "example-blinker/build-msvc/device.dll": "f5f479cc7bcef6ce1c5d191159f71178d1515f97fb1928f7a835847f139e79d7"
-  }
+  ]
 }

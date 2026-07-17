@@ -9,6 +9,7 @@ import { sanitizeManifestDefaultProperties, sanitizePackage } from "./packageSan
 import { sanitizeMcuSerialPorts } from "./catalogMetadata";
 import { SUBCIRCUIT_SCHEMA_VERSION, schemaVersionRejectionMessage } from "./subcircuitDocument";
 import { livePackagePreviewSymbolSvg } from "../ui/webview/componentSymbols";
+import { externalFolderPath } from "./externalComponents";
 
 /** Converte um `icon{}` canônico (`PackageDescriptor`, sem pinos) num `<svg>` autocontido pra usar
  * como `iconSvgInline` -- MESMO pipeline (`resolvePackageLayout`+`packageBodySvg`, via
@@ -410,7 +411,9 @@ export function parseSubcircuitManifest(json: Record<string, unknown>, manifestD
 export function resolveRegisteredItem(source: RegisteredSource, extensionPath: string, language: LasecSimulLanguage, mcuAdapterTypeIds: ReadonlySet<string>): ResolvedRegisteredItem {
   const absoluteFilePath = normalizeAbsolutePath(extensionPath, source.filePath);
   if (!fileExists(absoluteFilePath)) {
-    const fallbackFolder = localizedRegisteredFolder(source.kind, language);
+    const fallbackFolder = source.removable !== false
+      ? externalFolderPath(source.kind === "subcircuit-file" ? "subcircuit" : "device", language)
+      : localizedRegisteredFolder(source.kind, language);
     return createDisabledEntry(
       source,
       source.kind,
@@ -446,17 +449,15 @@ export function resolveRegisteredItem(source: RegisteredSource, extensionPath: s
         ? pinIds.length
         : (packageDescriptor ? packageDescriptor.pins.length : 2);
       const parsedFolderPath = manifestFolderPath(json);
-      const folderPath = resolveFolderPath({
+      const folderPath = source.removable !== false ? externalFolderPath("device", language) : resolveFolderPath({
         ...source,
         folderPath: parsedFolderPath && parsedFolderPath.length > 0 ? parsedFolderPath : source.folderPath,
       }, localizedRegisteredFolder(source.kind, language));
       const category = folderPath[0] ?? localizedRegisteredRoot(language);
       const subcategory = folderPath.length > 1 ? folderPath[1] : undefined;
-      const libraryPath = source.kind === "mcu-adapter"
-        ? undefined
-        : (source.libraryPath
-          ? normalizeAbsolutePath(extensionPath, source.libraryPath)
-          : inferLibraryPathForDevice(absoluteFilePath));
+      const libraryPath = source.libraryPath
+        ? normalizeAbsolutePath(extensionPath, source.libraryPath)
+        : source.kind === "abi-device" ? inferLibraryPathForDevice(absoluteFilePath) : undefined;
       const iconFields = manifestIconFields(json, path.dirname(absoluteFilePath));
       const EXTENSION_SIDE_INTERACTION_KINDS = new Set<string>(["joystick", "encoder", "touchpad"]);
       const manifestInteraction = typeof json.interaction === "string" ? json.interaction : undefined;
@@ -517,7 +518,7 @@ export function resolveRegisteredItem(source: RegisteredSource, extensionPath: s
       return {
         sourceId: source.id,
         kind: source.kind,
-        libraryPathToLoad: source.kind === "abi-device" ? libraryPath : undefined,
+        libraryPathToLoad: libraryPath,
         entry,
       };
     }
@@ -541,10 +542,15 @@ export function resolveRegisteredItem(source: RegisteredSource, extensionPath: s
     }
     const typeId = parsed.typeId || `registered.subcircuit.${source.id}`;
     const label = parsed.label || typeId;
-    const folderPath = resolveFolderPath({
-      ...source,
-      folderPath: parsed.folderPath && parsed.folderPath.length > 0 ? parsed.folderPath : source.folderPath,
-    }, localizedRegisteredFolder("subcircuit-file", language));
+    // Somente subcircuitos adicionados pelo usuário pertencem diretamente a Externos. Os
+    // integrados (`removable:false`) podem representar placas/microcontroladores e preservam a
+    // taxonomia declarada no manifesto (ex.: Microcontroladores/Espressif).
+    const folderPath = source.removable !== false
+      ? externalFolderPath("subcircuit", language)
+      : resolveFolderPath({
+          ...source,
+          folderPath: parsed.folderPath && parsed.folderPath.length > 0 ? parsed.folderPath : source.folderPath,
+        }, localizedRegisteredFolder("subcircuit-file", language));
     const category = folderPath[0] ?? localizedRegisteredRoot(language);
     const subcategory = folderPath.length > 1 ? folderPath[1] : undefined;
     const libraryPath = source.libraryPath
@@ -581,7 +587,9 @@ export function resolveRegisteredItem(source: RegisteredSource, extensionPath: s
       entry,
     };
   } catch (err) {
-    const fallbackFolder = folderPathFromMalformedJsonText(absoluteFilePath) ?? localizedRegisteredFolder(source.kind, language);
+    const fallbackFolder = folderPathFromMalformedJsonText(absoluteFilePath) ?? (source.removable !== false
+      ? externalFolderPath(source.kind === "subcircuit-file" ? "subcircuit" : "device", language)
+      : localizedRegisteredFolder(source.kind, language));
     return createDisabledEntry(
       source,
       source.kind,

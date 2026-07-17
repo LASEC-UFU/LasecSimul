@@ -44,8 +44,8 @@
       },
       {
         "command": "lasecsimul.palette.registerFile",
-        "title": "LasecSimul: Registrar Dispositivo ABI/QEMU/Subcircuito",
-        "icon": "$(add)"
+        "title": "LasecSimul: Adicionar componente externo",
+        "icon": "$(new-file)"
       },
       {
         "command": "lasecsimul.newSubcircuit",
@@ -56,8 +56,7 @@
       {
         "command": "lasecsimul.openSettings",
         "title": "LasecSimul: Settings",
-        "icon": "$(settings-gear)",
-        "enablement": "false"
+        "icon": "$(settings-gear)"
       },
       {
         "command": "lasecsimul.palette.removeRegistered",
@@ -330,13 +329,13 @@
     "compile": "tsc -p ./ && tsc -p ./tsconfig.webview.json",
     "watch": "tsc -p ./ -w",
     "watch:webview": "tsc -p ./tsconfig.webview.json -w",
-    "pretest": "npm run compile && tsc -p ./tsconfig.test.json && node out-test/src/lasecplot/manifest.test.js && node out-test/src/lasecplot/broker.test.js && node out-test/src/ui/webview/serialFormat.test.js",
-    "test": "node out-test/test/project/ProjectSerializer.test.js && node out-test/src/ipc/CoreClient.test.js && node out-test/src/catalog/UnifiedCatalog.test.js && node out-test/src/catalog/registeredSources.test.js && node out-test/src/catalog/catalogCommands.test.js && node out-test/src/catalog/deviceUniqueness.test.js && node out-test/src/catalog/catalogMerge.test.js && node out-test/src/catalog/simulideGraphicalCatalog.test.js && node out-test/src/language.test.js && node out-test/src/ui/webview/paletteTree.test.js && node out-test/src/ui/webview/wireGeometry.test.js && node out-test/src/ui/webview/componentGeometry.test.js && node out-test/src/ui/webview/wireTopology.test.js && node out-test/src/ui/webview/topologyDocument.test.js && node out-test/src/ui/webview/valueFormatting.test.js && node out-test/src/ui/webview/componentSymbols.test.js && node out-test/src/ui/webview/batchProperties.test.js && node out-test/src/ui/webview/instrumentTrigger.test.js && node out-test/src/ui/webview/instrumentViewport.test.js && node out-test/src/trust/trustDecision.test.js && node out-test/src/catalog/subcircuitDocument.test.js && node out-test/src/catalog/subcircuitPinModel.test.js && node out-test/src/catalog/subcircuitExposedComponents.test.js && node out-test/src/catalog/subcircuitValidation.test.js && node out-test/src/catalog/subcircuitSymbolScene.test.js && node out-test/src/core/schematicModel.test.js",
+    "pretest": "npm run compile && tsc -p ./tsconfig.test.json && node out-test/src/lasecplot/manifest.test.js && node out-test/src/lasecplot/broker.test.js && node out-test/src/ui/webview/serialFormat.test.js && node out-test/src/project/savePolicy.test.js && node out-test/src/catalog/catalogGeometryAudit.test.js",
+    "test": "node out-test/test/project/ProjectSerializer.test.js && node out-test/src/ipc/CoreClient.test.js && node out-test/src/catalog/UnifiedCatalog.test.js && node out-test/src/catalog/registeredSources.test.js && node out-test/src/catalog/catalogCommands.test.js && node out-test/src/catalog/externalComponents.test.js && node out-test/src/catalog/deviceUniqueness.test.js && node out-test/src/catalog/catalogMerge.test.js && node out-test/src/catalog/simulideGraphicalCatalog.test.js && node out-test/src/language.test.js && node out-test/src/ui/webview/paletteTree.test.js && node out-test/src/ui/webview/wireGeometry.test.js && node out-test/src/ui/webview/componentGeometry.test.js && node out-test/src/ui/webview/wireTopology.test.js && node out-test/src/ui/webview/topologyDocument.test.js && node out-test/src/ui/webview/valueFormatting.test.js && node out-test/src/ui/webview/componentSymbols.test.js && node out-test/src/ui/webview/batchProperties.test.js && node out-test/src/ui/webview/instrumentTrigger.test.js && node out-test/src/ui/webview/instrumentViewport.test.js && node out-test/src/trust/trustDecision.test.js && node out-test/src/catalog/subcircuitDocument.test.js && node out-test/src/catalog/subcircuitPinModel.test.js && node out-test/src/catalog/subcircuitExposedComponents.test.js && node out-test/src/catalog/subcircuitValidation.test.js && node out-test/src/catalog/subcircuitSymbolScene.test.js && node out-test/src/core/schematicModel.test.js",
     "test:e2e": "npm run compile && node test/e2e/run-webview-e2e.cjs",
     "test:e2e:update": "npm run compile && set UPDATE_SNAPSHOTS=1&& node test/e2e/run-webview-e2e.cjs"
   },
   "devDependencies": {
-    "@playwright/test": "^1.54.1",
+    "@playwright/test": "^1.61.1",
     "@types/node": "^20.0.0",
     "@types/pngjs": "^6.0.5",
     "@types/vscode": "^1.85.0",

@@ -394,6 +394,12 @@ function packagePinMatches(pin: PackagePin, pinId: string): boolean {
   return pin.id === pinId || Boolean(pin.aliases?.includes(pinId));
 }
 
+/** Converte aliases legados de pino no id canônico que foi registrado no Core. */
+export function canonicalPackagePinId(typeId: string, pinId: string, properties?: Record<string, unknown>): string {
+  const resolved = resolvedPackageFor(typeId, properties);
+  return resolved?.pins.find((pin) => packagePinMatches(pin, pinId))?.id ?? pinId;
+}
+
 function stateVisibleMatches(stateVisible: PackagePin["stateVisible"] | undefined, properties?: Record<string, unknown>): boolean {
   if (!stateVisible) return true;
   for (const [prop, accepted] of Object.entries(stateVisible.when)) {
@@ -1301,7 +1307,8 @@ function builtinComponentBox(typeId: string): ComponentBox | undefined {
     case SYMBOL_PIN_TYPE_ID: return { width: 24, height: 24 };
     case "other.test_unit": return { width: 32, height: 32 }; // other/testunit.cpp (IoComponent generico)
     case "other.dial": return { width: 40, height: 40 }; // other/dial.cpp: knob nativo (QDial) -- estilizacao vetorial menor que antes
-    case "subcircuits.external": return { width: 56, height: 40 }; // bloco generico de subcircuito por caminho, ainda sem arquivo vinculado -- retangulo neutro "de tamanho medio", nunca a silhueta de 2 pinos do fallback generico (ver componentSymbolSvg)
+    case "devices.external":
+    case "subcircuits.external": return { width: 56, height: 40 }; // blocos genéricos por caminho
 
     case "logic.button": return COMP2PIN_BOX;
 
@@ -1804,6 +1811,7 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
       // pra refletir além disso.
       return dialKnobSvg(midX, yMid, Math.min(midX, yMid) - 2, { ratio: 0.5 });
 
+    case "devices.external":
     case "subcircuits.external":
       // Bloco genérico "aponta pra .lssubcircuit por caminho" (ver `chooseSubcircuitFileCommand`,
       // `extension.ts`) ANTES de qualquer arquivo ser vinculado -- catálogo não declara `package`

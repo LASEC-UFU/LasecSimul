@@ -14,9 +14,9 @@ import { assertTopologyInvariants } from "./ui/webview/topologyDocument";
 import { WebviewToHostMessage } from "./ui/webview/messages";
 import { ComponentPaletteViewProvider } from "./ui/views/ComponentPaletteViewProvider";
 import { materializePinGroup, registerPackage } from "./ui/webview/componentSymbols";
-import { absoluteSubcircuitRefPath, importProjectCommand, openProjectCommand, openProjectFile, openRecentProjectCommand, projectComponentToWebviewComponent, refreshDirtyIndicator, saveProjectAsCommand, saveProjectCommand, webviewComponentToProjectComponent } from "./project/projectCommands";
+import { absoluteDeviceRefPath, absoluteSubcircuitRefPath, importProjectCommand, openProjectCommand, openProjectFile, openRecentProjectCommand, projectComponentToWebviewComponent, refreshDirtyIndicator, saveProjectAsCommand, saveProjectCommand, webviewComponentToProjectComponent } from "./project/projectCommands";
 import { loadUnifiedCatalog, RegisteredSource, saveRegisteredSources } from "./catalog/UnifiedCatalog";
-import { refreshUnifiedCatalogState, registerCatalogFileCommand, removeRegisteredCatalogItemCommand } from "./catalog/catalogCommands";
+import { attachPropertySchemas, refreshUnifiedCatalogState, registerCatalogFileCommand, removeRegisteredCatalogItemCommand } from "./catalog/catalogCommands";
 import { hasShowOnSymbolProperty, nextIndexedLabel } from "./catalog/catalogMerge";
 import { imageMimeForFile, sanitizeManifestDefaultProperties } from "./catalog/packageSanitizers";
 import { SUBCIRCUIT_SCHEMA_VERSION, SubcircuitDocument, parseSubcircuitDocument, schemaVersionRejectionMessage, serializeSubcircuitDocument } from "./catalog/subcircuitDocument";
@@ -83,6 +83,15 @@ import {
 } from "./catalog/subcircuitInternals";
 import { initSimulationLog, logSimulation, noteSimulationStatusChange, showSimulationLogChannel } from "./diagnostics/simulationLog";
 import { ProjectCustomEditorProvider } from "./ui/panels/ProjectCustomEditorProvider";
+import {
+  externalFolderPath,
+  missingManifestDependencies,
+  validateExternalManifest,
+  writeAdhocDeviceLibrary,
+} from "./catalog/externalComponents";
+
+const deviceReferenceWatchers = new Map<string, vscode.FileSystemWatcher>();
+const deviceReferenceReloadTimers = new Map<string, NodeJS.Timeout>();
 
 function setSchematicOpenContext(isOpen: boolean): Thenable<void> {
   return vscode.commands.executeCommand("setContext", "lasecsimul.schematicOpen", isOpen);
@@ -169,6 +178,7 @@ function computeProjectStatePatch(): ProjectStatePatch | undefined {
 }
 
 function syncSchematicPanel(): void {
+  reconcileDeviceReferenceWatchers();
   lasecPlotManager?.sync();
   serialTerminalManager?.sync();
   serialPortManager?.sync();
@@ -633,6 +643,219 @@ async function chooseSubcircuitFileCommand(componentId: string): Promise<void> {
   if (droppedWireCount > 0) {
     vscode.window.showWarningMessage(`${droppedWireCount} fio(s) removido(s): pino(s) não existem mais no novo subcircuito.`);
   }
+}
+
+/** Resolve um .lsdevice avulso para uma única instância, sem gravá-lo em registeredSources. */
+async function loadDeviceReference(componentId: string, absolutePath: string, showErrors = true): Promise<boolean> {
+  const component = getComponentById(componentId);
+  if (!component || !state.extensionContext) return false;
+  if (!state.coreClient) {
+    if (showErrors) vscode.window.showErrorMessage("Core indisponível: não foi possível carregar o Device externo.");
+    return false;
+  }
+
+  let manifest: ReturnType<typeof validateExternalManifest>;
+  try {
+    manifest = validateExternalManifest(absolutePath, readJsonFile(absolutePath));
+    if (manifest.kind !== "device") throw new Error("selecione um arquivo .lsdevice");
+  } catch (err) {
+    if (showErrors) vscode.window.showErrorMessage(`Device inválido: ${err instanceof Error ? err.message : String(err)}`);
+    return false;
+  }
+
+  const libraryPath = writeAdhocDeviceLibrary(
+    absolutePath,
+    manifest,
+    state.extensionContext.globalStorageUri.fsPath,
+  );
+  const failures = await loadConfiguredDeviceLibraries(state.extensionContext.extensionPath, [{
+    displayPath: absolutePath,
+    absolutePath: libraryPath,
+  }]);
+  const failure = failures.get(path.normalize(libraryPath));
+  if (failure) {
+    if (showErrors) vscode.window.showErrorMessage(`Falha ao carregar Device: ${failure}`);
+    return false;
+  }
+
+  const source: RegisteredSource = {
+    id: `adhoc-device:${componentId}`,
+    kind: manifest.runtimeKind!,
+    filePath: absolutePath,
+    libraryPath,
+    folderPath: externalFolderPath("device", currentLasecSimulLanguage()),
+    removable: false,
+  };
+  const resolved = resolveRegisteredItem(source, state.extensionContext.extensionPath, currentLasecSimulLanguage(),
+    manifest.runtimeKind === "mcu-adapter" ? new Set([manifest.typeId]) : new Set());
+  if (resolved.entry.disabled) {
+    if (showErrors) vscode.window.showErrorMessage(`Device incompatível: ${resolved.entry.disabledReason ?? "manifesto não suportado"}`);
+    return false;
+  }
+
+  const newPinIds = resolved.entry.pinIds?.length
+    ? resolved.entry.pinIds
+    : Array.from({ length: resolved.entry.pinCount }, (_, index) => `pin-${index + 1}`);
+  const newPinSet = new Set(newPinIds);
+  let droppedWireCount = 0;
+  const conductors = state.schematicState.topology.conductors.filter((wire) => {
+    const from = endpointId(wire.from) === componentId;
+    const to = endpointId(wire.to) === componentId;
+    if (!from && !to) return true;
+    const pinId = from ? endpointPinId(wire.from) : endpointPinId(wire.to);
+    const keep = newPinSet.has(pinId);
+    if (!keep) droppedWireCount++;
+    return keep;
+  });
+  const rawEntry: WebviewComponentCatalogEntry = {
+    ...resolved.entry,
+    hidden: true,
+    isRegistered: false,
+    registeredSourceRemovable: false,
+    externalReferencePath: path.normalize(absolutePath),
+  };
+  const entry = (await attachPropertySchemas([rawEntry]))[0] ?? rawEntry;
+  const label = component.typeId === "devices.external"
+    ? nextIndexedLabel(manifest.typeId, resolved.entry.label, state.schematicState.components)
+    : component.label;
+  const updated = updateElement(state.schematicState, componentId, {
+    typeId: manifest.typeId,
+    label,
+    pins: newPinIds.map((id, index) => ({ id, x: 0, y: index * 12 })),
+    // Defaults novos entram, mas propriedades da instância (inclusive posições de labels) vencem.
+    properties: { ...resolved.entry.defaultProperties, ...component.properties },
+    subcircuitRef: undefined,
+    deviceRef: {
+      path: absolutePath,
+      lastKnownTypeId: manifest.typeId,
+      lastKnownPinIds: newPinIds,
+      lastKnownMtimeMs: fs.statSync(absolutePath).mtimeMs,
+    },
+  });
+  if (!updated.ok) return false;
+  state.schematicState = {
+    ...updated.value.state,
+    catalog: [
+      ...updated.value.state.catalog.filter((candidate) => candidate.typeId !== manifest.typeId),
+      entry,
+    ],
+    topology: { ...updated.value.state.topology, conductors },
+  };
+  syncSchematicPanel();
+  if (droppedWireCount > 0 && showErrors) {
+    vscode.window.showWarningMessage(`${droppedWireCount} fio(s) removido(s): pino(s) não existem mais no Device recarregado.`);
+  }
+  return true;
+}
+
+async function chooseDeviceFileCommand(componentId: string): Promise<void> {
+  const component = getComponentById(componentId);
+  if (!component) return;
+  const previous = component.deviceRef?.path ? absoluteDeviceRefPath(component.deviceRef.path) : undefined;
+  const picked = await vscode.window.showOpenDialog({
+    canSelectMany: false,
+    filters: { "Dispositivo LasecSimul": ["lsdevice"] },
+    title: `Selecionar Device para ${component.label}`,
+    defaultUri: previous && fileExists(path.dirname(previous)) ? vscode.Uri.file(path.dirname(previous)) : undefined,
+  });
+  const selected = picked?.[0];
+  if (!selected) return;
+  if (await loadDeviceReference(componentId, selected.fsPath)) await rebuildCoreFromSchematicState();
+}
+
+/** Reidrata refs ao abrir projeto. Ausente/inválido permanece como placeholder com pinos conhecidos. */
+async function resolveExternalDeviceReferences(projectDir: string): Promise<void> {
+  const refs = [...state.schematicState.components].filter((component) => component.deviceRef);
+  let failures = 0;
+  let resolved = 0;
+  for (const component of refs) {
+    const absolutePath = normalizeAbsolutePath(projectDir, component.deviceRef!.path);
+    if (!fileExists(absolutePath) || !(await loadDeviceReference(component.id, absolutePath, false))) {
+      failures++;
+      continue;
+    }
+    resolved++;
+  }
+  if (failures > 0) {
+    const message = `${failures} Device(s) externo(s) ausente(s), inválido(s) ou incompatível(is). A instância foi preservada como placeholder.`;
+    logSimulation("error", message, { stage: "device-externo" });
+    vscode.window.showWarningMessage(message);
+  }
+  if (resolved > 0) syncSchematicPanel();
+}
+
+function deviceReferenceKey(filePath: string): string {
+  const normalized = path.normalize(filePath);
+  return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+}
+
+async function reloadChangedDeviceReferences(absolutePath: string): Promise<void> {
+  const key = deviceReferenceKey(absolutePath);
+  const referenced = state.schematicState.components.filter((component) =>
+    component.deviceRef && deviceReferenceKey(absoluteDeviceRefPath(component.deviceRef.path)) === key);
+  if (referenced.length === 0) return;
+
+  let loaded = false;
+  let failed = !fileExists(absolutePath);
+  if (!failed) {
+    for (const component of referenced) {
+      if (await loadDeviceReference(component.id, absolutePath, false)) loaded = true;
+      else failed = true;
+    }
+  }
+  if (failed) {
+    state.schematicState = {
+      ...state.schematicState,
+      catalog: state.schematicState.catalog.filter((entry) =>
+        !entry.externalReferencePath || deviceReferenceKey(entry.externalReferencePath) !== key),
+    };
+    const message = `Device externo alterado não pôde ser recarregado: ${absolutePath}. A instância foi preservada como placeholder.`;
+    logSimulation("error", message, { stage: "device-externo" });
+    vscode.window.showWarningMessage(message);
+    syncSchematicPanel();
+  }
+  if (loaded || failed) await rebuildCoreFromSchematicState();
+}
+
+function scheduleDeviceReferenceReload(absolutePath: string): void {
+  const key = deviceReferenceKey(absolutePath);
+  const previous = deviceReferenceReloadTimers.get(key);
+  if (previous) clearTimeout(previous);
+  deviceReferenceReloadTimers.set(key, setTimeout(() => {
+    deviceReferenceReloadTimers.delete(key);
+    void reloadChangedDeviceReferences(absolutePath);
+  }, 300));
+}
+
+/** Mantém um watcher por arquivo referenciado; salvar/renomear/apagar o .lsdevice atualiza a instância. */
+function reconcileDeviceReferenceWatchers(): void {
+  if (!state.extensionContext) return;
+  const desired = new Map<string, string>();
+  for (const component of state.schematicState.components) {
+    if (!component.deviceRef?.path) continue;
+    const absolutePath = absoluteDeviceRefPath(component.deviceRef.path);
+    desired.set(deviceReferenceKey(absolutePath), absolutePath);
+  }
+  for (const [key, watcher] of deviceReferenceWatchers) {
+    if (desired.has(key)) continue;
+    watcher.dispose();
+    deviceReferenceWatchers.delete(key);
+  }
+  for (const [key, absolutePath] of desired) {
+    if (deviceReferenceWatchers.has(key) || !fileExists(path.dirname(absolutePath))) continue;
+    const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(path.dirname(absolutePath), path.basename(absolutePath)));
+    watcher.onDidChange(() => scheduleDeviceReferenceReload(absolutePath));
+    watcher.onDidCreate(() => scheduleDeviceReferenceReload(absolutePath));
+    watcher.onDidDelete(() => scheduleDeviceReferenceReload(absolutePath));
+    deviceReferenceWatchers.set(key, watcher);
+  }
+}
+
+function disposeDeviceReferenceWatchers(): void {
+  for (const timer of deviceReferenceReloadTimers.values()) clearTimeout(timer);
+  deviceReferenceReloadTimers.clear();
+  for (const watcher of deviceReferenceWatchers.values()) watcher.dispose();
+  deviceReferenceWatchers.clear();
 }
 
 /** Editor de propriedade `filePath` GENÉRICO (Estágio 1 da autoria de Package/ícone dentro de "Abrir
@@ -1279,6 +1502,9 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
     case "requestChooseSubcircuitFile":
       void chooseSubcircuitFileCommand(message.componentId);
       return;
+    case "requestChooseDeviceFile":
+      void chooseDeviceFileCommand(message.componentId);
+      return;
     case "requestChooseFile":
       void chooseFilePropertyCommand(message.componentId, message.propertyKey);
       return;
@@ -1310,6 +1536,7 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
         void openProjectCommand({
           extensionUri: state.extensionContext.extensionUri,
           beforeOpen: closeAllMcuSerialMonitors,
+          resolveExternalDeviceReferences,
           openSchematicEditor,
           syncSchematicPanel,
         });
@@ -1894,12 +2121,14 @@ async function exportInstrumentDataCommand(suggestedFileName: string, csvContent
 export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi {
   initSimulationLog(context);
   context.subscriptions.push(
+    { dispose: disposeDeviceReferenceWatchers },
     vscode.commands.registerCommand("lasecsimul.showSimulationLog", () => showSimulationLogChannel()),
     vscode.window.registerCustomEditorProvider(
       "lasecsimul.projectEditor",
       new ProjectCustomEditorProvider({
         extensionUri: context.extensionUri,
         beforeOpen: closeAllMcuSerialMonitors,
+        resolveExternalDeviceReferences,
         openSchematicEditor,
         syncSchematicPanel,
       }),
@@ -1932,6 +2161,7 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
         await openProjectFile(process.env.LASECSIMUL_E2E_FIXTURE, {
           extensionUri: context.extensionUri,
           beforeOpen: closeAllMcuSerialMonitors,
+          resolveExternalDeviceReferences,
           openSchematicEditor,
           syncSchematicPanel,
         });
@@ -1988,8 +2218,14 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
     }),
     vscode.commands.registerCommand("lasecsimul.openSchematicEditor", () => openSchematicEditor(context.extensionUri)),
     vscode.commands.registerCommand("lasecsimul.newSubcircuit", () => triggerCreateSubcircuitFromSelection(state.schematicPanel)),
-    vscode.commands.registerCommand("lasecsimul.openSettings", () => {
-      void vscode.commands.executeCommand("workbench.action.openSettings", "lasecsimul.");
+    vscode.commands.registerCommand("lasecsimul.openSettings", async () => {
+      try {
+        await vscode.commands.executeCommand("workbench.action.openSettings", "@ext:josuemoraisgh.lasecsimul");
+      } catch (err) {
+        const message = `Não foi possível abrir as Configurações do LasecSimul: ${err instanceof Error ? err.message : String(err)}`;
+        logSimulation("error", message, { stage: "configurações" });
+        vscode.window.showErrorMessage(message);
+      }
     }),
     vscode.commands.registerCommand("lasecsimul.palette.addComponent", (typeId: string) => addPaletteComponent(typeId)),
     vscode.commands.registerCommand("lasecsimul.run", () => void runSimulationWithFirmwareCheck()),
@@ -2001,12 +2237,14 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
     vscode.commands.registerCommand("lasecsimul.openProject", () => openProjectCommand({
       extensionUri: context.extensionUri,
       beforeOpen: closeAllMcuSerialMonitors,
+      resolveExternalDeviceReferences,
       openSchematicEditor,
       syncSchematicPanel,
     })),
     vscode.commands.registerCommand("lasecsimul.openRecentProject", () => openRecentProjectCommand({
       extensionUri: context.extensionUri,
       beforeOpen: closeAllMcuSerialMonitors,
+      resolveExternalDeviceReferences,
       openSchematicEditor,
       syncSchematicPanel,
     })),
@@ -2051,6 +2289,7 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
       await openProjectFile(selected, {
         extensionUri: context.extensionUri,
         beforeOpen: closeAllMcuSerialMonitors,
+        resolveExternalDeviceReferences,
         openSchematicEditor,
         syncSchematicPanel,
       });

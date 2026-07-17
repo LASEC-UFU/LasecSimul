@@ -168,6 +168,8 @@ export type WebviewToHostMessage =
    * `library.json`). Mesmo comando serve pra escolha inicial e pra "relink" (arquivo ausente ou
    * trocar de arquivo depois de já resolvido) -- ver `.spec/lasecsimul-subcircuits.spec` seção 12. */
   | { version: number; type: "requestChooseSubcircuitFile"; componentId: string }
+  /** Device genérico por caminho; não adiciona o manifesto ao catálogo permanente. */
+  | { version: number; type: "requestChooseDeviceFile"; componentId: string }
   /** Editor de propriedade `filePath` GENÉRICO -- ao contrário de `requestChooseSubcircuitFile`
    * (caso especial único, nunca grava em `properties`, troca typeId/pinos/package da instância),
    * este comando serve QUALQUER `propertySchema` com `editor: "filePath"` cujo campo NÃO seja

@@ -373,7 +373,13 @@
         "subcircuits.external": {
           "label": "Subcircuit",
           "folderPath": [
-            "Subcircuits"
+            "External"
+          ]
+        },
+        "devices.external": {
+          "label": "Device",
+          "folderPath": [
+            "External"
           ]
         },
         "instruments.voltmeter": {
@@ -6038,12 +6044,35 @@
       "category": "Connectors"
     },
     {
+      "typeId": "devices.external",
+      "label": "Device",
+      "pinCount": 0,
+      "folderPath": [
+        "Externos"
+      ],
+      "defaultProperties": {},
+      "propertySchema": [
+        {
+          "id": "devicePath",
+          "label": "Arquivo do Device",
+          "group": "Geral",
+          "unit": "",
+          "editor": "filePath",
+          "default": ""
+        }
+      ],
+      "help": {
+        "description": "Componente genérico que referencia um arquivo .lsdevice sem registrá-lo permanentemente no catálogo."
+      },
+      "category": "Externos"
+    },
+    {
       "typeId": "subcircuits.external",
-      "label": "Subcircuit",
+      "label": "Subcircuito",
       "pinCount": 0,
       "icon": "package",
       "folderPath": [
-        "Subcircuits"
+        "Externos"
       ],
       "defaultProperties": {},
       "propertySchema": [
@@ -6059,7 +6088,7 @@
       "help": {
         "description": "Bloco generico que aponta para um arquivo .lssubcircuit escolhido nas propriedades. Forma, pinos e icone sao assumidos automaticamente do arquivo escolhido."
       },
-      "category": "Subcircuits"
+      "category": "Externos"
     },
     {
       "typeId": "connectors.socket",

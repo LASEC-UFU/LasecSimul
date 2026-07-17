@@ -1,7 +1,7 @@
 import { createTestRunner, assert } from "../../ipc/testSupport/MockCoreServer";
 import fs from "node:fs";
 import path from "node:path";
-import { componentBox, componentLocalOrigin, componentSymbolSvg, hasRealPinPosition, pinLocalPosition, packageSymbolSvg, registerPackage } from "./componentSymbols";
+import { canonicalPackagePinId, componentBox, componentLocalOrigin, componentSymbolSvg, hasRealPinPosition, pinLocalPosition, packageSymbolSvg, registerPackage } from "./componentSymbols";
 import { PackageDescriptor, WebviewComponentModel } from "./model";
 
 (async () => {
@@ -456,6 +456,7 @@ import { PackageDescriptor, WebviewComponentModel } from "./model";
     assert(pinOut.x === 28 && pinOut.y === 12, `id real out deveria conectar em (28,12), recebido ${JSON.stringify(pinOut)}`);
     assert(pinLegacy.x === 28 && pinLegacy.y === 12, `alias pin-1 deveria conectar no mesmo ponto, recebido ${JSON.stringify(pinLegacy)}`);
     assert(hasRealPinPosition("test.simulide-paint.fixed-volt", "pin"), "alias pin deveria contar como posicao real");
+    assert(canonicalPackagePinId("test.simulide-paint.fixed-volt", "pin-1") === "out", "Core deve receber o id canônico, não o alias legado");
   });
 
   await test("package.simulidePaint primitive 'repeat' duplica um template N vezes (arrays/repeticoes, ex: SwitchDip::createSwitches) sem hand-enumeration por device", () => {

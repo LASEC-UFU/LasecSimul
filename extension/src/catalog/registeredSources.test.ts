@@ -107,6 +107,61 @@ function sourceFor(filePath: string): RegisteredSource {
       assert(resolved.adhocSubcircuitPathToRegister === undefined, "com library.json nao precisa registro avulso");
     });
 
+    await test("subcircuito integrado de microcontrolador preserva a pasta declarada no manifesto", () => {
+      const manifestPath = path.join(tmpDir, "integrated-mcu.lssubcircuit");
+      fs.writeFileSync(manifestPath, JSON.stringify({
+        schemaVersion: 3,
+        typeId: "subcircuits.integrated_mcu",
+        name: "Integrated MCU",
+        folderPath: ["Microcontroladores", "Espressif"],
+        components: [],
+        topology: { revision: 0, nodes: [], conductors: [] },
+        interface: [],
+        exposedComponents: [],
+      }), "utf8");
+      const resolved = resolveRegisteredItem({ ...sourceFor(manifestPath), removable: false }, tmpDir, "pt-BR", new Set());
+      assert(
+        JSON.stringify(resolved.entry.folderPath) === JSON.stringify(["Microcontroladores", "Espressif"]),
+        `pasta integrada foi movida incorretamente: ${JSON.stringify(resolved.entry.folderPath)}`,
+      );
+    });
+
+    await test("subcircuito adicionado pelo usuário fica diretamente em Externos", () => {
+      const manifestPath = path.join(tmpDir, "external-mcu.lssubcircuit");
+      writeSubcircuitManifest(manifestPath);
+      const resolved = resolveRegisteredItem(sourceFor(manifestPath), tmpDir, "pt-BR", new Set());
+      assert(
+        JSON.stringify(resolved.entry.folderPath) === JSON.stringify(["Externos"]),
+        `subcircuito externo deveria ficar diretamente em Externos: ${JSON.stringify(resolved.entry.folderPath)}`,
+      );
+    });
+
+    await test("Blinker de exemplo não está registrado na biblioteca integrada", () => {
+      const candidates = [
+        path.resolve(process.cwd(), "..", "devices", "library.json"),
+        path.resolve(process.cwd(), "devices", "library.json"),
+      ];
+      const libraryPath = candidates.find((candidate) => fs.existsSync(candidate));
+      assert(Boolean(libraryPath), "devices/library.json real não encontrado");
+      const sources = expandLibraryJsonToSources(libraryPath!);
+      assert(!sources.some((source) => source.filePath.includes("example-blinker")), "Blinker ainda está registrado na biblioteca");
+    });
+
+    await test("biblioteca real mantém ESP32 DevKitC e WROOM em Microcontroladores/Espressif", () => {
+      const candidates = [
+        path.resolve(process.cwd(), "..", "subcircuits", "library.json"),
+        path.resolve(process.cwd(), "subcircuits", "library.json"),
+      ];
+      const libraryPath = candidates.find((candidate) => fs.existsSync(candidate));
+      assert(Boolean(libraryPath), "subcircuits/library.json real não encontrado");
+      const entries = expandLibraryJsonToSources(libraryPath!)
+        .map((source) => resolveRegisteredItem(source, tmpDir, "pt-BR", new Set(["espressif.esp32"])).entry)
+        .filter((entry) => entry.typeId === "subcircuits.esp32_devkitc_v4" || entry.typeId === "subcircuits.esp32_wroom32");
+      assert(entries.length === 2, `esperados DevKitC e WROOM, recebidos ${entries.map((entry) => entry.typeId).join(", ")}`);
+      assert(entries.every((entry) => JSON.stringify(entry.folderPath) === JSON.stringify(["Microcontroladores", "Espressif"])),
+        `pastas reais incorretas: ${entries.map((entry) => JSON.stringify(entry.folderPath)).join(", ")}`);
+    });
+
     await test("expandLibraryJsonToSources: 1 arquivo canonico (library.json) com 1 unico dispositivo", () => {
       const dir = path.join(tmpDir, "one-device");
       fs.mkdirSync(dir);

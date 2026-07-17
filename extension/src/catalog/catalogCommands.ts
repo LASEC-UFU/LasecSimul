@@ -14,6 +14,14 @@ import {
   resolveRegisteredItems,
 } from "./registeredSources";
 import { checkDeviceIdUniqueness, DeviceIdOwner, formatDeviceIdConflict } from "./deviceUniqueness";
+import {
+  copyExternalManifest,
+  externalFolderPath,
+  manifestComponentDependencies,
+  missingManifestDependencies,
+  validateExternalManifest,
+  writeAdhocDeviceLibrary,
+} from "./externalComponents";
 
 type LoadConfiguredDeviceLibraries = (
   extensionPath: string,
@@ -97,7 +105,7 @@ function inferSourcesFromSelectedFile(extensionPath: string, selectedPath: strin
   return sources;
 }
 
-async function attachPropertySchemas(
+export async function attachPropertySchemas(
   catalog: WebviewComponentCatalogEntry[]
 ): Promise<WebviewComponentCatalogEntry[]> {
   if (!state.coreClient) return catalog;
@@ -261,25 +269,52 @@ export async function registerCatalogFileCommand(options: CatalogCommandOptions)
   const picked = await vscode.window.showOpenDialog({
     canSelectMany: false,
     filters: {
-      "LasecSimul": ["lsdevice", "lssubcircuit", "json"],
+      "Componente externo LasecSimul": ["lsdevice", "lssubcircuit"],
     },
-    title: "Registrar arquivo ABI/QEMU/Subcircuito no LasecSimul",
+    title: "Adicionar componente externo",
   });
   const selected = picked?.[0];
   if (!selected) return;
 
   let newSources: RegisteredSource[] = [];
+  let importedTypeId: string | undefined;
   try {
-    newSources = inferSourcesFromSelectedFile(ctx.extensionPath, selected.fsPath);
+    const manifest = validateExternalManifest(selected.fsPath, readJsonFile(selected.fsPath));
+    importedTypeId = manifest.typeId;
+    const duplicate = state.schematicState.catalog.find((entry) =>
+      entry.typeId === manifest.typeId && entry.typeId !== "devices.external" && entry.typeId !== "subcircuits.external");
+    if (duplicate) {
+      vscode.window.showErrorMessage(`typeId duplicado: "${manifest.typeId}" já existe no catálogo.`);
+      return;
+    }
+    const missing = missingManifestDependencies(selected.fsPath, manifest.json);
+    if (missing.length > 0) {
+      vscode.window.showErrorMessage(`Dependência ausente: ${missing.join(", ")}`);
+      return;
+    }
+    const availableTypeIds = new Set(state.schematicState.catalog.map((entry) => entry.typeId));
+    const missingTypes = manifestComponentDependencies(manifest).filter((typeId) => !availableTypeIds.has(typeId));
+    if (missingTypes.length > 0) {
+      vscode.window.showErrorMessage(`Dependência de componente ausente: ${missingTypes.join(", ")}`);
+      return;
+    }
+    const copiedPath = copyExternalManifest(selected.fsPath, manifest, ctx.globalStorageUri.fsPath);
+    newSources = inferSourcesFromSelectedFile(ctx.extensionPath, copiedPath).map((source) => ({
+      ...source,
+      folderPath: externalFolderPath(manifest.kind, currentLasecSimulLanguage()),
+      ...(manifest.kind === "device" ? {
+        libraryPath: writeAdhocDeviceLibrary(copiedPath, manifest, ctx.globalStorageUri.fsPath),
+      } : {}),
+    }));
   } catch (err) {
     vscode.window.showErrorMessage(
-      `Não foi possível registrar arquivo: ${err instanceof Error ? err.message : String(err)}`
+      `Não foi possível adicionar componente externo: ${err instanceof Error ? err.message : String(err)}`
     );
     return;
   }
 
   if (newSources.length === 0) {
-    vscode.window.showWarningMessage("Arquivo não reconhecido como ABI, QEMU (mcu/library) nem subcircuito.");
+    vscode.window.showWarningMessage("Arquivo inválido ou extensão não suportada. Use .lsdevice ou .lssubcircuit.");
     return;
   }
 
@@ -295,14 +330,23 @@ export async function registerCatalogFileCommand(options: CatalogCommandOptions)
   });
 
   if (deduped.length === 0) {
-    vscode.window.showInformationMessage("Esses itens já estavam registrados na paleta.");
+    vscode.window.showInformationMessage("O componente externo já estava adicionado à paleta.");
     return;
   }
 
   const mergedSources = [...unifiedCatalog.registeredSources, ...deduped];
   const savedAt = saveRegisteredSources(ctx.extensionPath, mergedSources);
   await refreshUnifiedCatalogState(true, options);
-  vscode.window.showInformationMessage(`Registro concluído (${deduped.length} item(ns)). Catálogo salvo em ${savedAt}.`);
+  const loaded = importedTypeId
+    ? state.schematicState.catalog.find((entry) => entry.typeId === importedTypeId)
+    : undefined;
+  if (!loaded || loaded.disabled) {
+    vscode.window.showErrorMessage(
+      `O componente foi registrado, mas falhou ao carregar: ${loaded?.disabledReason ?? "entrada não encontrada no catálogo"}`
+    );
+    return;
+  }
+  vscode.window.showInformationMessage(`Componente externo adicionado com sucesso (${deduped.length}). Catálogo salvo em ${savedAt}.`);
 }
 
 export async function removeRegisteredCatalogItemCommand(

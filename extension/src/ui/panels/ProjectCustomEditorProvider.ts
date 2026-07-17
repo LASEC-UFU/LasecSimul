@@ -4,6 +4,7 @@ import { canReplaceCurrentProject, openProjectFile } from "../../project/project
 export interface ProjectCustomEditorOptions {
   extensionUri: vscode.Uri;
   beforeOpen?: () => void;
+  resolveExternalDeviceReferences?: (projectDir: string) => Promise<void>;
   openSchematicEditor: (extensionUri: vscode.Uri) => void;
   syncSchematicPanel: () => void;
 }

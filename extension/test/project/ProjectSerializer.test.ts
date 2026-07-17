@@ -69,7 +69,7 @@ import { createEmptyProject } from "../../src/project/ProjectTypes";
   labeledProject.components.push({
     id: "r1",
     typeId: "core.resistor",
-    properties: { resistance: 220 },
+    properties: { resistance: 220, __ui_idLabelX: 41, __ui_idLabelY: -19, __ui_idLabelRotation: 90 },
     label: "Resistor-7",
     showId: true,
     showValue: false,
@@ -88,6 +88,9 @@ import { createEmptyProject } from "../../src/project/ProjectTypes";
   assert.strictEqual(labeledRoundTrip.components[0]?.flipV, false);
   assert.strictEqual(labeledRoundTrip.components[0]?.locked, true);
   assert.strictEqual(labeledRoundTrip.components[0]?.hiddenByUser, true);
+  assert.strictEqual(labeledRoundTrip.components[0]?.properties.__ui_idLabelX, 41, "posição X do label foi perdida");
+  assert.strictEqual(labeledRoundTrip.components[0]?.properties.__ui_idLabelY, -19, "posição Y do label foi perdida");
+  assert.strictEqual(labeledRoundTrip.components[0]?.properties.__ui_idLabelRotation, 90, "rotação do label foi perdida");
 
   // Projeto sem `locked`/`hiddenByUser` (arquivo salvo antes desta versão) continua carregando --
   // ausente, nunca um default `true` inventado.
@@ -137,6 +140,24 @@ import { createEmptyProject } from "../../src/project/ProjectTypes";
     lastKnownTypeId: "subcircuits.divisor_5v",
     lastKnownPinIds: ["VIN", "VOUT", "GND"],
   });
+
+  const deviceRefProject = createEmptyProject();
+  deviceRefProject.components.push({
+    id: "dev1",
+    typeId: "external.custom",
+    properties: { __ui_idLabelX: 12, __ui_idLabelY: 34 },
+    deviceRef: {
+      path: "../Externos/Devices/custom.lsdevice",
+      lastKnownTypeId: "external.custom",
+      lastKnownPinIds: ["a", "b"],
+      lastKnownMtimeMs: 1234,
+    },
+  });
+  const deviceRefPath = path.join(tmpDir, "device-ref.lsproj");
+  await serializer.save(deviceRefPath, deviceRefProject);
+  const deviceRefRoundTrip = await serializer.load(deviceRefPath);
+  assert.deepStrictEqual(deviceRefRoundTrip.components[0]?.deviceRef, deviceRefProject.components[0]?.deviceRef);
+  assert.deepStrictEqual(deviceRefRoundTrip.components[0]?.properties, deviceRefProject.components[0]?.properties);
 
   // Componente normal (sem `subcircuitRef`) continua sem o campo depois do load -- nunca inventa um
   // valor default pra quem nunca teve essa referência.

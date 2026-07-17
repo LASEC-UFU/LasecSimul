@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import * as path from "path";
 import { IpcError } from "../ipc/protocol";
 import { ComponentReadoutValue, InstrumentHistoryPayload, SimulationStatus } from "../ui/webview/messages";
 import { CanonicalEndpoint, TopologyNode, TUNNEL_TYPE_ID, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewWireModel, endpointId, endpointPinId } from "../ui/webview/model";
@@ -9,6 +10,7 @@ import { serialTerminalManager } from "../serialterm/manager";
 import { serialPortManager } from "../serialport/manager";
 import { electricalEdgesForProject, diffElectricalEdges } from "../ui/webview/wireTopology";
 import { logSimulation, noteSimulationStatusChange } from "../diagnostics/simulationLog";
+import { canonicalPackagePinId } from "../ui/webview/componentSymbols";
 
 export { electricalEdgesForProject, diffElectricalEdges };
 
@@ -86,10 +88,15 @@ export function registerCoreIdsForComponent(
  * `registerCoreIdsForComponent` a partir de `exposedPins`, que o Core já calculava e devolvia mas a
  * Extension nunca lia) dá o {instanceId,pinId} real do túnel interno que representa esse pino. */
 function resolveWireEndpoint(componentId: string, pinId: string): { instanceId: string; pinId: string } | undefined {
-  const boundary = subcircuitBoundaryPinsByComponentId.get(componentId)?.[pinId];
+  const component = state.schematicState.components.find((item) => item.id === componentId);
+  const resolvedPinId = component
+    ? canonicalPackagePinId(component.typeId, pinId, component.properties)
+    : pinId;
+  const boundaryPins = subcircuitBoundaryPinsByComponentId.get(componentId);
+  const boundary = boundaryPins?.[pinId] ?? boundaryPins?.[resolvedPinId];
   if (boundary) return boundary;
   const instanceId = coreInstanceIdByComponentId.get(componentId);
-  return instanceId ? { instanceId, pinId } : undefined;
+  return instanceId ? { instanceId, pinId: resolvedPinId } : undefined;
 }
 
 /** Escolhe um pino real por rede e o associa a cada condutor geométrico dessa rede. Assim a
@@ -721,9 +728,14 @@ export function shouldSyncComponentToCore(typeId: string): boolean {
  * (arquivo ausente, ou projeto recém-aberto antes de `resolveProjectSubcircuitReferences` rodar) --
  * usado pra NUNCA tentar `addComponent` no Core enquanto não resolvido (typeId não existe em nenhum
  * `SubcircuitRegistry`, a tentativa só geraria um toast de erro à toa a cada rebuild). */
-export function isUnresolvedSubcircuitRef(component: { typeId: string; subcircuitRef?: unknown }): boolean {
-  if (!component.subcircuitRef) return false;
-  return !state.schematicState.catalog.some((item) => item.typeId === component.typeId);
+export function isUnresolvedSubcircuitRef(component: { typeId: string; subcircuitRef?: unknown; deviceRef?: { path: string } }): boolean {
+  if (component.subcircuitRef && !state.schematicState.catalog.some((item) => item.typeId === component.typeId)) return true;
+  if (!component.deviceRef) return false;
+  const absoluteRef = path.isAbsolute(component.deviceRef.path)
+    ? path.normalize(component.deviceRef.path)
+    : path.resolve(state.currentProjectFilePath ? path.dirname(state.currentProjectFilePath) : process.cwd(), component.deviceRef.path);
+  return !state.schematicState.catalog.some((item) =>
+    item.typeId === component.typeId && item.externalReferencePath && path.normalize(item.externalReferencePath) === absoluteRef);
 }
 
 /** Fila de execução serializada pra `rebuildCoreFromSchematicState` — sem isso, remover vários fios
@@ -853,9 +865,9 @@ async function rebuildCoreFromSchematicStateNow(): Promise<void> {
  * Aceita tanto `ProjectComponent` (`.lsproj`) quanto `WebviewComponentModel` (já em memória) --
  * as duas têm `typeId`/`subcircuitRef?` no mesmo shape, e ambas precisam do mesmo fallback ao
  * reconstruir pinos pro Core (`rebuildCoreFromSchematicState` reconstrói do zero a cada rebuild). */
-export function pinsForProjectComponent(component: { typeId: string; subcircuitRef?: { lastKnownPinIds?: string[] }; properties?: Record<string, unknown> }): Array<{ id: string; x: number; y: number }> {
+export function pinsForProjectComponent(component: { typeId: string; subcircuitRef?: { lastKnownPinIds?: string[] }; deviceRef?: { lastKnownPinIds?: string[] }; properties?: Record<string, unknown> }): Array<{ id: string; x: number; y: number }> {
   const descriptor = state.schematicState.catalog.find((item) => item.typeId === component.typeId);
-  const lastKnownPinIds = component.subcircuitRef?.lastKnownPinIds;
+  const lastKnownPinIds = component.subcircuitRef?.lastKnownPinIds ?? component.deviceRef?.lastKnownPinIds;
   if (!descriptor && lastKnownPinIds && lastKnownPinIds.length > 0) {
     return lastKnownPinIds.map((id, index) => ({ id, x: 0, y: index * 12 }));
   }

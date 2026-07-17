@@ -202,6 +202,7 @@ const UI_TEXT = {
     chooseSubcircuitFile: "Procurar...",
     noSubcircuitFileChosen: "(nenhum)",
     locateSubcircuitFile: "Localizar arquivo do subcircuito...",
+    locateDeviceFile: "Localizar ou recarregar arquivo do Device...",
     linkToTunnel: "Vincular a túnel...",
     unlinkTunnel: "Desvincular túnel",
     noTunnelsInScene: "(nenhum túnel na cena)",
@@ -312,6 +313,7 @@ const UI_TEXT = {
     chooseSubcircuitFile: "Browse...",
     noSubcircuitFileChosen: "(none)",
     locateSubcircuitFile: "Locate subcircuit file...",
+    locateDeviceFile: "Locate or reload Device file...",
     linkToTunnel: "Link to tunnel...",
     unlinkTunnel: "Unlink tunnel",
     noTunnelsInScene: "(no tunnels in scene)",
@@ -5277,6 +5279,7 @@ interface ComponentVisualFlags {
   isVoltmeter: boolean;
   hasPackageVisual: boolean;
   isMissingSubcircuitRef: boolean;
+  isMissingDeviceRef: boolean;
 }
 
 /** Ponto único de "que categoria visual/interativa este componente é" -- ANTES calculado duas vezes
@@ -5303,6 +5306,7 @@ function componentVisualFlags(component: WebviewComponentModel): ComponentVisual
     isVoltmeter: component.typeId === "instruments.voltmeter",
     hasPackageVisual: Boolean(catalogEntry?.package || (component.properties.logicSymbol === true && catalogEntry?.logicSymbolPackage)),
     isMissingSubcircuitRef: Boolean(component.subcircuitRef) && !catalogEntry,
+    isMissingDeviceRef: Boolean(component.deviceRef) && !catalogEntry?.externalReferencePath,
   };
 }
 
@@ -5485,6 +5489,12 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
           { label: t("locateSubcircuitFile"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestChooseSubcircuitFile", componentId: component.id }) },
         ]
       : [];
+    const deviceRefMenuItems: ContextMenuItem[] = !isGroup && (component.deviceRef || component.typeId === "devices.external")
+      ? [
+          { kind: "separator" },
+          { label: t("locateDeviceFile"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestChooseDeviceFile", componentId: component.id }) },
+        ]
+      : [];
     // Túnel adicional pro pino selecionado -- ação explícita, distinta da criação do próprio pino
     // (pedido original). Só aparece pro typeId dedicado de pino do Modo Símbolo.
     const symbolPinMenuItems: ContextMenuItem[] =
@@ -5554,6 +5564,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
       ...mcuMenuItems,
       ...createSubcircuitMenuItems,
       ...subcircuitRefMenuItems,
+      ...deviceRefMenuItems,
       ...symbolPinMenuItems,
       ...exposeComponentMenuItems,
       ...exportPropertyMenuItems,
@@ -6059,13 +6070,13 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
   // movido/apagado, ver `chooseSubcircuitFileCommand`/carregamento de projeto) -- `subcircuitRef`
   // presente mas o typeId atual não tem entrada no catálogo desta sessão.
   const {
-    catalogEntry, isPushButton, isSwitchToggle, isFixedVolt, isRail, isTunnel, isMeter, isVoltmeter, hasPackageVisual, isMissingSubcircuitRef,
+    catalogEntry, isPushButton, isSwitchToggle, isFixedVolt, isRail, isTunnel, isMeter, isVoltmeter, hasPackageVisual, isMissingSubcircuitRef, isMissingDeviceRef,
   } = componentVisualFlags(component);
   // `symbol.pin` (Modo Símbolo) é deliberadamente ausente do catálogo geral (nenhum typeId de pino na
   // paleta, pedido original) -- sem esta exceção, TODO pino do Símbolo caía em `isUnknownComponent`
   // e desenhava o placeholder "?" tracejado vermelho de componente desconhecido (bug real: o pino
   // nunca mostrava seu lead+círculo simples, só o marcador de erro).
-  const isUnknownComponent = !catalogEntry && !component.subcircuitRef && component.typeId !== SYMBOL_PIN_TYPE_ID;
+  const isUnknownComponent = !catalogEntry && !component.subcircuitRef && !component.deviceRef && component.typeId !== SYMBOL_PIN_TYPE_ID;
   const meterClass = isMeter ? `component--meter component--${component.typeId.replace(/[._]/g, "-")}` : "";
 
   // CSS aplica da direita pra esquerda: scale (flip) primeiro, rotate depois -- mesma ordem usada
@@ -6079,13 +6090,13 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
   // `viewBox`) passa a acompanhar a rotação, então nenhuma posição de pino/fio muda.
   const rotatedBox = rotatedComponentLocalBox(box, component.rotation, Boolean(component.flipH), Boolean(component.flipV), localOrigin);
 
-  el.className = `component ${isComponentSelected(component.id) ? "selected" : ""} ${hasPackageVisual ? "component--package" : ""} ${isVoltmeter ? "component--voltmeter" : ""} ${isPushButton ? "component--push" : ""} ${isSwitchToggle ? "component--switch" : ""} ${isFixedVolt ? "component--fixed-volt" : ""} ${isRail ? "component--rail" : ""} ${isTunnel ? "component--tunnel" : ""} ${meterClass} ${isMissingSubcircuitRef ? "component--subcircuit-missing" : ""} ${isUnknownComponent ? "component--unknown" : ""}`;
+  el.className = `component ${isComponentSelected(component.id) ? "selected" : ""} ${hasPackageVisual ? "component--package" : ""} ${isVoltmeter ? "component--voltmeter" : ""} ${isPushButton ? "component--push" : ""} ${isSwitchToggle ? "component--switch" : ""} ${isFixedVolt ? "component--fixed-volt" : ""} ${isRail ? "component--rail" : ""} ${isTunnel ? "component--tunnel" : ""} ${meterClass} ${isMissingSubcircuitRef || isMissingDeviceRef ? "component--subcircuit-missing" : ""} ${isUnknownComponent ? "component--unknown" : ""}`;
   el.style.left = `${component.x + rotatedBox.x}px`;
   el.style.top = `${component.y + rotatedBox.y}px`;
   el.style.width = `${rotatedBox.width}px`;
   el.style.height = `${rotatedBox.height}px`;
-  el.title = isMissingSubcircuitRef
-    ? `${component.label} -- ${t("locateSubcircuitFile")}\n${component.subcircuitRef?.path ?? ""}`
+  el.title = isMissingSubcircuitRef || isMissingDeviceRef
+    ? `${component.label} -- ${isMissingDeviceRef ? t("locateDeviceFile") : t("locateSubcircuitFile")}\n${component.deviceRef?.path ?? component.subcircuitRef?.path ?? ""}`
     : isUnknownComponent
       ? `${component.label} -- ${t("unknownComponent")}\n${component.typeId}`
       : `${component.label} (${component.typeId})`;
@@ -6755,6 +6766,8 @@ function resolvePropertyFields(component: WebviewComponentModel): PropertyField[
       : kind === "filePath"
         ? propSchema.id === "subcircuitPath"
           ? (component.subcircuitRef?.path ?? "")
+          : propSchema.id === "devicePath"
+            ? (component.deviceRef?.path ?? "")
           : (component.properties[propSchema.id] ?? propSchema.default ?? "")
         : component.properties[propSchema.id] ?? propSchema.default;
     fields.push({
@@ -6877,6 +6890,7 @@ function renderPropertyField(component: WebviewComponentModel, field: PropertyFi
     // `.spec/lasecsimul.spec`) é genérico: `requestChooseFile` lê o arquivo no host e grava o
     // resultado direto em `properties[propertyKey]` -- sem trocar typeId/pinos/nada mais.
     const isSubcircuitRefPath = field.key === "subcircuitPath";
+    const isDeviceRefPath = field.key === "devicePath";
     const row = document.createElement("label");
     row.className = "property-sheet__field-row";
     const caption = document.createElement("span");
@@ -6897,6 +6911,8 @@ function renderPropertyField(component: WebviewComponentModel, field: PropertyFi
     browseButton.addEventListener("click", () => {
       if (isSubcircuitRefPath) {
         send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestChooseSubcircuitFile", componentId: component.id });
+      } else if (isDeviceRefPath) {
+        send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestChooseDeviceFile", componentId: component.id });
       } else {
         send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestChooseFile", componentId: component.id, propertyKey: field.key });
       }
