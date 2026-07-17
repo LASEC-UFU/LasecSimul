@@ -42,5 +42,12 @@ await test("rejeita escrita read-only e fecha ao parar simulação", async () =>
   let rejected = false; try { await connection.write(Uint8Array.of(1)); } catch { rejected = true; } let reason = ""; connection.onDidClose((event) => { reason = event.reason; }); broker.setOnline(registration.id, false);
   assert(rejected, "read-only aceitou escrita"); assert(reason === "simulation-stopped", "fechamento não foi notificado"); assert((await broker.listLasecPlotEndpoints()).length === 0, "endpoint parado continuou publicado"); broker.dispose();
 });
+await test("publica com sucesso mesmo com a simulação parada (offline) -- abrir o endpoint não depende de Run", () => {
+  const broker = new LasecPlotBroker(new MemoryTransport(), 1000);
+  broker.register(registration); // NUNCA chama setOnline(true) -- endpoint continua offline
+  broker.publish(registration.id); // não deveria lançar
+  assert(broker.isPublished(registration.id), "endpoint deveria estar publicado mesmo offline");
+  broker.dispose();
+});
 const { failed } = finish(); process.exitCode = failed > 0 ? 1 : 0;
 })();

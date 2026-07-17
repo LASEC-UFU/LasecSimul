@@ -318,6 +318,16 @@ function mcuCommandOptions(): Parameters<typeof chooseMcuFirmwareCommand>[1] {
  * inacessível ou a recarga falhar, a simulação NÃO inicia -- erro claro em vez de rodar com firmware
  * potencialmente desatualizado ou o processo QEMU num estado inconsistente. */
 async function runSimulationWithFirmwareCheck(): Promise<void> {
+  // Sem isto, "Run" ficava em silêncio TOTAL sempre que `state.coreClient` ainda não estava pronto
+  // (Core em processo de inicialização, ou falhou ao conectar) -- achado real: `ensureAllMcuFirmwareUpToDate`
+  // PULA cada MCU quando `!state.coreClient` (`continue`, nunca `ok:false`) e `registerAllPauseConditions`
+  // devolve `false` no mesmo caso (também sem mensagem nenhuma) -- as duas etapas seguintes rodavam
+  // "com sucesso" (nada de errado detectado) e `runSimulation()` nunca era chamado, sem nenhum
+  // feedback visível pro usuário sobre o motivo.
+  if (!state.coreClient) {
+    vscode.window.showErrorMessage("Não foi possível iniciar a simulação: o Core ainda não está conectado.");
+    return;
+  }
   const result = await ensureAllMcuFirmwareUpToDate(mcuCommandOptions());
   if (!result.ok) {
     vscode.window.showErrorMessage(`Não foi possível iniciar a simulação: ${result.message}`);

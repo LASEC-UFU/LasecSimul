@@ -108,7 +108,12 @@ export class LasecPlotBroker implements LasecSimulInteropApi, vscode.Disposable 
   publish(id: string): void {
     const state = this.required(id);
     if (!state.registration.name.trim()) throw new Error("Nome da fonte não pode ficar vazio.");
-    if (!state.online) throw new Error("Inicie a simulação antes de abrir o LasecPlot.");
+    // Abrir o endpoint (pra outras extensões do VSCode conseguirem se conectar) é INDEPENDENTE de a
+    // simulação estar rodando -- pedido real: "o sistema não precisa estar em run para ele abrir a
+    // comunicação com outras extensões do vscode". `describe()`/`online` continua reportando
+    // separadamente se há dado ao vivo fluindo agora (`state.online`, ligado a
+    // `simulationStatus`/`coreInstanceIdByComponentId` em `manager.ts::sync`) -- só a PUBLICAÇÃO em
+    // si (o endpoint existir/aceitar conexão) não devia depender disso.
     if (state.published) throw new Error("O endpoint LasecPlot já está aberto.");
     state.published = true; state.sequence = 0; this.changed.fire();
   }
