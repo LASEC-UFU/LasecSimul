@@ -81,6 +81,7 @@ import {
   gatherInternalComponentSnapshots,
   resolveSourceFilePath,
 } from "./catalog/subcircuitInternals";
+import { initSimulationLog, logSimulation, noteSimulationStatusChange, showSimulationLogChannel } from "./diagnostics/simulationLog";
 
 function setSchematicOpenContext(isOpen: boolean): Thenable<void> {
   return vscode.commands.executeCommand("setContext", "lasecsimul.schematicOpen", isOpen);
@@ -325,14 +326,11 @@ async function runSimulationWithFirmwareCheck(): Promise<void> {
   // "com sucesso" (nada de errado detectado) e `runSimulation()` nunca era chamado, sem nenhum
   // feedback visível pro usuário sobre o motivo.
   if (!state.coreClient) {
-    vscode.window.showErrorMessage("Não foi possível iniciar a simulação: o Core ainda não está conectado.");
+    logSimulation("error", "O Core ainda não está conectado.", { stage: "core" });
     return;
   }
   const result = await ensureAllMcuFirmwareUpToDate(mcuCommandOptions());
-  if (!result.ok) {
-    vscode.window.showErrorMessage(`Não foi possível iniciar a simulação: ${result.message}`);
-    return;
-  }
+  if (!result.ok) return; // já logado (canal + Problemas + status bar) dentro de ensureAllMcuFirmwareUpToDate
   await registerAllPauseConditions().then((valid) => valid ? runSimulation() : undefined);
 }
 
@@ -355,7 +353,7 @@ async function registerAllPauseConditions(): Promise<boolean> {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       state.schematicPanel?.postMessage({ version: 1, type: "pauseConditionValidation", componentId: component.id, valid: false, error: message });
-      vscode.window.showErrorMessage(`Condição de pausa de ${component.label || component.id}: ${message}`);
+      logSimulation("error", message, { device: component.label || component.id, stage: "condição-de-pausa" });
       return false;
     }
   }
@@ -1757,6 +1755,10 @@ async function exportInstrumentDataCommand(suggestedFileName: string, csvContent
 }
 
 export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi {
+  initSimulationLog(context);
+  context.subscriptions.push(
+    vscode.commands.registerCommand("lasecsimul.showSimulationLog", () => showSimulationLogChannel())
+  );
   const lasecPlot = initializeLasecPlot(context);
   initializeSerialTerminal(context);
   initializeSerialPort(context);
@@ -1788,22 +1790,23 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
 
   state.coreProc = new CoreProcess({ executablePath: corePath, pipeName, env: coreEnv });
   state.coreProc.onError((err) => {
-    vscode.window.showErrorMessage(
-      `LasecSimul Core: não foi possível iniciar "${corePath}" (${err.message}). ` +
-        `Compile o Core antes (npm run build:core) e confirme que o gerador usado coloca o binário ` +
-        `em core/build/ ou core/build/<Config>/.`
+    logSimulation(
+      "error",
+      `Não foi possível iniciar "${corePath}": ${err.message}`,
+      {
+        stage: "core-process",
+        detail: "Compile o Core antes (npm run build:core) e confirme que o gerador usado coloca o binário em core/build/ ou core/build/<Config>/.",
+      }
     );
   });
   try {
     state.coreProc.start();
   } catch (err) {
-    vscode.window.showErrorMessage(
-      `LasecSimul Core: falha ao iniciar processo: ${err instanceof Error ? err.message : String(err)}`
-    );
+    logSimulation("error", `Falha ao iniciar processo: ${err instanceof Error ? err.message : String(err)}`, { stage: "core-process" });
   }
   state.coreProc.onExit((code) => {
     // RNF: Core caiu → reiniciar + restaurar snapshot (ver lasecsimul-native-devices.spec §12.5)
-    vscode.window.showWarningMessage(`LasecSimul Core terminou (code ${code}). Reinicie a simulação.`);
+    logSimulation("error", `LasecSimul Core terminou (code ${code}). Reinicie a simulação.`, { stage: "core-process" });
     state.coreClient = undefined;
     setSimulationStatus("stopped");
     for (const component of state.schematicState.components.filter((entry) => entry.typeId === "peripherals.lasecplot")) {
@@ -1825,6 +1828,14 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
     };
     stopVoltageReadoutPolling();
     setSimulationStatus("paused");
+    // Erro de AVALIAÇÃO da condição (expressão inválida) acende o indicador de erro em vez do simples
+    // "pausado" -- antes disto o `payload.error` só ia pra Webview (inline no instrumento), sem
+    // nenhum rastro no canal de saída/status bar.
+    if (payload.error) {
+      logSimulation("error", payload.error, { device: componentLabel(payload.ownerId ?? ""), stage: "condição-de-pausa" });
+    } else {
+      noteSimulationStatusChange("paused");
+    }
     state.schematicPanel?.postMessage({
       version: 1,
       type: "pauseConditionTriggered",
@@ -1850,9 +1861,7 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
       }
     })
     .catch((err) => {
-      vscode.window.showErrorMessage(
-        `Falha ao conectar ao LasecSimul Core: ${err instanceof Error ? err.message : String(err)}`
-      );
+      logSimulation("error", `Falha ao conectar ao LasecSimul Core: ${err instanceof Error ? err.message : String(err)}`, { stage: "core-process" });
     });
 
   const addPaletteComponent = (typeId: string) => {

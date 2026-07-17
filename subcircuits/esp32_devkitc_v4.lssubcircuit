@@ -2421,8 +2421,8 @@
   "exposedComponents": [
     {
       "componentId": "button_en",
-      "x": 50.12940691421322,
-      "y": 139.49062719864165,
+      "x": 48.97822845819975,
+      "y": 132.19977501110412,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2431,8 +2431,8 @@
     },
     {
       "componentId": "button_boot",
-      "x": 6.337859838025906,
-      "y": 141.16288694239717,
+      "x": 7.233232786702549,
+      "y": 133.10458895666858,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2441,14 +2441,17 @@
     },
     {
       "componentId": "component-1783937576339-406282",
-      "x": 104,
-      "y": 136,
+      "x": 9.730630163954487,
+      "y": 124.61605476180912,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
       "scale": 1,
       "layer": 2
     }
+  ],
+  "exportedPropertyComponentIds": [
+    "mcu1"
   ],
   "icon": {
     "width": 28,

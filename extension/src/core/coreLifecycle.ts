@@ -2,12 +2,13 @@ import * as vscode from "vscode";
 import { IpcError } from "../ipc/protocol";
 import { ComponentReadoutValue, InstrumentHistoryPayload, SimulationStatus } from "../ui/webview/messages";
 import { CanonicalEndpoint, TopologyNode, TUNNEL_TYPE_ID, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewWireModel, endpointId, endpointPinId } from "../ui/webview/model";
-import { state, coreInstanceIdByComponentId, mcuTargetCoreIdByComponentId } from "../state";
+import { state, coreInstanceIdByComponentId, mcuTargetCoreIdByComponentId, subcircuitBoundaryPinsByComponentId } from "../state";
 import { pinsForTypeId } from "../extension";
 import { lasecPlotManager } from "../lasecplot/manager";
 import { serialTerminalManager } from "../serialterm/manager";
 import { serialPortManager } from "../serialport/manager";
 import { electricalEdgesForProject, diffElectricalEdges } from "../ui/webview/wireTopology";
+import { logSimulation, noteSimulationStatusChange } from "../diagnostics/simulationLog";
 
 export { electricalEdgesForProject, diffElectricalEdges };
 
@@ -45,13 +46,21 @@ export function electricalOperationsDiff(
 
 export function reportCoreWarning(action: string, err: unknown): void {
   const code = err instanceof IpcError && err.code ? ` [${err.code}]` : "";
-  vscode.window.showWarningMessage(
-    `LasecSimul Core: ${action} falhou${code}: ${err instanceof Error ? err.message : String(err)}`
-  );
+  const message = `${action} falhou${code}: ${err instanceof Error ? err.message : String(err)}`;
+  logSimulation("warning", message, { stage: "core" });
 }
 
-export function registerCoreIdsForComponent(componentId: string, typeId: string, response: { instanceId: string; primaryMcuInstanceId?: string }): void {
+export function registerCoreIdsForComponent(
+  componentId: string,
+  typeId: string,
+  response: { instanceId: string; primaryMcuInstanceId?: string; exposedPins?: Record<string, { instanceId: string; pinId: string }> }
+): void {
   coreInstanceIdByComponentId.set(componentId, response.instanceId);
+  if (response.exposedPins && Object.keys(response.exposedPins).length > 0) {
+    subcircuitBoundaryPinsByComponentId.set(componentId, response.exposedPins);
+  } else {
+    subcircuitBoundaryPinsByComponentId.delete(componentId);
+  }
   if (response.primaryMcuInstanceId) {
     // Subcircuito hospedando MCU interno -- o alvo é o FILHO (primaryMcuInstanceId), não a
     // instância do subcircuito em si.
@@ -63,6 +72,24 @@ export function registerCoreIdsForComponent(componentId: string, typeId: string,
   // componente É o MCU, sua própria instância é o alvo. Nenhum hardcode de typeId aqui.
   const catalogEntry = state.schematicState.catalog.find((entry) => entry.typeId === typeId);
   if (catalogEntry?.mcuHost === true) mcuTargetCoreIdByComponentId.set(componentId, response.instanceId);
+}
+
+/** Resolve um endpoint de fio (`componentId`+`pinId` do modelo da Webview) pro par {instanceId,pinId}
+ * REAL que o Core entende. Pra maioria dos componentes isso é só `coreInstanceIdByComponentId.get
+ * (componentId)` + o mesmo `pinId` -- mas quando `componentId` é um BLOCO de subcircuito e `pinId` é
+ * um dos seus pinos de FRONTEIRA (ex: fio ligado direto no "GPIO2" do ESP32 DevKitC colocado no
+ * esquemático principal, não um componente interno exposto via Modo Placa), o id "container" do
+ * bloco NUNCA é um índice de componente válido do Netlist (`kSubcircuitInstanceFlag`, ver
+ * `SimulationSession.cpp`) -- usá-lo direto em `connectWire` derrubava o Core com "invalid
+ * vector<bool> subscript" (bug real 2026-07-17, reproduzido ao reconectar fios de um ESP32 DevKitC
+ * após um rebuild completo). `subcircuitBoundaryPinsByComponentId` (preenchido em
+ * `registerCoreIdsForComponent` a partir de `exposedPins`, que o Core já calculava e devolvia mas a
+ * Extension nunca lia) dá o {instanceId,pinId} real do túnel interno que representa esse pino. */
+function resolveWireEndpoint(componentId: string, pinId: string): { instanceId: string; pinId: string } | undefined {
+  const boundary = subcircuitBoundaryPinsByComponentId.get(componentId)?.[pinId];
+  if (boundary) return boundary;
+  const instanceId = coreInstanceIdByComponentId.get(componentId);
+  return instanceId ? { instanceId, pinId } : undefined;
 }
 
 /** Escolhe um pino real por rede e o associa a cada condutor geométrico dessa rede. Assim a
@@ -151,11 +178,11 @@ export function pushComponentToCore(
 
 async function pushWireToCoreNow(wire: WebviewWireModel): Promise<boolean> {
   if (!state.coreClient) return false;
-  const coreA = coreInstanceIdByComponentId.get(endpointId(wire.from));
-  const coreB = coreInstanceIdByComponentId.get(endpointId(wire.to));
-  if (!coreA || !coreB) return false; // um dos lados não existe no Core (typeId não suportado ou ainda não resolvido)
+  const a = resolveWireEndpoint(endpointId(wire.from), endpointPinId(wire.from));
+  const b = resolveWireEndpoint(endpointId(wire.to), endpointPinId(wire.to));
+  if (!a || !b) return false; // um dos lados não existe no Core (typeId não suportado ou ainda não resolvido)
   try {
-    await state.coreClient.connectWire(coreA, endpointPinId(wire.from), coreB, endpointPinId(wire.to));
+    await state.coreClient.connectWire(a.instanceId, a.pinId, b.instanceId, b.pinId);
     return true;
   } catch (err) {
     reportCoreWarning("conectar fio", err);
@@ -176,10 +203,10 @@ export function pushWireTopologyTransaction(operations: Array<{ kind: "connect" 
     if (!state.coreClient) return false;
     if (operations.length === 0) return true;
     const resolved = operations.map(({ kind, wire }) => {
-      const componentA = coreInstanceIdByComponentId.get(endpointId(wire.from));
-      const componentB = coreInstanceIdByComponentId.get(endpointId(wire.to));
-      if (!componentA || !componentB) return undefined;
-      return { kind, from: { componentId: componentA, pinId: endpointPinId(wire.from) }, to: { componentId: componentB, pinId: endpointPinId(wire.to) } };
+      const a = resolveWireEndpoint(endpointId(wire.from), endpointPinId(wire.from));
+      const b = resolveWireEndpoint(endpointId(wire.to), endpointPinId(wire.to));
+      if (!a || !b) return undefined;
+      return { kind, from: { componentId: a.instanceId, pinId: a.pinId }, to: { componentId: b.instanceId, pinId: b.pinId } };
     });
     if (resolved.some((operation) => operation === undefined)) return false;
     try {
@@ -208,14 +235,14 @@ export function pushRemoveWireToCore(wire: WebviewWireModel | undefined): void {
   if (!wire) return;
   void enqueueCoreMutation(async () => {
     if (!state.coreClient) return;
-    const coreA = coreInstanceIdByComponentId.get(endpointId(wire.from));
-    const coreB = coreInstanceIdByComponentId.get(endpointId(wire.to));
-    if (!coreA || !coreB) {
+    const a = resolveWireEndpoint(endpointId(wire.from), endpointPinId(wire.from));
+    const b = resolveWireEndpoint(endpointId(wire.to), endpointPinId(wire.to));
+    if (!a || !b) {
       await rebuildCoreFromSchematicStateNow();
       return;
     }
     try {
-      await state.coreClient.disconnectWire(coreA, endpointPinId(wire.from), coreB, endpointPinId(wire.to));
+      await state.coreClient.disconnectWire(a.instanceId, a.pinId, b.instanceId, b.pinId);
     } catch (err) {
       reportCoreWarning("remover fio", err);
     }
@@ -552,8 +579,8 @@ export async function pollWireVoltages(): Promise<void> {
   const voltagesByWireId: Record<string, number> = {};
   const batch: Array<{ key: string; instanceId: string; pinId: string }> = [];
   for (const probe of voltageProbesForProject(state.schematicState.topology)) {
-    const coreId = coreInstanceIdByComponentId.get(probe.componentId);
-    if (coreId) batch.push({ key: probe.wireId, instanceId: coreId, pinId: probe.pinId });
+    const endpoint = resolveWireEndpoint(probe.componentId, probe.pinId);
+    if (endpoint) batch.push({ key: probe.wireId, instanceId: endpoint.instanceId, pinId: endpoint.pinId });
   }
   try {
     Object.assign(voltagesByWireId, await state.coreClient.getNodeVoltages(batch));
@@ -615,6 +642,11 @@ export function stopVoltageReadoutPolling(): void {
   state.schematicPanel?.postMessage({ version: 1, type: "simulationRate", rate: undefined });
 }
 
+/** NÃO limpa a status bar de erro/aviso sozinha -- ver `noteSimulationStatusChange`, chamada só nos 3
+ * pontos de AÇÃO deliberada do usuário (`runSimulation`/`pauseSimulation`/`stopSimulation`) abaixo.
+ * Sem essa separação, um Core que morre (`extension.ts::coreProc.onExit`, que loga o erro E chama
+ * `setSimulationStatus("stopped")` em seguida) apagaria o próprio indicador vermelho que acabou de
+ * acender -- o usuário nunca veria o aviso na status bar, só um flash. */
 export function setSimulationStatus(status: SimulationStatus): void {
   state.simulationStatus = status;
   lasecPlotManager?.updateSimulationState();
@@ -635,6 +667,9 @@ export function runSimulation(): void {
   // overwritten by the start promise continuation.
   startVoltageReadoutPolling();
   setSimulationStatus("running");
+  // Tentativa deliberada do usuário -- limpa qualquer erro/aviso de uma corrida anterior ANTES de
+  // saber se esta vai dar certo; se falhar, `reportCoreWarning` abaixo acende um novo.
+  noteSimulationStatusChange("running");
   state.coreClient
     .run()
     .then(() => {
@@ -655,6 +690,7 @@ export function pauseSimulation(): void {
     .then(() => {
       stopVoltageReadoutPolling();
       setSimulationStatus("paused");
+      noteSimulationStatusChange("paused");
     })
     .catch((err) => reportCoreWarning("pausar simulação", err));
 }
@@ -663,6 +699,7 @@ export function stopSimulation(): void {
   if (!state.coreClient) {
     stopVoltageReadoutPolling();
     setSimulationStatus("stopped");
+    noteSimulationStatusChange("stopped");
     return;
   }
   state.coreClient
@@ -671,6 +708,7 @@ export function stopSimulation(): void {
     .finally(() => {
       stopVoltageReadoutPolling();
       setSimulationStatus("stopped");
+      noteSimulationStatusChange("stopped");
     });
 }
 
@@ -761,6 +799,7 @@ async function rebuildCoreFromSchematicStateNow(): Promise<void> {
   }
   coreInstanceIdByComponentId.clear();
   mcuTargetCoreIdByComponentId.clear();
+  subcircuitBoundaryPinsByComponentId.clear();
 
   for (const component of state.schematicState.components) {
     if (isUnresolvedSubcircuitRef(component) || !shouldSyncComponentToCore(component.typeId)) continue;
@@ -783,11 +822,11 @@ async function rebuildCoreFromSchematicStateNow(): Promise<void> {
   }
 
   for (const wire of electricalEdgesForProject({ wires: state.schematicState.topology.conductors, topologyNodes: state.schematicState.topology.nodes })) {
-    const coreA = coreInstanceIdByComponentId.get(endpointId(wire.from));
-    const coreB = coreInstanceIdByComponentId.get(endpointId(wire.to));
-    if (!coreA || !coreB) continue;
+    const a = resolveWireEndpoint(endpointId(wire.from), endpointPinId(wire.from));
+    const b = resolveWireEndpoint(endpointId(wire.to), endpointPinId(wire.to));
+    if (!a || !b) continue;
     try {
-      await state.coreClient.connectWire(coreA, endpointPinId(wire.from), coreB, endpointPinId(wire.to));
+      await state.coreClient.connectWire(a.instanceId, a.pinId, b.instanceId, b.pinId);
     } catch (err) {
       reportCoreWarning(`recriar fio "${wire.id}"`, err);
     }

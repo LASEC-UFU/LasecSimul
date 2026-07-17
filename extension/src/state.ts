@@ -72,6 +72,16 @@ export const state = {
  */
 export const coreInstanceIdByComponentId = new Map<string, string>();
 export const mcuTargetCoreIdByComponentId = new Map<string, string>();
+/** Só preenchido pra blocos de subcircuito (`registeredSourceKind === "subcircuit-file"`) -- cada
+ * pino de FRONTEIRA do bloco (ex: "GPIO2" do ESP32 DevKitC) é, no Core, na verdade um túnel interno
+ * com seu PRÓPRIO instanceId real; `coreInstanceIdByComponentId` guarda só o id "container" do bloco
+ * (`kSubcircuitInstanceFlag | rawId`, ver `SimulationSession.cpp`), que NUNCA é um índice válido de
+ * componente do Netlist -- usá-lo direto em `connectWire`/`getNodeVoltages` derruba o Core com
+ * "invalid vector<bool> subscript" (achado real 2026-07-17: o Core já devolve esse mapeamento em
+ * `exposedPins` na resposta de "addComponent", só nunca era lido do lado da Extension). Chave = pinId
+ * externo do bloco (mesmo id usado em `WebviewWireModel.from/to.pinId`), valor = {instanceId, pinId}
+ * REAIS do túnel interno -- ver `coreLifecycle.ts::resolveWireEndpoint`. */
+export const subcircuitBoundaryPinsByComponentId = new Map<string, Record<string, { instanceId: string; pinId: string }>>();
 /** Último firmware efetivamente empurrado (`CoreClient.loadMcuFirmware`) por instância REAL do Core --
  * chave é o `instanceId` do MCU (não `componentId`: uma reconstrução -- `rebuildCoreFromSchematicState`
  * -- destrói e recria toda instância, então uma instância nova nunca está aqui e recebe o firmware de

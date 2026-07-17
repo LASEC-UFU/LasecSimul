@@ -11,6 +11,7 @@ import {
 } from "../state";
 import { InternalComponentSnapshot } from "../ui/webview/messages";
 import { WebviewComponentModel } from "../ui/webview/model";
+import { logSimulation, reportFirmwareDiagnostic } from "../diagnostics/simulationLog";
 
 export interface McuCommandOptions {
   syncSchematicPanel: () => void;
@@ -211,14 +212,15 @@ function isMcuHostTypeId(typeId: string): boolean {
   return state.schematicState.catalog.find((entry) => entry.typeId === typeId)?.mcuHost === true;
 }
 
-/** Um alvo por MCU/CPU emulado no esquemático atual -- direto (`mcu-adapter` solto no circuito
+/** Um item por MCU/CPU emulado no esquemático atual -- direto (`mcu-adapter` solto no circuito
  * principal) OU exposto dentro de uma instância de subcircuito (`registeredSourceKind ===
- * "subcircuit-file"`, ex: ESP32 dentro do DevKitC). Usado por `ensureAllMcuFirmwareUpToDate` (chamado
- * antes de "Run", ver `extension.ts::runSimulationWithFirmwareCheck`) -- substitui os antigos
- * comandos manuais "Recarregar firmware" (removidos do menu 2026-07-09): o recarregamento agora é
- * sempre automático, nunca uma ação que o usuário precisa lembrar de clicar. */
-export function collectMcuFirmwareTargets(options: McuCommandOptions): McuFirmwareTarget[] {
-  const targets: McuFirmwareTarget[] = [];
+ * "subcircuit-file"`, ex: ESP32 dentro do DevKitC) -- INCLUI hosts ainda sem `firmwarePath`
+ * configurado (`firmwarePath: ""`), ao contrário de `collectMcuFirmwareTargets` (que filtra esses
+ * fora). Traversal única compartilhada entre `collectMcuFirmwareTargets` e a checagem de "MCU sem
+ * firmware" de `ensureAllMcuFirmwareUpToDate` -- percorrer os dois ramos (direto vs. exposto em
+ * subcircuito) separadamente duplicaria a lógica e divergiria com o tempo. */
+function collectMcuHostEntries(options: McuCommandOptions): McuFirmwareTarget[] {
+  const entries: McuFirmwareTarget[] = [];
   for (const component of state.schematicState.components) {
     const catalogEntry = state.schematicState.catalog.find((entry) => entry.typeId === component.typeId);
     if (catalogEntry?.registeredSourceKind === "subcircuit-file") {
@@ -229,11 +231,9 @@ export function collectMcuFirmwareTargets(options: McuCommandOptions): McuFirmwa
       if (!innerComponents) continue;
       for (const inner of innerComponents) {
         if (!isMcuHostTypeId(inner.typeId)) continue;
-        const firmwarePath = typeof inner.properties.firmwarePath === "string" ? inner.properties.firmwarePath.trim() : "";
-        if (!firmwarePath) continue;
-        targets.push({
+        entries.push({
           label: inner.label,
-          firmwarePath,
+          firmwarePath: typeof inner.properties.firmwarePath === "string" ? inner.properties.firmwarePath.trim() : "",
           qemuBinaryOverride: resolveQemuBinaryOverride(inner.properties),
           resolveCoreId: () => resolveSubcircuitChildCoreId(component.id, inner.id),
         });
@@ -241,40 +241,69 @@ export function collectMcuFirmwareTargets(options: McuCommandOptions): McuFirmwa
       continue;
     }
     if (!isMcuHostTypeId(component.typeId)) continue;
-    const firmwarePath = typeof component.properties.firmwarePath === "string" ? component.properties.firmwarePath.trim() : "";
-    if (!firmwarePath) continue;
-    targets.push({
+    entries.push({
       label: component.label,
-      firmwarePath,
+      firmwarePath: typeof component.properties.firmwarePath === "string" ? component.properties.firmwarePath.trim() : "",
       qemuBinaryOverride: resolveQemuBinaryOverride(component.properties),
       resolveCoreId: () => Promise.resolve(resolveMcuTargetCoreId(component.id)),
     });
   }
-  return targets;
+  return entries;
 }
 
-/** Roda ANTES de "Run" (`extension.ts::runSimulationWithFirmwareCheck`) -- pra cada MCU/CPU com
- * firmware configurado (direto ou exposto dentro de um subcircuito), confirma que o arquivo ainda
- * existe, compara `mtime`+tamanho contra o que foi efetivamente empurrado da ÚLTIMA vez pra ESSA
- * instância do Core (`lastLoadedFirmwareByCoreId`, ver `state.ts`) e só chama `loadMcuFirmware` de
- * novo quando algo mudou -- nunca a cada Run incondicionalmente (evitaria reiniciar o processo QEMU
- * sem necessidade, mais lento e reseta o estado do firmware à toa). MCU ainda sem instância no Core
- * (`resolveCoreId` undefined -- circuito nunca foi construído, ou subcircuito ainda não expandiu) é
- * silenciosamente ignorado aqui: nada pra recarregar ainda, `rebuildCoreFromSchematicState` não
- * carrega firmware sozinho (`firmwarePath`/`qemuBinaryOverride` são propriedades "UI-only", ver
- * `coreLifecycle.ts::isUiOnlyRuntimeProperty`) -- por isso mesmo TODA instância nova precisa passar
- * por aqui pelo menos uma vez, o que já acontece automaticamente (nunca está em
- * `lastLoadedFirmwareByCoreId` ainda). Devolve o motivo de falha em vez de lançar -- o chamador decide
- * se aborta o Run, sem depender de `try/catch` espalhado. */
+/** Um alvo por MCU/CPU emulado no esquemático atual COM firmware configurado -- usado por
+ * `ensureAllMcuFirmwareUpToDate` (chamado antes de "Run", ver `extension.ts::
+ * runSimulationWithFirmwareCheck`) e pelo comando de depuração GDB (`mcuDebug.ts`). Substitui os
+ * antigos comandos manuais "Recarregar firmware" (removidos do menu 2026-07-09): o recarregamento
+ * agora é sempre automático, nunca uma ação que o usuário precisa lembrar de clicar. */
+export function collectMcuFirmwareTargets(options: McuCommandOptions): McuFirmwareTarget[] {
+  return collectMcuHostEntries(options).filter((entry) => entry.firmwarePath.length > 0);
+}
+
+const FIRMWARE_DIAGNOSTIC_KEY = "firmware";
+
+/** Roda ANTES de "Run" (`extension.ts::runSimulationWithFirmwareCheck`) -- BLOQUEIA a simulação (nunca
+ * deixa rodar "no escuro") em dois casos: (1) algum MCU/CPU emulado no esquemático não tem
+ * `firmwarePath` configurado -- achado real: sem isto, `collectMcuFirmwareTargets` (que só enxerga
+ * hosts COM firmware) simplesmente ignorava o MCU inteiro, e "Run" seguia em frente com o MCU
+ * parado/sem responder, SEM NENHUM feedback de por quê; (2) pra cada MCU COM firmware configurado,
+ * confirma que o arquivo ainda existe, compara `mtime`+tamanho contra o que foi efetivamente empurrado
+ * da ÚLTIMA vez pra ESSA instância do Core (`lastLoadedFirmwareByCoreId`, ver `state.ts`) e só chama
+ * `loadMcuFirmware` de novo quando algo mudou -- nunca a cada Run incondicionalmente (evitaria
+ * reiniciar o processo QEMU sem necessidade, mais lento e reseta o estado do firmware à toa). MCU
+ * ainda sem instância no Core (`resolveCoreId` undefined -- circuito nunca foi construído, ou
+ * subcircuito ainda não expandiu) é silenciosamente ignorado aqui: nada pra recarregar ainda,
+ * `rebuildCoreFromSchematicState` não carrega firmware sozinho (`firmwarePath`/`qemuBinaryOverride`
+ * são propriedades "UI-only", ver `coreLifecycle.ts::isUiOnlyRuntimeProperty`) -- por isso mesmo TODA
+ * instância nova precisa passar por aqui pelo menos uma vez, o que já acontece automaticamente (nunca
+ * está em `lastLoadedFirmwareByCoreId` ainda). Toda falha já é logada (canal de saída + painel de
+ * Problemas + status bar, ver `diagnostics/simulationLog.ts`) ANTES de devolver -- o chamador só
+ * decide se aborta o Run, sem precisar formatar mensagem nenhuma de novo. */
 export async function ensureAllMcuFirmwareUpToDate(options: McuCommandOptions): Promise<{ ok: true } | { ok: false; message: string }> {
-  for (const target of collectMcuFirmwareTargets(options)) {
+  const entries = collectMcuHostEntries(options);
+  const missingFirmware = entries.filter((entry) => entry.firmwarePath.length === 0);
+  if (missingFirmware.length > 0) {
+    const labels = missingFirmware.map((entry) => entry.label).join(", ");
+    const message = `Nenhum firmware selecionado para: ${labels}. Configure o firmware antes de rodar a simulação.`;
+    logSimulation("error", message, { stage: "firmware" });
+    reportFirmwareDiagnostic(state.currentProjectFilePath, FIRMWARE_DIAGNOSTIC_KEY, message);
+    return { ok: false, message };
+  }
+
+  for (const target of entries) {
     if (!fileExists(target.firmwarePath)) {
+      const message = `Firmware não encontrado: ${target.firmwarePath}`;
+      logSimulation("error", message, { device: target.label, stage: "firmware" });
+      reportFirmwareDiagnostic(state.currentProjectFilePath, FIRMWARE_DIAGNOSTIC_KEY, `${target.label}: ${message}`);
       return { ok: false, message: `Firmware de "${target.label}" não encontrado: ${target.firmwarePath}` };
     }
     let stat: fs.Stats;
     try {
       stat = fs.statSync(target.firmwarePath);
     } catch (err) {
+      const message = `Não foi possível acessar o firmware: ${err instanceof Error ? err.message : String(err)}`;
+      logSimulation("error", message, { device: target.label, stage: "firmware" });
+      reportFirmwareDiagnostic(state.currentProjectFilePath, FIRMWARE_DIAGNOSTIC_KEY, `${target.label}: ${message}`);
       return { ok: false, message: `Não foi possível acessar o firmware de "${target.label}": ${err instanceof Error ? err.message : String(err)}` };
     }
     const targetCoreId = await target.resolveCoreId();
@@ -284,10 +313,16 @@ export async function ensureAllMcuFirmwareUpToDate(options: McuCommandOptions): 
     try {
       await state.coreClient.loadMcuFirmware(targetCoreId, target.firmwarePath, target.qemuBinaryOverride);
       lastLoadedFirmwareByCoreId.set(targetCoreId, { path: target.firmwarePath, mtimeMs: stat.mtimeMs, size: stat.size });
+      logSimulation("info", `Firmware carregado: ${target.firmwarePath}`, { device: target.label, stage: "firmware" });
     } catch (err) {
+      const detail = await state.coreClient.getMcuLogs(targetCoreId).catch(() => undefined);
+      const message = `Falha ao recarregar firmware: ${err instanceof Error ? err.message : String(err)}`;
+      logSimulation("error", message, { device: target.label, stage: "firmware", detail: detail ? detail.slice(-2000) : undefined });
+      reportFirmwareDiagnostic(state.currentProjectFilePath, FIRMWARE_DIAGNOSTIC_KEY, `${target.label}: ${message}`);
       return { ok: false, message: `Falha ao recarregar firmware de "${target.label}": ${err instanceof Error ? err.message : String(err)}` };
     }
   }
+  reportFirmwareDiagnostic(state.currentProjectFilePath, FIRMWARE_DIAGNOSTIC_KEY, undefined);
   return { ok: true };
 }
 

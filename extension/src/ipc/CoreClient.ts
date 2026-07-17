@@ -136,15 +136,21 @@ export class CoreClient {
    * x/y; plugins (NativeDeviceProxy) usam estes ids DIRETAMENTE como os pinos da instância — sem
    * isso, connectWire nunca acertaria o pino certo de um componente vindo de um plugin (ver
    * .spec/lasecsimul.spec sobre instrumentos como plugin ABI). */
+  /** `exposedPins` só vem preenchido quando `typeId` é um bloco de subcircuito -- chave é o pinId
+   * externo do bloco (ex: "GPIO2"), valor é o {instanceId,pinId} REAL do túnel interno que o
+   * representa no Netlist (ver `SimulationSession::expandSubcircuit`). O id "container" devolvido em
+   * `instanceId` para um subcircuito é um sentinel (`kSubcircuitInstanceFlag | rawId`), nunca um
+   * índice de componente válido -- usar `exposedPins` é obrigatório pra resolver qualquer fio ligado
+   * diretamente num pino de fronteira do bloco (ver `coreLifecycle.ts::resolveWireEndpoint`). */
   async addComponent(
     typeId: string,
     properties: Record<string, unknown>,
     pins: Array<{ id: string; x: number; y: number }> = [],
     instanceName = "",
     signalAliases: string[] = []
-  ): Promise<{ instanceId: string; primaryMcuInstanceId?: string }> {
+  ): Promise<{ instanceId: string; primaryMcuInstanceId?: string; exposedPins?: Record<string, { instanceId: string; pinId: string }> }> {
     const resp = await this.request("addComponent", { typeId, properties, pins, instanceName, signalAliases });
-    return resp as { instanceId: string; primaryMcuInstanceId?: string };
+    return resp as { instanceId: string; primaryMcuInstanceId?: string; exposedPins?: Record<string, { instanceId: string; pinId: string }> };
   }
 
   /** `requiresRestart: true` quando a propriedade alterada tem essa flag no schema (`Core` já

@@ -102,6 +102,10 @@
       {
         "command": "lasecsimul.redo",
         "title": "LasecSimul: Redo"
+      },
+      {
+        "command": "lasecsimul.showSimulationLog",
+        "title": "LasecSimul: Show Simulation Log"
       }
     ],
     "viewsContainers": {
