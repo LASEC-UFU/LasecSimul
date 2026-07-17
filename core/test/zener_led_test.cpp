@@ -8,7 +8,9 @@
 #include <array>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <memory>
+#include <string>
 #include "components/active/Diode.hpp"
 #include "components/active/DiodeLegArray.hpp"
 #include "components/other/Ground.hpp"
@@ -240,11 +242,68 @@ bool testLedColorChangesThreshold() {
     return ok;
 }
 
+// `getState()` do LED (`DiodeLegArray::getState`) precisa expor a MESMA corrente que
+// `componentCurrent()`/IPC já lia -- é o que alimenta `readoutFormat()`/telemetria da Webview
+// (`__led_fill`, `main.ts`) pra colorir o símbolo de verdade em vez do desenho estático de sempre
+// (diagnóstico "LED não pisca com ESP32": sem isso, `getComponentStates` sempre devolvia 0 bytes,
+// então a Webview nunca tinha `__readout` nenhum pra reagir).
+bool testLedGetStateExposesCurrent() {
+    GlobalPluginCache cache;
+    SimulationSession session(cache);
+    registerTestComponents(session.components());
+
+    const uint32_t source = session.addComponent("sources.dc_voltage", withVoltage(10.0));
+    const uint32_t r1 = session.addComponent("passive.resistor", withResistance(1000.0));
+    const uint32_t led = session.addComponent("outputs.led", {});
+    const uint32_t ground = session.addComponent("other.ground", {});
+
+    session.connectWire(source, "p1", r1, "p1");
+    session.connectWire(r1, "p2", led, "anode");
+    session.connectWire(led, "cathode", source, "p2");
+    session.connectWire(source, "p2", ground, "pin");
+
+    for (int i = 0; i < 200; ++i) {
+        if (!session.settleStep()) break;
+    }
+
+    const std::optional<double> currentFromApi = session.componentCurrent(led);
+    const std::vector<uint8_t> state = session.getComponentState(led);
+
+    std::printf("[led-state] current=%s stateBytes=%zu\n",
+                currentFromApi ? std::to_string(*currentFromApi).c_str() : "nullopt", state.size());
+
+    bool ok = true;
+    if (!currentFromApi) {
+        std::fprintf(stderr, "FALHOU (led-state): componentCurrent() deveria existir pra outputs.led (1 perna).\n");
+        ok = false;
+    }
+    if (state.size() != sizeof(double)) {
+        std::fprintf(stderr, "FALHOU (led-state): getState() deveria devolver 1 double (8 bytes), deu %zu\n", state.size());
+        ok = false;
+    } else {
+        double stateCurrent = 0.0;
+        std::memcpy(&stateCurrent, state.data(), sizeof(double));
+        if (currentFromApi && !nearlyEqual(stateCurrent, *currentFromApi, 1e-12)) {
+            std::fprintf(stderr,
+                         "FALHOU (led-state): getState() (%.9e) deveria bater exatamente com componentCurrent() (%.9e)\n",
+                         stateCurrent, *currentFromApi);
+            ok = false;
+        }
+        if (stateCurrent <= 0.0) {
+            std::fprintf(stderr, "FALHOU (led-state): LED conduzindo deveria reportar corrente > 0, deu %.9e\n", stateCurrent);
+            ok = false;
+        }
+    }
+    if (ok) std::printf("OK: getState() do LED expõe a mesma corrente de componentCurrent() -- telemetria pronta pra Webview.\n");
+    return ok;
+}
+
 } // namespace
 
 int main() {
     const bool zenerOk = testZenerBreakdown();
     const bool ledOk = testLedForwardVoltage();
     const bool ledColorOk = testLedColorChangesThreshold();
-    return (zenerOk && ledOk && ledColorOk) ? 0 : 1;
+    const bool ledStateOk = testLedGetStateExposesCurrent();
+    return (zenerOk && ledOk && ledColorOk && ledStateOk) ? 0 : 1;
 }

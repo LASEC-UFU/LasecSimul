@@ -1008,13 +1008,22 @@ import { PackageDescriptor, WebviewComponentModel } from "./model";
     assert(switchBoardOpen !== switchBoardClosed, "chave báscula (reaproveitada do esquemático) deveria continuar refletindo `closed` no Modo Placa");
   });
 
-  await test("outputs.led: SEM boardPackage (revertido 2026-07-12, `.spec` seção 27.10) -- LedBase::paint() do SimulIDE real já é diodo+círculo redondo colorido por `m_intensity`; um `boardPackage` estático não resolveria \"LED acende/apaga\" (nem o esquemático reflete corrente real hoje), então cai no esquemático mesmo pedindo variant \"board\"", () => {
+  await test("outputs.led: SEM boardPackage (revertido 2026-07-12, `.spec` seção 27.10) -- simulidePaint já reage à corrente ao vivo via `__led_fill` (fix \"LED não pisca com ESP32\"), então um `boardPackage` estático separado não agregaria nada; cai no esquemático mesmo pedindo variant \"board\"", () => {
     const ledSchematic = catalogPackage("outputs.led");
-    assert(catalogEntryBoardPackage("outputs.led") === undefined, "outputs.led NÃO deveria ter boardPackage no catálogo (revertido -- estático demais pra justificar existir, gap real é intensidade no Core)");
+    assert(catalogEntryBoardPackage("outputs.led") === undefined, "outputs.led NÃO deveria ter boardPackage no catálogo (revertido -- simulidePaint já reage à corrente sozinho, board não precisa de desenho separado)");
     registerPackage("outputs.led", ledSchematic);
     const schematicBox = componentBox("outputs.led");
     const boardBox = componentBox("outputs.led", undefined, "board");
     assert(schematicBox.width === boardBox.width && schematicBox.height === boardBox.height, "sem boardPackage, variant \"board\" deveria cair no MESMO box do esquemático (reaproveita, não duplica)");
+
+    // `__led_fill` (calculado em `main.ts::ledFillFor` a partir de `__readout`+`color`, ver
+    // `DiodeLegArray::getState`/`readoutFormat` no Core) precisa MESMO mudar o desenho da
+    // seta/leads -- sem ele (corrente desconhecida/instrumento não lido ainda), cai no cinza
+    // estático de sempre; com ele, usa a cor calculada em vez do fallback.
+    const off = packageSymbolSvg("outputs.led", { color: "Yellow" }, "led-fill-off") ?? "";
+    const on = packageSymbolSvg("outputs.led", { color: "Yellow", __led_fill: "#ffff55" }, "led-fill-on") ?? "";
+    assert(off.includes("#3a3a3a"), "sem __led_fill, o desenho deveria cair no fallback estático (#3a3a3a)");
+    assert(on.includes("#ffff55") && !on.includes("#3a3a3a"), "com __led_fill calculado, o desenho deveria usar essa cor (fill E stroke) em vez do fallback estático");
   });
 
   await test("switches.switch_dip vem de package.simulidePaint com 8 posicoes e 16 pinos reais (switchdip.cpp)", () => {

@@ -120,6 +120,23 @@ int main() {
     const double gpio2Volts = session.nodeVoltageOfPin(mcuIndex, "GPIO2");
     check(gpio2Volts > 3.0, "GPIO2 sobe para ~3.3V depois de ENABLE+OUT_REG ligarem o bit 2");
 
+    // Retenção de nível (diagnóstico "QEMU manda sinal mas vem como pulso e não retém conforme
+    // lógica"): sem NENHUM novo evento de arena (nenhuma escrita de registrador, nenhum
+    // `markDirty` manual), o nível já estampado deveria continuar em ~3.3V por muitos ciclos de
+    // `settleStep()` e por uma passagem grande de tempo simulado -- reproduz "firmware fez
+    // digitalWrite(HIGH) e não tocou o pino de novo por um tempo" sem precisar de QEMU real. Se
+    // isso reverter sozinho, o bug é no lado McuComponent/CircuitGroup (perda de estampa), não no
+    // QEMU/decodificação de registrador.
+    for (int i = 0; i < 50 && session.settleStep(); ++i) {}
+    check(session.nodeVoltageOfPin(mcuIndex, "GPIO2") > 3.0,
+          "GPIO2 continua em ~3.3V depois de 50 settleStep() extras sem nenhuma nova escrita de registrador");
+    session.scheduler().step(2'000'000); // 2ms de tempo simulado parado no mesmo nivel logico
+    for (int i = 0; i < 10 && session.settleStep(); ++i) {}
+    check(session.nodeVoltageOfPin(mcuIndex, "GPIO2") > 3.0,
+          "GPIO2 continua em ~3.3V depois de avancar 2ms de tempo simulado sem nova escrita (nao e um pulso que reverte sozinho -- "
+          "prova a correção de `m_resetPinObserved`: sem ela, o primeiro `Scheduler::step()` da simulação disparava um reset "
+          "fantasma do EN/RST vindo do chute inicial do Newton, zerando GPIO_OUT/GPIO_ENABLE)");
+
     // Agora o caminho contrário: GPIO3 não foi habilitado como saída -- McuComponent deve ler a
     // tensão real do nó (default 0V, sem nada estampado) e alimentar isso de volta no módulo.
     simulateQemuWrite(arena, gpioStart + 0x3C, 0); // dispara um SIM_READ
@@ -165,6 +182,15 @@ int main() {
     session.setProperty(enSourceIndex, "voltage", PropertyValue{0.0});
     for (int i = 0; i < 5 && session.settleStep(); ++i) {}
     check(!mcuPtr->resetPinHigh(), "resetPinHigh() vira false na borda de descida de RST");
+    // A limpeza de verdade (resetModulesAndWakeups()+stopFirmware()) roda num evento AGENDADO
+    // (delay 0, ver stampResetPin()), não dentro do stamp() atual -- só `Scheduler::step()`/
+    // `runUntil()` drenam a fila de eventos por tempo (`m_events`), `settleStep()` sozinho só
+    // processa o dirty-set do MNA e NUNCA toca essa fila. Sem este `step()`, este check só
+    // passava antes por acidente (achado ao corrigir `m_resetPinObserved`): o reset fantasma do
+    // cold-start já tinha zerado GPIO2 bem mais cedo, mascarando que o evento de reset de
+    // verdade continuava parado na fila sem nunca ser processado.
+    session.scheduler().step(1);
+    for (int i = 0; i < 5 && session.settleStep(); ++i) {}
     check(session.nodeVoltageOfPin(mcuIndex, "GPIO2") < 0.1,
           "reset de verdade limpa GPIO_ENABLE/GPIO_OUT -- GPIO2 volta a flutuar perto de 0V");
 

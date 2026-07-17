@@ -34,6 +34,10 @@ function transformFor(spec: SimulidePaintSpec, width: number, height: number): P
 function stateFillFor(primitive: DrawablePrimitive, properties: Record<string, unknown>): string | undefined {
   if (!primitive.stateFill) return undefined;
   const raw = properties[primitive.stateFill.prop];
+  if (primitive.stateFill.raw) {
+    if (typeof raw === "string" && raw) return raw;
+    return primitive.stateFill.fallback;
+  }
   if (primitive.stateFill.map) {
     const mapped = primitive.stateFill.map[String(raw)];
     if (mapped !== undefined) return mapped;
@@ -204,8 +208,9 @@ function styleFor(
   gradientId?: string
 ): Partial<PackageShape> {
   const projectedFill = stateFillFor(primitive, properties);
+  const projectedStroke = primitive.stateFill?.applyToStroke ? projectedFill : undefined;
   return {
-    stroke: primitive.stroke ?? spec.defaultStroke ?? "currentColor",
+    stroke: projectedStroke ?? primitive.stroke ?? spec.defaultStroke ?? "currentColor",
     fill: projectedFill ?? (gradientId ? `url(#${gradientId})` : primitive.fill ?? spec.defaultFill ?? "none"),
     strokeWidth: transform.sw(primitive.strokeWidth ?? spec.defaultStrokeWidth ?? 1),
     strokeLinecap: primitive.strokeLinecap,

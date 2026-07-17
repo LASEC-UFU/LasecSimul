@@ -4617,8 +4617,12 @@
                   "y": 6
                 }
               ],
-              "fill": "#3a3a3a",
-              "stroke": "#3a3a3a"
+              "stateFill": {
+                "prop": "__led_fill",
+                "raw": true,
+                "applyToStroke": true,
+                "fallback": "#3a3a3a"
+              }
             },
             {
               "kind": "line",
@@ -4626,8 +4630,13 @@
               "y1": -4,
               "x2": 8,
               "y2": 4,
-              "stroke": "#3a3a3a",
-              "strokeWidth": 2
+              "strokeWidth": 2,
+              "stateFill": {
+                "prop": "__led_fill",
+                "raw": true,
+                "applyToStroke": true,
+                "fallback": "#3a3a3a"
+              }
             },
             {
               "kind": "line",
@@ -4635,8 +4644,13 @@
               "y1": 0,
               "x2": 10,
               "y2": 0,
-              "stroke": "#3a3a3a",
-              "strokeWidth": 2
+              "strokeWidth": 2,
+              "stateFill": {
+                "prop": "__led_fill",
+                "raw": true,
+                "applyToStroke": true,
+                "fallback": "#3a3a3a"
+              }
             }
           ]
         },

@@ -3817,6 +3817,40 @@ function numericReadout(component: WebviewComponentModel): number | undefined {
   return typeof readout === "number" ? readout : undefined;
 }
 
+/** `LedBase::getColor()` real (`ledbase.cpp:144-180`) -- mesma fórmula de tonalidade por `bright`
+ * (0..255), sem o ramo `m_overBright` (só alcançável no modo pausa-debug do SimulIDE real, que este
+ * projeto não replica). */
+function ledColorHex(colorName: string, bright: number): string {
+  const b = Math.max(0, Math.min(255, Math.round(bright)));
+  const secL = Math.floor(b / 3);
+  const secH = Math.floor(b / 2);
+  const secX = Math.floor((b * 2) / 3);
+  const hex = (n: number) => n.toString(16).padStart(2, "0");
+  const rgb = (r: number, g: number, bl: number) => `#${hex(r)}${hex(g)}${hex(bl)}`;
+  switch (colorName) {
+    case "Red": return rgb(b, secH, secH);
+    case "Green": return rgb(secL, b, secL);
+    case "Blue": return rgb(secH, secH, b);
+    case "Orange": return rgb(b, secX, secL);
+    case "Purple": return rgb(b, secL, b);
+    case "White": return rgb(b, b, b);
+    default: return rgb(b, b, secL); // Yellow e cor desconhecida, mesmo default de LedBase::setColorStr
+  }
+}
+
+/** `eLed::updateBright()` real (`e-led.cpp:94-119`): brilho = sqrt(corrente/maxCurrent), 0 quando a
+ * simulação não está rodando. `DiodeLegArray` (Core) ainda não modela `MaxCurrent` como propriedade
+ * editável -- usa o mesmo default 30mA de `eLed::eLed()` (`e-led.cpp:16`), documentado aqui em vez de
+ * escondido. Só `outputs.led` (1 perna) tem `readoutFormat`/telemetria (ver `DiodeLegArray.hpp`), daí
+ * o typeId fixo. */
+function ledFillFor(component: WebviewComponentModel): string {
+  const colorName = typeof component.properties.color === "string" ? component.properties.color : "Yellow";
+  const current = simulationStatus === "running" ? Math.abs(numericReadout(component) ?? 0) : 0;
+  const kMaxCurrent = 0.03;
+  const bright = current > 0 ? Math.sqrt(current / kMaxCurrent) * 255 : 0;
+  return ledColorHex(colorName, bright);
+}
+
 /** ABI v2 (.spec/lasecsimul-native-devices.spec): consulta `interactionKind` do catálogo (vindo do
  * Core via `getPropertySchemas`) em vez de checar typeId -- fallback legado só pra typeId sem o
  * campo declarado ainda (catálogo não carregou do Core). */
@@ -3915,10 +3949,14 @@ function runtimeSymbolProperties(component: WebviewComponentModel): Record<strin
   } : component.typeId === "peripherals.lasecplot" || component.typeId === "peripherals.serialterm" || component.typeId === "peripherals.serialport"
     ? { __serial_button_label: "Abrir", __serial_tx_state: "off", __serial_rx_state: "off" }
     : {};
-  if (readout === undefined && !scopeHistory && !logicHistory && Object.keys(serialState).length === 0) return component.properties;
+  const ledState = component.typeId === "outputs.led" ? { __led_fill: ledFillFor(component) } : {};
+  if (readout === undefined && !scopeHistory && !logicHistory && Object.keys(serialState).length === 0 && Object.keys(ledState).length === 0) {
+    return component.properties;
+  }
   return {
     ...component.properties,
     ...serialState,
+    ...ledState,
     ...(readout === undefined ? {} : { __readout: readout }),
     ...(scopeHistory ? { __history: scopeHistory } : {}),
     ...(logicHistory ? { __history: logicHistory } : {}),

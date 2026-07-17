@@ -78,7 +78,16 @@ void McuComponent::startPolling() {
 void McuComponent::stopPolling() { m_polling.store(false, std::memory_order_release); }
 
 void McuComponent::scheduleNextPoll() {
-    schedulePollAt(m_scheduler.nowNs());
+    // +1ns (não `nowNs()` cru): quando chamado de dentro de `onPollEvent()` sem o Scheduler
+    // rodando em background (`isRunning()==false` -- driver síncrono via `step()`/testes), um
+    // evento reagendado EXATAMENTE no instante atual é reprocessado na MESMA passada de
+    // `runUntil()` (o laço interno consome qualquer evento com `timeNs <= nextTime`, e `m_nowNs`
+    // nunca avança processando um evento no MESMO instante) -- livelock genuíno, `m_nowNs` nunca
+    // avança, achado do diagnóstico "QEMU manda sinal mas vem como pulso e não retém": mascarado
+    // até aqui só porque o reset fantasma do EN/RST (ver `m_resetPinObserved`) fechava a arena
+    // antes deste laço rodar. O +1ns é imperceptível pro caso normal (`startPolling()`, chamado
+    // fora de `runUntil()`) e garante que `m_nowNs` sempre progride, então o laço termina.
+    schedulePollAt(m_scheduler.nowNs() + 1);
 }
 
 void McuComponent::schedulePollAt(uint64_t timeNs) {
@@ -351,6 +360,14 @@ void McuComponent::stampResetPin(MnaMatrixView& matrix, const Pin& pin) {
     matrix.addConductanceToGround(pin, kFloatingConductance);
     matrix.addCurrentToGround(pin, kDriveHighVolts * kFloatingConductance);
     const bool levelHigh = matrix.getNodeVoltage(pin) > kDigitalLevelThreshold;
+
+    if (!m_resetPinObserved) {
+        // Primeira leitura de verdade -- nunca uma borda contra uma suposição nunca observada (ver
+        // comentário de `m_resetPinObserved` no .hpp). Semeia e sai sem agendar reset/reload.
+        m_resetPinObserved = true;
+        m_resetPinHigh = levelHigh;
+        return;
+    }
 
     if (m_resetPinHigh && !levelHigh) {
         // Borda de descida: EN/RST ativo (baixo) -- mantém o chip parado enquanto durar, igual a

@@ -580,7 +580,8 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
         applyLedProperties(*model, p);
         return model;
     });
-    registerBuiltinMetadata("outputs.led", "Led", components::DiodeLegArray::propertySchema(), englishName("Led"));
+    registerBuiltinMetadata("outputs.led", "Led", components::DiodeLegArray::propertySchema(), englishName("Led"),
+                            components::DiodeLegArray::readoutFormat());
     // `stamp()` real (3 pernas de LED reais). Pinos fixos `[R, G, B, C]` (ver `component-catalog.json`)
     // -- `C` é CATODO comum (`ledrgb.cpp` real, `setComCathode(true)` é o default), R/G/B são os 3
     // anodos. Simplificação DOCUMENTADA (não escondida, `.spec` seção 29): real `LedRgb` tem

@@ -397,6 +397,15 @@ export interface SimulidePaintStateFill {
   prop: string;
   map?: Record<string, string>;
   numeric?: Array<{ op: ">" | ">=" | "<" | "<=" | "==" | "!="; value?: number; valueProp?: string; color: string }>;
+  /** Usa `String(properties[prop])` diretamente como cor (sem `map`/`numeric`) -- pra propriedades já
+   * computadas como um hex/rgb pronto (ex: `__led_fill`, cor+brilho do LED calculados na Webview a
+   * partir da corrente ao vivo, ver `runtimeSymbolProperties` em `main.ts`). Genérico -- qualquer
+   * device com cor derivada de telemetria pode reusar, não é hack por typeId. */
+  raw?: boolean;
+  /** Aplica a MESMA cor resolvida (map/numeric/raw) também como `stroke`, não só `fill` -- reproduz
+   * `p->setPen(foreColor); p->setBrush(foreColor)` do SimulIDE real (pincel e caneta com a mesma cor),
+   * comum em componentes ativos/dinâmicos (`LedBase::paint`). */
+  applyToStroke?: boolean;
   fallback?: string;
 }
 

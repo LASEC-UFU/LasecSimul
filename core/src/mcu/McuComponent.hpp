@@ -128,6 +128,15 @@ private:
     // normalmente) -- inverso do floating genérico de GPIO (que vai fraco pra terra), porque aqui
     // "sem ligação" tem que significar "não resetado", nunca o oposto (ver stampResetPin()).
     bool m_resetPinHigh = true;
+    // Falso até o primeiro stamp() real acontecer. Sem isto, o PRIMEIRO stamp() de qualquer
+    // McuComponent comparava a leitura de tensão (ainda o chute inicial do Newton, tipicamente
+    // ~0V antes do solver convergir -- não a tensão real do pull-up fraco) contra a SUPOSIÇÃO
+    // `m_resetPinHigh=true` acima, e confundia isso com uma borda de descida real do EN/RST --
+    // disparava reset+parada do firmware logo no início de toda simulação (achado do diagnóstico
+    // "QEMU manda sinal mas vem como pulso e não retém conforme lógica", 2026-07-17: reproduzido
+    // isoladamente em McuComponentTest sem precisar de QEMU real). `stampResetPin()` usa esta flag
+    // pra SEMEAR `m_resetPinHigh` a partir da primeira leitura em vez de tratá-la como uma borda.
+    bool m_resetPinObserved = false;
     std::filesystem::path m_lastFirmwarePath;
     std::string m_lastArenaName;
     std::string m_lastQemuBinaryOverride;

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <optional>
 #include <span>
 #include <string>
@@ -118,8 +119,31 @@ public:
         return m_lastCurrent[0];
     }
 
-    size_t getState(uint8_t*, size_t) const override { return 0; }
-    void setState(const uint8_t*, size_t) override {}
+    /** Mesmo padrão de `Voltmeter`/`Ampmeter` (1 double) -- só existe quando há exatamente 1 perna
+     * (mesma restrição de `current()`, ver comentário acima). Alimenta `readoutFormat()` abaixo, que
+     * é o que faz a Webview colorir/acender o LED de verdade (`__led_fill`, `main.ts`) em vez do
+     * símbolo estático de sempre -- achado do diagnóstico "LED não pisca com ESP32": o Core nunca
+     * expunha esse estado, então não havia telemetria nenhuma pra Webview reagir. */
+    size_t getState(uint8_t* out, size_t cap) const override {
+        if (m_legs.size() != 1 || cap < sizeof(double)) return 0;
+        std::memcpy(out, &m_lastCurrent[0], sizeof(double));
+        return sizeof(double);
+    }
+    void setState(const uint8_t* in, size_t len) override {
+        if (m_legs.size() != 1 || len < sizeof(double)) return;
+        std::memcpy(&m_lastCurrent[0], in, sizeof(double));
+    }
+
+    /** Só declarado por quem registra `outputs.led` (1 perna) em `CoreApplication.cpp` -- os outros
+     * typeIds desta MESMA classe (led_rgb/led_bar/led_matrix/seven_segment, N pernas) não passam
+     * este format pro registro, então `getComponentStates`/telemetria nunca é pedida pra eles (ver
+     * limitação documentada em `current()` acima: leitura por-segmento é pendência separada). */
+    static ReadoutFormat readoutFormat() {
+        ReadoutFormat format;
+        format.kind = ReadoutKind::Scalar;
+        format.unit = "A";
+        return format;
+    }
 
     std::vector<PropertyDescriptor> propertyDescriptors() override { return toPropertyDescriptors(properties()); }
 
