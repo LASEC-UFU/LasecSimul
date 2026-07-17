@@ -1955,10 +1955,13 @@ function renderAppBar(): HTMLElement {
       selectExposedButton.textContent = t("selectExposedComponents");
       selectExposedButton.addEventListener("click", () => openExposedComponentsDialog());
       subcircuitGroup.appendChild(selectExposedButton);
+    }
 
-      // "Selecionar Propriedades Exportadas" -- pedido real: "crie o recurso de poder selecionar
-      // quais componentes terão suas propriedades exportadas na área de edição do subcircuito".
-      // Botão IRMÃO do de cima, mas conceito INDEPENDENTE (exposto != exporta propriedades).
+    // "Selecionar Propriedades Exportadas" -- pedido real: "o selecionar propriedades exportadas é
+    // no subcircuito e não no símbolo" -- ao contrário de "Componentes Expostos" (conceito do
+    // Símbolo/apresentação), "propriedades exportadas" é sobre o CIRCUITO INTERNO (mesmo escopo do
+    // toggle de contexto `exportPropertyMenuItems`, só em Modo Subcircuito).
+    if (subcircuitEditorMode === "circuit") {
       const selectExportedButton = document.createElement("button");
       selectExportedButton.type = "button";
       selectExportedButton.className = "appbar__text-button";
@@ -7619,6 +7622,15 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     // entrar/sair da sessão, nunca num patch incremental dentro da MESMA sessão.
     if (enteringOrLeavingSubcircuitSession) subcircuitEditorMode = "circuit";
     if (enteringOrLeavingSubcircuitSession) resetUndoHistory(mainUndoHistory);
+    // Ao SAIR de uma sessão de "Abrir Subcircuito" de volta pro circuito principal, o overlay de
+    // Modo Placa (`renderBoardOverlaysFor`) de QUALQUER instância deste subcircuito no circuito de
+    // fora precisa refletir o que acabou de ser salvo -- mas `ensureBoardOverlayData` só busca uma
+    // vez por `componentId` e nunca mais (cache pra sempre, ver comentário lá), então sem limpar
+    // aqui o overlay continuava mostrando a posição/exposição ANTIGA (de antes de abrir a sessão)
+    // até a Webview inteira recarregar -- achado real relatado (posição arrastada em Modo Símbolo
+    // "não mudou" no circuito principal). Só ao SAIR (não ao entrar) -- entrar não tem overlay
+    // nenhum pra invalidar ainda.
+    if (enteringOrLeavingSubcircuitSession && !merged.subcircuitEditingContext) boardOverlayDataByComponentId.clear();
     if (message.patch.catalog) syncPackageRegistry(state.catalog);
     if (!state.pendingConnection) {
       pendingWirePreviewTarget = undefined;
