@@ -179,6 +179,10 @@ const UI_TEXT = {
     labelFontSize: "Tamanho da fonte",
     flipHorizontal: "Inverter horizontalmente",
     flipVertical: "Inverter verticalmente",
+    alignHorizontal: "Alinhar horizontalmente pelo primeiro item",
+    alignVertical: "Alinhar verticalmente pelo primeiro item",
+    distributeHorizontal: "Distribuir igualmente na horizontal",
+    distributeVertical: "Distribuir igualmente na vertical",
     help: "Ajuda",
     show: "Mostrar",
     title: "Título:",
@@ -280,6 +284,10 @@ const UI_TEXT = {
     labelFontSize: "Font size",
     flipHorizontal: "Flip horizontally",
     flipVertical: "Flip vertically",
+    alignHorizontal: "Align horizontally to first item",
+    alignVertical: "Align vertically to first item",
+    distributeHorizontal: "Distribute evenly horizontally",
+    distributeVertical: "Distribute evenly vertically",
     help: "Help",
     show: "Show",
     title: "Title:",
@@ -4973,6 +4981,83 @@ function flipSelectedComponents(axis: "horizontal" | "vertical"): void {
   render();
 }
 
+/** Componentes selecionados na ORDEM DE SELEÇÃO real (`state.selectedComponentIds`, ordem de
+ * clique/toggle -- ver `toggleComponentSelection`), NUNCA a ordem de `getSelectedComponents()`
+ * (ordem da CENA, irrelevante aqui). Alinhar/distribuir definem "primeiro"/"último" pela seleção do
+ * usuário (pedido original: "considere como primeiro item o primeiro selecionado e como último o
+ * último selecionado"), não por posição/x/y nem ordem de criação. Filtra ids obsoletos (defensivo,
+ * mesmo cuidado de sempre -- um id pode ter sido apagado por fora entre selecionar e o clique no
+ * menu). Funciona igual pra qualquer typeId (`pinos, textos, figuras e componentes` do pedido) porque
+ * todos são o mesmo `WebviewComponentModel` com `x`/`y`. */
+function selectedComponentsInSelectionOrder(): WebviewComponentModel[] {
+  const scene = activeSceneComponents();
+  return state.selectedComponentIds
+    .map((id) => scene.find((component) => component.id === id))
+    .filter((component): component is WebviewComponentModel => component !== undefined);
+}
+
+/** Alinhar horizontalmente pelo primeiro item: todo mundo recebe a MESMA posição vertical (`y`) do
+ * primeiro selecionado -- `x`/rotação/tamanho/demais propriedades intocados (pedido original:
+ * "preserve tamanhos, rotações e demais propriedades"). */
+function alignSelectedComponentsHorizontally(): void {
+  if (selectedTextLabel) return;
+  const components = selectedComponentsInSelectionOrder();
+  if (components.length < 2) return;
+  const firstY = components[0]!.y;
+  for (const component of components) component.y = firstY;
+  persistState();
+  render();
+}
+
+/** Alinhar verticalmente pelo primeiro item: todo mundo recebe a MESMA posição horizontal (`x`) do
+ * primeiro selecionado. */
+function alignSelectedComponentsVertically(): void {
+  if (selectedTextLabel) return;
+  const components = selectedComponentsInSelectionOrder();
+  if (components.length < 2) return;
+  const firstX = components[0]!.x;
+  for (const component of components) component.x = firstX;
+  persistState();
+  render();
+}
+
+/** Distribuir igualmente na horizontal: primeiro e último selecionados ficam FIXOS, os demais (na
+ * MESMA ordem de seleção, não reordenados por posição atual) recebem `x` igualmente espaçado entre
+ * os dois -- só `x` muda, `y`/rotação/tamanho intocados (distribuição É só ao longo de 1 eixo, mesmo
+ * princípio de ferramentas de design como Figma/Illustrator). Precisa de pelo menos 3 itens -- com 2,
+ * não sobra nenhum "demais" pra espaçar (gate também no menu de contexto). */
+function distributeSelectedComponentsHorizontally(): void {
+  if (selectedTextLabel) return;
+  const components = selectedComponentsInSelectionOrder();
+  if (components.length < 3) return;
+  const first = components[0]!;
+  const last = components[components.length - 1]!;
+  const span = last.x - first.x;
+  const steps = components.length - 1;
+  for (let index = 1; index < components.length - 1; index += 1) {
+    components[index]!.x = first.x + (span * index) / steps;
+  }
+  persistState();
+  render();
+}
+
+/** Distribuir igualmente na vertical: mesmo princípio de `distributeSelectedComponentsHorizontally`,
+ * só `y` muda. */
+function distributeSelectedComponentsVertically(): void {
+  if (selectedTextLabel) return;
+  const components = selectedComponentsInSelectionOrder();
+  if (components.length < 3) return;
+  const first = components[0]!;
+  const last = components[components.length - 1]!;
+  const span = last.y - first.y;
+  const steps = components.length - 1;
+  for (let index = 1; index < components.length - 1; index += 1) {
+    components[index]!.y = first.y + (span * index) / steps;
+  }
+  persistState();
+  render();
+}
+
 interface ComponentVisualFlags {
   catalogEntry: WebviewComponentCatalogEntry | undefined;
   isPushButton: boolean;
@@ -5217,6 +5302,23 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
             ];
           })()
         : [];
+    // Alinhar/distribuir (pedido original: "junto às ações de girar e rotacionar", pra qualquer
+    // elemento selecionável -- pino/texto/figura/componente, todos o mesmo `WebviewComponentModel`).
+    // Alinhar precisa de 2+; distribuir precisa de 3+ (com só 2, primeiro+último já são os únicos,
+    // não sobra "demais" pra espaçar) -- "só devem aparecer quando houver seleção múltipla
+    // compatível" do pedido.
+    const alignDistributeMenuItems: ContextMenuItem[] = isGroup
+      ? [
+          { label: t("alignHorizontal"), onClick: () => alignSelectedComponentsHorizontally() },
+          { label: t("alignVertical"), onClick: () => alignSelectedComponentsVertically() },
+          ...(selectedComponents.length >= 3
+            ? [
+                { label: t("distributeHorizontal"), onClick: () => distributeSelectedComponentsHorizontally() },
+                { label: t("distributeVertical"), onClick: () => distributeSelectedComponentsVertically() },
+              ] satisfies ContextMenuItem[]
+            : []),
+        ]
+      : [];
     const menuItems: ContextMenuItem[] = [
       ...exposedSubmenuItems,
       ...openSubcircuitMenuItems,
@@ -5231,6 +5333,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
       { label: t("rotate180"), icon: "rotate180", onClick: () => rotateSelectedComponents(2) },
       { label: t("flipHorizontal"), icon: "flipHorizontal", shortcut: "Ctrl+L", onClick: () => flipSelectedComponents("horizontal") },
       { label: t("flipVertical"), icon: "flipVertical", shortcut: "Ctrl+Shift+L", onClick: () => flipSelectedComponents("vertical") },
+      ...(alignDistributeMenuItems.length > 0 ? [{ kind: "separator" } satisfies ContextMenuItem, ...alignDistributeMenuItems] : []),
       ...mcuMenuItems,
       ...createSubcircuitMenuItems,
       ...subcircuitRefMenuItems,
