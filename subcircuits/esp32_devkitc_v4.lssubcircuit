@@ -775,7 +775,7 @@
     }
   ],
   "topology": {
-    "revision": 206,
+    "revision": 294,
     "nodes": [
       {
         "id": "junction-1783811970598-570810",
@@ -1621,6 +1621,10 @@
         "points": [
           {
             "x": 573.1141484824393,
+            "y": 465.36227721001353
+          },
+          {
+            "x": 573.1141484824393,
             "y": 480
           }
         ]
@@ -1637,6 +1641,10 @@
           "nodeId": "junction-1783846347585-947629"
         },
         "points": [
+          {
+            "x": 613.1141484824393,
+            "y": 478.42337301885084
+          },
           {
             "x": 613.1141484824393,
             "y": 480
@@ -1862,16 +1870,16 @@
       },
       {
         "id": "3V3",
-        "x": 0,
-        "y": 19,
+        "x": -4.23946448107476,
+        "y": 22.936243976488313,
         "angle": 180,
         "length": 4,
         "label": "3V3",
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 7.509999999999991,
-        "labelY": 19.5
+        "labelX": 7.76053551892524,
+        "labelY": 23.936243976488313
       },
       {
         "id": "G23",
@@ -1888,16 +1896,16 @@
       },
       {
         "id": "EN",
-        "x": 0,
-        "y": 26.799999237060547,
+        "x": -4.264863925509983,
+        "y": 29.49951037986606,
         "angle": 180,
         "length": 4,
         "label": "En",
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 8,
-        "labelY": 27.299999237060547
+        "labelX": 5.735136074490017,
+        "labelY": 30.49951037986606
       },
       {
         "id": "G22",
@@ -1914,16 +1922,16 @@
       },
       {
         "id": "VP",
-        "x": -4.086450283416468,
-        "y": 36.59439998310212,
+        "x": -4.008997071551075,
+        "y": 36.924791693670215,
         "angle": 180,
         "length": 4,
         "label": "VP",
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 10.913549716583532,
-        "labelY": 37.59439998310212
+        "labelX": 5.991002928448925,
+        "labelY": 37.924791693670215
       },
       {
         "id": "TX",
@@ -1940,16 +1948,16 @@
       },
       {
         "id": "VN",
-        "x": 0,
-        "y": 45,
+        "x": -3.9297981208388038,
+        "y": 44.706322009120406,
         "angle": 180,
         "length": 4,
         "label": "VN",
         "labelFontSize": 7,
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
-        "labelX": 8,
-        "labelY": 45.5
+        "labelX": 7.070201879161196,
+        "labelY": 45.706322009120406
       },
       {
         "id": "RX",
@@ -1975,7 +1983,7 @@
         "labelTextAnchor": "middle",
         "labelDominantBaseline": "middle",
         "labelX": 8,
-        "labelY": 53.5
+        "labelY": 54
       },
       {
         "id": "G21",
