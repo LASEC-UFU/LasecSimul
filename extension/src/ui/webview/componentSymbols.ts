@@ -394,7 +394,14 @@ function stateVisibleMatches(stateVisible: PackagePin["stateVisible"] | undefine
  * Chamadas sem `componentId` (ex: testes, paleta) usam o caminho legado `shapes[]`. */
 export function packageSymbolSvg(typeId: string, properties?: Record<string, unknown>, componentId?: string, variant?: PackageVariant): string | undefined {
   const resolved = resolvedPackageFor(typeId, properties, variant);
-  return resolved ? packageBodySvg(resolved, componentId, properties) : undefined;
+  // `variant==="board"` esconde leads+rótulo de CADA pino (`packageBodySvg`'s `hidePins`) -- mesmo
+  // `Component::setHidden(true,true,true)` do SimulIDE real (`component.cpp`) pra um componente
+  // exposto num Board-type subcircuit: `pin->setVisible(false)` pra TODO pino (lead inteiro, não só
+  // o terminal clicável) + rótulos id/value ocultos. NENHUM `paint()` alternativo existe no código
+  // real (`push.cpp`/`custombutton.cpp` verificados -- zero menção a board/hidden) -- confirmado que
+  // a diferença de "Modo Placa" é só isto (posição/rotação/espelho + esconder leads/rótulos), nunca
+  // uma aparência própria (ver `.spec`/memória "Aparência própria do Modo Placa").
+  return resolved ? packageBodySvg(resolved, componentId, properties, variant === "board") : undefined;
 }
 
 /** Igual a `packageSymbolSvg`, mas recebe um `PackageDescriptor` DIRETO em vez de buscar por typeId
@@ -1210,7 +1217,7 @@ function simulideQtWidgetSvg(widget: SimulideQtWidgetSpec, properties: Record<st
  * pro `viewBox` (ver `resolvePackageLayout`).
  * Quando `pkg.viewSpec` está presente e `componentId` é fornecido, usa o ViewSpec renderer (gradientes
  * escopados + stateProjection inicial). Caso contrário cai para `shapes[]` legado. */
-function packageBodySvg(resolved: ResolvedPackage, componentId?: string, properties?: Record<string, unknown>): string {
+function packageBodySvg(resolved: ResolvedPackage, componentId?: string, properties?: Record<string, unknown>, hidePins?: boolean): string {
   const pkg = resolved.source;
   let markup = packageBackgroundSvg(pkg);
   const scopeId = `simulide-${componentId ? componentId.replace(/[^a-zA-Z0-9_-]/g, "_") : "static"}`;
@@ -1242,7 +1249,9 @@ function packageBodySvg(resolved: ResolvedPackage, componentId?: string, propert
     `<g transform="scale(${resolved.scaleX.toFixed(6)},${resolved.scaleY.toFixed(6)})">${markup}</g>` +
     `</g>`;
   const pinLabelColor = pkg.pinLabelColor ?? "currentColor";
-  const pinsMarkup = resolved.pins
+  // `hidePins`: componente exposto num Board (equivalente ao `Component::setHidden(true,true,true)`
+  // real -- ver `packageSymbolSvg`) nunca desenha lead NEM rótulo de pino, só o corpo/fundo acima.
+  const pinsMarkup = hidePins ? "" : resolved.pins
     .filter((pin) => stateVisibleMatches(pin.stateVisible, properties))
     .map((pin) => packagePinLeadSvg(pin, resolved, pinLabelColor, properties))
     .join("");

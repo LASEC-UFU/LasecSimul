@@ -800,13 +800,6 @@ function openExposedComponentsDialog(): void {
   dialog.showModal();
 }
 
-/** Qual variante de `PackageDescriptor` usar pra desenhar `component` AGORA -- `"board"` só quando o
- * typeId declarou uma aparência própria pro Modo Placa (`catalogEntry.boardPackage`, ver model.ts).
- * Sem isto, cai em `undefined` (esquemático normal). Usado pelo overlay da instância no circuito
- * principal (`renderBoardOverlaysFor`, que está SEMPRE em contexto de Modo Placa por definição). */
-function boardPackageVariantFor(typeId: string): "board" | undefined {
-  return catalogEntryFor(typeId)?.boardPackage ? "board" : undefined;
-}
 
 const propertyDialog = document.createElement("dialog");
 propertyDialog.className = "property-dialog";
@@ -909,10 +902,11 @@ function renderBoardOverlaysFor(component: WebviewComponentModel): HTMLElement[]
     // `subcircuitInternals.ts::gatherInternalComponentSnapshots`) -- bug real corrigido aqui: antes
     // este overlay SEMPRE renderizava com `{closed:false}` fixo, ignorando `item.properties` por
     // inteiro, então um switch com `closed:true` salvo no arquivo aparecia aberto no overlay mesmo
-    // assim. `boardVariant` troca pra aparência de Modo Placa quando este typeId declarou uma
-    // (`.spec` seção 27) -- mesma resolução de `updateComponentElement`, nunca uma 2ª lógica.
+    // assim. `boardVariant` é SEMPRE "board" aqui (nunca condicional a um `boardPackage` -- SimulIDE
+    // real não tem nenhum `paint()` alternativo pro Board, ver `packageSymbolSvg`) -- só esconde
+    // leads/rótulos de pino, nunca troca a aparência do corpo.
+    const boardVariant = "board" as const;
     const properties: Record<string, string | number | boolean> = { closed: false, ...item.properties };
-    const boardVariant = boardPackageVariantFor(item.typeId);
     const box = componentBox(item.typeId, properties, boardVariant);
     const el = document.createElement("div");
     el.className = "component component--board-overlay";
@@ -1044,7 +1038,13 @@ function renderExposedComponentProjections(canvasContent: HTMLElement): void {
     const svg = document.createElementNS(SVG_NS, "svg");
     svg.setAttribute("viewBox", `0 0 ${box.width} ${box.height}`);
     svg.classList.add("component__symbol");
-    svg.innerHTML = componentSymbolSvg(source.typeId, source.properties);
+    // Variante "board": mesmo corpo/aparência do esquemático (SimulIDE real não tem NENHUM `paint()`
+    // alternativo pra Board -- verificado em `push.cpp`/`custombutton.cpp`/`component.cpp`), só sem
+    // leads/rótulos de pino (`Component::setHidden(true,true,true)` real esconde TODO `Pin` -- lead
+    // inteiro, não só o terminal -- e os dois rótulos). Sem isto, a projeção mostrava o traço do lead
+    // (e o rótulo do pino) saindo pra fora da caixa tracejada, junto de 2+ botões idênticos -- achado
+    // real relatado (pedido original: "os pinos e rótulos aqui estão aparecendo").
+    svg.innerHTML = packageSymbolSvg(source.typeId, source.properties, source.id, "board") ?? componentSymbolSvg(source.typeId, source.properties);
     el.appendChild(svg);
 
     let dragStartX = 0;
