@@ -889,4 +889,13 @@ export interface WebviewProjectState {
     scale: number;
     layer: number;
   }>;
+  /** Quais componentes internos exportam suas propriedades pro submenu "Propriedades" da INSTÂNCIA
+   * do subcircuito no schematic principal (`buildExposedComponentMenuItems`, `main.ts`) -- pedido
+   * real: "componente exposto e propriedade exportada devem ser conceitos independentes. Tornar um
+   * componente exposto não pode exportar automaticamente todas as suas propriedades." Array de
+   * `components[].id`, INDEPENDENTE de `exposedComponents[]` (um componente pode aparecer aqui sem
+   * estar exposto no Símbolo, e vice-versa) -- sem posição/rotação, já que não é uma apresentação
+   * visual, só um interruptor liga/desliga por componente (mesma granularidade escolhida pelo
+   * usuário: "por componente", não por propriedade individual). */
+  exportedPropertyComponentIds: string[];
 }

@@ -1,6 +1,6 @@
 import { TUNNEL_TYPE_ID } from "../ui/webview/model";
 import { SubcircuitDocument } from "./subcircuitDocument";
-import { pruneInvalidExposedComponentRefs } from "./subcircuitExposedComponents";
+import { pruneInvalidExportedPropertyRefs, pruneInvalidExposedComponentRefs } from "./subcircuitExposedComponents";
 
 /** Validação obrigatória ANTES de salvar (pré-save) -- ponto único, testável, sem DOM, que decide se
  * um `SubcircuitDocument` pode ser gravado em disco. Nunca lança exceção -- toda condição vira
@@ -93,8 +93,14 @@ export function validateSubcircuitDocument(document: SubcircuitDocument): Subcir
 
   // Componentes expostos -- referências órfãs/duplicadas (correção automática segura: pruneInvalidExposedComponentRefs
   // já é determinística -- mantém a primeira ocorrência, nunca escolhe arbitrariamente).
-  const pruned = pruneInvalidExposedComponentRefs(document);
-  for (const warning of pruned.warnings) warnings.push(warning);
+  const prunedExposed = pruneInvalidExposedComponentRefs(document);
+  for (const warning of prunedExposed.warnings) warnings.push(warning);
+
+  // Propriedades exportadas -- MESMA correção, mas pra `exportedPropertyComponentIds` (INDEPENDENTE
+  // de `exposedComponents[]`, ver doc do campo).
+  const prunedExported = pruneInvalidExportedPropertyRefs(prunedExposed.document);
+  for (const warning of prunedExported.warnings) warnings.push(warning);
+  const pruned = { document: prunedExported.document, warnings: [...prunedExposed.warnings, ...prunedExported.warnings] };
 
   // Formas do Símbolo/Ícone com kind não suportado ou referência inválida.
   const shapeSources: Array<{ label: string; shapes: SubcircuitDocument["symbol"] extends undefined ? never : NonNullable<SubcircuitDocument["symbol"]>["shapes"] }> = [];

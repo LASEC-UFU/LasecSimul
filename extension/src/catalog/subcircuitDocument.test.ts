@@ -43,6 +43,7 @@ function fullDocument(): SubcircuitDocument {
       ],
     },
     exposedComponents: [],
+    exportedPropertyComponentIds: [],
     icon: { width: 24, height: 24, pins: [], shapes: [{ kind: "rect", x: 1, y: 1, w: 22, h: 22, fill: "#2b2f36" }] },
   };
 }

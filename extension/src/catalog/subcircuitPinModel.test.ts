@@ -21,6 +21,7 @@ function emptyDocument(): SubcircuitDocument {
     topology: { revision: 0, nodes: [], conductors: [] },
     interface: [],
     exposedComponents: [],
+    exportedPropertyComponentIds: [],
   };
 }
 

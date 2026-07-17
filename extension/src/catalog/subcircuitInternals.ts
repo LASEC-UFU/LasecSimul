@@ -21,6 +21,7 @@ interface InternalComponentSeed {
   properties: Record<string, unknown>;
   boardVisual?: VisualPosition;
   exposed?: boolean;
+  exported?: boolean;
 }
 
 /** Deriva a posição de Modo Placa de `exposedComponents[]` (schemaVersion 3,
@@ -48,6 +49,10 @@ function extractInternalComponents(json: Record<string, unknown>): InternalCompo
   const componentsRaw = Array.isArray(json.components) ? json.components : [];
   const exposedComponentsRaw = (Array.isArray(json.exposedComponents) ? json.exposedComponents : [])
     .filter((value): value is Record<string, unknown> => typeof value === "object" && value !== null);
+  // INDEPENDENTE de `exposedComponents[]` -- ver doc de `SubcircuitDocument.exportedPropertyComponentIds`.
+  const exportedIds = new Set(
+    (Array.isArray(json.exportedPropertyComponentIds) ? json.exportedPropertyComponentIds : []).filter((value): value is string => typeof value === "string")
+  );
   return componentsRaw
     .filter((value): value is Record<string, unknown> => typeof value === "object" && value !== null)
     .map((value) => {
@@ -59,6 +64,7 @@ function extractInternalComponents(json: Record<string, unknown>): InternalCompo
         properties: typeof value.properties === "object" && value.properties !== null ? (value.properties as Record<string, unknown>) : {},
         boardVisual: boardVisualFromExposedEntry(exposedEntry),
         exposed: exposedEntry !== undefined,
+        exported: exportedIds.has(id),
       };
     })
     .filter((component) => component.id && component.typeId);
@@ -97,6 +103,7 @@ export function gatherInternalComponentSnapshots(sourceId: string): InternalComp
         label: component.id,
         graphical: catalogEntry?.graphical === true,
         exposed: component.exposed === true,
+        exported: component.exported === true,
         boardVisual: component.boardVisual
           ? {
               x: component.boardVisual.x,

@@ -101,7 +101,7 @@ function cloneState(): WebviewProjectState {
 
 const PROJECT_STATE_KEYS = [
   "locale", "catalog", "components", "topology", "viewport", "selectedComponentIds", "selectedWireIds", "pendingConnection",
-  "subcircuitEditingContext", "symbolElements", "iconElements", "exposedComponents", "symbolCanvas", "iconCanvas",
+  "subcircuitEditingContext", "symbolElements", "iconElements", "exposedComponents", "exportedPropertyComponentIds", "symbolCanvas", "iconCanvas",
 ] as const satisfies readonly (keyof WebviewProjectState)[];
 
 /** Último `state.schematicState` já mandado pra Webview (via `syncState`/`syncStatePatch`) -- `undefined`
@@ -841,6 +841,7 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
         ...state.schematicState,
         components: normalized.components,
         exposedComponents: removal.value.state.exposedComponents,
+        exportedPropertyComponentIds: removal.value.state.exportedPropertyComponentIds,
         topology: { ...state.schematicState.topology, nodes: normalized.nodes, conductors: normalized.wires },
         selectedComponentIds: state.schematicState.selectedComponentIds.filter((id) => id !== message.componentId),
         selectedWireIds: state.schematicState.selectedWireIds.filter((id) => survivingWireIds.has(id)),
@@ -1350,6 +1351,7 @@ async function createSubcircuitFromSelectionHandler(componentIds: string[]): Pro
     // Subcircuito, sem nenhum pino externo visual ainda (`interface[]` acima é só o contrato do
     // Core; o desenho WYSIWYG do Símbolo é responsabilidade do usuário, Modo Símbolo).
     exposedComponents: [],
+    exportedPropertyComponentIds: [],
   };
 
   // 7. Gravar arquivo
@@ -1499,6 +1501,7 @@ async function openSubcircuitForEditingCommand(sourceId: string): Promise<void> 
     initialSymbolElements: symbolElements,
     initialIconElements: iconElements,
     initialExposedComponents: document.exposedComponents,
+    initialExportedPropertyComponentIds: document.exportedPropertyComponentIds,
   });
 
   state.schematicState = {
@@ -1510,6 +1513,7 @@ async function openSubcircuitForEditingCommand(sourceId: string): Promise<void> 
     symbolCanvas,
     iconCanvas,
     exposedComponents: document.exposedComponents,
+    exportedPropertyComponentIds: document.exportedPropertyComponentIds,
     viewport: { x: 0, y: 0, zoom: 1 },
     selectedComponentIds: [],
     selectedWireIds: [],
@@ -1535,6 +1539,7 @@ function isSubcircuitEditingSessionDirty(session: SubcircuitEditingSession): boo
     symbolElements: state.schematicState.symbolElements,
     iconElements: state.schematicState.iconElements,
     exposedComponents: state.schematicState.exposedComponents,
+    exportedPropertyComponentIds: state.schematicState.exportedPropertyComponentIds,
   });
   const initial = JSON.stringify({
     components: session.initialComponents,
@@ -1543,6 +1548,7 @@ function isSubcircuitEditingSessionDirty(session: SubcircuitEditingSession): boo
     symbolElements: session.initialSymbolElements,
     iconElements: session.initialIconElements,
     exposedComponents: session.initialExposedComponents,
+    exportedPropertyComponentIds: session.initialExportedPropertyComponentIds,
   });
   return current !== initial;
 }
@@ -1613,6 +1619,7 @@ async function writeSubcircuitEditingSessionBack(session: SubcircuitEditingSessi
     ...(symbolResult.descriptor ? { symbol: symbolResult.descriptor } : {}),
     ...(iconResult.descriptor ? { icon: iconResult.descriptor } : {}),
     exposedComponents: state.schematicState.exposedComponents,
+    exportedPropertyComponentIds: state.schematicState.exportedPropertyComponentIds,
   };
 
   // Força `properties.name === properties.pinId` em todo túnel ligado e re-deriva `interface[]`

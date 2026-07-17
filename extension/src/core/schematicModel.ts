@@ -103,8 +103,9 @@ function tunnelPinId(element: WebviewComponentModel): string | undefined {
  *   acionável) quando é a ÚNICA ligação interna daquele pino -- remover o pino inteiro (categoria
  *   `pin`) é o caminho correto nesse caso, nunca apagar o túnel isoladamente e deixar o pino sem
  *   nenhuma ligação. Túnel comum (sem `pinId`) nunca é bloqueado.
- * - qualquer elemento no escopo `schematic`: remove também sua entrada em `exposedComponents[]`,
- *   se houver -- nunca deixa uma exposição órfã apontando pra um componente apagado.
+ * - qualquer elemento no escopo `schematic`: remove também sua entrada em `exposedComponents[]` e
+ *   `exportedPropertyComponentIds[]`, se houver -- nunca deixa uma exposição/exportação órfã
+ *   apontando pra um componente apagado.
  * "Elemento inexistente" é erro explícito, nunca no-op silencioso. */
 export function removeElement(state: WebviewProjectState, id: string): ElementOperationOutcome<{ state: WebviewProjectState; ref: ElementRef }> {
   const ref = getElement(state, id);
@@ -133,7 +134,11 @@ export function removeElement(state: WebviewProjectState, id: string): ElementOp
     }
   }
   if (ref.scope === "schematic") {
-    next = { ...next, exposedComponents: next.exposedComponents.filter((entry) => entry.componentId !== id) };
+    next = {
+      ...next,
+      exposedComponents: next.exposedComponents.filter((entry) => entry.componentId !== id),
+      exportedPropertyComponentIds: next.exportedPropertyComponentIds.filter((componentId) => componentId !== id),
+    };
   }
   return { ok: true, value: { state: next, ref } };
 }

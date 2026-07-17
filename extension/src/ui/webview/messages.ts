@@ -59,6 +59,11 @@ export interface InternalComponentSnapshot {
   label: string;
   graphical: boolean;
   exposed: boolean;
+  /** Independente de `exposed` -- pedido real: "componente exposto e propriedade exportada devem
+   * ser conceitos independentes". Só quando `true` este componente ganha o submenu "Propriedades"
+   * na instância do subcircuito no schematic principal (`main.ts::buildExposedComponentMenuItems`).
+   * Ver `SubcircuitDocument.exportedPropertyComponentIds`. */
+  exported: boolean;
   boardVisual?: { x: number; y: number; rotation: 0 | 90 | 180 | 270; flipH?: boolean; flipV?: boolean };
   properties: Record<string, string | number | boolean>;
 }

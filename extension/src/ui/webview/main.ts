@@ -52,6 +52,7 @@ function createEmptyState(): WebviewProjectState {
     symbolElements: [],
     iconElements: [],
     exposedComponents: [],
+    exportedPropertyComponentIds: [],
   };
 }
 
@@ -76,6 +77,7 @@ function normalizeProjectState(raw: WebviewProjectState): WebviewProjectState {
     symbolElements: Array.isArray(raw.symbolElements) ? raw.symbolElements : [],
     iconElements: Array.isArray(raw.iconElements) ? raw.iconElements : [],
     exposedComponents: Array.isArray(raw.exposedComponents) ? raw.exposedComponents : [],
+    exportedPropertyComponentIds: Array.isArray(raw.exportedPropertyComponentIds) ? raw.exportedPropertyComponentIds : [],
   };
 }
 
@@ -222,6 +224,10 @@ const UI_TEXT = {
     exposedComponentsSelectAll: "Selecionar todos",
     exposedComponentsClearAll: "Limpar seleção",
     notGraphicalHint: "(sem efeito visual no Modo Placa)",
+    selectExportedProperties: "Selecionar Propriedades Exportadas",
+    exportedPropertiesDialogTitle: "Propriedades Exportadas",
+    exportProperties: "Exportar propriedades",
+    unexportProperties: "Remover exportação de propriedades",
     createSubcircuit: "Criar Subcircuito da Seleção",
     selectAll: "Selecionar tudo",
     unknownComponent: "Componente desconhecido",
@@ -328,6 +334,10 @@ const UI_TEXT = {
     exposedComponentsSelectAll: "Select all",
     exposedComponentsClearAll: "Clear selection",
     notGraphicalHint: "(no visual effect in Board Mode)",
+    selectExportedProperties: "Select Exported Properties",
+    exportedPropertiesDialogTitle: "Exported Properties",
+    exportProperties: "Export properties",
+    unexportProperties: "Remove property export",
     createSubcircuit: "Create Subcircuit from Selection",
     selectAll: "Select all",
     unknownComponent: "Unknown component",
@@ -741,6 +751,31 @@ function applyExposedComponentSelection(selectedIds: ReadonlySet<string>): void 
   render();
 }
 
+/** Alterna se `componentId` exporta suas propriedades pro submenu "Propriedades" da instância do
+ * subcircuito no schematic principal -- INDEPENDENTE de `state.exposedComponents` (pedido real:
+ * "componente exposto e propriedade exportada devem ser conceitos independentes"). Sem
+ * posição/rotação/escala (não é uma apresentação visual), só um id numa lista. */
+function toggleExportedPropertyCommand(componentId: string): void {
+  const alreadyExported = state.exportedPropertyComponentIds.includes(componentId);
+  state = {
+    ...state,
+    exportedPropertyComponentIds: alreadyExported
+      ? state.exportedPropertyComponentIds.filter((id) => id !== componentId)
+      : [...state.exportedPropertyComponentIds, componentId],
+  };
+  persistState();
+  render();
+}
+
+/** Reconcilia `state.exportedPropertyComponentIds` inteiro contra um conjunto de ids selecionados
+ * de uma vez (diálogo "Selecionar Propriedades Exportadas" abaixo) -- mesmo princípio de
+ * `applyExposedComponentSelection`, mais simples (sem posição/rotação/escala pra preservar). */
+function applyExportedPropertySelection(selectedIds: ReadonlySet<string>): void {
+  state = { ...state, exportedPropertyComponentIds: [...selectedIds] };
+  persistState();
+  render();
+}
+
 /** "Selecione os Componentes Expostos" -- diálogo de seleção em lote (absorve "Modo Placa", mesmo
  * princípio de `openExposedComponentsDialog`/`subcircuitBoardMode.ts`, removido nesta refatoração
  * mas trazido de volta a pedido do usuário: o toggle por-componente do menu de contexto -- seção
@@ -800,6 +835,63 @@ function openExposedComponentsDialog(): void {
   dialog.showModal();
 }
 
+/** "Selecionar Propriedades Exportadas" -- diálogo de seleção em lote pro NOVO conceito
+ * `exportedPropertyComponentIds`, INDEPENDENTE de "Selecione os Componentes Expostos" acima (pedido
+ * real: "crie o recurso de poder selecionar quais componentes terão suas propriedades exportadas na
+ * área de edição do subcircuito"). Mesma UI/CSS de `openExposedComponentsDialog` (reaproveitadas,
+ * conceito irmão) -- lista TODO componente interno não-oculto, sem distinção `graphical` (exportar
+ * propriedades não depende de aparência visual, diferente de "exposto"). */
+function openExportedPropertiesDialog(): void {
+  if (!state.subcircuitEditingContext) return;
+  const dialog = document.createElement("dialog");
+  dialog.className = "exposed-components-dialog";
+  const form = document.createElement("form");
+  form.method = "dialog";
+  form.className = "exposed-components-form";
+  const title = document.createElement("h2");
+  title.textContent = t("exportedPropertiesDialogTitle");
+  form.appendChild(title);
+  const list = document.createElement("div");
+  list.className = "exposed-components-list";
+  const choices = new Map<string, HTMLInputElement>();
+  const currentlyExported = new Set(state.exportedPropertyComponentIds);
+  for (const component of state.components.filter((entry) => !entry.hidden)) {
+    const row = document.createElement("label");
+    row.className = "exposed-components-row";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = currentlyExported.has(component.id);
+    choices.set(component.id, input);
+    const text = document.createElement("span");
+    text.textContent = `${component.label} (${component.id})`;
+    row.append(input, text);
+    list.appendChild(row);
+  }
+  form.appendChild(list);
+  const actions = document.createElement("div");
+  actions.className = "exposed-components-actions";
+  const selectAll = document.createElement("button");
+  selectAll.type = "button"; selectAll.textContent = t("exposedComponentsSelectAll");
+  selectAll.onclick = () => choices.forEach((input) => { input.checked = true; });
+  const clearAll = document.createElement("button");
+  clearAll.type = "button"; clearAll.textContent = t("exposedComponentsClearAll");
+  clearAll.onclick = () => choices.forEach((input) => { input.checked = false; });
+  const cancel = document.createElement("button");
+  cancel.type = "button"; cancel.textContent = t("exposedComponentsCancel"); cancel.onclick = () => dialog.close("cancel");
+  const confirm = document.createElement("button");
+  confirm.type = "submit"; confirm.value = "confirm"; confirm.textContent = t("exposedComponentsConfirm");
+  actions.append(selectAll, clearAll, cancel, confirm);
+  form.appendChild(actions);
+  dialog.appendChild(form);
+  dialog.addEventListener("close", () => {
+    if (dialog.returnValue === "confirm") {
+      applyExportedPropertySelection(new Set([...choices].filter(([, input]) => input.checked).map(([id]) => id)));
+    }
+    dialog.remove();
+  });
+  document.body.appendChild(dialog);
+  dialog.showModal();
+}
 
 const propertyDialog = document.createElement("dialog");
 propertyDialog.className = "property-dialog";
@@ -1863,6 +1955,16 @@ function renderAppBar(): HTMLElement {
       selectExposedButton.textContent = t("selectExposedComponents");
       selectExposedButton.addEventListener("click", () => openExposedComponentsDialog());
       subcircuitGroup.appendChild(selectExposedButton);
+
+      // "Selecionar Propriedades Exportadas" -- pedido real: "crie o recurso de poder selecionar
+      // quais componentes terão suas propriedades exportadas na área de edição do subcircuito".
+      // Botão IRMÃO do de cima, mas conceito INDEPENDENTE (exposto != exporta propriedades).
+      const selectExportedButton = document.createElement("button");
+      selectExportedButton.type = "button";
+      selectExportedButton.className = "appbar__text-button";
+      selectExportedButton.textContent = t("selectExportedProperties");
+      selectExportedButton.addEventListener("click", () => openExportedPropertiesDialog());
+      subcircuitGroup.appendChild(selectExportedButton);
     }
 
     subcircuitGroup.appendChild(
@@ -5432,6 +5534,18 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
             ];
           })()
         : [];
+    // Exportar/remover exportação de propriedades -- toggle IRMÃO do de cima, mas INDEPENDENTE
+    // (pedido real: "componente exposto e propriedade exportada devem ser conceitos independentes").
+    // Mesmo escopo de `exposeComponentMenuItems` (só Modo Subcircuito, componente único).
+    const exportPropertyMenuItems: ContextMenuItem[] =
+      !isGroup && Boolean(state.subcircuitEditingContext) && subcircuitEditorMode === "circuit"
+        ? (() => {
+            const isExported = state.exportedPropertyComponentIds.includes(component.id);
+            return [
+              { label: isExported ? t("unexportProperties") : t("exportProperties"), checked: isExported, onClick: () => toggleExportedPropertyCommand(component.id) },
+            ];
+          })()
+        : [];
     // Alinhar/distribuir (pedido original: "junto às ações de girar e rotacionar", pra qualquer
     // elemento selecionável -- pino/texto/figura/componente, todos o mesmo `WebviewComponentModel`,
     // MISTURANDO com rótulos externos selecionados também, ver `MovableRef`/"rótulos + componentes
@@ -5471,6 +5585,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
       ...subcircuitRefMenuItems,
       ...symbolPinMenuItems,
       ...exposeComponentMenuItems,
+      ...exportPropertyMenuItems,
     ];
     showContextMenu(event, menuItems);
   });
@@ -6589,8 +6704,12 @@ function buildExposedComponentMenuItems(component: WebviewComponentModel): Conte
   if (!sourceId) return [];
   ensureBoardOverlayData(component);
   const items = boardOverlayDataByComponentId.get(component.id) ?? [];
+  // Filtra por `exported`, NUNCA `exposed` -- pedido real: "componente exposto e propriedade
+  // exportada devem ser conceitos independentes. Tornar um componente exposto não pode exportar
+  // automaticamente todas as suas propriedades." Um componente pode aparecer no Símbolo (exposto)
+  // sem nunca aparecer aqui, e vice-versa.
   return items
-    .filter((item) => item.exposed)
+    .filter((item) => item.exported)
     .map((item) => {
       const actions: ContextMenuItem[] = [];
       if (isMcuHostTypeId(item.typeId)) {

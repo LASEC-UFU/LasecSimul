@@ -1,6 +1,6 @@
 import { createTestRunner, assert } from "../ipc/testSupport/MockCoreServer";
 import { SUBCIRCUIT_SCHEMA_VERSION, SubcircuitDocument } from "./subcircuitDocument";
-import { pruneInvalidExposedComponentRefs, removeExposedComponent, setExposedComponent } from "./subcircuitExposedComponents";
+import { pruneInvalidExportedPropertyRefs, pruneInvalidExposedComponentRefs, removeExposedComponent, setExposedComponent } from "./subcircuitExposedComponents";
 
 function baseDocument(): SubcircuitDocument {
   return {
@@ -14,6 +14,7 @@ function baseDocument(): SubcircuitDocument {
     topology: { revision: 0, nodes: [], conductors: [] },
     interface: [],
     exposedComponents: [],
+    exportedPropertyComponentIds: [],
   };
 }
 
@@ -76,6 +77,34 @@ function baseDocument(): SubcircuitDocument {
     const result = pruneInvalidExposedComponentRefs(doc);
     assert(result.warnings.length === 0, "sem problemas, não deveria gerar warnings");
     assert(result.document === doc, "sem mudanças necessárias, deveria devolver a MESMA referência de documento (nunca clonar à toa)");
+  });
+
+  await test("exportedPropertyComponentIds é INDEPENDENTE de exposedComponents[] -- expor um componente nunca marca ele como exportado, e vice-versa", () => {
+    const doc = setExposedComponent(baseDocument(), { componentId: "led1", x: 5, y: 5, rotation: 0, flipH: false, flipV: false, scale: 1, layer: 0 });
+    assert(doc.exportedPropertyComponentIds.length === 0, "expor um componente não deveria exportar suas propriedades automaticamente");
+    const doc2: SubcircuitDocument = { ...baseDocument(), exportedPropertyComponentIds: ["btn1"] };
+    assert(doc2.exposedComponents.length === 0, "exportar propriedades não deveria expor o componente automaticamente");
+  });
+
+  await test("pruneInvalidExportedPropertyRefs remove referência órfã com warning explicativo", () => {
+    const doc: SubcircuitDocument = { ...baseDocument(), exportedPropertyComponentIds: ["nao-existe"] };
+    const result = pruneInvalidExportedPropertyRefs(doc);
+    assert(result.document.exportedPropertyComponentIds.length === 0, "referência órfã deveria ser removida");
+    assert(result.warnings.length === 1, `esperado 1 warning, recebido ${result.warnings.length}`);
+    assert(result.warnings[0]!.includes("nao-existe"), "warning deveria mencionar o componentId órfão");
+  });
+
+  await test("pruneInvalidExportedPropertyRefs deduplica ids repetidos, mantendo a primeira ocorrência", () => {
+    const doc: SubcircuitDocument = { ...baseDocument(), exportedPropertyComponentIds: ["led1", "btn1", "led1"] };
+    const result = pruneInvalidExportedPropertyRefs(doc);
+    assert(JSON.stringify(result.document.exportedPropertyComponentIds) === JSON.stringify(["led1", "btn1"]), "deveria deduplicar preservando a primeira ocorrência de cada id");
+  });
+
+  await test("pruneInvalidExportedPropertyRefs não toca no documento (mesma referência) quando não há nada pra corrigir", () => {
+    const doc: SubcircuitDocument = { ...baseDocument(), exportedPropertyComponentIds: ["led1"] };
+    const result = pruneInvalidExportedPropertyRefs(doc);
+    assert(result.warnings.length === 0, "sem problemas, não deveria gerar warnings");
+    assert(result.document === doc, "sem mudanças necessárias, deveria devolver a MESMA referência de documento");
   });
 
   finish();

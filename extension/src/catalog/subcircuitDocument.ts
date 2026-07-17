@@ -77,6 +77,14 @@ export interface SubcircuitDocument {
 
   /** Componentes expostos (Modo Símbolo, absorve "Modo Placa"). */
   exposedComponents: ExposedComponentEntry[];
+
+  /** Quais componentes internos exportam suas propriedades pro submenu "Propriedades" da instância
+   * do subcircuito no schematic principal -- INDEPENDENTE de `exposedComponents[]` (pedido real:
+   * "componente exposto e propriedade exportada devem ser conceitos independentes. Tornar um
+   * componente exposto não pode exportar automaticamente todas as suas propriedades"). Array de
+   * `components[].id`; granularidade por-componente (liga/desliga TODAS as propriedades daquele
+   * componente), não por-propriedade-individual (escolha explícita do usuário). */
+  exportedPropertyComponentIds: string[];
 }
 
 export type ParseSubcircuitDocumentResult =
@@ -186,6 +194,9 @@ export function parseSubcircuitDocument(raw: unknown, manifestDir: string): Pars
     exposedComponents: Array.isArray(obj.exposedComponents)
       ? (obj.exposedComponents as unknown[]).map(parseExposedComponentEntry).filter((entry): entry is ExposedComponentEntry => entry !== undefined)
       : [],
+    exportedPropertyComponentIds: Array.isArray(obj.exportedPropertyComponentIds)
+      ? (obj.exportedPropertyComponentIds as unknown[]).filter((id): id is string => typeof id === "string" && id.trim().length > 0)
+      : [],
   };
   return { ok: true, document };
 }
@@ -212,6 +223,7 @@ export function serializeSubcircuitDocument(document: SubcircuitDocument): Recor
     interface: document.interface,
     ...(document.symbol ? { symbol: document.symbol } : {}),
     exposedComponents: document.exposedComponents,
+    exportedPropertyComponentIds: document.exportedPropertyComponentIds,
     ...(document.icon ? { icon: document.icon } : {}),
     ...(document.folderPath ? { folderPath: document.folderPath } : {}),
     ...(document.defaultProperties ? { defaultProperties: document.defaultProperties } : {}),

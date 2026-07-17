@@ -138,6 +138,7 @@ function projectToWebviewState(project: ProjectDocument): WebviewProjectState {
     symbolElements: [],
     iconElements: [],
     exposedComponents: [],
+    exportedPropertyComponentIds: [],
   };
 }
 

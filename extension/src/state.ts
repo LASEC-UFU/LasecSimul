@@ -60,6 +60,7 @@ export const state = {
     initialSymbolElements: WebviewProjectState["symbolElements"];
     initialIconElements: WebviewProjectState["iconElements"];
     initialExposedComponents: WebviewProjectState["exposedComponents"];
+    initialExportedPropertyComponentIds: WebviewProjectState["exportedPropertyComponentIds"];
   }>,
 };
 

@@ -62,3 +62,29 @@ export function setExposedComponent(document: SubcircuitDocument, entry: Exposed
 export function removeExposedComponent(document: SubcircuitDocument, componentId: string): SubcircuitDocument {
   return { ...document, exposedComponents: document.exposedComponents.filter((entry) => entry.componentId !== componentId) };
 }
+
+/** Mesmo princípio de `pruneInvalidExposedComponentRefs`, pra `exportedPropertyComponentIds`
+ * (INDEPENDENTE de `exposedComponents[]` -- ver doc de `SubcircuitDocument.exportedPropertyComponentIds`):
+ * remove ids que não existem mais em `components[]` e duplicatas, sempre mantendo a primeira
+ * ocorrência. Nunca silencioso. */
+export function pruneInvalidExportedPropertyRefs(document: SubcircuitDocument): ExposedComponentValidationResult {
+  const warnings: string[] = [];
+  const existingComponentIds = new Set(document.components.map((component) => component.id));
+  const seenComponentIds = new Set<string>();
+  const nextIds: string[] = [];
+
+  for (const componentId of document.exportedPropertyComponentIds) {
+    if (!existingComponentIds.has(componentId)) {
+      warnings.push(`Exportação de propriedades referencia "${componentId}", que não existe mais no circuito interno -- referência removida.`);
+      continue;
+    }
+    if (seenComponentIds.has(componentId)) continue;
+    seenComponentIds.add(componentId);
+    nextIds.push(componentId);
+  }
+
+  if (nextIds.length === document.exportedPropertyComponentIds.length) {
+    return { document, warnings };
+  }
+  return { document: { ...document, exportedPropertyComponentIds: nextIds }, warnings };
+}

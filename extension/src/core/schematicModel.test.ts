@@ -27,6 +27,7 @@ function baseState(): WebviewProjectState {
     symbolElements: [makeComponent("pin1", SYMBOL_PIN_TYPE_ID, { properties: { pinId: "VCC" } })],
     iconElements: [makeComponent("shape1", "graphics.rectangle")],
     exposedComponents: [],
+    exportedPropertyComponentIds: [],
   };
 }
 

@@ -79,5 +79,6 @@ export function createInitialWebviewState(catalog: WebviewComponentCatalogEntry[
     symbolElements: [],
     iconElements: [],
     exposedComponents: [],
+    exportedPropertyComponentIds: [],
   };
 }
