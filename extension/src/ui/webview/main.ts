@@ -1051,7 +1051,12 @@ function renderBoardOverlaysFor(component: WebviewComponentModel): HTMLElement[]
         if (pressed === value) return;
         pressed = value;
         const pressedProperties = { ...properties, closed: value };
-        svg.innerHTML = packageSymbolSvg(item.typeId, pressedProperties, item.id) ?? componentSymbolSvg(item.typeId, pressedProperties);
+        // `boardVariant` aqui também -- SEM ele, este `packageSymbolSvg` (regenerado a cada aperto/
+        // soltura) reconstrói o SVG SEM `hidePins`, e os leads/rótulos de pino escondidos (ver
+        // `packageBodySvg`) VOLTAM a aparecer a cada clique -- bug real relatado ("os terminais
+        // aparecem indevidamente ao clicar", somem só no próximo `render()` completo porque a linha
+        // 1026 acima, essa sim com `boardVariant`, os esconde de novo).
+        svg.innerHTML = packageSymbolSvg(item.typeId, pressedProperties, item.id, boardVariant) ?? componentSymbolSvg(item.typeId, pressedProperties);
         send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateBoardOverlayProperty", outerComponentId: component.id, innerComponentId: item.id, name: "closed", value });
       };
       if (isPushButton) setPressed(true);
