@@ -1,6 +1,6 @@
 import { WEBVIEW_MESSAGE_VERSION, AnalyzerVectorHistory, ComponentReadoutValue, HostToWebviewMessage, InternalComponentSnapshot, SimulationStatus, WebviewToHostMessage } from "./messages.js";
 import { CanonicalEndpoint, CanonicalTopologyDocument, InteractionKindEntry, McuSerialPortEntry, PackagePin, PropertySchemaEntry, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, ViewSpecInteraction, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, endpointId, endpointPinId, nodeEndpoint, portEndpoint, remapEndpoint } from "./model.js";
-import { ComponentBox, PIN_RADIUS, componentBox, componentLocalOrigin, componentSymbolSvg, dialKnobSvg, hasRealPinPosition, livePackagePreviewSymbolSvg, missingSubcircuitPlaceholderSvg, packageSymbolSvg, pinLocalPosition, registerPackage } from "./componentSymbols.js";
+import { ComponentBox, PIN_RADIUS, componentBox, componentLocalOrigin, componentSymbolSvg, dialKnobSvg, hasRealPinPosition, livePackagePreviewSymbolSvg, missingSubcircuitPlaceholderSvg, packageLayoutTransform, packageSymbolSvg, pinLocalPosition, registerPackage } from "./componentSymbols.js";
 import { svgLocalTransform, transformLocalPoint, transformedLocalBounds } from "./componentGeometry.js";
 import { detectChannelTrigger, digitalStepPath, findTriggerAnchorIndex, triggerAlignedWindowEndNs, visibleSampleWindowByTime } from "./instrumentTrigger.js";
 import { analogSampleHoldPath, clampInstrumentWindow, decodeInstrumentState, encodeInstrumentState, panInstrumentTime, zoomInstrumentTimeAt } from "./instrumentViewport.js";
@@ -984,6 +984,17 @@ function renderBoardOverlaysFor(component: WebviewComponentModel): HTMLElement[]
   if (!items || items.length === 0) return [];
   const packageBox = componentBox(component.typeId, component.properties);
   const sourceId = catalogEntryFor(component.typeId)?.registeredSourceId;
+  // `boardVisual.x/y` (== `exposedComponents[].x/y`) é coordenada NATIVA do símbolo do subcircuito
+  // (mesmo espaço que a posição arrastada em Modo Símbolo, já alinhada com a foto/fundo real por
+  // `renderSymbolCanvasBackground`'s cancelamento de offset -- ver `.spec`). O `<div>` DESTA
+  // instância (`component.x/y`) NÃO começa em coordenada nativa 0,0 do próprio símbolo -- começa em
+  // `-offsetX*scaleX` (mesmo motivo de sempre: `resolvePackageLayout` desloca tudo pra caber leads
+  // que protrudem além de `0..width`/`0..height`). Sem compensar aqui, o overlay ficava deslocado
+  // por exatamente esse offset em relação à posição arrastada em Modo Símbolo -- bug real relatado
+  // ("a posição dos objetos expostos no símbolo não está exatamente igual no esquemático").
+  const deviceTransform = packageLayoutTransform(component.typeId, component.properties);
+  const boardOffsetX = deviceTransform ? deviceTransform.offsetX * deviceTransform.scaleX : 0;
+  const boardOffsetY = deviceTransform ? deviceTransform.offsetY * deviceTransform.scaleY : 0;
   const elements: HTMLElement[] = [];
   let fallbackIndex = 0;
   for (const item of items) {
@@ -1002,8 +1013,8 @@ function renderBoardOverlaysFor(component: WebviewComponentModel): HTMLElement[]
     const box = componentBox(item.typeId, properties, boardVariant);
     const el = document.createElement("div");
     el.className = "component component--board-overlay";
-    el.style.left = `${component.x + boardVisual.x}px`;
-    el.style.top = `${component.y + boardVisual.y}px`;
+    el.style.left = `${component.x + boardOffsetX + boardVisual.x}px`;
+    el.style.top = `${component.y + boardOffsetY + boardVisual.y}px`;
     el.style.width = `${box.width}px`;
     el.style.height = `${box.height}px`;
     el.style.transform = `rotate(${boardVisual.rotation}deg)`;
@@ -1027,8 +1038,8 @@ function renderBoardOverlaysFor(component: WebviewComponentModel): HTMLElement[]
       event.stopPropagation();
       const startClientX = event.clientX;
       const startClientY = event.clientY;
-      const startLeft = component.x + boardVisual.x;
-      const startTop = component.y + boardVisual.y;
+      const startLeft = component.x + boardOffsetX + boardVisual.x;
+      const startTop = component.y + boardOffsetY + boardVisual.y;
       let dragging = false;
       let pressed = false;
       const DRAG_THRESHOLD_PX = 4;

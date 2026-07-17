@@ -365,6 +365,21 @@ function resolvedPackageFor(typeId: string, properties?: Record<string, unknown>
   return pkg ? resolvePackageLayout(materializePackage(pkg, properties)) : undefined;
 }
 
+/** `offsetX`/`offsetY`/`scaleX`/`scaleY` reais que `packageBodySvg` aplica pra desenhar este typeId
+ * (ver `resolvePackageLayout`) -- `undefined` sem `package` registrado. Quem desenha uma projeção/
+ * overlay de um componente exposto FORA do `<svg>` do próprio pacote (`main.ts::
+ * renderExposedComponentProjections`/`renderBoardOverlaysFor`) precisa desta MESMA transformação pra
+ * posicionar em cima do corpo/fundo real -- sem isto, uma posição em coordenada NATIVA do pacote
+ * (`exposedComponents[].x/y`, mundo do Símbolo) fica deslocada por exatamente este offset em
+ * qualquer lugar que não seja o próprio `<svg>` interno do pacote (que já aplica via
+ * `packageBodySvg`'s `translate`) -- bug real: overlay do componente exposto na instância colocada
+ * no circuito principal não batia com a posição arrastada em Modo Símbolo pra qualquer typeId cujos
+ * pinos/rótulos protrudam além de `0..width`/`0..height` (`offsetX/offsetY` não-zero). */
+export function packageLayoutTransform(typeId: string, properties?: Record<string, unknown>, variant?: PackageVariant): { offsetX: number; offsetY: number; scaleX: number; scaleY: number } | undefined {
+  const resolved = resolvedPackageFor(typeId, properties, variant);
+  return resolved ? { offsetX: resolved.offsetX, offsetY: resolved.offsetY, scaleX: resolved.scaleX, scaleY: resolved.scaleY } : undefined;
+}
+
 function packageInstanceScale(properties?: Record<string, unknown>): { x: number; y: number } {
   const scaleX = typeof properties?.__simulideSceneScaleX === "number" && Number.isFinite(properties.__simulideSceneScaleX) && properties.__simulideSceneScaleX > 0
     ? properties.__simulideSceneScaleX
