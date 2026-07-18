@@ -78,5 +78,17 @@ await test("poll() NÃO despublica o endpoint quando a leitura falha (overflow �
   assert(broker.isPublished(registration.id), "endpoint NÃO deveria fechar sozinho por causa de erros de leitura repetidos");
   broker.dispose();
 });
+await test("debugRecentBytes (comando 'LasecSimul: List LasecPlot Endpoints') captura os bytes lidos do Core mesmo SEM cliente conectado, e limita o tamanho", async () => {
+  const transport = new MemoryTransport();
+  const broker = new LasecPlotBroker(transport, 5);
+  broker.register(registration);
+  assert((broker.debugRecentBytes(registration.id) ?? new Uint8Array()).byteLength === 0, "sem leitura nenhuma ainda, buffer deveria começar vazio");
+  broker.setOnline(registration.id, true); // liga o poll -- NUNCA publica, então nunca teria cliente
+  transport.reads.push(Uint8Array.of(72, 105)); // "Hi"
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const captured = broker.debugRecentBytes(registration.id);
+  assert(captured !== undefined && Buffer.from(captured).toString() === "Hi", `deveria capturar 'Hi' mesmo sem cliente/publicação, capturado: ${captured ? Buffer.from(captured).toString("hex") : "undefined"}`);
+  broker.dispose();
+});
 const { failed } = finish(); process.exitCode = failed > 0 ? 1 : 0;
 })();

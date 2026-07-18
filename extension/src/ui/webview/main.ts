@@ -1906,6 +1906,43 @@ function openExposedLabelPropertyDialog(outerComponentId: string, sourceId: stri
   if (!propertyDialog.open) propertyDialog.showModal();
 }
 
+/** Só `true` quando o typeId tem ALGUM campo `editor:"display"`/`showOnSymbol` no `propertySchema`
+ * (leitura ao vivo dentro do próprio diálogo, ver `formatLiveReadout`/`isLiveReadout` em
+ * `renderPropertyField`) -- a maioria dos typeIds (ex: LasecPlot) não tem NENHUM. */
+function propertyDialogHasLiveReadoutField(componentTypeId: string): boolean {
+  const schema = catalogEntryFor(componentTypeId)?.propertySchema;
+  return Boolean(schema?.some((entry) => propertyFieldKindFromEditor(entry.editor) === "readonly" && entry.showOnSymbol));
+}
+
+/** Bug real corrigido 2026-07-18 ("Abrir do LasecPlot nunca reage a clique NENHUM enquanto a
+ * simulação roda"): `componentReadout` chega a cada ~300ms durante a simulação e chamava
+ * `refreshOpenPropertyDialog` incondicionalmente pra QUALQUER diálogo aberto -- que reconstrói
+ * `propertyDialog.innerHTML` inteiro (`openPropertyDialog` -> `renderPropertySheet`), destruindo e
+ * recriando TODOS os elementos, inclusive o alvo de um clique em andamento. Se o `mousedown` e o
+ * `mouseup` do usuário caíssem em reconstruções diferentes (bem provável numa janela de ~300ms
+ * repetida sem parar), o evento `click` nunca chegava a disparar em NENHUM botão do diálogo --
+ * indistinguível de "o botão não funciona". LasecPlot não tem nenhum campo `showOnSymbol`+"display"
+ * (não mostra leitura ao vivo nenhuma no painel de Propriedades), então essa reconstrução nunca
+ * teve propósito ali, só risco -- mesmo raciocínio provavelmente vale pra maioria dos outros
+ * typeIds. Só os poucos com leitura ao vivo de verdade (voltímetro/amperímetro/etc, mostrador
+ * "editor:display" no schema) precisam do refresh; os demais mantêm o diálogo intocado até o
+ * usuário fazer alguma ação de verdade nele. */
+function activePropertyDialogNeedsReadoutRefresh(): boolean {
+  const target = activePropertyTarget;
+  if (!target) return false;
+  if (target.kind === "project") {
+    const component = activeSceneComponents().find((entry) => entry.id === target.componentId);
+    return component ? propertyDialogHasLiveReadoutField(component.typeId) : false;
+  }
+  if (target.kind === "project-batch") {
+    return target.componentIds.some((id) => {
+      const component = activeSceneComponents().find((entry) => entry.id === id);
+      return component ? propertyDialogHasLiveReadoutField(component.typeId) : false;
+    });
+  }
+  return false;
+}
+
 function refreshOpenPropertyDialog(): void {
   if (!propertyDialog.open || !activePropertyTarget) return;
   const target = activePropertyTarget;
@@ -5970,7 +6007,17 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
     const component = liveComponent();
     if (!component) return;
     if (event.button !== 0) return;
-    if (event.target instanceof Element && event.target.closest(".pin-terminal, .meter-expand-button")) return;
+    // Bug real corrigido 2026-07-18 ("Abrir do LasecPlot -- nem parece um botão, nada acontece ao
+    // clicar"): `.serial-toggle-hit-zone` (LasecPlot/Serial Terminal/Serial Port, ver
+    // `updateComponentElement`) tem seu PRÓPRIO `click` listener direto no elemento, igual a
+    // `.pin-terminal`/`.meter-expand-button` -- mas, ao contrário destes dois, nunca tinha sido
+    // adicionado aqui. Sem o early-return, `el.setPointerCapture(event.pointerId)` (algumas linhas
+    // abaixo) capturava QUALQUER pointerdown dentro da caixa do componente, inclusive em cima do
+    // texto "Abrir" -- por spec de Pointer Events, isso redireciona o `mouseup`/`click`
+    // subsequente pro elemento QUE CAPTUROU (`el`), nunca pro alvo visual original (o `<text>`), então
+    // o listener de `.serial-toggle-hit-zone` NUNCA disparava -- o clique virava só "selecionar o
+    // componente" (handler genérico de `el`), indistinguível de "o botão não faz nada".
+    if (event.target instanceof Element && event.target.closest(".pin-terminal, .meter-expand-button, .serial-toggle-hit-zone")) return;
     event.stopPropagation();
     // `Ctrl+Shift` junto é o gesto de duplicar-arrastando (checado ANTES do shift-toggle abaixo,
     // senão nunca chegaria aqui -- shift sozinho sempre alterna seleção e retorna cedo).
@@ -8235,7 +8282,7 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
       }
       refreshReadouts();
     }
-    refreshOpenPropertyDialog();
+    if (activePropertyDialogNeedsReadoutRefresh()) refreshOpenPropertyDialog();
   }
 
   if (message.type === "instrumentHistory") {

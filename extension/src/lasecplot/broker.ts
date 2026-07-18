@@ -43,6 +43,18 @@ interface EndpointState {
   sequence: number;
   connections: Set<Connection>;
   writer?: Connection;
+  /** Diagnóstico: últimos bytes LIDOS do Core pra este endpoint (independente de estar publicado ou
+   * ter cliente conectado, ver `poll()`) -- só existe pra responder "o problema é aqui (LasecSimul)
+   * ou na outra extensão (LasecPlot)?" (comando "LasecSimul: List LasecPlot Endpoints"). Buffer
+   * circular limitado por `RECENT_BYTES_CAP`. */
+  recentBytes: Uint8Array;
+}
+const RECENT_BYTES_CAP = 256;
+function appendCapped(previous: Uint8Array, incoming: Uint8Array, cap: number): Uint8Array {
+  const combined = new Uint8Array(previous.length + incoming.length);
+  combined.set(previous, 0);
+  combined.set(incoming, previous.length);
+  return combined.length <= cap ? combined : combined.slice(combined.length - cap);
 }
 
 class Connection implements LasecPlotConnection {
@@ -97,7 +109,7 @@ export class LasecPlotBroker implements LasecSimulInteropApi, vscode.Disposable 
       current.registration = registration;
       if (changed && current.published) this.changed.fire();
     }
-    else this.endpoints.set(registration.id, { registration, published: false, online: false, sequence: 0, connections: new Set() });
+    else this.endpoints.set(registration.id, { registration, published: false, online: false, sequence: 0, connections: new Set(), recentBytes: new Uint8Array(0) });
   }
   remove(id: string): void {
     const state = this.endpoints.get(id);
@@ -152,6 +164,14 @@ export class LasecPlotBroker implements LasecSimulInteropApi, vscode.Disposable 
   debugListAllEndpoints(): LasecPlotEndpointDescriptor[] {
     return [...this.endpoints.values()].map((state) => this.describe(state));
   }
+  /** Diagnóstico (achado 2026-07-18: conexão funciona, mas os caracteres chegam corrompidos no
+   * consumidor externo) -- devolve os últimos bytes que este broker LEU do Core pra este endpoint,
+   * pra comparar com o que o consumidor externo mostra. Se os bytes aqui já saem estranhos, o
+   * problema é do lado do LasecSimul (UART/firmware/hex-encoding); se saem corretos aqui mas
+   * aparecem corrompidos do outro lado, o problema é do consumidor externo. */
+  debugRecentBytes(id: string): Uint8Array | undefined {
+    return this.endpoints.get(id)?.recentBytes;
+  }
   async openLasecPlotEndpoint(id: string, options: { writable?: boolean } = {}): Promise<LasecPlotConnection> {
     const state = this.required(id);
     if (!state.published || !state.online) throw new Error("O endpoint LasecPlot não está disponível.");
@@ -201,6 +221,10 @@ export class LasecPlotBroker implements LasecSimulInteropApi, vscode.Disposable 
           continue;
         }
         if (batch.data.byteLength === 0) continue;
+        // Diagnóstico (ver `debugRecentBytes`) -- captura ANTES do "sem cliente: descarta" abaixo,
+        // pra sempre refletir o que o LasecSimul de fato leu do Core, independente de ter alguém
+        // ouvindo agora.
+        state.recentBytes = appendCapped(state.recentBytes, batch.data, RECENT_BYTES_CAP);
         if (!state.published || state.connections.size === 0) continue; // fechado/sem cliente: drena e descarta
         const packet: LasecPlotDataPacket = { endpointId: state.registration.id, sequence: state.sequence++,
           simulationTimeNs: batch.simulationTimeNs, direction: "mcu-to-client", encoding: "binary", data: batch.data.slice() };

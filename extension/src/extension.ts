@@ -2166,6 +2166,17 @@ async function exportInstrumentDataCommand(suggestedFileName: string, csvContent
   }
 }
 
+/** Diagnóstico (achado 2026-07-18: conexão LasecPlot funciona, mas os caracteres chegam corrompidos
+ * no consumidor externo) -- hex + melhor-esforço ASCII dos bytes CRUS que o LasecSimul leu do Core,
+ * pra comparar contra o que aparece do outro lado. Se já sai estranho aqui, o problema é do lado do
+ * LasecSimul (UART/firmware/encoding); se sai limpo aqui mas corrompe lá, o problema é do consumidor. */
+function hexAsciiPreview(bytes: Uint8Array): string {
+  if (bytes.byteLength === 0) return "(nenhum byte lido ainda)";
+  const hex = Buffer.from(bytes).toString("hex").match(/.{1,2}/g)?.join(" ") ?? "";
+  const ascii = Array.from(bytes).map((byte) => (byte >= 32 && byte < 127 ? String.fromCharCode(byte) : ".")).join("");
+  return `últimos ${bytes.byteLength} byte(s) lidos do Core:\n    hex:   ${hex}\n    ascii: ${ascii}`;
+}
+
 export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi {
   initSimulationLog(context);
   context.subscriptions.push(
@@ -2187,7 +2198,10 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
         return;
       }
       const detail = endpoints
-        .map((e) => `${e.displayName}\n    componentId=${e.componentId} id=${e.id}\n    aberto=${e.opened} online=${e.online} clientes=${e.connectedClients} escrita=${e.writable}\n    baud=${e.baudRate} bits=${e.dataBits} parity=${e.parity} stopBits=${e.stopBits}`)
+        .map((e) => {
+          const recentBytes = lasecPlotManager?.broker.debugRecentBytes(e.id);
+          return `${e.displayName}\n    componentId=${e.componentId} id=${e.id}\n    aberto=${e.opened} online=${e.online} clientes=${e.connectedClients} escrita=${e.writable}\n    baud=${e.baudRate} bits=${e.dataBits} parity=${e.parity} stopBits=${e.stopBits}\n    ${hexAsciiPreview(recentBytes ?? new Uint8Array(0))}`;
+        })
         .join("\n");
       logSimulation("info", `${endpoints.length} dispositivo(s) LasecPlot nesta janela:`, { stage: "lasecplot-diagnostico", detail, reveal: true });
     }),
