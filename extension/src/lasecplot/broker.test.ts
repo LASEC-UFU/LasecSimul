@@ -6,6 +6,13 @@ class MemoryTransport implements LasecPlotTransport {
   async read(): Promise<{ data: Uint8Array; simulationTimeNs: number }> { return { data: this.reads.shift() ?? new Uint8Array(), simulationTimeNs: 123456 }; }
   async write(_componentId: string, data: Uint8Array): Promise<number> { this.writes.push(data); return 654321; }
 }
+/** Simula `CoreUartTransport.read` lançando "Buffer UART RX excedido" (overflow -- ESPERADO enquanto
+ * ninguém está lendo ainda) em toda leitura, pra testar que o poll NÃO fecha o endpoint por causa
+ * disso (bug real 2026-07-18, ver `broker.ts::poll`). */
+class AlwaysOverflowingTransport implements LasecPlotTransport {
+  async read(): Promise<{ data: Uint8Array; simulationTimeNs: number }> { throw new Error("Buffer UART RX excedido: 4 byte(s) perdido(s)."); }
+  async write(): Promise<number> { throw new Error("não usado neste teste"); }
+}
 const registration = { id: "lasecsimul://workspace/w/simulation/s/lasecplot/component-42", componentId: "component-42", name: "Temperatura", projectId: "w", simulationId: "s", baudRate: 115200, dataBits: 8, stopBits: 1, parity: "none" as const, mode: "bidirectional" as const };
 (async () => {
 await test("publica, descobre e renomeia sem alterar o ID", async () => {
@@ -47,6 +54,28 @@ await test("publica com sucesso mesmo com a simulação parada (offline) -- abri
   broker.register(registration); // NUNCA chama setOnline(true) -- endpoint continua offline
   broker.publish(registration.id); // não deveria lançar
   assert(broker.isPublished(registration.id), "endpoint deveria estar publicado mesmo offline");
+  broker.dispose();
+});
+await test("debugListAllEndpoints (comando 'LasecSimul: List LasecPlot Endpoints') mostra registrados NÃO publicados, ao contrário de listLasecPlotEndpoints", async () => {
+  const broker = new LasecPlotBroker(new MemoryTransport(), 1000);
+  broker.register(registration); // registrado, mas "Abrir" nunca foi clicado -- nunca publicado
+  assert((await broker.listLasecPlotEndpoints()).length === 0, "API pública não deveria listar endpoint não publicado");
+  const all = broker.debugListAllEndpoints();
+  assert(all.length === 1, "diagnóstico deveria enxergar o registro mesmo sem publicar");
+  assert(all[0]?.id === registration.id && all[0]?.opened === false, "deveria refletir aberto=false pro registro ainda não publicado");
+  broker.publish(registration.id);
+  const allAfterPublish = broker.debugListAllEndpoints();
+  assert(allAfterPublish[0]?.opened === true, "deveria refletir aberto=true depois de publicar");
+  broker.dispose();
+});
+await test("poll() NÃO despublica o endpoint quando a leitura falha (overflow é esperado sem cliente conectado, bug real 2026-07-18: 'Abrir' parecia travado)", async () => {
+  const broker = new LasecPlotBroker(new AlwaysOverflowingTransport(), 5);
+  broker.register(registration);
+  broker.setOnline(registration.id, true); // liga o poll (a cada 5ms) -- toda leitura vai falhar
+  broker.publish(registration.id);
+  assert(broker.isPublished(registration.id), "publish() inicial deveria ter sucesso");
+  await new Promise((resolve) => setTimeout(resolve, 40)); // várias janelas de poll se passam, todas com erro
+  assert(broker.isPublished(registration.id), "endpoint NÃO deveria fechar sozinho por causa de erros de leitura repetidos");
   broker.dispose();
 });
 const { failed } = finish(); process.exitCode = failed > 0 ? 1 : 0;

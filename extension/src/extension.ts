@@ -1477,12 +1477,25 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       return;
     }
     case "requestToggleLasecPlot": {
-      void lasecPlotManager?.toggle(message.componentId).then((result) => {
+      // Diagnóstico (achado 2026-07-18: "Abrir não faz nada visível") -- roteia cada etapa pro canal
+      // "LasecSimul: Simulação" (`lasecsimul.showSimulationLog`), pra distinguir "o clique nem chegou
+      // aqui" de "chegou, mas o toggle() falhou" de "publicou certo, o problema é no consumidor
+      // externo" sem precisar de DevTools. `logSimulation("error", ...)` já mostra o toast nativo
+      // sozinho (nível "error" notifica por padrão) -- não duplica o `showErrorMessage` manual de antes.
+      const targetComponent = state.schematicState.components.find((c) => c.id === message.componentId);
+      const deviceLabel = targetComponent?.label ?? message.componentId;
+      if (!lasecPlotManager) {
+        logSimulation("error", "Clique em Abrir/Fechar ignorado: o gerenciador do LasecPlot ainda não foi inicializado nesta janela.", { device: deviceLabel, stage: "lasecplot-abrir" });
+        return;
+      }
+      logSimulation("info", "Abrir/Fechar clicado -- chamando LasecPlotBroker.toggle()...", { device: deviceLabel, stage: "lasecplot-abrir" });
+      void lasecPlotManager.toggle(message.componentId).then((result) => {
+        logSimulation("info", `toggle() concluído: aberto=${result.opened}, clientes=${result.clients}.`, { device: deviceLabel, stage: "lasecplot-abrir" });
         state.schematicPanel?.postMessage({ version: 1, type: "lasecPlotStatus", componentId: message.componentId, ...result });
       }).catch((error) => {
         const text = error instanceof Error ? error.message : String(error);
+        logSimulation("error", text, { device: deviceLabel, stage: "lasecplot-abrir" });
         state.schematicPanel?.postMessage({ version: 1, type: "lasecPlotStatus", componentId: message.componentId, opened: false, clients: 0, error: text });
-        vscode.window.showErrorMessage(`LasecPlot: ${text}`);
       });
       return;
     }
@@ -2158,6 +2171,26 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
   context.subscriptions.push(
     { dispose: disposeDeviceReferenceWatchers },
     vscode.commands.registerCommand("lasecsimul.showSimulationLog", () => showSimulationLogChannel()),
+    // Diagnóstico via Command Palette (achado 2026-07-18, pedido explícito do usuário: "tem algum
+    // comando que posso dar pelo prompt... pra saber se o problema é aqui ou na outra extensão") --
+    // lista TODOS os dispositivos LasecPlot que o broker conhece nesta janela, publicado ou não,
+    // direto no canal "LasecSimul: Simulação". `debugListAllEndpoints()` (sem filtro `published`, ao
+    // contrário da `listLasecPlotEndpoints()` da API pública) distingue as 3 causas possíveis de "a
+    // outra extensão não identifica nada": (1) lista vazia -- o dispositivo nem está registrado nesta
+    // janela/sessão; (2) `aberto=false` -- registrado, mas "Abrir" nunca publicou; (3) `aberto=true`
+    // -- LasecSimul publicou certo, o problema está do lado do consumidor externo.
+    vscode.commands.registerCommand("lasecsimul.lasecplot.listEndpoints", () => {
+      lasecPlotManager?.sync();
+      const endpoints = lasecPlotManager?.broker.debugListAllEndpoints() ?? [];
+      if (endpoints.length === 0) {
+        logSimulation("info", "Nenhum dispositivo LasecPlot registrado no circuito desta janela.", { stage: "lasecplot-diagnostico", reveal: true });
+        return;
+      }
+      const detail = endpoints
+        .map((e) => `${e.displayName}\n    componentId=${e.componentId} id=${e.id}\n    aberto=${e.opened} online=${e.online} clientes=${e.connectedClients} escrita=${e.writable}\n    baud=${e.baudRate} bits=${e.dataBits} parity=${e.parity} stopBits=${e.stopBits}`)
+        .join("\n");
+      logSimulation("info", `${endpoints.length} dispositivo(s) LasecPlot nesta janela:`, { stage: "lasecplot-diagnostico", detail, reveal: true });
+    }),
     vscode.window.registerCustomEditorProvider(
       "lasecsimul.projectEditor",
       new ProjectCustomEditorProvider({

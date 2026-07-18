@@ -109,6 +109,10 @@
       {
         "command": "lasecsimul.showSimulationLog",
         "title": "LasecSimul: Show Simulation Log"
+      },
+      {
+        "command": "lasecsimul.lasecplot.listEndpoints",
+        "title": "LasecSimul: List LasecPlot Endpoints"
       }
     ],
     "customEditors": [

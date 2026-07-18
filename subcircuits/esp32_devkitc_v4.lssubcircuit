@@ -94,9 +94,11 @@
       "typeId": "switches.push",
       "properties": {
         "__ui_idLabelX": 9,
-        "__ui_idLabelY": 11,
+        "__ui_idLabelY": 27,
         "closed": false,
-        "doubleThrow": false
+        "doubleThrow": false,
+        "__ui_idLabelSize": 7,
+        "__ui_idLabelColor": "#fafac8"
       },
       "label": "EN",
       "showId": true,
@@ -112,15 +114,17 @@
       "typeId": "switches.push",
       "properties": {
         "closed": false,
-        "__ui_idLabelX": 12,
-        "__ui_idLabelY": 6
+        "__ui_idLabelX": 6,
+        "__ui_idLabelY": 27,
+        "__ui_idLabelSize": 7,
+        "__ui_idLabelColor": "#fafac8"
       },
-      "label": "Push",
+      "label": "Boot",
       "showId": true,
       "showValue": false,
       "visual": {
-        "x": 594.0767242614673,
-        "y": 414.1421260274812,
+        "x": 593.51027697938,
+        "y": 413.3491032898788,
         "rotation": 0
       }
     },
@@ -797,7 +801,7 @@
     }
   ],
   "topology": {
-    "revision": 559,
+    "revision": 1090,
     "nodes": [
       {
         "id": "junction-1783811970598-570810",
@@ -1420,7 +1424,7 @@
         "points": [
           {
             "x": 656.4528618321319,
-            "y": 422.1421260274812
+            "y": 421.3491032898788
           }
         ]
       },
@@ -1448,7 +1452,12 @@
           "componentId": "button_boot",
           "pinId": "pin-1"
         },
-        "points": []
+        "points": [
+          {
+            "x": 593.51027697938,
+            "y": 422
+          }
+        ]
       },
       {
         "id": "wire-1783846347585-719268",
@@ -2423,8 +2432,8 @@
   "exposedComponents": [
     {
       "componentId": "button_en",
-      "x": 48.97822845819975,
-      "y": 132.19977501110412,
+      "x": 7.26402599208763,
+      "y": 136.5425287397969,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2433,8 +2442,8 @@
     },
     {
       "componentId": "button_boot",
-      "x": 7.233232786702549,
-      "y": 133.10458895666858,
+      "x": 49.58949445034085,
+      "y": 137.050050192517,
       "rotation": 0,
       "flipH": false,
       "flipV": false,

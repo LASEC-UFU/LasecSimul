@@ -143,6 +143,15 @@ export class LasecPlotBroker implements LasecSimulInteropApi, vscode.Disposable 
   async listLasecPlotEndpoints(): Promise<LasecPlotEndpointDescriptor[]> {
     return [...this.endpoints.values()].filter((state) => state.published).map((state) => this.describe(state));
   }
+  /** MESMOS descritores de `listLasecPlotEndpoints()`, mas sem o filtro `published` -- só pra
+   * diagnóstico interno (comando "LasecSimul: List LasecPlot Endpoints", ver `extension.ts`), nunca
+   * exposto na `LasecSimulInteropApi` pública: um endpoint registrado mas NUNCA aberto ainda mostra
+   * `opened:false` aqui, deixando claro se o problema é "o dispositivo nem chegou a existir pro
+   * broker" (registro ausente) vs. "existe mas 'Abrir' nunca publicou" (registrado, `opened:false`)
+   * vs. "publicou certo, quem não está achando é o consumidor externo" (`opened:true` aqui). */
+  debugListAllEndpoints(): LasecPlotEndpointDescriptor[] {
+    return [...this.endpoints.values()].map((state) => this.describe(state));
+  }
   async openLasecPlotEndpoint(id: string, options: { writable?: boolean } = {}): Promise<LasecPlotConnection> {
     const state = this.required(id);
     if (!state.published || !state.online) throw new Error("O endpoint LasecPlot não está disponível.");
@@ -180,9 +189,15 @@ export class LasecPlotBroker implements LasecSimulInteropApi, vscode.Disposable 
         let batch: { data: Uint8Array; simulationTimeNs: number };
         try { batch = await this.transport.read(state.registration.componentId); }
         catch {
-          state.published = false;
-          this.closeConnections(state, "transport-error");
-          this.changed.fire();
+          // Bug real corrigido 2026-07-18 ("Abrir parece travado, aberto volta pra false sozinho"):
+          // um erro de leitura (ex: overflow do buffer RX -- ESPERADO enquanto ninguém está lendo
+          // ainda, ver `CoreUartTransport.read`) fechava o endpoint inteiro aqui. Como o poll roda a
+          // cada `pollIntervalMs` (10ms) sempre que `online=true`, isso formava um loop "Abrir
+          // publica -> próximo tick de poll acha overflow -> despublica de novo" -- na prática o
+          // endpoint nunca ficava aberto tempo suficiente pra UI/consumidor externo perceberem.
+          // `serialterm/manager.ts::poll` já trata o MESMO erro assim (reporta, mas mantém aberto) --
+          // só este lote de bytes foi perdido, não é motivo pra fechar a conexão inteira. Fechamento
+          // de verdade continua acontecendo por `setOnline(id,false)` quando o Core realmente cai.
           continue;
         }
         if (batch.data.byteLength === 0) continue;

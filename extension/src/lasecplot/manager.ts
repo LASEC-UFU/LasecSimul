@@ -71,7 +71,10 @@ export class LasecPlotManager implements vscode.Disposable {
       this.broker.unpublish(id);
       await this.transport.read(componentId).catch(() => ({ data: new Uint8Array(), simulationTimeNs: 0 }));
     } else {
-      await this.transport.read(componentId); // endpoint novo começa sem bytes antigos/buffer temporário
+      // `.catch` (bug real 2026-07-18, mesma causa do "Abrir parece travado" -- ver `broker.ts::poll`):
+      // um overflow do buffer RX ACUMULADO enquanto o endpoint estava fechado (ninguém drenando) é
+      // justamente o que este read existe pra descartar -- não deveria impedir "Abrir" de completar.
+      await this.transport.read(componentId).catch(() => ({ data: new Uint8Array(), simulationTimeNs: 0 })); // endpoint novo começa sem bytes antigos/buffer temporário
       this.broker.publish(id);
     }
     return { opened: this.broker.isPublished(id), clients: 0 };

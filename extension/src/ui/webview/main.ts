@@ -6558,6 +6558,10 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
       text.style.pointerEvents = "all";
       text.addEventListener("click", (event: MouseEvent) => {
         event.stopPropagation();
+        // Mesmo feedback imediato do botão do painel de Propriedades (achado 2026-07-18) -- o
+        // próximo `render()` (disparado pela resposta `lasecPlotStatus`) reconstrói este texto do
+        // zero a partir de `__serial_button_label`, substituindo este "…" transitório.
+        text.textContent = "…";
         send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestToggleLasecPlot", componentId: component.id });
       });
     });
@@ -7804,13 +7808,25 @@ function renderPropertySheet(component: WebviewComponentModel, options: Property
     const action = document.createElement("button");
     action.type = "button";
     action.className = "property-sheet__button";
-    action.textContent = lasecPlotRuntime.get(component.id)?.opened ? "Fechar" : "Abrir";
-    action.addEventListener("click", () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestToggleLasecPlot", componentId: component.id }));
+    const wasOpen = lasecPlotRuntime.get(component.id)?.opened === true;
+    action.textContent = wasOpen ? "Fechar" : "Abrir";
     const status = document.createElement("span");
     const runtime = lasecPlotRuntime.get(component.id);
     status.textContent = runtime?.error ? `⚠ Erro — ${runtime.error}` : runtime?.opened
       ? runtime.clients > 0 ? `● ${runtime.clients} cliente(s) conectado(s)` : "● Aberto — aguardando cliente"
       : "○ Fechado";
+    action.addEventListener("click", () => {
+      // Feedback IMEDIATO (achado 2026-07-18: usuário via "nada acontecer" ao clicar) -- não espera
+      // o roundtrip host/Core pra mostrar que o clique foi registrado; `refreshOpenPropertyDialog`
+      // reconstrói este painel do zero assim que `lasecPlotStatus` responder (sucesso OU erro),
+      // substituindo este estado transitório pelo real. Se ficar preso em "Abrindo…"/"Fechando…" sem
+      // nunca voltar, o roundtrip travou antes de responder -- ver canal "LasecSimul: Simulação"
+      // (comando "LasecSimul: List LasecPlot Endpoints" mostra o estado real do broker).
+      action.disabled = true;
+      action.textContent = wasOpen ? "Fechando…" : "Abrindo…";
+      status.textContent = "…";
+      send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestToggleLasecPlot", componentId: component.id });
+    });
     const row = document.createElement("div"); row.className = "property-sheet__actions"; row.append(action, status); shell.append(row);
   }
   if (component.typeId === "peripherals.serialterm") {
