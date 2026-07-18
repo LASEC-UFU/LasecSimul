@@ -88,7 +88,7 @@ html, body {
 }
 
 .appbar__button--start {
-  color: #d94848;
+  color: #238b36;
 }
 
 .appbar__button--pause {
@@ -96,7 +96,7 @@ html, body {
 }
 
 .appbar__button--stop {
-  color: #6f747d;
+  color: #d32f2f;
 }
 
 .appbar__button--delete {
@@ -123,6 +123,7 @@ html, body {
   fill: none;
 }
 
+.appbar__button--start .appbar__icon,
 .appbar__button--pause .appbar__icon,
 .appbar__button--stop .appbar__icon {
   fill: currentColor;
@@ -631,6 +632,9 @@ rect.meter-expand-button:hover {
   user-select: none;
 }
 
+/* Defaults espelhados em componentLabels.ts (DEFAULT_ID_LABEL_COLOR/DEFAULT_VALUE_LABEL_COLOR/
+   DEFAULT_EXTERNAL_LABEL_FONT_SIZE) -- mudar aqui sem mudar lá (ou vice-versa) faz o dialogo de
+   propriedades do rotulo mostrar uma cor/tamanho "atual" que nao bate com o que esta na tela. */
 .component__id-label,
 .component-floating-label--id {
   color: #5b7fd1;
@@ -652,6 +656,17 @@ rect.meter-expand-button:hover {
   padding: 1px 2px;
   cursor: move;
   z-index: 3;
+}
+
+/* Label de um componente exposto (Modo Placa, ver main.ts::renderBoardOverlaysFor) tem que ficar
+   SEMPRE acima do corpo de QUALQUER item exposto vizinho -- ".component--board-overlay" usa
+   z-index:5, mais alto que o z-index:3 de ".component-floating-label" acima. Regra precisa vir
+   DEPOIS dela no arquivo (mesma especificidade -- 1 classe cada -- então empate de especificidade
+   é resolvido por ordem no stylesheet, não pela ordem das classes no elemento). Arrastável/com menu
+   de contexto próprio (`pointer-events` normal, herdado de `.component-floating-label` -- upgrade
+   2026-07-18 do Tier 1 puramente visual original). */
+.component-floating-label--board-overlay {
+  z-index: 6;
 }
 
 /* MESMO princípio de `.selection-overlay` (achado no mesmo teste) -- o fundo branco translúcido

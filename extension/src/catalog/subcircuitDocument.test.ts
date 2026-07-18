@@ -131,5 +131,45 @@ function fullDocument(): SubcircuitDocument {
     }
   });
 
+  // ── Bloqueio do package no esquemático principal (revisão global de labels, 2026-07-18):
+  // `propertySchema` (o que vira campo editável no diálogo da INSTÂNCIA colocada, ver
+  // `main.ts::resolvePropertyFields`) e `symbol.pins[]` (o conteúdo do PACKAGE, só editável via
+  // "Abrir Subcircuito") são conceitos disjuntos -- prova que o parser nunca mistura os dois, nem
+  // deixa um campo de pino vazar como se fosse propriedade de instância. ─────────────────────────
+  await test("propertySchema (instância) e symbol.pins[] (package) nunca colidem nem vazam um no outro", () => {
+    const document: SubcircuitDocument = {
+      ...fullDocument(),
+      propertySchema: [
+        { id: "resistance", editor: "number", default: 220 },
+        { id: "color", editor: "select", default: "Yellow" },
+      ],
+    };
+    const raw = serializeSubcircuitDocument(document);
+    const reparsed = parseSubcircuitDocument(raw, "/tmp");
+    assert(reparsed.ok === true, "documento com propertySchema + symbol.pins deveria parsear com sucesso");
+    if (!reparsed.ok) return;
+
+    // 1. propertySchema sobrevive exatamente como declarado -- nenhum campo de pino (angle/labelX/
+    // labelTextAnchor/etc) aparece dentro dele.
+    const schema = reparsed.document.propertySchema as Array<{ id: string; editor: string }> | undefined;
+    assert(Array.isArray(schema) && schema.length === 2, `propertySchema deveria sobreviver com 2 entradas, recebido ${JSON.stringify(schema)}`);
+    const schemaIds = schema!.map((entry) => entry.id).sort();
+    assert(JSON.stringify(schemaIds) === JSON.stringify(["color", "resistance"]), `propertySchema deveria bater exatamente com o declarado, recebido ${JSON.stringify(schemaIds)}`);
+    const pinOnlyFieldNames = ["angle", "length", "labelX", "labelY", "labelTextAnchor", "labelHidden", "labelFontSize", "labelRotation", "labelColor"];
+    for (const entry of schema!) {
+      assert(!pinOnlyFieldNames.includes(entry.id), `propertySchema não deveria conter um campo exclusivo de pino do package, achado id="${entry.id}"`);
+    }
+
+    // 2. symbol.pins[] preserva fidelidade total (nenhum campo comido pela presença de propertySchema).
+    assert(reparsed.document.symbol?.pins.length === 2, `symbol.pins deveria sobreviver intacto, recebido ${reparsed.document.symbol?.pins.length}`);
+    assert(reparsed.document.symbol?.pins[0]!.id === "VCC" && reparsed.document.symbol?.pins[0]!.label === "VCC", "pino VCC deveria sobreviver com id/label corretos");
+
+    // 3. nenhum id de propertySchema colide com um id de pino do package (espaços de nome disjuntos).
+    const pinIds = (reparsed.document.symbol?.pins ?? []).map((pin) => pin.id);
+    for (const id of schemaIds) {
+      assert(!pinIds.includes(id), `id de propertySchema "${id}" não deveria colidir com nenhum pinId do package`);
+    }
+  });
+
   finish();
 })();

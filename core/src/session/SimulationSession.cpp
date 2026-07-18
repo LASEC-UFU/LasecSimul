@@ -876,12 +876,30 @@ void SimulationSession::stopMcuFirmware(uint32_t componentIndex) {
     mcu->stopFirmware();
 }
 
+void SimulationSession::stopSimulation() {
+    // Primeiro interrompe a worker: nenhum componente pode voltar a agendar trabalho enquanto as
+    // MCUs são encerradas. reset() também limpa dirty/events, volta o relógio a zero e despausa.
+    m_scheduler.stop();
+    for (const auto& instance : m_componentInstances) {
+        if (auto* mcu = instance ? dynamic_cast<mcu::McuComponent*>(instance.get()) : nullptr) {
+            mcu->stopFirmware();
+        }
+    }
+    m_scheduler.reset();
+}
+
 std::string SimulationSession::mcuLogs(uint32_t componentIndex) const {
     IComponentModel* instance = m_componentInstances.at(componentIndex).get();
     if (!instance) throw std::runtime_error("getMcuLogs: componente removido");
     const auto* mcu = dynamic_cast<const mcu::McuComponent*>(instance);
     if (!mcu) throw std::runtime_error("getMcuLogs: componente nao e MCU/QEMU");
     return mcu->qemuLogs();
+}
+
+mcu::McuComponent* SimulationSession::mcuComponentForTesting(uint32_t componentIndex) const {
+    if (componentIndex >= m_componentInstances.size()) return nullptr;
+    IComponentModel* instance = m_componentInstances[componentIndex].get();
+    return instance ? dynamic_cast<mcu::McuComponent*>(instance) : nullptr;
 }
 
 void SimulationSession::sendComponentEvent(uint32_t componentIndex, const ComponentEvent& event) {

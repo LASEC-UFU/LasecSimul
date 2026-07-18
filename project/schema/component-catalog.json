@@ -4868,14 +4868,14 @@
         "pin-P6",
         "pin-P7",
         "pin-P8",
-        "pin-N9",
-        "pin-N10",
-        "pin-N11",
-        "pin-N12",
-        "pin-N13",
-        "pin-N14",
-        "pin-N15",
-        "pin-N16"
+        "pin-N1",
+        "pin-N2",
+        "pin-N3",
+        "pin-N4",
+        "pin-N5",
+        "pin-N6",
+        "pin-N7",
+        "pin-N8"
       ],
       "package": {
         "width": 16,
@@ -4933,7 +4933,13 @@
                   "h": 4,
                   "fill": "#e6e6e6",
                   "stroke": "#777777",
-                  "strokeWidth": 1
+                  "strokeWidth": 1,
+                  "stateFill": {
+                    "prop": "__led_fill",
+                    "raw": true,
+                    "applyToStroke": true,
+                    "fallback": "#e6e6e6"
+                  }
                 }
               ]
             }
@@ -4979,11 +4985,7 @@
               "countProp": "size",
               "indexName": "i",
               "idPrefix": "pin-N",
-              "idStart": {
-                "prop": "size",
-                "offset": 1,
-                "round": "trunc"
-              },
+              "idStart": 1,
               "x": 16,
               "y": {
                 "index": "i",

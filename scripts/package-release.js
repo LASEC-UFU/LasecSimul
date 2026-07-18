@@ -207,7 +207,10 @@ function resolveCoreExecutable() {
     path.join(coreBuildDir, "RelWithDebInfo", target.coreBinaryName),
     path.join(coreBuildDir, "Debug", target.coreBinaryName),
   ];
-  const existing = candidates.find((candidate) => fs.existsSync(candidate));
+  const existing = candidates
+    .filter((candidate) => fs.existsSync(candidate))
+    .map((candidate, order) => ({ candidate, order, modified: fs.statSync(candidate).mtimeMs }))
+    .sort((a, b) => b.modified - a.modified || a.order - b.order)[0]?.candidate;
   if (!existing) {
     console.error(
       `[package-release] executavel do Core nao encontrado. Rode o build antes (procurei por ${candidates.join(", ")}).`

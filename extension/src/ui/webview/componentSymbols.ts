@@ -10,7 +10,7 @@
  * layout de pino são calculados a partir da caixa do tipo, nunca de uma constante global de tamanho.
  */
 
-import { ComponentViewSpec, JUNCTION_TYPE_ID, PackageDescriptor, PackageDynamicPinGroup, PackageNumberValue, PackagePin, PackageShape, SIMULIDE_PACKAGE_GRID_UNIT, SimulidePaintSpec, SimulideQtWidgetSpec, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, ViewSpecHitTest, WebviewComponentModel } from "./model.js";
+import { ComponentViewSpec, JUNCTION_TYPE_ID, PackageDescriptor, PackageDynamicPinGroup, PackageNumberValue, PackagePin, PackageShape, SIMULIDE_PACKAGE_GRID_UNIT, SimulidePaintSpec, SimulideQtWidgetSpec, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, ViewSpecHitTest, ViewSpecProjection, WebviewComponentModel } from "./model.js";
 import { simulidePaintToPackageShapes } from "./simulidePaint.js";
 
 export interface ComponentBox {
@@ -866,9 +866,44 @@ interface ViewSpecResolvedProjection {
   visible?: boolean;
 }
 
+/** Fallback quando o catálogo não declara `stateProjection[partId]` explicitamente: todo componente
+ * com uma interação `dragAngular` (potenciômetro/resistor-indutor-capacitor variável/fonte
+ * controlada) nomeia por convenção sua parte móvel "dialIndicator" -- MESMO nome que os handlers de
+ * arrasto (`main.ts`, `.encoder-indicator`/`.encoder-indicator-halo`) já usam pra achar o elemento a
+ * girar durante o gesto. Deriva a projeção de rotação DIRETO da própria interação + limite
+ * referenciado, em vez de exigir uma segunda declaração (`stateProjection`) com os MESMOS
+ * min/max/ângulo que poderia divergir com o tempo -- arquitetura genérica, qualquer `dragAngular`
+ * futuro ganha isso de graça, sem precisar editar o tradutor de novo (mesmo princípio da primitiva
+ * `repeat`, ver `simulidePaint.ts`).
+ *
+ * Bug real corrigido 2026-07-18: sem isto, `viewSpecBodySvg` desenhava o nub sempre na posição de
+ * repouso (0°, autorada apontando "pra cima") -- o valor real da propriedade mudava (arrasto
+ * funcionava), mas QUALQUER `render()` depois (inclusive o do fim do próprio arrasto) reconstruía o
+ * SVG do zero e o indicador visualmente "voltava" pro meio, mesmo com o valor salvo correto. Sentido
+ * de "vai e volta" relatado pelo usuário: arrastar parecia mudar o dial, soltar o mouse parecia
+ * desfazer -- só o desenho estava errado, não o valor. */
+function implicitDialIndicatorProjection(partId: string, spec: ComponentViewSpec): ViewSpecProjection[] | undefined {
+  if (partId !== "dialIndicator") return undefined;
+  const dragAngular = Object.values(spec.interaction ?? {}).find((entry) => entry.kind === "dragAngular");
+  if (!dragAngular) return undefined;
+  const limit = dragAngular.limits ? spec.limits?.[dragAngular.limits] : undefined;
+  return [{
+    kind: "rotate",
+    prop: dragAngular.prop,
+    cx: dragAngular.cx,
+    cy: dragAngular.cy,
+    stepsPerRev: dragAngular.stepsPerRev ?? 1000,
+    ...(dragAngular.stepsPerRevProp ? { stepsPerRevProp: dragAngular.stepsPerRevProp } : {}),
+    propRange: [limit?.min ?? 0, limit?.max ?? 1000],
+    ...(limit?.minProp ? { propRangeMinProp: limit.minProp } : {}),
+    ...(limit?.maxProp ? { propRangeMaxProp: limit.maxProp } : {}),
+    angleRange: [limit?.minAngleDeg ?? -150, limit?.maxAngleDeg ?? 150],
+  }];
+}
+
 /** Computa a projeção visual inicial para um `partId` com base nas propriedades do componente. */
 function viewSpecResolvedProjection(partId: string, spec: ComponentViewSpec, properties: Record<string, unknown>): ViewSpecResolvedProjection {
-  const projections = spec.stateProjection?.[partId];
+  const projections = spec.stateProjection?.[partId] ?? implicitDialIndicatorProjection(partId, spec);
   if (!projections) return {};
   const transforms: string[] = [];
   let fill: string | undefined;
@@ -1079,7 +1114,7 @@ function packagePinLeadSvg(pin: MaterializedPackagePin, resolved: ResolvedPackag
   const markerMarkup = resolved.source.pinMarker === "packagePin"
     ? `<g stroke="#d3d3d3" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round"><line x1="${(x - 1).toFixed(1)}" y1="${y.toFixed(1)}" x2="${(x + 1).toFixed(1)}" y2="${y.toFixed(1)}"/><line x1="${x.toFixed(1)}" y1="${(y - 1).toFixed(1)}" x2="${x.toFixed(1)}" y2="${(y + 1).toFixed(1)}"/></g>`
     : "";
-  const labelVisible = stateVisibleMatches(pin.labelStateVisible, properties);
+  const labelVisible = pin.labelHidden !== true && stateVisibleMatches(pin.labelStateVisible, properties);
   const labelMarkup = labelVisible && label.trim()
     ? `<text x="${labelX.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="${textAnchor}"${baselineAttr}${fillAttr} style="font-size:${labelFontSize}px"${rotateAttr}>${escapeXmlText(label)}</text>`
     : "";

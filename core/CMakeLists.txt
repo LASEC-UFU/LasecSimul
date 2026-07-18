@@ -620,6 +620,25 @@ else()
 endif()
 add_test(NAME mcu_controller_real_qemu COMMAND mcu_controller_real_qemu_test)
 
+# Optional end-to-end long-running regression. CI without a firmware image skips it.
+add_executable(mcu_blink_long_run_test
+    test/core/mcu/McuBlinkLongRunTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(mcu_blink_long_run_test PRIVATE include src)
+target_link_libraries(mcu_blink_long_run_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(mcu_blink_long_run_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+    QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+)
+if(WIN32)
+    target_compile_definitions(mcu_blink_long_run_test PRIVATE _CRT_SECURE_NO_WARNINGS)
+else()
+    target_link_libraries(mcu_blink_long_run_test PRIVATE dl)
+endif()
+add_test(NAME mcu_blink_long_run COMMAND mcu_blink_long_run_test)
+set_tests_properties(mcu_blink_long_run PROPERTIES TIMEOUT 30)
+
 # McuComponent: ponte registrador<->pino, testada com arena sintética (sem QEMU real/firmware).
 add_executable(mcu_component_test
     test/core/mcu/McuComponentTest.cpp

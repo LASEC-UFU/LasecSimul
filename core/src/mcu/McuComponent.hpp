@@ -113,11 +113,28 @@ private:
     void resetModulesAndWakeups();
     QemuModule* findModule(uint64_t address) const;
 
-    // 1e6/1e-6 (não 1e9/1e-9 como Rail/Probe) -- ver comentário extenso em stamp(): um componente
-    // com dezenas de pinos simultaneamente flutuantes precisa de spread seguro pro rcond() do
-    // solver, não só "forte"/"fraco" em isolado.
-    static constexpr double kDriveConductance = 1e6;
-    static constexpr double kFloatingConductance = 1e-6;
+    // Mesmas impedâncias REAIS de `IoPin` no SimulIDE real (`.codex-simulide-src/src/gui/
+    // circuitwidget/iopin.cpp` -- `m_outputImp`/`m_inputImp`, usadas por `Esp32Pin`/todo pino de
+    // MCU real): 40Ω de saída ativa (`kDriveConductance=1/40`) e 1e7Ω flutuando
+    // (`kFloatingConductance=1e-7`, = `high_imp` de `e-element.h`). Substituídos aqui em
+    // 2026-07-17 -- os valores anteriores (1e6/1e-6, spread 1e12) eram um número SEM
+    // correspondência física nenhuma, inventado só pra manter `rcond()` acima do piso de rejeição
+    // do solver com ~40 pinos flutuando ao mesmo tempo (comentário antigo em stamp()); achado real:
+    // esse spread inflado deixava o `CircuitGroup` do MCU perigosamente perto do piso de
+    // singularidade sempre que compartilhava grupo com um componente não-linear (`DiodeLegArray`
+    // do LED, ver `.spec`) em convergência -- quando cruzava o piso, `MnaSolver::solve()` zerava
+    // TODAS as tensões do grupo (inclusive RST/EN), disparando um reset fantasma sincronizado com
+    // cada toggle do blink do usuário. O spread real do SimulIDE (40/1e7 ≈ 2.5e5, MUITO menor que
+    // 1e12) já é fisicamente plausível e não precisa desse "colchão" artificial.
+    static constexpr double kDriveConductance = 1.0 / 40.0;
+    static constexpr double kFloatingConductance = 1.0 / 1e7;
+    // Pull-up dedicado do pino RST/EN (`stampResetPin()`) -- idêntico a `Esp32::addPin()` real
+    // (`m_rstPin->setPullup(1e5)`, 100kΩ), NÃO o `kFloatingConductance` genérico de GPIO acima.
+    // SimulIDE trata o pino de reset como um caso elétrico PRÓPRIO (pull-up físico dedicado, mais
+    // forte que um GPIO comum flutuando), nunca reaproveita a condutância genérica de "sem fio" de
+    // um GPIO de dados -- reproduzido aqui fielmente em vez de continuar usando o mesmo valor de
+    // "flutuando" que todo GPIO comum usa.
+    static constexpr double kResetPullupConductance = 1e-5;
     static constexpr double kDriveHighVolts = 3.3; // lógica ESP32 é 3.3V, não 5V
 
     std::unique_ptr<IMcuAdapter> m_adapter;

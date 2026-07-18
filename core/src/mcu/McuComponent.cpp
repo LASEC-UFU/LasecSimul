@@ -276,15 +276,17 @@ void McuComponent::stamp(MnaMatrixView& matrix) {
             // parte do tempo) cairia numa linha zerada da matriz -- sistema singular, mesmo bug
             // já corrigido em WaveGen::stamp() pro pino "gnd" não-bipolar (ver doc lá).
             //
-            // kDriveConductance/kFloatingConductance NÃO podem ter spread arbitrário: um único
-            // componente com MUITOS pinos simultaneamente não-conectados (este é o primeiro --
-            // 42 pinos) faz a matriz inteira ficar diagonal, e CircuitGroup::singular() rejeita
-            // por rcond() <= 1e-14 -- 1e9 (drive) vs 1e-9 (antiga "alta impedância" copiada de
-            // Probe/WaveGen) já dá rcond ~1e-18, MUITO abaixo do limite, mesmo sendo uma matriz
-            // perfeitamente diagonal/bem-condicionada equação a equação. Por isso este componente
-            // usa valores próprios (1e6/1e-6, rcond ~1e-12) em vez dos de outros componentes --
-            // ainda "forte o bastante"/"fraco o bastante" pra qualquer fio real, só com spread
-            // seguro pro double. Ver .spec se outro componente algum dia precisar do mesmo ajuste.
+            // kDriveConductance/kFloatingConductance agora são as impedâncias REAIS de `IoPin` do
+            // SimulIDE (40Ω/1e7Ω, ver comentário no .hpp) -- spread ~2.5e5, a MESMA ordem de
+            // grandeza que o SimulIDE opera sem nenhum "colchão" especial, mesmo com um MCU de
+            // dezenas de pinos flutuando ao mesmo tempo. O valor antigo (1e6/1e-6, spread 1e12) era
+            // inflado de propósito só pra manter `rcond()` longe do piso de rejeição de
+            // `CircuitGroup::singular()` (<= 1e-14) -- mas por não ter correspondência física
+            // nenhuma, deixava o grupo perigosamente perto desse piso sempre que compartilhava
+            // `CircuitGroup` com um componente não-linear em convergência (ex: `DiodeLegArray` do
+            // LED do usuário), causando reset fantasma do RST/EN sincronizado com o toggle do GPIO
+            // (achado 2026-07-17). Valores físicos reais são estruturalmente mais seguros aqui, não
+            // menos -- não dependem de um spread artificial pra ficar bem-condicionados.
             matrix.addConductanceToGround(m_pins[i], kFloatingConductance);
             const double voltage = matrix.getNodeVoltage(m_pins[i]);
             module->setInputLevelAt(mapping.bitOrLine, voltage > kDigitalLevelThreshold, m_scheduler.nowNsUnlocked());
@@ -354,10 +356,13 @@ void McuComponent::resetModulesAndWakeups() {
 
 void McuComponent::stampResetPin(MnaMatrixView& matrix, const Pin& pin) {
     // ModuleKind::Reset (ex: EN do ESP32) nunca tem QemuModule -- é linha de controle de
-    // hardware, não registrador. Sem fio externo, fica fracamente puxado pra ALTO (chip roda) --
-    // ao contrário do floating genérico de GPIO (puxa fraco pra terra) -- "sem ligação" aqui tem
-    // que significar "não resetado". Um circuito real (botão + pull-up, igual ao EN real) com
-    // condutância muito mais forte domina e decide o nível de verdade quando presente.
+    // hardware, não registrador. Sem fio externo, fica puxado pra ALTO por um pull-up DEDICADO
+    // (`kResetPullupConductance`, 100kΩ, idêntico a `Esp32::addPin()->setPullup(1e5)` do SimulIDE
+    // real) -- NUNCA o `kFloatingConductance` genérico de GPIO (que puxa fraco pra terra, sentido
+    // oposto, e é 100x mais fraco): "sem ligação" aqui tem que significar "não resetado", com força
+    // elétrica de pull-up de verdade, não um resíduo de "flutuando" emprestado de outro tipo de
+    // pino. Um circuito real (botão + pull-up externo, igual ao EN real do DevKit) com condutância
+    // ainda mais forte domina e decide o nível de verdade quando presente.
     //
     // Só modelagem ELÉTRICA aqui -- a detecção de borda (reset/reload) mora em `onEvent()`, que só
     // é chamado pelo framework depois do solver convergir E numa transição REAL de nível (ver
@@ -365,17 +370,33 @@ void McuComponent::stampResetPin(MnaMatrixView& matrix, const Pin& pin) {
     // Newton (uma vez por iteração até o dirty-set esvaziar); ler `matrix.getNodeVoltage(pin)` AQUI
     // e comparar contra o estado anterior seria repetir o bug de cold-start já corrigido (a leitura
     // de uma iteração intermediária, ainda não convergida, sendo tratada como uma borda real).
-    matrix.addConductanceToGround(pin, kFloatingConductance);
-    matrix.addCurrentToGround(pin, kDriveHighVolts * kFloatingConductance);
+    matrix.addConductanceToGround(pin, kResetPullupConductance);
+    matrix.addCurrentToGround(pin, kDriveHighVolts * kResetPullupConductance);
 }
 
 void McuComponent::onEvent(const ComponentEvent& event) {
     if (event.tag != kPinChangeEventTag) return;
     const std::span<const PinMapping> mappings = m_adapter->pinMap();
-    if (event.a >= mappings.size() || mappings[event.a].moduleKind != ModuleKind::Reset) return;
+    if (event.a >= mappings.size()) return;
 
     std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
     const bool levelHigh = event.b != 0;
+    const PinMapping& mapping = mappings[event.a];
+    if (mapping.moduleKind != ModuleKind::Reset) {
+        // O pad de entrada continua fisicamente conectado quando o GPIO está configurado como
+        // saída. ESP-IDF/Arduino `digitalRead(pin)` lê GPIO_IN (nível real do pad), não o latch
+        // GPIO_OUT. Antes só atualizávamos a entrada no ramo de alta impedância de stamp(); depois
+        // de pinMode(OUTPUT), digitalRead() ficava preso no último zero e o padrão comum
+        // `digitalWrite(pin, !digitalRead(pin))` escrevia HIGH para sempre. O evento chega após a
+        // convergência do solver, portanto também preserva o comportamento real quando uma carga
+        // externa altera o nível do pad dirigido.
+        if (event.a < m_moduleByPin.size()) {
+            if (QemuModule* module = m_moduleByPin[event.a]) {
+                module->setInputLevelAt(mapping.bitOrLine, levelHigh, m_scheduler.nowNsUnlocked());
+            }
+        }
+        return;
+    }
     m_resetPinHigh = levelHigh;
 
     if (!levelHigh) {

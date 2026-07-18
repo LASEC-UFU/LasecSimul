@@ -20,8 +20,9 @@
   },
   "network": {
     "model": "open_eth",
-    "defaultMode": "lab-bridge",
+    "defaultMode": "disabled",
     "modes": [
+      "disabled",
       "lab-bridge",
       "isolated"
     ],

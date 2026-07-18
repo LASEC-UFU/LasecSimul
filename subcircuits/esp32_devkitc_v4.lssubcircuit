@@ -27,7 +27,7 @@
       "id": "mcu1",
       "typeId": "espressif.esp32",
       "properties": {
-        "firmwarePath": "g:\\Meu Drive\\Josue\\02 AulasUFU\\01 Aulas_ININD1\\Pratica\\EININDI01_GitHub_VSCode_PIO\\lasecSimul\\merged.bin"
+        "firmwarePath": "c:\\SourceCode\\EININDI01_GitHub_VSCode_PIO\\lasecSimul\\merged.bin"
       },
       "label": "QemuDevice",
       "showValue": false,
@@ -81,6 +81,7 @@
         "__ui_idLabelY": -8
       },
       "label": "Resistor",
+      "showId": true,
       "showValue": true,
       "visual": {
         "x": 680.9551498129092,
@@ -92,11 +93,13 @@
       "id": "button_en",
       "typeId": "switches.push",
       "properties": {
-        "__ui_idLabelX": -26,
-        "__ui_idLabelY": 30,
-        "closed": false
+        "__ui_idLabelX": 9,
+        "__ui_idLabelY": 11,
+        "closed": false,
+        "doubleThrow": false
       },
-      "label": "Push",
+      "label": "EN",
+      "showId": true,
       "showValue": false,
       "visual": {
         "x": 528,
@@ -109,10 +112,11 @@
       "typeId": "switches.push",
       "properties": {
         "closed": false,
-        "__ui_idLabelX": -3,
-        "__ui_idLabelY": 33
+        "__ui_idLabelX": 12,
+        "__ui_idLabelY": 6
       },
       "label": "Push",
+      "showId": true,
       "showValue": false,
       "visual": {
         "x": 594.0767242614673,
@@ -731,13 +735,14 @@
       "id": "component-1783937576339-406282",
       "typeId": "outputs.led_bar",
       "properties": {
-        "size": 1
+        "size": 1,
+        "color": "Red"
       },
       "label": "Led Bar",
       "showValue": false,
       "visual": {
-        "x": 538.2620346738242,
-        "y": 131.45106705986703,
+        "x": 543.3641282478765,
+        "y": 126.58091296819389,
         "rotation": 0
       }
     },
@@ -785,14 +790,14 @@
       "label": "Ground (0 V)-1",
       "showValue": false,
       "visual": {
-        "x": 578.4356892329322,
-        "y": 125.97333677732057,
+        "x": 593.2780821435878,
+        "y": 121.33509562779786,
         "rotation": 270
       }
     }
   ],
   "topology": {
-    "revision": 422,
+    "revision": 559,
     "nodes": [
       {
         "id": "junction-1783811970598-570810",
@@ -837,7 +842,7 @@
         }
       },
       {
-        "id": "junction-1783937660099-941826",
+        "id": "junction-1784366709606-65476",
         "position": {
           "x": 528,
           "y": 130.5
@@ -1576,55 +1581,6 @@
         "points": []
       },
       {
-        "id": "wire-1783937660099-436622",
-        "from": {
-          "kind": "port",
-          "componentId": "tunnel_5v",
-          "pinId": "pin"
-        },
-        "to": {
-          "kind": "node",
-          "nodeId": "junction-1783937660099-941826"
-        },
-        "points": []
-      },
-      {
-        "id": "wire-1783937660099-858304",
-        "from": {
-          "kind": "node",
-          "nodeId": "junction-1783937660099-941826"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "component-1783345270243-110688",
-          "pinId": "pin-1"
-        },
-        "points": [
-          {
-            "x": 528,
-            "y": 109.5
-          }
-        ]
-      },
-      {
-        "id": "wire-1783937660098-805483",
-        "from": {
-          "kind": "port",
-          "componentId": "component-1783937576339-406282",
-          "pinId": "pin-P1"
-        },
-        "to": {
-          "kind": "node",
-          "nodeId": "junction-1783937660099-941826"
-        },
-        "points": [
-          {
-            "x": 528,
-            "y": 135.45106705986703
-          }
-        ]
-      },
-      {
         "id": "wire-esp32-split-tunnel_GND2",
         "from": {
           "kind": "port",
@@ -1679,6 +1635,50 @@
           "kind": "port",
           "componentId": "component-1784281812804-173343",
           "pinId": "pin"
+        },
+        "points": []
+      },
+      {
+        "id": "wire-1784366709606-248477",
+        "from": {
+          "kind": "port",
+          "componentId": "tunnel_5v",
+          "pinId": "pin"
+        },
+        "to": {
+          "kind": "node",
+          "nodeId": "junction-1784366709606-65476"
+        },
+        "points": []
+      },
+      {
+        "id": "wire-1784366709606-340822",
+        "from": {
+          "kind": "node",
+          "nodeId": "junction-1784366709606-65476"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1783345270243-110688",
+          "pinId": "pin-1"
+        },
+        "points": [
+          {
+            "x": 528,
+            "y": 109.5
+          }
+        ]
+      },
+      {
+        "id": "wire-1784366709605-198298",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1783937576339-406282",
+          "pinId": "pin-P1"
+        },
+        "to": {
+          "kind": "node",
+          "nodeId": "junction-1784366709606-65476"
         },
         "points": []
       }

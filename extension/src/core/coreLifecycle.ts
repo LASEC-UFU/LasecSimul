@@ -1,8 +1,10 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { IpcError } from "../ipc/protocol";
-import { ComponentReadoutValue, InstrumentHistoryPayload, SimulationStatus } from "../ui/webview/messages";
-import { CanonicalEndpoint, TopologyNode, TUNNEL_TYPE_ID, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewWireModel, endpointId, endpointPinId } from "../ui/webview/model";
+import { ComponentReadoutValue, InstrumentHistoryPayload, InternalComponentSnapshot, SimulationStatus } from "../ui/webview/messages";
+import { gatherInternalComponentSnapshots } from "../catalog/subcircuitInternals";
+import { resolveSubcircuitChildCoreId } from "../mcu/mcuCommands";
+import { TopologyNode, TUNNEL_TYPE_ID, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewWireModel, endpointId, endpointPinId } from "../ui/webview/model";
 import { state, coreInstanceIdByComponentId, mcuTargetCoreIdByComponentId, subcircuitBoundaryPinsByComponentId } from "../state";
 import { pinsForTypeId } from "../extension";
 import { lasecPlotManager } from "../lasecplot/manager";
@@ -11,8 +13,9 @@ import { serialPortManager } from "../serialport/manager";
 import { electricalEdgesForProject, diffElectricalEdges } from "../ui/webview/wireTopology";
 import { logSimulation, noteSimulationStatusChange } from "../diagnostics/simulationLog";
 import { canonicalPackagePinId } from "../ui/webview/componentSymbols";
+import { voltageProbesForProject } from "./voltageTelemetry";
 
-export { electricalEdgesForProject, diffElectricalEdges };
+export { electricalEdgesForProject, diffElectricalEdges, voltageProbesForProject };
 
 /** Fonte única de verdade pra "o que mudou eletricamente entre duas topologias" -- achata
  * antes/depois em arestas de pino real (`electricalEdgesForProject`) e devolve a diferença já no
@@ -97,39 +100,6 @@ function resolveWireEndpoint(componentId: string, pinId: string): { instanceId: 
   if (boundary) return boundary;
   const instanceId = coreInstanceIdByComponentId.get(componentId);
   return instanceId ? { instanceId, pinId: resolvedPinId } : undefined;
-}
-
-/** Escolhe um pino real por rede e o associa a cada condutor geométrico dessa rede. Assim a
- * telemetria nunca tenta consultar um topologyNode no Core e continua usando os IDs visuais. */
-export function voltageProbesForProject(
-  project: Pick<typeof state.schematicState.topology, "conductors">
-): Array<{ wireId: string; componentId: string; pinId: string }> {
-  const key = (endpoint: CanonicalEndpoint): string => endpoint.kind === "node" ? `n:${endpoint.nodeId}` : `p:${JSON.stringify([endpoint.componentId, endpoint.pinId])}`;
-  const refs = new Map<string, { componentId: string; pinId: string }>();
-  const adjacency = new Map<string, Set<string>>();
-  for (const wire of project.conductors) {
-    const a = key(wire.from); const b = key(wire.to);
-    if (wire.from.kind === "port") refs.set(a, wire.from);
-    if (wire.to.kind === "port") refs.set(b, wire.to);
-    (adjacency.get(a) ?? (adjacency.set(a, new Set()), adjacency.get(a)!)).add(b);
-    (adjacency.get(b) ?? (adjacency.set(b, new Set()), adjacency.get(b)!)).add(a);
-  }
-  const probeByVertex = new Map<string, { componentId: string; pinId: string }>();
-  const seen = new Set<string>();
-  for (const start of adjacency.keys()) {
-    if (seen.has(start)) continue;
-    const queue = [start]; const network: string[] = []; let probe: { componentId: string; pinId: string } | undefined;
-    seen.add(start);
-    while (queue.length) {
-      const current = queue.pop()!; network.push(current); probe ??= refs.get(current);
-      for (const next of adjacency.get(current) ?? []) if (!seen.has(next)) { seen.add(next); queue.push(next); }
-    }
-    if (probe) for (const vertex of network) probeByVertex.set(vertex, probe);
-  }
-  return project.conductors.flatMap((wire) => {
-    const probe = probeByVertex.get(key(wire.from)) ?? probeByVertex.get(key(wire.to));
-    return probe ? [{ wireId: wire.id, ...probe }] : [];
-  });
 }
 
 let coreMutationQueue: Promise<unknown> = Promise.resolve();
@@ -282,6 +252,50 @@ export function pushPropertyToCore(componentId: string, name: string, value: str
       }
     } catch (err) {
       reportCoreWarning(`atualizar propriedade "${name}"`, err);
+    }
+  });
+}
+
+interface PendingPropertyPreview {
+  componentId: string;
+  name: string;
+  value: string | number | boolean;
+}
+
+const pendingPropertyPreviews = new Map<string, PendingPropertyPreview>();
+const activePropertyPreviewDrains = new Set<string>();
+
+/**
+ * Aplica propriedades interativas ao Core sem modificar o documento do host. Eventos pointermove
+ * podem chegar mais rápido que o IPC nativo; por isso cada componente/propriedade mantém somente o
+ * valor mais recente enquanto uma escrita está em andamento. O commit persistente continua usando
+ * `pushPropertyToCore` depois do pointerup e entra na mesma fila, portanto nunca é ultrapassado por
+ * uma pré-visualização antiga.
+ */
+export function previewPropertyInCore(componentId: string, name: string, value: string | number | boolean): void {
+  const key = `${componentId}\u0000${name}`;
+  pendingPropertyPreviews.set(key, { componentId, name, value });
+  if (activePropertyPreviewDrains.has(key)) return;
+  activePropertyPreviewDrains.add(key);
+  void enqueueCoreMutation(async () => {
+    try {
+      while (true) {
+        const preview = pendingPropertyPreviews.get(key);
+        if (!preview) break;
+        pendingPropertyPreviews.delete(key);
+        if (!state.coreClient) continue;
+        const component = state.schematicState.components.find((entry) => entry.id === preview.componentId);
+        if (isUiOnlyRuntimeProperty(component, preview.name)) continue;
+        const coreId = coreInstanceIdByComponentId.get(preview.componentId);
+        if (!coreId) continue;
+        try {
+          await state.coreClient.setProperty(coreId, preview.name, preview.value);
+        } catch (err) {
+          reportCoreWarning(`pré-visualizar propriedade "${preview.name}"`, err);
+        }
+      }
+    } finally {
+      activePropertyPreviewDrains.delete(key);
     }
   });
 }
@@ -586,23 +600,121 @@ export async function pollInstrumentReadouts(expectedGeneration?: number): Promi
   state.schematicPanel.postMessage({ version: 1, type: "componentReadout", readoutsByComponentId });
 }
 
+/** Quais componentes internos de um `.lssubcircuit` são "exposto + gráfico + com `readoutFormat`"
+ * (candidatos a acender de verdade no overlay de Modo Placa) -- cacheado por `sourceId` pra não bater
+ * disco (`gatherInternalComponentSnapshots` lê o arquivo JSON inteiro) a cada tick de telemetria
+ * (~300ms enquanto rodando). Igual a `boardOverlayDataByComponentId` do lado Webview: a lista de
+ * expostos é conceito de EDIÇÃO do subcircuito, não muda durante uma simulação rodando. */
+const boardOverlayExposedItemsBySourceId = new Map<string, InternalComponentSnapshot[]>();
+
+function exposedReadableItemsForSource(sourceId: string): InternalComponentSnapshot[] {
+  let cached = boardOverlayExposedItemsBySourceId.get(sourceId);
+  if (!cached) {
+    const items = gatherInternalComponentSnapshots(sourceId) ?? [];
+    cached = items.filter((item) => item.exposed && item.graphical && isReadableInstrument(item.typeId));
+    boardOverlayExposedItemsBySourceId.set(sourceId, cached);
+  }
+  return cached;
+}
+
+/** `${outerCoreId}:${innerLocalId}` -> `componentIndex` real do Core, resolvido via
+ * `getSubcircuitChildInstanceId` (1 IPC roundtrip) -- cacheado pra sempre DENTRO da mesma corrida de
+ * simulação. Chave inclui `outerCoreId` (não só o `componentId` da Webview) de propósito: um novo
+ * `run()` sempre gera `coreInstanceIdByComponentId` novo (ver `stopVoltageReadoutPolling`/rebuild em
+ * `syncProjectToCore`), então entradas de uma corrida anterior nunca colidem nem precisam de limpeza
+ * própria -- só ficam órfãs e inofensivas até o `.clear()` explícito em `stopVoltageReadoutPolling`. */
+const boardOverlayChildCoreIdCache = new Map<string, string>();
+
+/** Leitura AO VIVO (corrente/etc) de componentes internos expostos e graficamente visíveis no
+ * overlay de Modo Placa de QUALQUER instância de subcircuito colocada no circuito principal --
+ * `boardOverlayData`/`gatherInternalComponentSnapshots` só trazem `properties` ESTÁTICAS do arquivo,
+ * nunca isto (fix "LED onboard não acende quando exposto no símbolo", 2026-07-18: o LED acendia
+ * dentro do modo de edição do subcircuito, que usa `runtimeSymbolProperties` normalmente, mas o
+ * overlay do circuito PRINCIPAL nunca tinha telemetria nenhuma). Mesmo padrão de
+ * `pollInstrumentReadouts`: resolve instanceId (aqui via `getSubcircuitChildInstanceId`, cacheado),
+ * batch `getComponentStates`, decodifica com `decodeComponentReadout` (mesmo `readoutFormat` ABI v2). */
+export async function pollBoardOverlayReadouts(expectedGeneration?: number): Promise<void> {
+  if (!state.coreClient || !state.schematicPanel) return;
+  // Mesmo gate de `main.ts::renderBoardOverlaysFor`'s chamador (`registeredSourceKind ===
+  // "subcircuit-file"`) -- só um `.lssubcircuit` tem `components[]`/`exposedComponents[]`
+  // (`abi-device`/`mcu-adapter` são `.lsdevice` opacos, sem esse conceito).
+  const outerComponents = state.schematicState.components.filter(
+    (component) => findCatalogEntry(component.typeId)?.registeredSourceKind === "subcircuit-file"
+  );
+  if (outerComponents.length === 0) return;
+
+  const stateItems: Array<{ key: string; instanceId: string }> = [];
+  const typeIdByKey = new Map<string, string>();
+  for (const outer of outerComponents) {
+    const sourceId = findCatalogEntry(outer.typeId)?.registeredSourceId;
+    const outerCoreId = coreInstanceIdByComponentId.get(outer.id);
+    if (!sourceId || !outerCoreId) continue;
+    for (const item of exposedReadableItemsForSource(sourceId)) {
+      const cacheKey = `${outerCoreId}:${item.id}`;
+      let innerInstanceId = boardOverlayChildCoreIdCache.get(cacheKey);
+      if (innerInstanceId === undefined) {
+        const resolved = await resolveSubcircuitChildCoreId(outer.id, item.id);
+        if (!resolved) continue;
+        innerInstanceId = resolved;
+        boardOverlayChildCoreIdCache.set(cacheKey, innerInstanceId);
+      }
+      const key = `${outer.id}:${item.id}`;
+      stateItems.push({ key, instanceId: innerInstanceId });
+      typeIdByKey.set(key, item.typeId);
+    }
+  }
+  if (stateItems.length === 0) return;
+
+  let batchedStates: Record<string, Buffer>;
+  try {
+    batchedStates = await state.coreClient.getComponentStates(stateItems);
+  } catch {
+    return;
+  }
+  const readoutsByKey: Record<string, ComponentReadoutValue> = {};
+  for (const { key } of stateItems) {
+    const coreState = batchedStates[key];
+    const typeId = typeIdByKey.get(key);
+    if (!coreState || !typeId) continue;
+    try {
+      const readout = decodeComponentReadout(typeId, coreState);
+      if (readout !== undefined) readoutsByKey[key] = readout;
+    } catch {
+      // instância ainda não assentou ou foi removida nesse meio tempo -- ignora neste tick, tenta de novo no próximo
+    }
+  }
+  if (expectedGeneration !== undefined && expectedGeneration !== telemetryGeneration) return;
+  state.schematicPanel.postMessage({ version: 1, type: "boardOverlayReadouts", readoutsByKey });
+}
+
 /** Tensão de cada fio (lida em uma das duas pontas — são o mesmo nó elétrico por definição) pra
- * colorir/animar na Webview igual ao SimulIDE (`ConnectorLine::paint`: vermelho se >2.5V, azul
- * senão, só enquanto a simulação está "animada"/rodando). */
+ * colorir/animar na Webview. O limiar visual fica em `wirePresentation.ts` (0,7 V); a telemetria
+ * transporta a tensão real e não aplica nenhuma classificação elétrica aqui. */
 export async function pollWireVoltages(expectedGeneration?: number): Promise<void> {
   if (!state.coreClient || !state.schematicPanel) return;
   if (state.schematicState.topology.conductors.length === 0) return;
 
   const voltagesByWireId: Record<string, number> = {};
   const batch: Array<{ key: string; instanceId: string; pinId: string }> = [];
-  for (const probe of voltageProbesForProject(state.schematicState.topology)) {
+  for (const probe of voltageProbesForProject(
+    state.schematicState.topology,
+    (candidate) => resolveWireEndpoint(candidate.componentId, candidate.pinId) !== undefined
+  )) {
     const endpoint = resolveWireEndpoint(probe.componentId, probe.pinId);
     if (endpoint) batch.push({ key: probe.wireId, instanceId: endpoint.instanceId, pinId: endpoint.pinId });
   }
   try {
     Object.assign(voltagesByWireId, await state.coreClient.getNodeVoltages(batch));
   } catch {
-      // nó ainda não resolvido (settle loop não rodou pra esse trecho ainda) -- ignora neste tick
+    // Um endpoint ainda não assentado não pode apagar a telemetria de TODAS as demais redes.
+    // Recupera item a item; no próximo tick o endpoint que falhou será tentado novamente.
+    for (const item of batch) {
+      try {
+        Object.assign(voltagesByWireId, await state.coreClient.getNodeVoltages([item]));
+      } catch {
+        // nó individual ainda não resolvido
+      }
+    }
   }
   if (expectedGeneration !== undefined && expectedGeneration !== telemetryGeneration) return;
   state.schematicPanel.postMessage({ version: 1, type: "wireVoltages", voltagesByWireId });
@@ -659,21 +771,27 @@ export function startVoltageReadoutPolling(): void {
       pollInstrumentReadouts(generation),
       pollWireVoltages(generation),
       pollSimulationRate(generation),
+      pollBoardOverlayReadouts(generation),
     ]).finally(() => { telemetryPollInFlight = false; });
   }, Math.round(1000 / telemetryRateHz));
 }
 
-export function stopVoltageReadoutPolling(): void {
+export function stopVoltageReadoutPolling(clearVisuals = true): void {
   ++telemetryGeneration;
-  if (!state.voltageReadoutTimer) return;
-  clearInterval(state.voltageReadoutTimer);
-  state.voltageReadoutTimer = undefined;
+  if (state.voltageReadoutTimer) {
+    clearInterval(state.voltageReadoutTimer);
+    state.voltageReadoutTimer = undefined;
+  }
   lastRateSample = undefined;
+  // Pause preserves the last converged visual state, as SimulIDE does. Only Stop clears it.
+  if (!clearVisuals) return;
   // Sem simulação rodando não há tensão "atual" pra mostrar -- volta os fios pra cor neutra em vez
   // de deixar a última cor (vermelho/azul) congelada, o que pareceria que ainda está simulando.
   state.schematicPanel?.postMessage({ version: 1, type: "wireVoltages", voltagesByWireId: {} });
   state.schematicPanel?.postMessage({ version: 1, type: "componentReadout", readoutsByComponentId: {} });
   state.schematicPanel?.postMessage({ version: 1, type: "simulationRate", rate: undefined });
+  state.schematicPanel?.postMessage({ version: 1, type: "boardOverlayReadouts", readoutsByKey: {} });
+  boardOverlayChildCoreIdCache.clear();
 }
 
 /** NÃO limpa a status bar de erro/aviso sozinha -- ver `noteSimulationStatusChange`, chamada só nos 3
@@ -683,11 +801,15 @@ export function stopVoltageReadoutPolling(): void {
  * acender -- o usuário nunca veria o aviso na status bar, só um flash. */
 export function setSimulationStatus(status: SimulationStatus): void {
   state.simulationStatus = status;
+  simulationStatusRevision += 1;
   lasecPlotManager?.updateSimulationState();
   serialTerminalManager?.updateSimulationState();
   serialPortManager?.updateSimulationState();
   state.schematicPanel?.postMessage({ version: 1, type: "simulationStatus", status });
 }
+
+let simulationStatusRevision = 0;
+let stopOperationPending = false;
 
 /** Mesma geração de ids de pino que `projectToWebviewState`/a Webview usam ("pin-1".."pin-N", a
  * partir do pinCount do catálogo) — `ProjectComponent` (formato `.lsproj`) não guarda pinos, só
@@ -695,34 +817,42 @@ export function setSimulationStatus(status: SimulationStatus): void {
  * persistidos, então é isto que tem que mandar pro Core ao reabrir um projeto. */
 export function runSimulation(): void {
   if (!state.coreClient) return;
-  // Publish "running" before the request. A condition can fire in the Core's
-  // first converged step, before the start response returns; in that race the
-  // asynchronous "paused" notification must be the last state, never be
-  // overwritten by the start promise continuation.
-  startVoltageReadoutPolling();
-  setSimulationStatus("running");
-  // Tentativa deliberada do usuário -- limpa qualquer erro/aviso de uma corrida anterior ANTES de
-  // saber se esta vai dar certo; se falhar, `reportCoreWarning` abaixo acende um novo.
-  noteSimulationStatusChange("running");
+  const statusBeforeRequest = state.simulationStatus;
+  const revisionBeforeRequest = simulationStatusRevision;
   state.coreClient
     .run()
     .then(() => {
+      // Uma condição pode pausar no primeiro settle antes da resposta. A notificação assíncrona é
+      // mais nova e não pode ser sobrescrita por esta continuação.
+      if (simulationStatusRevision !== revisionBeforeRequest) return;
+      startVoltageReadoutPolling();
+      setSimulationStatus("running");
+      noteSimulationStatusChange("running");
       void pollInstrumentReadouts();
       void pollWireVoltages();
     })
     .catch((err) => {
-      stopVoltageReadoutPolling();
-      setSimulationStatus("stopped");
+      if (simulationStatusRevision === revisionBeforeRequest) {
+        stopVoltageReadoutPolling(statusBeforeRequest === "stopped");
+        setSimulationStatus(statusBeforeRequest);
+      }
       reportCoreWarning("iniciar simulação", err);
     });
 }
 
 export function pauseSimulation(): void {
   if (!state.coreClient) return;
+  if (state.simulationStatus === "paused") {
+    // The same toolbar action toggles Pause/Resume. Core `run()` resumes the existing Scheduler;
+    // it does not rebuild the circuit or restart the QEMU process.
+    runSimulation();
+    return;
+  }
+  if (state.simulationStatus !== "running") return;
   state.coreClient
     .pause()
     .then(() => {
-      stopVoltageReadoutPolling();
+      stopVoltageReadoutPolling(false);
       setSimulationStatus("paused");
       noteSimulationStatusChange("paused");
     })
@@ -730,20 +860,34 @@ export function pauseSimulation(): void {
 }
 
 export function stopSimulation(): void {
+  if (stopOperationPending || state.simulationStatus === "stopped") return;
+  stopOperationPending = true;
   // Corta a produção de telemetria no instante do clique, antes de escrever o comando no pipe.
   // Assim nenhum frame visual novo pode ser enfileirado enquanto a worker está encerrando.
   stopVoltageReadoutPolling();
   if (!state.coreClient) {
     setSimulationStatus("stopped");
     noteSimulationStatusChange("stopped");
+    stopOperationPending = false;
     return;
   }
-  state.coreClient
-    .stopSimulation()
-    .catch((err) => reportCoreWarning("parar simulação", err))
-    .finally(() => {
+  void enqueueCoreMutation(async () => {
+    if (!state.coreClient) return;
+    await state.coreClient.stopSimulation();
+    // O Core já encerrou QEMU/MCUs e zerou scheduler/eventos. Recriar as instâncias restaura também
+    // o estado dos componentes built-in/ABI, sem reiniciar a execução nem recarregar firmware.
+    await rebuildCoreFromSchematicStateNow({ alreadyStopped: true, resumeAfter: false });
+  })
+    .then(() => {
       setSimulationStatus("stopped");
       noteSimulationStatusChange("stopped");
+    })
+    .catch((err) => {
+      // Não confirma "parado" se o teardown falhou; o Stop continua disponível para nova tentativa.
+      reportCoreWarning("parar simulação", err);
+    })
+    .finally(() => {
+      stopOperationPending = false;
     });
 }
 
@@ -802,13 +946,13 @@ export function rebuildCoreFromSchematicState(): Promise<void> {
   return queueCoreRebuild();
 }
 
-async function rebuildCoreFromSchematicStateNow(): Promise<void> {
+async function rebuildCoreFromSchematicStateNow(options: { alreadyStopped?: boolean; resumeAfter?: boolean } = {}): Promise<void> {
   if (!state.coreClient) return;
 
-  const runningBeforeRebuild = state.simulationStatus === "running";
+  const runningBeforeRebuild = options.resumeAfter ?? state.simulationStatus === "running";
   // Controle vem antes de configuração e mutações. Assim uma reconstrução nunca deixa add/remove
   // atrás de trabalho normal da simulação nem reproduz o timeout visto ao trocar firmware rodando.
-  if (runningBeforeRebuild) {
+  if (runningBeforeRebuild && !options.alreadyStopped) {
     stopVoltageReadoutPolling();
     try {
       await state.coreClient.stopSimulation();

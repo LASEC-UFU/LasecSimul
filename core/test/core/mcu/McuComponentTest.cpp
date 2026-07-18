@@ -10,6 +10,9 @@
 #include <fstream>
 #include <memory>
 #include <vector>
+#include "components/active/DiodeLegArray.hpp"
+#include "components/other/Ground.hpp"
+#include "components/passive/Resistor.hpp"
 #include "components/sources/FixedVolt.hpp"
 #include "lasecsimul/qemu_arena_abi.h"
 #include "mcu/McuComponent.hpp"
@@ -122,6 +125,16 @@ int main() {
     const double gpio2Volts = session.nodeVoltageOfPin(mcuIndex, "GPIO2");
     check(gpio2Volts > 3.0, "GPIO2 sobe para ~3.3V depois de ENABLE+OUT_REG ligarem o bit 2");
 
+    // Arduino `digitalRead()` consulta GPIO_IN mesmo quando o pad está em OUTPUT. O nível físico
+    // convergido precisa voltar ao buffer de entrada; caso contrário `!digitalRead(pin)` fica
+    // sempre verdadeiro e um Blink por toggle permanece aceso para sempre.
+    simulateQemuWrite(arena, gpioStart + 0x3C, 0);
+    arena->simuAction = LSDN_SIM_READ;
+    session.scheduler().markDirty(mcuIndex);
+    for (int i = 0; i < 5 && session.settleStep(); ++i) {}
+    check((arena->regData & (1u << 2)) != 0,
+          "GPIO_IN reflete nivel alto do pad GPIO2 mesmo configurado como saida (digitalRead em OUTPUT)");
+
     // Retenção de nível (diagnóstico "QEMU manda sinal mas vem como pulso e não retém conforme
     // lógica"): sem NENHUM novo evento de arena (nenhuma escrita de registrador, nenhum
     // `markDirty` manual), o nível já estampado deveria continuar em ~3.3V por muitos ciclos de
@@ -139,6 +152,52 @@ int main() {
           "prova que McuComponent::onEvent() só reage a bordas do RST/EN já convergidas pelo solver, nunca à leitura crua de uma "
           "iteração intermediária de stamp()/Newton: sem isso, o primeiro Scheduler::step() da simulação disparava um reset "
           "fantasma vindo do chute inicial do Newton, zerando GPIO_OUT/GPIO_ENABLE)");
+
+    // Regressão do achado "pente fino" (2026-07-17, comparação direta com o SimulIDE real): RST/EN
+    // compartilha `CircuitGroup` com TODOS os pinos do MCU por construção (garantia do Netlist --
+    // "todos os pinos de um componente caem no mesmo grupo"), e o LED do usuário (`DiodeLegArray`,
+    // `isNonlinear()==true`) entra no MESMO grupo assim que fiado num GPIO -- cada toggle de
+    // `digitalWrite()` força várias rodadas de convergência de Newton (até `kMaxNonlinearIterations`
+    // por settleStep()) ANTES do circuito estabilizar. Reproduz o circuito real do usuário (ESP32 +
+    // resistor + LED, GPIO alternando como um blink) inteiramente com o adapter real, sem precisar
+    // de QEMU real nem firmware -- prova que a modelagem elétrica REAL do SimulIDE (impedâncias de
+    // `IoPin`, pull-up dedicado do RST) resolve o reset fantasma sincronizado com o blink que os
+    // valores antigos (`kDriveConductance=1e6`/`kFloatingConductance=1e-6`, spread 1e12) causavam
+    // ao deixar o `CircuitGroup` perto demais do piso de singularidade durante a convergência do LED.
+    session.components().registerFactory("passive.resistor", [](const registry::ComponentParams& p) {
+        return std::make_unique<components::Resistor>(std::array<Pin, 2>{Pin{"pin-1"}, Pin{"pin-2"}},
+                                                        p.property("resistance", 220.0));
+    });
+    session.components().registerFactory("outputs.led", [](const registry::ComponentParams&) {
+        std::vector<Pin> ledPins{Pin{"anode"}, Pin{"cathode"}};
+        return std::make_unique<components::DiodeLegArray>(
+            "outputs.led", std::move(ledPins), std::vector<components::DiodeLegArray::Leg>{{0, 1}});
+    });
+    session.components().registerFactory("other.ground", [](const registry::ComponentParams&) {
+        return std::make_unique<components::Ground>(Pin{"pin"});
+    });
+    const uint32_t resistorIndex = session.addComponent("passive.resistor", {});
+    const uint32_t ledIndex = session.addComponent("outputs.led", {});
+    const uint32_t groundIndex = session.addComponent("other.ground", {});
+    session.connectWire(mcuIndex, "GPIO2", resistorIndex, "pin-1");
+    session.connectWire(resistorIndex, "pin-2", ledIndex, "anode");
+    session.connectWire(ledIndex, "cathode", groundIndex, "pin");
+
+    const uint64_t loadCountBeforeBlink = mcuPtr->loadFirmwareCallCountForTesting();
+    bool resetPinStayedHighThroughoutBlink = true;
+    for (int cycle = 0; cycle < 20; ++cycle) {
+        const uint32_t bit2 = (cycle % 2 == 0) ? 0u : (1u << 2);
+        simulateQemuWrite(arena, gpioStart + 0x04, bit2);
+        session.scheduler().markDirty(mcuIndex);
+        // kMaxNonlinearIterations do SimulationSession é 50 -- folga de sobra pro LED convergir.
+        for (int i = 0; i < 60 && session.settleStep(); ++i) {}
+        if (!mcuPtr->resetPinHigh()) resetPinStayedHighThroughoutBlink = false;
+    }
+    check(resetPinStayedHighThroughoutBlink,
+          "RST/EN continua alto durante 20 ciclos de blink (GPIO2 alternando) com o LED não-linear "
+          "no MESMO CircuitGroup -- nao houve reset fantasma sincronizado com o toggle");
+    check(mcuPtr->loadFirmwareCallCountForTesting() == loadCountBeforeBlink,
+          "nenhum loadFirmware() disparado durante o blink com carga nao-linear (nenhum reset/reload fantasma)");
 
     // Agora o caminho contrário: GPIO3 não foi habilitado como saída -- McuComponent deve ler a
     // tensão real do nó (default 0V, sem nada estampado) e alimentar isso de volta no módulo.

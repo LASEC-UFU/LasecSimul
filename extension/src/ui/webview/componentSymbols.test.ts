@@ -299,6 +299,48 @@ import { PackageDescriptor, WebviewComponentModel } from "./model";
       "markup deveria conter o rótulo de cada pino declarado");
   });
 
+  await test("packagePinLeadSvg: text-anchor padrão por ângulo (0/90/180/270), sem labelTextAnchor explícito", () => {
+    registerPackage("test.pin-angle-anchor", {
+      width: 40, height: 40,
+      pins: [
+        { id: "right", x: 20, y: 0, angle: 0, length: 8, label: "R" },
+        { id: "down", x: 0, y: 20, angle: 90, length: 8, label: "D" },
+        { id: "left", x: -20, y: 0, angle: 180, length: 8, label: "L" },
+        { id: "up", x: 0, y: -20, angle: 270, length: 8, label: "U" },
+      ],
+    });
+    const svg = packageSymbolSvg("test.pin-angle-anchor") ?? "";
+    assert(/text-anchor="end"[^>]*>R</.test(svg), `angle=0 deveria ter text-anchor="end", markup: ${svg}`);
+    assert(/text-anchor="middle"[^>]*>D</.test(svg), `angle=90 deveria ter text-anchor="middle", markup: ${svg}`);
+    assert(/text-anchor="start"[^>]*>L</.test(svg), `angle=180 deveria ter text-anchor="start", markup: ${svg}`);
+    assert(/text-anchor="middle"[^>]*>U</.test(svg), `angle=270 deveria ter text-anchor="middle", markup: ${svg}`);
+  });
+
+  await test("packagePinLeadSvg: labelTextAnchor explícito vence o default calculado por ângulo", () => {
+    registerPackage("test.pin-explicit-anchor", {
+      width: 40, height: 40,
+      pins: [{ id: "right", x: 20, y: 0, angle: 0, length: 8, label: "R", labelTextAnchor: "start" }],
+    });
+    const svg = packageSymbolSvg("test.pin-explicit-anchor") ?? "";
+    assert(/text-anchor="start"[^>]*>R</.test(svg), `labelTextAnchor="start" explícito deveria vencer o default "end" de angle=0, markup: ${svg}`);
+  });
+
+  await test("packagePinLeadSvg: labelHidden:true remove o <text> do rótulo (pino continua desenhado)", () => {
+    registerPackage("test.pin-label-hidden", {
+      width: 40, height: 40,
+      pins: [
+        { id: "visible", x: 20, y: 10, angle: 0, length: 8, label: "VISIBLE" },
+        { id: "hidden", x: 20, y: 30, angle: 0, length: 8, label: "HIDDEN", labelHidden: true },
+      ],
+    });
+    const svg = packageSymbolSvg("test.pin-label-hidden") ?? "";
+    assert(svg.includes(">VISIBLE<"), `rótulo do pino visível deveria continuar aparecendo, markup: ${svg}`);
+    assert(!svg.includes(">HIDDEN<"), `rótulo do pino com labelHidden:true não deveria aparecer no SVG, markup: ${svg}`);
+    // O PINO oculto continua desenhado (só o rótulo/texto some) -- 2 pinos com length=8 cada geram 2
+    // <line> de lead (labelHidden não deveria afetar o lead nenhum).
+    assert((svg.match(/<line/g) ?? []).length === 2, `os 2 pinos deveriam continuar desenhando seus leads (só o rótulo do 2º some), markup: ${svg}`);
+  });
+
   await test("package.shapes resolve stateFill/stateText do .lsdevice sem sobrescrita visual", () => {
     registerPackage("test.declarative-visual-state", {
       width: 24,
@@ -769,6 +811,83 @@ import { PackageDescriptor, WebviewComponentModel } from "./model";
     assert(svgMax.includes('transform="rotate(150.00,16,27)"'), `valor máximo deveria mapear para +150 graus, markup: ${svgMax}`);
   });
 
+  await test("ViewSpec deriva rotate do dialIndicator DIRETO da interação dragAngular sem precisar de stateProjection explícito (bug 2026-07-18: dial 'vai e volta')", () => {
+    // MESMO shape de passive.potentiometer/variable_resistor/variable_capacitor/variable_inductor/
+    // sources.voltage_source/sources.current_source: interaction+limits declarados, SEM
+    // `stateProjection` -- antes do fix, o indicador sempre desenhava na posição de repouso (0deg)
+    // fora de um arrasto ativo, porque nada projetava o valor real da propriedade pro `rotate()`.
+    const dialPkg: PackageDescriptor = {
+      width: 32,
+      height: 22,
+      background: { kind: "none" },
+      pins: [{ id: "p1", x: 0, y: 11, angle: 180, length: 8, label: "" }],
+      viewSpec: {
+        paint: [
+          { kind: "ellipse", cx: 16, cy: 11, rx: 11, ry: 11, fill: "#e6e6e6", cssClass: "encoder-hit-zone" },
+          { kind: "ellipse", cx: 16, cy: 3, rx: 2, ry: 2, fill: "#d2d2c8", cssClass: "encoder-indicator", partId: "dialIndicator" },
+        ],
+        hitTest: { dial: { kind: "circle", cx: 16, cy: 11, r: 13, cursor: "grab" } },
+        interaction: { dial: { kind: "dragAngular", hitTest: "dial", prop: "position", cx: 16, cy: 11, stepsPerRev: 1000, continuous: true, limits: "dial" } },
+        limits: { dial: { min: 0, max: 1, minAngleDeg: -150, maxAngleDeg: 150, clamp: true } },
+      },
+    };
+    registerPackage("test.viewspec.implicit-dial-indicator", dialPkg);
+
+    const svgMid = packageSymbolSvg("test.viewspec.implicit-dial-indicator", { position: 0.5 }, "dial-mid") ?? "";
+    assert(svgMid.includes('class="encoder-indicator"'), `indicador deveria ser desenhado mesmo sem stateProjection explícito, markup: ${svgMid}`);
+    assert(!svgMid.includes("rotate("), `position=0.5 (meio da faixa -150..150) deveria mapear pra 0 graus sem transform, markup: ${svgMid}`);
+
+    const svgMax = packageSymbolSvg("test.viewspec.implicit-dial-indicator", { position: 1 }, "dial-max") ?? "";
+    assert(svgMax.includes('transform="rotate(150.00,16,11)"'), `position=1 (máximo) deveria girar o indicador +150 graus em torno do pivô da interação, markup: ${svgMax}`);
+
+    const svgMin = packageSymbolSvg("test.viewspec.implicit-dial-indicator", { position: 0 }, "dial-min") ?? "";
+    assert(svgMin.includes('transform="rotate(-150.00,16,11)"'), `position=0 (mínimo) deveria girar o indicador -150 graus, markup: ${svgMin}`);
+  });
+
+  await test("ViewSpec deriva rotate do dialIndicator lendo minProp/maxProp AO VIVO (fonte de tensão/corrente controlada, achado 2026-07-10)", () => {
+    const controlledSourcePkg: PackageDescriptor = {
+      width: 40,
+      height: 40,
+      background: { kind: "none" },
+      pins: [{ id: "p1", x: 0, y: 20, angle: 180, length: 8, label: "" }],
+      viewSpec: {
+        paint: [
+          { kind: "ellipse", cx: 20, cy: 20, rx: 2, ry: 2, fill: "#d2d2c8", cssClass: "encoder-indicator", partId: "dialIndicator" },
+        ],
+        interaction: { dial: { kind: "dragAngular", hitTest: "dial", prop: "value", cx: 20, cy: 20, continuous: true, limits: "dial" } },
+        limits: { dial: { minProp: "minValue", maxProp: "maxValue", minAngleDeg: -150, maxAngleDeg: 150, clamp: true } },
+      },
+    };
+    registerPackage("test.viewspec.implicit-dial-live-range", controlledSourcePkg);
+
+    // range fixo do catálogo (min/max ausentes) cairia em [0,1000] -- confirma que minProp/maxProp
+    // (lidos AO VIVO das properties da instância) têm prioridade, igual ao que a interação de
+    // arrasto já faz em main.ts.
+    const svg = packageSymbolSvg("test.viewspec.implicit-dial-live-range", { value: 7.5, minValue: 5, maxValue: 10 }, "src-live") ?? "";
+    assert(svg.includes('transform="rotate(0.00,20,20)"') || !svg.includes("rotate("), `value=7.5 no meio de [5,10] (ao vivo) deveria mapear pra 0 graus, markup: ${svg}`);
+
+    const svgHigh = packageSymbolSvg("test.viewspec.implicit-dial-live-range", { value: 10, minValue: 5, maxValue: 10 }, "src-live-max") ?? "";
+    assert(svgHigh.includes('transform="rotate(150.00,20,20)"'), `value no máximo do range AO VIVO [5,10] deveria mapear pra +150 graus, markup: ${svgHigh}`);
+  });
+
+  await test("ViewSpec: catálogo real de passive.potentiometer reflete 'position' no indicador sem depender de arrasto ativo", () => {
+    // Regressão direta do bug relatado: antes do fix, `render()` (chamado ao soltar o mouse, ou por
+    // QUALQUER sync vindo do host durante um arrasto) desenhava o indicador sempre na posição de
+    // repouso, então o dial "visualmente" desfazia a mudança mesmo com o valor salvo certo.
+    catalogPackage("passive.potentiometer");
+    const svgLow = packageSymbolSvg("passive.potentiometer", { resistance: 10000, position: 0.1 }, "pot-low") ?? "";
+    const svgHigh = packageSymbolSvg("passive.potentiometer", { resistance: 10000, position: 0.9 }, "pot-high") ?? "";
+    const rotateOf = (svg: string): number | undefined => {
+      const match = svg.match(/class="encoder-indicator" transform="rotate\(([-\d.]+),/);
+      return match ? Number(match[1]) : undefined;
+    };
+    const angleLow = rotateOf(svgLow);
+    const angleHigh = rotateOf(svgHigh);
+    assert(angleLow !== undefined, `position=0.1 deveria produzir um rotate() no indicador do potenciômetro real, markup: ${svgLow}`);
+    assert(angleHigh !== undefined, `position=0.9 deveria produzir um rotate() no indicador do potenciômetro real, markup: ${svgHigh}`);
+    assert((angleHigh ?? 0) > (angleLow ?? 0), `indicador deveria girar mais no sentido horário conforme 'position' aumenta (low=${angleLow}, high=${angleHigh})`);
+  });
+
   await test("ViewSpec preserva background image antes do paint interativo", () => {
     const viewSpecWithBackgroundPkg: PackageDescriptor = {
       width: 24,
@@ -1174,9 +1293,12 @@ import { PackageDescriptor, WebviewComponentModel } from "./model";
     const p1 = pinLocalPosition("pin-P2", 1, 16, "outputs.led_bar", props);
     assert(near(p1.y - p0.y, 8) && near(p1.x, p0.x), `Pinos P consecutivos devem diferir 8px só em y, recebido p0=${JSON.stringify(p0)} p1=${JSON.stringify(p1)}`);
 
-    // Numeração de id CRUZA os dois grupos (mesmo padrão do Core, resolveDynamicPins) -- o grupo N
-    // continua a partir de onde o grupo P parou (size=8 -> N começa em pin-N9), nunca reinicia em 1.
-    const n0 = pinLocalPosition("pin-N9", 0, 16, "outputs.led_bar", props);
+    // Numeração de id é POR GRUPO (mesmo padrão do Core, resolveDynamicPins com
+    // DynamicPinIndexMode::PerGroup em CoreApplication.cpp) -- o grupo N reinicia em 1
+    // independente do P, nunca continua a contagem global (bug corrigido 2026-07-18: Core mudou
+    // pra PerGroup no refactor de pinos dinâmicos, mas o catálogo aqui ainda gerava pin-N9..N16
+    // pra size=8, causando "pin inexistente: pin-N2" ao fiar um led_bar de size=1).
+    const n0 = pinLocalPosition("pin-N1", 0, 16, "outputs.led_bar", props);
     // P (tip x=-16) e N (tip x=+16) ficam nas pontas OPOSTAS dos leads, não nas bordas do corpo --
     // 32px de distância entre as PONTAS (16 de cada lado), não os 16px de largura do corpo em si.
     assert(near(n0.x - p0.x, 32), `Pino N deveria ficar na ponta do lead oposto (P tip=-16, N tip=+16, 32px de distância), recebido p0=${JSON.stringify(p0)} n0=${JSON.stringify(n0)}`);

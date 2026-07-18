@@ -199,6 +199,9 @@ struct PinMapping {
 struct QemuLaunchSpec {
     std::string binary;
     std::vector<std::string> args;
+    // Linha de diagnostico produzida pelo orquestrador (rede efetiva, fallback etc.).
+    // QemuProcessManager a coloca no mesmo buffer de logs antes de iniciar o processo.
+    std::string diagnostics;
 };
 
 struct McuDebugOptions {

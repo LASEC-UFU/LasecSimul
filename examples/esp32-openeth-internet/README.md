@@ -4,7 +4,8 @@ Para compilar com PlatformIO usando `setup()`/`loop()` e bibliotecas Arduino,
 consulte [`PLATFORMIO_ARDUINO.md`](PLATFORMIO_ARDUINO.md).
 
 Este exemplo usa a pilha `esp_netif`/lwIP real do ESP-IDF sobre o MAC virtual
-OpenETH. O modo de rede padrão agora é `lab-bridge`, que conecta a interface a
+OpenETH. A rede agora é opcional e o padrão é `disabled`. Para este exemplo,
+configure explicitamente `lasecsimul.network.mode` como `lab-bridge`, que conecta a interface a
 uma TAP previamente provisionada e permite obter IP do DHCP real da LAN. Para
 usar o backend SLIRP do QEMU (DHCP, DNS e NAT sem permissão de administrador),
 configure `lasecsimul.network.mode` como `isolated`.

@@ -1604,3 +1604,71 @@ cascata de túnel; arrastar uma projeção de componente exposto; renderização
 na paleta; ciclo completo editor→salvar→fechar→reabrir num `.lsproj`/circuito com uma instância
 colocada. Recomenda-se verificação manual completa no VSCode real antes de considerar a refatoração
 definitivamente fechada.
+
+## 23. Alinhamento e visibilidade de rótulo de pino em Modo Símbolo — round-trip completo autoria↔arquivo↔render (2026-07-18)
+
+Parte da revisão global de labels (`.spec/lasecsimul.spec` seção 30). Diagnóstico encontrou 2 bugs
+reais no round-trip de rótulo de `symbol.pin`, ambos em `catalog/subcircuitSymbolScene.ts`:
+
+1. **Alinhamento nunca chegava no arquivo, sempre forçado pra "middle"** — `compileSymbolScene`
+   gravava `labelTextAnchor: "middle", labelDominantBaseline: "middle"` INCONDICIONALMENTE pra todo
+   pino, derrubando a lógica de default inteligente por ângulo que `componentSymbols.ts::
+   packagePinLeadSvg` já sabia calcular quando o campo estava AUSENTE (`"end"`/`"middle"`/`"start"`/
+   `"middle"` pros ângulos 0/90/180/270). Não existia campo de UI pra alinhamento em lugar nenhum, e
+   `materializeSymbolPin` nunca lia `pin.labelTextAnchor` de volta do arquivo.
+2. **Sem toggle de visibilidade por-label, e mesmo que existisse, o SVG visível nunca respeitaria**
+   — `main.ts::externalLabelText`'s branch de `symbol.pin` ignorava `component.showId` (só olhava
+   `component.hidden`, o PINO inteiro). E `packagePinLeadSvg`'s `labelVisible` só olhava
+   `stateVisibleMatches(pin.labelStateVisible, properties)` (regra declarativa condicional-a-
+   propriedade, ex: "só mostra se X=Y" — mecanismo DIFERENTE, usado por outros dispositivos) — nunca
+   um toggle booleano simples de autoria.
+
+**Achado crítico adicional na validação cruzada do plano**: `main.ts::compileLiveSymbolPins` — usado
+só pra desenhar o PREVIEW AO VIVO durante a edição do Símbolo (`renderSymbolCanvasBackground` →
+`livePackagePreviewSymbolSvg` → `packagePinLeadSvg`) — é uma cópia praticamente idêntica de
+`compileSymbolScene`, com o MESMO hardcode de alinhamento. `main.ts` não pode importar de
+`catalog/subcircuitSymbolScene.ts` (fronteira de `tsconfig.webview.json`) — corrigir só
+`compileSymbolScene` deixaria o preview ao vivo divergente do arquivo salvo (exatamente a
+divergência preview-vs-exportado que a revisão global proíbe).
+
+### 23.1 Fix
+
+Novo `PackagePin.labelHidden?: boolean` (`ui/webview/model.ts`) — `undefined`/`false` = visível
+(preserva 100% do comportamento de todo arquivo já salvo), `true` = oculto. Passado por
+`packageSanitizers.ts` sem clamping. `componentSymbols.ts::packagePinLeadSvg`'s `labelVisible` passa
+a ser `pin.labelHidden !== true && stateVisibleMatches(...)`.
+
+Nova função pura `symbolPinLabelPackageFields(properties, showId)` em
+`ui/webview/componentLabels.ts` — fonte ÚNICA compartilhada entre `compileSymbolScene` (host) e
+`compileLiveSymbolPins` (`main.ts`, preview), importável dos dois lados (o mesmo módulo pelo qual
+`catalog/*` já importa `packagePinVisualEnd`, ver `subcircuitSymbolScene.test.ts`). Deriva
+`labelTextAnchor`/`labelDominantBaseline` a partir de uma nova propriedade de instância
+`__ui_idLabelAlign` (mesmo padrão de nomenclatura de `labelPropertyKey`, mas fora dessa função — é um
+conceito exclusivo de `symbol.pin`, nenhum outro rótulo id/value tem "alinhamento" configurável) só
+quando presente, e `labelHidden` a partir de `showId===false` — ambos SÓ gravados quando o autor
+customizou de verdade, nunca um valor "cravado" que coincide por acaso com o default (mesmo
+princípio já usado por posição/rotação/cor, ver seção 22).
+
+`materializeSymbolPin`: presença de `pin.labelTextAnchor` no arquivo (qualquer valor, inclusive
+`"middle"` de um save anterior a este fix — tratado como "explicitamente centralizado", inofensivo,
+é exatamente como já renderizava antes) grava `__ui_idLabelAlign`; `pin.labelHidden===true` grava
+`showId:false` no componente vivo. `main.ts::externalLabelPropertyFields` ganha um campo `"select"`
+de alinhamento (Esquerda/Centro/Direita) só pro combo `kind==="id" && typeId===SYMBOL_PIN_TYPE_ID`,
+ao lado do campo de tamanho de fonte já existente — aparece automaticamente também no diálogo de
+edição em lote (`computeSharedLabelPropertyFields` já reusa `externalLabelPropertyFields` direto).
+A visibilidade reusa o MESMO checkbox "Mostrar" genérico do diálogo de propriedades padrão
+(`renderPropertySheet`), sem UI nova — `main.ts::externalLabelText`'s branch de `symbol.pin` passou
+a checar `component.showId===false`.
+
+### 23.2 Verificação
+
+`subcircuitSymbolScene.test.ts`: round-trip de `labelFontSize`/alinhamento/visibilidade (customizado
+e default-omitido nos dois sentidos), teste de idempotência estendido com os 3 campos.
+`componentSymbols.test.ts`: `text-anchor` default por ângulo (0/90/180/270) contra o `packagePinLeadSvg`
+real, override explícito vencendo o default, `labelHidden:true` removendo o `<text>` do SVG (pino/lead
+continuam desenhados). `componentLabels.test.ts`: `symbolPinLabelPackageFields` isolada (vazio sem
+customização, alinhamento válido/inválido, visibilidade). `npm test` completo sem regressão (373
+testes). Verificação manual (sem GUI neste ambiente) recomendada: mudar alinhamento de um pino em
+Editar Símbolo e conferir que o PREVIEW AO VIVO já reflete sem precisar salvar/reabrir; ocultar o
+rótulo de um pino e conferir que some do preview E do SVG final do package colocado no esquemático
+principal; salvar, reabrir, conferir que tudo persiste.

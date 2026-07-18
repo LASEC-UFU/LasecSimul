@@ -79,11 +79,8 @@ int main() {
                 "QEMU runs headless and does not depend on a packaged keymap");
     TEST_ASSERT(containsArg(launch, "file=build/blink.bin,if=mtd,format=raw"),
                 "launch args include firmware drive");
-    TEST_ASSERT(containsArg(launch, "-nic"), "launch args enable a QEMU network interface");
-    TEST_ASSERT(containsArg(
-                    launch,
-                    "user,model=open_eth,net=192.168.4.0/24,host=192.168.4.2,dhcpstart=192.168.4.15,dns=192.168.4.3"),
-                "OpenETH is attached to unprivileged SLIRP with stable DHCP, gateway and DNS addresses");
+    TEST_ASSERT(!containsArg(launch, "-nic"),
+                "adapter base launch is network-neutral; Core adds OpenETH only when explicitly enabled");
 
     const auto regions = adapter->memoryRegions();
     const auto gpioRegion = std::find_if(regions.begin(), regions.end(), [](const MemoryRegion& region) {
@@ -137,6 +134,25 @@ int main() {
         gpioModule->writeRegister(0x3FF44000 + 0x04, 1u << 2);
         TEST_ASSERT(gpioModule->isOutputEnabled(2), "modulo via plugin marca bit 2 como saida apos ENABLE_REG");
         TEST_ASSERT(gpioModule->outputLevel(2), "modulo via plugin reporta nivel alto no bit 2 apos OUT_REG");
+
+        // GPIO_OUT_W1TS_REG/GPIO_OUT_W1TC_REG (0x08/0x0C) e GPIO_ENABLE_W1TS_REG/W1TC_REG
+        // (0x24/0x28) -- os registradores de AÇÃO reais que `digitalWrite()`/`pinMode()` do
+        // ESP-IDF usam de verdade (nunca escrevem 0x04/0x20 direto), completados 2026-07-17.
+        // Bit 4 (GPIO4 -- default `makeRawGpio(4)` no IOMUX, nunca sobrescrito por UART/SPI em
+        // `configureIoMux()`, ao contrário do bit 3/GPIO3 que default pra U0RXD) começa em
+        // 0/entrada; W1TS liga, W1TC desliga, sem afetar outros bits (bit 2 já ligado acima
+        // continua intacto).
+        gpioModule->writeRegister(0x3FF44000 + 0x24, 1u << 4); // ENABLE_W1TS: GPIO4 vira saida
+        TEST_ASSERT(gpioModule->isOutputEnabled(4), "GPIO_ENABLE_W1TS_REG liga o bit 4 como saida");
+        TEST_ASSERT(gpioModule->isOutputEnabled(2), "GPIO_ENABLE_W1TS_REG nao mexe no bit 2 ja ligado");
+        gpioModule->writeRegister(0x3FF44000 + 0x08, 1u << 4); // OUT_W1TS: GPIO4 vai a nivel alto
+        TEST_ASSERT(gpioModule->outputLevel(4), "GPIO_OUT_W1TS_REG liga o bit 4 (nivel alto)");
+        gpioModule->writeRegister(0x3FF44000 + 0x0C, 1u << 4); // OUT_W1TC: GPIO4 volta a nivel baixo
+        TEST_ASSERT(!gpioModule->outputLevel(4), "GPIO_OUT_W1TC_REG desliga o bit 4 (nivel baixo)");
+        TEST_ASSERT(gpioModule->outputLevel(2), "GPIO_OUT_W1TC_REG do bit 4 nao mexe no nivel do bit 2");
+        gpioModule->writeRegister(0x3FF44000 + 0x28, 1u << 4); // ENABLE_W1TC: GPIO4 volta a entrada
+        TEST_ASSERT(!gpioModule->isOutputEnabled(4), "GPIO_ENABLE_W1TC_REG desliga o bit 4 (volta a entrada)");
+        TEST_ASSERT(gpioModule->isOutputEnabled(2), "GPIO_ENABLE_W1TC_REG do bit 4 nao mexe no bit 2");
 
         if (ioMuxModule) ioMuxModule->writeRegister(0x3FF49000 + 0x88, 0);
         TEST_ASSERT(gpioModule->isOutputEnabled(1), "IOMUX direto habilita GPIO1 como saida do U0TXD");

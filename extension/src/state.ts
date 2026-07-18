@@ -51,9 +51,9 @@ export const state = {
     outerProjectFilePath: string | undefined;
     /** Cada cena como ficou logo após abrir a sessão (antes de qualquer edição do usuário) --
      * comparada contra `state.schematicState` atual em `isSubcircuitEditingSessionDirty` pra decidir
-     * se há alteração não salva (mesmo princípio de `projectCommands.ts::isProjectDirty`). Nunca
-     * mutada depois de empilhada (todo mutador de `schematicState` sempre troca o array/objeto por
-     * um novo, nunca edita in-place -- guardar a referência aqui é seguro). */
+     * se há alteração não salva (mesmo princípio de `projectCommands.ts::isProjectDirty`). Após um
+     * Ctrl+S bem-sucedido, `saveActiveSchematicCommand` avança estas referências para o snapshot
+     * salvo; todo mutador troca o array/objeto, portanto alterações posteriores voltam a divergir. */
     initialComponents: WebviewProjectState["components"];
     initialWires: WebviewProjectState["topology"]["conductors"];
     initialTopologyNodes: WebviewProjectState["topology"]["nodes"];
@@ -61,6 +61,9 @@ export const state = {
     initialIconElements: WebviewProjectState["iconElements"];
     initialExposedComponents: WebviewProjectState["exposedComponents"];
     initialExportedPropertyComponentIds: WebviewProjectState["exportedPropertyComponentIds"];
+    /** A sessão já foi gravada ao menos uma vez por Ctrl+S sem sair do editor. Ao voltar para o
+     * projeto, o catálogo/package precisa ser relido mesmo que não haja mais alterações sujas. */
+    savedDuringEditing?: boolean;
   }>,
 };
 

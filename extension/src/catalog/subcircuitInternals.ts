@@ -18,10 +18,14 @@ interface VisualPosition {
 interface InternalComponentSeed {
   id: string;
   typeId: string;
+  label: string;
   properties: Record<string, unknown>;
   boardVisual?: VisualPosition;
   exposed?: boolean;
   exported?: boolean;
+  showId?: boolean;
+  showValue?: boolean;
+  valueLabelPropertyKey?: string;
 }
 
 /** Deriva a posição de Modo Placa de `exposedComponents[]` (schemaVersion 3,
@@ -61,10 +65,14 @@ function extractInternalComponents(json: Record<string, unknown>): InternalCompo
       return {
         id,
         typeId: typeof value.typeId === "string" ? value.typeId : "",
+        label: typeof value.label === "string" ? value.label : id,
         properties: typeof value.properties === "object" && value.properties !== null ? (value.properties as Record<string, unknown>) : {},
         boardVisual: boardVisualFromExposedEntry(exposedEntry),
         exposed: exposedEntry !== undefined,
         exported: exportedIds.has(id),
+        showId: typeof value.showId === "boolean" ? value.showId : undefined,
+        showValue: typeof value.showValue === "boolean" ? value.showValue : undefined,
+        valueLabelPropertyKey: typeof value.valueLabelPropertyKey === "string" ? value.valueLabelPropertyKey : undefined,
       };
     })
     .filter((component) => component.id && component.typeId);
@@ -100,10 +108,13 @@ export function gatherInternalComponentSnapshots(sourceId: string): InternalComp
       return {
         id: component.id,
         typeId: component.typeId,
-        label: component.id,
+        label: component.label,
         graphical: catalogEntry?.graphical === true,
         exposed: component.exposed === true,
         exported: component.exported === true,
+        showId: component.showId,
+        showValue: component.showValue,
+        valueLabelPropertyKey: component.valueLabelPropertyKey,
         boardVisual: component.boardVisual
           ? {
               x: component.boardVisual.x,

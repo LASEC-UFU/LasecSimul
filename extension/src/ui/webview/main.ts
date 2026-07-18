@@ -1,6 +1,7 @@
 import { WEBVIEW_MESSAGE_VERSION, AnalyzerVectorHistory, ComponentReadoutValue, HostToWebviewMessage, InternalComponentSnapshot, SimulationStatus, WebviewToHostMessage } from "./messages.js";
 import { CanonicalEndpoint, CanonicalTopologyDocument, InteractionKindEntry, McuSerialPortEntry, PackagePin, PropertySchemaEntry, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, ViewSpecInteraction, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, endpointId, endpointPinId, nodeEndpoint, portEndpoint, remapEndpoint } from "./model.js";
 import { ComponentBox, PIN_RADIUS, componentBox, componentLocalOrigin, componentSymbolSvg, dialKnobSvg, hasRealPinPosition, livePackagePreviewSymbolSvg, missingSubcircuitPlaceholderSvg, packageLayoutTransform, packageSymbolSvg, pinLocalPosition, registerPackage } from "./componentSymbols.js";
+import { ExternalLabelKind, SYMBOL_PIN_LABEL_ALIGN_KEY, formatProbeVoltage, genericExternalLabelFontSize, isExternalProbeReadout, labelPropertyKey, nextLabelRotation, resolveDefaultExternalLabelOffset, resolveExternalLabelColor, symbolPinLabelPackageFields } from "./componentLabels.js";
 import { svgLocalTransform, transformLocalPoint, transformedLocalBounds } from "./componentGeometry.js";
 import { detectChannelTrigger, digitalStepPath, findTriggerAnchorIndex, triggerAlignedWindowEndNs, visibleSampleWindowByTime } from "./instrumentTrigger.js";
 import { analogSampleHoldPath, clampInstrumentWindow, decodeInstrumentState, encodeInstrumentState, panInstrumentTime, zoomInstrumentTimeAt } from "./instrumentViewport.js";
@@ -27,6 +28,9 @@ import { isJunctionVisible, movableTopologyNodeIds, endpointScenePosition as res
 import { WireSpatialIndex } from "./wireSpatialIndex.js";
 import { BatchPropertyPatch, PropertyField, PropertyFieldKind, SharedFieldValue, SharedPropertyField, computeGenericInstanceFields, computeSharedPropertyFields, planBatchPropertyChange } from "./batchProperties.js";
 import { parseSerialInput, serialFormatBytes, SerialFormat } from "./serialFormat.js";
+import { shouldRenderSimulationSnapshot, simulationControlModel } from "./simulationControls.js";
+import { isHighWireVoltage, reconcileWireVoltages } from "./wirePresentation.js";
+import { continuousDialValueFromPointer } from "./dialInteraction.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const FINE_WIRE_STEP = WIRE_GRID_SIZE / 10;
@@ -133,6 +137,21 @@ resetUndoHistory(mainUndoHistory);
  * é mantido vivo entre renders; as camadas internas são atualizadas sem `app.innerHTML = ""`.
  * Componentes também são cacheados por id para preservar listeners e estado de interação. */
 const componentElementsById = new Map<string, HTMLElement>();
+/** `${outerComponentId}:${innerComponentId}` -> `<svg>` do item exposto no overlay de Modo Placa
+ * (`renderBoardOverlaysFor`) -- permite `patchBoardOverlayLedFills` atualizar SÓ o preenchimento do
+ * LED a cada tick de telemetria (~300ms) sem chamar `render()` (que reconstrói o esquemático
+ * INTEIRO). Diferente de `componentElementsById`, os `<div>` do overlay são recriados a CADA
+ * `render()` (não reaproveitados entre chamadas) -- por isso este Map é limpo e repovoado no início
+ * de cada `render()`, só serve pra achar o elemento vivo ENTRE duas chamadas de `render()`. */
+const boardOverlaySvgByKey = new Map<string, SVGSVGElement>();
+/** `outerComponentId` -> todo `<div>` do overlay de Modo Placa que pertence a essa instância (o
+ * corpo/símbolo de cada item exposto E o rótulo id/value de cada um, ver `renderBoardOverlaysFor`)
+ * -- populado/limpo junto de `boardOverlaySvgByKey`. Fix real 2026-07-18 ("os elementos expostos não
+ * movimentam junto, só quando solta o mouse, dá uma impressão muito ruim"): o `onMove` de arrastar
+ * um componente (`createComponentElement`) só atualizava a posição do PRÓPRIO componente -- o
+ * overlay (desenhado por FORA, como elementos irmãos) ficava parado até o próximo `render()`
+ * completo (no `pointerup`). Usado pra mover estes elementos JUNTO, em tempo real, pelo MESMO delta. */
+const boardOverlayElementsByOuterId = new Map<string, HTMLElement[]>();
 /** Mesmo princípio de `componentElementsById` (UI-4) -- o `<polyline>` de cada fio é 100% não-
  * interativo (`pointer-events:none`, ver `render()`), sem listener nenhum pra se preocupar em
  * recriar com closure obsoleta; reaproveitar via Map em vez de recriar do zero a cada `render()`
@@ -156,6 +175,7 @@ const UI_TEXT = {
     saveProject: "Salvar projeto",
     runSimulation: "Iniciar simulação",
     pauseSimulation: "Pausar simulação",
+    continueSimulation: "Continuar simulação",
     stopSimulation: "Parar simulação",
     componentProperties: "Propriedades do componente",
     deleteSelectedWire: "Apagar fio selecionado",
@@ -179,6 +199,10 @@ const UI_TEXT = {
     rotate180: "Girar 180°",
     labelColor: "Cor",
     labelFontSize: "Tamanho da fonte",
+    labelAlignment: "Alinhamento",
+    labelAlignStart: "Esquerda",
+    labelAlignCenter: "Centro",
+    labelAlignEnd: "Direita",
     flipHorizontal: "Inverter horizontalmente",
     flipVertical: "Inverter verticalmente",
     alignHorizontal: "Alinhar horizontalmente pelo primeiro item",
@@ -267,6 +291,7 @@ const UI_TEXT = {
     saveProject: "Save project",
     runSimulation: "Run simulation",
     pauseSimulation: "Pause simulation",
+    continueSimulation: "Continue simulation",
     stopSimulation: "Stop simulation",
     componentProperties: "Component properties",
     deleteSelectedWire: "Delete selected wire",
@@ -290,6 +315,10 @@ const UI_TEXT = {
     rotate180: "Rotate 180°",
     labelColor: "Color",
     labelFontSize: "Font size",
+    labelAlignment: "Alignment",
+    labelAlignStart: "Left",
+    labelAlignCenter: "Center",
+    labelAlignEnd: "Right",
     flipHorizontal: "Flip horizontally",
     flipVertical: "Flip vertically",
     alignHorizontal: "Align horizontally to first item",
@@ -401,6 +430,10 @@ const INSTRUMENT_HISTORY_DEPTH = 600;
 const realScopeHistoryByComponentId = new Map<string, Array<{ timestampsNs: number[]; values: number[] }>>();
 const realLogicHistoryByComponentId = new Map<string, AnalyzerVectorHistory>();
 let voltagesByWireId: Record<string, number> = {};
+/** Leitura ao vivo (corrente/etc) de componentes internos expostos no overlay de Modo Placa --
+ * chave `${outerComponentId}:${innerComponentId}`, ver `coreLifecycle.ts::pollBoardOverlayReadouts`.
+ * Fix "LED onboard não acende quando exposto no símbolo" (2026-07-18). */
+let boardOverlayReadoutsByKey: Record<string, ComponentReadoutValue> = {};
 let pendingWirePreviewTarget: Point | undefined;
 let pendingWireRoute: Point[] = [];
 let pendingWireBendLengths: number[] = [];
@@ -450,6 +483,7 @@ let activePropertyTarget:
   | { kind: "exposed-internal"; outerComponentId: string; sourceId: string; snapshot: InternalComponentSnapshot; model: WebviewComponentModel }
   | { kind: "text-label"; componentId: string; labelKind: ExternalLabelKind }
   | { kind: "text-label-batch"; labels: { componentId: string; labelKind: ExternalLabelKind }[] }
+  | { kind: "exposed-label"; outerComponentId: string; sourceId: string; innerComponentId: string; labelKind: ExternalLabelKind }
   | undefined;
 /** Mensagem de rejeição (rule 10/11) da ÚLTIMA tentativa de aplicar um campo em lote -- exibida
  * dentro do próprio diálogo (sem mecanismo de toast/notificação genérico na Webview hoje, ver
@@ -555,7 +589,6 @@ function renderSerialTerminalWindows(): void {
     output.scrollTop = output.scrollHeight;
   }
 }
-type ExternalLabelKind = "id" | "value";
 /** Seleção múltipla de rótulos externos (id/value) -- pedido real: "preciso selecionar vários textos
  * independentemente dos pinos". Array (não `Set`) pra preservar ORDEM de seleção real, mesmo
  * contrato de `state.selectedComponentIds` (ver `selectedComponentsInSelectionOrder`) -- alinhar/
@@ -998,6 +1031,15 @@ function renderBoardOverlaysFor(component: WebviewComponentModel): HTMLElement[]
   const boardOffsetX = deviceTransform ? deviceTransform.offsetX * deviceTransform.scaleX : 0;
   const boardOffsetY = deviceTransform ? deviceTransform.offsetY * deviceTransform.scaleY : 0;
   const elements: HTMLElement[] = [];
+  // Registra QUALQUER `<div>` deste overlay (corpo do item + rótulos) pra mover junto em tempo real
+  // durante o arrasto do componente OUTER (ver `createComponentElement`'s `onMove`) -- sem isto, o
+  // overlay inteiro ficava parado até o `pointerup` soltar e `render()` completo recalcular tudo,
+  // dando a impressão de que o bloco e o overlay eram 2 coisas separadas (fix real 2026-07-18).
+  const registerBoardOverlayChild = (child: HTMLElement): void => {
+    const list = boardOverlayElementsByOuterId.get(component.id) ?? [];
+    list.push(child);
+    boardOverlayElementsByOuterId.set(component.id, list);
+  };
   let fallbackIndex = 0;
   for (const item of items) {
     if (!item.exposed || !item.graphical) continue;
@@ -1011,7 +1053,18 @@ function renderBoardOverlaysFor(component: WebviewComponentModel): HTMLElement[]
     // real não tem nenhum `paint()` alternativo pro Board, ver `packageSymbolSvg`) -- só esconde
     // leads/rótulos de pino, nunca troca a aparência do corpo.
     const boardVariant = "board" as const;
-    const properties: Record<string, string | number | boolean> = { closed: false, ...item.properties };
+    let properties: Record<string, string | number | boolean> = { closed: false, ...item.properties };
+    // Fix "LED onboard não acende quando exposto no símbolo" (2026-07-18) -- `item.properties`
+    // acima é só o ÚLTIMO valor SALVO no arquivo, nunca a corrente ao vivo; `boardOverlayReadoutsByKey`
+    // vem de `pollBoardOverlayReadouts` (host) só pra itens com `readoutFormat` (`outputs.led`/
+    // `outputs.led_bar` com `size:1`, ver `DiodeLegArray.hpp`). Mesmo `__led_fill` que
+    // `runtimeSymbolProperties` calcula pro componente "de verdade" dentro do modo de edição do
+    // subcircuito -- aqui é o MESMO valor, só que injetado no overlay do circuito principal.
+    if (item.typeId === "outputs.led" || item.typeId === "outputs.led_bar") {
+      const readout = boardOverlayReadoutsByKey[`${component.id}:${item.id}`];
+      const colorName = typeof properties.color === "string" ? properties.color : "Yellow";
+      properties = { ...properties, __led_fill: ledFillForReadout(colorName, typeof readout === "number" ? readout : undefined) };
+    }
     const box = componentBox(item.typeId, properties, boardVariant);
     const el = document.createElement("div");
     el.className = "component component--board-overlay";
@@ -1021,12 +1074,16 @@ function renderBoardOverlaysFor(component: WebviewComponentModel): HTMLElement[]
     el.style.height = `${box.height}px`;
     el.style.transform = `rotate(${boardVisual.rotation}deg)`;
     el.title = item.label;
+    registerBoardOverlayChild(el);
 
     const svg = document.createElementNS(SVG_NS, "svg");
     svg.setAttribute("viewBox", `0 0 ${box.width} ${box.height}`);
     svg.classList.add("component__symbol");
     svg.innerHTML = packageSymbolSvg(item.typeId, properties, item.id, boardVariant) ?? componentSymbolSvg(item.typeId, properties);
     el.appendChild(svg);
+    if (item.typeId === "outputs.led" || item.typeId === "outputs.led_bar") {
+      boardOverlaySvgByKey.set(`${component.id}:${item.id}`, svg);
+    }
 
     const isPushButton = interactionKindFor(item.typeId) === "momentary";
 
@@ -1103,8 +1160,133 @@ function renderBoardOverlaysFor(component: WebviewComponentModel): HTMLElement[]
     });
 
     elements.push(el);
+
+    // Fix "labels expostos não apareciam, não podiam ser movidos" (2026-07-18) -- este overlay antes
+    // só desenhava o corpo/símbolo do item exposto, nunca seu rótulo id/value (Tier 1); o pedido
+    // evoluiu pra também poder arrastar/editar cor+tamanho igual a um rótulo comum, sem precisar
+    // abrir o subcircuito pra cada ajuste -- mesma sensação de "uma coisa só" (bloco+rótulo) do
+    // SimulIDE real. Reaproveita os MESMOS resolvers do rótulo externo "de verdade"
+    // (`externalLabelText`/`externalLabelOffset`/`externalLabelRotation`/`resolveExternalLabelColor`/
+    // `genericExternalLabelFontSize`) contra um modelo sintético -- nenhum deles precisa de mudança,
+    // já são dirigidos só por typeId/properties/label/showId/showValue, nunca por `state`/DOM. A
+    // ÚNICA parte que difere de um rótulo comum é a PERSISTÊNCIA: grava em `item.properties` (cache
+    // local, refletido no próximo render) + `requestUpdateExposedComponentProperty` (escreve no
+    // `.lssubcircuit`, nunca `requestUpdateProperty`/Core -- ver
+    // `mcuCommands.ts::updateExposedComponentPropertyCommand`).
+    const anchor = { x: component.x + boardOffsetX + boardVisual.x, y: component.y + boardOffsetY + boardVisual.y };
+    const syntheticModel: WebviewComponentModel = {
+      id: `${component.id}:${item.id}`,
+      typeId: item.typeId,
+      label: item.label,
+      showId: item.showId,
+      showValue: item.showValue,
+      valueLabelPropertyKey: item.valueLabelPropertyKey,
+      x: anchor.x,
+      y: anchor.y,
+      rotation: 0,
+      pins: [],
+      properties,
+    };
+    for (const kind of ["id", "value"] as const) {
+      const text = externalLabelText(syntheticModel, kind);
+      if (!text) continue;
+      const offset = externalLabelOffset(syntheticModel, kind);
+      const rotation = externalLabelRotation(syntheticModel, kind);
+      const labelEl = document.createElement("div");
+      labelEl.className = `component-floating-label component-floating-label--${kind} component-floating-label--board-overlay`;
+      labelEl.textContent = text;
+      labelEl.style.left = `${syntheticModel.x + offset.x}px`;
+      labelEl.style.top = `${syntheticModel.y + offset.y}px`;
+      labelEl.style.transform = rotation === 0 ? "" : `rotate(${rotation}deg)`;
+      labelEl.style.fontSize = `${genericExternalLabelFontSize(kind, properties)}px`;
+      labelEl.style.color = resolveExternalLabelColor(kind, properties);
+      registerBoardOverlayChild(labelEl);
+
+      if (sourceId) {
+        let labelDragStartX = 0;
+        let labelDragStartY = 0;
+        let labelDragStartLeft = 0;
+        let labelDragStartTop = 0;
+        labelEl.addEventListener("pointerdown", (event) => {
+          if (event.button !== 0) return;
+          event.preventDefault();
+          event.stopPropagation();
+          labelDragStartX = event.clientX;
+          labelDragStartY = event.clientY;
+          labelDragStartLeft = parseFloat(labelEl.style.left) || 0;
+          labelDragStartTop = parseFloat(labelEl.style.top) || 0;
+          labelEl.setPointerCapture(event.pointerId);
+          isDraggingComponent = true;
+          const onLabelMove = (moveEvent: PointerEvent): void => {
+            const zoom = state.viewport.zoom || 1;
+            const dx = (moveEvent.clientX - labelDragStartX) / zoom;
+            const dy = (moveEvent.clientY - labelDragStartY) / zoom;
+            labelEl.style.left = `${labelDragStartLeft + dx}px`;
+            labelEl.style.top = `${labelDragStartTop + dy}px`;
+          };
+          const onLabelUp = (upEvent: PointerEvent): void => {
+            labelEl.removeEventListener("pointermove", onLabelMove);
+            labelEl.removeEventListener("pointerup", onLabelUp);
+            labelEl.removeEventListener("pointercancel", onLabelUp);
+            isDraggingComponent = false;
+            const moved = Math.hypot(upEvent.clientX - labelDragStartX, upEvent.clientY - labelDragStartY) >= 1;
+            if (!moved) return;
+            const zoom = state.viewport.zoom || 1;
+            const dx = (upEvent.clientX - labelDragStartX) / zoom;
+            const dy = (upEvent.clientY - labelDragStartY) / zoom;
+            const newOffsetX = Math.round(offset.x + dx);
+            const newOffsetY = Math.round(offset.y + dy);
+            item.properties[labelPropertyKey(kind, "x")] = newOffsetX;
+            item.properties[labelPropertyKey(kind, "y")] = newOffsetY;
+            send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateExposedComponentProperty", outerComponentId: component.id, sourceId, innerComponentId: item.id, name: labelPropertyKey(kind, "x"), value: newOffsetX });
+            send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateExposedComponentProperty", outerComponentId: component.id, sourceId, innerComponentId: item.id, name: labelPropertyKey(kind, "y"), value: newOffsetY });
+            render();
+          };
+          labelEl.addEventListener("pointermove", onLabelMove);
+          labelEl.addEventListener("pointerup", onLabelUp);
+          labelEl.addEventListener("pointercancel", onLabelUp);
+        });
+        labelEl.addEventListener("contextmenu", (event) => {
+          // NUNCA stopPropagation() -- ver comentário equivalente no handler de componente (esconde
+          // `defaultPrevented` do host da Webview, troca o menu customizado pelo nativo do VSCode).
+          event.preventDefault();
+          showContextMenu(event, [
+            { label: t("properties"), icon: "properties", onClick: () => openExposedLabelPropertyDialog(component.id, sourceId, item, kind) },
+          ]);
+        });
+      }
+      elements.push(labelEl);
+    }
   }
   return elements;
+}
+
+/** Atualiza SÓ o preenchimento do LED de cada item exposto no overlay de Modo Placa -- NUNCA chama
+ * `render()` (fix real 2026-07-18: chamar `render()`, que reconstrói o esquemático INTEIRO, a cada
+ * tick de telemetria (~300ms) enquanto a simulação roda deixava a Webview tão ocupada reconstruindo
+ * DOM que o clique em "Parar" demorava a ser processado -- o mesmo motivo pelo qual
+ * `componentReadout`/`wireVoltages` já faziam patch pontual em vez de `render()` incondicional, ver
+ * os comentários deles; este handler violava esse princípio já estabelecido). Encontra o `<svg>` já
+ * existente (`boardOverlaySvgByKey`, populado em `renderBoardOverlaysFor`) e regenera só o
+ * innerHTML dele -- mesma técnica que `setPressed` já usa pro clique de um push button no overlay,
+ * só disparada por telemetria em vez de clique. */
+function patchBoardOverlayLedFills(): void {
+  for (const [outerComponentId, items] of boardOverlayDataByComponentId) {
+    for (const item of items) {
+      if (item.typeId !== "outputs.led" && item.typeId !== "outputs.led_bar") continue;
+      const key = `${outerComponentId}:${item.id}`;
+      const svg = boardOverlaySvgByKey.get(key);
+      if (!svg) continue;
+      const readout = boardOverlayReadoutsByKey[key];
+      const colorName = typeof item.properties.color === "string" ? item.properties.color : "Yellow";
+      const properties: Record<string, string | number | boolean> = {
+        closed: false,
+        ...item.properties,
+        __led_fill: ledFillForReadout(colorName, typeof readout === "number" ? readout : undefined),
+      };
+      svg.innerHTML = packageSymbolSvg(item.typeId, properties, item.id, "board") ?? componentSymbolSvg(item.typeId, properties);
+    }
+  }
 }
 
 /** Gira UMA exposição (Modo Símbolo) em passos de 90° -- mesmo espírito de `rotateSelectedComponents`,
@@ -1684,6 +1866,36 @@ function openExposedInternalPropertyDialog(outerComponentId: string, sourceId: s
   if (!propertyDialog.open) propertyDialog.showModal();
 }
 
+/** Diálogo de propriedades (cor/tamanho) do rótulo id/value de um componente EXPOSTO (Modo Placa) --
+ * MESMO princípio de `openExposedInternalPropertyDialog` (persiste no `.lssubcircuit` via
+ * `requestUpdateExposedComponentProperty`, nunca `requestUpdateProperty`/Core), só que pro RÓTULO em
+ * vez das propriedades do componente inteiro. Aberto pelo menu de contexto do rótulo desenhado em
+ * `renderBoardOverlaysFor` (fix "não consigo mover os labels expostos", 2026-07-18). */
+function openExposedLabelPropertyDialog(outerComponentId: string, sourceId: string, snapshot: InternalComponentSnapshot, labelKind: ExternalLabelKind): void {
+  const model = snapshotToDialogComponent(snapshot);
+  activePropertyTarget = { kind: "exposed-label", outerComponentId, sourceId, innerComponentId: snapshot.id, labelKind };
+  propertyDialog.innerHTML = "";
+  propertyDialog.append(
+    renderExternalLabelPropertySheet(model, labelKind, {
+      titleText: `${t("properties")}: ${snapshot.label}`,
+      onPropertyChange: (key, value) => {
+        snapshot.properties[key] = value;
+        model.properties[key] = value;
+        send({
+          version: WEBVIEW_MESSAGE_VERSION,
+          type: "requestUpdateExposedComponentProperty",
+          outerComponentId,
+          sourceId,
+          innerComponentId: snapshot.id,
+          name: key,
+          value,
+        });
+      },
+    }),
+  );
+  if (!propertyDialog.open) propertyDialog.showModal();
+}
+
 function refreshOpenPropertyDialog(): void {
   if (!propertyDialog.open || !activePropertyTarget) return;
   const target = activePropertyTarget;
@@ -1731,6 +1943,16 @@ function refreshOpenPropertyDialog(): void {
       return;
     }
     openTextLabelBatchPropertyDialog(labels);
+    return;
+  }
+  if (target.kind === "exposed-label") {
+    const items = boardOverlayDataByComponentId.get(target.outerComponentId);
+    const snapshot = items?.find((entry) => entry.id === target.innerComponentId);
+    if (!snapshot) {
+      propertyDialog.close();
+      return;
+    }
+    openExposedLabelPropertyDialog(target.outerComponentId, target.sourceId, snapshot, target.labelKind);
     return;
   }
   openExposedInternalPropertyDialog(
@@ -1989,10 +2211,22 @@ function renderAppBar(): HTMLElement {
 
   const simGroup = document.createElement("div");
   simGroup.className = "appbar__group";
+  const simulationControls = simulationControlModel(simulationStatus);
   simGroup.append(
-    renderToolbarButton("start", t("runSimulation"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestRunSimulation" }), simulationStatus === "running"),
-    renderToolbarButton("pause", t("pauseSimulation"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestPauseSimulation" }), simulationStatus !== "running"),
-    renderToolbarButton("stop", t("stopSimulation"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestStopSimulation" }), simulationStatus === "stopped"),
+    renderToolbarButton(
+      simulationControls.primaryIcon,
+      t(simulationControls.primaryLabelKey),
+      () => send({
+        version: WEBVIEW_MESSAGE_VERSION,
+        type: simulationControls.primaryAction === "run" ? "requestRunSimulation" : "requestPauseSimulation",
+      }),
+    ),
+    renderToolbarButton(
+      "stop",
+      t("stopSimulation"),
+      () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestStopSimulation" }),
+      simulationControls.stopDisabled,
+    ),
   );
 
   const editGroup = document.createElement("div");
@@ -2056,13 +2290,13 @@ function renderIcon(kind: ToolbarIconKind): SVGSVGElement {
       svg.innerHTML = '<path d="M5 4h9l3 3v13H5z"></path><path d="M8 4v5h6V4"></path><path d="M9 18h4"></path><path d="M18.5 8.5v4"></path><path d="M16.7 9.5l3.6 2"></path><path d="M20.3 9.5l-3.6 2"></path>';
       break;
     case "start":
-      svg.innerHTML = '<circle cx="12" cy="12" r="8.25"></circle><line x1="12" y1="4" x2="12" y2="12"></line>';
+      svg.innerHTML = '<path d="M8 5.5 18 12 8 18.5z"></path>';
       break;
     case "pause":
       svg.innerHTML = '<rect x="7" y="6" width="3.5" height="12" rx="1"></rect><rect x="13.5" y="6" width="3.5" height="12" rx="1"></rect>';
       break;
     case "stop":
-      svg.innerHTML = '<rect x="7" y="7" width="10" height="10" rx="1.5"></rect>';
+      svg.innerHTML = '<rect x="7" y="7" width="10" height="10"></rect>';
       break;
     case "properties":
       svg.innerHTML = '<path d="M6 7h12"></path><path d="M6 12h12"></path><path d="M6 17h8"></path><circle cx="16.5" cy="17" r="1.75"></circle>';
@@ -2442,7 +2676,11 @@ function clearEphemeralCanvasChildren(canvasContent: HTMLDivElement): void {
  * Símbolo/Ícone -- desenhar lead+rótulo pelo MESMO `packagePinLeadSvg` que um dispositivo colocado
  * usa, em vez de tentar aproximar visualmente com CSS (3 divergências reais encontradas nessa
  * tentativa: placeholder de erro, tamanho/posição de fonte, espessura/cor do lead -- decidido migrar
- * pro pipeline real de vez em vez de perseguir cada detalhe via CSS). */
+ * pro pipeline real de vez em vez de perseguir cada detalhe via CSS). Alinhamento/visibilidade do
+ * rótulo usam `symbolPinLabelPackageFields` (`componentLabels.ts`, importável dos dois lados) em vez
+ * de repetir a lógica à mão -- bug real corrigido aqui: antes este preview E `compileSymbolScene`
+ * tinham o MESMO hardcode `labelTextAnchor:"middle"` incondicional cada um por conta própria, então
+ * corrigir só o lado do arquivo salvo deixaria o preview ao vivo divergente dele. */
 function compileLiveSymbolPins(elements: readonly WebviewComponentModel[]): PackagePin[] {
   const pins: PackagePin[] = [];
   const seenPinIds = new Set<string>();
@@ -2460,7 +2698,8 @@ function compileLiveSymbolPins(elements: readonly WebviewComponentModel[]): Pack
     const pin: PackagePin = {
       id: pinId, x: anchorX, y: anchorY,
       angle: (180 - component.rotation + 360) % 360,
-      length, label, labelFontSize, labelTextAnchor: "middle", labelDominantBaseline: "middle",
+      length, label, labelFontSize,
+      ...symbolPinLabelPackageFields(component.properties, component.showId),
     };
     if (typeof component.properties["__ui_idLabelX"] === "number" && typeof component.properties["__ui_idLabelY"] === "number") {
       pin.labelX = component.x + (component.properties["__ui_idLabelX"] as number);
@@ -2601,6 +2840,8 @@ function render(): void {
     componentElementsById.delete(id);
   }
 
+  boardOverlaySvgByKey.clear();
+  boardOverlayElementsByOuterId.clear();
   for (const component of subcircuitFileComponents) {
     ensureBoardOverlayData(component);
     for (const overlayEl of renderBoardOverlaysFor(component)) canvasContent.appendChild(overlayEl);
@@ -2884,7 +3125,7 @@ function wireClass(wireId: string): string {
   const classNames = ["wire-layer__wire"];
   const voltage = voltagesByWireId[wireId];
   if (voltage !== undefined) {
-    classNames.push(voltage > 2.5 ? "wire-layer__wire--high" : "wire-layer__wire--low");
+    classNames.push(isHighWireVoltage(voltage) ? "wire-layer__wire--high" : "wire-layer__wire--low");
   }
   if (isWireSelected(wireId) && selectedWireSegment?.wireId !== wireId) {
     classNames.push("wire-layer__wire--selected");
@@ -3853,17 +4094,23 @@ function ledColorHex(colorName: string, brightRatio: number): string {
   return `#${hex(mix(kLedOffGray.r, lit.r))}${hex(mix(kLedOffGray.g, lit.g))}${hex(mix(kLedOffGray.b, lit.b))}`;
 }
 
-/** `eLed::updateBright()` real (`e-led.cpp:94-119`): brilho = sqrt(corrente/maxCurrent), 0 quando a
- * simulação não está rodando. `DiodeLegArray` (Core) ainda não modela `MaxCurrent` como propriedade
+/** `eLed::updateBright()` real (`e-led.cpp:94-119`): brilho = sqrt(corrente/maxCurrent). Em Pause,
+ * preserva a última corrente recebida como um snapshot; somente Stop força brilho zero.
+ * `DiodeLegArray` (Core) ainda não modela `MaxCurrent` como propriedade
  * editável -- usa o mesmo default 30mA de `eLed::eLed()` (`e-led.cpp:16`), documentado aqui em vez de
- * escondido. Só `outputs.led` (1 perna) tem `readoutFormat`/telemetria (ver `DiodeLegArray.hpp`), daí
- * o typeId fixo. */
-function ledFillFor(component: WebviewComponentModel): string {
-  const colorName = typeof component.properties.color === "string" ? component.properties.color : "Yellow";
-  const current = simulationStatus === "running" ? Math.abs(numericReadout(component) ?? 0) : 0;
+ * escondido. `outputs.led` (1 perna) e `outputs.led_bar` com `size:1` (2026-07-18) têm
+ * `readoutFormat`/telemetria (ver `DiodeLegArray.hpp`) -- `led_bar` com `size>1` cai em `readout`
+ * `undefined`, tratado abaixo como corrente 0 (apagado), sem regressão. */
+function ledFillForReadout(colorName: string, readout: number | undefined): string {
+  const current = shouldRenderSimulationSnapshot(simulationStatus) ? Math.abs(readout ?? 0) : 0;
   const kMaxCurrent = 0.03;
   const brightRatio = current > 0 ? Math.sqrt(current / kMaxCurrent) : 0;
   return ledColorHex(colorName, brightRatio);
+}
+
+function ledFillFor(component: WebviewComponentModel): string {
+  const colorName = typeof component.properties.color === "string" ? component.properties.color : "Yellow";
+  return ledFillForReadout(colorName, numericReadout(component));
 }
 
 /** ABI v2 (.spec/lasecsimul-native-devices.spec): consulta `interactionKind` do catálogo (vindo do
@@ -3910,8 +4157,15 @@ function usesEmbeddedValueLabel(typeId: string): boolean {
   // leitura simulada (ver findCatalogEntry abaixo). Os dois continuam embutindo valor no símbolo,
   // por isso ficam juntos nesta função, mas a ORIGEM do "embute valor" é diferente pra cada um.
   if (typeId === "sources.fixed_volt" || typeId === "sources.rail") return true;
+  if (isExternalProbeReadout(typeId)) return false;
   if (catalogEntryFor(typeId)?.readoutFormat) return true;
   // Fallback legado -- typeId sem readoutFormat no catálogo ainda.
+  return typeId === "instruments.voltmeter" || typeId.startsWith("meters.");
+}
+
+/** Componentes cujo SVG muda com `__readout`, mesmo quando o valor textual fica fora do símbolo. */
+function usesRuntimeSymbolReadout(typeId: string): boolean {
+  if (catalogEntryFor(typeId)?.readoutFormat) return true;
   return typeId === "instruments.voltmeter" || typeId.startsWith("meters.");
 }
 
@@ -3964,7 +4218,14 @@ function runtimeSymbolProperties(component: WebviewComponentModel): Record<strin
   } : component.typeId === "peripherals.lasecplot" || component.typeId === "peripherals.serialterm" || component.typeId === "peripherals.serialport"
     ? { __serial_button_label: "Abrir", __serial_tx_state: "off", __serial_rx_state: "off" }
     : {};
-  const ledState = component.typeId === "outputs.led" ? { __led_fill: ledFillFor(component) } : {};
+  // `outputs.led_bar` entra aqui também (fix "LED onboard não acende", 2026-07-18) -- `Led Bar`
+  // com `size:1` (indicador de placa comum, ex: ESP32 DevKitC) tem `legs.size()==1` no Core, que
+  // agora declara `readoutFormat` pra ele (`DiodeLegArray::readoutFormat()`, CoreApplication.cpp);
+  // `size>1` só nunca recebe `__readout` (Core devolve `getState()` vazio), então `ledFillFor` cai
+  // no `numericReadout` undefined -> corrente 0 -> cor de fallback, sem regressão visual.
+  const ledState = component.typeId === "outputs.led" || component.typeId === "outputs.led_bar"
+    ? { __led_fill: ledFillFor(component) }
+    : {};
   if (readout === undefined && !scopeHistory && !logicHistory && Object.keys(serialState).length === 0 && Object.keys(ledState).length === 0) {
     return component.properties;
   }
@@ -5162,9 +5423,7 @@ function rotateSelectedComponents(steps: 1 | -1 | 2): void {
   if (components.length === 0 && labels.length === 0) return;
   for (const component of components) applyRotation(component, steps);
   for (const { component, kind } of labels) {
-    const current = externalLabelRotation(component, kind);
-    const delta = steps === 2 ? 180 : steps * 90;
-    const next = ((((current + delta) % 360) + 360) % 360) as 0 | 90 | 180 | 270;
+    const next = nextLabelRotation(externalLabelRotation(component, kind), steps);
     setExternalLabelLayout(component, kind, { rotation: next });
   }
   persistState();
@@ -5627,7 +5886,19 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
 
   let dragStartX = 0;
   let dragStartY = 0;
-  let dragTargets: Array<{ component: WebviewComponentModel; startX: number; startY: number; offsetX: number; offsetY: number }> = [];
+  let dragTargets: Array<{
+    component: WebviewComponentModel;
+    startX: number;
+    startY: number;
+    offsetX: number;
+    offsetY: number;
+    /** Overlay de Modo Placa (corpo + rótulos dos itens expostos, ver `renderBoardOverlaysFor`) desta
+     * instância, capturado na posição de TELA no início do arrasto -- fix real 2026-07-18 ("os
+     * elementos expostos não movimentam junto, só quando solta o mouse"): sem isto, o `onMove` só
+     * movia o `<div>` do PRÓPRIO componente; o overlay (elementos irmãos, fora dele no DOM) ficava
+     * parado até o `pointerup` disparar `render()` completo. */
+    boardOverlayChildren: Array<{ el: HTMLElement; startLeft: number; startTop: number }>;
+  }> = [];
   let groupWireDragTarget: GroupWireDragTarget | undefined;
   let groupWireMoveTargets: GroupMoveWireTargets | undefined;
 
@@ -5656,7 +5927,12 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
     dragStartY = event.clientY;
     dragTargets = getSelectedComponents().map((selected) => {
       const offset = componentDivOffset(selected);
-      return { component: selected, startX: selected.x, startY: selected.y, offsetX: offset.x, offsetY: offset.y };
+      const boardOverlayChildren = (boardOverlayElementsByOuterId.get(selected.id) ?? []).map((child) => ({
+        el: child,
+        startLeft: parseFloat(child.style.left) || 0,
+        startTop: parseFloat(child.style.top) || 0,
+      }));
+      return { component: selected, startX: selected.x, startY: selected.y, offsetX: offset.x, offsetY: offset.y, boardOverlayChildren };
     });
     // "Selecionar um ramo de fio + um dispositivo e mover juntos": se um canto/segmento de fio
     // também estava selecionado (marquee, ou clique anterior no ramo), ele acompanha o(s)
@@ -5811,38 +6087,55 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
           const propMax = comp0 && angularLimit?.maxProp ? numericComponentProperty(comp0, angularLimit.maxProp, angularLimit?.max ?? 1000) : (angularLimit?.max ?? 1000);
           const propStep = angularLimit?.step ?? 0;
           const clamp = angularLimit?.clamp !== false;
-          const angleSpanDeg = Math.max(1, Math.abs((angularLimit?.maxAngleDeg ?? 150) - (angularLimit?.minAngleDeg ?? -150)));
-          const angleSpanRad = (angleSpanDeg * Math.PI) / 180;
-          let prevAngle = Math.atan2(dy0, dx0);
+          const minAngleDeg = angularLimit?.minAngleDeg ?? -150;
+          const maxAngleDeg = angularLimit?.maxAngleDeg ?? 150;
+          // Mapeamento ABSOLUTO ângulo-do-mouse -> valor (igual ao QDial nativo real -- ver
+          // `CustomDial`/`Dialed` no SimulIDE -- e à MESMA fórmula usada pro render em `dialKnobSvg`:
+          // a posição do nub É o valor, nunca um delta acumulado). Bug relatado 2026-07-18 ("vai e
+          // volta", não travava num valor): o modelo antigo somava `dAngle` (ângulo atual menos o do
+          // frame anterior) a cada `pointermove`, e cada frame partia de `currentValue` relido de
+          // `liveComponent()` -- se esse valor fosse resetado por um sync vindo do host no meio do
+          // arrasto (`syncStatePatch`, ver guard novo em `isInteractiveGestureInProgress` acima), o
+          // próximo delta somava em cima da base errada e o valor visivelmente recuava antes de
+          // seguir em frente. Mapeamento absoluto não acumula nada -- cada frame recalcula o valor do
+          // zero a partir de onde o mouse está AGORA, então um frame perdido ou um reset só faz o
+          // valor "pular" pro lugar certo, nunca desalinha os frames seguintes.
+          let dialValue = comp0 ? numericComponentProperty(comp0, positionProp, propMin) : propMin;
+          let dialChanged = false;
           const onDialMove = (moveEvent: PointerEvent) => {
-            const dx = moveEvent.clientX - kx;
-            const dy = moveEvent.clientY - ky;
-            if (Math.hypot(dx, dy) < 3) return;
-            let dAngle = Math.atan2(dy, dx) - prevAngle;
-            if (dAngle >  Math.PI) dAngle -= 2 * Math.PI;
-            if (dAngle < -Math.PI) dAngle += 2 * Math.PI;
-            prevAngle = Math.atan2(dy, dx);
-
+            const nextValue = continuousDialValueFromPointer(moveEvent.clientX, moveEvent.clientY, {
+              centerX: kx,
+              centerY: ky,
+              minimum: propMin,
+              maximum: propMax,
+              minimumAngleDeg: minAngleDeg,
+              maximumAngleDeg: maxAngleDeg,
+              step: propStep,
+              clamp,
+            });
+            if (nextValue === undefined || Math.abs(nextValue - dialValue) < 1e-12) return;
             const comp = liveComponent();
             if (!comp) return;
-            const currentValue = numericComponentProperty(comp, positionProp, propMin);
-            let nextValue = currentValue + (dAngle / angleSpanRad) * (propMax - propMin);
-            if (propStep > 0) nextValue = Math.round(nextValue / propStep) * propStep;
-            if (clamp) nextValue = clampNumber(nextValue, Math.min(propMin, propMax), Math.max(propMin, propMax));
-            if (Math.abs(nextValue - currentValue) < 1e-12) return;
+            dialValue = nextValue;
+            dialChanged = true;
             comp.properties[positionProp] = nextValue;
-            send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: comp.id, name: positionProp, value: nextValue });
+            send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestPreviewProperty", componentId: comp.id, name: positionProp, value: nextValue });
             if (indicatorEl) {
-              const angle = mapLinear(nextValue, [propMin, propMax], [angularLimit?.minAngleDeg ?? -150, angularLimit?.maxAngleDeg ?? 150]);
+              const angle = mapLinear(nextValue, [propMin, propMax], [minAngleDeg, maxAngleDeg]);
               indicatorEl.setAttribute("transform", `rotate(${angle}, ${centerX}, ${centerY})`);
             }
-            persistState();
           };
           const onDialUp = () => {
             el.removeEventListener("pointermove", onDialMove);
             el.removeEventListener("pointerup", onDialUp);
             el.removeEventListener("pointercancel", onDialUp);
             isDraggingComponent = false;
+            const comp = liveComponent();
+            if (comp && dialChanged) {
+              comp.properties[positionProp] = dialValue;
+              send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: comp.id, name: positionProp, value: dialValue });
+            }
+            persistState();
             render();
           };
           isDraggingComponent = true;
@@ -5855,6 +6148,8 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
         const radPerStep = (2 * Math.PI) / stepsRev;
         let prevAngle = Math.atan2(dy0, dx0);
         let accumDelta = 0;
+        let encoderValue = comp0 ? numericComponentProperty(comp0, positionProp, 0) : 0;
+        let encoderChanged = false;
         const onEncoderMove = (moveEvent: PointerEvent) => {
           const dx = moveEvent.clientX - kx;
           const dy = moveEvent.clientY - ky;
@@ -5869,15 +6164,15 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
             accumDelta -= steps;
             const comp = liveComponent();
             if (comp) {
-              const currentPos = numericComponentProperty(comp, positionProp, 0);
-              const newPos = currentPos + steps;
+              const newPos = encoderValue + steps;
+              encoderValue = newPos;
+              encoderChanged = true;
               comp.properties[positionProp] = newPos;
-              send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: comp.id, name: positionProp, value: newPos });
+              send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestPreviewProperty", componentId: comp.id, name: positionProp, value: newPos });
               if (indicatorEl) {
                 const angle = ((((newPos % stepsRev) + stepsRev) % stepsRev) / stepsRev) * 360;
                 indicatorEl.setAttribute("transform", `rotate(${angle}, ${centerX}, ${centerY})`);
               }
-              persistState();
             }
           }
         };
@@ -5886,6 +6181,12 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
           el.removeEventListener("pointerup", onEncoderUp);
           el.removeEventListener("pointercancel", onEncoderUp);
           isDraggingComponent = false;
+          const comp = liveComponent();
+          if (comp && encoderChanged) {
+            comp.properties[positionProp] = encoderValue;
+            send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: comp.id, name: positionProp, value: encoderValue });
+          }
+          persistState();
           render();
         };
         isDraggingComponent = true;
@@ -6023,7 +6324,9 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
           }
           dragTargets = duplicated.map((dup) => {
             const offset = componentDivOffset(dup);
-            return { component: dup, startX: dup.x, startY: dup.y, offsetX: offset.x, offsetY: offset.y };
+            // Duplicata recém-criada nunca tem overlay de Modo Placa AINDA (precisaria de um
+            // `requestBoardOverlayData` novo, que só chega depois -- ver `ensureBoardOverlayData`).
+            return { component: dup, startX: dup.x, startY: dup.y, offsetX: offset.x, offsetY: offset.y, boardOverlayChildren: [] };
           });
           send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestInsertItems", scope: currentElementScope(), components: duplicated, wires: duplicatedWires });
           if (newTunnels.length > 0) send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestInsertItems", scope: "schematic", components: newTunnels, wires: [] });
@@ -6048,6 +6351,12 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
         if (targetEl) {
           targetEl.style.left = `${target.component.x + target.offsetX}px`;
           targetEl.style.top = `${target.component.y + target.offsetY}px`;
+        }
+        // Overlay de Modo Placa acompanha pelo MESMO delta -- fix real 2026-07-18, ver comentário na
+        // declaração de `dragTargets`.
+        for (const child of target.boardOverlayChildren) {
+          child.el.style.left = `${child.startLeft + dx}px`;
+          child.el.style.top = `${child.startTop + dy}px`;
         }
         updateWiresTouchingComponent(target.component.id);
       }
@@ -6371,16 +6680,14 @@ function numericFieldCandidates(component: WebviewComponentModel): PropertySchem
  * typeId não tem propriedade `showOnSymbol` nenhuma (nada a mostrar). Generaliza o que antes era um
  * bloco hardcoded só pro voltímetro em `renderComponent`. */
 function valueLabelText(component: WebviewComponentModel): string | undefined {
+  if (isExternalProbeReadout(component.typeId)) {
+    return formatProbeVoltage(numericReadout(component), simulationStatus === "running");
+  }
   const schema = findShowOnSymbolSchema(component);
   if (!schema) return undefined;
   if (schema.editor === "display") return formatLiveReadout(schema, component);
   const raw = component.properties[schema.id] ?? schema.default;
   return typeof raw === "number" ? formatEngineeringValue(raw, schema.unit) : String(raw);
-}
-
-function labelPropertyKey(kind: ExternalLabelKind, suffix: "x" | "y" | "rotation" | "color"): string {
-  const prefix = kind === "id" ? "__ui_idLabel" : "__ui_valueLabel";
-  return `${prefix}${suffix === "x" || suffix === "y" ? suffix.toUpperCase() : suffix[0]!.toUpperCase() + suffix.slice(1)}`;
 }
 
 /** `showValue` efetivo de um componente -- `false` incondicional pra typeId com mostrador embutido
@@ -6389,16 +6696,31 @@ function labelPropertyKey(kind: ExternalLabelKind, suffix: "x" | "y" | "rotation
  * `showOnSymbol` (default "mostra se tem o que mostrar"). Ponto único -- calculado em dois lugares
  * antes (`externalLabelText`/`refreshReadouts`) sempre com a mesma expressão. */
 function effectiveShowValue(component: WebviewComponentModel): boolean {
+  // `showVolt` é a opção nativa do Probe. Projetos antigos receberam `showValue:false`
+  // automaticamente quando o Probe era classificado incorretamente como mostrador embutido.
+  if (isExternalProbeReadout(component.typeId)) return component.properties.showVolt !== false;
   if (usesEmbeddedValueLabel(component.typeId)) return false;
   return component.showValue ?? Boolean(findShowOnSymbolSchema(component));
 }
 
+/** Só faz sentido oferecer o checkbox "Mostrar valor" (`renderPropertySheet`) quando `showValue`
+ * realmente controla algo: Probe tem seu próprio mecanismo (`showVolt`, fora de escopo aqui) e
+ * typeIds com mostrador embutido no símbolo (`usesEmbeddedValueLabel`) nunca desenham o rótulo
+ * externo de qualquer forma -- `effectiveShowValue` força `false`/lê `showVolt` antes de olhar
+ * `component.showValue` nesses dois casos, então um checkbox ali seria inerte. */
+function componentHasToggleableValueLabel(component: WebviewComponentModel): boolean {
+  if (isExternalProbeReadout(component.typeId)) return false;
+  if (usesEmbeddedValueLabel(component.typeId)) return false;
+  return Boolean(findShowOnSymbolSchema(component));
+}
+
 function externalLabelText(component: WebviewComponentModel, kind: ExternalLabelKind): string | undefined {
   if (kind === "id") {
-    // `symbol.pin` (Modo Símbolo) sempre mostra seu rótulo -- diferente de um componente comum
-    // (onde o id-label é opt-in via `showId`), um pino sem rótulo visível não faz sentido nenhum
-    // no editor WYSIWYG (é a própria identidade elétrica exposta pro usuário do subcircuito).
-    if (component.typeId === SYMBOL_PIN_TYPE_ID) return component.hidden ? undefined : component.label;
+    // `symbol.pin` (Modo Símbolo) mostra o rótulo por padrão (`showId` ausente == visível, ao
+    // contrário de um componente comum onde é opt-in) -- é a própria identidade elétrica exposta pro
+    // usuário do subcircuito, então some só quando explicitamente ocultado (`showId===false`, ver
+    // `PackagePin.labelHidden`/`symbolPinLabelPackageFields`), nunca por padrão.
+    if (component.typeId === SYMBOL_PIN_TYPE_ID) return component.hidden || component.showId === false ? undefined : component.label;
     return !component.hidden && component.showId ? component.label : undefined;
   }
   return !component.hidden && effectiveShowValue(component) ? valueLabelText(component) : undefined;
@@ -6426,12 +6748,11 @@ function symbolPinDefaultLabelOffset(component: WebviewComponentModel): Point {
 
 function defaultExternalLabelOffset(component: WebviewComponentModel, kind: ExternalLabelKind): Point {
   if (kind === "id" && component.typeId === SYMBOL_PIN_TYPE_ID) return symbolPinDefaultLabelOffset(component);
-  const packageValueLabel = catalogEntryFor(component.typeId)?.package?.valueLabel;
-  if (kind === "value" && packageValueLabel) return { x: packageValueLabel.x, y: packageValueLabel.y };
-  const box = componentBox(component.typeId, component.properties);
-  return kind === "id"
-    ? { x: 0, y: -14 }
-    : { x: 0, y: box.height + 2 };
+  return resolveDefaultExternalLabelOffset(
+    kind,
+    componentBox(component.typeId, component.properties),
+    catalogEntryFor(component.typeId)?.package?.valueLabel
+  );
 }
 
 function externalLabelOffset(component: WebviewComponentModel, kind: ExternalLabelKind): Point {
@@ -6471,7 +6792,7 @@ function externalLabelWorldBox(component: WebviewComponentModel, kind: ExternalL
   const isLiveSymbolPinIdLabel = kind === "id" && component.typeId === SYMBOL_PIN_TYPE_ID && subcircuitEditorMode === "symbol";
   const fontSize = isLiveSymbolPinIdLabel
     ? (typeof component.properties.labelFontSize === "number" ? component.properties.labelFontSize : 7)
-    : 11;
+    : genericExternalLabelFontSize(kind, component.properties);
   const width = isLiveSymbolPinIdLabel ? Math.max(16, text.length * fontSize * 0.62 + 4) : Math.max(20, text.length * fontSize * 0.62 + 8);
   const height = fontSize + 6;
   return { left: centerX - width / 2, top: centerY - height / 2, right: centerX + width / 2, bottom: centerY + height / 2 };
@@ -6492,31 +6813,62 @@ function setExternalLabelLayout(component: WebviewComponentModel, kind: External
   }
 }
 
-/** Cor atual do rótulo externo (mesma leitura de `renderExternalLabel`/`packagePinLeadSvg` -- `#1f2937`
- * é o `DEFAULT_LABEL_COLOR` espelhado de `catalog/subcircuitSymbolScene.ts`, único lugar que os dois
- * lados concordam sobre "cor padrão" quando a propriedade nunca foi customizada). */
+/** Cor atual do rótulo externo -- `resolveExternalLabelColor` (`componentLabels.ts`) já devolve o
+ * default correto POR KIND (`DEFAULT_ID_LABEL_COLOR`/`DEFAULT_VALUE_LABEL_COLOR`, batendo com o CSS
+ * `.component-floating-label--id/--value`) quando a propriedade nunca foi customizada. */
 function externalLabelColor(component: WebviewComponentModel, kind: ExternalLabelKind): string {
-  const color = component.properties[labelPropertyKey(kind, "color")];
-  return typeof color === "string" && color ? color : "#1f2937";
+  return resolveExternalLabelColor(kind, component.properties);
 }
 
-/** Fonte atual do rótulo (só `symbol.pin`, único caso com tamanho de fonte customizável hoje -- ver
- * `compileLiveSymbolPins`/`packagePinLeadSvg`; qualquer outro rótulo usa o `font-size` fixo do CSS). */
+/** Fonte atual do rótulo do `symbol.pin` ao vivo em Modo Símbolo (única propriedade `labelFontSize`,
+ * SEM kind -- mecanismo separado, renderiza via SVG consolidado do símbolo, ver
+ * `compileLiveSymbolPins`/`packagePinLeadSvg`). Rótulos genéricos (qualquer outro componente/kind)
+ * usam `genericExternalLabelFontSize` (`componentLabels.ts`), com propriedade própria por kind. */
 function externalLabelFontSize(component: WebviewComponentModel): number {
   return typeof component.properties.labelFontSize === "number" ? component.properties.labelFontSize : 7;
 }
 
-/** Monta os campos (cor sempre; tamanho da fonte só quando aplicável) pro diálogo de propriedades de
- * um rótulo externo (id/value) -- `field.key` já é a chave REAL de `component.properties` (ver
- * `labelPropertyKey`/`compileLiveSymbolPins`), então `renderPropertyField` aplica direto via seu
- * caminho padrão (`component.properties[key]=value` + `requestUpdateProperty`), sem precisar de
- * `onPropertyChange` customizado. */
+/** Monta os campos (cor sempre; tamanho da fonte sempre, exceto pro `symbol.pin` ao vivo que já tem
+ * seu próprio campo `labelFontSize` dedicado -- ver `externalLabelFontSize` acima) pro diálogo de
+ * propriedades de um rótulo externo (id/value) -- `field.key` já é a chave REAL de
+ * `component.properties` (ver `labelPropertyKey`/`compileLiveSymbolPins`), então `renderPropertyField`
+ * aplica direto via seu caminho padrão (`component.properties[key]=value` + `requestUpdateProperty`),
+ * sem precisar de `onPropertyChange` customizado. Fix "tamanho de fonte não configurável pra label
+ * comum" (2026-07-18): antes só `symbol.pin` ganhava este campo; todo outro componente (ex: os
+ * switches relatados) nunca tinha como ajustar o tamanho do próprio rótulo. */
 function externalLabelPropertyFields(component: WebviewComponentModel, kind: ExternalLabelKind): PropertyField[] {
   const fields: PropertyField[] = [
     { key: labelPropertyKey(kind, "color"), label: t("labelColor"), kind: "color", value: externalLabelColor(component, kind), group: t("visual") },
   ];
   if (kind === "id" && component.typeId === SYMBOL_PIN_TYPE_ID) {
     fields.push({ key: "labelFontSize", label: t("labelFontSize"), kind: "number", value: externalLabelFontSize(component), min: 4, max: 32, step: 1, group: t("visual") });
+    // Fix "alinhamento não configurável em Editar Símbolo" (2026-07-18) -- ausente == "middle"
+    // (mesmo default que `packagePinLeadSvg` já assume quando a chave não está em `properties`,
+    // ver `symbolPinLabelPackageFields`). Só `symbol.pin` tem esse conceito -- rótulo genérico de
+    // componente comum não expõe alinhamento, é sempre centralizado no ponto de ancoragem.
+    fields.push({
+      key: SYMBOL_PIN_LABEL_ALIGN_KEY,
+      label: t("labelAlignment"),
+      kind: "select",
+      value: typeof component.properties[SYMBOL_PIN_LABEL_ALIGN_KEY] === "string" ? (component.properties[SYMBOL_PIN_LABEL_ALIGN_KEY] as string) : "middle",
+      options: [
+        { value: "start", label: t("labelAlignStart") },
+        { value: "middle", label: t("labelAlignCenter") },
+        { value: "end", label: t("labelAlignEnd") },
+      ],
+      group: t("visual"),
+    });
+  } else {
+    fields.push({
+      key: labelPropertyKey(kind, "size"),
+      label: t("labelFontSize"),
+      kind: "number",
+      value: genericExternalLabelFontSize(kind, component.properties),
+      min: 4,
+      max: 32,
+      step: 1,
+      group: t("visual"),
+    });
   }
   return fields;
 }
@@ -6526,14 +6878,14 @@ function externalLabelPropertyFields(component: WebviewComponentModel, kind: Ext
  * mudar o tamanho também igual era antes". Reaproveita o MESMO `renderPropertyField`/`propertyDialog`
  * de qualquer outro componente (nunca um widget novo por fora do fluxo já existente), só com uma
  * lista de campos menor (o rótulo não é um componente de catálogo próprio). */
-function renderExternalLabelPropertySheet(component: WebviewComponentModel, kind: ExternalLabelKind): HTMLElement {
+function renderExternalLabelPropertySheet(component: WebviewComponentModel, kind: ExternalLabelKind, options: PropertySheetOptions = {}): HTMLElement {
   const shell = document.createElement("section");
   shell.className = "property-sheet";
   const titleBar = document.createElement("div");
   titleBar.className = "property-sheet__titlebar";
   const uid = document.createElement("div");
   uid.className = "property-sheet__uid";
-  uid.textContent = `${t("properties")}: ${component.label}`;
+  uid.textContent = options.titleText ?? `${t("properties")}: ${component.label}`;
   const closeButton = document.createElement("button");
   closeButton.type = "button";
   closeButton.className = "property-sheet__window-close";
@@ -6542,7 +6894,10 @@ function renderExternalLabelPropertySheet(component: WebviewComponentModel, kind
   titleBar.append(uid, closeButton);
   const fieldset = document.createElement("fieldset");
   fieldset.className = "property-sheet__group";
-  for (const field of externalLabelPropertyFields(component, kind)) fieldset.appendChild(renderPropertyField(component, field));
+  // `options` (pedido real: rótulo de um componente EXPOSTO em Modo Placa precisa persistir no
+  // `.lssubcircuit`, nunca via `requestUpdateProperty`/Core -- ver `openExposedLabelPropertyDialog`)
+  // -- rótulo comum continua usando o caminho padrão (`options={}`, mesmo comportamento de sempre).
+  for (const field of externalLabelPropertyFields(component, kind)) fieldset.appendChild(renderPropertyField(component, field, options));
   shell.append(titleBar, fieldset);
   return shell;
 }
@@ -7234,6 +7589,38 @@ function renderPropertySheet(component: WebviewComponentModel, options: Property
   showLabel.append(showText, showCheckbox);
   toolbarActions.append(helpButton);
   if (options.showVisibilityToggle !== false) toolbarActions.append(showLabel);
+  // Rótulo de NOME (acima) e de VALOR (aqui) são independentes -- achado real (2026-07-18): o único
+  // jeito de ligar `showValue` era o rádio "mostrar no símbolo" por propriedade (abaixo, dentro de
+  // `renderPropertyField`), que só aparece com 2+ propriedades numéricas candidatas E só liga, nunca
+  // desliga. Resistor/capacitor/indutor (1 candidata só) não tinham NENHUM controle -- `showValue`
+  // ficava sempre implicitamente `true` (default de `effectiveShowValue`) sem jeito de desmarcar.
+  // Este checkbox fecha a lacuna reusando o mesmo campo/mensagem/persistência de sempre, sem tocar
+  // em `valueLabelPropertyKey` (preserva a escolha de QUAL propriedade quando há mais de uma).
+  if (options.showVisibilityToggle !== false && componentHasToggleableValueLabel(component)) {
+    const showValueLabel = document.createElement("label");
+    showValueLabel.className = "property-sheet__show-toggle";
+    const showValueText = document.createElement("span");
+    showValueText.textContent = t("showValue");
+    const showValueCheckbox = document.createElement("input");
+    showValueCheckbox.type = "checkbox";
+    showValueCheckbox.checked = effectiveShowValue(component);
+    showValueCheckbox.addEventListener("change", () => {
+      component.showValue = showValueCheckbox.checked;
+      send({
+        version: WEBVIEW_MESSAGE_VERSION,
+        type: "requestUpdateLabelVisibility",
+        componentId: component.id,
+        showId: Boolean(component.showId),
+        showValue: component.showValue,
+        ...(component.valueLabelPropertyKey !== undefined ? { valueLabelPropertyKey: component.valueLabelPropertyKey } : {}),
+      });
+      persistState();
+      render();
+      refreshOpenPropertyDialog();
+    });
+    showValueLabel.append(showValueText, showValueCheckbox);
+    toolbarActions.append(showValueLabel);
+  }
   toolbar.append(typeText, toolbarActions);
 
   let titleRow: HTMLElement | undefined;
@@ -7675,7 +8062,14 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
       pendingWireBendLengths = [];
     }
     vscode?.setState(state);
-    render();
+    // `syncStatePatch` é o eco de QUALQUER `requestUpdateProperty`/`projectChanged` que a própria
+    // Webview acabou de mandar (ver `persistState`) -- um arrasto contínuo (dial/joystick/touchpad)
+    // dispara isso a cada `pointermove`. `render()` incondicional aqui reconstruiria o DOM do
+    // componente NO MEIO do gesto (mesmo risco de `componentReadout`/`boardOverlayReadouts`, que já
+    // usam este mesmo guard), fazendo o valor visivelmente avançar-e-recuar ("vai e volta", bug
+    // relatado 2026-07-18) sempre que o eco chegasse atrasado/fora de ordem. `state` já foi mesclado
+    // acima -- só adia o repaint até o solte do mouse, que já chama `render()` no fim do gesto.
+    if (!isInteractiveGestureInProgress()) render();
     refreshOpenPropertyDialog();
     // Ao ENTRAR numa sessão de "Abrir Subcircuito" (nunca ao sair, que já volta pro viewport
     // estabelecido do circuito de fora) -- mesmo pedido de auto-enquadrar do combobox de modo, ver
@@ -7709,7 +8103,7 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
       // rótulo de valor FORA do SVG (`refreshReadouts`, texto simples), bem mais barato que um
       // `render()` completo do canvas -- sem isto, `refreshReadouts` nunca era chamado (função morta).
       for (const component of state.components) {
-        if (!usesEmbeddedValueLabel(component.typeId) || !(component.id in message.readoutsByComponentId)) continue;
+        if (!usesRuntimeSymbolReadout(component.typeId) || !(component.id in message.readoutsByComponentId)) continue;
         const el = componentElementsById.get(component.id);
         if (el) updateComponentElement(el, component);
       }
@@ -7745,8 +8139,22 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     if (!isInteractiveGestureInProgress()) render();
   }
 
+  if (message.type === "boardOverlayReadouts") {
+    boardOverlayReadoutsByKey = message.readoutsByKey;
+    // Fix real 2026-07-18 ("Parar" ficava sem resposta durante a simulação): NUNCA `render()` aqui
+    // -- reconstruiria o esquemático INTEIRO a cada ~300ms só pra atualizar o brilho de 1 LED.
+    // `patchBoardOverlayLedFills` faz o patch pontual (mesmo princípio de `componentReadout`/
+    // `wireVoltages` abaixo, que já evitavam `render()` incondicional por este MESMO motivo).
+    if (!isInteractiveGestureInProgress()) patchBoardOverlayLedFills();
+  }
+
   if (message.type === "wireVoltages") {
-    voltagesByWireId = message.voltagesByWireId;
+    voltagesByWireId = reconcileWireVoltages(
+      voltagesByWireId,
+      message.voltagesByWireId,
+      new Set(state.topology.conductors.map((wire) => wire.id)),
+      simulationStatus === "stopped"
+    );
     if (!isInteractiveGestureInProgress()) {
       for (const [wireId, polyline] of wirePolylineElementsById) {
         polyline.setAttribute("class", wireClass(wireId));
@@ -7757,6 +8165,9 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
   if (message.type === "simulationStatus") {
     simulationStatus = message.status;
     if (message.status === "stopped") {
+      // Stop é a única transição que apaga o snapshot visual. Uma amostra de telemetria
+      // vazia durante Run/Pause é apenas uma falha transitória e preserva a última cor válida.
+      voltagesByWireId = {};
       readoutsByComponentId = {};
       scopeHistoryByComponentId = {};
       logicHistoryByComponentId = {};
@@ -8168,6 +8579,10 @@ function renderExternalLabel(component: WebviewComponentModel, kind: ExternalLab
     el.style.transform = `translate(-50%, -50%)${rotation === 0 ? "" : ` rotate(${rotation}deg)`}`;
   } else {
     el.style.transform = rotation === 0 ? "" : `rotate(${rotation}deg)`;
+    // Fix "tamanho de fonte não configurável" (2026-07-18) -- antes só o `symbol.pin` (branch acima)
+    // aplicava um `font-size` explícito; qualquer outro rótulo caía sempre no `font-size:11px` fixo
+    // do CSS, ignorando `__ui_idLabelSize`/`__ui_valueLabelSize` (ver `componentLabels.ts`).
+    el.style.fontSize = `${genericExternalLabelFontSize(kind, component.properties)}px`;
   }
   // `__ui_idLabelColor`/`__ui_valueLabelColor` -- cor customizada do rótulo (usada por `symbol.pin`,
   // ver `catalog/subcircuitSymbolScene.ts`), genérica pra qualquer rótulo id/value (pedido real: menu
@@ -8249,6 +8664,18 @@ function renderExternalLabel(component: WebviewComponentModel, kind: ExternalLab
     if (!isTextLabelSelected(component.id, kind)) selectOnlyTextLabel(component.id, kind);
     persistState();
     render();
+    // Achado real (2026-07-19): `render()` acima recria TODO `<div>` de rótulo do zero a cada
+    // chamada (`renderExternalLabel` não tem reconciliação por id, diferente do componente, que
+    // reaproveita `el` via `componentElementsById`) -- o `el` original deste `pointerdown` fica
+    // ÓRFÃO (removido do documento) assim que `render()` roda. `setPointerCapture` num elemento
+    // desconectado do documento falha (`InvalidStateError`, silencioso dentro do listener) -- o
+    // gesto morria bem aqui, mesmo com clique/seleção (contorno tracejado) funcionando normalmente,
+    // reproduzindo exatamente "consigo selecionar mas não consigo arrastar". Rebusca o elemento
+    // FRESCO recém-criado (mesmo `data-component-id`/`data-label-kind`) pra continuar o gesto nele.
+    const freshEl = document.querySelector<HTMLElement>(
+      `.component-floating-label[data-component-id="${component.id}"][data-label-kind="${kind}"]`
+    );
+    if (!freshEl) return;
     dragStartX = event.clientX;
     dragStartY = event.clientY;
     dragTargets = getSelectedTextLabels().map(({ component: selected, kind: selectedKind }) => ({
@@ -8256,7 +8683,7 @@ function renderExternalLabel(component: WebviewComponentModel, kind: ExternalLab
       kind: selectedKind,
       startOffset: externalLabelOffset(selected, selectedKind),
     }));
-    el.setPointerCapture(event.pointerId);
+    freshEl.setPointerCapture(event.pointerId);
     isDraggingComponent = true;
 
     const onMove = (moveEvent: PointerEvent): void => {
@@ -8274,9 +8701,9 @@ function renderExternalLabel(component: WebviewComponentModel, kind: ExternalLab
     };
 
     const onUp = (upEvent: PointerEvent): void => {
-      el.removeEventListener("pointermove", onMove);
-      el.removeEventListener("pointerup", onUp);
-      el.removeEventListener("pointercancel", onUp);
+      freshEl.removeEventListener("pointermove", onMove);
+      freshEl.removeEventListener("pointerup", onUp);
+      freshEl.removeEventListener("pointercancel", onUp);
       isDraggingComponent = false;
       const zoom = state.viewport.zoom || 1;
       const dx = (upEvent.clientX - dragStartX) / zoom;
@@ -8289,9 +8716,9 @@ function renderExternalLabel(component: WebviewComponentModel, kind: ExternalLab
       render();
     };
 
-    el.addEventListener("pointermove", onMove);
-    el.addEventListener("pointerup", onUp, { once: true });
-    el.addEventListener("pointercancel", onUp, { once: true });
+    freshEl.addEventListener("pointermove", onMove);
+    freshEl.addEventListener("pointerup", onUp, { once: true });
+    freshEl.addEventListener("pointercancel", onUp, { once: true });
   });
 
   return el;

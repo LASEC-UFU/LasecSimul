@@ -19,6 +19,10 @@
 #include "lasecsimul/IComponentModel.hpp"
 #include "PauseExpression.hpp"
 
+namespace lasecsimul::mcu {
+class McuComponent;
+} // namespace lasecsimul::mcu
+
 namespace lasecsimul::session {
 
 /** Pino exposto de uma instância de subcircuito -- É o pino real do `Tunnel` interno renomeado,
@@ -190,8 +194,19 @@ public:
     void loadMcuFirmware(uint32_t componentIndex, const std::filesystem::path& firmwarePath,
                          const std::string& arenaName, const std::string& qemuBinaryOverride,
                          McuDebugOptions debug = {});
+    /** Parada total da execução: encerra todas as MCUs/QEMUs e zera scheduler, tempo e eventos.
+     * As instâncias elétricas são recriadas pela camada de projeto depois da confirmação deste
+     * método, restaurando também o estado interno dos componentes built-in/ABI. */
+    void stopSimulation();
     void stopMcuFirmware(uint32_t componentIndex);
     std::string mcuLogs(uint32_t componentIndex) const;
+    /** Ponteiro cru pra instância MCU real (nullptr se `componentIndex` não for um McuComponent ou
+     * já tiver sido removido) -- só pra TESTE controlar a arena sintética/ler estado interno
+     * (`resetPinHigh()`/`loadFirmwareCallCountForTesting()`) de um MCU dentro de um subcircuito
+     * REAL expandido (`addSubcircuitInstance`), onde não há outro jeito de chegar na instância além
+     * do índice devolvido por `SubcircuitExposedPin::instanceId`. Produção nunca deveria precisar
+     * disso -- todo caminho real já passa por `loadMcuFirmware`/`stopMcuFirmware`/`mcuLogs` acima. */
+    mcu::McuComponent* mcuComponentForTesting(uint32_t componentIndex) const;
 
     void sendComponentEvent(uint32_t componentIndex, const ComponentEvent& event);
 

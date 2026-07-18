@@ -61,8 +61,8 @@ std::filesystem::path createBlankFlash() {
 int main() {
     std::fprintf(stderr, "=== McuControllerRealQemuTest ===\n");
 
-    // This host-independent integration test deliberately exercises SLIRP. The product default is
-    // lab-bridge, but CI cannot assume that a privileged TAP adapter has been provisioned.
+    // This test deliberately exercises the enabled/SLIRP path. Separate launch tests assert that
+    // the product default is disabled and contains no -nic.
 #ifdef _WIN32
     _putenv_s("LASECSIMUL_NETWORK_MODE", "isolated");
 #else
@@ -134,6 +134,33 @@ int main() {
     TEST_ASSERT(controller.qemuLogs().find("model=open_eth") != std::string::npos,
                 "logs do processo integrado registram a configuracao OpenETH");
 
+    controller.stop();
+    TEST_ASSERT(!controller.isRunning(), "primeiro processo QEMU encerra apos stop()");
+
+    // Backend externo indisponivel nao pode derrubar a CPU: a porta abaixo nao tem listener neste
+    // teste, entao o Core troca socket/TAP por SLIRP antes de qemu_init().
+#ifdef _WIN32
+    _putenv_s("LASECSIMUL_NETWORK_MODE", "lab-bridge");
+    _putenv_s("LASECSIMUL_GATEWAY_PORT", "65534");
+#else
+    setenv("LASECSIMUL_NETWORK_MODE", "lab-bridge", 1);
+    setenv("LASECSIMUL_GATEWAY_PORT", "65534", 1);
+#endif
+    bool fallbackStarted = false;
+    try {
+        controller.start(flashPath, uniqueArenaName());
+        fallbackStarted = true;
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "FALHOU: fallback de gateway lancou: %s\n", e.what());
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    const std::string fallbackLogs = controller.qemuLogs();
+    TEST_ASSERT(fallbackStarted && controller.isRunning(),
+                "QEMU continua executando quando gateway/TAP esta indisponivel");
+    TEST_ASSERT(fallbackLogs.find("gateway unavailable; falling back to isolated SLIRP") != std::string::npos,
+                "log explica claramente o fallback de backend indisponivel");
+    TEST_ASSERT(fallbackLogs.find("user,model=open_eth") != std::string::npos,
+                "fallback preserva a NIC OpenETH usando SLIRP");
     controller.stop();
     if (ownsFlashPath && !flashPath.empty()) {
         std::error_code removeError;

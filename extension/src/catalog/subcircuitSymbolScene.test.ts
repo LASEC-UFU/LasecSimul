@@ -95,6 +95,58 @@ function makeIdFactory(prefix: string): () => string {
     assert(compiled.pins[0]!.labelX === undefined && compiled.pins[0]!.labelY === undefined, "sem arrastar o rótulo, compilar não deveria inventar labelX/Y no arquivo");
   });
 
+  await test("labelFontSize: customizado sobrevive ao round-trip, default (7) nunca é gravado no arquivo", () => {
+    const customized: PackagePin = { id: "P1", x: 0, y: 12, angle: 180, length: 8, label: "P1", labelFontSize: 14 };
+    const elementsCustom = materializeSymbolScene({ width: 56, height: 40, pins: [customized] }, makeIdFactory("id"));
+    assert(elementsCustom[0]!.properties.labelFontSize === 14, "labelFontSize customizado deveria virar properties.labelFontSize");
+    const compiledCustom = compileSymbolScene(elementsCustom);
+    assert(compiledCustom.pins[0]!.labelFontSize === 14, "labelFontSize customizado deveria sobreviver ao round-trip");
+
+    const defaulted: PackagePin = { id: "P1", x: 0, y: 12, angle: 180, length: 8, label: "P1" };
+    const elementsDefault = materializeSymbolScene({ width: 56, height: 40, pins: [defaulted] }, makeIdFactory("id"));
+    assert(elementsDefault[0]!.properties.labelFontSize === undefined, "sem labelFontSize no arquivo, não deveria gravar a propriedade (default 7 implícito)");
+    const compiledDefault = compileSymbolScene(elementsDefault);
+    assert(compiledDefault.pins[0]!.labelFontSize === 7, `sem customização, compilar deveria usar o default 7, recebido ${compiledDefault.pins[0]!.labelFontSize}`);
+  });
+
+  // ── Bug real corrigido (2026-07-18): compileSymbolScene gravava "middle" INCONDICIONALMENTE pra
+  // todo pino, derrubando o default inteligente por ângulo de packagePinLeadSvg pra sempre. Agora só
+  // grava quando o autor customizou de verdade (via symbolPinLabelPackageFields). ──────────────────
+  await test("alinhamento: pino com labelTextAnchor explícito no arquivo materializa __ui_idLabelAlign e sobrevive ao round-trip", () => {
+    const pin: PackagePin = { id: "P1", x: 0, y: 12, angle: 180, length: 8, label: "P1", labelTextAnchor: "end" };
+    const elements = materializeSymbolScene({ width: 56, height: 40, pins: [pin] }, makeIdFactory("id"));
+    assert(elements[0]!.properties.__ui_idLabelAlign === "end", `esperado __ui_idLabelAlign==="end", recebido ${JSON.stringify(elements[0]!.properties)}`);
+    const compiled = compileSymbolScene(elements);
+    assert(compiled.pins[0]!.labelTextAnchor === "end", `alinhamento deveria sobreviver ao round-trip, recebido ${compiled.pins[0]!.labelTextAnchor}`);
+    assert(compiled.pins[0]!.labelDominantBaseline === "middle", "labelDominantBaseline deveria acompanhar o alinhamento customizado");
+  });
+
+  await test("alinhamento: pino SEM labelTextAnchor no arquivo nunca grava __ui_idLabelAlign nem inventa um valor ao compilar (deixa o default por ângulo valer)", () => {
+    const pin: PackagePin = { id: "P1", x: 0, y: 12, angle: 180, length: 8, label: "P1" };
+    const elements = materializeSymbolScene({ width: 56, height: 40, pins: [pin] }, makeIdFactory("id"));
+    assert(elements[0]!.properties.__ui_idLabelAlign === undefined, "sem labelTextAnchor no arquivo, não deveria gravar __ui_idLabelAlign");
+    const compiled = compileSymbolScene(elements);
+    assert(compiled.pins[0]!.labelTextAnchor === undefined, `sem customização, compilar NÃO deveria forçar um valor -- este é o bug original (hardcode incondicional "middle"), recebido ${compiled.pins[0]!.labelTextAnchor}`);
+  });
+
+  // ── Bug real corrigido (2026-07-18): não existia jeito de ocultar o rótulo de um pino em Modo
+  // Símbolo -- `showId` nunca era lido/escrito por materializeSymbolPin/compileSymbolScene. ────────
+  await test("visibilidade: pino com labelHidden:true materializa showId:false e sobrevive ao round-trip", () => {
+    const pin: PackagePin = { id: "P1", x: 0, y: 12, angle: 180, length: 8, label: "P1", labelHidden: true };
+    const elements = materializeSymbolScene({ width: 56, height: 40, pins: [pin] }, makeIdFactory("id"));
+    assert(elements[0]!.showId === false, `esperado showId===false, recebido ${elements[0]!.showId}`);
+    const compiled = compileSymbolScene(elements);
+    assert(compiled.pins[0]!.labelHidden === true, `labelHidden deveria sobreviver ao round-trip, recebido ${compiled.pins[0]!.labelHidden}`);
+  });
+
+  await test("visibilidade: pino sem labelHidden no arquivo nunca força showId, e compilar showId ausente/true nunca grava labelHidden", () => {
+    const pin: PackagePin = { id: "P1", x: 0, y: 12, angle: 180, length: 8, label: "P1" };
+    const elements = materializeSymbolScene({ width: 56, height: 40, pins: [pin] }, makeIdFactory("id"));
+    assert(elements[0]!.showId === undefined, `sem labelHidden no arquivo, showId não deveria ser forçado, recebido ${elements[0]!.showId}`);
+    const compiled = compileSymbolScene(elements);
+    assert(compiled.pins[0]!.labelHidden === undefined, `sem ocultar, compilar não deveria gravar labelHidden, recebido ${compiled.pins[0]!.labelHidden}`);
+  });
+
   await test("compileSymbolScene é o inverso EXATO de materializeSymbolScene pro round-trip de um pino (posição/ângulo/rótulo)", () => {
     const pin: PackagePin = { id: "GND", x: 40, y: 24, angle: 0, length: 8, label: "GND" };
     const descriptor: PackageDescriptor = { width: 56, height: 40, pins: [pin] };
@@ -165,8 +217,11 @@ function makeIdFactory(prefix: string): () => string {
     assert(compiled.shapes[1]!.kind === "rect", "o retângulo (order=1) deveria vir depois");
   });
 
-  await test("materialize -> compile -> materialize é idempotente (posição/rótulo estáveis entre save/reload)", () => {
-    const descriptor: PackageDescriptor = { width: 56, height: 40, pins: [{ id: "VCC", label: "VCC", x: 10, y: 12, angle: 180, length: 8 }] };
+  await test("materialize -> compile -> materialize é idempotente (posição/rótulo/fonte/alinhamento/visibilidade estáveis entre save/reload)", () => {
+    const descriptor: PackageDescriptor = {
+      width: 56, height: 40,
+      pins: [{ id: "VCC", label: "VCC", x: 10, y: 12, angle: 180, length: 8, labelFontSize: 14, labelTextAnchor: "end", labelHidden: true }],
+    };
     const elements1 = materializeSymbolScene(descriptor, makeIdFactory("seed1"));
     const compiled1 = compileSymbolScene(elements1);
     assert(compiled1.errors.length === 0, `não deveria ter erros: ${compiled1.errors.join(" | ")}`);
@@ -180,6 +235,9 @@ function makeIdFactory(prefix: string): () => string {
     const p2 = compiled2.pins[0]!;
     assert(Math.abs(Number(p1.x) - Number(p2.x)) < 0.01 && Math.abs(Number(p1.y) - Number(p2.y)) < 0.01, `posição deveria ser estável entre save/reload, recebido (${p1.x},${p1.y}) vs (${p2.x},${p2.y})`);
     assert(p1.label === p2.label, "rótulo deveria ser estável entre save/reload");
+    assert(p1.labelFontSize === p2.labelFontSize && p2.labelFontSize === 14, `labelFontSize deveria ser estável, recebido ${p1.labelFontSize} vs ${p2.labelFontSize}`);
+    assert(p1.labelTextAnchor === p2.labelTextAnchor && p2.labelTextAnchor === "end", `labelTextAnchor deveria ser estável, recebido ${p1.labelTextAnchor} vs ${p2.labelTextAnchor}`);
+    assert(p1.labelHidden === p2.labelHidden && p2.labelHidden === true, `labelHidden deveria ser estável, recebido ${p1.labelHidden} vs ${p2.labelHidden}`);
   });
 
   finish();

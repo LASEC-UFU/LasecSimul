@@ -134,10 +134,13 @@ public:
         std::memcpy(&m_lastCurrent[0], in, sizeof(double));
     }
 
-    /** Só declarado por quem registra `outputs.led` (1 perna) em `CoreApplication.cpp` -- os outros
-     * typeIds desta MESMA classe (led_rgb/led_bar/led_matrix/seven_segment, N pernas) não passam
-     * este format pro registro, então `getComponentStates`/telemetria nunca é pedida pra eles (ver
-     * limitação documentada em `current()` acima: leitura por-segmento é pendência separada). */
+    /** Declarado por `outputs.led` (sempre 1 perna) e por `outputs.led_bar` (2026-07-18, fix "LED
+     * onboard não acende" -- `size` tipicamente 1 num indicador de placa) em `CoreApplication.cpp`.
+     * `led_rgb`/`led_matrix`/`seven_segment` (sempre N>1 pernas fixas) continuam sem passar este
+     * format -- `getComponentStates`/telemetria nunca é pedida pra eles (ver limitação documentada
+     * em `current()` acima: leitura por-segmento é pendência separada). Uma instância de `led_bar`
+     * com `size>1` também não quebra: `getState()` só devolve 0 bytes, decodificado como "sem
+     * leitura" do lado Extension. */
     static ReadoutFormat readoutFormat() {
         ReadoutFormat format;
         format.kind = ReadoutKind::Scalar;

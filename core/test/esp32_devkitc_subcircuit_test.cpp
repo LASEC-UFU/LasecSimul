@@ -21,7 +21,10 @@
 #include "components/passive/Resistor.hpp"
 #include "components/sources/FixedVolt.hpp"
 #include "components/sources/Rail.hpp"
+#include "lasecsimul/qemu_arena_abi.h"
+#include "mcu/McuComponent.hpp"
 #include "plugins/GlobalPluginCache.hpp"
+#include "plugins/PluginRuntime.hpp"
 #include "registry/SubcircuitRegistry.hpp"
 #include "session/SimulationSession.hpp"
 
@@ -84,7 +87,7 @@ void registerNeededBuiltins(ComponentRegistry& components) {
             pins.push_back(std::move(pin));
         }
         return std::make_unique<components::SimulideSwitch>("switches.push", std::move(pins),
-                                                              p.property("closed", false),
+                                                              false,
                                                               p.property("normallyClosed", false));
     });
     // DevKitC real também tem uma barra de LED (outputs.led_bar) -- faltava aqui pela mesma razão
@@ -110,6 +113,21 @@ void registerNeededBuiltins(ComponentRegistry& components) {
         for (size_t i = 0; i < size; ++i) legs.push_back({i, size + i});
         return std::make_unique<components::DiodeLegArray>("outputs.led_bar", std::move(pins), std::move(legs));
     });
+    // LED simples do usuário (regressão "pente fino" 2026-07-17, ver mais abaixo) -- mesma classe
+    // de CoreApplication.cpp::registerBuiltinComponents.
+    components.registerFactory("outputs.led", [](const ComponentParams&) {
+        std::vector<Pin> pins{Pin{"anode"}, Pin{"cathode"}};
+        return std::make_unique<components::DiodeLegArray>(
+            "outputs.led", std::move(pins), std::vector<components::DiodeLegArray::Leg>{{0, 1}});
+    });
+}
+
+/** Simula o que writeReg(addr,value) do lado QEMU real faria (mesmo helper de McuComponentTest.cpp). */
+void simulateQemuWrite(LsdnQemuArena* arena, uint64_t addr, uint64_t value) {
+    arena->regAddr = addr;
+    arena->regData = value;
+    arena->simuAction = LSDN_SIM_WRITE;
+    arena->simuTime = 1;
 }
 
 // Mesmo mapeamento de campos que CoreApplication.cpp::loadSubcircuitLibraryFile -- mantido em
@@ -267,6 +285,64 @@ int runTest() {
     // McuComponentTest.cpp/Esp32AdapterTest.cpp -- este teste foca no que é específico do
     // SUBCIRCUITO: mapeamento de pino público -> McuComponent interno, e os nós GND/3V3/5V
     // compartilhados, que não existem em nenhum dos outros dois testes.
+
+    // ── Regressão "pente fino" (2026-07-17): reset fantasma sincronizado com o blink ─────────────
+    // Reproduz o circuito REAL do usuário inteiro: subcircuito DevKitC de verdade (com o pull-up de
+    // 10kΩ do EN, botões EN/BOOT e a barra de LED onboard JÁ embutidos, cada um contribuindo pro
+    // MESMO CircuitGroup que mcu1) + um LED/resistor do usuário num GPIO exposto, alternando como um
+    // `digitalWrite(HIGH); delay(); digitalWrite(LOW); delay();` -- sem QEMU real nem firmware.
+    // Prova que RST/EN não pisca sozinho mesmo com a complexidade elétrica completa do subcircuito
+    // real (não só um MCU isolado + 1 LED, como o teste mínimo em McuComponentTest.cpp já cobre).
+    {
+        TEST_ASSERT(expansion.primaryMcuInstanceId.has_value(),
+                    "addSubcircuitInstance() identifica o McuComponent principal do DevKitC (primaryMcuInstanceId)");
+        mcu::McuComponent* mcuPtr = expansion.primaryMcuInstanceId
+            ? session.mcuComponentForTesting(*expansion.primaryMcuInstanceId)
+            : nullptr;
+        TEST_ASSERT(mcuPtr != nullptr,
+                    "mcuComponentForTesting() acha o McuComponent real dentro do subcircuito expandido");
+        if (mcuPtr) {
+            const auto& g23 = expansion.exposedPins.at("G23");
+            ComponentParams resistorParams;
+            resistorParams.properties["resistance"] = 220.0;
+            const uint32_t resistorIndex = session.addComponent("passive.resistor", resistorParams);
+            const uint32_t ledIndex = session.addComponent("outputs.led", {});
+            const uint32_t groundIndex = session.addComponent("other.ground", {});
+            session.connectWire(g23.instanceId, g23.pinId, resistorIndex, "p1");
+            session.connectWire(resistorIndex, "p2", ledIndex, "anode");
+            session.connectWire(ledIndex, "cathode", groundIndex, "pin");
+
+            PluginRuntime probeRuntime(cache);
+            const std::unique_ptr<IMcuAdapter> probeAdapter = probeRuntime.createMcuAdapter("espressif.esp32");
+            uint64_t gpioStart = 0;
+            for (const MemoryRegion& region : probeAdapter->memoryRegions()) {
+                if (region.moduleKind == ModuleKind::Gpio && region.moduleIndex == 0) gpioStart = region.start;
+            }
+            TEST_ASSERT(gpioStart != 0, "memoryRegions() do plugin declara a faixa GPIO (pra escrever ENABLE/OUT)");
+
+            mcuPtr->openSyntheticArenaForTesting("esp32-devkitc-blink-regressao-arena");
+            LsdnQemuArena* arena = mcuPtr->arenaBridge().arena();
+            simulateQemuWrite(arena, gpioStart + 0x20, 1u << 23); // GPIO_ENABLE_REG: G23 como saida
+            session.scheduler().markDirty(*expansion.primaryMcuInstanceId);
+            for (int i = 0; i < 30 && session.settleStep(); ++i) {}
+
+            const uint64_t loadCountBeforeBlink = mcuPtr->loadFirmwareCallCountForTesting();
+            bool resetPinStayedHighThroughoutBlink = true;
+            for (int cycle = 0; cycle < 20; ++cycle) {
+                const uint32_t bit23 = (cycle % 2 == 0) ? 0u : (1u << 23);
+                simulateQemuWrite(arena, gpioStart + 0x04, bit23); // GPIO_OUT_REG
+                session.scheduler().markDirty(*expansion.primaryMcuInstanceId);
+                for (int i = 0; i < 60 && session.settleStep(); ++i) {}
+                if (!mcuPtr->resetPinHigh()) resetPinStayedHighThroughoutBlink = false;
+            }
+            TEST_ASSERT(resetPinStayedHighThroughoutBlink,
+                        "RST/EN continua alto durante 20 ciclos de blink em G23 com TODO o subcircuito "
+                        "DevKitC real (pull-ups, botoes, LED onboard) no mesmo CircuitGroup");
+            TEST_ASSERT(mcuPtr->loadFirmwareCallCountForTesting() == loadCountBeforeBlink,
+                        "nenhum loadFirmware() disparado durante o blink no subcircuito real (sem reset/reload fantasma)");
+            mcuPtr->stopFirmware();
+        }
+    }
 
     // ── ESP32-WROOM-32 (módulo, sem placa/USB/EN-BOOT físicos -- sem pino "5V") ──────────────────
     // Sessão separada de propósito: cada SimulationSession tem seu próprio McuRegistry/

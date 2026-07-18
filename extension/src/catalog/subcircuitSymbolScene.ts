@@ -1,4 +1,5 @@
 import { PackageDescriptor, PackagePin, PackageShape, SYMBOL_PIN_TYPE_ID, WebviewComponentModel } from "../ui/webview/model";
+import { SYMBOL_PIN_LABEL_ALIGN_KEY, symbolPinLabelPackageFields } from "../ui/webview/componentLabels";
 
 export { SYMBOL_PIN_TYPE_ID };
 
@@ -97,6 +98,10 @@ export function materializeSymbolPin(pin: PackagePin, idFactory: () => string): 
     id: idFactory(),
     typeId: SYMBOL_PIN_TYPE_ID,
     label,
+    // Ausente (`undefined`) quando `pin.labelHidden` nunca foi salvo -- preserva o comportamento de
+    // sempre (rótulo visível) pra todo arquivo já existente; `true` só quando o autor explicitamente
+    // ocultou (ver `symbolPinLabelPackageFields`, direção inversa em `compileSymbolScene`).
+    showId: pin.labelHidden === true ? false : undefined,
     x: componentX,
     y: componentY,
     rotation,
@@ -113,6 +118,10 @@ export function materializeSymbolPin(pin: PackagePin, idFactory: () => string): 
       ...(typeof pin.labelRotation === "number" && pin.labelRotation ? { [ID_LABEL_ROTATION_KEY]: nearestCardinalRotation(pin.labelRotation) } : {}),
       ...(typeof pin.labelColor === "string" && pin.labelColor !== DEFAULT_LABEL_COLOR ? { [ID_LABEL_COLOR_KEY]: pin.labelColor } : {}),
       ...(fontSize !== DEFAULT_LABEL_FONT_SIZE ? { labelFontSize: fontSize } : {}),
+      // Presença no arquivo (qualquer valor, inclusive "middle" de um save anterior ao fix do
+      // hardcode incondicional) é o único sinal de "alinhamento explícito" -- ausência deixa
+      // `packagePinLeadSvg` calcular o default por ângulo sozinho, nunca um valor "cravado".
+      ...(pin.labelTextAnchor ? { [SYMBOL_PIN_LABEL_ALIGN_KEY]: pin.labelTextAnchor } : {}),
       ...(pin.kind ? { kind: pin.kind } : {}),
     },
   };
@@ -327,8 +336,12 @@ export function compileSymbolScene(elements: readonly WebviewComponentModel[]): 
       length,
       label,
       labelFontSize,
-      labelTextAnchor: "middle",
-      labelDominantBaseline: "middle",
+      // Alinhamento/visibilidade só gravados quando o autor customizou de verdade -- ausência deixa
+      // `packagePinLeadSvg` calcular o default por ângulo/sempre-visível sozinho (bug real corrigido
+      // aqui: antes gravava "middle" incondicional pra TODO pino, derrubando esse default pra
+      // sempre). Fonte ÚNICA compartilhada com `main.ts::compileLiveSymbolPins` (preview ao vivo) --
+      // sem isto os dois divergiriam entre si de novo, ver `componentLabels.ts`.
+      ...symbolPinLabelPackageFields(component.properties, component.showId),
     };
     // `__ui_idLabelX/Y` (Webview) só existem quando o usuário efetivamente ARRASTOU o rótulo --
     // presença aqui é o único sinal de "posição customizada" (mesmo contrato de

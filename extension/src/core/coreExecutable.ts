@@ -20,7 +20,21 @@ export function resolveCoreExecutablePath(
   extensionPath: string,
   exists: (candidate: string) => boolean = fs.existsSync,
   platform = process.platform,
+  modifiedTimeMs: (candidate: string) => number = (candidate) => fs.statSync(candidate).mtimeMs,
 ): string {
   const candidates = coreExecutableCandidates(extensionPath, platform);
-  return candidates.find(exists) ?? candidates[0]!;
+  const available = candidates.filter(exists);
+  if (available.length === 0) return candidates[0]!;
+
+  // Evita iniciar um Release obsoleto quando o Core acabou de ser recompilado em outra
+  // configuração. A ordem original permanece como desempate para timestamps iguais.
+  return available
+    .map((candidate, order) => {
+      try {
+        return { candidate, order, modified: modifiedTimeMs(candidate) };
+      } catch {
+        return { candidate, order, modified: 0 };
+      }
+    })
+    .sort((a, b) => b.modified - a.modified || a.order - b.order)[0]!.candidate;
 }

@@ -1693,12 +1693,46 @@ envia `requestUpdateLabelVisibility` (`WebviewToHostMessage`) — handler em `ex
 `showValue` (`.lsproj`) — sem isso, o nome indexado se perderia a cada save/reload, igual o
 `label`/`Show_id`/`Show_Val` que o SimulIDE também persiste (`CompBase::toString()`).
 
+**Corrigido (2026-07-18)**: o checkbox "Mostrar valor" descrito acima não existia de fato — só havia
+um RÁDIO por propriedade numérica ("mostrar no símbolo", dentro de `renderPropertyField`, visível só
+com 2+ candidatas) que LIGAVA `showValue`, nunca desligava. Resistor/Capacitor/Inductor (1 candidata
+só) não tinham candidato nenhum a rádio, então `effectiveShowValue` ficava sempre `true` por padrão
+sem NENHUM controle pra desmarcar — reportado como "não consigo mostrar só o nome, ou só esconder o
+valor". `componentHasToggleableValueLabel` (`main.ts`, ao lado de `effectiveShowValue`) decide quando
+faz sentido oferecer o checkbox (exclui Probe, mecanismo próprio via `showVolt`, e typeIds com
+mostrador embutido no símbolo via `usesEmbeddedValueLabel`, onde o rótulo externo nunca aparece de
+qualquer forma); o checkbox em si reusa a mesma mensagem/persistência de sempre, sem tocar
+`valueLabelPropertyKey` (preserva qual propriedade fica escolhida pra quando o rótulo for reexibido).
+Com isso as 4 combinações (nome+valor, só nome, só valor, nenhum) ficam possíveis por instância, como
+pedido — cada rótulo posicionado independentemente (`defaultExternalLabelOffset` por `kind`, nunca um
+cálculo conjunto), então ocultar um nunca desloca nem deixa vão no outro.
+
 Formatação do rótulo de valor (`formatEngineeringValue` em `main.ts`) porta o `valToUnit` do SimulIDE
 (`utils.h`): escolhe o prefixo SI (p/n/µ/m/—/k/M/G) que mantém a mantissa abaixo de 1000.
 
-**Fora de escopo desta rodada** (não implementado, backlog): arrastar o rótulo independentemente do
-símbolo (`Label::mousePressEvent`/`mouseMoveEvent` do SimulIDE) — posição hoje é fixa (acima/abaixo da
-caixa do componente), sem edição de posição/rotação do rótulo em si.
+**Atualizado (2026-07-18, revisão global de labels)**: o parágrafo acima ("fora de escopo: arrastar
+o rótulo independentemente do símbolo, posição fixa") está desatualizado — o sistema completo já
+está implementado. `extension/src/ui/webview/componentLabels.ts` (módulo puro, sem DOM, importável
+tanto pela Webview quanto pelo host em `catalog/*` e por testes em Node) é a fonte única de:
+posição PADRÃO do rótulo (`resolveDefaultExternalLabelOffset`, centralizada na largura real do
+corpo via `componentBox`), tamanho de fonte (`genericExternalLabelFontSize`, propriedade
+`__ui_idLabelSize`/`__ui_valueLabelSize`), cor (`resolveExternalLabelColor`, `__ui_idLabelColor`/
+`__ui_valueLabelColor`) e nomenclatura das chaves de propriedade (`labelPropertyKey`). `main.ts`
+usa esses resolvers em `renderExternalLabel` (o `<div class="component-floating-label--id|value">`
+arrastável, com clique/ctrl+clique pra seleção múltipla, menu de contexto com "Propriedades"/girar/
+alinhar/distribuir, e persistência via `requestUpdateProperty`) pra QUALQUER `typeId` do catálogo
+sem exceção — inclusive Switches, onde o problema original era mais visível (rótulo ancorado na
+borda esquerda de corpos estreitos como `switches.switch_dip`/`switches.relay`, texto mais longo que
+o corpo invadindo componentes vizinhos). Válido tanto no esquemático principal quanto no circuito
+interno de um subcircuito (`subcircuitEditorMode==="circuit"`) — é o MESMO código, sem sistema
+paralelo (ver seção 30).
+
+Únicas 2 exceções, ambas estritamente `kind==="id" && component.typeId===SYMBOL_PIN_TYPE_ID &&
+subcircuitEditorMode==="symbol"` (`main.ts::renderExternalLabel`/`externalLabelWorldBox`): o pino do
+Modo Símbolo renderiza seu texto pelo SVG consolidado do símbolo (`compileLiveSymbolPins` →
+`packagePinLeadSvg`, ver `.spec/lasecsimul-subcircuits.spec` seção 23), não pelo `<div>` HTML — o
+`<div>` vira só uma hit-box transparente pra clicar/arrastar; e `connectors.tunnel`, que embute seu
+próprio nome no símbolo, sem rótulo id externo.
 
 ### 13.4 Seleção múltipla, atalhos de teclado e zoom — implementado
 
@@ -3890,3 +3924,148 @@ Validacao desta versao: build Debug completo; Core 43/43; Extension completa ver
 271078 bytes serializados e 49102 us de aquisicao total (aprox. 48 us por amostra extrema). Esse
 numero e baseline de regressao, nao promessa de Release; qualquer mudanca deve preservar os gates
 de assinantes, intervalo e packing e repetir a medicao.
+
+## 30. Motor único de rótulo — 3 contextos, mesmas garantias (2026-07-18)
+
+Revisão global pedida pelo usuário depois de relatos de labels quebradas "principalmente nos
+switches": pediu-se separar explicitamente 3 contextos que não podem se confundir (esquemático
+principal, package de subcircuito, circuito interno de "Abrir Subcircuito"), com um único motor
+compartilhado entre eles, e um diagnóstico do catálogo inteiro antes de corrigir.
+
+### 30.1 Diagnóstico
+
+O diagnóstico (leitura de código, sem suposição) concluiu que a arquitetura de rótulo já era
+majoritariamente compartilhada — o que faltava eram bugs pontuais na mesma base, não um sistema
+duplicado por typeId. Achados:
+
+- **Esquemático principal**: já genérico (ver seção 13.3, atualizada). Bugs reais corrigidos numa
+  sessão anterior: offset padrão ancorado na borda esquerda em vez de centralizado (grave em corpos
+  estreitos como `switches.switch_dip`/`switches.relay`), tamanho de fonte não configurável fora do
+  Modo Símbolo, cor default do diálogo não batendo com a cor real do CSS.
+- **Circuito interno de um subcircuito** (`subcircuitEditorMode==="circuit"`): já reusa o MESMO
+  código do esquemático principal — confirmado que `subcircuitEditorMode` só é checado em 2 pontos
+  de todo o sistema de rótulo (`main.ts::renderExternalLabel`/`externalLabelWorldBox`), ambos
+  estritos a `symbol.pin` em Modo Símbolo. Nenhum sistema paralelo existe pra switches/LEDs/
+  resistores dentro de um subcircuito.
+- **Bloqueio do package no esquemático principal**: já correto, sem vazamento. O diálogo de
+  propriedades de uma instância de subcircuito colocada (`main.ts::resolvePropertyFields`) só lê
+  `catalogEntry.propertySchema` (propriedades declaradas pelo autor do subcircuito/device) — nenhum
+  campo de `symbol.pins[]`/`symbol.shapes[]` (o PACKAGE) aparece ali. O mecanismo de "Modo Placa"
+  (`exposedComponents[]`/`InternalComponentSnapshot`) expõe COMPONENTES DO CIRCUITO interno (ex: um
+  switch interno marcado exposto) — espaço de id disjunto do package, sem relação nenhuma com
+  pinos/formas/imagens do símbolo. O único caminho pro package é "Abrir Subcircuito"
+  (`requestOpenSubcircuit` → `extension.ts::openSubcircuitForEditingCommand`), que navega pra dentro
+  do modo de edição — nunca uma edição inline a partir do esquemático principal. Testado em
+  `subcircuitDocument.test.ts` ("propertySchema (instância) e symbol.pins[] (package) nunca colidem
+  nem vazam um no outro").
+- **Modo "Editar Símbolo"**: aqui sim havia bugs reais de código, únicos que precisaram de
+  implementação nova nesta rodada — ver seção 30.2 e `.spec/lasecsimul-subcircuits.spec` seção 23.
+
+### 30.2 O motor compartilhado
+
+`extension/src/ui/webview/componentLabels.ts` é a fonte única de: nomenclatura de propriedade
+(`labelPropertyKey`), posição/cor/tamanho padrão (`resolveDefaultExternalLabelOffset`/
+`resolveExternalLabelColor`/`genericExternalLabelFontSize`), rotação (`nextLabelRotation`) e — desde
+esta rodada — os campos de alinhamento/visibilidade específicos de `symbol.pin`
+(`symbolPinLabelPackageFields`, ver seção 23 do subcircuits.spec). É um módulo puro (sem `document`/
+`window`), importável tanto pela Webview (`main.ts`) quanto pelo host (`catalog/subcircuitSymbolScene.ts`)
+quanto por testes em Node — a MESMA fórmula nos 3 lugares, nunca duplicada à mão (achado real: antes
+desta rodada, `compileSymbolScene` (host) e `compileLiveSymbolPins` (`main.ts`, preview ao vivo)
+tinham cada um seu PRÓPRIO hardcode de alinhamento, e divergiram entre si sem ninguém perceber —
+exatamente a classe de bug que motivou a extração).
+
+As diferenças entre os 3 contextos existem só em PERMISSÃO/ESCOPO, nunca em mecanismo: o
+esquemático principal e o circuito interno de um subcircuito chamam os mesmos resolvers pra
+qualquer componente comum; o Modo Símbolo os chama só pra `symbol.pin`, com uma persistência
+diferente (compila pro `package` do arquivo em vez de `requestUpdateProperty`); e a instância de um
+subcircuito colocado no esquemático principal usa o rótulo comum pro seu PRÓPRIO nome (seção 13.3),
+nunca tendo acesso aos rótulos internos do package (seção 30.1). Nenhum `if (typeId === "switches...")`
+existe em lugar nenhum desse sistema.
+
+## 31. Bug real: F5 "não mostra" mudanças da Webview mesmo depois de recompilar (2026-07-18)
+
+Usuário reportou repetidamente que features já implementadas nesta sessão (rótulos expostos
+arrastáveis, checkbox "Mostrar valor" da seção 13.3) não apareciam depois de F5 — suspeita de
+"re-render/estado", não de lógica. Diagnóstico encontrou **dois** bugs reais e independentes na
+fronteira host↔Webview, nenhum deles na lógica da Webview em si (que sempre esteve correta):
+
+### 31.1 `SchematicPanel` nunca recarregava o script ao reexibir um painel retido
+
+`SchematicPanel.createOrShow` (`src/ui/panels/SchematicPanel.ts`), ao encontrar `SchematicPanel.current`
+já existente, só chamava `panel.reveal(...)` — nunca reatribuía `webview.html`. Com
+`retainContextWhenHidden`, o contexto JS carregado é o mesmo desde a primeira criação do painel
+NESTA sessão do VS Code; recompilar `out-webview/main.js` sem fechar a aba do esquemático antes não
+tinha efeito algum. **Corrigido**: `createOrShow` agora compara o `mtime` de `out-webview/main.js`
+contra o que foi carregado da última vez (`lastRenderedScriptMtimeMs`) e só força `render()` de novo
+quando o arquivo mudou de fato — uso normal (trocar de aba e voltar) continua sem recarregar,
+preservando undo/seleção/zoom. `ready` é resetado pra `false` nesse caminho, já que `render()` mata
+o handshake `webviewReady` antigo; sem isso a mensagem `syncState` seguinte se perderia, despachada
+antes do listener da Webview NOVA existir.
+
+### 31.2 Erro de tipo no HOST silenciosamente travava a Webview inteira (achado mais sério)
+
+`extension/package.json`'s `compile` era `"tsc -p ./ && tsc -p ./tsconfig.webview.json"`. Como
+`noEmitOnError` não está setado em `tsconfig.json` (default `false`), `tsc` do HOST ainda emite
+`out/` mesmo com erro de tipo — mas sai com código != 0, e o `&&` faz o `tsc` da WEBVIEW nunca
+rodar. Host e Webview são unidades de compilação totalmente independentes (tsconfigs/runtimes
+diferentes, uma não lê o `.js` emitido da outra, só `.ts` fonte compartilhado) — não havia razão
+nenhuma pra uma depender do sucesso da outra. Resultado: **qualquer** erro de tipo em **qualquer**
+arquivo do host (mesmo sem relação nenhuma com a mudança sendo testada) fazia `out-webview/main.js`
+congelar silenciosamente no último build com sucesso, até o erro do host ser corrigido — reproduz
+exatamente "aperto F5 várias vezes, nada muda", porque o arquivo em disco genuinamente não mudava.
+
+**Corrigido**: `extension/scripts/compile.js` (novo) roda os dois `tsc` SEMPRE, incondicionalmente,
+via `spawnSync(process.execPath, [require.resolve("typescript/bin/tsc"), "-p", tsconfigPath])` (não
+depende de PATH/shell, funciona idêntico em cmd.exe/PowerShell/sh) — só propaga falha
+(`process.exitCode`) no final, preservando "compile falha ⇒ pretest/CI falham". Verificado
+empiricamente: com um erro de tipo deliberado injetado em `extension.ts`, `npm run compile` sai com
+código 1 (erro reportado) mas `out-webview/main.js` É recompilado mesmo assim (mtime avança).
+`.vscode/tasks.json`'s `"npm: compile"` (preLaunchTask do F5) não precisou mudar — só o `detail`
+descritivo — continua rodando `npm run compile`, que agora é este script.
+
+### 31.3 Cache de recurso da Webview (mitigação defensiva)
+
+`webview.asWebviewUri(scriptPath)` devolve sempre a MESMA URL `vscode-webview-resource://...` pro
+mesmo caminho — o cache HTTP do Chromium embutido pode, em tese, servir uma resposta antiga pra essa
+URL mesmo depois de `render()` genuinamente rodar de novo (o `nonce` do CSP autoriza qual script
+roda, não força buscar uma versão nova dele). `SchematicPanel::render()` agora anexa `?v=<mtime do
+arquivo>` tanto no `<script src>` quanto no `<link rel="stylesheet">` — muda a URL em si, então o
+cache nunca serve uma resposta antiga pra ela. Não foi isolado como causa raiz confirmada (31.2 já
+explica o sintoma sozinho), mas é uma mitigação de baixo custo pro mesmo sintoma numa causa
+adjacente, e evita reintroduzir o bug de CSS da seção 28 por um caminho de cache diferente.
+
+### 31.4 Bug real e CONFIRMADO: arrastar rótulo externo (id/value) nunca funcionava (2026-07-19)
+
+Depois de 31.1-31.3, usuário confirmou que uma janela NOVA do VS Code de fato refletia código
+recompilado (os fixes acima resolveram o sintoma de build/cache), mas reportou (com screenshot) que
+não conseguia mover NENHUM dos rótulos de valor visíveis (`10.0 kohm`, `100 Ω`, `10.0 Ω`) — clicar
+selecionava normalmente (contorno tracejado aparecia), mas arrastar não movia nada. Bug real,
+diferente de 31.1-31.3, isolado por leitura direta do handler de `pointerdown` do rótulo externo
+(`main.ts::renderExternalLabel`, ~linha 8612):
+
+```ts
+if (!isTextLabelSelected(component.id, kind)) selectOnlyTextLabel(component.id, kind);
+persistState();
+render();                              // <-- recria TODO <div> de rótulo do zero
+...
+el.setPointerCapture(event.pointerId); // <-- `el` já está órfão, removido do documento
+```
+
+`renderExternalLabel` não tem reconciliação por id (diferente do componente, que reaproveita `el`
+via `componentElementsById` entre renders, comentário em `main.ts` ~linha 5949) — cada `render()`
+descarta e recria TODOS os `<div>` de rótulo. Chamar `render()` (pra refletir a seleção
+imediatamente) ANTES de `el.setPointerCapture(...)` deixa `el` (a referência capturada no fechamento
+do próprio handler) órfã — `setPointerCapture` num elemento desconectado do documento falha
+silenciosamente (exceção não capturada dentro do listener, sem crash visível), e nem
+`pointermove`/`pointerup`/`pointercancel` chegam a ser anexados. Resultado: clique/seleção sempre
+funcionava (o `render()` que causa o problema é o que TAMBÉM desenha o contorno tracejado), mas o
+arrasto morria ali mesmo, sempre, em qualquer rótulo id/value comum — não achado antes porque o
+drag de rótulo exposto (Modo Placa, `main.ts` ~linha 1208) usa um caminho totalmente separado (sem
+esse `render()` no meio) e nunca teve o bug.
+
+**Corrigido**: depois do `render()`, o handler rebusca o elemento FRESCO recém-criado
+(`document.querySelector('.component-floating-label[data-component-id="..."][data-label-kind="..."]')`)
+e continua o gesto (`setPointerCapture`/`pointermove`/`pointerup`/`pointercancel`) nele, nunca no
+`el` original do fechamento. Varredura em todo `main.ts` (todo `setPointerCapture` do arquivo)
+confirmou que este era o ÚNICO handler com um `render()` síncrono entre a seleção e a captura — não
+é um padrão repetido em outro lugar.

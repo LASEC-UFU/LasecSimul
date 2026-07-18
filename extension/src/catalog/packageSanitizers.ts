@@ -885,6 +885,7 @@ export function sanitizePackage(value: unknown, assetBasePath?: string): Package
       labelFontSize: sanitizeNumberValue(pin.labelFontSize),
       labelSpace: sanitizeNumberValue(pin.labelSpace),
       labelStateVisible: sanitizeSimulidePaintStateVisible(pin.labelStateVisible),
+      labelHidden: typeof pin.labelHidden === "boolean" ? pin.labelHidden : undefined,
       labelTextAnchor: pin.labelTextAnchor === "start" || pin.labelTextAnchor === "middle" || pin.labelTextAnchor === "end" ? pin.labelTextAnchor : undefined,
       labelDominantBaseline: sanitizeDominantBaseline(pin.labelDominantBaseline),
       labelX: sanitizeNumberValue(pin.labelX),

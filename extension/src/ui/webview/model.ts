@@ -273,6 +273,12 @@ export interface PackagePin {
   labelFontSize?: PackageNumberValue;
   labelSpace?: PackageNumberValue;
   labelStateVisible?: SimulidePaintStateVisible;
+  /** Oculta o rótulo deste pino especificamente (o PINO em si continua visível/conectável) --
+   * distinto de `labelStateVisible` (regra declarativa condicional-a-propriedade, ex: "só mostra se
+   * X=Y", usada por outros dispositivos) -- este é um toggle simples de autoria, ligado a
+   * `WebviewComponentModel.showId` no Modo Símbolo (ver `catalog/subcircuitSymbolScene.ts`).
+   * Ausente/`false` == visível (preserva o comportamento de todo arquivo já salvo). */
+  labelHidden?: boolean;
   labelTextAnchor?: "start" | "middle" | "end";
   labelDominantBaseline?: "auto" | "middle" | "central" | "hanging" | "text-before-edge" | "text-after-edge";
   /** Posição do RÓTULO, independente da posição do pino -- igual ao SimulIDE real (texto de pino,

@@ -44,6 +44,7 @@ import {
   pushWireTopologyTransaction,
   pushRemoveWireToCore,
   pushPropertyToCore,
+  previewPropertyInCore,
   pushRemoveToCore,
   pushTunnelNameToCore,
   sendInstrumentHistory,
@@ -339,7 +340,7 @@ function attachCoreClientNotifications(client: CoreClient): void {
       resolvedValues?: Record<string, number | boolean | string>;
       error?: string;
     };
-    stopVoltageReadoutPolling();
+    stopVoltageReadoutPolling(false);
     setSimulationStatus("paused");
     // Erro de AVALIAÇÃO da condição (expressão inválida) acende o indicador de erro em vez do simples
     // "pausado" -- antes disto o `payload.error` só ia pra Webview (inline no instrumento), sem
@@ -368,12 +369,15 @@ function launchCoreProcess(extensionPath: string): { corePath: string; pipeName:
   const pipeName = CoreProcess.defaultPipeName();
   const networkConfiguration = vscode.workspace.getConfiguration("lasecsimul.network");
   const configuredNetworkNamespace = networkConfiguration.get<number>("namespace", -1);
-  const configuredNetworkMode = networkConfiguration.get<string>("mode", "lab-bridge");
+  const configuredNetworkMode = networkConfiguration.get<string>("mode", "disabled");
   const configuredGatewayPort = networkConfiguration.get<number>("gatewayPort", 9011);
   const coreEnv: NodeJS.ProcessEnv = {
     // Prevent shared-memory arena collisions between thin-client instances.
     LASECSIMUL_HOST_INSTANCE_ID: String(process.pid),
-    LASECSIMUL_NETWORK_MODE: configuredNetworkMode === "isolated" ? "isolated" : "lab-bridge",
+    LASECSIMUL_NETWORK_MODE:
+      configuredNetworkMode === "lab-bridge" || configuredNetworkMode === "isolated"
+        ? configuredNetworkMode
+        : "disabled",
     LASECSIMUL_GATEWAY_PORT: String(configuredGatewayPort),
   };
   if (Number.isInteger(configuredNetworkNamespace) && configuredNetworkNamespace >= 0 && configuredNetworkNamespace <= 255) {
@@ -446,7 +450,18 @@ async function ensureCoreConnected(): Promise<boolean> {
  * nunca recarrega à toa, nem no caso comum (nada mudou). Se QUALQUER MCU/CPU tiver firmware ausente/
  * inacessível ou a recarga falhar, a simulação NÃO inicia -- erro claro em vez de rodar com firmware
  * potencialmente desatualizado ou o processo QEMU num estado inconsistente. */
+let startSimulationPreparationPending = false;
+
 async function runSimulationWithFirmwareCheck(): Promise<void> {
+  // O comando de teclado/Command Palette obedece à mesma máquina de estados do botão: retomar uma
+  // pausa nunca passa pelo carregador de firmware e nunca recria o circuito/QEMU.
+  if (state.simulationStatus === "paused") {
+    pauseSimulation();
+    return;
+  }
+  if (state.simulationStatus !== "stopped" || startSimulationPreparationPending) return;
+  startSimulationPreparationPending = true;
+  try {
   // Sem isto, "Run" ficava em silêncio TOTAL sempre que `state.coreClient` ainda não estava pronto
   // (Core em processo de inicialização, ou falhou ao conectar) -- achado real: `ensureAllMcuFirmwareUpToDate`
   // PULA cada MCU quando `!state.coreClient` (`continue`, nunca `ok:false`) e `registerAllPauseConditions`
@@ -460,6 +475,9 @@ async function runSimulationWithFirmwareCheck(): Promise<void> {
   const result = await ensureAllMcuFirmwareUpToDate(mcuCommandOptions());
   if (!result.ok) return; // já logado (canal + Problemas + status bar) dentro de ensureAllMcuFirmwareUpToDate
   await registerAllPauseConditions().then((valid) => valid ? runSimulation() : undefined);
+  } finally {
+    startSimulationPreparationPending = false;
+  }
 }
 
 function persistedPauseCondition(component: WebviewComponentModel): string {
@@ -1450,6 +1468,12 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       }
       return;
     }
+    case "requestPreviewProperty": {
+      // Pointermove de dial/encoder: efeito elétrico ao vivo, sem mutar o documento nem devolver
+      // `syncStatePatch`. O pointerup envia um único `requestUpdateProperty` persistente.
+      previewPropertyInCore(message.componentId, message.name, message.value);
+      return;
+    }
     case "requestToggleLasecPlot": {
       void lasecPlotManager?.toggle(message.componentId).then((result) => {
         state.schematicPanel?.postMessage({ version: 1, type: "lasecPlotStatus", componentId: message.componentId, ...result });
@@ -2017,6 +2041,31 @@ async function writeSubcircuitEditingSessionBack(session: SubcircuitEditingSessi
   return true;
 }
 
+/** Salva o documento visual ativo, como Ctrl+S num editor de código. No circuito principal grava o
+ * `.lsproj`; dentro de "Editar Subcircuito" grava o `.lssubcircuit` atual sem fechar/desempilhar a
+ * sessão e estabelece uma nova baseline para o indicador de alterações. */
+async function saveActiveSchematicCommand(): Promise<void> {
+  const session = state.subcircuitEditingStack[state.subcircuitEditingStack.length - 1];
+  if (!session) {
+    await saveProjectCommand();
+    return;
+  }
+  if (!isSubcircuitEditingSessionDirty(session)) return;
+  if (!(await writeSubcircuitEditingSessionBack(session))) return;
+
+  // Mutadores da Webview substituem arrays/objetos em vez de editar estas referências in-place;
+  // portanto o snapshot atual pode virar a nova baseline exatamente como no momento da abertura.
+  session.initialComponents = state.schematicState.components;
+  session.initialWires = state.schematicState.topology.conductors;
+  session.initialTopologyNodes = state.schematicState.topology.nodes;
+  session.initialSymbolElements = state.schematicState.symbolElements;
+  session.initialIconElements = state.schematicState.iconElements;
+  session.initialExposedComponents = state.schematicState.exposedComponents;
+  session.initialExportedPropertyComponentIds = state.schematicState.exportedPropertyComponentIds;
+  session.savedDuringEditing = true;
+  vscode.window.showInformationMessage(`Subcircuito salvo em ${session.filePath}`);
+}
+
 /** Restaura o circuito empilhado por `openSubcircuitForEditingCommand`, sem tocar no arquivo --
  * usado tanto pelo branch "Descartar Alterações" quanto, após `writeSubcircuitEditingSessionBack`,
  * pelo branch "Salvar". */
@@ -2059,7 +2108,7 @@ async function closeSubcircuitEditorCommand(): Promise<void> {
     }
     state.subcircuitEditingStack.pop();
     await restoreOuterCircuitFromSession(session);
-    if (choice === save) {
+    if (choice === save || session.savedDuringEditing) {
       // Sem isto, `PACKAGE_BY_TYPE_ID` (host E Webview, `componentSymbols.ts`) mantém o `package`
       // ANTIGO deste typeId em memória -- qualquer instância já colocada no esquemático (deste
       // projeto ou de outro aberto depois) continua desenhando o Package de antes da edição até um
@@ -2081,6 +2130,9 @@ async function closeSubcircuitEditorCommand(): Promise<void> {
 
   state.subcircuitEditingStack.pop();
   await restoreOuterCircuitFromSession(session);
+  if (session.savedDuringEditing) {
+    await refreshUnifiedCatalogState(false, catalogCommandOptions());
+  }
 }
 
 /** "Exportar Dados" da janela "Expande" (osciloscópio/analisador lógico) -- o CSV já vem formatado
@@ -2214,7 +2266,7 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
     vscode.commands.registerCommand("lasecsimul.debugFirmware", () => void debugMcuFirmwareCommand(mcuCommandOptions())),
     vscode.commands.registerCommand("lasecsimul.pause", () => pauseSimulation()),
     vscode.commands.registerCommand("lasecsimul.stop", () => stopSimulation()),
-    vscode.commands.registerCommand("lasecsimul.saveProject", () => saveProjectCommand()),
+    vscode.commands.registerCommand("lasecsimul.saveProject", () => saveActiveSchematicCommand()),
     vscode.commands.registerCommand("lasecsimul.saveProjectAs", () => saveProjectAsCommand()),
     vscode.commands.registerCommand("lasecsimul.openProject", () => openProjectCommand({
       extensionUri: context.extensionUri,

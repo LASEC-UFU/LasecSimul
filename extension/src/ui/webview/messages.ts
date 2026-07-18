@@ -56,6 +56,10 @@ export interface InstrumentHistoryPayload {
 export interface InternalComponentSnapshot {
   id: string;
   typeId: string;
+  /** Nome REAL salvo no `.lssubcircuit` (mesmo campo top-level de `ProjectComponent.label`) --
+   * ausente no arquivo cai em `id` (mesmo default de sempre pra quem nunca teve um label
+   * customizado). Fix "label de componente exposto não aparecia no overlay de Modo Placa"
+   * (2026-07-18): antes este campo vinha sempre igual a `id`, nunca o texto de verdade. */
   label: string;
   graphical: boolean;
   exposed: boolean;
@@ -64,6 +68,12 @@ export interface InternalComponentSnapshot {
    * na instância do subcircuito no schematic principal (`main.ts::buildExposedComponentMenuItems`).
    * Ver `SubcircuitDocument.exportedPropertyComponentIds`. */
   exported: boolean;
+  /** Visibilidade do rótulo id/value (mesmos campos top-level de `ProjectComponent`/
+   * `WebviewComponentModel`) -- sem isto, `main.ts::renderBoardOverlaysFor` não tinha como saber se
+   * devia desenhar o label no overlay (2026-07-18). */
+  showId?: boolean;
+  showValue?: boolean;
+  valueLabelPropertyKey?: string;
   boardVisual?: { x: number; y: number; rotation: 0 | 90 | 180 | 270; flipH?: boolean; flipV?: boolean };
   properties: Record<string, string | number | boolean>;
 }
@@ -115,6 +125,15 @@ export type HostToWebviewMessage =
    * componente exposto no menu de contexto da instância (ver `main.ts::renderBoardOverlaysFor`/
    * `buildExposedComponentMenuItems`). */
   | { version: number; type: "boardOverlayData"; componentId: string; items: InternalComponentSnapshot[] }
+  /** Leitura AO VIVO (corrente/etc, ABI v2 `readoutFormat`) de um componente interno exposto e
+   * graficamente visível no overlay de Modo Placa (`main.ts::renderBoardOverlaysFor`) -- diferente de
+   * `boardOverlayData` acima, que só traz `properties` ESTÁTICAS lidas do arquivo `.lssubcircuit`
+   * (nunca o estado real da simulação rodando). Sem isto, um LED onboard exposto (`outputs.led`/
+   * `outputs.led_bar` com `size:1`) nunca acendia de verdade quando o subcircuito estava colocado
+   * como bloco -- só dentro do próprio modo de edição do subcircuito (que usa `runtimeSymbolProperties`
+   * normalmente). Chave = `${outerComponentId}:${innerComponentId}` (ver
+   * `coreLifecycle.ts::pollBoardOverlayReadouts`). */
+  | { version: number; type: "boardOverlayReadouts"; readoutsByKey: Record<string, ComponentReadoutValue> }
   /** Vem de `lasecsimul.rotateSelectionCw`/`Ccw` (`extension.ts`), disparado por keybinding do
    * VSCode com `when: activeWebviewPanelId == 'lasecsimul.schematic'` -- sobrepõe o `Ctrl+R`/
    * `Ctrl+Shift+R` nativo do VSCode SÓ enquanto o painel está em foco (`when` reverte sozinho ao
@@ -157,6 +176,9 @@ export type WebviewToHostMessage =
    * materializa todos os splits, nós e o ramo somente depois deste verbo. */
   | { version: number; type: "requestConnectEndpoints"; baseRevision: number; from: WireEndpoint; to: WireEndpoint; points?: Array<{ x: number; y: number }> }
   | { version: number; type: "requestUpdateProperty"; componentId: string; name: string; value: string | number | boolean }
+  /** Atualiza o Core durante um gesto sem alterar/ecoar o documento. O commit persistente é enviado
+   * uma única vez no pointerup, evitando confirmações antigas disputarem com o valor local. */
+  | { version: number; type: "requestPreviewProperty"; componentId: string; name: string; value: string | number | boolean }
   | { version: number; type: "requestToggleLasecPlot"; componentId: string }
   | { version: number; type: "requestToggleSerialTerminal"; componentId: string }
   | { version: number; type: "requestSerialTerminalWrite"; componentId: string; dataHex: string }

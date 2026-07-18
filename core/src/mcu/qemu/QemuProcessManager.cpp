@@ -81,6 +81,8 @@ public:
         if (isRunning()) throw std::runtime_error("QEMU process is already running");
         clearProcessState();
 
+        if (!spec.diagnostics.empty()) appendLog(spec.diagnostics.data(), spec.diagnostics.size());
+
 #if defined(_WIN32)
         HANDLE readPipe = nullptr;
         HANDLE writePipe = nullptr;

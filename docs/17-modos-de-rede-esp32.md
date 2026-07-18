@@ -1,9 +1,16 @@
 # Modos de rede da ESP32/OpenETH
 
-O LasecSimul oferece dois backends para a interface OpenETH da ESP32. O modo padrão é
-`lab-bridge`; `isolated` permanece disponível para execução sem driver ou privilégios.
+O LasecSimul oferece dois backends para a interface OpenETH da ESP32, além do modo `disabled`.
+`disabled` é o padrão: não cria NIC, socket ou thread de rede e deve ser usado por firmwares
+comuns (como Blink). Para firmware compilado com `CONFIG_ETH_USE_OPENETH=y`, selecione
+explicitamente `lab-bridge` ou `isolated`.
 
-## `lab-bridge` (padrão)
+## `disabled` (padrão)
+
+O QEMU inicia sem `-nic`; OpenETH e os backends de rede não são realizados. Uma falha de TAP,
+bridge ou gateway não pode afetar CPU, GPIO, timers ou o boot nesse modo.
+
+## `lab-bridge`
 
 Fluxo:
 

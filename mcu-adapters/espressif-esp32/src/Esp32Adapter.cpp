@@ -622,8 +622,33 @@ void gpioWriteRegisterAt(LsdnQemuModule* module, uint64_t address, uint64_t valu
         chip.gpioOut = value32;
         return;
     }
+    // GPIO_OUT_W1TS_REG/GPIO_OUT_W1TC_REG (0x08/0x0C, TRM real do ESP32) -- registrador de AÇÃO
+    // (write-1-pra-set/clear), não de nível: `digitalWrite()`/`gpio_set_level()` do ESP-IDF
+    // (`hal/esp32/include/hal/gpio_ll.h::gpio_ll_set_level`) usam EXCLUSIVAMENTE estes dois
+    // registradores, nunca escrevem `GPIO_OUT_REG` (0x04) diretamente -- só firmware/bootloader
+    // de baixo nível tocaria 0x04 cru. Sem tratar isto aqui, todo `digitalWrite()` normal seria um
+    // no-op silencioso (bit nunca chega a `chip.gpioOut`), completando a modelagem que faltava
+    // (achado 2026-07-17, revisão "pente fino").
+    if (offset == 0x08) {
+        chip.gpioOut |= value32;
+        return;
+    }
+    if (offset == 0x0C) {
+        chip.gpioOut &= ~value32;
+        return;
+    }
     if (offset == 0x20) {
         chip.gpioEnable = value32;
+        return;
+    }
+    // GPIO_ENABLE_W1TS_REG/GPIO_ENABLE_W1TC_REG (0x24/0x28) -- mesmo padrão de ação acima, usado
+    // por `gpio_set_direction()`/`pinMode()` real.
+    if (offset == 0x24) {
+        chip.gpioEnable |= value32;
+        return;
+    }
+    if (offset == 0x28) {
+        chip.gpioEnable &= ~value32;
         return;
     }
     if (offset >= 0x88 && offset < 0x130) {
@@ -1055,11 +1080,6 @@ LsdnQemuLaunchSpec buildLaunchArgs(LsdnMcuAdapter* adapter, const char* firmware
         "file=" + std::string(firmwarePath ? firmwarePath : "") + ",if=mtd,format=raw",
         "-icount",
         "shift=4,align=off,sleep=off",
-        // Rede Ethernet virtual do LasecSimul. O firmware continua executando
-        // esp_netif/lwIP e o driver OpenETH do ESP-IDF; o SLIRP do QEMU fornece
-        // DHCP, DNS e NAT sem TAP/TUN nem privilegios administrativos.
-        "-nic",
-        "user,model=open_eth,net=192.168.4.0/24,host=192.168.4.2,dhcpstart=192.168.4.15,dns=192.168.4.3",
     };
     state->launchArgs.clear();
     state->launchArgs.reserve(state->launchArgStorage.size());

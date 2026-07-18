@@ -72,7 +72,7 @@ function resolveSourceIdForComponent(componentId: string): string | undefined {
   return state.schematicState.catalog.find((entry) => entry.typeId === component.typeId)?.registeredSourceId;
 }
 
-function resolveSubcircuitChildCoreId(outerComponentId: string, innerComponentId: string): Promise<string | undefined> {
+export function resolveSubcircuitChildCoreId(outerComponentId: string, innerComponentId: string): Promise<string | undefined> {
   const outerCoreId = coreInstanceIdByComponentId.get(outerComponentId);
   if (!state.coreClient || !outerCoreId) return Promise.resolve(undefined);
   return state.coreClient.getSubcircuitChildInstanceId(outerCoreId, innerComponentId).catch(() => undefined);

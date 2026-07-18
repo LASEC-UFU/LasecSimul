@@ -367,7 +367,12 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
             if (const auto it = p.properties.find("key"); it != p.properties.end()) {
                 if (const std::string* value = std::get_if<std::string>(&it->second)) key = *value;
             }
-            const bool closed = std::get<bool>(propertyOrDefault(p.properties, schemaById(schemas, "closed")));
+            // Push e' momentaneo: um fechamento salvo enquanto o ponteiro estava pressionado (ou
+            // antes de VS Code/host encerrar) nao pode reaparecer no proximo load segurando EN/BOOT
+            // em GND para sempre. O runtime ainda altera `closed` normalmente via setProperty.
+            const bool closed = typeId == "switches.push"
+                ? false
+                : std::get<bool>(propertyOrDefault(p.properties, schemaById(schemas, "closed")));
             const bool normallyClosed = std::get<bool>(propertyOrDefault(p.properties, schemaById(schemas, "normallyClosed")));
             const bool doubleThrow = std::get<bool>(propertyOrDefault(p.properties, schemaById(schemas, "doubleThrow")));
             const double poles = std::get<double>(propertyOrDefault(p.properties, schemaById(schemas, "poles")));
@@ -623,7 +628,14 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
             applyLedProperties(*model, p);
             return model;
         });
-        registerBuiltinMetadata("outputs.led_bar", "Led Bar", ledBarSchema, englishName("Led Bar"));
+        // `readoutFormat` registrado aqui pra sempre (não só quando `size==1`) -- `Led Bar` inteiro
+        // compartilha 1 metadata estática, mas `DiodeLegArray::getState()`/`current()` já se
+        // auto-limitam a `legs.size()==1` (ver DiodeLegArray.hpp). Instâncias com `size>1` só
+        // devolvem `getState()` vazio (0 bytes), decodificado como "sem leitura" pela Extension --
+        // sem regressão, e destrava o `__led_fill` (acender de verdade) pro caso comum de
+        // `size==1` (LED onboard de placas como o ESP32 DevKitC).
+        registerBuiltinMetadata("outputs.led_bar", "Led Bar", ledBarSchema, englishName("Led Bar"),
+                                components::DiodeLegArray::readoutFormat());
     }
     // `ledmatrix.cpp` real: `m_pin[row]`/`m_pin[m_rows+col]` -- MESMA fórmula do `switches.keypad`
     // (rows+columns, nunca rows*columns). `stamp()` real: 1 perna de LED por INTERSEÇÃO linha×coluna
@@ -1316,7 +1328,7 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
         return resp;
     }
     if (msg.type == "stop") {
-        session.scheduler().stop();
+        session.stopSimulation();
         resp.ok = true;
         return resp;
     }

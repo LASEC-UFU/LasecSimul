@@ -10,8 +10,7 @@ class FakeAdapter final : public IMcuAdapter {
 public:
     const char* chipId() const override { return "fake.cpu"; }
     QemuLaunchSpec buildLaunchArgs(std::string_view firmware) const override {
-        return {"qemu-fake", {"qemu-fake", "-kernel", std::string(firmware), "-nic",
-                              "user,model=open_eth,net=192.168.4.0/24,host=192.168.4.2,dhcpstart=192.168.4.15,dns=192.168.4.3"}};
+        return {"qemu-fake", {"qemu-fake", "-kernel", std::string(firmware)}};
     }
     std::span<const MemoryRegion> memoryRegions() const override { return {}; }
     std::span<const PinMapping> pinMap() const override { return {}; }
@@ -31,18 +30,15 @@ int main() {
     FakeAdapter adapter;
     mcu::McuController controller(adapter);
 
-    const QemuLaunchSpec defaultBridge = controller.buildLaunchSpec(
+    const QemuLaunchSpec disabled = controller.buildLaunchSpec(
         "firmware.bin", "lasecsimul-mcu-1234-7");
-    const std::string expectedDefaultBridge =
-        "socket,model=open_eth,mac=02:4c:7c:7d:b8:e4,connect=127.0.0.1:9011";
+    assert(std::find(disabled.args.begin(), disabled.args.end(), "-nic") == disabled.args.end());
+    assert(disabled.diagnostics.find("network=disabled") != std::string::npos);
 #ifdef _WIN32
     _putenv_s("LASECSIMUL_NETWORK_MODE", "isolated");
 #else
     setenv("LASECSIMUL_NETWORK_MODE", "isolated", 1);
 #endif
-    assert(std::find(defaultBridge.args.begin(), defaultBridge.args.end(), expectedDefaultBridge) !=
-           defaultBridge.args.end());
-
     const QemuLaunchSpec normal = controller.buildLaunchSpec("firmware.bin", "lasecsimul-mcu-1234-7");
     assert(normal.args.front() == "lasecsimul-mcu-1234-7");
     assert(std::find(normal.args.begin(), normal.args.end(), "-gdb") == normal.args.end());
@@ -78,6 +74,6 @@ int main() {
     unsetenv("LASECSIMUL_NETWORK_MODE");
     unsetenv("LASECSIMUL_GATEWAY_PORT");
 #endif
-    std::puts("OK: QEMU launch supports isolated and lab-bridge networking; debug args preserved.");
+    std::puts("OK: QEMU launch defaults to no NIC and supports opt-in isolated/lab-bridge; debug args preserved.");
     return 0;
 }
