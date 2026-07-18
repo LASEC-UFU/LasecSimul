@@ -55,6 +55,11 @@ public:
     virtual bool outputLevel(uint32_t) const { return false; }
     virtual void setInputLevel(uint32_t, bool) {}
     virtual void setInputLevelAt(uint32_t bitOrLine, bool level, uint64_t) { setInputLevel(bitOrLine, level); }
+    /** Valor analogico do pad antes da conversao para nivel logico. Modulos antigos continuam
+     * funcionando pelo fallback digital; adaptadores com ADC sobrescrevem este metodo. */
+    virtual void setInputVoltageAt(uint32_t bitOrLine, double voltage, uint64_t nowNs) {
+        setInputLevelAt(bitOrLine, voltage > 1.65, nowNs);
+    }
 
     /** Modulos com protocolo temporizado (UART/SPI/I2C, timers, PWM) podem pedir um wakeup de
      * simulacao. O Core agenda a chamada e re-estampa o MCU; o modulo continua sem conhecer

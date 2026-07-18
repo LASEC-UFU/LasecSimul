@@ -17,6 +17,8 @@ inline ModuleKind toCoreModuleKind(LsdnModuleKind kind) {
         case LSDN_MODULE_USART: return ModuleKind::Usart;
         case LSDN_MODULE_TIMER: return ModuleKind::Timer;
         case LSDN_MODULE_RESET: return ModuleKind::Reset;
+        case LSDN_MODULE_ADC: return ModuleKind::Adc;
+        case LSDN_MODULE_PWM: return ModuleKind::Pwm;
         default: throw std::runtime_error("LsdnModuleKind desconhecido");
     }
 }
@@ -117,6 +119,19 @@ public:
                 m_handle.vtable->set_input_level_at(m_handle.module, bitOrLine, level ? 1 : 0, nowNs);
             } else if (m_handle.vtable->set_input_level) {
                 m_handle.vtable->set_input_level(m_handle.module, bitOrLine, level ? 1 : 0);
+            }
+        });
+        if (!ok) m_health = PluginHealthStatus::Faulted;
+    }
+
+    void setInputVoltageAt(uint32_t bitOrLine, double voltage, uint64_t nowNs) override {
+        const bool ok = CrashGuard::call(m_label, [&] {
+            if (m_handle.vtable->set_input_voltage_at) {
+                m_handle.vtable->set_input_voltage_at(m_handle.module, bitOrLine, voltage, nowNs);
+            } else if (m_handle.vtable->set_input_level_at) {
+                m_handle.vtable->set_input_level_at(m_handle.module, bitOrLine, voltage > 1.65 ? 1 : 0, nowNs);
+            } else if (m_handle.vtable->set_input_level) {
+                m_handle.vtable->set_input_level(m_handle.module, bitOrLine, voltage > 1.65 ? 1 : 0);
             }
         });
         if (!ok) m_health = PluginHealthStatus::Faulted;

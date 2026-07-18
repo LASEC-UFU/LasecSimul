@@ -40,6 +40,9 @@ export interface WebviewComponentModel {
    * Ausente == default calculado em runtime (`true` se o typeId tiver uma propriedade
    * `showOnSymbol`, senão `false`) — nunca persistido só pra "ter um valor", ver `componentSystemFlags`. */
   showValue?: boolean;
+  /** Mostra num terceiro rótulo externo o valor controlado pelo dial/knob declarado no ViewSpec.
+   * Só é oferecido para componentes que realmente possuem uma interação giratória. */
+  showDialValue?: boolean;
   /** QUAL propriedade numérica é exibida no rótulo de valor, quando o typeId tem mais de uma
    * candidata -- achado de auditoria de UI 2026-07-09: SimulIDE deixa o usuário escolher por
    * componente (cada `NumVal` tem seu próprio checkbox "Show"); antes disso, LasecSimul só permitia

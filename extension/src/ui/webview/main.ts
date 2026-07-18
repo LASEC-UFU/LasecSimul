@@ -219,6 +219,7 @@ const UI_TEXT = {
     measuredVoltage: "Tensao Medida",
     showName: "Mostrar nome",
     showValue: "Mostrar valor",
+    showDialValue: "Mostrar ajuste do dial",
     noProperties: "Nenhuma propriedade disponivel nesta aba.",
     type: "Type",
     uid: "Uid",
@@ -335,6 +336,7 @@ const UI_TEXT = {
     measuredVoltage: "Measured Voltage",
     showName: "Show name",
     showValue: "Show value",
+    showDialValue: "Show dial setting",
     noProperties: "No properties available in this tab.",
     type: "Type",
     uid: "Uid",
@@ -430,6 +432,13 @@ const INSTRUMENT_HISTORY_DEPTH = 600;
 const realScopeHistoryByComponentId = new Map<string, Array<{ timestampsNs: number[]; values: number[] }>>();
 const realLogicHistoryByComponentId = new Map<string, AnalyzerVectorHistory>();
 let voltagesByWireId: Record<string, number> = {};
+/** Estado visual mecânico do motor. O SimulIDE integra o ângulo a partir da tensão dos terminais
+ * (`DcMotor::updatePos/updateStep`); fazemos a mesma projeção sobre a telemetria elétrica já
+ * existente. O mapa sobrevive a `render()` e a Pause, portanto o rotor é um snapshot real da tela,
+ * não uma animação CSS que reinicia quando o SVG é reconstruído. */
+const dcMotorAnglesDeg = new Map<string, number>();
+const dcMotorSpeedRatios = new Map<string, number>();
+let dcMotorLastAnimationMs: number | undefined;
 /** Leitura ao vivo (corrente/etc) de componentes internos expostos no overlay de Modo Placa --
  * chave `${outerComponentId}:${innerComponentId}`, ver `coreLifecycle.ts::pollBoardOverlayReadouts`.
  * Fix "LED onboard não acende quando exposto no símbolo" (2026-07-18). */
@@ -1180,6 +1189,7 @@ function renderBoardOverlaysFor(component: WebviewComponentModel): HTMLElement[]
       label: item.label,
       showId: item.showId,
       showValue: item.showValue,
+      showDialValue: item.showDialValue,
       valueLabelPropertyKey: item.valueLabelPropertyKey,
       x: anchor.x,
       y: anchor.y,
@@ -1187,7 +1197,7 @@ function renderBoardOverlaysFor(component: WebviewComponentModel): HTMLElement[]
       pins: [],
       properties,
     };
-    for (const kind of ["id", "value"] as const) {
+    for (const kind of ["id", "value", "dial"] as const) {
       const text = externalLabelText(syntheticModel, kind);
       if (!text) continue;
       const offset = externalLabelOffset(syntheticModel, kind);
@@ -2859,6 +2869,8 @@ function render(): void {
     }
     const valueLabel = renderExternalLabel(component, "value");
     if (valueLabel) canvasContent.appendChild(valueLabel);
+    const dialLabel = renderExternalLabel(component, "dial");
+    if (dialLabel) canvasContent.appendChild(dialLabel);
   }
 
   // Nós de topologia (junções) são um conceito exclusivo do circuito interno REAL -- mesmo princípio
@@ -4056,6 +4068,58 @@ function updateWireVisual(wireId: string): void {
 function numericReadout(component: WebviewComponentModel): number | undefined {
   const readout = readoutsByComponentId[component.id];
   return typeof readout === "number" ? readout : undefined;
+}
+
+function voltageAtComponentPin(componentId: string, pinId: string): number | undefined {
+  for (const wire of state.topology.conductors) {
+    const touchesFrom = endpointId(wire.from) === componentId && endpointPinId(wire.from) === pinId;
+    const touchesTo = endpointId(wire.to) === componentId && endpointPinId(wire.to) === pinId;
+    if (!touchesFrom && !touchesTo) continue;
+    const voltage = voltagesByWireId[wire.id];
+    if (typeof voltage === "number" && Number.isFinite(voltage)) return voltage;
+  }
+  return undefined;
+}
+
+/** Replica a indicação mecânica de `DcMotor::paint()` do SimulIDE: o ponteiro gira na velocidade
+ * nominal escalada pela tensão e a cor informa o sentido. Uma inércia visual curta evita que PWM
+ * pareça liga/desliga a cada amostra de telemetria (o motor físico também não perde velocidade a
+ * cada nível baixo do PWM). Pause não avança o ângulo; Stop limpa os mapas no handler de status. */
+function animateDcMotors(nowMs: number): void {
+  const previousMs = dcMotorLastAnimationMs ?? nowMs;
+  const dtSeconds = Math.min(0.1, Math.max(0, (nowMs - previousMs) / 1000));
+  dcMotorLastAnimationMs = nowMs;
+
+  for (const component of activeSceneComponents()) {
+    if (component.typeId !== "outputs.dc_motor") continue;
+    const left = voltageAtComponentPin(component.id, "pin-1");
+    const right = voltageAtComponentPin(component.id, "pin-2");
+    const terminalVoltage = left !== undefined && right !== undefined ? left - right : 0;
+    const nominalVoltage = 5;
+    const nominalRpm = 60;
+    const targetRatio = clampNumber(terminalVoltage / nominalVoltage, -4, 4);
+    let speedRatio = dcMotorSpeedRatios.get(component.id) ?? 0;
+    if (simulationStatus === "running") {
+      const timeConstant = Math.abs(targetRatio) > Math.abs(speedRatio) ? 0.15 : 0.8;
+      const alpha = 1 - Math.exp(-dtSeconds / timeConstant);
+      speedRatio += (targetRatio - speedRatio) * alpha;
+      if (Math.abs(speedRatio) < 0.001 && Math.abs(targetRatio) < 0.001) speedRatio = 0;
+      dcMotorSpeedRatios.set(component.id, speedRatio);
+      const nextAngle = (dcMotorAnglesDeg.get(component.id) ?? 0) + speedRatio * nominalRpm * 6 * dtSeconds;
+      dcMotorAnglesDeg.set(component.id, ((nextAngle % 360) + 360) % 360);
+    }
+
+    const element = componentElementsById.get(component.id);
+    const rotor = element?.querySelector<SVGElement>(".dc-motor-rotor");
+    if (!element || !rotor) continue;
+    const angle = dcMotorAnglesDeg.get(component.id) ?? 0;
+    rotor.setAttribute("transform", `rotate(${angle.toFixed(2)} 40 33)`);
+    const moving = Math.abs(speedRatio) >= 0.01 && simulationStatus !== "stopped";
+    element.classList.toggle("dc-motor--running-forward", moving && speedRatio > 0);
+    element.classList.toggle("dc-motor--running-reverse", moving && speedRatio < 0);
+    element.title = `${component.label} (${component.typeId})\n${moving ? `${Math.abs(speedRatio * nominalRpm).toFixed(1)} RPM` : "0 RPM"}`;
+  }
+  requestAnimationFrame(animateDcMotors);
 }
 
 /** `LedBase::getColor()` real (`ledbase.cpp:144-180`) COM `bright=255` (máximo) -- a cor "acesa" de
@@ -6690,6 +6754,24 @@ function valueLabelText(component: WebviewComponentModel): string | undefined {
   return typeof raw === "number" ? formatEngineeringValue(raw, schema.unit) : String(raw);
 }
 
+/** Valor realmente controlado pelo knob declarado pelo próprio ViewSpec. Não depende do typeId para
+ * localizar a propriedade: qualquer device atual ou futuro que publique `dragAngular` ganha o
+ * terceiro rótulo. A única apresentação especial é a posição normalizada 0..1 do potenciômetro,
+ * mostrada como porcentagem, que é a leitura útil ao usuário em vez de uma fração sem unidade. */
+function dialLabelText(component: WebviewComponentModel): string | undefined {
+  const dial = viewSpecInteractionFor(component.typeId, "dragAngular");
+  if (!dial) return undefined;
+  const schema = catalogEntryFor(component.typeId)?.propertySchema?.find((entry) => entry.id === dial.prop);
+  const raw = component.properties[dial.prop] ?? schema?.default;
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return raw === undefined ? undefined : String(raw);
+  if (component.typeId === "passive.potentiometer") return `${Math.round(clampNumber(raw, 0, 1) * 100)} %`;
+  return formatEngineeringValue(raw, schema?.unit ?? "");
+}
+
+function componentHasDialLabel(component: WebviewComponentModel): boolean {
+  return viewSpecInteractionFor(component.typeId, "dragAngular") !== undefined;
+}
+
 /** `showValue` efetivo de um componente -- `false` incondicional pra typeId com mostrador embutido
  * no próprio SVG do símbolo (meters/voltímetro/readoutFormat, ver `usesEmbeddedValueLabel`), senão
  * o valor explícito da instância ou, na ausência, se o catálogo tem alguma propriedade
@@ -6723,7 +6805,8 @@ function externalLabelText(component: WebviewComponentModel, kind: ExternalLabel
     if (component.typeId === SYMBOL_PIN_TYPE_ID) return component.hidden || component.showId === false ? undefined : component.label;
     return !component.hidden && component.showId ? component.label : undefined;
   }
-  return !component.hidden && effectiveShowValue(component) ? valueLabelText(component) : undefined;
+  if (kind === "value") return !component.hidden && effectiveShowValue(component) ? valueLabelText(component) : undefined;
+  return !component.hidden && component.showDialValue === true ? dialLabelText(component) : undefined;
 }
 
 /** Espelha a fórmula de offset de `packagePinLeadSvg`/`defaultLabelPosition`
@@ -7478,7 +7561,7 @@ function renderPropertyField(component: WebviewComponentModel, field: PropertyFi
       radio.addEventListener("change", () => {
         component.valueLabelPropertyKey = field.key;
         component.showValue = true;
-        send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateLabelVisibility", componentId: component.id, showId: Boolean(component.showId), showValue: true, valueLabelPropertyKey: field.key });
+        send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateLabelVisibility", componentId: component.id, showId: Boolean(component.showId), showValue: true, showDialValue: component.showDialValue, valueLabelPropertyKey: field.key });
         persistState();
         render();
       });
@@ -7581,7 +7664,7 @@ function renderPropertySheet(component: WebviewComponentModel, options: Property
   showCheckbox.addEventListener("change", () => {
     component.showId = showCheckbox.checked;
     const showValue = component.showValue ?? Boolean(findShowOnSymbolSchema(component));
-    send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateLabelVisibility", componentId: component.id, showId: component.showId, showValue });
+    send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateLabelVisibility", componentId: component.id, showId: component.showId, showValue, showDialValue: component.showDialValue });
     persistState();
     render();
     refreshOpenPropertyDialog();
@@ -7612,6 +7695,7 @@ function renderPropertySheet(component: WebviewComponentModel, options: Property
         componentId: component.id,
         showId: Boolean(component.showId),
         showValue: component.showValue,
+        showDialValue: component.showDialValue,
         ...(component.valueLabelPropertyKey !== undefined ? { valueLabelPropertyKey: component.valueLabelPropertyKey } : {}),
       });
       persistState();
@@ -7620,6 +7704,32 @@ function renderPropertySheet(component: WebviewComponentModel, options: Property
     });
     showValueLabel.append(showValueText, showValueCheckbox);
     toolbarActions.append(showValueLabel);
+  }
+  if (options.showVisibilityToggle !== false && componentHasDialLabel(component)) {
+    const showDialLabel = document.createElement("label");
+    showDialLabel.className = "property-sheet__show-toggle";
+    const showDialText = document.createElement("span");
+    showDialText.textContent = t("showDialValue");
+    const showDialCheckbox = document.createElement("input");
+    showDialCheckbox.type = "checkbox";
+    showDialCheckbox.checked = component.showDialValue === true;
+    showDialCheckbox.addEventListener("change", () => {
+      component.showDialValue = showDialCheckbox.checked;
+      send({
+        version: WEBVIEW_MESSAGE_VERSION,
+        type: "requestUpdateLabelVisibility",
+        componentId: component.id,
+        showId: Boolean(component.showId),
+        showValue: component.showValue ?? Boolean(findShowOnSymbolSchema(component)),
+        showDialValue: component.showDialValue,
+        ...(component.valueLabelPropertyKey !== undefined ? { valueLabelPropertyKey: component.valueLabelPropertyKey } : {}),
+      });
+      persistState();
+      render();
+      refreshOpenPropertyDialog();
+    });
+    showDialLabel.append(showDialText, showDialCheckbox);
+    toolbarActions.append(showDialLabel);
   }
   toolbar.append(typeText, toolbarActions);
 
@@ -8174,6 +8284,8 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
       realScopeHistoryByComponentId.clear();
       realLogicHistoryByComponentId.clear();
       simulationRate = undefined;
+      dcMotorAnglesDeg.clear();
+      dcMotorSpeedRatios.clear();
     }
     render();
     renderInstrumentPopups();
@@ -8321,6 +8433,7 @@ function makeComponentFromTypeId(typeId: string): WebviewComponentModel {
     label,
     hidden: descriptor?.hidden ?? false,
     showValue: usesEmbeddedValueLabel(typeId) ? false : Boolean(descriptor?.propertySchema?.some((schema) => schema.showOnSymbol)),
+    showDialValue: false,
     x: 140 + componentIndex * 24,
     y: 140 + componentIndex * 24,
     rotation: 0,
@@ -8837,4 +8950,5 @@ window.addEventListener("keyup", (event) => {
 });
 
 render();
+requestAnimationFrame(animateDcMotors);
 send({ version: WEBVIEW_MESSAGE_VERSION, type: "webviewReady" });

@@ -4,7 +4,7 @@
   "name": "QemuDevice",
   "abiVersion": {
     "major": 2,
-    "minor": 4
+    "minor": 5
   },
   "nativeEntry": {
     "win32-x64": "build/win-x64/adapter.dll",
@@ -59,6 +59,12 @@
       "moduleIndex": 0
     },
     {
+      "start": "0x3FF48800",
+      "end": "0x3FF48BFF",
+      "moduleKind": "ADC",
+      "moduleIndex": 0
+    },
+    {
       "start": "0x3FF49000",
       "end": "0x3FF49FFF",
       "moduleKind": "IOMUX",
@@ -69,6 +75,12 @@
       "end": "0x3FF50FFF",
       "moduleKind": "USART",
       "moduleIndex": 1
+    },
+    {
+      "start": "0x3FF59000",
+      "end": "0x3FF59193",
+      "moduleKind": "PWM",
+      "moduleIndex": 0
     },
     {
       "start": "0x3FF53000",

@@ -73,6 +73,7 @@ export interface InternalComponentSnapshot {
    * devia desenhar o label no overlay (2026-07-18). */
   showId?: boolean;
   showValue?: boolean;
+  showDialValue?: boolean;
   valueLabelPropertyKey?: string;
   boardVisual?: { x: number; y: number; rotation: 0 | 90 | 180 | 270; flipH?: boolean; flipV?: boolean };
   properties: Record<string, string | number | boolean>;
@@ -171,7 +172,7 @@ export type WebviewToHostMessage =
   | { version: number; type: "requestRotateComponent"; componentId: string; rotation: 0 | 90 | 180 | 270 }
   | { version: number; type: "requestFlipComponent"; componentId: string; flipH: boolean; flipV: boolean }
   | { version: number; type: "requestRenameComponent"; componentId: string; label: string }
-  | { version: number; type: "requestUpdateLabelVisibility"; componentId: string; showId: boolean; showValue: boolean; valueLabelPropertyKey?: string }
+  | { version: number; type: "requestUpdateLabelVisibility"; componentId: string; showId: boolean; showValue: boolean; showDialValue?: boolean; valueLabelPropertyKey?: string }
   /** Commit único de uma conexão cujo início pode ser um segmento ainda não dividido. O host
    * materializa todos os splits, nós e o ramo somente depois deste verbo. */
   | { version: number; type: "requestConnectEndpoints"; baseRevision: number; from: WireEndpoint; to: WireEndpoint; points?: Array<{ x: number; y: number }> }

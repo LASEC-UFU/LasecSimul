@@ -5,6 +5,7 @@ import { componentBox, registerPackage } from "./componentSymbols";
 import { PackageDescriptor } from "./model";
 import {
   DEFAULT_EXTERNAL_LABEL_FONT_SIZE,
+  DEFAULT_DIAL_LABEL_COLOR,
   DEFAULT_ID_LABEL_COLOR,
   DEFAULT_VALUE_LABEL_COLOR,
   SYMBOL_PIN_LABEL_ALIGN_KEY,
@@ -93,14 +94,17 @@ import {
   await test("labelPropertyKey: sufixo 'size' produz __ui_idLabelSize/__ui_valueLabelSize", () => {
     assert(labelPropertyKey("id", "size") === "__ui_idLabelSize", `recebido ${labelPropertyKey("id", "size")}`);
     assert(labelPropertyKey("value", "size") === "__ui_valueLabelSize", `recebido ${labelPropertyKey("value", "size")}`);
+    assert(labelPropertyKey("dial", "size") === "__ui_dialLabelSize", `recebido ${labelPropertyKey("dial", "size")}`);
     // Sufixos existentes continuam intactos (não regredir o mecanismo já usado por x/y/rotation/color).
     assert(labelPropertyKey("id", "x") === "__ui_idLabelX", `recebido ${labelPropertyKey("id", "x")}`);
     assert(labelPropertyKey("value", "color") === "__ui_valueLabelColor", `recebido ${labelPropertyKey("value", "color")}`);
+    assert(labelPropertyKey("dial", "x") === "__ui_dialLabelX", `recebido ${labelPropertyKey("dial", "x")}`);
   });
 
   await test("genericExternalLabelFontSize: default 11 (bate com o CSS) quando nunca customizado, e respeita override", () => {
     assert(genericExternalLabelFontSize("id", {}) === DEFAULT_EXTERNAL_LABEL_FONT_SIZE, "default deveria ser 11 (mesmo font-size fixo do CSS)");
     assert(genericExternalLabelFontSize("value", {}) === DEFAULT_EXTERNAL_LABEL_FONT_SIZE, "default deveria ser 11 pro value também");
+    assert(genericExternalLabelFontSize("dial", {}) === DEFAULT_EXTERNAL_LABEL_FONT_SIZE, "default deveria ser 11 pro dial também");
     const customized = genericExternalLabelFontSize("id", { __ui_idLabelSize: 18 });
     assert(customized === 18, `override deveria vencer o default, recebido ${customized}`);
     // Chave errada (kind trocado) não pode vazar pro outro kind.
@@ -112,6 +116,7 @@ import {
   await test("resolveExternalLabelColor: defaults por-kind batem com as cores reais do CSS", () => {
     assert(resolveExternalLabelColor("id", {}) === DEFAULT_ID_LABEL_COLOR, `default id deveria ser ${DEFAULT_ID_LABEL_COLOR}`);
     assert(resolveExternalLabelColor("value", {}) === DEFAULT_VALUE_LABEL_COLOR, `default value deveria ser ${DEFAULT_VALUE_LABEL_COLOR}`);
+    assert(resolveExternalLabelColor("dial", {}) === DEFAULT_DIAL_LABEL_COLOR, `default dial deveria ser ${DEFAULT_DIAL_LABEL_COLOR}`);
     const customized = resolveExternalLabelColor("id", { __ui_idLabelColor: "#ff0000" });
     assert(customized === "#ff0000", `override deveria vencer o default, recebido ${customized}`);
   });

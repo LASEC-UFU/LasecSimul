@@ -652,6 +652,16 @@ rect.meter-expand-button:hover {
   font-weight: 600;
 }
 
+/** Terceiro rótulo dos componentes com knob/dial. Mantém a mesma tipografia e todos os mesmos
+ * comportamentos dos rótulos id/value; a cor distinta evita confundir ajuste manual com grandeza
+ * elétrica nominal. Default espelhado em componentLabels.ts. */
+.component-floating-label--dial {
+  position: absolute;
+  color: #7a4fa3;
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .component-floating-label {
   padding: 1px 2px;
   cursor: move;
@@ -677,6 +687,19 @@ rect.meter-expand-button:hover {
 .component-floating-label.selected {
   outline: 1px dashed rgba(24, 71, 199, 0.95);
   outline-offset: 1px;
+}
+
+/* O próprio ponteiro é azul no repouso, verde no sentido direto e laranja no reverso, seguindo a
+   convenção visual usada por DcMotor::paint() do SimulIDE. A rotação é aplicada por JS para que
+   Pause preserve o ângulo e um render incremental não reinicie a animação. */
+.component.dc-motor--running-forward .dc-motor-rotor {
+  stroke: #64c846;
+  filter: drop-shadow(0 0 1.5px rgba(100, 200, 70, 0.85));
+}
+
+.component.dc-motor--running-reverse .dc-motor-rotor {
+  stroke: #c86446;
+  filter: drop-shadow(0 0 1.5px rgba(200, 100, 70, 0.85));
 }
 
 /* Junção como `<g>` SVG dentro de `.wire-layer` (não mais `<div>` solto em `canvasContent`) -- dois

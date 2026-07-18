@@ -289,7 +289,7 @@ void McuComponent::stamp(MnaMatrixView& matrix) {
             // menos -- não dependem de um spread artificial pra ficar bem-condicionados.
             matrix.addConductanceToGround(m_pins[i], kFloatingConductance);
             const double voltage = matrix.getNodeVoltage(m_pins[i]);
-            module->setInputLevelAt(mapping.bitOrLine, voltage > kDigitalLevelThreshold, m_scheduler.nowNsUnlocked());
+            module->setInputVoltageAt(mapping.bitOrLine, voltage, m_scheduler.nowNsUnlocked());
         }
     }
     scheduleWakeupsForAllModules(m_scheduler.nowNsUnlocked(), true);

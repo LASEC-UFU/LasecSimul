@@ -1099,6 +1099,7 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
         label: nextIndexedLabel(message.typeId, baseLabel, state.schematicState.components),
         hidden: descriptor?.hidden ?? false,
         showValue: hasShowOnSymbolProperty(descriptor),
+        showDialValue: false,
         x: 140 + state.schematicState.components.length * 24,
         y: 140 + state.schematicState.components.length * 24,
         rotation: 0,
@@ -1386,6 +1387,7 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       const updated = updateElement(state.schematicState, message.componentId, {
         showId: message.showId,
         showValue: message.showValue,
+        showDialValue: message.showDialValue ?? false,
         ...(message.valueLabelPropertyKey !== undefined ? { valueLabelPropertyKey: message.valueLabelPropertyKey } : {}),
       });
       if (!updated.ok) return;

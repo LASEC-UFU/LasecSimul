@@ -69,10 +69,12 @@ import { createEmptyProject } from "../../src/project/ProjectTypes";
   labeledProject.components.push({
     id: "r1",
     typeId: "core.resistor",
-    properties: { resistance: 220, __ui_idLabelX: 41, __ui_idLabelY: -19, __ui_idLabelRotation: 90 },
+    properties: { resistance: 220, __ui_idLabelX: 41, __ui_idLabelY: -19, __ui_idLabelRotation: 90,
+      __ui_dialLabelX: 22, __ui_dialLabelY: 51, __ui_dialLabelRotation: 270, __ui_dialLabelColor: "#123456", __ui_dialLabelSize: 14 },
     label: "Resistor-7",
     showId: true,
     showValue: false,
+    showDialValue: true,
     flipH: true,
     flipV: false,
     locked: true,
@@ -84,6 +86,7 @@ import { createEmptyProject } from "../../src/project/ProjectTypes";
   assert.strictEqual(labeledRoundTrip.components[0]?.label, "Resistor-7");
   assert.strictEqual(labeledRoundTrip.components[0]?.showId, true);
   assert.strictEqual(labeledRoundTrip.components[0]?.showValue, false);
+  assert.strictEqual(labeledRoundTrip.components[0]?.showDialValue, true);
   assert.strictEqual(labeledRoundTrip.components[0]?.flipH, true);
   assert.strictEqual(labeledRoundTrip.components[0]?.flipV, false);
   assert.strictEqual(labeledRoundTrip.components[0]?.locked, true);
@@ -91,6 +94,10 @@ import { createEmptyProject } from "../../src/project/ProjectTypes";
   assert.strictEqual(labeledRoundTrip.components[0]?.properties.__ui_idLabelX, 41, "posição X do label foi perdida");
   assert.strictEqual(labeledRoundTrip.components[0]?.properties.__ui_idLabelY, -19, "posição Y do label foi perdida");
   assert.strictEqual(labeledRoundTrip.components[0]?.properties.__ui_idLabelRotation, 90, "rotação do label foi perdida");
+  assert.strictEqual(labeledRoundTrip.components[0]?.properties.__ui_dialLabelX, 22, "posição X do terceiro label foi perdida");
+  assert.strictEqual(labeledRoundTrip.components[0]?.properties.__ui_dialLabelRotation, 270, "rotação do terceiro label foi perdida");
+  assert.strictEqual(labeledRoundTrip.components[0]?.properties.__ui_dialLabelColor, "#123456", "cor do terceiro label foi perdida");
+  assert.strictEqual(labeledRoundTrip.components[0]?.properties.__ui_dialLabelSize, 14, "fonte do terceiro label foi perdida");
 
   // Projeto sem `locked`/`hiddenByUser` (arquivo salvo antes desta versão) continua carregando --
   // ausente, nunca um default `true` inventado.

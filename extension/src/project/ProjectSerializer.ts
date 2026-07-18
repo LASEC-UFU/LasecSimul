@@ -71,6 +71,7 @@ function validateComponent(component: unknown, index: number): ProjectComponent 
     label: asString(component.label),
     showId: asBoolean(component.showId),
     showValue: asBoolean(component.showValue),
+    showDialValue: asBoolean(component.showDialValue),
     valueLabelPropertyKey: asString(component.valueLabelPropertyKey),
     flipH: asBoolean(component.flipH),
     flipV: asBoolean(component.flipV),

@@ -68,6 +68,7 @@ export interface ProjectComponent {
   label?: string;
   showId?: boolean;
   showValue?: boolean;
+  showDialValue?: boolean;
   /** Qual propriedade numérica aparece no rótulo de valor, quando o typeId tem mais de uma
    * candidata (achado de auditoria de UI 2026-07-09, ver `WebviewComponentModel.valueLabelPropertyKey`
    * em `ui/webview/model.ts`). Ausente == usa o default do catálogo. */

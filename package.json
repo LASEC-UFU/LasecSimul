@@ -1,7 +1,7 @@
 {
   "name": "lasecsimul-workspace",
   "private": true,
-  "version": "0.0.10",
+  "version": "0.0.11",
   "description": "Scripts agregados para build/test da Extension (TypeScript) e do Core (C++ nativo) do LasecSimul. Não é o manifest da extensão VSCode -- esse é extension/package.json.",
   "scripts": {
     "build": "node scripts/build-all.js",

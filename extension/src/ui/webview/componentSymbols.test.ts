@@ -1464,6 +1464,8 @@ import { PackageDescriptor, WebviewComponentModel } from "./model";
     assert(dcBox.width === 80 && dcBox.height === 66, `DcMotor deveria ocupar 80x66, recebido ${JSON.stringify(dcBox)}`);
     assert(near(dcLeft.x, 0) && near(dcLeft.y, 33) && near(dcRight.x, 80) && near(dcRight.y, 33),
       `terminais do DcMotor devem cruzar o centro y=33, recebido ${JSON.stringify({ dcLeft, dcRight })}`);
+    const dcSvg = packageSymbolSvg("outputs.dc_motor", {}, "dc-motor-rotor") ?? "";
+    assert(dcSvg.includes('class="dc-motor-rotor"'), `ponteiro do motor precisa ser endereçável pela animação: ${dcSvg}`);
 
     catalogPackage("outputs.stepper");
     const expected = [

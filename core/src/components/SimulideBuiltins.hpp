@@ -167,8 +167,11 @@ public:
     void stamp(MnaMatrixView& matrix) override {
         const double low = std::max(m_resistance * m_position, 1e-6);
         const double high = std::max(m_resistance - low, 1e-6);
-        matrix.addConductance(m_pins[0], m_pins[2], 1.0 / low);
-        matrix.addConductance(m_pins[2], m_pins[1], 1.0 / high);
+        // pin-1 e pin-3 sao as extremidades; pin-2 e o cursor (mesma convencao do simbolo,
+        // do arquivo .lsproj e do Potentiometer real do SimulIDE). O codigo anterior usava
+        // pin-3 como cursor, aterrando a amostra analogica da montagem do usuario.
+        matrix.addConductance(m_pins[0], m_pins[1], 1.0 / low);
+        matrix.addConductance(m_pins[1], m_pins[2], 1.0 / high);
     }
 
     void postStep(uint64_t) override {}

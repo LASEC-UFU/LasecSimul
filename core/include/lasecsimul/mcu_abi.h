@@ -32,7 +32,7 @@ extern "C" {
 #endif
 
 #define LSDN_MCU_ABI_VERSION_MAJOR 2
-#define LSDN_MCU_ABI_VERSION_MINOR 4
+#define LSDN_MCU_ABI_VERSION_MINOR 5
 /* Major 2 (2026-06-28): entrou LsdnQemuModuleVTable/LsdnQemuModuleHandle e
  * LsdnMcuVTable::create_modules -- antes desta versao um plugin de MCU so conseguia DECLARAR faixas
  * de endereco/pinos (get_memory_regions/get_pin_map), nunca decodificar registrador de verdade (o
@@ -56,7 +56,9 @@ typedef enum LsdnModuleKind {
     LSDN_MODULE_SPI = 3,
     LSDN_MODULE_USART = 4,
     LSDN_MODULE_TIMER = 5,
-    LSDN_MODULE_RESET = 6
+    LSDN_MODULE_RESET = 6,
+    LSDN_MODULE_ADC = 7,
+    LSDN_MODULE_PWM = 8
 } LsdnModuleKind;
 
 /* Uma faixa de endereco MMIO do chip e o periferico generico do Core que deve trata-la.
@@ -115,6 +117,10 @@ typedef struct LsdnQemuModuleVTable {
     void     (*write_register_at)(LsdnQemuModule* module, uint64_t address, uint64_t value, uint64_t now_ns);
     void     (*set_input_level_at)(LsdnQemuModule* module, uint32_t bit_or_line, int32_t level, uint64_t now_ns);
     uint64_t (*next_wakeup_delay_ns_at)(LsdnQemuModule* module, uint64_t now_ns);
+    /* Minor 5: tensao eletrica real do pad. O callback antigo HIGH/LOW continua presente para
+     * plugins digitais; adaptadores com ADC podem receber a amostra em volts sem quantizacao. */
+    void     (*set_input_voltage_at)(LsdnQemuModule* module, uint32_t bit_or_line,
+                                     double voltage, uint64_t now_ns);
 } LsdnQemuModuleVTable;
 
 /* Um modulo concreto devolvido por create_modules(): estado opaco + vtable + identidade

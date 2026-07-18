@@ -11,7 +11,11 @@
  * - C:\SourceCode\simulide_2\src\microsim\cores\qemu\esp32\esp32iomux.cpp
  */
 #include "lasecsimul/mcu_abi.h"
+#include <algorithm>
 #include <array>
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <cstdint>
 #include <deque>
 #include <cstring>
@@ -27,14 +31,23 @@
 
 namespace {
 
+bool analogTraceEnabled() {
+    const char* value = std::getenv("LASECSIMUL_TRACE_ANALOG");
+    return value != nullptr && value[0] != '\0' && std::strcmp(value, "0") != 0;
+}
+
 constexpr uint64_t kUart0Start = 0x3FF40000;
 constexpr uint64_t kUart0End = 0x3FF40FFF;
 constexpr uint64_t kGpioStart = 0x3FF44000;
 constexpr uint64_t kGpioEnd = 0x3FF44FFF;
 constexpr uint64_t kIoMuxStart = 0x3FF49000;
 constexpr uint64_t kIoMuxEnd = 0x3FF49FFF;
+constexpr uint64_t kAdcStart = 0x3FF48800;
+constexpr uint64_t kAdcEnd = 0x3FF48BFF;
 constexpr uint64_t kUart1Start = 0x3FF50000;
 constexpr uint64_t kUart1End = 0x3FF50FFF;
+constexpr uint64_t kLedcStart = 0x3FF59000;
+constexpr uint64_t kLedcEnd = 0x3FF59193;
 constexpr uint64_t kI2c0Start = 0x3FF53000;
 constexpr uint64_t kI2c0End = 0x3FF53FFF;
 constexpr uint64_t kSpi0Start = 0x3FF64000; // HSPI in the SimulIDE mapping
@@ -68,6 +81,7 @@ enum class SignalKind {
     SpiMiso,
     SpiMosi,
     SpiCs0,
+    Ledc,
 };
 
 struct SignalDesc {
@@ -126,10 +140,21 @@ struct SpiState {
     bool cs0OutputEnabled = false;
 };
 
+struct LedcState {
+    std::array<uint32_t, 8> timerConfig{};
+    std::array<uint8_t, 8> dutyResolution{};
+    std::array<uint64_t, 8> periodNs{};
+    std::array<uint8_t, 16> channelTimer{};
+    std::array<uint32_t, 16> dutyRaw{};
+    std::array<bool, 16> outputLevel{};
+    std::array<uint64_t, 16> nextEdgeNs{};
+};
+
 struct Esp32SharedState {
     uint32_t gpioOut = 0;
     uint32_t gpioEnable = 0;
     std::array<bool, 40> gpioInputs{};
+    std::array<double, 40> gpioVoltages{};
     std::array<uint32_t, 40> gpioPinRegs{};
     std::array<uint16_t, 40> ioMuxRegs{};
     std::array<SignalDesc, 40 * 6> ioMuxFuncs{};
@@ -138,6 +163,7 @@ struct Esp32SharedState {
     std::array<UsartState, 3> usarts{};
     std::array<I2cState, 2> i2cs{};
     std::array<SpiState, 2> spis{};
+    LedcState ledc{};
 };
 
 SignalDesc makeRawGpio(uint32_t pin) { return SignalDesc{SignalKind::RawGpio, pin}; }
@@ -149,6 +175,7 @@ SignalDesc makeSpiClk(uint32_t index) { return SignalDesc{SignalKind::SpiClk, in
 SignalDesc makeSpiMiso(uint32_t index) { return SignalDesc{SignalKind::SpiMiso, index}; }
 SignalDesc makeSpiMosi(uint32_t index) { return SignalDesc{SignalKind::SpiMosi, index}; }
 SignalDesc makeSpiCs0(uint32_t index) { return SignalDesc{SignalKind::SpiCs0, index}; }
+SignalDesc makeLedc(uint32_t index) { return SignalDesc{SignalKind::Ledc, index}; }
 
 uint64_t usartStartAddress(uint32_t index) {
     switch (index) {
@@ -399,6 +426,7 @@ SignalDesc matrixInputSignal(uint32_t func) {
 }
 
 SignalDesc matrixOutputSignal(uint32_t func) {
+    if (func >= 71 && func <= 86) return makeLedc(func - 71);
     switch (func) {
         case 8: return makeSpiClk(0);
         case 9: return makeSpiMiso(0);
@@ -430,6 +458,7 @@ bool signalOutputEnabled(const Esp32SharedState& state, SignalDesc signal) {
         case SignalKind::SpiMiso: return signal.index < state.spis.size() && state.spis[signal.index].misoOutputEnabled;
         case SignalKind::SpiMosi: return signal.index < state.spis.size() && state.spis[signal.index].mosiOutputEnabled;
         case SignalKind::SpiCs0: return signal.index < state.spis.size() && state.spis[signal.index].cs0OutputEnabled;
+        case SignalKind::Ledc: return signal.index < state.ledc.outputLevel.size();
         default: return false;
     }
 }
@@ -445,6 +474,7 @@ bool signalOutputLevel(const Esp32SharedState& state, SignalDesc signal) {
         case SignalKind::SpiMiso: return signal.index < state.spis.size() && state.spis[signal.index].misoOutputLevel;
         case SignalKind::SpiMosi: return signal.index < state.spis.size() && state.spis[signal.index].mosiOutputLevel;
         case SignalKind::SpiCs0: return signal.index < state.spis.size() && state.spis[signal.index].cs0OutputLevel;
+        case SignalKind::Ledc: return signal.index < state.ledc.outputLevel.size() && state.ledc.outputLevel[signal.index];
         default: return false;
     }
 }
@@ -602,11 +632,22 @@ struct SpiModuleState {
     uint32_t index = 0;
 };
 
+struct AdcModuleState {
+    Esp32SharedState* chip = nullptr;
+    uint8_t channel1 = 0;
+    uint8_t channel2 = 0;
+};
+
+struct LedcModuleState {
+    Esp32SharedState* chip = nullptr;
+};
+
 void gpioReset(LsdnQemuModule* module) {
     auto* s = reinterpret_cast<GpioModuleState*>(module);
     s->chip->gpioOut = 0;
     s->chip->gpioEnable = 0;
     s->chip->gpioInputs.fill(false);
+    s->chip->gpioVoltages.fill(0.0);
     s->chip->gpioPinRegs.fill(0);
     s->chip->matrixInRegs.fill(0);
     s->chip->matrixOutRegs.fill(0);
@@ -667,7 +708,13 @@ void gpioWriteRegisterAt(LsdnQemuModule* module, uint64_t address, uint64_t valu
     }
     if (offset >= 0x530 && offset < 0x5D0) {
         const uint32_t pin = static_cast<uint32_t>((offset - 0x530) / 4u);
-        if (pin < chip.matrixOutRegs.size()) chip.matrixOutRegs[pin] = value32;
+        if (pin < chip.matrixOutRegs.size()) {
+            chip.matrixOutRegs[pin] = value32;
+            if (analogTraceEnabled() && pin == 27) {
+                std::fprintf(stderr, "[LasecSimul][adapter][GPIO27] matrix=0x%08x signal=%u\n",
+                             value32, value32 & 0xFFu);
+            }
+        }
     }
 }
 
@@ -696,6 +743,16 @@ int32_t gpioIsOutputEnabled(LsdnQemuModule* module, uint32_t bit) {
         if ((cfg & (1u << 10)) != 0) enabled = (bit < 32) && (chip.gpioEnable & (1u << bit)) != 0;
         if ((cfg & (1u << 11)) != 0) enabled = !enabled;
     }
+    if (analogTraceEnabled() && bit == 27) {
+        static int previous = -1;
+        const int current = enabled ? 1 : 0;
+        if (current != previous) {
+            std::fprintf(stderr,
+                         "[LasecSimul][adapter][GPIO27] output_enabled=%d mux=%u matrix=0x%08x\n",
+                         current, selectedIoMuxIndex(chip, bit), chip.matrixOutRegs[bit]);
+            previous = current;
+        }
+    }
     return enabled ? 1 : 0;
 }
 
@@ -708,6 +765,18 @@ int32_t gpioOutputLevel(LsdnQemuModule* module, uint32_t bit) {
     bool level = signalOutputLevel(chip, signal);
     if (bit < chip.matrixOutRegs.size() && selectedIoMuxIndex(chip, bit) == 2) {
         if ((chip.matrixOutRegs[bit] & (1u << 9)) != 0) level = !level;
+    }
+    if (analogTraceEnabled() && bit == 27) {
+        static int previous = -1;
+        static uint32_t changes = 0;
+        const int current = level ? 1 : 0;
+        if (current != previous && changes < 32) {
+            std::fprintf(stderr,
+                         "[LasecSimul][adapter][GPIO27] output_level=%d ledc0=%d mux=%u\n",
+                         current, chip.ledc.outputLevel[0] ? 1 : 0, selectedIoMuxIndex(chip, bit));
+            previous = current;
+            ++changes;
+        }
     }
     return level ? 1 : 0;
 }
@@ -724,6 +793,15 @@ void gpioSetInputLevel(LsdnQemuModule* module, uint32_t bit, int32_t level) {
     gpioSetInputLevelAt(module, bit, level, 0);
 }
 
+void gpioSetInputVoltageAt(LsdnQemuModule* module, uint32_t bit, double voltage, uint64_t nowNs) {
+    auto* s = reinterpret_cast<GpioModuleState*>(module);
+    Esp32SharedState& chip = *s->chip;
+    if (bit >= chip.gpioInputs.size()) return;
+    chip.gpioVoltages[bit] = voltage;
+    chip.gpioInputs[bit] = voltage > 1.65;
+    routePinInputAt(chip, bit, nowNs);
+}
+
 void gpioDestroy(LsdnQemuModule* module) {
     delete reinterpret_cast<GpioModuleState*>(module);
 }
@@ -731,6 +809,7 @@ void gpioDestroy(LsdnQemuModule* module) {
 const LsdnQemuModuleVTable kGpioModuleVTable = {
     &gpioReset, &gpioWriteRegister, &gpioReadRegister, &gpioIsOutputEnabled, &gpioOutputLevel,
     &gpioSetInputLevel, &gpioDestroy, nullptr, nullptr, &gpioWriteRegisterAt, &gpioSetInputLevelAt, nullptr,
+    &gpioSetInputVoltageAt,
 };
 
 void ioMuxReset(LsdnQemuModule* module) {
@@ -745,6 +824,10 @@ void ioMuxWriteRegisterAt(LsdnQemuModule* module, uint64_t address, uint64_t val
     const int pin = getIoMuxPin(offset);
     if (pin < 0) return;
     chip.ioMuxRegs[static_cast<size_t>(pin)] = static_cast<uint16_t>(value);
+    if (analogTraceEnabled() && pin == 27) {
+        std::fprintf(stderr, "[LasecSimul][adapter][GPIO27] iomux=0x%08llx mux=%u\n",
+                     static_cast<unsigned long long>(value), selectedIoMuxIndex(chip, 27));
+    }
     routePinInputAt(chip, static_cast<uint32_t>(pin), nowNs);
 }
 
@@ -965,11 +1048,217 @@ const LsdnQemuModuleVTable kSpiModuleVTable = {
     &spiSetInputLevel, &spiDestroy,
 };
 
+bool selectedAdcChannel(uint32_t value, uint8_t& channel) {
+    const uint32_t mask = (value & 0x7FF80000u) >> 19u;
+    if (mask == 0) return false;
+    for (uint8_t bit = 0; bit < 16; ++bit) {
+        if ((mask & (1u << bit)) != 0) {
+            channel = bit;
+            return true;
+        }
+    }
+    return false;
+}
+
+int adcChannelToGpio(bool adc2, uint8_t channel) {
+    static constexpr std::array<int, 8> kAdc1Gpio = {36, 37, 38, 39, 32, 33, 34, 35};
+    static constexpr std::array<int, 10> kAdc2Gpio = {4, 0, 2, 15, 13, 12, 14, 27, 25, 26};
+    if (!adc2) return channel < kAdc1Gpio.size() ? kAdc1Gpio[channel] : -1;
+    return channel < kAdc2Gpio.size() ? kAdc2Gpio[channel] : -1;
+}
+
+uint16_t adcRawFromVoltage(double voltage) {
+    // Modelo eletrico inicial: 12 bits no intervalo nominal 0..3,3 V. A nao-linearidade e as
+    // curvas por atenuacao do ADC real podem ser acrescentadas depois sem mudar a ABI.
+    const double clamped = std::clamp(voltage, 0.0, 3.3);
+    return static_cast<uint16_t>(std::lround(clamped * 4095.0 / 3.3));
+}
+
+void adcReset(LsdnQemuModule* module) {
+    auto* s = reinterpret_cast<AdcModuleState*>(module);
+    s->channel1 = 0;
+    s->channel2 = 0;
+}
+
+void adcWriteRegister(LsdnQemuModule* module, uint64_t address, uint64_t value) {
+    auto* s = reinterpret_cast<AdcModuleState*>(module);
+    const uint64_t offset = address - kAdcStart;
+    // O ESP-IDF escreve o registrador START diversas vezes durante uma conversao. Algumas
+    // dessas escritas alteram apenas START/FORCE e deixam o bitmap de canais zerado. Nesse
+    // caso o canal previamente selecionado precisa ser preservado; zerar para ADC1_CH0 fazia
+    // uma leitura valida ser seguida por GPIO36=0 V e analogRead() acabava retornando zero.
+    if (offset == 0x54) {
+        selectedAdcChannel(static_cast<uint32_t>(value), s->channel1);
+    } else if (offset == 0x94) {
+        selectedAdcChannel(static_cast<uint32_t>(value), s->channel2);
+    }
+}
+
+uint64_t adcReadRegister(LsdnQemuModule* module, uint64_t address) {
+    auto* s = reinterpret_cast<AdcModuleState*>(module);
+    const uint64_t offset = address - kAdcStart;
+    const bool adc2 = offset == 0x94;
+    if (offset != 0x54 && !adc2) return 0;
+    const int gpio = adcChannelToGpio(adc2, adc2 ? s->channel2 : s->channel1);
+    if (gpio < 0 || static_cast<size_t>(gpio) >= s->chip->gpioVoltages.size()) return 0;
+    return adcRawFromVoltage(s->chip->gpioVoltages[static_cast<size_t>(gpio)]);
+}
+
+void adcDestroy(LsdnQemuModule* module) {
+    delete reinterpret_cast<AdcModuleState*>(module);
+}
+
+const LsdnQemuModuleVTable kAdcModuleVTable = {
+    &adcReset, &adcWriteRegister, &adcReadRegister, nullptr, nullptr, nullptr, &adcDestroy,
+};
+
+uint64_t ledcPeriodNs(uint32_t config, uint8_t& dutyResolution, bool lowSpeed) {
+    dutyResolution = static_cast<uint8_t>(config & 0x1Fu);
+    const uint32_t dividerFixed8 = (config & 0x007FFFE0u) >> 5u;
+    if (dutyResolution == 0 || dividerFixed8 == 0) return 0;
+
+    uint64_t sourceHz = 1'000'000;
+    if ((config & 0x02000000u) != 0) sourceHz = lowSpeed ? 80'000'000 : 80'000'000;
+    const long double ticks = (static_cast<long double>(dividerFixed8) / 256.0L) *
+                              static_cast<long double>(uint64_t(1) << dutyResolution);
+    return std::max<uint64_t>(1, static_cast<uint64_t>(std::llround(ticks * 1.0e9L / sourceHz)));
+}
+
+void ledcRestartChannel(Esp32SharedState& chip, uint32_t channel, uint64_t nowNs) {
+    if (channel >= chip.ledc.outputLevel.size()) return;
+    const uint32_t timer = chip.ledc.channelTimer[channel];
+    if (timer >= chip.ledc.periodNs.size()) return;
+    const uint64_t period = chip.ledc.periodNs[timer];
+    const uint8_t resolution = chip.ledc.dutyResolution[timer];
+    if (analogTraceEnabled() && channel == 0) {
+        static uint32_t messages = 0;
+        if (messages < 32) {
+            std::fprintf(stderr,
+                         "[LasecSimul][adapter][LEDC0] timer=%u period_ns=%llu resolution=%u duty=%u now=%llu\n",
+                         timer, static_cast<unsigned long long>(period), resolution,
+                         chip.ledc.dutyRaw[channel], static_cast<unsigned long long>(nowNs));
+            ++messages;
+        }
+    }
+    if (period == 0 || resolution == 0) {
+        chip.ledc.outputLevel[channel] = false;
+        chip.ledc.nextEdgeNs[channel] = 0;
+        return;
+    }
+
+    const uint64_t fullScale = uint64_t(1) << resolution;
+    const uint64_t duty = std::min<uint64_t>(chip.ledc.dutyRaw[channel], fullScale);
+    if (duty == 0) {
+        chip.ledc.outputLevel[channel] = false;
+        chip.ledc.nextEdgeNs[channel] = 0;
+        return;
+    }
+    if (duty >= fullScale || period <= 1) {
+        chip.ledc.outputLevel[channel] = true;
+        chip.ledc.nextEdgeNs[channel] = 0;
+        return;
+    }
+
+    const uint64_t highNs = std::clamp<uint64_t>((period * duty) / fullScale, 1, period - 1);
+    chip.ledc.outputLevel[channel] = true;
+    chip.ledc.nextEdgeNs[channel] = addDelayNs(nowNs, highNs);
+}
+
+void ledcReset(LsdnQemuModule* module) {
+    auto* s = reinterpret_cast<LedcModuleState*>(module);
+    s->chip->ledc = LedcState{};
+}
+
+void ledcWriteRegisterAt(LsdnQemuModule* module, uint64_t address, uint64_t value, uint64_t nowNs) {
+    auto* s = reinterpret_cast<LedcModuleState*>(module);
+    Esp32SharedState& chip = *s->chip;
+    const uint64_t offset = address - kLedcStart;
+    const uint32_t value32 = static_cast<uint32_t>(value);
+
+    if (offset >= 0x140 && offset <= 0x178 && ((offset - 0x140) % 8u) == 0) {
+        const uint32_t timer = static_cast<uint32_t>((offset - 0x140) / 8u);
+        chip.ledc.timerConfig[timer] = value32;
+        chip.ledc.periodNs[timer] = ledcPeriodNs(value32, chip.ledc.dutyResolution[timer], timer >= 4);
+        if (analogTraceEnabled()) {
+            std::fprintf(stderr,
+                         "[LasecSimul][adapter][LEDC] timer=%u config=0x%08x period_ns=%llu resolution=%u\n",
+                         timer, value32, static_cast<unsigned long long>(chip.ledc.periodNs[timer]),
+                         chip.ledc.dutyResolution[timer]);
+        }
+        for (uint32_t channel = 0; channel < chip.ledc.channelTimer.size(); ++channel) {
+            if (chip.ledc.channelTimer[channel] == timer) ledcRestartChannel(chip, channel, nowNs);
+        }
+        return;
+    }
+
+    if (offset < 0x140) {
+        const uint32_t channel = static_cast<uint32_t>(offset / 0x14u);
+        const uint32_t registerOffset = static_cast<uint32_t>(offset % 0x14u);
+        if (channel >= chip.ledc.channelTimer.size()) return;
+        if (registerOffset == 0) {
+            chip.ledc.channelTimer[channel] = static_cast<uint8_t>((value32 & 0x3u) + (channel >= 8 ? 4u : 0u));
+            ledcRestartChannel(chip, channel, nowNs);
+        } else if (registerOffset == 8) {
+            chip.ledc.dutyRaw[channel] = (value32 >> 4u) & 0xFFFFFu;
+            ledcRestartChannel(chip, channel, nowNs);
+        }
+    }
+}
+
+void ledcWriteRegister(LsdnQemuModule* module, uint64_t address, uint64_t value) {
+    ledcWriteRegisterAt(module, address, value, 0);
+}
+
+uint64_t ledcReadRegister(LsdnQemuModule*, uint64_t) { return 0; }
+
+uint64_t ledcNextWakeupAt(LsdnQemuModule* module, uint64_t nowNs) {
+    auto* s = reinterpret_cast<LedcModuleState*>(module);
+    uint64_t nearest = LSDN_QEMU_MODULE_NO_WAKEUP;
+    for (const uint64_t edge : s->chip->ledc.nextEdgeNs) {
+        if (edge == 0) continue;
+        nearest = std::min(nearest, edge <= nowNs ? uint64_t(0) : edge - nowNs);
+    }
+    return nearest;
+}
+
+void ledcOnWakeup(LsdnQemuModule* module, uint64_t nowNs) {
+    auto* s = reinterpret_cast<LedcModuleState*>(module);
+    Esp32SharedState& chip = *s->chip;
+    for (uint32_t channel = 0; channel < chip.ledc.nextEdgeNs.size(); ++channel) {
+        if (chip.ledc.nextEdgeNs[channel] == 0 || chip.ledc.nextEdgeNs[channel] > nowNs) continue;
+        const uint32_t timer = chip.ledc.channelTimer[channel];
+        if (timer >= chip.ledc.periodNs.size()) continue;
+        const uint64_t period = chip.ledc.periodNs[timer];
+        const uint8_t resolution = chip.ledc.dutyResolution[timer];
+        const uint64_t fullScale = resolution == 0 ? 0 : uint64_t(1) << resolution;
+        const uint64_t duty = fullScale == 0 ? 0 : std::min<uint64_t>(chip.ledc.dutyRaw[channel], fullScale);
+        if (period <= 1 || duty == 0 || duty >= fullScale) {
+            ledcRestartChannel(chip, channel, nowNs);
+            continue;
+        }
+        const uint64_t highNs = std::clamp<uint64_t>((period * duty) / fullScale, 1, period - 1);
+        chip.ledc.outputLevel[channel] = !chip.ledc.outputLevel[channel];
+        chip.ledc.nextEdgeNs[channel] = addDelayNs(
+            nowNs, chip.ledc.outputLevel[channel] ? highNs : period - highNs);
+    }
+}
+
+void ledcDestroy(LsdnQemuModule* module) {
+    delete reinterpret_cast<LedcModuleState*>(module);
+}
+
+const LsdnQemuModuleVTable kLedcModuleVTable = {
+    &ledcReset, &ledcWriteRegister, &ledcReadRegister, nullptr, nullptr, nullptr, &ledcDestroy,
+    nullptr, &ledcOnWakeup, &ledcWriteRegisterAt, nullptr, &ledcNextWakeupAt,
+};
+
 const LsdnMemoryRegion kMemoryRegions[] = {
     {kUart0Start, kUart0End, LSDN_MODULE_USART, 0},
     {kGpioStart, kGpioEnd, LSDN_MODULE_GPIO, 0},
+    {kAdcStart, kAdcEnd, LSDN_MODULE_ADC, 0},
     {kIoMuxStart, kIoMuxEnd, LSDN_MODULE_IOMUX, 0},
     {kUart1Start, kUart1End, LSDN_MODULE_USART, 1},
+    {kLedcStart, kLedcEnd, LSDN_MODULE_PWM, 0},
     {kI2c0Start, kI2c0End, LSDN_MODULE_I2C, 0},
     {kSpi0Start, kSpi0End, LSDN_MODULE_SPI, 0},
     {kSpi1Start, kSpi1End, LSDN_MODULE_SPI, 1},
@@ -1106,7 +1395,7 @@ uint32_t getPinMap(LsdnMcuAdapter* adapter, LsdnPinMapping* out, uint32_t cap) {
 
 uint32_t createModules(LsdnMcuAdapter* adapter, LsdnQemuModuleHandle* out, uint32_t cap) {
     auto* state = reinterpret_cast<Esp32AdapterState*>(adapter);
-    constexpr uint32_t kCount = 9;
+    constexpr uint32_t kCount = 11;
     if (!out || cap < kCount) return kCount;
 
     out[0] = LsdnQemuModuleHandle{
@@ -1135,6 +1424,12 @@ uint32_t createModules(LsdnMcuAdapter* adapter, LsdnQemuModuleHandle* out, uint3
     };
     out[8] = LsdnQemuModuleHandle{
         LSDN_MODULE_SPI, 1, reinterpret_cast<LsdnQemuModule*>(new SpiModuleState{&state->chip, 1}), &kSpiModuleVTable,
+    };
+    out[9] = LsdnQemuModuleHandle{
+        LSDN_MODULE_ADC, 0, reinterpret_cast<LsdnQemuModule*>(new AdcModuleState{&state->chip}), &kAdcModuleVTable,
+    };
+    out[10] = LsdnQemuModuleHandle{
+        LSDN_MODULE_PWM, 0, reinterpret_cast<LsdnQemuModule*>(new LedcModuleState{&state->chip}), &kLedcModuleVTable,
     };
     return kCount;
 }

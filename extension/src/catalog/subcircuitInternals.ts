@@ -25,6 +25,7 @@ interface InternalComponentSeed {
   exported?: boolean;
   showId?: boolean;
   showValue?: boolean;
+  showDialValue?: boolean;
   valueLabelPropertyKey?: string;
 }
 
@@ -72,6 +73,7 @@ function extractInternalComponents(json: Record<string, unknown>): InternalCompo
         exported: exportedIds.has(id),
         showId: typeof value.showId === "boolean" ? value.showId : undefined,
         showValue: typeof value.showValue === "boolean" ? value.showValue : undefined,
+        showDialValue: typeof value.showDialValue === "boolean" ? value.showDialValue : undefined,
         valueLabelPropertyKey: typeof value.valueLabelPropertyKey === "string" ? value.valueLabelPropertyKey : undefined,
       };
     })
@@ -114,6 +116,7 @@ export function gatherInternalComponentSnapshots(sourceId: string): InternalComp
         exported: component.exported === true,
         showId: component.showId,
         showValue: component.showValue,
+        showDialValue: component.showDialValue,
         valueLabelPropertyKey: component.valueLabelPropertyKey,
         boardVisual: component.boardVisual
           ? {

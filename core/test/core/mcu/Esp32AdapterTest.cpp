@@ -104,12 +104,14 @@ int main() {
                 "GPIO2 maps to GPIO bit 2");
 
     const auto modules = adapter->createModules();
-    TEST_ASSERT(modules.size() == 9, "createModules() devolve GPIO + IOMUX + USART/I2C/SPI principais");
+    TEST_ASSERT(modules.size() == 11, "createModules() devolve GPIO/IOMUX/USART/I2C/SPI + ADC e PWM");
     bool hasGpioModule = false;
     bool hasIoMuxModule = false;
     QemuModule* gpioModule = nullptr;
     QemuModule* ioMuxModule = nullptr;
     QemuModule* uart0Module = nullptr;
+    QemuModule* adcModule = nullptr;
+    QemuModule* pwmModule = nullptr;
     for (const std::unique_ptr<QemuModule>& m : modules) {
         if (m->kind() == ModuleKind::Gpio && m->index() == 0 && m->owns(0x3FF44000)) {
             hasGpioModule = true;
@@ -122,6 +124,8 @@ int main() {
         if (m->kind() == ModuleKind::Usart && m->index() == 0 && m->owns(0x3FF40000)) {
             uart0Module = m.get();
         }
+        if (m->kind() == ModuleKind::Adc && m->index() == 0 && m->owns(0x3FF48800)) adcModule = m.get();
+        if (m->kind() == ModuleKind::Pwm && m->index() == 0 && m->owns(0x3FF59000)) pwmModule = m.get();
     }
     TEST_ASSERT(hasGpioModule, "createModules() inclui um QemuModule GPIO cobrindo a faixa real");
     TEST_ASSERT(hasIoMuxModule, "createModules() inclui um QemuModule IOMUX cobrindo a faixa real");
@@ -129,6 +133,8 @@ int main() {
     TEST_ASSERT(gpioModule != nullptr, "teste encontrou o modulo GPIO");
     TEST_ASSERT(ioMuxModule != nullptr, "teste encontrou o modulo IOMUX");
     TEST_ASSERT(uart0Module != nullptr, "teste encontrou o modulo UART0");
+    TEST_ASSERT(adcModule != nullptr, "teste encontrou o modulo ADC");
+    TEST_ASSERT(pwmModule != nullptr, "teste encontrou o modulo LEDC/PWM");
     if (gpioModule) {
         gpioModule->writeRegister(0x3FF44000 + 0x20, 1u << 2);
         gpioModule->writeRegister(0x3FF44000 + 0x04, 1u << 2);
@@ -199,6 +205,35 @@ int main() {
                     "UART0 FIFO le o byte recebido 0xA5");
         TEST_ASSERT(uart0Module && (uart0Module->readRegister(0x3FF40000 + 0x1C) & 0xFFu) == 0u,
                     "UART0 RX FIFO decrementa apos leitura");
+
+        // ADC1 canal 6 = GPIO34. A tensao analogica nao pode ser reduzida a HIGH/LOW na ABI.
+        gpioModule->setInputVoltageAt(34, 1.65, 0);
+        if (adcModule) adcModule->writeRegister(0x3FF48800 + 0x54, uint64_t(1u << 6u) << 19u);
+        const uint64_t adcHalfScale = adcModule ? adcModule->readRegister(0x3FF48800 + 0x54) : 0;
+        TEST_ASSERT(adcHalfScale >= 2047 && adcHalfScale <= 2048,
+                    "ADC1 converte 1,65 V no GPIO34 para aproximadamente meia escala de 12 bits");
+        // START/FORCE sem bitmap de canal e' uma escrita de controle normal do ESP-IDF e nao
+        // significa selecionar ADC1_CH0. O canal 6 deve permanecer retido ate outra selecao real.
+        if (adcModule) adcModule->writeRegister(0x3FF48800 + 0x54, 0x00000000u);
+        const uint64_t adcAfterControlWrite = adcModule ? adcModule->readRegister(0x3FF48800 + 0x54) : 0;
+        TEST_ASSERT(adcAfterControlWrite >= 2047 && adcAfterControlWrite <= 2048,
+                    "ADC preserva o canal selecionado em escritas START/FORCE sem bitmap");
+
+        // LEDC HS channel 0, 1 kHz/8 bits, roteado pelo sinal 71 da GPIO Matrix ao GPIO27.
+        if (ioMuxModule) ioMuxModule->writeRegister(0x3FF49000 + 0x2C, 2u << 12u);
+        gpioModule->writeRegister(0x3FF44000 + 0x530 + 27u * 4u, 71u);
+        if (pwmModule) {
+            pwmModule->writeRegisterAt(0x3FF59000 + 0x140, 8u | (80'000u << 5u) | 0x02000000u, 0);
+            pwmModule->writeRegisterAt(0x3FF59000 + 0x000, 0, 0);
+            pwmModule->writeRegisterAt(0x3FF59000 + 0x008, 128u << 4u, 0);
+        }
+        TEST_ASSERT(gpioModule->isOutputEnabled(27), "GPIO Matrix habilita GPIO27 como saida LEDC");
+        TEST_ASSERT(gpioModule->outputLevel(27), "PWM de 50% inicia no nivel alto");
+        TEST_ASSERT(pwmModule && pwmModule->nextWakeupDelayNs(0) >= 499'000u &&
+                        pwmModule->nextWakeupDelayNs(0) <= 501'000u,
+                    "PWM de 1 kHz/50% agenda a borda em aproximadamente 500 us");
+        if (pwmModule) pwmModule->onWakeup(500'000u);
+        TEST_ASSERT(!gpioModule->outputLevel(27), "borda do PWM alterna GPIO27 para nivel baixo");
     }
 
     if (failures == 0) {
