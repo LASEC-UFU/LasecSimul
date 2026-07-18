@@ -357,52 +357,61 @@ void McuComponent::stampResetPin(MnaMatrixView& matrix, const Pin& pin) {
     // ao contrário do floating genérico de GPIO (puxa fraco pra terra) -- "sem ligação" aqui tem
     // que significar "não resetado". Um circuito real (botão + pull-up, igual ao EN real) com
     // condutância muito mais forte domina e decide o nível de verdade quando presente.
+    //
+    // Só modelagem ELÉTRICA aqui -- a detecção de borda (reset/reload) mora em `onEvent()`, que só
+    // é chamado pelo framework depois do solver convergir E numa transição REAL de nível (ver
+    // comentário de `onEvent()` no .hpp). `stamp()` roda várias vezes por rodada de convergência do
+    // Newton (uma vez por iteração até o dirty-set esvaziar); ler `matrix.getNodeVoltage(pin)` AQUI
+    // e comparar contra o estado anterior seria repetir o bug de cold-start já corrigido (a leitura
+    // de uma iteração intermediária, ainda não convergida, sendo tratada como uma borda real).
     matrix.addConductanceToGround(pin, kFloatingConductance);
     matrix.addCurrentToGround(pin, kDriveHighVolts * kFloatingConductance);
-    const bool levelHigh = matrix.getNodeVoltage(pin) > kDigitalLevelThreshold;
+}
 
-    if (!m_resetPinObserved) {
-        // Primeira leitura de verdade -- nunca uma borda contra uma suposição nunca observada (ver
-        // comentário de `m_resetPinObserved` no .hpp). Semeia e sai sem agendar reset/reload.
-        m_resetPinObserved = true;
-        m_resetPinHigh = levelHigh;
-        return;
-    }
+void McuComponent::onEvent(const ComponentEvent& event) {
+    if (event.tag != kPinChangeEventTag) return;
+    const std::span<const PinMapping> mappings = m_adapter->pinMap();
+    if (event.a >= mappings.size() || mappings[event.a].moduleKind != ModuleKind::Reset) return;
 
-    if (m_resetPinHigh && !levelHigh) {
-        // Borda de descida: EN/RST ativo (baixo) -- mantém o chip parado enquanto durar, igual a
-        // hardware real (CHIP_PU desasserta, CPU não roda). stopFirmware()/loadFirmware() chamam
-        // Scheduler::markDirty (toma m_mutex) -- nunca direto de dentro de stamp() (deadlock, ver
-        // doc de scheduleEventUnlocked em Scheduler.hpp), por isso agendado.
-        m_resetPinHigh = false;
+    std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
+    const bool levelHigh = event.b != 0;
+    m_resetPinHigh = levelHigh;
+
+    if (!levelHigh) {
+        // Borda de descida CONFIRMADA (o framework só chama onEvent numa transição real, com a
+        // tensão já convergida -- ver `SimulationSession::settleStep()`, passo 3b): EN/RST ativo
+        // (baixo) -- mantém o chip parado enquanto durar, igual a hardware real (CHIP_PU
+        // desasserta, CPU não roda). stopFirmware()/loadFirmware() chamam Scheduler::markDirty
+        // (toma m_mutex) -- nunca direto de dentro de onEvent()/stamp() (deadlock, `onEvent()` é
+        // chamado com o m_mutex do Scheduler já travado por `Scheduler::runUntil()`, ver doc de
+        // scheduleEventUnlocked em Scheduler.hpp), por isso agendado.
         const std::weak_ptr<CallbackState> weakState = m_callbackState;
         m_scheduler.scheduleEventUnlocked(0, [weakState] {
             const std::shared_ptr<CallbackState> state = weakState.lock();
             if (!state) return;
-            std::lock_guard<std::recursive_mutex> lock(state->mutex);
+            std::lock_guard<std::recursive_mutex> innerLock(state->mutex);
             McuComponent* self = state->owner;
             if (!self) return;
             self->resetModulesAndWakeups();
             self->stopFirmware();
             self->m_scheduler.markDirty(self->m_componentIndex);
         });
-    } else if (!m_resetPinHigh && levelHigh) {
+    } else if (!m_lastFirmwarePath.empty()) {
         // Borda de subida: EN/RST liberado -- reinicia o firmware do zero (mesmo path/arena do
-        // loadFirmware() anterior), igual a hardware real (CPU reinicia do vetor de boot).
-        m_resetPinHigh = true;
-        if (!m_lastFirmwarePath.empty()) {
-            const std::filesystem::path firmwarePath = m_lastFirmwarePath;
-            const std::string arenaName = m_lastArenaName;
-            const std::string qemuOverride = m_lastQemuBinaryOverride;
-            const McuDebugOptions debug = m_lastDebugOptions;
-            const std::weak_ptr<CallbackState> weakState = m_callbackState;
-            m_scheduler.scheduleEventUnlocked(0, [weakState, firmwarePath, arenaName, qemuOverride, debug] {
-                const std::shared_ptr<CallbackState> state = weakState.lock();
-                if (!state) return;
-                std::lock_guard<std::recursive_mutex> lock(state->mutex);
-                if (state->owner) state->owner->loadFirmware(firmwarePath, arenaName, qemuOverride, debug);
-            });
-        }
+        // loadFirmware() anterior), igual a hardware real (CPU reinicia do vetor de boot). Sem
+        // firmware carregado ainda (`m_lastFirmwarePath` vazio, ex: 1ª borda de subida do
+        // pull-up no boot antes de qualquer `loadFirmware()`), não há o que recarregar.
+        const std::filesystem::path firmwarePath = m_lastFirmwarePath;
+        const std::string arenaName = m_lastArenaName;
+        const std::string qemuOverride = m_lastQemuBinaryOverride;
+        const McuDebugOptions debug = m_lastDebugOptions;
+        const std::weak_ptr<CallbackState> weakState = m_callbackState;
+        m_scheduler.scheduleEventUnlocked(0, [weakState, firmwarePath, arenaName, qemuOverride, debug] {
+            const std::shared_ptr<CallbackState> state = weakState.lock();
+            if (!state) return;
+            std::lock_guard<std::recursive_mutex> innerLock(state->mutex);
+            if (state->owner) state->owner->loadFirmware(firmwarePath, arenaName, qemuOverride, debug);
+        });
     }
 }
 

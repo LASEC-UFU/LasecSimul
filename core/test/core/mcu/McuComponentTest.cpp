@@ -134,8 +134,9 @@ int main() {
     for (int i = 0; i < 10 && session.settleStep(); ++i) {}
     check(session.nodeVoltageOfPin(mcuIndex, "GPIO2") > 3.0,
           "GPIO2 continua em ~3.3V depois de avancar 2ms de tempo simulado sem nova escrita (nao e um pulso que reverte sozinho -- "
-          "prova a correção de `m_resetPinObserved`: sem ela, o primeiro `Scheduler::step()` da simulação disparava um reset "
-          "fantasma do EN/RST vindo do chute inicial do Newton, zerando GPIO_OUT/GPIO_ENABLE)");
+          "prova que McuComponent::onEvent() só reage a bordas do RST/EN já convergidas pelo solver, nunca à leitura crua de uma "
+          "iteração intermediária de stamp()/Newton: sem isso, o primeiro Scheduler::step() da simulação disparava um reset "
+          "fantasma vindo do chute inicial do Newton, zerando GPIO_OUT/GPIO_ENABLE)");
 
     // Agora o caminho contrário: GPIO3 não foi habilitado como saída -- McuComponent deve ler a
     // tensão real do nó (default 0V, sem nada estampado) e alimentar isso de volta no módulo.

@@ -40,6 +40,16 @@ public:
     void stamp(MnaMatrixView& matrix) override;
     void postStep(uint64_t) override {} // não usado -- self-agendamento via onAssignedIndex/scheduleEvent
 
+    /** `kPinChangeEventTag` (Types.hpp): ÚNICA fonte de borda do pino RST/EN -- disparado pelo
+     * framework (`SimulationSession::settleStep()`) só depois do solver MNA convergir E só numa
+     * transição REAL de nível (`wasHigh != isHigh` contra a tensão anterior já resolvida), nunca
+     * durante uma iteração intermediária de Newton. Substitui a comparação manual de tensão que
+     * `stampResetPin()` fazia antes (ver histórico: comparar a leitura de CADA stamp() contra uma
+     * suposição não observada causava reset fantasma no cold-start, quando a 1ª stamp() via ~0V
+     * antes de o solver convergir -- mesma categoria de bug que o SimulIDE real evita não lendo
+     * tensão de pino dentro do laço do solver, só via callback pós-solve do próprio nó). */
+    void onEvent(const ComponentEvent& event) override;
+
     size_t getState(uint8_t*, size_t) const override { return 0; }
     void setState(const uint8_t*, size_t) override {}
 
@@ -66,8 +76,8 @@ public:
     bool firmwareRunning() const;
     std::string qemuLogs() const;
 
-    /** Estado do pino RST (ModuleKind::Reset, ex: EN do ESP32) na última stamp() -- exposto só pra
-     * teste confirmar a borda sem precisar reler tensão de matriz. */
+    /** Estado do pino RST (ModuleKind::Reset, ex: EN do ESP32) na última borda confirmada via
+     * `onEvent()` -- exposto só pra teste confirmar a borda sem precisar reler tensão de matriz. */
     bool resetPinHigh() const { return m_resetPinHigh; }
     uint64_t stampCountForTesting() const { return m_stampCount; }
 
@@ -124,19 +134,14 @@ private:
     uint64_t m_qemuTimeOriginNs = 0;
     uint64_t m_stampCount = 0;
     // ModuleKind::Reset (ex: EN do ESP32) -- nunca tem QemuModule, McuComponent trata direto.
-    // Default true: sem fio externo nenhum, o pino fica com polarização fraca pra ALTO (chip roda
-    // normalmente) -- inverso do floating genérico de GPIO (que vai fraco pra terra), porque aqui
-    // "sem ligação" tem que significar "não resetado", nunca o oposto (ver stampResetPin()).
-    bool m_resetPinHigh = true;
-    // Falso até o primeiro stamp() real acontecer. Sem isto, o PRIMEIRO stamp() de qualquer
-    // McuComponent comparava a leitura de tensão (ainda o chute inicial do Newton, tipicamente
-    // ~0V antes do solver convergir -- não a tensão real do pull-up fraco) contra a SUPOSIÇÃO
-    // `m_resetPinHigh=true` acima, e confundia isso com uma borda de descida real do EN/RST --
-    // disparava reset+parada do firmware logo no início de toda simulação (achado do diagnóstico
-    // "QEMU manda sinal mas vem como pulso e não retém conforme lógica", 2026-07-17: reproduzido
-    // isoladamente em McuComponentTest sem precisar de QEMU real). `stampResetPin()` usa esta flag
-    // pra SEMEAR `m_resetPinHigh` a partir da primeira leitura em vez de tratá-la como uma borda.
-    bool m_resetPinObserved = false;
+    // Só reflete o ÚLTIMO nível confirmado via `onEvent(kPinChangeEventTag)` (tensão já
+    // convergida) -- nunca escrito a partir de uma leitura crua de `stamp()` (ver comentário de
+    // `onEvent()` no .hpp). Default false: nenhuma borda ainda observada pelo framework: mesma
+    // convenção de `eNode::m_volt=0` no SimulIDE real (`e-node.cpp`) -- o nó começa "baixo" do
+    // ponto de vista do detector de borda até o solver resolver a tensão real pela 1ª vez, quando
+    // então uma borda de SUBIDA genuína dispara (RST sem fio nenhum se estabiliza em ~3.3V, ver
+    // `stampResetPin()`), tratada como "liberado do reset", nunca como reset em si.
+    bool m_resetPinHigh = false;
     std::filesystem::path m_lastFirmwarePath;
     std::string m_lastArenaName;
     std::string m_lastQemuBinaryOverride;
