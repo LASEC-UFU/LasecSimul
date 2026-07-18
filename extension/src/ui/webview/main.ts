@@ -3817,25 +3817,40 @@ function numericReadout(component: WebviewComponentModel): number | undefined {
   return typeof readout === "number" ? readout : undefined;
 }
 
-/** `LedBase::getColor()` real (`ledbase.cpp:144-180`) -- mesma fórmula de tonalidade por `bright`
- * (0..255), sem o ramo `m_overBright` (só alcançável no modo pausa-debug do SimulIDE real, que este
- * projeto não replica). */
-function ledColorHex(colorName: string, bright: number): string {
-  const b = Math.max(0, Math.min(255, Math.round(bright)));
+/** `LedBase::getColor()` real (`ledbase.cpp:144-180`) COM `bright=255` (máximo) -- a cor "acesa" de
+ * verdade pra cada opção do catálogo, sem o ramo `m_overBright` (só alcançável no modo pausa-debug
+ * do SimulIDE real, que este projeto não replica). */
+function ledLitColor(colorName: string): { r: number; g: number; b: number } {
+  const b = 255;
   const secL = Math.floor(b / 3);
   const secH = Math.floor(b / 2);
   const secX = Math.floor((b * 2) / 3);
-  const hex = (n: number) => n.toString(16).padStart(2, "0");
-  const rgb = (r: number, g: number, bl: number) => `#${hex(r)}${hex(g)}${hex(bl)}`;
   switch (colorName) {
-    case "Red": return rgb(b, secH, secH);
-    case "Green": return rgb(secL, b, secL);
-    case "Blue": return rgb(secH, secH, b);
-    case "Orange": return rgb(b, secX, secL);
-    case "Purple": return rgb(b, secL, b);
-    case "White": return rgb(b, b, b);
-    default: return rgb(b, b, secL); // Yellow e cor desconhecida, mesmo default de LedBase::setColorStr
+    case "Red": return { r: b, g: secH, b: secH };
+    case "Green": return { r: secL, g: b, b: secL };
+    case "Blue": return { r: secH, g: secH, b };
+    case "Orange": return { r: b, g: secX, b: secL };
+    case "Purple": return { r: b, g: secL, b };
+    case "White": return { r: b, g: b, b };
+    default: return { r: b, g: b, b: secL }; // Yellow e cor desconhecida, mesmo default de LedBase::setColorStr
   }
+}
+
+/** Cinza estático de sempre (era o `#3a3a3a` hardcoded no catálogo antes deste componente ganhar
+ * cor dinâmica) -- usado como PISO em `bright=0`, nunca preto puro. `getColor()` real do SimulIDE
+ * vai a preto quando `bright=0` (secL/secH/secX todos 0), o que é fiel ao app real mas, testado na
+ * prática pelo usuário, deixava a seta ânodo/cátodo do símbolo ilegível (some contra o círculo de
+ * fundo preto) -- sem esse piso não dava mais pra ver a polaridade do LED no schematic quando
+ * apagado, regressão real. Interpola LINEARMENTE deste cinza até `ledLitColor()` conforme o brilho
+ * sobe, preservando a legibilidade do símbolo em qualquer corrente. */
+const kLedOffGray = { r: 0x3a, g: 0x3a, b: 0x3a };
+
+function ledColorHex(colorName: string, brightRatio: number): string {
+  const t = Math.max(0, Math.min(1, brightRatio));
+  const lit = ledLitColor(colorName);
+  const mix = (off: number, on: number) => Math.round(off + (on - off) * t);
+  const hex = (n: number) => Math.max(0, Math.min(255, n)).toString(16).padStart(2, "0");
+  return `#${hex(mix(kLedOffGray.r, lit.r))}${hex(mix(kLedOffGray.g, lit.g))}${hex(mix(kLedOffGray.b, lit.b))}`;
 }
 
 /** `eLed::updateBright()` real (`e-led.cpp:94-119`): brilho = sqrt(corrente/maxCurrent), 0 quando a
@@ -3847,8 +3862,8 @@ function ledFillFor(component: WebviewComponentModel): string {
   const colorName = typeof component.properties.color === "string" ? component.properties.color : "Yellow";
   const current = simulationStatus === "running" ? Math.abs(numericReadout(component) ?? 0) : 0;
   const kMaxCurrent = 0.03;
-  const bright = current > 0 ? Math.sqrt(current / kMaxCurrent) * 255 : 0;
-  return ledColorHex(colorName, bright);
+  const brightRatio = current > 0 ? Math.sqrt(current / kMaxCurrent) : 0;
+  return ledColorHex(colorName, brightRatio);
 }
 
 /** ABI v2 (.spec/lasecsimul-native-devices.spec): consulta `interactionKind` do catálogo (vindo do
@@ -7905,23 +7920,23 @@ function makeComponentFromTypeId(typeId: string): WebviewComponentModel {
 
 /** Atualiza só o texto do rótulo de valor (telemetria ao vivo, ex: leitura do voltímetro) sem
  * re-renderizar o componente inteiro — chamado a cada tick de `componentReadout` (alta frequência
- * enquanto a simulação roda); um re-render completo a cada tick seria desnecessariamente caro. */
+ * enquanto a simulação roda); um re-render completo a cada tick seria desnecessariamente caro.
+ *
+ * Atualiza o MESMO `.component-floating-label--value` que `renderExternalLabel` já criou no
+ * último `render()` completo (identificado por `data-component-id`) -- nunca cria um elemento
+ * próprio. Antes desta correção criava um `<div class="component__value-label">` SEPARADO, filho
+ * de `.component` (sem `left`/`top`, sem seguir offset/rotação do usuário), que nunca era removido
+ * por um `render()` normal (só o `<svg>` é reconstruído, ver `updateComponentElement`) -- ficava
+ * pra sempre sobreposto ao rótulo "oficial", mostrando o mesmo valor duas vezes (achado real:
+ * usuário viu "1.00 kΩ" duplicado/embaralhado num resistor comum após parar a simulação uma vez,
+ * o que já bastava pra `stopVoltageReadoutPolling` mandar um `componentReadout` e disparar isto). */
 function refreshReadouts(): void {
   for (const component of state.components) {
-    const el = document.querySelector<HTMLElement>(`.component[data-component-id="${component.id}"]`);
-    if (!el) continue;
-    const existing = el.querySelector<HTMLElement>(".component__value-label");
-
     const text = externalLabelText(component, "value");
-    if (text === undefined) {
-      existing?.remove();
-      continue;
-    }
-
-    const valueLabelEl = existing ?? document.createElement("div");
-    valueLabelEl.className = "component__value-label";
-    valueLabelEl.textContent = text;
-    if (!existing) el.appendChild(valueLabelEl);
+    const labelEl = canvasContentElement?.querySelector<HTMLElement>(
+      `.component-floating-label--value[data-component-id="${component.id}"]`
+    );
+    if (labelEl && text !== undefined) labelEl.textContent = text;
   }
 }
 

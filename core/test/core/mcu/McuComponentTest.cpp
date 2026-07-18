@@ -7,7 +7,9 @@
 #include <chrono>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
 #include <memory>
+#include <vector>
 #include "components/sources/FixedVolt.hpp"
 #include "lasecsimul/qemu_arena_abi.h"
 #include "mcu/McuComponent.hpp"
@@ -203,6 +205,43 @@ int main() {
     check(session.scheduler().pendingEventCount() <= pendingBeforeReloads + 1,
           "recargas repetidas reutilizam um unico poll pendente (fila nao cresce por ciclo)");
     mcuPtr->stopFirmware();
+
+#ifdef QEMU_REAL_BINARY_PATH
+    // Reload espúrio (2026-07-17): usuário reportou "nem o pulso eu detecto mais" depois da
+    // correção do reset fantasma -- a 1ª subida natural da tensão do pull-up de RST, logo após o
+    // `loadFirmware()` inicial (mesmo mecanismo de `m_previousNodeVoltages` do framework começar
+    // em 0V pra QUALQUER nó novo, ver `onEvent()`), virava uma "borda de subida" e recarregava o
+    // firmware sozinho -- matava o processo QEMU recém-iniciado antes dele rodar qualquer coisa.
+    // Usa o binário REAL do QEMU vendorizado (mesma técnica de McuControllerRealQemuTest: flash
+    // MTD apagada, sem toolchain ESP-IDF local -- não executa aplicação, só prova que o processo
+    // sobe e fica de pé) porque o bug depende do RST realmente convergindo pra ~3.3V via solver,
+    // não de uma escrita sintética de arena.
+    {
+        const std::filesystem::path qemuRealPath = QEMU_REAL_BINARY_PATH;
+        if (std::filesystem::exists(qemuRealPath)) {
+            const std::filesystem::path blankFlashPath =
+                std::filesystem::temp_directory_path() / (uniqueArenaName() + "-flash.bin");
+            {
+                std::ofstream out(blankFlashPath, std::ios::binary | std::ios::trunc);
+                const std::vector<char> erasedBlock(64 * 1024, static_cast<char>(0xFF));
+                for (int i = 0; i < 64; ++i) out.write(erasedBlock.data(), erasedBlock.size());
+            }
+            mcuPtr->loadFirmware(blankFlashPath, uniqueArenaName(), qemuRealPath.string());
+            for (int i = 0; i < 20 && session.settleStep(); ++i) {}
+            session.scheduler().step(1);
+            for (int i = 0; i < 20 && session.settleStep(); ++i) {}
+            check(mcuPtr->loadFirmwareCallCountForTesting() == 1,
+                  "loadFirmware() real nao dispara reload espurio sozinho (RST subindo naturalmente apos o load)");
+            check(mcuPtr->firmwareRunning(),
+                  "processo QEMU real continua rodando depois de assentar (nao foi morto por um reset fantasma)");
+            mcuPtr->stopFirmware();
+            std::error_code removeError;
+            std::filesystem::remove(blankFlashPath, removeError);
+        } else {
+            std::fprintf(stderr, "PULADO (reload espurio): %s nao existe.\n", qemuRealPath.string().c_str());
+        }
+    }
+#endif
 
     if (failures == 0) {
         std::printf("\nTodos os testes de McuComponent passaram.\n");

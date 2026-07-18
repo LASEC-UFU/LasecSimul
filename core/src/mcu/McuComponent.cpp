@@ -298,6 +298,7 @@ void McuComponent::loadFirmware(const std::filesystem::path& firmwarePath, const
     // Também permite recarregar firmware enquanto o watcher está aguardando o próximo timestamp.
     stopPolling();
     std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
+    ++m_loadFirmwareCallCount;
     m_lastFirmwarePath = firmwarePath;
     m_lastArenaName = arenaName;
     m_lastQemuBinaryOverride = qemuBinaryOverride;
@@ -396,11 +397,18 @@ void McuComponent::onEvent(const ComponentEvent& event) {
             self->stopFirmware();
             self->m_scheduler.markDirty(self->m_componentIndex);
         });
-    } else if (!m_lastFirmwarePath.empty()) {
+    } else if (!firmwareRunning() && !m_lastFirmwarePath.empty()) {
         // Borda de subida: EN/RST liberado -- reinicia o firmware do zero (mesmo path/arena do
-        // loadFirmware() anterior), igual a hardware real (CPU reinicia do vetor de boot). Sem
-        // firmware carregado ainda (`m_lastFirmwarePath` vazio, ex: 1ª borda de subida do
-        // pull-up no boot antes de qualquer `loadFirmware()`), não há o que recarregar.
+        // loadFirmware() anterior), igual a hardware real (CPU reinicia do vetor de boot). SÓ
+        // quando o firmware NÃO está rodando (`!firmwareRunning()`) -- sem essa guarda, a 1ª borda
+        // de subida natural (`m_previousNodeVoltages` do framework começa em 0V pra QUALQUER nó
+        // recém-criado, então a tensão real ~3.3V do próprio `loadFirmware()` que acabou de rodar
+        // JÁ conta como "subida") disparava um reload IMEDIATO logo depois de todo `loadFirmware()`
+        // legítimo -- matava o processo QEMU recém-iniciado antes do firmware rodar qualquer coisa
+        // (achado 2026-07-17: usuário reportou "nem o pulso eu detecto mais" depois da correção do
+        // reset fantasma -- o reset fantasma tinha virado um reload fantasma). Sem firmware
+        // carregado ainda (`m_lastFirmwarePath` vazio, ex: 1ª borda de subida do pull-up no boot
+        // antes de qualquer `loadFirmware()`), não há o que recarregar de qualquer forma.
         const std::filesystem::path firmwarePath = m_lastFirmwarePath;
         const std::string arenaName = m_lastArenaName;
         const std::string qemuOverride = m_lastQemuBinaryOverride;

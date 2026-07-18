@@ -641,7 +641,6 @@ rect.meter-expand-button:hover {
 /** Valor formatado da propriedade `showOnSymbol` (ex: "1 kÎ©") ou leitura ao vivo (ex: voltÃ­metro) --
  * mesma convenÃ§Ã£o de cor do SimulIDE (`Component::m_valLabel`, vermelho-escuro), mostrado quando
  * `WebviewComponentModel.showValue` Ã© true (default calculado, ver `findShowOnSymbolSchema`). */
-.component__value-label,
 .component-floating-label--value {
   position: absolute;
   color: #c0594a;

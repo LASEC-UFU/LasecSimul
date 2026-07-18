@@ -80,6 +80,13 @@ public:
      * `onEvent()` -- exposto só pra teste confirmar a borda sem precisar reler tensão de matriz. */
     bool resetPinHigh() const { return m_resetPinHigh; }
     uint64_t stampCountForTesting() const { return m_stampCount; }
+    /** Quantas vezes `loadFirmware()` executou de verdade (chamada explícita OU reload disparado
+     * por `onEvent()` numa borda de subida do RST/EN) -- exposto só pra teste provar que um
+     * `loadFirmware()` legítimo nunca dispara UM SEGUNDO reload espúrio sozinho (achado 2026-07-17:
+     * a 1ª subida natural do próprio pull-up de RST, logo após o `loadFirmware()` inicial, tinha
+     * virado uma "borda" e recarregava tudo de novo -- ver guarda `!firmwareRunning()` em
+     * `onEvent()`). */
+    uint64_t loadFirmwareCallCountForTesting() const { return m_loadFirmwareCallCount; }
 
     /** Abre a arena SEM iniciar nenhum processo QEMU -- só pra teste poder simular escritas de
      * registrador manualmente (mesmo papel de QemuArenaBridgeTest), sem precisar de um binário
@@ -133,6 +140,7 @@ private:
     bool m_syntheticArenaForTesting = false;
     uint64_t m_qemuTimeOriginNs = 0;
     uint64_t m_stampCount = 0;
+    uint64_t m_loadFirmwareCallCount = 0;
     // ModuleKind::Reset (ex: EN do ESP32) -- nunca tem QemuModule, McuComponent trata direto.
     // Só reflete o ÚLTIMO nível confirmado via `onEvent(kPinChangeEventTag)` (tensão já
     // convergida) -- nunca escrito a partir de uma leitura crua de `stamp()` (ver comentário de
