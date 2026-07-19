@@ -48,6 +48,25 @@ public:
     using TimeStepBeginFn = std::function<void(uint64_t, uint64_t)>;
     using TimeStepCommitFn = std::function<TimeStepDecision(uint64_t, uint64_t, bool)>;
     using StableStepFn = std::function<void(uint64_t)>;
+    /** Redesign de concorrência 2026-07-19 (ver .claude/plans/idempotent-floating-cat.md) -- chamado
+     * pela thread do Scheduler em TRÊS pontos seguros: dentro de `settleUntilStableLocked()` (antes
+     * do laço e a cada iteração dele, cobrindo tanto "settle rápido" quanto "settle que nunca
+     * converge", mesmo raciocínio já usado pelo check de `m_stopRequested` logo abaixo) e no início
+     * do ramo pausado de `start()` (uma simulação pausada continua com a worker viva, só parada de
+     * avançar tempo -- sem drenar ali, editar uma propriedade com a simulação pausada travaria pra
+     * sempre esperando uma iteração de settle que não vai acontecer). Nunca chamado pela thread de
+     * IPC. Drena a fila de comandos externa (`SimulationSession::CommandQueue`) e aplica cada um.
+     * `Scheduler` não sabe o que é um "comando" nem depende de `SimulationSession` -- só chama o
+     * callback, mantendo a mesma separação de responsabilidades de `SettleStepFn`/`StableStepFn`.
+     * IMPORTANTE: nada disto ajuda quando a worker não existe (antes do primeiro `start()`, ou
+     * depois de `stop()`) -- nesse caso `SimulationSession::enqueueCommand` detecta `!isRunning()` e
+     * aplica o comando direto na thread de IPC (seguro: sem worker, não há com quem competir). */
+    using CommandDrainFn = std::function<void()>;
+    /** Predicado companheiro de `CommandDrainFn` -- usado SÓ pra decidir se a worker deve continuar
+     * ociosa/pausada ou acordar (ver `m_wake.wait(lock, predicate)` em `start()`). Sem isto, um
+     * comando chegando enquanto a worker está parked (ociosa ou pausada) ficaria esperando o próximo
+     * evento/dirty "de verdade" pra ser notado, o que pode nunca acontecer numa simulação pausada. */
+    using CommandPendingFn = std::function<bool()>;
 
     Scheduler(size_t componentCapacity, SettleStepFn settleStep)
         : m_dirty(componentCapacity), m_settleStep(std::move(settleStep)) {}
@@ -57,6 +76,15 @@ public:
         m_commitTimeStep = std::move(commit);
     }
     void setStableStepCallback(StableStepFn callback) { m_stableStep = std::move(callback); }
+    void setCommandDrainCallback(CommandDrainFn callback) { m_commandDrain = std::move(callback); }
+    void setCommandPendingCallback(CommandPendingFn callback) { m_commandPending = std::move(callback); }
+    /** Acorda a worker se ela estiver parked (ociosa ou pausada) -- chamada pela thread de IPC depois
+     * de empurrar um comando na fila (`SimulationSession::enqueueCommand`). Notificar sem segurar
+     * `m_mutex` é seguro aqui porque quem espera usa `wait(lock, predicate)`: mesmo que o notify
+     * chegue antes da worker (re)entrar em `wait`, o predicado é reavaliado no início e já vai
+     * enxergar o comando pendente (`CommandPendingFn` consulta a fila com o mutex dela própria, não
+     * o do Scheduler) -- não depende de ordering entre os dois mutexes. */
+    void notifyCommandPending() { m_wake.notify_one(); }
     void setMaximumTimeStepNs(uint64_t ns) { m_maximumTimeStepNs.store(ns, std::memory_order_relaxed); }
     uint64_t maximumTimeStepNs() const { return m_maximumTimeStepNs.load(std::memory_order_relaxed); }
     void configureAdaptiveTimeStep(uint64_t initialNs, uint64_t minimumNs, bool adaptive) {
@@ -187,6 +215,8 @@ private:
     TimeStepBeginFn m_beginTimeStep;
     TimeStepCommitFn m_commitTimeStep;
     StableStepFn m_stableStep;
+    CommandDrainFn m_commandDrain;
+    CommandPendingFn m_commandPending;
 
     std::thread m_thread;
     mutable std::mutex m_mutex;

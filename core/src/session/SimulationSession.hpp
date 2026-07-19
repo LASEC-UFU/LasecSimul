@@ -1,9 +1,14 @@
 #pragma once
 #include <atomic>
 
+#include <deque>
 #include <filesystem>
+#include <functional>
+#include <future>
 #include <memory>
+#include <mutex>
 #include <optional>
+#include <type_traits>
 #include <vector>
 #include "../plugins/GlobalPluginCache.hpp"
 #include "../plugins/PluginRuntime.hpp"
@@ -58,6 +63,31 @@ struct PauseConditionTriggered {
     std::string error;
 };
 
+/** Fase 3 do redesign de concorrência (ver .claude/plans/idempotent-floating-cat.md) -- cópia
+ * imutável e congelada do necessário pra resolver "tensão do pino X do componente Y" sem NUNCA
+ * tocar o mutex do Scheduler nem `m_netlist`/`m_topology` diretamente. Publicada só a cada *stable
+ * step* (não a cada iteração de settle -- só quando o circuito de fato estabiliza, ver
+ * `publishSnapshot()`), lida via `currentSnapshot()` com um mutex PRÓPRIO e dedicado (segurado só
+ * pelo tempo de copiar um `shared_ptr`, nunca pelo tempo de um settle inteiro). `slotToNode` e
+ * `pinSlotsByComponent` só mudam quando a topologia muda de verdade (raro comparado a tensão, que
+ * muda toda hora) -- publicações consecutivas reaproveitam o MESMO `shared_ptr` pra essas duas
+ * partes quando a topologia não mudou desde a última publicação, então a maioria das publicações só
+ * aloca um `vector<double>` novo pras tensões. */
+struct NodeVoltageSnapshot {
+    std::shared_ptr<const std::vector<double>> nodeVoltages;
+    std::shared_ptr<const std::vector<uint32_t>> slotToNode; // por slot -> nó global
+    // por componentIndex -> {pinId -> slot}; índice fora de faixa ou pinId ausente = componente/
+    // pino não existente (removido ou nunca existiu) NESTE snapshot.
+    std::shared_ptr<const std::vector<std::unordered_map<std::string, uint32_t>>> pinSlotsByComponent;
+};
+
+/** Resolve a tensão do pino `pinId` de `component` dentro de `snapshot` -- `std::nullopt` se o
+ * componente/pino não existir NESTE snapshot (removido, nunca existiu, ou nó fora da faixa
+ * registrada até a última publicação). Nunca lança, nunca bloqueia -- não toca em nenhum mutex do
+ * Scheduler nem em `m_netlist`/`m_topology`, só lê os vetores/mapas já congelados do snapshot. */
+std::optional<double> resolveNodeVoltage(const NodeVoltageSnapshot& snapshot, uint32_t component,
+                                          const std::string& pinId);
+
 struct SimulationPerformanceSnapshot {
     bool enabled = false;
     uint64_t simulatedNanoseconds = 0;
@@ -75,6 +105,49 @@ struct SimulationPerformanceSnapshot {
     uint64_t acceptedTransientSteps = 0;
     uint64_t rejectedTransientSteps = 0;
     size_t solverThreads = 0;
+};
+
+class SimulationSession; // ver CommandQueue::Command logo abaixo -- só usado por referência aqui
+
+/** Fila de comandos de escrita (fase 2 do redesign de concorrência, ver
+ * .claude/plans/idempotent-floating-cat.md) -- toda mutação estrutural de `SimulationSession`
+ * (`connectWire`, `removeComponent`, `setProperty`, etc.) empurra um fechamento aqui pela thread de
+ * IPC em vez de mutar `m_netlist`/`m_componentInstances` direto; só a thread do Scheduler drena e
+ * aplica (`SimulationSession::drainCommandQueue()`, chamado via `Scheduler::CommandDrainFn`). Isso
+ * elimina a data race real que existia entre a thread de IPC e a thread do Scheduler nesses
+ * containers -- não é uma janela mais estreita, é zero escritores concorrentes. A fila em si tem
+ * único produtor de fato (a fila de IPC é estritamente serial, ver IpcServer::processLoop), então um
+ * mutex simples (não lock-free) é suficiente. */
+class CommandQueue {
+public:
+    using Command = std::function<void(SimulationSession&)>;
+
+    /** Devolve `true` só na transição vazio->não-vazio -- quem chama usa isso pra decidir se
+     * precisa acordar a thread do Scheduler (via `Scheduler::scheduleAt`); se já havia comando
+     * pendente, a thread já vai acordar (ou já está acordada) processando aquele. */
+    bool push(Command command) {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        const bool wasEmpty = m_commands.empty();
+        m_commands.push_back(std::move(command));
+        return wasEmpty;
+    }
+
+    std::deque<Command> takeAll() {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return std::exchange(m_commands, {}); // não std::move -- precisa garantir vazio depois
+    }
+
+    /** Usado só como `Scheduler::CommandPendingFn` -- consulta com o mutex PRÓPRIO desta fila (não o
+     * do Scheduler), por isso é seguro chamar de dentro do predicado de `m_wake.wait(...)` mesmo sem
+     * o produtor (`push`) e o predicado compartilharem lock nenhum -- ver notifyCommandPending(). */
+    bool hasPending() const {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return !m_commands.empty();
+    }
+
+private:
+    mutable std::mutex m_mutex;
+    std::deque<Command> m_commands;
 };
 
 /**
@@ -241,6 +314,18 @@ public:
      * Scheduler.cpp). Não chamar diretamente fora desse contexto. */
     bool settleStep();
 
+    /** Snapshot publicado mais recente (fase 3 do redesign de concorrência) -- `nullptr` só antes do
+     * PRIMEIRO stable step da sessão (nenhuma solve() aconteceu ainda). Cópia barata de um
+     * `shared_ptr` sob um mutex DEDICADO (não o do Scheduler) -- nunca bloqueia, nunca falha por
+     * "ocupado". Este é o caminho usado por `getNodeVoltage`/`getNodeVoltages` via IPC (o mais
+     * chamado continuamente por osciloscópio/LasecPlot); `nodeVoltageOfPin`/`nodeVoltagesOfPins`
+     * abaixo continuam existindo tal como antes só porque dezenas de testes já os chamam
+     * diretamente fora de qualquer contexto concorrente real. */
+    std::shared_ptr<const NodeVoltageSnapshot> currentSnapshot() const {
+        std::lock_guard<std::mutex> lock(m_snapshotMutex);
+        return m_publishedSnapshot;
+    }
+
     /** Tensão atual (última solve()) do nó ao qual `pinId` da instância `component` está
      * resolvido. Usado por instrumentos/telemetria e por testes — nunca dispara um solve novo,
      * só lê o que já foi calculado. */
@@ -295,12 +380,39 @@ public:
     }
 
 private:
+    /** Corpo real de `addComponent`/`connectWire`/etc. -- o método público correspondente (sem o
+     * sufixo) só empacota os argumentos e chama `runViaCommandQueue`; isto aqui é o que de fato roda
+     * na thread do Scheduler (ou direto na thread de IPC quando a worker não existe, ver
+     * `enqueueCommand`). Chamadores INTERNOS (`expandSubcircuit`, a cascata de
+     * `removeSubcircuitInstanceUnlocked`, `applyWireTopologyTransactionUnlocked`) chamam estes
+     * diretamente, nunca o público -- chamar o público de dentro de um comando já em execução
+     * enfileiraria de novo e bloquearia esperando a própria thread que está travada nisto (deadlock:
+     * só existe UM consumidor da fila, e ele já está ocupado sendo o chamador). */
+    uint32_t addComponentUnlocked(const std::string& typeId, const registry::ComponentParams& params);
+    void connectWireUnlocked(uint32_t componentA, const std::string& pinIdA, uint32_t componentB,
+                              const std::string& pinIdB);
+    bool disconnectWireUnlocked(uint32_t componentA, const std::string& pinIdA, uint32_t componentB,
+                                 const std::string& pinIdB);
+    uint64_t applyWireTopologyTransactionUnlocked(uint64_t baseRevision,
+                                                   const std::vector<WireTopologyOperation>& operations);
+    void setTunnelNameUnlocked(uint32_t component, const std::string& pinId, const std::string& oldName,
+                                const std::string& newName);
+    void removeComponentUnlocked(uint32_t componentIndex);
+    void removeSubcircuitInstanceUnlocked(uint32_t subcircuitInstanceId);
+    void sendComponentEventUnlocked(uint32_t componentIndex, const ComponentEvent& event);
+
     std::optional<std::string> setPropertyUnlocked(uint32_t component, const std::string& propertyName,
                                                    const PropertyValue& value);
     std::optional<PropertyValue> propertyValueOfUnlocked(uint32_t component, const std::string& propertyName) const;
     ResolvedSignal resolveSignalUnlocked(const std::string& reference, std::optional<uint32_t> self) const;
     void acquireSubscribedSignalsUnlocked(uint64_t timestampNs);
     void onStableStepUnlocked(uint64_t timestampNs);
+    /** Chamado no fim de `onStableStepUnlocked()` (já na thread do Scheduler, com o mutex dela
+     * tomado) -- publica um `NodeVoltageSnapshot` novo em `m_publishedSnapshot`, sob
+     * `m_snapshotMutex` (mutex dedicado, NUNCA o do Scheduler -- ver doc-comment de
+     * `NodeVoltageSnapshot`). Reaproveita `slotToNode`/`pinSlotsByComponent` da publicação anterior
+     * quando `m_snapshotTopologyStale` está falso (topologia não mudou desde a última publicação). */
+    void publishSnapshot();
     void rebuildTopologyIfNeeded();
     /** Reaproveita `CircuitGroup` (matriz/fatoração já estampada) de `previous` pra qualquer rede
      * cujo conjunto de componentes vivos E mapeamento pino->índice local não mudaram -- sem isso,
@@ -316,6 +428,46 @@ private:
      * sempre gera slots novos, nunca reciclados) em toda edição de propriedade com
      * `AffectsPinCount`, mesmo quando o valor não mudou o suficiente pra alterar a contagem. */
     void reregisterPinsIfChanged(uint32_t componentIndex, IComponentModel* instance);
+
+    /** Empurra `command` na `m_commandQueue` e, se a fila estava vazia antes (transição
+     * vazio->não-vazio), acorda a thread do Scheduler caso ela esteja parada ociosa (ver
+     * `Scheduler::scheduleAt`/`m_wake`) -- se já havia comando pendente, a thread já vai processar
+     * este também quando esvaziar a fila, sem precisar de um novo "wake". */
+    void enqueueCommand(CommandQueue::Command command);
+
+    /** Chamado pelo Scheduler (via `CommandDrainFn`, já na thread dele) em dois pontos seguros:
+     * antes do laço de settle e a cada iteração dentro dele -- ver `Scheduler::settleUntilStableLocked`.
+     * Aplica cada comando pendente, em ordem (FIFO, único consumidor). */
+    void drainCommandQueue();
+
+    /** Empacota `fn` (que muta `*this`, chamado só na thread do Scheduler) num comando, empurra na
+     * fila e bloqueia (via `std::promise`/`std::future`) até a thread do Scheduler de fato aplicar
+     * -- preserva o contrato síncrono de hoje (mesma resposta/erro/timing observável do ponto de
+     * vista de quem chama) sem que a thread de IPC toque em `m_netlist`/`m_componentInstances`
+     * diretamente. `std::make_shared<std::promise<...>>` porque o comando pode ser aplicado (e a
+     * promise, satisfeita) numa call stack diferente/depois do retorno desta função caso a fila
+     * ainda não tenha sido drenada no instante do `push` -- a promise precisa sobreviver a essa
+     * travessia de thread. Exceções lançadas por `fn` são propagadas pra quem chama via
+     * `promise->set_exception`/`future.get()`, igual a uma chamada direta teria feito. */
+    template <class Fn>
+    auto runViaCommandQueue(Fn&& fn) -> std::invoke_result_t<Fn, SimulationSession&> {
+        using Result = std::invoke_result_t<Fn, SimulationSession&>;
+        auto promise = std::make_shared<std::promise<Result>>();
+        std::future<Result> future = promise->get_future();
+        enqueueCommand([promise, fn = std::forward<Fn>(fn)](SimulationSession& session) mutable {
+            try {
+                if constexpr (std::is_void_v<Result>) {
+                    fn(session);
+                    promise->set_value();
+                } else {
+                    promise->set_value(fn(session));
+                }
+            } catch (...) {
+                promise->set_exception(std::current_exception());
+            }
+        });
+        return future.get();
+    }
 
     plugins::GlobalPluginCache& m_globalCache;
     registry::ComponentRegistry m_components;
@@ -363,6 +515,18 @@ private:
     std::atomic<uint64_t> m_solverNanoseconds{0};
     std::atomic<uint64_t> m_topologyRebuilds{0};
     std::atomic<uint64_t> m_topologyNanoseconds{0};
+
+    CommandQueue m_commandQueue;
+
+    /** Mutex DEDICADO pra `m_publishedSnapshot` -- deliberadamente separado de `m_scheduler`'s
+     * mutex: só é tomado pelo tempo de trocar um `shared_ptr` (publicar) ou copiar um (ler), nunca
+     * pelo tempo de um settle inteiro, então leitores nunca bloqueiam de verdade. */
+    mutable std::mutex m_snapshotMutex;
+    std::shared_ptr<const NodeVoltageSnapshot> m_publishedSnapshot;
+    /** `true` quando `slotToNode`/`pinSlotsByComponent` precisam ser recopiados na próxima
+     * `publishSnapshot()` -- setado por `rebuildTopologyIfNeeded()` sempre que a topologia é
+     * reconstruída de verdade; começa `true` pra garantir que a primeira publicação sempre copie. */
+    bool m_snapshotTopologyStale = true;
 };
 
 } // namespace lasecsimul::session

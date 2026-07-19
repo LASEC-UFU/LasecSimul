@@ -59,6 +59,14 @@ size_t Scheduler::dirtyCount() const {
 }
 
 bool Scheduler::settleUntilStableLocked() {
+    // Drena a fila de comandos externa (ver CommandDrainFn) ANTES do laço de settle -- cobre o caso
+    // "chegou um comando, o circuito já estava quieto" (dirty vazio, senão nunca entraria no laço
+    // abaixo pra dar outra chance). Mesmo raciocínio de `m_stopRequested`/`m_paused` logo abaixo:
+    // drenar de novo A CADA iteração cobre o caso patológico de um settle que nunca converge (ver
+    // doc-comment de `m_stopRequested`) -- sem isso, um comando enfileirado enquanto um circuito
+    // oscila sem parar ficaria esperando pra sempre, exatamente a classe de bug que motivou este
+    // redesign (ver .claude/plans/idempotent-floating-cat.md).
+    if (m_commandDrain) m_commandDrain();
     const bool profile = m_profilingEnabled.load(std::memory_order_relaxed);
     const auto profileStart = profile ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
     bool hadWork = false;
@@ -69,6 +77,7 @@ bool Scheduler::settleUntilStableLocked() {
         // SimulIDE also checks its state inside solveCircuit(), not only in the outer loop.
         if (m_stopRequested.load(std::memory_order_acquire) ||
             m_paused.load(std::memory_order_acquire)) break;
+        if (m_commandDrain) m_commandDrain();
         ++iter;
         if (profile) m_settleIterations.fetch_add(1, std::memory_order_relaxed);
         hadWork = true;
@@ -198,9 +207,13 @@ void Scheduler::start() {
         while (m_running.load()) {
             if (m_paused.load()) {
                 std::unique_lock<std::mutex> lock(m_mutex);
+                // Pausado != parado: a fila de comandos ainda precisa ser drenada aqui, senão editar
+                // uma propriedade com a simulação pausada travaria pra sempre (ver CommandDrainFn).
+                if (m_commandDrain) m_commandDrain();
                 m_wake.wait(lock, [this] {
                     return !m_running.load(std::memory_order_acquire) ||
-                           !m_paused.load(std::memory_order_acquire);
+                           !m_paused.load(std::memory_order_acquire) ||
+                           (m_commandPending && m_commandPending());
                 });
                 continue;
             }
@@ -213,10 +226,20 @@ void Scheduler::start() {
                 const uint64_t configuredStepNs = m_maximumTimeStepNs.load(std::memory_order_relaxed);
                 if (configuredStepNs == 0) {
                     if (m_events.empty() && m_dirty.empty()) {
-                        m_wake.wait(lock, [this] {
-                            return !m_running.load(std::memory_order_acquire) ||
-                                   m_paused.load(std::memory_order_acquire) || !m_events.empty() || !m_dirty.empty();
-                        });
+                        // Drena ANTES de decidir se espera -- o `continue` logo abaixo volta pro topo
+                        // do laço externo, não cai em runUntil(), então sem isto um comando pendente
+                        // (predicado abaixo verdadeiro) faria o wait() retornar na hora (sem bloquear,
+                        // predicado já satisfeito) e o `continue` repetir pra sempre -- busy loop, não
+                        // um wake legítimo. Drenar aqui aplica o comando (ou, no caso de
+                        // sendComponentEvent, marca dirty pra ser pego pelo settle de verdade).
+                        if (m_commandDrain) m_commandDrain();
+                        if (m_events.empty() && m_dirty.empty()) {
+                            m_wake.wait(lock, [this] {
+                                return !m_running.load(std::memory_order_acquire) ||
+                                       m_paused.load(std::memory_order_acquire) || !m_events.empty() ||
+                                       !m_dirty.empty() || (m_commandPending && m_commandPending());
+                            });
+                        }
                         continue;
                     }
                     targetTimeNs = m_events.empty() ? m_nowNs : m_events.top().timeNs;
@@ -299,6 +322,13 @@ void Scheduler::stop() {
     m_wake.notify_all();
     m_pacingWake.notify_all();
     if (m_thread.joinable() && m_thread.get_id() != std::this_thread::get_id()) m_thread.join();
+    // Drena qualquer comando enfileirado bem no instante em que `m_running` virou false acima --
+    // como esse flip acontece ANTES do wake/join, é teoricamente possível a worker checar o topo do
+    // laço externo e sair sem mais nenhuma chance de drenar (ver doc-comment de CommandDrainFn). Só
+    // seguro AQUI, depois do join(): a worker já terminou de vez, então não há mais ninguém
+    // concorrendo com `SimulationSession` nesse instante. Sem isto, `enqueueCommand`/
+    // `runViaCommandQueue` de quem enfileirou aquele comando ficaria bloqueado pra sempre.
+    if (m_commandDrain) m_commandDrain();
     // A worker thread já terminou (join acima) -- rearma pra não quebrar chamadores SÍNCRONOS de
     // step()/runUntil() feitos depois deste stop() e antes do próximo start() (ex.: `setPauseCondition`
     // resolvendo topologia via `step(0)` enquanto a simulação está parada, ver comentário em Scheduler.hpp).

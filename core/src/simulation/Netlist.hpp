@@ -227,6 +227,17 @@ public:
         return m_componentPinSlots.at(componentIndex);
     }
 
+    /** Cópia rasa de TODOS os mapeamentos pino->slot, por componentIndex -- usado só pra montar o
+     * snapshot publicado de tensões de nó (ver SimulationSession::NodeVoltageSnapshot, fase 3 do
+     * redesign de concorrência, .claude/plans/idempotent-floating-cat.md): a thread de IPC nunca
+     * mais toca `Netlist` diretamente pra ler tensão, então precisa de uma cópia congelada em vez de
+     * `pinSlotsOf()` (que devolveria uma referência pra dentro deste objeto, mutável pela thread do
+     * Scheduler a qualquer momento). Só chamado no momento da publicação (raro: 1x por stable step,
+     * não por leitura), nunca no caminho quente de leitura em si. */
+    std::vector<std::unordered_map<std::string, uint32_t>> componentPinSlotsCopy() const {
+        return m_componentPinSlots;
+    }
+
     std::optional<uint32_t> tunnelSlot(std::string_view name) const {
         const auto it = m_tunnelGroups.find(std::string(name));
         if (it == m_tunnelGroups.end() || it->second.empty()) return std::nullopt;

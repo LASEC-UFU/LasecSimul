@@ -1796,9 +1796,17 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
                 msg.payloadJson.empty() ? nlohmann::json::object() : nlohmann::json::parse(msg.payloadJson);
             const uint32_t instanceId = static_cast<uint32_t>(std::stoul(payload.value("instanceId", std::string{"0"})));
             const std::string pinId = payload.value("pinId", std::string{});
-            const double voltage = session.nodeVoltageOfPin(instanceId, pinId);
+            // Fase 3 do redesign de concorrência (ver .claude/plans/idempotent-floating-cat.md):
+            // lê do snapshot publicado em vez de `nodeVoltageOfPin` (que tomava o mutex do
+            // Scheduler) -- getNodeVoltage é chamado continuamente por osciloscópio/LasecPlot, o
+            // caminho mais sensível a head-of-line-blocking de todos. Nunca bloqueia, nunca falha
+            // por "ocupado".
+            const auto snapshot = session.currentSnapshot();
+            if (!snapshot) throw std::runtime_error("topologia ainda nao resolvida");
+            const auto voltage = lasecsimul::session::resolveNodeVoltage(*snapshot, instanceId, pinId);
+            if (!voltage) throw std::out_of_range("pino inexistente: " + pinId);
             resp.ok = true;
-            resp.payloadJson = nlohmann::json{{"voltage", voltage}}.dump();
+            resp.payloadJson = nlohmann::json{{"voltage", *voltage}}.dump();
         } catch (const std::exception& e) {
             resp.ok = false;
             resp.error = std::string("getNodeVoltage falhou: ") + e.what();
@@ -1809,17 +1817,16 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
         try {
             const nlohmann::json payload = nlohmann::json::parse(msg.payloadJson);
             nlohmann::json values = nlohmann::json::object();
-            std::vector<std::string> keys;
-            std::vector<std::pair<uint32_t, std::string>> probes;
-            keys.reserve(payload.at("probes").size());
-            probes.reserve(payload.at("probes").size());
+            const auto snapshot = session.currentSnapshot();
+            if (!snapshot) throw std::runtime_error("topologia ainda nao resolvida");
             for (const auto& probe : payload.at("probes")) {
-                keys.push_back(probe.at("key").get<std::string>());
+                const std::string key = probe.at("key").get<std::string>();
                 const uint32_t instanceId = static_cast<uint32_t>(std::stoul(probe.at("instanceId").get<std::string>()));
-                probes.emplace_back(instanceId, probe.at("pinId").get<std::string>());
+                const std::string pinId = probe.at("pinId").get<std::string>();
+                const auto voltage = lasecsimul::session::resolveNodeVoltage(*snapshot, instanceId, pinId);
+                if (!voltage) throw std::out_of_range("pino inexistente: " + pinId);
+                values[key] = *voltage;
             }
-            const std::vector<double> batch = session.nodeVoltagesOfPins(probes);
-            for (size_t index = 0; index < batch.size(); ++index) values[keys[index]] = batch[index];
             resp.ok = true;
             resp.payloadJson = nlohmann::json{{"values", values}}.dump();
         } catch (const std::exception& e) {

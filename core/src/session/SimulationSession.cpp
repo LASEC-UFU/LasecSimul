@@ -115,7 +115,26 @@ SimulationSession::SimulationSession(plugins::GlobalPluginCache& globalCache, si
             return {accept, maximumError};
         });
     m_scheduler.setStableStepCallback([this](uint64_t timestampNs) { onStableStepUnlocked(timestampNs); });
+    m_scheduler.setCommandDrainCallback([this] { drainCommandQueue(); });
+    m_scheduler.setCommandPendingCallback([this] { return m_commandQueue.hasPending(); });
     setTransientSettings(m_transientSettings);
+}
+
+void SimulationSession::enqueueCommand(CommandQueue::Command command) {
+    if (!m_scheduler.isRunning()) {
+        // Sem worker viva não há com quem competir por m_netlist/m_componentInstances -- aplicar
+        // direto aqui (thread de IPC) é seguro E evita bloquear pra sempre esperando uma thread que
+        // não existe. Cobre o caso mais comum: editar o circuito (addComponent/connectWire/
+        // setProperty/etc.) ANTES do usuário apertar "play" pela primeira vez, ou depois de parar.
+        command(*this);
+        return;
+    }
+    if (m_commandQueue.push(std::move(command))) m_scheduler.notifyCommandPending();
+}
+
+void SimulationSession::drainCommandQueue() {
+    std::deque<CommandQueue::Command> commands = m_commandQueue.takeAll();
+    for (CommandQueue::Command& command : commands) command(*this);
 }
 
 void SimulationSession::setTransientSettings(const TransientSettings& settings) {
@@ -200,6 +219,12 @@ void SimulationSession::reregisterPinsIfChanged(uint32_t componentIndex, ICompon
 }
 
 uint32_t SimulationSession::addComponent(const std::string& typeId, const registry::ComponentParams& params) {
+    return runViaCommandQueue([typeId, params](SimulationSession& self) {
+        return self.addComponentUnlocked(typeId, params);
+    });
+}
+
+uint32_t SimulationSession::addComponentUnlocked(const std::string& typeId, const registry::ComponentParams& params) {
     std::unique_ptr<IComponentModel> instance;
     if (m_components.contains(typeId)) {
         instance = m_components.create(typeId, params);
@@ -236,7 +261,15 @@ uint32_t SimulationSession::addComponent(const std::string& typeId, const regist
     for (const std::string& alias : params.signalAliases) if (!alias.empty()) m_signalAliases[alias] = componentIndex;
     m_topologyDirty = true;
     m_topologyReuseSafe = false;
-    m_scheduler.markDirty(componentIndex);
+    // `dirtySet()` (não `markDirty()`) -- bug real encontrado 2026-07-19 rodando
+    // command_queue_session_test pela primeira vez: quando isto roda via drainCommandQueue() dentro
+    // de settleUntilStableLocked(), `Scheduler::m_mutex` já está travado pela própria thread
+    // (runUntil() segura o lock pelo ciclo inteiro) -- `markDirty()` tenta travar de novo por dentro
+    // (mutex não-reentrante), o que lança `std::system_error` ("resource deadlock would occur") em
+    // vez de travar silenciosamente. Mesmo cuidado já documentado em `sendComponentEventUnlocked`/
+    // `setPropertyUnlocked` ("mutex já pertence ao wrapper"); `addComponent` foi o único dos métodos
+    // migrados nesta fase que ainda chamava a versão com lock.
+    m_scheduler.dirtySet().insert(componentIndex);
     return componentIndex;
 }
 
@@ -383,6 +416,7 @@ void SimulationSession::setPauseCondition(const std::string& ownerId, const std:
 }
 
 void SimulationSession::onStableStepUnlocked(uint64_t timestampNs) {
+    publishSnapshot();
     acquireSubscribedSignalsUnlocked(timestampNs);
     for (auto& [ownerId, condition] : m_pauseConditions) try {
         PauseEvaluation evaluation = condition.expression.evaluate([this](PauseSignalMode mode, const std::string& reference) -> PauseScalar {
@@ -421,8 +455,64 @@ void SimulationSession::onStableStepUnlocked(uint64_t timestampNs) {
     }
 }
 
+void SimulationSession::publishSnapshot() {
+    // m_publishedSnapshot só é lido/escrito sob m_snapshotMutex, SEMPRE -- mesmo aqui, onde só a
+    // thread do Scheduler jamais escreve nele (produtor único): um leitor concorrente em
+    // currentSnapshot() copia o mesmo shared_ptr, e ler/escrever um shared_ptr sem sincronização
+    // dos DOIS lados é data race (só o refcount do control block é atômico, o ponteiro guardado em
+    // m_publishedSnapshot em si não é). O trabalho caro (copiar tensões/mapeamento de pinos) fica
+    // FORA das duas seções críticas abaixo, que só copiam ponteiros -- por isso duas seções curtas
+    // em vez de segurar o mutex pelo tempo inteiro da função.
+    auto nodeVoltages = std::make_shared<const std::vector<double>>(m_nodeVoltages);
+
+    std::shared_ptr<const std::vector<uint32_t>> slotToNode;
+    std::shared_ptr<const std::vector<std::unordered_map<std::string, uint32_t>>> pinSlotsByComponent;
+    bool needsTopologyCopy;
+    {
+        std::lock_guard<std::mutex> lock(m_snapshotMutex);
+        needsTopologyCopy = m_snapshotTopologyStale || !m_publishedSnapshot;
+        if (!needsTopologyCopy) {
+            slotToNode = m_publishedSnapshot->slotToNode;
+            pinSlotsByComponent = m_publishedSnapshot->pinSlotsByComponent;
+        }
+    }
+    if (needsTopologyCopy) {
+        // Topologia mudou (ou é a primeira publicação) -- recopia. Caso raro comparado a tensão
+        // mudando (várias solve() por segundo, topologia bem mais devagar).
+        slotToNode = std::make_shared<const std::vector<uint32_t>>(m_topology.slotToNode);
+        pinSlotsByComponent = std::make_shared<const std::vector<std::unordered_map<std::string, uint32_t>>>(
+            m_netlist.componentPinSlotsCopy());
+    }
+
+    auto snapshot = std::make_shared<const NodeVoltageSnapshot>(
+        NodeVoltageSnapshot{std::move(nodeVoltages), std::move(slotToNode), std::move(pinSlotsByComponent)});
+
+    std::lock_guard<std::mutex> lock(m_snapshotMutex);
+    m_publishedSnapshot = std::move(snapshot);
+    m_snapshotTopologyStale = false;
+}
+
+std::optional<double> resolveNodeVoltage(const NodeVoltageSnapshot& snapshot, uint32_t component,
+                                          const std::string& pinId) {
+    if (!snapshot.pinSlotsByComponent || component >= snapshot.pinSlotsByComponent->size()) return std::nullopt;
+    const std::unordered_map<std::string, uint32_t>& slots = (*snapshot.pinSlotsByComponent)[component];
+    const auto slotIt = slots.find(pinId);
+    if (slotIt == slots.end()) return std::nullopt;
+    if (!snapshot.slotToNode || slotIt->second >= snapshot.slotToNode->size()) return std::nullopt;
+    const uint32_t node = (*snapshot.slotToNode)[slotIt->second];
+    if (!snapshot.nodeVoltages || node >= snapshot.nodeVoltages->size()) return std::nullopt;
+    return (*snapshot.nodeVoltages)[node];
+}
+
 void SimulationSession::connectWire(uint32_t componentA, const std::string& pinIdA, uint32_t componentB,
                                      const std::string& pinIdB) {
+    runViaCommandQueue([componentA, pinIdA, componentB, pinIdB](SimulationSession& self) {
+        self.connectWireUnlocked(componentA, pinIdA, componentB, pinIdB);
+    });
+}
+
+void SimulationSession::connectWireUnlocked(uint32_t componentA, const std::string& pinIdA, uint32_t componentB,
+                                             const std::string& pinIdB) {
     if (m_netlist.isComponentRemoved(componentA) || m_netlist.isComponentRemoved(componentB))
         throw std::invalid_argument("SimulationSession::connectWire: componente removido");
     // Arquivos de autoria antigos e alguns packages genéricos usam `pin-N`, enquanto a factory
@@ -468,6 +558,13 @@ void SimulationSession::connectWire(uint32_t componentA, const std::string& pinI
 
 bool SimulationSession::disconnectWire(uint32_t componentA, const std::string& pinIdA, uint32_t componentB,
                                         const std::string& pinIdB) {
+    return runViaCommandQueue([componentA, pinIdA, componentB, pinIdB](SimulationSession& self) {
+        return self.disconnectWireUnlocked(componentA, pinIdA, componentB, pinIdB);
+    });
+}
+
+bool SimulationSession::disconnectWireUnlocked(uint32_t componentA, const std::string& pinIdA, uint32_t componentB,
+                                                const std::string& pinIdB) {
     if (m_netlist.isComponentRemoved(componentA) || m_netlist.isComponentRemoved(componentB))
         throw std::invalid_argument("SimulationSession::disconnectWire: componente removido");
     const auto endpointSlots = [&](uint32_t component, const std::string& pinId) {
@@ -491,11 +588,19 @@ bool SimulationSession::disconnectWire(uint32_t componentA, const std::string& p
 }
 
 uint64_t SimulationSession::applyWireTopologyTransaction(uint64_t baseRevision, const std::vector<WireTopologyOperation>& operations) {
+    return runViaCommandQueue([baseRevision, operations](SimulationSession& self) {
+        return self.applyWireTopologyTransactionUnlocked(baseRevision, operations);
+    });
+}
+
+uint64_t SimulationSession::applyWireTopologyTransactionUnlocked(uint64_t baseRevision,
+                                                                   const std::vector<WireTopologyOperation>& operations) {
     if (baseRevision != m_wireTopologyRevision)
         throw std::runtime_error("topology_revision_conflict: esperado " + std::to_string(m_wireTopologyRevision) +
                                  ", recebido " + std::to_string(baseRevision));
-    // Primeiro valida sem mutar. `connectWire` contém aliases posicionais; repetir a resolução aqui
-    // seria uma segunda regra, então uma cópia barata do Netlist funciona também como staging.
+    // Primeiro valida sem mutar. `connectWireUnlocked` contém aliases posicionais; repetir a
+    // resolução aqui seria uma segunda regra, então uma cópia barata do Netlist funciona também
+    // como staging.
     simulation::Netlist staged = m_netlist;
     const bool dirtyBefore = m_topologyDirty;
     const bool reuseSafeBefore = m_topologyReuseSafe;
@@ -503,9 +608,9 @@ uint64_t SimulationSession::applyWireTopologyTransaction(uint64_t baseRevision, 
     try {
         for (const WireTopologyOperation& operation : operations) {
             if (operation.kind == WireTopologyOperation::Kind::Connect) {
-                connectWire(operation.from.component, operation.from.pinId, operation.to.component, operation.to.pinId);
+                connectWireUnlocked(operation.from.component, operation.from.pinId, operation.to.component, operation.to.pinId);
             } else {
-                disconnectWire(operation.from.component, operation.from.pinId, operation.to.component, operation.to.pinId);
+                disconnectWireUnlocked(operation.from.component, operation.from.pinId, operation.to.component, operation.to.pinId);
             }
         }
     } catch (...) {
@@ -521,6 +626,13 @@ uint64_t SimulationSession::applyWireTopologyTransaction(uint64_t baseRevision, 
 
 void SimulationSession::setTunnelName(uint32_t component, const std::string& pinId, const std::string& oldName,
                                        const std::string& newName) {
+    runViaCommandQueue([component, pinId, oldName, newName](SimulationSession& self) {
+        self.setTunnelNameUnlocked(component, pinId, oldName, newName);
+    });
+}
+
+void SimulationSession::setTunnelNameUnlocked(uint32_t component, const std::string& pinId, const std::string& oldName,
+                                               const std::string& newName) {
     if (m_netlist.isComponentRemoved(component))
         throw std::invalid_argument("SimulationSession::setTunnelName: componente removido");
     const uint32_t slot = m_netlist.pinSlotsOf(component).at(pinId);
@@ -531,7 +643,15 @@ void SimulationSession::setTunnelName(uint32_t component, const std::string& pin
 
 std::optional<std::string> SimulationSession::setProperty(uint32_t component, const std::string& propertyName,
                                                           const PropertyValue& value) {
-    return m_scheduler.synchronized([&] { return setPropertyUnlocked(component, propertyName, value); });
+    // Redesign de concorrência 2026-07-19 (fase 2): antes bloqueava a thread de IPC inteira em
+    // `Scheduler::synchronized()` até o ciclo de settle em andamento terminar -- mesma classe do bug
+    // de head-of-line-blocking já corrigido em `tryDrainUartRx` (ver
+    // project_lasecsimul_drainuart_headofline_blocking_fix), só que síncrono em vez de num poll
+    // contínuo. Agora enfileira e espera só o Scheduler aplicar (uma iteração de settle, não o ciclo
+    // inteiro) -- mesmo contrato observável (código/mensagem de erro idênticos).
+    return runViaCommandQueue([component, propertyName, value](SimulationSession& self) {
+        return self.setPropertyUnlocked(component, propertyName, value);
+    });
 }
 
 std::optional<std::string> SimulationSession::setPropertyUnlocked(uint32_t component, const std::string& propertyName,
@@ -607,15 +727,26 @@ std::optional<std::string> SimulationSession::setPropertyUnlocked(uint32_t compo
 
 std::optional<PropertySchema> SimulationSession::propertySchemaOf(uint32_t component,
                                                                   const std::string& propertyName) const {
-    if (component >= m_componentInstances.size()) return std::nullopt;
-
-    IComponentModel* instance = m_componentInstances[component].get();
-    if (!instance) return std::nullopt;
-
-    for (PropertyDescriptor& descriptor : instance->propertyDescriptors()) {
-        if (descriptor.name == propertyName) return descriptor.schema;
-    }
-    return std::nullopt;
+    // Bug real de concorrência corrigido 2026-07-19 (fase 1 do redesign de concorrência, ver
+    // .claude/plans/idempotent-floating-cat.md): antes lia `m_componentInstances` sem sincronização
+    // NENHUMA, concorrente com a thread do Scheduler dentro de settleStep(). Único chamador
+    // (CoreApplication.cpp, handler de "setProperty") só usa o resultado pra decidir se marca
+    // `requiresRestart` numa resposta de SUCESSO -- nunca pra validar/rejeitar a escrita (isso já é
+    // responsabilidade de `setPropertyUnlocked`, chamado em seguida, com seu próprio lock). Por
+    // isso "ocupado agora" pode ser tratado igual a "propriedade não encontrada" com segurança --
+    // mesmo princípio já usado por `componentCurrent()` (auxiliar/visual, nunca bloqueia, uma
+    // leitura indisponível equivale a "sem valor", sem efeito colateral observável).
+    auto result = m_scheduler.trySynchronized([&]() -> std::optional<PropertySchema> {
+        if (component >= m_componentInstances.size()) return std::nullopt;
+        IComponentModel* instance = m_componentInstances[component].get();
+        if (!instance) return std::nullopt;
+        for (PropertyDescriptor& descriptor : instance->propertyDescriptors()) {
+            if (descriptor.name == propertyName) return descriptor.schema;
+        }
+        return std::nullopt;
+    });
+    if (!result) return std::nullopt;
+    return *result;
 }
 
 std::optional<PropertyValue> SimulationSession::propertyValueOf(uint32_t component,
@@ -633,6 +764,12 @@ std::optional<PropertyValue> SimulationSession::propertyValueOfUnlocked(uint32_t
 }
 
 void SimulationSession::removeComponent(uint32_t componentIndex) {
+    runViaCommandQueue([componentIndex](SimulationSession& self) {
+        self.removeComponentUnlocked(componentIndex);
+    });
+}
+
+void SimulationSession::removeComponentUnlocked(uint32_t componentIndex) {
     IComponentModel* instance = m_componentInstances.at(componentIndex).get();
     if (!instance) return; // já removido, idempotente
 
@@ -649,8 +786,10 @@ bool SimulationSession::isSubcircuitInstance(uint32_t instanceId) const {
 }
 
 SubcircuitExpansionResult SimulationSession::addSubcircuitInstance(const std::string& typeId) {
-    std::vector<std::string> expansionStack;
-    return expandSubcircuit(typeId, expansionStack);
+    return runViaCommandQueue([typeId](SimulationSession& self) {
+        std::vector<std::string> expansionStack;
+        return self.expandSubcircuit(typeId, expansionStack);
+    });
 }
 
 SubcircuitExpansionResult SimulationSession::expandSubcircuit(const std::string& typeId,
@@ -695,14 +834,14 @@ SubcircuitExpansionResult SimulationSession::expandSubcircuit(const std::string&
             if (wire.fromComponentId == compDef.id) appendReferencedPin(wire.fromPinId);
             if (wire.toComponentId == compDef.id) appendReferencedPin(wire.toPinId);
         }
-        const uint32_t childIndex = addComponent(compDef.typeId, params);
+        const uint32_t childIndex = addComponentUnlocked(compDef.typeId, params);
         componentIndexByLocalId[compDef.id] = childIndex;
         childComponentIndices.push_back(childIndex);
         if (!primaryMcuInstanceId && m_mcus.contains(compDef.typeId)) primaryMcuInstanceId = childIndex;
 
         if (compDef.typeId == "connectors.tunnel") {
             const std::string internalName = tunnelNameFromPropertiesJson(compDef.propertiesJson);
-            if (!internalName.empty()) setTunnelName(childIndex, "pin", "", internalName);
+            if (!internalName.empty()) setTunnelNameUnlocked(childIndex, "pin", "", internalName);
         }
     }
 
@@ -713,7 +852,7 @@ SubcircuitExpansionResult SimulationSession::expandSubcircuit(const std::string&
             throw std::runtime_error("subcircuito '" + typeId + "': fio interno referencia componente inexistente");
         }
         try {
-            connectWire(fromIt->second, wireDef.fromPinId, toIt->second, wireDef.toPinId);
+            connectWireUnlocked(fromIt->second, wireDef.fromPinId, toIt->second, wireDef.toPinId);
         } catch (const std::exception& err) {
             throw std::runtime_error(
                 "subcircuito '" + typeId + "': fio interno inválido " + wireDef.fromComponentId + "." +
@@ -734,7 +873,7 @@ SubcircuitExpansionResult SimulationSession::expandSubcircuit(const std::string&
         }
         const uint32_t tunnelIndex = componentIndexByLocalId.at(tunnelCompIt->id);
         const std::string externalName = std::to_string(subcircuitInstanceId) + "::" + ifaceDef.internalTunnel;
-        setTunnelName(tunnelIndex, "pin", ifaceDef.internalTunnel, externalName);
+        setTunnelNameUnlocked(tunnelIndex, "pin", ifaceDef.internalTunnel, externalName);
         exposedPins[ifaceDef.pinId] = SubcircuitExposedPin{tunnelIndex, "pin"};
     }
 
@@ -748,15 +887,21 @@ SubcircuitExpansionResult SimulationSession::expandSubcircuit(const std::string&
 }
 
 void SimulationSession::removeSubcircuitInstance(uint32_t subcircuitInstanceId) {
+    runViaCommandQueue([subcircuitInstanceId](SimulationSession& self) {
+        self.removeSubcircuitInstanceUnlocked(subcircuitInstanceId);
+    });
+}
+
+void SimulationSession::removeSubcircuitInstanceUnlocked(uint32_t subcircuitInstanceId) {
     const uint32_t rawId = subcircuitInstanceId & ~kSubcircuitInstanceFlag;
     const auto it = m_subcircuitChildren.find(rawId);
     if (it == m_subcircuitChildren.end()) return; // já removido, idempotente
 
     for (uint32_t childId : it->second) {
         if ((childId & kSubcircuitInstanceFlag) != 0) {
-            removeSubcircuitInstance(childId); // aninhado -- recursivo
+            removeSubcircuitInstanceUnlocked(childId); // aninhado -- recursivo
         } else {
-            removeComponent(childId);
+            removeComponentUnlocked(childId);
         }
     }
     m_subcircuitChildren.erase(it);
@@ -764,12 +909,24 @@ void SimulationSession::removeSubcircuitInstance(uint32_t subcircuitInstanceId) 
 }
 
 std::optional<uint32_t> SimulationSession::findSubcircuitChildByLocalId(uint32_t subcircuitInstanceId, const std::string& localId) const {
-    const uint32_t rawId = subcircuitInstanceId & ~kSubcircuitInstanceFlag;
-    const auto it = m_subcircuitChildIndexByLocalId.find(rawId);
-    if (it == m_subcircuitChildIndexByLocalId.end()) return std::nullopt;
-    const auto childIt = it->second.find(localId);
-    if (childIt == it->second.end()) return std::nullopt;
-    return childIt->second;
+    // Bug real de concorrência corrigido 2026-07-19 (fase 1, ver
+    // .claude/plans/idempotent-floating-cat.md): lia `m_subcircuitChildIndexByLocalId` sem
+    // sincronização nenhuma. Ao contrário de `propertySchemaOf` acima, aqui `nullopt` JÁ significa
+    // algo visível pro usuário ("componente interno não encontrado", ver
+    // CoreApplication.cpp/"setSubcircuitChildProperty"/"getSubcircuitChildInstanceId") -- por isso
+    // "ocupado agora" tem que LANÇAR (distinguível), nunca virar silenciosamente o mesmo nullopt de
+    // "não existe", senão um usuário editando uma propriedade de Modo Placa bem na hora errada veria
+    // "componente interno não encontrado" pra um componente que existe perfeitamente.
+    auto result = m_scheduler.trySynchronized([&]() -> std::optional<uint32_t> {
+        const uint32_t rawId = subcircuitInstanceId & ~kSubcircuitInstanceFlag;
+        const auto it = m_subcircuitChildIndexByLocalId.find(rawId);
+        if (it == m_subcircuitChildIndexByLocalId.end()) return std::nullopt;
+        const auto childIt = it->second.find(localId);
+        if (childIt == it->second.end()) return std::nullopt;
+        return childIt->second;
+    });
+    if (!result) throw std::runtime_error("simulacao ocupada; tente novamente");
+    return *result;
 }
 
 std::vector<uint8_t> SimulationSession::getComponentState(uint32_t componentIndex) const {
@@ -841,9 +998,18 @@ std::vector<double> SimulationSession::nodeVoltagesOfPins(
 }
 
 PluginHealthStatus SimulationSession::componentHealth(uint32_t componentIndex) const {
-    IComponentModel* instance = m_componentInstances.at(componentIndex).get();
-    if (!instance) throw std::runtime_error("componentHealth: componente removido");
-    return instance->health();
+    // Bug real de concorrência corrigido 2026-07-19 (fase 1, ver
+    // .claude/plans/idempotent-floating-cat.md): lia/chamava `m_componentInstances`/`health()` sem
+    // sincronização nenhuma, concorrente com stamp()/onEvent() da thread do Scheduler no mesmo
+    // objeto. Mesmo padrão de `getComponentState`/`nodeVoltageOfPin` (lança em vez de devolver um
+    // valor parcial/inventado quando ocupado -- não existe "PluginHealthStatus vazio" seguro aqui).
+    auto result = m_scheduler.trySynchronized([&]() -> PluginHealthStatus {
+        IComponentModel* instance = m_componentInstances.at(componentIndex).get();
+        if (!instance) throw std::runtime_error("componentHealth: componente removido");
+        return instance->health();
+    });
+    if (!result) throw std::runtime_error("simulacao ocupada; telemetria adiada");
+    return *result;
 }
 
 std::optional<double> SimulationSession::componentCurrent(uint32_t componentIndex) const {
@@ -903,10 +1069,27 @@ mcu::McuComponent* SimulationSession::mcuComponentForTesting(uint32_t componentI
 }
 
 void SimulationSession::sendComponentEvent(uint32_t componentIndex, const ComponentEvent& event) {
+    // Bug real de concorrência corrigido 2026-07-19: chamava `instance->onEvent()` sem sincronização
+    // nenhuma -- pior que as races de container achadas na mesma auditoria, porque é uma mutação
+    // concorrente do MESMO objeto que a thread do Scheduler chama stamp()/onEvent() dentro de
+    // settleStep(). Fase 1 usou `trySynchronized` (estopgap, introduzia "ocupado" como falha nova);
+    // fase 2 (aqui) move pra fila de comandos -- volta a ser sempre bem-sucedido do ponto de vista de
+    // quem chama, igual ao contrato de antes do bug, só que agora sem race nenhuma.
+    runViaCommandQueue([componentIndex, event](SimulationSession& self) {
+        self.sendComponentEventUnlocked(componentIndex, event);
+    });
+}
+
+void SimulationSession::sendComponentEventUnlocked(uint32_t componentIndex, const ComponentEvent& event) {
+    // `m_scheduler.dirtySet()` (não `markDirty()`) porque `markDirty()` toma `m_mutex` de novo por
+    // dentro -- quando isto roda via drainCommandQueue() dentro de settleUntilStableLocked(), o mutex
+    // já está travado por quem chamou (mesmo cuidado documentado em `setPropertyUnlocked`, "mutex já
+    // pertence ao wrapper"). Quando roda direto (worker não existe, ver `enqueueCommand`), não há
+    // mutex nenhum pra disputar -- acesso direto também é seguro nesse caso.
     IComponentModel* instance = m_componentInstances.at(componentIndex).get();
     if (!instance) throw std::runtime_error("sendComponentEvent: componente removido");
     instance->onEvent(event);
-    m_scheduler.markDirty(componentIndex);
+    m_scheduler.dirtySet().insert(componentIndex);
 }
 
 void SimulationSession::rebuildTopologyIfNeeded() {
@@ -931,6 +1114,10 @@ void SimulationSession::rebuildTopologyIfNeeded() {
     m_nodeVoltages.assign(m_topology.listenersByNode.size(), 0.0);
     m_lastEdgeTimeNs.assign(m_topology.listenersByNode.size(), 0);
     m_topologyDirty = false;
+    // Fase 3 do redesign de concorrência: `slotToNode`/`pinSlotsByComponent` do snapshot publicado
+    // (ver publishSnapshot()) ficaram obsoletos -- a próxima publicação precisa recopiar os dois em
+    // vez de reaproveitar o shared_ptr da publicação anterior.
+    m_snapshotTopologyStale = true;
 
     // Preenche m_nodeVoltages ANTES do reset acima ter zerado tudo: grupo reaproveitado não passa
     // por MnaSolver::solve() de novo (`dirty()` continua false, ver CircuitGroup.hpp) -- sem isto,

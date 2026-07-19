@@ -190,6 +190,106 @@ void testControlAndTelemetryStayResponsiveDuringNonConvergentSettle() {
     assert(std::chrono::steady_clock::now() - stopStart < std::chrono::seconds(1));
 }
 
+// Redesign de concorrência 2026-07-19 (ver .claude/plans/idempotent-floating-cat.md) -- cobre
+// CommandDrainFn/CommandPendingFn/notifyCommandPending nos três pontos em que a worker precisa
+// drenar a fila de comandos externa (SimulationSession::CommandQueue): ociosa, pausada, e presa num
+// settle que nunca converge. As duas primeiras são regressão direta de um bug real encontrado
+// ANTES de compilar: a implementação inicial só drenava dentro de settleUntilStableLocked(), que
+// nunca é alcançado enquanto a worker está parked (ociosa OU pausada) -- editar o circuito nesses
+// dois estados (o caso mais comum: montar o circuito antes de apertar "play", ou editar uma
+// propriedade com a simulação pausada) travaria para sempre esperando uma iteração de settle que
+// não ia acontecer.
+void testCommandDrainWhileIdle() {
+    std::atomic<int> drainCalls{0};
+    std::atomic<bool> pending{false};
+    std::atomic<bool> commandApplied{false};
+    Scheduler scheduler(2, [] { return false; }); // settle: nunca fica dirty, não-op
+    scheduler.setCommandDrainCallback([&] {
+        ++drainCalls;
+        if (pending.load()) { commandApplied.store(true); pending.store(false); }
+    });
+    scheduler.setCommandPendingCallback([&] { return pending.load(); });
+    scheduler.start(); // events/dirty vazios -- a worker deve parar ociosa quase imediatamente
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    pending.store(true);
+    scheduler.notifyCommandPending();
+
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+    while (!commandApplied.load() && std::chrono::steady_clock::now() < deadline)
+        std::this_thread::yield();
+    assert(commandApplied.load());
+
+    // Sem o fix do busy-loop original (drenar SEM reavaliar se dirty/events continuam vazios antes
+    // de decidir esperar de novo), a worker nunca voltaria a dormir depois deste comando -- ficaria
+    // girando runUntil(mesmoInstante) pra sempre, inflando drainCalls sem limite. Um punhado de
+    // chamadas extras é esperado (redrenagem antes de cada tentativa de dormir); milhares em 150ms
+    // não.
+    const int callsRightAfter = drainCalls.load();
+    std::this_thread::sleep_for(std::chrono::milliseconds(150));
+    const int callsAfterSettling = drainCalls.load();
+    scheduler.stop();
+    assert(callsAfterSettling - callsRightAfter < 50);
+}
+
+void testCommandDrainWhilePaused() {
+    std::atomic<bool> pending{false};
+    std::atomic<bool> commandApplied{false};
+    Scheduler scheduler(2, [] { return false; });
+    scheduler.setCommandDrainCallback([&] {
+        if (pending.load()) { commandApplied.store(true); pending.store(false); }
+    });
+    scheduler.setCommandPendingCallback([&] { return pending.load(); });
+    scheduler.start();
+    scheduler.pause();
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    assert(scheduler.isPaused());
+
+    pending.store(true);
+    scheduler.notifyCommandPending();
+
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+    while (!commandApplied.load() && std::chrono::steady_clock::now() < deadline)
+        std::this_thread::yield();
+
+    const bool stillPaused = scheduler.isPaused(); // drenar não deve alterar o estado de pausa
+    scheduler.stop();
+    assert(commandApplied.load());
+    assert(stillPaused);
+}
+
+void testCommandDrainDuringNonConvergentSettle() {
+    std::atomic<int> settleCalls{0};
+    std::atomic<bool> pending{false};
+    std::atomic<bool> commandApplied{false};
+    Scheduler scheduler(2, [&] {
+        ++settleCalls;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        return true; // nunca converge de propósito (dirty nunca esvazia)
+    });
+    scheduler.setCommandDrainCallback([&] {
+        if (pending.load()) { commandApplied.store(true); pending.store(false); }
+    });
+    scheduler.markDirty(1);
+    scheduler.start();
+
+    const auto readyDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+    while (settleCalls.load() == 0 && std::chrono::steady_clock::now() < readyDeadline)
+        std::this_thread::yield();
+    assert(settleCalls.load() > 0);
+
+    // O settle já está girando de verdade -- settleUntilStableLocked() já redrena a cada iteração
+    // (mesmo raciocínio do check de m_stopRequested), então nem precisa de notify aqui.
+    pending.store(true);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+    while (!commandApplied.load() && std::chrono::steady_clock::now() < deadline)
+        std::this_thread::yield();
+
+    scheduler.pause();
+    scheduler.stop();
+    assert(commandApplied.load());
+}
+
 } // namespace
 
 int main() {
@@ -202,7 +302,10 @@ int main() {
     testRealTimeRateCapsVirtualAdvanceWithoutFixedDelay();
     testRepeatedStartStopDoesNotLeakWorkersOrEvents();
     testControlAndTelemetryStayResponsiveDuringNonConvergentSettle();
+    testCommandDrainWhileIdle();
+    testCommandDrainWhilePaused();
+    testCommandDrainDuringNonConvergentSettle();
 
-    std::printf("OK: Scheduler ordered events, deterministic tie-break, dirty, reset, stop.\n");
+    std::printf("OK: Scheduler ordered events, deterministic tie-break, dirty, reset, stop, command queue drain (idle/paused/non-convergent).\n");
     return 0;
 }
