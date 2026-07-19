@@ -129,23 +129,36 @@ public:
         std::lock_guard<std::mutex> lock(m_mutex);
         const bool wasEmpty = m_commands.empty();
         m_commands.push_back(std::move(command));
+        m_hasPending.store(true, std::memory_order_release);
         return wasEmpty;
     }
 
+    /** Bug real de desempenho corrigido 2026-07-19 (achado testando ao vivo na extensão, não pela
+     * suíte): `settleUntilStableLocked()` chama `CommandDrainFn` a CADA iteração do settle, não só
+     * quando ocioso (ver doc-comment de `CommandDrainFn` em Scheduler.hpp) -- uma simulação com MCU
+     * ativo pode rodar centenas de milhares de iterações de settle por segundo, e antes deste fix
+     * CADA uma delas tomava `m_mutex` aqui incondicionalmente, mesmo com a fila vazia (o caso
+     * comum). Isso virou um custo por iteração que não existia antes do redesign de concorrência --
+     * sintoma real: taxa de simulação estabilizando bem abaixo de 100% de forma ESTÁVEL (não os
+     * picos/travamentos do bug original, que já tinha sido corrigido -- um custo por iteração novo,
+     * não um artefato de medição). `m_hasPending` deixa o caminho comum (fila vazia) virar uma única
+     * leitura atômica, sem tocar `m_mutex` nunca. */
     std::deque<Command> takeAll() {
+        if (!m_hasPending.load(std::memory_order_acquire)) return {};
         std::lock_guard<std::mutex> lock(m_mutex);
+        m_hasPending.store(false, std::memory_order_release);
         return std::exchange(m_commands, {}); // não std::move -- precisa garantir vazio depois
     }
 
-    /** Usado só como `Scheduler::CommandPendingFn` -- consulta com o mutex PRÓPRIO desta fila (não o
-     * do Scheduler), por isso é seguro chamar de dentro do predicado de `m_wake.wait(...)` mesmo sem
+    /** Usado só como `Scheduler::CommandPendingFn` -- leitura atômica lock-free (mesmo raciocínio de
+     * `takeAll()` acima), por isso é seguro chamar de dentro do predicado de `m_wake.wait(...)` sem
      * o produtor (`push`) e o predicado compartilharem lock nenhum -- ver notifyCommandPending(). */
     bool hasPending() const {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        return !m_commands.empty();
+        return m_hasPending.load(std::memory_order_acquire);
     }
 
 private:
+    std::atomic<bool> m_hasPending{false};
     mutable std::mutex m_mutex;
     std::deque<Command> m_commands;
 };
