@@ -257,6 +257,43 @@ public:
         return *result;
     }
 
+    /** Snapshot ATÔMICO (uma única aquisição de mutex, não três) das propriedades que o handler IPC
+     * de "drainUart" precisa juntas (dropped/hex/pending do MESMO instante) -- e, principalmente,
+     * SEM BLOQUEAR a thread de IPC se o Scheduler estiver no meio de um ciclo de settle. Bug real
+     * 2026-07-18: LasecPlot sonda "drainUart" a cada 10-50ms (`LasecPlotBroker::poll`, ver
+     * extension/src/lasecplot/broker.ts) e o handler antigo fazia TRÊS chamadas BLOQUEANTES de
+     * `propertyValueOf` (cada uma via `Scheduler::synchronized`, que trava até o ciclo de settle em
+     * andamento terminar) -- como `IpcServer::processLoop` despacha uma requisição JSON por vez,
+     * estritamente serial (ver IpcServer.cpp), UMA dessas chamadas travadas bloqueava o pipe
+     * INTEIRO, inclusive `getSimulationTime` (usado pra calcular a taxa de simulação mostrada na
+     * UI) -- daí o sintoma relatado: taxa caindo perto de 0% durante o travamento, seguida de um
+     * pico absurdo (>1000%) quando as respostas atrasadas chegavam de uma vez. Mesmo padrão já
+     * usado por `getComponentState`/`nodeVoltageOfPin` acima (`trySynchronized`, não
+     * `synchronized`), só que devolvendo `std::nullopt` em vez de lançar -- quem chama isto (o
+     * handler IPC) já trata "ocupado agora" como caso NORMAL e frequente (tenta de novo no próximo
+     * poll), não excepcional. `uart_rx_hex` drena o buffer atomicamente dentro do getter -- se o
+     * chamador descartar um resultado `std::nullopt`, nenhum byte chega a ser perdido, só adiado. */
+    struct UartRxSnapshot { std::string dataHex; double pending = 0.0; double dropped = 0.0; };
+    std::optional<UartRxSnapshot> tryDrainUartRx(uint32_t component) const {
+        return m_scheduler.trySynchronized([&]() -> UartRxSnapshot {
+            UartRxSnapshot snapshot;
+            if (const auto dropped = propertyValueOfUnlocked(component, "uart_rx_dropped");
+                dropped && std::holds_alternative<double>(*dropped)) {
+                snapshot.dropped = std::get<double>(*dropped);
+            }
+            const auto data = propertyValueOfUnlocked(component, "uart_rx_hex");
+            if (!data || !std::holds_alternative<std::string>(*data)) {
+                throw std::runtime_error("componente não implementa canal UART");
+            }
+            snapshot.dataHex = std::get<std::string>(*data);
+            if (const auto pending = propertyValueOfUnlocked(component, "uart_rx_pending");
+                pending && std::holds_alternative<double>(*pending)) {
+                snapshot.pending = std::get<double>(*pending);
+            }
+            return snapshot;
+        });
+    }
+
 private:
     std::optional<std::string> setPropertyUnlocked(uint32_t component, const std::string& propertyName,
                                                    const PropertyValue& value);

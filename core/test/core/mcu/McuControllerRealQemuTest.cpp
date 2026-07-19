@@ -56,6 +56,25 @@ std::filesystem::path createBlankFlash() {
     return path;
 }
 
+/** Bug real de CI corrigido 2026-07-18: o processo QEMU real imprime seu próprio banner de
+ * inicializacao (linha de comando completa, incluindo "-nic ...model=open_eth...") no stdout, lido
+ * de forma assíncrona por uma thread de pipe dentro de QemuProcessManager -- um `sleep_for(500ms)`
+ * fixo seguido de UMA checagem é suficiente na maioria das máquinas de desenvolvimento (passava
+ * sempre localmente no Windows), mas falha de forma intermitente em runners de CI mais lentos/
+ * compartilhados (GitHub Actions Linux) onde o banner ainda não tinha sido lido/anexado aos logs
+ * naquele instante -- não é uma regressão de texto/wording, é uma corrida contra um processo
+ * externo real. Poll com timeout generoso é robusto nos dois ambientes sem esconder uma regressão
+ * de verdade (ainda falha se o texto nunca aparecer dentro do prazo). */
+bool waitForLogSubstring(const McuController& controller, const std::string& substring,
+                          std::chrono::milliseconds timeout = std::chrono::seconds(5)) {
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    do {
+        if (controller.qemuLogs().find(substring) != std::string::npos) return true;
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    } while (std::chrono::steady_clock::now() < deadline);
+    return controller.qemuLogs().find(substring) != std::string::npos;
+}
+
 } // namespace
 
 int main() {
@@ -129,10 +148,10 @@ int main() {
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
     std::fprintf(stderr, "  [info] isRunning() antes do stop(): %s\n", controller.isRunning() ? "true" : "false");
+    const bool sawOpenEthNic = waitForLogSubstring(controller, "model=open_eth");
     std::fprintf(stderr, "  [info] qemuLogs(): %s\n", controller.qemuLogs().c_str());
     TEST_ASSERT(controller.isRunning(), "QEMU real permanece vivo com flash MTD valida e OpenETH/SLIRP inicializados");
-    TEST_ASSERT(controller.qemuLogs().find("model=open_eth") != std::string::npos,
-                "logs do processo integrado registram a configuracao OpenETH");
+    TEST_ASSERT(sawOpenEthNic, "logs do processo integrado registram a configuracao OpenETH");
 
     controller.stop();
     TEST_ASSERT(!controller.isRunning(), "primeiro processo QEMU encerra apos stop()");
@@ -154,13 +173,12 @@ int main() {
         std::fprintf(stderr, "FALHOU: fallback de gateway lancou: %s\n", e.what());
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    const std::string fallbackLogs = controller.qemuLogs();
+    const bool sawFallbackWarning = waitForLogSubstring(controller, "gateway unavailable; falling back to isolated SLIRP");
+    const bool sawFallbackOpenEthNic = waitForLogSubstring(controller, "user,model=open_eth");
     TEST_ASSERT(fallbackStarted && controller.isRunning(),
                 "QEMU continua executando quando gateway/TAP esta indisponivel");
-    TEST_ASSERT(fallbackLogs.find("gateway unavailable; falling back to isolated SLIRP") != std::string::npos,
-                "log explica claramente o fallback de backend indisponivel");
-    TEST_ASSERT(fallbackLogs.find("user,model=open_eth") != std::string::npos,
-                "fallback preserva a NIC OpenETH usando SLIRP");
+    TEST_ASSERT(sawFallbackWarning, "log explica claramente o fallback de backend indisponivel");
+    TEST_ASSERT(sawFallbackOpenEthNic, "fallback preserva a NIC OpenETH usando SLIRP");
     controller.stop();
     if (ownsFlashPath && !flashPath.empty()) {
         std::error_code removeError;

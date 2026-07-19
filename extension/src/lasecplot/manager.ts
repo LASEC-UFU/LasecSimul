@@ -17,7 +17,19 @@ export class LasecPlotManager implements vscode.Disposable {
   private readonly simulationId = `session-${process.pid}-${crypto.randomBytes(8).toString("hex")}`;
   private readonly projectId = contextId();
   private readonly transport = new CoreUartTransport();
-  readonly broker = new LasecPlotBroker(this.transport);
+  // Bug real de performance corrigido 2026-07-18 ("depois dos logs a simulação caiu pra 1-2%"): o
+  // default de `LasecPlotBroker` (10ms/100Hz) já fazia `transport.read()` (round-trip de IPC com o
+  // Core) nessa cadência SEMPRE que o endpoint estava online -- só que, com o bug do overflow de
+  // UART fechando o endpoint a cada erro (ver `broker.ts::poll`, corrigido no mesmo dia), a conexão
+  // raramente ficava aberta tempo suficiente pra chegar na parte cara (montar pacote + entregar
+  // pro `Connection`, que dispara SÍNCRONO o callback da extensão LasecPlot externa). Corrigido o
+  // overflow, o endpoint passou a ficar publicado de verdade com um cliente conectado, e as 100
+  // entregas/segundo (cada uma cruzando pra outra extensão) viraram um custo real, roubando tempo de
+  // CPU do processo do Core. Telemetria/plot não precisa de latência sub-10ms -- `drainUart` sempre
+  // devolve TUDO que acumulou desde a última chamada, então espaçar o poll não perde bytes, só
+  // agrupa mais por entrega. 50ms (20Hz) é imperceptível pra um gráfico e corta o tráfego de IPC/
+  // callbacks em 5x.
+  readonly broker = new LasecPlotBroker(this.transport, 50);
   readonly api: LasecSimulInteropApi = {
     apiVersion: this.broker.apiVersion,
     onDidChangeLasecPlotEndpoints: this.broker.onDidChangeLasecPlotEndpoints,

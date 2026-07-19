@@ -1499,16 +1499,22 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
         try {
             const nlohmann::json payload = nlohmann::json::parse(msg.payloadJson.empty() ? "{}" : msg.payloadJson);
             const uint32_t instanceId = static_cast<uint32_t>(std::stoul(payload.value("instanceId", std::string{"0"})));
-            const auto droppedValue = session.propertyValueOf(instanceId, "uart_rx_dropped");
-            const auto dataValue = session.propertyValueOf(instanceId, "uart_rx_hex"); // getter drena atomicamente no Scheduler
-            const auto pendingValue = session.propertyValueOf(instanceId, "uart_rx_pending");
-            if (!dataValue || !std::holds_alternative<std::string>(*dataValue)) throw std::runtime_error("componente não implementa canal UART");
+            // `tryDrainUartRx` (bug real de performance corrigido 2026-07-18: 3 chamadas BLOQUEANTES
+            // de propertyValueOf aqui travavam a thread de IPC inteira sempre que coincidiam com um
+            // ciclo de settle do Scheduler em andamento -- ver o doc-comment dela em
+            // SimulationSession.hpp) -- 1 aquisição de mutex NÃO BLOQUEANTE em vez de 3 bloqueantes.
+            // "simulacao ocupada" aqui é esperado e frequente (não um erro de verdade): o chamador
+            // (LasecPlotBroker::poll, a cada 10-50ms) já trata qualquer falha de leitura como "sem
+            // dado novo desta vez, tenta de novo no próximo poll" -- nenhum byte se perde, o buffer
+            // RX real só é drenado quando esta chamada de fato consegue o snapshot.
+            const auto snapshot = session.tryDrainUartRx(instanceId);
+            if (!snapshot) throw std::runtime_error("simulacao ocupada; telemetria adiada");
             resp.ok = true;
             resp.payloadJson = nlohmann::json{
-                {"dataHex", std::get<std::string>(*dataValue)},
+                {"dataHex", snapshot->dataHex},
                 {"simulationTimeNs", session.scheduler().nowNs()},
-                {"pending", pendingValue && std::holds_alternative<double>(*pendingValue) ? std::get<double>(*pendingValue) : 0.0},
-                {"dropped", droppedValue && std::holds_alternative<double>(*droppedValue) ? std::get<double>(*droppedValue) : 0.0},
+                {"pending", snapshot->pending},
+                {"dropped", snapshot->dropped},
             }.dump();
         } catch (const std::exception& e) { resp.ok = false; resp.error = std::string("drainUart falhou: ") + e.what(); }
         return resp;
