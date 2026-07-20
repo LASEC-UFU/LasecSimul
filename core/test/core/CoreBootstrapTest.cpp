@@ -995,6 +995,119 @@ static void testSetPropertyValidationOverIpc() {
 }
 
 // Teste 4: Core encerra com shutdown
+// Teste de caracterização (revisão arquitetural 2026-07-20, docs/33-plano-revisao-arquitetural-core.md
+// seção 9.2): 6 verbos (loadMcuFirmware, drainUart, writeUart, getMcuLogs, stopMcuFirmware,
+// getComponentStates) não tinham NENHUMA cobertura via JSON real sobre o pipe -- só chamadas C++
+// diretas em SimulationSession em outros testes, o que prova que o MÉTODO funciona mas não que o
+// parsing/marshalling/mapeamento de erro da mensagem JSON correspondente está correto. Cobre os
+// caminhos de erro (sem precisar de um processo QEMU real) e o caminho de sucesso de
+// getComponentStates (batelada), que já não precisa de MCU nenhuma.
+static void testUartAndMcuVerbsOverIpc() {
+    std::fprintf(stderr, "\n[T4h] loadMcuFirmware/drainUart/writeUart/getMcuLogs/stopMcuFirmware/getComponentStates via IPC\n");
+
+    const std::string pipeName = "lasecsimul-bootstrap-test-uart-mcu-verbs";
+    int serverResult = -1;
+    std::thread serverThread([&] {
+        lasecsimul::app::CoreApplication app({pipeName});
+        serverResult = app.run();
+    });
+
+#ifdef _WIN32
+    void* conn = clientConnect(pipeName);
+    TEST_ASSERT(conn != INVALID_HANDLE_VALUE, "cliente conectou");
+#else
+    int conn = clientConnect(pipeName);
+    TEST_ASSERT(conn >= 0, "cliente conectou");
+#endif
+
+    if (
+#ifdef _WIN32
+        conn != INVALID_HANDLE_VALUE
+#else
+        conn >= 0
+#endif
+    ) {
+        int nextId = 1;
+        auto send = [&](const std::string& type, const nlohmann::json& payload) -> nlohmann::json {
+            const nlohmann::json req = {{"id", std::to_string(nextId++)},
+                                         {"type", type},
+                                         {"payload", payload},
+                                         {"protocolVersion", lasecsimul::ipc::PROTOCOL_VERSION}};
+            clientWriteLine(conn, req.dump());
+            return nlohmann::json::parse(clientReadLine(conn));
+        };
+
+        send("hello", {{"clientVersion", "0.1.0"}});
+
+        // Duas instâncias reais, não-MCU, pra exercitar tanto erro (não é MCU/QEMU) quanto o caminho
+        // de sucesso de getComponentStates (batelada) -- capacitor de novo por já ter getState()
+        // real e determinístico (0.0V recém-criado), mesma escolha de testGetComponentStateOverIpc.
+        const std::string cap1 = send("addComponent", {{"typeId", "passive.capacitor"}, {"properties", {{"capacitance", 1e-6}}}})["payload"]["instanceId"];
+        const std::string cap2 = send("addComponent", {{"typeId", "passive.capacitor"}, {"properties", {{"capacitance", 2e-6}}}})["payload"]["instanceId"];
+
+        // loadMcuFirmware: caminho vazio rejeita antes de tocar em qualquer componente.
+        const nlohmann::json emptyPath = send("loadMcuFirmware", {{"instanceId", cap1}, {"firmwarePath", ""}});
+        TEST_ASSERT(!emptyPath.value("ok", true), "loadMcuFirmware com firmwarePath vazio falha, não trava o Core");
+
+        // loadMcuFirmware: componente real mas não-MCU rejeita com mensagem específica.
+        const nlohmann::json notMcuLoad = send("loadMcuFirmware", {{"instanceId", cap1}, {"firmwarePath", "C:/nao-existe/merged.bin"}});
+        TEST_ASSERT(!notMcuLoad.value("ok", true), "loadMcuFirmware num componente não-MCU falha, não trava o Core");
+
+        // stopMcuFirmware: mesma checagem, componente real mas não-MCU.
+        const nlohmann::json notMcuStop = send("stopMcuFirmware", {{"instanceId", cap1}});
+        TEST_ASSERT(!notMcuStop.value("ok", true), "stopMcuFirmware num componente não-MCU falha, não trava o Core");
+
+        // stopMcuFirmware: instanceId totalmente fora do intervalo (nunca existiu).
+        const nlohmann::json outOfRangeStop = send("stopMcuFirmware", {{"instanceId", "999999"}});
+        TEST_ASSERT(!outOfRangeStop.value("ok", true), "stopMcuFirmware com instanceId fora do intervalo falha, não trava o Core");
+
+        // getMcuLogs: componente real mas não-MCU rejeita, não devolve log vazio silenciosamente.
+        const nlohmann::json notMcuLogs = send("getMcuLogs", {{"instanceId", cap1}});
+        TEST_ASSERT(!notMcuLogs.value("ok", true), "getMcuLogs num componente não-MCU falha, não trava o Core");
+
+        // writeUart: dataHex com comprimento ímpar é rejeitado antes de tocar em qualquer propriedade.
+        const nlohmann::json oddHex = send("writeUart", {{"instanceId", cap1}, {"dataHex", "abc"}});
+        TEST_ASSERT(!oddHex.value("ok", true), "writeUart com dataHex de comprimento ímpar falha, não trava o Core");
+
+        // writeUart: hex válido, mas o componente (capacitor) não tem a propriedade uart_tx_hex.
+        const nlohmann::json notUartWrite = send("writeUart", {{"instanceId", cap1}, {"dataHex", "48656c6c6f"}});
+        TEST_ASSERT(!notUartWrite.value("ok", true), "writeUart num componente sem uart_tx_hex falha, não trava o Core");
+
+        // drainUart: componente real sem UART -- não deve travar o Core independente do resultado.
+        const nlohmann::json drainResp = send("drainUart", {{"instanceId", cap1}});
+        TEST_ASSERT(drainResp.is_object(), "drainUart num componente sem UART devolve JSON válido, não trava o Core");
+
+        // getComponentStates (batelada): dois componentes reais, uma chamada só -- confirma que o
+        // parsing do array "items" e o mapeamento key->stateHex funcionam de ponta a ponta pelo IPC.
+        const nlohmann::json batchOk = send("getComponentStates", {{"items", {
+            {{"key", "a"}, {"instanceId", cap1}},
+            {{"key", "b"}, {"instanceId", cap2}},
+        }}});
+        TEST_ASSERT(batchOk.value("ok", false), "getComponentStates com duas instâncias reais responde ok");
+        const auto& states = batchOk["payload"]["states"];
+        TEST_ASSERT(states.contains("a") && states.contains("b"), "getComponentStates devolve as duas chaves pedidas");
+        TEST_ASSERT(states.value("a", std::string{}).size() == 16 && states.value("b", std::string{}).size() == 16,
+                    "getComponentStates devolve 16 hex chars (8 bytes) por instância de capacitor");
+
+        // getComponentStates (batelada): uma instância inválida no meio derruba a chamada inteira --
+        // comportamento atual documentado explicitamente (sem sucesso parcial por item), não uma
+        // suposição -- ver docs/33-plano-revisao-arquitetural-core.md.
+        const nlohmann::json batchFail = send("getComponentStates", {{"items", {
+            {{"key", "a"}, {"instanceId", cap1}},
+            {{"key", "bad"}, {"instanceId", "999999"}},
+        }}});
+        TEST_ASSERT(!batchFail.value("ok", true), "getComponentStates com uma instância inválida na batelada falha por inteiro (sem sucesso parcial)");
+
+        send("removeComponent", {{"instanceId", cap1}});
+        send("removeComponent", {{"instanceId", cap2}});
+        send("shutdown", nlohmann::json::object());
+        clientClose(conn);
+    }
+
+    serverThread.join();
+    TEST_ASSERT(serverResult == 0, "servidor encerrou com codigo 0 apos shutdown");
+}
+
 static void testCoreShutdown() {
     std::fprintf(stderr, "\n[T4] Core encerra com mensagem 'shutdown'\n");
 
@@ -1124,6 +1237,7 @@ int main() {
     testSimulideComplexAbiEventsOverIpc();
     testGetPropertySchemasOverIpc();
     testSetPropertyValidationOverIpc();
+    testUartAndMcuVerbsOverIpc();
     testPauseConditionNotificationOverIpc();
     testCoreShutdown();
 
