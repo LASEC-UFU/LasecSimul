@@ -5,6 +5,12 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_library(adapter SHARED src/Esp32Adapter.cpp)
+if(WIN32)
+  target_compile_definitions(adapter PRIVATE
+    NOMINMAX
+    WIN32_LEAN_AND_MEAN
+  )
+endif()
 target_include_directories(adapter PRIVATE ${CMAKE_SOURCE_DIR}/../../core/include)
 
 set_target_properties(adapter PROPERTIES CXX_VISIBILITY_PRESET hidden)
