@@ -32,8 +32,17 @@
 namespace {
 
 bool analogTraceEnabled() {
-    const char* value = std::getenv("LASECSIMUL_TRACE_ANALOG");
-    return value != nullptr && value[0] != '\0' && std::strcmp(value, "0") != 0;
+    /* Bug real de desempenho encontrado 2026-07-19 perfilando o Core ao vivo: esta função é chamada
+     * em TODA leitura/escrita de GPIO/ADC (centenas de milhares de vezes por segundo numa simulação
+     * MCU-driven), e `std::getenv` no CRT do Windows varre o bloco de ambiente inteiro a cada
+     * chamada -- dominava o topo do profile (`strchr` dentro de `gpioIsOutputEnabled`/
+     * `gpioOutputLevel` em ~95% das amostras). A flag é só um toggle de trace pra debug, não precisa
+     * refletir mudanças em tempo real -- lida uma vez e cacheada. */
+    static const bool enabled = [] {
+        const char* value = std::getenv("LASECSIMUL_TRACE_ANALOG");
+        return value != nullptr && value[0] != '\0' && std::strcmp(value, "0") != 0;
+    }();
+    return enabled;
 }
 
 constexpr uint64_t kUart0Start = 0x3FF40000;

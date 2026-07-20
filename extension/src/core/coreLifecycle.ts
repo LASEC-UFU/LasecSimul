@@ -948,6 +948,12 @@ export function rebuildCoreFromSchematicState(): Promise<void> {
 
 async function rebuildCoreFromSchematicStateNow(options: { alreadyStopped?: boolean; resumeAfter?: boolean } = {}): Promise<void> {
   if (!state.coreClient) return;
+  // Espera a carga inicial de bibliotecas de dispositivo terminar antes de recriar componentes --
+  // sem isto, um `resolveCustomEditor` do VS Code restaurando a aba do projeto pode disparar esta
+  // reconstrução ANTES de tipos como `subcircuits.esp32_devkitc_v4` estarem registrados no Core,
+  // corrida real encontrada 2026-07-19 (ver comentário em state.ts::catalogReadyPromise). Resolve
+  // imediatamente se já tiver terminado (ou nunca foi disparada).
+  if (state.catalogReadyPromise) await state.catalogReadyPromise;
 
   const runningBeforeRebuild = options.resumeAfter ?? state.simulationStatus === "running";
   // Controle vem antes de configuração e mutações. Assim uma reconstrução nunca deixa add/remove

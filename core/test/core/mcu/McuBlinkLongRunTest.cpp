@@ -32,8 +32,10 @@ int main() {
         return 1;
     }
 
+    const char* qemuOverride = std::getenv("LASECSIMUL_TEST_QEMU_BINARY");
     const std::filesystem::path adapterPath = ESP32_ADAPTER_DLL_PATH;
-    const std::filesystem::path qemuPath = QEMU_REAL_BINARY_PATH;
+    const std::filesystem::path qemuPath =
+        (qemuOverride && *qemuOverride) ? std::filesystem::u8path(qemuOverride) : std::filesystem::path(QEMU_REAL_BINARY_PATH);
     if (!std::filesystem::exists(adapterPath) || !std::filesystem::exists(qemuPath)) {
         std::fprintf(stderr, "PULADO: adapter ou QEMU real nao esta compilado/empacotado.\n");
         return 0;

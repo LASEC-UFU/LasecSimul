@@ -2234,24 +2234,26 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
 
   state.coreClient = new CoreClient(pipeName);
   attachCoreClientNotifications(state.coreClient);
-  // Conecta de forma assíncrona — não bloqueia a ativação da extensão
-  state.coreClient
+  // Conecta de forma assíncrona — não bloqueia a ativação da extensão. `catalogReadyPromise` é
+  // atribuída aqui, síncrona dentro do corpo (não-async) de `activate()`, então já existe antes de
+  // o VS Code ter qualquer chance de invocar `resolveCustomEditor` (ver comentário em state.ts).
+  state.catalogReadyPromise = state.coreClient
     .start()
-    .then(async () => {
-      await refreshUnifiedCatalogState(true, catalogCommandOptions());
-      if (process.env.LASECSIMUL_E2E === "1" && process.env.LASECSIMUL_E2E_FIXTURE) {
-        await openProjectFile(process.env.LASECSIMUL_E2E_FIXTURE, {
-          extensionUri: context.extensionUri,
-          beforeOpen: closeAllMcuSerialMonitors,
-          resolveExternalDeviceReferences,
-          openSchematicEditor,
-          syncSchematicPanel,
-        });
-      }
-    })
+    .then(() => refreshUnifiedCatalogState(true, catalogCommandOptions()))
     .catch((err) => {
       logSimulation("error", `Falha ao conectar ao LasecSimul Core: ${err instanceof Error ? err.message : String(err)}`, { stage: "core-process" });
     });
+  state.catalogReadyPromise.then(async () => {
+    if (process.env.LASECSIMUL_E2E === "1" && process.env.LASECSIMUL_E2E_FIXTURE) {
+      await openProjectFile(process.env.LASECSIMUL_E2E_FIXTURE, {
+        extensionUri: context.extensionUri,
+        beforeOpen: closeAllMcuSerialMonitors,
+        resolveExternalDeviceReferences,
+        openSchematicEditor,
+        syncSchematicPanel,
+      });
+    }
+  });
 
   const addPaletteComponent = (typeId: string) => {
     if (!state.schematicPanel) openSchematicEditor(context.extensionUri);

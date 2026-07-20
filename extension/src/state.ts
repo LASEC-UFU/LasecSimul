@@ -21,6 +21,18 @@ import { SubcircuitDocument } from "./catalog/subcircuitDocument";
 export const state = {
   coreProc: undefined as CoreProcess | undefined,
   coreClient: undefined as CoreClient | undefined,
+  /** Resolve quando o carregamento inicial das bibliotecas de dispositivo no Core (ver
+   * `extension.ts::activate`, `refreshUnifiedCatalogState(true, ...)`) termina -- inclui subcircuitos
+   * empacotados como `subcircuits.esp32_devkitc_v4` (`subcircuits/library.json`). `activate()` dispara
+   * essa carga de forma assíncrona sem bloquear a ativação, mas `rebuildCoreFromSchematicStateNow`
+   * (disparado independentemente pelo `resolveCustomEditor` do VS Code ao restaurar a aba do projeto)
+   * pode rodar ANTES dela terminar -- corrida real encontrada 2026-07-19: `addComponent` pro wrapper
+   * de subcircuito falha com "Unknown component typeId" nessa janela, e como a falha é só logada (não
+   * repetida), o bloco fica sem `coreInstanceIdByComponentId`, todos os fios que tocam nele são
+   * descartados em silêncio, e a simulação roda "rápida" só porque o MCU ficou desconectado do resto
+   * do circuito. `rebuildCoreFromSchematicStateNow` espera esta promise antes de recriar componentes.
+   * `undefined` == ainda não chamado (mesmo tratamento de ausência que os mapas abaixo). */
+  catalogReadyPromise: undefined as Promise<void> | undefined,
   schematicPanel: undefined as SchematicPanel | undefined,
   schematicState: createInitialWebviewState() as WebviewProjectState,
   currentProjectFilePath: undefined as string | undefined,
