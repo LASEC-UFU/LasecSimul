@@ -628,6 +628,36 @@ else()
 endif()
 add_test(NAME mcu_controller_real_qemu COMMAND mcu_controller_real_qemu_test)
 
+# Mesmo binário/adapter reais acima, mas com 2 McuController/processos QEMU simultâneos -- lacuna de
+# escala real encontrada na revisão arquitetural de 2026-07-20 (docs/33-plano-revisao-arquitetural-core.md),
+# pré-requisito antes de PERF-12 (thread dedicada por MCU nesse mesmo documento).
+add_executable(mcu_multiple_controllers_real_qemu_test
+    test/core/mcu/McuMultipleControllersRealQemuTest.cpp
+    src/mcu/McuController.cpp
+    src/mcu/McuComponent.cpp
+    src/mcu/qemu/QemuProcessManager.cpp
+    src/mcu/qemu/QemuArenaBridge.cpp
+    src/plugins/PluginModule.cpp
+    src/plugins/PluginLoader.cpp
+    src/plugins/PluginRuntime.cpp
+    src/plugins/NativeDeviceProxy.cpp
+    src/plugins/NativeMcuAdapterProxy.cpp
+    src/plugins/CrashGuard.cpp
+    src/simulation/Scheduler.cpp
+)
+target_include_directories(mcu_multiple_controllers_real_qemu_test PRIVATE include src)
+target_link_libraries(mcu_multiple_controllers_real_qemu_test PRIVATE nlohmann_json::nlohmann_json)
+target_compile_definitions(mcu_multiple_controllers_real_qemu_test PRIVATE
+    QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+)
+if(WIN32)
+    target_compile_definitions(mcu_multiple_controllers_real_qemu_test PRIVATE _CRT_SECURE_NO_WARNINGS)
+else()
+    target_link_libraries(mcu_multiple_controllers_real_qemu_test PRIVATE dl)
+endif()
+add_test(NAME mcu_multiple_controllers_real_qemu COMMAND mcu_multiple_controllers_real_qemu_test)
+
 # Optional end-to-end long-running regression. CI without a firmware image skips it.
 add_executable(mcu_blink_long_run_test
     test/core/mcu/McuBlinkLongRunTest.cpp
