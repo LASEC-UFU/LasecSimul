@@ -106,6 +106,15 @@ private:
     // se o plugin travar mesmo numa chamada "só leitura" -- ver CrashGuard em cada um.
     mutable PluginHealthStatus m_health = PluginHealthStatus::Ok;
     uint32_t m_consecutiveTimeouts = 0;
+    /** Cache de `propertyDescriptors()` -- bug real de desempenho encontrado 2026-07-20 revisando a
+     * arquitetura do Core: antes, cada chamada reconstruía o vetor inteiro com um `std::function`
+     * (get+set) novo por propriedade, mesmo fora do caminho de settle (chamado sempre que o painel de
+     * propriedades da UI abre/atualiza). `m_meta.propertySchema` é imutável após o construtor (nunca
+     * reatribuída em nenhum outro método desta classe), então construir uma vez e reaproveitar é
+     * seguro -- as closures capturam `this` (sempre válido) e dados constantes por propriedade
+     * (id/unidade/valor padrão do schema), nunca estado que muda depois da construção. */
+    bool m_propertyDescriptorsBuilt = false;
+    std::vector<PropertyDescriptor> m_cachedPropertyDescriptors;
 };
 
 } // namespace lasecsimul::plugins

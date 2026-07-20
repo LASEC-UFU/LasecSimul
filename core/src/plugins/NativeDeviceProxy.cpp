@@ -125,8 +125,14 @@ void NativeDeviceProxy::stamp(MnaMatrixView& matrix) {
     // fallback seguro de "último valor conhecido" (a contribuição na matriz desta rodada já teria
     // que existir ou não, não dá pra adiar). CrashGuard ainda protege contra crash (não contra
     // travamento), igual ao comportamento já existente.
-    auto context = std::make_unique<AbiMatrixContext>(AbiMatrixContext{&matrix, &m_meta});
-    LsdnMatrixView view = toAbiView(context.get()); // context.reset() no fim do escopo, mesmo se a lambda lançar
+    // Bug real de desempenho encontrado 2026-07-20 revisando a arquitetura do Core: AbiMatrixContext
+    // é só dois ponteiros (POD trivial, sem destrutor) -- não precisa de heap. std::make_unique aqui
+    // pagava uma alocação por stamp() de TODO dispositivo baseado em plugin, mesma classe do bug do
+    // getenv() cacheado no adaptador ESP32. Variável local basta: seu endereço é estável durante todo
+    // o escopo de stamp() (onde toAbiView()/CrashGuard::call() a usam), e a limpeza em caso de exceção
+    // é automática (desenrolamento de pilha), sem nada real pra liberar.
+    AbiMatrixContext context{&matrix, &m_meta};
+    LsdnMatrixView view = toAbiView(&context);
     const bool ok = CrashGuard::call(m_meta.typeId, [&] { m_module->deviceVTable()->stamp(m_handle, &view); });
     if (!ok) m_health = PluginHealthStatus::Faulted;
 
@@ -205,6 +211,8 @@ void NativeDeviceProxy::setState(const uint8_t* in, size_t len) {
 }
 
 std::vector<PropertyDescriptor> NativeDeviceProxy::propertyDescriptors() {
+    if (m_propertyDescriptorsBuilt) return m_cachedPropertyDescriptors;
+
     std::vector<PropertyDescriptor> descriptors;
     descriptors.reserve(m_meta.propertySchema.size());
 
@@ -268,7 +276,9 @@ std::vector<PropertyDescriptor> NativeDeviceProxy::propertyDescriptors() {
         }
     }
 
-    return descriptors;
+    m_cachedPropertyDescriptors = std::move(descriptors);
+    m_propertyDescriptorsBuilt = true;
+    return m_cachedPropertyDescriptors;
 }
 
 } // namespace lasecsimul::plugins

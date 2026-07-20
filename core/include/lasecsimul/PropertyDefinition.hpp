@@ -1,9 +1,11 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <functional>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -47,9 +49,24 @@ inline std::optional<std::string> validatePropertyValue(const PropertySchema& sc
     }
 
     if (!schema.options.empty()) {
-        const std::string* optionValue = std::get_if<std::string>(&value);
-        const bool validOption = optionValue && std::any_of(schema.options.begin(), schema.options.end(),
-                                                              [&](const PropertyOption& option) { return option.value == *optionValue; });
+        // Achado de revisão arquitetural 2026-07-20: esta checagem só aceitava PropertyValue::string
+        // contra option.value, enquanto SimulationSession::setPropertyUnlocked (a via de edição em
+        // runtime) já aceitava bool/number coagidos pra string -- a MESMA divergência criação-vs-edição
+        // que o comentário desta função documenta ter corrigido em 2026-07-09 (D4), só que reaparecida
+        // aqui especificamente pra propriedades com `options`. Unificado pra aceitar a mesma coerção
+        // nos dois caminhos.
+        const bool validOption = std::any_of(schema.options.begin(), schema.options.end(), [&](const PropertyOption& option) {
+            if (const std::string* text = std::get_if<std::string>(&value)) return option.value == *text;
+            if (const bool* flag = std::get_if<bool>(&value)) return option.value == (*flag ? "true" : "false");
+            if (const double* number = std::get_if<double>(&value)) {
+                try {
+                    return std::abs(std::stod(option.value) - *number) <= 1e-12;
+                } catch (const std::exception&) {
+                    return false;
+                }
+            }
+            return false;
+        });
         if (!validOption) return "opção inválida";
     }
     return std::nullopt;
