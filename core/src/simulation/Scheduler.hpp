@@ -177,6 +177,19 @@ public:
      * saber o estado sem se inscrever em notificação nenhuma. */
     bool isPaused() const { return m_paused.load(); }
     bool isRunning() const { return m_running.load(std::memory_order_acquire); }
+    /** `true` quando chamado de dentro da própria thread do Scheduler (ex.: de dentro de
+     * `onPollEvent()` do MCU, que roda como callback síncrono de `scheduleAt`). Usado por
+     * `SimulationSession::enqueueCommand` pra aplicar o comando direto em vez de empurrar na fila e
+     * bloquear em `future.get()` esperando a própria thread que está executando isto agora --
+     * bug real de desempenho encontrado 2026-07-19 perfilando o Core ao vivo: `runViaCommandQueue`
+     * aloca uma `std::promise` por chamada e sempre passa pela fila, mesmo quando quem chamou já é a
+     * única thread que a drena, sem nenhum outro consumidor concorrente possível nesse caso. Só
+     * setada no início da lambda de `start()`, antes de qualquer outro trabalho -- lida sem lock
+     * porque `std::thread::id` é trivialmente copiável e só é escrita uma vez antes de `m_running`
+     * virar visível para outras threads. */
+    bool isCurrentThreadWorker() const {
+        return std::this_thread::get_id() == m_workerThreadId.load(std::memory_order_acquire);
+    }
     void reset();
     void runUntil(uint64_t targetTimeNs);
     void step(uint64_t deltaNs);
@@ -219,6 +232,7 @@ private:
     CommandPendingFn m_commandPending;
 
     std::thread m_thread;
+    std::atomic<std::thread::id> m_workerThreadId{};
     mutable std::mutex m_mutex;
     std::condition_variable m_wake;
     std::mutex m_pacingMutex;

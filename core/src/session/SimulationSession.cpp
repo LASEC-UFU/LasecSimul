@@ -121,11 +121,19 @@ SimulationSession::SimulationSession(plugins::GlobalPluginCache& globalCache, si
 }
 
 void SimulationSession::enqueueCommand(CommandQueue::Command command) {
-    if (!m_scheduler.isRunning()) {
+    if (!m_scheduler.isRunning() || m_scheduler.isCurrentThreadWorker()) {
         // Sem worker viva não há com quem competir por m_netlist/m_componentInstances -- aplicar
         // direto aqui (thread de IPC) é seguro E evita bloquear pra sempre esperando uma thread que
         // não existe. Cobre o caso mais comum: editar o circuito (addComponent/connectWire/
         // setProperty/etc.) ANTES do usuário apertar "play" pela primeira vez, ou depois de parar.
+        //
+        // O segundo caso (bug real de desempenho achado 2026-07-19 perfilando o Core ao vivo): quem
+        // chamou já É a própria thread do Scheduler (ex.: código do MCU rodando dentro de
+        // `onPollEvent()`, que é um callback síncrono de `scheduleAt`) -- enfileirar aqui seria
+        // `runViaCommandQueue` alocar uma `std::promise` e bloquear em `future.get()` esperando esta
+        // MESMA thread se desbloquear sozinha na próxima iteração de drenagem, sem nenhum outro
+        // consumidor concorrente possível nesse caso. Aplicar direto preserva o mesmo contrato
+        // observável (síncrono do ponto de vista de quem chama) sem a alocação/fila/espera.
         command(*this);
         return;
     }

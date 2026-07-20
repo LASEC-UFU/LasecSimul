@@ -196,6 +196,8 @@ void Scheduler::start() {
     m_stopRequested.store(false);
 
     m_thread = std::thread([this] {
+        m_workerThreadId.store(std::this_thread::get_id(), std::memory_order_release);
+
         // Mede a granularidade efetiva de espera do host. No Windows ela pode ser muito maior que
         // a resolução anunciada por steady_clock; dormir a cada passo de 100 us faria cada passo
         // custar ~15,6 ms. O pacing acumula avanço até esta granularidade, sem alterar o passo.
