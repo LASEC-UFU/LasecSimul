@@ -18,6 +18,19 @@ class Signal<T> {
   clear(): void { this.listeners.clear(); }
 }
 
+/** Achado 2026-07-21: `displayName` chegava ao consumidor como "LasecSimul — LasecPlot-1" e, com o
+ * prefixo extra que a própria LasecPlot ainda adicionava (`endpointToSourceOption` no repositório
+ * LasecPlot), aparecia como "LasecSimul: LasecSimul — LasecPlot-1@115200" na UI -- origem, ID interno
+ * e baud rate junto do nome, quando só o nome amigável era esperado. O rótulo padrão de um
+ * componente novo segue "<NomeDoCatálogo><contador>" sem separador (ver
+ * `catalog/catalogMerge.ts`/`ui/webview/main.ts::nextComponentLabel`, ex: "LasecPlot-1") -- insere
+ * espaço na fronteira minúscula->maiúscula e ao redor do hífen antes do número, deixando
+ * "LasecPlot-1" -> "Lasec Plot - 1". Nomes customizados pelo usuário sem essas fronteiras (ex:
+ * "Temperatura") passam inalterados. */
+function humanizeDeviceName(name: string): string {
+  return name.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/-(\d+)\s*$/, " - $1");
+}
+
 export interface LasecPlotTransport {
   read(componentId: string): Promise<{ data: Uint8Array; simulationTimeNs: number }>;
   write(componentId: string, data: Uint8Array): Promise<number>;
@@ -147,7 +160,8 @@ export class LasecPlotBroker implements LasecSimulInteropApi, vscode.Disposable 
   describe(state: EndpointState): LasecPlotEndpointDescriptor {
     const r = state.registration;
     const duplicateName = [...this.endpoints.values()].some((other) => other !== state && other.registration.name === r.name);
-    return { id: r.id, name: r.name, displayName: duplicateName ? `LasecSimul — ${r.name} — ${r.componentId}` : `LasecSimul — ${r.name}`, projectId: r.projectId,
+    const friendlyName = humanizeDeviceName(r.name);
+    return { id: r.id, name: r.name, displayName: duplicateName ? `${friendlyName} (${r.componentId})` : friendlyName, projectId: r.projectId,
       simulationId: r.simulationId, componentId: r.componentId, baudRate: r.baudRate, dataBits: r.dataBits,
       stopBits: r.stopBits, parity: r.parity, readable: true, writable: r.mode === "bidirectional",
       online: state.online, opened: state.published, connectedClients: state.connections.size };

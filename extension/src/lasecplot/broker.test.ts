@@ -17,8 +17,16 @@ const registration = { id: "lasecsimul://workspace/w/simulation/s/lasecplot/comp
 (async () => {
 await test("publica, descobre e renomeia sem alterar o ID", async () => {
   const broker = new LasecPlotBroker(new MemoryTransport(), 1000); broker.register(registration); broker.setOnline(registration.id, true); broker.publish(registration.id);
-  const first = (await broker.listLasecPlotEndpoints())[0]!; assert(first.id === registration.id, "ID incorreto"); assert(first.displayName === "LasecSimul — Temperatura", "displayName incorreto");
+  const first = (await broker.listLasecPlotEndpoints())[0]!; assert(first.id === registration.id, "ID incorreto"); assert(first.displayName === "Temperatura", "displayName incorreto");
   broker.register({ ...registration, name: "Motor" }); const renamed = (await broker.listLasecPlotEndpoints())[0]!; assert(renamed.id === first.id && renamed.name === "Motor", "renomear deve preservar ID"); broker.dispose();
+});
+await test("displayName mostra só o nome amigável, sem prefixo de origem/baud/IDs (achado 2026-07-21)", async () => {
+  const broker = new LasecPlotBroker(new MemoryTransport(), 1000);
+  const autoLabeled = { ...registration, id: registration.id.replace("component-42", "component-99"), componentId: "component-99", name: "LasecPlot-1" };
+  broker.register(autoLabeled); broker.setOnline(autoLabeled.id, true); broker.publish(autoLabeled.id);
+  const endpoint = (await broker.listLasecPlotEndpoints())[0]!;
+  assert(endpoint.displayName === "Lasec Plot - 1", `rótulo padrão "LasecPlot-1" deveria virar "Lasec Plot - 1", veio "${endpoint.displayName}"`);
+  broker.dispose();
 });
 await test("lista várias instâncias pelo nome do schematic e mantém streams independentes", async () => {
   const broker = new LasecPlotBroker(new MemoryTransport(), 1000);
@@ -28,8 +36,8 @@ await test("lista várias instâncias pelo nome do schematic e mantém streams i
   broker.publish(registration.id); broker.publish(second.id);
   const endpoints = await broker.listLasecPlotEndpoints();
   assert(endpoints.length === 2, "as duas instâncias deveriam ser publicadas");
-  assert(endpoints.some((item) => item.displayName === "LasecSimul — Temperatura"), "fonte Temperatura ausente");
-  assert(endpoints.some((item) => item.displayName === "LasecSimul — Corrente"), "fonte Corrente ausente");
+  assert(endpoints.some((item) => item.displayName === "Temperatura"), "fonte Temperatura ausente");
+  assert(endpoints.some((item) => item.displayName === "Corrente"), "fonte Corrente ausente");
   assert(endpoints[0]?.id !== endpoints[1]?.id, "instâncias diferentes compartilharam o ID");
   broker.dispose();
 });

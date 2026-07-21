@@ -1,9 +1,15 @@
 const path = require("path");
 const { CoreProcess } = require("../extension/out/ipc/CoreProcess");
 const { CoreClient } = require("../extension/out/ipc/CoreClient");
+const { resolveCoreExecutablePath } = require("../extension/out/core/coreExecutable");
 
 const root = path.resolve(__dirname, "..");
-const corePath = path.join(root, "core", "build", "Debug", process.platform === "win32" ? "lasecsimul-core.exe" : "lasecsimul-core");
+// Acha o binário mais recente entre Release/RelWithDebInfo/Debug (mesma lógica de resolução que a
+// extensão usa em produção, ver coreExecutable.ts) -- hardcodar "Debug" fazia este script falhar
+// sempre que só Release/RelWithDebInfo estivesse compilado nesta máquina (achado 2026-07-21).
+// `resolveCoreExecutablePath` espera o caminho da PASTA extension/ (ela sobe um nível pra achar
+// core/build a partir dali, ver coreExecutableCandidates), não a raiz do repo.
+const corePath = resolveCoreExecutablePath(path.join(root, "extension"));
 const libraryPath = path.join(root, "devices", "library.json");
 const pins = [{ id: "tx", x: 0, y: 8 }, { id: "rx", x: 0, y: 24 }];
 

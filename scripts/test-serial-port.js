@@ -3,9 +3,12 @@ const { spawn } = require("child_process");
 const readline = require("readline");
 const { CoreProcess } = require("../extension/out/ipc/CoreProcess");
 const { CoreClient } = require("../extension/out/ipc/CoreClient");
+const { resolveCoreExecutablePath } = require("../extension/out/core/coreExecutable");
 
 const root = path.resolve(__dirname, "..");
-const corePath = path.join(root, "core", "build", "Debug", process.platform === "win32" ? "lasecsimul-core.exe" : "lasecsimul-core");
+// Mesmo achado de test-uart-devices.js (2026-07-21): "Debug" hardcoded falhava sempre que só
+// Release/RelWithDebInfo estivesse compilado nesta máquina.
+const corePath = resolveCoreExecutablePath(path.join(root, "extension"));
 const libraryPath = path.join(root, "devices", "library.json");
 const devicePort = process.env.LASECSIMUL_SERIAL_PORT;
 const peerPort = process.env.LASECSIMUL_SERIAL_PEER;
