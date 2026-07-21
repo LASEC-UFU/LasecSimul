@@ -40,14 +40,27 @@ std::string uniqueArenaName() {
            std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
 }
 
-/** Simula o que writeReg(addr,value) do lado QEMU real faria (ver simuliface.c) -- seta
- * regAddr/regData/simuAction e simuTime != 0, sem esperar confirmação (fire-and-forget, igual
- * ao protocolo real pra SIM_WRITE). */
+/** Simula o que writeReg(addr,value) do lado QEMU real faria (protocolo v3, ver
+ * qemu_arena_abi.h/simuliface.c::pushQueueEntry) -- publica uma entrada na fila de escritas/
+ * heartbeat: escreve os campos da entrada e só DEPOIS incrementa queueWriteIndex (é isso que
+ * torna a entrada visível pro Core), sem esperar confirmação (fire-and-forget, igual ao
+ * protocolo real pra SIM_WRITE). */
 void simulateQemuWrite(LsdnQemuArena* arena, uint64_t addr, uint64_t value) {
+    const uint64_t slot = arena->queueWriteIndex % LSDN_QEMU_ARENA_QUEUE_DEPTH;
+    arena->queue[slot].regAddr = addr;
+    arena->queue[slot].regData = value;
+    arena->queue[slot].simuAction = LSDN_SIM_WRITE;
+    arena->queue[slot].simuTime = 1; // qualquer valor != 0 -- só importa que não seja 0
+    arena->queueWriteIndex++;
+}
+
+/** Simula o que readReg(addr) do lado QEMU real faria -- protocolo v3: leitura continua fora da
+ * fila, no slot único de sempre (regAddr/simuAction/simuTime/qemuAction), inalterado desde v2. */
+void simulateQemuRead(LsdnQemuArena* arena, uint64_t addr) {
     arena->regAddr = addr;
-    arena->regData = value;
-    arena->simuAction = LSDN_SIM_WRITE;
-    arena->simuTime = 1; // qualquer valor != 0 -- só importa que não seja 0
+    arena->qemuAction = 0;
+    arena->simuAction = LSDN_SIM_READ;
+    arena->simuTime = 1;
 }
 
 } // namespace
@@ -128,8 +141,7 @@ int main() {
     // Arduino `digitalRead()` consulta GPIO_IN mesmo quando o pad está em OUTPUT. O nível físico
     // convergido precisa voltar ao buffer de entrada; caso contrário `!digitalRead(pin)` fica
     // sempre verdadeiro e um Blink por toggle permanece aceso para sempre.
-    simulateQemuWrite(arena, gpioStart + 0x3C, 0);
-    arena->simuAction = LSDN_SIM_READ;
+    simulateQemuRead(arena, gpioStart + 0x3C);
     session.scheduler().markDirty(mcuIndex);
     for (int i = 0; i < 5 && session.settleStep(); ++i) {}
     check((arena->regData & (1u << 2)) != 0,
@@ -201,8 +213,7 @@ int main() {
 
     // Agora o caminho contrário: GPIO3 não foi habilitado como saída -- McuComponent deve ler a
     // tensão real do nó (default 0V, sem nada estampado) e alimentar isso de volta no módulo.
-    simulateQemuWrite(arena, gpioStart + 0x3C, 0); // dispara um SIM_READ
-    arena->simuAction = LSDN_SIM_READ;
+    simulateQemuRead(arena, gpioStart + 0x3C);
     session.scheduler().markDirty(mcuIndex);
     for (int i = 0; i < 5 && session.settleStep(); ++i) {}
     check(arena->qemuAction == LSDN_SIM_READ, "leitura de GPIO_IN_REG confirma via qemuAction (desbloquearia o QEMU real)");

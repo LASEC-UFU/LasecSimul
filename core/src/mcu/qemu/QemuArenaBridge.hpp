@@ -23,15 +23,18 @@ public:
     LsdnQemuArena* arena();
     const LsdnQemuArena* arena() const;
 
-    /** Lê o evento pendente (`simuTime != 0`) e já resolve o módulo dono de `regAddr` via
-     * `setMemoryRegions()` -- NÃO confirma a ação (nunca zera `simuTime`/seta `qemuAction`,
-     * mesmo em SIM_READ); quem chama decide isso via `acknowledgeRead()`/`acknowledgeWrite()`
-     * depois de repassar pro módulo certo (ver McuComponent::stamp()). */
+    /** Lê o próximo evento pendente -- PERF-13 (protocolo v3, ver qemu_arena_abi.h): primeiro a
+     * fila de escritas/heartbeat (`queueReadIndex != queueWriteIndex`), senão o slot único de
+     * leitura (`simuTime != 0`) -- e já resolve o módulo dono de `regAddr` via
+     * `setMemoryRegions()`. NÃO confirma a ação (nunca avança `queueReadIndex`/zera `simuTime`/
+     * seta `qemuAction`, mesmo em SIM_READ); quem chama decide isso via
+     * `acknowledgeRead()`/`acknowledgeWrite()` depois de repassar pro módulo certo (ver
+     * McuComponent::stamp()). */
     QemuPollResult poll();
     QemuDispatchResult dispatch(uint64_t address) const;
 
-    /** Confirma uma ação SIM_WRITE (ou qualquer ação sem retorno: SIM_FREQ/SIM_EVENT) -- só zera
-     * `simuTime`, liberando o `waitForSynch()` da PRÓXIMA chamada do QEMU. */
+    /** Confirma uma ação da FILA (SIM_WRITE/SIM_EVENT/qualquer ação sem retorno) -- avança
+     * `queueReadIndex`, liberando um slot pro QEMU publicar a próxima entrada (protocolo v3). */
     void acknowledgeWrite();
 
     /** Confirma uma ação SIM_READ: grava `regData` (valor lido) E seta `qemuAction = SIM_READ`

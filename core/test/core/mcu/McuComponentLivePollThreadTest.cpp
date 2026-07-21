@@ -51,15 +51,23 @@ std::string uniqueArenaName(const char* suffix) {
 }
 
 // Mesmo papel do helper em McuComponentTest.cpp: simula o que writeReg(addr,value) do lado QEMU
-// real faria (ver simuliface.c) -- escreve direto nos campos brutos da arena, sem lock nenhum
-// (mesma coisa que o processo QEMU real faz via memória compartilhada; a serialização contra o
-// poll do McuComponent vem do protocolo de slot único simuTime==0, não de um mutex do lado C++).
+// real faria (protocolo v3, ver qemu_arena_abi.h/simuliface.c::pushQueueEntry) -- publica uma
+// entrada na fila de escritas/heartbeat direto nos campos brutos da arena, sem lock nenhum (mesma
+// coisa que o processo QEMU real faz via memória compartilhada; a serialização contra o poll do
+// McuComponent vem do protocolo de índices da fila, não de um mutex do lado C++).
 void simulateQemuWrite(LsdnQemuArena* arena, uint64_t addr, uint64_t value) {
-    arena->regAddr = addr;
-    arena->regData = value;
-    arena->simuAction = LSDN_SIM_WRITE;
-    arena->simuTime = 1;
+    const uint64_t slot = arena->queueWriteIndex % LSDN_QEMU_ARENA_QUEUE_DEPTH;
+    arena->queue[slot].regAddr = addr;
+    arena->queue[slot].regData = value;
+    arena->queue[slot].simuAction = LSDN_SIM_WRITE;
+    arena->queue[slot].simuTime = 1;
+    arena->queueWriteIndex++;
 }
+
+// Fila totalmente vazia -- corresponde a "toda entrada publicada até agora já foi consumida pela
+// thread de poll dedicada" (mesma condição que readReg() do lado QEMU real espera antes de emitir
+// uma leitura, ver waitForQueueDrain() em simuliface.c).
+bool queueDrained(const LsdnQemuArena* arena) { return arena->queueReadIndex == arena->queueWriteIndex; }
 
 // Espera até `timeout` por uma condição observável via poll -- corrida real contra threads vivas,
 // não uma constante de sleep fixa (mesma disciplina de waitForLogSubstring em
@@ -91,9 +99,9 @@ double tryReadVoltage(SimulationSession& session, uint32_t componentIndex, const
 bool toggleAndWaitForLevel(LsdnQemuArena* arena, uint64_t gpioStart, SimulationSession& session,
                             uint32_t componentIndex, const char* pin, bool high) {
     simulateQemuWrite(arena, gpioStart + 0x20, 1u << 2); // GPIO_ENABLE_REG: pino 2 como saida
-    if (!waitUntil([&] { return arena->simuTime == 0; })) return false; // aguarda a thread de poll confirmar
+    if (!waitUntil([&] { return queueDrained(arena); })) return false; // aguarda a thread de poll confirmar
     simulateQemuWrite(arena, gpioStart + 0x04, high ? (1u << 2) : 0u); // GPIO_OUT_REG
-    if (!waitUntil([&] { return arena->simuTime == 0; })) return false;
+    if (!waitUntil([&] { return queueDrained(arena); })) return false;
     return waitUntil([&] {
         const double volts = tryReadVoltage(session, componentIndex, pin, high ? 0.0 : 5.0);
         return high ? volts > 3.0 : volts < 0.5;
@@ -119,18 +127,21 @@ namespace {
 void runConcurrentStressBurst(SimulationSession& session, mcu::McuComponent& mcu, uint32_t componentIndex,
                                LsdnQemuArena* arena, uint64_t gpioStart, std::chrono::seconds duration) {
     simulateQemuWrite(arena, gpioStart + 0x20, 1u << 2); // GPIO_ENABLE_REG: pino 2 como saida, uma vez.
-    waitUntil([&] { return arena->simuTime == 0; });
+    waitUntil([&] { return queueDrained(arena); });
 
     std::atomic<bool> running{true};
     std::atomic<uint64_t> writeCount{0};
     std::thread writer([&] {
         bool level = false;
         while (running.load(std::memory_order_relaxed)) {
-            // Respeita o protocolo de slot único (mesmo raciocínio de QemuArenaBridge::poll()):
-            // só publica a próxima escrita depois que a thread de poll dedicada confirmou a
-            // anterior (simuTime volta a 0) -- sem isso estaríamos testando um cenário que nem o
-            // QEMU real produziria.
-            while (running.load(std::memory_order_relaxed) && arena->simuTime != 0) std::this_thread::yield();
+            // Respeita o protocolo real de backpressure da fila (mesmo raciocínio de
+            // QemuArenaBridge::poll()/waitForSynch() em simuliface.c): só bloqueia quando a fila
+            // está CHEIA, publica livremente enquanto houver espaço -- diferente do protocolo v2
+            // de slot único, que esperava CADA entrada confirmar antes da próxima.
+            while (running.load(std::memory_order_relaxed) &&
+                   (arena->queueWriteIndex - arena->queueReadIndex) >= LSDN_QEMU_ARENA_QUEUE_DEPTH) {
+                std::this_thread::yield();
+            }
             if (!running.load(std::memory_order_relaxed)) break;
             level = !level;
             simulateQemuWrite(arena, gpioStart + 0x04, level ? (1u << 2) : 0u);

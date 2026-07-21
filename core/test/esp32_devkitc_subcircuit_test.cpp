@@ -122,12 +122,15 @@ void registerNeededBuiltins(ComponentRegistry& components) {
     });
 }
 
-/** Simula o que writeReg(addr,value) do lado QEMU real faria (mesmo helper de McuComponentTest.cpp). */
+/** Simula o que writeReg(addr,value) do lado QEMU real faria (protocolo v3, mesmo helper de
+ * McuComponentTest.cpp) -- publica uma entrada na fila de escritas/heartbeat. */
 void simulateQemuWrite(LsdnQemuArena* arena, uint64_t addr, uint64_t value) {
-    arena->regAddr = addr;
-    arena->regData = value;
-    arena->simuAction = LSDN_SIM_WRITE;
-    arena->simuTime = 1;
+    const uint64_t slot = arena->queueWriteIndex % LSDN_QEMU_ARENA_QUEUE_DEPTH;
+    arena->queue[slot].regAddr = addr;
+    arena->queue[slot].regData = value;
+    arena->queue[slot].simuAction = LSDN_SIM_WRITE;
+    arena->queue[slot].simuTime = 1;
+    arena->queueWriteIndex++;
 }
 
 // Mesmo mapeamento de campos que CoreApplication.cpp::loadSubcircuitLibraryFile -- mantido em

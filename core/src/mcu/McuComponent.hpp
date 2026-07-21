@@ -146,7 +146,8 @@ private:
     /** Corpo da thread dedicada -- `static` de propósito: nunca guarda `this`/`McuComponent*` fora
      * do escopo de `state->mutex`, só `state` (mantém `CallbackState` vivo sozinho). Poll roda com
      * o lock tomado (serializa contra `stamp()`/`pollAndDispatchPendingEvents()` na thread do
-     * Scheduler, mesma arena de slot único); o lock é solto entre iterações (ver `std::this_thread::
+     * Scheduler, mesma arena -- fila de escritas/heartbeat desde o PERF-13, ver qemu_arena_abi.h);
+     * o lock é solto entre iterações (ver `std::this_thread::
      * yield()` abaixo) -- diferente de `onPollEvent()` de hoje, que segurava o mutex pelo busy-wait
      * inteiro (achado PERF-09 da revisão arquitetural: resolvido de graça por este redesenho, já
      * que a espera nunca mais acontece com o lock tomado). Toda chamada ao Scheduler é coletada via

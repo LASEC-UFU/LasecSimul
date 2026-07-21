@@ -303,14 +303,18 @@ uint64_t McuComponent::electricalOutputFingerprint() const {
 bool McuComponent::pollAndDispatchPendingEvents(uint64_t nowNs) {
     qemu::QemuArenaBridge& arenaBridge = m_controller.arenaBridge();
     if (!arenaBridge.isOpen()) return false;
-    // A arena possui um único slot com handshake: enquanto o Core confirma este evento o QEMU
-    // não pode publicar outro. Portanto, um poll processa no máximo um evento real; um laço com
-    // limite arbitrário apenas criava busy-wait e piorava a latência de controle.
+    // PERF-13 (protocolo v3, ver qemu_arena_abi.h): a arena agora tem uma fila de escritas/
+    // heartbeat, não mais um slot único -- mas este caminho (chamado de dentro de stamp(), uma
+    // vez por iteração de Newton) continua processando no máximo um evento por chamada de
+    // propósito: mantém cada stamp() rápido e deixa o esvaziamento de rajadas maiores pra
+    // onPollEvent()/runBackgroundPollLoop() (que já drenam a fila inteira em loop quando o
+    // Scheduler está rodando em background, ver PERF-12) -- um laço aqui dentro só duplicaria
+    // esse trabalho e prenderia stamp() por mais tempo sem necessidade.
     const qemu::QemuPollResult result = arenaBridge.poll();
     if (!result.hasEvent || !result.event) return false;
     const uint64_t eventNs = qemuEventTimeNs(m_qemuTimeOriginNs, result.event->simuTimePs);
     // Uma stamp causada por outra parte do circuito não pode antecipar o relógio virtual do QEMU.
-    // O slot permanece intacto; onPollEvent() já está agendado para consumi-lo no instante correto.
+    // A entrada permanece na fila; onPollEvent() já está agendado para consumi-la no instante certo.
     if (eventNs > nowNs && !m_syntheticArenaForTesting) return false;
     return dispatchArenaEvent(*result.event, m_syntheticArenaForTesting ? nowNs : eventNs);
 }

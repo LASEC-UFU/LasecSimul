@@ -28,6 +28,18 @@ QemuArenaEvent copyArenaEvent(const LsdnQemuArena& arena) {
                           arena.running != 0};
 }
 
+/** PERF-13 (protocolo v3, ver qemu_arena_abi.h): copia uma entrada da fila de escritas/heartbeat
+ * -- irqNumber/irqLevel/qemuTime/loop_timeout_ns/ps_per_inst são estado GLOBAL do chip (não
+ * por-entrada, a fila nunca carregou esses campos, ver LsdnQemuQueueEntry), então vêm do arena
+ * como um todo, não da entrada -- mesmo valor que copyArenaEvent() já leria pra qualquer evento
+ * neste instante. */
+QemuArenaEvent copyQueueEntry(const LsdnQemuArena& arena, const LsdnQemuQueueEntry& entry) {
+    return QemuArenaEvent{entry.simuTime,  arena.qemuTime,        entry.regData,
+                          entry.regAddr,   arena.irqNumber,      arena.irqLevel,
+                          entry.simuAction, arena.loop_timeout_ns, arena.ps_per_inst,
+                          arena.running != 0};
+}
+
 } // namespace
 
 class QemuArenaBridge::SharedMemory {
@@ -121,21 +133,43 @@ const LsdnQemuArena* QemuArenaBridge::arena() const { return m_arena; }
 
 QemuPollResult QemuArenaBridge::poll() {
     if (!m_arena) return QemuPollResult{false, std::nullopt, std::nullopt, "QEMU arena is not open"};
+
+    // PERF-13 (protocolo v3): a fila de escritas/heartbeat tem prioridade sobre o slot único de
+    // leitura -- corresponde exatamente à ordem que o lado QEMU já garante (readReg() espera a
+    // fila esvaziar de vez antes de emitir SIM_READ, ver waitForQueueDrain() em simuliface.c),
+    // então nunca há as duas coisas pendentes ao mesmo tempo na prática -- mas checar a fila
+    // primeiro deixa isso correto por construção, não só por coincidência de timing.
+    if (m_arena->queueReadIndex != m_arena->queueWriteIndex) {
+        const uint64_t slot = m_arena->queueReadIndex % LSDN_QEMU_ARENA_QUEUE_DEPTH;
+        const LsdnQemuQueueEntry& entry = m_arena->queue[slot];
+
+        // NÃO confirma aqui de propósito (ver acknowledgeWrite()) -- ler a entrada não pode, por
+        // si só, liberar espaço na fila antes do módulo certo processar o registrador.
+        QemuPollResult result;
+        result.hasEvent = true;
+        result.event = copyQueueEntry(*m_arena, entry);
+        if (result.event->simuAction == LSDN_SIM_WRITE) result.dispatch = dispatch(result.event->regAddr);
+        return result;
+    }
+
     if (m_arena->simuTime == 0) return {};
 
-    // NÃO confirma aqui de propósito (ver acknowledgeRead/acknowledgeWrite) -- ler o evento não
-    // pode, por si só, liberar o QEMU antes do módulo certo processar o registrador.
+    // Fora da fila: só SIM_READ chega aqui no protocolo v3 (escritas/heartbeat são sempre
+    // publicados na fila acima, nunca mais neste slot único -- ver qemu_arena_abi.h).
     QemuPollResult result;
     result.hasEvent = true;
     result.event = copyArenaEvent(*m_arena);
-    if (result.event->simuAction == LSDN_SIM_READ || result.event->simuAction == LSDN_SIM_WRITE) {
-        result.dispatch = dispatch(result.event->regAddr);
-    }
+    if (result.event->simuAction == LSDN_SIM_READ) result.dispatch = dispatch(result.event->regAddr);
     return result;
 }
 
 void QemuArenaBridge::acknowledgeWrite() {
-    if (m_arena) m_arena->simuTime = 0;
+    // PERF-13 (protocolo v3): escritas/heartbeat vêm da fila agora -- confirma avançando o
+    // índice de leitura (libera um slot pro QEMU publicar a próxima entrada), nunca mais zerando
+    // m_arena->simuTime (isso é só do slot único de leitura, ver acknowledgeRead()). No-op se a
+    // fila já estiver vazia (não deveria acontecer -- só chamado depois de poll() achar uma
+    // entrada -- mas seguro por construção mesmo assim).
+    if (m_arena && m_arena->queueReadIndex != m_arena->queueWriteIndex) ++m_arena->queueReadIndex;
 }
 
 void QemuArenaBridge::acknowledgeRead(uint64_t regData) {
