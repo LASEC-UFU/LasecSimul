@@ -106,33 +106,95 @@ void McuComponent::schedulePollAt(uint64_t timeNs) {
 
 void McuComponent::onPollEvent() {
     m_pollEventScheduled = false;
+    if (m_scheduler.isRunning()) {
+        // PERF-12: com um worker de verdade rodando em background, o busy-wait "sem evento ainda"
+        // sai da thread do Scheduler (onde travava TODOS os outros MCUs/settle atrás dele na fila,
+        // ver docs/33-plano-revisao-arquitetural-core.md secao 5.3) e vai para uma thread dedicada
+        // por MCU -- ela mesma despacha eventos prontos (sob o mesmo m_callbackState->mutex que já
+        // serializa contra stamp()) e devolve o controle pra cá via schedulePollAt() assim que
+        // encontra um evento futuro, exatamente como o caminho síncrono abaixo já fazia.
+        startBackgroundPollThreadIfNeeded();
+        return;
+    }
+    // Sem worker em background (driver síncrono via step()/runUntil(), ex: testes) -- mesma
+    // ressalva de sempre: uma thread dedicada aqui não teria quem drenar m_events por conta própria,
+    // então mantém o comportamento de sempre (reagenda +1ns e devolve o controle pro chamador
+    // síncrono em vez de bloquear esperando um evento que só chega quando ELE avançar o relógio).
     qemu::QemuArenaBridge& arena = m_controller.arenaBridge();
     while (m_polling.load(std::memory_order_acquire) && arena.isOpen()) {
-        const qemu::QemuPollResult result = arena.poll();
-        if (!result.hasEvent || !result.event) {
-            // O QEMU é a fonte do próximo timestamp, como no QemuDevice::runEvent do SimulIDE.
-            // Este callback roda fora do mutex do Scheduler: IPC e Stop continuam livres.
-            if (!m_scheduler.isRunning()) {
-                scheduleNextPoll();
-                return;
+        const PollStep step = pollStepLocked();
+        if (step == PollStep::DeferredFuture) return;
+        if (step == PollStep::NoEvent) {
+            scheduleNextPoll();
+            return;
+        }
+        // DispatchedReady: a próxima iteração agrupa ações do mesmo timestamp.
+    }
+}
+
+McuComponent::PollStep McuComponent::pollStepLocked() {
+    qemu::QemuArenaBridge& arena = m_controller.arenaBridge();
+    const qemu::QemuPollResult result = arena.poll();
+    if (!result.hasEvent || !result.event) return PollStep::NoEvent;
+
+    const uint64_t eventNs = qemuEventTimeNs(m_qemuTimeOriginNs, result.event->simuTimePs);
+    const uint64_t nowNs = m_scheduler.nowNs();
+    if (eventNs > nowNs) {
+        // Mantém a ação na arena e agenda uma única entrada exatamente no instante publicado.
+        schedulePollAt(eventNs);
+        return PollStep::DeferredFuture;
+    }
+
+    const bool changed = dispatchArenaEvent(*result.event, eventNs);
+    scheduleWakeupsForAllModules(eventNs, false);
+    if (changed) m_scheduler.markDirty(m_componentIndex);
+    return PollStep::DispatchedReady;
+}
+
+void McuComponent::startBackgroundPollThreadIfNeeded() {
+    bool expected = false;
+    if (!m_callbackState->pollThreadRunning.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
+        return; // já existe uma thread de poll ativa para este MCU -- ela vai pegar o estado atual.
+    }
+    std::thread(&McuComponent::runBackgroundPollLoop, m_callbackState).detach();
+}
+
+void McuComponent::runBackgroundPollLoop(std::shared_ptr<CallbackState> state) {
+    // Nunca guarda `McuComponent*` fora do escopo do lock abaixo -- `state` (CallbackState) é a
+    // única coisa que esta thread mantém viva sozinha; McuComponent pode ser destruído a qualquer
+    // momento entre duas iterações (ver ~McuComponent(), que zera `owner` sob o mesmo mutex antes
+    // de qualquer membro ser desalocado).
+    for (;;) {
+        bool dispatchedReady = false;
+        bool yieldAndRetry = false;
+        {
+            std::lock_guard<std::recursive_mutex> lock(state->mutex);
+            McuComponent* self = state->owner;
+            if (!self || !self->m_polling.load(std::memory_order_acquire)) break;
+            qemu::QemuArenaBridge& arena = self->m_controller.arenaBridge();
+            if (!arena.isOpen()) break;
+
+            const PollStep step = self->pollStepLocked();
+            if (step == PollStep::DeferredFuture) break; // devolvido ao timeline do Scheduler.
+            if (step == PollStep::DispatchedReady) {
+                dispatchedReady = true;
+            } else if (!self->m_scheduler.isRunning()) {
+                // O Scheduler deixou de rodar em background enquanto esperávamos (ex: Stop) --
+                // volta pro modo passivo de sempre em vez de girar sem ninguém pra drenar m_events.
+                self->scheduleNextPoll();
+                break;
+            } else {
+                yieldAndRetry = true;
             }
+        }
+        if (dispatchedReady) continue;
+        if (yieldAndRetry) {
             std::this_thread::yield();
             continue;
         }
-
-        const uint64_t eventNs = qemuEventTimeNs(m_qemuTimeOriginNs, result.event->simuTimePs);
-        const uint64_t nowNs = m_scheduler.nowNs();
-        if (eventNs > nowNs) {
-            // Mantém a ação na arena e agenda uma única entrada exatamente no instante publicado.
-            schedulePollAt(eventNs);
-            return;
-        }
-
-        const bool changed = dispatchArenaEvent(*result.event, eventNs);
-        scheduleWakeupsForAllModules(eventNs, false);
-        if (changed) m_scheduler.markDirty(m_componentIndex);
-        // A próxima iteração agrupa ações do mesmo timestamp; uma ação futura cai no ramo acima.
+        break;
     }
+    state->pollThreadRunning.store(false, std::memory_order_release);
 }
 
 void McuComponent::scheduleModuleWakeup(size_t moduleIndex, uint64_t nowNs, bool schedulerLockHeld) {

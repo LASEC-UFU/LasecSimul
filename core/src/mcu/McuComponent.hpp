@@ -95,15 +95,46 @@ public:
     qemu::QemuArenaBridge& arenaBridge() { return m_controller.arenaBridge(); }
 
 private:
+    /** PERF-12 (docs/33-plano-revisao-arquitetural-core.md, alternativa C): sobrevive à destruição
+     * do McuComponent -- mantida viva pela `shared_ptr` que a própria thread de poll dedicada
+     * carrega, então `pollThreadRunning`/`mutex` continuam seguros de tocar mesmo depois de `owner`
+     * virar nullptr (ver `runBackgroundPollLoop`, que nunca guarda um `McuComponent*` cru fora do
+     * escopo do lock). */
     struct CallbackState {
         mutable std::recursive_mutex mutex;
         McuComponent* owner = nullptr;
+        std::atomic<bool> pollThreadRunning{false};
     };
+    /** Resultado de uma tentativa de poll -- ver `pollStepLocked()`. */
+    enum class PollStep { NoEvent, DispatchedReady, DeferredFuture };
     void startPolling();
     void stopPolling();
     void scheduleNextPoll();
     void schedulePollAt(uint64_t timeNs);
     void onPollEvent();
+    /** Um poll na arena + no máximo uma ação: sem evento (`NoEvent`), evento futuro reagendado via
+     * `schedulePollAt` (`DeferredFuture`) ou evento pronto despachado agora (`DispatchedReady`).
+     * Chamar só com `m_callbackState->mutex` já travado pelo chamador (mesma convenção de
+     * `settleUntilStableLocked`/`scheduleEventUnlocked` do Scheduler) -- nunca abre/fecha a arena
+     * nem checa `isOpen()`, isso é responsabilidade de quem chama. */
+    PollStep pollStepLocked();
+    /** PERF-12: inicia (se ainda não houver uma) a thread dedicada de poll para este MCU -- só
+     * quando `m_scheduler.isRunning()` (worker de verdade rodando em background; ver `onPollEvent`)
+     * -- idempotente via `CallbackState::pollThreadRunning` (compare-and-swap), seguro chamar toda
+     * vez que `onPollEvent()` não tem evento imediato pronto. */
+    void startBackgroundPollThreadIfNeeded();
+    /** Corpo da thread dedicada -- `static` de propósito: nunca guarda `this`/`McuComponent*` fora
+     * do escopo de `state->mutex`, só `state` (mantém `CallbackState` vivo sozinho). Poll roda com
+     * o lock tomado (serializa contra `stamp()`/`pollAndDispatchPendingEvents()` na thread do
+     * Scheduler, mesma arena de slot único); o lock é solto entre iterações (ver `std::this_thread::
+     * yield()` abaixo) -- diferente de `onPollEvent()` de hoje, que segurava o mutex pelo busy-wait
+     * inteiro (achado PERF-09 da revisão arquitetural: resolvido de graça por este redesenho, já
+     * que a espera nunca mais acontece com o lock tomado). Termina sozinha (sem `join()` -- nunca
+     * bloqueia quem chama `stopPolling()`/o destrutor, mesmo se isso acontecer de dentro de um
+     * callback que já segura `state->mutex` recursivamente, ver `onEvent()`) assim que `m_polling`
+     * vira false, a arena fecha, ou o dono é destruído.
+     */
+    static void runBackgroundPollLoop(std::shared_ptr<CallbackState> state);
     void scheduleModuleWakeup(size_t moduleIndex, uint64_t nowNs, bool schedulerLockHeld);
     void scheduleWakeupsForAllModules(uint64_t nowNs, bool schedulerLockHeld);
     bool pollAndDispatchPendingEvents(uint64_t nowNs);

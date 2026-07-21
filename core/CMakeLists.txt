@@ -693,6 +693,23 @@ if(NOT WIN32)
 endif()
 add_test(NAME mcu_component COMMAND mcu_component_test)
 
+# PERF-12: mesma ponte registrador<->pino, mas com Scheduler::start() ligado de verdade -- único
+# teste que exercita McuComponent::runBackgroundPollLoop() (McuComponentTest.cpp é só síncrono;
+# McuBlinkLongRunTest.cpp exige LASECSIMUL_TEST_FIRMWARE, normalmente ausente em CI).
+add_executable(mcu_component_live_poll_thread_test
+    test/core/mcu/McuComponentLivePollThreadTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(mcu_component_live_poll_thread_test PRIVATE include src)
+target_link_libraries(mcu_component_live_poll_thread_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(mcu_component_live_poll_thread_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+)
+if(NOT WIN32)
+    target_link_libraries(mcu_component_live_poll_thread_test PRIVATE dl)
+endif()
+add_test(NAME mcu_component_live_poll_thread COMMAND mcu_component_live_poll_thread_test)
+
 # Detecção de borda digital + despacho de ComponentEvent{kPinChangeEventTag} (substitui
 # I2cBusModule/SpiBusModule -- removidos por nunca terem sido ligados a um SimulationSession real;
 # ver .spec/lasecsimul-native-devices.spec, seção 8, e SimulationSession::settleStep() passo 3b).
