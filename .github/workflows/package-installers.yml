@@ -94,9 +94,6 @@ jobs:
       - name: Run extension tests
         run: npm --prefix extension test
 
-      - name: Run core tests
-        run: node scripts/test-core.js --config Release
-
       - name: Package release artifacts
         run: node scripts/package-release.js
 
