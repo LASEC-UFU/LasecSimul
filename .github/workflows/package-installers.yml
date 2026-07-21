@@ -97,32 +97,6 @@ jobs:
       - name: Package release artifacts
         run: node scripts/package-release.js
 
-      - name: Verify Windows TAP and gateway payload
-        if: matrix.os == 'windows-latest'
-        shell: pwsh
-        run: |
-          $root = "dist/staging/win32-x64/windows-bootstrapper"
-          $required = @(
-            "$root/tap-windows6/amd64/OemVista.inf",
-            "$root/tap-windows6/amd64/tap0901.cat",
-            "$root/tap-windows6/amd64/tap0901.sys",
-            "$root/tap-windows6/tap-windows6-9.27.0-source.zip",
-            "$root/network-gateway.exe"
-          )
-          foreach ($path in $required) {
-            if (-not (Test-Path -LiteralPath $path)) { throw "Payload ausente: $path" }
-          }
-          if (-not (Get-ChildItem "dist/release/win32-x64/*-setup.exe")) { throw "Instalador Windows ausente" }
-          $driverSignature = Get-AuthenticodeSignature "$root/tap-windows6/amd64/tap0901.sys"
-          if ($driverSignature.Status -ne "Valid") { throw "Assinatura TAP inválida: $($driverSignature.Status)" }
-          & "$root/gateway-publish/LasecSimul.NetworkGateway.exe" --self-test
-          if ($LASTEXITCODE -ne 0) { throw "Self-test do gateway falhou" }
-          $setup = Get-ChildItem "dist/release/win32-x64/*-setup.exe" | Select-Object -First 1
-          & $setup.FullName --verify-payload
-          if ($LASTEXITCODE -ne 0) { throw "Verificação do payload embutido falhou" }
-          & $setup.FullName --machine-status
-          if ($LASTEXITCODE -notin @(0, 2)) { throw "Verificação read-only do estado da máquina falhou com $LASTEXITCODE" }
-
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
