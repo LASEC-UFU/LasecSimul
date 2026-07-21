@@ -709,6 +709,10 @@ if(NOT WIN32)
     target_link_libraries(mcu_component_live_poll_thread_test PRIVATE dl)
 endif()
 add_test(NAME mcu_component_live_poll_thread COMMAND mcu_component_live_poll_thread_test)
+# A rajada de estresse concorrente dentro do teste roda ~4s; um deadlock real (a classe de bug que
+# este teste existe para pegar) travaria o processo indefinidamente -- limite explícito para que
+# isso apareça como falha de TIMEOUT do CTest em vez de travar o resto da suíte para sempre.
+set_tests_properties(mcu_component_live_poll_thread PROPERTIES TIMEOUT 60)
 
 # Detecção de borda digital + despacho de ComponentEvent{kPinChangeEventTag} (substitui
 # I2cBusModule/SpiBusModule -- removidos por nunca terem sido ligados a um SimulationSession real;

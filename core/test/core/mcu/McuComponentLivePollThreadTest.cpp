@@ -21,6 +21,9 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include "components/active/DiodeLegArray.hpp"
+#include "components/other/Ground.hpp"
+#include "components/passive/Resistor.hpp"
 #include "lasecsimul/qemu_arena_abi.h"
 #include "mcu/McuComponent.hpp"
 #include "plugins/GlobalPluginCache.hpp"
@@ -99,6 +102,66 @@ bool toggleAndWaitForLevel(LsdnQemuArena* arena, uint64_t gpioStart, SimulationS
 
 } // namespace
 
+namespace {
+
+// Achado 2026-07-21 (relato ao vivo do usuário: simulação travava em 0% depois de alguns minutos
+// rodando): Scheduler::runUntil() segura Scheduler::m_mutex pelo laço de settle inteiro, e stamp()
+// (chamado de dentro dele) adquire m_callbackState->mutex NESSA ordem -- a thread de poll dedicada
+// fazia o inverso antes da correção. Esta rajada tenta reproduzir a janela de corrida de verdade:
+// uma thread dedicada escreve registradores o mais rápido possível (respeitando só o protocolo de
+// slot único da arena) enquanto o pino alvo está ligado a um LED não-linear (força várias iterações
+// de Newton -- logo várias chamadas a stamp() -- por toggle, a mesma montagem de McuComponentTest),
+// e a thread principal concorrentemente chama session.componentHealth() (o MESMO caminho real de
+// produção: Scheduler::trySynchronized() -> McuComponent::health(), que expôs a segunda metade do
+// bug: onEvent()/loadFirmware() aninhados via callback agendado vs. este caminho). Sem a correção,
+// isto trava o processo inteiro (não falha um assert -- o timeout do CTest configurado no
+// CMakeLists é quem pegaria a regressão).
+void runConcurrentStressBurst(SimulationSession& session, mcu::McuComponent& mcu, uint32_t componentIndex,
+                               LsdnQemuArena* arena, uint64_t gpioStart, std::chrono::seconds duration) {
+    simulateQemuWrite(arena, gpioStart + 0x20, 1u << 2); // GPIO_ENABLE_REG: pino 2 como saida, uma vez.
+    waitUntil([&] { return arena->simuTime == 0; });
+
+    std::atomic<bool> running{true};
+    std::atomic<uint64_t> writeCount{0};
+    std::thread writer([&] {
+        bool level = false;
+        while (running.load(std::memory_order_relaxed)) {
+            // Respeita o protocolo de slot único (mesmo raciocínio de QemuArenaBridge::poll()):
+            // só publica a próxima escrita depois que a thread de poll dedicada confirmou a
+            // anterior (simuTime volta a 0) -- sem isso estaríamos testando um cenário que nem o
+            // QEMU real produziria.
+            while (running.load(std::memory_order_relaxed) && arena->simuTime != 0) std::this_thread::yield();
+            if (!running.load(std::memory_order_relaxed)) break;
+            level = !level;
+            simulateQemuWrite(arena, gpioStart + 0x04, level ? (1u << 2) : 0u);
+            writeCount.fetch_add(1, std::memory_order_relaxed);
+        }
+    });
+
+    uint64_t healthChecks = 0;
+    const auto deadline = std::chrono::steady_clock::now() + duration;
+    while (std::chrono::steady_clock::now() < deadline) {
+        try {
+            (void)session.componentHealth(componentIndex);
+        } catch (const std::exception&) {
+            // "simulacao ocupada" (trySynchronized não conseguiu o lock agora) é esperado e
+            // inofensivo -- só reflete contenção real, não uma falha.
+        }
+        ++healthChecks;
+    }
+    running.store(false, std::memory_order_relaxed);
+    writer.join();
+
+    std::fprintf(stderr, "  [info] rajada de %lld s: %llu escritas de registrador, %llu chamadas a componentHealth()\n",
+                 static_cast<long long>(duration.count()), static_cast<unsigned long long>(writeCount.load()),
+                 static_cast<unsigned long long>(healthChecks));
+    check(writeCount.load() > 200,
+          "thread dedicada publicou um volume alto de escritas concorrentes durante a rajada (nao ficou presa)");
+    (void)mcu;
+}
+
+} // namespace
+
 int main() {
 #ifndef ESP32_ADAPTER_DLL_PATH
 #error "ESP32_ADAPTER_DLL_PATH precisa ser definido pelo CMakeLists (caminho do adapter.dll real)"
@@ -166,6 +229,36 @@ int main() {
 
     check(mcuA->health() == PluginHealthStatus::Ok && mcuB->health() == PluginHealthStatus::Ok,
           "as duas instâncias continuam saudáveis depois da rajada de escritas concorrentes");
+
+    // LED não-linear no GPIO2 de A -- cada toggle força várias iterações de Newton (várias
+    // chamadas a stamp()) até convergir, a mesma montagem de McuComponentTest -- maximiza a chance
+    // da thread do Scheduler estar DENTRO de stamp() (segurando as duas travas, nessa ordem)
+    // exatamente quando a rajada abaixo despacha um evento pela thread de poll dedicada.
+    session.components().registerFactory("passive.resistor", [](const registry::ComponentParams& p) {
+        return std::make_unique<components::Resistor>(std::array<Pin, 2>{Pin{"pin-1"}, Pin{"pin-2"}},
+                                                        p.property("resistance", 220.0));
+    });
+    session.components().registerFactory("outputs.led", [](const registry::ComponentParams&) {
+        return std::make_unique<components::DiodeLegArray>(
+            "outputs.led", std::vector<Pin>{Pin{"anode"}, Pin{"cathode"}},
+            std::vector<components::DiodeLegArray::Leg>{{0, 1}});
+    });
+    session.components().registerFactory("other.ground", [](const registry::ComponentParams&) {
+        return std::make_unique<components::Ground>(Pin{"pin"});
+    });
+    const uint32_t resistorIndex = session.addComponent("passive.resistor", {});
+    const uint32_t ledIndex = session.addComponent("outputs.led", {});
+    const uint32_t groundIndex = session.addComponent("other.ground", {});
+    session.connectWire(indexA, "GPIO2", resistorIndex, "pin-1");
+    session.connectWire(resistorIndex, "pin-2", ledIndex, "anode");
+    session.connectWire(ledIndex, "cathode", groundIndex, "pin");
+
+    // A rajada de verdade: ~4s de relógio real com escritas concorrentes o mais rápido possível +
+    // session.componentHealth() (Scheduler::trySynchronized() -> McuComponent::health()) batendo
+    // ao mesmo tempo -- sem a correção do lock-order, isto trava o processo inteiro.
+    runConcurrentStressBurst(session, *mcuA, indexA, arenaA, gpioStart, std::chrono::seconds(4));
+    check(mcuA->health() == PluginHealthStatus::Ok, "MCU A continua saudável depois da rajada concorrente de 4s");
+    check(session.scheduler().isRunning(), "Scheduler continua rodando depois da rajada (nao travou)");
 
     // Recarrega firmware repetidamente com o Scheduler VIVO -- interação mais arriscada do
     // redesenho: stopFirmware()/loadFirmware() seguram m_callbackState->mutex, e a thread de poll

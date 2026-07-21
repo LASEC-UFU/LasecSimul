@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -107,17 +108,36 @@ private:
     };
     /** Resultado de uma tentativa de poll -- ver `pollStepLocked()`. */
     enum class PollStep { NoEvent, DispatchedReady, DeferredFuture };
-    void startPolling();
+    /** Achado 2026-07-21 (relato ao vivo do usuário: simulação travava em 0% depois de alguns
+     * minutos rodando): `Scheduler::runUntil()` segura `Scheduler::m_mutex` pelo laço de settle
+     * inteiro, e `stamp()` (chamado de dentro dele) adquire `m_callbackState->mutex` NESSA ordem
+     * (Scheduler::m_mutex -> CallbackState::mutex) -- sempre na própria thread do Scheduler. A
+     * thread de poll dedicada (`runBackgroundPollLoop`) faz o INVERSO: seguraria
+     * `m_callbackState->mutex` e SÓ ENTÃO chamaria `Scheduler::markDirty()`/`scheduleEvent()`/
+     * `scheduleAt()` (que adquirem `Scheduler::m_mutex`) -- inversão clássica de ordem de lock.
+     * Quando a thread do Scheduler está em `stamp()` do MESMO MCU (segurando as duas, nessa ordem)
+     * exatamente quando a thread de poll despacha um evento (segurando a primeira, querendo a
+     * segunda), as duas travam para sempre. `pollStepLocked()`/`schedulePollAt()`/
+     * `scheduleModuleWakeup()`/`scheduleWakeupsForAllModules()` aceitam este vetor opcional: quando
+     * não-nulo, QUALQUER chamada que tocaria o Scheduler é empacotada aqui em vez de disparada na
+     * hora -- `runBackgroundPollLoop()` as executa DEPOIS de soltar `m_callbackState->mutex`,
+     * nunca segurando as duas ao mesmo tempo. `nullptr` (default) preserva o comportamento direto
+     * de sempre para quem já é seguro (stamp()/onPollEvent() legado, chamados só pela própria
+     * thread do Scheduler com `Scheduler::m_mutex` já liberado antes do callback, ver
+     * `Scheduler::processNextEventUntilLocked`). */
+    using DeferredSchedulerCall = std::function<void()>;
+    void startPolling(std::vector<DeferredSchedulerCall>* deferred = nullptr);
     void stopPolling();
-    void scheduleNextPoll();
-    void schedulePollAt(uint64_t timeNs);
+    void scheduleNextPoll(std::vector<DeferredSchedulerCall>* deferred = nullptr);
+    void schedulePollAt(uint64_t timeNs, std::vector<DeferredSchedulerCall>* deferred = nullptr);
     void onPollEvent();
     /** Um poll na arena + no máximo uma ação: sem evento (`NoEvent`), evento futuro reagendado via
      * `schedulePollAt` (`DeferredFuture`) ou evento pronto despachado agora (`DispatchedReady`).
      * Chamar só com `m_callbackState->mutex` já travado pelo chamador (mesma convenção de
      * `settleUntilStableLocked`/`scheduleEventUnlocked` do Scheduler) -- nunca abre/fecha a arena
-     * nem checa `isOpen()`, isso é responsabilidade de quem chama. */
-    PollStep pollStepLocked();
+     * nem checa `isOpen()`, isso é responsabilidade de quem chama. `deferred` -- ver doc-comment de
+     * `DeferredSchedulerCall` acima. */
+    PollStep pollStepLocked(std::vector<DeferredSchedulerCall>* deferred = nullptr);
     /** PERF-12: inicia (se ainda não houver uma) a thread dedicada de poll para este MCU -- só
      * quando `m_scheduler.isRunning()` (worker de verdade rodando em background; ver `onPollEvent`)
      * -- idempotente via `CallbackState::pollThreadRunning` (compare-and-swap), seguro chamar toda
@@ -129,14 +149,28 @@ private:
      * Scheduler, mesma arena de slot único); o lock é solto entre iterações (ver `std::this_thread::
      * yield()` abaixo) -- diferente de `onPollEvent()` de hoje, que segurava o mutex pelo busy-wait
      * inteiro (achado PERF-09 da revisão arquitetural: resolvido de graça por este redesenho, já
-     * que a espera nunca mais acontece com o lock tomado). Termina sozinha (sem `join()` -- nunca
-     * bloqueia quem chama `stopPolling()`/o destrutor, mesmo se isso acontecer de dentro de um
-     * callback que já segura `state->mutex` recursivamente, ver `onEvent()`) assim que `m_polling`
-     * vira false, a arena fecha, ou o dono é destruído.
+     * que a espera nunca mais acontece com o lock tomado). Toda chamada ao Scheduler é coletada via
+     * `DeferredSchedulerCall` e só disparada DEPOIS de soltar `state->mutex` (ver doc-comment
+     * acima -- evita a inversão de ordem de lock contra `stamp()`). Termina sozinha (sem `join()`
+     * -- nunca bloqueia quem chama `stopPolling()`/o destrutor, mesmo se isso acontecer de dentro
+     * de um callback que já segura `state->mutex` recursivamente, ver `onEvent()`) assim que
+     * `m_polling` vira false, a arena fecha, ou o dono é destruído.
      */
     static void runBackgroundPollLoop(std::shared_ptr<CallbackState> state);
-    void scheduleModuleWakeup(size_t moduleIndex, uint64_t nowNs, bool schedulerLockHeld);
-    void scheduleWakeupsForAllModules(uint64_t nowNs, bool schedulerLockHeld);
+    void scheduleModuleWakeup(size_t moduleIndex, uint64_t nowNs, bool schedulerLockHeld,
+                               std::vector<DeferredSchedulerCall>* deferred = nullptr);
+    void scheduleWakeupsForAllModules(uint64_t nowNs, bool schedulerLockHeld,
+                                       std::vector<DeferredSchedulerCall>* deferred = nullptr);
+    /** Corpo de `loadFirmware()` -- espera `m_callbackState->mutex` JÁ travado pelo chamador (uma
+     * vez só, não reentrante) e nunca dispara `deferred` sozinha, só anexa -- quem travou primeiro
+     * é quem dispara, depois de soltar a PRÓPRIA trava (ver `loadFirmware()` e as bordas de
+     * `onEvent()`, que chamam isto direto em vez do `loadFirmware()` público porque já seguram o
+     * lock reentrante e precisam dispará-la só quando ELAS soltarem, não quando esta função
+     * retornar -- senão o disparo ainda aconteceria com `m_callbackState->mutex` travado pela
+     * chamadora externa, mesma inversão de ordem que motivou `DeferredSchedulerCall`). */
+    void loadFirmwareLocked(const std::filesystem::path& firmwarePath, const std::string& arenaName,
+                             const std::string& qemuBinaryOverride, McuDebugOptions debug,
+                             std::vector<DeferredSchedulerCall>& deferred);
     bool pollAndDispatchPendingEvents(uint64_t nowNs);
     bool dispatchArenaEvent(const qemu::QemuArenaEvent& event, uint64_t eventTimeNs);
     uint64_t electricalOutputFingerprint() const;

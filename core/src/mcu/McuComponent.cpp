@@ -70,14 +70,14 @@ void McuComponent::onAssignedIndex(uint32_t index) {
     m_componentIndex = index;
 }
 
-void McuComponent::startPolling() {
+void McuComponent::startPolling(std::vector<DeferredSchedulerCall>* deferred) {
     m_polling.store(true, std::memory_order_release);
-    scheduleNextPoll();
+    scheduleNextPoll(deferred);
 }
 
 void McuComponent::stopPolling() { m_polling.store(false, std::memory_order_release); }
 
-void McuComponent::scheduleNextPoll() {
+void McuComponent::scheduleNextPoll(std::vector<DeferredSchedulerCall>* deferred) {
     // +1ns (não `nowNs()` cru): quando chamado de dentro de `onPollEvent()` sem o Scheduler
     // rodando em background (`isRunning()==false` -- driver síncrono via `step()`/testes), um
     // evento reagendado EXATAMENTE no instante atual é reprocessado na MESMA passada de
@@ -87,21 +87,28 @@ void McuComponent::scheduleNextPoll() {
     // até aqui só porque o reset fantasma do EN/RST (ver `m_resetPinObserved`) fechava a arena
     // antes deste laço rodar. O +1ns é imperceptível pro caso normal (`startPolling()`, chamado
     // fora de `runUntil()`) e garante que `m_nowNs` sempre progride, então o laço termina.
-    schedulePollAt(m_scheduler.nowNs() + 1);
+    schedulePollAt(m_scheduler.nowNs() + 1, deferred);
 }
 
-void McuComponent::schedulePollAt(uint64_t timeNs) {
+void McuComponent::schedulePollAt(uint64_t timeNs, std::vector<DeferredSchedulerCall>* deferred) {
     if (m_pollEventScheduled) return;
     m_pollEventScheduled = true;
     const std::weak_ptr<CallbackState> weakState = m_callbackState;
-    m_scheduler.scheduleAt(timeNs, [weakState] {
+    auto callback = [weakState] {
         const std::shared_ptr<CallbackState> state = weakState.lock();
         if (!state) return;
         std::lock_guard<std::recursive_mutex> lock(state->mutex);
         McuComponent* self = state->owner;
         if (!self) return;
         self->onPollEvent();
-    });
+    };
+    if (deferred) {
+        deferred->push_back([&scheduler = m_scheduler, timeNs, callback = std::move(callback)]() mutable {
+            scheduler.scheduleAt(timeNs, std::move(callback));
+        });
+    } else {
+        m_scheduler.scheduleAt(timeNs, std::move(callback));
+    }
 }
 
 void McuComponent::onPollEvent() {
@@ -132,22 +139,30 @@ void McuComponent::onPollEvent() {
     }
 }
 
-McuComponent::PollStep McuComponent::pollStepLocked() {
+McuComponent::PollStep McuComponent::pollStepLocked(std::vector<DeferredSchedulerCall>* deferred) {
     qemu::QemuArenaBridge& arena = m_controller.arenaBridge();
     const qemu::QemuPollResult result = arena.poll();
     if (!result.hasEvent || !result.event) return PollStep::NoEvent;
 
+    // nowNs() é um snapshot lock-free (m_nowSnapshotNs), nunca toca Scheduler::m_mutex -- seguro
+    // chamar segurando m_callbackState->mutex independente de `deferred`.
     const uint64_t eventNs = qemuEventTimeNs(m_qemuTimeOriginNs, result.event->simuTimePs);
     const uint64_t nowNs = m_scheduler.nowNs();
     if (eventNs > nowNs) {
         // Mantém a ação na arena e agenda uma única entrada exatamente no instante publicado.
-        schedulePollAt(eventNs);
+        schedulePollAt(eventNs, deferred);
         return PollStep::DeferredFuture;
     }
 
     const bool changed = dispatchArenaEvent(*result.event, eventNs);
-    scheduleWakeupsForAllModules(eventNs, false);
-    if (changed) m_scheduler.markDirty(m_componentIndex);
+    scheduleWakeupsForAllModules(eventNs, false, deferred);
+    if (changed) {
+        if (deferred) {
+            deferred->push_back([&scheduler = m_scheduler, index = m_componentIndex] { scheduler.markDirty(index); });
+        } else {
+            m_scheduler.markDirty(m_componentIndex);
+        }
+    }
     return PollStep::DispatchedReady;
 }
 
@@ -165,39 +180,46 @@ void McuComponent::runBackgroundPollLoop(std::shared_ptr<CallbackState> state) {
     // momento entre duas iterações (ver ~McuComponent(), que zera `owner` sob o mesmo mutex antes
     // de qualquer membro ser desalocado).
     for (;;) {
-        bool dispatchedReady = false;
-        bool yieldAndRetry = false;
+        PollStep step = PollStep::NoEvent;
+        bool stop = false;
+        std::vector<DeferredSchedulerCall> deferred;
         {
             std::lock_guard<std::recursive_mutex> lock(state->mutex);
             McuComponent* self = state->owner;
-            if (!self || !self->m_polling.load(std::memory_order_acquire)) break;
-            qemu::QemuArenaBridge& arena = self->m_controller.arenaBridge();
-            if (!arena.isOpen()) break;
-
-            const PollStep step = self->pollStepLocked();
-            if (step == PollStep::DeferredFuture) break; // devolvido ao timeline do Scheduler.
-            if (step == PollStep::DispatchedReady) {
-                dispatchedReady = true;
-            } else if (!self->m_scheduler.isRunning()) {
-                // O Scheduler deixou de rodar em background enquanto esperávamos (ex: Stop) --
-                // volta pro modo passivo de sempre em vez de girar sem ninguém pra drenar m_events.
-                self->scheduleNextPoll();
-                break;
+            if (!self || !self->m_polling.load(std::memory_order_acquire)) {
+                stop = true;
             } else {
-                yieldAndRetry = true;
+                qemu::QemuArenaBridge& arena = self->m_controller.arenaBridge();
+                if (!arena.isOpen()) {
+                    stop = true;
+                } else {
+                    step = self->pollStepLocked(&deferred);
+                    if (step == PollStep::NoEvent && !self->m_scheduler.isRunning()) {
+                        // O Scheduler deixou de rodar em background enquanto esperávamos (ex:
+                        // Stop) -- volta pro modo passivo de sempre em vez de girar sem ninguém
+                        // pra drenar m_events.
+                        self->scheduleNextPoll(&deferred);
+                        stop = true;
+                    }
+                }
             }
         }
-        if (dispatchedReady) continue;
-        if (yieldAndRetry) {
-            std::this_thread::yield();
-            continue;
-        }
-        break;
+        // As chamadas ao Scheduler coletadas acima (markDirty/scheduleEvent/scheduleAt) só
+        // disparam AQUI, com `state->mutex` já solto -- ver doc-comment de DeferredSchedulerCall
+        // no .hpp: stamp() (thread do Scheduler) adquire Scheduler::m_mutex e SÓ DEPOIS
+        // m_callbackState->mutex; segurar as duas ao mesmo tempo na ordem inversa aqui
+        // deadlockaria assim que as duas threads se cruzassem no mesmo MCU.
+        for (DeferredSchedulerCall& call : deferred) call();
+
+        if (stop || step == PollStep::DeferredFuture) break; // devolvido ao timeline do Scheduler.
+        if (step == PollStep::DispatchedReady) continue; // agrupa ações do mesmo timestamp.
+        std::this_thread::yield();
     }
     state->pollThreadRunning.store(false, std::memory_order_release);
 }
 
-void McuComponent::scheduleModuleWakeup(size_t moduleIndex, uint64_t nowNs, bool schedulerLockHeld) {
+void McuComponent::scheduleModuleWakeup(size_t moduleIndex, uint64_t nowNs, bool schedulerLockHeld,
+                                         std::vector<DeferredSchedulerCall>* deferred) {
     if (moduleIndex >= m_modules.size()) return;
 
     const uint64_t delayNs = m_modules[moduleIndex]->nextWakeupDelayNs(nowNs);
@@ -227,16 +249,29 @@ void McuComponent::scheduleModuleWakeup(size_t moduleIndex, uint64_t nowNs, bool
         const uint64_t before = self->electricalOutputFingerprint();
         self->m_modules[moduleIndex]->onWakeup(nowNs);
         const bool changed = before != self->electricalOutputFingerprint();
+        // Este callback já roda com Scheduler::m_mutex liberado (ver
+        // Scheduler::processNextEventUntilLocked: unlock -> callback() -> lock) e na própria
+        // thread do Scheduler -- nunca precisa de `deferred` aqui, mesma lógica seguindo direto.
         self->scheduleModuleWakeup(moduleIndex, nowNs, false);
         // Mudança de FIFO/RX ou bit TX repetido não altera o circuito elétrico.
         if (changed) self->m_scheduler.markDirty(self->m_componentIndex);
     };
-    if (schedulerLockHeld) m_scheduler.scheduleEventUnlocked(delayNs, std::move(callback));
-    else m_scheduler.scheduleEvent(delayNs, std::move(callback));
+    if (deferred) {
+        // Ver doc-comment de DeferredSchedulerCall no .hpp -- evita inversão de ordem de lock com
+        // stamp() quando quem chama é a thread de poll dedicada (segurando m_callbackState->mutex).
+        deferred->push_back([&scheduler = m_scheduler, delayNs, callback = std::move(callback)]() mutable {
+            scheduler.scheduleEvent(delayNs, std::move(callback));
+        });
+    } else if (schedulerLockHeld) {
+        m_scheduler.scheduleEventUnlocked(delayNs, std::move(callback));
+    } else {
+        m_scheduler.scheduleEvent(delayNs, std::move(callback));
+    }
 }
 
-void McuComponent::scheduleWakeupsForAllModules(uint64_t nowNs, bool schedulerLockHeld) {
-    for (size_t i = 0; i < m_modules.size(); ++i) scheduleModuleWakeup(i, nowNs, schedulerLockHeld);
+void McuComponent::scheduleWakeupsForAllModules(uint64_t nowNs, bool schedulerLockHeld,
+                                                 std::vector<DeferredSchedulerCall>* deferred) {
+    for (size_t i = 0; i < m_modules.size(); ++i) scheduleModuleWakeup(i, nowNs, schedulerLockHeld, deferred);
 }
 
 QemuModule* McuComponent::findModule(uint64_t address) const {
@@ -361,7 +396,25 @@ void McuComponent::loadFirmware(const std::filesystem::path& firmwarePath, const
                                  const std::string& qemuBinaryOverride, McuDebugOptions debug) {
     // Também permite recarregar firmware enquanto o watcher está aguardando o próximo timestamp.
     stopPolling();
-    std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
+    // Achado 2026-07-21 (mesma classe de bug do doc-comment de DeferredSchedulerCall no .hpp):
+    // loadMcuFirmware/stopMcuFirmware chamam isto direto de CoreApplication::handleMessage, na
+    // thread de IPC -- NÃO na thread do Scheduler. Se startPolling()/markDirty() chamassem o
+    // Scheduler direto aqui, segurando m_callbackState->mutex, e a thread do Scheduler estivesse
+    // em stamp() deste MESMO MCU nesse instante (Scheduler::m_mutex -> CallbackState::mutex), as
+    // duas travariam. loadFirmwareLocked() só ANEXA em `deferred`; disparamos aqui, uma vez, já
+    // fora do lock (chamador único e não-reentrante -- ver as bordas de onEvent(), que chamam
+    // loadFirmwareLocked() direto pelo motivo oposto).
+    std::vector<DeferredSchedulerCall> deferred;
+    {
+        std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
+        loadFirmwareLocked(firmwarePath, arenaName, qemuBinaryOverride, debug, deferred);
+    }
+    for (DeferredSchedulerCall& call : deferred) call();
+}
+
+void McuComponent::loadFirmwareLocked(const std::filesystem::path& firmwarePath, const std::string& arenaName,
+                                       const std::string& qemuBinaryOverride, McuDebugOptions debug,
+                                       std::vector<DeferredSchedulerCall>& deferred) {
     ++m_loadFirmwareCallCount;
     m_lastFirmwarePath = firmwarePath;
     m_lastArenaName = arenaName;
@@ -378,8 +431,8 @@ void McuComponent::loadFirmware(const std::filesystem::path& firmwarePath, const
     m_syntheticArenaForTesting = false;
     m_qemuTimeOriginNs = m_scheduler.nowNs();
     m_controller.start(firmwarePath, arenaName, qemuBinaryOverride, debug);
-    startPolling();
-    m_scheduler.markDirty(m_componentIndex);
+    startPolling(&deferred);
+    deferred.push_back([&scheduler = m_scheduler, index = m_componentIndex] { scheduler.markDirty(index); });
 }
 
 void McuComponent::stopFirmware() {
@@ -401,11 +454,18 @@ std::string McuComponent::qemuLogs() const {
 }
 
 void McuComponent::openSyntheticArenaForTesting(const std::string& arenaName) {
-    std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
-    m_syntheticArenaForTesting = true;
-    m_qemuTimeOriginNs = m_scheduler.nowNs();
-    m_controller.arenaBridge().open(qemu::QemuArenaOpenOptions{arenaName, true});
-    startPolling();
+    // Mesma ressalva de loadFirmware(): pode ser chamado de uma thread de teste diferente da do
+    // Scheduler enquanto ele já está rodando (ver McuComponentLivePollThreadTest.cpp) -- não pode
+    // chamar o Scheduler direto segurando m_callbackState->mutex.
+    std::vector<DeferredSchedulerCall> deferred;
+    {
+        std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
+        m_syntheticArenaForTesting = true;
+        m_qemuTimeOriginNs = m_scheduler.nowNs();
+        m_controller.arenaBridge().open(qemu::QemuArenaOpenOptions{arenaName, true});
+        startPolling(&deferred);
+    }
+    for (DeferredSchedulerCall& call : deferred) call();
 }
 
 void McuComponent::resetModulesAndWakeups() {
@@ -473,12 +533,23 @@ void McuComponent::onEvent(const ComponentEvent& event) {
         m_scheduler.scheduleEventUnlocked(0, [weakState] {
             const std::shared_ptr<CallbackState> state = weakState.lock();
             if (!state) return;
-            std::lock_guard<std::recursive_mutex> innerLock(state->mutex);
-            McuComponent* self = state->owner;
-            if (!self) return;
-            self->resetModulesAndWakeups();
-            self->stopFirmware();
-            self->m_scheduler.markDirty(self->m_componentIndex);
+            // Achado 2026-07-21 (ver doc-comment de DeferredSchedulerCall no .hpp): este callback
+            // já roda com `state->mutex` travado por TODA a duração do bloco abaixo -- markDirty()
+            // só pode disparar DEPOIS que `innerLock` solta de vez, senão inverte a ordem de lock
+            // contra qualquer chamador concorrente que segure Scheduler::m_mutex primeiro (ex:
+            // componentHealth() via Scheduler::trySynchronized() -> McuComponent::health()).
+            simulation::Scheduler* scheduler = nullptr;
+            uint32_t componentIndex = 0;
+            {
+                std::lock_guard<std::recursive_mutex> innerLock(state->mutex);
+                McuComponent* self = state->owner;
+                if (!self) return;
+                self->resetModulesAndWakeups();
+                self->stopFirmware(); // não toca o Scheduler (só m_controller.stop()) -- seguro aninhado.
+                scheduler = &self->m_scheduler;
+                componentIndex = self->m_componentIndex;
+            }
+            scheduler->markDirty(componentIndex);
         });
     } else if (!firmwareRunning() && !m_lastFirmwarePath.empty()) {
         // Borda de subida: EN/RST liberado -- reinicia o firmware do zero (mesmo path/arena do
@@ -500,8 +571,19 @@ void McuComponent::onEvent(const ComponentEvent& event) {
         m_scheduler.scheduleEventUnlocked(0, [weakState, firmwarePath, arenaName, qemuOverride, debug] {
             const std::shared_ptr<CallbackState> state = weakState.lock();
             if (!state) return;
-            std::lock_guard<std::recursive_mutex> innerLock(state->mutex);
-            if (state->owner) state->owner->loadFirmware(firmwarePath, arenaName, qemuOverride, debug);
+            // Chama loadFirmwareLocked() (não o loadFirmware() público) de propósito: este
+            // callback já segura `state->mutex` (reentrante) pela duração do bloco -- disparar as
+            // chamadas ao Scheduler só depois que ELE solta de vez, mesma razão do ramo de descida
+            // acima (ver doc-comment de DeferredSchedulerCall no .hpp).
+            std::vector<DeferredSchedulerCall> deferred;
+            {
+                std::lock_guard<std::recursive_mutex> innerLock(state->mutex);
+                McuComponent* self = state->owner;
+                if (!self) return;
+                self->stopPolling();
+                self->loadFirmwareLocked(firmwarePath, arenaName, qemuOverride, debug, deferred);
+            }
+            for (DeferredSchedulerCall& call : deferred) call();
         });
     }
 }
