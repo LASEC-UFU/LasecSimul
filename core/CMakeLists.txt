@@ -693,6 +693,26 @@ if(NOT WIN32)
 endif()
 add_test(NAME mcu_component COMMAND mcu_component_test)
 
+# Achado ao vivo 2026-07-22: dados chegam embaralhados no LasecPlot, sempre com o MESMO padrão de
+# lixo (determinístico, independente do PERF-12) -- lacuna real: nenhum teste existente decodifica
+# UART0 TX de um MCU real com um peripherals.lasecplot REAL do outro lado (test-uart-devices.js usa
+# dois periféricos genéricos via writeUart() direto, sem passar pelo bit-banging elétrico de TX do
+# MCU). Síncrono de propósito -- elimina qualquer variável de PERF-12/concorrência.
+add_executable(mcu_uart_to_lasecplot_test
+    test/core/mcu/McuUartToLasecPlotTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(mcu_uart_to_lasecplot_test PRIVATE include src)
+target_link_libraries(mcu_uart_to_lasecplot_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(mcu_uart_to_lasecplot_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+    REAL_DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
+)
+if(NOT WIN32)
+    target_link_libraries(mcu_uart_to_lasecplot_test PRIVATE dl)
+endif()
+add_test(NAME mcu_uart_to_lasecplot COMMAND mcu_uart_to_lasecplot_test)
+
 # PERF-12: mesma ponte registrador<->pino, mas com Scheduler::start() ligado de verdade -- único
 # teste que exercita McuComponent::runBackgroundPollLoop() (McuComponentTest.cpp é só síncrono;
 # McuBlinkLongRunTest.cpp exige LASECSIMUL_TEST_FIRMWARE, normalmente ausente em CI).
