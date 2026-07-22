@@ -713,6 +713,30 @@ if(NOT WIN32)
 endif()
 add_test(NAME mcu_uart_to_lasecplot COMMAND mcu_uart_to_lasecplot_test)
 
+# Optional end-to-end com o firmware REAL do usuário (LASECSIMUL_TEST_FIRMWARE) + QEMU real +
+# peripherals.lasecplot real, Scheduler::start() ligado -- o firmware chama Serial.print() várias
+# vezes seguidas a cada 1ms (rajada quase sem gap ocioso entre bytes), padrão nunca exercitado por
+# mcu_uart_to_lasecplot (que sempre espera o frame completo antes do próximo byte). CI sem o
+# firmware específico pula.
+add_executable(mcu_firmware_lasecplot_test
+    test/core/mcu/McuFirmwareLasecPlotTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(mcu_firmware_lasecplot_test PRIVATE include src)
+target_link_libraries(mcu_firmware_lasecplot_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(mcu_firmware_lasecplot_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+    QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+    REAL_DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
+)
+if(WIN32)
+    target_compile_definitions(mcu_firmware_lasecplot_test PRIVATE _CRT_SECURE_NO_WARNINGS)
+else()
+    target_link_libraries(mcu_firmware_lasecplot_test PRIVATE dl)
+endif()
+add_test(NAME mcu_firmware_lasecplot COMMAND mcu_firmware_lasecplot_test)
+set_tests_properties(mcu_firmware_lasecplot PROPERTIES TIMEOUT 30)
+
 # PERF-12: mesma ponte registrador<->pino, mas com Scheduler::start() ligado de verdade -- único
 # teste que exercita McuComponent::runBackgroundPollLoop() (McuComponentTest.cpp é só síncrono;
 # McuBlinkLongRunTest.cpp exige LASECSIMUL_TEST_FIRMWARE, normalmente ausente em CI).
