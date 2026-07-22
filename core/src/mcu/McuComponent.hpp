@@ -54,6 +54,15 @@ public:
     size_t getState(uint8_t*, size_t) const override { return 0; }
     void setState(const uint8_t*, size_t) override {}
 
+    /** Uma propriedade `uart{N}_tx_monitor_hex`/`uart{N}_rx_monitor_hex` por USART que o adaptador
+     * declara em `memoryRegions()` (`ModuleKind::Usart`) -- drena (hex, atômico) o buffer de monitor
+     * fora da banda do módulo real (`QemuModule::drainMonitorByte`), alimentando "Abrir monitor
+     * serial UARTx" (`mcuCommands.ts::openSerialMonitor`, via `getProperty` IPC genérico) SEM exigir
+     * fio nenhum -- equivalente ao `SerialMonitor` real do SimulIDE que lê direto do `UsartModule`
+     * do MCU. Somente leitura (`set` no-op); ausente do painel de propriedades
+     * (`PropertySchemaHidden`). Vazio (`{}`) se o adaptador não declarar nenhum USART. */
+    std::vector<PropertyDescriptor> propertyDescriptors() override;
+
     /** Agrega a saúde do adaptador (`create`/`build_launch_args`/`get_memory_regions`/
      * `get_pin_map`/`create_modules`, ver `NativeMcuAdapterProxy`) com a de cada módulo concreto
      * (`writeRegister`/`readRegister`/etc, ver `QemuModuleProxy`) -- `Faulted` se qualquer um dos
@@ -178,6 +187,17 @@ private:
     void stampResetPin(MnaMatrixView& matrix, const Pin& pin);
     void resetModulesAndWakeups();
     QemuModule* findModule(uint64_t address) const;
+    /** Drena TODO o buffer de monitor (até esvaziar ou `kUsartMonitorDrainGuard` iterações, o que
+     * vier primeiro -- nunca deveria bater no guard em uso normal, é só proteção contra um adaptador
+     * malcomportado que nunca devolve buffer vazio) do módulo dono de `regionStart`, devolvendo hex
+     * lowercase (2 chars por byte, `""` se vazio ou módulo não encontrado). `tx=true` = lado saída. */
+    std::string drainUsartMonitorHex(uint64_t regionStart, bool tx) const;
+    /** Decodifica `hex` (lowercase/uppercase, 2 chars por byte) e injeta no RX do módulo dono de
+     * `regionStart` via `QemuModule::injectRxBytes` -- ver doc-comment lá (bypassa temporização
+     * elétrica de propósito). Hex malformado (tamanho ímpar/caractere inválido) é ignorado
+     * silenciosamente a partir do ponto do erro, mesmo espírito tolerante de `uart_enqueue_hex` em
+     * `devices/simulide-peripherals/src/lib.c`. */
+    void injectUsartRxHex(uint64_t regionStart, const std::string& hex) const;
 
     // Mesmas impedâncias REAIS de `IoPin` no SimulIDE real (`.codex-simulide-src/src/gui/
     // circuitwidget/iopin.cpp` -- `m_outputImp`/`m_inputImp`, usadas por `Esp32Pin`/todo pino de

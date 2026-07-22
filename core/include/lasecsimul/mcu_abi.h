@@ -24,6 +24,7 @@
 #ifndef LASECSIMUL_MCU_ABI_H
 #define LASECSIMUL_MCU_ABI_H
 
+#include <stddef.h>
 #include <stdint.h>
 #include "device_abi.h" /* reaproveita LSDN_EXPORT */
 
@@ -32,8 +33,24 @@ extern "C" {
 #endif
 
 #define LSDN_MCU_ABI_VERSION_MAJOR 2
-#define LSDN_MCU_ABI_VERSION_MINOR 5
-/* Major 2 (2026-06-28): entrou LsdnQemuModuleVTable/LsdnQemuModuleHandle e
+#define LSDN_MCU_ABI_VERSION_MINOR 7
+/* Minor 7 (2026-07-22): entrou inject_rx_bytes -- lado de ESCRITA do monitor de UART fora da banda
+ * (minor 6 abaixo so tinha leitura). Injeta bytes direto no FIFO de entrada real do periferico
+ * (ex: UsartState::rxFifo no adaptador ESP32), como se tivessem chegado por fio -- usado por
+ * McuComponent::propertyDescriptors() pra expor `uart{N}_rx_inject_hex` (escrita), consumido pela
+ * caixa de envio do Monitor Serial na Webview (equivalente a digitar no SerialMonitor real do
+ * SimulIDE). Opcional -- NULL e' tratado como "nao aceita nada" (0 bytes sempre), mesmo default de
+ * todo slot opcional desta ABI.
+ * Minor 6 (2026-07-22): entrou drain_monitor_byte/monitor_dropped_count -- monitor de UART FORA DA
+ * BANDA (independente do FIFO real de hardware, ver UsartState::txMonitor/rxMonitor no adaptador
+ * ESP32) que um modulo USART pode manter, pra permitir "Abrir monitor serial" por indice de UART
+ * (McuComponent::propertyDescriptors, uart{N}_tx_monitor_hex/uart{N}_rx_monitor_hex) sem exigir fio
+ * nenhum -- equivalente ao SerialMonitor real do SimulIDE (gui/serial/serialmon.cpp), que le direto
+ * do UsartModule do MCU. Opcional -- NULL e' tratado como "sem monitor" (0 bytes sempre), mesmo
+ * default de todo slot opcional desta ABI (aggregate-init de C++ zera campos trailing nao
+ * inicializados, ver kIoMuxModuleVTable/kGpioModuleVTable no adaptador -- nenhum vtable existente
+ * precisa mudar).
+ * Major 2 (2026-06-28): entrou LsdnQemuModuleVTable/LsdnQemuModuleHandle e
  * LsdnMcuVTable::create_modules -- antes desta versao um plugin de MCU so conseguia DECLARAR faixas
  * de endereco/pinos (get_memory_regions/get_pin_map), nunca decodificar registrador de verdade (o
  * Core nao tinha como chamar codigo do plugin pra isso) -- um adaptador de MCU via plugin ficava
@@ -121,6 +138,20 @@ typedef struct LsdnQemuModuleVTable {
      * plugins digitais; adaptadores com ADC podem receber a amostra em volts sem quantizacao. */
     void     (*set_input_voltage_at)(LsdnQemuModule* module, uint32_t bit_or_line,
                                      double voltage, uint64_t now_ns);
+    /* Minor 6: drena UM byte do buffer de monitor (tx!=0 = saida do dispositivo, tx==0 = entrada) --
+     * devolve 0 se havia byte (escrito em *out_byte), 0 caso o buffer esteja vazio. Chamado em loop
+     * pelo Core (McuComponent) ate' devolver 0, nunca pelo QEMU/guest. */
+    int32_t  (*drain_monitor_byte)(LsdnQemuModule* module, int32_t tx, uint8_t* out_byte);
+    /* Minor 6: quantos bytes foram descartados por overflow do buffer de monitor desde o ultimo
+     * drain completo (tx!=0 = lado saida, tx==0 = lado entrada) -- só informativo, não é drenado. */
+    uint32_t (*monitor_dropped_count)(LsdnQemuModule* module, int32_t tx);
+    /* Minor 7: injeta bytes como se tivessem chegado pela entrada do periferico (ex: RX de uma
+     * USART) -- bypassa qualquer temporizacao eletrica bit-a-bit de proposito (ferramenta de
+     * monitor/dev, nao simulacao de fio: equivalente a digitar no SerialMonitor real do SimulIDE).
+     * Devolve quantos bytes foram de fato aceitos (pode ser menos que count se o buffer de entrada
+     * real do periferico estiver cheio -- mesma politica de descarte que a entrada eletrica ja usa).
+     * Opcional -- NULL e' tratado como "nao aceita nada" (0 sempre). */
+    size_t   (*inject_rx_bytes)(LsdnQemuModule* module, const uint8_t* bytes, size_t count);
 } LsdnQemuModuleVTable;
 
 /* Um modulo concreto devolvido por create_modules(): estado opaco + vtable + identidade

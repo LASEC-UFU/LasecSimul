@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <limits>
 #include "Types.hpp"
@@ -67,6 +68,33 @@ public:
     virtual uint64_t nextWakeupDelayNs() const { return kNoWakeup; }
     virtual uint64_t nextWakeupDelayNs(uint64_t) const { return nextWakeupDelayNs(); }
     virtual void onWakeup(uint64_t) {}
+
+    /** Drena UM byte do buffer de MONITOR fora da banda (independente do FIFO real de hardware --
+     * ver `UsartState::txMonitor`/`rxMonitor` no adaptador ESP32) -- `tx=true` = lado saída
+     * (dispositivo transmitiu), `tx=false` = lado entrada (dispositivo recebeu). Devolve `false`
+     * quando o buffer está vazio (`outByte` não tocado). Default "sem monitor nenhum" -- só módulos
+     * USART (via `QemuModuleProxy`, que repassa pro `drain_monitor_byte` opcional do `mcu_abi.h`)
+     * sobrescrevem de verdade. Usado por `McuComponent::propertyDescriptors()`
+     * (`uart{N}_tx_monitor_hex`/`uart{N}_rx_monitor_hex`) pra alimentar "Abrir monitor serial" sem
+     * exigir fio nenhum -- mesmo papel do `UsartModule::byteReceived`/`frameSent` reais do SimulIDE
+     * (`gui/serial/serialmon.cpp`), só que via polling em vez de callback (não há canal de evento
+     * assíncrono Core->Extension pra isto hoje). */
+    virtual bool drainMonitorByte(bool /*tx*/, uint8_t& /*outByte*/) { return false; }
+
+    /** Quantos bytes o buffer de monitor descartou por overflow desde o último drain completo do
+     * lado pedido (`tx=true`/saída, `tx=false`/entrada) -- só informativo. Default 0. */
+    virtual uint32_t monitorDroppedCount(bool /*tx*/) const { return 0; }
+
+    /** Injeta `count` bytes como se tivessem chegado pela entrada real do periférico (ex: RX de
+     * uma USART) -- bypassa qualquer temporização elétrica bit-a-bit de propósito (ferramenta de
+     * monitor/dev, não simulação de fio: equivalente a digitar no SerialMonitor real do SimulIDE,
+     * `gui/serial/serialmon.cpp`, que também escreve direto no buffer do UsartModule). Devolve
+     * quantos bytes foram de fato aceitos (pode ser menos que `count` se o buffer de entrada real
+     * estiver cheio -- mesma política de descarte que a entrada elétrica já usa). Default "não
+     * aceita nada" -- só módulos USART (via `QemuModuleProxy`, repassando pro `inject_rx_bytes`
+     * opcional do `mcu_abi.h`) sobrescrevem de verdade. Usado pela caixa de envio do "Abrir monitor
+     * serial" (`McuComponent::propertyDescriptors()`, `uart{N}_rx_inject_hex`). */
+    virtual size_t injectRxBytes(const uint8_t* /*bytes*/, size_t /*count*/) { return 0; }
 
     /** Default `Ok` -- só `QemuModuleProxy` (plugin de MCU via `mcu_abi.h`) sobrescreve, marcando
      * `Faulted` se uma chamada pra dentro do plugin crashar (ver `CrashGuard`). Mesmo padrão de

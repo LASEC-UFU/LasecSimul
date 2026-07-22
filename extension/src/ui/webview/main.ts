@@ -519,9 +519,9 @@ let serialTerminalLayer: HTMLDivElement | undefined;
  * por painel -- SEM caixa de envio (o monitor por USART do MCU usa `send=false` no real; só o
  * Serial Terminal cabeado tem envio). Chave = mesma de `mcuSerialMonitorByKey` (`state.ts`,
  * Extension) -- `${componentId}:${usartIndex}` ou `${outerComponentId}:${innerComponentId}:${usartIndex}`.
- * `inputBytes` fica sempre vazio hoje (a fonte de dados é `getMcuLogs()`, texto já decodificado e
- * de mão única -- ver doc-comment de `mcuSerialMonitorData`, `messages.ts`); o painel existe pra já
- * ficar pronto pro dia em que o Core drenar RX/TX reais por UART. */
+ * `inputBytes`/`outputBytes` são byte-exatos, drenados de `uart{N}_rx_monitor_hex`/
+ * `_tx_monitor_hex` (Core, ver doc-comment de `mcuSerialMonitorData`, `messages.ts`) -- mesma
+ * separação Entrada/Saída do `SerialMonitor` real do SimulIDE. */
 interface McuSerialMonitorRuntime {
   label: string; portLabel: string; opened: boolean; online: boolean; error?: string;
   inputBytes: number[]; outputBytes: number[]; printFormat: SerialFormat; paused: boolean;
@@ -8471,8 +8471,10 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
   if (message.type === "mcuSerialMonitorData") {
     const runtime = mcuSerialMonitorRuntime.get(message.key);
     if (runtime && !runtime.paused) {
-      runtime.outputBytes.push(...new TextEncoder().encode(message.text));
-      if (runtime.outputBytes.length > 200_000) runtime.outputBytes.splice(0, runtime.outputBytes.length - 200_000);
+      const bytes = message.dataHex.match(/../g)?.map((pair) => parseInt(pair, 16)) ?? [];
+      const target = message.direction === "tx" ? runtime.outputBytes : runtime.inputBytes;
+      target.push(...bytes);
+      if (target.length > 200_000) target.splice(0, target.length - 200_000);
       renderMcuSerialMonitorWindows();
     }
   }

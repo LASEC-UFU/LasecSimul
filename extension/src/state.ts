@@ -108,10 +108,12 @@ export const subcircuitBoundaryPinsByComponentId = new Map<string, Record<string
 export const lastLoadedFirmwareByCoreId = new Map<string, { path: string; mtimeMs: number; size: number }>();
 /** Monitor serial por USART de um `QemuDevice` -- ao contrário de `serialTerminalManager`
  * (`peripherals.serialterm`, ligado por fio ao pino Tx/Rx real e drenado via `drainUart`), este
- * espelha `getMcuLogs()` (saída combinada do processo QEMU) num painel flutuante na própria Webview
- * (ver `renderMcuSerialMonitorWindows`, `main.ts`) -- não um `vscode.OutputChannel` mais, desde a
+ * drena `uart{N}_tx_monitor_hex`/`uart{N}_rx_monitor_hex` (propriedades expostas por
+ * `McuComponent::propertyDescriptors()`, Core -- buffer de monitor fora da banda no próprio módulo
+ * USART, sem exigir fio nenhum) e renderiza num painel flutuante na própria Webview (ver
+ * `renderMcuSerialMonitorWindows`, `main.ts`) -- não um `vscode.OutputChannel` mais, desde a
  * migração pra UI estilo SimulIDE (`SerialMonitor`/`serialmon.cpp` real: painéis Input/Output,
  * Pause, modo de impressão). `label`/`portLabel` ficam cacheados aqui pra re-enviar o status sem
  * precisar re-resolver o componente (ex: ao fechar todos num troca de projeto). */
-export const mcuSerialMonitorByKey = new Map<string, { timer: ReturnType<typeof setInterval>; lastLength: number; label: string; portLabel: string }>();
+export const mcuSerialMonitorByKey = new Map<string, { timer: ReturnType<typeof setInterval>; label: string; portLabel: string }>();
 export const projectSerializer = new ProjectSerializer();

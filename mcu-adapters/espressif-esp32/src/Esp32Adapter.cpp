@@ -105,6 +105,13 @@ enum class UartRxPhase : uint8_t {
     Stop,
 };
 
+/** Tamanho máximo dos buffers de MONITOR (`UsartState::txMonitor`/`rxMonitor`) -- bem maior que o
+ * FIFO real de hardware (128, `txFifo`/`rxFifo` abaixo) de propósito: o FIFO real é drenado pelo
+ * firmware em microssegundos, o monitor só é drenado pela Extension a cada poll (hoje 500ms, ver
+ * `mcuCommands.ts::openSerialMonitor`) -- precisa aguentar rajadas de log inteiras entre dois polls
+ * sem estourar. */
+constexpr size_t kUsartMonitorCap = 8192;
+
 struct UsartState {
     bool rxLevel = true;
     bool txLevel = true; // UART idle line
@@ -123,7 +130,23 @@ struct UsartState {
     uint64_t bitPeriodNs = kDefaultUartBitPeriodNs;
     uint64_t txDueNs = LSDN_QEMU_MODULE_NO_WAKEUP;
     uint64_t rxDueNs = LSDN_QEMU_MODULE_NO_WAKEUP;
+    // Monitor fora da banda (ver `drainMonitorByte`/`kUsartMonitorCap` acima) -- byte-exato, tocado
+    // só quando um frame COMPLETA (TX) ou é ACEITO com stop bit válido (RX), nunca bit a bit.
+    // Independente de `txFifo`/`rxFifo`: sobrevive ao dreno do hardware, existe só pra "Abrir
+    // monitor serial" ler passivamente sem afetar o firmware.
+    std::deque<uint8_t> txMonitor;
+    std::deque<uint8_t> rxMonitor;
+    uint32_t txMonitorDropped = 0;
+    uint32_t rxMonitorDropped = 0;
 };
+
+void pushMonitorByte(std::deque<uint8_t>& monitor, uint32_t& dropped, uint8_t byte) {
+    if (monitor.size() >= kUsartMonitorCap) {
+        monitor.pop_front();
+        ++dropped;
+    }
+    monitor.push_back(byte);
+}
 
 struct I2cState {
     bool sclInput = true;
@@ -243,6 +266,12 @@ void usartAdvanceTx(UsartState& usart, uint64_t nowNs) {
         return;
     }
 
+    // Frame completo (start + dataBits + stop(s)) -- extrai o byte de volta de `txFrame` (mesma
+    // codificação de `usartStartTx`: bit 0 = start, bits [1..dataBits] = dado, resto = stop) ANTES
+    // de `usartStartTx` reciclar `txFrame` pro próximo byte da fila.
+    const uint8_t sentByte = static_cast<uint8_t>((usart.txFrame >> 1) & ((1u << usart.dataBits) - 1u));
+    pushMonitorByte(usart.txMonitor, usart.txMonitorDropped, sentByte);
+
     usart.txActive = false;
     usart.txLevel = true;
     usartStartTx(usart, nowNs);
@@ -289,8 +318,12 @@ void usartAdvanceRx(UsartState& usart, uint64_t nowNs) {
             return;
 
         case UartRxPhase::Stop:
-            if (usart.rxStopIndex == 0 && usart.rxLevel && usart.rxFifo.size() < 128) {
-                usart.rxFifo.push_back(usart.rxShift);
+            if (usart.rxStopIndex == 0 && usart.rxLevel) {
+                // Monitor independe da capacidade do FIFO real de hardware -- "Abrir monitor
+                // serial" precisa ver TODO byte que chegou fisicamente no pino, mesmo um que o
+                // firmware descartaria por overflow do próprio FIFO (128 bytes).
+                pushMonitorByte(usart.rxMonitor, usart.rxMonitorDropped, usart.rxShift);
+                if (usart.rxFifo.size() < 128) usart.rxFifo.push_back(usart.rxShift);
             }
             ++usart.rxStopIndex;
             if (usart.rxStopIndex < usart.stopBits) {
@@ -963,10 +996,52 @@ void usartOnWakeup(LsdnQemuModule* module, uint64_t nowNs) {
     usartAdvanceDueWork(s->chip->usarts[s->index], nowNs);
 }
 
+// Monitor fora da banda (mcu_abi.h minor 6) -- ver `UsartState::txMonitor`/`rxMonitor`,
+// `pushMonitorByte`, e os pontos de captura em `usartAdvanceTx`/`usartAdvanceRx` acima.
+int32_t usartDrainMonitorByte(LsdnQemuModule* module, int32_t tx, uint8_t* outByte) {
+    auto* s = reinterpret_cast<UsartModuleState*>(module);
+    if (s->index >= s->chip->usarts.size() || !outByte) return 0;
+    std::deque<uint8_t>& monitor = tx != 0 ? s->chip->usarts[s->index].txMonitor : s->chip->usarts[s->index].rxMonitor;
+    if (monitor.empty()) return 0;
+    *outByte = monitor.front();
+    monitor.pop_front();
+    return 1;
+}
+
+uint32_t usartMonitorDroppedCount(LsdnQemuModule* module, int32_t tx) {
+    auto* s = reinterpret_cast<UsartModuleState*>(module);
+    if (s->index >= s->chip->usarts.size()) return 0;
+    return tx != 0 ? s->chip->usarts[s->index].txMonitorDropped : s->chip->usarts[s->index].rxMonitorDropped;
+}
+
+// Injeção de RX fora da banda (mcu_abi.h minor 7) -- lado ESCRITA do monitor: bytes entram direto
+// no FIFO real de RX (mesmo `usart.rxFifo` que `usartAdvanceRx` alimenta bit-a-bit ao amostrar o
+// pino elétrico), como se tivessem chegado por fio -- sem simular temporização de bit nenhuma
+// (ferramenta de monitor/dev, ver QemuModule::injectRxBytes). Respeita o mesmo limite de 128
+// bytes/descarte silencioso que o caminho elétrico real já usa (`usartWriteRegisterAt`/
+// `usartAdvanceRx`). Também alimenta `rxMonitor` explicitamente -- `usartAdvanceRx` é quem faz
+// isso hoje pro caminho elétrico (ver captura em `usartAdvanceRx` acima); bytes injetados bypassam
+// esse caminho, então não apareceriam no próprio painel "Entrada" de quem enviou sem este passo
+// extra.
+size_t usartInjectRxBytes(LsdnQemuModule* module, const uint8_t* bytes, size_t count) {
+    auto* s = reinterpret_cast<UsartModuleState*>(module);
+    if (s->index >= s->chip->usarts.size() || !bytes) return 0;
+    UsartState& usart = s->chip->usarts[s->index];
+    size_t accepted = 0;
+    for (size_t i = 0; i < count; ++i) {
+        if (usart.rxFifo.size() >= 128) break;
+        usart.rxFifo.push_back(bytes[i]);
+        pushMonitorByte(usart.rxMonitor, usart.rxMonitorDropped, bytes[i]);
+        ++accepted;
+    }
+    return accepted;
+}
+
 const LsdnQemuModuleVTable kUsartModuleVTable = {
     &usartReset, &usartWriteRegister, &usartReadRegister, &usartIsOutputEnabled, &usartOutputLevel,
     &usartSetInputLevel, &usartDestroy, &usartNextWakeupDelayNs, &usartOnWakeup,
-    &usartWriteRegisterAt, &usartSetInputLevelAt, &usartNextWakeupDelayNsAt,
+    &usartWriteRegisterAt, &usartSetInputLevelAt, &usartNextWakeupDelayNsAt, nullptr,
+    &usartDrainMonitorByte, &usartMonitorDroppedCount, &usartInjectRxBytes,
 };
 
 void i2cReset(LsdnQemuModule* module) {

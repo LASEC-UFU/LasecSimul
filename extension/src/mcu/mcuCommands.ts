@@ -338,15 +338,19 @@ function serialPortLabelForTypeId(typeId: string | undefined, usartIndex: 0 | 1 
 
 /** Corpo compartilhado de `openMcuSerialMonitorCommand`/`openExposedMcuSerialMonitorCommand` --
  * diferiam só em como `key`/`label`/`targetCoreId` eram resolvidos, com o resto (painel na Webview,
- * polling de log a cada 500ms, cálculo de delta) idêntico e duplicado (achado de auditoria
- * 2026-07-08). `state.coreClient` já verificado não-nulo pelos dois chamadores antes de entrar aqui.
+ * polling a cada 500ms) idêntico e duplicado (achado de auditoria 2026-07-08). `state.coreClient`
+ * já verificado não-nulo pelos dois chamadores antes de entrar aqui.
  *
- * Migrado de `vscode.OutputChannel` pra painel na própria Webview (2026-07-22, réplica visual/
- * funcional do `SerialMonitor` real do SimulIDE -- ver `renderMcuSerialMonitorWindows`, `main.ts`)
- * -- a fonte de dados continua sendo `getMcuLogs()` (saída combinada do processo QEMU): ainda não
- * separa RX/TX por USART de verdade (isso exigiria o Core lançar o QEMU com uma porta serial
- * dedicada por UART e novos RPCs de leitura/escrita por índice), só a apresentação virou fiel. */
-function openSerialMonitor(key: string, label: string, serialPortLabel: string, targetCoreId: string): void {
+ * Migrado de `vscode.OutputChannel` pra painel na própria Webview (2026-07-22, réplica visual do
+ * `SerialMonitor` real do SimulIDE -- ver `renderMcuSerialMonitorWindows`, `main.ts`), e a fonte de
+ * dados de `getMcuLogs()` (saída combinada do processo QEMU, nunca separada por UART) pra
+ * `uart{N}_tx_monitor_hex`/`uart{N}_rx_monitor_hex` -- propriedades ATÔMICAS de dreno (hex, byte-
+ * exato) que `McuComponent::propertyDescriptors()` (Core) expõe por USART, lidas via `getProperty`
+ * (RPC genérico já existente, sem verbo IPC novo) e alimentadas por um buffer de monitor fora da
+ * banda no próprio módulo USART do adaptador (`Esp32Adapter.cpp::UsartState::txMonitor`/`rxMonitor`,
+ * tocado quando um frame completa TX/RX) -- equivalente direto ao `SerialMonitor` real do SimulIDE,
+ * que lê pelo mesmo `UsartModule` do MCU, sem exigir fio nenhum. */
+function openSerialMonitor(key: string, label: string, serialPortLabel: string, targetCoreId: string, usartIndex: 0 | 1 | 2): void {
   const status = (online: boolean, error?: string): void => {
     state.schematicPanel?.postMessage({ version: 1, type: "mcuSerialMonitorStatus", key, label, portLabel: serialPortLabel, opened: true, online, ...(error ? { error } : {}) });
   };
@@ -357,29 +361,40 @@ function openSerialMonitor(key: string, label: string, serialPortLabel: string, 
     return;
   }
 
-  const pollLogs = async (): Promise<void> => {
+  const txProperty = `uart${usartIndex}_tx_monitor_hex`;
+  const rxProperty = `uart${usartIndex}_rx_monitor_hex`;
+  const poll = async (): Promise<void> => {
     try {
-      const logs = await state.coreClient!.getMcuLogs(targetCoreId);
-      const monitor = mcuSerialMonitorByKey.get(key);
-      if (!monitor) return;
-      const delta = logs.slice(monitor.lastLength);
-      if (delta) {
-        state.schematicPanel?.postMessage({ version: 1, type: "mcuSerialMonitorData", key, text: delta });
-        monitor.lastLength = logs.length;
-      } else if (logs.length < monitor.lastLength) {
-        state.schematicPanel?.postMessage({ version: 1, type: "mcuSerialMonitorData", key, text: `\n[${new Date().toLocaleTimeString()}] logs reiniciados\n${logs}` });
-        monitor.lastLength = logs.length;
-      }
+      const [txHex, rxHex] = await Promise.all([
+        state.coreClient!.getProperty(targetCoreId, txProperty),
+        state.coreClient!.getProperty(targetCoreId, rxProperty),
+      ]);
+      if (!mcuSerialMonitorByKey.has(key)) return;
+      if (typeof txHex === "string" && txHex) state.schematicPanel?.postMessage({ version: 1, type: "mcuSerialMonitorData", key, direction: "tx", dataHex: txHex });
+      if (typeof rxHex === "string" && rxHex) state.schematicPanel?.postMessage({ version: 1, type: "mcuSerialMonitorData", key, direction: "rx", dataHex: rxHex });
       status(state.simulationStatus !== "stopped");
     } catch (err) {
       status(state.simulationStatus !== "stopped", err instanceof Error ? err.message : String(err));
     }
   };
 
-  const timer = setInterval(() => void pollLogs(), 500);
-  mcuSerialMonitorByKey.set(key, { timer, lastLength: 0, label, portLabel: serialPortLabel });
+  const timer = setInterval(() => void poll(), 500);
+  mcuSerialMonitorByKey.set(key, { timer, label, portLabel: serialPortLabel });
   status(state.simulationStatus !== "stopped");
-  void pollLogs();
+  void poll();
+}
+
+/** Motivo específico de "Monitor serial indisponível" -- achado ao vivo 2026-07-22: a mensagem
+ * genérica não distinguia "simulação não conectada ao Core" de "componente sem porta serial
+ * declarada", deixando o usuário sem pista nenhuma de qual das 4 pré-condições falhou. */
+function serialMonitorUnavailableReason(
+  hasCoreClient: boolean, hasTargetCoreId: boolean, hasComponent: boolean, hasSerialPortLabel: boolean
+): string {
+  if (!hasComponent) return "Componente não encontrado no esquemático.";
+  if (!hasCoreClient) return "O Core não está conectado -- rode a simulação (▶) e tente de novo.";
+  if (!hasTargetCoreId) return "Este componente ainda não foi sincronizado com o Core -- rode a simulação (▶) e tente de novo.";
+  if (!hasSerialPortLabel) return "Este componente não declara essa porta serial no catálogo.";
+  return "Monitor serial indisponível para este componente.";
 }
 
 export function openMcuSerialMonitorCommand(componentId: string, usartIndex: 0 | 1 | 2): void {
@@ -387,10 +402,12 @@ export function openMcuSerialMonitorCommand(componentId: string, usartIndex: 0 |
   const component = getComponentById(componentId);
   const serialPortLabel = serialPortLabelForTypeId(component?.typeId, usartIndex);
   if (!state.coreClient || !targetCoreId || !component || !serialPortLabel) {
-    vscode.window.showWarningMessage("Monitor serial indisponivel para este componente.");
+    vscode.window.showWarningMessage(
+      serialMonitorUnavailableReason(Boolean(state.coreClient), Boolean(targetCoreId), Boolean(component), Boolean(serialPortLabel))
+    );
     return;
   }
-  openSerialMonitor(`${componentId}:${usartIndex}`, component.label, serialPortLabel, targetCoreId);
+  openSerialMonitor(`${componentId}:${usartIndex}`, component.label, serialPortLabel, targetCoreId, usartIndex);
 }
 
 export async function openExposedMcuSerialMonitorCommand(
@@ -405,10 +422,12 @@ export async function openExposedMcuSerialMonitorCommand(
   const serialPortLabel = serialPortLabelForTypeId(inner?.typeId, usartIndex);
   const targetCoreId = await resolveSubcircuitChildCoreId(outerComponentId, innerComponentId);
   if (!state.coreClient || !targetCoreId || !serialPortLabel) {
-    vscode.window.showWarningMessage("Monitor serial indisponivel para este componente.");
+    vscode.window.showWarningMessage(
+      serialMonitorUnavailableReason(Boolean(state.coreClient), Boolean(targetCoreId), true, Boolean(serialPortLabel))
+    );
     return;
   }
-  openSerialMonitor(`${outerComponentId}:${innerComponentId}:${usartIndex}`, label, serialPortLabel, targetCoreId);
+  openSerialMonitor(`${outerComponentId}:${innerComponentId}:${usartIndex}`, label, serialPortLabel, targetCoreId, usartIndex);
 }
 
 export async function requestBoardOverlayDataCommand(

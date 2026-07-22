@@ -281,6 +281,81 @@ QemuModule* McuComponent::findModule(uint64_t address) const {
     return nullptr;
 }
 
+namespace {
+constexpr int kUsartMonitorDrainGuard = 1 << 20; // ver doc-comment de drainUsartMonitorHex no .hpp
+constexpr char kHexDigits[] = "0123456789abcdef";
+} // namespace
+
+std::string McuComponent::drainUsartMonitorHex(uint64_t regionStart, bool tx) const {
+    QemuModule* module = findModule(regionStart);
+    if (!module) return {};
+    std::string hex;
+    uint8_t byte = 0;
+    for (int guard = 0; guard < kUsartMonitorDrainGuard && module->drainMonitorByte(tx, byte); ++guard) {
+        hex.push_back(kHexDigits[byte >> 4]);
+        hex.push_back(kHexDigits[byte & 0x0Fu]);
+    }
+    return hex;
+}
+
+namespace {
+int hexNibble(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+}
+} // namespace
+
+void McuComponent::injectUsartRxHex(uint64_t regionStart, const std::string& hex) const {
+    QemuModule* module = findModule(regionStart);
+    if (!module) return;
+    std::vector<uint8_t> bytes;
+    bytes.reserve(hex.size() / 2);
+    for (size_t i = 0; i + 1 < hex.size(); i += 2) {
+        const int hi = hexNibble(hex[i]);
+        const int lo = hexNibble(hex[i + 1]);
+        if (hi < 0 || lo < 0) break;
+        bytes.push_back(static_cast<uint8_t>((hi << 4) | lo));
+    }
+    if (!bytes.empty()) module->injectRxBytes(bytes.data(), bytes.size());
+}
+
+std::vector<PropertyDescriptor> McuComponent::propertyDescriptors() {
+    std::vector<PropertyDescriptor> descriptors;
+    for (const MemoryRegion& region : m_adapter->memoryRegions()) {
+        if (region.moduleKind != ModuleKind::Usart) continue;
+        const uint64_t regionStart = region.start;
+        for (const bool tx : {true, false}) {
+            PropertyDescriptor descriptor;
+            descriptor.name = "uart" + std::to_string(region.moduleIndex) + (tx ? "_tx_monitor_hex" : "_rx_monitor_hex");
+            descriptor.get = [this, regionStart, tx]() -> PropertyValue { return drainUsartMonitorHex(regionStart, tx); };
+            descriptor.set = [](const PropertyValue&) {}; // somente leitura -- `set` nunca chamado pelo caminho previsto
+            descriptor.schema.id = descriptor.name;
+            descriptor.schema.valueKind = PropertyValueKind::String;
+            descriptor.schema.flags = PropertySchemaHidden | PropertySchemaReadOnly;
+            descriptors.push_back(std::move(descriptor));
+        }
+        // Lado ESCRITA do monitor (mcu_abi.h minor 7) -- caixa de envio do "Abrir monitor serial"
+        // injeta hex aqui, que vira bytes reais no RX desta USART via injectUsartRxHex/
+        // QemuModule::injectRxBytes. `get` nunca é lido pelo caminho previsto (write-only de
+        // verdade, ao contrário dos dois acima que são somente-leitura).
+        {
+            PropertyDescriptor descriptor;
+            descriptor.name = "uart" + std::to_string(region.moduleIndex) + "_rx_inject_hex";
+            descriptor.get = []() -> PropertyValue { return std::string{}; };
+            descriptor.set = [this, regionStart](const PropertyValue& value) {
+                if (const auto* hex = std::get_if<std::string>(&value)) injectUsartRxHex(regionStart, *hex);
+            };
+            descriptor.schema.id = descriptor.name;
+            descriptor.schema.valueKind = PropertyValueKind::String;
+            descriptor.schema.flags = PropertySchemaHidden;
+            descriptors.push_back(std::move(descriptor));
+        }
+    }
+    return descriptors;
+}
+
 uint64_t McuComponent::electricalOutputFingerprint() const {
     // FNV-1a: estado compacto, sem alocação, suficiente para detectar a mudança que exige
     // restamp. Inclui a posição implicitamente pela ordem do pinMap.

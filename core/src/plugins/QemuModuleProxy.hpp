@@ -166,6 +166,38 @@ public:
         }
     }
 
+    bool drainMonitorByte(bool tx, uint8_t& outByte) override {
+        if (!m_handle.vtable->drain_monitor_byte) return false;
+        bool result = false;
+        uint8_t byte = 0;
+        const bool ok = CrashGuard::call(m_label, [&] {
+            result = m_handle.vtable->drain_monitor_byte(m_handle.module, tx ? 1 : 0, &byte) != 0;
+        });
+        if (!ok) { m_health = PluginHealthStatus::Faulted; return false; }
+        if (result) outByte = byte;
+        return result;
+    }
+
+    uint32_t monitorDroppedCount(bool tx) const override {
+        if (!m_handle.vtable->monitor_dropped_count) return 0;
+        uint32_t result = 0;
+        const bool ok = CrashGuard::call(m_label, [&] {
+            result = m_handle.vtable->monitor_dropped_count(m_handle.module, tx ? 1 : 0);
+        });
+        if (!ok) { m_health = PluginHealthStatus::Faulted; return 0; }
+        return result;
+    }
+
+    size_t injectRxBytes(const uint8_t* bytes, size_t count) override {
+        if (!m_handle.vtable->inject_rx_bytes) return 0;
+        size_t result = 0;
+        const bool ok = CrashGuard::call(m_label, [&] {
+            result = m_handle.vtable->inject_rx_bytes(m_handle.module, bytes, count);
+        });
+        if (!ok) { m_health = PluginHealthStatus::Faulted; return 0; }
+        return result;
+    }
+
     PluginHealthStatus health() const override { return m_health; }
 
 private:

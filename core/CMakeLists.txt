@@ -693,6 +693,23 @@ if(NOT WIN32)
 endif()
 add_test(NAME mcu_component COMMAND mcu_component_test)
 
+# Monitor de UART fora da banda (mcu_abi.h minor 6) que alimenta "Abrir monitor serial UARTx" sem
+# fio nenhum -- ver doc-comment de McuUsartMonitorTest.cpp. Síncrono, sem IOMUX/GPIO roteado de
+# propósito (o monitor tapeia o frame antes do pino, diferente de mcu_uart_to_lasecplot abaixo).
+add_executable(mcu_usart_monitor_test
+    test/core/mcu/McuUsartMonitorTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(mcu_usart_monitor_test PRIVATE include src)
+target_link_libraries(mcu_usart_monitor_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(mcu_usart_monitor_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+)
+if(NOT WIN32)
+    target_link_libraries(mcu_usart_monitor_test PRIVATE dl)
+endif()
+add_test(NAME mcu_usart_monitor COMMAND mcu_usart_monitor_test)
+
 # Achado ao vivo 2026-07-22: dados chegam embaralhados no LasecPlot, sempre com o MESMO padrão de
 # lixo (determinístico, independente do PERF-12) -- lacuna real: nenhum teste existente decodifica
 # UART0 TX de um MCU real com um peripherals.lasecplot REAL do outro lado (test-uart-devices.js usa

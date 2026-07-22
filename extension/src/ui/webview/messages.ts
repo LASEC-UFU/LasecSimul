@@ -120,10 +120,13 @@ export type HostToWebviewMessage =
    * `send=true`). `key` é o mesmo de `mcuSerialMonitorByKey` (`state.ts`):
    * `${componentId}:${usartIndex}` ou `${outerComponentId}:${innerComponentId}:${usartIndex}`. */
   | { version: number; type: "mcuSerialMonitorStatus"; key: string; label: string; portLabel: string; opened: boolean; online: boolean; error?: string }
-  /** Delta de texto já decodificado (`getMcuLogs()` devolve string, não bytes/hex -- diferente de
-   * `serialTerminalData`) -- a Webview acumula e formata via `serialFormatBytes` sobre os bytes UTF-8
-   * do texto quando o modo de impressão não é ASCII. */
-  | { version: number; type: "mcuSerialMonitorData"; key: string; text: string }
+  /** Delta byte-exato drenado de `uart{N}_tx_monitor_hex`/`uart{N}_rx_monitor_hex`
+   * (`McuComponent::propertyDescriptors()`, Core -- ver doc-comment de `mcuCommands.ts::
+   * openSerialMonitor`) -- `direction: "tx"` alimenta o painel "Saída" (bytes que o MCU transmitiu),
+   * `"rx"` alimenta "Entrada" (bytes que o MCU recebeu), mesma separação do `SerialMonitor` real do
+   * SimulIDE. Cada mensagem só carrega o lado que teve dado novo (nunca os dois, nunca vazio -- ver
+   * `mcuCommands.ts::openSerialMonitor::poll`). */
+  | { version: number; type: "mcuSerialMonitorData"; key: string; direction: "tx" | "rx"; dataHex: string }
   | { version: number; type: "pauseConditionTriggered"; ownerId: string; simulationTimeNs: number; expression: string; resolvedValues: Record<string, number | boolean | string>; error?: string }
   | { version: number; type: "pauseConditionValidation"; componentId: string; valid: boolean; error?: string; column?: number }
   /** Taxa real alcançada (`(ms simulados)/(ms de parede)`, ver `coreLifecycle.ts::pollSimulationRate`)
