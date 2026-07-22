@@ -505,6 +505,15 @@ export function sanitizeViewSpecLimit(value: unknown): ViewSpecLimit | undefined
   const limit: ViewSpecLimit = {};
   if (typeof raw.min === "number") limit.min = raw.min;
   if (typeof raw.max === "number") limit.max = raw.max;
+  // `minProp`/`maxProp` (ver `ViewSpecLimit`, `model.ts`): faltavam aqui -- fontes de tensão/corrente
+  // controladas e o dial do LDR (`min_lux`/`max_lux`, ambos editáveis pelo usuário) dependem de ler
+  // o range AO VIVO da instância em vez de um `min`/`max` fixo (main.ts::onDialMove,
+  // componentSymbols.ts::viewSpecResolvedProjection já leem `limit.minProp`/`maxProp`) -- sem isto
+  // um `.lsdevice` externo carregado via `sanitizePackage` (ao contrário do catálogo nativo, que
+  // pula este sanitizador) tinha os dois campos silenciosamente descartados, caindo sempre pro
+  // `min`/`max` fixo do catálogo mesmo depois do usuário editar o range.
+  if (typeof raw.minProp === "string" && raw.minProp.trim()) limit.minProp = raw.minProp.trim();
+  if (typeof raw.maxProp === "string" && raw.maxProp.trim()) limit.maxProp = raw.maxProp.trim();
   if (typeof raw.step === "number") limit.step = raw.step;
   if (typeof raw.center === "number") limit.center = raw.center;
   if (typeof raw.radius === "number") limit.radius = raw.radius;

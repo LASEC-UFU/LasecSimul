@@ -113,6 +113,17 @@ export type HostToWebviewMessage =
   | { version: number; type: "serialTerminalData"; componentId: string; dataHex: string; simulationTimeNs: number }
   | { version: number; type: "serialTerminalLoadedFile"; componentId: string; dataHex: string }
   | { version: number; type: "serialPortStatus"; componentId: string; opened: boolean; online: boolean; rxBytes: number; txBytes: number; error?: string }
+  /** Painel "Abrir monitor serial UARTx" de um `QemuDevice` (ver `mcuCommands.ts::openSerialMonitor`,
+   * `main.ts::renderMcuSerialMonitorWindows`) -- réplica visual/funcional do `SerialMonitor` real do
+   * SimulIDE (`gui/serial/serialmon.cpp`: painéis Input/Output, Pause, modo de impressão), mas SEM
+   * envio (o real usa `send=false` pro monitor por USART do MCU -- só o Serial Terminal cabeado tem
+   * `send=true`). `key` é o mesmo de `mcuSerialMonitorByKey` (`state.ts`):
+   * `${componentId}:${usartIndex}` ou `${outerComponentId}:${innerComponentId}:${usartIndex}`. */
+  | { version: number; type: "mcuSerialMonitorStatus"; key: string; label: string; portLabel: string; opened: boolean; online: boolean; error?: string }
+  /** Delta de texto já decodificado (`getMcuLogs()` devolve string, não bytes/hex -- diferente de
+   * `serialTerminalData`) -- a Webview acumula e formata via `serialFormatBytes` sobre os bytes UTF-8
+   * do texto quando o modo de impressão não é ASCII. */
+  | { version: number; type: "mcuSerialMonitorData"; key: string; text: string }
   | { version: number; type: "pauseConditionTriggered"; ownerId: string; simulationTimeNs: number; expression: string; resolvedValues: Record<string, number | boolean | string>; error?: string }
   | { version: number; type: "pauseConditionValidation"; componentId: string; valid: boolean; error?: string; column?: number }
   /** Taxa real alcançada (`(ms simulados)/(ms de parede)`, ver `coreLifecycle.ts::pollSimulationRate`)
@@ -232,6 +243,10 @@ export type WebviewToHostMessage =
    * runSimulationWithFirmwareCheck`), nunca mais uma ação exposta ao usuário. */
   | { version: number; type: "requestChooseExposedMcuFirmware"; outerComponentId: string; innerComponentId: string }
   | { version: number; type: "requestOpenExposedMcuSerialMonitor"; outerComponentId: string; innerComponentId: string; usartIndex: 0 | 1 | 2 }
+  /** Botão "×" de um painel `mcuSerialMonitorStatus` -- pára o polling e libera `mcuSerialMonitorByKey`
+   * (ver `mcuCommands.ts::closeMcuSerialMonitorByKey`). A Webview já remove o painel localmente ao
+   * clicar (otimista); este pedido só limpa o lado Extension, sem resposta esperada. */
+  | { version: number; type: "requestCloseMcuSerialMonitor"; key: string }
   /** "Exportar Dados" da janela "Expande" do osciloscópio/analisador lógico -- o CSV já vem PRONTO
    * (formatado em main.ts, que é quem tem o histórico/configuração de canais) pra extension.ts só
    * abrir `showSaveDialog`/escrever o arquivo, sem precisar conhecer o formato do instrumento. */

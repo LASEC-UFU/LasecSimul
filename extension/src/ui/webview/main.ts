@@ -512,6 +512,22 @@ interface SerialPortRuntime {
 }
 const serialPortRuntime = new Map<string, SerialPortRuntime>();
 let serialTerminalLayer: HTMLDivElement | undefined;
+/** Painel "Abrir monitor serial UARTx" de um `QemuDevice` -- réplica visual/funcional do
+ * `SerialMonitor` real do SimulIDE (`gui/serial/serialmon.cpp`): painéis Input/Output lado a lado,
+ * Pause (descarta bytes recebidos enquanto pausado, igual ao `printIn`/`printOut` reais que fazem
+ * `if(m_paused) return;` antes de qualquer coisa), modo de impressão ASCII/HEX/DEC/OCT/BIN, Limpar
+ * por painel -- SEM caixa de envio (o monitor por USART do MCU usa `send=false` no real; só o
+ * Serial Terminal cabeado tem envio). Chave = mesma de `mcuSerialMonitorByKey` (`state.ts`,
+ * Extension) -- `${componentId}:${usartIndex}` ou `${outerComponentId}:${innerComponentId}:${usartIndex}`.
+ * `inputBytes` fica sempre vazio hoje (a fonte de dados é `getMcuLogs()`, texto já decodificado e
+ * de mão única -- ver doc-comment de `mcuSerialMonitorData`, `messages.ts`); o painel existe pra já
+ * ficar pronto pro dia em que o Core drenar RX/TX reais por UART. */
+interface McuSerialMonitorRuntime {
+  label: string; portLabel: string; opened: boolean; online: boolean; error?: string;
+  inputBytes: number[]; outputBytes: number[]; printFormat: SerialFormat; paused: boolean;
+}
+const mcuSerialMonitorRuntime = new Map<string, McuSerialMonitorRuntime>();
+let mcuSerialMonitorLayer: HTMLDivElement | undefined;
 let clipboardItems: { components: WebviewComponentModel[]; wires: WebviewWireModel[] } | undefined;
 const activePushShortcutIds = new Set<string>();
 /** `true` durante QUALQUER gesto de arrastar componente em andamento (mouse ainda pressionado) --
@@ -598,6 +614,61 @@ function renderSerialTerminalWindows(): void {
     output.scrollTop = output.scrollHeight;
   }
 }
+
+function renderMcuSerialMonitorWindows(): void {
+  if (!mcuSerialMonitorLayer) {
+    mcuSerialMonitorLayer = document.createElement("div");
+    mcuSerialMonitorLayer.className = "mcu-serial-monitor-layer";
+    document.body.appendChild(mcuSerialMonitorLayer);
+  }
+  mcuSerialMonitorLayer.innerHTML = "";
+  for (const [key, runtime] of mcuSerialMonitorRuntime) {
+    if (!runtime.opened) continue;
+    const windowEl = document.createElement("section"); windowEl.className = "mcu-serial-monitor-window";
+    const title = document.createElement("header"); title.className = "mcu-serial-monitor-window__title";
+    const identity = document.createElement("strong"); identity.textContent = `${runtime.label} — ${runtime.portLabel}`;
+    const status = document.createElement("span"); status.textContent = runtime.error ? `⚠ ${runtime.error}` : runtime.online ? "● Online" : "○ Simulação parada";
+    const close = document.createElement("button"); close.textContent = "×"; close.title = "Fechar";
+    close.addEventListener("click", () => {
+      runtime.opened = false;
+      send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestCloseMcuSerialMonitor", key });
+      renderMcuSerialMonitorWindows();
+    });
+    title.append(identity, status, close);
+
+    const toolbar = document.createElement("div"); toolbar.className = "mcu-serial-monitor-window__toolbar";
+    const pause = document.createElement("button"); pause.textContent = runtime.paused ? "Retomar" : "Pausar";
+    pause.addEventListener("click", () => { runtime.paused = !runtime.paused; renderMcuSerialMonitorWindows(); });
+    const formatLabel = document.createElement("span"); formatLabel.textContent = "Formato:";
+    const formatSelect = document.createElement("select");
+    for (const mode of ["ASCII", "HEX", "DEC", "OCT", "BIN"] as SerialFormat[]) { const option = document.createElement("option"); option.value = mode; option.textContent = mode; option.selected = mode === runtime.printFormat; formatSelect.append(option); }
+    formatSelect.addEventListener("change", () => { runtime.printFormat = formatSelect.value as SerialFormat; renderMcuSerialMonitorWindows(); });
+    toolbar.append(pause, formatLabel, formatSelect);
+
+    const panels = document.createElement("div"); panels.className = "mcu-serial-monitor-window__panels";
+    const makePanel = (heading: string, bytes: number[], onClear: () => void): HTMLDivElement => {
+      const panel = document.createElement("div"); panel.className = "mcu-serial-monitor-window__panel";
+      const bar = document.createElement("div"); bar.className = "mcu-serial-monitor-window__panel-bar";
+      const clear = document.createElement("button"); clear.textContent = "Limpar";
+      clear.addEventListener("click", () => { onClear(); renderMcuSerialMonitorWindows(); });
+      const label = document.createElement("span"); label.textContent = heading;
+      bar.append(clear, label);
+      const output = document.createElement("pre"); output.className = "mcu-serial-monitor-window__output";
+      output.textContent = serialFormatBytes(bytes, runtime.printFormat);
+      panel.append(bar, output);
+      requestAnimationFrame(() => { output.scrollTop = output.scrollHeight; });
+      return panel;
+    };
+    panels.append(
+      makePanel(" Entrada", runtime.inputBytes, () => { runtime.inputBytes = []; }),
+      makePanel(" Saída", runtime.outputBytes, () => { runtime.outputBytes = []; }),
+    );
+
+    windowEl.append(title, toolbar, panels);
+    mcuSerialMonitorLayer.append(windowEl);
+  }
+}
+
 /** Seleção múltipla de rótulos externos (id/value) -- pedido real: "preciso selecionar vários textos
  * independentemente dos pinos". Array (não `Set`) pra preservar ORDEM de seleção real, mesmo
  * contrato de `state.selectedComponentIds` (ver `selectedComponentsInSelectionOrder`) -- alinhar/
@@ -8384,6 +8455,26 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
   if (message.type === "serialTerminalLoadedFile") {
     const runtime = serialTerminalRuntime.get(message.componentId);
     if (runtime) { runtime.loadedFile = Uint8Array.from(message.dataHex.match(/../g)?.map((pair) => parseInt(pair, 16)) ?? []); renderSerialTerminalWindows(); }
+  }
+
+  if (message.type === "mcuSerialMonitorStatus") {
+    if (!message.opened) { mcuSerialMonitorRuntime.delete(message.key); renderMcuSerialMonitorWindows(); return; }
+    const previous = mcuSerialMonitorRuntime.get(message.key);
+    mcuSerialMonitorRuntime.set(message.key, {
+      label: message.label, portLabel: message.portLabel, opened: true, online: message.online, error: message.error,
+      inputBytes: previous?.inputBytes ?? [], outputBytes: previous?.outputBytes ?? [],
+      printFormat: previous?.printFormat ?? "ASCII", paused: previous?.paused ?? false,
+    });
+    renderMcuSerialMonitorWindows();
+  }
+
+  if (message.type === "mcuSerialMonitorData") {
+    const runtime = mcuSerialMonitorRuntime.get(message.key);
+    if (runtime && !runtime.paused) {
+      runtime.outputBytes.push(...new TextEncoder().encode(message.text));
+      if (runtime.outputBytes.length > 200_000) runtime.outputBytes.splice(0, runtime.outputBytes.length - 200_000);
+      renderMcuSerialMonitorWindows();
+    }
   }
 
   if (message.type === "serialPortStatus") {

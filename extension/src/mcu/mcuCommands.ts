@@ -96,25 +96,29 @@ function recordFirmwareLoaded(coreId: string, firmwarePath: string): void {
   }
 }
 
+/** Pára o polling e some com o painel na Webview (`opened:false`) -- usado tanto pelo botão "×"
+ * (`requestCloseMcuSerialMonitor`) quanto pelas limpezas em lote abaixo. */
+export function closeMcuSerialMonitorByKey(key: string): void {
+  const monitor = mcuSerialMonitorByKey.get(key);
+  if (!monitor) return;
+  clearInterval(monitor.timer);
+  mcuSerialMonitorByKey.delete(key);
+  state.schematicPanel?.postMessage({ version: 1, type: "mcuSerialMonitorStatus", key, label: monitor.label, portLabel: monitor.portLabel, opened: false, online: false });
+}
+
 export function closeMcuSerialMonitor(componentId: string, usartIndex?: number): void {
-  for (const [key, monitor] of mcuSerialMonitorByKey) {
+  for (const key of [...mcuSerialMonitorByKey.keys()]) {
     const parts = key.split(":");
     const currentComponentId = parts[0];
     const currentUsartIndex = parts[parts.length - 1];
     if (currentComponentId !== componentId) continue;
     if (usartIndex !== undefined && Number(currentUsartIndex) !== usartIndex) continue;
-    clearInterval(monitor.timer);
-    monitor.channel.dispose();
-    mcuSerialMonitorByKey.delete(key);
+    closeMcuSerialMonitorByKey(key);
   }
 }
 
 export function closeAllMcuSerialMonitors(): void {
-  for (const [key, monitor] of mcuSerialMonitorByKey) {
-    clearInterval(monitor.timer);
-    monitor.channel.dispose();
-    mcuSerialMonitorByKey.delete(key);
-  }
+  for (const key of [...mcuSerialMonitorByKey.keys()]) closeMcuSerialMonitorByKey(key);
 }
 
 export function updateBoardOverlayPropertyCommand(
@@ -333,19 +337,25 @@ function serialPortLabelForTypeId(typeId: string | undefined, usartIndex: 0 | 1 
 }
 
 /** Corpo compartilhado de `openMcuSerialMonitorCommand`/`openExposedMcuSerialMonitorCommand` --
- * diferiam só em como `key`/`label`/`targetCoreId` eram resolvidos, com o resto (canal de saída,
+ * diferiam só em como `key`/`label`/`targetCoreId` eram resolvidos, com o resto (painel na Webview,
  * polling de log a cada 500ms, cálculo de delta) idêntico e duplicado (achado de auditoria
- * 2026-07-08). `state.coreClient` já verificado não-nulo pelos dois chamadores antes de entrar aqui. */
+ * 2026-07-08). `state.coreClient` já verificado não-nulo pelos dois chamadores antes de entrar aqui.
+ *
+ * Migrado de `vscode.OutputChannel` pra painel na própria Webview (2026-07-22, réplica visual/
+ * funcional do `SerialMonitor` real do SimulIDE -- ver `renderMcuSerialMonitorWindows`, `main.ts`)
+ * -- a fonte de dados continua sendo `getMcuLogs()` (saída combinada do processo QEMU): ainda não
+ * separa RX/TX por USART de verdade (isso exigiria o Core lançar o QEMU com uma porta serial
+ * dedicada por UART e novos RPCs de leitura/escrita por índice), só a apresentação virou fiel. */
 function openSerialMonitor(key: string, label: string, serialPortLabel: string, targetCoreId: string): void {
+  const status = (online: boolean, error?: string): void => {
+    state.schematicPanel?.postMessage({ version: 1, type: "mcuSerialMonitorStatus", key, label, portLabel: serialPortLabel, opened: true, online, ...(error ? { error } : {}) });
+  };
+
   const existing = mcuSerialMonitorByKey.get(key);
   if (existing) {
-    existing.channel.show(true);
+    status(state.simulationStatus !== "stopped");
     return;
   }
-
-  const channel = vscode.window.createOutputChannel(`LasecSimul ${serialPortLabel} - ${label}`);
-  channel.appendLine(`[${new Date().toLocaleString()}] Monitor serial aberto para ${label} (${serialPortLabel}).`);
-  channel.appendLine("Observacao: por enquanto o monitor espelha os logs/saida do QEMU expostos pelo Core.");
 
   const pollLogs = async (): Promise<void> => {
     try {
@@ -354,21 +364,21 @@ function openSerialMonitor(key: string, label: string, serialPortLabel: string, 
       if (!monitor) return;
       const delta = logs.slice(monitor.lastLength);
       if (delta) {
-        channel.append(delta);
+        state.schematicPanel?.postMessage({ version: 1, type: "mcuSerialMonitorData", key, text: delta });
         monitor.lastLength = logs.length;
       } else if (logs.length < monitor.lastLength) {
-        channel.appendLine(`\n[${new Date().toLocaleTimeString()}] logs reiniciados`);
-        if (logs) channel.append(logs);
+        state.schematicPanel?.postMessage({ version: 1, type: "mcuSerialMonitorData", key, text: `\n[${new Date().toLocaleTimeString()}] logs reiniciados\n${logs}` });
         monitor.lastLength = logs.length;
       }
+      status(state.simulationStatus !== "stopped");
     } catch (err) {
-      channel.appendLine(`\n[erro] ${err instanceof Error ? err.message : String(err)}`);
+      status(state.simulationStatus !== "stopped", err instanceof Error ? err.message : String(err));
     }
   };
 
   const timer = setInterval(() => void pollLogs(), 500);
-  mcuSerialMonitorByKey.set(key, { channel, timer, lastLength: 0 });
-  channel.show(true);
+  mcuSerialMonitorByKey.set(key, { timer, lastLength: 0, label, portLabel: serialPortLabel });
+  status(state.simulationStatus !== "stopped");
   void pollLogs();
 }
 

@@ -106,5 +106,12 @@ export const subcircuitBoundaryPinsByComponentId = new Map<string, Record<string
  * carga -- sem isto, cada Run recarregaria (mata+sobe o processo QEMU de novo) mesmo sem mudança
  * nenhuma no arquivo. */
 export const lastLoadedFirmwareByCoreId = new Map<string, { path: string; mtimeMs: number; size: number }>();
-export const mcuSerialMonitorByKey = new Map<string, { channel: vscode.OutputChannel; timer: ReturnType<typeof setInterval>; lastLength: number }>();
+/** Monitor serial por USART de um `QemuDevice` -- ao contrário de `serialTerminalManager`
+ * (`peripherals.serialterm`, ligado por fio ao pino Tx/Rx real e drenado via `drainUart`), este
+ * espelha `getMcuLogs()` (saída combinada do processo QEMU) num painel flutuante na própria Webview
+ * (ver `renderMcuSerialMonitorWindows`, `main.ts`) -- não um `vscode.OutputChannel` mais, desde a
+ * migração pra UI estilo SimulIDE (`SerialMonitor`/`serialmon.cpp` real: painéis Input/Output,
+ * Pause, modo de impressão). `label`/`portLabel` ficam cacheados aqui pra re-enviar o status sem
+ * precisar re-resolver o componente (ex: ao fechar todos num troca de projeto). */
+export const mcuSerialMonitorByKey = new Map<string, { timer: ReturnType<typeof setInterval>; lastLength: number; label: string; portLabel: string }>();
 export const projectSerializer = new ProjectSerializer();

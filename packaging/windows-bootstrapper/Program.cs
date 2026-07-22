@@ -71,6 +71,13 @@ internal static class Program
             }
 
             Console.WriteLine($"Infraestrutura global ausente ou incompleta: {machineStatus.Details}");
+            if (!ShouldProvisionTapInfrastructure(args))
+            {
+                Console.WriteLine("Instalação do driver TAP, da bridge de rede e do gateway recusada pelo usuário; etapa de rede ignorada.");
+                Console.WriteLine("A extensão continua funcionando no modo de rede 'isolated' (sem TAP nem administrador); veja \"lasecsimul.network.mode\".");
+                return extensionReady ? 0 : 1;
+            }
+
             Console.WriteLine("A instalação/reparação da máquina requer elevação administrativa.");
             var exitCode = IsAdministrator() ? ProvisionNetwork(args) : RunElevated(args, "--provision-network");
             if (exitCode != 0) return exitCode;
@@ -82,6 +89,29 @@ internal static class Program
             Console.Error.WriteLine($"Falha no instalador: {ex.Message}");
             return 1;
         }
+    }
+
+    private static bool ShouldProvisionTapInfrastructure(string[] args)
+    {
+        if (args.Contains("--no-tap", StringComparer.OrdinalIgnoreCase) ||
+            args.Contains("--skip-tap", StringComparer.OrdinalIgnoreCase))
+            return false;
+        if (args.Contains("--install-tap", StringComparer.OrdinalIgnoreCase) ||
+            args.Contains("--quiet", StringComparer.OrdinalIgnoreCase))
+            return true;
+
+        Console.WriteLine();
+        Console.WriteLine("O LasecSimul pode instalar o driver TAP-Windows6, criar uma Windows Network Bridge e");
+        Console.WriteLine("registrar um gateway de rede para o modo 'lab-bridge' (a ESP32 simulada aparece na LAN");
+        Console.WriteLine("física com IP próprio, via DHCP real). Isso requer elevação administrativa.");
+        Console.WriteLine("Sem esses componentes, a extensão continua funcionando normalmente no modo 'isolated'");
+        Console.WriteLine("(NAT local por processo, sem TAP nem administrador).");
+        Console.Write("Deseja instalar o driver TAP e a infraestrutura de rede agora? (s/N): ");
+        var response = Console.ReadLine()?.Trim() ?? string.Empty;
+        return response.Equals("s", StringComparison.OrdinalIgnoreCase) ||
+               response.Equals("sim", StringComparison.OrdinalIgnoreCase) ||
+               response.Equals("y", StringComparison.OrdinalIgnoreCase) ||
+               response.Equals("yes", StringComparison.OrdinalIgnoreCase);
     }
 
     private static int VerifyPayload()

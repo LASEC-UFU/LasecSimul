@@ -45,163 +45,189 @@
     "darwin-universal": "build/macos-universal/device.dylib"
   },
   "package": {
-    "width": 56,
-    "height": 24,
+    "width": 32,
+    "height": 40,
     "border": false,
     "background": {
-      "kind": "color",
-      "value": "transparent"
+      "kind": "none"
     },
-    "shapes": [
-      {
-        "kind": "line",
-        "x1": 10,
-        "y1": 16,
-        "x2": 14,
-        "y2": 16,
-        "stroke": "#444"
+    "simulidePaint": {
+      "version": 1,
+      "source": {
+        "file": "src/components/passive/resist_sensors/ldr.cpp + varresbase.cpp",
+        "className": "Ldr",
+        "method": "paint",
+        "notes": "Ldr::paint(): drawRect(-11,-4.5,22,9) + duas setas de luz incidindo por cima (-5,-11)->(-1,-7) e (1,-11)->(5,-7), cada uma com uma ponta em L. VarResBase pins (-16,0)/(16,0), setLength(4.4) => effective lead 3.7 (mesma base de passive.variable_resistor -- Ldr é um VarResBase, dial na mesma posição)."
       },
-      {
-        "kind": "line",
-        "x1": 14,
-        "y1": 16,
-        "x2": 17,
-        "y2": 10,
-        "stroke": "#444"
+      "bounds": {
+        "x": -16,
+        "y": -11,
+        "w": 32,
+        "h": 40
       },
-      {
-        "kind": "line",
-        "x1": 17,
-        "y1": 10,
-        "x2": 23,
-        "y2": 22,
-        "stroke": "#444"
-      },
-      {
-        "kind": "line",
-        "x1": 23,
-        "y1": 22,
-        "x2": 28,
-        "y2": 10,
-        "stroke": "#444"
-      },
-      {
-        "kind": "line",
-        "x1": 28,
-        "y1": 10,
-        "x2": 33,
-        "y2": 22,
-        "stroke": "#444"
-      },
-      {
-        "kind": "line",
-        "x1": 33,
-        "y1": 22,
-        "x2": 39,
-        "y2": 10,
-        "stroke": "#444"
-      },
-      {
-        "kind": "line",
-        "x1": 39,
-        "y1": 10,
-        "x2": 42,
-        "y2": 16,
-        "stroke": "#444"
-      },
-      {
-        "kind": "line",
-        "x1": 42,
-        "y1": 16,
-        "x2": 46,
-        "y2": 16,
-        "stroke": "#444"
-      },
-      {
-        "kind": "line",
-        "x1": 19,
-        "y1": 2,
-        "x2": 23,
-        "y2": 7,
-        "stroke": "#888"
-      },
-      {
-        "kind": "line",
-        "x1": 23,
-        "y1": 7,
-        "x2": 21,
-        "y2": 5,
-        "stroke": "#888"
-      },
-      {
-        "kind": "line",
-        "x1": 23,
-        "y1": 7,
-        "x2": 25,
-        "y2": 5,
-        "stroke": "#888"
-      },
-      {
-        "kind": "line",
-        "x1": 27,
-        "y1": 2,
-        "x2": 31,
-        "y2": 7,
-        "stroke": "#888"
-      },
-      {
-        "kind": "line",
-        "x1": 31,
-        "y1": 7,
-        "x2": 29,
-        "y2": 5,
-        "stroke": "#888"
-      },
-      {
-        "kind": "line",
-        "x1": 31,
-        "y1": 7,
-        "x2": 33,
-        "y2": 5,
-        "stroke": "#888"
-      }
-    ],
+      "defaultStroke": "#000",
+      "defaultFill": "none",
+      "defaultStrokeWidth": 1.5,
+      "primitives": [
+        {
+          "kind": "rect",
+          "x": -11,
+          "y": -4.5,
+          "w": 22,
+          "h": 9,
+          "fill": "#ffffff",
+          "strokeWidth": 1.5
+        },
+        {
+          "kind": "line",
+          "x1": -5,
+          "y1": -11,
+          "x2": -1,
+          "y2": -7,
+          "strokeWidth": 1.2
+        },
+        {
+          "kind": "line",
+          "x1": -1,
+          "y1": -7,
+          "x2": -1,
+          "y2": -9,
+          "strokeWidth": 1.2
+        },
+        {
+          "kind": "line",
+          "x1": -1,
+          "y1": -7,
+          "x2": -3,
+          "y2": -7,
+          "strokeWidth": 1.2
+        },
+        {
+          "kind": "line",
+          "x1": 1,
+          "y1": -11,
+          "x2": 5,
+          "y2": -7,
+          "strokeWidth": 1.2
+        },
+        {
+          "kind": "line",
+          "x1": 5,
+          "y1": -7,
+          "x2": 5,
+          "y2": -9,
+          "strokeWidth": 1.2
+        },
+        {
+          "kind": "line",
+          "x1": 5,
+          "y1": -7,
+          "x2": 3,
+          "y2": -7,
+          "strokeWidth": 1.2
+        }
+      ]
+    },
     "pins": [
       {
         "id": "a",
         "x": 0,
-        "y": 16,
+        "y": 11,
         "angle": 180,
-        "length": 10,
+        "length": 3.7,
         "label": ""
       },
       {
         "id": "b",
-        "x": 56,
-        "y": 16,
+        "x": 32,
+        "y": 11,
         "angle": 0,
-        "length": 10,
+        "length": 3.7,
         "label": ""
       }
-    ]
+    ],
+    "viewSpec": {
+      "overlayPaint": true,
+      "gradients": {
+        "dial": {
+          "kind": "radial",
+          "cx": 12,
+          "cy": 18,
+          "r": 14,
+          "gradientUnits": "userSpaceOnUse",
+          "stops": [
+            { "offset": "0%", "color": "#ffffff" },
+            { "offset": "80%", "color": "#e6e6e1" },
+            { "offset": "83%", "color": "#dcdcd7" },
+            { "offset": "100%", "color": "#c8c8c3" }
+          ]
+        }
+      },
+      "paint": [
+        { "kind": "line", "x1": 10.75, "y1": 36.09, "x2": 9, "y2": 39.12, "stroke": "#ff0000", "strokeWidth": 1, "cssClass": "encoder-tick" },
+        { "kind": "line", "x1": 7.79, "y1": 33.55, "x2": 5.84, "y2": 35.11, "stroke": "#6e6e6e", "strokeWidth": 1, "cssClass": "encoder-tick" },
+        { "kind": "line", "x1": 5.97, "y1": 30.09, "x2": 3.58, "y2": 30.83, "stroke": "#6e6e6e", "strokeWidth": 1, "cssClass": "encoder-tick" },
+        { "kind": "line", "x1": 5.53, "y1": 26.22, "x2": 3.04, "y2": 26.03, "stroke": "#6e6e6e", "strokeWidth": 1, "cssClass": "encoder-tick" },
+        { "kind": "line", "x1": 6.54, "y1": 22.44, "x2": 4.29, "y2": 21.36, "stroke": "#6e6e6e", "strokeWidth": 1, "cssClass": "encoder-tick" },
+        { "kind": "line", "x1": 8.86, "y1": 19.3, "x2": 7.16, "y2": 17.47, "stroke": "#6e6e6e", "strokeWidth": 1, "cssClass": "encoder-tick" },
+        { "kind": "line", "x1": 12.16, "y1": 17.23, "x2": 11.25, "y2": 14.9, "stroke": "#6e6e6e", "strokeWidth": 1, "cssClass": "encoder-tick" },
+        { "kind": "line", "x1": 16, "y1": 16.5, "x2": 16, "y2": 14, "stroke": "#6e6e6e", "strokeWidth": 1, "cssClass": "encoder-tick" },
+        { "kind": "line", "x1": 19.84, "y1": 17.23, "x2": 20.75, "y2": 14.9, "stroke": "#6e6e6e", "strokeWidth": 1, "cssClass": "encoder-tick" },
+        { "kind": "line", "x1": 23.14, "y1": 19.3, "x2": 24.84, "y2": 17.47, "stroke": "#6e6e6e", "strokeWidth": 1, "cssClass": "encoder-tick" },
+        { "kind": "line", "x1": 25.46, "y1": 22.44, "x2": 27.71, "y2": 21.36, "stroke": "#6e6e6e", "strokeWidth": 1, "cssClass": "encoder-tick" },
+        { "kind": "line", "x1": 26.47, "y1": 26.22, "x2": 28.96, "y2": 26.03, "stroke": "#6e6e6e", "strokeWidth": 1, "cssClass": "encoder-tick" },
+        { "kind": "line", "x1": 26.03, "y1": 30.09, "x2": 28.42, "y2": 30.83, "stroke": "#6e6e6e", "strokeWidth": 1, "cssClass": "encoder-tick" },
+        { "kind": "line", "x1": 24.21, "y1": 33.55, "x2": 26.16, "y2": 35.11, "stroke": "#6e6e6e", "strokeWidth": 1, "cssClass": "encoder-tick" },
+        { "kind": "line", "x1": 21.25, "y1": 36.09, "x2": 22.5, "y2": 38.26, "stroke": "#6e6e6e", "strokeWidth": 1, "cssClass": "encoder-tick" },
+        { "kind": "ellipse", "cx": 16, "cy": 27, "rx": 10, "ry": 10, "fill": "gradient:dial", "stroke": "#464646", "strokeWidth": 1, "cssClass": "encoder-hit-zone" },
+        { "kind": "ellipse", "cx": 16, "cy": 20, "rx": 2.5, "ry": 2.5, "fill": "none", "stroke": "#f0f0e6", "strokeWidth": 1, "cssClass": "encoder-indicator-halo", "partId": "dialIndicator" },
+        { "kind": "ellipse", "cx": 16, "cy": 20, "rx": 2, "ry": 2, "fill": "#d2d2c8", "stroke": "#464646", "strokeWidth": 1, "cssClass": "encoder-indicator", "partId": "dialIndicator" }
+      ],
+      "hitTest": {
+        "dial": { "kind": "circle", "cx": 16, "cy": 27, "r": 12, "cursor": "grab" }
+      },
+      "interaction": {
+        "dial": {
+          "kind": "dragAngular",
+          "hitTest": "dial",
+          "prop": "lux",
+          "cx": 16,
+          "cy": 27,
+          "stepsPerRev": 1000,
+          "continuous": true,
+          "limits": "dial"
+        }
+      },
+      "limits": {
+        "dial": {
+          "min": 0.001,
+          "max": 100000,
+          "minProp": "min_lux",
+          "maxProp": "max_lux",
+          "minAngleDeg": -150,
+          "maxAngleDeg": 150,
+          "clamp": true
+        }
+      }
+    }
   },
   "pins": [
     {
       "id": "a",
       "kind": "ANALOG_IN",
       "x": 0,
-      "y": 16,
+      "y": 11,
       "angle": 180,
-      "length": 10,
+      "length": 3.7,
       "label": ""
     },
     {
       "id": "b",
       "kind": "ANALOG_IN",
-      "x": 56,
-      "y": 16,
+      "x": 32,
+      "y": 11,
       "angle": 0,
-      "length": 10,
+      "length": 3.7,
       "label": ""
     }
   ],

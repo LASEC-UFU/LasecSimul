@@ -67,17 +67,26 @@ Comportamento:
    - `PATH`
    - instalacoes padrao de VS Code, VS Code Insiders e VSCodium
 3. executa `code --install-extension <vsix> --force` ou equivalente
-4. solicita elevação UAC apenas para a etapa de rede
-5. instala o TAP-Windows6 9.27.0 assinado e cria `LasecSimul TAP`
-6. seleciona a interface Ethernet física e cria/atualiza a Windows Network Bridge
-7. instala `LasecSimul.NetworkGateway.exe` em `Program Files` e registra uma tarefa de inicialização
+4. se a infraestrutura global (TAP/bridge/gateway) estiver ausente ou incompleta, pergunta no
+   console se o usuário deseja instalá-la agora (modo `lab-bridge`) ou pular essa etapa e seguir
+   apenas com o modo `isolated` (sem TAP nem administrador)
+5. só solicita elevação UAC para a etapa de rede se o usuário confirmar a pergunta acima
+6. instala o TAP-Windows6 9.27.0 assinado e cria `LasecSimul TAP`
+7. seleciona a interface Ethernet física e cria/atualiza a Windows Network Bridge
+8. instala `LasecSimul.NetworkGateway.exe` em `Program Files` e registra uma tarefa de inicialização
    como SYSTEM; todos os QEMUs usam o switch central em `127.0.0.1:9011`
 
 O mesmo instalador pode ser executado por todos os usuários do servidor. Depois de instalar o VSIX
 no perfil atual, ele verifica a instalação de máquina. Quando TAP, bridge, gateway, tarefa, porta
 9011, configuração e entrada de desinstalação estão saudáveis, encerra sem UAC e sem reiniciar o
-gateway. Se a infraestrutura estiver ausente ou incompleta, solicita UAC e instala/repara a etapa
-global.
+gateway. Se a infraestrutura estiver ausente ou incompleta, pergunta ao usuário antes de solicitar
+UAC e instalar/reparar a etapa global; recusar a pergunta não afeta a instalação da extensão.
+
+A pergunta pode ser respondida antecipadamente por linha de comando, útil para automação:
+
+- `--install-tap`: confirma a instalação da infraestrutura de rede sem perguntar
+- `--no-tap` / `--skip-tap`: recusa a infraestrutura de rede sem perguntar
+- `--quiet`: também confirma automaticamente (mantém o comportamento anterior a esta pergunta)
 
 A remoção da extensão no VS Code afeta somente o perfil daquele usuário. A infraestrutura global é
 registrada separadamente como **LasecSimul — Componentes da Máquina** em Aplicativos/Painel de

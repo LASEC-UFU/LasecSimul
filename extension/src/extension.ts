@@ -66,6 +66,7 @@ import {
   chooseMcuFirmwareCommand,
   closeAllMcuSerialMonitors,
   closeMcuSerialMonitor,
+  closeMcuSerialMonitorByKey,
   ensureAllMcuFirmwareUpToDate,
   openExposedMcuSerialMonitorCommand,
   openMcuSerialMonitorCommand,
@@ -1576,6 +1577,9 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       return;
     case "requestOpenExposedMcuSerialMonitor":
       void openExposedMcuSerialMonitorCommand(message.outerComponentId, message.innerComponentId, message.usartIndex, mcuCommandOptions());
+      return;
+    case "requestCloseMcuSerialMonitor":
+      closeMcuSerialMonitorByKey(message.key);
       return;
     case "requestExportInstrumentData":
       void exportInstrumentDataCommand(message.suggestedFileName, message.csvContent);
