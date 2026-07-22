@@ -379,9 +379,25 @@ function openSerialMonitor(key: string, label: string, serialPortLabel: string, 
   };
 
   const timer = setInterval(() => void poll(), 500);
-  mcuSerialMonitorByKey.set(key, { timer, label, portLabel: serialPortLabel });
+  mcuSerialMonitorByKey.set(key, { timer, label, portLabel: serialPortLabel, targetCoreId, usartIndex });
   status(state.simulationStatus !== "stopped");
   void poll();
+}
+
+/** Caixa de envio do Monitor Serial (achado 2026-07-22, completando o par com a leitura acima) --
+ * `dataHex` chega já codificado pela Webview (mesmo padrão de `requestSerialTerminalWrite`); aqui
+ * só resolve `targetCoreId`/`usartIndex` a partir de `key` (cacheados em `mcuSerialMonitorByKey`
+ * na abertura do painel, ver `openSerialMonitor` acima) e escreve na propriedade write-only
+ * `uart{N}_rx_inject_hex` (`McuComponent::propertyDescriptors()`, Core) -- injeta os bytes direto
+ * no RX real da USART via `QemuModule::injectRxBytes` (mcu_abi.h minor 7), sem exigir fio nenhum,
+ * equivalente a digitar no SerialMonitor real do SimulIDE. Silenciosamente ignora um `key` sem
+ * painel aberto (painel pode ter fechado entre o clique e a resposta). */
+export function writeMcuSerialMonitorCommand(key: string, dataHex: string): void {
+  const monitor = mcuSerialMonitorByKey.get(key);
+  if (!monitor || !state.coreClient) return;
+  void state.coreClient
+    .setProperty(monitor.targetCoreId, `uart${monitor.usartIndex}_rx_inject_hex`, dataHex)
+    .catch((error) => vscode.window.showErrorMessage(`Monitor serial: ${error instanceof Error ? error.message : String(error)}`));
 }
 
 /** Motivo específico de "Monitor serial indisponível" -- achado ao vivo 2026-07-22: a mensagem

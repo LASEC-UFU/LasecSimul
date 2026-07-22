@@ -36,7 +36,7 @@
   "properties": [
     { "id": "source_name", "label": "Nome da fonte", "group": "LasecPlot", "valueKind": "string", "editor": "text", "default": "LasecPlot 1" },
     { "id": "baudrate", "label": "Baud rate", "group": "Serial", "valueKind": "number", "editor": "select", "default": 115200,
-      "options": [{"label":"1200","value":1200},{"label":"2400","value":2400},{"label":"4800","value":4800},{"label":"9600","value":9600},{"label":"19200","value":19200},{"label":"38400","value":38400},{"label":"57600","value":57600},{"label":"115200","value":115200}] },
+      "options": [{"label":"1200","value":1200},{"label":"2400","value":2400},{"label":"4800","value":4800},{"label":"9600","value":9600},{"label":"19200","value":19200},{"label":"38400","value":38400},{"label":"57600","value":57600},{"label":"74880","value":74880},{"label":"115200","value":115200},{"label":"230400","value":230400},{"label":"460800","value":460800},{"label":"576000","value":576000},{"label":"921600","value":921600}] },
     { "id": "data_bits", "label": "Bits de dados", "group": "Serial", "valueKind": "number", "editor": "select", "default": 8,
       "options": [{"label":"5","value":5},{"label":"6","value":6},{"label":"7","value":7},{"label":"8","value":8}] },
     { "id": "stop_bits", "label": "Bits de parada", "group": "Serial", "valueKind": "number", "editor": "select", "default": 1,

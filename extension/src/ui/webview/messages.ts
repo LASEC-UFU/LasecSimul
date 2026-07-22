@@ -250,6 +250,13 @@ export type WebviewToHostMessage =
    * (ver `mcuCommands.ts::closeMcuSerialMonitorByKey`). A Webview já remove o painel localmente ao
    * clicar (otimista); este pedido só limpa o lado Extension, sem resposta esperada. */
   | { version: number; type: "requestCloseMcuSerialMonitor"; key: string }
+  /** Caixa de envio do Monitor Serial (achado 2026-07-22) -- `dataHex` já codificado pela Webview
+   * (mesmo padrão de `requestSerialTerminalWrite`). `key` é o mesmo de `mcuSerialMonitorStatus`/
+   * `mcuSerialMonitorData` -- `mcuCommands.ts::writeMcuSerialMonitorCommand` resolve
+   * `targetCoreId`/`usartIndex` a partir dele (cacheados em `mcuSerialMonitorByKey` na abertura do
+   * painel) e escreve em `uart{N}_rx_inject_hex` (Core), injetando os bytes no RX real da USART
+   * sem exigir fio nenhum. */
+  | { version: number; type: "requestMcuSerialMonitorWrite"; key: string; dataHex: string }
   /** "Exportar Dados" da janela "Expande" do osciloscópio/analisador lógico -- o CSV já vem PRONTO
    * (formatado em main.ts, que é quem tem o histórico/configuração de canais) pra extension.ts só
    * abrir `showSaveDialog`/escrever o arquivo, sem precisar conhecer o formato do instrumento. */

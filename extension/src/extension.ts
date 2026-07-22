@@ -67,6 +67,7 @@ import {
   closeAllMcuSerialMonitors,
   closeMcuSerialMonitor,
   closeMcuSerialMonitorByKey,
+  writeMcuSerialMonitorCommand,
   ensureAllMcuFirmwareUpToDate,
   openExposedMcuSerialMonitorCommand,
   openMcuSerialMonitorCommand,
@@ -86,6 +87,7 @@ import {
 } from "./catalog/subcircuitInternals";
 import { initSimulationLog, logSimulation, noteSimulationStatusChange, showSimulationLogChannel } from "./diagnostics/simulationLog";
 import { ProjectCustomEditorProvider } from "./ui/panels/ProjectCustomEditorProvider";
+import { maybeOfferMachineNetworkSetup, registerMachineNetworkSetupCommand } from "./network/machineNetworkSetup";
 import {
   externalFolderPath,
   missingManifestDependencies,
@@ -1581,6 +1583,9 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
     case "requestCloseMcuSerialMonitor":
       closeMcuSerialMonitorByKey(message.key);
       return;
+    case "requestMcuSerialMonitorWrite":
+      writeMcuSerialMonitorCommand(message.key, message.dataHex);
+      return;
     case "requestExportInstrumentData":
       void exportInstrumentDataCommand(message.suggestedFileName, message.csvContent);
       return;
@@ -2186,6 +2191,7 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
   context.subscriptions.push(
     { dispose: disposeDeviceReferenceWatchers },
     vscode.commands.registerCommand("lasecsimul.showSimulationLog", () => showSimulationLogChannel()),
+    registerMachineNetworkSetupCommand(context),
     // Diagnóstico via Command Palette (achado 2026-07-18, pedido explícito do usuário: "tem algum
     // comando que posso dar pelo prompt... pra saber se o problema é aqui ou na outra extensão") --
     // lista TODOS os dispositivos LasecPlot que o broker conhece nesta janela, publicado ou não,
@@ -2226,6 +2232,7 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
   initializeSerialPort(context);
   registerMcuDebugTracking(context);
   state.extensionContext = context;
+  maybeOfferMachineNetworkSetup(context);
   const unifiedCatalog = loadUnifiedCatalog(context.extensionPath, currentLasecSimulLanguage());
   const initialResolved = resolveRegisteredItems(context.extensionPath, unifiedCatalog.registeredSources);
   state.schematicState = createInitialWebviewState([

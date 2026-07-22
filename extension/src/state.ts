@@ -114,6 +114,10 @@ export const lastLoadedFirmwareByCoreId = new Map<string, { path: string; mtimeM
  * `renderMcuSerialMonitorWindows`, `main.ts`) -- não um `vscode.OutputChannel` mais, desde a
  * migração pra UI estilo SimulIDE (`SerialMonitor`/`serialmon.cpp` real: painéis Input/Output,
  * Pause, modo de impressão). `label`/`portLabel` ficam cacheados aqui pra re-enviar o status sem
- * precisar re-resolver o componente (ex: ao fechar todos num troca de projeto). */
-export const mcuSerialMonitorByKey = new Map<string, { timer: ReturnType<typeof setInterval>; label: string; portLabel: string }>();
+ * precisar re-resolver o componente (ex: ao fechar todos num troca de projeto). `targetCoreId`/
+ * `usartIndex` ficam cacheados aqui também (achado 2026-07-22, caixa de envio): a caixa de envio
+ * só manda `key` de volta (a Webview não conhece `targetCoreId`/instanceId do Core), então
+ * `writeMcuSerialMonitorCommand` precisa achar os dois sem re-resolver o componente (que exigiria
+ * repetir a lógica de subcircuito-filho de `openExposedMcuSerialMonitorCommand`). */
+export const mcuSerialMonitorByKey = new Map<string, { timer: ReturnType<typeof setInterval>; label: string; portLabel: string; targetCoreId: string; usartIndex: 0 | 1 | 2 }>();
 export const projectSerializer = new ProjectSerializer();

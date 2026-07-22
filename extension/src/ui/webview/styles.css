@@ -1216,7 +1216,7 @@ rect.meter-expand-button:hover {
    painéis Input/Output lado a lado (sem caixa de envio -- monitor por USART é send=false no real),
    Pause e formato de impressão ASCII/HEX/DEC/OCT/BIN compartilhados pelos dois painéis. */
 .mcu-serial-monitor-layer { position: fixed; inset: 0; z-index: 1250; pointer-events: none; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; }
-.mcu-serial-monitor-window { pointer-events: auto; width: min(640px, calc(100vw - 32px)); height: min(360px, calc(100vh - 48px)); display: grid; grid-template-rows: auto auto 1fr; gap: 4px; padding: 4px; color: var(--vscode-foreground); background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); border-radius: 5px; box-shadow: 0 10px 32px #0008; }
+.mcu-serial-monitor-window { pointer-events: auto; width: min(640px, calc(100vw - 32px)); height: min(430px, calc(100vh - 48px)); display: grid; grid-template-rows: auto auto 1fr auto minmax(60px, .35fr) auto; gap: 4px; padding: 4px; color: var(--vscode-foreground); background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); border-radius: 5px; box-shadow: 0 10px 32px #0008; }
 .mcu-serial-monitor-window__title { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 12px; padding: 5px 8px; background: var(--vscode-titleBar-activeBackground); }
 .mcu-serial-monitor-window__title button { font-size: 20px; line-height: 20px; border: 0; background: transparent; color: inherit; cursor: pointer; }
 .mcu-serial-monitor-window__toolbar { display: flex; align-items: center; gap: 6px; padding: 0 4px; }
@@ -1225,6 +1225,8 @@ rect.meter-expand-button:hover {
 .mcu-serial-monitor-window__panel { min-height: 0; min-width: 0; display: grid; grid-template-rows: auto 1fr; gap: 4px; }
 .mcu-serial-monitor-window__panel-bar { display: flex; align-items: center; gap: 6px; }
 .mcu-serial-monitor-window__output { min-height: 0; overflow: auto; margin: 0; padding: 8px; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.4 "Courier New", monospace; color: #fff; background: #231e3c; border: 1px solid #51486f; }
+.mcu-serial-monitor-window__input { resize: none; width: 100%; min-height: 60px; box-sizing: border-box; padding: 6px; font: 12px/1.4 "Courier New", monospace; color: #111; background: #fcfcf6; }
+.mcu-serial-monitor-window__error { min-height: 18px; color: var(--vscode-errorForeground); font-size: 12px; }
 
 .instrument-popup {
   position: absolute;

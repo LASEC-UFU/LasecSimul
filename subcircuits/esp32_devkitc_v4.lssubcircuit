@@ -27,7 +27,7 @@
       "id": "mcu1",
       "typeId": "espressif.esp32",
       "properties": {
-        "firmwarePath": "c:\\SourceCode\\EININDI01_GitHub_VSCode_PIO\\lasecSimul\\merged.bin"
+        "firmwarePath": "c:\\SourceCode\\EININDI01_GitHub_VSCode_PIO\\sourcecode\\merged.bin"
       },
       "label": "QemuDevice",
       "showValue": false,

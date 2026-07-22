@@ -4,14 +4,16 @@
   "description": "Simulador de circuitos eletrônicos com MCUs emulados via QEMU, inspirado no SimulIDE.",
   "publisher": "josuemoraisgh",
   "license": "SEE LICENSE IN LICENSE.txt",
-  "version": "0.0.12",
+  "version": "0.0.13",
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
@@ -113,6 +115,10 @@
       {
         "command": "lasecsimul.lasecplot.listEndpoints",
         "title": "LasecSimul: List LasecPlot Endpoints"
+      },
+      {
+        "command": "lasecsimul.network.installMachineSetup",
+        "title": "LasecSimul: Install Network Bridge (TAP Driver)"
       }
     ],
     "customEditors": [

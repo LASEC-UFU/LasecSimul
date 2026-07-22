@@ -8,6 +8,12 @@
 // Não precisa de IOMUX/GPIO nenhum roteado (a diferença chave: o monitor tapeia o FRAME antes de
 // chegar no pino, então funciona mesmo sem nenhuma fiação elétrica) -- só escreve no FIFO TX via
 // arena sintética (mesma técnica de McuComponentTest.cpp) e lê a propriedade de volta.
+//
+// Também cobre o lado ESCRITA (mcu_abi.h minor 7, `QemuModule::injectRxBytes`, achado 2026-07-22
+// ao completar o Monitor Serial): `uart{N}_rx_inject_hex` (setProperty) injeta bytes direto no RX
+// real da USART, sem simular fio nenhum -- verificado indiretamente via `uart{N}_rx_monitor_hex`
+// (McuComponent::injectUsartRxHex empurra pro MESMO laço que popula `rxFifo` E `rxMonitor`, ver
+// Esp32Adapter.cpp::usartInjectRxBytes, então confirmar o monitor já confirma o FIFO real também).
 #include <chrono>
 #include <cstdio>
 #include <cstdint>
@@ -128,6 +134,40 @@ int main() {
 
     const auto unknownProperty = session.propertyValueOf(mcuIndex, "uart9_tx_monitor_hex");
     check(!unknownProperty.has_value(), "uart9_tx_monitor_hex (índice inexistente) devolve nullopt, não uma string vazia");
+
+    // --- lado escrita: uart0_rx_inject_hex injeta bytes que aparecem em uart0_rx_monitor_hex ---
+    const auto rxHex0 = session.propertyValueOf(mcuIndex, "uart0_rx_monitor_hex");
+    check(rxHex0.has_value() && std::holds_alternative<std::string>(*rxHex0) && std::get<std::string>(*rxHex0).empty(),
+          "uart0_rx_monitor_hex começa vazio (nada injetado ainda)");
+
+    session.setProperty(mcuIndex, "uart0_rx_inject_hex", PropertyValue{std::string("deadbeef")});
+    const auto injected = session.propertyValueOf(mcuIndex, "uart0_rx_monitor_hex");
+    const std::string injectedHex = injected.has_value() && std::holds_alternative<std::string>(*injected) ? std::get<std::string>(*injected) : "";
+    check(injectedHex == "deadbeef", ("uart0_rx_inject_hex injetado aparece em uart0_rx_monitor_hex -- recebido: '" + injectedHex + "'").c_str());
+
+    const auto injectedAgain = session.propertyValueOf(mcuIndex, "uart0_rx_monitor_hex");
+    check(injectedAgain.has_value() && std::holds_alternative<std::string>(*injectedAgain) && std::get<std::string>(*injectedAgain).empty(),
+          "uart0_rx_monitor_hex esvazia após o dreno (mesma semântica atômica do lado TX)");
+
+    // UART1 não é afetado por uma injeção na UART0 (sem mistura de índice, mesma checagem já feita
+    // do lado TX acima).
+    session.setProperty(mcuIndex, "uart1_rx_inject_hex", PropertyValue{std::string("ff")});
+    const auto uart0RxAfterUart1Inject = session.propertyValueOf(mcuIndex, "uart0_rx_monitor_hex");
+    check(uart0RxAfterUart1Inject.has_value() && std::holds_alternative<std::string>(*uart0RxAfterUart1Inject) &&
+              std::get<std::string>(*uart0RxAfterUart1Inject).empty(),
+          "injetar na UART1 não vaza pro uart0_rx_monitor_hex");
+    const auto uart1RxAfterInject = session.propertyValueOf(mcuIndex, "uart1_rx_monitor_hex");
+    const std::string uart1RxHex = uart1RxAfterInject.has_value() && std::holds_alternative<std::string>(*uart1RxAfterInject)
+        ? std::get<std::string>(*uart1RxAfterInject) : "";
+    check(uart1RxHex == "ff", "uart1_rx_inject_hex injeta corretamente no índice certo");
+
+    // Hex de tamanho ímpar: injeta só os pares completos, sem crashar (mesma tolerância de
+    // uart_enqueue_hex em devices/simulide-peripherals/src/lib.c).
+    session.setProperty(mcuIndex, "uart0_rx_inject_hex", PropertyValue{std::string("abc")});
+    const auto oddHexResult = session.propertyValueOf(mcuIndex, "uart0_rx_monitor_hex");
+    const std::string oddHex = oddHexResult.has_value() && std::holds_alternative<std::string>(*oddHexResult)
+        ? std::get<std::string>(*oddHexResult) : "";
+    check(oddHex == "ab", ("hex de tamanho ímpar injeta só os pares completos, sem crashar -- recebido: '" + oddHex + "'").c_str());
 
     if (failures == 0) {
         std::printf("\nTodos os testes de McuUsartMonitor passaram.\n");

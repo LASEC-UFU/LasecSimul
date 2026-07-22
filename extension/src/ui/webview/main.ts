@@ -516,15 +516,25 @@ let serialTerminalLayer: HTMLDivElement | undefined;
  * `SerialMonitor` real do SimulIDE (`gui/serial/serialmon.cpp`): painéis Input/Output lado a lado,
  * Pause (descarta bytes recebidos enquanto pausado, igual ao `printIn`/`printOut` reais que fazem
  * `if(m_paused) return;` antes de qualquer coisa), modo de impressão ASCII/HEX/DEC/OCT/BIN, Limpar
- * por painel -- SEM caixa de envio (o monitor por USART do MCU usa `send=false` no real; só o
- * Serial Terminal cabeado tem envio). Chave = mesma de `mcuSerialMonitorByKey` (`state.ts`,
- * Extension) -- `${componentId}:${usartIndex}` ou `${outerComponentId}:${innerComponentId}:${usartIndex}`.
+ * por painel. Chave = mesma de `mcuSerialMonitorByKey` (`state.ts`, Extension) --
+ * `${componentId}:${usartIndex}` ou `${outerComponentId}:${innerComponentId}:${usartIndex}`.
  * `inputBytes`/`outputBytes` são byte-exatos, drenados de `uart{N}_rx_monitor_hex`/
  * `_tx_monitor_hex` (Core, ver doc-comment de `mcuSerialMonitorData`, `messages.ts`) -- mesma
- * separação Entrada/Saída do `SerialMonitor` real do SimulIDE. */
+ * separação Entrada/Saída do `SerialMonitor` real do SimulIDE.
+ * Caixa de envio (achado 2026-07-22): ao contrário do `send=false` do `SerialMonitor` real do
+ * SimulIDE, este ganha escrita -- `requestMcuSerialMonitorWrite` injeta bytes direto no RX real da
+ * USART via `uart{N}_rx_inject_hex` (Core), sem exigir fio nenhum (mesmo espírito do resto do
+ * monitor). Bytes enviados aparecem no próprio painel "Entrada" (o Core também os injeta em
+ * `rxMonitor`, ver `Esp32Adapter.cpp::usartInjectRxBytes`), então a Webview não precisa ecoá-los
+ * localmente. */
 interface McuSerialMonitorRuntime {
   label: string; portLabel: string; opened: boolean; online: boolean; error?: string;
   inputBytes: number[]; outputBytes: number[]; printFormat: SerialFormat; paused: boolean;
+  /** Caixa de envio (achado 2026-07-22) -- `sendText`/`sendFormat` só existem do lado Webview
+   * (mesmo padrão de `SerialTerminalRuntime.inputText`/`sendFormat`); o painel deixou de ser
+   * `send=false` puro do SerialMonitor real do SimulIDE, ganhando escrita via
+   * `uart{N}_rx_inject_hex` (Core). */
+  sendText: string; sendFormat: SerialFormat;
 }
 const mcuSerialMonitorRuntime = new Map<string, McuSerialMonitorRuntime>();
 let mcuSerialMonitorLayer: HTMLDivElement | undefined;
@@ -664,7 +674,28 @@ function renderMcuSerialMonitorWindows(): void {
       makePanel(" Saída", runtime.outputBytes, () => { runtime.outputBytes = []; }),
     );
 
-    windowEl.append(title, toolbar, panels);
+    const sendBar = document.createElement("div"); sendBar.className = "mcu-serial-monitor-window__toolbar";
+    const clearSend = document.createElement("button"); clearSend.textContent = "Limpar";
+    const sendButton = document.createElement("button"); sendButton.textContent = "Enviar";
+    const sendSelect = document.createElement("select");
+    for (const mode of ["ASCII", "HEX", "DEC", "OCT", "BIN"] as SerialFormat[]) { const option = document.createElement("option"); option.value = mode; option.textContent = mode; option.selected = mode === runtime.sendFormat; sendSelect.append(option); }
+    const input = document.createElement("textarea"); input.className = "mcu-serial-monitor-window__input";
+    input.value = runtime.sendText;
+    input.addEventListener("input", () => { runtime.sendText = input.value; });
+    const sendError = document.createElement("div"); sendError.className = "mcu-serial-monitor-window__error";
+    clearSend.addEventListener("click", () => { input.value = ""; runtime.sendText = ""; });
+    sendSelect.addEventListener("change", () => { runtime.sendFormat = sendSelect.value as SerialFormat; });
+    sendButton.addEventListener("click", () => {
+      try {
+        const bytes = parseSerialInput(input.value, runtime.sendFormat);
+        if (!bytes.byteLength) return;
+        send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestMcuSerialMonitorWrite", key, dataHex: Array.from(bytes).map((byte) => byte.toString(16).padStart(2, "0")).join("") });
+        sendError.textContent = "";
+      } catch (cause) { sendError.textContent = cause instanceof Error ? cause.message : String(cause); }
+    });
+    sendBar.append(clearSend, sendButton, document.createTextNode("Formato:"), sendSelect);
+
+    windowEl.append(title, toolbar, panels, sendBar, input, sendError);
     mcuSerialMonitorLayer.append(windowEl);
   }
 }
@@ -8464,6 +8495,7 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
       label: message.label, portLabel: message.portLabel, opened: true, online: message.online, error: message.error,
       inputBytes: previous?.inputBytes ?? [], outputBytes: previous?.outputBytes ?? [],
       printFormat: previous?.printFormat ?? "ASCII", paused: previous?.paused ?? false,
+      sendText: previous?.sendText ?? "", sendFormat: previous?.sendFormat ?? "ASCII",
     });
     renderMcuSerialMonitorWindows();
   }

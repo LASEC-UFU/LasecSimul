@@ -88,6 +88,36 @@ A pergunta pode ser respondida antecipadamente por linha de comando, útil para 
 - `--no-tap` / `--skip-tap`: recusa a infraestrutura de rede sem perguntar
 - `--quiet`: também confirma automaticamente (mantém o comportamento anterior a esta pergunta)
 
+## Instalação da infraestrutura de rede a partir da extensão publicada no Marketplace
+
+O Marketplace do VS Code só hospeda o `.vsix` -- não há como publicar o `.exe` nativo lá, e ele
+nunca poderia rodar `pnputil`/`netsh bridge`/`schtasks` de dentro do fluxo de instalação de extensão.
+Por isso, quem instala o `.vsix` direto do Marketplace (em vez de usar o `.exe`) e configura
+`lasecsimul.network.mode: "lab-bridge"` recebe a oferta de instalação pela própria extensão, em
+[`src/network/machineNetworkSetup.ts`](../extension/src/network/machineNetworkSetup.ts):
+
+1. na ativação (`onStartupFinished`), só age no Windows e só quando o modo configurado é
+   `lab-bridge` (o padrão `disabled` e o modo `isolated` nunca precisam de TAP)
+2. detecta a ausência de `%ProgramData%\LasecSimul\network.json` (checagem leve, sem elevação) e
+   pergunta ao usuário via notificação nativa do VS Code -- "Instalar agora" / "Mais tarde" / "Não
+   perguntar novamente" (a recusa é lembrada por versão da extensão em `globalState`)
+3. com consentimento, baixa `lasecsimul-<versão>-win32-x64-setup.exe` e `SHA256SUMS.txt` da release
+   `vX.Y.Z` do GitHub (`josuemoraisgh/LasecSimul`, a MESMA versão da extensão em execução) e confere
+   o SHA-256 antes de executar
+4. roda o `.exe` baixado só com `--provision-network` (nunca sem argumentos: a extensão já está
+   instalada por definição, este passo cobre apenas TAP/bridge/gateway), elevando via
+   `powershell -Command "Start-Process ... -Verb RunAs -Wait"` -- Node não tem equivalente direto de
+   `ProcessStartInfo.Verb = "runas"`
+
+Também existe o comando manual **LasecSimul: Install Network Bridge (TAP Driver)** (Command Palette,
+`lasecsimul.network.installMachineSetup`) para repetir esse fluxo a qualquer momento, inclusive
+depois de "Não perguntar novamente".
+
+Pré-requisito: a release `vX.Y.Z` correspondente precisa existir publicamente no GitHub com os dois
+arquivos acima anexados -- exatamente o que `scripts/package-release.js` gera e o workflow
+`package-installers.yml` publica. Repositório precisa ser público: download de asset de release
+privada sem token autenticado retorna 404.
+
 A remoção da extensão no VS Code afeta somente o perfil daquele usuário. A infraestrutura global é
 registrada separadamente como **LasecSimul — Componentes da Máquina** em Aplicativos/Painel de
 Controle. A desinstalação global exige administrador, para o gateway, remove sua tarefa, desfaz
