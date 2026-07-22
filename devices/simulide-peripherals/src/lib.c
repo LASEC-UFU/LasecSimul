@@ -122,7 +122,21 @@ typedef struct {
     int      ser_rx_active, ser_rx_bit_idx, ser_rx_stop_idx, ser_rx_parity_done;
     uint8_t  ser_rx_byte;
 
-    /* Ponte UART genérica usada pelo LasecPlot. O Core drena RX em lotes e enfileira TX. */
+    /* Ponte UART genérica usada pelo LasecPlot. O Core drena RX em lotes e enfileira TX.
+     *
+     * Achado 2026-07-22: corrida de dados real confirmada entre uart_rx_push() (chamado de dentro
+     * do callback LSDN_EVT_TIMER que completa um byte -- o host entrega esse callback com o mutex
+     * do Scheduler DELIBERADAMENTE liberado, ver hostScheduleEvent/processNextEventUntilLocked em
+     * PluginRuntime.cpp/Scheduler.hpp) e uart_drain_hex() (chamado por qualquer leitura concorrente
+     * de "uart_rx_hex", ex.: LasecPlotBroker fazendo poll via tryDrainUartRx -- essa leitura usa
+     * trySynchronized(), que consegue pegar o mesmo mutex exatamente durante a janela liberada).
+     * As duas mexem em uart_rx_head/tail/count/uart_rx_ring sem nenhuma seção crítica compartilhada
+     * -- reproduzido com firmware ESP32 real gerando o mesmo padrão de corrupção relatado pelo
+     * usuário (bytes embaralhados, sempre no mesmo lugar pro mesmo firmware, já que o tempo virtual
+     * determinístico faz a corrida "resolver" sempre igual). uart_ring_lock protege as quatro
+     * funções que tocam os aneis RX/TX (uart_rx_push/uart_drain_hex/uart_tx_push/uart_start_tx) --
+     * spinlock, não mutex de SO: seções críticas minúsculas (poucas instruções, sem I/O), e o
+     * arquivo já evita dependências extras de biblioteca (ver os shims de CRT acima). */
     uint8_t  uart_rx_ring[UART_RING_CAP];
     uint32_t uart_rx_head, uart_rx_tail, uart_rx_count;
     uint32_t uart_rx_dropped;
@@ -131,6 +145,7 @@ typedef struct {
     uint32_t uart_tx_dropped;
     int      uart_tx_active, uart_tx_waiting_stop, uart_tx_bit_idx;
     uint8_t  uart_tx_byte;
+    volatile long uart_ring_lock;
     char     uart_hex[(UART_RING_CAP * 2) + 1];
     char     source_name[128];
     char     uart_mode[24];
@@ -428,9 +443,28 @@ static int hex_value(char c) {
     return -1;
 }
 
+/* Spinlock mínimo (não mutex de SO) para as seções críticas dos anéis RX/TX -- ver comentário em
+ * uart_ring_lock. Seções protegidas são poucas instruções sem I/O, então girar é mais barato e
+ * mais simples que trazer pthread/CRT threading pra um plugin que já evita dependências extras. */
+static void uart_ring_lock_acquire(volatile long *lock) {
+#if defined(_WIN32)
+    while (InterlockedExchange(lock, 1) != 0) { /* spin */ }
+#else
+    while (__sync_lock_test_and_set(lock, 1)) { /* spin */ }
+#endif
+}
+static void uart_ring_lock_release(volatile long *lock) {
+#if defined(_WIN32)
+    InterlockedExchange(lock, 0);
+#else
+    __sync_lock_release(lock);
+#endif
+}
+
 /* UartTR/UsartModule do SimulIDE: uma fila opaca em cada direção, compartilhada pelos consumidores
  * SerialTerm e LasecPlot. RX aqui significa "recebido do MCU"; TX significa "a transmitir ao MCU". */
 static void uart_rx_push(PeriphState *s, uint8_t byte) {
+    uart_ring_lock_acquire(&s->uart_ring_lock);
     if (s->uart_rx_count == UART_RING_CAP) { /* bounded: discard oldest, preserve newest stream */
         s->uart_rx_tail = (s->uart_rx_tail + 1u) % UART_RING_CAP;
         s->uart_rx_count--;
@@ -439,14 +473,23 @@ static void uart_rx_push(PeriphState *s, uint8_t byte) {
     s->uart_rx_ring[s->uart_rx_head] = byte;
     s->uart_rx_head = (s->uart_rx_head + 1u) % UART_RING_CAP;
     s->uart_rx_count++;
+    uart_ring_lock_release(&s->uart_ring_lock);
 }
 
 static uint32_t uart_tx_push(PeriphState *s, uint8_t byte) {
-    if (s->uart_tx_count == UART_RING_CAP) { s->uart_tx_dropped++; return 0; }
-    s->uart_tx_ring[s->uart_tx_head] = byte;
-    s->uart_tx_head = (s->uart_tx_head + 1u) % UART_RING_CAP;
-    s->uart_tx_count++;
-    return 1;
+    uint32_t accepted;
+    uart_ring_lock_acquire(&s->uart_ring_lock);
+    if (s->uart_tx_count == UART_RING_CAP) {
+        s->uart_tx_dropped++;
+        accepted = 0;
+    } else {
+        s->uart_tx_ring[s->uart_tx_head] = byte;
+        s->uart_tx_head = (s->uart_tx_head + 1u) % UART_RING_CAP;
+        s->uart_tx_count++;
+        accepted = 1;
+    }
+    uart_ring_lock_release(&s->uart_ring_lock);
+    return accepted;
 }
 
 static int uart_parity_bit(PeriphState *s, uint8_t byte) {
@@ -468,6 +511,7 @@ static uint32_t uart_enqueue_hex(PeriphState *s, const char *p) {
 static const char *uart_drain_hex(PeriphState *s) {
     static const char digits[] = "0123456789abcdef";
     uint32_t n = 0;
+    uart_ring_lock_acquire(&s->uart_ring_lock);
     while (s->uart_rx_count && n < UART_RING_CAP) {
         uint8_t byte = s->uart_rx_ring[s->uart_rx_tail];
         s->uart_rx_tail = (s->uart_rx_tail + 1u) % UART_RING_CAP;
@@ -477,14 +521,20 @@ static const char *uart_drain_hex(PeriphState *s) {
         n++;
     }
     s->uart_hex[n*2] = '\0';
+    uart_ring_lock_release(&s->uart_ring_lock);
     return s->uart_hex;
 }
 
 static void uart_start_tx(PeriphState *s) {
-    if (s->uart_tx_active || s->uart_tx_waiting_stop || s->uart_tx_count == 0) return;
+    uart_ring_lock_acquire(&s->uart_ring_lock);
+    if (s->uart_tx_active || s->uart_tx_waiting_stop || s->uart_tx_count == 0) {
+        uart_ring_lock_release(&s->uart_ring_lock);
+        return;
+    }
     s->uart_tx_byte = s->uart_tx_ring[s->uart_tx_tail];
     s->uart_tx_tail = (s->uart_tx_tail + 1u) % UART_RING_CAP;
     s->uart_tx_count--;
+    uart_ring_lock_release(&s->uart_ring_lock);
     s->uart_tx_active = 1;
     s->uart_tx_bit_idx = -1; /* start bit */
     s->api->pin_write(s->host_ctx, 0, 0);
