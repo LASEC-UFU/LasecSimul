@@ -1,6 +1,7 @@
 #pragma once
 #include <atomic>
 
+#include <chrono>
 #include <deque>
 #include <filesystem>
 #include <functional>
@@ -294,6 +295,20 @@ public:
      * disso -- todo caminho real já passa por `loadMcuFirmware`/`stopMcuFirmware`/`mcuLogs` acima. */
     mcu::McuComponent* mcuComponentForTesting(uint32_t componentIndex) const;
 
+    /** Tempo virtual (ns) do PRIMEIRO MCU/QEMU da sessão, se houver algum -- lido direto de
+     * `arena->qemuTime` (mesmo campo que `McuComponent::qemuEventTimeNs` já usa pra agendar
+     * eventos). Existe só pro indicador diagnóstico "MCU real-time ratio" (ver
+     * `getSimulationTime` em CoreApplication.cpp) -- nunca usado por lógica de simulação, e
+     * DELIBERADAMENTE não é o mesmo relógio que `scheduler().nowNs()` (o elétrico, pareado ao
+     * relógio de parede por design): a diferença entre os dois é exatamente o que expõe se o
+     * MCU/QEMU está ficando pra trás do tempo real, mesmo que o solver elétrico continue "a
+     * 100%". MVP: só o primeiro MCU encontrado -- agregação multi-MCU fica como trabalho futuro. */
+    std::optional<uint64_t> firstMcuVirtualTimeNs() const;
+
+    /** Só pra TESTE: expõe `computeSlowestMcuPositionNs()` (ver seu doc-comment na seção privada)
+     * sem precisar esperar um ciclo real do laço de pacing do Scheduler chamar o hook sozinho. */
+    std::optional<uint64_t> computeSlowestMcuPositionNsForTesting() { return computeSlowestMcuPositionNs(); }
+
     void sendComponentEvent(uint32_t componentIndex, const ComponentEvent& event);
 
     /** Edita UMA propriedade de uma instância já existente via PropertyDescriptor (ver
@@ -540,6 +555,44 @@ private:
      * `publishSnapshot()` -- setado por `rebuildTopologyIfNeeded()` sempre que a topologia é
      * reconstruída de verdade; começa `true` pra garantir que a primeira publicação sempre copie. */
     bool m_snapshotTopologyStale = true;
+
+    /** Achado 2026-07-23 (McuComponentLivePollThreadTest com 2 MCUs, real, sob a nova
+     * sincronização de ritmo): um MCU cuja arena continua aberta mas que PAROU de produzir eventos
+     * novos há um bom tempo (ex.: ficou ocioso depois de uma rajada de teste, ou -- em produção --
+     * um firmware genuinamente dormindo/esperando um evento externo por um período longo) tem sua
+     * `pacingPositionNs()` CONGELADA pra sempre no último valor visto. Como
+     * `computeSlowestMcuPositionNs()` toma o MÍNIMO entre todos os MCUs, esse valor congelado vira
+     * um teto permanente sobre o elétrico -- mesmo que esse MCU não esteja "lento" de verdade, só
+     * quieto. Corrigido com o MÍNIMO de estado necessário: rastreia por MCU (chave = componentIndex,
+     * nunca reaproveitado) só o último `(posição, instante de parede em que mudou)`; se a posição
+     * não mudou por mais que `kStaleMcuTimeout`, esse MCU para de contribuir pro teto (mesmo
+     * tratamento de "sem dado" que um MCU recém-carregado já recebe) -- volta a contribuir
+     * normalmente assim que produzir um evento novo. `kStaleMcuTimeout` precisa ficar bem maior que
+     * a folga do Scheduler (5-20ms) pra nunca excluir por engano um MCU genuinamente lento mas ainda
+     * progredindo -- valor inicial a refinar com medição real, não considerado definitivo. */
+    struct McuPositionTracking {
+        uint64_t lastPositionNs = 0;
+        std::chrono::steady_clock::time_point lastChangeWallTime{};
+    };
+    std::unordered_map<uint32_t, McuPositionTracking> m_mcuPositionTracking;
+
+    /** Callback de `Scheduler::AdvanceLimitFn` (setado no construtor via
+     * `setAdvanceLimitCallback`) -- itera todo `McuComponent` da sessão com arena aberta, lê
+     * `pacingPositionNs()` (posição já traduzida pra timeline do Scheduler, `nullopt` se o MCU
+     * ainda não processou nenhum evento -- boot ou logo após recarga -- ou se ficou parado por mais
+     * que `kStaleMcuTimeout`, ver `McuPositionTracking` acima), e devolve a MENOR entre todas (o
+     * mais lento). `nullopt` se nenhum MCU contribuiu -- inclui o caso de 0 MCUs na sessão,
+     * degradando pro comportamento de sempre sem exceção nenhuma. A folga acima dessa posição é
+     * aplicada pelo PRÓPRIO Scheduler (derivada da granularidade de pacing que ele já calibra, ver
+     * `Scheduler::pacingQuantumNs()`) -- não somada aqui, pra não duplicar essa responsabilidade.
+     * Substituiu um design anterior (`computeSlowestMcuPacingRatio()`, uma EMA com estado por-MCU e
+     * janela de aquecimento) que falhou em teste ao vivo duas vezes (ver `Scheduler::AdvanceLimitFn`,
+     * doc-comment em Scheduler.hpp, pro raciocínio completo) -- o único estado que sobrou aqui é o
+     * de staleness acima, nada de suavização/ratio/aquecimento. Thread-safety: chamada pela thread
+     * worker do Scheduler, mesma convenção de `settleStep()` -- toda mutação externa de
+     * `m_componentInstances` já é funilada pela fila de comandos (`enqueueCommand`/
+     * `drainCommandQueue`), nunca concorrente com a própria worker. */
+    std::optional<uint64_t> computeSlowestMcuPositionNs();
 };
 
 } // namespace lasecsimul::session

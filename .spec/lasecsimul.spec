@@ -4069,3 +4069,340 @@ e continua o gesto (`setPointerCapture`/`pointermove`/`pointerup`/`pointercancel
 `el` original do fechamento. Varredura em todo `main.ts` (todo `setPointerCapture` do arquivo)
 confirmou que este era o ÚNICO handler com um `render()` síncrono entre a seleção e a captura — não
 é um padrão repetido em outro lugar.
+
+## 32. Temporização MCU/QEMU: indicador honesto, trava real Stop→Run corrigida, e sincronização de
+ritmo Scheduler↔MCU (2026-07-22/23)
+
+Usuário reportou, num relato extenso, que o ESP32 simulado (`millis()`/blink de LED) rodava ~4x mais
+devagar que o tempo real mesmo com o indicador de simulação em "100%", que UART a 921600 baud perdia
+dados, e que o LasecPlot fechava sozinho ao parar a simulação. Auditoria encontrou cinco causas-raiz
+distintas (calibração de `-icount` nunca existente de verdade, indicador medindo só o relógio
+elétrico — não o do MCU —, sincronização cross-process da fila sem barreira de memória, polling fixo
+de 50ms do LasecPlot incompatível com 921600 baud, e auto-despublicação do LasecPlot ao parar). As
+quatro últimas foram corrigidas de forma direta (atomics de acquire/release na fila PERF-13 via
+`std::atomic_ref`/`qatomic_store_release`, UART com poll adaptativo por baud + ring maior, LasecPlot
+nunca mais fecha sozinho fora de ação do usuário/fechamento do esquemático). A calibração de
+`-icount shift` (`QemuIcountCalibrator`, `core/src/mcu/qemu/QemuIcountCalibrator.{hpp,cpp}`) foi
+implementada, mas **descartada em produção**: calibrar contra a sonda (boot ROM em branco, aceite de
+MMIO instantâneo) mede um cenário otimista de melhor caso que não reflete o custo real de despacho
+de uma sessão completa — piorou ~5x a velocidade real e causou resets espúrios. Ficou desligada
+(`McuController::start()` nunca chama `ensureIcountShiftCalibrated`), com a infraestrutura de medição
+compilada/testada mas sem efeito em produção.
+
+### 32.1 Indicador honesto de progresso do MCU — `arena->qemuTime` é campo morto
+
+`arena->qemuTime` **nunca é escrito** pelo fork QEMU real (confirmado lendo `simuliface.c` — só
+existe como variável LOCAL dentro de `getQemu_ps()`, nunca atribuída ao campo do arena) — lê-lo
+direto (como `SimulationSession::firstMcuVirtualTimeNs()` fazia) sempre dava 0, prendendo o indicador
+"MCU real-time %" em 0% para sempre mesmo com o MCU rodando normalmente. O tempo virtual só chega
+EMBUTIDO em cada evento processado (`simuTimePs`, escrito tanto pelos heartbeats `SIM_EVENT` quanto
+por cada leitura/escrita de registrador) — `McuComponent::pollStepLocked()` agora rastreia o maior
+`simuTimePs` visto (compare_exchange, nunca retrocede) num novo `m_latestVirtualTimePs`, exposto via
+`McuComponent::latestVirtualTimeNs()`. Este campo é resetado para 0 a cada
+`loadFirmwareLocked()`/`openSyntheticArenaForTesting()` — sem isso, um firmware recarregado (Stop→Run)
+nunca conseguia avançar o indicador até seu `simuTimePs` cru ultrapassar organicamente o pico deixado
+pela sessão ANTERIOR (achado ao investigar por que `session_restart_stress_test`, seção 32.2, mostrava
+"trava" mesmo com o MCU saudável rodando ciclo após ciclo).
+
+### 32.2 Trava real 100% reproduzível em ciclos Stop→Run: `m_pollEventScheduled` preso em `true`
+
+Usuário relatou, ao vivo (Core recém-iniciado, processo antigo já descartado como causa), três
+comportamentos inconsistentes entre cliques repetidos de Stop→Run: às vezes o MCU nunca inicializa,
+às vezes roda perfeitamente, às vezes roda por um tempo e trava. Reproduzido 100% das vezes (15/15
+ciclos) num novo teste, `core/test/core/mcu/SessionRestartStressTest.cpp` (Scheduler + QEMU reais,
+Stop→Run repetido na MESMA instância de `McuComponent`).
+
+**Causa raiz**: `SimulationSession::stopSimulation()` para o `Scheduler` **antes** de chamar
+`stopFirmware()` (de propósito: nenhum componente pode voltar a agendar trabalho enquanto as MCUs
+são encerradas). Isso abre uma janela: a thread de poll dedicada (PERF-12,
+`McuComponent::runBackgroundPollLoop`), ainda girando, pode flagrar "sem evento + Scheduler parou"
+bem nessa janela e cair no ramo de "volta pro modo passivo" — que reagendava um poll via
+`scheduleNextPoll()`/`schedulePollAt()`, deixando `m_pollEventScheduled=true` e um callback pendente
+num Scheduler prestes a ser resetado. Esse callback é o ÚNICO lugar que zera
+`m_pollEventScheduled` (em `onPollEvent()`), mas `Scheduler::reset()` (chamado logo depois, em
+`stopSimulation()`) descarta a fila de eventos sem executá-lo — a flag fica presa em `true` para
+sempre. Todo load posterior via `startPolling()`→`scheduleNextPoll()`→`schedulePollAt()` via a flag
+presa e desiste silenciosamente (`if (m_pollEventScheduled) return;`) — nenhuma thread de poll nunca
+mais nasce, o MCU trava para sempre.
+
+**Corrigido** (`McuComponent.cpp::runBackgroundPollLoop`): o ramo "Scheduler parou no meio do giro"
+agora só sai da thread, SEM reagendar — nenhum chamador real de `Scheduler::stop()` depende desse
+reagendamento sobreviver (`stopSimulation()` sempre chama `stopFirmware()`+`reset()` logo em seguida).
+Verificado: `SessionRestartStressTest` 15/15 ciclos passando, de forma estável em várias rodadas,
+inclusive replicando a carga da suíte completa (rodado logo após os testes de estresse de 61s/38s).
+
+### 32.3 Sincronização de ritmo: o solver elétrico acompanha o MCU mais lento (2026-07-23,
+reescrito de forma disruptiva no mesmo dia)
+
+Restava o problema original nº 1: o solver elétrico roda a "100%" (pareado 1:1 ao relógio de parede
+por design, via `Scheduler::setMaximumTimeStepNs()`, um tique próprio e independente de qualquer MCU)
+enquanto o MCU (QEMU/`-icount`, gargalado pela vazão real de instruções do host) roda mais devagar
+(ex.: "83%"). Pedido do usuário: em vez de tentar acelerar o MCU (a calibração de `-icount` já
+provou que isso regride), o solver elétrico deve desacelerar para acompanhar o participante mais
+lento — e a solução não pode desperdiçar recursos de thread (nada de thread dedicada nova, nada de
+busy-wait adicional).
+
+#### 32.3.1 Primeira versão (revertida por completo): razão suavizada por EMA
+
+Design inicial: `Scheduler::PacingRateLimitFn` (`std::function<std::optional<double>()>`) chamado
+uma vez por ciclo de pacing, devolvendo um multiplicador de taxa (`std::clamp(*hook(),
+kMinimumPacedRate=0.01, taxaConfigurada)`) combinado com `m_realTimeRate` existente.
+`SimulationSession::computeSlowestMcuPacingRatio()` calculava esse multiplicador como uma razão
+suavizada (EMA, ΔvirtualNs/ΔwallNs, constante de tempo ~1s, com janela de aquecimento por-MCU) a
+partir de `McuComponent::latestVirtualTimeNs()`.
+
+**Falhou em teste ao vivo duas vezes**: (1) o indicador travava em "0%" por muito tempo — um ciclo
+de realimentação onde `latestVirtualTimeNs()` só avança quando um evento é DESPACHADO (que já
+depende de `eventNs<=nowNs()`); se o elétrico desacelerasse por uma amostra ruim isolada, o
+despacho travava, a razão media caía mais, e o freio apertava mais, sem saída natural. Uma correção
+pontual (ignorar ciclos com `ΔvirtualNs==0`) resolveu esse sintoma específico, mas (2) com firmware
+REAL (não a flash em branco dos testes) fazendo leituras de ADC, o sistema travou em "0%" de novo, e
+quando "funcionou" assentou em **~22%, muito pior que o ~82% que o MCU sozinho já alcançava antes de
+qualquer código de pacing existir**.
+
+**Causa raiz confirmada por auditoria**: a EMA amostra `ΔvirtualNs/ΔwallNs` uma vez por ciclo do
+laço de pacing do Scheduler — e a cadência desse laço é ELA MESMA função da taxa efetiva
+(`requiredWallNs = deltaSim/realTimeRate`, cresce conforme a taxa cai). Desacelerar → o laço dorme
+mais → amostra com menos frequência e mais ruído → mede uma razão pior do que a real → desacelera
+mais ainda. A própria medição interfere no que está medindo — um problema estrutural de QUALQUER
+abordagem por taxa suavizada, não um bug pontual corrigível com mais uma janela ou constante.
+Instrução explícita do usuário: parar de remendar, refazer do zero, priorizando velocidade,
+aceitando quebrar compatibilidade (fase beta) — algo simples e elegante, "elegantemente simples mas
+funcional", disruptivo se necessário.
+
+#### 32.3.2 Redesenho: teto de POSIÇÃO absoluta, não de taxa
+
+Em vez de estimar "a que velocidade o MCU está indo" (uma derivada, sensível a ruído/cadência de
+amostragem), compara diretamente duas posições absolutas na MESMA timeline: nunca deixa
+`Scheduler::nowNs()` avançar mais que uma folga fixa à frente da última posição CONFIRMADA do MCU
+mais lento. Elimina EMA, constante de suavização e janela de aquecimento — a checagem é sem estado
+(exceto uma pequena exceção de staleness, ver 32.3.3), recalculada do zero a cada ciclo:
+
+1. **`McuComponent::pacingPositionNs()`** (novo): mesma fonte de `latestVirtualTimeNs()`
+   (`m_latestVirtualTimePs`, já cobre leitura E escrita/heartbeat, já correta), mas traduzida pra
+   timeline do Scheduler (`qemuEventTimeNs(m_qemuTimeOriginNs, ps)`, mesma tradução que
+   `pollStepLocked()` já faz pra `eventNs`) — comparável direto contra `nowNs()`. `m_qemuTimeOriginNs`
+   virou `std::atomic<uint64_t>` (era `uint64_t` simples) porque este getter é lido cross-thread sem
+   segurar `m_callbackState->mutex`, mesma razão de `m_latestVirtualTimePs` já ser atomic.
+   **Correção de ordem de reset**: `loadFirmwareLocked()`/`openSyntheticArenaForTesting()` agora
+   zeram `m_latestVirtualTimePs` ANTES de setar a nova origem (era o contrário) — um leitor lock-free
+   que pegue a transição no meio agora só vê o pior caso "posição um pouco atrasada" (espera um
+   instante a mais, inofensivo) em vez de "origem nova + simuTimePs velho = posição espúria no
+   futuro" (deixaria o elétrico correr à frente indevidamente).
+2. **`SimulationSession::computeSlowestMcuPositionNs()`**: itera todo `McuComponent` com arena
+   aberta, lê `pacingPositionNs()` (nullopt = ainda não processou nenhum evento — boot ou logo após
+   recarga), devolve a MENOR entre todas. Substitui `computeSlowestMcuPacingRatio()` por completo —
+   `McuPacingSample`/`m_mcuPacingState`/as constantes de EMA/aquecimento saíram inteiras, sem
+   depreciação (nenhuma peça era usada por IPC nem por mais nada no código).
+3. **`Scheduler::AdvanceLimitFn`** (`std::function<std::optional<uint64_t>()>`, substitui
+   `PacingRateLimitFn`): devolve a posição de referência (não mais uma taxa) — a folga é somada
+   pelo PRÓPRIO Scheduler, aplicada como teto ABSOLUTO sobre `targetTimeNs` ANTES de `runUntil()`
+   (não como multiplicador de taxa DEPOIS, como antes). Aplicado incondicionalmente, mesmo com
+   `realTimeRate()==0`/ilimitado — mudança deliberada, é uma garantia de corretude, não um modo de
+   pacing.
+4. **Folga derivada de medição, não um número fixo adivinhado** (correção de rumo, feedback direto
+   do usuário ao ver a primeira proposta de `kMaxElectricalLeadNs=50ms` fixo: "não está demonstrado
+   que 50ms seja necessário"): `Scheduler::start()` já calibra `pacingQuantum` (medição real da
+   granularidade de espera do SO deste host, via sonda `sleep_for(1ms)` já existente para o pacing
+   de `realTimeRate`) — a folga é derivada dela: `leadNs = clamp(2*pacingQuantumNs(), 5ms, 20ms)`.
+   Hosts com boa temporização ficam perto do piso; hosts com mais jitter recebem mais margem; o
+   teto de 20ms garante que a defasagem nunca reabre grande o bastante pra reproduzir o sintoma
+   original. Valores exatos são um ponto de partida a refinar com medição ao vivo.
+5. **Evita busy-spin sem sacrificar o caso `configuredStepNs==0`**: um bug real foi encontrado
+   DURANTE a implementação (não em teste ao vivo) — a primeira versão do teto pulava `runUntil()`
+   inteiro sempre que `targetTimeNs<=cycleSimStartNs`, mas isso também é verdade no modo
+   `configuredStepNs==0` quando há dirty pendente sem evento futuro (drena o dirty set NO MESMO
+   instante, de propósito) — pulando `runUntil()` nesse caso trava os 3 testes de
+   `CommandDrainFn`/`CommandPendingFn` (`SchedulerTest.cpp`) num laço de espera de 5ms infinito.
+   Corrigido: uma flag `advanceLimited` só fica `true` quando o teto de VERDADE reduziu o alvo
+   (`cap < targetTimeNs`) — `runUntil()` continua sendo SEMPRE chamado; só espera 5ms antes do
+   próximo ciclo quando `advanceLimited && nowNs()==cycleSimStartNs` (nada avançou por causa do
+   teto, não por falta comum de trabalho).
+6. **`Scheduler::notifyAdvanceLimitChanged()`** (novo, sem lock, mesma categoria de
+   `notifyCommandPending()`): chamado por `McuComponent::pollStepLocked()` assim que
+   `m_latestVirtualTimePs` realmente avança — acorda o Scheduler se ele estiver esperando o teto
+   subir, em vez de só perceber no próximo poll de 5ms.
+
+**Por que isso sincroniza TODOS os MCUs, não só o mais lento, sem tocar em `McuComponent`**: o
+despacho de evento do MCU (`McuComponent::pollStepLocked`) já compara `eventNs` contra `nowNs()` e
+adia (`DeferredFuture`) qualquer evento `eventNs > nowNs`. Travar `nowNs()` perto da posição do MCU
+mais lento automaticamente represa qualquer MCU mais rápido no mesmo circuito atrás dessa mesma
+lógica — sem código novo por-MCU. Ressalva: a fila circular (32 entradas) é fire-and-forget para
+escritas/heartbeats — convergência de um MCU mais rápido é limitada pela profundidade da fila, não
+instantânea por evento; propriedade já intencional do protocolo v3, não nova.
+
+**A situação contrária** (Scheduler pesado/lento, QEMU mais rápido) já é coberta pela arquitetura
+existente, sem mudança nenhuma: o laço de pacing já nunca acelera pra "recompensar" um atraso de
+computação (comentário já existente cita literalmente "Boot/CPU/QEMU ficou pra trás" como o cenário
+evitado) — um solver lento nunca corre mais rápido que seu próprio custo de computação, e um MCU
+rápido nesse cenário já fica represado atrás do elétrico lento pela mesma fila com backpressure. O
+novo teto só pode puxar `nowNs()` pra BAIXO — estruturalmente incapaz de piorar esse outro sentido.
+
+#### 32.3.3 Bug real encontrado ao rodar a suíte completa: MCU ocioso vira teto permanente
+
+`McuComponentLivePollThreadTest.cpp` (2 MCUs reais) começou a falhar de forma determinística depois
+do redesenho: MCU A, recarregado 10 vezes com o Scheduler vivo, parava de responder a escritas de
+registrador. Causa raiz: MCU B (usado só numa rajada de 4s bem no início do teste) fica com a arena
+ABERTA mas para de produzir eventos novos pelo resto do teste — sua `pacingPositionNs()` CONGELA no
+último valor visto. Como `computeSlowestMcuPositionNs()` toma o MÍNIMO entre todos os MCUs, essa
+posição congelada virou um teto permanente sobre TODO o elétrico, mesmo MCU B não estando "lento" de
+verdade, só quieto — impedindo pra sempre que `nowNs()` alcançasse o que MCU A precisava pra
+despachar seus eventos pós-recarga. O mesmo aconteceria em produção sempre que um MCU legitimamente
+dormir/esperar um evento externo por um período longo enquanto outro MCU no mesmo circuito precisa
+que o elétrico continue avançando.
+
+**Corrigido** com o mínimo de estado necessário: `SimulationSession::McuPositionTracking`
+(`m_mcuPositionTracking`, chave = componentIndex) rastreia só `(última posição, instante de parede
+em que mudou)` por MCU — se a posição não mudou por mais que `kStaleMcuTimeout` (1000ms, ponto de
+partida — precisa ficar bem maior que a folga de 5-20ms pra nunca excluir por engano um MCU
+genuinamente lento mas ainda progredindo), esse MCU para de contribuir pro teto (mesmo tratamento de
+"sem dado" que um MCU recém-carregado já recebe) — volta a contribuir normalmente assim que produzir
+um evento novo. Único estado que sobrou no redesenho todo: nada de suavização/razão/aquecimento,
+só uma detecção de staleness.
+
+Verificado: 37 runs consecutivos de `scheduler_test` sem falha nem trava (valida especificamente a
+correção do busy-spin da seção 32.3.2 item 5), `mcu_component_live_poll_thread_test` voltando a
+passar de forma estável e repetida depois da correção de staleness (antes dela, falhava de forma
+determinística com o sintoma descrito acima, sem travar -- `waitUntil()` tem timeout próprio), e a
+suíte completa (`ctest`, 57/57) rodando no tempo normal (~164s) depois de tudo. Nota honesta: um
+`ctest` completo rodado ANTES desta correção de staleness (mas já com a correção de busy-spin da
+seção 32.3.2 item 5 aplicada) ficou preso por quase 3 HORAS, sem nenhum processo de teste ou QEMU
+vivo no meio tempo -- não isolado a um teste específico antes de aplicar esta correção, mas
+consistente com algum teste subsequente a `mcu_component_live_poll_thread` esperando (sem timeout
+próprio) o Scheduler avançar enquanto um MCU essencialmente idêntico ao MCU B ficava represando o
+teto pra sempre.
+
+#### 32.3.4 Achado ao vivo ainda em aberto: MCU parou de responder no meio de uma sessão longa com
+firmware real (potenciômetro + UART)
+
+Depois de todas as correções acima, usuário reportou (com firmware real, não flash em branco) o
+indicador do MCU subindo e depois caindo pra "0%" no MEIO de uma única execução (sem nenhum
+Stop/Run), com o elétrico em "98%" (correndo livre, não travado). Confirmado que isto é consistente
+com o fix de staleness funcionando como projetado -- um MCU que genuinamente parou de responder
+deixa de travar o elétrico pra sempre -- mas NÃO explica por que o MCU parou de produzir eventos.
+
+Novo teste (`McuSchedulerPacingSyncRealQemuTest.cpp`, ver seção 32.4) fecha uma lacuna de cobertura
+real: nenhum teste existente exercitava QEMU real + Scheduler real + a sincronização de ritmo nova
+numa ÚNICA sessão sustentada e longa (os existentes usam arena sintética, OU QEMU real mas em
+muitos ciclos curtos de Stop→Run). Rodado por 90s sustentados com QEMU real (flash em branco) --
+**nenhuma trava**, maior intervalo sem avanço de 222ms (MCU) e 318ms (elétrico), ambos muito abaixo
+do limiar de 10s. Isso prova que o mecanismo de sincronização em si é sólido sob QEMU real
+sustentado -- mas flash em branco não reproduz o padrão específico do firmware do usuário (leituras
+de registrador via `analogRead()` frequentes, mais tráfego de UART). **Causa raiz do travamento
+específico do usuário permanece em aberto** -- precisa ou do firmware real dele pra reproduzir
+diretamente, ou de logs/diagnóstico capturados ao vivo na sessão que travou.
+
+#### 32.3.5 Investigação concluída (2026-07-23): GPIO13 travado em LOW é uma corrida FORA do Core,
+dentro da emulação de CPU do QEMU — não no mecanismo de sincronização de ritmo
+
+Retomando o achado em aberto da seção 32.3.4: usuário forneceu o firmware real
+(`EININDI01_GitHub_VSCode_PIO`) e o esquemático correspondente, autorizando testes livres
+("aqui você está como administrator então faça o teste que você desejar"). Reproduzido
+diretamente via `mcu_blink_long_run_test` com `LASECSIMUL_TEST_FIRMWARE` apontando pro
+`merged.bin` real: **~30-50% das execuções terminam com o LED (GPIO13) nunca saindo de LOW**
+(`transitions=0`), sempre com `qemu_alive=yes` e `unexpected_reset=no` (não é queda do processo
+QEMU nem reset do firmware).
+
+**Hipóteses investigadas e descartadas, uma a uma, com evidência direta (não suposição):**
+
+1. **Inflação de `pacingPositionNs()` por PEEK em vez de despacho confirmado** — `arena.poll()` é
+   PEEK, não consome; um evento meramente espiado (ainda não despachado, `eventNs > nowNs()`)
+   podia inflar `m_latestVirtualTimePs` antes deste achado ser corrigido. Corrigido (mover a
+   atualização de `m_latestVirtualTimePs` em `McuComponent::pollStepLocked()` pra depois da
+   confirmação `eventNs <= nowNs()`) — mudança real e válida (ver `McuComponent.cpp`), mas
+   **retestada isoladamente: não mudou a taxa de falha do GPIO13 travado**.
+2. **Timeout de staleness (`kStaleMcuTimeout`, seção 32.3.3) removendo o teto cedo demais** —
+   testado temporariamente com o timeout multiplicado por 30× (1s → 30s): **taxa de falha
+   idêntica**. Descartado.
+3. **Janela entre "Scheduler alcança o timestamp agendado" e "a thread de poll dedicada roda pela
+   primeira vez"** em `McuComponent::onPollEvent()` (branch PERF-12) — `startBackgroundPollThreadIfNeeded()`
+   só CRIA a thread e retorna, sem esperar ela despachar nada; o laço de `runUntil()` ficava livre
+   pra avançar por cima de eventos seguintes do mesmo MCU nesse intervalo. Fechado (despacho
+   síncrono do evento já vencido antes de delegar à thread dedicada) — janela real, fechamento
+   verificado sem regressão no `ctest`, mas **também não mudou a taxa de falha do GPIO13**.
+4. **MCU com arena aberta mas zero eventos despachados sendo excluído (nullopt) do cálculo do teto
+   de avanço** em vez de contar como posição 0 — sem NENHUM MCU contribuindo, o teto ficava sem
+   restrição nenhuma e `Scheduler::nowNs()` saltava de ~0 pro fim inteiro da simulação (~22s) em
+   uma única rajada de iterações baratas, **comprovado com tracing de baixíssimo overhead
+   (buffer em anel lock-free — fprintf comum MASCARAVA a corrida ao mudar o timing entre threads,
+   sinal claro de corrida genuína) direto de dentro de `stamp()`**. Uma tentativa de correção
+   (tratar "zero eventos ainda" como posição 0) reduziu o salto observado de ~22s pra ~7s no mesmo
+   cenário, mas **também não mudou a taxa de falha do GPIO13** (permaneceu ~30-45%) E introduziu
+   uma regressão real: `session_restart_stress` roda cada ciclo por só 600ms de parede, abaixo do
+   `kStaleMcuTimeout` (1s) — um MCU recém-recarregado sem posição ainda ficava com o teto travado
+   perto de zero pelo ciclo inteiro, sem tempo de a exclusão por staleness (item acima) entrar em
+   ação. **Revertida** — o comportamento de exclusão por nullopt (original) foi restaurado; o salto
+   de ~22s continua acontecendo em cenários sem realTimeRate configurado, mas isso não chegou a ser
+   a causa do sintoma investigado, então não valia a regressão pra corrigi-lo agora.
+
+Ou seja: **três correções reais e verificadas no mecanismo de sincronização de ritmo (mais uma
+tentativa revertida por regressão), nenhuma
+delas era a causa do sintoma reportado.** Isolado progressivamente com o usuário (`/loop` de
+perguntas de "próximo passo"): UART removido do firmware (só restou `pinMode`+`digitalRead`+
+`digitalWrite` a cada 500ms) — falha idêntica (~45%); componentes do circuito reduzidos ao mínimo
+(removidos potenciômetro/motor/PWM/ADC, sobrando só GPIO13→resistor→LED→terra) — falha idêntica
+(~20%); **LED (diodo não-linear) removido, sobrando só GPIO13→resistor→terra** — falha idêntica
+(~30%). A reprodução mínima final é: um MCU ESP32 real (QEMU), um resistor de 1kΩ pra terra em
+GPIO13, e um firmware que só faz `pinMode(13, OUTPUT)` seguido de
+`digitalWrite(13, !digitalRead(13))` a cada 500ms.
+
+**Causa raiz encontrada** via tracing direto (buffer em anel) de `stamp()`/`dispatchArenaEvent()`:
+em TODAS as execuções que falham, `isOutputEnabled(13)` (consultado direto no adaptador, não via
+o flag `changed`/fingerprint) **nunca se torna `true`** — ou seja, a escrita em `GPIO_ENABLE_REG`
+que deveria habilitar GPIO13 como saída nunca chega a marcar esse bit no estado interno do
+adaptador, mesmo com a mesma sequência de escritas, nos mesmos timestamps de evento
+(`eventNs`), que em execuções que passam. Comparação direta confirmou: a MESMA escrita, no MESMO
+timestamp de evento, ora inclui o bit 13 ora não — só varia entre execuções da MESMA imagem de
+firmware. Isso é uma corrida de dados na própria emulação de CPU do QEMU (ex: acesso concorrente
+de dois núcleos virtuais do ESP32 ao mesmo registrador de periférico, ou não-determinismo na
+ordem de instruções emitidas pelo emulador) — **fora do processo Core do LasecSimul e fora deste
+repositório**: `devices/qemu-esp32/bin/` só contém o binário `qemu-system-xtensa.exe` pré-compilado,
+sem árvore de fontes do QEMU disponível aqui pra inspecionar ou corrigir o modelo do periférico
+GPIO.
+
+**Achado colateral, não um bug:** a falha "PWM27 nunca transiciona" observada em TODAS as execuções
+(passando ou falhando) do `mcu_blink_long_run_test` não é um bug do Core — `platformio.ini` do
+firmware real usa `build_src_filter = +<main0.cpp>`, e `main0.cpp` (o que é DE FATO compilado, não
+o `main.cpp` mais elaborado do mesmo diretório) nunca chama `analogRead()`/`analogWrite()` no
+`loop()` — só configura os pinos em `setup()` e nunca mais toca PWM/ADC. O teste antigo assumia o
+comportamento do `main.cpp`; o `merged.bin` real reflete `main0.cpp`.
+
+**Conclusão prática:** o mecanismo de sincronização de ritmo (Scheduler↔MCU) está correto e
+verificado (as quatro melhorias desta seção permanecem no código, sem regressão). O travamento de
+GPIO13 é uma limitação da emulação de CPU do QEMU usado pelo LasecSimul, não do simulador elétrico
+em si — não há correção possível no lado C++ do Core pra este sintoma específico sem acesso ao
+código-fonte do QEMU (ou ao binário `qemu-system-xtensa.exe`, se houver uma versão mais nova/com
+correção disponível upstream). Mitigação prática pro usuário: repetir Stop→Run até o boot
+"pegar" corretamente é, por ora, o contorno esperado — consistente com o que o próprio usuário já
+vinha fazendo manualmente.
+
+### 32.4 Testes adicionados
+
+- `core/test/core/mcu/McuRestartStressTest.cpp` (novo): 25 ciclos de start/stop de QEMU real via
+  `McuController` puro (sem Scheduler) — isola que o ciclo de vida de processo/arena é sólido.
+- `core/test/core/mcu/SessionRestartStressTest.cpp` (novo): 15 ciclos de Stop→Run com Scheduler +
+  QEMU reais — reproduziu e agora prova corrigida a trava da seção 32.2.
+- `core/test/core/mcu/QemuQueueStressTest.cpp` (novo): 60s de sessão única sustentada — valida a
+  sincronização cross-process da fila sob carga.
+- `test/core/simulation/SchedulerTest.cpp`: 5 casos síntéticos (sem MCU/QEMU) cobrindo só o
+  mecanismo de `AdvanceLimitFn`/`pacingQuantumNs()` em isolamento — teto aplicado (`nowNs()` nunca
+  ultrapassa posição+folga derivada), teto sobe e o elétrico retoma IMEDIATAMENTE (sem decaimento
+  gradual), `nullopt` idêntico a sem hook, teto se aplica mesmo com `realTimeRate(0)`/ilimitado
+  (mudança deliberada), e ausência de busy-spin comprovada (contagem de chamadas do hook limitada
+  numa janela fixa com o teto permanentemente travado).
+- `core/test/core/mcu/McuSchedulerPacingSyncTest.cpp` (reescrito): MCU sintético (sem QEMU real, sem
+  flakiness de host) publicando heartbeats numa taxa controlada -- prova posição some sem evento e
+  recomeça sem hiato numa recarga (sem estado nenhum pra "detectar retrocesso"), prova fim-a-fim que
+  o GAP entre `nowNs()` e a posição do MCU nunca excede a folga máxima (20ms) e que a taxa média de
+  avanço converge MUITO perto do alvo injetado (medido: ~0.40 alvo, ~0.398-0.400 observado --
+  bem mais preciso que o ~0.22 de subestimação da EMA antiga), e um caso bônus com 2 MCUs provando
+  que o elétrico segue o MAIS LENTO, não uma média nem o mais rápido.
+- `core/test/core/mcu/McuSchedulerPacingSyncRealQemuTest.cpp` (novo): QEMU real + Scheduler real +
+  a sincronização de ritmo nova, numa ÚNICA sessão sustentada de 90s (flash em branco) -- fecha a
+  lacuna de cobertura da seção 32.3.4. Monitora o maior intervalo sem avanço tanto do MCU
+  (`latestVirtualTimeNs()`) quanto do elétrico (`Scheduler::nowNs()`) -- nenhuma trava em 90s
+  (maior intervalo: 222ms MCU, 318ms elétrico, limiar de trava 10s).
+- `core/test/core/mcu/McuUartToLasecPlotTest.cpp`: estendido pra cobrir 921600 baud, não só 115200.
+
+Suíte completa do Core (`ctest`) e `npm test` da extensão 100% verdes depois de todas as correções
+desta seção.

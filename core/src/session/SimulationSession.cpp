@@ -13,6 +13,7 @@
 #include <unordered_map>
 #include <nlohmann/json.hpp>
 #include "../mcu/McuComponent.hpp"
+#include "lasecsimul/qemu_arena_abi.h"
 
 namespace lasecsimul::session {
 
@@ -27,6 +28,11 @@ constexpr double kVoltageEpsilon = 1e-9;
 // global (não por componente) porque ainda não existe componente não-linear real pra calibrar
 // algo mais fino — ver .spec/lasecsimul.spec, seção 7.4.
 constexpr uint32_t kMaxNonlinearIterations = 50;
+
+// Ver SimulationSession::McuPositionTracking (.hpp) -- precisa ficar bem maior que a folga do
+// Scheduler (5-20ms) pra nunca excluir por engano um MCU genuinamente lento mas ainda progredindo.
+// Ponto de partida a refinar com medição real, não considerado definitivo.
+constexpr auto kStaleMcuTimeout = std::chrono::milliseconds(1000);
 
 std::optional<std::string> validationError(const char* code, std::string message) {
     return std::string(code) + "|" + std::move(message);
@@ -117,6 +123,7 @@ SimulationSession::SimulationSession(plugins::GlobalPluginCache& globalCache, si
     m_scheduler.setStableStepCallback([this](uint64_t timestampNs) { onStableStepUnlocked(timestampNs); });
     m_scheduler.setCommandDrainCallback([this] { drainCommandQueue(); });
     m_scheduler.setCommandPendingCallback([this] { return m_commandQueue.hasPending(); });
+    m_scheduler.setAdvanceLimitCallback([this] { return computeSlowestMcuPositionNs(); });
     setTransientSettings(m_transientSettings);
 }
 
@@ -1074,6 +1081,65 @@ mcu::McuComponent* SimulationSession::mcuComponentForTesting(uint32_t componentI
     if (componentIndex >= m_componentInstances.size()) return nullptr;
     IComponentModel* instance = m_componentInstances[componentIndex].get();
     return instance ? dynamic_cast<mcu::McuComponent*>(instance) : nullptr;
+}
+
+std::optional<uint64_t> SimulationSession::firstMcuVirtualTimeNs() const {
+    for (const auto& slot : m_componentInstances) {
+        IComponentModel* instance = slot.get();
+        if (!instance) continue;
+        auto* mcu = dynamic_cast<mcu::McuComponent*>(instance);
+        if (!mcu) continue;
+        if (!mcu->arenaBridge().arena()) continue;
+        // Achado 2026-07-22: `arena->qemuTime` nunca é escrito pelo QEMU real (campo morto, ver
+        // comentário de `McuComponent::latestVirtualTimeNs()`) -- lê-lo direto sempre dava 0,
+        // fazendo o indicador "MCU real-time ratio" ficar preso em 0% pra sempre, mesmo com o MCU
+        // rodando normalmente. `latestVirtualTimeNs()` rastreia o progresso real via os eventos
+        // efetivamente processados.
+        return mcu->latestVirtualTimeNs();
+    }
+    return std::nullopt;
+}
+
+std::optional<uint64_t> SimulationSession::computeSlowestMcuPositionNs() {
+    const auto now = std::chrono::steady_clock::now();
+    std::optional<uint64_t> slowest;
+    for (uint32_t i = 0; i < m_componentInstances.size(); ++i) {
+        IComponentModel* instance = m_componentInstances[i].get();
+        auto* mcu = instance ? dynamic_cast<mcu::McuComponent*>(instance) : nullptr;
+        if (!mcu || !mcu->arenaBridge().arena()) {
+            m_mcuPositionTracking.erase(i);
+            continue;
+        }
+        // Achado 2026-07-23: cheguei a tratar "arena aberta, zero eventos despachados ainda" como
+        // posição 0 (em vez de nullopt) pra prender o teto perto do piso durante o boot -- reduzia
+        // um salto real de Scheduler::nowNs() observado em teste sintético (~22s -> ~7s), mas
+        // criava uma regressão pior: `session_restart_stress` roda cada ciclo por só 600ms de
+        // parede, bem abaixo de `kStaleMcuTimeout` (1s) -- um MCU recém-recarregado que ainda não
+        // produziu nenhum evento ficava com o teto travado perto de zero pelo ciclo INTEIRO, sem
+        // tempo de a exclusão por staleness entrar em ação. Revertido: um MCU sem posição ainda
+        // continua EXCLUÍDO do cálculo (comportamento original), não contribuindo pro teto até
+        // processar seu primeiro evento de verdade -- ver .spec, seção 32.3.5, pra o porquê essa
+        // troca acabou não sendo necessária (a causa raiz investigada está fora do Core).
+        const std::optional<uint64_t> position = mcu->pacingPositionNs();
+        if (!position) {
+            m_mcuPositionTracking.erase(i); // sem dado ainda -- nao ha o que rastrear.
+            continue;
+        }
+
+        auto& tracking = m_mcuPositionTracking[i];
+        if (*position != tracking.lastPositionNs || tracking.lastChangeWallTime == std::chrono::steady_clock::time_point{}) {
+            tracking.lastPositionNs = *position;
+            tracking.lastChangeWallTime = now;
+        }
+        // Achado 2026-07-23 (McuComponentLivePollThreadTest com 2 MCUs): um MCU que parou de
+        // produzir eventos novos (ficou ocioso, ou -- em produção -- genuinamente dormindo) fica
+        // com a posição CONGELADA -- sem isto, esse valor antigo travaria o teto pra sempre, mesmo
+        // esse MCU não estando "lento" de verdade, só quieto. Ver McuPositionTracking no .hpp.
+        if (now - tracking.lastChangeWallTime > kStaleMcuTimeout) continue;
+
+        slowest = slowest ? std::min(*slowest, *position) : *position;
+    }
+    return slowest;
 }
 
 void SimulationSession::sendComponentEvent(uint32_t componentIndex, const ComponentEvent& event) {

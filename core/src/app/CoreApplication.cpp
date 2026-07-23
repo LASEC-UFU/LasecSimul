@@ -1357,8 +1357,17 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
         // exatamente o que falta pra Extension calcular `Δ(tempo simulado)/Δ(tempo de parede)` entre
         // duas amostras (mesma técnica do SimulIDE real: tempo simulado dividido pelo tempo de
         // parede decorrido). Verbo somente-leitura, sem estado novo no Core.
+        //
+        // Achado 2026-07-22 (usuário: LED de 500ms via millis() demora ~4s reais mesmo com a
+        // simulação "a 100%"): `scheduler().nowNs()` é o relógio do solver ELÉTRICO, propositalmente
+        // pareado a 1:1 com o relógio de parede (ver Scheduler::start()) -- não tem relação nenhuma
+        // com o progresso real do MCU/QEMU. `mcuVirtualNs` (quando há MCU na sessão) é o relógio que
+        // `millis()`/FreeRTOS tick REALMENTE leem -- incluído aqui pra Extension calcular um segundo
+        // indicador honesto ("MCU real-time ratio"), sem substituir o indicador elétrico existente.
+        nlohmann::json payload{{"simulatedNs", session.scheduler().nowNs()}};
+        if (const auto mcuVirtualNs = session.firstMcuVirtualTimeNs()) payload["mcuVirtualNs"] = *mcuVirtualNs;
         resp.ok = true;
-        resp.payloadJson = nlohmann::json{{"simulatedNs", session.scheduler().nowNs()}}.dump();
+        resp.payloadJson = payload.dump();
         return resp;
     }
 

@@ -195,6 +195,19 @@ QemuLaunchSpec McuController::buildLaunchSpec(const std::filesystem::path& firmw
 
 void McuController::start(const std::filesystem::path& firmwarePath, const std::string& arenaName,
                           const std::string& callSiteBinaryOverride, McuDebugOptions debug) {
+    // Achado 2026-07-22 (DESATIVADO -- ver achado seguinte): esta chamada calibrava o `-icount
+    // shift` medindo a sonda de `QemuIcountCalibrator` (boot ROM genérico, sem firmware real, cada
+    // registrador confirmado instantaneamente por um laço síntético -- ver `pumpArenaFor` em
+    // QemuIcountCalibrator.cpp). Verificado ao vivo com firmware real: o shift medido por essa
+    // sonda (3, neste host) faz uma sessão REAL (que passa por todo o dispatch elétrico/Scheduler
+    // por acesso a registrador, custo MUITO maior que o laço síntético da sonda) rodar mais devagar
+    // que o shift=4 fixo antigo (0,57s simulados em 15s reais, contra 2,69s com shift=4) e ainda
+    // disparou um reset inesperado do firmware (GPIO nunca chegou a alternar) -- a sonda mede um
+    // teto de throughput otimista que não existe numa sessão real, então "calibrar" contra ela piora
+    // o problema em vez de corrigir. Desligado até uma metodologia de medição que reflita o custo
+    // real do dispatch (ou outra abordagem) existir -- `QemuIcountCalibrator`/`Esp32Adapter.cpp::
+    // configuredIcountShift()` continuam prontos (e testados) pra quando isso for retomado, só não
+    // chamados aqui. `Esp32Adapter.cpp` mantém o fallback `shift=4` de sempre.
     QemuLaunchSpec spec = buildLaunchSpec(
         firmwarePath, arenaName, callSiteBinaryOverride, debug);
     // O backend socket legado do QEMU encerra qemu_init() quando connect() recebe ECONNREFUSED.

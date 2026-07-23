@@ -5,6 +5,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
 #include "lasecsimul/IComponentModel.hpp"
@@ -103,6 +104,29 @@ public:
      * real nem de firmware. Produção sempre usa loadFirmware(), nunca isto direto. */
     void openSyntheticArenaForTesting(const std::string& arenaName);
     qemu::QemuArenaBridge& arenaBridge() { return m_controller.arenaBridge(); }
+
+    /** Achado 2026-07-22 (indicador "MCU real-time ratio" sempre em 0%, mesmo com o MCU rodando
+     * normalmente): `arena->qemuTime` NUNCA é escrito pelo fork QEMU real (confirmado lendo
+     * simuliface.c -- só existe como variável LOCAL dentro de getQemu_ps(), nunca atribuído ao
+     * campo do arena) -- fica 0 pra sempre, então ler esse campo direto (como
+     * `SimulationSession::firstMcuVirtualTimeNs` fazia antes desta correção) sempre dava 0. O tempo
+     * virtual só chega EMBUTIDO em cada evento processado (`simuTimePs`, escrito tanto pelos
+     * heartbeats `SIM_EVENT` quanto por cada leitura/escrita de registrador) -- por isso
+     * `pollStepLocked()` atualiza este campo a cada evento (mesma técnica do
+     * `QemuIcountCalibrator::pumpArenaFor`), e este getter expõe o valor mais recente. `std::atomic`
+     * porque é lido de uma thread diferente da que escreve (poll thread ou chamador síncrono vs. a
+     * thread que atende `getSimulationTime` via IPC). */
+    uint64_t latestVirtualTimeNs() const { return m_latestVirtualTimePs.load(std::memory_order_relaxed) / 1000u; }
+
+    /** Achado 2026-07-23 (sincronização de ritmo, ver .claude/plans/humble-waddling-parnas.md):
+     * mesma fonte de `latestVirtualTimeNs()`, mas já traduzida pra timeline do `Scheduler`
+     * compartilhado (mesma tradução que `pollStepLocked()` já faz pra `eventNs`) -- comparável
+     * direto contra `Scheduler::nowNs()`. Usado por `SimulationSession::computeSlowestMcuPositionNs()`
+     * pra alimentar `Scheduler::AdvanceLimitFn` (o elétrico nunca corre mais que uma folga fixa à
+     * frente da posição confirmada do MCU mais lento). `std::nullopt` se nenhum evento foi
+     * processado ainda (boot ou logo após uma recarga de firmware). Implementado no .cpp porque
+     * `qemuEventTimeNs()` é uma função livre dentro do namespace anônimo de McuComponent.cpp. */
+    std::optional<uint64_t> pacingPositionNs() const;
 
 private:
     /** PERF-12 (docs/33-plano-revisao-arquitetural-core.md, alternativa C): sobrevive à destruição
@@ -241,7 +265,13 @@ private:
     std::atomic<bool> m_polling{false};
     bool m_pollEventScheduled = false;
     bool m_syntheticArenaForTesting = false;
-    uint64_t m_qemuTimeOriginNs = 0;
+    // Achado 2026-07-23 (sincronização de ritmo): lido cross-thread por pacingPositionNs(), sem
+    // segurar m_callbackState->mutex -- precisa ser atomic pela mesma razão de m_latestVirtualTimePs
+    // logo abaixo.
+    std::atomic<uint64_t> m_qemuTimeOriginNs{0};
+    // Ver comentário de `latestVirtualTimeNs()` acima -- atualizado em pollStepLocked() a cada
+    // evento processado, lido de uma thread diferente via `latestVirtualTimeNs()`.
+    std::atomic<uint64_t> m_latestVirtualTimePs{0};
     uint64_t m_stampCount = 0;
     uint64_t m_loadFirmwareCallCount = 0;
     // ModuleKind::Reset (ex: EN do ESP32) -- nunca tem QemuModule, McuComponent trata direto.

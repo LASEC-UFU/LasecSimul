@@ -136,6 +136,36 @@ void testPollReadAcknowledgesViaQemuAction() {
     assert(bridge.arena()->simuTime == 0);
 }
 
+void testLegacySlotAckNeverConsumesNewQueueEntry() {
+    QemuArenaBridge bridge;
+    bridge.open(QemuArenaOpenOptions{uniqueArenaName(), true});
+
+    // Reproduz a corrida real: QEMU antigo publica SIM_FREQ no slot; depois do poll() e antes do
+    // ACK chega uma escrita na fila. O ACK do slot não pode avançar queueReadIndex.
+    bridge.arena()->simuTime = 100;
+    bridge.arena()->simuAction = LSDN_SIM_FREQ;
+    bridge.arena()->regAddr = 80'000'000;
+    bridge.arena()->regData = 240'000'000;
+
+    const QemuPollResult legacy = bridge.poll();
+    assert(legacy.hasEvent && legacy.event.has_value());
+    assert(!legacy.event->fromQueue);
+
+    pushQueueEntry(*bridge.arena(), 0x3FF49038, 0x2A00, LSDN_SIM_WRITE, 101);
+    bridge.acknowledgeEventSlot();
+    assert(bridge.arena()->simuTime == 0);
+    assert(bridge.arena()->queueReadIndex == 0);
+    assert(bridge.arena()->queueWriteIndex == 1);
+
+    const QemuPollResult queued = bridge.poll();
+    assert(queued.hasEvent && queued.event.has_value());
+    assert(queued.event->fromQueue);
+    assert(queued.event->regAddr == 0x3FF49038);
+    assert(queued.event->regData == 0x2A00);
+    bridge.acknowledgeWrite();
+    assert(bridge.arena()->queueReadIndex == bridge.arena()->queueWriteIndex);
+}
+
 } // namespace
 
 int main() {
@@ -144,7 +174,7 @@ int main() {
     testPollWithDispatch();
     testQueueMultipleEntriesDrainInOrder();
     testPollReadAcknowledgesViaQemuAction();
+    testLegacySlotAckNeverConsumesNewQueueEntry();
     std::printf("OK: QemuArenaBridge open, poll and dispatch passed.\n");
     return 0;
 }
-

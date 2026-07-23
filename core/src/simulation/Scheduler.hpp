@@ -67,6 +67,24 @@ public:
      * comando chegando enquanto a worker está parked (ociosa ou pausada) ficaria esperando o próximo
      * evento/dirty "de verdade" pra ser notado, o que pode nunca acontecer numa simulação pausada. */
     using CommandPendingFn = std::function<bool()>;
+    /** Retorna a posição de referência (ns, na timeline deste Scheduler) do participante mais
+     * lento a acompanhar -- `nullopt` = "sem referência agora" (ninguém a acompanhar). Mesma
+     * categoria de hook que CommandDrainFn/CommandPendingFn: o Scheduler não sabe o que preenche
+     * este valor (um MCU mais lento, ou qualquer outro participante futuro), só usa como TETO
+     * ABSOLUTO sobre até onde `m_nowNs` pode avançar nesta iteração -- a folga permitida acima
+     * dessa posição é calculada aqui dentro (ver `m_pacingQuantumNs`/uso em `start()`), não somada
+     * por quem preenche o hook. Chamada pela própria thread do Scheduler, uma vez por ciclo,
+     * incondicionalmente (mesmo com `realTimeRate()==0`/ilimitado -- isto é uma garantia de
+     * corretude, não um modo de pacing). Achado 2026-07-23: o solver elétrico tem um "tique"
+     * próprio via `setMaximumTimeStepNs()`, independente de qualquer MCU -- por isso ele corre à
+     * frente de um MCU emulado mais lento (QEMU/-icount gargalado pela vazão real de instruções do
+     * host) em vez de esperar por ele. Substituiu um design anterior (`PacingRateLimitFn`, um
+     * multiplicador de taxa alimentado por uma razão suavizada por EMA) que falhou em teste ao vivo
+     * duas vezes: a própria medição de taxa interferia na cadência de amostragem (desacelerar fazia
+     * o laço dormir mais, amostrando com menos frequência e mais ruído, subestimando a taxa real do
+     * MCU -- um ciclo de realimentação estrutural). Um teto de POSIÇÃO absoluta não tem esse
+     * problema: é uma comparação direta entre dois valores, sem janela nem suavização nenhuma. */
+    using AdvanceLimitFn = std::function<std::optional<uint64_t>()>;
 
     Scheduler(size_t componentCapacity, SettleStepFn settleStep)
         : m_dirty(componentCapacity), m_settleStep(std::move(settleStep)) {}
@@ -78,6 +96,7 @@ public:
     void setStableStepCallback(StableStepFn callback) { m_stableStep = std::move(callback); }
     void setCommandDrainCallback(CommandDrainFn callback) { m_commandDrain = std::move(callback); }
     void setCommandPendingCallback(CommandPendingFn callback) { m_commandPending = std::move(callback); }
+    void setAdvanceLimitCallback(AdvanceLimitFn callback) { m_advanceLimit = std::move(callback); }
     /** Acorda a worker se ela estiver parked (ociosa ou pausada) -- chamada pela thread de IPC depois
      * de empurrar um comando na fila (`SimulationSession::enqueueCommand`). Notificar sem segurar
      * `m_mutex` é seguro aqui porque quem espera usa `wait(lock, predicate)`: mesmo que o notify
@@ -85,6 +104,13 @@ public:
      * enxergar o comando pendente (`CommandPendingFn` consulta a fila com o mutex dela própria, não
      * o do Scheduler) -- não depende de ordering entre os dois mutexes. */
     void notifyCommandPending() { m_wake.notify_one(); }
+    /** Acorda a worker se ela estiver esperando o `AdvanceLimitFn` avançar (ver ramo "sem espaço pra
+     * avançar" em `start()`) -- chamada por quem preenche o hook assim que a posição de referência
+     * realmente muda (ex.: `McuComponent::pollStepLocked()`, logo após avançar
+     * `m_latestVirtualTimePs`). Sem lock, mesma justificativa de `notifyCommandPending()` -- quem
+     * espera usa `wait_for(lock, duração, predicado)`, então mesmo um notify perdido só custa até
+     * a próxima verificação por tempo (curta, ver a duração usada em `start()`), nunca trava. */
+    void notifyAdvanceLimitChanged() { m_pacingWake.notify_all(); }
     void setMaximumTimeStepNs(uint64_t ns) { m_maximumTimeStepNs.store(ns, std::memory_order_relaxed); }
     uint64_t maximumTimeStepNs() const { return m_maximumTimeStepNs.load(std::memory_order_relaxed); }
     void configureAdaptiveTimeStep(uint64_t initialNs, uint64_t minimumNs, bool adaptive) {
@@ -207,6 +233,13 @@ public:
         m_realTimeRate.store(rate, std::memory_order_relaxed);
     }
     double realTimeRate() const { return m_realTimeRate.load(std::memory_order_relaxed); }
+    /** Granularidade de espera do host, calibrada uma vez por `start()` (mesma sonda `sleep_for(1ms)`
+     * que já mede isto pra pacing de `realTimeRate`) -- só telemetria/teste determinístico. Usada
+     * internamente pra derivar a folga permitida acima da posição de `AdvanceLimitFn` (ver seu
+     * doc-comment): hosts com granularidade pequena ficam com folga pequena, hosts mais ruidosos
+     * recebem mais margem, sempre dentro de `[kMinAdvanceLeadNs, kMaxAdvanceLeadNs]`. Fica em `1`
+     * (nanosegundo) até a primeira calibração completar. */
+    uint64_t pacingQuantumNs() const { return m_pacingQuantumNs.load(std::memory_order_relaxed); }
 
     /** Limite de iterações não-lineares por settle cycle. 0 = ilimitado (default). */
     void setMaxNonLinearIterations(size_t n) { m_maxNonLinearIterations.store(n, std::memory_order_relaxed); }
@@ -214,6 +247,14 @@ public:
 
 private:
     static constexpr uint32_t kNoComponent = std::numeric_limits<uint32_t>::max();
+    /** Faixa permitida pra folga derivada de `pacingQuantumNs()` acima da posição de
+     * `AdvanceLimitFn` (ver `leadNs = clamp(2*pacingQuantumNs(), kMinAdvanceLeadNs, kMaxAdvanceLeadNs)`
+     * em `start()`) -- piso evita que hosts com granularidade minúscula fiquem "piscando" o teto a
+     * cada ciclo; teto garante que a defasagem nunca reabre grande o bastante pra reproduzir o
+     * sintoma que este recurso existe pra evitar, mesmo em hosts muito ruidosos. Ponto de partida a
+     * refinar com medição ao vivo, não considerado definitivo. */
+    static constexpr uint64_t kMinAdvanceLeadNs = 5'000'000;  // 5ms
+    static constexpr uint64_t kMaxAdvanceLeadNs = 20'000'000; // 20ms
 
     void pushEventLocked(uint64_t timeNs, uint32_t componentIndex, EventCallback callback);
     bool processNextEventUntilLocked(std::unique_lock<std::mutex>& lock, uint64_t targetTimeNs);
@@ -230,6 +271,7 @@ private:
     StableStepFn m_stableStep;
     CommandDrainFn m_commandDrain;
     CommandPendingFn m_commandPending;
+    AdvanceLimitFn m_advanceLimit;
 
     std::thread m_thread;
     std::atomic<std::thread::id> m_workerThreadId{};
@@ -256,6 +298,7 @@ private:
     std::atomic<bool> m_stopRequested{false};
     std::atomic<uint64_t> m_targetStepUs{0};
     std::atomic<double> m_realTimeRate{0.0};
+    std::atomic<uint64_t> m_pacingQuantumNs{1};
     std::atomic<size_t> m_maxNonLinearIterations{0};
     std::atomic<uint64_t> m_maximumTimeStepNs{0};
     std::atomic<bool> m_profilingEnabled{false};

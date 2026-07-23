@@ -28,7 +28,10 @@ export class LasecPlotManager implements vscode.Disposable {
   // CPU do processo do Core. Telemetria/plot não precisa de latência sub-10ms -- `drainUart` sempre
   // devolve TUDO que acumulou desde a última chamada, então espaçar o poll não perde bytes, só
   // agrupa mais por entrega. 50ms (20Hz) é imperceptível pra um gráfico e corta o tráfego de IPC/
-  // callbacks em 5x.
+  // callbacks em 5x -- esse valor agora é só o TETO (`maxPollIntervalMs`, ver `broker.ts`), usado
+  // sem mudança em baud baixo. Achado 2026-07-22 (921600 baud perdendo dados): em baud alto, um
+  // teto fixo de 50ms deixava o anel RX de `peripherals.lasecplot` encher antes do próximo poll --
+  // `LasecPlotBroker` agora encurta o intervalo automaticamente por baud (`computeDesiredPollIntervalMs`).
   readonly broker = new LasecPlotBroker(this.transport, 50);
   readonly api: LasecSimulInteropApi = {
     apiVersion: this.broker.apiVersion,
@@ -92,6 +95,15 @@ export class LasecPlotManager implements vscode.Disposable {
     return { opened: this.broker.isPublished(id), clients: 0 };
   }
   updateSimulationState(): void { this.sync(); }
+  /** Único gatilho automático de fechamento além do próprio usuário fechando o painel LasecPlot
+   * (`unpublish()`/`remove()` já cobrem isso) -- chamado quando o ESQUEMÁTICO é fechado (ver
+   * `extension.ts::openSchematicEditor`, callback `onDispose` do `SchematicPanel`). Pausar/parar a
+   * simulação nunca chega aqui (ver `broker.ts::setOnline`). */
+  closeAllForSchematicClose(): void {
+    for (const id of this.knownEndpointIds) {
+      if (this.broker.isPublished(id)) this.broker.unpublish(id, "schematic-closed");
+    }
+  }
   dispose(): void { this.broker.dispose(); }
 }
 

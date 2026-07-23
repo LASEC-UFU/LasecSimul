@@ -41,6 +41,9 @@ public:
      * -- é isso que desbloqueia o `readReg()` do lado QEMU (que espera `qemuAction`, não
      * `simuTime`) -- depois zera `simuTime` como qualquer outra ação. */
     void acknowledgeRead(uint64_t regData);
+    /** Confirma um evento sem resposta que veio do slot único legado (ex.: SIM_FREQ em QEMUs
+     * anteriores ao protocolo v3), sem tocar queueReadIndex. */
+    void acknowledgeEventSlot();
 
 private:
     class SharedMemory;
@@ -51,4 +54,3 @@ private:
 };
 
 } // namespace lasecsimul::mcu::qemu
-

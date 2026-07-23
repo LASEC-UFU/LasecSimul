@@ -343,10 +343,14 @@ export class CoreClient {
 
   /** Nanossegundos de tempo SIMULADO decorrido (`Scheduler::nowNs()`) -- base pra calcular a taxa
    * real de simulação (`Δsimulado/Δparede` entre duas amostras), achado de auditoria de UI
-   * 2026-07-09. Verbo somente-leitura. */
-  async getSimulationTime(): Promise<number> {
+   * 2026-07-09. Verbo somente-leitura.
+   *
+   * `mcuVirtualNs` (achado 2026-07-22, ver `CoreApplication.cpp::getSimulationTime`): tempo virtual
+   * do MCU/QEMU, quando há um na sessão -- relógio DIFERENTE de `simulatedNs` (o do solver elétrico,
+   * pareado ao relógio de parede por design). `undefined` quando não há MCU no circuito. */
+  async getSimulationTime(): Promise<{ simulatedNs: number; mcuVirtualNs?: number }> {
     const resp = await this.request("getSimulationTime", {});
-    return (resp as { simulatedNs: number }).simulatedNs;
+    return resp as { simulatedNs: number; mcuVirtualNs?: number };
   }
 
   async getPerformanceMetrics(): Promise<Record<string, unknown>> {

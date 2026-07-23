@@ -45,6 +45,33 @@ bool analogTraceEnabled() {
     return enabled;
 }
 
+/** Achado 2026-07-22 (LED de 500ms via millis() levando ~4s reais mesmo com a simulação "a 100%"):
+ * `-icount shift=N` credita `2^N` ns de tempo VIRTUAL a cada instrução Xtensa retirada -- sem
+ * relação obrigatória com quanto tempo REAL essa instrução levou. `4` (16ns/instrução, ~62.5 MIPS
+ * assumidos) é um palpite fixo nunca calibrado contra o host real. `QemuIcountCalibrator`
+ * (core/src/mcu/qemu/) mede a taxa real de ns-por-instrução deste host UMA VEZ (com cache) e seta
+ * esta env var ANTES do primeiro launch real (ver McuController::start()). Ausente/inválida ->
+ * mantém o `4` histórico (nunca lança, nunca trava um launch por causa de calibração ausente).
+ *
+ * Achado real 2026-07-22 (usuário reporta calibração medindo certo mas o launch real usando `4`
+ * mesmo assim): ISSO usava o mesmo padrão de cache estático de `analogTraceEnabled()` acima --
+ * mas, ao contrário daquele (chamado centenas de milhares de vezes/segundo, cache genuinamente
+ * necessário), `buildLaunchArgs` roda só uma vez por lançamento -- e o PRÓPRIO
+ * `QemuIcountCalibrator` chama `adapter.buildLaunchArgs("")` pra montar os argumentos da sonda de
+ * calibração, ANTES de terminar de medir e setar a env var. Com cache estático, essa PRIMEIRA
+ * chamada (da sonda, sempre antes da calibração terminar) travava o valor em `4` pro resto do
+ * processo -- o launch real nunca via o shift calibrado, mesmo a calibração tendo medido e
+ * gravado certo. Sem justificativa de desempenho real aqui (diferente do trace acima), a leitura
+ * volta a ser simples, sem cache. */
+int configuredIcountShift() {
+    const char* value = std::getenv("LASECSIMUL_ESP32_ICOUNT_SHIFT");
+    if (!value || !*value) return 4;
+    char* end = nullptr;
+    const long parsed = std::strtol(value, &end, 10);
+    if (end == value || *end != '\0' || parsed < 0 || parsed > 10) return 4;
+    return static_cast<int>(parsed);
+}
+
 constexpr uint64_t kUart0Start = 0x3FF40000;
 constexpr uint64_t kUart0End = 0x3FF40FFF;
 constexpr uint64_t kGpioStart = 0x3FF44000;
@@ -1452,7 +1479,7 @@ LsdnQemuLaunchSpec buildLaunchArgs(LsdnMcuAdapter* adapter, const char* firmware
         "-drive",
         "file=" + std::string(firmwarePath ? firmwarePath : "") + ",if=mtd,format=raw",
         "-icount",
-        "shift=4,align=off,sleep=off",
+        "shift=" + std::to_string(configuredIcountShift()) + ",align=off,sleep=off",
     };
     state->launchArgs.clear();
     state->launchArgs.reserve(state->launchArgStorage.size());

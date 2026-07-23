@@ -205,6 +205,9 @@ function openSchematicEditor(extensionUri: vscode.Uri): void {
     state.schematicPanel = undefined;
     state.lastSyncedProjectState = undefined; // painel fechado -- o próximo (novo ou reaberto) recebe "init" completo de novo
     void setSchematicOpenContext(false);
+    // Fechar o esquemático é o ÚNICO gatilho automático (além do próprio usuário fechando o painel
+    // LasecPlot) que deve derrubar o LasecPlot -- Pause/Stop nunca fecham (ver `broker.ts::setOnline`).
+    lasecPlotManager?.closeAllForSchematicClose();
   });
   // `createOrShow` acabou de mandar um snapshot COMPLETO (painel novo -> "init", painel já existente
   // -> "syncState" direto, ver SchematicPanel.ts) -- em qualquer um dos dois casos, o próximo
@@ -382,6 +385,10 @@ function launchCoreProcess(extensionPath: string): { corePath: string; pipeName:
         ? configuredNetworkMode
         : "disabled",
     LASECSIMUL_GATEWAY_PORT: String(configuredGatewayPort),
+    // Achado 2026-07-22: cache em disco da calibração do `-icount shift` (ver
+    // QemuIcountCalibrator.hpp) -- diretório gerenciado pelo próprio VS Code, por extensão/usuário,
+    // já usado em outros pontos da extensão (evita inventar lógica própria de resolução de path).
+    ...(state.extensionContext ? { LASECSIMUL_CORE_DATA_DIR: state.extensionContext.globalStorageUri.fsPath } : {}),
   };
   if (Number.isInteger(configuredNetworkNamespace) && configuredNetworkNamespace >= 0 && configuredNetworkNamespace <= 255) {
     coreEnv.LASECSIMUL_NETWORK_NAMESPACE = String(configuredNetworkNamespace);

@@ -26,6 +26,9 @@ struct QemuArenaEvent {
     int64_t loopTimeoutNs = 0;
     double psPerInst = 0.0;
     bool running = false;
+    /** true quando veio da fila circular; false quando veio do slot síncrono legado. O ACK deve
+     * seguir a origem, nunca apenas simuAction, pois QEMUs antigos também publicam SIM_FREQ no slot. */
+    bool fromQueue = false;
 };
 
 struct QemuDispatchResult {
@@ -42,4 +45,3 @@ struct QemuPollResult {
 };
 
 } // namespace lasecsimul::mcu::qemu
-

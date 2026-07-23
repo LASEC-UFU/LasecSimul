@@ -133,6 +133,12 @@ export type HostToWebviewMessage =
    * -- `undefined` quando parado/sem amostra suficiente ainda (achado de auditoria de UI 2026-07-09,
    * paridade com `InfoWidget::setRate()` do SimulIDE real). */
   | { version: number; type: "simulationRate"; rate: number | undefined }
+  /** Taxa real do relógio virtual do MCU/QEMU (achado 2026-07-22: `simulationRate` acima mede só o
+   * solver ELÉTRICO, pareado ao relógio de parede por design -- pode mostrar ~100% mesmo com o
+   * MCU/QEMU muito mais lento que tempo real, ex.: `millis()` atrasado). `undefined` quando não há
+   * MCU no circuito atual ou ainda sem amostra suficiente (janela de ~1-2s, mais ruidosa que a do
+   * solver elétrico). Ver `coreLifecycle.ts::pollSimulationRate`. */
+  | { version: number; type: "mcuRealTimeRatio"; rate: number | undefined }
   /** Resposta a `requestInstrumentHistory` -- histórico REAL (tempo simulado), ver
    * `InstrumentHistoryPayload`. */
   | ({ version: number; type: "instrumentHistory" } & InstrumentHistoryPayload)

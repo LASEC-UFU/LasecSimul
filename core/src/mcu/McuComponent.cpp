@@ -13,6 +13,12 @@ uint64_t qemuEventTimeNs(uint64_t originNs, uint64_t virtualTimePs) {
 }
 } // namespace
 
+std::optional<uint64_t> McuComponent::pacingPositionNs() const {
+    const uint64_t ps = m_latestVirtualTimePs.load(std::memory_order_relaxed);
+    if (ps == 0) return std::nullopt; // nenhum evento processado ainda (boot ou logo apos recarga).
+    return qemuEventTimeNs(m_qemuTimeOriginNs.load(std::memory_order_relaxed), ps);
+}
+
 McuComponent::McuComponent(std::unique_ptr<IMcuAdapter> adapter, simulation::Scheduler& scheduler,
                            std::span<const Pin> requestedPins)
     : m_adapter(std::move(adapter)), m_scheduler(scheduler), m_controller(*m_adapter),
@@ -120,6 +126,23 @@ void McuComponent::onPollEvent() {
         // por MCU -- ela mesma despacha eventos prontos (sob o mesmo m_callbackState->mutex que já
         // serializa contra stamp()) e devolve o controle pra cá via schedulePollAt() assim que
         // encontra um evento futuro, exatamente como o caminho síncrono abaixo já fazia.
+        //
+        // Achado 2026-07-23 (janela entre "Scheduler alcançou o timestamp agendado" e "a thread de
+        // poll recém-criada rodou pela primeira vez"): este callback roda na própria thread do
+        // Scheduler, com Scheduler::m_mutex JÁ SOLTO (ver processNextEventUntilLocked: unlock ->
+        // callback() -> lock) -- então é seguro despachar aqui, direto, ANTES de delegar a thread
+        // dedicada. Sem isto, startBackgroundPollThreadIfNeeded() só CRIA a thread e retorna na
+        // hora (não espera ela rodar nem uma vez) -- o laço de runUntil() (nada mais dirty pra
+        // assentar ainda) ficava livre pra avançar m_nowNs por cima de eventos SEGUINTES do MESMO
+        // MCU antes da thread recém-criada sequer ganhar sua primeira fatia de CPU do SO pra
+        // despachar o evento atual. Despachar aqui, síncrono, fecha essa janela pro evento que JÁ
+        // SABEMOS estar pronto agora (é por isso que este callback disparou); a thread dedicada
+        // assume só o que sobrar (evento futuro ainda não vencido, ou nada). Ressalva honesta: essa
+        // janela é real e esta correção a fecha, mas NÃO é a causa do GPIO13 travado em LOW visto
+        // com firmware real. A causa foi o ACK de um SIM_FREQ do slot legado avançando uma escrita
+        // recém-chegada na fila; ver dispatchArenaEvent()/QemuArenaEvent::fromQueue.
+        while (m_polling.load(std::memory_order_acquire) && pollStepLocked() == PollStep::DispatchedReady) {
+        }
         startBackgroundPollThreadIfNeeded();
         return;
     }
@@ -146,12 +169,40 @@ McuComponent::PollStep McuComponent::pollStepLocked(std::vector<DeferredSchedule
 
     // nowNs() é um snapshot lock-free (m_nowSnapshotNs), nunca toca Scheduler::m_mutex -- seguro
     // chamar segurando m_callbackState->mutex independente de `deferred`.
-    const uint64_t eventNs = qemuEventTimeNs(m_qemuTimeOriginNs, result.event->simuTimePs);
+    const uint64_t eventNs = qemuEventTimeNs(m_qemuTimeOriginNs.load(std::memory_order_relaxed), result.event->simuTimePs);
     const uint64_t nowNs = m_scheduler.nowNs();
     if (eventNs > nowNs) {
-        // Mantém a ação na arena e agenda uma única entrada exatamente no instante publicado.
+        // Mantém a ação na arena e agenda uma única entrada exatamente no instante publicado. NÃO
+        // avança m_latestVirtualTimePs aqui -- ver achado 2026-07-23 abaixo: isto só é seguro fazer
+        // depois de confirmar que o evento está sendo despachado agora, não só espiado.
         schedulePollAt(eventNs, deferred);
         return PollStep::DeferredFuture;
+    }
+
+    // Achado 2026-07-23 (sincronização de ritmo): só avança m_latestVirtualTimePs DEPOIS de
+    // confirmar `eventNs <= nowNs()` acima -- ou seja, só quando o evento está de fato sendo
+    // despachado agora, não quando foi meramente espiado (arena.poll() é PEEK, não consome; a fila
+    // pode ter até 32 entradas bufferizadas à frente do que foi realmente processado). Fazer isto
+    // ANTES do teste acima (versão original) deixava pacingPositionNs() refletir o timestamp de um
+    // evento ainda NÃO despachado -- com QEMU bufferizando rápido o bastante, isso inflava a
+    // posição relatada ao AdvanceLimitFn sem necessidade. Ressalva honesta: esta correção é uma
+    // melhoria de precisão real (confirmada sem regressão no ctest), mas investigação posterior
+    // (2026-07-23, ver .spec) mostrou que o salto de Scheduler::nowNs() pro fim da simulação em uma
+    // única chamada de runUntil() tinha uma causa DIFERENTE e mais simples (MCU com arena aberta
+    // mas zero eventos despachados sendo excluído do cálculo do teto em vez de contar como posição
+    // 0 -- ver SimulationSession::computeSlowestMcuPositionNs()), e nenhuma das duas explica o
+    // travamento de GPIO13 em LOW com firmware real. A causa foi o ACK de um SIM_FREQ do slot
+    // legado avançando uma entrada da fila sem despachá-la.
+    {
+        uint64_t observed = m_latestVirtualTimePs.load(std::memory_order_relaxed);
+        bool advanced = false;
+        while (result.event->simuTimePs > observed) {
+            if (m_latestVirtualTimePs.compare_exchange_weak(observed, result.event->simuTimePs, std::memory_order_relaxed)) {
+                advanced = true;
+                break;
+            }
+        }
+        if (advanced) m_scheduler.notifyAdvanceLimitChanged();
     }
 
     const bool changed = dispatchArenaEvent(*result.event, eventNs);
@@ -195,10 +246,25 @@ void McuComponent::runBackgroundPollLoop(std::shared_ptr<CallbackState> state) {
                 } else {
                     step = self->pollStepLocked(&deferred);
                     if (step == PollStep::NoEvent && !self->m_scheduler.isRunning()) {
-                        // O Scheduler deixou de rodar em background enquanto esperávamos (ex:
-                        // Stop) -- volta pro modo passivo de sempre em vez de girar sem ninguém
-                        // pra drenar m_events.
-                        self->scheduleNextPoll(&deferred);
+                        // O Scheduler deixou de rodar em background enquanto esperávamos (ex: Stop)
+                        // -- só sai, SEM reagendar. Achado 2026-07-22 (SessionRestartStressTest,
+                        // 15/15 ciclos travando pra sempre após o primeiro): reagendar aqui via
+                        // scheduleNextPoll() (versão antiga desta linha) deixava m_pollEventScheduled
+                        // preso em `true` para sempre sempre que este ramo disparasse durante
+                        // SimulationSession::stopSimulation() -- ela para o Scheduler ANTES de
+                        // chamar stopFirmware() (de propósito: nenhum componente pode voltar a
+                        // agendar trabalho enquanto as MCUs são encerradas), então esta thread podia
+                        // flagrar "sem evento + Scheduler parou" bem nessa janela e agendar um
+                        // callback num Scheduler prestes a ser resetado. Esse callback é o ÚNICO
+                        // lugar que zera m_pollEventScheduled (em onPollEvent()) -- mas
+                        // Scheduler::reset() (chamado logo depois, em stopSimulation()) descarta a
+                        // fila de eventos sem executá-lo, e a flag ficava presa para sempre: todo
+                        // load posterior via startPolling()->scheduleNextPoll()->schedulePollAt()
+                        // via a flag presa e desistia silenciosamente, nenhuma thread de poll nunca
+                        // mais nascia, o MCU travava pra sempre. Nenhum chamador real de
+                        // Scheduler::stop() deixa a arena aberta esperando um "ponto de retomada"
+                        // agendado (stopSimulation() sempre também chama stopFirmware()+reset() logo
+                        // em seguida) -- sair sem reagendar é seguro e evita a pegadinha.
                         stop = true;
                     }
                 }
@@ -387,7 +453,7 @@ bool McuComponent::pollAndDispatchPendingEvents(uint64_t nowNs) {
     // esse trabalho e prenderia stamp() por mais tempo sem necessidade.
     const qemu::QemuPollResult result = arenaBridge.poll();
     if (!result.hasEvent || !result.event) return false;
-    const uint64_t eventNs = qemuEventTimeNs(m_qemuTimeOriginNs, result.event->simuTimePs);
+    const uint64_t eventNs = qemuEventTimeNs(m_qemuTimeOriginNs.load(std::memory_order_relaxed), result.event->simuTimePs);
     // Uma stamp causada por outra parte do circuito não pode antecipar o relógio virtual do QEMU.
     // A entrada permanece na fila; onPollEvent() já está agendado para consumi-la no instante certo.
     if (eventNs > nowNs && !m_syntheticArenaForTesting) return false;
@@ -398,19 +464,24 @@ bool McuComponent::dispatchArenaEvent(const qemu::QemuArenaEvent& event, uint64_
     qemu::QemuArenaBridge& arenaBridge = m_controller.arenaBridge();
     if (!arenaBridge.isOpen()) return false;
     const uint64_t before = electricalOutputFingerprint();
+    uint64_t readValue = 0;
     if (event.simuAction == LSDN_SIM_WRITE) {
         if (QemuModule* module = findModule(event.regAddr)) {
             module->writeRegisterAt(event.regAddr, event.regData, eventTimeNs);
         }
+    } else if (event.simuAction == LSDN_SIM_READ) {
+        if (QemuModule* module = findModule(event.regAddr)) readValue = module->readRegister(event.regAddr);
+    }
+
+    // O ACK é determinado pela ORIGEM. QEMUs anteriores ao ajuste de protocolo ainda publicam
+    // SIM_FREQ no slot único; usar acknowledgeWrite() nesse caso pode avançar uma entrada da fila
+    // que chegou entre poll() e este ponto, descartando-a sem dispatch.
+    if (event.fromQueue) {
         arenaBridge.acknowledgeWrite();
     } else if (event.simuAction == LSDN_SIM_READ) {
-        uint64_t value = 0;
-        if (QemuModule* module = findModule(event.regAddr)) value = module->readRegister(event.regAddr);
-        arenaBridge.acknowledgeRead(value);
+        arenaBridge.acknowledgeRead(readValue);
     } else {
-        // SIM_FREQ/SIM_EVENT/SIM_INTERRUPT/SIM_I2C/SIM_SPI/SIM_USART/SIM_TIMER/SIM_GPIO_IN:
-        // confirma para liberar o QEMU mesmo quando não há payload elétrico a aplicar.
-        arenaBridge.acknowledgeWrite();
+        arenaBridge.acknowledgeEventSlot();
     }
     return before != electricalOutputFingerprint();
 }
@@ -508,7 +579,23 @@ void McuComponent::loadFirmwareLocked(const std::filesystem::path& firmwarePath,
     // contra o binário QEMU de verdade) -- ver comentário do membro m_controller no .hpp.
     m_gdbPort = debug.gdbPort;
     m_syntheticArenaForTesting = false;
-    m_qemuTimeOriginNs = m_scheduler.nowNs();
+    // Achado 2026-07-22 (session_restart_stress_test intermitente sob carga): latestVirtualTimeNs()
+    // rastreia o MAIOR simuTimePs já visto (compare_exchange que nunca retrocede, ver seu
+    // doc-comment no .hpp) -- sem este reset, um firmware recarregado (novo processo QEMU, relógio
+    // -icount próprio recomeçando perto de 0) nunca conseguia AVANÇAR esse indicador até seu
+    // simuTimePs cru ultrapassar organicamente o pico deixado pela sessão ANTERIOR, deixando o
+    // indicador de "MCU real-time %" (SimulationSession::firstMcuVirtualTimeNs) preso num valor
+    // antigo e cada vez mais desonesto por vários ciclos de Stop->Run.
+    //
+    // Achado 2026-07-23: zera ANTES de setar a nova origem (ordem invertida em relação a antes) --
+    // pacingPositionNs() lê os dois campos cross-thread, sem lock. Se um leitor pegar a transição
+    // no meio nesta ordem, o pior caso é combinar a origem VELHA com virtualTimePs ZERADO, dando uma
+    // posição um pouco ATRASADA (efeito: espera um instante a mais, inofensivo). Na ordem antiga
+    // (origem primeiro), o pior caso combinava a origem NOVA com o simuTimePs VELHO da sessão
+    // anterior, dando uma posição espúria no FUTURO (efeito: deixaria o elétrico correr à frente
+    // indevidamente, ainda que só por uma janela curta).
+    m_latestVirtualTimePs.store(0, std::memory_order_relaxed);
+    m_qemuTimeOriginNs.store(m_scheduler.nowNs(), std::memory_order_relaxed);
     m_controller.start(firmwarePath, arenaName, qemuBinaryOverride, debug);
     startPolling(&deferred);
     deferred.push_back([&scheduler = m_scheduler, index = m_componentIndex] { scheduler.markDirty(index); });
@@ -540,7 +627,9 @@ void McuComponent::openSyntheticArenaForTesting(const std::string& arenaName) {
     {
         std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
         m_syntheticArenaForTesting = true;
-        m_qemuTimeOriginNs = m_scheduler.nowNs();
+        // Ordem invertida (zera primeiro, seta origem depois) -- ver comentário em loadFirmwareLocked().
+        m_latestVirtualTimePs.store(0, std::memory_order_relaxed);
+        m_qemuTimeOriginNs.store(m_scheduler.nowNs(), std::memory_order_relaxed);
         m_controller.arenaBridge().open(qemu::QemuArenaOpenOptions{arenaName, true});
         startPolling(&deferred);
     }

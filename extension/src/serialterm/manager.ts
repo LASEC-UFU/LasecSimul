@@ -70,6 +70,10 @@ export class SerialTerminalManager implements vscode.Disposable {
         if (state.simulationStatus !== "running" || !coreInstanceIdByComponentId.has(componentId)) continue;
         try {
           const batch = await this.transport.read(componentId);
+          // Achado 2026-07-22 (baud alto perdendo dados): overflow do buffer RX não lança mais (ver
+          // `CoreUartTransport.read`) -- reporta o drop como aviso, mas continua processando os
+          // bytes que sobreviveram em `batch.data` (antes, o lote inteiro era descartado junto).
+          if (batch.droppedBytes > 0) this.status(componentId, true, `Buffer UART RX excedido: ${batch.droppedBytes} byte(s) perdido(s).`);
           if (!batch.data.byteLength) continue;
           if (this.open.has(componentId)) state.schematicPanel?.postMessage({ version: 1, type: "serialTerminalData", componentId,
             dataHex: Buffer.from(batch.data).toString("hex"), simulationTimeNs: batch.simulationTimeNs });

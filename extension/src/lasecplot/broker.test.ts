@@ -6,11 +6,12 @@ class MemoryTransport implements LasecPlotTransport {
   async read(): Promise<{ data: Uint8Array; simulationTimeNs: number }> { return { data: this.reads.shift() ?? new Uint8Array(), simulationTimeNs: 123456 }; }
   async write(_componentId: string, data: Uint8Array): Promise<number> { this.writes.push(data); return 654321; }
 }
-/** Simula `CoreUartTransport.read` lançando "Buffer UART RX excedido" (overflow -- ESPERADO enquanto
- * ninguém está lendo ainda) em toda leitura, pra testar que o poll NÃO fecha o endpoint por causa
- * disso (bug real 2026-07-18, ver `broker.ts::poll`). */
-class AlwaysOverflowingTransport implements LasecPlotTransport {
-  async read(): Promise<{ data: Uint8Array; simulationTimeNs: number }> { throw new Error("Buffer UART RX excedido: 4 byte(s) perdido(s)."); }
+/** Simula uma falha de TRANSPORTE genuína (ex: Core desconectado) em toda leitura, pra testar que o
+ * poll NÃO fecha o endpoint por causa disso (bug real 2026-07-18, ver `broker.ts::poll`). Overflow
+ * de buffer RX não lança mais (achado 2026-07-22, ver `CoreUartTransport.read`/`droppedBytes`) --
+ * esta classe cobre só o caso de falha de transporte que ainda pode lançar. */
+class AlwaysFailingTransport implements LasecPlotTransport {
+  async read(): Promise<{ data: Uint8Array; simulationTimeNs: number }> { throw new Error("Core desconectado."); }
   async write(): Promise<number> { throw new Error("não usado neste teste"); }
 }
 const registration = { id: "lasecsimul://workspace/w/simulation/s/lasecplot/component-42", componentId: "component-42", name: "Temperatura", projectId: "w", simulationId: "s", baudRate: 115200, dataBits: 8, stopBits: 1, parity: "none" as const, mode: "bidirectional" as const };
@@ -52,16 +53,78 @@ await test("permite vários leitores e somente um escritor", async () => {
   const writer = await broker.openLasecPlotEndpoint(registration.id, { writable: true }); let rejected = false; try { await broker.openLasecPlotEndpoint(registration.id, { writable: true }); } catch { rejected = true; }
   assert(rejected, "segundo escritor deveria ser rejeitado"); await writer.close(); const replacement = await broker.openLasecPlotEndpoint(registration.id, { writable: true }); assert(replacement.writable, "reserva não foi liberada"); broker.dispose();
 });
-await test("rejeita escrita read-only e fecha ao parar simulação", async () => {
+await test("rejeita escrita read-only", async () => {
   const broker = new LasecPlotBroker(new MemoryTransport(), 1000); broker.register({ ...registration, mode: "read-only" }); broker.setOnline(registration.id, true); broker.publish(registration.id); const connection = await broker.openLasecPlotEndpoint(registration.id);
-  let rejected = false; try { await connection.write(Uint8Array.of(1)); } catch { rejected = true; } let reason = ""; connection.onDidClose((event) => { reason = event.reason; }); broker.setOnline(registration.id, false);
-  assert(rejected, "read-only aceitou escrita"); assert(reason === "simulation-stopped", "fechamento não foi notificado"); assert((await broker.listLasecPlotEndpoints()).length === 0, "endpoint parado continuou publicado"); broker.dispose();
+  let rejected = false; try { await connection.write(Uint8Array.of(1)); } catch { rejected = true; }
+  assert(rejected, "read-only aceitou escrita"); broker.dispose();
+});
+await test("parar a simulação (setOnline false) NUNCA fecha o endpoint sozinho -- painel/conexão do LasecPlot sobrevivem a Pause/Stop", async () => {
+  const broker = new LasecPlotBroker(new MemoryTransport(), 1000); broker.register(registration); broker.setOnline(registration.id, true); broker.publish(registration.id);
+  const connection = await broker.openLasecPlotEndpoint(registration.id);
+  let closed = false; connection.onDidClose(() => { closed = true; });
+  broker.setOnline(registration.id, false); // equivalente a "Stop" (ver manager.ts::sync)
+  assert(!closed, "a conexão não deveria fechar sozinha ao parar a simulação");
+  assert(broker.isPublished(registration.id), "o endpoint deveria continuar publicado depois de parar a simulação");
+  assert((await broker.listLasecPlotEndpoints()).length === 1, "endpoint parado deveria continuar na lista pública");
+  broker.dispose();
+});
+await test("reiniciar a simulação (setOnline true de novo) reutiliza o MESMO endpoint publicado, sem precisar reabrir", async () => {
+  const transport = new MemoryTransport();
+  const broker = new LasecPlotBroker(transport, 2); broker.register(registration); broker.setOnline(registration.id, true); broker.publish(registration.id);
+  const connection = await broker.openLasecPlotEndpoint(registration.id);
+  let bytes: Uint8Array | undefined; connection.onData((value) => { bytes = value; });
+  broker.setOnline(registration.id, false); // "Stop"
+  broker.setOnline(registration.id, true); // "Run" de novo -- MESMA conexão, sem toggle/reabrir
+  transport.reads.push(Uint8Array.of(9, 9));
+  await new Promise((resolve) => setTimeout(resolve, 15));
+  assert(bytes?.join(",") === "9,9", "dado novo pós-restart deveria chegar na MESMA conexão já aberta");
+  assert(broker.isPublished(registration.id), "endpoint deveria continuar publicado durante todo o ciclo stop->run");
+  broker.dispose();
+});
+await test("achado 2026-07-22: dado que sobrevive a um overflow parcial (droppedBytes>0) ainda é entregue -- não descarta o lote inteiro (baud alto, ex. 921600)", async () => {
+  class PartiallyDroppingTransport implements LasecPlotTransport {
+    calls = 0;
+    async read(): Promise<{ data: Uint8Array; simulationTimeNs: number; droppedBytes: number }> {
+      this.calls++;
+      // Primeira leitura: alguns bytes sobreviveram no anel MESMO com drop de bytes mais antigos --
+      // antes desta correção, `droppedBytes>0` fazia `CoreUartTransport.read` lançar e o broker
+      // descartava esses bytes bons junto (ver `poll()`/`CoreUartTransport.ts`).
+      if (this.calls === 1) return { data: Uint8Array.of(1, 2, 3), simulationTimeNs: 1, droppedBytes: 12 };
+      return { data: new Uint8Array(), simulationTimeNs: 1, droppedBytes: 0 };
+    }
+    async write(): Promise<number> { throw new Error("não usado neste teste"); }
+  }
+  const broker = new LasecPlotBroker(new PartiallyDroppingTransport(), 5);
+  broker.register(registration); broker.setOnline(registration.id, true); broker.publish(registration.id);
+  const connection = await broker.openLasecPlotEndpoint(registration.id);
+  let bytes: Uint8Array | undefined; connection.onData((value) => { bytes = value; });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert(bytes?.join(",") === "1,2,3", `bytes que sobreviveram ao overflow parcial deveriam chegar ao cliente, veio: ${bytes?.join(",")}`);
+  assert(broker.isPublished(registration.id), "overflow parcial não deveria fechar o endpoint");
+  broker.dispose();
 });
 await test("publica com sucesso mesmo com a simulação parada (offline) -- abrir o endpoint não depende de Run", () => {
   const broker = new LasecPlotBroker(new MemoryTransport(), 1000);
   broker.register(registration); // NUNCA chama setOnline(true) -- endpoint continua offline
   broker.publish(registration.id); // não deveria lançar
   assert(broker.isPublished(registration.id), "endpoint deveria estar publicado mesmo offline");
+  broker.dispose();
+});
+await test("achado 2026-07-22: openLasecPlotEndpoint() conecta com sucesso mesmo OFFLINE (parado/pausado) -- antes exigia online e o LasecPlot via 'não disponível' ao (re)conectar depois de Stop", async () => {
+  const broker = new LasecPlotBroker(new MemoryTransport(), 1000);
+  broker.register(registration); broker.publish(registration.id); // publicado, mas NUNCA setOnline(true)
+  const connection = await broker.openLasecPlotEndpoint(registration.id); // não deveria lançar
+  assert(connection !== undefined, "conectar a um endpoint publicado-porém-offline deveria funcionar");
+  broker.dispose();
+});
+await test("achado 2026-07-22: write() em endpoint OFFLINE (simulação parada/pausada) não lança -- só não tem efeito (sem MCU vivo pra receber)", async () => {
+  const broker = new LasecPlotBroker(new MemoryTransport(), 1000);
+  broker.register({ ...registration, mode: "bidirectional" }); broker.setOnline(registration.id, true); broker.publish(registration.id);
+  const connection = await broker.openLasecPlotEndpoint(registration.id, { writable: true });
+  broker.setOnline(registration.id, false); // "Stop"/"Pause" -- conexão continua aberta (ver testes de ciclo de vida acima)
+  let threw = false;
+  try { await connection.write(Uint8Array.of(1, 2, 3)); } catch { threw = true; }
+  assert(!threw, "escrever com a simulação parada não deveria lançar -- o LasecPlot não pode ver erro só por isso");
   broker.dispose();
 });
 await test("debugListAllEndpoints (comando 'LasecSimul: List LasecPlot Endpoints') mostra registrados NÃO publicados, ao contrário de listLasecPlotEndpoints", async () => {
@@ -76,8 +139,8 @@ await test("debugListAllEndpoints (comando 'LasecSimul: List LasecPlot Endpoints
   assert(allAfterPublish[0]?.opened === true, "deveria refletir aberto=true depois de publicar");
   broker.dispose();
 });
-await test("poll() NÃO despublica o endpoint quando a leitura falha (overflow é esperado sem cliente conectado, bug real 2026-07-18: 'Abrir' parecia travado)", async () => {
-  const broker = new LasecPlotBroker(new AlwaysOverflowingTransport(), 5);
+await test("poll() NÃO despublica o endpoint quando a leitura falha (falha de transporte, bug real 2026-07-18: 'Abrir' parecia travado)", async () => {
+  const broker = new LasecPlotBroker(new AlwaysFailingTransport(), 5);
   broker.register(registration);
   broker.setOnline(registration.id, true); // liga o poll (a cada 5ms) -- toda leitura vai falhar
   broker.publish(registration.id);
