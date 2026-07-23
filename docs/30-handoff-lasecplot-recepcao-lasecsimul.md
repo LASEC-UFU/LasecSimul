@@ -194,12 +194,18 @@ const closeSubscription = connection.onDidClose(({ reason }) => {
 
 Motivos atuais incluem:
 
-- `device-closed`: usuário fechou o endpoint;
-- `simulation-stopped`: simulação foi parada;
+- `device-closed`: usuário fechou o endpoint (toggle "Fechar" no componente);
+- `schematic-closed`: o esquemático/painel do LasecSimul foi fechado;
 - `device-removed`: componente removido;
-- `transport-error`: falha no transporte UART/Core;
 - `extension-deactivated`: LasecSimul foi desativado;
 - `client-closed` ou `disposed`: fechamento iniciado pelo consumidor.
+
+**Pause/Stop NÃO fecham a conexão** (mudança de comportamento -- antes, parar a simulação disparava
+`onDidClose` com motivo `simulation-stopped`; agora a conexão permanece aberta, só para de receber
+dados novos enquanto a simulação não está rodando, e volta a receber automaticamente assim que a
+simulação roda de novo, sem o consumidor precisar reconectar). Use o campo `online` do endpoint
+(`listLasecPlotEndpoints()`/evento de mudança) para refletir "sem dado novo agora" na UI, sem tratar
+isso como desconexão.
 
 Após fechamento externo, atualize a UI e aguarde novo evento de endpoints. Reconexão automática só deve ocorrer se essa for uma opção explícita do produto. O `id` contém uma sessão aleatória e muda quando o LasecSimul/Core inicia uma nova sessão; se houver reconexão, procure uma fonte compatível por `projectId + componentId`, peça confirmação ao usuário em caso de ambiguidade e use o novo `id`.
 
@@ -360,8 +366,11 @@ Crie um mock de `LasecSimulInteropApi` e cubra pelo menos:
 8. Conecte como leitor.
 9. Gere dados textuais fragmentados e bytes binários; confirme que não há perda, duplicação ou alteração.
 10. Pause e retome a simulação: a conexão deve permanecer, sem dados novos durante a pausa.
-11. Pare a simulação: o consumidor deve receber `simulation-stopped` e mostrar estado desconectado.
-12. Reinicie, reabra o componente e confirme que a nova sessão pode ser descoberta/conectada.
+11. Pare a simulação: a conexão deve permanecer aberta (sem `onDidClose`), só sem dados novos.
+12. Rode a simulação de novo: a MESMA conexão deve voltar a receber dados, sem o consumidor
+    precisar reconectar/redescobrir a fonte.
+13. Feche o esquemático/painel do LasecSimul: o consumidor deve receber `onDidClose` com motivo
+    `schematic-closed`.
 
 ## Critérios de aceite
 

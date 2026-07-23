@@ -80,7 +80,12 @@ enum {
     KIND_LASECPLOT  = 8,
 };
 
-#define UART_RING_CAP 4096
+/* Achado 2026-07-22 (921600 baud perdendo dados): 4096 bytes enchiam em ~44,5ms nesse baud, perto
+ * demais do intervalo de poll do consumidor (ver extension/src/lasecplot/broker.ts,
+ * UART_RING_CAP_BYTES -- MESMO valor, duas linguagens/repositórios diferentes, não compartilham a
+ * constante de verdade). A correção principal é o poll do consumidor se adaptar ao baud
+ * configurado; aumentar o anel aqui é só margem extra de segurança, não a correção sozinha. */
+#define UART_RING_CAP 16384
 
 typedef struct {
     void *host_ctx;

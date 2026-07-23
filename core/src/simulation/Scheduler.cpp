@@ -251,9 +251,48 @@ void Scheduler::start() {
                 }
             }
 
+            // AdvanceLimitFn: teto ABSOLUTO sobre até onde m_nowNs pode avançar nesta iteração --
+            // ver doc-comment do tipo em Scheduler.hpp. Aplicado incondicionalmente (mesmo com
+            // realTimeRate()==0/ilimitado -- é uma garantia de corretude, não um modo de pacing).
+            // A folga acima da posição de referência é derivada da granularidade de pacing JÁ
+            // MEDIDA pra este host (pacingQuantum, calibrado logo abaixo), não uma constante
+            // adivinhada -- hosts com boa temporização ficam perto do piso, hosts mais ruidosos
+            // recebem mais margem. `advanceLimited` só fica true quando o teto de VERDADE reduziu o
+            // alvo (não quando o alvo já ia ser <= cycleSimStartNs por conta própria, ex.: o ramo
+            // configuredStepNs==0 com dirty pendente mas sem evento futuro -- ali targetTimeNs==
+            // m_nowNs de propósito, runUntil() ainda precisa rodar pra assentar o dirty set NO MESMO
+            // instante, não é um caso de "sem espaço pra avançar" do teto).
+            bool advanceLimited = false;
+            if (m_advanceLimit) {
+                if (const std::optional<uint64_t> referencePosition = m_advanceLimit()) {
+                    const uint64_t quantumNs = m_pacingQuantumNs.load(std::memory_order_relaxed);
+                    const uint64_t leadNs = std::clamp<uint64_t>(2 * quantumNs, kMinAdvanceLeadNs, kMaxAdvanceLeadNs);
+                    const uint64_t cap = *referencePosition > std::numeric_limits<uint64_t>::max() - leadNs
+                        ? std::numeric_limits<uint64_t>::max() : *referencePosition + leadNs;
+                    if (cap < targetTimeNs) {
+                        targetTimeNs = cap;
+                        advanceLimited = true;
+                    }
+                }
+            }
+
             // Usa exatamente o mesmo caminho do modo síncrono: callbacks transientes, passo
-            // adaptativo, eventos com timestamp, settle e aquisição de instrumentos.
+            // adaptativo, eventos com timestamp, settle e aquisição de instrumentos. Sempre chamado
+            // -- nunca pulado -- preserva o comportamento pré-existente do ramo configuredStepNs==0
+            // (drena dirty/eventos pendentes mesmo sem avançar o tempo).
             runUntil(targetTimeNs);
+
+            if (advanceLimited && nowNs() == cycleSimStartNs) {
+                // O teto de verdade impediu qualquer avanço neste ciclo (não uma falta de trabalho
+                // comum) -- espera um pouco em vez de girar sem dormir (a matemática de pacing
+                // abaixo, gated em cycleSimEndNs>cycleSimStartNs, não dispara nesse caso).
+                if (m_commandDrain) m_commandDrain();
+                std::unique_lock<std::mutex> pacingLock(m_pacingMutex);
+                m_pacingWake.wait_for(pacingLock, std::chrono::milliseconds(5), [this] {
+                    return !m_running.load(std::memory_order_acquire) || m_paused.load(std::memory_order_acquire);
+                });
+                continue;
+            }
 
             const double realTimeRate = m_realTimeRate.load(std::memory_order_relaxed);
             const uint64_t cycleSimEndNs = nowNs();
@@ -266,6 +305,9 @@ void Scheduler::start() {
                     pacingQuantum = std::max(
                         std::chrono::steady_clock::now() - probeStart,
                         std::chrono::steady_clock::duration{1});
+                    m_pacingQuantumNs.store(
+                        static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(pacingQuantum).count()),
+                        std::memory_order_relaxed);
                     pacingCalibrated = true;
                     pacingWallOrigin = std::chrono::steady_clock::now();
                     pacingSimOriginNs = cycleSimEndNs;

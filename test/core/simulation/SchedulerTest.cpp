@@ -1,9 +1,11 @@
 #include "simulation/Scheduler.hpp"
+#include <algorithm>
 #include <cassert>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
+#include <optional>
 #include <thread>
 #include <vector>
 
@@ -141,6 +143,133 @@ void testRealTimeRateCapsVirtualAdvanceWithoutFixedDelay() {
     // grandeza além deste limite; não se exige uma duração absoluta exata da máquina de CI.
     assert(scheduler.nowNs() > 0);
     assert(scheduler.nowNs() <= 100'000'000);
+}
+
+// Achado 2026-07-23 -- ver .claude/plans/humble-waddling-parnas.md: AdvanceLimitFn permite que
+// alguém de fora (SimulationSession, seguindo o MCU mais lento da sessão) trave m_nowNs() na
+// posição confirmada desse MCU mais uma folga, sem o Scheduler saber o que é um MCU. Substituiu um
+// design anterior (PacingRateLimitFn, um multiplicador de taxa alimentado por uma razão suavizada
+// por EMA) que falhou em teste ao vivo duas vezes -- ver doc-comment do tipo em Scheduler.hpp.
+// Estes testes cobrem só o MECANISMO do teto em isolamento (nenhum MCU/QEMU envolvido) -- ver
+// McuSchedulerPacingSyncTest.cpp pro comportamento fim-a-fim com um MCU sintético de verdade.
+void testAdvanceLimitCapsElectricalAdvance() {
+    Scheduler* schedulerPtr = nullptr;
+    Scheduler scheduler(2, [&schedulerPtr] {
+        schedulerPtr->dirtySet().clear();
+        return false;
+    });
+    schedulerPtr = &scheduler;
+    scheduler.setMaximumTimeStepNs(100'000);
+    scheduler.setRealTimeRate(1.0);
+    constexpr uint64_t kReferencePositionNs = 5'000'000; // 5ms
+    scheduler.setAdvanceLimitCallback([] { return std::optional<uint64_t>(kReferencePositionNs); });
+
+    scheduler.start();
+    std::this_thread::sleep_for(std::chrono::milliseconds(80)); // bem mais que o suficiente pra calibrar e travar no teto
+    scheduler.stop();
+
+    // leadNs = clamp(2*pacingQuantumNs(), 5ms, 20ms) -- ver doc-comment de AdvanceLimitFn.
+    const uint64_t leadNs = std::clamp<uint64_t>(2 * scheduler.pacingQuantumNs(), 5'000'000ULL, 20'000'000ULL);
+    assert(scheduler.nowNs() > 0);
+    assert(scheduler.nowNs() <= kReferencePositionNs + leadNs);
+}
+
+void testAdvanceLimitLiftsImmediatelyWhenReferenceMoves() {
+    Scheduler* schedulerPtr = nullptr;
+    Scheduler scheduler(2, [&schedulerPtr] {
+        schedulerPtr->dirtySet().clear();
+        return false;
+    });
+    schedulerPtr = &scheduler;
+    scheduler.setMaximumTimeStepNs(100'000);
+    scheduler.setRealTimeRate(1.0);
+    std::atomic<uint64_t> referencePositionNs{1'000'000}; // 1ms -- teto bem apertado no inicio
+    scheduler.setAdvanceLimitCallback([&referencePositionNs] {
+        return std::optional<uint64_t>(referencePositionNs.load(std::memory_order_relaxed));
+    });
+
+    scheduler.start();
+    std::this_thread::sleep_for(std::chrono::milliseconds(40)); // deixa travar no teto apertado
+    const uint64_t cappedNowNs = scheduler.nowNs();
+    assert(cappedNowNs < 30'000'000); // bem abaixo do que 40ms sem freio alcancaria
+
+    referencePositionNs.store(500'000'000, std::memory_order_relaxed); // sobe MUITO o teto
+    scheduler.notifyAdvanceLimitChanged();
+    std::this_thread::sleep_for(std::chrono::milliseconds(40)); // agora deveria progredir livremente
+    scheduler.stop();
+
+    // Retomou de verdade (sem decaimento gradual nenhum pra esperar) -- nao ficou preso perto do
+    // teto antigo.
+    assert(scheduler.nowNs() > cappedNowNs + 20'000'000);
+}
+
+void testAdvanceLimitNulloptBehavesLikeNoHook() {
+    Scheduler* schedulerPtr = nullptr;
+    Scheduler scheduler(2, [&schedulerPtr] {
+        schedulerPtr->dirtySet().clear();
+        return false;
+    });
+    schedulerPtr = &scheduler;
+    scheduler.setMaximumTimeStepNs(1'000'000);
+    scheduler.setRealTimeRate(1.0);
+    // nullopt = "nenhum MCU na sessão" -- isola a garantia de que isso se comporta EXATAMENTE como
+    // se nenhum hook tivesse sido setado (mesmo limite frouxo do teste original sem hook nenhum).
+    scheduler.setAdvanceLimitCallback([] { return std::optional<uint64_t>(std::nullopt); });
+
+    scheduler.start();
+    std::this_thread::sleep_for(std::chrono::milliseconds(40));
+    scheduler.stop();
+
+    assert(scheduler.nowNs() > 0);
+    assert(scheduler.nowNs() <= 100'000'000);
+}
+
+void testAdvanceLimitAppliesEvenWithUnlimitedRate() {
+    Scheduler* schedulerPtr = nullptr;
+    Scheduler scheduler(2, [&schedulerPtr] {
+        schedulerPtr->dirtySet().clear();
+        return false;
+    });
+    schedulerPtr = &scheduler;
+    scheduler.setMaximumTimeStepNs(100'000);
+    scheduler.setRealTimeRate(0.0); // ilimitado
+    constexpr uint64_t kReferencePositionNs = 5'000'000;
+    scheduler.setAdvanceLimitCallback([] { return std::optional<uint64_t>(kReferencePositionNs); });
+
+    scheduler.start();
+    std::this_thread::sleep_for(std::chrono::milliseconds(60));
+    scheduler.stop();
+
+    // Mesmo sem pacing por taxa nenhum, o teto de posição continua valendo -- mudança deliberada
+    // em relação ao hook antigo (PacingRateLimitFn só era chamado com realTimeRate()>0). Usa o teto
+    // máximo da folga (20ms) porque em modo ilimitado a calibração de pacingQuantum nunca roda (ela
+    // vive dentro do mesmo bloco gated em realTimeRate>0).
+    assert(scheduler.nowNs() > 0);
+    assert(scheduler.nowNs() <= kReferencePositionNs + 20'000'000);
+}
+
+void testAdvanceLimitNoBusySpinWhenPermanentlyCapped() {
+    Scheduler* schedulerPtr = nullptr;
+    std::atomic<uint64_t> hookCalls{0};
+    Scheduler scheduler(2, [&schedulerPtr] {
+        schedulerPtr->dirtySet().clear();
+        return false;
+    });
+    schedulerPtr = &scheduler;
+    scheduler.setMaximumTimeStepNs(100'000);
+    scheduler.setRealTimeRate(1.0);
+    scheduler.setAdvanceLimitCallback([&hookCalls] {
+        hookCalls.fetch_add(1, std::memory_order_relaxed);
+        return std::optional<uint64_t>(uint64_t{0}); // teto travado em 0 pra sempre -- nunca avança
+    });
+
+    scheduler.start();
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    scheduler.stop();
+
+    // Numa janela de 200ms com espera de 5ms quando sem espaço pra avançar, esperamos dezenas de
+    // chamadas -- nao milhares (o que indicaria busy-spin girando sem dormir).
+    assert(hookCalls.load() < 500);
 }
 
 void testRepeatedStartStopDoesNotLeakWorkersOrEvents() {
@@ -300,6 +429,11 @@ int main() {
     testStopDoesNotBlock();
     testAsyncModeAdvancesWithoutScheduledEvents();
     testRealTimeRateCapsVirtualAdvanceWithoutFixedDelay();
+    testAdvanceLimitCapsElectricalAdvance();
+    testAdvanceLimitLiftsImmediatelyWhenReferenceMoves();
+    testAdvanceLimitNulloptBehavesLikeNoHook();
+    testAdvanceLimitAppliesEvenWithUnlimitedRate();
+    testAdvanceLimitNoBusySpinWhenPermanentlyCapped();
     testRepeatedStartStopDoesNotLeakWorkersOrEvents();
     testControlAndTelemetryStayResponsiveDuringNonConvergentSettle();
     testCommandDrainWhileIdle();

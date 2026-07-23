@@ -13,6 +13,12 @@ uint64_t qemuEventTimeNs(uint64_t originNs, uint64_t virtualTimePs) {
 }
 } // namespace
 
+std::optional<uint64_t> McuComponent::pacingPositionNs() const {
+    const uint64_t ps = m_latestVirtualTimePs.load(std::memory_order_relaxed);
+    if (ps == 0) return std::nullopt; // nenhum evento processado ainda (boot ou logo apos recarga).
+    return qemuEventTimeNs(m_qemuTimeOriginNs.load(std::memory_order_relaxed), ps);
+}
+
 McuComponent::McuComponent(std::unique_ptr<IMcuAdapter> adapter, simulation::Scheduler& scheduler,
                            std::span<const Pin> requestedPins)
     : m_adapter(std::move(adapter)), m_scheduler(scheduler), m_controller(*m_adapter),
@@ -144,9 +150,30 @@ McuComponent::PollStep McuComponent::pollStepLocked(std::vector<DeferredSchedule
     const qemu::QemuPollResult result = arena.poll();
     if (!result.hasEvent || !result.event) return PollStep::NoEvent;
 
+    // Ver comentário de `latestVirtualTimeNs()` (McuComponent.hpp) -- `arena->qemuTime` nunca é
+    // escrito pelo QEMU real, então rastreia o maior `simuTimePs` visto entre os eventos
+    // efetivamente processados (heartbeats E leituras/escritas de registrador), a única fonte real
+    // de progresso do relógio virtual. compare_exchange evita retroceder se algum evento chegar
+    // fora de ordem.
+    {
+        uint64_t observed = m_latestVirtualTimePs.load(std::memory_order_relaxed);
+        bool advanced = false;
+        while (result.event->simuTimePs > observed) {
+            if (m_latestVirtualTimePs.compare_exchange_weak(observed, result.event->simuTimePs, std::memory_order_relaxed)) {
+                advanced = true;
+                break;
+            }
+        }
+        // Achado 2026-07-23 (sincronização de ritmo): acorda o Scheduler se ele estiver esperando
+        // AdvanceLimitFn avançar (ver ramo "sem espaço pra avançar" em Scheduler::start()) -- sem
+        // isto, um MCU que acabou de progredir só seria percebido no próximo teto curto de tempo
+        // em vez de imediatamente.
+        if (advanced) m_scheduler.notifyAdvanceLimitChanged();
+    }
+
     // nowNs() é um snapshot lock-free (m_nowSnapshotNs), nunca toca Scheduler::m_mutex -- seguro
     // chamar segurando m_callbackState->mutex independente de `deferred`.
-    const uint64_t eventNs = qemuEventTimeNs(m_qemuTimeOriginNs, result.event->simuTimePs);
+    const uint64_t eventNs = qemuEventTimeNs(m_qemuTimeOriginNs.load(std::memory_order_relaxed), result.event->simuTimePs);
     const uint64_t nowNs = m_scheduler.nowNs();
     if (eventNs > nowNs) {
         // Mantém a ação na arena e agenda uma única entrada exatamente no instante publicado.
@@ -195,10 +222,25 @@ void McuComponent::runBackgroundPollLoop(std::shared_ptr<CallbackState> state) {
                 } else {
                     step = self->pollStepLocked(&deferred);
                     if (step == PollStep::NoEvent && !self->m_scheduler.isRunning()) {
-                        // O Scheduler deixou de rodar em background enquanto esperávamos (ex:
-                        // Stop) -- volta pro modo passivo de sempre em vez de girar sem ninguém
-                        // pra drenar m_events.
-                        self->scheduleNextPoll(&deferred);
+                        // O Scheduler deixou de rodar em background enquanto esperávamos (ex: Stop)
+                        // -- só sai, SEM reagendar. Achado 2026-07-22 (SessionRestartStressTest,
+                        // 15/15 ciclos travando pra sempre após o primeiro): reagendar aqui via
+                        // scheduleNextPoll() (versão antiga desta linha) deixava m_pollEventScheduled
+                        // preso em `true` para sempre sempre que este ramo disparasse durante
+                        // SimulationSession::stopSimulation() -- ela para o Scheduler ANTES de
+                        // chamar stopFirmware() (de propósito: nenhum componente pode voltar a
+                        // agendar trabalho enquanto as MCUs são encerradas), então esta thread podia
+                        // flagrar "sem evento + Scheduler parou" bem nessa janela e agendar um
+                        // callback num Scheduler prestes a ser resetado. Esse callback é o ÚNICO
+                        // lugar que zera m_pollEventScheduled (em onPollEvent()) -- mas
+                        // Scheduler::reset() (chamado logo depois, em stopSimulation()) descarta a
+                        // fila de eventos sem executá-lo, e a flag ficava presa para sempre: todo
+                        // load posterior via startPolling()->scheduleNextPoll()->schedulePollAt()
+                        // via a flag presa e desistia silenciosamente, nenhuma thread de poll nunca
+                        // mais nascia, o MCU travava pra sempre. Nenhum chamador real de
+                        // Scheduler::stop() deixa a arena aberta esperando um "ponto de retomada"
+                        // agendado (stopSimulation() sempre também chama stopFirmware()+reset() logo
+                        // em seguida) -- sair sem reagendar é seguro e evita a pegadinha.
                         stop = true;
                     }
                 }
@@ -387,7 +429,7 @@ bool McuComponent::pollAndDispatchPendingEvents(uint64_t nowNs) {
     // esse trabalho e prenderia stamp() por mais tempo sem necessidade.
     const qemu::QemuPollResult result = arenaBridge.poll();
     if (!result.hasEvent || !result.event) return false;
-    const uint64_t eventNs = qemuEventTimeNs(m_qemuTimeOriginNs, result.event->simuTimePs);
+    const uint64_t eventNs = qemuEventTimeNs(m_qemuTimeOriginNs.load(std::memory_order_relaxed), result.event->simuTimePs);
     // Uma stamp causada por outra parte do circuito não pode antecipar o relógio virtual do QEMU.
     // A entrada permanece na fila; onPollEvent() já está agendado para consumi-la no instante certo.
     if (eventNs > nowNs && !m_syntheticArenaForTesting) return false;
@@ -508,7 +550,23 @@ void McuComponent::loadFirmwareLocked(const std::filesystem::path& firmwarePath,
     // contra o binário QEMU de verdade) -- ver comentário do membro m_controller no .hpp.
     m_gdbPort = debug.gdbPort;
     m_syntheticArenaForTesting = false;
-    m_qemuTimeOriginNs = m_scheduler.nowNs();
+    // Achado 2026-07-22 (session_restart_stress_test intermitente sob carga): latestVirtualTimeNs()
+    // rastreia o MAIOR simuTimePs já visto (compare_exchange que nunca retrocede, ver seu
+    // doc-comment no .hpp) -- sem este reset, um firmware recarregado (novo processo QEMU, relógio
+    // -icount próprio recomeçando perto de 0) nunca conseguia AVANÇAR esse indicador até seu
+    // simuTimePs cru ultrapassar organicamente o pico deixado pela sessão ANTERIOR, deixando o
+    // indicador de "MCU real-time %" (SimulationSession::firstMcuVirtualTimeNs) preso num valor
+    // antigo e cada vez mais desonesto por vários ciclos de Stop->Run.
+    //
+    // Achado 2026-07-23: zera ANTES de setar a nova origem (ordem invertida em relação a antes) --
+    // pacingPositionNs() lê os dois campos cross-thread, sem lock. Se um leitor pegar a transição
+    // no meio nesta ordem, o pior caso é combinar a origem VELHA com virtualTimePs ZERADO, dando uma
+    // posição um pouco ATRASADA (efeito: espera um instante a mais, inofensivo). Na ordem antiga
+    // (origem primeiro), o pior caso combinava a origem NOVA com o simuTimePs VELHO da sessão
+    // anterior, dando uma posição espúria no FUTURO (efeito: deixaria o elétrico correr à frente
+    // indevidamente, ainda que só por uma janela curta).
+    m_latestVirtualTimePs.store(0, std::memory_order_relaxed);
+    m_qemuTimeOriginNs.store(m_scheduler.nowNs(), std::memory_order_relaxed);
     m_controller.start(firmwarePath, arenaName, qemuBinaryOverride, debug);
     startPolling(&deferred);
     deferred.push_back([&scheduler = m_scheduler, index = m_componentIndex] { scheduler.markDirty(index); });
@@ -540,7 +598,9 @@ void McuComponent::openSyntheticArenaForTesting(const std::string& arenaName) {
     {
         std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
         m_syntheticArenaForTesting = true;
-        m_qemuTimeOriginNs = m_scheduler.nowNs();
+        // Ordem invertida (zera primeiro, seta origem depois) -- ver comentário em loadFirmwareLocked().
+        m_latestVirtualTimePs.store(0, std::memory_order_relaxed);
+        m_qemuTimeOriginNs.store(m_scheduler.nowNs(), std::memory_order_relaxed);
         m_controller.arenaBridge().open(qemu::QemuArenaOpenOptions{arenaName, true});
         startPolling(&deferred);
     }

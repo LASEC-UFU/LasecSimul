@@ -123,7 +123,6 @@ int main() {
     registry::ComponentParams plotParams;
     plotParams.pinList = {{"tx", 0.0, 8.0}, {"rx", 0.0, 24.0}};
     const uint32_t plotIndex = session.addComponent("peripherals.lasecplot", plotParams);
-    session.setProperty(plotIndex, "baudrate", PropertyValue{115200.0});
     session.setProperty(plotIndex, "data_bits", PropertyValue{8.0});
     session.setProperty(plotIndex, "stop_bits", PropertyValue{1.0});
     session.setProperty(plotIndex, "parity", PropertyValue{std::string("none")});
@@ -134,34 +133,58 @@ int main() {
     session.scheduler().markDirty(mcuIndex);
     for (int i = 0; i < 5 && session.settleStep(); ++i) {}
 
-    // Testa vários bytes -- 0x55/0xAA cobrem os dois padrões alternados de bit (maximiza chance de
-    // flagrar um bug de ordem de bits, que um valor só como 0x00 ou 0xFF nunca revelaria), 0x41 é
-    // um caractere ASCII normal (o tipo de dado real que passaria por telemetria de texto).
-    const std::vector<uint8_t> bytesToSend = {0x55, 0xAA, 0x41, 0x00, 0xFF};
-    for (const uint8_t byteToSend : bytesToSend) {
-        simulateQemuWrite(arena, uart0Start + 0x00, byteToSend);
+    // Achado 2026-07-22 (usuário reporta perda de dados especificamente em 921600 baud, 115200
+    // funcionando): antes só 115200 era exercitado aqui. `usartWriteClkDiv`/`ser_bit_period_ns`
+    // (Esp32Adapter.cpp/lib.c) escalam o período de bit a partir do baud configurado -- este teste
+    // agora prova a decodificação elétrica ponta-a-ponta nos DOIS baud rates que o usuário precisa,
+    // não só no que já funcionava.
+    auto runBaudRateCase = [&](double baudRate) {
+        session.setProperty(plotIndex, "baudrate", PropertyValue{baudRate});
+        // Configura o UART_CLKDIV_REG (offset 0x14) do UART0 do MCU pro MESMO baud rate --
+        // `usartWriteClkDiv` (Esp32Adapter.cpp) aceita o bit-time em ns já convertido direto (sem o
+        // marcador `kRawClkDivMarker`), o mesmo caminho que a produção real (qemu_simulide) usa.
+        // Sem isto, o TX do MCU continua no bit-time padrão (115200) enquanto o receptor já espera
+        // o baud novo -- causa decodificação embaralhada e determinística, não um bug do produto.
+        simulateQemuWrite(arena, uart0Start + 0x14, static_cast<uint64_t>(1'000'000'000.0 / baudRate));
         session.scheduler().markDirty(mcuIndex);
         for (int i = 0; i < 5 && session.settleStep(); ++i) {}
 
-        // 10 bits (start+8+stop) a 115200 baud = ~86.8us; avança tempo virtual síncrono o
-        // suficiente pra cobrir o frame inteiro, com folga.
-        session.scheduler().step(120'000);
-        for (int i = 0; i < 20 && session.settleStep(); ++i) {}
+        // Testa vários bytes -- 0x55/0xAA cobrem os dois padrões alternados de bit (maximiza chance
+        // de flagrar um bug de ordem de bits, que um valor só como 0x00 ou 0xFF nunca revelaria),
+        // 0x41 é um caractere ASCII normal (o tipo de dado real que passaria por telemetria de
+        // texto).
+        const std::vector<uint8_t> bytesToSend = {0x55, 0xAA, 0x41, 0x00, 0xFF};
+        for (const uint8_t byteToSend : bytesToSend) {
+            simulateQemuWrite(arena, uart0Start + 0x00, byteToSend);
+            session.scheduler().markDirty(mcuIndex);
+            for (int i = 0; i < 5 && session.settleStep(); ++i) {}
 
-        std::string receivedHex;
-        // tryDrainUartRx() pode devolver nullopt (settle em andamento) -- mesma disciplina de
-        // retry usada por LasecPlotBroker::poll() em produção.
-        for (int attempt = 0; attempt < 20 && receivedHex.empty(); ++attempt) {
-            if (const auto snapshot = session.tryDrainUartRx(plotIndex)) receivedHex = snapshot->dataHex;
-            else std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            // 10 bits (start+8+stop) no baud configurado; avança tempo virtual síncrono o
+            // suficiente pra cobrir o frame inteiro, com ~38% de folga (mesma margem que o valor
+            // original hardcoded pra 115200 já usava: 120000ns / 86805ns ~= 1.38).
+            const auto frameNs = static_cast<uint64_t>(10.0 * 1'000'000'000.0 / baudRate);
+            session.scheduler().step(frameNs * 138 / 100);
+            for (int i = 0; i < 20 && session.settleStep(); ++i) {}
+
+            std::string receivedHex;
+            // tryDrainUartRx() pode devolver nullopt (settle em andamento) -- mesma disciplina de
+            // retry usada por LasecPlotBroker::poll() em produção.
+            for (int attempt = 0; attempt < 20 && receivedHex.empty(); ++attempt) {
+                if (const auto snapshot = session.tryDrainUartRx(plotIndex)) receivedHex = snapshot->dataHex;
+                else std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            }
+
+            char expectedHex[3];
+            std::snprintf(expectedHex, sizeof(expectedHex), "%02x", static_cast<unsigned>(byteToSend));
+            const std::string label = "peripherals.lasecplot (dispositivo real) decodifica 0x" + std::string(expectedHex) +
+                " a " + std::to_string(static_cast<long>(baudRate)) + " baud, vindo de MCU ESP32 real (UART0 TX) -- recebido: '" +
+                receivedHex + "'";
+            check(receivedHex == expectedHex, label.c_str());
         }
+    };
 
-        char expectedHex[3];
-        std::snprintf(expectedHex, sizeof(expectedHex), "%02x", static_cast<unsigned>(byteToSend));
-        const std::string label = "peripherals.lasecplot (dispositivo real) decodifica 0x" + std::string(expectedHex) +
-            " vindo de MCU ESP32 real (UART0 TX) -- recebido: '" + receivedHex + "'";
-        check(receivedHex == expectedHex, label.c_str());
-    }
+    runBaudRateCase(115200.0);
+    runBaudRateCase(921600.0);
 
     if (failures == 0) {
         std::printf("\nTodos os testes de McuUartToLasecPlot passaram.\n");

@@ -13,6 +13,7 @@
 #include <unordered_map>
 #include <nlohmann/json.hpp>
 #include "../mcu/McuComponent.hpp"
+#include "lasecsimul/qemu_arena_abi.h"
 
 namespace lasecsimul::session {
 
@@ -117,6 +118,7 @@ SimulationSession::SimulationSession(plugins::GlobalPluginCache& globalCache, si
     m_scheduler.setStableStepCallback([this](uint64_t timestampNs) { onStableStepUnlocked(timestampNs); });
     m_scheduler.setCommandDrainCallback([this] { drainCommandQueue(); });
     m_scheduler.setCommandPendingCallback([this] { return m_commandQueue.hasPending(); });
+    m_scheduler.setAdvanceLimitCallback([this] { return computeSlowestMcuPositionNs(); });
     setTransientSettings(m_transientSettings);
 }
 
@@ -1074,6 +1076,36 @@ mcu::McuComponent* SimulationSession::mcuComponentForTesting(uint32_t componentI
     if (componentIndex >= m_componentInstances.size()) return nullptr;
     IComponentModel* instance = m_componentInstances[componentIndex].get();
     return instance ? dynamic_cast<mcu::McuComponent*>(instance) : nullptr;
+}
+
+std::optional<uint64_t> SimulationSession::firstMcuVirtualTimeNs() const {
+    for (const auto& slot : m_componentInstances) {
+        IComponentModel* instance = slot.get();
+        if (!instance) continue;
+        auto* mcu = dynamic_cast<mcu::McuComponent*>(instance);
+        if (!mcu) continue;
+        if (!mcu->arenaBridge().arena()) continue;
+        // Achado 2026-07-22: `arena->qemuTime` nunca é escrito pelo QEMU real (campo morto, ver
+        // comentário de `McuComponent::latestVirtualTimeNs()`) -- lê-lo direto sempre dava 0,
+        // fazendo o indicador "MCU real-time ratio" ficar preso em 0% pra sempre, mesmo com o MCU
+        // rodando normalmente. `latestVirtualTimeNs()` rastreia o progresso real via os eventos
+        // efetivamente processados.
+        return mcu->latestVirtualTimeNs();
+    }
+    return std::nullopt;
+}
+
+std::optional<uint64_t> SimulationSession::computeSlowestMcuPositionNs() const {
+    std::optional<uint64_t> slowest;
+    for (const auto& slot : m_componentInstances) {
+        IComponentModel* instance = slot.get();
+        auto* mcu = instance ? dynamic_cast<mcu::McuComponent*>(instance) : nullptr;
+        if (!mcu || !mcu->arenaBridge().arena()) continue;
+        if (const std::optional<uint64_t> position = mcu->pacingPositionNs()) {
+            slowest = slowest ? std::min(*slowest, *position) : *position;
+        }
+    }
+    return slowest;
 }
 
 void SimulationSession::sendComponentEvent(uint32_t componentIndex, const ComponentEvent& event) {

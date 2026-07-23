@@ -207,6 +207,22 @@ html, body {
   opacity: 0.85;
 }
 
+/* Indicador SEPARADO da taxa do solver elétrico acima (achado 2026-07-22: "100%" ali não garante
+ * que o MCU/QEMU acompanha tempo real -- ver messages.ts::mcuRealTimeRatio). */
+.appbar__status-mcu-rate {
+  font-weight: 400;
+  opacity: 0.85;
+  margin-left: 6px;
+  padding-left: 6px;
+  border-left: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+.appbar__status-mcu-rate--low {
+  font-weight: 700;
+  opacity: 1;
+  color: #ffd54a;
+}
+
 .canvas {
   position: relative;
   overflow: hidden;

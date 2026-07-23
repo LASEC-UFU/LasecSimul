@@ -1,5 +1,6 @@
 #include "QemuArenaBridge.hpp"
 #include <algorithm>
+#include <atomic>
 #include <cstring>
 #include <stdexcept>
 
@@ -134,12 +135,28 @@ const LsdnQemuArena* QemuArenaBridge::arena() const { return m_arena; }
 QemuPollResult QemuArenaBridge::poll() {
     if (!m_arena) return QemuPollResult{false, std::nullopt, std::nullopt, "QEMU arena is not open"};
 
+    // Achado 2026-07-22 (usuário reporta simulação travando por completo depois de rodar por um
+    // tempo, indicador de velocidade continua marcando 100%): `queueWriteIndex` é escrito pelo
+    // processo QEMU (outro processo, `pushQueueEntry()` em simuliface.c) -- sem um load de
+    // aquisição aqui, pareado com a store de liberação de lá, o padrão de memória do C++ não
+    // garante que os campos da entrada (`regAddr`/`regData`/`simuAction`/`simuTime`, escritos
+    // ANTES de lá incrementar o índice) já estejam visíveis pra este processo quando o índice
+    // aparenta ter avançado -- uma leitura "adiantada" da entrada podia estourar o cálculo de
+    // tempo de evento (`McuComponent.cpp::qemuEventTimeNs`) e travar aquela entrada (e tudo atrás
+    // dela na fila de 32) pra sempre, sem o Scheduler elétrico (relógio independente) perceber.
+    // `std::atomic_ref` não muda o layout do `LsdnQemuArena` compartilhado (mesmo campo, mesmo
+    // tipo) -- só a disciplina de acesso.
+    const uint64_t queueWriteIndex =
+        std::atomic_ref<uint64_t>(m_arena->queueWriteIndex).load(std::memory_order_acquire);
+
     // PERF-13 (protocolo v3): a fila de escritas/heartbeat tem prioridade sobre o slot único de
     // leitura -- corresponde exatamente à ordem que o lado QEMU já garante (readReg() espera a
     // fila esvaziar de vez antes de emitir SIM_READ, ver waitForQueueDrain() em simuliface.c),
     // então nunca há as duas coisas pendentes ao mesmo tempo na prática -- mas checar a fila
     // primeiro deixa isso correto por construção, não só por coincidência de timing.
-    if (m_arena->queueReadIndex != m_arena->queueWriteIndex) {
+    // `queueReadIndex` é escrito só por ESTE processo (ver acknowledgeWrite()), então uma leitura
+    // simples basta pro lado de cá.
+    if (m_arena->queueReadIndex != queueWriteIndex) {
         const uint64_t slot = m_arena->queueReadIndex % LSDN_QEMU_ARENA_QUEUE_DEPTH;
         const LsdnQemuQueueEntry& entry = m_arena->queue[slot];
 
@@ -169,7 +186,18 @@ void QemuArenaBridge::acknowledgeWrite() {
     // m_arena->simuTime (isso é só do slot único de leitura, ver acknowledgeRead()). No-op se a
     // fila já estiver vazia (não deveria acontecer -- só chamado depois de poll() achar uma
     // entrada -- mas seguro por construção mesmo assim).
-    if (m_arena && m_arena->queueReadIndex != m_arena->queueWriteIndex) ++m_arena->queueReadIndex;
+    //
+    // Achado 2026-07-22 (ver comentário de poll() acima): `queueReadIndex` é lido pelo processo
+    // QEMU (`waitForSynch()`/`waitForQueueDrain()` em simuliface.c, que decidem se o vCPU pode
+    // continuar publicando entradas novas) -- store de liberação aqui pareia com o load de
+    // aquisição de lá.
+    if (!m_arena) return;
+    const uint64_t queueWriteIndex =
+        std::atomic_ref<uint64_t>(m_arena->queueWriteIndex).load(std::memory_order_acquire);
+    if (m_arena->queueReadIndex != queueWriteIndex) {
+        std::atomic_ref<uint64_t>(m_arena->queueReadIndex)
+            .store(m_arena->queueReadIndex + 1, std::memory_order_release);
+    }
 }
 
 void QemuArenaBridge::acknowledgeRead(uint64_t regData) {

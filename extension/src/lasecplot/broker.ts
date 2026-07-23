@@ -32,7 +32,7 @@ function humanizeDeviceName(name: string): string {
 }
 
 export interface LasecPlotTransport {
-  read(componentId: string): Promise<{ data: Uint8Array; simulationTimeNs: number }>;
+  read(componentId: string): Promise<{ data: Uint8Array; simulationTimeNs: number; droppedBytes?: number }>;
   write(componentId: string, data: Uint8Array): Promise<number>;
 }
 
@@ -102,17 +102,56 @@ class Connection implements LasecPlotConnection {
   }
 }
 
+/** Mesmo tamanho do anel RX que `devices/simulide-peripherals/src/lib.c::UART_RING_CAP` -- duas
+ * linguagens/repositórios diferentes, não dá pra compartilhar a constante de verdade, mas
+ * `computeDesiredPollIntervalMs` abaixo só faz sentido com o MESMO valor dos dois lados. Mudar um
+ * dos dois lados sem o outro só perde a margem de segurança calculada, não quebra nada -- por isso
+ * não é um teste de igualdade automatizado, só este comentário. */
+const UART_RING_CAP_BYTES = 16384;
+/** Fração do tempo-de-preenchimento do anel que vira o intervalo de poll -- ex.: 0,4 = poll a cada
+ * 40% do tempo que o anel leva pra encher no baud configurado, ou seja, ~2,5 polls acontecem antes
+ * de qualquer risco real de overflow. Ache real 2026-07-22 (921600 baud perdendo dados): um
+ * intervalo FIXO (50ms, calibrado só pensando em 115200) enche o anel de 4096 bytes em ~44,5ms a
+ * 921600 baud -- mais rápido do que o poll conseguia drenar. */
+const UART_RING_FILL_SAFETY_FACTOR = 0.4;
+
+/** bits por frame (start + dados + paridade opcional + stop) -> bytes/segundo no baud configurado. */
+function bytesPerSecondForBaud(registration: Pick<EndpointRegistration, "baudRate" | "dataBits" | "stopBits" | "parity">): number {
+  const bitsPerFrame = 1 + registration.dataBits + (registration.parity === "none" ? 0 : 1) + registration.stopBits;
+  return registration.baudRate / bitsPerFrame;
+}
+
 export class LasecPlotBroker implements LasecSimulInteropApi, vscode.Disposable {
   readonly apiVersion = LASECSIMUL_INTEROP_API_VERSION;
   private readonly changed = new Signal<void>();
   readonly onDidChangeLasecPlotEndpoints = this.changed.event;
   private readonly endpoints = new Map<string, EndpointState>();
   private timer?: ReturnType<typeof setInterval>;
+  private timerIntervalMs?: number;
   private polling = false;
-  private readonly pollIntervalMs: number;
+  /** Teto do intervalo de poll (usado em baud baixo, onde não há risco de overflow) -- preserva a
+   * economia de CPU/IPC que motivou o valor original de 50ms (ver `manager.ts`). Em baud alto,
+   * `computeDesiredPollIntervalMs` encurta automaticamente abaixo deste teto. */
+  private readonly maxPollIntervalMs: number;
 
-  constructor(private readonly transport: LasecPlotTransport, pollIntervalMs = 10) {
-    this.pollIntervalMs = pollIntervalMs;
+  constructor(private readonly transport: LasecPlotTransport, maxPollIntervalMs = 10) {
+    this.maxPollIntervalMs = maxPollIntervalMs;
+  }
+
+  /** Menor intervalo necessário entre os endpoints ONLINE agora (o de baud mais alto manda) --
+   * nunca mais lento que `maxPollIntervalMs`, nunca mais rápido que 5ms (evita martelar o IPC por
+   * um baud absurdo). Sem nenhum endpoint online, o valor não importa (o timer fica parado, ver
+   * `updatePolling`). */
+  private computeDesiredPollIntervalMs(): number {
+    let desired = this.maxPollIntervalMs;
+    for (const state of this.endpoints.values()) {
+      if (!state.online) continue;
+      const bytesPerSecond = bytesPerSecondForBaud(state.registration);
+      if (bytesPerSecond <= 0) continue;
+      const fillTimeMs = (UART_RING_CAP_BYTES / bytesPerSecond) * 1000;
+      desired = Math.min(desired, fillTimeMs * UART_RING_FILL_SAFETY_FACTOR);
+    }
+    return Math.max(5, Math.min(this.maxPollIntervalMs, Math.floor(desired)));
   }
 
   register(registration: EndpointRegistration): void {
@@ -121,6 +160,10 @@ export class LasecPlotBroker implements LasecSimulInteropApi, vscode.Disposable 
       const changed = JSON.stringify(current.registration) !== JSON.stringify(registration);
       current.registration = registration;
       if (changed && current.published) this.changed.fire();
+      // Baud rate pode mudar com o endpoint já online (ex.: usuário edita a propriedade em runtime)
+      // -- recalcula o intervalo de poll pro novo baud em vez de esperar um próximo toggle de
+      // online que talvez nunca aconteça.
+      if (changed && current.online) this.updatePolling();
     }
     else this.endpoints.set(registration.id, { registration, published: false, online: false, sequence: 0, connections: new Set(), recentBytes: new Uint8Array(0) });
   }
@@ -151,8 +194,13 @@ export class LasecPlotBroker implements LasecSimulInteropApi, vscode.Disposable 
   }
   setOnline(id: string, online: boolean): void {
     const state = this.endpoints.get(id); if (!state || state.online === online) return;
+    // Pausar/parar a simulação (`online=false`) NUNCA fecha o endpoint sozinho -- pedido real: o
+    // painel/conexão do LasecPlot deve sobreviver a Pause/Stop, só parando de receber dado novo
+    // (`poll()` já ignora endpoints offline, ver abaixo), e voltar a fluir dado automaticamente
+    // quando a simulação rodar de novo (`setOnline(id,true)`), sem o usuário precisar reabrir. Só
+    // `unpublish()`/`remove()` explícitos (clique do usuário, componente removido, ou o esquemático
+    // sendo fechado, ver `LasecPlotManager::closeAllForSchematicClose`) devem despublicar.
     state.online = online;
-    if (!online && state.published) { state.published = false; this.closeConnections(state, "simulation-stopped"); }
     this.changed.fire();
     this.updatePolling();
   }
@@ -188,7 +236,13 @@ export class LasecPlotBroker implements LasecSimulInteropApi, vscode.Disposable 
   }
   async openLasecPlotEndpoint(id: string, options: { writable?: boolean } = {}): Promise<LasecPlotConnection> {
     const state = this.required(id);
-    if (!state.published || !state.online) throw new Error("O endpoint LasecPlot não está disponível.");
+    // Achado 2026-07-22 (usuário reporta: LasecSimul não fecha a conexão ao parar, mas o LasecPlot
+    // mostra falha de comunicação mesmo assim): antes exigia `state.online` também -- se o LasecPlot
+    // tentasse (re)conectar (ex.: reabrir o painel, ou o usuário clicar "Conectar" de novo) enquanto
+    // a simulação estivesse parada/pausada, essa checagem lançava "não está disponível", mesmo com o
+    // endpoint publicado. `online` só deveria gatear se HÁ DADO NOVO fluindo agora (ver poll()) --
+    // conectar/permanecer conectado nunca deveria depender da simulação estar rodando.
+    if (!state.published) throw new Error("O endpoint LasecPlot não está disponível.");
     const wantsWriter = options.writable === true;
     if (wantsWriter && state.registration.mode !== "bidirectional") throw new Error("Este endpoint LasecPlot está em modo somente leitura.");
     if (wantsWriter && state.writer) throw new Error("Já existe um cliente escritor conectado a este endpoint.");
@@ -198,8 +252,13 @@ export class LasecPlotBroker implements LasecSimulInteropApi, vscode.Disposable 
   }
   async write(state: EndpointState, connection: Connection, data: Uint8Array): Promise<void> {
     if (state.writer !== connection) throw new Error("O cliente não possui a reserva de escrita deste endpoint.");
-    if (!state.online || !state.published) throw new Error("O endpoint LasecPlot está fechado.");
+    if (!state.published) throw new Error("O endpoint LasecPlot está fechado.");
     if (data.byteLength === 0) return;
+    // Achado 2026-07-22: sem a simulação rodando não há MCU vivo pra receber os bytes -- descarta
+    // silenciosamente em vez de lançar (mesmo espírito de poll() já tolerar "sem dado agora" sem
+    // virar erro). O cliente (LasecPlot) não deveria ver uma exceção só por escrever enquanto a
+    // simulação está parada/pausada; ele só não terá efeito nenhum.
+    if (!state.online) return;
     const simulationTimeNs = await this.transport.write(state.registration.componentId, data.slice());
     const packet: LasecPlotDataPacket = { endpointId: state.registration.id, sequence: state.sequence++, simulationTimeNs,
       direction: "client-to-mcu", encoding: "binary", data: data.slice() };
@@ -211,8 +270,15 @@ export class LasecPlotBroker implements LasecSimulInteropApi, vscode.Disposable 
   private required(id: string): EndpointState { const state = this.endpoints.get(id); if (!state) throw new Error(`Endpoint LasecPlot desconhecido: ${id}`); return state; }
   private updatePolling(): void {
     const shouldPoll = [...this.endpoints.values()].some((state) => state.online);
-    if (shouldPoll && !this.timer) this.timer = setInterval(() => void this.poll(), this.pollIntervalMs);
-    else if (!shouldPoll && this.timer) { clearInterval(this.timer); this.timer = undefined; }
+    if (!shouldPoll) {
+      if (this.timer) { clearInterval(this.timer); this.timer = undefined; this.timerIntervalMs = undefined; }
+      return;
+    }
+    const desiredIntervalMs = this.computeDesiredPollIntervalMs();
+    if (this.timer && this.timerIntervalMs === desiredIntervalMs) return; // já rodando no intervalo certo
+    if (this.timer) clearInterval(this.timer);
+    this.timerIntervalMs = desiredIntervalMs;
+    this.timer = setInterval(() => void this.poll(), desiredIntervalMs);
   }
   private closeConnections(state: EndpointState, reason: string): void { for (const c of [...state.connections]) c.finish(reason); state.writer = undefined; }
   private async poll(): Promise<void> {
@@ -220,17 +286,14 @@ export class LasecPlotBroker implements LasecSimulInteropApi, vscode.Disposable 
     try {
       for (const state of this.endpoints.values()) {
         if (!state.online) continue;
-        let batch: { data: Uint8Array; simulationTimeNs: number };
+        let batch: { data: Uint8Array; simulationTimeNs: number; droppedBytes?: number };
         try { batch = await this.transport.read(state.registration.componentId); }
         catch {
           // Bug real corrigido 2026-07-18 ("Abrir parece travado, aberto volta pra false sozinho"):
-          // um erro de leitura (ex: overflow do buffer RX -- ESPERADO enquanto ninguém está lendo
-          // ainda, ver `CoreUartTransport.read`) fechava o endpoint inteiro aqui. Como o poll roda a
-          // cada `pollIntervalMs` (10ms) sempre que `online=true`, isso formava um loop "Abrir
-          // publica -> próximo tick de poll acha overflow -> despublica de novo" -- na prática o
-          // endpoint nunca ficava aberto tempo suficiente pra UI/consumidor externo perceberem.
-          // `serialterm/manager.ts::poll` já trata o MESMO erro assim (reporta, mas mantém aberto) --
-          // só este lote de bytes foi perdido, não é motivo pra fechar a conexão inteira. Fechamento
+          // uma falha de transporte (ex: Core desconectado) fechava o endpoint inteiro aqui. Overflow
+          // de buffer RX NÃO lança mais (ver `CoreUartTransport.read`, achado 2026-07-22: baud alto
+          // descartava o lote inteiro, não só os bytes perdidos) -- só falhas de transporte genuínas
+          // chegam neste catch agora. Mesmo assim, não é motivo pra fechar a conexão inteira; fechamento
           // de verdade continua acontecendo por `setOnline(id,false)` quando o Core realmente cai.
           continue;
         }

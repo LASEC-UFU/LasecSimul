@@ -184,6 +184,7 @@ const UI_TEXT = {
     running: "Rodando",
     paused: "Pausado",
     stopped: "Parado",
+    mcuRealTimeRatioTooltip: "Taxa real do relógio virtual do MCU/QEMU -- diferente da taxa do solver elétrico ao lado, que sempre acompanha o relógio de parede por design. Abaixo de 100% aqui indica que millis()/UART/timers do firmware estão rodando mais devagar que o tempo real.",
     properties: "Propriedades",
     copy: "Copiar",
     cut: "Cortar",
@@ -301,6 +302,7 @@ const UI_TEXT = {
     running: "Running",
     paused: "Paused",
     stopped: "Stopped",
+    mcuRealTimeRatioTooltip: "Real-time ratio of the MCU/QEMU virtual clock -- different from the electrical solver rate next to it, which always tracks wall-clock time by design. Below 100% here means the firmware's millis()/UART/timers are running slower than real time.",
     properties: "Properties",
     copy: "Copy",
     cut: "Cut",
@@ -486,6 +488,11 @@ let simulationStatus: SimulationStatus = "stopped";
 /** Taxa real alcançada (ver `messages.ts::simulationRate`) -- `undefined` == sem leitura ainda ou
  * simulação parada, mostra só o rótulo de status sem número junto. */
 let simulationRate: number | undefined;
+/** Taxa real do relógio virtual do MCU/QEMU (ver `messages.ts::mcuRealTimeRatio`, achado 2026-07-22)
+ * -- `undefined` == sem MCU no circuito atual ou sem amostra suficiente ainda. Indicador SEPARADO
+ * de `simulationRate`: aquele mede o solver elétrico (pareado ao relógio de parede por design),
+ * este mede se o MCU/QEMU (base de `millis()`) está de fato acompanhando o tempo real. */
+let mcuRealTimeRatio: number | undefined;
 let activePropertyTarget:
   | { kind: "project"; componentId: string }
   | { kind: "project-batch"; componentIds: string[] }
@@ -1797,6 +1804,28 @@ function updateSimulationRateLabel(): void {
   if (rateLabel) rateLabel.textContent = simulationRateText();
 }
 
+/** "" (nada) sem MCU no circuito/sem amostra ainda; senão "MCU 62%" -- número SEPARADO do solver
+ * elétrico acima (ver comentário de `mcuRealTimeRatio`), achado 2026-07-22. */
+function mcuRealTimeRatioText(): string {
+  if (mcuRealTimeRatio === undefined || simulationStatus !== "running") return "";
+  return `MCU ${Math.round(mcuRealTimeRatio * 100)}%`;
+}
+
+/** Abaixo de ~85% do tempo real, o MCU está perceptivelmente atrasado (ex.: `millis()`/UART/timers
+ * do firmware não acompanham o relógio de parede) -- destaca visualmente em vez de deixar o número
+ * baixo passar despercebido no meio da barra de status. */
+function mcuRealTimeRatioIsLow(): boolean {
+  return mcuRealTimeRatio !== undefined && simulationStatus === "running" && mcuRealTimeRatio < 0.85;
+}
+
+function updateMcuRealTimeRatioLabel(): void {
+  const label = appBarElement?.querySelector<HTMLElement>(".appbar__status-mcu-rate");
+  if (!label) return;
+  label.textContent = mcuRealTimeRatioText();
+  label.classList.toggle("appbar__status-mcu-rate--low", mcuRealTimeRatioIsLow());
+  label.hidden = mcuRealTimeRatio === undefined || simulationStatus !== "running";
+}
+
 function selectionLabel(): string {
   const labels = getSelectedTextLabels();
   const components = getSelectedComponents();
@@ -2412,6 +2441,16 @@ function renderAppBar(): HTMLElement {
   rateLabel.className = "appbar__status-rate";
   rateLabel.textContent = simulationRateText();
   status.appendChild(rateLabel);
+
+  // Indicador SEPARADO do relógio elétrico acima -- ver comentário de `mcuRealTimeRatio` (achado
+  // 2026-07-22: "100%" do solver elétrico não garante que o MCU/QEMU acompanha tempo real).
+  const mcuRateLabel = document.createElement("span");
+  mcuRateLabel.className = "appbar__status-mcu-rate";
+  mcuRateLabel.title = t("mcuRealTimeRatioTooltip");
+  mcuRateLabel.textContent = mcuRealTimeRatioText();
+  mcuRateLabel.classList.toggle("appbar__status-mcu-rate--low", mcuRealTimeRatioIsLow());
+  mcuRateLabel.hidden = mcuRealTimeRatio === undefined || simulationStatus !== "running";
+  status.appendChild(mcuRateLabel);
 
   meta.append(selection, status);
   bar.append(fileGroup, simGroup, editGroup, viewGroup, subcircuitGroup, meta);
@@ -8449,6 +8488,7 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
       realScopeHistoryByComponentId.clear();
       realLogicHistoryByComponentId.clear();
       simulationRate = undefined;
+      mcuRealTimeRatio = undefined;
       dcMotorAnglesDeg.clear();
       dcMotorSpeedRatios.clear();
     }
@@ -8528,6 +8568,11 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
   if (message.type === "simulationRate") {
     simulationRate = message.rate;
     updateSimulationRateLabel();
+  }
+
+  if (message.type === "mcuRealTimeRatio") {
+    mcuRealTimeRatio = message.rate;
+    updateMcuRealTimeRatioLabel();
   }
 
   if (message.type === "requestRotateSelection") {

@@ -60,6 +60,7 @@ set(CORE_SOURCES
     src/mcu/qemu/FirmwareWatcher.cpp
     src/mcu/qemu/QemuArenaBridge.cpp
     src/mcu/qemu/QemuProcessManager.cpp
+    src/mcu/qemu/QemuIcountCalibrator.cpp
     src/mcu/McuController.cpp
     src/mcu/McuComponent.cpp
     src/simulation/Scheduler.cpp
@@ -101,6 +102,7 @@ set(TEST_COMMON_SOURCES
     src/mcu/qemu/FirmwareWatcher.cpp
     src/mcu/qemu/QemuArenaBridge.cpp
     src/mcu/qemu/QemuProcessManager.cpp
+    src/mcu/qemu/QemuIcountCalibrator.cpp
     src/mcu/McuController.cpp
     src/mcu/McuComponent.cpp
     src/simulation/Scheduler.cpp
@@ -491,6 +493,7 @@ add_executable(mcu_debug_launch_test
     src/mcu/McuController.cpp
     src/mcu/qemu/QemuProcessManager.cpp
     src/mcu/qemu/QemuArenaBridge.cpp
+    src/mcu/qemu/QemuIcountCalibrator.cpp
 )
 target_include_directories(mcu_debug_launch_test PRIVATE include src)
 add_test(NAME mcu_debug_launch COMMAND mcu_debug_launch_test)
@@ -607,6 +610,7 @@ add_executable(mcu_controller_real_qemu_test
     src/mcu/McuComponent.cpp
     src/mcu/qemu/QemuProcessManager.cpp
     src/mcu/qemu/QemuArenaBridge.cpp
+    src/mcu/qemu/QemuIcountCalibrator.cpp
     src/plugins/PluginModule.cpp
     src/plugins/PluginLoader.cpp
     src/plugins/PluginRuntime.cpp
@@ -628,6 +632,127 @@ else()
 endif()
 add_test(NAME mcu_controller_real_qemu COMMAND mcu_controller_real_qemu_test)
 
+# Calibração do -icount shift (achado 2026-07-22, ver QemuIcountCalibrator.hpp) contra o binário
+# QEMU real -- mesmo binário/adapter/skip-se-ausente de mcu_controller_real_qemu_test acima.
+add_executable(qemu_icount_calibrator_test
+    test/core/mcu/QemuIcountCalibratorTest.cpp
+    src/mcu/qemu/QemuIcountCalibrator.cpp
+    src/mcu/qemu/QemuProcessManager.cpp
+    src/mcu/qemu/QemuArenaBridge.cpp
+    src/plugins/PluginModule.cpp
+    src/plugins/PluginLoader.cpp
+    src/plugins/PluginRuntime.cpp
+    src/plugins/NativeDeviceProxy.cpp
+    src/plugins/NativeMcuAdapterProxy.cpp
+    src/plugins/CrashGuard.cpp
+    src/simulation/Scheduler.cpp
+)
+target_include_directories(qemu_icount_calibrator_test PRIVATE include src)
+target_link_libraries(qemu_icount_calibrator_test PRIVATE nlohmann_json::nlohmann_json)
+target_compile_definitions(qemu_icount_calibrator_test PRIVATE
+    QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+)
+if(WIN32)
+    target_compile_definitions(qemu_icount_calibrator_test PRIVATE _CRT_SECURE_NO_WARNINGS)
+else()
+    target_link_libraries(qemu_icount_calibrator_test PRIVATE dl)
+endif()
+add_test(NAME qemu_icount_calibrator COMMAND qemu_icount_calibrator_test)
+
+# Estresse de longa duração da fila Core<->QEMU (achado 2026-07-22, ver QemuQueueStressTest.cpp) --
+# mesmo binário/adapter reais acima, roda por dezenas de segundos em vez de frações de segundo.
+add_executable(qemu_queue_stress_test
+    test/core/mcu/QemuQueueStressTest.cpp
+    src/mcu/McuController.cpp
+    src/mcu/qemu/QemuProcessManager.cpp
+    src/mcu/qemu/QemuArenaBridge.cpp
+    src/mcu/qemu/QemuIcountCalibrator.cpp
+    src/plugins/PluginModule.cpp
+    src/plugins/PluginLoader.cpp
+    src/plugins/PluginRuntime.cpp
+    src/plugins/NativeDeviceProxy.cpp
+    src/plugins/NativeMcuAdapterProxy.cpp
+    src/plugins/CrashGuard.cpp
+    src/simulation/Scheduler.cpp
+)
+target_include_directories(qemu_queue_stress_test PRIVATE include src)
+target_link_libraries(qemu_queue_stress_test PRIVATE nlohmann_json::nlohmann_json)
+target_compile_definitions(qemu_queue_stress_test PRIVATE
+    QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+)
+if(WIN32)
+    target_compile_definitions(qemu_queue_stress_test PRIVATE _CRT_SECURE_NO_WARNINGS)
+else()
+    target_link_libraries(qemu_queue_stress_test PRIVATE dl)
+endif()
+add_test(NAME qemu_queue_stress COMMAND qemu_queue_stress_test)
+
+# Estresse do CICLO Stop->Run repetido (achado 2026-07-22, relato ao vivo: às vezes o MCU não
+# inicializa, às vezes roda perfeitamente, às vezes roda e trava no meio -- nenhum teste real
+# existente cobria REINICIAR várias vezes, só uma sessão única). Mesmo binário/adapter reais acima.
+add_executable(mcu_restart_stress_test
+    test/core/mcu/McuRestartStressTest.cpp
+    src/mcu/McuController.cpp
+    src/mcu/qemu/QemuProcessManager.cpp
+    src/mcu/qemu/QemuArenaBridge.cpp
+    src/mcu/qemu/QemuIcountCalibrator.cpp
+    src/plugins/PluginModule.cpp
+    src/plugins/PluginLoader.cpp
+    src/plugins/PluginRuntime.cpp
+    src/plugins/NativeDeviceProxy.cpp
+    src/plugins/NativeMcuAdapterProxy.cpp
+    src/plugins/CrashGuard.cpp
+    src/simulation/Scheduler.cpp
+)
+target_include_directories(mcu_restart_stress_test PRIVATE include src)
+target_link_libraries(mcu_restart_stress_test PRIVATE nlohmann_json::nlohmann_json)
+target_compile_definitions(mcu_restart_stress_test PRIVATE
+    QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+)
+if(WIN32)
+    target_compile_definitions(mcu_restart_stress_test PRIVATE _CRT_SECURE_NO_WARNINGS)
+else()
+    target_link_libraries(mcu_restart_stress_test PRIVATE dl)
+endif()
+add_test(NAME mcu_restart_stress COMMAND mcu_restart_stress_test)
+
+# Combina os dois ângulos que os testes acima cobrem separadamente: QEMU real reiniciado
+# repetidamente (mcu_restart_stress, sem Scheduler) + Scheduler/SimulationSession reais reiniciados
+# repetidamente (mcu_component_live_poll_thread, com arena sintética) -- a combinação mais próxima
+# do que Stop/Run pela UI real faz a cada clique.
+add_executable(session_restart_stress_test
+    test/core/mcu/SessionRestartStressTest.cpp
+    src/mcu/McuController.cpp
+    src/mcu/McuComponent.cpp
+    src/mcu/qemu/QemuProcessManager.cpp
+    src/mcu/qemu/QemuArenaBridge.cpp
+    src/mcu/qemu/QemuIcountCalibrator.cpp
+    src/simulation/Scheduler.cpp
+    src/session/SimulationSession.cpp
+    src/session/PauseExpression.cpp
+    src/plugins/PluginModule.cpp
+    src/plugins/PluginLoader.cpp
+    src/plugins/PluginRuntime.cpp
+    src/plugins/NativeDeviceProxy.cpp
+    src/plugins/NativeMcuAdapterProxy.cpp
+    src/plugins/CrashGuard.cpp
+)
+target_include_directories(session_restart_stress_test PRIVATE include src)
+target_link_libraries(session_restart_stress_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(session_restart_stress_test PRIVATE
+    QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+)
+if(WIN32)
+    target_compile_definitions(session_restart_stress_test PRIVATE _CRT_SECURE_NO_WARNINGS)
+else()
+    target_link_libraries(session_restart_stress_test PRIVATE dl)
+endif()
+add_test(NAME session_restart_stress COMMAND session_restart_stress_test)
+
 # Mesmo binário/adapter reais acima, mas com 2 McuController/processos QEMU simultâneos -- lacuna de
 # escala real encontrada na revisão arquitetural de 2026-07-20 (docs/33-plano-revisao-arquitetural-core.md),
 # pré-requisito antes de PERF-12 (thread dedicada por MCU nesse mesmo documento).
@@ -637,6 +762,7 @@ add_executable(mcu_multiple_controllers_real_qemu_test
     src/mcu/McuComponent.cpp
     src/mcu/qemu/QemuProcessManager.cpp
     src/mcu/qemu/QemuArenaBridge.cpp
+    src/mcu/qemu/QemuIcountCalibrator.cpp
     src/plugins/PluginModule.cpp
     src/plugins/PluginLoader.cpp
     src/plugins/PluginRuntime.cpp
@@ -774,6 +900,27 @@ add_test(NAME mcu_component_live_poll_thread COMMAND mcu_component_live_poll_thr
 # este teste existe para pegar) travaria o processo indefinidamente -- limite explícito para que
 # isso apareça como falha de TIMEOUT do CTest em vez de travar o resto da suíte para sempre.
 set_tests_properties(mcu_component_live_poll_thread PROPERTIES TIMEOUT 60)
+
+# Sincronização de ritmo (2026-07-23, ver .claude/plans/humble-waddling-parnas.md):
+# Scheduler::PacingRateLimitFn + SimulationSession::computeSlowestMcuPacingRatio() -- o solver
+# elétrico desacelera pra acompanhar um MCU mais lento em vez de correr à frente dele. Usa uma
+# thread de teste publicando heartbeats numa taxa controlada em vez de QEMU real -- determinístico,
+# sem flakiness dependente da vazão de instrução do host.
+add_executable(mcu_scheduler_pacing_sync_test
+    test/core/mcu/McuSchedulerPacingSyncTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(mcu_scheduler_pacing_sync_test PRIVATE include src)
+target_link_libraries(mcu_scheduler_pacing_sync_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(mcu_scheduler_pacing_sync_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+)
+if(NOT WIN32)
+    target_link_libraries(mcu_scheduler_pacing_sync_test PRIVATE dl)
+endif()
+add_test(NAME mcu_scheduler_pacing_sync COMMAND mcu_scheduler_pacing_sync_test)
+# ~2s de aquecimento + ~9s de amostragem entre os dois testes -- generoso mas não deveria travar.
+set_tests_properties(mcu_scheduler_pacing_sync PROPERTIES TIMEOUT 60)
 
 # Detecção de borda digital + despacho de ComponentEvent{kPinChangeEventTag} (substitui
 # I2cBusModule/SpiBusModule -- removidos por nunca terem sido ligados a um SimulationSession real;

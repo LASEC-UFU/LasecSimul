@@ -6,17 +6,24 @@ export class CoreUartTransport {
   private readonly rxDropped = new Map<string, number>();
   private readonly txDropped = new Map<string, number>();
 
-  async read(componentId: string): Promise<{ data: Uint8Array; simulationTimeNs: number }> {
+  async read(componentId: string): Promise<{ data: Uint8Array; simulationTimeNs: number; droppedBytes: number }> {
     const client = state.coreClient; const coreId = coreInstanceIdByComponentId.get(componentId);
-    if (!client || !coreId) return { data: new Uint8Array(), simulationTimeNs: 0 };
+    if (!client || !coreId) return { data: new Uint8Array(), simulationTimeNs: 0, droppedBytes: 0 };
     const batch = await client.drainUart(coreId);
     const dropped = Number(batch.dropped ?? 0);
     const previousDropped = this.rxDropped.get(componentId) ?? 0;
     this.rxDropped.set(componentId, dropped);
-    if (dropped > previousDropped) throw new Error(`Buffer UART RX excedido: ${dropped - previousDropped} byte(s) perdido(s).`);
+    // Achado 2026-07-22 (baud alto, ex. 921600, perdendo dados): um overflow do buffer RX do Core
+    // (ex. poll do consumidor mais lento que o preenchimento do anel a este baud) é uma condição
+    // RECUPERÁVEL -- os bytes que SOBREVIVERAM no anel continuam válidos e devem ser entregues.
+    // Antes, lançar aqui descartava o LOTE INTEIRO (inclusive bytes bons já lidos), não só os
+    // poucos bytes efetivamente perdidos -- amplificando artificialmente a perda percebida bem além
+    // da contagem real de `dropped`. Devolve os bytes junto com a contagem, deixa quem chama decidir
+    // só reportar/logar.
+    const droppedBytes = Math.max(0, dropped - previousDropped);
     const hex = batch.dataHex;
     const simulationTimeNs = batch.simulationTimeNs;
-    return { data: Uint8Array.from(Buffer.from(hex, "hex")), simulationTimeNs };
+    return { data: Uint8Array.from(Buffer.from(hex, "hex")), simulationTimeNs, droppedBytes };
   }
 
   async write(componentId: string, data: Uint8Array): Promise<number> {

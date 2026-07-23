@@ -14,6 +14,7 @@ import { electricalEdgesForProject, diffElectricalEdges } from "../ui/webview/wi
 import { logSimulation, noteSimulationStatusChange } from "../diagnostics/simulationLog";
 import { canonicalPackagePinId } from "../ui/webview/componentSymbols";
 import { voltageProbesForProject } from "./voltageTelemetry";
+import { RollingRateSampler } from "./rollingRateSampler";
 
 export { electricalEdgesForProject, diffElectricalEdges, voltageProbesForProject };
 
@@ -720,33 +721,32 @@ export async function pollWireVoltages(expectedGeneration?: number): Promise<voi
   state.schematicPanel.postMessage({ version: 1, type: "wireVoltages", voltagesByWireId });
 }
 
-/** Amostra anterior de `(tempo de parede, tempo simulado)` -- base pra calcular a taxa real
- * alcançada (`Δsimulado/Δparede`) a cada tick do polling já existente, achado de auditoria de UI
- * 2026-07-09 (paridade com `InfoWidget::setRate()` real do SimulIDE -- taxa ACHADA, não a
- * configuração estática de `lasecsimul.simulation.targetStepUs`). `undefined` == ainda sem amostra
- * anterior nesta corrida (primeiro tick depois de `run()`/retomada). */
-let lastRateSample: { wallMs: number; simNs: number } | undefined;
+/** Achado de auditoria de UI 2026-07-09 (paridade com `InfoWidget::setRate()` real do SimulIDE --
+ * taxa ACHADA, não a configuração estática de `lasecsimul.simulation.targetStepUs`). Janela de 50ms
+ * evita ruído de jitter do `setInterval`. */
+const simulationRateSampler = new RollingRateSampler(50, true);
+/** Achado 2026-07-22: LED de 500ms via millis() levando ~4s reais mesmo com `simulationRate` em
+ * 100% -- ver comentário de `RollingRateSampler`. */
+const mcuRateSampler = new RollingRateSampler(1000, false);
 let telemetryGeneration = 0;
 let telemetryPollInFlight = false;
 
 async function pollSimulationRate(expectedGeneration?: number): Promise<void> {
   if (!state.coreClient) return;
   try {
-    const simNs = await state.coreClient.getSimulationTime();
+    const { simulatedNs, mcuVirtualNs } = await state.coreClient.getSimulationTime();
     const wallMs = Date.now();
-    if (lastRateSample) {
-      const deltaWallMs = wallMs - lastRateSample.wallMs;
-      const deltaSimNs = simNs - lastRateSample.simNs;
-      // Só reporta com uma janela de tempo de parede não-trivial -- uma amostra de 1-2ms de
-      // diferença entre polls (jitter do `setInterval`) daria uma taxa ruidosa/enganosa.
-      if (deltaWallMs > 50) {
-        const rate = (deltaSimNs / 1e6) / deltaWallMs; // (ms simulados)/(ms de parede) = fator "Nx"
-        if (expectedGeneration === undefined || expectedGeneration === telemetryGeneration) {
-          state.schematicPanel?.postMessage({ version: 1, type: "simulationRate", rate });
-        }
-      }
+    const canPost = expectedGeneration === undefined || expectedGeneration === telemetryGeneration;
+
+    const simResult = simulationRateSampler.sample(wallMs, simulatedNs);
+    if (simResult.report && canPost) {
+      state.schematicPanel?.postMessage({ version: 1, type: "simulationRate", rate: simResult.rate });
     }
-    lastRateSample = { wallMs, simNs };
+
+    const mcuResult = mcuRateSampler.sample(wallMs, mcuVirtualNs);
+    if (mcuResult.report && canPost) {
+      state.schematicPanel?.postMessage({ version: 1, type: "mcuRealTimeRatio", rate: mcuResult.rate });
+    }
   } catch {
     // Core pode ter parado/desconectado entre o tick e a resposta -- sem taxa neste ciclo, não é erro.
   }
@@ -755,7 +755,8 @@ async function pollSimulationRate(expectedGeneration?: number): Promise<void> {
 export function startVoltageReadoutPolling(): void {
   if (state.voltageReadoutTimer) return;
   const generation = ++telemetryGeneration;
-  lastRateSample = undefined;
+  simulationRateSampler.reset();
+  mcuRateSampler.reset();
   const telemetryRateHz = vscode.workspace
     .getConfiguration("lasecsimul.simulation")
     .get<number>("telemetryRateHz");
@@ -782,7 +783,8 @@ export function stopVoltageReadoutPolling(clearVisuals = true): void {
     clearInterval(state.voltageReadoutTimer);
     state.voltageReadoutTimer = undefined;
   }
-  lastRateSample = undefined;
+  simulationRateSampler.reset();
+  mcuRateSampler.reset();
   // Pause preserves the last converged visual state, as SimulIDE does. Only Stop clears it.
   if (!clearVisuals) return;
   // Sem simulação rodando não há tensão "atual" pra mostrar -- volta os fios pra cor neutra em vez
@@ -790,6 +792,7 @@ export function stopVoltageReadoutPolling(clearVisuals = true): void {
   state.schematicPanel?.postMessage({ version: 1, type: "wireVoltages", voltagesByWireId: {} });
   state.schematicPanel?.postMessage({ version: 1, type: "componentReadout", readoutsByComponentId: {} });
   state.schematicPanel?.postMessage({ version: 1, type: "simulationRate", rate: undefined });
+  state.schematicPanel?.postMessage({ version: 1, type: "mcuRealTimeRatio", rate: undefined });
   state.schematicPanel?.postMessage({ version: 1, type: "boardOverlayReadouts", readoutsByKey: {} });
   boardOverlayChildCoreIdCache.clear();
 }
