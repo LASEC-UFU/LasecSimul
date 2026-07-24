@@ -4367,14 +4367,43 @@ o `main.cpp` mais elaborado do mesmo diretório) nunca chama `analogRead()`/`ana
 `loop()` — só configura os pinos em `setup()` e nunca mais toca PWM/ADC. O teste antigo assumia o
 comportamento do `main.cpp`; o `merged.bin` real reflete `main0.cpp`.
 
-**Conclusão prática:** o mecanismo de sincronização de ritmo (Scheduler↔MCU) está correto e
-verificado (as quatro melhorias desta seção permanecem no código, sem regressão). O travamento de
-GPIO13 é uma limitação da emulação de CPU do QEMU usado pelo LasecSimul, não do simulador elétrico
-em si — não há correção possível no lado C++ do Core pra este sintoma específico sem acesso ao
-código-fonte do QEMU (ou ao binário `qemu-system-xtensa.exe`, se houver uma versão mais nova/com
-correção disponível upstream). Mitigação prática pro usuário: repetir Stop→Run até o boot
-"pegar" corretamente é, por ora, o contorno esperado — consistente com o que o próprio usuário já
-vinha fazendo manualmente.
+**Conclusão revisada em 2026-07-24 (ver 32.3.6):** a sequência MMIO do QEMU estava correta. A perda
+ocorria no ACK do Core, entre `poll()` e `dispatchArenaEvent()`, e foi corrigida no commit `848c347`.
+
+#### 32.3.6 Causa definitiva e recorrência aparente depois do merge
+
+O tracing separado dos dois consumidores mostrou que `stamp()` não perdia a alteração elétrica:
+quando ele despacha uma escrita, a mesma chamada já estampa o estado novo, portanto o retorno
+`changed` descartado não exige outro `markDirty()`. A entrada ausente era avançada sem nunca ter
+sido a entrada retornada pelo `poll()`.
+
+O protocolo v3 mantém escritas/heartbeats na fila, mas aceita eventos de QEMUs de transição no slot
+único legado. A corrida era:
+
+1. `poll()` copiava um `SIM_FREQ` do slot legado;
+2. antes do ACK, o QEMU publicava uma escrita MMIO na fila;
+3. `dispatchArenaEvent()` escolhia o ACK pelo tipo da ação e tratava qualquer evento que não fosse
+   `SIM_READ` como escrita;
+4. `acknowledgeWrite()` via a fila agora não vazia e avançava `queueReadIndex`, descartando a
+   primeira escrita (frequentemente `GPIO_ENABLE_REG`) sem despachá-la.
+
+A correção registra a **origem** em `QemuArenaEvent::fromQueue`: só uma entrada copiada da fila chama
+`acknowledgeWrite()`; `SIM_READ` confirma o slot com resposta e eventos legados sem resposta chamam
+`acknowledgeEventSlot()`, que zera apenas `simuTime`. O teste
+`testLegacySlotAckNeverConsumesNewQueueEntry` reproduz exatamente a janela “poll do slot → chegada
+na fila → ACK” e prova que `queueReadIndex` permanece intacto.
+
+Depois do merge `2cf87c2`, a correção continuava no `HEAD`, mas o checkout local executava
+`core/build/Release/lasecsimul-core.exe` compilado às 06:45, anterior a
+`QemuArenaBridge.cpp`/`McuComponent.cpp` corrigidos (07:46/08:50). Parecia uma regressão do GitHub,
+mas era um artefato local obsoleto selecionado pela Extension. O processo que reproduzia na UI foi
+confirmado ainda mais diretamente: vinha da extensão 0.0.13 instalada em
+`.vscode/extensions/.../bundled/core`, empacotada em 22/07 e portanto também anterior ao fix.
+`coreExecutable.ts` agora recusa, em checkout de desenvolvimento, iniciar qualquer Core mais antigo
+que os fontes e informa o comando de rebuild; instalações empacotadas não contêm a árvore
+`core/src`, logo precisam ser geradas novamente para incorporar o Core novo. A ordem de produção
+permanece firmware/condições antes de `Run`: mudar a ordem só alterava o timing e podia mascarar a
+corrida, não era sua causa.
 
 ### 32.4 Testes adicionados
 
