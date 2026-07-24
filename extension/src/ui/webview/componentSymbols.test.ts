@@ -787,6 +787,31 @@ import { PackageDescriptor, WebviewComponentModel } from "./model";
     assert(svg.includes("viewspec-interaction-dragAngular"), `hit-test dragAngular deveria continuar presente, markup: ${svg}`);
   });
 
+  await test("dialWidget reutiliza o CustomDial sobre shapes legados e lê faixa editável ao vivo", () => {
+    const sensorPkg: PackageDescriptor = {
+      width: 56,
+      height: 48,
+      background: { kind: "none" },
+      shapes: [{ kind: "rect", x: 14, y: 10, w: 28, h: 12, fill: "#ff0000" }],
+      pins: [{ id: "p1", x: 0, y: 16, angle: 180, length: 4, label: "" }],
+      viewSpec: {
+        overlayPaint: true,
+        dialWidget: { cx: 28, cy: 35, r: 12 },
+        paint: [],
+        hitTest: { dial: { kind: "circle", cx: 28, cy: 35, r: 12 } },
+        interaction: { dial: { kind: "dragAngular", hitTest: "dial", prop: "temp", cx: 28, cy: 35, stepsPerRev: 1000, continuous: true, limits: "dial" } },
+        limits: { dial: { min: -55, max: 200, minProp: "min_temp", maxProp: "max_temp", minAngleDeg: -150, maxAngleDeg: 150 } },
+      },
+    };
+    registerPackage("test.viewspec.dial-widget", sensorPkg);
+    const svg = packageSymbolSvg("test.viewspec.dial-widget", { temp: 50, min_temp: 0, max_temp: 100 }, "sensor-dial") ?? "";
+    assert(svg.includes('fill="#ff0000"'), `corpo legado deveria permanecer sob o dial, markup: ${svg}`);
+    assert(svg.includes("dial-grad-sensor-dial-temp"), `CustomDial reutilizável deveria ser desenhado, markup: ${svg}`);
+    assert(svg.includes('class="encoder-indicator" transform="rotate(0, 28, 35)"'),
+      `50 dentro da faixa viva 0..100 deveria deixar o indicador no centro, markup: ${svg}`);
+    assert(svg.includes("viewspec-interaction-dragAngular"), `hit-test do dial deveria permanecer interativo, markup: ${svg}`);
+  });
+
   await test("ViewSpec rotate aceita propRange/angleRange para Dialed contínuo", () => {
     const dialPkg: PackageDescriptor = {
       width: 32,

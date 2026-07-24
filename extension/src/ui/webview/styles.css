@@ -638,6 +638,17 @@ rect.meter-expand-button:hover {
   pointer-events: none;
 }
 
+/* Foco próprio do QDial: o componente pai fica sem seleção e somente o disco recebe o halo azul.
+   A região SVG transparente é a última camada do knob, portanto reproduz o fundo radial de foco do
+   CustomDial sem alterar a pintura/posição do indicador. */
+.viewspec-interaction-dragAngular.dial-control-focused {
+  fill: rgba(45, 116, 255, 0.13);
+  stroke: rgba(24, 101, 230, 0.9);
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
+  outline: none;
+}
+
 /** Nome com Ã­ndice (ex: "Resistor-1") perto do sÃ­mbolo -- mesma convenÃ§Ã£o de cor do SimulIDE
  * (`Component::m_idLabel`, azul-escuro), mostrado sÃ³ quando `WebviewComponentModel.showId` Ã© true. */
 .component__id-label,

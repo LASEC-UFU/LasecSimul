@@ -10,7 +10,7 @@
  * layout de pino são calculados a partir da caixa do tipo, nunca de uma constante global de tamanho.
  */
 
-import { ComponentViewSpec, JUNCTION_TYPE_ID, PackageDescriptor, PackageDynamicPinGroup, PackageNumberValue, PackagePin, PackageShape, SIMULIDE_PACKAGE_GRID_UNIT, SimulidePaintSpec, SimulideQtWidgetSpec, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, ViewSpecHitTest, ViewSpecProjection, WebviewComponentModel } from "./model.js";
+import { ComponentViewSpec, JUNCTION_TYPE_ID, PackageDescriptor, PackageDynamicPinGroup, PackageNumberValue, PackagePin, PackageShape, SIMULIDE_PACKAGE_GRID_UNIT, SimulidePaintSpec, SimulideQtWidgetSpec, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, ViewSpecHitTest, ViewSpecInteraction, ViewSpecProjection, WebviewComponentModel } from "./model.js";
 import { simulidePaintToPackageShapes } from "./simulidePaint.js";
 
 export interface ComponentBox {
@@ -1007,6 +1007,28 @@ function viewSpecBodySvg(pkg: PackageDescriptor, componentId: string, properties
   // Render paint items
   let paintMarkup = "";
   if (includePaint) {
+    if (spec.dialWidget) {
+      const dial = Object.values(spec.interaction ?? {}).find(
+        (interaction): interaction is Extract<ViewSpecInteraction, { kind: "dragAngular" }> =>
+          interaction.kind === "dragAngular"
+      );
+      if (dial) {
+        const limit = dial.limits ? spec.limits?.[dial.limits] : undefined;
+        const minimum = limit?.minProp
+          ? numericViewSpecProperty(properties, limit.minProp, limit.min ?? 0)
+          : (limit?.min ?? 0);
+        const maximum = limit?.maxProp
+          ? numericViewSpecProperty(properties, limit.maxProp, limit.max ?? 1000)
+          : (limit?.max ?? 1000);
+        const value = numericViewSpecProperty(properties, dial.prop, minimum);
+        const ratio = maximum === minimum ? 0 : (value - minimum) / (maximum - minimum);
+        paintMarkup += dialKnobSvg(spec.dialWidget.cx, spec.dialWidget.cy, spec.dialWidget.r, {
+          ratio,
+          tickCount: spec.dialWidget.tickCount,
+          idSeed: `${componentId}-${dial.prop}`,
+        });
+      }
+    }
     for (const shape of spec.paint ?? []) {
       const projection = shape.partId ? viewSpecResolvedProjection(shape.partId, spec, properties) : {};
       if (projection.visible === false) continue;
@@ -1289,6 +1311,10 @@ function packageBodySvg(resolved: ResolvedPackage, componentId?: string, propert
     }
   } else if (pkg.qtWidget) {
     markup += simulideQtWidgetSvg(pkg.qtWidget, properties ?? {}, scopeId);
+  } else if (hasViewSpec && pkg.viewSpec?.overlayPaint === true && (pkg.shapes?.length ?? 0) > 0) {
+    // Migração incremental: preserva o corpo legado e sobrepõe somente o widget/interação nova.
+    for (const shape of pkg.shapes ?? []) markup += packageShapeSvg(shape, undefined, properties);
+    markup += viewSpecBodySvg(pkg, componentId!, properties ?? {}, true) ?? "";
   } else if (hasViewSpec) {
     markup += viewSpecBodySvg(pkg, componentId!, properties ?? {}) ?? "";
   } else {
@@ -1601,13 +1627,17 @@ export function dialKnobSvg(cx: number, cy: number, r: number, options?: { ratio
 
   let nub = "";
   if (options?.ratio !== undefined) {
-    const rad = (angleDegFor(Math.min(1, Math.max(0, options.ratio))) * Math.PI) / 180;
+    const ratio = Math.min(1, Math.max(0, options.ratio));
+    // O nub nasce no topo e recebe a mesma rotação -150..150 usada pelos ViewSpecs. Além de produzir
+    // exatamente a posição anterior, as classes permitem atualização pontual durante pointer capture.
+    const rad = -Math.PI / 2;
+    const transformDeg = ratio * spanDeg - spanDeg / 2;
     const nubDist = faceR - knobRadius * 2.5;
     const nubX = cx + Math.cos(rad) * nubDist;
     const nubY = cy + Math.sin(rad) * nubDist;
     nub =
-      `<circle cx="${nubX.toFixed(1)}" cy="${nubY.toFixed(1)}" r="${(knobRadius + 0.5).toFixed(1)}" fill="none" stroke="rgb(240,240,230)" stroke-width="1"/>` +
-      `<circle cx="${nubX.toFixed(1)}" cy="${nubY.toFixed(1)}" r="${knobRadius.toFixed(1)}" fill="rgb(210,210,200)" stroke="rgb(70,70,70)" stroke-width="1"/>`;
+      `<circle class="encoder-indicator-halo" transform="rotate(${transformDeg}, ${cx}, ${cy})" cx="${nubX.toFixed(1)}" cy="${nubY.toFixed(1)}" r="${(knobRadius + 0.5).toFixed(1)}" fill="none" stroke="rgb(240,240,230)" stroke-width="1"/>` +
+      `<circle class="encoder-indicator" transform="rotate(${transformDeg}, ${cx}, ${cy})" cx="${nubX.toFixed(1)}" cy="${nubY.toFixed(1)}" r="${knobRadius.toFixed(1)}" fill="rgb(210,210,200)" stroke="rgb(70,70,70)" stroke-width="1"/>`;
   }
 
   return (

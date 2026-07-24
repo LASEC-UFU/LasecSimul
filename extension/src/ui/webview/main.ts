@@ -30,7 +30,7 @@ import { BatchPropertyPatch, PropertyField, PropertyFieldKind, SharedFieldValue,
 import { parseSerialInput, serialFormatBytes, SerialFormat } from "./serialFormat.js";
 import { shouldRenderSimulationSnapshot, simulationControlModel } from "./simulationControls.js";
 import { isHighWireVoltage, reconcileWireVoltages } from "./wirePresentation.js";
-import { continuousDialValueFromPointer } from "./dialInteraction.js";
+import { continuousDialValueFromPointer, steppedDialValue } from "./dialInteraction.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const FINE_WIRE_STEP = WIRE_GRID_SIZE / 10;
@@ -714,6 +714,8 @@ function renderMcuSerialMonitorWindows(): void {
  * com `state.selectedComponentIds` (NUNCA um substitui o outro) -- mistura rótulo+componente na
  * mesma seleção é suportada (pedido real: "rótulos + componentes juntos"). */
 let selectedTextLabels: { componentId: string; kind: ExternalLabelKind }[] = [];
+/** Dial com foco próprio, equivalente ao foco do QGraphicsProxyWidget/QDial no SimulIDE. */
+let activeDialComponentId: string | undefined;
 
 // Modo de posicionamento de componente (SimulIDE-style: clicar na paleta → mover → clicar no canvas).
 let placingTypeId: string | null = null;
@@ -1704,6 +1706,7 @@ function isTextLabelSelected(componentId: string, kind: ExternalLabelKind): bool
  * existente -- preserva `state.selectedComponentIds` (mistura rótulo+componente, ver comentário de
  * `selectedTextLabels`), diferente de `selectOnlyTextLabel` (substitui tudo). */
 function toggleTextLabelSelection(componentId: string, kind: ExternalLabelKind): void {
+  activeDialComponentId = undefined;
   selectedWireSegment = undefined;
   selectedWireCorner = undefined;
   selectedTextLabels = isTextLabelSelected(componentId, kind)
@@ -1734,6 +1737,7 @@ function getSelectedComponent(): WebviewComponentModel | undefined {
 }
 
 function selectOnlyComponent(componentId: string): void {
+  activeDialComponentId = undefined;
   state.selectedComponentIds = [componentId];
   state.selectedWireIds = [];
   selectedWireSegment = undefined;
@@ -1742,6 +1746,7 @@ function selectOnlyComponent(componentId: string): void {
 }
 
 function selectOnlyWire(wireId: string, segmentIndex?: number): void {
+  activeDialComponentId = undefined;
   state.selectedComponentIds = [];
   state.selectedWireIds = [wireId];
   selectedWireSegment = segmentIndex === undefined ? undefined : { wireId, segmentIndex };
@@ -1750,6 +1755,7 @@ function selectOnlyWire(wireId: string, segmentIndex?: number): void {
 }
 
 function selectOnlyWireCorner(wireId: string, pointIndex: number): void {
+  activeDialComponentId = undefined;
   state.selectedComponentIds = [];
   state.selectedWireIds = [wireId];
   selectedWireSegment = undefined;
@@ -1758,6 +1764,7 @@ function selectOnlyWireCorner(wireId: string, pointIndex: number): void {
 }
 
 function selectOnlyTextLabel(componentId: string, kind: ExternalLabelKind): void {
+  activeDialComponentId = undefined;
   state.selectedComponentIds = [];
   state.selectedWireIds = [];
   selectedWireSegment = undefined;
@@ -1770,6 +1777,7 @@ function selectOnlyTextLabel(componentId: string, kind: ExternalLabelKind): void
  * `selectedTextLabels` (pedido real: "rótulos + componentes juntos" -- alternar um componente nunca
  * derruba rótulos já selecionados). */
 function toggleComponentSelection(componentId: string): void {
+  activeDialComponentId = undefined;
   selectedWireSegment = undefined;
   selectedWireCorner = undefined;
   state.selectedComponentIds = isComponentSelected(componentId)
@@ -1782,6 +1790,7 @@ function toggleComponentSelection(componentId: string): void {
  * gesto; o condutor inteiro entra ou sai da seleção. Preserva `selectedTextLabels` (mesmo princípio
  * de `toggleComponentSelection`). */
 function toggleWireSelection(wireId: string): void {
+  activeDialComponentId = undefined;
   selectedWireSegment = undefined;
   selectedWireCorner = undefined;
   state.selectedWireIds = isWireSelected(wireId)
@@ -1842,6 +1851,7 @@ function selectionLabel(): string {
 }
 
 function clearSelection(): void {
+  activeDialComponentId = undefined;
   state.selectedComponentIds = [];
   state.selectedWireIds = [];
   selectedWireSegment = undefined;
@@ -4393,6 +4403,122 @@ function numericComponentProperty(component: WebviewComponentModel, prop: string
   return Number.isFinite(value) ? value : fallback;
 }
 
+function resolvedAngularDial(
+  component: WebviewComponentModel,
+  interaction: Extract<ViewSpecInteraction, { kind: "dragAngular" }>
+): {
+  minimum: number;
+  maximum: number;
+  step: number;
+  positions: number;
+  minimumAngleDeg: number;
+  maximumAngleDeg: number;
+  clamp: boolean;
+} {
+  const limit = interaction.limits
+    ? catalogEntryFor(component.typeId)?.package?.viewSpec?.limits?.[interaction.limits]
+    : undefined;
+  const minimum = limit?.minProp
+    ? numericComponentProperty(component, limit.minProp, limit.min ?? 0)
+    : (limit?.min ?? 0);
+  const maximum = limit?.maxProp
+    ? numericComponentProperty(component, limit.maxProp, limit.max ?? 1000)
+    : (limit?.max ?? 1000);
+  const fallbackPositions = interaction.stepsPerRev ?? 1000;
+  const positions = Math.max(1, Math.round(numericComponentProperty(component, interaction.stepsPerRevProp, fallbackPositions)));
+  return {
+    minimum,
+    maximum,
+    step: limit?.step ?? 0,
+    positions,
+    minimumAngleDeg: limit?.minAngleDeg ?? -150,
+    maximumAngleDeg: limit?.maxAngleDeg ?? 150,
+    clamp: limit?.clamp !== false,
+  };
+}
+
+function patchDialIndicator(
+  componentElement: HTMLElement,
+  interaction: Extract<ViewSpecInteraction, { kind: "dragAngular" }>,
+  value: number,
+  range: ReturnType<typeof resolvedAngularDial>
+): void {
+  const angle = mapLinear(value, [range.minimum, range.maximum], [range.minimumAngleDeg, range.maximumAngleDeg]);
+  componentElement.querySelectorAll<SVGElement>(".encoder-indicator, .encoder-indicator-halo").forEach((indicator) => {
+    indicator.setAttribute("transform", `rotate(${angle}, ${interaction.cx}, ${interaction.cy})`);
+  });
+  const hitZone = componentElement.querySelector<SVGElement>(".viewspec-interaction-dragAngular");
+  hitZone?.setAttribute("aria-valuenow", String(value));
+}
+
+/** Atualiza apenas o texto já montado; render() no meio do pointer capture desmontaria o SVG do dial. */
+function patchDialLabel(component: WebviewComponentModel): void {
+  const label = document.querySelector<HTMLElement>(
+    `.component-floating-label[data-component-id="${component.id}"][data-label-kind="dial"]`
+  );
+  const text = dialLabelText(component);
+  if (label && text !== undefined) label.textContent = text;
+}
+
+function activateOnlyDial(component: WebviewComponentModel, hitZone: Element | null): void {
+  clearSelection();
+  activeDialComponentId = component.id;
+  hitZone?.classList.add("dial-control-focused");
+  if (hitZone instanceof SVGElement || hitZone instanceof HTMLElement) {
+    hitZone.setAttribute("tabindex", "0");
+    hitZone.focus({ preventScroll: true });
+  }
+}
+
+function setDialValue(
+  component: WebviewComponentModel,
+  interaction: Extract<ViewSpecInteraction, { kind: "dragAngular" }>,
+  componentElement: HTMLElement,
+  value: number,
+  preview: boolean
+): void {
+  component.properties[interaction.prop] = value;
+  const range = resolvedAngularDial(component, interaction);
+  if (range.clamp) {
+    patchDialIndicator(componentElement, interaction, value, range);
+  } else {
+    const angle = ((((value % range.positions) + range.positions) % range.positions) / range.positions) * 360;
+    componentElement.querySelectorAll<SVGElement>(".encoder-indicator, .encoder-indicator-halo").forEach((indicator) => {
+      indicator.setAttribute("transform", `rotate(${angle}, ${interaction.cx}, ${interaction.cy})`);
+    });
+    componentElement.querySelector<SVGElement>(".viewspec-interaction-dragAngular")
+      ?.setAttribute("aria-valuenow", String(value));
+  }
+  patchDialLabel(component);
+  send({
+    version: WEBVIEW_MESSAGE_VERSION,
+    type: preview ? "requestPreviewProperty" : "requestUpdateProperty",
+    componentId: component.id,
+    name: interaction.prop,
+    value,
+  });
+}
+
+function stepFocusedDial(direction: 1 | -1, fine: boolean): boolean {
+  if (!activeDialComponentId) return false;
+  const component = activeSceneComponents().find((entry) => entry.id === activeDialComponentId);
+  const componentElement = component ? componentElementsById.get(component.id) : undefined;
+  const interaction = component ? viewSpecInteractionFor(component.typeId, "dragAngular") : undefined;
+  if (!component || !componentElement || !interaction || component.locked) {
+    activeDialComponentId = undefined;
+    return false;
+  }
+  const range = resolvedAngularDial(component, interaction);
+  const current = numericComponentProperty(component, interaction.prop, range.minimum);
+  const next = range.clamp
+    ? steppedDialValue(current, direction, fine, range)
+    : current + direction * (range.step > 0 ? range.step : 1);
+  if (Math.abs(next - current) < 1e-12) return true;
+  setDialValue(component, interaction, componentElement, next, false);
+  persistState();
+  return true;
+}
+
 function usesEmbeddedValueLabel(typeId: string): boolean {
   // sources.fixed_volt/sources.rail mostram um valor CONFIGURADO (propriedade estática), não uma
   // leitura medida -- conceito diferente de `readoutFormat` (ABI v2), que é só pra instrumentos com
@@ -5885,6 +6011,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
 
   const liveComponent = (): WebviewComponentModel | undefined =>
     activeSceneComponents().find((entry) => entry.id === componentId);
+  let suppressNextDialComponentClick = false;
 
   // ABI v2 (.spec/lasecsimul-native-devices.spec): isPushButton vem de interactionKind (genérico);
   // isToggleClickable é o conceito genérico de "clicar no toggle-hit-zone alterna `closed`" -- cobre
@@ -5911,56 +6038,58 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
   }
 
   if (isEncoder) {
+    el.addEventListener("focusin", (event) => {
+      const hitZone = event.target instanceof Element
+        ? event.target.closest(".encoder-hit-zone, .viewspec-interaction-dragAngular")
+        : null;
+      const comp = liveComponent();
+      if (!hitZone || !comp || activeDialComponentId === comp.id) return;
+      activateOnlyDial(comp, hitZone);
+      persistState();
+    });
+
     el.addEventListener("wheel", (event) => {
-      if (!(event.target instanceof Element) || !event.target.closest(".encoder-hit-zone, .viewspec-interaction-dragAngular")) return;
+      const hitZone = event.target instanceof Element
+        ? event.target.closest(".encoder-hit-zone, .viewspec-interaction-dragAngular")
+        : null;
+      if (!hitZone) return;
       event.preventDefault();
       event.stopPropagation();
       const comp = liveComponent();
       if (!comp) return;
       const turn = viewSpecInteractionFor(comp.typeId, "dragAngular");
+      if (!turn) return;
+      activateOnlyDial(comp, hitZone);
       const positionProp = turn?.prop ?? "position";
-      const stepsRevFallback = turn?.stepsPerRev ?? 20;
-      const stepsRev = numericComponentProperty(comp, turn?.stepsPerRevProp ?? "steps_rev", stepsRevFallback);
-      const centerX = turn?.cx ?? 20;
-      const centerY = turn?.cy ?? 20;
       const currentPos = numericComponentProperty(comp, positionProp, 0);
-      const angularLimit = turn?.limits ? catalogEntryFor(comp.typeId)?.package?.viewSpec?.limits?.[turn.limits] : undefined;
-      if (turn?.continuous) {
-        const propMin = angularLimit?.min ?? 0;
-        const propMax = angularLimit?.max ?? 1000;
-        const propStep = angularLimit?.step ?? 0;
-        const wheelStep = propStep > 0 ? propStep : Math.abs(propMax - propMin) * 25 / 1000;
-        const clamp = angularLimit?.clamp !== false;
-        let newValue = currentPos + (event.deltaY > 0 ? wheelStep : -wheelStep);
-        if (propStep > 0) newValue = Math.round(newValue / propStep) * propStep;
-        if (clamp) newValue = clampNumber(newValue, Math.min(propMin, propMax), Math.max(propMin, propMax));
+      const range = resolvedAngularDial(comp, turn);
+      if (turn?.continuous && range.clamp) {
+        const newValue = steppedDialValue(currentPos, event.deltaY > 0 ? 1 : -1, event.shiftKey, range);
         if (Math.abs(newValue - currentPos) < 1e-12) return;
-        comp.properties[positionProp] = newValue;
-        send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: comp.id, name: positionProp, value: newValue });
-        const indicatorEl = el.querySelector<SVGElement>(".encoder-indicator");
-        if (indicatorEl) {
-          const angle = mapLinear(newValue, [propMin, propMax], [angularLimit?.minAngleDeg ?? -150, angularLimit?.maxAngleDeg ?? 150]);
-          indicatorEl.setAttribute("transform", `rotate(${angle}, ${centerX}, ${centerY})`);
-        }
+        setDialValue(comp, turn, el, newValue, false);
         persistState();
         return;
       }
       const delta = event.deltaY > 0 ? 1 : -1;
-      const newPos = currentPos + delta;
-      comp.properties[positionProp] = newPos;
-      send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: comp.id, name: positionProp, value: newPos });
-      // Rotate the indicator line visually based on position
-      const indicatorEl = el.querySelector<SVGElement>(".encoder-indicator");
-      if (indicatorEl) {
-        const angle = ((((newPos % stepsRev) + stepsRev) % stepsRev) / stepsRev) * 360;
-        indicatorEl.setAttribute("transform", `rotate(${angle}, ${centerX}, ${centerY})`);
-      }
+      const newPos = currentPos + delta * (range.step > 0 ? range.step : 1);
+      setDialValue(comp, turn, el, newPos, false);
       persistState();
     }, { passive: false });
   }
 
   el.addEventListener("click", (event) => {
     event.stopPropagation();
+    if (suppressNextDialComponentClick) {
+      suppressNextDialComponentClick = false;
+      event.preventDefault();
+      return;
+    }
+    if (event.target instanceof Element && event.target.closest(".encoder-hit-zone, .viewspec-interaction-dragAngular")) {
+      const current = liveComponent();
+      if (current) activateOnlyDial(current, event.target.closest(".encoder-hit-zone, .viewspec-interaction-dragAngular"));
+      persistState();
+      return;
+    }
     if (event.shiftKey) toggleComponentSelection(componentId);
     else selectOnlyComponent(componentId);
     persistState();
@@ -6160,16 +6289,26 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
     // componente" (handler genérico de `el`), indistinguível de "o botão não faz nada".
     if (event.target instanceof Element && event.target.closest(".pin-terminal, .meter-expand-button, .serial-toggle-hit-zone")) return;
     event.stopPropagation();
+    const dialHitZone = isEncoder && event.target instanceof Element
+      ? event.target.closest(".encoder-hit-zone, .viewspec-interaction-dragAngular")
+      : null;
+    if (dialHitZone) {
+      // O QDial é um widget filho com foco próprio: clicar nele não seleciona/move o componente pai.
+      activateOnlyDial(component, dialHitZone);
+      suppressNextDialComponentClick = true;
+      el.querySelector(".selection-overlay")?.remove();
+      persistState();
+    }
     // `Ctrl+Shift` junto é o gesto de duplicar-arrastando (checado ANTES do shift-toggle abaixo,
     // senão nunca chegaria aqui -- shift sozinho sempre alterna seleção e retorna cedo).
     const isDuplicateDragGesture = event.ctrlKey && event.shiftKey;
-    if (event.shiftKey && !isDuplicateDragGesture) {
+    if (!dialHitZone && event.shiftKey && !isDuplicateDragGesture) {
       toggleComponentSelection(component.id);
       persistState();
       render();
       return;
     }
-    if (!isComponentSelected(component.id)) selectOnlyComponent(component.id);
+    if (!dialHitZone && !isComponentSelected(component.id)) selectOnlyComponent(component.id);
     // Bloqueio (`component.locked`, ver `batchProperties.ts`/model.ts): permanece SELECIONÁVEL
     // (seleção já sincronizada acima) -- só o ARRASTO em si é bloqueado, enforcement mínimo acordado
     // (não bloqueia edição de propriedades, nem o próprio campo `locked`, que precisa continuar
@@ -6177,7 +6316,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
     if (component.locked) return;
     dragStartX = event.clientX;
     dragStartY = event.clientY;
-    dragTargets = getSelectedComponents().map((selected) => {
+    dragTargets = (dialHitZone ? [] : getSelectedComponents()).map((selected) => {
       const offset = componentDivOffset(selected);
       const boardOverlayChildren = (boardOverlayElementsByOuterId.get(selected.id) ?? []).map((child) => ({
         el: child,
@@ -6303,7 +6442,6 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
         // Arrasto angular (igual ao QDial nativo do SimulIDE): atan2 do cursor em relação ao centro
         // do knob. Acumula fração de steps para resposta suave (igual ao `single-step` do QDial).
         const svgEl = el.querySelector<SVGElement>(".component__symbol");
-        const indicatorEl = el.querySelector<SVGElement>(".encoder-indicator");
         if (!svgEl) { isDraggingComponent = false; return; }
         const svgRect = svgEl.getBoundingClientRect();
         const viewBoxParts = svgEl.getAttribute("viewBox")?.split(" ") ?? [];
@@ -6331,16 +6469,18 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
         const stepsRevFallback = dragAngular?.stepsPerRev ?? 20;
         const stepsRev = comp0 ? numericComponentProperty(comp0, dragAngular?.stepsPerRevProp ?? "steps_rev", stepsRevFallback) : stepsRevFallback;
         const angularLimit = dragAngular?.limits ? catalogEntryFor(component.typeId)?.package?.viewSpec?.limits?.[dragAngular.limits] : undefined;
-        if (dragAngular?.continuous) {
-          // `minProp`/`maxProp` (achado 2026-07-10): fontes de tensão/corrente controladas têm
-          // `minValue`/`maxValue` EDITÁVEIS pelo usuário -- ler ao vivo da instância em vez de um
-          // `min`/`max` fixo, senão o dial ficaria preso no range do momento em que foi desenhado.
-          const propMin = comp0 && angularLimit?.minProp ? numericComponentProperty(comp0, angularLimit.minProp, angularLimit?.min ?? 0) : (angularLimit?.min ?? 0);
-          const propMax = comp0 && angularLimit?.maxProp ? numericComponentProperty(comp0, angularLimit.maxProp, angularLimit?.max ?? 1000) : (angularLimit?.max ?? 1000);
-          const propStep = angularLimit?.step ?? 0;
-          const clamp = angularLimit?.clamp !== false;
-          const minAngleDeg = angularLimit?.minAngleDeg ?? -150;
-          const maxAngleDeg = angularLimit?.maxAngleDeg ?? 150;
+        if (dragAngular?.continuous && angularLimit?.clamp !== false) {
+          const range = comp0
+            ? resolvedAngularDial(comp0, dragAngular)
+            : {
+                minimum: angularLimit?.min ?? 0,
+                maximum: angularLimit?.max ?? 1000,
+                step: angularLimit?.step ?? 0,
+                positions: Math.max(1, Math.round(stepsRev)),
+                minimumAngleDeg: angularLimit?.minAngleDeg ?? -150,
+                maximumAngleDeg: angularLimit?.maxAngleDeg ?? 150,
+                clamp: true,
+              };
           // Mapeamento ABSOLUTO ângulo-do-mouse -> valor (igual ao QDial nativo real -- ver
           // `CustomDial`/`Dialed` no SimulIDE -- e à MESMA fórmula usada pro render em `dialKnobSvg`:
           // a posição do nub É o valor, nunca um delta acumulado). Bug relatado 2026-07-18 ("vai e
@@ -6352,30 +6492,26 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
           // seguir em frente. Mapeamento absoluto não acumula nada -- cada frame recalcula o valor do
           // zero a partir de onde o mouse está AGORA, então um frame perdido ou um reset só faz o
           // valor "pular" pro lugar certo, nunca desalinha os frames seguintes.
-          let dialValue = comp0 ? numericComponentProperty(comp0, positionProp, propMin) : propMin;
+          let dialValue = comp0 ? numericComponentProperty(comp0, positionProp, range.minimum) : range.minimum;
           let dialChanged = false;
           const onDialMove = (moveEvent: PointerEvent) => {
             const nextValue = continuousDialValueFromPointer(moveEvent.clientX, moveEvent.clientY, {
               centerX: kx,
               centerY: ky,
-              minimum: propMin,
-              maximum: propMax,
-              minimumAngleDeg: minAngleDeg,
-              maximumAngleDeg: maxAngleDeg,
-              step: propStep,
-              clamp,
+              minimum: range.minimum,
+              maximum: range.maximum,
+              minimumAngleDeg: range.minimumAngleDeg,
+              maximumAngleDeg: range.maximumAngleDeg,
+              positions: range.positions,
+              step: range.step,
+              clamp: range.clamp,
             });
             if (nextValue === undefined || Math.abs(nextValue - dialValue) < 1e-12) return;
             const comp = liveComponent();
             if (!comp) return;
             dialValue = nextValue;
             dialChanged = true;
-            comp.properties[positionProp] = nextValue;
-            send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestPreviewProperty", componentId: comp.id, name: positionProp, value: nextValue });
-            if (indicatorEl) {
-              const angle = mapLinear(nextValue, [propMin, propMax], [minAngleDeg, maxAngleDeg]);
-              indicatorEl.setAttribute("transform", `rotate(${angle}, ${centerX}, ${centerY})`);
-            }
+            setDialValue(comp, dragAngular, el, nextValue, true);
           };
           const onDialUp = () => {
             el.removeEventListener("pointermove", onDialMove);
@@ -6419,11 +6555,16 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
               const newPos = encoderValue + steps;
               encoderValue = newPos;
               encoderChanged = true;
-              comp.properties[positionProp] = newPos;
-              send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestPreviewProperty", componentId: comp.id, name: positionProp, value: newPos });
-              if (indicatorEl) {
-                const angle = ((((newPos % stepsRev) + stepsRev) % stepsRev) / stepsRev) * 360;
-                indicatorEl.setAttribute("transform", `rotate(${angle}, ${centerX}, ${centerY})`);
+              if (dragAngular) {
+                setDialValue(comp, dragAngular, el, newPos, true);
+              } else {
+                comp.properties[positionProp] = newPos;
+                send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestPreviewProperty", componentId: comp.id, name: positionProp, value: newPos });
+                const indicator = el.querySelector<SVGElement>(".encoder-indicator");
+                if (indicator) {
+                  const angle = ((((newPos % stepsRev) + stepsRev) % stepsRev) / stepsRev) * 360;
+                  indicator.setAttribute("transform", `rotate(${angle}, ${centerX}, ${centerY})`);
+                }
               }
             }
           }
@@ -6740,6 +6881,26 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
     : isMissingSubcircuitRef || isUnknownComponent
       ? missingSubcircuitPlaceholderSvg(box)
       : packageSymbolSvg(component.typeId, symbolProperties, component.id, boardVariant) ?? catalogEntry?.symbolSvg ?? componentSymbolSvg(component.typeId, symbolProperties);
+  const dialInteraction = viewSpecInteractionFor(component.typeId, "dragAngular");
+  const dialFocusTarget = bodyGroup.querySelector<SVGElement>(".viewspec-interaction-dragAngular");
+  if (dialInteraction && dialFocusTarget) {
+    const range = resolvedAngularDial(component, dialInteraction);
+    const value = numericComponentProperty(component, dialInteraction.prop, range.minimum);
+    dialFocusTarget.setAttribute("tabindex", "0");
+    dialFocusTarget.setAttribute("role", "slider");
+    dialFocusTarget.setAttribute("aria-label", `${component.label}: ${dialInteraction.prop}`);
+    dialFocusTarget.setAttribute("aria-valuemin", String(Math.min(range.minimum, range.maximum)));
+    dialFocusTarget.setAttribute("aria-valuemax", String(Math.max(range.minimum, range.maximum)));
+    dialFocusTarget.setAttribute("aria-valuenow", String(value));
+    dialFocusTarget.classList.toggle("dial-control-focused", activeDialComponentId === component.id);
+    if (activeDialComponentId === component.id) {
+      queueMicrotask(() => {
+        if (dialFocusTarget.isConnected && document.activeElement !== dialFocusTarget) {
+          dialFocusTarget.focus({ preventScroll: true });
+        }
+      });
+    }
+  }
   if (component.typeId === "peripherals.lasecplot") {
     bodyGroup.querySelectorAll<SVGTextElement>(".serial-toggle-hit-zone").forEach((text) => {
       text.style.cursor = "pointer";
@@ -9072,6 +9233,7 @@ function renderExternalLabel(component: WebviewComponentModel, kind: ExternalLab
 
 /** Seleciona todo componente/fio não oculto (`Ctrl+A`, `circuit.cpp::keyPressEvent` do SimulIDE). */
 function selectAll(): void {
+  activeDialComponentId = undefined;
   state.selectedComponentIds = activeSceneComponents().filter((component) => !component.hidden && !component.hiddenByUser).map((component) => component.id);
   state.selectedWireIds = state.topology.conductors.map((wire) => wire.id);
   persistState();
@@ -9128,6 +9290,11 @@ window.addEventListener("keydown", (event) => {
   }
 
   if (event.key.startsWith("Arrow")) {
+    const dialDirection: 1 | -1 = event.key === "ArrowUp" || event.key === "ArrowRight" ? 1 : -1;
+    if (stepFocusedDial(dialDirection, event.shiftKey)) {
+      event.preventDefault();
+      return;
+    }
     const step = event.shiftKey ? FINE_WIRE_STEP : WIRE_GRID_SIZE;
     if (moveSelectedWireCornerByArrow(event.key, step)) {
       event.preventDefault();

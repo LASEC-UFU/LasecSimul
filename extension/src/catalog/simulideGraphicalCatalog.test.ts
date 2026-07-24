@@ -54,6 +54,16 @@ const manifestGraphical = [
     }
   });
 
+  await test("todos os sensores derivados de Dialed no SimulIDE expõem o mesmo controle giratório", () => {
+    for (const typeId of ["sensors.ldr", "sensors.thermistor", "sensors.rtd", "sensors.strain"]) {
+      const item = manifestById.get(typeId) as {
+        package?: { viewSpec?: { interaction?: Record<string, { kind?: string; prop?: string }> } };
+      } | undefined;
+      const dials = Object.values(item?.package?.viewSpec?.interaction ?? {}).filter((entry) => entry.kind === "dragAngular");
+      assert(dials.length === 1, `${typeId} deveria declarar exatamente um dragAngular, recebido ${dials.length}`);
+    }
+  });
+
   const { failed } = finish();
   process.exitCode = failed > 0 ? 1 : 0;
 })();

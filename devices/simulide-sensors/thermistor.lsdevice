@@ -46,7 +46,7 @@
   },
   "package": {
     "width": 56,
-    "height": 24,
+    "height": 48,
     "border": false,
     "background": {
       "kind": "color",
@@ -151,7 +151,48 @@
         "length": 10,
         "label": ""
       }
-    ]
+    ],
+    "viewSpec": {
+      "overlayPaint": true,
+      "dialWidget": {
+        "cx": 28,
+        "cy": 35,
+        "r": 12
+      },
+      "paint": [],
+      "hitTest": {
+        "dial": {
+          "kind": "circle",
+          "cx": 28,
+          "cy": 35,
+          "r": 12,
+          "cursor": "grab"
+        }
+      },
+      "interaction": {
+        "dial": {
+          "kind": "dragAngular",
+          "hitTest": "dial",
+          "prop": "temp",
+          "cx": 28,
+          "cy": 35,
+          "stepsPerRev": 1000,
+          "continuous": true,
+          "limits": "dial"
+        }
+      },
+      "limits": {
+        "dial": {
+          "min": -55,
+          "max": 200,
+          "minProp": "min_temp",
+          "maxProp": "max_temp",
+          "minAngleDeg": -150,
+          "maxAngleDeg": 150,
+          "clamp": true
+        }
+      }
+    }
   },
   "pins": [
     {

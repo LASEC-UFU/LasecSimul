@@ -693,6 +693,8 @@ export interface ComponentViewSpec {
   /** Quando true, `paint[]` e hit-test do ViewSpec sao renderizados por cima de `simulidePaint`/
    * `qtWidget`. Isso permite widgets/dials declarativos sem duplicar o corpo traduzido do C++. */
   overlayPaint?: boolean;
+  /** Instância reutilizável do CustomDial real; a interação dragAngular fornece valor e limites. */
+  dialWidget?: { cx: number; cy: number; r: number; tickCount?: number };
   /** Partes semânticas nomeadas; base para reescrita em massa dos módulos com interações móveis. */
   parts?: Record<string, ViewSpecPart>;
   /** Regiões de hit-test reutilizáveis por `parts` e `interaction`. */

@@ -712,6 +712,21 @@ export function sanitizeComponentViewSpec(value: unknown): ComponentViewSpec | u
   const paint = Array.isArray(raw.paint)
     ? raw.paint.map(sanitizePackageShape).filter((shape): shape is PackageShape => Boolean(shape))
     : [];
+  const dialWidgetRaw = typeof raw.dialWidget === "object" && raw.dialWidget !== null
+    ? raw.dialWidget as Record<string, unknown>
+    : undefined;
+  const dialWidget = dialWidgetRaw &&
+    typeof dialWidgetRaw.cx === "number" &&
+    typeof dialWidgetRaw.cy === "number" &&
+    typeof dialWidgetRaw.r === "number" &&
+    dialWidgetRaw.r > 0
+    ? {
+        cx: dialWidgetRaw.cx,
+        cy: dialWidgetRaw.cy,
+        r: dialWidgetRaw.r,
+        ...(typeof dialWidgetRaw.tickCount === "number" ? { tickCount: dialWidgetRaw.tickCount } : {}),
+      }
+    : undefined;
 
   const gradients: Record<string, ViewSpecGradient> = {};
   if (typeof raw.gradients === "object" && raw.gradients !== null) {
@@ -766,6 +781,7 @@ export function sanitizeComponentViewSpec(value: unknown): ComponentViewSpec | u
 
   if (
     paint.length === 0 &&
+    !dialWidget &&
     Object.keys(parts).length === 0 &&
     Object.keys(hitTest).length === 0 &&
     Object.keys(interaction).length === 0
@@ -776,6 +792,7 @@ export function sanitizeComponentViewSpec(value: unknown): ComponentViewSpec | u
   return {
     ...(Object.keys(gradients).length > 0 ? { gradients } : {}),
     ...(raw.overlayPaint === true ? { overlayPaint: true } : {}),
+    ...(dialWidget ? { dialWidget } : {}),
     ...(Object.keys(parts).length > 0 ? { parts } : {}),
     ...(Object.keys(hitTest).length > 0 ? { hitTest } : {}),
     ...(Object.keys(interaction).length > 0 ? { interaction } : {}),

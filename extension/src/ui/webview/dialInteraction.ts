@@ -5,9 +5,31 @@ export interface ContinuousDialMapping {
   maximum: number;
   minimumAngleDeg: number;
   maximumAngleDeg: number;
+  /** Resolução inteira do QDial subjacente (CustomDial do SimulIDE usa 0..1000). */
+  positions?: number;
   step?: number;
   clamp?: boolean;
   deadZonePx?: number;
+}
+
+export interface SteppedDialMapping {
+  minimum: number;
+  maximum: number;
+  /** Resolução inteira do QDial subjacente. */
+  positions?: number;
+  /** singleStep do QDial. CustomDial usa 25; Shift usa uma única posição. */
+  singleStep?: number;
+  /** Quantização física opcional aplicada por Dialed::dialChanged. */
+  step?: number;
+  clamp?: boolean;
+}
+
+function clampDialValue(value: number, minimum: number, maximum: number): number {
+  return Math.max(Math.min(minimum, maximum), Math.min(Math.max(minimum, maximum), value));
+}
+
+function quantizePhysicalValue(value: number, step: number | undefined): number {
+  return step !== undefined && step > 0 ? Math.round(value / step) * step : value;
 }
 
 /**
@@ -37,10 +59,38 @@ export function continuousDialValueFromPointer(
 
   const angleSpan = Math.max(1, Math.abs(maxAngle - minAngle));
   let value = mapping.minimum + ((angleDeg - minAngle) / angleSpan) * (mapping.maximum - mapping.minimum);
-  const step = mapping.step ?? 0;
-  if (step > 0) value = Math.round(value / step) * step;
+  // O CustomDial real não é contínuo: QDial armazena um inteiro de 0 a 1000. Reproduzir essa
+  // resolução aqui também evita valores de ponto flutuante diferentes a cada pixel/subpixel.
+  const positions = Math.max(1, Math.round(mapping.positions ?? 1000));
+  const ratio = mapping.maximum === mapping.minimum ? 0 : (value - mapping.minimum) / (mapping.maximum - mapping.minimum);
+  value = mapping.minimum + (Math.round(ratio * positions) / positions) * (mapping.maximum - mapping.minimum);
+  value = quantizePhysicalValue(value, mapping.step);
   if (mapping.clamp !== false) {
-    value = Math.max(Math.min(mapping.minimum, mapping.maximum), Math.min(Math.max(mapping.minimum, mapping.maximum), value));
+    value = clampDialValue(value, mapping.minimum, mapping.maximum);
   }
   return value;
+}
+
+/**
+ * Aplica uma seta/roda ao mesmo valor inteiro 0..1000 do CustomDial.
+ * No SimulIDE, setSingleStep(25); com Shift usamos uma única posição para o ajuste fino.
+ */
+export function steppedDialValue(
+  currentValue: number,
+  direction: 1 | -1,
+  fine: boolean,
+  mapping: SteppedDialMapping
+): number {
+  if (!Number.isFinite(currentValue) || mapping.minimum === mapping.maximum) return mapping.minimum;
+  const positions = Math.max(1, Math.round(mapping.positions ?? 1000));
+  const singleStep = Math.max(1, Math.round(mapping.singleStep ?? 25));
+  const ratio = (currentValue - mapping.minimum) / (mapping.maximum - mapping.minimum);
+  const currentPosition = Math.round(ratio * positions);
+  const nextPosition = currentPosition + direction * (fine ? 1 : singleStep);
+  const boundedPosition = mapping.clamp === false
+    ? nextPosition
+    : Math.max(0, Math.min(positions, nextPosition));
+  let value = mapping.minimum + (boundedPosition / positions) * (mapping.maximum - mapping.minimum);
+  value = quantizePhysicalValue(value, mapping.step);
+  return mapping.clamp === false ? value : clampDialValue(value, mapping.minimum, mapping.maximum);
 }

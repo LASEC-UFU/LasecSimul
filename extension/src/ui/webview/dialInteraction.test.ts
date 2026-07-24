@@ -1,5 +1,5 @@
 import { createTestRunner, assert } from "../../ipc/testSupport/MockCoreServer";
-import { continuousDialValueFromPointer } from "./dialInteraction";
+import { continuousDialValueFromPointer, steppedDialValue } from "./dialInteraction";
 
 (async () => {
   const { test, finish } = createTestRunner("dialInteraction — controles rotativos estáveis");
@@ -30,6 +30,28 @@ import { continuousDialValueFromPointer } from "./dialInteraction";
     assert(continuousDialValueFromPointer(101, 101, mapping) === undefined, "centro deve pertencer à zona morta");
     const stepped = continuousDialValueFromPointer(100, 50, { ...mapping, step: 0.2 });
     assert(stepped === 0.6000000000000001, `0,5 arredondado em passos de 0,2 deveria ser 0,6: ${stepped}`);
+  });
+
+  await test("quantiza o mouse nas 1000 posições inteiras do CustomDial", () => {
+    const value = continuousDialValueFromPointer(99, 50, mapping);
+    assert(value !== undefined && Math.abs(value * 1000 - Math.round(value * 1000)) < 1e-9,
+      `valor deveria cair na grade 0..1000 do QDial: ${value}`);
+  });
+
+  await test("setas usam singleStep 25 e Shift usa passo fino 1", () => {
+    const coarse = steppedDialValue(0.5, 1, false, { minimum: 0, maximum: 1 });
+    const fine = steppedDialValue(0.5, 1, true, { minimum: 0, maximum: 1 });
+    assert(coarse === 0.525, `seta normal deveria avançar 25/1000: ${coarse}`);
+    assert(fine === 0.501, `Shift+seta deveria avançar 1/1000: ${fine}`);
+  });
+
+  await test("setas respeitam faixa invertida, quantização física e extremos", () => {
+    const reversed = steppedDialValue(50, 1, false, { minimum: 100, maximum: 0 });
+    const snapped = steppedDialValue(0.5, 1, true, { minimum: 0, maximum: 1, step: 0.2 });
+    const clamped = steppedDialValue(1, 1, false, { minimum: 0, maximum: 1 });
+    assert(reversed === 47.5, `faixa invertida deveria acompanhar a direção declarada: ${reversed}`);
+    assert(Math.abs(snapped - 0.6) < 1e-12, `quantização física deveria ser preservada: ${snapped}`);
+    assert(clamped === 1, `máximo deveria permanecer limitado: ${clamped}`);
   });
 
   finish();
