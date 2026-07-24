@@ -74,6 +74,18 @@ OpenETH e ainda exigiriam a emulação do controlador MAC Wi-Fi proprietário.
 
 ## Instalação e limites operacionais
 
+O fork oficial usado pelo Core fica exclusivamente em
+`C:\SourceCode\qemu_lasecSimul`. No Windows, compile, prepare as DLLs (inclusive `libslirp-0.dll`)
+e implante o executável vendorizado com:
+
+```powershell
+npm run build:qemu:windows
+```
+
+O script recusa um build cujo `SRC_PATH` aponte para outra árvore, exige `--enable-slirp`, exige
+que todas as alterações rastreadas do QEMU estejam preservadas no Git e grava
+`devices/qemu-esp32/bin/BUILD-PROVENANCE.txt` com o commit e o SHA-256 implantados.
+
 - O instalador baixa no build o TAP-Windows6 9.27.0 oficial, valida SHA-256 e embute somente
   INF/CAT/SYS, licença GPLv2 e o código-fonte correspondente. Na instalação, uma etapa UAC instala
   o driver, cria `LasecSimul TAP`, cria a Windows Network Bridge e registra o gateway para iniciar

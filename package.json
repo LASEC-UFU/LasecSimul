@@ -9,6 +9,7 @@
     "build:core": "node scripts/build-core.js",
     "build:devices": "node scripts/build-devices.js",
     "build:mcu-adapters": "node scripts/build-mcu-adapters.js",
+    "build:qemu:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-qemu-windows.ps1",
     "package:release": "node scripts/package-release.js",
     "watch:extension": "node scripts/build-extension.js --watch",
     "test:core": "node scripts/test-core.js",
