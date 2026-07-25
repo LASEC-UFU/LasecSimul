@@ -91,7 +91,7 @@
       { "id": "sck", "x": 8, "y": 96, "angle": 90, "length": 8, "label": "SCK" }
     ]
   },
-  "icon": "max72xx_matrix",
+  "icon": "max72xx",
   "folderPath": ["Saidas", "Leds"],
   "defaultProperties": { "numDisplays": 4, "color": "Yellow" },
   "help": { "description": "Matriz de LEDs em cascata controlada por MAX7219/MAX7221." }
