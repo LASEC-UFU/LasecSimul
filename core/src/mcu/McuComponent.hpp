@@ -238,13 +238,14 @@ private:
     // 1e12) já é fisicamente plausível e não precisa desse "colchão" artificial.
     static constexpr double kDriveConductance = 1.0 / 40.0;
     static constexpr double kFloatingConductance = 1.0 / 1e7;
-    // Pull-up dedicado do pino RST/EN (`stampResetPin()`) -- idêntico a `Esp32::addPin()` real
-    // (`m_rstPin->setPullup(1e5)`, 100kΩ), NÃO o `kFloatingConductance` genérico de GPIO acima.
-    // SimulIDE trata o pino de reset como um caso elétrico PRÓPRIO (pull-up físico dedicado, mais
-    // forte que um GPIO comum flutuando), nunca reaproveita a condutância genérica de "sem fio" de
-    // um GPIO de dados -- reproduzido aqui fielmente em vez de continuar usando o mesmo valor de
-    // "flutuando" que todo GPIO comum usa.
-    static constexpr double kResetPullupConductance = 1e-5;
+    // Pull-up/pull-down FRACO real (100kΩ) -- idêntico a `Esp32Pin::m_pullAdmit`/`setPullup(1e5)`
+    // do SimulIDE real (`C:\SourceCode\simulide_2\src\microsim\cores\qemu\esp32\esp32pin.cpp`),
+    // NÃO o `kFloatingConductance` genérico de "sem pull nenhum" acima. Usado tanto pelo pull-up
+    // dedicado do pino RST/EN (`stampResetPin()`, caso elétrico próprio do SimulIDE) quanto pelo
+    // pull-up/pull-down INTERNO de um GPIO comum quando o firmware habilita via registrador (ex:
+    // IO_MUX FUN_PU/FUN_PD do ESP32, ver `QemuModule::pullState()`) -- mesmo valor físico nos dois
+    // casos, sem motivo pra inventar dois números diferentes pro mesmo resistor de 100kΩ.
+    static constexpr double kWeakPullConductance = 1e-5;
     static constexpr double kDriveHighVolts = 3.3; // lógica ESP32 é 3.3V, não 5V
 
     std::unique_ptr<IMcuAdapter> m_adapter;

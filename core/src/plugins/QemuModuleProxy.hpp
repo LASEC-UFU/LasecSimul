@@ -188,6 +188,21 @@ public:
         return result;
     }
 
+    PullState pullState(uint32_t bitOrLine) const override {
+        if (!m_handle.vtable->get_pull_state) return PullState::None;
+        int32_t result = 0;
+        const bool ok = CrashGuard::call(m_label, [&] {
+            result = m_handle.vtable->get_pull_state(m_handle.module, bitOrLine);
+        });
+        if (!ok) { m_health = PluginHealthStatus::Faulted; return PullState::None; }
+        const bool up = (result & static_cast<int32_t>(LSDN_PULL_UP)) != 0;
+        const bool down = (result & static_cast<int32_t>(LSDN_PULL_DOWN)) != 0;
+        if (up && down) return PullState::UpAndDown;
+        if (up) return PullState::Up;
+        if (down) return PullState::Down;
+        return PullState::None;
+    }
+
     size_t injectRxBytes(const uint8_t* bytes, size_t count) override {
         if (!m_handle.vtable->inject_rx_bytes) return 0;
         size_t result = 0;

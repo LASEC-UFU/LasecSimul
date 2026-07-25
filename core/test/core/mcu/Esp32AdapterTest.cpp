@@ -257,51 +257,216 @@ int main() {
                     "PWM de 1 kHz/50% agenda a borda em aproximadamente 500 us");
         if (pwmModule) pwmModule->onWakeup(500'000u);
         TEST_ASSERT(!gpioModule->outputLevel(27), "borda do PWM alterna GPIO27 para nivel baixo");
+
+        // ---- Pull-up/pull-down interno real (IO_MUX FUN_PU/FUN_PD, bits 8/7) -- GPIO4, offset
+        // 0x48 (ver getIoMuxPin) ----
+        TEST_ASSERT(gpioModule->pullState(4) == QemuModule::PullState::None,
+                    "GPIO4 sem FUN_PU/FUN_PD comeca sem pull nenhum");
+        if (ioMuxModule) ioMuxModule->writeRegister(0x3FF49000 + 0x48, 1u << 8); // FUN_PU
+        TEST_ASSERT(gpioModule->pullState(4) == QemuModule::PullState::Up,
+                    "IO_MUX FUN_PU liga o pull-up interno real do GPIO4");
+        if (ioMuxModule) ioMuxModule->writeRegister(0x3FF49000 + 0x48, 1u << 7); // FUN_PD
+        TEST_ASSERT(gpioModule->pullState(4) == QemuModule::PullState::Down,
+                    "IO_MUX FUN_PD liga o pull-down interno real do GPIO4");
+        if (ioMuxModule) ioMuxModule->writeRegister(0x3FF49000 + 0x48, (1u << 7) | (1u << 8));
+        TEST_ASSERT(gpioModule->pullState(4) == QemuModule::PullState::UpAndDown,
+                    "FUN_PU e FUN_PD juntos (fisicamente validos) reportam os dois habilitados");
+        if (ioMuxModule) ioMuxModule->writeRegister(0x3FF49000 + 0x48, 0);
+        TEST_ASSERT(gpioModule->pullState(4) == QemuModule::PullState::None,
+                    "limpar FUN_PU/FUN_PD desliga o pull de novo");
+
+        // ---- Open-drain real (GPIO_PINn_REG bit2 = PAD_DRIVER) -- mesmo GPIO4, agora como saida ----
+        gpioModule->writeRegister(0x3FF44000 + 0x20, 1u << 4); // GPIO_ENABLE_REG: GPIO4 = saida
+        gpioModule->writeRegister(0x3FF44000 + 0x04, 1u << 4); // GPIO_OUT_REG: GPIO4 = alto
+        TEST_ASSERT(gpioModule->isOutputEnabled(4) && gpioModule->outputLevel(4),
+                    "GPIO4 normal (push-pull) dirige nivel alto de verdade, sem PAD_DRIVER");
+
+        gpioModule->writeRegister(0x3FF44000 + 0x88 + 4u * 4u, 1u << 2); // GPIO_PIN4_REG: PAD_DRIVER
+        TEST_ASSERT(!gpioModule->isOutputEnabled(4),
+                    "open-drain (PAD_DRIVER=1) libera o pino em vez de dirigir nivel alto");
+        TEST_ASSERT(gpioModule->outputLevel(4),
+                    "outputLevel() continua reportando o nivel pretendido (alto) mesmo liberado");
+
+        gpioModule->writeRegister(0x3FF44000 + 0x04, 0); // GPIO_OUT_REG: GPIO4 = baixo
+        TEST_ASSERT(gpioModule->isOutputEnabled(4) && !gpioModule->outputLevel(4),
+                    "open-drain continua dirigindo o nivel baixo normalmente (so' o alto e' liberado)");
+
+        gpioModule->writeRegister(0x3FF44000 + 0x88 + 4u * 4u, 0); // desliga PAD_DRIVER
+        gpioModule->writeRegister(0x3FF44000 + 0x28, 1u << 4); // ENABLE_W1TC: GPIO4 volta a entrada
     }
 
     if (i2c0Module) {
         constexpr uint64_t kI2cBase = 0x3FF53000;
         constexpr uint32_t kSclLine = 0, kSdaLine = 1;
+        constexpr uint64_t kCmd0 = kI2cBase + 0x58;
+        constexpr uint64_t kCmd1 = kI2cBase + 0x58 + 4;
+        constexpr uint64_t kCmd2 = kI2cBase + 0x58 + 8;
+        constexpr uint64_t kCmd3 = kI2cBase + 0x58 + 12;
+        constexpr uint64_t kCmd4 = kI2cBase + 0x58 + 16;
+        constexpr uint32_t kOpRstart = 0u << 11, kOpWrite = 1u << 11, kOpRead = 2u << 11, kOpStop = 3u << 11;
+        constexpr uint32_t kAckVal = 1u << 10; // NACK pedido pelo mestre neste byte de leitura
 
-        // TRANS_START (I2C_CTR bit 5) -- inicio de uma transacao logica nova; sem byte nenhum
-        // ainda enfileirado, o motor mestre deve continuar ocioso (achado real: um adaptador
-        // anterior, so' de GPIO puro, nunca sequer tinha esses dois registradores implementados --
-        // toda escrita de registrador I2C do QEMU era descartada em silencio, entao o firmware
-        // "via" a transacao completar sem erro, mas nenhum bit de verdade chegava no dispositivo).
+        // I2C_LOW_PERIOD (offset 0x00) -- esp32_i2c_updt_frequency (fork QEMU) espelha aqui o
+        // periodo de BIT COMPLETO real (ns) calculado do clock configurado -- 2500ns/bit = 400kHz.
+        i2c0Module->writeRegister(kI2cBase + 0x00, 2500u);
+
+        // TRANS_START (I2C_CTR bit 5) -- inicio de uma transacao logica nova; sem operacao nenhuma
+        // ainda enfileirada, o motor mestre deve continuar ocioso (achado real 2026-07-25: um
+        // adaptador anterior, so' de GPIO puro, nunca sequer tinha estes registradores
+        // implementados -- toda escrita de registrador I2C do QEMU era descartada em silencio, e
+        // o firmware "via" a transacao completar sem erro mesmo sem nenhum bit real no barramento).
         i2c0Module->writeRegister(kI2cBase + 0x04, 1u << 5);
-        TEST_ASSERT(!i2c0Module->isOutputEnabled(kSclLine), "I2C fica ocioso ate' o primeiro byte chegar");
+        TEST_ASSERT(!i2c0Module->isOutputEnabled(kSclLine), "I2C fica ocioso ate' a 1a operacao chegar");
 
-        // CMD com opcode WRITE (bits[13:11]=1) e o byte 0x78 (endereco 7 bits 0x3C + R/W=0) nos
-        // bits baixos -- mesmo formato que esp32_i2c_do_transaction (fork QEMU) espelha via
-        // writeReg(A_I2C_CMD, ...) a cada byte que seu proprio motor de FIFO processa.
-        i2c0Module->writeRegisterAt(kI2cBase + 0x58, (1u << 11) | 0x78u, 0);
-        TEST_ASSERT(i2c0Module->isOutputEnabled(kSclLine) && i2c0Module->outputLevel(kSclLine),
-                    "primeiro byte dispara START com SCL alto");
-        TEST_ASSERT(i2c0Module->isOutputEnabled(kSdaLine) && !i2c0Module->outputLevel(kSdaLine),
-                    "START: SDA cai enquanto SCL esta' alto");
+        // ---- Escrita: RSTART + WRITE(endereco+W=0x78) + WRITE(0xAA) + STOP ----
+        // Mesma sequencia de opcodes que esp32_i2c_do_transaction (fork QEMU) gera e espelha pra'
+        // cada opcode que seu proprio motor de FIFO/comando processa -- RSTART cobre tanto o
+        // PRIMEIRO START quanto qualquer repeated-START (eletricamente identicos).
+        i2c0Module->writeRegisterAt(kCmd0, kOpRstart, 0);
+        TEST_ASSERT(i2c0Module->isOutputEnabled(kSclLine) && !i2c0Module->outputLevel(kSclLine),
+                    "RSTART comeca com SCL baixo (preparo antes de soltar SDA)");
+        TEST_ASSERT(i2c0Module->isOutputEnabled(kSdaLine) && i2c0Module->outputLevel(kSdaLine),
+                    "RSTART solta/sobe SDA primeiro (RestartRelease)");
+
+        i2c0Module->writeRegisterAt(kCmd1, kOpWrite | 0x78u, 0);
+        i2c0Module->writeRegisterAt(kCmd2, kOpWrite | 0xAAu, 0);
+        i2c0Module->writeRegisterAt(kCmd3, kOpStop, 0);
 
         uint64_t now = 0;
         int sclRises = 0;
-        bool wasSclHigh = true; // SCL comeca alto (o proprio START, ja' visivel antes do 1o pump)
-        now = pumpWakeups(i2c0Module, now, 40, [&](uint64_t) {
+        bool wasSclHigh = false; // SCL comeca baixo (RestartRelease, ja' visivel acima)
+        bool sawStartEdge = false;
+        now = pumpWakeups(i2c0Module, now, 80, [&](uint64_t) {
             const bool isHigh = i2c0Module->outputLevel(kSclLine);
             if (!wasSclHigh && isHigh) ++sclRises;
             wasSclHigh = isHigh;
-            // SDA liberado (nao mais dirigido pelo mestre) so' acontece na janela de ACK -- simula
-            // o escravo (ex: outputs.ssd1306 endereçado) puxando o barramento pra baixo ali.
+            // A borda do START/repeated-START (SDA cai com SCL JA' alto) so' acontece uma vez, bem
+            // no meio da sequencia RestartRelease->RestartClockHigh->StartFall->StartSettle.
+            if (isHigh && !i2c0Module->outputLevel(kSdaLine) && i2c0Module->isOutputEnabled(kSdaLine)) {
+                sawStartEdge = true;
+            }
+            // SDA liberado (nao mais dirigido pelo mestre) so' acontece na janela de ACK do
+            // escravo -- simula o escravo (ex: outputs.ssd1306 endereçado) puxando pra baixo ali.
             if (!i2c0Module->isOutputEnabled(kSdaLine)) i2c0Module->setInputLevel(kSdaLine, false);
         });
-        TEST_ASSERT(sclRises == 9, "um byte gera exatamente 9 pulsos de SCL (8 bits de dado + 1 ACK)");
-        // bit4 (BUS_BUSY) fica ligado de proposito aqui -- a transacao continua aberta ate' o
-        // STOP logo abaixo; so' o bit0 (ACK_REC, 0=ACK recebido) importa pra esta asserção.
+        TEST_ASSERT(sawStartEdge, "a borda real do START (SDA cai com SCL alto) acontece durante o RSTART");
+        // RestartClockHigh contribui 1 pulso proprio (sobe SCL antes da borda de SDA do START) +
+        // 2 bytes de escrita a 9 pulsos cada (8 bits + ACK) + StopSetup contribui mais 1 (sobe SCL
+        // antes da borda de subida de SDA do STOP, ja' enfileirado e processado dentro do mesmo
+        // pump de 80 passos) = 1+9+9+1 = 20.
+        TEST_ASSERT(sclRises == 20, "RSTART + dois bytes de escrita + STOP gera exatamente 20 pulsos de SCL");
         TEST_ASSERT((i2c0Module->readRegister(kI2cBase + 0x08) & 1u) == 0,
                     "I2C_STATUS reporta ACK_REC=0 (ACK recebido) depois do escravo puxar SDA na janela certa");
-
-        // STOP (opcode 3) no proximo slot de comando.
-        i2c0Module->writeRegisterAt(kI2cBase + 0x58 + 4, (3u << 11), now);
-        now = pumpWakeups(i2c0Module, now, 4, [](uint64_t) {});
         TEST_ASSERT(!i2c0Module->isOutputEnabled(kSclLine) && !i2c0Module->isOutputEnabled(kSdaLine),
                     "STOP libera SCL/SDA de volta pro pull-up externo do circuito do usuario");
+
+        // ---- Leitura com repeated-START: RSTART + WRITE(endereco+R=0x79) + READ(ACK) + READ(NACK) + STOP ----
+        // Mesma forma que i2c_master_write_read_device()/i2c_master_read() do ESP-IDF programam:
+        // todo byte de leitura exceto o ultimo pede ACK_VAL=0 (mestre manda ACK, mais bytes vem a
+        // seguir); o ULTIMO byte pede ACK_VAL=1 (mestre manda NACK, sinaliza fim da leitura).
+        i2c0Module->writeRegisterAt(kI2cBase + 0x04, 1u << 5, now); // TRANS_START de uma nova transacao
+        i2c0Module->writeRegisterAt(kCmd0, kOpRstart, now);
+        i2c0Module->writeRegisterAt(kCmd1, kOpWrite | 0x79u, now); // endereco 0x3C com R/W=1
+        i2c0Module->writeRegisterAt(kCmd2, kOpRead | 1u, now); // ACK_VAL=0 (bit10 claro) -- ACK
+        i2c0Module->writeRegisterAt(kCmd3, kOpRead | kAckVal | 1u, now); // ACK_VAL=1 -- NACK (ultimo byte)
+        i2c0Module->writeRegisterAt(kCmd4, kOpStop, now);
+
+        // Avanca exatamente UM passo do motor (nextWakeupDelayNs + onWakeup) -- usado quando o
+        // teste precisa intercalar leitura/escrita de sdaInput ENTRE dois passos especificos,
+        // coisa que pumpWakeups (so' tem callback DEPOIS de cada onWakeup) nao permite.
+        auto stepOnce = [&]() {
+            const uint64_t delay = i2c0Module->nextWakeupDelayNs(now);
+            now += delay;
+            i2c0Module->onWakeup(now);
+        };
+
+        // Pump generico ate' o byte de endereco+R (RSTART + WRITE) terminar E a 1a operacao Read da
+        // fila ser kickada -- detecta o kick pela PROPRIA borda eletrica (sdaOutputEnabled cai de
+        // verdadeiro pra falso quando o Read libera SDA pro escravo dirigir, ver i2cKick), nunca
+        // por contagem fixa de passos: robusto a qualquer mudanca de timing/fases no motor. Para
+        // exatamente nesse ponto -- o motor fica parado em ReadBitSetup aguardando o proximo
+        // avanco, que e' quem realmente amostra o bit0 (ver clockInByte abaixo).
+        bool sdaReleasedForAck = false;
+        bool wasSdaEnabled = true;
+        bool sdaJustReleasedForRead = false;
+        for (int guard = 0; guard < 200 && !sdaJustReleasedForRead; ++guard) {
+            const uint64_t delay = i2c0Module->nextWakeupDelayNs(now);
+            if (delay == QemuModule::kNoWakeup) break;
+            now += delay;
+            i2c0Module->onWakeup(now);
+            const bool isSdaEnabled = i2c0Module->isOutputEnabled(kSdaLine);
+            if (!isSdaEnabled && wasSdaEnabled && sdaReleasedForAck) {
+                // 2a vez que SDA e' liberado (a 1a foi a janela de ACK do endereco+R, simulada
+                // abaixo): so' pode ser o kick do Read -- para' aqui, sem consumir mais nada.
+                sdaJustReleasedForRead = true;
+            } else if (!isSdaEnabled) {
+                i2c0Module->setInputLevel(kSdaLine, false); // ACK do escravo pro byte de endereco+R
+                sdaReleasedForAck = true;
+            }
+            wasSdaEnabled = isSdaEnabled;
+        }
+        TEST_ASSERT(sdaReleasedForAck, "escravo confirma o endereco+R antes da leitura comecar");
+        TEST_ASSERT(sdaJustReleasedForRead, "motor kicka a 1a operacao Read e libera SDA pro escravo dirigir");
+
+        // Dois bytes simulados vindos do escravo: 0xC3 (mais bytes a seguir) e 0x5A (ultimo). Cada
+        // bit: seta sdaInput, DEPOIS avanca 2 passos (ReadBitSetup amostra+sobe SCL, ReadBitHold
+        // desce SCL e avanca) -- valido pq' o pump generico acima ja' deixou o motor parado
+        // exatamente em ReadBitSetup (kick ja' consumido), pronto pra' amostrar o bit0 no proximo
+        // avanco. IMPORTANTE: apos o ACK/NACK do mestre de CADA byte, o motor volta a Idle com uma
+        // folga pendente ate' a PROXIMA operacao (proximo Read ou STOP) ser kickada -- por isso
+        // "consomeGracaEKickSeguinte" roda entre bytes, senao o proximo clockInByte comecaria
+        // consumindo essa folga em vez de amostrar o bit0 de verdade (mesma pegadinha do pump
+        // generico acima, ver comentario logo abaixo de cada uso).
+        auto clockInByte = [&](uint8_t value) {
+            for (int bit = 0; bit < 8; ++bit) {
+                const bool bitVal = (value & (0x80u >> bit)) != 0;
+                i2c0Module->setInputLevel(kSdaLine, bitVal); // visivel pro ReadBitSetup a seguir
+                stepOnce(); // ReadBitSetup: sobe SCL e amostra o bit agora
+                stepOnce(); // ReadBitHold: desce SCL, avanca pro proximo bit (ou ACK, no 8o)
+            }
+        };
+        auto masterAck = [&](bool expectNack, const char* label) {
+            stepOnce(); // ReadAckSetup: sobe SCL com o ACK/NACK do mestre ja' no nivel certo
+            if (expectNack) {
+                TEST_ASSERT(!i2c0Module->isOutputEnabled(kSdaLine), label);
+            } else {
+                TEST_ASSERT(i2c0Module->isOutputEnabled(kSdaLine) && !i2c0Module->outputLevel(kSdaLine), label);
+            }
+            stepOnce(); // ReadAckHold: desce SCL, disponibiliza o byte recebido, volta a Idle+folga
+        };
+
+        clockInByte(0xC3);
+        masterAck(false, "ACK do mestre (mais bytes a vir) dirige SDA pra baixo de verdade");
+        TEST_ASSERT(i2c0Module->readRegister(kCmd0) == 0xC3u,
+                    "1o byte lido (0xC3) fica disponivel via A_I2C_CMD depois do ACK do mestre");
+
+        stepOnce(); // consome a folga pos-ACK e kicka a 2a operacao Read da fila (ver nota acima)
+        clockInByte(0x5A);
+        masterAck(true, "NACK do mestre (ultimo byte) libera SDA em vez de dirigir");
+        TEST_ASSERT(i2c0Module->readRegister(kCmd0) == 0x5Au,
+                    "2o byte lido (0x5A, ultimo) fica disponivel via A_I2C_CMD depois do NACK do mestre");
+
+        now = pumpWakeups(i2c0Module, now, 4, [](uint64_t) {});
+        TEST_ASSERT(!i2c0Module->isOutputEnabled(kSclLine) && !i2c0Module->isOutputEnabled(kSdaLine),
+                    "STOP apos a leitura libera SCL/SDA de volta pro pull-up externo");
+
+        // ---- ACK_ERR real: escravo NUNCA responde (endereco errado/ausente) ----
+        // sdaInput carrega o ultimo bit lido de 0x5A (0) -- reseta pra' "liberado/alto" (pull-up
+        // externo, ninguem dirigindo) antes de simular a auséncia de resposta do escravo.
+        i2c0Module->setInputLevel(kSdaLine, true);
+        i2c0Module->writeRegisterAt(kI2cBase + 0x04, 1u << 5, now);
+        i2c0Module->writeRegisterAt(kCmd0, kOpRstart, now);
+        // ACK_CHECK_EN (bit8) ligado, ACK_EXP (bit9) claro = firmware espera ACK (comportamento
+        // padrao de i2c_master_write_byte com ack_en=true).
+        constexpr uint32_t kAckCheckEn = 1u << 8;
+        i2c0Module->writeRegisterAt(kCmd1, kOpWrite | kAckCheckEn | 0x7Eu, now); // endereco que ninguem responde
+        now = pumpWakeups(i2c0Module, now, 40, [&](uint64_t) {
+            // Escravo NUNCA puxa SDA pra baixo -- pull-up externo mantem alto (NACK real).
+        });
+        TEST_ASSERT((i2c0Module->readRegister(kI2cBase + 0x08) & 1u) == 1u,
+                    "I2C_STATUS reporta ACK_REC=1 (NACK real) quando nenhum escravo responde");
+        i2c0Module->writeRegisterAt(kCmd2, kOpStop, now);
+        now = pumpWakeups(i2c0Module, now, 4, [](uint64_t) {});
     }
 
     if (spiModule) {
@@ -336,6 +501,28 @@ int main() {
             wasClkHigh = isHigh;
         });
         TEST_ASSERT(sclkRises == 8, "um byte SPI gera exatamente 8 pulsos de SCLK");
+
+        // ---- CS0 de hardware real (SPI_PIN_REG + inicio/fim REAL de transacao) ----
+        constexpr uint32_t kCs0Line = 3; // ver kSpiCs0Line no adaptador
+        TEST_ASSERT(spiModule->isOutputEnabled(kCs0Line) && spiModule->outputLevel(kCs0Line),
+                    "CS0 comeca habilitado e ocioso em alto (default real: pin_reg=0x6, CS0 fora dos _DIS)");
+
+        // A_SPI_CMD (offset 0x00) espelhado com 1 = inicio REAL de uma transacao USR (ver
+        // esp32_spi_do_command, numero>=2) -- CS0 deve cair (ativo-baixo, default sem CS0_POL).
+        spiModule->writeRegisterAt(kSpiBase + 0x00, 1u, 0);
+        TEST_ASSERT(spiModule->isOutputEnabled(kCs0Line) && !spiModule->outputLevel(kCs0Line),
+                    "CS0 cai automaticamente no inicio real da transacao, sem nenhum firmware pilotar GPIO");
+
+        // Fim real da transacao (espelhado com 0 em esp32_spi_event quando dataBytes chega a 0).
+        spiModule->writeRegisterAt(kSpiBase + 0x00, 0u, 0);
+        TEST_ASSERT(spiModule->outputLevel(kCs0Line),
+                    "CS0 sobe de volta automaticamente no fim real da transacao");
+
+        // SPI_PIN_REG (offset 0x34) com CS0_DIS (bit0) -- CS0 deixa de ser pilotado pelo periferico.
+        spiModule->writeRegisterAt(kSpiBase + 0x34, 1u, 0);
+        TEST_ASSERT(!spiModule->isOutputEnabled(kCs0Line), "CS0_DIS desliga o CS0 de hardware");
+        spiModule->writeRegisterAt(kSpiBase + 0x34, 0u, 0); // restaura CS0 habilitado
+        TEST_ASSERT(spiModule->isOutputEnabled(kCs0Line), "limpar CS0_DIS reabilita o CS0 de hardware");
     }
 
     if (failures == 0) {

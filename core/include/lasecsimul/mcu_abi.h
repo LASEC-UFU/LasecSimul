@@ -33,8 +33,15 @@ extern "C" {
 #endif
 
 #define LSDN_MCU_ABI_VERSION_MAJOR 2
-#define LSDN_MCU_ABI_VERSION_MINOR 7
-/* Minor 7 (2026-07-22): entrou inject_rx_bytes -- lado de ESCRITA do monitor de UART fora da banda
+#define LSDN_MCU_ABI_VERSION_MINOR 8
+/* Minor 8 (2026-07-25): entrou get_pull_state -- pull-up/pull-down INTERNO do pino (ex: IO_MUX
+ * FUN_PU/FUN_PD do ESP32), consultado por McuComponent::stamp() quando o modulo NAO esta' dirigindo
+ * o pino (mesmo branch que ja aplicava kFloatingConductance gen--rico) pra' decidir entre puxar
+ * fraco pra VDD, pra GND, ou manter o floating generico de sempre. Sem isto, um pino configurado
+ * com pull-up interno (comum em botoes/I2C sem resistor externo) sempre flutuava, dependendo 100%
+ * de um resistor externo no circuito do usuario -- que o hardware real dispensa. Opcional -- NULL
+ * e' tratado como "sem pull nenhum" (0 sempre), mesmo default de todo slot opcional desta ABI.
+ * Minor 7 (2026-07-22): entrou inject_rx_bytes -- lado de ESCRITA do monitor de UART fora da banda
  * (minor 6 abaixo so tinha leitura). Injeta bytes direto no FIFO de entrada real do periferico
  * (ex: UsartState::rxFifo no adaptador ESP32), como se tivessem chegado por fio -- usado por
  * McuComponent::propertyDescriptors() pra expor `uart{N}_rx_inject_hex` (escrita), consumido pela
@@ -152,7 +159,18 @@ typedef struct LsdnQemuModuleVTable {
      * real do periferico estiver cheio -- mesma politica de descarte que a entrada eletrica ja usa).
      * Opcional -- NULL e' tratado como "nao aceita nada" (0 sempre). */
     size_t   (*inject_rx_bytes)(LsdnQemuModule* module, const uint8_t* bytes, size_t count);
+    /* Minor 8: pull-up/pull-down INTERNO do pino, independente de estar ou nao sendo dirigido
+     * agora -- bit0 = pull-up habilitado, bit1 = pull-down habilitado (os dois juntos sao
+     * fisicamente validos: dois resistores fracos puxando em direcoes opostas, resultado real e'
+     * so' um divisor de tensao mais forte). Chamado so' quando is_output_enabled() for falso (pino
+     * flutuando do ponto de vista do proprio modulo) -- nunca sobrepoe um pino sendo dirigido de
+     * verdade. Opcional -- NULL e' tratado como 0 (sem pull nenhum), mesmo default de sempre. */
+    int32_t  (*get_pull_state)(LsdnQemuModule* module, uint32_t bit_or_line);
 } LsdnQemuModuleVTable;
+
+#define LSDN_PULL_NONE 0u
+#define LSDN_PULL_UP (1u << 0)
+#define LSDN_PULL_DOWN (1u << 1)
 
 /* Um modulo concreto devolvido por create_modules(): estado opaco + vtable + identidade
  * (moduleKind/moduleIndex, mesma identidade ja usada em LsdnMemoryRegion/LsdnPinMapping) -- e assim

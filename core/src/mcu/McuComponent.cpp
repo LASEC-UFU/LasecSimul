@@ -534,7 +534,27 @@ void McuComponent::stamp(MnaMatrixView& matrix) {
             // LED do usuário), causando reset fantasma do RST/EN sincronizado com o toggle do GPIO
             // (achado 2026-07-17). Valores físicos reais são estruturalmente mais seguros aqui, não
             // menos -- não dependem de um spread artificial pra ficar bem-condicionados.
-            matrix.addConductanceToGround(m_pins[i], kFloatingConductance);
+            //
+            // Pull-up/pull-down INTERNO (ex: IO_MUX FUN_PU/FUN_PD do ESP32, ver
+            // `QemuModule::pullState()`): quando o firmware habilita, o pino deixa de ser
+            // puramente flutuante -- mesmo princípio elétrico do pull-up dedicado do RST/EN
+            // (`stampResetPin()`), só que condicionado ao registrador real em vez de sempre-ligado.
+            // Os dois juntos (pull-up E pull-down habilitados ao mesmo tempo, config incomum mas
+            // fisicamente válida) simplesmente somam as duas stamps -- resultado real é um divisor
+            // de tensão mais forte, não um erro a ser resolvido aqui.
+            const QemuModule::PullState pull = module->pullState(mapping.bitOrLine);
+            const bool pullUp = pull == QemuModule::PullState::Up || pull == QemuModule::PullState::UpAndDown;
+            const bool pullDown = pull == QemuModule::PullState::Down || pull == QemuModule::PullState::UpAndDown;
+            if (pullUp) {
+                matrix.addConductanceToGround(m_pins[i], kWeakPullConductance);
+                matrix.addCurrentToGround(m_pins[i], kDriveHighVolts * kWeakPullConductance);
+            }
+            if (pullDown) {
+                matrix.addConductanceToGround(m_pins[i], kWeakPullConductance);
+            }
+            if (!pullUp && !pullDown) {
+                matrix.addConductanceToGround(m_pins[i], kFloatingConductance);
+            }
             const double voltage = matrix.getNodeVoltage(m_pins[i]);
             module->setInputVoltageAt(mapping.bitOrLine, voltage, m_scheduler.nowNsUnlocked());
         }
@@ -647,12 +667,12 @@ void McuComponent::resetModulesAndWakeups() {
 void McuComponent::stampResetPin(MnaMatrixView& matrix, const Pin& pin) {
     // ModuleKind::Reset (ex: EN do ESP32) nunca tem QemuModule -- é linha de controle de
     // hardware, não registrador. Sem fio externo, fica puxado pra ALTO por um pull-up DEDICADO
-    // (`kResetPullupConductance`, 100kΩ, idêntico a `Esp32::addPin()->setPullup(1e5)` do SimulIDE
-    // real) -- NUNCA o `kFloatingConductance` genérico de GPIO (que puxa fraco pra terra, sentido
-    // oposto, e é 100x mais fraco): "sem ligação" aqui tem que significar "não resetado", com força
-    // elétrica de pull-up de verdade, não um resíduo de "flutuando" emprestado de outro tipo de
-    // pino. Um circuito real (botão + pull-up externo, igual ao EN real do DevKit) com condutância
-    // ainda mais forte domina e decide o nível de verdade quando presente.
+    // (`kWeakPullConductance`, 100kΩ, idêntico a `Esp32Pin::m_pullAdmit`/`setPullup(1e5)` do
+    // SimulIDE real) -- NUNCA o `kFloatingConductance` genérico de GPIO (que puxa fraco pra terra,
+    // sentido oposto, e é 100x mais fraco): "sem ligação" aqui tem que significar "não resetado",
+    // com força elétrica de pull-up de verdade, não um resíduo de "flutuando" emprestado de outro
+    // tipo de pino. Um circuito real (botão + pull-up externo, igual ao EN real do DevKit) com
+    // condutância ainda mais forte domina e decide o nível de verdade quando presente.
     //
     // Só modelagem ELÉTRICA aqui -- a detecção de borda (reset/reload) mora em `onEvent()`, que só
     // é chamado pelo framework depois do solver convergir E numa transição REAL de nível (ver
@@ -660,8 +680,8 @@ void McuComponent::stampResetPin(MnaMatrixView& matrix, const Pin& pin) {
     // Newton (uma vez por iteração até o dirty-set esvaziar); ler `matrix.getNodeVoltage(pin)` AQUI
     // e comparar contra o estado anterior seria repetir o bug de cold-start já corrigido (a leitura
     // de uma iteração intermediária, ainda não convergida, sendo tratada como uma borda real).
-    matrix.addConductanceToGround(pin, kResetPullupConductance);
-    matrix.addCurrentToGround(pin, kDriveHighVolts * kResetPullupConductance);
+    matrix.addConductanceToGround(pin, kWeakPullConductance);
+    matrix.addCurrentToGround(pin, kDriveHighVolts * kWeakPullConductance);
 }
 
 void McuComponent::onEvent(const ComponentEvent& event) {

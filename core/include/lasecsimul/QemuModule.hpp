@@ -62,6 +62,16 @@ public:
         setInputLevelAt(bitOrLine, voltage > 1.65, nowNs);
     }
 
+    /** Pull-up/pull-down INTERNO do pino (ex: IO_MUX FUN_PU/FUN_PD do ESP32) -- consultado por
+     * `McuComponent::stamp()` SO' quando `isOutputEnabled()` for falso (pino flutuando do ponto de
+     * vista do modulo), pra decidir entre puxar fraco pra VDD, pra GND, ou manter o floating
+     * generico de sempre (nenhum pull configurado). `PullState::UpAndDown` e' fisicamente valido
+     * (dois resistores fracos em direcoes opostas -- resultado real e' so' um divisor de tensao
+     * mais forte, nao um erro). Default `None` -- so' um modulo GPIO-like faz sentido sobrescrever;
+     * mesma neutralidade de chip que `isOutputEnabled()`/`outputLevel()` ja tem. */
+    enum class PullState { None, Up, Down, UpAndDown };
+    virtual PullState pullState(uint32_t) const { return PullState::None; }
+
     /** Modulos com protocolo temporizado (UART/SPI/I2C, timers, PWM) podem pedir um wakeup de
      * simulacao. O Core agenda a chamada e re-estampa o MCU; o modulo continua sem conhecer
      * Scheduler/Netlist e sem depender de built-in. */

@@ -33,9 +33,11 @@ Processo QEMU externo, arena compartilhada, dispatch MMIO e adapter ESP32 inicia
   IPC). Módulo GPIO concreto via `LsdnQemuModuleVTable`, embrulhado pelo Core em `QemuModuleProxy`
   (`core/src/plugins/QemuModuleProxy.hpp`). **Achado crítico**: módulo de registrador é CHIP-ESPECÍFICO de
   propósito (confirmado lendo `hw/gpio/esp32_gpio.c` do fork real) — não existe módulo genérico de
-  GPIO/I2C/SPI/USART reusado entre chips. O módulo GPIO cobre hoje só GPIO puro
-  (`GPIO_OUT_REG`/`GPIO_ENABLE_REG`/`GPIO_IN_REG`/`GPIO_IN1_REG`); IOMUX/pin-matrix e TWI/SPI/USART do ESP32
-  ainda não existem (ver `docs/17-pendencias-pos-sessao-qemu-abi.md` seção 3.1).
+  GPIO/I2C/SPI/USART reusado entre chips. **Atualização 2026-07-25** (ver
+  `docs/17-pendencias-pos-sessao-qemu-abi.md` seção 7, que substitui a 3.1 abaixo): GPIO/IOMUX/matrix,
+  USART, I2C (write+read+repeated-START+ACK/NACK real) e SPI (dado+CS0 de hardware automático) estão
+  todos implementados hoje em `mcu-adapters/espressif-esp32/src/Esp32Adapter.cpp` — a frase seguinte
+  ("IOMUX/pin-matrix e TWI/SPI/USART ainda não existem") descreve o estado de 2026-06-28, não o atual.
 
 ## Fluxo
 
@@ -65,7 +67,9 @@ Processo QEMU externo, arena compartilhada, dispatch MMIO e adapter ESP32 inicia
 - Dependência de QEMU modificado deve ficar explícita no manifesto do adapter — **já verificada, não
   hipotética**: fork real em `C:\SourceCode\qemu_simulide`, fonte do SimulIDE atual em
   `C:\SourceCode\simulide_2`, e binário oficial em `SimulIDE_2-R260501_Win64\data\bin\` (vendorizado em
-  `devices/qemu-esp32/bin/`). GPIO output/input funcionando pro ESP32 hoje; UART/SPI/I2C ainda zero.
+  `devices/qemu-esp32/bin/`). GPIO output/input, USART, I2C (write+read+repeated-START+ACK/NACK real)
+  e SPI (dado+CS0 de hardware) funcionando pro ESP32 hoje (ver
+  `docs/17-pendencias-pos-sessao-qemu-abi.md` seção 7 pro estado detalhado e limitações restantes).
 - Vigilância de firmware é por polling de `mtime`, nunca API nativa de evento de filesystem por SO
   (`inotify`/`ReadDirectoryChangesW`/`FSEvents`) — simplicidade deliberada, latência de 1-2s é aceitável.
 - Módulo de registrador (`QemuModule` concreto) é CHIP-ESPECÍFICO de propósito — só

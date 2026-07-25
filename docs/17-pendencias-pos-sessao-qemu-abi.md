@@ -296,7 +296,12 @@ antes de perceber que é histórico.
 Estas são lacunas que o PRÓPRIO código já documenta como pendência (comentário no fonte) ou que
 ficaram evidentes durante o trabalho — não é re-trabalho de spec, é trabalho novo de fato.
 
-### 3.1 ESP32: IOMUX/pin-matrix, e módulos TWI/SPI/USART
+### 3.1 ESP32: IOMUX/pin-matrix, e módulos TWI/SPI/USART — **RESOLVIDO, ver seção 7 (2026-07-25)**
+
+> Texto original (2026-06-28) preservado abaixo por histórico — GPIO/IOMUX/matrix e USART já
+> tinham sido implementados antes da sessão de 2026-07-25 (não descrito em nenhum doc até agora);
+> I2C, SPI e pull-up/down+open-drain de GPIO foram implementados nessa sessão. Ver seção 7 pro
+> estado real atual, limitações restantes e testes.
 
 `Esp32GpioModule` cobre **só** GPIO puro (`GPIO_OUT_REG`/`GPIO_ENABLE_REG`/`GPIO_IN_REG`/
 `GPIO_IN1_REG`) — suficiente pra "Blink Real" (pino digital simples), mas:
@@ -362,11 +367,13 @@ em `qemudevice.cpp`). Documentado como simplificação aceitável pra GPIO digit
 necessária** (ex: protocolo com timing crítico tipo WS2812 vindo de um MCU real, não só de um
 componente built-in).
 
-### 3.7 `mcu_abi.h` nunca recebeu bump de versão nesta sessão
+### 3.7 `mcu_abi.h` nunca recebeu bump de versão nesta sessão — **DESATUALIZADO, ver seção 7**
 
-Ao contrário de `device_abi.h` (major 1→3), `mcu_abi.h` continua em `LSDN_MCU_ABI_VERSION_MAJOR=1`
-— nada na ABI de MCU plugin mudou. Mencionado aqui só pra registro/consistência (não é pendência
-de trabalho, é confirmação de que está correto como está).
+Texto original (2026-06-28): "`mcu_abi.h` continua em major 1, nada mudou". Isso já não reflete a
+realidade bem antes de 2026-07-25 (o arquivo atual começa em major 2 minor 7 — `LsdnQemuModuleVTable`/
+`create_modules`/monitor/inject_rx_bytes, todos de sessões não documentadas aqui). A sessão de
+2026-07-25 bump para **minor 8** (`get_pull_state`, ver seção 7.4). Corrigir esta seção só registra
+que o número "1" já estava errado há tempo, não é mais um "nada mudou" genuíno.
 
 ---
 
@@ -439,3 +446,142 @@ desalinhamento aqui é o que mais risco de causar retrabalho errado no futuro.
 modelo "copiar fielmente do `simulide_2`/`qemu_simulide` reais", não inventar — é a instrução
 explícita que guiou todo o trabalho desta sessão e não deve ser presumida silenciosamente continuar
 valendo sem reconfirmar com uma sessão nova.
+
+---
+
+## 7. Atualização 2026-07-25 — I2C/SPI reais, pull-up/down + open-drain, SPI CS0 de hardware
+
+Sessão nova, bem depois de 2026-06-28. **A seção 3.1 acima está desatualizada** — o que ela lista
+como pendência (IOMUX/matrix, TWI/SPI/USART do ESP32) já estava PARCIALMENTE resolvido antes desta
+sessão (GPIO/IOMUX/matrix e USART completos — ver `mcu-adapters/espressif-esp32/src/Esp32Adapter.cpp`,
+nenhum dos dois foi tocado aqui) e a parte que faltava de verdade (I2C, SPI, pull-up/down interno,
+CS0 de hardware) é o que esta sessão fecha. Contexto real do pedido: usuário reportou SSD1306 (I2C)
+funcionando no SimulIDE real e em branco no LasecSimul com o MESMO firmware ESP32 — a causa raiz era
+`i2cWriteRegister`/`i2cReadRegister`/`spiWriteRegister`/`spiReadRegister` serem stubs vazios em
+`Esp32Adapter.cpp`: o QEMU "via" toda transação I2C/SPI completar sem erro (o motor de FIFO/
+comando/interrupção dele é real e roda certo do ponto de vista do firmware), mas nenhum bit
+elétrico de verdade saía pro barramento — o dispositivo (SSD1306 ou qualquer outro) nunca recebia
+nada, ficando preso no estado de reset.
+
+### 7.1 Princípio arquitetural mantido (não mudou)
+
+QEMU (fork em `C:\SourceCode\qemu_lasecSimul`, não mais `qemu_simulide` — o caminho mudou entre
+sessões, confirmar sempre `git -C <fork> remote -v`/`log` antes de assumir) continua sendo dono do
+FIFO/registrador/interrupção de cada periférico — o Core nunca duplica esse motor. A mudança desta
+sessão foi **fechar o elo que faltava**: fazer o QEMU espelhar (`writeReg()`/`readReg()`, mesmo
+canal privado já usado por GPIO/USART) o suficiente de CADA opcode real (I2C: RSTART/WRITE/READ/
+STOP; SPI: byte de dado + início/fim real de transação) pra o lado Core converter isso em edges
+elétricos reais de SCL/SDA/SCLK/MOSI/CS0 — e ler de volta (ACK/NACK real, byte recebido) o que o
+barramento elétrico de fato produziu, fechando o ciclo nos dois sentidos.
+
+### 7.2 I2C — write, read, repeated-START, ACK/NACK real
+
+**QEMU (`hw/i2c/esp32_i2c.c`, fork em `C:\SourceCode\qemu_lasecSimul`)**:
+- `I2C_OPCODE_RSTART` agora espelha o próprio comando (`writeReg(A_I2C_CMD, cmd)`) antes de avançar
+  — sem isso, o Core não tinha como distinguir "um START (ou repeated-START) está começando agora"
+  de "só mais um byte do mesmo burst de escrita". Cobre tanto o START inicial quanto qualquer
+  repeated-START no meio de uma transação (`i2c_master_write_read_device()` etc.) — eletricamente
+  são a mesma coisa (SDA cai com SCL já alto), então um único mecanismo cobre os dois.
+- `I2C_OPCODE_READ` estava vazio (comentado) — implementado: espelha o comando (opcode+ACK_VAL+
+  BYTE_NUM) antes do timer, e no timer (`esp32_i2c_event`) lê de volta o byte que o Core já recebeu
+  eletricamente (`readReg(A_I2C_CMD)`) e empurra pro `rx_fifo` real — dado real chega no firmware
+  via `i2c_master_read()`/`Wire.requestFrom()`, não mais um FIFO vazio silencioso.
+- ACK/NACK real: `esp32_i2c_event()` lia `A_I2C_STATUS` mas descartava o resultado (`ackT` fixo em
+  0, comentário "TODO: get ACK from status" no fonte original) — agora usa o bit real espelhado
+  pelo Core. `ACK_ERR` também estava com a fórmula errada (comparava só bits que o PRÓPRIO firmware
+  escreveu, nunca contra o ACK real do barramento — um endereço sem resposta nenhuma nunca gerava
+  erro) — corrigido pra comparar o ACK real contra o que o firmware esperava (`ACK_CHECK_EN`/
+  `ACK_EXP`).
+- `esp32_i2c_updt_frequency()` já espelhava o período de bit real (`writeReg(A_I2C_LOW_PERIOD,
+  period_ns)`) antes desta sessão — só não estava sendo consumido do lado Core (ver 7.4).
+
+**Core (`Esp32Adapter.cpp`)**: motor mestre reescrito do zero em torno de uma fila única de
+operações (`I2cOp`: Restart/Write/Read/Stop, na ordem exata em que o QEMU as mirrora) — nenhuma
+suposição sobre "primeiro byte é sempre endereço" ou sobre biblioteca/dispositivo específico, só
+replica bit a bit qualquer sequência real de opcodes. START/repeated-START usam a MESMA sequência
+de 4 fases (liberar SDA → subir SCL → derrubar SDA → descer SCL); WRITE dirige SDA (push-pull,
+simplificação documentada — só a janela de ACK depende de verdade do open-drain) e libera SDA na
+janela de ACK pro escravo confirmar (open-drain real, mesma convenção de
+`devices/simulide-complex/src/lib.c::i2c_clock_bit`); READ libera SDA durante os 8 bits (escravo
+dirige) e o MESTRE dirige o ACK/NACK depois (ACK=puxa baixo, NACK=libera — real open-drain, decidido
+pelo `ACK_VAL` de cada comando `READ`, não por heurística de "é o último byte"). Período de bit
+aprendido do próprio QEMU (`I2C_LOW_PERIOD`, ver 7.1) — sem isso, dependeria de um palpite fixo de
+400kHz independente do que o firmware configurar.
+
+**Limitação real, documentada, não escondida**: `I2C_OPCODE_READ` só foi implementado até onde o
+PRÓPRIO fork QEMU permite — não há multi-master/arbitration (o ESP32 real, como mestre único, é o
+único cenário que o hardware real deste projeto precisa cobrir).
+
+### 7.3 SPI — CS0 de hardware automático
+
+**QEMU (`hw/ssi/esp32_spi.c`)**: `esp32_spi_do_command()`/`esp32_spi_event()` (caminho `número>=2`,
+HSPI/VSPI — SPI0/SPI1, dedicados a flash/PSRAM onboard, continuam 100% internos ao QEMU via
+`ssi_transfer`, nunca chegam no Core) agora espelham `A_SPI_CMD=1` no início real de CADA transação
+USR e `A_SPI_CMD=0` no fim real (quando o último byte termina) — mesmo bracket que
+`esp32_spi_cs_set()` já aplicava pro caminho interno de SPI0/SPI1, só que exposto pro Core em vez de
+`qemu_irq`. `A_SPI_PIN` (CS0_DIS/CS0_POL) também passou a ser espelhado em toda escrita.
+
+**Core**: `SpiState` ganhou `pinReg`/`csAsserted`, recomputando `cs0OutputEnabled`/`cs0OutputLevel`
+(`spiUpdateCs0`) a cada mudança de qualquer um dos dois — CS0 cai automaticamente no início real de
+QUALQUER transação e sobe no fim, sem nenhum firmware/biblioteca precisar pilotar um GPIO manual
+(esse continua funcionando também, exatamente como antes — a maioria das bibliotecas reais como
+Adafruit_SPITFT gerencia CS via `digitalWrite()`/GPIO comum, nunca o CS de hardware do periférico, e
+isso não muda em nada com esta correção).
+
+**Limitação documentada**: a posição exata do bit `CS0_POL` (assumida bit13) não pôde ser
+confirmada contra o TRM completo do ESP32 nesta sessão (só o bit0 `CS0_DIS`, confirmado contra o
+próprio reset real `pin_reg=0x6` no fork QEMU) — o caso default (nunca escrito, a esmagadora maioria
+das bibliotecas reais) não depende desse bit e funciona corretamente; só um firmware que configure
+polaridade de CS não-padrão seria afetado se a posição estiver errada.
+
+### 7.4 GPIO — pull-up/pull-down interno e open-drain
+
+**ABI (`mcu_abi.h` minor 7→8)**: novo slot opcional `get_pull_state` em `LsdnQemuModuleVTable`
+(bit0=pull-up, bit1=pull-down) + `QemuModule::pullState()` (C++, default `None`) +
+`QemuModuleProxy::pullState()` (fallback `None` se o plugin não implementar, mesmo padrão de todo
+slot opcional desta ABI).
+
+**`McuComponent::stamp()`**: o ramo "pino flutuante" (módulo não está dirigindo agora) passou a
+consultar `pullState()` antes de cair no floating genérico (`kFloatingConductance`, 1e7Ω) — pull-up
+habilitado estampa a MESMA condutância fraca (`kWeakPullConductance`, 100kΩ, renomeado de
+`kResetPullupConductance` — é o mesmo resistor físico que o pull-up dedicado do pino RST/EN já
+usava, confirmado contra `Esp32Pin::m_pullAdmit`/`setPullup(1e5)` do SimulIDE real) puxando pra VDD
+(3.3V); pull-down estampa a mesma condutância puxando pra GND; os dois habilitados ao mesmo tempo
+(config incomum mas fisicamente válida — dois resistores em direções opostas) simplesmente somam as
+duas stamps, sem tratamento especial.
+
+**`Esp32Adapter.cpp`**: `gpioGetPullState()` lê IO_MUX_GPIOn_REG bits 7 (`FUN_PD`)/8 (`FUN_PU`) —
+confirmado contra `Esp32Pin::writeIoMuxReg` do SimulIDE real ("PD bit 7 / PU bit 8"), não
+independente/pins RTC (32-39) fora do modo IOMUX-digital (RTC_IO override) — não modelado, gap
+honesto, pouco provável de importar pra uso comum de GPIO/I2C. Open-drain: `gpioIsOutputEnabled()`
+passou a consultar GPIO_PINn_REG bit2 (`PAD_DRIVER`, mesmo bit que `gpio_set_direction(pin,
+GPIO_MODE_OUTPUT_OD)` do ESP-IDF programa) — quando ligado e o nível pretendido for ALTO, o pino é
+tratado como não-dirigido (reaproveita o MESMO ramo floating/pull acima, nenhum caminho elétrico
+novo) em vez de forçar alto; nível BAIXO continua dirigido normalmente. Fonte do bit exata (posição
+2) não pôde ser 100% confirmada contra um TRM local (nem SimulIDE real nem o fork QEMU implementam
+isso — `Esp32Pin::writePinReg()` é um stub vazio mesmo na referência) — é o valor mais bem
+documentado disponível sem acesso à documentação oficial completa da Espressif.
+
+### 7.5 Testes adicionados
+
+Tudo em `core/test/core/mcu/Esp32AdapterTest.cpp` (ctest `esp32_adapter`), contra o `adapter.dll`
+real compilado — não mock: I2C (RSTART+2 WRITE+STOP contando pulsos reais de SCL, ACK real
+simulado por um "escravo" de teste; RSTART+WRITE+2 READ com ACK/NACK reais e reconstrução do byte
+recebido; ACK_ERR real quando nenhum escravo responde), SPI (contagem de pulsos de SCLK + bit a bit
+de MOSI, CS0 caindo/subindo automaticamente ao redor de uma transação real + `CS0_DIS`), GPIO
+(`FUN_PU`/`FUN_PD` isolados e juntos, open-drain liberando só o nível alto). **Rodado**: suíte
+completa do Core (`ctest`, 58 alvos incluindo os testes reais de QEMU
+`mcu_controller_real_qemu`/`mcu_scheduler_pacing_sync_real_qemu`/
+`mcu_multiple_controllers_real_qemu`) — 100% passou, sem regressão.
+
+### 7.6 Nota de processo — fork QEMU é um repositório separado
+
+`C:\SourceCode\qemu_lasecSimul` é um git próprio, fora do repositório LasecSimul. O script oficial
+de build/deploy (`scripts/build-qemu-windows.ps1`) **recusa rodar com alterações rastreadas não
+commitadas** no fork (checagem deliberada de proveniência/supply-chain). As mudanças desta sessão
+(`hw/i2c/esp32_i2c.c`, `hw/ssi/esp32_spi.c`) foram compiladas via `ninja` direto e o
+`qemu-system-xtensa.exe` resultante foi copiado manualmente pra `devices/qemu-esp32/bin/` só pra
+teste/desenvolvimento local — **isso contorna a checagem do script oficial de propósito**. Antes de
+qualquer release, alguém precisa: revisar o diff em `C:\SourceCode\qemu_lasecSimul`, decidir se
+commita, e então rodar `scripts/build-qemu-windows.ps1` de verdade (ele recalcula
+`BUILD-PROVENANCE.txt`/SHA-256 e falha se o hash não bater).
