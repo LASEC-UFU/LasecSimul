@@ -32,6 +32,23 @@ bool containsArg(const QemuLaunchSpec& spec, const std::string& value) {
     return std::find(spec.args.begin(), spec.args.end(), value) != spec.args.end();
 }
 
+// Avanca o motor temporizado de um modulo (I2C/SPI/USART/...) chamando onWakeup() no proximo
+// instante que o proprio modulo pediu, ate' `steps` vezes ou ate' ele nao ter mais nada agendado
+// (kNoWakeup) -- devolve o `nowNs` final. `onEdge` roda depois de CADA onWakeup, com o novo
+// `nowNs`, pra o chamador poder inspecionar/perturbar o estado eletrico exatamente entre dois
+// passos do motor (ex: simular um escravo puxando SDA pra baixo na janela de ACK).
+template <typename OnEdge>
+uint64_t pumpWakeups(QemuModule* module, uint64_t nowNs, int steps, OnEdge onEdge) {
+    for (int i = 0; i < steps; ++i) {
+        const uint64_t delay = module->nextWakeupDelayNs(nowNs);
+        if (delay == QemuModule::kNoWakeup) break;
+        nowNs += delay;
+        module->onWakeup(nowNs);
+        onEdge(nowNs);
+    }
+    return nowNs;
+}
+
 } // namespace
 
 int main() {
@@ -112,6 +129,8 @@ int main() {
     QemuModule* uart0Module = nullptr;
     QemuModule* adcModule = nullptr;
     QemuModule* pwmModule = nullptr;
+    QemuModule* i2c0Module = nullptr;
+    QemuModule* spiModule = nullptr;
     for (const std::unique_ptr<QemuModule>& m : modules) {
         if (m->kind() == ModuleKind::Gpio && m->index() == 0 && m->owns(0x3FF44000)) {
             hasGpioModule = true;
@@ -126,6 +145,8 @@ int main() {
         }
         if (m->kind() == ModuleKind::Adc && m->index() == 0 && m->owns(0x3FF48800)) adcModule = m.get();
         if (m->kind() == ModuleKind::Pwm && m->index() == 0 && m->owns(0x3FF59000)) pwmModule = m.get();
+        if (m->kind() == ModuleKind::I2c && m->index() == 0 && m->owns(0x3FF53000)) i2c0Module = m.get();
+        if (m->kind() == ModuleKind::Spi && m->index() == 0 && m->owns(0x3FF64000)) spiModule = m.get();
     }
     TEST_ASSERT(hasGpioModule, "createModules() inclui um QemuModule GPIO cobrindo a faixa real");
     TEST_ASSERT(hasIoMuxModule, "createModules() inclui um QemuModule IOMUX cobrindo a faixa real");
@@ -135,6 +156,8 @@ int main() {
     TEST_ASSERT(uart0Module != nullptr, "teste encontrou o modulo UART0");
     TEST_ASSERT(adcModule != nullptr, "teste encontrou o modulo ADC");
     TEST_ASSERT(pwmModule != nullptr, "teste encontrou o modulo LEDC/PWM");
+    TEST_ASSERT(i2c0Module != nullptr, "teste encontrou o modulo I2C0");
+    TEST_ASSERT(spiModule != nullptr, "teste encontrou o modulo SPI (HSPI)");
     if (gpioModule) {
         gpioModule->writeRegister(0x3FF44000 + 0x20, 1u << 2);
         gpioModule->writeRegister(0x3FF44000 + 0x04, 1u << 2);
@@ -234,6 +257,85 @@ int main() {
                     "PWM de 1 kHz/50% agenda a borda em aproximadamente 500 us");
         if (pwmModule) pwmModule->onWakeup(500'000u);
         TEST_ASSERT(!gpioModule->outputLevel(27), "borda do PWM alterna GPIO27 para nivel baixo");
+    }
+
+    if (i2c0Module) {
+        constexpr uint64_t kI2cBase = 0x3FF53000;
+        constexpr uint32_t kSclLine = 0, kSdaLine = 1;
+
+        // TRANS_START (I2C_CTR bit 5) -- inicio de uma transacao logica nova; sem byte nenhum
+        // ainda enfileirado, o motor mestre deve continuar ocioso (achado real: um adaptador
+        // anterior, so' de GPIO puro, nunca sequer tinha esses dois registradores implementados --
+        // toda escrita de registrador I2C do QEMU era descartada em silencio, entao o firmware
+        // "via" a transacao completar sem erro, mas nenhum bit de verdade chegava no dispositivo).
+        i2c0Module->writeRegister(kI2cBase + 0x04, 1u << 5);
+        TEST_ASSERT(!i2c0Module->isOutputEnabled(kSclLine), "I2C fica ocioso ate' o primeiro byte chegar");
+
+        // CMD com opcode WRITE (bits[13:11]=1) e o byte 0x78 (endereco 7 bits 0x3C + R/W=0) nos
+        // bits baixos -- mesmo formato que esp32_i2c_do_transaction (fork QEMU) espelha via
+        // writeReg(A_I2C_CMD, ...) a cada byte que seu proprio motor de FIFO processa.
+        i2c0Module->writeRegisterAt(kI2cBase + 0x58, (1u << 11) | 0x78u, 0);
+        TEST_ASSERT(i2c0Module->isOutputEnabled(kSclLine) && i2c0Module->outputLevel(kSclLine),
+                    "primeiro byte dispara START com SCL alto");
+        TEST_ASSERT(i2c0Module->isOutputEnabled(kSdaLine) && !i2c0Module->outputLevel(kSdaLine),
+                    "START: SDA cai enquanto SCL esta' alto");
+
+        uint64_t now = 0;
+        int sclRises = 0;
+        bool wasSclHigh = true; // SCL comeca alto (o proprio START, ja' visivel antes do 1o pump)
+        now = pumpWakeups(i2c0Module, now, 40, [&](uint64_t) {
+            const bool isHigh = i2c0Module->outputLevel(kSclLine);
+            if (!wasSclHigh && isHigh) ++sclRises;
+            wasSclHigh = isHigh;
+            // SDA liberado (nao mais dirigido pelo mestre) so' acontece na janela de ACK -- simula
+            // o escravo (ex: outputs.ssd1306 endereçado) puxando o barramento pra baixo ali.
+            if (!i2c0Module->isOutputEnabled(kSdaLine)) i2c0Module->setInputLevel(kSdaLine, false);
+        });
+        TEST_ASSERT(sclRises == 9, "um byte gera exatamente 9 pulsos de SCL (8 bits de dado + 1 ACK)");
+        // bit4 (BUS_BUSY) fica ligado de proposito aqui -- a transacao continua aberta ate' o
+        // STOP logo abaixo; so' o bit0 (ACK_REC, 0=ACK recebido) importa pra esta asserção.
+        TEST_ASSERT((i2c0Module->readRegister(kI2cBase + 0x08) & 1u) == 0,
+                    "I2C_STATUS reporta ACK_REC=0 (ACK recebido) depois do escravo puxar SDA na janela certa");
+
+        // STOP (opcode 3) no proximo slot de comando.
+        i2c0Module->writeRegisterAt(kI2cBase + 0x58 + 4, (3u << 11), now);
+        now = pumpWakeups(i2c0Module, now, 4, [](uint64_t) {});
+        TEST_ASSERT(!i2c0Module->isOutputEnabled(kSclLine) && !i2c0Module->isOutputEnabled(kSdaLine),
+                    "STOP libera SCL/SDA de volta pro pull-up externo do circuito do usuario");
+    }
+
+    if (spiModule) {
+        constexpr uint64_t kSpiBase = 0x3FF64000; // HSPI -- ver kSpi0Start no adaptador
+        constexpr uint32_t kClkLine = 0, kMosiLine = 2;
+
+        // SPI_CLOCK_REG (offset 0x18) -- periodo de 1 bit em picossegundos, ja' convertido pelo
+        // fork QEMU antes de espelhar (ver esp32_spi.c::write_clk_reg): 100ns/bit = 10 MHz.
+        spiModule->writeRegister(kSpiBase + 0x18, 100'000u);
+        // A_SPI_W0 (offset 0x80) -- byte da transacao: 0xA5 = 1010 0101.
+        spiModule->writeRegisterAt(kSpiBase + 0x80, 0xA5u, 0);
+        TEST_ASSERT(spiModule->isOutputEnabled(kClkLine) && !spiModule->outputLevel(kClkLine),
+                    "SPI MODE0: SCLK comeca ocioso em baixo assim que o byte chega");
+        TEST_ASSERT(spiModule->isOutputEnabled(kMosiLine) && spiModule->outputLevel(kMosiLine),
+                    "MOSI ja' segura o bit mais significativo de 0xA5 antes do 1o pulso de SCLK");
+
+        uint64_t now = 0;
+        int sclkRises = 0;
+        int sampledBit = -1;
+        bool wasClkHigh = false;
+        constexpr bool kExpectedBits[8] = {true, false, true, false, false, true, false, true}; // 0xA5, MSB->LSB
+        pumpWakeups(spiModule, now, 20, [&](uint64_t) {
+            const bool isHigh = spiModule->outputLevel(kClkLine);
+            if (!wasClkHigh && isHigh) {
+                ++sclkRises;
+                ++sampledBit;
+                if (sampledBit < 8) {
+                    TEST_ASSERT(spiModule->outputLevel(kMosiLine) == kExpectedBits[sampledBit],
+                                "MOSI mantem o bit correto na borda de subida de SCLK (amostragem MODE0)");
+                }
+            }
+            wasClkHigh = isHigh;
+        });
+        TEST_ASSERT(sclkRises == 8, "um byte SPI gera exatamente 8 pulsos de SCLK");
     }
 
     if (failures == 0) {

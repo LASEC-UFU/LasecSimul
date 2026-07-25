@@ -106,6 +106,23 @@ constexpr uint32_t kSpiCs0Line = 3;
 constexpr uint64_t kDefaultUartBitPeriodNs = 8'680; // 115200 baud, rounded to ns
 constexpr uint64_t kEsp32ApbClockHz = 80'000'000;
 
+/* I2C_LOW_PERIOD/I2C_HIGH_PERIOD (registrador real de clock do mestre) nunca sao espelhados na
+ * arena por esp32_i2c.c (fork QEMU, hw/i2c/esp32_i2c.c::esp32_i2c_write -- so' chama writeReg()
+ * pra A_I2C_CTR e A_I2C_CMD, nunca pros registradores de periodo) -- o lado Core nao tem como saber
+ * o clock configurado pelo firmware. 400kHz (fast-mode, o mais comum em Wire.setClock() de
+ * bibliotecas de display) e' um palpite fixo documentado, nao medido: o dispositivo escravo (ex:
+ * ssd1306 em devices/simulide-complex/src/lib.c::i2c_clock_bit) e' disparado por BORDA, nunca por
+ * tempo absoluto, entao qualquer clock plausivel produz o mesmo resultado eletrico -- so' importa
+ * nao ser tao lento que atrapalhe o ritmo da simulacao nem tao rapido que vire martelo de IPC. */
+constexpr uint64_t kI2cHalfPeriodNs = 1'250;
+
+/* SPI_CLOCK_REG (offset 0x18, ver esp32_spi.c::write_clk_reg) E' espelhado na arena
+ * (writeReg(iomem.addr+0x18, period_ns*1000)) -- ao contrario do I2C, o Core aprende o periodo de
+ * bit REAL configurado pelo firmware assim que a primeira escrita chega; este valor e' só o
+ * palpite usado ANTES dessa primeira escrita (ou se o firmware nunca configurar o clock por algum
+ * motivo). */
+constexpr uint64_t kSpiDefaultBitPeriodNs = 1'000;
+
 enum class SignalKind {
     None,
     RawGpio,
@@ -130,6 +147,28 @@ enum class UartRxPhase : uint8_t {
     Start,
     Data,
     Stop,
+};
+
+/* Motor mestre de bit-bang I2C (ver i2cAdvance/i2cKick) -- cada fase e' UMA borda eletrica real de
+ * SCL/SDA, avancada uma de cada vez por onWakeup, mesmo padrao de UartRxPhase acima. */
+enum class I2cPhase : uint8_t {
+    Idle,
+    StartFall,  // SDA ja caiu com SCL alto (START) -- proximo passo derruba SCL
+    BitSetup,   // SCL baixo, SDA segura o bit -- proximo passo sobe SCL (slave amostra)
+    BitHold,    // SCL alto -- proximo passo desce SCL e avanca pro bit seguinte/ACK
+    AckSetup,   // SCL baixo, SDA liberado pro slave dirigir o ACK -- proximo passo sobe SCL
+    AckHold,    // SCL alto -- amostra ACK em sdaInput -- proximo passo desce SCL
+    StopSetup,  // SCL baixo, SDA baixo -- proximo passo sobe SCL antes do STOP
+    StopRise,   // SCL alto, SDA baixo -- proximo passo sobe SDA (STOP completo)
+};
+
+/* Motor mestre de bit-bang SPI (ver spiAdvance/spiKick) -- MODE0 (CPOL=0/CPHA=0, o mais comum em
+ * bibliotecas de display tipo Adafruit_SPITFT): SCLK ocioso em baixo, MOSI e' preparado com SCLK
+ * baixo e amostrado pelo escravo na borda de subida. */
+enum class SpiPhase : uint8_t {
+    Idle,
+    ClockHigh, // proximo passo sobe SCLK (escravo amostra MOSI agora)
+    ClockLow,  // proximo passo desce SCLK e avanca pro bit seguinte/finaliza o byte
 };
 
 /** Tamanho máximo dos buffers de MONITOR (`UsartState::txMonitor`/`rxMonitor`) -- bem maior que o
@@ -182,6 +221,31 @@ struct I2cState {
     bool sdaOutputLevel = true;
     bool sclOutputEnabled = false;
     bool sdaOutputEnabled = false;
+
+    /* Motor mestre de bit-bang (ver i2cWriteRegisterAt/i2cKick/i2cAdvance) -- alimentado pelos
+     * writeReg() que esp32_i2c.c (fork QEMU, hw/i2c/esp32_i2c.c) ja espelha na arena a cada
+     * opcode WRITE/STOP que SEU PROPRIO motor de FIFO/comando/interrupcao (rodando de verdade
+     * dentro do QEMU, com FIFO/registradores/IRQ corretos do ponto de vista do firmware) processa
+     * -- nao ha necessidade nenhuma de duplicar esse motor aqui. Este lado so' converte cada byte
+     * espelhado numa sequencia eletrica REAL de START/8bits+ACK/STOP em SCL/SDA, pro dispositivo
+     * I2C de verdade (ex: outputs.ssd1306) no barramento perceber. Sem isto, o Wire.write() do
+     * firmware "funciona" do ponto de vista do proprio QEMU (a transacao completa sem erro) mas
+     * NENHUM bit real chega no dispositivo -- ele fica preso no reset (tela em branco), porque as
+     * escritas de registrador do QEMU eram descartadas silenciosamente aqui (achado 2026-07-25:
+     * usuario relata SSD1306 funcionando no SimulIDE real e em branco no LasecSimul, mesmo
+     * firmware/ESP32; i2cWriteRegister/i2cReadRegister eram stubs vazios).
+     * NAO implementa opcode READ (ler byte de volta de um sensor I2C, ex: BMP280): o proprio
+     * esp32_i2c.c do fork ja' nao implementa READ (o case correspondente em
+     * esp32_i2c_do_transaction esta' vazio/sem corpo) -- nao ha o que espelhar daquele lado ainda,
+     * entao nao ha o que decodificar deste. */
+    std::deque<uint8_t> pendingBytes;
+    bool pendingStop = false;
+    bool transactionOpen = false; // entre o START gerado e o STOP correspondente
+    I2cPhase phase = I2cPhase::Idle;
+    uint8_t bitIndex = 0;
+    uint8_t shiftByte = 0;
+    bool lastAck = false; // ultimo ACK observado em sdaInput -- so' diagnostico, QEMU nao consome hoje
+    uint64_t dueNs = LSDN_QEMU_MODULE_NO_WAKEUP;
 };
 
 struct SpiState {
@@ -197,6 +261,22 @@ struct SpiState {
     bool misoOutputEnabled = false;
     bool mosiOutputEnabled = false;
     bool cs0OutputEnabled = false;
+
+    /* Motor mestre de bit-bang (ver spiWriteRegisterAt/spiKick/spiAdvance) -- mesma logica do I2C
+     * acima, alimentado pelos writeReg(iomem.addr+0x80=A_SPI_W0, byte) que esp32_spi.c ja espelha
+     * um byte de cada vez (pausado pelo timer INTERNO do proprio QEMU, ver esp32_spi_event) pra
+     * toda transacao HSPI/VSPI (numero>=2 -- SPI0/SPI1, dedicados a flash/PSRAM onboard, processam
+     * 100% dentro do QEMU via ssi_transfer interno e NUNCA chegam aqui). CS0 nao e' pilotado por
+     * este motor: toda biblioteca real observada (Adafruit_SPITFT e afins) controla CS com
+     * digitalWrite()/GPIO comum, nunca o CS de hardware do periferico SPI -- o proprio
+     * esp32_spi.c so' pilota CS via qemu_irq para o caminho INTERNO de SPI0/SPI1 (flash), nunca
+     * para HSPI/VSPI. */
+    std::deque<uint8_t> pendingBytes;
+    SpiPhase phase = SpiPhase::Idle;
+    uint8_t bitIndex = 0;
+    uint8_t shiftByte = 0;
+    uint64_t bitPeriodNs = kSpiDefaultBitPeriodNs;
+    uint64_t dueNs = LSDN_QEMU_MODULE_NO_WAKEUP;
 };
 
 struct LedcState {
@@ -244,6 +324,9 @@ uint64_t usartStartAddress(uint32_t index) {
         default: return kUart0Start;
     }
 }
+
+uint64_t i2cStartAddress(uint32_t index) { return index == 0 ? kI2c0Start : kI2c1Start; }
+uint64_t spiStartAddress(uint32_t index) { return index == 0 ? kSpi0Start : kSpi1Start; }
 
 uint64_t addDelayNs(uint64_t nowNs, uint64_t delayNs) {
     if (delayNs > LSDN_QEMU_MODULE_NO_WAKEUP - nowNs) return LSDN_QEMU_MODULE_NO_WAKEUP;
@@ -1076,8 +1159,189 @@ void i2cReset(LsdnQemuModule* module) {
     s->chip->i2cs[s->index] = {};
 }
 
-void i2cWriteRegister(LsdnQemuModule*, uint64_t, uint64_t) {}
-uint64_t i2cReadRegister(LsdnQemuModule*, uint64_t) { return 0; }
+// Offsets reais do periferico I2C do ESP32 (ver hw/i2c/esp32_i2c.h no fork QEMU) -- so' os dois que
+// o Core precisa reconhecer (o resto do mapa de registrador e' tratado 100% dentro do QEMU).
+constexpr uint64_t kI2cCtrOffset = 0x04;
+constexpr uint64_t kI2cStatusOffset = 0x08;
+constexpr uint64_t kI2cCmdOffset = 0x58;
+constexpr uint64_t kI2cCmdCount = 16;
+constexpr uint32_t kI2cCtrTransStartBit = 1u << 5;
+constexpr uint32_t kI2cCmdOpcodeShift = 11;
+constexpr uint32_t kI2cCmdOpcodeMask = 0x7u;
+enum : uint32_t { kI2cOpWrite = 1, kI2cOpStop = 3 };
+
+void i2cKick(I2cState& i2c, uint64_t nowNs);
+
+void i2cAdvance(I2cState& i2c, uint64_t nowNs) {
+    switch (i2c.phase) {
+        case I2cPhase::Idle:
+            return;
+
+        case I2cPhase::StartFall:
+            i2c.sclOutputLevel = false; // START completo (SDA ja caiu com SCL alto em i2cKick)
+            i2c.transactionOpen = true;
+            i2c.phase = I2cPhase::Idle;
+            i2c.dueNs = addDelayNs(nowNs, kI2cHalfPeriodNs);
+            return;
+
+        case I2cPhase::BitSetup:
+            i2c.sclOutputLevel = true; // sobe SCL -- escravo amostra o bit agora
+            i2c.phase = I2cPhase::BitHold;
+            i2c.dueNs = addDelayNs(nowNs, kI2cHalfPeriodNs);
+            return;
+
+        case I2cPhase::BitHold:
+            i2c.sclOutputLevel = false;
+            ++i2c.bitIndex;
+            if (i2c.bitIndex < 8) {
+                i2c.sdaOutputLevel = (i2c.shiftByte & (0x80u >> i2c.bitIndex)) != 0;
+                i2c.phase = I2cPhase::BitSetup;
+            } else {
+                // Libera SDA pro escravo dirigir o ACK -- mesma convencao de
+                // devices/simulide-complex/src/lib.c::i2c_clock_bit (so' PUXA pra baixo, nunca
+                // dirige alto; depende do pull-up externo do circuito do usuario, igual hardware
+                // real e igual o proprio SimulIDE exige).
+                i2c.sdaOutputEnabled = false;
+                i2c.phase = I2cPhase::AckSetup;
+            }
+            i2c.dueNs = addDelayNs(nowNs, kI2cHalfPeriodNs);
+            return;
+
+        case I2cPhase::AckSetup:
+            i2c.sclOutputLevel = true; // sobe SCL -- amostra ACK em sdaInput no proximo passo
+            i2c.phase = I2cPhase::AckHold;
+            i2c.dueNs = addDelayNs(nowNs, kI2cHalfPeriodNs);
+            return;
+
+        case I2cPhase::AckHold:
+            i2c.lastAck = !i2c.sdaInput; // ACK real = SDA puxado pra baixo pelo escravo
+            i2c.sclOutputLevel = false;
+            i2c.sdaOutputEnabled = true; // retoma o controle de SDA pro proximo bit/STOP
+            i2c.phase = I2cPhase::Idle;
+            i2c.dueNs = addDelayNs(nowNs, kI2cHalfPeriodNs);
+            return;
+
+        case I2cPhase::StopSetup:
+            i2c.sclOutputLevel = true; // sobe SCL com SDA ainda baixo -- prepara a borda do STOP
+            i2c.phase = I2cPhase::StopRise;
+            i2c.dueNs = addDelayNs(nowNs, kI2cHalfPeriodNs);
+            return;
+
+        case I2cPhase::StopRise:
+            i2c.sdaOutputLevel = true; // SDA sobe com SCL alto: STOP completo
+            i2c.sclOutputEnabled = false; // barramento livre -- pull-up externo mantem os niveis
+            i2c.sdaOutputEnabled = false;
+            i2c.transactionOpen = false;
+            i2c.pendingStop = false;
+            i2c.phase = I2cPhase::Idle;
+            i2c.dueNs = LSDN_QEMU_MODULE_NO_WAKEUP;
+            return;
+    }
+}
+
+void i2cKick(I2cState& i2c, uint64_t nowNs) {
+    if (i2c.phase != I2cPhase::Idle || i2c.dueNs != LSDN_QEMU_MODULE_NO_WAKEUP) return;
+
+    if (!i2c.transactionOpen) {
+        if (i2c.pendingBytes.empty()) return; // nenhum byte ainda -- nada pra iniciar
+        i2c.sclOutputEnabled = true;
+        i2c.sclOutputLevel = true;
+        i2c.sdaOutputEnabled = true;
+        i2c.sdaOutputLevel = false; // START: SDA cai com SCL alto
+        i2c.phase = I2cPhase::StartFall;
+        i2c.dueNs = addDelayNs(nowNs, kI2cHalfPeriodNs);
+        return;
+    }
+
+    if (!i2c.pendingBytes.empty()) {
+        i2c.shiftByte = i2c.pendingBytes.front();
+        i2c.pendingBytes.pop_front();
+        i2c.bitIndex = 0;
+        i2c.sdaOutputEnabled = true;
+        i2c.sdaOutputLevel = (i2c.shiftByte & 0x80u) != 0; // MSB primeiro
+        i2c.phase = I2cPhase::BitSetup;
+        i2c.dueNs = addDelayNs(nowNs, kI2cHalfPeriodNs);
+        return;
+    }
+
+    if (i2c.pendingStop) {
+        i2c.sdaOutputEnabled = true;
+        i2c.sdaOutputLevel = false; // SDA baixo antes de subir -- STOP real
+        i2c.phase = I2cPhase::StopSetup;
+        i2c.dueNs = addDelayNs(nowNs, kI2cHalfPeriodNs);
+    }
+}
+
+void i2cWriteRegisterAt(LsdnQemuModule* module, uint64_t address, uint64_t value, uint64_t nowNs) {
+    auto* s = reinterpret_cast<I2cModuleState*>(module);
+    if (s->index >= s->chip->i2cs.size()) return;
+    I2cState& i2c = s->chip->i2cs[s->index];
+    const uint64_t offset = address - i2cStartAddress(s->index);
+    const uint32_t data = static_cast<uint32_t>(value);
+
+    if (offset == kI2cCtrOffset) {
+        if ((data & kI2cCtrTransStartBit) != 0) {
+            // esp32_i2c_write_CTR (fork QEMU) espelha TODA escrita de CTR aqui, mas so' o bit
+            // TRANS_START marca o inicio de uma transacao nova de verdade -- limpa qualquer resto
+            // de uma transacao anterior que porventura nao tenha sido totalmente drenada.
+            i2c.pendingBytes.clear();
+            i2c.pendingStop = false;
+            i2c.transactionOpen = false;
+        }
+        return;
+    }
+    if (offset >= kI2cCmdOffset && offset < kI2cCmdOffset + kI2cCmdCount * 4) {
+        const uint32_t opcode = (data >> kI2cCmdOpcodeShift) & kI2cCmdOpcodeMask;
+        if (opcode == kI2cOpWrite) {
+            if (i2c.pendingBytes.size() < 32) i2c.pendingBytes.push_back(static_cast<uint8_t>(data & 0xFFu));
+        } else if (opcode == kI2cOpStop) {
+            i2c.pendingStop = true;
+        }
+        i2cKick(i2c, nowNs);
+    }
+}
+
+void i2cWriteRegister(LsdnQemuModule* module, uint64_t address, uint64_t value) {
+    i2cWriteRegisterAt(module, address, value, 0);
+}
+
+uint64_t i2cReadRegister(LsdnQemuModule* module, uint64_t address) {
+    auto* s = reinterpret_cast<I2cModuleState*>(module);
+    if (s->index >= s->chip->i2cs.size()) return 0;
+    const I2cState& i2c = s->chip->i2cs[s->index];
+    const uint64_t offset = address - i2cStartAddress(s->index);
+    if (offset == kI2cStatusOffset) {
+        // Mesma forma de I2C_STATUS_REG do hardware real (ver hw/i2c/esp32_i2c.h):
+        // BUS_BUSY = bit 4, ACK_REC = bit 0 (0 = ACK recebido). O fork QEMU ainda nao consome este
+        // valor de volta (esp32_i2c_event le' A_I2C_STATUS mas descarta o resultado -- comentario
+        // "/// TODO: get ACK from status" no fonte real), mas reportar certo aqui documenta a
+        // intencao e nao custa nada preparar pro dia em que consumir.
+        uint64_t status = 0;
+        if (i2c.transactionOpen || i2c.phase != I2cPhase::Idle) status |= (1u << 4);
+        if (!i2c.lastAck) status |= 1u;
+        return status;
+    }
+    return 0;
+}
+
+uint64_t i2cNextWakeupDelayNsAt(LsdnQemuModule* module, uint64_t nowNs) {
+    auto* s = reinterpret_cast<I2cModuleState*>(module);
+    if (s->index >= s->chip->i2cs.size()) return LSDN_QEMU_MODULE_NO_WAKEUP;
+    return delayUntilNs(s->chip->i2cs[s->index].dueNs, nowNs);
+}
+uint64_t i2cNextWakeupDelayNs(LsdnQemuModule* module) { return i2cNextWakeupDelayNsAt(module, 0); }
+
+void i2cOnWakeup(LsdnQemuModule* module, uint64_t nowNs) {
+    auto* s = reinterpret_cast<I2cModuleState*>(module);
+    if (s->index >= s->chip->i2cs.size()) return;
+    I2cState& i2c = s->chip->i2cs[s->index];
+    if (i2c.dueNs != LSDN_QEMU_MODULE_NO_WAKEUP && i2c.dueNs <= nowNs) {
+        i2c.dueNs = LSDN_QEMU_MODULE_NO_WAKEUP;
+        i2cAdvance(i2c, nowNs);
+    }
+    i2cKick(i2c, nowNs);
+}
+
 int32_t i2cIsOutputEnabled(LsdnQemuModule* module, uint32_t line) {
     auto* s = reinterpret_cast<I2cModuleState*>(module);
     if (s->index >= s->chip->i2cs.size()) return 0;
@@ -1104,7 +1368,8 @@ void i2cDestroy(LsdnQemuModule* module) {
 
 const LsdnQemuModuleVTable kI2cModuleVTable = {
     &i2cReset, &i2cWriteRegister, &i2cReadRegister, &i2cIsOutputEnabled, &i2cOutputLevel,
-    &i2cSetInputLevel, &i2cDestroy,
+    &i2cSetInputLevel, &i2cDestroy, &i2cNextWakeupDelayNs, &i2cOnWakeup, &i2cWriteRegisterAt,
+    nullptr, &i2cNextWakeupDelayNsAt,
 };
 
 void spiReset(LsdnQemuModule* module) {
@@ -1112,8 +1377,98 @@ void spiReset(LsdnQemuModule* module) {
     s->chip->spis[s->index] = {};
 }
 
-void spiWriteRegister(LsdnQemuModule*, uint64_t, uint64_t) {}
+// Offsets reais do periferico SPI do ESP32 (ver hw/ssi/esp32_spi.h no fork QEMU).
+constexpr uint64_t kSpiClockOffset = 0x18; // SPI_CLOCK_REG (sem REG32 nomeado no header -- ver write_clk_reg)
+constexpr uint64_t kSpiDataOffset = 0x80;  // A_SPI_W0 -- primeira palavra do buffer de dados
+
+void spiKick(SpiState& spi, uint64_t nowNs);
+
+void spiAdvance(SpiState& spi, uint64_t nowNs) {
+    switch (spi.phase) {
+        case SpiPhase::Idle:
+            return;
+
+        case SpiPhase::ClockHigh:
+            spi.clkOutputLevel = true; // sobe SCLK -- escravo amostra MOSI agora (MODE0)
+            spi.phase = SpiPhase::ClockLow;
+            spi.dueNs = addDelayNs(nowNs, spi.bitPeriodNs / 2u);
+            return;
+
+        case SpiPhase::ClockLow:
+            spi.clkOutputLevel = false;
+            ++spi.bitIndex;
+            if (spi.bitIndex < 8) {
+                spi.mosiOutputLevel = (spi.shiftByte & (0x80u >> spi.bitIndex)) != 0;
+                spi.phase = SpiPhase::ClockHigh;
+                spi.dueNs = addDelayNs(nowNs, spi.bitPeriodNs / 2u);
+            } else {
+                spi.phase = SpiPhase::Idle;
+                spi.dueNs = LSDN_QEMU_MODULE_NO_WAKEUP;
+            }
+            return;
+    }
+}
+
+void spiKick(SpiState& spi, uint64_t nowNs) {
+    if (spi.phase != SpiPhase::Idle || spi.dueNs != LSDN_QEMU_MODULE_NO_WAKEUP) return;
+    if (spi.pendingBytes.empty()) return;
+
+    spi.shiftByte = spi.pendingBytes.front();
+    spi.pendingBytes.pop_front();
+    spi.bitIndex = 0;
+    spi.clkOutputEnabled = true;
+    spi.mosiOutputEnabled = true;
+    spi.clkOutputLevel = false; // MODE0: SCLK ocioso em baixo
+    spi.mosiOutputLevel = (spi.shiftByte & 0x80u) != 0; // MSB primeiro
+    spi.phase = SpiPhase::ClockHigh;
+    spi.dueNs = addDelayNs(nowNs, spi.bitPeriodNs / 2u);
+}
+
+void spiWriteRegisterAt(LsdnQemuModule* module, uint64_t address, uint64_t value, uint64_t nowNs) {
+    auto* s = reinterpret_cast<SpiModuleState*>(module);
+    if (s->index >= s->chip->spis.size()) return;
+    SpiState& spi = s->chip->spis[s->index];
+    const uint64_t offset = address - spiStartAddress(s->index);
+
+    if (offset == kSpiClockOffset) {
+        // esp32_spi.c::write_clk_reg ja' converte pro periodo de UM bit em picossegundos
+        // (period_ns*1000) antes de espelhar aqui.
+        if (value > 0) spi.bitPeriodNs = static_cast<uint64_t>(value) / 1000u;
+        return;
+    }
+    if (offset == kSpiDataOffset) {
+        // esp32_spi.c (numero>=2, HSPI/VSPI) espelha UM byte por vez, ja' pausado pelo timer
+        // interno do proprio QEMU (esp32_spi_event) -- SPI0/SPI1 (flash/PSRAM onboard) nunca
+        // chegam aqui, resolvidos 100% dentro do QEMU via ssi_transfer interno.
+        if (spi.pendingBytes.size() < 64) spi.pendingBytes.push_back(static_cast<uint8_t>(value & 0xFFu));
+        spiKick(spi, nowNs);
+    }
+}
+
+void spiWriteRegister(LsdnQemuModule* module, uint64_t address, uint64_t value) {
+    spiWriteRegisterAt(module, address, value, 0);
+}
+
 uint64_t spiReadRegister(LsdnQemuModule*, uint64_t) { return 0; }
+
+uint64_t spiNextWakeupDelayNsAt(LsdnQemuModule* module, uint64_t nowNs) {
+    auto* s = reinterpret_cast<SpiModuleState*>(module);
+    if (s->index >= s->chip->spis.size()) return LSDN_QEMU_MODULE_NO_WAKEUP;
+    return delayUntilNs(s->chip->spis[s->index].dueNs, nowNs);
+}
+uint64_t spiNextWakeupDelayNs(LsdnQemuModule* module) { return spiNextWakeupDelayNsAt(module, 0); }
+
+void spiOnWakeup(LsdnQemuModule* module, uint64_t nowNs) {
+    auto* s = reinterpret_cast<SpiModuleState*>(module);
+    if (s->index >= s->chip->spis.size()) return;
+    SpiState& spi = s->chip->spis[s->index];
+    if (spi.dueNs != LSDN_QEMU_MODULE_NO_WAKEUP && spi.dueNs <= nowNs) {
+        spi.dueNs = LSDN_QEMU_MODULE_NO_WAKEUP;
+        spiAdvance(spi, nowNs);
+    }
+    spiKick(spi, nowNs);
+}
+
 int32_t spiIsOutputEnabled(LsdnQemuModule* module, uint32_t line) {
     auto* s = reinterpret_cast<SpiModuleState*>(module);
     if (s->index >= s->chip->spis.size()) return 0;
@@ -1156,7 +1511,8 @@ void spiDestroy(LsdnQemuModule* module) {
 
 const LsdnQemuModuleVTable kSpiModuleVTable = {
     &spiReset, &spiWriteRegister, &spiReadRegister, &spiIsOutputEnabled, &spiOutputLevel,
-    &spiSetInputLevel, &spiDestroy,
+    &spiSetInputLevel, &spiDestroy, &spiNextWakeupDelayNs, &spiOnWakeup, &spiWriteRegisterAt,
+    nullptr, &spiNextWakeupDelayNsAt,
 };
 
 bool selectedAdcChannel(uint32_t value, uint8_t& channel) {
