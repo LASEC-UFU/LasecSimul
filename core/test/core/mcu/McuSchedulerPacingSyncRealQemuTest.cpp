@@ -16,6 +16,7 @@
 // manifestaria como um desses dois parar de avançar pelo resto do teste.
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -58,6 +59,16 @@ std::filesystem::path createBlankFlash() {
     for (int i = 0; i < 64; ++i) out.write(erasedBlock.data(), erasedBlock.size());
     if (!out) throw std::runtime_error("nao foi possivel criar flash vazia de teste");
     return path;
+}
+
+int configuredStressSeconds() {
+    const char* value = std::getenv("LASECSIMUL_STRESS_SECONDS");
+    if (!value || !*value) return 90;
+    char* end = nullptr;
+    const long parsed = std::strtol(value, &end, 10);
+    return end != value && *end == '\0' && parsed >= 5 && parsed <= 600
+               ? static_cast<int>(parsed)
+               : 90;
 }
 
 } // namespace
@@ -130,7 +141,7 @@ int main() {
     // segundo a poucos segundos com arena SINTETICA) -- o achado ao vivo foi "funcionou por um
     // tempo com firmware real, depois o MCU parou de produzir eventos", entao uma janela curta nao
     // teria exposicao suficiente.
-    constexpr auto kStressDuration = std::chrono::seconds(90);
+    const auto stressDuration = std::chrono::seconds(configuredStressSeconds());
     constexpr auto kStallThreshold = std::chrono::seconds(10);
 
     uint64_t lastMcuVirtualNs = mcuPtr->latestVirtualTimeNs();
@@ -141,7 +152,7 @@ int main() {
     auto longestSchedulerGap = std::chrono::steady_clock::duration::zero();
     bool stillRunning = true;
 
-    const auto testDeadline = std::chrono::steady_clock::now() + kStressDuration;
+    const auto testDeadline = std::chrono::steady_clock::now() + stressDuration;
     while (std::chrono::steady_clock::now() < testDeadline) {
         if (!mcuPtr->firmwareRunning()) { stillRunning = false; break; }
 
@@ -186,11 +197,11 @@ int main() {
     std::fprintf(stderr, "longestMcuGapMs=%lld longestSchedulerGapMs=%lld duration=%llds\n",
                  static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(longestMcuGap).count()),
                  static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(longestSchedulerGap).count()),
-                 static_cast<long long>(kStressDuration.count()));
+                 static_cast<long long>(stressDuration.count()));
 
     if (failures == 0) {
         std::printf("\nTodos os testes de sincronizacao de ritmo com QEMU real passaram (sem trava em %llds sustentados).\n",
-                     static_cast<long long>(kStressDuration.count()));
+                     static_cast<long long>(stressDuration.count()));
         return 0;
     }
     std::fprintf(stderr, "\n%d teste(s) FALHARAM. Ultimos logs QEMU:\n%s\n", failures, logs.c_str());

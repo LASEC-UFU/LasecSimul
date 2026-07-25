@@ -1,5 +1,6 @@
 #include "McuController.hpp"
 
+#include <algorithm>
 #include <charconv>
 #include <cstdlib>
 #include <iomanip>
@@ -158,14 +159,14 @@ void configureNetwork(QemuLaunchSpec& spec, std::string_view arenaName) {
     // historico. Nao se tenta inferir CONFIG_ETH_USE_OPENETH inspecionando o .bin: esse simbolo
     // de compilacao nao faz parte de uma imagem merged e a heuristica seria instavel.
     if (mode == "disabled") {
-        spec.diagnostics = "[LasecSimul] network=disabled; no NIC/backend will be created\n";
+        spec.diagnostics += "[LasecSimul] network=disabled; no NIC/backend will be created\n";
         return;
     }
 
     spec.args.push_back("-nic");
     spec.args.push_back(mode == "lab-bridge" ? labBridgeOpenEthArgument(arenaName)
                                                : isolatedOpenEthArgument(arenaName));
-    spec.diagnostics = "[LasecSimul] network=" + mode + "; OpenETH backend enabled\n";
+    spec.diagnostics += "[LasecSimul] network=" + mode + "; OpenETH backend enabled\n";
 }
 
 } // namespace
@@ -180,6 +181,18 @@ QemuLaunchSpec McuController::buildLaunchSpec(const std::filesystem::path& firmw
                                                const std::string& callSiteBinaryOverride,
                                                McuDebugOptions debug) const {
     QemuLaunchSpec spec = m_adapter.buildLaunchArgs(firmwarePath.string());
+    const bool mttcg = std::find(spec.args.begin(), spec.args.end(), "tcg,thread=multi") !=
+                       spec.args.end();
+    const bool icount = std::find(spec.args.begin(), spec.args.end(), "-icount") !=
+                        spec.args.end();
+    if (mttcg) {
+        spec.diagnostics +=
+            "[LasecSimul] execution=mttcg-realtime "
+            "(experimental, one TCG thread per vCPU; rollback: unset "
+            "LASECSIMUL_ESP32_EXECUTION_MODE)\n";
+    } else if (icount) {
+        spec.diagnostics += "[LasecSimul] execution=deterministic-icount\n";
+    }
     configureNetwork(spec, arenaName);
     const std::string& overridePath = !callSiteBinaryOverride.empty() ? callSiteBinaryOverride : m_qemuBinaryOverride;
     if (!overridePath.empty()) spec.binary = overridePath;

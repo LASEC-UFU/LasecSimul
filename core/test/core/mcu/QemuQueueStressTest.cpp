@@ -17,6 +17,7 @@
 // final.
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -60,6 +61,16 @@ std::filesystem::path createBlankFlash() {
     return path;
 }
 
+int configuredStressSeconds() {
+    const char* value = std::getenv("LASECSIMUL_STRESS_SECONDS");
+    if (!value || !*value) return 60;
+    char* end = nullptr;
+    const long parsed = std::strtol(value, &end, 10);
+    return end != value && *end == '\0' && parsed >= 2 && parsed <= 600
+               ? static_cast<int>(parsed)
+               : 60;
+}
+
 } // namespace
 
 int main() {
@@ -69,7 +80,10 @@ int main() {
 #ifndef ESP32_ADAPTER_DLL_PATH
 #error "ESP32_ADAPTER_DLL_PATH precisa ser definido pelo CMakeLists (caminho do adapter.dll real)"
 #endif
-    const std::filesystem::path qemuPath = QEMU_REAL_BINARY_PATH;
+    const char* qemuOverride = std::getenv("LASECSIMUL_TEST_QEMU_BINARY");
+    const std::filesystem::path qemuPath =
+        qemuOverride && *qemuOverride ? std::filesystem::u8path(qemuOverride)
+                                      : std::filesystem::path(QEMU_REAL_BINARY_PATH);
     const std::filesystem::path dllPath = ESP32_ADAPTER_DLL_PATH;
     if (!std::filesystem::exists(qemuPath)) {
         std::fprintf(stderr, "PULADO: %s nao existe.\n", qemuPath.string().c_str());
@@ -108,7 +122,7 @@ int main() {
     // Duração deliberadamente bem maior que os outros testes reais (que rodam frações de segundo
     // a poucos segundos) -- o achado ao vivo foi "funcionou por um tempo, depois travou", então uma
     // janela curta não teria exposição suficiente à condição de corrida.
-    constexpr auto kStressDuration = std::chrono::seconds(60);
+    const auto stressDuration = std::chrono::seconds(configuredStressSeconds());
     constexpr auto kStallThreshold = std::chrono::seconds(5);
 
     uint64_t eventsHandled = 0;
@@ -118,7 +132,7 @@ int main() {
     bool stillRunning = true;
 
     const auto testStart = std::chrono::steady_clock::now();
-    const auto testDeadline = testStart + kStressDuration;
+    const auto testDeadline = testStart + stressDuration;
     while (std::chrono::steady_clock::now() < testDeadline) {
         if (!controller.isRunning()) {
             stillRunning = false;
@@ -156,14 +170,30 @@ int main() {
     TEST_ASSERT(longestGap < kStallThreshold,
         "nenhum intervalo maior que o limiar de trava entre eventos consecutivos -- fila nunca parou de fluir");
 
+    const char* executionMode = std::getenv("LASECSIMUL_ESP32_EXECUTION_MODE");
+    if (executionMode && std::string(executionMode) == "mttcg") {
+        TEST_ASSERT(logs.find("execution mode: mttcg-realtime (vcpus=2, tcg_threads=2)") !=
+                        std::string::npos,
+                    "MTTCG real criou duas threads TCG para as duas vCPUs ESP32");
+        TEST_ASSERT(logs.find("[LasecSimul][PROFILE] mode=mttcg-realtime") !=
+                        std::string::npos,
+                    "telemetria MTTCG publicou medidas reproduziveis de parede/tempo virtual/fila");
+    }
+
+    const size_t profilePos = logs.rfind("[LasecSimul][PROFILE]");
+    if (profilePos != std::string::npos) {
+        const size_t profileEnd = logs.find_first_of("\r\n", profilePos);
+        std::fprintf(stderr, "profile=%s\n",
+                     logs.substr(profilePos, profileEnd - profilePos).c_str());
+    }
     std::fprintf(stderr, "eventsHandled=%llu longestGapMs=%lld duration=%llds\n",
                  static_cast<unsigned long long>(eventsHandled),
                  static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(longestGap).count()),
-                 static_cast<long long>(kStressDuration.count()));
+                 static_cast<long long>(stressDuration.count()));
 
     if (failures == 0) {
         std::printf("\nTodos os testes de QemuQueueStress passaram (sem trava em %llds sustentados).\n",
-                     static_cast<long long>(kStressDuration.count()));
+                     static_cast<long long>(stressDuration.count()));
         return 0;
     }
     std::fprintf(stderr, "\n%d teste(s) FALHARAM. Ultimos logs QEMU:\n%s\n", failures, logs.c_str());

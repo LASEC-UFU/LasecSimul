@@ -169,7 +169,12 @@ QemuPollResult QemuArenaBridge::poll() {
         return result;
     }
 
-    if (m_arena->simuTime == 0) return {};
+    // SIM_READ is published by QEMU with a release-store to simuTime after all
+    // request fields are filled.  Acquire here makes the single read slot safe
+    // across both the process boundary and the two MTTCG producer threads.
+    const uint64_t readTime =
+        std::atomic_ref<uint64_t>(m_arena->simuTime).load(std::memory_order_acquire);
+    if (readTime == 0) return {};
 
     // Fora da fila: só SIM_READ chega aqui no protocolo v3 (escritas/heartbeat são sempre
     // publicados na fila acima, nunca mais neste slot único -- ver qemu_arena_abi.h).
@@ -203,13 +208,19 @@ void QemuArenaBridge::acknowledgeWrite() {
 void QemuArenaBridge::acknowledgeRead(uint64_t regData) {
     if (!m_arena) return;
     m_arena->regData = regData;
-    m_arena->qemuAction = LSDN_SIM_READ;
-    m_arena->simuTime = 0;
+    // Clear the request before releasing the reply.  Reversing these stores
+    // lets QEMU observe qemuAction, start the next read, and then lose that new
+    // request when Core writes simuTime=0 late.
+    std::atomic_ref<uint64_t>(m_arena->simuTime)
+        .store(0, std::memory_order_relaxed);
+    std::atomic_ref<uint64_t>(m_arena->qemuAction)
+        .store(LSDN_SIM_READ, std::memory_order_release);
 }
 
 void QemuArenaBridge::acknowledgeEventSlot() {
     if (!m_arena) return;
-    m_arena->simuTime = 0;
+    std::atomic_ref<uint64_t>(m_arena->simuTime)
+        .store(0, std::memory_order_release);
 }
 
 QemuDispatchResult QemuArenaBridge::dispatch(uint64_t address) const {

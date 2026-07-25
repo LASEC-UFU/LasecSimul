@@ -63,13 +63,54 @@ bool analogTraceEnabled() {
  * processo -- o launch real nunca via o shift calibrado, mesmo a calibração tendo medido e
  * gravado certo. Sem justificativa de desempenho real aqui (diferente do trace acima), a leitura
  * volta a ser simples, sem cache. */
+std::string processEnvironmentValue(const char* name) {
+#if defined(_WIN32)
+    // adapter.dll uses the static MSVC runtime (/MT) so std::getenv() sees the
+    // environment snapshot from DLL load time, not _putenv_s() changes made by
+    // the Extension host afterwards.  Query the process environment directly.
+    const DWORD required = GetEnvironmentVariableA(name, nullptr, 0);
+    if (required == 0) return {};
+    std::vector<char> buffer(required);
+    const DWORD copied = GetEnvironmentVariableA(name, buffer.data(), required);
+    return copied > 0 && copied < required
+               ? std::string(buffer.data(), copied)
+               : std::string{};
+#else
+    const char* value = std::getenv(name);
+    return value ? std::string(value) : std::string{};
+#endif
+}
+
 int configuredIcountShift() {
-    const char* value = std::getenv("LASECSIMUL_ESP32_ICOUNT_SHIFT");
-    if (!value || !*value) return 4;
+    const std::string value = processEnvironmentValue("LASECSIMUL_ESP32_ICOUNT_SHIFT");
+    if (value.empty()) return 4;
     char* end = nullptr;
-    const long parsed = std::strtol(value, &end, 10);
-    if (end == value || *end != '\0' || parsed < 0 || parsed > 10) return 4;
+    const long parsed = std::strtol(value.c_str(), &end, 10);
+    if (end == value.c_str() || *end != '\0' || parsed < 0 || parsed > 10) return 4;
     return static_cast<int>(parsed);
+}
+
+enum class Esp32ExecutionMode {
+    Deterministic,
+    Mttcg,
+};
+
+/**
+ * MTTCG is deliberately opt-in.  The default keeps the instruction-counted,
+ * reproducible timeline used by existing projects and tests.  Setting
+ * LASECSIMUL_ESP32_EXECUTION_MODE=mttcg removes -icount and asks TCG for one
+ * host thread per ESP32 vCPU.  Removing the variable is the complete rollback.
+ *
+ * Unknown values fail closed to deterministic mode.  This function runs once
+ * per launch (like configuredIcountShift), so it must not cache the environment:
+ * tests and a future settings UI may switch modes between Stop -> Run cycles.
+ */
+Esp32ExecutionMode configuredExecutionMode() {
+    const std::string value =
+        processEnvironmentValue("LASECSIMUL_ESP32_EXECUTION_MODE");
+    return value == "mttcg"
+               ? Esp32ExecutionMode::Mttcg
+               : Esp32ExecutionMode::Deterministic;
 }
 
 constexpr uint64_t kUart0Start = 0x3FF40000;
@@ -2039,6 +2080,7 @@ LsdnMcuAdapter* create(void* hostCtx, const LsdnMcuHostApi* api) {
 
 LsdnQemuLaunchSpec buildLaunchArgs(LsdnMcuAdapter* adapter, const char* firmwarePath) {
     auto* state = reinterpret_cast<Esp32AdapterState*>(adapter);
+    const Esp32ExecutionMode executionMode = configuredExecutionMode();
     state->launchArgStorage = {
         "qemu-system-xtensa",
         "-M",
@@ -2049,9 +2091,17 @@ LsdnQemuLaunchSpec buildLaunchArgs(LsdnMcuAdapter* adapter, const char* firmware
         state->romDir,
         "-drive",
         "file=" + std::string(firmwarePath ? firmwarePath : "") + ",if=mtd,format=raw",
-        "-icount",
-        "shift=" + std::to_string(configuredIcountShift()) + ",align=off,sleep=off",
     };
+    state->launchArgStorage.push_back("-accel");
+    state->launchArgStorage.push_back(
+        executionMode == Esp32ExecutionMode::Mttcg ? "tcg,thread=multi"
+                                                    : "tcg,thread=single");
+    if (executionMode == Esp32ExecutionMode::Deterministic) {
+        state->launchArgStorage.push_back("-icount");
+        state->launchArgStorage.push_back(
+            "shift=" + std::to_string(configuredIcountShift()) +
+            ",align=off,sleep=off");
+    }
     state->launchArgs.clear();
     state->launchArgs.reserve(state->launchArgStorage.size());
     for (const std::string& arg : state->launchArgStorage) state->launchArgs.push_back(arg.c_str());

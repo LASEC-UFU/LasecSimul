@@ -690,6 +690,17 @@ else()
 endif()
 add_test(NAME qemu_queue_stress COMMAND qemu_queue_stress_test)
 
+# MTTCG opt-in: o mesmo bombeamento sustentado da arena, mas sem -icount e com uma thread TCG por
+# vCPU. Uma janela curta basta para validar relógio virtual não-zero, protocolo MPSC serializado,
+# duas threads reais e a linha de telemetria; o teste determinístico longo acima continua sendo a
+# regressão principal de estabilidade.
+add_test(NAME qemu_mttcg_smoke COMMAND qemu_queue_stress_test)
+set_tests_properties(qemu_mttcg_smoke PROPERTIES
+    ENVIRONMENT
+        "LASECSIMUL_ESP32_EXECUTION_MODE=mttcg;LASECSIMUL_QEMU_PROFILE=1;LASECSIMUL_STRESS_SECONDS=10"
+    TIMEOUT 30
+)
+
 # Estresse do CICLO Stop->Run repetido (achado 2026-07-22, relato ao vivo: às vezes o MCU não
 # inicializa, às vezes roda perfeitamente, às vezes roda e trava no meio -- nenhum teste real
 # existente cobria REINICIAR várias vezes, só uma sessão única). Mesmo binário/adapter reais acima.
@@ -944,6 +955,17 @@ add_test(NAME mcu_scheduler_pacing_sync_real_qemu COMMAND mcu_scheduler_pacing_s
 # 90s de janela de estresse + boot -- generoso mas não deveria travar (esse é exatamente o
 # comportamento que este teste existe para pegar, ver seu doc-comment de topo).
 set_tests_properties(mcu_scheduler_pacing_sync_real_qemu PROPERTIES TIMEOUT 150)
+
+# Mesmo caminho completo acima no modo de duas threads. A janela reduzida valida que timestamps
+# baseados no relógio virtual normal continuam compatíveis com AdvanceLimitFn/Scheduler sem somar
+# outros 90s à suíte padrão.
+add_test(NAME mcu_scheduler_pacing_sync_real_qemu_mttcg
+    COMMAND mcu_scheduler_pacing_sync_real_qemu_test)
+set_tests_properties(mcu_scheduler_pacing_sync_real_qemu_mttcg PROPERTIES
+    ENVIRONMENT
+        "LASECSIMUL_ESP32_EXECUTION_MODE=mttcg;LASECSIMUL_QEMU_PROFILE=1;LASECSIMUL_STRESS_SECONDS=15"
+    TIMEOUT 45
+)
 
 # Detecção de borda digital + despacho de ComponentEvent{kPinChangeEventTag} (substitui
 # I2cBusModule/SpiBusModule -- removidos por nunca terem sido ligados a um SimulationSession real;

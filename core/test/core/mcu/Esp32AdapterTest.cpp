@@ -4,6 +4,7 @@
 // createModules(). Alem do GPIO simples, este teste agora verifica tambem a presenca do IOMUX e o
 // roteamento temporizado de UART0 TX/RX via IOMUX/GPIO matrix.
 #include <algorithm>
+#include <cstdlib>
 #include <cstdio>
 #include <filesystem>
 #include <memory>
@@ -32,6 +33,23 @@ bool containsArg(const QemuLaunchSpec& spec, const std::string& value) {
     return std::find(spec.args.begin(), spec.args.end(), value) != spec.args.end();
 }
 
+bool containsArgPair(const QemuLaunchSpec& spec, const std::string& option,
+                     const std::string& value) {
+    for (size_t i = 0; i + 1 < spec.args.size(); ++i) {
+        if (spec.args[i] == option && spec.args[i + 1] == value) return true;
+    }
+    return false;
+}
+
+void setExecutionMode(const char* mode) {
+#if defined(_WIN32)
+    _putenv_s("LASECSIMUL_ESP32_EXECUTION_MODE", mode ? mode : "");
+#else
+    if (mode) setenv("LASECSIMUL_ESP32_EXECUTION_MODE", mode, 1);
+    else unsetenv("LASECSIMUL_ESP32_EXECUTION_MODE");
+#endif
+}
+
 // Avanca o motor temporizado de um modulo (I2C/SPI/USART/...) chamando onWakeup() no proximo
 // instante que o proprio modulo pediu, ate' `steps` vezes ou ate' ele nao ter mais nada agendado
 // (kNoWakeup) -- devolve o `nowNs` final. `onEdge` roda depois de CADA onWakeup, com o novo
@@ -53,6 +71,7 @@ uint64_t pumpWakeups(QemuModule* module, uint64_t nowNs, int steps, OnEdge onEdg
 
 int main() {
     std::fprintf(stderr, "=== Esp32AdapterTest (via plugin) ===\n");
+    setExecutionMode(nullptr);
 
 #ifndef ESP32_ADAPTER_DLL_PATH
 #error "ESP32_ADAPTER_DLL_PATH precisa ser definido pelo CMakeLists (caminho do adapter.dll real)"
@@ -98,6 +117,18 @@ int main() {
                 "launch args include firmware drive");
     TEST_ASSERT(!containsArg(launch, "-nic"),
                 "adapter base launch is network-neutral; Core adds OpenETH only when explicitly enabled");
+    TEST_ASSERT(containsArgPair(launch, "-accel", "tcg,thread=single"),
+                "default launch explicitly keeps one deterministic TCG thread");
+    TEST_ASSERT(containsArg(launch, "-icount"),
+                "default deterministic launch retains instruction-counted virtual time");
+
+    setExecutionMode("mttcg");
+    const QemuLaunchSpec mttcgLaunch = adapter->buildLaunchArgs("build/blink.bin");
+    TEST_ASSERT(containsArgPair(mttcgLaunch, "-accel", "tcg,thread=multi"),
+                "opt-in MTTCG launch requests one host thread per ESP32 vCPU");
+    TEST_ASSERT(!containsArg(mttcgLaunch, "-icount"),
+                "MTTCG launch removes incompatible -icount");
+    setExecutionMode(nullptr);
 
     const auto regions = adapter->memoryRegions();
     const auto gpioRegion = std::find_if(regions.begin(), regions.end(), [](const MemoryRegion& region) {
