@@ -137,6 +137,13 @@ O workflow baixa `dist.win10.zip` e o arquivo-fonte da tag oficial, exige os SHA
 script, descarta `devcon.exe` e embute somente INF/CAT/SYS, GPLv2, avisos e fonte correspondente.
 Também valida a assinatura Microsoft do `tap0901.sys` e executa o self-test multi-cliente do gateway.
 
+O adaptador nativo ESP32 no Windows deve ser compilado exclusivamente com MSVC em `Release` e CRT
+estático (`/MT`). A v0.0.14 publicada no Marketplace continha um `adapter.dll` MinGW que ainda
+importava `libwinpthread-1.dll`; como essa DLL não acompanha o VSIX nem existe numa instalação normal
+do VS Code, `LoadLibrary` falhava. Desde a v0.0.15, tanto `build-mcu-adapters.js` quanto
+`package-release.js` interrompem o processo se encontrarem `libwinpthread`, `libstdc++`, `libgcc` ou
+runtimes de debug do MSVC no adaptador Windows.
+
 Se a CLI nao for encontrada, o instalador falha com mensagem clara e informa onde o `.vsix` foi
 extraido.
 

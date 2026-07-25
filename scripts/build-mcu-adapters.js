@@ -8,6 +8,10 @@
  * adaptador de MCU (lsdn_get_mcu_vtable, ver mcu_abi.h) em vez de dispositivo
  * (lsdn_get_vtable, ver device_abi.h).
  *
+ * No Windows força o gerador Visual Studio/MSVC. O adaptador é C++ e uma build MinGW, mesmo com
+ * libstdc++/libgcc estáticos, ainda importava `libwinpthread-1.dll`; essa DLL não existe numa
+ * instalação normal feita pelo Marketplace e fazia `LoadLibrary(adapter.dll)` falhar.
+ *
  * Uso: node scripts/build-mcu-adapters.js [--clean]
  */
 
@@ -51,6 +55,16 @@ function resolveCmakeCommand() {
 
 const cmakeCommand = resolveCmakeCommand();
 
+function resolveWindowsGenerator() {
+  const vs2026Roots = [
+    "C:\\Program Files\\Microsoft Visual Studio\\18",
+    "C:\\Program Files (x86)\\Microsoft Visual Studio\\18",
+  ];
+  return vs2026Roots.some((candidate) => fs.existsSync(candidate))
+    ? "Visual Studio 18 2026"
+    : "Visual Studio 17 2022";
+}
+
 function run(command, args, cwd) {
   console.log(`[build-mcu-adapters] ${command} ${args.join(" ")} (cwd=${cwd})`);
   const result = spawnSync(command, args, { cwd, stdio: "inherit", shell: false });
@@ -84,7 +98,11 @@ function buildAdapter(adapterDir) {
   }
 
   const configureArgs = ["-S", adapterDir, "-B", buildDir];
-  if (config) configureArgs.push(`-DCMAKE_BUILD_TYPE=${config}`);
+  if (process.platform === "win32") {
+    configureArgs.push("-G", resolveWindowsGenerator(), "-A", "x64");
+  } else if (config) {
+    configureArgs.push(`-DCMAKE_BUILD_TYPE=${config}`);
+  }
   const buildArgs = ["--build", buildDir];
   if (config) buildArgs.push("--config", config);
 
@@ -103,6 +121,24 @@ function buildAdapter(adapterDir) {
   fs.mkdirSync(destDir, { recursive: true });
   const destPath = path.join(destDir, platformTarget.file);
   fs.copyFileSync(artifactPath, destPath);
+  if (process.platform === "win32") {
+    const binaryText = fs.readFileSync(destPath).toString("latin1");
+    const forbidden = [
+      "libwinpthread-1.dll",
+      "libstdc++-6.dll",
+      "libgcc_s_seh-1.dll",
+      "MSVCP140D.dll",
+      "VCRUNTIME140D.dll",
+      "VCRUNTIME140_1D.dll",
+      "ucrtbased.dll",
+    ].filter((dependency) => binaryText.toLowerCase().includes(dependency.toLowerCase()));
+    if (forbidden.length > 0) {
+      console.error(
+        `[build-mcu-adapters] [${name}] adapter.dll nao e redistribuivel: dependencias ausentes/debug: ${forbidden.join(", ")}`
+      );
+      process.exit(1);
+    }
+  }
   console.log(`[build-mcu-adapters] [${name}] ${artifactPath} -> ${destPath}`);
 }
 

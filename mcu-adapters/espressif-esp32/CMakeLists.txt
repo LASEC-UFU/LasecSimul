@@ -11,6 +11,12 @@ if(WIN32)
     WIN32_LEAN_AND_MEAN
   )
 endif()
+if(MSVC)
+  # O VSIX precisa ser autocontido: /MT evita depender do VC++ Redistributable da máquina-alvo.
+  # A ABI é C e não transfere ownership de alocações do CRT através da fronteira Core<->adapter.
+  set_property(TARGET adapter PROPERTY
+    MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
 target_include_directories(adapter PRIVATE ${CMAKE_SOURCE_DIR}/../../core/include)
 
 set_target_properties(adapter PROPERTIES CXX_VISIBILITY_PRESET hidden)
@@ -28,7 +34,7 @@ endif()
 # depois desta mudanca: esp32_adapter/mcu_component/mcu_controller_real_qemu quebraram). Estatico
 # resolve isso sem precisar redistribuir mais DLLs.
 if(MINGW)
-  target_link_options(adapter PRIVATE -static-libgcc -static-libstdc++)
+  target_link_options(adapter PRIVATE -static -static-libgcc -static-libstdc++)
 endif()
 
 # lasecsimul-cli build copia o artefato gerado para build/<plataforma>/adapter.{dll,so,dylib}

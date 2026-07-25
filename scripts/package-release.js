@@ -144,6 +144,41 @@ function sha256(filePath) {
   return hash.digest("hex");
 }
 
+function validateWindowsAdapterDependencies(adapterPath) {
+  if (process.platform !== "win32") return;
+  ensureFile(adapterPath, "adapter ESP32 Windows");
+  const binaryText = fs.readFileSync(adapterPath).toString("latin1").toLowerCase();
+  const forbiddenDependencies = [
+    "libwinpthread-1.dll",
+    "libstdc++-6.dll",
+    "libgcc_s_seh-1.dll",
+    "msvcp140d.dll",
+    "vcruntime140d.dll",
+    "vcruntime140_1d.dll",
+    "ucrtbased.dll",
+  ].filter((dependency) => binaryText.includes(dependency));
+  if (forbiddenDependencies.length > 0) {
+    console.error(
+      `[package-release] adapter.dll nao pode ser publicado: dependencias ausentes/debug: ` +
+      forbiddenDependencies.join(", ")
+    );
+    console.error("[package-release] rode 'node scripts/build-mcu-adapters.js --clean --config Release' com MSVC.");
+    process.exit(1);
+  }
+}
+
+const verifyAdapterIndex = process.argv.indexOf("--verify-windows-adapter");
+if (verifyAdapterIndex >= 0) {
+  const adapterPath = process.argv[verifyAdapterIndex + 1];
+  if (!adapterPath) {
+    console.error("[package-release] informe o caminho depois de --verify-windows-adapter");
+    process.exit(2);
+  }
+  validateWindowsAdapterDependencies(path.resolve(adapterPath));
+  console.log(`[package-release] dependencias do adapter Windows aprovadas: ${path.resolve(adapterPath)}`);
+  process.exit(0);
+}
+
 function downloadVerified(url, destination, expectedSha256) {
   fs.mkdirSync(path.dirname(destination), { recursive: true });
   if (!fs.existsSync(destination) || sha256(destination) !== expectedSha256) {
@@ -314,6 +349,9 @@ function stageBundledAssets() {
   copyDirFiltered(path.join(repoRoot, "subcircuits"), path.join(bundledRoot, "subcircuits"), excluded);
   copyDirFiltered(path.join(repoRoot, "Externos"), path.join(bundledRoot, "Externos"), excluded);
 
+  validateWindowsAdapterDependencies(
+    path.join(repoRoot, "mcu-adapters", "espressif-esp32", "build", "win-x64", "adapter.dll")
+  );
   const coreExecutable = resolveCoreExecutable();
   const coreRelative = path.relative(path.join(repoRoot, "core", "build"), coreExecutable);
   copyFileTo(coreExecutable, path.join(bundledRoot, "core", "build", coreRelative));
