@@ -12,7 +12,7 @@
  * (`__try`/`__except`) e não é compilável pelo GCC/MinGW. Deixar o PATH decidir já selecionou o
  * CMake do Strawberry/Ninja durante uma release. Linux/macOS continuam usando o generator padrão.
  *
- * Uso: node scripts/build-core.js [--clean]
+ * Uso: node scripts/build-core.js [--clean] [--config Release] [--target lasecsimul-core]
  */
 
 const { spawnSync } = require("child_process");
@@ -27,6 +27,11 @@ const configIndex = process.argv.indexOf("--config");
 const config =
   (configArg ? configArg.slice("--config=".length) : undefined) ??
   (configIndex >= 0 ? process.argv[configIndex + 1] : undefined);
+const targetArg = process.argv.find((arg) => arg.startsWith("--target="));
+const targetIndex = process.argv.indexOf("--target");
+const buildTarget =
+  (targetArg ? targetArg.slice("--target=".length) : undefined) ??
+  (targetIndex >= 0 ? process.argv[targetIndex + 1] : undefined);
 
 function resolveCmakeCommand() {
   if (process.platform !== "win32") return "cmake";
@@ -86,6 +91,7 @@ else if (config) configureArgs.push(`-DCMAKE_BUILD_TYPE=${config}`);
 
 const buildArgs = ["--build", path.join("core", "build")];
 if (config) buildArgs.push("--config", config);
+if (buildTarget) buildArgs.push("--target", buildTarget);
 // O projeto possui dezenas de executáveis de teste. Um limite pequeno evita recompilá-los
 // estritamente em série sem esgotar a RAM de runners/estações com paralelismo irrestrito.
 buildArgs.push("--parallel", "4");
