@@ -101,13 +101,21 @@ Por isso, quem instala o `.vsix` direto do Marketplace (em vez de usar o `.exe`)
 2. detecta a ausência de `%ProgramData%\LasecSimul\network.json` (checagem leve, sem elevação) e
    pergunta ao usuário via notificação nativa do VS Code -- "Instalar agora" / "Mais tarde" / "Não
    perguntar novamente" (a recusa é lembrada por versão da extensão em `globalState`)
-3. com consentimento, baixa `lasecsimul-<versão>-win32-x64-setup.exe` e `SHA256SUMS.txt` da release
-   `vX.Y.Z` do GitHub (`josuemoraisgh/LasecSimul`, a MESMA versão da extensão em execução) e confere
+3. compara `productVersion` do arquivo com a versão da extensão; configuração legada/sem versão ou
+   de uma versão anterior é tratada como desatualizada e volta a oferecer a instalação
+4. com consentimento, baixa `lasecsimul-<versão>-win32-x64-setup.exe` e `SHA256SUMS.txt` da release
+   `vX.Y.Z` do GitHub (`LASEC-UFU/LasecSimul`, a MESMA versão da extensão em execução) e confere
    o SHA-256 antes de executar
-4. roda o `.exe` baixado só com `--provision-network` (nunca sem argumentos: a extensão já está
+5. roda o `.exe` baixado só com `--provision-network` (nunca sem argumentos: a extensão já está
    instalada por definição, este passo cobre apenas TAP/bridge/gateway), elevando via
    `powershell -Command "Start-Process ... -Verb RunAs -Wait"` -- Node não tem equivalente direto de
    `ProcessStartInfo.Verb = "runas"`
+
+Antes de instalar o driver ou tocar na bridge, o setup verifica a interface física escolhida. O
+provisionamento automático é recusado quando ela usa IPv4 estático, pois o Windows pode remover
+IP/rota da placa sem transferi-los corretamente para `BridgeMP`. Em DHCP, a mudança é transacional:
+se um IPv4 utilizável e uma rota padrão não reaparecerem em até 60 segundos, a bridge é desfeita
+automaticamente. Assim uma falha de bridge não deve deixar a placa física sem conectividade.
 
 Também existe o comando manual **LasecSimul: Install Network Bridge (TAP Driver)** (Command Palette,
 `lasecsimul.network.installMachineSetup`) para repetir esse fluxo a qualquer momento, inclusive

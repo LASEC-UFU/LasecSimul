@@ -201,23 +201,21 @@ function stageTapWindowsPayload(bootstrapperStageDir) {
 
 function resolveCoreExecutable() {
   const coreBuildDir = path.join(repoRoot, "core", "build");
-  const candidates = [
-    path.join(coreBuildDir, target.coreBinaryName),
-    path.join(coreBuildDir, "Release", target.coreBinaryName),
-    path.join(coreBuildDir, "RelWithDebInfo", target.coreBinaryName),
-    path.join(coreBuildDir, "Debug", target.coreBinaryName),
-  ];
-  const existing = candidates
-    .filter((candidate) => fs.existsSync(candidate))
-    .map((candidate, order) => ({ candidate, order, modified: fs.statSync(candidate).mtimeMs }))
-    .sort((a, b) => b.modified - a.modified || a.order - b.order)[0]?.candidate;
-  if (!existing) {
+  const releaseCandidate = process.platform === "win32"
+    ? path.join(coreBuildDir, "Release", target.coreBinaryName)
+    : path.join(coreBuildDir, target.coreBinaryName);
+  if (!fs.existsSync(releaseCandidate)) {
     console.error(
-      `[package-release] executavel do Core nao encontrado. Rode o build antes (procurei por ${candidates.join(", ")}).`
+      `[package-release] Core Release nao encontrado: ${releaseCandidate}. ` +
+      "Rode 'node scripts/build-core.js --clean --config Release'; Debug/artefatos antigos nunca sao aceitos."
     );
     process.exit(1);
   }
-  return existing;
+  console.log(
+    `[package-release] Core Release selecionado: ${releaseCandidate} ` +
+    `(sha256=${sha256(releaseCandidate)})`
+  );
+  return releaseCandidate;
 }
 
 function stageExtensionFiles() {

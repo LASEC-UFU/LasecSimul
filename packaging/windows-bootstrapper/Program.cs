@@ -14,6 +14,7 @@ internal static class Program
 {
     private const string TapName = "LasecSimul TAP";
     private const int GatewayPort = 9011;
+    private const int UnsafeStaticIpv4ExitCode = 20;
     private const string GatewayTaskName = "LasecSimul Network Gateway";
     private const string ExtensionId = "josuemoraisgh.lasecsimul";
     private const string MachineProductName = "LasecSimul — Componentes da Máquina";
@@ -155,12 +156,15 @@ internal static class Program
                 {
                     using var config = JsonDocument.Parse(File.ReadAllText(configPath));
                     var root = config.RootElement;
-                    if (!root.TryGetProperty("schemaVersion", out var schema) || schema.GetInt32() != 1)
+                    if (!root.TryGetProperty("schemaVersion", out var schema) || schema.GetInt32() != 2)
                         failures.Add("network.json incompatível");
                     if (!root.TryGetProperty("gatewayPort", out var port) || port.GetInt32() != GatewayPort)
                         failures.Add("porta global incompatível");
                     if (!root.TryGetProperty("tapInterface", out var tap) || tap.GetString() != TapName)
                         failures.Add("TAP global incompatível");
+                    if (!root.TryGetProperty("productVersion", out var productVersion) ||
+                        !string.Equals(productVersion.GetString(), CurrentVersion(), StringComparison.OrdinalIgnoreCase))
+                        failures.Add("versão do payload global incompatível");
                 }
                 catch { failures.Add("network.json inválido"); }
             }
@@ -215,6 +219,19 @@ internal static class Program
             return 5;
         }
 
+        var requestedPhysical = ValueAfter(args, "--bridge-interface") ?? Environment.GetEnvironmentVariable("LASECSIMUL_BRIDGE_INTERFACE");
+        var physical = SelectPhysicalAdapter(requestedPhysical);
+        if (!PhysicalAdapterUsesDhcp(physical))
+        {
+            Console.Error.WriteLine(
+                $"A interface '{physical.Name}' usa IPv4 estático. A criação automática da Windows Network Bridge foi cancelada antes de alterar a rede.");
+            Console.Error.WriteLine(
+                "O Windows não transfere essa configuração de forma confiável para a bridge; isso poderia desativar o IP e a rota padrão da máquina.");
+            Console.Error.WriteLine(
+                "Use por enquanto lasecsimul.network.mode='isolated'. Para lab-bridge, configure a interface/bridge manualmente ou habilite DHCP antes de repetir.");
+            return UnsafeStaticIpv4ExitCode;
+        }
+
         // Repair/update is idempotent: release the TAP before replacing the driver or gateway.
         Run("schtasks.exe", new[] { "/End", "/TN", GatewayTaskName },
             capture: true, acceptFailure: true);
@@ -244,10 +261,30 @@ internal static class Program
         if (driverInstall.ExitCode == 259)
             Console.WriteLine("O driver TAP já estava instalado e atualizado; continuando a reparação.");
 
+        var tapExistedBeforeProvisioning = !string.IsNullOrWhiteSpace(GetAdapterPnpDeviceId(TapName));
         var tapDeviceInstanceId = EnsureTapAdapter(infPath, devconPath, TapName);
-        var requestedPhysical = ValueAfter(args, "--bridge-interface") ?? Environment.GetEnvironmentVariable("LASECSIMUL_BRIDGE_INTERFACE");
-        var physical = SelectPhysicalAdapter(requestedPhysical);
-        var bridge = ConfigureBridge(physical, TapName);
+        BridgeInfo? bridge = null;
+        try
+        {
+            bridge = ConfigureBridge(physical, TapName);
+            if (!WaitForUsableHostNetwork(TimeSpan.FromSeconds(60)))
+                throw new InvalidOperationException(
+                    "A bridge não recuperou um endereço IPv4 e uma rota padrão utilizáveis em 60 segundos.");
+        }
+        catch
+        {
+            if (bridge is BridgeInfo configuredBridge)
+                RollBackBridge(configuredBridge, TapName);
+            if (!tapExistedBeforeProvisioning)
+                Run("pnputil.exe", new[] { "/remove-device", tapDeviceInstanceId },
+                    capture: true, acceptFailure: true);
+            // Em uma reparação, a tarefa antiga foi apenas encerrada no começo da transação.
+            // Reative-a quando o provisionamento novo falhar; em uma instalação nova o comando
+            // simplesmente retorna erro e é ignorado.
+            Run("schtasks.exe", new[] { "/Run", "/TN", GatewayTaskName },
+                capture: true, acceptFailure: true);
+            throw;
+        }
 
         var installDir = MachineInstallDirectory();
         Directory.CreateDirectory(installDir);
@@ -257,14 +294,15 @@ internal static class Program
 
         var config = new
         {
-            schemaVersion = 1,
+            schemaVersion = 2,
+            productVersion = CurrentVersion(),
             mode = "lab-bridge",
             tapInterface = TapName,
             physicalInterface = physical.Name,
             physicalIfIndex = physical.IfIndex,
             tapDeviceInstanceId,
-            bridgeGuid = bridge.Guid,
-            bridgeCreatedByLasecSimul = bridge.CreatedByLasecSimul,
+            bridgeGuid = bridge.Value.Guid,
+            bridgeCreatedByLasecSimul = bridge.Value.CreatedByLasecSimul,
             gatewayAddress = "127.0.0.1",
             gatewayPort = GatewayPort,
             driver = "TAP-Windows6 9.27.0",
@@ -376,6 +414,32 @@ internal static class Program
         }
     }
 
+    private static bool PhysicalAdapterUsesDhcp(PhysicalAdapter physical)
+    {
+        var result = RunPowerShell(
+            $"$i=Get-NetIPInterface -AddressFamily IPv4 -InterfaceIndex {physical.IfIndex} -ErrorAction SilentlyContinue | Select-Object -First 1; " +
+            "if($i -and $i.Dhcp -eq 'Enabled'){exit 0}; exit 2", true);
+        return result.ExitCode == 0;
+    }
+
+    private static bool WaitForUsableHostNetwork(TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            var result = RunPowerShell(
+                "$routes=Get-NetRoute -AddressFamily IPv4 -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue | " +
+                "Where-Object {$_.State -ne 'Unreachable'}; " +
+                "foreach($r in $routes){" +
+                "$ip=Get-NetIPAddress -AddressFamily IPv4 -InterfaceIndex $r.ifIndex -ErrorAction SilentlyContinue | " +
+                "Where-Object {$_.IPAddress -notlike '169.254.*' -and $_.IPAddress -ne '0.0.0.0'} | Select-Object -First 1; " +
+                "if($ip){exit 0}}; exit 2", true);
+            if (result.ExitCode == 0) return true;
+            Thread.Sleep(1000);
+        }
+        return false;
+    }
+
     private static BridgeInfo ConfigureBridge(PhysicalAdapter physical, string tapName)
     {
         if (!TryGetAdapterIfIndex(tapName, out var tapIndex))
@@ -384,40 +448,82 @@ internal static class Program
         var created = bridgeGuid is null;
         if (bridgeGuid is not null && PreviouslyOwnedBridgeGuid() is string ownedGuid &&
             ownedGuid.Equals(bridgeGuid, StringComparison.OrdinalIgnoreCase)) created = true;
-        if (bridgeGuid is null)
+        try
         {
-            var create = Run("netsh.exe", new[] { "bridge", "create", physical.IfIndex.ToString(), tapIndex.ToString() }, capture: true);
-            if (create.ExitCode != 0 || LooksLikeNetshHelp(create.Output))
-                throw new InvalidOperationException($"Falha ao criar a Windows Network Bridge: {create.Output}");
-            Console.WriteLine("Aguardando o Windows concluir a criação da bridge...");
-            bridgeGuid = WaitForBridgeGuid(TimeSpan.FromSeconds(45));
             if (bridgeGuid is null)
-                throw new InvalidOperationException(
-                    "A bridge foi solicitada, mas o adaptador BridgeMP não apareceu em 45 segundos. " +
-                    "Verifique 'netsh bridge list' e o Visualizador de Eventos do Windows.");
-        }
-        else
-        {
-            AddAdapterToBridge(physical.IfIndex, bridgeGuid);
-            AddAdapterToBridge(tapIndex, bridgeGuid);
-        }
+            {
+                var create = Run("netsh.exe", new[] { "bridge", "create", physical.IfIndex.ToString(), tapIndex.ToString() }, capture: true);
+                if (create.ExitCode != 0 || LooksLikeNetshHelp(create.Output))
+                    throw new InvalidOperationException($"Falha ao criar a Windows Network Bridge: {create.Output}");
+                Console.WriteLine("Aguardando o Windows concluir a criação da bridge...");
+                bridgeGuid = WaitForBridgeGuid(TimeSpan.FromSeconds(45));
+                if (bridgeGuid is null)
+                    throw new InvalidOperationException(
+                        "A bridge foi solicitada, mas o adaptador BridgeMP não apareceu em 45 segundos. " +
+                        "Verifique 'netsh bridge list' e o Visualizador de Eventos do Windows.");
+            }
+            else
+            {
+                if (created)
+                {
+                    AddAdapterToBridge(physical.IfIndex, bridgeGuid);
+                }
+                else
+                {
+                    var existingMembers = Run(
+                        "netsh.exe", new[] { "bridge", "show", "adapter" },
+                        capture: true, acceptFailure: true);
+                    if (existingMembers.ExitCode != 0 ||
+                        !existingMembers.Output.Contains(physical.Name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new InvalidOperationException(
+                            $"Já existe uma bridge que não pertence ao LasecSimul e não contém '{physical.Name}'. " +
+                            "O instalador não alterará uma bridge administrada pelo usuário.");
+                    }
+                }
+                AddAdapterToBridge(tapIndex, bridgeGuid);
+            }
 
-        string statusOutput = string.Empty;
-        var membersVisible = false;
-        for (var attempt = 0; attempt < 60; ++attempt)
-        {
-            var status = Run("netsh.exe", new[] { "bridge", "show", "adapter" }, capture: true, acceptFailure: true);
-            statusOutput = status.Output;
-            membersVisible = status.ExitCode == 0 &&
-                status.Output.Contains(physical.Name, StringComparison.OrdinalIgnoreCase) &&
-                status.Output.Contains(tapName, StringComparison.OrdinalIgnoreCase);
-            if (membersVisible) break;
-            Thread.Sleep(500);
+            string statusOutput = string.Empty;
+            var membersVisible = false;
+            for (var attempt = 0; attempt < 60; ++attempt)
+            {
+                var status = Run("netsh.exe", new[] { "bridge", "show", "adapter" }, capture: true, acceptFailure: true);
+                statusOutput = status.Output;
+                membersVisible = status.ExitCode == 0 &&
+                    status.Output.Contains(physical.Name, StringComparison.OrdinalIgnoreCase) &&
+                    status.Output.Contains(tapName, StringComparison.OrdinalIgnoreCase);
+                if (membersVisible) break;
+                Thread.Sleep(500);
+            }
+            if (!membersVisible)
+                throw new InvalidOperationException($"A bridge foi criada, mas suas interfaces não ficaram visíveis: {statusOutput}");
+            Console.WriteLine($"Bridge configurada: {physical.Name} <-> {tapName}");
+            return new BridgeInfo(bridgeGuid, created);
         }
-        if (!membersVisible)
-            throw new InvalidOperationException($"A bridge foi criada, mas suas interfaces não ficaram visíveis: {statusOutput}");
-        Console.WriteLine($"Bridge configurada: {physical.Name} <-> {tapName}");
-        return new BridgeInfo(bridgeGuid, created);
+        catch
+        {
+            bridgeGuid ??= FindBridgeGuid();
+            if (bridgeGuid is not null)
+                RollBackBridge(new BridgeInfo(bridgeGuid, created), tapName);
+            throw;
+        }
+    }
+
+    private static void RollBackBridge(BridgeInfo bridge, string tapName)
+    {
+        Console.Error.WriteLine("A configuração da bridge falhou; desfazendo a alteração para preservar a rede do host...");
+        if (bridge.CreatedByLasecSimul)
+        {
+            Run("netsh.exe", new[] { "bridge", "destroy", bridge.Guid },
+                capture: true, acceptFailure: true);
+        }
+        else if (TryGetAdapterIfIndex(tapName, out var tapIndex))
+        {
+            Run("netsh.exe", new[] { "bridge", "remove", tapIndex.ToString(), "from", bridge.Guid },
+                capture: true, acceptFailure: true);
+        }
+        WaitForUsableHostNetwork(TimeSpan.FromSeconds(30));
     }
 
     private static string? WaitForBridgeGuid(TimeSpan timeout)
@@ -525,6 +631,10 @@ internal static class Program
 
         Run("schtasks.exe", new[] { "/End", "/TN", GatewayTaskName }, capture: true, acceptFailure: true);
         Run("schtasks.exe", new[] { "/Delete", "/TN", GatewayTaskName, "/F" }, capture: true, acceptFailure: true);
+        // Versões antigas podiam deixar o processo SYSTEM vivo quando a tarefa não era encerrada.
+        // O executável mantém o log aberto e impedia a remoção completa de ProgramData.
+        Run("taskkill.exe", new[] { "/IM", "LasecSimul.NetworkGateway.exe", "/F" },
+            capture: true, acceptFailure: true);
         Thread.Sleep(750);
 
         var configPath = Path.Combine(MachineProgramDataDirectory(), "network.json");

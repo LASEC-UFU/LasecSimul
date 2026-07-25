@@ -8,12 +8,9 @@
  *   cmake -S core -B core/build
  *   cmake --build core/build
  *
- * Sem opinião de generator: deixa o CMake escolher o default da plataforma (em Windows isso
- * resolve o Visual Studio instalado mais recente, com ambiente MSVC já configurado pelo próprio
- * CMake — não exige vcvarsall manual; em Linux/macOS, Makefiles/Ninja conforme o que estiver
- * disponível). Quem quiser um generator específico usa os presets em core/CMakePresets.json
- * diretamente (cmake --preset <nome>), este script é o caminho mínimo cobrindo os comandos de
- * verificação obrigatórios do agente 01.
+ * No Windows força Visual Studio 2022/x64: o Core usa SEH (`__try`/`__except`) e não é compilável
+ * pelo GCC/MinGW. Deixar o PATH decidir já selecionou o CMake do Strawberry/Ninja durante uma
+ * release. Linux/macOS continuam usando o generator padrão da plataforma.
  *
  * Uso: node scripts/build-core.js [--clean]
  */
@@ -31,12 +28,24 @@ const config =
   (configArg ? configArg.slice("--config=".length) : undefined) ??
   (configIndex >= 0 ? process.argv[configIndex + 1] : undefined);
 
+function resolveCmakeCommand() {
+  if (process.platform !== "win32") return "cmake";
+  const candidates = [
+    "C:\\Program Files\\CMake\\bin\\cmake.exe",
+    "C:\\Program Files (x86)\\CMake\\bin\\cmake.exe",
+    "C:\\Program Files\\Microsoft Visual Studio\\2022\\BuildTools\\Common7\\IDE\\CommonExtensions\\Microsoft\\CMake\\CMake\\bin\\cmake.exe",
+  ];
+  return candidates.find((candidate) => fs.existsSync(candidate)) ?? "cmake";
+}
+
+const cmakeCommand = resolveCmakeCommand();
+
 function run(command, args, cwd) {
   console.log(`[build-core] ${command} ${args.join(" ")} (cwd=${cwd})`);
   const result = spawnSync(command, args, {
     cwd,
     stdio: "inherit",
-    shell: process.platform === "win32",
+    shell: false,
   });
   if (result.error) {
     console.error(`[build-core] falha ao executar ${command}:`, result.error.message);
@@ -59,10 +68,14 @@ if (clean && fs.existsSync(buildDir)) {
 // Caminhos relativos à raiz do repositório -- equivalente direto ao par de comandos exigido pelo
 // teste obrigatório do agente 01 ("cmake -S core -B core/build" / "cmake --build core/build").
 const configureArgs = ["-S", "core", "-B", path.join("core", "build")];
-if (config) configureArgs.push(`-DCMAKE_BUILD_TYPE=${config}`);
+if (process.platform === "win32") configureArgs.push("-G", "Visual Studio 17 2022", "-A", "x64");
+else if (config) configureArgs.push(`-DCMAKE_BUILD_TYPE=${config}`);
 
 const buildArgs = ["--build", path.join("core", "build")];
 if (config) buildArgs.push("--config", config);
+// O projeto possui dezenas de executáveis de teste. Um limite pequeno evita recompilá-los
+// estritamente em série sem esgotar a RAM de runners/estações com paralelismo irrestrito.
+buildArgs.push("--parallel", "4");
 
-run("cmake", configureArgs, repoRoot);
-run("cmake", buildArgs, repoRoot);
+run(cmakeCommand, configureArgs, repoRoot);
+run(cmakeCommand, buildArgs, repoRoot);

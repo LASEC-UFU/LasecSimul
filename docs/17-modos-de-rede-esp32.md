@@ -96,6 +96,13 @@ que todas as alterações rastreadas do QEMU estejam preservadas no Git e grava
   no Painel de Controle.
 - Quando houver mais de uma interface Ethernet física ativa, o instalador pede ao administrador
   qual delas deve integrar a bridge. Também aceita `--bridge-interface "Ethernet"`.
+- O provisionamento automático exige DHCP habilitado na interface física. Em uma interface com IPv4
+  estático, o Windows pode retirar o IP e a rota da placa sem transferi-los corretamente para
+  `BridgeMP`; por isso o instalador v0.0.14 recusa a operação **antes de alterar a rede** e orienta o
+  uso de `isolated` ou a configuração manual da bridge.
+- Depois de criar uma bridge em DHCP, o instalador aguarda um IPv4 não-APIPA e uma rota padrão. Se
+  eles não voltarem em 60 segundos, a bridge criada é desfeita automaticamente para preservar a
+  conectividade do host.
 - Wi-Fi físico costuma rejeitar bridge Ethernet transparente de múltiplos MACs; prefira a interface
   Ethernet cabeada do thin client.
 - O switch físico precisa aceitar vários MACs na porta do thin client e o DHCP precisa ter endereços

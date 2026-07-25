@@ -7,6 +7,7 @@ import * as crypto from "crypto";
 import { spawn } from "child_process";
 import { fileExists, readJsonFile } from "../pathUtils";
 import { logSimulation } from "../diagnostics/simulationLog";
+import { isMachineNetworkConfigCurrent } from "./machineNetworkState";
 
 /** Instala sob demanda (a partir da própria Extension, já rodando via Marketplace) o driver
  * TAP-Windows6, a Windows Network Bridge e o `LasecSimul.NetworkGateway.exe` que o modo de rede
@@ -27,12 +28,15 @@ import { logSimulation } from "../diagnostics/simulationLog";
  * `.github/workflows/package-installers.yml` já publica. Repo precisa ser público: download de asset
  * de release privada sem token autenticado retorna 404. */
 
-const RELEASE_REPO = "josuemoraisgh/LasecSimul";
+const RELEASE_REPO = "LASEC-UFU/LasecSimul";
 const DISMISSED_VERSION_KEY = "lasecsimul.network.setupDismissedForVersion";
 /** Código de saída do Win32 (`ERROR_CANCELLED`) que o script PowerShell de elevação repassa quando o
  * usuário nega o prompt de UAC -- distinto de uma falha real do instalador, pra mostrar uma mensagem
  * apropriada em vez de "erro desconhecido". */
 const UAC_CANCELLED_EXIT_CODE = 1223;
+/** O instalador recusa criar uma bridge automaticamente sobre IPv4 estático porque o Windows pode
+ * retirar IP/rota da placa física sem transferi-los para BridgeMP. */
+const UNSAFE_STATIC_IPV4_EXIT_CODE = 20;
 
 function machineProgramDataConfigPath(): string {
   return path.join(process.env.ProgramData ?? "C:\\ProgramData", "LasecSimul", "network.json");
@@ -40,16 +44,19 @@ function machineProgramDataConfigPath(): string {
 
 /** Checagem leve (sem elevação, sem `netsh`/`schtasks`) só pra decidir se vale a pena OFERECER a
  * instalação -- não substitui a verificação completa que `LasecSimul.Setup.exe --machine-status` faz
- * (TAP, bridge, tarefa agendada, registro). Suficiente pro gate "nunca vi essa máquina instalada": se
- * `network.json` existe e bate a versão do schema/porta, assume-se saudável; qualquer inconsistência
- * mais sutil ainda pode ser reparada rodando `LasecSimul.Setup.exe --provision-network` (idempotente),
- * inclusive via o comando manual `lasecsimul.network.installMachineSetup`. */
-function isMachineNetworkInfraPresent(expectedGatewayPort: number): boolean {
+ * (TAP, bridge, tarefa agendada, registro). Desde a v0.0.14 exige também a versão exata do produto:
+ * uma atualização pelo Marketplace precisa buscar o setup.exe correspondente, mesmo quando TAP e
+ * gateway de uma versão anterior já existem. Inconsistências mais sutis ainda podem ser reparadas
+ * pelo comando manual `lasecsimul.network.installMachineSetup`. */
+function isMachineNetworkInfraCurrent(expectedGatewayPort: number, expectedProductVersion: string): boolean {
   const configPath = machineProgramDataConfigPath();
   if (!fileExists(configPath)) return false;
   try {
-    const config = readJsonFile(configPath) as { schemaVersion?: number; gatewayPort?: number };
-    return config.schemaVersion === 1 && config.gatewayPort === expectedGatewayPort;
+    return isMachineNetworkConfigCurrent(
+      readJsonFile(configPath),
+      expectedGatewayPort,
+      expectedProductVersion,
+    );
   } catch {
     return false;
   }
@@ -212,6 +219,12 @@ async function installMachineNetworkInfra(context: vscode.ExtensionContext, vers
         );
         return;
       }
+      if (result.code === UNSAFE_STATIC_IPV4_EXIT_CODE) {
+        throw new Error(
+          "A placa da rota padrão usa IPv4 estático. A bridge foi recusada antes de alterar a rede " +
+            "para evitar que o computador perca o IP. Use o modo \"isolated\" ou configure a bridge manualmente."
+        );
+      }
       if (result.code !== 0) {
         throw new Error(result.stderr || `LasecSimul.Setup.exe --provision-network retornou código ${result.code}.`);
       }
@@ -236,7 +249,7 @@ async function offerInstall(context: vscode.ExtensionContext, version: string, o
 
   const choice = await vscode.window.showInformationMessage(
     `O modo de rede "lab-bridge" precisa do driver TAP-Windows6, de uma Windows Network Bridge e do ` +
-      `gateway central para esta máquina -- ainda não detectados. Deseja baixar e instalar agora ` +
+      `gateway central para esta máquina -- ausentes ou desatualizados. Deseja baixar e instalar agora ` +
       `(lasecsimul-${version}-win32-x64-setup.exe, a partir da release v${version} no GitHub)? ` +
       `Isso exige elevação administrativa (UAC). Sem isso, a extensão continua funcionando ` +
       `normalmente no modo "isolated".`,
@@ -262,16 +275,16 @@ async function offerInstall(context: vscode.ExtensionContext, version: string, o
 
 /** Chamado (fire-and-forget) na ativação da extensão -- só age no Windows, só quando o usuário já
  * escolheu explicitamente o modo "lab-bridge" (o padrão é "disabled"; "isolated" nunca precisa de
- * TAP), só quando a infraestrutura global parece ausente, e só uma vez por versão dispensada. */
+ * TAP), quando a infraestrutura está ausente OU pertence a outra versão, e só uma vez por versão
+ * dispensada. */
 export function maybeOfferMachineNetworkSetup(context: vscode.ExtensionContext): void {
   if (process.platform !== "win32") return;
   const networkConfig = vscode.workspace.getConfiguration("lasecsimul.network");
   if (networkConfig.get<string>("mode", "disabled") !== "lab-bridge") return;
 
   const gatewayPort = networkConfig.get<number>("gatewayPort", 9011);
-  if (isMachineNetworkInfraPresent(gatewayPort)) return;
-
   const version = extensionVersion(context);
+  if (isMachineNetworkInfraCurrent(gatewayPort, version)) return;
   if (context.globalState.get<string>(DISMISSED_VERSION_KEY) === version) return;
 
   void offerInstall(context, version, { allowDismiss: true });

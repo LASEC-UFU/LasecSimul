@@ -496,6 +496,7 @@ add_executable(mcu_debug_launch_test
     src/mcu/qemu/QemuIcountCalibrator.cpp
 )
 target_include_directories(mcu_debug_launch_test PRIVATE include src)
+target_link_libraries(mcu_debug_launch_test PRIVATE nlohmann_json::nlohmann_json)
 add_test(NAME mcu_debug_launch COMMAND mcu_debug_launch_test)
 
 add_executable(qemu_arena_bridge_test
