@@ -77,6 +77,15 @@
     "background": {
       "kind": "none"
     },
+    "runtimeState": {
+      "versionOffset": 0, "expectedVersion": 1,
+      "surface": {
+        "encoding": "mono-page-lsb", "x": 10, "y": 10, "w": 84, "h": 48,
+        "sourceWidth": 84, "sourceHeight": 48,
+        "payloadOffset": 36, "enabledOffset": 16,
+        "onColor": "#101810", "offColor": "#c8dcb4"
+      }
+    },
     "shapes": [],
     "viewSpec": {
       "paint": [

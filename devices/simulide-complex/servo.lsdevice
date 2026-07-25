@@ -4,159 +4,59 @@
   "graphical": true,
   "name": "Servo Motor",
   "language": "pt-BR",
-  "translations": {
-    "en": {
-      "name": "Servo Motor"
-    }
-  },
-  "abiVersion": {
-    "major": 3,
-    "minor": 0
-  },
+  "translations": { "en": { "name": "Servo Motor" } },
+  "abiVersion": { "major": 3, "minor": 0 },
   "nativeEntry": {
     "win32-x64": "build/win-x64/device.dll",
     "linux-x64": "build/linux-x64/device.so",
     "darwin-universal": "build/macos-universal/device.dylib"
   },
   "pins": [
-    {
-      "id": "pwm",
-      "kind": "DIGITAL_IN",
-      "x": 0,
-      "y": 16,
-      "angle": 180,
-      "length": 8,
-      "label": "PWM"
-    }
+    { "id": "vcc", "kind": "DIGITAL_IN", "x": 0, "y": 16, "angle": 180, "length": 8, "label": "V+" },
+    { "id": "gnd", "kind": "DIGITAL_IN", "x": 0, "y": 32, "angle": 180, "length": 8, "label": "GND" },
+    { "id": "sig", "kind": "DIGITAL_IN", "x": 0, "y": 48, "angle": 180, "length": 8, "label": "SIG" }
   ],
   "properties": [
-    {
-      "id": "speed",
-      "label": "Velocidade",
-      "group": "Principal",
-      "valueKind": "number",
-      "editor": "number",
-      "default": 0.2,
-      "min": 0.001,
-      "step": 0.01
-    },
-    {
-      "id": "minPulse",
-      "label": "Pulso minimo",
-      "group": "Principal",
-      "valueKind": "number",
-      "editor": "number",
-      "default": 1000,
-      "min": 1,
-      "step": 10
-    },
-    {
-      "id": "maxPulse",
-      "label": "Pulso maximo",
-      "group": "Principal",
-      "valueKind": "number",
-      "editor": "number",
-      "default": 2000,
-      "min": 1,
-      "step": 10
-    },
-    {
-      "id": "angle",
-      "label": "Angulo",
-      "group": "Leitura",
-      "valueKind": "number",
-      "editor": "display",
-      "default": 90,
-      "readOnly": true
-    }
+    { "id": "speed", "label": "Velocidade", "group": "Principal", "unit": "s/60°", "valueKind": "number", "editor": "number", "default": 0.2, "min": 0.001, "step": 0.01 },
+    { "id": "minPulse", "label": "Pulso mínimo", "group": "Principal", "unit": "µs", "valueKind": "number", "editor": "number", "default": 1000, "min": 1, "step": 10 },
+    { "id": "maxPulse", "label": "Pulso máximo", "group": "Principal", "unit": "µs", "valueKind": "number", "editor": "number", "default": 2000, "min": 1, "step": 10 },
+    { "id": "angle", "label": "Ângulo", "group": "Leitura", "unit": "°", "valueKind": "number", "editor": "display", "default": 90, "readOnly": true }
   ],
-  "limits": {
-    "stepTimeoutMs": 8,
-    "expectedComplexity": "medium"
-  },
+  "limits": { "stepTimeoutMs": 8, "expectedComplexity": "medium" },
   "package": {
     "width": 96,
     "height": 80,
     "border": false,
-    "background": {
-      "kind": "none"
+    "background": { "kind": "none" },
+    "runtimeState": {
+      "versionOffset": 0,
+      "expectedVersion": 1,
+      "bindings": [
+        { "prop": "angle", "offset": 28, "valueType": "u32le", "scale": 0.001 }
+      ]
     },
-    "shapes": [],
-    "pins": [
-      {
-        "id": "pwm",
-        "x": 0,
-        "y": 16,
-        "angle": 180,
-        "length": 8,
-        "label": "PWM"
-      }
-    ],
     "viewSpec": {
       "paint": [
-        {
-          "kind": "rect",
-          "x": 8,
-          "y": 16,
-          "w": 80,
-          "h": 48,
-          "rx": 4,
-          "ry": 4,
-          "fill": "#3a3a3a"
-        },
-        {
-          "kind": "ellipse",
-          "cx": 48,
-          "cy": 40,
-          "rx": 16,
-          "ry": 16,
-          "fill": "none",
-          "stroke": "#ffffff",
-          "strokeWidth": 2
-        },
-        {
-          "kind": "rect",
-          "x": 48,
-          "y": 32,
-          "w": 32,
-          "h": 16,
-          "rx": 8,
-          "ry": 8,
-          "fill": "#ffffff",
-          "partId": "horn"
-        },
-        {
-          "kind": "text",
-          "x": 48,
-          "y": 8,
-          "value": "__label",
-          "fontSize": 5,
-          "color": "#0000aa"
-        }
+        { "kind": "rect", "x": 8, "y": 16, "w": 80, "h": 48, "rx": 4, "ry": 4, "fill": "#324664" },
+        { "kind": "ellipse", "cx": 48, "cy": 40, "rx": 16, "ry": 16, "fill": "none", "stroke": "#ffffff", "strokeWidth": 2 },
+        { "kind": "rect", "x": 40, "y": 32, "w": 48, "h": 16, "rx": 8, "ry": 8, "fill": "#ffffff", "partId": "horn" },
+        { "kind": "text", "x": 48, "y": 8, "value": "__label", "fontSize": 5, "color": "#0000aa" }
       ],
       "stateProjection": {
         "horn": [
-          {
-            "kind": "rotate",
-            "prop": "angle",
-            "stepsPerRev": 360,
-            "cx": 48,
-            "cy": 40
-          }
+          { "kind": "rotate", "prop": "angle", "stepsPerRev": 360, "cx": 48, "cy": 40, "propRange": [0, 180], "angleRange": [-90, 90] }
         ]
       }
-    }
+    },
+    "pins": [
+      { "id": "vcc", "x": 0, "y": 16, "angle": 180, "length": 8, "label": "V+" },
+      { "id": "gnd", "x": 0, "y": 32, "angle": 180, "length": 8, "label": "GND" },
+      { "id": "sig", "x": 0, "y": 48, "angle": 180, "length": 8, "label": "SIG" }
+    ],
+    "pinLabelColor": "#fafac8"
   },
   "icon": "servo",
-  "folderPath": [
-    "Saidas",
-    "Motors"
-  ],
-  "defaultProperties": {
-    "minPulse": 1000,
-    "maxPulse": 2000
-  },
-  "help": {
-    "description": "Servo motor controlado por sinal PWM."
-  }
+  "folderPath": ["Saidas", "Motors"],
+  "defaultProperties": { "minPulse": 1000, "maxPulse": 2000 },
+  "help": { "description": "Servo de três fios, alimentado por V+/GND e controlado por pulsos em SIG." }
 }

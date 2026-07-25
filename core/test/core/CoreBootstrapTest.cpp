@@ -766,6 +766,57 @@ static void testSimulideComplexAbiEventsOverIpc() {
         // versão na frente (header[0]) -- payload (DDRAM) agora começa no byte 36, não 32.
         TEST_ASSERT(state.size() >= 37 && state[36] == 65, "DDRAM[0] contem 'A' apos latches bit a bit");
 
+        const nlohmann::json oledResp = send(
+            "addComponent",
+            {{"typeId", "outputs.ssd1306"},
+             {"properties", {{"width", 128.0}, {"height", 64.0}, {"i2cAddress", 60.0}, {"imageRotated", true}}},
+             {"pins", {{{"id", "scl"}}, {{"id", "sda"}}}}});
+        TEST_ASSERT(oledResp.value("ok", false), "addComponent('outputs.ssd1306') usa NativeDeviceProxy");
+        const std::string oled = oledResp["payload"]["instanceId"];
+        auto setOledPin = [&](uint32_t pin, uint32_t level) {
+            return send("sendComponentEvent", {{"instanceId", oled}, {"tag", 1}, {"a", pin}, {"b", level}, {"c", 0}})
+                .value("ok", false);
+        };
+        auto oledByte = [&](uint8_t value) {
+            for (int bit = 7; bit >= 0; --bit) {
+                setOledPin(0, 0);
+                setOledPin(1, (value >> bit) & 1u);
+                setOledPin(0, 1);
+            }
+            setOledPin(0, 0);
+            setOledPin(1, 1);
+            setOledPin(0, 1); // ciclo de ACK
+            setOledPin(0, 0);
+        };
+        auto oledTransaction = [&](uint8_t control, std::initializer_list<uint8_t> bytes) {
+            setOledPin(0, 1);
+            setOledPin(1, 1);
+            setOledPin(1, 0); // START
+            oledByte(0x78);    // endereço 0x3c + write
+            oledByte(control);
+            for (uint8_t byte : bytes) oledByte(byte);
+            setOledPin(0, 0);
+            setOledPin(1, 0);
+            setOledPin(0, 1);
+            setOledPin(1, 1); // STOP
+        };
+
+        oledTransaction(0x00, {0xaf});
+        oledTransaction(0x40, {0x01});
+        auto oledState = decodeHex(send("getComponentState", {{"instanceId", oled}})["payload"]
+                                       .value("stateHex", std::string{}));
+        TEST_ASSERT(oledState.size() == 36 + 128 * 8, "SSD1306 exporta framebuffer visual 128x64 completo");
+        TEST_ASSERT(oledState.size() > 36 + 8 * 128 - 1 &&
+                        (oledState[36 + 7 * 128 + 127] & 0x80) != 0,
+                    "SSD1306 aplica imageRotated/remap visual ao pixel da GDDRAM");
+
+        oledTransaction(0x00, {0xae});
+        oledTransaction(0x00, {0xaf});
+        oledState = decodeHex(send("getComponentState", {{"instanceId", oled}})["payload"]
+                                  .value("stateHex", std::string{}));
+        TEST_ASSERT((oledState[36 + 7 * 128 + 127] & 0x80) != 0,
+                    "DISPLAYOFF/ON preserva GDDRAM do SSD1306");
+
         send("shutdown", nlohmann::json::object());
         clientClose(conn);
     }

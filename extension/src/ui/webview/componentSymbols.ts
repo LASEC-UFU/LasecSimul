@@ -1159,6 +1159,202 @@ function packageBackgroundSvg(pkg: PackageDescriptor): string {
   return "";
 }
 
+function runtimeStateBytes(properties: Record<string, unknown> | undefined): Uint8Array | undefined {
+  const encoded = properties?.__runtime_state;
+  if (typeof encoded !== "string" || !encoded) return undefined;
+  try {
+    const binary = globalThis.atob(encoded);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  } catch {
+    return undefined;
+  }
+}
+
+function readRuntimeNumber(bytes: Uint8Array, offset: number, kind: "u8" | "u16le" | "u32le" | "i32le" | "f64le"): number | undefined {
+  const size = kind === "u8" ? 1 : kind === "u16le" ? 2 : kind === "f64le" ? 8 : 4;
+  if (!Number.isInteger(offset) || offset < 0 || offset + size > bytes.byteLength) return undefined;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (kind === "u8") return view.getUint8(offset);
+  if (kind === "u16le") return view.getUint16(offset, true);
+  if (kind === "u32le") return view.getUint32(offset, true);
+  if (kind === "i32le") return view.getInt32(offset, true);
+  return view.getFloat64(offset, true);
+}
+
+/** Aplica bindings efêmeros antes do ViewSpec; o estado nunca altera/persiste properties do projeto. */
+function propertiesWithRuntimeState(pkg: PackageDescriptor, properties: Record<string, unknown> | undefined): Record<string, unknown> {
+  const base = properties ?? {};
+  const state = pkg.runtimeState;
+  const bytes = state ? runtimeStateBytes(base) : undefined;
+  if (!state || !bytes) return base;
+  if (state.versionOffset !== undefined && state.expectedVersion !== undefined) {
+    if (readRuntimeNumber(bytes, state.versionOffset, "u32le") !== state.expectedVersion) return base;
+  }
+  let result = base;
+  for (const binding of state.bindings ?? []) {
+    const raw = readRuntimeNumber(bytes, binding.offset, binding.valueType);
+    if (raw === undefined || !Number.isFinite(raw)) continue;
+    if (result === base) result = { ...base };
+    result[binding.prop] = raw * (binding.scale ?? 1) + (binding.add ?? 0);
+  }
+  return result;
+}
+
+function runtimeColor(spec: { value?: string; prop?: string; map?: Record<string, string>; fallback?: string } | undefined, properties: Record<string, unknown>, fallback: string): string {
+  if (!spec) return fallback;
+  if (spec.value) return spec.value;
+  const raw = spec.prop ? properties[spec.prop] : undefined;
+  return spec.map?.[String(raw)] ?? spec.fallback ?? fallback;
+}
+
+function rgbFromCssHex(color: string): [number, number, number] {
+  const value = color.trim();
+  const short = /^#([0-9a-f]{3})$/i.exec(value);
+  if (short) return short[1]!.split("").map((digit) => parseInt(digit + digit, 16)) as [number, number, number];
+  const full = /^#([0-9a-f]{6})$/i.exec(value);
+  if (full) return [
+    parseInt(full[1]!.slice(0, 2), 16),
+    parseInt(full[1]!.slice(2, 4), 16),
+    parseInt(full[1]!.slice(4, 6), 16)
+  ];
+  return [0, 0, 0];
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunk = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(offset, Math.min(bytes.length, offset + chunk)));
+  }
+  return globalThis.btoa(binary);
+}
+
+/** BMP BGRA32 é suportado pelo Chromium e evita milhares de `<rect>` no DOM para um TFT 240×320. */
+function bmpDataUri(width: number, height: number, rgba: Uint8Array): string {
+  const pixelBytes = width * height * 4;
+  const bytes = new Uint8Array(54 + pixelBytes);
+  const view = new DataView(bytes.buffer);
+  bytes[0] = 0x42; bytes[1] = 0x4d;
+  view.setUint32(2, bytes.length, true);
+  view.setUint32(10, 54, true);
+  view.setUint32(14, 40, true);
+  view.setInt32(18, width, true);
+  view.setInt32(22, -height, true); // top-down: mesma ordem do framebuffer
+  view.setUint16(26, 1, true);
+  view.setUint16(28, 32, true);
+  view.setUint32(34, pixelBytes, true);
+  for (let pixel = 0; pixel < width * height; pixel += 1) {
+    const source = pixel * 4;
+    const target = 54 + source;
+    bytes[target] = rgba[source + 2]!;
+    bytes[target + 1] = rgba[source + 1]!;
+    bytes[target + 2] = rgba[source]!;
+    bytes[target + 3] = rgba[source + 3]!;
+  }
+  return `data:image/bmp;base64,${bytesToBase64(bytes)}`;
+}
+
+function runtimeSurfaceSvg(pkg: PackageDescriptor, properties: Record<string, unknown>): string {
+  const runtimeState = pkg.runtimeState;
+  const surface = runtimeState?.surface;
+  const bytes = runtimeState ? runtimeStateBytes(properties) : undefined;
+  if (!surface || !bytes) return "";
+  if (runtimeState.versionOffset !== undefined && runtimeState.expectedVersion !== undefined &&
+      readRuntimeNumber(bytes, runtimeState.versionOffset, "u32le") !== runtimeState.expectedVersion) return "";
+  const x = numericPackageValue(surface.x, properties, {}, 0);
+  const y = numericPackageValue(surface.y, properties, {}, 0);
+  const w = Math.max(0, numericPackageValue(surface.w, properties, {}, 0));
+  const h = Math.max(0, numericPackageValue(surface.h, properties, {}, 0));
+  const sourceWidth = Math.max(1, Math.trunc(numericPackageValue(surface.sourceWidth, properties, {}, 1)));
+  const sourceHeight = Math.max(1, Math.trunc(numericPackageValue(surface.sourceHeight, properties, {}, 1)));
+  const enabled = surface.enabledOffset === undefined || readRuntimeNumber(bytes, surface.enabledOffset, "u32le") !== 0;
+  const onColor = runtimeColor(surface.onColor, properties, "#ffffff");
+  const offColor = runtimeColor(surface.offColor, properties, "#000000");
+  const [onR, onG, onB] = rgbFromCssHex(onColor);
+  const [offR, offG, offB] = rgbFromCssHex(offColor);
+  const rgba = new Uint8Array(sourceWidth * sourceHeight * 4);
+  const setPixel = (pixel: number, r: number, g: number, b: number) => {
+    const offset = pixel * 4;
+    rgba[offset] = r; rgba[offset + 1] = g; rgba[offset + 2] = b; rgba[offset + 3] = 255;
+  };
+  if (surface.encoding === "character-grid") {
+    const columns = Math.max(1, Math.trunc(Number(properties[surface.columnsProp ?? "columns"]) || sourceWidth));
+    const rows = Math.max(1, Math.trunc(Number(properties[surface.rowsProp ?? "rows"]) || sourceHeight));
+    let markup = "";
+    for (let row = 0; row < rows; row += 1) {
+      const addressBase = row < 2 ? row * 40 : (row - 2) * 40 + 20;
+      let text = "";
+      for (let column = 0; column < columns; column += 1) {
+        const code = enabled ? bytes[surface.payloadOffset + addressBase + column] ?? 32 : 32;
+        text += code >= 32 && code < 127 ? String.fromCharCode(code) : " ";
+      }
+      const rowHeight = h / rows;
+      markup += `<text x="${x + 2}" y="${y + rowHeight * (row + 0.68)}" fill="${escapeXmlText(onColor)}" ` +
+        `font-family="Ubuntu Mono,Consolas,monospace" font-size="${Math.max(4, rowHeight * 0.72)}" ` +
+        `textLength="${Math.max(0, w - 4)}" lengthAdjust="spacingAndGlyphs">${escapeXmlText(text)}</text>`;
+    }
+    return markup;
+  }
+  if (surface.encoding === "mono-page-lsb") {
+    for (let py = 0; py < sourceHeight; py += 1) {
+      for (let px = 0; px < sourceWidth; px += 1) {
+        const source = surface.payloadOffset + Math.floor(py / 8) * sourceWidth + px;
+        const lit = enabled && source < bytes.length && (bytes[source]! & (1 << (py & 7))) !== 0;
+        setPixel(py * sourceWidth + px, lit ? onR : offR, lit ? onG : offG, lit ? onB : offB);
+      }
+    }
+  } else if (surface.encoding === "rgbx32le") {
+    for (let pixel = 0; pixel < sourceWidth * sourceHeight; pixel += 1) {
+      const source = surface.payloadOffset + pixel * 4;
+      if (!enabled || source + 2 >= bytes.length) setPixel(pixel, offR, offG, offB);
+      else setPixel(pixel, bytes[source + 2]!, bytes[source + 1]!, bytes[source]!);
+    }
+  } else if (surface.encoding === "luma8") {
+    for (let pixel = 0; pixel < sourceWidth * sourceHeight; pixel += 1) {
+      const source = surface.payloadOffset + pixel;
+      const luma = enabled && source < bytes.length ? bytes[source]! / 255 : 0;
+      setPixel(
+        pixel,
+        Math.round(offR + (onR - offR) * luma),
+        Math.round(offG + (onG - offG) * luma),
+        Math.round(offB + (onB - offB) * luma),
+      );
+    }
+  } else {
+    // Layout legado MAX7219: [display][register row], MSB à esquerda.
+    for (let py = 0; py < sourceHeight; py += 1) {
+      for (let px = 0; px < sourceWidth; px += 1) {
+        const display = Math.floor(px / 8);
+        const source = surface.payloadOffset + display * 8 + py;
+        const lit = enabled && source < bytes.length && (bytes[source]! & (0x80 >> (px & 7))) !== 0;
+        setPixel(py * sourceWidth + px, lit ? onR : offR, lit ? onG : offG, lit ? onB : offB);
+      }
+    }
+  }
+  if (surface.pixelShape === "circle" && sourceWidth * sourceHeight <= 2048) {
+    const cellW = w / sourceWidth;
+    const cellH = h / sourceHeight;
+    const gap = Math.min(Math.max(0, surface.pixelGap ?? 0), Math.min(cellW, cellH) / 2);
+    let markup = "";
+    for (let py = 0; py < sourceHeight; py += 1) {
+      for (let px = 0; px < sourceWidth; px += 1) {
+        const offset = (py * sourceWidth + px) * 4;
+        const fill = `rgb(${rgba[offset]},${rgba[offset + 1]},${rgba[offset + 2]})`;
+        markup += `<ellipse cx="${x + (px + 0.5) * cellW}" cy="${y + (py + 0.5) * cellH}" ` +
+          `rx="${Math.max(0, cellW / 2 - gap)}" ry="${Math.max(0, cellH / 2 - gap)}" fill="${fill}"/>`;
+      }
+    }
+    return markup;
+  }
+  const image = `<image x="${x}" y="${y}" width="${w}" height="${h}" preserveAspectRatio="none" ` +
+    `style="image-rendering:pixelated" href="${bmpDataUri(sourceWidth, sourceHeight, rgba)}"/>`;
+  if (surface.clipShape !== "ellipse") return image;
+  return `<defs><clipPath id="runtime-surface-clip"><ellipse cx="${x + w / 2}" cy="${y + h / 2}" ` +
+    `rx="${w / 2}" ry="${h / 2}"/></clipPath></defs><g clip-path="url(#runtime-surface-clip)">${image}</g>`;
+}
+
 function svgRound(value: number): number {
   return Math.round(value * 1000) / 1000;
 }
@@ -1297,6 +1493,7 @@ function simulideQtWidgetSvg(widget: SimulideQtWidgetSpec, properties: Record<st
  * escopados + stateProjection inicial). Caso contrário cai para `shapes[]` legado. */
 function packageBodySvg(resolved: ResolvedPackage, componentId?: string, properties?: Record<string, unknown>, hidePins?: boolean): string {
   const pkg = resolved.source;
+  const effectiveProperties = propertiesWithRuntimeState(pkg, properties);
   let markup = packageBackgroundSvg(pkg);
   const scopeId = `simulide-${componentId ? componentId.replace(/[^a-zA-Z0-9_-]/g, "_") : "static"}`;
 
@@ -1305,24 +1502,26 @@ function packageBodySvg(resolved: ResolvedPackage, componentId?: string, propert
     // `hidePins` (variante "board"): pula formas marcadas `hideOnBoard` -- mesmo `m_hidden` real que
     // faz `Push::paint()`/`Switch::paint()` retornarem sem desenhar a barra do atuador (símbolo
     // esquemático-apenas), nunca o corpo/texto do widget clicável em si (ver `PackageShape.hideOnBoard`).
-    for (const shape of simulidePaintToPackageShapes(pkg.simulidePaint, pkg.width, pkg.height, properties ?? {}, scopeId)) {
+    for (const shape of simulidePaintToPackageShapes(pkg.simulidePaint, pkg.width, pkg.height, effectiveProperties, scopeId)) {
       if (hidePins && shape.hideOnBoard) continue;
       markup += packageShapeSvg(shape);
     }
   } else if (pkg.qtWidget) {
-    markup += simulideQtWidgetSvg(pkg.qtWidget, properties ?? {}, scopeId);
+    markup += simulideQtWidgetSvg(pkg.qtWidget, effectiveProperties, scopeId);
   } else if (hasViewSpec && pkg.viewSpec?.overlayPaint === true && (pkg.shapes?.length ?? 0) > 0) {
     // Migração incremental: preserva o corpo legado e sobrepõe somente o widget/interação nova.
-    for (const shape of pkg.shapes ?? []) markup += packageShapeSvg(shape, undefined, properties);
-    markup += viewSpecBodySvg(pkg, componentId!, properties ?? {}, true) ?? "";
+    for (const shape of pkg.shapes ?? []) markup += packageShapeSvg(shape, undefined, effectiveProperties);
+    markup += viewSpecBodySvg(pkg, componentId!, effectiveProperties, true) ?? "";
   } else if (hasViewSpec) {
-    markup += viewSpecBodySvg(pkg, componentId!, properties ?? {}) ?? "";
+    markup += viewSpecBodySvg(pkg, componentId!, effectiveProperties) ?? "";
   } else {
-    for (const shape of pkg.shapes ?? []) markup += packageShapeSvg(shape, undefined, properties);
+    for (const shape of pkg.shapes ?? []) markup += packageShapeSvg(shape, undefined, effectiveProperties);
   }
   if (hasViewSpec && (pkg.simulidePaint || pkg.qtWidget)) {
-    markup += viewSpecBodySvg(pkg, componentId!, properties ?? {}, pkg.viewSpec?.overlayPaint === true) ?? "";
+    markup += viewSpecBodySvg(pkg, componentId!, effectiveProperties, pkg.viewSpec?.overlayPaint === true) ?? "";
   }
+  // Superfície viva sempre por cima da carcaça/tela estática e por baixo de borda/pinos.
+  markup += runtimeSurfaceSvg(pkg, effectiveProperties);
   if (pkg.initialTransform?.rotateDeg) {
     const cx = pkg.initialTransform.cx ?? pkg.width / 2;
     const cy = pkg.initialTransform.cy ?? pkg.height / 2;
@@ -1340,8 +1539,8 @@ function packageBodySvg(resolved: ResolvedPackage, componentId?: string, propert
   // `hidePins`: componente exposto num Board (equivalente ao `Component::setHidden(true,true,true)`
   // real -- ver `packageSymbolSvg`) nunca desenha lead NEM rótulo de pino, só o corpo/fundo acima.
   const pinsMarkup = hidePins ? "" : resolved.pins
-    .filter((pin) => stateVisibleMatches(pin.stateVisible, properties))
-    .map((pin) => packagePinLeadSvg(pin, resolved, pinLabelColor, properties))
+    .filter((pin) => stateVisibleMatches(pin.stateVisible, effectiveProperties))
+    .map((pin) => packagePinLeadSvg(pin, resolved, pinLabelColor, effectiveProperties))
     .join("");
   const instanceScale = packageInstanceScale(properties);
   const packageMarkup = bodyMarkup + pinsMarkup;

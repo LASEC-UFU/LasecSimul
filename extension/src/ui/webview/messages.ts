@@ -106,6 +106,9 @@ export type HostToWebviewMessage =
       };
     }
   | { version: number; type: "componentReadout"; readoutsByComponentId: Record<string, ComponentReadoutValue> }
+  /** Estado opaco de `getComponentState()` para packages com `runtimeState`. O package declara
+   * offsets e encoding; esta mensagem não conhece nenhum dispositivo específico. */
+  | { version: number; type: "componentVisualState"; statesByComponentId: Record<string, string> }
   | { version: number; type: "wireVoltages"; voltagesByWireId: Record<string, number> }
   | { version: number; type: "simulationStatus"; status: SimulationStatus }
   | { version: number; type: "lasecPlotStatus"; componentId: string; opened: boolean; clients: number; error?: string }

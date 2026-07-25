@@ -415,6 +415,8 @@ function t(key: keyof typeof UI_TEXT["pt-BR"]): string {
 }
 
 let readoutsByComponentId: Record<string, ComponentReadoutValue> = {};
+/** Base64 do estado visual vivo, somente para packages que declaram `runtimeState`. */
+let visualStatesByComponentId: Record<string, string> = {};
 // Histórico APROXIMADO (1 amostra por poll de IPC, ~300ms de parede, sem relação com o tempo
 // SIMULADO do circuito) -- só pra pré-visualização PEQUENA no canvas (`scopePanelSvg`/
 // `logicAnalyzerPanelSvg`), onde não compensa buscar o histórico real de alta resolução pra todo
@@ -4594,13 +4596,17 @@ function runtimeSymbolProperties(component: WebviewComponentModel): Record<strin
   const ledState = component.typeId === "outputs.led" || component.typeId === "outputs.led_bar"
     ? { __led_fill: ledFillFor(component) }
     : {};
-  if (readout === undefined && !scopeHistory && !logicHistory && Object.keys(serialState).length === 0 && Object.keys(ledState).length === 0) {
+  const visualState = visualStatesByComponentId[component.id];
+  const runtimeVisualState = visualState ? { __runtime_state: visualState } : {};
+  if (readout === undefined && !scopeHistory && !logicHistory && Object.keys(serialState).length === 0 &&
+      Object.keys(ledState).length === 0 && Object.keys(runtimeVisualState).length === 0) {
     return component.properties;
   }
   return {
     ...component.properties,
     ...serialState,
     ...ledState,
+    ...runtimeVisualState,
     ...(readout === undefined ? {} : { __readout: readout }),
     ...(scopeHistory ? { __history: scopeHistory } : {}),
     ...(logicHistory ? { __history: logicHistory } : {}),
@@ -8587,6 +8593,19 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     if (activePropertyDialogNeedsReadoutRefresh()) refreshOpenPropertyDialog();
   }
 
+  if (message.type === "componentVisualState") {
+    visualStatesByComponentId = message.statesByComponentId;
+    // Mesmo backpressure dos instrumentos: troca somente os símbolos afetados, preservando drag,
+    // seleção, inputs e popups em vez de reconstruir o canvas inteiro a cada framebuffer.
+    if (!isInteractiveGestureInProgress()) {
+      for (const component of state.components) {
+        if (!(component.id in message.statesByComponentId)) continue;
+        const element = componentElementsById.get(component.id);
+        if (element) updateComponentElement(element, component);
+      }
+    }
+  }
+
   if (message.type === "instrumentHistory") {
     if (message.oscope) realScopeHistoryByComponentId.set(message.componentId, message.oscope.channels);
     if (message.logic) realLogicHistoryByComponentId.set(message.componentId, message.logic);
@@ -8644,6 +8663,7 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
       // vazia durante Run/Pause é apenas uma falha transitória e preserva a última cor válida.
       voltagesByWireId = {};
       readoutsByComponentId = {};
+      visualStatesByComponentId = {};
       scopeHistoryByComponentId = {};
       logicHistoryByComponentId = {};
       realScopeHistoryByComponentId.clear();

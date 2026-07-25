@@ -47,6 +47,7 @@
       "editor": "number",
       "default": 128,
       "min": 32,
+      "max": 128,
       "step": 1
     },
     {
@@ -57,7 +58,26 @@
       "editor": "number",
       "default": 128,
       "min": 16,
+      "max": 128,
       "step": 8
+    },
+    {
+      "id": "color",
+      "label": "Cor",
+      "group": "Principal",
+      "valueKind": "string",
+      "editor": "enum",
+      "default": "White",
+      "options": ["White", "Blue", "Yellow"],
+      "optionLabels": ["Branco", "Azul", "Amarelo"]
+    },
+    {
+      "id": "xOffset",
+      "label": "Deslocamento X",
+      "group": "Principal",
+      "valueKind": "boolean",
+      "editor": "checkbox",
+      "default": true
     },
     {
       "id": "i2cAddress",
@@ -69,6 +89,17 @@
       "min": 0,
       "max": 127,
       "step": 1
+    },
+    {
+      "id": "frequency",
+      "label": "Frequencia I2C",
+      "group": "I2C",
+      "unit": "kHz",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 400,
+      "min": 1,
+      "step": 1
     }
   ],
   "limits": {
@@ -76,11 +107,32 @@
     "expectedComplexity": "medium"
   },
   "package": {
-    "width": 88,
-    "height": 144,
+    "width": 140,
+    "height": 152,
     "border": false,
     "background": {
       "kind": "none"
+    },
+    "runtimeState": {
+      "versionOffset": 0,
+      "expectedVersion": 1,
+      "surface": {
+        "encoding": "mono-page-lsb",
+        "x": 6,
+        "y": 6,
+        "w": 128,
+        "h": 128,
+        "sourceWidth": { "prop": "width", "fallback": 128, "min": 1 },
+        "sourceHeight": { "prop": "height", "fallback": 128, "min": 8 },
+        "payloadOffset": 36,
+        "enabledOffset": 16,
+        "onColor": {
+          "prop": "color",
+          "map": { "White": "#f4f8ff", "Blue": "#5aa7ff", "Yellow": "#ffe66a" },
+          "fallback": "#f4f8ff"
+        },
+        "offColor": "#000000"
+      }
     },
     "shapes": [],
     "viewSpec": {
@@ -89,8 +141,8 @@
           "kind": "rect",
           "x": 0,
           "y": 0,
-          "w": 88,
-          "h": 144,
+          "w": 140,
+          "h": 152,
           "rx": 2,
           "ry": 2,
           "fill": "#324664"
@@ -99,13 +151,13 @@
           "kind": "rect",
           "x": 6,
           "y": 6,
-          "w": 76,
-          "h": 132,
+          "w": 128,
+          "h": 128,
           "fill": "#000000"
         },
         {
           "kind": "text",
-          "x": 44,
+          "x": 70,
           "y": -4,
           "value": "__label",
           "fontSize": 6,
@@ -117,7 +169,7 @@
       {
         "id": "scl",
         "x": 22,
-        "y": 144,
+        "y": 152,
         "angle": 90,
         "length": 8,
         "label": "SCL"
@@ -125,7 +177,7 @@
       {
         "id": "sda",
         "x": 30,
-        "y": 144,
+        "y": 152,
         "angle": 90,
         "length": 8,
         "label": "SDA"

@@ -1528,6 +1528,61 @@ import { PackageDescriptor, WebviewComponentModel } from "./model";
     assert(hasRealPinPosition("connectors.bus", "bus-in", props) && hasRealPinPosition("connectors.bus", "bus-out", props), "endpoints vetoriais devem existir");
   });
 
+  await test("runtimeState genérico desenha framebuffer, luma e binding sem case por dispositivo", () => {
+    const state = new Uint8Array(38);
+    const view = new DataView(state.buffer);
+    view.setUint32(0, 1, true);
+    view.setUint32(16, 1, true);
+    view.setUint32(28, 45000, true);
+    state[36] = 0x01;
+    state[37] = 0x80;
+    const encoded = Buffer.from(state).toString("base64");
+
+    registerPackage("test.runtime.mono", {
+      width: 20,
+      height: 12,
+      border: false,
+      pins: [{ id: "state", x: 0, y: 0, angle: 0, length: 0 }],
+      runtimeState: {
+        versionOffset: 0,
+        expectedVersion: 1,
+        surface: {
+          encoding: "mono-page-lsb",
+          x: 0, y: 0, w: 20, h: 12,
+          sourceWidth: 2, sourceHeight: 8,
+          payloadOffset: 36, enabledOffset: 16,
+          onColor: { value: "#ffffff" },
+          offColor: { value: "#000000" },
+        },
+      },
+    });
+    const mono = packageSymbolSvg("test.runtime.mono", { __runtime_state: encoded }, "runtime-mono") ?? "";
+    assert(mono.includes("data:image/bmp;base64,"), `framebuffer monocromático deveria virar uma imagem compacta: ${mono}`);
+
+    registerPackage("test.runtime.luma", {
+      width: 10,
+      height: 10,
+      border: false,
+      pins: [{ id: "state", x: 0, y: 0, angle: 0, length: 0 }],
+      runtimeState: {
+        versionOffset: 0,
+        expectedVersion: 1,
+        surface: {
+          encoding: "luma8",
+          x: 0, y: 0, w: 10, h: 10,
+          sourceWidth: 2, sourceHeight: 1,
+          payloadOffset: 36,
+          onColor: { value: "#ff0000" },
+          offColor: { value: "#000000" },
+          pixelShape: "circle",
+        },
+      },
+    });
+    const luma = packageSymbolSvg("test.runtime.luma", { __runtime_state: encoded }, "runtime-luma") ?? "";
+    assert(luma.includes("rgb(1,0,0)") && luma.includes("rgb(128,0,0)"),
+      `luma8 deveria modular a cor declarativa sem conhecer MAX7219: ${luma}`);
+  });
+
   await test("auditoria do catálogo: todo lead estático nasce no mesmo ponto usado pelo wire", () => {
     const catalogPath = [
       path.resolve(process.cwd(), "..", "project", "schema", "component-catalog.json"),
@@ -1563,5 +1618,7 @@ import { PackageDescriptor, WebviewComponentModel } from "./model";
   registerPackage("test.rich-shapes", undefined);
   registerPackage("test.simulide-paint.fixed-volt", undefined);
   registerPackage("test.simulide-paint.matrix", undefined);
+  registerPackage("test.runtime.mono", undefined);
+  registerPackage("test.runtime.luma", undefined);
   finish();
 })();

@@ -367,6 +367,60 @@ export interface PackageBackground {
   mime?: string;
 }
 
+/** Estado visual binário produzido por `IComponentModel::getState()`.
+ *
+ * O contrato é deliberadamente declarativo e independente de `typeId`: displays, matrizes, LEDs
+ * endereçáveis e atuadores descrevem offsets/encoding no próprio package. A Webview só interpreta
+ * este vocabulário comum; adicionar outro controlador não exige um helper TypeScript específico.
+ */
+export interface PackageRuntimeStateBinding {
+  /** Propriedade efêmera injetada apenas durante o render (ex.: `angle` do servo). */
+  prop: string;
+  offset: number;
+  valueType: "u8" | "u16le" | "u32le" | "i32le" | "f64le";
+  scale?: number;
+  add?: number;
+}
+
+export interface PackageRuntimeStateColor {
+  value?: string;
+  prop?: string;
+  map?: Record<string, string>;
+  fallback?: string;
+}
+
+export interface PackageRuntimeSurface {
+  /** Layout do payload depois de `payloadOffset`. */
+  encoding: "mono-page-lsb" | "rgbx32le" | "luma8" | "max7219" | "character-grid";
+  x: PackageNumberValue;
+  y: PackageNumberValue;
+  w: PackageNumberValue;
+  h: PackageNumberValue;
+  sourceWidth: PackageNumberValue;
+  sourceHeight: PackageNumberValue;
+  payloadOffset: number;
+  /** Campo u32 LE: zero apaga a superfície. Ausente significa sempre visível. */
+  enabledOffset?: number;
+  onColor?: PackageRuntimeStateColor;
+  offColor?: PackageRuntimeStateColor;
+  /** `circle` reproduz matrizes de LEDs; `rect` é o framebuffer padrão. */
+  pixelShape?: "rect" | "circle";
+  pixelGap?: number;
+  /** Recorte geométrico da superfície (ex.: vidro circular do GC9A01A). */
+  clipShape?: "rect" | "ellipse";
+  /** Somente character-grid: endereçamento DDRAM compatível com linhas 1/2/3/4. */
+  columnsProp?: string;
+  rowsProp?: string;
+}
+
+export interface PackageRuntimeStateSpec {
+  /** Validação opcional de versão antes de interpretar offsets. */
+  versionOffset?: number;
+  expectedVersion?: number;
+  bindings?: PackageRuntimeStateBinding[];
+  surface?: PackageRuntimeSurface;
+}
+
 export interface SimulidePaintBounds {
   x: number;
   y: number;
@@ -735,6 +789,8 @@ export interface PackageDescriptor {
   initialTransform?: { rotateDeg?: number; cx?: number; cy?: number };
   border?: boolean;
   background?: PackageBackground;
+  /** Projeção genérica do estado binário vivo (`getComponentState`) sobre o package. */
+  runtimeState?: PackageRuntimeStateSpec;
   /** Estilo visual dos pinos do package. `packagePin` replica `PackagePin::paint()` do SimulIDE:
    * depois do lead normal (`Pin::paint()`), desenha uma pequena cruz cinza no ponto onde o pino toca
    * o corpo do encapsulamento/subcircuito. */

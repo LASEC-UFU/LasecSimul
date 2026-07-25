@@ -601,6 +601,34 @@ export async function pollInstrumentReadouts(expectedGeneration?: number): Promi
   state.schematicPanel.postMessage({ version: 1, type: "componentReadout", readoutsByComponentId });
 }
 
+/** Atualiza qualquer package que declare `runtimeState`, sem conhecer SSD1306, TFT, servo ou outro
+ * typeId. O manifesto decide como os bytes serão projetados; o host apenas transporta o blob em
+ * base64 e mantém uma única chamada batelada ao Core. */
+export async function pollComponentVisualStates(expectedGeneration?: number): Promise<void> {
+  if (!state.coreClient || !state.schematicPanel) return;
+  const components = state.schematicState.components.filter((component) => {
+    const entry = findCatalogEntry(component.typeId);
+    return Boolean(entry?.package?.runtimeState || entry?.boardPackage?.runtimeState);
+  });
+  if (components.length === 0) return;
+  const items = components.flatMap((component) => {
+    const instanceId = coreInstanceIdByComponentId.get(component.id);
+    return instanceId ? [{ key: component.id, instanceId }] : [];
+  });
+  if (items.length === 0) return;
+  let states: Record<string, Buffer>;
+  try {
+    states = await state.coreClient.getComponentStates(items);
+  } catch {
+    return;
+  }
+  if (expectedGeneration !== undefined && expectedGeneration !== telemetryGeneration) return;
+  const statesByComponentId = Object.fromEntries(
+    Object.entries(states).map(([componentId, bytes]) => [componentId, bytes.toString("base64")])
+  );
+  state.schematicPanel.postMessage({ version: 1, type: "componentVisualState", statesByComponentId });
+}
+
 /** Quais componentes internos de um `.lssubcircuit` são "exposto + gráfico + com `readoutFormat`"
  * (candidatos a acender de verdade no overlay de Modo Placa) -- cacheado por `sourceId` pra não bater
  * disco (`gatherInternalComponentSnapshots` lê o arquivo JSON inteiro) a cada tick de telemetria
@@ -770,6 +798,7 @@ export function startVoltageReadoutPolling(): void {
     telemetryPollInFlight = true;
     void Promise.allSettled([
       pollInstrumentReadouts(generation),
+      pollComponentVisualStates(generation),
       pollWireVoltages(generation),
       pollSimulationRate(generation),
       pollBoardOverlayReadouts(generation),
@@ -791,6 +820,7 @@ export function stopVoltageReadoutPolling(clearVisuals = true): void {
   // de deixar a última cor (vermelho/azul) congelada, o que pareceria que ainda está simulando.
   state.schematicPanel?.postMessage({ version: 1, type: "wireVoltages", voltagesByWireId: {} });
   state.schematicPanel?.postMessage({ version: 1, type: "componentReadout", readoutsByComponentId: {} });
+  state.schematicPanel?.postMessage({ version: 1, type: "componentVisualState", statesByComponentId: {} });
   state.schematicPanel?.postMessage({ version: 1, type: "simulationRate", rate: undefined });
   state.schematicPanel?.postMessage({ version: 1, type: "mcuRealTimeRatio", rate: undefined });
   state.schematicPanel?.postMessage({ version: 1, type: "boardOverlayReadouts", readoutsByKey: {} });

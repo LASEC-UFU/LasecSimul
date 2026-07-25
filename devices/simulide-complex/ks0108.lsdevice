@@ -4,271 +4,73 @@
   "graphical": true,
   "name": "KS0108",
   "language": "pt-BR",
-  "translations": {
-    "en": {
-      "name": "KS0108"
-    }
-  },
-  "abiVersion": {
-    "major": 3,
-    "minor": 0
-  },
+  "translations": { "en": { "name": "KS0108" } },
+  "abiVersion": { "major": 3, "minor": 0 },
   "nativeEntry": {
     "win32-x64": "build/win-x64/device.dll",
     "linux-x64": "build/linux-x64/device.so",
     "darwin-universal": "build/macos-universal/device.dylib"
   },
   "pins": [
-    {
-      "id": "rs",
-      "kind": "DIGITAL_IN",
-      "x": 16,
-      "y": 8,
-      "angle": 270,
-      "length": 8,
-      "label": "RS"
-    },
-    {
-      "id": "rw",
-      "kind": "DIGITAL_IN",
-      "x": 24,
-      "y": 8,
-      "angle": 270,
-      "length": 8,
-      "label": "RW"
-    },
-    {
-      "id": "e",
-      "kind": "DIGITAL_IN",
-      "x": 32,
-      "y": 8,
-      "angle": 270,
-      "length": 8,
-      "label": "E"
-    },
-    {
-      "id": "d0",
-      "kind": "DIGITAL_BIDIR",
-      "x": 40,
-      "y": 8,
-      "angle": 270,
-      "length": 8,
-      "label": "D0"
-    },
-    {
-      "id": "d1",
-      "kind": "DIGITAL_BIDIR",
-      "x": 48,
-      "y": 8,
-      "angle": 270,
-      "length": 8,
-      "label": "D1"
-    },
-    {
-      "id": "d2",
-      "kind": "DIGITAL_BIDIR",
-      "x": 56,
-      "y": 8,
-      "angle": 270,
-      "length": 8,
-      "label": "D2"
-    },
-    {
-      "id": "d3",
-      "kind": "DIGITAL_BIDIR",
-      "x": 64,
-      "y": 8,
-      "angle": 270,
-      "length": 8,
-      "label": "D3"
-    },
-    {
-      "id": "d4",
-      "kind": "DIGITAL_BIDIR",
-      "x": 72,
-      "y": 8,
-      "angle": 270,
-      "length": 8,
-      "label": "D4"
-    },
-    {
-      "id": "d5",
-      "kind": "DIGITAL_BIDIR",
-      "x": 80,
-      "y": 8,
-      "angle": 270,
-      "length": 8,
-      "label": "D5"
-    },
-    {
-      "id": "d6",
-      "kind": "DIGITAL_BIDIR",
-      "x": 88,
-      "y": 8,
-      "angle": 270,
-      "length": 8,
-      "label": "D6"
-    },
-    {
-      "id": "d7",
-      "kind": "DIGITAL_BIDIR",
-      "x": 96,
-      "y": 8,
-      "angle": 270,
-      "length": 8,
-      "label": "D7"
-    }
+    { "id": "d0", "kind": "DIGITAL_BIDIR", "x": 96, "y": 108, "angle": 90, "length": 8, "label": "D0" },
+    { "id": "d1", "kind": "DIGITAL_BIDIR", "x": 88, "y": 108, "angle": 90, "length": 8, "label": "D1" },
+    { "id": "d2", "kind": "DIGITAL_BIDIR", "x": 80, "y": 108, "angle": 90, "length": 8, "label": "D2" },
+    { "id": "d3", "kind": "DIGITAL_BIDIR", "x": 72, "y": 108, "angle": 90, "length": 8, "label": "D3" },
+    { "id": "d4", "kind": "DIGITAL_BIDIR", "x": 64, "y": 108, "angle": 90, "length": 8, "label": "D4" },
+    { "id": "d5", "kind": "DIGITAL_BIDIR", "x": 56, "y": 108, "angle": 90, "length": 8, "label": "D5" },
+    { "id": "d6", "kind": "DIGITAL_BIDIR", "x": 48, "y": 108, "angle": 90, "length": 8, "label": "D6" },
+    { "id": "d7", "kind": "DIGITAL_BIDIR", "x": 40, "y": 108, "angle": 90, "length": 8, "label": "D7" },
+    { "id": "rst", "kind": "DIGITAL_IN", "x": 18, "y": 108, "angle": 90, "length": 8, "label": "RST" },
+    { "id": "cs2", "kind": "DIGITAL_IN", "x": 26, "y": 108, "angle": 90, "length": 8, "label": "CS2" },
+    { "id": "cs1", "kind": "DIGITAL_IN", "x": 34, "y": 108, "angle": 90, "length": 8, "label": "CS1" },
+    { "id": "en", "kind": "DIGITAL_IN", "x": 114, "y": 108, "angle": 90, "length": 8, "label": "EN" },
+    { "id": "rw", "kind": "DIGITAL_IN", "x": 122, "y": 108, "angle": 90, "length": 8, "label": "RW" },
+    { "id": "rs", "kind": "DIGITAL_IN", "x": 130, "y": 108, "angle": 90, "length": 8, "label": "RS" }
   ],
-  "properties": [],
-  "limits": {
-    "stepTimeoutMs": 8,
-    "expectedComplexity": "medium"
-  },
+  "properties": [
+    { "id": "csActiveLow", "label": "CS ativo em nível baixo", "group": "Principal", "valueKind": "boolean", "editor": "checkbox", "default": false }
+  ],
+  "limits": { "stepTimeoutMs": 8, "expectedComplexity": "medium" },
   "package": {
     "width": 148,
-    "height": 100,
+    "height": 108,
     "border": false,
-    "background": {
-      "kind": "none"
+    "background": { "kind": "none" },
+    "runtimeState": {
+      "versionOffset": 0,
+      "expectedVersion": 1,
+      "surface": {
+        "encoding": "mono-page-lsb", "x": 10, "y": 10, "w": 128, "h": 64,
+        "sourceWidth": 128, "sourceHeight": 64, "payloadOffset": 36, "enabledOffset": 16,
+        "onColor": "#101810", "offColor": "#c8d7b4"
+      }
     },
-    "shapes": [],
     "viewSpec": {
       "paint": [
-        {
-          "kind": "rect",
-          "x": 0,
-          "y": 8,
-          "w": 148,
-          "h": 92,
-          "rx": 2,
-          "ry": 2,
-          "fill": "#324664"
-        },
-        {
-          "kind": "rect",
-          "x": 8,
-          "y": 18,
-          "w": 132,
-          "h": 74,
-          "rx": 8,
-          "ry": 8,
-          "fill": "#c8dcb4"
-        },
-        {
-          "kind": "rect",
-          "x": 14,
-          "y": 24,
-          "w": 120,
-          "h": 62,
-          "fill": "#000000"
-        },
-        {
-          "kind": "text",
-          "x": 74,
-          "y": 4,
-          "value": "__label",
-          "fontSize": 6,
-          "color": "#0000aa"
-        }
+        { "kind": "rect", "x": 0, "y": 0, "w": 148, "h": 100, "rx": 2, "ry": 2, "fill": "#324664" },
+        { "kind": "rect", "x": 4, "y": 4, "w": 140, "h": 76, "rx": 8, "ry": 8, "fill": "#c8dcb4" },
+        { "kind": "rect", "x": 10, "y": 10, "w": 128, "h": 64, "fill": "#c8d7b4" },
+        { "kind": "text", "x": 74, "y": -4, "value": "__label", "fontSize": 6, "color": "#0000aa" }
       ]
     },
     "pins": [
-      {
-        "id": "rs",
-        "x": 16,
-        "y": 8,
-        "angle": 270,
-        "length": 8,
-        "label": "RS"
-      },
-      {
-        "id": "rw",
-        "x": 24,
-        "y": 8,
-        "angle": 270,
-        "length": 8,
-        "label": "RW"
-      },
-      {
-        "id": "e",
-        "x": 32,
-        "y": 8,
-        "angle": 270,
-        "length": 8,
-        "label": "E"
-      },
-      {
-        "id": "d0",
-        "x": 40,
-        "y": 8,
-        "angle": 270,
-        "length": 8,
-        "label": "D0"
-      },
-      {
-        "id": "d1",
-        "x": 48,
-        "y": 8,
-        "angle": 270,
-        "length": 8,
-        "label": "D1"
-      },
-      {
-        "id": "d2",
-        "x": 56,
-        "y": 8,
-        "angle": 270,
-        "length": 8,
-        "label": "D2"
-      },
-      {
-        "id": "d3",
-        "x": 64,
-        "y": 8,
-        "angle": 270,
-        "length": 8,
-        "label": "D3"
-      },
-      {
-        "id": "d4",
-        "x": 72,
-        "y": 8,
-        "angle": 270,
-        "length": 8,
-        "label": "D4"
-      },
-      {
-        "id": "d5",
-        "x": 80,
-        "y": 8,
-        "angle": 270,
-        "length": 8,
-        "label": "D5"
-      },
-      {
-        "id": "d6",
-        "x": 88,
-        "y": 8,
-        "angle": 270,
-        "length": 8,
-        "label": "D6"
-      },
-      {
-        "id": "d7",
-        "x": 96,
-        "y": 8,
-        "angle": 270,
-        "length": 8,
-        "label": "D7"
-      }
+      { "id": "d0", "x": 96, "y": 108, "angle": 90, "length": 8, "label": "D0" },
+      { "id": "d1", "x": 88, "y": 108, "angle": 90, "length": 8, "label": "D1" },
+      { "id": "d2", "x": 80, "y": 108, "angle": 90, "length": 8, "label": "D2" },
+      { "id": "d3", "x": 72, "y": 108, "angle": 90, "length": 8, "label": "D3" },
+      { "id": "d4", "x": 64, "y": 108, "angle": 90, "length": 8, "label": "D4" },
+      { "id": "d5", "x": 56, "y": 108, "angle": 90, "length": 8, "label": "D5" },
+      { "id": "d6", "x": 48, "y": 108, "angle": 90, "length": 8, "label": "D6" },
+      { "id": "d7", "x": 40, "y": 108, "angle": 90, "length": 8, "label": "D7" },
+      { "id": "rst", "x": 18, "y": 108, "angle": 90, "length": 8, "label": "RST" },
+      { "id": "cs2", "x": 26, "y": 108, "angle": 90, "length": 8, "label": "CS2" },
+      { "id": "cs1", "x": 34, "y": 108, "angle": 90, "length": 8, "label": "CS1" },
+      { "id": "en", "x": 114, "y": 108, "angle": 90, "length": 8, "label": "EN" },
+      { "id": "rw", "x": 122, "y": 108, "angle": 90, "length": 8, "label": "RW" },
+      { "id": "rs", "x": 130, "y": 108, "angle": 90, "length": 8, "label": "RS" }
     ]
   },
   "icon": "ks0108",
-  "folderPath": [
-    "Saidas",
-    "Displays"
-  ],
-  "help": {
-    "description": "Display gráfico LCD baseado no controlador KS0108."
-  }
+  "folderPath": ["Saidas", "Displays"],
+  "help": { "description": "LCD gráfico KS0108 completo, com reset, dois chip-selects e barramento bidirecional." }
 }

@@ -9,6 +9,10 @@ import {
   PackageNumberExpression,
   PackageNumberValue,
   PackagePin,
+  PackageRuntimeStateBinding,
+  PackageRuntimeStateColor,
+  PackageRuntimeStateSpec,
+  PackageRuntimeSurface,
   PackageShape,
   SimulidePaintGradient,
   SimulidePaintPrimitive,
@@ -878,6 +882,92 @@ function sanitizeDynamicLayout(value: unknown): PackageDynamicLayout | undefined
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
+function sanitizeRuntimeStateColor(value: unknown): PackageRuntimeStateColor | undefined {
+  if (typeof value === "string" && value.trim()) return { value: value.trim() };
+  if (typeof value !== "object" || value === null) return undefined;
+  const raw = value as Record<string, unknown>;
+  const map = typeof raw.map === "object" && raw.map !== null
+    ? Object.fromEntries(
+        Object.entries(raw.map as Record<string, unknown>)
+          .filter((entry): entry is [string, string] => typeof entry[1] === "string" && Boolean(entry[1].trim()))
+      )
+    : undefined;
+  const result: PackageRuntimeStateColor = {
+    ...(sanitizeOptionalString(raw.value) ? { value: sanitizeOptionalString(raw.value) } : {}),
+    ...(sanitizeOptionalString(raw.prop) ? { prop: sanitizeOptionalString(raw.prop) } : {}),
+    ...(map && Object.keys(map).length > 0 ? { map } : {}),
+    ...(sanitizeOptionalString(raw.fallback) ? { fallback: sanitizeOptionalString(raw.fallback) } : {}),
+  };
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function sanitizeRuntimeStateBinding(value: unknown): PackageRuntimeStateBinding | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const raw = value as Record<string, unknown>;
+  const prop = sanitizeOptionalString(raw.prop);
+  const offset = finiteNumber(raw.offset);
+  const valueType = raw.valueType;
+  if (!prop || offset === undefined || offset < 0 || !Number.isInteger(offset)) return undefined;
+  if (valueType !== "u8" && valueType !== "u16le" && valueType !== "u32le" &&
+      valueType !== "i32le" && valueType !== "f64le") return undefined;
+  return {
+    prop,
+    offset,
+    valueType,
+    ...(finiteNumber(raw.scale) !== undefined ? { scale: finiteNumber(raw.scale) } : {}),
+    ...(finiteNumber(raw.add) !== undefined ? { add: finiteNumber(raw.add) } : {}),
+  };
+}
+
+function sanitizeRuntimeSurface(value: unknown): PackageRuntimeSurface | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const raw = value as Record<string, unknown>;
+  const encoding = raw.encoding;
+  if (encoding !== "mono-page-lsb" && encoding !== "rgbx32le" && encoding !== "luma8" &&
+      encoding !== "max7219" && encoding !== "character-grid") return undefined;
+  const x = sanitizeNumberValue(raw.x);
+  const y = sanitizeNumberValue(raw.y);
+  const w = sanitizeNumberValue(raw.w);
+  const h = sanitizeNumberValue(raw.h);
+  const sourceWidth = sanitizeNumberValue(raw.sourceWidth);
+  const sourceHeight = sanitizeNumberValue(raw.sourceHeight);
+  const payloadOffset = finiteNumber(raw.payloadOffset);
+  if (x === undefined || y === undefined || w === undefined || h === undefined ||
+      sourceWidth === undefined || sourceHeight === undefined ||
+      payloadOffset === undefined || payloadOffset < 0 || !Number.isInteger(payloadOffset)) return undefined;
+  const enabledOffset = finiteNumber(raw.enabledOffset);
+  return {
+    encoding,
+    x, y, w, h, sourceWidth, sourceHeight, payloadOffset,
+    ...(enabledOffset !== undefined && enabledOffset >= 0 && Number.isInteger(enabledOffset) ? { enabledOffset } : {}),
+    ...(sanitizeRuntimeStateColor(raw.onColor) ? { onColor: sanitizeRuntimeStateColor(raw.onColor) } : {}),
+    ...(sanitizeRuntimeStateColor(raw.offColor) ? { offColor: sanitizeRuntimeStateColor(raw.offColor) } : {}),
+    ...(raw.pixelShape === "circle" || raw.pixelShape === "rect" ? { pixelShape: raw.pixelShape } : {}),
+    ...(finiteNumber(raw.pixelGap) !== undefined ? { pixelGap: Math.max(0, finiteNumber(raw.pixelGap)!) } : {}),
+    ...(raw.clipShape === "ellipse" || raw.clipShape === "rect" ? { clipShape: raw.clipShape } : {}),
+    ...(sanitizeOptionalString(raw.columnsProp) ? { columnsProp: sanitizeOptionalString(raw.columnsProp) } : {}),
+    ...(sanitizeOptionalString(raw.rowsProp) ? { rowsProp: sanitizeOptionalString(raw.rowsProp) } : {}),
+  };
+}
+
+function sanitizeRuntimeState(value: unknown): PackageRuntimeStateSpec | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const raw = value as Record<string, unknown>;
+  const versionOffset = finiteNumber(raw.versionOffset);
+  const expectedVersion = finiteNumber(raw.expectedVersion);
+  const bindings = Array.isArray(raw.bindings)
+    ? raw.bindings.map(sanitizeRuntimeStateBinding).filter((item): item is PackageRuntimeStateBinding => Boolean(item))
+    : [];
+  const surface = sanitizeRuntimeSurface(raw.surface);
+  const result: PackageRuntimeStateSpec = {
+    ...(versionOffset !== undefined && versionOffset >= 0 && Number.isInteger(versionOffset) ? { versionOffset } : {}),
+    ...(expectedVersion !== undefined && Number.isInteger(expectedVersion) ? { expectedVersion } : {}),
+    ...(bindings.length > 0 ? { bindings } : {}),
+    ...(surface ? { surface } : {}),
+  };
+  return bindings.length > 0 || surface ? result : undefined;
+}
+
 export function sanitizePackage(value: unknown, assetBasePath?: string): PackageDescriptor | undefined {
   if (typeof value !== "object" || value === null) return undefined;
   const raw = value as Record<string, unknown>;
@@ -931,13 +1021,14 @@ export function sanitizePackage(value: unknown, assetBasePath?: string): Package
   const qtWidget = sanitizeSimulideQtWidgetSpec(raw.qtWidget);
 
   const background = sanitizePackageBackground(raw.background, assetBasePath);
+  const runtimeState = sanitizeRuntimeState(raw.runtimeState);
 
   // Um descritor sem pino algum ainda é válido quando tem OUTRO conteúdo visual real (shapes/
   // background/viewSpec) -- o Ícone do subcircuito (Modo Ícone) NUNCA tem pinos por definição
   // (ver `subcircuitDocument.ts`), então exigir pelo menos 1 pino aqui descartaria todo ícone
   // silenciosamente. Só um descritor totalmente vazio (nem pino, nem forma alguma) é tratado como
   // ausente/não-autorado.
-  if (pins.length === 0 && !dynamicLayout?.pinGroups?.length && shapes.length === 0 && !background && !viewSpec && !simulidePaint) {
+  if (pins.length === 0 && !dynamicLayout?.pinGroups?.length && shapes.length === 0 && !background && !viewSpec && !simulidePaint && !runtimeState) {
     return undefined;
   }
 
@@ -956,6 +1047,7 @@ export function sanitizePackage(value: unknown, assetBasePath?: string): Package
       : undefined,
     border: typeof raw.border === "boolean" ? raw.border : undefined,
     background,
+    runtimeState,
     pinMarker: raw.pinMarker === "packagePin" ? "packagePin" : undefined,
     shapes,
     simulidePaint,

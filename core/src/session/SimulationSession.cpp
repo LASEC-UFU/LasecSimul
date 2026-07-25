@@ -33,6 +33,28 @@ constexpr uint32_t kMaxNonlinearIterations = 50;
 // Scheduler (5-20ms) pra nunca excluir por engano um MCU genuinamente lento mas ainda progredindo.
 // Ponto de partida a refinar com medição real, não considerado definitivo.
 constexpr auto kStaleMcuTimeout = std::chrono::milliseconds(1000);
+constexpr size_t kMaxComponentStateBytes = 16u * 1024u * 1024u;
+
+std::vector<uint8_t> readComponentStateWithGrowth(
+    IComponentModel& component,
+    size_t initialCapacity,
+    bool telemetry) {
+    std::vector<uint8_t> buffer(initialCapacity);
+    const auto read = [&](uint8_t* out, size_t cap) {
+        return telemetry ? component.getTelemetryState(out, cap) : component.getState(out, cap);
+    };
+    size_t written = read(buffer.data(), buffer.size());
+    if (written > buffer.size()) {
+        if (written > kMaxComponentStateBytes)
+            throw std::runtime_error("estado de componente excede limite de 16 MiB");
+        buffer.resize(written);
+        written = read(buffer.data(), buffer.size());
+        if (written > buffer.size())
+            throw std::runtime_error("estado de componente mudou de tamanho durante a leitura");
+    }
+    buffer.resize(written);
+    return buffer;
+}
 
 std::optional<std::string> validationError(const char* code, std::string message) {
     return std::string(code) + "|" + std::move(message);
@@ -953,10 +975,7 @@ std::vector<uint8_t> SimulationSession::getComponentState(uint32_t componentInde
     // bytes/amostra ~= 32KiB, ver Oscope.hpp) -- componentes com estado pequeno (a maioria) só
     // usam uma fração disto; `getState()` sempre devolve só os bytes realmente escritos, então
     // este buffer maior não muda o tamanho da resposta de quem já era pequeno.
-    std::vector<uint8_t> buffer(65536);
-    const size_t written = instance->getState(buffer.data(), buffer.size());
-    buffer.resize(written);
-    return buffer;
+    return readComponentStateWithGrowth(*instance, 65536, false);
     });
     if (!result) throw std::runtime_error("simulacao ocupada; telemetria adiada");
     return std::move(*result);
@@ -985,10 +1004,7 @@ std::vector<std::vector<uint8_t>> SimulationSession::getComponentTelemetryStates
                 states.emplace_back(compact.begin(), compact.begin() + compactWritten);
                 continue;
             }
-            std::vector<uint8_t> fallback(65536);
-            const size_t written = instance->getTelemetryState(fallback.data(), fallback.size());
-            fallback.resize(written);
-            states.push_back(std::move(fallback));
+            states.push_back(readComponentStateWithGrowth(*instance, 65536, true));
         }
         return states;
     });

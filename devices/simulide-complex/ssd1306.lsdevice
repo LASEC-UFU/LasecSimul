@@ -47,6 +47,7 @@
       "editor": "number",
       "default": 128,
       "min": 32,
+      "max": 128,
       "step": 1
     },
     {
@@ -57,7 +58,26 @@
       "editor": "number",
       "default": 64,
       "min": 16,
+      "max": 64,
       "step": 8
+    },
+    {
+      "id": "color",
+      "label": "Cor",
+      "group": "Principal",
+      "valueKind": "string",
+      "editor": "enum",
+      "default": "White",
+      "options": ["White", "Blue", "Yellow"],
+      "optionLabels": ["Branco", "Azul", "Amarelo"]
+    },
+    {
+      "id": "imageRotated",
+      "label": "Imagem rotacionada",
+      "group": "Principal",
+      "valueKind": "boolean",
+      "editor": "checkbox",
+      "default": true
     },
     {
       "id": "i2cAddress",
@@ -68,6 +88,17 @@
       "default": 60,
       "min": 0,
       "max": 127,
+      "step": 1
+    },
+    {
+      "id": "frequency",
+      "label": "Frequencia I2C",
+      "group": "I2C",
+      "unit": "kHz",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 400,
+      "min": 1,
       "step": 1
     }
   ],
@@ -81,6 +112,27 @@
     "border": false,
     "background": {
       "kind": "none"
+    },
+    "runtimeState": {
+      "versionOffset": 0,
+      "expectedVersion": 1,
+      "surface": {
+        "encoding": "mono-page-lsb",
+        "x": 6,
+        "y": 6,
+        "w": 128,
+        "h": 64,
+        "sourceWidth": { "prop": "width", "fallback": 128, "min": 1 },
+        "sourceHeight": { "prop": "height", "fallback": 64, "min": 8 },
+        "payloadOffset": 36,
+        "enabledOffset": 16,
+        "onColor": {
+          "prop": "color",
+          "map": { "White": "#f4f8ff", "Blue": "#5aa7ff", "Yellow": "#ffe66a" },
+          "fallback": "#f4f8ff"
+        },
+        "offColor": "#000000"
+      }
     },
     "shapes": [],
     "viewSpec": {

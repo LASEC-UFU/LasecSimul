@@ -98,6 +98,15 @@
     "background": {
       "kind": "none"
     },
+    "runtimeState": {
+      "versionOffset": 0, "expectedVersion": 1,
+      "surface": {
+        "encoding": "rgbx32le", "x": 6, "y": 6, "w": 132, "h": 162,
+        "sourceWidth": { "prop": "width", "fallback": 132, "min": 1 },
+        "sourceHeight": { "prop": "height", "fallback": 162, "min": 1 },
+        "payloadOffset": 36, "enabledOffset": 16, "offColor": "#000000"
+      }
+    },
     "shapes": [],
     "viewSpec": {
       "paint": [

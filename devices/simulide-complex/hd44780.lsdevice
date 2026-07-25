@@ -152,6 +152,25 @@
     "background": {
       "kind": "none"
     },
+    "runtimeState": {
+      "versionOffset": 0,
+      "expectedVersion": 1,
+      "surface": {
+        "encoding": "character-grid",
+        "x": 10,
+        "y": 22,
+        "w": 190,
+        "h": 41,
+        "sourceWidth": { "prop": "columns", "fallback": 16, "min": 1 },
+        "sourceHeight": { "prop": "rows", "fallback": 2, "min": 1 },
+        "payloadOffset": 36,
+        "enabledOffset": 16,
+        "columnsProp": "columns",
+        "rowsProp": "rows",
+        "onColor": "#101810",
+        "offColor": "#c8dcb4"
+      }
+    },
     "shapes": [],
     "viewSpec": {
       "paint": [
