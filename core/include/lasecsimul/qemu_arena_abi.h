@@ -1,5 +1,10 @@
 /*
- * QemuArena ABI v3 — mesma origem de v2 (espelho de `qemuArena_t` em
+ * QemuArena ABI v4 — o payload de transporte permanece binariamente idêntico à v3, mas agora é
+ * precedido por `LsdnQemuArenaDescriptor`: magic, versão, tamanhos, profundidade da fila,
+ * capacidades e handshake Core/QEMU. Isso rejeita um executável incompatível antes de consumir
+ * eventos. `LASECSIMUL_QEMU_ARENA_VERSION=3` preserva o mapping v3 puro como rollback.
+ *
+ * A ABI v3 tem a mesma origem de v2 (espelho de `qemuArena_t` em
  * C:\SourceCode\qemu_lasecSimul\softmmu\simuliface.h, fork QEMU real,
  * github.com/Arcachofo/qemu_simulide), agora estendida com uma fila circular de escritas
  * (PERF-13, docs/33-plano-revisao-arquitetural-core.md, seção 5.3, Alternativa A).
@@ -80,6 +85,19 @@ typedef enum LsdnSimAction {
  * revisão arquitetural (docs/33-*.md, seção 5.3); "precisa ser validado por benchmark" antes de
  * considerar definitivo, não é um número medido. */
 #define LSDN_QEMU_ARENA_QUEUE_DEPTH 32
+#define LSDN_QEMU_ARENA_ABI_MAGIC UINT64_C(0x4c53444e51415234) /* "LSDNQAR4" */
+#define LSDN_QEMU_ARENA_ABI_MAJOR 4
+#define LSDN_QEMU_ARENA_ABI_MINOR 0
+
+#define LSDN_QEMU_ARENA_CAP_WRITE_QUEUE           (UINT64_C(1) << 0)
+#define LSDN_QEMU_ARENA_CAP_ORDERED_EVENTS        (UINT64_C(1) << 1)
+#define LSDN_QEMU_ARENA_CAP_SYNC_READ             (UINT64_C(1) << 2)
+#define LSDN_QEMU_ARENA_CAP_MTTCG_MPSC_SERIALIZED (UINT64_C(1) << 3)
+#define LSDN_QEMU_ARENA_CAPABILITIES                                          \
+    (LSDN_QEMU_ARENA_CAP_WRITE_QUEUE | LSDN_QEMU_ARENA_CAP_ORDERED_EVENTS |   \
+     LSDN_QEMU_ARENA_CAP_SYNC_READ |                                           \
+     LSDN_QEMU_ARENA_CAP_MTTCG_MPSC_SERIALIZED)
+#define LSDN_QEMU_ARENA_REQUIRED_CAPABILITIES LSDN_QEMU_ARENA_CAPABILITIES
 
 /* Layout EXATO de qemuQueueEntry_t (simuliface.h) -- não reordenar, não inserir campo. */
 typedef struct LsdnQemuQueueEntry {
@@ -107,6 +125,46 @@ typedef struct LsdnQemuArena {
     int64_t  loop_timeout_ns; /* ajustado pelo Core conforme a frequência de clock do chip */
     double   ps_per_inst;
 } LsdnQemuArena;
+
+typedef struct LsdnQemuArenaDescriptor {
+    uint64_t magic;
+    uint32_t abiMajor;
+    uint32_t abiMinor;
+    uint64_t descriptorSize;
+    uint64_t arenaSize;
+    uint64_t transportSize;
+    uint64_t queueDepth;
+    uint64_t coreCapabilities;
+    uint64_t qemuCapabilities;
+    uint64_t negotiatedCapabilities;
+    uint64_t coreReady;
+    uint64_t qemuReady;
+} LsdnQemuArenaDescriptor;
+
+typedef struct LsdnQemuArenaV4Mapping {
+    LsdnQemuArenaDescriptor descriptor;
+    LsdnQemuArena transport;
+} LsdnQemuArenaV4Mapping;
+
+#if defined(__cplusplus)
+static_assert(sizeof(LsdnQemuQueueEntry) == 32,
+              "QEMU arena queue entry ABI changed");
+static_assert(sizeof(LsdnQemuArena) == 1128,
+              "QEMU arena v3 payload ABI changed");
+static_assert(sizeof(LsdnQemuArenaDescriptor) == 88,
+              "QEMU arena v4 descriptor ABI changed");
+static_assert(sizeof(LsdnQemuArenaV4Mapping) == 1216,
+              "QEMU arena v4 mapping ABI changed");
+#else
+_Static_assert(sizeof(LsdnQemuQueueEntry) == 32,
+               "QEMU arena queue entry ABI changed");
+_Static_assert(sizeof(LsdnQemuArena) == 1128,
+               "QEMU arena v3 payload ABI changed");
+_Static_assert(sizeof(LsdnQemuArenaDescriptor) == 88,
+               "QEMU arena v4 descriptor ABI changed");
+_Static_assert(sizeof(LsdnQemuArenaV4Mapping) == 1216,
+               "QEMU arena v4 mapping ABI changed");
+#endif
 
 #ifdef __cplusplus
 }

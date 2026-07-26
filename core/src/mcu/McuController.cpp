@@ -2,12 +2,14 @@
 
 #include <algorithm>
 #include <charconv>
+#include <chrono>
 #include <cstdlib>
 #include <iomanip>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string_view>
+#include <thread>
 
 #if defined(_WIN32)
 #include <winsock2.h>
@@ -193,6 +195,13 @@ QemuLaunchSpec McuController::buildLaunchSpec(const std::filesystem::path& firmw
     } else if (icount) {
         spec.diagnostics += "[LasecSimul] execution=deterministic-icount\n";
     }
+    const qemu::QemuArenaProtocol arenaProtocol =
+        qemu::QemuArenaBridge::configuredProtocol();
+    spec.diagnostics +=
+        arenaProtocol == qemu::QemuArenaProtocol::V4
+            ? "[LasecSimul] arena=v4 negotiated (default; rollback: "
+              "LASECSIMUL_QEMU_ARENA_VERSION=3)\n"
+            : "[LasecSimul] arena=v3 legacy rollback\n";
     configureNetwork(spec, arenaName);
     const std::string& overridePath = !callSiteBinaryOverride.empty() ? callSiteBinaryOverride : m_qemuBinaryOverride;
     if (!overridePath.empty()) spec.binary = overridePath;
@@ -239,6 +248,24 @@ void McuController::start(const std::filesystem::path& firmwarePath, const std::
     }
     m_arenaBridge.open(qemu::QemuArenaOpenOptions{arenaName, true});
     m_processManager.start(spec);
+    if (m_arenaBridge.protocolMajor() == LSDN_QEMU_ARENA_ABI_MAJOR) {
+        const auto deadline =
+            std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (m_processManager.isRunning() &&
+               !m_arenaBridge.peerReady() &&
+               std::chrono::steady_clock::now() < deadline) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        if (!m_arenaBridge.peerReady()) {
+            const std::string logs = m_processManager.logs();
+            m_processManager.stop();
+            m_arenaBridge.close();
+            throw std::runtime_error(
+                "QEMU arena ABI v4 handshake failed; verify that Core and "
+                "qemu-system-xtensa use the same arena ABI. QEMU logs: " +
+                logs);
+        }
+    }
 }
 
 void McuController::stop() { m_processManager.stop(); m_arenaBridge.close(); }

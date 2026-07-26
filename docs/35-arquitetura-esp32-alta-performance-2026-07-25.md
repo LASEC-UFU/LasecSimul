@@ -15,6 +15,11 @@
 > testes sustentados e a validação do firmware real (23% → 98%), MTTCG passou a ser o padrão. O
 > modo anterior permanece disponível com `LASECSIMUL_ESP32_EXECUTION_MODE=deterministic`. Consulte
 > `docs/36-mttcg-esp32-experimental-2026-07-25.md`.
+>
+> Em 2026-07-26, a fundação da ABI v4 negociada foi implementada no QEMU
+> (`73392afd7256aaa2adba03c0473e6b2b6744ac3d`) e no Core. O payload v3 permanece intacto e pode
+> ser selecionado com `LASECSIMUL_QEMU_ARENA_VERSION=3`; a v4 adiciona validação de versão,
+> tamanhos, capacidades e handshake. Consulte `docs/37-arena-abi-v4-negociada-2026-07-26.md`.
 
 ## 1. Resumo executivo
 

@@ -161,6 +161,9 @@ int main() {
     }
 
     const std::string logs = controller.qemuLogs();
+    const uint32_t arenaProtocol = controller.arenaBridge().protocolMajor();
+    const uint64_t arenaCapabilities =
+        controller.arenaBridge().negotiatedCapabilities();
     controller.stop();
     std::filesystem::remove(flashPath);
 
@@ -175,9 +178,30 @@ int main() {
         TEST_ASSERT(logs.find("execution mode: mttcg-realtime (vcpus=2, tcg_threads=2)") !=
                         std::string::npos,
                     "MTTCG real criou duas threads TCG para as duas vCPUs ESP32");
+    }
+    const char* profileMode = std::getenv("LASECSIMUL_QEMU_PROFILE");
+    if (profileMode && std::string(profileMode) != "0") {
         TEST_ASSERT(logs.find("[LasecSimul][PROFILE] mode=mttcg-realtime") !=
                         std::string::npos,
                     "telemetria MTTCG publicou medidas reproduziveis de parede/tempo virtual/fila");
+    }
+
+    const char* arenaVersion =
+        std::getenv("LASECSIMUL_QEMU_ARENA_VERSION");
+    const bool legacyArena =
+        arenaVersion && std::string(arenaVersion) == "3";
+    if (legacyArena) {
+        TEST_ASSERT(arenaProtocol == 3 && arenaCapabilities == 0,
+                    "rollback v3 usa o payload legado sem descritor");
+        TEST_ASSERT(logs.find("arena ABI v3 mapped") != std::string::npos,
+                    "QEMU confirmou o mapping legado v3");
+    } else {
+        TEST_ASSERT(arenaProtocol == LSDN_QEMU_ARENA_ABI_MAJOR,
+                    "Core abriu a arena ABI v4 por padrao");
+        TEST_ASSERT(arenaCapabilities == LSDN_QEMU_ARENA_CAPABILITIES,
+                    "Core e QEMU negociaram todas as capacidades v4 obrigatorias");
+        TEST_ASSERT(logs.find("arena ABI v4 mapped") != std::string::npos,
+                    "QEMU confirmou o descritor e o mapping v4");
     }
 
     const size_t profilePos = logs.rfind("[LasecSimul][PROFILE]");

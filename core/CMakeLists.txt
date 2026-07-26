@@ -704,6 +704,15 @@ set_tests_properties(qemu_mttcg_smoke PROPERTIES
     TIMEOUT 30
 )
 
+# Rollback explícito do transporte: o mesmo binário novo deve continuar aceitando o mapping v3
+# puro enquanto a v4 negociada amadurece.
+add_test(NAME qemu_arena_v3_smoke COMMAND qemu_queue_stress_test)
+set_tests_properties(qemu_arena_v3_smoke PROPERTIES
+    ENVIRONMENT
+        "LASECSIMUL_ESP32_EXECUTION_MODE=mttcg;LASECSIMUL_QEMU_ARENA_VERSION=3;LASECSIMUL_STRESS_SECONDS=5"
+    TIMEOUT 30
+)
+
 # Estresse do CICLO Stop->Run repetido (achado 2026-07-22, relato ao vivo: às vezes o MCU não
 # inicializa, às vezes roda perfeitamente, às vezes roda e trava no meio -- nenhum teste real
 # existente cobria REINICIAR várias vezes, só uma sessão única). Mesmo binário/adapter reais acima.

@@ -4435,3 +4435,46 @@ corrida, não era sua causa.
 
 Suíte completa do Core (`ctest`) e `npm test` da extensão 100% verdes depois de todas as correções
 desta seção.
+
+### 32.5 MTTCG + ABI v4: gap de avanço (`m_nextPendingEventNs`) confirmado corrigido; nova causa
+raiz isolada para a falha residual (2026-07-26)
+
+Sessão anterior (agente que esgotou os tokens, retomada aqui) investigou uma recorrência do
+travamento de boot já sob MTTCG/ABI v4 (seção 32.3.6 fechada, `docs/37-arena-abi-v4-negociada-*`):
+firmware real, ~1 em 10 execuções travava com tempo virtual avançando mas UART parada e GPIO13
+nunca saindo de LOW. Cadeia de correções aplicadas na sessão anterior (`McuComponent.cpp/hpp`):
+
+1. **Causa raiz identificada e corrigida**: `pacingPositionNs()` só publicava a posição do ÚLTIMO
+   evento APLICADO (`m_latestVirtualTimePs`), nunca a do PRÓXIMO evento já conhecido (a cabeça da
+   fila, espiada mas ainda não despachada porque `eventNs > nowNs()`). Quando o gap até essa cabeça
+   excedia a folga do `AdvanceLimitFn` (~10,8ms observados > 5ms de folga), o Scheduler nunca
+   alcançava o callback que a despacharia -- deadlock circular: fila enche 32/32, QEMU para de
+   publicar. Corrigido separando `m_nextPendingEventNs` (cabeça futura, só fronteira segura de
+   avanço) de `m_latestVirtualTimePs` (métrica de evento aplicado, inalterada) -- ver
+   `McuComponent::pacingPositionNs()`/`pollStepLocked()`.
+2. Retomada nesta sessão: bateria dedicada (`session_restart_stress_test`, firmware real
+   `EININDI01_GitHub_VSCode_PIO/.pio/build/esp32/merged.bin`, sem alterar o teste) rodada 2x (10 e
+   20 ciclos) sobre o binário Core recompilado com a correção acima. **Resultado: 29/30 ciclos
+   perfeitos** (6-8 bordas de GPIO13 cada, nenhuma trava de fila/Scheduler) -- a correção do item 1
+   está confirmada e não é mais hipótese.
+
+**A 1 falha residual observada NÃO é a mesma classe de bug.** Log da falha: QEMU imprime
+`Guru Meditation Error: Core / panic'ed (Cache error). Cache disabled but cached memory region
+accessed`, com dump de registradores dos DOIS núcleos, ainda durante o boot (logo após as primeiras
+linhas de trace do firmware, antes do `app_main`). `arena->running` permanece 1 (processo QEMU não
+morre) e o tempo virtual continua avançando (heartbeats), mas o firmware guest está genuinamente
+travado dentro do handler de panic -- não é falta de heartbeat nem fila cheia. Hipótese (não
+verificada por captura direta): corrida de visibilidade entre as duas threads MTTCG no toggle de
+`DPORT_..._CACHE_CTRL_REG` (`esp32_cache_state_update()`/`memory_region_set_enabled()` em
+`hw/misc/esp32_dport.c`, fork QEMU em `C:\SourceCode\qemu_lasecSimul`) -- um núcleo habilita o
+mapeamento de cache DROM0/IRAM0 enquanto o outro ainda enxerga a região antiga (`trap_mem`), ou
+vice-versa. **Fora deste repositório** (Core), mas o fork QEMU está disponível localmente (não é
+uma dependência externa inacessível) -- ver seção 32.5.1 para a investigação.
+
+**Achado colateral**: o "fix de timer de frame da UART" narrado pelo agente anterior (duplicação de
+temporização FIFO/adaptador) nunca foi commitado em `qemu_lasecSimul` -- `git log`/`git status` lá
+mostram a árvore limpa em `73392afd7256aaa2adba03c0473e6b2b6744ac3d` (só a negociação da ABI v4),
+sem o diff de `hw/char/esp32_uart.c` descrito. As edições devem ter se perdido quando os tokens do
+agente anterior esgotaram, antes de um commit. Não impediu a verificação do item 2 acima (a bateria
+de 30 ciclos não reproduziu nenhum sintoma de UART travada em `uart_tx_one_char`), mas fica
+registrado -- se esse sintoma reaparecer, a correção precisa ser refeita do zero.

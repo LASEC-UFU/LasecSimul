@@ -15,8 +15,15 @@ uint64_t qemuEventTimeNs(uint64_t originNs, uint64_t virtualTimePs) {
 
 std::optional<uint64_t> McuComponent::pacingPositionNs() const {
     const uint64_t ps = m_latestVirtualTimePs.load(std::memory_order_relaxed);
-    if (ps == 0) return std::nullopt; // nenhum evento processado ainda (boot ou logo apos recarga).
-    return qemuEventTimeNs(m_qemuTimeOriginNs.load(std::memory_order_relaxed), ps);
+    const uint64_t appliedPosition =
+        ps == 0 ? 0 : qemuEventTimeNs(
+                            m_qemuTimeOriginNs.load(std::memory_order_relaxed), ps);
+    const uint64_t pendingPosition =
+        m_nextPendingEventNs.load(std::memory_order_relaxed);
+    const uint64_t safeFrontier =
+        appliedPosition > pendingPosition ? appliedPosition : pendingPosition;
+    if (safeFrontier == 0) return std::nullopt;
+    return safeFrontier;
 }
 
 McuComponent::McuComponent(std::unique_ptr<IMcuAdapter> adapter, simulation::Scheduler& scheduler,
@@ -77,6 +84,11 @@ void McuComponent::onAssignedIndex(uint32_t index) {
 }
 
 void McuComponent::startPolling(std::vector<DeferredSchedulerCall>* deferred) {
+    // Um callback da sessão anterior pode ter sido descartado por Scheduler::reset(), sem passar
+    // por onPollEvent() para baixar m_pollEventScheduled. Cada Run começa uma geração nova: libera
+    // o primeiro callback e torna inofensivos callbacks antigos que ainda estejam na fila.
+    ++m_pollGeneration;
+    m_pollEventScheduled = false;
     m_polling.store(true, std::memory_order_release);
     scheduleNextPoll(deferred);
 }
@@ -100,12 +112,13 @@ void McuComponent::schedulePollAt(uint64_t timeNs, std::vector<DeferredScheduler
     if (m_pollEventScheduled) return;
     m_pollEventScheduled = true;
     const std::weak_ptr<CallbackState> weakState = m_callbackState;
-    auto callback = [weakState] {
+    const uint64_t generation = m_pollGeneration;
+    auto callback = [weakState, generation] {
         const std::shared_ptr<CallbackState> state = weakState.lock();
         if (!state) return;
         std::lock_guard<std::recursive_mutex> lock(state->mutex);
         McuComponent* self = state->owner;
-        if (!self) return;
+        if (!self || self->m_pollGeneration != generation) return;
         self->onPollEvent();
     };
     if (deferred) {
@@ -172,12 +185,26 @@ McuComponent::PollStep McuComponent::pollStepLocked(std::vector<DeferredSchedule
     const uint64_t eventNs = qemuEventTimeNs(m_qemuTimeOriginNs.load(std::memory_order_relaxed), result.event->simuTimePs);
     const uint64_t nowNs = m_scheduler.nowNs();
     if (eventNs > nowNs) {
+        /*
+         * A cabeça futura é uma fronteira segura: o QEMU já chegou a esse timestamp e
+         * schedulePollAt() instala um callback exatamente nele. Sem publicar essa fronteira ao
+         * pacing, um gap de heartbeat maior que a folga (10,8ms > 5ms reproduzido sob MTTCG)
+         * cria um deadlock circular: Scheduler para antes do callback, Core não consome a cabeça,
+         * a fila enche e o QEMU não publica o heartbeat intermediário que liberaria o teto.
+         *
+         * Não altera m_latestVirtualTimePs: métricas continuam representando somente eventos
+         * aplicados. A cabeça futura serve apenas para alcançar o callback que a aplicará.
+         */
+        const uint64_t previous =
+            m_nextPendingEventNs.exchange(eventNs, std::memory_order_relaxed);
+        if (previous != eventNs) m_scheduler.notifyAdvanceLimitChanged();
         // Mantém a ação na arena e agenda uma única entrada exatamente no instante publicado. NÃO
         // avança m_latestVirtualTimePs aqui -- ver achado 2026-07-23 abaixo: isto só é seguro fazer
         // depois de confirmar que o evento está sendo despachado agora, não só espiado.
         schedulePollAt(eventNs, deferred);
         return PollStep::DeferredFuture;
     }
+    m_nextPendingEventNs.store(0, std::memory_order_relaxed);
 
     // Achado 2026-07-23 (sincronização de ritmo): só avança m_latestVirtualTimePs DEPOIS de
     // confirmar `eventNs <= nowNs()` acima -- ou seja, só quando o evento está de fato sendo
@@ -230,6 +257,7 @@ void McuComponent::runBackgroundPollLoop(std::shared_ptr<CallbackState> state) {
     // única coisa que esta thread mantém viva sozinha; McuComponent pode ser destruído a qualquer
     // momento entre duas iterações (ver ~McuComponent(), que zera `owner` sob o mesmo mutex antes
     // de qualquer membro ser desalocado).
+    bool restartAfterExit = false;
     for (;;) {
         PollStep step = PollStep::NoEvent;
         bool stop = false;
@@ -239,10 +267,12 @@ void McuComponent::runBackgroundPollLoop(std::shared_ptr<CallbackState> state) {
             McuComponent* self = state->owner;
             if (!self || !self->m_polling.load(std::memory_order_acquire)) {
                 stop = true;
+                restartAfterExit = self != nullptr;
             } else {
                 qemu::QemuArenaBridge& arena = self->m_controller.arenaBridge();
                 if (!arena.isOpen()) {
                     stop = true;
+                    restartAfterExit = true;
                 } else {
                     step = self->pollStepLocked(&deferred);
                     if (step == PollStep::NoEvent && !self->m_scheduler.isRunning()) {
@@ -266,6 +296,7 @@ void McuComponent::runBackgroundPollLoop(std::shared_ptr<CallbackState> state) {
                         // agendado (stopSimulation() sempre também chama stopFirmware()+reset() logo
                         // em seguida) -- sair sem reagendar é seguro e evita a pegadinha.
                         stop = true;
+                        restartAfterExit = true;
                     }
                 }
             }
@@ -282,6 +313,23 @@ void McuComponent::runBackgroundPollLoop(std::shared_ptr<CallbackState> state) {
         std::this_thread::yield();
     }
     state->pollThreadRunning.store(false, std::memory_order_release);
+    if (restartAfterExit) {
+        /*
+         * Stop -> Run pode começar enquanto esta thread destacada já decidiu sair, mas antes de
+         * publicar pollThreadRunning=false. Nesse intervalo startPolling() vê a flag antiga em
+         * true e não cria uma substituta; sem este handoff, a thread antiga sai logo depois e a
+         * nova arena fica sem consumidor. Reavalie somente depois de baixar a flag. Se o novo Run
+         * já estiver ativo, o CAS transfere a responsabilidade para uma única nova thread; se ele
+         * começar depois desta checagem, verá a flag false e fará a mesma coisa.
+         */
+        std::lock_guard<std::recursive_mutex> lock(state->mutex);
+        McuComponent* self = state->owner;
+        if (self && self->m_polling.load(std::memory_order_acquire) &&
+            self->m_scheduler.isRunning() &&
+            self->m_controller.arenaBridge().isOpen()) {
+            self->startBackgroundPollThreadIfNeeded();
+        }
+    }
 }
 
 void McuComponent::scheduleModuleWakeup(size_t moduleIndex, uint64_t nowNs, bool schedulerLockHeld,
@@ -615,6 +663,7 @@ void McuComponent::loadFirmwareLocked(const std::filesystem::path& firmwarePath,
     // anterior, dando uma posição espúria no FUTURO (efeito: deixaria o elétrico correr à frente
     // indevidamente, ainda que só por uma janela curta).
     m_latestVirtualTimePs.store(0, std::memory_order_relaxed);
+    m_nextPendingEventNs.store(0, std::memory_order_relaxed);
     m_qemuTimeOriginNs.store(m_scheduler.nowNs(), std::memory_order_relaxed);
     m_controller.start(firmwarePath, arenaName, qemuBinaryOverride, debug);
     startPolling(&deferred);
@@ -649,6 +698,7 @@ void McuComponent::openSyntheticArenaForTesting(const std::string& arenaName) {
         m_syntheticArenaForTesting = true;
         // Ordem invertida (zera primeiro, seta origem depois) -- ver comentário em loadFirmwareLocked().
         m_latestVirtualTimePs.store(0, std::memory_order_relaxed);
+        m_nextPendingEventNs.store(0, std::memory_order_relaxed);
         m_qemuTimeOriginNs.store(m_scheduler.nowNs(), std::memory_order_relaxed);
         m_controller.arenaBridge().open(qemu::QemuArenaOpenOptions{arenaName, true});
         startPolling(&deferred);

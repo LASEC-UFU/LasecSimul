@@ -8,9 +8,16 @@
 
 namespace lasecsimul::mcu::qemu {
 
+enum class QemuArenaProtocol : uint32_t {
+    Environment = 0,
+    V3 = 3,
+    V4 = LSDN_QEMU_ARENA_ABI_MAJOR,
+};
+
 struct QemuArenaOpenOptions {
     std::string name;
     bool createIfMissing = true;
+    QemuArenaProtocol protocol = QemuArenaProtocol::Environment;
 };
 
 /** Cópia dos campos da `LsdnQemuArena` no momento do `poll()` -- ver qemu_arena_abi.h pro

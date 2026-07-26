@@ -1,4 +1,5 @@
 #include "mcu/qemu/QemuArenaBridge.hpp"
+#include <atomic>
 #include <cassert>
 #include <chrono>
 #include <cstdio>
@@ -27,9 +28,32 @@ void pushQueueEntry(LsdnQemuArena& arena, uint64_t addr, uint64_t data, uint64_t
 
 void testOpenPollAndAcknowledge() {
     QemuArenaBridge bridge;
-    bridge.open(QemuArenaOpenOptions{uniqueArenaName(), true});
+    bridge.open(QemuArenaOpenOptions{
+        uniqueArenaName(), true, QemuArenaProtocol::V4});
     assert(bridge.isOpen());
     assert(bridge.arena() != nullptr);
+    assert(bridge.protocolMajor() == LSDN_QEMU_ARENA_ABI_MAJOR);
+    assert(bridge.descriptor() != nullptr);
+    assert(bridge.descriptor()->magic == LSDN_QEMU_ARENA_ABI_MAGIC);
+    assert(bridge.descriptor()->descriptorSize ==
+           sizeof(LsdnQemuArenaDescriptor));
+    assert(bridge.descriptor()->arenaSize == sizeof(LsdnQemuArenaV4Mapping));
+    assert(bridge.descriptor()->transportSize == sizeof(LsdnQemuArena));
+    assert(bridge.descriptor()->queueDepth == LSDN_QEMU_ARENA_QUEUE_DEPTH);
+    assert(bridge.descriptor()->coreCapabilities ==
+           LSDN_QEMU_ARENA_CAPABILITIES);
+    assert(bridge.descriptor()->coreReady == 1);
+    assert(!bridge.peerReady());
+
+    auto* descriptor =
+        const_cast<LsdnQemuArenaDescriptor*>(bridge.descriptor());
+    descriptor->qemuCapabilities = LSDN_QEMU_ARENA_CAPABILITIES;
+    descriptor->negotiatedCapabilities = LSDN_QEMU_ARENA_CAPABILITIES;
+    std::atomic_ref<uint64_t>(descriptor->qemuReady)
+        .store(1, std::memory_order_release);
+    assert(bridge.peerReady());
+    assert(bridge.negotiatedCapabilities() ==
+           LSDN_QEMU_ARENA_CAPABILITIES);
 
     bridge.arena()->qemuTime = 7;
     bridge.arena()->running = true;
@@ -76,7 +100,8 @@ void testDispatchUsesSortedRegions() {
 void testPollWithDispatch() {
     QemuArenaBridge bridge;
     bridge.setMemoryRegions(std::vector<MemoryRegion>{MemoryRegion{0x1000, 0x10ff, ModuleKind::Usart, 2}});
-    bridge.open(QemuArenaOpenOptions{uniqueArenaName(), true});
+    bridge.open(QemuArenaOpenOptions{
+        uniqueArenaName(), true, QemuArenaProtocol::V4});
     pushQueueEntry(*bridge.arena(), 0x1004, 0xAB, LSDN_SIM_WRITE, 1);
 
     const QemuPollResult result = bridge.poll();
@@ -94,7 +119,8 @@ void testQueueMultipleEntriesDrainInOrder() {
     // que poll()/acknowledgeWrite() as drenam na ordem em que foram publicadas.
     QemuArenaBridge bridge;
     bridge.setMemoryRegions(std::vector<MemoryRegion>{MemoryRegion{0x1000, 0x10ff, ModuleKind::Gpio, 0}});
-    bridge.open(QemuArenaOpenOptions{uniqueArenaName(), true});
+    bridge.open(QemuArenaOpenOptions{
+        uniqueArenaName(), true, QemuArenaProtocol::V4});
 
     pushQueueEntry(*bridge.arena(), 0x1004, 0x11, LSDN_SIM_WRITE, 10);
     pushQueueEntry(*bridge.arena(), 0x1008, 0x22, LSDN_SIM_WRITE, 20);
@@ -121,7 +147,8 @@ void testQueueMultipleEntriesDrainInOrder() {
 void testPollReadAcknowledgesViaQemuAction() {
     QemuArenaBridge bridge;
     bridge.setMemoryRegions(std::vector<MemoryRegion>{MemoryRegion{0x1000, 0x10ff, ModuleKind::Gpio, 0}});
-    bridge.open(QemuArenaOpenOptions{uniqueArenaName(), true});
+    bridge.open(QemuArenaOpenOptions{
+        uniqueArenaName(), true, QemuArenaProtocol::V4});
     bridge.arena()->simuTime = 1;
     bridge.arena()->simuAction = LSDN_SIM_READ;
     bridge.arena()->regAddr = 0x103C;
@@ -138,7 +165,8 @@ void testPollReadAcknowledgesViaQemuAction() {
 
 void testLegacySlotAckNeverConsumesNewQueueEntry() {
     QemuArenaBridge bridge;
-    bridge.open(QemuArenaOpenOptions{uniqueArenaName(), true});
+    bridge.open(QemuArenaOpenOptions{
+        uniqueArenaName(), true, QemuArenaProtocol::V4});
 
     // Reproduz a corrida real: QEMU antigo publica SIM_FREQ no slot; depois do poll() e antes do
     // ACK chega uma escrita na fila. O ACK do slot não pode avançar queueReadIndex.
@@ -166,6 +194,44 @@ void testLegacySlotAckNeverConsumesNewQueueEntry() {
     assert(bridge.arena()->queueReadIndex == bridge.arena()->queueWriteIndex);
 }
 
+void testV3RollbackKeepsLegacyPayload() {
+    QemuArenaBridge bridge;
+    bridge.open(QemuArenaOpenOptions{
+        uniqueArenaName(), true, QemuArenaProtocol::V3});
+    assert(bridge.isOpen());
+    assert(bridge.protocolMajor() == 3);
+    assert(bridge.descriptor() == nullptr);
+    assert(bridge.negotiatedCapabilities() == 0);
+
+    bridge.arena()->running = 1;
+    assert(bridge.peerReady());
+    pushQueueEntry(*bridge.arena(), 0x1000, 0x55, LSDN_SIM_WRITE, 7);
+    const QemuPollResult result = bridge.poll();
+    assert(result.hasEvent && result.event->regData == 0x55);
+    bridge.acknowledgeWrite();
+    assert(bridge.arena()->queueReadIndex ==
+           bridge.arena()->queueWriteIndex);
+}
+
+void testV4RejectsMissingRequiredCapability() {
+    QemuArenaBridge bridge;
+    bridge.open(QemuArenaOpenOptions{
+        uniqueArenaName(), true, QemuArenaProtocol::V4});
+    auto* descriptor =
+        const_cast<LsdnQemuArenaDescriptor*>(bridge.descriptor());
+    const uint64_t incomplete =
+        LSDN_QEMU_ARENA_CAPABILITIES &
+        ~LSDN_QEMU_ARENA_CAP_MTTCG_MPSC_SERIALIZED;
+    descriptor->qemuCapabilities = incomplete;
+    descriptor->negotiatedCapabilities = incomplete;
+    std::atomic_ref<uint64_t>(descriptor->qemuReady)
+        .store(1, std::memory_order_release);
+
+    const QemuPollResult result = bridge.poll();
+    assert(!result.hasEvent);
+    assert(!result.error.empty());
+}
+
 } // namespace
 
 int main() {
@@ -175,6 +241,9 @@ int main() {
     testQueueMultipleEntriesDrainInOrder();
     testPollReadAcknowledgesViaQemuAction();
     testLegacySlotAckNeverConsumesNewQueueEntry();
-    std::printf("OK: QemuArenaBridge open, poll and dispatch passed.\n");
+    testV3RollbackKeepsLegacyPayload();
+    testV4RejectsMissingRequiredCapability();
+    std::printf(
+        "OK: QemuArenaBridge ABI v4, rollback v3, poll and dispatch passed.\n");
     return 0;
 }

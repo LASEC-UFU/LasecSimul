@@ -163,6 +163,8 @@ int main() {
     const auto runDuration = std::chrono::milliseconds(
         positiveEnvironmentValue("LASECSIMUL_STRESS_RUN_MS",
                                  useRealFirmware ? 5000 : 600, 120000));
+    const auto gpioGrace = std::chrono::milliseconds(
+        positiveEnvironmentValue("LASECSIMUL_STRESS_GPIO_GRACE_MS", 3000, 120000));
 
     int failedToBoot = 0;
     int stalledMidRun = 0;
@@ -238,7 +240,9 @@ int main() {
         bool observedGpioLowAfterHigh = false;
         int gpioTransitions = 0;
         const auto runDeadline = std::chrono::steady_clock::now() + runDuration;
-        while (std::chrono::steady_clock::now() < runDeadline && mcuPtr->firmwareRunning()) {
+        const auto maximumDeadline = runDeadline + (useRealFirmware ? gpioGrace
+                                                                    : std::chrono::milliseconds{0});
+        while (std::chrono::steady_clock::now() < maximumDeadline && mcuPtr->firmwareRunning()) {
             if (useRealFirmware) {
                 try {
                     const bool high = session.nodeVoltageOfPin(mcuIndex, "GPIO13") > 2.0;
@@ -251,6 +255,16 @@ int main() {
                     // O Scheduler pode estar no meio de um passo; a proxima amostra tenta de novo.
                 }
             }
+            // A primeira execução de um binário QEMU novo também mede/calibra o -icount. Essa
+            // calibração é trabalho de parede, não travamento do firmware: o relógio virtual segue
+            // avançando, mas pode ainda não ter alcançado o primeiro blink quando acaba a janela
+            // mínima. Só usa a tolerância extra nesse caso; ciclos que já comprovaram HIGH->LOW
+            // preservam a duração normal e um GPIO realmente travado ainda falha ao fim da graça.
+            if (std::chrono::steady_clock::now() >= runDeadline &&
+                (!useRealFirmware ||
+                 (observedGpioHigh && observedGpioLowAfterHigh && gpioTransitions >= 2))) {
+                break;
+            }
             std::this_thread::sleep_for(useRealFirmware ? std::chrono::milliseconds(2)
                                                         : std::chrono::milliseconds(10));
         }
@@ -259,12 +273,22 @@ int main() {
         const uint64_t virtualTimeAfter = mcuPtr->latestVirtualTimeNs();
 
         if (!stillRunning || !schedulerStillRunning || virtualTimeAfter == virtualTimeAtStart) {
+            const LsdnQemuArena* stalledArena = mcuPtr->arenaBridge().arena();
             std::fprintf(stderr,
-                "  ciclo %d: TRAVOU NO MEIO -- firmwareRunning=%s schedulerRunning=%s virtualTimeNs %llu->%llu "
-                "arenaRunning=%llu\n",
+                "  ciclo %d: TRAVOU NO MEIO -- firmwareRunning=%s schedulerRunning=%s"
+                " virtualTimeNs %llu->%llu arenaRunning=%llu queue=%llu/%llu"
+                " abi=%u peerReady=%s caps=0x%llx\n",
                 cycle, stillRunning ? "sim" : "nao", schedulerStillRunning ? "sim" : "nao",
                 static_cast<unsigned long long>(virtualTimeAtStart), static_cast<unsigned long long>(virtualTimeAfter),
-                static_cast<unsigned long long>(mcuPtr->arenaBridge().arena() ? mcuPtr->arenaBridge().arena()->running : 999));
+                static_cast<unsigned long long>(stalledArena ? stalledArena->running : 999),
+                static_cast<unsigned long long>(stalledArena ? stalledArena->queueReadIndex : 999),
+                static_cast<unsigned long long>(stalledArena ? stalledArena->queueWriteIndex : 999),
+                mcuPtr->arenaBridge().protocolMajor(),
+                mcuPtr->arenaBridge().peerReady() ? "sim" : "nao",
+                static_cast<unsigned long long>(
+                    mcuPtr->arenaBridge().negotiatedCapabilities()));
+            std::fprintf(stderr, "  Logs QEMU do ciclo %d:\n%s\n", cycle,
+                         mcuPtr->qemuLogs().c_str());
             ++stalledMidRun;
         } else {
             std::fprintf(stderr, "  ciclo %d: OK (virtualTimeNs avancou %llu->%llu",
@@ -280,10 +304,36 @@ int main() {
 
         if (useRealFirmware &&
             (!observedGpioHigh || !observedGpioLowAfterHigh || gpioTransitions < 2)) {
+            const LsdnQemuArena* failedArena = mcuPtr->arenaBridge().arena();
+            const LsdnQemuQueueEntry* failedHead =
+                failedArena && failedArena->queueReadIndex < failedArena->queueWriteIndex
+                    ? &failedArena->queue[
+                          failedArena->queueReadIndex % LSDN_QEMU_ARENA_QUEUE_DEPTH]
+                    : nullptr;
             std::fprintf(stderr,
-                "  ciclo %d: GPIO13 TRAVOU -- bordas=%d high=%s low-apos-high=%s\n",
+                "  ciclo %d: GPIO13 TRAVOU -- bordas=%d high=%s low-apos-high=%s"
+                " arenaRunning=%llu queue=%llu/%llu schedulerNow=%llu pending=%zu"
+                " head={timePs=%llu action=%llu addr=0x%llx}"
+                " poll={enabled=%s thread=%s scheduled=%s generation=%llu}"
+                " abi=%u peerReady=%s caps=0x%llx\n",
                 cycle, gpioTransitions, observedGpioHigh ? "sim" : "nao",
-                observedGpioLowAfterHigh ? "sim" : "nao");
+                observedGpioLowAfterHigh ? "sim" : "nao",
+                static_cast<unsigned long long>(failedArena ? failedArena->running : 999),
+                static_cast<unsigned long long>(failedArena ? failedArena->queueReadIndex : 999),
+                static_cast<unsigned long long>(failedArena ? failedArena->queueWriteIndex : 999),
+                static_cast<unsigned long long>(session.scheduler().nowNs()),
+                session.scheduler().pendingEventCount(),
+                static_cast<unsigned long long>(failedHead ? failedHead->simuTime : 0),
+                static_cast<unsigned long long>(failedHead ? failedHead->simuAction : 0),
+                static_cast<unsigned long long>(failedHead ? failedHead->regAddr : 0),
+                mcuPtr->pollingForTesting() ? "sim" : "nao",
+                mcuPtr->pollThreadRunningForTesting() ? "sim" : "nao",
+                mcuPtr->pollEventScheduledForTesting() ? "sim" : "nao",
+                static_cast<unsigned long long>(mcuPtr->pollGenerationForTesting()),
+                mcuPtr->arenaBridge().protocolMajor(),
+                mcuPtr->arenaBridge().peerReady() ? "sim" : "nao",
+                static_cast<unsigned long long>(
+                    mcuPtr->arenaBridge().negotiatedCapabilities()));
             std::fprintf(stderr, "  Logs QEMU do ciclo %d:\n%s\n", cycle,
                          mcuPtr->qemuLogs().c_str());
             const auto uartTx = session.propertyValueOf(mcuIndex, "uart0_tx_monitor_hex");

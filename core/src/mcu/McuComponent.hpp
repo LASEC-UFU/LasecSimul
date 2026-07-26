@@ -98,6 +98,20 @@ public:
      * virado uma "borda" e recarregava tudo de novo -- ver guarda `!firmwareRunning()` em
      * `onEvent()`). */
     uint64_t loadFirmwareCallCountForTesting() const { return m_loadFirmwareCallCount; }
+    bool pollingForTesting() const {
+        return m_polling.load(std::memory_order_acquire);
+    }
+    bool pollThreadRunningForTesting() const {
+        return m_callbackState->pollThreadRunning.load(std::memory_order_acquire);
+    }
+    bool pollEventScheduledForTesting() const {
+        std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
+        return m_pollEventScheduled;
+    }
+    uint64_t pollGenerationForTesting() const {
+        std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
+        return m_pollGeneration;
+    }
 
     /** Abre a arena SEM iniciar nenhum processo QEMU -- só pra teste poder simular escritas de
      * registrador manualmente (mesmo papel de QemuArenaBridgeTest), sem precisar de um binário
@@ -264,12 +278,20 @@ private:
     std::shared_ptr<CallbackState> m_callbackState;
     uint32_t m_componentIndex = 0;
     std::atomic<bool> m_polling{false};
+    // Identifica a sessão de polling à qual cada callback agendado pertence. Scheduler::reset()
+    // descarta callbacks pendentes sem executá-los; por isso uma nova carga precisa invalidar
+    // explicitamente os callbacks da sessão anterior e liberar seu próprio agendamento.
+    uint64_t m_pollGeneration = 0;
     bool m_pollEventScheduled = false;
     bool m_syntheticArenaForTesting = false;
     // Achado 2026-07-23 (sincronização de ritmo): lido cross-thread por pacingPositionNs(), sem
     // segurar m_callbackState->mutex -- precisa ser atomic pela mesma razão de m_latestVirtualTimePs
     // logo abaixo.
     std::atomic<uint64_t> m_qemuTimeOriginNs{0};
+    // Timestamp absoluto, na timeline do Scheduler, da cabeça FUTURA já observada na arena.
+    // Não significa "evento aplicado" e por isso é separado de m_latestVirtualTimePs; serve
+    // somente para o teto de pacing alcançar o próprio callback que consumirá essa cabeça.
+    std::atomic<uint64_t> m_nextPendingEventNs{0};
     // Ver comentário de `latestVirtualTimeNs()` acima -- atualizado em pollStepLocked() a cada
     // evento processado, lido de uma thread diferente via `latestVirtualTimeNs()`.
     std::atomic<uint64_t> m_latestVirtualTimePs{0};

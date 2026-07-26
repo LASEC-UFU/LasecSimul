@@ -1,8 +1,10 @@
 #include "QemuArenaBridge.hpp"
 #include <algorithm>
 #include <atomic>
+#include <cstdlib>
 #include <cstring>
 #include <stdexcept>
+#include <string_view>
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -116,24 +118,111 @@ void QemuArenaBridge::setMemoryRegions(std::span<const MemoryRegion> regions) {
     });
 }
 
+QemuArenaProtocol QemuArenaBridge::configuredProtocol() {
+    const char* value = std::getenv("LASECSIMUL_QEMU_ARENA_VERSION");
+    if (!value || !*value || std::string_view(value) == "4") return QemuArenaProtocol::V4;
+    if (std::string_view(value) == "3") return QemuArenaProtocol::V3;
+    throw std::invalid_argument(
+        "LASECSIMUL_QEMU_ARENA_VERSION must be '3' or '4'");
+}
+
 void QemuArenaBridge::open(const QemuArenaOpenOptions& options) {
     close();
     if (options.name.empty()) throw std::runtime_error("QEMU shared memory name is empty");
-    m_sharedMemory = std::make_unique<SharedMemory>(options.name, sizeof(LsdnQemuArena), options.createIfMissing);
-    m_arena = static_cast<LsdnQemuArena*>(m_sharedMemory->data());
+    m_protocol = options.protocol == QemuArenaProtocol::Environment
+                     ? configuredProtocol()
+                     : options.protocol;
+    if (m_protocol != QemuArenaProtocol::V3 &&
+        m_protocol != QemuArenaProtocol::V4) {
+        throw std::invalid_argument("Unsupported QEMU arena protocol");
+    }
+
+    const size_t mappingSize = m_protocol == QemuArenaProtocol::V4
+                                   ? sizeof(LsdnQemuArenaV4Mapping)
+                                   : sizeof(LsdnQemuArena);
+    m_sharedMemory = std::make_unique<SharedMemory>(
+        options.name, mappingSize, options.createIfMissing);
+    void* const base = m_sharedMemory->data();
+    if (options.createIfMissing) std::memset(base, 0, mappingSize);
+
+    if (m_protocol == QemuArenaProtocol::V4) {
+        auto* const mapping = static_cast<LsdnQemuArenaV4Mapping*>(base);
+        m_descriptor = &mapping->descriptor;
+        m_arena = &mapping->transport;
+        if (options.createIfMissing) {
+            m_descriptor->magic = LSDN_QEMU_ARENA_ABI_MAGIC;
+            m_descriptor->abiMajor = LSDN_QEMU_ARENA_ABI_MAJOR;
+            m_descriptor->abiMinor = LSDN_QEMU_ARENA_ABI_MINOR;
+            m_descriptor->descriptorSize = sizeof(LsdnQemuArenaDescriptor);
+            m_descriptor->arenaSize = sizeof(LsdnQemuArenaV4Mapping);
+            m_descriptor->transportSize = sizeof(LsdnQemuArena);
+            m_descriptor->queueDepth = LSDN_QEMU_ARENA_QUEUE_DEPTH;
+            m_descriptor->coreCapabilities = LSDN_QEMU_ARENA_CAPABILITIES;
+            std::atomic_ref<uint64_t>(m_descriptor->coreReady)
+                .store(1, std::memory_order_release);
+        } else if (m_descriptor->magic != LSDN_QEMU_ARENA_ABI_MAGIC ||
+                   m_descriptor->abiMajor != LSDN_QEMU_ARENA_ABI_MAJOR ||
+                   m_descriptor->descriptorSize !=
+                       sizeof(LsdnQemuArenaDescriptor) ||
+                   m_descriptor->arenaSize != sizeof(LsdnQemuArenaV4Mapping) ||
+                   m_descriptor->transportSize != sizeof(LsdnQemuArena) ||
+                   m_descriptor->queueDepth !=
+                       LSDN_QEMU_ARENA_QUEUE_DEPTH) {
+            close();
+            throw std::runtime_error("Incompatible QEMU arena ABI v4 descriptor");
+        }
+    } else {
+        m_arena = static_cast<LsdnQemuArena*>(base);
+    }
 }
 
 void QemuArenaBridge::close() {
     m_arena = nullptr;
+    m_descriptor = nullptr;
+    m_protocol = QemuArenaProtocol::Environment;
     m_sharedMemory.reset();
 }
 
 bool QemuArenaBridge::isOpen() const { return m_arena != nullptr; }
 LsdnQemuArena* QemuArenaBridge::arena() { return m_arena; }
 const LsdnQemuArena* QemuArenaBridge::arena() const { return m_arena; }
+const LsdnQemuArenaDescriptor* QemuArenaBridge::descriptor() const {
+    return m_descriptor;
+}
+uint32_t QemuArenaBridge::protocolMajor() const {
+    return static_cast<uint32_t>(m_protocol);
+}
+uint64_t QemuArenaBridge::negotiatedCapabilities() const {
+    if (!m_descriptor ||
+        std::atomic_ref<uint64_t>(m_descriptor->qemuReady)
+                .load(std::memory_order_acquire) == 0) {
+        return 0;
+    }
+    return m_descriptor->negotiatedCapabilities;
+}
+bool QemuArenaBridge::peerReady() const {
+    if (!m_arena) return false;
+    if (!m_descriptor) {
+        return std::atomic_ref<uint64_t>(m_arena->running)
+                   .load(std::memory_order_acquire) != 0;
+    }
+    return std::atomic_ref<uint64_t>(m_descriptor->qemuReady)
+               .load(std::memory_order_acquire) != 0;
+}
 
 QemuPollResult QemuArenaBridge::poll() {
     if (!m_arena) return QemuPollResult{false, std::nullopt, std::nullopt, "QEMU arena is not open"};
+    if (m_descriptor &&
+        std::atomic_ref<uint64_t>(m_descriptor->qemuReady)
+                .load(std::memory_order_acquire) != 0) {
+        const uint64_t required = LSDN_QEMU_ARENA_REQUIRED_CAPABILITIES;
+        if ((m_descriptor->qemuCapabilities & required) != required ||
+            (m_descriptor->negotiatedCapabilities & required) != required) {
+            return QemuPollResult{
+                false, std::nullopt, std::nullopt,
+                "QEMU arena ABI v4 capability negotiation failed"};
+        }
+    }
 
     // Achado 2026-07-22 (usuário reporta simulação travando por completo depois de rodar por um
     // tempo, indicador de velocidade continua marcando 100%): `queueWriteIndex` é escrito pelo

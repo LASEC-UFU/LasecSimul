@@ -22,6 +22,13 @@ public:
 
     LsdnQemuArena* arena();
     const LsdnQemuArena* arena() const;
+    const LsdnQemuArenaDescriptor* descriptor() const;
+    uint32_t protocolMajor() const;
+    uint64_t negotiatedCapabilities() const;
+    bool peerReady() const;
+
+    /** Resolve Environment usando LASECSIMUL_QEMU_ARENA_VERSION. V4 é o padrão; V3 é rollback. */
+    static QemuArenaProtocol configuredProtocol();
 
     /** Lê o próximo evento pendente -- PERF-13 (protocolo v3, ver qemu_arena_abi.h): primeiro a
      * fila de escritas/heartbeat (`queueReadIndex != queueWriteIndex`), senão o slot único de
@@ -50,6 +57,8 @@ private:
 
     std::unique_ptr<SharedMemory> m_sharedMemory;
     LsdnQemuArena* m_arena = nullptr;
+    LsdnQemuArenaDescriptor* m_descriptor = nullptr;
+    QemuArenaProtocol m_protocol = QemuArenaProtocol::Environment;
     std::vector<MemoryRegion> m_regions;
 };
 
