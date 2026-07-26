@@ -4463,13 +4463,9 @@ nunca saindo de LOW. Cadeia de correções aplicadas na sessão anterior (`McuCo
 accessed`, com dump de registradores dos DOIS núcleos, ainda durante o boot (logo após as primeiras
 linhas de trace do firmware, antes do `app_main`). `arena->running` permanece 1 (processo QEMU não
 morre) e o tempo virtual continua avançando (heartbeats), mas o firmware guest está genuinamente
-travado dentro do handler de panic -- não é falta de heartbeat nem fila cheia. Hipótese (não
-verificada por captura direta): corrida de visibilidade entre as duas threads MTTCG no toggle de
-`DPORT_..._CACHE_CTRL_REG` (`esp32_cache_state_update()`/`memory_region_set_enabled()` em
-`hw/misc/esp32_dport.c`, fork QEMU em `C:\SourceCode\qemu_lasecSimul`) -- um núcleo habilita o
-mapeamento de cache DROM0/IRAM0 enquanto o outro ainda enxerga a região antiga (`trap_mem`), ou
-vice-versa. **Fora deste repositório** (Core), mas o fork QEMU está disponível localmente (não é
-uma dependência externa inacessível) -- ver seção 32.5.1 para a investigação.
+travado/reiniciando em loop -- não é falta de heartbeat nem fila cheia. **Fora deste repositório**
+(Core), mas o fork QEMU está disponível localmente em `C:\SourceCode\qemu_lasecSimul` (não é uma
+dependência externa inacessível) -- ver seção 32.5.1 para a investigação feita e o que falta.
 
 **Achado colateral**: o "fix de timer de frame da UART" narrado pelo agente anterior (duplicação de
 temporização FIFO/adaptador) nunca foi commitado em `qemu_lasecSimul` -- `git log`/`git status` lá
@@ -4478,3 +4474,48 @@ sem o diff de `hw/char/esp32_uart.c` descrito. As edições devem ter se perdido
 agente anterior esgotaram, antes de um commit. Não impediu a verificação do item 2 acima (a bateria
 de 30 ciclos não reproduziu nenhum sintoma de UART travada em `uart_tx_one_char`), mas fica
 registrado -- se esse sintoma reaparecer, a correção precisa ser refeita do zero.
+
+#### 32.5.1 Investigação do "Cache error" (2026-07-26): hipótese original descartada por evidência
+direta; causa raiz ainda em aberto
+
+Reproduzido de forma confiável (~1/30 a 1/60 ciclos, `session_restart_stress_test` com
+`LASECSIMUL_TEST_FIRMWARE`/`LASECSIMUL_TEST_QEMU_BINARY` apontando pro firmware real e um binário
+QEMU de rascunho, sem tocar o binário oficial implantado em `devices/qemu-esp32/bin/`).
+
+**Hipótese 1 (descartada por instrumentação direta)**: corrida entre as duas threads MTTCG no
+toggle de `DPORT_..._CACHE_CTRL_REG` -- um núcleo habilitando o mapeamento de cache DROM0/IRAM0
+(`esp32_cache_state_update()`/`memory_region_set_enabled()`) enquanto o outro ainda accessa via
+`illegal_access_trap_mem` (`esp32_cache_ill_read()`, ambos em `hw/misc/esp32_dport.c`).
+Instrumentado (`fprintf` de core/timestamp em toda transição de enable e em todo hit do trap),
+recompilado via `ninja qemu-system-xtensa.exe` (ambiente UCRT64 em
+`C:\SourceCode\tools\msys64`), reproduzida a falha de novo com o binário instrumentado -- **o trap
+NUNCA disparou**. O mecanismo instrumentado não é o caminho da falha; hipótese descartada.
+Instrumentação revertida (`git checkout -- hw/misc/esp32_dport.c` em `qemu_lasecSimul`), árvore de
+novo limpa em `73392afd7256aaa2adba03c0473e6b2b6744ac3d`.
+
+**Evidência nova capturada**: o log do próprio QEMU (`[LasecSimul][ESP32 reset] count=N mask=...
+cause0=... cause1=... expected=...`) mostra, no ciclo que falha, uma sequência de resets
+`ESP32_SW_CPU_RESET` (causa 12 -- reset de software por-núcleo, não watchdog: `ESP32_TGWDT_CPU_RESET`
+é 11) depois do reset esperado de app-cpu-startup (count=2): primeiro só o APP_CPU (count=3), de
+novo só o APP_CPU (count=4), depois PRO_CPU (count=5) -- três reinícios auto-disparados em
+sequência, todos `expected=no`. O PC do APP_CPU logo antes do count=3 (`pc1=0x401218b3`) fica dentro
+da janela de cache de instrução mapeada em flash (`iram0`, base `0x40000000`, 4MB -- ver
+`esp32_cache_init_region()`), a MESMA classe de região da Hipótese 1, só que o mecanismo específico
+lá não é o trap direto.
+
+**Leitura mais provável (não confirmada)**: o `Guru Meditation Error (Cache error)` acontece uma
+PRIMEIRA vez em algum ponto anterior ao que foi inspecionado nos logs até agora; o handler de panic
+do ESP-IDF então reinicia o núcleo (`SW_CPU_RESET`) -- e como um reset por-núcleo neste modelo QEMU
+(`esp32_cpu_reset()`/`esp32_timg_cpu_reset()` setam só `ESP32_SOC_RESET_PROCPU`/`APPCPU`, nunca
+`ESP32_SOC_RESET_PERIPH`) NÃO reresseta o DPORT (`cache_state`/tabelas MMU de flash), o boot
+seguinte herda o mesmo estado ruim e falha de novo -- daí a cascata de 3 reinícios
+antes do teste desistir. **A causa do PRIMEIRO panic continua desconhecida**: exigiria instrumentar
+mais cedo (ou capturar via gdbstub/`-d exec` num ciclo isolado) para flagrar o exato acesso/instrução
+que dispara o cause=7 (`PC_VALUE_ERROR_CAUSE`) que antecede o rótulo "Cache error" do panic handler.
+
+**Estado ao pausar**: nenhuma mudança foi commitada em `qemu_lasecSimul` (árvore limpa); o binário
+implantado em `devices/qemu-esp32/bin/` não foi tocado por esta investigação. Decisão do usuário:
+pausar aqui, documentar e retomar depois em vez de continuar o ciclo instrumentar→recompilar→rodar
+sem prazo definido. Próximo passo recomendado pra quem retomar: capturar o log completo (não só uma
+janela) do PRIMEIRO ciclo que falha, com `LASECSIMUL_TEST_VERBOSE=1`, e localizar o exato instante
+do primeiro `Guru Meditation` antes de reinstrumentar.
