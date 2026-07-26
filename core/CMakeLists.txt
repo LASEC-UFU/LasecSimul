@@ -689,11 +689,14 @@ else()
     target_link_libraries(qemu_queue_stress_test PRIVATE dl)
 endif()
 add_test(NAME qemu_queue_stress COMMAND qemu_queue_stress_test)
+set_tests_properties(qemu_queue_stress PROPERTIES
+    ENVIRONMENT "LASECSIMUL_ESP32_EXECUTION_MODE=deterministic"
+)
 
-# MTTCG opt-in: o mesmo bombeamento sustentado da arena, mas sem -icount e com uma thread TCG por
-# vCPU. Uma janela curta basta para validar relógio virtual não-zero, protocolo MPSC serializado,
-# duas threads reais e a linha de telemetria; o teste determinístico longo acima continua sendo a
-# regressão principal de estabilidade.
+# Cobertura explícita do MTTCG padrão: o mesmo bombeamento sustentado da arena, sem -icount e com
+# uma thread TCG por vCPU. Uma janela curta valida relógio virtual não-zero, protocolo MPSC
+# serializado, duas threads reais e a linha de telemetria; o teste acima força o modo determinístico
+# para proteger também o caminho de rollback.
 add_test(NAME qemu_mttcg_smoke COMMAND qemu_queue_stress_test)
 set_tests_properties(qemu_mttcg_smoke PROPERTIES
     ENVIRONMENT
@@ -954,9 +957,12 @@ endif()
 add_test(NAME mcu_scheduler_pacing_sync_real_qemu COMMAND mcu_scheduler_pacing_sync_real_qemu_test)
 # 90s de janela de estresse + boot -- generoso mas não deveria travar (esse é exatamente o
 # comportamento que este teste existe para pegar, ver seu doc-comment de topo).
-set_tests_properties(mcu_scheduler_pacing_sync_real_qemu PROPERTIES TIMEOUT 150)
+set_tests_properties(mcu_scheduler_pacing_sync_real_qemu PROPERTIES
+    ENVIRONMENT "LASECSIMUL_ESP32_EXECUTION_MODE=deterministic"
+    TIMEOUT 150
+)
 
-# Mesmo caminho completo acima no modo de duas threads. A janela reduzida valida que timestamps
+# Mesmo caminho completo acima no modo MTTCG padrão. A janela reduzida valida que timestamps
 # baseados no relógio virtual normal continuam compatíveis com AdvanceLimitFn/Scheduler sem somar
 # outros 90s à suíte padrão.
 add_test(NAME mcu_scheduler_pacing_sync_real_qemu_mttcg

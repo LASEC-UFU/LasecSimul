@@ -8,8 +8,13 @@
 > commit `f21f457c0f11660370a5745d6e41441bf421c90f`. A SoC `xtensa.esp32` passou a ser única;
 > `esp32-simul` é uma máquina derivada que preserva as diferenças de integração do LasecSimul.
 > Também foram incorporados repeated-START, leitura e ACK/NACK reais no I2C, delimitação por CS no
-> SPI e consumo atômico da injeção de IRQ. O modo MTTCG permanece deliberadamente experimental:
-> esta entrega não troca o modo determinístico `-icount`.
+> SPI e consumo atômico da injeção de IRQ.
+>
+> Atualização posterior: após as correções de concorrência do commit QEMU `ec22444` e a correção
+> definitiva de relógio/reset multicore do commit `f3e3cebbc119b792dca69860d5b0f02a268ac0b7`, os
+> testes sustentados e a validação do firmware real (23% → 98%), MTTCG passou a ser o padrão. O
+> modo anterior permanece disponível com `LASECSIMUL_ESP32_EXECUTION_MODE=deterministic`. Consulte
+> `docs/36-mttcg-esp32-experimental-2026-07-25.md`.
 
 ## 1. Resumo executivo
 

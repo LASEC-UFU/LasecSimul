@@ -96,21 +96,20 @@ enum class Esp32ExecutionMode {
 };
 
 /**
- * MTTCG is deliberately opt-in.  The default keeps the instruction-counted,
- * reproducible timeline used by existing projects and tests.  Setting
- * LASECSIMUL_ESP32_EXECUTION_MODE=mttcg removes -icount and asks TCG for one
- * host thread per ESP32 vCPU.  Removing the variable is the complete rollback.
+ * MTTCG is the default after sustained validation with the real firmware:
+ * one host TCG thread per ESP32 vCPU and no incompatible -icount timeline.
+ * LASECSIMUL_ESP32_EXECUTION_MODE=deterministic is the explicit rollback to
+ * single-thread TCG plus instruction-counted virtual time.
  *
- * Unknown values fail closed to deterministic mode.  This function runs once
- * per launch (like configuredIcountShift), so it must not cache the environment:
- * tests and a future settings UI may switch modes between Stop -> Run cycles.
+ * Unknown non-empty values fail closed to deterministic mode.  This function
+ * runs once per launch (like configuredIcountShift), so it must not cache the
+ * environment: tests and a settings UI may switch modes between Stop -> Run.
  */
 Esp32ExecutionMode configuredExecutionMode() {
     const std::string value =
         processEnvironmentValue("LASECSIMUL_ESP32_EXECUTION_MODE");
-    return value == "mttcg"
-               ? Esp32ExecutionMode::Mttcg
-               : Esp32ExecutionMode::Deterministic;
+    if (value.empty() || value == "mttcg") return Esp32ExecutionMode::Mttcg;
+    return Esp32ExecutionMode::Deterministic;
 }
 
 constexpr uint64_t kUart0Start = 0x3FF40000;

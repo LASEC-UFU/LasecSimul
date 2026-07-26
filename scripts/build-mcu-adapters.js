@@ -12,7 +12,7 @@
  * libstdc++/libgcc estáticos, ainda importava `libwinpthread-1.dll`; essa DLL não existe numa
  * instalação normal feita pelo Marketplace e fazia `LoadLibrary(adapter.dll)` falhar.
  *
- * Uso: node scripts/build-mcu-adapters.js [--clean]
+ * Uso: node scripts/build-mcu-adapters.js [--clean] [--config Release|Debug]
  */
 
 const { spawnSync } = require("child_process");
@@ -26,7 +26,8 @@ const configArg = process.argv.find((arg) => arg.startsWith("--config="));
 const configIndex = process.argv.indexOf("--config");
 const config =
   (configArg ? configArg.slice("--config=".length) : undefined) ??
-  (configIndex >= 0 ? process.argv[configIndex + 1] : undefined);
+  (configIndex >= 0 ? process.argv[configIndex + 1] : undefined) ??
+  "Release";
 
 const platformTarget = {
   win32: { dir: "win-x64", file: "adapter.dll", artifactNames: ["adapter.dll", "libadapter.dll"] },
@@ -109,10 +110,17 @@ function buildAdapter(adapterDir) {
   run(cmakeCommand, configureArgs, repoRoot);
   run(cmakeCommand, buildArgs, repoRoot);
 
-  const artifactPath = findArtifact(buildDir, platformTarget.artifactNames);
+  // Multi-config generators keep Debug/Release side by side. Searching the whole build tree can
+  // silently select a stale DLL from another configuration, so prefer (and on Windows require)
+  // the directory that this invocation has just built.
+  const configuredArtifactRoot =
+    process.platform === "win32" ? path.join(buildDir, config) : buildDir;
+  const artifactPath = fs.existsSync(configuredArtifactRoot)
+    ? findArtifact(configuredArtifactRoot, platformTarget.artifactNames)
+    : null;
   if (!artifactPath) {
     console.error(
-      `[build-mcu-adapters] [${name}] não encontrei o artefato compilado (procurei por ${platformTarget.artifactNames.join(", ")} em ${buildDir})`
+      `[build-mcu-adapters] [${name}] não encontrei o artefato compilado (procurei por ${platformTarget.artifactNames.join(", ")} em ${configuredArtifactRoot})`
     );
     process.exit(1);
   }

@@ -86,6 +86,7 @@ int main() {
         ("lasecsimul-icount-calib-test-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     std::filesystem::create_directories(dataDir);
     setEnv("LASECSIMUL_CORE_DATA_DIR", dataDir.string());
+    setEnv("LASECSIMUL_ESP32_EXECUTION_MODE", "deterministic");
     unsetEnv("LASECSIMUL_ESP32_ICOUNT_SHIFT");
 
     std::string logOutput;

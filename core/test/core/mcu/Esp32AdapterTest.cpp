@@ -105,6 +105,7 @@ int main() {
 
     TEST_ASSERT(std::string(adapter->chipId()) == "espressif.esp32", "chipId is espressif.esp32");
 
+    setExecutionMode(nullptr);
     const QemuLaunchSpec launch = adapter->buildLaunchArgs("build/blink.bin");
     TEST_ASSERT(launch.binary == "qemu-system-xtensa", "QEMU binary is Xtensa");
     TEST_ASSERT(containsArg(launch, "qemu-system-xtensa"),
@@ -117,17 +118,23 @@ int main() {
                 "launch args include firmware drive");
     TEST_ASSERT(!containsArg(launch, "-nic"),
                 "adapter base launch is network-neutral; Core adds OpenETH only when explicitly enabled");
-    TEST_ASSERT(containsArgPair(launch, "-accel", "tcg,thread=single"),
-                "default launch explicitly keeps one deterministic TCG thread");
-    TEST_ASSERT(containsArg(launch, "-icount"),
-                "default deterministic launch retains instruction-counted virtual time");
+    TEST_ASSERT(containsArgPair(launch, "-accel", "tcg,thread=multi"),
+                "default launch requests one host TCG thread per ESP32 vCPU");
+    TEST_ASSERT(!containsArg(launch, "-icount"),
+                "default MTTCG launch omits incompatible instruction-counted time");
 
-    setExecutionMode("mttcg");
-    const QemuLaunchSpec mttcgLaunch = adapter->buildLaunchArgs("build/blink.bin");
-    TEST_ASSERT(containsArgPair(mttcgLaunch, "-accel", "tcg,thread=multi"),
-                "opt-in MTTCG launch requests one host thread per ESP32 vCPU");
-    TEST_ASSERT(!containsArg(mttcgLaunch, "-icount"),
-                "MTTCG launch removes incompatible -icount");
+    setExecutionMode("deterministic");
+    const QemuLaunchSpec deterministicLaunch = adapter->buildLaunchArgs("build/blink.bin");
+    TEST_ASSERT(containsArgPair(deterministicLaunch, "-accel", "tcg,thread=single"),
+                "explicit deterministic rollback keeps one TCG thread");
+    TEST_ASSERT(containsArg(deterministicLaunch, "-icount"),
+                "explicit deterministic rollback restores instruction-counted virtual time");
+
+    setExecutionMode("invalid-mode");
+    const QemuLaunchSpec invalidLaunch = adapter->buildLaunchArgs("build/blink.bin");
+    TEST_ASSERT(containsArgPair(invalidLaunch, "-accel", "tcg,thread=single") &&
+                    containsArg(invalidLaunch, "-icount"),
+                "unknown non-empty execution mode fails closed to deterministic");
     setExecutionMode(nullptr);
 
     const auto regions = adapter->memoryRegions();

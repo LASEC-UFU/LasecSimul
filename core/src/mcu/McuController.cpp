@@ -188,8 +188,8 @@ QemuLaunchSpec McuController::buildLaunchSpec(const std::filesystem::path& firmw
     if (mttcg) {
         spec.diagnostics +=
             "[LasecSimul] execution=mttcg-realtime "
-            "(experimental, one TCG thread per vCPU; rollback: unset "
-            "LASECSIMUL_ESP32_EXECUTION_MODE)\n";
+            "(default, one TCG thread per vCPU; rollback: "
+            "LASECSIMUL_ESP32_EXECUTION_MODE=deterministic)\n";
     } else if (icount) {
         spec.diagnostics += "[LasecSimul] execution=deterministic-icount\n";
     }
