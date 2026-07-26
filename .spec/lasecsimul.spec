@@ -4519,3 +4519,69 @@ pausar aqui, documentar e retomar depois em vez de continuar o ciclo instrumenta
 sem prazo definido. Próximo passo recomendado pra quem retomar: capturar o log completo (não só uma
 janela) do PRIMEIRO ciclo que falha, com `LASECSIMUL_TEST_VERBOSE=1`, e localizar o exato instante
 do primeiro `Guru Meditation` antes de reinstrumentar.
+
+#### 32.5.2 Investigação time-boxed de retomada (2026-07-26): primeiro panic isolado por
+`addr2line`, hipótese de lock refutada, segundo modo de falha distinto encontrado
+
+Retomada focada, sem fix amplo: capturar o PRIMEIRO panic (core, PC, causa, registradores, estado
+de cache/DPORT, causa do reset, saída UART) antes de qualquer reavaliação de causa raiz.
+
+**Núcleo que falhou, isolado via `xtensa-esp32-elf-addr2line` contra `firmware.elf`** (sem precisar
+recompilar QEMU): o PC/backtrace de um dump capturado anteriormente resolvem para:
+- **Core 0 (PRO_CPU)**: `esp_cpu_wait_for_intr` ← `prvIdleTask` -- idling de verdade, não envolvido.
+- **Core 1 (APP_CPU)**: `adc_oneshot_ll_start` (`hal/adc_ll.h:437`) ← `adc_oneshot_read` ←
+  `__analogRead` ← **`loop()` em `main.cpp:29`** ← `loopTask`. É o APP_CPU, executando a escrita de
+  registrador que inicia uma leitura de ADC, o núcleo diretamente implicado.
+
+(Achado colateral: `platformio.ini` usa `build_src_filter = +<main.cpp>` -- diferente do suposto na
+seção 32.3.5/32.3.6 antiga, `main.cpp` CHAMA `analogRead()` a cada 10ms; `>graf:N:0|g` é esse próprio
+trace, não instrumentação de cobertura.)
+
+`EXCCAUSE=7` em ambos os dumps não corresponde a nada que este QEMU realmente levante --
+`PC_VALUE_ERROR_CAUSE` (valor 7 no enum do `target/xtensa/cpu.h`) não aparece em nenhuma chamada de
+`HELPER(exception_cause)`/`gen_exception_cause` no fork inteiro. Ou é um valor sintético/residual
+escrito pelo próprio handler de panic do ESP-IDF (via NMI cross-core), ou aponta pra um mecanismo
+ainda não instrumentado.
+
+**Hipótese testada e REFUTADA**: `m_arenaOrderLock` (mutex de serialização MTTCG introduzido em
+`ec22444`, ver `arenaTransactionBegin()`/`End()` em `softmmu/simuliface.c`) sendo mantido preso
+durante o busy-wait de fila cheia em `waitForSynch()` -- poderia starvar o heartbeat (`simu_event`)
+ou o núcleo oposto por segundos. Instrumentado (log de espera/posse > 5ms, com core e timestamp),
+recompilado, rodado em duas baterias (60 e 90 ciclos, firmware real): **zero ocorrências do lock
+sendo disputado**, mesmo no ciclo que falhou na bateria de 90. Hipótese descartada; instrumentação
+revertida (`git checkout -- softmmu/simuliface.c`).
+
+**Segundo modo de falha, distinto do "Cache error", encontrado na mesma bateria de 90 ciclos**
+(ciclo 76): `schedulerNow=20565100000` (20,5s de tempo virtual contra um alvo de 5s de execução real)
+e **captura de UART completamente VAZIA** (nenhum banner de boot, nenhum trace) -- só os dois resets
+esperados (inicial + app-cpu-startup), sem a cascata de `SW_CPU_RESET` do primeiro modo. Isso bate
+com um comportamento já documentado e revertido deliberadamente: `SimulationSession::
+computeSlowestMcuPositionNs()` exclui um MCU do piso de avanço até ele despachar seu primeiro evento
+de verdade (ver comentário "Achado 2026-07-23" no código, e seção 32.3.5 acima) -- sem nenhum MCU
+contribuindo e sem `realTimeRate` configurado (este teste nunca configura), nada limita o avanço do
+Scheduler, que pode disparar numa rajada antes do QEMU sequer ter produzido alguma coisa.
+
+**Tentativa de reaplicar a reversão, testada e REFUTADA de novo**: reimplementado o tratamento
+"posição 0 em vez de nullopt" (mantendo a MESMA exclusão por staleness de `kStaleMcuTimeout` como
+rede de segurança, na expectativa de que ela cobrisse o caso que causou a reversão original).
+Recompilado o Core, rodado `session_restart_stress_test` SEM firmware real (15 ciclos de 600ms,
+flash em branco -- exatamente o cenário que motivou a reversão de 2026-07-23): **14 de 15 ciclos
+TRAVARAM NO MEIO** (contra 0/15 antes da mudança) -- regressão severa, confirma que a reversão
+original estava certa e que o raciocínio de "o teste de firmware real usa ciclos de 5s, bem mais que
+`kStaleMcuTimeout`" não se aplica ao teste de flash em branco (que continua rodando ciclos de
+600ms). Mudança revertida (`git checkout -- core/src/session/SimulationSession.cpp`), Core
+recompilado de volta ao estado limpo. **Este caminho está fechado**: `computeSlowestMcuPositionNs()`
+deve continuar excluindo (não zerando) um MCU sem posição ainda.
+
+**Estado ao final desta rodada**: nenhuma mudança de código sobrevive desta investigação (só
+`.spec` foi atualizado) -- `qemu_lasecSimul` limpo, `core/src/session/SimulationSession.cpp` limpo,
+nenhum binário implantado foi tocado. Dois modos de falha residuais permanecem em aberto,
+aparentemente independentes um do outro:
+1. "Cache error" (Guru Meditation, cascata de `SW_CPU_RESET`) -- causa do PRIMEIRO panic ainda
+   desconhecida (ver 32.5.1).
+2. "UART vazia + salto de tempo virtual" -- mecanismo entendido (MCU sem posição não limita o
+   avanço), mas a correção óbvia (zerar em vez de excluir) já foi tentada duas vezes e regride o
+   teste de flash em branco as duas vezes. Precisaria de uma abordagem mais fina (ex.: um teto
+   temporário SÓ durante uma janela inicial curta, não indefinidamente, ou alguma forma de o MCU
+   sinalizar "processo já vivo, aguardando primeiro evento" sem reintroduzir o travamento de
+   flash em branco) -- não tentado ainda.
