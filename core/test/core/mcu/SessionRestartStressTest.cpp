@@ -24,6 +24,10 @@
 #include "plugins/GlobalPluginCache.hpp"
 #include "plugins/PluginRuntime.hpp"
 #include "session/SimulationSession.hpp"
+#ifdef _WIN32
+#include <crtdbg.h>
+#include <windows.h>
+#endif
 
 using namespace lasecsimul;
 using namespace lasecsimul::session;
@@ -88,6 +92,23 @@ std::string decodeHex(const std::string& hex) {
 } // namespace
 
 int main() {
+#ifdef _WIN32
+    // Achado ao vivo 2026-07-27 (.spec 32.5.8): um crash interno do processo QEMU filho (assert do
+    // proprio QEMU, ex. fifo8_pop) pode deixar o processo deste teste num estado que o CRT de Debug
+    // do MSVC trata como abort()/assercao -- o comportamento PADRAO do CRT de Debug é mostrar uma
+    // caixa de dialogo MODAL ("Debug Error!... abort() has been called") que BLOQUEIA o processo
+    // esperando um clique humano. Para uma bateria automatizada e não-supervisionada (até 300
+    // ciclos pedidos nesta tarefa), isso é inaceitável -- trava a tela do usuário indefinidamente
+    // em vez de só terminar o processo. Redireciona qualquer relatório do CRT (assert/erro) e o
+    // WER (Windows Error Reporting) pra stderr/saída direta do processo, nunca uma caixa de
+    // dialogo interativa.
+    _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+    _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR);
+    _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+    SetErrorMode(SEM_NOGPFAULTERRORBOX | SEM_FAILCRITICALERRORS);
+#endif
 #ifndef ESP32_ADAPTER_DLL_PATH
 #error "ESP32_ADAPTER_DLL_PATH precisa ser definido pelo CMakeLists (caminho do adapter.dll real)"
 #endif
