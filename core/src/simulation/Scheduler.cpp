@@ -69,6 +69,10 @@ bool Scheduler::settleUntilStableLocked() {
     if (m_commandDrain) m_commandDrain();
     const bool profile = m_profilingEnabled.load(std::memory_order_relaxed);
     const auto profileStart = profile ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+    // m_nowNs no INÍCIO deste settle -- ver .spec 32.5.19. settleUntilStableLocked() em si nunca
+    // avança m_nowNs (isso é papel de processNextEventUntilLocked()), então este valor já representa
+    // o instante da timeline em que a chamada toda ocorreu, não só seu começo.
+    const uint64_t profileStartNowNs = profile ? m_nowNs : 0;
     bool hadWork = false;
     const size_t maxIter = m_maxNonLinearIterations.load(std::memory_order_relaxed);
     size_t iter = 0;
@@ -86,9 +90,21 @@ bool Scheduler::settleUntilStableLocked() {
     m_lastSettleConverged = m_dirty.empty();
     if (profile) {
         const auto elapsed = std::chrono::steady_clock::now() - profileStart;
-        m_settleNanoseconds.fetch_add(
-            static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count()),
-            std::memory_order_relaxed);
+        const uint64_t elapsedNs =
+            static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count());
+        m_settleNanoseconds.fetch_add(elapsedNs, std::memory_order_relaxed);
+        // Diagnostico .spec 32.5.18 -- rastreia a chamada individual mais longa (nao so a soma),
+        // pra testar a hipotese de que uma UNICA chamada de settle segurando m_mutex por muito
+        // tempo (circuito lento pra convergir) e o que causa os saltos de ~0,7-1,1s de tempo
+        // virtual observados do lado QEMU antes do watchdog do TIMER_GROUP1 expirar genuinamente.
+        uint64_t previousMax = m_maxSettleNanoseconds.load(std::memory_order_relaxed);
+        while (elapsedNs > previousMax &&
+               !m_maxSettleNanoseconds.compare_exchange_weak(
+                   previousMax, elapsedNs, std::memory_order_relaxed)) {
+        }
+        if (elapsedNs >= previousMax) {
+            m_maxSettleAtNowNs.store(profileStartNowNs, std::memory_order_relaxed);
+        }
     }
     return hadWork;
 }

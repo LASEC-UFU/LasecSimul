@@ -41,6 +41,17 @@ public:
         uint64_t settleIterations = 0;
         uint64_t settleNanoseconds = 0;
         uint64_t pendingEvents = 0;
+        /** Duração da MAIOR chamada individual de settleUntilStableLocked(), não a soma acumulada
+         * (settleNanoseconds acima). Adicionado 2026-07-27 (.spec 32.5.18) -- diagnosticar se uma
+         * ÚNICA chamada de settle segurando m_mutex por muito tempo (circuito lento pra convergir)
+         * é a causa dos saltos de ~0,7-1,1s de tempo virtual observados do lado QEMU logo antes do
+         * watchdog do TIMER_GROUP1 expirar genuinamente. */
+        uint64_t maxSettleNanoseconds = 0;
+        /** m_nowNs (tempo virtual do Scheduler) no INÍCIO da chamada de settle que produziu
+         * maxSettleNanoseconds acima. Adicionado 2026-07-27 (.spec 32.5.19) -- correlacionar esse
+         * settle mais lento com saltos de tempo virtual/waits do lado QEMU exige saber ONDE na
+         * timeline ele ocorreu, não só quanto durou. */
+        uint64_t maxSettleAtNowNs = 0;
     };
     struct TimeStepDecision { bool accept = true; double errorRatio = 0.0; };
     using SettleStepFn = std::function<bool()>;
@@ -156,6 +167,8 @@ public:
         m_timeSteps.store(0, std::memory_order_relaxed);
         m_settleIterations.store(0, std::memory_order_relaxed);
         m_settleNanoseconds.store(0, std::memory_order_relaxed);
+        m_maxSettleNanoseconds.store(0, std::memory_order_relaxed);
+        m_maxSettleAtNowNs.store(0, std::memory_order_relaxed);
     }
     MetricsSnapshot metrics() const {
         return {m_profilingEnabled.load(std::memory_order_relaxed),
@@ -163,7 +176,9 @@ public:
                 m_timeSteps.load(std::memory_order_relaxed),
                 m_settleIterations.load(std::memory_order_relaxed),
                 m_settleNanoseconds.load(std::memory_order_relaxed),
-                m_pendingEventSnapshot.load(std::memory_order_relaxed)};
+                m_pendingEventSnapshot.load(std::memory_order_relaxed),
+                m_maxSettleNanoseconds.load(std::memory_order_relaxed),
+                m_maxSettleAtNowNs.load(std::memory_order_relaxed)};
     }
     /** Snapshot lock-free: telemetry must never queue ahead of a stop IPC request. */
     uint64_t nowNs() const { return m_nowSnapshotNs.load(std::memory_order_acquire); }
@@ -332,6 +347,8 @@ private:
     std::atomic<uint64_t> m_timeSteps{0};
     std::atomic<uint64_t> m_settleIterations{0};
     std::atomic<uint64_t> m_settleNanoseconds{0};
+    std::atomic<uint64_t> m_maxSettleNanoseconds{0};
+    std::atomic<uint64_t> m_maxSettleAtNowNs{0};
     std::atomic<uint64_t> m_pendingEventSnapshot{0};
     uint64_t m_currentTimeStepNs = 0;
     uint64_t m_minimumTimeStepNs = 1;

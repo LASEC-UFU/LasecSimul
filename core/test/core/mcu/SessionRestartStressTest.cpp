@@ -207,6 +207,12 @@ int main() {
         // Mesma ordem que a Extension real usa: Scheduler primeiro (coreLifecycle.ts::runSimulation
         // chama Core.run(), que religa o Scheduler), depois loadMcuFirmware.
         if (!session.scheduler().isRunning()) session.scheduler().start();
+        // [DIAGNOSTIC] .spec 32.5.18 -- testar a hipotese de que uma unica chamada de
+        // settleUntilStableLocked() segurando m_mutex por muito tempo (circuito lento pra
+        // convergir) explica os saltos de ~0,7-1,1s de tempo virtual vistos do lado QEMU antes do
+        // watchdog do TIMER_GROUP1 expirar. Reset por-ciclo pra isolar o maximo deste ciclo.
+        session.scheduler().setProfilingEnabled(true);
+        session.scheduler().resetMetrics();
 
         try {
             McuDebugOptions debug;
@@ -280,6 +286,15 @@ int main() {
         bool observedGpioHigh = false;
         bool observedGpioLowAfterHigh = false;
         int gpioTransitions = 0;
+        // [WAIT-DIAG] .spec 32.5.19 -- nowNs() do Scheduler, nao wall-clock: os eventos da fila do
+        // arena carregam o simuClockNs() do lado QEMU (ver simuliface.c), entao esta e a MESMA linha
+        // do tempo virtual que aparece em start_virt_ns/end_virt_ns dos logs [WAIT-DIAG] e em
+        // maxSettleAtNowNs do Scheduler -- permite comparar diretamente QUANDO (nao so SE) cada
+        // espera/settle ocorreu em relacao a ultima borda observada do GPIO13, sem depender de
+        // alinhar relogios de parede entre os dois processos.
+        uint64_t firstGpioHighNowNs = 0;
+        uint64_t firstGpioLowAfterHighNowNs = 0;
+        uint64_t lastGpioTransitionNowNs = 0;
         const auto runDeadline = std::chrono::steady_clock::now() + runDuration;
         const auto maximumDeadline = runDeadline + (useRealFirmware ? gpioGrace
                                                                     : std::chrono::milliseconds{0});
@@ -287,7 +302,14 @@ int main() {
             if (useRealFirmware) {
                 try {
                     const bool high = session.nodeVoltageOfPin(mcuIndex, "GPIO13") > 2.0;
-                    if (haveGpioLevel && high != previousGpioHigh) ++gpioTransitions;
+                    if (haveGpioLevel && high != previousGpioHigh) {
+                        ++gpioTransitions;
+                        lastGpioTransitionNowNs = session.scheduler().nowNs();
+                        if (high && firstGpioHighNowNs == 0) firstGpioHighNowNs = lastGpioTransitionNowNs;
+                        if (!high && observedGpioHigh && firstGpioLowAfterHighNowNs == 0) {
+                            firstGpioLowAfterHighNowNs = lastGpioTransitionNowNs;
+                        }
+                    }
                     observedGpioHigh = observedGpioHigh || high;
                     observedGpioLowAfterHigh = observedGpioLowAfterHigh || (observedGpioHigh && !high);
                     previousGpioHigh = high;
@@ -336,9 +358,11 @@ int main() {
                          cycle, static_cast<unsigned long long>(virtualTimeAtStart),
                          static_cast<unsigned long long>(virtualTimeAfter));
             if (useRealFirmware) {
-                std::fprintf(stderr, ", GPIO13 bordas=%d high=%s low-apos-high=%s",
+                std::fprintf(stderr, ", GPIO13 bordas=%d high=%s low-apos-high=%s"
+                                     " ultimaBordaNowNs=%llu",
                              gpioTransitions, observedGpioHigh ? "sim" : "nao",
-                             observedGpioLowAfterHigh ? "sim" : "nao");
+                             observedGpioLowAfterHigh ? "sim" : "nao",
+                             static_cast<unsigned long long>(lastGpioTransitionNowNs));
             }
             std::fprintf(stderr, ")\n");
         }
@@ -353,12 +377,16 @@ int main() {
                     : nullptr;
             std::fprintf(stderr,
                 "  ciclo %d: GPIO13 TRAVOU -- bordas=%d high=%s low-apos-high=%s"
+                " firstHighNowNs=%llu firstLowAfterHighNowNs=%llu ultimaBordaNowNs=%llu"
                 " arenaRunning=%llu queue=%llu/%llu schedulerNow=%llu pending=%zu"
                 " head={timePs=%llu action=%llu addr=0x%llx}"
                 " poll={enabled=%s thread=%s scheduled=%s generation=%llu}"
                 " abi=%u peerReady=%s caps=0x%llx\n",
                 cycle, gpioTransitions, observedGpioHigh ? "sim" : "nao",
                 observedGpioLowAfterHigh ? "sim" : "nao",
+                static_cast<unsigned long long>(firstGpioHighNowNs),
+                static_cast<unsigned long long>(firstGpioLowAfterHighNowNs),
+                static_cast<unsigned long long>(lastGpioTransitionNowNs),
                 static_cast<unsigned long long>(failedArena ? failedArena->running : 999),
                 static_cast<unsigned long long>(failedArena ? failedArena->queueReadIndex : 999),
                 static_cast<unsigned long long>(failedArena ? failedArena->queueWriteIndex : 999),
@@ -386,6 +414,31 @@ int main() {
         } else if (verboseLogs) {
             std::fprintf(stderr, "  Logs QEMU do ciclo %d:\n%s\n", cycle,
                          mcuPtr->qemuLogs().c_str());
+        }
+
+        // [DIAGNOSTIC] .spec 32.5.19 -- ver comentario no setProfilingEnabled() acima. Impresso
+        // incondicionalmente (ciclo passe ou falhe) pra comparar. maxSettleAtNowNs e as bordas do
+        // GPIO13 estao todas na MESMA linha do tempo virtual que start_virt_ns/end_virt_ns dos logs
+        // [WAIT-DIAG] do lado QEMU (ver simuliface.c) -- correlacao cruzada entre os dois processos
+        // nao depende de alinhar relogios de parede, so comparar estes valores numericamente.
+        {
+            const auto metrics = session.scheduler().metrics();
+            std::fprintf(stderr,
+                "  ciclo %d: scheduler metrics -- settleIterations=%llu settleNanoseconds=%llu"
+                " maxSettleNanoseconds=%llu (%.3fms) maxSettleAtNowNs=%llu timeSteps=%llu"
+                " eventsProcessed=%llu gpioFirstHighNowNs=%llu gpioFirstLowAfterHighNowNs=%llu"
+                " gpioLastEdgeNowNs=%llu\n",
+                cycle,
+                static_cast<unsigned long long>(metrics.settleIterations),
+                static_cast<unsigned long long>(metrics.settleNanoseconds),
+                static_cast<unsigned long long>(metrics.maxSettleNanoseconds),
+                static_cast<double>(metrics.maxSettleNanoseconds) / 1.0e6,
+                static_cast<unsigned long long>(metrics.maxSettleAtNowNs),
+                static_cast<unsigned long long>(metrics.timeSteps),
+                static_cast<unsigned long long>(metrics.eventsProcessed),
+                static_cast<unsigned long long>(firstGpioHighNowNs),
+                static_cast<unsigned long long>(firstGpioLowAfterHighNowNs),
+                static_cast<unsigned long long>(lastGpioTransitionNowNs));
         }
 
         session.stopSimulation();
