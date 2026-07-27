@@ -58,7 +58,7 @@ size_t Scheduler::dirtyCount() const {
     return m_dirty.size();
 }
 
-bool Scheduler::settleUntilStableLocked() {
+bool Scheduler::settleUntilStableLocked(std::unique_lock<std::mutex>& lock) {
     // Drena a fila de comandos externa (ver CommandDrainFn) ANTES do laço de settle -- cobre o caso
     // "chegou um comando, o circuito já estava quieto" (dirty vazio, senão nunca entraria no laço
     // abaixo pra dar outra chance). Mesmo raciocínio de `m_stopRequested`/`m_paused` logo abaixo:
@@ -86,6 +86,21 @@ bool Scheduler::settleUntilStableLocked() {
         if (profile) m_settleIterations.fetch_add(1, std::memory_order_relaxed);
         hadWork = true;
         if (!m_settleStep || !m_settleStep()) break;
+        // Achado 2026-07-27 (.spec 32.5.19/32.5.20, bateria correlacionada de 200 ciclos): segurar
+        // m_mutex pelo laço inteiro (até 20 iterações, cada uma podendo custar dezenas de ms num
+        // circuito complexo -- 100-700ms observados na prática) bloqueia QUALQUER outra thread que
+        // precise dele, inclusive a thread de poll do MCU tentando markDirty() ao consumir a fila da
+        // arena -- que por sua vez para de drenar, fazendo o lado QEMU bloquear em
+        // waitForQueueDrain()/waitForSynch() pela MESMA duração. Se isso coincidir com uma seção
+        // crítica do firmware guest (interrupções desabilitadas, ex. leitura de ADC via
+        // adc_oneshot_read()), o Interrupt Watchdog do TIMER_GROUP1 pode genuinamente estourar --
+        // mecanismo completo documentado no .spec. Soltar e reobter o mutex aqui, uma vez por
+        // iteração (só quando o laço vai continuar, nunca no caminho já convergido), dá a threads
+        // bloqueadas nele uma chance real de progredir entre iterações, sem mudar a ordem dos
+        // eventos, a lógica de convergência, ou o protocolo Core↔QEMU -- settleUntilStableLocked()
+        // ainda entrega exatamente o mesmo resultado final, só não monopoliza o mutex pra chegar lá.
+        lock.unlock();
+        lock.lock();
     }
     m_lastSettleConverged = m_dirty.empty();
     if (profile) {
@@ -134,7 +149,7 @@ bool Scheduler::processNextEventUntilLocked(std::unique_lock<std::mutex>& lock, 
 
 void Scheduler::runUntil(uint64_t targetTimeNs) {
     std::unique_lock<std::mutex> lock(m_mutex);
-    const bool initialWork = settleUntilStableLocked();
+    const bool initialWork = settleUntilStableLocked(lock);
     if (initialWork && m_lastSettleConverged && m_stableStep) m_stableStep(m_nowNs);
 
     while (m_nowNs < targetTimeNs) {
@@ -158,7 +173,7 @@ void Scheduler::runUntil(uint64_t targetTimeNs) {
                 m_paused.load(std::memory_order_acquire)) break;
             processNextEventUntilLocked(lock, nextTime);
         }
-        settleUntilStableLocked();
+        settleUntilStableLocked(lock);
         bool accepted = true;
         if (m_commitTimeStep && nextTime > previousTime) {
             const TimeStepDecision decision = m_commitTimeStep(previousTime, nextTime, eventBoundary);

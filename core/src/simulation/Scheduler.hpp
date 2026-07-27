@@ -299,7 +299,7 @@ private:
 
     void pushEventLocked(uint64_t timeNs, uint32_t componentIndex, EventCallback callback);
     bool processNextEventUntilLocked(std::unique_lock<std::mutex>& lock, uint64_t targetTimeNs);
-    bool settleUntilStableLocked();
+    bool settleUntilStableLocked(std::unique_lock<std::mutex>& lock);
 
     SparseSet<uint32_t> m_dirty;
     std::priority_queue<ScheduledEvent, std::vector<ScheduledEvent>, ScheduledEventOrder> m_events;
