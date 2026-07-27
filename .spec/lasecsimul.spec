@@ -4585,3 +4585,381 @@ aparentemente independentes um do outro:
    temporário SÓ durante uma janela inicial curta, não indefinidamente, ou alguma forma de o MCU
    sinalizar "processo já vivo, aguardando primeiro evento" sem reintroduzir o travamento de
    flash em branco) -- não tentado ainda.
+
+#### 32.5.3 Medição da latência "abertura de arena -> primeira posição" pro item 2 de 32.5.2 (2026-07-26)
+
+Retomando o item 2 em aberto acima ("abordagem mais fina... não tentado ainda"): antes de tentar
+qualquer janela de avanço inicial limitada, medido isoladamente (repositório trabalhado num worktree
+Git dedicado, `investigate/scheduler-empty-uart-2026-07-26`, pra não disputar o build do Core com a
+investigação paralela do "Cache error" acima) quanto tempo `pacingPositionNs()` de fato fica `nullopt`
+depois de `loadMcuFirmware()`, tanto na condição que já regrediu a tentativa anterior (flash em
+branco, ciclos de 600ms) quanto numa condição ainda não medida (firmware real, ciclos de 5s).
+
+**Instrumentação (temporária, `[MEASURE-TEMP]` em `SessionRestartStressTest.cpp`, revertida depois
+desta medição)**: cada ciclo cronometra de "`loadMcuFirmware()` chamado" até
+`pacingPositionNs().has_value()` virar verdadeiro (ou até a MCU morrer/4s de timeout), imprime
+`positionLatencyMs` em stderr. Adicionado também `McuComponent::arenaOpenWallNs()` (getter lock-free
+do instante de abertura da arena, `steady_clock`) como infraestrutura preparatória -- NÃO consumido
+por nenhum código de produção nesta sessão (comentário correspondente em `McuComponent.hpp` deixa
+isso explícito pra não confundir leitura futura); revertido junto com a instrumentação de medição.
+
+**Flash em branco** (`session_restart_stress_test`, 30 ciclos e depois 15 -- padrão do teste):
+latência tipicamente 114-232ms; dois outliers isolados (819ms no ciclo 0 da bateria de 30 -- primeiro
+carregamento do processo, provável custo de I/O a frio do binário/DLL; 412ms num ciclo tardio isolado
+da mesma bateria). 0/30 e 0/15 falhas em ambas.
+
+**Firmware real, primeira bateria (15 ciclos de 5s)**: rodada por engano em paralelo com uma
+recompilação completa do Core (`cmake --build --parallel 4`) -- RAM livre do sistema caiu a ~0,2GB de
+7,35GB totais durante a sobreposição (o `--parallel 4` já tinha esgotado o *heap* do compilador,
+`error C1060`, em dois targets antes disso). Latência disparou nos ciclos 10-12 (1289ms, 841ms,
+2720ms) e o ciclo 13 travou com GPIO13 preso em HIGH (`bordas=1 high=sim low-apos-high=nao`) -- mesma
+classe do "Cache error" ainda em aberto na seção 32.5.1 (`arena->running=1`, fila cheia 1105/1105,
+tempo virtual seguia avançando). **Refeita isolada** (nada mais competindo por CPU/RAM): 15/15 ciclos
+OK, latência 115-364ms (média ~162ms). Isso confirma que a bateria contaminada não mede a
+variabilidade intrínseca do firmware real -- a pressão de RAM da recompilação concorrente
+provavelmente inflou os outliers de latência e pode ter contribuído pra tornar o travamento de Cache
+error mais provável de disparar dentro da janela do teste. A falha de GPIO13 fica registrada como mais
+uma reprodução do bug aberto em 32.5.1 (não investigada mais a fundo aqui -- fora do escopo desta
+medição).
+
+**Leitura pro item 2 de 32.5.2**: mesmo isolando a interferência de recompilação, a cauda de latência
+do firmware real (364ms, só 15 amostras) já é quase 2x o pior caso limpo do flash em branco (232ms) --
+e ambas as amostras (15-30 ciclos) são pequenas demais pra confiar num teto curto e fixo sem repetir
+com a mesma bateria de 60-90 ciclos usada em 32.5.1/32.5.2. `kStaleMcuTimeout` (1000ms,
+`SimulationSession.cpp:35`, já documentado como "ponto de partida a refinar com medição real") folga
+confortavelmente acima de toda amostra limpa coletada aqui (>2,7x o pior caso limpo de 364ms) -- os
+dados não sustentam reduzi-lo, e também não chegam a sustentar uma janela inicial curta separada com
+confiança (a mesma ordem de grandeza de `kStaleMcuTimeout` já cobre o caso limpo observado, sem deixar
+claro que uma janela dedicada menor seria seguro sob carga real). **Nenhuma mudança de comportamento
+de produção foi feita** nesta rodada -- só a infraestrutura de medição (revertida). O item 2 continua
+aberto: qualquer tentativa futura de janela inicial limitada precisa de uma bateria maior (60-90
+ciclos) de firmware real, sem contaminação de recompilação concorrente, antes de escolher um valor.
+
+#### 32.5.4 Pista forte para a causa do primeiro panic: `EXCCAUSE=7` aciona um hang JÁ COMPILADO no
+ESP-IDF quando o cache-IA nunca latcheia -- evidência estática, ainda NÃO confirmada ao vivo (2026-07-26)
+
+Retomada sem bateria ao vivo concluída (ver "Bloqueios de ambiente" abaixo) -- progresso via
+engenharia reversa direta dos binários prebuilt do ESP-IDF que este firmware realmente linka
+(`framework-arduinoespressif32-libs/esp32/lib/libesp_system.a`, objetos extraídos com `ar x` e lidos
+com `xtensa-esp32-elf-objdump -dr`/`nm`), uma fonte de evidência que nenhuma sessão anterior tinha
+usado, cruzada com o código-fonte do fork QEMU.
+
+**Confirmado por leitura direta do binário do ESP-IDF**: `EXCCAUSE=7` nos dumps é
+`PANIC_RSN_CACHEERR` (`panic_reason.h`), NÃO uma causa real do xtensa -- a tabela real de causas
+xtensa (`reason$1[]` em `panic_arch.c.obj`) rotula o índice 7 como `"PCValue"`; o índice 7 que
+efetivamente aparece nos dumps vem de uma tabela SEPARADA e sintética do ESP-IDF (`pseudo_reason$0[]`,
+índice 7 = `"Cache error"`, confirmado despejando os bytes crus de `.rodata.str1.1` nos offsets
+relocados). Bate com a suspeita já registrada em 32.5.2, agora com evidência do binário real em vez
+de inferência.
+
+**Achado novo, confirmado por desmontagem de `panic_handler.c.obj` (função `panicHandler`)**: quando
+`panic_get_cause(frame)==7`, o código chama `esp_cache_err_get_cpuid()`; se o retorno for `-1`
+(nenhum núcleo com `illegal_access_status` latchado no momento) E o núcleo em pânico for o APP_CPU
+(`core_id==1`), o ESP-IDF JÁ COMPILADO entra num loop infinito de auto-salto (`j` pro próprio
+endereço) -- **um hang real do firmware, não um artefato do QEMU**. PRO_CPU com `cpuid==-1` em vez
+disso segue o caminho normal do panic handler.
+
+**Cruzamento com o fork QEMU, verificado linha a linha nesta sessão contra `hw/misc/esp32_dport.c` e
+`hw/xtensa/esp32.c`**: `illegal_access_status` só é setado em `esp32_cache_ill_read()`
+(`esp32_dport.c:326,333`) e só é limpo em `esp32_dport_clear_ill_trap_state()` (`esp32_dport.c:352`),
+chamada apenas por `esp32_dig_reset()` (`esp32.c:160,165`) e `esp32_timg_sys_reset()`
+(`esp32.c:217,222`) -- NUNCA por `esp32_cpu_reset()` (`esp32.c:170`, o caminho `ESP32_SW_CPU_RESET`
+usado pelo reboot-por-panic real) nem por `esp32_timg_cpu_reset()` (`esp32.c:197`) nem por
+`esp32_app_cpu_reset_async()` (`esp32.c:146`) -- exatamente os três caminhos de reset usados pela
+cascata documentada em 32.5.1/32.5.2. Além disso, os handlers de escrita de `A_DPORT_PRO_CACHE_CTRL1`/
+`A_DPORT_APP_CACHE_CTRL1` (`esp32_dport.c:182-210`) só armazenam o registrador cru e chamam
+`esp32_cache_state_update()` -- nenhum bit tipo `MMU_IA_CLR` (o mecanismo de limpeza por software que
+o hardware real expõe) é sequer inspecionado; uma escrita nesse bit é descartada em silêncio.
+
+**Hipótese unificada (evidência estática forte, ainda NÃO confirmada ao vivo)**: uma vez que
+`illegal_access_status` latcheia por qualquer motivo -- inclusive um evento raro/transitório que o
+hardware real tolera via `MMU_IA_CLR` -- este fork não dá ao guest NENHUMA forma de limpar isso pelos
+caminhos que o reboot-por-panic real do ESP-IDF de fato usa. Se isso ocorrer no APP_CPU, o próprio
+ESP-IDF trava para sempre por design (achado do parágrafo anterior) -- batendo exatamente com o
+sintoma observado (`arena->running=1`, heartbeats seguem, guest genuinamente travado).
+
+**Bloqueios de ambiente que impediram a confirmação ao vivo nesta sessão** (nenhum é do código sob
+investigação): disco a 0 bytes livres no início (ENOSPC numa edição banal; liberado ~5GB via
+lixeira+cache pip/npm -- ~3,8GB livres ao final, confirmado; vale atenção independente deste bug);
+um `qemu-system-xtensa.exe` (binário oficial implantado) órfão de ~4h consumindo ~8h de CPU
+acumuladas, provável espécime do próprio hang, morto para liberar CPU; contenção pesada da
+investigação paralela da seção 32.5.3 recompilando o Core; e um hang REPRODUZIDO 4/4 vezes (com o
+binário oficial E com um instrumentado, descartando as próprias mudanças como causa) no próprio
+`session_restart_stress_test.exe` -- ver 32.5.5 abaixo, achado novo e distinto que impediu a coleta
+de uma bateria ao vivo.
+
+Instrumentação usada (log dedicado sem cap em `c:/tmp/lasecsimul_cache_trace.log`, fechando o risco de
+truncamento do `qemuLogs()` de 1MiB já apontado em 32.5.1: trap hits em `esp32_cache_ill_read()`,
+chamadas de clear em `esp32_dport_clear_ill_trap_state()`, tentativas de escrita em `MMU_IA_CLR`, e
+status a cada reset por-núcleo em `esp32.c`) foi testada só até compilar; revertida sem rodar bateria
+completa (`git checkout -- hw/misc/esp32_dport.c hw/xtensa/esp32.c` em `qemu_lasecSimul`, árvore de
+novo limpa, confirmado).
+
+**Próximo passo recomendado**: (1) resolver o ambiente primeiro -- espaço em disco, recompilar
+`session_restart_stress_test` com a fonte atual (que já tem `LASECSIMUL_STRESS_BOOT_MS`, ver 32.5.5)
+e investigar o hang pós-falha-de-boot como bug separado; (2) só depois, reaplicar a instrumentação
+descrita acima numa bateria real de 60-90 ciclos, correlacionando timestamps pra confirmar se o trap
+de fato dispara mais cedo do que a janela truncada da Hipótese 1 (já refutada em 32.5.2) conseguiu
+capturar, e se `cpuid==-1` com o panic no APP_CPU realmente precede o travamento observado.
+
+#### 32.5.5 Achado colateral: `session_restart_stress_test.exe` trava indefinidamente se o boot do
+ciclo 0 não alcançar `arena->running==1` a tempo -- bug de harness novo e distinto (2026-07-26)
+
+Durante a tentativa de bateria ao vivo da seção 32.5.4, achado que o binário compilado de
+`session_restart_stress_test` (`core/build/Debug/`, timestamp 2026-07-25 19:48) estava desatualizado
+em relação ao `.cpp` fonte atual (commit `c67ac1e`, 2026-07-26, que já introduziu
+`LASECSIMUL_STRESS_BOOT_MS` como variável de ambiente pro timeout de boot) -- o binário rodando não
+reflete esse knob, o timeout de boot fica fixo em 5000ms independente da variável.
+
+Mais importante: **reproduzido 4/4 vezes, tanto com o binário QEMU oficial quanto com um
+instrumentado** (descartando a própria instrumentação como causa) -- sempre que o boot do ciclo 0 não
+alcança `arena->running==1` dentro do timeout, `session_restart_stress_test.exe` trava
+INDEFINIDAMENTE, sem sequer chegar a imprimir o dump de `qemuLogs()` daquele ciclo (muito menos
+`stopSimulation()`/ciclo 1/o resumo final). Só morre por kill externo. Este é um bug de harness novo
+e distinto de tudo documentado em 32.3-32.5 até aqui -- ortogonal às duas falhas sob investigação, mas
+foi o que efetivamente bloqueou a coleta de uma bateria ao vivo em 32.5.4, então fica registrado.
+Ainda não investigado a fundo (fora do escopo desta sessão); candidato óbvio a next-step é localizar
+POR QUE o caminho de timeout de boot não retorna controle pro laço de ciclos (suspeita: algum
+`join()`/wait sem timeout próprio no caminho de cleanup de um MCU que nunca chegou a ficar pronto).
+
+#### 32.5.6 Causa raiz do hang de 32.5.5 encontrada e corrigida: duas esperas sem limite, uma delas
+uma corrida real de perda de wakeup -- e nova reprodução ao vivo do "Cache error" (2026-07-27)
+
+Retomada focada no achado colateral de 32.5.5. Ambiente preparado conforme o protocolo pedido:
+~35GB livres em disco, sem processos órfãos de `qemu-system-xtensa.exe`/`session_restart_stress_test.exe`,
+`core/build` reconfigurado (o `cmake.exe` original do `CMakeCache.txt`, `C:\Strawberry\c\bin\cmake.exe`,
+não existe mais nesta máquina -- reapontado pro `cmake.exe` empacotado com o VS Build Tools 2022,
+`ZERO_CHECK` voltou a funcionar) e `session_restart_stress_test.exe` recompilado do `.cpp` atual.
+
+**Duas esperas sem limite encontradas e corrigidas** (`Scheduler.cpp`/`QemuProcessManager.cpp`, ver
+commit `test: prevent session restart stress harness hang on boot timeout`):
+
+1. `QemuProcessManager::reapProcess()` fazia `WaitForSingleObject(hProcess, INFINITE)` depois de
+   `TerminateProcess()`. Bate exatamente com o achado de 32.5.4 (processo órfão de ~4h/~8h de CPU
+   acumulada): se o SO nunca reaper o processo depois do Terminate, este wait nunca retorna, e com
+   ele qualquer chamador (inclusive o harness inteiro). Corrigido com um teto de 3s; se estourar,
+   loga um aviso alto e abandona a limpeza (handle/thread leitor ficam pra trás de propósito) em vez
+   de travar o chamador.
+2. `Scheduler::stop()` fazia `m_running.store(false)` seguido de `m_wake.notify_all()` SEM segurar
+   `m_mutex`. **Corrida real de perda de wakeup, reproduzida ao vivo**: existe uma janela dentro de
+   uma ÚNICA chamada a `m_wake.wait(lock, predicate)` (branches "pausado"/"sem trabalho" de
+   `start()`) entre o predicado ser avaliado falso e a worker de fato registrar a espera de baixo
+   nível -- se `stop()` notifica nessa janela sem seguir o mesmo mutex, o notify não acorda ninguém
+   (a worker ainda não estava registrada) e a espera seguinte nunca mais recebe outro. Reproduzido
+   com um repro dedicado: qualquer `fprintf`/`fflush` por evento (a instrumentação óbvia de primeira
+   tentativa) muda o timing o bastante pra MASCARAR a corrida inteira (0/212 repros instrumentados
+   dessa forma) -- só reproduziu de forma confiável com um ring buffer em memória (sem I/O por
+   evento) + uma thread watchdog externa que aborta o processo se a sequência não terminar num
+   prazo, em vez de bloquear esperando por ela (o mesmo padrão pedido pro lado QEMU nesta tarefa,
+   valido aqui primeiro). ~60% das execuções da sequência `pause()` -> drenar comando -> `stop()`
+   travavam antes da correção. Corrigido protegendo a troca de `m_running` com `m_mutex` antes de
+   notificar.
+   - **Tentativa relacionada, revertida por causar um DEADLOCK diferente**: proteger `pause()`/
+     `resume()` da mesma forma (mesma classe teórica de corrida) reabre um ciclo fechado contra um
+     settle não-convergente -- `settleUntilStableLocked()` pode segurar `m_mutex` por tempo
+     arbitrário e só solta ao ver `m_paused`/`m_stopRequested` num POLL sem lock (mecanismo
+     deliberado pra permitir que `pause()`/`stop()` interrompam esse laço de fora); se `pause()`
+     também precisar do mesmo lock, ela nunca roda enquanto o settle não converge, e o settle só
+     converge vendo `m_paused`, que só muda depois que `pause()` conseguir o lock -- sem saída.
+     `stop()` escapa desse ciclo porque `m_stopRequested` (lock-free, não alterado) já basta pra
+     destravar o settle ANTES do `lock_guard` novo rodar. `pause()`/`resume()` permanecem lock-free;
+     o risco teórico fica documentado no código, sem reprodução ao vivo confirmada (ao contrário do
+     de `stop()`).
+   - Teste de regressão permanente adicionado (`testPauseThenStopNeverHangsAcrossManyIterations`,
+     200 iterações com watchdog próprio) -- uma única execução da suíte só pegava a corrida ~60% das
+     vezes, insuficiente pra confiar numa regressão futura.
+
+Harness também enriquecido (branch de timeout de boot agora registra `arena->running`/índices de
+fila/UART parcial, não só `firmwareRunning()`) conforme os itens pedidos.
+
+**Validado**: `scheduler_test` (15+ execuções consecutivas limpas + 4500+ iterações de stress nos três
+cenários afetados), `qemu_process_manager_test`, `mcu_crash_resilience_test`, `mcu_debug_launch_test`,
+e `session_restart_stress_test` (cenários de falha de boot forçada via binário QEMU falso + bateria
+real de 15 ciclos).
+
+**Achado colateral importante**: a própria bateria real de 15 ciclos (rodada como validação do fix de
+harness, sem tocar o binário QEMU) reproduziu o "Cache error" ainda em aberto (32.5.1-32.5.4) **2 vezes
+em 15 ciclos** (ciclos 0 e 6) -- taxa bem mais alta que o ~1/30-1/60 documentado antes, embora sem
+mudança conhecida no binário QEMU que explique a diferença (pode ser variância normal de amostra
+pequena). O dump de registradores de AMBOS os núcleos nas duas ocorrências mostra `EXCCAUSE=0x00000007`
+e `EXCVADDR=0x00000000` IDÊNTICOS nos dois cores -- mais uma confirmação direta (agora com uma segunda
+amostra) de que isto é o valor sintético `PANIC_RSN_CACHEERR` do ESP-IDF (32.5.4), não uma causa real
+por núcleo. PCs resolvidos com sucesso via `addr2line`/`nm` genéricos do MinGW/MSYS2 já presentes na
+máquina (`C:\SourceCode\tools\msys64\ucrt64\bin\addr2line.exe` -- BFD lê ELF xtensa sem precisar de
+toolchain cross específico; nenhuma instalação do PlatformIO foi localizada nesta máquina) contra
+`merger.elf` (`C:\SourceCode\EININDI01_GitHub_VSCode_PIO\sourcecode\merger.elf`):
+- **Core 0 (PRO_CPU)**: `esp_cpu_wait_for_intr` (`esp_hw_support/cpu.c:64`) ←
+  `esp_vApplicationIdleHook` ← `prvIdleTask` ← `vPortTaskWrapper` -- idle de verdade, igual à amostra
+  de 32.5.2.
+- **Core 1 (APP_CPU)**: PC dentro de `adc_ll_set_controller` (inline, `hal/esp32/include/hal/adc_ll.h:611`)
+  ← `adc_oneshot_hal_setup` (`adc_oneshot_hal.c:88`) ← `adc_oneshot_read` (`adc_oneshot.c:227`) ←
+  `__analogRead` (`esp32-hal-adc.c:316`) ← `loop()` (`main.cpp:29`) ← `loopTask`. Resolução mais fina
+  que 32.5.2 (que só tinha chegado a `adc_oneshot_ll_start`), mas MESMA conclusão: o PC está dentro de
+  uma escrita de registrador do controlador ADC (SENS/RTC), não numa região de cache DROM0/IRAM0 --
+  reforça a leitura já registrada em 32.5.2/32.5.4 de que isto é só onde o APP_CPU estava executando
+  quando o panic/NMI de dump foi disparado, não necessariamente a instrução que causou o acesso
+  ilegal (que pode ter ocorrido antes, ou no outro núcleo). **Não investigado mais a fundo aqui** --
+  confirma que resolver os PCs do dump de panic sozinho não basta; a instrumentação QEMU-side pedida
+  na seção 3 desta tarefa (capturar o PRIMEIRO evento em `esp32_cache_ill_read()` com timestamp,
+  núcleo, PC e estado de cache) é o próximo passo necessário, agora com um ambiente de teste
+  confiável (harness corrigido) e uma taxa de reprodução (2/15) alta o bastante pra não exigir
+  baterias enormes.
+
+#### 32.5.7 Instrumentação QEMU-side implementada; achado que refuta a Hipótese 1 (trap de acesso
+ilegal) de forma direta e nova; forte evidência de que o gatilho é uma corrida ligada ao MTTCG,
+não ainda confirmada na instrução exata (2026-07-27)
+
+**Ambiente de trabalho**: fork em `C:\SourceCode\qemu_lasecSimul` (repositório git próprio, separado
+do monorepo `LasecSimul`), toolchain UCRT64 em `C:\SourceCode\tools\msys64\ucrt64` (`ninja`/`cc`),
+build de rascunho nunca sobrepôs o binário oficial implantado em `devices/qemu-esp32/bin/`. Achado
+de ambiente: uma cópia de rascunho feita só do `.exe` (`cp build-ucrt64/qemu-system-xtensa.exe`
+pra um diretório novo) falha silenciosamente com `error while loading shared libraries:
+libslirp-0.dll` -- o processo morre em milissegundos, o handshake da ABI v4 falha rápido (não por
+timeout de 5s), e isso pareceu inicialmente com o harness "travando" numa bateria maior (múltiplos
+ciclos citando `loadMcuFirmware lancou: ... handshake failed`, sem nunca progredir) até isolar com
+`ps`/execução manual direta do binário. Correção: usar `run-ucrt64/` (já populado com todas as DLLs
+do UCRT64 ao lado do `.exe` pelas builds anteriores) como destino do binário de rascunho, sobrescrito
+a cada rebuild.
+
+**Instrumentação implementada** (`hw/misc/esp32_dport.c`, `hw/xtensa/esp32.c`,
+`include/hw/misc/esp32_dport.h` -- todas marcadas `[CACHE-TRACE]`, a reverter depois da causa raiz
+confirmada, ver critério de aceitação): ring buffer em memória (sem I/O por evento, evitando repetir
+o efeito Heisenbug já documentado na seção 32.5.6 para o bug do Scheduler -- qualquer `fprintf`/
+`fflush` por evento muda timing o bastante pra mascarar corridas reais) com os seguintes pontos:
+- `esp32_cache_ill_read()`: registra TODO hit no trap (mesmo com `illegal_access_trap_en==false`),
+  core dono da região (via `crs->cache->core_id`, atribuição inequívoca -- cada núcleo tem seu
+  próprio `cpu_specific_mem[i]`), PC do núcleo dono, `writer_core`/`writer_pc` (ver abaixo), endereço,
+  tamanho, estado de cache/status ilegal de AMBOS os núcleos antes do evento.
+- As quatro escritas de registrador de cache (`A_DPORT_{PRO,APP}_CACHE_CTRL{,1}`): old/new value,
+  só quando o valor realmente muda (filtra escritas redundantes, que eram ~metade do volume).
+- `A_DPORT_CACHE_IA_INT_EN` e `esp32_dport_clear_ill_trap_state()`.
+- Os cinco resets por-núcleo em `esp32.c` (`esp32_cpu_reset`, `esp32_timg_cpu_reset`,
+  `esp32_app_cpu_reset_async`, `esp32_dig_reset`, `esp32_timg_sys_reset`), via
+  `esp32_cache_trace_reset_event()` novo, exportado no header.
+- **`writer_core`/`writer_pc`** (achado de correção sobre a primeira versão da instrumentação): o
+  parâmetro `core` original identificava só o DONO do registro/região (pra PRO_CACHE_CTRL é sempre
+  0, pra APP_CACHE_CTRL é sempre 1) -- usá-lo pra resolver o PC dava o PC do núcleo DONO, não
+  necessariamente de quem EXECUTOU a escrita (qualquer núcleo pode escrever no registro do outro,
+  são só endereços MMIO comuns). Corrigido lendo `current_cpu` (global thread-local do QEMU, correto
+  sob MTTCG porque cada vCPU tem sua própria thread) via `CPUClass::get_pc()` -- o mesmo hook
+  genérico usado pro PC do dono, evitando incluir `target/xtensa/cpu.h` em código "common"
+  (`hw/misc/*` é compilado sem headers per-target; a build recusa com
+  `#error cpu.h included from common code` se tentado).
+- **Despejo em disco throttled + captura permanente do primeiro evento crítico**: despejar o ring
+  inteiro a CADA evento reabrindo/reescrevendo o arquivo travou uma bateria de 20 ciclos por mais de
+  240s (nenhum ciclo além do 0 rodou) -- o loop de disable/enable de cache do flash (achado abaixo)
+  dispara register-writes rápido demais pra sustentar um `fopen("w")`+N linhas de `fprintf` por
+  evento. Corrigido: despejo do ring geral limitado a 1x/200ms de tempo de parede (`g_get_monotonic_time`),
+  e uma captura SEPARADA, incondicional e permanente (`c:/tmp/lasecsimul_cache_trace_FIRST.log`,
+  nunca reescrita de novo) disparada na primeira vez que `illegal_access_status` realmente latcheia
+  (`illegal_access_trap_en==true`) -- despeja uma JANELA das últimas 500 entradas do ring até esse
+  evento, garantindo contexto de lead-up mesmo que o ring geral (capacidade fixa, 20000 entradas)
+  já tenha dado a volta muitas vezes por causa do volume do loop de flash.
+- Nenhum dos dois arquivos cresce sem limite (capacidades fixas do array em memória e da janela) --
+  ver achado de disco cheio na 32.5.4.
+
+**ACHADO PRINCIPAL, reprodução ao vivo (3 ocorrências em baterias de 15 e 20 ciclos, firmware real,
+binário instrumentado em `run-ucrt64/`)**: `c:/tmp/lasecsimul_cache_trace_FIRST.log` **NUNCA foi
+criado em nenhuma das 3 reproduções do "Cache error"**, apesar do `Guru Meditation Error (Cache
+error)` aparecer no UART em todas as 3. Ou seja: **`esp32_cache_ill_read()` nunca dispara com
+`illegal_access_trap_en==true`** durante o panic -- o mecanismo de trap de acesso ilegal do DPORT
+(a única coisa que pode setar `illegal_access_status`/levantar `cache_ill_irq` neste modelo) está
+genuinamente inocente. Isto **refuta definitivamente a Hipótese 1** de 32.5.1 (já suspeita ali, mas
+com instrumentação mais estreita e sem as três reproduções agora obtidas) com evidência direta e
+independente: o "Cache error" relatado pelo ESP-IDF não vem de um hit real no trap deste modelo.
+
+**Mecanismo ESP-IDF identificado ao redor do momento da falha** (via `nm`/`addr2line` genéricos do
+MinGW/MSYS2 contra `merger.elf`, mesma técnica de 32.5.6 -- confirma que funcionam bem o bastante
+pra este trabalho, nenhuma instalação do PlatformIO localizada nesta máquina): o log capturado (ring
+geral, não o FIRST) mostra, imediatamente antes/depois da região temporal da falha, um loop RÁPIDO
+(microssegundos de tempo virtual entre iterações) alternando `write_pro_cache_ctrl`/
+`write_app_cache_ctrl` entre `CACHE_ENA=1` (0x28) e `CACHE_ENA=0` (0x20) em ambos os núcleos. PCs
+resolvidos: `cache_ll_l1_disable_cache`/`cache_ll_l1_enable_cache`/`cache_ll_l1_enable_bus`
+(`hal/esp32/include/hal/cache_ll.h`), chamadas a partir de `spi_flash_op_block_func`
+(`components/spi_flash/cache_utils.c:109`) -- o mecanismo OFICIAL do ESP-IDF que desabilita o cache
+de AMBOS os núcleos ao redor de qualquer operação de flash SPI (proteção padrão, não um bug em si).
+**Achado de atribuição**: `writer_core` mostra que é sempre o **CORE 0 (PRO_CPU)** quem executa AMBAS
+as escritas (`write_pro_cache_ctrl` E `write_app_cache_ctrl`) -- não é o APP_CPU (que roda
+`analogRead()`) quem desabilita seu próprio cache; é o PRO_CPU quem coordena o disable/enable dos
+DOIS núcleos via IPC, escrevendo diretamente nos registros do outro núcleo.
+
+**Teste de controle direto do MTTCG, achado forte**: bateria de 15 ciclos com
+`LASECSIMUL_ESP32_EXECUTION_MODE=deterministic` (modo `-icount`, single-thread, sem MTTCG) --
+**15/15 ciclos OK, ZERO ocorrências de "Cache error"** (contra 2/15 e 3/15 em baterias comparáveis do
+MESMO binário instrumentado sob MTTCG default). Bateria maior de confirmação (45 ciclos, mesmo modo
+determinístico) iniciada para descartar "sorte" de amostra pequena -- ver resultado abaixo se já
+concluída ao ler isto. Ressalva honesta (auto-imposta pela diretriz desta tarefa de não presumir
+corrida só por haver duas threads): este resultado é evidência CIRCUNSTANCIAL forte, não ainda uma
+demonstração direta, com timestamps, da sequência exata de uma thread executando com estado de
+cache obsoleto enquanto a outra o altera. A bateria com o binário OFICIAL não-instrumentado (32.5.6,
+seção "Achado colateral", 2/15 falhas) mostra taxa na MESMA ordem de grandeza da bateria instrumentada
+-- indício de que a própria instrumentação (I/O throttled, não devia ser cara) NÃO é a causa principal
+da taxa mais alta que o ~1/30-1/60 histórico; pode ser variância real de amostra pequena ou alguma
+diferença de ambiente/host não identificada.
+
+**Hipótese de trabalho (ainda não confirmada na instrução exata)**: o disable/enable coordenado pelo
+PRO_CPU toca `esp32_cache_state_update()` → `esp32_cache_data_sync()` → `memory_region_flush_rom_device()`
+(invalidação de TB/tradução do QEMU) SEPARADAMENTE para os `Esp32CacheRegionState` de CADA núcleo
+(estruturas completamente separadas por núcleo, mesmo backing de flash). Sob MTTCG (uma thread TCG
+por vCPU), se a invalidação dessa API não alcançar de forma síncrona/completa a thread do OUTRO
+núcleo (ex.: um Translation Block já buscado por essa thread, mas ainda não invalidado no exato
+instante da mudança), esse núcleo pode continuar executando/buscando instrução de conteúdo obsoleto
+-- isto bateria com a exigência do item 3 da seção 4 desta tarefa ("Invalidação incompleta de TB ou
+TLB") e com o item da "Condição de corrida MTTCG", e explicaria por que o EXCCAUSE real (7,
+"PCValue" na tabela real do xtensa, não a pseudo-causa "Cache error" do ESP-IDF) aparece: buscar uma
+instrução com conteúdo obsoleto/incorreto pode produzir um alvo de salto inválido, dessa vez uma
+exceção XTENSA GENUÍNA (não sintética) que o `panic_soc_check_pseudo_cause()` do ESP-IDF
+(`esp_system/port/arch/xtensa/panic_arch.c:261`) então relabela como "Cache error" por checar
+alguma outra condição de estado SOC (não necessariamente `illegal_access_status` -- dado que esse
+bit nunca latcheia nas 3 reproduções, a condição que `panic_soc_check_pseudo_cause()` realmente
+verifica ainda não foi identificada linha a linha; candidato natural a próximo passo).
+
+**Bateria de confirmação determinística concluída**: 45/45 ciclos adicionais, ZERO "Cache error"
+(total acumulado 60/60 ciclos limpos em modo `-icount` determinístico, contra falhas em toda bateria
+comparável sob MTTCG default -- ~15-20% neste ambiente). Estatisticamente muito forte: se a taxa sob
+determinístico fosse sequer parecida com a pior taxa observada sob MTTCG (~20%), a chance de 0/60 por
+acaso seria ~0,0002%. Reforça com solidez que o MTTCG (multithreading real do QEMU, não o
+sincronismo Core↔QEMU) é condição necessária pra reproduzir o bug.
+
+**Experimento direcionado, HIPÓTESE REFUTADA (2026-07-27, retomada após um crash do editor que
+matou a sessão anterior no meio de uma bateria -- dois processos órfãos, `session_restart_stress_test.exe`
+e `qemu-system-xtensa.exe`, encontrados e encerrados ao retomar; nenhum dado corrompido, os 3 arquivos-fonte
+instrumentados sobreviveram intactos)**: adicionado um flush SÍNCRONO explícito extra de TLB em
+todas as vCPUs (`tlb_flush_all_cpus_synced()`, a primitiva mais forte do QEMU pra isso, via
+`async_safe_run_on_cpu()` -- garante que cada vCPU rode o flush antes do próprio próximo Translation
+Block) logo após `memory_region_set_enabled()` em `esp32_cache_state_update()`, testando a hipótese
+de que o mecanismo padrão do QEMU (`memory_region_transaction_commit()` → `tcg_commit()`) não estaria
+alcançando as outras threads TCG a tempo sob MTTCG. **Resultado: bateria de 30 ciclos sob MTTCG (log
+parcial, 18 ciclos observados antes do crash do editor interromper a coleta) ainda reproduziu o
+"Cache error" 1 vez (ciclo 4/18 ≈ 5,5%)** -- dentro da mesma ordem de grandeza da taxa basal sem o
+flush extra (~15-20%), não uma melhora estatisticamente convincente. **Hipótese refutada**: o
+gargalo NÃO é falta de invalidação de TLB a nível de região de memória -- o mecanismo padrão do QEMU
+já é suficiente nesse aspecto (consistente com ele ser um mecanismo central, testado por todo o
+ecossistema QEMU, não específico deste fork). A alteração experimental foi revertida (removida de
+`hw/misc/esp32_dport.c`, `hw/xtensa/esp32.c` e `include/hw/misc/esp32_dport.h`; árvore de instrumentação
+voltou a conter só o tracing legítimo, ainda ativo) -- **não deixar essa reversão implícita**: o
+helper `esp32_cache_trace_flush_all_tlbs()` e sua chamada existiram por um tempo curto só como teste,
+nunca foram considerados a correção final.
+
+**Achado adicional desta rodada**: no ciclo que falhou com o flush extra ativo, o dump de registrador
+do Core 0 (PRO_CPU) mostrou, pela primeira vez nas reproduções desta sessão, um PC (`0x4008cb86`)
+DENTRO da própria sequência de disable/enable de cache (`xt_utils_get_core_id`,
+`xtensa/include/xt_utils.h:37` -- uma leitura trivial do ID do núcleo, tipicamente inlined dentro de
+`spinlock_acquire()`), em vez de idle (`esp_cpu_wait_for_intr`) como nas capturas anteriores. Ou seja:
+PRO_CPU também já foi capturado no meio do próprio mecanismo de coordenação `spi_flash_op_block_func`
+no instante do panic, não só o APP_CPU rodando `analogRead()` -- mais um indício (ainda não prova)
+de que a coordenação cross-core desse mecanismo (IPC/interrupção cruzada, stall do APP_CPU) é onde
+observar em seguida, não a topologia de memória/TLB por si só.
+
+**Estado ao pausar esta rodada**: `run-ucrt64/qemu-system-xtensa.exe` atualizado com o binário revertido
+(só tracing, sem o flush extra), recompilado e confirmado limpo. Nenhum processo órfão, ~35GB livres em
+disco. `hw/misc/esp32_dport.c`, `hw/xtensa/esp32.c`, `include/hw/misc/esp32_dport.h` seguem modificados
+(tracing) em `qemu_lasecSimul` -- ainda não commitados (aguardando a causa raiz ser fechada, ou uma
+decisão explícita de commitar a instrumentação separadamente). Harness fix já commitado e limpo em
+`LasecSimul` (`5685825`). **Próximo passo mínimo e objetivo, em ordem de prioridade**: (1) instrumentar
+o mecanismo de stall/IPC do APP_CPU (`appcpu_stall_state`/`appcpu_stall_req`, e o crosscore-interrupt
+em `esp32_crosscore_int.c`) com timestamp, pra checar se existe uma janela em que o PRO_CPU já
+desabilitou o cache do APP_CPU (`write_app_cache_ctrl`, sempre disparado pelo PRO_CPU per o achado
+de `writer_core`) ANTES do APP_CPU efetivamente estar parado/estolado; (2) se essa janela existir e
+for suficientemente larga, isso é a causa raiz; (3) se não, considerar tracing de execução do QEMU
+(`-d exec,cpu`, mais pesado, non-trivial de correlacionar) como próximo recurso.
