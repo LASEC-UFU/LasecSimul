@@ -98,11 +98,24 @@ public:
     void setCommandPendingCallback(CommandPendingFn callback) { m_commandPending = std::move(callback); }
     void setAdvanceLimitCallback(AdvanceLimitFn callback) { m_advanceLimit = std::move(callback); }
     /** Acorda a worker se ela estiver parked (ociosa ou pausada) -- chamada pela thread de IPC depois
-     * de empurrar um comando na fila (`SimulationSession::enqueueCommand`). Notificar sem segurar
-     * `m_mutex` é seguro aqui porque quem espera usa `wait(lock, predicate)`: mesmo que o notify
-     * chegue antes da worker (re)entrar em `wait`, o predicado é reavaliado no início e já vai
-     * enxergar o comando pendente (`CommandPendingFn` consulta a fila com o mutex dela própria, não
-     * o do Scheduler) -- não depende de ordering entre os dois mutexes. */
+     * de empurrar um comando na fila (`SimulationSession::enqueueCommand`). CORREÇÃO 2026-07-27: o
+     * comentário antigo aqui argumentava que notificar sem segurar `m_mutex` era seguro porque
+     * `wait(lock, predicate)` reavalia o predicado no início -- reproduzido ao vivo (.spec 32.5.5,
+     * repro dedicado) que esse argumento é FALSO em geral: existe uma janela real, dentro de uma
+     * ÚNICA chamada a `wait(lock, predicate)`, entre o predicado ser avaliado falso e a worker
+     * efetivamente registrar a espera -- se quem muda o estado do predicado notifica nessa janela
+     * SEM segurar o mesmo mutex, o notify não acorda ninguém (a worker ainda não estava registrada)
+     * e a espera de baixo nível que a worker faz em seguida nunca mais recebe outro. Ver
+     * `Scheduler::stop()`, corrigido com essa evidência (segura `m_mutex` só pra trocar `m_running`,
+     * ver comentário lá). `pause()`/`resume()` têm a MESMA classe de risco teórico mas NÃO foram
+     * corrigidos da mesma forma -- fazer isso reabre um deadlock diferente contra um settle não-
+     * convergente (ver comentário de `pause()`); nenhuma reprodução ao vivo confirmou a perda de
+     * wakeup nesses dois, ao contrário do de `stop()`. Esta função (`notifyCommandPending`) também
+     * NÃO foi corrigida (o estado do predicado aqui, `CommandPendingFn`, pertence à fila de comandos
+     * externa, fora do `m_mutex` deste Scheduler -- corrigir exigiria uma API nova pra quem enfileira
+     * o comando também segurar este mutex, mudança maior, fora do escopo do achado de 32.5.5) --
+     * risco residual documentado: um comando enfileirado pode, em teoria, esperar até o próximo
+     * wakeup incidental (evento/dirty/pause/stop) em vez de ser atendido na hora. */
     void notifyCommandPending() { m_wake.notify_one(); }
     /** Acorda a worker se ela estiver esperando o `AdvanceLimitFn` avançar (ver ramo "sem espaço pra
      * avançar" em `start()`) -- chamada por quem preenche o hook assim que a posição de referência
@@ -188,6 +201,19 @@ public:
     }
 
     void start();
+    /** Achado ao vivo 2026-07-27 (.spec 32.5.5): cheguei a proteger esta troca com `m_mutex`, igual
+     * ao fix de `Scheduler::stop()` -- mas isso reabre um DEADLOCK diferente, também reproduzido ao
+     * vivo: `settleUntilStableLocked()` pode segurar `m_mutex` por um tempo arbitrariamente longo
+     * (settle que nunca converge, ver seu doc-comment) e só o solta ao ver `m_paused`/
+     * `m_stopRequested` num POLL sem lock -- exatamente pra permitir que `pause()`/`stop()`
+     * interrompam esse laço de fora. Se `pause()` precisar do MESMO `m_mutex` pra setar `m_paused`,
+     * ela nunca consegue rodar enquanto o settle não converge (só converge vendo `m_paused`, que só
+     * muda depois que `pause()` conseguir o lock) -- ciclo fechado, sem saída. `stop()` escapa desse
+     * ciclo porque `m_stopRequested` (não tocado por este achado, sempre foi lock-free) já é
+     * suficiente pra destravar o settle ANTES do `lock_guard` daquela função rodar. `pause()`/
+     * `resume()` continuam lock-free de propósito -- o risco teórico de wakeup perdido (mesma classe
+     * do achado de `stop()`) fica documentado como residual: nenhuma reprodução ao vivo o confirmou
+     * aqui, ao contrário do de `stop()`. */
     void pause() {
         m_paused.store(true, std::memory_order_release);
         m_wake.notify_all();

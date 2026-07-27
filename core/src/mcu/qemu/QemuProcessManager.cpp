@@ -1,5 +1,6 @@
 #include "QemuProcessManager.hpp"
 #include <atomic>
+#include <cstdio>
 #include <mutex>
 #include <sstream>
 #include <stdexcept>
@@ -214,8 +215,33 @@ private:
         CloseHandle(pipe);
     }
 
+    /** Achado ao vivo 2026-07-26 (.spec 32.5.4/32.5.5): este wait era INFINITE. Um
+     * qemu-system-xtensa.exe que ja recebeu TerminateProcess() mas nao morre (SO/driver segurando o
+     * processo vivo no nivel de kernel -- raro, mas um espécime orfao sobreviveu ~4h/~8h de CPU
+     * acumulada) travava este método pra sempre, e com ele qualquer chamador (stop()/kill() da
+     * McuComponent, e por cima session_restart_stress_test inteiro, que nunca chegava a imprimir
+     * nem o dump de qemuLogs() do ciclo). kProcessReapTimeout limita a espera; se o processo ainda
+     * não morreu depois dela, abandona a limpeza (handles e thread leitor ficam para trás de
+     * propósito) em vez de bloquear o chamador indefinidamente -- o processo já pathological vira
+     * um órfão real, mas o harness recupera o controle e pode seguir para o próximo ciclo. */
+    static constexpr std::chrono::milliseconds kProcessReapTimeout{3000};
+
     void reapProcess() {
-        if (m_processInfo.hProcess) WaitForSingleObject(m_processInfo.hProcess, INFINITE);
+        if (m_processInfo.hProcess) {
+            const DWORD waited = WaitForSingleObject(
+                m_processInfo.hProcess, static_cast<DWORD>(kProcessReapTimeout.count()));
+            if (waited != WAIT_OBJECT_0) {
+                std::fprintf(stderr,
+                    "[QemuProcessManager] AVISO: processo QEMU nao terminou %lldms apos "
+                    "TerminateProcess; abandonando limpeza para nao travar o chamador (processo "
+                    "orfao remanescente).\n",
+                    static_cast<long long>(kProcessReapTimeout.count()));
+                m_running = false;
+                if (m_reader.joinable()) m_reader.detach();
+                m_processInfo = {};
+                return;
+            }
+        }
         m_running = false;
         joinReader();
         if (m_processInfo.hThread) CloseHandle(m_processInfo.hThread);

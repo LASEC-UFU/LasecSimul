@@ -387,6 +387,60 @@ void testCommandDrainWhilePaused() {
     assert(stillPaused);
 }
 
+// Achado ao vivo 2026-07-27 (.spec 32.5.5): stop() logo após pause()+drenagem travava
+// `m_thread.join()` pra sempre em ~60% das execuções (perda de wakeup real -- `m_running.store(false)`
+// seguido de `notify_all()` sem segurar `m_mutex` corre contra a janela entre a worker reavaliar o
+// predicado de `m_wake.wait(lock, predicate)` como falso e efetivamente registrar a espera; ver
+// comentário de `Scheduler::stop()`). `testCommandDrainWhilePaused()` acima cobre a MESMA sequência,
+// mas uma única execução só reproduzia a corrida em ~60% das vezes -- insuficiente para pegar uma
+// regressão de forma confiável. Repete muitas vezes pra tornar a regressão praticamente certa de
+// aparecer. IMPORTANTE: se `stop()` REALMENTE travar (a própria regressão que este teste existe pra
+// pegar), chamá-lo direto na thread do teste travaria a suíte inteira pra sempre -- cada iteração
+// roda a sequência numa thread própria e só espera por ela com prazo; se o prazo estourar, a
+// thread trava (ela é dada como perdida -- não há como cancelar uma std::thread real), mas o
+// PROCESSO DE TESTE falha e termina, em vez de travar pra sempre esperando por ela.
+void testPauseThenStopNeverHangsAcrossManyIterations() {
+    constexpr int kIterations = 200;
+    for (int i = 0; i < kIterations; ++i) {
+        std::atomic<bool> finished{false};
+        std::thread worker([&finished] {
+            std::atomic<bool> pending{false};
+            std::atomic<bool> commandApplied{false};
+            Scheduler scheduler(2, [] { return false; });
+            scheduler.setCommandDrainCallback([&] {
+                if (pending.load()) { commandApplied.store(true); pending.store(false); }
+            });
+            scheduler.setCommandPendingCallback([&] { return pending.load(); });
+            scheduler.start();
+            scheduler.pause();
+            pending.store(true);
+            scheduler.notifyCommandPending();
+
+            const auto drainDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+            while (!commandApplied.load() && std::chrono::steady_clock::now() < drainDeadline)
+                std::this_thread::yield();
+            assert(commandApplied.load());
+
+            scheduler.stop();
+            finished.store(true, std::memory_order_release);
+        });
+
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+        while (!finished.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < deadline)
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+
+        if (!finished.load(std::memory_order_acquire)) {
+            std::fprintf(stderr,
+                "FALHOU: pause()+drain+stop() travou na iteracao %d (regressao da corrida "
+                "de perda de wakeup corrigida em 2026-07-27, ver Scheduler::stop())\n", i);
+            std::fflush(stderr);
+            std::abort(); // a worker fica presa pra sempre (thread real, sem cancelamento) -- aborta
+                          // o processo de teste em vez de travar pra sempre esperando por ela.
+        }
+        worker.join();
+    }
+}
+
 void testCommandDrainDuringNonConvergentSettle() {
     std::atomic<int> settleCalls{0};
     std::atomic<bool> pending{false};
@@ -439,6 +493,7 @@ int main() {
     testCommandDrainWhileIdle();
     testCommandDrainWhilePaused();
     testCommandDrainDuringNonConvergentSettle();
+    testPauseThenStopNeverHangsAcrossManyIterations();
 
     std::printf("OK: Scheduler ordered events, deterministic tie-break, dirty, reset, stop, command queue drain (idle/paused/non-convergent).\n");
     return 0;

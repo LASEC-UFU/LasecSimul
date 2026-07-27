@@ -362,7 +362,23 @@ void Scheduler::start() {
 
 void Scheduler::stop() {
     m_stopRequested.store(true);
-    m_running.store(false);
+    // Achado ao vivo 2026-07-27 (.spec 32.5.5): reproduzido com um repro dedicado (loop com
+    // watchdog + ring buffer, já que qualquer fprintf/fflush por evento muda o timing o bastante
+    // pra mascarar a corrida inteira) -- `m_running.store(false)` seguido de `m_wake.notify_all()`
+    // SEM segurar `m_mutex` perde a troca de acordar quando a worker está bem no meio de
+    // `m_wake.wait(lock, predicate)` (branch pausado ou "sem trabalho", ambos em
+    // `m_mutex`/`m_wake`): a worker pode reavaliar o predicado como falso (running ainda true),
+    // e SÓ DEPOIS -- antes de a chamada de bloqueio de baixo nível registrar de fato a espera --
+    // esta store()+notify_all() completarem sem segurar `m_mutex`. Como a worker ainda não estava
+    // registrada como esperando, o notify não acorda ninguém; a chamada de bloqueio que a worker
+    // faz em seguida então espera por um notify que já foi consumido e nunca mais chega --
+    // `m_thread.join()` trava pra sempre (e com ele qualquer chamador, inclusive o harness de
+    // teste de restart). `wait(lock, predicate)` só é imune a essa corrida quando quem muda o
+    // estado do predicado TAMBÉM segura o mesmo mutex -- por isso a store entra no lock abaixo.
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_running.store(false);
+    }
     m_wake.notify_all();
     m_pacingWake.notify_all();
     if (m_thread.joinable() && m_thread.get_id() != std::this_thread::get_id()) m_thread.join();

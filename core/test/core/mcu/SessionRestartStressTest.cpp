@@ -212,11 +212,31 @@ int main() {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
         if (!booted) {
-            std::fprintf(stderr, "  ciclo %d: NAO INICIALIZOU em %lldms (firmwareRunning=%s)\n",
-                         cycle, static_cast<long long>(bootTimeout.count()),
-                         mcuPtr->firmwareRunning() ? "sim" : "nao");
+            // Estado da arena no momento do timeout de boot (achado .spec 32.5.5: o harness chegou a
+            // travar indefinidamente neste ramo -- ver QemuProcessManager::reapProcess()/
+            // Scheduler::stop(), agora com timeout, e o comentário de bootDeadline acima). Registra
+            // running/fila cru em vez de só firmwareRunning() pra diferenciar "processo nunca chegou a
+            // reportar vida" de "processo morreu no meio".
+            const LsdnQemuArena* bootArena = mcuPtr->arenaBridge().arena();
+            std::fprintf(stderr,
+                "  ciclo %d: NAO INICIALIZOU em %lldms (firmwareRunning=%s arenaRunning=%llu"
+                " queue=%llu/%llu abi=%u peerReady=%s)\n",
+                cycle, static_cast<long long>(bootTimeout.count()),
+                mcuPtr->firmwareRunning() ? "sim" : "nao",
+                static_cast<unsigned long long>(bootArena ? bootArena->running : 999),
+                static_cast<unsigned long long>(bootArena ? bootArena->queueReadIndex : 999),
+                static_cast<unsigned long long>(bootArena ? bootArena->queueWriteIndex : 999),
+                mcuPtr->arenaBridge().protocolMajor(),
+                mcuPtr->arenaBridge().peerReady() ? "sim" : "nao");
             std::fprintf(stderr, "  Logs QEMU do ciclo %d:\n%s\n", cycle,
                          mcuPtr->qemuLogs().c_str());
+            if (useRealFirmware) {
+                const auto uartTx = session.propertyValueOf(mcuIndex, "uart0_tx_monitor_hex");
+                if (uartTx && std::holds_alternative<std::string>(*uartTx)) {
+                    std::fprintf(stderr, "  UART0 TX do ciclo %d (parcial ate o timeout):\n%s\n",
+                                 cycle, decodeHex(std::get<std::string>(*uartTx)).c_str());
+                }
+            }
             ++failedToBoot;
             session.stopSimulation();
             removeTemporaryFlash();
