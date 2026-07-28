@@ -1,0 +1,110 @@
+diff --git a/hw/misc/esp32_dport.c b/hw/misc/esp32_dport.c
+index 403e53c..ba8a1d9 100644
+--- a/hw/misc/esp32_dport.c
++++ b/hw/misc/esp32_dport.c
+@@ -124,0 +125,6 @@ static uint64_t esp32_dport_read(void *opaque, hwaddr addr, unsigned int size)
++    case A_DPORT_PRO_INTR_STATUS_0:
++    case A_DPORT_APP_INTR_STATUS_0:
++        r = s->intmatrix_opaque
++            ? esp32_intmatrix_get_raw_status_bits(s->intmatrix_opaque, 0, 32)
++            : 0;
++        break;
+diff --git a/hw/timer/esp32_timg.c b/hw/timer/esp32_timg.c
+index 311b772..a611e44 100644
+--- a/hw/timer/esp32_timg.c
++++ b/hw/timer/esp32_timg.c
+@@ -11,0 +12 @@
++#include "qemu/cutils.h"
+@@ -24,0 +26,2 @@
++#define TIMG_INTERRUPT_WDT_REALTIME_SCALE_DEFAULT 8
++#define TIMG_INTERRUPT_WDT_SCALE_MAX 100
+@@ -558,0 +562,11 @@ static void esp32_timg_wdt_arm(Esp32TimgWdtState *ws, uint64_t ns_now)
++    /*
++     * In mttcg-realtime QEMU_CLOCK_VIRTUAL follows wall time, while an
++     * emulated Xtensa CPU executes critical sections much more slowly than
++     * ESP32 silicon.  Scale only the Timer Group 1 interrupt watchdog so
++     * legitimate flash/cache operations do not become host-speed timeouts.
++     * Other timers and watchdogs retain their literal timing.
++     */
++    if (ws->parent->id == 1 && ws->parent->wdt_time_scale > 1) {
++        ns_to_timeout = ns_to_timeout > UINT64_MAX / ws->parent->wdt_time_scale
++            ? UINT64_MAX : ns_to_timeout * ws->parent->wdt_time_scale;
++    }
+@@ -598,0 +613,27 @@ static void esp32_timg_realize(DeviceState *dev, Error **errp)
++    Esp32TimgState *s = ESP32_TIMG(dev);
++    const char *execution_mode = getenv("LASECSIMUL_ESP32_EXECUTION_MODE");
++    const bool deterministic =
++        execution_mode && !strcmp(execution_mode, "deterministic");
++    const char *scale_env = getenv("LASECSIMUL_ESP32_WDT_SCALE");
++    unsigned scale = deterministic
++        ? 1 : TIMG_INTERRUPT_WDT_REALTIME_SCALE_DEFAULT;
++
++    if (scale_env && *scale_env) {
++        unsigned parsed = 0;
++        if (qemu_strtoui(scale_env, NULL, 10, &parsed) < 0 ||
++            parsed < 1 || parsed > TIMG_INTERRUPT_WDT_SCALE_MAX) {
++            warn_report("invalid LASECSIMUL_ESP32_WDT_SCALE='%s'; using %u (range 1..%u)",
++                        scale_env, scale, TIMG_INTERRUPT_WDT_SCALE_MAX);
++        } else {
++            scale = parsed;
++        }
++    }
++    s->wdt_time_scale = s->id == 1 ? scale : 1;
++    if (s->id == 1) {
++        fprintf(stderr,
++                "[LasecSimul] interrupt-wdt scale=%u (%s; rollback:"
++                " LASECSIMUL_ESP32_WDT_SCALE=1)\n",
++                s->wdt_time_scale,
++                deterministic ? "deterministic" : "mttcg-realtime");
++        fflush(stderr);
++    }
+@@ -625,0 +667 @@ static void esp32_timg_init(Object *obj)
++    s->wdt_time_scale = 1;
+diff --git a/hw/xtensa/esp32.c b/hw/xtensa/esp32.c
+index 0c39590..d28abe7 100644
+--- a/hw/xtensa/esp32.c
++++ b/hw/xtensa/esp32.c
+@@ -472,0 +473 @@ static void esp32_soc_realize( DeviceState *dev, Error **errp )
++    s->dport.intmatrix_opaque = &s->intmatrix;
+diff --git a/hw/xtensa/esp32_intc.c b/hw/xtensa/esp32_intc.c
+index f71bb48..30e0650 100644
+--- a/hw/xtensa/esp32_intc.c
++++ b/hw/xtensa/esp32_intc.c
+@@ -18,0 +19 @@
++#include "hw/misc/esp32_dport.h"
+@@ -80,0 +82,15 @@ static void esp32_intmatrix_write(void* opaque, hwaddr addr, uint64_t value, uns
++uint32_t esp32_intmatrix_get_raw_status_bits(void *opaque, int start_bit, int count)
++{
++    Esp32IntMatrixState *s = ESP32_INTMATRIX(opaque);
++    uint32_t result = 0;
++
++    assert(count > 0 && count <= 32);
++    for (int i = 0; i < count; ++i) {
++        int source = start_bit + i;
++        if (source >= 0 && source < ESP32_INT_MATRIX_INPUTS && s->irq_raw[source]) {
++            result |= (1u << i);
++        }
++    }
++    return result;
++}
++
+diff --git a/include/hw/misc/esp32_dport.h b/include/hw/misc/esp32_dport.h
+index 3447c48..d0a35c5 100644
+--- a/include/hw/misc/esp32_dport.h
++++ b/include/hw/misc/esp32_dport.h
+@@ -78,0 +79,2 @@ typedef struct Esp32DportState {
++    /* Sibling interrupt matrix used to expose DPORT raw interrupt status. */
++    void *intmatrix_opaque;
+@@ -81,0 +84 @@ void esp32_dport_clear_ill_trap_state(Esp32DportState* s);
++uint32_t esp32_intmatrix_get_raw_status_bits(void *opaque, int start_bit, int count);
+@@ -135,0 +139,3 @@ REG32(DPORT_CPU_INTR_FROM_CPU_3, 0xe8)
++REG32(DPORT_PRO_INTR_STATUS_0, 0xec)
++REG32(DPORT_APP_INTR_STATUS_0, 0xf8)
++
+diff --git a/include/hw/timer/esp32_timg.h b/include/hw/timer/esp32_timg.h
+index dbf554a..b78200e 100644
+--- a/include/hw/timer/esp32_timg.h
++++ b/include/hw/timer/esp32_timg.h
+@@ -93,0 +94,2 @@ typedef struct Esp32TimgState {
++    /* Timer Group 1 interrupt-WDT scale for realtime MTTCG execution. */
++    uint32_t wdt_time_scale;

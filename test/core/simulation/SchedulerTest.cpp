@@ -319,6 +319,62 @@ void testControlAndTelemetryStayResponsiveDuringNonConvergentSettle() {
     assert(std::chrono::steady_clock::now() - stopStart < std::chrono::seconds(1));
 }
 
+// Regressão da .spec 32.5.20: soltar m_mutex ENTRE iterações reduziu os panics do ESP32, mas uma
+// ÚNICA chamada longa de settleStep ainda bloqueava markDirty() e, com ela, a thread que drena a
+// arena QEMU. O guest continuava medindo tempo virtual dentro de seções críticas e podia disparar
+// seu Interrupt WDT. A publicação de dirty precisa terminar sem esperar essa iteração acabar, e o
+// Scheduler precisa incorporar a marca antes de declarar convergência.
+void testMarkDirtyDoesNotBlockBehindSingleLongSettleIteration() {
+    std::atomic<bool> insideLongSettle{false};
+    std::atomic<bool> releaseLongSettle{false};
+    std::atomic<bool> markerReturned{false};
+    std::atomic<bool> pendingDirtyWasSettled{false};
+    std::atomic<int> settleCalls{0};
+    Scheduler* schedulerPtr = nullptr;
+    Scheduler scheduler(4, [&] {
+        const int call = ++settleCalls;
+        if (call == 1) {
+            insideLongSettle.store(true, std::memory_order_release);
+            while (!releaseLongSettle.load(std::memory_order_acquire))
+                std::this_thread::yield();
+        }
+        if (schedulerPtr->dirtySet().contains(2)) pendingDirtyWasSettled.store(true);
+        schedulerPtr->dirtySet().clear();
+        return false;
+    });
+    schedulerPtr = &scheduler;
+    scheduler.markDirty(1);
+    scheduler.start();
+
+    const auto enterDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+    while (!insideLongSettle.load(std::memory_order_acquire) &&
+           std::chrono::steady_clock::now() < enterDeadline)
+        std::this_thread::yield();
+    assert(insideLongSettle.load(std::memory_order_acquire));
+
+    std::thread marker([&] {
+        scheduler.markDirty(2);
+        markerReturned.store(true, std::memory_order_release);
+    });
+    const auto markerDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(100);
+    while (!markerReturned.load(std::memory_order_acquire) &&
+           std::chrono::steady_clock::now() < markerDeadline)
+        std::this_thread::yield();
+    const bool returnedBeforeSettleFinished = markerReturned.load(std::memory_order_acquire);
+
+    releaseLongSettle.store(true, std::memory_order_release);
+    marker.join();
+    const auto settleDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+    while (!pendingDirtyWasSettled.load(std::memory_order_acquire) &&
+           std::chrono::steady_clock::now() < settleDeadline)
+        std::this_thread::yield();
+    scheduler.stop();
+
+    assert(returnedBeforeSettleFinished);
+    assert(pendingDirtyWasSettled.load(std::memory_order_acquire));
+    assert(settleCalls.load() >= 2);
+}
+
 // Redesign de concorrência 2026-07-19 (ver .claude/plans/idempotent-floating-cat.md) -- cobre
 // CommandDrainFn/CommandPendingFn/notifyCommandPending nos três pontos em que a worker precisa
 // drenar a fila de comandos externa (SimulationSession::CommandQueue): ociosa, pausada, e presa num
@@ -490,6 +546,7 @@ int main() {
     testAdvanceLimitNoBusySpinWhenPermanentlyCapped();
     testRepeatedStartStopDoesNotLeakWorkersOrEvents();
     testControlAndTelemetryStayResponsiveDuringNonConvergentSettle();
+    testMarkDirtyDoesNotBlockBehindSingleLongSettleIteration();
     testCommandDrainWhileIdle();
     testCommandDrainWhilePaused();
     testCommandDrainDuringNonConvergentSettle();

@@ -98,7 +98,8 @@ public:
     using AdvanceLimitFn = std::function<std::optional<uint64_t>()>;
 
     Scheduler(size_t componentCapacity, SettleStepFn settleStep)
-        : m_dirty(componentCapacity), m_settleStep(std::move(settleStep)) {}
+        : m_dirty(componentCapacity), m_pendingDirty(componentCapacity),
+          m_settleStep(std::move(settleStep)) {}
 
     void setTimeStepCallbacks(TimeStepBeginFn begin, TimeStepCommitFn commit) {
         m_beginTimeStep = std::move(begin);
@@ -108,26 +109,11 @@ public:
     void setCommandDrainCallback(CommandDrainFn callback) { m_commandDrain = std::move(callback); }
     void setCommandPendingCallback(CommandPendingFn callback) { m_commandPending = std::move(callback); }
     void setAdvanceLimitCallback(AdvanceLimitFn callback) { m_advanceLimit = std::move(callback); }
-    /** Acorda a worker se ela estiver parked (ociosa ou pausada) -- chamada pela thread de IPC depois
-     * de empurrar um comando na fila (`SimulationSession::enqueueCommand`). CORREÇÃO 2026-07-27: o
-     * comentário antigo aqui argumentava que notificar sem segurar `m_mutex` era seguro porque
-     * `wait(lock, predicate)` reavalia o predicado no início -- reproduzido ao vivo (.spec 32.5.5,
-     * repro dedicado) que esse argumento é FALSO em geral: existe uma janela real, dentro de uma
-     * ÚNICA chamada a `wait(lock, predicate)`, entre o predicado ser avaliado falso e a worker
-     * efetivamente registrar a espera -- se quem muda o estado do predicado notifica nessa janela
-     * SEM segurar o mesmo mutex, o notify não acorda ninguém (a worker ainda não estava registrada)
-     * e a espera de baixo nível que a worker faz em seguida nunca mais recebe outro. Ver
-     * `Scheduler::stop()`, corrigido com essa evidência (segura `m_mutex` só pra trocar `m_running`,
-     * ver comentário lá). `pause()`/`resume()` têm a MESMA classe de risco teórico mas NÃO foram
-     * corrigidos da mesma forma -- fazer isso reabre um deadlock diferente contra um settle não-
-     * convergente (ver comentário de `pause()`); nenhuma reprodução ao vivo confirmou a perda de
-     * wakeup nesses dois, ao contrário do de `stop()`. Esta função (`notifyCommandPending`) também
-     * NÃO foi corrigida (o estado do predicado aqui, `CommandPendingFn`, pertence à fila de comandos
-     * externa, fora do `m_mutex` deste Scheduler -- corrigir exigiria uma API nova pra quem enfileira
-     * o comando também segurar este mutex, mudança maior, fora do escopo do achado de 32.5.5) --
-     * risco residual documentado: um comando enfileirado pode, em teoria, esperar até o próximo
-     * wakeup incidental (evento/dirty/pause/stop) em vez de ser atendido na hora. */
-    void notifyCommandPending() { m_wake.notify_one(); }
+    /** Acorda a worker se ela estiver parked (ociosa ou pausada) depois que a thread de IPC publica
+     * um comando. Usa um contador atômico, não condition_variable: `atomic::wait(valor)` verifica o
+     * valor como parte do próprio protocolo de espera, portanto um notify ocorrido entre a última
+     * inspeção da fila e o bloqueio de baixo nível não pode ser perdido (ver .spec 32.5.22). */
+    void notifyCommandPending() { signalWorkAvailable(); }
     /** Acorda a worker se ela estiver esperando o `AdvanceLimitFn` avançar (ver ramo "sem espaço pra
      * avançar" em `start()`) -- chamada por quem preenche o hook assim que a posição de referência
      * realmente muda (ex.: `McuComponent::pollStepLocked()`, logo após avançar
@@ -146,11 +132,20 @@ public:
     ~Scheduler() { stop(); }
 
     void markDirty(uint32_t componentIndex) {
-        {
-            std::lock_guard<std::mutex> lock(m_mutex);
+        // Caminho comum: publica direto sob o mutex do Scheduler, preservando a mesma sincronização
+        // do condition_variable que sempre existiu. Se uma iteração elétrica longa já monopoliza
+        // esse mutex, não bloqueia a thread produtora (em especial o poll da arena QEMU): desvia a
+        // marcação para m_pendingDirty, cujo mutex só protege uma inserção O(1). Como try_lock()
+        // só falha enquanto outra thread segura m_mutex, a worker não pode estar dormindo na janela
+        // vulnerável a notify perdido; antes de qualquer espera ela incorpora a fila pendente.
+        std::unique_lock<std::mutex> schedulerLock(m_mutex, std::try_to_lock);
+        if (schedulerLock.owns_lock()) {
             m_dirty.insert(componentIndex);
+        } else {
+            std::lock_guard<std::mutex> pendingLock(m_pendingDirtyMutex);
+            m_pendingDirty.insert(componentIndex);
         }
-        m_wake.notify_one();
+        signalWorkAvailable();
     }
 
     void scheduleAt(uint64_t timeNs, uint32_t componentIndex);
@@ -216,27 +211,17 @@ public:
     }
 
     void start();
-    /** Achado ao vivo 2026-07-27 (.spec 32.5.5): cheguei a proteger esta troca com `m_mutex`, igual
-     * ao fix de `Scheduler::stop()` -- mas isso reabre um DEADLOCK diferente, também reproduzido ao
-     * vivo: `settleUntilStableLocked()` pode segurar `m_mutex` por um tempo arbitrariamente longo
-     * (settle que nunca converge, ver seu doc-comment) e só o solta ao ver `m_paused`/
-     * `m_stopRequested` num POLL sem lock -- exatamente pra permitir que `pause()`/`stop()`
-     * interrompam esse laço de fora. Se `pause()` precisar do MESMO `m_mutex` pra setar `m_paused`,
-     * ela nunca consegue rodar enquanto o settle não converge (só converge vendo `m_paused`, que só
-     * muda depois que `pause()` conseguir o lock) -- ciclo fechado, sem saída. `stop()` escapa desse
-     * ciclo porque `m_stopRequested` (não tocado por este achado, sempre foi lock-free) já é
-     * suficiente pra destravar o settle ANTES do `lock_guard` daquela função rodar. `pause()`/
-     * `resume()` continuam lock-free de propósito -- o risco teórico de wakeup perdido (mesma classe
-     * do achado de `stop()`) fica documentado como residual: nenhuma reprodução ao vivo o confirmou
-     * aqui, ao contrário do de `stop()`. */
+    /** Pause/resume continuam lock-free para poder interromper um settle não convergente sem esperar
+     * pelo mutex que esse mesmo settle segura. signalWorkAvailable() elimina a antiga janela de
+     * wakeup perdido sem reintroduzir o deadlock (ver .spec 32.5.22). */
     void pause() {
         m_paused.store(true, std::memory_order_release);
-        m_wake.notify_all();
+        signalWorkAvailable();
         m_pacingWake.notify_all();
     }
     void resume() {
-        m_paused.store(false);
-        m_wake.notify_one();
+        m_paused.store(false, std::memory_order_release);
+        signalWorkAvailable();
     }
     void stop();
     /** Leitura pura -- usada por `Probe::pauseOnChange` em teste (confirma que `pause()` chamado de
@@ -298,10 +283,21 @@ private:
     static constexpr uint64_t kMaxAdvanceLeadNs = 20'000'000; // 20ms
 
     void pushEventLocked(uint64_t timeNs, uint32_t componentIndex, EventCallback callback);
+    void signalWorkAvailable() {
+        m_workGeneration.fetch_add(1, std::memory_order_release);
+        m_workGeneration.notify_all();
+    }
     bool processNextEventUntilLocked(std::unique_lock<std::mutex>& lock, uint64_t targetTimeNs);
     bool settleUntilStableLocked(std::unique_lock<std::mutex>& lock);
+    /** Incorpora marcações feitas pelo caminho não bloqueante de markDirty(). Requer m_mutex. */
+    bool mergePendingDirtyLocked();
 
     SparseSet<uint32_t> m_dirty;
+    /** Produtores que encontram m_mutex ocupado publicam aqui para nunca bloquear o consumo da
+     * arena QEMU atrás de uma iteração cara do solver. Só o Scheduler move itens daqui para
+     * m_dirty; duplicatas continuam colapsadas pela mesma semântica de SparseSet. */
+    SparseSet<uint32_t> m_pendingDirty;
+    mutable std::mutex m_pendingDirtyMutex;
     std::priority_queue<ScheduledEvent, std::vector<ScheduledEvent>, ScheduledEventOrder> m_events;
     uint64_t m_nowNs = 0;
     std::atomic<uint64_t> m_nowSnapshotNs{0};
@@ -317,7 +313,9 @@ private:
     std::thread m_thread;
     std::atomic<std::thread::id> m_workerThreadId{};
     mutable std::mutex m_mutex;
-    std::condition_variable m_wake;
+    /** Geração monotônica do trabalho publicado. Ao contrário de condition_variable, atomic::wait
+     * não perde um sinal que chegue antes de a worker efetivamente bloquear. */
+    std::atomic<uint64_t> m_workGeneration{0};
     std::mutex m_pacingMutex;
     std::condition_variable m_pacingWake;
     std::atomic<bool> m_running{false};

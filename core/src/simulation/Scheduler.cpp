@@ -16,7 +16,7 @@ void Scheduler::scheduleAt(uint64_t timeNs, uint32_t componentIndex) {
         std::lock_guard<std::mutex> lock(m_mutex);
         pushEventLocked(timeNs, componentIndex, {});
     }
-    m_wake.notify_one();
+    signalWorkAvailable();
 }
 
 void Scheduler::scheduleAt(uint64_t timeNs, EventCallback callback) {
@@ -24,7 +24,7 @@ void Scheduler::scheduleAt(uint64_t timeNs, EventCallback callback) {
         std::lock_guard<std::mutex> lock(m_mutex);
         pushEventLocked(timeNs, kNoComponent, std::move(callback));
     }
-    m_wake.notify_one();
+    signalWorkAvailable();
 }
 
 void Scheduler::scheduleEvent(uint64_t delayNs, uint32_t componentIndex) {
@@ -32,7 +32,7 @@ void Scheduler::scheduleEvent(uint64_t delayNs, uint32_t componentIndex) {
         std::lock_guard<std::mutex> lock(m_mutex);
         pushEventLocked(m_nowNs + delayNs, componentIndex, {});
     }
-    m_wake.notify_one();
+    signalWorkAvailable();
 }
 
 void Scheduler::scheduleEvent(uint64_t delayNs, EventCallback callback) {
@@ -40,7 +40,7 @@ void Scheduler::scheduleEvent(uint64_t delayNs, EventCallback callback) {
         std::lock_guard<std::mutex> lock(m_mutex);
         pushEventLocked(m_nowNs + delayNs, kNoComponent, std::move(callback));
     }
-    m_wake.notify_one();
+    signalWorkAvailable();
 }
 
 size_t Scheduler::pendingEventCount() const {
@@ -50,12 +50,29 @@ size_t Scheduler::pendingEventCount() const {
 
 bool Scheduler::dirty(uint32_t componentIndex) const {
     std::lock_guard<std::mutex> lock(m_mutex);
-    return m_dirty.contains(componentIndex);
+    if (m_dirty.contains(componentIndex)) return true;
+    std::lock_guard<std::mutex> pendingLock(m_pendingDirtyMutex);
+    return m_pendingDirty.contains(componentIndex);
 }
 
 size_t Scheduler::dirtyCount() const {
     std::lock_guard<std::mutex> lock(m_mutex);
-    return m_dirty.size();
+    std::lock_guard<std::mutex> pendingLock(m_pendingDirtyMutex);
+    size_t count = m_dirty.size();
+    for (uint32_t componentIndex : m_pendingDirty.dense()) {
+        if (!m_dirty.contains(componentIndex)) ++count;
+    }
+    return count;
+}
+
+bool Scheduler::mergePendingDirtyLocked() {
+    std::lock_guard<std::mutex> pendingLock(m_pendingDirtyMutex);
+    bool inserted = false;
+    for (uint32_t componentIndex : m_pendingDirty.dense()) {
+        inserted = m_dirty.insert(componentIndex) || inserted;
+    }
+    m_pendingDirty.clear();
+    return inserted;
 }
 
 bool Scheduler::settleUntilStableLocked(std::unique_lock<std::mutex>& lock) {
@@ -66,6 +83,7 @@ bool Scheduler::settleUntilStableLocked(std::unique_lock<std::mutex>& lock) {
     // doc-comment de `m_stopRequested`) -- sem isso, um comando enfileirado enquanto um circuito
     // oscila sem parar ficaria esperando pra sempre, exatamente a classe de bug que motivou este
     // redesign (ver .claude/plans/idempotent-floating-cat.md).
+    mergePendingDirtyLocked();
     if (m_commandDrain) m_commandDrain();
     const bool profile = m_profilingEnabled.load(std::memory_order_relaxed);
     const auto profileStart = profile ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
@@ -85,7 +103,13 @@ bool Scheduler::settleUntilStableLocked(std::unique_lock<std::mutex>& lock) {
         ++iter;
         if (profile) m_settleIterations.fetch_add(1, std::memory_order_relaxed);
         hadWork = true;
-        if (!m_settleStep || !m_settleStep()) break;
+        if (!m_settleStep) break;
+        const bool settleRequestedAnotherIteration = m_settleStep();
+        // Uma thread de poll pode publicar dirty enquanto m_settleStep() executa. Incorpore antes
+        // de decidir que o circuito convergiu: uma única iteração lenta não pode nem bloquear o
+        // produtor nem fazer seu trabalho recém-publicado esperar pelo próximo ciclo de tempo.
+        mergePendingDirtyLocked();
+        if (!settleRequestedAnotherIteration && m_dirty.empty()) break;
         // Achado 2026-07-27 (.spec 32.5.19/32.5.20, bateria correlacionada de 200 ciclos): segurar
         // m_mutex pelo laço inteiro (até 20 iterações, cada uma podendo custar dezenas de ms num
         // circuito complexo -- 100-700ms observados na prática) bloqueia QUALQUER outra thread que
@@ -101,7 +125,9 @@ bool Scheduler::settleUntilStableLocked(std::unique_lock<std::mutex>& lock) {
         // ainda entrega exatamente o mesmo resultado final, só não monopoliza o mutex pra chegar lá.
         lock.unlock();
         lock.lock();
+        mergePendingDirtyLocked();
     }
+    mergePendingDirtyLocked();
     m_lastSettleConverged = m_dirty.empty();
     if (profile) {
         const auto elapsed = std::chrono::steady_clock::now() - profileStart;
@@ -214,6 +240,10 @@ void Scheduler::reset() {
 
     std::lock_guard<std::mutex> lock(m_mutex);
     m_dirty.clear();
+    {
+        std::lock_guard<std::mutex> pendingLock(m_pendingDirtyMutex);
+        m_pendingDirty.clear();
+    }
     m_events = {};
     m_pendingEventSnapshot.store(0, std::memory_order_relaxed);
     m_nowNs = 0;
@@ -239,15 +269,22 @@ void Scheduler::start() {
 
         while (m_running.load()) {
             if (m_paused.load()) {
-                std::unique_lock<std::mutex> lock(m_mutex);
-                // Pausado != parado: a fila de comandos ainda precisa ser drenada aqui, senão editar
-                // uma propriedade com a simulação pausada travaria pra sempre (ver CommandDrainFn).
-                if (m_commandDrain) m_commandDrain();
-                m_wake.wait(lock, [this] {
-                    return !m_running.load(std::memory_order_acquire) ||
-                           !m_paused.load(std::memory_order_acquire) ||
-                           (m_commandPending && m_commandPending());
-                });
+                // Leia a geração ANTES de inspecionar o estado. Se trabalho chegar depois desta
+                // leitura, atomic::wait(observed) não bloqueia; se já tinha chegado antes, a
+                // inspeção protegida abaixo o encontra. Assim não existe a janela "predicado falso
+                // -> notify cedo demais -> espera eterna" de condition_variable.
+                const uint64_t observedWork = m_workGeneration.load(std::memory_order_acquire);
+                bool shouldWait = false;
+                {
+                    std::unique_lock<std::mutex> lock(m_mutex);
+                    // Pausado != parado: a fila de comandos ainda precisa ser drenada aqui, senão
+                    // editar uma propriedade com a simulação pausada travaria pra sempre.
+                    if (m_commandDrain) m_commandDrain();
+                    shouldWait = m_running.load(std::memory_order_acquire) &&
+                                 m_paused.load(std::memory_order_acquire) &&
+                                 !(m_commandPending && m_commandPending());
+                }
+                if (shouldWait) m_workGeneration.wait(observedWork, std::memory_order_acquire);
                 continue;
             }
 
@@ -255,7 +292,9 @@ void Scheduler::start() {
             const uint64_t cycleSimStartNs = nowNs();
             uint64_t targetTimeNs = 0;
             {
+                const uint64_t observedWork = m_workGeneration.load(std::memory_order_acquire);
                 std::unique_lock<std::mutex> lock(m_mutex);
+                mergePendingDirtyLocked();
                 const uint64_t configuredStepNs = m_maximumTimeStepNs.load(std::memory_order_relaxed);
                 if (configuredStepNs == 0) {
                     if (m_events.empty() && m_dirty.empty()) {
@@ -266,12 +305,15 @@ void Scheduler::start() {
                         // um wake legítimo. Drenar aqui aplica o comando (ou, no caso de
                         // sendComponentEvent, marca dirty pra ser pego pelo settle de verdade).
                         if (m_commandDrain) m_commandDrain();
+                        mergePendingDirtyLocked();
                         if (m_events.empty() && m_dirty.empty()) {
-                            m_wake.wait(lock, [this] {
-                                return !m_running.load(std::memory_order_acquire) ||
-                                       m_paused.load(std::memory_order_acquire) || !m_events.empty() ||
-                                       !m_dirty.empty() || (m_commandPending && m_commandPending());
-                            });
+                            const bool shouldWait =
+                                m_running.load(std::memory_order_acquire) &&
+                                !m_paused.load(std::memory_order_acquire) &&
+                                !(m_commandPending && m_commandPending());
+                            lock.unlock();
+                            if (shouldWait)
+                                m_workGeneration.wait(observedWork, std::memory_order_acquire);
                         }
                         continue;
                     }
@@ -393,24 +435,14 @@ void Scheduler::start() {
 
 void Scheduler::stop() {
     m_stopRequested.store(true);
-    // Achado ao vivo 2026-07-27 (.spec 32.5.5): reproduzido com um repro dedicado (loop com
-    // watchdog + ring buffer, já que qualquer fprintf/fflush por evento muda o timing o bastante
-    // pra mascarar a corrida inteira) -- `m_running.store(false)` seguido de `m_wake.notify_all()`
-    // SEM segurar `m_mutex` perde a troca de acordar quando a worker está bem no meio de
-    // `m_wake.wait(lock, predicate)` (branch pausado ou "sem trabalho", ambos em
-    // `m_mutex`/`m_wake`): a worker pode reavaliar o predicado como falso (running ainda true),
-    // e SÓ DEPOIS -- antes de a chamada de bloqueio de baixo nível registrar de fato a espera --
-    // esta store()+notify_all() completarem sem segurar `m_mutex`. Como a worker ainda não estava
-    // registrada como esperando, o notify não acorda ninguém; a chamada de bloqueio que a worker
-    // faz em seguida então espera por um notify que já foi consumido e nunca mais chega --
-    // `m_thread.join()` trava pra sempre (e com ele qualquer chamador, inclusive o harness de
-    // teste de restart). `wait(lock, predicate)` só é imune a essa corrida quando quem muda o
-    // estado do predicado TAMBÉM segura o mesmo mutex -- por isso a store entra no lock abaixo.
+    // O contador atômico de trabalho torna o wake linearizável mesmo se ele ocorrer antes de a
+    // worker entrar no bloqueio de baixo nível. Mantemos a troca sob m_mutex para preservar também
+    // a ordenação já estabelecida com o restante do estado do Scheduler.
     {
         std::lock_guard<std::mutex> lock(m_mutex);
         m_running.store(false);
     }
-    m_wake.notify_all();
+    signalWorkAvailable();
     m_pacingWake.notify_all();
     if (m_thread.joinable() && m_thread.get_id() != std::this_thread::get_id()) m_thread.join();
     // Drena qualquer comando enfileirado bem no instante em que `m_running` virou false acima --

@@ -1,5 +1,7 @@
-QEMU source: C:\SourceCode\qemu_lasecSimul
-QEMU commit: 73392afd7256aaa2adba03c0473e6b2b6744ac3d
-Build directory: C:\SourceCode\qemu_lasecSimul\build-ucrt64
+QEMU source: https://github.com/josuemoraisgh/qemu_lasecSimul
+QEMU base commit: 3674866 (fix(esp32-uart): cancel tx_timer on reset to prevent fifo8_pop assertion crash)
+Release patch: devices/qemu-esp32/patches/0001-esp32-realtime-wdt-and-interrupt-status.patch
+Build source: clean detached worktree; no CACHE-TRACE/XTENSA diagnostic instrumentation
 Configure: xtensa-softmmu, gcrypt, slirp
-Executable SHA-256: 9E15C4DF38D72EC542F22BD55D73DCD1617D12B70F7E0C6D7AD7B2BA67188E2A
+Executable SHA-256: C468F89EAA592A76C0BBEE4AA490803DB79F60C4E1D2B010CBD9DEF7DC17AE7E
+Release: v0.0.18 production build
