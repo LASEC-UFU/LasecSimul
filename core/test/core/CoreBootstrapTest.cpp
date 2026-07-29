@@ -676,12 +676,12 @@ static void testRegisterAdhocSubcircuitOverIpc() {
 // Teste 4c.2: componentes complexos refeitos via ABI recebem comandos bit a bit pelo on_event.
 static void testSimulideComplexAbiEventsOverIpc() {
     std::fprintf(stderr, "\n[T4c.2] componente complexo SimulIDE via ABI interpreta pinos bit a bit\n");
-#ifndef DEVICES_LIBRARY_JSON_PATH
-    std::fprintf(stderr, "  [info] DEVICES_LIBRARY_JSON_PATH nao definido -- pulando teste.\n");
+#ifndef REAL_DEVICES_LIBRARY_JSON_PATH
+    std::fprintf(stderr, "  [info] REAL_DEVICES_LIBRARY_JSON_PATH nao definido -- pulando teste.\n");
     TEST_ASSERT(true, "teste pulado sem fixture de devices");
     return;
 #else
-    const std::filesystem::path libraryPath = DEVICES_LIBRARY_JSON_PATH;
+    const std::filesystem::path libraryPath = REAL_DEVICES_LIBRARY_JSON_PATH;
     const std::filesystem::path hdDll = libraryPath.parent_path() / "simulide-complex" / "build" / kTestPlatformKey / "device.dll";
     if (!std::filesystem::exists(libraryPath) || !std::filesystem::exists(hdDll)) {
         std::fprintf(stderr, "  [info] biblioteca ABI complexa nao encontrada -- pulando teste.\n");

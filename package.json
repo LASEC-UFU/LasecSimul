@@ -5,6 +5,7 @@
   "description": "Scripts agregados para build/test da Extension (TypeScript) e do Core (C++ nativo) do LasecSimul. Não é o manifest da extensão VSCode -- esse é extension/package.json.",
   "scripts": {
     "build": "node scripts/build-all.js",
+    "build:development": "node scripts/build-development.js",
     "build:extension": "node scripts/build-extension.js",
     "build:core": "node scripts/build-core.js",
     "build:devices": "node scripts/build-devices.js",
@@ -16,6 +17,7 @@
     "test:extension": "npm --prefix extension test",
     "test:uart": "npm --prefix extension run compile && node scripts/test-uart-devices.js",
     "test:serial-port": "npm --prefix extension run compile && node scripts/test-serial-port.js",
+    "test:development-flow": "node scripts/test-development-flow.js",
     "benchmark:wires": "npm run build:extension && node scripts/benchmark-wire-topology.mjs"
   },
   "engines": {

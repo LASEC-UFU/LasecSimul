@@ -258,6 +258,7 @@ target_include_directories(core_bootstrap_test PRIVATE include src)
 target_link_libraries(core_bootstrap_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
 target_compile_definitions(core_bootstrap_test PRIVATE
     DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/bootstrap-test-library.json"
+    REAL_DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
 )
 if(NOT WIN32)
     target_link_libraries(core_bootstrap_test PRIVATE dl pthread)

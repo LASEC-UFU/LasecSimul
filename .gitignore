@@ -12,6 +12,9 @@ Thumbs.db
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
+!/extension/.vscode/
+!/extension/.vscode/tasks.json
+!/extension/.vscode/launch.json
 
 # Node / TypeScript
 node_modules/

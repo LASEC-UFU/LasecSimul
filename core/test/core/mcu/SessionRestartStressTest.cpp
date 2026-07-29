@@ -125,6 +125,9 @@ int main() {
     const bool useRealFirmware = firmwareOverride && *firmwareOverride;
     const bool verboseLogs = verboseOverride && *verboseOverride &&
                              std::string(verboseOverride) != "0";
+    const char* requireGpioOverride = std::getenv("LASECSIMUL_STRESS_REQUIRE_GPIO");
+    const bool requireGpio = !requireGpioOverride ||
+                             std::string(requireGpioOverride) != "0";
     const std::filesystem::path realFirmware =
         useRealFirmware ? std::filesystem::u8path(firmwareOverride) : std::filesystem::path{};
     if (!std::filesystem::exists(dllPath)) {
@@ -190,6 +193,7 @@ int main() {
     int failedToBoot = 0;
     int stalledMidRun = 0;
     int gpioFailures = 0;
+    int panicFailures = 0;
     int stopCleanupFailures = 0;
 
     std::fprintf(stderr, "Restart stress: ciclos=%d run_ms=%lld firmware=%s\n",
@@ -296,7 +300,7 @@ int main() {
         uint64_t firstGpioLowAfterHighNowNs = 0;
         uint64_t lastGpioTransitionNowNs = 0;
         const auto runDeadline = std::chrono::steady_clock::now() + runDuration;
-        const auto maximumDeadline = runDeadline + (useRealFirmware ? gpioGrace
+        const auto maximumDeadline = runDeadline + (useRealFirmware && requireGpio ? gpioGrace
                                                                     : std::chrono::milliseconds{0});
         while (std::chrono::steady_clock::now() < maximumDeadline && mcuPtr->firmwareRunning()) {
             if (useRealFirmware) {
@@ -334,6 +338,19 @@ int main() {
         const bool stillRunning = mcuPtr->firmwareRunning();
         const bool schedulerStillRunning = session.scheduler().isRunning();
         const uint64_t virtualTimeAfter = mcuPtr->latestVirtualTimeNs();
+        std::string uartText;
+        if (useRealFirmware) {
+            const auto uartTx = session.propertyValueOf(mcuIndex, "uart0_tx_monitor_hex");
+            if (uartTx && std::holds_alternative<std::string>(*uartTx)) {
+                uartText = decodeHex(std::get<std::string>(*uartTx));
+            }
+            if (uartText.find("Guru Meditation Error") != std::string::npos) {
+                ++panicFailures;
+                std::fprintf(stderr,
+                             "  ciclo %d: PANIC NA UART (mesmo que o firmware tenha reiniciado):\n%s\n",
+                             cycle, uartText.c_str());
+            }
+        }
 
         if (!stillRunning || !schedulerStillRunning || virtualTimeAfter == virtualTimeAtStart) {
             const LsdnQemuArena* stalledArena = mcuPtr->arenaBridge().arena();
@@ -367,7 +384,7 @@ int main() {
             std::fprintf(stderr, ")\n");
         }
 
-        if (useRealFirmware &&
+        if (useRealFirmware && requireGpio &&
             (!observedGpioHigh || !observedGpioLowAfterHigh || gpioTransitions < 2)) {
             const LsdnQemuArena* failedArena = mcuPtr->arenaBridge().arena();
             const LsdnQemuQueueEntry* failedHead =
@@ -405,10 +422,9 @@ int main() {
                     mcuPtr->arenaBridge().negotiatedCapabilities()));
             std::fprintf(stderr, "  Logs QEMU do ciclo %d:\n%s\n", cycle,
                          mcuPtr->qemuLogs().c_str());
-            const auto uartTx = session.propertyValueOf(mcuIndex, "uart0_tx_monitor_hex");
-            if (uartTx && std::holds_alternative<std::string>(*uartTx)) {
+            if (!uartText.empty()) {
                 std::fprintf(stderr, "  UART0 TX do ciclo %d:\n%s\n", cycle,
-                             decodeHex(std::get<std::string>(*uartTx)).c_str());
+                             uartText.c_str());
             }
             ++gpioFailures;
         } else if (verboseLogs) {
@@ -462,13 +478,17 @@ int main() {
 
     TEST_ASSERT(failedToBoot == 0, "nenhum ciclo deveria falhar em INICIALIZAR (arena->running nunca chegando a 1)");
     TEST_ASSERT(stalledMidRun == 0, "nenhum ciclo deveria travar NO MEIO (Scheduler+MCU reais)");
-    TEST_ASSERT(gpioFailures == 0, "GPIO13 deveria piscar em todos os ciclos com firmware real");
+    if (requireGpio) {
+        TEST_ASSERT(gpioFailures == 0, "GPIO13 deveria piscar em todos os ciclos com firmware real");
+    }
+    TEST_ASSERT(panicFailures == 0, "UART nao deveria conter Guru Meditation em nenhum ciclo");
     TEST_ASSERT(stopCleanupFailures == 0, "Stop deveria limpar MCU, Scheduler, pausa, relogio e eventos");
 
     std::fprintf(stderr,
                  "\nResumo: %d/%d falharam ao iniciar, %d/%d travaram, %d/%d falharam no GPIO13, "
-                 "%d/%d deixaram estado apos Stop.\n",
+                 "%d/%d tiveram Guru Meditation, %d/%d deixaram estado apos Stop.\n",
                  failedToBoot, cycleCount, stalledMidRun, cycleCount, gpioFailures, cycleCount,
+                 panicFailures, cycleCount,
                  stopCleanupFailures, cycleCount);
 
     if (failures == 0) {
