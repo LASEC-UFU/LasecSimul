@@ -1,9 +1,9 @@
 QEMU source: https://github.com/josuemoraisgh/qemu_lasecSimul
-QEMU base commit: 3674866 (fix(esp32-uart): cancel tx_timer on reset to prevent fifo8_pop assertion crash)
-Release patches:
+QEMU source commit: 448559e (fix(esp32): stabilize interrupt watchdog and I2C timing)
+Reference patches incorporated in the source commit:
 - devices/qemu-esp32/patches/0001-esp32-realtime-wdt-and-interrupt-status.patch
 - devices/qemu-esp32/patches/0002-esp32-i2c-electrical-start-timing.patch
-Build source: detached worktree with the release patches; no CACHE-TRACE/XTENSA diagnostic instrumentation
+Build source: QEMU commit 448559e; no CACHE-TRACE/XTENSA diagnostic instrumentation
 Configure: xtensa-softmmu, gcrypt, slirp
 Executable SHA-256: C641FB1FC9F923DB4B0B83443A215325FF55E671FC8B47AB442D8AF06AE98401
-Release: v0.0.18 production build
+Release: v0.0.19 production build
