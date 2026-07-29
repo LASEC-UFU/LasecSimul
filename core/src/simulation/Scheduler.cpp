@@ -246,6 +246,7 @@ void Scheduler::reset() {
     }
     m_events = {};
     m_pendingEventSnapshot.store(0, std::memory_order_relaxed);
+    m_resetGeneration.fetch_add(1, std::memory_order_release);
     m_nowNs = 0;
     m_nowSnapshotNs.store(0, std::memory_order_release);
     m_nextSequence = 0;

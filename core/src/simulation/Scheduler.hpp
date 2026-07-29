@@ -177,6 +177,8 @@ public:
     }
     /** Snapshot lock-free: telemetry must never queue ahead of a stop IPC request. */
     uint64_t nowNs() const { return m_nowSnapshotNs.load(std::memory_order_acquire); }
+    /** Incrementada somente quando reset() descarta a fila inteira de callbacks. */
+    uint64_t resetGeneration() const { return m_resetGeneration.load(std::memory_order_acquire); }
     template <class Fn> decltype(auto) synchronized(Fn&& fn) const {
         std::lock_guard<std::mutex> lock(m_mutex);
         return std::forward<Fn>(fn)();
@@ -301,6 +303,7 @@ private:
     std::priority_queue<ScheduledEvent, std::vector<ScheduledEvent>, ScheduledEventOrder> m_events;
     uint64_t m_nowNs = 0;
     std::atomic<uint64_t> m_nowSnapshotNs{0};
+    std::atomic<uint64_t> m_resetGeneration{0};
     uint64_t m_nextSequence = 0;
     SettleStepFn m_settleStep;
     TimeStepBeginFn m_beginTimeStep;

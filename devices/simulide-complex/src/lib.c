@@ -58,7 +58,8 @@ typedef struct {
     uint8_t pin_level[32];
     uint32_t shift_reg;
     uint8_t bit_count;
-    uint8_t i2c_started, i2c_ack, i2c_seen_address, i2c_addressed, i2c_address;
+    uint8_t i2c_started, i2c_ack, i2c_ack_pending, i2c_ack_clocked;
+    uint8_t i2c_seen_address, i2c_addressed, i2c_address;
     uint8_t ws_rgb[3], ws_bit, ws_byte;
     uint32_t ws_led, ws_count, ws_t0h, ws_t0l, ws_t1h, ws_t1l, ws_reset_us;
     uint8_t ws_last_h, ws_new_word;
@@ -597,7 +598,11 @@ static void tft_clock_bit(SimDevice* s) {
 static void i2c_clock_bit(SimDevice* s) {
     if (!s->i2c_started) return;
     if (s->i2c_ack) {
-        s->i2c_ack = 0;
+        /* O escravo precisa manter SDA baixo durante TODO o nono pulso de SCL. Antes o ACK era
+         * removido nesta propria borda de subida; o solver entao via SDA subir ainda com SCL alto,
+         * interpretava essa subida como STOP e o master amostrava NACK. Marque que a borda de ACK
+         * aconteceu, mas deixe a liberacao real para a borda de descida de SCL. */
+        s->i2c_ack_clocked = 1;
         s->bit_count = 0;
         s->shift_reg = 0;
         return;
@@ -608,10 +613,10 @@ static void i2c_clock_bit(SimDevice* s) {
     if (!s->i2c_seen_address) {
         s->i2c_seen_address = 1;
         s->i2c_addressed = (uint8_t)((byte >> 1) == s->i2c_address);
-        if (s->i2c_addressed) s->i2c_ack = 1;
+        if (s->i2c_addressed) s->i2c_ack_pending = 1;
     } else if (s->i2c_addressed) {
         i2c_payload_byte(s, byte);
-        s->i2c_ack = 1;
+        s->i2c_ack_pending = 1;
     }
 }
 
@@ -627,6 +632,8 @@ static void handle_pin_change(SimDevice* s, uint32_t pin, uint32_t level) {
         if (old && !now) {
             s->i2c_started = 1;
             s->i2c_ack = 0;
+            s->i2c_ack_pending = 0;
+            s->i2c_ack_clocked = 0;
             s->i2c_seen_address = 0;
             s->i2c_addressed = 0;
             s->i2c_phase = 0;
@@ -635,13 +642,30 @@ static void handle_pin_change(SimDevice* s, uint32_t pin, uint32_t level) {
         } else if (!old && now) {
             s->i2c_started = 0;
             s->i2c_ack = 0;
+            s->i2c_ack_pending = 0;
+            s->i2c_ack_clocked = 0;
             s->bit_count = 0;
             s->shift_reg = 0;
         }
     }
 
-    if ((s->kind == KIND_AIP31068 || s->kind == KIND_OLED || s->kind == KIND_SH1107) && pin == 0 && !old && now) {
-        i2c_clock_bit(s);
+    if ((s->kind == KIND_AIP31068 || s->kind == KIND_OLED || s->kind == KIND_SH1107) && pin == 0) {
+        if (!old && now) {
+            i2c_clock_bit(s);
+        } else if (old && !now && s->i2c_ack_pending) {
+            /* O byte foi fechado na oitava borda de subida, mas o escravo so pode puxar SDA
+             * depois que SCL baixar. Fazer isto ainda com SCL alto transforma o proprio ACK
+             * (especialmente depois de byte terminado em bit 1) num falso START. */
+            s->i2c_ack_pending = 0;
+            s->i2c_ack = 1;
+        } else if (old && !now && s->i2c_ack && s->i2c_ack_clocked) {
+            /* Fim do nono pulso: agora SCL ja esta baixo e SDA pode ser liberado sem gerar um
+             * falso STOP. O proximo byte volta a ser contado normalmente a partir de zero. */
+            s->i2c_ack = 0;
+            s->i2c_ack_clocked = 0;
+            s->bit_count = 0;
+            s->shift_reg = 0;
+        }
     } else if (s->kind == KIND_HD44780 && pin == 2 && old && !now) {
         hd_latch_parallel(s);
     } else if (s->kind == KIND_KS0108) {

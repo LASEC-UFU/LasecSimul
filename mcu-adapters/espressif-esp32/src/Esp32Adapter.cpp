@@ -201,17 +201,22 @@ enum class UartRxPhase : uint8_t {
 enum class I2cPhase : uint8_t {
     Idle,
     RestartRelease,   // solta/sobe SDA com SCL baixo -- 1o passo de start/repeated-start
+    RestartDataHigh,  // SCL ja baixo; agora sobe SDA sem ambiguidade de ordem no solver
     RestartClockHigh, // SCL sobe com SDA alta -- barramento "ocioso" recriado, pronto pra' cair SDA
     StartFall,        // SDA cai com SCL alto -- START/repeated-START completo -- proximo desce SCL
     StartSettle,      // SCL desce -- pronto pro primeiro bit do proximo Write
     WriteBitSetup,    // (write) SCL baixo, SDA segura o bit -- proximo sobe SCL (escravo amostra)
     WriteBitHold,     // (write) SCL alto -- proximo desce SCL e avanca pro bit seguinte/ACK
+    WriteBitChange,   // SCL ja baixo; muda/libera SDA para o bit seguinte/ACK
     ReadBitSetup,     // (read) SCL baixo, SDA liberado (escravo dirige) -- proximo sobe SCL e amostra
     ReadBitHold,      // (read) SCL alto -- proximo desce SCL e avanca pro bit seguinte/ACK do mestre
     WriteAckSetup,    // SCL baixo, SDA liberado -- escravo confirma um byte que o MESTRE enviou
     WriteAckHold,     // SCL alto -- amostra o ACK do escravo em sdaInput -- proximo desce SCL
+    WriteAckRelease,  // SCL ja baixo; mestre retoma SDA sem criar falso STOP
     ReadAckSetup,      // SCL baixo, mestre dirige ACK(0)/NACK(liberado) do byte que ELE recebeu
     ReadAckHold,       // SCL alto -- ACK/NACK do mestre visivel no barramento -- proximo desce SCL
+    ReadAckDrive,      // SCL ja baixo; mestre passa a dirigir ACK/NACK
+    ReadAckRelease,    // SCL ja baixo; mestre libera/retoma SDA depois do ACK
     StopSetup,        // SCL baixo, SDA baixo -- proximo sobe SCL antes do STOP
     StopRise,         // SCL alto, SDA baixo -- proximo sobe SDA (STOP completo)
 };
@@ -1298,6 +1303,17 @@ enum : uint32_t { kI2cOpRstart = 0, kI2cOpWrite = 1, kI2cOpRead = 2, kI2cOpStop 
 
 void i2cKick(I2cState& i2c, uint64_t nowNs);
 
+/* SCL e SDA nao podem mudar no mesmo solve: os PIN_CHANGE de nos distintos nao possuem uma ordem
+ * eletrica garantida. Um intervalo minimo separa a descida de SCL da troca de SDA, preservando o
+ * mesmo meio-periodo total (salvo clocks patologicos de 1 ns) e evitando START/STOP falsos. */
+uint64_t i2cEdgeSettleNs(const I2cState& i2c) {
+    return std::max<uint64_t>(1, i2c.halfPeriodNs / 4u);
+}
+uint64_t i2cLowRemainderNs(const I2cState& i2c) {
+    const uint64_t separationNs = i2cEdgeSettleNs(i2c);
+    return i2c.halfPeriodNs > separationNs ? i2c.halfPeriodNs - separationNs : 1;
+}
+
 void i2cAdvance(I2cState& i2c, uint64_t nowNs) {
     switch (i2c.phase) {
         case I2cPhase::Idle:
@@ -1305,11 +1321,16 @@ void i2cAdvance(I2cState& i2c, uint64_t nowNs) {
 
         // ---- START / repeated-START (opcode Restart -- ver I2cOpKind) ----
         case I2cPhase::RestartRelease:
-            i2c.sclOutputLevel = false; // garante SCL baixo (ja' e' o caso fora do 1o START)
+            i2c.sclOutputLevel = false; // primeiro baixa SCL; SDA so muda no proximo solve
+            i2c.phase = I2cPhase::RestartDataHigh;
+            i2c.dueNs = addDelayNs(nowNs, i2cEdgeSettleNs(i2c));
+            return;
+
+        case I2cPhase::RestartDataHigh:
             i2c.sdaOutputEnabled = true;
             i2c.sdaOutputLevel = true; // solta/sobe SDA -- recria "barramento ocioso"
             i2c.phase = I2cPhase::RestartClockHigh;
-            i2c.dueNs = addDelayNs(nowNs, i2c.halfPeriodNs);
+            i2c.dueNs = addDelayNs(nowNs, i2cLowRemainderNs(i2c));
             return;
 
         case I2cPhase::RestartClockHigh:
@@ -1340,6 +1361,11 @@ void i2cAdvance(I2cState& i2c, uint64_t nowNs) {
         case I2cPhase::WriteBitHold:
             i2c.sclOutputLevel = false;
             ++i2c.bitIndex;
+            i2c.phase = I2cPhase::WriteBitChange;
+            i2c.dueNs = addDelayNs(nowNs, i2cEdgeSettleNs(i2c));
+            return;
+
+        case I2cPhase::WriteBitChange:
             if (i2c.bitIndex < 8) {
                 i2c.sdaOutputLevel = (i2c.shiftByte & (0x80u >> i2c.bitIndex)) != 0;
                 i2c.phase = I2cPhase::WriteBitSetup;
@@ -1351,7 +1377,7 @@ void i2cAdvance(I2cState& i2c, uint64_t nowNs) {
                 i2c.sdaOutputEnabled = false;
                 i2c.phase = I2cPhase::WriteAckSetup;
             }
-            i2c.dueNs = addDelayNs(nowNs, i2c.halfPeriodNs);
+            i2c.dueNs = addDelayNs(nowNs, i2cLowRemainderNs(i2c));
             return;
 
         case I2cPhase::WriteAckSetup:
@@ -1363,10 +1389,15 @@ void i2cAdvance(I2cState& i2c, uint64_t nowNs) {
         case I2cPhase::WriteAckHold:
             i2c.lastAck = !i2c.sdaInput; // ACK real = SDA puxado pra baixo pelo escravo
             i2c.sclOutputLevel = false;
+            i2c.phase = I2cPhase::WriteAckRelease;
+            i2c.dueNs = addDelayNs(nowNs, i2cEdgeSettleNs(i2c));
+            return;
+
+        case I2cPhase::WriteAckRelease:
             i2c.sdaOutputEnabled = true;
             i2c.sdaOutputLevel = true; // retoma controle, idle-alto -- base limpa pro proximo passo
             i2c.phase = I2cPhase::Idle;
-            i2c.dueNs = addDelayNs(nowNs, i2c.halfPeriodNs);
+            i2c.dueNs = addDelayNs(nowNs, i2cLowRemainderNs(i2c));
             return;
 
         // ---- READ (mestre recebe um byte do escravo) ----
@@ -1382,20 +1413,26 @@ void i2cAdvance(I2cState& i2c, uint64_t nowNs) {
             ++i2c.bitIndex;
             if (i2c.bitIndex < 8) {
                 i2c.phase = I2cPhase::ReadBitSetup;
+                i2c.dueNs = addDelayNs(nowNs, i2c.halfPeriodNs);
             } else {
                 // Mestre agora dirige o ACK/NACK: ACK (mais bytes a seguir) = puxa SDA pra baixo;
                 // NACK (ultimo byte da leitura) = libera SDA (sobe via pull-up) -- MESMA convencao
                 // open-drain do WRITE acima, so' que quem decide agora e' o ACK_VAL do firmware
                 // (I2cOp::nack), nao o escravo.
-                if (i2c.pendingNack) {
-                    i2c.sdaOutputEnabled = false;
-                } else {
-                    i2c.sdaOutputEnabled = true;
-                    i2c.sdaOutputLevel = false;
-                }
-                i2c.phase = I2cPhase::ReadAckSetup;
+                i2c.phase = I2cPhase::ReadAckDrive;
+                i2c.dueNs = addDelayNs(nowNs, i2cEdgeSettleNs(i2c));
             }
-            i2c.dueNs = addDelayNs(nowNs, i2c.halfPeriodNs);
+            return;
+
+        case I2cPhase::ReadAckDrive:
+            if (i2c.pendingNack) {
+                i2c.sdaOutputEnabled = false;
+            } else {
+                i2c.sdaOutputEnabled = true;
+                i2c.sdaOutputLevel = false;
+            }
+            i2c.phase = I2cPhase::ReadAckSetup;
+            i2c.dueNs = addDelayNs(nowNs, i2cLowRemainderNs(i2c));
             return;
 
         case I2cPhase::ReadAckSetup:
@@ -1406,11 +1443,16 @@ void i2cAdvance(I2cState& i2c, uint64_t nowNs) {
 
         case I2cPhase::ReadAckHold:
             i2c.sclOutputLevel = false;
+            i2c.phase = I2cPhase::ReadAckRelease;
+            i2c.dueNs = addDelayNs(nowNs, i2cEdgeSettleNs(i2c));
+            return;
+
+        case I2cPhase::ReadAckRelease:
             i2c.sdaOutputEnabled = true;
             i2c.sdaOutputLevel = true; // retoma controle, idle-alto
             i2c.lastReadByte = i2c.shiftByte; // disponibiliza o byte pro readRegister(A_I2C_CMD)
             i2c.phase = I2cPhase::Idle;
-            i2c.dueNs = addDelayNs(nowNs, i2c.halfPeriodNs);
+            i2c.dueNs = addDelayNs(nowNs, i2cLowRemainderNs(i2c));
             return;
 
         // ---- STOP ----
@@ -1489,15 +1531,11 @@ void i2cWriteRegisterAt(LsdnQemuModule* module, uint64_t address, uint64_t value
         return;
     }
     if (offset == kI2cCtrOffset) {
-        if ((data & kI2cCtrTransStartBit) != 0) {
-            // esp32_i2c_write_CTR (fork QEMU) espelha TODA escrita de CTR aqui, mas so' o bit
-            // TRANS_START marca o inicio de uma nova transacao de verdade -- limpa qualquer resto
-            // de uma transacao anterior que porventura nao tenha sido totalmente drenada (nao
-            // deveria acontecer em uso normal: cada transacao real termina em STOP).
-            i2c.pendingOps.clear();
-            i2c.phase = I2cPhase::Idle;
-            i2c.dueNs = LSDN_QEMU_MODULE_NO_WAKEUP;
-        }
+        // O QEMU e o motor eletrico sao assincronos: o proximo TRANS_START pode chegar quando o
+        // ultimo STOP/ACK ja terminou no periferico emulado, mas ainda aguarda sua ultima fase no
+        // Scheduler do Core. Por isso uma escrita de CTR apenas delimita a transacao logica; nao
+        // apaga pendingOps nem a fase fisica atual. Os opcodes espelhados entram no fim da mesma
+        // fila e preservam a ordem eletrica do barramento.
         return;
     }
     if (offset >= kI2cCmdOffset && offset < kI2cCmdOffset + kI2cCmdCount * 4) {

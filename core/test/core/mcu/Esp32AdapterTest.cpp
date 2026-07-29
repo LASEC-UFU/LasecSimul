@@ -464,13 +464,18 @@ int main() {
             }
         };
         auto masterAck = [&](bool expectNack, const char* label) {
+            // A descida de SCL e a mudanca de SDA agora ocupam passos separados: sem isto os
+            // PIN_CHANGE dos dois nos poderiam chegar ao escravo em ordem invertida e parecer um
+            // START/STOP. ReadAckDrive muda SDA com SCL ja baixo; ReadAckSetup sobe SCL depois.
+            stepOnce(); // ReadAckDrive: mestre passa a dirigir ACK/NACK com SCL baixo
             stepOnce(); // ReadAckSetup: sobe SCL com o ACK/NACK do mestre ja' no nivel certo
             if (expectNack) {
                 TEST_ASSERT(!i2c0Module->isOutputEnabled(kSdaLine), label);
             } else {
                 TEST_ASSERT(i2c0Module->isOutputEnabled(kSdaLine) && !i2c0Module->outputLevel(kSdaLine), label);
             }
-            stepOnce(); // ReadAckHold: desce SCL, disponibiliza o byte recebido, volta a Idle+folga
+            stepOnce(); // ReadAckHold: desce SCL sem mudar SDA no mesmo solve
+            stepOnce(); // ReadAckRelease: disponibiliza o byte recebido e volta a Idle+folga
         };
 
         clockInByte(0xC3);

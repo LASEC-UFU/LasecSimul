@@ -278,10 +278,11 @@ private:
     std::shared_ptr<CallbackState> m_callbackState;
     uint32_t m_componentIndex = 0;
     std::atomic<bool> m_polling{false};
-    // Identifica a sessão de polling à qual cada callback agendado pertence. Scheduler::reset()
-    // descarta callbacks pendentes sem executá-los; por isso uma nova carga precisa invalidar
-    // explicitamente os callbacks da sessão anterior e liberar seu próprio agendamento.
+    // Identifica a sessão de polling à qual cada callback agendado pertence. Uma simples recarga
+    // reutiliza o callback pendente; Scheduler::reset(), por outro lado, descarta a fila inteira e
+    // exige invalidar a geração anterior e liberar um novo agendamento.
     uint64_t m_pollGeneration = 0;
+    uint64_t m_pollSchedulerResetGeneration = 0;
     bool m_pollEventScheduled = false;
     bool m_syntheticArenaForTesting = false;
     // Achado 2026-07-23 (sincronização de ritmo): lido cross-thread por pacingPositionNs(), sem

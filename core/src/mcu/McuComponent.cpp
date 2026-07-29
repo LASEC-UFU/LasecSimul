@@ -84,11 +84,16 @@ void McuComponent::onAssignedIndex(uint32_t index) {
 }
 
 void McuComponent::startPolling(std::vector<DeferredSchedulerCall>* deferred) {
-    // Um callback da sessão anterior pode ter sido descartado por Scheduler::reset(), sem passar
-    // por onPollEvent() para baixar m_pollEventScheduled. Cada Run começa uma geração nova: libera
-    // o primeiro callback e torna inofensivos callbacks antigos que ainda estejam na fila.
-    ++m_pollGeneration;
-    m_pollEventScheduled = false;
+    // Recargas dentro da mesma timeline reutilizam o callback que já está na fila: ele executará
+    // contra a arena atual e schedulePollAt() impede duplicatas. Scheduler::reset() é diferente:
+    // ele descarta callbacks sem executar onPollEvent(), portanto sua geração monotônica informa
+    // quando a flag local precisa ser liberada e callbacks da timeline anterior invalidados.
+    const uint64_t schedulerResetGeneration = m_scheduler.resetGeneration();
+    if (m_pollSchedulerResetGeneration != schedulerResetGeneration) {
+        m_pollSchedulerResetGeneration = schedulerResetGeneration;
+        ++m_pollGeneration;
+        m_pollEventScheduled = false;
+    }
     m_polling.store(true, std::memory_order_release);
     scheduleNextPoll(deferred);
 }
