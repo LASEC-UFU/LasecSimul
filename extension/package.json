@@ -4,7 +4,7 @@
   "description": "Simulador de circuitos eletrônicos com MCUs emulados via QEMU, inspirado no SimulIDE.",
   "publisher": "josuemoraisgh",
   "license": "SEE LICENSE IN LICENSE.txt",
-  "version": "0.0.18",
+  "version": "0.0.19",
   "engines": {
     "vscode": "^1.85.0"
   },
