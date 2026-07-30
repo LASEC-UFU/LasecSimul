@@ -238,14 +238,23 @@ McuComponent::PollStep McuComponent::pollStepLocked(std::vector<DeferredSchedule
     }
 
     const bool changed = dispatchArenaEvent(*result.event, eventNs);
-    scheduleWakeupsForAllModules(eventNs, false, deferred);
     if (changed) {
         if (deferred) {
+            /*
+             * Publique o nivel eletrico atual ANTES de agendar a proxima borda do modulo.
+             * No poll em background, ambas as operacoes viram chamadas adiadas executadas sem o
+             * callbackState mutex. A ordem antiga era scheduleWakeup -> markDirty: o schedule
+             * acordava a worker e, sob carga, ela conseguia executar a proxima borda UART antes de
+             * markDirty publicar o start bit. O solver entao via direto o primeiro data bit e o
+             * LasecPlot corrompia bytes esporadicamente a 921600 baud. Dirty primeiro garante um
+             * settle do nivel presente; so' depois a borda seguinte pode entrar na fila.
+             */
             deferred->push_back([&scheduler = m_scheduler, index = m_componentIndex] { scheduler.markDirty(index); });
         } else {
             m_scheduler.markDirty(m_componentIndex);
         }
     }
+    scheduleWakeupsForAllModules(eventNs, false, deferred);
     return PollStep::DispatchedReady;
 }
 
@@ -411,6 +420,39 @@ std::string McuComponent::drainUsartMonitorHex(uint64_t regionStart, bool tx) co
     std::string hex;
     uint8_t byte = 0;
     for (int guard = 0; guard < kUsartMonitorDrainGuard && module->drainMonitorByte(tx, byte); ++guard) {
+        hex.push_back(kHexDigits[byte >> 4]);
+        hex.push_back(kHexDigits[byte & 0x0Fu]);
+    }
+    return hex;
+}
+
+std::optional<std::string>
+McuComponent::tryDrainUartTxWireTap(size_t localPinIndex, bool& busy) const {
+    busy = false;
+    const std::span<const PinMapping> mappings = m_adapter->pinMap();
+    if (localPinIndex >= mappings.size() || localPinIndex >= m_moduleByPin.size()) return std::nullopt;
+    const PinMapping& mapping = mappings[localPinIndex];
+    if (mapping.moduleKind != ModuleKind::Usart) return std::nullopt;
+
+    // tryDrainUartRx() chama isto com Scheduler::m_mutex tomado. NUNCA espere aqui pelo mutex do
+    // callback: um wakeup UART pode estar segurando-o e prestes a marcar o Scheduler dirty, ordem
+    // inversa que deadlockaria os dois. Se a UART estiver atualizando neste exato instante,
+    // identifique o pino como fonte (string vazia) e deixe o poll do instrumento tentar de novo;
+    // principalmente, nao caia no decoder eletrico e nao consuma seu buffer nessa tentativa.
+    std::unique_lock<std::recursive_mutex> lock(m_callbackState->mutex, std::try_to_lock);
+    if (!lock.owns_lock()) {
+        busy = true;
+        return std::nullopt;
+    }
+
+    QemuModule* module = m_moduleByPin[localPinIndex];
+    if (!module || !module->isOutputEnabled(mapping.bitOrLine)) {
+        return std::nullopt;
+    }
+
+    std::string hex;
+    uint8_t byte = 0;
+    for (int guard = 0; guard < kUsartMonitorDrainGuard && module->drainWireTapByte(byte); ++guard) {
         hex.push_back(kHexDigits[byte >> 4]);
         hex.push_back(kHexDigits[byte & 0x0Fu]);
     }

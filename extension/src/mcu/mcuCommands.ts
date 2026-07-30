@@ -66,6 +66,39 @@ function resolveQemuBinaryOverride(properties: Record<string, unknown>): string 
   return configured || resolveDefaultQemuBinaryPath();
 }
 
+/** Runtime settings for an MCU inside a subcircuit belong to the outer project instance. */
+function exposedMcuRuntimePropertyKey(innerComponentId: string, name: "firmwarePath" | "qemuBinaryOverride"): string {
+  return `__ui_exposedMcu_${encodeURIComponent(innerComponentId)}_${name}`;
+}
+
+function exposedMcuRuntimeProperty(
+  outerProperties: Record<string, unknown>,
+  innerComponentId: string,
+  name: "firmwarePath" | "qemuBinaryOverride"
+): string {
+  const value = outerProperties[exposedMcuRuntimePropertyKey(innerComponentId, name)];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function setExposedMcuRuntimeProperty(
+  outerComponentId: string,
+  innerComponentId: string,
+  name: "firmwarePath" | "qemuBinaryOverride",
+  value: string,
+  options: McuCommandOptions
+): void {
+  const propertyKey = exposedMcuRuntimePropertyKey(innerComponentId, name);
+  state.schematicState = {
+    ...state.schematicState,
+    components: state.schematicState.components.map((entry) =>
+      entry.id === outerComponentId
+        ? { ...entry, properties: { ...entry.properties, [propertyKey]: value } }
+        : entry
+    ),
+  };
+  options.syncSchematicPanel();
+}
+
 function resolveSourceIdForComponent(componentId: string): string | undefined {
   const component = getComponentById(componentId);
   if (!component) return undefined;
@@ -189,8 +222,12 @@ export async function chooseExposedMcuFirmwareCommand(
   if (!selected || !sourceId) return;
 
   const firmwarePath = selected.fsPath;
-  const qemuBinaryOverride = inner ? resolveQemuBinaryOverride(inner.properties) : resolveDefaultQemuBinaryPath();
-  await updateExposedComponentPropertyCommand(outerComponentId, sourceId, innerComponentId, "firmwarePath", firmwarePath, options);
+  const outer = getComponentById(outerComponentId);
+  const configuredQemu = outer
+    ? exposedMcuRuntimeProperty(outer.properties, innerComponentId, "qemuBinaryOverride")
+    : "";
+  const qemuBinaryOverride = configuredQemu || (inner ? resolveQemuBinaryOverride(inner.properties) : resolveDefaultQemuBinaryPath());
+  setExposedMcuRuntimeProperty(outerComponentId, innerComponentId, "firmwarePath", firmwarePath, options);
 
   if (state.simulationStatus === "running") {
     const targetCoreId = await resolveSubcircuitChildCoreId(outerComponentId, innerComponentId);
@@ -228,17 +265,20 @@ function collectMcuHostEntries(options: McuCommandOptions): McuFirmwareTarget[] 
   for (const component of state.schematicState.components) {
     const catalogEntry = state.schematicState.catalog.find((entry) => entry.typeId === component.typeId);
     if (catalogEntry?.registeredSourceKind === "subcircuit-file") {
-      // Subcircuito que HOSPEDA um MCU interno (ex: ESP32 DevKitC) -- o firmware mora nas
-      // `properties` do componente INTERNO exposto, nunca na instância de fora.
+      // Runtime settings prefer the outer project instance. The inner value remains only as a
+      // compatibility fallback for third-party subcircuits created by older releases.
       const sourceId = catalogEntry.registeredSourceId;
       const innerComponents = sourceId ? options.gatherInternalComponentSnapshots(sourceId) : undefined;
       if (!innerComponents) continue;
       for (const inner of innerComponents) {
         if (!isMcuHostTypeId(inner.typeId)) continue;
+        const instanceFirmwarePath = exposedMcuRuntimeProperty(component.properties, inner.id, "firmwarePath");
+        const instanceQemuOverride = exposedMcuRuntimeProperty(component.properties, inner.id, "qemuBinaryOverride");
         entries.push({
           label: inner.label,
-          firmwarePath: typeof inner.properties.firmwarePath === "string" ? inner.properties.firmwarePath.trim() : "",
-          qemuBinaryOverride: resolveQemuBinaryOverride(inner.properties),
+          firmwarePath: instanceFirmwarePath ||
+            (typeof inner.properties.firmwarePath === "string" ? inner.properties.firmwarePath.trim() : ""),
+          qemuBinaryOverride: instanceQemuOverride || resolveQemuBinaryOverride(inner.properties),
           resolveCoreId: () => resolveSubcircuitChildCoreId(component.id, inner.id),
         });
       }
@@ -452,8 +492,23 @@ export async function requestBoardOverlayDataCommand(
   options: McuCommandOptions
 ): Promise<void> {
   if (!state.schematicPanel) return;
-  const items = options.gatherInternalComponentSnapshots(sourceId);
-  if (!items) return;
+  const snapshots = options.gatherInternalComponentSnapshots(sourceId);
+  if (!snapshots) return;
+  const outer = getComponentById(componentId);
+  const items = snapshots.map((item) => {
+    if (!outer || !isMcuHostTypeId(item.typeId)) return item;
+    const firmwarePath = exposedMcuRuntimeProperty(outer.properties, item.id, "firmwarePath");
+    const qemuBinaryOverride = exposedMcuRuntimeProperty(outer.properties, item.id, "qemuBinaryOverride");
+    if (!firmwarePath && !qemuBinaryOverride) return item;
+    return {
+      ...item,
+      properties: {
+        ...item.properties,
+        ...(firmwarePath ? { firmwarePath } : {}),
+        ...(qemuBinaryOverride ? { qemuBinaryOverride } : {}),
+      },
+    };
+  });
   state.schematicPanel.postMessage({ version: 1, type: "boardOverlayData", componentId, items });
 }
 
@@ -466,6 +521,17 @@ export async function updateExposedComponentPropertyCommand(
   options: McuCommandOptions
 ): Promise<void> {
   if (!state.extensionContext || !sourceId) return;
+  const runtimeInnerTypeId = options.gatherInternalComponentSnapshots(sourceId)?.find((entry) => entry.id === innerComponentId)?.typeId;
+  const isRuntimeOnlyMcuProperty =
+    (name === "firmwarePath" || name === "qemuBinaryOverride") &&
+    runtimeInnerTypeId !== undefined &&
+    isMcuHostTypeId(runtimeInnerTypeId);
+  if (isRuntimeOnlyMcuProperty) {
+    setExposedMcuRuntimeProperty(outerComponentId, innerComponentId, name, String(value), options);
+    await requestBoardOverlayDataCommand(outerComponentId, sourceId, options);
+    return;
+  }
+
   const absoluteFilePath = options.resolveSourceFilePath(sourceId);
   if (!absoluteFilePath || !fileExists(absoluteFilePath)) return;
 
@@ -496,20 +562,7 @@ export async function updateExposedComponentPropertyCommand(
     return;
   }
 
-  // `firmwarePath`/`qemuBinaryOverride` são propriedades "UI-only" pro Core (mesma convenção de
-  // `coreLifecycle.ts::isUiOnlyRuntimeProperty`, que só cobre o componente de TOPO -- aqui é o
-  // equivalente pro componente INTERNO exposto em "Modo Placa") -- o Core nunca registra essas
-  // propriedades pra NENHUM componente, só consome firmware via o verbo IPC dedicado
-  // `loadMcuFirmware` (ver `chooseExposedMcuFirmwareCommand`, que já chama isso separadamente).
-  // Bug real 2026-07-17: `chooseExposedMcuFirmwareCommand` chamava esta função pra persistir
-  // `firmwarePath` no `.lssubcircuit`, que por sua vez empurrava a MESMA propriedade pro Core via
-  // `setSubcircuitChildProperty` -- sempre falhava com `unknown_property`, silenciosamente antes do
-  // novo log de simulação existir, agora visível como aviso a cada troca de firmware.
-  const innerTypeId = options.gatherInternalComponentSnapshots(sourceId)?.find((entry) => entry.id === innerComponentId)?.typeId;
-  const isUiOnlyMcuProperty = (name === "firmwarePath" || name === "qemuBinaryOverride") && innerTypeId !== undefined && isMcuHostTypeId(innerTypeId);
-  if (!isUiOnlyMcuProperty) {
-    updateBoardOverlayPropertyCommand(outerComponentId, innerComponentId, name, value, options);
-  }
+  updateBoardOverlayPropertyCommand(outerComponentId, innerComponentId, name, value, options);
   await requestBoardOverlayDataCommand(outerComponentId, sourceId, options);
 }
 

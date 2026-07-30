@@ -188,6 +188,18 @@ public:
         return result;
     }
 
+    bool drainWireTapByte(uint8_t& outByte) override {
+        if (!m_handle.vtable->drain_wire_tap_byte) return false;
+        bool result = false;
+        uint8_t byte = 0;
+        const bool ok = CrashGuard::call(m_label, [&] {
+            result = m_handle.vtable->drain_wire_tap_byte(m_handle.module, &byte) != 0;
+        });
+        if (!ok) { m_health = PluginHealthStatus::Faulted; return false; }
+        if (result) outByte = byte;
+        return result;
+    }
+
     PullState pullState(uint32_t bitOrLine) const override {
         if (!m_handle.vtable->get_pull_state) return PullState::None;
         int32_t result = 0;

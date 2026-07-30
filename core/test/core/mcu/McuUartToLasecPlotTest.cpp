@@ -123,10 +123,19 @@ int main() {
     registry::ComponentParams plotParams;
     plotParams.pinList = {{"tx", 0.0, 8.0}, {"rx", 0.0, 24.0}};
     const uint32_t plotIndex = session.addComponent("peripherals.lasecplot", plotParams);
+    const uint32_t tappedPlotIndex = session.addComponent("peripherals.lasecplot", plotParams);
     session.setProperty(plotIndex, "data_bits", PropertyValue{8.0});
     session.setProperty(plotIndex, "stop_bits", PropertyValue{1.0});
     session.setProperty(plotIndex, "parity", PropertyValue{std::string("none")});
+    session.setProperty(tappedPlotIndex, "data_bits", PropertyValue{8.0});
+    session.setProperty(tappedPlotIndex, "stop_bits", PropertyValue{1.0});
+    session.setProperty(tappedPlotIndex, "parity", PropertyValue{std::string("none")});
+    // Baud propositalmente diferente: o receptor ligado ao pino UART0_TX dedicado usa o wire tap
+    // byte-exato, portanto nao depende da amostragem eletrica. O primeiro plot, em GPIO1, continua
+    // provando separadamente o fallback eletrico legado nos baud rates corretos.
+    session.setProperty(tappedPlotIndex, "baudrate", PropertyValue{57600.0});
     session.connectWire(mcuIndex, "GPIO1", plotIndex, "rx");
+    session.connectWire(mcuIndex, "UART0_TX", tappedPlotIndex, "rx");
 
     // Habilita GPIO1 como U0TXD (função IOMUX 0) -- mesma sequência de McuComponentTest.cpp.
     simulateQemuWrite(arena, ioMuxStart + 0x88, 0);
@@ -138,6 +147,7 @@ int main() {
     // (Esp32Adapter.cpp/lib.c) escalam o período de bit a partir do baud configurado -- este teste
     // agora prova a decodificação elétrica ponta-a-ponta nos DOIS baud rates que o usuário precisa,
     // não só no que já funcionava.
+    std::string expectedMonitorHex;
     auto runBaudRateCase = [&](double baudRate) {
         session.setProperty(plotIndex, "baudrate", PropertyValue{baudRate});
         // Configura o UART_CLKDIV_REG (offset 0x14) do UART0 do MCU pro MESMO baud rate --
@@ -176,15 +186,79 @@ int main() {
 
             char expectedHex[3];
             std::snprintf(expectedHex, sizeof(expectedHex), "%02x", static_cast<unsigned>(byteToSend));
+            expectedMonitorHex += expectedHex;
             const std::string label = "peripherals.lasecplot (dispositivo real) decodifica 0x" + std::string(expectedHex) +
                 " a " + std::to_string(static_cast<long>(baudRate)) + " baud, vindo de MCU ESP32 real (UART0 TX) -- recebido: '" +
                 receivedHex + "'";
             check(receivedHex == expectedHex, label.c_str());
+
+            std::string tappedHex;
+            for (int attempt = 0; attempt < 20 && tappedHex.empty(); ++attempt) {
+                if (const auto snapshot = session.tryDrainUartRx(tappedPlotIndex)) tappedHex = snapshot->dataHex;
+                else std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            }
+            const std::string tappedLabel =
+                "wire tap UART0_TX entrega o mesmo byte sem depender do baud eletrico -- recebido: '" +
+                tappedHex + "'";
+            check(tappedHex == expectedHex, tappedLabel.c_str());
         }
+
+        // Rajada contínua: os bytes seguintes entram no FIFO enquanto o primeiro frame ainda está
+        // no fio. Este é o padrão de Serial.print() encadeado do firmware real; testar um byte por
+        // vez não detecta perdas nas fronteiras stop->start nem colisões de eventos no Scheduler.
+        const std::vector<uint8_t> burst = {
+            '>', 'r', 'e', 't', 'a', ':', '1', '2', '3', ':', '4', '5', '.', '0', '0', '|', 'g', '\r', '\n'
+        };
+        for (const uint8_t byteToSend : burst) {
+            simulateQemuWrite(arena, uart0Start + 0x00, byteToSend);
+            session.scheduler().markDirty(mcuIndex);
+            for (int i = 0; i < 5 && session.settleStep(); ++i) {}
+        }
+        const auto burstNs = static_cast<uint64_t>(
+            burst.size() * 10.0 * 1'000'000'000.0 / baudRate);
+        session.scheduler().step(burstNs * 120 / 100);
+        for (int i = 0; i < 20 && session.settleStep(); ++i) {}
+
+        std::string burstReceivedHex;
+        for (int attempt = 0; attempt < 20 && burstReceivedHex.empty(); ++attempt) {
+            if (const auto snapshot = session.tryDrainUartRx(plotIndex)) burstReceivedHex = snapshot->dataHex;
+            else std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        std::string burstExpectedHex;
+        char byteHex[3];
+        for (const uint8_t byte : burst) {
+            std::snprintf(byteHex, sizeof(byteHex), "%02x", static_cast<unsigned>(byte));
+            burstExpectedHex += byteHex;
+        }
+        expectedMonitorHex += burstExpectedHex;
+        const std::string burstLabel =
+            "peripherals.lasecplot preserva rajada UART continua a " +
+            std::to_string(static_cast<long>(baudRate)) + " baud -- recebido: '" +
+            burstReceivedHex + "'";
+        check(burstReceivedHex == burstExpectedHex, burstLabel.c_str());
+
+        std::string tappedBurstHex;
+        for (int attempt = 0; attempt < 20 && tappedBurstHex.empty(); ++attempt) {
+            if (const auto snapshot = session.tryDrainUartRx(tappedPlotIndex)) {
+                tappedBurstHex = snapshot->dataHex;
+            } else {
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            }
+        }
+        const std::string tappedBurstLabel =
+            "wire tap UART0_TX preserva a rajada e nao disputa com o decoder eletrico -- recebido: '" +
+            tappedBurstHex + "'";
+        check(tappedBurstHex == burstExpectedHex, tappedBurstLabel.c_str());
     };
 
     runBaudRateCase(115200.0);
     runBaudRateCase(921600.0);
+
+    const auto monitor = session.propertyValueOf(mcuIndex, "uart0_tx_monitor_hex");
+    const std::string monitorHex =
+        monitor && std::holds_alternative<std::string>(*monitor) ? std::get<std::string>(*monitor) : "";
+    check(monitorHex == expectedMonitorHex,
+          "monitor serial conserva sua copia completa mesmo depois de LasecPlot drenar o wire tap");
 
     if (failures == 0) {
         std::printf("\nTodos os testes de McuUartToLasecPlot passaram.\n");

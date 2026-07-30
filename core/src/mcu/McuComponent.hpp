@@ -64,6 +64,14 @@ public:
      * (`PropertySchemaHidden`). Vazio (`{}`) se o adaptador não declarar nenhum USART. */
     std::vector<PropertyDescriptor> propertyDescriptors() override;
 
+    /** Se `localPinIndex` identifica a linha TX de uma USART dedicada, drena a fila byte-exata
+     * separada que o adaptador reserva aos receptores UART ligados por fio e devolve hex lowercase.
+     * `nullopt` significa "este pino nao e' TX de USART (ou o adaptador nao oferece wire tap)";
+     * string vazia significa "e' um TX valido, mas nao ha byte novo". `busy=true` pede que o
+     * chamador tente novamente sem consumir o receptor eletrico, evitando inversao de mutex entre
+     * Scheduler e a thread/callback da MCU. */
+    std::optional<std::string> tryDrainUartTxWireTap(size_t localPinIndex, bool& busy) const;
+
     /** Agrega a saúde do adaptador (`create`/`build_launch_args`/`get_memory_regions`/
      * `get_pin_map`/`create_modules`, ver `NativeMcuAdapterProxy`) com a de cada módulo concreto
      * (`writeRegister`/`readRegister`/etc, ver `QemuModuleProxy`) -- `Faulted` se qualquer um dos

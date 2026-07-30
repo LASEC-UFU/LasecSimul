@@ -387,25 +387,7 @@ public:
      * poll), não excepcional. `uart_rx_hex` drena o buffer atomicamente dentro do getter -- se o
      * chamador descartar um resultado `std::nullopt`, nenhum byte chega a ser perdido, só adiado. */
     struct UartRxSnapshot { std::string dataHex; double pending = 0.0; double dropped = 0.0; };
-    std::optional<UartRxSnapshot> tryDrainUartRx(uint32_t component) const {
-        return m_scheduler.trySynchronized([&]() -> UartRxSnapshot {
-            UartRxSnapshot snapshot;
-            if (const auto dropped = propertyValueOfUnlocked(component, "uart_rx_dropped");
-                dropped && std::holds_alternative<double>(*dropped)) {
-                snapshot.dropped = std::get<double>(*dropped);
-            }
-            const auto data = propertyValueOfUnlocked(component, "uart_rx_hex");
-            if (!data || !std::holds_alternative<std::string>(*data)) {
-                throw std::runtime_error("componente não implementa canal UART");
-            }
-            snapshot.dataHex = std::get<std::string>(*data);
-            if (const auto pending = propertyValueOfUnlocked(component, "uart_rx_pending");
-                pending && std::holds_alternative<double>(*pending)) {
-                snapshot.pending = std::get<double>(*pending);
-            }
-            return snapshot;
-        });
-    }
+    std::optional<UartRxSnapshot> tryDrainUartRx(uint32_t component) const;
 
 private:
     /** Corpo real de `addComponent`/`connectWire`/etc. -- o método público correspondente (sem o

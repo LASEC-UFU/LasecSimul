@@ -58,4 +58,24 @@ for (const requiredBuild of [
   );
 }
 
-console.log("OK: F5 recompila o runtime completo e a regressão SSD1306 abre o projeto correto.");
+const shippedSubcircuitsDir = path.join(repoRoot, "subcircuits");
+for (const fileName of fs.readdirSync(shippedSubcircuitsDir).filter((name) => name.endsWith(".lssubcircuit"))) {
+  const document = readJson(path.join("subcircuits", fileName));
+  for (const component of document.components ?? []) {
+    assert(
+      !component.properties?.firmwarePath,
+      `${fileName}:${component.id} não pode fixar firmware de um projeto na definição compartilhada`
+    );
+  }
+}
+
+const mcuCommands = fs.readFileSync(
+  path.join(repoRoot, "extension", "src", "mcu", "mcuCommands.ts"),
+  "utf8"
+);
+assert(
+  mcuCommands.includes("__ui_exposedMcu_"),
+  "firmware de MCU exposto deve ser persistido na instância do projeto"
+);
+
+console.log("OK: F5 recompila o runtime completo, abre o projeto correto e firmware de placa é isolado por projeto.");

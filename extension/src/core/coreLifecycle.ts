@@ -132,7 +132,10 @@ async function pushComponentToCoreNow(
   if (!state.coreClient || !shouldSyncComponentToCore(typeId)) return false;
   try {
     const model = state.schematicState.components.find((component) => component.id === componentId);
-    const response = await state.coreClient.addComponent(typeId, properties, pins, componentId, model?.label ? [model.label] : []);
+    const runtimeProperties = Object.fromEntries(
+      Object.entries(properties).filter(([name]) => !name.startsWith("__ui_"))
+    );
+    const response = await state.coreClient.addComponent(typeId, runtimeProperties, pins, componentId, model?.label ? [model.label] : []);
     registerCoreIdsForComponent(componentId, typeId, response);
     if (typeId === TUNNEL_TYPE_ID) {
       const name = String(properties.name ?? "");

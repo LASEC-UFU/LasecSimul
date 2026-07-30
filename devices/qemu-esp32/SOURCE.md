@@ -3,11 +3,13 @@
 The bundled `qemu-system-xtensa.exe` is built from:
 
 - Repository: https://github.com/josuemoraisgh/qemu_lasecSimul
-- Source commit: `448559e` (`fix(esp32): stabilize interrupt watchdog and I2C timing`)
+- Source commit: `721ff59` (`fix(esp32): avoid per-byte I2C ACK stalls`)
 - Reference patches incorporated in that commit:
   - [`patches/0001-esp32-realtime-wdt-and-interrupt-status.patch`](patches/0001-esp32-realtime-wdt-and-interrupt-status.patch)
   - [`patches/0002-esp32-i2c-electrical-start-timing.patch`](patches/0002-esp32-i2c-electrical-start-timing.patch)
+  - [`patches/0003-esp32-i2c-address-ack-burst.patch`](patches/0003-esp32-i2c-address-ack-burst.patch)
 
 Configure options and the executable checksum are recorded in
-`bin/BUILD-PROVENANCE.txt`. The release build is produced from that clean commit
-and does not contain the diagnostic tracing used during the investigation.
+`bin/BUILD-PROVENANCE.txt`. The bundled build is produced from that source
+commit and does not contain the diagnostic tracing used during the
+investigation.

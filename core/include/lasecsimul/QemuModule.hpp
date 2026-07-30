@@ -95,6 +95,12 @@ public:
      * lado pedido (`tx=true`/saída, `tx=false`/entrada) -- só informativo. Default 0. */
     virtual uint32_t monitorDroppedCount(bool /*tx*/) const { return 0; }
 
+    /** Drena UM byte de uma fila TX byte-exata reservada aos receptores UART ligados no circuito.
+     * E' deliberadamente independente de drainMonitorByte(): LasecPlot/terminal e a janela de
+     * monitor da MCU podem observar a mesma transmissao sem competir pelo mesmo buffer. Adaptador
+     * sem ABI minor 9 devolve false e o Core continua usando o receptor eletrico normal. */
+    virtual bool drainWireTapByte(uint8_t& /*outByte*/) { return false; }
+
     /** Injeta `count` bytes como se tivessem chegado pela entrada real do periférico (ex: RX de
      * uma USART) -- bypassa qualquer temporização elétrica bit-a-bit de propósito (ferramenta de
      * monitor/dev, não simulação de fio: equivalente a digitar no SerialMonitor real do SimulIDE,
