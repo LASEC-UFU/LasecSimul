@@ -6,6 +6,9 @@ import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(here, "..");
+const runtimeRepo = process.env.LASECSIMUL_BENCHMARK_RUNTIME_REPO
+  ? path.resolve(process.env.LASECSIMUL_BENCHMARK_RUNTIME_REPO)
+  : repo;
 const require = createRequire(import.meta.url);
 const { CoreClient } = require(path.join(repo, "extension", "out", "ipc", "CoreClient.js"));
 
@@ -17,8 +20,9 @@ const durationMs = Number(process.argv[4] ?? 5000);
 const corePath = process.argv[5] ?? path.join(repo, "core", "build", "Release", "lasecsimul-core.exe");
 const profiling = process.argv[6] !== "false";
 const realTimeRate = Number(process.argv[7] ?? 0);
-const qemuPath = path.join(repo, "devices", "qemu-esp32", "bin", "qemu-system-xtensa.exe");
-const subcircuitPath = path.join(repo, "subcircuits", "esp32_devkitc_v4.lssubcircuit");
+const gdbPort = Number(process.env.LASECSIMUL_BENCHMARK_GDB_PORT ?? 0);
+const qemuPath = path.join(runtimeRepo, "devices", "qemu-esp32", "bin", "qemu-system-xtensa.exe");
+const subcircuitPath = path.join(runtimeRepo, "subcircuits", "esp32_devkitc_v4.lssubcircuit");
 
 for (const required of [projectPath, firmwarePath, corePath, qemuPath, subcircuitPath]) {
   if (!fs.existsSync(required)) throw new Error(`Arquivo obrigatório não encontrado: ${required}`);
@@ -42,6 +46,8 @@ const client = new CoreClient(pipeName, { requestTimeoutMs: 30000 });
 const instances = new Map();
 let uartTimer;
 let uartPollInFlight = false;
+let plotUartHex = "";
+const progress = (label) => console.error(`[benchmark-real-esp32] ${label}`);
 
 function resolveEndpoint(endpoint) {
   const instance = instances.get(endpoint.componentId);
@@ -55,23 +61,29 @@ function resolveEndpoint(endpoint) {
 }
 
 async function main() {
+  progress("conectando ao Core");
   await client.start();
-  await client.loadDeviceLibrary(path.join(repo, "devices", "library.json"));
-  await client.loadDeviceLibrary(path.join(repo, "mcu-adapters", "library.json"));
+  progress("carregando bibliotecas");
+  await client.loadDeviceLibrary(path.join(runtimeRepo, "devices", "library.json"));
+  await client.loadDeviceLibrary(path.join(runtimeRepo, "mcu-adapters", "library.json"));
   await client.registerAdhocSubcircuitDefinition(subcircuitPath);
   const catalog = await client.getPropertySchemas();
 
+  progress("materializando projeto");
   for (const component of project.components) {
     const pins = (catalog.pinIdsByTypeId[component.typeId] ?? [])
       .map((id) => ({ id, x: 0, y: 0 }));
     const response = await client.addComponent(
       component.typeId,
-      component.properties ?? {},
+      Object.fromEntries(Object.entries(component.properties ?? {}).filter(([name]) => !name.startsWith("__ui_"))),
       pins,
       component.id,
       component.label ? [component.label] : [],
     );
     instances.set(component.id, response);
+    if (component.typeId === "connectors.tunnel" && component.properties?.name) {
+      await client.setTunnelName(response.instanceId, pins[0]?.id ?? "pin", "", String(component.properties.name));
+    }
   }
   for (const conductor of project.topology?.conductors ?? []) {
     const from = resolveEndpoint(conductor.from);
@@ -86,6 +98,7 @@ async function main() {
     await client.getSubcircuitChildInstanceId(board.instanceId, "mcu1");
   const plotEntry = [...instances.entries()].find(([projectId]) =>
     project.components.find((component) => component.id === projectId)?.typeId === "peripherals.lasecplot");
+  const plotId = plotEntry?.[1].instanceId;
 
   await client.setSimulationConfig({
     targetStepUs: 0,
@@ -100,34 +113,55 @@ async function main() {
     relativeTolerance: 1e-4,
     absoluteTolerance: 1e-9,
   });
-  await client.loadMcuFirmware(mcuId, firmwarePath, qemuPath);
+  progress("carregando firmware");
+  await client.loadMcuFirmware(
+    mcuId,
+    firmwarePath,
+    qemuPath,
+    gdbPort > 0 ? { gdbPort, startPaused: false } : undefined,
+  );
+  progress("iniciando simulacao");
   await client.resetPerformanceMetrics();
   await client.run();
+  progress("simulacao iniciada");
 
-  if (plotEntry) {
-    const plotId = plotEntry[1].instanceId;
+  if (plotId) {
     uartTimer = setInterval(() => {
       if (uartPollInFlight) return;
       uartPollInFlight = true;
-      void client.drainUart(plotId).finally(() => { uartPollInFlight = false; });
+      void client.drainUart(plotId)
+        .then((batch) => { plotUartHex += batch.dataHex; })
+        .catch(() => undefined)
+        .finally(() => { uartPollInFlight = false; });
     }, 10);
   }
 
   const samples = [];
   let previousWall = performance.now();
-  let previousSim = await client.getSimulationTime();
+  const initialTime = await client.getSimulationTime();
+  let previousSim = initialTime.simulatedNs;
+  let previousMcu = initialTime.mcuVirtualNs;
   const deadline = previousWall + durationMs;
   while (performance.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 250));
     const wall = performance.now();
-    const sim = await client.getSimulationTime();
+    const time = await client.getSimulationTime();
+    const sim = time.simulatedNs;
+    const mcuDelta = time.mcuVirtualNs !== undefined && previousMcu !== undefined
+      ? time.mcuVirtualNs - previousMcu
+      : undefined;
     samples.push({
       wallMs: wall - previousWall,
       simulatedNs: sim - previousSim,
       rate: ((sim - previousSim) / 1e6) / (wall - previousWall),
+      ...(mcuDelta !== undefined ? {
+        mcuVirtualNs: mcuDelta,
+        mcuRate: (mcuDelta / 1e6) / (wall - previousWall),
+      } : {}),
     });
     previousWall = wall;
     previousSim = sim;
+    previousMcu = time.mcuVirtualNs;
   }
 
   clearInterval(uartTimer);
@@ -135,20 +169,102 @@ async function main() {
   const stopStarted = performance.now();
   await client.stopSimulation();
   const stopLatencyMs = performance.now() - stopStarted;
+  if (plotId) {
+    const finalPlotBatch = await client.drainUart(plotId).catch(() => undefined);
+    if (finalPlotBatch) plotUartHex += finalPlotBatch.dataHex;
+  }
+  const directUartValue = await client.getProperty(mcuId, "uart0_tx_monitor_hex").catch(() => "");
+  const directUartHex = typeof directUartValue === "string" ? directUartValue : "";
+  const displayEntry = [...instances.entries()].find(([projectId]) =>
+    project.components.find((component) => component.id === projectId)?.typeId === "outputs.ssd1306");
+  const displayState = displayEntry ? await client.getComponentState(displayEntry[1].instanceId) : undefined;
+  const displayPayload = displayState && displayState.length >= 36 ? displayState.subarray(36) : Buffer.alloc(0);
+  const display = displayState ? {
+    stateBytes: displayState.length,
+    version: displayState.readUInt32LE(0),
+    width: displayState.readUInt32LE(8),
+    height: displayState.readUInt32LE(12),
+    enabled: displayState.readUInt32LE(16) !== 0,
+    nonZeroBytes: [...displayPayload].filter((value) => value !== 0).length,
+    litPixels: [...displayPayload].reduce((count, value) => count + value.toString(2).replaceAll("0", "").length, 0),
+    nonZeroBytesByPage: Array.from({ length: 8 }, (_, page) =>
+      [...displayPayload.subarray(page * 128, (page + 1) * 128)].filter((value) => value !== 0).length
+    ),
+  } : undefined;
   const metrics = await client.getPerformanceMetrics();
   const qemuLogs = await client.getMcuLogs(mcuId);
+  if (displayEntry && (!display?.enabled || display.litPixels === 0)) {
+    throw new Error(`SSD1306 não foi atualizado: ${JSON.stringify(display)}`);
+  }
+  if (/Guru Meditation|panic'ed|CORRUPTED/i.test(qemuLogs)) {
+    throw new Error("Firmware entrou em panic durante a execução real.");
+  }
   const rates = samples.map((sample) => sample.rate);
+  const mcuRates = samples.flatMap((sample) => typeof sample.mcuRate === "number" ? [sample.mcuRate] : []);
+  const uartSummary = (hex) => {
+    const bytes = Buffer.from(hex, "hex");
+    const printable = bytes.toString("utf8").replace(/[^\x09\x0a\x0d\x20-\x7e]/g, ".");
+    // A janela do benchmark pode terminar no meio de um Serial.print(); isso e' uma linha
+    // incompleta, nao uma linha corrompida. Valide somente registros encerrados por LF.
+    const lastCompleteLineEnd = printable.lastIndexOf("\n");
+    const completeText = lastCompleteLineEnd >= 0
+      ? printable.slice(0, lastCompleteLineEnd + 1)
+      : "";
+    const firstTextOffset = Math.max(0, bytes.indexOf(Buffer.from("Display")));
+    const firstTextEnd = bytes.indexOf(0x0a, firstTextOffset);
+    const telemetryLines = completeText
+      .split(/\r?\n/)
+      .filter((line) => line.startsWith(">reta:") || line.startsWith(">seno:"));
+    const malformedTelemetryLines = telemetryLines.filter((line) =>
+      !/^>(?:reta|seno):\d+:-?\d+(?:\.\d+)?\|g$/.test(line)
+    );
+    return {
+      bytes: bytes.length,
+      preview: printable.slice(0, 500),
+      tail: printable.slice(-500),
+      firstTextLineHex: bytes.subarray(
+        firstTextOffset,
+        firstTextEnd >= 0 ? firstTextEnd + 1 : Math.min(bytes.length, firstTextOffset + 80)
+      ).toString("hex"),
+      telemetryLines: telemetryLines.length,
+      malformedTelemetryLines: malformedTelemetryLines.length,
+    };
+  };
+  if (plotId && directUartHex !== plotUartHex) {
+    throw new Error(
+      `LasecPlot divergiu do monitor byte-exato: monitor=${directUartHex.length / 2} bytes, ` +
+      `plot=${plotUartHex.length / 2} bytes`
+    );
+  }
+  const compact = process.env.LASECSIMUL_BENCHMARK_COMPACT === "1";
   const result = {
     fixture: { projectPath, firmwarePath, boardProjectId, mcuId, durationMs, realTimeRate },
     rate: {
       average: rates.reduce((sum, value) => sum + value, 0) / rates.length,
       minimum: Math.min(...rates),
       maximum: Math.max(...rates),
-      samples,
+      ...(compact ? { sampleCount: samples.length } : { samples }),
+    },
+    mcuRate: mcuRates.length > 0 ? {
+      average: mcuRates.reduce((sum, value) => sum + value, 0) / mcuRates.length,
+      minimum: Math.min(...mcuRates),
+      maximum: Math.max(...mcuRates),
+      sampleCount: mcuRates.length,
+    } : undefined,
+    uart: {
+      exactMatch: directUartHex === plotUartHex,
+      directMonitor: uartSummary(directUartHex),
+      lasecPlot: uartSummary(plotUartHex),
     },
     stopLatencyMs,
+    display,
     metrics,
-    qemuLogs,
+    ...(compact ? {
+      qemu: {
+        guruMeditation: /Guru Meditation|panic'ed|CORRUPTED/i.test(qemuLogs),
+        i2cAckErrors: (qemuLogs.match(/esp32_i2c_event ackERR/g) ?? []).length,
+      },
+    } : { qemuLogs }),
   };
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }

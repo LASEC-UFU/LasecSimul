@@ -106,6 +106,70 @@ std::string tunnelNameFromPropertiesJson(const std::string& propertiesJson) {
 }
 } // namespace
 
+std::optional<SimulationSession::UartRxSnapshot>
+SimulationSession::tryDrainUartRx(uint32_t component) const {
+    return m_scheduler.trySynchronized([&]() -> UartRxSnapshot {
+        UartRxSnapshot snapshot;
+        if (const auto dropped = propertyValueOfUnlocked(component, "uart_rx_dropped");
+            dropped && std::holds_alternative<double>(*dropped)) {
+            snapshot.dropped = std::get<double>(*dropped);
+        }
+
+        // Quando o RX do instrumento esta' no mesmo no' de um pino TX dedicado de uma MCU,
+        // prefira a copia byte-exata independente publicada pelo modulo USART. O fio continua
+        // eletricamente presente e sendo simulado; so' a observacao de texto do instrumento deixa
+        // de depender do alinhamento entre a thread QEMU e a amostragem bit-a-bit do plugin.
+        if (component < m_componentInstances.size() && m_componentInstances[component]) {
+            const auto& slots = m_netlist.pinSlotsOf(component);
+            auto rxIt = slots.find("rx");
+            if (rxIt == slots.end()) rxIt = slots.find("RX");
+            if (rxIt != slots.end() && rxIt->second < m_topology.slotToNode.size()) {
+                const uint32_t node = m_topology.slotToNode[rxIt->second];
+                if (node < m_topology.pinRefsByNode.size()) {
+                    for (const simulation::NodePinRef& ref : m_topology.pinRefsByNode[node]) {
+                        if (ref.componentIndex == component ||
+                            ref.componentIndex >= m_componentInstances.size()) {
+                            continue;
+                        }
+                        auto* source = dynamic_cast<mcu::McuComponent*>(
+                            m_componentInstances[ref.componentIndex].get());
+                        if (!source) continue;
+                        bool sourceBusy = false;
+                        const std::optional<std::string> tapped =
+                            source->tryDrainUartTxWireTap(ref.localPinIndex, sourceBusy);
+                        if (sourceBusy) {
+                            // Nao drene o receptor eletrico: nenhum byte foi obtido do tap e o
+                            // proximo poll deve repetir a tentativa integralmente.
+                            snapshot.dataHex.clear();
+                            snapshot.pending = 0.0;
+                            return snapshot;
+                        }
+                        if (!tapped) continue;
+
+                        // Esvazia a copia eletrica do receptor para ela nao crescer/estourar. Seu
+                        // conteudo pode conter bytes corrompidos e nunca e' misturado com o tap.
+                        (void)propertyValueOfUnlocked(component, "uart_rx_hex");
+                        snapshot.dataHex = *tapped;
+                        snapshot.pending = 0.0;
+                        return snapshot;
+                    }
+                }
+            }
+        }
+
+        const auto data = propertyValueOfUnlocked(component, "uart_rx_hex");
+        if (!data || !std::holds_alternative<std::string>(*data)) {
+            throw std::runtime_error("componente nao implementa canal UART");
+        }
+        snapshot.dataHex = std::get<std::string>(*data);
+        if (const auto pending = propertyValueOfUnlocked(component, "uart_rx_pending");
+            pending && std::holds_alternative<double>(*pending)) {
+            snapshot.pending = std::get<double>(*pending);
+        }
+        return snapshot;
+    });
+}
+
 SimulationSession::SimulationSession(plugins::GlobalPluginCache& globalCache, size_t componentCapacity)
     : m_globalCache(globalCache), m_pluginRuntime(globalCache),
       m_scheduler(componentCapacity, [this] { return settleStep(); }) {

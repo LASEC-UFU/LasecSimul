@@ -26,9 +26,7 @@
     {
       "id": "mcu1",
       "typeId": "espressif.esp32",
-      "properties": {
-        "firmwarePath": "c:\\SourceCode\\EININDI01_GitHub_VSCode_PIO\\sourcecode\\merged.bin"
-      },
+      "properties": {},
       "label": "QemuDevice",
       "showValue": false,
       "visual": {
@@ -919,7 +917,7 @@
         "to": {
           "kind": "port",
           "componentId": "mcu1",
-          "pinId": "GPIO1"
+          "pinId": "UART0_TX"
         },
         "points": []
       },
@@ -933,7 +931,7 @@
         "to": {
           "kind": "port",
           "componentId": "mcu1",
-          "pinId": "GPIO3"
+          "pinId": "UART0_RX"
         },
         "points": []
       },

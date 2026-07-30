@@ -33,8 +33,14 @@ extern "C" {
 #endif
 
 #define LSDN_MCU_ABI_VERSION_MAJOR 2
-#define LSDN_MCU_ABI_VERSION_MINOR 8
-/* Minor 8 (2026-07-25): entrou get_pull_state -- pull-up/pull-down INTERNO do pino (ex: IO_MUX
+#define LSDN_MCU_ABI_VERSION_MINOR 9
+/* Minor 9 (2026-07-29): entrou drain_wire_tap_byte -- segunda fila byte-exata de TX de uma USART,
+ * independente de drain_monitor_byte. O Core usa esta fila apenas quando um receptor UART de
+ * circuito (LasecPlot/terminal) esta' ligado diretamente ao pino TX dedicado da MCU: evita que
+ * jitter entre a thread QEMU e o Scheduler corrompa uma amostragem eletrica bit-a-bit, sem fazer
+ * o LasecPlot disputar/destruir os bytes da janela "Abrir monitor serial". Opcional -- NULL
+ * preserva integralmente o caminho eletrico anterior.
+ * Minor 8 (2026-07-25): entrou get_pull_state -- pull-up/pull-down INTERNO do pino (ex: IO_MUX
  * FUN_PU/FUN_PD do ESP32), consultado por McuComponent::stamp() quando o modulo NAO esta' dirigindo
  * o pino (mesmo branch que ja aplicava kFloatingConductance gen--rico) pra' decidir entre puxar
  * fraco pra VDD, pra GND, ou manter o floating generico de sempre. Sem isto, um pino configurado
@@ -166,6 +172,11 @@ typedef struct LsdnQemuModuleVTable {
      * flutuando do ponto de vista do proprio modulo) -- nunca sobrepoe um pino sendo dirigido de
      * verdade. Opcional -- NULL e' tratado como 0 (sem pull nenhum), mesmo default de sempre. */
     int32_t  (*get_pull_state)(LsdnQemuModule* module, uint32_t bit_or_line);
+    /* Minor 9: drena UM byte da fila byte-exata de TX reservada aos receptores UART diretamente
+     * ligados no circuito. Diferente de drain_monitor_byte(tx=1), esta fila tem consumidor
+     * independente: abrir o monitor serial e usar LasecPlot ao mesmo tempo nao faz um roubar bytes
+     * do outro. So' faz sentido para modulos USART; NULL = sem wire tap. */
+    int32_t  (*drain_wire_tap_byte)(LsdnQemuModule* module, uint8_t* out_byte);
 } LsdnQemuModuleVTable;
 
 #define LSDN_PULL_NONE 0u

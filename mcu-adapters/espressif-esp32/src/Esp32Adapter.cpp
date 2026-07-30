@@ -274,8 +274,13 @@ struct UsartState {
     // monitor serial" ler passivamente sem afetar o firmware.
     std::deque<uint8_t> txMonitor;
     std::deque<uint8_t> rxMonitor;
+    // Consumidor independente para um receptor UART ligado diretamente ao pino dedicado TX.
+    // Nunca compartilhar com txMonitor: LasecPlot e "Abrir monitor serial" podem ficar abertos
+    // simultaneamente sem um drenar os bytes do outro.
+    std::deque<uint8_t> txWireTap;
     uint32_t txMonitorDropped = 0;
     uint32_t rxMonitorDropped = 0;
+    uint32_t txWireTapDropped = 0;
 };
 
 void pushMonitorByte(std::deque<uint8_t>& monitor, uint32_t& dropped, uint8_t byte) {
@@ -467,6 +472,7 @@ void usartAdvanceTx(UsartState& usart, uint64_t nowNs) {
     // de `usartStartTx` reciclar `txFrame` pro próximo byte da fila.
     const uint8_t sentByte = static_cast<uint8_t>((usart.txFrame >> 1) & ((1u << usart.dataBits) - 1u));
     pushMonitorByte(usart.txMonitor, usart.txMonitorDropped, sentByte);
+    pushMonitorByte(usart.txWireTap, usart.txWireTapDropped, sentByte);
 
     usart.txActive = false;
     usart.txLevel = true;
@@ -1253,6 +1259,16 @@ uint32_t usartMonitorDroppedCount(LsdnQemuModule* module, int32_t tx) {
     return tx != 0 ? s->chip->usarts[s->index].txMonitorDropped : s->chip->usarts[s->index].rxMonitorDropped;
 }
 
+int32_t usartDrainWireTapByte(LsdnQemuModule* module, uint8_t* outByte) {
+    auto* s = reinterpret_cast<UsartModuleState*>(module);
+    if (s->index >= s->chip->usarts.size() || !outByte) return 0;
+    std::deque<uint8_t>& tap = s->chip->usarts[s->index].txWireTap;
+    if (tap.empty()) return 0;
+    *outByte = tap.front();
+    tap.pop_front();
+    return 1;
+}
+
 // Injeção de RX fora da banda (mcu_abi.h minor 7) -- lado ESCRITA do monitor: bytes entram direto
 // no FIFO real de RX (mesmo `usart.rxFifo` que `usartAdvanceRx` alimenta bit-a-bit ao amostrar o
 // pino elétrico), como se tivessem chegado por fio -- sem simular temporização de bit nenhuma
@@ -1280,7 +1296,8 @@ const LsdnQemuModuleVTable kUsartModuleVTable = {
     &usartReset, &usartWriteRegister, &usartReadRegister, &usartIsOutputEnabled, &usartOutputLevel,
     &usartSetInputLevel, &usartDestroy, &usartNextWakeupDelayNs, &usartOnWakeup,
     &usartWriteRegisterAt, &usartSetInputLevelAt, &usartNextWakeupDelayNsAt, nullptr,
-    &usartDrainMonitorByte, &usartMonitorDroppedCount, &usartInjectRxBytes,
+    &usartDrainMonitorByte, &usartMonitorDroppedCount, &usartInjectRxBytes, nullptr,
+    &usartDrainWireTapByte,
 };
 
 void i2cReset(LsdnQemuModule* module) {

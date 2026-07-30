@@ -4,7 +4,7 @@
   "name": "QemuDevice",
   "abiVersion": {
     "major": 2,
-    "minor": 5
+    "minor": 9
   },
   "nativeEntry": {
     "win32-x64": "build/win-x64/adapter.dll",

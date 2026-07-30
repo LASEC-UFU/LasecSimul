@@ -1,9 +1,10 @@
 QEMU source: https://github.com/josuemoraisgh/qemu_lasecSimul
-QEMU source commit: 448559e (fix(esp32): stabilize interrupt watchdog and I2C timing)
+QEMU source commit: 721ff59 (fix(esp32): avoid per-byte I2C ACK stalls)
 Reference patches incorporated in the source commit:
 - devices/qemu-esp32/patches/0001-esp32-realtime-wdt-and-interrupt-status.patch
 - devices/qemu-esp32/patches/0002-esp32-i2c-electrical-start-timing.patch
-Build source: QEMU commit 448559e; no CACHE-TRACE/XTENSA diagnostic instrumentation
+- devices/qemu-esp32/patches/0003-esp32-i2c-address-ack-burst.patch
+Build source: QEMU commit 721ff59; no CACHE-TRACE/XTENSA diagnostic instrumentation
 Configure: xtensa-softmmu, gcrypt, slirp
-Executable SHA-256: C641FB1FC9F923DB4B0B83443A215325FF55E671FC8B47AB442D8AF06AE98401
-Release: v0.0.19 production build
+Executable SHA-256: 0D69BFA78A34BA81EF1366CF98907F6D2704B3BF9629732547BBB711B2ED58E4
+Release: v0.0.20 production build

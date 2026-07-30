@@ -101,11 +101,35 @@ public:
         si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
 
         std::wstring commandLine = buildCommandLine(spec);
-        if (!CreateProcessW(nullptr, commandLine.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, nullptr,
+        if (!CreateProcessW(nullptr, commandLine.data(), nullptr, nullptr, TRUE,
+                            CREATE_NO_WINDOW | CREATE_SUSPENDED, nullptr, nullptr,
                             &si, &m_processInfo)) {
             CloseHandle(readPipe);
             CloseHandle(writePipe);
             throw std::runtime_error("Failed to start QEMU process: " + spec.binary);
+        }
+        // Keep QEMU tied to the Core lifetime even if the Core is terminated before C++ destructors
+        // run. This also prevents stale QEMU instances from locking merged.bin across F5 sessions.
+        m_job = CreateJobObjectW(nullptr, nullptr);
+        if (m_job) {
+            JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
+            limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            if (!SetInformationJobObject(
+                    m_job, JobObjectExtendedLimitInformation, &limits, sizeof(limits)) ||
+                !AssignProcessToJobObject(m_job, m_processInfo.hProcess)) {
+                CloseHandle(m_job);
+                m_job = nullptr;
+                std::fprintf(stderr,
+                    "[QemuProcessManager] AVISO: nao foi possivel vincular QEMU ao Job Object; "
+                    "encerramento forcado do Core pode deixar processo orfao.\n");
+            }
+        }
+        if (ResumeThread(m_processInfo.hThread) == static_cast<DWORD>(-1)) {
+            TerminateProcess(m_processInfo.hProcess, 1);
+            CloseHandle(readPipe);
+            CloseHandle(writePipe);
+            closeProcessHandles();
+            throw std::runtime_error("Failed to resume QEMU process: " + spec.binary);
         }
         CloseHandle(writePipe);
         m_running = true;
@@ -231,6 +255,19 @@ private:
             const DWORD waited = WaitForSingleObject(
                 m_processInfo.hProcess, static_cast<DWORD>(kProcessReapTimeout.count()));
             if (waited != WAIT_OBJECT_0) {
+                // Closing a kill-on-close Job Object is a second, kernel-enforced termination path.
+                // It remains effective when ordinary TerminateProcess did not complete promptly.
+                if (m_job) {
+                    CloseHandle(m_job);
+                    m_job = nullptr;
+                }
+                TerminateProcess(m_processInfo.hProcess, 1);
+                if (WaitForSingleObject(m_processInfo.hProcess, 1000) == WAIT_OBJECT_0) {
+                    m_running = false;
+                    joinReader();
+                    closeProcessHandles();
+                    return;
+                }
                 std::fprintf(stderr,
                     "[QemuProcessManager] AVISO: processo QEMU nao terminou %lldms apos "
                     "TerminateProcess; abandonando limpeza para nao travar o chamador (processo "
@@ -244,9 +281,7 @@ private:
         }
         m_running = false;
         joinReader();
-        if (m_processInfo.hThread) CloseHandle(m_processInfo.hThread);
-        if (m_processInfo.hProcess) CloseHandle(m_processInfo.hProcess);
-        m_processInfo = {};
+        closeProcessHandles();
     }
 #else
     void readPipeLoop(int fd) {
@@ -314,6 +349,10 @@ private:
             CloseHandle(m_processInfo.hProcess);
             m_processInfo.hProcess = nullptr;
         }
+        if (m_job) {
+            CloseHandle(m_job);
+            m_job = nullptr;
+        }
 #endif
     }
 
@@ -326,6 +365,7 @@ private:
     std::thread m_reader;
 #if defined(_WIN32)
     PROCESS_INFORMATION m_processInfo{};
+    HANDLE m_job = nullptr;
 #else
     pid_t m_pid = -1;
 #endif
