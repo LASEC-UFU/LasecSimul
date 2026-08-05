@@ -6,11 +6,13 @@
 // agora, ver `.spec` seção 29). Mesmo padrão de diode_test.cpp: sem framework de teste, settleStep()
 // chamado direto.
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <memory>
 #include <string>
+#include <thread>
 #include "components/active/Diode.hpp"
 #include "components/active/DiodeLegArray.hpp"
 #include "components/other/Ground.hpp"
@@ -298,6 +300,50 @@ bool testLedGetStateExposesCurrent() {
     return ok;
 }
 
+// Regressao do thin client: com varias sessoes/QEMUs ativos, a worker fica continuamente dentro de
+// runUntil(). A telemetria visual nao pode depender de vencer um try_lock do mutex quente, senao o
+// firmware continua executando mas o LED da Webview congela. A primeira leitura apenas registra a
+// assinatura; um stable step publica o snapshot e uma leitura seguinte precisa recebe-lo.
+bool testLedTelemetrySnapshotProgressesWhileSchedulerIsBusy() {
+    GlobalPluginCache cache;
+    SimulationSession session(cache);
+    registerTestComponents(session.components());
+
+    const uint32_t source = session.addComponent("sources.dc_voltage", withVoltage(10.0));
+    const uint32_t resistor = session.addComponent("passive.resistor", withResistance(1000.0));
+    const uint32_t led = session.addComponent("outputs.led", {});
+    const uint32_t ground = session.addComponent("other.ground", {});
+    session.connectWire(source, "p1", resistor, "p1");
+    session.connectWire(resistor, "p2", led, "anode");
+    session.connectWire(led, "cathode", source, "p2");
+    session.connectWire(source, "p2", ground, "pin");
+
+    session.scheduler().setRealTimeRate(0.0);
+    session.scheduler().setMaximumTimeStepNs(100'000);
+    session.scheduler().configureAdaptiveTimeStep(1, 1, false);
+    session.scheduler().start();
+
+    std::vector<uint8_t> state;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (state.empty() && std::chrono::steady_clock::now() < deadline) {
+        try {
+            state = session.getComponentTelemetryState(led);
+        } catch (const std::exception&) {
+            std::this_thread::yield();
+        }
+    }
+    session.scheduler().stop();
+
+    if (state.size() != sizeof(double)) {
+        std::fprintf(stderr,
+            "FALHOU (led-telemetry-snapshot): UI nao recebeu snapshot durante Scheduler ocupado; bytes=%zu\n",
+            state.size());
+        return false;
+    }
+    std::printf("OK: telemetria do LED progride por snapshot mesmo com Scheduler continuamente ocupado.\n");
+    return true;
+}
+
 } // namespace
 
 int main() {
@@ -305,5 +351,6 @@ int main() {
     const bool ledOk = testLedForwardVoltage();
     const bool ledColorOk = testLedColorChangesThreshold();
     const bool ledStateOk = testLedGetStateExposesCurrent();
-    return (zenerOk && ledOk && ledColorOk && ledStateOk) ? 0 : 1;
+    const bool ledTelemetryOk = testLedTelemetrySnapshotProgressesWhileSchedulerIsBusy();
+    return (zenerOk && ledOk && ledColorOk && ledStateOk && ledTelemetryOk) ? 0 : 1;
 }

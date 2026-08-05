@@ -15,6 +15,7 @@
 #include "../plugins/PluginRuntime.hpp"
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include "../registry/ComponentRegistry.hpp"
 #include "../registry/McuRegistry.hpp"
 #include "../registry/SubcircuitRegistry.hpp"
@@ -423,6 +424,9 @@ private:
      * `NodeVoltageSnapshot`). Reaproveita `slotToNode`/`pinSlotsByComponent` da publicação anterior
      * quando `m_snapshotTopologyStale` está falso (topologia não mudou desde a última publicação). */
     void publishSnapshot();
+    void publishTelemetrySnapshotIfRequested();
+    std::vector<std::vector<uint8_t>> captureComponentTelemetryStatesUnlocked(
+        const std::vector<uint32_t>& componentIndices) const;
     void rebuildTopologyIfNeeded();
     /** Reaproveita `CircuitGroup` (matriz/fatoração já estampada) de `previous` pra qualquer rede
      * cujo conjunto de componentes vivos E mapeamento pino->índice local não mudaram -- sem isso,
@@ -537,6 +541,16 @@ private:
      * `publishSnapshot()` -- setado por `rebuildTopologyIfNeeded()` sempre que a topologia é
      * reconstruída de verdade; começa `true` pra garantir que a primeira publicação sempre copie. */
     bool m_snapshotTopologyStale = true;
+
+    /** Snapshot sob demanda dos blobs usados por `getComponentStates` (LED, displays e demais
+     * estados visuais). O mutex e' independente do Scheduler e fica tomado apenas para registrar
+     * ids ou trocar o snapshot; a captura real ocorre na worker depois de um stable step. */
+    using ComponentTelemetrySnapshot = std::vector<std::optional<std::vector<uint8_t>>>;
+    mutable std::mutex m_telemetrySnapshotMutex;
+    mutable std::unordered_set<uint32_t> m_telemetrySubscriptions;
+    mutable uint64_t m_telemetryRequestedGeneration = 0;
+    uint64_t m_telemetryPublishedGeneration = 0;
+    std::shared_ptr<const ComponentTelemetrySnapshot> m_publishedTelemetrySnapshot;
 
     /** Achado 2026-07-23 (McuComponentLivePollThreadTest com 2 MCUs, real, sob a nova
      * sincronização de ritmo): um MCU cuja arena continua aberta mas que PAROU de produzir eventos

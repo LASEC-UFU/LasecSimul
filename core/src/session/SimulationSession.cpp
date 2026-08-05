@@ -518,6 +518,7 @@ void SimulationSession::setPauseCondition(const std::string& ownerId, const std:
 
 void SimulationSession::onStableStepUnlocked(uint64_t timestampNs) {
     publishSnapshot();
+    publishTelemetrySnapshotIfRequested();
     acquireSubscribedSignalsUnlocked(timestampNs);
     for (auto& [ownerId, condition] : m_pauseConditions) try {
         PauseEvaluation evaluation = condition.expression.evaluate([this](PauseSignalMode mode, const std::string& reference) -> PauseScalar {
@@ -554,6 +555,53 @@ void SimulationSession::onStableStepUnlocked(uint64_t timestampNs) {
         condition.errorReported = true;
         std::fprintf(stderr, "[PauseCondition] avaliação falhou em %llu ns: %s\n", static_cast<unsigned long long>(timestampNs), error.what());
     }
+}
+
+std::vector<std::vector<uint8_t>> SimulationSession::captureComponentTelemetryStatesUnlocked(
+    const std::vector<uint32_t>& componentIndices) const {
+    std::vector<std::vector<uint8_t>> states;
+    states.reserve(componentIndices.size());
+    for (uint32_t componentIndex : componentIndices) {
+        if (componentIndex >= m_componentInstances.size() || !m_componentInstances[componentIndex])
+            throw std::runtime_error("getComponentTelemetryStates: componente removido");
+
+        IComponentModel& instance = *m_componentInstances[componentIndex];
+        std::array<uint8_t, 256> compact{};
+        const size_t compactWritten = instance.getTelemetryState(compact.data(), compact.size());
+        if (compactWritten > 0 && compactWritten <= compact.size()) {
+            states.emplace_back(compact.begin(), compact.begin() + compactWritten);
+            continue;
+        }
+        states.push_back(readComponentStateWithGrowth(instance, 65536, true));
+    }
+    return states;
+}
+
+void SimulationSession::publishTelemetrySnapshotIfRequested() {
+    std::vector<uint32_t> subscriptions;
+    uint64_t requestedGeneration = 0;
+    {
+        std::lock_guard<std::mutex> lock(m_telemetrySnapshotMutex);
+        if (m_telemetryRequestedGeneration == m_telemetryPublishedGeneration) return;
+        requestedGeneration = m_telemetryRequestedGeneration;
+        subscriptions.assign(m_telemetrySubscriptions.begin(), m_telemetrySubscriptions.end());
+    }
+
+    auto snapshot = std::make_shared<ComponentTelemetrySnapshot>(m_componentInstances.size());
+    for (uint32_t componentIndex : subscriptions) {
+        if (componentIndex >= m_componentInstances.size() || !m_componentInstances[componentIndex]) continue;
+        try {
+            std::vector<std::vector<uint8_t>> captured =
+                captureComponentTelemetryStatesUnlocked({componentIndex});
+            (*snapshot)[componentIndex] = std::move(captured.front());
+        } catch (const std::exception&) {
+            // Um plugin defeituoso nao pode interromper a worker nem impedir os demais estados.
+        }
+    }
+
+    std::lock_guard<std::mutex> lock(m_telemetrySnapshotMutex);
+    m_publishedTelemetrySnapshot = std::move(snapshot);
+    m_telemetryPublishedGeneration = requestedGeneration;
 }
 
 void SimulationSession::publishSnapshot() {
@@ -1052,28 +1100,24 @@ std::vector<uint8_t> SimulationSession::getComponentTelemetryState(uint32_t comp
 
 std::vector<std::vector<uint8_t>> SimulationSession::getComponentTelemetryStates(
     const std::vector<uint32_t>& componentIndices) const {
-    auto result = m_scheduler.trySynchronized([&] {
-        std::vector<std::vector<uint8_t>> states;
-        states.reserve(componentIndices.size());
-        for (uint32_t componentIndex : componentIndices) {
-            IComponentModel* instance = m_componentInstances.at(componentIndex).get();
-            if (!instance) throw std::runtime_error("getComponentTelemetryStates: componente removido");
+    if (!m_scheduler.isRunning()) return captureComponentTelemetryStatesUnlocked(componentIndices);
 
-            // Estados periódicos built-in cabem neste buffer pequeno sem heap. O fallback mantém
-            // compatibilidade com plugins antigos, cujo default ainda pode devolver um snapshot
-            // grande pelo getState().
-            std::array<uint8_t, 256> compact{};
-            const size_t compactWritten = instance->getTelemetryState(compact.data(), compact.size());
-            if (compactWritten > 0 && compactWritten <= compact.size()) {
-                states.emplace_back(compact.begin(), compact.begin() + compactWritten);
-                continue;
-            }
-            states.push_back(readComponentStateWithGrowth(*instance, 65536, true));
-        }
-        return states;
-    });
-    if (!result) throw std::runtime_error("simulacao ocupada; telemetria adiada");
-    return std::move(*result);
+    std::shared_ptr<const ComponentTelemetrySnapshot> snapshot;
+    {
+        std::lock_guard<std::mutex> lock(m_telemetrySnapshotMutex);
+        for (uint32_t componentIndex : componentIndices) m_telemetrySubscriptions.insert(componentIndex);
+        ++m_telemetryRequestedGeneration;
+        snapshot = m_publishedTelemetrySnapshot;
+    }
+
+    std::vector<std::vector<uint8_t>> states;
+    states.reserve(componentIndices.size());
+    for (uint32_t componentIndex : componentIndices) {
+        if (!snapshot || componentIndex >= snapshot->size() || !(*snapshot)[componentIndex])
+            throw std::runtime_error("telemetria ainda nao publicada; tente novamente");
+        states.push_back(*(*snapshot)[componentIndex]);
+    }
+    return states;
 }
 
 std::vector<double> SimulationSession::nodeVoltagesOfPins(
