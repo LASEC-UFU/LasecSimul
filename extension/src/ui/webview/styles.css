@@ -1131,18 +1131,22 @@ rect.meter-expand-button:hover {
 .context-menu {
   position: fixed;
   z-index: 30;
-  min-width: 414px;
+  box-sizing: border-box;
+  min-width: min(414px, calc(100vw - 16px));
   padding: 4px;
   border: 1px solid #b8b8b8;
   background: #fbfbfb;
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.24);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 /** Submenu (ex: um item por componente exposto da instância) -- popup PRÓPRIO, anexado fora do menu
  * pai (ver `main.ts::renderContextMenuItems`), aberto ao passar o mouse no item que o contém.
  * `min-width` menor que o menu de topo -- normalmente só tem 2-4 ações por componente exposto. */
 .context-menu--submenu {
-  min-width: 220px;
+  min-width: min(220px, calc(100vw - 16px));
 }
 
 .context-menu__submenu-arrow {
@@ -1153,7 +1157,7 @@ rect.meter-expand-button:hover {
 
 .context-menu__item {
   display: grid;
-  grid-template-columns: 24px 1fr 112px;
+  grid-template-columns: 24px minmax(0, 1fr) minmax(0, 112px);
   align-items: center;
   gap: 6px;
   width: 100%;
@@ -1165,6 +1169,15 @@ rect.meter-expand-button:hover {
   text-align: left;
   cursor: pointer;
   font: 14px "Segoe UI", sans-serif;
+}
+
+.context-menu--submenu .context-menu__item {
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+}
+
+.context-menu__label,
+.context-menu__shortcut {
+  overflow-wrap: anywhere;
 }
 
 .context-menu__icon {

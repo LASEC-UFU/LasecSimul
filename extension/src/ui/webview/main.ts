@@ -31,6 +31,7 @@ import { parseSerialInput, serialFormatBytes, SerialFormat } from "./serialForma
 import { shouldRenderSimulationSnapshot, simulationControlModel } from "./simulationControls.js";
 import { isHighWireVoltage, reconcileWireVoltages } from "./wirePresentation.js";
 import { continuousDialValueFromPointer, steppedDialValue } from "./dialInteraction.js";
+import { contextMenuViewportSize, positionContextSubmenu, positionRootContextMenu } from "./contextMenuPosition.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const FINE_WIRE_STEP = WIRE_GRID_SIZE / 10;
@@ -1087,16 +1088,83 @@ document.addEventListener("pointermove", (event) => {
  * ser removidos do DOM explicitamente ao fechar o menu, senão acumulam elementos órfãos a cada
  * abertura de um menu com submenu. */
 let openSubmenuPopups: HTMLElement[] = [];
+const submenuParentMenus = new Map<HTMLElement, HTMLElement>();
+const submenuCloseTimers = new Map<HTMLElement, ReturnType<typeof setTimeout>>();
+
+function clearSubmenuCloseTimer(submenu: HTMLElement): void {
+  const timer = submenuCloseTimers.get(submenu);
+  if (timer) clearTimeout(timer);
+  submenuCloseTimers.delete(submenu);
+}
+
+function forEachSubmenuInPath(submenu: HTMLElement, visit: (entry: HTMLElement) => void): void {
+  let current: HTMLElement | undefined = submenu;
+  while (current && current !== contextMenu) {
+    visit(current);
+    current = submenuParentMenus.get(current);
+  }
+}
+
+function hideSubmenuBranch(submenu: HTMLElement): void {
+  clearSubmenuCloseTimer(submenu);
+  submenu.hidden = true;
+  for (const candidate of openSubmenuPopups) {
+    if (submenuParentMenus.get(candidate) === submenu) hideSubmenuBranch(candidate);
+  }
+}
+
+function isSubmenuAncestor(candidate: HTMLElement, submenu: HTMLElement): boolean {
+  let parent = submenuParentMenus.get(submenu);
+  while (parent && parent !== contextMenu) {
+    if (parent === candidate) return true;
+    parent = submenuParentMenus.get(parent);
+  }
+  return false;
+}
+
+function viewportDimensions(): { width: number; height: number } {
+  return {
+    width: document.documentElement.clientWidth || window.innerWidth,
+    height: document.documentElement.clientHeight || window.innerHeight,
+  };
+}
+
+/** Exibe primeiro para que `getBoundingClientRect()` devolva as dimensões finais do conteúdo. */
+function measureContextMenu(menu: HTMLElement): { width: number; height: number } {
+  const viewport = viewportDimensions();
+  const maximum = contextMenuViewportSize(viewport);
+  menu.style.maxWidth = `${maximum.width}px`;
+  menu.style.maxHeight = `${maximum.height}px`;
+  menu.style.left = "0px";
+  menu.style.top = "0px";
+  menu.hidden = false;
+  const rect = menu.getBoundingClientRect();
+  return { width: rect.width, height: rect.height };
+}
+
+function placeSubmenu(submenu: HTMLElement, button: HTMLElement, arrow: HTMLElement): void {
+  const viewport = viewportDimensions();
+  const anchor = button.getBoundingClientRect();
+  const size = measureContextMenu(submenu);
+  const position = positionContextSubmenu(anchor, size, viewport);
+  submenu.style.left = `${position.left}px`;
+  submenu.style.top = `${position.top}px`;
+  arrow.textContent = position.direction === "left" ? "◀" : "▶";
+}
 
 function hideContextMenu(): void {
   contextMenu.hidden = true;
   contextMenu.innerHTML = "";
+  for (const timer of submenuCloseTimers.values()) clearTimeout(timer);
+  submenuCloseTimers.clear();
   for (const submenu of openSubmenuPopups) submenu.remove();
   openSubmenuPopups = [];
+  submenuParentMenus.clear();
 }
 
 window.addEventListener("click", () => hideContextMenu());
 window.addEventListener("blur", () => hideContextMenu());
+window.addEventListener("resize", () => hideContextMenu());
 
 /** Overlay de Modo Placa no circuito PRINCIPAL -- todo componente "graphical" marcado como exposto no
  * Símbolo (`exposedComponents[]`, ver seção 22 do `.spec` de subcircuitos) é desenhado sobre a foto
@@ -2212,7 +2280,7 @@ function isSubmenuItem(item: ContextMenuItem): item is Extract<ContextMenuItem, 
 /** Preenche `container` (menu de topo OU um popup de submenu) com `items` -- recursivo: um item
  * `items` (sem `onClick`) vira um submenu aberto ao passar o mouse, com seu PRÓPRIO popup
  * `context-menu--submenu` anexado a `document.body` (não dentro do pai, pra não ficar limitado pela
- * largura/altura dele) e posicionado à direita do botão que o abriu. */
+ * largura/altura dele) e posicionado no lado do botão que tiver espaço no viewport. */
 function renderContextMenuItems(container: HTMLElement, items: ContextMenuItem[]): void {
   container.innerHTML = "";
   for (const item of items) {
@@ -2240,25 +2308,32 @@ function renderContextMenuItems(container: HTMLElement, items: ContextMenuItem[]
       submenu.className = "context-menu context-menu--submenu";
       submenu.hidden = true;
       document.body.appendChild(submenu);
-      renderContextMenuItems(submenu, item.items);
       openSubmenuPopups.push(submenu);
+      submenuParentMenus.set(submenu, container);
+      renderContextMenuItems(submenu, item.items);
 
-      let closeTimer: ReturnType<typeof setTimeout> | undefined;
       const openSubmenu = (): void => {
-        if (closeTimer) clearTimeout(closeTimer);
-        for (const other of openSubmenuPopups) if (other !== submenu) other.hidden = true;
-        const rect = button.getBoundingClientRect();
-        submenu.hidden = false;
-        submenu.style.left = `${rect.right}px`;
-        submenu.style.top = `${rect.top}px`;
+        forEachSubmenuInPath(submenu, clearSubmenuCloseTimer);
+        for (const other of openSubmenuPopups) {
+          if (other !== submenu && !isSubmenuAncestor(other, submenu)) hideSubmenuBranch(other);
+        }
+        placeSubmenu(submenu, button, arrow);
       };
       const scheduleClose = (): void => {
-        closeTimer = setTimeout(() => { submenu.hidden = true; }, 250);
+        clearSubmenuCloseTimer(submenu);
+        submenuCloseTimers.set(submenu, setTimeout(() => hideSubmenuBranch(submenu), 250));
+      };
+      const scheduleClosePath = (): void => {
+        forEachSubmenuInPath(submenu, (entry) => {
+          clearSubmenuCloseTimer(entry);
+          submenuCloseTimers.set(entry, setTimeout(() => hideSubmenuBranch(entry), 250));
+        });
       };
       button.addEventListener("mouseenter", openSubmenu);
       button.addEventListener("mouseleave", scheduleClose);
-      submenu.addEventListener("mouseenter", () => { if (closeTimer) clearTimeout(closeTimer); });
-      submenu.addEventListener("mouseleave", scheduleClose);
+      submenu.addEventListener("mouseenter", () => forEachSubmenuInPath(submenu, clearSubmenuCloseTimer));
+      submenu.addEventListener("mouseleave", scheduleClosePath);
+      container.addEventListener("scroll", () => hideSubmenuBranch(submenu), { passive: true });
       container.appendChild(button);
       continue;
     }
@@ -2302,9 +2377,11 @@ function showContextMenu(event: MouseEvent, items: ContextMenuItem[]): void {
   }
   renderContextMenuItems(contextMenu, items);
 
-  contextMenu.hidden = false;
-  contextMenu.style.left = `${event.clientX}px`;
-  contextMenu.style.top = `${event.clientY}px`;
+  const viewport = viewportDimensions();
+  const size = measureContextMenu(contextMenu);
+  const position = positionRootContextMenu({ x: event.clientX, y: event.clientY }, size, viewport);
+  contextMenu.style.left = `${position.left}px`;
+  contextMenu.style.top = `${position.top}px`;
 }
 
 function renderToolbarButton(kind: ToolbarIconKind, title: string, onClick: () => void, disabled = false): HTMLButtonElement {
