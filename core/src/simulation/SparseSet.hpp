@@ -8,7 +8,7 @@ namespace lasecsimul::simulation {
 
 /**
  * Dirty-tracking O(1) insert/remove/contains, iteração contígua — substitui lista ligada intrusiva
- * (ver .spec/lasecsimul.spec, seção 7.1: pointer-chasing é hostil a cache em hardware atual; array
+ * (ver .spec/archive/legacy-v2/lasecsimul.spec, seção 7.1: pointer-chasing é hostil a cache em hardware atual; array
  * denso favorece prefetch). Array esparso indexado pelo slot do item -> posição no array denso.
  */
 template <typename IndexT = uint32_t>

@@ -86,7 +86,7 @@ inline void assertOwnershipOrThrow(std::unordered_map<std::string, std::string>&
 
 /**
  * Estado compartilhado entre sessões (hoje só existe uma SimulationSession por processo, ver
- * .spec/lasecsimul.spec seção 4) — qual PluginModule é a versão ativa por typeId/chipId, e o
+ * .spec/archive/legacy-v2/lasecsimul.spec seção 4) — qual PluginModule é a versão ativa por typeId/chipId, e o
  * catálogo de metadados de UI. Nunca mutado fora de loadLibrary/setActive*Module; sessões só leem
  * activeDeviceModule/activeMcuModule ao criar uma instância nova.
  */
@@ -121,7 +121,7 @@ public:
         }
     }
 
-    /** Versioned swap (ver .spec/lasecsimul-native-devices.spec, seção 3): publica qual módulo é
+    /** Versioned swap (ver .spec/archive/legacy-v2/lasecsimul-native-devices.spec, seção 3): publica qual módulo é
      * usado por NOVAS instâncias a partir de agora. Instâncias já criadas mantêm seu próprio
      * shared_ptr para o módulo antigo — nunca são afetadas por esta chamada. */
     void setActiveDeviceModule(std::string typeId, std::shared_ptr<PluginModule> module) {
@@ -214,7 +214,7 @@ private:
      * via plugin nativo, ver `mcu_abi.h`). Cada entrada `{chipId, manifest}` aponta pra um
      * `.lsdevice` cujo `nativeEntry[plataforma]` é resolvido e carregado via
      * `PluginLoader::loadMcuPlugin`. Sem `registry::ComponentMetadata` aqui -- MCU não passa pelo
-     * catálogo de propriedades editáveis genérico (ver `.spec/lasecsimul-native-devices.spec`
+     * catálogo de propriedades editáveis genérico (ver `.spec/archive/legacy-v2/lasecsimul-native-devices.spec`
      * seção 22 e a auditoria arquitetural 2026-07-09, seção 10 do relatório: `McuComponent` não
      * expõe `propertyDescriptors()` hoje). */
     void loadMcuEntry(const nlohmann::json& mcuEntry, const std::filesystem::path& libraryDir,

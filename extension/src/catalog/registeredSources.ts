@@ -20,7 +20,7 @@ function iconDescriptorToSvgInline(icon: PackageDescriptor): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${box.width} ${box.height}" width="${box.width}" height="${box.height}">${svg}</svg>`;
 }
 
-/** EX-9 (.spec/lasecsimul-native-devices.spec): resolução de fontes registradas (`.lsdevice`/
+/** EX-9 (.spec/archive/legacy-v2/lasecsimul-native-devices.spec): resolução de fontes registradas (`.lsdevice`/
  * `.lssubcircuit`/mcu-adapter) pra entradas de catálogo -- extraído de `extension.ts` por ser um
  * domínio autocontido (só toca `fs`/`path`/os tipos importados abaixo, NUNCA `coreClient`/
  * `schematicState`/`schematicPanel`/etc., os estados mutáveis que o resto de `extension.ts` ainda
@@ -108,7 +108,7 @@ export function inferLibraryPathForDevice(deviceFilePath: string): string | unde
   return fileExists(candidate) ? candidate : undefined;
 }
 
-/** Subcircuitos não têm pasta por item (ver .spec/lasecsimul-subcircuits.spec seção 7 — diferença
+/** Subcircuitos não têm pasta por item (ver .spec/archive/legacy-v2/lasecsimul-subcircuits.spec seção 7 — diferença
  * deliberada de devices/mcu-adapters: arquivo único, sem binário por plataforma) -- o
  * `library.json` fica na MESMA pasta do `.lssubcircuit`, não um nível acima. */
 export function inferLibraryPathForSubcircuit(manifestFilePath: string): string | undefined {
@@ -371,7 +371,7 @@ function manifestDefaultProperties(json: Record<string, unknown>, logicSymbolPac
  * -- compartilhado entre `resolveRegisteredItem`'s subcircuit-file branch (registro na paleta) e a
  * resolução do bloco genérico de subcircuito por caminho (`extension.ts::chooseSubcircuitFileCommand`/
  * `resolveSubcircuitReferences`), pra nunca duplicar `knownPinIdsForManifest`/`sanitizePackage`/
- * derivação de ícone uma terceira vez (ver `.spec/lasecsimul-subcircuits.spec` seção 12). NÃO decide
+ * derivação de ícone uma terceira vez (ver `.spec/archive/legacy-v2/lasecsimul-subcircuits.spec` seção 12). NÃO decide
  * nada específico do REGISTRO (libraryPath, fallback de `folderPath` de `RegisteredSource`,
  * disabled/gate) -- isso fica por conta de cada chamador. */
 export function parseSubcircuitManifest(json: Record<string, unknown>, manifestDir: string, language: LasecSimulLanguage, mcuAdapterTypeIds: ReadonlySet<string>): ParsedSubcircuitManifest {

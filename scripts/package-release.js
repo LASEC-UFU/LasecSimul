@@ -382,7 +382,7 @@ function readDeviceIdsFromLibrary(absoluteLibraryPath) {
   return owners;
 }
 
-/** Unicidade global de device ID (ver `.spec/lasecsimul-native-devices.spec` seção 14, `lasecsimul.spec`
+/** Unicidade global de device ID (ver `.spec/archive/legacy-v2/lasecsimul-native-devices.spec` seção 14, `lasecsimul.spec`
  * seção 13.1.1 regra 16) -- gate de EMPACOTAMENTO: nenhum pacote deve sair com o mesmo typeId/chipId
  * declarado por dois arquivos canonicos diferentes (`items[]` estatico, `deviceLibraries[]` expandido,
  * `registeredSources[]` avulso). A checagem em si (`checkDeviceIdUniqueness`) é a MESMA função pura

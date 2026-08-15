@@ -1,5 +1,57 @@
 import * as assert from "assert";
-import { isMachineNetworkConfigCurrent } from "./machineNetworkState";
+import { isMachineNetworkConfigCurrent, shouldOfferMachineNetworkSetup } from "./machineNetworkState";
+
+assert.strictEqual(
+  shouldOfferMachineNetworkSetup({
+    platform: "win32",
+    infrastructureCurrent: false,
+    extensionVersion: "0.0.23",
+  }),
+  true,
+  "instalação nova do Marketplace deve oferecer a infraestrutura com o modo padrão disabled",
+);
+
+assert.strictEqual(
+  shouldOfferMachineNetworkSetup({
+    platform: "win32",
+    infrastructureCurrent: true,
+    extensionVersion: "0.0.23",
+  }),
+  false,
+  "infraestrutura atual não deve gerar uma oferta redundante",
+);
+
+assert.strictEqual(
+  shouldOfferMachineNetworkSetup({
+    platform: "win32",
+    infrastructureCurrent: false,
+    extensionVersion: "0.0.23",
+    dismissedVersion: "0.0.23",
+  }),
+  false,
+  "recusa explícita continua valendo para a versão atual",
+);
+
+assert.strictEqual(
+  shouldOfferMachineNetworkSetup({
+    platform: "win32",
+    infrastructureCurrent: false,
+    extensionVersion: "0.0.23",
+    dismissedVersion: "0.0.22",
+  }),
+  true,
+  "uma nova versão pode oferecer a infraestrutura novamente",
+);
+
+assert.strictEqual(
+  shouldOfferMachineNetworkSetup({
+    platform: "linux",
+    infrastructureCurrent: false,
+    extensionVersion: "0.0.23",
+  }),
+  false,
+  "a infraestrutura TAP/bridge só deve ser oferecida no Windows",
+);
 
 assert.strictEqual(
   isMachineNetworkConfigCurrent(

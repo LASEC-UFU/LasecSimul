@@ -126,7 +126,7 @@ const { test, finish } = createTestRunner("CoreClient — testes de IPC");
     await new Promise<void>((r) => srv.close(() => { cleanup(name); r(); }));
   });
 
-  // PC-4 (.spec/lasecsimul-native-devices.spec): um caractere UTF-8 multi-byte (ex: "ç" = 2 bytes,
+  // PC-4 (.spec/archive/legacy-v2/lasecsimul-native-devices.spec): um caractere UTF-8 multi-byte (ex: "ç" = 2 bytes,
   // 0xC3 0xA7) cortado bem na fronteira entre dois `socket.write()` -- antes, `Buffer.toString("utf8")`
   // por chunk decodificava o byte solto (0xC3, sem o par 0xA7 que só chega no próximo `data`) como
   // U+FFFD (replacement character), corrompendo qualquer texto acentuado que caísse nessa fronteira

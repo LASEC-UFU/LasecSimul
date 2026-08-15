@@ -135,7 +135,7 @@ inline std::vector<Pin> resolveDynamicPins(const ComponentPinSpec& spec,
 }
 
 /** Como a UI deve interpretar os bytes de leitura de um componente (`getComponentState`/instrumento)
- * sem precisar conhecer o typeId -- ABI v2, ver .spec/lasecsimul-native-devices.spec. Declarado pelo
+ * sem precisar conhecer o typeId -- ABI v2, ver .spec/archive/legacy-v2/lasecsimul-native-devices.spec. Declarado pelo
  * device (built-in: método estático; plugin/DLL: chave `"readout"` opcional em `.lsdevice`), nunca
  * inferido por typeId em nenhum lado (Core ou Extension). Ausência (`std::optional` em
  * `ComponentMetadata`) é uma declaração válida de "sem leitura estruturada" -- a maioria dos
@@ -166,7 +166,7 @@ enum class BusRole { Master, Slave };
 /** Saúde operacional de uma instância de componente (watchdog/crash-guard de plugin nativo) -- só
  * plugins têm motivo real de reportar algo diferente de `Ok`; built-ins nunca falham nem atrasam
  * por natureza, então a interface devolve `Ok` por default. Ver
- * .spec/lasecsimul-native-devices.spec, seção 13. */
+ * .spec/archive/legacy-v2/lasecsimul-native-devices.spec, seção 13. */
 enum class PluginHealthStatus { Ok, Lagging, Faulted };
 
 /** Periférico genérico do Core que interpreta uma faixa de endereço MMIO de um MCU emulado.
@@ -176,7 +176,7 @@ enum class PluginHealthStatus { Ok, Lagging, Faulted };
  * mapa de registradores (ver QemuModule.hpp/IMcuAdapter.hpp). */
 /** `Reset` é tratado especialmente por `McuComponent::stamp()` -- nunca tem `QemuModule` próprio
  * (não existe registrador por trás, é uma linha de controle de hardware: ESP32 chama de EN). Ver
- * .spec/lasecsimul-native-devices.spec seção 8.1. */
+ * .spec/archive/legacy-v2/lasecsimul-native-devices.spec seção 8.1. */
 enum class ModuleKind { Gpio, IoMux, I2c, Spi, Usart, Timer, Reset, Adc, Pwm };
 
 /** Faixa de endereco MMIO do chip -> qual QemuModule concreto deve trata-la.
@@ -215,7 +215,7 @@ struct ComponentMeta {
     std::vector<Pin> pins;
     std::vector<PropertySchema> propertySchema;
     /** `limits.stepTimeoutMs` do `.lsdevice` -- 0 == sem watchdog (chamada roda sem limite de
-     * tempo, comportamento de hoje). Ver .spec/lasecsimul-native-devices.spec, seção 13. */
+     * tempo, comportamento de hoje). Ver .spec/archive/legacy-v2/lasecsimul-native-devices.spec, seção 13. */
     uint32_t stepTimeoutMs = 0;
     /** `pinSpec` opcional do `.lsdevice` -- caminho declarativo pra pino dinâmico de plugin, SEM
      * escrever `pin_declare` na unha em C. Quando presente, `PluginRuntime::createDeviceInstance`

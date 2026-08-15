@@ -121,6 +121,9 @@ void testCombinationalAndSequentialAgainstRealScheduler(const std::string& vpiMo
                 PortSpec{"clk", true, 1, true},      PortSpec{"sw0", true, 1, true}, PortSpec{"sw1", true, 1, true},
                 PortSpec{"led_and", false, 1, true}, PortSpec{"count", false, 4, true},
             };
+            config.sources = {vhdlFile.string()};
+            config.topEntity = "component_test";
+            config.standard = "08";
             config.vcc = 3.3;
 
             GhdlBackendOptions options;
@@ -131,14 +134,7 @@ void testCombinationalAndSequentialAgainstRealScheduler(const std::string& vpiMo
 
             auto component = std::make_unique<FpgaComponent>(session.scheduler(), std::move(backend), config);
             fpgaComponentPtr = component.get();
-
-            RtlCompileRequest request;
-            request.sources = {vhdlFile.string()};
-            request.topEntity = "component_test";
-            request.standard = "08";
-            request.inputBitCount = countInputBits(config.ports);
-            request.outputBitCount = countOutputBits(config.ports);
-            component->start(request); // lança se compile() falhar -- propaga por addComponent()
+            component->start(); // lança se compile() falhar -- propaga por addComponent()
 
             return component;
         });

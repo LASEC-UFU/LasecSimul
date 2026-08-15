@@ -59,7 +59,7 @@ public:
 
     std::vector<PropertyDescriptor> propertyDescriptors() override { return toPropertyDescriptors(properties()); }
 
-    /** ABI v2 (.spec/lasecsimul-native-devices.spec) -- `getState()` é 1 double de tensão. */
+    /** ABI v2 (.spec/archive/legacy-v2/lasecsimul-native-devices.spec) -- `getState()` é 1 double de tensão. */
     static ReadoutFormat readoutFormat() {
         ReadoutFormat format;
         format.kind = ReadoutKind::Scalar;

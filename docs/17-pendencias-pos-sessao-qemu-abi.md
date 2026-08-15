@@ -162,7 +162,7 @@ quanto a chip; módulos de registrador concreto são CHIP-ESPECÍFICOS de propó
 > Citações de linha abaixo são do estado dos arquivos no momento da auditoria — confirme o número
 > exato antes de editar (o arquivo pode já ter mudado).
 
-### 1.1 `.spec/lasecsimul.spec`
+### 1.1 `.spec/archive/legacy-v2/lasecsimul.spec`
 
 - **Estrutura de pastas (~linha 295)**: lista `core/src/bus/{BusController,I2cBusModule,
   SpiBusModule,UsartModule}.{h,cpp}` como parte da árvore — **esses arquivos não existem mais**.
@@ -200,7 +200,7 @@ quanto a chip; módulos de registrador concreto são CHIP-ESPECÍFICOS de propó
   referência deve apontar pra `C:\SourceCode\simulide_2` (ver 0.5) — `SimulIDE-dev` não existe
   mais neste disco.
 
-### 1.2 `.spec/lasecsimul-native-devices.spec`
+### 1.2 `.spec/archive/legacy-v2/lasecsimul-native-devices.spec`
 
 - **Seção 8 inteira (~linha 502-560)**: descreve `BusController`/`I2cBusModule`/`SpiBusModule`/
   `UsartModule` como arquitetura atual ("mesma divisão de responsabilidade já validada"). **Essa
@@ -222,7 +222,7 @@ quanto a chip; módulos de registrador concreto são CHIP-ESPECÍFICOS de propó
 - **Launch args/`argv[1]`**: mesma lacuna do `lasecsimul.spec` (seção 8.2 antiga, ~linha 852-870)
   — sem menção ao mecanismo real de passagem da chave da arena.
 
-### 1.3 `.spec/lasecsimul-subcircuits.spec`
+### 1.3 `.spec/archive/legacy-v2/lasecsimul-subcircuits.spec`
 
 Não auditado nesta sessão em detalhe (nada do que mudou tocou subcircuitos diretamente). **Ação
 pro próximo agente**: ler por completo e confirmar que nada ficou desalinhado — é baixo risco, mas
@@ -432,8 +432,8 @@ desalinhamento aqui é o que mais risco de causar retrabalho errado no futuro.
 
 1. **`.skill/lasecsimul.skill`** primeiro — é o que qualquer outro agente lê antes de tudo; deixar
    ele errado enquanto corrige o resto é como pintar a casa com a porta aberta pra poeira entrar.
-2. **`.spec/lasecsimul.spec`** + **`.spec/lasecsimul-native-devices.spec`** — fonte de verdade
-   normativa, seção 1 deste documento já tem a lista exata do que mudar.
+2. **`.spec/README.md`** + documentos canônicos aplicáveis — fonte de verdade normativa. Os monólitos em
+   `.spec/archive/legacy-v2/` servem apenas para localizar o contexto histórico citado na seção 1.
 3. **`docs/16-roadmap-pendencias-spec.md`** + **`docs/mvp-limitacoes.md`** + **`docs/11-qemu-esp32.md`**
    — seção 2 deste documento.
 4. Só depois, código novo: seção 3, na ordem 3.1 (IOMUX+TWI/SPI/USART, maior esforço, é o que

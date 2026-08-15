@@ -37,7 +37,7 @@ Causa raiz: politica CSP incompleta para Webview com ES modules. O HTML autoriza
 - Catalogo/parser: `UnifiedCatalog.ts`, `registeredSources.ts`, novo `subcircuitInternals.ts`.
 - Removidos: `symbolCommands.ts`, `symbolAuthoring.ts`, `symbolAuthoring.test.ts`.
 - Manifestos e catalogo: `project/schema/component-catalog.json`, `devices/**/*.lsdevice`, `mcu-adapters/espressif-esp32/mcu.lsdevice`.
-- Produto/docs: `.spec/lasecsimul-native-devices.spec`, `.spec/lasecsimul-subcircuits.spec`, `.spec/lasecsimul.spec`, `.skill/lasecsimul.skill`, `README.md`, este documento.
+- Produto/docs: `.spec/archive/legacy-v2/lasecsimul-native-devices.spec`, `.spec/archive/legacy-v2/lasecsimul-subcircuits.spec`, `.spec/archive/legacy-v2/lasecsimul.spec`, `.skill/lasecsimul.skill`, `README.md`, este documento.
 
 ## 6. Testes executados
 

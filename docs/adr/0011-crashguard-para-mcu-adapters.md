@@ -83,7 +83,7 @@ depois, dentro de `McuComponent`/`QemuModule`).
 
 ## Impacto no projeto
 
-- `.spec/lasecsimul-native-devices.spec` seção 22/23 precisa registrar que MCU agora tem `health()`
+- `.spec/archive/legacy-v2/lasecsimul-native-devices.spec` seção 22/23 precisa registrar que MCU agora tem `health()`
   e contenção de crash simétrica à de dispositivo comum (ver atualização correspondente nesta mesma
   rodada).
 - Qualquer MCU adapter de terceiro futuro (além do ESP32) já herda essa proteção automaticamente,

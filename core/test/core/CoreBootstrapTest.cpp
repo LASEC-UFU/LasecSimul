@@ -260,7 +260,7 @@ static void testCoreAcceptsHello() {
 
 // Teste 4b: getComponentState via IPC devolve os bytes opacos de getState() de uma instância real —
 // mecanismo genérico (não específico de um tipo), usado pela Extension pra ler de volta qualquer
-// valor calculado (built-in ou plugin, ex: voltímetro — ver .spec/lasecsimul.spec).
+// valor calculado (built-in ou plugin, ex: voltímetro — ver .spec/archive/legacy-v2/lasecsimul.spec).
 static void testGetComponentStateOverIpc() {
     std::fprintf(stderr, "\n[T4b] 'getComponentState' via IPC devolve o estado opaco de uma instância real\n");
 
@@ -336,7 +336,7 @@ static void testGetComponentStateOverIpc() {
 }
 
 // Teste 4b2: getNodeVoltage via IPC resolve um divisor resistivo de ponta a ponta -- usado pela
-// Extension pra colorir/animar fios na Webview (ver .spec/lasecsimul.spec e ConnectorLine do SimulIDE).
+// Extension pra colorir/animar fios na Webview (ver .spec/archive/legacy-v2/lasecsimul.spec e ConnectorLine do SimulIDE).
 static void testGetNodeVoltageOverIpc() {
     std::fprintf(stderr, "\n[T4b2] 'getNodeVoltage' via IPC resolve divisor resistivo (10V/1k/1k)\n");
 
@@ -495,7 +495,7 @@ static void testGetComponentCurrentOverIpc() {
 
 // Teste 4b4: 'registerAdhocSubcircuit' via IPC registra UM .lssubcircuit avulso (sem library.json) e
 // addComponent com o typeId resultante expande normalmente -- prova o verbo IPC usado pelo bloco
-// genérico de subcircuito por caminho (ver .spec/lasecsimul-subcircuits.spec seção 9). Mesmo
+// genérico de subcircuito por caminho (ver .spec/archive/legacy-v2/lasecsimul-subcircuits.spec seção 9). Mesmo
 // "divisor_5v" sintético de subcircuit_test.cpp, mas escrito num arquivo real e registrado pela
 // via IPC em vez de SubcircuitRegistry::registerDefinition() direto.
 static void testRegisterAdhocSubcircuitOverIpc() {
@@ -762,7 +762,7 @@ static void testSimulideComplexAbiEventsOverIpc() {
         const nlohmann::json stateResp = send("getComponentState", {{"instanceId", hd}});
         TEST_ASSERT(stateResp.value("ok", false), "getComponentState retorna RAM do HD44780 ABI");
         const std::vector<uint8_t> state = decodeHex(stateResp["payload"].value("stateHex", std::string{}));
-        // ABI v2 (.spec/lasecsimul-native-devices.spec): header de get_state ganhou um uint32 de
+        // ABI v2 (.spec/archive/legacy-v2/lasecsimul-native-devices.spec): header de get_state ganhou um uint32 de
         // versão na frente (header[0]) -- payload (DDRAM) agora começa no byte 36, não 32.
         TEST_ASSERT(state.size() >= 37 && state[36] == 65, "DDRAM[0] contem 'A' apos latches bit a bit");
 
@@ -878,7 +878,7 @@ static void testGetPropertySchemasOverIpc() {
         TEST_ASSERT(resistorSchema.value("unit", std::string{}) == "Ω", "resistor: unidade == Ω");
         TEST_ASSERT(resistorSchema.contains("min"), "resistor: min presente");
 
-        // ABI v2 (.spec/lasecsimul-native-devices.spec) -- readoutFormatByTypeId/interactionKindByTypeId
+        // ABI v2 (.spec/archive/legacy-v2/lasecsimul-native-devices.spec) -- readoutFormatByTypeId/interactionKindByTypeId
         // são mapas IRMÃOS aditivos, só aparecem pra quem declarou; resistor não declara nenhum dos dois.
         const nlohmann::json& readoutByTypeId = beforeResp["payload"]["readoutFormatByTypeId"];
         const nlohmann::json& interactionByTypeId = beforeResp["payload"]["interactionKindByTypeId"];

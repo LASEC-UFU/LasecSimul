@@ -10,7 +10,7 @@ namespace lasecsimul::registry {
 
 /** Schema de UI por typeId — pinos, propriedades editáveis, ícone. Não depende de o plugin ter
  * carregado com sucesso como factory instanciável: vem direto do manifesto parseado. Separado de
- * ComponentRegistry (factory) de propósito — ver .spec/lasecsimul-native-devices.spec, seção 1. */
+ * ComponentRegistry (factory) de propósito — ver .spec/archive/legacy-v2/lasecsimul-native-devices.spec, seção 1. */
 struct ComponentMetadata {
     std::string typeId;
     std::string displayName;
@@ -27,9 +27,9 @@ struct ComponentMetadata {
      * `{"<lang>": {"name": "...", "properties": {"<id>": {"label": "...", "group": "..."}}}}`. */
     std::string translationsJson;
     /** `limits.stepTimeoutMs` do `.lsdevice` -- 0 == sem watchdog. Ver
-     * .spec/lasecsimul-native-devices.spec, seção 13. */
+     * .spec/archive/legacy-v2/lasecsimul-native-devices.spec, seção 13. */
     uint32_t stepTimeoutMs = 0;
-    /** ABI v2 (.spec/lasecsimul-native-devices.spec): como a UI decodifica leitura/interage com o
+    /** ABI v2 (.spec/archive/legacy-v2/lasecsimul-native-devices.spec): como a UI decodifica leitura/interage com o
      * componente sem checar typeId. `std::nullopt` é uma declaração válida ("sem leitura
      * estruturada"/"sem interação especial"), não um estado "ainda não migrado". */
     std::optional<ReadoutFormat> readoutFormat;

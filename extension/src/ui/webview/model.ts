@@ -4,7 +4,7 @@ export interface WebviewPinModel {
   y: number;
 }
 
-/** ABI v2 (.spec/lasecsimul-native-devices.spec) -- como a UI decodifica `getComponentState()` de um
+/** ABI v2 (.spec/archive/legacy-v2/lasecsimul-native-devices.spec) -- como a UI decodifica `getComponentState()` de um
  * typeId sem checar typeId em código nenhum: declarado pelo device (built-in: método estático no
  * Core; plugin/DLL: chave `"readout"` em `.lsdevice`), vindo via `getPropertySchemas`. Ausente ==
  * device sem leitura estruturada (válido, não "ainda não migrado"). */
@@ -203,7 +203,7 @@ export interface PropertySchemaEntry {
 }
 
 /** Pino declarado em `package.pins[]` (`.lsdevice`/`.lssubcircuit`, ver
- * `.spec/lasecsimul-native-devices.spec` seção 21.2). `x`/`y` é sempre o terminal elétrico; quando
+ * `.spec/archive/legacy-v2/lasecsimul-native-devices.spec` seção 21.2). `x`/`y` é sempre o terminal elétrico; quando
  * `PackageDescriptor.coordinateSpace` é `simulide-local`, usa diretamente o espaço local do
  * `QGraphicsItem`/`m_area` original e é normalizado junto com o corpo pelo resolvedor comum. `id`
  * deve bater com o `pin.id` real devolvido pelo
@@ -300,7 +300,7 @@ export interface PackagePin {
 
 /** Uma forma declarativa de `package.shapes[]` — mesmo vocabulário de
  * `components/graphical/{rectangle,ellipse,line,textcomponent}` do SimulIDE, só que como dado
- * (`.spec/lasecsimul-native-devices.spec` seção 21.2), nunca um componente à parte. */
+ * (`.spec/archive/legacy-v2/lasecsimul-native-devices.spec` seção 21.2), nunca um componente à parte. */
 export interface PackageShape {
   kind: "rect" | "text" | "line" | "ellipse" | "polygon" | "path" | "image" | "svg";
   x?: number;
@@ -573,7 +573,7 @@ export interface SimulideQtWidgetSpec {
 /** SimulIDE stores Package.Width/Height in schematic grid cells; each cell is 8 scene units. */
 export const SIMULIDE_PACKAGE_GRID_UNIT = 8;
 
-/** typeId de `connectors.tunnel` -- ponto único (TR-7, .spec/lasecsimul-native-devices.spec), usado
+/** typeId de `connectors.tunnel` -- ponto único (TR-7, .spec/archive/legacy-v2/lasecsimul-native-devices.spec), usado
  * nos vários lugares (main.ts/componentSymbols.ts/extension.ts) que tratam este
  * conector como exceção (rótulo derivado ao vivo do nome do net, geometria variável, id embutido no
  * próprio SVG) -- cada exceção continua com sua própria lógica/justificativa local (não são cópias
@@ -768,7 +768,7 @@ export interface ComponentViewSpec {
 // ────────────────────────────────────────────────────────────────────────────────────────────────
 
 /** Símbolo visual declarativo de um `typeId` — mesmo bloco `package` de `.lsdevice`/`.lssubcircuit`
- * (`.spec/lasecsimul-native-devices.spec` seção 21, `.spec/lasecsimul-subcircuits.spec` seção 3).
+ * (`.spec/archive/legacy-v2/lasecsimul-native-devices.spec` seção 21, `.spec/archive/legacy-v2/lasecsimul-subcircuits.spec` seção 3).
  * Quando presente, o renderizador da Webview desenha o corpo e posiciona cada pino na coordenada
  * REAL declarada — nunca o algoritmo genérico esquerda/direita usado para built-ins sem `package`
  * (ver `componentSymbols.ts`, Épico G do roadmap de pendências). */
@@ -924,7 +924,7 @@ export interface WebviewProjectState {
   components: WebviewComponentModel[];
   /** `x`/`y` = pan, `zoom` = escala — aplicado via CSS transform no wrapper `.canvas-content`
    * (`main.ts`), com `eventToCanvasPoint` invertendo a transformação pra todo cálculo de coordenada
-   * tela→canvas continuar correto em qualquer zoom (ver `.spec/lasecsimul.spec` seção 13.4). */
+   * tela→canvas continuar correto em qualquer zoom (ver `.spec/archive/legacy-v2/lasecsimul.spec` seção 13.4). */
   viewport: { x: number; y: number; zoom: number };
   /** Seleção múltipla (marquee/Shift+click) — array vazio == nada selecionado, nunca `undefined`
    * (mais simples de testar que opcional). Substituiu `selectedComponentId?: string` singular. */
@@ -943,6 +943,8 @@ export interface WebviewProjectState {
    * desabilitar Abrir/Salvar/Importar Projeto (formatos incompatíveis: `.lsproj` vs `.lssubcircuit`)
    * enquanto durar a sessão. */
   subcircuitEditingContext?: { sourceId: string; typeId: string; name: string };
+  /** Política de autoria do encapsulamento durante uma sessão de subcircuito. */
+  symbolMode?: "generic" | "custom";
   /** Cena do Modo Símbolo (refatoração Subcircuito/Símbolo/Ícone) -- elementos gráficos + pinos
    * externos autorados via WYSIWYG, MESMO vocabulário de componente (`WebviewComponentModel`) que
    * `components[]`, só que NUNCA misturado a ele (substitui o antigo `other.package`/

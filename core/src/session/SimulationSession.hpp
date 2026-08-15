@@ -33,7 +33,7 @@ class McuComponent;
 namespace lasecsimul::session {
 
 /** Pino exposto de uma instância de subcircuito -- É o pino real do `Tunnel` interno renomeado,
- * nunca um proxy (ver .spec/lasecsimul-subcircuits.spec, seção 5.2). */
+ * nunca um proxy (ver .spec/archive/legacy-v2/lasecsimul-subcircuits.spec, seção 5.2). */
 struct SubcircuitExposedPin {
     uint32_t instanceId;
     std::string pinId;
@@ -171,7 +171,7 @@ private:
  *
  * Escopo atual: exatamente UMA sessão por processo Core. O tipo existe para que isso não seja um
  * singleton implícito (cada membro é uma instância normal, não um Meyers-singleton/global), não
- * porque múltiplas sessões simultâneas sejam suportadas hoje — ver .spec/lasecsimul.spec, seção 4.
+ * porque múltiplas sessões simultâneas sejam suportadas hoje — ver .spec/archive/legacy-v2/lasecsimul.spec, seção 4.
  *
  * `settleStep()` é o callback real passado ao Scheduler (ver .spec, seção 7/7.2): drena os
  * componentes dirty, estampa via ComponentMatrixView, resolve grupos dirty via MnaSolver, marca
@@ -214,7 +214,7 @@ public:
                       const std::string& pinIdB);
 
     /** Inverso de `connectWire` -- remove SÓ este fio específico (Netlist::disconnectWire), sem
-     * tocar em nenhum outro componente/fio (EX-6.1/EX-6.2, .spec/lasecsimul-native-devices.spec) --
+     * tocar em nenhum outro componente/fio (EX-6.1/EX-6.2, .spec/archive/legacy-v2/lasecsimul-native-devices.spec) --
      * antes disto, a Extension não tinha como remover um fio sem reconstruir o circuito inteiro do
      * zero (removeComponent+addComponent+connectWire de TODOS os componentes). Devolve `false` (sem
      * marcar a topologia como suja) se este par de pinos não estava conectado -- idempotente, igual
@@ -251,7 +251,7 @@ public:
      * outro subcircuito), conecta os fios internos, e renomeia o `Tunnel` de cada pino exposto em
      * `interface[]` para `"<subcircuitInstanceId>::<internalTunnel>"`. Lança em ciclo de
      * dependência (subcircuito que se contém, direta ou indiretamente) ou referência interna
-     * inválida. Ver .spec/lasecsimul-subcircuits.spec, seção 5.1. */
+     * inválida. Ver .spec/archive/legacy-v2/lasecsimul-subcircuits.spec, seção 5.1. */
     SubcircuitExpansionResult addSubcircuitInstance(const std::string& typeId);
 
     /** Remove em cascata todos os `componentIndex` (recursivamente, incluindo subcircuitos
@@ -271,7 +271,7 @@ public:
         const std::vector<std::pair<uint32_t, std::string>>& probes) const;
 
     /** Saúde operacional da instância (`Ok`/`Lagging`/`Faulted`) -- ver
-     * `IComponentModel::health()`/`NativeDeviceProxy` e `.spec/lasecsimul-native-devices.spec`
+     * `IComponentModel::health()`/`NativeDeviceProxy` e `.spec/archive/legacy-v2/lasecsimul-native-devices.spec`
      * seção 13. Lança se a instância já foi removida. */
     PluginHealthStatus componentHealth(uint32_t componentIndex) const;
 

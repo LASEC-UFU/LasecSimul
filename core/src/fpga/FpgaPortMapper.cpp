@@ -1,5 +1,7 @@
 #include "FpgaPortMapper.hpp"
 
+#include <sstream>
+
 namespace lasecsimul::fpga {
 
 std::vector<FpgaPinBit> mapPorts(const std::vector<PortSpec>& ports) {
@@ -41,6 +43,41 @@ uint32_t countOutputBits(const std::vector<PortSpec>& ports) {
         if (!port.isInput) total += port.width == 0 ? 1 : port.width;
     }
     return total;
+}
+
+std::vector<PortSpec> parseDiscoveredPorts(const std::string& vpiDiscoverOutput) {
+    static const std::string kPrefix = "LSDN_FPGA_PORT ";
+    std::vector<PortSpec> ports;
+    std::istringstream lines(vpiDiscoverOutput);
+    std::string line;
+    while (std::getline(lines, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back(); // CRLF do pipe do Windows
+        if (line.compare(0, kPrefix.size(), kPrefix) != 0) continue;
+
+        PortSpec spec;
+        spec.downto = true; // ver comentário do header -- discover não relata downto/to
+        std::istringstream fields(line.substr(kPrefix.size()));
+        std::string token;
+        while (fields >> token) {
+            const size_t eq = token.find('=');
+            if (eq == std::string::npos) continue;
+            const std::string key = token.substr(0, eq);
+            const std::string value = token.substr(eq + 1);
+            if (key == "name") {
+                spec.name = value;
+            } else if (key == "direction") {
+                spec.isInput = (value == "in");
+            } else if (key == "width") {
+                try {
+                    spec.width = static_cast<uint32_t>(std::stoul(value));
+                } catch (const std::exception&) {
+                    spec.width = 1; // linha corrompida/inesperada -- nunca propaga exceção daqui
+                }
+            }
+        }
+        if (!spec.name.empty()) ports.push_back(spec);
+    }
+    return ports;
 }
 
 } // namespace lasecsimul::fpga

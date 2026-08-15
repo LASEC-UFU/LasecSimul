@@ -62,8 +62,8 @@ A documentação operacional existe para coordenar agentes paralelos. Specs cont
 - [ ] Todos os agentes têm tarefa.
 - [ ] Todos os ADRs têm seções obrigatórias.
 - [ ] README não virou spec gigante.
-- [ ] Docs não contradizem `.spec/lasecsimul.spec`.
-- [ ] Docs não contradizem `.spec/lasecsimul-native-devices.spec`.
+- [ ] Docs não contradizem `.spec/archive/legacy-v2/lasecsimul.spec`.
+- [ ] Docs não contradizem `.spec/archive/legacy-v2/lasecsimul-native-devices.spec`.
 
 ## Critérios de aceite
 

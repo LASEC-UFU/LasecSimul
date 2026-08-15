@@ -86,7 +86,7 @@ usado por `registerBuiltinMetadata` antes de qualquer instância existir), mas a
 
 ## Impacto no projeto
 
-- `.spec/lasecsimul.spec` seção 6 (Interfaces principais) precisa de uma nota sobre
+- `.spec/archive/legacy-v2/lasecsimul.spec` seção 6 (Interfaces principais) precisa de uma nota sobre
   `PropertyDefinition` como forma recomendada de declarar propriedade (ver atualização
   correspondente nesta mesma rodada).
 - Próximo desenvolvedor migrando um built-in existente: seguir `Probe.hpp`/`Resistor.hpp` como

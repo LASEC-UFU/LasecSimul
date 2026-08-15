@@ -19,9 +19,9 @@
  * aquele existe pra evitar syscall ENTRE PROCESSOS. Plugin roda no mesmo processo do Core —
  * vtable->stamp() ja e' uma chamada de funcao direta, mais barata que qualquer espera ativa em
  * memoria compartilhada, sem fronteira de processo a economizar. Avaliado e descartado
- * deliberadamente, nao esquecido — ver .spec/lasecsimul.spec, secao 8.1.
+ * deliberadamente, nao esquecido — ver .spec/archive/legacy-v2/lasecsimul.spec, secao 8.1.
  *
- * Ver .spec/lasecsimul-native-devices.spec, secoes 4-9, para a especificacao completa.
+ * Ver .spec/archive/legacy-v2/lasecsimul-native-devices.spec, secoes 4-9, para a especificacao completa.
  */
 #ifndef LASECSIMUL_DEVICE_ABI_H
 #define LASECSIMUL_DEVICE_ABI_H
@@ -38,7 +38,7 @@ extern "C" {
  * preocupação de compat aqui, todo device deste repo recompila a cada mudança de ABI via `npm run
  * build:devices`. Bump major sempre que mudar layout/semântica de algo em LsdnHostApi/
  * LsdnMatrixView/LsdnEventTag; nunca manter duas formas de fazer a mesma coisa (ver
- * .spec/lasecsimul-native-devices.spec, seção 4 e 8 -- histórico de major 1/2 removido daqui,
+ * .spec/archive/legacy-v2/lasecsimul-native-devices.spec, seção 4 e 8 -- histórico de major 1/2 removido daqui,
  * git log é o changelog). Major 3: `pin_write`/`pin_write_analog`/`pin_read`/`now_ns`/
  * `schedule_event` deixaram de ser stubs vazios; `pin_watch` saiu (redundante -- todo pino já
  * recebe LSDN_EVT_PIN_CHANGE automaticamente, sem precisar de registro prévio); entrou `pin_name`. */

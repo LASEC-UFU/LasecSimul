@@ -786,7 +786,7 @@ static uint32_t set_property(LsdnDevice* dev, const char* name, const LsdnProper
     return 0;
 }
 
-/* ABI v2 (.spec/lasecsimul-native-devices.spec): get_state/set_state passam a se autoversionar --
+/* ABI v2 (.spec/archive/legacy-v2/lasecsimul-native-devices.spec): get_state/set_state passam a se autoversionar --
  * uint32 de versão antes do payload, mesmo padrão de example-blinker/simulide-complex. */
 #define SIMULIDE_LOGIC_STATE_VERSION 1u
 

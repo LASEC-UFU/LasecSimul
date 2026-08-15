@@ -45,7 +45,7 @@ public:
         // Modelo inicial DC: indutor em regime permanente se aproxima de curto. O solver ainda nao
         // expoe fonte de corrente historica/dt para o modelo dinamico completo. Corrente lida da
         // ÚLTIMA solve() antes de re-estampar -- mesma técnica de Resistor/plano de leitura de
-        // corrente (.spec/lasecsimul.spec, seção 7.3).
+        // corrente (.spec/archive/legacy-v2/lasecsimul.spec, seção 7.3).
         m_current = kInitialShortConductance * (matrix.getNodeVoltage(m_pins[0]) - matrix.getNodeVoltage(m_pins[1]));
         matrix.addConductance(m_pins[0], m_pins[1], kInitialShortConductance);
     }

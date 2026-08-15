@@ -1,4 +1,7 @@
-# 16 - Roadmap de Pendências das `.spec`
+# 16 - Roadmap histórico de pendências das specs monolíticas
+
+> Documento histórico. O roadmap normativo atual é `.spec/ROADMAP.md`; specs em
+> `.spec/archive/legacy-v2/` servem somente para rastreabilidade.
 
 ## Objetivo
 
@@ -8,15 +11,15 @@ recomendada.
 
 ## Escopo
 
-Este documento descreve o **estado atual do backlog estrutural do projeto**, não o roadmap histórico do MVP.
+Este documento descreve o backlog estrutural registrado antes da migração F0, não o roadmap normativo atual.
 Ele deve ser lido junto com:
 
 - `docs/02-roadmap-mvp.md` — visão do MVP original;
 - `docs/03-plano-de-execucao.md` — divisão por ondas/agentes;
 - `docs/mvp-limitacoes.md` — lacunas conscientemente abertas no código atual;
-- `.spec/lasecsimul.spec`;
-- `.spec/lasecsimul-native-devices.spec`;
-- `.spec/lasecsimul-subcircuits.spec`.
+- `.spec/archive/legacy-v2/lasecsimul.spec`;
+- `.spec/archive/legacy-v2/lasecsimul-native-devices.spec`;
+- `.spec/archive/legacy-v2/lasecsimul-subcircuits.spec`.
 
 ## Leitura executiva
 
@@ -96,13 +99,13 @@ Fora do escopo original deste épico, mas no mesmo espírito (expor mais estado 
 disparar solve novo): `IComponentModel::current()` + `SimulationSession::componentCurrent()` + IPC
 `getComponentCurrent` + `CoreClient.getComponentCurrent`. Convenção de sinal passiva validada
 empiricamente (fonte fornecendo energia aparece negativa). Detalhe completo em
-`.spec/lasecsimul.spec` seção 6.1.4 e `docs/17-pendencias-pos-sessao-qemu-abi.md` seção 0.1.
+`.spec/archive/legacy-v2/lasecsimul.spec` seção 6.1.4 e `docs/17-pendencias-pos-sessao-qemu-abi.md` seção 0.1.
 
 ## Épico B - Completar o pipeline MCU/QEMU
 
 **Status: concluído, e mais avançado do que quando este épico foi escrito.** `QemuProcessManager`,
 `FirmwareWatcher` e `McuComponent` (peça que faltava: liga `IMcuAdapter` ao circuito real via pinos,
-seção 8 do `.spec/lasecsimul.spec`) estão implementados. Adaptador ESP32 migrado em 2026-06-28 do
+seção 8 do `.spec/archive/legacy-v2/lasecsimul.spec`) estão implementados. Adaptador ESP32 migrado em 2026-06-28 do
 caminho built-in (que existia em `core/src/mcu/esp32/`, removido) para **plugin DLL/SO**
 (`mcu-adapters/espressif-esp32/`, `mcu_abi.h` major 2+, `LsdnQemuModuleVTable`/`create_modules`) — mesmo
 desempenho, sem precisar recompilar o Core pra cada chip novo. Binário real do QEMU **vendorizado** em
@@ -310,13 +313,13 @@ Sem isso, o backlog de editor e i18n fica caro de manter.
 
 **Status (atualizado 2026-07-07): fundação do Core concluída E integração na Extension também —
 "Criar Subcircuito a partir da Seleção" foi implementado em 2026-07-03 (ver seção 11 de
-`.spec/lasecsimul-subcircuits.spec`), fechando o que este Épico ainda listava como pendente. O texto
+`.spec/archive/legacy-v2/lasecsimul-subcircuits.spec`), fechando o que este Épico ainda listava como pendente. O texto
 abaixo (escrito em 2026-06-28/29) usa o formato de arquivo ANTIGO (`.lssub.json`+`.lsconfig`
 separados) como exemplo — já migrado pra `.lssubcircuit` único em 2026-07-06, ver a nota
 "Atualização 2026-07-06" logo abaixo. Mantido como registro histórico da fundação do Core; as
 pendências reais de então já foram todas resolvidas (ver lista de Pendências atualizada mais
 abaixo).** Implementado em `core/src/registry/SubcircuitRegistry.hpp` e
-`core/src/session/SimulationSession.{hpp,cpp}`, seguindo `.spec/lasecsimul-subcircuits.spec` seção 5
+`core/src/session/SimulationSession.{hpp,cpp}`, seguindo `.spec/archive/legacy-v2/lasecsimul-subcircuits.spec` seção 5
 à risca:
 - Loader de `.lssub.json`/`subcircuits/library.json` (histórico -- hoje é `.lssubcircuit`, ver nota
   de migração 2026-07-06 abaixo) (`loadSubcircuitLibraryFile` em
@@ -354,12 +357,12 @@ duplicação que contrariava o "princípio do arquivo único" já valendo pra `d
 desde 2026-07-02 — corrigido nesta data. `esp32_devkitc_v4.lssub.json`+`esp32_devkitc_v4.lsconfig`
 (e o par `esp32_wroom32.*`) foram fundidos num único `esp32_devkitc_v4.lssubcircuit` (campo
 `iconPath` movido pro manifesto raiz, `.lsconfig` apagado). `mcu-adapters/espressif-esp32/mcu.json`
-também virou `.lsdevice`, fundindo seu `device.lsconfig`. Ver `.spec/lasecsimul-subcircuits.spec`
-seção 7.1 e `.spec/lasecsimul-native-devices.spec` seção 14/21.2 (já atualizadas).
+também virou `.lsdevice`, fundindo seu `device.lsconfig`. Ver `.spec/archive/legacy-v2/lasecsimul-subcircuits.spec`
+seção 7.1 e `.spec/archive/legacy-v2/lasecsimul-native-devices.spec` seção 14/21.2 (já atualizadas).
 
 **Atualização 2026-07-03**: comando "Criar Subcircuito a partir da Seleção" **implementado** —
 `lasecsimul.newSubcircuit`, algoritmo completo em `createSubcircuitFromSelectionHandler`
-(`extension.ts`), detalhado em `.spec/lasecsimul-subcircuits.spec` seção 11. Editor de símbolo
+(`extension.ts`), detalhado em `.spec/archive/legacy-v2/lasecsimul-subcircuits.spec` seção 11. Editor de símbolo
 (Épico G) e persistência `.lssubcircuit` a partir do editor também já implementados (ver Épico G
 abaixo) — nenhuma das três pendências listadas aqui em 2026-06-28 continua em aberto.
 
@@ -377,7 +380,7 @@ suficiente para começar a implementação por fases.
 - Implementar expansão recursiva de subcircuito dentro da `SimulationSession`.
 - Detectar ciclo de dependência entre subcircuitos.
 - ~~Criar comando "Criar Subcircuito a partir da Seleção".~~ **Feito** (2026-07-03, ver
-  `.spec/lasecsimul-subcircuits.spec` seção 11).
+  `.spec/archive/legacy-v2/lasecsimul-subcircuits.spec` seção 11).
 - ~~Criar persistência `.lssubcircuit`.~~ **Feito**.
 - ~~Integrar subcircuitos à paleta com `folderPath`, i18n e `deviceLibraries[]`.~~ **Feito**
   (2026-06-28) — ver nota acima.
@@ -441,7 +444,7 @@ dedicado). Todos `pinCount: 0`, nunca tocam o Core. Conversão pura package↔co
 (`extension.ts::saveSymbolCommand`); fundo `svg`/`image` já existente é preservado verbatim (sem UI de
 upload nesta rodada). Dois pontos de entrada: botão "✎" por item registrado na paleta, comando
 `lasecsimul.palette.editSymbol` (seletor de arquivo, pra manifesto ainda não registrado). Detalhe
-completo em `docs/11-qemu-esp32.md` e `.spec/lasecsimul-native-devices.spec` seção 21.3.
+completo em `docs/11-qemu-esp32.md` e `.spec/archive/legacy-v2/lasecsimul-native-devices.spec` seção 21.3.
 
 **Limite real desta entrega — verificação manual no Extension Development Host ainda não foi feita.**
 Não há `jsdom`/navegador headless neste repositório (decisão consciente da Onda 1, Épico E/E4), então o
@@ -464,7 +467,7 @@ lasecsimul-native-devices.spec` seção 21.4) e revelou que faltava mais coisa f
 - **"Logic Symbol"** (seção 21.4 do spec de plugins nativos): aparência alternativa booleana
   (`logicSymbolPackage`), trocável por botão na barra da sessão de autoria — pra `mcu-adapter` e
   `subcircuit-file`, nunca `abi-device`.
-- **Circuito interno real editável** (`.spec/lasecsimul-subcircuits.spec` seção 4): a sessão de
+- **Circuito interno real editável** (`.spec/archive/legacy-v2/lasecsimul-subcircuits.spec` seção 4): a sessão de
   autoria de um `subcircuit-file` agora TAMBÉM semeia `components[]`/`wires[]` reais (não só o
   `package`) — igual ao "Open Subcircuit" do SimulIDE mostrar os dois juntos na mesma cena.
   `.lssubcircuit` ganhou campos aditivos (`visual`/`boardVisual`/`points`), Core ignora o que não
@@ -500,7 +503,7 @@ rodada, o contrato existia melhor do que a ferramenta visual para produzi-lo.
   Host (ver ressalva acima);
 - ~~comando "Criar Subcircuito a partir da Seleção" (detectar fios cruzando a borda de uma seleção,
   inserir `connectors.tunnel` automaticamente)~~ **feito** (2026-07-03, ver Épico F acima e
-  `.spec/lasecsimul-subcircuits.spec` seção 11).
+  `.spec/archive/legacy-v2/lasecsimul-subcircuits.spec` seção 11).
 
 ### Entregáveis
 
@@ -591,9 +594,9 @@ A arquitetura para não lineares já foi desenhada; falta transformá-la em comp
   precisar editar o teste.
 
 **Atualização 2026-07-08** (auditoria "pente fino" achou este parágrafo desatualizado, mesma classe
-de drift já documentada em `docs/mvp-limitacoes.md`/`.spec/lasecsimul.spec` pro diode/subcircuitos):
+de drift já documentada em `docs/mvp-limitacoes.md`/`.spec/archive/legacy-v2/lasecsimul.spec` pro diode/subcircuitos):
 copiar/colar, undo/redo E flip horizontal/vertical foram TODOS implementados numa rodada posterior a
-esta -- ver `.spec/lasecsimul.spec` seções 13.4 e 17 pro design final (undo/redo por snapshot
+esta -- ver `.spec/archive/legacy-v2/lasecsimul.spec` seções 13.4 e 17 pro design final (undo/redo por snapshot
 completo via `persistState()`/`syncState`, não o "diff Webview→Core" que o parágrafo original abaixo
 concluía ser necessário -- a solução real contornou esse obstáculo em vez de resolvê-lo). O raciocínio
 abaixo é preservado como registro histórico de POR QUE parecia difícil na época, não como estado atual.
@@ -622,10 +625,10 @@ Esses itens não bloqueiam a arquitetura, mas melhoram bastante produtividade do
 ### Pendências
 
 - arrastar rótulo independentemente do símbolo;
-- ~~copiar/colar~~ -- feito, ver `.spec/lasecsimul.spec` seção 13.4;
-- ~~flip horizontal~~ -- feito, ver `.spec/lasecsimul.spec` seção 13.4;
-- ~~flip vertical~~ -- feito, ver `.spec/lasecsimul.spec` seção 13.4;
-- ~~undo/redo~~ -- feito, ver `.spec/lasecsimul.spec` seção 17;
+- ~~copiar/colar~~ -- feito, ver `.spec/archive/legacy-v2/lasecsimul.spec` seção 13.4;
+- ~~flip horizontal~~ -- feito, ver `.spec/archive/legacy-v2/lasecsimul.spec` seção 13.4;
+- ~~flip vertical~~ -- feito, ver `.spec/archive/legacy-v2/lasecsimul.spec` seção 13.4;
+- ~~undo/redo~~ -- feito, ver `.spec/archive/legacy-v2/lasecsimul.spec` seção 17;
 - ~~batch test headless de circuitos salvos~~ -- feito, ver início desta seção;
 - eventual shell alternativo além do VSCode, quando o custo fizer sentido.
 

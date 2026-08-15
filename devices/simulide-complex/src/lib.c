@@ -68,7 +68,7 @@ typedef struct {
     double p[12];
     int latch;
     double last_a, last_b, last_c;
-    /* ABI v2 (.spec/lasecsimul-native-devices.spec) -- setado por validate_pin_order() quando o
+    /* ABI v2 (.spec/archive/legacy-v2/lasecsimul-native-devices.spec) -- setado por validate_pin_order() quando o
      * device.json declara pins[] fora da ordem que este arquivo espera. Antes só logava e
      * continuava decodificando ERRADO silenciosamente; agora handle_pin_change() vira no-op
      * (device fica inerte, visivelmente quebrado -- ex: display em branco) em vez de produzir
@@ -115,7 +115,7 @@ static int is_type(SimDevice* s, const char* suffix) {
  * exatamente o bug real de aip31068_i2c.json, que tinha sda/scl trocados). Chamado 1x no fim de
  * init(); loga (s->api->log nível 2 = erro) E marca `s->misconfigured` -- a vtable C
  * (`device_abi.h`) não tem como `init()` recusar a instância (retorna void, ver ABI v2 em
- * .spec/lasecsimul-native-devices.spec), então em vez de travar o Core, handle_pin_change() vira
+ * .spec/archive/legacy-v2/lasecsimul-native-devices.spec), então em vez de travar o Core, handle_pin_change() vira
  * no-op pra essa instância: o device fica inerte/visivelmente quebrado (ex: display em branco) em
  * vez de decodificar errado sem nenhum aviso visual -- bem melhor que o log-e-continua de antes,
  * que produzia leitura ERRADA silenciosa. */
@@ -984,7 +984,7 @@ static uint32_t set_property(LsdnDevice* dev, const char* name, const LsdnProper
     return 1;
 }
 
-/* ABI v2 (.spec/lasecsimul-native-devices.spec): header[0] passa a ser um uint32 de versão de
+/* ABI v2 (.spec/archive/legacy-v2/lasecsimul-native-devices.spec): header[0] passa a ser um uint32 de versão de
  * layout, antes dos campos que já existiam (deslocados +1 posição) -- set_state rejeita
  * (loga e ignora, mantém estado atual) um blob de versão diferente da que este binário entende,
  * em vez de interpretar offsets de um layout potencialmente diferente às cegas. */

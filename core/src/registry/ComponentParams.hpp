@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <variant>
 #include <vector>
+#include "fpga/FpgaPortMapper.hpp"
 #include "lasecsimul/Types.hpp"
 
 namespace lasecsimul::registry {
@@ -21,6 +22,17 @@ struct ComponentParams {
     std::vector<std::string> signalAliases;
     std::vector<lasecsimul::Pin> pinList;
     std::unordered_map<std::string, PropertyValue> properties;
+
+    /** Configuração VHDL de `digital.generic_fpga` -- fora do mapa `properties` (que só aceita
+     * `PropertyValue` escalar, ver `lasecsimul::PropertyValue`) de propósito, mesmo precedente já
+     * usado por `pinList`/`signalAliases` acima. Preenchido a partir da chave irmã `"fpga"` do
+     * payload de `addComponent` (mesma ideia do `.lsproj`, onde `"fpga"` também é uma chave irmã
+     * de `"properties"`/`"visual"` no componente salvo -- ver plano FPGA, seção "Property/config
+     * storage"). Vazio para todo componente que não seja FPGA. */
+    std::vector<std::string> fpgaSources;
+    std::string fpgaTop;
+    std::string fpgaStandard = "08";
+    std::vector<fpga::PortSpec> fpgaPorts;
 
     template <size_t N>
     std::array<lasecsimul::Pin, N> pins() const {

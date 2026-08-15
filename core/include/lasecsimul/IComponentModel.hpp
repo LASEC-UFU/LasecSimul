@@ -32,7 +32,7 @@ inline constexpr double kLeakageGuardConductance = 1e-9;
  * crítico do solver), então a escolha é por consistência, não desempenho.
  *
  * Sem isto, o painel de propriedades não tinha como editar um componente já existente de forma
- * genérica — `ComponentParams` só cobria propriedade NA CRIAÇÃO. Ver .spec/lasecsimul.spec, seção 6.1.
+ * genérica — `ComponentParams` só cobria propriedade NA CRIAÇÃO. Ver .spec/archive/legacy-v2/lasecsimul.spec, seção 6.1.
  */
 struct PropertyDescriptor {
     std::string name;
@@ -53,7 +53,7 @@ public:
     virtual void addCurrent(const Pin& a, const Pin& b, double amperes) = 0;
 
     /** Fonte de tensão ideal a-b. Usa a variável extra (corrente do ramo) que este componente
-     * reservou via `extraVariableCount()` — ver .spec/lasecsimul.spec, seção 7.3. */
+     * reservou via `extraVariableCount()` — ver .spec/archive/legacy-v2/lasecsimul.spec, seção 7.3. */
     virtual void addVoltageSource(const Pin& a, const Pin& b, double volts) = 0;
 
     /** Pino fixado à referência (terra) com admitância alta — convenção deliberadamente simples
@@ -65,7 +65,7 @@ public:
      * Combinada com `addConductanceToGround` de admitância grande, fixa `pin` em
      * `amperes / siemens` Volts sem precisar de um segundo pino (ex: Rail/FixedVolt/Clock, que só
      * têm 1 terminal no SimulIDE — o "retorno" é implícito, resolvido pela referência de terra que
-     * já existir em algum outro lugar do circuito). Ver .spec/lasecsimul.spec, seção 7.3. */
+     * já existir em algum outro lugar do circuito). Ver .spec/archive/legacy-v2/lasecsimul.spec, seção 7.3. */
     virtual void addCurrentToGround(const Pin& pin, double amperes) = 0;
 
     virtual double getNodeVoltage(const Pin& pin) const = 0;
@@ -73,14 +73,14 @@ public:
     /** Valor (na ÚLTIMA `solve()`) da variável extra de corrente de ramo que este componente
      * reservou via `extraVariableCount() > 0` (ex: fonte de tensão ideal) — leitura grátis, já é
      * uma incógnita resolvida, não um cálculo novo. Lança se o componente não reservou nenhuma
-     * variável extra. Ver plano de leitura de corrente em `.spec/lasecsimul.spec`, seção 7.3. */
+     * variável extra. Ver plano de leitura de corrente em `.spec/archive/legacy-v2/lasecsimul.spec`, seção 7.3. */
     virtual double getBranchCurrent() const = 0;
 };
 
 /**
  * Implementada por todo componente eletrico: built-in (compilado no Core) ou NativeDeviceProxy
  * (plugin DLL/SO). O MnaSolver nunca diferencia os dois caminhos — mesmo custo de chamada.
- * Ver .spec/lasecsimul.spec, secao 6.
+ * Ver .spec/archive/legacy-v2/lasecsimul.spec, secao 6.
  */
 class IComponentModel {
 public:
@@ -116,7 +116,7 @@ public:
 
     /** Quantas incógnitas extras (correntes de ramo) este componente precisa no CircuitGroup —
      * 0 para tudo que não seja fonte de tensão ideal/dependente. Resolvido uma vez por rebuild de
-     * topologia, nunca durante stamp() — ver .spec/lasecsimul.spec, seção 7.3. */
+     * topologia, nunca durante stamp() — ver .spec/archive/legacy-v2/lasecsimul.spec, seção 7.3. */
     virtual uint32_t extraVariableCount() const { return 0; }
 
     /** Só chamado quando o componente está "dirty" (topologia/propriedade mudou) — nunca a cada passo.
@@ -129,7 +129,7 @@ public:
     /** true para diodo/transistor/qualquer elemento cuja stamp() dependa do ponto de operação
      * (não pode ser resolvido num stamp+solve só). Default false — só quem precisa declara.
      * Contrato fixado agora; nenhum componente não-linear real existe ainda (sem diodo/transistor
-     * implementado) — ver .spec/lasecsimul.spec, seção 7.4. */
+     * implementado) — ver .spec/archive/legacy-v2/lasecsimul.spec, seção 7.4. */
     virtual bool isNonlinear() const { return false; }
 
     /** Só chamado (pelo settle-loop) para componentes com isNonlinear()==true, depois de cada
@@ -162,11 +162,11 @@ public:
     /** Propriedades editáveis em runtime (painel de propriedades), separado de getState/setState
      * (serialização opaca de TODO o estado interno, não editável campo a campo). Default vazio —
      * só quem tem algo editável depois da criação declara. Não-const de propósito: o `set` de cada
-     * descritor precisa poder mutar `this`. Ver .spec/lasecsimul.spec, seção 6.1. */
+     * descritor precisa poder mutar `this`. Ver .spec/archive/legacy-v2/lasecsimul.spec, seção 6.1. */
     virtual std::vector<PropertyDescriptor> propertyDescriptors() { return {}; }
 
     /** Default `Ok` -- só `NativeDeviceProxy` (plugins, via watchdog/CrashGuard) reporta outra
-     * coisa. Ver .spec/lasecsimul-native-devices.spec, seção 13. */
+     * coisa. Ver .spec/archive/legacy-v2/lasecsimul-native-devices.spec, seção 13. */
     virtual PluginHealthStatus health() const { return PluginHealthStatus::Ok; }
 
     /** Chamado uma vez por `SimulationSession::addComponent()`, logo depois do `componentIndex`

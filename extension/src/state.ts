@@ -11,7 +11,7 @@ import { ProjectSerializer } from "./project/ProjectSerializer";
 import { SubcircuitDocument } from "./catalog/subcircuitDocument";
 
 /** Estado mutável de nível de módulo de `extension.ts`, extraído (EX-9,
- * .spec/lasecsimul-native-devices.spec) pra um objeto único importável por outros módulos de
+ * .spec/archive/legacy-v2/lasecsimul-native-devices.spec) pra um objeto único importável por outros módulos de
  * domínio (`catalog/registeredSources.ts` não precisa disto -- só lê `extensionPath` por parâmetro
  * -- mas `core/coreLifecycle.ts` e futuros módulos de domínio precisam ESCREVER estes campos).
  * `export let X` do ES module só permite ao módulo QUE DECLAROU reatribuir `X`; um objeto exportado
@@ -70,6 +70,7 @@ export const state = {
     initialWires: WebviewProjectState["topology"]["conductors"];
     initialTopologyNodes: WebviewProjectState["topology"]["nodes"];
     initialSymbolElements: WebviewProjectState["symbolElements"];
+    initialSymbolMode: NonNullable<WebviewProjectState["symbolMode"]>;
     initialIconElements: WebviewProjectState["iconElements"];
     initialExposedComponents: WebviewProjectState["exposedComponents"];
     initialExportedPropertyComponentIds: WebviewProjectState["exportedPropertyComponentIds"];

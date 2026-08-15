@@ -11,7 +11,7 @@
 namespace lasecsimul::plugins {
 
 /** Resultado de uma chamada vigiada por `PluginWatchdog::call`. Ver
- * .spec/lasecsimul-native-devices.spec, seção 13: convenção cooperativa (`yield_check`, fora do
+ * .spec/archive/legacy-v2/lasecsimul-native-devices.spec, seção 13: convenção cooperativa (`yield_check`, fora do
  * escopo desta classe -- é o SDK do plugin que chamaria isso, não o host) + watchdog por thread
  * dedicada (esta classe) + abandono da thread após N timeouts consecutivos (decisão de quem chama,
  * ver `NativeDeviceProxy::postStep`). */

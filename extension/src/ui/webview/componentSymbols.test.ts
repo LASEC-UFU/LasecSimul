@@ -1249,7 +1249,7 @@ import { PackageDescriptor, WebviewComponentModel } from "./model";
   // Pino dinâmico (2026-07-07) -- dynamicLayout de outputs.led_matrix/led_bar/active.analog_mux,
   // valores derivados do SimulIDE real (ledmatrix.cpp/ledbar.cpp/mux_analog.cpp), NÃO verificados
   // visualmente numa sessão interativa (sem GUI/harness de DOM neste projeto) -- ver
-  // .spec/lasecsimul-native-devices.spec seção 7.1 e docs/22. Estes testes cobrem a FÓRMULA (caixa
+  // .spec/archive/legacy-v2/lasecsimul-native-devices.spec seção 7.1 e docs/22. Estes testes cobrem a FÓRMULA (caixa
   // cresce/encolhe certo, pinos de grupos consecutivos ficam no grid step certo, countFn/transform
   // "log2Ceil" resolve a contagem/posição certas) -- não substituem a conferência visual pendente.
   await test("outputs.led_matrix vem de package com dynamicLayout rows+columns (m_pin[row]/m_pin[rows+col], ledmatrix.cpp)", () => {

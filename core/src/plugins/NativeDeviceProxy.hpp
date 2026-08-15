@@ -49,7 +49,7 @@ struct NativeDeviceHostContext {
  * PluginInstance de um dispositivo: implementa IComponentModel delegando para a vtable C de um
  * PluginModule compartilhado. Guarda shared_ptr<PluginModule> — isso é o que mantém o binário
  * carregado vivo enquanto esta instância existir, e é todo o mecanismo de refcount necessário
- * (sem contagem manual). Ver .spec/lasecsimul-native-devices.spec, seção 2.
+ * (sem contagem manual). Ver .spec/archive/legacy-v2/lasecsimul-native-devices.spec, seção 2.
  */
 class NativeDeviceProxy final : public IComponentModel {
 public:
@@ -92,7 +92,7 @@ private:
     static LsdnMatrixView toAbiView(void* context); // implementado em NativeDeviceProxy.cpp
 
     /** Quantos timeouts seguidos de watchdog antes de desistir e marcar `Faulted` permanente --
-     * ver .spec/lasecsimul-native-devices.spec, seção 13, item 3 ("abandono da thread após N
+     * ver .spec/archive/legacy-v2/lasecsimul-native-devices.spec, seção 13, item 3 ("abandono da thread após N
      * timeouts consecutivos"). Pequeno de propósito: cada timeout já deixa uma thread presa pra
      * sempre (nunca terminada à força), então não vale a pena tolerar muitos antes de desistir. */
     static constexpr uint32_t kMaxConsecutiveTimeouts = 3;

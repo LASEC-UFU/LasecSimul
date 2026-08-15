@@ -87,7 +87,7 @@ public:
         };
     }
 
-    /** ABI v2 (.spec/lasecsimul-native-devices.spec) -- `getState()` é 1 double de frequência. */
+    /** ABI v2 (.spec/archive/legacy-v2/lasecsimul-native-devices.spec) -- `getState()` é 1 double de frequência. */
     static ReadoutFormat readoutFormat() {
         ReadoutFormat format;
         format.kind = ReadoutKind::Scalar;

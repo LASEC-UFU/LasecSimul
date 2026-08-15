@@ -37,7 +37,7 @@ Decision Keywords:
 > mesma velocidade de um componente compilado no Core — ver `lasecsimul.spec` v0.2). Mantido neste arquivo
 > apenas como registro histórico da decisão; não usar como referência de implementação.
 
-Status: rascunho inicial — SUPERSEDED | Depende de: [`.spec/lasecsimul.spec`](./lasecsimul.spec) | Análogo conceitual: Wokwi Custom Chips
+Status: rascunho inicial — SUPERSEDED | Depende de: [`.spec/lasecsimul.spec`](./legacy-v2/lasecsimul.spec) | Análogo conceitual: Wokwi Custom Chips
 
 ---
 

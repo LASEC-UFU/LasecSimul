@@ -258,7 +258,7 @@ public:
     }
 
     /** Decisão de qual schema usar por typeId mora aqui (dentro da própria classe), não no
-     * registrador central -- ver .spec/lasecsimul-native-devices.spec, critério de decoupling. */
+     * registrador central -- ver .spec/archive/legacy-v2/lasecsimul-native-devices.spec, critério de decoupling. */
     static std::vector<PropertySchema> propertySchemaFor(const std::string& typeId) {
         return typeId == "switches.push" ? pushPropertySchema() : propertySchema();
     }

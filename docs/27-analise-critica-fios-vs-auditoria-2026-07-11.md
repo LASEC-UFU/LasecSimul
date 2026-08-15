@@ -412,7 +412,7 @@ forte por rastreamento direto de código (equivalente, não superior, a uma prov
 | Nós duplicados | Não encontrado nenhum caminho que produza isso nos testes/código revisado | `assertTopologyInvariants` pegaria se acontecesse |
 | Segmentos de comprimento zero | `assertTopologyInvariants` rejeita explicitamente (`condutor de comprimento topológico zero`) — mas só roda em save/load, não durante edição | `topologyDocument.ts:40` |
 | Objetos temporários órfãos | Não encontrados no caminho principal (`pendingConnection`/`pendingWireRoute` nunca são serializados) | — |
-| "Bola laranja" (bug histórico) | Estruturalmente eliminada como classe de bug — junção não é mais componente do Core, `topologyNodes` é puramente visual | ver `.spec/lasecsimul.spec` seção 24.1 |
+| "Bola laranja" (bug histórico) | Estruturalmente eliminada como classe de bug — junção não é mais componente do Core, `topologyNodes` é puramente visual | ver `.spec/archive/legacy-v2/lasecsimul.spec` seção 24.1 |
 | Acúmulo de estado em operações repetidas | **Não testado nesta rodada** — recomendo teste de estresse manual (repetir criar/apagar centenas de vezes e monitorar memória/handles do Core) | — |
 | Circuitos com centenas/milhares de segmentos | **Testado o índice espacial isoladamente** (ver desempenho) — o caminho completo de edição (com `queueCoreRebuild`) NÃO foi medido em escala nesta rodada, mas o comportamO(componentes+fios) já é suficiente pra prever degradação severa | ver "Análise de desempenho" |
 

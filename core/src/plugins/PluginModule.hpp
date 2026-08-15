@@ -13,7 +13,7 @@ enum class PluginKind { Device, McuAdapter };
  * Código carregado de UM binário (DLL/SO) — vida útil independente de qualquer instância que o
  * use. Vive em std::shared_ptr; FreeLibrary/dlclose só acontece no destrutor, quando a última
  * referência (a última PluginInstance que aponta para este módulo) é liberada. Nunca descarregar
- * fora desse caminho — ver .spec/lasecsimul-native-devices.spec, seção 1 e 3 (versioned swap).
+ * fora desse caminho — ver .spec/archive/legacy-v2/lasecsimul-native-devices.spec, seção 1 e 3 (versioned swap).
  *
  * Guarda a vtable como void* + um PluginKind porque device_abi.h e mcu_abi.h têm formas de vtable
  * diferentes; o construtor escolhido (por overload) já fixa o kind corretamente.

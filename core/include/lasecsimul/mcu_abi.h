@@ -19,7 +19,7 @@
  * `McuComponent` (que implementa IComponentModel pra entrar no circuito com pinos reais via
  * pinMap()) -- ele so repassa registrador pro LsdnQemuModuleHandle certo, nunca interpreta nada.
  *
- * Ver .spec/lasecsimul.spec, secao 8, e .spec/lasecsimul-native-devices.spec, secao 8.1 e 20.
+ * Ver .spec/archive/legacy-v2/lasecsimul.spec, secao 8, e .spec/archive/legacy-v2/lasecsimul-native-devices.spec, secao 8.1 e 20.
  */
 #ifndef LASECSIMUL_MCU_ABI_H
 #define LASECSIMUL_MCU_ABI_H
@@ -75,7 +75,7 @@ extern "C" {
  * desatualizada -- atualizar junto).
  * Minor 4 (2026-06-29): entrou LSDN_MODULE_RESET -- pino de controle de hardware (EN do ESP32),
  * tratado especialmente por McuComponent::stamp() (nunca tem LsdnQemuModule proprio, nao ha
- * registrador por tras). Ver .spec/lasecsimul-native-devices.spec secao 8.1. */
+ * registrador por tras). Ver .spec/archive/legacy-v2/lasecsimul-native-devices.spec secao 8.1. */
 
 typedef struct LsdnMcuAdapter LsdnMcuAdapter; /* opaco */
 

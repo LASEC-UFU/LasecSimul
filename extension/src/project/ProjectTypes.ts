@@ -38,7 +38,7 @@ export interface ProjectTopology {
 }
 
 /** Referência do "bloco genérico de subcircuito" a um `.lssubcircuit` escolhido por caminho (fora
- * de `registeredSources[]` -- ver `.spec/lasecsimul-subcircuits.spec` seção 12). `path` é relativo
+ * de `registeredSources[]` -- ver `.spec/archive/legacy-v2/lasecsimul-subcircuits.spec` seção 12). `path` é relativo
  * ao diretório do próprio `.lsproj` quando possível, senão absoluto. `lastKnownTypeId`/
  * `lastKnownPinIds` são a ÚNICA exceção deliberada à regra "nunca persistir pinos" (comentário em
  * `extension.ts::projectToWebviewState`): sem um `RegisteredSource` pra consultar, não há de onde

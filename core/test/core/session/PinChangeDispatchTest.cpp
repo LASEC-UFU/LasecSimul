@@ -2,7 +2,7 @@
 // Core dispara ComponentEvent{kPinChangeEventTag,...} pra todo IComponentModel com um pino naquele
 // nó -- ESTA é a infraestrutura que faltava pra que devices (plugins ou built-ins) decodifiquem
 // protocolos bit a bit (I2C/SPI/1-wire) a partir de transições reais de pino, em vez do antigo
-// I2cBusModule/SpiBusModule (removidos -- ver .spec/lasecsimul-native-devices.spec, seção 8: nunca
+// I2cBusModule/SpiBusModule (removidos -- ver .spec/archive/legacy-v2/lasecsimul-native-devices.spec, seção 8: nunca
 // chegaram a ser ligados num SimulationSession real).
 #include <cstdio>
 #include <vector>

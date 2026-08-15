@@ -22,6 +22,11 @@ FpgaComponent::FpgaComponent(simulation::Scheduler& scheduler, std::unique_ptr<R
                              FpgaComponentConfig config)
     : m_scheduler(scheduler), m_controller(std::move(backend)), m_pinBits(mapPorts(config.ports)),
       m_vcc(config.vcc), m_advanceTimeout(config.advanceTimeout) {
+    m_compileRequest.sources = config.sources;
+    m_compileRequest.topEntity = config.topEntity;
+    m_compileRequest.standard = config.standard;
+    m_compileRequest.inputBitCount = countInputBits(config.ports);
+    m_compileRequest.outputBitCount = countOutputBits(config.ports);
     m_pins.reserve(m_pinBits.size());
     for (const FpgaPinBit& bit : m_pinBits) m_pins.push_back(Pin{bit.pinId});
     m_inputLocalIndices = collectInputLocalIndices(m_pinBits);
@@ -49,8 +54,8 @@ void FpgaComponent::stamp(MnaMatrixView& matrix) {
     }
 }
 
-void FpgaComponent::start(const RtlCompileRequest& request) {
-    const RtlCompileResult compileResult = m_controller.compile(request);
+void FpgaComponent::start() {
+    const RtlCompileResult compileResult = m_controller.compile(m_compileRequest);
     if (!compileResult.ok) {
         m_health = PluginHealthStatus::Faulted;
         throw std::runtime_error("FpgaComponent: falha ao compilar VHDL -- " + compileResult.log);
@@ -63,9 +68,15 @@ void FpgaComponent::start(const RtlCompileRequest& request) {
 
 void FpgaComponent::stop() { m_controller.stop(); }
 
-void FpgaComponent::restart(const RtlCompileRequest& request) {
+void FpgaComponent::restart() {
     stop();
-    start(request);
+    start();
+}
+
+void FpgaComponent::setSources(std::vector<std::string> sources, std::string topEntity, std::string standard) {
+    m_compileRequest.sources = std::move(sources);
+    m_compileRequest.topEntity = std::move(topEntity);
+    m_compileRequest.standard = std::move(standard);
 }
 
 void FpgaComponent::applyOutputChanges(std::span<const GhdlChangeEntry> changes) {

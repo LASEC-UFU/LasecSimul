@@ -38,6 +38,8 @@
 #include "../components/passive/Inductor.hpp"
 #include "../components/passive/Resistor.hpp"
 #include "../components/sources/DcVoltageSource.hpp"
+#include "../fpga/FpgaComponent.hpp"
+#include "../fpga/GhdlBackend.hpp"
 #include <nlohmann/json.hpp>
 #include <array>
 #include <cstdio>
@@ -135,7 +137,7 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
             // Mesmos ids canônicos que a factory acima usa como fallback quando o chamador não
             // manda pino explícito (`pos[N].id.empty() ? "..." : pos[N].id`) -- ABI v2 expõe isso
             // pra `getPropertySchemas` (`pinIdsByTypeId`) em vez da Extension manter uma 2ª cópia
-            // hardcoded do mesmo dado (ver .spec/lasecsimul-native-devices.spec).
+            // hardcoded do mesmo dado (ver .spec/archive/legacy-v2/lasecsimul-native-devices.spec).
             for (const std::string& pinId : canonicalPinIds) meta.pins.push_back(Pin{pinId, 0.0, 0.0});
             metadata.registerMetadata(std::move(meta));
         };
@@ -463,7 +465,7 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
     // vence quando carregado. Mantido como fallback (nunca exercitado se o plugin carrega) --
     // não vale a pena portar Shockley/ruptura pra estes (built-in E plugin usam o mesmo modelo
     // simplificado on/off hoje; consertar de verdade exigiria mexer no `lib.c` do plugin, que é
-    // quem manda). Ver .spec/lasecsimul.spec seção 7.4 e memória do projeto.
+    // quem manda). Ver .spec/archive/legacy-v2/lasecsimul.spec seção 7.4 e memória do projeto.
     registerDiodeLike("active.diac", "Diac", 30.0);
     registerDiodeLike("active.scr", "SCR", 0.8);
     registerDiodeLike("active.triac", "Triac", 0.8);
@@ -974,14 +976,14 @@ ParsedPropertyError parsePropertyError(const std::string& rawError) {
 
 /** Parseia `subcircuits/library.json` (lista de `{typeId, manifest}`, mesmo padrão de
  * `devices/library.json`) e cada `.lssubcircuit` referenciado, registrando no `SubcircuitRegistry`
- * da sessão -- ver .spec/lasecsimul-subcircuits.spec, seções 1 e 7. Roda no mesmo verbo IPC
+ * da sessão -- ver .spec/archive/legacy-v2/lasecsimul-subcircuits.spec, seções 1 e 7. Roda no mesmo verbo IPC
  * `loadDeviceLibrary` que já existe (seção 6): um `library.json` com `"devices"` cai no caminho de
  * plugin nativo (`GlobalPluginCache::loadLibrary`), um com `"subcircuits"` cai aqui -- os dois são checados
  * independentemente porque um `library.json` futuro poderia, em tese, ter as duas chaves. */
 /** Lê UM `.lssubcircuit` e registra no `SubcircuitRegistry` -- corpo por-entrada que
  * `loadSubcircuitLibraryFile` sempre executou, fatorado aqui pra ser reutilizado também pelo verbo
  * IPC avulso `registerAdhocSubcircuit` (bloco genérico de subcircuito por caminho, sem exigir
- * `library.json`/registro prévio na paleta -- ver .spec/lasecsimul-subcircuits.spec seção 12).
+ * `library.json`/registro prévio na paleta -- ver .spec/archive/legacy-v2/lasecsimul-subcircuits.spec seção 12).
  * `typeIdOverride` preserva o comportamento de sempre quando chamado a partir do loop de
  * `library.json` (typeId vem da ENTRADA do library.json, não do manifesto); quando vazio (caso do
  * verbo avulso), usa o `typeId` declarado dentro do próprio manifesto. Devolve o typeId
@@ -1025,7 +1027,7 @@ struct WireEndpointsJson {
  * (`componentA`/`pinIdA`/`componentB`/`pinIdB`) enquanto o arquivo já usava esta forma aninhada --
  * mesma entidade lógica, dois parsers. Unificado nesta forma (não a achatada) porque já era o
  * formato do arquivo, já é o modelo interno de fio da Webview (`WebviewWireModel.from`/`.to`) e já
- * é o que `.spec/lasecsimul-subcircuits.spec` documenta -- eliminar a segunda forma, não escolher
+ * é o que `.spec/archive/legacy-v2/lasecsimul-subcircuits.spec` documenta -- eliminar a segunda forma, não escolher
  * a "melhor" das duas do zero. */
 WireEndpointsJson parseWireEndpoints(const nlohmann::json& wireJson, const std::string& context) {
     if (!wireJson.contains("from") || !wireJson["from"].is_object() || !wireJson.contains("to") ||
@@ -1389,7 +1391,7 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
             // hardcoded na própria factory, ver registerBuiltinComponents) e só leem a posição,
             // mas plugins (NativeDeviceProxy) usam ESTES ids diretamente como ComponentMeta::pins
             // — sem isso, connectWire nunca acertaria o pino certo de um plugin (ver
-            // .spec/lasecsimul.spec sobre instrumentos/plugins ABI).
+            // .spec/archive/legacy-v2/lasecsimul.spec sobre instrumentos/plugins ABI).
             if (payload.contains("pins") && payload["pins"].is_array()) {
                 for (const auto& pinJson : payload["pins"]) {
                     Pin pin;
@@ -1399,10 +1401,33 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
                     params.pinList.push_back(std::move(pin));
                 }
             }
+            // Chave irmã "fpga" (não dentro de "properties" -- PropertyValue é só escalar, ver
+            // ComponentParams.hpp) -- mesma forma que o componente salvo no .lsproj usa (plano
+            // FPGA, seção "Property/config storage"), só pra `digital.generic_fpga`.
+            if (payload.contains("fpga") && payload["fpga"].is_object()) {
+                const nlohmann::json& fpgaJson = payload["fpga"];
+                if (fpgaJson.contains("sources") && fpgaJson["sources"].is_array()) {
+                    for (const auto& source : fpgaJson["sources"]) {
+                        if (source.is_string()) params.fpgaSources.push_back(source.get<std::string>());
+                    }
+                }
+                params.fpgaTop = fpgaJson.value("top", std::string{});
+                params.fpgaStandard = fpgaJson.value("standard", std::string{"08"});
+                if (fpgaJson.contains("ports") && fpgaJson["ports"].is_array()) {
+                    for (const auto& portJson : fpgaJson["ports"]) {
+                        fpga::PortSpec spec;
+                        spec.name = portJson.value("name", std::string{});
+                        spec.isInput = portJson.value("direction", std::string{"in"}) == "in";
+                        spec.width = portJson.value("width", 1u);
+                        spec.downto = portJson.value("downto", true);
+                        if (!spec.name.empty()) params.fpgaPorts.push_back(std::move(spec));
+                    }
+                }
+            }
             const std::string typeId = payload.value("typeId", std::string{});
             if (session.isSubcircuitType(typeId)) {
                 // Subcircuito: nem `properties`/`pins` do payload se aplicam (interno já vem fixo
-                // do .lssubcircuit) — ver .spec/lasecsimul-subcircuits.spec, seção 5.1/6.
+                // do .lssubcircuit) — ver .spec/archive/legacy-v2/lasecsimul-subcircuits.spec, seção 5.1/6.
                 const session::SubcircuitExpansionResult expansion = session.addSubcircuitInstance(typeId);
                 nlohmann::json exposedPinsJson = nlohmann::json::object();
                 for (const auto& [pinId, exposed] : expansion.exposedPins) {
@@ -1652,7 +1677,7 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
     }
     // Leitura genérica do estado opaco de QUALQUER instância (built-in ou plugin) — mecanismo único
     // de "ler de volta" um valor calculado, em vez de um verbo por tipo de componente (ver
-    // .spec/lasecsimul.spec sobre instrumentos como plugin ABI). Quem decide o que os bytes
+    // .spec/archive/legacy-v2/lasecsimul.spec sobre instrumentos como plugin ABI). Quem decide o que os bytes
     // significam é o chamador (ex: a Extension sabe que "instruments.voltmeter" devolve 8 bytes =
     // 1 double). Mesma ressalva de concorrência que já existe hoje para addComponent/setProperty/
     // connectWire/removeComponent enquanto a simulação está rodando: lido na thread de IPC enquanto
@@ -1680,7 +1705,7 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
         return resp;
     }
     // Saúde operacional (watchdog/CrashGuard) de uma instância -- visibilidade pra Extension
-    // decidir se avisa o usuário (.spec/lasecsimul-native-devices.spec seção 13). Só leitura.
+    // decidir se avisa o usuário (.spec/archive/legacy-v2/lasecsimul-native-devices.spec seção 13). Só leitura.
     if (msg.type == "getComponentStates") {
         try {
             const nlohmann::json payload = nlohmann::json::parse(msg.payloadJson);
@@ -1903,7 +1928,7 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
             // "language" é só um pedido de tradução, nunca obrigatório (ver lasecsimul.spec seção 6.3.3).
             const std::string requestedLanguage = payload.value("language", std::string{});
             nlohmann::json schemasByTypeId = nlohmann::json::object();
-            // ABI v2 (.spec/lasecsimul-native-devices.spec) -- mapas IRMÃOS, ADITIVOS, não um campo a
+            // ABI v2 (.spec/archive/legacy-v2/lasecsimul-native-devices.spec) -- mapas IRMÃOS, ADITIVOS, não um campo a
             // mais dentro de schemasByTypeId[typeId]: manter schemasByTypeId[typeId] como array puro
             // preserva 100% de compatibilidade de wire com todo consumidor existente da Extension
             // (lê só o array de propertySchema); readoutFormatByTypeId/interactionKindByTypeId só
@@ -1916,7 +1941,7 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
             // aparece pra typeId que declarou `pins` (built-ins com id canônico fixo, OU device/
             // subcircuit-file cujo `.lsdevice`/`.lssubcircuit` já populou `meta.pins` via
             // `interface[]`). Substitui a Extension manter uma tabela hardcoded 2ª cópia do mesmo
-            // dado (ver .spec/lasecsimul-native-devices.spec).
+            // dado (ver .spec/archive/legacy-v2/lasecsimul-native-devices.spec).
             nlohmann::json pinIdsByTypeId = nlohmann::json::object();
             for (const auto& [typeId, meta] : pluginCache.metadata().all()) {
                 const std::vector<PropertySchema> resolved = resolvePropertySchemaForLanguage(meta, requestedLanguage);
@@ -1966,7 +1991,7 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
     // Registra UM `.lssubcircuit` avulso direto, sem exigir um `library.json` -- usado pelo bloco
     // genérico de subcircuito por caminho (Extension escolhe um arquivo numa propriedade; aqui só
     // registra a definição, `addComponent` com esse typeId continua sendo o mesmo caminho de sempre,
-    // ver `.spec/lasecsimul-subcircuits.spec` seção 12). Payload: `{path: string}`.
+    // ver `.spec/archive/legacy-v2/lasecsimul-subcircuits.spec` seção 12). Payload: `{path: string}`.
     if (msg.type == "registerAdhocSubcircuit") {
         try {
             const nlohmann::json payload =
@@ -2043,7 +2068,7 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
         }
         return resp;
     }
-    // EX-6.1/EX-6.2 (.spec/lasecsimul-native-devices.spec) -- inverso de "connectWire", remove só
+    // EX-6.1/EX-6.2 (.spec/archive/legacy-v2/lasecsimul-native-devices.spec) -- inverso de "connectWire", remove só
     // este fio sem reconstruir o circuito inteiro (antes, a Extension não tinha nenhum jeito de
     // remover um fio sem removeComponent+addComponent+connectWire de TODOS os componentes).
     if (msg.type == "disconnectWire") {

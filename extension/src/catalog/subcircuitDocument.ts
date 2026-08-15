@@ -70,6 +70,9 @@ export interface SubcircuitDocument {
   /** Contrato do Core, re-derivado a cada save -- ver doc de `SubcircuitInterfaceEntry`. */
   interface: SubcircuitInterfaceEntry[];
 
+  /** Política de autoria do símbolo. Ausente preserva documentos existentes como personalizados. */
+  symbolMode?: "generic" | "custom";
+
   /** Símbolo (Modo Símbolo) -- corpo + pinos externos (`symbol.pins[].id` é o pinId, ver
    * `model.ts::PackagePin`). Ausente == subcircuito ainda sem símbolo autorado (nenhum pino externo
    * também, nesse caso). */
@@ -189,6 +192,7 @@ export function parseSubcircuitDocument(raw: unknown, manifestDir: string): Pars
     interface: Array.isArray(obj.interface)
       ? (obj.interface as unknown[]).map(parseInterfaceEntry).filter((entry): entry is SubcircuitInterfaceEntry => entry !== undefined)
       : [],
+    symbolMode: obj.symbolMode === "generic" ? "generic" : obj.symbolMode === "custom" ? "custom" : undefined,
     symbol: sanitizePackage(obj.symbol, manifestDir),
     icon: sanitizePackage(obj.icon, manifestDir),
     exposedComponents: Array.isArray(obj.exposedComponents)
@@ -221,6 +225,7 @@ export function serializeSubcircuitDocument(document: SubcircuitDocument): Recor
       conductors: document.topology.conductors.map(({ id, from, to, vertices }) => ({ id, from, to, points: vertices })),
     },
     interface: document.interface,
+    ...(document.symbolMode ? { symbolMode: document.symbolMode } : {}),
     ...(document.symbol ? { symbol: document.symbol } : {}),
     exposedComponents: document.exposedComponents,
     exportedPropertyComponentIds: document.exportedPropertyComponentIds,

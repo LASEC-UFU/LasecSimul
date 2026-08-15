@@ -31,7 +31,7 @@ bool looksLikeSha256Hex(const std::string& value) {
 // "PREENCHER_NO_BUILD_SHA256" que ainda sobra em alguns library.json não populados -- ver achado
 // de auditoria arquitetural 2026-07-09) pula a checagem em silêncio: checksum é opt-in, ausência
 // não é erro. Só quando um hash de 64 hex chars foi de fato declarado é que a comparação vira
-// obrigatória -- essa é a "defesa em profundidade" real (.spec/lasecsimul-native-devices.spec,
+// obrigatória -- essa é a "defesa em profundidade" real (.spec/archive/legacy-v2/lasecsimul-native-devices.spec,
 // seção 12 item 1), não confiando cegamente na decisão de confiança que a Extension já tomou.
 bool verifyChecksum(const std::filesystem::path& binaryPath, const std::string& expectedSha256Hex) {
     if (!looksLikeSha256Hex(expectedSha256Hex)) return true;

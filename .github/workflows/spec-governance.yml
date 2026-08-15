@@ -1,0 +1,35 @@
+name: Spec governance
+
+on:
+  pull_request:
+    paths:
+      - ".spec/**"
+      - ".skill/**"
+      - "**/*.md"
+      - ".github/workflows/spec-governance.yml"
+  push:
+    branches: [main]
+    paths:
+      - ".spec/**"
+      - ".skill/**"
+      - "**/*.md"
+      - ".github/workflows/spec-governance.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Validate specifications
+        run: npm run spec:check
+      - name: Verify generated status
+        shell: bash
+        run: |
+          npm run spec:status
+          git diff --exit-code -- .spec/STATUS.md

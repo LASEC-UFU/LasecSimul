@@ -8,7 +8,7 @@
 namespace lasecsimul::components {
 
 /** Fonte de tensão ideal DC. Precisa de 1 variável extra (corrente do ramo) no CircuitGroup — ver
- * .spec/lasecsimul.spec, seção 7.3. p1 é o terminal +, p2 o terminal -. */
+ * .spec/archive/legacy-v2/lasecsimul.spec, seção 7.3. p1 é o terminal +, p2 o terminal -. */
 class DcVoltageSource final : public IComponentModel {
 public:
     DcVoltageSource(std::array<Pin, 2> pins, double voltage) : m_pins(std::move(pins)), m_voltage(voltage) {}
@@ -20,7 +20,7 @@ public:
     void stamp(MnaMatrixView& matrix) override {
         matrix.addVoltageSource(m_pins[0], m_pins[1], m_voltage);
         // getBranchCurrent() lê a variável extra desta fonte na ÚLTIMA solve() -- leitura grátis,
-        // já é uma incógnita resolvida (ver plano de leitura de corrente, .spec/lasecsimul.spec
+        // já é uma incógnita resolvida (ver plano de leitura de corrente, .spec/archive/legacy-v2/lasecsimul.spec
         // seção 7.3). Só funciona depois do primeiro rebuild de topologia (extraVarBase alocado);
         // antes disso, ComponentMatrixView::getBranchCurrent() lançaria -- por isso só lemos aqui,
         // nunca antes do primeiro stamp() real.

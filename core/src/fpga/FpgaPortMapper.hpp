@@ -52,4 +52,19 @@ std::vector<FpgaPinBit> mapPorts(const std::vector<PortSpec>& ports);
 uint32_t countInputBits(const std::vector<PortSpec>& ports);
 uint32_t countOutputBits(const std::vector<PortSpec>& ports);
 
+/** Parseia a saída do modo "discover" de `lasecsimul_vpi.c` (linhas
+ * `LSDN_FPGA_PORT name=X direction=in|out width=N`, ver `runDiscoverMode()`) numa lista de
+ * `PortSpec` -- mecanismo de "LasecSimul: Analyze VHDL" (plano, seção 13), reusa 100% da
+ * infraestrutura de processo/VPI em vez de um parser VHDL próprio via regex.
+ *
+ * Limitação conhecida (documentada, não um bug escondido): o modo discover não relata `downto`
+ * vs `to` -- GHDL/VPI não expõe isso de forma simples nesta investigação (ver memória de
+ * projeto). Toda porta descoberta automaticamente assume `downto` (a convenção esmagadoramente
+ * mais comum em VHDL real); um projeto que declare um vetor `(0 to N-1)` terá a ordem de bits
+ * invertida se depender só da descoberta automática -- plano permite explicitamente a
+ * alternativa declarativa manual no `.lsproj` pra esse caso (seção 13). Linhas que não começam
+ * com o prefixo são ignoradas silenciosamente (pode haver ruído de log do próprio GHDL
+ * misturado no mesmo stdout). */
+std::vector<PortSpec> parseDiscoveredPorts(const std::string& vpiDiscoverOutput);
+
 } // namespace lasecsimul::fpga

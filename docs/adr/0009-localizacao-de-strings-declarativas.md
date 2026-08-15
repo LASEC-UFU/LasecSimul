@@ -1,7 +1,7 @@
 # ADR 0009 — Localização de strings declarativas (labels, grupos, taxonomia da paleta)
 
-Status: aceito e implementado | Depende de: `.spec/lasecsimul.spec` seção 6.1-6.3,
-`.spec/lasecsimul-native-devices.spec` seção 4.2.2.1
+Status: aceito e implementado | Depende de: `.spec/archive/legacy-v2/lasecsimul.spec` seção 6.1-6.3,
+`.spec/archive/legacy-v2/lasecsimul-native-devices.spec` seção 4.2.2.1
 
 ## Contexto
 

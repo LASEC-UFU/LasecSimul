@@ -42,6 +42,7 @@ function fullDocument(): SubcircuitDocument {
         { id: "GND", label: "GND", x: 0, y: 24, angle: 180, length: 8 },
       ],
     },
+    symbolMode: "generic",
     exposedComponents: [],
     exportedPropertyComponentIds: [],
     icon: { width: 24, height: 24, pins: [], shapes: [{ kind: "rect", x: 1, y: 1, w: 22, h: 22, fill: "#2b2f36" }] },
@@ -88,6 +89,7 @@ function fullDocument(): SubcircuitDocument {
       assert(reparsed.document.components.length === original.components.length, "components[] deveria sobreviver ao round-trip");
       assert(reparsed.document.interface.length === original.interface.length, "interface[] deveria sobreviver ao round-trip");
       assert(reparsed.document.symbol?.pins.length === 2, "symbol.pins[] deveria sobreviver ao round-trip");
+      assert(reparsed.document.symbolMode === "generic", "symbolMode deveria sobreviver ao round-trip");
       assert(reparsed.document.icon?.width === 24, "icon deveria sobreviver ao round-trip");
     }
   });
@@ -129,6 +131,19 @@ function fullDocument(): SubcircuitDocument {
       assert(result.document.symbol === undefined, "symbol ausente deveria ficar undefined, não um objeto vazio sintético");
       assert(result.document.icon === undefined, "icon ausente deveria ficar undefined");
     }
+  });
+
+  await test("symbolMode ausente preserva compatibilidade e valor inválido é ignorado", () => {
+    const absent = parseSubcircuitDocument(
+      { schemaVersion: SUBCIRCUIT_SCHEMA_VERSION, typeId: "subcircuits.old", components: [], topology: {}, interface: [], exposedComponents: [] },
+      "/tmp"
+    );
+    assert(absent.ok && absent.document.symbolMode === undefined, "documento antigo deveria continuar sem modo explícito");
+    const invalid = parseSubcircuitDocument(
+      { schemaVersion: SUBCIRCUIT_SCHEMA_VERSION, typeId: "subcircuits.bad", symbolMode: "automatic", components: [], topology: {}, interface: [], exposedComponents: [] },
+      "/tmp"
+    );
+    assert(invalid.ok && invalid.document.symbolMode === undefined, "modo desconhecido deveria ser ignorado com segurança");
   });
 
   // ── Bloqueio do package no esquemático principal (revisão global de labels, 2026-07-18):

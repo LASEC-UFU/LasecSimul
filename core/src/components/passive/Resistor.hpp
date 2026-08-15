@@ -19,7 +19,7 @@ public:
 
     void stamp(MnaMatrixView& matrix) override {
         // Lê a tensão da ÚLTIMA solve() ANTES de re-estampar -- mesma técnica de "current" cacheado
-        // usada por Diode/Ampmeter/etc, ver plano de leitura de corrente em .spec/lasecsimul.spec,
+        // usada por Diode/Ampmeter/etc, ver plano de leitura de corrente em .spec/archive/legacy-v2/lasecsimul.spec,
         // seção 7.3 (opção de baixo custo: sem incógnita nova, só Ohm na tensão já resolvida).
         const double conductance = 1.0 / m_resistance;
         m_lastCurrent = conductance * (matrix.getNodeVoltage(m_pins[0]) - matrix.getNodeVoltage(m_pins[1]));
@@ -42,7 +42,7 @@ public:
      * nunca por índice -- achado de auditoria arquitetural 2026-07-09, D1) quanto em
      * `CoreApplication::registerBuiltinComponents` (registra no `ComponentMetadataRegistry` por
      * typeId, antes de qualquer instância existir). Mesmo vocabulário que `.lsdevice` usa pra
-     * plugins — ver `.spec/lasecsimul.spec` sobre paridade built-in/plugin. */
+     * plugins — ver `.spec/archive/legacy-v2/lasecsimul.spec` sobre paridade built-in/plugin. */
     static std::vector<PropertySchema> propertySchema() {
         PropertySchema schema;
         schema.id = "resistance";

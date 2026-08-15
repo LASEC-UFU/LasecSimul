@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lasecsimul.dev/spec/frontmatter.schema.json",
+  "type": "object",
+  "required": ["id", "kind", "status", "dependsOn", "supersedes"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{3,4}$" },
+    "kind": {
+      "enum": ["architecture", "feature", "schema", "adr", "benchmark", "governance", "roadmap"]
+    },
+    "status": {
+      "enum": ["active", "planned", "deferred", "accepted", "superseded", "historical"]
+    },
+    "dependsOn": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[A-Z]+-[0-9]{3,4}$" },
+      "uniqueItems": true
+    },
+    "supersedes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    }
+  },
+  "additionalProperties": true
+}

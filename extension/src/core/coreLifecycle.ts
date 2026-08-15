@@ -44,7 +44,7 @@ export function electricalOperationsDiff(
 }
 
 /** Camada de comunicação com o Core (push de mutações, polling de leitura, ciclo de vida da
- * simulação) -- extraída de `extension.ts` (EX-9, .spec/lasecsimul-native-devices.spec). Todo
+ * simulação) -- extraída de `extension.ts` (EX-9, .spec/archive/legacy-v2/lasecsimul-native-devices.spec). Todo
  * campo mutável compartilhado (`state.coreClient`/`state.schematicState`/etc.) vem de `../state`;
  * `extension.ts` continua sendo quem REATRIBUI `state.coreClient`/`state.schematicPanel` (conectar/
  * desconectar Core, abrir/fechar painel), este módulo só LÊ esses campos (exceto
@@ -73,7 +73,7 @@ export function registerCoreIdsForComponent(
     mcuTargetCoreIdByComponentId.set(componentId, response.primaryMcuInstanceId);
     return;
   }
-  // Genérico via `mcuHost` (.spec/lasecsimul-native-devices.spec): qualquer typeId que SEJA um
+  // Genérico via `mcuHost` (.spec/archive/legacy-v2/lasecsimul-native-devices.spec): qualquer typeId que SEJA um
   // mcu-adapter direto (ex: espressif.esp32) não tem `primaryMcuInstanceId` próprio -- o
   // componente É o MCU, sua própria instância é o alvo. Nenhum hardcode de typeId aqui.
   const catalogEntry = state.schematicState.catalog.find((entry) => entry.typeId === typeId);
@@ -332,7 +332,7 @@ export function pushTunnelNameToCore(componentId: string, pinId: string, oldName
 }
 
 /** Lookup único de catálogo por typeId -- usado pelos 3 decodificadores genéricos abaixo (ABI v2,
- * .spec/lasecsimul-native-devices.spec) pra consultar `readoutFormat` sem repetir
+ * .spec/archive/legacy-v2/lasecsimul-native-devices.spec) pra consultar `readoutFormat` sem repetir
  * `state.schematicState.catalog.find(...)` em cada um. */
 export function findCatalogEntry(typeId: string): WebviewComponentCatalogEntry | undefined {
   return state.schematicState.catalog.find((entry) => entry.typeId === typeId);
@@ -572,7 +572,7 @@ export function isReadableInstrument(typeId: string): boolean {
 }
 
 /** Lê o estado de cada "instruments.voltmeter" no projeto e manda pra Webview — único instrumento
- * com leitura via Webview hoje (ver .spec/lasecsimul.spec sobre instrumentos como plugin ABI).
+ * com leitura via Webview hoje (ver .spec/archive/legacy-v2/lasecsimul.spec sobre instrumentos como plugin ABI).
  * Generaliza naturalmente pra outros: basta interpretar getComponentState() conforme o typeId. */
 export async function pollInstrumentReadouts(expectedGeneration?: number): Promise<void> {
   if (!state.coreClient || !state.schematicPanel) return;

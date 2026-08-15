@@ -84,7 +84,7 @@ export type HostToWebviewMessage =
   | { version: number; type: "selectComponent"; componentId: string | null }
   | { version: number; type: "beginComponentPlacement"; typeId: string }
   | { version: number; type: "syncState"; project: WebviewProjectState }
-  /** PC-1/EX-7 (.spec/lasecsimul-native-devices.spec) -- versão incremental de "syncState": só os
+  /** PC-1/EX-7 (.spec/archive/legacy-v2/lasecsimul-native-devices.spec) -- versão incremental de "syncState": só os
    * campos de nível superior de `WebviewProjectState` que MUDARAM desde o último sync (comparação
    * por referência no lado da Extension, ver `extension.ts::syncSchematicPanel`). A Webview funde
    * (`state = {...state, ...patch}`), nunca substitui por inteiro -- um campo ausente aqui significa
@@ -162,7 +162,7 @@ export type HostToWebviewMessage =
    * VSCode com `when: activeWebviewPanelId == 'lasecsimul.schematic'` -- sobrepõe o `Ctrl+R`/
    * `Ctrl+Shift+R` nativo do VSCode SÓ enquanto o painel está em foco (`when` reverte sozinho ao
    * trocar de foco, sem lógica de restauração manual). A Webview não trata mais `Ctrl+R` no próprio
-   * `keydown` -- esse é o caminho confiável agora, ver `.spec/lasecsimul.spec` seção 13.4. */
+   * `keydown` -- esse é o caminho confiável agora, ver `.spec/archive/legacy-v2/lasecsimul.spec` seção 13.4. */
   | { version: number; type: "requestRotateSelection"; direction: "cw" | "ccw" }
   /** Mesmo caminho de `requestRotateSelection`, mas pra flip -- ver `lasecsimul.flipSelectionHorizontal`/
    * `Vertical` em `extension.ts`. */
@@ -212,7 +212,7 @@ export type WebviewToHostMessage =
   /** Bloco genérico de subcircuito por caminho -- abre um seletor de `.lssubcircuit`, resolve
    * typeId/pinos/package do arquivo escolhido e registra no Core (verbo IPC avulso, sem
    * `library.json`). Mesmo comando serve pra escolha inicial e pra "relink" (arquivo ausente ou
-   * trocar de arquivo depois de já resolvido) -- ver `.spec/lasecsimul-subcircuits.spec` seção 12. */
+   * trocar de arquivo depois de já resolvido) -- ver `.spec/archive/legacy-v2/lasecsimul-subcircuits.spec` seção 12. */
   | { version: number; type: "requestChooseSubcircuitFile"; componentId: string }
   /** Device genérico por caminho; não adiciona o manifesto ao catálogo permanente. */
   | { version: number; type: "requestChooseDeviceFile"; componentId: string }
@@ -222,7 +222,7 @@ export type WebviewToHostMessage =
    * `subcircuitPath`: abre o seletor, lê o arquivo e grava o resultado direto em
    * `component.properties[propertyKey]` (mais campos auxiliares resolvidos quando aplicável, ex:
    * `imageData`/`imageMime` pra `graphics.image.path` -- ver `extension.ts`). Usado hoje pelo objeto
-   * Figura/ícone da autoria de Package (`.spec/lasecsimul.spec`), reaproveitável por qualquer futuro
+   * Figura/ícone da autoria de Package (`.spec/archive/legacy-v2/lasecsimul.spec`), reaproveitável por qualquer futuro
    * campo `filePath` sem precisar de mais um caso especial. */
   | { version: number; type: "requestChooseFile"; componentId: string; propertyKey: string; filters?: Record<string, string[]> }
   /** Abre URL no browser externo — disparado pelo botão "Ajuda" do diálogo de propriedades quando

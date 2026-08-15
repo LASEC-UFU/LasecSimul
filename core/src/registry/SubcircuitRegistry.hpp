@@ -25,7 +25,7 @@ struct SubcircuitWireDef {
 
 /** `interface[]` -- `pinId` é o nome público (visto de fora), `internalTunnel` é o
  * `properties.name` do `connectors.tunnel` interno correspondente (ver
- * .spec/lasecsimul-subcircuits.spec, seção 2). */
+ * .spec/archive/legacy-v2/lasecsimul-subcircuits.spec, seção 2). */
 struct SubcircuitInterfaceDef {
     std::string pinId;
     std::string label;

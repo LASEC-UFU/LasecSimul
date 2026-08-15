@@ -16,6 +16,13 @@ namespace lasecsimul::fpga {
 
 struct FpgaComponentConfig {
     std::vector<PortSpec> ports;
+    /** Fontes/top/standard -- guardados aqui (não só passados na hora de `start()`) pra
+     * `runFpga`/`restartFpga` (Step 6, IPC) poderem operar só com um `componentIndex`, sem o
+     * chamador precisar reenviar a configuração VHDL inteira a cada Run. `setSources()` atualiza
+     * isto depois de criado (verbo `setFpgaConfig`). */
+    std::vector<std::string> sources;
+    std::string topEntity;
+    std::string standard = "08";
     /** Tensão lógica "alta" usada por `toVoltageStamp()` -- 3.3V como default (mesma convenção já
      * adotada por McuComponent pra lógica moderna; SEM propriedade editável em runtime nesta
      * passada, ver Step 6/7 pra expor via PropertyDescriptor). */
@@ -70,13 +77,21 @@ public:
     PluginHealthStatus health() const override { return m_health; }
     std::span<const uint32_t> leakagePinIndices() const override { return m_inputLocalIndices; }
 
-    /** Compila (com cache, ver GhdlBackend) e inicia o processo GHDL -- lança se `compile()`
-     * falhar (erro de VHDL, ver plano Caso C; quem chama decide como reportar). Força reamostragem
-     * incondicional de TODOS os pinos de entrada na próxima `advanceLockstep` (plano, "Initial-input
+    /** Compila (com cache, ver GhdlBackend) e inicia o processo GHDL, usando a configuração
+     * (sources/top/standard) atual -- ver `setSources()`. Lança se `compile()` falhar (erro de
+     * VHDL, ver plano Caso C; quem chama decide como reportar). Força reamostragem incondicional
+     * de TODOS os pinos de entrada na próxima `advanceLockstep` (plano, "Initial-input
      * correctness": uma entrada já em nível alto ANTES do FPGA iniciar não pode ser perdida). */
-    void start(const RtlCompileRequest& request);
+    void start();
     void stop();
-    void restart(const RtlCompileRequest& request);
+    void restart();
+
+    /** Atualiza sources/top/standard pra uso no PRÓXIMO `start()`/`restart()` -- não afeta uma
+     * simulação já rodando (verbo `setFpgaConfig`, Step 6). Contagem de bits de entrada/saída
+     * (`ports`) permanece FIXA depois da criação nesta passada -- mudar o número de portas exige
+     * recriar o componente (ver plano, `AffectsPinCount`; não coberto no Step 6, deixado pro
+     * follow-up de Step 7). */
+    void setSources(std::vector<std::string> sources, std::string topEntity, std::string standard);
 
     /** Chamado por `SimulationSession`'s `TimeStepBeginFn`, uma vez por avanço REAL do Scheduler
      * (`m_nowNs` mudando de `previousNs` pra `nextNs`) -- nunca por iteração de settle/Newton. Ver
@@ -91,6 +106,7 @@ private:
 
     simulation::Scheduler& m_scheduler;
     FpgaController m_controller;
+    RtlCompileRequest m_compileRequest; // sources/topEntity/standard atuais -- ver setSources()
     std::vector<Pin> m_pins;
     std::vector<FpgaPinBit> m_pinBits; // mesma ordem/tamanho de m_pins
     std::vector<uint32_t> m_inputLocalIndices; // leakagePinIndices() -- só pinos de entrada

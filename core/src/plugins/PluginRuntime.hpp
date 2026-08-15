@@ -15,7 +15,7 @@ namespace lasecsimul::plugins {
 /**
  * Cria/destrói PluginInstance (NativeDeviceProxy) para ESTA sessão, a partir do PluginModule ativo
  * no GlobalPluginCache. Não conhece LoadLibrary/dlopen nem valida ABI — isso é do PluginLoader.
- * Ver .spec/lasecsimul-native-devices.spec, seção 1.
+ * Ver .spec/archive/legacy-v2/lasecsimul-native-devices.spec, seção 1.
  */
 class PluginRuntime {
 public:

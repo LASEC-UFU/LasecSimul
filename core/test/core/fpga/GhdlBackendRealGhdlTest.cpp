@@ -109,6 +109,15 @@ void testCompileCacheAndRunRoundTrip(const std::string& ghdlBinary, const std::s
     TEST_CHECK(second.log.find("cache hit") != std::string::npos);
     std::printf("OK: segunda compilacao com as mesmas fontes acerta o cache\n");
 
+    // discoverPorts(): mecanismo real de "LasecSimul: Analyze VHDL" -- roda GHDL em modo discover
+    // (sem arena) e confere que as portas voltam batendo com a entity real acima.
+    const std::vector<PortSpec> discovered = backend.discoverPorts();
+    TEST_CHECK(discovered.size() == 3);
+    TEST_CHECK(discovered[0].name == "a" && discovered[0].isInput && discovered[0].width == 1);
+    TEST_CHECK(discovered[1].name == "b" && discovered[1].isInput && discovered[1].width == 1);
+    TEST_CHECK(discovered[2].name == "y" && !discovered[2].isInput && discovered[2].width == 1);
+    std::printf("OK: discoverPorts() contra GHDL real bate com a entity declarada (a,b,y)\n");
+
     // start()/run: mesma prova de ponta a ponta de GhdlLockstepRealGhdlTest, agora através da API
     // de mais alto nível.
     backend.start();

@@ -20,7 +20,7 @@ struct PinSlotResolution {
 };
 
 /** Onde a(s) variável(is) extra(s) — corrente de ramo — de um componente caiu. Só populado para
- * componentes com extraVariableCount() > 0 (ver .spec/lasecsimul.spec, seção 7.3). */
+ * componentes com extraVariableCount() > 0 (ver .spec/archive/legacy-v2/lasecsimul.spec, seção 7.3). */
 struct ExtraVariableResolution {
     uint32_t groupIndex;
     uint32_t baseLocalIndex; // primeira linha/coluna de variável extra deste componente, no grupo
@@ -57,7 +57,7 @@ struct Topology {
 
 /**
  * Grafo de nós do circuito, sempre achatado (subcircuitos/devices aninhados nunca geram matriz
- * própria — ver .spec/lasecsimul.spec, seção 7.1). Resolve topologia em duas passadas de
+ * própria — ver .spec/archive/legacy-v2/lasecsimul.spec, seção 7.1). Resolve topologia em duas passadas de
  * `UnionFind`, sempre do zero — nunca incremental, porque união não é desfazível (renomear um
  * túnel pode separar nós que estavam fundidos) e topologia só muda em edição do usuário, nunca no
  * caminho crítico de simulação (ver seção 7.2):

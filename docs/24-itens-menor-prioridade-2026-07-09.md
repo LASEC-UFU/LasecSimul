@@ -145,7 +145,7 @@ e mais arriscada, deixada de fora desta rodada (mesmo raciocínio da seção seg
   não uma correção: um gesto de arrasto dedicado + geometria de símbolo (knob/dial) pra 3 typeIds,
   incluindo decidir a curva de mapeamento ângulo→valor (linear vs logarítmica, o SimulIDE real usa
   faixas bem diferentes pra R/L/C) — decisão de produto melhor tomada com o usuário testando
-  interativamente do que suposta sem GUI. Ver `.spec/lasecsimul.spec` §7.5 (achado documentado desde
+  interativamente do que suposta sem GUI. Ver `.spec/archive/legacy-v2/lasecsimul.spec` §7.5 (achado documentado desde
   a rodada anterior) pra referência futura.
 
 ## Verificação

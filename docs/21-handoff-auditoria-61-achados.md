@@ -62,7 +62,7 @@ um teste comece a falhar.
 
 ### Fase 2 — Documentação (`.skill`, `.spec`, `docs/`)
 - Correções de divergência entre `.skill`/`.spec` e o código real (paleta, painel de propriedades,
-  organização de pastas). Ver `.skill/lasecsimul.skill` e `.spec/lasecsimul.spec` seção 5/13.
+  organização de pastas). Ver `.skill/lasecsimul.skill` e `.spec/archive/legacy-v2/lasecsimul.spec` seção 5/13.
 
 ### Fase 3 — Arquitetura duplicada
 - PC-6: paleta duplicada — `extension/src/ui/tree/ComponentPaletteProvider.ts` (nunca usado) foi

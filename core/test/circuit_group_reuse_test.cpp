@@ -1,4 +1,4 @@
-// Teste de regressão pra SimulationSession::reuseUnaffectedCircuitGroups (.spec/lasecsimul.spec,
+// Teste de regressão pra SimulationSession::reuseUnaffectedCircuitGroups (.spec/archive/legacy-v2/lasecsimul.spec,
 // seção 25.5): edita repetidamente UMA ilha elétrica isolada e confere que (a) o resultado da ilha
 // editada continua fisicamente correto a cada mutação e (b) a tensão da ilha NÃO TOCADA nunca muda
 // nem um bit -- é essa segunda checagem que prova que o reaproveitamento de CircuitGroup não vaza

@@ -137,6 +137,33 @@ std::string GhdlBackend::resolveVpiLibraryDir() const {
     return output;
 }
 
+std::vector<PortSpec> GhdlBackend::discoverPorts() {
+    if (!m_compiled) throw std::runtime_error("GhdlBackend::discoverPorts() chamado antes de compile() ter sucesso");
+
+    std::string pathOverride = resolveVpiLibraryDir();
+    if (const char* existingPath = std::getenv("PATH")) {
+        pathOverride += ";";
+        pathOverride += existingPath;
+    }
+
+    // Processo PRÓPRIO, independente de `m_process`/`start()`/`stop()` -- discover é uma rodada
+    // curta e autocontida (sem arena, sem lockstep), não o processo de simulação de longa duração.
+    GhdlProcessManager discover;
+    GhdlLaunchSpec spec{
+        m_options.ghdlBinary,
+        {"-r", "--std=" + m_compiledRequest.standard, m_compiledRequest.topEntity, "--vpi=" + m_options.vpiModulePath},
+        {},
+        m_cacheDir,
+        {{"LASECSIMUL_FPGA_MODE", "discover"}, {"PATH", pathOverride}}};
+    discover.start(spec);
+    const std::optional<int> exitCode = discover.waitForExit(m_options.compileTimeout);
+    if (!exitCode) {
+        discover.kill();
+        throw std::runtime_error("GhdlBackend::discoverPorts(): timeout rodando GHDL em modo discover");
+    }
+    return parseDiscoveredPorts(discover.logs());
+}
+
 void GhdlBackend::start() {
     if (!m_compiled) throw std::runtime_error("GhdlBackend::start() chamado antes de compile() ter sucesso");
     if (m_process.isRunning()) throw std::runtime_error("GhdlBackend já está rodando");

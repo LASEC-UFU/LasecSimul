@@ -7,4 +7,4 @@ target_include_directories(device PRIVATE ${CMAKE_SOURCE_DIR}/../../core/include
 set_target_properties(device PROPERTIES C_VISIBILITY_PRESET hidden)
 
 # lasecsimul-cli build copia o artefato gerado para build/<plataforma>/device.{dll,so,dylib}
-# conforme .lsdevice (ver .spec/lasecsimul-native-devices.spec, secao 18).
+# conforme .lsdevice (ver .spec/archive/legacy-v2/lasecsimul-native-devices.spec, secao 18).

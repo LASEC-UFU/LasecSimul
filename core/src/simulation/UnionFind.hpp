@@ -10,7 +10,7 @@ namespace lasecsimul::simulation {
 
 /**
  * Disjoint-set clássico (path halving + union por rank) — primitiva única usada nas duas passadas
- * de resolução de topologia (ver .spec/lasecsimul.spec, seção 7.2): pino->nó (fio + grupo de
+ * de resolução de topologia (ver .spec/archive/legacy-v2/lasecsimul.spec, seção 7.2): pino->nó (fio + grupo de
  * túnel) e nó->grupo (pinos de um mesmo componente). Recalculado do zero a cada mudança de
  * topologia, nunca mantido incrementalmente — união não é desfazível (renomear um túnel pode
  * separar nós que estavam fundidos), e refazer do zero é barato porque topologia só muda em

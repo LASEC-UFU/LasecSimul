@@ -27,7 +27,7 @@ constexpr double kVoltageEpsilon = 1e-9;
 // Mesmo papel do Simulator::m_maxNlstp do SimulIDE — limite de rounds em que o settle-loop é
 // mantido vivo só por componente não-linear não convergido, pra nunca girar pra sempre. Contador
 // global (não por componente) porque ainda não existe componente não-linear real pra calibrar
-// algo mais fino — ver .spec/lasecsimul.spec, seção 7.4.
+// algo mais fino — ver .spec/archive/legacy-v2/lasecsimul.spec, seção 7.4.
 constexpr uint32_t kMaxNonlinearIterations = 50;
 
 // Ver SimulationSession::McuPositionTracking (.hpp) -- precisa ficar bem maior que a folga do
@@ -73,7 +73,7 @@ bool propertyKindMatches(const PropertyValue& value, PropertyValueKind expectedK
 
 // Bit alto reservado para distinguir um `subcircuitInstanceId` de um `componentIndex` comum no
 // mesmo espaço numérico de `instanceId` na fronteira IPC (ambos uint32_t) -- "id sintético" que a
-// spec explicitamente deixa como decisão de implementação (.spec/lasecsimul-subcircuits.spec,
+// spec explicitamente deixa como decisão de implementação (.spec/archive/legacy-v2/lasecsimul-subcircuits.spec,
 // seção 5.1, item 2). Um subcircuito nunca tem `componentIndex` próprio (orquestra filhos reais),
 // então não há colisão de espaço de id real a evitar, só de REPRESENTAÇÃO na mesma variável.
 constexpr uint32_t kSubcircuitInstanceFlag = 0x8000'0000u;

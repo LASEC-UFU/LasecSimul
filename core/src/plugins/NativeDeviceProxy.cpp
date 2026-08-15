@@ -121,7 +121,7 @@ NativeDeviceProxy::~NativeDeviceProxy() {
 
 void NativeDeviceProxy::stamp(MnaMatrixView& matrix) {
     // Síncrono e sem watchdog de propósito: stamp() roda inline na mesma iteração do MnaSolver,
-    // sem cosimulação (.spec/lasecsimul-native-devices.spec seção 10) -- um timeout aqui não tem
+    // sem cosimulação (.spec/archive/legacy-v2/lasecsimul-native-devices.spec seção 10) -- um timeout aqui não tem
     // fallback seguro de "último valor conhecido" (a contribuição na matriz desta rodada já teria
     // que existir ou não, não dá pra adiar). CrashGuard ainda protege contra crash (não contra
     // travamento), igual ao comportamento já existente.

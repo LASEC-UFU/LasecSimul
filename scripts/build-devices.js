@@ -4,7 +4,7 @@
 /**
  * Configura + builda cada device em devices/<nome>/ (plugin nativo DLL/SO, projeto CMake próprio,
  * detectado por ter um CMakeLists.txt) e copia o artefato pra build/<plataforma>/ que device.json
- * espera (nativeEntry.win32-x64 etc) — ver .spec/lasecsimul-native-devices.spec, seção 18.
+ * espera (nativeEntry.win32-x64 etc) — ver .spec/archive/legacy-v2/lasecsimul-native-devices.spec, seção 18.
  *
  * Devices são projetos CMake separados do Core de propósito (build independente do binário do
  * Core, igual um plugin de terceiros faria) — este script só automatiza o que "lasecsimul-cli

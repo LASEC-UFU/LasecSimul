@@ -61,7 +61,7 @@ só-lidos como `en`/`addr-*` do mux, `powerPos`/`powerNeg` do opamp) fica com o 
 se o usuário só fiar parte dessas sub-redes (uso normal — ninguém fia os 16 pinos de um DIP sempre),
 e o solver zera TODAS as tensões do grupo, inclusive as sub-redes que tinham referência real. Fix
 padrão aplicado nas 4 classes novas: uma condutância de fuga insignificante (`1e-9 S`) até a terra em
-todo pino sem outra garantia de estampa. Documentado em `.spec/lasecsimul.spec` §7.5 como padrão
+todo pino sem outra garantia de estampa. Documentado em `.spec/archive/legacy-v2/lasecsimul.spec` §7.5 como padrão
 obrigatório para componentes multi-pino futuros.
 
 ### 1.2 — Sensores resistivos falsos duplicando os reais
@@ -170,7 +170,7 @@ modelo analógico simplificado:
   R/L/C variável; a popup do osciloscópio também usa dial interativo relativo.
 - **Contagem de entradas de `Csource` genérico e alguns modelos analógicos simplificados** (BJT/
   MOSFET/JFET/SCR/DIAC/TRIAC com modelo limiar simplificado, tanto no built-in quanto no plugin
-  `devices/simulide-complex`) — já documentado como achado aceito em `.spec/lasecsimul.spec` §7.4
+  `devices/simulide-complex`) — já documentado como achado aceito em `.spec/archive/legacy-v2/lasecsimul.spec` §7.4
   desde antes desta auditoria; confirmado ainda válido, não re-trabalhado (portar Newton-Raphson
   completo pra esses 6 exigiria reescrever o `lib.c` do plugin, escopo grande à parte).
 - **Paridade visual do símbolo pra portas invertidas** (bolha de NAND/NOR/NOT/XNOR) — a correção
@@ -186,7 +186,7 @@ modelo analógico simplificado:
 Mesma classe de problema encontrada e corrigida uma vez nesta sessão para o diodo (spec dizia "não
 implementado" quando já estava); desta vez, uma varredura sistemática achou mais 5 ocorrências:
 
-- `.spec/lasecsimul.spec` §6.1.2 — validação de propriedade + reação a `affectsTopology`/
+- `.spec/archive/legacy-v2/lasecsimul.spec` §6.1.2 — validação de propriedade + reação a `affectsTopology`/
   `requiresRestart` estava marcada "Pendente"; já estava implementada e testada.
 - `README.md` — spec de subcircuitos descrita como "ainda não implementado" (falso); contagem de
   testes desatualizada (19→31 Core, 7→15 Extension).

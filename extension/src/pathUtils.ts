@@ -3,7 +3,7 @@ import * as path from "path";
 
 /** Resolve `inputPath` (absoluto ou relativo) contra `basePath`, sempre normalizado -- ponto único
  * usado tanto por `extension.ts` quanto por `catalog/packageSanitizers.ts` (EX-9,
- * .spec/lasecsimul-native-devices.spec) pra nunca duplicar a mesma lógica de resolução de caminho. */
+ * .spec/archive/legacy-v2/lasecsimul-native-devices.spec) pra nunca duplicar a mesma lógica de resolução de caminho. */
 export function normalizeAbsolutePath(basePath: string, inputPath: string): string {
   return path.isAbsolute(inputPath) ? path.normalize(inputPath) : path.normalize(path.resolve(basePath, inputPath));
 }

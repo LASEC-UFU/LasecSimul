@@ -588,10 +588,10 @@ Fase 2). Passos concretos:
 
 ## 14. Documentação/spec/skill que deve ser atualizada
 
-- **`.spec/lasecsimul.spec`** — seção 6 ("Interfaces principais") precisa de uma nova subseção
+- **`.spec/archive/legacy-v2/lasecsimul.spec`** — seção 6 ("Interfaces principais") precisa de uma nova subseção
   descrevendo `PropertyDefinition`/`ComponentDescriptor` assim que a Fase 1 introduzir os arquivos
   novos; a atual descrição de `IComponentModel`/registries precisa apontar pro novo mecanismo.
-- **`.spec/lasecsimul-native-devices.spec`** — seção 4 ("API pública ABI") não muda (C ABI é estável por
+- **`.spec/archive/legacy-v2/lasecsimul-native-devices.spec`** — seção 4 ("API pública ABI") não muda (C ABI é estável por
   design), mas seção 6 ("funções fornecidas pelo simulador") precisa documentar `ComponentDescriptor`
   substituindo a menção implícita a `ComponentMeta`; adicionar nota sobre a correção do campo
   `abiVersion` (D15) assim que decidida.
@@ -661,11 +661,11 @@ mesma contagem Release) e mesclado. Ordem = mesma do ranking original.
 
 | # | Achado | Status | Onde |
 |---|---|---|---|
-| 1 | D4 — pipelines de validação divergentes | ✅ **Fechado por completo pro lado da EDIÇÃO** (todo built-in migrado agora valida via `PropertyDefinition`/`validatePropertyValue`); lado da CRIAÇÃO (fábricas em `CoreApplication.cpp`) só convertido pra `propertyOrDefault` em `Probe`/`Resistor` — ver §17.1 | `PropertyDefinition.hpp`, ADR 0010, `.spec/lasecsimul.spec` §6.1.5 |
+| 1 | D4 — pipelines de validação divergentes | ✅ **Fechado por completo pro lado da EDIÇÃO** (todo built-in migrado agora valida via `PropertyDefinition`/`validatePropertyValue`); lado da CRIAÇÃO (fábricas em `CoreApplication.cpp`) só convertido pra `propertyOrDefault` em `Probe`/`Resistor` — ver §17.1 | `PropertyDefinition.hpp`, ADR 0010, `.spec/archive/legacy-v2/lasecsimul.spec` §6.1.5 |
 | 2 | 5.5 — MCU sem CrashGuard/Watchdog | ✅ **Fechado por completo** — mesma cobertura que dispositivo ABI comum já tinha | `NativeMcuAdapterProxy`/`QemuModuleProxy`/`McuComponent::health()`, ADR 0011, teste `mcu_crash_resilience` |
 | 3 | D1/D2/D3 — schema/descriptor duplicado + acoplamento posicional | ✅ **Fechado por completo** — todos os 25 arquivos migrados, zero acoplamento posicional restante em `core/src/components/` (ver §17.1) | Todo `core/src/components/*.hpp`, teste `property_definition` |
 | 4 | D9 — `kLeakageConductance` duplicado em 4 classes | ✅ **Fechado por completo** — `IComponentModel::leakagePinIndices()` (opt-in, não detecção automática — mitiga o risco 🔴 original) aplicado pelo framework; os 4 arquivos não estampam mais a condutância manualmente (ver §17.2) | `IComponentModel.hpp`, `SimulationSession.cpp`, `OpAmp`/`AnalogMux`/`DiodeLegArray`/`ResistorArray.hpp` |
-| 5 | D15 — `abiVersion` morto/divergido | ✅ **Fechado** — 68 manifestos corrigidos pro valor real + aviso automático (não bloqueante) em toda carga futura | `GlobalPluginCache.hpp` (`warnIfAbiVersionMismatch`), `.spec/lasecsimul-native-devices.spec` §24.2 |
+| 5 | D15 — `abiVersion` morto/divergido | ✅ **Fechado** — 68 manifestos corrigidos pro valor real + aviso automático (não bloqueante) em toda carga futura | `GlobalPluginCache.hpp` (`warnIfAbiVersionMismatch`), `.spec/archive/legacy-v2/lasecsimul-native-devices.spec` §24.2 |
 | 6 | D7/D8 — `ComponentMeta` vs `ComponentMetadata` | 🔄 **Reavaliado, não é duplicação nociva** — na prática `ComponentMeta` é um subconjunto legítimo, enxuto, do caminho quente de `NativeDeviceProxy` (não carrega `displayName`/`iconPath`/`language`, que esse proxy nunca usa); fundir infligiria bloat no hot path sem benefício real. Mantido como está — julgamento de engenharia revisado ao implementar, não um adiamento por falta de tempo | Nenhuma mudança — ver nota abaixo |
 | 7 | D10/D11/D12/D13 — código morto confirmado | ✅ **Fechado, com uma correção ao plano original**: `MnaSolver::rebuildTopology/stampDirty` (D10) e `registerSubcircuitFromManifestLegacyUnused`/`IpcServer::sendNotification` (D12/D13) foram REMOVIDOS como planejado; `McuController` (D11) **não foi removido** — descobriu-se que tem um chamador real (`McuControllerRealQemuTest`, integração contra o binário QEMU de verdade) que seria perdido. Em vez de remover, `McuComponent` passou a DELEGAR pra `McuController` (unificação de verdade, não duplicação) | `McuComponent.hpp/.cpp`, `McuController.hpp/.cpp` |
 | 8 | D16 — `PluginLoader::scanDirectory`/`verifyChecksum` stubs | 🔄 **Parcial, com correção de responsável**: o carregamento real saiu do lugar errado (`CoreApplication.cpp`) e virou `GlobalPluginCache::loadLibrary` — não `PluginLoader::scanDirectory` como o plano original sugeria, porque só `GlobalPluginCache` tem `loader()`+`metadata()`+os mapas `setActive*Module` juntos (`PluginLoader` sozinho não tem acesso a isso, e não deveria ganhar — quebraria seu escopo deliberadamente estreito). `verifyChecksum` continua stub — fora do escopo desta rodada | `GlobalPluginCache.hpp` |
@@ -675,7 +675,7 @@ mesma contagem Release) e mesclado. Ordem = mesma do ranking original.
 **Resumo de verificação**: `ctest -C Debug`/`-C Release` — **34/34** (era 32/32; +2:
 `mcu_crash_resilience`, `property_definition`). Extension não tocada nesta rodada — confirmado por
 busca (nenhum símbolo removido/alterado é referenciado do lado TypeScript). 2 ADRs novos (0010,
-0011). `.spec/lasecsimul.spec` §6.1.5 e `.spec/lasecsimul-native-devices.spec` §24 atualizados.
+0011). `.spec/archive/legacy-v2/lasecsimul.spec` §6.1.5 e `.spec/archive/legacy-v2/lasecsimul-native-devices.spec` §24 atualizados.
 
 **O que ficou de fora nesta rodada, e por quê** (não é esquecimento — decisão explícita registrada):
 - Unificação da forma JSON de "fio" — cross-cutting com a Extension.
@@ -857,7 +857,7 @@ handlers IPC), não só a Extension.
 
 Escolhida a forma aninhada como única (era o que a seção 15 já recomendava): já é o formato do
 arquivo `.lssubcircuit`, já é o modelo interno de fio da Webview (`WebviewWireModel.from`/`.to`,
-`coreLifecycle.ts`) e já é o que `.spec/lasecsimul-subcircuits.spec` documenta — eliminar a forma
+`coreLifecycle.ts`) e já é o que `.spec/archive/legacy-v2/lasecsimul-subcircuits.spec` documenta — eliminar a forma
 achatada, não escolher "a melhor" das duas do zero.
 
 - `CoreApplication.cpp`: novo `parseWireEndpoints(wireJson, context)` (ao lado de

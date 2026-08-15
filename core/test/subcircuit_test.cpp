@@ -1,6 +1,6 @@
 // Teste de integração da expansão de subcircuitos (Épico F do roadmap de pendências): registra um
 // "subcircuits.divisor_5v" (2 resistores + 3 tunnels VIN/VOUT/GND, exatamente o exemplo de
-// .spec/lasecsimul-subcircuits.spec seção 1), expande via addSubcircuitInstance(), conecta uma
+// .spec/archive/legacy-v2/lasecsimul-subcircuits.spec seção 1), expande via addSubcircuitInstance(), conecta uma
 // fonte+terra externas aos pinos expostos e valida que o circuito INTERNO resolve corretamente
 // através da expansão -- prova que addComponent/connectWire/setTunnelName recursivos produzem o
 // mesmo resultado elétrico que montar o divisor à mão (ver voltage_divider_test.cpp).

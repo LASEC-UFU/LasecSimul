@@ -24,7 +24,7 @@ endif()
 # CMakePresets.json) em vez de Ninja nesse cenário. Ver docs/mvp-limitacoes.md.
 #
 # Eigen: header-only, MPL2, sem GUI -- usado só pelo MnaSolver/CircuitGroup (LU densa com
-# pivoteamento). Ver .spec/lasecsimul.spec, RNF05 e secao 7.1.
+# pivoteamento). Ver .spec/archive/legacy-v2/lasecsimul.spec, RNF05 e secao 7.1.
 include(FetchContent)
 FetchContent_Declare(
     eigen
@@ -328,6 +328,7 @@ add_executable(ghdl_backend_real_ghdl_test
     src/fpga/GhdlBackend.cpp
     src/fpga/GhdlProcessManager.cpp
     src/fpga/GhdlArenaBridge.cpp
+    src/fpga/FpgaPortMapper.cpp
 )
 target_include_directories(ghdl_backend_real_ghdl_test PRIVATE include src)
 add_test(NAME ghdl_backend_real_ghdl COMMAND ghdl_backend_real_ghdl_test)
@@ -1060,7 +1061,7 @@ set_tests_properties(mcu_scheduler_pacing_sync_real_qemu_mttcg PROPERTIES
 
 # Detecção de borda digital + despacho de ComponentEvent{kPinChangeEventTag} (substitui
 # I2cBusModule/SpiBusModule -- removidos por nunca terem sido ligados a um SimulationSession real;
-# ver .spec/lasecsimul-native-devices.spec, seção 8, e SimulationSession::settleStep() passo 3b).
+# ver .spec/archive/legacy-v2/lasecsimul-native-devices.spec, seção 8, e SimulationSession::settleStep() passo 3b).
 add_executable(pin_change_dispatch_test
     test/core/session/PinChangeDispatchTest.cpp
     ${TEST_COMMON_SOURCES}

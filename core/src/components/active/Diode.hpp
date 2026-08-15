@@ -14,7 +14,7 @@ namespace lasecsimul::components {
  * Primeiro componente não linear real do Core (Épico H do roadmap de pendências) — diodo
  * Shockley com modelo companion (condutância + fonte de corrente equivalente) linearizado em
  * torno do ponto de operação da ÚLTIMA solve(), exatamente como `IComponentModel::stamp()` já
- * documenta para `isNonlinear()==true`. Ver .spec/lasecsimul.spec, seção 7.4.
+ * documenta para `isNonlinear()==true`. Ver .spec/archive/legacy-v2/lasecsimul.spec, seção 7.4.
  *
  * Id(Vd) = Is * (exp(Vd/Vt) - 1)
  * Linearizado em Vop: Id(Vd) ≈ Gd*Vd + Ieq, com Gd = dId/dVd em Vop, Ieq = Id(Vop) - Gd*Vop.
@@ -32,7 +32,7 @@ namespace lasecsimul::components {
  * logarítmico de suavização do joelho (`m_zOfset`) nem o `emCoef`/`gmin` variável por passo -- captura
  * o comportamento físico essencial (clampeamento de tensão perto da ruptura) sem replicar as
  * constantes exatas de arredondamento do SimulIDE. Documentado, não escondido -- ver
- * `.spec/lasecsimul.spec` seção 7.4 e memória do projeto.
+ * `.spec/archive/legacy-v2/lasecsimul.spec` seção 7.4 e memória do projeto.
  */
 class Diode final : public IComponentModel {
 public:

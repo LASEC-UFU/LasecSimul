@@ -5,7 +5,7 @@
 // Não chama session.addComponent("example.blinker", ...) de propósito: PluginRuntime::createDeviceInstance
 // hoje chama vt->create(nullptr, nullptr) (ver PluginRuntime.cpp) — o host_ctx/LsdnHostApi real que
 // ligaria pin_declare/pin_write ao Netlist/Scheduler desta sessão ainda não existe (lacuna conhecida
-// e documentada, ver .spec/lasecsimul.spec, seção 6, e docs/mvp-limitacoes.md). lib.c do blinker
+// e documentada, ver .spec/archive/legacy-v2/lasecsimul.spec, seção 6, e docs/mvp-limitacoes.md). lib.c do blinker
 // desreferencia esse `api` em init() — instanciar de fato derrubaria o processo. Este teste valida
 // exatamente o que está pronto hoje: carregar e registrar um binário nativo real, não instanciá-lo
 // num circuito.

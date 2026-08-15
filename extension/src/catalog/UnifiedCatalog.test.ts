@@ -75,7 +75,7 @@ test("lÃ­ngua pedida sem nenhuma traduÃ§Ã£o no arquivo (ex: 'fr') cai pra 
   assert(resolved === baseItems, "'fr' nÃ£o existe em translations -- devolve a base sem alteraÃ§Ã£o");
 });
 
-// ── sanitizeStringArray/entryToWebview (PC-16, .spec/lasecsimul-native-devices.spec) ──────────────
+// ── sanitizeStringArray/entryToWebview (PC-16, .spec/archive/legacy-v2/lasecsimul-native-devices.spec) ──────────────
 // component-catalog.json/registro de device é JSON externo -- só o container (`items` é array) era
 // checado antes; um campo individual malformado (ex: "pinIds":"AB" em vez de array) passava direto
 // pro tipo `WebviewComponentCatalogEntry` e derrubava `pinsForTypeId` (extension.ts) com TypeError.

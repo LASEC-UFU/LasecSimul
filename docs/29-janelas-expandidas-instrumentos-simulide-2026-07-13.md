@@ -84,7 +84,7 @@ Comportamentos disponíveis:
 
 ## Arquivos desta rodada
 
-- `.spec/lasecsimul.spec` — contrato 29.11 e baseline comparativo;
+- `.spec/archive/legacy-v2/lasecsimul.spec` — contrato 29.11 e baseline comparativo;
 - `extension/src/ui/webview/instrumentViewport.ts` — infraestrutura pura compartilhada;
 - `extension/src/ui/webview/instrumentViewport.test.ts` — zoom, pan, bounds, persistência,
   sample-and-hold, decimação e VCD;
@@ -95,7 +95,7 @@ Comportamentos disponíveis:
 
 ## Fechamento funcional
 
-As regras vigentes estao centralizadas em `.spec/lasecsimul.spec`, secao 29.12; este documento
+As regras vigentes estao centralizadas em `.spec/archive/legacy-v2/lasecsimul.spec`, secao 29.12; este documento
 registra somente evidencias operacionais para nao duplicar a especificacao.
 
 O Analyzer agora recebe descritores e amostras vetoriais reais pelo Core/IPC v2. Os oito pinos

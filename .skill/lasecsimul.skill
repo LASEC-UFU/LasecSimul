@@ -5,8 +5,9 @@ applies_to: LasecSimul/**
 language: en
 keywords: [coding-skill, architecture-boundary, native-plugin, qemu, testing-gates, change-management, decision-protocol]
 source_of_truth:
-  - .spec/lasecsimul.spec
-  - .spec/lasecsimul-native-devices.spec
+  - .spec/README.md
+  - .spec/architecture/system-boundaries.md
+  - .spec/architecture/runtime-and-simulation-plan.md
 ---
 
 # Claude Code Skill Contract (English)
@@ -52,12 +53,14 @@ processo; o tipo existe para não virar singleton implícito, não porque sessõ
 `Netlist`/`Scheduler`/`PluginRuntime`/`QemuProcessManager` pertencem à sessão, nunca ao cache.
 
 Especificações fonte de verdade, nesta ordem de leitura:
-1. [`.spec/lasecsimul.spec`](../.spec/lasecsimul.spec) (v0.2+) — arquitetura geral, os dois processos, IPC, fluxos.
-2. [`.spec/lasecsimul-native-devices.spec`](../.spec/lasecsimul-native-devices.spec) — sistema de plugins nativos (dispositivos e MCUs).
+1. [`.spec/README.md`](../.spec/README.md) — precedência, estrutura e política beta.
+2. [Fronteiras do sistema](../.spec/architecture/system-boundaries.md) — processos, ownership e isolamento.
+3. [Runtime e SimulationPlan](../.spec/architecture/runtime-and-simulation-plan.md) — autoria, compilação e estado.
+4. A feature/schema/ADR aplicável, conforme o índice [`.spec/STATUS.md`](../.spec/STATUS.md).
 
-`.spec/archive/lasecsimul-wasm-devices.spec` está marcado **SUPERSEDED** — é registro histórico de uma abordagem
-descartada (WASM + worker_threads). Nunca usar como referência de implementação; se algo nesta skill parecer
-remeter a WASM/worker, é desatualizado — confiar nos dois `.spec` acima.
+Todo conteúdo em `.spec/archive/` é histórico e não normativo. Os specs monolíticos anteriores continuam
+disponíveis em `.spec/archive/legacy-v2/` para rastrear detalhes e seções citadas pelo código, mas conflitos
+devem ser resolvidos pela árvore canônica acima. O spec WASM permanece superseded.
 
 ## Regras inegociáveis
 
@@ -85,7 +88,7 @@ remeter a WASM/worker, é desatualizado — confiar nos dois `.spec` acima.
    formalmente fora de escopo por esse motivo (ver `lasecsimul.spec`, seção 8.2).
 6. **Nunca hardcode lógica de um typeId específico fora do módulo daquele device quando existe (ou
    deveria existir) um caminho de metadata genérico pro mesmo problema.** Exemplo formal já resolvido:
-   `ReadoutFormat`/`InteractionKind` (`.spec/lasecsimul-native-devices.spec` seção 22) — como a UI
+   `ReadoutFormat`/`InteractionKind` (`.spec/archive/legacy-v2/lasecsimul-native-devices.spec` seção 22) — como a UI
    decodifica leitura/interage com um componente vem de metadata declarado pelo PRÓPRIO device (método
    estático pro built-in, chave em `device.json` pro plugin), nunca de um `if (typeId === "...")`
    espalhado pela Extension. Quando a MESMA classificação por typeId precisar existir em mais de um
@@ -96,7 +99,7 @@ remeter a WASM/worker, é desatualizado — confiar nos dois `.spec` acima.
    (`SimulideBuiltins.hpp`, `simulide-complex`/`simulide-logic` — 18+25 tipos cada num único `lib.c`) —
    **não é violação de SRP a "corrigir" separando arquivos.** O critério real de SRP aqui não é "uma
    classe por arquivo": é "nenhuma lógica específica de UM typeId vaza pra fora do código daquele
-   device E/OU fica duplicada em outro lugar" (ver regra 6 acima e `.spec/lasecsimul.spec` seção 11).
+   device E/OU fica duplicada em outro lugar" (ver regra 6 acima e `.spec/archive/legacy-v2/lasecsimul.spec` seção 11).
    Built-in novo SEM relação com um grupo já existente ganha arquivo próprio; built-in novo
    RELACIONADO a um grupo existente (ex: mais um tipo de switch) pode entrar no mesmo módulo do grupo.
 8. **Na UI/webview, `package`/`logicSymbolPackage` é somente leitura pra `.lsdevice` (e pra
@@ -104,7 +107,7 @@ remeter a WASM/worker, é desatualizado — confiar nos dois `.spec` acima.
   exatamente do manifesto; não recriar comando, botão, menu, mensagem IPC ou sessão de autoria
   SEPARADA pra editar/salvar esse símbolo pela UI. A renderização continua via parser/tradutor
   genérico compatível com SimulIDE, sem helper ad-hoc por device nem `if/switch` por `typeId` para
-  geometria já declarada no payload. **Exceção explícita (2026-07-10, `.spec/lasecsimul-subcircuits.spec`
+  geometria já declarada no payload. **Exceção explícita (2026-07-10, `.spec/archive/legacy-v2/lasecsimul-subcircuits.spec`
   seção 17)**: o `package`/ícone de um `.lssubcircuit` PODE ser editado, mas só DENTRO da sessão
   "Abrir Subcircuito" já existente (seção 16 do mesmo spec) via componentes normais na mesma cena
   (`other.package`/`other.package_pin`/`graphics.image` marcado, compilados por
@@ -240,7 +243,7 @@ remeter a WASM/worker, é desatualizado — confiar nos dois `.spec` acima.
   morto). Diálogo de propriedades é **modal** (`&lt;dialog&gt;.showModal()` na própria Webview, aberto com
   duplo-clique) — decisão revertida na prática (esta linha dizia "painel persistente, nunca modal"; um
   painel lateral fixo ocupava espaço permanente e duplicava a paleta, avaliado e descartado, ver
-  `.spec/lasecsimul.spec` seção 13).
+  `.spec/archive/legacy-v2/lasecsimul.spec` seção 13).
 - **Firmware recarrega sozinho antes de "Run" — nunca exige ação manual como o `slotReload()` do
   SimulIDE.** Corrigido 2026-07-09: a UI teve um botão manual "Recarregar Firmware" até essa data (o
   `FirmwareWatcher` nativo pra isso, seção 8.3 do `.spec`, foi especificado em 2026-06-28 mas nunca

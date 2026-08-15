@@ -16,7 +16,7 @@ Aceita
 
 ## Contexto
 
-O Core já era host-agnóstico por construção (RNF03/RNF06 de `.spec/lasecsimul.spec`: não conhece Qt nem
+O Core já era host-agnóstico por construção (RNF03/RNF06 de `.spec/archive/legacy-v2/lasecsimul.spec`: não conhece Qt nem
 VSCode, só fala o protocolo de IPC). Ao implementar `loadDeviceLibrary` nesta rodada, apareceu um ponto
 concreto onde uma decisão de *configuração* (quais `library.json` carregar) tinha vazado pra um mecanismo
 específico do VSCode: `extension/package.json` declara isso via `contributes["lasecsimul.deviceLibraries"]`,
@@ -30,7 +30,7 @@ JSON, versionado por `protocolVersion`) e (b) os formatos de arquivo em disco (`
 `library.json`, e `.lssubcircuit` de subcircuitos — ver ADR 0008). Nenhuma decisão de protocolo ou de
 "o que carregar" pode depender de um mecanismo exclusivo de um host.
 
-Correção registrada (implementação pendente, ver `.spec/lasecsimul.spec` seção 1.1 e RNF10): a declaração de
+Correção registrada (implementação pendente, ver `.spec/archive/legacy-v2/lasecsimul.spec` seção 1.1 e RNF10): a declaração de
 bibliotecas de dispositivo/subcircuito a carregar precisa migrar de `contributes` do VSCode para algo
 host-agnóstico — um arquivo de configuração próprio do projeto, ou descoberta automática pelo próprio Core
 de pastas convencionais (`devices/`, `mcu-adapters/`, `subcircuits/`) relativas a si mesmo.

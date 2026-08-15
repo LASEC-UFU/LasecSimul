@@ -8,7 +8,7 @@ const STORAGE_KEY = "lasecsimul.trustedPublishers";
  * Persiste a decisão de confiança por publisher (`library.json::publisher`) em
  * `ExtensionContext.globalState` -- decisão sobrevive a reinícios do VSCode, mas é local à máquina
  * (não sincroniza), pois é uma decisão de segurança sobre código nativo sem sandbox (ver
- * `.spec/lasecsimul-native-devices.spec` seção 12, item 2). "Permitir uma vez" nunca passa por
+ * `.spec/archive/legacy-v2/lasecsimul-native-devices.spec` seção 12, item 2). "Permitir uma vez" nunca passa por
  * aqui -- só "Bloquear"/"Sempre confiar" são persistidos.
  */
 export class TrustStore {

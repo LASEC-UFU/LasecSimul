@@ -118,7 +118,7 @@ inline std::vector<PropertySchema> parsePropertySchemaList(const nlohmann::json&
     return schemaList;
 }
 
-/** ABI v2 (.spec/lasecsimul-native-devices.spec): chave opcional `"readout"` de `.lsdevice` --
+/** ABI v2 (.spec/archive/legacy-v2/lasecsimul-native-devices.spec): chave opcional `"readout"` de `.lsdevice` --
  * device de terceiros declara como a UI deve decodificar sua leitura sem nenhuma mudança de código
  * no Core nem na Extension. Ausente/mal-formado = nullopt ("sem leitura estruturada"), nunca erro --
  * a maioria dos devices não tem mostrador. */

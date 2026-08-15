@@ -10,7 +10,7 @@
 
 #define EV_TICK 1
 
-/* ABI v2 (.spec/lasecsimul-native-devices.spec): get_state/set_state passam a se autoversionar --
+/* ABI v2 (.spec/archive/legacy-v2/lasecsimul-native-devices.spec): get_state/set_state passam a se autoversionar --
  * os primeiros 4 bytes são sempre um uint32 de versão do layout, ANTES do payload em si. Sem isso,
  * um set_state recebendo um blob de layout diferente (snapshot/undo antigo, versão futura do
  * device) interpretaria bytes alheios às cegas. set_state que não reconhece a versão loga e ignora

@@ -32,6 +32,7 @@ import { shouldRenderSimulationSnapshot, simulationControlModel } from "./simula
 import { isHighWireVoltage, reconcileWireVoltages } from "./wirePresentation.js";
 import { continuousDialValueFromPointer, steppedDialValue } from "./dialInteraction.js";
 import { contextMenuViewportSize, positionContextSubmenu, positionRootContextMenu } from "./contextMenuPosition.js";
+import { regenerateGenericSubcircuitState } from "./genericSubcircuitPackage.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const FINE_WIRE_STEP = WIRE_GRID_SIZE / 10;
@@ -58,6 +59,7 @@ function createEmptyState(): WebviewProjectState {
     iconElements: [],
     exposedComponents: [],
     exportedPropertyComponentIds: [],
+    symbolMode: undefined,
   };
 }
 
@@ -269,6 +271,9 @@ const UI_TEXT = {
     subcircuitEditorModeSymbol: "Símbolo",
     subcircuitEditorModeIcon: "Ícone",
     createPin: "Criar Pino",
+    genericEncapsulation: "Encapsulamento Genérico",
+    customEncapsulation: "Encapsulamento Personalizado",
+    replaceCustomEncapsulation: "Substituir o encapsulamento personalizado pelo genérico? O desenho atual será descartado.",
     pinElectricalId: "ID Elétrico do Pino",
     createAdditionalTunnel: "Criar túnel adicional",
     exposeComponent: "Expor no Símbolo",
@@ -387,6 +392,9 @@ const UI_TEXT = {
     subcircuitEditorModeSymbol: "Symbol",
     subcircuitEditorModeIcon: "Icon",
     createPin: "Create Pin",
+    genericEncapsulation: "Generic Encapsulation",
+    customEncapsulation: "Custom Encapsulation",
+    replaceCustomEncapsulation: "Replace the custom encapsulation with the generic one? The current drawing will be discarded.",
     pinElectricalId: "Pin Electrical ID",
     createAdditionalTunnel: "Create additional tunnel",
     exposeComponent: "Expose in Symbol",
@@ -783,6 +791,23 @@ function setSubcircuitEditorMode(mode: SubcircuitEditorMode): void {
 
 const DEFAULT_SYMBOL_CANVAS = { width: 56, height: 40, border: true };
 
+function regenerateCurrentGenericSymbol(): void {
+  state = regenerateGenericSubcircuitState(state, newComponentId);
+}
+
+function setSubcircuitSymbolMode(mode: "generic" | "custom"): void {
+  if (!state.subcircuitEditingContext || state.symbolMode === mode) return;
+  if (mode === "generic" && state.symbolElements.length > 0 && !window.confirm(t("replaceCustomEncapsulation"))) {
+    render();
+    return;
+  }
+  state = { ...state, symbolMode: mode };
+  if (mode === "generic") regenerateCurrentGenericSymbol();
+  persistState();
+  render();
+  zoomToFitAllDeferred();
+}
+
 /** Cria um novo pino no Modo Símbolo -- ação dedicada (comando/botão), nunca um typeId comum da
  * paleta (pedido original: "sem typeId de pino na paleta geral"). Cria o pino + seu túnel interno
  * OBRIGATÓRIO atomicamente (`symbolElements`+`components`, nunca um sem o outro) -- puramente local
@@ -825,6 +850,7 @@ function createSymbolPinCommand(): void {
     selectedComponentIds: [pinComponentId],
     selectedWireIds: [],
   };
+  regenerateCurrentGenericSymbol();
   persistState();
   render();
 }
@@ -1173,7 +1199,7 @@ window.addEventListener("resize", () => hideContextMenu());
  * demanda (`ensureBoardOverlayData`) uma vez por instância `subcircuit-file` visível.
  *
  * **Correção 2026-07-16**: existia um gate extra `properties.boardModeEnabled === true` (Mecanismo
- * A/B distintos, ver `.spec/lasecsimul.spec` seção 26) que nunca foi de fato alcançável pela UI --
+ * A/B distintos, ver `.spec/archive/legacy-v2/lasecsimul.spec` seção 26) que nunca foi de fato alcançável pela UI --
  * nenhum checkbox/propriedade/menu jamais setava esse campo, então o overlay nunca aparecia em
  * NENHUMA instância colocada de NENHUM subcircuito, apesar dos dados serem buscados normalmente.
  * `renderBoardOverlaysFor` já retorna vazio sozinho quando não há nada exposto/gráfico -- o gate era
@@ -1604,6 +1630,8 @@ interface UndoSnapshot {
   topology: CanonicalTopologyDocument;
   selectedComponentIds: string[];
   selectedWireIds: string[];
+  symbolMode?: WebviewProjectState["symbolMode"];
+  symbolCanvas?: WebviewProjectState["symbolCanvas"];
 }
 
 interface UndoHistory {
@@ -1625,12 +1653,14 @@ function activeUndoHistory(): UndoHistory {
   return mainUndoHistory;
 }
 
-function snapshotOfProjectState(project: Pick<WebviewProjectState, "components" | "topology" | "selectedComponentIds" | "selectedWireIds">): UndoSnapshot {
+function snapshotOfProjectState(project: Pick<WebviewProjectState, "components" | "topology" | "selectedComponentIds" | "selectedWireIds" | "symbolMode" | "symbolCanvas">): UndoSnapshot {
   return {
     components: structuredClone(project.components),
     topology: structuredClone(project.topology),
     selectedComponentIds: [...project.selectedComponentIds],
     selectedWireIds: [...project.selectedWireIds],
+    symbolMode: project.symbolMode,
+    symbolCanvas: project.symbolCanvas ? structuredClone(project.symbolCanvas) : undefined,
   };
 }
 
@@ -1638,9 +1668,9 @@ function captureUndoSnapshot(): UndoSnapshot {
   return snapshotOfProjectState({ ...state, components: activeSceneComponents() });
 }
 
-/** Chave de comparação -- só `components`/`topology` (NUNCA seleção, ver comentário da seção). */
-function undoContentKey(snapshot: { components: WebviewComponentModel[]; topology: CanonicalTopologyDocument }): string {
-  return JSON.stringify([snapshot.components, snapshot.topology]);
+/** Chave de comparação -- conteúdo da cena + política/canvas do símbolo (nunca seleção). */
+function undoContentKey(snapshot: { components: WebviewComponentModel[]; topology: CanonicalTopologyDocument; symbolMode?: WebviewProjectState["symbolMode"]; symbolCanvas?: WebviewProjectState["symbolCanvas"] }): string {
+  return JSON.stringify([snapshot.components, snapshot.topology, snapshot.symbolMode, snapshot.symbolCanvas]);
 }
 
 /** Reseta o histórico (undo E redo) pro estado ATUAL de `state` -- chamado ao entrar/sair da sessão
@@ -1689,7 +1719,7 @@ function recordUndoTransition(currentKey: string, captureCurrent: () => UndoSnap
  * mudança de SELEÇÃO apenas (nunca vira entrada de undo, ver `undoContentKey`) -- antes clonava
  * `components`/`wires` inteiros só pra descobrir isso a cada uma. */
 function recordUndoSnapshotIfChanged(): void {
-  const currentKey = undoContentKey({ components: activeSceneComponents(), topology: state.topology });
+  const currentKey = undoContentKey({ components: activeSceneComponents(), topology: state.topology, symbolMode: state.symbolMode, symbolCanvas: state.symbolCanvas });
   recordUndoTransition(currentKey, captureUndoSnapshot);
 }
 
@@ -1704,6 +1734,8 @@ function applyUndoSnapshot(snapshot: UndoSnapshot): void {
     state.topology = snapshot.topology;
     state.selectedComponentIds = snapshot.selectedComponentIds;
     state.selectedWireIds = snapshot.selectedWireIds;
+    state.symbolMode = snapshot.symbolMode;
+    state.symbolCanvas = snapshot.symbolCanvas;
     clearPendingWire();
     selectedWireSegment = undefined;
     selectedWireCorner = undefined;
@@ -1738,6 +1770,14 @@ function redo(): void {
 // ────────────────────────────────────────────────────────────────────────────────────────────────
 
 function persistState(): void {
+  // Qualquer edição geométrica/visual direta sobre o resultado automático passa a ser uma edição
+  // personalizada. Operações semânticas de pino regeneram antes de chegar aqui e continuam generic.
+  if (state.symbolMode === "generic" && subcircuitEditorMode === "symbol") {
+    const expected = regenerateGenericSubcircuitState(state, newComponentId);
+    if (JSON.stringify([state.symbolElements, state.symbolCanvas]) !== JSON.stringify([expected.symbolElements, expected.symbolCanvas])) {
+      state = { ...state, symbolMode: "custom" };
+    }
+  }
   recordUndoSnapshotIfChanged();
   vscode?.setState(state);
   const outbound: WebviewToHostMessage = { version: WEBVIEW_MESSAGE_VERSION, type: "projectChanged", project: state };
@@ -2455,6 +2495,22 @@ function renderAppBar(): HTMLElement {
     // "Criar Pino" -- ação dedicada, só em Modo Símbolo (pedido original: nenhum typeId de pino na
     // paleta geral).
     if (subcircuitEditorMode === "symbol") {
+      const encapsulationSelect = document.createElement("select");
+      encapsulationSelect.className = "appbar__subcircuit-mode-select";
+      for (const optionModel of [
+        { value: "generic", label: t("genericEncapsulation") },
+        { value: "custom", label: t("customEncapsulation") },
+      ] as const) {
+        const option = document.createElement("option");
+        option.value = optionModel.value;
+        option.textContent = optionModel.label;
+        encapsulationSelect.appendChild(option);
+      }
+      encapsulationSelect.value = state.symbolMode ?? "custom";
+      encapsulationSelect.title = encapsulationSelect.value === "generic" ? t("genericEncapsulation") : t("customEncapsulation");
+      encapsulationSelect.addEventListener("change", () => setSubcircuitSymbolMode(encapsulationSelect.value as "generic" | "custom"));
+      subcircuitGroup.appendChild(encapsulationSelect);
+
       subcircuitGroup.appendChild(renderToolbarButton("createPin", t("createPin"), () => createSymbolPinCommand()));
 
       // "Selecionar Componentes Expostos" -- pedido explícito do usuário: precisa existir DENTRO do
@@ -2692,14 +2748,14 @@ function installCanvasEventHandlers(canvas: HTMLDivElement, canvasContent: HTMLD
 
   // Marquee (retângulo de arrasto a partir do fundo vazio) -- seleção por interseção, igual ao
   // SimulIDE real (`QGraphicsView::RubberBandDrag` puro, sem distinção de sentido de arrasto, ver
-  // `.spec/lasecsimul.spec` seção 13.4). Só começa se o pointerdown for no fundo (componente/fio/pino
+  // `.spec/archive/legacy-v2/lasecsimul.spec` seção 13.4). Só começa se o pointerdown for no fundo (componente/fio/pino
   // já chamam `stopPropagation()` nos próprios listeners, então nunca chegam aqui).
   canvas.addEventListener("pointerdown", (event) => {
     if (event.button !== 0 || state.pendingConnection) return;
     // Pino/fio não chamam `stopPropagation()` no PRÓPRIO `pointerdown` (só no `click`) -- sem este
     // guard, o evento borbulha até aqui e `setPointerCapture` rouba o pointer do pino, quebrando o
     // clique que inicia um fio (mesma classe de bug já corrigida 2x antes nesta sessão, ver
-    // .spec/lasecsimul.spec — pointerdown de filho sem stopPropagation some o alvo do clique
+    // .spec/archive/legacy-v2/lasecsimul.spec — pointerdown de filho sem stopPropagation some o alvo do clique
     // sintetizado quando o `render()` do `onUp` do marquee recria o DOM no meio do gesto).
     if (
       event.target instanceof Element &&
@@ -4444,7 +4500,7 @@ function ledFillFor(component: WebviewComponentModel): string {
   return ledFillForReadout(colorName, numericReadout(component));
 }
 
-/** ABI v2 (.spec/lasecsimul-native-devices.spec): consulta `interactionKind` do catálogo (vindo do
+/** ABI v2 (.spec/archive/legacy-v2/lasecsimul-native-devices.spec): consulta `interactionKind` do catálogo (vindo do
  * Core via `getPropertySchemas`) em vez de checar typeId -- fallback legado só pra typeId sem o
  * campo declarado ainda (catálogo não carregou do Core). */
 function interactionKindFor(typeId: string): InteractionKindEntry {
@@ -5849,7 +5905,7 @@ function refreshInstrumentPopupPlots(): void {
 }
 
 /** `steps`: múltiplo de 90° (1 = CW, -1 = CCW, 2 = 180° — `Ctrl+R`/`Ctrl+Shift+R`/menu "Rotacionar
- * 180", ver `.spec/lasecsimul.spec` seção 13.4). Sem `persistState`/`render` aqui -- quem chama em
+ * 180", ver `.spec/archive/legacy-v2/lasecsimul.spec` seção 13.4). Sem `persistState`/`render` aqui -- quem chama em
  * grupo (`rotateSelectedComponents`) faz isso uma vez só, não por componente. */
 function applyRotation(component: WebviewComponentModel, steps: 1 | -1 | 2): void {
   const nextRotation = (((component.rotation + 90 * steps + 360) % 360) as 0 | 90 | 180 | 270);
@@ -6076,7 +6132,7 @@ function componentVisualFlags(component: WebviewComponentModel): ComponentVisual
 /** Cria o elemento `.component` UMA VEZ por id (reaproveitado entre renders, ver
  * `componentElementsById`) -- registra aqui SÓ os listeners de longa duração (clique/seleção,
  * duplo-clique, menu de contexto, arrastar, popup de instrumento). Reconciliação incremental
- * (.spec/lasecsimul-native-devices.spec): pintura visual (posição/classe/SVG/pinos) fica inteira em
+ * (.spec/archive/legacy-v2/lasecsimul-native-devices.spec): pintura visual (posição/classe/SVG/pinos) fica inteira em
  * `updateComponentElement`, chamada daqui pra pintura inicial e de novo em TODO `render()` seguinte
  * pro mesmo id -- nunca recria o wrapper nem os listeners abaixo, só atualiza.
  *
@@ -6096,7 +6152,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
     activeSceneComponents().find((entry) => entry.id === componentId);
   let suppressNextDialComponentClick = false;
 
-  // ABI v2 (.spec/lasecsimul-native-devices.spec): isPushButton vem de interactionKind (genérico);
+  // ABI v2 (.spec/archive/legacy-v2/lasecsimul-native-devices.spec): isPushButton vem de interactionKind (genérico);
   // isToggleClickable é o conceito genérico de "clicar no toggle-hit-zone alterna `closed`" -- cobre
   // switch E switch_dip (e qualquer typeId futuro de interactionKind "toggle" que use a mesma
   // propriedade `closed`), sem precisar de um bucket por typeId (bug real: switch_dip não tinha
@@ -7787,6 +7843,7 @@ function renamePinIdCascade(pinComponent: WebviewComponentModel, rawNewPinId: st
     // -- nunca precisa ser escrito aqui, evita duplicar a regra nos dois lados.
     send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: tunnel.id, name: "pinId", value: newPinId });
   }
+  regenerateCurrentGenericSymbol();
   persistState();
   render();
   refreshOpenPropertyDialog();
@@ -7814,7 +7871,7 @@ function renderPropertyField(component: WebviewComponentModel, field: PropertyFi
     // fluxo assíncrono no host (parse + troca de typeId/pinos/package + registro no Core) -- mesmo
     // comando usado pelo menu de contexto "Localizar arquivo do subcircuito...". Qualquer OUTRO
     // campo `filePath` (ex: `graphics.image.path`, usado pela Figura/ícone da autoria de Package,
-    // `.spec/lasecsimul.spec`) é genérico: `requestChooseFile` lê o arquivo no host e grava o
+    // `.spec/archive/legacy-v2/lasecsimul.spec`) é genérico: `requestChooseFile` lê o arquivo no host e grava o
     // resultado direto em `properties[propertyKey]` -- sem trocar typeId/pinos/nada mais.
     const isSubcircuitRefPath = field.key === "subcircuitPath";
     const isDeviceRefPath = field.key === "devicePath";
@@ -8181,6 +8238,7 @@ function renderPropertySheet(component: WebviewComponentModel, options: Property
     titleInput.addEventListener("change", () => {
       component.label = titleInput.value.trim() || component.label;
       send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestRenameComponent", componentId: component.id, label: component.label });
+      if (component.typeId === SYMBOL_PIN_TYPE_ID) regenerateCurrentGenericSymbol();
       persistState();
       render();
       refreshOpenPropertyDialog();

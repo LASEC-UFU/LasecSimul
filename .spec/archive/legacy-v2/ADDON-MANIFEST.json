@@ -1,0 +1,86 @@
+{
+  "package": "LasecSimul .spec add-on",
+  "range": "30-42",
+  "files": [
+    {
+      "name": "30-animated-process-visualization.md",
+      "bytes": 11106,
+      "sha256": "2cfe2f743ebd327a60825a69f1a8a10e2f5b3121b43c3f62db8328919f485b32"
+    },
+    {
+      "name": "31-process-visual-asset-and-animation-schema.md",
+      "bytes": 6349,
+      "sha256": "61404528bf83a95ccf109c289670a42c00f1722882c10285d8064e96824972cc"
+    },
+    {
+      "name": "32-python-script-block.md",
+      "bytes": 8364,
+      "sha256": "8a6c345c995be399dedb6cdec19f365fd0d872e98f850b1bf9476a6071f152af"
+    },
+    {
+      "name": "33-python-electrical-and-process-io-bridge.md",
+      "bytes": 6738,
+      "sha256": "57dad897003baa8aa25391558a6d31fb782cd391981534cbecdc95ae34f46199"
+    },
+    {
+      "name": "34-python-runtime-security-and-dependencies.md",
+      "bytes": 7305,
+      "sha256": "68955748357001d1d6aa12e9439ea4f9ec705cb21665fae4c7036ca79b5a5e82"
+    },
+    {
+      "name": "35-marketplace-one-click-installation.md",
+      "bytes": 11130,
+      "sha256": "9d918ea2bb538b661e14b58bd06bbea0d52d768aaf427c072ef7fcb2c3bf9124"
+    },
+    {
+      "name": "36-managed-toolchain-bootstrap.md",
+      "bytes": 6978,
+      "sha256": "5461826f1304eb21b91b9566af3606e4d6e6192646f3956ac4a509009f22cb6c"
+    },
+    {
+      "name": "37-first-run-onboarding-and-setup-prompt.md",
+      "bytes": 4766,
+      "sha256": "c0be948dc0e3bfe9e79fa60e816bd4f82dfd6d98863da3b13f13632c28afbc20"
+    },
+    {
+      "name": "38-animated-process-python-integration.md",
+      "bytes": 2660,
+      "sha256": "7fcf4435d3f791a55a2c5f8c510af01de2aeff0bcf01be2b0f63ae9093624009"
+    },
+    {
+      "name": "39-marketplace-release-packaging-and-ci.md",
+      "bytes": 3555,
+      "sha256": "7c375fde58aaa2746534a199657846457c153cf41e404955ee258b6ea9f693b8"
+    },
+    {
+      "name": "40-process-visualization-editor-ux.md",
+      "bytes": 2396,
+      "sha256": "c43371345c37533c3cbd9543bbc789c1a3ef6aac6b69ecb25e17a0bc5dad98a7"
+    },
+    {
+      "name": "41-new-feature-test-matrix-and-demos.md",
+      "bytes": 2836,
+      "sha256": "c6c7d267f103fa704ba4f6c6dd9ce0557d18450f091c891243d44611609c621d"
+    },
+    {
+      "name": "42-architecture-decisions-addendum.md",
+      "bytes": 3597,
+      "sha256": "7d9168fcbe1d8cde0fade650ee0e645a9d7ae986145794c38b3f06dbc8d27ae6"
+    },
+    {
+      "name": "MERGE-INSTRUCTIONS.md",
+      "bytes": 1607,
+      "sha256": "9943ed28799af038d12b8023f1d6591a3e57f8576b75fb2c33e895bca726ccd3"
+    },
+    {
+      "name": "README-ADDENDUM-30-42.md",
+      "bytes": 1375,
+      "sha256": "4550fcc9d8a9277eaaa37f3b7d47db21f480f6002691ce263060326ca2b2555d"
+    },
+    {
+      "name": "STATUS-ADDENDUM-30-42.md",
+      "bytes": 1069,
+      "sha256": "fb4e4b9d3551349afc737944eff574d6cdfad783299bd5106d5198091648ffca"
+    }
+  ]
+}

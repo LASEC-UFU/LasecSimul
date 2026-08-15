@@ -176,7 +176,7 @@ public:
         };
     }
 
-    /** ABI v2 (.spec/lasecsimul-native-devices.spec) -- declara que `getState()` começa com 4
+    /** ABI v2 (.spec/archive/legacy-v2/lasecsimul-native-devices.spec) -- declara que `getState()` começa com 4
      * canais de histórico temporal, pra Webview decodificar sem checar typeId. */
     static ReadoutFormat readoutFormat() {
         ReadoutFormat format;

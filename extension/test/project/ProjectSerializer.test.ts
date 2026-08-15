@@ -123,7 +123,7 @@ import { createEmptyProject } from "../../src/project/ProjectTypes";
   assert.deepStrictEqual(batchColorRoundTrip.components.map((component) => component.properties.color), ["#ff0000", "#ff0000"]);
   assert.deepStrictEqual(batchColorRoundTrip.components.map((component) => component.properties.fontSize), [11, 14], "fontSize (não editado em lote) deveria continuar individual por componente");
 
-  // `subcircuitRef` (bloco genérico de subcircuito por caminho, ver .spec/lasecsimul-subcircuits.spec
+  // `subcircuitRef` (bloco genérico de subcircuito por caminho, ver .spec/archive/legacy-v2/lasecsimul-subcircuits.spec
   // seção 9) precisa sobreviver a save→load igual label/showId/showValue -- é a ÚNICA exceção
   // deliberada à regra "nunca persistir pinos" (lastKnownPinIds), sem ela o componente perderia a
   // identidade elétrica dos fios ao reabrir com o arquivo ausente.

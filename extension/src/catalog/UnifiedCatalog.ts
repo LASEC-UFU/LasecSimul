@@ -106,7 +106,7 @@ function sanitizeFolderPath(input: string[] | undefined): string[] {
   return out;
 }
 
-/** PC-16 (.spec/lasecsimul-native-devices.spec): `item` vem de JSON externo
+/** PC-16 (.spec/archive/legacy-v2/lasecsimul-native-devices.spec): `item` vem de JSON externo
  * (`component-catalog.json`/registro de device) só com o CONTAINER checado (`readUnifiedCatalogFile`
  * garante que `items` é array, nunca que cada `item.pinIds` de fato é `string[]`) -- sem isto, um
  * `pinIds` mal formado (ex: string em vez de array) passava direto pro tipo `WebviewComponentCatalogEntry`

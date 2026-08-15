@@ -59,7 +59,7 @@ export class CoreClient {
   private readonly notificationHandlers: NotificationHandler[] = [];
   private requestCounter = 0;
   private lineBuffer = "";
-  /** PC-4 (.spec/lasecsimul-native-devices.spec): decodifica UTF-8 de forma INCREMENTAL entre
+  /** PC-4 (.spec/archive/legacy-v2/lasecsimul-native-devices.spec): decodifica UTF-8 de forma INCREMENTAL entre
    * chamadas de `_onData` -- um `Buffer.toString("utf8")` ingênuo por chunk (como era antes) corrompe
    * qualquer caractere multi-byte (praticamente todo texto acentuado -- "ç"/"ã"/"õ", comum em
    * label/erro/tradução deste app, majoritariamente em pt-BR) que caia bem na fronteira entre dois
@@ -135,7 +135,7 @@ export class CoreClient {
   /** `pins`: built-ins ignoram o id (cada factory já tem o seu hardcoded, ex: "p1"/"p2") e só leem
    * x/y; plugins (NativeDeviceProxy) usam estes ids DIRETAMENTE como os pinos da instância — sem
    * isso, connectWire nunca acertaria o pino certo de um componente vindo de um plugin (ver
-   * .spec/lasecsimul.spec sobre instrumentos como plugin ABI). */
+   * .spec/archive/legacy-v2/lasecsimul.spec sobre instrumentos como plugin ABI). */
   /** `exposedPins` só vem preenchido quando `typeId` é um bloco de subcircuito -- chave é o pinId
    * externo do bloco (ex: "GPIO2"), valor é o {instanceId,pinId} REAL do túnel interno que o
    * representa no Netlist (ver `SimulationSession::expandSubcircuit`). O id "container" devolvido em
@@ -197,7 +197,7 @@ export class CoreClient {
 
   /** Renomeia um túnel no Netlist. Deve ser chamado em vez de `setProperty` quando a propriedade
    * "name" de um `connectors.tunnel` muda — `setProperty` só re-stampa, não rebuilda topologia.
-   * Ver `SimulationSession::setTunnelName` e `.spec/lasecsimul.spec` seção 6.1. */
+   * Ver `SimulationSession::setTunnelName` e `.spec/archive/legacy-v2/lasecsimul.spec` seção 6.1. */
   async setTunnelName(instanceId: string, pinId: string, oldName: string, newName: string): Promise<void> {
     await this.request("setTunnelName", { instanceId, pinId, oldName, newName });
   }
@@ -309,7 +309,7 @@ export class CoreClient {
   }
 
   /** Saúde operacional da instância (`"ok" | "lagging" | "faulted"`) -- watchdog/CrashGuard do
-   * lado do plugin nativo, ver `.spec/lasecsimul-native-devices.spec` seção 13. Built-ins sempre
+   * lado do plugin nativo, ver `.spec/archive/legacy-v2/lasecsimul-native-devices.spec` seção 13. Built-ins sempre
    * respondem `"ok"`. */
   async getComponentHealth(instanceId: string): Promise<"ok" | "lagging" | "faulted"> {
     const resp = await this.request("getComponentHealth", { instanceId });
@@ -384,7 +384,7 @@ export class CoreClient {
    * do componente -- nunca falha, ver `lasecsimul.spec` seção 6.3.3. */
   async getPropertySchemas(language?: string): Promise<{
     schemasByTypeId: Record<string, PropertySchemaDto[]>;
-    /** ABI v2 (.spec/lasecsimul-native-devices.spec) -- mapas irmãos aditivos, só presentes pro
+    /** ABI v2 (.spec/archive/legacy-v2/lasecsimul-native-devices.spec) -- mapas irmãos aditivos, só presentes pro
      * typeId que o device declarou; ausência é "sem leitura estruturada"/"sem interação especial". */
     readoutFormatByTypeId: Record<string, ReadoutFormatDto>;
     interactionKindByTypeId: Record<string, InteractionKindDto>;

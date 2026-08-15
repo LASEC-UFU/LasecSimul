@@ -15,7 +15,7 @@ namespace lasecsimul::simulation {
 /**
  * Um sistema linear independente — um componente conectado do grafo de nós (DFS em Netlist).
  * Grupos nunca compartilham estado mutável entre si, por isso podem ser resolvidos em paralelo sem
- * sincronização (ver .spec/lasecsimul.spec, seção 7.1).
+ * sincronização (ver .spec/archive/legacy-v2/lasecsimul.spec, seção 7.1).
  *
  * Dimensão da matriz = nós do grupo + variáveis extras (correntes de ramo de fontes de tensão
  * ideais, ver seção 7.3) — alocadas uma vez no rebuild de topologia, nunca durante stamp(). As
@@ -166,7 +166,7 @@ public:
         // ordens de grandeza de spread sepultam as linhas fracas. Escalar cada linha/coluna i por
         // `1/sqrt(|A_ii|)` deixa a diagonal em ~1 e o spread relativo correto reaparece (resolve a
         // causa raiz pra qualquer combinação futura de magnitudes, não só este caso -- ver
-        // .spec/lasecsimul-native-devices.spec seção 8.1). Variáveis extras (corrente de ramo de
+        // .spec/archive/legacy-v2/lasecsimul-native-devices.spec seção 8.1). Variáveis extras (corrente de ramo de
         // fonte de tensão ideal) têm diagonal exatamente 0 por construção (MNA padrão) -- escala 1,
         // sem tocar essas linhas, que já são bem-condicionadas sozinhas (±1 nos off-diagonais).
         const Eigen::Index n = m_admittance.rows();

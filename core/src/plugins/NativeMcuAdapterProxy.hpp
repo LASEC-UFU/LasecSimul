@@ -53,7 +53,7 @@ private:
     /** Timeout fixo pras chamadas frias de inicialização/finalização -- generoso de propósito
      * (nunca deveriam demorar mais que milissegundos num plugin legítimo; ver classe doc). Sem
      * `stepTimeoutMs` declarável no manifesto pra MCU hoje (só devices têm `limits.stepTimeoutMs`
-     * -- ver `.spec/lasecsimul-native-devices.spec` seção 13), então uma constante única serve
+     * -- ver `.spec/archive/legacy-v2/lasecsimul-native-devices.spec` seção 13), então uma constante única serve
      * todo mundo por enquanto. */
     static constexpr uint32_t kColdCallTimeoutMs = 5000;
     static constexpr uint32_t kMaxConsecutiveTimeouts = 3;

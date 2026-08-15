@@ -9,7 +9,7 @@ aqui foi conferido contra o código real do repositório nesta data (2026-06-28)
 função, campo de struct ou caminho de arquivo é hipotético.
 
 Leitura de referência completa (este guia é o atalho prático, não substitui):
-`.spec/lasecsimul-native-devices.spec` (dispositivo ABI), `.spec/lasecsimul.spec` seção 8 (QEMU/MCU),
+`.spec/archive/legacy-v2/lasecsimul-native-devices.spec` (dispositivo ABI), `.spec/archive/legacy-v2/lasecsimul.spec` seção 8 (QEMU/MCU),
 `docs/17-pendencias-pos-sessao-qemu-abi.md` (estado real pós-sessão de correção da ABI de MCU).
 
 ---
@@ -145,7 +145,7 @@ informativo) — sempre recompile o device (`npm run build:devices`) depois de a
 ## 1.3 Anatomia de `.lsdevice` — cada campo, o que faz
 
 Arquivo real de referência: `devices/example-blinker/.lsdevice` e
-`devices/voltmeter/.lsdevice`. Schema completo: `.spec/lasecsimul-native-devices.spec` seção 4.2.2.
+`devices/voltmeter/.lsdevice`. Schema completo: `.spec/archive/legacy-v2/lasecsimul-native-devices.spec` seção 4.2.2.
 
 ```json
 {

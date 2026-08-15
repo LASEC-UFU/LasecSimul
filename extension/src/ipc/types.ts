@@ -29,7 +29,7 @@ export interface PropertySchemaDto {
 }
 
 /** Espelha 1:1 `readoutFormatToJson` em `CoreApplication.cpp` -- ABI v2, ver
- * .spec/lasecsimul-native-devices.spec. */
+ * .spec/archive/legacy-v2/lasecsimul-native-devices.spec. */
 export type ReadoutFormatDto =
   | { kind: "scalar"; unit: string }
   | { kind: "channelHistory"; channels: number }

@@ -1672,3 +1672,21 @@ testes). Verificação manual (sem GUI neste ambiente) recomendada: mudar alinha
 Editar Símbolo e conferir que o PREVIEW AO VIVO já reflete sem precisar salvar/reabrir; ocultar o
 rótulo de um pino e conferir que some do preview E do SVG final do package colocado no esquemático
 principal; salvar, reabrir, conferir que tudo persiste.
+
+## 24. Encapsulamento genérico automático (2026-08-15)
+
+`SubcircuitDocument.symbolMode?: "generic" | "custom"` define apenas a política de autoria. Ausente
+significa `custom`, preservando todo arquivo schemaVersion 3 existente. O resultado genérico MUST
+continuar materializado em `symbol: PackageDescriptor`; catálogo, renderer e Core nunca ganham um
+caminho paralelo para interpretá-lo.
+
+`ui/webview/genericSubcircuitPackage.ts` é a fonte única do layout automático. O algoritmo MUST ser
+determinístico e linear: preserva a ordem elétrica, alterna pinos entre esquerda/direita, cresce o
+corpo conforme contagem/labels, alinha dimensões à grade de 8 px e posiciona cada ponto elétrico fora
+do corpo com o lead terminando exatamente na borda. O título é uma forma `graphics.text` comum.
+
+Novos subcircuitos criados a partir de seleção MUST nascer com `symbolMode:"generic"`, `symbol`
+gerado e túneis canônicos `{name,pinId}`. No modo genérico, criar, duplicar, excluir ou renomear pinos
+regenera o símbolo e preserva os componentIds sobreviventes. Qualquer edição geométrica ou visual
+direta promove o modo para `custom`, preservando a alteração. Trocar de personalizado para genérico
+exige confirmação; trocar para personalizado congela o desenho corrente como cena WYSIWYG editável.

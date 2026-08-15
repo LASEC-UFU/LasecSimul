@@ -90,7 +90,7 @@ function schemaDto(overrides: Partial<PropertySchemaDto> = {}): PropertySchemaDt
     assert(catalog[0]?.propertySchema === undefined, "catálogo original não deve ser mutado");
   });
 
-  // ABI v2 (.spec/lasecsimul-native-devices.spec) -- readoutFormat/interactionKind são mapas
+  // ABI v2 (.spec/archive/legacy-v2/lasecsimul-native-devices.spec) -- readoutFormat/interactionKind são mapas
   // irmãos aditivos, separados de schemasByTypeId.
   await test("mergePropertySchemas anexa readoutFormat/interactionKind por typeId quando presentes", () => {
     const catalog = [catalogEntry("meters.oscope"), catalogEntry("switches.push"), catalogEntry("passive.resistor")];
@@ -132,7 +132,7 @@ function schemaDto(overrides: Partial<PropertySchemaDto> = {}): PropertySchemaDt
     assert(merged[0]?.readoutFormat === undefined, "sem mapa novo, readoutFormat fica ausente");
   });
 
-  // EX-4.2 (.spec/lasecsimul-native-devices.spec) -- pinIdsByTypeId só PREENCHE builtins sem
+  // EX-4.2 (.spec/archive/legacy-v2/lasecsimul-native-devices.spec) -- pinIdsByTypeId só PREENCHE builtins sem
   // pinIds próprio (ex: passive.resistor, sem package), nunca sobrescreve o que devices/mcu-
   // adapter/subcircuit-file já tinham resolvido direto do manifesto (mesma fonte, resolvida antes).
   await test("mergePropertySchemas preenche pinIds vindo do Core só quando o catalogo ainda nao tem (EX-4.2)", () => {

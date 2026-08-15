@@ -48,7 +48,7 @@ do documento abaixo permanece como histórico do diagnóstico original.
   `normalizeSelectedWireCorner()` no início de `render()`.
 - **PC-20/PC-21 fechados**: a contribuição morta `view/item/context` não existe mais no `package.json`, e a
   mensagem de catálogo integrado já está com acentuação correta.
-- **SPEC/DOC fechados**: `.spec/lasecsimul.spec`, `.spec/lasecsimul-subcircuits.spec`,
+- **SPEC/DOC fechados**: `.spec/archive/legacy-v2/lasecsimul.spec`, `.spec/archive/legacy-v2/lasecsimul-subcircuits.spec`,
   `docs/07-extension-typescript.md`, `docs/08-ui-webview.md`, `docs/11-qemu-esp32.md` e
   `docs/mvp-limitacoes.md` foram alinhados ao estado atual de paleta, subcircuito, undo/redo,
   copiar/colar e flip.
@@ -68,7 +68,7 @@ do documento abaixo permanece como histórico do diagnóstico original.
   afetava a topologia elétrica) agora funciona de verdade, de `init()` ou de dentro do próprio
   `set_property()`, **sem nenhuma mudança de assinatura de ABI**; existe também um caminho 100%
   declarativo (`pinSpec` no `.lsdevice`) pra quem não quer escrever C. `Netlist::reregisterComponentPins`
-  segue a mesma filosofia append-only de `removeComponent`. Ver `.spec/lasecsimul-native-devices.spec`
+  segue a mesma filosofia append-only de `removeComponent`. Ver `.spec/archive/legacy-v2/lasecsimul-native-devices.spec`
   seção 7.1 pro desenho completo e [[project_lasecsimul_dynamic_pins]] na memória.
   - **Gap visual fechado nesta mesma tarefa**: `outputs.led_matrix`/`outputs.led_bar`/`active.analog_mux`
     ganharam `package.dynamicLayout`/`simulidePaint` completos (só `switches.keypad` tinha antes),
@@ -110,7 +110,7 @@ do documento abaixo permanece como histórico do diagnóstico original.
   `replaceFactory`, chamado depois do registro built-in), e o modelo do próprio plugin (`lib.c`) também é um
   limiar on/off simplificado -- portar Newton-Raphson de verdade pra estes exigiria mexer no `lib.c`, fora do
   escopo desta tarefa. Testes novos: `core/test/zener_led_test.cpp` (regulador zener com fonte reversa +
-  LED forward, ambos validando KCL na tensão convergida, não só que o laço parou). `.spec/lasecsimul.spec`
+  LED forward, ambos validando KCL na tensão convergida, não só que o laço parou). `.spec/archive/legacy-v2/lasecsimul.spec`
   §7.4 atualizada (estava desatualizada dizendo "não existe diodo... ainda não escrita", de antes do
   `active.diode` já ter sido implementado por outra sessão sem atualizar a spec).
 - **Workflow de instaladores (`.github/workflows/package-installers.yml`) corrigido (2026-07-08)**: item
@@ -176,7 +176,7 @@ declarativo antes de qualquer fallback hardcoded.
 ## Método
 
 5 agentes de investigação em paralelo, cada um com escopo de domínio, acesso ao código atual, às specs
-(`.spec/lasecsimul.spec`, `.spec/lasecsimul-native-devices.spec`, `.spec/lasecsimul-subcircuits.spec`),
+(`.spec/archive/legacy-v2/lasecsimul.spec`, `.spec/archive/legacy-v2/lasecsimul-native-devices.spec`, `.spec/archive/legacy-v2/lasecsimul-subcircuits.spec`),
 à skill (`.skill/lasecsimul.skill`) e ao SimulIDE real (`C:\SourceCode\simulide_2`) como referência de
 comportamento. Cada agente recebeu o contexto do handoff anterior para não redescobrir o que já foi
 corrigido, e foi instruído a **confirmar lendo o código atual** antes de aceitar qualquer afirmação do
@@ -233,7 +233,7 @@ o que é um sinal de confirmação, não de achado duplo.
   deliberada e documentada (comentário explícito no código), não uma fragilidade. Só uma inconsistência
   pequena sobrou (`selectedTextLabel` sem a mesma auto-cura que `selectedWireSegment`/`selectedWireCorner`
   têm).
-- **A documentação normativa tem uma contradição interna séria**: `.spec/lasecsimul.spec` §13.4 lista
+- **A documentação normativa tem uma contradição interna séria**: `.spec/archive/legacy-v2/lasecsimul.spec` §13.4 lista
   undo/redo, copiar/colar e flip como "fora de escopo, não implementado" — mas os três já existem e a
   própria §17 do mesmo arquivo documenta a implementação. Um agente futuro que leia só §13.4 pode tentar
   reimplementar do zero algo que já existe.
@@ -254,7 +254,7 @@ o que é um sinal de confirmação, não de achado duplo.
 | TR-9 | `switches.keypad`: redimensionamento por `rows`/`columns` quebrado após migração pra `package` | Alto | Core, Extension, UI |
 | EX-E | Duas filas de serialização de mutação do Core que não se coordenam entre si (race condition) | Alto | Extension |
 | PC-19 | Diálogo de propriedades usa `typeId` literal em vez do metadado ABI v2 já migrado | Alto | UI |
-| SPEC-3 | `.spec/lasecsimul.spec` §13.4 contradiz §17: lista undo/redo/copiar-colar/flip como não implementados | Alto | Spec |
+| SPEC-3 | `.spec/archive/legacy-v2/lasecsimul.spec` §13.4 contradiz §17: lista undo/redo/copiar-colar/flip como não implementados | Alto | Spec |
 | UI-DUP | Lógica de conexão de fio duplicada entre `extension.ts` e `main.ts` no modo de autoria de subcircuito | Alto | Extension, UI |
 | HARD-1 | Normalização de manifesto (ícone, `folderPath`, `logicSymbol` default) duplicada 2-3x em `registeredSources.ts` | Médio | Extension |
 | HARD-2 | `extractPackageForEditing` reimplementa `sanitizePackage` com validação mais fraca e sem resolver `background.asset` | Médio | Extension |
@@ -266,10 +266,10 @@ o que é um sinal de confirmação, não de achado duplo.
 | EX-A | Função órfã `registeredSubcircuitInfoToParsedManifest` (resultado de edição não commitada) | Baixo | Extension |
 | PC-20 | Contribuição `view/item/context` morta em `package.json` (resíduo do TreeView deletado) | Baixo | Extension (manifesto) |
 | PC-21 | Mensagem de erro com mojibake exibida ao usuário | Baixo | Extension |
-| SPEC-1 | `.spec/lasecsimul-subcircuits.spec` contradiz a si mesmo: linha 37 diz `.json`, resto do doc diz `.lssubcircuit` | Baixo | Spec |
+| SPEC-1 | `.spec/archive/legacy-v2/lasecsimul-subcircuits.spec` contradiz a si mesmo: linha 37 diz `.json`, resto do doc diz `.lssubcircuit` | Baixo | Spec |
 | SPEC-2 | Spec referencia `TreeItem.iconPath`, API não mais usada (resíduo do TreeView) | Baixo | Spec |
 | DOC-3 | `docs/07-extension-typescript.md` referencia `ui/commands/`, diretório que nunca existiu de fato | Baixo | Docs |
-| SPEC-4 | Mojibake em `.spec/lasecsimul-native-devices.spec` (mudança não commitada do próprio usuário) | Baixo (nota) | Spec |
+| SPEC-4 | Mojibake em `.spec/archive/legacy-v2/lasecsimul-native-devices.spec` (mudança não commitada do próprio usuário) | Baixo (nota) | Spec |
 | PERF-1 | `updateWiresTouchingComponent` faz scan O(total de fios) por componente arrastado, a cada `pointermove` | Baixo | UI |
 | PERF-2 | `render()` itera `state.components` inteiro 5x em passes de `.filter()` separados | Baixo | UI |
 | OPT-1 | `loadUnifiedCatalog` sem cache — relido/reparseado do disco em 7+ pontos de `extension.ts` | Melhoria opcional | Extension |
@@ -299,9 +299,9 @@ o que é um sinal de confirmação, não de achado duplo.
   `disabledReason`. O único fluxo real de criação (comando `lasecsimul.newSubcircuit`) grava o
   `.lssubcircuit` e registra a fonte **sem `libraryPath`**, e nunca cria/atualiza `library.json`. O mesmo
   vale para "Registrar arquivo..." apontando direto pra um `.lssubcircuit` avulso.
-- **Por que é problema**: quebra o fluxo principal e documentado (`.spec/lasecsimul-subcircuits.spec`
+- **Por que é problema**: quebra o fluxo principal e documentado (`.spec/archive/legacy-v2/lasecsimul-subcircuits.spec`
   seção 11) de criação de subcircuito — o resultado aparece na paleta com ícone fantasma/desabilitado.
-- **Relação com `.spec`/`.skill`**: contradiz `.spec/lasecsimul-subcircuits.spec` §12.1, que documenta
+- **Relação com `.spec`/`.skill`**: contradiz `.spec/archive/legacy-v2/lasecsimul-subcircuits.spec` §12.1, que documenta
   `registerAdhocSubcircuit` no Core **sem exigir** `library.json` para subcircuito avulso. A exigência de
   `library.json` foi copiada da regra de confiança de `abi-device` (código nativo, precisa de
   `publisher`/`trust`, seção 12 do native-devices.spec) sem adaptação — subcircuito é dado puro, não tem
@@ -393,7 +393,7 @@ o que é um sinal de confirmação, não de achado duplo.
 - **Por que é problema**: violação direta da regra do skill ("nunca hardcode lógica de um typeId
   específico fora do módulo daquele device quando existe caminho de metadata genérico") — inconsistente
   com o resto do arquivo, que já foi migrado.
-- **Relação com `.spec`/`.skill`**: `.spec/lasecsimul-native-devices.spec` §22.4/22.8 declara esses
+- **Relação com `.spec`/`.skill`**: `.spec/archive/legacy-v2/lasecsimul-native-devices.spec` §22.4/22.8 declara esses
   typeIds como migrados pro ABI v2 nesta mesma linha de trabalho.
 - **Impacto atual**: baixo em termos de bug ativo (os 3 typeIds cobertos hoje são exatamente os mesmos que
   o metadado cobriria) — o risco é de **drift futuro**: um typeId novo com o mesmo padrão de interação não
@@ -404,9 +404,9 @@ o que é um sinal de confirmação, não de achado duplo.
 - **Disruptivo**: não.
 - **Camadas**: UI (`main.ts`).
 
-### SPEC-3 — `.spec/lasecsimul.spec` §13.4 contradiz §17: undo/redo/copiar-colar/flip
+### SPEC-3 — `.spec/archive/legacy-v2/lasecsimul.spec` §13.4 contradiz §17: undo/redo/copiar-colar/flip
 
-- **Arquivo**: `.spec/lasecsimul.spec:1462-1465` (§13.4) vs `.spec/lasecsimul.spec` §17 (linhas 1651+).
+- **Arquivo**: `.spec/archive/legacy-v2/lasecsimul.spec:1462-1465` (§13.4) vs `.spec/archive/legacy-v2/lasecsimul.spec` §17 (linhas 1651+).
 - **Evidência**: §13.4 lista como "fora de escopo, não implementado": copiar/colar, flip
   horizontal/vertical, undo/redo ("o LasecSimul não tem NENHUM sistema de undo hoje"). §17, mais adiante
   no MESMO arquivo, título "Undo/Redo (Ctrl+Z/Ctrl+Y/Ctrl+Shift+Z) (2026-07-06/07)", documenta a
@@ -527,7 +527,7 @@ o que é um sinal de confirmação, não de achado duplo.
 
 - **Arquivo**: `docs/08-ui-webview.md:14-15` ("Paleta... é um TreeView nativo do VSCode"), `:26`
   ("Painel de propriedades — persistente, nunca modal") — exatamente as duas decisões que
-  `.spec/lasecsimul.spec` §13 documenta como revertidas na prática.
+  `.spec/archive/legacy-v2/lasecsimul.spec` §13 documenta como revertidas na prática.
 - **Por que é problema**: a Fase 2 do handoff corrigiu `.skill`/`.spec`, mas não tocou neste doc de
   planejamento inicial (docs 00-14 parecem não terem sido atualizados desde o MVP original) — real risco
   de confundir um agente que leia `docs/08` (nome mais "óbvio" pra UI/Webview que `.spec` §13).
@@ -611,25 +611,25 @@ o que é um sinal de confirmação, não de achado duplo.
   pode ser removido pela paleta."` (encoding duplo, deveria ser "catálogo"/"não").
 - **Proposta**: corrigir a string. **Disruptivo**: não. **Camadas**: Extension.
 
-### SPEC-1 — Auto-contradição de extensão de arquivo em `.spec/lasecsimul-subcircuits.spec`
+### SPEC-1 — Auto-contradição de extensão de arquivo em `.spec/archive/legacy-v2/lasecsimul-subcircuits.spec`
 
-- **Arquivo**: `.spec/lasecsimul-subcircuits.spec:37` ("salvo em disco como `.json`") vs `:64` ("definido
+- **Arquivo**: `.spec/archive/legacy-v2/lasecsimul-subcircuits.spec:37` ("salvo em disco como `.json`") vs `:64` ("definido
   por um único arquivo `*.lssubcircuit`") — resquício de antes da migração de extensões (2026-07-06).
 - **Proposta**: corrigir linha 37 para `.lssubcircuit`. **Disruptivo**: não. **Camadas**: Spec.
 
 ### SPEC-2 — Spec referencia `TreeItem.iconPath`, API não mais usada
 
-- **Arquivo**: `.spec/lasecsimul.spec:1296-1298` vs código real (`paletteTree.ts:4-5,135-136`,
+- **Arquivo**: `.spec/archive/legacy-v2/lasecsimul.spec:1296-1298` vs código real (`paletteTree.ts:4-5,135-136`,
   `palette.ts:53`) que resolve ícone via `iconLightUri`/`iconDarkUri` (URIs de webview).
 - **Proposta**: trocar a referência. **Disruptivo**: não. **Camadas**: Spec.
 
 ### DOC-3 — `docs/07` referencia `ui/commands/` inexistente
 
-- **Arquivo**: `docs/07-extension-typescript.md:33` vs `.spec/lasecsimul.spec:1276` (já correto: "não
+- **Arquivo**: `docs/07-extension-typescript.md:33` vs `.spec/archive/legacy-v2/lasecsimul.spec:1276` (já correto: "não
   existe `ui/commands/` como diretório separado").
 - **Proposta**: atualizar `docs/07` pra apontar pro `.spec`. **Disruptivo**: não. **Camadas**: Docs.
 
-### SPEC-4 — Mojibake em `.spec/lasecsimul-native-devices.spec` (WIP não commitado)
+### SPEC-4 — Mojibake em `.spec/archive/legacy-v2/lasecsimul-native-devices.spec` (WIP não commitado)
 
 - **Nota informativa**: o diff não commitado atual tem `"cada perifÃ©rico UART/USART... pinos fÃ­sicos"`
   (corrupção de encoding). É trabalho do próprio usuário ainda não commitado — reportado só para não

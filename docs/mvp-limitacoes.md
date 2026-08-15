@@ -61,7 +61,7 @@ fica para depois do MVP. Ver `docs/14-integracao-final.md` para os critérios de
   mede tensão DC entre dois pinos usando só `LsdnMatrixView::add_conductance`/`get_node_voltage`
   dentro de `stamp()`, deliberadamente sem usar `LsdnHostApi`/`pin_declare` (ver próximo item).
   Decisão arquitetural registrada em `docs/adr/0006-instrumentos-como-plugin-abi.md` — reverte o
-  texto de `.spec/lasecsimul.spec` que dizia "instrumentos como código nativo, não como plugin".
+  texto de `.spec/archive/legacy-v2/lasecsimul.spec` que dizia "instrumentos como código nativo, não como plugin".
   Teste `core_bootstrap` (`testVoltmeterPluginOverIpc`) valida de ponta a ponta contra o `.dll`
   real: `loadDeviceLibrary` → `addComponent` com `pins` → `connectWire` num divisor resistivo
   10V/1k/1k → `getComponentState` lê **4.999998 V** no ponto médio.
@@ -81,7 +81,7 @@ fica para depois do MVP. Ver `docs/14-integracao-final.md` para os critérios de
   nos pinos de completar; seleção visual virou retângulo translúcido sobre o símbolo (igual
   `Component::paintSelected()` do SimulIDE) em vez de borda; painel de propriedades virou `<dialog>`
   modal aberto com duplo-clique (substituindo o painel lateral fixo, decisão revertida — ver tabela
-  da seção 13 de `.spec/lasecsimul.spec`); fio do esquemático ganhou CSS de cor visível (faltava
+  da seção 13 de `.spec/archive/legacy-v2/lasecsimul.spec`); fio do esquemático ganhou CSS de cor visível (faltava
   inteiramente, por isso parecia "não conectar") e anima vermelho/azul por tensão durante a
   simulação (`getNodeVoltage` IPC, igual `ConnectorLine::paint()` do SimulIDE).
 - **Paleta de componentes com taxonomia/ícones do SimulIDE**: `ComponentPaletteProvider` (TreeView
@@ -111,8 +111,8 @@ fica para depois do MVP. Ver `docs/14-integracao-final.md` para os critérios de
   voltímetro. Dois checkboxes de sistema ("Mostrar nome"/"Mostrar valor",
   `WebviewComponentModel.showId`/`showValue`) no diálogo de propriedades, fora do schema do Core (não
   é elétrico); persistido em `ProjectComponent` (`.lsproj`) — antes desta rodada, `label` não era
-  persistido nenhum. Ver `.spec/lasecsimul.spec` seção 13.3.
-- **Internacionalização de strings declarativas implementada** (ADR 0009, `.spec/lasecsimul.spec`
+  persistido nenhum. Ver `.spec/archive/legacy-v2/lasecsimul.spec` seção 13.3.
+- **Internacionalização de strings declarativas implementada** (ADR 0009, `.spec/archive/legacy-v2/lasecsimul.spec`
   seção 6.3, RNF12): `.lsdevice`/`component-catalog.json` declaram `language` (obrigatório) +
   `translations` (opcional); resolução por fallback (idioma ativo do VSCode → `language` do autor →
   primeira tradução disponível) implementada nos dois lados — Core
@@ -134,7 +134,7 @@ fica para depois do MVP. Ver `docs/14-integracao-final.md` para os critérios de
   CSS transform, e corrigir `eventToCanvasPoint`/drag de componente pra dividir por zoom (sem isso,
   mover um componente com zoom≠100% ficaria errado). Menu de contexto completo (Rotacionar CW/CCW/180°,
   Excluir, Propriedades só com 1 selecionado, "Selecionar tudo" no fundo vazio) e cursor `grabbing`
-  durante arraste. Ver `.spec/lasecsimul.spec` seção 13.4. Copiar/colar, flip H/V e undo/redo
+  durante arraste. Ver `.spec/archive/legacy-v2/lasecsimul.spec` seção 13.4. Copiar/colar, flip H/V e undo/redo
   deixados de fora desta rodada (backlog, ver "Próximos passos sugeridos" abaixo).
 - **Correções pós-rodada de seleção múltipla/atalhos/zoom** (achadas testando a rodada anterior):
   - **`Ctrl+R`/`Ctrl+Shift+R` conflitavam com keybinding nativo do VSCode** (`Ctrl+R` = "Abrir
@@ -239,16 +239,16 @@ fica para depois do MVP. Ver `docs/14-integracao-final.md` para os critérios de
   `mosfet`/`jfet` também têm `isNonlinear()==true` (`SimulideTransistorLike`), embora com um modelo
   mais simples que o SCR/DIAC/TRIAC (achado de auditoria 2026-07-08 confirma esses seis como
   código morto built-in, sempre sobrescritos pelo plugin `devices/simulide-complex`, cujo modelo
-  próprio também é um limiar simplificado — `.spec/lasecsimul.spec` seção 7.4). Ainda pendente, sem
+  próprio também é um limiar simplificado — `.spec/archive/legacy-v2/lasecsimul.spec` seção 7.4). Ainda pendente, sem
   relação com Newton-Raphson: reintroduzir `semiconductors.*`/`logic.led` no catálogo, se ainda fizer
   sentido dado que `outputs.led`/`active.diode`/`active.zener` já cobrem o mesmo espaço.
 - Próximo instrumento (ex: osciloscópio/traço de pino ao longo do tempo) segue o mesmo padrão do
   voltímetro: plugin em `devices/`, estado lido via `getComponentState` — ver ADR 0006.
 - ~~Corrigir `contributes["lasecsimul.deviceLibraries"]`~~ — feito: consolidado em
   `project/schema/component-catalog.json` (`deviceLibraries[]`), lido por
-  `extension/src/catalog/UnifiedCatalog.ts` — ver `.spec/lasecsimul.spec` seção 1.1 e ADR 0007.
+  `extension/src/catalog/UnifiedCatalog.ts` — ver `.spec/archive/legacy-v2/lasecsimul.spec` seção 1.1 e ADR 0007.
 - ~~Implementar subcircuitos~~ — feito: circuito reutilizável definido por `.lssubcircuit` (arquivo
-  único, sem código), spec completa em `.spec/lasecsimul-subcircuits.spec`; expansão real via
+  único, sem código), spec completa em `.spec/archive/legacy-v2/lasecsimul-subcircuits.spec`; expansão real via
   `SimulationSession::addSubcircuitInstance`/`SubcircuitRegistry`, "Criar Subcircuito da Seleção" na
   Extension, subcircuitos reais em produção (`subcircuits/esp32_devkitc_v4.lssubcircuit`,
   `esp32_wroom32.lssubcircuit`), testado em `core/test/subcircuit_test.cpp`/
@@ -257,12 +257,12 @@ fica para depois do MVP. Ver `docs/14-integracao-final.md` para os critérios de
 - **Backlog de paridade SimulIDE na Webview** (achado ao investigar a UI do SimulIDE — itens restantes,
   nenhum é pré-requisito de outro):
   - Copiar/colar (Ctrl+C/Ctrl+X/Ctrl+V), flip horizontal/vertical (`H`/`V`) e undo/redo
-    (Ctrl+Z/Y/Ctrl+Shift+Z) já foram implementados na Webview; ver `.spec/lasecsimul.spec` seções 13.4 e
+    (Ctrl+Z/Y/Ctrl+Shift+Z) já foram implementados na Webview; ver `.spec/archive/legacy-v2/lasecsimul.spec` seções 13.4 e
     17 para o comportamento atual e os keybindings finais.
   - Arrastar o rótulo de nome/valor independentemente do símbolo (`Label::mousePressEvent` do
-    SimulIDE) — posição hoje é fixa (acima/abaixo da caixa do componente), ver `.spec/lasecsimul.spec`
+    SimulIDE) — posição hoje é fixa (acima/abaixo da caixa do componente), ver `.spec/archive/legacy-v2/lasecsimul.spec`
     seção 13.3.
   - Tradução de `name` (nome de exibição do componente) e `pins[].label` — o mecanismo de
     `language`/`translations` (ADR 0009) já existe pra `properties[]`, mas `getPropertySchemas` ainda
-    não devolve/resolve `displayName`/`pins[]`; ver `.spec/lasecsimul-native-devices.spec` seção
+    não devolve/resolve `displayName`/`pins[]`; ver `.spec/archive/legacy-v2/lasecsimul-native-devices.spec` seção
     4.2.2.1.

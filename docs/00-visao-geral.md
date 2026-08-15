@@ -6,12 +6,13 @@ Definir a visão operacional do LasecSimul para que vários agentes implementem 
 
 ## Escopo
 
-Este documento complementa as specs. Ele não substitui `.spec/lasecsimul.spec` nem `.spec/lasecsimul-native-devices.spec`.
+Este documento complementa as specs. Ele não substitui a árvore canônica descrita em `.spec/README.md`.
 
 ## Fontes obrigatórias
 
-- `.spec/lasecsimul.spec`: arquitetura principal.
-- `.spec/lasecsimul-native-devices.spec`: plugins nativos DLL/SO.
+- `.spec/architecture/`: arquitetura normativa atual.
+- `.spec/features/`: features ativas, planejadas e adiadas.
+- `.spec/archive/legacy-v2/`: specs anteriores, somente para rastreabilidade.
 - `.skill/lasecsimul.skill`: regras práticas para agentes.
 - `.spec/archive/lasecsimul-wasm-devices.spec`: apenas histórico superseded.
 

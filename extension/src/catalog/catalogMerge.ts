@@ -56,7 +56,7 @@ export function toWebviewPropertySchema(dto: PropertySchemaDto): PropertySchemaE
 /** Combina o catálogo unificado (sem schema rico) com o mapa typeId→schemas já resolvido pelo Core
  * (`getPropertySchemas`). Função pura — quem chama (`extension.ts::attachPropertySchemas`) cuida de
  * obter `schemasByTypeId` via IPC; aqui só o merge é testado, sem precisar de Core real.
- * `readoutFormatByTypeId`/`interactionKindByTypeId` (ABI v2, .spec/lasecsimul-native-devices.spec)
+ * `readoutFormatByTypeId`/`interactionKindByTypeId` (ABI v2, .spec/archive/legacy-v2/lasecsimul-native-devices.spec)
  * são opcionais -- ausentes (chamador antigo, resposta do Core sem os campos novos) preserva
  * exatamente o comportamento de antes desta rodada, sem quebrar nada.
  * `pinIdsByTypeId` só PREENCHE quando `entry.pinIds` ainda está ausente (built-in sem `package`,

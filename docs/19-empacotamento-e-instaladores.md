@@ -92,12 +92,12 @@ A pergunta pode ser respondida antecipadamente por linha de comando, útil para 
 
 O Marketplace do VS Code só hospeda o `.vsix` -- não há como publicar o `.exe` nativo lá, e ele
 nunca poderia rodar `pnputil`/`netsh bridge`/`schtasks` de dentro do fluxo de instalação de extensão.
-Por isso, quem instala o `.vsix` direto do Marketplace (em vez de usar o `.exe`) e configura
-`lasecsimul.network.mode: "lab-bridge"` recebe a oferta de instalação pela própria extensão, em
+Por isso, quem instala o `.vsix` direto do Marketplace (em vez de usar o `.exe`) recebe na primeira
+ativação a oferta da infraestrutura opcional de `lab-bridge` pela própria extensão, em
 [`src/network/machineNetworkSetup.ts`](../extension/src/network/machineNetworkSetup.ts):
 
-1. na ativação (`onStartupFinished`), só age no Windows e só quando o modo configurado é
-   `lab-bridge` (o padrão `disabled` e o modo `isolated` nunca precisam de TAP)
+1. na ativação (`onStartupFinished`), só age no Windows; a oferta independe do modo configurado,
+   pois uma instalação nova começa no padrão `disabled`
 2. detecta a ausência de `%ProgramData%\LasecSimul\network.json` (checagem leve, sem elevação) e
    pergunta ao usuário via notificação nativa do VS Code -- "Instalar agora" / "Mais tarde" / "Não
    perguntar novamente" (a recusa é lembrada por versão da extensão em `globalState`)

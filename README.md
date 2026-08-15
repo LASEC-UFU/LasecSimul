@@ -64,12 +64,12 @@ envia componentes/fios desenhados na Webview para o Core via IPC
 ## Fontes de verdade
 
 - [Skill do projeto](.skill/lasecsimul.skill)
+- [Especificações canônicas](.spec/README.md) — precedência, arquitetura, features, schemas, ADRs e roadmap F0–F10.
+- [Status gerado](.spec/STATUS.md)
 - [Catálogo unificado de componentes](project/schema/component-catalog.json) — ponto único para:
    definição dos itens da UI (paleta), hierarquia de pastas/subpastas (`folderPath`) e bibliotecas
    ABI que a Extension manda o Core carregar (`deviceLibraries`).
-- [Spec principal](.spec/lasecsimul.spec)
-- [Spec de plugins nativos](.spec/lasecsimul-native-devices.spec)
-- [Spec de subcircuitos](.spec/lasecsimul-subcircuits.spec) — terceiro caminho de extensibilidade (dado, não código); implementado (`.lssubcircuit` de arquivo único, expansão real via `SimulationSession::addSubcircuitInstance`, testado em `core/test/subcircuit_test.cpp`/`esp32_devkitc_subcircuit_test.cpp`).
+- [Specs monolíticos anteriores](.spec/archive/MIGRATION.md) — preservados apenas para rastreabilidade histórica.
 - [Spec WASM superseded](.spec/archive/lasecsimul-wasm-devices.spec), apenas histórico, não usar como arquitetura ativa.
 - [Documentação operacional](docs/00-visao-geral.md)
 - [Tarefas por agente](tasks/agent-01-estrutura-repositorio.md)

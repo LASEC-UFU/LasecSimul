@@ -1,7 +1,7 @@
 // Teste de integração mínimo: fonte de tensão ideal + 2 resistores + terra, ponta a ponta pelo
 // pipeline real (Netlist -> CircuitGroup com variável extra -> Eigen -> ComponentMatrixView).
 // Sem framework de teste — assert + código de saída, consistente com o resto do scaffold
-// (ver .spec/lasecsimul.spec, seção 7.3). Roda settleStep() direto (sem thread do Scheduler) —
+// (ver .spec/archive/legacy-v2/lasecsimul.spec, seção 7.3). Roda settleStep() direto (sem thread do Scheduler) —
 // uso de teste single-threaded é o único contexto seguro de chamar settleStep() fora do Scheduler.
 #include <array>
 #include <cmath>

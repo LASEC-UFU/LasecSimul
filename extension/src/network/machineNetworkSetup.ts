@@ -7,7 +7,7 @@ import * as crypto from "crypto";
 import { spawn } from "child_process";
 import { fileExists, readJsonFile } from "../pathUtils";
 import { logSimulation } from "../diagnostics/simulationLog";
-import { isMachineNetworkConfigCurrent } from "./machineNetworkState";
+import { isMachineNetworkConfigCurrent, shouldOfferMachineNetworkSetup } from "./machineNetworkState";
 
 /** Instala sob demanda (a partir da própria Extension, já rodando via Marketplace) o driver
  * TAP-Windows6, a Windows Network Bridge e o `LasecSimul.NetworkGateway.exe` que o modo de rede
@@ -237,8 +237,8 @@ async function installMachineNetworkInfra(context: vscode.ExtensionContext, vers
   );
 }
 
-/** Pergunta e, com consentimento, instala -- usado tanto pelo gatilho automático (`activate()`, só
- * quando `lasecsimul.network.mode` já está em "lab-bridge" e a infraestrutura está ausente) quanto
+/** Pergunta e, com consentimento, instala -- usado tanto pelo gatilho automático (`activate()`,
+ * quando a infraestrutura opcional está ausente ou desatualizada) quanto
  * pelo comando manual `lasecsimul.network.installMachineSetup` (sempre pergunta, sem os gates de
  * modo/versão-dispensada -- ação explícita do usuário). */
 async function offerInstall(context: vscode.ExtensionContext, version: string, options: { allowDismiss: boolean }): Promise<void> {
@@ -248,8 +248,8 @@ async function offerInstall(context: vscode.ExtensionContext, version: string, o
   const buttons = options.allowDismiss ? [install, later, dontAskAgain] : [install, later];
 
   const choice = await vscode.window.showInformationMessage(
-    `O modo de rede "lab-bridge" precisa do driver TAP-Windows6, de uma Windows Network Bridge e do ` +
-      `gateway central para esta máquina -- ausentes ou desatualizados. Deseja baixar e instalar agora ` +
+    `O LasecSimul pode instalar o suporte opcional ao modo de rede "lab-bridge": driver TAP-Windows6, ` +
+      `Windows Network Bridge e gateway central. Deseja baixar e instalar agora ` +
       `(lasecsimul-${version}-win32-x64-setup.exe, a partir da release v${version} no GitHub)? ` +
       `Isso exige elevação administrativa (UAC). Sem isso, a extensão continua funcionando ` +
       `normalmente no modo "isolated".`,
@@ -273,19 +273,22 @@ async function offerInstall(context: vscode.ExtensionContext, version: string, o
   }
 }
 
-/** Chamado (fire-and-forget) na ativação da extensão -- só age no Windows, só quando o usuário já
- * escolheu explicitamente o modo "lab-bridge" (o padrão é "disabled"; "isolated" nunca precisa de
- * TAP), quando a infraestrutura está ausente OU pertence a outra versão, e só uma vez por versão
- * dispensada. */
+/** Chamado (fire-and-forget) na ativação da extensão. No Windows, oferece o suporte opcional ao
+ * `lab-bridge` mesmo que o modo atual ainda seja o padrão `disabled`; uma instalação nova do
+ * Marketplace nunca teria como selecionar `lab-bridge` antes deste primeiro aviso. Não pergunta se a
+ * infraestrutura desta versão já estiver instalada ou se o usuário dispensou a oferta na versão. */
 export function maybeOfferMachineNetworkSetup(context: vscode.ExtensionContext): void {
   if (process.platform !== "win32") return;
   const networkConfig = vscode.workspace.getConfiguration("lasecsimul.network");
-  if (networkConfig.get<string>("mode", "disabled") !== "lab-bridge") return;
-
   const gatewayPort = networkConfig.get<number>("gatewayPort", 9011);
   const version = extensionVersion(context);
-  if (isMachineNetworkInfraCurrent(gatewayPort, version)) return;
-  if (context.globalState.get<string>(DISMISSED_VERSION_KEY) === version) return;
+  const shouldOffer = shouldOfferMachineNetworkSetup({
+    platform: process.platform,
+    infrastructureCurrent: isMachineNetworkInfraCurrent(gatewayPort, version),
+    extensionVersion: version,
+    dismissedVersion: context.globalState.get<string>(DISMISSED_VERSION_KEY),
+  });
+  if (!shouldOffer) return;
 
   void offerInstall(context, version, { allowDismiss: true });
 }

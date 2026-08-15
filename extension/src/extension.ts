@@ -9,12 +9,13 @@ import { TrustStore } from "./trust/TrustStore";
 import { isPreApproved, isPreBlocked, resolveConsentChoice, shouldLoadLibrary, decisionToPersist } from "./trust/trustDecision";
 import { SchematicPanel } from "./ui/panels/SchematicPanel";
 import { createInitialWebviewState } from "./ui/webview/catalog";
-import { CanonicalTopologyDocument, JUNCTION_TYPE_ID, PackageDescriptor, TUNNEL_TYPE_ID, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, endpointId, endpointPinId, portEndpoint } from "./ui/webview/model";
+import { CanonicalTopologyDocument, JUNCTION_TYPE_ID, PackageDescriptor, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, endpointId, endpointPinId, portEndpoint } from "./ui/webview/model";
 import { connectEndpointToNode, normalizeWireGeometry, removeOrphanNodes, splitSegmentAtPoint } from "./ui/webview/wireTopology";
 import { assertTopologyInvariants } from "./ui/webview/topologyDocument";
 import { WebviewToHostMessage } from "./ui/webview/messages";
 import { ComponentPaletteViewProvider } from "./ui/views/ComponentPaletteViewProvider";
 import { materializePinGroup, registerPackage } from "./ui/webview/componentSymbols";
+import { buildGenericSubcircuitPackage, buildGenericSubcircuitSymbol, regenerateGenericSubcircuitState } from "./ui/webview/genericSubcircuitPackage";
 import { absoluteDeviceRefPath, absoluteSubcircuitRefPath, importProjectCommand, openProjectCommand, openProjectFile, openRecentProjectCommand, projectComponentToWebviewComponent, refreshDirtyIndicator, saveProjectAsCommand, saveProjectCommand, webviewComponentToProjectComponent } from "./project/projectCommands";
 import { loadUnifiedCatalog, RegisteredSource, saveRegisteredSources } from "./catalog/UnifiedCatalog";
 import { attachPropertySchemas, refreshUnifiedCatalogState, registerCatalogFileCommand, removeRegisteredCatalogItemCommand } from "./catalog/catalogCommands";
@@ -117,7 +118,7 @@ function cloneState(): WebviewProjectState {
 
 const PROJECT_STATE_KEYS = [
   "locale", "catalog", "components", "topology", "viewport", "selectedComponentIds", "selectedWireIds", "pendingConnection",
-  "subcircuitEditingContext", "symbolElements", "iconElements", "exposedComponents", "exportedPropertyComponentIds", "symbolCanvas", "iconCanvas",
+  "subcircuitEditingContext", "symbolMode", "symbolElements", "iconElements", "exposedComponents", "exportedPropertyComponentIds", "symbolCanvas", "iconCanvas",
 ] as const satisfies readonly (keyof WebviewProjectState)[];
 
 /** Último `state.schematicState` já mandado pra Webview (via `syncState`/`syncStatePatch`) -- `undefined`
@@ -128,7 +129,7 @@ const PROJECT_STATE_KEYS = [
  * mantém a MESMA referência de antes, então `!==` já detecta exatamente "isto mudou" sem precisar de
  * comparação profunda. */
 
-/** PC-1/EX-7 (.spec/lasecsimul-native-devices.spec): mensagens incrementais -- `syncSchematicPanel`
+/** PC-1/EX-7 (.spec/archive/legacy-v2/lasecsimul-native-devices.spec): mensagens incrementais -- `syncSchematicPanel`
  * roda a cada mutação pequena do projeto (mover 1 componente, editar 1 propriedade, apagar 1 fio --
  * ~18 call sites), mas ANTES mandava o `WebviewProjectState` inteiro (clonado via JSON de novo) toda
  * vez, mesmo quando só UM dos ~8 campos de nível superior mudou. Serializa só os campos que
@@ -235,7 +236,7 @@ function setEffectiveCatalog(entries: WebviewComponentCatalogEntry[]): void {
 /** Lê `publisher`/`trust` do `library.json` e decide se o carregamento pode seguir -- nunca lança:
  * arquivo ilegível/sem esses campos é tratado como publisher "desconhecido", não first-party (o
  * próprio `loadDeviceLibrary` no Core reporta o erro real se o arquivo for inválido de verdade).
- * Ver `.spec/lasecsimul-native-devices.spec` seção 12, item 2 -- consentimento mora na Extension,
+ * Ver `.spec/archive/legacy-v2/lasecsimul-native-devices.spec` seção 12, item 2 -- consentimento mora na Extension,
  * nunca no Core. */
 async function ensureLibraryTrusted(libraryPath: string): Promise<boolean> {
   if (!state.extensionContext) return false;
@@ -421,7 +422,7 @@ let coreReconnectPromise: Promise<boolean> | undefined;
  * (bug relatado 2026-07-17). Reconstrói o circuito inteiro no processo novo a partir de
  * `state.schematicState` (fonte de verdade já vive na Extension, não no Core) -- é a "restaurar
  * snapshot" que o comentário antigo em `attachCoreProcessHandlers`/`coreProc.onExit` prometia (RNF,
- * .spec/lasecsimul-native-devices.spec) mas nunca implementava. Deliberadamente reativo (só tenta
+ * .spec/archive/legacy-v2/lasecsimul-native-devices.spec) mas nunca implementava. Deliberadamente reativo (só tenta
  * quando o usuário pede "Run" de novo), nunca automático a partir de `onExit` -- um Core que morre
  * repetidamente (binário quebrado, por exemplo) não deve virar um loop de respawn silencioso em
  * segundo plano. `coreReconnectPromise` coalesce chamadas concorrentes (ex: duplo-clique em "Run") --
@@ -531,7 +532,7 @@ function componentLabel(componentId: string): string {
  * `library.json`) e troca o typeId/pinos da instância. Mesmo comando serve pra escolha inicial e
  * pra "relink" (arquivo ausente ou trocar de arquivo depois de já resolvido). Fios cujo pinId
  * sobrevive no novo arquivo são mantidos, os que não existem mais são removidos com aviso explícito
- * (nunca silenciosamente) -- ver `.spec/lasecsimul-subcircuits.spec` seção 12. */
+ * (nunca silenciosamente) -- ver `.spec/archive/legacy-v2/lasecsimul-subcircuits.spec` seção 12. */
 async function chooseSubcircuitFileCommand(componentId: string): Promise<void> {
   const component = getComponentById(componentId);
   if (!component) return;
@@ -868,7 +869,7 @@ function disposeDeviceReferenceWatchers(): void {
 }
 
 /** Editor de propriedade `filePath` GENÉRICO (Estágio 1 da autoria de Package/ícone dentro de "Abrir
- * Subcircuito", `.spec/lasecsimul.spec`) -- ao contrário de `chooseSubcircuitFileCommand` (nunca
+ * Subcircuito", `.spec/archive/legacy-v2/lasecsimul.spec`) -- ao contrário de `chooseSubcircuitFileCommand` (nunca
  * grava em `properties`, troca typeId/pinos/package inteiros da instância), este comando só lê o
  * arquivo escolhido e grava em `component.properties[propertyKey]`. Quando o campo é
  * `graphics.image.path`, também resolve `imageData`/`imageMime` (base64, mesmo padrão de
@@ -1140,7 +1141,16 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
         // Símbolo/Ícone nunca têm fios/topologia nem presença no Core -- só insere os elementos
         // (pino/forma) no escopo certo, nunca no circuito interno real.
         const inserted = insertElements(state.schematicState, message.scope, message.components);
-        state.schematicState = { ...inserted.state, selectedComponentIds: inserted.inserted.map((component) => component.id), selectedWireIds: [] };
+        const insertedCustomShape = message.scope === "symbol" && inserted.inserted.some((component) => component.typeId !== SYMBOL_PIN_TYPE_ID);
+        const nextState = {
+          ...inserted.state,
+          ...(insertedCustomShape ? { symbolMode: "custom" as const } : {}),
+          selectedComponentIds: inserted.inserted.map((component) => component.id),
+          selectedWireIds: [],
+        };
+        state.schematicState = message.scope === "symbol" && !insertedCustomShape
+          ? regenerateGenericSubcircuitState(nextState, () => nextId("symauth"))
+          : nextState;
         syncSchematicPanel();
         return;
       }
@@ -1184,7 +1194,9 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       if (removal.value.ref.scope !== "schematic") {
         // Símbolo/Ícone nunca tocam Core/topologia -- efeito colateral nenhum além de aplicar a
         // remoção (já cascateada) e sincronizar.
-        state.schematicState = removal.value.state;
+        state.schematicState = removal.value.ref.scope === "symbol"
+          ? regenerateGenericSubcircuitState(removal.value.state, () => nextId("symauth"))
+          : removal.value.state;
         syncSchematicPanel();
         return;
       }
@@ -1392,7 +1404,7 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       return;
     }
     case "requestUpdateLabelVisibility": {
-      // Puramente visual -- nunca toca o Core (ver `.spec/lasecsimul.spec` seção 6.1.2: visibilidade
+      // Puramente visual -- nunca toca o Core (ver `.spec/archive/legacy-v2/lasecsimul.spec` seção 6.1.2: visibilidade
       // de rótulo não é uma propriedade elétrica, não tem schema de plugin/built-in nenhum).
       const updated = updateElement(state.schematicState, message.componentId, {
         showId: message.showId,
@@ -1719,7 +1731,7 @@ async function createSubcircuitFromSelectionHandler(componentIds: string[]): Pro
   const tunnelCompObjects = tunnels.map((t) => ({
     id: t.id,
     typeId: TUNNEL_TYPE_ID,
-    properties: { name: t.name },
+    properties: { name: t.name, pinId: t.name },
     visual: { x: t.x, y: t.y, rotation: 0 },
     exposed: false,
   }));
@@ -1755,9 +1767,8 @@ async function createSubcircuitFromSelectionHandler(componentIds: string[]): Pro
       })),
     },
     interface: interfaceEntries,
-    // Símbolo/Ícone ainda não autorados nesta criação -- subcircuito novo abre direto em Modo
-    // Subcircuito, sem nenhum pino externo visual ainda (`interface[]` acima é só o contrato do
-    // Core; o desenho WYSIWYG do Símbolo é responsabilidade do usuário, Modo Símbolo).
+    symbolMode: "generic",
+    symbol: buildGenericSubcircuitPackage(baseName, interfaceEntries.map((entry) => ({ id: entry.pinId, label: entry.label }))),
     exposedComponents: [],
     exportedPropertyComponentIds: [],
   };
@@ -1888,11 +1899,19 @@ async function openSubcircuitForEditingCommand(sourceId: string): Promise<void> 
   const normalized = normalizeWireGeometry({ components: internalComponents, wires: internalWires, nodes: document.topology.nodes });
 
   const symbolAuthoringIdFactory = () => nextId("symauth");
-  const symbolElements = materializeSymbolScene(document.symbol, symbolAuthoringIdFactory);
-  const iconElements = materializeSymbolScene(document.icon, symbolAuthoringIdFactory);
-  const symbolCanvas = document.symbol
-    ? { width: document.symbol.width, height: document.symbol.height, border: document.symbol.border, background: document.symbol.background }
+  const genericPins = (document.symbol?.pins ?? document.interface).map((pin) => ({
+    id: "id" in pin ? pin.id : pin.pinId,
+    label: pin.label,
+  }));
+  const genericSymbol = document.symbolMode === "generic"
+    ? buildGenericSubcircuitSymbol(document.name, genericPins, symbolAuthoringIdFactory)
     : undefined;
+  const effectiveSymbol = genericSymbol?.descriptor ?? document.symbol;
+  const symbolElements = genericSymbol?.elements ?? materializeSymbolScene(effectiveSymbol, symbolAuthoringIdFactory);
+  const iconElements = materializeSymbolScene(document.icon, symbolAuthoringIdFactory);
+  const symbolCanvas = genericSymbol?.canvas ?? (effectiveSymbol
+    ? { width: effectiveSymbol.width, height: effectiveSymbol.height, border: effectiveSymbol.border, background: effectiveSymbol.background }
+    : undefined);
   const iconCanvas = document.icon
     ? { width: document.icon.width, height: document.icon.height, border: document.icon.border, background: document.icon.background }
     : undefined;
@@ -1907,6 +1926,7 @@ async function openSubcircuitForEditingCommand(sourceId: string): Promise<void> 
     initialWires: normalized.wires,
     initialTopologyNodes: normalized.nodes,
     initialSymbolElements: symbolElements,
+    initialSymbolMode: document.symbolMode ?? "custom",
     initialIconElements: iconElements,
     initialExposedComponents: document.exposedComponents,
     initialExportedPropertyComponentIds: document.exportedPropertyComponentIds,
@@ -1917,6 +1937,7 @@ async function openSubcircuitForEditingCommand(sourceId: string): Promise<void> 
     components: normalized.components,
     topology: { revision: document.topology.revision, nodes: normalized.nodes, conductors: normalized.wires },
     symbolElements,
+    symbolMode: document.symbolMode ?? "custom",
     iconElements,
     symbolCanvas,
     iconCanvas,
@@ -1945,6 +1966,7 @@ function isSubcircuitEditingSessionDirty(session: SubcircuitEditingSession): boo
     wires: state.schematicState.topology.conductors,
     nodes: state.schematicState.topology.nodes,
     symbolElements: state.schematicState.symbolElements,
+    symbolMode: state.schematicState.symbolMode,
     iconElements: state.schematicState.iconElements,
     exposedComponents: state.schematicState.exposedComponents,
     exportedPropertyComponentIds: state.schematicState.exportedPropertyComponentIds,
@@ -1954,6 +1976,7 @@ function isSubcircuitEditingSessionDirty(session: SubcircuitEditingSession): boo
     wires: session.initialWires,
     nodes: session.initialTopologyNodes,
     symbolElements: session.initialSymbolElements,
+    symbolMode: session.initialSymbolMode,
     iconElements: session.initialIconElements,
     exposedComponents: session.initialExposedComponents,
     exportedPropertyComponentIds: session.initialExportedPropertyComponentIds,
@@ -2024,6 +2047,7 @@ async function writeSubcircuitEditingSessionBack(session: SubcircuitEditingSessi
       conductors: state.schematicState.topology.conductors.map((wire) => ({ id: wire.id, from: wire.from, to: wire.to, vertices: wire.points ?? [] })),
     },
     interface: [], // re-derivado abaixo por finalizeSubcircuitDocumentForSave, nunca hand-authored
+    symbolMode: state.schematicState.symbolMode ?? "custom",
     ...(symbolResult.descriptor ? { symbol: symbolResult.descriptor } : {}),
     ...(iconResult.descriptor ? { icon: iconResult.descriptor } : {}),
     exposedComponents: state.schematicState.exposedComponents,
@@ -2090,6 +2114,7 @@ async function saveActiveSchematicCommand(): Promise<void> {
   session.initialWires = state.schematicState.topology.conductors;
   session.initialTopologyNodes = state.schematicState.topology.nodes;
   session.initialSymbolElements = state.schematicState.symbolElements;
+  session.initialSymbolMode = state.schematicState.symbolMode ?? "custom";
   session.initialIconElements = state.schematicState.iconElements;
   session.initialExposedComponents = state.schematicState.exposedComponents;
   session.initialExportedPropertyComponentIds = state.schematicState.exportedPropertyComponentIds;
@@ -2359,7 +2384,7 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
     // Keybinding em contributes.keybindings ("when": activeWebviewPanelId == 'lasecsimul.schematic')
     // sobrepõe Ctrl+R/Ctrl+Shift+R do VSCode SÓ enquanto o painel do esquemático está em foco --
     // fora dele, o `when` deixa de casar e o atalho nativo do VSCode volta a funcionar sozinho, sem
-    // nenhuma lógica de restauração aqui (ver `.spec/lasecsimul.spec` seção 13.4).
+    // nenhuma lógica de restauração aqui (ver `.spec/archive/legacy-v2/lasecsimul.spec` seção 13.4).
     vscode.commands.registerCommand("lasecsimul.rotateSelectionCw", () => {
       state.schematicPanel?.postMessage({ version: 1, type: "requestRotateSelection", direction: "cw" });
     }),

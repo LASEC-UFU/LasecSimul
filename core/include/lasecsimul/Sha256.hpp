@@ -4,7 +4,7 @@
 // `plugins::PluginLoader::verifyChecksum` (achado de auditoria arquitetural 2026-07-09, D-verifyChecksum:
 // o Core recalcula o hash do binário e confere contra `library.json`, defesa em profundidade
 // independente da decisão de confiança que a Extension já tomou antes de pedir o load via IPC --
-// ver .spec/lasecsimul-native-devices.spec, seção 12). Implementação baseada no algoritmo público
+// ver .spec/archive/legacy-v2/lasecsimul-native-devices.spec, seção 12). Implementação baseada no algoritmo público
 // FIPS 180-4, sem otimização SIMD (arquivo de plugin é tipicamente < 10MB, custo de hash é
 // desprezível perto do próprio LoadLibrary/dlopen).
 

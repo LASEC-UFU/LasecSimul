@@ -1582,12 +1582,12 @@ function builtinComponentBox(typeId: string): ComponentBox | undefined {
 /** Caixa property-driven dos typeIds "de autoria de símbolo/subcircuito" -- `other.package`/
  * `graphics.rectangle`/`ellipse`/`image` usam `width`/`height` direto (mesmo significado de
  * `PackageDescriptor.width/height`/`PackageShape.w/h`, ver seção 21.2 do
- * `.spec/lasecsimul-native-devices.spec`). `graphics.line`/`other.package_pin` usam uma caixa
+ * `.spec/archive/legacy-v2/lasecsimul-native-devices.spec`). `graphics.line`/`other.package_pin` usam uma caixa
  * QUADRADA centrada no `length` -- o ponto fixo que não se move quando `component.rotation` gira
  * (CSS `rotate()` pivota no CENTRO do elemento, ver `renderComponent`) é o CENTRO da caixa, por isso
  * o desenho "canônico" (rotation=0) tem que colocar a âncora/ponto médio exatamente lá -- ver
  * `componentSymbolSvg` e `extension/src/catalog/subcircuitPackageAuthoring.ts` (fórmula inversa, o
- * compilador da autoria de Package dentro de "Abrir Subcircuito" -- ver `.spec/lasecsimul.spec`). */
+ * compilador da autoria de Package dentro de "Abrir Subcircuito" -- ver `.spec/archive/legacy-v2/lasecsimul.spec`). */
 function propertyDrivenBox(typeId: string, properties: Record<string, unknown> | undefined): ComponentBox | undefined {
   if (!properties) return undefined;
   const numberOf = (key: string): number | undefined => (typeof properties[key] === "number" ? (properties[key] as number) : undefined);

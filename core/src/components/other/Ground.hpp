@@ -9,7 +9,7 @@ namespace lasecsimul::components {
  * Referência de 0V. Convenção deliberadamente simples (não elimina linha/coluna como MNA "de
  * livro" faria) — pino fica puxado pra 0V com admitância alta, não literalmente excluído da
  * matriz. Erro residual ~ 1/kGroundConductance, desprezível na prática mas não bit-exato. Ver
- * .spec/lasecsimul.spec, seção 7.3, pela troca feita e a forma "correta" (eliminação de
+ * .spec/archive/legacy-v2/lasecsimul.spec, seção 7.3, pela troca feita e a forma "correta" (eliminação de
  * linha/coluna) deixada como refinamento futuro.
  */
 class Ground final : public IComponentModel {

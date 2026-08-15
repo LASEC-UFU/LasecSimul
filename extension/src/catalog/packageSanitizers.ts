@@ -32,7 +32,7 @@ import {
   ViewSpecProjection,
 } from "../ui/webview/model";
 
-/** EX-9 (.spec/lasecsimul-native-devices.spec): sanitização de `package`/`viewSpec`/`simulidePaint`/
+/** EX-9 (.spec/archive/legacy-v2/lasecsimul-native-devices.spec): sanitização de `package`/`viewSpec`/`simulidePaint`/
  * `qtWidget` vindos de JSON externo (`.lsdevice`/`.lssubcircuit`) -- extraído de `extension.ts` por
  * ser um bloco 100% autocontido (nenhuma função aqui toca estado mutável de nível de módulo do
  * host da extensão, só transforma `unknown` em tipos validados). `sanitizePackage`/
@@ -411,7 +411,7 @@ export function isViewSpecScalar(value: unknown): value is boolean | number | st
   return typeof value === "boolean" || typeof value === "number" || typeof value === "string";
 }
 
-/** Princípio do arquivo único (`.spec/lasecsimul-native-devices.spec` seção 14): `defaultProperties`
+/** Princípio do arquivo único (`.spec/archive/legacy-v2/lasecsimul-native-devices.spec` seção 14): `defaultProperties`
  * do catálogo vem SEMPRE do próprio manifesto (`.lsdevice`/`.lssubcircuit`) -- nunca de um arquivo
  * separado. */
 export function sanitizeManifestDefaultProperties(value: unknown): Record<string, string | number | boolean> {

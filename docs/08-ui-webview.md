@@ -2,7 +2,7 @@
 
 > Nota 2026-07-07: este documento descreve o planejamento inicial do MVP. A UI atual reverteu pontos
 > importantes daqui: a paleta é uma Webview própria, não um `TreeView` nativo, e propriedades são
-> editadas por diálogo/modal no fluxo atual. Para o estado normativo, ver `.spec/lasecsimul.spec`
+> editadas por diálogo/modal no fluxo atual. Para o estado normativo, ver `.spec/archive/legacy-v2/lasecsimul.spec`
 > seção 13.
 
 ## Objetivo

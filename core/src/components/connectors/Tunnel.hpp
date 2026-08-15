@@ -14,7 +14,7 @@ namespace lasecsimul::components {
  *
  * Diferente do SimulIDE (registro estático `Tunnel::m_tunnels`, processo inteiro): o registro de
  * nomes vive no `Netlist` de cada `SimulationSession` — duas sessões nunca compartilham nomes de
- * túnel por acidente (ver .spec/lasecsimul.spec, seção 7.2).
+ * túnel por acidente (ver .spec/archive/legacy-v2/lasecsimul.spec, seção 7.2).
  *
  * Estrutura inicial: quem chama `SimulationSession::setTunnelName()` ao detectar que a propriedade
  * "name" desta instância mudou é o manipulador de "set property" da camada de IPC/sessão — ainda

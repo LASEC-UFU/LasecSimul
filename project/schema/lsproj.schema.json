@@ -30,7 +30,7 @@
     },
     "topology": {
       "type": "object",
-      "description": "Fonte canônica v2 de conectividade -- substitui o antigo array `wires[]` (schemaVersion 1). Nós topológicos (junções de grau N) não são mais componentes de simulação -- ver .spec/lasecsimul.spec, ADR sobre remoção de connectors.junction do Core.",
+      "description": "Fonte canônica v2 de conectividade -- substitui o antigo array `wires[]` (schemaVersion 1). Nós topológicos (junções de grau N) não são mais componentes de simulação -- ver .spec/archive/legacy-v2/lasecsimul.spec, ADR sobre remoção de connectors.junction do Core.",
       "required": ["revision", "nodes", "conductors"],
       "properties": {
         "revision": { "type": "integer", "minimum": 0 },

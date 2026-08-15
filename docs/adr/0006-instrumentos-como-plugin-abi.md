@@ -8,12 +8,12 @@ osciloscópio, multímetro, gerador de função, analisador lógico) vivem no Co
 ## Escopo
 
 Instrumentos virtuais conectados a nós/pinos arbitrários do circuito (RF06 de
-`.spec/lasecsimul.spec`). Não afeta componentes passivos/fontes built-in (resistor, capacitor,
+`.spec/archive/legacy-v2/lasecsimul.spec`). Não afeta componentes passivos/fontes built-in (resistor, capacitor,
 indutor, fonte DC, terra, túnel, chave) nem MCUs via QEMU.
 
 ## Status
 
-Aceita — substitui o texto original de `.spec/lasecsimul.spec`, seção "Fora de escopo do MVP atual
+Aceita — substitui o texto original de `.spec/archive/legacy-v2/lasecsimul.spec`, seção "Fora de escopo do MVP atual
 (decisão deliberada)", que dizia "Instrumentos virtuais... como código nativo de primeira classe no
 núcleo — não como plugin de terceiros".
 
@@ -65,7 +65,7 @@ Decisões de implementação que acompanham esta ADR:
 
 ## Consequências
 
-- `.spec/lasecsimul.spec` precisa de correção textual (a frase "não como plugin de terceiros" não
+- `.spec/archive/legacy-v2/lasecsimul.spec` precisa de correção textual (a frase "não como plugin de terceiros" não
   vale mais) — ver próxima seção.
 - Novo instrumento = novo plugin em `devices/`, registrado em `devices/library.json`, carregado via
   `loadDeviceLibrary` — não precisa mais de PR no Core.
@@ -74,7 +74,7 @@ Decisões de implementação que acompanham esta ADR:
 
 ## Impacto no projeto
 
-- Onde `.spec/lasecsimul.spec` disser "instrumentos como código nativo... não como plugin", o texto
+- Onde `.spec/archive/legacy-v2/lasecsimul.spec` disser "instrumentos como código nativo... não como plugin", o texto
   está desatualizado; esta ADR é a fonte de verdade atual.
 - Próximo instrumento (ex: osciloscópio/traço de pino ao longo do tempo) deve seguir o mesmo padrão:
   plugin em `devices/`, estado lido via `getComponentState`, sem novo verbo IPC dedicado a menos que

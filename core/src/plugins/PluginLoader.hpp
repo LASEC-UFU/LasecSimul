@@ -13,7 +13,7 @@ namespace lasecsimul::plugins {
  * ComponentRegistry/McuRegistry — isso é responsabilidade de PluginRuntime (por sessão), a partir
  * do módulo que GlobalPluginCache publica como ativo. Decisão de confiança (TrustStore) acontece
  * inteiramente na Extension, antes do IPC pedir este load — ver
- * .spec/lasecsimul-native-devices.spec, seção 1, 3 e 12.
+ * .spec/archive/legacy-v2/lasecsimul-native-devices.spec, seção 1, 3 e 12.
  */
 class PluginLoader {
 public:
@@ -31,7 +31,7 @@ public:
      * -- não confia cegamente na Extension, que já fez sua própria decisão de confiança via
      * TrustStore antes de pedir este load pelo IPC). String vazia (default, ou quando
      * `library.json` não declara checksum pra este binário -- estado ainda comum, ver
-     * .spec/lasecsimul-native-devices.spec seção 12) pula a checagem sem erro: o checksum é
+     * .spec/archive/legacy-v2/lasecsimul-native-devices.spec seção 12) pula a checagem sem erro: o checksum é
      * opt-in, não uma trava obrigatória em todo binário. Lança `std::runtime_error` só quando um
      * hash FOI declarado e não bate. */
     std::shared_ptr<PluginModule> loadDevicePlugin(const std::filesystem::path& binaryPath,

@@ -39,7 +39,7 @@ próprio pino do `Tunnel` interno renomeado — não existe um `IComponentModel`
 Subcircuito não passa pela cerimônia de confiança/consentimento de plugin nativo (`lasecsimul-native-devices.spec`
 seção 12) — é dado, nunca código executável; não há risco de memória a mitigar.
 
-Especificação completa: `.spec/lasecsimul-subcircuits.spec`.
+Especificação completa: `.spec/archive/legacy-v2/lasecsimul-subcircuits.spec`.
 
 ## Alternativas consideradas
 

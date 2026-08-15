@@ -1,0 +1,34 @@
+{
+  "status": "exploratory",
+  "reason": "Existing Release binaries; local source changes were not rebuilt in this environment.",
+  "host": {
+    "logicalProcessorsObservedBySolver": 12,
+    "os": "Windows"
+  },
+  "solver": {
+    "stamp256Iterations2000": {
+      "denseMs": 188.126,
+      "sparseMs": 0.165,
+      "speedup": 1142.93
+    },
+    "groups32Size48Iterations300": {
+      "serialMs": 13.210,
+      "poolMs": 12.944,
+      "speedup": 1.02,
+      "checksumDiff": 0
+    },
+    "refactorGroups8Size256Iterations20": {
+      "serialMs": 25.172,
+      "poolMs": 7.513,
+      "speedup": 3.35
+    }
+  },
+  "structuralTestsPassed": [
+    "scheduler_test.exe",
+    "netlist_test.exe",
+    "mna_solver_test.exe",
+    "subcircuit_test.exe",
+    "circuit_group_test.exe",
+    "simulation_performance_benchmark.exe --require-realtime"
+  ]
+}

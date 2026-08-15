@@ -110,7 +110,7 @@ a mudança é apenas a taxonomia apresentada na paleta e nos novos registros.
 
 #### Compatibilidade: Subcircuitos
 
-SubCircuit — equivalente ao que `.spec/lasecsimul-subcircuits.spec` especifica pro LasecSimul
+SubCircuit — equivalente ao que `.spec/archive/legacy-v2/lasecsimul-subcircuits.spec` especifica pro LasecSimul
 (circuito reutilizável definido por `.lssubcircuit`, ver ADR 0008).
 
 ### Conectores

@@ -3,7 +3,7 @@ import { TrustDecision } from "./TrustStore";
 /** Lógica pura de decisão de confiança -- separada do diálogo (`vscode.window.*`) pra poder ser
  * testada sem mock de VSCode. `trust: "first-party"` (devices/mcu-adapters embutidos no próprio
  * LasecSimul, ver `devices/library.json`) nunca passa por consentimento. Ver
- * `.spec/lasecsimul-native-devices.spec` seção 12, item 2. */
+ * `.spec/archive/legacy-v2/lasecsimul-native-devices.spec` seção 12, item 2. */
 
 export function isFirstParty(trust: string | undefined): boolean {
   return trust === "first-party";

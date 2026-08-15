@@ -236,7 +236,7 @@ dentro do corpo.
 
 **Atualização 2026-07-07**: o comando "Criar Subcircuito a partir da Seleção" existe e gera
 `connectors.tunnel` automaticamente para fios que cruzam a borda da seleção; ver
-`.spec/lasecsimul-subcircuits.spec` seção 11 e `createSubcircuitFromSelectionHandler` em
+`.spec/archive/legacy-v2/lasecsimul-subcircuits.spec` seção 11 e `createSubcircuitFromSelectionHandler` em
 `extension.ts`. Esta seção continua útil para o fluxo de autoria/edição de um manifesto que JÁ EXISTE
 e para o escopo que segue fora dela. Ainda não existe upload de imagem de fundo (só cor sólida) nem
 alça de arrastar pra
@@ -255,7 +255,7 @@ conceito "Package" estava errada (eu tinha descrito como lista de N-variantes). 
 em `C:\SourceCode\simulide_2\src` + https://simulidedocs.netlify.app + resposta de dev no fórum
 oficial: *"A Package é apenas o invólucro, enquanto um Subcircuit é uma Package com um Circuito
 dentro, como um IC"*) corrigiu isso e revelou o que realmente faltava — documentado em detalhe em
-`.spec/lasecsimul-native-devices.spec` seção 21.4 e `.spec/lasecsimul-subcircuits.spec` seção 4:
+`.spec/archive/legacy-v2/lasecsimul-native-devices.spec` seção 21.4 e `.spec/archive/legacy-v2/lasecsimul-subcircuits.spec` seção 4:
 
 - **Circuito interno real editável.** Pra `subcircuit-file` (nunca `abi-device`/`mcu-adapter` — não
   têm circuito interno, "Package ≠ Subcircuit"), a MESMA sessão de autoria agora também semeia
@@ -286,4 +286,4 @@ independentes, ignora componentes de autoria de símbolo), `componentSymbols.tes
 `properties.logicSymbol`). **O que isto NÃO inclui**: simulação elétrica ao vivo dentro da sessão (só
 posição/propriedades, sem IPC com o Core); `BoardSubc`/`ShieldSubc` (Arduino Uno + Shield empilhado do
 SimulIDE real, feature à parte, não pedida). "Criar Subcircuito a partir da Seleção" foi implementado
-depois deste desenho inicial; ver nota acima e `.spec/lasecsimul-subcircuits.spec` seção 11.
+depois deste desenho inicial; ver nota acima e `.spec/archive/legacy-v2/lasecsimul-subcircuits.spec` seção 11.

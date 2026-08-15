@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "fpga/FpgaPortMapper.hpp"
 #include "fpga/GhdlArenaBridge.hpp"
 #include "fpga/GhdlProcessManager.hpp"
 #include "fpga/RtlBackend.hpp"
@@ -45,6 +46,13 @@ public:
     GhdlBackend& operator=(const GhdlBackend&) = delete;
 
     RtlCompileResult compile(const RtlCompileRequest& request) override;
+
+    /** Roda `ghdl -r ... --vpi=lasecsimul_vpi` em modo "discover" (env `LASECSIMUL_FPGA_MODE=
+     * discover`, ver lasecsimul_vpi.c) -- sem arena, só descobre as portas da entity e termina.
+     * Exige `compile()` bem-sucedido antes (usa o mesmo `m_cacheDir`/top/standard). Mecanismo real
+     * de "LasecSimul: Analyze VHDL" (plano seção 13/17) -- reusa 100% da infra de processo/VPI, sem
+     * parser VHDL próprio. */
+    std::vector<PortSpec> discoverPorts();
 
     void start() override;
     void stop() override;
