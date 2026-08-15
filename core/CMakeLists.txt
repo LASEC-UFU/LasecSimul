@@ -275,6 +275,13 @@ target_include_directories(circuit_group_test PRIVATE include src)
 target_link_libraries(circuit_group_test PRIVATE Eigen3::Eigen)
 add_test(NAME circuit_group COMMAND circuit_group_test)
 
+# Passo 1 do plano FPGA/VHDL (.claude/plans/golden-puzzling-quasar.md): LogicValue isolado.
+add_executable(logic_value_test
+    test/core/fpga/LogicValueTest.cpp
+)
+target_include_directories(logic_value_test PRIVATE include src)
+add_test(NAME logic_value COMMAND logic_value_test)
+
 add_executable(mna_solver_test
     test/core/simulation/MnaSolverTest.cpp
 )
