@@ -12,6 +12,7 @@
 #include <stdexcept>
 #include <unordered_map>
 #include <nlohmann/json.hpp>
+#include "../fpga/FpgaComponent.hpp"
 #include "../mcu/McuComponent.hpp"
 #include "lasecsimul/qemu_arena_abi.h"
 
@@ -204,6 +205,21 @@ SimulationSession::SimulationSession(plugins::GlobalPluginCache& globalCache, si
             }
             if (accept) ++m_acceptedTransientSteps;
             else ++m_rejectedTransientSteps;
+            // FPGA (GHDL) só avança quando `current` é o tempo REALMENTE aceito -- nunca no
+            // primeiro callback (TimeStepBeginFn), que roda ANTES de o passo adaptativo decidir
+            // aceitar/rejeitar. GHDL não tem como "desfazer" um ADVANCE_TO (seu relógio interno é
+            // monotônico), então avançá-lo num passo que depois é rejeitado/reencolhido
+            // dessincronizaria o GHDL do timeline real do Scheduler pra sempre -- mesma razão pela
+            // qual componentes reativos só fazem commitTransientStep() aqui, não no callback de
+            // início. Ver plano FPGA, ".claude/plans/golden-puzzling-quasar.md": "o Core continua
+            // sendo a autoridade do tempo".
+            if (accept) {
+                for (const auto& component : m_componentInstances) {
+                    if (auto* fpgaComponent = dynamic_cast<fpga::FpgaComponent*>(component.get())) {
+                        fpgaComponent->advanceLockstep(previous, current);
+                    }
+                }
+            }
             return {accept, maximumError};
         });
     m_scheduler.setStableStepCallback([this](uint64_t timestampNs) { onStableStepUnlocked(timestampNs); });

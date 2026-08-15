@@ -63,6 +63,8 @@ set(CORE_SOURCES
     src/mcu/qemu/QemuIcountCalibrator.cpp
     src/mcu/McuController.cpp
     src/mcu/McuComponent.cpp
+    src/fpga/FpgaComponent.cpp
+    src/fpga/FpgaPortMapper.cpp
     src/simulation/Scheduler.cpp
     src/session/SimulationSession.cpp
     src/session/PauseExpression.cpp
@@ -105,6 +107,8 @@ set(TEST_COMMON_SOURCES
     src/mcu/qemu/QemuIcountCalibrator.cpp
     src/mcu/McuController.cpp
     src/mcu/McuComponent.cpp
+    src/fpga/FpgaComponent.cpp
+    src/fpga/FpgaPortMapper.cpp
     src/simulation/Scheduler.cpp
     src/session/SimulationSession.cpp
     src/session/PauseExpression.cpp
@@ -327,6 +331,22 @@ add_executable(ghdl_backend_real_ghdl_test
 )
 target_include_directories(ghdl_backend_real_ghdl_test PRIVATE include src)
 add_test(NAME ghdl_backend_real_ghdl COMMAND ghdl_backend_real_ghdl_test)
+
+# Passo 5 do plano FPGA/VHDL: FpgaComponent + SimulationSession/Scheduler reais + GHDL real --
+# Casos A (combinacional) e B (sequencial/clock real) do plano. Auto-pula como os demais.
+add_executable(fpga_component_real_ghdl_test
+    test/core/fpga/FpgaComponentRealGhdlTest.cpp
+    src/fpga/GhdlBackend.cpp
+    src/fpga/GhdlProcessManager.cpp
+    src/fpga/GhdlArenaBridge.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(fpga_component_real_ghdl_test PRIVATE include src)
+target_link_libraries(fpga_component_real_ghdl_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+if(NOT WIN32)
+    target_link_libraries(fpga_component_real_ghdl_test PRIVATE dl)
+endif()
+add_test(NAME fpga_component_real_ghdl COMMAND fpga_component_real_ghdl_test)
 
 add_executable(mna_solver_test
     test/core/simulation/MnaSolverTest.cpp
@@ -808,6 +828,8 @@ add_executable(session_restart_stress_test
     src/mcu/qemu/QemuProcessManager.cpp
     src/mcu/qemu/QemuArenaBridge.cpp
     src/mcu/qemu/QemuIcountCalibrator.cpp
+    src/fpga/FpgaComponent.cpp
+    src/fpga/FpgaPortMapper.cpp
     src/simulation/Scheduler.cpp
     src/session/SimulationSession.cpp
     src/session/PauseExpression.cpp

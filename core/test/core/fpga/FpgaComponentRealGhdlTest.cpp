@@ -1,0 +1,231 @@
+// Passo 5 do plano FPGA/VHDL (golden-puzzling-quasar.md): prova de ponta a ponta de VERDADE --
+// SimulationSession + Scheduler reais, componentes eletricos built-in reais (Clock/Rail) fiados a
+// um FpgaComponent real, rodando GHDL de verdade via TimeStepCommitFn. Isto e o que os Casos A
+// (combinacional) e B (sequencial, clock real) do plano pedem. Mesma convencao de self-skip das
+// outras rodadas reais.
+#include "components/sources/Clock.hpp"
+#include "components/sources/Rail.hpp"
+#include "fpga/FpgaComponent.hpp"
+#include "fpga/GhdlBackend.hpp"
+#include "plugins/GlobalPluginCache.hpp"
+#include "session/SimulationSession.hpp"
+
+#include <chrono>
+#include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <stdexcept>
+#include <string>
+
+using namespace lasecsimul;
+using namespace lasecsimul::fpga;
+namespace fs = std::filesystem;
+
+#define TEST_CHECK(expr)                                                                                             \
+    do {                                                                                                             \
+        if (!(expr)) throw std::runtime_error(std::string("check failed: ") + #expr + " (line " + std::to_string(__LINE__) + ")"); \
+    } while (false)
+
+namespace {
+
+std::string uniqueSuffix() {
+    return std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+}
+
+#if defined(_WIN32)
+constexpr const char* kVpiModuleRelativePath = "/fpga/ghdl-vpi/build/win-x64/lasecsimul_vpi.dll";
+#elif defined(__APPLE__)
+constexpr const char* kVpiModuleRelativePath = "/fpga/ghdl-vpi/build/macos-universal/liblasecsimul_vpi.dylib";
+#else
+constexpr const char* kVpiModuleRelativePath = "/fpga/ghdl-vpi/build/linux-x64/liblasecsimul_vpi.so";
+#endif
+
+bool ghdlAvailable() {
+    fpga::GhdlProcessManager probe;
+    try {
+        probe.start(fpga::GhdlLaunchSpec{"ghdl", {"--version"}, {}, {}, {}});
+    } catch (const std::exception&) {
+        return false;
+    }
+    const std::optional<int> exitCode = probe.waitForExit(std::chrono::seconds(3));
+    if (!exitCode) {
+        probe.kill();
+        return false;
+    }
+    return probe.logs().find("GHDL") != std::string::npos;
+}
+
+void registerCommon(registry::ComponentRegistry& reg) {
+    reg.registerFactory("sources.rail", [](const registry::ComponentParams& p) {
+        return std::make_unique<components::Rail>(Pin{"out"}, p.property("voltage", 0.0));
+    });
+}
+
+void testCombinationalAndSequentialAgainstRealScheduler(const std::string& vpiModulePath) {
+    const fs::path workDir = fs::temp_directory_path() / ("lasecsimul-fpga-component-" + uniqueSuffix());
+    const fs::path cacheDir = workDir / "cache";
+    const fs::path vhdlFile = workDir / "component_test.vhd";
+    fs::create_directories(workDir);
+    {
+        // Um único entity cobrindo os dois casos de aceite do plano: `led_and` é combinacional
+        // (Caso A), `count` é um contador de 4 bits avançado por um clock REAL do Scheduler
+        // (Caso B) -- um compile só, dois comportamentos verificados.
+        std::ofstream out(vhdlFile);
+        out << "library ieee;\n"
+               "use ieee.std_logic_1164.all;\n"
+               "use ieee.numeric_std.all;\n"
+               "entity component_test is\n"
+               "    port (\n"
+               "        clk     : in  std_logic;\n"
+               "        sw0     : in  std_logic;\n"
+               "        sw1     : in  std_logic;\n"
+               "        led_and : out std_logic;\n"
+               "        count   : out std_logic_vector(3 downto 0)\n"
+               "    );\n"
+               "end entity;\n"
+               "architecture rtl of component_test is\n"
+               "    signal counter : unsigned(3 downto 0) := (others => '0');\n"
+               "begin\n"
+               "    led_and <= sw0 and sw1;\n"
+               "    process(clk)\n"
+               "    begin\n"
+               "        if rising_edge(clk) then\n"
+               "            counter <= counter + 1;\n"
+               "        end if;\n"
+               "    end process;\n"
+               "    count <= std_logic_vector(counter);\n"
+               "end architecture;\n";
+    }
+
+    plugins::GlobalPluginCache cache;
+    session::SimulationSession session(cache);
+    registerCommon(session.components());
+
+    session.components().registerFactory("sources.clock", [&session](const registry::ComponentParams&) {
+        return std::make_unique<components::Clock>(session.scheduler(), Pin{"out"}, 3.3, 1'000'000.0, true);
+    });
+
+    // ComponentRegistry::Factory só recebe ComponentParams -- neste teste direto (sem IPC, mesma
+    // convenção de bus_test.cpp/simulide_sources_meters_test.cpp) o caminho do VHDL/top/standard
+    // são fechados por referência no lambda em vez de passados via properties (produção real usa
+    // os campos estruturados de ComponentParams, Step 6 -- fora de escopo aqui). `compile()`+
+    // `start()` acontecem AQUI DENTRO, antes de devolver a instância, e `fpgaComponentPtr` é
+    // capturado pra o corpo do teste conseguir logs/controller sem precisar de um accessor que
+    // SimulationSession não expõe publicamente.
+    FpgaComponent* fpgaComponentPtr = nullptr;
+    session.components().registerFactory(
+        "digital.generic_fpga", [&session, &vpiModulePath, &cacheDir, &vhdlFile, &fpgaComponentPtr](
+                                    const registry::ComponentParams&) {
+            FpgaComponentConfig config;
+            config.ports = {
+                PortSpec{"clk", true, 1, true},      PortSpec{"sw0", true, 1, true}, PortSpec{"sw1", true, 1, true},
+                PortSpec{"led_and", false, 1, true}, PortSpec{"count", false, 4, true},
+            };
+            config.vcc = 3.3;
+
+            GhdlBackendOptions options;
+            options.ghdlBinary = "ghdl";
+            options.vpiModulePath = vpiModulePath;
+            options.cacheRootDir = cacheDir.string();
+            auto backend = std::make_unique<GhdlBackend>(options);
+
+            auto component = std::make_unique<FpgaComponent>(session.scheduler(), std::move(backend), config);
+            fpgaComponentPtr = component.get();
+
+            RtlCompileRequest request;
+            request.sources = {vhdlFile.string()};
+            request.topEntity = "component_test";
+            request.standard = "08";
+            request.inputBitCount = countInputBits(config.ports);
+            request.outputBitCount = countOutputBits(config.ports);
+            component->start(request); // lança se compile() falhar -- propaga por addComponent()
+
+            return component;
+        });
+
+    const uint32_t fpga = session.addComponent("digital.generic_fpga", {});
+    TEST_CHECK(fpgaComponentPtr != nullptr);
+    FpgaComponent& fpgaComponent = *fpgaComponentPtr;
+
+    registry::ComponentParams railHigh;
+    railHigh.properties["voltage"] = 3.3;
+    const uint32_t clock = session.addComponent("sources.clock", {});
+    const uint32_t sw0 = session.addComponent("sources.rail", railHigh);
+    const uint32_t sw1 = session.addComponent("sources.rail", railHigh);
+
+    session.connectWire(clock, "out", fpga, "clk");
+    session.connectWire(sw0, "out", fpga, "sw0");
+    session.connectWire(sw1, "out", fpga, "sw1");
+    // Sem componente Ground: todo pino aqui (Clock/Rail/FpgaComponent) crava via
+    // addConductanceToGround/addCurrentToGround, já referenciado à terra global diretamente --
+    // não existe malha de dois terminais precisando de um retorno físico explícito neste circuito
+    // (diferente do teste de bateria+resistor em simulide_sources_meters_test.cpp).
+
+    try {
+        // Assenta a rodada inicial (aplica sw0/sw1 no FPGA, delta cycle resolve led_and) --
+        // Caso A: combinacional, sw0=sw1=3.3V (One) -> led_and deveria virar One.
+        for (int i = 0; i < 20 && session.settleStep(); ++i) {
+        }
+        session.scheduler().runUntil(1); // primeiro avanco real de tempo -- dispara advanceLockstep
+        // advanceLockstep só MARCA o componente dirty com a nova saída (markDirty) -- não força
+        // re-settle na hora (roda dentro de TimeStepCommitFn, depois que o settle daquele passo já
+        // rodou). Precisa de outro settleStep() pra crava eletricamente led_and com o valor novo
+        // antes de ler a tensão do nó.
+        for (int i = 0; i < 20 && session.settleStep(); ++i) {
+        }
+
+        const double ledVoltage = session.nodeVoltageOfPin(fpga, "led_and");
+        TEST_CHECK(ledVoltage > 1.65); // > metade de 3.3V -- lido como One
+        std::printf("OK: Caso A (combinacional) -- sw0=sw1=3.3V produz led_and alto via Scheduler real\n");
+
+        // Caso B: contador avancando por clock REAL do Scheduler (1MHz, half-period=500ns) --
+        // roda tempo suficiente pra varias bordas de subida, confere que o contador saiu de zero.
+        session.scheduler().runUntil(5500); // 5.5 periodos -- pelo menos 5 bordas de subida
+        for (int i = 0; i < 20 && session.settleStep(); ++i) {
+        }
+
+        double countValue = 0.0;
+        for (int bit = 0; bit < 4; ++bit) {
+            const std::string pinId = "count(" + std::to_string(bit) + ")";
+            const double bitVoltage = session.nodeVoltageOfPin(fpga, pinId);
+            if (bitVoltage > 1.65) countValue += (1 << bit);
+        }
+        TEST_CHECK(countValue > 0.0);
+        std::printf("OK: Caso B (sequencial) -- contador avancou via clock real do Scheduler (count=%.0f)\n", countValue);
+    } catch (const std::exception& e) {
+        const std::string logs = fpgaComponent.controller().logs();
+        fpgaComponent.stop();
+        throw std::runtime_error(std::string(e.what()) + "\n--- logs do processo GHDL ---\n" + logs);
+    }
+
+    fpgaComponent.stop();
+    std::error_code ec;
+    fs::remove_all(workDir, ec);
+}
+
+} // namespace
+
+int main() {
+    if (!ghdlAvailable()) {
+        std::printf("PULADO: GHDL nao encontrado no PATH -- ver docs/fpga-vhdl.md pra instalar.\n");
+        return 0;
+    }
+
+    const fs::path repoRoot = fs::path(__FILE__).parent_path().parent_path().parent_path().parent_path().parent_path();
+    const fs::path vpiModule = fs::path(repoRoot.string() + kVpiModuleRelativePath);
+    if (!fs::exists(vpiModule)) {
+        std::printf("PULADO: modulo VPI nao encontrado em %s -- rode 'npm run build:fpga-vpi' primeiro.\n",
+                   vpiModule.string().c_str());
+        return 0;
+    }
+
+    try {
+        testCombinationalAndSequentialAgainstRealScheduler(vpiModule.string());
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "FALHOU: %s\n", e.what());
+        return 1;
+    }
+
+    std::printf("\nOK: FpgaComponent + Scheduler real + GHDL real (Casos A e B) passou.\n");
+    return 0;
+}
