@@ -282,6 +282,14 @@ add_executable(logic_value_test
 target_include_directories(logic_value_test PRIVATE include src)
 add_test(NAME logic_value COMMAND logic_value_test)
 
+# Passo 2 do plano FPGA/VHDL: GhdlArenaBridge sintetico (sem GHDL real).
+add_executable(ghdl_arena_bridge_test
+    test/core/fpga/GhdlArenaBridgeTest.cpp
+    src/fpga/GhdlArenaBridge.cpp
+)
+target_include_directories(ghdl_arena_bridge_test PRIVATE include src)
+add_test(NAME ghdl_arena_bridge COMMAND ghdl_arena_bridge_test)
+
 add_executable(mna_solver_test
     test/core/simulation/MnaSolverTest.cpp
 )
