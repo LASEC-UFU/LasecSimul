@@ -309,6 +309,25 @@ add_executable(ghdl_lockstep_real_ghdl_test
 target_include_directories(ghdl_lockstep_real_ghdl_test PRIVATE include src)
 add_test(NAME ghdl_lockstep_real_ghdl COMMAND ghdl_lockstep_real_ghdl_test)
 
+# Passo 5 do plano FPGA/VHDL: FpgaPortMapper isolado.
+add_executable(fpga_port_mapper_test
+    test/core/fpga/FpgaPortMapperTest.cpp
+    src/fpga/FpgaPortMapper.cpp
+)
+target_include_directories(fpga_port_mapper_test PRIVATE include src)
+add_test(NAME fpga_port_mapper COMMAND fpga_port_mapper_test)
+
+# Passo 5 do plano FPGA/VHDL: GhdlBackend (compile+cache+run) contra GHDL real -- auto-pula se
+# `ghdl` nao estiver no PATH ou `npm run build:fpga-vpi` nao tiver rodado.
+add_executable(ghdl_backend_real_ghdl_test
+    test/core/fpga/GhdlBackendRealGhdlTest.cpp
+    src/fpga/GhdlBackend.cpp
+    src/fpga/GhdlProcessManager.cpp
+    src/fpga/GhdlArenaBridge.cpp
+)
+target_include_directories(ghdl_backend_real_ghdl_test PRIVATE include src)
+add_test(NAME ghdl_backend_real_ghdl COMMAND ghdl_backend_real_ghdl_test)
+
 add_executable(mna_solver_test
     test/core/simulation/MnaSolverTest.cpp
 )

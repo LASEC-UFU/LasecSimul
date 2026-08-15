@@ -285,6 +285,35 @@ public:
 #endif
     }
 
+    std::optional<int> waitForExit(std::chrono::milliseconds timeout) {
+#if defined(_WIN32)
+        if (!m_processInfo.hProcess) return std::nullopt; // nunca iniciado ou já reapado
+        const DWORD waitMs = static_cast<DWORD>(timeout.count());
+        if (WaitForSingleObject(m_processInfo.hProcess, waitMs) != WAIT_OBJECT_0) return std::nullopt;
+        DWORD exitCode = 0;
+        GetExitCodeProcess(m_processInfo.hProcess, &exitCode);
+        m_running = false;
+        joinReader();
+        closeProcessHandles();
+        return static_cast<int>(exitCode);
+#else
+        if (m_pid <= 0) return std::nullopt;
+        const auto deadline = std::chrono::steady_clock::now() + timeout;
+        while (std::chrono::steady_clock::now() < deadline) {
+            int status = 0;
+            const pid_t result = waitpid(m_pid, &status, WNOHANG);
+            if (result == m_pid) {
+                m_running = false;
+                joinReader();
+                m_pid = -1;
+                return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        return std::nullopt;
+#endif
+    }
+
     bool isRunning() const {
 #if defined(_WIN32)
         if (!m_running || !m_processInfo.hProcess) return false;
@@ -438,5 +467,8 @@ bool GhdlProcessManager::stop(std::chrono::milliseconds timeout) { return m_impl
 void GhdlProcessManager::kill() { m_impl->kill(); }
 bool GhdlProcessManager::isRunning() const { return m_impl->isRunning(); }
 std::string GhdlProcessManager::logs() const { return m_impl->logs(); }
+std::optional<int> GhdlProcessManager::waitForExit(std::chrono::milliseconds timeout) {
+    return m_impl->waitForExit(timeout);
+}
 
 } // namespace lasecsimul::fpga

@@ -28,6 +28,11 @@ int runFakeChild(const char* mode) {
         std::this_thread::sleep_for(std::chrono::seconds(30));
         return 0;
     }
+    if (std::strcmp(mode, "--fake-exit-42") == 0) {
+        std::printf("fake-ghdl-analyze-error\n");
+        std::fflush(stdout);
+        return 42; // simula `ghdl -a` reportando erro de compilacao (exit != 0)
+    }
     if (std::strcmp(mode, "--fake-print-env") == 0) {
         const char* mode2 = std::getenv("LASECSIMUL_FPGA_MODE");
         const char* arena = std::getenv("LASECSIMUL_FPGA_ARENA_NAME");
@@ -79,6 +84,30 @@ void testKillHungProcess(const char* self) {
     std::printf("OK: kill() derruba processo travado (Caso E: crash/hang isolado do Core)\n");
 }
 
+void testWaitForExitReturnsRealExitCode(const char* self) {
+    // GhdlBackend::compile() precisa saber se `ghdl -a`/`-e` reportou erro de compilacao (exit !=
+    // 0) -- stop()/kill() nao expoem isso (sao pra processos de vida longa que precisam ser
+    // INTERROMPIDOS, nao esperados ate completar).
+    GhdlProcessManager manager;
+    manager.start(GhdlLaunchSpec{self, {"--fake-exit-42"}, {}});
+    const std::optional<int> exitCode = manager.waitForExit(std::chrono::seconds(2));
+    assert(exitCode.has_value());
+    assert(*exitCode == 42);
+    assert(!manager.isRunning());
+    std::printf("OK: waitForExit() devolve o codigo de saida real do processo (42)\n");
+}
+
+void testWaitForExitTimesOutOnLongRunningProcess(const char* self) {
+    GhdlProcessManager manager;
+    manager.start(GhdlLaunchSpec{self, {"--fake-hang"}, {}});
+    waitForLog(manager, "fake-ghdl-hanging");
+    const std::optional<int> exitCode = manager.waitForExit(std::chrono::milliseconds(200));
+    assert(!exitCode.has_value());
+    assert(manager.isRunning()); // waitForExit nunca mata -- so observa
+    manager.kill();
+    std::printf("OK: waitForExit() nunca forca o processo -- timeout devolve nullopt, processo continua rodando\n");
+}
+
 void testMissingBinaryReportsError() {
     GhdlProcessManager manager;
     bool threw = false;
@@ -127,6 +156,8 @@ int main(int argc, char** argv) {
     testStartStopAndLogs(argv[0]);
     testUtf8AndSpacesInCommandLine(argv[0]);
     testKillHungProcess(argv[0]);
+    testWaitForExitReturnsRealExitCode(argv[0]);
+    testWaitForExitTimesOutOnLongRunningProcess(argv[0]);
     testMissingBinaryReportsError();
     testEnvironmentOverridesReachChildProcess(argv[0]);
     testDiagnosticsPrefixAppearsInLogsBeforeProcessOutput(argv[0]);

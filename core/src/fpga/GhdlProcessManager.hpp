@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -52,6 +53,14 @@ public:
     void kill();
     bool isRunning() const;
     std::string logs() const;
+
+    /** Espera o processo terminar SOZINHO (nunca força) até `timeout`, devolve o código de saída
+     * se terminou a tempo -- `std::nullopt` se ainda estava rodando quando o timeout venceu (quem
+     * chama decide: `kill()` pra abortar, ou esperar mais). Pra comandos "rode até completar"
+     * (`ghdl -a`/`-e`, ver GhdlBackend::compile), onde sucesso/falha É o código de saída --
+     * diferente de `stop()`/`kill()`, que são pra processos de vida longa (`ghdl -r`) que
+     * precisam ser INTERROMPIDOS, não esperados. */
+    std::optional<int> waitForExit(std::chrono::milliseconds timeout);
 
 private:
     class Impl;
