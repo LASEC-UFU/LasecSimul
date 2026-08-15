@@ -1217,6 +1217,47 @@ std::string SimulationSession::mcuLogs(uint32_t componentIndex) const {
     return mcu->qemuLogs();
 }
 
+void SimulationSession::setFpgaConfig(uint32_t componentIndex, std::vector<std::string> sources,
+                                      std::string topEntity, std::string standard) {
+    IComponentModel* instance = m_componentInstances.at(componentIndex).get();
+    if (!instance) throw std::runtime_error("setFpgaConfig: componente removido");
+    auto* fpgaComponent = dynamic_cast<fpga::FpgaComponent*>(instance);
+    if (!fpgaComponent) throw std::runtime_error("setFpgaConfig: componente nao e FPGA");
+    fpgaComponent->setSources(std::move(sources), std::move(topEntity), std::move(standard));
+}
+
+void SimulationSession::runFpga(uint32_t componentIndex) {
+    IComponentModel* instance = m_componentInstances.at(componentIndex).get();
+    if (!instance) throw std::runtime_error("runFpga: componente removido");
+    auto* fpgaComponent = dynamic_cast<fpga::FpgaComponent*>(instance);
+    if (!fpgaComponent) throw std::runtime_error("runFpga: componente nao e FPGA");
+    fpgaComponent->start();
+}
+
+void SimulationSession::stopFpga(uint32_t componentIndex) {
+    IComponentModel* instance = m_componentInstances.at(componentIndex).get();
+    if (!instance) throw std::runtime_error("stopFpga: componente removido");
+    auto* fpgaComponent = dynamic_cast<fpga::FpgaComponent*>(instance);
+    if (!fpgaComponent) throw std::runtime_error("stopFpga: componente nao e FPGA");
+    fpgaComponent->stop();
+}
+
+void SimulationSession::restartFpga(uint32_t componentIndex) {
+    IComponentModel* instance = m_componentInstances.at(componentIndex).get();
+    if (!instance) throw std::runtime_error("restartFpga: componente removido");
+    auto* fpgaComponent = dynamic_cast<fpga::FpgaComponent*>(instance);
+    if (!fpgaComponent) throw std::runtime_error("restartFpga: componente nao e FPGA");
+    fpgaComponent->restart();
+}
+
+std::string SimulationSession::fpgaLogs(uint32_t componentIndex) const {
+    IComponentModel* instance = m_componentInstances.at(componentIndex).get();
+    if (!instance) throw std::runtime_error("getFpgaLogs: componente removido");
+    const auto* fpgaComponent = dynamic_cast<const fpga::FpgaComponent*>(instance);
+    if (!fpgaComponent) throw std::runtime_error("getFpgaLogs: componente nao e FPGA");
+    return fpgaComponent->logs();
+}
+
 mcu::McuComponent* SimulationSession::mcuComponentForTesting(uint32_t componentIndex) const {
     if (componentIndex >= m_componentInstances.size()) return nullptr;
     IComponentModel* instance = m_componentInstances[componentIndex].get();

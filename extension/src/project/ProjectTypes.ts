@@ -89,6 +89,24 @@ export interface ProjectComponent {
   };
   subcircuitRef?: ProjectSubcircuitRef;
   deviceRef?: ProjectDeviceRef;
+  /** Só presente pra `typeId === "digital.generic_fpga"` -- mesma chave irmã que o payload
+   * `addComponent` já usa com o Core (`ComponentParams.fpgaSources/fpgaTop/fpgaStandard/
+   * fpgaPorts`). `sources` são caminhos RELATIVOS à pasta do `.lsproj` (projeto precisa sobreviver
+   * a ser movido, mesma convenção de `deviceRef`/`subcircuitRef`). Deliberadamente SEM
+   * ghdlBinary/vpiModulePath/cacheRootDir -- toolchain é ambiente-específico, nunca persistido,
+   * resolvido fresco de `lasecsimul.fpga.*` a cada sessão (mesma disciplina do caminho vendorizado
+   * do QEMU, ver `mcuCommands.ts::resolveDefaultQemuBinaryPath`). */
+  fpga?: ProjectFpgaConfig;
+}
+
+export interface ProjectFpgaConfig {
+  language: "vhdl";
+  backend: "ghdl";
+  standard: string;
+  top: string;
+  /** Caminhos relativos à pasta do `.lsproj`. */
+  sources: string[];
+  ports: Array<{ name: string; direction: "in" | "out"; width: number; downto: boolean }>;
 }
 
 export interface ProjectFirmwareConfig {

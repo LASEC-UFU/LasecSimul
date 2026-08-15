@@ -6624,6 +6624,20 @@
       }
     },
     {
+      "typeId": "digital.generic_fpga",
+      "label": "FPGA Genérico (VHDL/GHDL)",
+      "pinCount": 0,
+      "icon": "package",
+      "folderPath": [
+        "Digital"
+      ],
+      "defaultProperties": {},
+      "hidden": true,
+      "help": {
+        "description": "FPGA genérico simulado a partir de VHDL, compilado e executado pelo GHDL. Colocado via o comando 'LasecSimul: Adicionar FPGA Genérico' (não arrastável da paleta) -- o pinset real só é conhecido depois de analisar o VHDL, então a instância já nasce com o pacote/pinos certos em vez de um placeholder genérico."
+      }
+    },
+    {
       "typeId": "other.dial",
       "label": "Dial",
       "pinCount": 0,

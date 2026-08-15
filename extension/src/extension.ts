@@ -77,6 +77,14 @@ import {
   updateBoardOverlayVisualCommand,
   updateExposedComponentPropertyCommand,
 } from "./mcu/mcuCommands";
+import {
+  addGenericFpgaCommand,
+  reanalyzeFpgaCommand,
+  restartFpgaCommand,
+  runFpgaCommand,
+  showFpgaLogsCommand,
+  stopFpgaCommand,
+} from "./fpga/fpgaCommands";
 import { debugMcuFirmwareCommand, registerMcuDebugTracking } from "./mcu/mcuDebug";
 import { initializeLasecPlot, lasecPlotManager } from "./lasecplot/manager";
 import { LasecSimulInteropApi } from "./lasecplot/api";
@@ -307,6 +315,10 @@ function mcuCommandOptions(): Parameters<typeof chooseMcuFirmwareCommand>[1] {
     resolveSourceFilePath,
     refreshUnifiedCatalogState: (loadLibrariesInCore) => refreshUnifiedCatalogState(loadLibrariesInCore, catalogCommandOptions()),
   };
+}
+
+function fpgaCommandOptions(): Parameters<typeof addGenericFpgaCommand>[0] {
+  return { syncSchematicPanel, reportCoreWarning };
 }
 
 /** Registra os handlers de ciclo de vida de um `CoreProcess` recém-criado -- extraído de `activate()`
@@ -1590,6 +1602,21 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
     case "requestChooseMcuFirmware":
       void chooseMcuFirmwareCommand(message.componentId, mcuCommandOptions());
       return;
+    case "requestReanalyzeFpga":
+      void reanalyzeFpgaCommand(message.componentId, fpgaCommandOptions());
+      return;
+    case "requestRunFpga":
+      void runFpgaCommand(message.componentId, fpgaCommandOptions());
+      return;
+    case "requestStopFpga":
+      void stopFpgaCommand(message.componentId, fpgaCommandOptions());
+      return;
+    case "requestRestartFpga":
+      void restartFpgaCommand(message.componentId, fpgaCommandOptions());
+      return;
+    case "requestShowFpgaLogs":
+      void showFpgaLogsCommand(message.componentId, fpgaCommandOptions());
+      return;
     case "requestChooseExposedMcuFirmware":
       void chooseExposedMcuFirmwareCommand(message.outerComponentId, message.innerComponentId, mcuCommandOptions());
       return;
@@ -2358,6 +2385,7 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
     vscode.commands.registerCommand("lasecsimul.palette.addComponent", (typeId: string) => addPaletteComponent(typeId)),
     vscode.commands.registerCommand("lasecsimul.run", () => void runSimulationWithFirmwareCheck()),
     vscode.commands.registerCommand("lasecsimul.debugFirmware", () => void debugMcuFirmwareCommand(mcuCommandOptions())),
+    vscode.commands.registerCommand("lasecsimul.addGenericFpga", () => void addGenericFpgaCommand(fpgaCommandOptions())),
     vscode.commands.registerCommand("lasecsimul.pause", () => pauseSimulation()),
     vscode.commands.registerCommand("lasecsimul.stop", () => stopSimulation()),
     vscode.commands.registerCommand("lasecsimul.saveProject", () => saveActiveSchematicCommand()),

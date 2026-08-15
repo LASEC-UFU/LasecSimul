@@ -110,6 +110,15 @@ export function showSimulationLogChannel(): void {
   channel?.show();
 }
 
+/** A MESMA `DiagnosticCollection("lasecsimul")` usada por `reportFirmwareDiagnostic` abaixo --
+ * exposta pra `diagnostics/fpgaDiagnostics.ts` poder ancorar diagnósticos REAIS de arquivo/linha/
+ * coluna (erro de compilação VHDL) em vez do padrão `Range(0,0,0,0)` no `.lsproj` que
+ * `reportFirmwareDiagnostic` usa -- um painel de Problemas único pro projeto inteiro, não uma
+ * segunda collection paralela. */
+export function getDiagnosticsCollection(): vscode.DiagnosticCollection | undefined {
+  return diagnostics;
+}
+
 /** Marca um diagnóstico no painel de Problemas, ancorado no arquivo do projeto atual (quando
  * conhecido) -- best-effort: sem um arquivo salvo pra apontar, a mensagem já foi pro canal de saída
  * e pro toast, então simplesmente não há onde ancorar o ícone de erro (não é uma falha por si só). */

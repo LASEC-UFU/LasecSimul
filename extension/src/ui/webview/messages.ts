@@ -246,6 +246,12 @@ export type WebviewToHostMessage =
   | { version: number; type: "requestImportCircuit" }
   | { version: number; type: "requestChooseMcuFirmware"; componentId: string }
   | { version: number; type: "requestOpenMcuSerialMonitor"; componentId: string; usartIndex: 0 | 1 | 2 }
+  /** Ações de uma instância `digital.generic_fpga` -- ver `fpga/fpgaCommands.ts`. */
+  | { version: number; type: "requestReanalyzeFpga"; componentId: string }
+  | { version: number; type: "requestRunFpga"; componentId: string }
+  | { version: number; type: "requestStopFpga"; componentId: string }
+  | { version: number; type: "requestRestartFpga"; componentId: string }
+  | { version: number; type: "requestShowFpgaLogs"; componentId: string }
   /** Mesmas ações do MCU de topo, mas disparadas a partir do submenu de um componente INTERNO
    * exposto de um subcircuito no esquemático principal. `outerComponentId` é a instância do
    * subcircuito colocada no circuito; `innerComponentId` é o id local salvo no `.lssubcircuit`

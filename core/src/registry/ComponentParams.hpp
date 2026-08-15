@@ -33,6 +33,12 @@ struct ComponentParams {
     std::string fpgaTop;
     std::string fpgaStandard = "08";
     std::vector<fpga::PortSpec> fpgaPorts;
+    /** Toolchain GHDL resolvido pela Extension e enviado fresco a cada `addComponent` -- nunca
+     * um valor de sessão cacheado no Core (ver CoreApplication.cpp, parsing da chave "fpga"). A
+     * factory de `digital.generic_fpga` usa isto pra construir o `GhdlBackend` desta instância. */
+    std::string fpgaGhdlBinary = "ghdl";
+    std::string fpgaVpiModulePath;
+    std::string fpgaCacheRootDir;
 
     template <size_t N>
     std::array<lasecsimul::Pin, N> pins() const {

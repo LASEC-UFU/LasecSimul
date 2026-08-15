@@ -196,6 +196,192 @@ void testInvalidVhdlReportsCompileFailure(const std::string& ghdlBinary) {
     fs::remove_all(workDir, ec);
 }
 
+// Testes de Cache vNext (.spec/features/fpga-ghdl.md) -- ver GhdlBackend::compile() (lock por
+// chave, staging+rename atomico, entrada publicada read-only) e memoria de projeto
+// project_lasecsimul_fpga_vhdl_ghdl_integration.md, secao "Cache vNext".
+
+void testConcurrentCompilationsOfSameKeyDoNotCorruptCache(const std::string& ghdlBinary, const std::string& vpiModulePath) {
+    const fs::path workDir = fs::temp_directory_path() / ("lasecsimul-fpga-backend-concurrent-" + uniqueDirSuffix());
+    const fs::path cacheDir = workDir / "cache";
+    const fs::path vhdlFile = workDir / "concurrent_test.vhd";
+    fs::create_directories(workDir);
+    {
+        std::ofstream out(vhdlFile);
+        out << "library ieee;\n"
+               "use ieee.std_logic_1164.all;\n"
+               "entity concurrent_test is\n"
+               "    port (a : in std_logic; y : out std_logic);\n"
+               "end entity;\n"
+               "architecture rtl of concurrent_test is\n"
+               "begin\n"
+               "    y <= a;\n"
+               "end architecture;\n";
+    }
+
+    GhdlBackendOptions options;
+    options.ghdlBinary = ghdlBinary;
+    options.vpiModulePath = vpiModulePath;
+    options.cacheRootDir = cacheDir.string();
+
+    RtlCompileRequest request;
+    request.sources = {vhdlFile.string()};
+    request.topEntity = "concurrent_test";
+    request.standard = "08";
+
+    // Duas instâncias, MESMA chave de cache, compilando ao mesmo tempo -- aceitação de Cache vNext:
+    // "duas compilações concorrentes da mesma chave não corrompem cache". Antes do lock por chave
+    // (ver GhdlBackend::compile()), as duas escreviam direto no MESMO diretório final -- uma podia
+    // remove_all() os arquivos que a outra estava lendo/escrevendo no meio da compilação.
+    bool okA = false, okB = false;
+    std::string logA, logB;
+    std::thread threadA([&] {
+        GhdlBackend backendA(options);
+        const RtlCompileResult result = backendA.compile(request);
+        okA = result.ok;
+        logA = result.log;
+    });
+    std::thread threadB([&] {
+        GhdlBackend backendB(options);
+        const RtlCompileResult result = backendB.compile(request);
+        okB = result.ok;
+        logB = result.log;
+    });
+    threadA.join();
+    threadB.join();
+
+    if (!okA) std::printf("log A: %s\n", logA.c_str());
+    if (!okB) std::printf("log B: %s\n", logB.c_str());
+    TEST_CHECK(okA);
+    TEST_CHECK(okB);
+    std::printf("OK: duas compilacoes concorrentes da mesma chave nao corrompem o cache\n");
+
+    // Prova que a entrada publicada ficou íntegra: uma TERCEIRA compilação depois disso deve ser
+    // hit, e discoverPorts() deve continuar funcionando (arquivos de biblioteca não corrompidos).
+    GhdlBackend verifyBackend(options);
+    const RtlCompileResult verifyResult = verifyBackend.compile(request);
+    TEST_CHECK(verifyResult.ok);
+    TEST_CHECK(verifyResult.log.find("cache hit") != std::string::npos);
+    const std::vector<PortSpec> ports = verifyBackend.discoverPorts();
+    TEST_CHECK(ports.size() == 2);
+    std::printf("OK: entrada publicada apos a corrida continua integra (discoverPorts funciona)\n");
+
+    std::error_code ec;
+    fs::remove_all(workDir, ec);
+}
+
+void testDifferentVpiFingerprintCausesCacheMiss(const std::string& ghdlBinary) {
+    const fs::path workDir = fs::temp_directory_path() / ("lasecsimul-fpga-backend-vpimiss-" + uniqueDirSuffix());
+    const fs::path cacheDir = workDir / "cache";
+    const fs::path vhdlFile = workDir / "vpi_miss_test.vhd";
+    const fs::path vpiA = workDir / "fake_vpi_a.bin";
+    const fs::path vpiB = workDir / "fake_vpi_b.bin";
+    fs::create_directories(workDir);
+    {
+        std::ofstream out(vhdlFile);
+        out << "library ieee;\n"
+               "use ieee.std_logic_1164.all;\n"
+               "entity vpi_miss_test is\n"
+               "    port (a : in std_logic; y : out std_logic);\n"
+               "end entity;\n"
+               "architecture rtl of vpi_miss_test is\n"
+               "begin\n"
+               "    y <= a;\n"
+               "end architecture;\n";
+    }
+    { std::ofstream(vpiA) << "fake-vpi-content-a"; }
+    { std::ofstream(vpiB) << "fake-vpi-content-b-different"; }
+
+    RtlCompileRequest request;
+    request.sources = {vhdlFile.string()};
+    request.topEntity = "vpi_miss_test";
+    request.standard = "08";
+
+    // Aceitação de Cache vNext: "mudança de toolchain/VPI causa miss" -- mesmas fontes/top/
+    // standard, só o MÓDULO VPI referenciado muda de conteúdo (simulando uma rebuild da ABI).
+    // Fingerprint do VPI não afeta a etapa de compile em si, só a CHAVE do cache -- por isso não
+    // precisa de uma .dll de verdade aqui, um arquivo binário qualquer com bytes diferentes já
+    // move o hash (GhdlBackend::computeCacheKey faz Sha256::hashFile(vpiModulePath)).
+    GhdlBackendOptions optionsA;
+    optionsA.ghdlBinary = ghdlBinary;
+    optionsA.vpiModulePath = vpiA.string();
+    optionsA.cacheRootDir = cacheDir.string();
+    GhdlBackend backendA(optionsA);
+    const RtlCompileResult resultA = backendA.compile(request);
+    TEST_CHECK(resultA.ok);
+    TEST_CHECK(resultA.log.find("cache hit") == std::string::npos); // 1a compilacao, sempre miss
+
+    GhdlBackendOptions optionsB = optionsA;
+    optionsB.vpiModulePath = vpiB.string();
+    GhdlBackend backendB(optionsB);
+    const RtlCompileResult resultB = backendB.compile(request);
+    TEST_CHECK(resultB.ok);
+    TEST_CHECK(resultB.log.find("cache hit") == std::string::npos); // VPI diferente -- MISS, nao hit
+    std::printf("OK: trocar o modulo VPI referenciado invalida o cache (miss, nao reusa a chave antiga)\n");
+
+    // Confere que voltar pro MESMO vpiModulePath de A bate cache de novo (prova que a diferença
+    // real observada acima é o conteúdo do VPI, não algum efeito colateral do teste).
+    GhdlBackend backendA2(optionsA);
+    const RtlCompileResult resultA2 = backendA2.compile(request);
+    TEST_CHECK(resultA2.ok);
+    TEST_CHECK(resultA2.log.find("cache hit") != std::string::npos);
+    std::printf("OK: voltar ao mesmo modulo VPI de antes acerta o cache de novo\n");
+
+    std::error_code ec;
+    fs::remove_all(workDir, ec);
+}
+
+void testCompileTimeoutNeverPublishesCacheHit(const std::string& ghdlBinary) {
+    const fs::path workDir = fs::temp_directory_path() / ("lasecsimul-fpga-backend-timeout-" + uniqueDirSuffix());
+    const fs::path cacheDir = workDir / "cache";
+    const fs::path vhdlFile = workDir / "timeout_test.vhd";
+    fs::create_directories(workDir);
+    {
+        std::ofstream out(vhdlFile);
+        out << "library ieee;\n"
+               "use ieee.std_logic_1164.all;\n"
+               "entity timeout_test is\n"
+               "    port (a : in std_logic; y : out std_logic);\n"
+               "end entity;\n"
+               "architecture rtl of timeout_test is\n"
+               "begin\n"
+               "    y <= a;\n"
+               "end architecture;\n";
+    }
+
+    GhdlBackendOptions options;
+    options.ghdlBinary = ghdlBinary;
+    options.vpiModulePath = "unused-for-this-test";
+    options.cacheRootDir = cacheDir.string();
+    // Timeout absurdamente curto -- forca timeout real no 'ghdl -a' (spawn de processo sozinho já
+    // passa de 1ms no mundo real). Aceitação de Cache vNext: "timeout deixa cache inválido/
+    // removível" -- nunca publica um hit parcial.
+    options.compileTimeout = std::chrono::milliseconds(1);
+
+    RtlCompileRequest request;
+    request.sources = {vhdlFile.string()};
+    request.topEntity = "timeout_test";
+    request.standard = "08";
+
+    GhdlBackend backend(options);
+    const RtlCompileResult result = backend.compile(request);
+    TEST_CHECK(!result.ok);
+    std::printf("OK: timeout de compilacao nunca reporta sucesso (log: %.80s...)\n", result.log.c_str());
+
+    // Nenhuma entrada publicada (marker) deve existir depois disso -- uma compilação subsequente
+    // com timeout normal deve rodar `ghdl -a/-e` de VERDADE (miss), não herdar um "hit" fantasma
+    // de uma publicação parcial/corrompida.
+    GhdlBackendOptions normalOptions = options;
+    normalOptions.compileTimeout = std::chrono::milliseconds(30000);
+    GhdlBackend retryBackend(normalOptions);
+    const RtlCompileResult retryResult = retryBackend.compile(request);
+    TEST_CHECK(retryResult.ok);
+    TEST_CHECK(retryResult.log.find("cache hit") == std::string::npos);
+    std::printf("OK: nenhuma entrada fantasma publicada -- retry com timeout normal recompila de verdade\n");
+
+    std::error_code ec;
+    fs::remove_all(workDir, ec);
+}
+
 } // namespace
 
 int main() {
@@ -217,6 +403,9 @@ int main() {
     try {
         testCompileCacheAndRunRoundTrip("ghdl", vpiModule.string());
         testInvalidVhdlReportsCompileFailure("ghdl");
+        testConcurrentCompilationsOfSameKeyDoNotCorruptCache("ghdl", vpiModule.string());
+        testDifferentVpiFingerprintCausesCacheMiss("ghdl");
+        testCompileTimeoutNeverPublishesCacheHit("ghdl");
     } catch (const std::exception& e) {
         std::fprintf(stderr, "FALHOU: %s\n", e.what());
         return 1;

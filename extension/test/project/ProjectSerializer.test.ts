@@ -3,7 +3,7 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { ProjectSerializer } from "../../src/project/ProjectSerializer";
-import { createEmptyProject } from "../../src/project/ProjectTypes";
+import { createEmptyProject, LS_PROJ_SCHEMA_VERSION } from "../../src/project/ProjectTypes";
 
 (async () => {
   const serializer = new ProjectSerializer();
@@ -165,6 +165,45 @@ import { createEmptyProject } from "../../src/project/ProjectTypes";
   const deviceRefRoundTrip = await serializer.load(deviceRefPath);
   assert.deepStrictEqual(deviceRefRoundTrip.components[0]?.deviceRef, deviceRefProject.components[0]?.deviceRef);
   assert.deepStrictEqual(deviceRefRoundTrip.components[0]?.properties, deviceRefProject.components[0]?.properties);
+
+  // `fpga` (config VHDL/GHDL de uma instância `digital.generic_fpga`, ver ProjectTypes.ts) precisa
+  // sobreviver a save->load igual subcircuitRef/deviceRef acima -- é dado de circuito genuíno
+  // (equivalente a firmwarePath do MCU), não um caminho de toolchain (esses nunca são persistidos,
+  // ver fpga/fpgaToolchain.ts).
+  const fpgaProject = createEmptyProject();
+  fpgaProject.components.push({
+    id: "fpga1",
+    typeId: "digital.generic_fpga",
+    properties: {},
+    visual: { x: 10, y: 20, rotation: 0 },
+    fpga: {
+      language: "vhdl",
+      backend: "ghdl",
+      standard: "08",
+      top: "counter",
+      sources: ["../vhdl/counter.vhd"],
+      ports: [
+        { name: "clk", direction: "in", width: 1, downto: true },
+        { name: "count", direction: "out", width: 4, downto: true },
+      ],
+    },
+  });
+  const fpgaPath = path.join(tmpDir, "fpga.lsproj");
+  await serializer.save(fpgaPath, fpgaProject);
+  const fpgaRoundTrip = await serializer.load(fpgaPath);
+  assert.deepStrictEqual(fpgaRoundTrip.components[0]?.fpga, fpgaProject.components[0]?.fpga);
+
+  // `fpga` malformado (sem `top`/`sources`) é descartado silenciosamente, não quebra o load do
+  // resto do componente -- mesma postura de `subcircuitRef` sem `path` (linha ~213 abaixo).
+  const malformedFpgaPath = path.join(tmpDir, "fpga-malformed.lsproj");
+  const malformedFpgaBase = createEmptyProject();
+  await fs.writeFile(malformedFpgaPath, JSON.stringify({
+    ...malformedFpgaBase,
+    schemaVersion: LS_PROJ_SCHEMA_VERSION,
+    components: [{ id: "fpga2", typeId: "digital.generic_fpga", properties: {}, fpga: { standard: "08" } }],
+  }));
+  const malformedFpgaProject = await serializer.load(malformedFpgaPath);
+  assert.strictEqual(malformedFpgaProject.components[0]?.fpga, undefined);
 
   // Componente normal (sem `subcircuitRef`) continua sem o campo depois do load -- nunca inventa um
   // valor default pra quem nunca teve essa referência.

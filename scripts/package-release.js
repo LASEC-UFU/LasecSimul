@@ -355,6 +355,27 @@ function stageBundledAssets() {
   const coreExecutable = resolveCoreExecutable();
   const coreRelative = path.relative(path.join(repoRoot, "core", "build"), coreExecutable);
   copyFileTo(coreExecutable, path.join(bundledRoot, "core", "build", coreRelative));
+
+  stageBundledFpgaVpiModule();
+}
+
+/** Módulo VPI do GHDL (`npm run build:fpga-vpi`, ver `scripts/build-fpga-vpi.js`) -- vendorizado
+ * como binário pré-compilado (mesma disciplina do QEMU em `devices/qemu-esp32/bin/`: o workflow de
+ * packaging não tem GHDL/MinGW provisionados pra rebuildar isto do zero, ver `.gitignore` sobre
+ * `!/fpga/ghdl-vpi/build/**`). Best-effort: avisa e segue sem falhar o pacote inteiro se o módulo
+ * ainda não foi construído localmente (ex: ambiente de dev sem GHDL instalado) -- FPGA/VHDL fica
+ * indisponível nesse pacote específico, mas o resto do LasecSimul empacota normalmente (mesmo
+ * espírito não-bloqueante de `validateWindowsAdapterDependencies` pra outros componentes opcionais). */
+function stageBundledFpgaVpiModule() {
+  const sourceDir = path.join(repoRoot, "fpga", "ghdl-vpi", "build");
+  if (!fs.existsSync(sourceDir)) {
+    console.warn(
+      "[package-release] AVISO: fpga/ghdl-vpi/build/ não encontrado -- pacote sairá sem suporte a FPGA/VHDL " +
+      "(rode 'npm run build:fpga-vpi' antes de empacotar pra incluir)."
+    );
+    return;
+  }
+  copyDirFiltered(sourceDir, path.join(bundledRoot, "fpga", "ghdl-vpi", "build"), new Set());
 }
 
 /** Extrai só `{typeId ou chipId, arquivo}` de cada dispositivo declarado num `library.json` --

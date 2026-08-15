@@ -1,0 +1,378 @@
+{
+  "schemaVersion": 2,
+  "components": [
+    {
+      "id": "fpga1",
+      "typeId": "digital.generic_fpga",
+      "properties": {},
+      "visual": {
+        "x": 360,
+        "y": 200,
+        "rotation": 0
+      },
+      "fpga": {
+        "language": "vhdl",
+        "backend": "ghdl",
+        "standard": "08",
+        "top": "counter",
+        "sources": [
+          "counter.vhd"
+        ],
+        "ports": [
+          {
+            "name": "clk",
+            "direction": "in",
+            "width": 1,
+            "downto": true
+          },
+          {
+            "name": "rst",
+            "direction": "in",
+            "width": 1,
+            "downto": true
+          },
+          {
+            "name": "count",
+            "direction": "out",
+            "width": 4,
+            "downto": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "clk1",
+      "typeId": "sources.clock",
+      "properties": {
+        "voltage": 3.3,
+        "freqHz": 2,
+        "alwaysOn": true
+      },
+      "visual": {
+        "x": 160,
+        "y": 160,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "gnd1",
+      "typeId": "other.ground",
+      "properties": {},
+      "visual": {
+        "x": 160,
+        "y": 320,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "r0",
+      "typeId": "passive.resistor",
+      "properties": {
+        "resistance": 330
+      },
+      "visual": {
+        "x": 600,
+        "y": 120,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "r1",
+      "typeId": "passive.resistor",
+      "properties": {
+        "resistance": 330
+      },
+      "visual": {
+        "x": 600,
+        "y": 200,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "r2",
+      "typeId": "passive.resistor",
+      "properties": {
+        "resistance": 330
+      },
+      "visual": {
+        "x": 600,
+        "y": 280,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "r3",
+      "typeId": "passive.resistor",
+      "properties": {
+        "resistance": 330
+      },
+      "visual": {
+        "x": 600,
+        "y": 360,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "led0",
+      "typeId": "outputs.led",
+      "properties": {
+        "color": "Yellow"
+      },
+      "visual": {
+        "x": 760,
+        "y": 120,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "led1",
+      "typeId": "outputs.led",
+      "properties": {
+        "color": "Yellow"
+      },
+      "visual": {
+        "x": 760,
+        "y": 200,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "led2",
+      "typeId": "outputs.led",
+      "properties": {
+        "color": "Yellow"
+      },
+      "visual": {
+        "x": 760,
+        "y": 280,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "led3",
+      "typeId": "outputs.led",
+      "properties": {
+        "color": "Yellow"
+      },
+      "visual": {
+        "x": 760,
+        "y": 360,
+        "rotation": 0
+      }
+    }
+  ],
+  "topology": {
+    "revision": 0,
+    "nodes": [],
+    "conductors": [
+      {
+        "id": "w1",
+        "from": {
+          "kind": "port",
+          "componentId": "clk1",
+          "pinId": "pin-1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "fpga1",
+          "pinId": "clk"
+        },
+        "vertices": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "kind": "port",
+          "componentId": "gnd1",
+          "pinId": "pin"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "fpga1",
+          "pinId": "rst"
+        },
+        "vertices": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "kind": "port",
+          "componentId": "fpga1",
+          "pinId": "count(0)"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "r0",
+          "pinId": "p1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "kind": "port",
+          "componentId": "r0",
+          "pinId": "p2"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "led0",
+          "pinId": "anode"
+        },
+        "vertices": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "kind": "port",
+          "componentId": "led0",
+          "pinId": "cathode"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "gnd1",
+          "pinId": "pin"
+        },
+        "vertices": []
+      },
+      {
+        "id": "w6",
+        "from": {
+          "kind": "port",
+          "componentId": "fpga1",
+          "pinId": "count(1)"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "r1",
+          "pinId": "p1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "w7",
+        "from": {
+          "kind": "port",
+          "componentId": "r1",
+          "pinId": "p2"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "led1",
+          "pinId": "anode"
+        },
+        "vertices": []
+      },
+      {
+        "id": "w8",
+        "from": {
+          "kind": "port",
+          "componentId": "led1",
+          "pinId": "cathode"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "gnd1",
+          "pinId": "pin"
+        },
+        "vertices": []
+      },
+      {
+        "id": "w9",
+        "from": {
+          "kind": "port",
+          "componentId": "fpga1",
+          "pinId": "count(2)"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "r2",
+          "pinId": "p1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "w10",
+        "from": {
+          "kind": "port",
+          "componentId": "r2",
+          "pinId": "p2"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "led2",
+          "pinId": "anode"
+        },
+        "vertices": []
+      },
+      {
+        "id": "w11",
+        "from": {
+          "kind": "port",
+          "componentId": "led2",
+          "pinId": "cathode"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "gnd1",
+          "pinId": "pin"
+        },
+        "vertices": []
+      },
+      {
+        "id": "w12",
+        "from": {
+          "kind": "port",
+          "componentId": "fpga1",
+          "pinId": "count(3)"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "r3",
+          "pinId": "p1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "w13",
+        "from": {
+          "kind": "port",
+          "componentId": "r3",
+          "pinId": "p2"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "led3",
+          "pinId": "anode"
+        },
+        "vertices": []
+      },
+      {
+        "id": "w14",
+        "from": {
+          "kind": "port",
+          "componentId": "led3",
+          "pinId": "cathode"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "gnd1",
+          "pinId": "pin"
+        },
+        "vertices": []
+      }
+    ]
+  },
+  "visual": {
+    "viewport": {
+      "x": 0,
+      "y": 0,
+      "zoom": 1
+    }
+  },
+  "simulationSettings": {
+    "frequencyHz": 1000,
+    "timeScale": 1,
+    "paused": false
+  }
+}

@@ -65,6 +65,9 @@ set(CORE_SOURCES
     src/mcu/McuComponent.cpp
     src/fpga/FpgaComponent.cpp
     src/fpga/FpgaPortMapper.cpp
+    src/fpga/GhdlBackend.cpp
+    src/fpga/GhdlProcessManager.cpp
+    src/fpga/GhdlArenaBridge.cpp
     src/simulation/Scheduler.cpp
     src/session/SimulationSession.cpp
     src/session/PauseExpression.cpp
@@ -109,6 +112,9 @@ set(TEST_COMMON_SOURCES
     src/mcu/McuComponent.cpp
     src/fpga/FpgaComponent.cpp
     src/fpga/FpgaPortMapper.cpp
+    src/fpga/GhdlBackend.cpp
+    src/fpga/GhdlProcessManager.cpp
+    src/fpga/GhdlArenaBridge.cpp
     src/simulation/Scheduler.cpp
     src/session/SimulationSession.cpp
     src/session/PauseExpression.cpp
@@ -337,9 +343,6 @@ add_test(NAME ghdl_backend_real_ghdl COMMAND ghdl_backend_real_ghdl_test)
 # Casos A (combinacional) e B (sequencial/clock real) do plano. Auto-pula como os demais.
 add_executable(fpga_component_real_ghdl_test
     test/core/fpga/FpgaComponentRealGhdlTest.cpp
-    src/fpga/GhdlBackend.cpp
-    src/fpga/GhdlProcessManager.cpp
-    src/fpga/GhdlArenaBridge.cpp
     ${TEST_COMMON_SOURCES}
 )
 target_include_directories(fpga_component_real_ghdl_test PRIVATE include src)
@@ -831,6 +834,9 @@ add_executable(session_restart_stress_test
     src/mcu/qemu/QemuIcountCalibrator.cpp
     src/fpga/FpgaComponent.cpp
     src/fpga/FpgaPortMapper.cpp
+    src/fpga/GhdlBackend.cpp
+    src/fpga/GhdlProcessManager.cpp
+    src/fpga/GhdlArenaBridge.cpp
     src/simulation/Scheduler.cpp
     src/session/SimulationSession.cpp
     src/session/PauseExpression.cpp

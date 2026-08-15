@@ -41,6 +41,11 @@
         "icon": "$(debug-alt)"
       },
       {
+        "command": "lasecsimul.addGenericFpga",
+        "title": "LasecSimul: Adicionar FPGA Genérico",
+        "icon": "$(circuit-board)"
+      },
+      {
         "command": "lasecsimul.palette.addComponent",
         "title": "LasecSimul: Add Palette Component"
       },
@@ -241,6 +246,11 @@
           "type": "string",
           "default": "xtensa-esp32-elf-gdb",
           "description": "Caminho do GDB compatível com a CPU emulada pelo QEMU."
+        },
+        "lasecsimul.fpga.ghdlPath": {
+          "type": "string",
+          "default": "ghdl",
+          "description": "Caminho do binário GHDL usado para compilar e simular componentes FPGA/VHDL genéricos."
         },
           "lasecsimul.network.mode": {
             "type": "string",

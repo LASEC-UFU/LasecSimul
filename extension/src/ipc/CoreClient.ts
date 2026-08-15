@@ -142,14 +142,30 @@ export class CoreClient {
    * `instanceId` para um subcircuito é um sentinel (`kSubcircuitInstanceFlag | rawId`), nunca um
    * índice de componente válido -- usar `exposedPins` é obrigatório pra resolver qualquer fio ligado
    * diretamente num pino de fronteira do bloco (ver `coreLifecycle.ts::resolveWireEndpoint`). */
+  /** `fpga`: chave irmã de `properties`/`pins` só pra `typeId === "digital.generic_fpga"` (mesma
+   * ideia de `exposedPins` acima -- dado estruturado que não cabe no mapa escalar de
+   * `properties`). Ver `ComponentParams.fpgaSources/fpgaTop/fpgaStandard/fpgaPorts/
+   * fpgaGhdlBinary/fpgaVpiModulePath/fpgaCacheRootDir` no Core (CoreApplication.cpp). Os 3 últimos
+   * campos (toolchain) NUNCA são persistidos no `.lsproj` -- resolvidos frescos de
+   * `lasecsimul.fpga.*` a cada `addComponent`, mesma disciplina do caminho vendorizado do QEMU
+   * (ver `mcuCommands.ts::resolveDefaultQemuBinaryPath`). */
   async addComponent(
     typeId: string,
     properties: Record<string, unknown>,
     pins: Array<{ id: string; x: number; y: number }> = [],
     instanceName = "",
-    signalAliases: string[] = []
+    signalAliases: string[] = [],
+    fpga?: {
+      sources: string[];
+      top: string;
+      standard: string;
+      ports: Array<{ name: string; direction: "in" | "out"; width: number; downto: boolean }>;
+      ghdlBinary: string;
+      vpiModulePath: string;
+      cacheRootDir: string;
+    }
   ): Promise<{ instanceId: string; primaryMcuInstanceId?: string; exposedPins?: Record<string, { instanceId: string; pinId: string }> }> {
-    const resp = await this.request("addComponent", { typeId, properties, pins, instanceName, signalAliases });
+    const resp = await this.request("addComponent", { typeId, properties, pins, instanceName, signalAliases, fpga });
     return resp as { instanceId: string; primaryMcuInstanceId?: string; exposedPins?: Record<string, { instanceId: string; pinId: string }> };
   }
 
@@ -372,6 +388,53 @@ export class CoreClient {
 
   async getMcuLogs(instanceId: string): Promise<string> {
     const resp = await this.request("getMcuLogs", { instanceId });
+    return (resp as { logs: string }).logs;
+  }
+
+  // ── FPGA/VHDL (GHDL) ────────────────────────────────────────────────────────
+
+  /** STANDALONE -- sem `instanceId`: roda `ghdl -a/-e` (com cache) + descoberta de portas contra
+   * um `GhdlBackend` descartável no Core, ANTES de qualquer `addComponent` existir pra essa
+   * instância (a Extension só sabe o pinset real depois disto -- ver `fpgaCommands.ts`). Erro de
+   * compilação (VHDL inválido) chega aqui como rejeição da Promise (`request()` já traduz
+   * `resp.ok===false` em erro, ver `IpcError`), fonte real do parser de diagnostics
+   * (`fpgaDiagnostics.ts`). */
+  async analyzeFpga(options: {
+    sources: string[];
+    topEntity: string;
+    standard?: string;
+    ghdlBinary?: string;
+    vpiModulePath: string;
+    cacheRootDir: string;
+  }): Promise<{ ports: Array<{ name: string; direction: "in" | "out"; width: number; downto: boolean }>; log: string }> {
+    return await this.request("analyzeFpga", options) as {
+      ports: Array<{ name: string; direction: "in" | "out"; width: number; downto: boolean }>;
+      log: string;
+    };
+  }
+
+  /** Atualiza sources/top/standard de uma instância `digital.generic_fpga` JÁ criada, pra uso no
+   * PRÓXIMO `runFpga`/`restartFpga` -- não recompila/roda imediatamente. */
+  async setFpgaConfig(instanceId: string, sources: string[], topEntity: string, standard: string): Promise<void> {
+    await this.request("setFpgaConfig", { instanceId, sources, topEntity, standard });
+  }
+
+  /** Compila (com cache) e inicia o processo GHDL da instância -- rejeita a Promise se `compile()`
+   * falhar (mensagem inclui o log real do GHDL). */
+  async runFpga(instanceId: string): Promise<void> {
+    await this.request("runFpga", { instanceId });
+  }
+
+  async stopFpga(instanceId: string): Promise<void> {
+    await this.request("stopFpga", { instanceId });
+  }
+
+  async restartFpga(instanceId: string): Promise<void> {
+    await this.request("restartFpga", { instanceId });
+  }
+
+  async getFpgaLogs(instanceId: string): Promise<string> {
+    const resp = await this.request("getFpgaLogs", { instanceId });
     return (resp as { logs: string }).logs;
   }
 

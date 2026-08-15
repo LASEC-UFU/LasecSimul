@@ -93,6 +93,18 @@ export interface WebviewComponentModel {
     lastKnownPinIds?: string[];
     lastKnownMtimeMs?: number;
   };
+  /** Só presente pra `typeId === "digital.generic_fpga"` -- mesmo shape de `ProjectFpgaConfig`
+   * (`ProjectTypes.ts`). `pins` desta instância são derivados de `fpga.ports` (ver
+   * `fpga/fpgaPins.ts::buildFpgaPins`), não do catálogo (`digital.generic_fpga` tem `pinCount: 0`
+   * fixo -- o pinset real só é conhecido por instância, depois de "Analyze VHDL"). */
+  fpga?: {
+    language: "vhdl";
+    backend: "ghdl";
+    standard: string;
+    top: string;
+    sources: string[];
+    ports: Array<{ name: string; direction: "in" | "out"; width: number; downto: boolean }>;
+  };
 }
 
 export interface WebviewPoint {

@@ -15,6 +15,8 @@ import { logSimulation, noteSimulationStatusChange } from "../diagnostics/simula
 import { canonicalPackagePinId } from "../ui/webview/componentSymbols";
 import { voltageProbesForProject } from "./voltageTelemetry";
 import { RollingRateSampler } from "./rollingRateSampler";
+import { buildFpgaPins, FpgaPortSpec } from "../fpga/fpgaPins";
+import { resolveFpgaToolchainConfig } from "../fpga/fpgaToolchain";
 
 export { electricalEdgesForProject, diffElectricalEdges, voltageProbesForProject };
 
@@ -127,7 +129,8 @@ async function pushComponentToCoreNow(
   componentId: string,
   typeId: string,
   properties: Record<string, unknown>,
-  pins: Array<{ id: string; x: number; y: number }>
+  pins: Array<{ id: string; x: number; y: number }>,
+  fpgaOverride?: WebviewComponentModel["fpga"]
 ): Promise<boolean> {
   if (!state.coreClient || !shouldSyncComponentToCore(typeId)) return false;
   try {
@@ -135,7 +138,19 @@ async function pushComponentToCoreNow(
     const runtimeProperties = Object.fromEntries(
       Object.entries(properties).filter(([name]) => !name.startsWith("__ui_"))
     );
-    const response = await state.coreClient.addComponent(typeId, runtimeProperties, pins, componentId, model?.label ? [model.label] : []);
+    // `fpga` resolvido FRESCO a cada push -- toolchain (ghdlBinary/vpiModulePath/cacheRootDir)
+    // nunca é persistido, sempre lido de `lasecsimul.fpga.*`/caminho vendorizado do VPI (mesma
+    // disciplina do QEMU, ver `mcuCommands.ts::resolveDefaultQemuBinaryPath`); sources/top/
+    // standard/ports vêm de `fpgaOverride` (chamador ainda não inseriu o componente em
+    // `state.schematicState.components`, ex: `fpgaCommands.ts::addGenericFpgaCommand`) OU de
+    // `model.fpga` (componente já presente no estado, ex: rebuild/push incremental normal).
+    const fpgaConfig = fpgaOverride ?? model?.fpga;
+    const fpgaPayload = typeId === "digital.generic_fpga" && fpgaConfig
+      ? { ...fpgaConfig, ...resolveFpgaToolchainConfig() }
+      : undefined;
+    const response = await state.coreClient.addComponent(
+      typeId, runtimeProperties, pins, componentId, model?.label ? [model.label] : [], fpgaPayload
+    );
     registerCoreIdsForComponent(componentId, typeId, response);
     if (typeId === TUNNEL_TYPE_ID) {
       const name = String(properties.name ?? "");
@@ -152,9 +167,10 @@ export function pushComponentToCore(
   componentId: string,
   typeId: string,
   properties: Record<string, unknown>,
-  pins: Array<{ id: string; x: number; y: number }>
+  pins: Array<{ id: string; x: number; y: number }>,
+  fpgaOverride?: WebviewComponentModel["fpga"]
 ): Promise<boolean> {
-  return enqueueCoreMutation(() => pushComponentToCoreNow(componentId, typeId, properties, pins));
+  return enqueueCoreMutation(() => pushComponentToCoreNow(componentId, typeId, properties, pins, fpgaOverride));
 }
 
 async function pushWireToCoreNow(wire: WebviewWireModel): Promise<boolean> {
@@ -928,6 +944,11 @@ export function stopSimulation(): void {
 }
 
 export function shouldSyncComponentToCore(typeId: string): boolean {
+  // `digital.generic_fpga` tem `pinCount: 0` FIXO no catálogo de propósito (o pinset real só é
+  // conhecido por instância, depois de "Analyze VHDL" -- ver fpga/fpgaPins.ts/component-catalog.json)
+  // -- sem este caso especial, o teste genérico abaixo (`pinCount > 0`) nunca deixaria NENHUMA
+  // instância FPGA chegar ao Core, mesmo com portas reais descobertas.
+  if (typeId === "digital.generic_fpga") return true;
   const descriptor = state.schematicState.catalog.find((item) => item.typeId === typeId);
   return (descriptor?.pinCount ?? 2) > 0;
 }
@@ -1034,12 +1055,16 @@ async function rebuildCoreFromSchematicStateNow(options: { alreadyStopped?: bool
   for (const component of state.schematicState.components) {
     if (isUnresolvedSubcircuitRef(component) || !shouldSyncComponentToCore(component.typeId)) continue;
     try {
+      const fpgaPayload = component.typeId === "digital.generic_fpga" && component.fpga
+        ? { ...component.fpga, ...resolveFpgaToolchainConfig() }
+        : undefined;
       const response = await state.coreClient.addComponent(
         component.typeId,
         component.properties,
         pinsForProjectComponent(component),
         component.id,
-        component.label ? [component.label] : []
+        component.label ? [component.label] : [],
+        fpgaPayload
       );
       registerCoreIdsForComponent(component.id, component.typeId, response);
       if (component.typeId === TUNNEL_TYPE_ID) {
@@ -1083,7 +1108,19 @@ async function rebuildCoreFromSchematicStateNow(options: { alreadyStopped?: bool
  * Aceita tanto `ProjectComponent` (`.lsproj`) quanto `WebviewComponentModel` (já em memória) --
  * as duas têm `typeId`/`subcircuitRef?` no mesmo shape, e ambas precisam do mesmo fallback ao
  * reconstruir pinos pro Core (`rebuildCoreFromSchematicState` reconstrói do zero a cada rebuild). */
-export function pinsForProjectComponent(component: { typeId: string; subcircuitRef?: { lastKnownPinIds?: string[] }; deviceRef?: { lastKnownPinIds?: string[] }; properties?: Record<string, unknown> }): Array<{ id: string; x: number; y: number }> {
+export function pinsForProjectComponent(component: {
+  typeId: string;
+  subcircuitRef?: { lastKnownPinIds?: string[] };
+  deviceRef?: { lastKnownPinIds?: string[] };
+  properties?: Record<string, unknown>;
+  fpga?: { ports: FpgaPortSpec[] };
+}): Array<{ id: string; x: number; y: number }> {
+  // `digital.generic_fpga` tem `pinCount: 0` fixo no catálogo (o pinset real só é conhecido por
+  // instância, depois de "Analyze VHDL" -- ver fpga/fpgaPins.ts) -- pinsForTypeId nunca acertaria
+  // isso sozinho.
+  if (component.typeId === "digital.generic_fpga" && component.fpga) {
+    return buildFpgaPins(component.fpga.ports);
+  }
   const descriptor = state.schematicState.catalog.find((item) => item.typeId === component.typeId);
   const lastKnownPinIds = component.subcircuitRef?.lastKnownPinIds ?? component.deviceRef?.lastKnownPinIds;
   if (!descriptor && lastKnownPinIds && lastKnownPinIds.length > 0) {

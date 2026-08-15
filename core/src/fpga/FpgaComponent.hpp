@@ -100,6 +100,11 @@ public:
     void advanceLockstep(uint64_t previousNs, uint64_t nextNs);
 
     FpgaController& controller() { return m_controller; }
+    /** Log combinado do processo GHDL atual/último -- só leitura, exposto separado de `controller()`
+     * pra `SimulationSession::fpgaLogs() const` (verbo IPC `getFpgaLogs`) não precisar de
+     * `const_cast` pra um acesso que é conceitualmente const (mesmo formato de `McuComponent::
+     * qemuLogs() const`). */
+    std::string logs() const { return m_controller.logs(); }
 
 private:
     void applyOutputChanges(std::span<const GhdlChangeEntry> changes);

@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <filesystem>
 #include <span>
 #include <string>
 #include <vector>
@@ -23,8 +24,16 @@ struct GhdlBackendOptions {
      * cada combinação (fontes+top+standard) ganha seu próprio subdiretório, nunca reusa
      * `work-obj08.cf` de uma combinação diferente. */
     std::string cacheRootDir;
-    /** Timeout de cada etapa de `ghdl -a`/`-e` (compile, não simulação). */
+    /** Timeout de cada etapa de `ghdl -a`/`-e` (compile, não simulação); também o teto de espera
+     * pelo lock por chave (ver Cache vNext abaixo). */
     std::chrono::milliseconds compileTimeout{30000};
+    /** Orçamento do cache de compilação (Cache vNext, `.spec/features/fpga-ghdl.md`) -- entradas
+     * publicadas mais antigas (por mtime, nunca a recém-publicada desta compilação) são removidas
+     * quando o total ultrapassa isto logo após uma publicação bem-sucedida. Seguro remover uma
+     * entrada mesmo com uma instância rodando a partir dela: `start()` nunca roda GHDL na entrada
+     * publicada diretamente, sempre num diretório de execução por instância com CÓPIAS dos
+     * artefatos (`materializeRunDir`) -- a instância em execução já tem seus próprios arquivos. */
+    uint64_t cacheBudgetBytes = 2ull * 1024 * 1024 * 1024;
 };
 
 /** Implementação `RtlBackend` pra GHDL -- `compile()` roda `ghdl -a`/`-e` com cache por hash
@@ -67,14 +76,32 @@ public:
 private:
     std::string computeCacheKey(const RtlCompileRequest& request) const;
     std::string resolveVpiLibraryDir() const;
+    /** `ghdl --version`, cacheada por instância (chamada de novo a cada `compile()` seria um
+     * spawn+wait extra por chave, desnecessário -- o binário não muda no meio da vida de um
+     * `GhdlBackend`). Parte da chave de cache (Cache vNext): garante que trocar de instalação/
+     * versão de GHDL invalida entradas antigas em vez de reusar um `work-obj08.cf` incompatível. */
+    std::string ghdlFingerprint() const;
+    /** Diretório de execução PRÓPRIO desta instância, com CÓPIAS (não hardlinks -- ver .cpp sobre
+     * por que hardlink quebraria a proteção read-only da entrada publicada) dos artefatos da
+     * entrada de cache publicada -- `start()` nunca roda GHDL na entrada publicada diretamente
+     * (que fica read-only após `compile()`), tanto pra não mutar um cache imutável quanto pra
+     * permitir duas instâncias da MESMA compilação rodando ao mesmo tempo sem disputar os mesmos
+     * arquivos de biblioteca GHDL. Limpo em `stop()`. */
+    std::filesystem::path materializeRunDir(const std::string& arenaName) const;
+    void cleanupRunDir();
+    /** Evicção LRU best-effort chamada após cada publicação bem-sucedida -- nunca remove a entrada
+     * recém-publicada desta compilação. Ver `GhdlBackendOptions::cacheBudgetBytes`. */
+    void evictIfOverBudget() const;
 
     GhdlBackendOptions m_options;
     GhdlProcessManager m_process;
     GhdlArenaBridge m_arena;
 
     RtlCompileRequest m_compiledRequest; // última compilação bem-sucedida -- start() precisa do topEntity/cache dir
-    std::string m_cacheDir;
+    std::string m_cacheDir; // entrada PUBLICADA (read-only) -- fonte dos hardlinks de m_runDir
+    std::string m_runDir;   // diretório de execução desta instância, materializado em start()
     bool m_compiled = false;
+    mutable std::string m_ghdlFingerprintCache;
 };
 
 } // namespace lasecsimul::fpga

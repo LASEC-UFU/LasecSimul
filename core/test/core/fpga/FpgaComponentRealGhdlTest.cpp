@@ -16,6 +16,7 @@
 #include <fstream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 using namespace lasecsimul;
 using namespace lasecsimul::fpga;
@@ -199,6 +200,103 @@ void testCombinationalAndSequentialAgainstRealScheduler(const std::string& vpiMo
     fs::remove_all(workDir, ec);
 }
 
+/** Duas instâncias `digital.generic_fpga` compilando a MESMA entity/fontes/cacheRootDir ao mesmo
+ * tempo -- a segunda instância bate cache (Cache vNext, `.spec/features/fpga-ghdl.md`), e por isso
+ * `start()` das duas precisa materializar diretórios de execução PRÓPRIOS a partir da MESMA entrada
+ * publicada (`GhdlBackend::materializeRunDir`) -- sem isso, os dois processos GHDL disputariam os
+ * mesmos arquivos `work-obj08.cf`/artefatos de biblioteca no mesmo diretório de trabalho. Prova que
+ * as duas rodam de forma independente (entradas diferentes -> saídas diferentes, cada uma
+ * observada só na sua própria instância) e que `stop()` de uma não afeta a outra. */
+void testMultipleFpgaInstancesOfSameCompilation(const std::string& vpiModulePath) {
+    const fs::path workDir = fs::temp_directory_path() / ("lasecsimul-fpga-multi-" + uniqueSuffix());
+    const fs::path cacheDir = workDir / "cache"; // MESMO cacheRootDir pras duas instâncias -- de propósito
+    const fs::path vhdlFile = workDir / "multi_test.vhd";
+    fs::create_directories(workDir);
+    {
+        std::ofstream out(vhdlFile);
+        out << "library ieee;\n"
+               "use ieee.std_logic_1164.all;\n"
+               "entity multi_test is\n"
+               "    port (a : in std_logic; y : out std_logic);\n"
+               "end entity;\n"
+               "architecture rtl of multi_test is\n"
+               "begin\n"
+               "    y <= a;\n"
+               "end architecture;\n";
+    }
+
+    plugins::GlobalPluginCache cache;
+    session::SimulationSession session(cache);
+
+    std::vector<FpgaComponent*> instances;
+    session.components().registerFactory(
+        "digital.generic_fpga", [&session, &vpiModulePath, &cacheDir, &vhdlFile, &instances](const registry::ComponentParams&) {
+            FpgaComponentConfig config;
+            config.ports = {PortSpec{"a", true, 1, true}, PortSpec{"y", false, 1, true}};
+            config.sources = {vhdlFile.string()};
+            config.topEntity = "multi_test";
+            config.standard = "08";
+            config.vcc = 3.3;
+
+            GhdlBackendOptions options;
+            options.ghdlBinary = "ghdl";
+            options.vpiModulePath = vpiModulePath;
+            options.cacheRootDir = cacheDir.string(); // MESMO cache pras duas -- ver comentário acima
+            auto backend = std::make_unique<GhdlBackend>(options);
+
+            auto component = std::make_unique<FpgaComponent>(session.scheduler(), std::move(backend), config);
+            instances.push_back(component.get());
+            component->start(); // 1a: cache miss (compila de verdade); 2a: cache hit (ver Cache vNext)
+            return component;
+        });
+
+    const uint32_t fpgaA = session.addComponent("digital.generic_fpga", {});
+    const uint32_t fpgaB = session.addComponent("digital.generic_fpga", {});
+    TEST_CHECK(instances.size() == 2);
+
+    registry::ComponentParams railHigh, railLow;
+    railHigh.properties["voltage"] = 3.3;
+    railLow.properties["voltage"] = 0.0;
+    registerCommon(session.components());
+    const uint32_t sourceHigh = session.addComponent("sources.rail", railHigh);
+    const uint32_t sourceLow = session.addComponent("sources.rail", railLow);
+
+    // Entradas DIFERENTES pras duas instâncias -- se elas estivessem compartilhando estado por
+    // engano (arena/processo cruzado), as saídas colidiriam.
+    session.connectWire(sourceHigh, "out", fpgaA, "a");
+    session.connectWire(sourceLow, "out", fpgaB, "a");
+
+    try {
+        for (int i = 0; i < 20 && session.settleStep(); ++i) {
+        }
+        session.scheduler().runUntil(1);
+        for (int i = 0; i < 20 && session.settleStep(); ++i) {
+        }
+
+        const double yA = session.nodeVoltageOfPin(fpgaA, "y");
+        const double yB = session.nodeVoltageOfPin(fpgaB, "y");
+        TEST_CHECK(yA > 1.65); // a=1 -> y=1
+        TEST_CHECK(yB < 1.65); // a=0 -> y=0
+        std::printf("OK: duas instancias FPGA da MESMA compilacao (cache vNext) rodam de forma independente\n");
+    } catch (const std::exception& e) {
+        const std::string logsA = instances[0]->controller().logs();
+        const std::string logsB = instances[1]->controller().logs();
+        instances[0]->stop();
+        instances[1]->stop();
+        throw std::runtime_error(std::string(e.what()) + "\n--- logs A ---\n" + logsA + "\n--- logs B ---\n" + logsB);
+    }
+
+    // stop() de UMA não pode afetar a outra -- confere que B continua respondendo depois de A parar.
+    instances[0]->stop();
+    TEST_CHECK(!instances[0]->controller().isRunning());
+    TEST_CHECK(instances[1]->controller().isRunning());
+    instances[1]->stop();
+    std::printf("OK: stop() de uma instancia nao afeta a outra\n");
+
+    std::error_code ec;
+    fs::remove_all(workDir, ec);
+}
+
 } // namespace
 
 int main() {
@@ -217,6 +315,7 @@ int main() {
 
     try {
         testCombinationalAndSequentialAgainstRealScheduler(vpiModule.string());
+        testMultipleFpgaInstancesOfSameCompilation(vpiModule.string());
     } catch (const std::exception& e) {
         std::fprintf(stderr, "FALHOU: %s\n", e.what());
         return 1;

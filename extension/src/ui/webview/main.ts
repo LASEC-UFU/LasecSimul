@@ -245,6 +245,11 @@ const UI_TEXT = {
     firmwareGroup: "Firmware",
     firmwarePath: "Firmware (.bin/.elf)",
     qemuBinary: "Binario QEMU",
+    fpgaAnalyzeVhdl: "Analisar VHDL",
+    fpgaRun: "Rodar FPGA",
+    fpgaStop: "Parar FPGA",
+    fpgaRestart: "Reiniciar FPGA",
+    fpgaShowLogs: "Ver log do GHDL",
     boardMode: "Modo Placa",
     exposed: "Exposto",
     selectExposedComponents: "Selecione os Componentes expostos",
@@ -365,6 +370,11 @@ const UI_TEXT = {
     openSerialMonitor: "Open serial monitor",
     firmwareGroup: "Firmware",
     firmwarePath: "Firmware (.bin/.elf)",
+    fpgaAnalyzeVhdl: "Analyze VHDL",
+    fpgaRun: "Run FPGA",
+    fpgaStop: "Stop FPGA",
+    fpgaRestart: "Restart FPGA",
+    fpgaShowLogs: "View GHDL log",
     qemuBinary: "QEMU binary",
     boardMode: "Board Mode",
     exposed: "Exposed",
@@ -6293,6 +6303,16 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
           } satisfies ContextMenuItem)),
         ]
       : [];
+    const fpgaMenuItems: ContextMenuItem[] = !isGroup && component.typeId === "digital.generic_fpga"
+      ? [
+          { kind: "separator" },
+          { label: t("fpgaAnalyzeVhdl"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestReanalyzeFpga", componentId: component.id }) },
+          { label: t("fpgaRun"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestRunFpga", componentId: component.id }) },
+          { label: t("fpgaStop"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestStopFpga", componentId: component.id }) },
+          { label: t("fpgaRestart"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestRestartFpga", componentId: component.id }) },
+          { label: t("fpgaShowLogs"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestShowFpgaLogs", componentId: component.id }) },
+        ]
+      : [];
     const createSubcircuitMenuItems: ContextMenuItem[] = isGroup
       ? [
           { kind: "separator" },
@@ -6384,6 +6404,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
       { label: t("flipVertical"), icon: "flipVertical", shortcut: "Ctrl+Shift+L", onClick: () => flipSelectedComponents("vertical") },
       ...(alignDistributeMenuItems.length > 0 ? [{ kind: "separator" } satisfies ContextMenuItem, ...alignDistributeMenuItems] : []),
       ...mcuMenuItems,
+      ...fpgaMenuItems,
       ...createSubcircuitMenuItems,
       ...subcircuitRefMenuItems,
       ...deviceRefMenuItems,

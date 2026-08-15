@@ -6,6 +6,7 @@ import {
   ProjectDocument,
   ProjectSubcircuitRef,
   ProjectDeviceRef,
+  ProjectFpgaConfig,
   ProjectTopology,
   ProjectTopologyEndpoint,
   ProjectWire,
@@ -57,6 +58,31 @@ function validateDeviceRef(value: unknown): ProjectDeviceRef | undefined {
   };
 }
 
+function validateFpgaConfig(value: unknown): ProjectFpgaConfig | undefined {
+  if (!isObject(value)) return undefined;
+  const top = asString(value.top);
+  const sources = asStringArray(value.sources);
+  if (!top || !sources) return undefined; // sem top/sources não é uma config utilizável -- descarta
+  const rawPorts = Array.isArray(value.ports) ? value.ports : [];
+  const ports = rawPorts
+    .filter(isObject)
+    .map((p) => ({
+      name: asString(p.name) ?? "",
+      direction: p.direction === "out" ? ("out" as const) : ("in" as const),
+      width: asNumber(p.width) ?? 1,
+      downto: p.downto !== false,
+    }))
+    .filter((p) => p.name.length > 0);
+  return {
+    language: "vhdl",
+    backend: "ghdl",
+    standard: asString(value.standard) ?? "08",
+    top,
+    sources,
+    ports,
+  };
+}
+
 function validateComponent(component: unknown, index: number): ProjectComponent {
   if (!isObject(component)) throw new Error(`components[${index}] inválido`);
   const id = asString(component.id);
@@ -88,6 +114,7 @@ function validateComponent(component: unknown, index: number): ProjectComponent 
       : undefined,
     subcircuitRef: validateSubcircuitRef(component.subcircuitRef),
     deviceRef: validateDeviceRef(component.deviceRef),
+    fpga: validateFpgaConfig(component.fpga),
   };
 }
 

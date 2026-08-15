@@ -39,6 +39,10 @@ function projectWithRelativeExternalRefs(project: ProjectDocument, targetProject
           ...component.deviceRef,
           path: portable(component.deviceRef.path),
         } } : {}),
+        ...(component.fpga?.sources.length ? { fpga: {
+          ...component.fpga,
+          sources: component.fpga.sources.map(portable),
+        } } : {}),
       };
     }),
   };
@@ -61,6 +65,7 @@ export function webviewComponentToProjectComponent(component: WebviewComponentMo
     visual: { x: component.x, y: component.y, rotation: component.rotation },
     subcircuitRef: component.subcircuitRef,
     deviceRef: component.deviceRef,
+    fpga: component.fpga,
   };
 }
 
@@ -105,6 +110,7 @@ export function projectComponentToWebviewComponent(component: ProjectComponent, 
     properties: component.properties as Record<string, string | number | boolean>,
     subcircuitRef: component.subcircuitRef,
     deviceRef: component.deviceRef,
+    fpga: component.fpga,
   };
 }
 

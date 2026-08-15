@@ -282,6 +282,19 @@ public:
     void loadMcuFirmware(uint32_t componentIndex, const std::filesystem::path& firmwarePath,
                          const std::string& arenaName, const std::string& qemuBinaryOverride,
                          McuDebugOptions debug = {});
+    /** Atualiza sources/top/standard de uma instância `digital.generic_fpga` já criada, pra uso no
+     * PRÓXIMO `runFpga`/`restartFpga` (verbo IPC `setFpgaConfig`) -- mesmo papel de
+     * `loadMcuFirmware` pra MCU, mas sem (re)compilar/rodar imediatamente (isso é `runFpga`,
+     * separado, pra permitir editar o VHDL sem religar o backend a cada keystroke). Lança se
+     * `componentIndex` não for um `FpgaComponent` ou já tiver sido removido. */
+    void setFpgaConfig(uint32_t componentIndex, std::vector<std::string> sources, std::string topEntity,
+                       std::string standard);
+    /** Compila (com cache) e inicia o processo GHDL da instância -- lança (mensagem inclui o log
+     * de compilação real do GHDL, ver plano Caso C) se `compile()` falhar. */
+    void runFpga(uint32_t componentIndex);
+    void stopFpga(uint32_t componentIndex);
+    void restartFpga(uint32_t componentIndex);
+    std::string fpgaLogs(uint32_t componentIndex) const;
     /** Parada total da execução: encerra todas as MCUs/QEMUs e zera scheduler, tempo e eventos.
      * As instâncias elétricas são recriadas pela camada de projeto depois da confirmação deste
      * método, restaurando também o estado interno dos componentes built-in/ABI. */

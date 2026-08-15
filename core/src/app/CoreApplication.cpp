@@ -911,6 +911,35 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
     });
     registerBuiltinMetadata("instruments.voltmeter", "Voltímetro", components::Voltmeter::propertySchema(),
                             englishName("Voltmeter"), components::Voltmeter::readoutFormat());
+
+    // "Generic FPGA" -- built-in, não plugin (ver plano FPGA, seção "Component registration &
+    // catalog/packaging": GHDL é um PROCESSO externo comandado pelo Core, não uma DLL/SO carregada
+    // via NativeDeviceProxy). Toda a configuração VHDL/toolchain chega FRESCA por instância via a
+    // chave irmã "fpga" do payload de addComponent (ComponentParams.fpgaSources/fpgaTop/
+    // fpgaStandard/fpgaPorts/fpgaGhdlBinary/fpgaVpiModulePath/fpgaCacheRootDir) -- a factory não
+    // depende de nenhum estado mutável de sessão, então não importa que `registerBuiltinComponents`
+    // rode antes de qualquer verbo IPC de config existir. Portas (`fpgaPorts`) vêm de uma chamada
+    // prévia a `analyzeFpga` (verbo standalone, não passa por aqui -- ver handleMessage) que já
+    // rodou `ghdl -a/-e` + descoberta de portas contra as MESMAS fontes.
+    reg.registerFactory("digital.generic_fpga", [&scheduler](const ComponentParams& p) -> std::unique_ptr<IComponentModel> {
+        fpga::GhdlBackendOptions options;
+        options.ghdlBinary = p.fpgaGhdlBinary.empty() ? "ghdl" : p.fpgaGhdlBinary;
+        options.vpiModulePath = p.fpgaVpiModulePath;
+        options.cacheRootDir = p.fpgaCacheRootDir;
+        auto backend = std::make_unique<fpga::GhdlBackend>(options);
+
+        fpga::FpgaComponentConfig config;
+        config.ports = p.fpgaPorts;
+        config.sources = p.fpgaSources;
+        config.topEntity = p.fpgaTop;
+        config.standard = p.fpgaStandard.empty() ? "08" : p.fpgaStandard;
+        return std::make_unique<fpga::FpgaComponent>(scheduler, std::move(backend), std::move(config));
+    });
+    registerBuiltinMetadata(
+        "digital.generic_fpga",
+        "FPGA Genérico (VHDL/GHDL)",
+        std::vector<PropertySchema>{},
+        R"json({"en":{"name":"Generic FPGA (VHDL/GHDL)"}})json");
 }
 
 } // namespace
@@ -1423,6 +1452,16 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
                         if (!spec.name.empty()) params.fpgaPorts.push_back(std::move(spec));
                     }
                 }
+                // Toolchain resolvido pela Extension (setting `lasecsimul.fpga.ghdlPath`, caminho do
+                // módulo VPI empacotado, `.lasecsimul/fpga-cache/` do projeto -- ver Step 8) e enviado
+                // FRESCO a cada `addComponent`, nunca guardado/cacheado a nível de sessão: mesma
+                // disciplina de `qemuBinaryOverride` em `loadMcuFirmware` abaixo. Isso é o que permite
+                // a factory de `digital.generic_fpga` (registerBuiltinComponents) construir um
+                // `GhdlBackend` já configurado SEM precisar de nenhum estado mutável de sessão nem
+                // depender de ordem entre registro de tipo e chegada de config por IPC.
+                params.fpgaGhdlBinary = fpgaJson.value("ghdlBinary", std::string{"ghdl"});
+                params.fpgaVpiModulePath = fpgaJson.value("vpiModulePath", std::string{});
+                params.fpgaCacheRootDir = fpgaJson.value("cacheRootDir", std::string{});
             }
             const std::string typeId = payload.value("typeId", std::string{});
             if (session.isSubcircuitType(typeId)) {
@@ -1911,6 +1950,126 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
         } catch (const std::exception& e) {
             resp.ok = false;
             resp.error = std::string("getMcuLogs falhou: ") + e.what();
+        }
+        return resp;
+    }
+    // "LasecSimul: Analyze VHDL" -- STANDALONE (sem instanceId): roda `ghdl -a/-e` (com cache) e
+    // descoberta de portas contra um `GhdlBackend` descartável, ANTES de qualquer `addComponent`
+    // existir pra essa instância (a Extension só sabe o pinset real depois disto, ver plano FPGA
+    // Step 7 -- regeneração do símbolo via buildGenericSubcircuitPackage). Erro de compilação
+    // (VHDL inválido) surge aqui como `resp.error`, fonte real do parser de diagnostics (Step 8,
+    // Problems panel do VS Code) -- nunca de `addComponent`.
+    if (msg.type == "analyzeFpga") {
+        try {
+            const nlohmann::json payload =
+                msg.payloadJson.empty() ? nlohmann::json::object() : nlohmann::json::parse(msg.payloadJson);
+            fpga::RtlCompileRequest request;
+            if (payload.contains("sources") && payload["sources"].is_array()) {
+                for (const auto& source : payload["sources"]) {
+                    if (source.is_string()) request.sources.push_back(source.get<std::string>());
+                }
+            }
+            request.topEntity = payload.value("topEntity", std::string{});
+            request.standard = payload.value("standard", std::string{"08"});
+            if (request.sources.empty()) throw std::runtime_error("nenhuma fonte VHDL informada");
+            if (request.topEntity.empty()) throw std::runtime_error("topEntity vazio");
+
+            fpga::GhdlBackendOptions options;
+            options.ghdlBinary = payload.value("ghdlBinary", std::string{"ghdl"});
+            options.vpiModulePath = payload.value("vpiModulePath", std::string{});
+            options.cacheRootDir = payload.value("cacheRootDir", std::string{});
+            if (options.vpiModulePath.empty()) throw std::runtime_error("vpiModulePath vazio");
+            if (options.cacheRootDir.empty()) throw std::runtime_error("cacheRootDir vazio");
+
+            fpga::GhdlBackend backend(options);
+            const fpga::RtlCompileResult compileResult = backend.compile(request);
+            if (!compileResult.ok) throw std::runtime_error(compileResult.log);
+
+            const std::vector<fpga::PortSpec> ports = backend.discoverPorts();
+            nlohmann::json portsJson = nlohmann::json::array();
+            for (const fpga::PortSpec& port : ports) {
+                portsJson.push_back(nlohmann::json{{"name", port.name},
+                                                    {"direction", port.isInput ? "in" : "out"},
+                                                    {"width", port.width},
+                                                    {"downto", port.downto}});
+            }
+            resp.ok = true;
+            resp.payloadJson = nlohmann::json{{"ports", std::move(portsJson)}, {"log", compileResult.log}}.dump();
+        } catch (const std::exception& e) {
+            resp.ok = false;
+            resp.error = std::string("analyzeFpga falhou: ") + e.what();
+        }
+        return resp;
+    }
+    if (msg.type == "setFpgaConfig") {
+        try {
+            const nlohmann::json payload =
+                msg.payloadJson.empty() ? nlohmann::json::object() : nlohmann::json::parse(msg.payloadJson);
+            const uint32_t instanceId = static_cast<uint32_t>(std::stoul(payload.value("instanceId", std::string{"0"})));
+            std::vector<std::string> sources;
+            if (payload.contains("sources") && payload["sources"].is_array()) {
+                for (const auto& source : payload["sources"]) {
+                    if (source.is_string()) sources.push_back(source.get<std::string>());
+                }
+            }
+            session.setFpgaConfig(instanceId, std::move(sources), payload.value("topEntity", std::string{}),
+                                  payload.value("standard", std::string{"08"}));
+            resp.ok = true;
+        } catch (const std::exception& e) {
+            resp.ok = false;
+            resp.error = std::string("setFpgaConfig falhou: ") + e.what();
+        }
+        return resp;
+    }
+    if (msg.type == "runFpga") {
+        try {
+            const nlohmann::json payload =
+                msg.payloadJson.empty() ? nlohmann::json::object() : nlohmann::json::parse(msg.payloadJson);
+            const uint32_t instanceId = static_cast<uint32_t>(std::stoul(payload.value("instanceId", std::string{"0"})));
+            session.runFpga(instanceId);
+            resp.ok = true;
+        } catch (const std::exception& e) {
+            resp.ok = false;
+            resp.error = std::string("runFpga falhou: ") + e.what();
+        }
+        return resp;
+    }
+    if (msg.type == "stopFpga") {
+        try {
+            const nlohmann::json payload =
+                msg.payloadJson.empty() ? nlohmann::json::object() : nlohmann::json::parse(msg.payloadJson);
+            const uint32_t instanceId = static_cast<uint32_t>(std::stoul(payload.value("instanceId", std::string{"0"})));
+            session.stopFpga(instanceId);
+            resp.ok = true;
+        } catch (const std::exception& e) {
+            resp.ok = false;
+            resp.error = std::string("stopFpga falhou: ") + e.what();
+        }
+        return resp;
+    }
+    if (msg.type == "restartFpga") {
+        try {
+            const nlohmann::json payload =
+                msg.payloadJson.empty() ? nlohmann::json::object() : nlohmann::json::parse(msg.payloadJson);
+            const uint32_t instanceId = static_cast<uint32_t>(std::stoul(payload.value("instanceId", std::string{"0"})));
+            session.restartFpga(instanceId);
+            resp.ok = true;
+        } catch (const std::exception& e) {
+            resp.ok = false;
+            resp.error = std::string("restartFpga falhou: ") + e.what();
+        }
+        return resp;
+    }
+    if (msg.type == "getFpgaLogs") {
+        try {
+            const nlohmann::json payload =
+                msg.payloadJson.empty() ? nlohmann::json::object() : nlohmann::json::parse(msg.payloadJson);
+            const uint32_t instanceId = static_cast<uint32_t>(std::stoul(payload.value("instanceId", std::string{"0"})));
+            resp.ok = true;
+            resp.payloadJson = nlohmann::json{{"logs", session.fpgaLogs(instanceId)}}.dump();
+        } catch (const std::exception& e) {
+            resp.ok = false;
+            resp.error = std::string("getFpgaLogs falhou: ") + e.what();
         }
         return resp;
     }
