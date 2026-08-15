@@ -28,6 +28,13 @@ int runFakeChild(const char* mode) {
         std::this_thread::sleep_for(std::chrono::seconds(30));
         return 0;
     }
+    if (std::strcmp(mode, "--fake-print-env") == 0) {
+        const char* mode2 = std::getenv("LASECSIMUL_FPGA_MODE");
+        const char* arena = std::getenv("LASECSIMUL_FPGA_ARENA_NAME");
+        std::printf("env-mode=%s env-arena=%s\n", mode2 ? mode2 : "(unset)", arena ? arena : "(unset)");
+        std::fflush(stdout);
+        return 0;
+    }
     return 2;
 }
 
@@ -84,6 +91,22 @@ void testMissingBinaryReportsError() {
     std::printf("OK: binario GHDL vazio/ausente lanca em vez de falhar em silencio\n");
 }
 
+void testEnvironmentOverridesReachChildProcess(const char* self) {
+    // lasecsimul_vpi.c le LASECSIMUL_FPGA_MODE/LASECSIMUL_FPGA_ARENA_NAME do ambiente do processo
+    // (GHDL nao repassa argv extra pro modulo VPI) -- prova que o mecanismo de injecao funciona
+    // nos dois SOs antes de depender dele contra um GHDL real.
+    GhdlProcessManager manager;
+    GhdlLaunchSpec spec{self, {"--fake-print-env"}, {}};
+    spec.environmentOverrides = {{"LASECSIMUL_FPGA_MODE", "run"}, {"LASECSIMUL_FPGA_ARENA_NAME", "lasecsimul-fpga-test-arena"}};
+    manager.start(spec);
+    waitForLog(manager, "env-mode=");
+    manager.stop(std::chrono::seconds(2));
+    const std::string logs = manager.logs();
+    assert(logs.find("env-mode=run") != std::string::npos);
+    assert(logs.find("env-arena=lasecsimul-fpga-test-arena") != std::string::npos);
+    std::printf("OK: environmentOverrides chegam ao processo filho (LASECSIMUL_FPGA_MODE/ARENA_NAME)\n");
+}
+
 void testDiagnosticsPrefixAppearsInLogsBeforeProcessOutput(const char* self) {
     GhdlProcessManager manager;
     manager.start(GhdlLaunchSpec{self, {"--fake-short"}, "[GhdlProcessManager] resolvido via PATH\n"});
@@ -105,6 +128,7 @@ int main(int argc, char** argv) {
     testUtf8AndSpacesInCommandLine(argv[0]);
     testKillHungProcess(argv[0]);
     testMissingBinaryReportsError();
+    testEnvironmentOverridesReachChildProcess(argv[0]);
     testDiagnosticsPrefixAppearsInLogsBeforeProcessOutput(argv[0]);
     std::printf("\nOK: GhdlProcessManager fake process lifecycle passed.\n");
     return 0;

@@ -71,11 +71,60 @@ typedef enum LsdnFpgaLogSeverity {
     LSDN_FPGA_LOG_ASSERT_FAILURE = 3,
 } LsdnFpgaLogSeverity;
 
+/* Codificação numérica de estado lógico usada em `LsdnFpgaChangeEntry::value` -- espelha
+ * EXATAMENTE a ordem de `enum class lasecsimul::fpga::LogicValue` (LogicValue.hpp), que por sua
+ * vez casa com a ordem canônica VHDL ('U','X','0','1','Z','W','L','H','-'). Definida AQUI (não em
+ * LogicValue.hpp) porque este header é C puro e é a ÚNICA coisa que o módulo VPI (lasecsimul_vpi.c,
+ * compilado por gcc/MinGW, sem acesso a headers C++) enxerga -- LogicValue.hpp delega pra estas
+ * funções em vez de duplicar a tabela (duas tabelas independentes seriam um risco real de
+ * divergência silenciosa entre o lado Core e o lado VPI). */
+#define LSDN_FPGA_LOGIC_U 0
+#define LSDN_FPGA_LOGIC_X 1
+#define LSDN_FPGA_LOGIC_ZERO 2
+#define LSDN_FPGA_LOGIC_ONE 3
+#define LSDN_FPGA_LOGIC_Z 4
+#define LSDN_FPGA_LOGIC_W 5
+#define LSDN_FPGA_LOGIC_L 6
+#define LSDN_FPGA_LOGIC_H 7
+#define LSDN_FPGA_LOGIC_DONT_CARE 8
+
+static inline char lsdnFpgaLogicValueToChar(uint8_t value) {
+    switch (value) {
+        case LSDN_FPGA_LOGIC_U: return 'U';
+        case LSDN_FPGA_LOGIC_X: return 'X';
+        case LSDN_FPGA_LOGIC_ZERO: return '0';
+        case LSDN_FPGA_LOGIC_ONE: return '1';
+        case LSDN_FPGA_LOGIC_Z: return 'Z';
+        case LSDN_FPGA_LOGIC_W: return 'W';
+        case LSDN_FPGA_LOGIC_L: return 'L';
+        case LSDN_FPGA_LOGIC_H: return 'H';
+        case LSDN_FPGA_LOGIC_DONT_CARE: return '-';
+        default: return 'X';
+    }
+}
+
+/* Aceita maiúsculo OU minúsculo (GHDL observado emitindo maiúsculo no Spike 0; vpiBinStrVal
+ * padrão do VPI usa minúsculo pra x/z) -- caractere não reconhecido cai em X (fallback seguro,
+ * nunca UB), mesma postura de LogicValue::fromChar(). */
+static inline uint8_t lsdnFpgaCharToLogicValue(char c) {
+    switch (c) {
+        case 'U': case 'u': return LSDN_FPGA_LOGIC_U;
+        case 'X': case 'x': return LSDN_FPGA_LOGIC_X;
+        case '0': return LSDN_FPGA_LOGIC_ZERO;
+        case '1': return LSDN_FPGA_LOGIC_ONE;
+        case 'Z': case 'z': return LSDN_FPGA_LOGIC_Z;
+        case 'W': case 'w': return LSDN_FPGA_LOGIC_W;
+        case 'L': case 'l': return LSDN_FPGA_LOGIC_L;
+        case 'H': case 'h': return LSDN_FPGA_LOGIC_H;
+        case '-': return LSDN_FPGA_LOGIC_DONT_CARE;
+        default: return LSDN_FPGA_LOGIC_X;
+    }
+}
+
 /* `portIndex`/`bitIndex` identificam um bit dentro de um port declarado (bitIndex=0 pra port
- * escalar) -- ver FpgaPortMapper. `value` é o valor NUMÉRICO de `lasecsimul::fpga::LogicValue`
- * (não o caractere VHDL) -- este header é C puro (compilado tanto pelo Core em C++ quanto pelo
- * módulo VPI em C via gcc/MinGW), não pode incluir o enum C++ de LogicValue.hpp diretamente; a
- * conversão fica no wrapper C++ (GhdlArenaBridge) e no módulo VPI. */
+ * escalar) -- ver FpgaPortMapper. `value` é a codificação numérica acima (não o caractere VHDL
+ * diretamente, embora as duas convertam 1:1 via `lsdnFpgaLogicValueToChar`/
+ * `lsdnFpgaCharToLogicValue`). */
 typedef struct LsdnFpgaChangeEntry {
     uint32_t portIndex;
     uint32_t bitIndex;

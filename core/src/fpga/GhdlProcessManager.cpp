@@ -1,13 +1,24 @@
 #include "GhdlProcessManager.hpp"
+#include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <cstdio>
+#include <cwctype>
+#include <map>
 #include <mutex>
 #include <sstream>
 #include <stdexcept>
 #include <thread>
 #include <vector>
 
+#if !defined(_WIN32)
+#include <cstdlib>
+#endif
+
 #if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX // sem isto, as macros min/max de windows.h colidem com std::min (CaseInsensitiveWideLess)
+#endif
 #include <windows.h>
 #else
 #include <csignal>
@@ -67,6 +78,53 @@ std::wstring buildCommandLine(const GhdlLaunchSpec& spec) {
     }
     return command;
 }
+
+struct CaseInsensitiveWideLess {
+    bool operator()(const std::wstring& a, const std::wstring& b) const {
+        // Nomes de variavel de ambiente do Windows sao case-insensitive por convencao do SO --
+        // sem isso, "Path" (herdado do processo pai) e um override nosso escrito como "PATH"
+        // coexistiriam como duas entradas distintas no bloco, comportamento nao especificado.
+        const size_t n = std::min(a.size(), b.size());
+        for (size_t i = 0; i < n; ++i) {
+            const wchar_t ca = towlower(a[i]);
+            const wchar_t cb = towlower(b[i]);
+            if (ca != cb) return ca < cb;
+        }
+        return a.size() < b.size();
+    }
+};
+
+/** Bloco de ambiente pro `lpEnvironment` de CreateProcessW: copia o ambiente ATUAL do processo
+ * (GHDL precisa de PATH pra achar suas próprias DLLs/libghdlvpi, entre outras coisas -- nunca um
+ * ambiente vazio) e sobrepõe/adiciona as entradas de `overrides`. Formato exigido pela API:
+ * pares "NOME=valor" concatenados, cada um terminado em NUL, bloco inteiro terminado em NUL duplo. */
+std::wstring buildEnvironmentBlock(const std::vector<std::pair<std::string, std::string>>& overrides) {
+    std::map<std::wstring, std::wstring, CaseInsensitiveWideLess> env;
+    LPWCH inherited = GetEnvironmentStringsW();
+    if (inherited) {
+        for (LPCWSTR p = inherited; *p != L'\0';) {
+            const std::wstring entry(p);
+            const size_t eq = entry.find(L'=');
+            // Entradas começando com '=' (ex.: "=C:=C:\algum\dir", estado de diretório-por-drive
+            // do cmd.exe) não são variáveis de verdade -- pular, senão `eq==0` produziria uma
+            // chave vazia.
+            if (eq != std::wstring::npos && eq > 0) env[entry.substr(0, eq)] = entry.substr(eq + 1);
+            p += entry.size() + 1;
+        }
+        FreeEnvironmentStringsW(inherited);
+    }
+    for (const auto& [name, value] : overrides) env[widen(name)] = widen(value);
+
+    std::wstring block;
+    for (const auto& [name, value] : env) {
+        block += name;
+        block += L'=';
+        block += value;
+        block += L'\0';
+    }
+    block += L'\0';
+    return block;
+}
 #endif
 
 } // namespace
@@ -99,8 +157,11 @@ public:
         si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
 
         std::wstring commandLine = buildCommandLine(spec);
+        std::wstring environmentBlock = buildEnvironmentBlock(spec.environmentOverrides);
+        const std::wstring workingDirectory = spec.workingDirectory.empty() ? std::wstring() : widen(spec.workingDirectory);
         if (!CreateProcessW(nullptr, commandLine.data(), nullptr, nullptr, TRUE,
-                            CREATE_NO_WINDOW | CREATE_SUSPENDED, nullptr, nullptr,
+                            CREATE_NO_WINDOW | CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT,
+                            environmentBlock.data(), workingDirectory.empty() ? nullptr : workingDirectory.c_str(),
                             &si, &m_processInfo)) {
             CloseHandle(readPipe);
             CloseHandle(writePipe);
@@ -149,6 +210,16 @@ public:
             dup2(pipes[1], STDERR_FILENO);
             ::close(pipes[0]);
             ::close(pipes[1]);
+
+            // Muta o ambiente só DESTE processo filho recém-forkado (nunca o do pai) --
+            // lasecsimul_vpi.c lê LASECSIMUL_FPGA_MODE/LASECSIMUL_FPGA_ARENA_NAME daqui, mesma
+            // convenção do lado Windows (buildEnvironmentBlock).
+            for (const auto& [name, value] : spec.environmentOverrides) {
+                setenv(name.c_str(), value.c_str(), 1);
+            }
+            if (!spec.workingDirectory.empty() && chdir(spec.workingDirectory.c_str()) != 0) {
+                _exit(126); // mesma convenção de exit code de "não consegui nem começar" do shell
+            }
 
             std::vector<char*> argv;
             argv.reserve(spec.args.size() + 2);

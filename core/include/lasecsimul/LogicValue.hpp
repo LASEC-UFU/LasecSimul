@@ -3,6 +3,7 @@
 #include <cstdint>
 
 #include "lasecsimul/Types.hpp"
+#include "lasecsimul/fpga_arena_abi.h"
 
 namespace lasecsimul::fpga {
 
@@ -14,49 +15,23 @@ namespace lasecsimul::fpga {
  * Ordem dos valores casa com a ordem canônica VHDL ('U','X','0','1','Z','W','L','H','-') pra
  * `toChar`/`fromChar` ficarem uma tabela direta. */
 enum class LogicValue : uint8_t {
-    U = 0,        // uninitialized
-    X,            // forcing unknown
-    Zero,         // forcing 0
-    One,          // forcing 1
-    Z,            // high impedance
-    W,            // weak unknown
-    L,            // weak 0
-    H,             // weak 1
-    DontCare,     // '-'
+    U = LSDN_FPGA_LOGIC_U,               // uninitialized
+    X = LSDN_FPGA_LOGIC_X,               // forcing unknown
+    Zero = LSDN_FPGA_LOGIC_ZERO,         // forcing 0
+    One = LSDN_FPGA_LOGIC_ONE,           // forcing 1
+    Z = LSDN_FPGA_LOGIC_Z,               // high impedance
+    W = LSDN_FPGA_LOGIC_W,               // weak unknown
+    L = LSDN_FPGA_LOGIC_L,               // weak 0
+    H = LSDN_FPGA_LOGIC_H,               // weak 1
+    DontCare = LSDN_FPGA_LOGIC_DONT_CARE, // '-'
 };
 
-inline char toChar(LogicValue value) {
-    switch (value) {
-        case LogicValue::U: return 'U';
-        case LogicValue::X: return 'X';
-        case LogicValue::Zero: return '0';
-        case LogicValue::One: return '1';
-        case LogicValue::Z: return 'Z';
-        case LogicValue::W: return 'W';
-        case LogicValue::L: return 'L';
-        case LogicValue::H: return 'H';
-        case LogicValue::DontCare: return '-';
-    }
-    return 'X';
-}
-
-/** Aceita maiúsculo OU minúsculo (GHDL/VPI observado emitindo maiúsculo nos testes do Spike 0, mas
- * vpiBinStrVal do padrão VPI usa minúsculo pra x/z) -- caractere não reconhecido cai em `X` (mesma
- * postura de "desconhecido é o fallback seguro" que o resto do engine usa, nunca um crash). */
-inline LogicValue fromChar(char c) {
-    switch (c) {
-        case 'U': case 'u': return LogicValue::U;
-        case 'X': case 'x': return LogicValue::X;
-        case '0': return LogicValue::Zero;
-        case '1': return LogicValue::One;
-        case 'Z': case 'z': return LogicValue::Z;
-        case 'W': case 'w': return LogicValue::W;
-        case 'L': case 'l': return LogicValue::L;
-        case 'H': case 'h': return LogicValue::H;
-        case '-': return LogicValue::DontCare;
-        default: return LogicValue::X;
-    }
-}
+/** Delega pra `fpga_arena_abi.h` (`lsdnFpgaLogicValueToChar`/`lsdnFpgaCharToLogicValue`) em vez
+ * de ter sua própria tabela -- aquele header é C puro e é a única coisa que o módulo VPI
+ * (lasecsimul_vpi.c) enxerga, então a codificação numérica precisa morar lá; ter uma segunda
+ * tabela aqui seria um risco real de divergência silenciosa entre os dois lados. */
+inline char toChar(LogicValue value) { return lsdnFpgaLogicValueToChar(static_cast<uint8_t>(value)); }
+inline LogicValue fromChar(char c) { return static_cast<LogicValue>(lsdnFpgaCharToLogicValue(c)); }
 
 /** Contribuição elétrica de um `LogicValue` sendo cravado num pino (via
  * `MnaMatrixView::addConductanceToGround` + `addCurrentToGround`, mesmo idioma usado por

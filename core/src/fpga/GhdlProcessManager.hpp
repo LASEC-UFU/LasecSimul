@@ -17,6 +17,19 @@ struct GhdlLaunchSpec {
     std::string binary;
     std::vector<std::string> args;
     std::string diagnostics;
+    /** `ghdl -a`/`-e`/`-r` leem/escrevem arquivos de biblioteca (`work-obj08.cf`) no diretório de
+     * trabalho do processo -- vazio significa "herda o cwd do Core" (comportamento anterior a
+     * este campo). GhdlBackend (compile/cache) usa isto pra apontar cada projeto pro seu próprio
+     * diretório dentro de `.lasecsimul/fpga-cache/`, sem misturar work-obj08.cf de dois projetos
+     * diferentes nem sujar o cwd do Core. */
+    std::string workingDirectory;
+    /** GHDL não repassa argv extra pro módulo VPI carregado via `--vpi=` -- variável de ambiente é
+     * o mecanismo real (mesma convenção usada por cocotb pra configurar seus próprios módulos
+     * VPI/FLI). `lasecsimul_vpi.c` lê `LASECSIMUL_FPGA_MODE`/`LASECSIMUL_FPGA_ARENA_NAME` daqui.
+     * QemuLaunchSpec não precisa disto porque QEMU recebe o nome da arena via argv[1]
+     * (McuController::buildLaunchSpec) -- não copiado aqui de propósito, GHDL não tem um lugar
+     * equivalente pra receber argv customizado. */
+    std::vector<std::pair<std::string, std::string>> environmentOverrides;
 };
 
 /** Processo GHDL (`ghdl -r ... --vpi=...`) controlado pelo Core -- mesmo padrão comprovado de

@@ -298,6 +298,17 @@ add_executable(ghdl_process_manager_test
 target_include_directories(ghdl_process_manager_test PRIVATE include src)
 add_test(NAME ghdl_process_manager COMMAND ghdl_process_manager_test)
 
+# Passo 4 do plano FPGA/VHDL: ponta a ponta contra GHDL real + modulo VPI real (auto-pula se
+# `ghdl` nao estiver no PATH ou `npm run build:fpga-vpi` nao tiver rodado -- mesma convencao de
+# McuControllerRealQemuTest).
+add_executable(ghdl_lockstep_real_ghdl_test
+    test/core/fpga/GhdlLockstepRealGhdlTest.cpp
+    src/fpga/GhdlProcessManager.cpp
+    src/fpga/GhdlArenaBridge.cpp
+)
+target_include_directories(ghdl_lockstep_real_ghdl_test PRIVATE include src)
+add_test(NAME ghdl_lockstep_real_ghdl COMMAND ghdl_lockstep_real_ghdl_test)
+
 add_executable(mna_solver_test
     test/core/simulation/MnaSolverTest.cpp
 )
