@@ -290,6 +290,14 @@ add_executable(ghdl_arena_bridge_test
 target_include_directories(ghdl_arena_bridge_test PRIVATE include src)
 add_test(NAME ghdl_arena_bridge COMMAND ghdl_arena_bridge_test)
 
+# Passo 3 do plano FPGA/VHDL: GhdlProcessManager (fake self-spawn, sem GHDL real).
+add_executable(ghdl_process_manager_test
+    test/core/fpga/GhdlProcessManagerTest.cpp
+    src/fpga/GhdlProcessManager.cpp
+)
+target_include_directories(ghdl_process_manager_test PRIVATE include src)
+add_test(NAME ghdl_process_manager COMMAND ghdl_process_manager_test)
+
 add_executable(mna_solver_test
     test/core/simulation/MnaSolverTest.cpp
 )
