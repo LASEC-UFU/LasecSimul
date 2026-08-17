@@ -359,6 +359,7 @@ function stageBundledAssets() {
   copyFileTo(coreExecutable, path.join(bundledRoot, "core", "build", coreRelative));
 
   stageBundledFpgaVpiModule();
+  stageBundledGhdlRuntime();
 }
 
 /** Módulo VPI do GHDL (`npm run build:fpga-vpi`). Suporte FPGA/VHDL faz parte do produto, logo a
@@ -377,6 +378,48 @@ function stageBundledFpgaVpiModule() {
     throw new Error(`módulo VPI obrigatório ausente para ${platformDir}: ${modulePath}`);
   }
   copyDirFiltered(path.join(sourceDir, platformDir), path.join(bundledRoot, "fpga", "ghdl-vpi", "build", platformDir), new Set());
+}
+
+/** Empacota o runtime GHDL usado no próprio gate da release. Assim como o QEMU, a ferramenta de
+ * simulação faz parte do produto instalado: o usuário final não precisa conhecer PATH, winget ou
+ * localizar executáveis. O layout oficial é relocável (`bin/ghdl` encontra `lib/ghdl` pelo prefixo
+ * derivado do próprio executável), portanto preservamos exatamente `bin/` + `lib/`. */
+function stageBundledGhdlRuntime() {
+  const executableName = process.platform === "win32" ? "ghdl.exe" : "ghdl";
+  const pathEntries = String(process.env.PATH || "").split(path.delimiter).filter(Boolean);
+  const configured = String(process.env.LASECSIMUL_GHDL_BINARY || "").trim();
+  const executableCandidates = [configured, ...pathEntries.map((entry) => path.join(entry, executableName))].filter(Boolean);
+  const executable = executableCandidates.find((candidate) => fs.existsSync(candidate) && fs.statSync(candidate).isFile());
+  if (!executable) {
+    throw new Error("runtime GHDL obrigatório não encontrado no PATH da release");
+  }
+
+  const runtimeRoot = path.dirname(path.dirname(fs.realpathSync(executable)));
+  const binDir = path.join(runtimeRoot, "bin");
+  const libDir = path.join(runtimeRoot, "lib");
+  ensureDir(binDir, "diretório bin/ do runtime GHDL");
+  ensureDir(path.join(libDir, "ghdl"), "bibliotecas padrão do runtime GHDL");
+
+  const destination = path.join(bundledRoot, "fpga", "ghdl");
+  copyDirFiltered(binDir, path.join(destination, "bin"), new Set());
+  const destinationLib = path.join(destination, "lib");
+  copyDirFiltered(path.join(libDir, "ghdl"), path.join(destinationLib, "ghdl"), new Set());
+  // Não copie `lib/` inteiro: numa instalação de distro o prefixo pode ser `/usr`, e isso arrastaria
+  // bibliotecas alheias ao produto. O mcode precisa apenas das shared libraries da própria família;
+  // `libghdl.a` é SDK estático (dezenas de MB), não runtime.
+  const runtimeLibraryPrefixes = ["libghdl", "libghw", "libgnat", "libgcc", "libwinpthread", "zlib"];
+  for (const entry of fs.readdirSync(libDir, { withFileTypes: true })) {
+    if (!entry.isFile() || entry.name === "libghdl.a") continue;
+    if (!runtimeLibraryPrefixes.some((prefix) => entry.name.startsWith(prefix))) continue;
+    copyFileTo(path.join(libDir, entry.name), path.join(destinationLib, entry.name));
+  }
+  ensureFile(path.join(destination, "bin", executableName), "GHDL integrado");
+  writeFile(
+    path.join(destination, "GHDL-NOTICE.txt"),
+    "GHDL is distributed under the GNU General Public License.\n" +
+      "Version/source/license: https://github.com/ghdl/ghdl\n" +
+      "This unmodified runtime is bundled so LasecSimul FPGA simulation works without system setup.\n"
+  );
 }
 
 /** Extrai só `{typeId ou chipId, arquivo}` de cada dispositivo declarado num `library.json` --
@@ -467,8 +510,11 @@ function createWindowsNativeInstaller(vsixPath) {
   const bootstrapperTemplateDir = path.join(repoRoot, "packaging", "windows-bootstrapper");
   ensureDir(bootstrapperTemplateDir, "template do bootstrapper Windows");
 
-  const bootstrapperStageDir = path.join(stagingRoot, "windows-bootstrapper");
-  resetDir(bootstrapperStageDir);
+  // MSBuild mantém nós reutilizáveis após `dotnet publish` e, no Windows, esses nós podem segurar o
+  // diretório do projeto anterior como CWD. Um caminho único elimina a disputa sem matar processos
+  // globais do SDK que também podem pertencer ao VS Code do usuário.
+  const bootstrapperStageDir = path.join(stagingRoot, `windows-bootstrapper-${process.pid}-${Date.now()}`);
+  fs.mkdirSync(bootstrapperStageDir, { recursive: true });
   copyDirFiltered(bootstrapperTemplateDir, bootstrapperStageDir);
   copyFileTo(vsixPath, path.join(bootstrapperStageDir, "payload.vsix"));
   stageTapWindowsPayload(bootstrapperStageDir);

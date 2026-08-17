@@ -79,13 +79,16 @@ import {
 } from "./mcu/mcuCommands";
 import {
   addGenericFpgaCommand,
+  configureFpgaCommand,
   ensureAllFpgasReady,
+  openFpgaSourceCommand,
   reanalyzeFpgaCommand,
   restartFpgaCommand,
   runFpgaCommand,
   showFpgaLogsCommand,
   stopFpgaCommand,
 } from "./fpga/fpgaCommands";
+import { configureGhdlToolchainCommand } from "./fpga/fpgaToolchain";
 import { debugMcuFirmwareCommand, registerMcuDebugTracking } from "./mcu/mcuDebug";
 import { initializeLasecPlot, lasecPlotManager } from "./lasecplot/manager";
 import { LasecSimulInteropApi } from "./lasecplot/api";
@@ -1603,6 +1606,18 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       return;
     case "requestChooseMcuFirmware":
       void chooseMcuFirmwareCommand(message.componentId, mcuCommandOptions());
+      return;
+    case "requestAddGenericFpga":
+      void addGenericFpgaCommand(fpgaCommandOptions());
+      return;
+    case "requestOpenFpgaSource":
+      void openFpgaSourceCommand(message.componentId);
+      return;
+    case "requestConfigureFpga":
+      void configureFpgaCommand(message.componentId, fpgaCommandOptions());
+      return;
+    case "requestConfigureGhdl":
+      void configureGhdlToolchainCommand().then((changed) => changed ? rebuildCoreFromSchematicState() : undefined);
       return;
     case "requestReanalyzeFpga":
       void reanalyzeFpgaCommand(message.componentId, fpgaCommandOptions());

@@ -6,22 +6,20 @@ LasecSimul (Scheduler continua sendo a única autoridade de tempo virtual — ve
 `.spec/features/fpga-ghdl.md`). Este documento cobre instalação, criação de projeto, portas/clocks,
 diagnósticos e limitações conhecidas.
 
-## Instalação do GHDL
+## GHDL integrado
 
-O GHDL **não é vendorizado** com a extensão (é um toolchain de sistema, como o GDB usado por
-depuração de firmware) — precisa estar instalado e acessível.
+O instalador/VSIX inclui o GHDL e o seleciona automaticamente, assim como faz com o QEMU. O usuário
+final não precisa instalar pacotes, alterar PATH nem executar comandos. A preferência
+`lasecsimul.fpga.ghdlPath` permanece somente como override avançado para quem quiser usar outra
+versão.
 
-- **Windows**: `winget install ghdl.ghdl.ucrt64.mcode` (testado contra GHDL 6.0.0, backend mcode).
-- **Linux/macOS**: use o pacote da sua distro ou compile a partir do
-  [repositório oficial](https://github.com/ghdl/ghdl).
+Se o runtime integrado estiver ausente (por exemplo, num checkout de desenvolvimento), a própria
+interface oferece **Instalar automaticamente** ou **Selecionar executável**. No Windows a instalação
+guiada usa o pacote oficial `ghdl.ghdl.ucrt64.mcode`, sem abrir terminal.
 
-Configure `lasecsimul.fpga.ghdlPath` (Configurações do VS Code) se `ghdl` não estiver no `PATH` do
-sistema — mesma convenção de `lasecsimul.debug.gdbPath` (GDB do QEMU).
-
-O **módulo VPI** (`lasecsimul_vpi.dll`/`.so`) é a ponte entre o Core e o processo GHDL — esse SIM é
-incluído com a extensão (compilado por `npm run build:fpga-vpi` no desenvolvimento e pelo CI de
-release; o empacotamento falha se o artefato estiver ausente). Se a extensão reportar "módulo VPI não
-encontrado", no repositório de desenvolvimento rode:
+O **módulo VPI** (`lasecsimul_vpi.dll`/`.so`) é a ponte entre o Core e o processo GHDL e também é
+incluído obrigatoriamente na extensão. Em checkout de desenvolvimento, mantenedores podem construí-lo
+com:
 
 ```powershell
 npm run build:fpga-vpi
@@ -35,7 +33,8 @@ já que o GHDL distribuído via winget não é compatível com o linker do MSVC 
 Ao contrário de todo outro componente do catálogo, o FPGA Genérico **não é arrastável da paleta**
 com um pinset fixo — o pinset real só é conhecido depois de compilar o VHDL. O fluxo é:
 
-1. **Comando "LasecSimul: Adicionar FPGA Genérico"** (Command Palette, `Ctrl+Shift+P`).
+1. Clique no botão de **FPGA** (ícone de chip) na barra principal. O comando
+   "LasecSimul: Adicionar FPGA Genérico" continua disponível como atalho opcional.
 2. Selecione um ou mais arquivos `.vhd`/`.vhdl` (múltiplos arquivos: ordem de análise é a ordem de
    seleção — resolução automática de dependências entre arquivos fica fora de escopo por ora,
    declare a ordem certa manualmente se tiver mais de um arquivo).
@@ -46,6 +45,9 @@ com um pinset fixo — o pinset real só é conhecido depois de compilar o VHDL.
 
 Depois de colocado, clique com o botão direito no bloco pra:
 
+- **Abrir/editar VHDL**: abre a fonte diretamente no editor do VS Code; com várias fontes, mostra
+  uma janela para escolher o arquivo.
+- **Alterar arquivos e entity**: wizard para trocar fontes, entity principal e versão VHDL.
 - **Analisar VHDL**: recompila e redescobre portas contra o VHDL atual (útil depois de editar o
   `.vhd` num editor de texto). Se o conjunto de pinos mudou, o circuito é reconstruído no Core
   automaticamente (fios que tocavam um pino removido são descartados, mesmo comportamento de
@@ -54,6 +56,10 @@ Depois de colocado, clique com o botão direito no bloco pra:
   todos os FPGAs configurados; o Stop geral encerra todos os processos GHDL.
 - **Ver log do GHDL**: log combinado do processo (stdout/stderr) e do protocolo VPI, útil pra depurar um `assert`/erro
   de runtime do VHDL.
+- **Configurar simulador GHDL**: mostra o runtime integrado e permite um override avançado.
+
+Essas mesmas ações ficam visíveis na janela **Propriedades** da FPGA; o menu de contexto não é
+obrigatório.
 
 ## Portas e tipos suportados
 

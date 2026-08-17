@@ -249,8 +249,8 @@
         },
         "lasecsimul.fpga.ghdlPath": {
           "type": "string",
-          "default": "ghdl",
-          "description": "Caminho do binário GHDL usado para compilar e simular componentes FPGA/VHDL genéricos."
+          "default": "",
+          "description": "Override avançado do executável GHDL. Deixe vazio para usar automaticamente o runtime integrado à extensão."
         },
           "lasecsimul.network.mode": {
             "type": "string",

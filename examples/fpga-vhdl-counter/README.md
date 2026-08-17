@@ -15,9 +15,8 @@ lockstep com o resto da simulação elétrica.
 
 1. Abra a pasta `examples/fpga-vhdl-counter/` no VS Code com a extensão LasecSimul instalada.
 2. Abra `counter.lsproj` (editor customizado do LasecSimul).
-3. Confirme que `lasecsimul.fpga.ghdlPath` aponta pro GHDL instalado (padrão: `ghdl`, resolvido via
-   PATH -- ver `docs/38-fpga-vhdl-ghdl.md`).
-4. Clique com o botão direito no bloco FPGA -> **Analisar VHDL** (opcional -- as portas já estão
+3. O GHDL já vem integrado à extensão; nenhuma configuração de PATH/terminal é necessária.
+4. Abra **Propriedades** do bloco FPGA -> **Analisar VHDL** (opcional -- as portas já estão
    salvas no `.lsproj`, útil só depois de editar `counter.vhd`).
 5. Rode a simulação (▶). Os 4 LEDs devem contar em binário, incrementando a cada segundo (½ período
    do clock de 2 Hz).

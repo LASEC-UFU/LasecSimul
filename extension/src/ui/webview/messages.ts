@@ -247,6 +247,10 @@ export type WebviewToHostMessage =
   | { version: number; type: "requestChooseMcuFirmware"; componentId: string }
   | { version: number; type: "requestOpenMcuSerialMonitor"; componentId: string; usartIndex: 0 | 1 | 2 }
   /** Ações de uma instância `digital.generic_fpga` -- ver `fpga/fpgaCommands.ts`. */
+  | { version: number; type: "requestAddGenericFpga" }
+  | { version: number; type: "requestOpenFpgaSource"; componentId: string }
+  | { version: number; type: "requestConfigureFpga"; componentId: string }
+  | { version: number; type: "requestConfigureGhdl" }
   | { version: number; type: "requestReanalyzeFpga"; componentId: string }
   | { version: number; type: "requestRunFpga"; componentId: string }
   | { version: number; type: "requestStopFpga"; componentId: string }

@@ -7,7 +7,7 @@ import { coreInstanceIdByComponentId, state } from "../state";
 import { endpointId, endpointPinId, WebviewComponentModel } from "../ui/webview/model";
 import { pushComponentToCore, rebuildCoreFromSchematicState } from "../core/coreLifecycle";
 import { buildFpgaPins, FpgaPortSpec } from "./fpgaPins";
-import { resolveFpgaToolchainConfig } from "./fpgaToolchain";
+import { ensureGhdlToolchainReady, resolveFpgaToolchainConfig, resolveGhdlBinaryPath } from "./fpgaToolchain";
 
 export interface FpgaCommandOptions {
   syncSchematicPanel: () => void;
@@ -36,17 +36,18 @@ function requireVpiModulePath(): string | undefined {
   const toolchain = resolveFpgaToolchainConfig();
   if (toolchain.vpiModulePath) return toolchain.vpiModulePath;
   vscode.window.showErrorMessage(
-    "Módulo VPI do GHDL não encontrado. No repositório de desenvolvimento, rode 'npm run build:fpga-vpi'; " +
-    "numa extensão instalada via VSIX isso indica um empacotamento incompleto."
+    "O módulo interno de comunicação com o GHDL está ausente. Reinstale ou atualize a extensão LasecSimul."
   );
   return undefined;
 }
 
-async function promptForVhdlSources(): Promise<string[] | undefined> {
+async function promptForVhdlSources(defaultUri?: vscode.Uri): Promise<string[] | undefined> {
   const picked = await vscode.window.showOpenDialog({
     canSelectMany: true,
     filters: { VHDL: ["vhd", "vhdl"] },
     title: "Selecionar arquivo(s) VHDL",
+    openLabel: "Usar arquivos selecionados",
+    defaultUri,
   });
   if (!picked || picked.length === 0) return undefined;
   return picked.map((uri) => uri.fsPath);
@@ -75,6 +76,8 @@ export async function addGenericFpgaCommand(options: FpgaCommandOptions): Promis
   const defaultTop = path.basename(firstSource, path.extname(firstSource));
   const topEntity = await promptForTopEntity(defaultTop);
   if (!topEntity) return;
+
+  if (!(await ensureGhdlToolchainReady())) return;
 
   const vpiModulePath = requireVpiModulePath();
   if (!vpiModulePath) return;
@@ -141,31 +144,40 @@ export async function addGenericFpgaCommand(options: FpgaCommandOptions): Promis
  * VHDL" não é um caminho quente (ação deliberada do usuário, não por-frame). Fios que tocavam um
  * pino removido somem (mesmo comportamento de qualquer troca de pinset dinâmico, ver
  * `extension.ts`'s `requestUpdateProperty`/`affectsPinCount`). */
-export async function reanalyzeFpgaCommand(componentId: string, options: FpgaCommandOptions): Promise<void> {
+type EditableFpgaConfiguration = { sources: string[]; top: string; standard: string };
+
+export async function reanalyzeFpgaCommand(
+  componentId: string,
+  options: FpgaCommandOptions,
+  configuration?: EditableFpgaConfiguration
+): Promise<void> {
   const component = getComponentById(componentId);
   if (!component || !component.fpga) return;
+  if (!(await ensureGhdlToolchainReady())) return;
   const vpiModulePath = requireVpiModulePath();
   if (!vpiModulePath || !state.coreClient) return;
+
+  const fpgaConfig = configuration ? { ...component.fpga, ...configuration } : component.fpga;
 
   const toolchain = { ...resolveFpgaToolchainConfig(), vpiModulePath };
   let ports: FpgaPortSpec[];
   try {
     const result = await state.coreClient.analyzeFpga({
-      sources: component.fpga.sources,
-      topEntity: component.fpga.top,
-      standard: component.fpga.standard,
+      sources: fpgaConfig.sources,
+      topEntity: fpgaConfig.top,
+      standard: fpgaConfig.standard,
       ...toolchain,
     });
     ports = result.ports;
-    reportVhdlDiagnostics(component.fpga.sources, undefined);
+    reportVhdlDiagnostics(fpgaConfig.sources, undefined);
   } catch (err) {
-    reportVhdlDiagnostics(component.fpga.sources, errorMessage(err));
+    reportVhdlDiagnostics(fpgaConfig.sources, errorMessage(err));
     options.reportCoreWarning(`analisar VHDL de "${component.label}"`, err);
     return;
   }
 
   if (ports.length === 0) {
-    vscode.window.showWarningMessage(`Nenhuma porta encontrada na entity "${component.fpga.top}" -- confira a declaração VHDL.`);
+    vscode.window.showWarningMessage(`Nenhuma porta encontrada na entity "${fpgaConfig.top}" -- confira a declaração VHDL.`);
     return;
   }
 
@@ -173,11 +185,15 @@ export async function reanalyzeFpgaCommand(componentId: string, options: FpgaCom
   const newPinIds = new Set(newPins.map((pin) => pin.id));
   const pinSetChanged = newPinIds.size !== component.pins.length || component.pins.some((pin) => !newPinIds.has(pin.id));
   const portMetadataChanged = JSON.stringify(component.fpga.ports) !== JSON.stringify(ports);
+  const configurationChanged =
+    component.fpga.top !== fpgaConfig.top ||
+    component.fpga.standard !== fpgaConfig.standard ||
+    JSON.stringify(component.fpga.sources) !== JSON.stringify(fpgaConfig.sources);
 
   const updatedComponent: WebviewComponentModel = {
     ...component,
     pins: newPins,
-    fpga: { ...component.fpga, ports },
+    fpga: { ...fpgaConfig, ports },
   };
   const remainingWires = pinSetChanged
     ? state.schematicState.topology.conductors.filter((wire) => {
@@ -196,7 +212,51 @@ export async function reanalyzeFpgaCommand(componentId: string, options: FpgaCom
   options.syncSchematicPanel();
   logSimulation("info", `VHDL de "${component.label}" reanalisado (${ports.length} porta(s)).`, { device: component.label, stage: "fpga" });
 
-  if (pinSetChanged || portMetadataChanged) await rebuildCoreFromSchematicState();
+  if (pinSetChanged || portMetadataChanged || configurationChanged) await rebuildCoreFromSchematicState();
+}
+
+/** Abre o VHDL no editor de texto normal do VS Code; com várias fontes, mostra uma janela de
+ * seleção pelos nomes em vez de exigir que o usuário procure arquivos no Explorer. */
+export async function openFpgaSourceCommand(componentId: string): Promise<void> {
+  const component = getComponentById(componentId);
+  const sources = component?.fpga?.sources ?? [];
+  if (sources.length === 0) return;
+  let selected = sources[0];
+  if (sources.length > 1) {
+    const picked = await vscode.window.showQuickPick(
+      sources.map((source) => ({ label: path.basename(source), description: source, source })),
+      { title: `Abrir fonte VHDL de ${component?.label ?? "FPGA"}`, placeHolder: "Selecione o arquivo para editar" }
+    );
+    selected = picked?.source;
+  }
+  if (!selected) return;
+  try {
+    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(selected));
+    await vscode.window.showTextDocument(document, { preview: false });
+  } catch (error) {
+    void vscode.window.showErrorMessage(`Não foi possível abrir o VHDL: ${errorMessage(error)}`);
+  }
+}
+
+/** Wizard visual para trocar arquivos/entity/standard sem editar JSON nem usar Command Palette. */
+export async function configureFpgaCommand(componentId: string, options: FpgaCommandOptions): Promise<void> {
+  const component = getComponentById(componentId);
+  if (!component?.fpga) return;
+  const firstSource = component.fpga.sources[0];
+  const sources = await promptForVhdlSources(firstSource ? vscode.Uri.file(path.dirname(firstSource)) : undefined);
+  if (!sources) return;
+  const top = await promptForTopEntity(component.fpga.top);
+  if (!top) return;
+  const standard = await vscode.window.showQuickPick(
+    [
+      { label: "VHDL 2008", value: "08" },
+      { label: "VHDL 1993", value: "93" },
+      { label: "VHDL 1987", value: "87" },
+    ],
+    { title: "Versão da linguagem VHDL", placeHolder: `Atual: VHDL ${component.fpga.standard}` }
+  );
+  if (!standard) return;
+  await reanalyzeFpgaCommand(componentId, options, { sources, top, standard: standard.value });
 }
 
 function requireTargetCoreId(componentId: string): string | undefined {
@@ -207,6 +267,10 @@ function requireTargetCoreId(componentId: string): string | undefined {
  * REAL (arquivo/linha/coluna) via `reportVhdlDiagnostics`, não só um toast. */
 export async function runFpgaCommand(componentId: string, options: FpgaCommandOptions): Promise<void> {
   const component = getComponentById(componentId);
+  const before = resolveGhdlBinaryPath();
+  const ready = await ensureGhdlToolchainReady();
+  if (!ready) return;
+  if (ready !== before) await rebuildCoreFromSchematicState();
   const targetCoreId = requireTargetCoreId(componentId);
   if (!component || !state.coreClient || !targetCoreId) return;
   try {
@@ -223,8 +287,15 @@ export async function runFpgaCommand(componentId: string, options: FpgaCommandOp
  * relógio de iniciar, evitando uma simulação aparentemente normal com parte do circuito inerte. */
 export async function ensureAllFpgasReady(options: FpgaCommandOptions): Promise<boolean> {
   if (!state.coreClient) return false;
-  for (const component of state.schematicState.components) {
-    if (component.typeId !== FPGA_TYPE_ID || !component.fpga) continue;
+  const configuredFpgas = state.schematicState.components.filter((component) => component.typeId === FPGA_TYPE_ID && component.fpga);
+  if (configuredFpgas.length === 0) return true;
+  const before = resolveGhdlBinaryPath();
+  const ready = await ensureGhdlToolchainReady();
+  if (!ready) return false;
+  if (ready !== before) await rebuildCoreFromSchematicState();
+  for (const component of configuredFpgas) {
+    const fpga = component.fpga;
+    if (!fpga) continue;
     const targetCoreId = requireTargetCoreId(component.id);
     if (!targetCoreId) {
       options.reportCoreWarning(`iniciar FPGA "${component.label}"`, new Error("instância FPGA ausente no Core"));
@@ -232,9 +303,9 @@ export async function ensureAllFpgasReady(options: FpgaCommandOptions): Promise<
     }
     try {
       await state.coreClient.runFpga(targetCoreId);
-      reportVhdlDiagnostics(component.fpga.sources, undefined);
+      reportVhdlDiagnostics(fpga.sources, undefined);
     } catch (err) {
-      reportVhdlDiagnostics(component.fpga.sources, errorMessage(err));
+      reportVhdlDiagnostics(fpga.sources, errorMessage(err));
       options.reportCoreWarning(`iniciar FPGA "${component.label}"`, err);
       return false;
     }

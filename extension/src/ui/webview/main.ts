@@ -245,6 +245,13 @@ const UI_TEXT = {
     firmwareGroup: "Firmware",
     firmwarePath: "Firmware (.bin/.elf)",
     qemuBinary: "Binario QEMU",
+    fpgaAdd: "Adicionar FPGA VHDL",
+    fpgaOpenSource: "Abrir/editar VHDL",
+    fpgaConfigure: "Alterar arquivos e entity...",
+    fpgaConfigureGhdl: "Configurar simulador GHDL...",
+    fpgaSources: "Fontes VHDL",
+    fpgaTop: "Entity principal",
+    fpgaStandard: "Versao VHDL",
     fpgaAnalyzeVhdl: "Analisar VHDL",
     fpgaRun: "Rodar FPGA",
     fpgaStop: "Parar FPGA",
@@ -370,6 +377,13 @@ const UI_TEXT = {
     openSerialMonitor: "Open serial monitor",
     firmwareGroup: "Firmware",
     firmwarePath: "Firmware (.bin/.elf)",
+    fpgaAdd: "Add VHDL FPGA",
+    fpgaOpenSource: "Open/edit VHDL",
+    fpgaConfigure: "Change files and entity...",
+    fpgaConfigureGhdl: "Configure GHDL simulator...",
+    fpgaSources: "VHDL sources",
+    fpgaTop: "Top entity",
+    fpgaStandard: "VHDL version",
     fpgaAnalyzeVhdl: "Analyze VHDL",
     fpgaRun: "Run FPGA",
     fpgaStop: "Stop FPGA",
@@ -2562,6 +2576,14 @@ function renderAppBar(): HTMLElement {
     ),
   );
 
+  const fpgaGroup = document.createElement("div");
+  fpgaGroup.className = "appbar__group";
+  if (!editingSubcircuit) {
+    fpgaGroup.appendChild(
+      renderToolbarButton("fpga", t("fpgaAdd"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestAddGenericFpga" }))
+    );
+  }
+
   const editGroup = document.createElement("div");
   editGroup.className = "appbar__group";
   editGroup.append(
@@ -2608,11 +2630,11 @@ function renderAppBar(): HTMLElement {
   status.appendChild(mcuRateLabel);
 
   meta.append(selection, status);
-  bar.append(fileGroup, simGroup, editGroup, viewGroup, subcircuitGroup, meta);
+  bar.append(fileGroup, fpgaGroup, simGroup, editGroup, viewGroup, subcircuitGroup, meta);
   return bar;
 }
 
-type ToolbarIconKind = "open" | "save" | "saveProjectAs" | "start" | "pause" | "stop" | "properties" | "delete" | "zoomFitSelection" | "zoomFitAll" | "zoomReset" | "back" | "createPin" | "selectExposedComponents" | "selectExportedProperties";
+type ToolbarIconKind = "open" | "save" | "saveProjectAs" | "fpga" | "start" | "pause" | "stop" | "properties" | "delete" | "zoomFitSelection" | "zoomFitAll" | "zoomReset" | "back" | "createPin" | "selectExposedComponents" | "selectExportedProperties";
 
 function renderIcon(kind: ToolbarIconKind): SVGSVGElement {
   const svg = document.createElementNS(SVG_NS, "svg");
@@ -2631,6 +2653,9 @@ function renderIcon(kind: ToolbarIconKind): SVGSVGElement {
       // Mesmo disquete de "save", com um asterisco no canto -- convenção comum pra "Salvar Como"
       // (grava sempre num arquivo novo/escolhido, ao contrário de "Salvar" que grava direto).
       svg.innerHTML = '<path d="M5 4h9l3 3v13H5z"></path><path d="M8 4v5h6V4"></path><path d="M9 18h4"></path><path d="M18.5 8.5v4"></path><path d="M16.7 9.5l3.6 2"></path><path d="M20.3 9.5l-3.6 2"></path>';
+      break;
+    case "fpga":
+      svg.innerHTML = '<rect x="5" y="5" width="14" height="14" rx="2"></rect><path d="M9 9h6v6H9z"></path><path d="M2 8h3M2 12h3M2 16h3M19 8h3M19 12h3M19 16h3M8 2v3M12 2v3M16 2v3M8 19v3M12 19v3M16 19v3"></path>';
       break;
     case "start":
       svg.innerHTML = '<path d="M8 5.5 18 12 8 18.5z"></path>';
@@ -6306,11 +6331,14 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
     const fpgaMenuItems: ContextMenuItem[] = !isGroup && component.typeId === "digital.generic_fpga"
       ? [
           { kind: "separator" },
+          { label: t("fpgaOpenSource"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenFpgaSource", componentId: component.id }) },
+          { label: t("fpgaConfigure"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestConfigureFpga", componentId: component.id }) },
           { label: t("fpgaAnalyzeVhdl"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestReanalyzeFpga", componentId: component.id }) },
           { label: t("fpgaRun"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestRunFpga", componentId: component.id }) },
           { label: t("fpgaStop"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestStopFpga", componentId: component.id }) },
           { label: t("fpgaRestart"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestRestartFpga", componentId: component.id }) },
           { label: t("fpgaShowLogs"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestShowFpgaLogs", componentId: component.id }) },
+          { label: t("fpgaConfigureGhdl"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestConfigureGhdl" }) },
         ]
       : [];
     const createSubcircuitMenuItems: ContextMenuItem[] = isGroup
@@ -8315,6 +8343,34 @@ function renderPropertySheet(component: WebviewComponentModel, options: Property
   shell.append(titleBar, toolbar, helpPanel);
   if (titleRow) shell.append(titleRow);
   shell.append(tabs, pages);
+  if (component.typeId === "digital.generic_fpga" && component.fpga) {
+    const fpgaPanel = document.createElement("fieldset");
+    fpgaPanel.className = "property-sheet__group";
+    const legend = document.createElement("legend");
+    legend.textContent = "FPGA / GHDL";
+    const summary = document.createElement("p");
+    summary.textContent = `${t("fpgaTop")}: ${component.fpga.top} · ${t("fpgaStandard")}: ${component.fpga.standard} · ${t("fpgaSources")}: ${component.fpga.sources.map((source) => source.split(/[\\/]/).pop()).join(", ")}`;
+    const actions = document.createElement("div");
+    actions.className = "property-sheet__actions";
+    const addAction = (label: string, onClick: () => void): void => {
+      const action = document.createElement("button");
+      action.type = "button";
+      action.className = "property-sheet__button";
+      action.textContent = label;
+      action.addEventListener("click", onClick);
+      actions.appendChild(action);
+    };
+    addAction(t("fpgaOpenSource"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenFpgaSource", componentId: component.id }));
+    addAction(t("fpgaConfigure"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestConfigureFpga", componentId: component.id }));
+    addAction(t("fpgaAnalyzeVhdl"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestReanalyzeFpga", componentId: component.id }));
+    addAction(t("fpgaRun"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestRunFpga", componentId: component.id }));
+    addAction(t("fpgaStop"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestStopFpga", componentId: component.id }));
+    addAction(t("fpgaRestart"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestRestartFpga", componentId: component.id }));
+    addAction(t("fpgaShowLogs"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestShowFpgaLogs", componentId: component.id }));
+    addAction(t("fpgaConfigureGhdl"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestConfigureGhdl" }));
+    fpgaPanel.append(legend, summary, actions);
+    shell.append(fpgaPanel);
+  }
   if (component.typeId === "peripherals.lasecplot") {
     const action = document.createElement("button");
     action.type = "button";

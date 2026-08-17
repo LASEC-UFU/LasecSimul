@@ -16,6 +16,18 @@ supersedes: []
 - processo possui timeout, stop e kill;
 - cada instância FPGA mantém backend/processo próprio por enquanto.
 
+## Experiência do usuário e distribuição
+
+- O instalador/VSIX inclui um runtime GHDL relocável e o módulo VPI da plataforma, seguindo o mesmo
+  modelo do QEMU integrado. O fluxo normal nunca depende de PATH, terminal ou instalação manual.
+- A barra principal oferece **Adicionar FPGA VHDL**. A criação inteira usa seletores de arquivo,
+  janela de entity e versão VHDL.
+- As propriedades e o menu de contexto da FPGA expõem abrir/editar fontes, alterar fontes/entity,
+  analisar, rodar, parar, reiniciar, visualizar logs e gerenciar o simulador.
+- `lasecsimul.fpga.ghdlPath` é apenas override avançado. Pacote incompleto/checkout de
+  desenvolvimento oferece instalação ou seleção guiada, nunca uma instrução de linha de comando ao
+  usuário final.
+
 ## Cache vNext
 
 A chave inclui conteúdos e nomes relativos das fontes, ordem, top, standard, flags, versão/fingerprint/backend do GHDL, plataforma, ABI da arena e VPI.
@@ -34,6 +46,7 @@ Agrupar várias instâncias FPGA em um único processo exige benchmark e design 
 - mudança de toolchain/VPI causa miss;
 - timeout deixa cache inválido/removível;
 - crash de uma FPGA não deixa processo órfão;
+- pacote Release executa o teste real usando exclusivamente o GHDL integrado/relocável;
 - lockstep nunca observa passo rejeitado.
 
 ## Evidência automatizada
