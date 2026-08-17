@@ -196,6 +196,81 @@ void testInvalidVhdlReportsCompileFailure(const std::string& ghdlBinary) {
     fs::remove_all(workDir, ec);
 }
 
+void testDiscoveryPreservesAscendingAndNonZeroRanges(const std::string& ghdlBinary,
+                                                      const std::string& vpiModulePath) {
+    const fs::path workDir = fs::temp_directory_path() / ("lasecsimul-fpga-ranges-" + uniqueDirSuffix());
+    const fs::path source = workDir / "range_test.vhd";
+    fs::create_directories(workDir);
+    {
+        std::ofstream out(source);
+        out << "library ieee;\n"
+               "use ieee.std_logic_1164.all;\n"
+               "entity range_test is\n"
+               "  port (ascending : in std_logic_vector(2 to 5);\n"
+               "        descending : out std_logic_vector(7 downto 4));\n"
+               "end entity;\n"
+               "architecture rtl of range_test is begin descending <= ascending; end architecture;\n";
+    }
+    GhdlBackendOptions options;
+    options.ghdlBinary = ghdlBinary;
+    options.vpiModulePath = vpiModulePath;
+    options.cacheRootDir = (workDir / "cache").string();
+    GhdlBackend backend(options);
+    RtlCompileRequest request;
+    request.sources = {source.string()};
+    request.topEntity = "range_test";
+    request.standard = "08";
+    TEST_CHECK(backend.compile(request).ok);
+    const auto ports = backend.discoverPorts();
+    TEST_CHECK(ports.size() == 2);
+    TEST_CHECK(!ports[0].downto && ports[0].leftIndex == 2 && ports[0].rightIndex == 5);
+    TEST_CHECK(ports[1].downto && ports[1].leftIndex == 7 && ports[1].rightIndex == 4);
+    const auto pins = mapPorts(ports);
+    TEST_CHECK(pins.front().pinId == "ascending(2)");
+    TEST_CHECK(pins[3].pinId == "ascending(5)");
+    TEST_CHECK(pins[4].pinId == "descending(7)");
+    TEST_CHECK(pins.back().pinId == "descending(4)");
+    std::error_code ec;
+    fs::remove_all(workDir, ec);
+}
+
+void testRelativeSourceNamesParticipateInCacheKey(const std::string& ghdlBinary) {
+    const fs::path projectDir = fs::temp_directory_path() / ("lasecsimul-fpga-relative-key-" + uniqueDirSuffix());
+    const fs::path sourceA = projectDir / "rtl-a" / "design.vhd";
+    const fs::path sourceB = projectDir / "rtl-b" / "design.vhd";
+    fs::create_directories(sourceA.parent_path());
+    fs::create_directories(sourceB.parent_path());
+    const std::string contents =
+        "entity relative_key is end entity;\n"
+        "architecture rtl of relative_key is begin end architecture;\n";
+    { std::ofstream(sourceA) << contents; }
+    { std::ofstream(sourceB) << contents; }
+
+    GhdlBackendOptions options;
+    options.ghdlBinary = ghdlBinary;
+    options.vpiModulePath = "unused";
+    options.cacheRootDir = (projectDir / ".lasecsimul" / "fpga-cache").string();
+    options.sourceRootDir = projectDir.string();
+    auto requestFor = [](const fs::path& source) {
+        RtlCompileRequest request;
+        request.sources = {source.string()};
+        request.topEntity = "relative_key";
+        request.standard = "08";
+        return request;
+    };
+
+    GhdlBackend first(options);
+    TEST_CHECK(first.compile(requestFor(sourceA)).ok);
+    GhdlBackend differentRelativeName(options);
+    const RtlCompileResult miss = differentRelativeName.compile(requestFor(sourceB));
+    TEST_CHECK(miss.ok && miss.log.find("cache hit") == std::string::npos);
+    GhdlBackend sameRelativeName(options);
+    const RtlCompileResult hit = sameRelativeName.compile(requestFor(sourceB));
+    TEST_CHECK(hit.ok && hit.log.find("cache hit") != std::string::npos);
+    std::error_code ec;
+    fs::remove_all(projectDir, ec);
+}
+
 // Testes de Cache vNext (.spec/features/fpga-ghdl.md) -- ver GhdlBackend::compile() (lock por
 // chave, staging+rename atomico, entrada publicada read-only) e memoria de projeto
 // project_lasecsimul_fpga_vhdl_ghdl_integration.md, secao "Cache vNext".
@@ -403,6 +478,8 @@ int main() {
     try {
         testCompileCacheAndRunRoundTrip("ghdl", vpiModule.string());
         testInvalidVhdlReportsCompileFailure("ghdl");
+        testDiscoveryPreservesAscendingAndNonZeroRanges("ghdl", vpiModule.string());
+        testRelativeSourceNamesParticipateInCacheKey("ghdl");
         testConcurrentCompilationsOfSameKeyDoNotCorruptCache("ghdl", vpiModule.string());
         testDifferentVpiFingerprintCausesCacheMiss("ghdl");
         testCompileTimeoutNeverPublishesCacheHit("ghdl");

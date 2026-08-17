@@ -19,8 +19,8 @@ Configure `lasecsimul.fpga.ghdlPath` (Configurações do VS Code) se `ghdl` não
 sistema — mesma convenção de `lasecsimul.debug.gdbPath` (GDB do QEMU).
 
 O **módulo VPI** (`lasecsimul_vpi.dll`/`.so`) é a ponte entre o Core e o processo GHDL — esse SIM é
-vendorizado com a extensão (compilado por `npm run build:fpga-vpi` no repositório de
-desenvolvimento, empacotado no VSIX em produção). Se a extensão reportar "módulo VPI não
+incluído com a extensão (compilado por `npm run build:fpga-vpi` no desenvolvimento e pelo CI de
+release; o empacotamento falha se o artefato estiver ausente). Se a extensão reportar "módulo VPI não
 encontrado", no repositório de desenvolvimento rode:
 
 ```powershell
@@ -50,10 +50,9 @@ Depois de colocado, clique com o botão direito no bloco pra:
   `.vhd` num editor de texto). Se o conjunto de pinos mudou, o circuito é reconstruído no Core
   automaticamente (fios que tocavam um pino removido são descartados, mesmo comportamento de
   qualquer componente com contagem de pinos dinâmica).
-- **Rodar/Parar/Reiniciar FPGA**: controla o processo GHDL desta instância independentemente do
-  Run/Pause/Stop geral da simulação (mas normalmente basta rodar a simulação inteira — a instância é
-  compilada e iniciada automaticamente).
-- **Ver log do GHDL**: log combinado do processo (stdout/stderr), útil pra depurar um `assert`/erro
+- **Rodar/Parar/Reiniciar FPGA**: controla individualmente a instância. O Run geral compila/inicia
+  todos os FPGAs configurados; o Stop geral encerra todos os processos GHDL.
+- **Ver log do GHDL**: log combinado do processo (stdout/stderr) e do protocolo VPI, útil pra depurar um `assert`/erro
   de runtime do VHDL.
 
 ## Portas e tipos suportados
@@ -96,7 +95,7 @@ direto pro ponto do erro. O canal de saída "LasecSimul: Simulação" também re
   barato pra projetos com muitos FPGAs) está fora de escopo por enquanto (ver `.spec/features/
   fpga-ghdl.md`, seção "Adiado").
 - **Sem visualização de waveform** (VCD) integrada ainda — só o log combinado do processo.
-- **Sem suporte a `inout`**, generics via GUI (só key=value cru), nem backends além do GHDL
+- **Sem suporte a `inout`**, generics via GUI, nem backends além do GHDL
   (Verilator/CXXRTL não implementados).
 - **Sem resolução automática de dependência entre múltiplos arquivos VHDL** — declare a ordem
   manualmente se sua entity usa pacotes/entities de outro arquivo.

@@ -39,6 +39,7 @@ struct ComponentParams {
     std::string fpgaGhdlBinary = "ghdl";
     std::string fpgaVpiModulePath;
     std::string fpgaCacheRootDir;
+    std::string fpgaSourceRootDir;
 
     template <size_t N>
     std::array<lasecsimul::Pin, N> pins() const {

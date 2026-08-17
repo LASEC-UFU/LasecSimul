@@ -79,14 +79,9 @@ _deps/
 # acima só pra esta pasta -- o resto do repo continua nunca versionando artefato de build comum.
 !/devices/qemu-esp32/bin/**
 
-# Módulo VPI do GHDL (fpga/ghdl-vpi/build/) -- MESMO motivo do QEMU acima: a regra genérica
-# "build/" (linha 33) capturava silenciosamente este artefato vendorizado (achado ao empacotar
-# Step 12 do plano FPGA/VHDL). Sem isto, um checkout de CI empacota sem `lasecsimul_vpi.dll`/
-# `libghdlvpi.dll`, e todo "Analisar VHDL"/"Rodar FPGA" falha com "módulo VPI não encontrado" numa
-# extensão instalada via VSIX -- nunca rebuilda a partir de `lasecsimul_vpi.c` no workflow de
-# packaging hoje (GHDL/MinGW não estão provisionados no runner), mesma disciplina de binário
-# pré-compilado e commitado que o QEMU já usa.
-!/fpga/ghdl-vpi/build/**
+# O módulo VPI do GHDL é reproduzível e construído no CI de release; continua ignorado como os
+# demais artefatos de build. `package-release.js` falha se o módulo da plataforma estiver ausente,
+# impedindo que um VSIX anuncie suporte a FPGA sem conter a ponte nativa necessária.
 
 # Saida de build/empacotamento (gerada por scripts/build-all.js e scripts/package-release.js)
 /dist/

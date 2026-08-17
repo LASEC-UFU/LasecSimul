@@ -55,6 +55,8 @@ typedef struct PortInfo {
     char name[128];
     int direction; /* vpiInput/vpiOutput/vpiInout */
     int width;
+    int leftIndex;
+    int rightIndex;
     vpiHandle handle;
     /* Último valor (BinStr) reportado ao Core -- usado só pra portas de saída, pra computar o
      * diff que vira o batch de OUTPUT_CHANGE (ver flushChangedOutputs()). Achado real (Step 4):
@@ -86,6 +88,20 @@ typedef struct ArenaHandle {
 static ArenaHandle g_arena;
 static int g_arenaAttached = 0;
 
+static int descriptorCompatible(const LsdnFpgaArenaDescriptor* descriptor) {
+    if (descriptor->magic != LSDN_FPGA_ARENA_ABI_MAGIC ||
+        descriptor->abiMajor != LSDN_FPGA_ARENA_ABI_MAJOR ||
+        descriptor->descriptorSize != sizeof(LsdnFpgaArenaDescriptor) ||
+        descriptor->transportSize != sizeof(LsdnFpgaArenaTransport) ||
+        descriptor->changeEntrySize != sizeof(LsdnFpgaChangeEntry) ||
+        descriptor->logQueueDepth != LSDN_FPGA_ARENA_LOG_QUEUE_DEPTH) return 0;
+    if ((descriptor->coreCapabilities & LSDN_FPGA_ARENA_REQUIRED_CAPABILITIES) !=
+        LSDN_FPGA_ARENA_REQUIRED_CAPABILITIES) return 0;
+    if (descriptor->inputChangeCapacity > (1u << 20) ||
+        descriptor->outputChangeCapacity > (1u << 20)) return 0;
+    return 1;
+}
+
 /* ---------------------------------------------------------------------------------------------
  * Anexo na arena (só ANEXA, nunca cria -- o Core sempre cria a arena antes de spawnar o processo
  * GHDL, mesma disciplina de McuController/QemuArenaBridge). Descobre as capacidades reais em duas
@@ -105,7 +121,7 @@ static int arenaAttach(ArenaHandle* out, const char* name) {
         return 0;
     }
     LsdnFpgaArenaDescriptor* probeDescriptor = (LsdnFpgaArenaDescriptor*)probe;
-    if (probeDescriptor->magic != LSDN_FPGA_ARENA_ABI_MAGIC || probeDescriptor->abiMajor != LSDN_FPGA_ARENA_ABI_MAJOR) {
+    if (!descriptorCompatible(probeDescriptor)) {
         UnmapViewOfFile(probe);
         CloseHandle(out->mapping);
         return 0;
@@ -141,6 +157,31 @@ static int arenaAttach(ArenaHandle* out, const char* name) {
         return 0;
     }
 #endif
+    LsdnFpgaArenaDescriptor* descriptor = (LsdnFpgaArenaDescriptor*)out->base;
+    if (!descriptorCompatible(descriptor)) {
+#if defined(_WIN32)
+        UnmapViewOfFile(out->base);
+        CloseHandle(out->mapping);
+#else
+        munmap(out->base, out->size);
+        close(out->fd);
+#endif
+        memset(out, 0, sizeof(*out));
+        return 0;
+    }
+    const size_t expectedSize = sizeof(LsdnFpgaArenaDescriptor) + sizeof(LsdnFpgaArenaTransport) +
+        (size_t)(descriptor->inputChangeCapacity + descriptor->outputChangeCapacity) * sizeof(LsdnFpgaChangeEntry);
+    if (out->size < expectedSize) {
+#if defined(_WIN32)
+        UnmapViewOfFile(out->base);
+        CloseHandle(out->mapping);
+#else
+        munmap(out->base, out->size);
+        close(out->fd);
+#endif
+        memset(out, 0, sizeof(*out));
+        return 0;
+    }
     out->descriptor = (LsdnFpgaArenaDescriptor*)out->base;
     out->transport = (LsdnFpgaArenaTransport*)((unsigned char*)out->base + sizeof(LsdnFpgaArenaDescriptor));
     out->inputChanges = lsdnFpgaArenaInputChanges(out->transport);
@@ -189,14 +230,25 @@ static vpiHandle findTopModule(void) {
     return vpi_scan(iterator);
 }
 
-static void buildPortTable(vpiHandle top) {
+static const char* directionName(int direction);
+
+static int rangeIndex(vpiHandle port, int relation, int fallback) {
+    vpiHandle range = vpi_handle(relation, port);
+    if (!range) return fallback;
+    s_vpi_value value;
+    value.format = vpiIntVal;
+    vpi_get_value(range, &value);
+    return value.value.integer;
+}
+
+static int buildPortTable(vpiHandle top) {
     g_portCount = 0;
     vpiHandle portIterator = vpi_iterate(vpiPort, top);
     vpiHandle port;
     while (portIterator && (port = vpi_scan(portIterator)) != NULL) {
         if (g_portCount >= LSDN_VPI_MAX_PORTS) {
-            vpi_printf("[lasecsimul_vpi] AVISO: mais de %d portas, ignorando o restante\n", LSDN_VPI_MAX_PORTS);
-            break;
+            vpi_printf("LSDN_FPGA_ERROR mais de %d portas; limite excedido\n", LSDN_VPI_MAX_PORTS);
+            return 0;
         }
         PortInfo* info = &g_ports[g_portCount];
         const char* name = vpi_get_str(vpiName, port);
@@ -205,10 +257,17 @@ static void buildPortTable(vpiHandle top) {
         info->width = vpi_get(vpiSize, port);
         if (info->width <= 0) info->width = 1;
         if (info->width > LSDN_VPI_MAX_WIDTH) {
-            vpi_printf("[lasecsimul_vpi] AVISO: port '%s' com %d bits excede o maximo suportado (%d)\n",
+            vpi_printf("LSDN_FPGA_ERROR port '%s' com %d bits excede o maximo suportado (%d)\n",
                       info->name, info->width, LSDN_VPI_MAX_WIDTH);
-            info->width = LSDN_VPI_MAX_WIDTH;
+            return 0;
         }
+        if (info->direction != vpiInput && info->direction != vpiOutput) {
+            vpi_printf("LSDN_FPGA_ERROR port '%s' usa direcao nao suportada: %s\n",
+                       info->name, directionName(info->direction));
+            return 0;
+        }
+        info->leftIndex = rangeIndex(port, vpiLeftRange, info->width - 1);
+        info->rightIndex = rangeIndex(port, vpiRightRange, 0);
         // Achado real (Step 4, confirmado contra GHDL real): `vpiPort` (o que `vpi_iterate`
         // devolve) é um objeto de CONEXÃO (IEEE 1364 vpiLowConn/vpiHighConn), não o sinal em si --
         // `vpi_put_value` nele parece funcionar sem erro, mas `cbValueChange` registrado ali NUNCA
@@ -228,6 +287,7 @@ static void buildPortTable(vpiHandle top) {
         info->lastValue[0] = '\0';
         g_portCount++;
     }
+    return 1;
 }
 
 static const char* directionName(int direction) {
@@ -242,11 +302,15 @@ static const char* directionName(int direction) {
  * dependência nova só pra isto), parseado por GhdlBackend (Core) no fluxo "Analyze VHDL".
  * ------------------------------------------------------------------------------------------- */
 static void runDiscoverMode(vpiHandle top) {
-    buildPortTable(top);
+    if (!buildPortTable(top)) {
+        vpi_control(vpiFinish, 1);
+        return;
+    }
     vpi_printf("LSDN_FPGA_TOP %s\n", vpi_get_str(vpiFullName, top));
     for (int i = 0; i < g_portCount; ++i) {
-        vpi_printf("LSDN_FPGA_PORT name=%s direction=%s width=%d\n", g_ports[i].name,
-                  directionName(g_ports[i].direction), g_ports[i].width);
+        vpi_printf("LSDN_FPGA_PORT name=%s direction=%s width=%d left=%d right=%d\n", g_ports[i].name,
+                  directionName(g_ports[i].direction), g_ports[i].width,
+                  g_ports[i].leftIndex, g_ports[i].rightIndex);
     }
     vpi_printf("LSDN_FPGA_PORTS_DONE\n");
     // `vpi_flush()` existe no header padrao mas nao e exportado por libghdlvpi nesta build do
@@ -265,7 +329,14 @@ static void logToArena(LsdnFpgaLogSeverity severity, const char* message) {
     LsdnFpgaArenaTransport* transport = g_arena.transport;
     const uint64_t writeIndex = transport->logWriteIndex;
     const uint64_t readIndex = __atomic_load_n(&transport->logReadIndex, __ATOMIC_ACQUIRE);
-    if (writeIndex - readIndex >= LSDN_FPGA_ARENA_LOG_QUEUE_DEPTH) return; // fila cheia -- descarta em vez de travar
+    if (writeIndex - readIndex >= LSDN_FPGA_ARENA_LOG_QUEUE_DEPTH) {
+        static uint64_t dropped = 0;
+        dropped++;
+        if (dropped == 1 || (dropped & (dropped - 1)) == 0)
+            vpi_printf("[lasecsimul_vpi] log queue cheia; mensagens descartadas=%llu\n",
+                       (unsigned long long)dropped);
+        return;
+    }
     const uint64_t slot = writeIndex % LSDN_FPGA_ARENA_LOG_QUEUE_DEPTH;
     LsdnFpgaLogEntry* entry = &transport->logQueue[slot];
     entry->severity = (uint32_t)severity;
@@ -507,7 +578,10 @@ static PLI_INT32 onStartOfSimulation(p_cb_data cb) {
         return 0;
     }
 
-    buildPortTable(top);
+    if (!buildPortTable(top)) {
+        vpi_control(vpiFinish, 1);
+        return 0;
+    }
 
     if (!arenaAttach(&g_arena, arenaName)) {
         vpi_printf("[lasecsimul_vpi] ERRO: nao foi possivel anexar na arena '%s'\n", arenaName);
@@ -559,4 +633,3 @@ void (*vlog_startup_routines[])(void) = {
     lasecsimulVpiRegister,
     0
 };
-

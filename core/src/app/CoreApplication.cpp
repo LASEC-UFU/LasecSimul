@@ -926,6 +926,7 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
         options.ghdlBinary = p.fpgaGhdlBinary.empty() ? "ghdl" : p.fpgaGhdlBinary;
         options.vpiModulePath = p.fpgaVpiModulePath;
         options.cacheRootDir = p.fpgaCacheRootDir;
+        options.sourceRootDir = p.fpgaSourceRootDir;
         auto backend = std::make_unique<fpga::GhdlBackend>(options);
 
         fpga::FpgaComponentConfig config;
@@ -1318,7 +1319,7 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
 
     // ── shutdown ───────────────────────────────────────────────────────────────
     if (msg.type == "shutdown") {
-        session.scheduler().stop();
+        session.stopSimulation();
         server.shutdown();
         resp.ok = true;
         return resp;
@@ -1449,6 +1450,8 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
                         spec.isInput = portJson.value("direction", std::string{"in"}) == "in";
                         spec.width = portJson.value("width", 1u);
                         spec.downto = portJson.value("downto", true);
+                        if (portJson.contains("leftIndex")) spec.leftIndex = portJson["leftIndex"].get<int32_t>();
+                        if (portJson.contains("rightIndex")) spec.rightIndex = portJson["rightIndex"].get<int32_t>();
                         if (!spec.name.empty()) params.fpgaPorts.push_back(std::move(spec));
                     }
                 }
@@ -1462,6 +1465,7 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
                 params.fpgaGhdlBinary = fpgaJson.value("ghdlBinary", std::string{"ghdl"});
                 params.fpgaVpiModulePath = fpgaJson.value("vpiModulePath", std::string{});
                 params.fpgaCacheRootDir = fpgaJson.value("cacheRootDir", std::string{});
+                params.fpgaSourceRootDir = fpgaJson.value("sourceRootDir", std::string{});
             }
             const std::string typeId = payload.value("typeId", std::string{});
             if (session.isSubcircuitType(typeId)) {
@@ -1978,6 +1982,7 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
             options.ghdlBinary = payload.value("ghdlBinary", std::string{"ghdl"});
             options.vpiModulePath = payload.value("vpiModulePath", std::string{});
             options.cacheRootDir = payload.value("cacheRootDir", std::string{});
+            options.sourceRootDir = payload.value("sourceRootDir", std::string{});
             if (options.vpiModulePath.empty()) throw std::runtime_error("vpiModulePath vazio");
             if (options.cacheRootDir.empty()) throw std::runtime_error("cacheRootDir vazio");
 
@@ -1988,10 +1993,13 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
             const std::vector<fpga::PortSpec> ports = backend.discoverPorts();
             nlohmann::json portsJson = nlohmann::json::array();
             for (const fpga::PortSpec& port : ports) {
-                portsJson.push_back(nlohmann::json{{"name", port.name},
-                                                    {"direction", port.isInput ? "in" : "out"},
-                                                    {"width", port.width},
-                                                    {"downto", port.downto}});
+                nlohmann::json portJson{{"name", port.name},
+                                        {"direction", port.isInput ? "in" : "out"},
+                                        {"width", port.width},
+                                        {"downto", port.downto}};
+                if (port.leftIndex) portJson["leftIndex"] = *port.leftIndex;
+                if (port.rightIndex) portJson["rightIndex"] = *port.rightIndex;
+                portsJson.push_back(std::move(portJson));
             }
             resp.ok = true;
             resp.payloadJson = nlohmann::json{{"ports", std::move(portsJson)}, {"log", compileResult.log}}.dump();

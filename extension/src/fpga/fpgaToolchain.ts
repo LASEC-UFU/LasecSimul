@@ -53,10 +53,12 @@ export function resolveFpgaCacheRootDir(): string {
 /** Resolvido FRESCO a cada chamada (nunca cacheado a nível de sessão, exceto o caminho do VPI que é
  * imutável por processo) -- ver `.lsproj`'s `ProjectFpgaConfig` (nunca persiste isto) e
  * `CoreClient.addComponent`'s parâmetro `fpga`. */
-export function resolveFpgaToolchainConfig(): { ghdlBinary: string; vpiModulePath: string; cacheRootDir: string } {
+export function resolveFpgaToolchainConfig(): { ghdlBinary: string; vpiModulePath: string; cacheRootDir: string; sourceRootDir: string } {
+  const sourceRootDir = state.currentProjectFilePath ? path.dirname(state.currentProjectFilePath) : process.cwd();
   return {
     ghdlBinary: resolveGhdlBinaryPath(),
     vpiModulePath: resolveVpiModulePath() ?? "",
     cacheRootDir: resolveFpgaCacheRootDir(),
+    sourceRootDir,
   };
 }

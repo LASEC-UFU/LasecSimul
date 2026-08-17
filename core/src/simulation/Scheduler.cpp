@@ -220,6 +220,10 @@ void Scheduler::runUntil(uint64_t targetTimeNs) {
                     static_cast<uint64_t>(static_cast<double>(attempted) * factor), m_minimumTimeStepNs, maxStep);
             }
         }
+        // O commit de um participante lockstep pode publicar novas saídas no MESMO timestamp
+        // aceito (FPGA/GHDL). Assente esse trabalho antes de publicar o stable step/telemetria;
+        // quando o commit não marcou nada dirty, o caminho custa apenas a checagem da fila vazia.
+        if (accepted) settleUntilStableLocked(lock);
         if (accepted && m_lastSettleConverged && m_stableStep) m_stableStep(m_nowNs);
         if (accepted && m_profilingEnabled.load(std::memory_order_relaxed))
             m_timeSteps.fetch_add(1, std::memory_order_relaxed);

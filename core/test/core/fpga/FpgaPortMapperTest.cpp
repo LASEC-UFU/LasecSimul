@@ -52,6 +52,18 @@ void testToVectorOrdersLowIndexFirst() {
     CHECK(bits[2].pinId == "data(2)" && bits[2].bitIndex == 2, "bitIndex 2 = data(2)");
 }
 
+void testExplicitNonZeroRangesArePreserved() {
+    PortSpec down{"nibble", true, 4, true};
+    down.leftIndex = 7;
+    down.rightIndex = 4;
+    PortSpec up{"window", false, 4, false};
+    up.leftIndex = -2;
+    up.rightIndex = 1;
+    const std::vector<FpgaPinBit> bits = mapPorts({down, up});
+    CHECK(bits[0].pinId == "nibble(7)" && bits[3].pinId == "nibble(4)", "faixa 7 downto 4 preservada");
+    CHECK(bits[4].pinId == "window(-2)" && bits[7].pinId == "window(1)", "faixa -2 to 1 preservada");
+}
+
 void testMixedScalarAndVectorPorts() {
     const std::vector<PortSpec> ports = {
         PortSpec{"clk", true, 1, true},
@@ -109,6 +121,30 @@ void testParseDiscoveredPortsHandlesCrlfAndEmptyInput() {
     CHECK(parseDiscoveredPorts("apenas ruido sem prefixo\n").empty(), "linha sem o prefixo e ignorada");
 }
 
+void testDiscoveryPreservesRangeAndRejectsUnsupportedDirection() {
+    const auto ports = parseDiscoveredPorts(
+        "LSDN_FPGA_PORT name=data direction=out width=4 left=7 right=4\n");
+    CHECK(ports.size() == 1 && ports[0].downto, "direcao downto derivada dos limites");
+    CHECK(ports[0].leftIndex == 7 && ports[0].rightIndex == 4, "limites descobertos preservados");
+    CHECK(mapPorts(ports).front().pinId == "data(7)", "pinId usa indice esquerdo real");
+
+    bool rejectedInout = false;
+    try {
+        (void)parseDiscoveredPorts("LSDN_FPGA_PORT name=bus direction=inout width=1 left=0 right=0\n");
+    } catch (const std::runtime_error&) {
+        rejectedInout = true;
+    }
+    CHECK(rejectedInout, "inout e rejeitado explicitamente");
+
+    bool propagatedVpiError = false;
+    try {
+        (void)parseDiscoveredPorts("LSDN_FPGA_ERROR limite excedido\n");
+    } catch (const std::runtime_error&) {
+        propagatedVpiError = true;
+    }
+    CHECK(propagatedVpiError, "erro explicito do VPI nao vira lista vazia");
+}
+
 } // namespace
 
 int main() {
@@ -116,11 +152,13 @@ int main() {
     testScalarPortsMapOneToOne();
     testDowntoVectorOrdersMsbFirst();
     testToVectorOrdersLowIndexFirst();
+    testExplicitNonZeroRangesArePreserved();
     testMixedScalarAndVectorPorts();
     testZeroWidthTreatedAsOne();
     testCountInputOutputBits();
     testParseDiscoveredPortsMatchesRealVpiOutputFormat();
     testParseDiscoveredPortsHandlesCrlfAndEmptyInput();
+    testDiscoveryPreservesRangeAndRejectsUnsupportedDirection();
 
     if (failures == 0) {
         std::fprintf(stderr, "\nTodos os testes passaram.\n");

@@ -164,12 +164,6 @@ void testCombinationalAndSequentialAgainstRealScheduler(const std::string& vpiMo
         for (int i = 0; i < 20 && session.settleStep(); ++i) {
         }
         session.scheduler().runUntil(1); // primeiro avanco real de tempo -- dispara advanceLockstep
-        // advanceLockstep só MARCA o componente dirty com a nova saída (markDirty) -- não força
-        // re-settle na hora (roda dentro de TimeStepCommitFn, depois que o settle daquele passo já
-        // rodou). Precisa de outro settleStep() pra crava eletricamente led_and com o valor novo
-        // antes de ler a tensão do nó.
-        for (int i = 0; i < 20 && session.settleStep(); ++i) {
-        }
 
         const double ledVoltage = session.nodeVoltageOfPin(fpga, "led_and");
         TEST_CHECK(ledVoltage > 1.65); // > metade de 3.3V -- lido como One
@@ -290,8 +284,9 @@ void testMultipleFpgaInstancesOfSameCompilation(const std::string& vpiModulePath
     instances[0]->stop();
     TEST_CHECK(!instances[0]->controller().isRunning());
     TEST_CHECK(instances[1]->controller().isRunning());
-    instances[1]->stop();
-    std::printf("OK: stop() de uma instancia nao afeta a outra\n");
+    session.stopSimulation();
+    TEST_CHECK(!instances[1]->controller().isRunning());
+    std::printf("OK: stop() de uma instancia nao afeta a outra; Stop global encerra a remanescente\n");
 
     std::error_code ec;
     fs::remove_all(workDir, ec);

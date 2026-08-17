@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <memory>
 #include <span>
+#include <unordered_map>
 #include <vector>
 
 #include "fpga/FpgaController.hpp"
@@ -107,7 +108,8 @@ public:
     std::string logs() const { return m_controller.logs(); }
 
 private:
-    void applyOutputChanges(std::span<const GhdlChangeEntry> changes);
+    bool applyOutputChanges(std::span<const GhdlChangeEntry> changes);
+    void transitionToFaulted();
 
     simulation::Scheduler& m_scheduler;
     FpgaController m_controller;
@@ -122,6 +124,8 @@ private:
     /** Só significativo pra pinos de entrada -- último valor efetivamente mandado ao GHDL, pra
      * `advanceLockstep` só publicar o DIFF, exceto quando `m_forceFullInputResend` está ligado. */
     std::vector<LogicValue> m_lastSentToGhdl;
+    std::vector<GhdlChangeEntry> m_inputChangesScratch;
+    std::unordered_map<uint64_t, uint32_t> m_outputLocalIndex;
     double m_vcc;
     std::chrono::milliseconds m_advanceTimeout;
     uint32_t m_componentIndex = kNoIndex;

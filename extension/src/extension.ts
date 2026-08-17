@@ -79,6 +79,7 @@ import {
 } from "./mcu/mcuCommands";
 import {
   addGenericFpgaCommand,
+  ensureAllFpgasReady,
   reanalyzeFpgaCommand,
   restartFpgaCommand,
   runFpgaCommand,
@@ -497,6 +498,7 @@ async function runSimulationWithFirmwareCheck(): Promise<void> {
   }
   const result = await ensureAllMcuFirmwareUpToDate(mcuCommandOptions());
   if (!result.ok) return; // já logado (canal + Problemas + status bar) dentro de ensureAllMcuFirmwareUpToDate
+  if (!(await ensureAllFpgasReady(fpgaCommandOptions()))) return;
   await registerAllPauseConditions().then((valid) => valid ? runSimulation() : undefined);
   } finally {
     startSimulationPreparationPending = false;

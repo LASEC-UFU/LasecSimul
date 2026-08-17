@@ -35,6 +35,11 @@ FpgaComponent::FpgaComponent(simulation::Scheduler& scheduler, std::unique_ptr<R
     // de qualquer advanceLockstep real usar o valor -- ver comentário de onAssignedIndex/start()).
     m_currentValue.assign(m_pinBits.size(), LogicValue::X);
     m_lastSentToGhdl.assign(m_pinBits.size(), LogicValue::X);
+    m_inputChangesScratch.reserve(m_inputLocalIndices.size());
+    for (uint32_t i = 0; i < m_pinBits.size(); ++i) {
+        const FpgaPinBit& bit = m_pinBits[i];
+        if (!bit.isInput) m_outputLocalIndex.emplace((static_cast<uint64_t>(bit.portIndex) << 32) | bit.bitIndex, i);
+    }
 }
 
 FpgaComponent::~FpgaComponent() {
@@ -79,15 +84,25 @@ void FpgaComponent::setSources(std::vector<std::string> sources, std::string top
     m_compileRequest.standard = std::move(standard);
 }
 
-void FpgaComponent::applyOutputChanges(std::span<const GhdlChangeEntry> changes) {
+bool FpgaComponent::applyOutputChanges(std::span<const GhdlChangeEntry> changes) {
+    bool changedAny = false;
     for (const GhdlChangeEntry& change : changes) {
-        for (size_t i = 0; i < m_pinBits.size(); ++i) {
-            if (m_pinBits[i].isInput) continue;
-            if (m_pinBits[i].portIndex == change.portIndex && m_pinBits[i].bitIndex == change.bitIndex) {
-                m_currentValue[i] = change.value;
-                break;
-            }
-        }
+        const uint64_t key = (static_cast<uint64_t>(change.portIndex) << 32) | change.bitIndex;
+        const auto found = m_outputLocalIndex.find(key);
+        if (found == m_outputLocalIndex.end()) continue;
+        if (m_currentValue[found->second] == change.value) continue;
+        m_currentValue[found->second] = change.value;
+        changedAny = true;
+    }
+    return changedAny;
+}
+
+void FpgaComponent::transitionToFaulted() {
+    m_health = PluginHealthStatus::Faulted;
+    try {
+        m_controller.stop();
+    } catch (...) {
+        // O estado Faulted já é a fonte de verdade; cleanup é best-effort neste caminho de erro.
     }
 }
 
@@ -95,19 +110,19 @@ void FpgaComponent::advanceLockstep(uint64_t /*previousNs*/, uint64_t nextNs) {
     if (m_health == PluginHealthStatus::Faulted) return;
     if (!m_controller.isRunning()) return; // nunca iniciado, ou já parado deliberadamente -- não é falha
 
-    std::vector<GhdlChangeEntry> changes;
+    m_inputChangesScratch.clear();
     for (size_t i = 0; i < m_pins.size(); ++i) {
         if (!m_pinBits[i].isInput) continue;
         if (!m_forceFullInputResend && m_currentValue[i] == m_lastSentToGhdl[i]) continue;
-        changes.push_back(GhdlChangeEntry{m_pinBits[i].portIndex, m_pinBits[i].bitIndex, m_currentValue[i]});
+        m_inputChangesScratch.push_back(GhdlChangeEntry{m_pinBits[i].portIndex, m_pinBits[i].bitIndex, m_currentValue[i]});
         m_lastSentToGhdl[i] = m_currentValue[i];
     }
     m_forceFullInputResend = false;
 
     try {
-        m_controller.requestAdvanceTo(nextNs, changes);
+        m_controller.requestAdvanceTo(nextNs, m_inputChangesScratch);
     } catch (const std::exception&) {
-        m_health = PluginHealthStatus::Faulted;
+        transitionToFaulted();
         return;
     }
 
@@ -120,23 +135,22 @@ void FpgaComponent::advanceLockstep(uint64_t /*previousNs*/, uint64_t nextNs) {
         reply = m_controller.pollReply();
         if (reply.ready) break;
         if (!m_controller.isRunning()) {
-            m_health = PluginHealthStatus::Faulted;
+            transitionToFaulted();
             return;
         }
         if (std::chrono::steady_clock::now() > deadline) {
-            m_health = PluginHealthStatus::Faulted;
-            m_controller.stop(); // isola o travamento -- nunca deixa o processo pendurado pra sempre
+            transitionToFaulted();
             return;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 
     if (reply.overflow) {
-        m_health = PluginHealthStatus::Faulted;
+        transitionToFaulted();
         return;
     }
 
-    applyOutputChanges(reply.outputChanges);
+    const bool outputsChanged = applyOutputChanges(reply.outputChanges);
     // Achado real: `advanceLockstep` roda de DENTRO de `TimeStepCommitFn`, um callback do
     // Scheduler já invocado com `m_mutex` retido pela MESMA thread -- `markDirty()`'s `try_lock`
     // falha nesse caso (mutex não-recursivo) e cai no caminho `m_pendingDirty`, que só é mesclado
@@ -145,7 +159,7 @@ void FpgaComponent::advanceLockstep(uint64_t /*previousNs*/, uint64_t nextNs) {
     // (Scheduler.hpp) como seguro de chamar "de dentro do callback de settle" -- exatamente esta
     // situação, mesmo padrão que `TimeStepBeginFn` já usa (`m_scheduler.dirtySet().insert(i)`)
     // pra componentes reativos.
-    if (m_componentIndex != kNoIndex) m_scheduler.dirtySet().insert(m_componentIndex);
+    if (outputsChanged && m_componentIndex != kNoIndex) m_scheduler.dirtySet().insert(m_componentIndex);
 }
 
 } // namespace lasecsimul::fpga

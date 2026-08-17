@@ -214,10 +214,9 @@ SimulationSession::SimulationSession(plugins::GlobalPluginCache& globalCache, si
             // início. Ver plano FPGA, ".claude/plans/golden-puzzling-quasar.md": "o Core continua
             // sendo a autoridade do tempo".
             if (accept) {
-                for (const auto& component : m_componentInstances) {
-                    if (auto* fpgaComponent = dynamic_cast<fpga::FpgaComponent*>(component.get())) {
-                        fpgaComponent->advanceLockstep(previous, current);
-                    }
+                for (const uint32_t index : m_fpgaComponentIndices) {
+                    auto* fpgaComponent = static_cast<fpga::FpgaComponent*>(m_componentInstances[index].get());
+                    fpgaComponent->advanceLockstep(previous, current);
                 }
             }
             return {accept, maximumError};
@@ -372,8 +371,10 @@ uint32_t SimulationSession::addComponentUnlocked(const std::string& typeId, cons
     }
 
     instance->onAssignedIndex(componentIndex);
+    const bool isFpga = dynamic_cast<fpga::FpgaComponent*>(instance.get()) != nullptr;
     if (!instance->signalSubscriptions().empty()) m_signalSubscribers.push_back(componentIndex);
     m_componentInstances.push_back(std::move(instance));
+    if (isFpga) m_fpgaComponentIndices.push_back(componentIndex);
     if (!params.instanceName.empty()) m_signalAliases[params.instanceName] = componentIndex;
     for (const std::string& alias : params.signalAliases) if (!alias.empty()) m_signalAliases[alias] = componentIndex;
     m_topologyDirty = true;
@@ -940,6 +941,7 @@ void SimulationSession::removeComponentUnlocked(uint32_t componentIndex) {
 
     m_netlist.removeComponent(componentIndex);
     m_componentInstances[componentIndex].reset();
+    std::erase(m_fpgaComponentIndices, componentIndex);
     m_scheduler.dirtySet().remove(componentIndex);
     m_topologyDirty = true;
     m_topologyReuseSafe = false;
@@ -1206,6 +1208,9 @@ void SimulationSession::stopSimulation() {
             mcu->stopFirmware();
         }
     }
+    for (const uint32_t index : m_fpgaComponentIndices) {
+        static_cast<fpga::FpgaComponent*>(m_componentInstances[index].get())->stop();
+    }
     m_scheduler.reset();
 }
 
@@ -1219,43 +1224,56 @@ std::string SimulationSession::mcuLogs(uint32_t componentIndex) const {
 
 void SimulationSession::setFpgaConfig(uint32_t componentIndex, std::vector<std::string> sources,
                                       std::string topEntity, std::string standard) {
-    IComponentModel* instance = m_componentInstances.at(componentIndex).get();
-    if (!instance) throw std::runtime_error("setFpgaConfig: componente removido");
-    auto* fpgaComponent = dynamic_cast<fpga::FpgaComponent*>(instance);
-    if (!fpgaComponent) throw std::runtime_error("setFpgaConfig: componente nao e FPGA");
-    fpgaComponent->setSources(std::move(sources), std::move(topEntity), std::move(standard));
+    runViaCommandQueue([componentIndex, sources = std::move(sources), topEntity = std::move(topEntity),
+                        standard = std::move(standard)](SimulationSession& self) mutable {
+        IComponentModel* instance = self.m_componentInstances.at(componentIndex).get();
+        if (!instance) throw std::runtime_error("setFpgaConfig: componente removido");
+        auto* fpgaComponent = dynamic_cast<fpga::FpgaComponent*>(instance);
+        if (!fpgaComponent) throw std::runtime_error("setFpgaConfig: componente nao e FPGA");
+        fpgaComponent->setSources(std::move(sources), std::move(topEntity), std::move(standard));
+    });
 }
 
 void SimulationSession::runFpga(uint32_t componentIndex) {
-    IComponentModel* instance = m_componentInstances.at(componentIndex).get();
-    if (!instance) throw std::runtime_error("runFpga: componente removido");
-    auto* fpgaComponent = dynamic_cast<fpga::FpgaComponent*>(instance);
-    if (!fpgaComponent) throw std::runtime_error("runFpga: componente nao e FPGA");
-    fpgaComponent->start();
+    runViaCommandQueue([componentIndex](SimulationSession& self) {
+        IComponentModel* instance = self.m_componentInstances.at(componentIndex).get();
+        if (!instance) throw std::runtime_error("runFpga: componente removido");
+        auto* fpgaComponent = dynamic_cast<fpga::FpgaComponent*>(instance);
+        if (!fpgaComponent) throw std::runtime_error("runFpga: componente nao e FPGA");
+        if (!fpgaComponent->controller().isRunning()) fpgaComponent->start();
+    });
 }
 
 void SimulationSession::stopFpga(uint32_t componentIndex) {
-    IComponentModel* instance = m_componentInstances.at(componentIndex).get();
-    if (!instance) throw std::runtime_error("stopFpga: componente removido");
-    auto* fpgaComponent = dynamic_cast<fpga::FpgaComponent*>(instance);
-    if (!fpgaComponent) throw std::runtime_error("stopFpga: componente nao e FPGA");
-    fpgaComponent->stop();
+    runViaCommandQueue([componentIndex](SimulationSession& self) {
+        IComponentModel* instance = self.m_componentInstances.at(componentIndex).get();
+        if (!instance) throw std::runtime_error("stopFpga: componente removido");
+        auto* fpgaComponent = dynamic_cast<fpga::FpgaComponent*>(instance);
+        if (!fpgaComponent) throw std::runtime_error("stopFpga: componente nao e FPGA");
+        fpgaComponent->stop();
+    });
 }
 
 void SimulationSession::restartFpga(uint32_t componentIndex) {
-    IComponentModel* instance = m_componentInstances.at(componentIndex).get();
-    if (!instance) throw std::runtime_error("restartFpga: componente removido");
-    auto* fpgaComponent = dynamic_cast<fpga::FpgaComponent*>(instance);
-    if (!fpgaComponent) throw std::runtime_error("restartFpga: componente nao e FPGA");
-    fpgaComponent->restart();
+    runViaCommandQueue([componentIndex](SimulationSession& self) {
+        IComponentModel* instance = self.m_componentInstances.at(componentIndex).get();
+        if (!instance) throw std::runtime_error("restartFpga: componente removido");
+        auto* fpgaComponent = dynamic_cast<fpga::FpgaComponent*>(instance);
+        if (!fpgaComponent) throw std::runtime_error("restartFpga: componente nao e FPGA");
+        fpgaComponent->restart();
+    });
 }
 
 std::string SimulationSession::fpgaLogs(uint32_t componentIndex) const {
-    IComponentModel* instance = m_componentInstances.at(componentIndex).get();
-    if (!instance) throw std::runtime_error("getFpgaLogs: componente removido");
-    const auto* fpgaComponent = dynamic_cast<const fpga::FpgaComponent*>(instance);
-    if (!fpgaComponent) throw std::runtime_error("getFpgaLogs: componente nao e FPGA");
-    return fpgaComponent->logs();
+    auto result = m_scheduler.trySynchronized([&] {
+        IComponentModel* instance = m_componentInstances.at(componentIndex).get();
+        if (!instance) throw std::runtime_error("getFpgaLogs: componente removido");
+        const auto* fpgaComponent = dynamic_cast<const fpga::FpgaComponent*>(instance);
+        if (!fpgaComponent) throw std::runtime_error("getFpgaLogs: componente nao e FPGA");
+        return fpgaComponent->logs();
+    });
+    if (!result) throw std::runtime_error("simulacao ocupada; logs FPGA adiados");
+    return *result;
 }
 
 mcu::McuComponent* SimulationSession::mcuComponentForTesting(uint32_t componentIndex) const {

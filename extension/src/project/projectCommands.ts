@@ -10,6 +10,7 @@ import { CanonicalTopologyDocument, WebviewComponentCatalogEntry, WebviewCompone
 import { ProjectComponent, ProjectDocument, ProjectTopology, createEmptyProject } from "./ProjectTypes";
 import { assertTopologyInvariants } from "../ui/webview/topologyDocument";
 import { decideSaveTarget } from "./savePolicy";
+import { resolveProjectSourcePaths } from "./projectPathPolicy";
 
 export function absoluteSubcircuitRefPath(refPath: string): string {
   if (path.isAbsolute(refPath)) return path.normalize(refPath);
@@ -114,7 +115,7 @@ export function projectComponentToWebviewComponent(component: ProjectComponent, 
   };
 }
 
-function projectToWebviewState(project: ProjectDocument): WebviewProjectState {
+function projectToWebviewState(project: ProjectDocument, projectDir?: string): WebviewProjectState {
   const catalog = state.schematicState.catalog;
   const visualWirePoints = new Map(
     project.visual.wires.map((wire) => [
@@ -122,7 +123,17 @@ function projectToWebviewState(project: ProjectDocument): WebviewProjectState {
       validVisualPoints(wire.points),
     ])
   );
-  const components: WebviewComponentModel[] = project.components.map((component) => projectComponentToWebviewComponent(component, catalog));
+  const components: WebviewComponentModel[] = project.components.map((component) => {
+    const mapped = projectComponentToWebviewComponent(component, catalog);
+    if (!projectDir || !mapped.fpga) return mapped;
+    return {
+      ...mapped,
+      fpga: {
+        ...mapped.fpga,
+        sources: resolveProjectSourcePaths(mapped.fpga.sources, projectDir),
+      },
+    };
+  });
   // `ProjectTopology` (`ProjectTypes.ts`, formato persistido) e `CanonicalTopologyDocument`
   // (`model.ts`, modelo vivo) têm a MESMA forma de endpoint (`{kind:"port"|"node",...}`) desde a
   // Fase C completa (`.spec` seção 25.6) -- só o nome do campo de geometria difere (`vertices` no
@@ -326,7 +337,7 @@ export async function openRecentProjectCommand(options: {
   }
   options.beforeOpen?.();
   state.currentProjectFilePath = picked.filePath;
-  state.schematicState = projectToWebviewState(project);
+  state.schematicState = projectToWebviewState(project, path.dirname(picked.filePath));
   await resolveProjectSubcircuitReferences(path.dirname(picked.filePath));
   await options.resolveExternalDeviceReferences?.(path.dirname(picked.filePath));
   if (!state.schematicPanel) options.openSchematicEditor(options.extensionUri);
@@ -481,7 +492,7 @@ export async function openProjectFile(filePath: string, options: {
   }
   options.beforeOpen?.();
   state.currentProjectFilePath = filePath;
-  state.schematicState = projectToWebviewState(project);
+  state.schematicState = projectToWebviewState(project, path.dirname(filePath));
   await resolveProjectSubcircuitReferences(path.dirname(filePath));
   await options.resolveExternalDeviceReferences?.(path.dirname(filePath));
   if (!state.schematicPanel) options.openSchematicEditor(options.extensionUri);
@@ -524,7 +535,7 @@ export async function importProjectCommand(options: { syncSchematicPanel: () => 
     return;
   }
 
-  const imported = projectToWebviewState(project);
+  const imported = projectToWebviewState(project, path.dirname(selected.fsPath));
   const idMap = new Map<string, string>();
   const components: WebviewComponentModel[] = imported.components.map((component) => {
     const nextComponentId = nextImportedId("component");

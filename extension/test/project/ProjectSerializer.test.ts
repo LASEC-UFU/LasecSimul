@@ -4,10 +4,14 @@ import * as os from "os";
 import * as path from "path";
 import { ProjectSerializer } from "../../src/project/ProjectSerializer";
 import { createEmptyProject, LS_PROJ_SCHEMA_VERSION } from "../../src/project/ProjectTypes";
+import { resolveProjectSourcePaths } from "../../src/project/projectPathPolicy";
 
 (async () => {
   const serializer = new ProjectSerializer();
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "lasecsimul-lsproj-"));
+
+  const resolvedSources = resolveProjectSourcePaths(["rtl/counter.vhd", path.join(tmpDir, "absolute.vhd")], tmpDir);
+  assert.deepStrictEqual(resolvedSources, [path.join(tmpDir, "rtl", "counter.vhd"), path.join(tmpDir, "absolute.vhd")]);
 
   const emptyPath = path.join(tmpDir, "empty.lsproj");
   const project = createEmptyProject();

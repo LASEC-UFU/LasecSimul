@@ -17,6 +17,8 @@ namespace lasecsimul::fpga {
 
 namespace {
 
+constexpr uint32_t kMaxArenaChangeCapacity = 1u << 20;
+
 std::string posixSharedMemoryName(const std::string& name) {
     if (!name.empty() && name.front() == '/') return name;
     return "/" + name;
@@ -155,6 +157,10 @@ void GhdlArenaBridge::open(const GhdlArenaOpenOptions& options) {
     if (options.name.empty()) throw std::runtime_error("GHDL shared memory name is empty");
 
     if (options.createIfMissing) {
+        if (options.inputChangeCapacity > kMaxArenaChangeCapacity ||
+            options.outputChangeCapacity > kMaxArenaChangeCapacity) {
+            throw std::runtime_error("GHDL arena capacity exceeds safety limit");
+        }
         m_inputCapacity = options.inputChangeCapacity;
         m_outputCapacity = options.outputChangeCapacity;
         const size_t mappingSize = totalMappingSize(m_inputCapacity, m_outputCapacity);
@@ -187,6 +193,12 @@ void GhdlArenaBridge::open(const GhdlArenaOpenOptions& options) {
     }
     m_inputCapacity = static_cast<uint32_t>(probe->inputChangeCapacity);
     m_outputCapacity = static_cast<uint32_t>(probe->outputChangeCapacity);
+    if (m_inputCapacity > kMaxArenaChangeCapacity || m_outputCapacity > kMaxArenaChangeCapacity ||
+        probe->logQueueDepth != LSDN_FPGA_ARENA_LOG_QUEUE_DEPTH ||
+        (probe->coreCapabilities & LSDN_FPGA_ARENA_REQUIRED_CAPABILITIES) != LSDN_FPGA_ARENA_REQUIRED_CAPABILITIES) {
+        close();
+        throw std::runtime_error("Invalid FPGA arena descriptor capacities/capabilities");
+    }
     m_sharedMemory->remapFull(totalMappingSize(m_inputCapacity, m_outputCapacity));
     mapPointers();
 }
@@ -272,11 +284,11 @@ GhdlAdvanceReply GhdlArenaBridge::pollReply() const {
 
     reply.ready = true;
     reply.reachedTimeNs = m_transport->reachedTimeNs;
-    reply.overflow = m_transport->outputOverflow != 0;
+    const uint64_t count = m_transport->outputChangeCount;
+    reply.overflow = m_transport->outputOverflow != 0 || count > m_outputCapacity;
     if (!reply.overflow) {
-        const uint64_t count = m_transport->outputChangeCount;
         reply.outputChanges.reserve(static_cast<size_t>(count));
-        for (uint64_t i = 0; i < count && i < m_outputCapacity; ++i) {
+        for (uint64_t i = 0; i < count; ++i) {
             reply.outputChanges.push_back(GhdlChangeEntry{m_outputChanges[i].portIndex, m_outputChanges[i].bitIndex,
                                                            static_cast<LogicValue>(m_outputChanges[i].value)});
         }

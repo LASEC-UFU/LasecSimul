@@ -75,7 +75,9 @@ function ensureDir(dirPath, description) {
 }
 
 function resetDir(dirPath) {
-  fs.rmSync(dirPath, { recursive: true, force: true });
+  // Antivírus/indexadores do Windows podem manter arquivos recém-gerados pelo dotnet por alguns
+  // milissegundos. O retry nativo torna o empacotamento idempotente sem mascarar erro persistente.
+  fs.rmSync(dirPath, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });
   fs.mkdirSync(dirPath, { recursive: true });
 }
 
@@ -359,23 +361,22 @@ function stageBundledAssets() {
   stageBundledFpgaVpiModule();
 }
 
-/** Módulo VPI do GHDL (`npm run build:fpga-vpi`, ver `scripts/build-fpga-vpi.js`) -- vendorizado
- * como binário pré-compilado (mesma disciplina do QEMU em `devices/qemu-esp32/bin/`: o workflow de
- * packaging não tem GHDL/MinGW provisionados pra rebuildar isto do zero, ver `.gitignore` sobre
- * `!/fpga/ghdl-vpi/build/**`). Best-effort: avisa e segue sem falhar o pacote inteiro se o módulo
- * ainda não foi construído localmente (ex: ambiente de dev sem GHDL instalado) -- FPGA/VHDL fica
- * indisponível nesse pacote específico, mas o resto do LasecSimul empacota normalmente (mesmo
- * espírito não-bloqueante de `validateWindowsAdapterDependencies` pra outros componentes opcionais). */
+/** Módulo VPI do GHDL (`npm run build:fpga-vpi`). Suporte FPGA/VHDL faz parte do produto, logo a
+ * ausência do artefato nativo é erro de empacotamento, não uma degradação opcional silenciosa. */
 function stageBundledFpgaVpiModule() {
   const sourceDir = path.join(repoRoot, "fpga", "ghdl-vpi", "build");
   if (!fs.existsSync(sourceDir)) {
-    console.warn(
-      "[package-release] AVISO: fpga/ghdl-vpi/build/ não encontrado -- pacote sairá sem suporte a FPGA/VHDL " +
-      "(rode 'npm run build:fpga-vpi' antes de empacotar pra incluir)."
+    throw new Error(
+      "fpga/ghdl-vpi/build/ não encontrado; rode 'npm run build:fpga-vpi' antes de empacotar"
     );
-    return;
   }
-  copyDirFiltered(sourceDir, path.join(bundledRoot, "fpga", "ghdl-vpi", "build"), new Set());
+  const platformDir = process.platform === "win32" ? "win-x64" : process.platform === "darwin" ? "macos-universal" : "linux-x64";
+  const moduleName = process.platform === "win32" ? "lasecsimul_vpi.dll" : process.platform === "darwin" ? "liblasecsimul_vpi.dylib" : "liblasecsimul_vpi.so";
+  const modulePath = path.join(sourceDir, platformDir, moduleName);
+  if (!fs.existsSync(modulePath)) {
+    throw new Error(`módulo VPI obrigatório ausente para ${platformDir}: ${modulePath}`);
+  }
+  copyDirFiltered(path.join(sourceDir, platformDir), path.join(bundledRoot, "fpga", "ghdl-vpi", "build", platformDir), new Set());
 }
 
 /** Extrai só `{typeId ou chipId, arquivo}` de cada dispositivo declarado num `library.json` --

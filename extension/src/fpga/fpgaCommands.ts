@@ -172,6 +172,7 @@ export async function reanalyzeFpgaCommand(componentId: string, options: FpgaCom
   const newPins = buildFpgaPins(ports);
   const newPinIds = new Set(newPins.map((pin) => pin.id));
   const pinSetChanged = newPinIds.size !== component.pins.length || component.pins.some((pin) => !newPinIds.has(pin.id));
+  const portMetadataChanged = JSON.stringify(component.fpga.ports) !== JSON.stringify(ports);
 
   const updatedComponent: WebviewComponentModel = {
     ...component,
@@ -195,7 +196,7 @@ export async function reanalyzeFpgaCommand(componentId: string, options: FpgaCom
   options.syncSchematicPanel();
   logSimulation("info", `VHDL de "${component.label}" reanalisado (${ports.length} porta(s)).`, { device: component.label, stage: "fpga" });
 
-  if (pinSetChanged) await rebuildCoreFromSchematicState();
+  if (pinSetChanged || portMetadataChanged) await rebuildCoreFromSchematicState();
 }
 
 function requireTargetCoreId(componentId: string): string | undefined {
@@ -216,6 +217,29 @@ export async function runFpgaCommand(componentId: string, options: FpgaCommandOp
     reportVhdlDiagnostics(component.fpga?.sources ?? [], errorMessage(err));
     options.reportCoreWarning(`iniciar FPGA "${component.label}"`, err);
   }
+}
+
+/** Prepara todos os FPGAs configurados antes do Run global. Falha de qualquer instância impede o
+ * relógio de iniciar, evitando uma simulação aparentemente normal com parte do circuito inerte. */
+export async function ensureAllFpgasReady(options: FpgaCommandOptions): Promise<boolean> {
+  if (!state.coreClient) return false;
+  for (const component of state.schematicState.components) {
+    if (component.typeId !== FPGA_TYPE_ID || !component.fpga) continue;
+    const targetCoreId = requireTargetCoreId(component.id);
+    if (!targetCoreId) {
+      options.reportCoreWarning(`iniciar FPGA "${component.label}"`, new Error("instância FPGA ausente no Core"));
+      return false;
+    }
+    try {
+      await state.coreClient.runFpga(targetCoreId);
+      reportVhdlDiagnostics(component.fpga.sources, undefined);
+    } catch (err) {
+      reportVhdlDiagnostics(component.fpga.sources, errorMessage(err));
+      options.reportCoreWarning(`iniciar FPGA "${component.label}"`, err);
+      return false;
+    }
+  }
+  return true;
 }
 
 export async function stopFpgaCommand(componentId: string, options: FpgaCommandOptions): Promise<void> {

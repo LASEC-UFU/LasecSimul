@@ -12,6 +12,8 @@ export interface FpgaPortSpec {
   direction: "in" | "out";
   width: number;
   downto: boolean;
+  leftIndex?: number;
+  rightIndex?: number;
 }
 
 export function fpgaPinIdsForPort(port: FpgaPortSpec): string[] {
@@ -19,7 +21,8 @@ export function fpgaPinIdsForPort(port: FpgaPortSpec): string[] {
   if (width === 1) return [port.name];
   const ids: string[] = [];
   for (let bitIndex = 0; bitIndex < width; bitIndex++) {
-    const vhdlIndex = port.downto ? width - 1 - bitIndex : bitIndex;
+    const leftIndex = port.leftIndex ?? (port.downto ? width - 1 : 0);
+    const vhdlIndex = leftIndex + (port.downto ? -bitIndex : bitIndex);
     ids.push(`${port.name}(${vhdlIndex})`);
   }
   return ids;

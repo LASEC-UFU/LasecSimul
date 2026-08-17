@@ -1,6 +1,7 @@
 #include "FpgaPortMapper.hpp"
 
 #include <sstream>
+#include <stdexcept>
 
 namespace lasecsimul::fpga {
 
@@ -21,7 +22,10 @@ std::vector<FpgaPinBit> mapPorts(const std::vector<PortSpec>& ports) {
         // simplesmente conta 0..width-1 na ordem de geração, e `vhdlIndex` é o número real que
         // aparece no id do pino.
         for (uint32_t bitIndex = 0; bitIndex < width; ++bitIndex) {
-            const uint32_t vhdlIndex = port.downto ? (width - 1 - bitIndex) : bitIndex;
+            const int64_t defaultLeft = port.downto ? static_cast<int64_t>(width) - 1 : 0;
+            const int64_t left = port.leftIndex.value_or(static_cast<int32_t>(defaultLeft));
+            const int64_t vhdlIndex = left + (port.downto ? -static_cast<int64_t>(bitIndex)
+                                                          : static_cast<int64_t>(bitIndex));
             result.push_back(
                 FpgaPinBit{port.name + "(" + std::to_string(vhdlIndex) + ")", portIndex, bitIndex, port.isInput});
         }
@@ -52,10 +56,12 @@ std::vector<PortSpec> parseDiscoveredPorts(const std::string& vpiDiscoverOutput)
     std::string line;
     while (std::getline(lines, line)) {
         if (!line.empty() && line.back() == '\r') line.pop_back(); // CRLF do pipe do Windows
+        if (line.rfind("LSDN_FPGA_ERROR ", 0) == 0) {
+            throw std::runtime_error("descoberta VPI falhou: " + line.substr(17));
+        }
         if (line.compare(0, kPrefix.size(), kPrefix) != 0) continue;
-
         PortSpec spec;
-        spec.downto = true; // ver comentário do header -- discover não relata downto/to
+        std::string direction;
         std::istringstream fields(line.substr(kPrefix.size()));
         std::string token;
         while (fields >> token) {
@@ -66,16 +72,26 @@ std::vector<PortSpec> parseDiscoveredPorts(const std::string& vpiDiscoverOutput)
             if (key == "name") {
                 spec.name = value;
             } else if (key == "direction") {
-                spec.isInput = (value == "in");
+                direction = value;
             } else if (key == "width") {
                 try {
                     spec.width = static_cast<uint32_t>(std::stoul(value));
                 } catch (const std::exception&) {
                     spec.width = 1; // linha corrompida/inesperada -- nunca propaga exceção daqui
                 }
+            } else if (key == "left") {
+                try { spec.leftIndex = static_cast<int32_t>(std::stol(value)); } catch (...) {}
+            } else if (key == "right") {
+                try { spec.rightIndex = static_cast<int32_t>(std::stol(value)); } catch (...) {}
             }
         }
-        if (!spec.name.empty()) ports.push_back(spec);
+        if (spec.name.empty()) continue;
+        if (direction != "in" && direction != "out") {
+            throw std::runtime_error("porta VHDL '" + spec.name + "' usa direção não suportada: " + direction);
+        }
+        spec.isInput = direction == "in";
+        if (spec.leftIndex && spec.rightIndex) spec.downto = *spec.leftIndex > *spec.rightIndex;
+        ports.push_back(spec);
     }
     return ports;
 }

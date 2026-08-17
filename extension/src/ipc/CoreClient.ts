@@ -145,7 +145,7 @@ export class CoreClient {
   /** `fpga`: chave irmã de `properties`/`pins` só pra `typeId === "digital.generic_fpga"` (mesma
    * ideia de `exposedPins` acima -- dado estruturado que não cabe no mapa escalar de
    * `properties`). Ver `ComponentParams.fpgaSources/fpgaTop/fpgaStandard/fpgaPorts/
-   * fpgaGhdlBinary/fpgaVpiModulePath/fpgaCacheRootDir` no Core (CoreApplication.cpp). Os 3 últimos
+   * fpgaGhdlBinary/fpgaVpiModulePath/fpgaCacheRootDir/fpgaSourceRootDir` no Core. Os 4 últimos
    * campos (toolchain) NUNCA são persistidos no `.lsproj` -- resolvidos frescos de
    * `lasecsimul.fpga.*` a cada `addComponent`, mesma disciplina do caminho vendorizado do QEMU
    * (ver `mcuCommands.ts::resolveDefaultQemuBinaryPath`). */
@@ -159,10 +159,11 @@ export class CoreClient {
       sources: string[];
       top: string;
       standard: string;
-      ports: Array<{ name: string; direction: "in" | "out"; width: number; downto: boolean }>;
+      ports: Array<{ name: string; direction: "in" | "out"; width: number; downto: boolean; leftIndex?: number; rightIndex?: number }>;
       ghdlBinary: string;
       vpiModulePath: string;
       cacheRootDir: string;
+      sourceRootDir: string;
     }
   ): Promise<{ instanceId: string; primaryMcuInstanceId?: string; exposedPins?: Record<string, { instanceId: string; pinId: string }> }> {
     const resp = await this.request("addComponent", { typeId, properties, pins, instanceName, signalAliases, fpga });
@@ -406,9 +407,10 @@ export class CoreClient {
     ghdlBinary?: string;
     vpiModulePath: string;
     cacheRootDir: string;
-  }): Promise<{ ports: Array<{ name: string; direction: "in" | "out"; width: number; downto: boolean }>; log: string }> {
+    sourceRootDir: string;
+  }): Promise<{ ports: Array<{ name: string; direction: "in" | "out"; width: number; downto: boolean; leftIndex?: number; rightIndex?: number }>; log: string }> {
     return await this.request("analyzeFpga", options) as {
-      ports: Array<{ name: string; direction: "in" | "out"; width: number; downto: boolean }>;
+      ports: Array<{ name: string; direction: "in" | "out"; width: number; downto: boolean; leftIndex?: number; rightIndex?: number }>;
       log: string;
     };
   }

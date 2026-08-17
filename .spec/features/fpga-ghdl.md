@@ -35,3 +35,13 @@ Agrupar várias instâncias FPGA em um único processo exige benchmark e design 
 - timeout deixa cache inválido/removível;
 - crash de uma FPGA não deixa processo órfão;
 - lockstep nunca observa passo rejeitado.
+
+## Evidência automatizada
+
+- `core/test/core/fpga/GhdlBackendRealGhdlTest.cpp`: cache concorrente, fingerprints, timeout,
+  descoberta de faixas e execução com GHDL real;
+- `core/test/core/fpga/FpgaComponentRealGhdlTest.cpp`: lockstep no Scheduler, settle no timestamp
+  aceito, duas instâncias e parada global;
+- `core/test/core/fpga/GhdlProcessManagerTest.cpp`: timeout, kill, ambiente, exit code e logs;
+- `core/test/core/fpga/GhdlArenaBridgeTest.cpp`: ABI/capacidades, overflow e logs;
+- `extension/test/project/ProjectSerializer.test.ts`: round-trip e resolução de fontes relativas.

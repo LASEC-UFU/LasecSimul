@@ -86,6 +86,24 @@ jobs:
       - name: Compile extension
         run: npm --prefix extension run compile
 
+      - name: Setup MSYS2 toolchain for the Windows VPI module
+        if: matrix.os == 'windows-latest'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: ucrt64
+          update: true
+          path-type: inherit
+
+      - name: Setup GHDL
+        uses: ghdl/setup-ghdl@v1
+        with:
+          version: 6.0.0
+          backend: mcode
+          runtime: ${{ matrix.os == 'windows-latest' && 'ucrt64' || '' }}
+
+      - name: Build FPGA VPI module
+        run: npm run build:fpga-vpi
+
       - name: Build core
         # O pacote precisa somente do binário de produção. A suíte nativa completa é um gate local/
         # de CI dedicado; construir ALL_BUILD recompila as mesmas fontes em dezenas de testes e
@@ -100,6 +118,9 @@ jobs:
 
       - name: Run extension tests
         run: npm --prefix extension test
+
+      - name: Verify GHDL integration
+        run: node scripts/build-core.js --config Release --target ghdl_backend_real_ghdl_test && ctest --test-dir core/build -C Release -R ghdl_backend_real_ghdl --output-on-failure
 
       - name: Package release artifacts
         run: node scripts/package-release.js

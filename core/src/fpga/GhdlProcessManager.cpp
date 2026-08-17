@@ -25,6 +25,9 @@
 #include <fcntl.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#if defined(__linux__)
+#include <sys/prctl.h>
+#endif
 #endif
 
 namespace lasecsimul::fpga {
@@ -171,18 +174,21 @@ public:
         // Core (Job Object kill-on-close), pra não deixar um GHDL orfao segurando handles/arquivos
         // de build (ex.: work-obj08.cf) se o Core morrer sem dar tempo dos destrutores rodarem.
         m_job = CreateJobObjectW(nullptr, nullptr);
+        bool jobAttached = false;
         if (m_job) {
             JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
             limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-            if (!SetInformationJobObject(
-                    m_job, JobObjectExtendedLimitInformation, &limits, sizeof(limits)) ||
-                !AssignProcessToJobObject(m_job, m_processInfo.hProcess)) {
-                CloseHandle(m_job);
-                m_job = nullptr;
-                std::fprintf(stderr,
-                    "[GhdlProcessManager] AVISO: nao foi possivel vincular GHDL ao Job Object; "
-                    "encerramento forcado do Core pode deixar processo orfao.\n");
-            }
+            jobAttached = SetInformationJobObject(
+                    m_job, JobObjectExtendedLimitInformation, &limits, sizeof(limits)) != FALSE;
+            jobAttached = jobAttached && AssignProcessToJobObject(m_job, m_processInfo.hProcess);
+        }
+        if (!jobAttached) {
+            TerminateProcess(m_processInfo.hProcess, 1);
+            WaitForSingleObject(m_processInfo.hProcess, 1000);
+            CloseHandle(readPipe);
+            CloseHandle(writePipe);
+            closeProcessHandles();
+            throw std::runtime_error("Failed to attach GHDL process to kill-on-close Job Object");
         }
         if (ResumeThread(m_processInfo.hThread) == static_cast<DWORD>(-1)) {
             TerminateProcess(m_processInfo.hProcess, 1);
@@ -206,6 +212,13 @@ public:
         }
 
         if (m_pid == 0) {
+            // Grupo próprio permite encerrar também subprocessos eventualmente criados pelo
+            // GHDL. No Linux, parent-death signal cobre crash/SIGKILL do Core sem destrutores.
+            setpgid(0, 0);
+#if defined(__linux__)
+            prctl(PR_SET_PDEATHSIG, SIGKILL);
+            if (getppid() == 1) _exit(125); // pai morreu entre fork() e prctl()
+#endif
             dup2(pipes[1], STDOUT_FILENO);
             dup2(pipes[1], STDERR_FILENO);
             ::close(pipes[0]);
@@ -231,6 +244,7 @@ public:
         }
 
         ::close(pipes[1]);
+        setpgid(m_pid, m_pid); // fecha a corrida antes de o filho chegar ao setpgid()
         m_running = true;
         m_reader = std::thread([this, fd = pipes[0]] { readPipeLoop(fd); });
 #endif
@@ -248,7 +262,7 @@ public:
         reapProcess();
         return false;
 #else
-        ::kill(m_pid, SIGTERM);
+        ::kill(-m_pid, SIGTERM);
         const auto deadline = std::chrono::steady_clock::now() + timeout;
         while (std::chrono::steady_clock::now() < deadline) {
             int status = 0;
@@ -276,7 +290,7 @@ public:
         TerminateProcess(m_processInfo.hProcess, 1);
         reapProcess();
 #else
-        ::kill(m_pid, SIGKILL);
+        ::kill(-m_pid, SIGKILL);
         int status = 0;
         waitpid(m_pid, &status, 0);
         m_running = false;
@@ -338,12 +352,8 @@ private:
         CloseHandle(pipe);
     }
 
-    /** Mesmo achado/fix de QemuProcessManager (.spec 32.5.4/32.5.5): um processo que já recebeu
-     * TerminateProcess() mas o SO/driver segura vivo no nível de kernel travaria este método pra
-     * sempre com um wait INFINITE. `kProcessReapTimeout` limita a espera; se o processo ainda não
-     * morreu depois dela, a limpeza é ABANDONADA (handles/thread leitor ficam pra trás de
-     * propósito) em vez de travar o chamador indefinidamente -- o processo vira um órfão real, mas
-     * o harness recupera o controle. */
+    /** Espera limitada pelo processo. Se um driver impedir a finalização, cancela a leitura
+     * síncrona antes de juntar a thread; nunca destaca uma thread que captura `this`. */
     static constexpr std::chrono::milliseconds kProcessReapTimeout{3000};
 
     void reapProcess() {
@@ -362,14 +372,11 @@ private:
                     closeProcessHandles();
                     return;
                 }
-                std::fprintf(stderr,
-                    "[GhdlProcessManager] AVISO: processo GHDL nao terminou %lldms apos "
-                    "TerminateProcess; abandonando limpeza para nao travar o chamador (processo "
-                    "orfao remanescente).\n",
-                    static_cast<long long>(kProcessReapTimeout.count()));
+                std::fprintf(stderr, "[GhdlProcessManager] processo GHDL resistiu ao encerramento forcado.\n");
                 m_running = false;
-                if (m_reader.joinable()) m_reader.detach();
-                m_processInfo = {};
+                if (m_reader.joinable()) CancelSynchronousIo(static_cast<HANDLE>(m_reader.native_handle()));
+                joinReader();
+                closeProcessHandles();
                 return;
             }
         }

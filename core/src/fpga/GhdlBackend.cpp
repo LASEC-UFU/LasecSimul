@@ -24,6 +24,11 @@ std::string uniqueArenaName(const std::string& topEntity) {
 
 constexpr const char* kCacheMarkerName = ".lasecsimul-fpga-cache-ok";
 
+std::chrono::milliseconds staleLockThreshold(std::chrono::milliseconds operationTimeout) {
+    return std::max(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::minutes(5)),
+                    operationTimeout * 10);
+}
+
 // Espelha exatamente os subdiretórios de build de fpga/ghdl-vpi (ver build-fpga-vpi.js e
 // GhdlBackendRealGhdlTest.cpp) -- entra na chave de cache (Cache vNext) como parte de "plataforma".
 std::string platformId() {
@@ -34,6 +39,60 @@ std::string platformId() {
 #else
     return "linux-x64";
 #endif
+}
+
+constexpr char pathListSeparator() {
+#if defined(_WIN32)
+    return ';';
+#else
+    return ':';
+#endif
+}
+
+fs::path resolveExecutablePath(const std::string& binary) {
+    fs::path candidate(binary);
+    std::error_code ec;
+    if (candidate.has_parent_path() && fs::exists(candidate, ec)) return fs::absolute(candidate, ec);
+    const char* pathValue = std::getenv("PATH");
+    if (!pathValue) return {};
+    std::istringstream entries(pathValue);
+    std::string entry;
+    while (std::getline(entries, entry, pathListSeparator())) {
+        candidate = fs::path(entry) / binary;
+        if (fs::is_regular_file(candidate, ec)) return fs::absolute(candidate, ec);
+#if defined(_WIN32)
+        if (!candidate.has_extension()) {
+            candidate += ".exe";
+            if (fs::is_regular_file(candidate, ec)) return fs::absolute(candidate, ec);
+        }
+#endif
+    }
+    return {};
+}
+
+bool isRelativeInside(const fs::path& relative) {
+    return !relative.empty() && relative.begin()->string() != ".." && !relative.is_absolute();
+}
+
+fs::path commonSourceRoot(const std::vector<std::string>& sources) {
+    if (sources.empty()) return {};
+    std::error_code ec;
+    fs::path root = fs::absolute(sources.front(), ec).parent_path();
+    while (!root.empty()) {
+        bool containsAll = true;
+        for (const std::string& source : sources) {
+            const fs::path relative = fs::absolute(source, ec).lexically_relative(root);
+            if (!isRelativeInside(relative)) {
+                containsAll = false;
+                break;
+            }
+        }
+        if (containsAll) return root == root.root_path() ? fs::path{} : root;
+        const fs::path parent = root.parent_path();
+        if (parent == root) break;
+        root = parent;
+    }
+    return {};
 }
 
 // Entradas publicadas ganham o atributo read-only (ver compile()) -- no Windows, `DeleteFile`
@@ -72,7 +131,10 @@ std::string GhdlBackend::ghdlFingerprint() const {
     }
     std::string output = probe.logs();
     while (!output.empty() && (output.back() == '\n' || output.back() == '\r')) output.pop_back();
-    m_ghdlFingerprintCache = output.empty() ? "unknown" : output;
+    const fs::path executable = resolveExecutablePath(m_options.ghdlBinary);
+    const std::string binaryHash = executable.empty() ? "unresolved" : Sha256::hashFile(executable.string());
+    m_ghdlFingerprintCache = (output.empty() ? "unknown" : output) + "\npath=" + executable.generic_string() +
+                             "\nsha256=" + binaryHash;
     return m_ghdlFingerprintCache;
 }
 
@@ -93,12 +155,18 @@ std::string GhdlBackend::computeCacheKey(const RtlCompileRequest& request) const
         hasher.update(&kSeparator, 1); // evita colisão "ab"+"c" == "a"+"bc" na concatenação do hash
     };
 
+    const fs::path sourceRoot = m_options.sourceRootDir.empty()
+        ? commonSourceRoot(request.sources)
+        : fs::absolute(m_options.sourceRootDir).lexically_normal();
     for (const std::string& source : request.sources) {
         std::ifstream file(source, std::ios::binary);
         if (!file) throw std::runtime_error("GhdlBackend: não foi possível ler fonte VHDL: " + source);
         std::ostringstream buffer;
         buffer << file.rdbuf();
-        feed(fs::path(source).filename().string());
+        const fs::path sourcePath = fs::absolute(source).lexically_normal();
+        const fs::path candidateRelative = sourceRoot.empty() ? fs::path{} : sourcePath.lexically_relative(sourceRoot);
+        const fs::path relative = isRelativeInside(candidateRelative) ? candidateRelative : sourcePath.filename();
+        feed(relative.generic_string());
         feed(buffer.str());
     }
     feed(request.topEntity);
@@ -113,6 +181,19 @@ std::string GhdlBackend::computeCacheKey(const RtlCompileRequest& request) const
 
 void GhdlBackend::evictIfOverBudget() const {
     std::error_code ec;
+    const fs::path evictionLock = fs::path(m_options.cacheRootDir) / ".eviction.lock";
+    if (!fs::create_directory(evictionLock, ec)) {
+        std::error_code timeEc;
+        const auto lockTime = fs::last_write_time(evictionLock, timeEc);
+        if (timeEc || fs::file_time_type::clock::now() - lockTime <= staleLockThreshold(m_options.compileTimeout)) return;
+        fs::remove_all(evictionLock, ec);
+        ec.clear();
+        if (!fs::create_directory(evictionLock, ec)) return;
+    }
+    struct EvictionGuard {
+        fs::path path;
+        ~EvictionGuard() { std::error_code ignored; fs::remove(path, ignored); }
+    } evictionGuard{evictionLock};
     struct Entry {
         fs::path path;
         fs::file_time_type mtime;
@@ -125,6 +206,7 @@ void GhdlBackend::evictIfOverBudget() const {
         const std::string name = dirEntry.path().filename().string();
         if (name.rfind(".staging-", 0) == 0 || name == ".run" || dirEntry.path().extension() == ".lock") continue;
         if (!fs::exists(dirEntry.path() / kCacheMarkerName)) continue; // não é uma entrada publicada
+        if (fs::exists(fs::path(m_options.cacheRootDir) / (name + ".lock"))) continue;
 
         uint64_t bytes = 0;
         std::error_code walkEc;
@@ -143,6 +225,19 @@ void GhdlBackend::evictIfOverBudget() const {
     for (const Entry& entry : entries) {
         if (total <= m_options.cacheBudgetBytes) break;
         if (entry.path == fs::path(m_cacheDir)) continue; // nunca evita a entrada recém-publicada desta compilação
+
+        // O teste feito durante a enumeração é apenas uma otimização. A aquisição atômica
+        // deste lock é o que impede a limpeza LRU de competir com compile()/materializeRunDir().
+        const fs::path entryLock = fs::path(m_options.cacheRootDir) /
+                                   (entry.path.filename().string() + ".lock");
+        std::error_code lockEc;
+        if (!fs::create_directory(entryLock, lockEc)) continue;
+        struct EntryLockGuard {
+            fs::path path;
+            ~EntryLockGuard() { std::error_code ignored; fs::remove(path, ignored); }
+        } entryLockGuard{entryLock};
+
+        if (!fs::exists(entry.path / kCacheMarkerName)) continue;
         clearReadOnlyRecursive(entry.path);
         std::error_code removeEc;
         fs::remove_all(entry.path, removeEc);
@@ -152,6 +247,15 @@ void GhdlBackend::evictIfOverBudget() const {
 
 RtlCompileResult GhdlBackend::compile(const RtlCompileRequest& request) {
     RtlCompileResult result;
+    if (m_process.isRunning()) {
+        result.log = "GhdlBackend: não é permitido recompilar enquanto a instância está rodando";
+        return result;
+    }
+    // Uma tentativa nova invalida o estado anterior imediatamente. Se ela falhar, start() nunca
+    // pode executar silenciosamente o artefato de uma compilação velha.
+    m_compiled = false;
+    m_compiledRequest = {};
+    m_cacheDir.clear();
     const std::string cacheKey = computeCacheKey(request);
     const fs::path finalDir = fs::path(m_options.cacheRootDir) / cacheKey;
     const fs::path markerPath = finalDir / kCacheMarkerName;
@@ -195,6 +299,12 @@ RtlCompileResult GhdlBackend::compile(const RtlCompileRequest& request) {
             return result;
         }
         if (std::chrono::steady_clock::now() >= lockDeadline) {
+            std::error_code timeEc;
+            const auto lockTime = fs::last_write_time(lockDir, timeEc);
+            if (!timeEc && fs::file_time_type::clock::now() - lockTime > staleLockThreshold(m_options.compileTimeout)) {
+                fs::remove_all(lockDir, ec);
+                if (!ec) continue; // lock abandonado por crash; tenta adquiri-lo novamente
+            }
             result.ok = false;
             result.log = "GhdlBackend: timeout esperando lock de compilação para " + cacheKey;
             return result;
@@ -277,7 +387,13 @@ RtlCompileResult GhdlBackend::compile(const RtlCompileRequest& request) {
 
     {
         std::ofstream marker(stagingDir / kCacheMarkerName);
-        marker << request.topEntity << "\n" << request.standard << "\n" << ghdlFingerprint() << "\n";
+        marker << "cacheKey=" << cacheKey << "\n"
+               << "top=" << request.topEntity << "\n"
+               << "standard=" << request.standard << "\n"
+               << "platform=" << platformId() << "\n"
+               << "abi=" << LSDN_FPGA_ARENA_ABI_MAJOR << '.' << LSDN_FPGA_ARENA_ABI_MINOR << "\n"
+               << "vpiSha256=" << Sha256::hashFile(m_options.vpiModulePath) << "\n"
+               << ghdlFingerprint() << "\n";
     }
 
     clearReadOnlyRecursive(finalDir); // resto de uma publicação anterior corrompida/parcial pode estar read-only
@@ -329,7 +445,7 @@ std::vector<PortSpec> GhdlBackend::discoverPorts() {
 
     std::string pathOverride = resolveVpiLibraryDir();
     if (const char* existingPath = std::getenv("PATH")) {
-        pathOverride += ";";
+        pathOverride += pathListSeparator();
         pathOverride += existingPath;
     }
 
@@ -361,6 +477,10 @@ std::vector<PortSpec> GhdlBackend::discoverPorts() {
         discover.kill();
         throw std::runtime_error("GhdlBackend::discoverPorts(): timeout rodando GHDL em modo discover");
     }
+    if (*exitCode != 0) {
+        throw std::runtime_error("GhdlBackend::discoverPorts(): GHDL terminou com código " +
+                                 std::to_string(*exitCode) + "\n" + discover.logs());
+    }
     return parseDiscoveredPorts(discover.logs());
 }
 
@@ -373,50 +493,77 @@ void GhdlBackend::start() {
     const std::string arenaName = uniqueArenaName(m_compiledRequest.topEntity);
     // Core sempre cria a arena ANTES de spawnar o processo GHDL -- mesma disciplina de
     // McuController/QemuArenaBridge (ver GhdlArenaBridge.hpp).
-    m_arena.open(GhdlArenaOpenOptions{arenaName, true, inputCapacity, outputCapacity});
+    try {
+        m_arena.open(GhdlArenaOpenOptions{arenaName, true, inputCapacity, outputCapacity});
 
-    std::string pathOverride = resolveVpiLibraryDir();
-    if (const char* existingPath = std::getenv("PATH")) {
-        pathOverride += ";";
-        pathOverride += existingPath;
+        std::string pathOverride = resolveVpiLibraryDir();
+        if (const char* existingPath = std::getenv("PATH")) {
+            pathOverride += pathListSeparator();
+            pathOverride += existingPath;
+        }
+
+        m_runDir = materializeRunDir(arenaName).string();
+        GhdlLaunchSpec spec{
+            m_options.ghdlBinary,
+            {"-r", "--std=" + m_compiledRequest.standard, m_compiledRequest.topEntity, "--vpi=" + m_options.vpiModulePath},
+            {},
+            m_runDir,
+            {{"LASECSIMUL_FPGA_MODE", "run"}, {"LASECSIMUL_FPGA_ARENA_NAME", arenaName}, {"PATH", pathOverride}}};
+        m_process.start(spec);
+    } catch (...) {
+        m_process.kill();
+        m_arena.close();
+        cleanupRunDir();
+        throw;
     }
-
-    // Materializa um diretório de execução PRÓPRIO desta instância (hardlinks a partir da entrada
-    // publicada) -- nunca roda em m_cacheDir diretamente (read-only por contrato, Cache vNext).
-    // Também é o que permite duas instâncias FPGA da MESMA compilação rodarem ao mesmo tempo sem
-    // disputar os mesmos arquivos de biblioteca GHDL.
-    m_runDir = materializeRunDir(arenaName).string();
-
-    GhdlLaunchSpec spec{
-        m_options.ghdlBinary,
-        {"-r", "--std=" + m_compiledRequest.standard, m_compiledRequest.topEntity, "--vpi=" + m_options.vpiModulePath},
-        {},
-        m_runDir,
-        {{"LASECSIMUL_FPGA_MODE", "run"}, {"LASECSIMUL_FPGA_ARENA_NAME", arenaName}, {"PATH", pathOverride}}};
-    m_process.start(spec);
 }
 
 void GhdlBackend::stop() {
-    if (!m_process.isRunning()) {
-        cleanupRunDir();
-        return;
-    }
-    if (m_arena.isOpen()) {
+    drainArenaLogs();
+    if (m_process.isRunning() && m_arena.isOpen()) {
         try {
             m_arena.requestStop();
         } catch (const std::exception&) {
             // arena já pode estar num estado ruim (processo travado/morto) -- kill() abaixo cobre.
         }
     }
-    m_process.stop(std::chrono::seconds(5));
-    m_process.kill(); // no-op se já parou -- rede de segurança se requestStop()/stop() não foram suficientes
+    if (m_process.isRunning()) {
+        m_process.stop(std::chrono::seconds(5));
+        m_process.kill();
+    }
     m_arena.close();
     cleanupRunDir();
 }
 
 std::filesystem::path GhdlBackend::materializeRunDir(const std::string& runName) const {
-    const fs::path runDir = fs::path(m_options.cacheRootDir) / ".run" / runName;
+    const fs::path cacheLock = fs::path(m_options.cacheRootDir) /
+                               (fs::path(m_cacheDir).filename().string() + ".lock");
+    const auto deadline = std::chrono::steady_clock::now() + m_options.compileTimeout;
     std::error_code ec;
+    while (!fs::create_directory(cacheLock, ec)) {
+        if (ec) throw std::runtime_error("GhdlBackend: falha adquirindo lock da entrada de cache: " + ec.message());
+        if (std::chrono::steady_clock::now() >= deadline) {
+            std::error_code timeEc;
+            const auto lockTime = fs::last_write_time(cacheLock, timeEc);
+            if (!timeEc && fs::file_time_type::clock::now() - lockTime > staleLockThreshold(m_options.compileTimeout)) {
+                fs::remove_all(cacheLock, ec);
+                ec.clear();
+                continue;
+            }
+            throw std::runtime_error("GhdlBackend: timeout adquirindo lock da entrada de cache");
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    struct CacheLockGuard {
+        fs::path path;
+        ~CacheLockGuard() { std::error_code ignored; fs::remove(path, ignored); }
+    } cacheLockGuard{cacheLock};
+
+    if (!fs::exists(fs::path(m_cacheDir) / kCacheMarkerName)) {
+        throw std::runtime_error("GhdlBackend: entrada de cache ausente ou incompleta antes da materialização");
+    }
+
+    const fs::path runDir = fs::path(m_options.cacheRootDir) / ".run" / runName;
     fs::remove_all(runDir, ec);
     fs::create_directories(runDir, ec);
     if (ec) throw std::runtime_error("GhdlBackend: não foi possível criar diretório de execução: " + runDir.string());
@@ -431,7 +578,15 @@ std::filesystem::path GhdlBackend::materializeRunDir(const std::string& runName)
     for (const auto& entry : fs::directory_iterator(m_cacheDir, listEc)) {
         if (!entry.is_regular_file()) continue;
         std::error_code copyEc;
-        fs::copy_file(entry.path(), runDir / entry.path().filename(), fs::copy_options::overwrite_existing, copyEc);
+        if (!fs::copy_file(entry.path(), runDir / entry.path().filename(), fs::copy_options::overwrite_existing, copyEc) || copyEc) {
+            fs::remove_all(runDir, ec);
+            throw std::runtime_error("GhdlBackend: falha copiando artefato para diretório de execução: " +
+                                     entry.path().string() + ": " + copyEc.message());
+        }
+    }
+    if (listEc) {
+        fs::remove_all(runDir, ec);
+        throw std::runtime_error("GhdlBackend: falha enumerando entrada de cache: " + listEc.message());
     }
     clearReadOnlyRecursive(runDir); // CopyFile/cp preservam o atributo read-only da origem por padrão
     return runDir;
@@ -451,8 +606,24 @@ void GhdlBackend::requestAdvanceTo(uint64_t targetNs, std::span<const GhdlChange
     m_arena.requestAdvanceTo(targetNs, inputs);
 }
 
-GhdlAdvanceReply GhdlBackend::pollReply() { return m_arena.pollReply(); }
+GhdlAdvanceReply GhdlBackend::pollReply() {
+    drainArenaLogs();
+    return m_arena.pollReply();
+}
 
-std::string GhdlBackend::logs() const { return m_process.logs(); }
+void GhdlBackend::drainArenaLogs() {
+    while (const std::optional<GhdlLogMessage> message = m_arena.pollLog()) {
+        std::lock_guard<std::mutex> lock(m_protocolLogMutex);
+        m_protocolLogs += "[VPI t=" + std::to_string(message->timeNs) + "ns severity=" +
+                          std::to_string(message->severity) + "] " + message->message + "\n";
+        if (m_protocolLogs.size() > (1u << 20)) m_protocolLogs.erase(0, m_protocolLogs.size() - (1u << 19));
+        m_arena.acknowledgeLog();
+    }
+}
+
+std::string GhdlBackend::logs() const {
+    std::lock_guard<std::mutex> lock(m_protocolLogMutex);
+    return m_process.logs() + m_protocolLogs;
+}
 
 } // namespace lasecsimul::fpga

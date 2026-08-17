@@ -163,6 +163,31 @@ void testOverflowNeverReturnsPartialData() {
     std::printf("OK: overflow reportado explicitamente, nunca como mudancas parciais silenciosas\n");
 }
 
+void testInvalidCountWithoutOverflowFlagIsStillRejected() {
+    GhdlArenaBridge bridge;
+    bridge.open(GhdlArenaOpenOptions{uniqueArenaName(), true, 1, 2});
+    bridge.requestAdvanceTo(50, {});
+    bridge.transport()->outputChangeCount = 3; // peer corrompido: maior que a capacidade 2
+    bridge.transport()->outputOverflow = 0;
+    std::atomic_ref<uint64_t>(bridge.transport()->replySeq)
+        .store(bridge.transport()->commandSeq, std::memory_order_release);
+    const GhdlAdvanceReply reply = bridge.pollReply();
+    assert(reply.ready && reply.overflow && reply.outputChanges.empty());
+    std::printf("OK: contagem fora da capacidade e rejeitada mesmo sem flag do peer\n");
+}
+
+void testExcessiveArenaCapacityIsRejected() {
+    GhdlArenaBridge bridge;
+    bool threw = false;
+    try {
+        bridge.open(GhdlArenaOpenOptions{uniqueArenaName(), true, (1u << 20) + 1, 1});
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    assert(threw);
+    std::printf("OK: capacidade excessiva e rejeitada antes de calcular/mapear a arena\n");
+}
+
 void testResetAndStopPublishDistinctCommands() {
     GhdlArenaBridge bridge;
     bridge.open(GhdlArenaOpenOptions{uniqueArenaName(), true, 1, 1});
@@ -220,6 +245,8 @@ int main() {
     testPollReplyNotReadyUntilReplySeqMatches();
     testPollReplyReturnsOutputChangesOnceReady();
     testOverflowNeverReturnsPartialData();
+    testInvalidCountWithoutOverflowFlagIsStillRejected();
+    testExcessiveArenaCapacityIsRejected();
     testResetAndStopPublishDistinctCommands();
     testLogQueueDrainsInOrder();
     std::printf("\nTodos os testes passaram.\n");

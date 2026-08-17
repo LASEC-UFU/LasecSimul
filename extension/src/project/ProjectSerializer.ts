@@ -71,6 +71,8 @@ function validateFpgaConfig(value: unknown): ProjectFpgaConfig | undefined {
       direction: p.direction === "out" ? ("out" as const) : ("in" as const),
       width: asNumber(p.width) ?? 1,
       downto: p.downto !== false,
+      ...(asNumber(p.leftIndex) !== undefined ? { leftIndex: asNumber(p.leftIndex) } : {}),
+      ...(asNumber(p.rightIndex) !== undefined ? { rightIndex: asNumber(p.rightIndex) } : {}),
     }))
     .filter((p) => p.name.length > 0);
   return {

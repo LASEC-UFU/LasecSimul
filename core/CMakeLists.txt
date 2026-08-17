@@ -6,6 +6,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(MSVC)
     add_compile_options(/EHsc)
+    # Restrito à unidade grande: aplicar globalmente forçaria recompilação/crescimento de todos
+    # os objetos do projeto sem necessidade.
+    set_source_files_properties(src/session/SimulationSession.cpp PROPERTIES COMPILE_OPTIONS /bigobj)
 endif()
 
 # GIT_SHALLOW TRUE em todas as dependências via FetchContent: GIT_TAG já fixa um commit exato, então

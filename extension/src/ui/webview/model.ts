@@ -103,7 +103,7 @@ export interface WebviewComponentModel {
     standard: string;
     top: string;
     sources: string[];
-    ports: Array<{ name: string; direction: "in" | "out"; width: number; downto: boolean }>;
+    ports: Array<{ name: string; direction: "in" | "out"; width: number; downto: boolean; leftIndex?: number; rightIndex?: number }>;
   };
 }
 

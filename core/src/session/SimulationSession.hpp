@@ -512,6 +512,9 @@ private:
     simulation::Scheduler m_scheduler;
 
     std::vector<std::unique_ptr<IComponentModel>> m_componentInstances;
+    /** Índices somente de FpgaComponent. Mantido na criação/remoção para que cada passo de
+     * tempo custe O(número de FPGAs), sem varrer/dynamic_cast em todo o circuito. */
+    std::vector<uint32_t> m_fpgaComponentIndices;
     std::vector<uint32_t> m_signalSubscribers;
     std::unordered_map<std::string, uint32_t> m_signalAliases;
     struct PauseConditionState { PauseExpression expression; bool wasTrue = false; bool errorReported = false; };

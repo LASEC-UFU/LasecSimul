@@ -106,7 +106,7 @@ export interface ProjectFpgaConfig {
   top: string;
   /** Caminhos relativos à pasta do `.lsproj`. */
   sources: string[];
-  ports: Array<{ name: string; direction: "in" | "out"; width: number; downto: boolean }>;
+  ports: Array<{ name: string; direction: "in" | "out"; width: number; downto: boolean; leftIndex?: number; rightIndex?: number }>;
 }
 
 export interface ProjectFirmwareConfig {

@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <span>
 #include <string>
+#include <mutex>
 #include <vector>
 
 #include "fpga/FpgaPortMapper.hpp"
@@ -24,6 +25,8 @@ struct GhdlBackendOptions {
      * cada combinação (fontes+top+standard) ganha seu próprio subdiretório, nunca reusa
      * `work-obj08.cf` de uma combinação diferente. */
     std::string cacheRootDir;
+    /** Raiz usada exclusivamente para os nomes relativos da chave de cache. */
+    std::string sourceRootDir;
     /** Timeout de cada etapa de `ghdl -a`/`-e` (compile, não simulação); também o teto de espera
      * pelo lock por chave (ver Cache vNext abaixo). */
     std::chrono::milliseconds compileTimeout{30000};
@@ -81,6 +84,7 @@ private:
      * `GhdlBackend`). Parte da chave de cache (Cache vNext): garante que trocar de instalação/
      * versão de GHDL invalida entradas antigas em vez de reusar um `work-obj08.cf` incompatível. */
     std::string ghdlFingerprint() const;
+    void drainArenaLogs();
     /** Diretório de execução PRÓPRIO desta instância, com CÓPIAS (não hardlinks -- ver .cpp sobre
      * por que hardlink quebraria a proteção read-only da entrada publicada) dos artefatos da
      * entrada de cache publicada -- `start()` nunca roda GHDL na entrada publicada diretamente
@@ -102,6 +106,8 @@ private:
     std::string m_runDir;   // diretório de execução desta instância, materializado em start()
     bool m_compiled = false;
     mutable std::string m_ghdlFingerprintCache;
+    mutable std::mutex m_protocolLogMutex;
+    std::string m_protocolLogs;
 };
 
 } // namespace lasecsimul::fpga

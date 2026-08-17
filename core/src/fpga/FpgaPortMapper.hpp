@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -18,6 +19,10 @@ struct PortSpec {
     /** true: declarado `(N-1 downto 0)` (índice mais alto primeiro); false: `(0 to N-1)`.
      * Irrelevante quando width==1. */
     bool downto = true;
+    /** Limites VHDL reais, quando informados pela descoberta VPI ou pelo projeto. Ausentes mantêm
+     * compatibilidade com projetos antigos e derivam `width-1 downto 0`/`0 to width-1`. */
+    std::optional<int32_t> leftIndex;
+    std::optional<int32_t> rightIndex;
 };
 
 /** Um bit elétrico concreto derivado de um `PortSpec` -- a unidade que `FpgaComponent` realmente
@@ -57,14 +62,9 @@ uint32_t countOutputBits(const std::vector<PortSpec>& ports);
  * `PortSpec` -- mecanismo de "LasecSimul: Analyze VHDL" (plano, seção 13), reusa 100% da
  * infraestrutura de processo/VPI em vez de um parser VHDL próprio via regex.
  *
- * Limitação conhecida (documentada, não um bug escondido): o modo discover não relata `downto`
- * vs `to` -- GHDL/VPI não expõe isso de forma simples nesta investigação (ver memória de
- * projeto). Toda porta descoberta automaticamente assume `downto` (a convenção esmagadoramente
- * mais comum em VHDL real); um projeto que declare um vetor `(0 to N-1)` terá a ordem de bits
- * invertida se depender só da descoberta automática -- plano permite explicitamente a
- * alternativa declarativa manual no `.lsproj` pra esse caso (seção 13). Linhas que não começam
- * com o prefixo são ignoradas silenciosamente (pode haver ruído de log do próprio GHDL
- * misturado no mesmo stdout). */
+ * O VPI publica também `left`/`right`; o parser preserva direção e limites. Direções não
+ * suportadas (`inout`/unknown) e erros explícitos do módulo são rejeitados, nunca convertidos
+ * silenciosamente em saída. Ruído sem prefixo continua ignorado. */
 std::vector<PortSpec> parseDiscoveredPorts(const std::string& vpiDiscoverOutput);
 
 } // namespace lasecsimul::fpga
