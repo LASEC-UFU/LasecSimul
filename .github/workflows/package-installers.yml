@@ -101,6 +101,32 @@ jobs:
           backend: mcode
           runtime: ${{ matrix.os == 'windows-latest' && 'ucrt64' || '' }}
 
+      # setup-ghdl instala o pacote ucrt64 dentro do MSYS2, mas atualmente não adiciona
+      # /ucrt64/bin ao GITHUB_PATH quando runtime != native. Converta explicitamente para caminhos
+      # Windows, pois os próximos passos executam Node/PowerShell fora do shell MSYS2.
+      - name: Export Windows GHDL toolchain paths
+        if: matrix.os == 'windows-latest'
+        shell: msys2 {0}
+        run: |
+          GHDL_BIN_WIN="$(cygpath -w /ucrt64/bin)"
+          GHDL_EXE_WIN="$(cygpath -w /ucrt64/bin/ghdl.exe)"
+          GCC_EXE_WIN="$(cygpath -w /ucrt64/bin/gcc.exe)"
+          GHDL_PREFIX_WIN="$(cygpath -w /ucrt64/lib/ghdl)"
+          printf '%s\n' "$GHDL_BIN_WIN" >> "$GITHUB_PATH"
+          printf 'GHDL_PREFIX=%s\n' "$GHDL_PREFIX_WIN" >> "$GITHUB_ENV"
+          printf 'LASECSIMUL_GHDL_PATH=%s\n' "$GHDL_EXE_WIN" >> "$GITHUB_ENV"
+          printf 'LASECSIMUL_GHDL_BINARY=%s\n' "$GHDL_EXE_WIN" >> "$GITHUB_ENV"
+          printf 'LASECSIMUL_FPGA_VPI_CC=%s\n' "$GCC_EXE_WIN" >> "$GITHUB_ENV"
+
+      - name: Verify Windows GHDL toolchain visibility
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          & $env:LASECSIMUL_GHDL_PATH --version
+          if ($LASTEXITCODE -ne 0) { throw "GHDL integrado ao MSYS2 não executou" }
+          & $env:LASECSIMUL_FPGA_VPI_CC --version
+          if ($LASTEXITCODE -ne 0) { throw "GCC UCRT64 integrado ao MSYS2 não executou" }
+
       - name: Build FPGA VPI module
         run: npm run build:fpga-vpi
 
