@@ -9,6 +9,29 @@
 
 Definir o editor visual inicial do esquemático.
 
+## Workspace atual
+
+A navegação da área de trabalho fica na parte inferior e possui estado puramente de UI:
+
+```text
+Workspace
+├── Circuit
+│   ├── Analog
+│   └── Digital
+└── Process
+    ├── Ctrl
+    └── Autom
+```
+
+`Circuit/Analog` e `Circuit/Digital` compartilham o mesmo documento e canvas elétrico; trocar a
+subaba filtra rigorosamente a toolbox e os controles específicos, sem apagar, recarregar ou duplicar
+o circuito. `Process/Ctrl` e `Process/Autom` começam vazias e não criam estado de processo enquanto
+esse domínio ainda não estiver implementado.
+
+Cada entrada de catálogo pode declarar `workspaceSection` (`analog`, `digital`, `ctrl` ou `autom`).
+Entradas legadas passam por uma classificação central em `ui/webview/workspace.ts`, garantindo que
+cada item pertença a exatamente uma seção e evitando condições repetidas na paleta e no editor.
+
 ## Escopo
 
 UI do MVP na Webview — **só o canvas central e o painel de propriedades**. Sem solver, sem QEMU e sem acesso

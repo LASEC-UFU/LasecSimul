@@ -1956,6 +1956,16 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
     case TUNNEL_TYPE_ID:
       return builtinPaintSvg(tunnelPaintSpec(properties), box, properties);
 
+    case "digital.generic_fpga":
+      // O bloco programável existe antes do VHDL e, nesse estado, possui zero pinos. O fallback
+      // genérico desenha dois leads horizontais decorativos, que pareciam entradas/saídas reais.
+      // O corpo FPGA não inventa terminais: os círculos clicáveis são desenhados separadamente a
+      // partir de `component.pins` somente depois da análise da entity.
+      return (
+        `<rect x="${PIN_INSET}" y="2" width="${box.width - PIN_INSET * 2}" height="${box.height - 4}" rx="4" class="symbol-stroke" fill="none"/>` +
+        `<text x="${midX}" y="${yMid + 4}" text-anchor="middle" font-size="10" fill="currentColor">FPGA</text>`
+      );
+
     case "connectors.bus": {
       // logic/bus.cpp: tronco VERTICAL grosso (não horizontal) com os fios de bit saindo pra
       // esquerda -- orientação e proporção corrigidas (era um traço horizontal com 6 tiquinhos).

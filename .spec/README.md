@@ -18,7 +18,7 @@ Conteúdo em `archive/` é histórico e **não normativo**. Ele pode explicar um
 ## Estrutura
 
 - `architecture/`: fronteiras e contratos duráveis do sistema;
-- `features/`: comportamento e aceitação de funcionalidades;
+- `features/`: comportamento e aceitação de funcionalidades, incluindo PLC IEC 61131-3 e protocolos;
 - `schemas/`: formatos persistidos e contratos versionados;
 - `adr/`: decisões arquiteturais imutáveis, uma por arquivo;
 - `benchmarks/`: método, cenários e baselines;
@@ -49,5 +49,11 @@ Conteúdo em `archive/` é histórico e **não normativo**. Ele pode explicar um
 - [Recursos e concorrência](architecture/resource-and-concurrency.md)
 - [IPC e telemetria](architecture/ipc-and-telemetry.md)
 - [Roadmap F0–F10](ROADMAP.md)
+- [PLC IEC 61131-3 integrado](features/iec61131-plc.md)
+- [Editor IEC 61131-3 e biblioteca comum de POUs](features/iec61131-editor.md)
+- [Workspace por domínio](features/workspace-navigation.md)
+- [FPGA/VHDL com GHDL](features/fpga-ghdl.md)
+- [Schema IEC 61131-3](schemas/iec61131-project.md)
+- [ADR de incorporação do OpenPLC v4/STruCpp e pipeline PLC nativo](adr/0007-openplc-v4-incorporation-and-native-plc-pipeline.md)
 - [Plano de benchmarks](benchmarks/capacity-plan.md)
 - [Migração do legado](archive/MIGRATION.md)

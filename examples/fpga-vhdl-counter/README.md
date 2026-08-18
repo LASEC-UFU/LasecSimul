@@ -1,6 +1,6 @@
 # Exemplo: Contador de 4 bits em VHDL (FPGA genérico + GHDL)
 
-Circuito de exemplo pra `docs/38-fpga-vhdl-ghdl.md`. Demonstra o componente **FPGA Genérico
+Circuito de exemplo pra `docs/38-fpga-vhdl-ghdl.md`. Demonstra o **Bloco Programável FPGA
 (VHDL/GHDL)**: um bloco `digital.generic_fpga` compila `counter.vhd` de verdade via GHDL e roda em
 lockstep com o resto da simulação elétrica.
 
@@ -20,6 +20,10 @@ lockstep com o resto da simulação elétrica.
    salvas no `.lsproj`, útil só depois de editar `counter.vhd`).
 5. Rode a simulação (▶). Os 4 LEDs devem contar em binário, incrementando a cada segundo (½ período
    do clock de 2 Hz).
+
+Para montar uma nova instância, selecione **Circuit > Digital**, insira **Bloco Programável FPGA**
+(ele aparece inicialmente sem pinos) e use **Carregar código VHDL** nas propriedades. A análise de
+`counter.vhd` cria dinamicamente `clk`, `rst` e os quatro bits de `count`.
 
 ## O que observar
 

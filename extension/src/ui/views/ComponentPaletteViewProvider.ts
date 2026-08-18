@@ -3,6 +3,7 @@ import * as path from "path";
 import * as vscode from "vscode";
 import { LasecSimulLanguage } from "../../language";
 import { WebviewComponentCatalogEntry } from "../webview/model";
+import { DEFAULT_WORKSPACE_SELECTION, WorkspaceSelection } from "../webview/workspace";
 
 interface PaletteWebviewCatalogEntry extends WebviewComponentCatalogEntry {
   iconLightUri: string;
@@ -12,6 +13,7 @@ interface PaletteWebviewCatalogEntry extends WebviewComponentCatalogEntry {
 interface PaletteHostState {
   catalog: PaletteWebviewCatalogEntry[];
   language: LasecSimulLanguage;
+  workspaceSelection: WorkspaceSelection;
 }
 
 type PaletteWebviewMessage =
@@ -31,6 +33,7 @@ export class ComponentPaletteViewProvider implements vscode.WebviewViewProvider 
     private language: LasecSimulLanguage,
     private readonly onAddComponent: (typeId: string) => void,
     private readonly onRemoveRegistered: (item: { sourceId?: string }) => void | Promise<void>,
+    private workspaceSelection: WorkspaceSelection = DEFAULT_WORKSPACE_SELECTION,
   ) {
     this.catalog = [...catalog];
   }
@@ -43,6 +46,11 @@ export class ComponentPaletteViewProvider implements vscode.WebviewViewProvider 
 
   setLanguage(language: LasecSimulLanguage): void {
     this.language = language;
+    void this.postState();
+  }
+
+  setWorkspaceSelection(selection: WorkspaceSelection): void {
+    this.workspaceSelection = { ...selection };
     void this.postState();
   }
 
@@ -98,6 +106,7 @@ export class ComponentPaletteViewProvider implements vscode.WebviewViewProvider 
     return {
       catalog: this.catalog.map((entry) => this.decorateCatalogEntry(entry)),
       language: this.language,
+      workspaceSelection: this.workspaceSelection,
     };
   }
 

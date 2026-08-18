@@ -135,9 +135,14 @@ function stageLicenseFile() {
   const stagedLicensePath = path.join(stagingExtensionDir, "LICENSE.txt");
   if (resolvedLicensePath) {
     copyFileTo(resolvedLicensePath, stagedLicensePath);
-    return;
+  } else {
+    writeFile(stagedLicensePath, createFallbackLicenseText());
   }
-  writeFile(stagedLicensePath, createFallbackLicenseText());
+
+  const runtimeExceptionPath = path.join(repoRoot, "LICENSE-RUNTIME-EXCEPTION.txt");
+  if (fs.existsSync(runtimeExceptionPath)) {
+    copyFileTo(runtimeExceptionPath, path.join(stagingExtensionDir, "LICENSE-RUNTIME-EXCEPTION.txt"));
+  }
 }
 
 function sha256(filePath) {
@@ -493,8 +498,8 @@ function rewriteStagedPackageJson() {
       { libraryManifest: "./bundled/subcircuits/library.json" },
     ];
   }
-  pkg.license = "SEE LICENSE IN LICENSE.txt";
-  pkg.files = ["out/**/*", "out-webview/**/*", "media/**/*", "bundled/**/*", "README.md", "LICENSE.txt", "src/ui/webview/styles.css", "src/ui/palette/styles.css"];
+  pkg.license = "GPL-3.0-or-later";
+  pkg.files = ["out/**/*", "out-webview/**/*", "media/**/*", "bundled/**/*", "README.md", "LICENSE.txt", "LICENSE-RUNTIME-EXCEPTION.txt", "src/ui/webview/styles.css", "src/ui/palette/styles.css"];
   writeFile(stagedPackageJsonPath, `${JSON.stringify(pkg, null, 2)}\n`);
 }
 

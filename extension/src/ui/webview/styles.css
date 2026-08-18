@@ -35,6 +35,77 @@ html, body {
   min-height: 0;
 }
 
+#app > [hidden] {
+  display: none !important;
+}
+
+.process-workspace {
+  flex: 1 1 auto;
+  min-height: 0;
+  background: var(--panel-2);
+}
+
+.workspace-tabs {
+  position: relative;
+  z-index: 12;
+  flex: 0 0 auto;
+  border-top: 1px solid var(--toolbar-line);
+  background: var(--toolbar-bg);
+  color: var(--toolbar-text);
+}
+
+.workspace-tabs__row {
+  display: flex;
+  align-items: flex-end;
+  min-height: 30px;
+  padding: 3px 8px 0;
+  gap: 2px;
+}
+
+.workspace-tabs__row--sub {
+  min-height: 28px;
+  border-bottom: 1px solid #d2d2ca;
+  background: #f5f5ef;
+}
+
+.workspace-tabs__row--main {
+  min-height: 32px;
+}
+
+.workspace-tabs__button {
+  min-width: 92px;
+  height: 27px;
+  padding: 3px 18px;
+  border: 1px solid #a9abb0;
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  background: linear-gradient(#ffffff, #d8d9dc);
+  color: #555b64;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.workspace-tabs__button:hover {
+  background: linear-gradient(#ffffff, #cfd3da);
+}
+
+.workspace-tabs__button--active {
+  border-color: var(--accent);
+  background: #fff7d9;
+  color: #4d3a05;
+  font-weight: 700;
+}
+
+body.workspace-mode--process .property-dialog,
+body.workspace-mode--process .context-menu,
+body.workspace-mode--process .instrument-popup-layer,
+body.workspace-mode--process .serial-terminal-layer,
+body.workspace-mode--process .mcu-serial-monitor-layer,
+body.workspace-mode--process .exposed-components-dialog {
+  display: none !important;
+}
+
 .appbar {
   position: sticky;
   top: 0;

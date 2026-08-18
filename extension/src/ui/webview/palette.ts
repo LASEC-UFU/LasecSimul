@@ -1,8 +1,10 @@
 import { buildPaletteTree, PaletteComponentNode, PaletteRenderableEntry, PaletteTreeNode } from "./paletteTree.js";
+import { activeWorkspaceSection, DEFAULT_WORKSPACE_SELECTION, normalizeWorkspaceSelection, WorkspaceSelection } from "./workspace.js";
 
 interface PaletteState {
   catalog: PaletteRenderableEntry[];
   language: "pt-BR" | "en";
+  workspaceSelection: WorkspaceSelection;
 }
 
 interface WindowWithPaletteState extends Window {
@@ -14,7 +16,15 @@ declare const acquireVsCodeApi: undefined | (() => { postMessage(message: unknow
 const vscode = typeof acquireVsCodeApi === "function" ? acquireVsCodeApi() : undefined;
 const app = document.getElementById("app");
 
-const initialState = (window as WindowWithPaletteState).__LASECSIMUL_PALETTE_STATE__ ?? { catalog: [], language: "pt-BR" as const };
+const injectedInitialState = (window as WindowWithPaletteState).__LASECSIMUL_PALETTE_STATE__;
+const initialState: PaletteState = injectedInitialState ? {
+  ...injectedInitialState,
+  workspaceSelection: normalizeWorkspaceSelection(injectedInitialState.workspaceSelection),
+} : {
+  catalog: [],
+  language: "pt-BR" as const,
+  workspaceSelection: DEFAULT_WORKSPACE_SELECTION,
+};
 const persisted = (vscode?.getState() as { query?: string } | undefined) ?? {};
 
 let state: PaletteState = initialState;
@@ -149,7 +159,7 @@ function render(): void {
   const shouldRestoreSearchFocus = activeElement instanceof HTMLInputElement && activeElement.classList.contains("palette__search-input");
   const selectionStart = shouldRestoreSearchFocus ? activeElement.selectionStart : null;
   const selectionEnd = shouldRestoreSearchFocus ? activeElement.selectionEnd : null;
-  const tree = buildPaletteTree(state.catalog, query);
+  const tree = buildPaletteTree(state.catalog, query, activeWorkspaceSection(state.workspaceSelection));
   const visibleComponents = collectVisibleComponents(tree).filter((node) => !node.disabled);
   app.innerHTML = "";
 
@@ -203,7 +213,7 @@ function render(): void {
 
 window.addEventListener("message", (event: MessageEvent<{ type: string; state?: PaletteState }>) => {
   if (event.data?.type !== "sync" || !event.data.state) return;
-  state = event.data.state;
+  state = { ...event.data.state, workspaceSelection: normalizeWorkspaceSelection(event.data.state.workspaceSelection) };
   render();
 });
 

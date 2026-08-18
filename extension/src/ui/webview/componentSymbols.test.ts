@@ -787,6 +787,13 @@ import { PackageDescriptor, WebviewComponentModel } from "./model";
     assert(svg.includes("viewspec-interaction-dragAngular"), `hit-test dragAngular deveria continuar presente, markup: ${svg}`);
   });
 
+  await test("FPGA vazio desenha somente o corpo, sem leads que simulem terminais", () => {
+    const svg = componentSymbolSvg("digital.generic_fpga");
+    assert(svg.includes(">FPGA</text>"), `bloco deveria identificar o corpo FPGA, markup: ${svg}`);
+    assert(svg.includes("<rect"), `bloco deveria continuar visível sem código, markup: ${svg}`);
+    assert(!svg.includes("<line"), `FPGA sem pinos não deveria inventar leads, markup: ${svg}`);
+  });
+
   await test("dialWidget reutiliza o CustomDial sobre shapes legados e lê faixa editável ao vivo", () => {
     const sensorPkg: PackageDescriptor = {
       width: 56,

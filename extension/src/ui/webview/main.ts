@@ -33,6 +33,7 @@ import { isHighWireVoltage, reconcileWireVoltages } from "./wirePresentation.js"
 import { continuousDialValueFromPointer, steppedDialValue } from "./dialInteraction.js";
 import { contextMenuViewportSize, positionContextSubmenu, positionRootContextMenu } from "./contextMenuPosition.js";
 import { regenerateGenericSubcircuitState } from "./genericSubcircuitPackage.js";
+import { normalizeWorkspaceSelection, WorkspaceMainTab, WorkspaceSelection } from "./workspace.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const FINE_WIRE_STEP = WIRE_GRID_SIZE / 10;
@@ -96,7 +97,13 @@ function syncPackageRegistry(catalog: WebviewProjectState["catalog"]): void {
 }
 
 const initialWindowState = (window as WindowWithInitialState).__LASECSIMUL_INITIAL_STATE__;
-let state = normalizeProjectState((vscode?.getState() as WebviewProjectState | undefined) ?? initialWindowState ?? createEmptyState());
+const persistedWebviewState = vscode?.getState() as (WebviewProjectState & { workspaceSelection?: unknown }) | undefined;
+const workspaceSelectionFromStorage = persistedWebviewState?.workspaceSelection;
+const persistedProjectState = persistedWebviewState
+  ? (({ workspaceSelection: _workspaceSelection, ...project }) => project)(persistedWebviewState)
+  : undefined;
+let workspaceSelection: WorkspaceSelection = normalizeWorkspaceSelection(workspaceSelectionFromStorage);
+let state = normalizeProjectState(persistedProjectState ?? initialWindowState ?? createEmptyState());
 syncPackageRegistry(state.catalog);
 
 let catalogLookupSource: WebviewProjectState["catalog"] | undefined;
@@ -169,6 +176,8 @@ let appBarElement: HTMLElement | undefined;
 let canvasElement: HTMLDivElement | undefined;
 let canvasContentElement: HTMLDivElement | undefined;
 let wireLayerElement: SVGSVGElement | undefined;
+let workspaceTabsElement: HTMLElement | undefined;
+let processWorkspaceElement: HTMLElement | undefined;
 
 const UI_TEXT = {
   "pt-BR": {
@@ -245,7 +254,15 @@ const UI_TEXT = {
     firmwareGroup: "Firmware",
     firmwarePath: "Firmware (.bin/.elf)",
     qemuBinary: "Binario QEMU",
-    fpgaAdd: "Adicionar FPGA VHDL",
+    fpgaAdd: "Adicionar bloco programável FPGA",
+    fpgaLoadCode: "Carregar código VHDL...",
+    fpgaUnconfigured: "Nenhum código carregado; o bloco ainda não possui entradas ou saídas.",
+    workspaceCircuit: "Circuit",
+    workspaceProcess: "Process",
+    workspaceAnalog: "Analog",
+    workspaceDigital: "Digital",
+    workspaceCtrl: "Ctrl",
+    workspaceAutom: "Autom",
     fpgaOpenSource: "Abrir/editar VHDL",
     fpgaConfigure: "Alterar arquivos e entity...",
     fpgaConfigureGhdl: "Configurar simulador GHDL...",
@@ -377,7 +394,15 @@ const UI_TEXT = {
     openSerialMonitor: "Open serial monitor",
     firmwareGroup: "Firmware",
     firmwarePath: "Firmware (.bin/.elf)",
-    fpgaAdd: "Add VHDL FPGA",
+    fpgaAdd: "Add programmable FPGA block",
+    fpgaLoadCode: "Load VHDL code...",
+    fpgaUnconfigured: "No code loaded; the block does not have inputs or outputs yet.",
+    workspaceCircuit: "Circuit",
+    workspaceProcess: "Process",
+    workspaceAnalog: "Analog",
+    workspaceDigital: "Digital",
+    workspaceCtrl: "Ctrl",
+    workspaceAutom: "Autom",
     fpgaOpenSource: "Open/edit VHDL",
     fpgaConfigure: "Change files and entity...",
     fpgaConfigureGhdl: "Configure GHDL simulator...",
@@ -1803,9 +1828,15 @@ function persistState(): void {
     }
   }
   recordUndoSnapshotIfChanged();
-  vscode?.setState(state);
+  storeWebviewState();
   const outbound: WebviewToHostMessage = { version: WEBVIEW_MESSAGE_VERSION, type: "projectChanged", project: state };
   vscode?.postMessage(outbound);
+}
+
+/** Persiste navegação e projeto no estado opaco da Webview, mas envia ao host somente o projeto.
+ * Assim trocar de aba nunca suja nem serializa o `.lsproj`. */
+function storeWebviewState(): void {
+  vscode?.setState({ ...state, workspaceSelection });
 }
 
 function send(message: WebviewToHostMessage): void {
@@ -2077,7 +2108,7 @@ function handleWireGestureClick(target: WireGestureOrigin): void {
     points: pendingWirePointsForTarget(target.point),
   });
   clearPendingWire();
-  vscode?.setState(state);
+  storeWebviewState();
   render();
 }
 
@@ -2578,7 +2609,7 @@ function renderAppBar(): HTMLElement {
 
   const fpgaGroup = document.createElement("div");
   fpgaGroup.className = "appbar__group";
-  if (!editingSubcircuit) {
+  if (!editingSubcircuit && workspaceSelection.main === "circuit" && workspaceSelection.circuit === "digital") {
     fpgaGroup.appendChild(
       renderToolbarButton("fpga", t("fpgaAdd"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestAddGenericFpga" }))
     );
@@ -2718,7 +2749,7 @@ function installCanvasEventHandlers(canvas: HTMLDivElement, canvasContent: HTMLD
       const newComponents = componentsToAddForTypeId(placingTypeId);
       for (const comp of newComponents) { comp.x = snappedX; comp.y = snappedY; }
       setActiveSceneComponents([...activeSceneComponents(), ...newComponents]);
-      vscode?.setState(state);
+      storeWebviewState();
       persistState();
       exitPlacementMode();
       render();
@@ -2991,6 +3022,69 @@ function zoomReset(): void {
   persistState();
 }
 
+function workspaceTabButton(label: string, active: boolean, onClick: () => void): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `workspace-tabs__button${active ? " workspace-tabs__button--active" : ""}`;
+  button.textContent = label;
+  button.setAttribute("aria-selected", String(active));
+  button.addEventListener("click", onClick);
+  return button;
+}
+
+function setWorkspaceSelection(next: WorkspaceSelection): void {
+  if (
+    next.main === workspaceSelection.main &&
+    next.circuit === workspaceSelection.circuit &&
+    next.process === workspaceSelection.process
+  ) return;
+  const hadPendingConnection = state.pendingConnection !== undefined;
+  cancelActiveTool();
+  hideContextMenu();
+  workspaceSelection = next;
+  if (hadPendingConnection) persistState();
+  else storeWebviewState();
+  send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestSetWorkspaceSelection", selection: workspaceSelection });
+  render();
+}
+
+function setWorkspaceMainTab(main: WorkspaceMainTab): void {
+  setWorkspaceSelection({ ...workspaceSelection, main });
+}
+
+function renderWorkspaceTabs(): HTMLElement {
+  const navigation = document.createElement("nav");
+  navigation.className = "workspace-tabs";
+  navigation.setAttribute("aria-label", "Workspace");
+
+  const subtabs = document.createElement("div");
+  subtabs.className = "workspace-tabs__row workspace-tabs__row--sub";
+  if (workspaceSelection.main === "circuit") {
+    subtabs.append(
+      workspaceTabButton(t("workspaceAnalog"), workspaceSelection.circuit === "analog", () =>
+        setWorkspaceSelection({ ...workspaceSelection, circuit: "analog" })),
+      workspaceTabButton(t("workspaceDigital"), workspaceSelection.circuit === "digital", () =>
+        setWorkspaceSelection({ ...workspaceSelection, circuit: "digital" })),
+    );
+  } else {
+    subtabs.append(
+      workspaceTabButton(t("workspaceCtrl"), workspaceSelection.process === "ctrl", () =>
+        setWorkspaceSelection({ ...workspaceSelection, process: "ctrl" })),
+      workspaceTabButton(t("workspaceAutom"), workspaceSelection.process === "autom", () =>
+        setWorkspaceSelection({ ...workspaceSelection, process: "autom" })),
+    );
+  }
+
+  const mainTabs = document.createElement("div");
+  mainTabs.className = "workspace-tabs__row workspace-tabs__row--main";
+  mainTabs.append(
+    workspaceTabButton(t("workspaceCircuit"), workspaceSelection.main === "circuit", () => setWorkspaceMainTab("circuit")),
+    workspaceTabButton(t("workspaceProcess"), workspaceSelection.main === "process", () => setWorkspaceMainTab("process")),
+  );
+  navigation.append(subtabs, mainTabs);
+  return navigation;
+}
+
 function ensureRenderShell(): { canvas: HTMLDivElement; canvasContent: HTMLDivElement; wireLayer: SVGSVGElement } | undefined {
   if (!app) return undefined;
 
@@ -3015,6 +3109,29 @@ function ensureRenderShell(): { canvas: HTMLDivElement; canvasContent: HTMLDivEl
 
   if (canvasElement.parentElement !== app) app.appendChild(canvasElement);
   if (appBarElement.nextSibling !== canvasElement) app.insertBefore(canvasElement, appBarElement.nextSibling);
+
+  const processActive = workspaceSelection.main === "process";
+  document.body.classList.toggle("workspace-mode--process", processActive);
+  appBarElement.hidden = processActive;
+  canvasElement.hidden = processActive;
+  if (processActive) {
+    if (!processWorkspaceElement) {
+      processWorkspaceElement = document.createElement("section");
+      processWorkspaceElement.className = "process-workspace";
+      processWorkspaceElement.setAttribute("aria-label", "Process workspace");
+    }
+    if (processWorkspaceElement.parentElement !== app) app.appendChild(processWorkspaceElement);
+  } else {
+    processWorkspaceElement?.remove();
+  }
+
+  const nextWorkspaceTabs = renderWorkspaceTabs();
+  if (workspaceTabsElement) workspaceTabsElement.replaceWith(nextWorkspaceTabs);
+  else app.appendChild(nextWorkspaceTabs);
+  workspaceTabsElement = nextWorkspaceTabs;
+  if (workspaceTabsElement.parentElement === app && workspaceTabsElement !== app.lastElementChild) app.appendChild(workspaceTabsElement);
+
+  if (processActive) return undefined;
 
   canvasContentElement.style.transform = `translate(${state.viewport.x}px, ${state.viewport.y}px) scale(${state.viewport.zoom})`;
   if (wireLayerElement.parentElement !== canvasContentElement) canvasContentElement.insertBefore(wireLayerElement, canvasContentElement.firstChild);
@@ -3485,7 +3602,7 @@ function pasteClipboardItems(): void {
     selectedComponentIds: remintedComponents.map((component) => component.id),
     selectedWireIds: wires.map((wire) => wire.id),
   };
-  vscode?.setState(state);
+  storeWebviewState();
   send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestInsertItems", scope: currentElementScope(), components: remintedComponents, wires });
   if (newTunnels.length > 0) send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestInsertItems", scope: "schematic", components: newTunnels, wires: [] });
   render();
@@ -6331,13 +6448,17 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
     const fpgaMenuItems: ContextMenuItem[] = !isGroup && component.typeId === "digital.generic_fpga"
       ? [
           { kind: "separator" },
-          { label: t("fpgaOpenSource"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenFpgaSource", componentId: component.id }) },
-          { label: t("fpgaConfigure"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestConfigureFpga", componentId: component.id }) },
-          { label: t("fpgaAnalyzeVhdl"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestReanalyzeFpga", componentId: component.id }) },
-          { label: t("fpgaRun"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestRunFpga", componentId: component.id }) },
-          { label: t("fpgaStop"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestStopFpga", componentId: component.id }) },
-          { label: t("fpgaRestart"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestRestartFpga", componentId: component.id }) },
-          { label: t("fpgaShowLogs"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestShowFpgaLogs", componentId: component.id }) },
+          ...(component.fpga
+            ? [
+                { label: t("fpgaOpenSource"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenFpgaSource", componentId: component.id }) },
+                { label: t("fpgaConfigure"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestConfigureFpga", componentId: component.id }) },
+                { label: t("fpgaAnalyzeVhdl"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestReanalyzeFpga", componentId: component.id }) },
+                { label: t("fpgaRun"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestRunFpga", componentId: component.id }) },
+                { label: t("fpgaStop"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestStopFpga", componentId: component.id }) },
+                { label: t("fpgaRestart"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestRestartFpga", componentId: component.id }) },
+                { label: t("fpgaShowLogs"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestShowFpgaLogs", componentId: component.id }) },
+              ] satisfies ContextMenuItem[]
+            : [{ label: t("fpgaLoadCode"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestConfigureFpga", componentId: component.id }) }]),
           { label: t("fpgaConfigureGhdl"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestConfigureGhdl" }) },
         ]
       : [];
@@ -8343,13 +8464,15 @@ function renderPropertySheet(component: WebviewComponentModel, options: Property
   shell.append(titleBar, toolbar, helpPanel);
   if (titleRow) shell.append(titleRow);
   shell.append(tabs, pages);
-  if (component.typeId === "digital.generic_fpga" && component.fpga) {
+  if (component.typeId === "digital.generic_fpga") {
     const fpgaPanel = document.createElement("fieldset");
     fpgaPanel.className = "property-sheet__group";
     const legend = document.createElement("legend");
     legend.textContent = "FPGA / GHDL";
     const summary = document.createElement("p");
-    summary.textContent = `${t("fpgaTop")}: ${component.fpga.top} · ${t("fpgaStandard")}: ${component.fpga.standard} · ${t("fpgaSources")}: ${component.fpga.sources.map((source) => source.split(/[\\/]/).pop()).join(", ")}`;
+    summary.textContent = component.fpga
+      ? `${t("fpgaTop")}: ${component.fpga.top} · ${t("fpgaStandard")}: ${component.fpga.standard} · ${t("fpgaSources")}: ${component.fpga.sources.map((source) => source.split(/[\\/]/).pop()).join(", ")}`
+      : t("fpgaUnconfigured");
     const actions = document.createElement("div");
     actions.className = "property-sheet__actions";
     const addAction = (label: string, onClick: () => void): void => {
@@ -8360,13 +8483,17 @@ function renderPropertySheet(component: WebviewComponentModel, options: Property
       action.addEventListener("click", onClick);
       actions.appendChild(action);
     };
-    addAction(t("fpgaOpenSource"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenFpgaSource", componentId: component.id }));
-    addAction(t("fpgaConfigure"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestConfigureFpga", componentId: component.id }));
-    addAction(t("fpgaAnalyzeVhdl"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestReanalyzeFpga", componentId: component.id }));
-    addAction(t("fpgaRun"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestRunFpga", componentId: component.id }));
-    addAction(t("fpgaStop"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestStopFpga", componentId: component.id }));
-    addAction(t("fpgaRestart"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestRestartFpga", componentId: component.id }));
-    addAction(t("fpgaShowLogs"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestShowFpgaLogs", componentId: component.id }));
+    if (component.fpga) {
+      addAction(t("fpgaOpenSource"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenFpgaSource", componentId: component.id }));
+      addAction(t("fpgaConfigure"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestConfigureFpga", componentId: component.id }));
+      addAction(t("fpgaAnalyzeVhdl"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestReanalyzeFpga", componentId: component.id }));
+      addAction(t("fpgaRun"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestRunFpga", componentId: component.id }));
+      addAction(t("fpgaStop"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestStopFpga", componentId: component.id }));
+      addAction(t("fpgaRestart"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestRestartFpga", componentId: component.id }));
+      addAction(t("fpgaShowLogs"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestShowFpgaLogs", componentId: component.id }));
+    } else {
+      addAction(t("fpgaLoadCode"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestConfigureFpga", componentId: component.id }));
+    }
     addAction(t("fpgaConfigureGhdl"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestConfigureGhdl" }));
     fpgaPanel.append(legend, summary, actions);
     shell.append(fpgaPanel);
@@ -8689,7 +8816,7 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
       pendingWireBendLengths = [];
     }
     if (message.type === "init") resetUndoHistory(mainUndoHistory);
-    vscode?.setState(state);
+    storeWebviewState();
     render();
     refreshOpenPropertyDialog();
   }
@@ -8754,7 +8881,7 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
       pendingWireRoute = [];
       pendingWireBendLengths = [];
     }
-    vscode?.setState(state);
+    storeWebviewState();
     // `syncStatePatch` é o eco de QUALQUER `requestUpdateProperty`/`projectChanged` que a própria
     // Webview acabou de mandar (ver `persistState`) -- um arrasto contínuo (dial/joystick/touchpad)
     // dispara isso a cada `pointermove`. `render()` incondicional aqui reconstruiria o DOM do
@@ -9126,7 +9253,7 @@ function setPushClosed(component: WebviewComponentModel, closed: boolean): void 
   if (component.properties.closed === closed) return;
   component.properties.closed = closed;
   send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name: "closed", value: closed });
-  vscode?.setState(state);
+  storeWebviewState();
   updateRenderedToggleState(component);
   refreshOpenPropertyDialog();
 }
@@ -9135,7 +9262,7 @@ function setSwitchClosed(component: WebviewComponentModel, closed: boolean): voi
   if (component.properties.closed === closed) return;
   component.properties.closed = closed;
   send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name: "closed", value: closed });
-  vscode?.setState(state);
+  storeWebviewState();
   updateRenderedToggleState(component);
   refreshOpenPropertyDialog();
 }
@@ -9144,7 +9271,7 @@ function setFixedVoltOut(component: WebviewComponentModel, out: boolean): void {
   if (component.properties.out === out) return;
   component.properties.out = out;
   send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name: "out", value: out });
-  vscode?.setState(state);
+  storeWebviewState();
   updateRenderedFixedVoltState(component);
   refreshOpenPropertyDialog();
 }
@@ -9584,3 +9711,4 @@ window.addEventListener("keyup", (event) => {
 render();
 requestAnimationFrame(animateDcMotors);
 send({ version: WEBVIEW_MESSAGE_VERSION, type: "webviewReady" });
+send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestSetWorkspaceSelection", selection: workspaceSelection });

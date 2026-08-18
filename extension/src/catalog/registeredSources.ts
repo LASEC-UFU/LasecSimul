@@ -10,6 +10,7 @@ import { sanitizeMcuSerialPorts } from "./catalogMetadata";
 import { SUBCIRCUIT_SCHEMA_VERSION, schemaVersionRejectionMessage } from "./subcircuitDocument";
 import { livePackagePreviewSymbolSvg } from "../ui/webview/componentSymbols";
 import { externalFolderPath } from "./externalComponents";
+import { WorkspaceSection } from "../ui/webview/workspace";
 
 /** Converte um `icon{}` canônico (`PackageDescriptor`, sem pinos) num `<svg>` autocontido pra usar
  * como `iconSvgInline` -- MESMO pipeline (`resolvePackageLayout`+`packageBodySvg`, via
@@ -317,6 +318,7 @@ export interface ParsedSubcircuitManifest {
   defaultProperties: Record<string, string | number | boolean>;
   help?: WebviewComponentCatalogEntry["help"];
   folderPath: string[] | undefined;
+  workspaceSection?: WorkspaceSection;
   mcuHost: boolean;
   serialPorts: ReturnType<typeof sanitizeMcuSerialPorts>;
 }
@@ -325,6 +327,11 @@ function manifestFolderPath(json: Record<string, unknown>): string[] | undefined
   return Array.isArray(json.folderPath)
     ? (json.folderPath as unknown[]).filter((s): s is string => typeof s === "string")
     : undefined;
+}
+
+function manifestWorkspaceSection(json: Record<string, unknown>): WorkspaceSection | undefined {
+  const value = json.workspaceSection;
+  return value === "analog" || value === "digital" || value === "ctrl" || value === "autom" ? value : undefined;
 }
 
 function manifestIconFields(json: Record<string, unknown>, manifestDir: string): Pick<ParsedSubcircuitManifest, "icon" | "iconSvgInline" | "iconFilePath"> {
@@ -403,6 +410,7 @@ export function parseSubcircuitManifest(json: Record<string, unknown>, manifestD
     defaultProperties: manifestDefaultProperties(json, logicSymbolPackage),
     help: manifestHelpFields(json),
     folderPath,
+    workspaceSection: manifestWorkspaceSection(json),
     mcuHost: manifestHostsMcu(json, mcuAdapterTypeIds),
     serialPorts: sanitizeMcuSerialPorts(json.serialPorts),
   };
@@ -475,6 +483,7 @@ export function resolveRegisteredItem(source: RegisteredSource, extensionPath: s
         category,
         subcategory,
         folderPath,
+        workspaceSection: manifestWorkspaceSection(json),
         ...iconFields,
         package: packageDescriptor,
         logicSymbolPackage,
@@ -565,6 +574,7 @@ export function resolveRegisteredItem(source: RegisteredSource, extensionPath: s
       category,
       subcategory,
       folderPath,
+      workspaceSection: parsed.workspaceSection,
       icon: parsed.icon,
       iconFilePath: parsed.iconFilePath,
       iconSvgInline: parsed.iconSvgInline,

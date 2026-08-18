@@ -2,7 +2,7 @@
 
 > Arquivo gerado por `node .spec/governance/generate-status.mjs`. Não editar manualmente.
 
-Total: 26 documentos. accepted: 5; active: 11; deferred: 3; planned: 7.
+Total: 32 documentos. accepted: 6; active: 12; deferred: 3; planned: 10; superseded: 1.
 
 | ID | Kind | Status | Documento | Dependências |
 |---|---|---|---|---|
@@ -11,6 +11,8 @@ Total: 26 documentos. accepted: 5; active: 11; deferred: 3; planned: 7.
 | ADR-0003 | adr | accepted | [Coordenador único e workers limitados](adr/0003-coordinator-and-bounded-workers.md) | ADR-0001, ADR-0002 |
 | ADR-0004 | adr | accepted | [Evolução incremental da telemetria](adr/0004-telemetry-evolution.md) | ADR-0001 |
 | ADR-0005 | adr | accepted | [Política de schemas durante beta](adr/0005-beta-schema-policy.md) | — |
+| ADR-0006 | adr | superseded | [IEC 61131-3: POUs cross-language sobre IR e ABI comuns](adr/0006-iec61131-common-ir-and-cross-language-pous.md) | ADR-0001, ADR-0002 |
+| ADR-0007 | adr | accepted | [Incorporação do OpenPLC v4/STruCpp, relicenciamento GPL-3.0 e pipeline PLC nativo](adr/0007-openplc-v4-incorporation-and-native-plc-pipeline.md) | ADR-0001, ADR-0002, ADR-0003 |
 | ARCH-001 | architecture | active | [Fronteiras do sistema](architecture/system-boundaries.md) | — |
 | ARCH-002 | architecture | active | [Runtime e SimulationPlan](architecture/runtime-and-simulation-plan.md) | ARCH-001, ARCH-006 |
 | ARCH-003 | architecture | active | [Scheduler e tempo virtual](architecture/scheduler-and-time.md) | ARCH-002 |
@@ -24,14 +26,18 @@ Total: 26 documentos. accepted: 5; active: 11; deferred: 3; planned: 7.
 | FEAT-002 | feature | planned | [Dinâmica contínua e discreta](features/continuous-discrete-dynamics.md) | FEAT-001, ARCH-003 |
 | FEAT-003 | feature | planned | [Bridges elétrico ↔ sinal](features/electrical-signal-bridges.md) | FEAT-001, FEAT-002, ARCH-006 |
 | FEAT-004 | feature | planned | [Subsistemas e templates compilados](features/subsystems.md) | ARCH-002, ARCH-006, SCHEMA-002 |
-| FEAT-005 | feature | active | [FPGA/VHDL com GHDL](features/fpga-ghdl.md) | ARCH-001, ARCH-003, ARCH-004 |
+| FEAT-005 | feature | active | [FPGA/VHDL com GHDL](features/fpga-ghdl.md) | ARCH-001, ARCH-003, ARCH-004, FEAT-011 |
 | FEAT-006 | feature | deferred | [Runtime Python](features/python-runtime.md) | FEAT-001, ARCH-004, ARCH-005 |
-| FEAT-007 | feature | deferred | [Protocolos industriais e PLC](features/protocols-and-plc.md) | FEAT-001, ARCH-003, ARCH-006 |
-| FEAT-008 | feature | deferred | [Visualização animada de processo](features/process-visualization.md) | FEAT-001, ARCH-005 |
+| FEAT-007 | feature | planned | [PLC IEC 61131-3 integrado ao LasecSimul](features/iec61131-plc.md) | FEAT-001, ARCH-002, ARCH-003, ARCH-006, SCHEMA-003, ADR-0007 |
+| FEAT-008 | feature | deferred | [Visualização animada de processo](features/process-visualization.md) | FEAT-001, ARCH-005, FEAT-011 |
+| FEAT-009 | feature | deferred | [Protocolos industriais](features/industrial-protocols.md) | FEAT-001, ARCH-003, ARCH-006 |
+| FEAT-010 | feature | planned | [Editor IEC 61131-3 e biblioteca comum de POUs](features/iec61131-editor.md) | FEAT-007, ADR-0007, SCHEMA-003 |
+| FEAT-011 | feature | active | [Workspace por domínio](features/workspace-navigation.md) | ARCH-001 |
 | GOV-001 | governance | active | [Governança das especificações](governance/governance.md) | — |
 | ROADMAP-001 | roadmap | active | [Roadmap arquitetural F0–F10](ROADMAP.md) | GOV-001, BENCH-001 |
 | SCHEMA-001 | schema | planned | [Projeto vNext](schemas/project-vnext.md) | ARCH-001, ARCH-006 |
 | SCHEMA-002 | schema | planned | [Subsistema vNext](schemas/subsystem-vnext.md) | SCHEMA-001, ARCH-006 |
+| SCHEMA-003 | schema | planned | [Projeto IEC 61131-3 e artefato PLC](schemas/iec61131-project.md) | SCHEMA-001, ARCH-002, ARCH-006, ADR-0007 |
 
 ## Próximo gate
 

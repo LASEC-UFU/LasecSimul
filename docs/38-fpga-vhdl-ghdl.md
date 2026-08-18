@@ -1,6 +1,6 @@
-# FPGA Genérico (VHDL/GHDL)
+# Bloco Programável FPGA (VHDL/GHDL)
 
-Suporte a um componente **FPGA Genérico** que compila e simula VHDL de verdade via
+Suporte a um **Bloco Programável FPGA** que compila e simula VHDL de verdade via
 [GHDL](https://github.com/ghdl/ghdl), rodando em lockstep com o resto da simulação elétrica do
 LasecSimul (Scheduler continua sendo a única autoridade de tempo virtual — ver
 `.spec/features/fpga-ghdl.md`). Este documento cobre instalação, criação de projeto, portas/clocks,
@@ -28,20 +28,21 @@ npm run build:fpga-vpi
 (exige também um MinGW/UCRT GCC no PATH — ex. `winget install BrechtSanders.WinLibs.POSIX.UCRT` —
 já que o GHDL distribuído via winget não é compatível com o linker do MSVC para este módulo.)
 
-## Criando um FPGA genérico
+## Criando um bloco programável FPGA
 
-Ao contrário de todo outro componente do catálogo, o FPGA Genérico **não é arrastável da paleta**
-com um pinset fixo — o pinset real só é conhecido depois de compilar o VHDL. O fluxo é:
+O bloco fica na toolbox **Circuit > Digital** e nasce deliberadamente **sem entradas e sem saídas**.
+O pinset real só é criado depois que o VHDL for associado e analisado. O fluxo é:
 
-1. Clique no botão de **FPGA** (ícone de chip) na barra principal. O comando
-   "LasecSimul: Adicionar FPGA Genérico" continua disponível como atalho opcional.
-2. Selecione um ou mais arquivos `.vhd`/`.vhdl` (múltiplos arquivos: ordem de análise é a ordem de
+1. Selecione **Circuit > Digital** nas abas inferiores e insira **Bloco Programável FPGA** pela
+   toolbox. O botão de FPGA e o comando "LasecSimul: Adicionar Bloco Programável FPGA" continuam
+   disponíveis como atalhos. O bloco já aparece no esquemático, ainda sem terminais.
+2. Abra **Propriedades** ou o menu de contexto do bloco e escolha **Carregar código VHDL**.
+3. Selecione um ou mais arquivos `.vhd`/`.vhdl` (múltiplos arquivos: ordem de análise é a ordem de
    seleção — resolução automática de dependências entre arquivos fica fora de escopo por ora,
    declare a ordem certa manualmente se tiver mais de um arquivo).
-3. Informe o nome da entity **top-level** a simular.
-4. A extensão compila (`ghdl -a`/`-e`, com cache de compilação — ver "Cache de compilação" abaixo) e
-   descobre as portas reais da entity. O componente nasce no esquemático já com um pino elétrico por
-   bit de porta.
+4. Informe o nome da entity **top-level** e a versão VHDL.
+5. A extensão compila (`ghdl -a`/`-e`, com cache de compilação — ver "Cache de compilação" abaixo),
+   descobre as portas reais e atualiza o mesmo bloco com um pino elétrico por bit de porta.
 
 Depois de colocado, clique com o botão direito no bloco pra:
 

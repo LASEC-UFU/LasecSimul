@@ -1,5 +1,6 @@
 import { WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./model";
 import { ConnectionEndpoint } from "./wireTopology";
+import { WorkspaceSelection } from "./workspace";
 
 /** Mesma forma de `ConnectionEndpoint` (`wireTopology.ts`) -- eram dois tipos idênticos definidos em
  * paralelo (achado real de duplicação: "regras de conexão repetidas em diferentes arquivos").
@@ -181,6 +182,7 @@ export type HostToWebviewMessage =
 
 export type WebviewToHostMessage =
   | { version: number; type: "webviewReady" }
+  | { version: number; type: "requestSetWorkspaceSelection"; selection: WorkspaceSelection }
   | { version: number; type: "projectChanged"; project: WebviewProjectState }
   | { version: number; type: "requestAddComponent"; typeId: string }
   /** `scope` -- em qual cena inserir (`main.ts::subcircuitEditorMode`, traduzido pro vocabulário do

@@ -1,4 +1,5 @@
 import { WebviewComponentCatalogEntry } from "./model";
+import { WorkspaceSection, workspaceSectionForCatalogEntry } from "./workspace";
 
 export interface PaletteRenderableEntry extends WebviewComponentCatalogEntry {
   iconLightUri?: string;
@@ -96,13 +97,13 @@ function stripMutableNodes(nodes: Array<MutableFolderNode | PaletteComponentNode
   });
 }
 
-export function buildPaletteTree(entries: PaletteRenderableEntry[], rawQuery: string): PaletteTreeNode[] {
+export function buildPaletteTree(entries: PaletteRenderableEntry[], rawQuery: string, workspaceSection?: WorkspaceSection): PaletteTreeNode[] {
   const roots: Array<MutableFolderNode | PaletteComponentNode> = [];
   const rootFolders = new Map<string, MutableFolderNode>();
   const query = normalizeSearchText(rawQuery);
 
   for (const entry of entries) {
-    if (entry.hidden || !entryMatchesQuery(entry, query)) continue;
+    if (entry.hidden || (workspaceSection && workspaceSectionForCatalogEntry(entry) !== workspaceSection) || !entryMatchesQuery(entry, query)) continue;
     const pathSegments = resolvePaletteFolderPath(entry);
 
     let targetChildren = roots;

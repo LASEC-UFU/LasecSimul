@@ -17,6 +17,8 @@ ResourceBudget {
   maxWorkerThreads,
   maxParallelTasks,
   maxExternalProcesses,
+  maxBuildJobs,
+  plcVmMemoryBytes,
   telemetryBytesPerSecond,
   telemetryQueueBytes,
   scopeHistoryBytes,
@@ -25,7 +27,7 @@ ResourceBudget {
 }
 ```
 
-O Governor concede orçamento; pools, telemetria e caches continuam donos de seus recursos. Apenas esta camada consulta capacidade de CPU ou política administrativa.
+O Governor concede orçamento; pools, telemetria, PLC VM e caches continuam donos de seus recursos. Apenas esta camada consulta capacidade de CPU ou política administrativa.
 
 ## Workers
 
@@ -36,12 +38,14 @@ O Governor concede orçamento; pools, telemetria e caches continuam donos de seu
 - tarefas leem plano/snapshot e escrevem em scratch disjunto;
 - commit e reduções globais ocorrem em ordem determinística.
 
-Paralelizar inicialmente apenas ilhas MNA e lotes/SCCs independentes. Não paralelizar dentro de componente, grupo elétrico ou SCC sem prova específica.
+Paralelizar inicialmente apenas ilhas MNA e lotes/SCCs independentes. PLC tasks de uma mesma instância executam segundo a ordem IEC compilada; não paralelizar chamadas internas de POU sem prova específica.
+
+Compilação IEC é build job limitado, separado do pool de simulação. Cacheia `PlcCompiledArtifact` por hash e publica somente artefato completo/imútavel.
 
 ## Perfis
 
 - `Desktop`: orçamento moderado, ainda limitado e lazy;
-- `SharedHost`: coordenador + 0–1 worker inicialmente, telemetria conservadora;
+- `SharedHost`: coordenador + 0–1 worker inicialmente, telemetria conservadora e build queue limitada;
 - `Custom`: limites administrativos explícitos;
 - `Automatic`: escolhe perfil, nunca concede toda a máquina a cada sessão.
 
@@ -49,12 +53,14 @@ Afinidade, CPU sets e HostSupervisor não são defaults. Um HostSupervisor só e
 
 ## Filas
 
-Toda fila declara produtor, consumidor, capacidade, unidade do limite, overflow, ordem e shutdown. Comandos não podem ser descartados silenciosamente; telemetria intermediária pode ser coalescida.
+Toda fila declara produtor, consumidor, capacidade, unidade do limite, overflow, ordem e shutdown. Comandos não podem ser descartados silenciosamente; telemetria intermediária pode ser coalescida. Build IEC não cria fila ilimitada de recompilações: alterações rápidas coalescem por geração de autoria.
 
 ## Aceitação
 
 - sessão vazia cria zero worker extra;
 - thread count respeita orçamento em todas as sessões;
+- build IEC respeita `maxBuildJobs` e não bloqueia indefinidamente o coordenador de simulação;
+- memória total das PLC VMs respeita orçamento por sessão;
 - memória de filas/logs/Scope é limitada;
 - resultados são equivalentes com 1, 2 e N workers;
 - benchmark decide thresholds e defaults.

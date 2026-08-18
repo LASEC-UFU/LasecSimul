@@ -1,4 +1,5 @@
 import { PackageDescriptor } from "../ui/webview/model";
+import { WorkspaceSection } from "../ui/webview/workspace";
 import { ProjectComponent, ProjectTopology, ProjectTopologyEndpoint } from "../project/ProjectTypes";
 import { sanitizePackage } from "./packageSanitizers";
 
@@ -56,6 +57,7 @@ export interface SubcircuitDocument {
   translations?: Record<string, { name?: string }>;
   serialPorts?: Array<{ label: string; usartIndex: 0 | 1 | 2 }>;
   folderPath?: string[];
+  workspaceSection?: WorkspaceSection;
   icon?: PackageDescriptor;
   /** Metadados de catálogo -- passam intocados (o Core/paleta já entendem esses campos hoje,
    * inalterados por esta refatoração). */
@@ -184,6 +186,9 @@ export function parseSubcircuitDocument(raw: unknown, manifestDir: string): Pars
     translations: typeof obj.translations === "object" && obj.translations !== null ? (obj.translations as Record<string, { name?: string }>) : undefined,
     serialPorts: Array.isArray(obj.serialPorts) ? (obj.serialPorts as SubcircuitDocument["serialPorts"]) : undefined,
     folderPath: Array.isArray(obj.folderPath) ? (obj.folderPath as string[]) : undefined,
+    workspaceSection: obj.workspaceSection === "analog" || obj.workspaceSection === "digital" || obj.workspaceSection === "ctrl" || obj.workspaceSection === "autom"
+      ? obj.workspaceSection
+      : undefined,
     defaultProperties: typeof obj.defaultProperties === "object" && obj.defaultProperties !== null ? (obj.defaultProperties as Record<string, unknown>) : undefined,
     propertySchema: Array.isArray(obj.propertySchema) ? (obj.propertySchema as unknown[]) : undefined,
     help: typeof obj.help === "object" && obj.help !== null ? (obj.help as { description?: string }) : undefined,
@@ -231,6 +236,7 @@ export function serializeSubcircuitDocument(document: SubcircuitDocument): Recor
     exportedPropertyComponentIds: document.exportedPropertyComponentIds,
     ...(document.icon ? { icon: document.icon } : {}),
     ...(document.folderPath ? { folderPath: document.folderPath } : {}),
+    ...(document.workspaceSection ? { workspaceSection: document.workspaceSection } : {}),
     ...(document.defaultProperties ? { defaultProperties: document.defaultProperties } : {}),
     ...(document.propertySchema ? { propertySchema: document.propertySchema } : {}),
     ...(document.help ? { help: document.help } : {}),

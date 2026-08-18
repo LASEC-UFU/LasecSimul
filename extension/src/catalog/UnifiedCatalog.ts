@@ -3,6 +3,7 @@ import * as path from "path";
 import { McuSerialPortEntry, PackageDescriptor, PropertySchemaEntry, WebviewComponentCatalogEntry } from "../ui/webview/model";
 import { defaultComponentCatalog } from "../ui/webview/catalog";
 import { sanitizeMcuSerialPorts } from "./catalogMetadata";
+import { WorkspaceSection } from "../ui/webview/workspace";
 
 export type RegisteredSourceKind = "abi-device" | "mcu-adapter" | "subcircuit-file";
 
@@ -28,6 +29,7 @@ export interface UnifiedCatalogItem {
   propertySchema?: PropertySchemaEntry[];
   help?: { description?: string; url?: string; file?: string };
   folderPath?: string[];
+  workspaceSection?: WorkspaceSection;
   category?: string;
   subcategory?: string;
   hidden?: boolean;
@@ -88,6 +90,7 @@ const DEFAULT_CATALOG_FILE: UnifiedCatalogFile = {
     defaultProperties: entry.defaultProperties,
     icon: entry.icon,
     folderPath: entry.folderPath,
+    workspaceSection: entry.workspaceSection,
     category: entry.category,
     subcategory: entry.subcategory,
     disabled: entry.disabled,
@@ -127,6 +130,7 @@ export function entryToWebview(item: UnifiedCatalogItem): WebviewComponentCatalo
     category,
     subcategory,
     folderPath,
+    workspaceSection: item.workspaceSection,
     icon: item.icon,
     iconFilePath: item.iconFilePath,
     symbolSvg: item.symbolSvg,

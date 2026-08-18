@@ -197,6 +197,22 @@ import { resolveProjectSourcePaths } from "../../src/project/projectPathPolicy";
   const fpgaRoundTrip = await serializer.load(fpgaPath);
   assert.deepStrictEqual(fpgaRoundTrip.components[0]?.fpga, fpgaProject.components[0]?.fpga);
 
+  // O bloco programável sem código também é autoria válida: deve sobreviver ao round-trip sem a
+  // chave `fpga` e sem qualquer pinset placeholder persistido.
+  const blankFpgaProject = createEmptyProject();
+  blankFpgaProject.components.push({
+    id: "fpga-blank",
+    typeId: "digital.generic_fpga",
+    properties: {},
+    visual: { x: 30, y: 40, rotation: 0 },
+  });
+  const blankFpgaPath = path.join(tmpDir, "fpga-blank.lsproj");
+  await serializer.save(blankFpgaPath, blankFpgaProject);
+  const blankFpgaRoundTrip = await serializer.load(blankFpgaPath);
+  assert.strictEqual(blankFpgaRoundTrip.components.length, 1);
+  assert.strictEqual(blankFpgaRoundTrip.components[0]?.typeId, "digital.generic_fpga");
+  assert.strictEqual(blankFpgaRoundTrip.components[0]?.fpga, undefined);
+
   // `fpga` malformado (sem `top`/`sources`) é descartado silenciosamente, não quebra o load do
   // resto do componente -- mesma postura de `subcircuitRef` sem `path` (linha ~213 abaixo).
   const malformedFpgaPath = path.join(tmpDir, "fpga-malformed.lsproj");

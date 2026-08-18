@@ -18,6 +18,7 @@
     "src/ui/webview/messages.ts",
     "src/ui/webview/model.ts",
     "src/ui/webview/paletteTree.ts",
+    "src/ui/webview/workspace.ts",
     "src/ui/webview/componentSymbols.ts",
     "src/ui/webview/wireGeometry.ts",
     "src/ui/webview/wireConnections.ts",

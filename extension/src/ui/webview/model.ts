@@ -1,3 +1,5 @@
+import type { WorkspaceSection } from "./workspace";
+
 export interface WebviewPinModel {
   id: string;
   x: number;
@@ -839,6 +841,9 @@ export interface WebviewComponentCatalogEntry {
    * ["Passivos", "Resistores", "Precisao"]. Quando ausente, a árvore usa
    * `category`/`subcategory` para manter compatibilidade com catálogos legados. */
   folderPath?: string[];
+  /** Área exclusiva da toolbox. Ausente mantém compatibilidade pela classificação central de
+   * `workspace.ts`; componentes novos podem declarar o destino sem alterar a UI. */
+  workspaceSection?: WorkspaceSection;
   /** Caminho relativo a `extension/media/components/{light,dark}/<icon>` (sem extensão/tema) —
    * ex: "resistor" resolve para "media/components/light/resistor.svg" ou ".../dark/resistor.svg"
    * conforme o tema ativo do VSCode. */

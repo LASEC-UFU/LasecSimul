@@ -21,9 +21,13 @@ O vNext usa JSON Schema 2020-12 como fonte de verdade e gera tipos TypeScript. O
 - topologias separadas por domínio;
 - visual/viewport;
 - settings de simulação declarativos;
-- referências portáteis a firmware, VHDL, scripts e subsistemas.
+- referências portáteis a firmware, VHDL, scripts, subsistemas e projetos IEC 61131-3;
+- componentes PLC podem referenciar um projeto IEC, uma configuração de entrada e/ou um `PlcCompiledArtifact` por asset/hash;
+- identidade estável de endpoints PLC (`ioId`) para preservar bindings entre recompilações.
 
-Não persistir `SimulationPlan`, índices runtime, soluções, filas ou estado transitório.
+A estrutura detalhada de POUs, cinco linguagens e manifesto PLC pertence a [SCHEMA-003](iec61131-project.md).
+
+Não persistir `SimulationPlan`, índices runtime, soluções, filas, imagens de I/O, memória da PLC VM ou estado transitório. Artefato PLC pode ser armazenado como asset de build reproduzível, mas nunca é a fonte de verdade quando a autoria IEC está presente.
 
 ## Evolução beta
 
@@ -34,5 +38,7 @@ Mudança incompatível incrementa `schemaVersion`; loader rejeita versão errada
 - schema estrito para estruturas canônicas;
 - tipos TS derivados não divergem do schema;
 - IDs e endpoints são validados antes da compilação;
+- bloco PLC sem projeto/artefato é persistível com zero endpoints;
+- `ioId` permite preservar bindings em rename de I/O;
 - round-trip preserva semântica;
 - fixtures numéricas v2 convertidas mantêm resultado dentro da tolerância.

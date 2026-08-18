@@ -912,15 +912,15 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
     registerBuiltinMetadata("instruments.voltmeter", "Voltímetro", components::Voltmeter::propertySchema(),
                             englishName("Voltmeter"), components::Voltmeter::readoutFormat());
 
-    // "Generic FPGA" -- built-in, não plugin (ver plano FPGA, seção "Component registration &
-    // catalog/packaging": GHDL é um PROCESSO externo comandado pelo Core, não uma DLL/SO carregada
-    // via NativeDeviceProxy). Toda a configuração VHDL/toolchain chega FRESCA por instância via a
+    // "Bloco Programável FPGA" -- built-in, não plugin (ver `.spec/features/fpga-ghdl.md`): GHDL
+    // é um PROCESSO externo comandado pelo Core, não uma DLL/SO carregada via
+    // NativeDeviceProxy. Toda a configuração VHDL/toolchain chega FRESCA por instância via a
     // chave irmã "fpga" do payload de addComponent (ComponentParams.fpgaSources/fpgaTop/
     // fpgaStandard/fpgaPorts/fpgaGhdlBinary/fpgaVpiModulePath/fpgaCacheRootDir) -- a factory não
     // depende de nenhum estado mutável de sessão, então não importa que `registerBuiltinComponents`
-    // rode antes de qualquer verbo IPC de config existir. Portas (`fpgaPorts`) vêm de uma chamada
-    // prévia a `analyzeFpga` (verbo standalone, não passa por aqui -- ver handleMessage) que já
-    // rodou `ghdl -a/-e` + descoberta de portas contra as MESMAS fontes.
+    // rode antes de qualquer verbo IPC de config existir. Sem a chave `fpga`, a instância nasce
+    // legitimamente com fontes/portas vazias; depois de `analyzeFpga`, a Extension reconstrói esta
+    // mesma autoria com `fpgaPorts` derivados da entity.
     reg.registerFactory("digital.generic_fpga", [&scheduler](const ComponentParams& p) -> std::unique_ptr<IComponentModel> {
         fpga::GhdlBackendOptions options;
         options.ghdlBinary = p.fpgaGhdlBinary.empty() ? "ghdl" : p.fpgaGhdlBinary;
@@ -938,9 +938,9 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
     });
     registerBuiltinMetadata(
         "digital.generic_fpga",
-        "FPGA Genérico (VHDL/GHDL)",
+        "Bloco Programável FPGA",
         std::vector<PropertySchema>{},
-        R"json({"en":{"name":"Generic FPGA (VHDL/GHDL)"}})json");
+        R"json({"en":{"name":"Programmable FPGA Block"}})json");
 }
 
 } // namespace

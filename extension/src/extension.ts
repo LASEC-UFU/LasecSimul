@@ -617,6 +617,7 @@ async function chooseSubcircuitFileCommand(componentId: string): Promise<void> {
     typeId: parsed.typeId,
     label,
     category: "Subcircuitos",
+    workspaceSection: parsed.workspaceSection,
     hidden: true, // nunca aparece na paleta -- só resolve por typeId, ver paletteTree.ts
     pinCount: parsed.pinCount,
     pinIds: parsed.pinIds.length > 0 ? parsed.pinIds : undefined,
@@ -1110,6 +1111,11 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
         : { ...message.project, topology: { ...message.project.topology, revision: previous.topology.revision } };
       enqueueProjectSnapshotSync(previous, state.schematicState);
       if (topologyChanged) syncSchematicPanel();
+      return;
+    }
+    case "requestSetWorkspaceSelection": {
+      state.workspaceSelection = { ...message.selection };
+      state.paletteViewProvider?.setWorkspaceSelection(state.workspaceSelection);
       return;
     }
     case "requestAddComponent": {
@@ -2352,7 +2358,8 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
     state.schematicState.catalog,
     currentLasecSimulLanguage(),
     addPaletteComponent,
-    (item) => removeRegisteredCatalogItemCommand(item, catalogCommandOptions())
+    (item) => removeRegisteredCatalogItemCommand(item, catalogCommandOptions()),
+    state.workspaceSelection,
   );
 
   context.subscriptions.push(

@@ -1,0 +1,82 @@
+LasecSimul PLC RUNTIME LIBRARY EXCEPTION
+
+Version 1.0, 2026
+
+Copyright (C) 2026 LasecSimul contributors.
+
+Everyone is permitted to copy and distribute verbatim copies of this
+license document, but changing it is not allowed.
+
+This LasecSimul PLC Runtime Library Exception ("Exception") is an
+additional permission under section 7 of the GNU General Public License,
+version 3 ("GPLv3"). It applies to a given file (the "Runtime Library")
+that bears a notice placed by the copyright holder of the file stating
+that the file is governed by GPLv3 along with this Exception.
+
+LasecSimul's IEC 61131-3 toolchain lowers LD, FBD and SFC programs to
+Structured Text, compiles the result with the vendored STruCpp compiler
+(itself GPL-3.0 with the STruC++ Runtime Library Exception) into C++17,
+and builds that C++17 into a native module (`PlcNativeModule`) that a
+worker process of the LasecSimul Core loads and executes. When LasecSimul
+does this, it may combine portions of certain runtime header files and
+runtime libraries — from LasecSimul itself and/or from the vendored
+STruCpp toolchain — with the compiled program produced from a user's own
+IEC 61131-3 project. The purpose of this Exception is to allow such
+compiled programs, including proprietary ones, to be distributed under
+terms of the user's choosing.
+
+0. Definitions.
+
+A file is an "Independent Module" if it either requires no license from
+the copyright holders of the covered file, or if the license it requires
+is compatible with both the GPLv3 and this Exception.
+
+"LasecSimul" means a version of the LasecSimul IEC 61131-3 toolchain
+(including its vendored STruCpp compiler), with or without modifications,
+governed by version 3 (or a specified later version) of the GNU General
+Public License (GPL) and not solely by any other licenses.
+
+"Target Code" is the `PlcNativeModule` output — or any intermediate C++
+source, object code, or linked binary produced along the way — from
+compiling a user's own IEC 61131-3 project (LD, FBD, ST, SFC or IL) with
+LasecSimul, in a form suitable for loading and execution by a LasecSimul
+PLC worker or by any other compatible execution environment.
+
+"Compilation Process" means a process that transforms source code
+governed only by Independent Modules into Target Code.
+
+"Eligible Compilation Process" means a Compilation Process that uses
+LasecSimul, alone or with other GPL-compatible software, to transform
+code.
+
+1. Grant of Additional Permission.
+
+You have permission to propagate a work of Target Code formed by
+combining the Runtime Library with Independent Modules, even if such
+propagation would otherwise violate the terms of GPLv3, provided that all
+Target Code was generated through an Eligible Compilation Process. You
+may then convey such a combination under terms of your choice, consistent
+with the licensing of the Independent Modules.
+
+In practice: a `PlcNativeModule` (and any C++ or object code produced
+along the way) compiled by LasecSimul from your own IEC 61131-3 project
+is Target Code. You may distribute it — bundled with your device, product,
+or service — under any license you choose, including a proprietary one.
+This Exception does not extend to LasecSimul's own source code, its
+vendored STruCpp compiler, or its vendored OpenPLC Editor v4-derived UI
+components, all of which remain governed by GPLv3 as described in the
+LasecSimul `LICENSE` file.
+
+2. No Weakening of LasecSimul's Copyleft.
+
+The availability of this Exception does not imply any general presumption
+that third-party software is unaffected by the copyleft requirements of
+the license of LasecSimul.
+
+3. Provenance.
+
+This Exception mirrors the STruC++ Runtime Library Exception published by
+the OpenPLC Project / Autonomy-Logic, adapted for LasecSimul's own vendored
+toolchain and worker-process execution model. See
+`.spec/adr/0007-openplc-v4-incorporation-and-native-plc-pipeline.md` for the
+decision record.

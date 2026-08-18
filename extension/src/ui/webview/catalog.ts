@@ -29,6 +29,7 @@ export const defaultComponentCatalog: WebviewComponentCatalogEntry[] = [
   { typeId: "other.package", label: "Pacote", category: "Outros", folderPath: ["Outros"], icon: "package", graphical: true, pinCount: 0, defaultProperties: {}, disabled: true, disabledReason: "subcircuito/package interativo ainda indisponivel" },
   { typeId: "other.test_unit", label: "Unidade de Teste", category: "Outros", folderPath: ["Outros"], icon: "test-unit", pinCount: 0, defaultProperties: {}, hidden: true },
   { typeId: "other.dial", label: "Rotativo", category: "Outros", folderPath: ["Outros"], icon: "dial", graphical: true, pinCount: 0, defaultProperties: {}, hidden: true },
+  { typeId: "digital.generic_fpga", label: "Bloco Programável FPGA", category: "Digital", folderPath: ["Digital"], workspaceSection: "digital", icon: "package", pinCount: 0, defaultProperties: {} },
   { typeId: "logic.buffer", label: "Buffer", category: "Logicos", folderPath: ["Logicos", "Portas"], icon: "buffer", pinCount: 2, defaultProperties: {} },
   { typeId: "logic.and_gate", label: "And Gate", category: "Logicos", folderPath: ["Logicos", "Portas"], icon: "andgate", pinCount: 3, defaultProperties: {} },
   { typeId: "logic.or_gate", label: "Or Gate", category: "Logicos", folderPath: ["Logicos", "Portas"], icon: "orgate", pinCount: 3, defaultProperties: {} },

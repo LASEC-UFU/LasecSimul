@@ -87,6 +87,25 @@ const catalog: PaletteRenderableEntry[] = [
     assert(tree.length === 0, "itens ocultos nao devem aparecer na busca");
   });
 
+  await test("buildPaletteTree separa Analog e Digital rigorosamente", () => {
+    const mixed: PaletteRenderableEntry[] = [
+      ...catalog,
+      { typeId: "logic.and_gate", label: "AND", category: "Logicos", pinCount: 3, defaultProperties: {} },
+      { typeId: "digital.generic_fpga", label: "FPGA", category: "Digital", pinCount: 0, defaultProperties: {} },
+    ];
+    const analog = JSON.stringify(buildPaletteTree(mixed, "", "analog"));
+    const digital = JSON.stringify(buildPaletteTree(mixed, "", "digital"));
+    assert(analog.includes("passive.resistor"), "Analog deveria conter o resistor");
+    assert(!analog.includes("logic.and_gate") && !analog.includes("digital.generic_fpga"), "Analog não deveria conter itens digitais");
+    assert(digital.includes("logic.and_gate") && digital.includes("digital.generic_fpga"), "Digital deveria conter lógica e FPGA");
+    assert(!digital.includes("passive.resistor"), "Digital não deveria conter o resistor");
+  });
+
+  await test("seções futuras de Process permanecem vazias sem itens declarados", () => {
+    assert(buildPaletteTree(catalog, "", "ctrl").length === 0, "Ctrl deveria iniciar vazia");
+    assert(buildPaletteTree(catalog, "", "autom").length === 0, "Autom deveria iniciar vazia");
+  });
+
   const { failed } = finish();
   process.exitCode = failed > 0 ? 1 : 0;
 })();
