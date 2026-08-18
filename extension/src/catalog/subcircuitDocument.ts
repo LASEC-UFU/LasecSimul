@@ -186,7 +186,7 @@ export function parseSubcircuitDocument(raw: unknown, manifestDir: string): Pars
     translations: typeof obj.translations === "object" && obj.translations !== null ? (obj.translations as Record<string, { name?: string }>) : undefined,
     serialPorts: Array.isArray(obj.serialPorts) ? (obj.serialPorts as SubcircuitDocument["serialPorts"]) : undefined,
     folderPath: Array.isArray(obj.folderPath) ? (obj.folderPath as string[]) : undefined,
-    workspaceSection: obj.workspaceSection === "analog" || obj.workspaceSection === "digital" || obj.workspaceSection === "ctrl" || obj.workspaceSection === "autom"
+    workspaceSection: obj.workspaceSection === "analog" || obj.workspaceSection === "digital" || obj.workspaceSection === "control" || obj.workspaceSection === "process"
       ? obj.workspaceSection
       : undefined,
     defaultProperties: typeof obj.defaultProperties === "object" && obj.defaultProperties !== null ? (obj.defaultProperties as Record<string, unknown>) : undefined,

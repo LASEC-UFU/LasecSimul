@@ -33,7 +33,7 @@ import { isHighWireVoltage, reconcileWireVoltages } from "./wirePresentation.js"
 import { continuousDialValueFromPointer, steppedDialValue } from "./dialInteraction.js";
 import { contextMenuViewportSize, positionContextSubmenu, positionRootContextMenu } from "./contextMenuPosition.js";
 import { regenerateGenericSubcircuitState } from "./genericSubcircuitPackage.js";
-import { normalizeWorkspaceSelection, WorkspaceMainTab, WorkspaceSelection } from "./workspace.js";
+import { normalizeWorkspaceSelection, WORKSPACE_SECTION_ORDER, WorkspaceSection, WorkspaceSelection } from "./workspace.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const FINE_WIRE_STEP = WIRE_GRID_SIZE / 10;
@@ -177,7 +177,7 @@ let canvasElement: HTMLDivElement | undefined;
 let canvasContentElement: HTMLDivElement | undefined;
 let wireLayerElement: SVGSVGElement | undefined;
 let workspaceTabsElement: HTMLElement | undefined;
-let processWorkspaceElement: HTMLElement | undefined;
+let placeholderWorkspaceElement: HTMLElement | undefined;
 
 const UI_TEXT = {
   "pt-BR": {
@@ -257,12 +257,10 @@ const UI_TEXT = {
     fpgaAdd: "Adicionar bloco programável FPGA",
     fpgaLoadCode: "Carregar código VHDL...",
     fpgaUnconfigured: "Nenhum código carregado; o bloco ainda não possui entradas ou saídas.",
-    workspaceCircuit: "Circuit",
-    workspaceProcess: "Process",
-    workspaceAnalog: "Analog",
+    workspaceAnalog: "Analógico",
     workspaceDigital: "Digital",
-    workspaceCtrl: "Ctrl",
-    workspaceAutom: "Autom",
+    workspaceControl: "Controle",
+    workspaceProcess: "Processo",
     fpgaOpenSource: "Abrir/editar VHDL",
     fpgaConfigure: "Alterar arquivos e entity...",
     fpgaConfigureGhdl: "Configurar simulador GHDL...",
@@ -397,12 +395,10 @@ const UI_TEXT = {
     fpgaAdd: "Add programmable FPGA block",
     fpgaLoadCode: "Load VHDL code...",
     fpgaUnconfigured: "No code loaded; the block does not have inputs or outputs yet.",
-    workspaceCircuit: "Circuit",
-    workspaceProcess: "Process",
     workspaceAnalog: "Analog",
     workspaceDigital: "Digital",
-    workspaceCtrl: "Ctrl",
-    workspaceAutom: "Autom",
+    workspaceControl: "Control",
+    workspaceProcess: "Process",
     fpgaOpenSource: "Open/edit VHDL",
     fpgaConfigure: "Change files and entity...",
     fpgaConfigureGhdl: "Configure GHDL simulator...",
@@ -2609,7 +2605,7 @@ function renderAppBar(): HTMLElement {
 
   const fpgaGroup = document.createElement("div");
   fpgaGroup.className = "appbar__group";
-  if (!editingSubcircuit && workspaceSelection.main === "circuit" && workspaceSelection.circuit === "digital") {
+  if (!editingSubcircuit && workspaceSelection.section === "digital") {
     fpgaGroup.appendChild(
       renderToolbarButton("fpga", t("fpgaAdd"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestAddGenericFpga" }))
     );
@@ -2663,6 +2659,36 @@ function renderAppBar(): HTMLElement {
   meta.append(selection, status);
   bar.append(fileGroup, fpgaGroup, simGroup, editGroup, viewGroup, subcircuitGroup, meta);
   return bar;
+}
+
+/** Glifos das 4 abas fixas do workspace -- mesma receita de `renderIcon` (viewBox 24x24, stroke-line
+ * via CSS), um por `WorkspaceSection`. Nenhuma logica de componente aqui, so um desenho por secao. */
+function renderWorkspaceTabIcon(section: WorkspaceSection): SVGSVGElement {
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  svg.classList.add("workspace-tabs__icon");
+
+  switch (section) {
+    case "analog":
+      // onda senoidal -- sinal analogico continuo
+      svg.innerHTML = '<path d="M2 16c3-12 7-12 10 0s7 12 10-8"></path>';
+      break;
+    case "digital":
+      // onda quadrada -- pulso binario
+      svg.innerHTML = '<path d="M2 16h4V8h4v8h4V8h4v8h4"></path>';
+      break;
+    case "control":
+      // seta de laco fechado (malha de realimentacao) em torno de um ponto de setpoint
+      svg.innerHTML = '<path d="M18 8a7 7 0 1 0 1 5"></path><path d="M19 3v5h-5"></path><circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none"></circle>';
+      break;
+    case "process":
+      // vaso/tanque com linha de nivel de liquido
+      svg.innerHTML = '<path d="M6 3h12"></path><path d="M7 3v15a5 5 0 0 0 5 5a5 5 0 0 0 5-5V3"></path><path d="M7 14h10"></path>';
+      break;
+  }
+
+  return svg;
 }
 
 type ToolbarIconKind = "open" | "save" | "saveProjectAs" | "fpga" | "start" | "pause" | "stop" | "properties" | "delete" | "zoomFitSelection" | "zoomFitAll" | "zoomReset" | "back" | "createPin" | "selectExposedComponents" | "selectExportedProperties";
@@ -3022,66 +3048,66 @@ function zoomReset(): void {
   persistState();
 }
 
-function workspaceTabButton(label: string, active: boolean, onClick: () => void): HTMLButtonElement {
+const WORKSPACE_SECTION_LABEL_KEY: Record<WorkspaceSection, keyof typeof UI_TEXT["pt-BR"]> = {
+  analog: "workspaceAnalog",
+  digital: "workspaceDigital",
+  control: "workspaceControl",
+  process: "workspaceProcess",
+};
+
+function workspaceTabButton(section: WorkspaceSection, active: boolean): HTMLButtonElement {
+  const label = t(WORKSPACE_SECTION_LABEL_KEY[section]);
   const button = document.createElement("button");
   button.type = "button";
+  button.setAttribute("role", "tab");
   button.className = `workspace-tabs__button${active ? " workspace-tabs__button--active" : ""}`;
-  button.textContent = label;
+  button.title = label;
+  button.setAttribute("aria-label", label);
   button.setAttribute("aria-selected", String(active));
-  button.addEventListener("click", onClick);
+  button.tabIndex = active ? 0 : -1;
+  button.appendChild(renderWorkspaceTabIcon(section));
+  button.addEventListener("click", () => setWorkspaceSection(section));
   return button;
 }
 
-function setWorkspaceSelection(next: WorkspaceSelection): void {
-  if (
-    next.main === workspaceSelection.main &&
-    next.circuit === workspaceSelection.circuit &&
-    next.process === workspaceSelection.process
-  ) return;
+function setWorkspaceSection(next: WorkspaceSection): void {
+  if (next === workspaceSelection.section) return;
   const hadPendingConnection = state.pendingConnection !== undefined;
   cancelActiveTool();
   hideContextMenu();
-  workspaceSelection = next;
+  workspaceSelection = { section: next };
   if (hadPendingConnection) persistState();
   else storeWebviewState();
   send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestSetWorkspaceSelection", selection: workspaceSelection });
   render();
 }
 
-function setWorkspaceMainTab(main: WorkspaceMainTab): void {
-  setWorkspaceSelection({ ...workspaceSelection, main });
+/** Setas movem foco+seleção entre as 4 abas (padrão `role="tablist"`), com wrap nas pontas. */
+function handleWorkspaceTabsKeydown(event: KeyboardEvent): void {
+  if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+  const currentIndex = WORKSPACE_SECTION_ORDER.indexOf(workspaceSelection.section);
+  const delta = event.key === "ArrowRight" ? 1 : -1;
+  const nextIndex = (currentIndex + delta + WORKSPACE_SECTION_ORDER.length) % WORKSPACE_SECTION_ORDER.length;
+  const nextSection = WORKSPACE_SECTION_ORDER[nextIndex];
+  if (!nextSection) return;
+  event.preventDefault();
+  setWorkspaceSection(nextSection);
+  (workspaceTabsElement?.querySelector(`[aria-selected="true"]`) as HTMLElement | null)?.focus();
 }
 
 function renderWorkspaceTabs(): HTMLElement {
   const navigation = document.createElement("nav");
   navigation.className = "workspace-tabs";
+  navigation.setAttribute("role", "tablist");
   navigation.setAttribute("aria-label", "Workspace");
+  navigation.addEventListener("keydown", handleWorkspaceTabsKeydown);
 
-  const subtabs = document.createElement("div");
-  subtabs.className = "workspace-tabs__row workspace-tabs__row--sub";
-  if (workspaceSelection.main === "circuit") {
-    subtabs.append(
-      workspaceTabButton(t("workspaceAnalog"), workspaceSelection.circuit === "analog", () =>
-        setWorkspaceSelection({ ...workspaceSelection, circuit: "analog" })),
-      workspaceTabButton(t("workspaceDigital"), workspaceSelection.circuit === "digital", () =>
-        setWorkspaceSelection({ ...workspaceSelection, circuit: "digital" })),
-    );
-  } else {
-    subtabs.append(
-      workspaceTabButton(t("workspaceCtrl"), workspaceSelection.process === "ctrl", () =>
-        setWorkspaceSelection({ ...workspaceSelection, process: "ctrl" })),
-      workspaceTabButton(t("workspaceAutom"), workspaceSelection.process === "autom", () =>
-        setWorkspaceSelection({ ...workspaceSelection, process: "autom" })),
-    );
+  const row = document.createElement("div");
+  row.className = "workspace-tabs__row";
+  for (const section of WORKSPACE_SECTION_ORDER) {
+    row.appendChild(workspaceTabButton(section, workspaceSelection.section === section));
   }
-
-  const mainTabs = document.createElement("div");
-  mainTabs.className = "workspace-tabs__row workspace-tabs__row--main";
-  mainTabs.append(
-    workspaceTabButton(t("workspaceCircuit"), workspaceSelection.main === "circuit", () => setWorkspaceMainTab("circuit")),
-    workspaceTabButton(t("workspaceProcess"), workspaceSelection.main === "process", () => setWorkspaceMainTab("process")),
-  );
-  navigation.append(subtabs, mainTabs);
+  navigation.appendChild(row);
   return navigation;
 }
 
@@ -3110,19 +3136,22 @@ function ensureRenderShell(): { canvas: HTMLDivElement; canvasContent: HTMLDivEl
   if (canvasElement.parentElement !== app) app.appendChild(canvasElement);
   if (appBarElement.nextSibling !== canvasElement) app.insertBefore(canvasElement, appBarElement.nextSibling);
 
-  const processActive = workspaceSelection.main === "process";
-  document.body.classList.toggle("workspace-mode--process", processActive);
-  appBarElement.hidden = processActive;
-  canvasElement.hidden = processActive;
-  if (processActive) {
-    if (!processWorkspaceElement) {
-      processWorkspaceElement = document.createElement("section");
-      processWorkspaceElement.className = "process-workspace";
-      processWorkspaceElement.setAttribute("aria-label", "Process workspace");
+  // "analog"/"digital" usam o canvas eletrico normal; "control"/"process" ainda nao tem editor
+  // proprio (ver .spec/features/process-visualization.md, FEAT-008 deferred) e mostram um
+  // placeholder generico -- sem logica especifica de componente, so a secao ativa.
+  const placeholderActive = workspaceSelection.section === "control" || workspaceSelection.section === "process";
+  document.body.classList.toggle("workspace-mode--placeholder", placeholderActive);
+  appBarElement.hidden = placeholderActive;
+  canvasElement.hidden = placeholderActive;
+  if (placeholderActive) {
+    if (!placeholderWorkspaceElement) {
+      placeholderWorkspaceElement = document.createElement("section");
+      placeholderWorkspaceElement.className = "workspace-placeholder";
+      placeholderWorkspaceElement.setAttribute("aria-label", "Workspace placeholder");
     }
-    if (processWorkspaceElement.parentElement !== app) app.appendChild(processWorkspaceElement);
+    if (placeholderWorkspaceElement.parentElement !== app) app.appendChild(placeholderWorkspaceElement);
   } else {
-    processWorkspaceElement?.remove();
+    placeholderWorkspaceElement?.remove();
   }
 
   const nextWorkspaceTabs = renderWorkspaceTabs();
@@ -3131,7 +3160,7 @@ function ensureRenderShell(): { canvas: HTMLDivElement; canvasContent: HTMLDivEl
   workspaceTabsElement = nextWorkspaceTabs;
   if (workspaceTabsElement.parentElement === app && workspaceTabsElement !== app.lastElementChild) app.appendChild(workspaceTabsElement);
 
-  if (processActive) return undefined;
+  if (placeholderActive) return undefined;
 
   canvasContentElement.style.transform = `translate(${state.viewport.x}px, ${state.viewport.y}px) scale(${state.viewport.zoom})`;
   if (wireLayerElement.parentElement !== canvasContentElement) canvasContentElement.insertBefore(wireLayerElement, canvasContentElement.firstChild);

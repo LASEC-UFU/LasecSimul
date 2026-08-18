@@ -12,10 +12,10 @@ Visualização é projeção de telemetria, não participante do solver. Assets 
 
 ## Shell de navegação já disponível
 
-A feature completa continua adiada, mas o workspace já reserva `Process/Ctrl` e `Process/Autom`
-conforme [FEAT-011](workspace-navigation.md). Ambas as áreas permanecem intencionalmente vazias nesta
-fase. A presença das abas não autoriza misturar componentes elétricos, analógicos ou digitais nelas e
-não significa que editor, biblioteca ou runtime de processo estejam implementados.
+A feature completa continua adiada, mas o workspace já reserva as abas de primeiro nível `Controle`
+e `Processo` conforme [FEAT-011](workspace-navigation.md). Ambas as áreas permanecem intencionalmente
+vazias nesta fase. A presença das abas não autoriza misturar componentes elétricos, analógicos ou
+digitais nelas e não significa que editor, biblioteca ou runtime de processo estejam implementados.
 
 Quando a implementação desta feature começar, a área de processo deve ser preenchida dentro dessa
 hierarquia e preservar seu estado ao alternar abas, sem reutilizar o canvas elétrico como fonte de
@@ -31,8 +31,8 @@ verdade.
 
 ## Aceitação
 
-- antes da implementação da feature, `Ctrl` e `Autom` existem como áreas vazias e isoladas do catálogo
-  de `Circuit`;
+- antes da implementação da feature, `Controle` e `Processo` existem como abas de primeiro nível
+  vazias e isoladas do catálogo de `Analógico`/`Digital`;
 - ocultar/fechar Webview não muda resultado;
 - SharedHost reduz FPS sem mudar simulação;
 - bindings inválidos falham na compilação/autoria;

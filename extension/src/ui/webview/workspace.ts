@@ -1,31 +1,42 @@
-export type WorkspaceMainTab = "circuit" | "process";
-export type CircuitWorkspaceTab = "analog" | "digital";
-export type ProcessWorkspaceTab = "ctrl" | "autom";
-export type WorkspaceSection = CircuitWorkspaceTab | ProcessWorkspaceTab;
+// IDs internos ficam em ingles e estaveis; os rotulos em portugues (Analogico/Digital/Controle/
+// Processo) existem so na camada de apresentacao (UI_TEXT em main.ts).
+export type WorkspaceSection = "analog" | "digital" | "control" | "process";
+
+// Fonte unica de verdade pra ordem fixa das 4 abas -- main.ts itera este array em vez de um
+// literal local. Nao existe UI de reordenar; a ordem e garantida por vir sempre deste array.
+export const WORKSPACE_SECTION_ORDER: readonly WorkspaceSection[] = ["analog", "digital", "control", "process"] as const;
 
 export interface WorkspaceSelection {
-  main: WorkspaceMainTab;
-  circuit: CircuitWorkspaceTab;
-  process: ProcessWorkspaceTab;
+  section: WorkspaceSection;
 }
-export const DEFAULT_WORKSPACE_SELECTION: WorkspaceSelection = {
-  main: "circuit",
-  circuit: "analog",
-  process: "ctrl",
-};
+export const DEFAULT_WORKSPACE_SELECTION: WorkspaceSelection = { section: "analog" };
+
+const VALID_SECTIONS = new Set<WorkspaceSection>(WORKSPACE_SECTION_ORDER);
+
+// Formato legado (pre abas achatadas): { main: "circuit"|"process", circuit: "analog"|"digital",
+// process: "ctrl"|"autom" }. Mapeado uma unica vez na leitura do `vscode.getState()` persistido --
+// depois disso so o formato novo e gravado. Nao e suporte indefinido a dois formatos, e migracao
+// de leitura unica do estado local da Webview.
+interface LegacyWorkspaceSelection {
+  main?: unknown;
+  circuit?: unknown;
+  process?: unknown;
+}
+
+function migrateLegacyWorkspaceSelection(candidate: LegacyWorkspaceSelection): WorkspaceSection | undefined {
+  if (candidate.main === undefined && candidate.circuit === undefined && candidate.process === undefined) return undefined;
+  if (candidate.main === "process") return candidate.process === "autom" ? "process" : "control";
+  return candidate.circuit === "digital" ? "digital" : "analog";
+}
 
 export function normalizeWorkspaceSelection(value: unknown): WorkspaceSelection {
   if (typeof value !== "object" || value === null) return { ...DEFAULT_WORKSPACE_SELECTION };
-  const candidate = value as Partial<WorkspaceSelection>;
-  return {
-    main: candidate.main === "process" ? "process" : "circuit",
-    circuit: candidate.circuit === "digital" ? "digital" : "analog",
-    process: candidate.process === "autom" ? "autom" : "ctrl",
-  };
-}
-
-export function activeWorkspaceSection(selection: WorkspaceSelection): WorkspaceSection {
-  return selection.main === "circuit" ? selection.circuit : selection.process;
+  const candidate = value as Partial<WorkspaceSelection> & LegacyWorkspaceSelection;
+  if (typeof candidate.section === "string" && VALID_SECTIONS.has(candidate.section as WorkspaceSection)) {
+    return { section: candidate.section as WorkspaceSection };
+  }
+  const migrated = migrateLegacyWorkspaceSelection(candidate);
+  return { section: migrated ?? "analog" };
 }
 
 interface WorkspaceClassifiableCatalogEntry {

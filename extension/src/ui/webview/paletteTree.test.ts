@@ -101,9 +101,9 @@ const catalog: PaletteRenderableEntry[] = [
     assert(!digital.includes("passive.resistor"), "Digital não deveria conter o resistor");
   });
 
-  await test("seções futuras de Process permanecem vazias sem itens declarados", () => {
-    assert(buildPaletteTree(catalog, "", "ctrl").length === 0, "Ctrl deveria iniciar vazia");
-    assert(buildPaletteTree(catalog, "", "autom").length === 0, "Autom deveria iniciar vazia");
+  await test("seções futuras de Controle/Processo permanecem vazias sem itens declarados", () => {
+    assert(buildPaletteTree(catalog, "", "control").length === 0, "Controle deveria iniciar vazia");
+    assert(buildPaletteTree(catalog, "", "process").length === 0, "Processo deveria iniciar vazia");
   });
 
   const { failed } = finish();

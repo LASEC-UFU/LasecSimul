@@ -1,5 +1,5 @@
 import { buildPaletteTree, PaletteComponentNode, PaletteRenderableEntry, PaletteTreeNode } from "./paletteTree.js";
-import { activeWorkspaceSection, DEFAULT_WORKSPACE_SELECTION, normalizeWorkspaceSelection, WorkspaceSelection } from "./workspace.js";
+import { DEFAULT_WORKSPACE_SELECTION, normalizeWorkspaceSelection, WorkspaceSelection } from "./workspace.js";
 
 interface PaletteState {
   catalog: PaletteRenderableEntry[];
@@ -159,7 +159,7 @@ function render(): void {
   const shouldRestoreSearchFocus = activeElement instanceof HTMLInputElement && activeElement.classList.contains("palette__search-input");
   const selectionStart = shouldRestoreSearchFocus ? activeElement.selectionStart : null;
   const selectionEnd = shouldRestoreSearchFocus ? activeElement.selectionEnd : null;
-  const tree = buildPaletteTree(state.catalog, query, activeWorkspaceSection(state.workspaceSelection));
+  const tree = buildPaletteTree(state.catalog, query, state.workspaceSelection.section);
   const visibleComponents = collectVisibleComponents(tree).filter((node) => !node.disabled);
   app.innerHTML = "";
 

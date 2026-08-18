@@ -20,7 +20,7 @@ supersedes: []
 
 - O instalador/VSIX inclui um runtime GHDL relocável e o módulo VPI da plataforma, seguindo o mesmo
   modelo do QEMU integrado. O fluxo normal nunca depende de PATH, terminal ou instalação manual.
-- O catálogo e a barra de `Circuit/Digital` oferecem **Bloco Programável FPGA**. A inserção cria
+- O catálogo e a barra da aba `Digital` oferecem **Bloco Programável FPGA**. A inserção cria
   imediatamente um componente visual persistível, sem configuração VHDL, sem entradas e sem saídas;
   inserir o bloco não inicia GHDL nem exige que o toolchain esteja disponível.
 - As propriedades e o menu de contexto do bloco vazio oferecem **Carregar código VHDL...**. Somente
@@ -56,7 +56,7 @@ Agrupar várias instâncias FPGA em um único processo exige benchmark e design 
 
 ## Aceitação
 
-- o bloco programável pode ser inserido em `Circuit/Digital` com zero entradas, zero saídas e nenhuma
+- o bloco programável pode ser inserido na aba `Digital` com zero entradas, zero saídas e nenhuma
   configuração FPGA;
 - antes de carregar código, o bloco permanece visível, selecionável, movível, persistível e não inicia
   GHDL; seu símbolo não desenha leads ou terminais fictícios;
@@ -64,7 +64,7 @@ Agrupar várias instâncias FPGA em um único processo exige benchmark e design 
   portas analisadas;
 - uma entity válida com zero portas conclui a análise e conserva zero terminais;
 - reanálise preserva ligações de terminais que continuam existindo e remove ligações órfãs;
-- o bloco programável não aparece em `Circuit/Analog`, `Process/Ctrl` ou `Process/Autom`;
+- o bloco programável não aparece nas abas `Analógico`, `Controle` ou `Processo`;
 - duas compilações concorrentes da mesma chave não corrompem cache;
 - mudança de toolchain/VPI causa miss;
 - timeout deixa cache inválido/removível;
@@ -78,8 +78,7 @@ Agrupar várias instâncias FPGA em um único processo exige benchmark e design 
   portas escalares/vetoriais, incluindo intervalos ascendentes não nulos;
 - `extension/src/ui/webview/componentSymbols.test.ts`: corpo visual do FPGA vazio sem leads
   fictícios;
-- `extension/src/ui/webview/paletteTree.test.ts`: presença exclusiva do bloco FPGA em
-  `Circuit/Digital`;
+- `extension/src/ui/webview/paletteTree.test.ts`: presença exclusiva do bloco FPGA na aba `Digital`;
 - `core/test/core/fpga/GhdlBackendRealGhdlTest.cpp`: cache concorrente, fingerprints, timeout,
   descoberta de faixas e execução com GHDL real;
 - `core/test/core/fpga/FpgaComponentRealGhdlTest.cpp`: lockstep no Scheduler, settle no timestamp

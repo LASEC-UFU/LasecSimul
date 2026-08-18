@@ -331,7 +331,7 @@ function manifestFolderPath(json: Record<string, unknown>): string[] | undefined
 
 function manifestWorkspaceSection(json: Record<string, unknown>): WorkspaceSection | undefined {
   const value = json.workspaceSection;
-  return value === "analog" || value === "digital" || value === "ctrl" || value === "autom" ? value : undefined;
+  return value === "analog" || value === "digital" || value === "control" || value === "process" ? value : undefined;
 }
 
 function manifestIconFields(json: Record<string, unknown>, manifestDir: string): Pick<ParsedSubcircuitManifest, "icon" | "iconSvgInline" | "iconFilePath"> {
