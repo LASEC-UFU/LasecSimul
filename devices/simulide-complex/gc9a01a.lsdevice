@@ -85,6 +85,16 @@
       "default": 240,
       "min": 16,
       "step": 1
+    },
+    {
+      "id": "scale",
+      "label": "Escala",
+      "group": "Principal",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 1,
+      "min": 0.1,
+      "step": 0.1
     }
   ],
   "limits": {
@@ -93,18 +103,33 @@
   },
   "package": {
     "width": 252,
-    "height": 252,
+    "height": 268,
     "border": false,
     "background": {
       "kind": "none"
     },
     "runtimeState": {
-      "versionOffset": 0, "expectedVersion": 1,
+      "versionOffset": 0,
+      "expectedVersion": 1,
       "surface": {
-        "encoding": "rgbx32le", "x": 6, "y": 6, "w": 240, "h": 240,
-        "sourceWidth": { "prop": "width", "fallback": 240, "min": 1 },
-        "sourceHeight": { "prop": "height", "fallback": 240, "min": 1 },
-        "payloadOffset": 36, "enabledOffset": 16, "offColor": "#000000",
+        "encoding": "rgbx32le",
+        "x": 6,
+        "y": 6,
+        "w": 240,
+        "h": 240,
+        "sourceWidth": {
+          "prop": "width",
+          "fallback": 240,
+          "min": 1
+        },
+        "sourceHeight": {
+          "prop": "height",
+          "fallback": 240,
+          "min": 1
+        },
+        "payloadOffset": 36,
+        "enabledOffset": 16,
+        "offColor": "#000000",
         "clipShape": "ellipse"
       }
     },
@@ -188,7 +213,21 @@
         "length": 8,
         "label": "RST"
       }
-    ]
+    ],
+    "dynamicLayout": {
+      "schematicWidth": {
+        "prop": "scale",
+        "multiplier": 252,
+        "fallback": 252,
+        "min": 25.200000000000003
+      },
+      "schematicHeight": {
+        "prop": "scale",
+        "multiplier": 268,
+        "fallback": 268,
+        "min": 26.8
+      }
+    }
   },
   "icon": "gc9a01a",
   "folderPath": [
@@ -197,5 +236,8 @@
   ],
   "help": {
     "description": "Display gráfico redondo baseado no controlador GC9A01A."
+  },
+  "defaultProperties": {
+    "scale": 1
   }
 }

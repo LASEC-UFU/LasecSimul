@@ -22,9 +22,15 @@ const devicesRoot = path.join(repoRoot, "devices");
 const clean = process.argv.includes("--clean");
 const configArg = process.argv.find((arg) => arg.startsWith("--config="));
 const configIndex = process.argv.indexOf("--config");
+// Default Release -- sem isto, `cmake --build` num gerador multi-config (Visual Studio) cai
+// silenciosamente pra Debug (achado real 2026-08-18: um rebuild sem --config publicou um
+// device.dll Debug em build/win-x64, o mesmo caminho que o Core real carrega -- CRT de debug
+// incompatível deixou o processo Core sem responder, esvaziando a paleta inteira). Debug
+// continua disponível via --config=Debug pra quem precisa depurar o plugin nativo.
 const config =
   (configArg ? configArg.slice("--config=".length) : undefined) ??
-  (configIndex >= 0 ? process.argv[configIndex + 1] : undefined);
+  (configIndex >= 0 ? process.argv[configIndex + 1] : undefined) ??
+  "Release";
 
 const platformTarget = {
   win32: { dir: "win-x64", file: "device.dll", artifactNames: ["device.dll", "libdevice.dll"] },

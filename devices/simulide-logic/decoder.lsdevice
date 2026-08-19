@@ -1,0 +1,203 @@
+{
+  "schemaVersion": 1,
+  "typeId": "logic.decoder",
+  "name": "Decoder",
+  "language": "pt-BR",
+  "icon": "1to3",
+  "folderPath": [
+    "Conversores"
+  ],
+  "abiVersion": {
+    "major": 3,
+    "minor": 0
+  },
+  "nativeEntry": {
+    "win32-x64": "build/win-x64/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
+  "pins": [
+    {
+      "id": "s0",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "s1",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "s2",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "en",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "y0",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "y1",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "y2",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "y3",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "y4",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "y5",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "y6",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "y7",
+      "kind": "DIGITAL_OUT"
+    }
+  ],
+  "properties": [],
+  "limits": {
+    "stepTimeoutMs": 4,
+    "expectedComplexity": "low"
+  },
+  "package": {
+    "width": 56,
+    "height": 72,
+    "border": false,
+    "background": {
+      "kind": "none"
+    },
+    "viewSpec": {
+      "paint": [
+        {
+          "kind": "rect",
+          "x": 8,
+          "y": 0,
+          "w": 40,
+          "h": 72,
+          "fill": "#ffffff"
+        },
+        {
+          "kind": "text",
+          "x": 28,
+          "y": -4,
+          "value": "__label",
+          "fontSize": 5,
+          "color": "#0000aa"
+        }
+      ]
+    },
+    "pins": [
+      {
+        "id": "s0",
+        "x": 0,
+        "y": 8,
+        "angle": 180,
+        "length": 8,
+        "label": "S0"
+      },
+      {
+        "id": "s1",
+        "x": 0,
+        "y": 16,
+        "angle": 180,
+        "length": 8,
+        "label": "S1"
+      },
+      {
+        "id": "s2",
+        "x": 0,
+        "y": 24,
+        "angle": 180,
+        "length": 8,
+        "label": "S2"
+      },
+      {
+        "id": "en",
+        "x": 0,
+        "y": 32,
+        "angle": 180,
+        "length": 8,
+        "label": "EN"
+      },
+      {
+        "id": "y0",
+        "x": 48,
+        "y": 8,
+        "angle": 0,
+        "length": 8,
+        "label": "Y0"
+      },
+      {
+        "id": "y1",
+        "x": 48,
+        "y": 16,
+        "angle": 0,
+        "length": 8,
+        "label": "Y1"
+      },
+      {
+        "id": "y2",
+        "x": 48,
+        "y": 24,
+        "angle": 0,
+        "length": 8,
+        "label": "Y2"
+      },
+      {
+        "id": "y3",
+        "x": 48,
+        "y": 32,
+        "angle": 0,
+        "length": 8,
+        "label": "Y3"
+      },
+      {
+        "id": "y4",
+        "x": 48,
+        "y": 40,
+        "angle": 0,
+        "length": 8,
+        "label": "Y4"
+      },
+      {
+        "id": "y5",
+        "x": 48,
+        "y": 48,
+        "angle": 0,
+        "length": 8,
+        "label": "Y5"
+      },
+      {
+        "id": "y6",
+        "x": 48,
+        "y": 56,
+        "angle": 0,
+        "length": 8,
+        "label": "Y6"
+      },
+      {
+        "id": "y7",
+        "x": 48,
+        "y": 64,
+        "angle": 0,
+        "length": 8,
+        "label": "Y7"
+      }
+    ]
+  },
+  "help": {
+    "description": "Decodificador binario 3 para 8 com habilitacao (EN)."
+  }
+}

@@ -1,0 +1,203 @@
+{
+  "schemaVersion": 1,
+  "typeId": "logic.random",
+  "name": "Random",
+  "language": "pt-BR",
+  "icon": "package",
+  "folderPath": [
+    "Memorias"
+  ],
+  "abiVersion": {
+    "major": 3,
+    "minor": 0
+  },
+  "nativeEntry": {
+    "win32-x64": "build/win-x64/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
+  "pins": [
+    {
+      "id": "clk",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "rst",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "q0",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "q1",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "q2",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "q3",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "q4",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "q5",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "q6",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "q7",
+      "kind": "DIGITAL_OUT"
+    }
+  ],
+  "properties": [
+    {
+      "id": "seed",
+      "label": "Semente",
+      "group": "Main",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 1,
+      "min": 1,
+      "max": 255,
+      "step": 1
+    },
+    {
+      "id": "invertInputs",
+      "label": "Inverter Entradas",
+      "group": "Inputs",
+      "valueKind": "bool",
+      "editor": "checkbox",
+      "default": false
+    }
+  ],
+  "limits": {
+    "stepTimeoutMs": 4,
+    "expectedComplexity": "low"
+  },
+  "package": {
+    "width": 64,
+    "height": 72,
+    "border": false,
+    "background": {
+      "kind": "none"
+    },
+    "viewSpec": {
+      "paint": [
+        {
+          "kind": "rect",
+          "x": 8,
+          "y": 0,
+          "w": 48,
+          "h": 72,
+          "fill": "#ffffff"
+        },
+        {
+          "kind": "text",
+          "x": 32,
+          "y": -4,
+          "value": "__label",
+          "fontSize": 5,
+          "color": "#0000aa"
+        }
+      ]
+    },
+    "pins": [
+      {
+        "id": "clk",
+        "x": 0,
+        "y": 8,
+        "angle": 180,
+        "length": 8,
+        "label": "CLK"
+      },
+      {
+        "id": "rst",
+        "x": 0,
+        "y": 16,
+        "angle": 180,
+        "length": 8,
+        "label": "RST"
+      },
+      {
+        "id": "q0",
+        "x": 56,
+        "y": 8,
+        "angle": 0,
+        "length": 8,
+        "label": "Q0"
+      },
+      {
+        "id": "q1",
+        "x": 56,
+        "y": 16,
+        "angle": 0,
+        "length": 8,
+        "label": "Q1"
+      },
+      {
+        "id": "q2",
+        "x": 56,
+        "y": 24,
+        "angle": 0,
+        "length": 8,
+        "label": "Q2"
+      },
+      {
+        "id": "q3",
+        "x": 56,
+        "y": 32,
+        "angle": 0,
+        "length": 8,
+        "label": "Q3"
+      },
+      {
+        "id": "q4",
+        "x": 56,
+        "y": 40,
+        "angle": 0,
+        "length": 8,
+        "label": "Q4"
+      },
+      {
+        "id": "q5",
+        "x": 56,
+        "y": 48,
+        "angle": 0,
+        "length": 8,
+        "label": "Q5"
+      },
+      {
+        "id": "q6",
+        "x": 56,
+        "y": 56,
+        "angle": 0,
+        "length": 8,
+        "label": "Q6"
+      },
+      {
+        "id": "q7",
+        "x": 56,
+        "y": 64,
+        "angle": 0,
+        "length": 8,
+        "label": "Q7"
+      }
+    ]
+  },
+  "help": {
+    "description": "Gerador pseudoaleatorio de 8 bits (LFSR), avanca na borda de subida de CLK."
+  },
+  "defaultProperties": {
+    "seed": 1,
+    "invertInputs": false
+  }
+}

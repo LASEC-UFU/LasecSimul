@@ -1,10 +1,9 @@
 import { buildPaletteTree, PaletteComponentNode, PaletteRenderableEntry, PaletteTreeNode } from "./paletteTree.js";
-import { DEFAULT_WORKSPACE_SELECTION, normalizeWorkspaceSelection, WorkspaceSelection } from "./workspace.js";
+import { normalizeWorkspaceSelection, WORKSPACE_SECTION_ORDER, WorkspaceSection } from "./workspace.js";
 
 interface PaletteState {
   catalog: PaletteRenderableEntry[];
   language: "pt-BR" | "en";
-  workspaceSelection: WorkspaceSelection;
 }
 
 interface WindowWithPaletteState extends Window {
@@ -17,18 +16,22 @@ const vscode = typeof acquireVsCodeApi === "function" ? acquireVsCodeApi() : und
 const app = document.getElementById("app");
 
 const injectedInitialState = (window as WindowWithPaletteState).__LASECSIMUL_PALETTE_STATE__;
-const initialState: PaletteState = injectedInitialState ? {
-  ...injectedInitialState,
-  workspaceSelection: normalizeWorkspaceSelection(injectedInitialState.workspaceSelection),
-} : {
+const initialState: PaletteState = injectedInitialState ?? {
   catalog: [],
   language: "pt-BR" as const,
-  workspaceSelection: DEFAULT_WORKSPACE_SELECTION,
 };
-const persisted = (vscode?.getState() as { query?: string } | undefined) ?? {};
+const persisted = (vscode?.getState() as { query?: string; section?: unknown } | undefined) ?? {};
 
 let state: PaletteState = initialState;
 let query = persisted.query ?? "";
+/** Aba ativa da paleta -- filtra o catalogo por dominio (Analogico/Digital/Controle/Processo).
+ * Estado puramente local da paleta (nunca compartilhado com o editor, ver FEAT-011): o editor mostra
+ * o circuito inteiro sempre, essas abas so existem aqui pra organizar a busca por componente. */
+let section: WorkspaceSection = normalizeWorkspaceSelection(persisted.section).section;
+
+function persistNavigationState(): void {
+  vscode?.setState({ query, section });
+}
 
 const UI_TEXT = {
   "pt-BR": {
@@ -40,6 +43,10 @@ const UI_TEXT = {
     noResults: "Nenhum componente encontrado para este filtro.",
     removeRegistered: "Remover item registrado",
     addHint: "Clique para adicionar",
+    workspaceAnalog: "Analógico",
+    workspaceDigital: "Digital",
+    workspaceControl: "Controle",
+    workspaceProcess: "Processo",
   },
   en: {
     searchPlaceholder: "Search Components",
@@ -50,8 +57,19 @@ const UI_TEXT = {
     noResults: "No components match this filter.",
     removeRegistered: "Remove registered item",
     addHint: "Click to add",
+    workspaceAnalog: "Analog",
+    workspaceDigital: "Digital",
+    workspaceControl: "Control",
+    workspaceProcess: "Process",
   },
 } as const;
+
+const WORKSPACE_SECTION_LABEL_KEY: Record<WorkspaceSection, keyof typeof UI_TEXT["pt-BR"]> = {
+  analog: "workspaceAnalog",
+  digital: "workspaceDigital",
+  control: "workspaceControl",
+  process: "workspaceProcess",
+};
 
 function t(key: keyof typeof UI_TEXT["pt-BR"]): string {
   return UI_TEXT[state.language][key];
@@ -63,6 +81,83 @@ function isDarkTheme(): boolean {
 
 function currentIcon(node: PaletteComponentNode): string | undefined {
   return isDarkTheme() ? (node.iconDarkUri ?? node.iconLightUri) : (node.iconLightUri ?? node.iconDarkUri);
+}
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+function renderWorkspaceTabIcon(tabSection: WorkspaceSection): SVGSVGElement {
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  svg.classList.add("palette-tabs__icon");
+
+  switch (tabSection) {
+    case "analog":
+      svg.innerHTML = '<path d="M2 16c3-12 7-12 10 0s7 12 10-8"></path>';
+      break;
+    case "digital":
+      svg.innerHTML = '<path d="M2 16h4V8h4v8h4V8h4v8h4"></path>';
+      break;
+    case "control":
+      svg.innerHTML = '<path d="M18 8a7 7 0 1 0 1 5"></path><path d="M19 3v5h-5"></path><circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none"></circle>';
+      break;
+    case "process":
+      svg.innerHTML = '<path d="M6 3h12"></path><path d="M7 3v15a5 5 0 0 0 5 5a5 5 0 0 0 5-5V3"></path><path d="M7 14h10"></path>';
+      break;
+  }
+
+  return svg;
+}
+
+function workspaceTabButton(tabSection: WorkspaceSection, active: boolean): HTMLButtonElement {
+  const label = t(WORKSPACE_SECTION_LABEL_KEY[tabSection]);
+  const button = document.createElement("button");
+  button.type = "button";
+  button.setAttribute("role", "tab");
+  button.className = `palette-tabs__button${active ? " palette-tabs__button--active" : ""}`;
+  button.title = label;
+  button.setAttribute("aria-label", label);
+  button.setAttribute("aria-selected", String(active));
+  button.tabIndex = active ? 0 : -1;
+  button.appendChild(renderWorkspaceTabIcon(tabSection));
+  button.addEventListener("click", () => {
+    if (tabSection === section) return;
+    section = tabSection;
+    persistNavigationState();
+    render();
+  });
+  return button;
+}
+
+/** Setas movem foco+seleção entre as 4 abas (padrão `role="tablist"`), com wrap nas pontas. */
+function handleWorkspaceTabsKeydown(event: KeyboardEvent, navigation: HTMLElement): void {
+  if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+  const currentIndex = WORKSPACE_SECTION_ORDER.indexOf(section);
+  const delta = event.key === "ArrowRight" ? 1 : -1;
+  const nextIndex = (currentIndex + delta + WORKSPACE_SECTION_ORDER.length) % WORKSPACE_SECTION_ORDER.length;
+  const nextSection = WORKSPACE_SECTION_ORDER[nextIndex];
+  if (!nextSection || nextSection === section) return;
+  event.preventDefault();
+  section = nextSection;
+  persistNavigationState();
+  render();
+  (app?.querySelector(".palette-tabs [aria-selected=\"true\"]") as HTMLElement | null)?.focus();
+}
+
+function renderWorkspaceTabs(): HTMLElement {
+  const navigation = document.createElement("nav");
+  navigation.className = "palette-tabs";
+  navigation.setAttribute("role", "tablist");
+  navigation.setAttribute("aria-label", "Workspace");
+  navigation.addEventListener("keydown", (event) => handleWorkspaceTabsKeydown(event, navigation));
+
+  const row = document.createElement("div");
+  row.className = "palette-tabs__row";
+  for (const tabSection of WORKSPACE_SECTION_ORDER) {
+    row.appendChild(workspaceTabButton(tabSection, section === tabSection));
+  }
+  navigation.appendChild(row);
+  return navigation;
 }
 
 function pinCountLabel(count: number): string {
@@ -159,12 +254,14 @@ function render(): void {
   const shouldRestoreSearchFocus = activeElement instanceof HTMLInputElement && activeElement.classList.contains("palette__search-input");
   const selectionStart = shouldRestoreSearchFocus ? activeElement.selectionStart : null;
   const selectionEnd = shouldRestoreSearchFocus ? activeElement.selectionEnd : null;
-  const tree = buildPaletteTree(state.catalog, query, state.workspaceSelection.section);
+  const tree = buildPaletteTree(state.catalog, query, section);
   const visibleComponents = collectVisibleComponents(tree).filter((node) => !node.disabled);
   app.innerHTML = "";
 
   const shell = document.createElement("section");
   shell.className = "palette";
+
+  const tabs = renderWorkspaceTabs();
 
   const search = document.createElement("div");
   search.className = "palette__search";
@@ -176,7 +273,7 @@ function render(): void {
   input.value = query;
   input.addEventListener("input", () => {
     query = input.value;
-    vscode?.setState({ query });
+    persistNavigationState();
     render();
   });
   input.addEventListener("keydown", (event) => {
@@ -202,7 +299,7 @@ function render(): void {
     }
   }
 
-  shell.append(search, treeRoot);
+  shell.append(tabs, search, treeRoot);
   app.appendChild(shell);
 
   if (shouldRestoreSearchFocus) {
@@ -213,7 +310,7 @@ function render(): void {
 
 window.addEventListener("message", (event: MessageEvent<{ type: string; state?: PaletteState }>) => {
   if (event.data?.type !== "sync" || !event.data.state) return;
-  state = { ...event.data.state, workspaceSelection: normalizeWorkspaceSelection(event.data.state.workspaceSelection) };
+  state = event.data.state;
   render();
 });
 

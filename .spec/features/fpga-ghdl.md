@@ -20,7 +20,9 @@ supersedes: []
 
 - O instalador/VSIX inclui um runtime GHDL relocável e o módulo VPI da plataforma, seguindo o mesmo
   modelo do QEMU integrado. O fluxo normal nunca depende de PATH, terminal ou instalação manual.
-- O catálogo e a barra da aba `Digital` oferecem **Bloco Programável FPGA**. A inserção cria
+- O catálogo oferece **Bloco Programável FPGA** na aba `Digital` da paleta lateral (ver
+  [FEAT-011](workspace-navigation.md)); o editor de esquemático também oferece um botão de inserção
+  rápida na barra de ferramentas, sempre disponível (o editor não tem abas). A inserção cria
   imediatamente um componente visual persistível, sem configuração VHDL, sem entradas e sem saídas;
   inserir o bloco não inicia GHDL nem exige que o toolchain esteja disponível.
 - As propriedades e o menu de contexto do bloco vazio oferecem **Carregar código VHDL...**. Somente

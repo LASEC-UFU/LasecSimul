@@ -21,6 +21,29 @@ enum {
     I2C_TX_ACK
 };
 
+/* Contrato elétrico de I/O digital (achado real 2026-08-19, lendo `logicfamily.h`/`iopin.cpp` do
+ * SimulIDE real): nomes espelham `logicFamily_t` real, mas aqui já em VOLTS/OHMS ABSOLUTOS (a
+ * conversão Family-proporção x SupplyV acontece uma vez em `resolve_io_config`, não a cada
+ * stamp()). `inputHighV`/`inputLowV` DIFERENTES criam uma janela de histerese real --
+ * `IoPin::getInpState()` real preserva o nível anterior enquanto a tensão está entre os dois
+ * (nem HIGH nem LOW), não é um único corte -- por isso o estado por pino precisa ser persistido
+ * (`LogicDevice.inpHystState`), não recalculado do zero a cada stamp(). Quando o manifest não
+ * declara nenhuma destas properties, `resolve_io_config` cai exatamente nos valores fixos que já
+ * existiam (`LOGIC_THRESHOLD`/`LOGIC_HIGH`/`DRIVE_G`) -- comportamento numérico de qualquer
+ * circuito salvo antes desta mudança não muda (ver teste de retroatividade). */
+typedef struct {
+    double inputHighV;
+    double inputLowV;
+    double inputImpedance;   /* Ohms; 0 = sem carga extra no nó (mesmo padrão real: 1e9 default) */
+    double inputPullupR;     /* Ohms; 0 = sem pullup de entrada */
+    double outputHighV;
+    double outputLowV;
+    double outputImpedance;  /* Ohms; forma Thevenin/Norton -- ver drive_volts() */
+    double outputPullupR;    /* Ohms; 0 = sem pullup de saída (só relevante c/ openCollector) */
+    int openCollector;
+    int invertInputs;
+} LogicIoConfig;
+
 typedef struct {
     void* host_ctx;
     const LsdnHostApi* api;
@@ -51,6 +74,10 @@ typedef struct {
     uint8_t control_code;
     uint32_t mem_size;
     uint32_t addr_ptr;
+    LogicIoConfig io;             /* resolvido 1x em init(), nunca lido por string em stamp() */
+    uint8_t inpHystState[32];     /* estado lógico anterior por pino de ENTRADA, p/ histerese --
+                                      array dedicado, não reaproveita pin_level[]/prev[] (esses já
+                                      têm semântica própria em i2c/latch/decoder no mesmo arquivo) */
 } LogicDevice;
 
 static int streq(const LogicDevice* s, const char* id) { return strcmp(s->type_id, id) == 0; }
@@ -82,22 +109,81 @@ static int cfg_bool(LogicDevice* s, const char* name, int fallback) {
     return fallback;
 }
 
-static int read_level(LsdnMatrixView* matrix, uint32_t pin) {
-    return matrix && matrix->get_node_voltage && matrix->get_node_voltage(matrix->opaque, pin) > LOGIC_THRESHOLD;
+/* Resolvido 1x em init() (mesmo padrão de pin_count/functions/mem_size logo abaixo), nunca a
+ * cada stamp() -- ver comentário do LogicIoConfig. Quando o manifest não declara uma destas
+ * properties, `cfg_num`/`cfg_bool` caem no fallback já usado antes desta mudança
+ * (LOGIC_THRESHOLD/LOGIC_HIGH/DRIVE_G-equivalente), preservando o comportamento numérico de
+ * qualquer device/circuito que ainda não foi migrado -- ver teste de retroatividade A/B. */
+static void resolve_io_config(LogicDevice* s) {
+    s->io.inputHighV = cfg_num(s, "inputHighV", LOGIC_THRESHOLD);
+    s->io.inputLowV = cfg_num(s, "inputLowV", LOGIC_THRESHOLD);
+    s->io.inputImpedance = cfg_num(s, "inputImpedance", 0.0);
+    s->io.inputPullupR = cfg_num(s, "inputPullupR", 0.0);
+    s->io.outputHighV = cfg_num(s, "outputHighV", LOGIC_HIGH);
+    s->io.outputLowV = cfg_num(s, "outputLowV", 0.0);
+    s->io.outputImpedance = cfg_num(s, "outputImpedance", 1.0 / DRIVE_G);
+    s->io.outputPullupR = cfg_num(s, "outputPullupR", 0.0);
+    s->io.openCollector = cfg_bool(s, "openCollector", 0);
+    s->io.invertInputs = cfg_bool(s, "invertInputs", 0);
+}
+
+/* Único ponto de leitura de nível digital de TODO stamp_* -- thresholds/histerese/inversão
+ * resolvidos aqui uma única vez, nunca duplicados por device (achado real: `IoPin::getInpState()`
+ * preserva o nível anterior quando a tensão cai entre inputLowV e inputHighV -- não é um único
+ * corte). `invertInputs` inverte o nível LÓGICO já resolvido (depois da histerese), nunca a
+ * tensão bruta -- espelha a ordem real (medição elétrica primeiro, inversão de config depois). */
+static int read_level(LogicDevice* s, LsdnMatrixView* matrix, uint32_t pin) {
+    if (!matrix || !matrix->get_node_voltage) return 0;
+    const double v = matrix->get_node_voltage(matrix->opaque, pin);
+    int level;
+    if (v > s->io.inputHighV) level = 1;
+    else if (v < s->io.inputLowV) level = 0;
+    else level = pin < 32 ? s->inpHystState[pin] : 0; /* região intermediária: mantém o anterior */
+    if (pin < 32) s->inpHystState[pin] = (uint8_t)level;
+    return s->io.invertInputs ? !level : level;
 }
 
 static double read_volts(LsdnMatrixView* matrix, uint32_t pin) {
     return (matrix && matrix->get_node_voltage) ? matrix->get_node_voltage(matrix->opaque, pin) : 0.0;
 }
 
-static void drive_volts(LsdnMatrixView* matrix, uint32_t pin, double volts) {
-    if (!matrix || !matrix->add_conductance_to_ground || !matrix->add_current_to_ground) return;
-    matrix->add_conductance_to_ground(matrix->opaque, pin, DRIVE_G);
-    matrix->add_current_to_ground(matrix->opaque, pin, volts * DRIVE_G);
+/* Fonte Norton referenciada ao nó de terra do circuito -- eletricamente equivalente a uma fonte
+ * Thevenin `target_volts` em série com `1/conductance` (não "puxa pra GND": o valor resultante no
+ * nó, em circuito aberto, é `target_volts`, não 0V). Primitivo único reaproveitado por
+ * `drive_volts`/`drive_level`/pullup -- não um mecanismo por conceito. */
+static void stamp_source(LsdnMatrixView* matrix, uint32_t pin, double conductance, double target_volts) {
+    if (!matrix || !matrix->add_conductance_to_ground || !matrix->add_current_to_ground || conductance <= 0.0) return;
+    matrix->add_conductance_to_ground(matrix->opaque, pin, conductance);
+    matrix->add_current_to_ground(matrix->opaque, pin, target_volts * conductance);
 }
 
-static void drive_level(LsdnMatrixView* matrix, uint32_t pin, int level) {
-    drive_volts(matrix, pin, level ? LOGIC_HIGH : 0.0);
+/* Impedância de saída real (achado 2026-08-19): `1/outputImpedance` no lugar do `DRIVE_G` fixo
+ * já modela um driver não-ideal com o MESMO primitivo Norton -- não precisou de mecanismo novo.
+ * Pullup de saída soma-se por cima, mais fraco por construção (outputPullupR tipicamente >>
+ * outputImpedance), sempre em direção a `outputHighV` (não a 0V -- pullup real referencia o
+ * supply, não o terra). */
+static void drive_volts(LogicDevice* s, LsdnMatrixView* matrix, uint32_t pin, double volts) {
+    const double g = s->io.outputImpedance > 0.0 ? 1.0 / s->io.outputImpedance : DRIVE_G;
+    stamp_source(matrix, pin, g, volts);
+    if (s->io.outputPullupR > 0.0) stamp_source(matrix, pin, 1.0 / s->io.outputPullupR, s->io.outputHighV);
+}
+
+/* Open-collector: só puxa ativamente quando o nível lógico é LOW; quando seria HIGH, o driver
+ * NÃO estampa condutância nenhuma (alta impedância de verdade) -- só o pullup, se configurado,
+ * decide o nó. Sem pullup, o nó fica livre pra outro device/pullup externo decidir -- não é
+ * forçado artificialmente pra HIGH (achado real, `IoComponent::openCol`/uso real do padrão já
+ * existente em `open_collector_out()` mais abaixo pro barramento I2C, generalizado aqui). */
+static void drive_level(LogicDevice* s, LsdnMatrixView* matrix, uint32_t pin, int level) {
+    if (s->io.openCollector) {
+        if (level) {
+            if (s->io.outputPullupR > 0.0) stamp_source(matrix, pin, 1.0 / s->io.outputPullupR, s->io.outputHighV);
+            return;
+        }
+        const double g = s->io.outputImpedance > 0.0 ? 1.0 / s->io.outputImpedance : DRIVE_G;
+        stamp_source(matrix, pin, g, s->io.outputLowV);
+        return;
+    }
+    drive_volts(s, matrix, pin, level ? s->io.outputHighV : s->io.outputLowV);
 }
 
 static int rising(LogicDevice* s, uint32_t pin, int now) {
@@ -106,16 +192,16 @@ static int rising(LogicDevice* s, uint32_t pin, int now) {
     return now && !was;
 }
 
-static uint32_t bits_in(LsdnMatrixView* matrix, uint32_t first, uint32_t count) {
+static uint32_t bits_in(LogicDevice* s, LsdnMatrixView* matrix, uint32_t first, uint32_t count) {
     uint32_t value = 0;
     for (uint32_t i = 0; i < count; ++i) {
-        if (read_level(matrix, first + i)) value |= (1u << i);
+        if (read_level(s, matrix, first + i)) value |= (1u << i);
     }
     return value;
 }
 
-static void bits_out(LsdnMatrixView* matrix, uint32_t first, uint32_t count, uint32_t value) {
-    for (uint32_t i = 0; i < count; ++i) drive_level(matrix, first + i, (value >> i) & 1u);
+static void bits_out(LogicDevice* s, LsdnMatrixView* matrix, uint32_t first, uint32_t count, uint32_t value) {
+    for (uint32_t i = 0; i < count; ++i) drive_level(s, matrix, first + i, (value >> i) & 1u);
 }
 
 static void open_collector_out(LsdnMatrixView* matrix, uint32_t pin, int released) {
@@ -139,36 +225,39 @@ static uint32_t seven_seg(uint32_t value) {
 /* NAND/NOR/XNOR/NOT não são typeIds separados -- mesma solução do SimulIDE real
  * (`gate.cpp`/`gate_and.cpp`: propriedade "Inverted Outs" na MESMA porta AND/OR/XOR/Buffer, achado
  * de auditoria 2026-07-08 -- LasecSimul não tinha essa flag, tornando NAND/NOR/NOT/XNOR
- * inconstruíveis). `logic.buffer` com `inverted=true` É o NOT. AND/OR também seguem o SimulIDE real
- * em `Num_Inputs` 2-8: o manifesto declara `out` primeiro e `in1..inN` dinamicamente; este stamp
- * lê essas N entradas. XOR/Buffer continuam fixos porque a referência SimulIDE 2 não expõe
- * `Num_Inputs` nesses dois. */
+ * inconstruíveis). `logic.buffer` com `inverted=true` É o NOT. AND/OR seguem o SimulIDE real em
+ * `Num_Inputs`: o manifesto declara `out` primeiro e `in1..inN` dinamicamente; este stamp lê essas N
+ * entradas -- SEM teto (achado 2026-08-19, lendo `gate.cpp`/`gate_and.cpp`/`gate_or.cpp` reais: o
+ * `IntProp` de `Num_Inputs` não declara `min`/`max` nenhum; um teto de 8 aqui era invenção do port,
+ * não algo do SimulIDE original -- auditado antes de remover: nenhuma das duas camadas por baixo,
+ * `LsdnMatrixView`/`read_level`/`drive_level` (`device_abi.h`) nem `Component::m_pins` no core C++,
+ * usa buffer/array de tamanho fixo por pino, então N maior não estoura nada aqui). XOR/Buffer
+ * continuam fixos porque a referência SimulIDE 2 não expõe `Num_Inputs` nesses dois. */
 static void stamp_gate(LogicDevice* s, LsdnMatrixView* matrix) {
     if (streq(s, "logic.and_gate") || streq(s, "logic.or_gate")) {
         uint32_t inputs = (uint32_t)cfg_num(s, "inputs", 2);
         if (inputs < 2) inputs = 2;
-        if (inputs > 8) inputs = 8;
         uint32_t high = 0;
         for (uint32_t i = 0; i < inputs; ++i) {
-            if (read_level(matrix, i + 1)) high++;
+            if (read_level(s, matrix, i + 1)) high++;
         }
         int out = streq(s, "logic.and_gate") ? (high == inputs) : (high > 0);
         if (cfg_bool(s, "inverted", 0)) out = !out;
-        drive_level(matrix, 0, out);
+        drive_level(s, matrix, 0, out);
         return;
     }
 
-    const int a = read_level(matrix, 0);
-    const int b = read_level(matrix, 1);
+    const int a = read_level(s, matrix, 0);
+    const int b = read_level(s, matrix, 1);
     int out = a;
     if (streq(s, "logic.xor_gate")) out = !!(a ^ b);
     if (cfg_bool(s, "inverted", 0)) out = !out;
-    drive_level(matrix, streq(s, "logic.buffer") ? 1 : 2, out);
+    drive_level(s, matrix, streq(s, "logic.buffer") ? 1 : 2, out);
 }
 
 static void stamp_counter(LogicDevice* s, LsdnMatrixView* matrix) {
-    const int clk = read_level(matrix, 0);
-    const int rst = read_level(matrix, 1);
+    const int clk = read_level(s, matrix, 0);
+    const int rst = read_level(s, matrix, 1);
     const uint32_t bits = streq(s, "logic.counter") ? 1u : 4u;
     const uint32_t max_value = streq(s, "logic.counter") ? (uint32_t)cfg_num(s, "maxValue", 1) : 15u;
     if (rst) s->state = 0;
@@ -176,39 +265,40 @@ static void stamp_counter(LogicDevice* s, LsdnMatrixView* matrix) {
         s->state++;
         if (s->state > max_value) s->state = 0;
     }
-    if (streq(s, "logic.counter")) drive_level(matrix, 2, s->state == max_value);
-    else bits_out(matrix, 2, bits, s->state);
+    if (streq(s, "logic.counter")) drive_level(s, matrix, 2, s->state == max_value);
+    else bits_out(s, matrix, 2, bits, s->state);
 }
 
-static void stamp_full_adder(LsdnMatrixView* matrix) {
-    const int a = read_level(matrix, 0);
-    const int b = read_level(matrix, 1);
-    const int cin = read_level(matrix, 2);
+static void stamp_full_adder(LogicDevice* s, LsdnMatrixView* matrix) {
+    const int a = read_level(s, matrix, 0);
+    const int b = read_level(s, matrix, 1);
+    const int cin = read_level(s, matrix, 2);
     const int sum = a ^ b ^ cin;
     const int cout = (a && b) || (a && cin) || (b && cin);
-    drive_level(matrix, 3, sum);
-    drive_level(matrix, 4, cout);
+    drive_level(s, matrix, 3, sum);
+    drive_level(s, matrix, 4, cout);
 }
 
-static void stamp_magnitude_comp(LsdnMatrixView* matrix) {
-    const uint32_t a = bits_in(matrix, 0, 4);
-    const uint32_t b = bits_in(matrix, 4, 4);
-    drive_level(matrix, 8, a > b);
-    drive_level(matrix, 9, a == b);
-    drive_level(matrix, 10, a < b);
+static void stamp_magnitude_comp(LogicDevice* s, LsdnMatrixView* matrix) {
+    const uint32_t a = bits_in(s, matrix, 0, 4);
+    const uint32_t b = bits_in(s, matrix, 4, 4);
+    drive_level(s, matrix, 8, a > b);
+    drive_level(s, matrix, 9, a == b);
+    drive_level(s, matrix, 10, a < b);
 }
 
 static void stamp_shift_reg(LogicDevice* s, LsdnMatrixView* matrix) {
-    const int clk = read_level(matrix, 0);
-    const int data = read_level(matrix, 1);
-    const int rst = read_level(matrix, 2);
+    const int clk = read_level(s, matrix, 0);
+    const int data = read_level(s, matrix, 1);
+    const int rst = read_level(s, matrix, 2);
     if (rst) s->state = 0;
     else if (rising(s, 0, clk)) s->state = ((s->state << 1) | (uint32_t)data) & 0xffu;
-    bits_out(matrix, 3, 8, s->state);
+    bits_out(s, matrix, 3, 8, s->state);
 }
 
 typedef struct {
     const char* p;
+    LogicDevice* s;
     LsdnMatrixView* matrix;
     uint32_t input_count;
     uint32_t output_count;
@@ -245,7 +335,7 @@ static double expr_primary(ExprParser* p) {
     if ((*p->p == 'i' || *p->p == 'I') && p->p[1] >= '0' && p->p[1] <= '9') {
         p->p++;
         const uint32_t pin = (uint32_t)strtoul(p->p, (char**)&p->p, 10);
-        return pin < p->input_count ? (double)read_level(p->matrix, pin) : 0.0;
+        return pin < p->input_count ? (double)read_level(p->s, p->matrix, pin) : 0.0;
     }
     if ((*p->p == 'v' || *p->p == 'V') && (p->p[1] == 'i' || p->p[1] == 'I') && p->p[2] >= '0' && p->p[2] <= '9') {
         p->p += 2;
@@ -343,6 +433,7 @@ static void stamp_function(LogicDevice* s, LsdnMatrixView* matrix) {
 
     ExprParser parser;
     memset(&parser, 0, sizeof(parser));
+    parser.s = s;
     parser.matrix = matrix;
     parser.input_count = 2;
     parser.output_count = 1;
@@ -365,10 +456,10 @@ static void stamp_function(LogicDevice* s, LsdnMatrixView* matrix) {
         const double result = expr_or(&parser);
         if (voltage_expr) {
             parser.output_volts[out] = result;
-            drive_volts(matrix, parser.input_count + out, result);
+            drive_volts(s, matrix, parser.input_count + out, result);
         } else {
             parser.output_volts[out] = result ? LOGIC_HIGH : 0.0;
-            drive_level(matrix, parser.input_count + out, result != 0.0);
+            drive_level(s, matrix, parser.input_count + out, result != 0.0);
         }
         cursor = next;
     }
@@ -377,31 +468,31 @@ static void stamp_function(LogicDevice* s, LsdnMatrixView* matrix) {
 static void stamp_flipflop(LogicDevice* s, LsdnMatrixView* matrix) {
     uint32_t q = s->state & 1u;
     if (streq(s, "logic.flipflop_rs")) {
-        const int set = read_level(matrix, 0);
-        const int rst = read_level(matrix, 1);
+        const int set = read_level(s, matrix, 0);
+        const int rst = read_level(s, matrix, 1);
         if (rst && !set) q = 0;
         else if (set && !rst) q = 1;
         else if (set && rst) q = 0;
-        drive_level(matrix, 2, q);
-        drive_level(matrix, 3, !q);
+        drive_level(s, matrix, 2, q);
+        drive_level(s, matrix, 3, !q);
         s->state = q;
         return;
     }
 
-    const int set = streq(s, "logic.flipflop_t") ? read_level(matrix, 2) :
-                    streq(s, "logic.flipflop_jk") ? read_level(matrix, 2) : read_level(matrix, 1);
-    const int rst = streq(s, "logic.flipflop_t") ? read_level(matrix, 3) :
-                    streq(s, "logic.flipflop_jk") ? read_level(matrix, 3) : read_level(matrix, 2);
+    const int set = streq(s, "logic.flipflop_t") ? read_level(s, matrix, 2) :
+                    streq(s, "logic.flipflop_jk") ? read_level(s, matrix, 2) : read_level(s, matrix, 1);
+    const int rst = streq(s, "logic.flipflop_t") ? read_level(s, matrix, 3) :
+                    streq(s, "logic.flipflop_jk") ? read_level(s, matrix, 3) : read_level(s, matrix, 2);
     const int clk_pin = streq(s, "logic.flipflop_t") ? 1 : streq(s, "logic.flipflop_jk") ? 4 : 3;
-    const int clk = read_level(matrix, (uint32_t)clk_pin);
+    const int clk = read_level(s, matrix, (uint32_t)clk_pin);
     if (rst) q = 0;
     else if (set) q = 1;
     else if (rising(s, (uint32_t)clk_pin, clk)) {
-        if (streq(s, "logic.flipflop_d")) q = read_level(matrix, 0);
-        else if (streq(s, "logic.flipflop_t")) q = read_level(matrix, 0) ? !q : q;
+        if (streq(s, "logic.flipflop_d")) q = read_level(s, matrix, 0);
+        else if (streq(s, "logic.flipflop_t")) q = read_level(s, matrix, 0) ? !q : q;
         else {
-            const int j = read_level(matrix, 0);
-            const int k = read_level(matrix, 1);
+            const int j = read_level(s, matrix, 0);
+            const int k = read_level(s, matrix, 1);
             if (j && k) q = !q;
             else if (j) q = 1;
             else if (k) q = 0;
@@ -409,57 +500,57 @@ static void stamp_flipflop(LogicDevice* s, LsdnMatrixView* matrix) {
     }
     s->state = q;
     const uint32_t out = streq(s, "logic.flipflop_jk") ? 5u : streq(s, "logic.flipflop_t") ? 4u : 4u;
-    drive_level(matrix, out, q);
-    drive_level(matrix, out + 1, !q);
+    drive_level(s, matrix, out, q);
+    drive_level(s, matrix, out + 1, !q);
 }
 
 static void stamp_latch_d(LogicDevice* s, LsdnMatrixView* matrix) {
-    if (read_level(matrix, 1)) s->state = read_level(matrix, 0) ? 1u : 0u;
-    drive_level(matrix, 2, s->state & 1u);
-    drive_level(matrix, 3, !(s->state & 1u));
+    if (read_level(s, matrix, 1)) s->state = read_level(s, matrix, 0) ? 1u : 0u;
+    drive_level(s, matrix, 2, s->state & 1u);
+    drive_level(s, matrix, 3, !(s->state & 1u));
 }
 
-static uint32_t memory_address(LsdnMatrixView* matrix) { return bits_in(matrix, 3, 4) & 0x0fu; }
+static uint32_t memory_address(LogicDevice* s, LsdnMatrixView* matrix) { return bits_in(s, matrix, 3, 4) & 0x0fu; }
 
 static void stamp_memory(LogicDevice* s, LsdnMatrixView* matrix) {
-    const int clk = read_level(matrix, 0);
-    const int we = read_level(matrix, 1);
-    const int oe = read_level(matrix, 2);
-    const uint32_t addr = memory_address(matrix);
-    if (we && rising(s, 0, clk)) s->mem[addr] = (uint8_t)bits_in(matrix, 7, 4);
-    if (oe) bits_out(matrix, 11, 4, s->mem[addr] & 0x0fu);
+    const int clk = read_level(s, matrix, 0);
+    const int we = read_level(s, matrix, 1);
+    const int oe = read_level(s, matrix, 2);
+    const uint32_t addr = memory_address(s, matrix);
+    if (we && rising(s, 0, clk)) s->mem[addr] = (uint8_t)bits_in(s, matrix, 7, 4);
+    if (oe) bits_out(s, matrix, 11, 4, s->mem[addr] & 0x0fu);
 }
 
-static void stamp_mux(LsdnMatrixView* matrix) {
-    const uint32_t sel = bits_in(matrix, 0, 3) & 7u;
-    drive_level(matrix, 11, read_level(matrix, 3 + sel));
-    drive_level(matrix, 12, !read_level(matrix, 3 + sel));
+static void stamp_mux(LogicDevice* s, LsdnMatrixView* matrix) {
+    const uint32_t sel = bits_in(s, matrix, 0, 3) & 7u;
+    drive_level(s, matrix, 11, read_level(s, matrix, 3 + sel));
+    drive_level(s, matrix, 12, !read_level(s, matrix, 3 + sel));
 }
 
-static void stamp_demux(LsdnMatrixView* matrix) {
-    const uint32_t sel = bits_in(matrix, 0, 3) & 7u;
-    const int data = read_level(matrix, 3);
-    for (uint32_t i = 0; i < 8; ++i) drive_level(matrix, 4 + i, data && i == sel);
+static void stamp_demux(LogicDevice* s, LsdnMatrixView* matrix) {
+    const uint32_t sel = bits_in(s, matrix, 0, 3) & 7u;
+    const int data = read_level(s, matrix, 3);
+    for (uint32_t i = 0; i < 8; ++i) drive_level(s, matrix, 4 + i, data && i == sel);
 }
 
-static void stamp_bcd_to_dec(LsdnMatrixView* matrix) {
-    const uint32_t value = bits_in(matrix, 0, 4);
-    for (uint32_t i = 0; i < 10; ++i) drive_level(matrix, 4 + i, value == i);
+static void stamp_bcd_to_dec(LogicDevice* s, LsdnMatrixView* matrix) {
+    const uint32_t value = bits_in(s, matrix, 0, 4);
+    for (uint32_t i = 0; i < 10; ++i) drive_level(s, matrix, 4 + i, value == i);
 }
 
-static void stamp_dec_to_bcd(LsdnMatrixView* matrix) {
+static void stamp_dec_to_bcd(LogicDevice* s, LsdnMatrixView* matrix) {
     uint32_t value = 0;
     for (uint32_t i = 0; i < 10; ++i) {
-        if (read_level(matrix, i)) {
+        if (read_level(s, matrix, i)) {
             value = i;
             break;
         }
     }
-    bits_out(matrix, 10, 4, value);
+    bits_out(s, matrix, 10, 4, value);
 }
 
-static void stamp_bcd_to_7seg(LsdnMatrixView* matrix) {
-    bits_out(matrix, 4, 7, seven_seg(bits_in(matrix, 0, 4)));
+static void stamp_bcd_to_7seg(LogicDevice* s, LsdnMatrixView* matrix) {
+    bits_out(s, matrix, 4, 7, seven_seg(bits_in(s, matrix, 0, 4)));
 }
 
 static void stamp_adc(LogicDevice* s, LsdnMatrixView* matrix) {
@@ -467,13 +558,13 @@ static void stamp_adc(LogicDevice* s, LsdnMatrixView* matrix) {
     const double vin = read_volts(matrix, 0);
     uint32_t value = vin <= 0.0 ? 0u : (uint32_t)((vin / vref) * 255.0 + 0.1);
     if (value > 255u) value = 255u;
-    bits_out(matrix, 1, 8, value);
+    bits_out(s, matrix, 1, 8, value);
 }
 
 static void stamp_dac(LogicDevice* s, LsdnMatrixView* matrix) {
     const double vref = cfg_num(s, "vref", 5.0);
-    const uint32_t value = bits_in(matrix, 0, 8);
-    drive_volts(matrix, 8, vref * ((double)value / 255.0));
+    const uint32_t value = bits_in(s, matrix, 0, 8);
+    drive_volts(s, matrix, 8, vref * ((double)value / 255.0));
 }
 
 static uint8_t i2c_address(LogicDevice* s) {
@@ -649,8 +740,130 @@ static void stamp_lm555(LogicDevice* s, LsdnMatrixView* matrix) {
     if (rst - gnd < 0.7) s->out_level = 0;
     else if (trig < trigger_ref) s->out_level = 1;
     else if (thr > threshold_ref) s->out_level = 0;
-    drive_volts(matrix, 2, s->out_level ? fmax(gnd, vcc - 1.3) : gnd);
+    drive_volts(s, matrix, 2, s->out_level ? fmax(gnd, vcc - 1.3) : gnd);
     if (!s->out_level && matrix->add_conductance) matrix->add_conductance(matrix->opaque, 6, 0, DISCHARGE_G);
+}
+
+/* --- Familia adicionada pra fechar a lacuna de aritmetica/memoria/plexers frente ao Logisim
+ * Evolution (varredura 2026-08-18) -- mesmo padrao dos stamps acima: pinos ABI na ordem
+ * declarada no .lsdevice (esquerda depois direita), leitura/escrita via bits_in/bits_out. */
+
+static void stamp_subtractor(LogicDevice* s, LsdnMatrixView* matrix) {
+    const int a = read_level(s, matrix, 0);
+    const int b = read_level(s, matrix, 1);
+    const int bin = read_level(s, matrix, 2);
+    const int diff = a ^ b ^ bin;
+    const int bout = (!a && b) || (!a && bin) || (b && bin);
+    drive_level(s, matrix, 3, diff);
+    drive_level(s, matrix, 4, bout);
+}
+
+static void stamp_multiplier(LogicDevice* s, LsdnMatrixView* matrix) {
+    const uint32_t a = bits_in(s, matrix, 0, 4);
+    const uint32_t b = bits_in(s, matrix, 4, 4);
+    bits_out(s, matrix, 8, 8, a * b);
+}
+
+static void stamp_divider(LogicDevice* s, LsdnMatrixView* matrix) {
+    const uint32_t a = bits_in(s, matrix, 0, 4);
+    const uint32_t b = bits_in(s, matrix, 4, 4);
+    const uint32_t q = b == 0 ? 15u : a / b;
+    const uint32_t r = b == 0 ? a : a % b;
+    bits_out(s, matrix, 8, 4, q);
+    bits_out(s, matrix, 12, 4, r);
+}
+
+static void stamp_shifter(LogicDevice* s, LsdnMatrixView* matrix) {
+    const uint32_t d = bits_in(s, matrix, 0, 8);
+    const uint32_t amt = bits_in(s, matrix, 8, 3);
+    const int dir = read_level(s, matrix, 11);
+    const int arithmetic = cfg_bool(s, "arithmetic", 0);
+    uint32_t q;
+    if (!dir) {
+        q = (d << amt) & 0xffu;
+    } else {
+        const int msb = (d & 0x80u) != 0;
+        const uint32_t logical = d >> amt;
+        const uint32_t fill = (arithmetic && msb && amt > 0) ? ((0xffu << (8 - amt)) & 0xffu) : 0u;
+        q = logical | fill;
+    }
+    bits_out(s, matrix, 12, 8, q);
+}
+
+static void stamp_negator(LogicDevice* s, LsdnMatrixView* matrix) {
+    const uint32_t d = bits_in(s, matrix, 0, 8);
+    bits_out(s, matrix, 8, 8, (~d + 1u) & 0xffu);
+}
+
+static void stamp_minmax(LogicDevice* s, LsdnMatrixView* matrix) {
+    const uint32_t a = bits_in(s, matrix, 0, 4);
+    const uint32_t b = bits_in(s, matrix, 4, 4);
+    bits_out(s, matrix, 8, 4, a < b ? a : b);
+    bits_out(s, matrix, 12, 4, a > b ? a : b);
+}
+
+static void stamp_absolute(LogicDevice* s, LsdnMatrixView* matrix) {
+    const uint32_t d = bits_in(s, matrix, 0, 8);
+    bits_out(s, matrix, 8, 8, (d & 0x80u) ? ((~d + 1u) & 0xffu) : d);
+}
+
+static void stamp_bit_adder(LogicDevice* s, LsdnMatrixView* matrix) {
+    const uint32_t d = bits_in(s, matrix, 0, 8);
+    uint32_t count = 0;
+    for (uint32_t i = 0; i < 8; ++i) {
+        if (d & (1u << i)) count++;
+    }
+    bits_out(s, matrix, 8, 4, count);
+}
+
+static void stamp_register(LogicDevice* s, LsdnMatrixView* matrix) {
+    const int clk = read_level(s, matrix, 0);
+    const int ld = read_level(s, matrix, 1);
+    const int rst = read_level(s, matrix, 2);
+    if (rst) s->state = 0;
+    else if (rising(s, 0, clk) && ld) s->state = bits_in(s, matrix, 3, 8);
+    bits_out(s, matrix, 11, 8, s->state & 0xffu);
+}
+
+static void stamp_random(LogicDevice* s, LsdnMatrixView* matrix) {
+    const int clk = read_level(s, matrix, 0);
+    const int rst = read_level(s, matrix, 1);
+    if (rst) {
+        uint32_t seed = (uint32_t)cfg_num(s, "seed", 1);
+        if (seed < 1) seed = 1;
+        if (seed > 255) seed = 255;
+        s->state = seed;
+    } else if (rising(s, 0, clk)) {
+        uint32_t x = s->state & 0xffu;
+        if (x == 0) x = 1;
+        const uint32_t bit = ((x >> 7) ^ (x >> 5) ^ (x >> 4) ^ (x >> 3)) & 1u;
+        s->state = ((x << 1) | bit) & 0xffu;
+    }
+    bits_out(s, matrix, 2, 8, s->state & 0xffu);
+}
+
+static void stamp_decoder(LogicDevice* s, LsdnMatrixView* matrix) {
+    const uint32_t sel = bits_in(s, matrix, 0, 3);
+    const int en = read_level(s, matrix, 3);
+    for (uint32_t i = 0; i < 8; ++i) drive_level(s, matrix, 4 + i, en && i == sel);
+}
+
+static void stamp_priority_encoder(LogicDevice* s, LsdnMatrixView* matrix) {
+    int idx = -1;
+    for (int i = 7; i >= 0; --i) {
+        if (read_level(s, matrix, (uint32_t)i)) {
+            idx = i;
+            break;
+        }
+    }
+    bits_out(s, matrix, 8, 3, idx < 0 ? 0u : (uint32_t)idx);
+    drive_level(s, matrix, 11, idx >= 0);
+}
+
+static void stamp_bit_selector(LogicDevice* s, LsdnMatrixView* matrix) {
+    const uint32_t value = bits_in(s, matrix, 0, 8);
+    const int high = read_level(s, matrix, 8);
+    bits_out(s, matrix, 9, 4, high ? (value >> 4) & 0x0fu : value & 0x0fu);
 }
 
 static LsdnDevice* create(void* host_ctx, const LsdnHostApi* api) {
@@ -668,6 +881,7 @@ static LsdnDevice* create(void* host_ctx, const LsdnHostApi* api) {
 
 static void init(LsdnDevice* dev) {
     LogicDevice* s = (LogicDevice*)dev;
+    resolve_io_config(s);
     s->pin_count = (uint32_t)cfg_num(s, "pinCount", 0);
     strncpy(s->functions, cfg_string(s, "functions", "i0 | i1"), sizeof(s->functions) - 1);
     s->functions[sizeof(s->functions) - 1] = 0;
@@ -692,23 +906,36 @@ static void stamp(LsdnDevice* dev, LsdnMatrixView* matrix) {
     LogicDevice* s = (LogicDevice*)dev;
     if (streq(s, "logic.buffer") || streq(s, "logic.and_gate") || streq(s, "logic.or_gate") || streq(s, "logic.xor_gate")) stamp_gate(s, matrix);
     else if (streq(s, "logic.counter") || streq(s, "logic.bin_counter")) stamp_counter(s, matrix);
-    else if (streq(s, "logic.full_adder")) stamp_full_adder(matrix);
-    else if (streq(s, "logic.magnitude_comp")) stamp_magnitude_comp(matrix);
+    else if (streq(s, "logic.full_adder")) stamp_full_adder(s, matrix);
+    else if (streq(s, "logic.magnitude_comp")) stamp_magnitude_comp(s, matrix);
     else if (streq(s, "logic.shift_reg")) stamp_shift_reg(s, matrix);
     else if (streq(s, "logic.function")) stamp_function(s, matrix);
     else if (streq(s, "logic.flipflop_d") || streq(s, "logic.flipflop_t") || streq(s, "logic.flipflop_rs") || streq(s, "logic.flipflop_jk")) stamp_flipflop(s, matrix);
     else if (streq(s, "logic.latch_d")) stamp_latch_d(s, matrix);
     else if (streq(s, "logic.memory") || streq(s, "logic.dynamic_memory")) stamp_memory(s, matrix);
     else if (streq(s, "logic.i2c_ram")) stamp_i2c_ram(s, matrix);
-    else if (streq(s, "logic.mux")) stamp_mux(matrix);
-    else if (streq(s, "logic.demux")) stamp_demux(matrix);
-    else if (streq(s, "logic.bcd_to_dec")) stamp_bcd_to_dec(matrix);
-    else if (streq(s, "logic.dec_to_bcd")) stamp_dec_to_bcd(matrix);
-    else if (streq(s, "logic.bcd_to_7seg") || streq(s, "logic.seven_segment_bcd")) stamp_bcd_to_7seg(matrix);
+    else if (streq(s, "logic.mux")) stamp_mux(s, matrix);
+    else if (streq(s, "logic.demux")) stamp_demux(s, matrix);
+    else if (streq(s, "logic.bcd_to_dec")) stamp_bcd_to_dec(s, matrix);
+    else if (streq(s, "logic.dec_to_bcd")) stamp_dec_to_bcd(s, matrix);
+    else if (streq(s, "logic.bcd_to_7seg") || streq(s, "logic.seven_segment_bcd")) stamp_bcd_to_7seg(s, matrix);
     else if (streq(s, "logic.i2c_to_parallel")) stamp_i2c_to_parallel(s, matrix);
     else if (streq(s, "logic.adc")) stamp_adc(s, matrix);
     else if (streq(s, "logic.dac")) stamp_dac(s, matrix);
     else if (streq(s, "logic.lm555")) stamp_lm555(s, matrix);
+    else if (streq(s, "logic.subtractor")) stamp_subtractor(s, matrix);
+    else if (streq(s, "logic.multiplier")) stamp_multiplier(s, matrix);
+    else if (streq(s, "logic.divider")) stamp_divider(s, matrix);
+    else if (streq(s, "logic.shifter")) stamp_shifter(s, matrix);
+    else if (streq(s, "logic.negator")) stamp_negator(s, matrix);
+    else if (streq(s, "logic.minmax")) stamp_minmax(s, matrix);
+    else if (streq(s, "logic.absolute")) stamp_absolute(s, matrix);
+    else if (streq(s, "logic.bit_adder")) stamp_bit_adder(s, matrix);
+    else if (streq(s, "logic.register")) stamp_register(s, matrix);
+    else if (streq(s, "logic.random")) stamp_random(s, matrix);
+    else if (streq(s, "logic.decoder")) stamp_decoder(s, matrix);
+    else if (streq(s, "logic.priority_encoder")) stamp_priority_encoder(s, matrix);
+    else if (streq(s, "logic.bit_selector")) stamp_bit_selector(s, matrix);
 }
 
 static void post_step(LsdnDevice* dev, uint64_t time_ns) { (void)dev; (void)time_ns; }

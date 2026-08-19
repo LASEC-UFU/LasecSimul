@@ -1,9 +1,10 @@
 // IDs internos ficam em ingles e estaveis; os rotulos em portugues (Analogico/Digital/Controle/
-// Processo) existem so na camada de apresentacao (UI_TEXT em main.ts).
+// Processo) existem so na camada de apresentacao (UI_TEXT em palette.ts).
 export type WorkspaceSection = "analog" | "digital" | "control" | "process";
 
-// Fonte unica de verdade pra ordem fixa das 4 abas -- main.ts itera este array em vez de um
-// literal local. Nao existe UI de reordenar; a ordem e garantida por vir sempre deste array.
+// Fonte unica de verdade pra ordem fixa das 4 abas -- palette.ts itera este array em vez de um
+// literal local. Nao existe UI de reordenar; a ordem e garantida por vir sempre deste array. As
+// abas filtram só a paleta (FEAT-011); o editor (main.ts) nunca le WorkspaceSection.
 export const WORKSPACE_SECTION_ORDER: readonly WorkspaceSection[] = ["analog", "digital", "control", "process"] as const;
 
 export interface WorkspaceSelection {
@@ -42,53 +43,18 @@ export function normalizeWorkspaceSelection(value: unknown): WorkspaceSelection 
 interface WorkspaceClassifiableCatalogEntry {
   typeId: string;
   workspaceSection?: WorkspaceSection;
-  mcuHost?: boolean;
-  registeredSourceKind?: "abi-device" | "mcu-adapter" | "subcircuit-file";
 }
-
-const DIGITAL_TYPE_IDS = new Set([
-  "sources.clock",
-  "switches.switch_dip",
-  "switches.keypad",
-  "connectors.bus",
-  "meters.freqmeter",
-  "meters.logic_analyzer",
-  "outputs.led_bar",
-  "outputs.led_matrix",
-  "outputs.seven_segment",
-  "outputs.ssd1306",
-  "outputs.sh1107",
-  "outputs.hd44780",
-  "outputs.aip31068_i2c",
-  "outputs.ili9341",
-  "outputs.st7735",
-  "outputs.st7789",
-  "outputs.gc9a01a",
-  "outputs.pcf8833",
-  "outputs.pcd8544",
-  "outputs.ks0108",
-  "outputs.max72xx_matrix",
-  "outputs.ws2812",
-  "sensors.sr04",
-  "sensors.dht22",
-  "sensors.ds1621",
-  "sensors.ds18b20",
-]);
 
 /**
  * Classifica cada entrada em exatamente uma área do workspace. `workspaceSection` é o contrato
- * extensível e tem prioridade; as regras por família mantêm catálogos/manifestações legados
- * compatíveis sem duplicar os itens em Analog e Digital.
+ * extensível e tem prioridade. Sem ele, só os prefixos `logic.`/`digital.` (gates da pasta
+ * `Portas`/`Aritmeticos`/etc. e o bloco `GHDL`) caem em Digital -- todo o resto do catálogo legado
+ * (MCUs, periféricos digitais, displays, sensores digitais etc.) é Analógico por padrão, já que o
+ * editor nunca restringe o que pode ser inserido por seção (ver FEAT-011).
  */
 export function workspaceSectionForCatalogEntry(entry: WorkspaceClassifiableCatalogEntry): WorkspaceSection {
   if (entry.workspaceSection) return entry.workspaceSection;
-  if (entry.mcuHost || entry.registeredSourceKind === "mcu-adapter") return "digital";
-  if (
-    entry.typeId.startsWith("logic.") ||
-    entry.typeId.startsWith("digital.") ||
-    entry.typeId.startsWith("peripherals.") ||
-    DIGITAL_TYPE_IDS.has(entry.typeId)
-  ) {
+  if (entry.typeId.startsWith("logic.") || entry.typeId.startsWith("digital.")) {
     return "digital";
   }
   return "analog";

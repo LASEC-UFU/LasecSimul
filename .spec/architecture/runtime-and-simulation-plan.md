@@ -28,6 +28,20 @@ O `SimulationPlan` referencia somente artefatos compilados válidos; parser, AST
 
 `SimulationPlan` agrega planos específicos por domínio. Não é um objeto universal que mistura estado elétrico, PLC, Python e UI.
 
+
+Subsistemas/dispositivos compostos também passam por compilação antes do hot path:
+
+```text
+CompositeDefinition -> normalize/hash -> CompiledSubsystemTemplate
+AuthoringSnapshot + instance overrides
+                   -> PlanCompiler
+                   -> índices/handles densos por domínio
+```
+
+A hierarquia permanece canônica na autoria, mas o `PlanCompiler` pode achatar instâncias para listas densas. A execução não percorre a árvore hierárquica nem resolve `componentId/propertyId` por string a cada passo. `interfaceBindings`, `parameterExports` e `telemetryExports` são resolvidos para handles no plano.
+
+Modelos importados do TDPS entram nesse mesmo pipeline após conversão de autoria. Índices legados (`Indice lista ...`, `Mnn`) não existem no `SimulationPlan`.
+
 ## Conteúdo mínimo
 
 - geração e hash da autoria normalizada;
@@ -83,7 +97,9 @@ Na primeira versão, um novo plano ou novo artefato PLC só é publicado com a s
 - período/conexão de sinal: `SignalPlan` e RateGroups;
 - fio/túnel elétrico: `ElectricalPlan` afetado;
 - tipo/largura/unidade: domínio e bridges relacionados;
-- conteúdo de subsistema: template e dependentes;
+- conteúdo de subsistema: template e dependentes; mudança interna com interface idêntica preserva bindings externos, mas recompila o template;
+- `interface`/`portId` de subsistema: recompila endpoints/bindings afetados e produz orphan explícito quando uma porta usada é removida;
+- `parameterExport`: recompila metadata/bindings de parâmetro; override runtime-safe pode atualizar estado sem recompilar topologia;
 - VHDL/toolchain: artefato GHDL;
 - corpo IEC sem mudança de interface: recompila artefato + `PlcPlan`, preservando topologia externa quando `exportedIo` for idêntico;
 - interface IEC/exported I/O: recompila artefato, `PlcPlan`, endpoints e bindings afetados;
@@ -97,5 +113,7 @@ Incrementalidade inicial é por domínio. Recompilação fina por POU/SCC só en
 - nenhuma varredura global para localizar reativos, FPGA ou PLC a cada passo;
 - falha de compilação IEC preserva plano/runtime anterior;
 - duas instâncias do mesmo artefato possuem estado PLC isolado;
+- duas instâncias do mesmo `CompiledSubsystemTemplate` compartilham apenas estrutura imutável e possuem todo estado dinâmico isolado;
+- composto e expansão manual do mesmo grafo são numericamente equivalentes dentro da tolerância definida;
 - troca de implementação de um POU entre linguagens, mantendo interface e comportamento, não altera bindings externos;
 - execução idêntica com 1, 2 e N workers dentro das tolerâncias numéricas fixadas.

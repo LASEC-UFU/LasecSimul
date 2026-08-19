@@ -61,6 +61,56 @@
       "min": 0.1,
       "step": 0.1,
       "unit": "V"
+    },
+    {
+      "id": "inputHighV",
+      "label": "Limiar de Baixo para Alto",
+      "group": "Inputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "V",
+      "default": 2.5,
+      "step": 0.1
+    },
+    {
+      "id": "inputLowV",
+      "label": "Limiar de Alto para Baixo",
+      "group": "Inputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "V",
+      "default": 2.5,
+      "step": 0.1
+    },
+    {
+      "id": "inputImpedance",
+      "label": "Impedância de Entrada",
+      "group": "Inputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "Ω",
+      "default": 1000000000,
+      "min": 0,
+      "step": 1
+    },
+    {
+      "id": "inputPullupR",
+      "label": "Pull-up de Entrada",
+      "group": "Inputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "Ω",
+      "default": 0,
+      "min": 0,
+      "step": 1
+    },
+    {
+      "id": "invertInputs",
+      "label": "Inverter Entradas",
+      "group": "Inputs",
+      "valueKind": "bool",
+      "editor": "checkbox",
+      "default": false
     }
   ],
   "limits": {
@@ -68,7 +118,7 @@
     "expectedComplexity": "low"
   },
   "package": {
-    "width": 48,
+    "width": 56,
     "height": 72,
     "border": false,
     "background": {
@@ -142,7 +192,7 @@
       },
       {
         "id": "out",
-        "x": 48,
+        "x": 56,
         "y": 8,
         "angle": 0,
         "length": 8,
@@ -155,13 +205,13 @@
           "kind": "rect",
           "x": 0,
           "y": 0,
-          "w": 48,
+          "w": 56,
           "h": 72,
           "fill": "#ffffff"
         },
         {
           "kind": "text",
-          "x": 24,
+          "x": 28,
           "y": -4,
           "value": "__label",
           "fontSize": 5,
@@ -172,11 +222,15 @@
   },
   "icon": "3to1",
   "folderPath": [
-    "Logicos",
     "Outros logicos"
   ],
   "defaultProperties": {
-    "vref": 5
+    "vref": 5,
+    "inputHighV": 2.5,
+    "inputLowV": 2.5,
+    "inputImpedance": 1000000000,
+    "inputPullupR": 0,
+    "invertInputs": false
   },
   "help": {
     "description": "Conversor digital-analógico para gerar tensão proporcional ao valor digital."

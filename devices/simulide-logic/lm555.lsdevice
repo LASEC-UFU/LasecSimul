@@ -5,7 +5,6 @@
   "language": "pt-BR",
   "icon": "ic2",
   "folderPath": [
-    "Logicos",
     "Outros logicos"
   ],
   "abiVersion": {
@@ -57,7 +56,7 @@
     "expectedComplexity": "medium"
   },
   "package": {
-    "width": 48,
+    "width": 80,
     "height": 40,
     "border": false,
     "background": {
@@ -69,7 +68,7 @@
           "kind": "rect",
           "x": 8,
           "y": 0,
-          "w": 32,
+          "w": 64,
           "h": 40,
           "rx": 1,
           "ry": 1,
@@ -77,12 +76,12 @@
         },
         {
           "kind": "path",
-          "d": "M 18 0 A 4 4 0 0 0 26 0",
+          "d": "M 36 0 A 4 4 0 0 0 44 0",
           "fill": "none"
         },
         {
           "kind": "text",
-          "x": 24,
+          "x": 40,
           "y": 22,
           "value": "__label",
           "fontSize": 6,
@@ -125,7 +124,7 @@
       },
       {
         "id": "vcc",
-        "x": 40,
+        "x": 72,
         "y": 8,
         "angle": 0,
         "length": 8,
@@ -133,7 +132,7 @@
       },
       {
         "id": "dis",
-        "x": 40,
+        "x": 72,
         "y": 16,
         "angle": 0,
         "length": 8,
@@ -141,7 +140,7 @@
       },
       {
         "id": "thr",
-        "x": 40,
+        "x": 72,
         "y": 24,
         "angle": 0,
         "length": 8,
@@ -149,7 +148,7 @@
       },
       {
         "id": "cv",
-        "x": 40,
+        "x": 72,
         "y": 32,
         "angle": 0,
         "length": 8,

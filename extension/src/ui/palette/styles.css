@@ -29,9 +29,58 @@ body {
   height: 100%;
 }
 
-.palette__search {
+.palette-tabs {
   position: sticky;
   top: 0;
+  z-index: 2;
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, transparent);
+  background: var(--vscode-sideBar-background);
+}
+
+.palette-tabs__row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px;
+}
+
+.palette-tabs__button {
+  display: inline-grid;
+  place-items: center;
+  flex: 1 1 0;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--vscode-icon-foreground, var(--vscode-sideBar-foreground));
+  cursor: pointer;
+}
+
+.palette-tabs__button:hover {
+  background: var(--vscode-toolbar-hoverBackground);
+}
+
+.palette-tabs__button--active {
+  border-color: var(--vscode-focusBorder);
+  background: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+}
+
+.palette-tabs__icon {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+.palette__search {
+  position: sticky;
+  top: 28px;
   z-index: 1;
   padding: 8px;
   border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, transparent);

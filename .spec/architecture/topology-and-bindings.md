@@ -28,6 +28,24 @@ Cada endpoint declara domínio, tipo, largura, unidade e direção. A validaçã
 
 Strings e aliases existem apenas na autoria/compilação. Runtime usa slots densos. Conversão de unidade é pré-compilada quando inequívoca.
 
+
+## Subsistemas e dispositivos compostos
+
+Uma porta externa de composto é um endpoint normal do respectivo domínio. O shell visual nunca é uma topologia paralela.
+
+`interface[].portId` é a identidade externa estável. `interfaceBindings[]` resolve essa porta para um endpoint interno durante compilação. Após resolução, o runtime usa slots/handles densos; não procura caminhos hierárquicos por nome.
+
+Regras:
+
+- `package.pins[].id` referencia `portId`, mas geometria não define conectividade;
+- uma porta de entrada pode alimentar fan-out interno normal;
+- fan-in exige semântica explícita do domínio/bloco e nunca implica soma automática;
+- remover uma porta conectada gera binding órfão;
+- um composto aninhado é semanticamente equivalente a expandir seu grafo interno;
+- bridges entre domínios continuam explícitos mesmo quando estão dentro de um composto.
+
+Importação TDPS deve converter índices globais e `Mnn` em edges/bindings explícitos antes desta fase.
+
 ## PLC
 
 O componente PLC é um consumidor/produtor tipado do `SignalPlan`; sua linguagem IEC interna não aparece na topologia externa.
@@ -57,5 +75,7 @@ Python, PLC, protocolos e UI recebem handles compilados. Nenhum runtime externo 
 - remoção nunca reconecta automaticamente um fio a outro I/O;
 - erro de tipo/largura/unidade aponta os dois endpoints;
 - mudança visual não invalida topologia;
+- mover/redesenhar pino de composto preserva conexão pelo `portId`;
+- interface externa de composto e target interno são validados antes de `RUN`;
 - mudança estrutural invalida apenas planos relacionados;
 - projetos headless produzem a mesma topologia da UI.

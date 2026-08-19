@@ -84,8 +84,8 @@
     "expectedComplexity": "high"
   },
   "package": {
-    "width": 36,
-    "height": 32,
+    "width": 56,
+    "height": 50,
     "border": false,
     "background": {
       "kind": "none"
@@ -98,15 +98,21 @@
         "y": 16,
         "angle": 180,
         "length": 8,
-        "label": "A1"
+        "label": "A1",
+        "labelX": 11.5,
+        "labelY": 42,
+        "labelTextAnchor": "start"
       },
       {
         "id": "a2",
-        "x": 32,
+        "x": 56,
         "y": 16,
         "angle": 0,
         "length": 8,
-        "label": "A2"
+        "label": "A2",
+        "labelX": 44.5,
+        "labelY": 42,
+        "labelTextAnchor": "end"
       }
     ],
     "viewSpec": {
@@ -115,15 +121,15 @@
           "kind": "polygon",
           "points": [
             {
-              "x": 25,
+              "x": 38.88888888888889,
               "y": 8
             },
             {
-              "x": 10,
+              "x": 15.555555555555555,
               "y": 1
             },
             {
-              "x": 10,
+              "x": 15.555555555555555,
               "y": 16
             }
           ],
@@ -133,15 +139,15 @@
           "kind": "polygon",
           "points": [
             {
-              "x": 11,
+              "x": 17.11111111111111,
               "y": 24
             },
             {
-              "x": 26,
+              "x": 40.44444444444444,
               "y": 16
             },
             {
-              "x": 26,
+              "x": 40.44444444444444,
               "y": 31
             }
           ],
@@ -149,23 +155,23 @@
         },
         {
           "kind": "line",
-          "x1": 10,
+          "x1": 15.555555555555555,
           "y1": 0,
-          "x2": 10,
+          "x2": 15.555555555555555,
           "y2": 32,
           "strokeWidth": 3
         },
         {
           "kind": "line",
-          "x1": 26,
+          "x1": 40.44444444444444,
           "y1": 0,
-          "x2": 26,
+          "x2": 40.44444444444444,
           "y2": 32,
           "strokeWidth": 3
         },
         {
           "kind": "text",
-          "x": 18,
+          "x": 28,
           "y": -4,
           "value": "__label",
           "fontSize": 5,

@@ -1,0 +1,215 @@
+{
+  "schemaVersion": 1,
+  "typeId": "logic.bit_selector",
+  "name": "Bit Selector",
+  "language": "pt-BR",
+  "icon": "mux",
+  "folderPath": [
+    "Conversores"
+  ],
+  "abiVersion": {
+    "major": 3,
+    "minor": 0
+  },
+  "nativeEntry": {
+    "win32-x64": "build/win-x64/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
+  "pins": [
+    {
+      "id": "in0",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "in1",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "in2",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "in3",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "in4",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "in5",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "in6",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "in7",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "g",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "out0",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "out1",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "out2",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "out3",
+      "kind": "DIGITAL_OUT"
+    }
+  ],
+  "properties": [],
+  "limits": {
+    "stepTimeoutMs": 4,
+    "expectedComplexity": "low"
+  },
+  "package": {
+    "width": 72,
+    "height": 80,
+    "border": false,
+    "background": {
+      "kind": "none"
+    },
+    "viewSpec": {
+      "paint": [
+        {
+          "kind": "rect",
+          "x": 8,
+          "y": 0,
+          "w": 56,
+          "h": 80,
+          "fill": "#ffffff"
+        },
+        {
+          "kind": "text",
+          "x": 36,
+          "y": -4,
+          "value": "__label",
+          "fontSize": 5,
+          "color": "#0000aa"
+        }
+      ]
+    },
+    "pins": [
+      {
+        "id": "in0",
+        "x": 0,
+        "y": 8,
+        "angle": 180,
+        "length": 8,
+        "label": "IN0"
+      },
+      {
+        "id": "in1",
+        "x": 0,
+        "y": 16,
+        "angle": 180,
+        "length": 8,
+        "label": "IN1"
+      },
+      {
+        "id": "in2",
+        "x": 0,
+        "y": 24,
+        "angle": 180,
+        "length": 8,
+        "label": "IN2"
+      },
+      {
+        "id": "in3",
+        "x": 0,
+        "y": 32,
+        "angle": 180,
+        "length": 8,
+        "label": "IN3"
+      },
+      {
+        "id": "in4",
+        "x": 0,
+        "y": 40,
+        "angle": 180,
+        "length": 8,
+        "label": "IN4"
+      },
+      {
+        "id": "in5",
+        "x": 0,
+        "y": 48,
+        "angle": 180,
+        "length": 8,
+        "label": "IN5"
+      },
+      {
+        "id": "in6",
+        "x": 0,
+        "y": 56,
+        "angle": 180,
+        "length": 8,
+        "label": "IN6"
+      },
+      {
+        "id": "in7",
+        "x": 0,
+        "y": 64,
+        "angle": 180,
+        "length": 8,
+        "label": "IN7"
+      },
+      {
+        "id": "g",
+        "x": 0,
+        "y": 72,
+        "angle": 180,
+        "length": 8,
+        "label": "G"
+      },
+      {
+        "id": "out0",
+        "x": 64,
+        "y": 8,
+        "angle": 0,
+        "length": 8,
+        "label": "OUT0"
+      },
+      {
+        "id": "out1",
+        "x": 64,
+        "y": 16,
+        "angle": 0,
+        "length": 8,
+        "label": "OUT1"
+      },
+      {
+        "id": "out2",
+        "x": 64,
+        "y": 24,
+        "angle": 0,
+        "length": 8,
+        "label": "OUT2"
+      },
+      {
+        "id": "out3",
+        "x": 64,
+        "y": 32,
+        "angle": 0,
+        "length": 8,
+        "label": "OUT3"
+      }
+    ]
+  },
+  "help": {
+    "description": "Extrai um nibble (4 bits) de uma palavra de 8 bits: G=0 seleciona bits baixos, G=1 os altos."
+  }
+}

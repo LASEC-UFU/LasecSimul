@@ -65,7 +65,7 @@
   },
   "package": {
     "width": 48,
-    "height": 48,
+    "height": 64,
     "border": false,
     "background": {
       "kind": "none"
@@ -168,7 +168,7 @@
           "x": 0,
           "y": 0,
           "w": 48,
-          "h": 48,
+          "h": 64,
           "fill": "#ffffff"
         },
         {
@@ -184,7 +184,6 @@
   },
   "icon": "7segbcd",
   "folderPath": [
-    "Logicos",
     "Outros logicos"
   ],
   "help": {

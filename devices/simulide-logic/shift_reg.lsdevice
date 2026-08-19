@@ -58,13 +58,106 @@
       "kind": "DIGITAL_OUT"
     }
   ],
-  "properties": [],
+  "properties": [
+    {
+      "id": "inputHighV",
+      "label": "Limiar de Baixo para Alto",
+      "group": "Inputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "V",
+      "default": 2.5,
+      "step": 0.1
+    },
+    {
+      "id": "inputLowV",
+      "label": "Limiar de Alto para Baixo",
+      "group": "Inputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "V",
+      "default": 2.5,
+      "step": 0.1
+    },
+    {
+      "id": "inputImpedance",
+      "label": "Impedância de Entrada",
+      "group": "Inputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "Ω",
+      "default": 1000000000,
+      "min": 0,
+      "step": 1
+    },
+    {
+      "id": "inputPullupR",
+      "label": "Pull-up de Entrada",
+      "group": "Inputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "Ω",
+      "default": 0,
+      "min": 0,
+      "step": 1
+    },
+    {
+      "id": "outputHighV",
+      "label": "Tensão Alta de Saída",
+      "group": "Outputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "V",
+      "default": 5,
+      "step": 0.1
+    },
+    {
+      "id": "outputLowV",
+      "label": "Tensão Baixa de Saída",
+      "group": "Outputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "V",
+      "default": 0,
+      "step": 0.1
+    },
+    {
+      "id": "outputImpedance",
+      "label": "Impedância de Saída",
+      "group": "Outputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "Ω",
+      "default": 40,
+      "min": 0,
+      "step": 1
+    },
+    {
+      "id": "outputPullupR",
+      "label": "Pull-up de Saída",
+      "group": "Outputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "Ω",
+      "default": 0,
+      "min": 0,
+      "step": 1
+    },
+    {
+      "id": "openCollector",
+      "label": "Coletor Aberto",
+      "group": "Outputs",
+      "valueKind": "bool",
+      "editor": "checkbox",
+      "default": false
+    }
+  ],
   "limits": {
     "stepTimeoutMs": 4,
     "expectedComplexity": "low"
   },
   "package": {
-    "width": 48,
+    "width": 56,
     "height": 72,
     "border": false,
     "background": {
@@ -98,7 +191,7 @@
       },
       {
         "id": "q0",
-        "x": 48,
+        "x": 56,
         "y": 8,
         "angle": 0,
         "length": 8,
@@ -106,7 +199,7 @@
       },
       {
         "id": "q1",
-        "x": 48,
+        "x": 56,
         "y": 16,
         "angle": 0,
         "length": 8,
@@ -114,7 +207,7 @@
       },
       {
         "id": "q2",
-        "x": 48,
+        "x": 56,
         "y": 24,
         "angle": 0,
         "length": 8,
@@ -122,7 +215,7 @@
       },
       {
         "id": "q3",
-        "x": 48,
+        "x": 56,
         "y": 32,
         "angle": 0,
         "length": 8,
@@ -130,7 +223,7 @@
       },
       {
         "id": "q4",
-        "x": 48,
+        "x": 56,
         "y": 40,
         "angle": 0,
         "length": 8,
@@ -138,7 +231,7 @@
       },
       {
         "id": "q5",
-        "x": 48,
+        "x": 56,
         "y": 48,
         "angle": 0,
         "length": 8,
@@ -146,7 +239,7 @@
       },
       {
         "id": "q6",
-        "x": 48,
+        "x": 56,
         "y": 56,
         "angle": 0,
         "length": 8,
@@ -154,7 +247,7 @@
       },
       {
         "id": "q7",
-        "x": 48,
+        "x": 56,
         "y": 64,
         "angle": 0,
         "length": 8,
@@ -167,13 +260,13 @@
           "kind": "rect",
           "x": 0,
           "y": 0,
-          "w": 48,
+          "w": 56,
           "h": 72,
           "fill": "#ffffff"
         },
         {
           "kind": "text",
-          "x": 24,
+          "x": 28,
           "y": -4,
           "value": "__label",
           "fontSize": 5,
@@ -184,10 +277,20 @@
   },
   "icon": "1to3",
   "folderPath": [
-    "Logicos",
     "Aritmeticos"
   ],
   "help": {
     "description": "Registrador de deslocamento."
+  },
+  "defaultProperties": {
+    "inputHighV": 2.5,
+    "inputLowV": 2.5,
+    "inputImpedance": 1000000000,
+    "inputPullupR": 0,
+    "outputHighV": 5,
+    "outputLowV": 0,
+    "outputImpedance": 40,
+    "outputPullupR": 0,
+    "openCollector": false
   }
 }

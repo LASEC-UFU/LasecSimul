@@ -99,8 +99,8 @@
     "expectedComplexity": "medium"
   },
   "package": {
-    "width": 48,
-    "height": 64,
+    "width": 56,
+    "height": 112,
     "border": false,
     "background": {
       "kind": "none"
@@ -149,7 +149,7 @@
       },
       {
         "id": "int",
-        "x": 48,
+        "x": 56,
         "y": 8,
         "angle": 0,
         "length": 8,
@@ -226,13 +226,13 @@
           "kind": "rect",
           "x": 0,
           "y": 0,
-          "w": 48,
-          "h": 64,
+          "w": 56,
+          "h": 112,
           "fill": "#ffffff"
         },
         {
           "kind": "text",
-          "x": 24,
+          "x": 28,
           "y": -4,
           "value": "__label",
           "fontSize": 5,
@@ -243,7 +243,6 @@
   },
   "icon": "2to3g",
   "folderPath": [
-    "Logicos",
     "Conversores"
   ],
   "defaultProperties": {

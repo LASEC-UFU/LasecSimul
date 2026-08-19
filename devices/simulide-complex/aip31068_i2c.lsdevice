@@ -69,6 +69,17 @@
       "min": 0,
       "max": 127,
       "step": 1
+    },
+    {
+      "id": "frequency",
+      "label": "Frequencia I2C",
+      "group": "I2C",
+      "unit": "kHz",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 400,
+      "min": 1,
+      "step": 1
     }
   ],
   "limits": {
@@ -91,8 +102,16 @@
         "y": 22,
         "w": 190,
         "h": 41,
-        "sourceWidth": { "prop": "columns", "fallback": 16, "min": 1 },
-        "sourceHeight": { "prop": "rows", "fallback": 2, "min": 1 },
+        "sourceWidth": {
+          "prop": "columns",
+          "fallback": 16,
+          "min": 1
+        },
+        "sourceHeight": {
+          "prop": "rows",
+          "fallback": 2,
+          "min": 1
+        },
         "payloadOffset": 36,
         "enabledOffset": 16,
         "columnsProp": "columns",
@@ -160,5 +179,8 @@
   ],
   "help": {
     "description": "Display LCD compatível com controlador AIP31068 em barramento I2C."
+  },
+  "defaultProperties": {
+    "frequency": 400
   }
 }

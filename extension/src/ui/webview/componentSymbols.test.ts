@@ -1,7 +1,9 @@
 import { createTestRunner, assert } from "../../ipc/testSupport/MockCoreServer";
 import fs from "node:fs";
 import path from "node:path";
-import { canonicalPackagePinId, componentBox, componentLocalOrigin, componentSymbolSvg, hasRealPinPosition, pinLocalPosition, packageSymbolSvg, registerPackage } from "./componentSymbols";
+import { canonicalPackagePinId, componentBox, componentLocalOrigin, componentSymbolSvg, hasRealPinPosition, pinLocalPosition, packageSymbolSvg, pinTerminalMargins, registerPackage, resolvedPackageFor } from "./componentSymbols";
+import { transformLocalPoint } from "./componentGeometry";
+import { sanitizePackage } from "../../catalog/packageSanitizers";
 import { PackageDescriptor, WebviewComponentModel } from "./model";
 
 (async () => {
@@ -51,6 +53,24 @@ import { PackageDescriptor, WebviewComponentModel } from "./model";
     if (!catalogPath) throw new Error("component-catalog.json nao localizado para teste de renderer");
     const catalog = JSON.parse(fs.readFileSync(catalogPath, "utf8")) as { items?: Array<{ typeId?: string; boardPackage?: PackageDescriptor }> };
     return catalog.items?.find((entry) => entry.typeId === typeId)?.boardPackage;
+  }
+
+  /** Lê o `.lsdevice` REAL (não uma reconstrução aproximada) via o mesmo `sanitizePackage` que o
+   * catálogo de verdade usa, registra sob `typeId` e devolve `defaultProperties` -- pra testar a
+   * geometria dinâmica de AND/OR contra o manifesto realmente versionado, não uma cópia que pode
+   * divergir dele com o tempo. */
+  function registerGateManifest(typeId: string, fileName: string): Record<string, unknown> {
+    const candidates = [
+      path.resolve(process.cwd(), "..", "devices", "simulide-logic", fileName),
+      path.resolve(process.cwd(), "devices", "simulide-logic", fileName),
+    ];
+    const file = candidates.find((candidate) => fs.existsSync(candidate));
+    if (!file) throw new Error(`manifest nao localizado: ${fileName}`);
+    const json = JSON.parse(fs.readFileSync(file, "utf8")) as { package?: unknown; defaultProperties?: Record<string, unknown> };
+    const descriptor = sanitizePackage(json.package, path.dirname(file));
+    if (!descriptor) throw new Error(`package invalido em ${fileName}`);
+    registerPackage(typeId, descriptor);
+    return json.defaultProperties ?? {};
   }
 
   await test("sem package registrado, componentBox cai pro algoritmo genérico (fallback)", () => {
@@ -1520,8 +1540,16 @@ import { PackageDescriptor, WebviewComponentModel } from "./model";
     assert(near(left.x, 0) && near(left.y, 10) && near(right.x, 32) && near(right.y, 10),
       `terminais Comp2Pin da Lamp devem cruzar o centro da elipse: ${JSON.stringify({ left, right })}`);
     const svg = packageSymbolSvg("outputs.incandescent_lamp", {}, "lamp-native") ?? "";
-    assert(svg.includes('<g transform="translate(6.000,0.000)"><g transform="scale(1.000000,1.000000)"><ellipse cx="10" cy="10" rx="8" ry="8"'),
+    // A elipse continua desenhada na mesma origem dos leads (dentro do `<g translate(6,0)>` -- ver
+    // `pinLocalPosition` acima), só que agora por baixo de um `<clipPath>` genérico (`pinTerminalMargins`,
+    // aplicado a QUALQUER package com pino na borda da caixa, não só a este) que reserva a faixa do
+    // terminal pro fio nascer fora do corpo -- ver `.spec`/memória sobre a regra central de geometria.
+    // A elipse (x nativo 2..18) fica INTEIRA dentro da região não cortada pelo clip (calculado a
+    // partir do MESMO trim de 0.7 que os leads já usavam), então seu `cx`/`rx` seguem idênticos.
+    assert(svg.includes('<ellipse cx="10" cy="10" rx="8" ry="8"'),
       `elipse deve ficar entre contatos internos x=8/24, usando a mesma origem dos leads: ${svg}`);
+    assert(/<g transform="translate\(6\.000,0\.000\)"><g transform="scale\(1\.000000,1\.000000\)">(<clipPath[^]*?<\/clipPath><g clip-path="url\(#[^"]+\)">)?<ellipse cx="10"/.test(svg),
+      `elipse deve continuar na mesma origem dos leads, com ou sem o clip-path genérico do terminal: ${svg}`);
   });
 
   await test("barramento materializa 8 bits em ordem LSB-first", () => {
@@ -1614,6 +1642,132 @@ import { PackageDescriptor, WebviewComponentModel } from "./model";
     assert(checked >= 120, `auditoria deveria cobrir os packages estáticos; apenas ${checked} terminais foram verificados`);
   });
 
+  // Regra central de geometria (única fonte de verdade, `pinTerminalMargins`): um pino cujo ponto
+  // elétrico nasce na BORDA DA CAIXA reserva ali uma faixa cheia (não só embaixo do próprio pino) do
+  // tamanho do avanço visual do lead pra dentro -- nenhuma forma pintada pode ocupar essa faixa,
+  // então o fio sempre nasce fora do corpo e encosta exatamente na borda dele. Testado como conceito
+  // (LEFT/RIGHT/TOP/BOTTOM, corpo com qualquer cor -- a função nem recebe cor, geometria pura), não
+  // amarrado a nenhum `typeId` -- ver `.spec`/memória sobre o achado real (`serialport`/`serialterm`/
+  // `lasecplot`/`ds1307` tinham essa margem copiada à mão pino a pino antes desta função existir).
+  await test("regra central: pino na borda da caixa reserva margem pro terminal em QUALQUER lado", () => {
+    const width = 40, height = 20;
+    const left = { id: "l", x: 0, y: 10, angle: 180, length: 8 };
+    const right = { id: "r", x: width, y: 10, angle: 0, length: 6 };
+    const top = { id: "t", x: 20, y: 0, angle: 90, length: 5 };
+    const bottom = { id: "b", x: 20, y: height, angle: 270, length: 7 };
+    const margins = pinTerminalMargins([left, right, top, bottom], width, height);
+    assert(near(margins.left, 8) && near(margins.right, 6) && near(margins.top, 5) && near(margins.bottom, 7),
+      `margem devia bater com o avanço visual de cada lado (LEFT/RIGHT/TOP/BOTTOM): ${JSON.stringify(margins)}`);
+  });
+
+  await test("regra central: leadEndTrim reduz a margem reservada (segue o avanço VISUAL, não o length bruto)", () => {
+    const width = 32, height = 16;
+    const trimmed = { id: "o", x: width, y: 8, angle: 0, length: 8, leadEndTrim: 6.2 };
+    const margins = pinTerminalMargins([trimmed], width, height);
+    assert(near(margins.right, 1.8), `margem devia refletir length-leadEndTrim, não o length bruto: ${JSON.stringify(margins)}`);
+  });
+
+  await test("regra central: pino ANCORADO NO CORPO (convenção hd44780 -- ponto elétrico fora da borda, lead aponta pra fora) não reserva margem nenhuma", () => {
+    // As duas convenções coexistem de propósito (ver `.spec`/memória): pino ancorado na borda da
+    // CAIXA precisa da margem calculada acima; pino ancorado na borda do CORPO já nasce sem
+    // sobreposição nenhuma (o lead inteiro já vive fora do corpo, apontando pra fora) -- essa função
+    // não deve mexer nele, e não mexe, porque o ponto elétrico não está perto de nenhuma borda da caixa.
+    const width = 210, height = 75;
+    const bodyAnchored = { id: "rs", x: 16, y: 8, angle: 270, length: 8 }; // hd44780 real: y=8, longe de y=0/height
+    const margins = pinTerminalMargins([bodyAnchored], width, height);
+    assert(margins.left === 0 && margins.right === 0 && margins.top === 0 && margins.bottom === 0,
+      `pino ancorado no corpo não deve gerar margem nenhuma: ${JSON.stringify(margins)}`);
+  });
+
+  await test("regra central aplicada ao renderer: corpo sólido de QUALQUER cor recebe o clip-path quando há pino na borda", () => {
+    const makePackage = (fill: string): PackageDescriptor => ({
+      width: 40, height: 20, border: false, background: { kind: "none" },
+      viewSpec: { paint: [{ kind: "rect", x: 0, y: 0, w: 40, h: 20, fill }] },
+      pins: [{ id: "a", x: 0, y: 10, angle: 180, length: 8, label: "A" }],
+    });
+    for (const [name, fill] of [["branco", "#ffffff"], ["preto", "#000000"], ["azul saturado", "#00008b"]] as const) {
+      registerPackage(`test.terminal-margin.${name}`, makePackage(fill));
+      const svg = packageSymbolSvg(`test.terminal-margin.${name}`, {}, `terminal-margin-${name}`) ?? "";
+      assert(/<clipPath id="[^"]+"><rect x="8\.00" y="0\.00" width="32\.00" height="20\.00"/.test(svg),
+        `corpo ${name}: clip-path da margem do terminal não apareceu (ou com retângulo errado) -- cor não deveria importar pra geometria: ${svg}`);
+    }
+  });
+
+  // AND/OR: geometria dinâmica genérica (achado real 2026-08-19 -- ver `logicGateBodyPath` em
+  // componentSymbols.ts e `feedback_no_per_device_geometry_hacks`/futura memória sobre este caso).
+  // O bug original: pinos escalavam via `dynamicLayout.pinGroups` (sem teto), corpo ficava preso
+  // numa tabela `statePath` só até "8" -- pra `inputs=10` o corpo caía no fallback do "2" enquanto
+  // os pinos continuavam crescendo, "vazando" pra fora do símbolo. Testado contra o `.lsdevice`
+  // REAL (não uma reconstrução), com valores pares/ímpares/muito acima do teto antigo.
+  for (const [style, typeId, fileName] of [
+    ["and", "logic.and_gate", "and_gate.lsdevice"],
+    ["or", "logic.or_gate", "or_gate.lsdevice"],
+  ] as const) {
+    const defaults = registerGateManifest(typeId, fileName);
+
+    await test(`${style}_gate: contagem de pinos, altura do corpo e centralização da saída acompanham 'inputs' pra qualquer N (2,3,5,8,10,16,32)`, () => {
+      for (const n of [2, 3, 5, 8, 10, 16, 32]) {
+        const properties = { ...defaults, inputs: n };
+        const resolved = resolvedPackageFor(typeId, properties);
+        assert(Boolean(resolved), `${typeId} inputs=${n}: resolvedPackageFor não resolveu o package`);
+        const inPins = resolved!.pins.filter((pin) => pin.id.startsWith("in"));
+        const outPin = resolved!.pins.find((pin) => pin.id === "out");
+        assert(inPins.length === n, `${typeId} inputs=${n}: esperado ${n} pinos de entrada, achou ${inPins.length}`);
+        assert(Boolean(outPin), `${typeId} inputs=${n}: pino 'out' não encontrado`);
+        const expectedHeight = Math.max(16, n * 8);
+        assert(resolved!.source.height === expectedHeight,
+          `${typeId} inputs=${n}: altura do corpo (${resolved!.source.height}) não bate com a fórmula de dynamicLayout.height (${expectedHeight}) -- corpo e pinos divergiram de novo`);
+        assert(resolved!.source.width === 32,
+          `${typeId} inputs=${n}: largura mudou (${resolved!.source.width}) -- deveria ser constante, igual ao m_area.width() real (não muda com inputs)`);
+        assert(outPin!.y === expectedHeight / 2,
+          `${typeId} inputs=${n}: saída (y=${outPin!.y}) não está centralizada verticalmente (esperado ${expectedHeight / 2}) -- inclui N ímpar de propósito`);
+        // Invariante: NENHUM pino de entrada cai fora da faixa vertical que o corpo resolvido ocupa
+        // -- comparando bounds numéricos (não string SVG), exatamente o bug relatado pra inputs=10.
+        for (const pin of inPins) {
+          assert(pin.y >= 0 && pin.y <= expectedHeight,
+            `${typeId} inputs=${n}: pino '${pin.id}' em y=${pin.y} cai fora da faixa [0,${expectedHeight}] que o corpo ocupa -- estaria vazando pra fora do símbolo`);
+        }
+      }
+    });
+
+    await test(`${style}_gate: mutação em runtime (2→10→3) recomputa geometria do zero, sem pino/estado residual da contagem anterior`, () => {
+      const seq = [2, 10, 3, 16, 2];
+      for (const n of seq) {
+        const resolved = resolvedPackageFor(typeId, { ...defaults, inputs: n });
+        const inPins = resolved!.pins.filter((pin) => pin.id.startsWith("in"));
+        assert(inPins.length === n, `${typeId}: após mudar pra inputs=${n}, achou ${inPins.length} pinos -- sobrou estado da contagem anterior`);
+        const ids = new Set(inPins.map((pin) => pin.id));
+        assert(ids.size === n, `${typeId} inputs=${n}: ids de pino duplicados -- ${JSON.stringify([...inPins.map((p) => p.id)])}`);
+      }
+    });
+
+    await test(`${style}_gate: rotação (0/90/180/270) continua produzindo coordenadas finitas -- mesmo pipeline de transform de qualquer outro device, sem tratamento especial`, () => {
+      const resolved = resolvedPackageFor(typeId, { ...defaults, inputs: 10 });
+      const box = { width: resolved!.source.width, height: resolved!.source.height };
+      for (const pin of resolved!.pins) {
+        for (const rotation of [0, 90, 180, 270] as const) {
+          for (const flipH of [false, true]) for (const flipV of [false, true]) {
+            const transformed = transformLocalPoint({ x: pin.x, y: pin.y }, { size: box, rotation, flipH, flipV });
+            assert(Number.isFinite(transformed.x) && Number.isFinite(transformed.y),
+              `${typeId} pino '${pin.id}': rotação/espelho produziu coordenada não finita`);
+          }
+        }
+      }
+    });
+
+    await test(`${style}_gate: manifesto não tem mais 'statePath' (tabela por valor) -- usa 'logicGateBody' (fórmula)`, () => {
+      const candidates = [
+        path.resolve(process.cwd(), "..", "devices", "simulide-logic", fileName),
+        path.resolve(process.cwd(), "devices", "simulide-logic", fileName),
+      ];
+      const file = candidates.find((candidate) => fs.existsSync(candidate));
+      const raw = fs.readFileSync(file!, "utf8");
+      assert(!raw.includes("statePath"), `${fileName}: ainda tem 'statePath' -- tabela por valor não deveria ter sobrado`);
+      assert(raw.includes(`"logicGateBody"`) && raw.includes(`"${style}"`), `${fileName}: 'logicGateBody' com style '${style}' não encontrado`);
+      assert(!raw.includes(`"max": 8`), `${fileName}: teto artificial de 8 ainda presente`);
+    });
+  }
+
   registerPackage("test.example", undefined);
   registerPackage("test.scaled", undefined);
   registerPackage("test.vertical", undefined);
@@ -1627,5 +1781,7 @@ import { PackageDescriptor, WebviewComponentModel } from "./model";
   registerPackage("test.simulide-paint.matrix", undefined);
   registerPackage("test.runtime.mono", undefined);
   registerPackage("test.runtime.luma", undefined);
+  registerPackage("logic.and_gate", undefined);
+  registerPackage("logic.or_gate", undefined);
   finish();
 })();

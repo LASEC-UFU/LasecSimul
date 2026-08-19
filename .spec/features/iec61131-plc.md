@@ -24,7 +24,7 @@ Por decisão de [ADR-0007](../adr/0007-openplc-v4-incorporation-and-native-plc-p
 - o compilador **STruCpp** (ST -> C++17) é vendorizado como o backend de compilação; a execução final continua isolada em um worker do Core do LasecSimul (ver "Scan e tasks"), nunca dependendo de um OpenPLC Runtime externo em produção;
 - a separação entre autoria, compilação e runtime é preservada; a execução final pertence sempre ao Core do LasecSimul.
 
-Cada arquivo vendorizado preserva seu aviso de copyright/licença original. A [LasecSimul PLC Runtime Library Exception](../../LICENSE-RUNTIME-EXCEPTION.txt) garante que o programa PLC compilado a partir do projeto IEC de um usuário — não o compilador em si — pode ser distribuído sob qualquer licença.
+Cada arquivo vendorizado preserva seu aviso de copyright/licença original. A `LasecSimul PLC Runtime Library Exception` (`LICENSE-RUNTIME-EXCEPTION.txt`, na raiz do repositório) garante que o programa PLC compilado a partir do projeto IEC de um usuário — não o compilador em si — pode ser distribuído sob qualquer licença.
 
 ## Cinco linguagens obrigatórias
 

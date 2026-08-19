@@ -1,0 +1,263 @@
+{
+  "schemaVersion": 1,
+  "typeId": "logic.minmax",
+  "name": "Min/Max",
+  "language": "pt-BR",
+  "icon": "ic2",
+  "folderPath": [
+    "Aritmeticos"
+  ],
+  "abiVersion": {
+    "major": 3,
+    "minor": 0
+  },
+  "nativeEntry": {
+    "win32-x64": "build/win-x64/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
+  "pins": [
+    {
+      "id": "a0",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "a1",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "a2",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "a3",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "b0",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "b1",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "b2",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "b3",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "min0",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "min1",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "min2",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "min3",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "max0",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "max1",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "max2",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "max3",
+      "kind": "DIGITAL_OUT"
+    }
+  ],
+  "properties": [
+    {
+      "id": "invertInputs",
+      "label": "Inverter Entradas",
+      "group": "Inputs",
+      "valueKind": "bool",
+      "editor": "checkbox",
+      "default": false
+    }
+  ],
+  "limits": {
+    "stepTimeoutMs": 4,
+    "expectedComplexity": "low"
+  },
+  "package": {
+    "width": 72,
+    "height": 72,
+    "border": false,
+    "background": {
+      "kind": "none"
+    },
+    "viewSpec": {
+      "paint": [
+        {
+          "kind": "rect",
+          "x": 8,
+          "y": 0,
+          "w": 56,
+          "h": 72,
+          "fill": "#ffffff"
+        },
+        {
+          "kind": "text",
+          "x": 36,
+          "y": -4,
+          "value": "__label",
+          "fontSize": 5,
+          "color": "#0000aa"
+        }
+      ]
+    },
+    "pins": [
+      {
+        "id": "a0",
+        "x": 0,
+        "y": 8,
+        "angle": 180,
+        "length": 8,
+        "label": "A0"
+      },
+      {
+        "id": "a1",
+        "x": 0,
+        "y": 16,
+        "angle": 180,
+        "length": 8,
+        "label": "A1"
+      },
+      {
+        "id": "a2",
+        "x": 0,
+        "y": 24,
+        "angle": 180,
+        "length": 8,
+        "label": "A2"
+      },
+      {
+        "id": "a3",
+        "x": 0,
+        "y": 32,
+        "angle": 180,
+        "length": 8,
+        "label": "A3"
+      },
+      {
+        "id": "b0",
+        "x": 0,
+        "y": 40,
+        "angle": 180,
+        "length": 8,
+        "label": "B0"
+      },
+      {
+        "id": "b1",
+        "x": 0,
+        "y": 48,
+        "angle": 180,
+        "length": 8,
+        "label": "B1"
+      },
+      {
+        "id": "b2",
+        "x": 0,
+        "y": 56,
+        "angle": 180,
+        "length": 8,
+        "label": "B2"
+      },
+      {
+        "id": "b3",
+        "x": 0,
+        "y": 64,
+        "angle": 180,
+        "length": 8,
+        "label": "B3"
+      },
+      {
+        "id": "min0",
+        "x": 64,
+        "y": 8,
+        "angle": 0,
+        "length": 8,
+        "label": "MIN0"
+      },
+      {
+        "id": "min1",
+        "x": 64,
+        "y": 16,
+        "angle": 0,
+        "length": 8,
+        "label": "MIN1"
+      },
+      {
+        "id": "min2",
+        "x": 64,
+        "y": 24,
+        "angle": 0,
+        "length": 8,
+        "label": "MIN2"
+      },
+      {
+        "id": "min3",
+        "x": 64,
+        "y": 32,
+        "angle": 0,
+        "length": 8,
+        "label": "MIN3"
+      },
+      {
+        "id": "max0",
+        "x": 64,
+        "y": 40,
+        "angle": 0,
+        "length": 8,
+        "label": "MAX0"
+      },
+      {
+        "id": "max1",
+        "x": 64,
+        "y": 48,
+        "angle": 0,
+        "length": 8,
+        "label": "MAX1"
+      },
+      {
+        "id": "max2",
+        "x": 64,
+        "y": 56,
+        "angle": 0,
+        "length": 8,
+        "label": "MAX2"
+      },
+      {
+        "id": "max3",
+        "x": 64,
+        "y": 64,
+        "angle": 0,
+        "length": 8,
+        "label": "MAX3"
+      }
+    ]
+  },
+  "help": {
+    "description": "Minimo e maximo de dois valores de 4 bits (nao sinalizados)."
+  },
+  "defaultProperties": {
+    "invertInputs": false
+  }
+}

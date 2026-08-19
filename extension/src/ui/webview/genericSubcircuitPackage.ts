@@ -1,4 +1,4 @@
-import { PackageDescriptor, PackagePin, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, WebviewComponentModel, WebviewProjectState } from "./model";
+import { PackageDescriptor, PackagePin, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, WebviewComponentModel, WebviewProjectState } from "./model.js";
 
 export type SubcircuitSymbolMode = "generic" | "custom";
 

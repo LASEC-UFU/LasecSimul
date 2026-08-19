@@ -1,5 +1,5 @@
-import { WebviewComponentCatalogEntry } from "./model";
-import { WorkspaceSection, workspaceSectionForCatalogEntry } from "./workspace";
+import { WebviewComponentCatalogEntry } from "./model.js";
+import { WorkspaceSection, workspaceSectionForCatalogEntry } from "./workspace.js";
 
 export interface PaletteRenderableEntry extends WebviewComponentCatalogEntry {
   iconLightUri?: string;

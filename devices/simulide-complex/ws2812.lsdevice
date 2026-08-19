@@ -4,49 +4,189 @@
   "graphical": true,
   "name": "WS2812 Led",
   "language": "pt-BR",
-  "translations": { "en": { "name": "WS2812 Led" } },
-  "abiVersion": { "major": 3, "minor": 0 },
+  "translations": {
+    "en": {
+      "name": "WS2812 Led"
+    }
+  },
+  "abiVersion": {
+    "major": 3,
+    "minor": 0
+  },
   "nativeEntry": {
     "win32-x64": "build/win-x64/device.dll",
     "linux-x64": "build/linux-x64/device.so",
     "darwin-universal": "build/macos-universal/device.dylib"
   },
   "pins": [
-    { "id": "din", "kind": "DIGITAL_IN", "x": 0, "y": 6, "angle": 180, "length": 8, "label": "DIN" },
-    { "id": "dout", "kind": "DIGITAL_OUT", "x": 28, "y": 6, "angle": 0, "length": 8, "label": "DOUT" }
+    {
+      "id": "din",
+      "kind": "DIGITAL_IN",
+      "x": 0,
+      "y": 6,
+      "angle": 180,
+      "length": 8,
+      "label": "DIN"
+    },
+    {
+      "id": "dout",
+      "kind": "DIGITAL_OUT",
+      "x": 28,
+      "y": 6,
+      "angle": 0,
+      "length": 8,
+      "label": "DOUT"
+    }
   ],
   "properties": [
-    { "id": "rows", "label": "Linhas", "group": "Principal", "valueKind": "number", "editor": "number", "default": 1, "min": 1, "max": 320, "step": 1 },
-    { "id": "columns", "label": "Colunas", "group": "Principal", "valueKind": "number", "editor": "number", "default": 1, "min": 1, "max": 240, "step": 1 },
-    { "id": "resetPulse", "label": "Pulso mínimo de reset", "group": "Timing", "unit": "µs", "valueKind": "number", "editor": "number", "default": 50, "min": 1, "step": 1 },
-    { "id": "t0h", "label": "T0H", "group": "Timing", "unit": "ns", "valueKind": "number", "editor": "number", "default": 400, "min": 1, "step": 1 },
-    { "id": "t0l", "label": "T0L", "group": "Timing", "unit": "ns", "valueKind": "number", "editor": "number", "default": 850, "min": 1, "step": 1 },
-    { "id": "t1h", "label": "T1H", "group": "Timing", "unit": "ns", "valueKind": "number", "editor": "number", "default": 850, "min": 1, "step": 1 },
-    { "id": "t1l", "label": "T1L", "group": "Timing", "unit": "ns", "valueKind": "number", "editor": "number", "default": 400, "min": 1, "step": 1 }
+    {
+      "id": "rows",
+      "label": "Linhas",
+      "group": "Principal",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 1,
+      "min": 1,
+      "max": 320,
+      "step": 1
+    },
+    {
+      "id": "columns",
+      "label": "Colunas",
+      "group": "Principal",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 1,
+      "min": 1,
+      "max": 240,
+      "step": 1
+    },
+    {
+      "id": "resetPulse",
+      "label": "Pulso mínimo de reset",
+      "group": "Timing",
+      "unit": "µs",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 50,
+      "min": 1,
+      "step": 1
+    },
+    {
+      "id": "t0h",
+      "label": "T0H",
+      "group": "Timing",
+      "unit": "ns",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 400,
+      "min": 1,
+      "step": 1
+    },
+    {
+      "id": "t0l",
+      "label": "T0L",
+      "group": "Timing",
+      "unit": "ns",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 850,
+      "min": 1,
+      "step": 1
+    },
+    {
+      "id": "t1h",
+      "label": "T1H",
+      "group": "Timing",
+      "unit": "ns",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 850,
+      "min": 1,
+      "step": 1
+    },
+    {
+      "id": "t1l",
+      "label": "T1L",
+      "group": "Timing",
+      "unit": "ns",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 400,
+      "min": 1,
+      "step": 1
+    }
   ],
-  "limits": { "stepTimeoutMs": 8, "expectedComplexity": "medium" },
+  "limits": {
+    "stepTimeoutMs": 8,
+    "expectedComplexity": "medium"
+  },
   "package": {
-    "width": 28,
+    "width": 84,
     "height": 12,
     "border": false,
-    "background": { "kind": "none" },
+    "background": {
+      "kind": "none"
+    },
     "dynamicLayout": {
-      "width": { "prop": "columns", "multiplier": 12, "offset": 16, "fallback": 1, "min": 28 },
-      "height": { "prop": "rows", "multiplier": 12, "fallback": 1, "min": 12 },
-      "schematicWidth": { "prop": "columns", "multiplier": 12, "offset": 16, "fallback": 1, "min": 28 },
-      "schematicHeight": { "prop": "rows", "multiplier": 12, "fallback": 1, "min": 12 }
+      "width": {
+        "prop": "columns",
+        "multiplier": 12,
+        "offset": 72,
+        "fallback": 1,
+        "min": 84
+      },
+      "height": {
+        "prop": "rows",
+        "multiplier": 12,
+        "fallback": 1,
+        "min": 12
+      },
+      "schematicWidth": {
+        "prop": "columns",
+        "multiplier": 12,
+        "offset": 72,
+        "fallback": 1,
+        "min": 84
+      },
+      "schematicHeight": {
+        "prop": "rows",
+        "multiplier": 12,
+        "fallback": 1,
+        "min": 12
+      }
     },
     "runtimeState": {
       "versionOffset": 0,
       "expectedVersion": 1,
       "surface": {
         "encoding": "rgbx32le",
-        "x": 8,
+        "x": 32,
         "y": 0,
-        "w": { "prop": "columns", "multiplier": 12, "fallback": 1, "min": 12 },
-        "h": { "prop": "rows", "multiplier": 12, "fallback": 1, "min": 12 },
-        "sourceWidth": { "prop": "columns", "fallback": 1, "min": 1, "max": 240 },
-        "sourceHeight": { "prop": "rows", "fallback": 1, "min": 1, "max": 320 },
+        "w": {
+          "prop": "columns",
+          "multiplier": 12,
+          "fallback": 1,
+          "min": 12
+        },
+        "h": {
+          "prop": "rows",
+          "multiplier": 12,
+          "fallback": 1,
+          "min": 12
+        },
+        "sourceWidth": {
+          "prop": "columns",
+          "fallback": 1,
+          "min": 1,
+          "max": 240
+        },
+        "sourceHeight": {
+          "prop": "rows",
+          "fallback": 1,
+          "min": 1,
+          "max": 320
+        },
         "payloadOffset": 36,
         "offColor": "#000000",
         "pixelShape": "circle"
@@ -59,29 +199,93 @@
         "className": "WS2812",
         "method": "paint"
       },
-      "bounds": { "x": 0, "y": 0, "w": 28, "h": 12 },
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 84,
+        "h": 12
+      },
       "primitives": [
         {
-          "kind": "rect", "x": 8, "y": 0,
-          "w": { "prop": "columns", "multiplier": 12, "fallback": 1, "min": 12 },
-          "h": { "prop": "rows", "multiplier": 12, "fallback": 1, "min": 12 },
-          "fill": "#000000", "stroke": "#000000"
+          "kind": "rect",
+          "x": 32,
+          "y": 0,
+          "w": {
+            "prop": "columns",
+            "multiplier": 12,
+            "fallback": 1,
+            "min": 12
+          },
+          "h": {
+            "prop": "rows",
+            "multiplier": 12,
+            "fallback": 1,
+            "min": 12
+          },
+          "fill": "#000000",
+          "stroke": "#000000"
         },
-        { "kind": "polygon", "points": [{ "x": 0, "y": 4 }, { "x": 3, "y": 6 }, { "x": 0, "y": 8 }], "fill": "#000000" }
+        {
+          "kind": "polygon",
+          "points": [
+            {
+              "x": 0,
+              "y": 4
+            },
+            {
+              "x": 3,
+              "y": 6
+            },
+            {
+              "x": 0,
+              "y": 8
+            }
+          ],
+          "fill": "#000000"
+        }
       ]
     },
     "pins": [
-      { "id": "din", "x": 0, "y": 6, "angle": 180, "length": 8, "label": "DIN" },
+      {
+        "id": "din",
+        "x": 0,
+        "y": 6,
+        "angle": 180,
+        "length": 8,
+        "label": "DIN"
+      },
       {
         "id": "dout",
-        "x": { "prop": "columns", "multiplier": 12, "offset": 16, "fallback": 1, "min": 28 },
-        "y": { "prop": "rows", "multiplier": 12, "offset": -6, "fallback": 1, "min": 6 },
-        "angle": 0, "length": 8, "label": "DOUT"
+        "x": {
+          "prop": "columns",
+          "multiplier": 12,
+          "offset": 72,
+          "fallback": 1,
+          "min": 52
+        },
+        "y": {
+          "prop": "rows",
+          "multiplier": 12,
+          "offset": -6,
+          "fallback": 1,
+          "min": 6
+        },
+        "angle": 0,
+        "length": 8,
+        "label": "DOUT"
       }
     ]
   },
   "icon": "ws2812",
-  "folderPath": ["Saidas", "Leds"],
-  "defaultProperties": { "rows": 1, "columns": 1 },
-  "help": { "description": "Matriz RGB endereçável WS2812 com DIN/DOUT e temporização configurável." }
+  "folderPath": [
+    "Saidas",
+    "Leds"
+  ],
+  "defaultProperties": {
+    "rows": 1,
+    "columns": 1
+  },
+  "help": {
+    "description": "Matriz RGB endereçável WS2812 com DIN/DOUT e temporização configurável."
+  }
 }

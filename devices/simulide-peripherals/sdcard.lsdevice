@@ -81,9 +81,7 @@
         "y": 8,
         "angle": 180,
         "length": 8,
-        "label": "CS",
-        "labelX": 10,
-        "labelY": 10
+        "label": "CS"
       },
       {
         "id": "di",
@@ -91,9 +89,7 @@
         "y": 16,
         "angle": 180,
         "length": 8,
-        "label": "DI",
-        "labelX": 10,
-        "labelY": 18
+        "label": "DI"
       },
       {
         "id": "ck",
@@ -101,9 +97,7 @@
         "y": 24,
         "angle": 180,
         "length": 8,
-        "label": "CK",
-        "labelX": 10,
-        "labelY": 26
+        "label": "CK"
       },
       {
         "id": "do",
@@ -111,9 +105,7 @@
         "y": 32,
         "angle": 180,
         "length": 8,
-        "label": "DO",
-        "labelX": 10,
-        "labelY": 34
+        "label": "DO"
       }
     ]
   },

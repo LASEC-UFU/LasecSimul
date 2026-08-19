@@ -5,7 +5,6 @@
   "language": "pt-BR",
   "icon": "2to2",
   "folderPath": [
-    "Logicos",
     "Aritmeticos"
   ],
   "abiVersion": {
@@ -39,13 +38,106 @@
       "kind": "DIGITAL_OUT"
     }
   ],
-  "properties": [],
+  "properties": [
+    {
+      "id": "inputHighV",
+      "label": "Limiar de Baixo para Alto",
+      "group": "Inputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "V",
+      "default": 2.5,
+      "step": 0.1
+    },
+    {
+      "id": "inputLowV",
+      "label": "Limiar de Alto para Baixo",
+      "group": "Inputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "V",
+      "default": 2.5,
+      "step": 0.1
+    },
+    {
+      "id": "inputImpedance",
+      "label": "Impedância de Entrada",
+      "group": "Inputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "Ω",
+      "default": 1000000000,
+      "min": 0,
+      "step": 1
+    },
+    {
+      "id": "inputPullupR",
+      "label": "Pull-up de Entrada",
+      "group": "Inputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "Ω",
+      "default": 0,
+      "min": 0,
+      "step": 1
+    },
+    {
+      "id": "outputHighV",
+      "label": "Tensão Alta de Saída",
+      "group": "Outputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "V",
+      "default": 5,
+      "step": 0.1
+    },
+    {
+      "id": "outputLowV",
+      "label": "Tensão Baixa de Saída",
+      "group": "Outputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "V",
+      "default": 0,
+      "step": 0.1
+    },
+    {
+      "id": "outputImpedance",
+      "label": "Impedância de Saída",
+      "group": "Outputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "Ω",
+      "default": 40,
+      "min": 0,
+      "step": 1
+    },
+    {
+      "id": "outputPullupR",
+      "label": "Pull-up de Saída",
+      "group": "Outputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "Ω",
+      "default": 0,
+      "min": 0,
+      "step": 1
+    },
+    {
+      "id": "openCollector",
+      "label": "Coletor Aberto",
+      "group": "Outputs",
+      "valueKind": "bool",
+      "editor": "checkbox",
+      "default": false
+    }
+  ],
   "limits": {
     "stepTimeoutMs": 4,
     "expectedComplexity": "low"
   },
   "package": {
-    "width": 40,
+    "width": 64,
     "height": 32,
     "border": false,
     "background": {
@@ -57,13 +149,13 @@
           "kind": "rect",
           "x": 8,
           "y": 0,
-          "w": 24,
+          "w": 48,
           "h": 32,
           "fill": "#ffffff"
         },
         {
           "kind": "text",
-          "x": 20,
+          "x": 32,
           "y": -4,
           "value": "__label",
           "fontSize": 5,
@@ -90,7 +182,7 @@
       },
       {
         "id": "cin",
-        "x": 32,
+        "x": 56,
         "y": 8,
         "angle": 0,
         "length": 8,
@@ -98,7 +190,7 @@
       },
       {
         "id": "sum",
-        "x": 32,
+        "x": 56,
         "y": 16,
         "angle": 0,
         "length": 8,
@@ -106,7 +198,7 @@
       },
       {
         "id": "cout",
-        "x": 32,
+        "x": 56,
         "y": 24,
         "angle": 0,
         "length": 8,
@@ -116,5 +208,16 @@
   },
   "help": {
     "description": "Somador completo de 1 bit com carry."
+  },
+  "defaultProperties": {
+    "inputHighV": 2.5,
+    "inputLowV": 2.5,
+    "inputImpedance": 1000000000,
+    "inputPullupR": 0,
+    "outputHighV": 5,
+    "outputLowV": 0,
+    "outputImpedance": 40,
+    "outputPullupR": 0,
+    "openCollector": false
   }
 }

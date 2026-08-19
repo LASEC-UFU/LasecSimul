@@ -67,6 +67,26 @@ Testes obrigatórios:
 - cold/warm reset e RETAIN;
 - step/accelerated/headless -> mesma semântica temporal.
 
+
+## Hierarquia e referência TDPS
+
+Testes obrigatórios de `FEAT-004`/`FEAT-012`:
+
+- composto versus expansão manual do mesmo grafo;
+- duas instâncias com estado dinâmico independente;
+- nested composite com hash transitivo e rejeição de ciclo;
+- rename/movimento visual de porta preservando binding por `portId`;
+- remoção de porta conectada produzindo orphan explícito;
+- mudança interna com interface estável preservando fios externos;
+- `parameterOverride` atingindo apenas o target/instância correto;
+- parser dos 24 `.smp` de referência sem crash;
+- importador resolvendo `Mnn`/índices globais para edges explícitos;
+- golden de basic flow loop e Smith predictor;
+- regressões de FirstOrder/FOPDT/DeadTime/Valve/Stiction/RateLimiter quando portados;
+- observer/Scope/AnimatedValue não alterando resultado numérico.
+
+Fixtures provenientes do TDPS devem registrar origem/versão e tolerância. Estado transitório salvo no `.smp` não se torna estado canônico de projeto; quando usado para reprodução, fica isolado na fixture de teste.
+
 ## Baselines
 
 Todo baseline registra commit, toolchain, CPU, RAM, SO, perfil, comando, cenário e versão do formato. Para IEC registra também `compilerVersion`, `abiVersion`, hashes de libraries e backend de bytecode. Resultado sem ambiente definido é diagnóstico, não gate de capacidade.
@@ -78,4 +98,6 @@ Todo baseline registra commit, toolchain, CPU, RAM, SO, perfil, comando, cenári
 - matriz IEC 5×5 é gate antes de `FEAT-007` tornar-se `active`;
 - flaky test não é promovido a gate até ter causa e política;
 - regressão de performance exige limiar estatístico, não uma única execução;
-- cada feature normativa aponta para testes concretos antes de `status: active`.
+- cada feature normativa aponta para testes concretos antes de `status: active`;
+- `FEAT-004` só vira `active` após equivalência de composite/expansão e isolamento de instâncias;
+- `FEAT-012` só vira `active` após parser/importador e pelo menos dois cenários TDPS com golden documentado.

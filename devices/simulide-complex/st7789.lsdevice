@@ -85,6 +85,16 @@
       "default": 320,
       "min": 16,
       "step": 1
+    },
+    {
+      "id": "scale",
+      "label": "Escala",
+      "group": "Principal",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 1,
+      "min": 0.1,
+      "step": 0.1
     }
   ],
   "limits": {
@@ -99,12 +109,27 @@
       "kind": "none"
     },
     "runtimeState": {
-      "versionOffset": 0, "expectedVersion": 1,
+      "versionOffset": 0,
+      "expectedVersion": 1,
       "surface": {
-        "encoding": "rgbx32le", "x": 6, "y": 6, "w": 240, "h": 320,
-        "sourceWidth": { "prop": "width", "fallback": 240, "min": 1 },
-        "sourceHeight": { "prop": "height", "fallback": 320, "min": 1 },
-        "payloadOffset": 36, "enabledOffset": 16, "offColor": "#000000"
+        "encoding": "rgbx32le",
+        "x": 6,
+        "y": 6,
+        "w": 240,
+        "h": 320,
+        "sourceWidth": {
+          "prop": "width",
+          "fallback": 240,
+          "min": 1
+        },
+        "sourceHeight": {
+          "prop": "height",
+          "fallback": 320,
+          "min": 1
+        },
+        "payloadOffset": 36,
+        "enabledOffset": 16,
+        "offColor": "#000000"
       }
     },
     "shapes": [],
@@ -187,7 +212,21 @@
         "length": 8,
         "label": "RST"
       }
-    ]
+    ],
+    "dynamicLayout": {
+      "schematicWidth": {
+        "prop": "scale",
+        "multiplier": 252,
+        "fallback": 252,
+        "min": 25.200000000000003
+      },
+      "schematicHeight": {
+        "prop": "scale",
+        "multiplier": 342,
+        "fallback": 342,
+        "min": 34.2
+      }
+    }
   },
   "icon": "st7789",
   "folderPath": [
@@ -196,5 +235,8 @@
   ],
   "help": {
     "description": "Display TFT colorido baseado no controlador ST7789."
+  },
+  "defaultProperties": {
+    "scale": 1
   }
 }

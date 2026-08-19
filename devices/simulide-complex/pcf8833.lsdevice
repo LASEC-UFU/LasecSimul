@@ -20,15 +20,6 @@
   },
   "pins": [
     {
-      "id": "dc",
-      "kind": "DIGITAL_IN",
-      "x": -12,
-      "y": 60,
-      "angle": 270,
-      "length": 8,
-      "label": "DC"
-    },
-    {
       "id": "cs",
       "kind": "DIGITAL_IN",
       "x": -20,
@@ -147,14 +138,6 @@
       ]
     },
     "pins": [
-      {
-        "id": "dc",
-        "x": 52,
-        "y": 152,
-        "angle": 90,
-        "length": 8,
-        "label": "DC"
-      },
       {
         "id": "cs",
         "x": 68,

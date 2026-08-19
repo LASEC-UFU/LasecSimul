@@ -37,7 +37,7 @@
     "darwin-universal": "build/macos-universal/device.dylib"
   },
   "package": {
-    "width": 56,
+    "width": 88,
     "height": 56,
     "border": false,
     "background": {
@@ -49,7 +49,7 @@
         "kind": "rect",
         "x": 0,
         "y": 0,
-        "w": 56,
+        "w": 88,
         "h": 56,
         "stroke": "#333",
         "fill": "#1a1a2e",
@@ -57,15 +57,15 @@
       },
       {
         "kind": "line",
-        "x1": 4,
+        "x1": 40,
         "y1": 0,
-        "x2": 4,
+        "x2": 40,
         "y2": 56,
         "stroke": "#2a2a3e"
       },
       {
         "kind": "text",
-        "x": 8,
+        "x": 44,
         "y": 24,
         "value": "DS",
         "fontSize": 9,
@@ -73,7 +73,7 @@
       },
       {
         "kind": "text",
-        "x": 8,
+        "x": 44,
         "y": 36,
         "value": "1621",
         "fontSize": 9,
@@ -81,7 +81,7 @@
       },
       {
         "kind": "text",
-        "x": 8,
+        "x": 44,
         "y": 48,
         "value": "I2C T°",
         "fontSize": 7,
@@ -124,7 +124,7 @@
       },
       {
         "id": "vdd",
-        "x": 56,
+        "x": 88,
         "y": 8,
         "angle": 0,
         "length": 8,
@@ -132,7 +132,7 @@
       },
       {
         "id": "a2",
-        "x": 56,
+        "x": 88,
         "y": 20,
         "angle": 0,
         "length": 8,
@@ -140,7 +140,7 @@
       },
       {
         "id": "a1",
-        "x": 56,
+        "x": 88,
         "y": 32,
         "angle": 0,
         "length": 8,
@@ -148,7 +148,7 @@
       },
       {
         "id": "a0",
-        "x": 56,
+        "x": 88,
         "y": 44,
         "angle": 0,
         "length": 8,
@@ -196,7 +196,7 @@
     {
       "id": "vdd",
       "kind": "POWER",
-      "x": 56,
+      "x": 88,
       "y": 8,
       "angle": 0,
       "length": 8,
@@ -205,7 +205,7 @@
     {
       "id": "a2",
       "kind": "DIGITAL_IN",
-      "x": 56,
+      "x": 88,
       "y": 20,
       "angle": 0,
       "length": 8,
@@ -214,7 +214,7 @@
     {
       "id": "a1",
       "kind": "DIGITAL_IN",
-      "x": 56,
+      "x": 88,
       "y": 32,
       "angle": 0,
       "length": 8,
@@ -223,7 +223,7 @@
     {
       "id": "a0",
       "kind": "DIGITAL_IN",
-      "x": 56,
+      "x": 88,
       "y": 44,
       "angle": 0,
       "length": 8,
@@ -266,6 +266,17 @@
       "max": 125,
       "step": 1,
       "unit": "°C"
+    },
+    {
+      "id": "tempInc",
+      "label": "Incremento de Temperatura",
+      "group": "Sensor",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "°C",
+      "default": 0.5,
+      "min": 0.001,
+      "step": 0.1
     }
   ],
   "help": {
@@ -274,5 +285,8 @@
   "limits": {
     "stepTimeoutMs": 2,
     "expectedComplexity": "medium"
+  },
+  "defaultProperties": {
+    "tempInc": 0.5
   }
 }

@@ -683,6 +683,22 @@ if(NOT WIN32)
 endif()
 add_test(NAME logic_gate_plugin COMMAND logic_gate_plugin_test)
 
+# Familia aritmetica/plexers adicionada a devices/simulide-logic pra fechar a lacuna frente ao
+# Logisim Evolution (varredura 2026-08-18) -- mesmo padrão real-DLL acima.
+add_executable(logic_family_extension_test
+    test/logic_family_extension_test.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(logic_family_extension_test PRIVATE include src)
+target_link_libraries(logic_family_extension_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(logic_family_extension_test PRIVATE
+    SIMULIDE_LOGIC_DLL_PATH="${SIMULIDE_LOGIC_ARTIFACT}"
+)
+if(NOT WIN32)
+    target_link_libraries(logic_family_extension_test PRIVATE dl)
+endif()
+add_test(NAME logic_family_extension COMMAND logic_family_extension_test)
+
 # Orquestrador McuController contra o binário REAL do fork qemu-simulide (não fake) -- pula se o
 # binário não existir no caminho esperado (sibling do repositório, ver docs/mvp-limitacoes.md).
 # Adapter ESP32 agora vem do plugin real (mesmo binário de esp32_adapter_test acima), não built-in.

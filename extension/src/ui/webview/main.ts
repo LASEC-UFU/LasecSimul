@@ -33,7 +33,6 @@ import { isHighWireVoltage, reconcileWireVoltages } from "./wirePresentation.js"
 import { continuousDialValueFromPointer, steppedDialValue } from "./dialInteraction.js";
 import { contextMenuViewportSize, positionContextSubmenu, positionRootContextMenu } from "./contextMenuPosition.js";
 import { regenerateGenericSubcircuitState } from "./genericSubcircuitPackage.js";
-import { normalizeWorkspaceSelection, WORKSPACE_SECTION_ORDER, WorkspaceSection, WorkspaceSelection } from "./workspace.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const FINE_WIRE_STEP = WIRE_GRID_SIZE / 10;
@@ -97,13 +96,8 @@ function syncPackageRegistry(catalog: WebviewProjectState["catalog"]): void {
 }
 
 const initialWindowState = (window as WindowWithInitialState).__LASECSIMUL_INITIAL_STATE__;
-const persistedWebviewState = vscode?.getState() as (WebviewProjectState & { workspaceSelection?: unknown }) | undefined;
-const workspaceSelectionFromStorage = persistedWebviewState?.workspaceSelection;
-const persistedProjectState = persistedWebviewState
-  ? (({ workspaceSelection: _workspaceSelection, ...project }) => project)(persistedWebviewState)
-  : undefined;
-let workspaceSelection: WorkspaceSelection = normalizeWorkspaceSelection(workspaceSelectionFromStorage);
-let state = normalizeProjectState(persistedProjectState ?? initialWindowState ?? createEmptyState());
+const persistedWebviewState = vscode?.getState() as WebviewProjectState | undefined;
+let state = normalizeProjectState(persistedWebviewState ?? initialWindowState ?? createEmptyState());
 syncPackageRegistry(state.catalog);
 
 let catalogLookupSource: WebviewProjectState["catalog"] | undefined;
@@ -176,8 +170,6 @@ let appBarElement: HTMLElement | undefined;
 let canvasElement: HTMLDivElement | undefined;
 let canvasContentElement: HTMLDivElement | undefined;
 let wireLayerElement: SVGSVGElement | undefined;
-let workspaceTabsElement: HTMLElement | undefined;
-let placeholderWorkspaceElement: HTMLElement | undefined;
 
 const UI_TEXT = {
   "pt-BR": {
@@ -257,10 +249,6 @@ const UI_TEXT = {
     fpgaAdd: "Adicionar bloco programável FPGA",
     fpgaLoadCode: "Carregar código VHDL...",
     fpgaUnconfigured: "Nenhum código carregado; o bloco ainda não possui entradas ou saídas.",
-    workspaceAnalog: "Analógico",
-    workspaceDigital: "Digital",
-    workspaceControl: "Controle",
-    workspaceProcess: "Processo",
     fpgaOpenSource: "Abrir/editar VHDL",
     fpgaConfigure: "Alterar arquivos e entity...",
     fpgaConfigureGhdl: "Configurar simulador GHDL...",
@@ -395,10 +383,6 @@ const UI_TEXT = {
     fpgaAdd: "Add programmable FPGA block",
     fpgaLoadCode: "Load VHDL code...",
     fpgaUnconfigured: "No code loaded; the block does not have inputs or outputs yet.",
-    workspaceAnalog: "Analog",
-    workspaceDigital: "Digital",
-    workspaceControl: "Control",
-    workspaceProcess: "Process",
     fpgaOpenSource: "Open/edit VHDL",
     fpgaConfigure: "Change files and entity...",
     fpgaConfigureGhdl: "Configure GHDL simulator...",
@@ -1829,10 +1813,8 @@ function persistState(): void {
   vscode?.postMessage(outbound);
 }
 
-/** Persiste navegação e projeto no estado opaco da Webview, mas envia ao host somente o projeto.
- * Assim trocar de aba nunca suja nem serializa o `.lsproj`. */
 function storeWebviewState(): void {
-  vscode?.setState({ ...state, workspaceSelection });
+  vscode?.setState(state);
 }
 
 function send(message: WebviewToHostMessage): void {
@@ -2605,7 +2587,7 @@ function renderAppBar(): HTMLElement {
 
   const fpgaGroup = document.createElement("div");
   fpgaGroup.className = "appbar__group";
-  if (!editingSubcircuit && workspaceSelection.section === "digital") {
+  if (!editingSubcircuit) {
     fpgaGroup.appendChild(
       renderToolbarButton("fpga", t("fpgaAdd"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestAddGenericFpga" }))
     );
@@ -2659,36 +2641,6 @@ function renderAppBar(): HTMLElement {
   meta.append(selection, status);
   bar.append(fileGroup, fpgaGroup, simGroup, editGroup, viewGroup, subcircuitGroup, meta);
   return bar;
-}
-
-/** Glifos das 4 abas fixas do workspace -- mesma receita de `renderIcon` (viewBox 24x24, stroke-line
- * via CSS), um por `WorkspaceSection`. Nenhuma logica de componente aqui, so um desenho por secao. */
-function renderWorkspaceTabIcon(section: WorkspaceSection): SVGSVGElement {
-  const svg = document.createElementNS(SVG_NS, "svg");
-  svg.setAttribute("viewBox", "0 0 24 24");
-  svg.setAttribute("aria-hidden", "true");
-  svg.classList.add("workspace-tabs__icon");
-
-  switch (section) {
-    case "analog":
-      // onda senoidal -- sinal analogico continuo
-      svg.innerHTML = '<path d="M2 16c3-12 7-12 10 0s7 12 10-8"></path>';
-      break;
-    case "digital":
-      // onda quadrada -- pulso binario
-      svg.innerHTML = '<path d="M2 16h4V8h4v8h4V8h4v8h4"></path>';
-      break;
-    case "control":
-      // seta de laco fechado (malha de realimentacao) em torno de um ponto de setpoint
-      svg.innerHTML = '<path d="M18 8a7 7 0 1 0 1 5"></path><path d="M19 3v5h-5"></path><circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none"></circle>';
-      break;
-    case "process":
-      // vaso/tanque com linha de nivel de liquido
-      svg.innerHTML = '<path d="M6 3h12"></path><path d="M7 3v15a5 5 0 0 0 5 5a5 5 0 0 0 5-5V3"></path><path d="M7 14h10"></path>';
-      break;
-  }
-
-  return svg;
 }
 
 type ToolbarIconKind = "open" | "save" | "saveProjectAs" | "fpga" | "start" | "pause" | "stop" | "properties" | "delete" | "zoomFitSelection" | "zoomFitAll" | "zoomReset" | "back" | "createPin" | "selectExposedComponents" | "selectExportedProperties";
@@ -3048,69 +3000,6 @@ function zoomReset(): void {
   persistState();
 }
 
-const WORKSPACE_SECTION_LABEL_KEY: Record<WorkspaceSection, keyof typeof UI_TEXT["pt-BR"]> = {
-  analog: "workspaceAnalog",
-  digital: "workspaceDigital",
-  control: "workspaceControl",
-  process: "workspaceProcess",
-};
-
-function workspaceTabButton(section: WorkspaceSection, active: boolean): HTMLButtonElement {
-  const label = t(WORKSPACE_SECTION_LABEL_KEY[section]);
-  const button = document.createElement("button");
-  button.type = "button";
-  button.setAttribute("role", "tab");
-  button.className = `workspace-tabs__button${active ? " workspace-tabs__button--active" : ""}`;
-  button.title = label;
-  button.setAttribute("aria-label", label);
-  button.setAttribute("aria-selected", String(active));
-  button.tabIndex = active ? 0 : -1;
-  button.appendChild(renderWorkspaceTabIcon(section));
-  button.addEventListener("click", () => setWorkspaceSection(section));
-  return button;
-}
-
-function setWorkspaceSection(next: WorkspaceSection): void {
-  if (next === workspaceSelection.section) return;
-  const hadPendingConnection = state.pendingConnection !== undefined;
-  cancelActiveTool();
-  hideContextMenu();
-  workspaceSelection = { section: next };
-  if (hadPendingConnection) persistState();
-  else storeWebviewState();
-  send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestSetWorkspaceSelection", selection: workspaceSelection });
-  render();
-}
-
-/** Setas movem foco+seleção entre as 4 abas (padrão `role="tablist"`), com wrap nas pontas. */
-function handleWorkspaceTabsKeydown(event: KeyboardEvent): void {
-  if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-  const currentIndex = WORKSPACE_SECTION_ORDER.indexOf(workspaceSelection.section);
-  const delta = event.key === "ArrowRight" ? 1 : -1;
-  const nextIndex = (currentIndex + delta + WORKSPACE_SECTION_ORDER.length) % WORKSPACE_SECTION_ORDER.length;
-  const nextSection = WORKSPACE_SECTION_ORDER[nextIndex];
-  if (!nextSection) return;
-  event.preventDefault();
-  setWorkspaceSection(nextSection);
-  (workspaceTabsElement?.querySelector(`[aria-selected="true"]`) as HTMLElement | null)?.focus();
-}
-
-function renderWorkspaceTabs(): HTMLElement {
-  const navigation = document.createElement("nav");
-  navigation.className = "workspace-tabs";
-  navigation.setAttribute("role", "tablist");
-  navigation.setAttribute("aria-label", "Workspace");
-  navigation.addEventListener("keydown", handleWorkspaceTabsKeydown);
-
-  const row = document.createElement("div");
-  row.className = "workspace-tabs__row";
-  for (const section of WORKSPACE_SECTION_ORDER) {
-    row.appendChild(workspaceTabButton(section, workspaceSelection.section === section));
-  }
-  navigation.appendChild(row);
-  return navigation;
-}
-
 function ensureRenderShell(): { canvas: HTMLDivElement; canvasContent: HTMLDivElement; wireLayer: SVGSVGElement } | undefined {
   if (!app) return undefined;
 
@@ -3135,32 +3024,6 @@ function ensureRenderShell(): { canvas: HTMLDivElement; canvasContent: HTMLDivEl
 
   if (canvasElement.parentElement !== app) app.appendChild(canvasElement);
   if (appBarElement.nextSibling !== canvasElement) app.insertBefore(canvasElement, appBarElement.nextSibling);
-
-  // "analog"/"digital" usam o canvas eletrico normal; "control"/"process" ainda nao tem editor
-  // proprio (ver .spec/features/process-visualization.md, FEAT-008 deferred) e mostram um
-  // placeholder generico -- sem logica especifica de componente, so a secao ativa.
-  const placeholderActive = workspaceSelection.section === "control" || workspaceSelection.section === "process";
-  document.body.classList.toggle("workspace-mode--placeholder", placeholderActive);
-  appBarElement.hidden = placeholderActive;
-  canvasElement.hidden = placeholderActive;
-  if (placeholderActive) {
-    if (!placeholderWorkspaceElement) {
-      placeholderWorkspaceElement = document.createElement("section");
-      placeholderWorkspaceElement.className = "workspace-placeholder";
-      placeholderWorkspaceElement.setAttribute("aria-label", "Workspace placeholder");
-    }
-    if (placeholderWorkspaceElement.parentElement !== app) app.appendChild(placeholderWorkspaceElement);
-  } else {
-    placeholderWorkspaceElement?.remove();
-  }
-
-  const nextWorkspaceTabs = renderWorkspaceTabs();
-  if (workspaceTabsElement) workspaceTabsElement.replaceWith(nextWorkspaceTabs);
-  else app.appendChild(nextWorkspaceTabs);
-  workspaceTabsElement = nextWorkspaceTabs;
-  if (workspaceTabsElement.parentElement === app && workspaceTabsElement !== app.lastElementChild) app.appendChild(workspaceTabsElement);
-
-  if (placeholderActive) return undefined;
 
   canvasContentElement.style.transform = `translate(${state.viewport.x}px, ${state.viewport.y}px) scale(${state.viewport.zoom})`;
   if (wireLayerElement.parentElement !== canvasContentElement) canvasContentElement.insertBefore(wireLayerElement, canvasContentElement.firstChild);
@@ -8060,6 +7923,14 @@ function renderPropertyField(component: WebviewComponentModel, field: PropertyFi
     } else {
       send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name: field.key, value });
       persistState();
+      // Sem isto, o corpo do símbolo (curva do gate, bolha de inversão, etc. -- tudo que depende de
+      // `properties` mas não de `pins[]`) só reaparecia depois de ALGUM outro gatilho de render
+      // (clicar noutro componente, mover o mouse) -- a mutação local de `component.properties` acima
+      // já é o dado certo, só faltava mandar o canvas redesenhar com ele (mesmo padrão de
+      // `applyLabelBatchChange`/`renamePinIdCascade`, que já chamam `render()` aqui perto). O eco
+      // `syncStatePatch` do host (que traz `pins[]` recalculado p/ propriedades `affectsPinCount`)
+      // ainda chega depois e re-renderiza de novo -- este `render()` só cobre o intervalo até lá.
+      render();
     }
     refreshOpenPropertyDialog();
   };
@@ -8277,7 +8148,14 @@ function renderPropertyField(component: WebviewComponentModel, field: PropertyFi
   }
   if (!input.readOnly) {
     input.addEventListener("change", () => {
-      const value = field.kind === "number" ? Number(input.value) : input.value;
+      let value: number | string = field.kind === "number" ? Number(input.value) : input.value;
+      // `<input min/max>` só afeta as setas do spinner e o `:invalid` do CSS -- não impede o usuário
+      // de digitar um valor fora do range e ele ser persistido do mesmo jeito (achado real
+      // 2026-08-19: `Entradas` da AND aceitava 10 mesmo com `max:8` declarado). Clampa aqui quando
+      // min/max estão declarados, pra QUALQUER propriedade numérica, não só a AND/OR.
+      if (typeof value === "number" && Number.isFinite(value) && (field.min !== undefined || field.max !== undefined)) {
+        value = clampNumber(value, field.min ?? -Infinity, field.max ?? Infinity);
+      }
       applyChange(value);
     });
   }
@@ -9740,4 +9618,3 @@ window.addEventListener("keyup", (event) => {
 render();
 requestAnimationFrame(animateDcMotors);
 send({ version: WEBVIEW_MESSAGE_VERSION, type: "webviewReady" });
-send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestSetWorkspaceSelection", selection: workspaceSelection });

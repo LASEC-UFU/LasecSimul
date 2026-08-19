@@ -1,0 +1,263 @@
+{
+  "schemaVersion": 1,
+  "typeId": "logic.multiplier",
+  "name": "Multiplier",
+  "language": "pt-BR",
+  "icon": "ic2",
+  "folderPath": [
+    "Aritmeticos"
+  ],
+  "abiVersion": {
+    "major": 3,
+    "minor": 0
+  },
+  "nativeEntry": {
+    "win32-x64": "build/win-x64/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
+  "pins": [
+    {
+      "id": "a0",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "a1",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "a2",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "a3",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "b0",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "b1",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "b2",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "b3",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "p0",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "p1",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "p2",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "p3",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "p4",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "p5",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "p6",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "p7",
+      "kind": "DIGITAL_OUT"
+    }
+  ],
+  "properties": [
+    {
+      "id": "invertInputs",
+      "label": "Inverter Entradas",
+      "group": "Inputs",
+      "valueKind": "bool",
+      "editor": "checkbox",
+      "default": false
+    }
+  ],
+  "limits": {
+    "stepTimeoutMs": 4,
+    "expectedComplexity": "low"
+  },
+  "package": {
+    "width": 56,
+    "height": 72,
+    "border": false,
+    "background": {
+      "kind": "none"
+    },
+    "viewSpec": {
+      "paint": [
+        {
+          "kind": "rect",
+          "x": 8,
+          "y": 0,
+          "w": 40,
+          "h": 72,
+          "fill": "#ffffff"
+        },
+        {
+          "kind": "text",
+          "x": 28,
+          "y": -4,
+          "value": "__label",
+          "fontSize": 5,
+          "color": "#0000aa"
+        }
+      ]
+    },
+    "pins": [
+      {
+        "id": "a0",
+        "x": 0,
+        "y": 8,
+        "angle": 180,
+        "length": 8,
+        "label": "A0"
+      },
+      {
+        "id": "a1",
+        "x": 0,
+        "y": 16,
+        "angle": 180,
+        "length": 8,
+        "label": "A1"
+      },
+      {
+        "id": "a2",
+        "x": 0,
+        "y": 24,
+        "angle": 180,
+        "length": 8,
+        "label": "A2"
+      },
+      {
+        "id": "a3",
+        "x": 0,
+        "y": 32,
+        "angle": 180,
+        "length": 8,
+        "label": "A3"
+      },
+      {
+        "id": "b0",
+        "x": 0,
+        "y": 40,
+        "angle": 180,
+        "length": 8,
+        "label": "B0"
+      },
+      {
+        "id": "b1",
+        "x": 0,
+        "y": 48,
+        "angle": 180,
+        "length": 8,
+        "label": "B1"
+      },
+      {
+        "id": "b2",
+        "x": 0,
+        "y": 56,
+        "angle": 180,
+        "length": 8,
+        "label": "B2"
+      },
+      {
+        "id": "b3",
+        "x": 0,
+        "y": 64,
+        "angle": 180,
+        "length": 8,
+        "label": "B3"
+      },
+      {
+        "id": "p0",
+        "x": 48,
+        "y": 8,
+        "angle": 0,
+        "length": 8,
+        "label": "P0"
+      },
+      {
+        "id": "p1",
+        "x": 48,
+        "y": 16,
+        "angle": 0,
+        "length": 8,
+        "label": "P1"
+      },
+      {
+        "id": "p2",
+        "x": 48,
+        "y": 24,
+        "angle": 0,
+        "length": 8,
+        "label": "P2"
+      },
+      {
+        "id": "p3",
+        "x": 48,
+        "y": 32,
+        "angle": 0,
+        "length": 8,
+        "label": "P3"
+      },
+      {
+        "id": "p4",
+        "x": 48,
+        "y": 40,
+        "angle": 0,
+        "length": 8,
+        "label": "P4"
+      },
+      {
+        "id": "p5",
+        "x": 48,
+        "y": 48,
+        "angle": 0,
+        "length": 8,
+        "label": "P5"
+      },
+      {
+        "id": "p6",
+        "x": 48,
+        "y": 56,
+        "angle": 0,
+        "length": 8,
+        "label": "P6"
+      },
+      {
+        "id": "p7",
+        "x": 48,
+        "y": 64,
+        "angle": 0,
+        "length": 8,
+        "label": "P7"
+      }
+    ]
+  },
+  "help": {
+    "description": "Multiplicador 4x4 bits (produto de 8 bits)."
+  },
+  "defaultProperties": {
+    "invertInputs": false
+  }
+}

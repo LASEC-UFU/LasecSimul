@@ -12,14 +12,17 @@ Visualização é projeção de telemetria, não participante do solver. Assets 
 
 ## Shell de navegação já disponível
 
-A feature completa continua adiada, mas o workspace já reserva as abas de primeiro nível `Controle`
-e `Processo` conforme [FEAT-011](workspace-navigation.md). Ambas as áreas permanecem intencionalmente
-vazias nesta fase. A presença das abas não autoriza misturar componentes elétricos, analógicos ou
-digitais nelas e não significa que editor, biblioteca ou runtime de processo estejam implementados.
+A feature completa continua adiada, mas a paleta lateral já reserva as abas de filtro `Controle` e
+`Processo` conforme [FEAT-011](workspace-navigation.md). Ambas permanecem intencionalmente vazias
+nesta fase — nenhum item de catálogo declara `workspaceSection: "control"` ou `"process"` ainda. A
+presença das abas na paleta não autoriza misturar componentes elétricos, analógicos ou digitais
+nelas e não significa que biblioteca ou runtime de processo estejam implementados.
 
-Quando a implementação desta feature começar, a área de processo deve ser preenchida dentro dessa
-hierarquia e preservar seu estado ao alternar abas, sem reutilizar o canvas elétrico como fonte de
-verdade.
+Diferente da decisão anterior, o editor de esquemático (`main.ts`) não tem mais um modo de
+navegação por aba nem um placeholder próprio: é um único canvas elétrico sempre visível. Quando a
+implementação desta feature começar, a visualização de processo deve ser um overlay/projeção sobre
+esse mesmo canvas (ou um painel próprio fora do fluxo de abas), nunca reintroduzir um canvas
+alternativo selecionado por seção.
 
 ## Regras
 
@@ -31,7 +34,7 @@ verdade.
 
 ## Aceitação
 
-- antes da implementação da feature, `Controle` e `Processo` existem como abas de primeiro nível
+- antes da implementação da feature, `Controle` e `Processo` existem como abas de filtro na paleta,
   vazias e isoladas do catálogo de `Analógico`/`Digital`;
 - ocultar/fechar Webview não muda resultado;
 - SharedHost reduz FPS sem mudar simulação;

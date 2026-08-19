@@ -43,8 +43,8 @@ import {
   await test("famílias legadas são separadas sem duplicação, nunca em control/process", () => {
     assert(workspaceSectionForCatalogEntry({ typeId: "passive.resistor" }) === "analog", "resistor deveria ser analógico");
     assert(workspaceSectionForCatalogEntry({ typeId: "logic.and_gate" }) === "digital", "porta lógica deveria ser digital");
-    assert(workspaceSectionForCatalogEntry({ typeId: "digital.generic_fpga" }) === "digital", "FPGA deveria ser digital");
-    assert(workspaceSectionForCatalogEntry({ typeId: "custom.mcu", mcuHost: true }) === "digital", "host MCU deveria ser digital");
+    assert(workspaceSectionForCatalogEntry({ typeId: "digital.generic_fpga" }) === "digital", "FPGA/GHDL deveria ser digital");
+    assert(workspaceSectionForCatalogEntry({ typeId: "outputs.hd44780" }) === "analog", "display legado sem workspaceSection deveria ser analógico (só logic./digital. ficam em Digital)");
   });
 
   const { failed } = finish();

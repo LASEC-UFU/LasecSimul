@@ -276,6 +276,14 @@ export interface PackagePin {
   id: string;
   aliases?: string[];
   stateVisible?: SimulidePaintStateVisible;
+  /** Bolha de inversão (NAND/NOR/NOT/XNOR) desenhada pelo PRÓPRIO pino, igual ao `Pin::m_inverted`
+   * real (`gui/circuitwidget/pin.cpp::Pin::paint()`): o fio é desenhado PRIMEIRO (comprimento
+   * inteiro) e um círculo branco com contorno preto é pintado POR CIMA da ponta dele, cobrindo só
+   * essa ponta -- nunca uma forma separada em `package.shapes[]`/`viewSpec.paint[]` (que desenha
+   * ANTES dos pinos, então o fio ficaria por cima da bolha, escondendo ela). Reaproveita o mesmo
+   * formato de `stateVisible` (`{when:{prop:["valor",...]}}`) só pra decidir SE a bolha aparece --
+   * a geometria dela (raio, posição ao longo do lead) é fixa, ver `packagePinLeadSvg`. */
+  invertBubble?: SimulidePaintStateVisible;
   kind?: string;
   /** Ponto elétrico real em coordenadas locais. É também o início visual do lead e o ponto usado
    * pelo wire; o contato com o corpo é derivado exclusivamente de `angle` + `length`. */
@@ -359,10 +367,22 @@ export interface PackageShape {
    * Quando presente, o renderizador aplica o transform inicial derivado das propriedades do componente
    * (ex: position do encoder → rotate; x_pos/y_pos do joystick → translate). */
   partId?: string;
-  /** Troca declarativa do `d` de um path por propriedade da instância. Útil para símbolos cuja
-   * geometria muda por uma propriedade discreta, sem criar helper TS por `typeId` (ex: gates com
-   * 2..8 entradas). */
+  /** Troca declarativa do `d` de um path por propriedade da instância -- só serve pra um conjunto
+   * FINITO e pequeno de valores discretos (ex: um enum de aparência). NÃO use para geometria que
+   * escala com uma contagem sem teto real (pins/entradas/bits) -- uma tabela por valor sempre
+   * diverge assim que o valor real passa da última chave mapeada (achado real 2026-08-19: AND/OR
+   * tinham `statePath` map "2".."8" enquanto os pinos, resolvidos por `dynamicLayout.pinGroups`,
+   * não tinham teto nenhum -- pra `inputs=10` o corpo caía no `fallback` do "2" mas os 10 pinos
+   * continuavam sendo desenhados, "vazando" pra fora do símbolo). Pra geometria paramétrica desse
+   * tipo use `logicGateBody` (ou um campo irmão equivalente) resolvido por fórmula central em
+   * `componentSymbols.ts`, nunca uma tabela nova. */
   statePath?: { prop: string; map: Record<string, string>; fallback?: string };
+  /** Corpo de porta lógica com contagem de entradas variável (AND/OR) -- path gerado por FÓRMULA
+   * (porta de `AndGate::updatePath()`/`OrGate::updatePath()` reais em `gate_and.cpp`/`gate_or.cpp`),
+   * não uma tabela por valor, a partir dos bounds JÁ resolvidos do package (mesma altura que
+   * `dynamicLayout.pinGroups` usa pra distribuir os pinos -- corpo e pinos não podem divergir porque
+   * os dois leem o mesmo valor resolvido). Ver `logicGateBodyPath` em `componentSymbols.ts`. */
+  logicGateBody?: { style: "and" | "or" };
   /** Nunca desenhado quando `hidePins`/variante "board" está ativa (projeção de componente exposto,
    * overlay de instância) -- mesmo princípio de `Component::setHidden(true,...)` real: o `m_hidden`
    * flag faz `Push::paint()`/`Switch::paint()` (SimulIDE real) retornarem sem desenhar a barra do

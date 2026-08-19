@@ -84,7 +84,7 @@
   },
   "package": {
     "width": 48,
-    "height": 32,
+    "height": 48,
     "border": false,
     "background": {
       "kind": "none"
@@ -139,7 +139,7 @@
           "x": 0,
           "y": 0,
           "w": 48,
-          "h": 32,
+          "h": 48,
           "fill": "#ffffff"
         },
         {
@@ -155,7 +155,6 @@
   },
   "icon": "2to3",
   "folderPath": [
-    "Logicos",
     "Memorias"
   ],
   "defaultProperties": {

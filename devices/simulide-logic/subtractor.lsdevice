@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 1,
+  "typeId": "logic.subtractor",
+  "name": "Subtractor",
+  "language": "pt-BR",
+  "icon": "2to2",
+  "folderPath": [
+    "Aritmeticos"
+  ],
+  "abiVersion": {
+    "major": 3,
+    "minor": 0
+  },
+  "nativeEntry": {
+    "win32-x64": "build/win-x64/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
+  "pins": [
+    {
+      "id": "a",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "b",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "bin",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "diff",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "bout",
+      "kind": "DIGITAL_OUT"
+    }
+  ],
+  "properties": [
+    {
+      "id": "invertInputs",
+      "label": "Inverter Entradas",
+      "group": "Inputs",
+      "valueKind": "bool",
+      "editor": "checkbox",
+      "default": false
+    }
+  ],
+  "limits": {
+    "stepTimeoutMs": 4,
+    "expectedComplexity": "low"
+  },
+  "package": {
+    "width": 56,
+    "height": 32,
+    "border": false,
+    "background": {
+      "kind": "none"
+    },
+    "viewSpec": {
+      "paint": [
+        {
+          "kind": "rect",
+          "x": 8,
+          "y": 0,
+          "w": 40,
+          "h": 32,
+          "fill": "#ffffff"
+        },
+        {
+          "kind": "text",
+          "x": 28,
+          "y": -4,
+          "value": "__label",
+          "fontSize": 5,
+          "color": "#0000aa"
+        }
+      ]
+    },
+    "pins": [
+      {
+        "id": "a",
+        "x": 0,
+        "y": 8,
+        "angle": 180,
+        "length": 8,
+        "label": "A"
+      },
+      {
+        "id": "b",
+        "x": 0,
+        "y": 16,
+        "angle": 180,
+        "length": 8,
+        "label": "B"
+      },
+      {
+        "id": "bin",
+        "x": 0,
+        "y": 24,
+        "angle": 180,
+        "length": 8,
+        "label": "BI"
+      },
+      {
+        "id": "diff",
+        "x": 48,
+        "y": 8,
+        "angle": 0,
+        "length": 8,
+        "label": "D"
+      },
+      {
+        "id": "bout",
+        "x": 48,
+        "y": 16,
+        "angle": 0,
+        "length": 8,
+        "label": "BO"
+      }
+    ]
+  },
+  "help": {
+    "description": "Subtrator completo de 1 bit com borrow."
+  },
+  "defaultProperties": {
+    "invertInputs": false
+  }
+}

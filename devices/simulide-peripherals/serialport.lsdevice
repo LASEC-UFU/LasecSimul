@@ -75,7 +75,15 @@
         "ry": 2,
         "stroke": "none",
         "fill": "#000000",
-        "stateFill": { "prop": "__serial_tx_state", "map": { "off": "#000000", "idle": "#ff0000", "active": "#ffff00" }, "fallback": "#000000" }
+        "stateFill": {
+          "prop": "__serial_tx_state",
+          "map": {
+            "off": "#000000",
+            "idle": "#ff0000",
+            "active": "#ffff00"
+          },
+          "fallback": "#000000"
+        }
       },
       {
         "kind": "rect",
@@ -87,7 +95,15 @@
         "ry": 2,
         "stroke": "none",
         "fill": "#000000",
-        "stateFill": { "prop": "__serial_rx_state", "map": { "off": "#000000", "idle": "#ff0000", "active": "#ffff00" }, "fallback": "#000000" }
+        "stateFill": {
+          "prop": "__serial_rx_state",
+          "map": {
+            "off": "#000000",
+            "idle": "#ff0000",
+            "active": "#ffff00"
+          },
+          "fallback": "#000000"
+        }
       },
       {
         "kind": "rect",
@@ -106,7 +122,10 @@
         "x": 46,
         "y": 20,
         "value": "Abrir",
-        "stateText": { "kind": "property", "prop": "__serial_button_label" },
+        "stateText": {
+          "kind": "property",
+          "prop": "__serial_button_label"
+        },
         "fontSize": 11,
         "color": "#000000",
         "cssClass": "serial-toggle-hit-zone"
@@ -117,7 +136,10 @@
         "y": 21,
         "textAnchor": "start",
         "value": "COM1",
-        "stateText": { "kind": "property", "prop": "port_name" },
+        "stateText": {
+          "kind": "property",
+          "prop": "port_name"
+        },
         "fontSize": 11,
         "color": "#FAFAC8"
       }
@@ -130,9 +152,7 @@
         "y": 8,
         "angle": 180,
         "length": 8,
-        "label": "Tx",
-        "labelX": 6,
-        "labelY": 10
+        "label": "Tx"
       },
       {
         "id": "rx",
@@ -140,9 +160,7 @@
         "y": 24,
         "angle": 180,
         "length": 8,
-        "label": "Rx",
-        "labelX": 6,
-        "labelY": 26
+        "label": "Rx"
       }
     ]
   },

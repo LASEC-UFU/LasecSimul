@@ -6,15 +6,19 @@ dependsOn: [ARCH-001]
 supersedes: []
 ---
 
-# Workspace por domínio
+# Navegação por domínio na paleta
 
-## Hierarquia e navegação
+## Onde vivem as 4 abas
 
-A área de trabalho possui exatamente 4 abas fixas, num único nível, sempre localizadas na sua borda
-inferior e sempre nesta ordem:
+As 4 categorias de domínio (`Analógico`, `Digital`, `Controle`, `Processo`) existem exclusivamente
+como abas de filtro na **paleta de componentes** (painel lateral `lasecsimul.componentPalette`,
+`extension/src/ui/webview/palette.ts`). Elas nunca aparecem no editor de esquemático (`main.ts`): o
+editor é um único canvas elétrico sempre completo, sem seções, sem placeholder e sem gates de
+ferramenta por domínio — qualquer componente do catálogo pode ser colocado e conectado livremente ao
+mesmo circuito, independentemente de qual aba está ativa na paleta no momento.
 
 ```text
-Workspace
+Paleta (painel lateral)
 ├── Analógico
 ├── Digital
 ├── Controle
@@ -32,83 +36,93 @@ Workspace
   `Controle`, `Processo`;
 - a navegação segue o padrão de acessibilidade `role="tablist"`/`role="tab"`/`aria-selected`, com
   `ArrowLeft`/`ArrowRight` movendo foco e seleção entre as 4 abas (com wrap nas pontas);
-- a troca de aba cancela apenas ferramentas ou ligações interativas ainda incompletas. Ela não remove
-  componentes, fios, viewport nem qualquer outro estado de autoria já confirmado;
-- selecionar a aba já ativa é no-op: não recria canvas, placeholder nem estado da paleta, e não
-  reenvia sincronização de estado.
+- trocar de aba na paleta é puramente um filtro de busca/listagem — nunca cancela ferramentas
+  ativas, nunca afeta seleção, viewport ou qualquer estado de autoria do editor, porque o editor não
+  tem noção de "aba ativa" nenhuma;
+- selecionar a aba já ativa é no-op: não refaz a árvore da paleta.
 
-`Analógico` e `Digital` são duas projeções da mesma autoria elétrica. A troca entre elas não cria uma
-cópia do circuito nem desmonta/remonta seu modelo, e usam o canvas elétrico normal. `Controle` e
-`Processo` ainda não têm editor próprio; enquanto suas funcionalidades não forem implementadas, ambas
-exibem a mesma área de placeholder genérica e não alteram o circuito ao serem visitadas.
+O editor (`main.ts`) não lê nem escreve `workspaceSection`/`WorkspaceSelection` em nenhum momento —
+esse conceito é interno à paleta.
 
-## Separação do catálogo e das ferramentas
+## Separação do catálogo na paleta
 
 Cada entrada do catálogo pertence a exatamente uma seção: `analog`, `digital`, `control` ou
-`process`. Somente entradas da seção ativa podem aparecer na paleta, em resultados de busca ou em
-atalhos de inserção da barra de ferramentas.
+`process`. Essa classificação é só um agrupamento de descoberta na paleta — não restringe o que pode
+ser inserido ou conectado no circuito. Somente entradas da seção ativa aparecem na listagem/busca da
+paleta.
 
-- componentes e ferramentas de circuito analógico pertencem exclusivamente a `analog`;
-- lógica digital, MCUs, periféricos digitais e o bloco programável FPGA pertencem exclusivamente a
-  `digital`;
+- `digital` é deliberadamente estreita: só a família `logic.*` (pastas `Portas`, `Aritmeticos`,
+  `Memorias`, `Conversores`, `Outros logicos`, direto na raiz da aba — sem um nível `Logicos`
+  envolvendo-as) e o bloco programável FPGA (pasta `GHDL`, `digital.generic_fpga`) pertencem a ela;
+- todo o resto do catálogo legado sem `workspaceSection` explícito — MCUs, periféricos digitais
+  (displays, RTC, cartão SD, Wi-Fi, encoder, touchpad etc.) e qualquer componente que não seja
+  `logic.*`/`digital.*` — cai em `analog` por padrão; a divisão Analógico/Digital deixou de espelhar
+  "é eletricamente digital?" e passou a significar só "é porta lógica pura ou bloco FPGA/GHDL?";
+- o botão de inserção rápida de FPGA na barra de ferramentas do editor fica sempre disponível (o
+  editor não tem abas, então não há gate por seção — ver [FEAT-005](fpga-ghdl.md));
 - `control` (controladores, PID, blocos de controle, PLC/IEC 61131-3) e `process` (tanques, bombas,
   válvulas, motores, tubulações, sensores de processo) não possuem entradas enquanto as respectivas
   bibliotecas não forem implementadas;
 - um item não pode ser duplicado entre seções para facilitar descoberta.
 
 `workspaceSection` é o metadado extensível e preferencial do catálogo — é a ÚNICA fonte de
-classificação; a navegação (renderização das abas, seleção, placeholder) nunca contém lógica
-condicional por `typeId`/componente. O valor explícito sempre tem prioridade. A classificação por
-famílias/type IDs existe somente como compatibilidade para entradas legadas sem o metadado, e produz
-apenas `analog`/`digital` — um componente novo destinado a `control` ou `process` precisa declarar
-`workspaceSection` explicitamente; isso impede que um futuro PLC, PID ou tanque seja classificado
-silenciosamente na seção errada. O mesmo contrato é propagado por catálogos integrados, componentes
-externos e subcircuitos, sem lógica específica de renderização por componente.
+classificação; a paleta (renderização das abas, seleção, filtragem) nunca contém lógica condicional
+por `typeId`/componente além dos dois prefixos fixos `logic.`/`digital.` usados como fallback. O valor
+explícito sempre tem prioridade. A classificação por prefixo existe somente como compatibilidade para
+entradas legadas sem o metadado, e produz apenas `analog`/`digital` — um componente novo destinado a
+`control` ou `process` precisa declarar `workspaceSection` explicitamente; isso impede que um futuro
+PLC, PID ou tanque seja classificado silenciosamente na seção errada. O mesmo contrato é propagado por
+catálogos integrados, componentes externos e subcircuitos, sem lógica específica de renderização por
+componente.
 
 ## Estado e persistência
 
-A seleção da aba é estado de navegação da Webview, não autoria do projeto: pode ser restaurada pela
-sessão visual (`vscode.getState()`), mas não suja nem é serializada no `.lsproj`. O documento de
-autoria e o estado do Core continuam únicos e independentes da seção visível.
+A aba ativa é estado de navegação da própria Webview da paleta (`vscode.getState()`/`setState()`
+locais a `palette.ts`), nunca compartilhada com a Webview do editor e nunca serializada no `.lsproj`.
+Fechar/reabrir a paleta ou o editor não afeta o outro.
 
-Estado persistido no formato anterior (aba principal + subaba) é migrado uma única vez na leitura,
-preservando a aba em que o usuário estava: `Circuit/Analog → analog`, `Circuit/Digital → digital`,
-`Process/Ctrl → control`, `Process/Autom → process`. Depois da primeira leitura, só o formato achatado
-(`{ section }`) volta a ser persistido.
-
-Ao introduzir conteúdo em `Controle` ou `Processo`, cada área deve manter seu próprio estado de
-autoria. A navegação pode ocultar uma área, mas não pode apagá-la ou recriá-la desnecessariamente.
+Estado persistido no formato anterior (aba principal + subaba, ou o antigo `WorkspaceSelection`
+compartilhado com o editor) é migrado uma única vez na leitura pela mesma função
+(`normalizeWorkspaceSelection`), preservando a aba em que o usuário estava: `Circuit/Analog →
+analog`, `Circuit/Digital → digital`, `Process/Ctrl → control`, `Process/Autom → process`. Depois da
+primeira leitura, só o formato achatado (`{ section }`) volta a ser persistido.
 
 ## Modularidade
 
 Novas bibliotecas são adicionadas declarando a seção no catálogo e implementando o renderer/editor do
-domínio quando necessário. A navegação, filtragem e sincronização entre editor e paleta não devem
-conter listas paralelas de componentes nem exigir um novo painel para cada item.
+domínio quando necessário (dentro do MESMO canvas elétrico unificado, nunca um canvas separado por
+seção). A filtragem da paleta não deve conter listas paralelas de componentes nem exigir um novo
+painel para cada item.
 
 ## Aceitação
 
-- existem exatamente 4 abas fixas, num único nível, sempre nesta ordem: `Analógico`, `Digital`,
-  `Controle`, `Processo`;
-- as abas ficam na parte inferior da área de trabalho, exibem somente ícone (sem texto visível) e o
-  nome aparece só como tooltip/hint;
-- `Analógico` é a seleção inicial e exibe somente itens analógicos;
-- `Digital` exibe somente itens digitais, incluindo o bloco programável FPGA;
-- buscas e comandos visuais não fazem itens de outra seção reaparecerem;
-- `Controle` e `Processo` existem como abas de primeiro nível e permanecem vazias nesta entrega;
-- alternar entre todas as abas preserva componentes, fios, seleção confirmada e viewport do circuito;
-- selecionar a aba já ativa não recria canvas, placeholder, nem estado da paleta, e não reenvia
-  sincronização de estado;
-- trocar apenas a aba não emite alteração de projeto nem modifica o `.lsproj`;
+- existem exatamente 4 abas fixas na paleta, num único nível, sempre nesta ordem: `Analógico`,
+  `Digital`, `Controle`, `Processo`;
+- as abas ficam no topo da paleta, exibem somente ícone (sem texto visível) e o nome aparece só como
+  tooltip/hint;
+- `Analógico` é a seleção inicial e filtra a paleta para exibir todo o catálogo legado sem
+  `workspaceSection` explícito, exceto `logic.*`/`digital.*` (MCUs, periféricos digitais, displays,
+  sensores etc. incluídos);
+- `Digital` filtra a paleta para exibir só `logic.*` (pastas `Portas`, `Aritmeticos`, `Memorias`,
+  `Conversores`, `Outros logicos` direto na raiz, sem um nível `Logicos` agrupando-as) e o bloco
+  programável FPGA na pasta `GHDL`;
+- buscas e comandos visuais não fazem itens de outra seção reaparecerem na paleta;
+- `Controle` e `Processo` existem como abas de filtro na paleta e permanecem vazias nesta entrega;
+- o editor de esquemático nunca exibe abas, placeholder ou qualquer restrição de ferramenta por
+  seção — todo o catálogo pode ser inserido e conectado no mesmo circuito a qualquer momento;
+- trocar de aba na paleta nunca emite alteração de projeto, nunca modifica o `.lsproj` e nunca afeta
+  o editor (seleção, viewport, componentes, fios);
 - catálogo legado sem `workspaceSection` continua classificado em uma única seção, sempre
-  `analog`/`digital`, nunca `control`/`process`;
+  `analog`/`digital` (nunca `control`/`process`), com `digital` restrita ao prefixo `logic.`/`digital.`;
 - uma entrada com `workspaceSection` explícito é exibida somente na seção declarada;
 - estado de navegação persistido no formato anterior é migrado preservando a aba do usuário;
-- a navegação (`main.ts`/`workspace.ts`) não contém `if`/`switch` por `typeId`/componente — apenas
-  leitura de `workspaceSection`.
+- a filtragem (`palette.ts`/`workspace.ts`) não contém `if`/`switch` por `typeId`/componente além dos
+  dois prefixos fixos `logic.`/`digital.` usados como fallback de classificação legada.
 
 ## Evidência automatizada
 
 - `extension/src/ui/webview/workspace.test.ts`: ordem fixa das 4 abas, normalização/migração da
-  seleção persistida, prioridade do metadado e classificação legada restrita a `analog`/`digital`;
+  seleção persistida, prioridade do metadado e classificação legada restrita a `analog`/`digital`
+  (com `digital` limitada a `logic.`/`digital.`);
 - `extension/src/ui/webview/paletteTree.test.ts`: isolamento rigoroso de `analog`/`digital` e
   ausência inicial de itens em `control`/`process`.

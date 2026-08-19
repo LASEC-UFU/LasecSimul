@@ -82,7 +82,10 @@
         "y": 16,
         "angle": 180,
         "length": 8,
-        "label": "G"
+        "label": "G",
+        "labelX": 11.5,
+        "labelY": 27,
+        "labelTextAnchor": "start"
       }
     ],
     "viewSpec": {

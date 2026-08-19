@@ -34,6 +34,14 @@
       "valueKind": "string",
       "editor": "text",
       "default": "i0 | i1"
+    },
+    {
+      "id": "invertInputs",
+      "label": "Inverter Entradas",
+      "group": "Inputs",
+      "valueKind": "bool",
+      "editor": "checkbox",
+      "default": false
     }
   ],
   "limits": {
@@ -41,7 +49,7 @@
     "expectedComplexity": "low"
   },
   "package": {
-    "width": 40,
+    "width": 48,
     "height": 40,
     "border": false,
     "background": {
@@ -67,7 +75,7 @@
       },
       {
         "id": "o0",
-        "x": 40,
+        "x": 48,
         "y": 8,
         "angle": 0,
         "length": 8,
@@ -80,13 +88,13 @@
           "kind": "rect",
           "x": 0,
           "y": 0,
-          "w": 40,
+          "w": 48,
           "h": 40,
           "fill": "#ffffff"
         },
         {
           "kind": "text",
-          "x": 20,
+          "x": 24,
           "y": -4,
           "value": "__label",
           "fontSize": 5,
@@ -97,11 +105,11 @@
   },
   "icon": "package",
   "folderPath": [
-    "Logicos",
     "Aritmeticos"
   ],
   "defaultProperties": {
-    "functions": "i0 | i1"
+    "functions": "i0 | i1",
+    "invertInputs": false
   },
   "help": {
     "description": "Bloco lógico programável por expressão."

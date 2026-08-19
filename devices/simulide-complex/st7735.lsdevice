@@ -85,6 +85,16 @@
       "default": 162,
       "min": 16,
       "step": 1
+    },
+    {
+      "id": "scale",
+      "label": "Escala",
+      "group": "Principal",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 1,
+      "min": 0.1,
+      "step": 0.1
     }
   ],
   "limits": {
@@ -99,12 +109,27 @@
       "kind": "none"
     },
     "runtimeState": {
-      "versionOffset": 0, "expectedVersion": 1,
+      "versionOffset": 0,
+      "expectedVersion": 1,
       "surface": {
-        "encoding": "rgbx32le", "x": 6, "y": 6, "w": 132, "h": 162,
-        "sourceWidth": { "prop": "width", "fallback": 132, "min": 1 },
-        "sourceHeight": { "prop": "height", "fallback": 162, "min": 1 },
-        "payloadOffset": 36, "enabledOffset": 16, "offColor": "#000000"
+        "encoding": "rgbx32le",
+        "x": 6,
+        "y": 6,
+        "w": 132,
+        "h": 162,
+        "sourceWidth": {
+          "prop": "width",
+          "fallback": 132,
+          "min": 1
+        },
+        "sourceHeight": {
+          "prop": "height",
+          "fallback": 162,
+          "min": 1
+        },
+        "payloadOffset": 36,
+        "enabledOffset": 16,
+        "offColor": "#000000"
       }
     },
     "shapes": [],
@@ -187,7 +212,21 @@
         "length": 8,
         "label": "RST"
       }
-    ]
+    ],
+    "dynamicLayout": {
+      "schematicWidth": {
+        "prop": "scale",
+        "multiplier": 144,
+        "fallback": 144,
+        "min": 14.4
+      },
+      "schematicHeight": {
+        "prop": "scale",
+        "multiplier": 184,
+        "fallback": 184,
+        "min": 18.400000000000002
+      }
+    }
   },
   "icon": "st7735",
   "folderPath": [
@@ -196,5 +235,8 @@
   ],
   "help": {
     "description": "Display TFT colorido baseado no controlador ST7735."
+  },
+  "defaultProperties": {
+    "scale": 1
   }
 }

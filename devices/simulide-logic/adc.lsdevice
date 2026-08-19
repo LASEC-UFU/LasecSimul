@@ -61,6 +61,56 @@
       "min": 0.1,
       "step": 0.1,
       "unit": "V"
+    },
+    {
+      "id": "outputHighV",
+      "label": "Tensão Alta de Saída",
+      "group": "Outputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "V",
+      "default": 5,
+      "step": 0.1
+    },
+    {
+      "id": "outputLowV",
+      "label": "Tensão Baixa de Saída",
+      "group": "Outputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "V",
+      "default": 0,
+      "step": 0.1
+    },
+    {
+      "id": "outputImpedance",
+      "label": "Impedância de Saída",
+      "group": "Outputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "Ω",
+      "default": 40,
+      "min": 0,
+      "step": 1
+    },
+    {
+      "id": "outputPullupR",
+      "label": "Pull-up de Saída",
+      "group": "Outputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "Ω",
+      "default": 0,
+      "min": 0,
+      "step": 1
+    },
+    {
+      "id": "openCollector",
+      "label": "Coletor Aberto",
+      "group": "Outputs",
+      "valueKind": "bool",
+      "editor": "checkbox",
+      "default": false
     }
   ],
   "limits": {
@@ -172,11 +222,15 @@
   },
   "icon": "1to3",
   "folderPath": [
-    "Logicos",
     "Outros logicos"
   ],
   "defaultProperties": {
-    "vref": 5
+    "vref": 5,
+    "outputHighV": 5,
+    "outputLowV": 0,
+    "outputImpedance": 40,
+    "outputPullupR": 0,
+    "openCollector": false
   },
   "help": {
     "description": "Conversor analógico-digital para representar amostragem de sinais."

@@ -9,7 +9,6 @@ import { ComponentPaletteViewProvider } from "./ui/views/ComponentPaletteViewPro
 import { TrustStore } from "./trust/TrustStore";
 import { ProjectSerializer } from "./project/ProjectSerializer";
 import { SubcircuitDocument } from "./catalog/subcircuitDocument";
-import { DEFAULT_WORKSPACE_SELECTION, WorkspaceSelection } from "./ui/webview/workspace";
 
 /** Estado mutável de nível de módulo de `extension.ts`, extraído (EX-9,
  * .spec/archive/legacy-v2/lasecsimul-native-devices.spec) pra um objeto único importável por outros módulos de
@@ -39,8 +38,6 @@ export const state = {
   currentProjectFilePath: undefined as string | undefined,
   simulationStatus: "stopped" as SimulationStatus,
   paletteViewProvider: undefined as ComponentPaletteViewProvider | undefined,
-  /** Navegação puramente de UI compartilhada com a paleta; nunca é serializada no `.lsproj`. */
-  workspaceSelection: { ...DEFAULT_WORKSPACE_SELECTION } as WorkspaceSelection,
   extensionContext: undefined as vscode.ExtensionContext | undefined,
   trustStore: undefined as TrustStore | undefined,
   lastSyncedProjectState: undefined as WebviewProjectState | undefined,

@@ -1,0 +1,203 @@
+{
+  "schemaVersion": 1,
+  "typeId": "logic.priority_encoder",
+  "name": "Priority Encoder",
+  "language": "pt-BR",
+  "icon": "3to1",
+  "folderPath": [
+    "Conversores"
+  ],
+  "abiVersion": {
+    "major": 3,
+    "minor": 0
+  },
+  "nativeEntry": {
+    "win32-x64": "build/win-x64/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
+  "pins": [
+    {
+      "id": "i0",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "i1",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "i2",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "i3",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "i4",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "i5",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "i6",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "i7",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "a0",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "a1",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "a2",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "gs",
+      "kind": "DIGITAL_OUT"
+    }
+  ],
+  "properties": [],
+  "limits": {
+    "stepTimeoutMs": 4,
+    "expectedComplexity": "low"
+  },
+  "package": {
+    "width": 48,
+    "height": 72,
+    "border": false,
+    "background": {
+      "kind": "none"
+    },
+    "viewSpec": {
+      "paint": [
+        {
+          "kind": "rect",
+          "x": 8,
+          "y": 0,
+          "w": 32,
+          "h": 72,
+          "fill": "#ffffff"
+        },
+        {
+          "kind": "text",
+          "x": 24,
+          "y": -4,
+          "value": "__label",
+          "fontSize": 5,
+          "color": "#0000aa"
+        }
+      ]
+    },
+    "pins": [
+      {
+        "id": "i0",
+        "x": 0,
+        "y": 8,
+        "angle": 180,
+        "length": 8,
+        "label": "I0"
+      },
+      {
+        "id": "i1",
+        "x": 0,
+        "y": 16,
+        "angle": 180,
+        "length": 8,
+        "label": "I1"
+      },
+      {
+        "id": "i2",
+        "x": 0,
+        "y": 24,
+        "angle": 180,
+        "length": 8,
+        "label": "I2"
+      },
+      {
+        "id": "i3",
+        "x": 0,
+        "y": 32,
+        "angle": 180,
+        "length": 8,
+        "label": "I3"
+      },
+      {
+        "id": "i4",
+        "x": 0,
+        "y": 40,
+        "angle": 180,
+        "length": 8,
+        "label": "I4"
+      },
+      {
+        "id": "i5",
+        "x": 0,
+        "y": 48,
+        "angle": 180,
+        "length": 8,
+        "label": "I5"
+      },
+      {
+        "id": "i6",
+        "x": 0,
+        "y": 56,
+        "angle": 180,
+        "length": 8,
+        "label": "I6"
+      },
+      {
+        "id": "i7",
+        "x": 0,
+        "y": 64,
+        "angle": 180,
+        "length": 8,
+        "label": "I7"
+      },
+      {
+        "id": "a0",
+        "x": 40,
+        "y": 8,
+        "angle": 0,
+        "length": 8,
+        "label": "A0"
+      },
+      {
+        "id": "a1",
+        "x": 40,
+        "y": 16,
+        "angle": 0,
+        "length": 8,
+        "label": "A1"
+      },
+      {
+        "id": "a2",
+        "x": 40,
+        "y": 24,
+        "angle": 0,
+        "length": 8,
+        "label": "A2"
+      },
+      {
+        "id": "gs",
+        "x": 40,
+        "y": 32,
+        "angle": 0,
+        "length": 8,
+        "label": "GS"
+      }
+    ]
+  },
+  "help": {
+    "description": "Codificador de prioridade 8 para 3 (entrada de maior indice ativa vence); GS indica alguma entrada ativa."
+  }
+}

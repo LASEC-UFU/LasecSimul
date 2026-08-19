@@ -1113,11 +1113,6 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       if (topologyChanged) syncSchematicPanel();
       return;
     }
-    case "requestSetWorkspaceSelection": {
-      state.workspaceSelection = { ...message.selection };
-      state.paletteViewProvider?.setWorkspaceSelection(state.workspaceSelection);
-      return;
-    }
     case "requestAddComponent": {
       // Junção só pode nascer automaticamente de uma divisão real de fio (ver `wireTopology.ts`
       // `splitSegmentAtPoint`) -- nunca colocável manualmente, mesmo que uma mensagem IPC tente
@@ -2359,7 +2354,6 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
     currentLasecSimulLanguage(),
     addPaletteComponent,
     (item) => removeRegisteredCatalogItemCommand(item, catalogCommandOptions()),
-    state.workspaceSelection,
   );
 
   context.subscriptions.push(

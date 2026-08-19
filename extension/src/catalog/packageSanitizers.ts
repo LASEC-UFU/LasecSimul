@@ -65,6 +65,13 @@ export function sanitizePackageShape(value: unknown): PackageShape | undefined {
         ...(sanitizeOptionalString(statePathRaw?.fallback) ? { fallback: sanitizeOptionalString(statePathRaw?.fallback) } : {}),
       }
     : undefined;
+  const logicGateBodyRaw = typeof shape.logicGateBody === "object" && shape.logicGateBody !== null
+    ? shape.logicGateBody as Record<string, unknown>
+    : undefined;
+  const logicGateBodyStyle = logicGateBodyRaw?.style;
+  const logicGateBody = logicGateBodyStyle === "and" || logicGateBodyStyle === "or"
+    ? { style: logicGateBodyStyle as "and" | "or" }
+    : undefined;
   return {
     ...(shape as unknown as PackageShape),
     cssClass: typeof shape.cssClass === "string" && shape.cssClass.trim() ? shape.cssClass.trim() : undefined,
@@ -72,6 +79,7 @@ export function sanitizePackageShape(value: unknown): PackageShape | undefined {
     stateFill: sanitizeSimulidePaintStateFill(shape.stateFill),
     stateText: shape.kind === "text" ? sanitizeSimulidePaintStateText(shape.stateText) : undefined,
     ...(statePath ? { statePath } : {}),
+    logicGateBody,
   };
 }
 
@@ -989,6 +997,7 @@ export function sanitizePackage(value: unknown, assetBasePath?: string): Package
       id: pin.id,
       aliases: Array.isArray(pin.aliases) ? pin.aliases.filter((alias): alias is string => typeof alias === "string" && Boolean(alias.trim())) : undefined,
       stateVisible: sanitizeSimulidePaintStateVisible(pin.stateVisible),
+      invertBubble: sanitizeSimulidePaintStateVisible(pin.invertBubble),
       kind: typeof pin.kind === "string" ? pin.kind : undefined,
       x: legacyBodyCoordinate(x, angle, length, "x", pin.leadOrigin),
       y: legacyBodyCoordinate(y, angle, length, "y", pin.leadOrigin),

@@ -309,6 +309,45 @@ export function packagePinVisualEnd(pin: MaterializedPackagePin): { x: number; y
   return { x: pin.x + Math.cos(rad) * visualLength, y: pin.y + Math.sin(rad) * visualLength };
 }
 
+/** Ponto único de verdade pra "onde o corpo pode pintar" vs. "área reservada ao terminal": UM pino
+ * cujo ponto elétrico já está NA borda da caixa (`x<=0`/`x>=width`/`y<=0`/`y>=height`, tolerância
+ * `TERMINAL_EDGE_EPS`) reserva, naquele lado, uma faixa cheia (não só embaixo daquele pino -- mesma
+ * largura de faixa que o `hd44780` real já usa) do tamanho do avanço visual do lead pra dentro
+ * (`packagePinVisualEnd`, já respeitando `leadEndTrim`). NENHUM `package.shapes[]`/`viewSpec.paint[]`
+ * pode ser pintado dentro dessa faixa -- é isso que garante "o fio nasce fora, encosta na borda do
+ * corpo" pra QUALQUER dispositivo, sem cada `.lsdevice` ter que declarar a própria margem (achado
+ * real 2026-08-19: `serialport`/`serialterm`/`lasecplot`/`ds1307` tinham esse deslocamento copiado à
+ * mão pino a pino -- essa função é o único lugar que deveria calcular isso).
+ *
+ * Um pino cujo ponto elétrico NÃO está na borda (ex: `hd44780`, ancorado na borda do CORPO, com o
+ * lead apontando pra FORA até a borda da caixa -- ver `.spec`/memória sobre as duas convenções
+ * válidas) não contribui margem nenhuma aqui -- não precisa, porque essa convenção já nasce sem
+ * sobreposição (o lead inteiro já vive fora do corpo). As duas convenções continuam válidas; esta
+ * função só fecha a lacuna da que tinha o bug. */
+const TERMINAL_EDGE_EPS = 0.5;
+
+export function pinTerminalMargins(pins: readonly MaterializedPackagePin[], width: number, height: number): { left: number; right: number; top: number; bottom: number } {
+  let left = 0, right = 0, top = 0, bottom = 0;
+  for (const pin of pins) {
+    if (!(pin.length > 0)) continue;
+    const angle = ((Math.round(pin.angle) % 360) + 360) % 360;
+    const end = packagePinVisualEnd(pin);
+    if (angle === 180 && pin.x <= TERMINAL_EDGE_EPS) left = Math.max(left, end.x);
+    else if (angle === 0 && pin.x >= width - TERMINAL_EDGE_EPS) right = Math.max(right, width - end.x);
+    else if (angle === 90 && pin.y <= TERMINAL_EDGE_EPS) top = Math.max(top, end.y);
+    else if (angle === 270 && pin.y >= height - TERMINAL_EDGE_EPS) bottom = Math.max(bottom, height - end.y);
+  }
+  // Nunca negativo (pino com `leadEndTrim` maior que `length`, ou ponta que recua em vez de avançar)
+  // e nunca a ponto de inverter a caixa (par esquerda+direita/topo+baixo maior que a própria caixa).
+  left = Math.max(0, left);
+  right = Math.max(0, right);
+  top = Math.max(0, top);
+  bottom = Math.max(0, bottom);
+  if (left + right > width) { const excess = (left + right - width) / 2; left -= excess; right -= excess; }
+  if (top + bottom > height) { const excess = (top + bottom - height) / 2; top -= excess; bottom -= excess; }
+  return { left: Math.max(0, left), right: Math.max(0, right), top: Math.max(0, top), bottom: Math.max(0, bottom) };
+}
+
 const PACKAGE_BY_TYPE_ID = new Map<string, PackageDescriptor>();
 /** Aparência ALTERNATIVA opcional ("Chip or Logic Symbol", igual ao `SubPackage::Logic_Symbol` do
  * SimulIDE real -- booleano simples, não uma lista de N variantes). Mapa SEPARADO do padrão (não um
@@ -352,7 +391,10 @@ export function registerPackage(typeId: string, pkg: PackageDescriptor | undefin
  * uma variante Logic Symbol registrada pra este typeId -> usa ela; qualquer outro caso (sem
  * variante, propriedade ausente/falsa, ou sem `properties` nenhuma -- chamadas legadas que só
  * passam typeId) -> cai no `package` padrão de sempre. */
-function resolvedPackageFor(typeId: string, properties?: Record<string, unknown>, variant?: PackageVariant): ResolvedPackage | undefined {
+/** Exportado só pra `catalogGeometryAudit.test.ts` recalcular `pinTerminalMargins` de fora com os
+ * MESMOS pinos materializados que `packageBodySvg` usa (não uma cópia da lógica de materialização) --
+ * evita duplicar `materializePackage`/`resolvePackageLayout` só pra auditoria. */
+export function resolvedPackageFor(typeId: string, properties?: Record<string, unknown>, variant?: PackageVariant): ResolvedPackage | undefined {
   if (variant === "board") {
     const boardPackage = BOARD_PACKAGE_BY_TYPE_ID.get(typeId);
     if (boardPackage) return resolvePackageLayout(materializePackage(boardPackage, properties));
@@ -510,7 +552,15 @@ function packageShapeStateFill(shape: PackageShape, properties?: Record<string, 
 
 function packageTextContent(shape: PackageShape, properties?: Record<string, unknown>): string {
   const dynamicValue = shape.stateText?.kind === "property" ? properties?.[shape.stateText.prop] : undefined;
-  const lines = String(dynamicValue ?? shape.value ?? "").split(/\r?\n/);
+  const rawValue = dynamicValue ?? shape.value ?? "";
+  // `"__label"` é um sentinela ainda-não-implementado presente em dezenas de `.lsdevice` (achado
+  // real 2026-08-18: caption literal "__label" aparecia por cima de todo device com esse texto,
+  // já que nada aqui nunca o substituiu pelo nome de verdade). O rótulo real do componente já é
+  // desenhado por um mecanismo separado e funcional (`component-floating-label`, controlado por
+  // `showId`, ver `main.ts`) -- duplicar aqui ficaria redundante, então o sentinela renderiza vazio
+  // em vez de literal.
+  if (rawValue === "__label") return "";
+  const lines = String(rawValue).split(/\r?\n/);
   if (lines.length <= 1) return escapeXmlText(lines[0] ?? "");
   const lineHeight = Math.round((shape.fontSize ?? 11) * 1.15 * 1000) / 1000;
   return lines
@@ -534,14 +584,40 @@ function tracePath(history: number[], x: number, y: number, width: number, heigh
     .join(" ");
 }
 
-function resolvedPathD(shape: PackageShape, properties?: Record<string, unknown>): string {
-  if (shape.kind !== "path" || !shape.statePath) return shape.d ?? "";
+/** Corpo de porta lógica AND/OR com contagem de entradas variável -- FÓRMULA portada 1:1 de
+ * `AndGate::updatePath()`/`OrGate::updatePath()` reais (`gate_and.cpp`/`gate_or.cpp`), não uma
+ * tabela por valor (achado real 2026-08-19: um `statePath.map` só cobria "2".."8", então
+ * `inputs=10` caía no fallback do "2" enquanto os 10 pinos, resolvidos por
+ * `dynamicLayout.pinGroups` sem teto nenhum, escapavam do corpo). Recebe os `bounds` JÁ resolvidos
+ * do package (a MESMA largura/altura que os pinos usam) em vez de uma altura isolada, pra deixar
+ * explícito que corpo e pinos derivam do mesmo valor -- não podem mais divergir.
+ *
+ * Conversão de coordenadas: o SimulIDE real desenha o corpo centrado na origem local do componente
+ * (`m_path` simétrico em volta de x=0/y=0). A caixa positiva do LasecSimul (0..width, 0..height) tem
+ * essa MESMA origem no seu centro -- então `cx = width/2`/`cy = height/2` não é um número escolhido
+ * pra esse caso, é a regra de conversão entre os dois sistemas de coordenada. `width` da AND/OR é
+ * constante (não muda com `inputs`, igual ao `m_area.width()` real). As constantes `9,4,9.5` (AND) e
+ * `10,6,7.5,9.5` (OR) são a proporção PRÓPRIA de cada forma, portada direto do C++ real -- não algo
+ * pra derivar além disso. */
+function logicGateBodyPath(style: "and" | "or", bounds: { width: number; height: number }): string {
+  const cx = bounds.width / 2;
+  const h = Math.max(0, bounds.height);
+  if (style === "and") {
+    return `M ${(cx - 9).toFixed(2)} 0 L ${(cx - 4).toFixed(2)} 0 Q ${(cx + 9.5).toFixed(2)} 0 ${(cx + 9.5).toFixed(2)} ${(h / 2).toFixed(2)} Q ${(cx + 9.5).toFixed(2)} ${h.toFixed(2)} ${(cx - 4).toFixed(2)} ${h.toFixed(2)} L ${(cx - 9).toFixed(2)} ${h.toFixed(2)} Z`;
+  }
+  return `M ${(cx - 10).toFixed(2)} 0 Q ${(cx + 7.5).toFixed(2)} 0 ${(cx + 9.5).toFixed(2)} ${(h / 2).toFixed(2)} Q ${(cx + 7.5).toFixed(2)} ${h.toFixed(2)} ${(cx - 10).toFixed(2)} ${h.toFixed(2)} Q ${(cx - 6).toFixed(2)} ${(h / 2).toFixed(2)} ${(cx - 10).toFixed(2)} 0`;
+}
+
+function resolvedPathD(shape: PackageShape, properties?: Record<string, unknown>, bounds?: { width: number; height: number }): string {
+  if (shape.kind !== "path") return shape.d ?? "";
+  if (shape.logicGateBody && bounds) return logicGateBodyPath(shape.logicGateBody.style, bounds);
+  if (!shape.statePath) return shape.d ?? "";
   const rawValue = properties?.[shape.statePath.prop];
   const key = rawValue === undefined ? "absent" : String(rawValue);
   return shape.statePath.map[key] ?? shape.statePath.fallback ?? shape.d ?? "";
 }
 
-function packageShapeSvg(shape: PackageShape, extraTransform?: string, properties?: Record<string, unknown>): string {
+function packageShapeSvg(shape: PackageShape, extraTransform?: string, properties?: Record<string, unknown>, bounds?: { width: number; height: number }): string {
   const cls = shape.cssClass ? ` class="${shape.cssClass}"` : "";
   const transform = [shape.transform, extraTransform].filter(Boolean).join(" ");
   const xf = transform ? ` transform="${escapeXmlText(transform)}"` : "";
@@ -566,7 +642,7 @@ function packageShapeSvg(shape: PackageShape, extraTransform?: string, propertie
       return `<polygon${cls}${xf} points="${pts}" stroke="${shape.stroke ?? "currentColor"}" fill="${fill}" stroke-width="${shape.strokeWidth ?? 1}"${paintAttrs}/>`;
     }
     case "path":
-      return `<path${cls}${xf} d="${escapeXmlText(resolvedPathD(shape, properties))}" stroke="${shape.stroke ?? "currentColor"}" fill="${fill}" stroke-width="${shape.strokeWidth ?? 1}"${paintAttrs}/>`;
+      return `<path${cls}${xf} d="${escapeXmlText(resolvedPathD(shape, properties, bounds))}" stroke="${shape.stroke ?? "currentColor"}" fill="${fill}" stroke-width="${shape.strokeWidth ?? 1}"${paintAttrs}/>`;
     case "image": {
       const href = safeImageHref(shape.href ?? shape.value);
       return `<image${cls}${xf} x="${shape.x ?? 0}" y="${shape.y ?? 0}" width="${shape.w ?? 0}" height="${shape.h ?? 0}" preserveAspectRatio="${escapeXmlText(shape.preserveAspectRatio ?? "none")}" href="${escapeXmlText(href)}"${paintAttrs}/>`;
@@ -608,7 +684,7 @@ function safeImageHref(value: string | undefined): string {
  * `pen.setWidth(3)` uma vez só, pras 4) some quando a tradução é mecânica, não manual. */
 function builtinPaintSvg(spec: SimulidePaintSpec, box: ComponentBox, properties?: Record<string, unknown>): string {
   const shapes = simulidePaintToPackageShapes(spec, box.width, box.height, properties ?? {});
-  return shapes.map((shape) => packageShapeSvg(shape)).join("");
+  return shapes.map((shape) => packageShapeSvg(shape, undefined, properties, box)).join("");
 }
 
 // ── Fontes (pasta "Sources" do SimulIDE) -- specs SimulidePaint (ver `builtinPaintSvg`) ───────────
@@ -1037,7 +1113,7 @@ function viewSpecBodySvg(pkg: PackageDescriptor, componentId: string, properties
       const resolvedShape: PackageShape = gradientIdMap.has(projectedShape.fill ?? "")
         ? { ...projectedShape, fill: gradientIdMap.get(projectedShape.fill!)! }
         : projectedShape;
-      paintMarkup += packageShapeSvg(resolvedShape, projection.transform, properties);
+      paintMarkup += packageShapeSvg(resolvedShape, projection.transform, properties, { width: pkg.width, height: pkg.height });
     }
   }
 
@@ -1133,6 +1209,29 @@ function packagePinLeadSvg(pin: MaterializedPackagePin, resolved: ResolvedPackag
   const leadMarkup = pin.length === 0
     ? ""
     : `<line x1="${x.toFixed(1)}" y1="${y.toFixed(1)}" x2="${leadEndX.toFixed(1)}" y2="${leadEndY.toFixed(1)}" stroke="${escapeXmlText(leadColor)}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`;
+  // Bolha de inversão: desenhada AQUI (parte do pino, depois do `leadMarkup` acima) pra ficar por
+  // cima do fio -- igual ao `Pin::paint()` real, que desenha a linha inteira e SÓ DEPOIS a elipse
+  // branca com contorno preto sobre a ponta dela. `package.shapes[]`/`viewSpec.paint[]` desenham
+  // ANTES de todos os pinos (`packageBodySvg`: `bodyMarkup + pinsMarkup`), então uma bolha ali
+  // sempre ficaria ATRÁS do fio grosso -- nunca use essa rota pra bolha de inversão.
+  // `stateVisibleMatches` devolve `true` quando a regra está AUSENTE (usado em todo outro lugar
+  // pra "sem restrição, sempre visível") -- errado aqui: a maioria dos pinos não declara
+  // `invertBubble` nenhum, e o padrão pra esses tem que ser "nunca desenha bolha", não o inverso.
+  const bubbleVisible = pin.invertBubble !== undefined && stateVisibleMatches(pin.invertBubble, properties);
+  const bubbleMarkup = bubbleVisible
+    ? (() => {
+        const bubbleRadius = 2.2;
+        const start = pin.length > 4 ? pin.length - 4.5 : 3.5;
+        const dirRad = ((180 - pin.angle) * Math.PI) / 180;
+        const bubbleNativeX = tipNativeX + Math.cos(dirRad) * (start + bubbleRadius);
+        const bubbleNativeY = tipNativeY + Math.sin(dirRad) * (start + bubbleRadius);
+        const bubbleX = toDisplayX(bubbleNativeX);
+        const bubbleY = toDisplayY(bubbleNativeY);
+        const bubbleRx = bubbleRadius * resolved.scaleX;
+        const bubbleRy = bubbleRadius * resolved.scaleY;
+        return `<ellipse cx="${bubbleX.toFixed(1)}" cy="${bubbleY.toFixed(1)}" rx="${bubbleRx.toFixed(2)}" ry="${bubbleRy.toFixed(2)}" fill="#ffffff" stroke="${escapeXmlText(leadColor)}" stroke-width="1.8"/>`;
+      })()
+    : "";
   const markerMarkup = resolved.source.pinMarker === "packagePin"
     ? `<g stroke="#d3d3d3" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round"><line x1="${(x - 1).toFixed(1)}" y1="${y.toFixed(1)}" x2="${(x + 1).toFixed(1)}" y2="${y.toFixed(1)}"/><line x1="${x.toFixed(1)}" y1="${(y - 1).toFixed(1)}" x2="${x.toFixed(1)}" y2="${(y + 1).toFixed(1)}"/></g>`
     : "";
@@ -1142,6 +1241,7 @@ function packagePinLeadSvg(pin: MaterializedPackagePin, resolved: ResolvedPackag
     : "";
   return (
     leadMarkup +
+    bubbleMarkup +
     markerMarkup +
     labelMarkup
   );
@@ -1504,18 +1604,18 @@ function packageBodySvg(resolved: ResolvedPackage, componentId?: string, propert
     // esquemático-apenas), nunca o corpo/texto do widget clicável em si (ver `PackageShape.hideOnBoard`).
     for (const shape of simulidePaintToPackageShapes(pkg.simulidePaint, pkg.width, pkg.height, effectiveProperties, scopeId)) {
       if (hidePins && shape.hideOnBoard) continue;
-      markup += packageShapeSvg(shape);
+      markup += packageShapeSvg(shape, undefined, effectiveProperties, { width: pkg.width, height: pkg.height });
     }
   } else if (pkg.qtWidget) {
     markup += simulideQtWidgetSvg(pkg.qtWidget, effectiveProperties, scopeId);
   } else if (hasViewSpec && pkg.viewSpec?.overlayPaint === true && (pkg.shapes?.length ?? 0) > 0) {
     // Migração incremental: preserva o corpo legado e sobrepõe somente o widget/interação nova.
-    for (const shape of pkg.shapes ?? []) markup += packageShapeSvg(shape, undefined, effectiveProperties);
+    for (const shape of pkg.shapes ?? []) markup += packageShapeSvg(shape, undefined, effectiveProperties, { width: pkg.width, height: pkg.height });
     markup += viewSpecBodySvg(pkg, componentId!, effectiveProperties, true) ?? "";
   } else if (hasViewSpec) {
     markup += viewSpecBodySvg(pkg, componentId!, effectiveProperties) ?? "";
   } else {
-    for (const shape of pkg.shapes ?? []) markup += packageShapeSvg(shape, undefined, effectiveProperties);
+    for (const shape of pkg.shapes ?? []) markup += packageShapeSvg(shape, undefined, effectiveProperties, { width: pkg.width, height: pkg.height });
   }
   if (hasViewSpec && (pkg.simulidePaint || pkg.qtWidget)) {
     markup += viewSpecBodySvg(pkg, componentId!, effectiveProperties, pkg.viewSpec?.overlayPaint === true) ?? "";
@@ -1526,6 +1626,20 @@ function packageBodySvg(resolved: ResolvedPackage, componentId?: string, propert
     const cx = pkg.initialTransform.cx ?? pkg.width / 2;
     const cy = pkg.initialTransform.cy ?? pkg.height / 2;
     markup = `<g transform="rotate(${pkg.initialTransform.rotateDeg} ${cx} ${cy})">${markup}</g>`;
+  }
+  // Nenhum `package.shapes[]`/`viewSpec.paint[]`/`simulidePaint` pinta dentro da faixa reservada ao
+  // terminal de um pino que nasce na borda da caixa -- ver `pinTerminalMargins`. Único lugar que
+  // resolve isso; nenhum `.lsdevice` precisa (nem deve) declarar a própria margem pra conseguir o
+  // fio "nascendo fora, encostando na borda do corpo".
+  const terminalMargins = pinTerminalMargins(resolved.pins, pkg.width, pkg.height);
+  if (terminalMargins.left > 0 || terminalMargins.right > 0 || terminalMargins.top > 0 || terminalMargins.bottom > 0) {
+    const clipId = `${scopeId}-terminal-clip`;
+    const clipX = terminalMargins.left;
+    const clipY = terminalMargins.top;
+    const clipW = Math.max(0, pkg.width - terminalMargins.left - terminalMargins.right);
+    const clipH = Math.max(0, pkg.height - terminalMargins.top - terminalMargins.bottom);
+    markup = `<clipPath id="${clipId}"><rect x="${clipX.toFixed(2)}" y="${clipY.toFixed(2)}" width="${clipW.toFixed(2)}" height="${clipH.toFixed(2)}"/></clipPath>` +
+      `<g clip-path="url(#${clipId})">${markup}</g>`;
   }
   if (pkg.border) {
     markup += `<rect x="0.5" y="0.5" width="${Math.max(0, pkg.width - 1)}" height="${Math.max(0, pkg.height - 1)}" class="symbol-stroke" fill="none"/>`;

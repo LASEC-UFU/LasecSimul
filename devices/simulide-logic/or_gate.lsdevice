@@ -5,7 +5,6 @@
   "language": "pt-BR",
   "icon": "orgate",
   "folderPath": [
-    "Logicos",
     "Portas"
   ],
   "abiVersion": {
@@ -40,13 +39,112 @@
       "editor": "number",
       "default": 2,
       "min": 2,
-      "max": 8,
       "step": 1,
       "affectsPinCount": true
     },
     {
       "id": "inverted",
       "label": "Inverter Saida (NOR)",
+      "group": "Outputs",
+      "valueKind": "bool",
+      "editor": "checkbox",
+      "default": false
+    },
+    {
+      "id": "inputHighV",
+      "label": "Limiar de Baixo para Alto",
+      "group": "Inputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "V",
+      "default": 2.5,
+      "step": 0.1
+    },
+    {
+      "id": "inputLowV",
+      "label": "Limiar de Alto para Baixo",
+      "group": "Inputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "V",
+      "default": 2.5,
+      "step": 0.1
+    },
+    {
+      "id": "inputImpedance",
+      "label": "Impedância de Entrada",
+      "group": "Inputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "Ω",
+      "default": 1000000000,
+      "min": 0,
+      "step": 1
+    },
+    {
+      "id": "inputPullupR",
+      "label": "Pull-up de Entrada",
+      "group": "Inputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "Ω",
+      "default": 0,
+      "min": 0,
+      "step": 1
+    },
+    {
+      "id": "invertInputs",
+      "label": "Inverter Entradas",
+      "group": "Inputs",
+      "valueKind": "bool",
+      "editor": "checkbox",
+      "default": false
+    },
+    {
+      "id": "outputHighV",
+      "label": "Tensão Alta de Saída",
+      "group": "Outputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "V",
+      "default": 5,
+      "step": 0.1
+    },
+    {
+      "id": "outputLowV",
+      "label": "Tensão Baixa de Saída",
+      "group": "Outputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "V",
+      "default": 0,
+      "step": 0.1
+    },
+    {
+      "id": "outputImpedance",
+      "label": "Impedância de Saída",
+      "group": "Outputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "Ω",
+      "default": 40,
+      "min": 0,
+      "step": 1
+    },
+    {
+      "id": "outputPullupR",
+      "label": "Pull-up de Saída",
+      "group": "Outputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "Ω",
+      "default": 0,
+      "min": 0,
+      "step": 1
+    },
+    {
+      "id": "openCollector",
+      "label": "Coletor Aberto",
       "group": "Outputs",
       "valueKind": "bool",
       "editor": "checkbox",
@@ -68,69 +166,33 @@
       "paint": [
         {
           "kind": "path",
-          "d": "M 6 0 Q 23 0 25 8 Q 23 16 6 16 Q 10 8 6 0 Z",
-          "fill": "#ffffff",
-          "statePath": {
-            "prop": "inputs",
-            "fallback": "M 6 0 Q 23 0 25 8 Q 23 16 6 16 Q 10 8 6 0 Z",
-            "map": {
-              "2": "M 6 0 Q 23 0 25 8 Q 23 16 6 16 Q 10 8 6 0 Z",
-              "3": "M 6 0 Q 23 0 25 12 Q 23 24 6 24 Q 10 12 6 0 Z",
-              "4": "M 6 0 Q 23 0 25 16 Q 23 32 6 32 Q 10 16 6 0 Z",
-              "5": "M 6 0 Q 23 0 25 20 Q 23 40 6 40 Q 10 20 6 0 Z",
-              "6": "M 6 0 Q 23 0 25 24 Q 23 48 6 48 Q 10 24 6 0 Z",
-              "7": "M 6 0 Q 23 0 25 28 Q 23 56 6 56 Q 10 28 6 0 Z",
-              "8": "M 6 0 Q 23 0 25 32 Q 23 64 6 64 Q 10 32 6 0 Z"
-            }
-          }
-        },
-        {
-          "kind": "ellipse",
-          "cx": 27.2,
-          "cy": 8,
-          "rx": 2.2,
-          "ry": 2.2,
-          "fill": "#ffffff",
-          "partId": "invertBubble"
-        }
-      ],
-      "stateProjection": {
-        "invertBubble": [
-          {
-            "kind": "translate",
-            "y": {
-              "prop": "inputs",
-              "propRange": [
-                2,
-                8
-              ],
-              "pixelRange": [
-                0,
-                24
-              ]
-            }
+          "logicGateBody": {
+            "style": "or"
           },
-          {
-            "kind": "visible",
-            "prop": "inverted"
-          }
-        ]
-      }
+          "fill": "#ffffff"
+        }
+      ]
     },
     "pins": [
       {
         "id": "out",
-        "x": 24,
+        "x": 32,
         "y": {
           "prop": "inputs",
           "multiplier": 4,
           "fallback": 8,
-          "min": 8,
-          "max": 32
+          "min": 8
         },
         "angle": 0,
         "length": 8,
-        "label": ""
+        "label": "",
+        "invertBubble": {
+          "when": {
+            "inverted": [
+              "true"
+            ]
+          }
+        }
       }
     ],
     "dynamicLayout": {
@@ -138,8 +200,7 @@
         "prop": "inputs",
         "multiplier": 8,
         "fallback": 16,
-        "min": 16,
-        "max": 64
+        "min": 16
       },
       "pinGroups": [
         {
@@ -147,7 +208,7 @@
           "indexName": "i",
           "idPrefix": "in",
           "idStart": 1,
-          "x": 8,
+          "x": 0,
           "y": {
             "index": "i",
             "multiplier": 8,
@@ -162,7 +223,17 @@
   },
   "defaultProperties": {
     "inputs": 2,
-    "inverted": false
+    "inverted": false,
+    "inputHighV": 2.5,
+    "inputLowV": 2.5,
+    "inputImpedance": 1000000000,
+    "inputPullupR": 0,
+    "invertInputs": false,
+    "outputHighV": 5,
+    "outputLowV": 0,
+    "outputImpedance": 40,
+    "outputPullupR": 0,
+    "openCollector": false
   },
   "pinSpec": {
     "fixedPinIds": [

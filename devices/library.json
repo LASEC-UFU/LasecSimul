@@ -206,6 +206,58 @@
       "manifest": "simulide-logic/lm555.lsdevice"
     },
     {
+      "typeId": "logic.subtractor",
+      "manifest": "simulide-logic/subtractor.lsdevice"
+    },
+    {
+      "typeId": "logic.multiplier",
+      "manifest": "simulide-logic/multiplier.lsdevice"
+    },
+    {
+      "typeId": "logic.divider",
+      "manifest": "simulide-logic/divider.lsdevice"
+    },
+    {
+      "typeId": "logic.shifter",
+      "manifest": "simulide-logic/shifter.lsdevice"
+    },
+    {
+      "typeId": "logic.negator",
+      "manifest": "simulide-logic/negator.lsdevice"
+    },
+    {
+      "typeId": "logic.minmax",
+      "manifest": "simulide-logic/minmax.lsdevice"
+    },
+    {
+      "typeId": "logic.absolute",
+      "manifest": "simulide-logic/absolute.lsdevice"
+    },
+    {
+      "typeId": "logic.bit_adder",
+      "manifest": "simulide-logic/bit_adder.lsdevice"
+    },
+    {
+      "typeId": "logic.register",
+      "manifest": "simulide-logic/register.lsdevice"
+    },
+    {
+      "typeId": "logic.random",
+      "manifest": "simulide-logic/random.lsdevice"
+    },
+    {
+      "typeId": "logic.decoder",
+      "manifest": "simulide-logic/decoder.lsdevice"
+    },
+    {
+      "typeId": "logic.priority_encoder",
+      "manifest": "simulide-logic/priority_encoder.lsdevice"
+    },
+    {
+      "typeId": "logic.bit_selector",
+      "manifest": "simulide-logic/bit_selector.lsdevice"
+    },
+    {
       "typeId": "sensors.ldr",
       "manifest": "simulide-sensors/ldr.lsdevice"
     },

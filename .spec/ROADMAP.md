@@ -19,10 +19,37 @@ O roadmap substitui a ordem histórica que iniciava pelo Signal Engine. Cada fas
 | F4 | Telemetria | lanes, frame batelado e coalescência | memória limitada; controle nunca descartado | F5, F8, F9, F10 |
 | F5 | Signal Engine | slots tipados, SCCs, RateGroups, microsteps | tipos/unidades, loops diagnosticados, zero alocação steady-state | F6–F9 |
 | F6 | Dinâmica | integradores e blocos contínuos/discretos | golden models e erro/timestep controlados | F7 |
-| F7 | Bridges/subsystems | bridges explícitos e templates por conteúdo | cache hit, equivalência numérica e estado isolado | F8–F9 |
+| F7 | Bridges/subsystems + referência TDPS | bridges explícitos, shell externo + grafo interno, templates por conteúdo e biblioteca/importador TDPS | cache hit, equivalência composite/expansão, estado isolado e goldens TDPS | F8–F9 |
 | F8 | Python | worker por sessão, `STEP_BATCH`, watchdog | timeout/crash/restart e limites comprovados | F9–F10 |
 | F9 | PLC IEC 61131-3 + protocolos | editores 5 linguagens (LD/FBD vendorizados), lowering para ST, STruCpp, worker PLC nativo, bloco PLC, cross-language POUs, Modbus/HART | matriz 5×5, scan virtual, pinos dinâmicos, cache seguro, sem portas implícitas | F10 |
 | F10 | SharedHost | perfis administrativos e capacidade multi-sessão | fair-share e N sessões em host definido | release lab |
+
+
+## F7 — decomposição obrigatória
+
+### F7A — hierarquia e shell/implementation graph
+
+- `ADR-0008`, `SCHEMA-002` e `FEAT-004`;
+- interface externa tipada com `portId` estável;
+- `package`/símbolo externo separado da semântica interna;
+- `interfaceBindings`, `parameterExports` e `telemetryExports`;
+- abrir implementação com breadcrumb e túneis de fronteira;
+- `CompiledSubsystemTemplate` e flattening para runtime;
+- nested composites com rejeição de ciclo.
+
+Gate: composto e expansão manual são numericamente equivalentes, duas instâncias não compartilham estado e mudança visual não quebra bindings.
+
+### F7B — biblioteca de processo e compatibilidade de autoria TDPS
+
+- `FEAT-012`;
+- PID e primitivas de processo necessárias;
+- `PROCESSO` TDPS-like como composite quando decomponível;
+- `CalcExpression` segura;
+- Scope/XYRecorder/AnimatedValue;
+- parser `.smp` e conversão de `Mnn`/índices globais para edges explícitos;
+- basic flow loop e Smith predictor como primeiros goldens.
+
+Gate: os 24 `.smp` de referência são parseados sem crash; pelo menos dois cenários convertidos compilam e reproduzem os goldens dentro da tolerância documentada.
 
 ## F9 — decomposição obrigatória
 

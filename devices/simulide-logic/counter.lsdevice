@@ -36,6 +36,98 @@
       "default": 1,
       "min": 1,
       "step": 1
+    },
+    {
+      "id": "inputHighV",
+      "label": "Limiar de Baixo para Alto",
+      "group": "Inputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "V",
+      "default": 2.5,
+      "step": 0.1
+    },
+    {
+      "id": "inputLowV",
+      "label": "Limiar de Alto para Baixo",
+      "group": "Inputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "V",
+      "default": 2.5,
+      "step": 0.1
+    },
+    {
+      "id": "inputImpedance",
+      "label": "Impedância de Entrada",
+      "group": "Inputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "Ω",
+      "default": 1000000000,
+      "min": 0,
+      "step": 1
+    },
+    {
+      "id": "inputPullupR",
+      "label": "Pull-up de Entrada",
+      "group": "Inputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "Ω",
+      "default": 0,
+      "min": 0,
+      "step": 1
+    },
+    {
+      "id": "outputHighV",
+      "label": "Tensão Alta de Saída",
+      "group": "Outputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "V",
+      "default": 5,
+      "step": 0.1
+    },
+    {
+      "id": "outputLowV",
+      "label": "Tensão Baixa de Saída",
+      "group": "Outputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "V",
+      "default": 0,
+      "step": 0.1
+    },
+    {
+      "id": "outputImpedance",
+      "label": "Impedância de Saída",
+      "group": "Outputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "Ω",
+      "default": 40,
+      "min": 0,
+      "step": 1
+    },
+    {
+      "id": "outputPullupR",
+      "label": "Pull-up de Saída",
+      "group": "Outputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "Ω",
+      "default": 0,
+      "min": 0,
+      "step": 1
+    },
+    {
+      "id": "openCollector",
+      "label": "Coletor Aberto",
+      "group": "Outputs",
+      "valueKind": "bool",
+      "editor": "checkbox",
+      "default": false
     }
   ],
   "limits": {
@@ -43,7 +135,7 @@
     "expectedComplexity": "low"
   },
   "package": {
-    "width": 40,
+    "width": 48,
     "height": 24,
     "border": false,
     "background": {
@@ -69,7 +161,7 @@
       },
       {
         "id": "q",
-        "x": 40,
+        "x": 48,
         "y": 8,
         "angle": 0,
         "length": 8,
@@ -82,13 +174,13 @@
           "kind": "rect",
           "x": 0,
           "y": 0,
-          "w": 40,
+          "w": 48,
           "h": 24,
           "fill": "#ffffff"
         },
         {
           "kind": "text",
-          "x": 20,
+          "x": 24,
           "y": -4,
           "value": "__label",
           "fontSize": 5,
@@ -99,11 +191,19 @@
   },
   "icon": "2to1",
   "folderPath": [
-    "Logicos",
     "Aritmeticos"
   ],
   "defaultProperties": {
-    "maxValue": 1
+    "maxValue": 1,
+    "inputHighV": 2.5,
+    "inputLowV": 2.5,
+    "inputImpedance": 1000000000,
+    "inputPullupR": 0,
+    "outputHighV": 5,
+    "outputLowV": 0,
+    "outputImpedance": 40,
+    "outputPullupR": 0,
+    "openCollector": false
   },
   "help": {
     "description": "Contador lógico simples."

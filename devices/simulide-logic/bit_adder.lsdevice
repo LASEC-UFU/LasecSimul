@@ -1,0 +1,203 @@
+{
+  "schemaVersion": 1,
+  "typeId": "logic.bit_adder",
+  "name": "Bit Adder",
+  "language": "pt-BR",
+  "icon": "2to3g",
+  "folderPath": [
+    "Aritmeticos"
+  ],
+  "abiVersion": {
+    "major": 3,
+    "minor": 0
+  },
+  "nativeEntry": {
+    "win32-x64": "build/win-x64/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
+  "pins": [
+    {
+      "id": "d0",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "d1",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "d2",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "d3",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "d4",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "d5",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "d6",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "d7",
+      "kind": "DIGITAL_IN"
+    },
+    {
+      "id": "c0",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "c1",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "c2",
+      "kind": "DIGITAL_OUT"
+    },
+    {
+      "id": "c3",
+      "kind": "DIGITAL_OUT"
+    }
+  ],
+  "properties": [],
+  "limits": {
+    "stepTimeoutMs": 4,
+    "expectedComplexity": "low"
+  },
+  "package": {
+    "width": 56,
+    "height": 72,
+    "border": false,
+    "background": {
+      "kind": "none"
+    },
+    "viewSpec": {
+      "paint": [
+        {
+          "kind": "rect",
+          "x": 8,
+          "y": 0,
+          "w": 40,
+          "h": 72,
+          "fill": "#ffffff"
+        },
+        {
+          "kind": "text",
+          "x": 28,
+          "y": -4,
+          "value": "__label",
+          "fontSize": 5,
+          "color": "#0000aa"
+        }
+      ]
+    },
+    "pins": [
+      {
+        "id": "d0",
+        "x": 0,
+        "y": 8,
+        "angle": 180,
+        "length": 8,
+        "label": "D0"
+      },
+      {
+        "id": "d1",
+        "x": 0,
+        "y": 16,
+        "angle": 180,
+        "length": 8,
+        "label": "D1"
+      },
+      {
+        "id": "d2",
+        "x": 0,
+        "y": 24,
+        "angle": 180,
+        "length": 8,
+        "label": "D2"
+      },
+      {
+        "id": "d3",
+        "x": 0,
+        "y": 32,
+        "angle": 180,
+        "length": 8,
+        "label": "D3"
+      },
+      {
+        "id": "d4",
+        "x": 0,
+        "y": 40,
+        "angle": 180,
+        "length": 8,
+        "label": "D4"
+      },
+      {
+        "id": "d5",
+        "x": 0,
+        "y": 48,
+        "angle": 180,
+        "length": 8,
+        "label": "D5"
+      },
+      {
+        "id": "d6",
+        "x": 0,
+        "y": 56,
+        "angle": 180,
+        "length": 8,
+        "label": "D6"
+      },
+      {
+        "id": "d7",
+        "x": 0,
+        "y": 64,
+        "angle": 180,
+        "length": 8,
+        "label": "D7"
+      },
+      {
+        "id": "c0",
+        "x": 48,
+        "y": 8,
+        "angle": 0,
+        "length": 8,
+        "label": "C0"
+      },
+      {
+        "id": "c1",
+        "x": 48,
+        "y": 16,
+        "angle": 0,
+        "length": 8,
+        "label": "C1"
+      },
+      {
+        "id": "c2",
+        "x": 48,
+        "y": 24,
+        "angle": 0,
+        "length": 8,
+        "label": "C2"
+      },
+      {
+        "id": "c3",
+        "x": 48,
+        "y": 32,
+        "angle": 0,
+        "length": 8,
+        "label": "C3"
+      }
+    ]
+  },
+  "help": {
+    "description": "Conta quantos bits estao em 1 na entrada de 8 bits (popcount, saida 0-8)."
+  }
+}

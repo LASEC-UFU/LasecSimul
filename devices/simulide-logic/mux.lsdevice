@@ -66,14 +66,115 @@
       "kind": "DIGITAL_OUT"
     }
   ],
-  "properties": [],
+  "properties": [
+    {
+      "id": "inputHighV",
+      "label": "Limiar de Baixo para Alto",
+      "group": "Inputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "V",
+      "default": 2.5,
+      "step": 0.1
+    },
+    {
+      "id": "inputLowV",
+      "label": "Limiar de Alto para Baixo",
+      "group": "Inputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "V",
+      "default": 2.5,
+      "step": 0.1
+    },
+    {
+      "id": "inputImpedance",
+      "label": "Impedância de Entrada",
+      "group": "Inputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "Ω",
+      "default": 1000000000,
+      "min": 0,
+      "step": 1
+    },
+    {
+      "id": "inputPullupR",
+      "label": "Pull-up de Entrada",
+      "group": "Inputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "Ω",
+      "default": 0,
+      "min": 0,
+      "step": 1
+    },
+    {
+      "id": "invertInputs",
+      "label": "Inverter Entradas",
+      "group": "Inputs",
+      "valueKind": "bool",
+      "editor": "checkbox",
+      "default": false
+    },
+    {
+      "id": "outputHighV",
+      "label": "Tensão Alta de Saída",
+      "group": "Outputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "V",
+      "default": 5,
+      "step": 0.1
+    },
+    {
+      "id": "outputLowV",
+      "label": "Tensão Baixa de Saída",
+      "group": "Outputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "V",
+      "default": 0,
+      "step": 0.1
+    },
+    {
+      "id": "outputImpedance",
+      "label": "Impedância de Saída",
+      "group": "Outputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "Ω",
+      "default": 40,
+      "min": 0,
+      "step": 1
+    },
+    {
+      "id": "outputPullupR",
+      "label": "Pull-up de Saída",
+      "group": "Outputs",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "Ω",
+      "default": 0,
+      "min": 0,
+      "step": 1
+    },
+    {
+      "id": "openCollector",
+      "label": "Coletor Aberto",
+      "group": "Outputs",
+      "valueKind": "bool",
+      "editor": "checkbox",
+      "default": false
+    }
+  ],
   "limits": {
     "stepTimeoutMs": 4,
     "expectedComplexity": "low"
   },
   "package": {
     "width": 50,
-    "height": 114,
+    "height": 132,
     "border": false,
     "background": {
       "kind": "none"
@@ -86,19 +187,19 @@
           "points": [
             {
               "x": 0,
-              "y": 6
+              "y": 0
             },
             {
               "x": 0,
-              "y": 108
+              "y": 128
             },
             {
               "x": 50,
-              "y": 90
+              "y": 94
             },
             {
               "x": 50,
-              "y": 24
+              "y": 30
             }
           ],
           "fill": "#ffffff"
@@ -117,7 +218,7 @@
       {
         "id": "s0",
         "x": 0,
-        "y": 9.5,
+        "y": 15.5,
         "angle": 180,
         "length": 8,
         "label": "S0"
@@ -125,7 +226,7 @@
       {
         "id": "s1",
         "x": 0,
-        "y": 19,
+        "y": 25,
         "angle": 180,
         "length": 8,
         "label": "S1"
@@ -133,7 +234,7 @@
       {
         "id": "s2",
         "x": 0,
-        "y": 28.5,
+        "y": 34.5,
         "angle": 180,
         "length": 8,
         "label": "S2"
@@ -141,7 +242,7 @@
       {
         "id": "d0",
         "x": 0,
-        "y": 38,
+        "y": 44,
         "angle": 180,
         "length": 8,
         "label": "D0"
@@ -149,7 +250,7 @@
       {
         "id": "d1",
         "x": 0,
-        "y": 47.5,
+        "y": 53.5,
         "angle": 180,
         "length": 8,
         "label": "D1"
@@ -157,7 +258,7 @@
       {
         "id": "d2",
         "x": 0,
-        "y": 57,
+        "y": 63,
         "angle": 180,
         "length": 8,
         "label": "D2"
@@ -165,7 +266,7 @@
       {
         "id": "d3",
         "x": 0,
-        "y": 66.5,
+        "y": 72.5,
         "angle": 180,
         "length": 8,
         "label": "D3"
@@ -173,7 +274,7 @@
       {
         "id": "d4",
         "x": 0,
-        "y": 76,
+        "y": 82,
         "angle": 180,
         "length": 8,
         "label": "D4"
@@ -181,7 +282,7 @@
       {
         "id": "d5",
         "x": 0,
-        "y": 85.5,
+        "y": 91.5,
         "angle": 180,
         "length": 8,
         "label": "D5"
@@ -189,7 +290,7 @@
       {
         "id": "d6",
         "x": 0,
-        "y": 95,
+        "y": 101,
         "angle": 180,
         "length": 8,
         "label": "D6"
@@ -197,7 +298,7 @@
       {
         "id": "d7",
         "x": 0,
-        "y": 104.5,
+        "y": 110.5,
         "angle": 180,
         "length": 8,
         "label": "D7"
@@ -205,7 +306,7 @@
       {
         "id": "y",
         "x": 50,
-        "y": 46,
+        "y": 52,
         "angle": 0,
         "length": 8,
         "label": "Y"
@@ -213,7 +314,7 @@
       {
         "id": "ny",
         "x": 50,
-        "y": 68,
+        "y": 74,
         "angle": 0,
         "length": 8,
         "label": "NY"
@@ -222,10 +323,21 @@
   },
   "icon": "mux",
   "folderPath": [
-    "Logicos",
     "Conversores"
   ],
   "help": {
     "description": "Multiplexador lógico."
+  },
+  "defaultProperties": {
+    "inputHighV": 2.5,
+    "inputLowV": 2.5,
+    "inputImpedance": 1000000000,
+    "inputPullupR": 0,
+    "invertInputs": false,
+    "outputHighV": 5,
+    "outputLowV": 0,
+    "outputImpedance": 40,
+    "outputPullupR": 0,
+    "openCollector": false
   }
 }

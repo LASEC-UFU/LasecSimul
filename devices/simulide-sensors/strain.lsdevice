@@ -276,6 +276,17 @@
       "max": 100000,
       "step": 1,
       "unit": "Ω"
+    },
+    {
+      "id": "dialStep",
+      "label": "Passo do Dial",
+      "group": "Main",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "N",
+      "default": 1,
+      "min": 0.001,
+      "step": 1
     }
   ],
   "help": {
@@ -284,5 +295,8 @@
   "limits": {
     "stepTimeoutMs": 4,
     "expectedComplexity": "low"
+  },
+  "defaultProperties": {
+    "dialStep": 1
   }
 }
