@@ -4,6 +4,11 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "17 3 * * *"
+  # Bootstrap temporario: workflows novos so aceitam workflow_dispatch depois de existirem na
+  # branch padrao. Remover depois de validar o primeiro artifact desta branch.
+  push:
+    branches:
+      - agent/f1-core-baseline
 
 jobs:
   baseline:
