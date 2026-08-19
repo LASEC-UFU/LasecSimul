@@ -1,7 +1,9 @@
 #pragma once
 
 #include <cstdio>
+#include <utility>
 #include <vector>
+#include "../resources/ResourceGovernor.hpp"
 #include "CircuitGroup.hpp"
 #include "ThreadPool.hpp"
 
@@ -10,7 +12,11 @@ namespace lasecsimul::simulation {
 /** Resolve grupos eletricamente independentes num pool persistente. */
 class MnaSolver {
 public:
-    explicit MnaSolver(size_t threadCount = 0) : m_pool(threadCount) {}
+    explicit MnaSolver(size_t threadCount = 0)
+        : MnaSolver(governorForThreadCount(threadCount)) {}
+
+    explicit MnaSolver(resources::ResourceGovernor governor)
+        : m_governor(std::move(governor)), m_pool(m_governor.budget().maxWorkerThreads) {}
 
     void solve(std::vector<CircuitGroup>& groups, std::vector<double>& nodeVoltages) {
         m_dirtyGroups.clear();
@@ -38,16 +44,31 @@ public:
         };
         // Thread dispatch custa mais que uma substituicao LU pequena. Paraleliza somente quando
         // ha trabalho suficiente para amortizar fila/sincronizacao.
-        if (m_dirtyGroups.size() > 1 && estimatedWork >= m_parallelWorkThreshold) {
-            m_pool.parallelFor(m_dirtyGroups.size(), solveGroup);
+        const resources::ParallelGrant grant = m_governor.grantParallelTasks(
+            m_dirtyGroups.size(), estimatedWork, m_parallelWorkThreshold);
+        if (grant.usesWorkers()) {
+            m_pool.parallelFor(m_dirtyGroups.size(), grant.parallelTasks, solveGroup);
         } else {
             for (size_t i = 0; i < m_dirtyGroups.size(); ++i) solveGroup(i);
         }
     }
 
     size_t threadCount() const { return m_pool.threadCount(); }
+    size_t workerThreadCount() const { return m_pool.workerThreadCount(); }
+    const resources::ResourceBudget& resourceBudget() const { return m_governor.budget(); }
 
 private:
+    static resources::ResourceGovernor governorForThreadCount(size_t threadCount) {
+        if (threadCount == 0) return resources::ResourceGovernor{};
+        resources::ResourceBudget budget =
+            resources::ResourceGovernor::forProfile(resources::ResourceProfile::Desktop,
+                                                     threadCount + 1).budget();
+        budget.maxWorkerThreads = threadCount - 1;
+        budget.maxParallelTasks = threadCount;
+        return resources::ResourceGovernor(budget);
+    }
+
+    resources::ResourceGovernor m_governor;
     ThreadPool m_pool;
     std::vector<CircuitGroup*> m_dirtyGroups;
     static constexpr size_t m_parallelWorkThreshold = 250'000;

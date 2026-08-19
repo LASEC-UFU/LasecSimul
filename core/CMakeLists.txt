@@ -53,6 +53,7 @@ FetchContent_MakeAvailable(nlohmann_json)
 set(CORE_SOURCES
     src/main.cpp
     src/app/CoreApplication.cpp
+    src/resources/ResourceGovernor.cpp
     src/ipc/IpcServer.cpp
     src/plugins/PluginModule.cpp
     src/plugins/PluginLoader.cpp
@@ -105,8 +106,17 @@ add_executable(resource_governor_test
 target_include_directories(resource_governor_test PRIVATE include src)
 add_test(NAME resource_governor COMMAND resource_governor_test)
 
+add_executable(resource_worker_pool_test
+    test/core/resources/ResourceWorkerPoolTest.cpp
+    src/resources/ResourceGovernor.cpp
+)
+target_include_directories(resource_worker_pool_test PRIVATE include src)
+target_link_libraries(resource_worker_pool_test PRIVATE Eigen3::Eigen)
+add_test(NAME resource_worker_pool COMMAND resource_worker_pool_test)
+
 set(TEST_COMMON_SOURCE_FILES
     src/app/CoreApplication.cpp
+    src/resources/ResourceGovernor.cpp
     src/ipc/IpcServer.cpp
     src/plugins/PluginModule.cpp
     src/plugins/PluginLoader.cpp
@@ -376,6 +386,7 @@ add_test(NAME fpga_component_real_ghdl COMMAND fpga_component_real_ghdl_test)
 
 add_executable(mna_solver_test
     test/core/simulation/MnaSolverTest.cpp
+    src/resources/ResourceGovernor.cpp
 )
 target_include_directories(mna_solver_test PRIVATE include src)
 target_link_libraries(mna_solver_test PRIVATE Eigen3::Eigen)
@@ -413,7 +424,7 @@ if(NOT WIN32)
 endif()
 add_test(NAME transient_rlc COMMAND transient_rlc_test)
 
-add_executable(solver_benchmark benchmark/solver_benchmark.cpp)
+add_executable(solver_benchmark benchmark/solver_benchmark.cpp src/resources/ResourceGovernor.cpp)
 target_include_directories(solver_benchmark PRIVATE include src)
 target_link_libraries(solver_benchmark PRIVATE Eigen3::Eigen)
 add_executable(transient_benchmark benchmark/transient_benchmark.cpp ${TEST_COMMON_SOURCES})
@@ -877,6 +888,7 @@ add_executable(session_restart_stress_test
     src/fpga/GhdlArenaBridge.cpp
     src/simulation/Scheduler.cpp
     src/session/SimulationSession.cpp
+    src/resources/ResourceGovernor.cpp
     src/session/PauseExpression.cpp
     src/plugins/PluginModule.cpp
     src/plugins/PluginLoader.cpp
@@ -1129,7 +1141,7 @@ add_test(NAME plugin_watchdog COMMAND plugin_watchdog_test)
 # Mantenha todos os testes em exatamente um grupo: o runner descobre os nomes via CTest e usa
 # estes labels, sem duplicar listas de testes em JavaScript ou no workflow de CI.
 set(LASECSIMUL_HERMETIC_TESTS
-    pause_expression logic_analyzer_vector resource_governor voltage_divider circuit_group_reuse diode zener_led
+    pause_expression logic_analyzer_vector resource_governor resource_worker_pool voltage_divider circuit_group_reuse diode zener_led
     inert_components_fix probe_pause_on_change subcircuit simulide_sources_meters voltmeter
     component_removal netlist union_find scheduler sparse_set core_bootstrap circuit_group logic_value
     ghdl_arena_bridge ghdl_process_manager fpga_port_mapper mna_solver sha256 passive_components
