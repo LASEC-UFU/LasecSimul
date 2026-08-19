@@ -13,7 +13,7 @@ Total: 34 documentos. accepted: 7; active: 12; deferred: 3; planned: 11; superse
 | ADR-0005 | adr | accepted | [Política de schemas durante beta](adr/0005-beta-schema-policy.md) | — |
 | ADR-0006 | adr | superseded | [IEC 61131-3: POUs cross-language sobre IR e ABI comuns](adr/0006-iec61131-common-ir-and-cross-language-pous.md) | ADR-0001, ADR-0002 |
 | ADR-0007 | adr | accepted | [Incorporação do OpenPLC v4/STruCpp, relicenciamento GPL-3.0 e pipeline PLC nativo](adr/0007-openplc-v4-incorporation-and-native-plc-pipeline.md) | ADR-0001, ADR-0002, ADR-0003 |
-| ADR-0008 | adr | accepted | [Dispositivos compostos hierárquicos e incorporação do TDPS como referência funcional](adr/0008-hierarchical-composite-devices-and-tdps-reference.md) | ADR-0001, ADR-0002, ADR-0005 |
+| ADR-0008 | adr | accepted | [Processos TDPS-like como subcircuitos nativos do LasecSimul](adr/0008-hierarchical-composite-devices-and-tdps-reference.md) | ADR-0001, ADR-0002, ADR-0005 |
 | ARCH-001 | architecture | active | [Fronteiras do sistema](architecture/system-boundaries.md) | — |
 | ARCH-002 | architecture | active | [Runtime e SimulationPlan](architecture/runtime-and-simulation-plan.md) | ARCH-001, ARCH-006 |
 | ARCH-003 | architecture | active | [Scheduler e tempo virtual](architecture/scheduler-and-time.md) | ARCH-002 |
@@ -26,7 +26,7 @@ Total: 34 documentos. accepted: 7; active: 12; deferred: 3; planned: 11; superse
 | FEAT-001 | feature | planned | [Signal Engine](features/signal-engine.md) | ARCH-002, ARCH-003, ARCH-006, SCHEMA-001 |
 | FEAT-002 | feature | planned | [Dinâmica contínua e discreta](features/continuous-discrete-dynamics.md) | FEAT-001, ARCH-003 |
 | FEAT-003 | feature | planned | [Bridges elétrico ↔ sinal](features/electrical-signal-bridges.md) | FEAT-001, FEAT-002, ARCH-006 |
-| FEAT-004 | feature | planned | [Subsistemas, dispositivos compostos e templates compilados](features/subsystems.md) | ARCH-002, ARCH-006, SCHEMA-002, ADR-0008, FEAT-001 |
+| FEAT-004 | feature | planned | [Evolução do subcircuito para modelos de processo e controle](features/subsystems.md) | ARCH-002, ARCH-006, SCHEMA-002, ADR-0008, FEAT-001 |
 | FEAT-005 | feature | active | [FPGA/VHDL com GHDL](features/fpga-ghdl.md) | ARCH-001, ARCH-003, ARCH-004, FEAT-011 |
 | FEAT-006 | feature | deferred | [Runtime Python](features/python-runtime.md) | FEAT-001, ARCH-004, ARCH-005 |
 | FEAT-007 | feature | planned | [PLC IEC 61131-3 integrado ao LasecSimul](features/iec61131-plc.md) | FEAT-001, ARCH-002, ARCH-003, ARCH-006, SCHEMA-003, ADR-0007 |
@@ -43,4 +43,4 @@ Total: 34 documentos. accepted: 7; active: 12; deferred: 3; planned: 11; superse
 
 ## Próximo gate
 
-F1 — reconstruir o baseline a partir de checkout/build limpo. Features novas permanecem bloqueadas até F1–F4.
+Gate atual: F1. Ver ROADMAP.md para objetivo/entregáveis/aceitação desta fase.

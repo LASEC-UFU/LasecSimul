@@ -50,6 +50,11 @@ const documents = walk(specRoot).map((file) => {
 const counts = new Map();
 for (const document of documents) counts.set(document.status, (counts.get(document.status) ?? 0) + 1);
 
+const roadmap = documents.find((document) => document.id === "ROADMAP-001");
+if (!roadmap?.currentGate) {
+  throw new Error("ROADMAP-001 deve declarar currentGate no frontmatter.");
+}
+
 const lines = [
   "# Status das especificações",
   "",
@@ -63,7 +68,7 @@ const lines = [
   "",
   "## Próximo gate",
   "",
-  "F1 — reconstruir o baseline a partir de checkout/build limpo. Features novas permanecem bloqueadas até F1–F4.",
+  `Gate atual: ${roadmap.currentGate}. Ver ROADMAP.md para objetivo/entregáveis/aceitação desta fase.`,
   ""
 ];
 

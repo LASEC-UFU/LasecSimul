@@ -2,6 +2,7 @@
 id: ROADMAP-001
 kind: roadmap
 status: active
+currentGate: F1
 dependsOn: [GOV-001, BENCH-001]
 supersedes: []
 ---

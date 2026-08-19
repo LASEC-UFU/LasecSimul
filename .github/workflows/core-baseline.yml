@@ -1,0 +1,71 @@
+name: Core Baseline
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * *"
+
+jobs:
+  baseline:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.target == 'linux-x64' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows-x64
+          - os: ubuntu-latest
+            target: linux-x64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup MSYS2 toolchain for GHDL on Windows
+        if: matrix.os == 'windows-latest'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: ucrt64
+          update: true
+          path-type: inherit
+
+      - name: Setup GHDL
+        uses: ghdl/setup-ghdl@v1
+        with:
+          version: 6.0.0
+          backend: mcode
+          runtime: ${{ matrix.os == 'windows-latest' && 'ucrt64' || '' }}
+
+      - name: Export Windows GHDL toolchain paths
+        if: matrix.os == 'windows-latest'
+        shell: msys2 {0}
+        run: |
+          GHDL_BIN_WIN="$(cygpath -w /ucrt64/bin)"
+          GHDL_EXE_WIN="$(cygpath -w /ucrt64/bin/ghdl.exe)"
+          GCC_EXE_WIN="$(cygpath -w /ucrt64/bin/gcc.exe)"
+          GHDL_PREFIX_WIN="$(cygpath -w /ucrt64/lib/ghdl)"
+          printf '%s\n' "$GHDL_BIN_WIN" >> "$GITHUB_PATH"
+          printf 'GHDL_PREFIX=%s\n' "$GHDL_PREFIX_WIN" >> "$GITHUB_ENV"
+          printf 'LASECSIMUL_GHDL_PATH=%s\n' "$GHDL_EXE_WIN" >> "$GITHUB_ENV"
+          printf 'LASECSIMUL_GHDL_BINARY=%s\n' "$GHDL_EXE_WIN" >> "$GITHUB_ENV"
+          printf 'LASECSIMUL_FPGA_VPI_CC=%s\n' "$GCC_EXE_WIN" >> "$GITHUB_ENV"
+
+      - name: Generate clean Core baseline
+        run: node scripts/baseline-core.js --config Release
+
+      - name: Upload baseline candidate
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-baseline-${{ matrix.target }}-${{ github.run_id }}
+          path: .spec/benchmarks/baseline-*-*.json
+          if-no-files-found: error

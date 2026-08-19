@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(LasecSimulCore CXX)
+project(LasecSimulCore LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -1105,3 +1105,40 @@ if(NOT WIN32)
     target_link_libraries(plugin_watchdog_test PRIVATE pthread)
 endif()
 add_test(NAME plugin_watchdog COMMAND plugin_watchdog_test)
+
+# Classificacao canonica da suite para o baseline reproduzivel (ROADMAP-001/F1).
+# Mantenha todos os testes em exatamente um grupo: o runner descobre os nomes via CTest e usa
+# estes labels, sem duplicar listas de testes em JavaScript ou no workflow de CI.
+set(LASECSIMUL_HERMETIC_TESTS
+    pause_expression logic_analyzer_vector voltage_divider circuit_group_reuse diode zener_led
+    inert_components_fix probe_pause_on_change subcircuit simulide_sources_meters voltmeter
+    component_removal netlist union_find scheduler sparse_set core_bootstrap circuit_group logic_value
+    ghdl_arena_bridge ghdl_process_manager fpga_port_mapper mna_solver sha256 passive_components
+    transient_rc transient_rlc simulation_performance_smoke property_definition dynamic_pins
+    logic_components plugin_loader plugin_loader_real_dll plugin_checksum plugin_duplicate_device_id
+    plugin_runtime mcu_crash_resilience qemu_process_manager mcu_debug_launch qemu_arena_bridge
+    firmware_watcher esp32_adapter esp32_devkitc_subcircuit bus command_queue_session logic_gate_plugin
+    logic_family_extension mcu_component mcu_usart_monitor mcu_uart_to_lasecplot
+    mcu_component_live_poll_thread mcu_scheduler_pacing_sync pin_change_dispatch plugin_watchdog
+)
+set(LASECSIMUL_EXTERNAL_GHDL_TESTS
+    ghdl_lockstep_real_ghdl ghdl_backend_real_ghdl fpga_component_real_ghdl
+)
+set(LASECSIMUL_EXTERNAL_QEMU_TESTS
+    mcu_controller_real_qemu qemu_icount_calibrator qemu_queue_stress qemu_mttcg_smoke
+    qemu_arena_v3_smoke mcu_restart_stress session_restart_stress
+    mcu_multiple_controllers_real_qemu mcu_blink_long_run mcu_firmware_lasecplot
+    mcu_scheduler_pacing_sync_real_qemu mcu_scheduler_pacing_sync_real_qemu_mttcg
+)
+set_tests_properties(${LASECSIMUL_HERMETIC_TESTS} PROPERTIES
+    LABELS "hermetic"
+    SKIP_REGULAR_EXPRESSION "PULADO:"
+)
+set_tests_properties(${LASECSIMUL_EXTERNAL_GHDL_TESTS} PROPERTIES
+    LABELS "external-ghdl"
+    SKIP_REGULAR_EXPRESSION "PULADO:"
+)
+set_tests_properties(${LASECSIMUL_EXTERNAL_QEMU_TESTS} PROPERTIES
+    LABELS "external-qemu"
+    SKIP_REGULAR_EXPRESSION "PULADO:"
+)
