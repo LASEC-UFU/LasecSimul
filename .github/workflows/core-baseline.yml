@@ -21,8 +21,10 @@ jobs:
         include:
           - os: windows-latest
             target: windows-x64
+            platform: windows
           - os: ubuntu-latest
             target: linux-x64
+            platform: linux
 
     steps:
       - name: Checkout
@@ -72,5 +74,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: core-baseline-${{ matrix.target }}-${{ github.run_id }}
-          path: .spec/benchmarks/baseline-*-*.json
+          # O sufixo de plataforma impede que uma falha antes da escrita envie por engano o
+          # baseline exploratorio historico baseline-2026-08-15.json.
+          path: .spec/benchmarks/baseline-????-??-??-${{ matrix.platform }}.json
           if-no-files-found: error

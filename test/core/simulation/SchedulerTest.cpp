@@ -162,7 +162,9 @@ void testAdvanceLimitCapsElectricalAdvance() {
     scheduler.setMaximumTimeStepNs(100'000);
     scheduler.setRealTimeRate(1.0);
     constexpr uint64_t kReferencePositionNs = 5'000'000; // 5ms
-    scheduler.setAdvanceLimitCallback([] { return std::optional<uint64_t>(kReferencePositionNs); });
+    scheduler.setAdvanceLimitCallback([kReferencePositionNs] {
+        return std::optional<uint64_t>(kReferencePositionNs);
+    });
 
     scheduler.start();
     std::this_thread::sleep_for(std::chrono::milliseconds(80)); // bem mais que o suficiente pra calibrar e travar no teto
@@ -234,7 +236,9 @@ void testAdvanceLimitAppliesEvenWithUnlimitedRate() {
     scheduler.setMaximumTimeStepNs(100'000);
     scheduler.setRealTimeRate(0.0); // ilimitado
     constexpr uint64_t kReferencePositionNs = 5'000'000;
-    scheduler.setAdvanceLimitCallback([] { return std::optional<uint64_t>(kReferencePositionNs); });
+    scheduler.setAdvanceLimitCallback([kReferencePositionNs] {
+        return std::optional<uint64_t>(kReferencePositionNs);
+    });
 
     scheduler.start();
     std::this_thread::sleep_for(std::chrono::milliseconds(60));
