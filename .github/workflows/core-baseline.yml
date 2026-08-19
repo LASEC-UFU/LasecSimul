@@ -2,6 +2,12 @@ name: Core Baseline
 
 on:
   workflow_dispatch:
+    inputs:
+      include_linux:
+        description: Executar tambem o baseline portavel Linux (mais demorado)
+        required: false
+        default: false
+        type: boolean
   schedule:
     - cron: "17 3 * * *"
   # Bootstrap temporario: workflows novos so aceitam workflow_dispatch depois de existirem na
@@ -18,13 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: windows-latest
-            target: windows-x64
-            platform: windows
-          - os: ubuntu-latest
-            target: linux-x64
-            platform: linux
+        include: ${{ fromJSON(inputs.include_linux && '[{"os":"windows-latest","target":"windows-x64","platform":"windows"},{"os":"ubuntu-latest","target":"linux-x64","platform":"linux"}]' || '[{"os":"windows-latest","target":"windows-x64","platform":"windows"}]') }}
 
     steps:
       - name: Checkout

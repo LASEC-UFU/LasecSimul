@@ -98,7 +98,7 @@ target_include_directories(logic_analyzer_vector_test PRIVATE include src)
 target_link_libraries(logic_analyzer_vector_test PRIVATE nlohmann_json::nlohmann_json)
 add_test(NAME logic_analyzer_vector COMMAND logic_analyzer_vector_test)
 
-set(TEST_COMMON_SOURCES
+set(TEST_COMMON_SOURCE_FILES
     src/app/CoreApplication.cpp
     src/ipc/IpcServer.cpp
     src/plugins/PluginModule.cpp
@@ -122,6 +122,18 @@ set(TEST_COMMON_SOURCES
     src/session/SimulationSession.cpp
     src/session/PauseExpression.cpp
 )
+
+# A maioria dos executaveis de teste usa exatamente as mesmas fontes do Core. Compila-las em
+# cada alvo multiplicava o trabalho de um build limpo por dezenas de vezes (especialmente caro
+# no runner Windows do GitHub). A object library preserva executaveis de teste independentes,
+# mas gera esse conjunto comum uma unica vez.
+add_library(lasecsimul_test_common OBJECT ${TEST_COMMON_SOURCE_FILES})
+target_include_directories(lasecsimul_test_common PRIVATE include src)
+target_link_libraries(lasecsimul_test_common PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+if(WIN32)
+    target_compile_definitions(lasecsimul_test_common PRIVATE _CRT_SECURE_NO_WARNINGS)
+endif()
+set(TEST_COMMON_SOURCES $<TARGET_OBJECTS:lasecsimul_test_common>)
 
 # Teste de divisor de tensão (existente)
 add_executable(voltage_divider_test

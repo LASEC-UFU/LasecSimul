@@ -225,6 +225,9 @@ function runTestLabel(label) {
     "--output-junit",
     junit,
   ];
+  // A suite hermetica nao compartilha processos externos nem firmware. Executa-la em paralelo
+  // reduz o tempo de CI sem alterar a cobertura; GHDL e QEMU permanecem seriais por seguranca.
+  if (label === "hermetic") args.push("--parallel", process.env.CI ? "4" : "2");
   const result = execute(ctestCommand, args, { capture: true, echo: true, allowFailure: true });
   return {
     ...parseJunit(junit, testsByLabel[label].length, result.status),
