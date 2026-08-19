@@ -23,9 +23,14 @@ ResourceBudget {
   telemetryQueueBytes,
   scopeHistoryBytes,
   logBytes,
-  cacheBytes
+  cacheBytes,
+  commandQueueCapacity
 }
 ```
+
+`maxWorkerThreads` conta somente threads adicionais; a coordenadora pode participar do trabalho e
+está incluída em `maxParallelTasks`. Limites de telemetria, histórico, logs e cache são expressos em
+bytes; a fila de comandos usa quantidade de comandos porque closures não possuem tamanho portável.
 
 O Governor concede orçamento; pools, telemetria, PLC VM e caches continuam donos de seus recursos. Apenas esta camada consulta capacidade de CPU ou política administrativa.
 

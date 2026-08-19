@@ -98,6 +98,13 @@ target_include_directories(logic_analyzer_vector_test PRIVATE include src)
 target_link_libraries(logic_analyzer_vector_test PRIVATE nlohmann_json::nlohmann_json)
 add_test(NAME logic_analyzer_vector COMMAND logic_analyzer_vector_test)
 
+add_executable(resource_governor_test
+    test/core/resources/ResourceGovernorTest.cpp
+    src/resources/ResourceGovernor.cpp
+)
+target_include_directories(resource_governor_test PRIVATE include src)
+add_test(NAME resource_governor COMMAND resource_governor_test)
+
 set(TEST_COMMON_SOURCE_FILES
     src/app/CoreApplication.cpp
     src/ipc/IpcServer.cpp
@@ -1122,7 +1129,7 @@ add_test(NAME plugin_watchdog COMMAND plugin_watchdog_test)
 # Mantenha todos os testes em exatamente um grupo: o runner descobre os nomes via CTest e usa
 # estes labels, sem duplicar listas de testes em JavaScript ou no workflow de CI.
 set(LASECSIMUL_HERMETIC_TESTS
-    pause_expression logic_analyzer_vector voltage_divider circuit_group_reuse diode zener_led
+    pause_expression logic_analyzer_vector resource_governor voltage_divider circuit_group_reuse diode zener_led
     inert_components_fix probe_pause_on_change subcircuit simulide_sources_meters voltmeter
     component_removal netlist union_find scheduler sparse_set core_bootstrap circuit_group logic_value
     ghdl_arena_bridge ghdl_process_manager fpga_port_mapper mna_solver sha256 passive_components
