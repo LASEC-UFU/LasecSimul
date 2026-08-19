@@ -228,6 +228,9 @@ function runTestLabel(label) {
   // A suite hermetica nao compartilha processos externos nem firmware. Executa-la em paralelo
   // reduz o tempo de CI sem alterar a cobertura; GHDL e QEMU permanecem seriais por seguranca.
   if (label === "hermetic") args.push("--parallel", process.env.CI ? "4" : "2");
+  // Runners compartilhados podem pausar o processo QEMU por tempo suficiente para disparar um
+  // watchdog. Repete somente o teste que falhou, uma unica vez; falhas reais continuam fatais.
+  if (label === "external-qemu" && process.env.CI) args.push("--repeat", "until-pass:2");
   const result = execute(ctestCommand, args, { capture: true, echo: true, allowFailure: true });
   return {
     ...parseJunit(junit, testsByLabel[label].length, result.status),
