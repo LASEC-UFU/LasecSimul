@@ -2,7 +2,7 @@
 id: ROADMAP-001
 kind: roadmap
 status: active
-currentGate: F1
+currentGate: F2
 dependsOn: [GOV-001, BENCH-001]
 supersedes: []
 ---
@@ -89,7 +89,7 @@ Gate: PLC funciona sem protocolos e protocolos funcionam sem PLC.
 
 ## Gate atual
 
-F0 é concluído por esta reorganização quando o checker passa. O próximo trabalho de produto é F1; nenhuma feature nova deve furar F1–F4.
+F0 e F1 estão concluídos. O próximo trabalho de produto é F2; nenhuma feature nova deve furar F2–F4.
 
 ## Política de exceção
 
