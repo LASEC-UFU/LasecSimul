@@ -97,11 +97,28 @@ const source = {
   dirty: git(["status", "--porcelain", "--untracked-files=normal"]).length > 0,
 };
 
+const supportBuilds = [
+  [path.join("scripts", "build-devices.js"), "--clean", "--config", configuration],
+  [path.join("scripts", "build-mcu-adapters.js"), "--clean", "--config", configuration],
+];
+for (const args of supportBuilds) execute(process.execPath, args);
+
+// O modulo VPI usa o toolchain do proprio GHDL e nao possui --clean. Remover somente seu output
+// reproduzivel evita que uma execucao local reutilize um binario de outra versao/toolchain.
+fs.rmSync(path.join(repoRoot, "fpga", "ghdl-vpi", "build"), { recursive: true, force: true });
+const vpiBuildArgs = [path.join("scripts", "build-fpga-vpi.js")];
+execute(process.execPath, vpiBuildArgs);
+
 const buildArgs = [
   path.join("scripts", "build-core.js"),
   "--clean",
   "--config",
   configuration,
+];
+const buildCommands = [
+  ...supportBuilds.map((args) => printableCommand(process.execPath, args)),
+  printableCommand(process.execPath, vpiBuildArgs),
+  printableCommand(process.execPath, buildArgs),
 ];
 execute(process.execPath, buildArgs);
 
@@ -416,7 +433,8 @@ const baseline = {
   build: {
     configuration,
     clean: true,
-    command: printableCommand(process.execPath, buildArgs),
+    command: buildCommands.join(" && "),
+    commands: buildCommands,
   },
   tests: {
     discovered: discoveredTests.length,

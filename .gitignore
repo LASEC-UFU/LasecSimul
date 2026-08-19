@@ -5,6 +5,7 @@ Thumbs.db
 *.swo
 *.tmp
 *.temp
+.codex-simulide-src/
 
 # VS Code
 .vscode/
