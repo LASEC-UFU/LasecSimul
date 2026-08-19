@@ -71,6 +71,16 @@ int configuredStressSeconds() {
                : 60;
 }
 
+int configuredStallThresholdMilliseconds() {
+    const char* value = std::getenv("LASECSIMUL_STALL_THRESHOLD_MS");
+    if (!value || !*value) return 5000;
+    char* end = nullptr;
+    const long parsed = std::strtol(value, &end, 10);
+    return end != value && *end == '\0' && parsed >= 1000 && parsed <= 30000
+               ? static_cast<int>(parsed)
+               : 5000;
+}
+
 } // namespace
 
 int main() {
@@ -123,7 +133,8 @@ int main() {
     // a poucos segundos) -- o achado ao vivo foi "funcionou por um tempo, depois travou", então uma
     // janela curta não teria exposição suficiente à condição de corrida.
     const auto stressDuration = std::chrono::seconds(configuredStressSeconds());
-    constexpr auto kStallThreshold = std::chrono::seconds(5);
+    const auto kStallThreshold =
+        std::chrono::milliseconds(configuredStallThresholdMilliseconds());
 
     uint64_t eventsHandled = 0;
     auto lastEventAt = std::chrono::steady_clock::now();
@@ -153,8 +164,8 @@ int main() {
         // trava em andamento sem esperar o teste inteiro acabar.
         const auto gapSoFar = std::chrono::steady_clock::now() - lastEventAt;
         if (sawAnyEvent && gapSoFar > kStallThreshold) {
-            std::fprintf(stderr, "AVISO: %lld segundos sem nenhum evento (limiar de trava: %lld s)\n",
-                         static_cast<long long>(std::chrono::duration_cast<std::chrono::seconds>(gapSoFar).count()),
+            std::fprintf(stderr, "AVISO: %lld ms sem nenhum evento (limiar de trava: %lld ms)\n",
+                         static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(gapSoFar).count()),
                          static_cast<long long>(kStallThreshold.count()));
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(1));

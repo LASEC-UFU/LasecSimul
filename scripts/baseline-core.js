@@ -60,7 +60,7 @@ function execute(command, args, options = {}) {
   const result = spawnSync(command, args, {
     cwd: options.cwd ?? repoRoot,
     encoding: "utf8",
-    env: process.env,
+    env: options.env ?? process.env,
     maxBuffer: 64 * 1024 * 1024,
     shell: false,
     stdio: options.capture ? "pipe" : "inherit",
@@ -231,7 +231,16 @@ function runTestLabel(label) {
   // Runners compartilhados podem pausar o processo QEMU por tempo suficiente para disparar um
   // watchdog. Repete somente o teste que falhou, uma unica vez; falhas reais continuam fatais.
   if (label === "external-qemu" && process.env.CI) args.push("--repeat", "until-pass:2");
-  const result = execute(ctestCommand, args, { capture: true, echo: true, allowFailure: true });
+  const testEnvironment =
+    label === "external-qemu" && process.env.CI
+      ? { ...process.env, LASECSIMUL_STALL_THRESHOLD_MS: "7000" }
+      : process.env;
+  const result = execute(ctestCommand, args, {
+    capture: true,
+    echo: true,
+    allowFailure: true,
+    env: testEnvironment,
+  });
   return {
     ...parseJunit(junit, testsByLabel[label].length, result.status),
     command: result.display,
