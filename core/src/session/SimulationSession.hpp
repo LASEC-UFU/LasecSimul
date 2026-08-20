@@ -26,6 +26,7 @@
 #include "../simulation/Netlist.hpp"
 #include "../simulation/RuntimeState.hpp"
 #include "../simulation/Scheduler.hpp"
+#include "../python/PythonRuntime.hpp"
 #include "lasecsimul/IComponentModel.hpp"
 #include "PauseExpression.hpp"
 
@@ -245,6 +246,12 @@ public:
     void setSignalGraph(simulation::SignalGraphDefinition definition);
     void setElectricalSignalBridges(std::vector<simulation::ElectricalSignalBridgeDefinition> definitions);
     const simulation::SignalRuntime& signalRuntime() const { return m_runtimeState.signals; }
+    /** Publica blocos Python somente no cold path. O processo continua inexistente ate o primeiro lote. */
+    void setPythonBlocks(std::vector<python::PythonBlockDefinition> definitions);
+    std::vector<python::PythonStepResult> stepPythonBatch(
+        const std::string& rateGroupId, const std::vector<python::PythonStep>& steps);
+    void restartPythonRuntime();
+    const python::PythonRuntime& pythonRuntime() const { return m_pythonRuntime; }
 
     /** Registra, no ComponentRegistry desta sessão, uma factory delegando ao PluginRuntime para
      * cada typeId com PluginModule ativo no GlobalPluginCache. Componentes built-in (ex: Resistor)
@@ -572,6 +579,7 @@ private:
     simulation::Netlist m_netlist;
     simulation::MnaSolver m_mnaSolver;
     simulation::Scheduler m_scheduler;
+    python::PythonRuntime m_pythonRuntime;
 
     std::vector<std::unique_ptr<IComponentModel>> m_componentInstances;
     simulation::RuntimeState m_runtimeState;
@@ -584,6 +592,7 @@ private:
     std::unordered_map<std::string, uint32_t> m_signalAliases;
     simulation::SignalGraphDefinition m_signalGraphDefinition;
     std::vector<simulation::ElectricalSignalBridgeDefinition> m_electricalSignalBridgeDefinitions;
+    std::vector<python::PythonBlockDefinition> m_pythonBlockDefinitions;
     std::optional<uint64_t> m_signalBoundaryScheduledNs;
     uint64_t m_signalScheduleGeneration = 0;
     struct PauseConditionState {

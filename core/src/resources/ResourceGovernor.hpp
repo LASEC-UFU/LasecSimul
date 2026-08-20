@@ -25,6 +25,9 @@ struct ResourceBudget {
     uint64_t logBytes = 0;
     uint64_t cacheBytes = 0;
     size_t commandQueueCapacity = 1;
+    uint64_t pythonMemoryBytes = 0;
+    size_t pythonPayloadBytes = 0;
+    uint32_t pythonStepTimeoutMs = 0;
 };
 
 struct ParallelGrant {

@@ -1581,6 +1581,10 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
         const session::SimulationPerformanceSnapshot core = session.performanceMetrics();
         const ipc::IpcServer::MetricsSnapshot ipcMetrics = server.metrics();
         const std::shared_ptr<const simulation::SimulationPlan> plan = session.simulationPlan();
+        const python::PythonRuntimeMetrics& pythonMetrics = session.pythonRuntime().metrics();
+        const python::PythonEnvironmentDiagnostics& pythonEnvironment = session.pythonRuntime().environment();
+        const char* pythonHealth = session.pythonRuntime().health() == python::PythonWorkerHealth::Ready ? "ready"
+            : session.pythonRuntime().health() == python::PythonWorkerHealth::Faulted ? "faulted" : "stopped";
         resp.ok = true;
         resp.payloadJson = nlohmann::json{
             {"enabled", core.enabled}, {"simulatedNanoseconds", core.simulatedNanoseconds},
@@ -1608,6 +1612,7 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
                 {"reactiveComponents", plan->execution->reactiveComponents.size()},
                 {"fpgaComponents", plan->execution->fpgaComponents.size()},
                 {"mcuComponents", plan->execution->mcuComponents.size()},
+                {"pythonBlocks", plan->python ? plan->python->blocks.size() : 0},
                 {"electricalGroups", plan->electrical->groups.size()},
                 {"electricalNodes", plan->electrical->listenersByNode.size()}}
                 : nlohmann::json(nullptr)},
@@ -1618,6 +1623,17 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
                 {"maxBuildJobs", session.resourceGovernor().budget().maxBuildJobs},
                 {"telemetryQueueBytes", session.resourceGovernor().budget().telemetryQueueBytes},
                 {"commandQueueCapacity", session.resourceGovernor().budget().commandQueueCapacity}}},
+            {"python", nlohmann::json{
+                {"health", pythonHealth}, {"workerRunning", session.pythonRuntime().workerRunning()},
+                {"workerProcessId", session.pythonRuntime().workerProcessId()},
+                {"fault", session.pythonRuntime().faultMessage()},
+                {"workerStarts", pythonMetrics.workerStarts}, {"batches", pythonMetrics.batches},
+                {"steps", pythonMetrics.steps}, {"requestBytes", pythonMetrics.requestBytes},
+                {"responseBytes", pythonMetrics.responseBytes}, {"timeouts", pythonMetrics.timeouts},
+                {"crashes", pythonMetrics.crashes}, {"restarts", pythonMetrics.restarts},
+                {"environment", nlohmann::json{{"implementation", pythonEnvironment.implementation},
+                    {"version", pythonEnvironment.version}, {"executable", pythonEnvironment.executable},
+                    {"platform", pythonEnvironment.platform}, {"dependencies", pythonEnvironment.dependencies}}}}},
             {"ipc", nlohmann::json{{"requests", ipcMetrics.requests}, {"notifications", ipcMetrics.notifications},
                                    {"receivedBytes", ipcMetrics.receivedBytes}, {"sentBytes", ipcMetrics.sentBytes},
                                    {"parseNanoseconds", ipcMetrics.parseNanoseconds},

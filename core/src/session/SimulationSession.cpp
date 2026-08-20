@@ -178,6 +178,7 @@ SimulationSession::SimulationSession(plugins::GlobalPluginCache& globalCache, si
     : m_globalCache(globalCache), m_resourceGovernor(std::move(resourceGovernor)),
       m_pluginRuntime(globalCache), m_mnaSolver(m_resourceGovernor),
       m_scheduler(componentCapacity, [this] { return settleStep(); }),
+      m_pythonRuntime(m_resourceGovernor.budget()),
       m_commandQueue(m_resourceGovernor.budget().commandQueueCapacity) {
     m_scheduler.setBeforeExecutionCallback([this] {
         if (!publishSimulationPlan()) {
@@ -334,6 +335,10 @@ bool SimulationSession::publishSimulationPlan() {
     input.resolvedSignalSubscribers = m_runtimeState.resolvedSignalSubscribers;
     input.signalGraph = &m_signalGraphDefinition;
     input.electricalSignalBridges = m_electricalSignalBridgeDefinitions;
+    input.pythonBlocks.reserve(m_pythonBlockDefinitions.size());
+    for (const auto& block : m_pythonBlockDefinitions) {
+        input.pythonBlocks.push_back({block.blockId, block.source, block.rateGroupId, block.dependencies});
+    }
 
     // Staging: nenhuma referência publicada muda antes de compile() concluir integralmente.
     std::shared_ptr<const simulation::SimulationPlan> staged = simulation::PlanCompiler::compile(input);
@@ -429,6 +434,51 @@ void SimulationSession::setElectricalSignalBridges(
     });
 }
 
+void SimulationSession::setPythonBlocks(std::vector<python::PythonBlockDefinition> definitions) {
+    runViaCommandQueue([definitions = std::move(definitions)](SimulationSession& self) mutable {
+        if (self.m_scheduler.isRunning())
+            throw std::runtime_error("setPythonBlocks requer simulacao parada para publicar PythonPlan");
+        // PythonRuntime::configure validates IDs and payload before mutating the session plan.
+        self.m_pythonRuntime.configure(definitions);
+        self.m_pythonBlockDefinitions = std::move(definitions);
+        self.invalidatePlan(simulation::PlanDomain::Python);
+    });
+}
+
+std::vector<python::PythonStepResult> SimulationSession::stepPythonBatch(
+    const std::string& rateGroupId, const std::vector<python::PythonStep>& steps) {
+    return runViaCommandQueue([rateGroupId, steps](SimulationSession& self) {
+        if (!self.publishSimulationPlan() && !self.m_scheduler.isRunning())
+            throw std::runtime_error("falha ao publicar PythonPlan");
+        std::shared_ptr<const simulation::SimulationPlan> plan;
+        {
+            std::lock_guard<std::mutex> lock(self.m_planMutex);
+            plan = self.m_publishedPlan;
+        }
+        if (!plan || !plan->python) throw std::runtime_error("PythonPlan nao publicado");
+        std::vector<std::string> expected;
+        for (const auto& block : plan->python->blocks) {
+            if (block.rateGroupId == rateGroupId) expected.push_back(block.blockId);
+        }
+        if (expected.size() != steps.size())
+            throw std::invalid_argument("STEP_BATCH deve conter exatamente o RateGroup publicado");
+        for (size_t i = 0; i < expected.size(); ++i) {
+            if (steps[i].blockId != expected[i])
+                throw std::invalid_argument("STEP_BATCH fora da ordem deterministica do PythonPlan");
+        }
+        try {
+            return self.m_pythonRuntime.stepBatch(self.m_scheduler.nowNs(), rateGroupId, steps);
+        } catch (...) {
+            self.m_scheduler.pause();
+            throw;
+        }
+    });
+}
+
+void SimulationSession::restartPythonRuntime() {
+    runViaCommandQueue([](SimulationSession& self) { self.m_pythonRuntime.restart(); });
+}
+
 std::shared_ptr<const simulation::SimulationPlan> SimulationSession::simulationPlan() {
     if (!m_scheduler.isRunning()) publishSimulationPlan();
     std::lock_guard<std::mutex> lock(m_planMutex);
@@ -490,6 +540,7 @@ void SimulationSession::resetPerformanceMetrics() {
     m_topologyNanoseconds.store(0, std::memory_order_relaxed);
     m_scheduler.resetMetrics();
     m_runtimeState.signals.resetMetrics();
+    m_pythonRuntime.resetMetrics();
 }
 
 SimulationPerformanceSnapshot SimulationSession::performanceMetrics() const {
@@ -1682,6 +1733,7 @@ void SimulationSession::stopSimulation() {
     for (const uint32_t index : m_fpgaComponentIndices) {
         static_cast<fpga::FpgaComponent*>(m_componentInstances[index].get())->stop();
     }
+    m_pythonRuntime.shutdown();
     m_scheduler.reset();
     m_runtimeState.virtualTimeNs = 0;
     m_runtimeState.signals.reset();

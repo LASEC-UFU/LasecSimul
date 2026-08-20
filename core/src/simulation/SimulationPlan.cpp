@@ -54,6 +54,7 @@ void validateExecution(const DenseExecutionLists& lists, size_t capacity) {
     validateDenseList(lists.mcuComponents, capacity, &lists.activeComponents, "mcuComponents");
     validateDenseList(lists.signalSubscribers, capacity, &lists.activeComponents, "signalSubscribers");
     validateDenseList(lists.plcComponents, capacity, &lists.activeComponents, "plcComponents");
+    validateDenseList(lists.pythonComponents, capacity, &lists.activeComponents, "pythonComponents");
 }
 
 bool isSensorBridge(ElectricalSignalBridgeKind kind) {
@@ -93,6 +94,7 @@ std::string structuralHash(const PlanCompileInput& input) {
     hashList(hash, lists.mcuComponents);
     hashList(hash, lists.signalSubscribers);
     hashList(hash, lists.plcComponents);
+    hashList(hash, lists.pythonComponents);
     hashScalar(hash, input.resolvedSignalSubscribers.size());
     for (const SignalPlan::Subscriber& subscriber : input.resolvedSignalSubscribers) {
         hashScalar(hash, subscriber.componentIndex);
@@ -139,6 +141,14 @@ std::string structuralHash(const PlanCompileInput& input) {
         hashScalar(hash, bridge.kind);
         hashScalar(hash, bridge.componentIndex);
         hashText(hash, bridge.signalBlockId);
+    }
+    hashScalar(hash, input.pythonBlocks.size());
+    for (const PythonBlockPlan& block : input.pythonBlocks) {
+        hashText(hash, block.blockId);
+        hashText(hash, block.source);
+        hashText(hash, block.rateGroupId);
+        hashScalar(hash, block.dependencies.size());
+        for (const std::string& dependency : block.dependencies) hashText(hash, dependency);
     }
 
     if (input.electricalTopology) {
@@ -260,6 +270,21 @@ std::shared_ptr<const SimulationPlan> PlanCompiler::compile(const PlanCompileInp
         next->plc = std::move(plc);
     } else {
         next->plc = input.previous->plc;
+    }
+    if (first || input.invalidation.contains(PlanDomain::Python)) {
+        auto python = std::make_shared<PythonPlan>();
+        python->revision = input.authoringRevision;
+        std::unordered_set<std::string> ids;
+        for (const PythonBlockPlan& block : input.pythonBlocks) {
+            if (block.blockId.empty() || block.source.empty() || block.rateGroupId.empty())
+                throw std::invalid_argument("PythonPlan exige blockId/source/rateGroupId nao vazios");
+            if (!ids.insert(block.blockId).second)
+                throw std::invalid_argument("PythonPlan contem blockId duplicado: " + block.blockId);
+            python->blocks.push_back(block);
+        }
+        next->python = std::move(python);
+    } else {
+        next->python = input.previous->python;
     }
     return next;
 }

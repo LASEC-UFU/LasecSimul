@@ -61,6 +61,9 @@ ResourceBudget ResourceGovernor::makeBudget(ResourceProfile profile, size_t logi
     budget.logBytes = shared ? mib(4) : mib(16);
     budget.cacheBytes = shared ? mib(512) : gib(2);
     budget.commandQueueCapacity = shared ? 256 : 1024;
+    budget.pythonMemoryBytes = shared ? mib(128) : mib(512);
+    budget.pythonPayloadBytes = shared ? mib(1) : mib(8);
+    budget.pythonStepTimeoutMs = shared ? 250 : 1000;
     return budget;
 }
 
@@ -76,6 +79,10 @@ void ResourceGovernor::validate(const ResourceBudget& budget) {
     }
     if (budget.telemetryQueueBytes == 0 || budget.commandQueueCapacity == 0) {
         throw std::invalid_argument("filas devem declarar capacidade positiva");
+    }
+    if (budget.maxExternalProcesses > 0 &&
+        (budget.pythonMemoryBytes == 0 || budget.pythonPayloadBytes == 0 || budget.pythonStepTimeoutMs == 0)) {
+        throw std::invalid_argument("runtime Python exige limites positivos de memoria, payload e watchdog");
     }
 }
 

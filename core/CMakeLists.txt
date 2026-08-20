@@ -58,6 +58,7 @@ set(CORE_SOURCES
     src/main.cpp
     src/app/CoreApplication.cpp
     src/resources/ResourceGovernor.cpp
+    src/python/PythonRuntime.cpp
     src/registry/SubcircuitRegistry.cpp
     src/ipc/NotificationQueue.cpp
     src/ipc/IpcServer.cpp
@@ -126,6 +127,7 @@ add_test(NAME resource_worker_pool COMMAND resource_worker_pool_test)
 set(TEST_COMMON_SOURCE_FILES
     src/app/CoreApplication.cpp
     src/resources/ResourceGovernor.cpp
+    src/python/PythonRuntime.cpp
     src/registry/SubcircuitRegistry.cpp
     src/ipc/NotificationQueue.cpp
     src/ipc/IpcServer.cpp
@@ -199,6 +201,37 @@ add_executable(signal_dynamics_test
 )
 target_include_directories(signal_dynamics_test PRIVATE include src)
 add_test(NAME signal_dynamics COMMAND signal_dynamics_test)
+
+find_package(Python3 COMPONENTS Interpreter QUIET)
+add_executable(python_runtime_test
+    test/core/python/PythonRuntimeTest.cpp
+    src/python/PythonRuntime.cpp
+    src/resources/ResourceGovernor.cpp
+)
+target_include_directories(python_runtime_test PRIVATE include src)
+target_link_libraries(python_runtime_test PRIVATE nlohmann_json::nlohmann_json)
+if(Python3_Interpreter_FOUND)
+    target_compile_definitions(python_runtime_test PRIVATE
+        LASECSIMUL_TEST_PYTHON_EXECUTABLE="${Python3_EXECUTABLE}"
+    )
+endif()
+add_test(NAME python_runtime COMMAND python_runtime_test)
+set_tests_properties(python_runtime PROPERTIES TIMEOUT 30 SKIP_REGULAR_EXPRESSION "PULADO:")
+
+add_executable(python_session_test
+    test/core/python/PythonSessionTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(python_session_test PRIVATE include src)
+target_link_libraries(python_session_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+if(NOT WIN32)
+    target_link_libraries(python_session_test PRIVATE dl)
+endif()
+add_test(NAME python_session COMMAND python_session_test)
+set_tests_properties(python_session PROPERTIES TIMEOUT 30 SKIP_REGULAR_EXPRESSION "PULADO:")
+if(Python3_Interpreter_FOUND)
+    set_tests_properties(python_session PROPERTIES ENVIRONMENT "LASECSIMUL_PYTHON=${Python3_EXECUTABLE}")
+endif()
 
 add_executable(signal_bridge_test
     test/core/simulation/SignalBridgeTest.cpp
@@ -988,6 +1021,7 @@ add_executable(session_restart_stress_test
     src/simulation/SimulationPlan.cpp
     src/session/SimulationSession.cpp
     src/resources/ResourceGovernor.cpp
+    src/python/PythonRuntime.cpp
     src/session/PauseExpression.cpp
     src/plugins/PluginModule.cpp
     src/plugins/PluginLoader.cpp
@@ -1260,6 +1294,9 @@ set(LASECSIMUL_EXTERNAL_QEMU_TESTS
     mcu_multiple_controllers_real_qemu mcu_blink_long_run mcu_firmware_lasecplot
     mcu_scheduler_pacing_sync_real_qemu mcu_scheduler_pacing_sync_real_qemu_mttcg
 )
+set(LASECSIMUL_EXTERNAL_PYTHON_TESTS
+    python_runtime python_session
+)
 set_tests_properties(${LASECSIMUL_HERMETIC_TESTS} PROPERTIES
     LABELS "hermetic"
     SKIP_REGULAR_EXPRESSION "PULADO:"
@@ -1270,5 +1307,9 @@ set_tests_properties(${LASECSIMUL_EXTERNAL_GHDL_TESTS} PROPERTIES
 )
 set_tests_properties(${LASECSIMUL_EXTERNAL_QEMU_TESTS} PROPERTIES
     LABELS "external-qemu"
+    SKIP_REGULAR_EXPRESSION "PULADO:"
+)
+set_tests_properties(${LASECSIMUL_EXTERNAL_PYTHON_TESTS} PROPERTIES
+    LABELS "external-python"
     SKIP_REGULAR_EXPRESSION "PULADO:"
 )

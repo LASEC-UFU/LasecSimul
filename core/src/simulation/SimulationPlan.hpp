@@ -18,8 +18,9 @@ enum class PlanDomain : uint32_t {
     Signal = 1u << 1,
     External = 1u << 2,
     Plc = 1u << 3,
-    ExecutionIndex = 1u << 4,
-    All = (1u << 5) - 1u,
+    Python = 1u << 4,
+    ExecutionIndex = 1u << 5,
+    All = (1u << 6) - 1u,
 };
 
 constexpr PlanDomain operator|(PlanDomain left, PlanDomain right) {
@@ -57,6 +58,7 @@ struct DenseExecutionLists {
     std::vector<uint32_t> mcuComponents;
     std::vector<uint32_t> signalSubscribers;
     std::vector<uint32_t> plcComponents;
+    std::vector<uint32_t> pythonComponents;
 };
 
 struct ElectricalGroupPlan {
@@ -121,6 +123,18 @@ struct PlcPlan {
     std::vector<uint32_t> instances;
 };
 
+struct PythonBlockPlan {
+    std::string blockId;
+    std::string source;
+    std::string rateGroupId;
+    std::vector<std::string> dependencies;
+};
+
+struct PythonPlan {
+    uint64_t revision = 0;
+    std::vector<PythonBlockPlan> blocks;
+};
+
 struct SimulationPlan {
     uint64_t generation = 0;
     uint64_t authoringRevision = 0;
@@ -130,6 +144,7 @@ struct SimulationPlan {
     std::shared_ptr<const SignalPlan> signal;
     std::shared_ptr<const ExternalBindingPlan> externalBindings;
     std::shared_ptr<const PlcPlan> plc;
+    std::shared_ptr<const PythonPlan> python;
 };
 
 struct PlanCompileInput {
@@ -143,6 +158,7 @@ struct PlanCompileInput {
     std::vector<SignalPlan::Subscriber> resolvedSignalSubscribers;
     const SignalGraphDefinition* signalGraph = nullptr;
     std::vector<ElectricalSignalBridgeDefinition> electricalSignalBridges;
+    std::vector<PythonBlockPlan> pythonBlocks;
     PlanInvalidation invalidation{PlanDomain::All};
     std::shared_ptr<const SimulationPlan> previous;
 };
