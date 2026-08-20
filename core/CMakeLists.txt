@@ -228,6 +228,32 @@ if(NOT WIN32)
     target_link_libraries(python_session_test PRIVATE dl)
 endif()
 add_test(NAME python_session COMMAND python_session_test)
+
+# F9.2 (PLC IEC 61131-3): contrato de scan do PlcScanSession contra o fixture `hello` (ST->C++ ja
+# compilado pelo STruCpp vendorizado e commitado como snapshot -- ver
+# core/test/core/plc/fixtures/hello.generated.{cpp,hpp} -- nao chama strucpp.exe em tempo de teste,
+# so linka contra codigo C++ ja gerado; nenhuma dependencia externa em tempo de execucao, por isso
+# hermetic e nao external-* como os workers Python/GHDL). Runtime da STruCpp vendorizada
+# (core/src/plc/runtime/include/) precisa do proprio diretorio de include.
+add_executable(plc_scan_session_test
+    test/core/plc/PlcScanSessionTest.cpp
+    test/core/plc/fixtures/hello.generated.cpp
+    src/plc/PlcScanSession.cpp
+)
+target_include_directories(plc_scan_session_test PRIVATE include src src/plc/runtime/include)
+add_test(NAME plc_scan_session COMMAND plc_scan_session_test)
+
+# Driver standalone (processo real, stdin/stdout) pro fixture `hello` -- prova que o mesmo
+# PlcScanSession funciona como processo isolado de verdade, nao so linkado direto no teste acima.
+# Hand-wired pra este PROGRAM especifico nesta rodada; F9.3 (PlcCompiler) gera este arquivo por
+# projeto. Sem add_test aqui -- spawnar/falar o protocolo via pipe real e responsabilidade do
+# PlcRuntime (F9.4), que ja vai precisar dessa infraestrutura de qualquer forma; nao duplicar agora.
+add_executable(plc_worker_driver_hello
+    src/plc/PlcWorkerDriverHello.cpp
+    test/core/plc/fixtures/hello.generated.cpp
+    src/plc/PlcScanSession.cpp
+)
+target_include_directories(plc_worker_driver_hello PRIVATE include src src/plc/runtime/include test/core/plc)
 set_tests_properties(python_session PROPERTIES TIMEOUT 30 SKIP_REGULAR_EXPRESSION "PULADO:")
 if(Python3_Interpreter_FOUND)
     set_tests_properties(python_session PROPERTIES ENVIRONMENT "LASECSIMUL_PYTHON=${Python3_EXECUTABLE}")
@@ -1284,6 +1310,7 @@ set(LASECSIMUL_HERMETIC_TESTS
     firmware_watcher esp32_adapter esp32_devkitc_subcircuit bus command_queue_session logic_gate_plugin
     logic_family_extension mcu_component mcu_usart_monitor mcu_uart_to_lasecplot
     mcu_component_live_poll_thread mcu_scheduler_pacing_sync pin_change_dispatch plugin_watchdog
+    plc_scan_session
 )
 set(LASECSIMUL_EXTERNAL_GHDL_TESTS
     ghdl_lockstep_real_ghdl ghdl_backend_real_ghdl fpga_component_real_ghdl
