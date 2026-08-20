@@ -54,6 +54,7 @@ set(CORE_SOURCES
     src/main.cpp
     src/app/CoreApplication.cpp
     src/resources/ResourceGovernor.cpp
+    src/ipc/NotificationQueue.cpp
     src/ipc/IpcServer.cpp
     src/plugins/PluginModule.cpp
     src/plugins/PluginLoader.cpp
@@ -118,6 +119,7 @@ add_test(NAME resource_worker_pool COMMAND resource_worker_pool_test)
 set(TEST_COMMON_SOURCE_FILES
     src/app/CoreApplication.cpp
     src/resources/ResourceGovernor.cpp
+    src/ipc/NotificationQueue.cpp
     src/ipc/IpcServer.cpp
     src/plugins/PluginModule.cpp
     src/plugins/PluginLoader.cpp

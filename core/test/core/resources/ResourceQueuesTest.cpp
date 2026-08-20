@@ -3,6 +3,7 @@
 
 #include "app/CoreApplication.hpp"
 #include "ipc/IpcServer.hpp"
+#include "ipc/NotificationQueue.hpp"
 #include "plugins/GlobalPluginCache.hpp"
 #include "resources/ResourceGovernor.hpp"
 #include "session/SimulationSession.hpp"
@@ -65,6 +66,41 @@ void notificationQueueIsByteBoundedAndLazy() {
     CHECK(server.metrics().notificationWorkerStarted, "primeira notificacao aceita cria worker lazy");
 }
 
+void notificationLanesPrioritizeControlAndCoalesceTelemetry() {
+    ipc::NotificationQueue queue(64);
+    CHECK(queue.pushTelemetry("visual", "frame-1"), "primeiro frame entra na lane lossy");
+    CHECK(queue.pushTelemetry("visual", "frame-2-latest"), "frame novo substitui stream pendente");
+    CHECK(queue.pushTelemetry("scope", "scope-frame"), "streams diferentes permanecem separados");
+    CHECK(queue.pushControl("control-1"), "controle entra mesmo com telemetria pendente");
+    CHECK(queue.pushControl("control-2"), "controle preserva FIFO proprio");
+
+    const auto first = queue.waitPop();
+    const auto second = queue.waitPop();
+    const auto third = queue.waitPop();
+    CHECK(first && first->lane == ipc::NotificationLane::ReliableControl && first->serialized == "control-1",
+          "controle tem prioridade sobre telemetria");
+    CHECK(second && second->serialized == "control-2", "controle mantem ordem FIFO");
+    CHECK(third && third->key == "visual" && third->serialized == "frame-2-latest",
+          "latest-wins preserva somente o frame novo");
+
+    const auto metrics = queue.metrics();
+    CHECK(metrics.coalescedTelemetryFrames == 1, "coalescencia fica observavel");
+    CHECK(metrics.droppedTelemetryFrames == 1, "frame substituido conta como drop");
+    CHECK(metrics.maxDepth <= 4 && metrics.bytes <= queue.capacityBytes(), "profundidade e bytes sao limitados");
+    queue.stop();
+}
+
+void telemetryCannotStarveControl() {
+    ipc::NotificationQueue queue(16);
+    CHECK(queue.pushTelemetry("visual", std::string(14, 't')), "telemetria ocupa quase todo budget");
+    CHECK(queue.pushControl(std::string(12, 'c')), "controle expulsa telemetria para ser aceito");
+    const auto metrics = queue.metrics();
+    CHECK(metrics.controlDepth == 1 && metrics.telemetryDepth == 0, "lane confiavel sobrevive a saturacao lossy");
+    CHECK(metrics.droppedTelemetryFrames == 1 && metrics.rejectedControlNotifications == 0,
+          "expulsao e observavel e controle nao e descartado");
+    queue.stop();
+}
+
 void coreProfileIsSelectable() {
     char executable[] = "lasecsimul-core";
     char pipeFlag[] = "--pipe";
@@ -84,6 +120,8 @@ int main() {
     commandQueueRejectsOverflowExplicitly();
     emptySessionHasNoSolverWorkers();
     notificationQueueIsByteBoundedAndLazy();
+    notificationLanesPrioritizeControlAndCoalesceTelemetry();
+    telemetryCannotStarveControl();
     coreProfileIsSelectable();
     if (failures == 0) std::printf("ResourceGovernor queues: OK\n");
     return failures == 0 ? 0 : 1;

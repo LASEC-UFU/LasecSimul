@@ -3,9 +3,8 @@
 #include <functional>
 #include <string>
 #include <mutex>
-#include <condition_variable>
-#include <deque>
 #include <thread>
+#include "NotificationQueue.hpp"
 #include "Protocol.hpp"
 
 namespace lasecsimul::ipc {
@@ -37,6 +36,13 @@ public:
         uint64_t maxNotificationQueueDepth = 0;
         uint64_t notificationQueueBytes = 0;
         uint64_t rejectedNotifications = 0;
+        uint64_t controlQueueDepth = 0;
+        uint64_t telemetryQueueDepth = 0;
+        uint64_t coalescedTelemetryFrames = 0;
+        uint64_t coalescedTelemetryBytes = 0;
+        uint64_t droppedTelemetryFrames = 0;
+        uint64_t droppedTelemetryBytes = 0;
+        uint64_t rejectedControlNotifications = 0;
         bool notificationWorkerStarted = false;
     };
     explicit IpcServer(std::string pipeName, uint64_t notificationQueueCapacityBytes = 8ull * 1024 * 1024);
@@ -57,7 +63,12 @@ public:
 
     /** Sinaliza encerramento limpo. Deve ser chamado dentro do MessageHandler. */
     void shutdown();
+    /** Notificacao essencial: FIFO e prioritaria. Telemetria pendente pode ser expulsa para
+     * garantir espaco; uma rejeicao so ocorre se a propria lane de controle consumir o budget. */
     bool sendNotification(const std::string& type, const std::string& payloadJson);
+    /** Snapshot substituivel. Apenas o frame mais recente de cada streamKey fica pendente. */
+    bool sendTelemetryNotification(const std::string& streamKey, const std::string& type,
+                                   const std::string& payloadJson);
     void setProfilingEnabled(bool enabled) { m_profilingEnabled.store(enabled, std::memory_order_relaxed); }
     void resetMetrics();
     MetricsSnapshot metrics() const;
@@ -71,12 +82,8 @@ private:
     // último '\n' de um bloco fica aqui até o próximo readLine() completar a linha.
     std::string m_readBuffer;
     std::mutex m_sendMutex;
-    std::mutex m_notificationMutex;
-    std::condition_variable m_notificationWake;
-    std::deque<std::string> m_notificationQueue;
-    const uint64_t m_notificationQueueCapacityBytes;
-    uint64_t m_notificationQueuedBytes = 0;
-    bool m_notificationStop = false;
+    std::mutex m_notificationThreadMutex;
+    NotificationQueue m_notificationQueue;
     std::thread m_notificationThread;
     std::atomic<bool> m_profilingEnabled{false};
     std::atomic<uint64_t> m_requests{0};
@@ -86,9 +93,6 @@ private:
     std::atomic<uint64_t> m_parseNanoseconds{0};
     std::atomic<uint64_t> m_handlerNanoseconds{0};
     std::atomic<uint64_t> m_serializationNanoseconds{0};
-    std::atomic<uint64_t> m_notificationQueueDepth{0};
-    std::atomic<uint64_t> m_maxNotificationQueueDepth{0};
-    std::atomic<uint64_t> m_notificationQueueBytes{0};
     std::atomic<uint64_t> m_rejectedNotifications{0};
     std::atomic<bool> m_notificationWorkerStarted{false};
 
@@ -104,6 +108,7 @@ private:
     bool acceptClient();
     void processLoop();
     bool sendLine(const std::string& line);
+    bool ensureNotificationWorker();
     void notificationLoop();
     std::string readLine(bool& eof);
 

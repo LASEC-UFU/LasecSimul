@@ -21,18 +21,10 @@ namespace lasecsimul::ipc {
 
 IpcServer::IpcServer(std::string pipeName, uint64_t notificationQueueCapacityBytes)
     : m_pipeName(std::move(pipeName)),
-      m_notificationQueueCapacityBytes(notificationQueueCapacityBytes) {
-    if (notificationQueueCapacityBytes == 0) {
-        throw std::invalid_argument("fila de notificacoes exige capacidade positiva");
-    }
-}
+      m_notificationQueue(notificationQueueCapacityBytes) {}
 
 IpcServer::~IpcServer() {
-    {
-        std::lock_guard<std::mutex> lock(m_notificationMutex);
-        m_notificationStop = true;
-    }
-    m_notificationWake.notify_one();
+    m_notificationQueue.stop();
     if (m_notificationThread.joinable()) m_notificationThread.join();
 #ifdef _WIN32
     if (m_pipe && m_pipe != INVALID_HANDLE_VALUE) {
@@ -70,21 +62,22 @@ void IpcServer::resetMetrics() {
     m_parseNanoseconds.store(0, std::memory_order_relaxed);
     m_handlerNanoseconds.store(0, std::memory_order_relaxed);
     m_serializationNanoseconds.store(0, std::memory_order_relaxed);
-    m_maxNotificationQueueDepth.store(m_notificationQueueDepth.load(std::memory_order_relaxed),
-                                      std::memory_order_relaxed);
+    m_notificationQueue.resetMetrics();
     m_rejectedNotifications.store(0, std::memory_order_relaxed);
 }
 
 IpcServer::MetricsSnapshot IpcServer::metrics() const {
+    const NotificationQueue::Metrics queue = m_notificationQueue.metrics();
     return {m_profilingEnabled.load(std::memory_order_relaxed), m_requests.load(std::memory_order_relaxed),
             m_notifications.load(std::memory_order_relaxed), m_receivedBytes.load(std::memory_order_relaxed),
             m_sentBytes.load(std::memory_order_relaxed), m_parseNanoseconds.load(std::memory_order_relaxed),
             m_handlerNanoseconds.load(std::memory_order_relaxed),
             m_serializationNanoseconds.load(std::memory_order_relaxed),
-            m_notificationQueueDepth.load(std::memory_order_relaxed),
-            m_maxNotificationQueueDepth.load(std::memory_order_relaxed),
-            m_notificationQueueBytes.load(std::memory_order_relaxed),
+            queue.depth, queue.maxDepth, queue.bytes,
             m_rejectedNotifications.load(std::memory_order_relaxed),
+            queue.controlDepth, queue.telemetryDepth, queue.coalescedTelemetryFrames,
+            queue.coalescedTelemetryBytes, queue.droppedTelemetryFrames, queue.droppedTelemetryBytes,
+            queue.rejectedControlNotifications,
             m_notificationWorkerStarted.load(std::memory_order_acquire)};
 }
 
@@ -92,57 +85,49 @@ bool IpcServer::sendNotification(const std::string& type, const std::string& pay
     nlohmann::json message{{"type", type}};
     message["payload"] = payloadJson.empty() ? nlohmann::json::object() : nlohmann::json::parse(payloadJson);
     std::string serialized = message.dump();
-    {
-        std::lock_guard<std::mutex> lock(m_notificationMutex);
-        if (m_notificationStop) return false;
-        const uint64_t availableBytes = m_notificationQueuedBytes >= m_notificationQueueCapacityBytes
-                                            ? 0
-                                            : m_notificationQueueCapacityBytes - m_notificationQueuedBytes;
-        if (serialized.size() > availableBytes) {
-            m_rejectedNotifications.fetch_add(1, std::memory_order_relaxed);
-            return false;
-        }
-        m_notificationQueuedBytes += serialized.size();
-        m_notificationQueueBytes.store(m_notificationQueuedBytes, std::memory_order_relaxed);
-        m_notificationQueue.push_back(std::move(serialized));
-        m_notificationQueueDepth.store(m_notificationQueue.size(), std::memory_order_relaxed);
-        uint64_t maximum = m_maxNotificationQueueDepth.load(std::memory_order_relaxed);
-        while (m_notificationQueue.size() > maximum &&
-               !m_maxNotificationQueueDepth.compare_exchange_weak(
-                   maximum, m_notificationQueue.size(), std::memory_order_relaxed)) {}
-        if (!m_notificationThread.joinable()) {
-            try {
-                m_notificationThread = std::thread([this] { notificationLoop(); });
-                m_notificationWorkerStarted.store(true, std::memory_order_release);
-            } catch (...) {
-                m_notificationQueuedBytes -= m_notificationQueue.back().size();
-                m_notificationQueue.pop_back();
-                m_notificationQueueBytes.store(m_notificationQueuedBytes, std::memory_order_relaxed);
-                m_notificationQueueDepth.store(m_notificationQueue.size(), std::memory_order_relaxed);
-                m_rejectedNotifications.fetch_add(1, std::memory_order_relaxed);
-                return false;
-            }
-        }
+    if (!m_notificationQueue.pushControl(std::move(serialized))) {
+        m_rejectedNotifications.fetch_add(1, std::memory_order_relaxed);
+        return false;
     }
+    if (!ensureNotificationWorker()) return false;
     if (m_profilingEnabled.load(std::memory_order_relaxed))
         m_notifications.fetch_add(1, std::memory_order_relaxed);
-    m_notificationWake.notify_one();
     return true;
+}
+
+bool IpcServer::sendTelemetryNotification(const std::string& streamKey, const std::string& type,
+                                          const std::string& payloadJson) {
+    nlohmann::json message{{"type", type}};
+    message["payload"] = payloadJson.empty() ? nlohmann::json::object() : nlohmann::json::parse(payloadJson);
+    if (!m_notificationQueue.pushTelemetry(streamKey, message.dump())) {
+        m_rejectedNotifications.fetch_add(1, std::memory_order_relaxed);
+        return false;
+    }
+    if (!ensureNotificationWorker()) return false;
+    if (m_profilingEnabled.load(std::memory_order_relaxed))
+        m_notifications.fetch_add(1, std::memory_order_relaxed);
+    return true;
+}
+
+bool IpcServer::ensureNotificationWorker() {
+    std::lock_guard<std::mutex> lock(m_notificationThreadMutex);
+    if (m_notificationThread.joinable()) return true;
+    try {
+        m_notificationThread = std::thread([this] { notificationLoop(); });
+        m_notificationWorkerStarted.store(true, std::memory_order_release);
+        return true;
+    } catch (...) {
+        m_notificationQueue.stop();
+        m_rejectedNotifications.fetch_add(1, std::memory_order_relaxed);
+        return false;
+    }
 }
 
 void IpcServer::notificationLoop() {
     for (;;) {
-        std::string message;
-        {
-            std::unique_lock<std::mutex> lock(m_notificationMutex);
-            m_notificationWake.wait(lock, [this] { return m_notificationStop || !m_notificationQueue.empty(); });
-            if (m_notificationStop && m_notificationQueue.empty()) return;
-            message = std::move(m_notificationQueue.front());
-            m_notificationQueue.pop_front();
-            m_notificationQueuedBytes -= message.size();
-            m_notificationQueueBytes.store(m_notificationQueuedBytes, std::memory_order_relaxed);
-            m_notificationQueueDepth.store(m_notificationQueue.size(), std::memory_order_relaxed);
-        }
+        std::optional<QueuedNotification> queued = m_notificationQueue.waitPop();
+        if (!queued) return;
+        const std::string& message = queued->serialized;
         if (m_profilingEnabled.load(std::memory_order_relaxed))
             m_sentBytes.fetch_add(message.size() + 1, std::memory_order_relaxed);
         (void)sendLine(message);
