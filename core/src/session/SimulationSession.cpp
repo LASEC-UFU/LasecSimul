@@ -697,7 +697,7 @@ void SimulationSession::setPauseCondition(const std::string& ownerId, const std:
 void SimulationSession::onStableStepUnlocked(uint64_t timestampNs) {
     m_runtimeState.virtualTimeNs = timestampNs;
     publishSnapshot();
-    publishTelemetrySnapshotIfRequested();
+    publishTelemetrySnapshotIfRequested(timestampNs);
     acquireSubscribedSignalsUnlocked(timestampNs);
     for (auto& [ownerId, condition] : m_pauseConditions) try {
         PauseEvaluation evaluation = condition.expression.evaluate([this, &condition](PauseSignalMode mode, const std::string& reference) -> PauseScalar {
@@ -760,7 +760,7 @@ std::vector<std::vector<uint8_t>> SimulationSession::captureComponentTelemetrySt
     return states;
 }
 
-void SimulationSession::publishTelemetrySnapshotIfRequested() {
+void SimulationSession::publishTelemetrySnapshotIfRequested(uint64_t timestampNs) {
     std::vector<uint32_t> subscriptions;
     uint64_t requestedGeneration = 0;
     {
@@ -769,14 +769,24 @@ void SimulationSession::publishTelemetrySnapshotIfRequested() {
         requestedGeneration = m_telemetryRequestedGeneration;
         subscriptions.assign(m_telemetrySubscriptions.begin(), m_telemetrySubscriptions.end());
     }
+    std::sort(subscriptions.begin(), subscriptions.end());
 
-    auto snapshot = std::make_shared<ComponentTelemetrySnapshot>(m_componentInstances.size());
+    auto snapshot = std::make_shared<ComponentTelemetrySnapshot>();
+    snapshot->planGeneration = m_runtimeState.planGeneration;
+    snapshot->telemetryGeneration = m_telemetryFrameGeneration.fetch_add(1, std::memory_order_relaxed) + 1;
+    snapshot->timestampNs = timestampNs;
+    snapshot->nodeVoltages = currentSnapshot();
+    snapshot->states.resize(m_componentInstances.size());
+    const uint64_t rawFrameLimit = m_resourceGovernor.budget().telemetryQueueBytes / 2;
+    uint64_t capturedBytes = 0;
     for (uint32_t componentIndex : subscriptions) {
         if (componentIndex >= m_componentInstances.size() || !m_componentInstances[componentIndex]) continue;
         try {
             std::vector<std::vector<uint8_t>> captured =
                 captureComponentTelemetryStatesUnlocked({componentIndex});
-            (*snapshot)[componentIndex] = std::move(captured.front());
+            if (captured.front().size() > rawFrameLimit - std::min(rawFrameLimit, capturedBytes)) continue;
+            capturedBytes += captured.front().size();
+            snapshot->states[componentIndex] = std::move(captured.front());
         } catch (const std::exception&) {
             // Um plugin defeituoso nao pode interromper a worker nem impedir os demais estados.
         }
@@ -1348,11 +1358,57 @@ std::vector<std::vector<uint8_t>> SimulationSession::getComponentTelemetryStates
     std::vector<std::vector<uint8_t>> states;
     states.reserve(componentIndices.size());
     for (uint32_t componentIndex : componentIndices) {
-        if (!snapshot || componentIndex >= snapshot->size() || !(*snapshot)[componentIndex])
+        if (!snapshot || componentIndex >= snapshot->states.size() || !snapshot->states[componentIndex])
             throw std::runtime_error("telemetria ainda nao publicada; tente novamente");
-        states.push_back(*(*snapshot)[componentIndex]);
+        states.push_back(*snapshot->states[componentIndex]);
     }
     return states;
+}
+
+TelemetryFrameSnapshot SimulationSession::getTelemetryFrameSnapshot(
+    const std::vector<uint32_t>& componentIndices) const {
+    if (!m_scheduler.isRunning()) {
+        TelemetryFrameSnapshot frame;
+        frame.planGeneration = m_runtimeState.planGeneration;
+        frame.telemetryGeneration = m_telemetryFrameGeneration.fetch_add(1, std::memory_order_relaxed) + 1;
+        frame.timestampNs = m_scheduler.nowNs();
+        frame.nodeVoltages = currentSnapshot();
+        const uint64_t rawFrameLimit = m_resourceGovernor.budget().telemetryQueueBytes / 2;
+        uint64_t capturedBytes = 0;
+        frame.componentStates.reserve(componentIndices.size());
+        for (uint32_t componentIndex : componentIndices) {
+            std::vector<std::vector<uint8_t>> captured =
+                captureComponentTelemetryStatesUnlocked({componentIndex});
+            if (captured.front().size() > rawFrameLimit - std::min(rawFrameLimit, capturedBytes))
+                throw std::runtime_error("frame de telemetria excede ResourceBudget");
+            capturedBytes += captured.front().size();
+            frame.componentStates.push_back(std::move(captured.front()));
+        }
+        return frame;
+    }
+
+    std::shared_ptr<const ComponentTelemetrySnapshot> snapshot;
+    {
+        std::lock_guard<std::mutex> lock(m_telemetrySnapshotMutex);
+        m_telemetrySubscriptions.clear();
+        for (uint32_t componentIndex : componentIndices) m_telemetrySubscriptions.insert(componentIndex);
+        ++m_telemetryRequestedGeneration;
+        snapshot = m_publishedTelemetrySnapshot;
+    }
+    if (!snapshot) throw std::runtime_error("telemetria ainda nao publicada; tente novamente");
+
+    TelemetryFrameSnapshot frame;
+    frame.planGeneration = snapshot->planGeneration;
+    frame.telemetryGeneration = snapshot->telemetryGeneration;
+    frame.timestampNs = snapshot->timestampNs;
+    frame.nodeVoltages = snapshot->nodeVoltages;
+    frame.componentStates.reserve(componentIndices.size());
+    for (uint32_t componentIndex : componentIndices) {
+        if (componentIndex >= snapshot->states.size() || !snapshot->states[componentIndex])
+            throw std::runtime_error("telemetria ainda nao publicada; tente novamente");
+        frame.componentStates.push_back(*snapshot->states[componentIndex]);
+    }
+    return frame;
 }
 
 std::vector<double> SimulationSession::nodeVoltagesOfPins(

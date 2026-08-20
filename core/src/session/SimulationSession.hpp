@@ -114,6 +114,16 @@ struct SimulationPerformanceSnapshot {
     size_t solverMaxParallelTasks = 1;
 };
 
+/** Um frame visual coerente, publicado apenas em fronteira de stable step. Estados de componente
+ * e tensoes apontam para a mesma geracao; leitores nunca percorrem objetos mutaveis do runtime. */
+struct TelemetryFrameSnapshot {
+    uint64_t planGeneration = 0;
+    uint64_t telemetryGeneration = 0;
+    uint64_t timestampNs = 0;
+    std::shared_ptr<const NodeVoltageSnapshot> nodeVoltages;
+    std::vector<std::vector<uint8_t>> componentStates;
+};
+
 class SimulationSession; // ver CommandQueue::Command logo abaixo -- só usado por referência aqui
 
 /** Fila de comandos de escrita (fase 2 do redesign de concorrência, ver
@@ -299,6 +309,7 @@ public:
     std::vector<uint8_t> getComponentState(uint32_t componentIndex) const;
     std::vector<uint8_t> getComponentTelemetryState(uint32_t componentIndex) const;
     std::vector<std::vector<uint8_t>> getComponentTelemetryStates(const std::vector<uint32_t>& componentIndices) const;
+    TelemetryFrameSnapshot getTelemetryFrameSnapshot(const std::vector<uint32_t>& componentIndices) const;
     std::vector<double> nodeVoltagesOfPins(
         const std::vector<std::pair<uint32_t, std::string>>& probes) const;
 
@@ -473,7 +484,7 @@ private:
      * `NodeVoltageSnapshot`). Reaproveita `slotToNode`/`pinSlotsByComponent` da publicação anterior
      * quando `m_snapshotTopologyStale` está falso (topologia não mudou desde a última publicação). */
     void publishSnapshot();
-    void publishTelemetrySnapshotIfRequested();
+    void publishTelemetrySnapshotIfRequested(uint64_t timestampNs);
     std::vector<std::vector<uint8_t>> captureComponentTelemetryStatesUnlocked(
         const std::vector<uint32_t>& componentIndices) const;
     void rebuildTopologyIfNeeded();
@@ -616,11 +627,18 @@ private:
     /** Snapshot sob demanda dos blobs usados por `getComponentStates` (LED, displays e demais
      * estados visuais). O mutex e' independente do Scheduler e fica tomado apenas para registrar
      * ids ou trocar o snapshot; a captura real ocorre na worker depois de um stable step. */
-    using ComponentTelemetrySnapshot = std::vector<std::optional<std::vector<uint8_t>>>;
+    struct ComponentTelemetrySnapshot {
+        uint64_t planGeneration = 0;
+        uint64_t telemetryGeneration = 0;
+        uint64_t timestampNs = 0;
+        std::shared_ptr<const NodeVoltageSnapshot> nodeVoltages;
+        std::vector<std::optional<std::vector<uint8_t>>> states;
+    };
     mutable std::mutex m_telemetrySnapshotMutex;
     mutable std::unordered_set<uint32_t> m_telemetrySubscriptions;
     mutable uint64_t m_telemetryRequestedGeneration = 0;
     uint64_t m_telemetryPublishedGeneration = 0;
+    mutable std::atomic<uint64_t> m_telemetryFrameGeneration{0};
     std::shared_ptr<const ComponentTelemetrySnapshot> m_publishedTelemetrySnapshot;
 
     /** Achado 2026-07-23 (McuComponentLivePollThreadTest com 2 MCUs, real, sob a nova

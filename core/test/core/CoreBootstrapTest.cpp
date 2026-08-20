@@ -1140,6 +1140,26 @@ static void testUartAndMcuVerbsOverIpc() {
         TEST_ASSERT(states.value("a", std::string{}).size() == 16 && states.value("b", std::string{}).size() == 16,
                     "getComponentStates devolve 16 hex chars (8 bytes) por instância de capacitor");
 
+        const nlohmann::json frameOk = send("getTelemetryFrame", {
+            {"subscription", {
+                {"items", {{{"key", "cap-a"}, {"instanceId", cap1}},
+                           {{"key", "cap-b"}, {"instanceId", cap2}}}},
+                {"probes", nlohmann::json::array()},
+            }},
+            {"sinceGeneration", 0},
+        });
+        TEST_ASSERT(frameOk.value("ok", false), "getTelemetryFrame agrega um tick visual em um request");
+        const auto& framePayload = frameOk["payload"];
+        TEST_ASSERT(framePayload.value("telemetryGeneration", uint64_t{0}) > 0,
+                    "frame publica geração monotônica explícita");
+        TEST_ASSERT(framePayload.contains("planGeneration") && framePayload.contains("timestampNs"),
+                    "frame inclui geração do plano e timestamp");
+        TEST_ASSERT(framePayload["groups"]["componentStates"].contains("cap-a") &&
+                        framePayload["groups"]["componentStates"].contains("cap-b") &&
+                        framePayload["groups"].contains("nodeVoltages") &&
+                        framePayload["groups"].contains("runtime"),
+                    "frame transporta estados, tensões e runtime em grupos batelados");
+
         // getComponentStates (batelada): uma instância inválida no meio derruba a chamada inteira --
         // comportamento atual documentado explicitamente (sem sucesso parcial por item), não uma
         // suposição -- ver docs/33-plano-revisao-arquitetural-core.md.

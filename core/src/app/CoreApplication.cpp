@@ -1569,6 +1569,13 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
                                    {"maxNotificationQueueDepth", ipcMetrics.maxNotificationQueueDepth},
                                    {"notificationQueueBytes", ipcMetrics.notificationQueueBytes},
                                    {"rejectedNotifications", ipcMetrics.rejectedNotifications},
+                                   {"controlQueueDepth", ipcMetrics.controlQueueDepth},
+                                   {"telemetryQueueDepth", ipcMetrics.telemetryQueueDepth},
+                                   {"coalescedTelemetryFrames", ipcMetrics.coalescedTelemetryFrames},
+                                   {"coalescedTelemetryBytes", ipcMetrics.coalescedTelemetryBytes},
+                                   {"droppedTelemetryFrames", ipcMetrics.droppedTelemetryFrames},
+                                   {"droppedTelemetryBytes", ipcMetrics.droppedTelemetryBytes},
+                                   {"rejectedControlNotifications", ipcMetrics.rejectedControlNotifications},
                                    {"notificationWorkerStarted", ipcMetrics.notificationWorkerStarted}}}
         }.dump();
         return resp;
@@ -1800,6 +1807,74 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
             resp.ok = true; resp.payloadJson = nlohmann::json{{"states", states}}.dump();
         } catch (const std::exception& e) {
             resp.ok = false; resp.error = std::string("getComponentStates falhou: ") + e.what();
+        }
+        return resp;
+    }
+    if (msg.type == "getTelemetryFrame") {
+        try {
+            const nlohmann::json payload = nlohmann::json::parse(msg.payloadJson.empty() ? "{}" : msg.payloadJson);
+            const nlohmann::json& subscription = payload.contains("subscription")
+                ? payload.at("subscription") : payload;
+
+            std::vector<std::string> stateKeys;
+            std::vector<uint32_t> stateIds;
+            if (subscription.contains("items")) {
+                stateKeys.reserve(subscription.at("items").size());
+                stateIds.reserve(subscription.at("items").size());
+                for (const auto& item : subscription.at("items")) {
+                    stateKeys.push_back(item.at("key").get<std::string>());
+                    stateIds.push_back(static_cast<uint32_t>(std::stoul(item.at("instanceId").get<std::string>())));
+                }
+            }
+
+            const TelemetryFrameSnapshot frame = session.getTelemetryFrameSnapshot(stateIds);
+            nlohmann::json states = nlohmann::json::object();
+            static const char digits[] = "0123456789abcdef";
+            for (size_t index = 0; index < frame.componentStates.size(); ++index) {
+                const std::vector<uint8_t>& bytes = frame.componentStates[index];
+                std::string hex;
+                hex.reserve(bytes.size() * 2);
+                for (uint8_t byte : bytes) {
+                    hex.push_back(digits[byte >> 4]);
+                    hex.push_back(digits[byte & 15]);
+                }
+                states[stateKeys[index]] = std::move(hex);
+            }
+
+            nlohmann::json voltages = nlohmann::json::object();
+            nlohmann::json missingProbes = nlohmann::json::array();
+            if (subscription.contains("probes") && !subscription.at("probes").empty()) {
+                if (!frame.nodeVoltages) throw std::runtime_error("topologia ainda nao resolvida");
+                for (const auto& probe : subscription.at("probes")) {
+                    const std::string key = probe.at("key").get<std::string>();
+                    const uint32_t instanceId =
+                        static_cast<uint32_t>(std::stoul(probe.at("instanceId").get<std::string>()));
+                    const std::string pinId = probe.at("pinId").get<std::string>();
+                    const auto voltage = resolveNodeVoltage(*frame.nodeVoltages, instanceId, pinId);
+                    if (voltage) voltages[key] = *voltage;
+                    else missingProbes.push_back(key);
+                }
+            }
+
+            nlohmann::json runtime{{"simulatedNs", frame.timestampNs}};
+            if (const auto mcuVirtualNs = session.firstMcuVirtualTimeNs()) runtime["mcuVirtualNs"] = *mcuVirtualNs;
+            const uint64_t sinceGeneration = payload.value("sinceGeneration", uint64_t{0});
+            const std::string encodedFrame = nlohmann::json{
+                {"planGeneration", frame.planGeneration},
+                {"telemetryGeneration", frame.telemetryGeneration},
+                {"timestampNs", frame.timestampNs},
+                {"unchanged", sinceGeneration != 0 && sinceGeneration == frame.telemetryGeneration},
+                {"groups", nlohmann::json{{"componentStates", std::move(states)},
+                                           {"nodeVoltages", std::move(voltages)},
+                                           {"runtime", std::move(runtime)}}},
+                {"missingProbes", std::move(missingProbes)}}.dump();
+            if (encodedFrame.size() > session.resourceGovernor().budget().telemetryQueueBytes)
+                throw std::runtime_error("frame serializado excede ResourceBudget");
+            resp.ok = true;
+            resp.payloadJson = encodedFrame;
+        } catch (const std::exception& e) {
+            resp.ok = false;
+            resp.error = std::string("getTelemetryFrame falhou: ") + e.what();
         }
         return resp;
     }

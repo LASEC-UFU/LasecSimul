@@ -40,7 +40,7 @@ void sessionPublishesOnlyAtStoppedBoundaries() {
     registerFactories(session);
 
     const uint32_t rail = session.addComponent("sources.rail", {});
-    session.addComponent("passive.capacitor", {});
+    const uint32_t capacitor = session.addComponent("passive.capacitor", {});
     const auto first = session.simulationPlan();
     CHECK(first && first->generation == 1, "sessao parada publica primeira geracao");
     CHECK(first->execution->activeComponents == std::vector<uint32_t>({0, 1}),
@@ -49,6 +49,14 @@ void sessionPublishesOnlyAtStoppedBoundaries() {
           "reativos sao classificados fora do passo");
     CHECK(session.runtimeState().planGeneration == first->generation,
           "RuntimeState fica vinculado a geracao publicada");
+
+    session.scheduler().runUntil(10);
+    const TelemetryFrameSnapshot telemetry = session.getTelemetryFrameSnapshot({capacitor});
+    CHECK(telemetry.planGeneration == first->generation, "frame referencia exatamente o plano publicado");
+    CHECK(telemetry.telemetryGeneration > 0 && telemetry.timestampNs == 10,
+          "frame possui geracao monotona e timestamp da fronteira estavel");
+    CHECK(telemetry.nodeVoltages && telemetry.componentStates.size() == 1,
+          "tensoes e estados pertencem ao mesmo frame imutavel");
 
     const auto propertyError = session.setProperty(rail, "voltage", PropertyValue{3.3});
     CHECK(!propertyError, "parametro runtime-safe e aceito");
