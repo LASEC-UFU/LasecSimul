@@ -930,6 +930,7 @@ add_executable(session_restart_stress_test
     src/fpga/GhdlProcessManager.cpp
     src/fpga/GhdlArenaBridge.cpp
     src/simulation/Scheduler.cpp
+    src/simulation/SimulationPlan.cpp
     src/session/SimulationSession.cpp
     src/resources/ResourceGovernor.cpp
     src/session/PauseExpression.cpp
