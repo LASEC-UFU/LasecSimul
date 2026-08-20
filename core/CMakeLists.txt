@@ -74,6 +74,7 @@ set(CORE_SOURCES
     src/mcu/qemu/QemuIcountCalibrator.cpp
     src/mcu/McuController.cpp
     src/mcu/McuComponent.cpp
+    src/plc/PlcRuntime.cpp
     src/fpga/FpgaComponent.cpp
     src/fpga/FpgaPortMapper.cpp
     src/fpga/GhdlBackend.cpp
@@ -143,6 +144,7 @@ set(TEST_COMMON_SOURCE_FILES
     src/mcu/qemu/QemuIcountCalibrator.cpp
     src/mcu/McuController.cpp
     src/mcu/McuComponent.cpp
+    src/plc/PlcRuntime.cpp
     src/fpga/FpgaComponent.cpp
     src/fpga/FpgaPortMapper.cpp
     src/fpga/GhdlBackend.cpp
@@ -333,6 +335,28 @@ target_compile_definitions(plc_runtime_hang_test PRIVATE
 )
 add_test(NAME plc_runtime_hang COMMAND plc_runtime_hang_test)
 set_tests_properties(plc_runtime_hang PROPERTIES TIMEOUT 60 SKIP_REGULAR_EXPRESSION "PULADO:")
+
+# F9.5: integracao ponta a ponta PlcComponent/PlcPlan/SimulationSession/Scheduler -- Scheduler
+# event(T) -> InputLatch -> PlcRuntime::scan(T) -> OutputCommit -> propagacao normal via Signal
+# Engine, pausa, fault isolation, orphan de binding, multiplas instancias. Usa ${TEST_COMMON_SOURCES}
+# (SimulationSession.cpp completo) + os mesmos workers reais/double de F9.4 -- hermetic, sem
+# dependencia do binario STruCpp vendorizado.
+add_executable(plc_session_integration_test
+    test/core/plc/PlcSessionIntegrationTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(plc_session_integration_test PRIVATE include src)
+target_link_libraries(plc_session_integration_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+if(NOT WIN32)
+    target_link_libraries(plc_session_integration_test PRIVATE dl)
+endif()
+add_dependencies(plc_session_integration_test plc_worker_driver_hello plc_misbehaving_worker)
+target_compile_definitions(plc_session_integration_test PRIVATE
+    LASECSIMUL_TEST_PLC_WORKER_HELLO_BINARY="$<TARGET_FILE:plc_worker_driver_hello>"
+    LASECSIMUL_TEST_PLC_MISBEHAVING_WORKER_BINARY="$<TARGET_FILE:plc_misbehaving_worker>"
+)
+add_test(NAME plc_session_integration COMMAND plc_session_integration_test)
+set_tests_properties(plc_session_integration PROPERTIES TIMEOUT 60 SKIP_REGULAR_EXPRESSION "PULADO:")
 
 set_tests_properties(python_session PROPERTIES TIMEOUT 30 SKIP_REGULAR_EXPRESSION "PULADO:")
 if(Python3_Interpreter_FOUND)
@@ -1390,7 +1414,7 @@ set(LASECSIMUL_HERMETIC_TESTS
     firmware_watcher esp32_adapter esp32_devkitc_subcircuit bus command_queue_session logic_gate_plugin
     logic_family_extension mcu_component mcu_usart_monitor mcu_uart_to_lasecplot
     mcu_component_live_poll_thread mcu_scheduler_pacing_sync pin_change_dispatch plugin_watchdog
-    plc_scan_session plc_runtime
+    plc_scan_session plc_runtime plc_session_integration
 )
 set(LASECSIMUL_EXTERNAL_GHDL_TESTS
     ghdl_lockstep_real_ghdl ghdl_backend_real_ghdl fpga_component_real_ghdl

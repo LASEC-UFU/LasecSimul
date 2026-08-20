@@ -27,12 +27,18 @@
 #include "../simulation/RuntimeState.hpp"
 #include "../simulation/Scheduler.hpp"
 #include "../python/PythonRuntime.hpp"
+#include "../plc/PlcNativeModule.hpp"
+#include "../plc/PlcRuntime.hpp"
 #include "lasecsimul/IComponentModel.hpp"
 #include "PauseExpression.hpp"
 
 namespace lasecsimul::mcu {
 class McuComponent;
 } // namespace lasecsimul::mcu
+
+namespace lasecsimul::plc {
+class PlcComponent;
+} // namespace lasecsimul::plc
 
 namespace lasecsimul::session {
 
@@ -252,6 +258,29 @@ public:
         const std::string& rateGroupId, const std::vector<python::PythonStep>& steps);
     void restartPythonRuntime();
     const python::PythonRuntime& pythonRuntime() const { return m_pythonRuntime; }
+
+    /** F9.5: carrega (ou descarrega, se `module` for `nullopt`) um artefato compilado (F9.3) numa
+     * instância `plc.instance` existente -- reconstrói os pinos (`exportedIo[]` exato, zero pinos
+     * sem artefato) via `reregisterPinsIfChanged`, igual a qualquer outra propriedade estrutural
+     * (`AffectsPinCount`). Requer simulação parada, mesma regra de `setProperty` estrutural. */
+    void loadPlcArtifact(uint32_t componentIndex, std::optional<plc::PlcNativeModule> module);
+    /** Pedidos de ligação de I/O do PLC a blocos do Signal Engine -- resolvidos/validados só na
+     * próxima `publishSimulationPlan()` (mesmo caminho de `PlcInstanceDescriptor`, ver
+     * SimulationPlan.hpp). Substitui a lista inteira desta instância (mesmo padrão de
+     * `setElectricalSignalBridges`/`setPythonBlocks` -- não incremental). */
+    void setPlcIoBindings(uint32_t componentIndex, std::vector<simulation::PlcIoBindingRequest> requests);
+    void setPlcTaskIntervalNs(uint32_t componentIndex, uint64_t intervalNs);
+
+    /** GET/SET/FORCE/UNFORCE passam direto pro `PlcRuntime` da instância, sem tocar
+     * `simulationTimeNs`/disparar `scan()` (garantia já provada em F9.2/F9.4) -- funcionam com a
+     * simulação rodando OU pausada (nunca com ela parada/sem worker ainda iniciado). Lança
+     * `std::invalid_argument` se `componentIndex` não for uma instância de PLC com artefato
+     * carregado; propaga `plc::PlcRuntimeError` se o worker faltar. */
+    std::string plcGetVariable(uint32_t componentIndex, const std::string& qualifiedName);
+    std::string plcSetVariable(uint32_t componentIndex, const std::string& qualifiedName, const std::string& value);
+    std::string plcForceVariable(uint32_t componentIndex, const std::string& qualifiedName, const std::string& value);
+    std::string plcUnforceVariable(uint32_t componentIndex, const std::string& qualifiedName);
+    plc::PlcRuntimeState plcRuntimeState(uint32_t componentIndex) const;
 
     /** Registra, no ComponentRegistry desta sessão, uma factory delegando ao PluginRuntime para
      * cada typeId com PluginModule ativo no GlobalPluginCache. Componentes built-in (ex: Resistor)
@@ -497,6 +526,31 @@ private:
     void publishElectricalSensorsToSignalUnlocked();
     void onStableStepUnlocked(uint64_t timestampNs);
     void scheduleNextSignalBoundaryUnlocked(uint64_t timestampNs);
+    /** F9.5: agenda o PRIMEIRO scan de qualquer instância de PLC com artefato que ainda não tenha
+     * um scan pendente (`m_plcScanScheduledNs`) -- chamado depois de publicar um plano novo, mesmo
+     * espírito de `scheduleNextSignalBoundaryUnlocked`. Cada scan subsequente se reagenda sozinho
+     * (ver `runPlcScanUnlocked`), então isto só precisa "dar a partida" em instâncias novas. */
+    void schedulePlcScansUnlocked(uint64_t timestampNs);
+    /** Agenda UM scan (o próximo, `intervalNs` a partir de `fromTimeNs`) pra `componentIndex` --
+     * usado tanto pra dar a partida inicial quanto pelo autoagendamento no fim de cada scan (ver
+     * `runPlcScanUnlocked`), garantindo as duas chamadas sempre usam exatamente a mesma lógica de
+     * geração/staleness. */
+    void scheduleOnePlcScanUnlocked(uint32_t componentIndex, uint64_t fromTimeNs, uint64_t intervalNs);
+    /** Corpo do evento agendado pra UM scan de UMA instância -- InputLatch (lê `ioBindings` do
+     * Signal Engine) -> `PlcRuntime::scan()` -> OutputCommit (só se `scan()` retornar com sucesso,
+     * nunca parcial) -> reagenda o PRÓXIMO scan desta mesma instância. Roda fora do mutex do
+     * Scheduler (ver `Scheduler::scheduleEventUnlocked` -- callback invocado com o lock liberado),
+     * então bloquear aqui dentro de `PlcRuntime::scan()` nunca trava outras threads de IPC, só
+     * atrasa o progresso do próprio worker thread do Scheduler (mesma categoria de custo já aceita
+     * pra qualquer outro passo síncrono de processo externo). Um fault NÃO reagenda -- a instância
+     * fica parada em `Faulted` até um reset/restart explícito (fora do escopo desta rodada), Core e
+     * outras instâncias seguem normalmente. */
+    void runPlcScanUnlocked(uint32_t componentIndex, uint64_t scanTimeNs);
+    /** Resolve `componentIndex` pra um `PlcComponent` com `PlcRuntime` já carregado, ou lança
+     * `std::invalid_argument` com uma mensagem prefixada por `callerName` -- usado por
+     * `plcGetVariable`/`plcSetVariable`/`plcForceVariable`/`plcUnforceVariable` (todos idênticos na
+     * validação, só o método chamado no `PlcRuntime` resultante muda). */
+    plc::PlcRuntime& requirePlcRuntimeUnlocked(uint32_t componentIndex, const char* callerName);
     /** Chamado no fim de `onStableStepUnlocked()` (já na thread do Scheduler, com o mutex dela
      * tomado) -- publica um `NodeVoltageSnapshot` novo em `m_publishedSnapshot`, sob
      * `m_snapshotMutex` (mutex dedicado, NUNCA o do Scheduler -- ver doc-comment de
@@ -588,6 +642,7 @@ private:
     std::vector<uint32_t>& m_nonlinearComponentIndices = m_runtimeState.execution.nonlinearComponents;
     std::vector<uint32_t>& m_fpgaComponentIndices = m_runtimeState.execution.fpgaComponents;
     std::vector<uint32_t>& m_mcuComponentIndices = m_runtimeState.execution.mcuComponents;
+    std::vector<uint32_t>& m_plcComponentIndices = m_runtimeState.execution.plcComponents;
     std::vector<uint32_t>& m_signalSubscribers = m_runtimeState.execution.signalSubscribers;
     std::unordered_map<std::string, uint32_t> m_signalAliases;
     simulation::SignalGraphDefinition m_signalGraphDefinition;
@@ -595,6 +650,21 @@ private:
     std::vector<python::PythonBlockDefinition> m_pythonBlockDefinitions;
     std::optional<uint64_t> m_signalBoundaryScheduledNs;
     uint64_t m_signalScheduleGeneration = 0;
+    /** F9.5: `componentIndex` -> `simulationTimeNs` do próximo SCAN já agendado no Scheduler pra
+     * essa instância -- mesmo papel de `m_signalBoundaryScheduledNs`, mas por instância (cada PLC
+     * tem seu próprio relógio de task, ao contrário do único calendário do Signal Engine). Ausência
+     * de entrada = nenhum scan pendente pra essa instância (fault recém-ocorrido, artefato
+     * descarregado, ou ainda não teve o primeiro scan agendado). */
+    std::unordered_map<uint32_t, uint64_t> m_plcScanScheduledNs;
+    /** `componentIndex` -> geração atual daquela instância -- incrementada a CADA chamada de
+     * `scheduleOnePlcScanUnlocked` (não só em reset/reload) e também em `loadPlcArtifact`/
+     * `stopSimulation`/remoção. Cada callback agendado captura a geração do momento em que foi
+     * armado; um valor capturado diferente do valor atual do mapa significa "outro agendamento pra
+     * esta instância já aconteceu depois deste" -- protege contra o caso em que
+     * `nextScanNs` sozinho colidiria por coincidência com um agendamento anterior já invalidado
+     * (mesmo raciocínio de `m_signalScheduleGeneration`, só que por instância em vez de global —
+     * global invalidaria erroneamente OUTRAS instâncias PLC não relacionadas a cada reload). */
+    std::unordered_map<uint32_t, uint64_t> m_plcScanGeneration;
     struct PauseConditionState {
         PauseExpression expression;
         std::unordered_map<std::string, simulation::SignalPlan::Route> signalRoutes;

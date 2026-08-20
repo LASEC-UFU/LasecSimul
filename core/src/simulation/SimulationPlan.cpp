@@ -195,6 +195,98 @@ std::shared_ptr<const ElectricalPlan> compileElectrical(const PlanCompileInput& 
     return plan;
 }
 
+/** Round 1 simplification (documentada, nao inventada silenciosamente): mapeamento IEC->Signal
+ * Engine so distingue BOOL/REAL/LREAL; todo o resto (SINT/INT/DINT/LINT/USINT/UINT/UDINT/ULINT/
+ * BYTE/WORD/DWORD/LWORD/TIME) cai no bucket Int64 do Signal Engine -- suficiente pra rotear pelo
+ * barramento de 3 tipos ja existente (Real/Bool/Int64) sem implementar semantica numerica IEC
+ * completa nesta rodada. */
+SignalScalarType plcIoScalarType(const std::string& iecType) {
+    if (iecType == "BOOL") return SignalScalarType::Bool;
+    if (iecType == "REAL" || iecType == "LREAL") return SignalScalarType::Real;
+    return SignalScalarType::Int64;
+}
+
+std::shared_ptr<PlcPlan> compilePlc(const PlanCompileInput& input, const std::shared_ptr<const CompiledSignalGraph>& engine) {
+    auto plc = std::make_shared<PlcPlan>();
+    plc->revision = input.authoringRevision;
+
+    std::unordered_set<uint32_t> seenComponents;
+    for (const PlcInstanceDescriptor& descriptor : input.plcInstances) {
+        if (descriptor.componentIndex >= input.componentCapacity ||
+            !std::binary_search(input.execution.plcComponents.begin(), input.execution.plcComponents.end(),
+                                descriptor.componentIndex)) {
+            throw std::invalid_argument("PlcInstanceDescriptor referencia componente PLC inativo/inexistente");
+        }
+        if (!seenComponents.insert(descriptor.componentIndex).second) {
+            throw std::invalid_argument("PlcInstanceDescriptor duplicado pro mesmo componentIndex");
+        }
+
+        PlcInstancePlan instance;
+        instance.componentIndex = descriptor.componentIndex;
+        instance.artifact = descriptor.artifact;
+        instance.taskIntervalNs = descriptor.taskIntervalNs > 0 ? descriptor.taskIntervalNs : 10'000'000;
+
+        if (instance.artifact) {
+            std::unordered_set<std::string> requestedIds;
+            std::unordered_set<std::string> outputTargets; // dedup: só um OUTPUT de PLC por signalBlockId nesta instância.
+            for (const plc::PlcExportedIo& io : instance.artifact->exportedIo) {
+                PlcIoBinding binding;
+                binding.ioId = io.ioId;
+                binding.name = io.name;
+                binding.direction = io.direction;
+                binding.iecType = io.iecType;
+
+                const PlcIoBindingRequest* request = nullptr;
+                for (const PlcIoBindingRequest& candidate : descriptor.ioBindingRequests) {
+                    if (candidate.ioId == io.ioId) { request = &candidate; break; }
+                }
+                if (request) {
+                    requestedIds.insert(request->ioId);
+                    const SignalScalarType expectedScalar = plcIoScalarType(io.iecType);
+                    if (io.direction == "output") {
+                        // Round 1: SignalRuntime só tem setExternalReal/setExternalBool (sem
+                        // setExternalInt) -- um output PLC mapeado pra Int64 (SINT/INT/DINT/etc,
+                        // ver plcIoScalarType) não tem como ser publicado no Signal Engine ainda.
+                        // Rejeitado explicitamente aqui em vez de aceitar a ligação e falhar
+                        // silenciosamente em tempo de scan.
+                        if (expectedScalar == SignalScalarType::Int64) {
+                            throw std::invalid_argument(
+                                "PLC output de tipo IEC inteiro/temporal (" + io.iecType +
+                                ") ainda não pode ser ligado ao Signal Engine nesta rodada (só BOOL/REAL/LREAL): " + io.ioId);
+                        }
+                        if (!SignalCompiler::isExternalInput(engine, request->signalBlockId)) {
+                            throw std::invalid_argument("PLC output deve publicar em um bloco ExternalInput do Signal Engine: " +
+                                                        request->signalBlockId);
+                        }
+                        const SignalPortDefinition target = SignalCompiler::outputDefinition(engine, request->signalBlockId);
+                        if (target.type.scalar != expectedScalar) {
+                            throw std::invalid_argument("PLC output com tipo incompativel no bloco alvo: " + request->signalBlockId);
+                        }
+                        if (!outputTargets.insert(request->signalBlockId).second) {
+                            throw std::invalid_argument("mais de um output de PLC publica no mesmo bloco: " + request->signalBlockId);
+                        }
+                        binding.signalBlockId = request->signalBlockId;
+                    } else if (io.direction == "input") {
+                        const SignalPortDefinition source = SignalCompiler::outputDefinition(engine, request->signalBlockId);
+                        if (source.type.scalar != expectedScalar) {
+                            throw std::invalid_argument("PLC input com tipo incompativel na fonte: " + request->signalBlockId);
+                        }
+                        binding.signalBlockId = request->signalBlockId;
+                        binding.signal = SignalCompiler::output(engine, request->signalBlockId);
+                    }
+                }
+                instance.ioBindings.push_back(std::move(binding));
+            }
+            for (const PlcIoBindingRequest& request : descriptor.ioBindingRequests) {
+                if (!requestedIds.count(request.ioId)) instance.orphanedBindingRequests.push_back(request.ioId);
+            }
+        }
+
+        plc->instances.push_back(std::move(instance));
+    }
+    return plc;
+}
+
 } // namespace
 
 std::shared_ptr<const SimulationPlan> PlanCompiler::compile(const PlanCompileInput& input) {
@@ -264,10 +356,7 @@ std::shared_ptr<const SimulationPlan> PlanCompiler::compile(const PlanCompileInp
         next->externalBindings = input.previous->externalBindings;
     }
     if (first || input.invalidation.contains(PlanDomain::Plc)) {
-        auto plc = std::make_shared<PlcPlan>();
-        plc->revision = input.authoringRevision;
-        plc->instances = input.execution.plcComponents;
-        next->plc = std::move(plc);
+        next->plc = compilePlc(input, next->signal ? next->signal->engine : nullptr);
     } else {
         next->plc = input.previous->plc;
     }

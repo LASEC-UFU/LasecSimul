@@ -16,6 +16,7 @@ struct RuntimeState {
     DenseExecutionLists execution;
     std::vector<SignalPlan::Subscriber> resolvedSignalSubscribers;
     std::vector<SignalPlan::BridgeBinding> electricalSignalBridges;
+    std::vector<PlcInstancePlan> plcInstances;
     SignalRuntime signals;
     Topology electricalTopology;
     std::vector<double> nodeVoltages;
@@ -32,6 +33,7 @@ struct RuntimeState {
                                                  : std::vector<SignalPlan::Subscriber>{};
         electricalSignalBridges = plan->signal ? plan->signal->electricalBridges
                                                : std::vector<SignalPlan::BridgeBinding>{};
+        plcInstances = plan->plc ? plan->plc->instances : std::vector<PlcInstancePlan>{};
         const auto engine = plan->signal ? plan->signal->engine : nullptr;
         if (signals.graph() != engine) {
             signals.bind(engine);

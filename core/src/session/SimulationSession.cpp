@@ -16,6 +16,7 @@
 #include <nlohmann/json.hpp>
 #include "../fpga/FpgaComponent.hpp"
 #include "../mcu/McuComponent.hpp"
+#include "../plc/PlcComponent.hpp"
 #include "lasecsimul/qemu_arena_abi.h"
 
 namespace lasecsimul::session {
@@ -37,6 +38,11 @@ constexpr uint32_t kMaxNonlinearIterations = 50;
 // Ponto de partida a refinar com medição real, não considerado definitivo.
 constexpr auto kStaleMcuTimeout = std::chrono::milliseconds(1000);
 constexpr size_t kMaxComponentStateBytes = 16u * 1024u * 1024u;
+
+// F9.5: unico typeId de instancia de PLC nesta rodada -- sem paleta/editor grafico ainda (ver plano
+// F9), entao nao ha por que ter N "tipos" distintos como MCU (N chips diferentes); o que varia por
+// instancia e' o artefato carregado via SimulationSession::loadPlcArtifact(), nao o typeId.
+constexpr const char* kPlcInstanceTypeId = "plc.instance";
 
 std::vector<uint8_t> readComponentStateWithGrowth(
     IComponentModel& component,
@@ -291,6 +297,10 @@ simulation::PlanDomain SimulationSession::refreshComponentExecutionLists(uint32_
     if (fpgaChanged || mcuChanged) {
         changed = changed | simulation::PlanDomain::ExecutionIndex | simulation::PlanDomain::External;
     }
+    const bool isPlc = component && dynamic_cast<plc::PlcComponent*>(component) != nullptr;
+    if (setMembership(m_plcComponentIndices, isPlc)) {
+        changed = changed | simulation::PlanDomain::ExecutionIndex | simulation::PlanDomain::Plc;
+    }
     if (setMembership(m_signalSubscribers, component && !component->signalSubscriptions().empty())) {
         changed = changed | simulation::PlanDomain::ExecutionIndex | simulation::PlanDomain::Signal;
     }
@@ -339,6 +349,18 @@ bool SimulationSession::publishSimulationPlan() {
     for (const auto& block : m_pythonBlockDefinitions) {
         input.pythonBlocks.push_back({block.blockId, block.source, block.rateGroupId, block.dependencies});
     }
+    input.plcInstances.reserve(m_plcComponentIndices.size());
+    for (uint32_t componentIndex : m_plcComponentIndices) {
+        auto* plcComponent = static_cast<plc::PlcComponent*>(m_componentInstances[componentIndex].get());
+        simulation::PlcInstanceDescriptor descriptor;
+        descriptor.componentIndex = componentIndex;
+        if (plcComponent->artifact()) {
+            descriptor.artifact = std::make_shared<const plc::PlcNativeModule>(*plcComponent->artifact());
+        }
+        descriptor.taskIntervalNs = plcComponent->taskIntervalNs();
+        descriptor.ioBindingRequests = plcComponent->ioBindingRequests();
+        input.plcInstances.push_back(std::move(descriptor));
+    }
 
     // Staging: nenhuma referência publicada muda antes de compile() concluir integralmente.
     std::shared_ptr<const simulation::SimulationPlan> staged = simulation::PlanCompiler::compile(input);
@@ -355,6 +377,7 @@ bool SimulationSession::publishSimulationPlan() {
             m_runtimeState.signals.noteExplicitBoundary(boundary);
         });
     }
+    schedulePlcScansUnlocked(m_runtimeState.virtualTimeNs);
     {
         std::lock_guard<std::mutex> lock(m_planMutex);
         m_publishedPlan = std::move(staged);
@@ -477,6 +500,111 @@ std::vector<python::PythonStepResult> SimulationSession::stepPythonBatch(
 
 void SimulationSession::restartPythonRuntime() {
     runViaCommandQueue([](SimulationSession& self) { self.m_pythonRuntime.restart(); });
+}
+
+void SimulationSession::loadPlcArtifact(uint32_t componentIndex, std::optional<plc::PlcNativeModule> module) {
+    runViaCommandQueue([componentIndex, module = std::move(module)](SimulationSession& self) mutable {
+        if (self.m_scheduler.isRunning()) {
+            throw std::runtime_error("loadPlcArtifact requer simulacao parada para publicar SimulationPlan");
+        }
+        if (componentIndex >= self.m_componentInstances.size() || !self.m_componentInstances[componentIndex]) {
+            throw std::invalid_argument("loadPlcArtifact: componente inexistente");
+        }
+        auto* plcComponent = dynamic_cast<plc::PlcComponent*>(self.m_componentInstances[componentIndex].get());
+        if (!plcComponent) throw std::invalid_argument("loadPlcArtifact: componente nao e uma instancia de PLC");
+
+        // Worker do artefato ANTERIOR (se houver) e' destruido dentro de loadArtifact() (troca
+        // m_runtime); nenhum scan pode estar "no ar" pra esta instancia enquanto a simulacao esta
+        // parada (pre-condicao ja checada acima), entao nao ha corrida com runPlcScanUnlocked().
+        plcComponent->loadArtifact(std::move(module));
+        self.reregisterPinsIfChanged(componentIndex, plcComponent);
+        self.m_plcScanScheduledNs.erase(componentIndex);
+        ++self.m_plcScanGeneration[componentIndex];
+        self.m_topologyDirty = true;
+        self.m_topologyReuseSafe = false;
+        self.invalidatePlan(simulation::PlanDomain::Electrical | simulation::PlanDomain::Plc);
+        self.m_scheduler.dirtySet().insert(componentIndex);
+    });
+}
+
+void SimulationSession::setPlcIoBindings(uint32_t componentIndex, std::vector<simulation::PlcIoBindingRequest> requests) {
+    runViaCommandQueue([componentIndex, requests = std::move(requests)](SimulationSession& self) mutable {
+        if (self.m_scheduler.isRunning()) {
+            throw std::runtime_error("setPlcIoBindings requer simulacao parada para publicar SimulationPlan");
+        }
+        if (componentIndex >= self.m_componentInstances.size() || !self.m_componentInstances[componentIndex]) {
+            throw std::invalid_argument("setPlcIoBindings: componente inexistente");
+        }
+        auto* plcComponent = dynamic_cast<plc::PlcComponent*>(self.m_componentInstances[componentIndex].get());
+        if (!plcComponent) throw std::invalid_argument("setPlcIoBindings: componente nao e uma instancia de PLC");
+        plcComponent->setIoBindingRequests(std::move(requests));
+        // Resolucao/validacao real (tipo/ExternalInput/duplicatas) so acontece dentro de
+        // PlanCompiler::compile() na proxima publishSimulationPlan() -- mesmo padrao de
+        // setElectricalSignalBridges (que tambem valida via SignalCompiler::compile ali mesmo
+        // e nao aqui, ainda que este caminho especifico nao precise recompilar o grafo).
+        self.invalidatePlan(simulation::PlanDomain::Plc);
+    });
+}
+
+void SimulationSession::setPlcTaskIntervalNs(uint32_t componentIndex, uint64_t intervalNs) {
+    runViaCommandQueue([componentIndex, intervalNs](SimulationSession& self) {
+        if (self.m_scheduler.isRunning()) {
+            throw std::runtime_error("setPlcTaskIntervalNs requer simulacao parada para publicar SimulationPlan");
+        }
+        if (intervalNs == 0) throw std::invalid_argument("setPlcTaskIntervalNs: intervalo deve ser > 0");
+        if (componentIndex >= self.m_componentInstances.size() || !self.m_componentInstances[componentIndex]) {
+            throw std::invalid_argument("setPlcTaskIntervalNs: componente inexistente");
+        }
+        auto* plcComponent = dynamic_cast<plc::PlcComponent*>(self.m_componentInstances[componentIndex].get());
+        if (!plcComponent) throw std::invalid_argument("setPlcTaskIntervalNs: componente nao e uma instancia de PLC");
+        plcComponent->setTaskIntervalNs(intervalNs);
+        self.invalidatePlan(simulation::PlanDomain::Plc);
+    });
+}
+
+plc::PlcRuntime& SimulationSession::requirePlcRuntimeUnlocked(uint32_t componentIndex, const char* callerName) {
+    if (componentIndex >= m_componentInstances.size() || !m_componentInstances[componentIndex]) {
+        throw std::invalid_argument(std::string(callerName) + ": componente inexistente");
+    }
+    auto* plcComponent = dynamic_cast<plc::PlcComponent*>(m_componentInstances[componentIndex].get());
+    if (!plcComponent) throw std::invalid_argument(std::string(callerName) + ": componente nao e uma instancia de PLC");
+    plc::PlcRuntime* runtime = plcComponent->runtime();
+    if (!runtime) throw std::invalid_argument(std::string(callerName) + ": instancia de PLC sem artefato/worker carregado");
+    return *runtime;
+}
+
+std::string SimulationSession::plcGetVariable(uint32_t componentIndex, const std::string& qualifiedName) {
+    return runViaCommandQueue([componentIndex, qualifiedName](SimulationSession& self) {
+        return self.requirePlcRuntimeUnlocked(componentIndex, "plcGetVariable").get(qualifiedName);
+    });
+}
+
+std::string SimulationSession::plcSetVariable(uint32_t componentIndex, const std::string& qualifiedName, const std::string& value) {
+    return runViaCommandQueue([componentIndex, qualifiedName, value](SimulationSession& self) {
+        return self.requirePlcRuntimeUnlocked(componentIndex, "plcSetVariable").set(qualifiedName, value);
+    });
+}
+
+std::string SimulationSession::plcForceVariable(uint32_t componentIndex, const std::string& qualifiedName, const std::string& value) {
+    return runViaCommandQueue([componentIndex, qualifiedName, value](SimulationSession& self) {
+        return self.requirePlcRuntimeUnlocked(componentIndex, "plcForceVariable").force(qualifiedName, value);
+    });
+}
+
+std::string SimulationSession::plcUnforceVariable(uint32_t componentIndex, const std::string& qualifiedName) {
+    return runViaCommandQueue([componentIndex, qualifiedName](SimulationSession& self) {
+        return self.requirePlcRuntimeUnlocked(componentIndex, "plcUnforceVariable").unforce(qualifiedName);
+    });
+}
+
+plc::PlcRuntimeState SimulationSession::plcRuntimeState(uint32_t componentIndex) const {
+    if (componentIndex >= m_componentInstances.size() || !m_componentInstances[componentIndex]) {
+        throw std::invalid_argument("plcRuntimeState: componente inexistente");
+    }
+    const auto* plcComponent = dynamic_cast<const plc::PlcComponent*>(m_componentInstances[componentIndex].get());
+    if (!plcComponent) throw std::invalid_argument("plcRuntimeState: componente nao e uma instancia de PLC");
+    const plc::PlcRuntime* runtime = plcComponent->runtime();
+    return runtime ? runtime->state() : plc::PlcRuntimeState::Stopped;
 }
 
 std::shared_ptr<const simulation::SimulationPlan> SimulationSession::simulationPlan() {
@@ -617,6 +745,12 @@ uint32_t SimulationSession::addComponentUnlocked(const std::string& typeId, cons
         instance = m_components.create(typeId, params);
     } else if (m_mcus.contains(typeId)) {
         instance = std::make_unique<mcu::McuComponent>(m_mcus.create(typeId), m_scheduler, params.pinList);
+    } else if (typeId == kPlcInstanceTypeId) {
+        // Sem registry proprio (ao contrario de MCU/plugins) -- ha um unico "tipo" de instancia de
+        // PLC nesta rodada (sem editor grafico/paleta de dispositivos PLC ainda), diferente de MCU
+        // que tem N chips distintos. Sobe sem artefato (zero pinos) -- loadPlcArtifact() e' quem
+        // carrega o PlcNativeModule depois, mesmo padrao de loadFirmware() do McuComponent.
+        instance = std::make_unique<plc::PlcComponent>();
     } else {
         instance = m_components.create(typeId, params);
     }
@@ -1371,6 +1505,8 @@ void SimulationSession::removeComponentUnlocked(uint32_t componentIndex) {
     m_componentInstances[componentIndex].reset();
     const simulation::PlanDomain executionChanges = refreshComponentExecutionLists(componentIndex);
     m_mcuPositionTracking.erase(componentIndex);
+    m_plcScanScheduledNs.erase(componentIndex);
+    ++m_plcScanGeneration[componentIndex]; // invalida qualquer callback de scan ainda no ar pra este componentIndex.
     m_scheduler.dirtySet().remove(componentIndex);
     m_topologyDirty = true;
     m_topologyReuseSafe = false;
@@ -1388,6 +1524,108 @@ void SimulationSession::scheduleNextSignalBoundaryUnlocked(uint64_t timestampNs)
         m_signalBoundaryScheduledNs.reset();
         m_runtimeState.signals.noteExplicitBoundary(boundary);
     });
+}
+
+namespace {
+
+std::string toUpperAscii(const std::string& text) {
+    std::string upper = text;
+    for (char& c : upper) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    return upper;
+}
+
+/** Formata o valor atual do slot do Signal Engine como texto no formato que `PlcScanSession`
+ * espera pra `SCAN <requestId> <timeNs> NOME=valor` (ver `var_set_value` em
+ * `PlcVariableCommands.hpp`) -- BOOL vira TRUE/FALSE, os demais tipos (Round 1: todos mapeiam pra
+ * Real ou Int64 do Signal Engine, ver `plcIoScalarType` em SimulationPlan.cpp) viram a
+ * representação decimal padrão de `std::to_string`. */
+std::string plcSignalValueToText(const simulation::PlcIoBinding& binding, const simulation::SignalRuntime& signals) {
+    if (!binding.signal) return binding.iecType == "BOOL" ? "FALSE" : "0";
+    if (binding.iecType == "BOOL") return signals.boolean(*binding.signal) ? "TRUE" : "FALSE";
+    if (binding.iecType == "REAL" || binding.iecType == "LREAL") return std::to_string(signals.real(*binding.signal));
+    return std::to_string(signals.integer(*binding.signal));
+}
+
+} // namespace
+
+void SimulationSession::scheduleOnePlcScanUnlocked(uint32_t componentIndex, uint64_t fromTimeNs, uint64_t intervalNs) {
+    const uint64_t nextScanNs = fromTimeNs + intervalNs;
+    const uint64_t generation = ++m_plcScanGeneration[componentIndex];
+    m_plcScanScheduledNs[componentIndex] = nextScanNs;
+    m_scheduler.scheduleEventUnlocked(intervalNs, [this, componentIndex, nextScanNs, generation] {
+        if (m_plcScanGeneration[componentIndex] != generation) return; // substituido/invalidado.
+        const auto pending = m_plcScanScheduledNs.find(componentIndex);
+        if (pending == m_plcScanScheduledNs.end() || pending->second != nextScanNs) return; // obsoleto.
+        m_plcScanScheduledNs.erase(pending);
+        runPlcScanUnlocked(componentIndex, nextScanNs);
+    });
+}
+
+void SimulationSession::schedulePlcScansUnlocked(uint64_t timestampNs) {
+    for (const simulation::PlcInstancePlan& instance : m_runtimeState.plcInstances) {
+        if (!instance.artifact) continue; // sem artefato -- nada a agendar (zero pinos, zero scans).
+        if (m_plcScanScheduledNs.count(instance.componentIndex)) continue; // ja tem scan pendente.
+        scheduleOnePlcScanUnlocked(instance.componentIndex, timestampNs, instance.taskIntervalNs);
+    }
+}
+
+void SimulationSession::runPlcScanUnlocked(uint32_t componentIndex, uint64_t scanTimeNs) {
+    const simulation::PlcInstancePlan* planEntry = nullptr;
+    for (const simulation::PlcInstancePlan& instance : m_runtimeState.plcInstances) {
+        if (instance.componentIndex == componentIndex) { planEntry = &instance; break; }
+    }
+    // Instancia removida ou artefato descarregado entre o agendamento e agora -- nao reagenda,
+    // nao publica nada; a proxima publishSimulationPlan() (se a instancia voltar a existir com
+    // artefato) e' quem da a partida de novo via schedulePlcScansUnlocked.
+    if (!planEntry || !planEntry->artifact) return;
+    if (componentIndex >= m_componentInstances.size() || !m_componentInstances[componentIndex]) return;
+
+    auto* plcComponent = static_cast<plc::PlcComponent*>(m_componentInstances[componentIndex].get());
+    plc::PlcRuntime* runtime = plcComponent->runtime();
+    if (!runtime) return;
+
+    // InputLatch: TODOS os inputs sao lidos do Signal Engine ANTES de chamar scan() -- atomicidade
+    // por scan (mesmo contrato ja provado em F9.2/F9.4, aqui so alimentado por uma fonte real em
+    // vez de valores passados direto no teste).
+    plc::PlcScanRequest request;
+    request.simulationTimeNs = static_cast<int64_t>(scanTimeNs);
+    for (const simulation::PlcIoBinding& binding : planEntry->ioBindings) {
+        if (binding.direction != "input") continue;
+        request.inputs[toUpperAscii(binding.name)] = plcSignalValueToText(binding, m_runtimeState.signals);
+    }
+
+    plc::PlcScanResult result;
+    try {
+        result = runtime->scan(request);
+    } catch (const plc::PlcRuntimeError&) {
+        // PlcRuntime ja transitou pra Faulted e nao devolveu nenhum PlcScanResult -- nenhuma saida
+        // e publicada, esta instancia nao reagenda (fica parada ate reset/restart explicito, fora
+        // do escopo desta rodada), Core e as outras instancias PLC seguem normalmente.
+        return;
+    }
+
+    // OutputCommit: so publica depois de uma resposta COMPLETA e valida -- nunca parcial.
+    bool anyOutputChanged = false;
+    for (const simulation::PlcIoBinding& binding : planEntry->ioBindings) {
+        if (binding.direction != "output" || binding.signalBlockId.empty()) continue;
+        const auto found = result.outputs.find(toUpperAscii(binding.name));
+        if (found == result.outputs.end()) continue; // defensivo -- nao deveria faltar um output exportado.
+        if (binding.iecType == "BOOL") {
+            m_runtimeState.signals.setExternalBool(binding.signalBlockId, found->second == "TRUE");
+        } else {
+            // Round 1: compilePlc() ja rejeita outputs mapeados pra Int64 (SignalRuntime nao tem
+            // setExternalInt) -- aqui so sobra REAL/LREAL.
+            m_runtimeState.signals.setExternalReal(binding.signalBlockId, std::stod(found->second));
+        }
+        anyOutputChanged = true;
+    }
+    if (anyOutputChanged) m_scheduler.dirtySet().insert(componentIndex);
+
+    // Reagenda o PROXIMO scan desta MESMA instancia -- nunca dois eventos pendentes ao mesmo tempo
+    // pra mesma task: cada callback so agenda o seguinte estritamente `taskIntervalNs` a frente do
+    // `scanTimeNs` que ele mesmo acabou de processar, entao a mesma task nunca recebe dois SCAN no
+    // mesmo timestamp (ver relatorio de F9.5, secao "Tempo").
+    scheduleOnePlcScanUnlocked(componentIndex, scanTimeNs, planEntry->taskIntervalNs);
 }
 
 bool SimulationSession::isSubcircuitInstance(uint32_t instanceId) const {
@@ -1733,12 +1971,18 @@ void SimulationSession::stopSimulation() {
     for (const uint32_t index : m_fpgaComponentIndices) {
         static_cast<fpga::FpgaComponent*>(m_componentInstances[index].get())->stop();
     }
+    for (uint32_t index : m_plcComponentIndices) {
+        auto* plcComponent = static_cast<plc::PlcComponent*>(m_componentInstances[index].get());
+        if (plc::PlcRuntime* runtime = plcComponent->runtime()) runtime->shutdown();
+    }
     m_pythonRuntime.shutdown();
     m_scheduler.reset();
     m_runtimeState.virtualTimeNs = 0;
     m_runtimeState.signals.reset();
     m_signalBoundaryScheduledNs.reset();
     ++m_signalScheduleGeneration;
+    m_plcScanScheduledNs.clear();
+    for (auto& [componentIndex, generation] : m_plcScanGeneration) ++generation;
 }
 
 std::string SimulationSession::mcuLogs(uint32_t componentIndex) const {
