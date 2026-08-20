@@ -13,10 +13,10 @@ Visualização é projeção de telemetria, não participante do solver. Assets 
 ## Shell de navegação já disponível
 
 A feature completa continua adiada, mas a paleta lateral já reserva as abas de filtro `Controle` e
-`Processo` conforme [FEAT-011](workspace-navigation.md). Ambas permanecem intencionalmente vazias
-nesta fase — nenhum item de catálogo declara `workspaceSection: "control"` ou `"process"` ainda. A
-presença das abas na paleta não autoriza misturar componentes elétricos, analógicos ou digitais
-nelas e não significa que biblioteca ou runtime de processo estejam implementados.
+`Processo` conforme [FEAT-011](workspace-navigation.md). Desde F7, subcircuitos de processo podem
+declarar `workspaceSection: "process"` e aparecer na aba correspondente. Isso não implementa a
+visualização animada: os itens continuam no canvas único e observadores são apenas projeções de
+telemetria, sem scripts visuais ou participação no solver.
 
 Diferente da decisão anterior, o editor de esquemático (`main.ts`) não tem mais um modo de
 navegação por aba nem um placeholder próprio: é um único canvas elétrico sempre visível. Quando a
@@ -34,8 +34,8 @@ alternativo selecionado por seção.
 
 ## Aceitação
 
-- antes da implementação da feature, `Controle` e `Processo` existem como abas de filtro na paleta,
-  vazias e isoladas do catálogo de `Analógico`/`Digital`;
+- antes da implementação da animação, `Controle` e `Processo` existem como abas de filtro isoladas;
+  itens F7 podem ocupá-las somente por `workspaceSection` explícito;
 - ocultar/fechar Webview não muda resultado;
 - SharedHost reduz FPS sem mudar simulação;
 - bindings inválidos falham na compilação/autoria;

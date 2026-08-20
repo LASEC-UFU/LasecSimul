@@ -1,4 +1,5 @@
 #include "SimulationSession.hpp"
+#include "../components/bridges/SignalBridges.hpp"
 #include <array>
 #include <algorithm>
 #include <cmath>
@@ -187,6 +188,10 @@ SimulationSession::SimulationSession(plugins::GlobalPluginCache& globalCache, si
         [this](uint64_t previous, uint64_t current) {
             const TransientStepContext context{current, current - previous, m_transientSettings.method,
                                                m_acceptedTransientSteps.load(std::memory_order_relaxed)};
+            // Política cross-domain explícita: atuadores consomem o último sinal ACEITO; sensores
+            // só publicarão a solução elétrica atual em onStableStepUnlocked(). Isso introduz uma
+            // fronteira causal de um passo aceito e impede loop algébrico interdomínio incidental.
+            applySignalActuatorsUnlocked();
             m_runtimeState.signals.beginContinuousStep(previous, current);
             for (uint32_t i : m_reactiveComponentIndices) {
                 IComponentModel* component = m_componentInstances[i].get();
@@ -328,6 +333,7 @@ bool SimulationSession::publishSimulationPlan() {
     input.execution = m_runtimeState.execution;
     input.resolvedSignalSubscribers = m_runtimeState.resolvedSignalSubscribers;
     input.signalGraph = &m_signalGraphDefinition;
+    input.electricalSignalBridges = m_electricalSignalBridgeDefinitions;
 
     // Staging: nenhuma referência publicada muda antes de compile() concluir integralmente.
     std::shared_ptr<const simulation::SimulationPlan> staged = simulation::PlanCompiler::compile(input);
@@ -362,6 +368,63 @@ void SimulationSession::setSignalGraph(simulation::SignalGraphDefinition definit
         self.m_signalGraphDefinition = std::move(definition);
         self.m_signalBoundaryScheduledNs.reset();
         ++self.m_signalScheduleGeneration;
+        self.invalidatePlan(simulation::PlanDomain::Signal);
+    });
+}
+
+void SimulationSession::setElectricalSignalBridges(
+    std::vector<simulation::ElectricalSignalBridgeDefinition> definitions) {
+    runViaCommandQueue([definitions = std::move(definitions)](SimulationSession& self) mutable {
+        if (self.m_scheduler.isRunning())
+            throw std::runtime_error("setElectricalSignalBridges requer simulacao parada");
+        const auto engine = simulation::SignalCompiler::compile(self.m_signalGraphDefinition);
+        std::unordered_set<uint32_t> components;
+        std::unordered_set<std::string> sensorTargets;
+        for (const auto& bridge : definitions) {
+            if (bridge.componentIndex >= self.m_componentInstances.size() ||
+                !self.m_componentInstances[bridge.componentIndex])
+                throw std::invalid_argument("bridge referencia componente inexistente");
+            if (!components.insert(bridge.componentIndex).second)
+                throw std::invalid_argument("componente possui mais de um bridge");
+            const char* expectedType = nullptr;
+            bool sensor = false;
+            switch (bridge.kind) {
+            case simulation::ElectricalSignalBridgeKind::VoltageSensor:
+                expectedType = "bridges.voltage_sensor"; sensor = true; break;
+            case simulation::ElectricalSignalBridgeKind::CurrentSensor:
+                expectedType = "bridges.current_sensor"; sensor = true; break;
+            case simulation::ElectricalSignalBridgeKind::DigitalInput:
+                expectedType = "bridges.digital_input"; sensor = true; break;
+            case simulation::ElectricalSignalBridgeKind::ControlledVoltageSource:
+                expectedType = "bridges.controlled_voltage_source"; break;
+            case simulation::ElectricalSignalBridgeKind::ControlledCurrentSource:
+                expectedType = "bridges.controlled_current_source"; break;
+            case simulation::ElectricalSignalBridgeKind::DigitalOutput:
+                expectedType = "bridges.digital_output"; break;
+            }
+            if (std::string_view(self.m_componentInstances[bridge.componentIndex]->typeId()) != expectedType)
+                throw std::invalid_argument("kind do bridge nao corresponde ao componente eletrico");
+            const simulation::SignalPortDefinition output =
+                simulation::SignalCompiler::outputDefinition(engine, bridge.signalBlockId);
+            const bool digital = bridge.kind == simulation::ElectricalSignalBridgeKind::DigitalInput ||
+                                 bridge.kind == simulation::ElectricalSignalBridgeKind::DigitalOutput;
+            const simulation::SignalScalarType expectedScalar = digital
+                ? simulation::SignalScalarType::Bool : simulation::SignalScalarType::Real;
+            std::string_view expectedUnit;
+            if (bridge.kind == simulation::ElectricalSignalBridgeKind::VoltageSensor ||
+                bridge.kind == simulation::ElectricalSignalBridgeKind::ControlledVoltageSource) expectedUnit = "V";
+            else if (bridge.kind == simulation::ElectricalSignalBridgeKind::CurrentSensor ||
+                     bridge.kind == simulation::ElectricalSignalBridgeKind::ControlledCurrentSource) expectedUnit = "A";
+            if (output.type.scalar != expectedScalar || output.type.width != 1 || output.unit != expectedUnit)
+                throw std::invalid_argument("tipo/largura/unidade incompativel no bridge: " + bridge.signalBlockId);
+            if (sensor) {
+                if (!simulation::SignalCompiler::isExternalInput(engine, bridge.signalBlockId))
+                    throw std::invalid_argument("sensor bridge exige ExternalInput");
+                if (!sensorTargets.insert(bridge.signalBlockId).second)
+                    throw std::invalid_argument("mais de um sensor publica no mesmo ExternalInput");
+            }
+        }
+        self.m_electricalSignalBridgeDefinitions = std::move(definitions);
         self.invalidatePlan(simulation::PlanDomain::Signal);
     });
 }
@@ -732,8 +795,60 @@ void SimulationSession::setPauseCondition(const std::string& ownerId, const std:
     });
 }
 
+void SimulationSession::applySignalActuatorsUnlocked() {
+    for (const simulation::SignalPlan::BridgeBinding& binding : m_runtimeState.electricalSignalBridges) {
+        const uint32_t componentIndex = binding.definition.componentIndex;
+        if (componentIndex >= m_componentInstances.size() || !m_componentInstances[componentIndex]) continue;
+        bool changed = false;
+        switch (binding.definition.kind) {
+        case simulation::ElectricalSignalBridgeKind::ControlledVoltageSource:
+            changed = static_cast<components::SignalControlledVoltageSource*>(m_componentInstances[componentIndex].get())
+                          ->setCommand(m_runtimeState.signals.real(binding.signal));
+            break;
+        case simulation::ElectricalSignalBridgeKind::ControlledCurrentSource:
+            changed = static_cast<components::SignalControlledCurrentSource*>(m_componentInstances[componentIndex].get())
+                          ->setCommand(m_runtimeState.signals.real(binding.signal));
+            break;
+        case simulation::ElectricalSignalBridgeKind::DigitalOutput:
+            changed = static_cast<components::SignalDigitalOutput*>(m_componentInstances[componentIndex].get())
+                          ->setCommand(m_runtimeState.signals.boolean(binding.signal));
+            break;
+        default:
+            break;
+        }
+        if (changed) m_scheduler.dirtySet().insert(componentIndex);
+    }
+}
+
+void SimulationSession::publishElectricalSensorsToSignalUnlocked() {
+    for (const simulation::SignalPlan::BridgeBinding& binding : m_runtimeState.electricalSignalBridges) {
+        const uint32_t componentIndex = binding.definition.componentIndex;
+        if (componentIndex >= m_componentInstances.size() || !m_componentInstances[componentIndex]) continue;
+        switch (binding.definition.kind) {
+        case simulation::ElectricalSignalBridgeKind::VoltageSensor:
+            m_runtimeState.signals.setExternalReal(
+                binding.definition.signalBlockId,
+                static_cast<components::SignalVoltageSensor*>(m_componentInstances[componentIndex].get())->measuredValue());
+            break;
+        case simulation::ElectricalSignalBridgeKind::CurrentSensor:
+            m_runtimeState.signals.setExternalReal(
+                binding.definition.signalBlockId,
+                static_cast<components::SignalCurrentSensor*>(m_componentInstances[componentIndex].get())->measuredValue());
+            break;
+        case simulation::ElectricalSignalBridgeKind::DigitalInput:
+            m_runtimeState.signals.setExternalBool(
+                binding.definition.signalBlockId,
+                static_cast<components::SignalDigitalInput*>(m_componentInstances[componentIndex].get())->measuredValue());
+            break;
+        default:
+            break;
+        }
+    }
+}
+
 void SimulationSession::onStableStepUnlocked(uint64_t timestampNs) {
     m_runtimeState.virtualTimeNs = timestampNs;
+    publishElectricalSensorsToSignalUnlocked();
     m_runtimeState.signals.executeUntil(timestampNs);
     scheduleNextSignalBoundaryUnlocked(timestampNs);
     publishSnapshot();
@@ -1252,16 +1367,20 @@ SubcircuitExpansionResult SimulationSession::expandSubcircuit(const std::string&
     const uint32_t subcircuitInstanceId = kSubcircuitInstanceFlag | rawId;
 
     std::unordered_map<std::string, uint32_t> componentIndexByLocalId;
+    std::unordered_map<std::string, SubcircuitExpansionResult> nestedExpansionByLocalId;
     std::vector<uint32_t> childComponentIndices;
     std::vector<uint32_t> childSubcircuitIds; // subcircuitos aninhados, pra cascata de remoção
     std::optional<uint32_t> primaryMcuInstanceId;
 
+    try {
     for (const registry::SubcircuitComponentDef& compDef : def->components) {
         if (isSubcircuitType(compDef.typeId)) {
             const SubcircuitExpansionResult nested = expandSubcircuit(compDef.typeId, expansionStack);
             childSubcircuitIds.push_back(nested.subcircuitInstanceId);
             if (!primaryMcuInstanceId && nested.primaryMcuInstanceId) primaryMcuInstanceId = nested.primaryMcuInstanceId;
-            continue; // sem componentIndexByLocalId pra ele: wires nunca miram um subcircuito direto
+            componentIndexByLocalId[compDef.id] = nested.subcircuitInstanceId;
+            nestedExpansionByLocalId.emplace(compDef.id, nested);
+            continue;
         }
         registry::ComponentParams params = paramsFromPropertiesJson(compDef.propertiesJson);
         // Subcircuitos armazenam endpoints nos wires, não uma cópia redundante de `pinList` em
@@ -1292,14 +1411,28 @@ SubcircuitExpansionResult SimulationSession::expandSubcircuit(const std::string&
         }
     }
 
-    for (const registry::SubcircuitWireDef& wireDef : def->wires) {
-        const auto fromIt = componentIndexByLocalId.find(wireDef.fromComponentId);
-        const auto toIt = componentIndexByLocalId.find(wireDef.toComponentId);
-        if (fromIt == componentIndexByLocalId.end() || toIt == componentIndexByLocalId.end()) {
-            throw std::runtime_error("subcircuito '" + typeId + "': fio interno referencia componente inexistente");
+    const auto resolveEndpoint = [&](const std::string& localId, const std::string& portId) {
+        if (const auto nestedIt = nestedExpansionByLocalId.find(localId);
+            nestedIt != nestedExpansionByLocalId.end()) {
+            const auto pinIt = nestedIt->second.exposedPins.find(portId);
+            if (pinIt == nestedIt->second.exposedPins.end()) {
+                throw std::runtime_error("subcircuito '" + typeId + "': componente aninhado '" + localId +
+                                         "' nao possui portId externo '" + portId + "'");
+            }
+            return pinIt->second;
         }
+        const auto componentIt = componentIndexByLocalId.find(localId);
+        if (componentIt == componentIndexByLocalId.end()) {
+            throw std::runtime_error("subcircuito '" + typeId + "': fio interno referencia componente inexistente: " + localId);
+        }
+        return SubcircuitExposedPin{componentIt->second, portId};
+    };
+
+    for (const registry::SubcircuitWireDef& wireDef : def->wires) {
+        const SubcircuitExposedPin from = resolveEndpoint(wireDef.fromComponentId, wireDef.fromPinId);
+        const SubcircuitExposedPin to = resolveEndpoint(wireDef.toComponentId, wireDef.toPinId);
         try {
-            connectWireUnlocked(fromIt->second, wireDef.fromPinId, toIt->second, wireDef.toPinId);
+            connectWireUnlocked(from.instanceId, from.pinId, to.instanceId, to.pinId);
         } catch (const std::exception& err) {
             throw std::runtime_error(
                 "subcircuito '" + typeId + "': fio interno inválido " + wireDef.fromComponentId + "." +
@@ -1331,6 +1464,20 @@ SubcircuitExpansionResult SimulationSession::expandSubcircuit(const std::string&
 
     expansionStack.pop_back();
     return SubcircuitExpansionResult{subcircuitInstanceId, std::move(exposedPins), primaryMcuInstanceId};
+    } catch (...) {
+        // Expansão é uma publicação atômica: nenhum filho criado no staging pode sobreviver a um
+        // endpoint inválido, factory ausente, ciclo ou erro de propriedade.
+        for (auto it = childSubcircuitIds.rbegin(); it != childSubcircuitIds.rend(); ++it) {
+            removeSubcircuitInstanceUnlocked(*it);
+        }
+        for (auto it = childComponentIndices.rbegin(); it != childComponentIndices.rend(); ++it) {
+            removeComponentUnlocked(*it);
+        }
+        m_subcircuitChildren.erase(rawId);
+        m_subcircuitChildIndexByLocalId.erase(rawId);
+        if (!expansionStack.empty() && expansionStack.back() == typeId) expansionStack.pop_back();
+        throw;
+    }
 }
 
 void SimulationSession::removeSubcircuitInstance(uint32_t subcircuitInstanceId) {

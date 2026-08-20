@@ -30,7 +30,7 @@ function fullDocument(): SubcircuitDocument {
       ],
     },
     interface: [
-      { pinId: "VCC", label: "VCC", internalTunnel: "VCC" },
+      { pinId: "VCC", label: "VCC", internalTunnel: "VCC", domain: "signal", direction: "in", valueType: "Real", width: 1, unit: "V" },
       { pinId: "GND", label: "GND", internalTunnel: "GND" },
     ],
     symbol: {
@@ -88,6 +88,7 @@ function fullDocument(): SubcircuitDocument {
       assert(reparsed.document.typeId === original.typeId, "typeId deveria sobreviver ao round-trip");
       assert(reparsed.document.components.length === original.components.length, "components[] deveria sobreviver ao round-trip");
       assert(reparsed.document.interface.length === original.interface.length, "interface[] deveria sobreviver ao round-trip");
+      assert(reparsed.document.interface[0]?.domain === "signal" && reparsed.document.interface[0]?.unit === "V", "metadados tipados da interface deveriam sobreviver");
       assert(reparsed.document.symbol?.pins.length === 2, "symbol.pins[] deveria sobreviver ao round-trip");
       assert(reparsed.document.symbolMode === "generic", "symbolMode deveria sobreviver ao round-trip");
       assert(reparsed.document.icon?.width === 24, "icon deveria sobreviver ao round-trip");

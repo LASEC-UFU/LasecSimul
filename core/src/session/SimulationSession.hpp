@@ -243,6 +243,7 @@ public:
     SimulationPerformanceSnapshot performanceMetrics() const;
     /** Substitui o grafo de blocos no cold path. A publicação compila tipos, unidades, SCCs e rates. */
     void setSignalGraph(simulation::SignalGraphDefinition definition);
+    void setElectricalSignalBridges(std::vector<simulation::ElectricalSignalBridgeDefinition> definitions);
     const simulation::SignalRuntime& signalRuntime() const { return m_runtimeState.signals; }
 
     /** Registra, no ComponentRegistry desta sessão, uma factory delegando ao PluginRuntime para
@@ -485,6 +486,8 @@ private:
     ResolvedSignal sampleSignalRouteUnlocked(const simulation::SignalPlan::Route& route) const;
     void rebuildSignalRoutesIfNeeded();
     void acquireSubscribedSignalsUnlocked(uint64_t timestampNs);
+    void applySignalActuatorsUnlocked();
+    void publishElectricalSensorsToSignalUnlocked();
     void onStableStepUnlocked(uint64_t timestampNs);
     void scheduleNextSignalBoundaryUnlocked(uint64_t timestampNs);
     /** Chamado no fim de `onStableStepUnlocked()` (já na thread do Scheduler, com o mutex dela
@@ -580,6 +583,7 @@ private:
     std::vector<uint32_t>& m_signalSubscribers = m_runtimeState.execution.signalSubscribers;
     std::unordered_map<std::string, uint32_t> m_signalAliases;
     simulation::SignalGraphDefinition m_signalGraphDefinition;
+    std::vector<simulation::ElectricalSignalBridgeDefinition> m_electricalSignalBridgeDefinitions;
     std::optional<uint64_t> m_signalBoundaryScheduledNs;
     uint64_t m_signalScheduleGeneration = 0;
     struct PauseConditionState {

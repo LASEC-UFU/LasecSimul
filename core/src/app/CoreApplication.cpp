@@ -33,6 +33,7 @@
 #include "../components/connectors/Tunnel.hpp"
 #include "../components/connectors/Bus.hpp"
 #include "../components/logic/Button.hpp"
+#include "../components/bridges/SignalBridges.hpp"
 #include "../components/other/Ground.hpp"
 #include "../components/passive/Capacitor.hpp"
 #include "../components/passive/Inductor.hpp"
@@ -199,6 +200,37 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
         std::vector<PropertySchema>{},
         R"json({"en":{"name":"Tunnel"}})json",
         std::nullopt, std::nullopt, std::vector<std::string>{"pin"});
+
+    reg.registerFactory("bridges.voltage_sensor", [](const ComponentParams& p) {
+        return std::make_unique<components::SignalVoltageSensor>(makePins2(p, "p", "n"));
+    });
+    registerBuiltinMetadata("bridges.voltage_sensor", "Sensor de Tensao", {},
+                            R"json({"en":{"name":"Voltage Sensor"}})json", std::nullopt, std::nullopt, {"p", "n"});
+    reg.registerFactory("bridges.current_sensor", [](const ComponentParams& p) {
+        return std::make_unique<components::SignalCurrentSensor>(makePins2(p, "p", "n"));
+    });
+    registerBuiltinMetadata("bridges.current_sensor", "Sensor de Corrente", {},
+                            R"json({"en":{"name":"Current Sensor"}})json", std::nullopt, std::nullopt, {"p", "n"});
+    reg.registerFactory("bridges.digital_input", [](const ComponentParams& p) {
+        return std::make_unique<components::SignalDigitalInput>(makePins2(p, "p", "n"));
+    });
+    registerBuiltinMetadata("bridges.digital_input", "Entrada Digital", {},
+                            R"json({"en":{"name":"Digital Input"}})json", std::nullopt, std::nullopt, {"p", "n"});
+    reg.registerFactory("bridges.controlled_voltage_source", [](const ComponentParams& p) {
+        return std::make_unique<components::SignalControlledVoltageSource>(makePins2(p, "p", "n"));
+    });
+    registerBuiltinMetadata("bridges.controlled_voltage_source", "Fonte de Tensao por Sinal", {},
+                            R"json({"en":{"name":"Signal Controlled Voltage Source"}})json", std::nullopt, std::nullopt, {"p", "n"});
+    reg.registerFactory("bridges.controlled_current_source", [](const ComponentParams& p) {
+        return std::make_unique<components::SignalControlledCurrentSource>(makePins2(p, "p", "n"));
+    });
+    registerBuiltinMetadata("bridges.controlled_current_source", "Fonte de Corrente por Sinal", {},
+                            R"json({"en":{"name":"Signal Controlled Current Source"}})json", std::nullopt, std::nullopt, {"p", "n"});
+    reg.registerFactory("bridges.digital_output", [](const ComponentParams& p) {
+        return std::make_unique<components::SignalDigitalOutput>(makePins2(p, "p", "n"));
+    });
+    registerBuiltinMetadata("bridges.digital_output", "Saida Digital", {},
+                            R"json({"en":{"name":"Digital Output"}})json", std::nullopt, std::nullopt, {"p", "n"});
 
     reg.registerFactory("connectors.bus", [](const ComponentParams& p) {
         const auto schemas = components::Bus::propertySchema();
@@ -1226,12 +1258,33 @@ RegisteredSubcircuitInfo registerSubcircuitFromManifestRich(const std::filesyste
         iface.pinId = requiredString(ifaceJson, "pinId", "interface[]");
         iface.label = ifaceJson.value("label", iface.pinId);
         iface.internalTunnel = requiredString(ifaceJson, "internalTunnel", "interface[]");
+        iface.domain = ifaceJson.value("domain", std::string{"electrical"});
+        iface.direction = ifaceJson.value("direction", std::string{"inout"});
+        iface.valueType = ifaceJson.value("valueType", std::string{"Real"});
+        const int interfaceWidth = ifaceJson.value("width", 1);
+        iface.unit = ifaceJson.value("unit", std::string{});
+        if (iface.domain != "electrical" && iface.domain != "signal") {
+            throw std::runtime_error("interface com domain invalido: " + iface.pinId);
+        }
+        if (iface.direction != "in" && iface.direction != "out" && iface.direction != "inout") {
+            throw std::runtime_error("interface com direction invalida: " + iface.pinId);
+        }
+        if (iface.valueType != "Real" && iface.valueType != "Bool" && iface.valueType != "Int64") {
+            throw std::runtime_error("interface com valueType invalido: " + iface.pinId);
+        }
+        if (interfaceWidth < 1 || interfaceWidth > 64) {
+            throw std::runtime_error("interface com width fora de 1..64: " + iface.pinId);
+        }
+        iface.width = static_cast<uint16_t>(interfaceWidth);
         if (!interfacePinIds.insert(iface.pinId).second) throw std::runtime_error("pinId duplicado na interface: " + iface.pinId);
         if (!tunnelNames.contains(iface.internalTunnel)) {
             throw std::runtime_error("interface referencia tunnel interno inexistente: " + iface.internalTunnel);
         }
         if (returnPayload) {
-            exportedInterface.push_back({{"pinId", iface.pinId}, {"label", iface.label}, {"internalTunnel", iface.internalTunnel}});
+            exportedInterface.push_back({{"pinId", iface.pinId}, {"label", iface.label},
+                                         {"internalTunnel", iface.internalTunnel}, {"domain", iface.domain},
+                                         {"direction", iface.direction}, {"valueType", iface.valueType},
+                                         {"width", iface.width}, {"unit", iface.unit}});
             pinIds.push_back(iface.pinId);
         }
         def.interfaceDefs.push_back(std::move(iface));

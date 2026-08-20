@@ -76,6 +76,21 @@ struct ElectricalPlan {
     std::vector<ComponentStampResolution> stampResolutionByComponent;
 };
 
+enum class ElectricalSignalBridgeKind : uint8_t {
+    VoltageSensor,
+    CurrentSensor,
+    DigitalInput,
+    ControlledVoltageSource,
+    ControlledCurrentSource,
+    DigitalOutput,
+};
+
+struct ElectricalSignalBridgeDefinition {
+    ElectricalSignalBridgeKind kind = ElectricalSignalBridgeKind::VoltageSensor;
+    uint32_t componentIndex = 0;
+    std::string signalBlockId;
+};
+
 struct SignalPlan {
     uint64_t revision = 0;
     std::vector<uint32_t> subscribers;
@@ -89,6 +104,11 @@ struct SignalPlan {
     };
     std::vector<Subscriber> resolvedSubscribers;
     std::shared_ptr<const CompiledSignalGraph> engine;
+    struct BridgeBinding {
+        ElectricalSignalBridgeDefinition definition;
+        SignalSlotHandle signal;
+    };
+    std::vector<BridgeBinding> electricalBridges;
 };
 
 struct ExternalBindingPlan {
@@ -122,6 +142,7 @@ struct PlanCompileInput {
     DenseExecutionLists execution;
     std::vector<SignalPlan::Subscriber> resolvedSignalSubscribers;
     const SignalGraphDefinition* signalGraph = nullptr;
+    std::vector<ElectricalSignalBridgeDefinition> electricalSignalBridges;
     PlanInvalidation invalidation{PlanDomain::All};
     std::shared_ptr<const SimulationPlan> previous;
 };

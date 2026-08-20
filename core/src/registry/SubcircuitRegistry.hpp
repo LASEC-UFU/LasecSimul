@@ -2,6 +2,7 @@
 
 #include <string>
 #include <stdexcept>
+#include <cstdint>
 #include <unordered_map>
 #include <vector>
 
@@ -30,6 +31,11 @@ struct SubcircuitInterfaceDef {
     std::string pinId;
     std::string label;
     std::string internalTunnel;
+    std::string domain = "electrical";
+    std::string direction = "inout";
+    std::string valueType = "Real";
+    uint16_t width = 1;
+    std::string unit;
 };
 
 /** Definição completa de um subcircuito, já parseada de `.lssubcircuit` -- `packageJson` fica opaco
@@ -47,12 +53,7 @@ struct SubcircuitDefinition {
 
 class SubcircuitRegistry {
 public:
-    void registerDefinition(SubcircuitDefinition def, bool allowReplace = true) {
-        if (!allowReplace && contains(def.typeId)) {
-            throw std::invalid_argument("subcircuito duplicado: " + def.typeId);
-        }
-        m_byTypeId[def.typeId] = std::move(def);
-    }
+    void registerDefinition(SubcircuitDefinition def, bool allowReplace = true);
 
     const SubcircuitDefinition* find(const std::string& typeId) const {
         auto it = m_byTypeId.find(typeId);
@@ -63,8 +64,18 @@ public:
 
     const std::unordered_map<std::string, SubcircuitDefinition>& all() const { return m_byTypeId; }
 
+    /** Hash somente do conteúdo que participa da simulação. `packageJson`, nome, origem e layout
+     * são deliberadamente ignorados. Dependências aninhadas entram transitivamente e ciclos são
+     * rejeitados antes de qualquer expansão de runtime. */
+    std::string semanticHash(const std::string& typeId) const;
+    uint64_t semanticHashCacheHits() const { return m_semanticHashCacheHits; }
+
 private:
+    std::string semanticHashImpl(const std::string& typeId, std::vector<std::string>& stack) const;
+
     std::unordered_map<std::string, SubcircuitDefinition> m_byTypeId;
+    mutable std::unordered_map<std::string, std::string> m_semanticHashCache;
+    mutable uint64_t m_semanticHashCacheHits = 0;
 };
 
 } // namespace lasecsimul::registry

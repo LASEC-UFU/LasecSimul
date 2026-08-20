@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "corpus": "TDPS v7.71 examples",
+  "note": "Somente nomes relativos, hashes e contagens; os arquivos .smp originais nao sao redistribuidos.",
+  "files": 24,
+  "totals": {
+    "controllers": 66,
+    "processes": 139,
+    "calcBlocks": 172,
+    "recorders": 57,
+    "xyRecorders": 24,
+    "animatedTexts": 213
+  },
+  "entries": [
+    { "file": "basic flow loop/basic flow loop.smp", "sha256": "b8cfbe50c74f2cadec4833273153c7563f47c665ea6150f298b80c176dae7ce7", "controllers": 1, "processes": 1, "calcBlocks": 2, "recorders": 0, "xyRecorders": 1, "animatedTexts": 3 },
+    { "file": "boiler/boiler.smp", "sha256": "ab20aea2c35e95492c84a05dda86ae1881a0d5cd95e8d9fd62a1a4f1471d6b23", "controllers": 9, "processes": 15, "calcBlocks": 22, "recorders": 3, "xyRecorders": 1, "animatedTexts": 16 },
+    { "file": "combustion/cl.smp", "sha256": "1e228fc745fd76f0cd619b63673af0765637a0ae4c6fbebc6af3ac35df03836e", "controllers": 3, "processes": 4, "calcBlocks": 5, "recorders": 2, "xyRecorders": 1, "animatedTexts": 8 },
+    { "file": "combustion/dcl.smp", "sha256": "bc30d41306e01aa0f5d22eca9da9a22e058c14286a3148a1920b33e6922998a1", "controllers": 3, "processes": 4, "calcBlocks": 11, "recorders": 2, "xyRecorders": 1, "animatedTexts": 8 },
+    { "file": "combustion/ratio.smp", "sha256": "da9adb884d84b2505496eb4a59a42072dd3d7c24b61055c4f7bbf577ed79994f", "controllers": 3, "processes": 4, "calcBlocks": 3, "recorders": 2, "xyRecorders": 1, "animatedTexts": 8 },
+    { "file": "combustion2fuels/combustion2fuels.smp", "sha256": "7acbd68671cc6c2f111706b84386ec0df2c4e83ff4eaae2d1dddfd521b54ad89", "controllers": 3, "processes": 3, "calcBlocks": 9, "recorders": 1, "xyRecorders": 1, "animatedTexts": 7 },
+    { "file": "coolingplant/coolingplant.smp", "sha256": "77fa7da8a7c0915f6b48c48a8bad8f5f16061da5f10d5f19d0b20e4404ca5736", "controllers": 4, "processes": 14, "calcBlocks": 24, "recorders": 0, "xyRecorders": 1, "animatedTexts": 20 },
+    { "file": "course-fine flow loop/course-fine flow loop.smp", "sha256": "0b73b8dcccd939a693c8379eaecd6498b5ad69b65bea24e9f53d997d1802fba8", "controllers": 2, "processes": 2, "calcBlocks": 1, "recorders": 0, "xyRecorders": 1, "animatedTexts": 5 },
+    { "file": "ethaneplant/ethaneplant.smp", "sha256": "c0f270409851707243149179f9027b3756b9a49ab0597e2225a4c3819ccef10c", "controllers": 6, "processes": 17, "calcBlocks": 15, "recorders": 3, "xyRecorders": 1, "animatedTexts": 19 },
+    { "file": "frequency response/frequencyresponse.smp", "sha256": "53a185b6daec04ee8263eec49a84cc3ba3078038a1932948bb822f257081e9b5", "controllers": 1, "processes": 2, "calcBlocks": 4, "recorders": 0, "xyRecorders": 1, "animatedTexts": 4 },
+    { "file": "furnace masterslave/furnace.smp", "sha256": "a8559f80f6bc5851e77b7c480d9bb565743b7d53d20e9dc4fa777d3af77ad826", "controllers": 2, "processes": 4, "calcBlocks": 3, "recorders": 1, "xyRecorders": 1, "animatedTexts": 8 },
+    { "file": "furnace/furnace.smp", "sha256": "85ea76caa9916ee65e07da8d6882d757e319f7bc1eda018e2455f62aa74b8d19", "controllers": 1, "processes": 4, "calcBlocks": 2, "recorders": 1, "xyRecorders": 1, "animatedTexts": 5 },
+    { "file": "header pressure with 3 consumers/header pressure with 3 consumers.smp", "sha256": "b7b37e4df048e1eb3ab6e2eb1112fae642e33a6c1e238596b5e1a86fcf670016", "controllers": 3, "processes": 6, "calcBlocks": 3, "recorders": 0, "xyRecorders": 1, "animatedTexts": 9 },
+    { "file": "heat exchanger/heatexchanger.smp", "sha256": "1035bf82395bb391f7c6065be9d2977684f81271719ffa41532525e610dcceae", "controllers": 1, "processes": 4, "calcBlocks": 5, "recorders": 9, "xyRecorders": 1, "animatedTexts": 9 },
+    { "file": "Industrial Boiler/Industrial Boiler.smp", "sha256": "208fc164b1b09db876e81be325719adef346c914622049e824f5ffc2c60ebd96", "controllers": 9, "processes": 15, "calcBlocks": 22, "recorders": 10, "xyRecorders": 1, "animatedTexts": 16 },
+    { "file": "linearized pH control/Linearized pH control.smp", "sha256": "4afd2dd8b061f9cafb02d6e53b842ac3744800c46c28535f979ac5ccdf3d838e", "controllers": 1, "processes": 4, "calcBlocks": 3, "recorders": 0, "xyRecorders": 1, "animatedTexts": 6 },
+    { "file": "linearized pH control/pHcontrol.smp", "sha256": "f3d96a9501d917bc74865a37532c2a04efc4dba1794170912b7dabc0e3fa47ee", "controllers": 1, "processes": 4, "calcBlocks": 3, "recorders": 0, "xyRecorders": 1, "animatedTexts": 6 },
+    { "file": "nonlinear flow processes/nonlinear flow processes.smp", "sha256": "0259dc0ab37fecd9a6aded1050e7f14b0b87ecf11c39d785caf9bcf7587acfaf", "controllers": 4, "processes": 4, "calcBlocks": 4, "recorders": 0, "xyRecorders": 1, "animatedTexts": 12 },
+    { "file": "processes to model/4processes.smp", "sha256": "a0db5d494d2ee52c850f9087565ad76c15f04b27f61b1ac6d283cf5b6acff77c", "controllers": 0, "processes": 6, "calcBlocks": 7, "recorders": 4, "xyRecorders": 1, "animatedTexts": 5 },
+    { "file": "reactor/reactor.smp", "sha256": "c72580f796f2a6fe7232e23e0cf8ce90665a04a85954d23d4a87f66bb54d2af8", "controllers": 4, "processes": 9, "calcBlocks": 9, "recorders": 1, "xyRecorders": 1, "animatedTexts": 11 },
+    { "file": "regulatory level/regulatory level.smp", "sha256": "0d7fe21f2a8153797395ad469c19c0ed0088ba9e43cb6f6fc03b3496a6347dc5", "controllers": 1, "processes": 4, "calcBlocks": 4, "recorders": 9, "xyRecorders": 1, "animatedTexts": 9 },
+    { "file": "Smith predictor/smithpredictor.smp", "sha256": "ff3358a94de760d12cb007e0f364f8d37a3910051ad806a457aa740cded19c73", "controllers": 1, "processes": 4, "calcBlocks": 4, "recorders": 0, "xyRecorders": 1, "animatedTexts": 8 },
+    { "file": "splitrange control/splitrange.smp", "sha256": "572ee5c0e3febb25af7408ab7de8ff9156ede6d35a9502b4937e835e7314a998", "controllers": 1, "processes": 1, "calcBlocks": 5, "recorders": 1, "xyRecorders": 1, "animatedTexts": 5 },
+    { "file": "surge tank/surge tank.smp", "sha256": "f2f2c7312e0bf3b07b234e39a413d72a65d5196d8797a8e14c99564af0eb381d", "controllers": 2, "processes": 4, "calcBlocks": 2, "recorders": 8, "xyRecorders": 1, "animatedTexts": 6 }
+  ]
+}

@@ -60,9 +60,9 @@ paleta.
   "é eletricamente digital?" e passou a significar só "é porta lógica pura ou bloco FPGA/GHDL?";
 - o botão de inserção rápida de FPGA na barra de ferramentas do editor fica sempre disponível (o
   editor não tem abas, então não há gate por seção — ver [FEAT-005](fpga-ghdl.md));
-- `control` (controladores, PID, blocos de controle, PLC/IEC 61131-3) e `process` (tanques, bombas,
-  válvulas, motores, tubulações, sensores de processo) não possuem entradas enquanto as respectivas
-  bibliotecas não forem implementadas;
+- `control` (controladores, PID, blocos de controle, PLC/IEC 61131-3) e `process` (modelos e
+  subcircuitos de processo) recebem entradas somente das respectivas bibliotecas implementadas e
+  sempre por `workspaceSection` explícito; F7 introduz os primeiros subcircuitos em `process`;
 - um item não pode ser duplicado entre seções para facilitar descoberta.
 
 `workspaceSection` é o metadado extensível e preferencial do catálogo — é a ÚNICA fonte de
@@ -107,7 +107,8 @@ painel para cada item.
   `Conversores`, `Outros logicos` direto na raiz, sem um nível `Logicos` agrupando-as) e o bloco
   programável FPGA na pasta `GHDL`;
 - buscas e comandos visuais não fazem itens de outra seção reaparecerem na paleta;
-- `Controle` e `Processo` existem como abas de filtro na paleta e permanecem vazias nesta entrega;
+- `Controle` e `Processo` existem como abas de filtro; ficam vazias enquanto não houver entrada com
+  `workspaceSection` explícito e passam a listar as bibliotecas instaladas que o declarem;
 - o editor de esquemático nunca exibe abas, placeholder ou qualquer restrição de ferramenta por
   seção — todo o catálogo pode ser inserido e conectado no mesmo circuito a qualquer momento;
 - trocar de aba na paleta nunca emite alteração de projeto, nunca modifica o `.lsproj` e nunca afeta
@@ -125,4 +126,4 @@ painel para cada item.
   seleção persistida, prioridade do metadado e classificação legada restrita a `analog`/`digital`
   (com `digital` limitada a `logic.`/`digital.`);
 - `extension/src/ui/webview/paletteTree.test.ts`: isolamento rigoroso de `analog`/`digital` e
-  ausência inicial de itens em `control`/`process`.
+  ausência de itens em `control`/`process` no catálogo sintético sem metadado explícito.

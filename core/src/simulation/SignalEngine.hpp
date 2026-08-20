@@ -32,6 +32,7 @@ struct SignalRate {
 
 enum class SignalBlockKind : uint8_t {
     Source,
+    ExternalInput,
     Gain,
     Sum,
     Product,
@@ -54,6 +55,7 @@ enum class SignalBlockKind : uint8_t {
     Hysteresis,
     Stiction,
     RateLimiter,
+    Pid,
 };
 
 enum class AlgebraicLoopPolicy : uint8_t { Reject, FixedPoint };
@@ -118,6 +120,10 @@ class CompiledSignalGraph;
 class SignalCompiler {
 public:
     static std::shared_ptr<const CompiledSignalGraph> compile(const SignalGraphDefinition& definition);
+    static SignalSlotHandle output(const std::shared_ptr<const CompiledSignalGraph>& graph, std::string_view blockId);
+    static SignalPortDefinition outputDefinition(const std::shared_ptr<const CompiledSignalGraph>& graph,
+                                                 std::string_view blockId);
+    static bool isExternalInput(const std::shared_ptr<const CompiledSignalGraph>& graph, std::string_view blockId);
 };
 
 /** Mutable dense state. bind() performs all allocations; executeUntil() allocates nothing. */
@@ -142,6 +148,8 @@ public:
     double real(SignalSlotHandle slot, uint16_t element = 0) const;
     bool boolean(SignalSlotHandle slot, uint16_t element = 0) const;
     int64_t integer(SignalSlotHandle slot, uint16_t element = 0) const;
+    void setExternalReal(std::string_view blockId, double value, uint16_t element = 0);
+    void setExternalBool(std::string_view blockId, bool value, uint16_t element = 0);
 
     /** Used by tests/diagnostics to prove storage remains stable during steady-state execution. */
     const void* realStorageAddress() const { return m_reals.data(); }

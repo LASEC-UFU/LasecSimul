@@ -1,7 +1,7 @@
 ---
 id: FEAT-003
 kind: feature
-status: planned
+status: active
 dependsOn: [FEAT-001, FEAT-002, ARCH-006]
 supersedes: []
 ---

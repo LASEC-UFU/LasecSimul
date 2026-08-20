@@ -169,7 +169,20 @@ export function renameCanonicalTunnelNames(document: SubcircuitDocument): Subcir
  * `pin.id` -- não precisa procurar nenhum componente-túnel pra derivar isto. */
 export function deriveInterfaceEntries(document: SubcircuitDocument): SubcircuitInterfaceEntry[] {
   const pins = document.symbol?.pins ?? [];
-  return pins.map((pin) => ({ pinId: pin.id, label: pin.label ?? pin.id, internalTunnel: pin.id }));
+  const existingByPinId = new Map(document.interface.map((entry) => [entry.pinId, entry]));
+  return pins.map((pin) => {
+    const existing = existingByPinId.get(pin.id);
+    return {
+      pinId: pin.id,
+      label: pin.label ?? pin.id,
+      internalTunnel: pin.id,
+      ...(existing?.domain ? { domain: existing.domain } : {}),
+      ...(existing?.direction ? { direction: existing.direction } : {}),
+      ...(existing?.valueType ? { valueType: existing.valueType } : {}),
+      ...(existing?.width !== undefined ? { width: existing.width } : {}),
+      ...(existing?.unit !== undefined ? { unit: existing.unit } : {}),
+    };
+  });
 }
 
 /** Ponto único chamado ANTES de todo save -- aplica `renameCanonicalTunnelNames` e re-deriva

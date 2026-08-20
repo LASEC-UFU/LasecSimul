@@ -8,7 +8,11 @@ if(MSVC)
     add_compile_options(/EHsc)
     # Restrito à unidade grande: aplicar globalmente forçaria recompilação/crescimento de todos
     # os objetos do projeto sem necessidade.
-    set_source_files_properties(src/session/SimulationSession.cpp PROPERTIES COMPILE_OPTIONS /bigobj)
+    set_source_files_properties(
+        src/session/SimulationSession.cpp
+        src/app/CoreApplication.cpp
+        PROPERTIES COMPILE_OPTIONS /bigobj
+    )
 endif()
 
 # GIT_SHALLOW TRUE em todas as dependências via FetchContent: GIT_TAG já fixa um commit exato, então
@@ -54,6 +58,7 @@ set(CORE_SOURCES
     src/main.cpp
     src/app/CoreApplication.cpp
     src/resources/ResourceGovernor.cpp
+    src/registry/SubcircuitRegistry.cpp
     src/ipc/NotificationQueue.cpp
     src/ipc/IpcServer.cpp
     src/plugins/PluginModule.cpp
@@ -75,6 +80,7 @@ set(CORE_SOURCES
     src/fpga/GhdlArenaBridge.cpp
     src/simulation/Scheduler.cpp
     src/simulation/SignalEngine.cpp
+    src/simulation/ProcessSubcircuitCompiler.cpp
     src/simulation/SimulationPlan.cpp
     src/session/SimulationSession.cpp
     src/session/PauseExpression.cpp
@@ -120,6 +126,7 @@ add_test(NAME resource_worker_pool COMMAND resource_worker_pool_test)
 set(TEST_COMMON_SOURCE_FILES
     src/app/CoreApplication.cpp
     src/resources/ResourceGovernor.cpp
+    src/registry/SubcircuitRegistry.cpp
     src/ipc/NotificationQueue.cpp
     src/ipc/IpcServer.cpp
     src/plugins/PluginModule.cpp
@@ -141,6 +148,7 @@ set(TEST_COMMON_SOURCE_FILES
     src/fpga/GhdlArenaBridge.cpp
     src/simulation/Scheduler.cpp
     src/simulation/SignalEngine.cpp
+    src/simulation/ProcessSubcircuitCompiler.cpp
     src/simulation/SimulationPlan.cpp
     src/session/SimulationSession.cpp
     src/session/PauseExpression.cpp
@@ -191,6 +199,28 @@ add_executable(signal_dynamics_test
 )
 target_include_directories(signal_dynamics_test PRIVATE include src)
 add_test(NAME signal_dynamics COMMAND signal_dynamics_test)
+
+add_executable(signal_bridge_test
+    test/core/simulation/SignalBridgeTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(signal_bridge_test PRIVATE include src)
+target_link_libraries(signal_bridge_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+if(NOT WIN32)
+    target_link_libraries(signal_bridge_test PRIVATE dl)
+endif()
+add_test(NAME signal_bridge COMMAND signal_bridge_test)
+
+add_executable(process_subcircuit_test
+    test/core/simulation/ProcessSubcircuitTest.cpp
+    src/simulation/SignalEngine.cpp
+    src/simulation/ProcessSubcircuitCompiler.cpp
+    src/registry/SubcircuitRegistry.cpp
+)
+target_include_directories(process_subcircuit_test PRIVATE include src)
+target_link_libraries(process_subcircuit_test PRIVATE nlohmann_json::nlohmann_json)
+target_compile_definitions(process_subcircuit_test PRIVATE PROCESS_LIBRARY_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../subcircuits")
+add_test(NAME process_subcircuit COMMAND process_subcircuit_test)
 
 add_executable(simulation_plan_session_test
     test/core/simulation/SimulationPlanSessionTest.cpp
@@ -502,7 +532,10 @@ if(NOT WIN32)
     target_link_libraries(simulation_performance_benchmark PRIVATE dl)
 endif()
 add_test(NAME simulation_performance_smoke
-         COMMAND simulation_performance_benchmark --sim-ns 10000000 --scale 1 --digital-hz 10000 --require-realtime)
+         COMMAND simulation_performance_benchmark --sim-ns 10000000 --scale 1 --digital-hz 10000
+                 $<$<CONFIG:Release>:--require-realtime>)
+# Debug valida o pipeline e os contadores, mas instrumentacao/sem otimizacao nao e um gate de
+# tempo real reproduzivel. O limiar >=1x pertence ao build Release usado por baseline/CI de perf.
 add_executable(signal_engine_benchmark benchmark/signal_engine_benchmark.cpp src/simulation/SignalEngine.cpp)
 target_include_directories(signal_engine_benchmark PRIVATE include src)
 
@@ -1207,7 +1240,7 @@ add_test(NAME plugin_watchdog COMMAND plugin_watchdog_test)
 # Mantenha todos os testes em exatamente um grupo: o runner descobre os nomes via CTest e usa
 # estes labels, sem duplicar listas de testes em JavaScript ou no workflow de CI.
 set(LASECSIMUL_HERMETIC_TESTS
-    pause_expression logic_analyzer_vector resource_governor resource_worker_pool resource_queues simulation_plan signal_engine signal_dynamics simulation_plan_session dense_hot_path voltage_divider circuit_group_reuse diode zener_led
+    pause_expression logic_analyzer_vector resource_governor resource_worker_pool resource_queues simulation_plan signal_engine signal_dynamics signal_bridge process_subcircuit simulation_plan_session dense_hot_path voltage_divider circuit_group_reuse diode zener_led
     inert_components_fix probe_pause_on_change subcircuit simulide_sources_meters voltmeter
     component_removal netlist union_find scheduler sparse_set core_bootstrap circuit_group logic_value
     ghdl_arena_bridge ghdl_process_manager fpga_port_mapper mna_solver sha256 passive_components

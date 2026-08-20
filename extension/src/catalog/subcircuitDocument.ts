@@ -24,6 +24,13 @@ export interface SubcircuitInterfaceEntry {
   pinId: string;
   label: string;
   internalTunnel: string;
+  /** Metadados opcionais e retrocompatíveis. Ausentes preservam subcircuitos elétricos v3
+   * existentes; presentes tornam a fronteira de signal/control explicitamente tipada. */
+  domain?: "electrical" | "signal";
+  direction?: "in" | "out" | "inout";
+  valueType?: "Real" | "Bool" | "Int64";
+  width?: number;
+  unit?: string;
 }
 
 /** Uma projeção visual de um componente interno REAL no Símbolo (substitui "Modo Placa"/`exposed`+
@@ -111,6 +118,11 @@ function parseInterfaceEntry(raw: unknown): SubcircuitInterfaceEntry | undefined
     pinId,
     label: typeof entry.label === "string" ? entry.label : pinId,
     internalTunnel: typeof entry.internalTunnel === "string" ? entry.internalTunnel : pinId,
+    domain: entry.domain === "electrical" || entry.domain === "signal" ? entry.domain : undefined,
+    direction: entry.direction === "in" || entry.direction === "out" || entry.direction === "inout" ? entry.direction : undefined,
+    valueType: entry.valueType === "Real" || entry.valueType === "Bool" || entry.valueType === "Int64" ? entry.valueType : undefined,
+    width: typeof entry.width === "number" && Number.isInteger(entry.width) && entry.width > 0 ? entry.width : undefined,
+    unit: typeof entry.unit === "string" ? entry.unit : undefined,
   };
 }
 

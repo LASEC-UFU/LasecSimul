@@ -2,7 +2,7 @@
 id: ROADMAP-001
 kind: roadmap
 status: active
-currentGate: F7
+currentGate: F8
 dependsOn: [GOV-001, BENCH-001]
 supersedes: []
 ---
@@ -31,11 +31,11 @@ O roadmap substitui a ordem histórica que iniciava pelo Signal Engine. Cada fas
 ### F7A — hierarquia e shell/implementation graph
 
 - `ADR-0008`, `SCHEMA-002` e `FEAT-004`;
-- interface externa tipada com `portId` estável;
-- `package`/símbolo externo separado da semântica interna;
-- `interfaceBindings`, `parameterExports` e `telemetryExports`;
-- abrir implementação com breadcrumb e túneis de fronteira;
-- `CompiledSubsystemTemplate` e flattening para runtime;
+- interface externa tipada com `pinId` estavel e tunnel de fronteira;
+- `symbol` externo separado da semantica interna;
+- `components`/`topology`, `exportedPropertyComponentIds` e telemetria/Probe existentes;
+- editor de subcircuito existente, nesting e tuneis de fronteira;
+- hash semantico/cache transitivo e compilacao cold-path para o plano de sinal normal;
 - nested composites com rejeição de ciclo.
 
 Gate: composto e expansão manual são numericamente equivalentes, duas instâncias não compartilham estado e mudança visual não quebra bindings.
@@ -89,7 +89,7 @@ Gate: PLC funciona sem protocolos e protocolos funcionam sem PLC.
 
 ## Gate atual
 
-F0–F6 estão concluídos. O próximo trabalho de produto é F7; nenhuma feature nova deve furar F7.
+F0–F7 estão concluídos. O próximo trabalho de produto é F8; nenhuma feature nova deve furar F8.
 
 ## Política de exceção
 

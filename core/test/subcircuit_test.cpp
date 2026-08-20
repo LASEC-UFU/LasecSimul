@@ -67,6 +67,25 @@ SubcircuitDefinition makeDivisor5vDefinition() {
     return def;
 }
 
+SubcircuitDefinition makeNestedDivisorDefinition() {
+    SubcircuitDefinition def;
+    def.typeId = "subcircuits.nested_divisor";
+    def.name = "Divisor aninhado";
+    def.components = {
+        {"inner", "subcircuits.divisor_5v", "{}"},
+        {"outer_in", "connectors.tunnel", R"({"name":"IN"})"},
+        {"outer_out", "connectors.tunnel", R"({"name":"OUT"})"},
+        {"outer_gnd", "connectors.tunnel", R"({"name":"GND"})"},
+    };
+    def.wires = {
+        {"outer_in", "pin", "inner", "VIN"},
+        {"inner", "VOUT", "outer_out", "pin"},
+        {"inner", "GND", "outer_gnd", "pin"},
+    };
+    def.interfaceDefs = {{"IN", "Entrada", "IN"}, {"OUT", "Saida", "OUT"}, {"GND", "Terra", "GND"}};
+    return def;
+}
+
 ComponentParams withVoltage(double v) {
     ComponentParams p;
     p.properties["voltage"] = v;
@@ -285,6 +304,99 @@ void testFindSubcircuitChildByLocalId() {
     std::printf("OK: findSubcircuitChildByLocalId resolve por id local, sem colisao entre instancias, com efeito eletrico real, e expira na remocao.\n");
 }
 
+void testNestedPortsAreConnectableAndStateIsIsolated() {
+    GlobalPluginCache cache;
+    SimulationSession session(cache);
+    registerTestComponents(session.components());
+    session.subcircuits().registerDefinition(makeDivisor5vDefinition());
+    session.subcircuits().registerDefinition(makeNestedDivisorDefinition());
+
+    const SubcircuitExpansionResult first = session.addSubcircuitInstance("subcircuits.nested_divisor");
+    const SubcircuitExpansionResult second = session.addSubcircuitInstance("subcircuits.nested_divisor");
+    const auto nestedId = session.findSubcircuitChildByLocalId(first.subcircuitInstanceId, "inner");
+    if (!nestedId || !session.isSubcircuitInstance(*nestedId)) {
+        std::fprintf(stderr, "FALHOU: id local do filho aninhado deveria resolver para uma instancia de subcircuito\n");
+        std::exit(1);
+    }
+
+    const uint32_t source = session.addComponent("sources.dc_voltage", withVoltage(10.0));
+    const uint32_t ground = session.addComponent("other.ground", {});
+    session.connectWire(source, "p1", first.exposedPins.at("IN").instanceId, "pin");
+    session.connectWire(first.exposedPins.at("GND").instanceId, "pin", source, "p2");
+    session.connectWire(first.exposedPins.at("GND").instanceId, "pin", ground, "pin");
+    for (int i = 0; i < 100 && session.settleStep(); ++i) {}
+
+    const double firstOutput = session.nodeVoltageOfPin(first.exposedPins.at("OUT").instanceId, "pin");
+    const double secondOutput = session.nodeVoltageOfPin(second.exposedPins.at("OUT").instanceId, "pin");
+    if (!nearlyEqual(firstOutput, 5.0) || !nearlyEqual(secondOutput, 0.0, 1e-3)) {
+        std::fprintf(stderr, "FALHOU: nesting conectado/isolado esperava 5V e 0V, recebeu %.6f e %.6f\n",
+                     firstOutput, secondOutput);
+        std::exit(1);
+    }
+    std::printf("OK: ports de subcircuito aninhado conectam por portId e instancias permanecem isoladas.\n");
+}
+
+void testSemanticHashIsStableTransitiveAndCached() {
+    SubcircuitRegistry registry;
+    SubcircuitDefinition inner = makeDivisor5vDefinition();
+    inner.components[0].propertiesJson = R"({"resistance":1000,"temperature":25})";
+    registry.registerDefinition(inner);
+    SubcircuitDefinition outer = makeNestedDivisorDefinition();
+    outer.packageJson = R"({"width":100,"pins":[]})";
+    registry.registerDefinition(outer);
+
+    const std::string original = registry.semanticHash(outer.typeId);
+    const uint64_t hitsBefore = registry.semanticHashCacheHits();
+    if (registry.semanticHash(outer.typeId) != original || registry.semanticHashCacheHits() <= hitsBefore) {
+        std::fprintf(stderr, "FALHOU: segunda consulta deveria ser cache hit do mesmo hash\n");
+        std::exit(1);
+    }
+
+    outer.packageJson = R"({"width":999,"pins":[{"id":"movido","x":80}]})";
+    outer.name = "Nome visual alterado";
+    registry.registerDefinition(outer);
+    if (registry.semanticHash(outer.typeId) != original) {
+        std::fprintf(stderr, "FALHOU: mudanca puramente visual alterou hash semantico\n");
+        std::exit(1);
+    }
+
+    inner.components[0].propertiesJson = R"({"temperature":25,"resistance":2000})";
+    registry.registerDefinition(inner);
+    if (registry.semanticHash(outer.typeId) == original) {
+        std::fprintf(stderr, "FALHOU: mudanca interna transitiva nao alterou hash semantico\n");
+        std::exit(1);
+    }
+    std::printf("OK: hash semantico e normalizado, transitivo, cacheado e independente do visual.\n");
+}
+
+void testFailedExpansionRollsBackCreatedChildren() {
+    GlobalPluginCache cache;
+    SimulationSession session(cache);
+    registerTestComponents(session.components());
+    SubcircuitDefinition invalid;
+    invalid.typeId = "subcircuits.invalid_transaction";
+    invalid.components = {
+        {"created_first", "passive.resistor", R"({"resistance":1000})"},
+        {"missing", "component.that.does.not.exist", "{}"},
+    };
+    session.subcircuits().registerDefinition(std::move(invalid));
+    bool rejected = false;
+    try { (void)session.addSubcircuitInstance("subcircuits.invalid_transaction"); }
+    catch (const std::exception&) { rejected = true; }
+    if (!rejected) {
+        std::fprintf(stderr, "FALHOU: expansao com factory ausente deveria falhar\n");
+        std::exit(1);
+    }
+    bool removed = false;
+    try { (void)session.getComponentState(0); }
+    catch (const std::exception&) { removed = true; }
+    if (!removed) {
+        std::fprintf(stderr, "FALHOU: componente criado antes da falha sobreviveu ao rollback\n");
+        std::exit(1);
+    }
+    std::printf("OK: falha de expansao faz rollback de todos os filhos ja criados.\n");
+}
+
 } // namespace
 
 int main() {
@@ -293,6 +405,9 @@ int main() {
     testCascadeRemovalDeletesAllInternalComponents();
     testCycleDetection();
     testFindSubcircuitChildByLocalId();
+    testNestedPortsAreConnectableAndStateIsIsolated();
+    testSemanticHashIsStableTransitiveAndCached();
+    testFailedExpansionRollsBackCreatedChildren();
     std::printf("\nTodos os testes de subcircuito passaram.\n");
     return 0;
 }

@@ -99,6 +99,7 @@ import {
   resolveSourceFilePath,
 } from "./catalog/subcircuitInternals";
 import { initSimulationLog, logSimulation, noteSimulationStatusChange, showSimulationLogChannel } from "./diagnostics/simulationLog";
+import { importTdpsSmpCommand } from "./tdps/tdpsCommand";
 import { ProjectCustomEditorProvider } from "./ui/panels/ProjectCustomEditorProvider";
 import { maybeOfferMachineNetworkSetup, registerMachineNetworkSetupCommand } from "./network/machineNetworkSetup";
 import {
@@ -2423,6 +2424,9 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
       syncSchematicPanel,
     })),
     vscode.commands.registerCommand("lasecsimul.importProject", () => importProjectCommand({ syncSchematicPanel })),
+    vscode.commands.registerCommand("lasecsimul.importTdps", () => importTdpsSmpCommand({
+      refreshCatalog: () => refreshUnifiedCatalogState(true, catalogCommandOptions()),
+    })),
     vscode.commands.registerCommand("lasecsimul.palette.registerFile", () => registerCatalogFileCommand(catalogCommandOptions())),
     vscode.commands.registerCommand("lasecsimul.palette.removeRegistered", (item: { sourceId?: string }) =>
       removeRegisteredCatalogItemCommand(item, catalogCommandOptions())

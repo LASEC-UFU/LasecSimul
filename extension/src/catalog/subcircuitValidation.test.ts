@@ -1,7 +1,7 @@
 import { createTestRunner, assert } from "../ipc/testSupport/MockCoreServer";
 import { TUNNEL_TYPE_ID } from "../ui/webview/model";
 import { SUBCIRCUIT_SCHEMA_VERSION, SubcircuitDocument } from "./subcircuitDocument";
-import { createPin } from "./subcircuitPinModel";
+import { createPin, finalizeSubcircuitDocumentForSave } from "./subcircuitPinModel";
 import { setExposedComponent } from "./subcircuitExposedComponents";
 import { validateSubcircuitDocument } from "./subcircuitValidation";
 
@@ -28,7 +28,7 @@ function makeIdFactory(prefix: string): () => string {
 
   await test("documento válido mínimo não produz erros nem warnings", () => {
     const created = createPin(emptyDocument(), { label: "VCC", x: 0, y: 8, angle: 180 }, makeIdFactory("id"));
-    const result = validateSubcircuitDocument(created.document);
+    const result = validateSubcircuitDocument(finalizeSubcircuitDocumentForSave(created.document));
     assert(result.errors.length === 0, `não esperava erros, recebido: ${result.errors.join(" | ")}`);
     assert(result.warnings.length === 0, `não esperava warnings, recebido: ${result.warnings.join(" | ")}`);
   });
@@ -52,6 +52,29 @@ function makeIdFactory(prefix: string): () => string {
     assert(result.errors.some((e) => e.includes("P1") && e.includes("túnel")), `esperava erro de pino sem túnel, recebido: ${result.errors.join(" | ")}`);
   });
 
+  await test("detecta endpoint topológico órfão antes de salvar", () => {
+    const doc: SubcircuitDocument = {
+      ...emptyDocument(),
+      topology: {
+        revision: 1,
+        nodes: [],
+        conductors: [{ id: "w1", from: { kind: "port", componentId: "fantasma", pinId: "out" }, to: { kind: "node", nodeId: "no-fantasma" }, vertices: [] }],
+      },
+    };
+    const result = validateSubcircuitDocument(doc);
+    assert(result.errors.filter((error) => error.includes("órfão")).length === 2, `esperava os dois endpoints órfãos, recebido: ${result.errors.join(" | ")}`);
+  });
+
+  await test("interface signal exige causalidade e binding para túnel real", () => {
+    const doc: SubcircuitDocument = {
+      ...emptyDocument(),
+      interface: [{ pinId: "PV", label: "PV", internalTunnel: "AUSENTE", domain: "signal", direction: "inout", valueType: "Real", width: 1, unit: "%" }],
+    };
+    const result = validateSubcircuitDocument(doc);
+    assert(result.errors.some((error) => error.includes("inout")), `esperava erro de causalidade: ${result.errors.join(" | ")}`);
+    assert(result.errors.some((error) => error.includes("AUSENTE")), `esperava erro de tunnel órfão: ${result.errors.join(" | ")}`);
+  });
+
   await test("detecta túnel referenciando um pino inexistente", () => {
     const doc: SubcircuitDocument = {
       ...emptyDocument(),
@@ -73,7 +96,7 @@ function makeIdFactory(prefix: string): () => string {
 
   await test("exposedComponents[] com referência órfã vira warning (auto-fix seguro) em vez de erro bloqueante", () => {
     const created = createPin(emptyDocument(), { label: "VCC", x: 0, y: 8, angle: 180 }, makeIdFactory("id"));
-    const doc: SubcircuitDocument = { ...created.document, exposedComponents: [{ componentId: "nao-existe", x: 0, y: 0, rotation: 0, flipH: false, flipV: false, scale: 1, layer: 0 }] };
+    const doc: SubcircuitDocument = finalizeSubcircuitDocumentForSave({ ...created.document, exposedComponents: [{ componentId: "nao-existe", x: 0, y: 0, rotation: 0, flipH: false, flipV: false, scale: 1, layer: 0 }] });
     const result = validateSubcircuitDocument(doc);
     assert(result.errors.length === 0, "referência órfã em exposedComponents deveria ser corrigível automaticamente, não bloqueante");
     assert(result.warnings.some((w) => w.includes("nao-existe")), `esperava warning sobre a referência órfã, recebido: ${result.warnings.join(" | ")}`);

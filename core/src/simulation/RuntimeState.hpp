@@ -15,6 +15,7 @@ struct RuntimeState {
     uint64_t virtualTimeNs = 0;
     DenseExecutionLists execution;
     std::vector<SignalPlan::Subscriber> resolvedSignalSubscribers;
+    std::vector<SignalPlan::BridgeBinding> electricalSignalBridges;
     SignalRuntime signals;
     Topology electricalTopology;
     std::vector<double> nodeVoltages;
@@ -29,6 +30,8 @@ struct RuntimeState {
         execution = *plan->execution;
         resolvedSignalSubscribers = plan->signal ? plan->signal->resolvedSubscribers
                                                  : std::vector<SignalPlan::Subscriber>{};
+        electricalSignalBridges = plan->signal ? plan->signal->electricalBridges
+                                               : std::vector<SignalPlan::BridgeBinding>{};
         const auto engine = plan->signal ? plan->signal->engine : nullptr;
         if (signals.graph() != engine) {
             signals.bind(engine);

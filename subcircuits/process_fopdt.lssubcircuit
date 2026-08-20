@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 3,
+  "typeId": "subcircuits.process.fopdt",
+  "name": "Processo FOPDT",
+  "language": "pt-BR",
+  "folderPath": ["Controle de Processos", "Modelos"],
+  "workspaceSection": "process",
+  "help": { "description": "Modelo reutilizavel K/(tau*s+1) com tempo morto. Executado como composicao Gain/FirstOrder/DeadTime no Signal Engine." },
+  "components": [
+    { "id": "input", "typeId": "connectors.tunnel", "properties": { "name": "u", "pinId": "u", "defaultValue": 0 }, "visual": { "x": 40, "y": 100, "rotation": 0 } },
+    { "id": "plant", "typeId": "control.process", "properties": { "gain": 1, "tau1": 1, "tau2": 0, "deadTime": 0.1, "hysteresis": 0, "stiction": 0, "rateLimiter": 0, "actuatorTau": 0, "lead": 0, "lag": 0, "samplePeriodNs": 10000000 }, "visual": { "x": 180, "y": 100, "rotation": 0 } },
+    { "id": "output", "typeId": "connectors.tunnel", "properties": { "name": "y", "pinId": "y" }, "visual": { "x": 360, "y": 100, "rotation": 180 } }
+  ],
+  "topology": {
+    "revision": 0,
+    "nodes": [],
+    "conductors": [
+      { "id": "wire-1", "from": { "kind": "port", "componentId": "input", "pinId": "pin" }, "to": { "kind": "port", "componentId": "plant", "pinId": "in" }, "points": [] },
+      { "id": "wire-2", "from": { "kind": "port", "componentId": "plant", "pinId": "out" }, "to": { "kind": "port", "componentId": "output", "pinId": "pin" }, "points": [] }
+    ]
+  },
+  "interface": [
+    { "pinId": "u", "label": "u", "internalTunnel": "u", "domain": "signal", "direction": "in", "valueType": "Real", "width": 1 },
+    { "pinId": "y", "label": "y", "internalTunnel": "y", "domain": "signal", "direction": "out", "valueType": "Real", "width": 1 }
+  ],
+  "symbolMode": "generic",
+  "symbol": {
+    "width": 100,
+    "height": 60,
+    "border": true,
+    "shapes": [
+      { "kind": "text", "x": 50, "y": 22, "value": "FOPDT", "fontSize": 11, "textAnchor": "middle", "color": "#111827" },
+      { "kind": "text", "x": 50, "y": 40, "value": "K e^-Ls/(tau s+1)", "fontSize": 7, "textAnchor": "middle", "color": "#374151" }
+    ],
+    "pins": [
+      { "id": "u", "kind": "ANALOG_IN", "x": 0, "y": 30, "angle": 180, "length": 8, "label": "u" },
+      { "id": "y", "kind": "ANALOG_OUT", "x": 100, "y": 30, "angle": 0, "length": 8, "label": "y" }
+    ]
+  },
+  "exposedComponents": [],
+  "exportedPropertyComponentIds": ["plant"]
+}

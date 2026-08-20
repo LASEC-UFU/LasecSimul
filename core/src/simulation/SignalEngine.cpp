@@ -153,6 +153,7 @@ private:
 struct CompiledBlock {
     SignalBlockKind kind;
     SignalSlotHandle output;
+    std::string outputUnit;
     std::vector<InputBinding> inputs;
     std::vector<double> realParameters;
     std::vector<int64_t> intParameters;
@@ -218,7 +219,7 @@ bool isContinuous(SignalBlockKind kind) {
 
 bool isDiscreteState(SignalBlockKind kind) {
     return kind == SignalBlockKind::UnitDelay || kind == SignalBlockKind::Hysteresis ||
-           kind == SignalBlockKind::Stiction;
+           kind == SignalBlockKind::Stiction || kind == SignalBlockKind::Pid;
 }
 
 bool usesDelay(SignalBlockKind kind) {
@@ -244,6 +245,8 @@ size_t expectedInputCount(SignalBlockKind kind) {
         return 1;
     case SignalBlockKind::Tank:
         return 2;
+    case SignalBlockKind::Pid:
+        return 2;
     default:
         return std::numeric_limits<size_t>::max();
     }
@@ -266,6 +269,7 @@ size_t minimumParameterCount(SignalBlockKind kind) {
     case SignalBlockKind::Hysteresis: return 5;              // low/high thresholds, low/high outputs, initial
     case SignalBlockKind::Stiction: return 3;                // breakaway, slip, initial
     case SignalBlockKind::RateLimiter: return 3;             // rise/s, fall/s, initial
+    case SignalBlockKind::Pid: return 10;                    // Kc,Ti,Td,bias,Tf,min,max,action,D-on-PV,I0
     default: return 0;
     }
 }
@@ -273,7 +277,7 @@ size_t minimumParameterCount(SignalBlockKind kind) {
 uint16_t stateWidthFor(const SignalBlockDefinition& block) {
     if (!isContinuous(block.kind) && !isDiscreteState(block.kind)) return 0;
     return static_cast<uint16_t>(block.output.type.width *
-        (block.kind == SignalBlockKind::SecondOrder ? 2u : 1u));
+        (block.kind == SignalBlockKind::SecondOrder ? 2u : block.kind == SignalBlockKind::Pid ? 4u : 1u));
 }
 
 uint64_t secondsToNanoseconds(double seconds, const std::string& blockId) {
@@ -298,15 +302,16 @@ void validateBlock(const SignalBlockDefinition& block, uint16_t maxWidth) {
         unitInfo(input.unit);
     }
     const size_t count = block.inputs.size();
-    if (block.kind == SignalBlockKind::Source && count != 0) throw std::invalid_argument("Source nao aceita entradas: " + block.id);
+    if ((block.kind == SignalBlockKind::Source || block.kind == SignalBlockKind::ExternalInput) && count != 0)
+        throw std::invalid_argument("Source/ExternalInput nao aceita entradas: " + block.id);
     if ((block.kind == SignalBlockKind::Gain || block.kind == SignalBlockKind::Limiter || block.kind == SignalBlockKind::Probe) && count != 1)
         throw std::invalid_argument("bloco exige exatamente uma entrada: " + block.id);
     if ((block.kind == SignalBlockKind::Sum || block.kind == SignalBlockKind::Product) && count == 0)
         throw std::invalid_argument("bloco exige ao menos uma entrada: " + block.id);
     if (block.kind == SignalBlockKind::Selector && count != 3)
         throw std::invalid_argument("Selector exige condicao, verdadeiro e falso: " + block.id);
-    if (block.kind == SignalBlockKind::CalcExpression && (count == 0 || block.output.type.scalar != SignalScalarType::Real))
-        throw std::invalid_argument("CalcExpression exige entradas e saida Real: " + block.id);
+    if (block.kind == SignalBlockKind::CalcExpression && block.output.type.scalar != SignalScalarType::Real)
+        throw std::invalid_argument("CalcExpression exige saida Real: " + block.id);
     if (block.kind == SignalBlockKind::Selector && block.inputs.front().type.scalar != SignalScalarType::Bool)
         throw std::invalid_argument("primeira entrada de Selector deve ser Bool: " + block.id);
     const auto sameAsOutput = [&](size_t input) { return block.inputs[input].type == block.output.type; };
@@ -329,8 +334,9 @@ void validateBlock(const SignalBlockDefinition& block, uint16_t maxWidth) {
     const size_t parameterCount = block.output.type.scalar == SignalScalarType::Real ? block.realParameters.size()
                                   : block.output.type.scalar == SignalScalarType::Int64 ? block.intParameters.size()
                                   : block.boolParameters.size();
-    if (block.kind == SignalBlockKind::Source && parameterCount != 1 && parameterCount != block.output.type.width)
-        throw std::invalid_argument("Source exige um valor escalar ou um por elemento: " + block.id);
+    if ((block.kind == SignalBlockKind::Source || block.kind == SignalBlockKind::ExternalInput) &&
+        parameterCount != 1 && parameterCount != block.output.type.width)
+        throw std::invalid_argument("Source/ExternalInput exige um valor escalar ou um por elemento: " + block.id);
     if (block.kind == SignalBlockKind::Gain && parameterCount != 1)
         throw std::invalid_argument("Gain exige um parametro: " + block.id);
     if (block.kind == SignalBlockKind::Limiter && parameterCount != 2)
@@ -373,6 +379,11 @@ void validateBlock(const SignalBlockDefinition& block, uint16_t maxWidth) {
         throw std::invalid_argument("Stiction exige 0 <= slip <= breakaway: " + block.id);
     if (block.kind == SignalBlockKind::RateLimiter && (block.realParameters[0] < 0.0 || block.realParameters[1] < 0.0))
         throw std::invalid_argument("RateLimiter exige taxas nao negativas: " + block.id);
+    if (block.kind == SignalBlockKind::Pid) {
+        const auto& p = block.realParameters;
+        if (p[1] < 0.0 || p[2] < 0.0 || (p[2] > 0.0 && !(p[4] > 0.0)) || p[5] > p[6] || p[7] == 0.0)
+            throw std::invalid_argument("PID possui Ti/Td/filtro/limites/acao invalidos: " + block.id);
+    }
 }
 
 SignalSlotHandle allocateSlot(const SignalDataType& type, CompiledSignalGraph& graph) {
@@ -404,6 +415,7 @@ std::shared_ptr<const CompiledSignalGraph> SignalCompiler::compile(const SignalG
         auto& target = graph->blocks[index];
         target.kind = source.kind;
         target.output = allocateSlot(source.output.type, *graph);
+        target.outputUnit = source.output.unit;
         target.realParameters = source.realParameters;
         target.intParameters = source.intParameters;
         target.boolParameters = source.boolParameters;
@@ -578,6 +590,7 @@ void evaluate(const CompiledBlock& block, const std::vector<double>& reals, cons
             double value = 0.0;
             switch (block.kind) {
             case SignalBlockKind::Source: value = block.realParameters.size() == 1 ? block.realParameters[0] : block.realParameters.at(element); break;
+            case SignalBlockKind::ExternalInput: value = reals.at(block.output.offset + element); break;
             case SignalBlockKind::Gain: value = readSlot(reals, block.inputs[0], element) * (block.realParameters.empty() ? 1.0 : block.realParameters[0]); break;
             case SignalBlockKind::Sum: for (const auto& input : block.inputs) value += readSlot(reals, input, element); break;
             case SignalBlockKind::Product: value = 1.0; for (const auto& input : block.inputs) value *= readSlot(reals, input, element); break;
@@ -610,6 +623,7 @@ void evaluate(const CompiledBlock& block, const std::vector<double>& reals, cons
             case SignalBlockKind::Hysteresis:
             case SignalBlockKind::Stiction:
             case SignalBlockKind::RateLimiter:
+            case SignalBlockKind::Pid:
                 value = reals[block.output.offset + element];
                 break;
             case SignalBlockKind::CalcExpression: {
@@ -631,6 +645,7 @@ void evaluate(const CompiledBlock& block, const std::vector<double>& reals, cons
             int64_t value = 0;
             switch (block.kind) {
             case SignalBlockKind::Source: value = block.intParameters.size() == 1 ? block.intParameters[0] : block.intParameters.at(element); break;
+            case SignalBlockKind::ExternalInput: value = ints.at(block.output.offset + element); break;
             case SignalBlockKind::Gain: value = wrapMultiply(readSlot(ints, block.inputs[0], element), block.intParameters[0]); break;
             case SignalBlockKind::Sum: for (const auto& input : block.inputs) value = wrapAdd(value, readSlot(ints, input, element)); break;
             case SignalBlockKind::Product: value = 1; for (const auto& input : block.inputs) value = wrapMultiply(value, readSlot(ints, input, element)); break;
@@ -644,6 +659,7 @@ void evaluate(const CompiledBlock& block, const std::vector<double>& reals, cons
             bool value = false;
             switch (block.kind) {
             case SignalBlockKind::Source: value = (block.boolParameters.size() == 1 ? block.boolParameters[0] : block.boolParameters.at(element)) != 0; break;
+            case SignalBlockKind::ExternalInput: value = bools.at(block.output.offset + element) != 0; break;
             case SignalBlockKind::Selector: value = readSlot(bools, block.inputs[0], element) ? readSlot(bools, block.inputs[1], element) : readSlot(bools, block.inputs[2], element); break;
             case SignalBlockKind::Probe: value = readSlot(bools, block.inputs[0], element); break;
             default: throw std::logic_error("operacao nao suportada para Bool");
@@ -721,8 +737,32 @@ void SignalRuntime::bind(std::shared_ptr<const CompiledSignalGraph> graph) {
         m_delayBuffers.resize(m_graph->delayBlocks.size());
         for (uint32_t blockIndex = 0; blockIndex < m_graph->blocks.size(); ++blockIndex) {
             const CompiledBlock& block = m_graph->blocks[blockIndex];
+            if (block.kind == SignalBlockKind::ExternalInput) {
+                for (uint16_t element = 0; element < block.output.width; ++element) {
+                    if (block.output.scalar == SignalScalarType::Real) {
+                        m_reals[block.output.offset + element] = block.realParameters.size() == 1
+                            ? block.realParameters[0] : block.realParameters.at(element);
+                    } else if (block.output.scalar == SignalScalarType::Int64) {
+                        m_ints[block.output.offset + element] = block.intParameters.size() == 1
+                            ? block.intParameters[0] : block.intParameters.at(element);
+                    } else {
+                        m_bools[block.output.offset + element] = (block.boolParameters.size() == 1
+                            ? block.boolParameters[0] : block.boolParameters.at(element)) != 0;
+                    }
+                }
+            }
             if (block.stateOffset == UINT32_MAX) continue;
             for (uint16_t element = 0; element < block.output.width; ++element) {
+                if (block.kind == SignalBlockKind::Pid) {
+                    m_dynamicState[block.stateOffset + element] = block.realParameters[9];
+                    m_dynamicState[block.stateOffset + block.output.width + element] = 0.0;
+                    m_dynamicState[block.stateOffset + 2 * block.output.width + element] = 0.0;
+                    m_dynamicState[block.stateOffset + 3 * block.output.width + element] = 0.0;
+                    m_reals[block.output.offset + element] = std::clamp(
+                        block.realParameters[3] + block.realParameters[9],
+                        block.realParameters[5], block.realParameters[6]);
+                    continue;
+                }
                 double initial = 0.0;
                 switch (block.kind) {
                 case SignalBlockKind::Integrator: initial = block.realParameters[1]; break;
@@ -829,6 +869,49 @@ void SignalRuntime::activateGroup(uint32_t groupIndex, uint64_t timestampNs) {
                 const CompiledBlock& block = m_graph->blocks[blockIndex];
                 if (isDiscreteState(block.kind)) {
                     for (uint16_t element = 0; element < block.output.width; ++element) {
+                        if (block.kind == SignalBlockKind::Pid) {
+                            const uint32_t width = block.output.width;
+                            double& integral = m_dynamicState[block.stateOffset + element];
+                            double& previousBasis = m_dynamicState[block.stateOffset + width + element];
+                            double& filteredDerivative = m_dynamicState[block.stateOffset + 2 * width + element];
+                            double& initialized = m_dynamicState[block.stateOffset + 3 * width + element];
+                            const double sp = readSlot(m_realSnapshot, block.inputs[0], element);
+                            const double pv = readSlot(m_realSnapshot, block.inputs[1], element);
+                            const double kc = block.realParameters[0];
+                            const double ti = block.realParameters[1];
+                            const double td = block.realParameters[2];
+                            const double bias = block.realParameters[3];
+                            const double filterTau = block.realParameters[4];
+                            const double minimum = block.realParameters[5];
+                            const double maximum = block.realParameters[6];
+                            const double action = block.realParameters[7];
+                            const bool derivativeOnPv = block.realParameters[8] != 0.0;
+                            const double error = action * (sp - pv);
+                            const double basis = derivativeOnPv ? pv : error;
+                            double integralCandidate = integral;
+                            if (initialized != 0.0) {
+                                const double dt = static_cast<double>(group.rate.periodNs) * 1e-9;
+                                const double integralDelta = ti > 0.0 ? kc * error * dt / ti : 0.0;
+                                integralCandidate += integralDelta;
+                                if (td > 0.0) {
+                                    const double rawDerivative = (basis - previousBasis) / dt;
+                                    const double alpha = dt / (filterTau + dt);
+                                    filteredDerivative += alpha * (rawDerivative - filteredDerivative);
+                                }
+                                const double derivativeTerm = kc * td * filteredDerivative * (derivativeOnPv ? -1.0 : 1.0);
+                                const double unconstrained = bias + kc * error + integralCandidate + derivativeTerm;
+                                if ((unconstrained > maximum && integralDelta > 0.0) ||
+                                    (unconstrained < minimum && integralDelta < 0.0)) integralCandidate = integral;
+                            } else {
+                                initialized = 1.0;
+                            }
+                            integral = integralCandidate;
+                            previousBasis = basis;
+                            const double derivativeTerm = kc * td * filteredDerivative * (derivativeOnPv ? -1.0 : 1.0);
+                            m_realCandidate[block.output.offset + element] = std::clamp(
+                                bias + kc * error + integral + derivativeTerm, minimum, maximum);
+                            continue;
+                        }
                         const double previous = m_dynamicState[block.stateOffset + element];
                         const double input = readSlot(m_realSnapshot, block.inputs[0], element);
                         double output = previous;
@@ -1101,10 +1184,35 @@ void SignalRuntime::noteExplicitBoundary(uint64_t timestampNs) {
 }
 
 SignalSlotHandle SignalRuntime::output(std::string_view blockId) const {
-    if (!m_graph) throw std::logic_error("SignalRuntime sem plano");
-    for (uint32_t index = 0; index < m_graph->blockIds.size(); ++index)
-        if (m_graph->blockIds[index] == blockId) return m_graph->blocks[index].output;
-    throw std::out_of_range("bloco de sinal inexistente");
+    return SignalCompiler::output(m_graph, blockId);
+}
+
+SignalSlotHandle SignalCompiler::output(const std::shared_ptr<const CompiledSignalGraph>& graph,
+                                        std::string_view blockId) {
+    if (!graph) throw std::logic_error("SignalGraph ausente");
+    for (uint32_t index = 0; index < graph->blockIds.size(); ++index)
+        if (graph->blockIds[index] == blockId) return graph->blocks[index].output;
+    throw std::out_of_range("bloco de sinal inexistente: " + std::string(blockId));
+}
+
+SignalPortDefinition SignalCompiler::outputDefinition(const std::shared_ptr<const CompiledSignalGraph>& graph,
+                                                      std::string_view blockId) {
+    if (!graph) throw std::logic_error("SignalGraph ausente");
+    for (uint32_t index = 0; index < graph->blockIds.size(); ++index) {
+        if (graph->blockIds[index] == blockId) {
+            const SignalSlotHandle slot = graph->blocks[index].output;
+            return {"out", {slot.scalar, slot.width}, graph->blocks[index].outputUnit};
+        }
+    }
+    throw std::out_of_range("bloco de sinal inexistente: " + std::string(blockId));
+}
+
+bool SignalCompiler::isExternalInput(const std::shared_ptr<const CompiledSignalGraph>& graph,
+                                     std::string_view blockId) {
+    if (!graph) return false;
+    for (uint32_t index = 0; index < graph->blockIds.size(); ++index)
+        if (graph->blockIds[index] == blockId) return graph->blocks[index].kind == SignalBlockKind::ExternalInput;
+    return false;
 }
 
 double SignalRuntime::real(SignalSlotHandle slot, uint16_t element) const {
@@ -1118,6 +1226,32 @@ bool SignalRuntime::boolean(SignalSlotHandle slot, uint16_t element) const {
 int64_t SignalRuntime::integer(SignalSlotHandle slot, uint16_t element) const {
     if (slot.scalar != SignalScalarType::Int64 || element >= slot.width) throw std::invalid_argument("slot nao e Int64/elemento invalido");
     return m_ints.at(slot.offset + element);
+}
+
+void SignalRuntime::setExternalReal(std::string_view blockId, double value, uint16_t element) {
+    if (!SignalCompiler::isExternalInput(m_graph, blockId))
+        throw std::invalid_argument("bridge so pode publicar em ExternalInput: " + std::string(blockId));
+    const SignalSlotHandle slot = output(blockId);
+    if (slot.scalar != SignalScalarType::Real || element >= slot.width)
+        throw std::invalid_argument("ExternalInput nao e Real/elemento invalido");
+    const uint32_t offset = slot.offset + element;
+    m_reals.at(offset) = value;
+    m_realSnapshot.at(offset) = value;
+    m_realCandidate.at(offset) = value;
+    if (offset < m_dynamicOutputCandidate.size()) m_dynamicOutputCandidate[offset] = value;
+}
+
+void SignalRuntime::setExternalBool(std::string_view blockId, bool value, uint16_t element) {
+    if (!SignalCompiler::isExternalInput(m_graph, blockId))
+        throw std::invalid_argument("bridge so pode publicar em ExternalInput: " + std::string(blockId));
+    const SignalSlotHandle slot = output(blockId);
+    if (slot.scalar != SignalScalarType::Bool || element >= slot.width)
+        throw std::invalid_argument("ExternalInput nao e Bool/elemento invalido");
+    const uint32_t offset = slot.offset + element;
+    const uint8_t stored = value ? 1 : 0;
+    m_bools.at(offset) = stored;
+    m_boolSnapshot.at(offset) = stored;
+    m_boolCandidate.at(offset) = stored;
 }
 
 } // namespace lasecsimul::simulation

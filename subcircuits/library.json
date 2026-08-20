@@ -6,6 +6,9 @@
   "license": "MIT",
   "subcircuits": [
     { "typeId": "subcircuits.esp32_devkitc_v4", "manifest": "esp32_devkitc_v4.lssubcircuit" },
-    { "typeId": "subcircuits.esp32_wroom32", "manifest": "esp32_wroom32.lssubcircuit" }
+    { "typeId": "subcircuits.esp32_wroom32", "manifest": "esp32_wroom32.lssubcircuit" },
+    { "typeId": "subcircuits.process.fopdt", "manifest": "process_fopdt.lssubcircuit" },
+    { "typeId": "subcircuits.tdps.basic_flow_loop", "manifest": "tdps_basic_flow_loop.lssubcircuit" },
+    { "typeId": "subcircuits.tdps.smith_predictor", "manifest": "tdps_smith_predictor.lssubcircuit" }
   ]
 }

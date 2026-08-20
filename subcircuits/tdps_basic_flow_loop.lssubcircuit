@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 3,
+  "typeId": "subcircuits.tdps.basic_flow_loop",
+  "name": "TDPS - Malha Basica de Vazao",
+  "language": "pt-BR",
+  "folderPath": ["Controle de Processos", "TDPS importado"],
+  "workspaceSection": "process",
+  "help": { "description": "Conversao canonica do exemplo basic flow loop: indices legados foram substituidos por endpoints e entradas nomeadas." },
+  "components": [
+    { "id": "sp", "typeId": "connectors.tunnel", "properties": { "name": "setpoint", "pinId": "setpoint", "defaultValue": 50 }, "visual": { "x": 30, "y": 80, "rotation": 0 } },
+    { "id": "disturbance-in", "typeId": "connectors.tunnel", "properties": { "name": "disturbance", "pinId": "disturbance", "defaultValue": 0 }, "visual": { "x": 30, "y": 220, "rotation": 0 } },
+    { "id": "pid", "typeId": "control.pid", "label": "FIC101", "properties": { "kc": 1, "ti": 10, "td": 0, "bias": 50, "derivativeFilter": 0.1, "outputMin": 0, "outputMax": 100, "action": 1, "derivativeOnPv": true, "samplePeriodNs": 100000000 }, "visual": { "x": 180, "y": 100, "rotation": 0 } },
+    { "id": "plant", "typeId": "control.process", "label": "FT101", "properties": { "gain": 1.2, "tau1": 1.1, "tau2": 0.8, "deadTime": 0.4, "actuatorTau": 0.5, "hysteresis": 0, "stiction": 0, "rateLimiter": 0, "lead": 0, "lag": 0, "samplePeriodNs": 10000000 }, "visual": { "x": 390, "y": 100, "rotation": 0 } },
+    { "id": "measurement", "typeId": "control.calc_expression", "label": "FY101", "properties": { "expression": "x0+x1", "inputs": ["x0", "x1"], "lowerLimit": 0, "upperLimit": 105, "lowerLimitEnabled": true, "upperLimitEnabled": false, "samplePeriodNs": 10000000 }, "visual": { "x": 620, "y": 100, "rotation": 0 } },
+    { "id": "readout", "typeId": "control.probe", "label": "Vazao", "properties": { "unit": "L/min", "observerOnly": true }, "visual": { "x": 620, "y": 220, "rotation": 0 } },
+    { "id": "out", "typeId": "connectors.tunnel", "properties": { "name": "flow", "pinId": "flow" }, "visual": { "x": 820, "y": 100, "rotation": 180 } }
+  ],
+  "topology": {
+    "revision": 0,
+    "nodes": [],
+    "conductors": [
+      { "id": "wire-1", "from": { "kind": "port", "componentId": "sp", "pinId": "pin" }, "to": { "kind": "port", "componentId": "pid", "pinId": "sp" }, "points": [] },
+      { "id": "wire-2", "from": { "kind": "port", "componentId": "measurement", "pinId": "out" }, "to": { "kind": "port", "componentId": "pid", "pinId": "pv" }, "points": [] },
+      { "id": "wire-3", "from": { "kind": "port", "componentId": "pid", "pinId": "out" }, "to": { "kind": "port", "componentId": "plant", "pinId": "in" }, "points": [] },
+      { "id": "wire-4", "from": { "kind": "port", "componentId": "plant", "pinId": "out" }, "to": { "kind": "port", "componentId": "measurement", "pinId": "x0" }, "points": [] },
+      { "id": "wire-5", "from": { "kind": "port", "componentId": "disturbance-in", "pinId": "pin" }, "to": { "kind": "port", "componentId": "measurement", "pinId": "x1" }, "points": [] },
+      { "id": "wire-6", "from": { "kind": "port", "componentId": "measurement", "pinId": "out" }, "to": { "kind": "port", "componentId": "readout", "pinId": "in" }, "points": [] },
+      { "id": "wire-7", "from": { "kind": "port", "componentId": "measurement", "pinId": "out" }, "to": { "kind": "port", "componentId": "out", "pinId": "pin" }, "points": [] }
+    ]
+  },
+  "interface": [
+    { "pinId": "setpoint", "label": "SP", "internalTunnel": "setpoint", "domain": "signal", "direction": "in", "valueType": "Real", "width": 1, "unit": "L/min" },
+    { "pinId": "disturbance", "label": "D", "internalTunnel": "disturbance", "domain": "signal", "direction": "in", "valueType": "Real", "width": 1, "unit": "L/min" },
+    { "pinId": "flow", "label": "PV", "internalTunnel": "flow", "domain": "signal", "direction": "out", "valueType": "Real", "width": 1, "unit": "L/min" }
+  ],
+  "symbolMode": "generic",
+  "symbol": { "width": 120, "height": 80, "border": true, "shapes": [{ "kind": "text", "x": 60, "y": 24, "value": "FLOW LOOP", "fontSize": 10, "textAnchor": "middle", "color": "#111827" }], "pins": [
+    { "id": "setpoint", "kind": "ANALOG_IN", "x": 0, "y": 25, "angle": 180, "length": 8, "label": "SP" },
+    { "id": "disturbance", "kind": "ANALOG_IN", "x": 0, "y": 55, "angle": 180, "length": 8, "label": "D" },
+    { "id": "flow", "kind": "ANALOG_OUT", "x": 120, "y": 40, "angle": 0, "length": 8, "label": "PV" }
+  ] },
+  "exposedComponents": [],
+  "exportedPropertyComponentIds": ["pid", "plant"]
+}

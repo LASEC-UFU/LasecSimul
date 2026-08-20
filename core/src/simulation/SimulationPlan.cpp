@@ -6,6 +6,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string_view>
+#include <unordered_set>
 
 namespace lasecsimul::simulation {
 namespace {
@@ -53,6 +54,25 @@ void validateExecution(const DenseExecutionLists& lists, size_t capacity) {
     validateDenseList(lists.mcuComponents, capacity, &lists.activeComponents, "mcuComponents");
     validateDenseList(lists.signalSubscribers, capacity, &lists.activeComponents, "signalSubscribers");
     validateDenseList(lists.plcComponents, capacity, &lists.activeComponents, "plcComponents");
+}
+
+bool isSensorBridge(ElectricalSignalBridgeKind kind) {
+    return kind == ElectricalSignalBridgeKind::VoltageSensor ||
+           kind == ElectricalSignalBridgeKind::CurrentSensor ||
+           kind == ElectricalSignalBridgeKind::DigitalInput;
+}
+
+SignalScalarType bridgeScalar(ElectricalSignalBridgeKind kind) {
+    return kind == ElectricalSignalBridgeKind::DigitalInput || kind == ElectricalSignalBridgeKind::DigitalOutput
+        ? SignalScalarType::Bool : SignalScalarType::Real;
+}
+
+std::string_view bridgeUnit(ElectricalSignalBridgeKind kind) {
+    if (kind == ElectricalSignalBridgeKind::VoltageSensor || kind == ElectricalSignalBridgeKind::ControlledVoltageSource)
+        return "V";
+    if (kind == ElectricalSignalBridgeKind::CurrentSensor || kind == ElectricalSignalBridgeKind::ControlledCurrentSource)
+        return "A";
+    return "";
 }
 
 void hashList(uint64_t& hash, const std::vector<uint32_t>& values) {
@@ -113,6 +133,12 @@ std::string structuralHash(const PlanCompileInput& input) {
             hashText(hash, edge.targetBlock); hashText(hash, edge.targetPort);
             hashScalar(hash, edge.allowUnitConversion);
         }
+    }
+    hashScalar(hash, input.electricalSignalBridges.size());
+    for (const ElectricalSignalBridgeDefinition& bridge : input.electricalSignalBridges) {
+        hashScalar(hash, bridge.kind);
+        hashScalar(hash, bridge.componentIndex);
+        hashText(hash, bridge.signalBlockId);
     }
 
     if (input.electricalTopology) {
@@ -186,6 +212,29 @@ std::shared_ptr<const SimulationPlan> PlanCompiler::compile(const PlanCompileInp
         signal->resolvedSubscribers = input.resolvedSignalSubscribers;
         signal->engine = input.signalGraph ? SignalCompiler::compile(*input.signalGraph)
                                            : SignalCompiler::compile(SignalGraphDefinition{});
+        std::unordered_set<uint32_t> boundComponents;
+        std::unordered_set<std::string> sensorTargets;
+        for (const ElectricalSignalBridgeDefinition& bridge : input.electricalSignalBridges) {
+            if (bridge.componentIndex >= input.componentCapacity ||
+                !std::binary_search(input.execution.activeComponents.begin(), input.execution.activeComponents.end(),
+                                    bridge.componentIndex)) {
+                throw std::invalid_argument("bridge referencia componente eletrico inativo/inexistente");
+            }
+            if (!boundComponents.insert(bridge.componentIndex).second)
+                throw std::invalid_argument("componente eletrico possui mais de um bridge");
+            const SignalPortDefinition output = SignalCompiler::outputDefinition(signal->engine, bridge.signalBlockId);
+            if (output.type.scalar != bridgeScalar(bridge.kind) || output.type.width != 1)
+                throw std::invalid_argument("bridge possui tipo/largura de sinal incompativel: " + bridge.signalBlockId);
+            if (output.unit != bridgeUnit(bridge.kind))
+                throw std::invalid_argument("bridge possui unidade incompativel: " + bridge.signalBlockId);
+            if (isSensorBridge(bridge.kind)) {
+                if (!SignalCompiler::isExternalInput(signal->engine, bridge.signalBlockId))
+                    throw std::invalid_argument("sensor bridge deve publicar em ExternalInput: " + bridge.signalBlockId);
+                if (!sensorTargets.insert(bridge.signalBlockId).second)
+                    throw std::invalid_argument("mais de um sensor publica no mesmo ExternalInput");
+            }
+            signal->electricalBridges.push_back({bridge, SignalCompiler::output(signal->engine, bridge.signalBlockId)});
+        }
         next->signal = std::move(signal);
     } else {
         next->signal = input.previous->signal;

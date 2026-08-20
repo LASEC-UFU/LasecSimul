@@ -59,6 +59,43 @@ export function validateSubcircuitDocument(document: SubcircuitDocument): Subcir
     errors.push(`Identificador duplicado: "${id}" (componente interno e/ou pino do Símbolo compartilhando o mesmo id).`);
   }
 
+  const componentIds = new Set(document.components.map((component) => component.id));
+  const topologyNodeIds = new Set<string>();
+  for (const node of document.topology.nodes) {
+    if (!node.id || componentIds.has(node.id) || topologyNodeIds.has(node.id)) {
+      errors.push(`Identificador topológico duplicado ou vazio: "${node.id}".`);
+    }
+    topologyNodeIds.add(node.id);
+  }
+  const conductorIds = new Set<string>();
+  const validateEndpoint = (endpoint: unknown, conductorId: string, side: "from" | "to"): void => {
+    if (typeof endpoint !== "object" || endpoint === null) {
+      errors.push(`Condutor "${conductorId}" possui endpoint ${side} inválido.`);
+      return;
+    }
+    const value = endpoint as Record<string, unknown>;
+    if (value.kind === "port") {
+      if (typeof value.componentId !== "string" || !componentIds.has(value.componentId)) {
+        errors.push(`Condutor "${conductorId}" referencia componente órfão no endpoint ${side}: "${String(value.componentId)}".`);
+      }
+      if (typeof value.pinId !== "string" || !value.pinId.trim()) {
+        errors.push(`Condutor "${conductorId}" possui pinId vazio no endpoint ${side}.`);
+      }
+    } else if (value.kind === "node") {
+      if (typeof value.nodeId !== "string" || !topologyNodeIds.has(value.nodeId)) {
+        errors.push(`Condutor "${conductorId}" referencia nó órfão no endpoint ${side}: "${String(value.nodeId)}".`);
+      }
+    } else {
+      errors.push(`Condutor "${conductorId}" possui kind inválido no endpoint ${side}.`);
+    }
+  };
+  for (const conductor of document.topology.conductors) {
+    if (!conductor.id || conductorIds.has(conductor.id)) errors.push(`Identificador de condutor duplicado ou vazio: "${conductor.id}".`);
+    conductorIds.add(conductor.id);
+    validateEndpoint(conductor.from, conductor.id, "from");
+    validateEndpoint(conductor.to, conductor.id, "to");
+  }
+
   // Pino sem pinId (símbolo malformado).
   const pinIds = new Set<string>();
   for (const pin of document.symbol?.pins ?? []) {
@@ -68,6 +105,36 @@ export function validateSubcircuitDocument(document: SubcircuitDocument): Subcir
       continue;
     }
     pinIds.add(pinId);
+  }
+
+  const interfacePinIds = new Set<string>();
+  const interfaceTunnelNames = new Set<string>();
+  for (const entry of document.interface) {
+    if (!entry.pinId || interfacePinIds.has(entry.pinId)) errors.push(`pinId duplicado ou vazio na interface: "${entry.pinId}".`);
+    interfacePinIds.add(entry.pinId);
+    if (!entry.internalTunnel) errors.push(`Interface "${entry.pinId}" não possui internalTunnel.`);
+    interfaceTunnelNames.add(entry.internalTunnel);
+    if (entry.width !== undefined && (!Number.isInteger(entry.width) || entry.width < 1 || entry.width > 64)) {
+      errors.push(`Interface "${entry.pinId}" possui width fora de 1..64.`);
+    }
+    if (entry.domain === "signal" && entry.direction === "inout") {
+      errors.push(`Interface de sinal "${entry.pinId}" deve declarar causalidade in ou out; inout é proibido.`);
+    }
+  }
+  for (const pinId of pinIds) {
+    if (!interfacePinIds.has(pinId)) errors.push(`Pino "${pinId}" do Símbolo não possui entrada correspondente em interface[].`);
+  }
+
+  const tunnelNames = new Set(
+    document.components
+      .filter((component) => component.typeId === TUNNEL_TYPE_ID)
+      .map((component) => component.properties.name)
+      .filter((name): name is string => typeof name === "string" && name.trim().length > 0)
+  );
+  for (const entry of document.interface) {
+    if (entry.internalTunnel && !tunnelNames.has(entry.internalTunnel)) {
+      errors.push(`Interface "${entry.pinId}" referencia o túnel interno inexistente "${entry.internalTunnel}".`);
+    }
   }
 
   // Pino sem nenhum túnel correspondente.

@@ -200,5 +200,17 @@ function makeIdFactory(prefix: string): () => string {
     assert(JSON.stringify(once.components) === JSON.stringify(twice.components), "components[] deveria ser estável entre chamadas repetidas");
   });
 
+  await test("finalize preserva metadados tipados da interface pelo portId estável", () => {
+    const created = createPin(emptyDocument(), { label: "PV", x: 0, y: 8, angle: 180 }, makeIdFactory("typed"));
+    const typed: SubcircuitDocument = {
+      ...created.document,
+      interface: [{ pinId: created.pinId, label: "antigo", internalTunnel: "antigo", domain: "signal", direction: "in", valueType: "Real", width: 1, unit: "%" }],
+    };
+    const finalized = finalizeSubcircuitDocumentForSave(typed);
+    const entry = finalized.interface[0];
+    assert(entry?.pinId === created.pinId && entry.internalTunnel === created.pinId, "binding máquina-derivado deveria continuar canônico");
+    assert(entry?.domain === "signal" && entry.direction === "in" && entry.unit === "%", "tipagem deveria sobreviver ao save");
+  });
+
   finish();
 })();

@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 3,
+  "typeId": "subcircuits.tdps.smith_predictor",
+  "name": "TDPS - Preditor de Smith",
+  "language": "pt-BR",
+  "folderPath": ["Controle de Processos", "TDPS importado"],
+  "workspaceSection": "process",
+  "help": { "description": "Estrategia de Preditor de Smith convertida para componentes e topologia canonicos; nenhuma referencia Mnn permanece no runtime." },
+  "components": [
+    { "id": "sp", "typeId": "connectors.tunnel", "properties": { "name": "setpoint", "pinId": "setpoint", "defaultValue": 17 }, "visual": { "x": 20, "y": 80, "rotation": 0 } },
+    { "id": "disturbance-in", "typeId": "connectors.tunnel", "properties": { "name": "disturbance", "pinId": "disturbance", "defaultValue": 50 }, "visual": { "x": 20, "y": 170, "rotation": 0 } },
+    { "id": "selector-in", "typeId": "connectors.tunnel", "properties": { "name": "selector", "pinId": "selector", "defaultValue": 1 }, "visual": { "x": 20, "y": 260, "rotation": 0 } },
+    { "id": "control-signal", "typeId": "connectors.tunnel", "properties": { "name": "controlSignal", "pinId": "controlSignal", "defaultValue": 1 }, "visual": { "x": 20, "y": 350, "rotation": 0 } },
+    { "id": "pid", "typeId": "control.pid", "label": "ZIC", "properties": { "kc": 1, "ti": 3, "td": 0, "bias": 50, "derivativeFilter": 0.1, "outputMin": 0, "outputMax": 100, "action": 1, "derivativeOnPv": true, "samplePeriodNs": 100000000 }, "visual": { "x": 180, "y": 90, "rotation": 0 } },
+    { "id": "process-real", "typeId": "control.process", "label": "G", "properties": { "gain": 1.15, "tau1": 3, "tau2": 0, "deadTime": 12, "actuatorTau": 0, "hysteresis": 0, "stiction": 0, "rateLimiter": 0, "lead": 0, "lag": 0, "samplePeriodNs": 10000000 }, "visual": { "x": 360, "y": 80, "rotation": 0 } },
+    { "id": "process-model", "typeId": "control.process", "label": "Gtil", "properties": { "gain": 1.15, "tau1": 3, "tau2": 0, "deadTime": 0, "actuatorTau": 0, "hysteresis": 0, "stiction": 0, "rateLimiter": 0, "lead": 0, "lag": 0, "samplePeriodNs": 10000000 }, "visual": { "x": 360, "y": 190, "rotation": 0 } },
+    { "id": "model-delay", "typeId": "control.process", "label": "Delay", "properties": { "gain": 1, "tau1": 0, "tau2": 0, "deadTime": 12, "actuatorTau": 0, "hysteresis": 0, "stiction": 0, "rateLimiter": 0, "lead": 0, "lag": 0, "samplePeriodNs": 10000000 }, "visual": { "x": 360, "y": 300, "rotation": 0 } },
+    { "id": "disturbance-model", "typeId": "control.process", "label": "D", "properties": { "gain": 1, "tau1": 0, "tau2": 0, "deadTime": 0, "actuatorTau": 0, "hysteresis": 0, "stiction": 0, "rateLimiter": 0, "lead": 0, "lag": 0, "samplePeriodNs": 10000000 }, "visual": { "x": 360, "y": 410, "rotation": 0 } },
+    { "id": "measured-pv", "typeId": "control.calc_expression", "label": "PV_medida", "properties": { "expression": "x0+x1-50", "inputs": ["x0", "x1"], "upperLimitEnabled": false, "lowerLimitEnabled": false, "samplePeriodNs": 10000000 }, "visual": { "x": 600, "y": 80, "rotation": 0 } },
+    { "id": "prediction-error", "typeId": "control.calc_expression", "label": "DesvioPS", "properties": { "expression": "x0-x1", "inputs": ["x0", "x1"], "upperLimitEnabled": false, "lowerLimitEnabled": false, "samplePeriodNs": 10000000 }, "visual": { "x": 600, "y": 190, "rotation": 0 } },
+    { "id": "feedback-pv", "typeId": "control.calc_expression", "label": "PV_Realim", "properties": { "expression": "x0+x1", "inputs": ["x0", "x1"], "upperLimitEnabled": false, "lowerLimitEnabled": false, "samplePeriodNs": 10000000 }, "visual": { "x": 600, "y": 300, "rotation": 0 } },
+    { "id": "selected-control", "typeId": "control.calc_expression", "label": "Sel", "properties": { "expression": "x0*x1", "inputs": ["x0", "x1"], "upperLimitEnabled": false, "lowerLimitEnabled": false, "samplePeriodNs": 10000000 }, "visual": { "x": 600, "y": 410, "rotation": 0 } },
+    { "id": "pv-out", "typeId": "connectors.tunnel", "properties": { "name": "pv", "pinId": "pv" }, "visual": { "x": 850, "y": 90, "rotation": 180 } },
+    { "id": "prediction-out", "typeId": "connectors.tunnel", "properties": { "name": "predictionError", "pinId": "predictionError" }, "visual": { "x": 850, "y": 200, "rotation": 180 } },
+    { "id": "controller-out", "typeId": "connectors.tunnel", "properties": { "name": "controllerOutput", "pinId": "controllerOutput" }, "visual": { "x": 850, "y": 310, "rotation": 180 } }
+  ],
+  "topology": {
+    "revision": 0,
+    "nodes": [],
+    "conductors": [
+      { "id": "wire-1", "from": { "kind": "port", "componentId": "sp", "pinId": "pin" }, "to": { "kind": "port", "componentId": "pid", "pinId": "sp" }, "points": [] },
+      { "id": "wire-2", "from": { "kind": "port", "componentId": "feedback-pv", "pinId": "out" }, "to": { "kind": "port", "componentId": "pid", "pinId": "pv" }, "points": [] },
+      { "id": "wire-3", "from": { "kind": "port", "componentId": "pid", "pinId": "out" }, "to": { "kind": "port", "componentId": "process-real", "pinId": "in" }, "points": [] },
+      { "id": "wire-4", "from": { "kind": "port", "componentId": "feedback-pv", "pinId": "out" }, "to": { "kind": "port", "componentId": "process-model", "pinId": "in" }, "points": [] },
+      { "id": "wire-5", "from": { "kind": "port", "componentId": "process-real", "pinId": "out" }, "to": { "kind": "port", "componentId": "model-delay", "pinId": "in" }, "points": [] },
+      { "id": "wire-6", "from": { "kind": "port", "componentId": "disturbance-in", "pinId": "pin" }, "to": { "kind": "port", "componentId": "disturbance-model", "pinId": "in" }, "points": [] },
+      { "id": "wire-7", "from": { "kind": "port", "componentId": "process-real", "pinId": "out" }, "to": { "kind": "port", "componentId": "measured-pv", "pinId": "x0" }, "points": [] },
+      { "id": "wire-8", "from": { "kind": "port", "componentId": "disturbance-model", "pinId": "out" }, "to": { "kind": "port", "componentId": "measured-pv", "pinId": "x1" }, "points": [] },
+      { "id": "wire-9", "from": { "kind": "port", "componentId": "measured-pv", "pinId": "out" }, "to": { "kind": "port", "componentId": "prediction-error", "pinId": "x0" }, "points": [] },
+      { "id": "wire-10", "from": { "kind": "port", "componentId": "model-delay", "pinId": "out" }, "to": { "kind": "port", "componentId": "prediction-error", "pinId": "x1" }, "points": [] },
+      { "id": "wire-11", "from": { "kind": "port", "componentId": "process-model", "pinId": "out" }, "to": { "kind": "port", "componentId": "feedback-pv", "pinId": "x0" }, "points": [] },
+      { "id": "wire-12", "from": { "kind": "port", "componentId": "prediction-error", "pinId": "out" }, "to": { "kind": "port", "componentId": "feedback-pv", "pinId": "x1" }, "points": [] },
+      { "id": "wire-13", "from": { "kind": "port", "componentId": "selector-in", "pinId": "pin" }, "to": { "kind": "port", "componentId": "selected-control", "pinId": "x0" }, "points": [] },
+      { "id": "wire-14", "from": { "kind": "port", "componentId": "control-signal", "pinId": "pin" }, "to": { "kind": "port", "componentId": "selected-control", "pinId": "x1" }, "points": [] },
+      { "id": "wire-15", "from": { "kind": "port", "componentId": "measured-pv", "pinId": "out" }, "to": { "kind": "port", "componentId": "pv-out", "pinId": "pin" }, "points": [] },
+      { "id": "wire-16", "from": { "kind": "port", "componentId": "prediction-error", "pinId": "out" }, "to": { "kind": "port", "componentId": "prediction-out", "pinId": "pin" }, "points": [] },
+      { "id": "wire-17", "from": { "kind": "port", "componentId": "pid", "pinId": "out" }, "to": { "kind": "port", "componentId": "controller-out", "pinId": "pin" }, "points": [] }
+    ]
+  },
+  "interface": [
+    { "pinId": "setpoint", "label": "SP", "internalTunnel": "setpoint", "domain": "signal", "direction": "in", "valueType": "Real", "width": 1, "unit": "mm" },
+    { "pinId": "disturbance", "label": "D", "internalTunnel": "disturbance", "domain": "signal", "direction": "in", "valueType": "Real", "width": 1 },
+    { "pinId": "selector", "label": "Selector", "internalTunnel": "selector", "domain": "signal", "direction": "in", "valueType": "Real", "width": 1 },
+    { "pinId": "controlSignal", "label": "Control", "internalTunnel": "controlSignal", "domain": "signal", "direction": "in", "valueType": "Real", "width": 1 },
+    { "pinId": "pv", "label": "PV", "internalTunnel": "pv", "domain": "signal", "direction": "out", "valueType": "Real", "width": 1, "unit": "mm" },
+    { "pinId": "predictionError", "label": "Pred Error", "internalTunnel": "predictionError", "domain": "signal", "direction": "out", "valueType": "Real", "width": 1, "unit": "mm" },
+    { "pinId": "controllerOutput", "label": "CO", "internalTunnel": "controllerOutput", "domain": "signal", "direction": "out", "valueType": "Real", "width": 1, "unit": "%" }
+  ],
+  "symbolMode": "generic",
+  "symbol": { "width": 150, "height": 150, "border": true, "shapes": [
+    { "kind": "text", "x": 75, "y": 28, "value": "SMITH", "fontSize": 11, "textAnchor": "middle", "color": "#111827" },
+    { "kind": "text", "x": 75, "y": 46, "value": "PREDICTOR", "fontSize": 9, "textAnchor": "middle", "color": "#374151" }
+  ], "pins": [
+    { "id": "setpoint", "kind": "ANALOG_IN", "x": 0, "y": 30, "angle": 180, "length": 8, "label": "SP" },
+    { "id": "disturbance", "kind": "ANALOG_IN", "x": 0, "y": 60, "angle": 180, "length": 8, "label": "D" },
+    { "id": "selector", "kind": "ANALOG_IN", "x": 0, "y": 90, "angle": 180, "length": 8, "label": "SEL" },
+    { "id": "controlSignal", "kind": "ANALOG_IN", "x": 0, "y": 120, "angle": 180, "length": 8, "label": "CTRL" },
+    { "id": "pv", "kind": "ANALOG_OUT", "x": 150, "y": 40, "angle": 0, "length": 8, "label": "PV" },
+    { "id": "predictionError", "kind": "ANALOG_OUT", "x": 150, "y": 75, "angle": 0, "length": 8, "label": "ERR" },
+    { "id": "controllerOutput", "kind": "ANALOG_OUT", "x": 150, "y": 110, "angle": 0, "length": 8, "label": "CO" }
+  ] },
+  "exposedComponents": [],
+  "exportedPropertyComponentIds": ["pid", "process-real", "process-model", "model-delay", "disturbance-model"]
+}
