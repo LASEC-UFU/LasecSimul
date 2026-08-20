@@ -43,4 +43,4 @@ Total: 34 documentos. accepted: 7; active: 12; deferred: 3; planned: 11; superse
 
 ## Próximo gate
 
-Gate atual: F2. Ver ROADMAP.md para objetivo/entregáveis/aceitação desta fase.
+Gate atual: F3. Ver ROADMAP.md para objetivo/entregáveis/aceitação desta fase.
