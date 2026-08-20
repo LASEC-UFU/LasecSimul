@@ -107,6 +107,31 @@ Na primeira versão, um novo plano ou novo artefato PLC só é publicado com a s
 
 Incrementalidade inicial é por domínio. Recompilação fina por POU/SCC só entra com benchmark, embora cache por hash de POU seja permitido se não mudar semântica.
 
+## Implementação inicial da F3
+
+O Core implementa este contrato em `simulation/SimulationPlan.*` e `simulation/RuntimeState.hpp`:
+
+- `PlanCompiler` compila em staging e devolve `shared_ptr<const SimulationPlan>` somente depois de
+  validar listas densas, capacidade e referências; uma exceção preserva o plano publicado;
+- geração e hash da autoria normalizada são separados: a geração é monotônica por publicação e o
+  hash deriva do estado canônico dos componentes, propriedades, listas e topologia, sem depender da
+  sequência de edições;
+- `ElectricalPlan` publica grupos e resoluções estruturais imutáveis; matrizes, fatorações, soluções,
+  bordas e scratch permanecem exclusivamente no `RuntimeState` da sessão;
+- `PlanInvalidation` separa `Electrical`, `Signal`, `External`, `Plc` e `ExecutionIndex`; domínios não
+  invalidados preservam a identidade do subplano anterior;
+- reativos, não lineares, FPGA, MCU e subscribers são listas densas mantidas no cold path. Callbacks
+  de tempo, pacing MCU e settle não descobrem tipos percorrendo todos os componentes;
+- subscriptions e condições de pausa compilam source/alias para índices de nós. O stable step apenas
+  amostra esses handles, sem resolver strings ou procurar pinos globalmente;
+- `Scheduler::start()` e execução síncrona publicam pendências antes de iniciar. Mutação estrutural
+  durante `RUN` falha com erro explícito exigindo `stop`; parâmetro runtime-safe continua atualizando
+  apenas estado e não troca a geração;
+- `getPerformanceMetrics` expõe geração, hash, domínios pendentes e cardinalidades do plano.
+
+`SignalPlan`, `PlcPlan` e bindings externos já possuem fronteiras imutáveis, mas seu conteúdo de
+domínio cresce apenas nas fases correspondentes (F5, F8 e F9); F3 não antecipa seus runtimes.
+
 ## Aceitação
 
 - nenhuma resolução de alias/string no hot path do Signal Engine ou PLC VM;
