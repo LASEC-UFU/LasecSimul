@@ -284,6 +284,56 @@ add_executable(plc_worker_driver_hello
     src/plc/PlcScanSession.cpp
 )
 target_include_directories(plc_worker_driver_hello PRIVATE include src src/plc/runtime/include test/core/plc)
+
+# F9.4: worker de teste "mal-comportado" (protocolo/versao errados, requestId errado, resposta
+# truncada/malformada, crash pos-handshake, trava indefinidamente) -- nao ha construcao ST que
+# produza esses modos de forma deterministica e nao-racy, entao e escrito a mao (ver
+# fixtures/misbehaving_worker.cpp). So usado por plc_runtime_test, sem add_test proprio.
+add_executable(plc_misbehaving_worker
+    test/core/plc/fixtures/misbehaving_worker.cpp
+)
+
+# F9.4: PlcRuntime gerencia um worker isolado por instancia (spawn/HELLO/SCAN/GET/SET/FORCE/
+# UNFORCE/RESET/SHUTDOWN, lifecycle e fault handling) -- roda contra o driver real `hello`
+# (plc_worker_driver_hello, ja compilado acima, mesmo binario que F9.2 prova como processo
+# standalone) e contra `plc_misbehaving_worker` pra exercitar os caminhos de falha. Nenhum dos
+# dois depende do binario STruCpp vendorizado nem de um compilador C++ externo -- por isso
+# hermetic, ao contrario de plc_compiler/plc_runtime_hang (abaixo).
+add_executable(plc_runtime_test
+    test/core/plc/PlcRuntimeTest.cpp
+    src/plc/PlcRuntime.cpp
+)
+target_include_directories(plc_runtime_test PRIVATE include src)
+add_dependencies(plc_runtime_test plc_worker_driver_hello plc_misbehaving_worker)
+target_compile_definitions(plc_runtime_test PRIVATE
+    LASECSIMUL_TEST_PLC_WORKER_HELLO_BINARY="$<TARGET_FILE:plc_worker_driver_hello>"
+    LASECSIMUL_TEST_PLC_MISBEHAVING_WORKER_BINARY="$<TARGET_FILE:plc_misbehaving_worker>"
+)
+add_test(NAME plc_runtime COMMAND plc_runtime_test)
+set_tests_properties(plc_runtime PROPERTIES TIMEOUT 60 SKIP_REGULAR_EXPRESSION "PULADO:")
+
+# F9.4 (complemento): a mesma garantia de timeout-sem-derrubar-o-Core, mas contra um PROGRAM ST de
+# verdade preso em WHILE TRUE (fixtures/hang.st) em vez do double escrito a mao -- depende do
+# binario STruCpp vendorizado + toolchain C++ real, por isso external-plc (pula, nao falha, se
+# ausente), mesmo padrao de plc_compiler.
+add_executable(plc_runtime_hang_test
+    test/core/plc/PlcRuntimeHangTest.cpp
+    src/plc/PlcCompiler.cpp
+    src/plc/PlcInterfaceParser.cpp
+    src/plc/PlcDriverCodegen.cpp
+    src/plc/PlcScanSession.cpp
+    src/plc/PlcRuntime.cpp
+)
+target_include_directories(plc_runtime_hang_test PRIVATE include src src/plc/runtime/include)
+target_compile_definitions(plc_runtime_hang_test PRIVATE
+    LASECSIMUL_TEST_STRUCPP_BINARY="${LASECSIMUL_STRUCPP_TEST_BINARY}"
+    LASECSIMUL_TEST_PLC_RUNTIME_INCLUDE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/src/plc/runtime/include"
+    LASECSIMUL_TEST_PLC_SRC_DIR="${CMAKE_CURRENT_SOURCE_DIR}/src/plc"
+    LASECSIMUL_TEST_PLC_HANG_FIXTURE_ST="${CMAKE_CURRENT_SOURCE_DIR}/test/core/plc/fixtures/hang.st"
+)
+add_test(NAME plc_runtime_hang COMMAND plc_runtime_hang_test)
+set_tests_properties(plc_runtime_hang PROPERTIES TIMEOUT 60 SKIP_REGULAR_EXPRESSION "PULADO:")
+
 set_tests_properties(python_session PROPERTIES TIMEOUT 30 SKIP_REGULAR_EXPRESSION "PULADO:")
 if(Python3_Interpreter_FOUND)
     set_tests_properties(python_session PROPERTIES ENVIRONMENT "LASECSIMUL_PYTHON=${Python3_EXECUTABLE}")
@@ -1340,7 +1390,7 @@ set(LASECSIMUL_HERMETIC_TESTS
     firmware_watcher esp32_adapter esp32_devkitc_subcircuit bus command_queue_session logic_gate_plugin
     logic_family_extension mcu_component mcu_usart_monitor mcu_uart_to_lasecplot
     mcu_component_live_poll_thread mcu_scheduler_pacing_sync pin_change_dispatch plugin_watchdog
-    plc_scan_session
+    plc_scan_session plc_runtime
 )
 set(LASECSIMUL_EXTERNAL_GHDL_TESTS
     ghdl_lockstep_real_ghdl ghdl_backend_real_ghdl fpga_component_real_ghdl
@@ -1355,7 +1405,7 @@ set(LASECSIMUL_EXTERNAL_PYTHON_TESTS
     python_runtime python_session
 )
 set(LASECSIMUL_EXTERNAL_PLC_TESTS
-    plc_compiler
+    plc_compiler plc_runtime_hang
 )
 set_tests_properties(${LASECSIMUL_HERMETIC_TESTS} PROPERTIES
     LABELS "hermetic"
