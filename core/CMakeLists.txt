@@ -185,6 +185,13 @@ add_executable(signal_engine_test
 target_include_directories(signal_engine_test PRIVATE include src)
 add_test(NAME signal_engine COMMAND signal_engine_test)
 
+add_executable(signal_dynamics_test
+    test/core/simulation/SignalDynamicsTest.cpp
+    src/simulation/SignalEngine.cpp
+)
+target_include_directories(signal_dynamics_test PRIVATE include src)
+add_test(NAME signal_dynamics COMMAND signal_dynamics_test)
+
 add_executable(simulation_plan_session_test
     test/core/simulation/SimulationPlanSessionTest.cpp
     ${TEST_COMMON_SOURCES}
@@ -1200,7 +1207,7 @@ add_test(NAME plugin_watchdog COMMAND plugin_watchdog_test)
 # Mantenha todos os testes em exatamente um grupo: o runner descobre os nomes via CTest e usa
 # estes labels, sem duplicar listas de testes em JavaScript ou no workflow de CI.
 set(LASECSIMUL_HERMETIC_TESTS
-    pause_expression logic_analyzer_vector resource_governor resource_worker_pool resource_queues simulation_plan signal_engine simulation_plan_session dense_hot_path voltage_divider circuit_group_reuse diode zener_led
+    pause_expression logic_analyzer_vector resource_governor resource_worker_pool resource_queues simulation_plan signal_engine signal_dynamics simulation_plan_session dense_hot_path voltage_divider circuit_group_reuse diode zener_led
     inert_components_fix probe_pause_on_change subcircuit simulide_sources_meters voltmeter
     component_removal netlist union_find scheduler sparse_set core_bootstrap circuit_group logic_value
     ghdl_arena_bridge ghdl_process_manager fpga_port_mapper mna_solver sha256 passive_components

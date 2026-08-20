@@ -30,7 +30,10 @@ struct RuntimeState {
         resolvedSignalSubscribers = plan->signal ? plan->signal->resolvedSubscribers
                                                  : std::vector<SignalPlan::Subscriber>{};
         const auto engine = plan->signal ? plan->signal->engine : nullptr;
-        if (signals.graph() != engine) signals.bind(engine);
+        if (signals.graph() != engine) {
+            signals.bind(engine);
+            signals.setTimeBase(virtualTimeNs);
+        }
     }
 };
 

@@ -2,7 +2,7 @@
 
 > Arquivo gerado por `node .spec/governance/generate-status.mjs`. Não editar manualmente.
 
-Total: 34 documentos. accepted: 7; active: 13; deferred: 3; planned: 10; superseded: 1.
+Total: 34 documentos. accepted: 7; active: 14; deferred: 3; planned: 9; superseded: 1.
 
 | ID | Kind | Status | Documento | Dependências |
 |---|---|---|---|---|
@@ -24,7 +24,7 @@ Total: 34 documentos. accepted: 7; active: 13; deferred: 3; planned: 10; superse
 | ARCH-008 | architecture | active | [Estratégia de testes e regressão](architecture/testing-strategy.md) | ARCH-001, BENCH-001 |
 | BENCH-001 | benchmark | active | [Plano de benchmarks e capacidade](benchmarks/capacity-plan.md) | ARCH-001 |
 | FEAT-001 | feature | active | [Signal Engine](features/signal-engine.md) | ARCH-002, ARCH-003, ARCH-006, SCHEMA-001 |
-| FEAT-002 | feature | planned | [Dinâmica contínua e discreta](features/continuous-discrete-dynamics.md) | FEAT-001, ARCH-003 |
+| FEAT-002 | feature | active | [Dinâmica contínua e discreta](features/continuous-discrete-dynamics.md) | FEAT-001, ARCH-003 |
 | FEAT-003 | feature | planned | [Bridges elétrico ↔ sinal](features/electrical-signal-bridges.md) | FEAT-001, FEAT-002, ARCH-006 |
 | FEAT-004 | feature | planned | [Evolução do subcircuito para modelos de processo e controle](features/subsystems.md) | ARCH-002, ARCH-006, SCHEMA-002, ADR-0008, FEAT-001 |
 | FEAT-005 | feature | active | [FPGA/VHDL com GHDL](features/fpga-ghdl.md) | ARCH-001, ARCH-003, ARCH-004, FEAT-011 |
@@ -43,4 +43,4 @@ Total: 34 documentos. accepted: 7; active: 13; deferred: 3; planned: 10; superse
 
 ## Próximo gate
 
-Gate atual: F6. Ver ROADMAP.md para objetivo/entregáveis/aceitação desta fase.
+Gate atual: F7. Ver ROADMAP.md para objetivo/entregáveis/aceitação desta fase.

@@ -1537,7 +1537,12 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
             {"solverCalls", core.solverCalls}, {"solverNanoseconds", core.solverNanoseconds},
             {"topologyRebuilds", core.topologyRebuilds}, {"topologyNanoseconds", core.topologyNanoseconds},
             {"pendingEvents", core.pendingEvents}, {"acceptedTransientSteps", core.acceptedTransientSteps},
-            {"rejectedTransientSteps", core.rejectedTransientSteps}, {"solverThreads", core.solverThreads},
+            {"rejectedTransientSteps", core.rejectedTransientSteps},
+            {"acceptedSignalDynamicSteps", core.acceptedSignalDynamicSteps},
+            {"rejectedSignalDynamicSteps", core.rejectedSignalDynamicSteps},
+            {"signalDiscontinuityEvents", core.signalDiscontinuityEvents},
+            {"signalLastStepNs", core.signalLastStepNs},
+            {"signalLastErrorRatio", core.signalLastErrorRatio}, {"solverThreads", core.solverThreads},
             {"solverWorkerThreads", core.solverWorkerThreads},
             {"solverMaxParallelTasks", core.solverMaxParallelTasks},
             {"simulationPlan", plan ? nlohmann::json{

@@ -1,4 +1,5 @@
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <thread>
 
@@ -120,11 +121,63 @@ void sessionCompilesAndAdvancesSignalPlan() {
           "restart volta a ativar RateGroups desde tempo virtual zero");
 }
 
+void sessionCoordinatesAdaptiveDynamicsAndDiscontinuities() {
+    plugins::GlobalPluginCache cache;
+    SimulationSession session(cache);
+    TransientSettings settings;
+    settings.initialStepNs = 100'000'000;
+    settings.minimumStepNs = 1'000;
+    settings.maximumStepNs = 100'000'000;
+    settings.relativeTolerance = 1e-7;
+    settings.absoluteTolerance = 1e-10;
+    settings.adaptiveTimeStep = true;
+    session.setTransientSettings(settings);
+
+    SignalGraphDefinition graph;
+    SignalBlockDefinition source;
+    source.id = "step"; source.kind = SignalBlockKind::Source; source.realParameters = {1.0};
+    source.rate = {1'000'000'000, 0, 0};
+    SignalBlockDefinition plant;
+    plant.id = "plant"; plant.kind = SignalBlockKind::Fopdt;
+    plant.inputs = {{"in", {SignalScalarType::Real, 1}, ""}};
+    plant.realParameters = {1.0, 0.05, 0.05, 0.0}; plant.rate = source.rate;
+    graph.blocks = {source, plant}; graph.connections = {{"step", "out", "plant", "in", false}};
+    session.setSignalGraph(std::move(graph));
+    (void)session.simulationPlan();
+    CHECK(session.signalRuntime().real(session.signalRuntime().output("step")) == 1.0,
+          "publicacao inicializa Source no tempo virtual zero");
+
+    session.scheduler().pause();
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    session.scheduler().runUntil(100'000'000);
+    CHECK(session.scheduler().nowNs() == 0 && session.signalRuntime().real(session.signalRuntime().output("plant")) == 0.0,
+          "pausa nao usa wall clock nem avanca estado dinamico");
+    session.scheduler().resume();
+    session.scheduler().runUntil(100'000'000);
+    const double expected = 1.0 - std::exp(-1.0);
+    CHECK(std::abs(session.signalRuntime().real(session.signalRuntime().output("plant")) - expected) < 2e-3,
+          "FOPDT da sessao segue golden depois de resume");
+    const auto metrics = session.signalRuntime().metrics();
+    CHECK(metrics.acceptedDynamicSteps > 0 && metrics.rejectedDynamicSteps > 0,
+          "passos aceitos e rejeitados ficam observaveis");
+    CHECK(metrics.discontinuityEvents == 1 && metrics.lastAcceptedDynamicStepNs > 0,
+          "DeadTime cria fronteira explicita no Scheduler");
+    const SimulationPerformanceSnapshot performance = session.performanceMetrics();
+    CHECK(performance.acceptedSignalDynamicSteps == metrics.acceptedDynamicSteps &&
+              performance.rejectedSignalDynamicSteps == metrics.rejectedDynamicSteps &&
+              performance.signalLastErrorRatio == metrics.lastDynamicErrorRatio,
+          "metricas dinamicas sao expostas pelo diagnostico da sessao");
+    session.resetPerformanceMetrics();
+    CHECK(session.performanceMetrics().acceptedSignalDynamicSteps == 0,
+          "reset de performance inclui metricas do SignalRuntime");
+}
+
 } // namespace
 
 int main() {
     sessionPublishesOnlyAtStoppedBoundaries();
     sessionCompilesAndAdvancesSignalPlan();
+    sessionCoordinatesAdaptiveDynamicsAndDiscontinuities();
     if (failures == 0) std::printf("SimulationPlan session publication: OK\n");
     return failures == 0 ? 0 : 1;
 }

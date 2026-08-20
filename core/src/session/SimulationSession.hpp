@@ -109,6 +109,11 @@ struct SimulationPerformanceSnapshot {
     uint64_t pendingEvents = 0;
     uint64_t acceptedTransientSteps = 0;
     uint64_t rejectedTransientSteps = 0;
+    uint64_t acceptedSignalDynamicSteps = 0;
+    uint64_t rejectedSignalDynamicSteps = 0;
+    uint64_t signalDiscontinuityEvents = 0;
+    uint64_t signalLastStepNs = 0;
+    double signalLastErrorRatio = 0.0;
     size_t solverThreads = 0;
     size_t solverWorkerThreads = 0;
     size_t solverMaxParallelTasks = 1;
@@ -481,6 +486,7 @@ private:
     void rebuildSignalRoutesIfNeeded();
     void acquireSubscribedSignalsUnlocked(uint64_t timestampNs);
     void onStableStepUnlocked(uint64_t timestampNs);
+    void scheduleNextSignalBoundaryUnlocked(uint64_t timestampNs);
     /** Chamado no fim de `onStableStepUnlocked()` (já na thread do Scheduler, com o mutex dela
      * tomado) -- publica um `NodeVoltageSnapshot` novo em `m_publishedSnapshot`, sob
      * `m_snapshotMutex` (mutex dedicado, NUNCA o do Scheduler -- ver doc-comment de
@@ -574,6 +580,8 @@ private:
     std::vector<uint32_t>& m_signalSubscribers = m_runtimeState.execution.signalSubscribers;
     std::unordered_map<std::string, uint32_t> m_signalAliases;
     simulation::SignalGraphDefinition m_signalGraphDefinition;
+    std::optional<uint64_t> m_signalBoundaryScheduledNs;
+    uint64_t m_signalScheduleGeneration = 0;
     struct PauseConditionState {
         PauseExpression expression;
         std::unordered_map<std::string, simulation::SignalPlan::Route> signalRoutes;

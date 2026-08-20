@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -38,6 +39,21 @@ enum class SignalBlockKind : uint8_t {
     Selector,
     Probe,
     CalcExpression,
+    Integrator,
+    FilteredDerivative,
+    UnitDelay,
+    DeadTime,
+    FirstOrder,
+    SecondOrder,
+    LeadLag,
+    Fopdt,
+    Tank,
+    ValveCharacteristic,
+    Saturation,
+    Deadband,
+    Hysteresis,
+    Stiction,
+    RateLimiter,
 };
 
 enum class AlgebraicLoopPolicy : uint8_t { Reject, FixedPoint };
@@ -56,6 +72,8 @@ struct SignalBlockDefinition {
     std::vector<int64_t> intParameters;
     std::vector<uint8_t> boolParameters;
     std::string expression;
+    /** Ring capacity for DeadTime/Fopdt input changes; allocated once by bind(). */
+    uint32_t historyCapacity = 1024;
 };
 
 struct SignalConnectionDefinition {
@@ -87,6 +105,12 @@ struct SignalRuntimeMetrics {
     uint64_t microsteps = 0;
     uint64_t algebraicIterations = 0;
     uint64_t nonConvergentLoops = 0;
+    uint64_t acceptedDynamicSteps = 0;
+    uint64_t rejectedDynamicSteps = 0;
+    uint64_t discontinuityEvents = 0;
+    uint64_t delayHistoryDrops = 0;
+    uint64_t lastAcceptedDynamicStepNs = 0;
+    double lastDynamicErrorRatio = 0.0;
 };
 
 class CompiledSignalGraph;
@@ -101,7 +125,16 @@ class SignalRuntime {
 public:
     void bind(std::shared_ptr<const CompiledSignalGraph> graph);
     void reset();
+    void setTimeBase(uint64_t timestampNs);
     void executeUntil(uint64_t timestampNs);
+    /** Two-phase continuous step. Candidate state is invisible until commitContinuousStep(). */
+    void beginContinuousStep(uint64_t previousNs, uint64_t currentNs);
+    double continuousErrorRatio(double absoluteTolerance, double relativeTolerance);
+    void commitContinuousStep();
+    void rollbackContinuousStep();
+    std::optional<uint64_t> nextEventNs() const;
+    void noteExplicitBoundary(uint64_t timestampNs);
+    void resetMetrics() { m_metrics = {}; }
 
     const std::shared_ptr<const CompiledSignalGraph>& graph() const { return m_graph; }
     const SignalRuntimeMetrics& metrics() const { return m_metrics; }
@@ -114,9 +147,18 @@ public:
     const void* realStorageAddress() const { return m_reals.data(); }
     const void* boolStorageAddress() const { return m_bools.data(); }
     const void* integerStorageAddress() const { return m_ints.data(); }
+    const void* dynamicStorageAddress() const { return m_dynamicState.data(); }
 
 private:
-    void activateGroup(uint32_t groupIndex);
+    struct DelayBuffer {
+        std::vector<uint64_t> times;
+        std::vector<double> values;
+        uint32_t head = 0;
+        uint32_t count = 0;
+        uint16_t width = 1;
+    };
+
+    void activateGroup(uint32_t groupIndex, uint64_t timestampNs);
 
     std::shared_ptr<const CompiledSignalGraph> m_graph;
     std::vector<double> m_reals;
@@ -130,6 +172,17 @@ private:
     std::vector<uint8_t> m_boolCandidate;
     std::vector<double> m_expressionStack;
     std::vector<uint64_t> m_nextActivationNs;
+    std::vector<double> m_dynamicState;
+    std::vector<double> m_dynamicCandidate;
+    std::vector<double> m_dynamicFullStep;
+    std::vector<double> m_dynamicOutputCandidate;
+    std::vector<DelayBuffer> m_delayBuffers;
+    uint64_t m_dynamicTimeNs = 0;
+    uint64_t m_lastExecutionNs = 0;
+    uint64_t m_pendingDynamicTimeNs = 0;
+    uint64_t m_pendingDynamicStepNs = 0;
+    bool m_dynamicStepPending = false;
+    double m_pendingDynamicErrorRatio = 0.0;
     SignalRuntimeMetrics m_metrics;
 };
 

@@ -1,7 +1,7 @@
 ---
 id: FEAT-002
 kind: feature
-status: planned
+status: active
 dependsOn: [FEAT-001, ARCH-003]
 supersedes: []
 ---
@@ -33,6 +33,18 @@ input -> ValveCharacteristic -> Hysteresis/Stiction -> RateLimiter
 ```
 
 A equivalência deve ser definida por equações e goldens. Campos legados cujo significado exato não esteja comprovado permanecem explicitamente não suportados até haver evidência.
+
+## Implementação inicial da F6
+
+- o `SignalRuntime` mantém estado dinâmico denso separado dos slots publicados;
+- passos contínuos usam RK4, com estimativa de erro por um passo completo contra dois meios passos e tolerâncias absoluta/relativa do `Scheduler`;
+- o protocolo `beginContinuousStep`/`commitContinuousStep`/`rollbackContinuousStep` garante que tentativas rejeitadas não sejam observáveis externamente;
+- `DeadTime` e FOPDT usam histórico circular pré-alocado e publicam a próxima descontinuidade como fronteira explícita do `Scheduler`;
+- métricas expõem passos aceitos/rejeitados, último passo, último erro normalizado, eventos de descontinuidade e descarte por capacidade de histórico;
+- os blocos cobertos são Integrator, FilteredDerivative, UnitDelay, DeadTime, Gain, FirstOrder, SecondOrder, LeadLag, FOPDT, Tank, ValveCharacteristic, Saturation, Deadband, Hysteresis, Stiction e RateLimiter;
+- a dinâmica opcional de atuador é representada pela composição com `FirstOrder`, sem criar um solver paralelo.
+
+Os testes automatizados incluem goldens de primeira ordem e FOPDT, convergência com redução de passo, rollback, pausa/resume independente de wall clock, fronteira de atraso, estado isolado, armazenamento estável, validação de parâmetros, primitivas isoladas e cadeia composta.
 
 ## Regras
 

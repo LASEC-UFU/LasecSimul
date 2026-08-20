@@ -94,6 +94,7 @@ std::string structuralHash(const PlanCompileInput& input) {
             hashScalar(hash, block.output.type.width); hashText(hash, block.output.unit);
             hashScalar(hash, block.rate.periodNs); hashScalar(hash, block.rate.offsetNs); hashScalar(hash, block.rate.phase);
             hashScalar(hash, block.loopPolicy); hashScalar(hash, block.maxIterations); hashScalar(hash, block.tolerance);
+            hashScalar(hash, block.historyCapacity);
             hashScalar(hash, block.inputs.size());
             for (const SignalPortDefinition& port : block.inputs) {
                 hashText(hash, port.id); hashScalar(hash, port.type.scalar); hashScalar(hash, port.type.width); hashText(hash, port.unit);

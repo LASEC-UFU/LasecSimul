@@ -187,6 +187,7 @@ SimulationSession::SimulationSession(plugins::GlobalPluginCache& globalCache, si
         [this](uint64_t previous, uint64_t current) {
             const TransientStepContext context{current, current - previous, m_transientSettings.method,
                                                m_acceptedTransientSteps.load(std::memory_order_relaxed)};
+            m_runtimeState.signals.beginContinuousStep(previous, current);
             for (uint32_t i : m_reactiveComponentIndices) {
                 IComponentModel* component = m_componentInstances[i].get();
                 component->beginTransientStep(context);
@@ -195,7 +196,10 @@ SimulationSession::SimulationSession(plugins::GlobalPluginCache& globalCache, si
         },
         [this](uint64_t previous, uint64_t current, bool eventBoundary) -> simulation::Scheduler::TimeStepDecision {
             double maximumError = 0.0;
+            const double signalError = m_runtimeState.signals.continuousErrorRatio(
+                m_transientSettings.absoluteTolerance, m_transientSettings.relativeTolerance);
             if (m_transientSettings.adaptiveTimeStep && !eventBoundary) {
+                maximumError = signalError;
                 for (uint32_t index : m_reactiveComponentIndices) {
                     IComponentModel* component = m_componentInstances[index].get();
                     maximumError = std::max(maximumError, component->transientErrorRatio(
@@ -226,6 +230,8 @@ SimulationSession::SimulationSession(plugins::GlobalPluginCache& globalCache, si
                     fpgaComponent->advanceLockstep(previous, current);
                 }
             }
+            if (accept) m_runtimeState.signals.commitContinuousStep();
+            else m_runtimeState.signals.rollbackContinuousStep();
             return {accept, maximumError};
         });
     m_scheduler.setStableStepCallback([this](uint64_t timestampNs) { onStableStepUnlocked(timestampNs); });
@@ -326,6 +332,18 @@ bool SimulationSession::publishSimulationPlan() {
     // Staging: nenhuma referência publicada muda antes de compile() concluir integralmente.
     std::shared_ptr<const simulation::SimulationPlan> staged = simulation::PlanCompiler::compile(input);
     m_runtimeState.bind(staged);
+    m_runtimeState.signals.executeUntil(m_runtimeState.virtualTimeNs);
+    if (const std::optional<uint64_t> next = m_runtimeState.signals.nextEventNs();
+        next && *next > m_runtimeState.virtualTimeNs &&
+        (!m_signalBoundaryScheduledNs || *next < *m_signalBoundaryScheduledNs)) {
+        m_signalBoundaryScheduledNs = *next;
+        const uint64_t generation = m_signalScheduleGeneration;
+        m_scheduler.scheduleAt(*next, [this, boundary = *next, generation] {
+            if (generation != m_signalScheduleGeneration || m_signalBoundaryScheduledNs != boundary) return;
+            m_signalBoundaryScheduledNs.reset();
+            m_runtimeState.signals.noteExplicitBoundary(boundary);
+        });
+    }
     {
         std::lock_guard<std::mutex> lock(m_planMutex);
         m_publishedPlan = std::move(staged);
@@ -342,6 +360,8 @@ void SimulationSession::setSignalGraph(simulation::SignalGraphDefinition definit
         // Compile before mutating authoring state so a malformed graph is transactionally rejected.
         (void)simulation::SignalCompiler::compile(definition);
         self.m_signalGraphDefinition = std::move(definition);
+        self.m_signalBoundaryScheduledNs.reset();
+        ++self.m_signalScheduleGeneration;
         self.invalidatePlan(simulation::PlanDomain::Signal);
     });
 }
@@ -406,10 +426,12 @@ void SimulationSession::resetPerformanceMetrics() {
     m_topologyRebuilds.store(0, std::memory_order_relaxed);
     m_topologyNanoseconds.store(0, std::memory_order_relaxed);
     m_scheduler.resetMetrics();
+    m_runtimeState.signals.resetMetrics();
 }
 
 SimulationPerformanceSnapshot SimulationSession::performanceMetrics() const {
     const simulation::Scheduler::MetricsSnapshot schedulerMetrics = m_scheduler.metrics();
+    const simulation::SignalRuntimeMetrics& signalMetrics = m_runtimeState.signals.metrics();
     return {m_performanceProfilingEnabled.load(std::memory_order_relaxed),
             m_scheduler.nowNs(), schedulerMetrics.eventsProcessed, schedulerMetrics.timeSteps,
             schedulerMetrics.settleIterations, schedulerMetrics.settleNanoseconds,
@@ -420,7 +442,10 @@ SimulationPerformanceSnapshot SimulationSession::performanceMetrics() const {
             m_topologyRebuilds.load(std::memory_order_relaxed),
             m_topologyNanoseconds.load(std::memory_order_relaxed), schedulerMetrics.pendingEvents,
             m_acceptedTransientSteps.load(std::memory_order_relaxed),
-            m_rejectedTransientSteps.load(std::memory_order_relaxed), m_mnaSolver.threadCount(),
+            m_rejectedTransientSteps.load(std::memory_order_relaxed),
+            signalMetrics.acceptedDynamicSteps, signalMetrics.rejectedDynamicSteps,
+            signalMetrics.discontinuityEvents, signalMetrics.lastAcceptedDynamicStepNs,
+            signalMetrics.lastDynamicErrorRatio, m_mnaSolver.threadCount(),
             m_mnaSolver.workerThreadCount(), m_mnaSolver.resourceBudget().maxParallelTasks};
 }
 
@@ -710,6 +735,7 @@ void SimulationSession::setPauseCondition(const std::string& ownerId, const std:
 void SimulationSession::onStableStepUnlocked(uint64_t timestampNs) {
     m_runtimeState.virtualTimeNs = timestampNs;
     m_runtimeState.signals.executeUntil(timestampNs);
+    scheduleNextSignalBoundaryUnlocked(timestampNs);
     publishSnapshot();
     publishTelemetrySnapshotIfRequested(timestampNs);
     acquireSubscribedSignalsUnlocked(timestampNs);
@@ -1185,6 +1211,19 @@ void SimulationSession::removeComponentUnlocked(uint32_t componentIndex) {
     invalidatePlan(simulation::PlanDomain::Electrical | executionChanges);
 }
 
+void SimulationSession::scheduleNextSignalBoundaryUnlocked(uint64_t timestampNs) {
+    const std::optional<uint64_t> next = m_runtimeState.signals.nextEventNs();
+    if (!next || *next <= timestampNs) return;
+    if (m_signalBoundaryScheduledNs && *m_signalBoundaryScheduledNs <= *next) return;
+    m_signalBoundaryScheduledNs = *next;
+    const uint64_t generation = m_signalScheduleGeneration;
+    m_scheduler.scheduleEventUnlocked(*next - timestampNs, [this, boundary = *next, generation] {
+        if (generation != m_signalScheduleGeneration || m_signalBoundaryScheduledNs != boundary) return;
+        m_signalBoundaryScheduledNs.reset();
+        m_runtimeState.signals.noteExplicitBoundary(boundary);
+    });
+}
+
 bool SimulationSession::isSubcircuitInstance(uint32_t instanceId) const {
     if ((instanceId & kSubcircuitInstanceFlag) == 0) return false;
     return m_subcircuitChildren.count(instanceId & ~kSubcircuitInstanceFlag) > 0;
@@ -1499,6 +1538,8 @@ void SimulationSession::stopSimulation() {
     m_scheduler.reset();
     m_runtimeState.virtualTimeNs = 0;
     m_runtimeState.signals.reset();
+    m_signalBoundaryScheduledNs.reset();
+    ++m_signalScheduleGeneration;
 }
 
 std::string SimulationSession::mcuLogs(uint32_t componentIndex) const {
