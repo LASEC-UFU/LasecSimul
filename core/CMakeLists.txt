@@ -73,6 +73,7 @@ set(CORE_SOURCES
     src/fpga/GhdlProcessManager.cpp
     src/fpga/GhdlArenaBridge.cpp
     src/simulation/Scheduler.cpp
+    src/simulation/SimulationPlan.cpp
     src/session/SimulationSession.cpp
     src/session/PauseExpression.cpp
 )
@@ -136,6 +137,7 @@ set(TEST_COMMON_SOURCE_FILES
     src/fpga/GhdlProcessManager.cpp
     src/fpga/GhdlArenaBridge.cpp
     src/simulation/Scheduler.cpp
+    src/simulation/SimulationPlan.cpp
     src/session/SimulationSession.cpp
     src/session/PauseExpression.cpp
 )
@@ -162,6 +164,14 @@ if(NOT WIN32)
     target_link_libraries(resource_queues_test PRIVATE dl)
 endif()
 add_test(NAME resource_queues COMMAND resource_queues_test)
+
+add_executable(simulation_plan_test
+    test/core/simulation/SimulationPlanTest.cpp
+    src/simulation/SimulationPlan.cpp
+)
+target_include_directories(simulation_plan_test PRIVATE include src)
+target_link_libraries(simulation_plan_test PRIVATE Eigen3::Eigen)
+add_test(NAME simulation_plan COMMAND simulation_plan_test)
 
 # Teste de divisor de tensão (existente)
 add_executable(voltage_divider_test
@@ -1152,7 +1162,7 @@ add_test(NAME plugin_watchdog COMMAND plugin_watchdog_test)
 # Mantenha todos os testes em exatamente um grupo: o runner descobre os nomes via CTest e usa
 # estes labels, sem duplicar listas de testes em JavaScript ou no workflow de CI.
 set(LASECSIMUL_HERMETIC_TESTS
-    pause_expression logic_analyzer_vector resource_governor resource_worker_pool resource_queues voltage_divider circuit_group_reuse diode zener_led
+    pause_expression logic_analyzer_vector resource_governor resource_worker_pool resource_queues simulation_plan voltage_divider circuit_group_reuse diode zener_led
     inert_components_fix probe_pause_on_change subcircuit simulide_sources_meters voltmeter
     component_removal netlist union_find scheduler sparse_set core_bootstrap circuit_group logic_value
     ghdl_arena_bridge ghdl_process_manager fpga_port_mapper mna_solver sha256 passive_components
