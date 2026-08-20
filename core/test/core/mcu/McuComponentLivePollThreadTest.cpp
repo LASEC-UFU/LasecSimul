@@ -220,6 +220,27 @@ int main() {
     LsdnQemuArena* arenaA = mcuA->arenaBridge().arena();
     LsdnQemuArena* arenaB = mcuB->arenaBridge().arena();
 
+    // A F3 torna o plano imutavel durante RUN. Monte o circuito nao-linear antes de iniciar a
+    // worker; a rajada abaixo continua exercitando stamp()/health() concorrentemente em RUN.
+    session.components().registerFactory("passive.resistor", [](const registry::ComponentParams& p) {
+        return std::make_unique<components::Resistor>(std::array<Pin, 2>{Pin{"pin-1"}, Pin{"pin-2"}},
+                                                        p.property("resistance", 220.0));
+    });
+    session.components().registerFactory("outputs.led", [](const registry::ComponentParams&) {
+        return std::make_unique<components::DiodeLegArray>(
+            "outputs.led", std::vector<Pin>{Pin{"anode"}, Pin{"cathode"}},
+            std::vector<components::DiodeLegArray::Leg>{{0, 1}});
+    });
+    session.components().registerFactory("other.ground", [](const registry::ComponentParams&) {
+        return std::make_unique<components::Ground>(Pin{"pin"});
+    });
+    const uint32_t resistorIndex = session.addComponent("passive.resistor", {});
+    const uint32_t ledIndex = session.addComponent("outputs.led", {});
+    const uint32_t groundIndex = session.addComponent("other.ground", {});
+    session.connectWire(indexA, "GPIO2", resistorIndex, "pin-1");
+    session.connectWire(resistorIndex, "pin-2", ledIndex, "anode");
+    session.connectWire(ledIndex, "cathode", groundIndex, "pin");
+
     // Liga o Scheduler de verdade -- ponto central deste teste: a partir daqui, McuComponent::
     // onPollEvent() vê isRunning()==true e delega para runBackgroundPollLoop() em vez do laço
     // síncrono que McuComponentTest.cpp exercita.
@@ -240,29 +261,6 @@ int main() {
 
     check(mcuA->health() == PluginHealthStatus::Ok && mcuB->health() == PluginHealthStatus::Ok,
           "as duas instâncias continuam saudáveis depois da rajada de escritas concorrentes");
-
-    // LED não-linear no GPIO2 de A -- cada toggle força várias iterações de Newton (várias
-    // chamadas a stamp()) até convergir, a mesma montagem de McuComponentTest -- maximiza a chance
-    // da thread do Scheduler estar DENTRO de stamp() (segurando as duas travas, nessa ordem)
-    // exatamente quando a rajada abaixo despacha um evento pela thread de poll dedicada.
-    session.components().registerFactory("passive.resistor", [](const registry::ComponentParams& p) {
-        return std::make_unique<components::Resistor>(std::array<Pin, 2>{Pin{"pin-1"}, Pin{"pin-2"}},
-                                                        p.property("resistance", 220.0));
-    });
-    session.components().registerFactory("outputs.led", [](const registry::ComponentParams&) {
-        return std::make_unique<components::DiodeLegArray>(
-            "outputs.led", std::vector<Pin>{Pin{"anode"}, Pin{"cathode"}},
-            std::vector<components::DiodeLegArray::Leg>{{0, 1}});
-    });
-    session.components().registerFactory("other.ground", [](const registry::ComponentParams&) {
-        return std::make_unique<components::Ground>(Pin{"pin"});
-    });
-    const uint32_t resistorIndex = session.addComponent("passive.resistor", {});
-    const uint32_t ledIndex = session.addComponent("outputs.led", {});
-    const uint32_t groundIndex = session.addComponent("other.ground", {});
-    session.connectWire(indexA, "GPIO2", resistorIndex, "pin-1");
-    session.connectWire(resistorIndex, "pin-2", ledIndex, "anode");
-    session.connectWire(ledIndex, "cathode", groundIndex, "pin");
 
     // A rajada de verdade: ~4s de relógio real com escritas concorrentes o mais rápido possível +
     // session.componentHealth() (Scheduler::trySynchronized() -> McuComponent::health()) batendo
