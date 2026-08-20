@@ -39,6 +39,28 @@ Somente Scope/stream local de alta taxa que continue limitado por IPC após T2. 
 
 O coordenador publica snapshot imutável com `planGeneration`, `telemetryGeneration`, `timestampNs` e grupos solicitados. A Extension descarta geração obsoleta e decide FPS/renderização.
 
+## Implementação inicial da F4
+
+O Core implementa as lanes em `ipc/NotificationQueue.*` e o frame lógico em
+`SimulationSession::getTelemetryFrameSnapshot`/`getTelemetryFrame`:
+
+- `ReliableControl` mantém FIFO próprio, tem prioridade no consumidor e aplica backpressure entre
+  mensagens confiáveis. Sob pressão, expulsa somente frames `LossyTelemetry`; controle maior que a
+  capacidade é rejeitado explicitamente, nunca de forma silenciosa;
+- `LossyTelemetry` usa uma chave estável por stream. Uma publicação nova substitui a anterior ainda
+  pendente (`latest-wins`) e contabiliza frames/bytes coalescidos e descartados;
+- a soma das lanes respeita `ResourceBudget::telemetryQueueBytes`, a worker continua preguiçosa e
+  shutdown limpa as duas filas antes do `join`;
+- `getTelemetryFrame(subscription, sinceGeneration)` agrega estados de componentes, tensões e
+  relógios em um único JSON. O snapshot carrega `planGeneration`, `telemetryGeneration` monotônica
+  e timestamp da mesma fronteira de stable step;
+- blobs de componentes e o frame JSON final são limitados pelo orçamento de telemetria. Assinaturas
+  novas substituem inscrições anteriores, evitando retenção cumulativa de streams obsoletos;
+- a Extension mantém no máximo um frame em trânsito, envia a última geração observada e descarta
+  respostas obsoletas. O tick periódico deixou de fazer cinco round-trips independentes;
+- `getPerformanceMetrics` expõe profundidade por lane, máximos, coalescência, drops, bytes e rejeições
+  de controle. O framing continua JSON; T2/T3 permanecem condicionados a benchmark.
+
 ## Aceitação
 
 - controle responde sob saturação de telemetria;
