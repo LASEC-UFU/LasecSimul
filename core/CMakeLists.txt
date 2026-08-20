@@ -74,6 +74,7 @@ set(CORE_SOURCES
     src/fpga/GhdlProcessManager.cpp
     src/fpga/GhdlArenaBridge.cpp
     src/simulation/Scheduler.cpp
+    src/simulation/SignalEngine.cpp
     src/simulation/SimulationPlan.cpp
     src/session/SimulationSession.cpp
     src/session/PauseExpression.cpp
@@ -139,6 +140,7 @@ set(TEST_COMMON_SOURCE_FILES
     src/fpga/GhdlProcessManager.cpp
     src/fpga/GhdlArenaBridge.cpp
     src/simulation/Scheduler.cpp
+    src/simulation/SignalEngine.cpp
     src/simulation/SimulationPlan.cpp
     src/session/SimulationSession.cpp
     src/session/PauseExpression.cpp
@@ -169,11 +171,19 @@ add_test(NAME resource_queues COMMAND resource_queues_test)
 
 add_executable(simulation_plan_test
     test/core/simulation/SimulationPlanTest.cpp
+    src/simulation/SignalEngine.cpp
     src/simulation/SimulationPlan.cpp
 )
 target_include_directories(simulation_plan_test PRIVATE include src)
 target_link_libraries(simulation_plan_test PRIVATE Eigen3::Eigen)
 add_test(NAME simulation_plan COMMAND simulation_plan_test)
+
+add_executable(signal_engine_test
+    test/core/simulation/SignalEngineTest.cpp
+    src/simulation/SignalEngine.cpp
+)
+target_include_directories(signal_engine_test PRIVATE include src)
+add_test(NAME signal_engine COMMAND signal_engine_test)
 
 add_executable(simulation_plan_session_test
     test/core/simulation/SimulationPlanSessionTest.cpp
@@ -486,6 +496,8 @@ if(NOT WIN32)
 endif()
 add_test(NAME simulation_performance_smoke
          COMMAND simulation_performance_benchmark --sim-ns 10000000 --scale 1 --digital-hz 10000 --require-realtime)
+add_executable(signal_engine_benchmark benchmark/signal_engine_benchmark.cpp src/simulation/SignalEngine.cpp)
+target_include_directories(signal_engine_benchmark PRIVATE include src)
 
 # PropertyDefinition/validatePropertyValue/propertyOrDefault (auditoria arquitetural 2026-07-09,
 # Fase 1.4/2.1) -- Probe e Resistor migrados como demonstração; prova que get/set casam por ID, não
@@ -932,6 +944,7 @@ add_executable(session_restart_stress_test
     src/fpga/GhdlProcessManager.cpp
     src/fpga/GhdlArenaBridge.cpp
     src/simulation/Scheduler.cpp
+    src/simulation/SignalEngine.cpp
     src/simulation/SimulationPlan.cpp
     src/session/SimulationSession.cpp
     src/resources/ResourceGovernor.cpp
@@ -1187,7 +1200,7 @@ add_test(NAME plugin_watchdog COMMAND plugin_watchdog_test)
 # Mantenha todos os testes em exatamente um grupo: o runner descobre os nomes via CTest e usa
 # estes labels, sem duplicar listas de testes em JavaScript ou no workflow de CI.
 set(LASECSIMUL_HERMETIC_TESTS
-    pause_expression logic_analyzer_vector resource_governor resource_worker_pool resource_queues simulation_plan simulation_plan_session dense_hot_path voltage_divider circuit_group_reuse diode zener_led
+    pause_expression logic_analyzer_vector resource_governor resource_worker_pool resource_queues simulation_plan signal_engine simulation_plan_session dense_hot_path voltage_divider circuit_group_reuse diode zener_led
     inert_components_fix probe_pause_on_change subcircuit simulide_sources_meters voltmeter
     component_removal netlist union_find scheduler sparse_set core_bootstrap circuit_group logic_value
     ghdl_arena_bridge ghdl_process_manager fpga_port_mapper mna_solver sha256 passive_components

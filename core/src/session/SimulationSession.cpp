@@ -321,6 +321,7 @@ bool SimulationSession::publishSimulationPlan() {
     input.electricalTopology = &m_topology;
     input.execution = m_runtimeState.execution;
     input.resolvedSignalSubscribers = m_runtimeState.resolvedSignalSubscribers;
+    input.signalGraph = &m_signalGraphDefinition;
 
     // Staging: nenhuma referência publicada muda antes de compile() concluir integralmente.
     std::shared_ptr<const simulation::SimulationPlan> staged = simulation::PlanCompiler::compile(input);
@@ -331,6 +332,18 @@ bool SimulationSession::publishSimulationPlan() {
         m_planInvalidation.clear(input.invalidation.domains());
     }
     return true;
+}
+
+void SimulationSession::setSignalGraph(simulation::SignalGraphDefinition definition) {
+    runViaCommandQueue([definition = std::move(definition)](SimulationSession& self) mutable {
+        if (self.m_scheduler.isRunning()) {
+            throw std::runtime_error("setSignalGraph requer simulacao parada para publicar SignalPlan");
+        }
+        // Compile before mutating authoring state so a malformed graph is transactionally rejected.
+        (void)simulation::SignalCompiler::compile(definition);
+        self.m_signalGraphDefinition = std::move(definition);
+        self.invalidatePlan(simulation::PlanDomain::Signal);
+    });
 }
 
 std::shared_ptr<const simulation::SimulationPlan> SimulationSession::simulationPlan() {
@@ -696,6 +709,7 @@ void SimulationSession::setPauseCondition(const std::string& ownerId, const std:
 
 void SimulationSession::onStableStepUnlocked(uint64_t timestampNs) {
     m_runtimeState.virtualTimeNs = timestampNs;
+    m_runtimeState.signals.executeUntil(timestampNs);
     publishSnapshot();
     publishTelemetrySnapshotIfRequested(timestampNs);
     acquireSubscribedSignalsUnlocked(timestampNs);
@@ -1484,6 +1498,7 @@ void SimulationSession::stopSimulation() {
     }
     m_scheduler.reset();
     m_runtimeState.virtualTimeNs = 0;
+    m_runtimeState.signals.reset();
 }
 
 std::string SimulationSession::mcuLogs(uint32_t componentIndex) const {

@@ -2,7 +2,7 @@
 
 > Arquivo gerado por `node .spec/governance/generate-status.mjs`. Não editar manualmente.
 
-Total: 34 documentos. accepted: 7; active: 12; deferred: 3; planned: 11; superseded: 1.
+Total: 34 documentos. accepted: 7; active: 13; deferred: 3; planned: 10; superseded: 1.
 
 | ID | Kind | Status | Documento | Dependências |
 |---|---|---|---|---|
@@ -23,7 +23,7 @@ Total: 34 documentos. accepted: 7; active: 12; deferred: 3; planned: 11; superse
 | ARCH-007 | architecture | planned | [Perfis de implantação](architecture/deployment-profiles.md) | ARCH-001, ARCH-004, ARCH-005 |
 | ARCH-008 | architecture | active | [Estratégia de testes e regressão](architecture/testing-strategy.md) | ARCH-001, BENCH-001 |
 | BENCH-001 | benchmark | active | [Plano de benchmarks e capacidade](benchmarks/capacity-plan.md) | ARCH-001 |
-| FEAT-001 | feature | planned | [Signal Engine](features/signal-engine.md) | ARCH-002, ARCH-003, ARCH-006, SCHEMA-001 |
+| FEAT-001 | feature | active | [Signal Engine](features/signal-engine.md) | ARCH-002, ARCH-003, ARCH-006, SCHEMA-001 |
 | FEAT-002 | feature | planned | [Dinâmica contínua e discreta](features/continuous-discrete-dynamics.md) | FEAT-001, ARCH-003 |
 | FEAT-003 | feature | planned | [Bridges elétrico ↔ sinal](features/electrical-signal-bridges.md) | FEAT-001, FEAT-002, ARCH-006 |
 | FEAT-004 | feature | planned | [Evolução do subcircuito para modelos de processo e controle](features/subsystems.md) | ARCH-002, ARCH-006, SCHEMA-002, ADR-0008, FEAT-001 |
@@ -43,4 +43,4 @@ Total: 34 documentos. accepted: 7; active: 12; deferred: 3; planned: 11; superse
 
 ## Próximo gate
 
-Gate atual: F5. Ver ROADMAP.md para objetivo/entregáveis/aceitação desta fase.
+Gate atual: F6. Ver ROADMAP.md para objetivo/entregáveis/aceitação desta fase.

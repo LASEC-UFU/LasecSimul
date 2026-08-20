@@ -299,6 +299,7 @@ const benchmarkPrograms = [
     executable: "simulation_performance_benchmark",
     args: ["--sim-ns", "10000000", "--scale", "100", "--digital-hz", "10000"],
   },
+  { name: "signal", executable: "signal_engine_benchmark", args: [] },
 ];
 
 function tokensOf(line) {
@@ -334,6 +335,10 @@ function benchmarkMetrics(program, stdout) {
       if (!scenario) continue;
       for (const [metric, unit] of [["init_ms", "ms"], ["wall_ms", "ms"], ["rate", "x-realtime"]]) {
         if (Number.isFinite(values[metric])) metrics.push([`simulation.${scenario}.${metric}`, values[metric], unit]);
+      }
+    } else if (program === "signal" && kind === "SIGNAL" && Number.isFinite(values.blocks)) {
+      for (const [metric, unit] of [["compile_ms", "ms"], ["execute_ms", "ms"], ["ns_per_block", "ns"]]) {
+        if (Number.isFinite(values[metric])) metrics.push([`signal.${values.blocks}.${metric}`, values[metric], unit]);
       }
     }
   }

@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "Netlist.hpp"
+#include "SignalEngine.hpp"
 #include "lasecsimul/Signal.hpp"
 
 namespace lasecsimul::simulation {
@@ -87,6 +88,7 @@ struct SignalPlan {
         std::vector<Route> channels;
     };
     std::vector<Subscriber> resolvedSubscribers;
+    std::shared_ptr<const CompiledSignalGraph> engine;
 };
 
 struct ExternalBindingPlan {
@@ -119,6 +121,7 @@ struct PlanCompileInput {
     const Topology* electricalTopology = nullptr;
     DenseExecutionLists execution;
     std::vector<SignalPlan::Subscriber> resolvedSignalSubscribers;
+    const SignalGraphDefinition* signalGraph = nullptr;
     PlanInvalidation invalidation{PlanDomain::All};
     std::shared_ptr<const SimulationPlan> previous;
 };

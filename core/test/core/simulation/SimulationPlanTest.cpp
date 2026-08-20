@@ -98,6 +98,24 @@ void runtimeStateIsIsolatedPerSession() {
     CHECK(first.nodeVoltages[0] != second.nodeVoltages[0], "solucoes MNA nunca sao compartilhadas");
 }
 
+void signalEngineIsPublishedAndBoundWithThePlan() {
+    Topology topology = topologyWithTwoNodes();
+    PlanCompileInput input = inputFor(topology);
+    SignalGraphDefinition definition;
+    SignalBlockDefinition source;
+    source.id = "command";
+    source.kind = SignalBlockKind::Source;
+    source.realParameters = {7.5};
+    definition.blocks = {source};
+    input.signalGraph = &definition;
+    const auto plan = PlanCompiler::compile(input);
+    RuntimeState runtime;
+    runtime.bind(plan);
+    runtime.signals.executeUntil(0);
+    CHECK(runtime.signals.real(runtime.signals.output("command")) == 7.5,
+          "SignalPlan publica programa compilado e RuntimeState vincula slots");
+}
+
 void invalidationIsExplicitByDomain() {
     PlanInvalidation invalidation;
     invalidation.invalidate(PlanDomain::Electrical | PlanDomain::ExecutionIndex);
@@ -115,6 +133,7 @@ int main() {
     planIsImmutableAndDomainIncremental();
     failedCompilationPreservesPublishedPlan();
     runtimeStateIsIsolatedPerSession();
+    signalEngineIsPublishedAndBoundWithThePlan();
     invalidationIsExplicitByDomain();
     if (failures == 0) std::printf("SimulationPlan/RuntimeState: OK\n");
     return failures == 0 ? 0 : 1;

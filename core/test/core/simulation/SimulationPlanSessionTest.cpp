@@ -89,10 +89,42 @@ void sessionPublishesOnlyAtStoppedBoundaries() {
           "RuntimeState passa a nova geracao somente apos publicacao");
 }
 
+void sessionCompilesAndAdvancesSignalPlan() {
+    plugins::GlobalPluginCache cache;
+    SimulationSession session(cache);
+    SignalGraphDefinition definition;
+    SignalBlockDefinition source;
+    source.id = "setpoint"; source.kind = SignalBlockKind::Source;
+    source.realParameters = {12.5}; source.rate = {5, 0, 0};
+    definition.blocks = {source};
+    session.setSignalGraph(definition);
+    const auto plan = session.simulationPlan();
+    CHECK(plan->signal && plan->signal->engine, "sessao publica SignalPlan compilado");
+    session.scheduler().runUntil(10);
+    CHECK(session.signalRuntime().real(session.signalRuntime().output("setpoint")) == 12.5,
+          "stable step avanca o SignalRuntime no tempo virtual");
+    CHECK(session.signalRuntime().metrics().rateGroupActivations == 3,
+          "Scheduler ativa RateGroup nos deadlines virtuais acumulados");
+
+    SignalGraphDefinition invalid = definition;
+    invalid.blocks.front().realParameters.clear();
+    bool rejected = false;
+    try { session.setSignalGraph(std::move(invalid)); } catch (const std::invalid_argument&) { rejected = true; }
+    CHECK(rejected, "grafo invalido e rejeitado antes de alterar o authoring state");
+    CHECK(session.simulationPlan() == plan, "falha de compilacao preserva plano publicado");
+    session.stopSimulation();
+    CHECK(session.signalRuntime().metrics().rateGroupActivations == 0,
+          "Stop limpa estado e deadlines do SignalRuntime");
+    session.scheduler().runUntil(1);
+    CHECK(session.signalRuntime().metrics().rateGroupActivations == 1,
+          "restart volta a ativar RateGroups desde tempo virtual zero");
+}
+
 } // namespace
 
 int main() {
     sessionPublishesOnlyAtStoppedBoundaries();
+    sessionCompilesAndAdvancesSignalPlan();
     if (failures == 0) std::printf("SimulationPlan session publication: OK\n");
     return failures == 0 ? 0 : 1;
 }

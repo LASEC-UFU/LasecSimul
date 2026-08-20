@@ -236,6 +236,9 @@ public:
     void setPerformanceProfilingEnabled(bool enabled);
     void resetPerformanceMetrics();
     SimulationPerformanceSnapshot performanceMetrics() const;
+    /** Substitui o grafo de blocos no cold path. A publicação compila tipos, unidades, SCCs e rates. */
+    void setSignalGraph(simulation::SignalGraphDefinition definition);
+    const simulation::SignalRuntime& signalRuntime() const { return m_runtimeState.signals; }
 
     /** Registra, no ComponentRegistry desta sessão, uma factory delegando ao PluginRuntime para
      * cada typeId com PluginModule ativo no GlobalPluginCache. Componentes built-in (ex: Resistor)
@@ -570,6 +573,7 @@ private:
     std::vector<uint32_t>& m_mcuComponentIndices = m_runtimeState.execution.mcuComponents;
     std::vector<uint32_t>& m_signalSubscribers = m_runtimeState.execution.signalSubscribers;
     std::unordered_map<std::string, uint32_t> m_signalAliases;
+    simulation::SignalGraphDefinition m_signalGraphDefinition;
     struct PauseConditionState {
         PauseExpression expression;
         std::unordered_map<std::string, simulation::SignalPlan::Route> signalRoutes;

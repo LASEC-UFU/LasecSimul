@@ -83,6 +83,36 @@ std::string structuralHash(const PlanCompileInput& input) {
             hashList(hash, route.nodeIndices);
         }
     }
+    if (input.signalGraph) {
+        const SignalGraphDefinition& graph = *input.signalGraph;
+        hashScalar(hash, graph.maxVectorWidth);
+        hashScalar(hash, graph.maxMicrosteps);
+        hashScalar(hash, graph.blocks.size());
+        for (const SignalBlockDefinition& block : graph.blocks) {
+            hashText(hash, block.id); hashScalar(hash, block.kind);
+            hashText(hash, block.output.id); hashScalar(hash, block.output.type.scalar);
+            hashScalar(hash, block.output.type.width); hashText(hash, block.output.unit);
+            hashScalar(hash, block.rate.periodNs); hashScalar(hash, block.rate.offsetNs); hashScalar(hash, block.rate.phase);
+            hashScalar(hash, block.loopPolicy); hashScalar(hash, block.maxIterations); hashScalar(hash, block.tolerance);
+            hashScalar(hash, block.inputs.size());
+            for (const SignalPortDefinition& port : block.inputs) {
+                hashText(hash, port.id); hashScalar(hash, port.type.scalar); hashScalar(hash, port.type.width); hashText(hash, port.unit);
+            }
+            hashScalar(hash, block.realParameters.size());
+            for (double value : block.realParameters) hashScalar(hash, value);
+            hashScalar(hash, block.intParameters.size());
+            for (int64_t value : block.intParameters) hashScalar(hash, value);
+            hashScalar(hash, block.boolParameters.size());
+            for (uint8_t value : block.boolParameters) hashScalar(hash, value);
+            hashText(hash, block.expression);
+        }
+        hashScalar(hash, graph.connections.size());
+        for (const SignalConnectionDefinition& edge : graph.connections) {
+            hashText(hash, edge.sourceBlock); hashText(hash, edge.sourcePort);
+            hashText(hash, edge.targetBlock); hashText(hash, edge.targetPort);
+            hashScalar(hash, edge.allowUnitConversion);
+        }
+    }
 
     if (input.electricalTopology) {
         const Topology& topology = *input.electricalTopology;
@@ -153,6 +183,8 @@ std::shared_ptr<const SimulationPlan> PlanCompiler::compile(const PlanCompileInp
         signal->revision = input.authoringRevision;
         signal->subscribers = input.execution.signalSubscribers;
         signal->resolvedSubscribers = input.resolvedSignalSubscribers;
+        signal->engine = input.signalGraph ? SignalCompiler::compile(*input.signalGraph)
+                                           : SignalCompiler::compile(SignalGraphDefinition{});
         next->signal = std::move(signal);
     } else {
         next->signal = input.previous->signal;
