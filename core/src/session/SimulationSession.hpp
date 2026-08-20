@@ -9,7 +9,9 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <stdexcept>
 #include <type_traits>
+#include <utility>
 #include <vector>
 #include "../plugins/GlobalPluginCache.hpp"
 #include "../plugins/PluginRuntime.hpp"
@@ -107,6 +109,8 @@ struct SimulationPerformanceSnapshot {
     uint64_t acceptedTransientSteps = 0;
     uint64_t rejectedTransientSteps = 0;
     size_t solverThreads = 0;
+    size_t solverWorkerThreads = 0;
+    size_t solverMaxParallelTasks = 1;
 };
 
 class SimulationSession; // ver CommandQueue::Command logo abaixo -- só usado por referência aqui
@@ -123,16 +127,22 @@ class SimulationSession; // ver CommandQueue::Command logo abaixo -- só usado p
 class CommandQueue {
 public:
     using Command = std::function<void(SimulationSession&)>;
+    enum class PushResult { First, Queued, Full };
 
-    /** Devolve `true` só na transição vazio->não-vazio -- quem chama usa isso pra decidir se
-     * precisa acordar a thread do Scheduler (via `Scheduler::scheduleAt`); se já havia comando
-     * pendente, a thread já vai acordar (ou já está acordada) processando aquele. */
-    bool push(Command command) {
+    explicit CommandQueue(size_t capacity = 1024) : m_capacity(capacity) {
+        if (capacity == 0) throw std::invalid_argument("CommandQueue exige capacidade positiva");
+    }
+
+    /** Devolve `First` só na transição vazio->não-vazio -- quem chama usa isso pra decidir se
+     * precisa acordar a thread do Scheduler. `Queued` preserva FIFO sem novo wakeup e `Full`
+     * torna o overflow explícito para o produtor. */
+    PushResult push(Command command) {
         std::lock_guard<std::mutex> lock(m_mutex);
+        if (m_commands.size() >= m_capacity) return PushResult::Full;
         const bool wasEmpty = m_commands.empty();
         m_commands.push_back(std::move(command));
         m_hasPending.store(true, std::memory_order_release);
-        return wasEmpty;
+        return wasEmpty ? PushResult::First : PushResult::Queued;
     }
 
     /** Bug real de desempenho corrigido 2026-07-19 (achado testando ao vivo na extensão, não pela
@@ -159,7 +169,14 @@ public:
         return m_hasPending.load(std::memory_order_acquire);
     }
 
+    size_t capacity() const { return m_capacity; }
+    size_t size() const {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return m_commands.size();
+    }
+
 private:
+    const size_t m_capacity;
     std::atomic<bool> m_hasPending{false};
     mutable std::mutex m_mutex;
     std::deque<Command> m_commands;
@@ -180,13 +197,18 @@ private:
  */
 class SimulationSession {
 public:
-    explicit SimulationSession(plugins::GlobalPluginCache& globalCache, size_t componentCapacity = 1024);
+    explicit SimulationSession(
+        plugins::GlobalPluginCache& globalCache,
+        size_t componentCapacity = 1024,
+        resources::ResourceGovernor resourceGovernor = resources::ResourceGovernor{});
 
     registry::ComponentRegistry& components() { return m_components; }
     registry::McuRegistry& mcus() { return m_mcus; }
     plugins::PluginRuntime& pluginRuntime() { return m_pluginRuntime; }
     simulation::Netlist& netlist() { return m_netlist; }
     simulation::Scheduler& scheduler() { return m_scheduler; }
+    const resources::ResourceGovernor& resourceGovernor() const { return m_resourceGovernor; }
+    size_t solverWorkerThreadCount() const { return m_mnaSolver.workerThreadCount(); }
     void setTransientSettings(const TransientSettings& settings);
     const TransientSettings& transientSettings() const { return m_transientSettings; }
     uint64_t acceptedTransientSteps() const { return m_acceptedTransientSteps.load(std::memory_order_relaxed); }
@@ -497,6 +519,7 @@ private:
     }
 
     plugins::GlobalPluginCache& m_globalCache;
+    resources::ResourceGovernor m_resourceGovernor;
     registry::ComponentRegistry m_components;
     registry::McuRegistry m_mcus;
     registry::SubcircuitRegistry m_subcircuits;

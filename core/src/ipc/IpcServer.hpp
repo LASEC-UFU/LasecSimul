@@ -35,8 +35,11 @@ public:
         uint64_t serializationNanoseconds = 0;
         uint64_t notificationQueueDepth = 0;
         uint64_t maxNotificationQueueDepth = 0;
+        uint64_t notificationQueueBytes = 0;
+        uint64_t rejectedNotifications = 0;
+        bool notificationWorkerStarted = false;
     };
-    explicit IpcServer(std::string pipeName);
+    explicit IpcServer(std::string pipeName, uint64_t notificationQueueCapacityBytes = 8ull * 1024 * 1024);
     ~IpcServer();
 
     IpcServer(const IpcServer&) = delete;
@@ -71,6 +74,8 @@ private:
     std::mutex m_notificationMutex;
     std::condition_variable m_notificationWake;
     std::deque<std::string> m_notificationQueue;
+    const uint64_t m_notificationQueueCapacityBytes;
+    uint64_t m_notificationQueuedBytes = 0;
     bool m_notificationStop = false;
     std::thread m_notificationThread;
     std::atomic<bool> m_profilingEnabled{false};
@@ -83,6 +88,9 @@ private:
     std::atomic<uint64_t> m_serializationNanoseconds{0};
     std::atomic<uint64_t> m_notificationQueueDepth{0};
     std::atomic<uint64_t> m_maxNotificationQueueDepth{0};
+    std::atomic<uint64_t> m_notificationQueueBytes{0};
+    std::atomic<uint64_t> m_rejectedNotifications{0};
+    std::atomic<bool> m_notificationWorkerStarted{false};
 
 #ifdef _WIN32
     void* m_pipe = nullptr; // HANDLE

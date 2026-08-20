@@ -71,13 +71,15 @@ using namespace lasecsimul::ipc;
 struct CoreApplication::Impl {
     CoreConfig config;
     GlobalPluginCache pluginCache;
+    resources::ResourceGovernor resourceGovernor;
     SimulationSession session;
     IpcServer ipcServer;
 
     explicit Impl(CoreConfig cfg)
         : config(std::move(cfg))
-        , session(pluginCache)
-        , ipcServer(config.pipeName) {}
+        , resourceGovernor(config.resourceProfile)
+        , session(pluginCache, 1024, resourceGovernor)
+        , ipcServer(config.pipeName, resourceGovernor.budget().telemetryQueueBytes) {}
 };
 
 // ── componentes built-in ───────────────────────────────────────────────────────
@@ -1535,13 +1537,25 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
             {"topologyRebuilds", core.topologyRebuilds}, {"topologyNanoseconds", core.topologyNanoseconds},
             {"pendingEvents", core.pendingEvents}, {"acceptedTransientSteps", core.acceptedTransientSteps},
             {"rejectedTransientSteps", core.rejectedTransientSteps}, {"solverThreads", core.solverThreads},
+            {"solverWorkerThreads", core.solverWorkerThreads},
+            {"solverMaxParallelTasks", core.solverMaxParallelTasks},
+            {"resourceBudget", nlohmann::json{
+                {"maxWorkerThreads", session.resourceGovernor().budget().maxWorkerThreads},
+                {"maxParallelTasks", session.resourceGovernor().budget().maxParallelTasks},
+                {"maxExternalProcesses", session.resourceGovernor().budget().maxExternalProcesses},
+                {"maxBuildJobs", session.resourceGovernor().budget().maxBuildJobs},
+                {"telemetryQueueBytes", session.resourceGovernor().budget().telemetryQueueBytes},
+                {"commandQueueCapacity", session.resourceGovernor().budget().commandQueueCapacity}}},
             {"ipc", nlohmann::json{{"requests", ipcMetrics.requests}, {"notifications", ipcMetrics.notifications},
                                    {"receivedBytes", ipcMetrics.receivedBytes}, {"sentBytes", ipcMetrics.sentBytes},
                                    {"parseNanoseconds", ipcMetrics.parseNanoseconds},
                                    {"handlerNanoseconds", ipcMetrics.handlerNanoseconds},
                                    {"serializationNanoseconds", ipcMetrics.serializationNanoseconds},
                                    {"notificationQueueDepth", ipcMetrics.notificationQueueDepth},
-                                   {"maxNotificationQueueDepth", ipcMetrics.maxNotificationQueueDepth}}}
+                                   {"maxNotificationQueueDepth", ipcMetrics.maxNotificationQueueDepth},
+                                   {"notificationQueueBytes", ipcMetrics.notificationQueueBytes},
+                                   {"rejectedNotifications", ipcMetrics.rejectedNotifications},
+                                   {"notificationWorkerStarted", ipcMetrics.notificationWorkerStarted}}}
         }.dump();
         return resp;
     }
@@ -2317,7 +2331,9 @@ CoreApplication::CoreApplication(CoreConfig config)
                 }
             }, value);
         }
-        m_impl->ipcServer.sendNotification("pauseConditionTriggered", nlohmann::json{{"ownerId",event.ownerId},{"simulationTimeNs",event.simulationTimeNs},{"expression",event.expression},{"resolvedValues",values},{"error",event.error}}.dump());
+        if (!m_impl->ipcServer.sendNotification("pauseConditionTriggered", nlohmann::json{{"ownerId",event.ownerId},{"simulationTimeNs",event.simulationTimeNs},{"expression",event.expression},{"resolvedValues",values},{"error",event.error}}.dump())) {
+            std::fprintf(stderr, "[Core] notificacao pauseConditionTriggered rejeitada pelo ResourceBudget\n");
+        }
     });
 }
 
@@ -2332,14 +2348,29 @@ int CoreApplication::run() {
 
 CoreConfig parseArgs(int argc, char** argv) {
     CoreConfig cfg;
-    for (int i = 1; i < argc - 1; ++i) {
-        if (std::strcmp(argv[i], "--pipe") == 0) {
-            cfg.pipeName = argv[i + 1];
-            return cfg;
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--pipe") == 0 && i + 1 < argc) {
+            cfg.pipeName = argv[++i];
+        } else if (std::strcmp(argv[i], "--resource-profile") == 0 && i + 1 < argc) {
+            const std::string profile = argv[++i];
+            if (profile == "automatic") cfg.resourceProfile = resources::ResourceProfile::Automatic;
+            else if (profile == "desktop") cfg.resourceProfile = resources::ResourceProfile::Desktop;
+            else if (profile == "shared-host") cfg.resourceProfile = resources::ResourceProfile::SharedHost;
+            else {
+                std::fprintf(stderr, "Perfil de recursos invalido: %s\n", profile.c_str());
+                std::exit(1);
+            }
+        } else {
+            std::fprintf(stderr,
+                         "Uso: lasecsimul-core --pipe <nome> [--resource-profile automatic|desktop|shared-host]\n");
+            std::exit(1);
         }
     }
-    std::fprintf(stderr, "Uso: lasecsimul-core --pipe <nome-do-pipe>\n");
-    std::exit(1);
+    if (cfg.pipeName.empty()) {
+        std::fprintf(stderr, "Uso: lasecsimul-core --pipe <nome-do-pipe>\n");
+        std::exit(1);
+    }
+    return cfg;
 }
 
 } // namespace lasecsimul::app

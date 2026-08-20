@@ -11,6 +11,7 @@
 #include <span>
 #include <stdexcept>
 #include <unordered_map>
+#include <utility>
 #include <nlohmann/json.hpp>
 #include "../fpga/FpgaComponent.hpp"
 #include "../mcu/McuComponent.hpp"
@@ -171,9 +172,12 @@ SimulationSession::tryDrainUartRx(uint32_t component) const {
     });
 }
 
-SimulationSession::SimulationSession(plugins::GlobalPluginCache& globalCache, size_t componentCapacity)
-    : m_globalCache(globalCache), m_pluginRuntime(globalCache),
-      m_scheduler(componentCapacity, [this] { return settleStep(); }) {
+SimulationSession::SimulationSession(plugins::GlobalPluginCache& globalCache, size_t componentCapacity,
+                                     resources::ResourceGovernor resourceGovernor)
+    : m_globalCache(globalCache), m_resourceGovernor(std::move(resourceGovernor)),
+      m_pluginRuntime(globalCache), m_mnaSolver(m_resourceGovernor),
+      m_scheduler(componentCapacity, [this] { return settleStep(); }),
+      m_commandQueue(m_resourceGovernor.budget().commandQueueCapacity) {
     m_scheduler.setTimeStepCallbacks(
         [this](uint64_t previous, uint64_t current) {
             const TransientStepContext context{current, current - previous, m_transientSettings.method,
@@ -245,7 +249,11 @@ void SimulationSession::enqueueCommand(CommandQueue::Command command) {
         command(*this);
         return;
     }
-    if (m_commandQueue.push(std::move(command))) m_scheduler.notifyCommandPending();
+    const CommandQueue::PushResult result = m_commandQueue.push(std::move(command));
+    if (result == CommandQueue::PushResult::Full) {
+        throw std::runtime_error("fila de comandos atingiu a capacidade do ResourceBudget");
+    }
+    if (result == CommandQueue::PushResult::First) m_scheduler.notifyCommandPending();
 }
 
 void SimulationSession::drainCommandQueue() {
@@ -292,7 +300,8 @@ SimulationPerformanceSnapshot SimulationSession::performanceMetrics() const {
             m_topologyRebuilds.load(std::memory_order_relaxed),
             m_topologyNanoseconds.load(std::memory_order_relaxed), schedulerMetrics.pendingEvents,
             m_acceptedTransientSteps.load(std::memory_order_relaxed),
-            m_rejectedTransientSteps.load(std::memory_order_relaxed), m_mnaSolver.threadCount()};
+            m_rejectedTransientSteps.load(std::memory_order_relaxed), m_mnaSolver.threadCount(),
+            m_mnaSolver.workerThreadCount(), m_mnaSolver.resourceBudget().maxParallelTasks};
 }
 
 void SimulationSession::registerKnownPluginTypes() {

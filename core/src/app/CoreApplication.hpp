@@ -1,12 +1,14 @@
 #pragma once
 #include <memory>
 #include <string>
+#include "../resources/ResourceGovernor.hpp"
 
 namespace lasecsimul::app {
 
 /** Configuração recebida via argumentos de linha de comando. */
 struct CoreConfig {
     std::string pipeName; // nome do pipe/socket IPC (sem prefixo de plataforma)
+    resources::ResourceProfile resourceProfile = resources::ResourceProfile::Automatic;
 };
 
 /**

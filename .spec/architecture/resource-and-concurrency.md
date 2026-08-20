@@ -60,6 +60,13 @@ Afinidade, CPU sets e HostSupervisor não são defaults. Um HostSupervisor só e
 
 Toda fila declara produtor, consumidor, capacidade, unidade do limite, overflow, ordem e shutdown. Comandos não podem ser descartados silenciosamente; telemetria intermediária pode ser coalescida. Build IEC não cria fila ilimitada de recompilações: alterações rápidas coalescem por geração de autoria.
 
+- `CommandQueue`: produtor IPC, consumidor Scheduler, capacidade em comandos, FIFO; overflow retorna
+  erro síncrono ao produtor e shutdown drena apenas o lote já aceito;
+- notificações IPC: produtor Scheduler, consumidor IPC, capacidade em bytes, FIFO; overflow retorna
+  rejeição observável em métrica/log e a thread consumidora é criada somente na primeira mensagem;
+- pool MNA: produtor/coordenador único, índices atômicos limitados ao lote atual, sem fila persistente;
+  workers são estacionados e encerrados por `join` no shutdown.
+
 ## Aceitação
 
 - sessão vazia cria zero worker extra;
