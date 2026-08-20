@@ -243,6 +243,36 @@ add_executable(plc_scan_session_test
 target_include_directories(plc_scan_session_test PRIVATE include src src/plc/runtime/include)
 add_test(NAME plc_scan_session COMMAND plc_scan_session_test)
 
+# F9.3: PlcCompiler orquestra strucpp.exe (binario vendorizado, ver scripts/build-strucpp.js) +
+# um compilador C++ real de ponta a ponta -- depende de ambos existirem no ambiente de teste, por
+# isso "external-plc" (paralelo a external-ghdl/external-qemu/external-python), nao hermetic. Pula
+# (nao falha) se o binario vendorizado nao tiver sido baixado ainda -- mesmo padrao de
+# SKIP_REGULAR_EXPRESSION "PULADO:" ja usado pelos outros testes external-*.
+if(WIN32)
+    set(LASECSIMUL_STRUCPP_TEST_BINARY "${CMAKE_CURRENT_SOURCE_DIR}/../plc/strucpp/build/win32-x64/strucpp/strucpp.exe")
+elseif(APPLE)
+    set(LASECSIMUL_STRUCPP_TEST_BINARY "${CMAKE_CURRENT_SOURCE_DIR}/../plc/strucpp/build/darwin-x64/strucpp/strucpp")
+else()
+    set(LASECSIMUL_STRUCPP_TEST_BINARY "${CMAKE_CURRENT_SOURCE_DIR}/../plc/strucpp/build/linux-x64/strucpp/strucpp")
+endif()
+
+add_executable(plc_compiler_test
+    test/core/plc/PlcCompilerTest.cpp
+    src/plc/PlcCompiler.cpp
+    src/plc/PlcInterfaceParser.cpp
+    src/plc/PlcDriverCodegen.cpp
+    src/plc/PlcScanSession.cpp
+)
+target_include_directories(plc_compiler_test PRIVATE include src src/plc/runtime/include)
+target_compile_definitions(plc_compiler_test PRIVATE
+    LASECSIMUL_TEST_STRUCPP_BINARY="${LASECSIMUL_STRUCPP_TEST_BINARY}"
+    LASECSIMUL_TEST_PLC_RUNTIME_INCLUDE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/src/plc/runtime/include"
+    LASECSIMUL_TEST_PLC_SRC_DIR="${CMAKE_CURRENT_SOURCE_DIR}/src/plc"
+    LASECSIMUL_TEST_PLC_FIXTURE_ST="${CMAKE_CURRENT_SOURCE_DIR}/test/core/plc/fixtures/hello.st"
+)
+add_test(NAME plc_compiler COMMAND plc_compiler_test)
+set_tests_properties(plc_compiler PROPERTIES TIMEOUT 90 SKIP_REGULAR_EXPRESSION "PULADO:")
+
 # Driver standalone (processo real, stdin/stdout) pro fixture `hello` -- prova que o mesmo
 # PlcScanSession funciona como processo isolado de verdade, nao so linkado direto no teste acima.
 # Hand-wired pra este PROGRAM especifico nesta rodada; F9.3 (PlcCompiler) gera este arquivo por
@@ -1324,6 +1354,9 @@ set(LASECSIMUL_EXTERNAL_QEMU_TESTS
 set(LASECSIMUL_EXTERNAL_PYTHON_TESTS
     python_runtime python_session
 )
+set(LASECSIMUL_EXTERNAL_PLC_TESTS
+    plc_compiler
+)
 set_tests_properties(${LASECSIMUL_HERMETIC_TESTS} PROPERTIES
     LABELS "hermetic"
     SKIP_REGULAR_EXPRESSION "PULADO:"
@@ -1338,5 +1371,9 @@ set_tests_properties(${LASECSIMUL_EXTERNAL_QEMU_TESTS} PROPERTIES
 )
 set_tests_properties(${LASECSIMUL_EXTERNAL_PYTHON_TESTS} PROPERTIES
     LABELS "external-python"
+    SKIP_REGULAR_EXPRESSION "PULADO:"
+)
+set_tests_properties(${LASECSIMUL_EXTERNAL_PLC_TESTS} PROPERTIES
+    LABELS "external-plc"
     SKIP_REGULAR_EXPRESSION "PULADO:"
 )
