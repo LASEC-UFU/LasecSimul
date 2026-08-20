@@ -14,16 +14,20 @@ struct RuntimeState {
     uint64_t planGeneration = 0;
     uint64_t virtualTimeNs = 0;
     DenseExecutionLists execution;
+    std::vector<SignalPlan::Subscriber> resolvedSignalSubscribers;
     Topology electricalTopology;
     std::vector<double> nodeVoltages;
     std::vector<double> previousNodeVoltages;
     std::vector<uint64_t> lastEdgeTimeNs;
     std::vector<uint32_t> stampedThisRound;
+    std::vector<uint32_t> stampedNonlinearThisRound;
 
     void bind(const std::shared_ptr<const SimulationPlan>& plan) {
         if (!plan || !plan->execution) throw std::invalid_argument("RuntimeState exige SimulationPlan completo");
         planGeneration = plan->generation;
         execution = *plan->execution;
+        resolvedSignalSubscribers = plan->signal ? plan->signal->resolvedSubscribers
+                                                 : std::vector<SignalPlan::Subscriber>{};
     }
 };
 

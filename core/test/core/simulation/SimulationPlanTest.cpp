@@ -38,6 +38,7 @@ PlanCompileInput inputFor(const Topology& topology) {
     input.authoringRevision = 7;
     input.electricalRevision = 3;
     input.componentCapacity = 4;
+    input.normalizedComponentState = {"source", "observer", "", ""};
     input.electricalTopology = &topology;
     input.execution.activeComponents = {0, 1};
     input.execution.reactiveComponents = {1};
@@ -60,6 +61,8 @@ void planIsImmutableAndDomainIncremental() {
     input.invalidation = PlanInvalidation(PlanDomain::Signal);
     const auto second = PlanCompiler::compile(input);
     CHECK(second->generation == 2, "publicacao incrementa geracao");
+    CHECK(second->normalizedAuthoringHash == first->normalizedAuthoringHash,
+          "hash normalizado independe da sequencia de revisoes");
     CHECK(second->electrical == first->electrical, "dominio eletrico nao invalidado e compartilhado");
     CHECK(second->signal != first->signal, "somente SignalPlan invalidado e recompilado");
     CHECK(second->execution == first->execution, "indices densos nao invalidos sao compartilhados");

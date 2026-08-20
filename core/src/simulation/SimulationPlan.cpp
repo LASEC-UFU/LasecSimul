@@ -63,6 +63,8 @@ void hashList(uint64_t& hash, const std::vector<uint32_t>& values) {
 std::string structuralHash(const PlanCompileInput& input) {
     uint64_t hash = kFnvOffset;
     hashScalar(hash, input.componentCapacity);
+    hashScalar(hash, input.normalizedComponentState.size());
+    for (const std::string& component : input.normalizedComponentState) hashText(hash, component);
     const DenseExecutionLists& lists = input.execution;
     hashList(hash, lists.activeComponents);
     hashList(hash, lists.reactiveComponents);
@@ -71,6 +73,16 @@ std::string structuralHash(const PlanCompileInput& input) {
     hashList(hash, lists.mcuComponents);
     hashList(hash, lists.signalSubscribers);
     hashList(hash, lists.plcComponents);
+    hashScalar(hash, input.resolvedSignalSubscribers.size());
+    for (const SignalPlan::Subscriber& subscriber : input.resolvedSignalSubscribers) {
+        hashScalar(hash, subscriber.componentIndex);
+        for (const SignalPlan::Route& route : subscriber.channels) {
+            hashText(hash, route.descriptor.channelId);
+            hashText(hash, route.descriptor.source);
+            hashText(hash, route.descriptor.label);
+            hashList(hash, route.nodeIndices);
+        }
+    }
 
     if (input.electricalTopology) {
         const Topology& topology = *input.electricalTopology;
@@ -140,6 +152,7 @@ std::shared_ptr<const SimulationPlan> PlanCompiler::compile(const PlanCompileInp
         auto signal = std::make_shared<SignalPlan>();
         signal->revision = input.authoringRevision;
         signal->subscribers = input.execution.signalSubscribers;
+        signal->resolvedSubscribers = input.resolvedSignalSubscribers;
         next->signal = std::move(signal);
     } else {
         next->signal = input.previous->signal;

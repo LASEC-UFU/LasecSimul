@@ -178,13 +178,17 @@ SimulationSession::SimulationSession(plugins::GlobalPluginCache& globalCache, si
       m_pluginRuntime(globalCache), m_mnaSolver(m_resourceGovernor),
       m_scheduler(componentCapacity, [this] { return settleStep(); }),
       m_commandQueue(m_resourceGovernor.budget().commandQueueCapacity) {
+    m_scheduler.setBeforeExecutionCallback([this] {
+        if (!publishSimulationPlan()) {
+            throw std::logic_error("SimulationPlan so pode ser publicado com a simulacao parada");
+        }
+    });
     m_scheduler.setTimeStepCallbacks(
         [this](uint64_t previous, uint64_t current) {
             const TransientStepContext context{current, current - previous, m_transientSettings.method,
                                                m_acceptedTransientSteps.load(std::memory_order_relaxed)};
-            for (uint32_t i = 0; i < m_componentInstances.size(); ++i) {
+            for (uint32_t i : m_reactiveComponentIndices) {
                 IComponentModel* component = m_componentInstances[i].get();
-                if (!component || !component->isReactive()) continue;
                 component->beginTransientStep(context);
                 m_scheduler.dirtySet().insert(i);
             }
@@ -192,18 +196,17 @@ SimulationSession::SimulationSession(plugins::GlobalPluginCache& globalCache, si
         [this](uint64_t previous, uint64_t current, bool eventBoundary) -> simulation::Scheduler::TimeStepDecision {
             double maximumError = 0.0;
             if (m_transientSettings.adaptiveTimeStep && !eventBoundary) {
-                for (const auto& component : m_componentInstances) {
-                    if (component && component->isReactive()) {
-                        maximumError = std::max(maximumError, component->transientErrorRatio(
-                            m_transientSettings.absoluteTolerance, m_transientSettings.relativeTolerance));
-                    }
+                for (uint32_t index : m_reactiveComponentIndices) {
+                    IComponentModel* component = m_componentInstances[index].get();
+                    maximumError = std::max(maximumError, component->transientErrorRatio(
+                        m_transientSettings.absoluteTolerance, m_transientSettings.relativeTolerance));
                 }
             }
             if (!m_scheduler.lastSettleConvergedUnlocked()) maximumError = std::max(maximumError, 2.0);
             const bool atMinimumStep = current - previous <= m_transientSettings.minimumStepNs;
             const bool accept = eventBoundary || atMinimumStep || !m_transientSettings.adaptiveTimeStep || maximumError <= 1.0;
-            for (const auto& component : m_componentInstances) {
-                if (!component || !component->isReactive()) continue;
+            for (uint32_t index : m_reactiveComponentIndices) {
+                IComponentModel* component = m_componentInstances[index].get();
                 if (accept) component->commitTransientStep();
                 else component->rollbackTransientStep();
             }
@@ -230,6 +233,110 @@ SimulationSession::SimulationSession(plugins::GlobalPluginCache& globalCache, si
     m_scheduler.setCommandPendingCallback([this] { return m_commandQueue.hasPending(); });
     m_scheduler.setAdvanceLimitCallback([this] { return computeSlowestMcuPositionNs(); });
     setTransientSettings(m_transientSettings);
+}
+
+void SimulationSession::invalidatePlan(simulation::PlanDomain domains) {
+    if (domains == simulation::PlanDomain::None) return;
+    if ((domains & simulation::PlanDomain::Electrical) != simulation::PlanDomain::None &&
+        (!m_signalSubscribers.empty() || !m_pauseConditions.empty())) {
+        domains = domains | simulation::PlanDomain::Signal;
+    }
+    if ((domains & simulation::PlanDomain::Signal) != simulation::PlanDomain::None) {
+        m_signalRoutesDirty = true;
+    }
+    std::lock_guard<std::mutex> lock(m_planMutex);
+    ++m_authoringRevision;
+    if ((domains & simulation::PlanDomain::Electrical) != simulation::PlanDomain::None) {
+        ++m_electricalPlanRevision;
+    }
+    m_planInvalidation.invalidate(domains);
+}
+
+simulation::PlanDomain SimulationSession::refreshComponentExecutionLists(uint32_t componentIndex) {
+    IComponentModel* component = componentIndex < m_componentInstances.size()
+                                     ? m_componentInstances[componentIndex].get()
+                                     : nullptr;
+    const auto setMembership = [componentIndex](std::vector<uint32_t>& list, bool member) {
+        const auto position = std::lower_bound(list.begin(), list.end(), componentIndex);
+        const bool present = position != list.end() && *position == componentIndex;
+        if (member == present) return false;
+        if (member) list.insert(position, componentIndex);
+        else list.erase(position);
+        return true;
+    };
+
+    simulation::PlanDomain changed = simulation::PlanDomain::None;
+    const bool activeChanged = setMembership(m_activeComponentIndices, component != nullptr);
+    const bool reactiveChanged = setMembership(m_reactiveComponentIndices, component && component->isReactive());
+    const bool nonlinearChanged = setMembership(m_nonlinearComponentIndices, component && component->isNonlinear());
+    if (activeChanged || reactiveChanged || nonlinearChanged) {
+        changed = changed | simulation::PlanDomain::ExecutionIndex;
+    }
+    const bool isFpga = component && dynamic_cast<fpga::FpgaComponent*>(component) != nullptr;
+    const bool isMcu = component && dynamic_cast<mcu::McuComponent*>(component) != nullptr;
+    const bool fpgaChanged = setMembership(m_fpgaComponentIndices, isFpga);
+    const bool mcuChanged = setMembership(m_mcuComponentIndices, isMcu);
+    if (fpgaChanged || mcuChanged) {
+        changed = changed | simulation::PlanDomain::ExecutionIndex | simulation::PlanDomain::External;
+    }
+    if (setMembership(m_signalSubscribers, component && !component->signalSubscriptions().empty())) {
+        changed = changed | simulation::PlanDomain::ExecutionIndex | simulation::PlanDomain::Signal;
+    }
+    return changed;
+}
+
+bool SimulationSession::publishSimulationPlan() {
+    if (m_scheduler.isRunning()) return false;
+    simulation::PlanCompileInput input;
+    {
+        std::lock_guard<std::mutex> lock(m_planMutex);
+        if (m_planInvalidation.empty() && m_publishedPlan) return true;
+        input.authoringRevision = m_authoringRevision;
+        input.electricalRevision = m_electricalPlanRevision;
+        input.invalidation = m_planInvalidation;
+        input.previous = m_publishedPlan;
+    }
+
+    rebuildTopologyIfNeeded();
+    rebuildSignalRoutesIfNeeded();
+    input.componentCapacity = m_componentInstances.size();
+    input.normalizedComponentState.resize(m_componentInstances.size());
+    for (uint32_t componentIndex : m_activeComponentIndices) {
+        IComponentModel* component = m_componentInstances[componentIndex].get();
+        nlohmann::json normalized{{"typeId", component->typeId()}, {"pins", nlohmann::json::array()},
+                                  {"properties", nlohmann::json::object()}};
+        for (const Pin& pin : component->pins()) normalized["pins"].push_back(pin.id);
+        for (PropertyDescriptor& descriptor : component->propertyDescriptors()) {
+            normalized["properties"][descriptor.name] = std::visit([](const auto& value) -> nlohmann::json {
+                using Value = std::decay_t<decltype(value)>;
+                if constexpr (std::is_same_v<Value, PropertyPoint>) {
+                    return nlohmann::json{{"x", value.x}, {"y", value.y}};
+                } else {
+                    return nlohmann::json(value);
+                }
+            }, descriptor.get());
+        }
+        input.normalizedComponentState[componentIndex] = normalized.dump();
+    }
+    input.electricalTopology = &m_topology;
+    input.execution = m_runtimeState.execution;
+    input.resolvedSignalSubscribers = m_runtimeState.resolvedSignalSubscribers;
+
+    // Staging: nenhuma referência publicada muda antes de compile() concluir integralmente.
+    std::shared_ptr<const simulation::SimulationPlan> staged = simulation::PlanCompiler::compile(input);
+    m_runtimeState.bind(staged);
+    {
+        std::lock_guard<std::mutex> lock(m_planMutex);
+        m_publishedPlan = std::move(staged);
+        m_planInvalidation.clear(input.invalidation.domains());
+    }
+    return true;
+}
+
+std::shared_ptr<const simulation::SimulationPlan> SimulationSession::simulationPlan() {
+    if (!m_scheduler.isRunning()) publishSimulationPlan();
+    std::lock_guard<std::mutex> lock(m_planMutex);
+    return m_publishedPlan;
 }
 
 void SimulationSession::enqueueCommand(CommandQueue::Command command) {
@@ -350,6 +457,9 @@ uint32_t SimulationSession::addComponent(const std::string& typeId, const regist
 }
 
 uint32_t SimulationSession::addComponentUnlocked(const std::string& typeId, const registry::ComponentParams& params) {
+    if (m_scheduler.isRunning()) {
+        throw std::runtime_error("addComponent requer simulacao parada para publicar SimulationPlan");
+    }
     std::unique_ptr<IComponentModel> instance;
     if (m_components.contains(typeId)) {
         instance = m_components.create(typeId, params);
@@ -380,14 +490,13 @@ uint32_t SimulationSession::addComponentUnlocked(const std::string& typeId, cons
     }
 
     instance->onAssignedIndex(componentIndex);
-    const bool isFpga = dynamic_cast<fpga::FpgaComponent*>(instance.get()) != nullptr;
-    if (!instance->signalSubscriptions().empty()) m_signalSubscribers.push_back(componentIndex);
     m_componentInstances.push_back(std::move(instance));
-    if (isFpga) m_fpgaComponentIndices.push_back(componentIndex);
+    const simulation::PlanDomain executionChanges = refreshComponentExecutionLists(componentIndex);
     if (!params.instanceName.empty()) m_signalAliases[params.instanceName] = componentIndex;
     for (const std::string& alias : params.signalAliases) if (!alias.empty()) m_signalAliases[alias] = componentIndex;
     m_topologyDirty = true;
     m_topologyReuseSafe = false;
+    invalidatePlan(simulation::PlanDomain::Electrical | executionChanges);
     // `dirtySet()` (não `markDirty()`) -- bug real encontrado 2026-07-19 rodando
     // command_queue_session_test pela primeira vez: quando isto roda via drainCommandQueue() dentro
     // de settleUntilStableLocked(), `Scheduler::m_mutex` já está travado pela própria thread
@@ -404,7 +513,8 @@ ResolvedSignal SimulationSession::resolveSignal(const std::string& reference, st
     return m_scheduler.synchronized([&] { return resolveSignalUnlocked(reference, self); });
 }
 
-ResolvedSignal SimulationSession::resolveSignalUnlocked(const std::string& reference, std::optional<uint32_t> self) const {
+simulation::SignalPlan::Route SimulationSession::compileSignalRouteUnlocked(
+    const std::string& reference, std::optional<uint32_t> self) const {
     std::string text;
     for (char c : reference) if (!std::isspace(static_cast<unsigned char>(c))) text.push_back(c);
     if (text.empty()) throw std::invalid_argument("referencia de sinal vazia");
@@ -470,8 +580,7 @@ ResolvedSignal SimulationSession::resolveSignalUnlocked(const std::string& refer
         if (msb && (*msb != 0 || *lsb != 0)) throw std::out_of_range("sinal escalar nao possui esse indice: " + reference);
         slots.push_back(*tunnel);
     } else {
-        for (uint32_t i = 0; i < m_componentInstances.size(); ++i) {
-            if (!m_componentInstances[i]) continue;
+        for (uint32_t i : m_activeComponentIndices) {
             const auto& byId = m_netlist.pinSlotsOf(i);
             const auto pin = byId.find(base);
             if (pin == byId.end()) continue;
@@ -481,36 +590,72 @@ ResolvedSignal SimulationSession::resolveSignalUnlocked(const std::string& refer
         if (slots.empty()) throw std::invalid_argument("sinal nao encontrado: " + base);
     }
 
-    ResolvedSignal result;
-    result.descriptor.source = reference;
-    result.descriptor.label = reference;
-    result.descriptor.width = static_cast<uint16_t>(slots.size());
-    result.descriptor.msb = static_cast<int16_t>(msb.value_or(static_cast<int>(slots.size()) - 1));
-    result.descriptor.lsb = static_cast<int16_t>(lsb.value_or(0));
-    result.descriptor.kind = slots.size() == 1 ? SignalValueKind::Analog : SignalValueKind::Unsigned;
-    result.elements.reserve(slots.size());
+    simulation::SignalPlan::Route route;
+    route.descriptor.source = reference;
+    route.descriptor.label = reference;
+    route.descriptor.width = static_cast<uint16_t>(slots.size());
+    route.descriptor.msb = static_cast<int16_t>(msb.value_or(static_cast<int>(slots.size()) - 1));
+    route.descriptor.lsb = static_cast<int16_t>(lsb.value_or(0));
+    route.descriptor.kind = slots.size() == 1 ? SignalValueKind::Analog : SignalValueKind::Unsigned;
+    route.nodeIndices.reserve(slots.size());
     for (uint32_t slot : slots) {
         if (slot >= m_topology.slotToNode.size()) throw std::runtime_error("topologia ainda nao resolvida para " + reference);
-        result.elements.push_back(m_nodeVoltages.at(m_topology.slotToNode[slot]));
+        route.nodeIndices.push_back(m_topology.slotToNode[slot]);
     }
+    return route;
+}
+
+ResolvedSignal SimulationSession::sampleSignalRouteUnlocked(const simulation::SignalPlan::Route& route) const {
+    ResolvedSignal result;
+    result.descriptor = route.descriptor;
+    result.elements.reserve(route.nodeIndices.size());
+    for (uint32_t node : route.nodeIndices) result.elements.push_back(m_nodeVoltages.at(node));
     return result;
 }
 
-void SimulationSession::acquireSubscribedSignalsUnlocked(uint64_t timestampNs) {
+ResolvedSignal SimulationSession::resolveSignalUnlocked(const std::string& reference,
+                                                         std::optional<uint32_t> self) const {
+    return sampleSignalRouteUnlocked(compileSignalRouteUnlocked(reference, self));
+}
+
+void SimulationSession::rebuildSignalRoutesIfNeeded() {
+    if (!m_signalRoutesDirty) return;
+    std::vector<simulation::SignalPlan::Subscriber> resolved;
+    resolved.reserve(m_signalSubscribers.size());
     for (uint32_t componentIndex : m_signalSubscribers) {
         IComponentModel* component = m_componentInstances[componentIndex].get();
-        if (!component || !component->wantsResolvedSignalSample(timestampNs)) continue;
+        simulation::SignalPlan::Subscriber subscriber;
+        subscriber.componentIndex = componentIndex;
         const std::vector<SignalSubscription> subscriptions = component->signalSubscriptions();
-        if (subscriptions.empty()) continue;
-        std::vector<ResolvedSignal> values;
-        values.reserve(subscriptions.size());
+        subscriber.channels.reserve(subscriptions.size());
         for (const SignalSubscription& subscription : subscriptions) {
-            ResolvedSignal value = resolveSignalUnlocked(subscription.source, componentIndex);
-            value.descriptor.channelId = subscription.channelId;
-            value.descriptor.label = subscription.label.empty() ? subscription.source : subscription.label;
-            value.descriptor.kind = subscription.requestedKind;
-            values.push_back(std::move(value));
+            simulation::SignalPlan::Route route =
+                compileSignalRouteUnlocked(subscription.source, componentIndex);
+            route.descriptor.channelId = subscription.channelId;
+            route.descriptor.label = subscription.label.empty() ? subscription.source : subscription.label;
+            route.descriptor.kind = subscription.requestedKind;
+            subscriber.channels.push_back(std::move(route));
         }
+        resolved.push_back(std::move(subscriber));
+    }
+    m_runtimeState.resolvedSignalSubscribers = std::move(resolved);
+    for (auto& [ownerId, condition] : m_pauseConditions) {
+        (void)ownerId;
+        for (auto& [reference, route] : condition.signalRoutes) {
+            route = compileSignalRouteUnlocked(reference, std::nullopt);
+        }
+    }
+    m_signalRoutesDirty = false;
+}
+
+void SimulationSession::acquireSubscribedSignalsUnlocked(uint64_t timestampNs) {
+    for (const simulation::SignalPlan::Subscriber& subscriber : m_runtimeState.resolvedSignalSubscribers) {
+        IComponentModel* component = m_componentInstances[subscriber.componentIndex].get();
+        if (!component->wantsResolvedSignalSample(timestampNs)) continue;
+        std::vector<ResolvedSignal> values;
+        values.reserve(subscriber.channels.size());
+        for (const simulation::SignalPlan::Route& route : subscriber.channels)
+            values.push_back(sampleSignalRouteUnlocked(route));
         component->onResolvedSignalSample(timestampNs, values);
     }
 }
@@ -518,18 +663,22 @@ void SimulationSession::acquireSubscribedSignalsUnlocked(uint64_t timestampNs) {
 void SimulationSession::setPauseCondition(const std::string& ownerId, const std::string& expression) {
     PauseExpression compiled = PauseExpression::compile(expression);
     m_scheduler.synchronized([&] {
+        PauseConditionState next;
         if (!compiled.empty()) {
             // Validação semântica antes de iniciar; não arma bordas com esta leitura.
-            compiled.evaluate([this](PauseSignalMode mode, const std::string& reference) -> PauseScalar {
+            compiled.evaluate([this, &next](PauseSignalMode mode, const std::string& reference) -> PauseScalar {
                 if (mode == PauseSignalMode::Current) {
                     const auto alias = m_signalAliases.find(reference);
                     if (alias == m_signalAliases.end()) throw std::invalid_argument("componente de corrente não encontrado: " + reference);
                     IComponentModel* component = m_componentInstances.at(alias->second).get();
                     const auto current = component ? component->current() : std::nullopt;
                     if (!current) throw std::invalid_argument("componente não expõe corrente: " + reference);
+                    next.currentComponents[reference] = alias->second;
                     return *current;
                 }
-                const ResolvedSignal signal = resolveSignalUnlocked(reference, std::nullopt);
+                simulation::SignalPlan::Route route = compileSignalRouteUnlocked(reference, std::nullopt);
+                const ResolvedSignal signal = sampleSignalRouteUnlocked(route);
+                next.signalRoutes[reference] = std::move(route);
                 if (mode == PauseSignalMode::Digital || mode == PauseSignalMode::Rising || mode == PauseSignalMode::Falling)
                     return signal.unsignedValue() != 0;
                 if (signal.elements.size() == 1) return signal.elements.front();
@@ -538,25 +687,33 @@ void SimulationSession::setPauseCondition(const std::string& ownerId, const std:
             compiled.resetEdges();
         }
         if (compiled.empty()) m_pauseConditions.erase(ownerId);
-        else m_pauseConditions[ownerId] = PauseConditionState{std::move(compiled), false, false};
+        else {
+            next.expression = std::move(compiled);
+            m_pauseConditions[ownerId] = std::move(next);
+        }
     });
 }
 
 void SimulationSession::onStableStepUnlocked(uint64_t timestampNs) {
+    m_runtimeState.virtualTimeNs = timestampNs;
     publishSnapshot();
     publishTelemetrySnapshotIfRequested();
     acquireSubscribedSignalsUnlocked(timestampNs);
     for (auto& [ownerId, condition] : m_pauseConditions) try {
-        PauseEvaluation evaluation = condition.expression.evaluate([this](PauseSignalMode mode, const std::string& reference) -> PauseScalar {
+        PauseEvaluation evaluation = condition.expression.evaluate([this, &condition](PauseSignalMode mode, const std::string& reference) -> PauseScalar {
             if (mode == PauseSignalMode::Current) {
-                const auto alias = m_signalAliases.find(reference);
-                if (alias == m_signalAliases.end()) throw std::invalid_argument("componente de corrente não encontrado: " + reference);
-                IComponentModel* component = m_componentInstances.at(alias->second).get();
+                const auto compiled = condition.currentComponents.find(reference);
+                if (compiled == condition.currentComponents.end())
+                    throw std::invalid_argument("handle de corrente nao compilado: " + reference);
+                IComponentModel* component = m_componentInstances.at(compiled->second).get();
                 const auto current = component ? component->current() : std::nullopt;
                 if (!current) throw std::invalid_argument("componente não expõe corrente: " + reference);
                 return *current;
             }
-            const ResolvedSignal signal = resolveSignalUnlocked(reference, std::nullopt);
+            const auto compiled = condition.signalRoutes.find(reference);
+            if (compiled == condition.signalRoutes.end())
+                throw std::invalid_argument("handle de sinal nao compilado: " + reference);
+            const ResolvedSignal signal = sampleSignalRouteUnlocked(compiled->second);
             if (mode == PauseSignalMode::Digital || mode == PauseSignalMode::Rising || mode == PauseSignalMode::Falling)
                 return signal.unsignedValue() != 0;
             if (signal.elements.size() == 1) return signal.elements.front();
@@ -688,6 +845,9 @@ void SimulationSession::connectWire(uint32_t componentA, const std::string& pinI
 
 void SimulationSession::connectWireUnlocked(uint32_t componentA, const std::string& pinIdA, uint32_t componentB,
                                              const std::string& pinIdB) {
+    if (m_scheduler.isRunning()) {
+        throw std::runtime_error("connectWire requer simulacao parada para publicar ElectricalPlan");
+    }
     if (m_netlist.isComponentRemoved(componentA) || m_netlist.isComponentRemoved(componentB))
         throw std::invalid_argument("SimulationSession::connectWire: componente removido");
     // Arquivos de autoria antigos e alguns packages genéricos usam `pin-N`, enquanto a factory
@@ -729,6 +889,7 @@ void SimulationSession::connectWireUnlocked(uint32_t componentA, const std::stri
     m_topologyDirty = true;
     if (!wasDirty) m_topologyReuseSafe = true;
     ++m_wireTopologyRevision;
+    invalidatePlan(simulation::PlanDomain::Electrical);
 }
 
 bool SimulationSession::disconnectWire(uint32_t componentA, const std::string& pinIdA, uint32_t componentB,
@@ -740,6 +901,9 @@ bool SimulationSession::disconnectWire(uint32_t componentA, const std::string& p
 
 bool SimulationSession::disconnectWireUnlocked(uint32_t componentA, const std::string& pinIdA, uint32_t componentB,
                                                 const std::string& pinIdB) {
+    if (m_scheduler.isRunning()) {
+        throw std::runtime_error("disconnectWire requer simulacao parada para publicar ElectricalPlan");
+    }
     if (m_netlist.isComponentRemoved(componentA) || m_netlist.isComponentRemoved(componentB))
         throw std::invalid_argument("SimulationSession::disconnectWire: componente removido");
     const auto endpointSlots = [&](uint32_t component, const std::string& pinId) {
@@ -758,7 +922,12 @@ bool SimulationSession::disconnectWireUnlocked(uint32_t componentA, const std::s
         throw std::invalid_argument("larguras de barramento incompatíveis ao desconectar");
     bool removed = false;
     for (size_t i = 0; i < slotsA.size(); ++i) removed = m_netlist.disconnectWire(slotsA[i], slotsB[i]) || removed;
-    if (removed) { m_topologyDirty = true; m_topologyReuseSafe = false; ++m_wireTopologyRevision; }
+    if (removed) {
+        m_topologyDirty = true;
+        m_topologyReuseSafe = false;
+        ++m_wireTopologyRevision;
+        invalidatePlan(simulation::PlanDomain::Electrical);
+    }
     return removed;
 }
 
@@ -780,6 +949,15 @@ uint64_t SimulationSession::applyWireTopologyTransactionUnlocked(uint64_t baseRe
     const bool dirtyBefore = m_topologyDirty;
     const bool reuseSafeBefore = m_topologyReuseSafe;
     const uint64_t revisionBefore = m_wireTopologyRevision;
+    uint64_t authoringRevisionBefore = 0;
+    uint64_t electricalRevisionBefore = 0;
+    simulation::PlanInvalidation invalidationBefore;
+    {
+        std::lock_guard<std::mutex> lock(m_planMutex);
+        authoringRevisionBefore = m_authoringRevision;
+        electricalRevisionBefore = m_electricalPlanRevision;
+        invalidationBefore = m_planInvalidation;
+    }
     try {
         for (const WireTopologyOperation& operation : operations) {
             if (operation.kind == WireTopologyOperation::Kind::Connect) {
@@ -793,6 +971,12 @@ uint64_t SimulationSession::applyWireTopologyTransactionUnlocked(uint64_t baseRe
         m_topologyDirty = dirtyBefore;
         m_topologyReuseSafe = reuseSafeBefore;
         m_wireTopologyRevision = revisionBefore;
+        {
+            std::lock_guard<std::mutex> lock(m_planMutex);
+            m_authoringRevision = authoringRevisionBefore;
+            m_electricalPlanRevision = electricalRevisionBefore;
+            m_planInvalidation = invalidationBefore;
+        }
         throw;
     }
     m_wireTopologyRevision = revisionBefore + 1;
@@ -808,12 +992,16 @@ void SimulationSession::setTunnelName(uint32_t component, const std::string& pin
 
 void SimulationSession::setTunnelNameUnlocked(uint32_t component, const std::string& pinId, const std::string& oldName,
                                                const std::string& newName) {
+    if (m_scheduler.isRunning()) {
+        throw std::runtime_error("setTunnelName requer simulacao parada para publicar ElectricalPlan");
+    }
     if (m_netlist.isComponentRemoved(component))
         throw std::invalid_argument("SimulationSession::setTunnelName: componente removido");
     const uint32_t slot = m_netlist.pinSlotsOf(component).at(pinId);
     m_netlist.setTunnelName(slot, oldName, newName);
     m_topologyDirty = true;
     m_topologyReuseSafe = false;
+    invalidatePlan(simulation::PlanDomain::Electrical);
 }
 
 std::optional<std::string> SimulationSession::setProperty(uint32_t component, const std::string& propertyName,
@@ -842,6 +1030,10 @@ std::optional<std::string> SimulationSession::setPropertyUnlocked(uint32_t compo
         if (descriptor.name != propertyName) continue;
 
         const PropertySchema& schema = descriptor.schema;
+        if (m_scheduler.isRunning() &&
+            (schema.flags & (PropertySchemaAffectsTopology | PropertySchemaAffectsPinCount)) != 0) {
+            return validationError("requires_stop", "propriedade estrutural requer simulacao parada: " + propertyName);
+        }
         if ((schema.flags & PropertySchemaReadOnly) != 0) {
             return validationError("read_only", "propriedade somente leitura: " + propertyName);
         }
@@ -880,6 +1072,11 @@ std::optional<std::string> SimulationSession::setPropertyUnlocked(uint32_t compo
 
         descriptor.set(value);
         if ((schema.flags & PropertySchemaAffectsPinCount) != 0) reregisterPinsIfChanged(component, instance);
+        simulation::PlanDomain executionChanges = refreshComponentExecutionLists(component);
+        if (std::binary_search(m_signalSubscribers.begin(), m_signalSubscribers.end(), component)) {
+            // A lista pode continuar contendo o mesmo observer enquanto suas sources/channels mudam.
+            executionChanges = executionChanges | simulation::PlanDomain::Signal;
+        }
 
         bool fallbackTunnelChanged = false;
         for (const Pin& pin : instance->pins()) {
@@ -892,6 +1089,9 @@ std::optional<std::string> SimulationSession::setPropertyUnlocked(uint32_t compo
         if ((schema.flags & (PropertySchemaAffectsTopology | PropertySchemaAffectsPinCount)) != 0 || fallbackTunnelChanged) {
             m_topologyDirty = true;
             m_topologyReuseSafe = false;
+            invalidatePlan(simulation::PlanDomain::Electrical | executionChanges);
+        } else if (executionChanges != simulation::PlanDomain::None) {
+            invalidatePlan(executionChanges);
         }
         m_scheduler.dirtySet().insert(component); // mutex já pertence ao wrapper setProperty()
         return std::nullopt;
@@ -945,15 +1145,20 @@ void SimulationSession::removeComponent(uint32_t componentIndex) {
 }
 
 void SimulationSession::removeComponentUnlocked(uint32_t componentIndex) {
+    if (m_scheduler.isRunning()) {
+        throw std::runtime_error("removeComponent requer simulacao parada para publicar SimulationPlan");
+    }
     IComponentModel* instance = m_componentInstances.at(componentIndex).get();
     if (!instance) return; // já removido, idempotente
 
     m_netlist.removeComponent(componentIndex);
     m_componentInstances[componentIndex].reset();
-    std::erase(m_fpgaComponentIndices, componentIndex);
+    const simulation::PlanDomain executionChanges = refreshComponentExecutionLists(componentIndex);
+    m_mcuPositionTracking.erase(componentIndex);
     m_scheduler.dirtySet().remove(componentIndex);
     m_topologyDirty = true;
     m_topologyReuseSafe = false;
+    invalidatePlan(simulation::PlanDomain::Electrical | executionChanges);
 }
 
 bool SimulationSession::isSubcircuitInstance(uint32_t instanceId) const {
@@ -970,6 +1175,9 @@ SubcircuitExpansionResult SimulationSession::addSubcircuitInstance(const std::st
 
 SubcircuitExpansionResult SimulationSession::expandSubcircuit(const std::string& typeId,
                                                                 std::vector<std::string>& expansionStack) {
+    if (m_scheduler.isRunning()) {
+        throw std::runtime_error("addSubcircuitInstance requer simulacao parada para publicar SimulationPlan");
+    }
     const registry::SubcircuitDefinition* def = m_subcircuits.find(typeId);
     if (!def) throw std::invalid_argument("subcircuito desconhecido: " + typeId);
     if (std::find(expansionStack.begin(), expansionStack.end(), typeId) != expansionStack.end()) {
@@ -1212,15 +1420,14 @@ void SimulationSession::stopSimulation() {
     // Primeiro interrompe a worker: nenhum componente pode voltar a agendar trabalho enquanto as
     // MCUs são encerradas. reset() também limpa dirty/events, volta o relógio a zero e despausa.
     m_scheduler.stop();
-    for (const auto& instance : m_componentInstances) {
-        if (auto* mcu = instance ? dynamic_cast<mcu::McuComponent*>(instance.get()) : nullptr) {
-            mcu->stopFirmware();
-        }
+    for (uint32_t index : m_mcuComponentIndices) {
+        static_cast<mcu::McuComponent*>(m_componentInstances[index].get())->stopFirmware();
     }
     for (const uint32_t index : m_fpgaComponentIndices) {
         static_cast<fpga::FpgaComponent*>(m_componentInstances[index].get())->stop();
     }
     m_scheduler.reset();
+    m_runtimeState.virtualTimeNs = 0;
 }
 
 std::string SimulationSession::mcuLogs(uint32_t componentIndex) const {
@@ -1235,11 +1442,15 @@ void SimulationSession::setFpgaConfig(uint32_t componentIndex, std::vector<std::
                                       std::string topEntity, std::string standard) {
     runViaCommandQueue([componentIndex, sources = std::move(sources), topEntity = std::move(topEntity),
                         standard = std::move(standard)](SimulationSession& self) mutable {
+        if (self.m_scheduler.isRunning()) {
+            throw std::runtime_error("setFpgaConfig requer simulacao parada para publicar ExternalBindingPlan");
+        }
         IComponentModel* instance = self.m_componentInstances.at(componentIndex).get();
         if (!instance) throw std::runtime_error("setFpgaConfig: componente removido");
         auto* fpgaComponent = dynamic_cast<fpga::FpgaComponent*>(instance);
         if (!fpgaComponent) throw std::runtime_error("setFpgaConfig: componente nao e FPGA");
         fpgaComponent->setSources(std::move(sources), std::move(topEntity), std::move(standard));
+        self.invalidatePlan(simulation::PlanDomain::External);
     });
 }
 
@@ -1292,11 +1503,8 @@ mcu::McuComponent* SimulationSession::mcuComponentForTesting(uint32_t componentI
 }
 
 std::optional<uint64_t> SimulationSession::firstMcuVirtualTimeNs() const {
-    for (const auto& slot : m_componentInstances) {
-        IComponentModel* instance = slot.get();
-        if (!instance) continue;
-        auto* mcu = dynamic_cast<mcu::McuComponent*>(instance);
-        if (!mcu) continue;
+    for (uint32_t index : m_mcuComponentIndices) {
+        auto* mcu = static_cast<mcu::McuComponent*>(m_componentInstances[index].get());
         if (!mcu->arenaBridge().arena()) continue;
         // Achado 2026-07-22: `arena->qemuTime` nunca é escrito pelo QEMU real (campo morto, ver
         // comentário de `McuComponent::latestVirtualTimeNs()`) -- lê-lo direto sempre dava 0,
@@ -1311,10 +1519,9 @@ std::optional<uint64_t> SimulationSession::firstMcuVirtualTimeNs() const {
 std::optional<uint64_t> SimulationSession::computeSlowestMcuPositionNs() {
     const auto now = std::chrono::steady_clock::now();
     std::optional<uint64_t> slowest;
-    for (uint32_t i = 0; i < m_componentInstances.size(); ++i) {
-        IComponentModel* instance = m_componentInstances[i].get();
-        auto* mcu = instance ? dynamic_cast<mcu::McuComponent*>(instance) : nullptr;
-        if (!mcu || !mcu->arenaBridge().arena()) {
+    for (uint32_t i : m_mcuComponentIndices) {
+        auto* mcu = static_cast<mcu::McuComponent*>(m_componentInstances[i].get());
+        if (!mcu->arenaBridge().arena()) {
             m_mcuPositionTracking.erase(i);
             continue;
         }
@@ -1378,8 +1585,7 @@ void SimulationSession::rebuildTopologyIfNeeded() {
     if (!m_topologyDirty) return;
 
     std::vector<uint32_t> extraVarCountByComponent(m_componentInstances.size());
-    for (size_t i = 0; i < m_componentInstances.size(); ++i) {
-        if (!m_componentInstances[i]) continue;
+    for (uint32_t i : m_activeComponentIndices) {
         extraVarCountByComponent[i] = m_componentInstances[i]->extraVariableCount();
         const std::span<Pin> pins = m_componentInstances[i]->pins();
         for (size_t local = 0; local < pins.size(); ++local) {
@@ -1409,8 +1615,7 @@ void SimulationSession::rebuildTopologyIfNeeded() {
         reuseUnaffectedCircuitGroups(previous, previousNodeVoltages);
     } else {
         // Deleção/split/túnel/pinos/componente: rebuild integral + restamp integral é o oracle.
-        for (uint32_t i = 0; i < m_componentInstances.size(); ++i)
-            if (m_componentInstances[i]) m_scheduler.dirtySet().insert(i);
+        for (uint32_t i : m_activeComponentIndices) m_scheduler.dirtySet().insert(i);
     }
     m_previousNodeVoltages = m_nodeVoltages;
 }
@@ -1424,8 +1629,7 @@ void SimulationSession::reuseUnaffectedCircuitGroups(simulation::Topology& previ
     // componente já existisse na topologia anterior (checado abaixo por bounds).
     const auto groupComponentSignatures = [this](const simulation::Topology& topology) {
         std::map<uint32_t, std::vector<uint32_t>> byGroup;
-        for (uint32_t componentIndex = 0; componentIndex < m_componentInstances.size(); ++componentIndex) {
-            if (!m_componentInstances[componentIndex]) continue;
+        for (uint32_t componentIndex : m_activeComponentIndices) {
             const auto& slots = m_netlist.pinSlotsOf(componentIndex);
             if (slots.empty()) continue;
             const uint32_t anySlot = slots.begin()->second;
@@ -1498,8 +1702,7 @@ void SimulationSession::reuseUnaffectedCircuitGroups(simulation::Topology& previ
 
     // Só marca dirty quem está num grupo NÃO reaproveitado -- grupo reaproveitado já tem a estampa
     // certa (nada mudou na rede dele), re-stampar seria trabalho jogado fora sem efeito no resultado.
-    for (uint32_t componentIndex = 0; componentIndex < m_componentInstances.size(); ++componentIndex) {
-        if (!m_componentInstances[componentIndex]) continue;
+    for (uint32_t componentIndex : m_activeComponentIndices) {
         const auto& slots = m_netlist.pinSlotsOf(componentIndex);
         if (slots.empty()) continue;
         const uint32_t anySlot = slots.begin()->second;
@@ -1514,6 +1717,7 @@ bool SimulationSession::settleStep() {
     const auto topologyStart = profile && topologyWasDirty ? std::chrono::steady_clock::now()
                                                             : std::chrono::steady_clock::time_point{};
     rebuildTopologyIfNeeded();
+    rebuildSignalRoutesIfNeeded();
     if (profile && topologyWasDirty) {
         m_topologyRebuilds.fetch_add(1, std::memory_order_relaxed);
         m_topologyNanoseconds.fetch_add(static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -1526,9 +1730,14 @@ bool SimulationSession::settleStep() {
     //    do Netlist garante que todos os pinos de um componente caem no mesmo grupo).
     const auto dirtyComponents = m_scheduler.dirtySet().dense();
     m_stampedThisRound.assign(dirtyComponents.begin(), dirtyComponents.end());
+    m_stampedNonlinearThisRound.clear();
     const auto deviceStart = profile ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
     for (uint32_t componentIndex : m_stampedThisRound) {
         IComponentModel* component = m_componentInstances[componentIndex].get();
+        if (std::binary_search(m_nonlinearComponentIndices.begin(), m_nonlinearComponentIndices.end(),
+                               componentIndex)) {
+            m_stampedNonlinearThisRound.push_back(componentIndex);
+        }
         const simulation::ComponentStampResolution& stampResolution =
             m_topology.stampResolutionByComponent[componentIndex];
         const uint32_t groupIndex = stampResolution.groupIndex;
@@ -1617,9 +1826,9 @@ bool SimulationSession::settleStep() {
     //    (critério de convergência, diodo/transistor) fica para depois.
     bool anyNonlinearPending = false;
     if (m_nonlinearIterations < kMaxNonlinearIterations) {
-        for (uint32_t componentIndex : m_stampedThisRound) {
+        for (uint32_t componentIndex : m_stampedNonlinearThisRound) {
             IComponentModel* component = m_componentInstances[componentIndex].get();
-            if (component->isNonlinear() && !component->hasConverged()) {
+            if (!component->hasConverged()) {
                 m_scheduler.dirtySet().insert(componentIndex);
                 anyNonlinearPending = true;
             }
@@ -1627,7 +1836,7 @@ bool SimulationSession::settleStep() {
     } else {
         std::fprintf(stderr, "[SimulationSession] %u componente(s) não convergiram após %u iterações — "
                               "seguindo com último ponto de operação\n",
-                     static_cast<unsigned>(m_stampedThisRound.size()), kMaxNonlinearIterations);
+                     static_cast<unsigned>(m_stampedNonlinearThisRound.size()), kMaxNonlinearIterations);
     }
     m_nonlinearIterations = anyNonlinearPending ? m_nonlinearIterations + 1 : 0;
 

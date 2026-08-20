@@ -1527,6 +1527,7 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
     if (msg.type == "getPerformanceMetrics") {
         const session::SimulationPerformanceSnapshot core = session.performanceMetrics();
         const ipc::IpcServer::MetricsSnapshot ipcMetrics = server.metrics();
+        const std::shared_ptr<const simulation::SimulationPlan> plan = session.simulationPlan();
         resp.ok = true;
         resp.payloadJson = nlohmann::json{
             {"enabled", core.enabled}, {"simulatedNanoseconds", core.simulatedNanoseconds},
@@ -1539,6 +1540,19 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
             {"rejectedTransientSteps", core.rejectedTransientSteps}, {"solverThreads", core.solverThreads},
             {"solverWorkerThreads", core.solverWorkerThreads},
             {"solverMaxParallelTasks", core.solverMaxParallelTasks},
+            {"simulationPlan", plan ? nlohmann::json{
+                {"generation", plan->generation},
+                {"runtimeGeneration", session.runtimeState().planGeneration},
+                {"authoringRevision", plan->authoringRevision},
+                {"normalizedAuthoringHash", plan->normalizedAuthoringHash},
+                {"pendingDomains", static_cast<uint32_t>(session.pendingPlanDomains())},
+                {"activeComponents", plan->execution->activeComponents.size()},
+                {"reactiveComponents", plan->execution->reactiveComponents.size()},
+                {"fpgaComponents", plan->execution->fpgaComponents.size()},
+                {"mcuComponents", plan->execution->mcuComponents.size()},
+                {"electricalGroups", plan->electrical->groups.size()},
+                {"electricalNodes", plan->electrical->listenersByNode.size()}}
+                : nlohmann::json(nullptr)},
             {"resourceBudget", nlohmann::json{
                 {"maxWorkerThreads", session.resourceGovernor().budget().maxWorkerThreads},
                 {"maxParallelTasks", session.resourceGovernor().budget().maxParallelTasks},

@@ -174,6 +174,9 @@ bool Scheduler::processNextEventUntilLocked(std::unique_lock<std::mutex>& lock, 
 }
 
 void Scheduler::runUntil(uint64_t targetTimeNs) {
+    // O callback só roda no caminho síncrono. A worker de start() já o executou antes de publicar
+    // m_running=true, garantindo que um novo plano nunca seja publicado durante RUN.
+    if (!m_running.load(std::memory_order_acquire) && m_beforeExecution) m_beforeExecution();
     std::unique_lock<std::mutex> lock(m_mutex);
     const bool initialWork = settleUntilStableLocked(lock);
     if (initialWork && m_lastSettleConverged && m_stableStep) m_stableStep(m_nowNs);
@@ -258,6 +261,7 @@ void Scheduler::reset() {
 }
 
 void Scheduler::start() {
+    if (!m_running.load(std::memory_order_acquire) && m_beforeExecution) m_beforeExecution();
     if (m_running.exchange(true)) return;
     m_stopRequested.store(false);
 

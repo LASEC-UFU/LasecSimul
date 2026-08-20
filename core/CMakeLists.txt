@@ -173,6 +173,28 @@ target_include_directories(simulation_plan_test PRIVATE include src)
 target_link_libraries(simulation_plan_test PRIVATE Eigen3::Eigen)
 add_test(NAME simulation_plan COMMAND simulation_plan_test)
 
+add_executable(simulation_plan_session_test
+    test/core/simulation/SimulationPlanSessionTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(simulation_plan_session_test PRIVATE include src)
+target_link_libraries(simulation_plan_session_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+if(NOT WIN32)
+    target_link_libraries(simulation_plan_session_test PRIVATE dl)
+endif()
+add_test(NAME simulation_plan_session COMMAND simulation_plan_session_test)
+
+add_executable(dense_hot_path_test
+    test/core/simulation/DenseHotPathTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(dense_hot_path_test PRIVATE include src)
+target_link_libraries(dense_hot_path_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+if(NOT WIN32)
+    target_link_libraries(dense_hot_path_test PRIVATE dl)
+endif()
+add_test(NAME dense_hot_path COMMAND dense_hot_path_test)
+
 # Teste de divisor de tensão (existente)
 add_executable(voltage_divider_test
     test/voltage_divider_test.cpp
@@ -1162,7 +1184,7 @@ add_test(NAME plugin_watchdog COMMAND plugin_watchdog_test)
 # Mantenha todos os testes em exatamente um grupo: o runner descobre os nomes via CTest e usa
 # estes labels, sem duplicar listas de testes em JavaScript ou no workflow de CI.
 set(LASECSIMUL_HERMETIC_TESTS
-    pause_expression logic_analyzer_vector resource_governor resource_worker_pool resource_queues simulation_plan voltage_divider circuit_group_reuse diode zener_led
+    pause_expression logic_analyzer_vector resource_governor resource_worker_pool resource_queues simulation_plan simulation_plan_session dense_hot_path voltage_divider circuit_group_reuse diode zener_led
     inert_components_fix probe_pause_on_change subcircuit simulide_sources_meters voltmeter
     component_removal netlist union_find scheduler sparse_set core_bootstrap circuit_group logic_value
     ghdl_arena_bridge ghdl_process_manager fpga_port_mapper mna_solver sha256 passive_components

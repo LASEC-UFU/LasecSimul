@@ -24,6 +24,7 @@
 #include "../simulation/ComponentMatrixView.hpp"
 #include "../simulation/MnaSolver.hpp"
 #include "../simulation/Netlist.hpp"
+#include "../simulation/RuntimeState.hpp"
 #include "../simulation/Scheduler.hpp"
 #include "lasecsimul/IComponentModel.hpp"
 #include "PauseExpression.hpp"
@@ -205,10 +206,19 @@ public:
     registry::ComponentRegistry& components() { return m_components; }
     registry::McuRegistry& mcus() { return m_mcus; }
     plugins::PluginRuntime& pluginRuntime() { return m_pluginRuntime; }
-    simulation::Netlist& netlist() { return m_netlist; }
+    const simulation::Netlist& netlist() const { return m_netlist; }
     simulation::Scheduler& scheduler() { return m_scheduler; }
     const resources::ResourceGovernor& resourceGovernor() const { return m_resourceGovernor; }
     size_t solverWorkerThreadCount() const { return m_mnaSolver.workerThreadCount(); }
+    /** Compila/publica pendências somente quando o Scheduler está parado. Durante RUN nunca troca
+     * a geração visível; alterações estruturais ficam pendentes até a próxima fronteira parada. */
+    std::shared_ptr<const simulation::SimulationPlan> simulationPlan();
+    bool publishSimulationPlan();
+    const simulation::RuntimeState& runtimeState() const { return m_runtimeState; }
+    simulation::PlanDomain pendingPlanDomains() const {
+        std::lock_guard<std::mutex> lock(m_planMutex);
+        return m_planInvalidation.domains();
+    }
     void setTransientSettings(const TransientSettings& settings);
     const TransientSettings& transientSettings() const { return m_transientSettings; }
     uint64_t acceptedTransientSteps() const { return m_acceptedTransientSteps.load(std::memory_order_relaxed); }
@@ -451,6 +461,10 @@ private:
                                                    const PropertyValue& value);
     std::optional<PropertyValue> propertyValueOfUnlocked(uint32_t component, const std::string& propertyName) const;
     ResolvedSignal resolveSignalUnlocked(const std::string& reference, std::optional<uint32_t> self) const;
+    simulation::SignalPlan::Route compileSignalRouteUnlocked(const std::string& reference,
+                                                              std::optional<uint32_t> self) const;
+    ResolvedSignal sampleSignalRouteUnlocked(const simulation::SignalPlan::Route& route) const;
+    void rebuildSignalRoutesIfNeeded();
     void acquireSubscribedSignalsUnlocked(uint64_t timestampNs);
     void onStableStepUnlocked(uint64_t timestampNs);
     /** Chamado no fim de `onStableStepUnlocked()` (já na thread do Scheduler, com o mutex dela
@@ -477,6 +491,8 @@ private:
      * sempre gera slots novos, nunca reciclados) em toda edição de propriedade com
      * `AffectsPinCount`, mesmo quando o valor não mudou o suficiente pra alterar a contagem. */
     void reregisterPinsIfChanged(uint32_t componentIndex, IComponentModel* instance);
+    simulation::PlanDomain refreshComponentExecutionLists(uint32_t componentIndex);
+    void invalidatePlan(simulation::PlanDomain domains);
 
     /** Empurra `command` na `m_commandQueue` e, se a fila estava vazia antes (transição
      * vazio->não-vazio), acorda a thread do Scheduler caso ela esteja parada ociosa (ver
@@ -535,28 +551,44 @@ private:
     simulation::Scheduler m_scheduler;
 
     std::vector<std::unique_ptr<IComponentModel>> m_componentInstances;
-    /** Índices somente de FpgaComponent. Mantido na criação/remoção para que cada passo de
-     * tempo custe O(número de FPGAs), sem varrer/dynamic_cast em todo o circuito. */
-    std::vector<uint32_t> m_fpgaComponentIndices;
-    std::vector<uint32_t> m_signalSubscribers;
+    simulation::RuntimeState m_runtimeState;
+    std::vector<uint32_t>& m_activeComponentIndices = m_runtimeState.execution.activeComponents;
+    std::vector<uint32_t>& m_reactiveComponentIndices = m_runtimeState.execution.reactiveComponents;
+    std::vector<uint32_t>& m_nonlinearComponentIndices = m_runtimeState.execution.nonlinearComponents;
+    std::vector<uint32_t>& m_fpgaComponentIndices = m_runtimeState.execution.fpgaComponents;
+    std::vector<uint32_t>& m_mcuComponentIndices = m_runtimeState.execution.mcuComponents;
+    std::vector<uint32_t>& m_signalSubscribers = m_runtimeState.execution.signalSubscribers;
     std::unordered_map<std::string, uint32_t> m_signalAliases;
-    struct PauseConditionState { PauseExpression expression; bool wasTrue = false; bool errorReported = false; };
+    struct PauseConditionState {
+        PauseExpression expression;
+        std::unordered_map<std::string, simulation::SignalPlan::Route> signalRoutes;
+        std::unordered_map<std::string, uint32_t> currentComponents;
+        bool wasTrue = false;
+        bool errorReported = false;
+    };
     std::unordered_map<std::string, PauseConditionState> m_pauseConditions;
     std::function<void(const PauseConditionTriggered&)> m_pauseTriggeredCallback;
-    simulation::Topology m_topology;
-    std::vector<double> m_nodeVoltages;
-    std::vector<double> m_previousNodeVoltages;
+    simulation::Topology& m_topology = m_runtimeState.electricalTopology;
+    std::vector<double>& m_nodeVoltages = m_runtimeState.nodeVoltages;
+    std::vector<double>& m_previousNodeVoltages = m_runtimeState.previousNodeVoltages;
     /** Por nó global -> `nowNs()` da última vez que esse nó cruzou `kDigitalThreshold` -- só usado
      * pra calcular o `c` (ns desde a última borda) de `ComponentEvent{kPinChangeEventTag,...}`. Ver
      * settleStep(). */
-    std::vector<uint64_t> m_lastEdgeTimeNs;
+    std::vector<uint64_t>& m_lastEdgeTimeNs = m_runtimeState.lastEdgeTimeNs;
     /** Scratch reutilizado pelo settle: evita alocar/copiar um vetor novo em toda iteração. */
-    std::vector<uint32_t> m_stampedThisRound;
+    std::vector<uint32_t>& m_stampedThisRound = m_runtimeState.stampedThisRound;
+    std::vector<uint32_t>& m_stampedNonlinearThisRound = m_runtimeState.stampedNonlinearThisRound;
     bool m_topologyDirty = true;
+    bool m_signalRoutesDirty = true;
     /** Verdadeiro somente enquanto a revisão pendente contém EXCLUSIVAMENTE adições de fios.
      * Qualquer operação capaz de separar/reindexar rede desabilita reuso de matrizes neste rebuild. */
     bool m_topologyReuseSafe = false;
     uint64_t m_wireTopologyRevision = 0;
+    uint64_t m_authoringRevision = 0;
+    uint64_t m_electricalPlanRevision = 0;
+    simulation::PlanInvalidation m_planInvalidation{simulation::PlanDomain::All};
+    mutable std::mutex m_planMutex;
+    std::shared_ptr<const simulation::SimulationPlan> m_publishedPlan;
     uint32_t m_nonlinearIterations = 0; // ver kMaxNonlinearIterations em SimulationSession.cpp
     TransientSettings m_transientSettings;
     std::atomic<uint64_t> m_acceptedTransientSteps{0};

@@ -45,25 +45,32 @@ int main() {
 
     // Antes do primeiro start(): worker não existe -- caminho de aplicação direta (sem fila).
     const uint32_t before = session.addComponent("sources.rail", {});
+    const uint32_t beforeSecond = session.addComponent("sources.rail", {});
     session.scheduler().start();
 
-    uint32_t addedWhileRunningId = UINT32_MAX;
+    bool addRejected = false;
     const bool addedWhileRunning = completesWithin([&] {
-        addedWhileRunningId = session.addComponent("sources.rail", {});
+        try { (void)session.addComponent("sources.rail", {}); }
+        catch (const std::runtime_error&) { addRejected = true; }
     }, std::chrono::seconds(2));
     if (!addedWhileRunning) {
         std::printf("FALHOU: addComponent travou com a simulacao rodando\n");
         ++failures;
-    } else if (addedWhileRunningId != before + 1) {
-        std::printf("FALHOU: id inesperado com a simulacao rodando: %u\n", addedWhileRunningId);
+    } else if (!addRejected) {
+        std::printf("FALHOU: addComponent estrutural nao exigiu stop\n");
         ++failures;
     }
 
+    bool connectRejected = false;
     const bool connectedWhileRunning = completesWithin([&] {
-        session.connectWire(before, "out", addedWhileRunningId, "out");
+        try { session.connectWire(before, "out", beforeSecond, "out"); }
+        catch (const std::runtime_error&) { connectRejected = true; }
     }, std::chrono::seconds(2));
     if (!connectedWhileRunning) {
         std::printf("FALHOU: connectWire travou com a simulacao rodando\n");
+        ++failures;
+    } else if (!connectRejected) {
+        std::printf("FALHOU: connectWire estrutural nao exigiu stop\n");
         ++failures;
     }
 

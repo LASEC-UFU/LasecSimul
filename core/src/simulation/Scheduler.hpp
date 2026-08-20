@@ -96,6 +96,7 @@ public:
      * MCU -- um ciclo de realimentação estrutural). Um teto de POSIÇÃO absoluta não tem esse
      * problema: é uma comparação direta entre dois valores, sem janela nem suavização nenhuma. */
     using AdvanceLimitFn = std::function<std::optional<uint64_t>()>;
+    using BeforeExecutionFn = std::function<void()>;
 
     Scheduler(size_t componentCapacity, SettleStepFn settleStep)
         : m_dirty(componentCapacity), m_pendingDirty(componentCapacity),
@@ -109,6 +110,7 @@ public:
     void setCommandDrainCallback(CommandDrainFn callback) { m_commandDrain = std::move(callback); }
     void setCommandPendingCallback(CommandPendingFn callback) { m_commandPending = std::move(callback); }
     void setAdvanceLimitCallback(AdvanceLimitFn callback) { m_advanceLimit = std::move(callback); }
+    void setBeforeExecutionCallback(BeforeExecutionFn callback) { m_beforeExecution = std::move(callback); }
     /** Acorda a worker se ela estiver parked (ociosa ou pausada) depois que a thread de IPC publica
      * um comando. Usa um contador atômico, não condition_variable: `atomic::wait(valor)` verifica o
      * valor como parte do próprio protocolo de espera, portanto um notify ocorrido entre a última
@@ -312,6 +314,7 @@ private:
     CommandDrainFn m_commandDrain;
     CommandPendingFn m_commandPending;
     AdvanceLimitFn m_advanceLimit;
+    BeforeExecutionFn m_beforeExecution;
 
     std::thread m_thread;
     std::atomic<std::thread::id> m_workerThreadId{};

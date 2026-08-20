@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "Netlist.hpp"
+#include "lasecsimul/Signal.hpp"
 
 namespace lasecsimul::simulation {
 
@@ -77,6 +78,15 @@ struct ElectricalPlan {
 struct SignalPlan {
     uint64_t revision = 0;
     std::vector<uint32_t> subscribers;
+    struct Route {
+        SignalDescriptor descriptor;
+        std::vector<uint32_t> nodeIndices;
+    };
+    struct Subscriber {
+        uint32_t componentIndex = 0;
+        std::vector<Route> channels;
+    };
+    std::vector<Subscriber> resolvedSubscribers;
 };
 
 struct ExternalBindingPlan {
@@ -104,8 +114,11 @@ struct PlanCompileInput {
     uint64_t authoringRevision = 0;
     uint64_t electricalRevision = 0;
     size_t componentCapacity = 0;
+    /** JSON/texto canônico por componentIndex, produzido pelo normalizador da sessão. */
+    std::vector<std::string> normalizedComponentState;
     const Topology* electricalTopology = nullptr;
     DenseExecutionLists execution;
+    std::vector<SignalPlan::Subscriber> resolvedSignalSubscribers;
     PlanInvalidation invalidation{PlanDomain::All};
     std::shared_ptr<const SimulationPlan> previous;
 };
