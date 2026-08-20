@@ -11,6 +11,7 @@
     "build:devices": "node scripts/build-devices.js",
     "build:mcu-adapters": "node scripts/build-mcu-adapters.js",
     "build:fpga-vpi": "node scripts/build-fpga-vpi.js",
+    "build:strucpp": "node scripts/build-strucpp.js",
     "build:qemu:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-qemu-windows.ps1",
     "package:release": "node scripts/package-release.js",
     "watch:extension": "node scripts/build-extension.js --watch",
@@ -19,6 +20,8 @@
     "test:uart": "npm --prefix extension run compile && node scripts/test-uart-devices.js",
     "test:serial-port": "npm --prefix extension run compile && node scripts/test-serial-port.js",
     "test:development-flow": "node scripts/test-development-flow.js",
+    "test:strucpp-smoke": "node scripts/test-strucpp-smoke.js",
+    "check:plc-toolchain": "node scripts/check-plc-toolchain.js",
     "benchmark:wires": "npm run build:extension && node scripts/benchmark-wire-topology.mjs",
     "spec:check": "node .spec/governance/check-specs.mjs",
     "spec:status": "node .spec/governance/generate-status.mjs"

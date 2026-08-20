@@ -1,0 +1,53 @@
+{
+  "_comment": "Fonte unica de verdade para a versao vendorizada do STruCpp (compilador ST->C++17, IEC 61131-3). Usado por scripts/build-strucpp.js (dev local) e por scripts/package-release.js (empacotamento). Nao duplicar versao/hash em outro lugar -- ver ADR-0007 e .spec/features/iec61131-plc.md.",
+  "repository": "Autonomy-Logic/STruCpp",
+  "version": "0.6.3",
+  "tag": "v0.6.3",
+  "releaseUrl": "https://github.com/Autonomy-Logic/STruCpp/releases/tag/v0.6.3",
+  "_runtimeSourceRevisionNote": "core/src/plc/runtime/ e extraido do MESMO asset .zip/.tar.gz de cada plataforma (pasta runtime/include/ dentro do pacote), nunca do arvore git separadamente -- garante que compilador e runtime headers vem sempre da mesma build. Revisao da runtime = a mesma tag/version acima.",
+  "assets": {
+    "win32-x64": {
+      "file": "strucpp-win32-x64.zip",
+      "url": "https://github.com/Autonomy-Logic/STruCpp/releases/download/v0.6.3/strucpp-win32-x64.zip",
+      "sha256": "665c748275c0c9d4a190c28c63bed6abebf2f39dd9fb6f26120aabd9c72e0aa7",
+      "archive": "zip",
+      "binaryPath": "strucpp/strucpp.exe"
+    },
+    "win32-arm64": {
+      "file": "strucpp-win32-arm64.zip",
+      "url": "https://github.com/Autonomy-Logic/STruCpp/releases/download/v0.6.3/strucpp-win32-arm64.zip",
+      "sha256": "665c748275c0c9d4a190c28c63bed6abebf2f39dd9fb6f26120aabd9c72e0aa7",
+      "archive": "zip",
+      "binaryPath": "strucpp/strucpp.exe",
+      "_note": "hash identico ao win32-x64 na v0.6.3 -- confirmar em versoes futuras se isso muda (pode ser build ainda nao diferenciada por arquitetura upstream)."
+    },
+    "linux-x64": {
+      "file": "strucpp-linux-x64.tar.gz",
+      "url": "https://github.com/Autonomy-Logic/STruCpp/releases/download/v0.6.3/strucpp-linux-x64.tar.gz",
+      "sha256": "6e84d256add16fd27a175c9880cf2501bfdad7ae0f66aaaf6e795d9183495dc2",
+      "archive": "tar.gz",
+      "binaryPath": "strucpp/strucpp"
+    },
+    "linux-arm64": {
+      "file": "strucpp-linux-arm64.tar.gz",
+      "url": "https://github.com/Autonomy-Logic/STruCpp/releases/download/v0.6.3/strucpp-linux-arm64.tar.gz",
+      "sha256": "74939e300b049cb4eda92ebe0ea4dc787044f7d2af0a3a300109fdf5b9b5e042",
+      "archive": "tar.gz",
+      "binaryPath": "strucpp/strucpp"
+    },
+    "darwin-x64": {
+      "file": "strucpp-darwin-x64.zip",
+      "url": "https://github.com/Autonomy-Logic/STruCpp/releases/download/v0.6.3/strucpp-darwin-x64.zip",
+      "sha256": "a3ebbd8a65795ebfe44dec30f0b930e03dbbcef91e8cc2e06f39ed733f8ed92c",
+      "archive": "zip",
+      "binaryPath": "strucpp/strucpp"
+    },
+    "darwin-arm64": {
+      "file": "strucpp-darwin-arm64.zip",
+      "url": "https://github.com/Autonomy-Logic/STruCpp/releases/download/v0.6.3/strucpp-darwin-arm64.zip",
+      "sha256": "d81b5cd61ef649d9b0134411699f4f3e24539c8213b5c68a991fc4baa6ddb45d",
+      "archive": "zip",
+      "binaryPath": "strucpp/strucpp"
+    }
+  }
+}
