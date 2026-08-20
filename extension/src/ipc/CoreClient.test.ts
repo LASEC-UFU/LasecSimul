@@ -206,6 +206,40 @@ const { test, finish } = createTestRunner("CoreClient — testes de IPC");
     await client.stop(); await server.stop();
   });
 
+  await test("frame de telemetria preserva assinatura, gerações e decodifica blobs em lote", async () => {
+    const name = `lasecsimul-test-telemetry-frame-${process.pid}`;
+    const received: RequestEnvelope[] = [];
+    const server = new MockCoreServer(name, PROTOCOL_VERSION, (msg) => {
+      received.push(msg);
+      return { id: msg.id, ok: true, payload: {
+        planGeneration: 7,
+        telemetryGeneration: 11,
+        timestampNs: 1234,
+        unchanged: false,
+        groups: {
+          componentStates: { led: "00ff41" },
+          nodeVoltages: { wire: 3.3 },
+          runtime: { simulatedNs: 1234, mcuVirtualNs: 1200 },
+        },
+        missingProbes: [],
+      }};
+    });
+    await server.start();
+    const client = new CoreClient(name); await client.start();
+    const frame = await client.getTelemetryFrame(
+      { items: [{ key: "led", instanceId: "4" }], probes: [{ key: "wire", instanceId: "4", pinId: "out" }] },
+      10
+    );
+    const request = received.find((message) => message.type === "getTelemetryFrame");
+    assert((request?.payload as { sinceGeneration?: number }).sinceGeneration === 10,
+      "cliente deve enviar a última geração observada para coalescência");
+    assert(frame.planGeneration === 7 && frame.telemetryGeneration === 11 && frame.timestampNs === 1234,
+      "metadados do snapshot foram alterados");
+    assert(frame.componentStates.led?.equals(Buffer.from([0, 255, 65])) === true && frame.nodeVoltages.wire === 3.3,
+      "grupos batelados não foram decodificados corretamente");
+    await client.stop(); await server.stop();
+  });
+
   const { failed } = finish();
   process.exitCode = failed > 0 ? 1 : 0;
 })();

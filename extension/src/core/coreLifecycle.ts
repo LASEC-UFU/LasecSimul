@@ -799,9 +799,118 @@ async function pollSimulationRate(expectedGeneration?: number): Promise<void> {
   }
 }
 
+let lastTelemetryFrameGeneration = 0;
+
+/** Um tick visual = um frame logico/um request IPC. A montagem da assinatura permanece na
+ * Extension (ela conhece catalogo e ids visuais); o Core resolve todos os grupos contra o mesmo
+ * snapshot imutavel de stable step. */
+async function pollTelemetryFrame(expectedGeneration: number): Promise<void> {
+  if (!state.coreClient || !state.schematicPanel) return;
+
+  const readable = state.schematicState.components.filter((component) => isReadableInstrument(component.typeId));
+  const visual = state.schematicState.components.filter((component) => {
+    const entry = findCatalogEntry(component.typeId);
+    return Boolean(entry?.package?.runtimeState || entry?.boardPackage?.runtimeState);
+  });
+
+  const requestItems = new Map<string, { key: string; instanceId: string }>();
+  const requestKeyByInstanceId = new Map<string, string>();
+  const addState = (instanceId: string): string => {
+    const existing = requestKeyByInstanceId.get(instanceId);
+    if (existing) return existing;
+    const key = `state:${instanceId}`;
+    requestKeyByInstanceId.set(instanceId, key);
+    requestItems.set(key, { key, instanceId });
+    return key;
+  };
+
+  const readoutStateKey = new Map<string, string>();
+  for (const component of readable) {
+    const instanceId = coreInstanceIdByComponentId.get(component.id);
+    if (instanceId) readoutStateKey.set(component.id, addState(instanceId));
+  }
+  const visualStateKey = new Map<string, string>();
+  for (const component of visual) {
+    const instanceId = coreInstanceIdByComponentId.get(component.id);
+    if (instanceId) visualStateKey.set(component.id, addState(instanceId));
+  }
+
+  const overlayTypeId = new Map<string, string>();
+  const overlayStateKey = new Map<string, string>();
+  for (const outer of state.schematicState.components.filter(
+    (component) => findCatalogEntry(component.typeId)?.registeredSourceKind === "subcircuit-file"
+  )) {
+    const sourceId = findCatalogEntry(outer.typeId)?.registeredSourceId;
+    const outerCoreId = coreInstanceIdByComponentId.get(outer.id);
+    if (!sourceId || !outerCoreId) continue;
+    for (const item of exposedReadableItemsForSource(sourceId)) {
+      const cacheKey = `${outerCoreId}:${item.id}`;
+      let innerInstanceId = boardOverlayChildCoreIdCache.get(cacheKey);
+      if (innerInstanceId === undefined) {
+        innerInstanceId = await resolveSubcircuitChildCoreId(outer.id, item.id);
+        if (!innerInstanceId) continue;
+        boardOverlayChildCoreIdCache.set(cacheKey, innerInstanceId);
+      }
+      const key = `${outer.id}:${item.id}`;
+      overlayTypeId.set(key, item.typeId);
+      overlayStateKey.set(key, addState(innerInstanceId));
+    }
+  }
+
+  const probes: Array<{ key: string; instanceId: string; pinId: string }> = [];
+  for (const probe of voltageProbesForProject(
+    state.schematicState.topology,
+    (candidate) => resolveWireEndpoint(candidate.componentId, candidate.pinId) !== undefined
+  )) {
+    const endpoint = resolveWireEndpoint(probe.componentId, probe.pinId);
+    if (endpoint) probes.push({ key: probe.wireId, instanceId: endpoint.instanceId, pinId: endpoint.pinId });
+  }
+
+  const frame = await state.coreClient.getTelemetryFrame(
+    { items: [...requestItems.values()], probes },
+    lastTelemetryFrameGeneration
+  );
+  if (expectedGeneration !== telemetryGeneration) return;
+  if (frame.telemetryGeneration <= lastTelemetryFrameGeneration) return;
+  lastTelemetryFrameGeneration = frame.telemetryGeneration;
+
+  const readoutsByComponentId: Record<string, ComponentReadoutValue> = {};
+  for (const component of readable) {
+    const bytes = frame.componentStates[readoutStateKey.get(component.id) ?? ""];
+    if (!bytes) continue;
+    const readout = decodeComponentReadout(component.typeId, bytes);
+    if (readout !== undefined) readoutsByComponentId[component.id] = readout;
+  }
+  state.schematicPanel.postMessage({ version: 1, type: "componentReadout", readoutsByComponentId });
+
+  const statesByComponentId: Record<string, string> = {};
+  for (const component of visual) {
+    const bytes = frame.componentStates[visualStateKey.get(component.id) ?? ""];
+    if (bytes) statesByComponentId[component.id] = bytes.toString("base64");
+  }
+  state.schematicPanel.postMessage({ version: 1, type: "componentVisualState", statesByComponentId });
+
+  const readoutsByKey: Record<string, ComponentReadoutValue> = {};
+  for (const [key, typeId] of overlayTypeId) {
+    const bytes = frame.componentStates[overlayStateKey.get(key) ?? ""];
+    if (!bytes) continue;
+    const readout = decodeComponentReadout(typeId, bytes);
+    if (readout !== undefined) readoutsByKey[key] = readout;
+  }
+  state.schematicPanel.postMessage({ version: 1, type: "boardOverlayReadouts", readoutsByKey });
+  state.schematicPanel.postMessage({ version: 1, type: "wireVoltages", voltagesByWireId: frame.nodeVoltages });
+
+  const wallMs = Date.now();
+  const simResult = simulationRateSampler.sample(wallMs, frame.runtime.simulatedNs);
+  if (simResult.report) state.schematicPanel.postMessage({ version: 1, type: "simulationRate", rate: simResult.rate });
+  const mcuResult = mcuRateSampler.sample(wallMs, frame.runtime.mcuVirtualNs);
+  if (mcuResult.report) state.schematicPanel.postMessage({ version: 1, type: "mcuRealTimeRatio", rate: mcuResult.rate });
+}
+
 export function startVoltageReadoutPolling(): void {
   if (state.voltageReadoutTimer) return;
   const generation = ++telemetryGeneration;
+  lastTelemetryFrameGeneration = 0;
   simulationRateSampler.reset();
   mcuRateSampler.reset();
   const telemetryRateHz = vscode.workspace
@@ -815,18 +924,15 @@ export function startVoltageReadoutPolling(): void {
     // comandos de controle e estado essencial nunca entram numa fila crescente atrás deles.
     if (telemetryPollInFlight) return;
     telemetryPollInFlight = true;
-    void Promise.allSettled([
-      pollInstrumentReadouts(generation),
-      pollComponentVisualStates(generation),
-      pollWireVoltages(generation),
-      pollSimulationRate(generation),
-      pollBoardOverlayReadouts(generation),
-    ]).finally(() => { telemetryPollInFlight = false; });
+    void pollTelemetryFrame(generation)
+      .catch(() => { /* snapshot ainda nao publicado ou Core encerrando; proximo tick tenta de novo */ })
+      .finally(() => { telemetryPollInFlight = false; });
   }, Math.round(1000 / telemetryRateHz));
 }
 
 export function stopVoltageReadoutPolling(clearVisuals = true): void {
   ++telemetryGeneration;
+  lastTelemetryFrameGeneration = 0;
   if (state.voltageReadoutTimer) {
     clearInterval(state.voltageReadoutTimer);
     state.voltageReadoutTimer = undefined;

@@ -42,6 +42,22 @@ export interface RegisteredSubcircuitInfo {
   iconPath?: string | null;
 }
 
+export interface TelemetryFrameSubscription {
+  items: Array<{ key: string; instanceId: string }>;
+  probes: Array<{ key: string; instanceId: string; pinId: string }>;
+}
+
+export interface TelemetryFrame {
+  planGeneration: number;
+  telemetryGeneration: number;
+  timestampNs: number;
+  unchanged: boolean;
+  componentStates: Record<string, Buffer>;
+  nodeVoltages: Record<string, number>;
+  runtime: { simulatedNs: number; mcuVirtualNs?: number };
+  missingProbes: string[];
+}
+
 interface PendingRequest {
   resolve: (payload: unknown) => void;
   reject: (err: Error) => void;
@@ -323,6 +339,33 @@ export class CoreClient {
     const resp = await this.request("getComponentStates", { items });
     const encoded = (resp as { states: Record<string, string> }).states;
     return Object.fromEntries(Object.entries(encoded).map(([key, hex]) => [key, Buffer.from(hex, "hex")]));
+  }
+
+  async getTelemetryFrame(subscription: TelemetryFrameSubscription, sinceGeneration = 0): Promise<TelemetryFrame> {
+    const resp = await this.request("getTelemetryFrame", { subscription, sinceGeneration }) as {
+      planGeneration: number;
+      telemetryGeneration: number;
+      timestampNs: number;
+      unchanged: boolean;
+      groups: {
+        componentStates: Record<string, string>;
+        nodeVoltages: Record<string, number>;
+        runtime: { simulatedNs: number; mcuVirtualNs?: number };
+      };
+      missingProbes?: string[];
+    };
+    return {
+      planGeneration: resp.planGeneration,
+      telemetryGeneration: resp.telemetryGeneration,
+      timestampNs: resp.timestampNs,
+      unchanged: resp.unchanged,
+      componentStates: Object.fromEntries(
+        Object.entries(resp.groups.componentStates).map(([key, hex]) => [key, Buffer.from(hex, "hex")])
+      ),
+      nodeVoltages: resp.groups.nodeVoltages,
+      runtime: resp.groups.runtime,
+      missingProbes: resp.missingProbes ?? [],
+    };
   }
 
   /** Saúde operacional da instância (`"ok" | "lagging" | "faulted"`) -- watchdog/CrashGuard do
