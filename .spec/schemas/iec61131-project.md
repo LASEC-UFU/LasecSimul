@@ -1,7 +1,7 @@
 ---
 id: SCHEMA-003
 kind: schema
-status: planned
+status: active
 dependsOn: [SCHEMA-001, ARCH-002, ARCH-006, ADR-0007]
 supersedes: []
 ---

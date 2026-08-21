@@ -975,6 +975,13 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
         "Bloco Programável FPGA",
         std::vector<PropertySchema>{},
         R"json({"en":{"name":"Programmable FPGA Block"}})json");
+    // Factory is owned by SimulationSession: the block starts with zero pins and publishes the
+    // artifact-derived interface only while the simulation is stopped.
+    registerBuiltinMetadata(
+        "plc.instance",
+        "PLC IEC 61131-3",
+        std::vector<PropertySchema>{},
+        R"json({"en":{"name":"IEC 61131-3 PLC"}})json");
 }
 
 } // namespace
@@ -1359,6 +1366,35 @@ void loadSubcircuitLibraryFile(const std::filesystem::path& libraryJsonPath, reg
 
 namespace {
 
+plc::PlcNativeModule plcModuleFromJson(const nlohmann::json& value) {
+    if (!value.is_object()) throw std::invalid_argument("module PLC deve ser um objeto");
+    plc::PlcNativeModule module;
+    module.formatVersion = value.value("formatVersion", 0u);
+    module.workerProtocolVersion = value.value("workerProtocolVersion", 0u);
+    module.targetPlatform = value.value("targetPlatform", std::string{});
+    module.targetArch = value.value("targetArch", std::string{});
+    module.strucppVersion = value.value("strucppVersion", std::string{});
+    module.runtimeRevision = value.value("runtimeRevision", std::string{});
+    module.cxxToolchainVersion = value.value("cxxToolchainVersion", std::string{});
+    module.sourceHash = value.value("sourceHash", std::string{});
+    module.artifactHash = value.value("artifactHash", std::string{});
+    module.nativeBinaryRef = value.value("nativeBinaryRef", std::string{});
+    module.programName = value.value("programName", std::string{});
+    if (value.contains("exportedIo") && value["exportedIo"].is_array()) {
+        for (const auto& encoded : value["exportedIo"]) {
+            module.exportedIo.push_back({encoded.value("ioId", std::string{}), encoded.value("name", std::string{}),
+                                         encoded.value("direction", std::string{}), encoded.value("iecType", std::string{})});
+        }
+    }
+    if (value.contains("debugMap") && value["debugMap"].is_array()) {
+        for (const auto& encoded : value["debugMap"]) {
+            module.debugMap.push_back({encoded.value("generatedLine", 0u), encoded.value("sourceFile", std::string{}),
+                                       encoded.value("sourceLine", 0u)});
+        }
+    }
+    return module;
+}
+
 OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& session,
                                 IpcServer& server, GlobalPluginCache& pluginCache) {
     OutgoingResponse resp;
@@ -1459,6 +1495,65 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
     }
 
     // ── esquemático: componentes e fios ───────────────────────────────────────
+    // PLC IEC 61131-3: artifact/interface, bindings and watch/force/reset. The native module is
+    // always spawned by PlcRuntime; this IPC surface never loads it into the Core process.
+    if (msg.type == "loadPlcArtifact") {
+        try {
+            const auto payload = nlohmann::json::parse(msg.payloadJson.empty() ? "{}" : msg.payloadJson);
+            const uint32_t instanceId = static_cast<uint32_t>(std::stoul(payload.value("instanceId", std::string{"0"})));
+            if (!payload.contains("module") || payload["module"].is_null()) session.loadPlcArtifact(instanceId, std::nullopt);
+            else session.loadPlcArtifact(instanceId, plcModuleFromJson(payload["module"]));
+            resp.ok = true;
+        } catch (const std::exception& error) { resp.ok = false; resp.error = error.what(); }
+        return resp;
+    }
+    if (msg.type == "setPlcIoBindings") {
+        try {
+            const auto payload = nlohmann::json::parse(msg.payloadJson.empty() ? "{}" : msg.payloadJson);
+            const uint32_t instanceId = static_cast<uint32_t>(std::stoul(payload.value("instanceId", std::string{"0"})));
+            std::vector<simulation::PlcIoBindingRequest> bindings;
+            for (const auto& item : payload.value("bindings", nlohmann::json::array())) {
+                bindings.push_back({item.value("ioId", std::string{}), item.value("signalBlockId", std::string{})});
+            }
+            session.setPlcIoBindings(instanceId, std::move(bindings));
+            resp.ok = true;
+        } catch (const std::exception& error) { resp.ok = false; resp.error = error.what(); }
+        return resp;
+    }
+    if (msg.type == "setPlcTaskInterval") {
+        try {
+            const auto payload = nlohmann::json::parse(msg.payloadJson.empty() ? "{}" : msg.payloadJson);
+            const uint32_t instanceId = static_cast<uint32_t>(std::stoul(payload.value("instanceId", std::string{"0"})));
+            session.setPlcTaskIntervalNs(instanceId, payload.at("intervalNs").get<uint64_t>());
+            resp.ok = true;
+        } catch (const std::exception& error) { resp.ok = false; resp.error = error.what(); }
+        return resp;
+    }
+    if (msg.type == "plcGet" || msg.type == "plcSet" || msg.type == "plcForce" || msg.type == "plcUnforce") {
+        try {
+            const auto payload = nlohmann::json::parse(msg.payloadJson.empty() ? "{}" : msg.payloadJson);
+            const uint32_t instanceId = static_cast<uint32_t>(std::stoul(payload.value("instanceId", std::string{"0"})));
+            const std::string name = payload.at("qualifiedName").get<std::string>();
+            std::string value;
+            if (msg.type == "plcGet") value = session.plcGetVariable(instanceId, name);
+            else if (msg.type == "plcSet") value = session.plcSetVariable(instanceId, name, payload.at("value").get<std::string>());
+            else if (msg.type == "plcForce") value = session.plcForceVariable(instanceId, name, payload.at("value").get<std::string>());
+            else value = session.plcUnforceVariable(instanceId, name);
+            resp.ok = true;
+            resp.payloadJson = nlohmann::json{{"value", value}}.dump();
+        } catch (const std::exception& error) { resp.ok = false; resp.error = error.what(); }
+        return resp;
+    }
+    if (msg.type == "plcReset") {
+        try {
+            const auto payload = nlohmann::json::parse(msg.payloadJson.empty() ? "{}" : msg.payloadJson);
+            const uint32_t instanceId = static_cast<uint32_t>(std::stoul(payload.value("instanceId", std::string{"0"})));
+            session.plcReset(instanceId);
+            resp.ok = true;
+        } catch (const std::exception& error) { resp.ok = false; resp.error = error.what(); }
+        return resp;
+    }
+
     if (msg.type == "addComponent") {
         try {
             const nlohmann::json payload =

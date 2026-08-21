@@ -107,6 +107,14 @@ export interface WebviewComponentModel {
     sources: string[];
     ports: Array<{ name: string; direction: "in" | "out"; width: number; downto: boolean; leftIndex?: number; rightIndex?: number }>;
   };
+  plc?: {
+    iecProjectRef?: string;
+    entryConfiguration?: string;
+    artifactRef?: string;
+    expectedArtifactHash?: string;
+    exportedIoBindingVersion?: number;
+    exportedIo?: Array<{ ioId: string; name: string; direction: "input" | "output"; iecType: string }>;
+  };
 }
 
 export interface WebviewPoint {

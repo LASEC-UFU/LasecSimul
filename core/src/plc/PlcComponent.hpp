@@ -1,10 +1,14 @@
 #pragma once
 
 #include <memory>
+#include <filesystem>
+#include <stdexcept>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include "lasecsimul/IComponentModel.hpp"
+#include "lasecsimul/Sha256.hpp"
 #include "PlcNativeModule.hpp"
 #include "PlcRuntime.hpp"
 #include "../simulation/SimulationPlan.hpp"
@@ -70,10 +74,11 @@ public:
     /** Carrega um artefato compilado (F9.3) -- reconstrói `m_pins` a partir de
      * `module.exportedIo` (zero pinos se `module` for `nullopt`, exatamente `exportedIo.size()`
      * caso contrário) e (re)cria o `PlcRuntime`, descartando qualquer worker anterior. Chamado fora
-     * do caminho de propriedades genérico (não há editor/IPC pra isso ainda nesta rodada) --
-     * `SimulationSession::loadPlcArtifact` é quem invoca isto e cuida de
+     * do caminho de propriedades genérico; o comando IPC `loadPlcArtifact` chega a
+     * `SimulationSession::loadPlcArtifact`, que invoca isto e cuida de
      * `reregisterPinsIfChanged`/`invalidatePlan`. */
     void loadArtifact(std::optional<PlcNativeModule> module) {
+        if (module) validateArtifact(*module);
         m_runtime.reset();
         m_module = std::move(module);
         m_pins.clear();
@@ -100,6 +105,43 @@ public:
     const PlcRuntime* runtime() const { return m_runtime.get(); }
 
 private:
+    static void validateArtifact(const PlcNativeModule& module) {
+        if (module.formatVersion != 1 || module.workerProtocolVersion != 1) {
+            throw std::invalid_argument("PlcNativeModule format/protocol version incompativel");
+        }
+#if defined(_WIN32)
+        constexpr const char* platform = "windows";
+#elif defined(__APPLE__)
+        constexpr const char* platform = "darwin";
+#else
+        constexpr const char* platform = "linux";
+#endif
+        if (module.targetPlatform != platform) throw std::invalid_argument("PlcNativeModule targetPlatform incompativel");
+#if defined(__aarch64__) || defined(_M_ARM64)
+        constexpr const char* architecture = "arm64";
+#elif defined(_WIN64) || defined(__x86_64__)
+        constexpr const char* architecture = "x64";
+#else
+        constexpr const char* architecture = "unknown";
+#endif
+        if (module.targetArch != architecture) throw std::invalid_argument("PlcNativeModule targetArch incompativel");
+        if (module.nativeBinaryRef.empty() || !std::filesystem::exists(module.nativeBinaryRef)) {
+            throw std::invalid_argument("PlcNativeModule nativeBinaryRef inexistente");
+        }
+        if (module.artifactHash.size() != 64 || Sha256::hashFile(module.nativeBinaryRef) != module.artifactHash) {
+            throw std::invalid_argument("PlcNativeModule artifactHash invalido");
+        }
+        std::unordered_set<std::string> ioIds;
+        for (const PlcExportedIo& io : module.exportedIo) {
+            if (io.ioId.empty() || io.name.empty() || !ioIds.insert(io.ioId).second) {
+                throw std::invalid_argument("PlcNativeModule exportedIo possui ioId vazio/duplicado");
+            }
+            if (io.direction != "input" && io.direction != "output") {
+                throw std::invalid_argument("PlcNativeModule exportedIo direction invalida");
+            }
+        }
+    }
+
     uint32_t m_componentIndex = 0;
     std::vector<Pin> m_pins;
     std::vector<uint32_t> m_leakageIndices;

@@ -2,7 +2,7 @@
 id: ROADMAP-001
 kind: roadmap
 status: active
-currentGate: F8
+currentGate: release-lab
 dependsOn: [GOV-001, BENCH-001]
 supersedes: []
 ---
@@ -89,7 +89,8 @@ Gate: PLC funciona sem protocolos e protocolos funcionam sem PLC.
 
 ## Gate atual
 
-F0–F7 estão concluídos. O próximo trabalho de produto é F8; nenhuma feature nova deve furar F8.
+F0–F10 estão concluídos e automatizados. O próximo gate é o release lab, que deve repetir os
+baselines de capacidade e os testes externos no ambiente de distribuição antes de publicar.
 
 ## Política de exceção
 

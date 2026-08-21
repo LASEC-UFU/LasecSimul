@@ -17,6 +17,7 @@ import { voltageProbesForProject } from "./voltageTelemetry";
 import { RollingRateSampler } from "./rollingRateSampler";
 import { buildFpgaPins, FpgaPortSpec } from "../fpga/fpgaPins";
 import { resolveFpgaToolchainConfig } from "../fpga/fpgaToolchain";
+import { readPlcNativeModule } from "../plc/artifact";
 
 export { electricalEdgesForProject, diffElectricalEdges, voltageProbesForProject };
 
@@ -80,6 +81,28 @@ export function registerCoreIdsForComponent(
   // componente É o MCU, sua própria instância é o alvo. Nenhum hardcode de typeId aqui.
   const catalogEntry = state.schematicState.catalog.find((entry) => entry.typeId === typeId);
   if (catalogEntry?.mcuHost === true) mcuTargetCoreIdByComponentId.set(componentId, response.instanceId);
+}
+
+async function publishConfiguredPlcArtifact(
+  component: Pick<WebviewComponentModel, "plc"> | undefined,
+  instanceId: string
+): Promise<void> {
+  if (!state.coreClient || !component?.plc?.artifactRef) return;
+  const module = await readPlcNativeModule(component.plc.artifactRef);
+  if (component.plc.expectedArtifactHash && component.plc.expectedArtifactHash !== module.artifactHash) {
+    throw new Error(`PLC artifact hash differs from expectedArtifactHash (${component.plc.expectedArtifactHash})`);
+  }
+  const persistedIo = component.plc.exportedIo ?? [];
+  if (persistedIo.length > 0) {
+    const interfaceKey = (io: { ioId: string; direction: string; iecType: string }) =>
+      `${io.ioId}:${io.direction}:${io.iecType.toUpperCase()}`;
+    const expected = persistedIo.map(interfaceKey).sort();
+    const actual = module.exportedIo.map(interfaceKey).sort();
+    if (JSON.stringify(expected) !== JSON.stringify(actual)) {
+      throw new Error("PLC artifact exportedIo differs from the persisted interface snapshot");
+    }
+  }
+  await state.coreClient.loadPlcArtifact(instanceId, module);
 }
 
 /** Resolve um endpoint de fio (`componentId`+`pinId` do modelo da Webview) pro par {instanceId,pinId}
@@ -152,6 +175,7 @@ async function pushComponentToCoreNow(
       typeId, runtimeProperties, pins, componentId, model?.label ? [model.label] : [], fpgaPayload
     );
     registerCoreIdsForComponent(componentId, typeId, response);
+    if (typeId === "plc.instance") await publishConfiguredPlcArtifact(model, response.instanceId);
     if (typeId === TUNNEL_TYPE_ID) {
       const name = String(properties.name ?? "");
       if (name) await state.coreClient.setTunnelName(response.instanceId, pins[0]?.id ?? "pin", "", name);
@@ -1054,7 +1078,7 @@ export function shouldSyncComponentToCore(typeId: string): boolean {
   // conhecido por instância, depois de "Analyze VHDL" -- ver fpga/fpgaPins.ts/component-catalog.json)
   // -- sem este caso especial, o teste genérico abaixo (`pinCount > 0`) nunca deixaria NENHUMA
   // instância FPGA chegar ao Core, mesmo com portas reais descobertas.
-  if (typeId === "digital.generic_fpga") return true;
+  if (typeId === "digital.generic_fpga" || typeId === "plc.instance") return true;
   const descriptor = state.schematicState.catalog.find((item) => item.typeId === typeId);
   return (descriptor?.pinCount ?? 2) > 0;
 }
@@ -1173,6 +1197,9 @@ async function rebuildCoreFromSchematicStateNow(options: { alreadyStopped?: bool
         fpgaPayload
       );
       registerCoreIdsForComponent(component.id, component.typeId, response);
+      if (component.typeId === "plc.instance") {
+        await publishConfiguredPlcArtifact(component, response.instanceId);
+      }
       if (component.typeId === TUNNEL_TYPE_ID) {
         const name = String(component.properties.name ?? "");
         if (name) await state.coreClient.setTunnelName(response.instanceId, component.pins[0]?.id ?? "pin", "", name);
@@ -1220,12 +1247,16 @@ export function pinsForProjectComponent(component: {
   deviceRef?: { lastKnownPinIds?: string[] };
   properties?: Record<string, unknown>;
   fpga?: { ports: FpgaPortSpec[] };
+  plc?: { exportedIo?: Array<{ ioId: string }> };
 }): Array<{ id: string; x: number; y: number }> {
   // `digital.generic_fpga` tem `pinCount: 0` fixo no catálogo (o pinset real só é conhecido por
   // instância, depois de "Analyze VHDL" -- ver fpga/fpgaPins.ts) -- pinsForTypeId nunca acertaria
   // isso sozinho.
   if (component.typeId === "digital.generic_fpga" && component.fpga) {
     return buildFpgaPins(component.fpga.ports);
+  }
+  if (component.typeId === "plc.instance") {
+    return (component.plc?.exportedIo ?? []).map((io, index) => ({ id: io.ioId, x: 0, y: index * 12 }));
   }
   const descriptor = state.schematicState.catalog.find((item) => item.typeId === component.typeId);
   const lastKnownPinIds = component.subcircuitRef?.lastKnownPinIds ?? component.deviceRef?.lastKnownPinIds;

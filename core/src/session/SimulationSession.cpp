@@ -597,6 +597,12 @@ std::string SimulationSession::plcUnforceVariable(uint32_t componentIndex, const
     });
 }
 
+void SimulationSession::plcReset(uint32_t componentIndex) {
+    runViaCommandQueue([componentIndex](SimulationSession& self) {
+        self.requirePlcRuntimeUnlocked(componentIndex, "plcReset").reset();
+    });
+}
+
 plc::PlcRuntimeState SimulationSession::plcRuntimeState(uint32_t componentIndex) const {
     if (componentIndex >= m_componentInstances.size() || !m_componentInstances[componentIndex]) {
         throw std::invalid_argument("plcRuntimeState: componente inexistente");

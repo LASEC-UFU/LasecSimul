@@ -38,6 +38,20 @@ void setMisbehaveMode(const std::string& mode) {
 
 plc::PlcNativeModule makeHelloModule() {
     plc::PlcNativeModule module;
+#if defined(_WIN32)
+    module.targetPlatform = "windows";
+#elif defined(__APPLE__)
+    module.targetPlatform = "darwin";
+#else
+    module.targetPlatform = "linux";
+#endif
+#if defined(__aarch64__) || defined(_M_ARM64)
+    module.targetArch = "arm64";
+#elif defined(_WIN64) || defined(__x86_64__)
+    module.targetArch = "x64";
+#else
+    module.targetArch = "unknown";
+#endif
     module.workerProtocolVersion = 1;
     module.programName = "hello";
     module.nativeBinaryRef = helloWorkerBinary().string();
@@ -51,6 +65,20 @@ plc::PlcNativeModule makeHelloModule() {
 
 plc::PlcNativeModule makeMisbehavingModule() {
     plc::PlcNativeModule module;
+#if defined(_WIN32)
+    module.targetPlatform = "windows";
+#elif defined(__APPLE__)
+    module.targetPlatform = "darwin";
+#else
+    module.targetPlatform = "linux";
+#endif
+#if defined(__aarch64__) || defined(_M_ARM64)
+    module.targetArch = "arm64";
+#elif defined(_WIN64) || defined(__x86_64__)
+    module.targetArch = "x64";
+#else
+    module.targetArch = "unknown";
+#endif
     module.workerProtocolVersion = 1;
     module.programName = "hello";
     module.nativeBinaryRef = misbehavingWorkerBinary().string();
@@ -288,6 +316,44 @@ void repeatedAddRemoveLeavesNoDanglingSchedule() {
     // "consultar uma instancia removida deve lancar" repetido em loop sem nunca crashar/vazar.
 }
 
+std::pair<bool, uint64_t> runEquivalentProfile(resources::ResourceProfile profile) {
+    plugins::GlobalPluginCache cache;
+    SimulationSession session(cache, 64, resources::ResourceGovernor::forProfile(profile, 8));
+    const uint32_t idx = session.addComponent("plc.instance", {});
+    session.loadPlcArtifact(idx, makeHelloModule());
+    session.setPlcIoBindings(idx, standardBindings());
+    session.setPlcTaskIntervalNs(idx, 100'000'000);
+    session.setSignalGraph(makeGraph(true));
+    const auto plan = session.simulationPlan();
+    const auto output = SignalCompiler::output(plan->signal->engine, "plc_do0_target");
+    session.scheduler().runUntil(700'000'000);
+    return {session.signalRuntime().boolean(output), session.scheduler().nowNs()};
+}
+
+void desktopAndSharedHostPreservePlcSemantics() {
+    const auto desktop = runEquivalentProfile(resources::ResourceProfile::Desktop);
+    const auto shared = runEquivalentProfile(resources::ResourceProfile::SharedHost);
+    CHECK(desktop == shared, "o mesmo artefato PLC deve ter resultado e tempo equivalentes nos dois perfis");
+    CHECK(desktop.first && desktop.second == 700'000'000,
+          "cenario de equivalencia deve realmente completar o TON e o tempo virtual esperado");
+}
+
+void resetWhileSchedulerRunsUsesTheCommandQueue() {
+    plugins::GlobalPluginCache cache;
+    SimulationSession session(cache);
+    const uint32_t idx = session.addComponent("plc.instance", {});
+    session.loadPlcArtifact(idx, makeHelloModule());
+    session.setPlcIoBindings(idx, standardBindings());
+    session.setPlcTaskIntervalNs(idx, 100'000'000);
+    session.setSignalGraph(makeGraph(false));
+    (void)session.simulationPlan();
+    session.scheduler().start();
+    session.plcReset(idx); // must be drained by the running scheduler, never paused before enqueue.
+    CHECK(session.plcRuntimeState(idx) == plc::PlcRuntimeState::Ready,
+          "reset enfileirado durante Run deve recriar o worker sem deadlock");
+    session.stopSimulation();
+}
+
 } // namespace
 
 int main() {
@@ -299,6 +365,8 @@ int main() {
     artifactReloadOrphansStaleBindingsAndKeepsFreshOnes();
     multipleIndependentInstancesNeverInterfereEvenAtTheSameTimestamp();
     repeatedAddRemoveLeavesNoDanglingSchedule();
+    desktopAndSharedHostPreservePlcSemantics();
+    resetWhileSchedulerRunsUsesTheCommandQueue();
     if (failures == 0) std::printf("PLC <-> SimulationSession/Scheduler integration (F9.5): OK\n");
     return failures == 0 ? 0 : 1;
 }

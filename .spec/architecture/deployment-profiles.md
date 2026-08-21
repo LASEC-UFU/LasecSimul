@@ -1,7 +1,7 @@
 ---
 id: ARCH-007
 kind: architecture
-status: planned
+status: active
 dependsOn: [ARCH-001, ARCH-004, ARCH-005]
 supersedes: []
 ---
@@ -15,6 +15,20 @@ Extension, IEC Compiler e Core estão na mesma máquina; named pipe/Unix socket 
 ## SharedHost
 
 Cada usuário mantém processo Core e diretórios/arenas próprios. Política administrativa fornece `SharedHost` budgets. Builds IEC usam fila limitada/cache imutável e não criam um compilador residente por bloco. O scheduler do SO distribui processos; afinidade não é aplicada por padrão.
+
+`resources::SharedHostCapacity` aplica a admissão antes de iniciar cada Core, deriva namespaces
+independentes para pipe, arena, porta virtual e workdir, limita a fila de builds e registra falhas
+de encerramento de processos filhos. O `ResourceBudget` entregue em cada lease é imutável durante a
+sessão. O gerenciador não hospeda estado de simulação e não remove workdirs por conta própria.
+
+### Cenário de capacidade F10
+
+- host: Windows x64, 8 processadores lógicos, 32 GiB, 4 GiB reservados;
+- perfil: até 20 sessões administrativas, 1 GiB residente por sessão, 2 processos externos por
+  sessão, 2 builds IEC concorrentes no host;
+- carga automatizada: 20 processos Core, 25 passos concorrentes de 1 ms virtual por sessão;
+- comando reproduzível: `npm run benchmark:shared-host`;
+- evidência versionada: `BENCH-004`.
 
 ## Backend remoto futuro
 

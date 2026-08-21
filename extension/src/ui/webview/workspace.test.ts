@@ -44,6 +44,7 @@ import {
     assert(workspaceSectionForCatalogEntry({ typeId: "passive.resistor" }) === "analog", "resistor deveria ser analógico");
     assert(workspaceSectionForCatalogEntry({ typeId: "logic.and_gate" }) === "digital", "porta lógica deveria ser digital");
     assert(workspaceSectionForCatalogEntry({ typeId: "digital.generic_fpga" }) === "digital", "FPGA/GHDL deveria ser digital");
+    assert(workspaceSectionForCatalogEntry({ typeId: "plc.instance", workspaceSection: "control" }) === "control", "PLC deveria ser controle");
     assert(workspaceSectionForCatalogEntry({ typeId: "outputs.hd44780" }) === "analog", "display legado sem workspaceSection deveria ser analógico (só logic./digital. ficam em Digital)");
   });
 

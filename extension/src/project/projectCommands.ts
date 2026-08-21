@@ -44,6 +44,11 @@ function projectWithRelativeExternalRefs(project: ProjectDocument, targetProject
           ...component.fpga,
           sources: component.fpga.sources.map(portable),
         } } : {}),
+        ...(component.plc ? { plc: {
+          ...component.plc,
+          ...(component.plc.iecProjectRef ? { iecProjectRef: portable(component.plc.iecProjectRef) } : {}),
+          ...(component.plc.artifactRef ? { artifactRef: portable(component.plc.artifactRef) } : {}),
+        } } : {}),
       };
     }),
   };
@@ -67,6 +72,7 @@ export function webviewComponentToProjectComponent(component: WebviewComponentMo
     subcircuitRef: component.subcircuitRef,
     deviceRef: component.deviceRef,
     fpga: component.fpga,
+    plc: component.plc,
   };
 }
 
@@ -112,6 +118,7 @@ export function projectComponentToWebviewComponent(component: ProjectComponent, 
     subcircuitRef: component.subcircuitRef,
     deviceRef: component.deviceRef,
     fpga: component.fpga,
+    plc: component.plc,
   };
 }
 
@@ -125,13 +132,18 @@ function projectToWebviewState(project: ProjectDocument, projectDir?: string): W
   );
   const components: WebviewComponentModel[] = project.components.map((component) => {
     const mapped = projectComponentToWebviewComponent(component, catalog);
-    if (!projectDir || !mapped.fpga) return mapped;
+    if (!projectDir || (!mapped.fpga && !mapped.plc)) return mapped;
     return {
       ...mapped,
-      fpga: {
+      ...(mapped.fpga ? { fpga: {
         ...mapped.fpga,
         sources: resolveProjectSourcePaths(mapped.fpga.sources, projectDir),
-      },
+      } } : {}),
+      ...(mapped.plc ? { plc: {
+        ...mapped.plc,
+        ...(mapped.plc.iecProjectRef ? { iecProjectRef: resolveProjectSourcePaths([mapped.plc.iecProjectRef], projectDir)[0] } : {}),
+        ...(mapped.plc.artifactRef ? { artifactRef: resolveProjectSourcePaths([mapped.plc.artifactRef], projectDir)[0] } : {}),
+      } } : {}),
     };
   });
   // `ProjectTopology` (`ProjectTypes.ts`, formato persistido) e `CanonicalTopologyDocument`

@@ -97,6 +97,7 @@ export interface ProjectComponent {
    * resolvido fresco de `lasecsimul.fpga.*` a cada sessão (mesma disciplina do caminho vendorizado
    * do QEMU, ver `mcuCommands.ts::resolveDefaultQemuBinaryPath`). */
   fpga?: ProjectFpgaConfig;
+  plc?: ProjectPlcConfig;
 }
 
 export interface ProjectFpgaConfig {
@@ -107,6 +108,15 @@ export interface ProjectFpgaConfig {
   /** Caminhos relativos à pasta do `.lsproj`. */
   sources: string[];
   ports: Array<{ name: string; direction: "in" | "out"; width: number; downto: boolean; leftIndex?: number; rightIndex?: number }>;
+}
+
+export interface ProjectPlcConfig {
+  iecProjectRef?: string;
+  entryConfiguration?: string;
+  artifactRef?: string;
+  expectedArtifactHash?: string;
+  exportedIoBindingVersion?: number;
+  exportedIo?: Array<{ ioId: string; name: string; direction: "input" | "output"; iecType: string }>;
 }
 
 export interface ProjectFirmwareConfig {

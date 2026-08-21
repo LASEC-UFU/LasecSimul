@@ -23,6 +23,7 @@
     "test:strucpp-smoke": "node scripts/test-strucpp-smoke.js",
     "check:plc-toolchain": "node scripts/check-plc-toolchain.js",
     "benchmark:wires": "npm run build:extension && node scripts/benchmark-wire-topology.mjs",
+    "benchmark:shared-host": "node scripts/shared-host-capacity.js",
     "spec:check": "node .spec/governance/check-specs.mjs",
     "spec:status": "node .spec/governance/generate-status.mjs"
   },

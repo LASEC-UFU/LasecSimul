@@ -206,32 +206,124 @@ ProcessRunResult runProcessCapturingOutput(const std::string& executable, const 
 // =============================================================================
 
 bool isExecutableAvailable(const std::string& command) {
-    ProcessRunResult result = runProcessCapturingOutput(command, {"--version"}, fs::temp_directory_path(),
+    const std::string filename = fs::path(command).filename().string();
+    const bool isMsvc = filename == "cl" || filename == "cl.exe";
+    ProcessRunResult result = runProcessCapturingOutput(command, {isMsvc ? "/?" : "--version"}, fs::temp_directory_path(),
                                                          std::chrono::milliseconds(5000));
     return !result.spawnFailed && result.exitCode == 0;
 }
 
-std::string resolveCxxCompiler(const fs::path& configured) {
+enum class CxxCompilerFlavor { Gnu, Msvc };
+
+struct ResolvedCxxCompiler {
+    std::string executable;
+    CxxCompilerFlavor flavor = CxxCompilerFlavor::Gnu;
+    fs::path environmentScript;
+};
+
+bool isMsvcCompilerName(const std::string& executable) {
+    std::string filename = fs::path(executable).filename().string();
+    std::transform(filename.begin(), filename.end(), filename.begin(),
+                   [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+    return filename == "cl" || filename == "cl.exe" || filename == "clang-cl" || filename == "clang-cl.exe";
+}
+
+#if defined(_WIN32)
+std::optional<ResolvedCxxCompiler> findVisualStudioCompiler() {
+    const fs::path vswhere = fs::path(std::getenv("ProgramFiles(x86)") ? std::getenv("ProgramFiles(x86)") :
+                                                                       "C:\\Program Files (x86)") /
+                              "Microsoft Visual Studio/Installer/vswhere.exe";
+    if (!fs::exists(vswhere)) return std::nullopt;
+
+    const ProcessRunResult query = runProcessCapturingOutput(
+        vswhere.string(), {"-latest", "-products", "*", "-requires",
+                           "Microsoft.VisualStudio.Component.VC.Tools.x86.x64", "-property", "installationPath"},
+        fs::temp_directory_path(), std::chrono::milliseconds(10000));
+    if (query.spawnFailed || query.exitCode != 0) return std::nullopt;
+
+    std::string installation = query.combinedOutput;
+    while (!installation.empty() && std::isspace(static_cast<unsigned char>(installation.back()))) installation.pop_back();
+    const size_t newline = installation.find_last_of("\r\n");
+    if (newline != std::string::npos) installation = installation.substr(newline + 1);
+    if (installation.empty()) return std::nullopt;
+
+    const fs::path root = fs::path(installation);
+    const fs::path environmentScript = root / "Common7/Tools/VsDevCmd.bat";
+    const fs::path toolsRoot = root / "VC/Tools/MSVC";
+    if (!fs::exists(environmentScript) || !fs::is_directory(toolsRoot)) return std::nullopt;
+
+    fs::path newestCompiler;
+    for (const auto& entry : fs::directory_iterator(toolsRoot)) {
+        if (!entry.is_directory()) continue;
+        const fs::path candidate = entry.path() / "bin/Hostx64/x64/cl.exe";
+        if (fs::exists(candidate) && (newestCompiler.empty() || candidate.string() > newestCompiler.string())) {
+            newestCompiler = candidate;
+        }
+    }
+    if (newestCompiler.empty() || !isExecutableAvailable(newestCompiler.string())) return std::nullopt;
+    return ResolvedCxxCompiler{newestCompiler.string(), CxxCompilerFlavor::Msvc, environmentScript};
+}
+#endif
+
+ResolvedCxxCompiler resolveCxxCompiler(const fs::path& configured) {
     if (!configured.empty()) {
         const std::string configuredStr = configured.string();
         if (!isExecutableAvailable(configuredStr)) {
             fail("toolchain", "compilador C++ configurado nao encontrado/nao executavel: " + configuredStr);
         }
-        return configuredStr;
+        return {configuredStr, isMsvcCompilerName(configuredStr) ? CxxCompilerFlavor::Msvc : CxxCompilerFlavor::Gnu, {}};
     }
     if (const char* envVar = std::getenv("LASECSIMUL_PLC_CXX"); envVar && *envVar) {
         if (!isExecutableAvailable(envVar)) {
             fail("toolchain", "LASECSIMUL_PLC_CXX aponta pra um compilador nao encontrado/nao executavel: " + std::string(envVar));
         }
-        return envVar;
+        return {envVar, isMsvcCompilerName(envVar) ? CxxCompilerFlavor::Msvc : CxxCompilerFlavor::Gnu, {}};
     }
     for (const char* candidate : {"g++", "gcc"}) {
-        if (isExecutableAvailable(candidate)) return candidate;
+        if (isExecutableAvailable(candidate)) return {candidate, CxxCompilerFlavor::Gnu, {}};
     }
+#if defined(_WIN32)
+    if (auto msvc = findVisualStudioCompiler()) return *msvc;
+#endif
     fail("toolchain",
-        "nenhum compilador C++ compativel encontrado (tentado g++, gcc no PATH). O STruCpp nao "
-        "empacota toolchain proprio -- instale um MinGW-w64/UCRT (Windows) ou configure "
+        "nenhum compilador C++ compativel encontrado (tentado g++, gcc e Visual C++ Build Tools). O STruCpp nao "
+        "empacota toolchain proprio -- instale MinGW-w64/Visual C++ Build Tools (Windows) ou configure "
         "LASECSIMUL_PLC_CXX. Ver scripts/check-plc-toolchain.js.");
+}
+
+std::string quoteBatchArg(const std::string& argument) {
+    std::string escaped = argument;
+    size_t position = 0;
+    while ((position = escaped.find('"', position)) != std::string::npos) {
+        escaped.insert(position, 1, '"');
+        position += 2;
+    }
+    return "\"" + escaped + "\"";
+}
+
+ProcessRunResult runMsvc(const ResolvedCxxCompiler& compiler, const std::vector<std::string>& args,
+                         const fs::path& workingDir, std::chrono::milliseconds timeout) {
+#if defined(_WIN32)
+    const fs::path scriptPath = workingDir / "__plc_msvc.cmd";
+    std::ostringstream script;
+    script << "@echo off\r\n";
+    if (!compiler.environmentScript.empty()) {
+        script << "call " << quoteBatchArg(compiler.environmentScript.string()) << " -no_logo -arch=x64 >nul\r\n"
+               << "if errorlevel 1 exit /b %errorlevel%\r\n";
+    }
+    script << quoteBatchArg(compiler.executable);
+    for (const auto& arg : args) script << ' ' << quoteBatchArg(arg);
+    script << "\r\nexit /b %errorlevel%\r\n";
+    writeFile(scriptPath, script.str());
+    ProcessRunResult result = runProcessCapturingOutput("cmd.exe", {"/d", "/s", "/c", scriptPath.string()},
+                                                         workingDir, timeout);
+    std::error_code removeError;
+    fs::remove(scriptPath, removeError);
+    return result;
+#else
+    (void)compiler; (void)args; (void)workingDir; (void)timeout;
+    return {};
+#endif
 }
 
 // =============================================================================
@@ -448,7 +540,7 @@ PlcNativeModule PlcCompiler::compile(const PlcCompileOptions& options) {
     if (options.stSourcePath.empty() || !fs::exists(options.stSourcePath)) {
         fail("parse", "arquivo fonte ST nao encontrado: " + options.stSourcePath.string());
     }
-    const std::string cxxCompiler = resolveCxxCompiler(options.cxxCompilerPath);
+    const ResolvedCxxCompiler cxxCompiler = resolveCxxCompiler(options.cxxCompilerPath);
 
     std::error_code mkdirError;
     fs::create_directories(options.workDir, mkdirError);
@@ -500,21 +592,34 @@ PlcNativeModule PlcCompiler::compile(const PlcCompileOptions& options) {
     fs::remove(binaryPath, removeBinaryError); // nunca deixar um binario da compilacao ANTERIOR
                                                 // parecer valido se esta falhar antes de recriar.
 
-    std::vector<std::string> cxxArgs = {
-        "-std=c++17", "-O2",
-        "-I", options.runtimeIncludeDir.string(),
-        "-I", options.lasecsimulPlcSrcDir.string(),
-        "-I", options.workDir.string(),
-        driverCppPath.string(), generatedCppPath.string(),
-        (options.lasecsimulPlcSrcDir / "PlcScanSession.cpp").string(),
-        "-o", binaryPath.string(),
-    };
+    std::vector<std::string> cxxArgs;
+    if (cxxCompiler.flavor == CxxCompilerFlavor::Msvc) {
+        cxxArgs = {
+            "/nologo", "/std:c++17", "/O2", "/EHsc", "/permissive-", "/utf-8", "/Brepro",
+            "/I" + options.runtimeIncludeDir.string(),
+            "/I" + options.lasecsimulPlcSrcDir.string(),
+            "/I" + options.workDir.string(),
+            driverCppPath.string(), generatedCppPath.string(),
+            (options.lasecsimulPlcSrcDir / "PlcScanSession.cpp").string(),
+            "/Fe:" + binaryPath.string(), "/link", "/Brepro", "/INCREMENTAL:NO",
+        };
+    } else {
+        cxxArgs = {
+            "-std=c++17", "-O2",
+            "-I", options.runtimeIncludeDir.string(),
+            "-I", options.lasecsimulPlcSrcDir.string(),
+            "-I", options.workDir.string(),
+            driverCppPath.string(), generatedCppPath.string(),
+            (options.lasecsimulPlcSrcDir / "PlcScanSession.cpp").string(),
+            "-o", binaryPath.string(),
+        };
 #if defined(_WIN32)
-    // MinGW/ld: remove o timestamp de build embutido no cabecalho PE -- sem isso, artifactHash
-    // nunca seria deterministico entre dois builds identicos (requisito explicito desta rodada).
-    cxxArgs.push_back("-Wl,--no-insert-timestamp");
+        cxxArgs.push_back("-Wl,--no-insert-timestamp");
 #endif
-    ProcessRunResult cxxResult = runProcessCapturingOutput(cxxCompiler, cxxArgs, options.workDir, std::chrono::milliseconds(120000));
+    }
+    ProcessRunResult cxxResult = cxxCompiler.flavor == CxxCompilerFlavor::Msvc
+        ? runMsvc(cxxCompiler, cxxArgs, options.workDir, std::chrono::milliseconds(120000))
+        : runProcessCapturingOutput(cxxCompiler.executable, cxxArgs, options.workDir, std::chrono::milliseconds(120000));
     if (cxxResult.spawnFailed) {
         fail("cxx", cxxResult.spawnError, cxxResult.combinedOutput);
     }
@@ -553,7 +658,9 @@ PlcNativeModule PlcCompiler::compile(const PlcCompileOptions& options) {
         module.runtimeRevision = module.strucppVersion;
     }
     {
-        ProcessRunResult versionResult = runProcessCapturingOutput(cxxCompiler, {"--version"}, options.workDir, std::chrono::milliseconds(5000));
+        ProcessRunResult versionResult = cxxCompiler.flavor == CxxCompilerFlavor::Msvc
+            ? runMsvc(cxxCompiler, {"/Bv"}, options.workDir, std::chrono::milliseconds(10000))
+            : runProcessCapturingOutput(cxxCompiler.executable, {"--version"}, options.workDir, std::chrono::milliseconds(5000));
         std::istringstream versionStream(versionResult.combinedOutput);
         std::string firstLine;
         std::getline(versionStream, firstLine);
@@ -564,7 +671,9 @@ PlcNativeModule PlcCompiler::compile(const PlcCompileOptions& options) {
     module.nativeBinaryRef = binaryPath.string();
     module.programName = parsedInterface.programName;
     for (const auto& variable : parsedInterface.variables) {
-        module.exportedIo.push_back({variable.name, variable.name, variable.direction, variable.iecType});
+        const auto stableId = options.ioIdByVariableName.find(variable.name);
+        module.exportedIo.push_back({stableId == options.ioIdByVariableName.end() ? variable.name : stableId->second,
+                                     variable.name, variable.direction, variable.iecType});
     }
     module.debugMap = debugMap;
     return module;

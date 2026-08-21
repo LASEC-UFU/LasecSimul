@@ -58,6 +58,22 @@ export interface TelemetryFrame {
   missingProbes: string[];
 }
 
+export interface PlcNativeModuleDto {
+  formatVersion: number;
+  workerProtocolVersion: number;
+  targetPlatform: string;
+  targetArch: string;
+  strucppVersion: string;
+  runtimeRevision: string;
+  cxxToolchainVersion: string;
+  sourceHash: string;
+  artifactHash: string;
+  nativeBinaryRef: string;
+  programName: string;
+  exportedIo: Array<{ ioId: string; name: string; direction: "input" | "output"; iecType: string }>;
+  debugMap?: Array<{ generatedLine: number; sourceFile: string; sourceLine: number }>;
+}
+
 interface PendingRequest {
   resolve: (payload: unknown) => void;
   reject: (err: Error) => void;
@@ -435,14 +451,47 @@ export class CoreClient {
     return (resp as { logs: string }).logs;
   }
 
+  // ── PLC IEC 61131-3 ─────────────────────────────────────────────────────────
+
+  // PLC IEC 61131-3. Artifact publication is stopped-only in the Core; watch/force may run while
+  // the simulation is paused or active and never advances virtual time by itself.
+  async loadPlcArtifact(instanceId: string, module: PlcNativeModuleDto | null): Promise<void> {
+    await this.request("loadPlcArtifact", { instanceId, module }, 30_000);
+  }
+
+  async setPlcIoBindings(instanceId: string, bindings: Array<{ ioId: string; signalBlockId: string }>): Promise<void> {
+    await this.request("setPlcIoBindings", { instanceId, bindings });
+  }
+
+  async setPlcTaskInterval(instanceId: string, intervalNs: number): Promise<void> {
+    await this.request("setPlcTaskInterval", { instanceId, intervalNs });
+  }
+
+  async plcGet(instanceId: string, qualifiedName: string): Promise<string> {
+    return (await this.request("plcGet", { instanceId, qualifiedName }) as { value: string }).value;
+  }
+
+  async plcSet(instanceId: string, qualifiedName: string, value: string): Promise<string> {
+    return (await this.request("plcSet", { instanceId, qualifiedName, value }) as { value: string }).value;
+  }
+
+  async plcForce(instanceId: string, qualifiedName: string, value: string): Promise<string> {
+    return (await this.request("plcForce", { instanceId, qualifiedName, value }) as { value: string }).value;
+  }
+
+  async plcUnforce(instanceId: string, qualifiedName: string): Promise<string> {
+    return (await this.request("plcUnforce", { instanceId, qualifiedName }) as { value: string }).value;
+  }
+
+  async plcReset(instanceId: string): Promise<void> {
+    await this.request("plcReset", { instanceId });
+  }
+
   // ── FPGA/VHDL (GHDL) ────────────────────────────────────────────────────────
 
   /** STANDALONE -- sem `instanceId`: roda `ghdl -a/-e` (com cache) + descoberta de portas contra
-   * um `GhdlBackend` descartável no Core, ANTES de qualquer `addComponent` existir pra essa
-   * instância (a Extension só sabe o pinset real depois disto -- ver `fpgaCommands.ts`). Erro de
-   * compilação (VHDL inválido) chega aqui como rejeição da Promise (`request()` já traduz
-   * `resp.ok===false` em erro, ver `IpcError`), fonte real do parser de diagnostics
-   * (`fpgaDiagnostics.ts`). */
+   * um `GhdlBackend` descartável no Core, antes de qualquer `addComponent` existir. */
+
   async analyzeFpga(options: {
     sources: string[];
     topEntity: string;

@@ -26,6 +26,7 @@ PlcCompileOptions baseOptions(const fs::path& workDir) {
     options.strucppBinaryPath = strucppBinary();
     options.runtimeIncludeDir = LASECSIMUL_TEST_PLC_RUNTIME_INCLUDE_DIR;
     options.lasecsimulPlcSrcDir = LASECSIMUL_TEST_PLC_SRC_DIR;
+    options.ioIdByVariableName = {{"di0", "io-input-stable"}, {"do0", "io-output-stable"}};
     return options;
 }
 
@@ -59,8 +60,8 @@ void compilesHelloFixtureWithExpectedMetadata() {
     CHECK(module.exportedIo.size() == 2, "exportedIo must contain exactly the two VAR_INPUT/VAR_OUTPUT variables from hello.st");
     bool foundInput = false, foundOutput = false;
     for (const auto& io : module.exportedIo) {
-        if (io.name == "di0" && io.direction == "input" && io.iecType == "BOOL") foundInput = true;
-        if (io.name == "do0" && io.direction == "output" && io.iecType == "BOOL") foundOutput = true;
+        if (io.ioId == "io-input-stable" && io.name == "di0" && io.direction == "input" && io.iecType == "BOOL") foundInput = true;
+        if (io.ioId == "io-output-stable" && io.name == "do0" && io.direction == "output" && io.iecType == "BOOL") foundOutput = true;
     }
     CHECK(foundInput, "exportedIo must contain di0 as a BOOL input");
     CHECK(foundOutput, "exportedIo must contain do0 as a BOOL output");

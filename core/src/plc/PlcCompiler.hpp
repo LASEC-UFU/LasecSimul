@@ -15,6 +15,7 @@
 #include <filesystem>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 
 #include "PlcNativeModule.hpp"
 
@@ -32,8 +33,8 @@ struct PlcCompileOptions {
     std::filesystem::path strucppBinaryPath;
 
     /** Compilador C++ nativo -- se vazio, resolvido nesta ordem: variável de ambiente
-     * `LASECSIMUL_PLC_CXX`, depois `g++`/`gcc` no PATH (mesma lógica de
-     * scripts/check-plc-toolchain.js). Se PREENCHIDO (aqui OU via a variável de ambiente) e o
+     * `LASECSIMUL_PLC_CXX`, depois `g++`/`gcc` no PATH e, no Windows, o MSVC Build Tools mais
+     * recente descoberto via vswhere. Se PREENCHIDO (aqui OU via a variável de ambiente) e o
      * compilador resultante não for executável, é erro explícito -- nunca cai silenciosamente pro
      * PATH nesse caso (só tenta PATH quando NADA foi configurado). */
     std::filesystem::path cxxCompilerPath;
@@ -44,6 +45,10 @@ struct PlcCompileOptions {
     /** `core/src/plc` -- onde `PlcScanSession.{hpp,cpp}`/`PlcVariableCommands.hpp` vivem, pra
      * compilar o driver contra eles. Obrigatório. */
     std::filesystem::path lasecsimulPlcSrcDir;
+
+    /** Stable authoring ioId by ST variable name. When absent (legacy standalone ST input), the
+     * variable name is used for backward compatibility; project builds should always provide it. */
+    std::unordered_map<std::string, std::string> ioIdByVariableName;
 };
 
 struct PlcCompileDiagnostics {

@@ -280,6 +280,7 @@ public:
     std::string plcSetVariable(uint32_t componentIndex, const std::string& qualifiedName, const std::string& value);
     std::string plcForceVariable(uint32_t componentIndex, const std::string& qualifiedName, const std::string& value);
     std::string plcUnforceVariable(uint32_t componentIndex, const std::string& qualifiedName);
+    void plcReset(uint32_t componentIndex);
     plc::PlcRuntimeState plcRuntimeState(uint32_t componentIndex) const;
 
     /** Registra, no ComponentRegistry desta sessão, uma factory delegando ao PluginRuntime para

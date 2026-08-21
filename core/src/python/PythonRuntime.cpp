@@ -115,6 +115,14 @@ std::chrono::milliseconds timeoutFrom(const resources::ResourceBudget& budget) {
     return std::chrono::milliseconds(budget.pythonStepTimeoutMs);
 }
 
+std::chrono::milliseconds startupTimeoutFrom(const resources::ResourceBudget& budget) {
+    // O watchdog curto protege o hot path STEP_BATCH. O bootstrap importa módulos da stdlib e
+    // coleta versões de dependências, operações cold-path que no Windows podem ultrapassar 100 ms
+    // mesmo em uma máquina saudável. Reutilizar diretamente o prazo do step fazia um timeout de
+    // usuário matar o worker antes de ele aceitar o primeiro batch e tornava restart não confiável.
+    return std::max(timeoutFrom(budget), std::chrono::milliseconds(5000));
+}
+
 #if defined(_WIN32)
 std::wstring widen(const std::string& text) {
     if (text.empty()) return {};
@@ -342,7 +350,15 @@ public:
         }
         if (m_stdinWrite) { CloseHandle(m_stdinWrite); m_stdinWrite = nullptr; }
         if (m_stdoutRead) { CloseHandle(m_stdoutRead); m_stdoutRead = nullptr; }
-        if (m_stderrThread.joinable()) m_stderrThread.join();
+        if (m_stderrThread.joinable()) {
+            // A morte anormal do interpretador nem sempre sinaliza EOF no pipe de stderr antes de
+            // o último handle do processo ser fechado. Nesse caso ReadFile() pode permanecer
+            // bloqueado e o watchdog ficava preso no join(), impedindo justamente o restart que
+            // deveria recuperar a sessão. Cancele a I/O síncrona na thread proprietária antes de
+            // aguardá-la; ela continua sendo a única thread que fecha m_stderrRead.
+            CancelSynchronousIo(m_stderrThread.native_handle());
+            m_stderrThread.join();
+        }
         closeHandles();
 #else
         if (m_pid > 0) {
@@ -545,7 +561,7 @@ void PythonRuntime::ensureStarted() {
         size_t sent = 0;
         size_t received = 0;
         const json response = m_process->request({{"op", "INIT"}, {"blocks", definitions}, {"dependencies", dependencies}},
-                                                  timeoutFrom(m_budget), sent, received);
+                                                  startupTimeoutFrom(m_budget), sent, received);
         m_metrics.requestBytes += sent;
         m_metrics.responseBytes += received;
         if (!response.value("ok", false)) {

@@ -1,0 +1,14 @@
+{
+  "repository": "Autonomy-Logic/openplc-editor",
+  "tag": "v4.2.10",
+  "commit": "0cf29e23a5158efa84d64201a3665339dd448ffd",
+  "license": "GPL-3.0-only",
+  "upstreamFiles": {
+    "src/backend/shared/transpilers/st-transpiler/core/path-tree.ts": "d024ad7910fdd41f9cfe20b12f4439db2a72b79c4674636e26ceb65da45ff331",
+    "src/backend/shared/transpilers/st-transpiler/core/modifiers.ts": "92644bab135283dc3ef2760c85fc6ee1c6d0e85a3c9d26cd96f83fba352ccb14",
+    "src/backend/shared/transpilers/st-transpiler/walker/ld.ts": "6261b3cbbe80c5ee838abf4c35f06d870ef4936de59211d17647142e992861ad",
+    "src/backend/shared/transpilers/st-transpiler/walker/fbd.ts": "e9b9c6b9d426fa95f076bfef698ad0868f58117fdbae3db50ac99def58fcd05e",
+    "src/middleware/shared/ports/library-types.ts": "e2e131d73e0ab19a0c765588ab05d58a6b51f749e43fe861dd9b3d32bfdb0776",
+    "LICENSE": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+  }
+}

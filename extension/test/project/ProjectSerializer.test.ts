@@ -197,6 +197,35 @@ import { resolveProjectSourcePaths } from "../../src/project/projectPathPolicy";
   const fpgaRoundTrip = await serializer.load(fpgaPath);
   assert.deepStrictEqual(fpgaRoundTrip.components[0]?.fpga, fpgaProject.components[0]?.fpga);
 
+  // A configuração IEC e o snapshot dos I/Os exportados são dados portáteis do projeto. Estado
+  // vivo do worker (watch/force/scan) nunca faz parte deste payload persistido.
+  const plcProject = createEmptyProject();
+  plcProject.components.push({
+    id: "plc1",
+    typeId: "plc.instance",
+    properties: {},
+    visual: { x: 20, y: 30, rotation: 0 },
+    plc: {
+      iecProjectRef: "../plc/controller.iec.json",
+      entryConfiguration: "MainConfiguration",
+      artifactRef: "../plc/build/controller.exe",
+      expectedArtifactHash: "a".repeat(64),
+      exportedIoBindingVersion: 1,
+      exportedIo: [
+        { ioId: "io-start", name: "start", direction: "input", iecType: "BOOL" },
+        { ioId: "io-motor", name: "motor", direction: "output", iecType: "BOOL" },
+      ],
+    },
+  });
+  const plcPath = path.join(tmpDir, "plc.lsproj");
+  await serializer.save(plcPath, plcProject);
+  const plcRoundTrip = await serializer.load(plcPath);
+  assert.deepStrictEqual(plcRoundTrip.components[0]?.plc, plcProject.components[0]?.plc);
+  const plcRaw = JSON.parse(await fs.readFile(plcPath, "utf8"));
+  assert.strictEqual(plcRaw.components[0].plc.forcedValues, undefined);
+  assert.strictEqual(plcRaw.components[0].plc.watchValues, undefined);
+  assert.strictEqual(plcRaw.components[0].plc.scanState, undefined);
+
   // O bloco programável sem código também é autoria válida: deve sobreviver ao round-trip sem a
   // chave `fpga` e sem qualquer pinset placeholder persistido.
   const blankFpgaProject = createEmptyProject();

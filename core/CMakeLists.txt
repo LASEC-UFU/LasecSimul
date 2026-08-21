@@ -58,6 +58,7 @@ set(CORE_SOURCES
     src/main.cpp
     src/app/CoreApplication.cpp
     src/resources/ResourceGovernor.cpp
+    src/resources/SharedHostCapacity.cpp
     src/python/PythonRuntime.cpp
     src/registry/SubcircuitRegistry.cpp
     src/ipc/NotificationQueue.cpp
@@ -75,6 +76,7 @@ set(CORE_SOURCES
     src/mcu/McuController.cpp
     src/mcu/McuComponent.cpp
     src/plc/PlcRuntime.cpp
+    src/protocols/IndustrialProtocols.cpp
     src/fpga/FpgaComponent.cpp
     src/fpga/FpgaPortMapper.cpp
     src/fpga/GhdlBackend.cpp
@@ -117,6 +119,14 @@ add_executable(resource_governor_test
 target_include_directories(resource_governor_test PRIVATE include src)
 add_test(NAME resource_governor COMMAND resource_governor_test)
 
+add_executable(shared_host_capacity_test
+    test/core/resources/SharedHostCapacityTest.cpp
+    src/resources/SharedHostCapacity.cpp
+    src/resources/ResourceGovernor.cpp
+)
+target_include_directories(shared_host_capacity_test PRIVATE include src)
+add_test(NAME shared_host_capacity COMMAND shared_host_capacity_test)
+
 add_executable(resource_worker_pool_test
     test/core/resources/ResourceWorkerPoolTest.cpp
     src/resources/ResourceGovernor.cpp
@@ -128,6 +138,7 @@ add_test(NAME resource_worker_pool COMMAND resource_worker_pool_test)
 set(TEST_COMMON_SOURCE_FILES
     src/app/CoreApplication.cpp
     src/resources/ResourceGovernor.cpp
+    src/resources/SharedHostCapacity.cpp
     src/python/PythonRuntime.cpp
     src/registry/SubcircuitRegistry.cpp
     src/ipc/NotificationQueue.cpp
@@ -145,6 +156,7 @@ set(TEST_COMMON_SOURCE_FILES
     src/mcu/McuController.cpp
     src/mcu/McuComponent.cpp
     src/plc/PlcRuntime.cpp
+    src/protocols/IndustrialProtocols.cpp
     src/fpga/FpgaComponent.cpp
     src/fpga/FpgaPortMapper.cpp
     src/fpga/GhdlBackend.cpp
@@ -357,6 +369,13 @@ target_compile_definitions(plc_session_integration_test PRIVATE
 )
 add_test(NAME plc_session_integration COMMAND plc_session_integration_test)
 set_tests_properties(plc_session_integration PROPERTIES TIMEOUT 60 SKIP_REGULAR_EXPRESSION "PULADO:")
+
+add_executable(industrial_protocols_test
+    test/core/protocols/IndustrialProtocolsTest.cpp
+    src/protocols/IndustrialProtocols.cpp
+)
+target_include_directories(industrial_protocols_test PRIVATE include src)
+add_test(NAME industrial_protocols COMMAND industrial_protocols_test)
 
 set_tests_properties(python_session PROPERTIES TIMEOUT 30 SKIP_REGULAR_EXPRESSION "PULADO:")
 if(Python3_Interpreter_FOUND)
@@ -1152,6 +1171,7 @@ add_executable(session_restart_stress_test
     src/session/SimulationSession.cpp
     src/resources/ResourceGovernor.cpp
     src/python/PythonRuntime.cpp
+    src/plc/PlcRuntime.cpp
     src/session/PauseExpression.cpp
     src/plugins/PluginModule.cpp
     src/plugins/PluginLoader.cpp

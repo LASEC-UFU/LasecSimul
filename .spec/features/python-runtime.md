@@ -1,7 +1,7 @@
 ---
 id: FEAT-006
 kind: feature
-status: deferred
+status: active
 dependsOn: [FEAT-001, ARCH-004, ARCH-005]
 supersedes: []
 ---

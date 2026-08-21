@@ -7,6 +7,7 @@ import {
   ProjectSubcircuitRef,
   ProjectDeviceRef,
   ProjectFpgaConfig,
+  ProjectPlcConfig,
   ProjectTopology,
   ProjectTopologyEndpoint,
   ProjectWire,
@@ -85,6 +86,24 @@ function validateFpgaConfig(value: unknown): ProjectFpgaConfig | undefined {
   };
 }
 
+function validatePlcConfig(value: unknown): ProjectPlcConfig | undefined {
+  if (!isObject(value)) return undefined;
+  const exportedIo = Array.isArray(value.exportedIo) ? value.exportedIo.filter(isObject).map(io => ({
+    ioId: asString(io.ioId) ?? "",
+    name: asString(io.name) ?? "",
+    direction: io.direction === "output" ? ("output" as const) : ("input" as const),
+    iecType: asString(io.iecType) ?? "",
+  })).filter(io => io.ioId && io.name && io.iecType) : undefined;
+  return {
+    iecProjectRef: asString(value.iecProjectRef),
+    entryConfiguration: asString(value.entryConfiguration),
+    artifactRef: asString(value.artifactRef),
+    expectedArtifactHash: asString(value.expectedArtifactHash),
+    exportedIoBindingVersion: asNumber(value.exportedIoBindingVersion),
+    exportedIo,
+  };
+}
+
 function validateComponent(component: unknown, index: number): ProjectComponent {
   if (!isObject(component)) throw new Error(`components[${index}] inválido`);
   const id = asString(component.id);
@@ -117,6 +136,7 @@ function validateComponent(component: unknown, index: number): ProjectComponent 
     subcircuitRef: validateSubcircuitRef(component.subcircuitRef),
     deviceRef: validateDeviceRef(component.deviceRef),
     fpga: validateFpgaConfig(component.fpga),
+    plc: validatePlcConfig(component.plc),
   };
 }
 

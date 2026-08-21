@@ -101,6 +101,7 @@ import {
 import { initSimulationLog, logSimulation, noteSimulationStatusChange, showSimulationLogChannel } from "./diagnostics/simulationLog";
 import { importTdpsSmpCommand } from "./tdps/tdpsCommand";
 import { ProjectCustomEditorProvider } from "./ui/panels/ProjectCustomEditorProvider";
+import { IecProjectEditorProvider } from "./plc/IecProjectEditorProvider";
 import { maybeOfferMachineNetworkSetup, registerMachineNetworkSetupCommand } from "./network/machineNetworkSetup";
 import {
   externalFolderPath,
@@ -2269,6 +2270,7 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
   context.subscriptions.push(
     { dispose: disposeDeviceReferenceWatchers },
     vscode.commands.registerCommand("lasecsimul.showSimulationLog", () => showSimulationLogChannel()),
+    IecProjectEditorProvider.register(context),
     registerMachineNetworkSetupCommand(context),
     // Diagnóstico via Command Palette (achado 2026-07-18, pedido explícito do usuário: "tem algum
     // comando que posso dar pelo prompt... pra saber se o problema é aqui ou na outra extensão") --
