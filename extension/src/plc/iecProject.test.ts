@@ -122,6 +122,7 @@ async function main(): Promise<void> {
   assert.deepEqual(roundTrip, snapshot, "round-trip preserves POU/node/io identities");
   assert.throws(() => parseIecProject({ ...snapshot, runtimeState: {} }), /transient PLC field/);
 
+  const artifactDirectory = path.resolve("project", "build");
   const module = parsePlcNativeModule({
     formatVersion: 1,
     workerProtocolVersion: 1,
@@ -135,8 +136,8 @@ async function main(): Promise<void> {
     nativeBinaryRef: "bin/controller.exe",
     programName: "MAIN",
     exportedIo: [{ ioId: "io-q", name: "q", direction: "output", iecType: "BOOL" }],
-  }, "C:/project/build");
-  assert.equal(module.nativeBinaryRef, path.normalize("C:/project/build/bin/controller.exe"));
+  }, artifactDirectory);
+  assert.equal(module.nativeBinaryRef, path.join(artifactDirectory, "bin", "controller.exe"));
   assert.throws(() => parsePlcNativeModule({ ...module, targetArch: "" }), /targetArch/);
 
   const isolatedA = { count: 0 };
