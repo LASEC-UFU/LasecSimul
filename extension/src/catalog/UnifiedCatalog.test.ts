@@ -2,6 +2,8 @@
 
 // â”€â”€ utilitÃ¡rios de teste (mesmo padrÃ£o de ipc/CoreClient.test.ts) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+import { loadUnifiedCatalog } from "./UnifiedCatalog";
+
 let passed = 0;
 let failed = 0;
 
@@ -112,6 +114,17 @@ test("entryToWebview: pinIds válido sobrevive intacto", () => {
   const item = { typeId: "other.ground", label: "Terra", pinCount: 1, pinIds: ["pin"] };
   const entry = entryToWebview(item);
   assert(JSON.stringify(entry.pinIds) === JSON.stringify(["pin"]), "pinIds válido preservado");
+});
+
+test("catalogo canonico registra PLC, Modbus e HART nas areas visiveis", () => {
+  const catalog = loadUnifiedCatalog(process.cwd(), "pt-BR").catalog;
+  const byTypeId = new Map(catalog.map((entry) => [entry.typeId, entry]));
+  assert(byTypeId.get("plc.instance")?.workspaceSection === "control", "PLC deve existir na aba Controle");
+  for (const typeId of ["protocol.modbus.server", "protocol.modbus.client", "protocol.hart.transmitter", "protocol.hart.communicator"]) {
+    const entry = byTypeId.get(typeId);
+    assert(entry?.workspaceSection === "process", `${typeId} deve existir na aba Processo`);
+    assert(entry?.folderPath?.[0] === "Process", `${typeId} deve ficar sob a pasta Process`);
+  }
 });
 
 console.log(`\nResultado: ${passed} passaram, ${failed} falharam\n`);

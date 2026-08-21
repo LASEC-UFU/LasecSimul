@@ -84,10 +84,15 @@ export function registerCoreIdsForComponent(
 }
 
 async function publishConfiguredPlcArtifact(
-  component: Pick<WebviewComponentModel, "plc"> | undefined,
+  component: Pick<WebviewComponentModel, "plc" | "properties"> | undefined,
   instanceId: string
 ): Promise<void> {
-  if (!state.coreClient || !component?.plc?.artifactRef) return;
+  if (!state.coreClient || !component) return;
+  const taskIntervalMs = Number(component.properties.plcTaskIntervalMs ?? 10);
+  if (Number.isFinite(taskIntervalMs) && taskIntervalMs > 0) {
+    await state.coreClient.setPlcTaskInterval(instanceId, Math.max(1, Math.round(taskIntervalMs * 1_000_000)));
+  }
+  if (!component.plc?.artifactRef) return;
   const module = await readPlcNativeModule(component.plc.artifactRef);
   if (component.plc.expectedArtifactHash && component.plc.expectedArtifactHash !== module.artifactHash) {
     throw new Error(`PLC artifact hash differs from expectedArtifactHash (${component.plc.expectedArtifactHash})`);

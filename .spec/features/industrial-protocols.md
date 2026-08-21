@@ -21,6 +21,17 @@ Protocolos são independentes do PLC IEC. Modbus, HART e futuros protocolos usam
 - transporte semântico e camada física evoluem separadamente;
 - binding PLC ↔ protocolo referencia símbolos/handles compilados, nunca faz busca global por nome no hot path.
 
+## Implementacao entregue na v0.0.26
+
+- `protocol.modbus.server` e `protocol.modbus.client` compartilham um barramento virtual por
+  `SimulationSession`, enderecado por canal, unit ID, area e endereco;
+- `protocol.hart.transmitter` e `protocol.hart.communicator` compartilham PV, polling address,
+  unique ID, tag e unidade no mesmo modelo de isolamento;
+- os quatro componentes possuem pinos eletricos `value`/`gnd`, scan e timeout em tempo virtual;
+- aparecem em `Process/Protocolos Industriais/Modbus|HART` no catalogo canonico;
+- esta entrega e semantica e virtual. Ela nao abre socket, serial, RS-485 nem modem FSK do host e
+  nao afirma interoperabilidade fisica; transportes reais continuam opt-in e fora deste marco.
+
 ## Ordem
 
 1. registry de variáveis/parameters;

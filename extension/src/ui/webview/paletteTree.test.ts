@@ -1,5 +1,6 @@
 import { createTestRunner, assert } from "../../ipc/testSupport/MockCoreServer";
 import { buildPaletteTree, resolvePaletteFolderPath, PaletteRenderableEntry } from "./paletteTree";
+import { defaultComponentCatalog } from "./catalog";
 
 const catalog: PaletteRenderableEntry[] = [
   {
@@ -104,6 +105,13 @@ const catalog: PaletteRenderableEntry[] = [
   await test("seções futuras de Controle/Processo permanecem vazias sem itens declarados", () => {
     assert(buildPaletteTree(catalog, "", "control").length === 0, "Controle deveria iniciar vazia");
     assert(buildPaletteTree(catalog, "", "process").length === 0, "Processo deveria iniciar vazia");
+  });
+
+  await test("catalogo real expoe Modbus e HART em Process/Protocolos Industriais", () => {
+    const processTree = JSON.stringify(buildPaletteTree(defaultComponentCatalog, "", "process"));
+    assert(processTree.includes("protocol.modbus.server") && processTree.includes("protocol.modbus.client"), "Processo deveria conter servidor e cliente Modbus");
+    assert(processTree.includes("protocol.hart.transmitter") && processTree.includes("protocol.hart.communicator"), "Processo deveria conter transmissor e comunicador HART");
+    assert(processTree.includes("Protocolos Industriais"), "protocolos deveriam ficar sob Process/Protocolos Industriais");
   });
 
   const { failed } = finish();

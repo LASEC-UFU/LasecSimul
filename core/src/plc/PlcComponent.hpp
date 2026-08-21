@@ -1,10 +1,13 @@
 #pragma once
 
 #include <memory>
+#include <cmath>
+#include <cctype>
 #include <filesystem>
 #include <stdexcept>
 #include <string>
 #include <unordered_set>
+#include <unordered_map>
 #include <vector>
 
 #include "lasecsimul/IComponentModel.hpp"
@@ -29,14 +32,10 @@ using PlcIoBindingRequest = simulation::PlcIoBindingRequest;
  * isoladamente) e `IComponentModel` (entra no Netlist como qualquer outro componente, com pinos
  * reais ligáveis por fio -- mesmo papel que `McuComponent` cumpre pra QEMU, ver seu doc-comment).
  *
- * Pinos nesta rodada são placeholders de IDENTIDADE/conectividade (um `Pin{ioId}` por
- * `PlcNativeModule::exportedIo[]`), não participam da equação MNA (`stamp()` é no-op) -- a troca de
- * valor de verdade com o resto da simulação acontece pelo Signal Engine (`PlcIoBinding::signal`,
- * resolvido pelo `PlanCompiler`), a mesma dualidade "pino elétrico real + amarração a um bloco do
- * Signal Engine por string" que `ElectricalSignalBridgeDefinition`/`SignalVoltageSensor` etc. já
- * usam. Fazer um pino de PLC dirigir tensão real na matriz MNA diretamente fica pra quando a rodada
- * gráfica decidir como um bloco PLC deve se conectar fisicamente a um circuito -- não implementado
- * agora (ver plano F9, seção 8, rodadas futuras).
+ * Cada `PlcNativeModule::exportedIo[]` vira um pino elétrico real. Entradas amostram a tensão do nó
+ * com alta impedância e alimentam o scan quando não existe binding explícito do Signal Engine;
+ * saídas dirigem a tensão do pino (BOOL = 0/5 V, tipos numéricos = valor em volts). Bindings do
+ * Signal Engine continuam suportados e têm precedência para a mesma variável.
  *
  * O worker (`PlcRuntime`) é uma OWN member, criado/recriado por `loadArtifact()`, destruído
  * sincronamente no destrutor (mesmo padrão de `McuController::stop()` em `~McuComponent()`) -- a
@@ -52,17 +51,25 @@ public:
     const char* typeId() const override { return "plc.instance"; }
     std::span<Pin> pins() override { return m_pins; }
 
-    void stamp(MnaMatrixView&) override {} // sem participação elétrica nesta rodada -- ver doc-comment acima.
+    void stamp(MnaMatrixView& matrix) override {
+        if (!m_module) return;
+        for (size_t i = 0; i < m_module->exportedIo.size(); ++i) {
+            const PlcExportedIo& io = m_module->exportedIo[i];
+            const Pin& pin = m_pins[i];
+            if (io.direction == "input") {
+                m_electricalInputs[io.ioId] = matrix.getNodeVoltage(pin);
+                matrix.addConductanceToGround(pin, kInputConductance);
+            } else {
+                const auto found = m_electricalOutputs.find(io.ioId);
+                const double target = found == m_electricalOutputs.end() ? 0.0 : found->second;
+                matrix.addConductanceToGround(pin, kOutputConductance);
+                matrix.addCurrentToGround(pin, target * kOutputConductance);
+            }
+        }
+    }
     void postStep(uint64_t) override {}    // não usado -- scan é disparado pelo Scheduler via SimulationSession, não por postStep.
 
-    /** `stamp()` nunca estampa nada -- sem isto, cada pino de PLC fica um nó totalmente flutuante
-     * (nenhuma condutância, nem pra terra nem pra qualquer outro nó), o que deixa o grupo elétrico
-     * daquele componente singular. O framework já resolve exatamente esse caso (LeakageGuard, ver
-     * `SimulationSession.cpp`, D9/auditoria-2026-07-09): uma condutância de fuga minúscula pra
-     * terra é somada DEPOIS de `stamp()` pra cada índice retornado aqui -- mesmo padrão que
-     * `SignalDigitalInput::stamp()` já faz manualmente com `addConductance(..., 1e-12)`, só que via
-     * o mecanismo genérico em vez de cada componente reimplementar. Sem isso, o solver via a matriz
-     * cair num grupo singular a cada settle sem nunca estabilizar. */
+    /** LeakageGuard mantém entradas e saídas desconectadas numericamente referenciadas. */
     std::span<const uint32_t> leakagePinIndices() const override { return m_leakageIndices; }
 
     size_t getState(uint8_t*, size_t) const override { return 0; }
@@ -83,6 +90,8 @@ public:
         m_module = std::move(module);
         m_pins.clear();
         m_leakageIndices.clear();
+        m_electricalInputs.clear();
+        m_electricalOutputs.clear();
         if (m_module) {
             m_pins.reserve(m_module->exportedIo.size());
             m_leakageIndices.reserve(m_module->exportedIo.size());
@@ -104,7 +113,45 @@ public:
     PlcRuntime* runtime() { return m_runtime.get(); }
     const PlcRuntime* runtime() const { return m_runtime.get(); }
 
+    void appendElectricalInputs(PlcScanRequest& request, const std::unordered_set<std::string>& signalBoundNames) const {
+        if (!m_module) return;
+        for (const PlcExportedIo& io : m_module->exportedIo) {
+            if (io.direction != "input" || signalBoundNames.contains(io.name) || signalBoundNames.contains(io.ioId)) continue;
+            const auto found = m_electricalInputs.find(io.ioId);
+            const double value = found == m_electricalInputs.end() ? 0.0 : found->second;
+            const std::string type = upper(io.iecType);
+            if (type == "BOOL") request.inputs[upper(io.name)] = value > kDigitalLevelThreshold ? "TRUE" : "FALSE";
+            else if (type == "REAL" || type == "LREAL") request.inputs[upper(io.name)] = std::to_string(value);
+            else request.inputs[upper(io.name)] = std::to_string(static_cast<int64_t>(std::llround(value)));
+        }
+    }
+
+    bool commitElectricalOutputs(const std::unordered_map<std::string, std::string>& outputs) {
+        if (!m_module) return false;
+        bool changed = false;
+        for (const PlcExportedIo& io : m_module->exportedIo) {
+            if (io.direction != "output") continue;
+            const auto found = outputs.find(upper(io.name));
+            if (found == outputs.end()) continue;
+            const std::string type = upper(io.iecType);
+            double value = 0.0;
+            try {
+                value = type == "BOOL" ? (upper(found->second) == "TRUE" ? 5.0 : 0.0) : std::stod(found->second);
+            } catch (const std::exception&) {
+                continue;
+            }
+            const auto previous = m_electricalOutputs.find(io.ioId);
+            changed = changed || previous == m_electricalOutputs.end() || previous->second != value;
+            m_electricalOutputs[io.ioId] = value;
+        }
+        return changed;
+    }
+
 private:
+    static std::string upper(std::string value) {
+        for (char& c : value) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+        return value;
+    }
     static void validateArtifact(const PlcNativeModule& module) {
         if (module.formatVersion != 1 || module.workerProtocolVersion != 1) {
             throw std::invalid_argument("PlcNativeModule format/protocol version incompativel");
@@ -145,10 +192,14 @@ private:
     uint32_t m_componentIndex = 0;
     std::vector<Pin> m_pins;
     std::vector<uint32_t> m_leakageIndices;
+    std::unordered_map<std::string, double> m_electricalInputs;
+    std::unordered_map<std::string, double> m_electricalOutputs;
     std::optional<PlcNativeModule> m_module;
     std::vector<PlcIoBindingRequest> m_ioBindingRequests;
     uint64_t m_taskIntervalNs = 10'000'000; // 10ms -- default fixo desta rodada, ver doc-comment em SimulationPlan.hpp/PlcInstancePlan.
     PlcRuntimeOptions m_runtimeOptions;
+    static constexpr double kInputConductance = 1e-9;
+    static constexpr double kOutputConductance = 1e6;
     std::unique_ptr<PlcRuntime> m_runtime;
 };
 

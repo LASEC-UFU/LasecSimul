@@ -1,0 +1,203 @@
+{
+  "schemaVersion": 3,
+  "typeId": "subcircuits.tdps.split_range",
+  "name": "TDPS - Controle Split-Range",
+  "language": "pt-BR",
+  "folderPath": [
+    "Process",
+    "TDPS Convertidos"
+  ],
+  "workspaceSection": "process",
+  "help": {
+    "description": "Cenario didatico TDPS convertido: duas regioes de atuacao sao representadas pela nao linearidade de valvula, histerese, stiction, atuador e limites de velocidade do bloco de processo."
+  },
+  "components": [
+    {
+      "id": "command-tunnel",
+      "typeId": "connectors.tunnel",
+      "properties": {
+        "name": "command",
+        "pinId": "command",
+        "defaultValue": 0
+      },
+      "visual": {
+        "x": 40,
+        "y": 70,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "balance",
+      "typeId": "control.calc_expression",
+      "label": "Modelo estatico",
+      "properties": {
+        "expression": "x0",
+        "inputs": [
+          "x0"
+        ]
+      },
+      "visual": {
+        "x": 210,
+        "y": 110,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "plant",
+      "typeId": "control.process",
+      "label": "TDPS - Controle Split-Range",
+      "properties": {
+        "gain": 1,
+        "tau1": 1.8,
+        "tau2": 0.7,
+        "deadTime": 0.2,
+        "actuatorTau": 0.35,
+        "hysteresis": 1.5,
+        "stiction": 0.8,
+        "rateLimiter": 40,
+        "lead": 0,
+        "lag": 0,
+        "samplePeriodNs": 10000000
+      },
+      "visual": {
+        "x": 420,
+        "y": 110,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "response-tunnel",
+      "typeId": "connectors.tunnel",
+      "properties": {
+        "name": "response",
+        "pinId": "response"
+      },
+      "visual": {
+        "x": 640,
+        "y": 110,
+        "rotation": 180
+      }
+    }
+  ],
+  "topology": {
+    "revision": 0,
+    "nodes": [],
+    "conductors": [
+      {
+        "id": "wire-1",
+        "from": {
+          "kind": "port",
+          "componentId": "command-tunnel",
+          "pinId": "pin"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "balance",
+          "pinId": "x0"
+        },
+        "points": []
+      },
+      {
+        "id": "wire-2",
+        "from": {
+          "kind": "port",
+          "componentId": "balance",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "plant",
+          "pinId": "in"
+        },
+        "points": []
+      },
+      {
+        "id": "wire-3",
+        "from": {
+          "kind": "port",
+          "componentId": "plant",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "response-tunnel",
+          "pinId": "pin"
+        },
+        "points": []
+      }
+    ]
+  },
+  "interface": [
+    {
+      "pinId": "command",
+      "label": "Comando",
+      "internalTunnel": "command",
+      "domain": "signal",
+      "direction": "in",
+      "valueType": "Real",
+      "width": 1,
+      "unit": "%"
+    },
+    {
+      "pinId": "response",
+      "label": "Resposta",
+      "internalTunnel": "response",
+      "domain": "signal",
+      "direction": "out",
+      "valueType": "Real",
+      "width": 1,
+      "unit": "%"
+    }
+  ],
+  "symbolMode": "generic",
+  "symbol": {
+    "width": 150,
+    "height": 90,
+    "border": true,
+    "shapes": [
+      {
+        "kind": "text",
+        "x": 75,
+        "y": 34,
+        "value": "SPLIT",
+        "fontSize": 11,
+        "textAnchor": "middle",
+        "color": "#111827"
+      },
+      {
+        "kind": "text",
+        "x": 75,
+        "y": 52,
+        "value": "RANGE",
+        "fontSize": 8,
+        "textAnchor": "middle",
+        "color": "#374151"
+      }
+    ],
+    "pins": [
+      {
+        "id": "command",
+        "kind": "ANALOG_IN",
+        "x": 0,
+        "y": 34,
+        "angle": 180,
+        "length": 8,
+        "label": "Comando"
+      },
+      {
+        "id": "response",
+        "kind": "ANALOG_OUT",
+        "x": 150,
+        "y": 50,
+        "angle": 0,
+        "length": 8,
+        "label": "Resposta"
+      }
+    ]
+  },
+  "exposedComponents": [],
+  "exportedPropertyComponentIds": [
+    "balance",
+    "plant"
+  ]
+}

@@ -382,6 +382,44 @@
             "External"
           ]
         },
+        "plc.instance": {
+          "label": "IEC 61131-3 PLC",
+          "folderPath": [
+            "IEC 61131-3 PLC"
+          ]
+        },
+        "protocol.modbus.server": {
+          "label": "Modbus Server",
+          "folderPath": [
+            "Process",
+            "Industrial Protocols",
+            "Modbus"
+          ]
+        },
+        "protocol.modbus.client": {
+          "label": "Modbus Client",
+          "folderPath": [
+            "Process",
+            "Industrial Protocols",
+            "Modbus"
+          ]
+        },
+        "protocol.hart.transmitter": {
+          "label": "HART Transmitter",
+          "folderPath": [
+            "Process",
+            "Industrial Protocols",
+            "HART"
+          ]
+        },
+        "protocol.hart.communicator": {
+          "label": "HART Communicator",
+          "folderPath": [
+            "Process",
+            "Industrial Protocols",
+            "HART"
+          ]
+        },
         "instruments.voltmeter": {
           "label": "Voltmeter",
           "folderPath": [
@@ -6635,6 +6673,180 @@
       "defaultProperties": {},
       "help": {
         "description": "Bloco programável criado sem terminais. Carregue e analise um código VHDL nas propriedades para gerar dinamicamente as entradas e saídas."
+      }
+    },
+    {
+      "typeId": "plc.instance",
+      "label": "PLC IEC 61131-3",
+      "pinCount": 0,
+      "icon": "package",
+      "folderPath": [
+        "PLC IEC 61131-3"
+      ],
+      "workspaceSection": "control",
+      "defaultProperties": {
+        "plcIecProjectRef": "",
+        "plcArtifactRef": "",
+        "plcEntryConfiguration": "",
+        "plcTaskIntervalMs": 10
+      },
+      "propertySchema": [
+        {
+          "id": "plcIecProjectRef",
+          "label": "Projeto IEC 61131-3",
+          "group": "PLC",
+          "unit": "",
+          "editor": "filePath",
+          "default": ""
+        },
+        {
+          "id": "plcArtifactRef",
+          "label": "Artefato compilado",
+          "group": "PLC",
+          "unit": "",
+          "editor": "filePath",
+          "default": ""
+        },
+        {
+          "id": "plcEntryConfiguration",
+          "label": "Configuracao de entrada",
+          "group": "PLC",
+          "unit": "",
+          "editor": "text",
+          "default": ""
+        },
+        {
+          "id": "plcTaskIntervalMs",
+          "label": "Periodo da tarefa",
+          "group": "PLC",
+          "unit": "ms",
+          "editor": "number",
+          "default": 10,
+          "min": 0.1,
+          "max": 60000
+        }
+      ],
+      "help": {
+        "description": "PLC virtual IEC 61131-3 com projeto integrado, artefato compilado, scan deterministico e pinos derivados de exportedIo."
+      }
+    },
+    {
+      "typeId": "protocol.modbus.server",
+      "label": "Servidor Modbus",
+      "pinCount": 2,
+      "pinIds": [
+        "value",
+        "gnd"
+      ],
+      "icon": "package",
+      "folderPath": [
+        "Process",
+        "Protocolos Industriais",
+        "Modbus"
+      ],
+      "workspaceSection": "process",
+      "defaultProperties": {
+        "channel": "modbus-1",
+        "enabled": true,
+        "scanPeriodMs": 100,
+        "timeoutMs": 1000,
+        "unitId": 1,
+        "area": "holdingRegister",
+        "address": 0,
+        "scale": 0.001,
+        "offset": 0
+      },
+      "help": {
+        "description": "Publica o valor eletrico no barramento Modbus virtual e isolado da sessao."
+      }
+    },
+    {
+      "typeId": "protocol.modbus.client",
+      "label": "Cliente Modbus",
+      "pinCount": 2,
+      "pinIds": [
+        "value",
+        "gnd"
+      ],
+      "icon": "package",
+      "folderPath": [
+        "Process",
+        "Protocolos Industriais",
+        "Modbus"
+      ],
+      "workspaceSection": "process",
+      "defaultProperties": {
+        "channel": "modbus-1",
+        "enabled": true,
+        "scanPeriodMs": 100,
+        "timeoutMs": 1000,
+        "unitId": 1,
+        "area": "holdingRegister",
+        "address": 0,
+        "scale": 0.001,
+        "offset": 0
+      },
+      "help": {
+        "description": "Le um ponto do barramento Modbus virtual e o entrega no pino eletrico value."
+      }
+    },
+    {
+      "typeId": "protocol.hart.transmitter",
+      "label": "Transmissor HART",
+      "pinCount": 2,
+      "pinIds": [
+        "value",
+        "gnd"
+      ],
+      "icon": "package",
+      "folderPath": [
+        "Process",
+        "Protocolos Industriais",
+        "HART"
+      ],
+      "workspaceSection": "process",
+      "defaultProperties": {
+        "channel": "hart-1",
+        "enabled": true,
+        "scanPeriodMs": 100,
+        "timeoutMs": 1000,
+        "pollingAddress": 0,
+        "uniqueId": "0011223344",
+        "tag": "TIC101",
+        "unit": "V"
+      },
+      "help": {
+        "description": "Publica PV, tag e unidade no barramento HART semantico da sessao."
+      }
+    },
+    {
+      "typeId": "protocol.hart.communicator",
+      "label": "Comunicador HART",
+      "pinCount": 2,
+      "pinIds": [
+        "value",
+        "gnd"
+      ],
+      "icon": "package",
+      "folderPath": [
+        "Process",
+        "Protocolos Industriais",
+        "HART"
+      ],
+      "workspaceSection": "process",
+      "defaultProperties": {
+        "channel": "hart-1",
+        "enabled": true,
+        "scanPeriodMs": 100,
+        "timeoutMs": 1000,
+        "pollingAddress": 0,
+        "uniqueId": "0011223344",
+        "tag": "TIC101",
+        "unit": "V",
+        "hartCommand": "1"
+      },
+      "help": {
+        "description": "Consulta o transmissor HART virtual selecionado e entrega a PV no pino value."
       }
     },
     {

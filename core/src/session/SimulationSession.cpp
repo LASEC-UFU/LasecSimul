@@ -1595,6 +1595,14 @@ void SimulationSession::runPlcScanUnlocked(uint32_t componentIndex, uint64_t sca
     // vez de valores passados direto no teste).
     plc::PlcScanRequest request;
     request.simulationTimeNs = static_cast<int64_t>(scanTimeNs);
+    std::unordered_set<std::string> signalBoundInputNames;
+    for (const simulation::PlcIoBinding& binding : planEntry->ioBindings) {
+        if (binding.direction == "input" && !binding.signalBlockId.empty()) {
+            signalBoundInputNames.insert(binding.name);
+            signalBoundInputNames.insert(binding.ioId);
+        }
+    }
+    plcComponent->appendElectricalInputs(request, signalBoundInputNames);
     for (const simulation::PlcIoBinding& binding : planEntry->ioBindings) {
         if (binding.direction != "input") continue;
         request.inputs[toUpperAscii(binding.name)] = plcSignalValueToText(binding, m_runtimeState.signals);
@@ -1625,6 +1633,7 @@ void SimulationSession::runPlcScanUnlocked(uint32_t componentIndex, uint64_t sca
         }
         anyOutputChanged = true;
     }
+    anyOutputChanged = plcComponent->commitElectricalOutputs(result.outputs) || anyOutputChanged;
     if (anyOutputChanged) m_scheduler.dirtySet().insert(componentIndex);
 
     // Reagenda o PROXIMO scan desta MESMA instancia -- nunca dois eventos pendentes ao mesmo tempo

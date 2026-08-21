@@ -3,7 +3,7 @@
   "typeId": "subcircuits.tdps.smith_predictor",
   "name": "TDPS - Preditor de Smith",
   "language": "pt-BR",
-  "folderPath": ["Controle de Processos", "TDPS importado"],
+  "folderPath": ["Process", "TDPS Convertidos"],
   "workspaceSection": "process",
   "help": { "description": "Estrategia de Preditor de Smith convertida para componentes e topologia canonicos; nenhuma referencia Mnn permanece no runtime." },
   "components": [

@@ -110,6 +110,51 @@ async function domClick(locator) {
     await activity.waitFor({ state: "visible", timeout: 30000 });
     await activity.click(); // ativa a extensão; o modo E2E abre a fixture pelo pipeline real
 
+    let paletteFrame;
+    for (let attempt = 0; attempt < 120 && !paletteFrame; attempt++) {
+      for (const frame of workbench.frames()) {
+        if (frame === workbench.mainFrame()) continue;
+        try {
+          if (await frame.locator(".palette-tabs").count()) { paletteFrame = frame; break; }
+        } catch { /* a view pode substituir o iframe durante a ativacao */ }
+      }
+      if (!paletteFrame) await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    if (!paletteFrame) throw new Error("Paleta real do LasecSimul nao abriu");
+
+    const controlTab = paletteFrame.getByRole("tab", { name: /^(Controle|Control)$/ }).first();
+    await controlTab.waitFor({ state: "visible", timeout: 30000 });
+    await domClick(controlTab);
+    await paletteFrame.locator('.palette-item[title^="plc.instance"]').waitFor({ state: "attached", timeout: 30000 });
+
+    const processTab = paletteFrame.getByRole("tab", { name: /^(Processo|Process)$/ }).first();
+    await processTab.waitFor({ state: "visible", timeout: 30000 });
+    await domClick(processTab);
+
+    const requiredProcessTypeIds = [
+      "protocol.modbus.server",
+      "protocol.modbus.client",
+      "protocol.hart.transmitter",
+      "protocol.hart.communicator",
+      "subcircuits.process.fopdt",
+      "subcircuits.tdps.basic_flow_loop",
+      "subcircuits.tdps.smith_predictor",
+      "subcircuits.tdps.split_range",
+      "subcircuits.tdps.surge_tank_level",
+      "subcircuits.tdps.heat_exchanger",
+      "subcircuits.tdps.furnace_combustion",
+      "subcircuits.tdps.boiler_drum",
+      "subcircuits.tdps.reactor_temperature",
+      "subcircuits.tdps.ph_neutralization",
+    ];
+    for (const typeId of requiredProcessTypeIds) {
+      await paletteFrame.locator(`.palette-item[title^="${typeId}"]`).waitFor({ state: "attached", timeout: 30000 });
+    }
+    await paletteFrame.locator(".palette").screenshot({
+      path: path.join(artifacts, "process-palette.actual.png"),
+      animations: "disabled",
+    });
+
     let instrumentFrame;
     for (let attempt = 0; attempt < 120 && !instrumentFrame; attempt++) {
       for (const frame of workbench.frames()) {
@@ -138,8 +183,18 @@ async function domClick(locator) {
     if (restoredCondition !== "1 == 1") {
       throw new Error(`condição persistida não foi restaurada: ${JSON.stringify(restoredCondition)}`);
     }
+    // A condicao persistida e verdadeira no primeiro timestamp. Limpe-a temporariamente para a
+    // aquisicao materializar todos os canais antes de testar a pausa; caso contrario o Core pode
+    // pausar antes da primeira rodada de telemetria e o snapshot fica dependente do timing de IPC.
+    const conditionInput = analyzer.locator(".instrument-trigger-condition");
+    await conditionInput.fill("");
+    await conditionInput.dispatchEvent("change");
+    await new Promise((resolve) => setTimeout(resolve, 500));
     await domClick(instrumentFrame.locator(".appbar__button--start"));
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await analyzer.getByText("DATA[7]", { exact: true }).first().waitFor({ state: "visible", timeout: 15000 });
+    await conditionInput.fill("1 == 1");
+    await conditionInput.dispatchEvent("change");
     fs.writeFileSync(path.join(artifacts, "webview-state.txt"), await instrumentFrame.locator("body").innerText());
     await analyzer.locator(".instrument-pause-event").waitFor({ state: "visible", timeout: 15000 });
     const analyzerActual = path.join(artifacts, "analyzer.actual.png");

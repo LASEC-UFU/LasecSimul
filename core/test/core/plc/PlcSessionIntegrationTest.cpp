@@ -8,11 +8,14 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <cmath>
 #include <string>
+#include <unordered_map>
 
 #include "session/SimulationSession.hpp"
 #include "plugins/GlobalPluginCache.hpp"
 #include "lasecsimul/Sha256.hpp"
+#include "plc/PlcComponent.hpp"
 
 namespace fs = std::filesystem;
 using namespace lasecsimul;
@@ -122,6 +125,36 @@ SignalGraphDefinition makeGraph(bool sourceValue) {
 
 std::vector<PlcIoBindingRequest> standardBindings() {
     return {{"di0", "src_di0"}, {"do0", "plc_do0_target"}};
+}
+
+class PlcElectricalTestMatrix final : public MnaMatrixView {
+public:
+    void addConductance(const Pin&, const Pin&, double) override {}
+    void addCurrent(const Pin&, const Pin&, double) override {}
+    void addVoltageSource(const Pin&, const Pin&, double) override {}
+    void addConductanceToGround(const Pin& pin, double siemens) override { conductance[pin.id] += siemens; }
+    void addCurrentToGround(const Pin& pin, double amperes) override { current[pin.id] += amperes; }
+    double getNodeVoltage(const Pin& pin) const override {
+        const auto found = voltage.find(pin.id); return found == voltage.end() ? 0.0 : found->second;
+    }
+    double getBranchCurrent() const override { return 0.0; }
+    std::unordered_map<std::string, double> voltage, conductance, current;
+};
+
+void plcPinsBridgeDirectlyToTheElectricalDomain() {
+    plc::PlcComponent component;
+    component.loadArtifact(makeHelloModule());
+    PlcElectricalTestMatrix matrix;
+    matrix.voltage["di0"] = 5.0;
+    component.stamp(matrix);
+    plc::PlcScanRequest request;
+    component.appendElectricalInputs(request, {});
+    CHECK(request.inputs["DI0"] == "TRUE", "entrada BOOL do PLC deve amostrar nivel eletrico acima do limiar");
+    CHECK(component.commitElectricalOutputs({{"DO0", "TRUE"}}), "primeiro commit eletrico de saida deve marcar mudanca");
+    matrix.current.clear(); matrix.conductance.clear();
+    component.stamp(matrix);
+    CHECK(std::abs(matrix.current["do0"] / matrix.conductance["do0"] - 5.0) < 1e-12,
+          "saida BOOL do PLC deve dirigir 5 V no pino exportado");
 }
 
 void plcBlockWithoutArtifactHasZeroPins() {
@@ -359,6 +392,7 @@ void resetWhileSchedulerRunsUsesTheCommandQueue() {
 int main() {
     plcBlockWithoutArtifactHasZeroPins();
     loadingArtifactCreatesExactExportedIoPins();
+    plcPinsBridgeDirectlyToTheElectricalDomain();
     inputLatchAndOutputCommitFlowThroughSignalEngine();
     pauseNeverAdvancesPlcTimeOrRunsNewScans();
     faultedInstanceDoesNotAffectAnother();
