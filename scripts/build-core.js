@@ -35,14 +35,25 @@ const buildTarget =
 
 function resolveCmakeCommand() {
   if (process.platform !== "win32") return "cmake";
-  const candidates = [
+  const fixedCandidates = [
     "C:\\Program Files\\CMake\\bin\\cmake.exe",
     "C:\\Program Files (x86)\\CMake\\bin\\cmake.exe",
     "C:\\Program Files\\Microsoft Visual Studio\\18\\Enterprise\\Common7\\IDE\\CommonExtensions\\Microsoft\\CMake\\CMake\\bin\\cmake.exe",
     "C:\\Program Files\\Microsoft Visual Studio\\2022\\BuildTools\\Common7\\IDE\\CommonExtensions\\Microsoft\\CMake\\CMake\\bin\\cmake.exe",
     "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\Common7\\IDE\\CommonExtensions\\Microsoft\\CMake\\CMake\\bin\\cmake.exe",
   ];
-  return candidates.find((candidate) => fs.existsSync(candidate)) ?? "cmake";
+  const discovered = spawnSync("where.exe", ["cmake.exe"], { encoding: "utf8", shell: false });
+  const pathCandidates = discovered.status === 0
+    ? discovered.stdout.split(/\r?\n/).map((candidate) => candidate.trim()).filter(Boolean)
+    : [];
+  const candidates = [...new Set([...fixedCandidates, ...pathCandidates])].filter((candidate) => fs.existsSync(candidate));
+  const versionOf = (candidate) => {
+    const result = spawnSync(candidate, ["--version"], { encoding: "utf8", shell: false });
+    const match = result.status === 0 ? /cmake version\s+(\d+)\.(\d+)\.(\d+)/i.exec(result.stdout) : undefined;
+    return match ? Number(match[1]) * 1_000_000 + Number(match[2]) * 1_000 + Number(match[3]) : -1;
+  };
+  candidates.sort((left, right) => versionOf(right) - versionOf(left));
+  return candidates[0] ?? "cmake";
 }
 
 const cmakeCommand = resolveCmakeCommand();

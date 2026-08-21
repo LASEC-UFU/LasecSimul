@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <mutex>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -51,6 +52,51 @@ struct ModbusMapping {
 struct RealTransportOptions {
     bool explicitOptIn = false;
     uint16_t port = 0;
+};
+
+/** Chave deterministica do barramento Modbus virtual da sessao. O transporte virtual e o padrao
+ * seguro do simulador: nao abre socket nem porta serial e permite ligar componentes pelo mesmo
+ * canal/endereco sem depender do relogio de parede. */
+struct VirtualModbusPoint {
+    std::string channel = "modbus-1";
+    uint8_t unitId = 1;
+    ModbusArea area = ModbusArea::HoldingRegister;
+    uint16_t address = 0;
+    bool operator==(const VirtualModbusPoint&) const = default;
+};
+
+struct VirtualHartPoint {
+    std::string channel = "hart-1";
+    uint8_t pollingAddress = 0;
+    bool operator==(const VirtualHartPoint&) const = default;
+};
+
+struct VirtualHartValue {
+    std::string uniqueId;
+    std::string tag;
+    std::string unit;
+    double primaryValue = 0.0;
+};
+
+/** Barramento industrial compartilhado apenas pelas instancias de uma CoreApplication. Valores
+ * carregam timestamp de tempo virtual; leituras nunca aceitam dados do "futuro" (por exemplo,
+ * depois de resetar a simulacao) nem dados alem do timeout pedido pelo receptor. */
+class VirtualIndustrialBus {
+public:
+    void publishModbus(const VirtualModbusPoint& point, double value, uint64_t virtualNowNs);
+    std::optional<double> readModbus(const VirtualModbusPoint& point, uint64_t virtualNowNs,
+                                     uint64_t maximumAgeNs) const;
+    void publishHart(const VirtualHartPoint& point, VirtualHartValue value, uint64_t virtualNowNs);
+    std::optional<VirtualHartValue> readHart(const VirtualHartPoint& point, uint64_t virtualNowNs,
+                                             uint64_t maximumAgeNs) const;
+    void clear();
+
+private:
+    struct ModbusEntry { VirtualModbusPoint point; double value = 0.0; uint64_t timestampNs = 0; };
+    struct HartEntry { VirtualHartPoint point; VirtualHartValue value; uint64_t timestampNs = 0; };
+    mutable std::mutex m_mutex;
+    std::vector<ModbusEntry> m_modbus;
+    std::vector<HartEntry> m_hart;
 };
 
 class ProtocolTimeout final : public std::runtime_error {

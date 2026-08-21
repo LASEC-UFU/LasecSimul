@@ -336,7 +336,7 @@ export function convertTdpsToSubcircuit(model: TdpsModel, typeId = `subcircuits.
 
   const document: SubcircuitDocument = {
     schemaVersion: SUBCIRCUIT_SCHEMA_VERSION,
-    typeId, name: model.title, language: "pt-BR", folderPath: ["Controle de Processos", "TDPS importado"],
+    typeId, name: model.title, language: "pt-BR", folderPath: ["Process", "TDPS Convertidos"],
     workspaceSection: "process", help: { description: `Convertido de ${model.sourceName}; referencias TDPS foram resolvidas para topologia explicita.` },
     components, topology, interface: interfaces,
     symbolMode: "generic",

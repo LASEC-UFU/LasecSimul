@@ -167,6 +167,11 @@ Prioridade inicial:
 
 Entregar como projeto didático ou subcircuito conforme reusabilidade; não transformar todo cenário em novo tipo de componente.
 
+Na v0.0.26, a biblioteca integrada entrega os nove cenários priorizados acima, além do FOPDT base,
+como dez `.lssubcircuit` schemaVersion 3 registrados em `Process/Modelos` e
+`Process/TDPS Convertidos`. O gerador `scripts/generate-tdps-process-library.mjs` e os testes de
+catálogo/Core garantem que a lista e a pasta canônica não divirjam.
+
 ## Compatibilidade matemática
 
 Compatibilidade significa reproduzir o comportamento observável dentro de tolerância documentada, não replicar a implementação Delphi.

@@ -4,7 +4,7 @@
   "description": "Simulador de circuitos eletrônicos com MCUs emulados via QEMU, inspirado no SimulIDE.",
   "publisher": "josuemoraisgh",
   "license": "GPL-3.0-or-later",
-  "version": "0.0.25",
+  "version": "0.0.26",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -92,6 +92,11 @@
       {
         "command": "lasecsimul.importTdps",
         "title": "LasecSimul: Import TDPS Project (.smp)..."
+      },
+      {
+        "command": "lasecsimul.plc.newProject",
+        "title": "LasecSimul: New IEC 61131-3 PLC Project...",
+        "icon": "$(new-file)"
       },
       {
         "command": "lasecsimul.rotateSelectionCw",

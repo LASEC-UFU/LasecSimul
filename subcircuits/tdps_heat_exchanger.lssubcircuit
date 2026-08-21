@@ -1,0 +1,251 @@
+{
+  "schemaVersion": 3,
+  "typeId": "subcircuits.tdps.heat_exchanger",
+  "name": "TDPS - Trocador de Calor",
+  "language": "pt-BR",
+  "folderPath": [
+    "Process",
+    "TDPS Convertidos"
+  ],
+  "workspaceSection": "process",
+  "help": {
+    "description": "Cenario didatico TDPS convertido com mistura de vapor/temperatura, duas constantes de tempo, atuador e tempo morto."
+  },
+  "components": [
+    {
+      "id": "steam-tunnel",
+      "typeId": "connectors.tunnel",
+      "properties": {
+        "name": "steam",
+        "pinId": "steam",
+        "defaultValue": 0
+      },
+      "visual": {
+        "x": 40,
+        "y": 70,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "inletTemperature-tunnel",
+      "typeId": "connectors.tunnel",
+      "properties": {
+        "name": "inletTemperature",
+        "pinId": "inletTemperature",
+        "defaultValue": 0
+      },
+      "visual": {
+        "x": 40,
+        "y": 150,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "balance",
+      "typeId": "control.calc_expression",
+      "label": "Modelo estatico",
+      "properties": {
+        "expression": "0.65*x0+0.35*x1",
+        "inputs": [
+          "x0",
+          "x1"
+        ]
+      },
+      "visual": {
+        "x": 210,
+        "y": 110,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "plant",
+      "typeId": "control.process",
+      "label": "TDPS - Trocador de Calor",
+      "properties": {
+        "gain": 1.1,
+        "tau1": 12,
+        "tau2": 3.5,
+        "deadTime": 1.2,
+        "actuatorTau": 0.8,
+        "hysteresis": 0,
+        "stiction": 0.3,
+        "rateLimiter": 15,
+        "lead": 0,
+        "lag": 0,
+        "samplePeriodNs": 10000000
+      },
+      "visual": {
+        "x": 420,
+        "y": 110,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "outletTemperature-tunnel",
+      "typeId": "connectors.tunnel",
+      "properties": {
+        "name": "outletTemperature",
+        "pinId": "outletTemperature"
+      },
+      "visual": {
+        "x": 640,
+        "y": 110,
+        "rotation": 180
+      }
+    }
+  ],
+  "topology": {
+    "revision": 0,
+    "nodes": [],
+    "conductors": [
+      {
+        "id": "wire-1",
+        "from": {
+          "kind": "port",
+          "componentId": "steam-tunnel",
+          "pinId": "pin"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "balance",
+          "pinId": "x0"
+        },
+        "points": []
+      },
+      {
+        "id": "wire-2",
+        "from": {
+          "kind": "port",
+          "componentId": "inletTemperature-tunnel",
+          "pinId": "pin"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "balance",
+          "pinId": "x1"
+        },
+        "points": []
+      },
+      {
+        "id": "wire-3",
+        "from": {
+          "kind": "port",
+          "componentId": "balance",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "plant",
+          "pinId": "in"
+        },
+        "points": []
+      },
+      {
+        "id": "wire-4",
+        "from": {
+          "kind": "port",
+          "componentId": "plant",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "outletTemperature-tunnel",
+          "pinId": "pin"
+        },
+        "points": []
+      }
+    ]
+  },
+  "interface": [
+    {
+      "pinId": "steam",
+      "label": "Vapor",
+      "internalTunnel": "steam",
+      "domain": "signal",
+      "direction": "in",
+      "valueType": "Real",
+      "width": 1,
+      "unit": "%"
+    },
+    {
+      "pinId": "inletTemperature",
+      "label": "Temperatura entrada",
+      "internalTunnel": "inletTemperature",
+      "domain": "signal",
+      "direction": "in",
+      "valueType": "Real",
+      "width": 1,
+      "unit": "degC"
+    },
+    {
+      "pinId": "outletTemperature",
+      "label": "Temperatura saida",
+      "internalTunnel": "outletTemperature",
+      "domain": "signal",
+      "direction": "out",
+      "valueType": "Real",
+      "width": 1,
+      "unit": "degC"
+    }
+  ],
+  "symbolMode": "generic",
+  "symbol": {
+    "width": 150,
+    "height": 118,
+    "border": true,
+    "shapes": [
+      {
+        "kind": "text",
+        "x": 75,
+        "y": 34,
+        "value": "HEAT",
+        "fontSize": 11,
+        "textAnchor": "middle",
+        "color": "#111827"
+      },
+      {
+        "kind": "text",
+        "x": 75,
+        "y": 52,
+        "value": "EXCHANGER",
+        "fontSize": 8,
+        "textAnchor": "middle",
+        "color": "#374151"
+      }
+    ],
+    "pins": [
+      {
+        "id": "steam",
+        "kind": "ANALOG_IN",
+        "x": 0,
+        "y": 34,
+        "angle": 180,
+        "length": 8,
+        "label": "Vapor"
+      },
+      {
+        "id": "inletTemperature",
+        "kind": "ANALOG_IN",
+        "x": 0,
+        "y": 68,
+        "angle": 180,
+        "length": 8,
+        "label": "Temperatura entrada"
+      },
+      {
+        "id": "outletTemperature",
+        "kind": "ANALOG_OUT",
+        "x": 150,
+        "y": 50,
+        "angle": 0,
+        "length": 8,
+        "label": "Temperatura saida"
+      }
+    ]
+  },
+  "exposedComponents": [],
+  "exportedPropertyComponentIds": [
+    "balance",
+    "plant"
+  ]
+}

@@ -3,7 +3,7 @@
   "typeId": "subcircuits.process.fopdt",
   "name": "Processo FOPDT",
   "language": "pt-BR",
-  "folderPath": ["Controle de Processos", "Modelos"],
+  "folderPath": ["Process", "Modelos"],
   "workspaceSection": "process",
   "help": { "description": "Modelo reutilizavel K/(tau*s+1) com tempo morto. Executado como composicao Gain/FirstOrder/DeadTime no Signal Engine." },
   "components": [

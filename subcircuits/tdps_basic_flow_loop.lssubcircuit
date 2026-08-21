@@ -3,7 +3,7 @@
   "typeId": "subcircuits.tdps.basic_flow_loop",
   "name": "TDPS - Malha Basica de Vazao",
   "language": "pt-BR",
-  "folderPath": ["Controle de Processos", "TDPS importado"],
+  "folderPath": ["Process", "TDPS Convertidos"],
   "workspaceSection": "process",
   "help": { "description": "Conversao canonica do exemplo basic flow loop: indices legados foram substituidos por endpoints e entradas nomeadas." },
   "components": [

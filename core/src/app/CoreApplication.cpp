@@ -41,6 +41,7 @@
 #include "../components/sources/DcVoltageSource.hpp"
 #include "../fpga/FpgaComponent.hpp"
 #include "../fpga/GhdlBackend.hpp"
+#include "../protocols/IndustrialProtocolComponents.hpp"
 #include <nlohmann/json.hpp>
 #include <array>
 #include <cstdio>
@@ -73,12 +74,14 @@ struct CoreApplication::Impl {
     CoreConfig config;
     GlobalPluginCache pluginCache;
     resources::ResourceGovernor resourceGovernor;
+    std::shared_ptr<protocols::VirtualIndustrialBus> protocolBus;
     SimulationSession session;
     IpcServer ipcServer;
 
     explicit Impl(CoreConfig cfg)
         : config(std::move(cfg))
         , resourceGovernor(config.resourceProfile)
+        , protocolBus(std::make_shared<protocols::VirtualIndustrialBus>())
         , session(pluginCache, 1024, resourceGovernor)
         , ipcServer(config.pipeName, resourceGovernor.budget().telemetryQueueBytes) {}
 };
@@ -120,7 +123,8 @@ std::vector<Pin> makePinVector(const ComponentParams& p, size_t count) {
 }
 
 void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetadataRegistry& metadata,
-                                simulation::Scheduler& scheduler) {
+                                simulation::Scheduler& scheduler,
+                                std::shared_ptr<protocols::VirtualIndustrialBus> protocolBus) {
     const auto registerBuiltinMetadata =
         [&metadata](std::string typeId,
                     std::string displayName,
@@ -982,6 +986,26 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
         "PLC IEC 61131-3",
         std::vector<PropertySchema>{},
         R"json({"en":{"name":"IEC 61131-3 PLC"}})json");
+
+    const auto registerIndustrial = [&](const char* typeId, const char* label,
+                                        protocols::IndustrialComponentKind kind, const char* englishLabel) {
+        reg.registerFactory(typeId, [&scheduler, protocolBus, kind](const ComponentParams& p) {
+            return std::make_unique<protocols::IndustrialProtocolComponent>(
+                kind, scheduler, protocolBus, makePins2(p, "value", "gnd"));
+        });
+        registerBuiltinMetadata(typeId, label,
+            protocols::IndustrialProtocolComponent::propertySchema(kind),
+            std::string{"{\"en\":{\"name\":\""} + englishLabel + "\"}}",
+            protocols::IndustrialProtocolComponent::readoutFormat(), std::nullopt, {"value", "gnd"});
+    };
+    registerIndustrial("protocol.modbus.server", "Servidor Modbus", protocols::IndustrialComponentKind::ModbusServer,
+                       "Modbus Server");
+    registerIndustrial("protocol.modbus.client", "Cliente Modbus", protocols::IndustrialComponentKind::ModbusClient,
+                       "Modbus Client");
+    registerIndustrial("protocol.hart.transmitter", "Transmissor HART",
+                       protocols::IndustrialComponentKind::HartTransmitter, "HART Transmitter");
+    registerIndustrial("protocol.hart.communicator", "Comunicador HART",
+                       protocols::IndustrialComponentKind::HartCommunicator, "HART Communicator");
 }
 
 } // namespace
@@ -2568,7 +2592,8 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
 
 CoreApplication::CoreApplication(CoreConfig config)
     : m_impl(std::make_unique<Impl>(std::move(config))) {
-    registerBuiltinComponents(m_impl->session.components(), m_impl->pluginCache.metadata(), m_impl->session.scheduler());
+    registerBuiltinComponents(m_impl->session.components(), m_impl->pluginCache.metadata(), m_impl->session.scheduler(),
+                              m_impl->protocolBus);
     m_impl->session.registerKnownPluginTypes();
     m_impl->session.registerKnownMcuTypes();
 

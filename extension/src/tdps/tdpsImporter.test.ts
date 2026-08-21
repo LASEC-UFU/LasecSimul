@@ -104,15 +104,21 @@ function listSmpFiles(root: string): string[] {
     assert(second.topology.conductors.length > first.topology.conductors.length, "topologias convertidas devem ser independentes");
   });
 
-  await test("biblioteca FOPDT, basic flow e Smith usa schema v3 valido e DSL canonica", () => {
+  await test("biblioteca de processos TDPS usa schema v3 valido, pasta Process e DSL canonica", () => {
     const repositoryRoot = path.resolve(__dirname, "../../../../");
-    for (const name of ["process_fopdt", "tdps_basic_flow_loop", "tdps_smith_predictor"]) {
+    for (const name of [
+      "process_fopdt", "tdps_basic_flow_loop", "tdps_smith_predictor", "tdps_split_range",
+      "tdps_surge_tank_level", "tdps_heat_exchanger", "tdps_furnace_combustion", "tdps_boiler_drum",
+      "tdps_reactor_temperature", "tdps_ph_neutralization",
+    ]) {
       const file = path.join(repositoryRoot, "subcircuits", `${name}.lssubcircuit`);
       const parsed = parseSubcircuitDocument(JSON.parse(fs.readFileSync(file, "utf8")), path.dirname(file));
       assert(parsed.ok, `${name} deveria ser um .lssubcircuit schemaVersion 3 parseavel`);
       if (!parsed.ok) continue;
       const validation = validateSubcircuitDocument(parsed.document);
       assert(validation.errors.length === 0, `${name}: ${validation.errors.join(" | ")}`);
+      assert(parsed.document.workspaceSection === "process", `${name} deveria estar no workspace Process`);
+      assert(parsed.document.folderPath?.[0] === "Process", `${name} deveria estar dentro da pasta Process`);
       for (const component of parsed.document.components.filter((candidate) => candidate.typeId === "control.calc_expression")) {
         assert(!/\bM\d+\b/i.test(String(component.properties.expression ?? "")), `${name}/${component.id} ainda contem Mnn operacional`);
       }

@@ -102,6 +102,9 @@ import { initSimulationLog, logSimulation, noteSimulationStatusChange, showSimul
 import { importTdpsSmpCommand } from "./tdps/tdpsCommand";
 import { ProjectCustomEditorProvider } from "./ui/panels/ProjectCustomEditorProvider";
 import { IecProjectEditorProvider } from "./plc/IecProjectEditorProvider";
+import { newIecProjectCommand } from "./plc/plcCommands";
+import { parseIecProject } from "./plc/iecProject";
+import { readPlcNativeModule } from "./plc/artifact";
 import { maybeOfferMachineNetworkSetup, registerMachineNetworkSetupCommand } from "./network/machineNetworkSetup";
 import {
   externalFolderPath,
@@ -902,9 +905,14 @@ async function chooseFilePropertyCommand(componentId: string, propertyKey: strin
   const component = ref.element;
 
   const isImagePath = component.typeId === "graphics.image" && propertyKey === "path";
+  const isPlcProject = component.typeId === "plc.instance" && propertyKey === "plcIecProjectRef";
+  const isPlcArtifact = component.typeId === "plc.instance" && propertyKey === "plcArtifactRef";
   const picked = await vscode.window.showOpenDialog({
     canSelectMany: false,
-    filters: isImagePath ? { Imagem: ["png", "jpg", "jpeg", "svg"] } : { "Todos os arquivos": ["*"] },
+    filters: isImagePath ? { Imagem: ["png", "jpg", "jpeg", "svg"] }
+      : isPlcProject ? { "Projeto IEC 61131-3": ["json"] }
+      : isPlcArtifact ? { "Artefato PLC": ["json"] }
+      : { "Todos os arquivos": ["*"] },
     title: `Selecionar arquivo para ${component.label}`,
   });
   const selected = picked?.[0];
@@ -912,6 +920,8 @@ async function chooseFilePropertyCommand(componentId: string, propertyKey: strin
   const absolutePath = selected.fsPath;
 
   const updatedProperties: Record<string, string | number | boolean> = { ...component.properties, [propertyKey]: absolutePath };
+  let plc = component.plc;
+  let plcPins: WebviewComponentModel["pins"] | undefined;
   if (isImagePath) {
     try {
       updatedProperties.imageData = fs.readFileSync(absolutePath).toString("base64");
@@ -921,12 +931,53 @@ async function chooseFilePropertyCommand(componentId: string, propertyKey: strin
       return;
     }
   }
+  if (isPlcProject) {
+    try {
+      const project = parseIecProject(JSON.parse(fs.readFileSync(absolutePath, "utf8")));
+      const entryConfiguration = typeof project.buildSettings.entryConfiguration === "string"
+        ? project.buildSettings.entryConfiguration : component.plc?.entryConfiguration;
+      plc = { ...component.plc, iecProjectRef: absolutePath, ...(entryConfiguration ? { entryConfiguration } : {}) };
+      if (entryConfiguration) updatedProperties.plcEntryConfiguration = entryConfiguration;
+    } catch (err) {
+      vscode.window.showErrorMessage(`Projeto IEC inválido: ${err instanceof Error ? err.message : String(err)}`);
+      return;
+    }
+  }
+  if (isPlcArtifact) {
+    try {
+      const artifact = await readPlcNativeModule(absolutePath);
+      const exportedIo = artifact.exportedIo.map((io) => ({ ...io }));
+      plc = {
+        ...component.plc,
+        artifactRef: absolutePath,
+        expectedArtifactHash: artifact.artifactHash,
+        exportedIoBindingVersion: 1,
+        exportedIo,
+      };
+      plcPins = exportedIo.map((io, index) => ({ id: io.ioId, x: 0, y: index * 12 }));
+    } catch (err) {
+      vscode.window.showErrorMessage(`Artefato PLC inválido: ${err instanceof Error ? err.message : String(err)}`);
+      return;
+    }
+  }
 
-  const updated = updateElement(state.schematicState, componentId, { properties: updatedProperties });
+  const validPlcPinIds = plcPins ? new Set(plcPins.map((pin) => pin.id)) : undefined;
+  const nextWires = validPlcPinIds ? state.schematicState.topology.conductors.filter((wire) =>
+    !((endpointId(wire.from) === componentId && !validPlcPinIds.has(endpointPinId(wire.from))) ||
+      (endpointId(wire.to) === componentId && !validPlcPinIds.has(endpointPinId(wire.to)))))
+    : state.schematicState.topology.conductors;
+  const updated = updateElement(state.schematicState, componentId, {
+    properties: updatedProperties,
+    ...(plc ? { plc } : {}),
+    ...(plcPins ? { pins: plcPins } : {}),
+  });
   if (!updated.ok) return;
-  state.schematicState = updated.value.state;
+  state.schematicState = { ...updated.value.state, topology: { ...updated.value.state.topology, conductors: nextWires } };
   // Core só existe pro circuito interno real -- Símbolo/Ícone nunca sincronizam.
-  if (ref.scope === "schematic") pushPropertyToCore(componentId, propertyKey, absolutePath);
+  if (ref.scope === "schematic") {
+    if (isPlcProject || isPlcArtifact) await rebuildCoreFromSchematicState();
+    else pushPropertyToCore(componentId, propertyKey, absolutePath);
+  }
   syncSchematicPanel();
 }
 
@@ -1447,6 +1498,9 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
         return;
       }
       const updatedProperties = { ...prevComponent.properties, [message.name]: message.value };
+      const updatedPlc = prevComponent.typeId === "plc.instance" && message.name === "plcEntryConfiguration"
+        ? { ...prevComponent.plc, entryConfiguration: String(message.value) }
+        : prevComponent.plc;
 
       if (ref.scope !== "schematic") {
         // Símbolo/Ícone (pino/forma) nunca têm `affectsPinCount`/Core/túnel -- só a propriedade em
@@ -1484,6 +1538,7 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
         : undefined;
       const updated = updateElement(state.schematicState, message.componentId, {
         properties: updatedProperties,
+        ...(updatedPlc ? { plc: updatedPlc } : {}),
         ...(synchronizedSourceName ? { label: synchronizedSourceName } : {}),
         ...(newPins ? { pins: newPins } : {}),
       });
@@ -1501,6 +1556,9 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
         const pinId = prevComponent.pins[0]?.id ?? "pin";
         const oldName = String(prevComponent.properties["name"] ?? "");
         pushTunnelNameToCore(message.componentId, pinId, oldName, String(message.value));
+      } else if (prevComponent.typeId === "plc.instance" &&
+                 ["plcIecProjectRef", "plcArtifactRef", "plcEntryConfiguration", "plcTaskIntervalMs"].includes(message.name)) {
+        void rebuildCoreFromSchematicState();
       } else {
         pushPropertyToCore(message.componentId, message.name, message.value);
       }
@@ -2429,6 +2487,7 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
     vscode.commands.registerCommand("lasecsimul.importTdps", () => importTdpsSmpCommand({
       refreshCatalog: () => refreshUnifiedCatalogState(true, catalogCommandOptions()),
     })),
+    vscode.commands.registerCommand("lasecsimul.plc.newProject", () => newIecProjectCommand()),
     vscode.commands.registerCommand("lasecsimul.palette.registerFile", () => registerCatalogFileCommand(catalogCommandOptions())),
     vscode.commands.registerCommand("lasecsimul.palette.removeRegistered", (item: { sourceId?: string }) =>
       removeRegisteredCatalogItemCommand(item, catalogCommandOptions())

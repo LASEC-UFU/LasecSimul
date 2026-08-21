@@ -373,6 +373,7 @@ set_tests_properties(plc_session_integration PROPERTIES TIMEOUT 60 SKIP_REGULAR_
 add_executable(industrial_protocols_test
     test/core/protocols/IndustrialProtocolsTest.cpp
     src/protocols/IndustrialProtocols.cpp
+    src/simulation/Scheduler.cpp
 )
 target_include_directories(industrial_protocols_test PRIVATE include src)
 add_test(NAME industrial_protocols COMMAND industrial_protocols_test)

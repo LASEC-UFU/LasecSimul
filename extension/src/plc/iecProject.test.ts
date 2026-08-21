@@ -4,6 +4,7 @@ import { IEC_LANGUAGES, IecLanguage, IecProjectStore, PouBody, PouDefinition, pa
 import { compileProjectToCanonicalSt, lowerPouToSt } from "./lowering";
 import { parsePlcNativeModule } from "./artifact";
 import { addPouToProject, insertPouReference } from "./iecEditorWorkspace";
+import { starterIecProject } from "./plcProjectTemplate";
 
 function body(language: IecLanguage, targetPouId?: string): PouBody {
   if (language === "st") return { language, text: targetPouId ? "callee();" : "q := q;" };
@@ -24,6 +25,12 @@ function pou(id: string, name: string, language: IecLanguage, kind: PouDefinitio
 }
 
 async function main(): Promise<void> {
+  const starter = parseIecProject(starterIecProject("starter"));
+  const starterMain = starter.pous.find((entry) => entry.name === "MAIN");
+  assert.equal(starterMain?.implementation.language, "st", "starter project creates MAIN in Structured Text");
+  assert.equal(starterMain?.interface.variables.map((variable) => variable.ioId).join(","), "DI0,DO0",
+    "starter project exports stable DI0/DO0 identities");
+
   const store = new IecProjectStore();
   for (const language of IEC_LANGUAGES) assert.deepEqual(store.savePou(pou(`callee-${language}`, `FB_${language.toUpperCase()}`, language)), []);
   assert.equal(store.browser().length, 5, "all five implementation languages share one browser");
