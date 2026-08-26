@@ -4,7 +4,7 @@
   "name": "Decoder(4 to 10/16)",
   "language": "pt-BR",
   "abiVersion": {
-    "major": 3,
+    "major": 4,
     "minor": 0
   },
   "nativeEntry": {

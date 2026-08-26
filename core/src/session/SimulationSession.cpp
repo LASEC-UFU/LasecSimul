@@ -6,6 +6,7 @@
 #include <cctype>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <limits>
 #include <map>
 #include <optional>
@@ -773,10 +774,10 @@ uint32_t SimulationSession::addComponentUnlocked(const std::string& typeId, cons
         // ponto de chamada real (McuComponent::processI2cBurstLocked já sabe seu próprio índice).
         static_cast<mcu::McuComponent*>(instance.get())->setI2cTransferHandler(
             [this](uint32_t mcuIndex, uint32_t bus, const I2cTransfer& transfer) -> I2cTransferResult {
-                if (m_scheduler.isCurrentThreadWorker()) {
-                    return resolveI2cTransferUnlocked(mcuIndex, bus, transfer);
-                }
-                return m_scheduler.synchronized([&] { return resolveI2cTransferUnlocked(mcuIndex, bus, transfer); });
+                /* McuComponent garante este contrato: chamada direta quando já está na worker ou
+                 * chamada externa envolvida por Scheduler::synchronized(). Reentrar aqui no mesmo
+                 * mutex faria a thread externa tentar travá-lo duas vezes. */
+                return resolveI2cTransferUnlocked(mcuIndex, bus, transfer);
             });
     } else if (typeId == kPlcInstanceTypeId) {
         // Sem registry proprio (ao contrario de MCU/plugins) -- ha um unico "tipo" de instancia de
@@ -2170,64 +2171,124 @@ std::optional<uint64_t> SimulationSession::computeSlowestMcuPositionNs() {
 
 bool SimulationSession::isI2cFastPathTransparentUnlocked(const IComponentModel& component) {
     // Tipos embutidos cujo comportamento elétrico já é conhecido e não interfere no protocolo I2C
-    // (pull-up/pull-down resistivo, terra, ou um túnel que só encaminha o mesmo nó) -- qualquer
+    // (resistor passivo ou um túnel que só encaminha o mesmo nó) -- qualquer
     // OUTRA coisa presente no mesmo nó (capacitor, driver ativo desconhecido, outro dispositivo
     // I2C sem suporte a transferI2c) precisa do caminho elétrico bit-a-bit de verdade, então força
     // fallback (ver resolveI2cTransferUnlocked). Comparação por typeId (não dynamic_cast) porque
     // são tipos embutidos com typeId estável, mesmo padrão já usado alhures neste arquivo.
     const std::string_view typeId = component.typeId();
-    return typeId == "passive.resistor" || typeId == "other.ground" || typeId == "connectors.tunnel";
+    return typeId == "passive.resistor" || typeId == "connectors.tunnel";
 }
 
 I2cTransferResult SimulationSession::resolveI2cTransferUnlocked(uint32_t mcuIndex, uint32_t bus,
                                                                  const I2cTransfer& transfer) {
-    I2cTransferResult fallback{}; // handled=false por padrão -- chamador cai pro caminho elétrico.
-    if (mcuIndex >= m_componentInstances.size() || !m_componentInstances[mcuIndex]) return fallback;
+    I2cTransferResult fallback{};
+    const bool traceI2c = [] {
+        const char* value = std::getenv("LASECSIMUL_I2C_FASTPATH_TRACE");
+        return value && *value && std::string_view(value) != "0";
+    }();
+    if (traceI2c) {
+        const auto wallUs = std::chrono::duration_cast<std::chrono::microseconds>(
+                                 std::chrono::steady_clock::now().time_since_epoch())
+                                 .count();
+        std::fprintf(stderr, "[LasecSimul][I2C fast-path] enter wallUs=%lld\n", static_cast<long long>(wallUs));
+    }
+    const auto traceFallback = [&](const char* reason, const IComponentModel* component = nullptr) {
+        if (traceI2c) std::fprintf(stderr, "[LasecSimul][I2C fast-path] fallback: %s%s%s\n", reason,
+                                  component ? " type=" : "", component ? component->typeId() : "");
+        return fallback;
+    };
+    if (mcuIndex >= m_componentInstances.size() || !m_componentInstances[mcuIndex]) return traceFallback("MCU inválido");
     auto* mcuComponent = dynamic_cast<mcu::McuComponent*>(m_componentInstances[mcuIndex].get());
-    if (!mcuComponent) return fallback;
+    if (!mcuComponent) return traceFallback("componente não é MCU");
 
-    const std::optional<uint32_t> sdaPinIndex = mcuComponent->resolveI2cPinIndex(bus, /*sda=*/true);
-    if (!sdaPinIndex) return fallback; // chip sem suporte, ou barramento sem roteamento agora.
-
+    const auto sdaPinIndex = mcuComponent->resolveI2cPinIndex(bus, true);
+    const auto sclPinIndex = mcuComponent->resolveI2cPinIndex(bus, false);
     const std::span<Pin> mcuPins = mcuComponent->pins();
-    if (*sdaPinIndex >= mcuPins.size()) return fallback;
-    const std::string& sdaPinId = mcuPins[*sdaPinIndex].id;
+    if (!sdaPinIndex || !sclPinIndex || *sdaPinIndex >= mcuPins.size() || *sclPinIndex >= mcuPins.size()) {
+        return traceFallback("adaptador não resolveu SDA/SCL");
+    }
 
     const auto& slots = m_netlist.pinSlotsOf(mcuIndex);
-    const auto slotIt = slots.find(sdaPinId);
-    if (slotIt == slots.end() || slotIt->second >= m_topology.slotToNode.size()) return fallback;
-    const uint32_t node = m_topology.slotToNode[slotIt->second];
-    if (node >= m_topology.pinRefsByNode.size()) return fallback;
+    const auto sdaSlot = slots.find(mcuPins[*sdaPinIndex].id);
+    const auto sclSlot = slots.find(mcuPins[*sclPinIndex].id);
+    if (sdaSlot == slots.end() || sclSlot == slots.end() ||
+        sdaSlot->second >= m_topology.slotToNode.size() || sclSlot->second >= m_topology.slotToNode.size()) {
+        return traceFallback("slot SDA/SCL ausente");
+    }
+    const uint32_t sdaNode = m_topology.slotToNode[sdaSlot->second];
+    const uint32_t sclNode = m_topology.slotToNode[sclSlot->second];
+    if (sdaNode >= m_topology.pinRefsByNode.size() || sclNode >= m_topology.pinRefsByNode.size()) return traceFallback("nó SDA/SCL ausente");
 
-    IComponentModel* target = nullptr;
-    for (const simulation::NodePinRef& ref : m_topology.pinRefsByNode[node]) {
-        if (ref.componentIndex == mcuIndex) continue; // o próprio MCU não conta pra esta decisão.
-        if (ref.componentIndex >= m_componentInstances.size() || !m_componentInstances[ref.componentIndex]) {
-            continue; // não deveria acontecer (pinRefsByNode só referencia componentes vivos), mas
-                      // seguro por construção: se acontecer, trata como "não sei o suficiente" abaixo.
-        }
+    std::vector<IComponentModel*> targets;
+    for (const simulation::NodePinRef& ref : m_topology.pinRefsByNode[sdaNode]) {
+        if (ref.componentIndex == mcuIndex) continue;
+        if (ref.componentIndex >= m_componentInstances.size() || !m_componentInstances[ref.componentIndex]) continue;
         IComponentModel* candidate = m_componentInstances[ref.componentIndex].get();
         if (candidate->supportsI2cTransfer()) {
-            if (!target) target = candidate; // primeiro candidato I2C-capaz encontrado no nó.
+            const auto candidateSda = candidate->i2cPinIndex(true);
+            const auto candidateScl = candidate->i2cPinIndex(false);
+            if (!candidateSda || !candidateScl || ref.localPinIndex != *candidateSda) return traceFallback("pinos I2C do alvo incompatíveis", candidate);
+            const bool sclMatches = std::any_of(
+                m_topology.pinRefsByNode[sclNode].begin(), m_topology.pinRefsByNode[sclNode].end(),
+                [&](const simulation::NodePinRef& sclRef) {
+                    return sclRef.componentIndex == ref.componentIndex && sclRef.localPinIndex == *candidateScl;
+                });
+            if (!sclMatches) return traceFallback("SCL do alvo não está no mesmo barramento", candidate);
+            if (std::find(targets.begin(), targets.end(), candidate) == targets.end()) targets.push_back(candidate);
             continue;
         }
-        if (isI2cFastPathTransparentUnlocked(*candidate)) continue;
-        // Qualquer coisa não reconhecida no mesmo nó de SDA: sem garantia de que o fast path
-        // representa o barramento corretamente -- desiste pro caminho elétrico bit-a-bit.
-        return fallback;
+        if (!isI2cFastPathTransparentUnlocked(*candidate)) return traceFallback("componente opaco em SDA", candidate);
     }
 
-    if (!target) {
-        // Nó sem nenhum dispositivo I2C-capaz (nada conectado, ou só pull-up/terra/túnel) -- o fast
-        // path já sabe, com certeza, que ninguém vai confirmar o endereço: NACK definitivo, não
-        // "não sei" (ver doc-comment da declaração).
-        I2cTransferResult definitiveNack{};
-        definitiveNack.handled = true;
-        definitiveNack.addressAck = false;
-        definitiveNack.firstNack = 0;
-        return definitiveNack;
+    for (const simulation::NodePinRef& ref : m_topology.pinRefsByNode[sclNode]) {
+        if (ref.componentIndex == mcuIndex) continue;
+        if (ref.componentIndex >= m_componentInstances.size() || !m_componentInstances[ref.componentIndex]) continue;
+        IComponentModel* candidate = m_componentInstances[ref.componentIndex].get();
+        if (candidate->supportsI2cTransfer()) {
+            const auto candidateScl = candidate->i2cPinIndex(false);
+            if (candidateScl && ref.localPinIndex == *candidateScl &&
+                std::find(targets.begin(), targets.end(), candidate) != targets.end()) {
+                continue;
+            }
+            return traceFallback("alvo I2C inesperado em SCL", candidate);
+        }
+        if (!isI2cFastPathTransparentUnlocked(*candidate)) return traceFallback("componente opaco em SCL", candidate);
     }
-    return target->transferI2c(transfer);
+
+    if (targets.empty()) {
+        I2cTransferResult nack{};
+        nack.handled = true;
+        nack.firstNack = 0;
+        return nack;
+    }
+
+    I2cTransferResult combined{};
+    combined.handled = true;
+    combined.firstNack = UINT32_MAX;
+    uint32_t readResponders = 0;
+    for (IComponentModel* target : targets) {
+        const I2cTransferResult result = target->transferI2c(transfer);
+        if (!result.handled) return traceFallback("plugin recusou transferência", target);
+        if (!result.addressAck) continue;
+        combined.addressAck = true;
+        combined.firstNack = std::min(combined.firstNack, result.firstNack);
+        combined.stretchNs = std::max(combined.stretchNs, result.stretchNs);
+        if (transfer.read) {
+            ++readResponders;
+            combined.rxSize = result.rxSize;
+        }
+    }
+    if (transfer.read && readResponders > 1) return traceFallback("mais de um alvo respondeu leitura");
+    if (traceI2c) {
+        const auto wallUs = std::chrono::duration_cast<std::chrono::microseconds>(
+                                 std::chrono::steady_clock::now().time_since_epoch())
+                                 .count();
+        std::fprintf(stderr, "[LasecSimul][I2C fast-path] handled wallUs=%lld bus=%u addr=0x%02x tx=%u rx=%u ack=%u\n",
+                     static_cast<long long>(wallUs), bus, transfer.address, transfer.txSize, transfer.rxSize,
+                     combined.addressAck ? 1u : 0u);
+    }
+    return combined;
 }
 
 void SimulationSession::sendComponentEvent(uint32_t componentIndex, const ComponentEvent& event) {

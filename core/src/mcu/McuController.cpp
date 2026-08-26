@@ -198,8 +198,8 @@ QemuLaunchSpec McuController::buildLaunchSpec(const std::filesystem::path& firmw
     const qemu::QemuArenaProtocol arenaProtocol =
         qemu::QemuArenaBridge::configuredProtocol();
     spec.diagnostics +=
-        arenaProtocol == qemu::QemuArenaProtocol::V4
-            ? "[LasecSimul] arena=v4 negotiated (default; rollback: "
+        arenaProtocol == qemu::QemuArenaProtocol::V5
+            ? "[LasecSimul] arena=v5 negotiated (default; rollback: "
               "LASECSIMUL_QEMU_ARENA_VERSION=3)\n"
             : "[LasecSimul] arena=v3 legacy rollback\n";
     configureNetwork(spec, arenaName);
@@ -261,7 +261,7 @@ void McuController::start(const std::filesystem::path& firmwarePath, const std::
             m_processManager.stop();
             m_arenaBridge.close();
             throw std::runtime_error(
-                "QEMU arena ABI v4 handshake failed; verify that Core and "
+                "QEMU arena ABI v5 handshake failed; verify that Core and "
                 "qemu-system-xtensa use the same arena ABI. QEMU logs: " +
                 logs);
         }

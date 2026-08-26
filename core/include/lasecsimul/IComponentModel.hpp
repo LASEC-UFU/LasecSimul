@@ -166,6 +166,7 @@ public:
     /** Fast path opcional. `false` preserva o caminho elétrico bit-a-bit para qualquer componente
      * que não declare explicitamente paridade funcional por transação. */
     virtual bool supportsI2cTransfer() const { return false; }
+    virtual std::optional<uint32_t> i2cPinIndex(bool) const { return std::nullopt; }
     virtual I2cTransferResult transferI2c(const I2cTransfer&) { return {}; }
 
     virtual size_t getState(uint8_t* out, size_t cap) const = 0;

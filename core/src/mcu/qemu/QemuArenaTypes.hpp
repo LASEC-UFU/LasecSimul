@@ -11,7 +11,7 @@ namespace lasecsimul::mcu::qemu {
 enum class QemuArenaProtocol : uint32_t {
     Environment = 0,
     V3 = 3,
-    V4 = LSDN_QEMU_ARENA_ABI_MAJOR,
+    V5 = LSDN_QEMU_ARENA_ABI_MAJOR,
 };
 
 struct QemuArenaOpenOptions {
@@ -59,7 +59,7 @@ struct QemuI2cBurst {
     uint64_t periodNs = 0;
     uint32_t txLen = 0;
     uint32_t rxLen = 0;
-    uint8_t tx[32]{};
+    uint8_t tx[64]{};
 };
 
 } // namespace lasecsimul::mcu::qemu

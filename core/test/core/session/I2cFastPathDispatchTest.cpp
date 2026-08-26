@@ -2,11 +2,12 @@
 // fast path de I2C (docs/39-i2c-mttcg-throughput-ceiling-2026-08-26.md secao 9): acha o pino SDA
 // via IMcuAdapter::resolveI2cPinIndex (chip-especifico), acha o no eletrico via
 // Netlist/topologia (chip-neutro), e so' usa o fast path quando todo componente no mesmo no' e'
-// I2C-capaz ou de um tipo explicitamente transparente (resistor/terra/tunel) -- caso contrario cai
+// I2C-capaz ou de um tipo explicitamente transparente (resistor/tunel) -- caso contrario cai
 // pro caminho eletrico (handled=false). Usa um IMcuAdapter e um IComponentModel de teste, sem
 // QEMU/plugin nativo real -- isola exatamente a logica de roteamento que esta sessao adicionou
-// (a producao de bursts pelo QEMU e' trabalho futuro separado, ver o doc acima).
+// O contrato de mailbox QEMU/Core é validado separadamente em QemuArenaBridgeTest.
 #include <cstdio>
+#include <array>
 #include <optional>
 #include "lasecsimul/IMcuAdapter.hpp"
 #include "lasecsimul/Types.hpp"
@@ -53,13 +54,14 @@ private:
  * o ultimo payload de escrita recebido (pra provar que o transfer chegou intacto). */
 class FakeI2cDevice final : public IComponentModel {
 public:
-    explicit FakeI2cDevice(Pin pin) : m_pin(std::move(pin)) {}
+    explicit FakeI2cDevice(Pin) {}
 
     const char* typeId() const override { return "test.fake_i2c_device"; }
-    std::span<Pin> pins() override { return {&m_pin, 1}; }
+    std::span<Pin> pins() override { return m_pins; }
     void stamp(MnaMatrixView&) override {}
     void postStep(uint64_t) override {}
     bool supportsI2cTransfer() const override { return true; }
+    std::optional<uint32_t> i2cPinIndex(bool sda) const override { return sda ? 0u : 1u; }
     I2cTransferResult transferI2c(const I2cTransfer& transfer) override {
         I2cTransferResult result{};
         result.handled = true;
@@ -83,7 +85,7 @@ public:
     uint8_t lastWriteByte = 0;
 
 private:
-    Pin m_pin;
+    std::array<Pin, 2> m_pins{Pin{"sda"}, Pin{"scl"}};
 };
 
 /** Sem `supportsI2cTransfer` nem tipo transparente -- representa "qualquer coisa desconhecida no
@@ -150,6 +152,7 @@ void testFastPathRoutesToConnectedDevice() {
     const uint32_t mcuIndex = session.addComponent("test.fake_mcu", {});
     const uint32_t deviceIndex = session.addComponent("test.fake_i2c_device", {});
     session.connectWire(mcuIndex, "sda", deviceIndex, "sda");
+    session.connectWire(mcuIndex, "scl", deviceIndex, "scl");
     for (int i = 0; i < 10 && session.settleStep(); ++i) {}
 
     const uint8_t payload = 0x99;
@@ -182,6 +185,7 @@ void testFastPathFallsBackWithOpaqueComponentOnBus() {
     const uint32_t deviceIndex = session.addComponent("test.fake_i2c_device", {});
     const uint32_t opaqueIndex = session.addComponent("test.fake_opaque", {});
     session.connectWire(mcuIndex, "sda", deviceIndex, "sda");
+    session.connectWire(mcuIndex, "scl", deviceIndex, "scl");
     session.connectWire(mcuIndex, "sda", opaqueIndex, "sda");
     for (int i = 0; i < 10 && session.settleStep(); ++i) {}
 
@@ -189,6 +193,26 @@ void testFastPathFallsBackWithOpaqueComponentOnBus() {
     const I2cTransferResult result = session.resolveI2cTransferForTesting(mcuIndex, 0, makeWrite(0x42, &payload, 1));
     check(!result.handled,
           "componente desconhecido (nao I2C-capaz, nao transparente) no mesmo no' forca fallback eletrico");
+}
+
+void testFastPathRequiresBothBusWires() {
+    plugins::GlobalPluginCache cache;
+    SimulationSession session(cache);
+    session.mcus().registerFactory("test.fake_mcu", [] { return std::make_unique<FakeMcuAdapter>(); });
+    session.components().registerFactory("test.fake_i2c_device", [](const registry::ComponentParams&) {
+        return std::make_unique<FakeI2cDevice>(Pin{"sda"});
+    });
+
+    const uint32_t mcuIndex = session.addComponent("test.fake_mcu", {});
+    const uint32_t deviceIndex = session.addComponent("test.fake_i2c_device", {});
+    session.connectWire(mcuIndex, "sda", deviceIndex, "sda");
+    for (int i = 0; i < 10 && session.settleStep(); ++i) {}
+
+    const uint8_t payload = 0x55;
+    const I2cTransferResult result =
+        session.resolveI2cTransferForTesting(mcuIndex, 0, makeWrite(0x42, &payload, 1));
+    check(!result.handled,
+          "dispositivo ligado apenas em SDA, sem SCL correspondente, força fallback elétrico");
 }
 
 void testFastPathIgnoresTransparentComponents() {
@@ -205,26 +229,27 @@ void testFastPathIgnoresTransparentComponents() {
     session.components().registerFactory("passive.resistor", [](const registry::ComponentParams&) {
         return std::make_unique<FakeTransparentComponent>("passive.resistor", Pin{"sda"});
     });
-    session.components().registerFactory("other.ground", [](const registry::ComponentParams&) {
-        return std::make_unique<FakeTransparentComponent>("other.ground", Pin{"sda"});
+    session.components().registerFactory("connectors.tunnel", [](const registry::ComponentParams&) {
+        return std::make_unique<FakeTransparentComponent>("connectors.tunnel", Pin{"sda"});
     });
 
     const uint32_t mcuIndex = session.addComponent("test.fake_mcu", {});
     const uint32_t deviceIndex = session.addComponent("test.fake_i2c_device", {});
     const uint32_t pullupIndex = session.addComponent("passive.resistor", {});
-    const uint32_t groundIndex = session.addComponent("other.ground", {});
+    const uint32_t tunnelIndex = session.addComponent("connectors.tunnel", {});
     // Todos os quatro pinos "sda" no MESMO nó -- não modela um pull-up de verdade eletricamente
     // (não é o que está sob teste), só prova que a PRESENÇA desses typeIds no nó não bloqueia o
     // fast path.
     session.connectWire(mcuIndex, "sda", deviceIndex, "sda");
+    session.connectWire(mcuIndex, "scl", deviceIndex, "scl");
     session.connectWire(mcuIndex, "sda", pullupIndex, "sda");
-    session.connectWire(mcuIndex, "sda", groundIndex, "sda");
+    session.connectWire(mcuIndex, "sda", tunnelIndex, "sda");
     for (int i = 0; i < 10 && session.settleStep(); ++i) {}
 
     const uint8_t payload = 0x02;
     const I2cTransferResult result = session.resolveI2cTransferForTesting(mcuIndex, 0, makeWrite(0x42, &payload, 1));
     check(result.handled && result.addressAck,
-          "resistor de pull-up e terra no mesmo no' nao impedem o fast path (tipos transparentes)");
+          "resistor e tunel no mesmo no' nao impedem o fast path (tipos transparentes)");
 }
 
 void testFastPathDefinitiveNackWithNothingConnected() {
@@ -246,6 +271,7 @@ void testFastPathDefinitiveNackWithNothingConnected() {
 int main() {
     testFastPathRoutesToConnectedDevice();
     testFastPathFallsBackWithOpaqueComponentOnBus();
+    testFastPathRequiresBothBusWires();
     testFastPathIgnoresTransparentComponents();
     testFastPathDefinitiveNackWithNothingConnected();
     if (failures == 0) {

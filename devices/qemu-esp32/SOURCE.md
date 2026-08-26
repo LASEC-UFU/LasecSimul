@@ -32,3 +32,11 @@ branch (not yet distilled into a numbered patch against the `721ff59` baseline -
   Core-round-trips-per-byte but does **not** close the throughput gap for bit-accurate 400kHz I2C
   under MTTCG -- see [`docs/39-i2c-mttcg-throughput-ceiling-2026-08-26.md`](../../docs/39-i2c-mttcg-throughput-ceiling-2026-08-26.md)
   for the full architecture writeup, what was measured, and what a real fix needs to do.
+
+The current packaged executable additionally uses arena ABI v5 and the I2C burst mailbox implemented
+in the local QEMU working tree on top of `71a0b06`. It collapses a supported ESP-IDF transaction into
+one Core round-trip while preserving virtual bus time, ACK/NACK status, FIFO order, clock stretching,
+and electrical fallback for command lists or topologies that cannot be represented safely. The exact
+source files and executable checksum are recorded in `bin/BUILD-PROVENANCE.txt`. The QEMU working-tree
+changes still need to be committed (or distilled into `patches/0005-...`) before producing a tagged
+release; the packaged development binary itself is reproducibly identified by its SHA-256.

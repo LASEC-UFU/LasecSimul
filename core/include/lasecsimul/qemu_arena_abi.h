@@ -1,5 +1,7 @@
 /*
- * QemuArena ABI v4 — o payload de transporte permanece binariamente idêntico à v3, mas agora é
+ * QemuArena ABI v5 — mantém o descritor negociado introduzido na v4 e amplia o payload v3 com
+ * o mailbox de burst I2C. O transporte legado até `ps_per_inst` permanece binariamente idêntico;
+ * o mailbox foi anexado ao fim do payload e exige recompilação coordenada de Core e QEMU. O mapa é
  * precedido por `LsdnQemuArenaDescriptor`: magic, versão, tamanhos, profundidade da fila,
  * capacidades e handshake Core/QEMU. Isso rejeita um executável incompatível antes de consumir
  * eventos. `LASECSIMUL_QEMU_ARENA_VERSION=3` preserva o mapping v3 puro como rollback.
@@ -136,7 +138,7 @@ typedef struct LsdnQemuArena {
     uint64_t i2cPeriodNs;
     uint32_t i2cTxLen;
     uint32_t i2cRxLen;
-    uint8_t  i2cTx[32];
+    uint8_t  i2cTx[64];   /* tx[0] = endereço+RW; suporta metadado + FIFO ESP32 de 32 bytes */
     uint8_t  i2cRx[32];
     uint32_t i2cStatus;      /* bit0 handled, bit1 address ACK */
     uint32_t i2cFirstNack;   /* UINT32_MAX quando todos os payloads deram ACK */
@@ -158,28 +160,28 @@ typedef struct LsdnQemuArenaDescriptor {
     uint64_t qemuReady;
 } LsdnQemuArenaDescriptor;
 
-typedef struct LsdnQemuArenaV4Mapping {
+typedef struct LsdnQemuArenaV5Mapping {
     LsdnQemuArenaDescriptor descriptor;
     LsdnQemuArena transport;
-} LsdnQemuArenaV4Mapping;
+} LsdnQemuArenaV5Mapping;
 
 #if defined(__cplusplus)
 static_assert(sizeof(LsdnQemuQueueEntry) == 32,
               "QEMU arena queue entry ABI changed");
-static_assert(sizeof(LsdnQemuArena) == 1256,
+static_assert(sizeof(LsdnQemuArena) == 1288,
               "QEMU arena v5 payload ABI changed");
 static_assert(sizeof(LsdnQemuArenaDescriptor) == 88,
-              "QEMU arena v4 descriptor ABI changed");
-static_assert(sizeof(LsdnQemuArenaV4Mapping) == 1344,
+              "QEMU arena descriptor ABI changed");
+static_assert(sizeof(LsdnQemuArenaV5Mapping) == 1376,
               "QEMU arena v5 mapping ABI changed");
 #else
 _Static_assert(sizeof(LsdnQemuQueueEntry) == 32,
                "QEMU arena queue entry ABI changed");
-_Static_assert(sizeof(LsdnQemuArena) == 1256,
+_Static_assert(sizeof(LsdnQemuArena) == 1288,
                "QEMU arena v5 payload ABI changed");
 _Static_assert(sizeof(LsdnQemuArenaDescriptor) == 88,
-               "QEMU arena v4 descriptor ABI changed");
-_Static_assert(sizeof(LsdnQemuArenaV4Mapping) == 1344,
+               "QEMU arena descriptor ABI changed");
+_Static_assert(sizeof(LsdnQemuArenaV5Mapping) == 1376,
                "QEMU arena v5 mapping ABI changed");
 #endif
 

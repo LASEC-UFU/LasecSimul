@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <mutex>
 #include <unordered_map>
 #include "lasecsimul/IComponentModel.hpp"
 #include "lasecsimul/device_abi.h"
@@ -77,6 +78,7 @@ public:
     void postStep(uint64_t timeNs) override;
     void onEvent(const ComponentEvent& event) override;
     bool supportsI2cTransfer() const override;
+    std::optional<uint32_t> i2cPinIndex(bool sda) const override;
     I2cTransferResult transferI2c(const I2cTransfer& transfer) override;
     size_t getState(uint8_t* out, size_t cap) const override;
     void setState(const uint8_t* in, size_t len) override;
@@ -92,8 +94,14 @@ public:
         m_hostContext->scheduler = &m_scheduler;
     }
 
-    bool faulted() const { return m_health == PluginHealthStatus::Faulted; }
-    PluginHealthStatus health() const override { return m_health; }
+    bool faulted() const {
+        std::lock_guard<std::recursive_mutex> lock(m_deviceMutex);
+        return m_health == PluginHealthStatus::Faulted;
+    }
+    PluginHealthStatus health() const override {
+        std::lock_guard<std::recursive_mutex> lock(m_deviceMutex);
+        return m_health;
+    }
     NativeDeviceHostContext* hostContext() { return m_hostContext.get(); }
 
 private:
@@ -113,6 +121,7 @@ private:
     // mutable: getState()/o getter de propriedade são const (leitura), mas precisam marcar Faulted
     // se o plugin travar mesmo numa chamada "só leitura" -- ver CrashGuard em cada um.
     mutable PluginHealthStatus m_health = PluginHealthStatus::Ok;
+    mutable std::recursive_mutex m_deviceMutex;
     uint32_t m_consecutiveTimeouts = 0;
     /** Cache de `propertyDescriptors()` -- bug real de desempenho encontrado 2026-07-20 revisando a
      * arquitetura do Core: antes, cada chamada reconstruía o vetor inteiro com um `std::function`

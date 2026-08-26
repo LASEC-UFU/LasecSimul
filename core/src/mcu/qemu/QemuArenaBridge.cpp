@@ -120,7 +120,7 @@ void QemuArenaBridge::setMemoryRegions(std::span<const MemoryRegion> regions) {
 
 QemuArenaProtocol QemuArenaBridge::configuredProtocol() {
     const char* value = std::getenv("LASECSIMUL_QEMU_ARENA_VERSION");
-    if (!value || !*value || std::string_view(value) == "5") return QemuArenaProtocol::V4;
+    if (!value || !*value || std::string_view(value) == "5") return QemuArenaProtocol::V5;
     if (std::string_view(value) == "3") return QemuArenaProtocol::V3;
     throw std::invalid_argument(
         "LASECSIMUL_QEMU_ARENA_VERSION must be '3' or '5'");
@@ -133,20 +133,20 @@ void QemuArenaBridge::open(const QemuArenaOpenOptions& options) {
                      ? configuredProtocol()
                      : options.protocol;
     if (m_protocol != QemuArenaProtocol::V3 &&
-        m_protocol != QemuArenaProtocol::V4) {
+        m_protocol != QemuArenaProtocol::V5) {
         throw std::invalid_argument("Unsupported QEMU arena protocol");
     }
 
-    const size_t mappingSize = m_protocol == QemuArenaProtocol::V4
-                                   ? sizeof(LsdnQemuArenaV4Mapping)
+    const size_t mappingSize = m_protocol == QemuArenaProtocol::V5
+                                   ? sizeof(LsdnQemuArenaV5Mapping)
                                    : sizeof(LsdnQemuArena);
     m_sharedMemory = std::make_unique<SharedMemory>(
         options.name, mappingSize, options.createIfMissing);
     void* const base = m_sharedMemory->data();
     if (options.createIfMissing) std::memset(base, 0, mappingSize);
 
-    if (m_protocol == QemuArenaProtocol::V4) {
-        auto* const mapping = static_cast<LsdnQemuArenaV4Mapping*>(base);
+    if (m_protocol == QemuArenaProtocol::V5) {
+        auto* const mapping = static_cast<LsdnQemuArenaV5Mapping*>(base);
         m_descriptor = &mapping->descriptor;
         m_arena = &mapping->transport;
         if (options.createIfMissing) {
@@ -154,7 +154,7 @@ void QemuArenaBridge::open(const QemuArenaOpenOptions& options) {
             m_descriptor->abiMajor = LSDN_QEMU_ARENA_ABI_MAJOR;
             m_descriptor->abiMinor = LSDN_QEMU_ARENA_ABI_MINOR;
             m_descriptor->descriptorSize = sizeof(LsdnQemuArenaDescriptor);
-            m_descriptor->arenaSize = sizeof(LsdnQemuArenaV4Mapping);
+            m_descriptor->arenaSize = sizeof(LsdnQemuArenaV5Mapping);
             m_descriptor->transportSize = sizeof(LsdnQemuArena);
             m_descriptor->queueDepth = LSDN_QEMU_ARENA_QUEUE_DEPTH;
             m_descriptor->coreCapabilities = LSDN_QEMU_ARENA_CAPABILITIES;
@@ -164,12 +164,12 @@ void QemuArenaBridge::open(const QemuArenaOpenOptions& options) {
                    m_descriptor->abiMajor != LSDN_QEMU_ARENA_ABI_MAJOR ||
                    m_descriptor->descriptorSize !=
                        sizeof(LsdnQemuArenaDescriptor) ||
-                   m_descriptor->arenaSize != sizeof(LsdnQemuArenaV4Mapping) ||
+                   m_descriptor->arenaSize != sizeof(LsdnQemuArenaV5Mapping) ||
                    m_descriptor->transportSize != sizeof(LsdnQemuArena) ||
                    m_descriptor->queueDepth !=
                        LSDN_QEMU_ARENA_QUEUE_DEPTH) {
             close();
-            throw std::runtime_error("Incompatible QEMU arena ABI v4 descriptor");
+            throw std::runtime_error("Incompatible QEMU arena ABI v5 descriptor");
         }
     } else {
         m_arena = static_cast<LsdnQemuArena*>(base);
@@ -220,7 +220,7 @@ QemuPollResult QemuArenaBridge::poll() {
             (m_descriptor->negotiatedCapabilities & required) != required) {
             return QemuPollResult{
                 false, std::nullopt, std::nullopt,
-                "QEMU arena ABI v4 capability negotiation failed"};
+                "QEMU arena ABI v5 capability negotiation failed"};
         }
     }
 
@@ -275,7 +275,7 @@ QemuPollResult QemuArenaBridge::poll() {
 }
 
 std::optional<QemuI2cBurst> QemuArenaBridge::pollI2cBurst() const {
-    if (!m_arena || m_protocol != QemuArenaProtocol::V4) return std::nullopt;
+    if (!m_arena || m_protocol != QemuArenaProtocol::V5) return std::nullopt;
     const uint64_t request = std::atomic_ref<uint64_t>(m_arena->i2cRequestSeq)
                                  .load(std::memory_order_acquire);
     const uint64_t response = std::atomic_ref<uint64_t>(m_arena->i2cResponseSeq)
@@ -287,7 +287,7 @@ std::optional<QemuI2cBurst> QemuArenaBridge::pollI2cBurst() const {
     burst.bus = m_arena->i2cBus;
     burst.flags = m_arena->i2cFlags;
     burst.periodNs = m_arena->i2cPeriodNs;
-    burst.txLen = std::min<uint32_t>(m_arena->i2cTxLen, 32);
+    burst.txLen = std::min<uint32_t>(m_arena->i2cTxLen, 64);
     burst.rxLen = std::min<uint32_t>(m_arena->i2cRxLen, 32);
     std::copy_n(m_arena->i2cTx, burst.txLen, burst.tx);
     return burst;
@@ -296,7 +296,7 @@ std::optional<QemuI2cBurst> QemuArenaBridge::pollI2cBurst() const {
 void QemuArenaBridge::completeI2cBurst(uint64_t sequence, uint32_t status,
                                        uint32_t firstNack, std::span<const uint8_t> rx,
                                        uint64_t stretchNs) {
-    if (!m_arena || m_protocol != QemuArenaProtocol::V4) return;
+    if (!m_arena || m_protocol != QemuArenaProtocol::V5) return;
     const size_t count = std::min<size_t>(rx.size(), 32);
     std::copy_n(rx.data(), count, m_arena->i2cRx);
     m_arena->i2cRxLen = static_cast<uint32_t>(count);

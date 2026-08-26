@@ -27,7 +27,7 @@ public:
     uint64_t negotiatedCapabilities() const;
     bool peerReady() const;
 
-    /** Resolve Environment usando LASECSIMUL_QEMU_ARENA_VERSION. V4 é o padrão; V3 é rollback. */
+    /** Resolve Environment usando LASECSIMUL_QEMU_ARENA_VERSION. V5 é o padrão; V3 é rollback. */
     static QemuArenaProtocol configuredProtocol();
 
     /** Lê o próximo evento pendente -- PERF-13 (protocolo v3, ver qemu_arena_abi.h): primeiro a

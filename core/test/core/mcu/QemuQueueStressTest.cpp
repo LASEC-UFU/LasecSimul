@@ -208,11 +208,11 @@ int main() {
                     "QEMU confirmou o mapping legado v3");
     } else {
         TEST_ASSERT(arenaProtocol == LSDN_QEMU_ARENA_ABI_MAJOR,
-                    "Core abriu a arena ABI v4 por padrao");
+                    "Core abriu a arena ABI v5 por padrao");
         TEST_ASSERT(arenaCapabilities == LSDN_QEMU_ARENA_CAPABILITIES,
-                    "Core e QEMU negociaram todas as capacidades v4 obrigatorias");
-        TEST_ASSERT(logs.find("arena ABI v4 mapped") != std::string::npos,
-                    "QEMU confirmou o descritor e o mapping v4");
+                    "Core e QEMU negociaram todas as capacidades v5 obrigatorias");
+        TEST_ASSERT(logs.find("arena ABI v5 mapped") != std::string::npos,
+                    "QEMU confirmou o descritor e o mapping v5");
     }
 
     const size_t profilePos = logs.rfind("[LasecSimul][PROFILE]");

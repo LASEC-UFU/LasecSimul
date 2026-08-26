@@ -1,5 +1,6 @@
 #include "mcu/qemu/QemuArenaBridge.hpp"
 #include <atomic>
+#include <array>
 #include <cassert>
 #include <chrono>
 #include <cstdio>
@@ -29,7 +30,7 @@ void pushQueueEntry(LsdnQemuArena& arena, uint64_t addr, uint64_t data, uint64_t
 void testOpenPollAndAcknowledge() {
     QemuArenaBridge bridge;
     bridge.open(QemuArenaOpenOptions{
-        uniqueArenaName(), true, QemuArenaProtocol::V4});
+        uniqueArenaName(), true, QemuArenaProtocol::V5});
     assert(bridge.isOpen());
     assert(bridge.arena() != nullptr);
     assert(bridge.protocolMajor() == LSDN_QEMU_ARENA_ABI_MAJOR);
@@ -37,7 +38,7 @@ void testOpenPollAndAcknowledge() {
     assert(bridge.descriptor()->magic == LSDN_QEMU_ARENA_ABI_MAGIC);
     assert(bridge.descriptor()->descriptorSize ==
            sizeof(LsdnQemuArenaDescriptor));
-    assert(bridge.descriptor()->arenaSize == sizeof(LsdnQemuArenaV4Mapping));
+    assert(bridge.descriptor()->arenaSize == sizeof(LsdnQemuArenaV5Mapping));
     assert(bridge.descriptor()->transportSize == sizeof(LsdnQemuArena));
     assert(bridge.descriptor()->queueDepth == LSDN_QEMU_ARENA_QUEUE_DEPTH);
     assert(bridge.descriptor()->coreCapabilities ==
@@ -101,7 +102,7 @@ void testPollWithDispatch() {
     QemuArenaBridge bridge;
     bridge.setMemoryRegions(std::vector<MemoryRegion>{MemoryRegion{0x1000, 0x10ff, ModuleKind::Usart, 2}});
     bridge.open(QemuArenaOpenOptions{
-        uniqueArenaName(), true, QemuArenaProtocol::V4});
+        uniqueArenaName(), true, QemuArenaProtocol::V5});
     pushQueueEntry(*bridge.arena(), 0x1004, 0xAB, LSDN_SIM_WRITE, 1);
 
     const QemuPollResult result = bridge.poll();
@@ -120,7 +121,7 @@ void testQueueMultipleEntriesDrainInOrder() {
     QemuArenaBridge bridge;
     bridge.setMemoryRegions(std::vector<MemoryRegion>{MemoryRegion{0x1000, 0x10ff, ModuleKind::Gpio, 0}});
     bridge.open(QemuArenaOpenOptions{
-        uniqueArenaName(), true, QemuArenaProtocol::V4});
+        uniqueArenaName(), true, QemuArenaProtocol::V5});
 
     pushQueueEntry(*bridge.arena(), 0x1004, 0x11, LSDN_SIM_WRITE, 10);
     pushQueueEntry(*bridge.arena(), 0x1008, 0x22, LSDN_SIM_WRITE, 20);
@@ -148,7 +149,7 @@ void testPollReadAcknowledgesViaQemuAction() {
     QemuArenaBridge bridge;
     bridge.setMemoryRegions(std::vector<MemoryRegion>{MemoryRegion{0x1000, 0x10ff, ModuleKind::Gpio, 0}});
     bridge.open(QemuArenaOpenOptions{
-        uniqueArenaName(), true, QemuArenaProtocol::V4});
+        uniqueArenaName(), true, QemuArenaProtocol::V5});
     bridge.arena()->simuTime = 1;
     bridge.arena()->simuAction = LSDN_SIM_READ;
     bridge.arena()->regAddr = 0x103C;
@@ -166,7 +167,7 @@ void testPollReadAcknowledgesViaQemuAction() {
 void testLegacySlotAckNeverConsumesNewQueueEntry() {
     QemuArenaBridge bridge;
     bridge.open(QemuArenaOpenOptions{
-        uniqueArenaName(), true, QemuArenaProtocol::V4});
+        uniqueArenaName(), true, QemuArenaProtocol::V5});
 
     // Reproduz a corrida real: QEMU antigo publica SIM_FREQ no slot; depois do poll() e antes do
     // ACK chega uma escrita na fila. O ACK do slot não pode avançar queueReadIndex.
@@ -194,6 +195,40 @@ void testLegacySlotAckNeverConsumesNewQueueEntry() {
     assert(bridge.arena()->queueReadIndex == bridge.arena()->queueWriteIndex);
 }
 
+void testI2cMailboxRoundTrip() {
+    QemuArenaBridge bridge;
+    bridge.open(QemuArenaOpenOptions{
+        uniqueArenaName(), true, QemuArenaProtocol::V5});
+    LsdnQemuArena& arena = *bridge.arena();
+    arena.i2cTimePs = 123'456;
+    arena.i2cBus = 1;
+    arena.i2cFlags = 1u | 2u | 4u;
+    arena.i2cPeriodNs = 2'500;
+    arena.i2cTxLen = 3;
+    arena.i2cRxLen = 2;
+    arena.i2cTx[0] = 0x85;
+    arena.i2cTx[1] = 0x10;
+    arena.i2cTx[2] = 0x20;
+    std::atomic_ref<uint64_t>(arena.i2cRequestSeq)
+        .store(7, std::memory_order_release);
+
+    const auto pending = bridge.pollI2cBurst();
+    assert(pending.has_value());
+    assert(pending->sequence == 7 && pending->timePs == 123'456);
+    assert(pending->bus == 1 && pending->flags == 7 && pending->periodNs == 2'500);
+    assert(pending->txLen == 3 && pending->rxLen == 2);
+    assert(pending->tx[0] == 0x85 && pending->tx[1] == 0x10 && pending->tx[2] == 0x20);
+
+    const std::array<uint8_t, 2> rx{0xAB, 0xCD};
+    bridge.completeI2cBurst(7, 3u, UINT32_MAX, rx, 900);
+    assert(std::atomic_ref<uint64_t>(arena.i2cResponseSeq)
+               .load(std::memory_order_acquire) == 7);
+    assert(arena.i2cStatus == 3u && arena.i2cFirstNack == UINT32_MAX);
+    assert(arena.i2cRxLen == 2 && arena.i2cRx[0] == 0xAB && arena.i2cRx[1] == 0xCD);
+    assert(arena.i2cStretchNs == 900);
+    assert(!bridge.pollI2cBurst().has_value());
+}
+
 void testV3RollbackKeepsLegacyPayload() {
     QemuArenaBridge bridge;
     bridge.open(QemuArenaOpenOptions{
@@ -213,10 +248,10 @@ void testV3RollbackKeepsLegacyPayload() {
            bridge.arena()->queueWriteIndex);
 }
 
-void testV4RejectsMissingRequiredCapability() {
+void testV5RejectsMissingRequiredCapability() {
     QemuArenaBridge bridge;
     bridge.open(QemuArenaOpenOptions{
-        uniqueArenaName(), true, QemuArenaProtocol::V4});
+        uniqueArenaName(), true, QemuArenaProtocol::V5});
     auto* descriptor =
         const_cast<LsdnQemuArenaDescriptor*>(bridge.descriptor());
     const uint64_t incomplete =
@@ -241,9 +276,10 @@ int main() {
     testQueueMultipleEntriesDrainInOrder();
     testPollReadAcknowledgesViaQemuAction();
     testLegacySlotAckNeverConsumesNewQueueEntry();
+    testI2cMailboxRoundTrip();
     testV3RollbackKeepsLegacyPayload();
-    testV4RejectsMissingRequiredCapability();
+    testV5RejectsMissingRequiredCapability();
     std::printf(
-        "OK: QemuArenaBridge ABI v4, rollback v3, poll and dispatch passed.\n");
+        "OK: QemuArenaBridge ABI v5, rollback v3, mailbox, poll and dispatch passed.\n");
     return 0;
 }

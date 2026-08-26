@@ -306,6 +306,7 @@ private:
     uint64_t m_pollGeneration = 0;
     uint64_t m_pollSchedulerResetGeneration = 0;
     bool m_pollEventScheduled = false;
+    uint64_t m_pollEventDueNs = UINT64_MAX;
     bool m_syntheticArenaForTesting = false;
     // Achado 2026-07-23 (sincronização de ritmo): lido cross-thread por pacingPositionNs(), sem
     // segurar m_callbackState->mutex -- precisa ser atomic pela mesma razão de m_latestVirtualTimePs

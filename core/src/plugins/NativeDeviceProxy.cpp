@@ -1,4 +1,6 @@
 #include "NativeDeviceProxy.hpp"
+#include <algorithm>
+#include <cctype>
 #include <cstring>
 #include <stdexcept>
 #include "PluginWatchdog.hpp"
@@ -114,12 +116,14 @@ LsdnMatrixView NativeDeviceProxy::toAbiView(void* context) {
 }
 
 NativeDeviceProxy::~NativeDeviceProxy() {
+    std::lock_guard<std::recursive_mutex> lock(m_deviceMutex);
     if (m_module && m_handle) {
         m_module->deviceVTable()->destroy(m_handle);
     }
 }
 
 void NativeDeviceProxy::stamp(MnaMatrixView& matrix) {
+    std::lock_guard<std::recursive_mutex> lock(m_deviceMutex);
     // Síncrono e sem watchdog de propósito: stamp() roda inline na mesma iteração do MnaSolver,
     // sem cosimulação (.spec/archive/legacy-v2/lasecsimul-native-devices.spec seção 10) -- um timeout aqui não tem
     // fallback seguro de "último valor conhecido" (a contribuição na matriz desta rodada já teria
@@ -158,6 +162,7 @@ void NativeDeviceProxy::stamp(MnaMatrixView& matrix) {
 }
 
 void NativeDeviceProxy::postStep(uint64_t timeNs) {
+    std::lock_guard<std::recursive_mutex> lock(m_deviceMutex);
     if (m_health == PluginHealthStatus::Faulted) return;
 
     const WatchdogOutcome outcome = PluginWatchdog::call(
@@ -183,6 +188,7 @@ void NativeDeviceProxy::postStep(uint64_t timeNs) {
 }
 
 void NativeDeviceProxy::onEvent(const ComponentEvent& event) {
+    std::lock_guard<std::recursive_mutex> lock(m_deviceMutex);
     if (m_health == PluginHealthStatus::Faulted) return;
     LsdnEvent abiEvent{};
     abiEvent.tag = event.tag;
@@ -194,11 +200,25 @@ void NativeDeviceProxy::onEvent(const ComponentEvent& event) {
 }
 
 bool NativeDeviceProxy::supportsI2cTransfer() const {
+    std::lock_guard<std::recursive_mutex> lock(m_deviceMutex);
     return m_module && m_module->deviceVTable()->i2c_transfer != nullptr &&
            m_health != PluginHealthStatus::Faulted;
 }
 
+std::optional<uint32_t> NativeDeviceProxy::i2cPinIndex(bool sda) const {
+    const std::string_view wanted = sda ? "sda" : "scl";
+    const auto& pins = m_hostContext->declaredPins;
+    for (uint32_t i = 0; i < pins.size(); ++i) {
+        std::string id = pins[i].id;
+        std::transform(id.begin(), id.end(), id.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        if (id == wanted) return i;
+    }
+    return std::nullopt;
+}
+
 I2cTransferResult NativeDeviceProxy::transferI2c(const I2cTransfer& transfer) {
+    std::lock_guard<std::recursive_mutex> lock(m_deviceMutex);
     I2cTransferResult result{};
     if (!supportsI2cTransfer()) return result;
     LsdnI2cTransfer request{};
@@ -230,6 +250,7 @@ I2cTransferResult NativeDeviceProxy::transferI2c(const I2cTransfer& transfer) {
 }
 
 size_t NativeDeviceProxy::getState(uint8_t* out, size_t cap) const {
+    std::lock_guard<std::recursive_mutex> lock(m_deviceMutex);
     size_t result = 0;
     const bool ok = CrashGuard::call(
         m_meta.typeId, [&] { result = m_module->deviceVTable()->get_state(m_handle, out, static_cast<uint32_t>(cap)); });
@@ -241,6 +262,7 @@ size_t NativeDeviceProxy::getState(uint8_t* out, size_t cap) const {
 }
 
 void NativeDeviceProxy::setState(const uint8_t* in, size_t len) {
+    std::lock_guard<std::recursive_mutex> lock(m_deviceMutex);
     const bool ok = CrashGuard::call(
         m_meta.typeId, [&] { m_module->deviceVTable()->set_state(m_handle, in, static_cast<uint32_t>(len)); });
     if (!ok) m_health = PluginHealthStatus::Faulted;

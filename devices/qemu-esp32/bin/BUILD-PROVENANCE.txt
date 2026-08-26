@@ -1,18 +1,25 @@
-QEMU source: https://github.com/josuemoraisgh/qemu_lasecSimul
-QEMU source baseline: 721ff59 (fix(esp32): avoid per-byte I2C ACK stalls)
-Reference patches incorporated in the runtime:
-- devices/qemu-esp32/patches/0001-esp32-realtime-wdt-and-interrupt-status.patch
-- devices/qemu-esp32/patches/0002-esp32-i2c-electrical-start-timing.patch
-- devices/qemu-esp32/patches/0003-esp32-i2c-address-ack-burst.patch
-- devices/qemu-esp32/patches/0004-esp32-i2c-cancel-stale-timer.patch
-Also built from qemu_lasecSimul `main` branch commits (not yet folded into a
-numbered patch against the 721ff59 baseline -- see SOURCE.md):
-- cc68b4a debug(xtensa,esp32): add temporary cache/PC-sampler trace instrumentation
-- 71a0b06 fix(esp32): stabilize interrupt watchdog and skip redundant I2C ACK reads
-Build source: QEMU baseline 721ff59 plus patch 0004, ABI v4 runtime, plus the
-two main-branch commits above
+QEMU source: C:\SourceCode\qemu_lasecSimul
+QEMU repository: https://github.com/josuemoraisgh/qemu_lasecSimul
+QEMU HEAD: 71a0b06bef9b12afcc8f686da55fb3eabe685110
+Working-tree source: HEAD plus the ABI v5/I2C burst fast-path changes in
+hw/i2c/esp32_i2c.c, hw/xtensa/esp32.c, include/hw/i2c/esp32_i2c.h and
+softmmu/simuliface.c/.h (burst mailbox implementation plus a per-call
+wallWaitNs trace gated by LASECSIMUL_I2C_BURST_TRACE, added while
+diagnosing the Windows timer-resolution bottleneck below). These sources
+must be committed before a release tag.
 Configure: xtensa-softmmu, gcrypt, slirp
-Executable SHA-256: FAF760CE51CAC634D40092161A5B050E95AB628A2EDCED3E44600CDF3B3B8483
-Release: post-v0.0.26 I2C stale-timer fix with realtime interrupt-WDT isolation
-  and address-only I2C ACK sampling (still I2C-throughput-limited under
-  MTTCG -- see docs/39-i2c-mttcg-throughput-ceiling-2026-08-26.md)
+Executable SHA-256: B0D6394DA5728BC876AF090AE04B629B5656D7D4FE505B6FC081A439CEBE3DA7
+Build date: 2026-08-26
+Runtime contract: QEMU arena ABI v5, negotiated I2C burst mailbox, v3 rollback.
+
+Paired Core-side requirement (see core/src/main.cpp): Windows builds must call
+timeBeginPeriod(1) for the I2C burst mailbox to run at its designed speed.
+Measured live 2026-08-26: without it, every sleep_for()/wait_for() with a
+short timeout in McuComponent's background poll thread rounds up to the
+host's default ~15.6ms timer tick (85% of inter-burst gaps landed within
+800us of an exact multiple of 15625us), throttling burst throughput to
+roughly 40/s regardless of how fast the burst protocol or electrical model
+itself run. With timeBeginPeriod(1), the same workload sustained ~145
+bursts/s and a full SSD1306 frame (display.display()) dropped from
+~0.84-0.91s wall to ~0.12-0.19s wall (measured via the
+.codex-validation/i2c-throughput probe firmware).

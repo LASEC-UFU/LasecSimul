@@ -95,6 +95,7 @@ void McuComponent::startPolling(std::vector<DeferredSchedulerCall>* deferred) {
         m_pollSchedulerResetGeneration = schedulerResetGeneration;
         ++m_pollGeneration;
         m_pollEventScheduled = false;
+        m_pollEventDueNs = UINT64_MAX;
     }
     m_polling.store(true, std::memory_order_release);
     scheduleNextPoll(deferred);
@@ -116,8 +117,17 @@ void McuComponent::scheduleNextPoll(std::vector<DeferredSchedulerCall>* deferred
 }
 
 void McuComponent::schedulePollAt(uint64_t timeNs, std::vector<DeferredSchedulerCall>* deferred) {
-    if (m_pollEventScheduled) return;
+    if (m_pollEventScheduled) {
+        if (timeNs >= m_pollEventDueNs) return;
+        /* Um mailbox síncrono (I2C burst) pode chegar enquanto há um poll marcado para um evento
+         * normal futuro. Ele precisa preemptar esse prazo: o QEMU não pode avançar até receber a
+         * resposta, portanto esperar o evento futuro cria um bloqueio circular com o pacing. Não
+         * há cancelamento físico no Scheduler; avance a geração para tornar o callback antigo um
+         * no-op e publique o callback anterior. */
+        ++m_pollGeneration;
+    }
     m_pollEventScheduled = true;
+    m_pollEventDueNs = timeNs;
     const std::weak_ptr<CallbackState> weakState = m_callbackState;
     const uint64_t generation = m_pollGeneration;
     auto callback = [weakState, generation] {
@@ -139,6 +149,7 @@ void McuComponent::schedulePollAt(uint64_t timeNs, std::vector<DeferredScheduler
 
 void McuComponent::onPollEvent() {
     m_pollEventScheduled = false;
+    m_pollEventDueNs = UINT64_MAX;
     if (m_scheduler.isRunning()) {
         // PERF-12: com um worker de verdade rodando em background, o busy-wait "sem evento ainda"
         // sai da thread do Scheduler (onde travava TODOS os outros MCUs/settle atrás dele na fila,
@@ -184,7 +195,13 @@ void McuComponent::onPollEvent() {
 
 McuComponent::PollStep McuComponent::pollStepLocked(std::vector<DeferredSchedulerCall>* deferred) {
     qemu::QemuArenaBridge& arena = m_controller.arenaBridge();
-    if (processI2cBurstLocked()) return PollStep::DispatchedReady;
+    if (arena.pollI2cBurst()) {
+        if (m_scheduler.isRunning() && !m_scheduler.isCurrentThreadWorker()) {
+            schedulePollAt(m_scheduler.nowNs(), deferred);
+            return PollStep::DeferredFuture;
+        }
+        if (processI2cBurstLocked()) return PollStep::DispatchedReady;
+    }
     const qemu::QemuPollResult result = arena.poll();
     if (!result.hasEvent || !result.event) return PollStep::NoEvent;
 
@@ -271,9 +288,11 @@ bool McuComponent::processI2cBurstLocked() {
     if (m_i2cTransferHandler && pending->txLen > 0) {
         const bool start = (pending->flags & 1u) != 0;
         const bool read = (pending->flags & 4u) != 0;
-        const uint32_t payloadOffset = start ? 1u : 0u;
+        /* ABI 5 sempre transporta o byte de endereço em tx[0], inclusive em uma continuação sem
+         * START. Nesse caso ele é metadado de roteamento e não deve chegar ao payload do plugin. */
+        const uint32_t payloadOffset = 1u;
         I2cTransfer transfer{};
-        transfer.address = start ? static_cast<uint8_t>(pending->tx[0] >> 1) : 0;
+        transfer.address = static_cast<uint8_t>(pending->tx[0] >> 1);
         transfer.read = read;
         transfer.start = start;
         transfer.stop = (pending->flags & 2u) != 0;
@@ -308,6 +327,9 @@ void McuComponent::runBackgroundPollLoop(std::shared_ptr<CallbackState> state) {
     for (;;) {
         PollStep step = PollStep::NoEvent;
         bool stop = false;
+        std::optional<qemu::QemuI2cBurst> backgroundI2c;
+        I2cTransferHandler backgroundI2cHandler;
+        uint32_t backgroundComponentIndex = 0;
         std::vector<DeferredSchedulerCall> deferred;
         {
             std::lock_guard<std::recursive_mutex> lock(state->mutex);
@@ -320,6 +342,15 @@ void McuComponent::runBackgroundPollLoop(std::shared_ptr<CallbackState> state) {
                 if (!arena.isOpen()) {
                     stop = true;
                     restartAfterExit = true;
+                } else if (arena.pollI2cBurst() && self->m_scheduler.isRunning() &&
+                           !self->m_scheduler.isCurrentThreadWorker()) {
+                    /* Não agende o mailbox na timeline: o QEMU está bloqueado esperando esta
+                     * resposta e pode não produzir o evento futuro que liberaria o pacing. Copie
+                     * o pedido aqui e execute depois de soltar o mutex do MCU. A topologia é
+                     * imutável durante Run e NativeDeviceProxy serializa o próprio estado. */
+                    backgroundI2c = arena.pollI2cBurst();
+                    backgroundI2cHandler = self->m_i2cTransferHandler;
+                    backgroundComponentIndex = self->m_componentIndex;
                 } else {
                     step = self->pollStepLocked(&deferred);
                     if (step == PollStep::NoEvent && !self->m_scheduler.isRunning()) {
@@ -355,7 +386,53 @@ void McuComponent::runBackgroundPollLoop(std::shared_ptr<CallbackState> state) {
         // deadlockaria assim que as duas threads se cruzassem no mesmo MCU.
         for (DeferredSchedulerCall& call : deferred) call();
 
-        if (stop || step == PollStep::DeferredFuture) break; // devolvido ao timeline do Scheduler.
+        if (backgroundI2c) {
+            std::array<uint8_t, 32> rx{};
+            I2cTransferResult result{};
+            if (backgroundI2cHandler && backgroundI2c->txLen > 0) {
+                const bool start = (backgroundI2c->flags & 1u) != 0;
+                I2cTransfer transfer{};
+                transfer.address = static_cast<uint8_t>(backgroundI2c->tx[0] >> 1);
+                transfer.read = (backgroundI2c->flags & 4u) != 0;
+                transfer.start = start;
+                transfer.stop = (backgroundI2c->flags & 2u) != 0;
+                transfer.txData = backgroundI2c->tx + 1;
+                transfer.txSize = backgroundI2c->txLen - 1;
+                transfer.rxData = rx.data();
+                transfer.rxSize = backgroundI2c->rxLen;
+                transfer.periodNs = backgroundI2c->periodNs;
+                result = backgroundI2cHandler(backgroundComponentIndex, backgroundI2c->bus, transfer);
+            }
+            {
+                std::lock_guard<std::recursive_mutex> lock(state->mutex);
+                McuComponent* self = state->owner;
+                if (self && self->m_controller.arenaBridge().isOpen()) {
+                    const uint32_t status = (result.handled ? 1u : 0u) |
+                                            (result.addressAck ? 2u : 0u);
+                    self->m_controller.arenaBridge().completeI2cBurst(
+                        backgroundI2c->sequence, status, result.firstNack,
+                        std::span<const uint8_t>(rx.data(), std::min<uint32_t>(result.rxSize, 32)),
+                        result.stretchNs);
+                }
+            }
+            continue;
+        }
+
+        if (stop) break;
+        if (step == PollStep::DeferredFuture) {
+            /* ABI 5 acrescentou um pedido síncrono que pode ser publicado DEPOIS de termos
+             * encontrado/agendado um evento normal futuro. Sem doorbell cross-process, encerrar
+             * esta thread aqui deixa o mailbox sem consumidor enquanto o QEMU está bloqueado e
+             * já não consegue publicar outro heartbeat que acorde o Core. Continue observando a
+             * arena; o callback futuro já está deduplicado por schedulePollAt(). O lock é solto a
+             * cada iteração, então o Scheduler pode executar o callback normalmente. */
+            /* `yield()` sozinho causa starvation no Windows: esta thread readquire o mutex em um
+             * laço quente antes de a worker conseguir executar o callback recém-agendado. A pausa
+             * ocorre fora do mutex e limita a latência de descoberta do mailbox sem ocupar um
+             * núcleo nem impedir o Scheduler. */
+            std::this_thread::sleep_for(std::chrono::microseconds(50));
+            continue;
+        }
         if (step == PollStep::DispatchedReady) continue; // agrupa ações do mesmo timestamp.
         std::this_thread::yield();
     }
