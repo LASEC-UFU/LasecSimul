@@ -1,0 +1,90 @@
+diff --git a/hw/i2c/esp32_i2c.c b/hw/i2c/esp32_i2c.c
+index 8bd0400..6af2db8 100644
+--- a/hw/i2c/esp32_i2c.c
++++ b/hw/i2c/esp32_i2c.c
+@@ -21,6 +21,28 @@ static void esp32_i2c_update_irq(Esp32I2CState * s)
+     qemu_set_irq(s->irq, irq_state);
+ }
+ 
++/*
++ * A FIFO vazia com bytesTx != 0 significa que uma transacao temporizada
++ * sobreviveu a um TX_FIFO_RST/reset ou que o convidado publicou uma contagem
++ * inconsistente. fifo8_pop()/fifo8_peek() abortam o processo inteiro nesse
++ * caso. Falhe a transacao I2C, preserve o QEMU e deixe o driver convidado
++ * recuperar no proximo comando.
++ */
++static void esp32_i2c_abort_empty_tx(Esp32I2CState *s)
++{
++    timer_del(&s->event_timer);
++    s->bytesTx = 0;
++    s->ackSamplePending = false;
++    s->sr_reg &= ~(1 << 4);             /* I2C_BUS_BUSY */
++    s->int_raw_reg &= ~(1 << 6);        /* I2C_BYTE_TRANS */
++    s->int_raw_reg |= (1 << 10) | (1 << 7); /* ACK_ERR + TRANS_COMPLETE */
++    if (s->lastCMD < ESP32_I2C_CMD_COUNT) {
++        s->cmd_reg[s->lastCMD] =
++            FIELD_DP32(s->cmd_reg[s->lastCMD], I2C_CMD, DONE, 1);
++    }
++    esp32_i2c_update_irq(s);
++}
++
+ static void esp32_i2c_do_transaction( void* opaque )
+ {
+     Esp32I2CState* s = Esp32_I2C(opaque);
+@@ -66,6 +88,11 @@ static void esp32_i2c_do_transaction( void* opaque )
+     case I2C_OPCODE_WRITE:
+     {
+         if( s->bytesTx == 0 ) s->bytesTx = cmd & 0xFF; //FIELD_EX32( cmd, I2C_CMD, BYTE_NUM );
++        if (fifo8_num_used(&s->tx_fifo) == 0) {
++            error_report("esp32_i2c: timed write found an empty TX FIFO");
++            esp32_i2c_abort_empty_tx(s);
++            return;
++        }
+         uint8_t data = fifo8_peek( &s->tx_fifo );
+         //printf("Qemu: esp32_i2c CMD write %i %i\n", s->bytesTx, data ); fflush( stdout );
+         writeReg( s->iomem.addr+A_I2C_CMD, (cmd & ~0xFF) | data);
+@@ -153,6 +180,11 @@ static void esp32_i2c_event( void* opaque ) // Timer event
+             ackT = (uint8_t)(((status & (1u << 4)) == 0) ? (status & 1u) : 0u);
+             s->ackSamplePending = false;
+         }
++        if (fifo8_num_used(&s->tx_fifo) == 0) {
++            error_report("esp32_i2c: stale write timer found an empty TX FIFO");
++            esp32_i2c_abort_empty_tx(s);
++            return;
++        }
+         fifo8_pop( &s->tx_fifo );
+         s->bytesTx--;
+ 
+@@ -310,7 +342,21 @@ static void esp32_i2c_write(void * opaque, hwaddr addr, uint64_t value, unsigned
+     case A_I2C_FIFO_CONF:
+         if( FIELD_EX32(value, I2C_FIFO_CONF, NONFIFO_EN) ) error_report("esp32_i2c: APB mode not implemented");
+         if( FIELD_EX32(value, I2C_FIFO_CONF, RX_FIFO_RST)) fifo8_reset(&s->rx_fifo);
+-        if( FIELD_EX32(value, I2C_FIFO_CONF, TX_FIFO_RST)) fifo8_reset(&s->tx_fifo);
++        if( FIELD_EX32(value, I2C_FIFO_CONF, TX_FIFO_RST)) {
++            /*
++             * O ESP-IDF pulsa TX_FIFO_RST antes de reutilizar a FIFO. Um
++             * event_timer da transferencia anterior nao pode permanecer
++             * armado: ele dispararia depois do reset e faria fifo8_pop() na
++             * FIFO vazia ou, pior, consumiria o primeiro byte da transacao
++             * seguinte.
++             */
++            timer_del(&s->event_timer);
++            fifo8_reset(&s->tx_fifo);
++            s->bytesTx = 0;
++            s->ackSamplePending = false;
++            s->sr_reg &= ~(1 << 4);      /* I2C_BUS_BUSY */
++            s->int_raw_reg &= ~(1 << 6); /* I2C_BYTE_TRANS */
++        }
+         break;
+     case A_I2C_FIFO_DATA:
+         if( fifo8_num_free(&s->tx_fifo) == 0) error_report("esp32_i2c: write to I2C TX FIFO while it is full");
+@@ -409,6 +455,9 @@ static void esp32_i2c_reset(DeviceState * dev)
+ {
+     Esp32I2CState * s = Esp32_I2C(dev);
+ 
++    /* Nao permita que um callback da instancia anterior rode apos as FIFOs
++     * serem zeradas. Mesmo contrato de reset ja aplicado ao TX da UART. */
++    timer_del(&s->event_timer);
+     fifo8_reset(&s->rx_fifo);
+     fifo8_reset(&s->tx_fifo);
+     s->period_ns = 0;

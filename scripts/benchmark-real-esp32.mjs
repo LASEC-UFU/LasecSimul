@@ -175,6 +175,7 @@ async function main() {
   }
   const directUartValue = await client.getProperty(mcuId, "uart0_tx_monitor_hex").catch(() => "");
   const directUartHex = typeof directUartValue === "string" ? directUartValue : "";
+  const directUartText = Buffer.from(directUartHex, "hex").toString("latin1");
   const displayEntry = [...instances.entries()].find(([projectId]) =>
     project.components.find((component) => component.id === projectId)?.typeId === "outputs.ssd1306");
   const displayState = displayEntry ? await client.getComponentState(displayEntry[1].instanceId) : undefined;
@@ -193,10 +194,11 @@ async function main() {
   } : undefined;
   const metrics = await client.getPerformanceMetrics();
   const qemuLogs = await client.getMcuLogs(mcuId);
-  if (displayEntry && (!display?.enabled || display.litPixels === 0)) {
+  const allowIncomplete = process.env.LASECSIMUL_BENCHMARK_ALLOW_INCOMPLETE === "1";
+  if (!allowIncomplete && displayEntry && (!display?.enabled || display.litPixels === 0)) {
     throw new Error(`SSD1306 não foi atualizado: ${JSON.stringify(display)}`);
   }
-  if (/Guru Meditation|panic'ed|CORRUPTED/i.test(qemuLogs)) {
+  if (!allowIncomplete && /Guru Meditation|panic'ed|CORRUPTED/i.test(qemuLogs + directUartText)) {
     throw new Error("Firmware entrou em panic durante a execução real.");
   }
   const rates = samples.map((sample) => sample.rate);
@@ -236,6 +238,12 @@ async function main() {
       `plot=${plotUartHex.length / 2} bytes`
     );
   }
+  const directUartSummary = uartSummary(directUartHex);
+  const lasecPlotUartSummary = uartSummary(plotUartHex);
+  if (!allowIncomplete && process.env.LASECSIMUL_BENCHMARK_REQUIRE_TELEMETRY === "1" &&
+      directUartSummary.telemetryLines === 0) {
+    throw new Error("Firmware não chegou ao loop de telemetria dentro da janela do benchmark.");
+  }
   const compact = process.env.LASECSIMUL_BENCHMARK_COMPACT === "1";
   const result = {
     fixture: { projectPath, firmwarePath, boardProjectId, mcuId, durationMs, realTimeRate },
@@ -253,15 +261,15 @@ async function main() {
     } : undefined,
     uart: {
       exactMatch: directUartHex === plotUartHex,
-      directMonitor: uartSummary(directUartHex),
-      lasecPlot: uartSummary(plotUartHex),
+      directMonitor: directUartSummary,
+      lasecPlot: lasecPlotUartSummary,
     },
     stopLatencyMs,
     display,
     metrics,
     ...(compact ? {
       qemu: {
-        guruMeditation: /Guru Meditation|panic'ed|CORRUPTED/i.test(qemuLogs),
+        guruMeditation: /Guru Meditation|panic'ed|CORRUPTED/i.test(qemuLogs + directUartText),
         i2cAckErrors: (qemuLogs.match(/esp32_i2c_event ackERR/g) ?? []).length,
       },
     } : { qemuLogs }),
