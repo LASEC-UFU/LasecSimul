@@ -1413,6 +1413,20 @@ if(NOT WIN32)
 endif()
 add_test(NAME pin_change_dispatch COMMAND pin_change_dispatch_test)
 
+# postStep() era pura virtual mas nenhum SimulationSession real a despachava (ver
+# IComponentModel.hpp::isDynamic() e SimulationSession::advanceDynamicComponentsUnlocked) --
+# deixava rolagem de hardware SSD1306/animacao de servo mortas em silencio.
+add_executable(dynamic_component_dispatch_test
+    test/core/session/DynamicComponentDispatchTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(dynamic_component_dispatch_test PRIVATE include src)
+target_link_libraries(dynamic_component_dispatch_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+if(NOT WIN32)
+    target_link_libraries(dynamic_component_dispatch_test PRIVATE dl)
+endif()
+add_test(NAME dynamic_component_dispatch COMMAND dynamic_component_dispatch_test)
+
 # Watchdog de plugins nativos (Épico D do roadmap de pendências)
 add_executable(plugin_watchdog_test test/core/plugins/PluginWatchdogTest.cpp src/plugins/CrashGuard.cpp)
 target_include_directories(plugin_watchdog_test PRIVATE include src)

@@ -1721,6 +1721,10 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
             {"signalLastErrorRatio", core.signalLastErrorRatio}, {"solverThreads", core.solverThreads},
             {"solverWorkerThreads", core.solverWorkerThreads},
             {"solverMaxParallelTasks", core.solverMaxParallelTasks},
+            {"maxSettleNanoseconds", core.maxSettleNanoseconds},
+            {"maxSettleAtNowNs", core.maxSettleAtNowNs},
+            {"advanceLimitWaitCount", core.advanceLimitWaitCount},
+            {"advanceLimitWaitNanoseconds", core.advanceLimitWaitNanoseconds},
             {"simulationPlan", plan ? nlohmann::json{
                 {"generation", plan->generation},
                 {"runtimeGeneration", session.runtimeState().planGeneration},

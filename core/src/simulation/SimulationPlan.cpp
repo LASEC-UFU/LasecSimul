@@ -55,6 +55,7 @@ void validateExecution(const DenseExecutionLists& lists, size_t capacity) {
     validateDenseList(lists.signalSubscribers, capacity, &lists.activeComponents, "signalSubscribers");
     validateDenseList(lists.plcComponents, capacity, &lists.activeComponents, "plcComponents");
     validateDenseList(lists.pythonComponents, capacity, &lists.activeComponents, "pythonComponents");
+    validateDenseList(lists.dynamicComponents, capacity, &lists.activeComponents, "dynamicComponents");
 }
 
 bool isSensorBridge(ElectricalSignalBridgeKind kind) {
@@ -95,6 +96,7 @@ std::string structuralHash(const PlanCompileInput& input) {
     hashList(hash, lists.signalSubscribers);
     hashList(hash, lists.plcComponents);
     hashList(hash, lists.pythonComponents);
+    hashList(hash, lists.dynamicComponents);
     hashScalar(hash, input.resolvedSignalSubscribers.size());
     for (const SignalPlan::Subscriber& subscriber : input.resolvedSignalSubscribers) {
         hashScalar(hash, subscriber.componentIndex);

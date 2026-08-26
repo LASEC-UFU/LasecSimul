@@ -61,6 +61,9 @@ struct DenseExecutionLists {
     std::vector<uint32_t> signalSubscribers;
     std::vector<uint32_t> plcComponents;
     std::vector<uint32_t> pythonComponents;
+    /** Componentes com isDynamic()==true, despachados por `advanceDynamicComponentsUnlocked` a uma
+     * cadência limitada (ver SimulationSession.hpp). */
+    std::vector<uint32_t> dynamicComponents;
 };
 
 struct ElectricalGroupPlan {

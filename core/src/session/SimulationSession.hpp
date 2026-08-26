@@ -124,6 +124,13 @@ struct SimulationPerformanceSnapshot {
     size_t solverThreads = 0;
     size_t solverWorkerThreads = 0;
     size_t solverMaxParallelTasks = 1;
+    /** Duração da MAIOR chamada individual de settle (não a soma) e o instante (m_nowNs) em que
+     * ela começou -- ver Scheduler::MetricsSnapshot::maxSettleNanoseconds/maxSettleAtNowNs. Só
+     * lido daqui pra fora (getPerformanceMetrics); nunca populado neste struct. */
+    uint64_t maxSettleNanoseconds = 0;
+    uint64_t maxSettleAtNowNs = 0;
+    uint64_t advanceLimitWaitCount = 0;
+    uint64_t advanceLimitWaitNanoseconds = 0;
 };
 
 /** Um frame visual coerente, publicado apenas em fronteira de stable step. Estados de componente
@@ -524,6 +531,14 @@ private:
     void rebuildSignalRoutesIfNeeded();
     void acquireSubscribedSignalsUnlocked(uint64_t timestampNs);
     void applySignalActuatorsUnlocked();
+    /** Despacha postStep() para `m_dynamicComponentIndices`, mas não a cada passo MNA aceito (que
+     * pode acontecer em microssegundos simulados sob passo adaptativo) -- acumula `acceptedDeltaNs`
+     * por componente e só chama quando o total atinge `kDynamicComponentTickNs` (~60Hz, mesma
+     * granularidade que simulide-complex/src/lib.c já usa pra rolagem de OLED/servo). Necessário
+     * porque `NativeDeviceProxy::postStep` passa por `PluginWatchdog::call`, que cria uma thread
+     * nova por chamada sempre que o manifesto declara `stepTimeoutMs` (todo device "complex" declara
+     * 8-10ms) -- despachar a cada passo MNA geraria uma tempestade de criação de threads. */
+    void advanceDynamicComponentsUnlocked(uint64_t acceptedDeltaNs);
     void publishElectricalSensorsToSignalUnlocked();
     void onStableStepUnlocked(uint64_t timestampNs);
     void scheduleNextSignalBoundaryUnlocked(uint64_t timestampNs);
@@ -645,6 +660,12 @@ private:
     std::vector<uint32_t>& m_mcuComponentIndices = m_runtimeState.execution.mcuComponents;
     std::vector<uint32_t>& m_plcComponentIndices = m_runtimeState.execution.plcComponents;
     std::vector<uint32_t>& m_signalSubscribers = m_runtimeState.execution.signalSubscribers;
+    std::vector<uint32_t>& m_dynamicComponentIndices = m_runtimeState.execution.dynamicComponents;
+    /** componentIndex -> ns simulados acumulados desde o último postStep() despachado -- ver
+     * `advanceDynamicComponentsUnlocked`. Entrada removida (não zerada) quando o componente sai da
+     * lista dinâmica, pra uma instância nova reaproveitando o mesmo índice nunca herdar acumulado
+     * da anterior. */
+    std::unordered_map<uint32_t, uint64_t> m_dynamicAccumulatedNs;
     std::unordered_map<std::string, uint32_t> m_signalAliases;
     simulation::SignalGraphDefinition m_signalGraphDefinition;
     std::vector<simulation::ElectricalSignalBridgeDefinition> m_electricalSignalBridgeDefinitions;

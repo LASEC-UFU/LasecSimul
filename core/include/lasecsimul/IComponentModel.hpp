@@ -139,8 +139,19 @@ public:
      * decisão de cada componente não-linear concreto, não do Scheduler. */
     virtual bool hasConverged() const { return true; }
 
-    /** Hot path por passo — só chamado para componentes registrados como dinâmicos (ver Scheduler). */
-    virtual void postStep(uint64_t timeNs) = 0;
+    /** Hot path por passo — só chamado para componentes registrados como dinâmicos (ver
+     * SimulationSession::m_dynamicComponentIndices). Recebe o delta acumulado (ns) desde a última
+     * chamada, não o instante absoluto -- mesma convenção usada pelos plugins nativos reais
+     * (simulide-complex/src/lib.c: `oled_scroll_elapsed_ns += dt_ns`). */
+    virtual void postStep(uint64_t deltaNs) = 0;
+
+    /** true só para componentes cujo postStep() faz algo de verdade -- controla a inclusão em
+     * `SimulationSession::m_dynamicComponentIndices`, despachado a uma cadência limitada (não a
+     * cada passo MNA aceito, ver `advanceDynamicComponentsUnlocked`). Default false: os builtins
+     * C++ avançam estado via commitTransientStep(), não postStep() (todo `postStep` deles é vazio
+     * hoje -- ver comentário em Diode.hpp). Só `NativeDeviceProxy` sobrescreve, porque só os
+     * plugins nativos (ex.: rolagem/servo em simulide-complex) usam esse caminho de verdade. */
+    virtual bool isDynamic() const { return false; }
 
     /** Contrato transiente em duas fases. begin nunca confirma historico; commit so ocorre depois
      * de o passo MNA convergir. rollback descarta o candidato quando o passo for rejeitado. */

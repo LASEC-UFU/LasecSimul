@@ -68,6 +68,12 @@ public:
     std::span<Pin> pins() override { return m_hostContext->declaredPins; }
 
     void stamp(MnaMatrixView& matrix) override;
+    /** Sempre true: todo plugin nativo passa pelo mesmo `post_step` da vtable C. A maioria tem corpo
+     * vazio hoje (ex.: example-blinker, simulide-logic/-peripherals/-sensors -- ver comentários nos
+     * próprios .c), então o custo de incluir é só a chamada em si; só simulide-complex (OLED
+     * scroll/servo) de fato usa. Sem essa flag, `postStep` nunca era despachado (ver
+     * `SimulationSession::advanceDynamicComponentsUnlocked`). */
+    bool isDynamic() const override { return true; }
     void postStep(uint64_t timeNs) override;
     void onEvent(const ComponentEvent& event) override;
     size_t getState(uint8_t* out, size_t cap) const override;

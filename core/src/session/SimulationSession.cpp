@@ -44,6 +44,12 @@ constexpr size_t kMaxComponentStateBytes = 16u * 1024u * 1024u;
 // instancia e' o artefato carregado via SimulationSession::loadPlcArtifact(), nao o typeId.
 constexpr const char* kPlcInstanceTypeId = "plc.instance";
 
+// Cadência máxima de postStep() por componente dinâmico (ver
+// SimulationSession::advanceDynamicComponentsUnlocked). 16'666'667ns = mesma constante de 60Hz que
+// simulide-complex/src/lib.c já usa internamente para o tick de rolagem de OLED/servo -- não é um
+// valor novo escolhido a dedo, é a granularidade que o único consumidor real já assume.
+constexpr uint64_t kDynamicComponentTickNs = 16'666'667ull;
+
 std::vector<uint8_t> readComponentStateWithGrowth(
     IComponentModel& component,
     size_t initialCapacity,
@@ -242,6 +248,7 @@ SimulationSession::SimulationSession(plugins::GlobalPluginCache& globalCache, si
                     fpgaComponent->advanceLockstep(previous, current);
                 }
             }
+            if (accept) advanceDynamicComponentsUnlocked(current - previous);
             if (accept) m_runtimeState.signals.commitContinuousStep();
             else m_runtimeState.signals.rollbackContinuousStep();
             return {accept, maximumError};
@@ -303,6 +310,12 @@ simulation::PlanDomain SimulationSession::refreshComponentExecutionLists(uint32_
     }
     if (setMembership(m_signalSubscribers, component && !component->signalSubscriptions().empty())) {
         changed = changed | simulation::PlanDomain::ExecutionIndex | simulation::PlanDomain::Signal;
+    }
+    if (setMembership(m_dynamicComponentIndices, component && component->isDynamic())) {
+        // Sai ou entra na lista: zera o acumulado em vez de deixar (index reciclado por uma
+        // instância nova herdaria ns acumulados de quem ocupava este índice antes).
+        m_dynamicAccumulatedNs.erase(componentIndex);
+        changed = changed | simulation::PlanDomain::ExecutionIndex;
     }
     return changed;
 }
@@ -694,7 +707,9 @@ SimulationPerformanceSnapshot SimulationSession::performanceMetrics() const {
             signalMetrics.acceptedDynamicSteps, signalMetrics.rejectedDynamicSteps,
             signalMetrics.discontinuityEvents, signalMetrics.lastAcceptedDynamicStepNs,
             signalMetrics.lastDynamicErrorRatio, m_mnaSolver.threadCount(),
-            m_mnaSolver.workerThreadCount(), m_mnaSolver.resourceBudget().maxParallelTasks};
+            m_mnaSolver.workerThreadCount(), m_mnaSolver.resourceBudget().maxParallelTasks,
+            schedulerMetrics.maxSettleNanoseconds, schedulerMetrics.maxSettleAtNowNs,
+            schedulerMetrics.advanceLimitWaitCount, schedulerMetrics.advanceLimitWaitNanoseconds};
 }
 
 void SimulationSession::registerKnownPluginTypes() {
@@ -1008,6 +1023,20 @@ void SimulationSession::applySignalActuatorsUnlocked() {
             break;
         }
         if (changed) m_scheduler.dirtySet().insert(componentIndex);
+    }
+}
+
+void SimulationSession::advanceDynamicComponentsUnlocked(uint64_t acceptedDeltaNs) {
+    if (acceptedDeltaNs == 0 || m_dynamicComponentIndices.empty()) return;
+    for (const uint32_t index : m_dynamicComponentIndices) {
+        uint64_t& accumulated = m_dynamicAccumulatedNs[index];
+        accumulated += acceptedDeltaNs;
+        if (accumulated < kDynamicComponentTickNs) continue;
+        // Entrega o acumulado (não só o delta do último passo aceito) -- o consumidor real
+        // (simulide-complex/src/lib.c::post_step) só faz `elapsed_ns += dt_ns`, então lotes maiores
+        // e mais raros são equivalentes a muitos pequenos, sem perda de precisão temporal.
+        m_componentInstances[index]->postStep(accumulated);
+        accumulated = 0;
     }
 }
 

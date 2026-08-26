@@ -52,6 +52,9 @@ public:
          * settle mais lento com saltos de tempo virtual/waits do lado QEMU exige saber ONDE na
          * timeline ele ocorreu, não só quanto durou. */
         uint64_t maxSettleAtNowNs = 0;
+        /** Ver m_advanceLimitWaitCount/m_advanceLimitWaitNanoseconds. */
+        uint64_t advanceLimitWaitCount = 0;
+        uint64_t advanceLimitWaitNanoseconds = 0;
     };
     struct TimeStepDecision { bool accept = true; double errorRatio = 0.0; };
     using SettleStepFn = std::function<bool()>;
@@ -119,10 +122,23 @@ public:
     /** Acorda a worker se ela estiver esperando o `AdvanceLimitFn` avançar (ver ramo "sem espaço pra
      * avançar" em `start()`) -- chamada por quem preenche o hook assim que a posição de referência
      * realmente muda (ex.: `McuComponent::pollStepLocked()`, logo após avançar
-     * `m_latestVirtualTimePs`). Sem lock, mesma justificativa de `notifyCommandPending()` -- quem
-     * espera usa `wait_for(lock, duração, predicado)`, então mesmo um notify perdido só custa até
-     * a próxima verificação por tempo (curta, ver a duração usada em `start()`), nunca trava. */
-    void notifyAdvanceLimitChanged() { m_pacingWake.notify_all(); }
+     * `m_latestVirtualTimePs`).
+     *
+     * Bug real corrigido (achado por instrumentação, sessão de investigação de desempenho I2C):
+     * antes desta correção o predicado de `wait_for()` em `start()` só checava `!m_running`/
+     * `m_paused` -- nenhuma condição relacionada a "a posição de referência avançou" -- então este
+     * `notify_all()` acordava a thread, o predicado reavaliava falso (ainda rodando, não pausado) e
+     * ela voltava a dormir até o timeout de 5ms INTEIRO se esgotar, sempre, não só numa corrida rara.
+     * Sob I2C bit-banged a 400kHz (milhares de avanços pequenos de posição por frame), isso custava
+     * 5ms REAIS por avanço -- centenas de vezes por frame, segundos por frame. `m_advanceLimitGeneration`
+     * é o mesmo padrão de contador que `m_workGeneration`/`signalWorkAvailable()` já usa (documentado
+     * ali como necessário justamente pra eliminar essa classe de wakeup perdido): incrementado aqui,
+     * conferido pelo predicado -- agora um notify de verdade acorda a espera quase imediatamente, e o
+     * timeout de 5ms volta a ser só uma rede de segurança, não o caminho comum. */
+    void notifyAdvanceLimitChanged() {
+        m_advanceLimitGeneration.fetch_add(1, std::memory_order_release);
+        m_pacingWake.notify_all();
+    }
     void setMaximumTimeStepNs(uint64_t ns) { m_maximumTimeStepNs.store(ns, std::memory_order_relaxed); }
     uint64_t maximumTimeStepNs() const { return m_maximumTimeStepNs.load(std::memory_order_relaxed); }
     void configureAdaptiveTimeStep(uint64_t initialNs, uint64_t minimumNs, bool adaptive) {
@@ -166,6 +182,8 @@ public:
         m_settleNanoseconds.store(0, std::memory_order_relaxed);
         m_maxSettleNanoseconds.store(0, std::memory_order_relaxed);
         m_maxSettleAtNowNs.store(0, std::memory_order_relaxed);
+        m_advanceLimitWaitCount.store(0, std::memory_order_relaxed);
+        m_advanceLimitWaitNanoseconds.store(0, std::memory_order_relaxed);
     }
     MetricsSnapshot metrics() const {
         return {m_profilingEnabled.load(std::memory_order_relaxed),
@@ -175,7 +193,9 @@ public:
                 m_settleNanoseconds.load(std::memory_order_relaxed),
                 m_pendingEventSnapshot.load(std::memory_order_relaxed),
                 m_maxSettleNanoseconds.load(std::memory_order_relaxed),
-                m_maxSettleAtNowNs.load(std::memory_order_relaxed)};
+                m_maxSettleAtNowNs.load(std::memory_order_relaxed),
+                m_advanceLimitWaitCount.load(std::memory_order_relaxed),
+                m_advanceLimitWaitNanoseconds.load(std::memory_order_relaxed)};
     }
     /** Snapshot lock-free: telemetry must never queue ahead of a stop IPC request. */
     uint64_t nowNs() const { return m_nowSnapshotNs.load(std::memory_order_acquire); }
@@ -344,6 +364,14 @@ private:
     std::atomic<uint64_t> m_targetStepUs{0};
     std::atomic<double> m_realTimeRate{0.0};
     std::atomic<uint64_t> m_pacingQuantumNs{1};
+    /** Ver doc-comment de notifyAdvanceLimitChanged() acima. */
+    std::atomic<uint64_t> m_advanceLimitGeneration{0};
+    /** Instrumentação temporária (investigação de desempenho I2C) -- quantas vezes o ramo
+     * "advanceLimited" esperou, e quanto tempo real cada wait_for() realmente levou (soma). Antes
+     * da correção de notifyAdvanceLimitChanged(), cada ocorrência pagava ~5ms cheios; depois, só
+     * paga o tempo real até o próximo avanço genuíno. */
+    std::atomic<uint64_t> m_advanceLimitWaitCount{0};
+    std::atomic<uint64_t> m_advanceLimitWaitNanoseconds{0};
     std::atomic<size_t> m_maxNonLinearIterations{0};
     std::atomic<uint64_t> m_maximumTimeStepNs{0};
     std::atomic<bool> m_profilingEnabled{false};

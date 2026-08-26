@@ -369,10 +369,23 @@ void Scheduler::start() {
                 // comum) -- espera um pouco em vez de girar sem dormir (a matemática de pacing
                 // abaixo, gated em cycleSimEndNs>cycleSimStartNs, não dispara nesse caso).
                 if (m_commandDrain) m_commandDrain();
+                // Captura ANTES do wait -- ver doc-comment de notifyAdvanceLimitChanged(): sem checar
+                // este contador no predicado, um notify_all() daquela função não tinha como acordar
+                // esta espera de verdade (o predicado antigo só olhava running/paused), e todo ciclo
+                // pagava o timeout de 5ms inteiro em vez de acordar assim que a posição de referência
+                // avançasse.
+                const uint64_t observedAdvanceGen = m_advanceLimitGeneration.load(std::memory_order_acquire);
                 std::unique_lock<std::mutex> pacingLock(m_pacingMutex);
-                m_pacingWake.wait_for(pacingLock, std::chrono::milliseconds(5), [this] {
-                    return !m_running.load(std::memory_order_acquire) || m_paused.load(std::memory_order_acquire);
+                const auto waitStart = std::chrono::steady_clock::now();
+                m_pacingWake.wait_for(pacingLock, std::chrono::milliseconds(5), [this, observedAdvanceGen] {
+                    return !m_running.load(std::memory_order_acquire) || m_paused.load(std::memory_order_acquire) ||
+                           m_advanceLimitGeneration.load(std::memory_order_acquire) != observedAdvanceGen;
                 });
+                m_advanceLimitWaitCount.fetch_add(1, std::memory_order_relaxed);
+                m_advanceLimitWaitNanoseconds.fetch_add(
+                    static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        std::chrono::steady_clock::now() - waitStart).count()),
+                    std::memory_order_relaxed);
                 continue;
             }
 
