@@ -16,7 +16,7 @@ index 311b772..a611e44 100644
 @@ -11,0 +12 @@
 +#include "qemu/cutils.h"
 @@ -24,0 +26,2 @@
-+#define TIMG_INTERRUPT_WDT_REALTIME_SCALE_DEFAULT 8
++#define TIMG_INTERRUPT_WDT_REALTIME_SCALE_DEFAULT 100
 +#define TIMG_INTERRUPT_WDT_SCALE_MAX 100
 @@ -558,0 +562,11 @@ static void esp32_timg_wdt_arm(Esp32TimgWdtState *ws, uint64_t ns_now)
 +    /*
@@ -30,16 +30,17 @@ index 311b772..a611e44 100644
 +        ns_to_timeout = ns_to_timeout > UINT64_MAX / ws->parent->wdt_time_scale
 +            ? UINT64_MAX : ns_to_timeout * ws->parent->wdt_time_scale;
 +    }
-@@ -598,0 +613,27 @@ static void esp32_timg_realize(DeviceState *dev, Error **errp)
+@@ -598,0 +613,44 @@ static void esp32_timg_realize(DeviceState *dev, Error **errp)
 +    Esp32TimgState *s = ESP32_TIMG(dev);
 +    const char *execution_mode = getenv("LASECSIMUL_ESP32_EXECUTION_MODE");
 +    const bool deterministic =
 +        execution_mode && !strcmp(execution_mode, "deterministic");
 +    const char *scale_env = getenv("LASECSIMUL_ESP32_WDT_SCALE");
++    const bool explicit_scale = scale_env && *scale_env;
 +    unsigned scale = deterministic
 +        ? 1 : TIMG_INTERRUPT_WDT_REALTIME_SCALE_DEFAULT;
 +
-+    if (scale_env && *scale_env) {
++    if (explicit_scale) {
 +        unsigned parsed = 0;
 +        if (qemu_strtoui(scale_env, NULL, 10, &parsed) < 0 ||
 +            parsed < 1 || parsed > TIMG_INTERRUPT_WDT_SCALE_MAX) {
@@ -50,12 +51,28 @@ index 311b772..a611e44 100644
 +        }
 +    }
 +    s->wdt_time_scale = s->id == 1 ? scale : 1;
++    /*
++     * In realtime mode the watchdog follows host wall time while the emulated vCPU can stop
++     * progressing during host scheduling, the electrical solver and IPC. Any finite multiplier
++     * only delays the false positive (100x still failed a 60-second run). Disable only the
++     * Timer Group 1 MWDT used by the Interrupt WDT. Timer Group 0, regular timers and all
++     * deterministic-mode watchdogs remain literal. Setting LASECSIMUL_ESP32_WDT_SCALE explicitly
++     * re-enables Timer Group 1 with the requested diagnostic scale.
++     */
++    if (s->id == 1 && !deterministic && !explicit_scale) {
++        s->wdt_disable = true;
++    }
 +    if (s->id == 1) {
-+        fprintf(stderr,
-+                "[LasecSimul] interrupt-wdt scale=%u (%s; rollback:"
-+                " LASECSIMUL_ESP32_WDT_SCALE=1)\n",
-+                s->wdt_time_scale,
-+                deterministic ? "deterministic" : "mttcg-realtime");
++        if (s->wdt_disable) {
++            fprintf(stderr,
++                    "[LasecSimul] interrupt-wdt disabled (mttcg-realtime; enable:"
++                    " LASECSIMUL_ESP32_WDT_SCALE=1)\n");
++        } else {
++            fprintf(stderr,
++                    "[LasecSimul] interrupt-wdt scale=%u (%s)\n",
++                    s->wdt_time_scale,
++                    deterministic ? "deterministic" : "explicit realtime override");
++        }
 +        fflush(stderr);
 +    }
 @@ -625,0 +667 @@ static void esp32_timg_init(Object *obj)

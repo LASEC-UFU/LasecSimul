@@ -47,6 +47,7 @@ const instances = new Map();
 let uartTimer;
 let uartPollInFlight = false;
 let plotUartHex = "";
+let directUartHex = "";
 const progress = (label) => console.error(`[benchmark-real-esp32] ${label}`);
 
 function resolveEndpoint(endpoint) {
@@ -129,11 +130,17 @@ async function main() {
     uartTimer = setInterval(() => {
       if (uartPollInFlight) return;
       uartPollInFlight = true;
-      void client.drainUart(plotId)
-        .then((batch) => { plotUartHex += batch.dataHex; })
+      void Promise.all([
+        client.drainUart(plotId).catch(() => undefined),
+        client.getProperty(mcuId, "uart0_tx_monitor_hex").catch(() => ""),
+      ])
+        .then(([plotBatch, monitorHex]) => {
+          if (plotBatch) plotUartHex += plotBatch.dataHex;
+          if (typeof monitorHex === "string") directUartHex += monitorHex;
+        })
         .catch(() => undefined)
         .finally(() => { uartPollInFlight = false; });
-    }, 10);
+    }, 25);
   }
 
   const samples = [];
@@ -166,6 +173,7 @@ async function main() {
 
   clearInterval(uartTimer);
   uartTimer = undefined;
+  while (uartPollInFlight) await new Promise((resolve) => setTimeout(resolve, 5));
   const stopStarted = performance.now();
   await client.stopSimulation();
   const stopLatencyMs = performance.now() - stopStarted;
@@ -174,7 +182,7 @@ async function main() {
     if (finalPlotBatch) plotUartHex += finalPlotBatch.dataHex;
   }
   const directUartValue = await client.getProperty(mcuId, "uart0_tx_monitor_hex").catch(() => "");
-  const directUartHex = typeof directUartValue === "string" ? directUartValue : "";
+  if (typeof directUartValue === "string") directUartHex += directUartValue;
   const directUartText = Buffer.from(directUartHex, "hex").toString("latin1");
   const displayEntry = [...instances.entries()].find(([projectId]) =>
     project.components.find((component) => component.id === projectId)?.typeId === "outputs.ssd1306");

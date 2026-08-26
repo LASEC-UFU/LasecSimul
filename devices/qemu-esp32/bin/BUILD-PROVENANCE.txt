@@ -5,7 +5,14 @@ Reference patches incorporated in the runtime:
 - devices/qemu-esp32/patches/0002-esp32-i2c-electrical-start-timing.patch
 - devices/qemu-esp32/patches/0003-esp32-i2c-address-ack-burst.patch
 - devices/qemu-esp32/patches/0004-esp32-i2c-cancel-stale-timer.patch
-Build source: QEMU baseline 721ff59 plus patch 0004, ABI v4 runtime
+Also built from qemu_lasecSimul `main` branch commits (not yet folded into a
+numbered patch against the 721ff59 baseline -- see SOURCE.md):
+- cc68b4a debug(xtensa,esp32): add temporary cache/PC-sampler trace instrumentation
+- 71a0b06 fix(esp32): stabilize interrupt watchdog and skip redundant I2C ACK reads
+Build source: QEMU baseline 721ff59 plus patch 0004, ABI v4 runtime, plus the
+two main-branch commits above
 Configure: xtensa-softmmu, gcrypt, slirp
-Executable SHA-256: A0947806B89B02E704FE31C8162A4F2B056CFD737EAF8DBBBBDA3D1FA8E195F4
-Release: post-v0.0.26 I2C stale-timer fix
+Executable SHA-256: FAF760CE51CAC634D40092161A5B050E95AB628A2EDCED3E44600CDF3B3B8483
+Release: post-v0.0.26 I2C stale-timer fix with realtime interrupt-WDT isolation
+  and address-only I2C ACK sampling (still I2C-throughput-limited under
+  MTTCG -- see docs/39-i2c-mttcg-throughput-ceiling-2026-08-26.md)
