@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string_view>
 #include <vector>
@@ -60,6 +61,18 @@ public:
      * pra dentro do plugin (`create`/`build_launch_args`/`get_memory_regions`/`get_pin_map`/
      * `create_modules`) -- mesmo padrão de `IComponentModel::health()`. */
     virtual PluginHealthStatus health() const { return PluginHealthStatus::Ok; }
+
+    /** Índice de pino físico (mesmo espaço de `pinMap()`) que carrega SDA (`sda=true`) ou SCL
+     * (`sda=false`) do barramento I2C `bus` NO INSTANTE ATUAL -- só quem conhece o roteamento
+     * dinâmico da GPIO matrix do chip concreto sabe responder isto; `SimulationSession` usa o
+     * resultado pra achar, na topologia (chip-neutra), qual componente está eletricamente
+     * conectado, e rotear (ou não) o fast path de transferência I2C pra ele. Default `nullopt`:
+     * adaptadores que não implementam simplesmente nunca habilitam o fast path -- o caminho
+     * elétrico bit-a-bit continua funcionando sem isto, sempre. */
+    virtual std::optional<uint32_t> resolveI2cPinIndex(uint32_t bus, bool sda) const {
+        (void)bus; (void)sda;
+        return std::nullopt;
+    }
 };
 
 } // namespace lasecsimul

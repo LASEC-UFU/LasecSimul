@@ -237,6 +237,29 @@ struct ComponentEvent {
     uint32_t c = 0;
 };
 
+/** Transferência I2C funcional usada pelo fast path MCU<->device. Os buffers pertencem ao
+ * chamador e só são válidos durante a chamada; o limite de 32 bytes corresponde ao FIFO do
+ * periférico I2C do ESP32 atualmente suportado. */
+struct I2cTransfer {
+    uint8_t address = 0;
+    bool read = false;
+    bool start = true;
+    bool stop = true;
+    const uint8_t* txData = nullptr;
+    uint32_t txSize = 0;
+    uint8_t* rxData = nullptr;
+    uint32_t rxSize = 0;
+    uint64_t periodNs = 0;
+};
+
+struct I2cTransferResult {
+    bool handled = false;
+    bool addressAck = false;
+    uint32_t firstNack = UINT32_MAX;
+    uint32_t rxSize = 0;
+    uint64_t stretchNs = 0;
+};
+
 /** Tag de evento "pino digital mudou de nível" — `a` = índice local do pino (posição em
  * `IComponentModel::pins()`/ordem de declaração, igual ao índice usado pela ABI de plugins), `b` =
  * novo nível (0/1), `c` = ns desde a última transição NESTE nó (saturado em UINT32_MAX, suficiente

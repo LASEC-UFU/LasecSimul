@@ -1097,8 +1097,30 @@ static void set_state(LsdnDevice* dev, const uint8_t* in, uint32_t len) {
 
 static void destroy(LsdnDevice* dev) { free(dev); }
 
+static uint32_t i2c_transfer(LsdnDevice* dev, const LsdnI2cTransfer* transfer,
+                             LsdnI2cTransferResult* result) {
+    SimDevice* s = (SimDevice*)dev;
+    if (!transfer || !result) return 0;
+    memset(result, 0, sizeof(*result));
+    result->first_nack = LSDN_I2C_NO_NACK;
+    if (s->kind != KIND_AIP31068 && s->kind != KIND_OLED && s->kind != KIND_SH1107) return 0;
+    result->handled = 1;
+    if (transfer->address != s->i2c_address) return 1;
+    result->address_ack = 1;
+    if (transfer->read) {
+        /* Os displays modelados são write-only nesta implementação. O endereço existe, mas o
+         * primeiro byte de leitura recebe NACK em vez de fabricar dados. */
+        result->first_nack = 0;
+        return 1;
+    }
+    if (transfer->start) s->i2c_phase = 0;
+    for (uint32_t i = 0; i < transfer->tx_size; ++i) i2c_payload_byte(s, transfer->tx_data[i]);
+    return 1;
+}
+
 static const LsdnDeviceVTable kVTable = {
-    create, init, stamp, post_step, on_event, get_property, set_property, get_state, set_state, destroy
+    create, init, stamp, post_step, on_event, get_property, set_property, get_state, set_state,
+    destroy, i2c_transfer
 };
 
 LSDN_EXPORT

@@ -2224,8 +2224,29 @@ void destroy(LsdnMcuAdapter* adapter) {
     delete reinterpret_cast<Esp32AdapterState*>(adapter);
 }
 
+// Fast path de transferencia I2C (ver mcu_abi.h ABI 3, docs/39-i2c-mttcg-throughput-ceiling-*.md
+// secao 9): dado o barramento I2C (0 ou 1) e SDA/SCL, devolve qual pino fisico (0-39) a GPIO
+// matrix tem roteado pra' aquele sinal AGORA. Varredura linear de 40 pinos -- barata (chamada por
+// burst, nao por bit; nada perto do custo de milhares de callbacks por byte que o fast path existe
+// pra evitar), reaproveita a MESMA resolucao (`selectedPinOutputSignal`) que gpioIsOutputEnabled()/
+// gpioOutputLevel() ja usam pra decidir quem dirige eletricamente cada GPIO -- sem logica nova de
+// roteamento, so' o sentido inverso da mesma tabela.
+int32_t resolveI2cPin(LsdnMcuAdapter* adapter, uint32_t bus, uint8_t sda, uint32_t* out_pin) {
+    auto* state = reinterpret_cast<Esp32AdapterState*>(adapter);
+    if (!out_pin) return 0;
+    const SignalKind wanted = sda ? SignalKind::I2cSda : SignalKind::I2cScl;
+    for (uint32_t pin = 0; pin < 40; ++pin) {
+        const SignalDesc signal = selectedPinOutputSignal(state->chip, pin);
+        if (signal.kind == wanted && signal.index == bus) {
+            *out_pin = pin;
+            return 1;
+        }
+    }
+    return 0;
+}
+
 const LsdnMcuVTable kVTable = {
-    &create, &buildLaunchArgs, &getMemoryRegions, &getPinMap, &createModules, &destroy,
+    &create, &buildLaunchArgs, &getMemoryRegions, &getPinMap, &createModules, &destroy, &resolveI2cPin,
 };
 
 } // namespace

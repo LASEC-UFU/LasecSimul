@@ -1,5 +1,6 @@
 #include "NativeMcuAdapterProxy.hpp"
 #include <stdexcept>
+#include "CrashGuard.hpp"
 #include "QemuModuleProxy.hpp"
 
 namespace lasecsimul::plugins {
@@ -124,6 +125,22 @@ std::vector<std::unique_ptr<QemuModule>> NativeMcuAdapterProxy::createModules() 
         modules.push_back(std::make_unique<QemuModuleProxy>(handle, memStart, memEnd));
     }
     return modules;
+}
+
+std::optional<uint32_t> NativeMcuAdapterProxy::resolveI2cPinIndex(uint32_t bus, bool sda) const {
+    const LsdnMcuVTable* vt = m_module->mcuVTable();
+    if (!vt->resolve_i2c_pin || m_health == PluginHealthStatus::Faulted) return std::nullopt;
+    uint32_t pin = 0;
+    int32_t found = 0;
+    const bool ok = CrashGuard::call(m_chipId, [&] {
+        found = vt->resolve_i2c_pin(m_handle, bus, sda ? 1 : 0, &pin);
+    });
+    if (!ok) {
+        m_health = PluginHealthStatus::Faulted;
+        return std::nullopt;
+    }
+    if (found == 0) return std::nullopt;
+    return pin;
 }
 
 } // namespace lasecsimul::plugins

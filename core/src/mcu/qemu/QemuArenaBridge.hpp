@@ -38,6 +38,9 @@ public:
      * `acknowledgeRead()`/`acknowledgeWrite()` depois de repassar pro módulo certo (ver
      * McuComponent::stamp()). */
     QemuPollResult poll();
+    std::optional<QemuI2cBurst> pollI2cBurst() const;
+    void completeI2cBurst(uint64_t sequence, uint32_t status, uint32_t firstNack,
+                          std::span<const uint8_t> rx, uint64_t stretchNs);
     QemuDispatchResult dispatch(uint64_t address) const;
 
     /** Confirma uma ação da FILA (SIM_WRITE/SIM_EVENT/qualquer ação sem retorno) -- avança

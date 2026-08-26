@@ -1427,6 +1427,21 @@ if(NOT WIN32)
 endif()
 add_test(NAME dynamic_component_dispatch COMMAND dynamic_component_dispatch_test)
 
+# Fast path de transferencia I2C (docs/39-i2c-mttcg-throughput-ceiling-2026-08-26.md secao 9):
+# prova que SimulationSession::resolveI2cTransferUnlocked resolve a topologia (pino -> no' ->
+# componentes conectados) corretamente, incluindo os dois fallbacks de seguranca (componente
+# desconhecido no no', barramento sem roteamento do adaptador).
+add_executable(i2c_fast_path_dispatch_test
+    test/core/session/I2cFastPathDispatchTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(i2c_fast_path_dispatch_test PRIVATE include src)
+target_link_libraries(i2c_fast_path_dispatch_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+if(NOT WIN32)
+    target_link_libraries(i2c_fast_path_dispatch_test PRIVATE dl)
+endif()
+add_test(NAME i2c_fast_path_dispatch COMMAND i2c_fast_path_dispatch_test)
+
 # Watchdog de plugins nativos (Épico D do roadmap de pendências)
 add_executable(plugin_watchdog_test test/core/plugins/PluginWatchdogTest.cpp src/plugins/CrashGuard.cpp)
 target_include_directories(plugin_watchdog_test PRIVATE include src)

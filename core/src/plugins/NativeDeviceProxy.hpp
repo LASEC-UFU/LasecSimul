@@ -76,6 +76,8 @@ public:
     bool isDynamic() const override { return true; }
     void postStep(uint64_t timeNs) override;
     void onEvent(const ComponentEvent& event) override;
+    bool supportsI2cTransfer() const override;
+    I2cTransferResult transferI2c(const I2cTransfer& transfer) override;
     size_t getState(uint8_t* out, size_t cap) const override;
     void setState(const uint8_t* in, size_t len) override;
     std::vector<PropertyDescriptor> propertyDescriptors() override;

@@ -32,8 +32,16 @@
 extern "C" {
 #endif
 
-#define LSDN_MCU_ABI_VERSION_MAJOR 2
-#define LSDN_MCU_ABI_VERSION_MINOR 9
+#define LSDN_MCU_ABI_VERSION_MAJOR 3
+#define LSDN_MCU_ABI_VERSION_MINOR 0
+/* Major 3 (2026-08-26): entrou resolve_i2c_pin (LsdnMcuVTable) -- fast path de transferencia I2C
+ * (ver device_abi.h ABI 4 LsdnI2cTransfer/i2c_transfer, docs/39-i2c-mttcg-throughput-ceiling-*.md
+ * secao 9). So' o Core sabe qual componente esta' fisicamente ligado a um pino (Netlist/topologia,
+ * neutro de chip); so' o adaptador sabe qual pino fisico carrega SDA/SCL de um barramento I2C
+ * AGORA (roteamento dinamico da GPIO matrix, especifico do ESP32) -- por isso a resolucao precisa
+ * das duas metades, cada uma no lado que ja tem a informacao. Opcional por natureza (ponteiro pode
+ * ser NULL mesmo nesta versao): um adaptador que nao implementa simplesmente nunca habilita o fast
+ * path pra esse chip, cai sempre no caminho eletrico bit-a-bit que ja funciona sem isto. */
 /* Minor 9 (2026-07-29): entrou drain_wire_tap_byte -- segunda fila byte-exata de TX de uma USART,
  * independente de drain_monitor_byte. O Core usa esta fila apenas quando um receptor UART de
  * circuito (LasecPlot/terminal) esta' ligado diretamente ao pino TX dedicado da MCU: evita que
@@ -210,6 +218,15 @@ typedef struct LsdnMcuVTable {
     uint32_t (*create_modules)(LsdnMcuAdapter* adapter, LsdnQemuModuleHandle* out, uint32_t cap);
 
     void (*destroy)(LsdnMcuAdapter* adapter);
+
+    /* ABI 3: opcional (NULL valido em qualquer versao >= 3) -- ver comentario de
+     * LSDN_MCU_ABI_VERSION_MAJOR acima. Devolve 1 e preenche *out_pin com o indice de pino fisico
+     * (mesmo espaco de get_pin_map) que carrega SDA (sda!=0) ou SCL (sda==0) do barramento I2C
+     * `bus` NO INSTANTE ATUAL (roteamento pode mudar em runtime via GPIO matrix); devolve 0 se nao
+     * houver nenhum pino roteado assim agora. Chamado so' quando um LsdnQemuArena com
+     * LSDN_QEMU_ARENA_CAP_I2C_BURST publica um pedido de burst -- nunca no caminho eletrico
+     * bit-a-bit comum. */
+    int32_t (*resolve_i2c_pin)(LsdnMcuAdapter* adapter, uint32_t bus, uint8_t sda, uint32_t* out_pin);
 } LsdnMcuVTable;
 
 /* Simbolo exportado por um plugin de adaptador de MCU — distinto de lsdn_get_vtable (dispositivos)

@@ -120,10 +120,10 @@ void QemuArenaBridge::setMemoryRegions(std::span<const MemoryRegion> regions) {
 
 QemuArenaProtocol QemuArenaBridge::configuredProtocol() {
     const char* value = std::getenv("LASECSIMUL_QEMU_ARENA_VERSION");
-    if (!value || !*value || std::string_view(value) == "4") return QemuArenaProtocol::V4;
+    if (!value || !*value || std::string_view(value) == "5") return QemuArenaProtocol::V4;
     if (std::string_view(value) == "3") return QemuArenaProtocol::V3;
     throw std::invalid_argument(
-        "LASECSIMUL_QEMU_ARENA_VERSION must be '3' or '4'");
+        "LASECSIMUL_QEMU_ARENA_VERSION must be '3' or '5'");
 }
 
 void QemuArenaBridge::open(const QemuArenaOpenOptions& options) {
@@ -272,6 +272,38 @@ QemuPollResult QemuArenaBridge::poll() {
     result.event = copyArenaEvent(*m_arena);
     if (result.event->simuAction == LSDN_SIM_READ) result.dispatch = dispatch(result.event->regAddr);
     return result;
+}
+
+std::optional<QemuI2cBurst> QemuArenaBridge::pollI2cBurst() const {
+    if (!m_arena || m_protocol != QemuArenaProtocol::V4) return std::nullopt;
+    const uint64_t request = std::atomic_ref<uint64_t>(m_arena->i2cRequestSeq)
+                                 .load(std::memory_order_acquire);
+    const uint64_t response = std::atomic_ref<uint64_t>(m_arena->i2cResponseSeq)
+                                  .load(std::memory_order_acquire);
+    if (request == 0 || request == response) return std::nullopt;
+    QemuI2cBurst burst{};
+    burst.sequence = request;
+    burst.timePs = m_arena->i2cTimePs;
+    burst.bus = m_arena->i2cBus;
+    burst.flags = m_arena->i2cFlags;
+    burst.periodNs = m_arena->i2cPeriodNs;
+    burst.txLen = std::min<uint32_t>(m_arena->i2cTxLen, 32);
+    burst.rxLen = std::min<uint32_t>(m_arena->i2cRxLen, 32);
+    std::copy_n(m_arena->i2cTx, burst.txLen, burst.tx);
+    return burst;
+}
+
+void QemuArenaBridge::completeI2cBurst(uint64_t sequence, uint32_t status,
+                                       uint32_t firstNack, std::span<const uint8_t> rx,
+                                       uint64_t stretchNs) {
+    if (!m_arena || m_protocol != QemuArenaProtocol::V4) return;
+    const size_t count = std::min<size_t>(rx.size(), 32);
+    std::copy_n(rx.data(), count, m_arena->i2cRx);
+    m_arena->i2cRxLen = static_cast<uint32_t>(count);
+    m_arena->i2cStatus = status;
+    m_arena->i2cFirstNack = firstNack;
+    m_arena->i2cStretchNs = stretchNs;
+    std::atomic_ref<uint64_t>(m_arena->i2cResponseSeq).store(sequence, std::memory_order_release);
 }
 
 void QemuArenaBridge::acknowledgeWrite() {

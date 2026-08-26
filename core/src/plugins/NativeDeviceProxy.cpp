@@ -193,6 +193,42 @@ void NativeDeviceProxy::onEvent(const ComponentEvent& event) {
     if (!ok) m_health = PluginHealthStatus::Faulted;
 }
 
+bool NativeDeviceProxy::supportsI2cTransfer() const {
+    return m_module && m_module->deviceVTable()->i2c_transfer != nullptr &&
+           m_health != PluginHealthStatus::Faulted;
+}
+
+I2cTransferResult NativeDeviceProxy::transferI2c(const I2cTransfer& transfer) {
+    I2cTransferResult result{};
+    if (!supportsI2cTransfer()) return result;
+    LsdnI2cTransfer request{};
+    request.address = transfer.address;
+    request.read = transfer.read ? 1 : 0;
+    request.start = transfer.start ? 1 : 0;
+    request.stop = transfer.stop ? 1 : 0;
+    request.tx_data = transfer.txData;
+    request.tx_size = transfer.txSize;
+    request.rx_data = transfer.rxData;
+    request.rx_size = transfer.rxSize;
+    request.period_ns = transfer.periodNs;
+    LsdnI2cTransferResult response{};
+    response.first_nack = LSDN_I2C_NO_NACK;
+    uint32_t accepted = 0;
+    const bool ok = CrashGuard::call(m_meta.typeId, [&] {
+        accepted = m_module->deviceVTable()->i2c_transfer(m_handle, &request, &response);
+    });
+    if (!ok) {
+        m_health = PluginHealthStatus::Faulted;
+        return result;
+    }
+    result.handled = accepted != 0 && response.handled != 0;
+    result.addressAck = response.address_ack != 0;
+    result.firstNack = response.first_nack;
+    result.rxSize = response.rx_size;
+    result.stretchNs = response.stretch_ns;
+    return result;
+}
+
 size_t NativeDeviceProxy::getState(uint8_t* out, size_t cap) const {
     size_t result = 0;
     const bool ok = CrashGuard::call(

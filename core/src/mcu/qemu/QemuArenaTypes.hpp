@@ -51,4 +51,15 @@ struct QemuPollResult {
     std::string error;
 };
 
+struct QemuI2cBurst {
+    uint64_t sequence = 0;
+    uint64_t timePs = 0;
+    uint32_t bus = 0;
+    uint32_t flags = 0;
+    uint64_t periodNs = 0;
+    uint32_t txLen = 0;
+    uint32_t rxLen = 0;
+    uint8_t tx[32]{};
+};
+
 } // namespace lasecsimul::mcu::qemu

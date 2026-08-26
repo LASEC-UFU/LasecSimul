@@ -48,6 +48,9 @@ let uartTimer;
 let uartPollInFlight = false;
 let plotUartHex = "";
 let directUartHex = "";
+const uartTimelineEnabled = process.env.LASECSIMUL_BENCHMARK_UART_TIMELINE === "1";
+const uartTimeline = [];
+let benchmarkWallOrigin = 0;
 const progress = (label) => console.error(`[benchmark-real-esp32] ${label}`);
 
 function resolveEndpoint(endpoint) {
@@ -136,7 +139,16 @@ async function main() {
       ])
         .then(([plotBatch, monitorHex]) => {
           if (plotBatch) plotUartHex += plotBatch.dataHex;
-          if (typeof monitorHex === "string") directUartHex += monitorHex;
+          if (typeof monitorHex === "string") {
+            directUartHex += monitorHex;
+            if (uartTimelineEnabled && monitorHex.length > 0) {
+              uartTimeline.push({
+                wallMs: performance.now() - benchmarkWallOrigin,
+                bytes: monitorHex.length / 2,
+                text: Buffer.from(monitorHex, "hex").toString("latin1"),
+              });
+            }
+          }
         })
         .catch(() => undefined)
         .finally(() => { uartPollInFlight = false; });
@@ -145,6 +157,7 @@ async function main() {
 
   const samples = [];
   let previousWall = performance.now();
+  benchmarkWallOrigin = previousWall;
   const initialTime = await client.getSimulationTime();
   let previousSim = initialTime.simulatedNs;
   let previousMcu = initialTime.mcuVirtualNs;
@@ -271,6 +284,7 @@ async function main() {
       exactMatch: directUartHex === plotUartHex,
       directMonitor: directUartSummary,
       lasecPlot: lasecPlotUartSummary,
+      ...(uartTimelineEnabled ? { timeline: uartTimeline } : {}),
     },
     stopLatencyMs,
     display,
@@ -279,6 +293,7 @@ async function main() {
       qemu: {
         guruMeditation: /Guru Meditation|panic'ed|CORRUPTED/i.test(qemuLogs + directUartText),
         i2cAckErrors: (qemuLogs.match(/esp32_i2c_event ackERR/g) ?? []).length,
+        profile: qemuLogs.match(/\[LasecSimul\]\[PROFILE\][^\r\n]*/g)?.at(-1),
       },
     } : { qemuLogs }),
   };

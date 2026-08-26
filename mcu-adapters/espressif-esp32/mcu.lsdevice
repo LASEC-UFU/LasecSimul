@@ -3,8 +3,8 @@
   "chipId": "espressif.esp32",
   "name": "QemuDevice",
   "abiVersion": {
-    "major": 2,
-    "minor": 9
+    "major": 3,
+    "minor": 0
   },
   "nativeEntry": {
     "win32-x64": "build/win-x64/adapter.dll",

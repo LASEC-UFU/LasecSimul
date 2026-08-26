@@ -1,5 +1,7 @@
 #include "McuComponent.hpp"
 #include "lasecsimul/qemu_arena_abi.h"
+#include <algorithm>
+#include <array>
 #include <limits>
 #include <thread>
 
@@ -182,6 +184,7 @@ void McuComponent::onPollEvent() {
 
 McuComponent::PollStep McuComponent::pollStepLocked(std::vector<DeferredSchedulerCall>* deferred) {
     qemu::QemuArenaBridge& arena = m_controller.arenaBridge();
+    if (processI2cBurstLocked()) return PollStep::DispatchedReady;
     const qemu::QemuPollResult result = arena.poll();
     if (!result.hasEvent || !result.event) return PollStep::NoEvent;
 
@@ -256,6 +259,36 @@ McuComponent::PollStep McuComponent::pollStepLocked(std::vector<DeferredSchedule
     }
     scheduleWakeupsForAllModules(eventNs, false, deferred);
     return PollStep::DispatchedReady;
+}
+
+bool McuComponent::processI2cBurstLocked() {
+    qemu::QemuArenaBridge& arena = m_controller.arenaBridge();
+    const std::optional<qemu::QemuI2cBurst> pending = arena.pollI2cBurst();
+    if (!pending) return false;
+
+    std::array<uint8_t, 32> rx{};
+    I2cTransferResult result{};
+    if (m_i2cTransferHandler && pending->txLen > 0) {
+        const bool start = (pending->flags & 1u) != 0;
+        const bool read = (pending->flags & 4u) != 0;
+        const uint32_t payloadOffset = start ? 1u : 0u;
+        I2cTransfer transfer{};
+        transfer.address = start ? static_cast<uint8_t>(pending->tx[0] >> 1) : 0;
+        transfer.read = read;
+        transfer.start = start;
+        transfer.stop = (pending->flags & 2u) != 0;
+        transfer.txData = pending->tx + payloadOffset;
+        transfer.txSize = pending->txLen - payloadOffset;
+        transfer.rxData = rx.data();
+        transfer.rxSize = pending->rxLen;
+        transfer.periodNs = pending->periodNs;
+        result = m_i2cTransferHandler(m_componentIndex, pending->bus, transfer);
+    }
+    uint32_t status = (result.handled ? 1u : 0u) | (result.addressAck ? 2u : 0u);
+    arena.completeI2cBurst(pending->sequence, status, result.firstNack,
+                           std::span<const uint8_t>(rx.data(), std::min<uint32_t>(result.rxSize, 32)),
+                           result.stretchNs);
+    return true;
 }
 
 void McuComponent::startBackgroundPollThreadIfNeeded() {

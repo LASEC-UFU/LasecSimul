@@ -766,6 +766,18 @@ uint32_t SimulationSession::addComponentUnlocked(const std::string& typeId, cons
         instance = m_components.create(typeId, params);
     } else if (m_mcus.contains(typeId)) {
         instance = std::make_unique<mcu::McuComponent>(m_mcus.create(typeId), m_scheduler, params.pinList);
+        // Fast path de transferência I2C (ver resolveI2cTransferUnlocked): a fila/handshake da
+        // arena roda numa thread de fundo por MCU, então este handler pode ser chamado de QUALQUER
+        // thread -- `mcuIndex` é resolvido depois (onAssignedIndex ainda não rodou aqui), por isso
+        // a lambda captura `this` e recebe o índice como parâmetro de setI2cTransferHandler no
+        // ponto de chamada real (McuComponent::processI2cBurstLocked já sabe seu próprio índice).
+        static_cast<mcu::McuComponent*>(instance.get())->setI2cTransferHandler(
+            [this](uint32_t mcuIndex, uint32_t bus, const I2cTransfer& transfer) -> I2cTransferResult {
+                if (m_scheduler.isCurrentThreadWorker()) {
+                    return resolveI2cTransferUnlocked(mcuIndex, bus, transfer);
+                }
+                return m_scheduler.synchronized([&] { return resolveI2cTransferUnlocked(mcuIndex, bus, transfer); });
+            });
     } else if (typeId == kPlcInstanceTypeId) {
         // Sem registry proprio (ao contrario de MCU/plugins) -- ha um unico "tipo" de instancia de
         // PLC nesta rodada (sem editor grafico/paleta de dispositivos PLC ainda), diferente de MCU
@@ -2154,6 +2166,68 @@ std::optional<uint64_t> SimulationSession::computeSlowestMcuPositionNs() {
         slowest = slowest ? std::min(*slowest, *position) : *position;
     }
     return slowest;
+}
+
+bool SimulationSession::isI2cFastPathTransparentUnlocked(const IComponentModel& component) {
+    // Tipos embutidos cujo comportamento elétrico já é conhecido e não interfere no protocolo I2C
+    // (pull-up/pull-down resistivo, terra, ou um túnel que só encaminha o mesmo nó) -- qualquer
+    // OUTRA coisa presente no mesmo nó (capacitor, driver ativo desconhecido, outro dispositivo
+    // I2C sem suporte a transferI2c) precisa do caminho elétrico bit-a-bit de verdade, então força
+    // fallback (ver resolveI2cTransferUnlocked). Comparação por typeId (não dynamic_cast) porque
+    // são tipos embutidos com typeId estável, mesmo padrão já usado alhures neste arquivo.
+    const std::string_view typeId = component.typeId();
+    return typeId == "passive.resistor" || typeId == "other.ground" || typeId == "connectors.tunnel";
+}
+
+I2cTransferResult SimulationSession::resolveI2cTransferUnlocked(uint32_t mcuIndex, uint32_t bus,
+                                                                 const I2cTransfer& transfer) {
+    I2cTransferResult fallback{}; // handled=false por padrão -- chamador cai pro caminho elétrico.
+    if (mcuIndex >= m_componentInstances.size() || !m_componentInstances[mcuIndex]) return fallback;
+    auto* mcuComponent = dynamic_cast<mcu::McuComponent*>(m_componentInstances[mcuIndex].get());
+    if (!mcuComponent) return fallback;
+
+    const std::optional<uint32_t> sdaPinIndex = mcuComponent->resolveI2cPinIndex(bus, /*sda=*/true);
+    if (!sdaPinIndex) return fallback; // chip sem suporte, ou barramento sem roteamento agora.
+
+    const std::span<Pin> mcuPins = mcuComponent->pins();
+    if (*sdaPinIndex >= mcuPins.size()) return fallback;
+    const std::string& sdaPinId = mcuPins[*sdaPinIndex].id;
+
+    const auto& slots = m_netlist.pinSlotsOf(mcuIndex);
+    const auto slotIt = slots.find(sdaPinId);
+    if (slotIt == slots.end() || slotIt->second >= m_topology.slotToNode.size()) return fallback;
+    const uint32_t node = m_topology.slotToNode[slotIt->second];
+    if (node >= m_topology.pinRefsByNode.size()) return fallback;
+
+    IComponentModel* target = nullptr;
+    for (const simulation::NodePinRef& ref : m_topology.pinRefsByNode[node]) {
+        if (ref.componentIndex == mcuIndex) continue; // o próprio MCU não conta pra esta decisão.
+        if (ref.componentIndex >= m_componentInstances.size() || !m_componentInstances[ref.componentIndex]) {
+            continue; // não deveria acontecer (pinRefsByNode só referencia componentes vivos), mas
+                      // seguro por construção: se acontecer, trata como "não sei o suficiente" abaixo.
+        }
+        IComponentModel* candidate = m_componentInstances[ref.componentIndex].get();
+        if (candidate->supportsI2cTransfer()) {
+            if (!target) target = candidate; // primeiro candidato I2C-capaz encontrado no nó.
+            continue;
+        }
+        if (isI2cFastPathTransparentUnlocked(*candidate)) continue;
+        // Qualquer coisa não reconhecida no mesmo nó de SDA: sem garantia de que o fast path
+        // representa o barramento corretamente -- desiste pro caminho elétrico bit-a-bit.
+        return fallback;
+    }
+
+    if (!target) {
+        // Nó sem nenhum dispositivo I2C-capaz (nada conectado, ou só pull-up/terra/túnel) -- o fast
+        // path já sabe, com certeza, que ninguém vai confirmar o endereço: NACK definitivo, não
+        // "não sei" (ver doc-comment da declaração).
+        I2cTransferResult definitiveNack{};
+        definitiveNack.handled = true;
+        definitiveNack.addressAck = false;
+        definitiveNack.firstNack = 0;
+        return definitiveNack;
+    }
+    return target->transferI2c(transfer);
 }
 
 void SimulationSession::sendComponentEvent(uint32_t componentIndex, const ComponentEvent& event) {

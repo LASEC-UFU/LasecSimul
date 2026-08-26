@@ -43,6 +43,12 @@ public:
 
     PluginHealthStatus health() const override { return m_health; }
 
+    /** Diferente de todo o resto desta classe: chamada no caminho QUENTE de um burst I2C, não só
+     * no load frio -- por isso usa `CrashGuard` direto (sem `PluginWatchdog`, que criaria uma
+     * thread nova por chamada, ver doc da classe acima), mesma escolha que
+     * `NativeDeviceProxy::transferI2c` já faz pelo mesmo motivo. */
+    std::optional<uint32_t> resolveI2cPinIndex(uint32_t bus, bool sda) const override;
+
 private:
     static MemoryRegion toCoreRegion(const LsdnMemoryRegion& region);
     static PinMapping toCorePinMapping(const LsdnPinMapping& mapping);

@@ -33,6 +33,11 @@ namespace lasecsimul::mcu {
  */
 class McuComponent final : public IComponentModel {
 public:
+    /** (componentIndex deste MCU, bus I2C, transferência) -> resultado. `componentIndex` vai
+     * primeiro (não capturado na lambda de quem registra) porque `SimulationSession::addComponent`
+     * monta o handler ANTES de `componentIndex` existir (só é atribuído depois, via
+     * `onAssignedIndex`) -- ver `resolveI2cTransferUnlocked`. */
+    using I2cTransferHandler = std::function<I2cTransferResult(uint32_t, uint32_t, const I2cTransfer&)>;
     McuComponent(std::unique_ptr<IMcuAdapter> adapter, simulation::Scheduler& scheduler, std::span<const Pin> requestedPins = {});
     ~McuComponent() override;
 
@@ -84,6 +89,13 @@ public:
     PluginHealthStatus health() const override;
 
     void onAssignedIndex(uint32_t index) override;
+    void setI2cTransferHandler(I2cTransferHandler handler) { m_i2cTransferHandler = std::move(handler); }
+    /** Repassa pro adaptador concreto -- ver `IMcuAdapter::resolveI2cPinIndex`. `McuComponent`
+     * continua neutro de chip (não interpreta o resultado, só repassa o índice de pino pra quem
+     * chamou resolver a topologia -- `SimulationSession`). */
+    std::optional<uint32_t> resolveI2cPinIndex(uint32_t bus, bool sda) const {
+        return m_adapter->resolveI2cPinIndex(bus, sda);
+    }
 
     /** Inicia o processo QEMU real com o firmware indicado -- chamado via IPC `loadMcuFirmware`
      * (`CoreApplication.cpp`, `extension/src/mcu/mcuCommands.ts`). `arenaName` deve ser único por
@@ -193,6 +205,7 @@ private:
      * nem checa `isOpen()`, isso é responsabilidade de quem chama. `deferred` -- ver doc-comment de
      * `DeferredSchedulerCall` acima. */
     PollStep pollStepLocked(std::vector<DeferredSchedulerCall>* deferred = nullptr);
+    bool processI2cBurstLocked();
     /** PERF-12: inicia (se ainda não houver uma) a thread dedicada de poll para este MCU -- só
      * quando `m_scheduler.isRunning()` (worker de verdade rodando em background; ver `onPollEvent`)
      * -- idempotente via `CallbackState::pollThreadRunning` (compare-and-swap), seguro chamar toda
@@ -285,6 +298,7 @@ private:
     McuController m_controller;
     std::shared_ptr<CallbackState> m_callbackState;
     uint32_t m_componentIndex = 0;
+    I2cTransferHandler m_i2cTransferHandler;
     std::atomic<bool> m_polling{false};
     // Identifica a sessão de polling à qual cada callback agendado pertence. Uma simples recarga
     // reutiliza o callback pendente; Scheduler::reset(), por outro lado, descarta a fila inteira e

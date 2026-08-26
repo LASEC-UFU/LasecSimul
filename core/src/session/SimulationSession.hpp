@@ -795,6 +795,38 @@ private:
      * `m_componentInstances` já é funilada pela fila de comandos (`enqueueCommand`/
      * `drainCommandQueue`), nunca concorrente com a própria worker. */
     std::optional<uint64_t> computeSlowestMcuPositionNs();
+
+    /** Fast path de transferência I2C (ver McuComponent::setI2cTransferHandler,
+     * docs/39-i2c-mttcg-throughput-ceiling-*.md seção 9): dado o MCU e o índice de barramento I2C,
+     * acha o pino físico que carrega SDA agora (`McuComponent::resolveI2cPinIndex`, chip-específico
+     * -- nullopt aqui já é fallback seguro, chip sem suporte), o nó elétrico daquele pino
+     * (`m_netlist`/`m_topology`, chip-neutro) e todo componente com pino no MESMO nó
+     * (`pinRefsByNode`). Só usa o fast path se TODOS os outros componentes daquele nó forem ou (a)
+     * capazes de `transferI2c` (dispositivo I2C real) ou (b) um tipo explicitamente transparente
+     * pra essa decisão (resistor de pull-up, terra, túnel) -- qualquer outra coisa (capacitor,
+     * componente ativo desconhecido, outro MCU fazendo bit-bang) força `handled=false`, que o
+     * chamador (McuComponent/QEMU) interpreta como "sem suporte, use o caminho elétrico
+     * bit-a-bit". Só o PRIMEIRO componente I2C-capaz que confirma o endereço (`addressAck`) é
+     * usado; se nenhum confirmar, devolve `handled=true, addressAck=false` -- um NACK definitivo
+     * resolvido pelo fast path, não um "não sei, tente devagar". `mcuIndex` é lido com
+     * `m_componentInstances[mcuIndex]` sem lock adicional -- seguro porque `m_componentInstances`
+     * só muda via `enqueueCommand`, nunca concorrente com a worker (ver doc-comment de
+     * `computeSlowestMcuPositionNs` acima); mas os campos DENTRO de outro `IComponentModel` (ex: o
+     * framebuffer do plugin do SSD1306) só são seguros de tocar na mesma serialização que protege
+     * `stamp()` -- por isso `McuComponent::processI2cBurstLocked` só chama este método via
+     * `m_scheduler.isCurrentThreadWorker()` (chamada direta) ou `m_scheduler.synchronized(...)`
+     * (qualquer outra thread, ex: a thread de poll de fundo do MCU) -- nunca direto de uma thread
+     * que não seja a worker sem passar por `synchronized`. */
+    I2cTransferResult resolveI2cTransferUnlocked(uint32_t mcuIndex, uint32_t bus, const I2cTransfer& transfer);
+    /** true se `componentIndex` pode compartilhar o nó elétrico de um barramento I2C fast-path sem
+     * forçar fallback -- ver doc-comment de `resolveI2cTransferUnlocked` acima, item (b). */
+    static bool isI2cFastPathTransparentUnlocked(const IComponentModel& component);
+
+public:
+    /** Só pra TESTE -- ver `computeSlowestMcuPositionNsForTesting` acima pro mesmo padrão. */
+    I2cTransferResult resolveI2cTransferForTesting(uint32_t mcuIndex, uint32_t bus, const I2cTransfer& transfer) {
+        return resolveI2cTransferUnlocked(mcuIndex, bus, transfer);
+    }
 };
 
 } // namespace lasecsimul::session

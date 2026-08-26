@@ -412,3 +412,282 @@ carimba o lote inteiro drenado com um único timestamp de "agora", não por amos
 ficar ocupado por vários polls seguidos os bytes se acumulam e chegam em rajada) mas **não foi
 confirmado empiricamente** — a investigação pivotou pro teto de I2C antes de medir isso ao vivo.
 Vale revisitar com o mesmo tipo de instrumentação usada aqui.
+
+---
+
+## 8. Adendo de validação: segunda causa raiz e decisão arquitetural
+
+Uma nova rodada de testes correlacionou marcadores UART do firmware, tempo de parede do harness,
+métricas do Scheduler e o profiler do QEMU. Ela confirma o teto elétrico descrito acima, mas
+encontra uma segunda serialização que precisa ser corrigida junto: `esp32_i2c.c` agenda um timer
+QEMU para **cada byte** (`esp32_i2c_do_transaction()` -> `timer_mod()` ->
+`esp32_i2c_event()`). Em Windows/MTTCG, a execução efetiva desses milhares de timers fica muito
+acima dos 25 us teóricos de um byte a 400 kHz.
+
+### 8.1 Medição correlacionada
+
+O firmware de prova transmitiu o mesmo framebuffer SSD1306 (1024 bytes) sucessivamente em três
+clocks e imprimiu `I2CPROBE,start/end,<clock>,<frame>,<millis>`. O harness foi estendido com
+`LASECSIMUL_BENCHMARK_UART_TIMELINE=1`, que registra o tempo de parede de cada lote UART.
+
+Resultados reproduzidos em processo isolado, `realTimeRate=0`, QEMU bundled atual:
+
+| Quadro | Duração vista pelo firmware | Duração aproximada de parede |
+|---|---:|---:|
+| 100 kHz | 8,527 a 12,763 s | mesma ordem |
+| 400 kHz | 5,489 a 10,279 s | mesma ordem |
+
+Uma execução de 18 s apresentou:
+
+- 110.702 eventos do Scheduler e 82.832 solves;
+- 2,31 s acumulados em `settleUntilStableLocked()` e 1,26 s no solver;
+- 15,15 s em esperas do advance-limit;
+- somente 5.277 eventos publicados pelo QEMU em 16,77 s;
+- apenas 75 esperas por fila cheia, embora `max_queue=32`.
+
+Portanto, aumentar apenas `LSDN_QEMU_ARENA_QUEUE_DEPTH` não resolve. O QEMU produz bytes devagar
+por causa da cadeia de timer por byte; quando eles chegam, o Core ainda os expande em cerca de 27
+eventos elétricos por byte. São dois tetos em série.
+
+### 8.2 Lacunas de fidelidade encontradas
+
+1. **Clock stretching não está implementado.** `I2cState::sclInput` é atualizado, mas
+   `i2cAdvance()` nunca o consulta antes/depois de liberar SCL. O comentário de que uma futura
+   otimização deve “preservar clock stretching” não descreve uma garantia existente; a correção
+   nova deve implementá-lo e testá-lo.
+2. **ACK de dados não volta ao firmware.** O Core amostra todos os ACKs em `lastAck`, mas o QEMU
+   chama `readReg(A_I2C_STATUS)` somente quando `ackSamplePending` está ativo, isto é, no primeiro
+   byte após RSTART. Os demais ACKs são assumidos.
+3. **Drenar a arena não significa concluir a onda elétrica.** `waitForQueueDrain()` garante apenas
+   que o Core retirou a escrita da ring queue. Ela pode continuar em `I2cState::pendingOps`. A
+   consulta atual transforma `BUS_BUSY` em `ackT=0`, portanto atraso elétrico pode parecer ACK.
+4. **`Adafruit_SSD1306::begin()` não é uma sonda de presença.** Com firmware endereçando `0x3D`
+   e dispositivo em `0x3C`, o QEMU registrou 9 `ackERR`, o display permaneceu desligado, mas o
+   firmware imprimiu `begin-ok`. A biblioteca retorna sucesso de inicialização/alocação, não uma
+   confirmação confiável de que o escravo respondeu. Retry deve usar uma transmissão Wire cuja
+   resposta de `endTransmission()` seja conferida explicitamente.
+
+### 8.3 Solução recomendada
+
+A solução deve ser implementada como um fast path genérico de **ilha digital open-drain**, com
+fallback automático para a simulação MNA atual:
+
+1. **ABI Core/QEMU em bursts.** Publicar um descritor por RSTART/WRITE-burst/READ-burst/STOP, com
+   barramento, período, timestamp, quantidade e bytes, em vez de uma entrada e um timer por byte.
+   O QEMU usa um único timer para a duração total do burst.
+2. **Handshake de conclusão elétrica.** O Core publica uma sequência de conclusão e o resultado
+   real (ACK do endereço, bitmap/primeiro NACK de dados, bytes lidos). O QEMU só conclui o opcode
+   quando a sequência correspondente terminar. Isso elimina o falso equivalente
+   “ring queue drenada = barramento terminou”.
+3. **Executor denso no Core.** Para uma ilha contendo apenas drivers open-drain, pull-ups e
+   consumidores digitais declaradamente compatíveis, expandir todas as bordas com timestamps em
+   um laço compacto, sem `priority_queue`, callback, lock e solve MNA por subfase. Cada borda ainda
+   é entregue aos listeners; ACK, múltiplos endereços e analisador lógico continuam observáveis.
+4. **Fallback de fidelidade.** Se SCL/SDA tiver capacitor, componente analógico/não-linear,
+   participante não compatível, contenção desconhecida ou instrumentação que peça tensão
+   analógica, usar automaticamente o caminho bit-a-bit/MNA existente.
+5. **Clock stretching no resolver digital.** Ao liberar SCL, o mestre só avança depois que o valor
+   resolvido realmente ficar alto. O mesmo teste deve ser aplicado também ao fallback atual.
+
+Entregar apenas “mais fila”, fundir duas das 27 fases ou otimizar Eigen pode melhorar percentuais,
+mas não remove os dois custos O(bytes) com timer/callback pesado. O burst QEMU reduz os timers em
+cerca de 32 vezes; a ilha digital reduz os eventos pesados do Core, preservando as bordas como
+eventos lógicos com timestamp.
+
+### 8.4 Critérios de aceite obrigatórios
+
+- `Wire.endTransmission()` retorna sucesso em `0x3C` e NACK em `0x3D`.
+- Um escravo que segura SCL baixo atrasa a transação; ao liberar, ela continua sem perder bit.
+- O SSD1306 recebe exatamente os mesmos 1024 bytes nos caminhos rápido e fallback.
+- Um analisador lógico observa START, 9 clocks por byte, ACK e STOP com timestamps corretos.
+- Barramento com dois escravos de endereços distintos responde somente pelo endereçado.
+- Em 400 kHz, um framebuffer termina próximo do tempo elétrico (aproximadamente 25 ms, aceitando
+  margem explícita de CI), e não em segundos.
+- O benchmark sustenta vários quadros e telemetria UART sem WDT, fila presa ou degradação gradual.
+
+### 8.4.1 Continuação (mesma sessão, depois que os tokens do Codex acabaram)
+
+Retomei o trabalho a partir do estado que o Codex deixou: ABI da arena em bursts (seção 9.5 item 1)
+e interface `I2cTarget` opcional no device ABI (item 2, `IComponentModel::supportsI2cTransfer`/
+`transferI2c`, `device_abi.h` ABI 4, implementado em `devices/simulide-complex/src/lib.c` pro
+SSD1306/SH1107/AIP31068) já estavam prontos e compilando, mas **nada os conectava**:
+`McuComponent::setI2cTransferHandler()` existia mas nenhum código chamava; sem isso, todo burst (se
+existisse) voltaria sempre "não tratado".
+
+**O que completei (item 3 da seção 9.5, "executor fast protocol + seleção automática por
+topologia"):**
+
+1. **`IMcuAdapter::resolveI2cPinIndex(bus, sda)`** (novo, `mcu_abi.h` ABI 3 -- opcional, ponteiro de
+   vtable pode ser `NULL`): só o adaptador concreto sabe qual pino físico a GPIO matrix tem roteado
+   pra SDA/SCL de um barramento I2C AGORA (roteamento dinâmico, específico do ESP32 -- confirmado
+   lendo `Esp32Adapter.cpp::selectedPinOutputSignal`/`matrixOutputSignal`, que já mapeia os sinais
+   reais 29/30/95/96 da GPIO matrix do chip pra I2C0/I2C1 SCL/SDA). Implementado em
+   `mcu-adapters/espressif-esp32/src/Esp32Adapter.cpp::resolveI2cPin` -- varredura linear de 40
+   pinos reaproveitando a mesma resolução que `gpioIsOutputEnabled()` já usa, sem lógica de
+   roteamento nova. Chamada quente (por burst, não por bit): usa `CrashGuard` direto em
+   `NativeMcuAdapterProxy`, não `PluginWatchdog` (que criaria uma thread nova por chamada -- mesmo
+   cuidado de desempenho do `postStep()`, seção 3.1).
+2. **`SimulationSession::resolveI2cTransferUnlocked(mcuIndex, bus, transfer)`**: acha o nó elétrico
+   do pino SDA resolvido acima (`m_netlist`/`m_topology.pinRefsByNode`, chip-neutro) e todo
+   componente no mesmo nó. Só usa o fast path se TODOS forem `supportsI2cTransfer()` ou um tipo
+   explicitamente transparente (`passive.resistor`/`other.ground`/`connectors.tunnel`) -- qualquer
+   outra coisa força `handled=false` (fallback elétrico). Sem nenhum dispositivo I2C-capaz no nó
+   (nada conectado, ou só pull-up/terra): NACK definitivo (`handled=true, addressAck=false`), não
+   "não sei" -- resolve com certeza que ninguém vai responder, sem precisar do caminho lento.
+3. **Concorrência**: `processI2cBurstLocked()` pode rodar na thread de poll de fundo do MCU OU na
+   própria worker do Scheduler (via `stamp()`) -- chamar `transferI2c()` de outro componente sem
+   sincronização correta seria uma race nova (o plugin do SSD1306, por ex., não é thread-safe
+   contra `stamp()` concorrente). Usa `Scheduler::isCurrentThreadWorker()` (já existia, usado por
+   `enqueueCommand`) pra decidir: já na worker -> chama direto; qualquer outra thread ->
+   `Scheduler::synchronized(...)`. `m_topology`/`m_netlist`/`m_componentInstances` são seguros de
+   ler de qualquer thread enquanto a simulação está rodando (topologia só muda com o Scheduler
+   parado, mutação de `m_componentInstances` sempre funilada pela fila de comandos -- nenhum dos
+   dois é novo, já documentado em `computeSlowestMcuPositionNs`).
+
+Novo teste: `core/test/core/session/I2cFastPathDispatchTest.cpp` (10 verificações, todas passando)
+-- prova a resolução de topologia com um `IMcuAdapter`/`IComponentModel` de teste, SEM QEMU real
+(a produção de bursts pelo QEMU, item 4 da seção 9.5, continua não implementada -- ver 8.4.2).
+
+### 8.4.2 Achado crítico: a ABI da arena já quebrou o QEMU real, bloqueando
+
+**A mudança de ABI da arena que o Codex já tinha feito (`qemu_arena_abi.h`, `LSDN_QEMU_ARENA_ABI_MAJOR`
+4->5, `LsdnQemuArena` 1128->1256 bytes, mailbox de I2C) não tem contraparte no QEMU
+(`qemu_lasecSimul`) -- e o Core, corretamente, RECUSA se conectar a um QEMU com essa
+incompatibilidade.**
+
+Confirmado: `softmmu/simuliface.h` (`qemu_lasecSimul`) define `struct qemuArena` SEPARADAMENTE (não
+inclui `qemu_arena_abi.h` do Core -- os dois lados são mantidos sincronizados manualmente) e NÃO
+tem os campos `i2cRequestSeq`/etc. O binário QEMU já empacotado (`devices/qemu-esp32/bin/
+qemu-system-xtensa.exe`, ainda o mesmo desta sessão, ABI 4 -- não mexi nele) é, portanto,
+**incompatível com o Core recompilado a partir do estado atual do repositório**.
+`QemuArenaBridge::open()` detecta isso corretamente (`transportSize != sizeof(LsdnQemuArena)`,
+`QemuArenaBridge.cpp:163-172`) e lança `std::runtime_error("Incompatible QEMU arena ABI v4
+descriptor")` -- mas os testes que carregam QEMU real (`mcu_component_test`,
+`mcu_scheduler_pacing_sync_test`, `session_restart_stress_test`) não capturam essa exceção, então
+terminam com `std::terminate()`/fail-fast do MSVC (relatado pelo Windows como
+`STATUS_STACK_BUFFER_OVERRUN`, 0xC0000409 -- **não é corrupção de memória de verdade**, é o código
+que o MSVC usa pra exceção não capturada em build Release; confirmei lendo o `throw` exato antes de
+concluir isso).
+
+**Isto não é uma regressão desta continuação** -- já estava latente no que o Codex deixou (a
+mudança de ABI da arena é anterior a qualquer coisa que eu adicionei aqui); só ficou visível agora
+porque esta é a primeira vez, nesta investigação, que a suíte completa (incluindo os testes com
+QEMU real) rodou depois dessa mudança específica. O binário bundled do QEMU
+(`devices/qemu-esp32/bin/qemu-system-xtensa.exe`, commit `1e492ae`) continua sendo o build ABI-4,
+compatível com o Core ANTES desta sessão -- ou seja, a instalação/sessão interativa do usuário (que
+usa o binário do Core já instalado, não o `core/build/Release/lasecsimul-core.exe` local recompilado
+agora) não é afetada. O risco é só pra quem recompilar o Core a partir da árvore atual e tentar
+carregar firmware real: vai falhar (com uma exceção clara, não silenciosamente) até o item 4 da
+seção 9.5 (QEMU consumir o burst) ser implementado.
+
+**Não tentei corrigir isso nesta sessão** -- exigiria mexer em `qemu_lasecSimul/softmmu/simuliface.c`
+e `hw/i2c/esp32_i2c.c` (C, toolchain separada, rebuild de QEMU) com tempo insuficiente pra validar
+com o mesmo rigor do resto deste documento. Fica registrado aqui como o PRÓXIMO passo obrigatório
+antes de qualquer commit que dependa de testes com QEMU real voltarem a passar.
+
+### 8.5 Mitigação imediata, sem confundir com a correção estrutural
+
+Para o firmware atual, rolagem contínua por software exige retransmitir 1024 bytes por quadro e
+continuará impraticável até o fast path. O SSD1306 possui comandos de hardware para scroll por
+páginas; o plugin já os modela em `oled_command()`/`post_step()`. Usá-los permite configurar a
+rolagem uma vez e deixa o display avançá-la sem retransmitir o framebuffer. Para detectar display
+ausente, fazer uma sonda explícita com `Wire.beginTransmission(0x3C)` e conferir
+`Wire.endTransmission() == 0`; não confiar no retorno de `SSD1306.begin()`.
+
+---
+
+## 9. Comparação direta com `qemu_simulide` e `simulide_2`
+
+Foram inspecionadas as árvores locais `C:\SourceCode\qemu_simulide` e
+`C:\SourceCode\simulide_2`. Não havia binário pronto do SimulIDE 2 nessa árvore para executar o
+mesmo firmware, então a comparação de implementação foi estática; a configuração de `icount` da
+referência, porém, foi reproduzida e medida no LasecSimul.
+
+### 9.1 O que a referência realmente faz
+
+| Aspecto | SimulIDE/QEMU de referência | LasecSimul atual | Decisão |
+|---|---|---|---|
+| Sincronização QEMU/Core | Arena de uma única posição; `waitForSynch()` em cada acesso | Ring queue assíncrona para writes e read síncrono | Manter a ring queue; a referência é mais bloqueante |
+| I2C no QEMU | Um byte por `timer_mod()` | Também um byte por timer | Substituir ambos por descritor de burst |
+| Onda I2C | `TwiModule`, bit a bit | `I2cState`, bit a bit | Manter apenas como fallback elétrico/debug |
+| Agenda do simulador | Lista intrusiva; um evento pendente por `eElement` | `priority_queue` com `std::function` | Extrair o executor intrusivo para protocolos densos, não trocar o Scheduler inteiro |
+| Solve | Agrupa mesmo timestamp e resolve nós alterados | Settle elétrico genérico por fase | Ilha digital evita MNA; fallback continua genérico |
+| ACK | Estado TWI existe, mas o QEMU original lê status com TODO e não implementa a resposta completa | Endereço volta; ACK de payload é assumido | Burst deve devolver endereço e primeiro/bitmap de NACK |
+| Leitura I2C | Caminho READ comentado/incompleto no QEMU original | Estrutura existe, com round-trip por byte | Implementar READ no novo descritor e testar FIFO/ACK_VAL |
+| Clock stretching | Não há espera robusta do master pela subida física de SCL | `sclInput` é armazenado, mas ignorado | Implementar duração/espera explícita nos dois caminhos |
+| SSD1306 | Decodifica comandos e framebuffer | Decodifica comandos, framebuffer e scroll | Reusar a máquina de comandos atual; ela é mais completa |
+
+O `TwiModule` não reduz a quantidade de trabalho elétrico. Para cada bit, `runEvent()` alterna entre
+uma etapa que trata o estado e outra que efetivamente alterna SCL, cada uma separada por metade do
+seu `m_clockPeriod`; isso chega a aproximadamente 36 callbacks por byte. O ganho do executor é que
+o evento está embutido no próprio `eElement` (`nextEvent`/`eventTime`), sem alocação, lambda ou
+captura. Esse padrão é útil dentro do fast path, mas não remove o timer QEMU por byte.
+
+### 9.2 Teste do `icount` copiado da referência
+
+O SimulIDE 2 inicia o ESP32 com `-icount shift=4,align=off,sleep=off`. O mesmo perfil foi aplicado
+ao LasecSimul (`LASECSIMUL_ESP32_EXECUTION_MODE=deterministic` e
+`LASECSIMUL_ESP32_ICOUNT_SHIFT=4`) durante 12 segundos, usando o firmware controlado desta análise.
+
+Resultado do profiler QEMU:
+
+```text
+mode=deterministic-icount wall_ns=12525107200 virtual_ns=511422052
+realtime_percent=4.08 events=8359 reads=20 queue_waits=561 max_queue=39
+```
+
+O firmware avançou apenas 0,511 s virtuais em 12,525 s de parede e nem concluiu o primeiro quadro
+de 100 kHz. Isso é substancialmente pior que MTTCG neste desenho desacoplado. Portanto, tornar
+`shift=4` o padrão ou voltar ao lockstep da referência está descartado.
+
+### 9.3 O que vale extrair
+
+1. **Evento intrusivo especializado.** Um `I2cBurstExecutor` pode conter seu próximo timestamp e
+   estado diretamente, processando bordas em vetor/loop contíguo. Isso copia a parte eficiente do
+   SimulIDE sem impor sua lista O(n) e sua limitação de um evento pendente a todo o Scheduler.
+2. **Agrupamento por timestamp.** Entregar a todos os consumidores digitais as mudanças de uma
+   borda antes de calcular ACK/entrada, fazendo uma única resolução lógica por timestamp.
+3. **Máquina TWI explícita.** Preservar estados START, endereço, payload, ACK/NACK, READ e STOP no
+   descritor/resultados, em vez de inferir conclusão pela drenagem da arena.
+4. **Separação da GUI.** O avanço de protocolo não deve esperar pintura do display. O plugin altera
+   RAM/estado do SSD1306 durante o burst e a UI continua apresentando snapshots na sua taxa normal.
+
+Não devem ser copiados: arena de slot único, spin infinito, `shift=4` fixo, READ incompleto nem o
+status I2C simplificado da referência.
+
+### 9.4 Arquitetura otimizada para a prioridade velocidade + paridade funcional
+
+A recomendação da seção 8.3 pode ser tornada ainda mais rápida usando dois modos explícitos:
+
+- **Fast protocol (padrão):** um descritor representa START + endereço + N bytes + STOP. O Core
+  entrega bytes diretamente a componentes que anunciem a interface `I2cTarget`, reserva na linha
+  de tempo a duração exata calculada dos registradores LOW/HIGH/START/STOP e devolve ACK/NACK,
+  bytes lidos e eventual duração de stretch. Não há MNA nem callback por borda.
+- **Electrical (compatibilidade/debug):** usa o motor atual bit a bit quando o barramento contém
+  componente analógico, dispositivo sem `I2cTarget`, bit-banging GPIO, contenção ou quando o usuário
+  pede forma de onda elétrica real.
+- **Waveform sintética no fast path:** analisadores digitais recebem START, nove clocks por byte,
+  ACK e STOP gerados dos mesmos timestamps do descritor. Assim a observabilidade digital não força
+  o solver. Medição de tensão analógica seleciona automaticamente o modo Electrical.
+
+Esse desenho prioriza a paridade que importa ao firmware: FIFO e IRQ do ESP32, endereço, ACK/NACK
+de cada byte, READ, tempo de barramento e estado do dispositivo. Ele é também mais fiel que os dois
+caminhos atuais justamente nos pontos hoje ausentes. A paridade elétrica analógica permanece
+disponível sob demanda, mas deixa de taxar todo framebuffer do display.
+
+### 9.5 Ordem de implementação e metas mensuráveis
+
+1. Arena ABI seguinte: `I2C_BURST_REQUEST`/`I2C_BURST_COMPLETE`, sequence id, bus, timing, flags,
+   TX/RX e resultados de ACK; sem reaproveitar `SIM_READ` como barreira.
+2. Interface opcional `I2cTarget` no device ABI e adaptação inicial de OLED/SH1107/AIP31068,
+   reutilizando `i2c_payload_byte()`/`oled_command()` para evitar duas implementações funcionais.
+3. Executor fast protocol + seleção automática fast/electrical por topologia.
+4. QEMU: consumir uma FIFO/comando inteiro, publicar um burst e usar somente um timer de conclusão;
+   refletir NACK, RX FIFO, interrupções e BUS_BUSY reais do resultado.
+5. Corrigir clock stretching e ACK de payload também no fallback.
+6. Gate de CI: quadro SSD1306 de 1024 bytes a 400 kHz em até 100 ms de parede e 25-30 ms virtuais,
+   razão parede/virtual sem degradação em 100 quadros; mesmas imagens e retornos Wire nos dois
+   modos.
+
+Até essa ABI existir, o melhor ajuste operacional continua sendo MTTCG, `realTimeRate=0`, scroll
+de hardware do SSD1306 e limitação de `display.display()` a atualizações realmente necessárias.

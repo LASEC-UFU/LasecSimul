@@ -32,7 +32,7 @@
 extern "C" {
 #endif
 
-#define LSDN_ABI_VERSION_MAJOR 3
+#define LSDN_ABI_VERSION_MAJOR 4
 #define LSDN_ABI_VERSION_MINOR 0
 /* O PluginLoader só checa MAJOR (minor é só informativo) -- sem plugin de terceiro nem
  * preocupação de compat aqui, todo device deste repo recompila a cada mudança de ABI via `npm run
@@ -147,6 +147,30 @@ typedef struct LsdnHostApi {
     void     (*submit_task)(void* host_ctx, void (*fn)(void* arg), void* arg);
 } LsdnHostApi;
 
+#define LSDN_I2C_NO_NACK UINT32_MAX
+
+typedef struct LsdnI2cTransfer {
+    uint8_t address;
+    uint8_t read;
+    uint8_t start;
+    uint8_t stop;
+    const uint8_t* tx_data;
+    uint32_t tx_size;
+    uint8_t* rx_data;
+    uint32_t rx_size;
+    uint64_t period_ns;
+} LsdnI2cTransfer;
+
+typedef struct LsdnI2cTransferResult {
+    uint8_t handled;
+    uint8_t address_ack;
+    uint16_t reserved;
+    uint32_t first_nack;
+    uint32_t rx_size;
+    uint32_t reserved2;
+    uint64_t stretch_ns;
+} LsdnI2cTransferResult;
+
 /* As 8 funcoes obrigatorias do dispositivo — nenhuma outra e necessaria (ver spec, secao 5). */
 typedef struct LsdnDeviceVTable {
     LsdnDevice* (*create)(void* host_ctx, const LsdnHostApi* host_api);
@@ -159,6 +183,9 @@ typedef struct LsdnDeviceVTable {
     uint32_t    (*get_state)(LsdnDevice* dev, uint8_t* out, uint32_t cap);
     void        (*set_state)(LsdnDevice* dev, const uint8_t* in, uint32_t len);
     void        (*destroy)(LsdnDevice* dev);
+    /* ABI 4: opcional; NULL mantém o caminho elétrico bit-a-bit. */
+    uint32_t    (*i2c_transfer)(LsdnDevice* dev, const LsdnI2cTransfer* transfer,
+                                LsdnI2cTransferResult* result);
 } LsdnDeviceVTable;
 
 /* Unico simbolo exportado por um plugin de dispositivo. */

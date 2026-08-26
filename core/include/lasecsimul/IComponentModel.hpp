@@ -163,6 +163,11 @@ public:
 
     virtual void onEvent(const ComponentEvent&) {}
 
+    /** Fast path opcional. `false` preserva o caminho elétrico bit-a-bit para qualquer componente
+     * que não declare explicitamente paridade funcional por transação. */
+    virtual bool supportsI2cTransfer() const { return false; }
+    virtual I2cTransferResult transferI2c(const I2cTransfer&) { return {}; }
+
     virtual size_t getState(uint8_t* out, size_t cap) const = 0;
     /** Snapshot pequeno para telemetria periódica. Por padrão preserva a ABI/comportamento de
      * getState(); instrumentos com histórico sobrescrevem para devolver somente a leitura atual,

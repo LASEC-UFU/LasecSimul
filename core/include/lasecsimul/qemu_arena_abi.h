@@ -85,18 +85,19 @@ typedef enum LsdnSimAction {
  * revisão arquitetural (docs/33-*.md, seção 5.3); "precisa ser validado por benchmark" antes de
  * considerar definitivo, não é um número medido. */
 #define LSDN_QEMU_ARENA_QUEUE_DEPTH 32
-#define LSDN_QEMU_ARENA_ABI_MAGIC UINT64_C(0x4c53444e51415234) /* "LSDNQAR4" */
-#define LSDN_QEMU_ARENA_ABI_MAJOR 4
+#define LSDN_QEMU_ARENA_ABI_MAGIC UINT64_C(0x4c53444e51415235) /* "LSDNQAR5" */
+#define LSDN_QEMU_ARENA_ABI_MAJOR 5
 #define LSDN_QEMU_ARENA_ABI_MINOR 0
 
 #define LSDN_QEMU_ARENA_CAP_WRITE_QUEUE           (UINT64_C(1) << 0)
 #define LSDN_QEMU_ARENA_CAP_ORDERED_EVENTS        (UINT64_C(1) << 1)
 #define LSDN_QEMU_ARENA_CAP_SYNC_READ             (UINT64_C(1) << 2)
 #define LSDN_QEMU_ARENA_CAP_MTTCG_MPSC_SERIALIZED (UINT64_C(1) << 3)
+#define LSDN_QEMU_ARENA_CAP_I2C_BURST              (UINT64_C(1) << 4)
 #define LSDN_QEMU_ARENA_CAPABILITIES                                          \
     (LSDN_QEMU_ARENA_CAP_WRITE_QUEUE | LSDN_QEMU_ARENA_CAP_ORDERED_EVENTS |   \
      LSDN_QEMU_ARENA_CAP_SYNC_READ |                                           \
-     LSDN_QEMU_ARENA_CAP_MTTCG_MPSC_SERIALIZED)
+     LSDN_QEMU_ARENA_CAP_MTTCG_MPSC_SERIALIZED | LSDN_QEMU_ARENA_CAP_I2C_BURST)
 #define LSDN_QEMU_ARENA_REQUIRED_CAPABILITIES LSDN_QEMU_ARENA_CAPABILITIES
 
 /* Layout EXATO de qemuQueueEntry_t (simuliface.h) -- não reordenar, não inserir campo. */
@@ -124,6 +125,22 @@ typedef struct LsdnQemuArena {
     uint64_t running;         /* QEMU seta 1 quando o processo terminou de inicializar */
     int64_t  loop_timeout_ns; /* ajustado pelo Core conforme a frequência de clock do chip */
     double   ps_per_inst;
+
+    /* ABI 5: mailbox I2C de um produtor/um consumidor. O QEMU publica todos os campos e por
+     * último i2cRequestSeq; o Core responde e por último publica i2cResponseSeq. */
+    uint64_t i2cRequestSeq;
+    uint64_t i2cResponseSeq;
+    uint64_t i2cTimePs;
+    uint32_t i2cBus;
+    uint32_t i2cFlags;       /* bit0 START, bit1 STOP, bit2 READ */
+    uint64_t i2cPeriodNs;
+    uint32_t i2cTxLen;
+    uint32_t i2cRxLen;
+    uint8_t  i2cTx[32];
+    uint8_t  i2cRx[32];
+    uint32_t i2cStatus;      /* bit0 handled, bit1 address ACK */
+    uint32_t i2cFirstNack;   /* UINT32_MAX quando todos os payloads deram ACK */
+    uint64_t i2cStretchNs;
 } LsdnQemuArena;
 
 typedef struct LsdnQemuArenaDescriptor {
@@ -149,21 +166,21 @@ typedef struct LsdnQemuArenaV4Mapping {
 #if defined(__cplusplus)
 static_assert(sizeof(LsdnQemuQueueEntry) == 32,
               "QEMU arena queue entry ABI changed");
-static_assert(sizeof(LsdnQemuArena) == 1128,
-              "QEMU arena v3 payload ABI changed");
+static_assert(sizeof(LsdnQemuArena) == 1256,
+              "QEMU arena v5 payload ABI changed");
 static_assert(sizeof(LsdnQemuArenaDescriptor) == 88,
               "QEMU arena v4 descriptor ABI changed");
-static_assert(sizeof(LsdnQemuArenaV4Mapping) == 1216,
-              "QEMU arena v4 mapping ABI changed");
+static_assert(sizeof(LsdnQemuArenaV4Mapping) == 1344,
+              "QEMU arena v5 mapping ABI changed");
 #else
 _Static_assert(sizeof(LsdnQemuQueueEntry) == 32,
                "QEMU arena queue entry ABI changed");
-_Static_assert(sizeof(LsdnQemuArena) == 1128,
-               "QEMU arena v3 payload ABI changed");
+_Static_assert(sizeof(LsdnQemuArena) == 1256,
+               "QEMU arena v5 payload ABI changed");
 _Static_assert(sizeof(LsdnQemuArenaDescriptor) == 88,
                "QEMU arena v4 descriptor ABI changed");
-_Static_assert(sizeof(LsdnQemuArenaV4Mapping) == 1216,
-               "QEMU arena v4 mapping ABI changed");
+_Static_assert(sizeof(LsdnQemuArenaV4Mapping) == 1344,
+               "QEMU arena v5 mapping ABI changed");
 #endif
 
 #ifdef __cplusplus
