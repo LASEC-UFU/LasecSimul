@@ -53,6 +53,19 @@ std::string uniqueArenaName(int cycle) {
            "-" + std::to_string(cycle);
 }
 
+std::string uniqueArenaNameForThisTestRun() {
+    // Producao usa "lasecsimul-mcu-<hostInstanceId>-<instanceId>" (CoreApplication.cpp, handler
+    // loadMcuFirmware): ESTAVEL para o mesmo McuComponent durante todo o processo, nunca varia
+    // entre ciclos Stop->Run. bindPollDoorbellLocked() (McuComponent.cpp, desde 102546b) assume
+    // essa mesma estabilidade -- o primeiro nome vincula o doorbell nomeado pra vida do
+    // McuComponent, e um nome diferente em qualquer ciclo seguinte lanca deliberadamente. Reflete
+    // aqui: UM nome por invocacao deste teste (isola execucoes concorrentes/independentes do
+    // teste, ex. duas rodadas do binario ao mesmo tempo), reutilizado por TODOS os ciclos do
+    // loop -- nao um nome novo por ciclo.
+    return "lasecsimul-session-restart-stress-" +
+           std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+}
+
 std::filesystem::path createBlankFlash(int cycle) {
     const std::filesystem::path path =
         std::filesystem::temp_directory_path() / (uniqueArenaName(cycle) + "-flash.bin");
@@ -201,15 +214,26 @@ int main() {
     // stale -- sem isso, "15/15 ciclos inicializaram" nao provaria que o lifecycle de restart em si
     // esta correto, so que o guard passa.
     std::unordered_set<uint64_t> executionIds;
+    // Prova que o doorbell nomeado reutilizado (mesmo HANDLE do ciclo 0, ver
+    // uniqueArenaNameForThisTestRun() acima) continua FUNCIONAL apos restart, nao so que o guard de
+    // rebind parou de lancar: pollDoorbellWakeCountForTesting() e' cumulativo e nunca resetado
+    // entre ciclos (mesma vida do HANDLE) -- comparar o valor logo apos o ciclo 0 contra o valor
+    // final prova atividade (SetEvent/Wait bem-sucedidos) em ciclos POS-restart tambem.
+    uint64_t doorbellWakeCountAfterCycle0 = 0;
+    // Producao nunca varia o nome da arena entre ciclos Stop->Run do mesmo McuComponent (ver
+    // comentario de uniqueArenaNameForThisTestRun() acima) -- um nome so, calculado uma vez,
+    // reutilizado pelos 15 ciclos. Isola execucoes concorrentes/independentes deste binario de
+    // teste sem violar o contrato de bindPollDoorbellLocked() (McuComponent.cpp).
+    const std::string arenaName = uniqueArenaNameForThisTestRun();
 
-    std::fprintf(stderr, "Restart stress: ciclos=%d run_ms=%lld firmware=%s\n",
+    std::fprintf(stderr, "Restart stress: ciclos=%d run_ms=%lld firmware=%s arena=%s\n",
                  cycleCount, static_cast<long long>(runDuration.count()),
-                 useRealFirmware ? realFirmware.string().c_str() : "flash-vazia");
+                 useRealFirmware ? realFirmware.string().c_str() : "flash-vazia",
+                 arenaName.c_str());
 
     for (int cycle = 0; cycle < cycleCount; ++cycle) {
         const std::filesystem::path flashPath =
             useRealFirmware ? realFirmware : createBlankFlash(cycle);
-        const std::string arenaName = uniqueArenaName(cycle);
         const auto removeTemporaryFlash = [&] {
             if (!useRealFirmware) std::filesystem::remove(flashPath);
         };
@@ -474,6 +498,16 @@ int main() {
                 static_cast<unsigned long long>(lastGpioTransitionNowNs));
         }
 
+        {
+            const uint64_t doorbellWakeCount = mcuPtr->pollDoorbellWakeCountForTesting();
+            const uint64_t doorbellWaitFailures = mcuPtr->pollWaitFailureCountForTesting();
+            std::fprintf(stderr,
+                "  ciclo %d: doorbell -- wakeCount(cumulativo)=%llu waitFailures(cumulativo)=%llu\n",
+                cycle, static_cast<unsigned long long>(doorbellWakeCount),
+                static_cast<unsigned long long>(doorbellWaitFailures));
+            if (cycle == 0) doorbellWakeCountAfterCycle0 = doorbellWakeCount;
+        }
+
         session.stopSimulation();
         const bool stopClean = !mcuPtr->firmwareRunning() &&
                                !session.scheduler().isRunning() &&
@@ -494,6 +528,15 @@ int main() {
             ++stopCleanupFailures;
         }
         removeTemporaryFlash();
+    }
+
+    {
+        const uint64_t finalDoorbellWakeCount = mcuPtr->pollDoorbellWakeCountForTesting();
+        TEST_ASSERT(finalDoorbellWakeCount > doorbellWakeCountAfterCycle0,
+                    "o doorbell reutilizado (mesmo HANDLE do ciclo 0) continua sendo sinalizado/aguardado"
+                    " com sucesso em ciclos POS-restart, nao so no ciclo 0");
+        TEST_ASSERT(mcuPtr->pollWaitFailureCountForTesting() == 0,
+                    "nenhuma falha de wait no doorbell reutilizado ao longo de todos os ciclos");
     }
 
     TEST_ASSERT(failedToBoot == 0, "nenhum ciclo deveria falhar em INICIALIZAR (arena->running nunca chegando a 1)");
