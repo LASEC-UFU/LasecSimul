@@ -90,3 +90,10 @@ _deps/
 /extension/test/e2e/artifacts/
 /packaging/*/obj/
 /packaging/*/bin/
+
+# Artefatos de diagnostico/investigacao (traces binarios do Recorder causal, dumps de validacao
+# ad-hoc) -- gerados repetidamente durante investigacoes de performance/timing e nunca destinados a
+# ficar no historico; poluiam a raiz do repo (lasecsimul-qemu-*.trace) e .codex-validation/ antes
+# desta entrada existir.
+*.trace
+/.codex-validation/

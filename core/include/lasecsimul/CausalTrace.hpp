@@ -14,14 +14,15 @@ enum class EventType : uint16_t {
     QemuI2cRequestReady = 20, QemuI2cRequestPublished = 21,
     CoreI2cCompletionPublished = 22, QemuI2cCompletionObserved = 23,
     PollWake = 10, PollDispatch = 11, PollWait = 12,
-    /* TEMPORARY, minimal diagnostic for the 2026-08-27 TG0WDT_SYS_RESET investigation -- closes the
-     * gap between CoreI2cEnter (topology resolution starts) and CoreI2cCompletionPublished (response
-     * published) with the two phases static analysis could not distinguish: device-mutex contention
-     * and the plugin's own compute. C0 (request claimed by the background poll thread, before this
-     * gap) is also recorded under this range. Remove once the investigation concludes. */
+    /* TEMPORARY, minimal diagnostic for the 2026-08-27 TG0WDT_SYS_RESET investigation, Light Pass 3 --
+     * C0: request claimed by the background poll thread, before CoreI2cEnter's topology resolution.
+     * Together with the existing CoreI2cEnter/CoreI2cCompletionPublished and QEMU's T0/T1/T5, this is
+     * the minimum needed to decompose T1->C0 (pickup/wake), C0->C6 (Core service), C6->T5 (QEMU
+     * observation). The finer device-mutex/plugin-compute breakpoints (Pass 2) were removed once Pass
+     * 2 showed that segment cheap and stable in the (non-degraded) run it measured -- reduced here to
+     * cut per-transaction QPC/recorder overhead, not because that segment is cleared for the
+     * degradation regime, which Pass 2 never reproduced. Remove once the investigation concludes. */
     CoreI2cBurstClaimed = 30,
-    DeviceMutexWaitStart = 31, DeviceMutexAcquired = 32,
-    PluginCallStart = 33, PluginCallEnd = 34,
 };
 
 struct Record {
