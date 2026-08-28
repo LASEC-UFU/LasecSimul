@@ -1228,6 +1228,7 @@ add_executable(session_restart_stress_test
     src/plugins/NativeDeviceProxy.cpp
     src/plugins/NativeMcuAdapterProxy.cpp
     src/plugins/CrashGuard.cpp
+    src/trace/CausalTrace.cpp
 )
 target_include_directories(session_restart_stress_test PRIVATE include src)
 target_link_libraries(session_restart_stress_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
@@ -1259,6 +1260,7 @@ add_executable(mcu_multiple_controllers_real_qemu_test
     src/plugins/NativeMcuAdapterProxy.cpp
     src/plugins/CrashGuard.cpp
     src/simulation/Scheduler.cpp
+    src/trace/CausalTrace.cpp
 )
 target_include_directories(mcu_multiple_controllers_real_qemu_test PRIVATE include src)
 target_link_libraries(mcu_multiple_controllers_real_qemu_test PRIVATE nlohmann_json::nlohmann_json)
