@@ -116,7 +116,12 @@ int main() {
     const std::string arenaName = uniqueArenaName();
 
     session.scheduler().setRealTimeRate(1.0); // mesmo default que a extensao configura hoje.
-    session.scheduler().start();
+    // Mesma ordem que o handler "start" real usa (CoreApplication.cpp): desde 102546b,
+    // loadMcuFirmware() exige executionActive/sessionExecutionId, estabelecidos por
+    // beginExecutionIfNeeded().
+    session.beginExecutionIfNeeded();
+    session.scheduler().resume();
+    if (!session.scheduler().isRunning()) session.scheduler().start();
     try {
         session.loadMcuFirmware(mcuIndex, flashPath, arenaName, qemuPath.string());
     } catch (const std::exception& ex) {

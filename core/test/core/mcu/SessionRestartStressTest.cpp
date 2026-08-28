@@ -17,6 +17,7 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <unordered_set>
 #include <vector>
 #include "components/other/Ground.hpp"
 #include "components/passive/Resistor.hpp"
@@ -195,6 +196,11 @@ int main() {
     int gpioFailures = 0;
     int panicFailures = 0;
     int stopCleanupFailures = 0;
+    // Confirma que stopSimulation() realmente encerra a execucao anterior (executionActive=false)
+    // e que o beginExecutionIfNeeded() de cada ciclo cria uma NOVA identidade, nao reaproveita uma
+    // stale -- sem isso, "15/15 ciclos inicializaram" nao provaria que o lifecycle de restart em si
+    // esta correto, so que o guard passa.
+    std::unordered_set<uint64_t> executionIds;
 
     std::fprintf(stderr, "Restart stress: ciclos=%d run_ms=%lld firmware=%s\n",
                  cycleCount, static_cast<long long>(runDuration.count()),
@@ -208,8 +214,19 @@ int main() {
             if (!useRealFirmware) std::filesystem::remove(flashPath);
         };
 
-        // Mesma ordem que a Extension real usa: Scheduler primeiro (coreLifecycle.ts::runSimulation
-        // chama Core.run(), que religa o Scheduler), depois loadMcuFirmware.
+        // Mesma ordem que o handler "start" real usa (CoreApplication.cpp): beginExecutionIfNeeded()
+        // primeiro -- desde 102546b, loadMcuFirmware() exige executionActive/sessionExecutionId, e só
+        // beginExecutionIfNeeded() estabelece isso -- depois resume()/start() do Scheduler, só então
+        // loadMcuFirmware.
+        session.beginExecutionIfNeeded();
+        const uint64_t executionId = session.runtimeState().sessionExecutionId;
+        if (executionId == 0 || !executionIds.insert(executionId).second) {
+            std::fprintf(stderr,
+                "  ciclo %d: sessionExecutionId=%llu (zero ou repetido -- stopSimulation() do ciclo"
+                " anterior nao encerrou a execucao corretamente)\n",
+                cycle, static_cast<unsigned long long>(executionId));
+        }
+        session.scheduler().resume();
         if (!session.scheduler().isRunning()) session.scheduler().start();
         // [DIAGNOSTIC] .spec 32.5.18 -- testar a hipotese de que uma unica chamada de
         // settleUntilStableLocked() segurando m_mutex por muito tempo (circuito lento pra
@@ -462,15 +479,18 @@ int main() {
                                !session.scheduler().isRunning() &&
                                !session.scheduler().isPaused() &&
                                session.scheduler().nowNs() == 0 &&
-                               session.scheduler().pendingEventCount() == 0;
+                               session.scheduler().pendingEventCount() == 0 &&
+                               !session.runtimeState().executionActive;
         if (!stopClean) {
             std::fprintf(stderr,
-                "  ciclo %d: STOP NAO LIMPOU -- firmware=%s scheduler=%s paused=%s nowNs=%llu eventos=%zu\n",
+                "  ciclo %d: STOP NAO LIMPOU -- firmware=%s scheduler=%s paused=%s nowNs=%llu eventos=%zu"
+                " executionActive=%s\n",
                 cycle, mcuPtr->firmwareRunning() ? "rodando" : "parado",
                 session.scheduler().isRunning() ? "rodando" : "parado",
                 session.scheduler().isPaused() ? "sim" : "nao",
                 static_cast<unsigned long long>(session.scheduler().nowNs()),
-                session.scheduler().pendingEventCount());
+                session.scheduler().pendingEventCount(),
+                session.runtimeState().executionActive ? "sim" : "nao");
             ++stopCleanupFailures;
         }
         removeTemporaryFlash();
@@ -483,13 +503,18 @@ int main() {
     }
     TEST_ASSERT(panicFailures == 0, "UART nao deveria conter Guru Meditation em nenhum ciclo");
     TEST_ASSERT(stopCleanupFailures == 0, "Stop deveria limpar MCU, Scheduler, pausa, relogio e eventos");
+    TEST_ASSERT(executionIds.size() == static_cast<size_t>(cycleCount),
+                "cada ciclo deveria obter um sessionExecutionId novo e distinto (stopSimulation()"
+                " encerrando a execucao anterior antes do proximo beginExecutionIfNeeded())");
 
     std::fprintf(stderr,
                  "\nResumo: %d/%d falharam ao iniciar, %d/%d travaram, %d/%d falharam no GPIO13, "
-                 "%d/%d tiveram Guru Meditation, %d/%d deixaram estado apos Stop.\n",
+                 "%d/%d tiveram Guru Meditation, %d/%d deixaram estado apos Stop, "
+                 "%zu/%d sessionExecutionId distintos.\n",
                  failedToBoot, cycleCount, stalledMidRun, cycleCount, gpioFailures, cycleCount,
                  panicFailures, cycleCount,
-                 stopCleanupFailures, cycleCount);
+                 stopCleanupFailures, cycleCount,
+                 executionIds.size(), cycleCount);
 
     if (failures == 0) {
         std::printf("\nTodos os %d ciclos (Scheduler+QEMU reais) passaram sem falha.\n", cycleCount);
