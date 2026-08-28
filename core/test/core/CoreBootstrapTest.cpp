@@ -1487,6 +1487,120 @@ static void testGetPropertyHeadOfLineRemovedOverIpc() {
     TEST_ASSERT(serverResult == 0, "servidor encerrou com codigo 0 apos shutdown");
 }
 
+// [FIX] writeUart/getUartStatus serial-IPC head-of-line blocking (2026-08-28).
+//
+// writeUart's own side effect (setProperty("uart_tx_hex", ...)) is applied BEFORE the two
+// trailing pending/dropped telemetry reads that were converted to tryPropertyValueOf() -- see
+// CoreApplication.cpp's writeUart handler: the write call and its `if (const auto error = ...)
+// throw` are the only things that can make the response ok=false, and both execute strictly
+// before either trailing read. This is a static, source-order fact, not something a live test
+// needs to (re)establish -- it is documented here, at the point that motivated it, rather than
+// re-derived through a live-contention writeUart test.
+//
+// A live test analogous to testGetPropertyHeadOfLineRemovedOverIpc() was deliberately NOT built
+// for writeUart specifically: writeUart's write goes through
+// SimulationSession::setProperty()->runViaCommandQueue()->future.get(), which blocks the IPC
+// thread until the SCHEDULER THREAD ITSELF drains the command queue (Scheduler.cpp's
+// drainCommandQueue() call sites are only reached from inside the Scheduler thread's own
+// Scheduler::m_mutex-locked sections). An externally-held Scheduler::m_mutex (the same technique
+// used below and in the getProperty test) would therefore also starve the Scheduler thread's own
+// progress, stalling setProperty()'s future.get() itself -- BEFORE either trailing read is even
+// reached -- rather than isolating contention to specifically the trailing telemetry reads this
+// fix targets. There is no simple/deterministic way to build that narrower window with existing
+// test infrastructure; building one would require a new, single-purpose synchronization hook,
+// which was judged not justified given the static proof above plus normal regression coverage
+// (testUartAndMcuVerbsOverIpc, unchanged, still exercises writeUart's/getUartStatus's failure
+// paths) already establish correctness for what this change actually touches.
+//
+// getUartStatus has NO such complication (pure read, no setProperty/command-queue call at all),
+// so its own decisive HOL test below uses the same external-hold technique with no caveat.
+
+// Teste 4j (DECISIVO para getUartStatus): mesma tecnica de testGetPropertyHeadOfLineRemovedOverIpc
+// -- getUartStatus deve responder BUSY prontamente sob contencao sustentada de Scheduler::m_mutex,
+// e um getSimulationTime enviado logo em seguida, na mesma conexao serial, deve responder pronto
+// tambem -- provando que getUartStatus nao bloqueia mais o dispatch serial de IPC atras de si.
+static void testGetUartStatusHeadOfLineRemovedOverIpc() {
+    std::fprintf(stderr, "\n[T4j] contencao de Scheduler::m_mutex nao bloqueia mais getUartStatus\n");
+
+    const std::string pipeName = "lasecsimul-bootstrap-test-getuartstatus-hol";
+    lasecsimul::app::CoreApplication app({pipeName});
+    int serverResult = -1;
+    std::thread serverThread([&] { serverResult = app.run(); });
+
+#ifdef _WIN32
+    void* conn = clientConnect(pipeName);
+    const bool connected = conn != INVALID_HANDLE_VALUE;
+#else
+    int conn = clientConnect(pipeName);
+    const bool connected = conn >= 0;
+#endif
+    TEST_ASSERT(connected, "cliente conectou");
+
+    if (connected) {
+        int nextId = 1;
+        auto send = [&](const std::string& type, const nlohmann::json& payload) -> nlohmann::json {
+            const nlohmann::json req = {{"id", std::to_string(nextId++)},
+                                         {"type", type},
+                                         {"payload", payload},
+                                         {"protocolVersion", lasecsimul::ipc::PROTOCOL_VERSION}};
+            clientWriteLine(conn, req.dump());
+            return nlohmann::json::parse(clientReadLine(conn));
+        };
+
+        send("hello", {{"clientVersion", "0.1.0"}});
+        // A propriedade nao precisa existir de verdade: o caminho BUSY sai antes de qualquer
+        // checagem de propriedade/componente (tryPropertyValueOf's outer nullopt e' decidido pela
+        // aquisicao do mutex, nao pelo lookup) -- um capacitor comum basta, mesma escolha de
+        // simplicidade ja usada pelos outros testes deste arquivo.
+        const std::string cap = send("addComponent", {{"typeId", "passive.capacitor"},
+                                                        {"properties", {{"capacitance", 1e-6}}}})["payload"]["instanceId"];
+        send("start", nlohmann::json::object());
+
+        constexpr auto kHoldDuration = std::chrono::milliseconds(4000);
+        constexpr auto kPromptBound = std::chrono::milliseconds(2000); // generoso, nao microbenchmark
+        std::atomic<bool> lockAcquired{false};
+        std::thread lockHolder([&] {
+            app.sessionForTesting().scheduler().synchronized([&] {
+                lockAcquired.store(true, std::memory_order_release);
+                std::this_thread::sleep_for(kHoldDuration);
+            });
+        });
+        for (int attempt = 0; attempt < 500 && !lockAcquired.load(std::memory_order_acquire); ++attempt) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        TEST_ASSERT(lockAcquired.load(std::memory_order_acquire), "thread auxiliar conseguiu tomar Scheduler::m_mutex");
+
+        const auto t0 = std::chrono::steady_clock::now();
+        const nlohmann::json busyResp = send("getUartStatus", {{"instanceId", cap}});
+        const auto t1 = std::chrono::steady_clock::now();
+        const nlohmann::json timeResp = send("getSimulationTime", nlohmann::json::object());
+        const auto t2 = std::chrono::steady_clock::now();
+
+        lockHolder.join();
+
+        TEST_ASSERT(!busyResp.value("ok", true) && busyResp["payload"].value("errorCode", std::string{}) == "busy",
+                    "getUartStatus responde BUSY (nao trava) com o mutex ocupado");
+        TEST_ASSERT(!busyResp["payload"].contains("pending"),
+                    "resposta BUSY nao inclui pending=0 fabricado -- ausente, nao substituido");
+        TEST_ASSERT((t1 - t0) < kPromptBound, "getUartStatus (BUSY) responde dentro do bound generoso");
+
+        TEST_ASSERT(timeResp.value("ok", false), "getSimulationTime enviado logo apos o BUSY responde ok=true");
+        TEST_ASSERT((t2 - t1) < kPromptBound,
+                    "getSimulationTime responde prontamente -- NAO fica preso atras do getUartStatus ocupado");
+
+        std::fprintf(stderr, "  [info] getUartStatus(BUSY)=%lldms getSimulationTime=%lldms hold=%lldms\n",
+                     static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count()),
+                     static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count()),
+                     static_cast<long long>(kHoldDuration.count()));
+
+        send("shutdown", nlohmann::json::object());
+        clientClose(conn);
+    }
+
+    serverThread.join();
+    TEST_ASSERT(serverResult == 0, "servidor encerrou com codigo 0 apos shutdown");
+}
+
 // ── main ───────────────────────────────────────────────────────────────────────
 
 int main() {
@@ -1505,6 +1619,7 @@ int main() {
     testPauseConditionNotificationOverIpc();
     testGetPropertyContractOverIpc();
     testGetPropertyHeadOfLineRemovedOverIpc();
+    testGetUartStatusHeadOfLineRemovedOverIpc();
     testCoreShutdown();
 
     if (failures == 0) {

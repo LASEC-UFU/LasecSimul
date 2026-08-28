@@ -1854,12 +1854,19 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
             if ((dataHex.size() & 1u) != 0 || dataHex.size() > 8192u || !std::all_of(dataHex.begin(), dataHex.end(), [](unsigned char c) { return std::isxdigit(c) != 0; }))
                 throw std::invalid_argument("dataHex UART inválido ou maior que 4096 bytes");
             if (const auto error = session.setProperty(instanceId, "uart_tx_hex", PropertyValue{dataHex})) throw std::runtime_error(*error);
-            const auto pending = session.propertyValueOf(instanceId, "uart_tx_pending");
-            const auto dropped = session.propertyValueOf(instanceId, "uart_tx_dropped");
+            // [FIX] writeUart serial-IPC head-of-line blocking (2026-08-28) -- the write itself
+            // (setProperty above) is already committed by this point; these two reads are pure
+            // telemetry attached to the response, never gating the write's own success/failure.
+            // tryPropertyValueOf() instead of the blocking propertyValueOf(): busy, not-found, and
+            // wrong-type all collapse to the same 0.0 fallback the not-found case already used --
+            // resp.ok stays true regardless, so a transiently busy Scheduler can never masquerade
+            // as a write failure (which would risk a client retry duplicating the TX).
+            const auto pending = session.tryPropertyValueOf(instanceId, "uart_tx_pending");
+            const auto dropped = session.tryPropertyValueOf(instanceId, "uart_tx_dropped");
             resp.ok = true;
             resp.payloadJson = nlohmann::json{
-                {"pending", pending && std::holds_alternative<double>(*pending) ? std::get<double>(*pending) : 0.0},
-                {"dropped", dropped && std::holds_alternative<double>(*dropped) ? std::get<double>(*dropped) : 0.0},
+                {"pending", pending && *pending && std::holds_alternative<double>(**pending) ? std::get<double>(**pending) : 0.0},
+                {"dropped", dropped && *dropped && std::holds_alternative<double>(**dropped) ? std::get<double>(**dropped) : 0.0},
                 {"simulationTimeNs", session.scheduler().nowNs()},
             }.dump();
         } catch (const std::exception& e) { resp.ok = false; resp.error = std::string("writeUart falhou: ") + e.what(); }
@@ -1869,12 +1876,30 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
         try {
             const nlohmann::json payload = nlohmann::json::parse(msg.payloadJson.empty() ? "{}" : msg.payloadJson);
             const uint32_t instanceId = static_cast<uint32_t>(std::stoul(payload.value("instanceId", std::string{"0"})));
-            const auto pending = session.propertyValueOf(instanceId, "uart_tx_pending");
-            const auto dropped = session.propertyValueOf(instanceId, "uart_tx_dropped");
+            // [FIX] getUartStatus serial-IPC head-of-line blocking (2026-08-28) -- pure read, no
+            // side effect to protect (unlike writeUart above). pending is load-bearing for
+            // CoreUartTransport's flow control (chunk sizing), so busy must be reported explicitly
+            // (errorCode="busy", same contract getProperty already uses) rather than silently
+            // defaulted to 0 -- a stale "0 pending" would make the client think the full buffer is
+            // free and risk oversending/avoidable drops.
+            const auto pending = session.tryPropertyValueOf(instanceId, "uart_tx_pending");
+            if (!pending) {
+                resp.ok = false;
+                resp.error = "simulacao ocupada; status UART adiado";
+                resp.payloadJson = nlohmann::json{{"errorCode", "busy"}}.dump();
+                return resp;
+            }
+            const auto dropped = session.tryPropertyValueOf(instanceId, "uart_tx_dropped");
+            if (!dropped) {
+                resp.ok = false;
+                resp.error = "simulacao ocupada; status UART adiado";
+                resp.payloadJson = nlohmann::json{{"errorCode", "busy"}}.dump();
+                return resp;
+            }
             resp.ok = true;
             resp.payloadJson = nlohmann::json{
-                {"pending", pending && std::holds_alternative<double>(*pending) ? std::get<double>(*pending) : 0.0},
-                {"dropped", dropped && std::holds_alternative<double>(*dropped) ? std::get<double>(*dropped) : 0.0},
+                {"pending", *pending && std::holds_alternative<double>(**pending) ? std::get<double>(**pending) : 0.0},
+                {"dropped", *dropped && std::holds_alternative<double>(**dropped) ? std::get<double>(**dropped) : 0.0},
             }.dump();
         } catch (const std::exception& e) { resp.ok = false; resp.error = std::string("getUartStatus falhou: ") + e.what(); }
         return resp;
