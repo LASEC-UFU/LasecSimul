@@ -1135,6 +1135,39 @@ set_tests_properties(qemu_arena_v3_smoke PROPERTIES
     TIMEOUT 30
 )
 
+# Fix de correctness da fila cheia (achado 2026-08-28, ver simuliface.c waitForSynch()/
+# publishQueueEntry()): ao contrário do estresse acima (drena agressivamente), este teste NÃO
+# drena a arena de propósito, forçando o backstop de process-health (host elapsed time, 3s) a
+# disparar de verdade -- confirma que a falha propaga como desligamento controlado (QEMU se
+# auto-termina) em vez de continuar rodando sobre fila corrompida ou travar o host indefinidamente.
+add_executable(qemu_queue_full_timeout_test
+    test/core/mcu/QemuQueueFullTimeoutTest.cpp
+    src/mcu/McuController.cpp
+    src/mcu/qemu/QemuProcessManager.cpp
+    src/mcu/qemu/QemuArenaBridge.cpp
+    src/mcu/qemu/QemuIcountCalibrator.cpp
+    src/plugins/PluginModule.cpp
+    src/plugins/PluginLoader.cpp
+    src/plugins/PluginRuntime.cpp
+    src/plugins/NativeDeviceProxy.cpp
+    src/plugins/NativeMcuAdapterProxy.cpp
+    src/plugins/CrashGuard.cpp
+    src/simulation/Scheduler.cpp
+)
+target_include_directories(qemu_queue_full_timeout_test PRIVATE include src)
+target_link_libraries(qemu_queue_full_timeout_test PRIVATE nlohmann_json::nlohmann_json)
+target_compile_definitions(qemu_queue_full_timeout_test PRIVATE
+    QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+)
+if(WIN32)
+    target_compile_definitions(qemu_queue_full_timeout_test PRIVATE _CRT_SECURE_NO_WARNINGS)
+else()
+    target_link_libraries(qemu_queue_full_timeout_test PRIVATE dl)
+endif()
+add_test(NAME qemu_queue_full_timeout COMMAND qemu_queue_full_timeout_test)
+set_tests_properties(qemu_queue_full_timeout PROPERTIES TIMEOUT 40)
+
 # Estresse do CICLO Stop->Run repetido (achado 2026-07-22, relato ao vivo: às vezes o MCU não
 # inicializa, às vezes roda perfeitamente, às vezes roda e trava no meio -- nenhum teste real
 # existente cobria REINICIAR várias vezes, só uma sessão única). Mesmo binário/adapter reais acima.
