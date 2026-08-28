@@ -1,4 +1,5 @@
 #include "NativeDeviceProxy.hpp"
+#include "lasecsimul/CausalTrace.hpp"
 #include <algorithm>
 #include <cctype>
 #include <cstring>
@@ -218,7 +219,17 @@ std::optional<uint32_t> NativeDeviceProxy::i2cPinIndex(bool sda) const {
 }
 
 I2cTransferResult NativeDeviceProxy::transferI2c(const I2cTransfer& transfer) {
+    /* TEMPORARY, minimal diagnostic for the 2026-08-27 TG0WDT_SYS_RESET investigation -- C2/C3
+     * bracket device-mutex contention, C4/C5 bracket the plugin's own compute. Uses the existing
+     * causal-trace Recorder (LASECSIMUL_CAUSAL_TRACE=detailed); a no-op (single mode check) when
+     * off. Keyed by the calling thread's currentI2cRequest(), already set by the caller for the
+     * fast-path burst (0 for any other transferI2c() caller -- harmless, filtered at analysis
+     * time). Remove once the investigation concludes. */
+    auto& causalTrace = lasecsimul::trace::Recorder::instance();
+    const uint64_t traceTransaction = causalTrace.currentI2cRequest();
+    causalTrace.record(lasecsimul::trace::EventType::DeviceMutexWaitStart, traceTransaction);
     std::lock_guard<std::recursive_mutex> lock(m_deviceMutex);
+    causalTrace.record(lasecsimul::trace::EventType::DeviceMutexAcquired, traceTransaction);
     I2cTransferResult result{};
     if (!supportsI2cTransfer()) return result;
     LsdnI2cTransfer request{};
@@ -234,9 +245,11 @@ I2cTransferResult NativeDeviceProxy::transferI2c(const I2cTransfer& transfer) {
     LsdnI2cTransferResult response{};
     response.first_nack = LSDN_I2C_NO_NACK;
     uint32_t accepted = 0;
+    causalTrace.record(lasecsimul::trace::EventType::PluginCallStart, traceTransaction);
     const bool ok = CrashGuard::call(m_meta.typeId, [&] {
         accepted = m_module->deviceVTable()->i2c_transfer(m_handle, &request, &response);
     });
+    causalTrace.record(lasecsimul::trace::EventType::PluginCallEnd, traceTransaction);
     if (!ok) {
         m_health = PluginHealthStatus::Faulted;
         return result;
@@ -269,6 +282,7 @@ void NativeDeviceProxy::setState(const uint8_t* in, size_t len) {
 }
 
 std::vector<PropertyDescriptor> NativeDeviceProxy::propertyDescriptors() {
+    std::lock_guard<std::recursive_mutex> lock(m_deviceMutex);
     if (m_propertyDescriptorsBuilt) return m_cachedPropertyDescriptors;
 
     std::vector<PropertyDescriptor> descriptors;
@@ -280,6 +294,7 @@ std::vector<PropertyDescriptor> NativeDeviceProxy::propertyDescriptors() {
             schema.id,
             schema.unit,
             [this, propertyId = schema.id, fallbackValue = schema.defaultValue] {
+                std::lock_guard<std::recursive_mutex> lock(m_deviceMutex);
                 const LsdnDeviceVTable* vt = m_module->deviceVTable();
                 if (vt->get_property) {
                     LsdnPropertyValue abiValue{};
@@ -298,6 +313,7 @@ std::vector<PropertyDescriptor> NativeDeviceProxy::propertyDescriptors() {
             },
             [this, propertyId = schema.id, affectsPinCount = (schema.flags & PropertySchemaAffectsPinCount) != 0](
                 const PropertyValue& value) {
+                std::lock_guard<std::recursive_mutex> lock(m_deviceMutex);
                 m_hostContext->properties[propertyId] = value;
                 const LsdnDeviceVTable* vt = m_module->deviceVTable();
                 if (vt->set_property) {

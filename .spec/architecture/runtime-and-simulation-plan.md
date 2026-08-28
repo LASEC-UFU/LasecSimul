@@ -2,7 +2,7 @@
 id: ARCH-002
 kind: architecture
 status: active
-dependsOn: [ARCH-001, ARCH-006]
+dependsOn: [ARCH-001, ARCH-006, ADR-0009]
 supersedes: []
 ---
 
@@ -60,7 +60,7 @@ O plano não contém processos, handles do SO, tensões, estado interno dos bloc
 
 ## RuntimeState
 
-É criado para uma geração do plano e contém todo estado mutável: tempo, dirty sets, soluções MNA, slots de sinal, estados de bloco, processos externos e buffers limitados.
+É criado para uma geração do plano e contém todo estado mutável: tempo, dirty sets, soluções MNA, slots de sinal, estados de bloco, processos externos e buffers limitados. Identidade de execução é runtime/lifecycle state, nunca autoria ou `SimulationPlan`: `session_execution_id` muda em novo start real, `runtime_instance_id` identifica a instância lógica e `launch_generation` distingue cada tentativa de processo externo sem reutilização. Pause/resume preserva a execução; stop + novo start cria outra.
 
 Para cada instância PLC contém, no mínimo:
 
@@ -75,6 +75,14 @@ Para cada instância PLC contém, no mínimo:
 Duas instâncias podem compartilhar o mesmo `PlcCompiledArtifact`, mas nunca a memória acima.
 
 O coordenador é o único escritor do estado global. Workers recebem plano e snapshots somente leitura, escrevem em scratch disjunto e têm resultados commitados em ordem do plano.
+
+## Runtimes externos e metadata fria
+
+- IDs densos, provenance e launch generation são resolvidos antes do processo iniciar e armazenados no estado runtime existente.
+- Ambiente/argumentos de launch podem transportar metadata diagnóstica ao runtime externo; o hot path não concatena strings, calcula hashes nem procura nomes.
+- Falha de launch não faz rollback de `launch_generation`; gaps são aceitáveis e reutilização não.
+- ABI funcional de arena/protocolo não é ampliada apenas para tracing quando uma sequência já existente, como `i2cRequestSeq`, correlaciona request/response.
+- Buffers de trace detalhado pertencem ao RuntimeState/recorder opt-in, são bounded e não são persistidos no projeto.
 
 ## Compilação e publicação
 
@@ -141,4 +149,6 @@ domínio cresce apenas nas fases correspondentes (F5, F8 e F9); F3 não antecipa
 - duas instâncias do mesmo `CompiledSubsystemTemplate` compartilham apenas estrutura imutável e possuem todo estado dinâmico isolado;
 - composto e expansão manual do mesmo grafo são numericamente equivalentes dentro da tolerância definida;
 - troca de implementação de um POU entre linguagens, mantendo interface e comportamento, não altera bindings externos;
-- execução idêntica com 1, 2 e N workers dentro das tolerâncias numéricas fixadas.
+- execução idêntica com 1, 2 e N workers dentro das tolerâncias numéricas fixadas;
+- pause/resume preserva identidade de execução e relaunch incrementa geração sem colisão;
+- nenhum campo de identidade exige lookup/hash/string no hot path.

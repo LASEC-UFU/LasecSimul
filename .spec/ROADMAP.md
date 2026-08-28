@@ -3,7 +3,7 @@ id: ROADMAP-001
 kind: roadmap
 status: active
 currentGate: release-lab
-dependsOn: [GOV-001, BENCH-001]
+dependsOn: [GOV-001, BENCH-001, BENCH-005]
 supersedes: []
 ---
 
@@ -91,6 +91,14 @@ Gate: PLC funciona sem protocolos e protocolos funcionam sem PLC.
 
 F0–F10 estão concluídos e automatizados. O próximo gate é o release lab, que deve repetir os
 baselines de capacidade e os testes externos no ambiente de distribuição antes de publicar.
+
+O release lab também fecha o track cross-cutting de fidelidade/IPC de `ADR-0009`/`BENCH-005`:
+
+- provenance dos binários efetivamente carregados;
+- identidade sem colisão em pause/resume, stop/start, relaunch, múltiplos runtimes e sessões;
+- trace causal bounded sem observer effect não documentado;
+- comparação fast/reference/hardware para os periféricos críticos disponíveis;
+- nenhuma otimização de latência promovida se alterar semântica guest-visible ou multiplicar recursos por sessão sem benchmark SharedHost.
 
 ## Política de exceção
 

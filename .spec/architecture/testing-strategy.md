@@ -2,7 +2,7 @@
 id: ARCH-008
 kind: architecture
 status: active
-dependsOn: [ARCH-001, BENCH-001]
+dependsOn: [ARCH-001, BENCH-001, BENCH-005, ADR-0009]
 supersedes: []
 ---
 
@@ -25,7 +25,23 @@ supersedes: []
 - memória/filas limitadas;
 - falhas de runtimes externos contidas;
 - build e testes a partir de checkout limpo;
-- benchmarks não substituem assertions semânticas.
+- benchmarks não substituem assertions semânticas;
+- hardware real/datasheet é oracle externo de fidelidade quando disponível;
+- trace/diagnóstico não pode alterar comportamento qualitativo ou ser tratado como timing funcional.
+
+## Fidelidade, IPC e observer effect
+
+Para runtimes/periféricos onde tempo e protocolo são guest-visible, testes distinguem:
+
+1. `fixed host wall-clock` para throughput;
+2. `fixed guest workload` para overhead/observer effect;
+3. comparação com hardware real/datasheet quando disponível.
+
+Backends fast/reference são comparados por bytes, ACK/NACK, estado intermediário/final, FIFO/IRQ/timers, ordem e tempo virtual; concordância entre dois backends não supera evidência física.
+
+Trace causal usado como prova exige zero drops, zero órfãos/duplicatas, identidade/dependências válidas e provenance compatível. `DETAILED` não é benchmark final quando seu observer effect for material.
+
+Testes de lifecycle cobrem pause/resume, stop/start, relaunch com contador local reiniciado, múltiplos runtimes e múltiplas sessões sem colisão.
 
 ## Matriz IEC obrigatória
 
@@ -100,4 +116,6 @@ Todo baseline registra commit, toolchain, CPU, RAM, SO, perfil, comando, cenári
 - regressão de performance exige limiar estatístico, não uma única execução;
 - cada feature normativa aponta para testes concretos antes de `status: active`;
 - `FEAT-004` só vira `active` após equivalência de composite/expansão e isolamento de instâncias;
-- `FEAT-012` só vira `active` após parser/importador e pelo menos dois cenários TDPS com golden documentado.
+- `FEAT-012` só vira `active` após parser/importador e pelo menos dois cenários TDPS com golden documentado;
+- fast path de runtime externo não vira default sem differential test e benchmark `BENCH-005`;
+- mudança que aumenta recurso por sessão não vira default SharedHost sem densidade reproduzível.

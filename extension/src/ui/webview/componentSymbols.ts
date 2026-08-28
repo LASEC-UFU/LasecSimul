@@ -1448,11 +1448,21 @@ function runtimeSurfaceSvg(pkg: PackageDescriptor, properties: Record<string, un
     }
     return markup;
   }
-  const image = `<image x="${x}" y="${y}" width="${w}" height="${h}" preserveAspectRatio="none" ` +
+  const image = `<image data-runtime-surface="bitmap" x="${x}" y="${y}" width="${w}" height="${h}" preserveAspectRatio="none" ` +
     `style="image-rendering:pixelated" href="${bmpDataUri(sourceWidth, sourceHeight, rgba)}"/>`;
   if (surface.clipShape !== "ellipse") return image;
   return `<defs><clipPath id="runtime-surface-clip"><ellipse cx="${x + w / 2}" cy="${y + h / 2}" ` +
     `rx="${w / 2}" ry="${h / 2}"/></clipPath></defs><g clip-path="url(#runtime-surface-clip)">${image}</g>`;
+}
+
+/** Gera somente o bitmap vivo de um package já registrado. A telemetria usa isto para trocar o
+ * `href` da área da tela sem reconstruir carcaça, pinos, seleção e listeners do componente. */
+export function runtimeSurfaceImageHref(typeId: string, properties: Record<string, unknown>): string | undefined {
+  const resolved = resolvedPackageFor(typeId, properties);
+  if (!resolved?.source.runtimeState?.surface) return undefined;
+  const effectiveProperties = propertiesWithRuntimeState(resolved.source, properties);
+  const markup = runtimeSurfaceSvg(resolved.source, effectiveProperties);
+  return /<image\b[^>]*\bhref="([^"]+)"/.exec(markup)?.[1];
 }
 
 function svgRound(value: number): number {

@@ -2,7 +2,7 @@
 id: BENCH-001
 kind: benchmark
 status: active
-dependsOn: [ARCH-001]
+dependsOn: [ARCH-001, ADR-0009]
 supersedes: []
 ---
 
@@ -42,9 +42,20 @@ Não declarar “suporta N alunos/sessões” sem cenário, host, toolchain, per
 - fair-share, p95/p99 de controle e taxa virtual;
 - encerramento/restart e pressão de memória/disco.
 
+### E — fidelidade/IPC causal
+
+- fixed host wall-clock versus fixed guest workload;
+- QEMU/Core request-completion e waits no caminho crítico;
+- observer effect `OFF|COUNTERS|DETAILED`;
+- backend fast/reference versus hardware/datasheet;
+- lifecycle identity sob restart/relaunch/múltiplos runtimes;
+- densidade 1/4/8/20 sessões antes de promover footprint/threads/wakeups novos.
+
+O protocolo detalhado está em [BENCH-005](ipc-hardware-fidelity-and-causal-trace.md).
+
 ## Métricas
 
-Throughput, latência p50/p95/p99, CPU por máquina e processo, RSS/commit, threads, processos, handles/FDs, bytes/requests IPC, queue depth/drops, eventos, settles, stamps, fatorações e erro numérico.
+Throughput, latência p50/p95/p99, CPU por máquina e processo, RSS/commit, threads, processos, handles/FDs, context switches/wakeups quando disponíveis, bytes/requests IPC, queue depth/drops, eventos, settles, stamps, fatorações, erro numérico, virtual-time/host-time ratio e erro temporal contra hardware quando houver referência.
 
 ## Gates iniciais
 
@@ -52,7 +63,9 @@ Throughput, latência p50/p95/p99, CPU por máquina e processo, RSS/commit, thre
 - fila: crescimento limitado sob consumidor lento;
 - determinismo: hash/fixtures equivalentes em 1/2/N workers;
 - regressão: mínimo de 10 amostras após warm-up e limiar definido por cenário;
-- SharedHost: nenhuma sessão monopoliza todos os CPUs por decisão local.
+- SharedHost: nenhuma sessão monopoliza todos os CPUs por decisão local;
+- trace OFF: zero buffer/arquivo/thread/wake específico;
+- causal trace: análise só é válida com zero drops e integridade comprovada.
 
 ## Baseline observado
 

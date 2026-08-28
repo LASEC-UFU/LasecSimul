@@ -5,11 +5,13 @@
 // tensão real do nó). O adaptador ESP32 vem do plugin real (mcu_abi.h major 2+), não built-in --
 // ver docs/17-pendencias-pos-sessao-qemu-abi.md seção 3.4.
 #include <chrono>
+#include <atomic>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <memory>
 #include <vector>
+#include <thread>
 #include "components/active/DiodeLegArray.hpp"
 #include "components/other/Ground.hpp"
 #include "components/passive/Resistor.hpp"
@@ -106,16 +108,18 @@ int main() {
     check(uart0Start != 0, "memoryRegions() do plugin declara uma faixa UART0");
 
     mcu::McuComponent* mcuPtr = nullptr;
-    session.components().registerFactory("mcu.esp32", [&mcuPtr, &session](const registry::ComponentParams&) {
+    mcu::McuComponent* secondMcuPtr = nullptr;
+    session.components().registerFactory("mcu.esp32", [&mcuPtr, &secondMcuPtr, &session](const registry::ComponentParams&) {
         auto instance = std::make_unique<mcu::McuComponent>(session.mcus().create("espressif.esp32"), session.scheduler());
-        mcuPtr = instance.get();
+        if (!mcuPtr) mcuPtr = instance.get(); else secondMcuPtr = instance.get();
         return instance;
     });
 
     const uint32_t mcuIndex = session.addComponent("mcu.esp32", {});
     (void)mcuIndex;
 
-    mcuPtr->openSyntheticArenaForTesting(uniqueArenaName());
+    const std::string syntheticArenaName = uniqueArenaName();
+    mcuPtr->openSyntheticArenaForTesting(syntheticArenaName);
 
     for (int i = 0; i < 5 && session.settleStep(); ++i) {}
     check(session.nodeVoltageOfPin(mcuIndex, "GPIO2") < 0.1, "GPIO2 começa perto de 0V (nenhum registrador escrito ainda)");
@@ -270,11 +274,29 @@ int main() {
     const size_t pendingBeforeReloads = session.scheduler().pendingEventCount();
     for (int cycle = 0; cycle < 25; ++cycle) {
         mcuPtr->stopFirmware();
-        mcuPtr->openSyntheticArenaForTesting(uniqueArenaName());
+        mcuPtr->openSyntheticArenaForTesting(syntheticArenaName);
     }
     check(session.scheduler().pendingEventCount() <= pendingBeforeReloads + 1,
           "recargas repetidas reutilizam um unico poll pendente (fila nao cresce por ciclo)");
     mcuPtr->stopFirmware();
+
+    const uint32_t secondMcuIndex = session.addComponent("mcu.esp32", {});
+    check(secondMcuPtr && secondMcuIndex != mcuIndex,
+          "segundo MCU recebe componentIndex distinto");
+    check(secondMcuPtr && secondMcuPtr->runtimeInstanceId() == secondMcuIndex,
+          "segundo MCU expoe runtimeInstanceId denso");
+    check(secondMcuPtr && secondMcuPtr->runtimeInstanceId() != mcuPtr->runtimeInstanceId(),
+          "MCUs logicos nao compartilham runtimeInstanceId");
+    const auto gen1 = mcuPtr->reserveLaunchGeneration();
+    const auto gen2 = mcuPtr->reserveLaunchGeneration();
+    check(gen1 == 1 && gen2 == 2, "launch generations sao monotônicas por MCU");
+    check(secondMcuPtr->reserveLaunchGeneration() == 1, "cada MCU possui sequencia independente");
+    std::atomic<uint64_t> gA{0}, gB{0};
+    std::thread tA([&] { gA = mcuPtr->reserveLaunchGeneration(); });
+    std::thread tB([&] { gB = mcuPtr->reserveLaunchGeneration(); });
+    tA.join(); tB.join();
+    check(gA != gB && ((gA == 3 && gB == 4) || (gA == 4 && gB == 3)),
+          "reservas concorrentes do mesmo MCU sao distintas");
 
 #ifdef QEMU_REAL_BINARY_PATH
     // Reload espúrio (2026-07-17): usuário reportou "nem o pulso eu detecto mais" depois da
@@ -296,7 +318,7 @@ int main() {
                 const std::vector<char> erasedBlock(64 * 1024, static_cast<char>(0xFF));
                 for (int i = 0; i < 64; ++i) out.write(erasedBlock.data(), erasedBlock.size());
             }
-            mcuPtr->loadFirmware(blankFlashPath, uniqueArenaName(), qemuRealPath.string());
+            mcuPtr->loadFirmware(blankFlashPath, syntheticArenaName, qemuRealPath.string());
             for (int i = 0; i < 20 && session.settleStep(); ++i) {}
             session.scheduler().step(1);
             for (int i = 0; i < 20 && session.settleStep(); ++i) {}

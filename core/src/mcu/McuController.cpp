@@ -181,8 +181,10 @@ McuController::McuController(const IMcuAdapter& adapter, std::string qemuBinaryO
 QemuLaunchSpec McuController::buildLaunchSpec(const std::filesystem::path& firmwarePath,
                                                const std::string& arenaName,
                                                const std::string& callSiteBinaryOverride,
-                                               McuDebugOptions debug) const {
+                                               McuDebugOptions debug,
+                                               RuntimeLaunchIdentity identity) const {
     QemuLaunchSpec spec = m_adapter.buildLaunchArgs(firmwarePath.string());
+    spec.runtimeIdentity = identity;
     const bool mttcg = std::find(spec.args.begin(), spec.args.end(), "tcg,thread=multi") !=
                        spec.args.end();
     const bool icount = std::find(spec.args.begin(), spec.args.end(), "-icount") !=
@@ -216,7 +218,8 @@ QemuLaunchSpec McuController::buildLaunchSpec(const std::filesystem::path& firmw
 }
 
 void McuController::start(const std::filesystem::path& firmwarePath, const std::string& arenaName,
-                          const std::string& callSiteBinaryOverride, McuDebugOptions debug) {
+                          const std::string& callSiteBinaryOverride, McuDebugOptions debug,
+                          RuntimeLaunchIdentity identity) {
     // Achado 2026-07-22 (DESATIVADO -- ver achado seguinte): esta chamada calibrava o `-icount
     // shift` medindo a sonda de `QemuIcountCalibrator` (boot ROM genérico, sem firmware real, cada
     // registrador confirmado instantaneamente por um laço síntético -- ver `pumpArenaFor` em
@@ -230,8 +233,9 @@ void McuController::start(const std::filesystem::path& firmwarePath, const std::
     // real do dispatch (ou outra abordagem) existir -- `QemuIcountCalibrator`/`Esp32Adapter.cpp::
     // configuredIcountShift()` continuam prontos (e testados) pra quando isso for retomado, só não
     // chamados aqui. `Esp32Adapter.cpp` mantém o fallback `shift=4` de sempre.
+    m_runtimeIdentity = identity;
     QemuLaunchSpec spec = buildLaunchSpec(
-        firmwarePath, arenaName, callSiteBinaryOverride, debug);
+        firmwarePath, arenaName, callSiteBinaryOverride, debug, identity);
     // O backend socket legado do QEMU encerra qemu_init() quando connect() recebe ECONNREFUSED.
     // Detecte antes de criar a CPU e degrade para SLIRP: firmware OpenETH continua tendo a mesma
     // NIC/MMIO, enquanto um gateway/TAP ausente nunca derruba GPIO, timers ou o processo inteiro.

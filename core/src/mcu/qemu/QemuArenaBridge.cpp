@@ -1,4 +1,8 @@
 #include "QemuArenaBridge.hpp"
+#include <chrono>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 #include <algorithm>
 #include <atomic>
 #include <cstdlib>
@@ -293,10 +297,18 @@ std::optional<QemuI2cBurst> QemuArenaBridge::pollI2cBurst() const {
     return burst;
 }
 
-void QemuArenaBridge::completeI2cBurst(uint64_t sequence, uint32_t status,
-                                       uint32_t firstNack, std::span<const uint8_t> rx,
-                                       uint64_t stretchNs) {
-    if (!m_arena || m_protocol != QemuArenaProtocol::V5) return;
+uint64_t QemuArenaBridge::qpcNow() noexcept {
+#ifdef _WIN32
+    LARGE_INTEGER v{}; QueryPerformanceCounter(&v); return static_cast<uint64_t>(v.QuadPart);
+#else
+    return static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
+#endif
+}
+
+uint64_t QemuArenaBridge::completeI2cBurst(uint64_t sequence, uint32_t status,
+                                           uint32_t firstNack, std::span<const uint8_t> rx,
+                                           uint64_t stretchNs) {
+    if (!m_arena || m_protocol != QemuArenaProtocol::V5) return 0;
     const size_t count = std::min<size_t>(rx.size(), 32);
     std::copy_n(rx.data(), count, m_arena->i2cRx);
     m_arena->i2cRxLen = static_cast<uint32_t>(count);
@@ -304,6 +316,7 @@ void QemuArenaBridge::completeI2cBurst(uint64_t sequence, uint32_t status,
     m_arena->i2cFirstNack = firstNack;
     m_arena->i2cStretchNs = stretchNs;
     std::atomic_ref<uint64_t>(m_arena->i2cResponseSeq).store(sequence, std::memory_order_release);
+    return 0;
 }
 
 void QemuArenaBridge::acknowledgeWrite() {

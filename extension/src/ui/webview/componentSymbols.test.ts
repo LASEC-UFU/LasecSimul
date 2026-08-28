@@ -1,7 +1,7 @@
 import { createTestRunner, assert } from "../../ipc/testSupport/MockCoreServer";
 import fs from "node:fs";
 import path from "node:path";
-import { canonicalPackagePinId, componentBox, componentLocalOrigin, componentSymbolSvg, hasRealPinPosition, pinLocalPosition, packageSymbolSvg, pinTerminalMargins, registerPackage, resolvedPackageFor } from "./componentSymbols";
+import { canonicalPackagePinId, componentBox, componentLocalOrigin, componentSymbolSvg, hasRealPinPosition, pinLocalPosition, packageSymbolSvg, pinTerminalMargins, registerPackage, resolvedPackageFor, runtimeSurfaceImageHref } from "./componentSymbols";
 import { transformLocalPoint } from "./componentGeometry";
 import { sanitizePackage } from "../../catalog/packageSanitizers";
 import { PackageDescriptor, WebviewComponentModel } from "./model";
@@ -1593,6 +1593,9 @@ import { PackageDescriptor, WebviewComponentModel } from "./model";
     });
     const mono = packageSymbolSvg("test.runtime.mono", { __runtime_state: encoded }, "runtime-mono") ?? "";
     assert(mono.includes("data:image/bmp;base64,"), `framebuffer monocromático deveria virar uma imagem compacta: ${mono}`);
+    assert(mono.includes('data-runtime-surface="bitmap"'), "bitmap vivo deve ser localizável para atualização sem reconstruir o componente");
+    assert(Boolean(runtimeSurfaceImageHref("test.runtime.mono", { __runtime_state: encoded })?.startsWith("data:image/bmp;base64,")),
+      "helper deve produzir somente o href do bitmap vivo");
 
     registerPackage("test.runtime.luma", {
       width: 10,

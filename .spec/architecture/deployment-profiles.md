@@ -2,7 +2,7 @@
 id: ARCH-007
 kind: architecture
 status: active
-dependsOn: [ARCH-001, ARCH-004, ARCH-005]
+dependsOn: [ARCH-001, ARCH-004, ARCH-005, ADR-0009]
 supersedes: []
 ---
 
@@ -20,6 +20,12 @@ Cada usuário mantém processo Core e diretórios/arenas próprios. Política ad
 independentes para pipe, arena, porta virtual e workdir, limita a fila de builds e registra falhas
 de encerramento de processos filhos. O `ResourceBudget` entregue em cada lease é imutável durante a
 sessão. O gerenciador não hospeda estado de simulação e não remove workdirs por conta própria.
+
+### Identidade e diagnóstico no SharedHost
+
+Cada execução possui identidade independente mesmo quando projeto, firmware e binários são idênticos. Runtimes externos recebem IDs densos no launch e seus traces usam namespaces/workdirs próprios. Relaunch altera `launch_generation`; pause/resume não cria nova execução.
+
+Trace `OFF` é o default de produção/capacidade e não aloca buffer/arquivo/thread. `DETAILED` é diagnóstico explícito, lazy e bounded; não se assume 1.000.000 de records por processo como default. Otimizações que alterem recursos por sessão devem passar pela matriz de densidade de `BENCH-005` antes de promoção.
 
 ### Cenário de capacidade F10
 
@@ -44,4 +50,6 @@ A Extension usa o mesmo backend contract através de transporte autenticado. O s
 - `PlcCompiledArtifact` compatível produz a mesma semântica em todos os perfis;
 - nomes de pipe, arena, porta virtual e workdir não colidem;
 - encerramento do Core mata filhos ou registra falha de cleanup;
-- nenhuma promessa de capacidade sem host/cenário/versão definidos.
+- nenhuma promessa de capacidade sem host/cenário/versão definidos;
+- duas sessões com mesmos artefatos não colidem em execution identity, trace path ou correlação;
+- sessão SharedHost com trace OFF não paga buffer/thread/wake diagnóstico.

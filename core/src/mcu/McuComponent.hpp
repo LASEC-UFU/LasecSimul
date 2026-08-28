@@ -7,6 +7,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <stdexcept>
 #include <vector>
 #include "lasecsimul/IComponentModel.hpp"
 #include "lasecsimul/IMcuAdapter.hpp"
@@ -89,6 +90,19 @@ public:
     PluginHealthStatus health() const override;
 
     void onAssignedIndex(uint32_t index) override;
+    /** Identidade densa do MCU lógico. Reutiliza o índice estável do componente; relaunch do
+     * QEMU não reconstrói o componente e, portanto, não altera este valor. */
+    uint64_t runtimeInstanceId() const noexcept { return static_cast<uint64_t>(m_componentIndex); }
+    /** Reserva uma nova geração de launch no cold path. A reserva não sofre rollback. */
+    uint64_t reserveLaunchGeneration() {
+        uint64_t current = m_launchGeneration.load(std::memory_order_relaxed);
+        for (;;) {
+            if (current == UINT64_MAX) throw std::overflow_error("launch generation exhausted");
+            if (m_launchGeneration.compare_exchange_weak(current, current + 1,
+                    std::memory_order_acq_rel, std::memory_order_relaxed)) return current + 1;
+        }
+    }
+    uint64_t launchGenerationForTesting() const noexcept { return m_launchGeneration.load(std::memory_order_acquire); }
     void setI2cTransferHandler(I2cTransferHandler handler) { m_i2cTransferHandler = std::move(handler); }
     /** Repassa pro adaptador concreto -- ver `IMcuAdapter::resolveI2cPinIndex`. `McuComponent`
      * continua neutro de chip (não interpreta o resultado, só repassa o índice de pino pra quem
@@ -101,7 +115,8 @@ public:
      * (`CoreApplication.cpp`, `extension/src/mcu/mcuCommands.ts`). `arenaName` deve ser único por
      * instância (várias MCUs no mesmo projeto = várias arenas, nunca uma global). */
     void loadFirmware(const std::filesystem::path& firmwarePath, const std::string& arenaName,
-                      const std::string& qemuBinaryOverride = {}, McuDebugOptions debug = {});
+                      const std::string& qemuBinaryOverride = {}, McuDebugOptions debug = {},
+                      RuntimeLaunchIdentity identity = {});
     uint16_t gdbPort() const { return m_gdbPort; }
     void stopFirmware();
     bool firmwareRunning() const;
@@ -132,6 +147,21 @@ public:
         std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
         return m_pollGeneration;
     }
+    bool pollDoorbellBoundForTesting() const {
+        std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
+        return m_callbackState->doorbell != nullptr;
+    }
+    bool pollWorkerLaunchFailedForTesting() const {
+        return m_callbackState->pollWorkerLaunchFailed.load(std::memory_order_acquire);
+    }
+    uint64_t pollDoorbellWakeCountForTesting() const {
+        return m_callbackState->doorbellWakeCount.load(std::memory_order_relaxed);
+    }
+    uint64_t pollWaitFailureCountForTesting() const {
+        return m_callbackState->multiWaitFailedCount.load(std::memory_order_relaxed) +
+               m_callbackState->singleStopWaitFailedCount.load(std::memory_order_relaxed);
+    }
+    void ringPollDoorbellForTesting();
 
     /** Abre a arena SEM iniciar nenhum processo QEMU -- só pra teste poder simular escritas de
      * registrador manualmente (mesmo papel de QemuArenaBridgeTest), sem precisar de um binário
@@ -169,9 +199,23 @@ private:
      * virar nullptr (ver `runBackgroundPollLoop`, que nunca guarda um `McuComponent*` cru fora do
      * escopo do lock). */
     struct CallbackState {
+        CallbackState();
+        ~CallbackState();
         mutable std::recursive_mutex mutex;
         McuComponent* owner = nullptr;
         std::atomic<bool> pollThreadRunning{false};
+        std::atomic<bool> pollWorkerLaunchFailed{false};
+        void* stopEvent = nullptr;
+        void* doorbell = nullptr;
+        std::string expectedDoorbellArenaName;
+        uint32_t boundedWaitTimeoutMs = 5;
+        std::atomic<uint64_t> doorbellWakeCount{0};
+        std::atomic<uint64_t> stopEventWakeCount{0};
+        std::atomic<uint64_t> normalTimeoutCount{0};
+        std::atomic<uint64_t> doorbellUnavailableFallbackWaits{0};
+        std::atomic<uint64_t> multiWaitFailedCount{0};
+        std::atomic<uint64_t> singleStopWaitFailedCount{0};
+        std::atomic<uint64_t> level3SleepFallbackCount{0};
     };
     /** Resultado de uma tentativa de poll -- ver `pollStepLocked()`. */
     enum class PollStep { NoEvent, DispatchedReady, DeferredFuture };
@@ -226,6 +270,8 @@ private:
      * `m_polling` vira false, a arena fecha, ou o dono é destruído.
      */
     static void runBackgroundPollLoop(std::shared_ptr<CallbackState> state);
+    void bindPollDoorbellLocked(const std::string& arenaName);
+    static void waitForPollWork(const std::shared_ptr<CallbackState>& state);
     void scheduleModuleWakeup(size_t moduleIndex, uint64_t nowNs, bool schedulerLockHeld,
                                std::vector<DeferredSchedulerCall>* deferred = nullptr);
     void scheduleWakeupsForAllModules(uint64_t nowNs, bool schedulerLockHeld,
@@ -239,7 +285,8 @@ private:
      * chamadora externa, mesma inversão de ordem que motivou `DeferredSchedulerCall`). */
     void loadFirmwareLocked(const std::filesystem::path& firmwarePath, const std::string& arenaName,
                              const std::string& qemuBinaryOverride, McuDebugOptions debug,
-                             std::vector<DeferredSchedulerCall>& deferred);
+                             std::vector<DeferredSchedulerCall>& deferred,
+                             RuntimeLaunchIdentity identity = {});
     bool pollAndDispatchPendingEvents(uint64_t nowNs);
     bool dispatchArenaEvent(const qemu::QemuArenaEvent& event, uint64_t eventTimeNs);
     uint64_t electricalOutputFingerprint() const;
@@ -298,6 +345,7 @@ private:
     McuController m_controller;
     std::shared_ptr<CallbackState> m_callbackState;
     uint32_t m_componentIndex = 0;
+    std::atomic<uint64_t> m_launchGeneration{0};
     I2cTransferHandler m_i2cTransferHandler;
     std::atomic<bool> m_polling{false};
     // Identifica a sessão de polling à qual cada callback agendado pertence. Uma simples recarga

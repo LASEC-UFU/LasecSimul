@@ -2,7 +2,7 @@
 id: FEAT-007
 kind: feature
 status: active
-dependsOn: [FEAT-001, ARCH-002, ARCH-003, ARCH-006, SCHEMA-003, ADR-0007]
+dependsOn: [FEAT-001, ARCH-002, ARCH-003, ARCH-006, ARCH-009, SCHEMA-003, ADR-0007]
 supersedes: []
 ---
 
@@ -228,6 +228,10 @@ Por ADR-0007, o isolamento passa de validação em nível de VM (ADR-0006, super
 - recursão ilimitada e uso de memória são limitados por watchdog e limites de processo (ulimits/job objects) do worker, não por validação de opcode;
 - compilador (STruCpp vendorizado) e cache de build não mantêm estado mutável de sessão dentro do artefato publicado.
 
+## Lifecycle e observabilidade do worker PLC
+
+Processos PLC nativos seguem `ARCH-009`: identidade/provenance é criada no cold path, relaunch incrementa geração sem reutilização e wall-clock/watchdog continua separado do tempo IEC. Diagnóstico detalhado não cria thread por PLC nem trafega raw trace pela Webview; qualquer custo por sessão permanece bounded pelo perfil.
+
 ## Compatibilidade futura
 
 PLCopen XML e importadores/atualizações do OpenPLC v4/STruCpp podem ser adicionados como formatos de intercâmbio e atualizações de toolchain vendorizado. Eles nunca substituem o schema canônico do LasecSimul nem o `PlcNativeModule` publicado.
@@ -246,4 +250,5 @@ PLCopen XML e importadores/atualizações do OpenPLC v4/STruCpp podem ser adicio
 - nenhuma das cinco linguagens exige um runtime próprio;
 - toda simulação PLC ocorre em um worker do LasecSimul, sem depender de um OpenPLC Runtime externo;
 - crash/timeout do worker PLC não derruba o Core nem outras instâncias PLC/domínios;
-- um projeto IEC compilado pelo usuário produz um `PlcNativeModule` que o usuário pode distribuir sob a licença de sua escolha, conforme a LasecSimul PLC Runtime Library Exception.
+- um projeto IEC compilado pelo usuário produz um `PlcNativeModule` que o usuário pode distribuir sob a licença de sua escolha, conforme a LasecSimul PLC Runtime Library Exception;
+- relaunch de worker não colide identidade com geração anterior e trace OFF não acrescenta thread/buffer por instância.

@@ -11,6 +11,10 @@ namespace lasecsimul::simulation {
 
 /** Todo estado mutável da execução elétrica pertencente a uma sessão. */
 struct RuntimeState {
+    // Identidade da execução real (cold path). Zero significa que a sessão ainda não iniciou
+    // uma execução; pause/resume preserva o valor.
+    uint64_t sessionExecutionId = 0;
+    bool executionActive = false;
     uint64_t planGeneration = 0;
     uint64_t virtualTimeNs = 0;
     DenseExecutionLists execution;

@@ -4,11 +4,25 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <variant>
 #include <vector>
 
 namespace lasecsimul {
+
+/** Identidade imutável de uma tentativa de launch de runtime externo.
+ *
+ * Etapa 1A: tipo de valor somente. Ele não possui ownership, heap, sincronização ou
+ * conversão textual; a conexão ao lifecycle será feita nas etapas seguintes.
+ */
+struct RuntimeLaunchIdentity {
+    uint64_t sessionExecutionId = 0;
+    uint64_t runtimeInstanceId = 0;
+    uint64_t launchGeneration = 0;
+};
+static_assert(std::is_trivially_copyable_v<RuntimeLaunchIdentity>);
+static_assert(sizeof(RuntimeLaunchIdentity) == 24);
 
 struct Pin {
     std::string id;
@@ -199,6 +213,7 @@ struct PinMapping {
 struct QemuLaunchSpec {
     std::string binary;
     std::vector<std::string> args;
+    RuntimeLaunchIdentity runtimeIdentity{};
     // Linha de diagnostico produzida pelo orquestrador (rede efetiva, fallback etc.).
     // QemuProcessManager a coloca no mesmo buffer de logs antes de iniciar o processo.
     std::string diagnostics;

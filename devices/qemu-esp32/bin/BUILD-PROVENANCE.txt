@@ -1,25 +1,28 @@
 QEMU source: C:\SourceCode\qemu_lasecSimul
 QEMU repository: https://github.com/josuemoraisgh/qemu_lasecSimul
-QEMU HEAD: 71a0b06bef9b12afcc8f686da55fb3eabe685110
-Working-tree source: HEAD plus the ABI v5/I2C burst fast-path changes in
-hw/i2c/esp32_i2c.c, hw/xtensa/esp32.c, include/hw/i2c/esp32_i2c.h and
-softmmu/simuliface.c/.h (burst mailbox implementation plus a per-call
-wallWaitNs trace gated by LASECSIMUL_I2C_BURST_TRACE, added while
-diagnosing the Windows timer-resolution bottleneck below). These sources
-must be committed before a release tag.
-Configure: xtensa-softmmu, gcrypt, slirp
-Executable SHA-256: B0D6394DA5728BC876AF090AE04B629B5656D7D4FE505B6FC081A439CEBE3DA7
-Build date: 2026-08-26
-Runtime contract: QEMU arena ABI v5, negotiated I2C burst mailbox, v3 rollback.
+QEMU HEAD: 92d3b96071d4f3c7756a155536f8bfa0c7fdfd84
+Working-tree source: HEAD plus the event-driven I2C polling and precise Windows
+sub-millisecond timer changes in softmmu/simuliface.c, hw/i2c/esp32_i2c.c and
+util/main-loop.c. This deployed executable was rebuilt from the pre-general-MMIO
+candidate state after that candidate failed its first cold-boot functional gate.
+The source working tree retains the candidate for diagnosis, but it is not the
+deployed runtime. These sources must be committed before a release tag.
+Configure: xtensa-softmmu, gcrypt, slirp (MSYS2 UCRT64)
+Executable SHA-256: 1E23537F6F96096846DF8A5FD17BACAC87632FF9CCE72B2EB339E9956EBE8F5C
+Build date: 2026-08-27
+Runtime contract: QEMU arena ABI v5, 64-byte TX/32-byte RX I2C burst mailbox,
+continuation routing metadata, named Windows poll doorbell; ABI v3 rollback.
 
-Paired Core-side requirement (see core/src/main.cpp): Windows builds must call
-timeBeginPeriod(1) for the I2C burst mailbox to run at its designed speed.
-Measured live 2026-08-26: without it, every sleep_for()/wait_for() with a
-short timeout in McuComponent's background poll thread rounds up to the
-host's default ~15.6ms timer tick (85% of inter-burst gaps landed within
-800us of an exact multiple of 15625us), throttling burst throughput to
-roughly 40/s regardless of how fast the burst protocol or electrical model
-itself run. With timeBeginPeriod(1), the same workload sustained ~145
-bursts/s and a full SSD1306 frame (display.display()) dropped from
-~0.84-0.91s wall to ~0.12-0.19s wall (measured via the
-.codex-validation/i2c-throughput probe firmware).
+Paired Core-side requirement: McuComponent creates <arena>-doorbell before QEMU
+starts, waits on that event plus a local stop event, and falls back to a bounded
+timed wait if the doorbell is unavailable. Native devices serialize mutable
+plugin state per instance without holding McuComponent::CallbackState::mutex.
+
+Measured with the real ESP32/SSD1306 fixture on 2026-08-26 after correcting the
+fixture so Adafruit_SSD1306 actually uses each labelled bus clock:
+  100 kHz: 109-130 ms per 1024-byte framebuffer
+  400 kHz: 38-56 ms per framebuffer
+  800 kHz: 21-23 ms per framebuffer
+UART direct/plot streams matched exactly; no I2C ACK error or Guru Meditation;
+display state was enabled and populated. Set LASECSIMUL_QEMU_COARSE_SUBMS_WAIT=1
+to roll back the Windows cooperative sub-ms polling optimization.

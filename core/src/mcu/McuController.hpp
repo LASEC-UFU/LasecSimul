@@ -44,9 +44,11 @@ public:
      * instância/chamada (via IPC `loadMcuFirmware`), não no momento em que o McuController é
      * criado junto com o componente. */
     void start(const std::filesystem::path& firmwarePath, const std::string& arenaName,
-               const std::string& callSiteBinaryOverride = {}, McuDebugOptions debug = {});
+               const std::string& callSiteBinaryOverride = {}, McuDebugOptions debug = {},
+               RuntimeLaunchIdentity identity = {});
     QemuLaunchSpec buildLaunchSpec(const std::filesystem::path& firmwarePath, const std::string& arenaName,
-                                   const std::string& callSiteBinaryOverride = {}, McuDebugOptions debug = {}) const;
+                                   const std::string& callSiteBinaryOverride = {}, McuDebugOptions debug = {},
+                                   RuntimeLaunchIdentity identity = {}) const;
 
     /** Para o processo (gracioso até `timeout`, kill() se não responder) e sempre fecha a arena
      * depois, mesmo se o processo já tiver morrido por conta própria. */
@@ -54,6 +56,7 @@ public:
 
     bool isRunning() const;
     std::string qemuLogs() const;
+    RuntimeLaunchIdentity runtimeIdentity() const noexcept { return m_runtimeIdentity; }
 
     qemu::QemuArenaBridge& arenaBridge() { return m_arenaBridge; }
     const qemu::QemuArenaBridge& arenaBridge() const { return m_arenaBridge; }
@@ -63,6 +66,7 @@ private:
     std::string m_qemuBinaryOverride;
     qemu::QemuProcessManager m_processManager;
     qemu::QemuArenaBridge m_arenaBridge;
+    RuntimeLaunchIdentity m_runtimeIdentity{};
 };
 
 } // namespace lasecsimul::mcu

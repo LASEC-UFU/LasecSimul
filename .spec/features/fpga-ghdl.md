@@ -2,7 +2,7 @@
 id: FEAT-005
 kind: feature
 status: active
-dependsOn: [ARCH-001, ARCH-003, ARCH-004, FEAT-011]
+dependsOn: [ARCH-001, ARCH-003, ARCH-004, ARCH-009, FEAT-011]
 supersedes: []
 ---
 
@@ -52,6 +52,10 @@ Compilação usa lock por chave e diretório temporário. Publicação ocorre po
 
 Se artefatos GHDL não forem relocáveis, a sessão materializa hardlinks/cópias em workdir próprio.
 
+## Lifecycle e diagnóstico
+
+GHDL reutiliza o contrato de identidade/provenance de `ARCH-009`: runtime instance estável para a instância lógica, launch generation nova em cada tentativa e metadata resolvida no cold path. Trace detalhado, quando habilitado, é bounded e local ao processo; não cria thread dedicada nem altera lockstep/tempo virtual.
+
 ## Adiado
 
 Agrupar várias instâncias FPGA em um único processo exige benchmark e design separado para generics, nomes VPI, reset, fault isolation e recompilação. Não faz parte do roadmap antes de F9.
@@ -72,7 +76,9 @@ Agrupar várias instâncias FPGA em um único processo exige benchmark e design 
 - timeout deixa cache inválido/removível;
 - crash de uma FPGA não deixa processo órfão;
 - pacote Release executa o teste real usando exclusivamente o GHDL integrado/relocável;
-- lockstep nunca observa passo rejeitado.
+- lockstep nunca observa passo rejeitado;
+- relaunch não colide identidade/trace com execução anterior;
+- trace OFF não acrescenta worker/thread/buffer permanente.
 
 ## Evidência automatizada
 

@@ -1,6 +1,6 @@
 import { WEBVIEW_MESSAGE_VERSION, AnalyzerVectorHistory, ComponentReadoutValue, HostToWebviewMessage, InternalComponentSnapshot, SimulationStatus, WebviewToHostMessage } from "./messages.js";
 import { CanonicalEndpoint, CanonicalTopologyDocument, InteractionKindEntry, McuSerialPortEntry, PackagePin, PropertySchemaEntry, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, ViewSpecInteraction, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, endpointId, endpointPinId, nodeEndpoint, portEndpoint, remapEndpoint } from "./model.js";
-import { ComponentBox, PIN_RADIUS, componentBox, componentLocalOrigin, componentSymbolSvg, dialKnobSvg, hasRealPinPosition, livePackagePreviewSymbolSvg, missingSubcircuitPlaceholderSvg, packageLayoutTransform, packageSymbolSvg, pinLocalPosition, registerPackage } from "./componentSymbols.js";
+import { ComponentBox, PIN_RADIUS, componentBox, componentLocalOrigin, componentSymbolSvg, dialKnobSvg, hasRealPinPosition, livePackagePreviewSymbolSvg, missingSubcircuitPlaceholderSvg, packageLayoutTransform, packageSymbolSvg, pinLocalPosition, registerPackage, runtimeSurfaceImageHref } from "./componentSymbols.js";
 import { ExternalLabelKind, SYMBOL_PIN_LABEL_ALIGN_KEY, formatProbeVoltage, genericExternalLabelFontSize, isExternalProbeReadout, labelPropertyKey, nextLabelRotation, resolveDefaultExternalLabelOffset, resolveExternalLabelColor, symbolPinLabelPackageFields } from "./componentLabels.js";
 import { svgLocalTransform, transformLocalPoint, transformedLocalBounds } from "./componentGeometry.js";
 import { detectChannelTrigger, digitalStepPath, findTriggerAnchorIndex, triggerAlignedWindowEndNs, visibleSampleWindowByTime } from "./instrumentTrigger.js";
@@ -8840,14 +8840,26 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
   }
 
   if (message.type === "componentVisualState") {
+    const changedComponentIds = new Set(
+      Object.entries(message.statesByComponentId)
+        .filter(([componentId, encoded]) => visualStatesByComponentId[componentId] !== encoded)
+        .map(([componentId]) => componentId)
+    );
     visualStatesByComponentId = message.statesByComponentId;
     // Mesmo backpressure dos instrumentos: troca somente os símbolos afetados, preservando drag,
     // seleção, inputs e popups em vez de reconstruir o canvas inteiro a cada framebuffer.
-    if (!isInteractiveGestureInProgress()) {
+    if (changedComponentIds.size > 0 && !isInteractiveGestureInProgress()) {
       for (const component of state.components) {
-        if (!(component.id in message.statesByComponentId)) continue;
+        if (!changedComponentIds.has(component.id)) continue;
         const element = componentElementsById.get(component.id);
-        if (element) updateComponentElement(element, component);
+        if (!element) continue;
+        const runtimeImage = element.querySelector<SVGImageElement>('image[data-runtime-surface="bitmap"]');
+        const nextHref = runtimeSurfaceImageHref(component.typeId, runtimeSymbolProperties(component));
+        if (runtimeImage && nextHref) {
+          runtimeImage.setAttribute("href", nextHref);
+        } else {
+          updateComponentElement(element, component);
+        }
       }
     }
   }

@@ -261,6 +261,8 @@ void Scheduler::reset() {
 }
 
 void Scheduler::start() {
+    if (m_failNextStartForTesting.exchange(false, std::memory_order_acq_rel))
+        throw std::runtime_error("Scheduler::start failure injected for test");
     if (!m_running.load(std::memory_order_acquire) && m_beforeExecution) m_beforeExecution();
     if (m_running.exchange(true)) return;
     m_stopRequested.store(false);

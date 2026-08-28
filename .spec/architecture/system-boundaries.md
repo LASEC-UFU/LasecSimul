@@ -2,7 +2,7 @@
 id: ARCH-001
 kind: architecture
 status: active
-dependsOn: []
+dependsOn: [ADR-0009]
 supersedes: []
 ---
 
@@ -27,6 +27,13 @@ Authoring/UI -> Backend contract -> Core por sessão -> runtimes externos opcion
 - Desktop e SharedHost usam o mesmo binário e contratos. Mudam apenas perfil, orçamento e deployment.
 - Um backend remoto futuro troca transporte e provisionamento, não o motor de física ou a semântica PLC.
 
+## Fidelidade e observabilidade
+
+- Hardware real/datasheet é a referência final de comportamento guest-visible; backend reference não é oracle absoluto.
+- Otimizações removem overhead host-side/IPC sem encurtar artificialmente FIFO, IRQ, timers, registradores, bytes, ACK/NACK, duração virtual ou oportunidades legítimas de execução.
+- QPC/wall-clock podem medir latência, watchdog e orchestration, mas nunca definem tempo funcional da simulação.
+- Identidade/provenance e trace causal seguem [ARCH-009](runtime-identity-fidelity-and-observability.md) e não exigem serviço global, thread por domínio ou raw trace na Webview.
+
 ## Proibições
 
 - lógica de simulação na Webview/Extension;
@@ -36,7 +43,9 @@ Authoring/UI -> Backend contract -> Core por sessão -> runtimes externos opcion
 - porta TCP do host criada implicitamente para endpoint virtual;
 - cache global com estado mutável de sessão;
 - thread ou processo por bloco/PLC por padrão;
-- segunda implementação de Scheduler/solver/PLC VM para SharedHost.
+- segunda implementação de Scheduler/solver/PLC VM para SharedHost;
+- fast path que altere comportamento guest-visible apenas para atingir meta de wall-clock;
+- trace/diagnóstico que introduza thread, processo, writer cross-process ou fila não bounded por sessão.
 
 ## Ownership
 
@@ -64,4 +73,6 @@ OpenPLC é referência técnica para organização de POUs, editores e pipeline 
 - testes headless não dependem da Extension;
 - compilação IEC produz o mesmo formato de artefato para Desktop/SharedHost;
 - backend local e remoto expõem o mesmo contrato sem duplicar semântica;
-- simular PLC não requer iniciar OpenPLC Editor ou OpenPLC Runtime.
+- simular PLC não requer iniciar OpenPLC Editor ou OpenPLC Runtime;
+- mesma fixture guest produz semântica equivalente em Desktop/SharedHost e não depende de host clock para resultados;
+- trace OFF não aumenta recursos permanentes da sessão.

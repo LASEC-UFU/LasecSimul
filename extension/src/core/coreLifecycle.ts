@@ -1002,11 +1002,11 @@ let stopOperationPending = false;
  * partir do pinCount do catálogo) — `ProjectComponent` (formato `.lsproj`) não guarda pinos, só
  * posição (`ProjectComponent.visual`); os IDs em si são sempre recalculados do catálogo, nunca
  * persistidos, então é isto que tem que mandar pro Core ao reabrir um projeto. */
-export function runSimulation(): void {
-  if (!state.coreClient) return;
+export function runSimulation(): Promise<void> {
+  if (!state.coreClient) return Promise.resolve();
   const statusBeforeRequest = state.simulationStatus;
   const revisionBeforeRequest = simulationStatusRevision;
-  state.coreClient
+  return state.coreClient
     .run()
     .then(() => {
       // Uma condição pode pausar no primeiro settle antes da resposta. A notificação assíncrona é

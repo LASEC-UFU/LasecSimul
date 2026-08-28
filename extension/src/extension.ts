@@ -504,10 +504,16 @@ async function runSimulationWithFirmwareCheck(): Promise<void> {
     logSimulation("error", "O Core ainda não está conectado.", { stage: "core" });
     return;
   }
+  // O Core só aceita loadMcuFirmware durante uma execução ativa. Primeiro abre a execução
+  // (criando o session_execution_id); em seguida o carregador pode iniciar/reiniciar o QEMU com
+  // o firmware selecionado. A ordem anterior tentava carregar com a sessão parada e produzia
+  // "loadMcuFirmware requer execucao ativa".
+  await runSimulation();
+  if ((state.simulationStatus as string) !== "running") return;
   const result = await ensureAllMcuFirmwareUpToDate(mcuCommandOptions());
-  if (!result.ok) return; // já logado (canal + Problemas + status bar) dentro de ensureAllMcuFirmwareUpToDate
+  if (!result.ok) { await stopSimulation(); return; } // já logado dentro do carregador
   if (!(await ensureAllFpgasReady(fpgaCommandOptions()))) return;
-  await registerAllPauseConditions().then((valid) => valid ? runSimulation() : undefined);
+  await registerAllPauseConditions();
   } finally {
     startSimulationPreparationPending = false;
   }

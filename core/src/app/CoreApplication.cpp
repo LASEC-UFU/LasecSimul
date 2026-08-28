@@ -1444,8 +1444,15 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
     if (msg.type == "start") {
         // start() is idempotent while the worker is already running, so a
         // Core-side pause must be released explicitly before restarting it.
-        session.scheduler().resume();
-        session.scheduler().start();
+        session.beginExecutionIfNeeded();
+        const uint64_t attemptedId = session.runtimeState().sessionExecutionId;
+        try {
+            session.scheduler().resume();
+            session.scheduler().start();
+        } catch (...) {
+            session.abortExecutionIfCurrent(attemptedId);
+            throw;
+        }
         resp.ok = true;
         return resp;
     }
@@ -2076,8 +2083,15 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
         return resp;
     }
     if (msg.type == "resume") {
-        session.scheduler().start();
-        session.scheduler().resume();
+        session.beginExecutionIfNeeded();
+        const uint64_t attemptedId = session.runtimeState().sessionExecutionId;
+        try {
+            session.scheduler().start();
+            session.scheduler().resume();
+        } catch (...) {
+            session.abortExecutionIfCurrent(attemptedId);
+            throw;
+        }
         resp.ok = true;
         return resp;
     }

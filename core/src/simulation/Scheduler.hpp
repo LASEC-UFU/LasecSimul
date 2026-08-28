@@ -235,6 +235,7 @@ public:
     }
 
     void start();
+    void setFailNextStartForTesting(bool enabled) { m_failNextStartForTesting.store(enabled); }
     /** Pause/resume continuam lock-free para poder interromper um settle não convergente sem esperar
      * pelo mutex que esse mesmo settle segura. signalWorkAvailable() elimina a antiga janela de
      * wakeup perdido sem reintroduzir o deadlock (ver .spec 32.5.22). */
@@ -345,6 +346,7 @@ private:
     std::mutex m_pacingMutex;
     std::condition_variable m_pacingWake;
     std::atomic<bool> m_running{false};
+    std::atomic<bool> m_failNextStartForTesting{false};
     std::atomic<bool> m_paused{false};
     /** Setada por `stop()` ANTES de `m_thread.join()`, checada dentro de `settleUntilStableLocked()`
      * -- sem isso, um circuito que nunca converge/estabiliza (oscilação sustentada entre dois

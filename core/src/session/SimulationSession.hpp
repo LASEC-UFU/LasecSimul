@@ -244,6 +244,9 @@ public:
     std::shared_ptr<const simulation::SimulationPlan> simulationPlan();
     bool publishSimulationPlan();
     const simulation::RuntimeState& runtimeState() const { return m_runtimeState; }
+    /** Inicia uma nova execução real no cold path. Idempotente para pause/resume. */
+    void beginExecutionIfNeeded();
+    void abortExecutionIfCurrent(uint64_t attemptedId);
     simulation::PlanDomain pendingPlanDomains() const {
         std::lock_guard<std::mutex> lock(m_planMutex);
         return m_planInvalidation.domains();
@@ -653,6 +656,9 @@ private:
 
     std::vector<std::unique_ptr<IComponentModel>> m_componentInstances;
     simulation::RuntimeState m_runtimeState;
+    // Serializa apenas as transições cold-path de identidade (start/stop). Não participa
+    // do settle-loop nem do caminho I2C.
+    mutable std::mutex m_executionIdentityMutex;
     std::vector<uint32_t>& m_activeComponentIndices = m_runtimeState.execution.activeComponents;
     std::vector<uint32_t>& m_reactiveComponentIndices = m_runtimeState.execution.reactiveComponents;
     std::vector<uint32_t>& m_nonlinearComponentIndices = m_runtimeState.execution.nonlinearComponents;

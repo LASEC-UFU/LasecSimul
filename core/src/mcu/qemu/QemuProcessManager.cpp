@@ -1,6 +1,7 @@
 #include "QemuProcessManager.hpp"
 #include <atomic>
 #include <cstdio>
+#include <cwchar>
 #include <mutex>
 #include <sstream>
 #include <stdexcept>
@@ -69,6 +70,35 @@ std::wstring buildCommandLine(const QemuLaunchSpec& spec) {
     }
     return command;
 }
+
+std::vector<wchar_t> buildLaunchEnvironment(const QemuLaunchSpec& spec) {
+    std::vector<std::wstring> entries;
+    LPWCH raw = GetEnvironmentStringsW();
+    if (raw) {
+        for (const wchar_t* p = raw; *p; p += wcslen(p) + 1) {
+            std::wstring e(p);
+            if (e.rfind(L"LASECSIMUL_SESSION_EXECUTION_ID=", 0) == 0 ||
+                e.rfind(L"LASECSIMUL_RUNTIME_INSTANCE_ID=", 0) == 0 ||
+                e.rfind(L"LASECSIMUL_LAUNCH_GENERATION=", 0) == 0) continue;
+            entries.push_back(std::move(e));
+        }
+        FreeEnvironmentStringsW(raw);
+    }
+    // A zeroed identity is the explicit legacy/standalone launch form.  Do not
+    // serialize it as managed metadata (session and generation zero are invalid
+    // and would make QEMU reject otherwise-valid standalone tests).
+    if (spec.runtimeIdentity.sessionExecutionId != 0 ||
+        spec.runtimeIdentity.runtimeInstanceId != 0 ||
+        spec.runtimeIdentity.launchGeneration != 0) {
+        entries.push_back(L"LASECSIMUL_SESSION_EXECUTION_ID=" + std::to_wstring(spec.runtimeIdentity.sessionExecutionId));
+        entries.push_back(L"LASECSIMUL_RUNTIME_INSTANCE_ID=" + std::to_wstring(spec.runtimeIdentity.runtimeInstanceId));
+        entries.push_back(L"LASECSIMUL_LAUNCH_GENERATION=" + std::to_wstring(spec.runtimeIdentity.launchGeneration));
+    }
+    std::vector<wchar_t> block;
+    for (const auto& e : entries) { block.insert(block.end(), e.begin(), e.end()); block.push_back(L'\0'); }
+    block.push_back(L'\0');
+    return block;
+}
 #endif
 
 } // namespace
@@ -101,8 +131,10 @@ public:
         si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
 
         std::wstring commandLine = buildCommandLine(spec);
+        std::vector<wchar_t> environmentBlock = buildLaunchEnvironment(spec);
         if (!CreateProcessW(nullptr, commandLine.data(), nullptr, nullptr, TRUE,
-                            CREATE_NO_WINDOW | CREATE_SUSPENDED, nullptr, nullptr,
+                            CREATE_NO_WINDOW | CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT,
+                            environmentBlock.data(), nullptr,
                             &si, &m_processInfo)) {
             CloseHandle(readPipe);
             CloseHandle(writePipe);

@@ -2,7 +2,7 @@
 id: ARCH-003
 kind: architecture
 status: active
-dependsOn: [ARCH-002]
+dependsOn: [ARCH-002, ADR-0009]
 supersedes: []
 ---
 
@@ -10,7 +10,7 @@ supersedes: []
 
 ## Autoridade
 
-O Scheduler/coordenador é a única autoridade do tempo virtual e da ordem observável. Runtimes externos avançam somente por comando do Core. A PLC VM é interna ao Core e recebe `timestampNs`/delta virtual explicitamente; nunca lê wall clock.
+O Scheduler/coordenador é a única autoridade do tempo virtual e da ordem observável. Runtimes externos avançam somente por comando do Core. A PLC VM é interna ao Core e recebe `timestampNs`/delta virtual explicitamente; nunca lê wall clock. QPC, wall-clock, wake latency e scheduling do SO podem ser registrados para diagnóstico/benchmark, mas não alteram `timestampNs`, timers, IRQs, duração de barramento ou timeout simulado.
 
 ## Chave de evento
 
@@ -60,6 +60,13 @@ O integrador pode escolher passos menores que o próximo evento, respeitando lim
 
 Um PLC já executado em um timestamp aceito não sofre rollback parcial. O integrador precisa fechar/aceitar o estado contínuo necessário antes da fase `PlcInputLatch` daquele evento.
 
+## Pacing e fidelidade temporal
+
+- Modo real-time compara avanço virtual/host sem usar wall-clock como fonte semântica.
+- A média próxima de 100% não basta: stalls e catch-up bursts devem ser observáveis em benchmark quando relevantes.
+- Espera host-side só pode ser removida depois de classificada como overhead artificial; pacing que representa restrição física/virtual correta permanece.
+- Metas de wall-clock não autorizam acelerar uma operação além do hardware real.
+
 ## Alocação
 
 - reutilizar buffers de lotes e scratch;
@@ -76,4 +83,6 @@ Um PLC já executado em um timestamp aceito não sofre rollback parcial. O integ
 - pausa/stop responsivos inclusive em não convergência;
 - loop de microsteps limitado e diagnosticado;
 - RateGroup gera um evento por período, não por bloco/task individual;
-- nenhum uso funcional de wall clock.
+- nenhum uso funcional de wall clock;
+- instrumentation/QPC não altera ordem, `EventKey`, timer ou IRQ;
+- otimização de pacing preserva duração e oportunidades guest-visible comprovadas contra hardware/modelo.

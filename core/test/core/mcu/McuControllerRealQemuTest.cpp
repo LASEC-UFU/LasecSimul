@@ -135,6 +135,15 @@ int main() {
             flashPath = createBlankFlash();
             ownsFlashPath = true;
         }
+        const RuntimeLaunchIdentity expectedIdentity{0x1111222233334444ULL, 7, 1};
+        const QemuLaunchSpec identitySpec = controller.buildLaunchSpec(
+            flashPath, arenaName, {}, {}, expectedIdentity);
+        TEST_ASSERT(identitySpec.runtimeIdentity.sessionExecutionId == expectedIdentity.sessionExecutionId,
+                    "QemuLaunchSpec preserva sessionExecutionId");
+        TEST_ASSERT(identitySpec.runtimeIdentity.runtimeInstanceId == expectedIdentity.runtimeInstanceId,
+                    "QemuLaunchSpec preserva runtimeInstanceId");
+        TEST_ASSERT(identitySpec.runtimeIdentity.launchGeneration == expectedIdentity.launchGeneration,
+                    "QemuLaunchSpec preserva launchGeneration");
         controller.start(flashPath, arenaName);
         started = true;
     } catch (const std::exception& e) {

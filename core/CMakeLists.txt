@@ -88,6 +88,7 @@ set(CORE_SOURCES
     src/simulation/SimulationPlan.cpp
     src/session/SimulationSession.cpp
     src/session/PauseExpression.cpp
+    src/trace/CausalTrace.cpp
 )
 
 add_executable(lasecsimul-core ${CORE_SOURCES})
@@ -168,6 +169,7 @@ set(TEST_COMMON_SOURCE_FILES
     src/simulation/SimulationPlan.cpp
     src/session/SimulationSession.cpp
     src/session/PauseExpression.cpp
+    src/trace/CausalTrace.cpp
 )
 
 # A maioria dos executaveis de teste usa exatamente as mesmas fontes do Core. Compila-las em
@@ -415,6 +417,17 @@ if(NOT WIN32)
     target_link_libraries(simulation_plan_session_test PRIVATE dl)
 endif()
 add_test(NAME simulation_plan_session COMMAND simulation_plan_session_test)
+
+add_executable(session_execution_identity_test
+    test/core/session/SessionExecutionIdentityTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(session_execution_identity_test PRIVATE include src)
+target_link_libraries(session_execution_identity_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+if(NOT WIN32)
+    target_link_libraries(session_execution_identity_test PRIVATE dl)
+endif()
+add_test(NAME session_execution_identity COMMAND session_execution_identity_test)
 
 add_executable(dense_hot_path_test
     test/core/simulation/DenseHotPathTest.cpp
@@ -838,6 +851,7 @@ add_executable(plugin_runtime_test
     src/plugins/NativeMcuAdapterProxy.cpp
     src/plugins/CrashGuard.cpp
     src/simulation/Scheduler.cpp
+    src/trace/CausalTrace.cpp
 )
 target_include_directories(plugin_runtime_test PRIVATE include src)
 target_link_libraries(plugin_runtime_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
@@ -1026,6 +1040,7 @@ add_executable(mcu_controller_real_qemu_test
     src/plugins/NativeMcuAdapterProxy.cpp
     src/plugins/CrashGuard.cpp
     src/simulation/Scheduler.cpp
+    src/trace/CausalTrace.cpp
 )
 target_include_directories(mcu_controller_real_qemu_test PRIVATE include src)
 target_link_libraries(mcu_controller_real_qemu_test PRIVATE nlohmann_json::nlohmann_json)

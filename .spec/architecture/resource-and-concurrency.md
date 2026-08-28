@@ -2,7 +2,7 @@
 id: ARCH-004
 kind: architecture
 status: active
-dependsOn: [ARCH-001, ARCH-002, BENCH-001]
+dependsOn: [ARCH-001, ARCH-002, BENCH-001, ADR-0009]
 supersedes: []
 ---
 
@@ -56,6 +56,16 @@ Compilação IEC é build job limitado, separado do pool de simulação. Cacheia
 
 Afinidade, CPU sets e HostSupervisor não são defaults. Um HostSupervisor só entra se benchmark multi-sessão demonstrar que processos independentes e políticas do SO são insuficientes.
 
+## Diagnóstico e trace
+
+Causal trace não cria worker/thread por domínio. O recorder usa o contexto de execução já existente e segue três modos:
+
+- `OFF`: zero buffer detalhado, arquivo, thread e wake próprio;
+- `COUNTERS`: somente contadores pequenos/bounded;
+- `DETAILED`: buffer lazy, bounded/configurável e explicitamente habilitado.
+
+Capacidade grande de laboratório não é default SharedHost. Antes de promover footprint novo, medir bytes alocados/commitados, high-watermark e custo em 1/4/8/20 sessões conforme `BENCH-005`. Um buffer de trace não pode crescer sem limite nem competir silenciosamente com estado semântico da simulação.
+
 ## Filas
 
 Toda fila declara produtor, consumidor, capacidade, unidade do limite, overflow, ordem e shutdown. Comandos não podem ser descartados silenciosamente; telemetria intermediária pode ser coalescida. Build IEC não cria fila ilimitada de recompilações: alterações rápidas coalescem por geração de autoria.
@@ -75,4 +85,6 @@ Toda fila declara produtor, consumidor, capacidade, unidade do limite, overflow,
 - memória total das PLC VMs respeita orçamento por sessão;
 - memória de filas/logs/Scope é limitada;
 - resultados são equivalentes com 1, 2 e N workers;
-- benchmark decide thresholds e defaults.
+- benchmark decide thresholds e defaults;
+- trace OFF mantém footprint/threads/handles da sessão inalterados;
+- nova otimização não multiplica threads, processos, wakeups ou buffers por sessão sem benchmark SharedHost favorável.

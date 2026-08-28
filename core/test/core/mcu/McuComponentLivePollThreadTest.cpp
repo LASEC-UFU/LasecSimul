@@ -69,6 +69,24 @@ void simulateQemuWrite(LsdnQemuArena* arena, uint64_t addr, uint64_t value) {
 // uma leitura, ver waitForQueueDrain() em simuliface.c).
 bool queueDrained(const LsdnQemuArena* arena) { return arena->queueReadIndex == arena->queueWriteIndex; }
 
+// TEMPORARY regression test infra (2026-08-27, duplicate I2C dispatch fix) -- simula o que
+// i2cBurstTransfer() do lado QEMU real faria (ABI v5, ver qemu_arena_abi.h/simuliface.c): publica
+// os campos do pedido e SÓ POR ÚLTIMO i2cRequestSeq (mesmo motivo de simulateQemuWrite() publicar
+// queueWriteIndex por último -- é isso que torna o pedido visível/pendente pro lado Core).
+void simulateQemuI2cBurstRequest(LsdnQemuArena* arena, uint64_t sequence, uint8_t addressByte) {
+    arena->i2cBus = 0;
+    arena->i2cFlags = 0x3; // START|STOP, sem READ -- uma escrita completa de um byte
+    arena->i2cPeriodNs = 10000; // 100kHz nominal, irrelevante pro teste (sem plugin real de barramento)
+    arena->i2cTxLen = 1;
+    arena->i2cRxLen = 0;
+    arena->i2cTx[0] = addressByte;
+    arena->i2cRequestSeq = sequence;
+}
+
+bool i2cResponseObserved(const LsdnQemuArena* arena, uint64_t sequence) {
+    return arena->i2cResponseSeq == sequence;
+}
+
 // Espera até `timeout` por uma condição observável via poll -- corrida real contra threads vivas,
 // não uma constante de sleep fixa (mesma disciplina de waitForLogSubstring em
 // McuMultipleControllersRealQemuTest.cpp/McuControllerRealQemuTest.cpp).
@@ -171,6 +189,93 @@ void runConcurrentStressBurst(SimulationSession& session, mcu::McuComponent& mcu
     (void)mcu;
 }
 
+// TEMPORARY regression test (2026-08-27, investigacao TG0WDT_SYS_RESET -- corrige a race de
+// double-dispatch descrita em McuComponent.cpp::pollStepLocked()) -- exercita exatamente o
+// mecanismo da race: onPollEvent() (thread do proprio Scheduler) e runBackgroundPollLoop() (thread
+// de poll dedicada) ambos fazem peek em arena.pollI2cBurst(); antes da correcao, nada impedia as
+// duas de despachar o MESMO i2cRequestSeq de forma independente enquanto o pedido seguia pendente
+// (runBackgroundPollLoop() solta m_callbackState->mutex ANTES do dispatch, de proposito). Instala um
+// handler contador diretamente via McuComponent::setI2cTransferHandler() -- o mesmo metodo publico
+// que SimulationSession::resolveI2cTransferUnlocked() usa na producao -- para checar a invariante
+// (um pedido -> exatamente um dispatch) sem precisar montar uma topologia eletrica I2C completa.
+void runI2cDuplicateDispatchRegressionTest(mcu::McuComponent& mcu, LsdnQemuArena* arena) {
+    std::atomic<uint64_t> lastDispatchCount{0};
+    mcu.setI2cTransferHandler([&](uint32_t, uint32_t, const I2cTransfer&) -> I2cTransferResult {
+        lastDispatchCount.fetch_add(1, std::memory_order_relaxed);
+        // A race real (Pass 2, firmware/QEMU de verdade) tem uma janela de poucos microssegundos
+        // entre runBackgroundPollLoop() soltar m_callbackState->mutex e completeI2cBurst() -- estreita
+        // demais pra reproduzir de forma confiavel num dispatch sintetico instantaneo. O plugin OLED
+        // real (devices/simulide-complex/src/lib.c) nao dorme, mas o CAMINHO ate ele (topologia +
+        // m_deviceMutex) mediu tipicamente dezenas de microssegundos no Pass 2 -- ainda maior que um
+        // retorno instantaneo. Alargar aqui pra alguns milissegundos e' o que da' ao Scheduler uma
+        // chance real de disparar onPollEvent() durante a janela, sem inventar um segundo mecanismo
+        // de forcar a concorrencia.
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        I2cTransferResult result;
+        result.handled = true;
+        result.addressAck = true;
+        return result;
+    });
+
+    auto publishAndVerifyOnce = [&](uint64_t sequence) -> bool {
+        lastDispatchCount.store(0, std::memory_order_relaxed);
+        simulateQemuI2cBurstRequest(arena, sequence, 0x3C << 1);
+        if (!waitUntil([&] { return i2cResponseObserved(arena, sequence); })) return false;
+        // Pequena folga: um segundo despacho concorrente (a propria race) pode publicar
+        // completeI2cBurst() um pouco depois do primeiro -- ver reconstrucao causal na investigacao
+        // TG0WDT_SYS_RESET (Pass 2). Sem esta folga, o teste poderia observar count==1 por sorte de
+        // timing mesmo com a race presente.
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        return lastDispatchCount.load(std::memory_order_relaxed) == 1;
+    };
+
+    // TESTE 1 (janela de partida): pedido publicado logo apos o Scheduler ligar, sem qualquer
+    // garantia de que a thread de poll dedicada ja rodou. Sem a correcao, onPollEvent() (thread do
+    // Scheduler) despacha sincronamente aqui -- ISSO e' o comportamento de janela de partida
+    // pretendido (pollThreadRunning ainda false), preservado pela correcao; o teste garante que
+    // continua despachando exatamente uma vez, nao zero e nao duas.
+    check(publishAndVerifyOnce(1001),
+          "pedido I2C na janela de partida (thread de poll ainda nao confirmada) despachado exatamente uma vez");
+
+    // TESTE 2 (estado estacionario): espera a thread de poll dedicada confirmadamente rodando, guard
+    // o mesmo estado ja mantido por CallbackState::pollThreadRunning (reutilizado, nao um novo bool),
+    // depois publica varios pedidos sequenciais.
+    check(waitUntil([&] { return mcu.pollThreadRunningForTesting(); }),
+          "thread de poll dedicada confirmada rodando antes do teste de estado estacionario");
+    bool allSteadyStateOk = true;
+    for (uint64_t seq = 2000; seq < 2020; ++seq) {
+        if (!publishAndVerifyOnce(seq)) allSteadyStateOk = false;
+    }
+    check(allSteadyStateOk, "20 pedidos I2C sequenciais em estado estacionario, cada um despachado exatamente uma vez");
+
+    // TESTE 3 (estresse concorrente): escritas de registrador concorrentes (gerando wakeups
+    // frequentes do Scheduler -- o gatilho real da race, via onPollEvent()) enquanto pedidos I2C sao
+    // publicados um a um. Reproducao mais proxima da race original (19 duplicatas observadas no
+    // Pass 2 real com firmware/QEMU de verdade).
+    std::atomic<bool> stressRunning{true};
+    std::thread stressWriter([&] {
+        uint32_t counter = 0;
+        while (stressRunning.load(std::memory_order_relaxed)) {
+            while (stressRunning.load(std::memory_order_relaxed) &&
+                   (arena->queueWriteIndex - arena->queueReadIndex) >= LSDN_QEMU_ARENA_QUEUE_DEPTH) {
+                std::this_thread::yield();
+            }
+            if (!stressRunning.load(std::memory_order_relaxed)) break;
+            simulateQemuWrite(arena, 0x3ff44004, counter++); // GPIO_OUT_REG; valor irrelevante aqui
+        }
+    });
+    bool allStressOk = true;
+    for (uint64_t seq = 3000; seq < 3040; ++seq) {
+        if (!publishAndVerifyOnce(seq)) allStressOk = false;
+    }
+    stressRunning.store(false, std::memory_order_relaxed);
+    stressWriter.join();
+    check(allStressOk,
+          "40 pedidos I2C sob rajada concorrente de escritas de registrador, cada um despachado exatamente uma vez");
+
+    mcu.setI2cTransferHandler(nullptr);
+}
+
 } // namespace
 
 int main() {
@@ -215,8 +320,10 @@ int main() {
     mcu::McuComponent* mcuA = mcus[0];
     mcu::McuComponent* mcuB = mcus[1];
 
-    mcuA->openSyntheticArenaForTesting(uniqueArenaName("a"));
-    mcuB->openSyntheticArenaForTesting(uniqueArenaName("b"));
+    const std::string arenaNameA = uniqueArenaName("a");
+    const std::string arenaNameB = uniqueArenaName("b");
+    mcuA->openSyntheticArenaForTesting(arenaNameA);
+    mcuB->openSyntheticArenaForTesting(arenaNameB);
     LsdnQemuArena* arenaA = mcuA->arenaBridge().arena();
     LsdnQemuArena* arenaB = mcuB->arenaBridge().arena();
 
@@ -246,6 +353,19 @@ int main() {
     // síncrono que McuComponentTest.cpp exercita.
     session.scheduler().start();
     check(session.scheduler().isRunning(), "Scheduler realmente rodando em background");
+#ifdef _WIN32
+    check(mcuA->pollDoorbellBoundForTesting() && mcuB->pollDoorbellBoundForTesting(),
+          "arenas sinteticas criam handles doorbell reais no Windows");
+    const uint64_t wakesBefore = mcuA->pollDoorbellWakeCountForTesting();
+    mcuA->ringPollDoorbellForTesting();
+    check(waitUntil([&] { return mcuA->pollDoorbellWakeCountForTesting() > wakesBefore; }),
+          "doorbell real acorda a thread dedicada sem depender do timeout");
+#endif
+
+    // Regressao da race de double-dispatch I2C -- roda logo apos o Scheduler ligar, testando
+    // explicitamente a janela de partida (thread de poll dedicada ainda sem garantia de ja ter
+    // rodado), o estado estacionario e um cenario de estresse concorrente com escritas de registrador.
+    runI2cDuplicateDispatchRegressionTest(*mcuA, arenaA);
 
     // Escritas intercaladas nas duas arenas, sem nenhum settleStep()/markDirty() manual -- só a
     // thread de poll dedicada de cada McuComponent deveria perceber e despachar cada uma.
@@ -276,17 +396,25 @@ int main() {
     // assert (o timeout do CTest pega, mas o objetivo aqui é nunca chegar nele).
     for (int cycle = 0; cycle < 10; ++cycle) {
         mcuA->stopFirmware();
-        mcuA->openSyntheticArenaForTesting(uniqueArenaName("a-reload"));
+        mcuA->openSyntheticArenaForTesting(arenaNameA);
     }
     arenaA = mcuA->arenaBridge().arena();
     check(mcuA->arenaBridge().isOpen(), "arena A reaberta depois de 10 ciclos de reload com o Scheduler vivo");
     check(toggleAndWaitForLevel(arenaA, gpioStart, session, indexA, "GPIO2", true),
           "MCU A volta a responder a escritas de registrador depois dos reloads ao vivo");
 
+    // Reconfirma a mesma regressao depois de 10 ciclos de fechar/reabrir a arena com o Scheduler
+    // vivo -- prova que a ownership do consumidor I2C (pollThreadRunning) se recompoe corretamente
+    // apos a thread de poll antiga sair e uma nova nascer, sem janela de pedido perdido nem
+    // duplicado.
+    runI2cDuplicateDispatchRegressionTest(*mcuA, arenaA);
+
     // Parada limpa: stopSimulation() precisa devolver o controle (sem travar) mesmo com as duas
     // threads de poll dedicadas ainda potencialmente ativas.
     session.stopSimulation();
     check(!session.scheduler().isRunning(), "Scheduler parado depois de stopSimulation()");
+    check(!mcuA->pollWorkerLaunchFailedForTesting() && mcuA->pollWaitFailureCountForTesting() == 0,
+          "ciclo de vida do poll terminou sem falha de lancamento ou HANDLE wait");
     check(mcuA->health() == PluginHealthStatus::Ok && mcuB->health() == PluginHealthStatus::Ok,
           "as duas instâncias continuam saudáveis depois da parada");
 

@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
@@ -17,6 +18,7 @@ const projectPath = process.argv[2] ??
 const firmwarePath = process.argv[3] ??
   "G:\\Meu Drive\\Josue\\02 AulasUFU\\01 Aulas_ININD1\\Pratica\\EININDI01_GitHub_VSCode_PIO\\lasecSimul\\merged.bin";
 const durationMs = Number(process.argv[4] ?? 5000);
+const fixedVirtualNs = Number(process.env.LASECSIMUL_BENCHMARK_FIXED_VIRTUAL_NS ?? 0);
 const corePath = process.argv[5] ?? path.join(repo, "core", "build", "Release", "lasecsimul-core.exe");
 const profiling = process.argv[6] !== "false";
 const realTimeRate = Number(process.argv[7] ?? 0);
@@ -51,6 +53,13 @@ let directUartHex = "";
 const uartTimelineEnabled = process.env.LASECSIMUL_BENCHMARK_UART_TIMELINE === "1";
 const uartTimeline = [];
 let benchmarkWallOrigin = 0;
+const displayTimelineEnabled = process.env.LASECSIMUL_BENCHMARK_DISPLAY_TIMELINE === "1";
+const displayFramePayloadEnabled = process.env.LASECSIMUL_BENCHMARK_DISPLAY_FRAME_PAYLOAD === "1";
+const displayTimeline = [];
+let displayTimer;
+let displayPollInFlight = false;
+let previousDisplayPayload;
+let displayTelemetryGeneration = 0;
 const progress = (label) => console.error(`[benchmark-real-esp32] ${label}`);
 
 function resolveEndpoint(endpoint) {
@@ -103,6 +112,9 @@ async function main() {
   const plotEntry = [...instances.entries()].find(([projectId]) =>
     project.components.find((component) => component.id === projectId)?.typeId === "peripherals.lasecplot");
   const plotId = plotEntry?.[1].instanceId;
+  const displayEntry = [...instances.entries()].find(([projectId]) =>
+    project.components.find((component) => component.id === projectId)?.typeId === "outputs.ssd1306");
+  const displayId = displayEntry?.[1].instanceId;
 
   await client.setSimulationConfig({
     targetStepUs: 0,
@@ -118,6 +130,9 @@ async function main() {
     absoluteTolerance: 1e-9,
   });
   progress("carregando firmware");
+  // O Core exige uma execução ativa antes de aceitar o vínculo do runtime QEMU.
+  // Inicie o lifecycle antes de carregar o firmware; isso não altera o protocolo.
+  await client.run();
   await client.loadMcuFirmware(
     mcuId,
     firmwarePath,
@@ -126,7 +141,6 @@ async function main() {
   );
   progress("iniciando simulacao");
   await client.resetPerformanceMetrics();
-  await client.run();
   progress("simulacao iniciada");
 
   if (plotId) {
@@ -158,11 +172,40 @@ async function main() {
   const samples = [];
   let previousWall = performance.now();
   benchmarkWallOrigin = previousWall;
+  if (displayTimelineEnabled && displayId) {
+    displayTimer = setInterval(() => {
+      if (displayPollInFlight) return;
+      displayPollInFlight = true;
+      void client.getTelemetryFrame(
+        { items: [{ key: "display", instanceId: displayId }], probes: [] },
+        displayTelemetryGeneration,
+      )
+        .then((frame) => {
+          displayTelemetryGeneration = frame.telemetryGeneration;
+          const state = frame.componentStates.display;
+          if (!state) return;
+          const payload = state.length >= 36 ? state.subarray(36) : state;
+          if (!previousDisplayPayload || !payload.equals(previousDisplayPayload)) {
+            displayTimeline.push({
+              wallMs: performance.now() - benchmarkWallOrigin,
+              litPixels: [...payload].reduce((count, value) => count + value.toString(2).replaceAll("0", "").length, 0),
+              sha256: createHash("sha256").update(payload).digest("hex"),
+              ...(displayFramePayloadEnabled ? { payloadHex: payload.toString("hex") } : {}),
+            });
+            previousDisplayPayload = Buffer.from(payload);
+          }
+        })
+        .catch(() => undefined)
+        .finally(() => { displayPollInFlight = false; });
+    }, 50);
+  }
   const initialTime = await client.getSimulationTime();
   let previousSim = initialTime.simulatedNs;
   let previousMcu = initialTime.mcuVirtualNs;
   const deadline = previousWall + durationMs;
-  while (performance.now() < deadline) {
+  const virtualStart = previousMcu ?? 0;
+  while ((fixedVirtualNs > 0 && (previousMcu ?? virtualStart) - virtualStart < fixedVirtualNs) ||
+         (fixedVirtualNs <= 0 && performance.now() < deadline)) {
     await new Promise((resolve) => setTimeout(resolve, 250));
     const wall = performance.now();
     const time = await client.getSimulationTime();
@@ -184,12 +227,18 @@ async function main() {
     previousMcu = time.mcuVirtualNs;
   }
 
+  progress("janela de medicao concluida");
   clearInterval(uartTimer);
   uartTimer = undefined;
+  clearInterval(displayTimer);
+  displayTimer = undefined;
   while (uartPollInFlight) await new Promise((resolve) => setTimeout(resolve, 5));
+  while (displayPollInFlight) await new Promise((resolve) => setTimeout(resolve, 5));
+  progress("parando simulacao");
   const stopStarted = performance.now();
   await client.stopSimulation();
   const stopLatencyMs = performance.now() - stopStarted;
+  progress("simulacao parada; coletando resultados");
   if (plotId) {
     const finalPlotBatch = await client.drainUart(plotId).catch(() => undefined);
     if (finalPlotBatch) plotUartHex += finalPlotBatch.dataHex;
@@ -197,8 +246,6 @@ async function main() {
   const directUartValue = await client.getProperty(mcuId, "uart0_tx_monitor_hex").catch(() => "");
   if (typeof directUartValue === "string") directUartHex += directUartValue;
   const directUartText = Buffer.from(directUartHex, "hex").toString("latin1");
-  const displayEntry = [...instances.entries()].find(([projectId]) =>
-    project.components.find((component) => component.id === projectId)?.typeId === "outputs.ssd1306");
   const displayState = displayEntry ? await client.getComponentState(displayEntry[1].instanceId) : undefined;
   const displayPayload = displayState && displayState.length >= 36 ? displayState.subarray(36) : Buffer.alloc(0);
   const display = displayState ? {
@@ -212,7 +259,9 @@ async function main() {
     nonZeroBytesByPage: Array.from({ length: 8 }, (_, page) =>
       [...displayPayload.subarray(page * 128, (page + 1) * 128)].filter((value) => value !== 0).length
     ),
+    ...(displayTimelineEnabled ? { timeline: displayTimeline } : {}),
   } : undefined;
+  const finalTime = await client.getSimulationTime();
   const metrics = await client.getPerformanceMetrics();
   const qemuLogs = await client.getMcuLogs(mcuId);
   const allowIncomplete = process.env.LASECSIMUL_BENCHMARK_ALLOW_INCOMPLETE === "1";
@@ -266,6 +315,13 @@ async function main() {
     throw new Error("Firmware não chegou ao loop de telemetria dentro da janela do benchmark.");
   }
   const compact = process.env.LASECSIMUL_BENCHMARK_COMPACT === "1";
+  const uartTimelineSummary = uartTimeline.length > 0 ? {
+    chunks: uartTimeline.length,
+    firstWallMs: uartTimeline[0].wallMs,
+    lastWallMs: uartTimeline.at(-1).wallMs,
+    maximumGapMs: uartTimeline.slice(1).reduce(
+      (maximum, entry, index) => Math.max(maximum, entry.wallMs - uartTimeline[index].wallMs), 0),
+  } : { chunks: 0 };
   const result = {
     fixture: { projectPath, firmwarePath, boardProjectId, mcuId, durationMs, realTimeRate },
     rate: {
@@ -284,9 +340,12 @@ async function main() {
       exactMatch: directUartHex === plotUartHex,
       directMonitor: directUartSummary,
       lasecPlot: lasecPlotUartSummary,
-      ...(uartTimelineEnabled ? { timeline: uartTimeline } : {}),
+      ...(uartTimelineEnabled ? (compact ? { timelineSummary: uartTimelineSummary } : { timeline: uartTimeline }) : {}),
     },
     stopLatencyMs,
+    hostWallDurationMs: performance.now() - benchmarkWallOrigin,
+    virtualWorkCompletedNs: finalTime.mcuVirtualNs !== undefined && initialTime.mcuVirtualNs !== undefined
+      ? finalTime.mcuVirtualNs - initialTime.mcuVirtualNs : undefined,
     display,
     metrics,
     ...(compact ? {

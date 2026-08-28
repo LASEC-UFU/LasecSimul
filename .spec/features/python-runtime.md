@@ -2,7 +2,7 @@
 id: FEAT-006
 kind: feature
 status: active
-dependsOn: [FEAT-001, ARCH-004, ARCH-005]
+dependsOn: [FEAT-001, ARCH-004, ARCH-005, ARCH-009]
 supersedes: []
 ---
 
@@ -13,6 +13,10 @@ supersedes: []
 Um worker Python por sessão, criado sob demanda e limitado pelo Governor. Cada bloco possui namespace/módulo isolado dentro do worker. Blocos do mesmo timestamp/RateGroup são enviados por `STEP_BATCH` em ordem do plano.
 
 O Core fornece timestamp e entradas; Python não consulta wall clock para semântica. IPC começa em JSON batelado e só migra para binário após benchmark.
+
+## Lifecycle e diagnóstico
+
+O worker Python recebe identidade/provenance no launch conforme `ARCH-009`. Restart preserva a instância lógica e incrementa launch generation; nenhum hash/string é resolvido por `STEP_BATCH`. Trace detalhado é opt-in, bounded e não usa a lane normal de telemetria.
 
 ## Falhas
 
@@ -30,4 +34,5 @@ Python não é sandbox de segurança forte. SharedHost deve executar o processo 
 - limites de payload/memória/processos;
 - timeout/crash/restart testados;
 - worker nunca é compartilhado entre usuários;
-- dependências e ambiente entram no diagnóstico reproduzível.
+- dependências e ambiente entram no diagnóstico reproduzível;
+- restart não reutiliza launch identity e trace OFF não acrescenta recursos permanentes.

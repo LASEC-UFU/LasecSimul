@@ -1,0 +1,6 @@
+QEMU source: C:\SourceCode\qemu_lasecSimul
+QEMU HEAD: 92d3b96071d4f3c7756a155536f8bfa0c7fdfd84
+Executable SHA-256: 3D5D4C569906B713BFCBFF8A763D87529A2C69B6AE30331E07B2367681F5CDD9
+Build: MSYS2 UCRT64, ninja qemu-system-xtensa.exe
+Etapa: 1H runtime identity startup parser (NONE / COMPLETE_VALID / MANAGED_INVALID)
+Historical provenance preserved in BUILD-PROVENANCE.txt.

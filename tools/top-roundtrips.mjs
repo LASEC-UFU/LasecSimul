@@ -1,0 +1,5 @@
+import fs from 'node:fs';
+const [cf,qf]=process.argv.slice(2),g=new Map(),b=fs.readFileSync(cf),s=b.readUInt32LE(12),n=Number(b.readBigUInt64LE(40)),f=b.readBigUInt64LE(24);
+for(let i=0,o=64;i<n;i++,o+=s){const tx=b.readBigUInt64LE(o+32).toString(),m=g.get(tx)||{};m[b.readUInt16LE(o+80)]=b.readBigUInt64LE(o+64)*1000000000n/f;g.set(tx,m);}
+const q=fs.readFileSync(qf),rs=q.readUInt32LE(12),fq=q.readBigUInt64LE(24);let wn=Number(q.readBigUInt64LE(40)),o=56;if(!wn)while(o+(wn+1)*rs<=q.length&&q.readBigUInt64LE(o+wn*rs+40)!==0n)wn++;for(let i=0;i<wn;i++,o+=rs){const tx=q.readBigUInt64LE(o+32).toString(),m=g.get(tx)||{};m[q.readUInt16LE(o+80)]=q.readBigUInt64LE(o+64)*1000000000n/fq;g.set(tx,m);}
+const out=[];for(const [tx,m] of g)if([20,1,2,22,23].every(e=>m[e]!==undefined)){const d={tx,t01:Number(m[21]-m[20])/1000,t02:Number(m[1]-m[20])/1000,t23:Number(m[2]-m[1])/1000,t34:Number(m[22]-m[2])/1000,t35:Number(m[23]-m[2])/1000,t05:Number(m[23]-m[20])/1000};out.push(d);}out.sort((a,b)=>b.t05-a.t05);console.log(JSON.stringify(out.slice(0,20),null,2));

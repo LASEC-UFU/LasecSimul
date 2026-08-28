@@ -30,12 +30,18 @@ enum {
     EV_PIN_CHANGE = LSDN_EVT_PIN_CHANGE
 };
 
+#define OLED_PRESENTATION_BYTES (128u * 16u)
+
 typedef struct {
     void* host_ctx;
     const LsdnHostApi* api;
     int kind;
     char type_id[64];
     uint8_t bytes[65536];
+    /* A GDDRAM (`bytes`) muda em blocos I2C de 16/32/64 bytes, mas o vidro real não apresenta uma
+     * mistura arbitrária de dois framebuffers como uma captura de RAM no meio da transferência.
+     * Este front buffer só troca ao completar a janela inteira; evita tearing na telemetria/UI. */
+    uint8_t oled_presented[OLED_PRESENTATION_BYTES];
     /* Maior framebuffer suportado hoje: 240x320 (ILI9341/ST7789). O array antigo de 65536
      * pixels escrevia 11264 pixels além do fim e corrompia todo o estado seguinte do device. */
     uint32_t pixels[240 * 320];
@@ -47,6 +53,10 @@ typedef struct {
     uint8_t oled_scroll_start, oled_scroll_end, oled_scroll_offset;
     uint16_t oled_scroll_interval;
     uint64_t oled_scroll_elapsed_ns;
+    uint32_t oled_frame_bytes_written;
+    uint8_t oled_frame_active, oled_transaction_wrote_data;
+    uint32_t oled_diag_data_total, oled_diag_data_fast, oled_diag_data_electrical;
+    uint8_t oled_diag_in_fast;
     uint8_t tft_madctl;
     uint8_t pending_cmd, pending_count, pending_index, control, i2c_phase;
     uint32_t data_acc, data_index, data_bytes, pixel_mode;
@@ -172,6 +182,7 @@ static void hd_data(SimDevice* s, uint8_t data) {
 
 static void oled_reset(SimDevice* s) {
     memset(s->bytes, 0, sizeof(s->bytes));
+    memset(s->oled_presented, 0, sizeof(s->oled_presented));
     s->x = s->y = s->start_x = s->start_y = 0;
     s->end_x = s->width ? s->width - 1 : 127;
     s->end_y = s->rows ? s->rows - 1 : 7;
@@ -188,15 +199,57 @@ static void oled_reset(SimDevice* s) {
     s->oled_scroll_offset = 0;
     s->oled_scroll_interval = 5;
     s->oled_scroll_elapsed_ns = 0;
+    s->oled_frame_bytes_written = 0;
+    s->oled_frame_active = 0;
+    s->oled_transaction_wrote_data = 0;
+}
+
+static uint32_t oled_buffer_bytes(const SimDevice* s) {
+    const uint64_t requested = (uint64_t)s->width * s->rows;
+    return requested < OLED_PRESENTATION_BYTES ? (uint32_t)requested : OLED_PRESENTATION_BYTES;
+}
+
+static void oled_present(SimDevice* s) {
+    static unsigned trace_count;
+    const char* trace = getenv("LASECSIMUL_OLED_FRAME_TRACE");
+    if (trace && trace[0] && strcmp(trace, "0") != 0 && trace_count++ < 500) {
+        fprintf(stderr, "[OLED frame] at=%llu written=%u active=%u x=%u y=%u window=%u,%u-%u,%u mode=%u phase=%u control=%02x pending=%u cmd=%02x\n",
+                (unsigned long long)(s->api && s->api->now_ns ? s->api->now_ns(s->host_ctx) : 0),
+                s->oled_frame_bytes_written, s->oled_frame_active, s->x, s->y,
+                s->start_x, s->start_y, s->end_x, s->end_y, s->addr_mode,
+                s->i2c_phase, s->control, s->pending_count, s->pending_cmd);
+        fflush(stderr);
+    }
+    const uint32_t count = oled_buffer_bytes(s);
+    memcpy(s->oled_presented, s->bytes, count);
+    if (count < OLED_PRESENTATION_BYTES)
+        memset(s->oled_presented + count, 0, OLED_PRESENTATION_BYTES - count);
+    s->oled_frame_active = 0;
+    s->oled_frame_bytes_written = 0;
+}
+
+static int oled_full_horizontal_window(const SimDevice* s) {
+    return s->addr_mode == 0 && s->start_x == 0 && s->start_y == 0 &&
+           s->end_x + 1 == s->width && s->end_y + 1 == s->rows;
 }
 
 static void oled_data(SimDevice* s, uint8_t data) {
+    ++s->oled_diag_data_total;
+    if (s->oled_diag_in_fast) ++s->oled_diag_data_fast;
+    else ++s->oled_diag_data_electrical;
+    const int full_frame = oled_full_horizontal_window(s);
+    if (full_frame && !s->oled_frame_active && s->x == 0 && s->y == 0) {
+        s->oled_frame_active = 1;
+        s->oled_frame_bytes_written = 0;
+    }
     uint32_t write_x = s->x;
     if (s->kind == KIND_SH1107 && s->oled_x_offset && s->width) {
         write_x = s->x >= 96 ? s->x - 96 : s->x + s->width - 96;
         write_x %= s->width;
     }
     if (write_x < s->width && s->y < s->rows) s->bytes[s->y * s->width + write_x] = data;
+    s->oled_transaction_wrote_data = 1;
+    if (s->oled_frame_active && full_frame) ++s->oled_frame_bytes_written;
     if (s->addr_mode & 1) {
         s->y++;
         if (s->y > s->end_y) { s->y = s->start_y; if (s->addr_mode == 1 && ++s->x > s->end_x) s->x = s->start_x; }
@@ -204,13 +257,26 @@ static void oled_data(SimDevice* s, uint8_t data) {
         s->x++;
         if (s->x > s->end_x) { s->x = s->start_x; if (s->addr_mode == 0 && ++s->y > s->end_y) s->y = s->start_y; }
     }
+    if (s->oled_frame_active && s->oled_frame_bytes_written >= oled_buffer_bytes(s)) oled_present(s);
 }
 
 static void oled_param(SimDevice* s, uint8_t data) {
     s->pending_index++;
     if (s->pending_cmd == 0x20) s->addr_mode = data & 3;
-    else if (s->pending_cmd == 0x21) { if (s->pending_index == 1) s->x = s->start_x = data & 0x7f; else s->end_x = data & 0x7f; }
-    else if (s->pending_cmd == 0x22) { if (s->pending_index == 1) s->y = s->start_y = data & 0x0f; else s->end_y = data & 0x0f; }
+    else if (s->pending_cmd == 0x21) {
+        uint32_t column = data & 0x7f;
+        if (s->width && column >= s->width) column = s->width - 1;
+        if (s->pending_index == 1) s->x = s->start_x = column;
+        else s->end_x = column;
+    }
+    else if (s->pending_cmd == 0x22) {
+        uint32_t page = data & 0x0f;
+        /* Adafruit_SSD1306 envia 0xFF como página final; no chip, o MUX/painel limita isso às 8
+         * páginas físicas. Sem clamp o modelo esperava 2048 bytes e nunca reconhecia o quadro. */
+        if (s->rows && page >= s->rows) page = s->rows - 1;
+        if (s->pending_index == 1) s->y = s->start_y = page;
+        else s->end_y = page;
+    }
     /* Multiplex ratio não redimensiona fisicamente o módulo escolhido pelo usuário. */
     else if (s->pending_cmd == 0xd3) s->oled_display_offset = data & 0x7f;
     else if (s->pending_cmd == 0xdc) s->oled_start_line = data & 0x7f;
@@ -227,6 +293,19 @@ static void oled_param(SimDevice* s, uint8_t data) {
 }
 
 static void oled_command(SimDevice* s, uint8_t c) {
+    /* Um novo comando encerra uma escrita parcial que não completou a janela inteira. O caminho
+     * normal de `Adafruit_SSD1306::display()` chega aqui só depois dos 1024 bytes e já publicou. */
+    if (s->oled_frame_active) oled_present(s);
+    if (c == 0x21) {
+        const char* trace = getenv("LASECSIMUL_OLED_TRANSFER_TRACE");
+        if (trace && trace[0] && strcmp(trace, "0") != 0) {
+            fprintf(stderr, "[OLED window] at=%llu total=%u fast=%u electrical=%u frame=%u active=%u\n",
+                    (unsigned long long)(s->api && s->api->now_ns ? s->api->now_ns(s->host_ctx) : 0),
+                    s->oled_diag_data_total, s->oled_diag_data_fast, s->oled_diag_data_electrical,
+                    s->oled_frame_bytes_written, s->oled_frame_active);
+        }
+        s->oled_diag_data_total = s->oled_diag_data_fast = s->oled_diag_data_electrical = 0;
+    }
     s->pending_cmd = c; s->pending_index = 0; s->pending_count = 0;
     if (c < 0x10 && s->addr_mode == 2) s->x = (s->x & 0xf0) | (c & 0x0f);
     else if (c < 0x20 && s->addr_mode == 2) {
@@ -305,6 +384,7 @@ static void oled_scroll_once(SimDevice* s) {
             }
         }
     }
+    oled_present(s);
 }
 
 static void i2c_payload_byte(SimDevice* s, uint8_t byte) {
@@ -631,6 +711,7 @@ static void handle_pin_change(SimDevice* s, uint32_t pin, uint32_t level) {
     if ((s->kind == KIND_AIP31068 || s->kind == KIND_OLED || s->kind == KIND_SH1107) && pin == 1 && s->pin_level[0]) {
         if (old && !now) {
             s->i2c_started = 1;
+            s->oled_transaction_wrote_data = 0;
             s->i2c_ack = 0;
             s->i2c_ack_pending = 0;
             s->i2c_ack_clocked = 0;
@@ -640,6 +721,8 @@ static void handle_pin_change(SimDevice* s, uint32_t pin, uint32_t level) {
             s->bit_count = 0;
             s->shift_reg = 0;
         } else if (!old && now) {
+            if ((s->kind == KIND_OLED || s->kind == KIND_SH1107) &&
+                s->oled_transaction_wrote_data && !s->oled_frame_active) oled_present(s);
             s->i2c_started = 0;
             s->i2c_ack = 0;
             s->i2c_ack_pending = 0;
@@ -1014,7 +1097,7 @@ static void visible_mono_payload(const SimDevice* s, uint8_t* payload, uint32_t 
         const uint32_t ram_y = (source_y + s->oled_start_line) % s->height;
         for (uint32_t source_x = 0; source_x < s->width; ++source_x) {
             const uint32_t source = (ram_y / 8) * s->width + source_x;
-            uint8_t lit = (s->bytes[source] >> (ram_y & 7)) & 1;
+            uint8_t lit = (s->oled_presented[source] >> (ram_y & 7)) & 1;
             if (s->invert) lit = !lit;
             if (!lit) continue;
             uint32_t dest_x = s->remap ? s->width - 1 - source_x : source_x;
@@ -1107,14 +1190,33 @@ static uint32_t i2c_transfer(LsdnDevice* dev, const LsdnI2cTransfer* transfer,
     result->handled = 1;
     if (transfer->address != s->i2c_address) return 1;
     result->address_ack = 1;
+    {
+        static unsigned transfer_trace_count;
+        const char* trace = getenv("LASECSIMUL_OLED_TRANSFER_TRACE");
+        if (trace && trace[0] && strcmp(trace, "0") != 0 && transfer_trace_count++ < 10000) {
+            fprintf(stderr, "[OLED transfer] start=%u stop=%u size=%u first=%02x second=%02x frame=%u active=%u x=%u y=%u phase=%u control=%02x\n",
+                    transfer->start, transfer->stop, transfer->tx_size,
+                    transfer->tx_size ? transfer->tx_data[0] : 0,
+                    transfer->tx_size > 1 ? transfer->tx_data[1] : 0,
+                    s->oled_frame_bytes_written, s->oled_frame_active, s->x, s->y,
+                    s->i2c_phase, s->control);
+            fflush(stderr);
+        }
+    }
     if (transfer->read) {
         /* Os displays modelados são write-only nesta implementação. O endereço existe, mas o
          * primeiro byte de leitura recebe NACK em vez de fabricar dados. */
         result->first_nack = 0;
         return 1;
     }
-    if (transfer->start) s->i2c_phase = 0;
+    if (transfer->start) {
+        s->i2c_phase = 0;
+        s->oled_transaction_wrote_data = 0;
+    }
+    s->oled_diag_in_fast = 1;
     for (uint32_t i = 0; i < transfer->tx_size; ++i) i2c_payload_byte(s, transfer->tx_data[i]);
+    s->oled_diag_in_fast = 0;
+    if (transfer->stop && s->oled_transaction_wrote_data && !s->oled_frame_active) oled_present(s);
     return 1;
 }
 

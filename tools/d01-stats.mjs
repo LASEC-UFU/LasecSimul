@@ -1,0 +1,7 @@
+import fs from 'node:fs';
+const b=fs.readFileSync(process.argv[2]); const size=b.readUInt32LE(12), n=Number(b.readBigUInt64LE(40)), freq=Number(b.readBigUInt64LE(24)); const groups=new Map();
+for(let i=0,o=64;i<n;i++,o+=size){const tx=b.readBigUInt64LE(o+32).toString(), ev=b.readUInt16LE(o+80), m=groups.get(tx)||{}; if(ev===2)m.t3=b.readBigUInt64LE(o+64); if(ev===22){m.t4=b.readBigUInt64LE(o+64);m.d0=size>=136?b.readBigUInt64LE(o+120):0n;m.d1=size>=136?b.readBigUInt64LE(o+128):0n;m.r3=size>=144?b.readBigUInt64LE(o+136):0n;} groups.set(tx,m);}
+const rows=[]; for(const m of groups.values()) if(m.t3&&m.t4&&m.d0&&m.d1&&m.r3) rows.push({t3r3:m.r3-m.t3,r3d0:m.d0-m.r3,t3d0:m.d0-m.t3,d0d1:m.d1-m.d0,d1t4:m.t4-m.d1,t3t4:m.t4-m.t3,t3d1:m.d1-m.t3});
+const us=x=>Number(x)*1e6/freq, stats=v=>{v.sort((a,b)=>a<b?-1:1); const at=p=>v[Math.floor((v.length-1)*p)]; return {count:v.length,min:us(v[0]),median:us(at(.5)),p95:us(at(.95)),p99:us(at(.99)),max:us(v.at(-1))};};
+const vals=k=>rows.map(r=>r[k]); const p95=stats(vals('t3t4')).p95, tails=rows.filter(r=>us(r.t3t4)>=p95); const dominance={PRE_CALL:0,INSIDE_COMPLETE:0,POST_PUBLISH:0}; for(const r of tails){const k=[['PRE_CALL',r.t3d0],['INSIDE_COMPLETE',r.d0d1],['POST_PUBLISH',r.d1t4]].sort((a,b)=>Number(b[1]-a[1]))[0][0]; dominance[k]++;}
+console.log(JSON.stringify({t3_r3:stats(vals('t3r3')),r3_d0:stats(vals('r3d0')),t3_d0:stats(vals('t3d0')),d0_d1:stats(vals('d0d1')),d1_t4:stats(vals('d1t4')),t3_d1:stats(vals('t3d1')),t3_t4:stats(vals('t3t4')),p95PlusCount:tails.length,tailDominance:dominance},null,2));

@@ -1,9 +1,19 @@
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#endif
 #include "McuComponent.hpp"
+#include "lasecsimul/CausalTrace.hpp"
 #include "lasecsimul/qemu_arena_abi.h"
 #include <algorithm>
 #include <array>
+#include <cstdlib>
+#include <cstdio>
 #include <limits>
 #include <thread>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 namespace lasecsimul::mcu {
 
@@ -13,7 +23,34 @@ uint64_t qemuEventTimeNs(uint64_t originNs, uint64_t virtualTimePs) {
     if (deltaNs > std::numeric_limits<uint64_t>::max() - originNs) return std::numeric_limits<uint64_t>::max();
     return originNs + deltaNs;
 }
+
 } // namespace
+
+McuComponent::CallbackState::CallbackState() {
+    const char* configured = std::getenv("LASECSIMUL_MCU_POLL_WAIT_TIMEOUT_MS");
+    if (configured && *configured) {
+        char* end = nullptr;
+        const long parsed = std::strtol(configured, &end, 10);
+        if (end && *end == '\0' && parsed >= 1 && parsed <= 50) {
+            boundedWaitTimeoutMs = static_cast<uint32_t>(parsed);
+        } else {
+            std::fprintf(stderr,
+                         "[LasecSimul] invalid LASECSIMUL_MCU_POLL_WAIT_TIMEOUT_MS='%s'; using 5ms\n",
+                         configured);
+        }
+    }
+#ifdef _WIN32
+    stopEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    if (!stopEvent) throw std::runtime_error("CreateEventW failed for MCU poll stop event");
+#endif
+}
+
+McuComponent::CallbackState::~CallbackState() {
+#ifdef _WIN32
+    if (doorbell) CloseHandle(static_cast<HANDLE>(doorbell));
+    if (stopEvent) CloseHandle(static_cast<HANDLE>(stopEvent));
+#endif
+}
 
 std::optional<uint64_t> McuComponent::pacingPositionNs() const {
     const uint64_t ps = m_latestVirtualTimePs.load(std::memory_order_relaxed);
@@ -64,7 +101,7 @@ McuComponent::McuComponent(std::unique_ptr<IMcuAdapter> adapter, simulation::Sch
 }
 
 McuComponent::~McuComponent() {
-    m_polling.store(false, std::memory_order_release);
+    stopPolling();
     std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
     m_callbackState->owner = nullptr;
     m_controller.stop();
@@ -101,7 +138,87 @@ void McuComponent::startPolling(std::vector<DeferredSchedulerCall>* deferred) {
     scheduleNextPoll(deferred);
 }
 
-void McuComponent::stopPolling() { m_polling.store(false, std::memory_order_release); }
+void McuComponent::stopPolling() {
+    std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
+    m_polling.store(false, std::memory_order_release);
+#ifdef _WIN32
+    if (m_callbackState->stopEvent &&
+        !SetEvent(static_cast<HANDLE>(m_callbackState->stopEvent))) {
+        std::fprintf(stderr, "[LasecSimul] SetEvent failed for MCU poll stop event: %lu\n",
+                     static_cast<unsigned long>(GetLastError()));
+    }
+#endif
+}
+
+void McuComponent::bindPollDoorbellLocked(const std::string& arenaName) {
+    CallbackState& state = *m_callbackState;
+    if (state.expectedDoorbellArenaName.empty()) state.expectedDoorbellArenaName = arenaName;
+    else if (state.expectedDoorbellArenaName != arenaName) {
+        throw std::runtime_error("MCU poll doorbell cannot be rebound to a different arena name");
+    }
+#ifdef _WIN32
+    if (state.doorbell) return;
+    const std::string utf8Name = arenaName + "-doorbell";
+    const int chars = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, utf8Name.c_str(), -1,
+                                          nullptr, 0);
+    if (chars <= 0) return;
+    std::wstring name(static_cast<size_t>(chars), L'\0');
+    MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, utf8Name.c_str(), -1, name.data(), chars);
+    SetLastError(ERROR_SUCCESS);
+    HANDLE handle = CreateEventW(nullptr, FALSE, FALSE, name.c_str());
+    const DWORD error = GetLastError();
+    if (!handle) {
+        std::fprintf(stderr, "[LasecSimul] I2C doorbell unavailable (%lu); timed fallback active\n",
+                     static_cast<unsigned long>(error));
+        return;
+    }
+    if (error == ERROR_ALREADY_EXISTS) {
+        std::fprintf(stderr, "[LasecSimul] I2C doorbell name already exists; timed fallback active\n");
+        CloseHandle(handle);
+        return;
+    }
+    state.doorbell = handle;
+#else
+    (void)arenaName;
+#endif
+}
+
+void McuComponent::waitForPollWork(const std::shared_ptr<CallbackState>& state) {
+#ifdef _WIN32
+    HANDLE stop = static_cast<HANDLE>(state->stopEvent);
+    HANDLE doorbell = static_cast<HANDLE>(state->doorbell);
+    const DWORD timeout = state->boundedWaitTimeoutMs;
+    if (doorbell) {
+        HANDLE handles[2]{stop, doorbell};
+        const DWORD result = WaitForMultipleObjects(2, handles, FALSE, timeout);
+        if (result == WAIT_OBJECT_0) state->stopEventWakeCount.fetch_add(1, std::memory_order_relaxed);
+        else if (result == WAIT_OBJECT_0 + 1) state->doorbellWakeCount.fetch_add(1, std::memory_order_relaxed);
+        else if (result == WAIT_TIMEOUT) state->normalTimeoutCount.fetch_add(1, std::memory_order_relaxed);
+        else {
+            state->multiWaitFailedCount.fetch_add(1, std::memory_order_relaxed);
+            const DWORD stopResult = WaitForSingleObject(stop, timeout);
+            if (stopResult == WAIT_FAILED) {
+                state->singleStopWaitFailedCount.fetch_add(1, std::memory_order_relaxed);
+                state->level3SleepFallbackCount.fetch_add(1, std::memory_order_relaxed);
+                Sleep(timeout);
+            }
+        }
+        return;
+    }
+    state->doorbellUnavailableFallbackWaits.fetch_add(1, std::memory_order_relaxed);
+    const DWORD result = WaitForSingleObject(stop, timeout);
+    if (result == WAIT_OBJECT_0) state->stopEventWakeCount.fetch_add(1, std::memory_order_relaxed);
+    else if (result == WAIT_TIMEOUT) state->normalTimeoutCount.fetch_add(1, std::memory_order_relaxed);
+    else if (result == WAIT_FAILED) {
+        state->singleStopWaitFailedCount.fetch_add(1, std::memory_order_relaxed);
+        state->level3SleepFallbackCount.fetch_add(1, std::memory_order_relaxed);
+        Sleep(timeout);
+    }
+#else
+    state->doorbellUnavailableFallbackWaits.fetch_add(1, std::memory_order_relaxed);
+    std::this_thread::sleep_for(std::chrono::milliseconds(state->boundedWaitTimeoutMs));
+#endif
+}
 
 void McuComponent::scheduleNextPoll(std::vector<DeferredSchedulerCall>* deferred) {
     // +1ns (não `nowNs()` cru): quando chamado de dentro de `onPollEvent()` sem o Scheduler
@@ -196,7 +313,31 @@ void McuComponent::onPollEvent() {
 McuComponent::PollStep McuComponent::pollStepLocked(std::vector<DeferredSchedulerCall>* deferred) {
     qemu::QemuArenaBridge& arena = m_controller.arenaBridge();
     if (arena.pollI2cBurst()) {
-        if (m_scheduler.isRunning() && !m_scheduler.isCurrentThreadWorker()) {
+        /* Achado 2026-08-27 (investigação TG0WDT_SYS_RESET): arena.pollI2cBurst() é um peek sem
+         * efeito colateral -- nada além de completeI2cBurst() consome o pedido. onPollEvent() (thread
+         * do próprio Scheduler, isCurrentThreadWorker()==true) cai no ramo de baixo e despacha
+         * sincronamente via processI2cBurstLocked(). Isso é intencional só pra fechar a janela de
+         * partida ANTES da thread de poll dedicada existir (ver onPollEvent()) -- mas nada impedia
+         * essa mesma chamada de continuar disparando em TODO poll subsequente do Scheduler mesmo
+         * depois da thread de fundo já estar rodando e ter copiado o MESMO pedido (ainda pendente,
+         * porque runBackgroundPollLoop() solta m_callbackState->mutex ANTES de despachar, de
+         * propósito, pra não bloquear o mutex durante uma chamada de dispositivo potencialmente
+         * lenta -- ver comentário em runBackgroundPollLoop()). As duas threads passavam no mesmo
+         * peek antes de qualquer uma publicar completeI2cBurst(), cada uma chamando
+         * NativeDeviceProxy::transferI2c() (e portanto o i2c_transfer() do plugin) de forma
+         * independente pro mesmo i2cRequestSeq -- violando a invariante do protocolo (um pedido, um
+         * dispatch, uma conclusão autoritativa). `pollThreadRunning` já é o estado de lifecycle
+         * existente da thread de fundo (CAS ao nascer, revertido em toda saída/falha de lançamento,
+         * ver startBackgroundPollThreadIfNeeded()/runBackgroundPollLoop()) -- reutilizado aqui como
+         * regra de ownership por-lifecycle em vez de um claim atômico por-pedido: enquanto ele está
+         * true, só a thread de fundo despacha I2C; a checagem abaixo faz a thread do Scheduler
+         * desistir (adiar, não descartar) sempre que a de fundo já estiver de pé, preservando o
+         * comportamento original de fechar a janela de partida (antes dela existir,
+         * `pollThreadRunning` é false e este ramo despacha normalmente). */
+        const bool backgroundThreadOwnsI2c =
+            m_callbackState->pollThreadRunning.load(std::memory_order_acquire);
+        if ((m_scheduler.isRunning() && !m_scheduler.isCurrentThreadWorker()) ||
+            (m_scheduler.isCurrentThreadWorker() && backgroundThreadOwnsI2c)) {
             schedulePollAt(m_scheduler.nowNs(), deferred);
             return PollStep::DeferredFuture;
         }
@@ -301,21 +442,54 @@ bool McuComponent::processI2cBurstLocked() {
         transfer.rxData = rx.data();
         transfer.rxSize = pending->rxLen;
         transfer.periodNs = pending->periodNs;
+        auto& traceRecorder = lasecsimul::trace::Recorder::instance();
+        traceRecorder.setCurrentI2cRequest(pending->sequence);
+        traceRecorder.setRuntimeIdentity(m_controller.runtimeIdentity());
+        struct I2cTraceContextGuard { lasecsimul::trace::Recorder& r; ~I2cTraceContextGuard() { r.setCurrentI2cRequest(0); r.setRuntimeIdentity({}); } } guard{traceRecorder};
         result = m_i2cTransferHandler(m_componentIndex, pending->bus, transfer);
     }
     uint32_t status = (result.handled ? 1u : 0u) | (result.addressAck ? 2u : 0u);
     arena.completeI2cBurst(pending->sequence, status, result.firstNack,
                            std::span<const uint8_t>(rx.data(), std::min<uint32_t>(result.rxSize, 32)),
                            result.stretchNs);
+    auto& tr = lasecsimul::trace::Recorder::instance(); tr.setRuntimeIdentity(m_controller.runtimeIdentity());
+    tr.setCurrentI2cRequest(pending->sequence);
+    tr.record(lasecsimul::trace::EventType::CoreI2cCompletionPublished, pending->sequence, pending->sequence, m_scheduler.nowNs());
+    tr.setCurrentI2cRequest(0); tr.setRuntimeIdentity({});
     return true;
 }
 
 void McuComponent::startBackgroundPollThreadIfNeeded() {
+#ifdef _WIN32
+    if (m_callbackState->doorbell) {
+        SetEvent(static_cast<HANDLE>(m_callbackState->doorbell));
+    }
+#endif
     bool expected = false;
     if (!m_callbackState->pollThreadRunning.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
         return; // já existe uma thread de poll ativa para este MCU -- ela vai pegar o estado atual.
     }
-    std::thread(&McuComponent::runBackgroundPollLoop, m_callbackState).detach();
+#ifdef _WIN32
+    if (!ResetEvent(static_cast<HANDLE>(m_callbackState->stopEvent))) {
+        m_callbackState->pollThreadRunning.store(false, std::memory_order_release);
+        m_callbackState->pollWorkerLaunchFailed.store(true, std::memory_order_release);
+        m_polling.store(false, std::memory_order_release);
+        std::fprintf(stderr, "[LasecSimul] ResetEvent failed for MCU poll worker: %lu\n",
+                     static_cast<unsigned long>(GetLastError()));
+        return;
+    }
+#endif
+    std::thread worker;
+    try {
+        worker = std::thread(&McuComponent::runBackgroundPollLoop, m_callbackState);
+    } catch (...) {
+        m_callbackState->pollThreadRunning.store(false, std::memory_order_release);
+        m_callbackState->pollWorkerLaunchFailed.store(true, std::memory_order_release);
+        m_polling.store(false, std::memory_order_release);
+        return;
+    }
+    worker.detach();
+    m_callbackState->pollWorkerLaunchFailed.store(false, std::memory_order_release);
 }
 
 void McuComponent::runBackgroundPollLoop(std::shared_ptr<CallbackState> state) {
@@ -351,6 +525,16 @@ void McuComponent::runBackgroundPollLoop(std::shared_ptr<CallbackState> state) {
                     backgroundI2c = arena.pollI2cBurst();
                     backgroundI2cHandler = self->m_i2cTransferHandler;
                     backgroundComponentIndex = self->m_componentIndex;
+                    /* TEMPORARY, minimal diagnostic (TG0WDT_SYS_RESET investigation, 2026-08-27) --
+                     * C0: request claimed by the background poll thread, before the handler call.
+                     * Uses the existing causal-trace Recorder (LASECSIMUL_CAUSAL_TRACE=detailed),
+                     * not a new mechanism -- see CausalTrace.hpp. Remove once concluded. */
+                    if (backgroundI2c) {
+                        auto& tr = lasecsimul::trace::Recorder::instance();
+                        tr.setRuntimeIdentity(self->m_controller.runtimeIdentity());
+                        tr.record(lasecsimul::trace::EventType::CoreI2cBurstClaimed,
+                                  backgroundI2c->sequence, backgroundI2c->sequence, self->m_scheduler.nowNs());
+                    }
                 } else {
                     step = self->pollStepLocked(&deferred);
                     if (step == PollStep::NoEvent && !self->m_scheduler.isRunning()) {
@@ -401,6 +585,10 @@ void McuComponent::runBackgroundPollLoop(std::shared_ptr<CallbackState> state) {
                 transfer.rxData = rx.data();
                 transfer.rxSize = backgroundI2c->rxLen;
                 transfer.periodNs = backgroundI2c->periodNs;
+                auto& traceRecorder = lasecsimul::trace::Recorder::instance();
+                traceRecorder.setCurrentI2cRequest(backgroundI2c->sequence);
+                traceRecorder.setRuntimeIdentity(state->owner ? state->owner->m_controller.runtimeIdentity() : RuntimeLaunchIdentity{});
+                struct I2cTraceContextGuard { lasecsimul::trace::Recorder& r; ~I2cTraceContextGuard() { r.setCurrentI2cRequest(0); r.setRuntimeIdentity({}); } } guard{traceRecorder};
                 result = backgroundI2cHandler(backgroundComponentIndex, backgroundI2c->bus, transfer);
             }
             {
@@ -413,6 +601,12 @@ void McuComponent::runBackgroundPollLoop(std::shared_ptr<CallbackState> state) {
                         backgroundI2c->sequence, status, result.firstNack,
                         std::span<const uint8_t>(rx.data(), std::min<uint32_t>(result.rxSize, 32)),
                         result.stretchNs);
+                    auto& tr = lasecsimul::trace::Recorder::instance();
+                    tr.setRuntimeIdentity(self->m_controller.runtimeIdentity());
+                    tr.setCurrentI2cRequest(backgroundI2c->sequence);
+                    tr.record(lasecsimul::trace::EventType::CoreI2cCompletionPublished,
+                              backgroundI2c->sequence, backgroundI2c->sequence, self->m_scheduler.nowNs());
+                    tr.setCurrentI2cRequest(0); tr.setRuntimeIdentity({});
                 }
             }
             continue;
@@ -430,13 +624,12 @@ void McuComponent::runBackgroundPollLoop(std::shared_ptr<CallbackState> state) {
              * laço quente antes de a worker conseguir executar o callback recém-agendado. A pausa
              * ocorre fora do mutex e limita a latência de descoberta do mailbox sem ocupar um
              * núcleo nem impedir o Scheduler. */
-            std::this_thread::sleep_for(std::chrono::microseconds(50));
+            waitForPollWork(state);
             continue;
         }
         if (step == PollStep::DispatchedReady) continue; // agrupa ações do mesmo timestamp.
-        std::this_thread::yield();
+        waitForPollWork(state);
     }
-    state->pollThreadRunning.store(false, std::memory_order_release);
     if (restartAfterExit) {
         /*
          * Stop -> Run pode começar enquanto esta thread destacada já decidiu sair, mas antes de
@@ -447,12 +640,16 @@ void McuComponent::runBackgroundPollLoop(std::shared_ptr<CallbackState> state) {
          * começar depois desta checagem, verá a flag false e fará a mesma coisa.
          */
         std::lock_guard<std::recursive_mutex> lock(state->mutex);
+        state->pollThreadRunning.store(false, std::memory_order_release);
         McuComponent* self = state->owner;
         if (self && self->m_polling.load(std::memory_order_acquire) &&
             self->m_scheduler.isRunning() &&
             self->m_controller.arenaBridge().isOpen()) {
             self->startBackgroundPollThreadIfNeeded();
         }
+        // Nada depois deste bloco pode voltar a agir como worker ativo.
+    } else {
+        state->pollThreadRunning.store(false, std::memory_order_release);
     }
 }
 
@@ -768,7 +965,8 @@ void McuComponent::stamp(MnaMatrixView& matrix) {
 }
 
 void McuComponent::loadFirmware(const std::filesystem::path& firmwarePath, const std::string& arenaName,
-                                 const std::string& qemuBinaryOverride, McuDebugOptions debug) {
+                                 const std::string& qemuBinaryOverride, McuDebugOptions debug,
+                                 RuntimeLaunchIdentity identity) {
     // Também permite recarregar firmware enquanto o watcher está aguardando o próximo timestamp.
     stopPolling();
     // Achado 2026-07-21 (mesma classe de bug do doc-comment de DeferredSchedulerCall no .hpp):
@@ -782,14 +980,15 @@ void McuComponent::loadFirmware(const std::filesystem::path& firmwarePath, const
     std::vector<DeferredSchedulerCall> deferred;
     {
         std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
-        loadFirmwareLocked(firmwarePath, arenaName, qemuBinaryOverride, debug, deferred);
+        loadFirmwareLocked(firmwarePath, arenaName, qemuBinaryOverride, debug, deferred, identity);
     }
     for (DeferredSchedulerCall& call : deferred) call();
 }
 
 void McuComponent::loadFirmwareLocked(const std::filesystem::path& firmwarePath, const std::string& arenaName,
                                        const std::string& qemuBinaryOverride, McuDebugOptions debug,
-                                       std::vector<DeferredSchedulerCall>& deferred) {
+                                       std::vector<DeferredSchedulerCall>& deferred,
+                                       RuntimeLaunchIdentity identity) {
     ++m_loadFirmwareCallCount;
     m_lastFirmwarePath = firmwarePath;
     m_lastArenaName = arenaName;
@@ -822,7 +1021,8 @@ void McuComponent::loadFirmwareLocked(const std::filesystem::path& firmwarePath,
     m_latestVirtualTimePs.store(0, std::memory_order_relaxed);
     m_nextPendingEventNs.store(0, std::memory_order_relaxed);
     m_qemuTimeOriginNs.store(m_scheduler.nowNs(), std::memory_order_relaxed);
-    m_controller.start(firmwarePath, arenaName, qemuBinaryOverride, debug);
+    bindPollDoorbellLocked(arenaName);
+    m_controller.start(firmwarePath, arenaName, qemuBinaryOverride, debug, identity);
     startPolling(&deferred);
     deferred.push_back([&scheduler = m_scheduler, index = m_componentIndex] { scheduler.markDirty(index); });
 }
@@ -857,10 +1057,21 @@ void McuComponent::openSyntheticArenaForTesting(const std::string& arenaName) {
         m_latestVirtualTimePs.store(0, std::memory_order_relaxed);
         m_nextPendingEventNs.store(0, std::memory_order_relaxed);
         m_qemuTimeOriginNs.store(m_scheduler.nowNs(), std::memory_order_relaxed);
+        bindPollDoorbellLocked(arenaName);
         m_controller.arenaBridge().open(qemu::QemuArenaOpenOptions{arenaName, true});
         startPolling(&deferred);
     }
     for (DeferredSchedulerCall& call : deferred) call();
+}
+
+void McuComponent::ringPollDoorbellForTesting() {
+#ifdef _WIN32
+    std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
+    if (m_callbackState->doorbell &&
+        !SetEvent(static_cast<HANDLE>(m_callbackState->doorbell))) {
+        throw std::runtime_error("failed to signal MCU poll doorbell in test");
+    }
+#endif
 }
 
 void McuComponent::resetModulesAndWakeups() {

@@ -10,6 +10,7 @@
 #include <limits>
 #include <map>
 #include <optional>
+#include <random>
 #include <span>
 #include <stdexcept>
 #include <unordered_map>
@@ -19,6 +20,8 @@
 #include "../mcu/McuComponent.hpp"
 #include "../plc/PlcComponent.hpp"
 #include "lasecsimul/qemu_arena_abi.h"
+#include "lasecsimul/CausalTrace.hpp"
+#include "../mcu/qemu/QemuArenaBridge.hpp"
 
 namespace lasecsimul::session {
 
@@ -2008,7 +2011,13 @@ void SimulationSession::loadMcuFirmware(uint32_t componentIndex, const std::file
     if (!instance) throw std::runtime_error("loadMcuFirmware: componente removido");
     auto* mcu = dynamic_cast<mcu::McuComponent*>(instance);
     if (!mcu) throw std::runtime_error("loadMcuFirmware: componente nao e MCU/QEMU");
-    mcu->loadFirmware(firmwarePath, arenaName, qemuBinaryOverride, debug);
+    if (!m_runtimeState.executionActive || m_runtimeState.sessionExecutionId == 0)
+        throw std::runtime_error("loadMcuFirmware requer execucao ativa");
+    const RuntimeLaunchIdentity identity{
+        m_runtimeState.sessionExecutionId,
+        mcu->runtimeInstanceId(),
+        mcu->reserveLaunchGeneration()};
+    mcu->loadFirmware(firmwarePath, arenaName, qemuBinaryOverride, debug, identity);
 }
 
 void SimulationSession::stopMcuFirmware(uint32_t componentIndex) {
@@ -2019,6 +2028,7 @@ void SimulationSession::stopMcuFirmware(uint32_t componentIndex) {
 }
 
 void SimulationSession::stopSimulation() {
+    std::lock_guard<std::mutex> identityLock(m_executionIdentityMutex);
     // Primeiro interrompe a worker: nenhum componente pode voltar a agendar trabalho enquanto as
     // MCUs são encerradas. reset() também limpa dirty/events, volta o relógio a zero e despausa.
     m_scheduler.stop();
@@ -2034,6 +2044,7 @@ void SimulationSession::stopSimulation() {
     }
     m_pythonRuntime.shutdown();
     m_scheduler.reset();
+    m_runtimeState.executionActive = false;
     m_runtimeState.virtualTimeNs = 0;
     m_runtimeState.signals.reset();
     m_signalBoundaryScheduledNs.reset();
@@ -2182,6 +2193,13 @@ bool SimulationSession::isI2cFastPathTransparentUnlocked(const IComponentModel& 
 
 I2cTransferResult SimulationSession::resolveI2cTransferUnlocked(uint32_t mcuIndex, uint32_t bus,
                                                                  const I2cTransfer& transfer) {
+    auto& causalTrace = lasecsimul::trace::Recorder::instance();
+    // The arena sequence is the protocol identity.  Do not substitute the
+    // recorder's process-local counter: it cannot distinguish relaunches,
+    // MCUs, or sessions.
+    const uint64_t traceTransaction = causalTrace.currentI2cRequest();
+    causalTrace.record(lasecsimul::trace::EventType::I2cEnter, traceTransaction, 0,
+                       m_scheduler.nowNs(), transfer.txSize);
     I2cTransferResult fallback{};
     const bool traceI2c = [] {
         const char* value = std::getenv("LASECSIMUL_I2C_FASTPATH_TRACE");
@@ -2288,7 +2306,27 @@ I2cTransferResult SimulationSession::resolveI2cTransferUnlocked(uint32_t mcuInde
                      static_cast<long long>(wallUs), bus, transfer.address, transfer.txSize, transfer.rxSize,
                      combined.addressAck ? 1u : 0u);
     }
+    causalTrace.record(lasecsimul::trace::EventType::I2cHandled, traceTransaction,
+                       traceTransaction, m_scheduler.nowNs(), transfer.txSize);
     return combined;
+}
+
+void SimulationSession::beginExecutionIfNeeded() {
+    std::lock_guard<std::mutex> identityLock(m_executionIdentityMutex);
+    // Chamado pelo lifecycle de controle antes de Scheduler::start(). O próprio mutex do
+    // Scheduler serializa esta transição; não introduzimos uma segunda disciplina de lock.
+    if (m_runtimeState.executionActive) return;
+    std::random_device rd;
+    uint64_t id = (static_cast<uint64_t>(rd()) << 32) ^ static_cast<uint64_t>(rd());
+    if (id == 0) id = 1;
+    m_runtimeState.sessionExecutionId = id;
+    m_runtimeState.executionActive = true;
+}
+
+void SimulationSession::abortExecutionIfCurrent(uint64_t attemptedId) {
+    std::lock_guard<std::mutex> identityLock(m_executionIdentityMutex);
+    if (m_runtimeState.executionActive && m_runtimeState.sessionExecutionId == attemptedId)
+        m_runtimeState.executionActive = false;
 }
 
 void SimulationSession::sendComponentEvent(uint32_t componentIndex, const ComponentEvent& event) {

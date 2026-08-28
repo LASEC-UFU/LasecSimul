@@ -691,3 +691,32 @@ disponível sob demanda, mas deixa de taxar todo framebuffer do display.
 
 Até essa ABI existir, o melhor ajuste operacional continua sendo MTTCG, `realTimeRate=0`, scroll
 de hardware do SSD1306 e limitação de `display.display()` a atualizações realmente necessárias.
+
+---
+
+## 10. Estado final implementado e medido
+
+As seções anteriores registram a investigação incremental; esta seção substitui as afirmações
+intermediárias de que a ABI/fast path ainda não existiam. Foram concluídos: arena ABI v5, mailbox
+TX 64/RX 32, continuação de FIFO sem novo START, dispatch `I2cTarget`, QEMU por burst, serialização
+por dispositivo e wake event-driven Core/QEMU no Windows.
+
+A medição detalhada encontrou ainda uma segunda quantização: o loop MTTCG customizado pedia waits
+de centenas de nanossegundos, mas o poll do Windows os entregava aproximadamente a cada 1 ms. Para
+deadlines sub-ms ele agora faz poll não bloqueante e yield cooperativo enquanto o BQL está solto;
+`LASECSIMUL_QEMU_COARSE_SUBMS_WAIT=1` restaura o comportamento anterior.
+
+A fixture também foi corrigida: `Adafruit_SSD1306::display()` sobrescrevia `Wire.setClock()` com o
+clock guardado no construtor, portanto os rótulos 100/400/800 kHz antigos mediam todos 400 kHz.
+Com o clock efetivo instrumentado e traces desativados no ensaio de aceite:
+
+| Clock efetivo | Tempo por framebuffer de 1024 bytes |
+|---:|---:|
+| 100 kHz | 109-130 ms |
+| 400 kHz | 38-56 ms |
+| 800 kHz | 21-23 ms |
+
+O gate de 400 kHz (`<=100 ms`) passou; a escala entre clocks acompanha o custo físico esperado.
+UART direta e LasecPlot foram byte-exatas, o display terminou habilitado e preenchido, sem ACK
+errado, Guru Meditation ou degradação ao longo dos quadros. O teste de ciclo de vida usa handles
+Win32 reais, cobre doorbell e dez reloads, e passou também sob Application Verifier Handles+Locks.

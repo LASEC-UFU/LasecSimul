@@ -30,7 +30,8 @@ Conteúdo em `archive/` é histórico e **não normativo**. Ele pode explicar um
 - Formatos experimentais podem sofrer ruptura deliberada com incremento de versão e erro acionável.
 - Não é obrigatório manter leitura indefinida de todo formato beta antigo.
 - Quando barato e seguro, deve existir conversor explícito de uma versão anterior para a atual.
-- Resultados numéricos, determinismo, autoridade do tempo virtual e isolamento entre sessões são contratos estáveis e exigem regressão.
+- Resultados numéricos, determinismo, autoridade do tempo virtual, fidelidade guest-visible ao hardware real e isolamento entre sessões são contratos estáveis e exigem regressão.
+- Diagnóstico/trace de alta resolução é opt-in, bounded e não pode alterar semântica nem footprint padrão do SharedHost.
 - O projeto persiste autoria; `SimulationPlan` e `RuntimeState` são derivados e não são fontes de verdade.
 
 ## Fluxo obrigatório
@@ -48,6 +49,8 @@ Conteúdo em `archive/` é histórico e **não normativo**. Ele pode explicar um
 - [Scheduler e tempo](architecture/scheduler-and-time.md)
 - [Recursos e concorrência](architecture/resource-and-concurrency.md)
 - [IPC e telemetria](architecture/ipc-and-telemetry.md)
+- [Identidade de runtime, fidelidade e observabilidade causal](architecture/runtime-identity-fidelity-and-observability.md)
+- [IPC, fidelidade ao hardware e trace causal](benchmarks/ipc-hardware-fidelity-and-causal-trace.md)
 - [Roadmap F0–F10](ROADMAP.md)
 - [PLC IEC 61131-3 integrado](features/iec61131-plc.md)
 - [Editor IEC 61131-3 e biblioteca comum de POUs](features/iec61131-editor.md)
