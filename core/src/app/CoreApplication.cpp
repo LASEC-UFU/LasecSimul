@@ -1796,14 +1796,25 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
                 msg.payloadJson.empty() ? nlohmann::json::object() : nlohmann::json::parse(msg.payloadJson);
             const uint32_t instanceId = static_cast<uint32_t>(std::stoul(payload.value("instanceId", std::string{"0"})));
             const std::string name = payload.value("name", std::string{});
-            const std::optional<PropertyValue> value = session.propertyValueOf(instanceId, name);
-            if (!value) {
+            // [FIX] getProperty IPC head-of-line blocking (2026-08-28) -- tryPropertyValueOf()
+            // (trySynchronized(), never blocks the serial IPC dispatch thread on
+            // Scheduler::m_mutex) instead of the blocking propertyValueOf(). Outer nullopt =
+            // Scheduler busy (distinct "busy" errorCode -- must never be conflated with
+            // "unknown_property", a different, non-transient condition); outer present + inner
+            // nullopt = component/property genuinely not found; outer present + inner value =
+            // success. See SimulationSession::tryPropertyValueOf() doc-comment.
+            const std::optional<std::optional<PropertyValue>> outer = session.tryPropertyValueOf(instanceId, name);
+            if (!outer) {
+                resp.ok = false;
+                resp.error = "simulacao ocupada; propriedade adiada";
+                resp.payloadJson = nlohmann::json{{"errorCode", "busy"}}.dump();
+            } else if (!*outer) {
                 resp.ok = false;
                 resp.error = "propriedade desconhecida: " + name;
                 resp.payloadJson = nlohmann::json{{"errorCode", "unknown_property"}}.dump();
             } else {
                 resp.ok = true;
-                resp.payloadJson = nlohmann::json{{"value", propertyValueToJson(*value)}}.dump();
+                resp.payloadJson = nlohmann::json{{"value", propertyValueToJson(**outer)}}.dump();
             }
         } catch (const std::exception& e) {
             resp.ok = false;
@@ -2644,6 +2655,8 @@ int CoreApplication::run() {
     std::fprintf(stderr, "[Core] IPC escutando em '%s'\n", m_impl->config.pipeName.c_str());
     return m_impl->ipcServer.run();
 }
+
+session::SimulationSession& CoreApplication::sessionForTesting() { return m_impl->session; }
 
 // ── parsing de argumentos ──────────────────────────────────────────────────────
 

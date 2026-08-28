@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { coreInstanceIdByComponentId, state } from "../state";
+import { IpcError } from "../ipc/protocol";
 
 const TYPE_ID = "peripherals.serialport";
 
@@ -26,8 +27,15 @@ export class SerialPortManager implements vscode.Disposable {
     const client = state.coreClient;
     const coreId = coreInstanceIdByComponentId.get(componentId);
     if (!client || !coreId || state.simulationStatus === "stopped") throw new Error("Inicie a simulação antes de abrir a porta serial.");
-    const opened = Boolean(await client.getProperty(coreId, "port_is_open"));
-    await client.setProperty(coreId, "port_open", !opened);
+    // [FIX] getProperty IPC head-of-line blocking (2026-08-28) -- avoid a fresh getProperty
+    // round-trip just to compute the inverse of the current state; the poll loop (refresh(),
+    // every 250ms) already keeps statusByComponentId current for this exact componentId/coreId
+    // pair, so the cached value is at most one poll interval stale. Removing this read
+    // eliminates the busy question at this call site entirely instead of adding a retry policy
+    // for it. Never assume a default (e.g. false) when no cached state exists yet.
+    const cached = this.statusByComponentId.get(componentId);
+    if (!cached) throw new Error("Estado da porta ainda não está disponível. Tente novamente.");
+    await client.setProperty(coreId, "port_open", !cached.opened);
     await this.refresh(componentId, coreId);
   }
 
@@ -75,6 +83,11 @@ export class SerialPortManager implements vscode.Disposable {
       const error = String(errorValue ?? "").trim();
       this.publish(componentId, { opened: Boolean(openedValue), online: true, rxBytes: Number(rxBytesValue) || 0, txBytes: Number(txBytesValue) || 0, ...(error ? { error } : {}) });
     } catch (cause) {
+      // [FIX] getProperty IPC head-of-line blocking (2026-08-28) -- "busy" is the Scheduler
+      // mutex being transiently held, not a real fault: skip this sample silently (no publish()
+      // call, so the last-published status is preserved untouched) and let the next 250ms tick
+      // retry naturally. Never mark offline/log/burst-retry for this specific code.
+      if (cause instanceof IpcError && cause.code === "busy") return;
       this.publish(componentId, { opened: false, online: true, rxBytes: 0, txBytes: 0, error: cause instanceof Error ? cause.message : String(cause) });
     }
   }

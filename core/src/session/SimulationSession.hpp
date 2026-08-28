@@ -444,6 +444,23 @@ public:
     std::optional<PropertySchema> propertySchemaOf(uint32_t component, const std::string& propertyName) const;
     std::optional<PropertyValue> propertyValueOf(uint32_t component, const std::string& propertyName) const;
 
+    /** [FIX] getProperty IPC head-of-line blocking (2026-08-28) -- non-blocking sibling of
+     * propertyValueOf(), used ONLY by the getProperty IPC handler, which must never wait on
+     * Scheduler::m_mutex from the strictly single-threaded IPC dispatch thread (a slow/contended
+     * wait there blocks every other queued request, including trivial ones like
+     * getSimulationTime, behind it). propertyValueOf() itself is untouched -- its other callers
+     * (writeUart/getUartStatus handlers, 20+ existing tests) keep their current blocking
+     * behavior unchanged.
+     *
+     * Reuses propertyValueOfUnlocked() (the same lookup propertyValueOf() itself calls) under
+     * trySynchronized() instead of synchronized() -- no lookup logic duplicated, only the locking
+     * strategy differs. Distinguishes three outcomes via a nested optional:
+     *   outer nullopt              -> Scheduler::m_mutex busy (lock not acquired)
+     *   outer present, inner nullopt -> lock acquired, component/property not found
+     *   outer present, inner value   -> lock acquired, value found */
+    std::optional<std::optional<PropertyValue>> tryPropertyValueOf(uint32_t component,
+                                                                     const std::string& propertyName) const;
+
     /** Resolvedor canônico usado por aquisição vetorial e condições de pausa. */
     ResolvedSignal resolveSignal(const std::string& reference, std::optional<uint32_t> self = std::nullopt) const;
     void setPauseCondition(const std::string& ownerId, const std::string& expression);

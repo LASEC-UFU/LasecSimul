@@ -12,6 +12,7 @@ import {
 import { InternalComponentSnapshot } from "../ui/webview/messages";
 import { WebviewComponentModel } from "../ui/webview/model";
 import { logSimulation, reportFirmwareDiagnostic } from "../diagnostics/simulationLog";
+import { IpcError } from "../ipc/protocol";
 
 export interface McuCommandOptions {
   syncSchematicPanel: () => void;
@@ -414,6 +415,11 @@ function openSerialMonitor(key: string, label: string, serialPortLabel: string, 
       if (typeof rxHex === "string" && rxHex) state.schematicPanel?.postMessage({ version: 1, type: "mcuSerialMonitorData", key, direction: "rx", dataHex: rxHex });
       status(state.simulationStatus !== "stopped");
     } catch (err) {
+      // [FIX] getProperty IPC head-of-line blocking (2026-08-28) -- "busy" is the Scheduler
+      // mutex being transiently held, not a real fault: skip this sample silently (no status()
+      // call at all, so the last-published UI state is preserved untouched) and let the next
+      // 500ms tick retry naturally. Never mark offline/log/burst-retry for this specific code.
+      if (err instanceof IpcError && err.code === "busy") return;
       status(state.simulationStatus !== "stopped", err instanceof Error ? err.message : String(err));
     }
   };

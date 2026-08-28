@@ -2,6 +2,7 @@
 #include <memory>
 #include <string>
 #include "../resources/ResourceGovernor.hpp"
+#include "../session/SimulationSession.hpp"
 
 namespace lasecsimul::app {
 
@@ -34,6 +35,16 @@ public:
      * Retorna 0 em caso de shutdown limpo, 1 em caso de erro de transporte.
      */
     int run();
+
+    /** TEST-ONLY accessor (2026-08-28, getProperty IPC head-of-line-blocking regression test) --
+     * lets a test hold Scheduler::m_mutex from a thread other than the one running run(), to
+     * prove getProperty's tryPropertyValueOf() path returns BUSY promptly instead of blocking the
+     * serial IPC dispatch loop. Safe to call from a different thread than run(): the session is
+     * fully constructed before run() is ever invoked (see CoreBootstrapTest.cpp's existing
+     * pattern -- CoreApplication is constructed on the test's own thread, only run() is handed to
+     * a background thread), and Scheduler's own locking is what this accessor exists to exercise.
+     * Not part of the IPC protocol; do not call from production code paths. */
+    session::SimulationSession& sessionForTesting();
 
 private:
     struct Impl;

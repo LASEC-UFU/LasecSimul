@@ -5,6 +5,7 @@
  * Executa em CI sem VSCode.
  */
 #include <algorithm>
+#include <atomic>
 #include <cassert>
 #include <chrono>
 #include <cmath>
@@ -1294,6 +1295,198 @@ static void testPauseConditionNotificationOverIpc() {
     TEST_ASSERT(serverResult == 0, "servidor encerrou apos teste de pausa");
 }
 
+// [FIX] getProperty IPC head-of-line blocking (2026-08-28) -- getProperty() must never wait on
+// Scheduler::m_mutex from the strictly single-threaded IPC dispatch thread (IpcServer::processLoop):
+// a contended wait there blocks every other queued request, including trivial ones like
+// getSimulationTime, behind it. Fixed by routing getProperty through
+// SimulationSession::tryPropertyValueOf() (trySynchronized()) instead of the blocking
+// propertyValueOf(); on contention it now returns a distinct BUSY response immediately rather
+// than waiting. propertyValueOf() itself, and its other callers (writeUart/getUartStatus), are
+// unchanged -- known residual head-of-line risk there, out of scope for this fix.
+//
+// Teste 4h: contrato de resposta de 'getProperty' distingue SUCCESS / unknown_property / busy.
+static void testGetPropertyContractOverIpc() {
+    std::fprintf(stderr, "\n[T4h] 'getProperty' distingue SUCCESS / unknown_property / busy\n");
+
+    const std::string pipeName = "lasecsimul-bootstrap-test-getproperty-contract";
+    lasecsimul::app::CoreApplication app({pipeName});
+    int serverResult = -1;
+    std::thread serverThread([&] { serverResult = app.run(); });
+
+#ifdef _WIN32
+    void* conn = clientConnect(pipeName);
+    const bool connected = conn != INVALID_HANDLE_VALUE;
+#else
+    int conn = clientConnect(pipeName);
+    const bool connected = conn >= 0;
+#endif
+    TEST_ASSERT(connected, "cliente conectou");
+
+    if (connected) {
+        int nextId = 1;
+        auto send = [&](const std::string& type, const nlohmann::json& payload) -> nlohmann::json {
+            const nlohmann::json req = {{"id", std::to_string(nextId++)},
+                                         {"type", type},
+                                         {"payload", payload},
+                                         {"protocolVersion", lasecsimul::ipc::PROTOCOL_VERSION}};
+            clientWriteLine(conn, req.dump());
+            return nlohmann::json::parse(clientReadLine(conn));
+        };
+
+        send("hello", {{"clientVersion", "0.1.0"}});
+
+        const std::string resistor = send("addComponent", {{"typeId", "passive.resistor"},
+                                                             {"properties", {{"resistance", 1000.0}}}})["payload"]["instanceId"];
+
+        // SUCCESS
+        const nlohmann::json successResp = send("getProperty", {{"instanceId", resistor}, {"name", "resistance"}});
+        TEST_ASSERT(successResp.value("ok", false), "getProperty de propriedade existente responde ok=true");
+        TEST_ASSERT(successResp["payload"].value("value", -1.0) == 1000.0, "getProperty devolve o valor correto");
+        TEST_ASSERT(!successResp["payload"].contains("errorCode"), "resposta de sucesso nao contem errorCode");
+
+        // UNKNOWN_PROPERTY
+        const nlohmann::json unknownResp = send("getProperty", {{"instanceId", resistor}, {"name", "propriedade_que_nao_existe"}});
+        TEST_ASSERT(!unknownResp.value("ok", true), "getProperty de propriedade inexistente responde ok=false");
+        TEST_ASSERT(unknownResp["payload"].value("errorCode", std::string{}) == "unknown_property",
+                    "errorCode == unknown_property para propriedade inexistente");
+
+        // BUSY -- segura Scheduler::m_mutex numa thread separada, então tenta ler durante a espera.
+        std::atomic<bool> lockAcquired{false};
+        std::atomic<bool> releaseRequested{false};
+        std::thread lockHolder([&] {
+            app.sessionForTesting().scheduler().synchronized([&] {
+                lockAcquired.store(true, std::memory_order_release);
+                while (!releaseRequested.load(std::memory_order_acquire)) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                }
+            });
+        });
+        for (int attempt = 0; attempt < 500 && !lockAcquired.load(std::memory_order_acquire); ++attempt) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        TEST_ASSERT(lockAcquired.load(std::memory_order_acquire), "thread auxiliar conseguiu tomar Scheduler::m_mutex");
+
+        const nlohmann::json busyResp = send("getProperty", {{"instanceId", resistor}, {"name", "resistance"}});
+        releaseRequested.store(true, std::memory_order_release);
+        lockHolder.join();
+
+        TEST_ASSERT(!busyResp.value("ok", true), "getProperty com Scheduler::m_mutex ocupado responde ok=false");
+        TEST_ASSERT(busyResp["payload"].value("errorCode", std::string{}) == "busy",
+                    "errorCode == busy quando o Scheduler esta ocupado -- distinto de unknown_property");
+
+        send("shutdown", nlohmann::json::object());
+        clientClose(conn);
+    }
+
+    serverThread.join();
+    TEST_ASSERT(serverResult == 0, "servidor encerrou com codigo 0 apos shutdown");
+}
+
+// Teste 4i (DECISIVO): sob contencao artificial e sustentada de Scheduler::m_mutex, prova que o
+// dispatch serial de IPC nao fica mais bloqueado atras de um getProperty -- getSimulationTime e
+// stop, enviados logo em seguida, respondem prontamente. Bound generoso (bem abaixo do timeout de
+// 30s do cliente real, tolerante a scheduling do Windows/CI) -- prova "prompt/nonblocking", nao
+// microbenchmark de latencia de IPC.
+static void testGetPropertyHeadOfLineRemovedOverIpc() {
+    std::fprintf(stderr, "\n[T4i] contencao de Scheduler::m_mutex nao bloqueia mais o dispatch serial de IPC\n");
+
+    const std::string pipeName = "lasecsimul-bootstrap-test-getproperty-hol";
+    lasecsimul::app::CoreApplication app({pipeName});
+    int serverResult = -1;
+    std::thread serverThread([&] { serverResult = app.run(); });
+
+#ifdef _WIN32
+    void* conn = clientConnect(pipeName);
+    const bool connected = conn != INVALID_HANDLE_VALUE;
+#else
+    int conn = clientConnect(pipeName);
+    const bool connected = conn >= 0;
+#endif
+    TEST_ASSERT(connected, "cliente conectou");
+
+    if (connected) {
+        int nextId = 1;
+        auto send = [&](const std::string& type, const nlohmann::json& payload) -> nlohmann::json {
+            const nlohmann::json req = {{"id", std::to_string(nextId++)},
+                                         {"type", type},
+                                         {"payload", payload},
+                                         {"protocolVersion", lasecsimul::ipc::PROTOCOL_VERSION}};
+            clientWriteLine(conn, req.dump());
+            return nlohmann::json::parse(clientReadLine(conn));
+        };
+
+        send("hello", {{"clientVersion", "0.1.0"}});
+        const std::string resistor = send("addComponent", {{"typeId", "passive.resistor"},
+                                                             {"properties", {{"resistance", 1000.0}}}})["payload"]["instanceId"];
+        send("start", nlohmann::json::object());
+
+        // Segura Scheduler::m_mutex por um periodo bem mais longo do que o bound "prompt" abaixo
+        // exige -- se getProperty/getSimulationTime/stop respondessem esperando o mutex liberar,
+        // eles estourariam esse bound com folga enquanto o hold ainda estivesse ativo.
+        constexpr auto kHoldDuration = std::chrono::milliseconds(4000);
+        constexpr auto kPromptBound = std::chrono::milliseconds(2000); // generoso, nao microbenchmark
+        std::atomic<bool> lockAcquired{false};
+        std::thread lockHolder([&] {
+            app.sessionForTesting().scheduler().synchronized([&] {
+                lockAcquired.store(true, std::memory_order_release);
+                std::this_thread::sleep_for(kHoldDuration);
+            });
+        });
+        for (int attempt = 0; attempt < 500 && !lockAcquired.load(std::memory_order_acquire); ++attempt) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        TEST_ASSERT(lockAcquired.load(std::memory_order_acquire), "thread auxiliar conseguiu tomar Scheduler::m_mutex");
+
+        const auto t0 = std::chrono::steady_clock::now();
+        const nlohmann::json busyResp = send("getProperty", {{"instanceId", resistor}, {"name", "resistance"}});
+        const auto t1 = std::chrono::steady_clock::now();
+        const nlohmann::json timeResp = send("getSimulationTime", nlohmann::json::object());
+        const auto t2 = std::chrono::steady_clock::now();
+        const nlohmann::json stopResp = send("stop", nlohmann::json::object());
+        const auto t3 = std::chrono::steady_clock::now();
+
+        lockHolder.join();
+
+        TEST_ASSERT(!busyResp.value("ok", true) && busyResp["payload"].value("errorCode", std::string{}) == "busy",
+                    "getProperty responde BUSY (nao trava) com o mutex ocupado");
+        TEST_ASSERT((t1 - t0) < kPromptBound, "getProperty (BUSY) responde dentro do bound generoso");
+
+        // Esta e' a prova decisiva do fix: getSimulationTime, enviado imediatamente apos o
+        // getProperty ocupado, na MESMA conexao serial, responde pronto -- ele NAO ficou
+        // enfileirado atras do getProperty (que teria, antes do fix, bloqueado a thread de
+        // dispatch inteira em Scheduler::synchronized() ate o hold liberar).
+        TEST_ASSERT(timeResp.value("ok", false), "getSimulationTime enviado logo apos o BUSY responde ok=true");
+        TEST_ASSERT((t2 - t1) < kPromptBound,
+                    "getSimulationTime responde prontamente -- NAO fica preso atras do getProperty ocupado");
+
+        // 'stop' e' DIFERENTE por natureza: seu handler (SimulationSession::stopSimulation() ->
+        // Scheduler::stop()) precisa genuinamente sincronizar com quem quer que esteja segurando
+        // Scheduler::m_mutex para parar a simulacao com seguranca -- isso NAO faz parte do bug de
+        // head-of-line blocking que este fix corrige (que era: uma leitura pura/read-only,
+        // getProperty, bloqueando a fila de dispatch por uma razao evitavel). O que importa aqui
+        // e' que o PEDIDO 'stop' foi lido e despachado prontamente (nao ficou preso atras do
+        // getProperty na fila -- ja provado acima pelo getSimulationTime ter respondido antes dele
+        // sequer ser enviado); quanto tempo o PROPRIO handler de 'stop' leva para sincronizar com
+        // o mutex ocupado e' uma caracteristica esperada e separada, nao um bound "prompt".
+        TEST_ASSERT(stopResp.value("ok", false), "stop enviado logo apos responde ok=true (eventualmente)");
+        TEST_ASSERT((t3 - t2) < (kHoldDuration + kPromptBound),
+                    "stop completa em tempo compativel com sincronizar com o hold do mutex -- sem atraso "
+                    "adicional inexplicado (nao e' um bound 'prompt': stop() genuinamente espera o mutex)");
+
+        std::fprintf(stderr, "  [info] getProperty(BUSY)=%lldms getSimulationTime=%lldms stop=%lldms hold=%lldms\n",
+                     static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count()),
+                     static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count()),
+                     static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(t3 - t2).count()),
+                     static_cast<long long>(kHoldDuration.count()));
+
+        send("shutdown", nlohmann::json::object());
+        clientClose(conn);
+    }
+
+    serverThread.join();
+    TEST_ASSERT(serverResult == 0, "servidor encerrou com codigo 0 apos shutdown");
+}
+
 // ── main ───────────────────────────────────────────────────────────────────────
 
 int main() {
@@ -1310,6 +1503,8 @@ int main() {
     testSetPropertyValidationOverIpc();
     testUartAndMcuVerbsOverIpc();
     testPauseConditionNotificationOverIpc();
+    testGetPropertyContractOverIpc();
+    testGetPropertyHeadOfLineRemovedOverIpc();
     testCoreShutdown();
 
     if (failures == 0) {

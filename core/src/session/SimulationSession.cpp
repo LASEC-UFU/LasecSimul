@@ -1530,6 +1530,13 @@ std::optional<PropertyValue> SimulationSession::propertyValueOf(uint32_t compone
     return m_scheduler.synchronized([&] { return propertyValueOfUnlocked(component, propertyName); });
 }
 
+std::optional<std::optional<PropertyValue>> SimulationSession::tryPropertyValueOf(
+    uint32_t component, const std::string& propertyName) const {
+    return m_scheduler.trySynchronized([&] {
+        return propertyValueOfUnlocked(component, propertyName);
+    });
+}
+
 std::optional<PropertyValue> SimulationSession::propertyValueOfUnlocked(uint32_t component,
                                                                          const std::string& propertyName) const {
     if (component >= m_componentInstances.size() || !m_componentInstances[component]) return std::nullopt;
