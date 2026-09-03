@@ -899,7 +899,15 @@ static void init(LsdnDevice* dev) {
     s->pin_level[5] = 1;
     for (uint32_t i = 6; i < 14 && i < 32; ++i) s->pin_level[i] = 1;
     if (!s->api || !s->api->pin_declare) return;
-    for (uint32_t i = 0; i < s->pin_count; ++i) s->api->pin_declare(s->host_ctx, i, LSDN_PIN_DIGITAL_BIDIR, "");
+    /* The manifest's canonical electrical names are part of the plugin contract:
+     * NativeDeviceProxy resolves I2C by sda/scl, not by visual pin position. */
+    static const char* const names[] = {"scl", "sda", "a0", "a1", "a2"};
+    static const uint32_t kinds[] = {LSDN_PIN_DIGITAL_BIDIR, LSDN_PIN_DIGITAL_BIDIR,
+                                     LSDN_PIN_DIGITAL_IN, LSDN_PIN_DIGITAL_IN,
+                                     LSDN_PIN_DIGITAL_IN};
+    for (uint32_t i = 0; i < s->pin_count; ++i)
+        s->api->pin_declare(s->host_ctx, i, i < 5 ? kinds[i] : LSDN_PIN_DIGITAL_BIDIR,
+                            i < 5 ? names[i] : "pin");
 }
 
 static void stamp(LsdnDevice* dev, LsdnMatrixView* matrix) {
@@ -1046,10 +1054,35 @@ static void set_state(LsdnDevice* dev, const uint8_t* in, uint32_t len) {
     memcpy(s->mem, cursor, sizeof(s->mem));
 }
 
+/* Transaction-level adapter for the same deterministic RAM state machine used
+ * by the electrical pins. This is intentionally a Core adapter operation: it
+ * never fabricates an ACK in transport and keeps address/NACK/data semantics
+ * identical to i2c_scl_rising()/i2c_prepare_tx_byte(). */
+static uint32_t i2c_transfer(LsdnDevice* dev, const LsdnI2cTransfer* transfer,
+                             LsdnI2cTransferResult* result) {
+    LogicDevice* s = (LogicDevice*)dev;
+    if (!transfer || !result || !streq(s, "logic.i2c_ram")) return 0;
+    memset(result, 0, sizeof(*result));
+    result->first_nack = LSDN_I2C_NO_NACK;
+    result->handled = 1;
+    result->address_ack = transfer->address == i2c_address(s);
+    if (!result->address_ack) return 1;
+    if (transfer->start) i2c_start_write(s);
+    if (transfer->read) {
+        for (uint32_t i = 0; i < transfer->rx_size; ++i)
+            if (transfer->rx_data) transfer->rx_data[i] = i2c_ram_tx_byte(s);
+        result->rx_size = transfer->rx_size;
+    } else {
+        for (uint32_t i = 0; i < transfer->tx_size; ++i) i2c_ram_rx_byte(s, transfer->tx_data[i]);
+    }
+    return 1;
+}
+
 static void destroy(LsdnDevice* dev) { free(dev); }
 
 static const LsdnDeviceVTable kVTable = {
-    create, init, stamp, post_step, on_event, get_property, set_property, get_state, set_state, destroy
+    create, init, stamp, post_step, on_event, get_property, set_property, get_state, set_state,
+    destroy, i2c_transfer
 };
 
 LSDN_EXPORT

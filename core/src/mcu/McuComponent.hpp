@@ -92,7 +92,10 @@ public:
     void onAssignedIndex(uint32_t index) override;
     /** Identidade densa do MCU lógico. Reutiliza o índice estável do componente; relaunch do
      * QEMU não reconstrói o componente e, portanto, não altera este valor. */
-    uint64_t runtimeInstanceId() const noexcept { return static_cast<uint64_t>(m_componentIndex); }
+    uint64_t runtimeInstanceId() const noexcept { return static_cast<uint64_t>(m_componentIndex) + 1u; }
+    const std::string& vnextArtifactEventNameForTesting() noexcept {
+        return m_controller.vnextBAttachment().artifactEventName();
+    }
     /** Reserva uma nova geração de launch no cold path. A reserva não sofre rollback. */
     uint64_t reserveLaunchGeneration() {
         uint64_t current = m_launchGeneration.load(std::memory_order_relaxed);
@@ -120,6 +123,7 @@ public:
     uint16_t gdbPort() const { return m_gdbPort; }
     void stopFirmware();
     bool firmwareRunning() const;
+    uint64_t qemuProcessIdForTesting() const { return m_controller.processIdForTesting(); }
     std::string qemuLogs() const;
 
     /** Estado do pino RST (ModuleKind::Reset, ex: EN do ESP32) na última borda confirmada via
@@ -162,6 +166,45 @@ public:
                m_callbackState->singleStopWaitFailedCount.load(std::memory_order_relaxed);
     }
     void ringPollDoorbellForTesting();
+    /** TEMPORARY (ConsumerTrace investigation) -- dumps the arena-consumer D0-D6 trace + recorded
+     * wait-threshold violations to stderr. No-op (prints one line saying so) unless
+     * LASECSIMUL_MCU_CONSUMER_TRACE=1 is set. Intended to be called only on
+     * queue-full/termination/test-failure, never per-operation. See ConsumerTrace.hpp. Remove
+     * once the investigation concludes. */
+    static void dumpConsumerTraceForTesting();
+    /** TEMPORARY (ConsumerTrace investigation, round 2) -- same data as
+     * dumpConsumerTraceForTesting(), but written synchronously to a local file
+     * (LASECSIMUL_MCU_CONSUMER_TRACE_FILE, default "consumer_trace_dump.txt") instead of the
+     * piped stderr capture -- more resistant to the pre-existing OPEN/SECONDARY crash that has
+     * repeatedly cut the stderr dump off. Remove once the investigation concludes. */
+    static void dumpConsumerTraceToFileForTesting();
+    /** TEMPORARY (ConsumerTrace investigation, round 6: Release-vs-Debug validation) -- returns
+     * the max queue occupancy observed by the existing pressure tracker (diag::pressureState(),
+     * already built in round 2/3) since the last call, then resets it to 0 -- lets a caller sample
+     * a lightweight per-cycle summary without dumping the full trace. Reads/resets existing
+     * state, adds no new capture mechanism. Returns 0 (no-op) unless
+     * LASECSIMUL_MCU_CONSUMER_TRACE=1. Remove once the investigation concludes. */
+    static uint64_t peekAndResetMaxQueueOccupancyForTesting();
+    /** TEMPORARY (ConsumerTrace investigation, round 7: restart-timebase audit) -- exposes
+     * m_qemuTimeOriginNs (the Scheduler::nowNs() snapshot taken at the START of the most recent
+     * loadFirmwareLocked() call, which every subsequent eventNs for this MCU/cycle is computed
+     * relative to -- see qemuEventTimeNs() in this .cpp). Lets a caller check for a stale/carried
+     * timebase across restarts without guessing. Remove once the investigation concludes. */
+    uint64_t qemuTimeOriginNsForTesting() const { return m_qemuTimeOriginNs.load(std::memory_order_relaxed); }
+    /** D2 STAGE 1 (2026-08-29) -- read-only access to the published coreProgressNs field and its
+     * publish counter, for smoke/lifecycle verification only (see qemu_arena_abi.h). */
+    uint64_t coreProgressNsForTesting() const {
+        const LsdnQemuArena* a = m_controller.arenaBridge().arena();
+        return a ? a->coreProgressNs : 0;
+    }
+    uint64_t corePublishCountForTesting() const { return m_controller.arenaBridge().publishCountForTesting(); }
+    /** TEMPORARY (ConsumerTrace investigation, round 8: I2C0 0x3ff53058 healthy-vs-terminal
+     * baseline) -- call at the start of each restart cycle to reset the per-cycle address-watch
+     * and backlog-horizon rings (see ConsumerTrace.hpp), and at the end of a CLEAN cycle to print
+     * one aggregate summary line (no per-event dump). Both no-op unless
+     * LASECSIMUL_MCU_CONSUMER_TRACE=1. Remove once the investigation concludes. */
+    static void resetPerCycleWatchesForTesting();
+    static void printAddressWatchSummaryForTesting(int cycle);
 
     /** Abre a arena SEM iniciar nenhum processo QEMU -- só pra teste poder simular escritas de
      * registrador manualmente (mesmo papel de QemuArenaBridgeTest), sem precisar de um binário
@@ -181,6 +224,15 @@ public:
      * porque é lido de uma thread diferente da que escreve (poll thread ou chamador síncrono vs. a
      * thread que atende `getSimulationTime` via IPC). */
     uint64_t latestVirtualTimeNs() const { return m_latestVirtualTimePs.load(std::memory_order_relaxed) / 1000u; }
+    uint64_t vnextI2cCompletionCountForTesting() const {
+        return m_vnextI2cCompletionCount.load(std::memory_order_relaxed);
+    }
+    uint64_t vnextI2cSubmissionCountForTesting() const {
+        return m_vnextI2cSubmissionCount.load(std::memory_order_relaxed);
+    }
+    uint64_t vnextArtifactProgressForTesting() const noexcept {
+        return m_controller.vnextBAttachment().artifactProgressForTesting();
+    }
 
     /** Achado 2026-07-23 (sincronização de ritmo, ver .claude/plans/humble-waddling-parnas.md):
      * mesma fonte de `latestVirtualTimeNs()`, mas já traduzida pra timeline do `Scheduler`
@@ -367,6 +419,8 @@ private:
     // Ver comentário de `latestVirtualTimeNs()` acima -- atualizado em pollStepLocked() a cada
     // evento processado, lido de uma thread diferente via `latestVirtualTimeNs()`.
     std::atomic<uint64_t> m_latestVirtualTimePs{0};
+    std::atomic<uint64_t> m_vnextI2cCompletionCount{0};
+    std::atomic<uint64_t> m_vnextI2cSubmissionCount{0};
     uint64_t m_stampCount = 0;
     uint64_t m_loadFirmwareCallCount = 0;
     // ModuleKind::Reset (ex: EN do ESP32) -- nunca tem QemuModule, McuComponent trata direto.

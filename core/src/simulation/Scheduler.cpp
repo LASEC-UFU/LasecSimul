@@ -1,4 +1,5 @@
 #include "Scheduler.hpp"
+#include "mcu/ConsumerTrace.hpp"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -184,12 +185,48 @@ void Scheduler::runUntil(uint64_t targetTimeNs) {
     while (m_nowNs < targetTimeNs) {
         if (m_stopRequested.load(std::memory_order_acquire) ||
             m_paused.load(std::memory_order_acquire)) break;
+        // TEMPORARY (ConsumerTrace investigation, round 3) -- no-op unless
+        // LASECSIMUL_MCU_CONSUMER_TRACE=1; captures per-iteration state to find out WHY
+        // Scheduler::nowNs() advancement can collapse to a small fraction of real time. Only
+        // wraps the two EXISTING settleUntilStableLocked() calls below with timing (steady_clock
+        // before/after); does not touch settle's internals, retry policy, or the commit/adaptive
+        // logic itself. See ConsumerTrace.hpp.
+        const bool tracing = mcu::diag::traceEnabled();
+        mcu::diag::SchedulerIterEntry iterTrace{};
+        uint64_t settleDurationAccumNs = 0;
+        uint64_t settleIterationsBefore = 0;
+        if (tracing) {
+            iterTrace.nowNsBefore = m_nowNs;
+            iterTrace.targetTimeNs = targetTimeNs;
+            iterTrace.currentTimeStepNs = m_currentTimeStepNs;
+            iterTrace.hasCommitCallback = m_commitTimeStep ? 1 : 0;
+            settleIterationsBefore = m_settleIterations.load(std::memory_order_relaxed);
+        }
+
         uint64_t nextTime = targetTimeNs;
         const uint64_t maxStep = m_maximumTimeStepNs.load(std::memory_order_relaxed);
         const uint64_t selectedStep = m_adaptiveTimeStep && m_currentTimeStepNs > 0
             ? std::min(maxStep, m_currentTimeStepNs) : maxStep;
-        if (selectedStep > 0 && targetTimeNs - m_nowNs > selectedStep) nextTime = m_nowNs + selectedStep;
-        if (!m_events.empty() && m_events.top().timeNs < nextTime) nextTime = m_events.top().timeNs;
+        bool cappedByStep = false;
+        if (selectedStep > 0 && targetTimeNs - m_nowNs > selectedStep) { nextTime = m_nowNs + selectedStep; cappedByStep = true; }
+        bool cappedByEvent = false;
+        if (!m_events.empty() && m_events.top().timeNs < nextTime) { nextTime = m_events.top().timeNs; cappedByEvent = true; }
+        if (tracing) { iterTrace.nextTime = nextTime; iterTrace.maximumTimeStepNs = maxStep; }
+        // TEMPORARY (ConsumerTrace investigation, round 9: Option C audit) -- classify which term
+        // won the min(), aggregate-only (no per-step dump), plus a bounded reservoir of
+        // deadline-distance samples specifically for the event-limited case. No-op unless
+        // LASECSIMUL_MCU_CONSUMER_TRACE=1; does not change nextTime, selectedStep, or any
+        // scheduling decision -- purely observes the values already computed above.
+        if (mcu::diag::traceEnabled()) {
+            if (cappedByEvent) {
+                mcu::diag::traceNextTimeLimiter(mcu::diag::NextTimeLimiter::Event);
+                mcu::diag::traceEventLimiterSample(m_events.top().timeNs - m_nowNs, m_events.top().componentIndex);
+            } else if (cappedByStep) {
+                mcu::diag::traceNextTimeLimiter(mcu::diag::NextTimeLimiter::Step);
+            } else {
+                mcu::diag::traceNextTimeLimiter(mcu::diag::NextTimeLimiter::Target);
+            }
+        }
 
         const uint64_t previousTime = m_nowNs;
         const bool eventBoundary = !m_events.empty() && m_events.top().timeNs == nextTime;
@@ -202,11 +239,29 @@ void Scheduler::runUntil(uint64_t targetTimeNs) {
                 m_paused.load(std::memory_order_acquire)) break;
             processNextEventUntilLocked(lock, nextTime);
         }
-        settleUntilStableLocked(lock);
+        {
+            const auto t0 = tracing ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+            const uint64_t cpu0 = tracing ? mcu::diag::currentThreadCpuTimeNs() : 0;
+            const uint64_t nowBeforeThisSettle = m_nowNs;
+            const uint64_t stepBeforeThisSettle = m_currentTimeStepNs;
+            const uint64_t settleItersBefore = tracing ? m_settleIterations.load(std::memory_order_relaxed) : 0;
+            settleUntilStableLocked(lock);
+            if (tracing) {
+                const uint64_t wallNs = static_cast<uint64_t>(
+                    std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        std::chrono::steady_clock::now() - t0).count());
+                settleDurationAccumNs += wallNs;
+                mcu::diag::traceSettleCall(mcu::diag::SettleCallEntry{
+                    /*hostTsNs=*/0, wallNs, mcu::diag::currentThreadCpuTimeNs() - cpu0,
+                    nowBeforeThisSettle, m_nowNs, stepBeforeThisSettle,
+                    m_settleIterations.load(std::memory_order_relaxed) - settleItersBefore});
+            }
+        }
         bool accepted = true;
         if (m_commitTimeStep && nextTime > previousTime) {
             const TimeStepDecision decision = m_commitTimeStep(previousTime, nextTime, eventBoundary);
             accepted = decision.accept;
+            if (tracing) { iterTrace.commitAccepted = accepted ? 1 : 0; iterTrace.errorRatio = decision.errorRatio; }
             const uint64_t attempted = nextTime - previousTime;
             if (!decision.accept && !eventBoundary && attempted > m_minimumTimeStepNs) {
                 m_nowNs = previousTime;
@@ -214,6 +269,15 @@ void Scheduler::runUntil(uint64_t targetTimeNs) {
                 const double factor = std::clamp(0.9 / std::sqrt(std::max(decision.errorRatio, 1e-12)), 0.2, 0.8);
                 m_currentTimeStepNs = std::max<uint64_t>(m_minimumTimeStepNs,
                     static_cast<uint64_t>(static_cast<double>(attempted) * factor));
+                if (tracing) {
+                    iterTrace.nowNsAfter = m_nowNs;
+                    iterTrace.settleDurationNs = settleDurationAccumNs;
+                    iterTrace.settleIterationsDelta =
+                        m_settleIterations.load(std::memory_order_relaxed) - settleIterationsBefore;
+                    iterTrace.settleConverged = m_lastSettleConverged ? 1 : 0;
+                    iterTrace.eventBoundary = eventBoundary ? 1 : 0;
+                    mcu::diag::traceSchedulerIter(iterTrace);
+                }
                 continue;
             }
             if (m_adaptiveTimeStep) {
@@ -226,10 +290,36 @@ void Scheduler::runUntil(uint64_t targetTimeNs) {
         // O commit de um participante lockstep pode publicar novas saídas no MESMO timestamp
         // aceito (FPGA/GHDL). Assente esse trabalho antes de publicar o stable step/telemetria;
         // quando o commit não marcou nada dirty, o caminho custa apenas a checagem da fila vazia.
-        if (accepted) settleUntilStableLocked(lock);
+        if (accepted) {
+            const auto t0 = tracing ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+            const uint64_t cpu0 = tracing ? mcu::diag::currentThreadCpuTimeNs() : 0;
+            const uint64_t nowBeforeThisSettle = m_nowNs;
+            const uint64_t stepBeforeThisSettle = m_currentTimeStepNs;
+            const uint64_t settleItersBefore = tracing ? m_settleIterations.load(std::memory_order_relaxed) : 0;
+            settleUntilStableLocked(lock);
+            if (tracing) {
+                const uint64_t wallNs = static_cast<uint64_t>(
+                    std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        std::chrono::steady_clock::now() - t0).count());
+                settleDurationAccumNs += wallNs;
+                mcu::diag::traceSettleCall(mcu::diag::SettleCallEntry{
+                    /*hostTsNs=*/0, wallNs, mcu::diag::currentThreadCpuTimeNs() - cpu0,
+                    nowBeforeThisSettle, m_nowNs, stepBeforeThisSettle,
+                    m_settleIterations.load(std::memory_order_relaxed) - settleItersBefore});
+            }
+        }
         if (accepted && m_lastSettleConverged && m_stableStep) m_stableStep(m_nowNs);
         if (accepted && m_profilingEnabled.load(std::memory_order_relaxed))
             m_timeSteps.fetch_add(1, std::memory_order_relaxed);
+        if (tracing) {
+            iterTrace.nowNsAfter = m_nowNs;
+            iterTrace.settleDurationNs = settleDurationAccumNs;
+            iterTrace.settleIterationsDelta =
+                m_settleIterations.load(std::memory_order_relaxed) - settleIterationsBefore;
+            iterTrace.settleConverged = m_lastSettleConverged ? 1 : 0;
+            iterTrace.eventBoundary = eventBoundary ? 1 : 0;
+            mcu::diag::traceSchedulerIter(iterTrace);
+        }
     }
 }
 

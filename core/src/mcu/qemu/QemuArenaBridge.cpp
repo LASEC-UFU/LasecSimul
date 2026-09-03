@@ -357,6 +357,41 @@ void QemuArenaBridge::acknowledgeEventSlot() {
         .store(0, std::memory_order_release);
 }
 
+void QemuArenaBridge::publishCoreProgress(uint64_t nowNs) {
+    // D2 STAGE 1 (SHADOW/OBSERVATION ONLY): max(nowNs, 1) keeps 0 an unambiguous "not published
+    // yet" sentinel on the QEMU side (see doc-comment on coreProgressNs in qemu_arena_abi.h) --
+    // Scheduler::nowNs() legitimately starts near 0 on a fresh cycle, so a literal 0 publish
+    // would be ambiguous with "never published this execution" without this.
+    if (!m_arena) return;
+
+    // D2 STAGE 1B (2026-08-29, observer-effect cleanup): pollStepLocked() calls this on every
+    // iteration (measured ~18.4k/s), far more often than a diagnostic consumer needs -- gate to a
+    // bounded rate using only a cheap host-time read (std::chrono::steady_clock, no thread/timer/
+    // handle/Sleep). Publish immediately on genuine virtual progress (>=1ms of Scheduler time) so
+    // a real advance is never delayed; otherwise fall back to a >=5ms host-time heartbeat so a
+    // stalled-but-alive Core still becomes visible well inside the 3s backstop window. Semantics
+    // unchanged: every publish still writes the real, current nowNs -- never fabricated/
+    // interpolated -- this only skips redundant back-to-back writes of near-identical state.
+    const auto hostNow = std::chrono::steady_clock::now();
+    const uint64_t hostNowNs =
+        static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+            hostNow.time_since_epoch()).count());
+    const uint64_t virtualDeltaNs =
+        nowNs > m_lastPublishedProgressNs ? nowNs - m_lastPublishedProgressNs : 0;
+    const uint64_t hostDeltaNs = hostNowNs - m_lastPublishHostNs; // 0-initialized -> huge on first call
+    static constexpr uint64_t kVirtualGateNs = 1'000'000;  // 1ms of Scheduler progress
+    static constexpr uint64_t kHostGateNs = 5'000'000;     // 5ms host-time heartbeat ceiling
+    if (virtualDeltaNs < kVirtualGateNs && hostDeltaNs < kHostGateNs) {
+        return;
+    }
+
+    const uint64_t published = nowNs == 0 ? 1 : nowNs;
+    std::atomic_ref<uint64_t>(m_arena->coreProgressNs).store(published, std::memory_order_release);
+    m_lastPublishedProgressNs = nowNs;
+    m_lastPublishHostNs = hostNowNs;
+    ++m_publishCount;
+}
+
 QemuDispatchResult QemuArenaBridge::dispatch(uint64_t address) const {
     const auto it = std::upper_bound(m_regions.begin(), m_regions.end(), address,
                                      [](uint64_t value, const MemoryRegion& region) {

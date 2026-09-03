@@ -89,18 +89,31 @@ typedef enum LsdnSimAction {
 #define LSDN_QEMU_ARENA_QUEUE_DEPTH 32
 #define LSDN_QEMU_ARENA_ABI_MAGIC UINT64_C(0x4c53444e51415235) /* "LSDNQAR5" */
 #define LSDN_QEMU_ARENA_ABI_MAJOR 5
-#define LSDN_QEMU_ARENA_ABI_MINOR 0
+/* D2 STAGE 1 (2026-08-29, causal-progress-aware host-health backstop, SHADOW/OBSERVATION ONLY --
+ * see coreProgressNs below): minor bump documents the addition. Compatibility is actually
+ * enforced by the existing strict descriptorSize/arenaSize/transportSize equality checks (both
+ * sides already reject any size mismatch, regardless of how the version number reads), so this
+ * bump is self-documentation, not itself the compatibility mechanism. */
+#define LSDN_QEMU_ARENA_ABI_MINOR 1
 
 #define LSDN_QEMU_ARENA_CAP_WRITE_QUEUE           (UINT64_C(1) << 0)
 #define LSDN_QEMU_ARENA_CAP_ORDERED_EVENTS        (UINT64_C(1) << 1)
 #define LSDN_QEMU_ARENA_CAP_SYNC_READ             (UINT64_C(1) << 2)
 #define LSDN_QEMU_ARENA_CAP_MTTCG_MPSC_SERIALIZED (UINT64_C(1) << 3)
 #define LSDN_QEMU_ARENA_CAP_I2C_BURST              (UINT64_C(1) << 4)
+/* D2 STAGE 1: documents that coreProgressNs is present in this build's layout. NOT added to
+ * LSDN_QEMU_ARENA_REQUIRED_CAPABILITIES -- Stage 1 is shadow-only, nothing may depend on this bit
+ * being negotiated, and gating on it would be a functional (not observational) protocol change. */
+#define LSDN_QEMU_ARENA_CAP_CORE_PROGRESS          (UINT64_C(1) << 5)
 #define LSDN_QEMU_ARENA_CAPABILITIES                                          \
     (LSDN_QEMU_ARENA_CAP_WRITE_QUEUE | LSDN_QEMU_ARENA_CAP_ORDERED_EVENTS |   \
      LSDN_QEMU_ARENA_CAP_SYNC_READ |                                           \
+     LSDN_QEMU_ARENA_CAP_MTTCG_MPSC_SERIALIZED | LSDN_QEMU_ARENA_CAP_I2C_BURST | \
+     LSDN_QEMU_ARENA_CAP_CORE_PROGRESS)
+#define LSDN_QEMU_ARENA_REQUIRED_CAPABILITIES                                 \
+    (LSDN_QEMU_ARENA_CAP_WRITE_QUEUE | LSDN_QEMU_ARENA_CAP_ORDERED_EVENTS |   \
+     LSDN_QEMU_ARENA_CAP_SYNC_READ |                                           \
      LSDN_QEMU_ARENA_CAP_MTTCG_MPSC_SERIALIZED | LSDN_QEMU_ARENA_CAP_I2C_BURST)
-#define LSDN_QEMU_ARENA_REQUIRED_CAPABILITIES LSDN_QEMU_ARENA_CAPABILITIES
 
 /* Layout EXATO de qemuQueueEntry_t (simuliface.h) -- não reordenar, não inserir campo. */
 typedef struct LsdnQemuQueueEntry {
@@ -143,6 +156,18 @@ typedef struct LsdnQemuArena {
     uint32_t i2cStatus;      /* bit0 handled, bit1 address ACK */
     uint32_t i2cFirstNack;   /* UINT32_MAX quando todos os payloads deram ACK */
     uint64_t i2cStretchNs;
+
+    /* D2 STAGE 1 (2026-08-29, SHADOW/OBSERVATION ONLY -- does not affect
+     * waitForSynch()'s real 3000ms host-health timeout decision in this stage). Formal semantic:
+     * the latest Scheduler::nowNs() value Core has observed and published, in nanoseconds.
+     * Producer = Core (release store); consumer = QEMU (acquire load). Zeroed unconditionally by
+     * the EXISTING QemuArenaBridge::open() memset() on every fresh execution (no new reset logic
+     * needed) -- 0 means "no valid publication observed yet this execution" and must not be
+     * treated as a real causal position; Core publishes max(nowNs, 1) specifically so a
+     * legitimately-near-zero Scheduler position is never confused with the sentinel. Published
+     * from McuComponent::pollStepLocked()'s already-existing arena-observation point -- no new
+     * timer, no new thread, no per-Scheduler-iteration write. */
+    uint64_t coreProgressNs;
 } LsdnQemuArena;
 
 typedef struct LsdnQemuArenaDescriptor {
@@ -168,20 +193,20 @@ typedef struct LsdnQemuArenaV5Mapping {
 #if defined(__cplusplus)
 static_assert(sizeof(LsdnQemuQueueEntry) == 32,
               "QEMU arena queue entry ABI changed");
-static_assert(sizeof(LsdnQemuArena) == 1288,
+static_assert(sizeof(LsdnQemuArena) == 1296,
               "QEMU arena v5 payload ABI changed");
 static_assert(sizeof(LsdnQemuArenaDescriptor) == 88,
               "QEMU arena descriptor ABI changed");
-static_assert(sizeof(LsdnQemuArenaV5Mapping) == 1376,
+static_assert(sizeof(LsdnQemuArenaV5Mapping) == 1384,
               "QEMU arena v5 mapping ABI changed");
 #else
 _Static_assert(sizeof(LsdnQemuQueueEntry) == 32,
                "QEMU arena queue entry ABI changed");
-_Static_assert(sizeof(LsdnQemuArena) == 1288,
+_Static_assert(sizeof(LsdnQemuArena) == 1296,
                "QEMU arena v5 payload ABI changed");
 _Static_assert(sizeof(LsdnQemuArenaDescriptor) == 88,
                "QEMU arena descriptor ABI changed");
-_Static_assert(sizeof(LsdnQemuArenaV5Mapping) == 1376,
+_Static_assert(sizeof(LsdnQemuArenaV5Mapping) == 1384,
                "QEMU arena v5 mapping ABI changed");
 #endif
 

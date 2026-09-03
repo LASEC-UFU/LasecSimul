@@ -73,6 +73,8 @@ set(CORE_SOURCES
     src/mcu/qemu/QemuArenaBridge.cpp
     src/mcu/qemu/QemuProcessManager.cpp
     src/mcu/qemu/QemuIcountCalibrator.cpp
+    src/mcu/qemu/VnextBAttachment.cpp
+    src/mcu/qemu/VnextBWaitDispatcher.cpp
     src/mcu/McuController.cpp
     src/mcu/McuComponent.cpp
     src/plc/PlcRuntime.cpp
@@ -154,6 +156,8 @@ set(TEST_COMMON_SOURCE_FILES
     src/mcu/qemu/QemuArenaBridge.cpp
     src/mcu/qemu/QemuProcessManager.cpp
     src/mcu/qemu/QemuIcountCalibrator.cpp
+    src/mcu/qemu/VnextBAttachment.cpp
+    src/mcu/qemu/VnextBWaitDispatcher.cpp
     src/mcu/McuController.cpp
     src/mcu/McuComponent.cpp
     src/plc/PlcRuntime.cpp
@@ -899,6 +903,8 @@ add_executable(mcu_debug_launch_test
     src/mcu/qemu/QemuProcessManager.cpp
     src/mcu/qemu/QemuArenaBridge.cpp
     src/mcu/qemu/QemuIcountCalibrator.cpp
+    src/mcu/qemu/VnextBAttachment.cpp
+    src/mcu/qemu/VnextBWaitDispatcher.cpp
 )
 target_include_directories(mcu_debug_launch_test PRIVATE include src)
 target_link_libraries(mcu_debug_launch_test PRIVATE nlohmann_json::nlohmann_json)
@@ -1033,6 +1039,8 @@ add_executable(mcu_controller_real_qemu_test
     src/mcu/qemu/QemuProcessManager.cpp
     src/mcu/qemu/QemuArenaBridge.cpp
     src/mcu/qemu/QemuIcountCalibrator.cpp
+    src/mcu/qemu/VnextBAttachment.cpp
+    src/mcu/qemu/VnextBWaitDispatcher.cpp
     src/plugins/PluginModule.cpp
     src/plugins/PluginLoader.cpp
     src/plugins/PluginRuntime.cpp
@@ -1091,6 +1099,8 @@ add_executable(qemu_queue_stress_test
     src/mcu/qemu/QemuProcessManager.cpp
     src/mcu/qemu/QemuArenaBridge.cpp
     src/mcu/qemu/QemuIcountCalibrator.cpp
+    src/mcu/qemu/VnextBAttachment.cpp
+    src/mcu/qemu/VnextBWaitDispatcher.cpp
     src/plugins/PluginModule.cpp
     src/plugins/PluginLoader.cpp
     src/plugins/PluginRuntime.cpp
@@ -1146,6 +1156,8 @@ add_executable(qemu_queue_full_timeout_test
     src/mcu/qemu/QemuProcessManager.cpp
     src/mcu/qemu/QemuArenaBridge.cpp
     src/mcu/qemu/QemuIcountCalibrator.cpp
+    src/mcu/qemu/VnextBAttachment.cpp
+    src/mcu/qemu/VnextBWaitDispatcher.cpp
     src/plugins/PluginModule.cpp
     src/plugins/PluginLoader.cpp
     src/plugins/PluginRuntime.cpp
@@ -1168,6 +1180,21 @@ endif()
 add_test(NAME qemu_queue_full_timeout COMMAND qemu_queue_full_timeout_test)
 set_tests_properties(qemu_queue_full_timeout PROPERTIES TIMEOUT 40)
 
+add_executable(vnext_b_attachment_test
+    test/core/mcu/VnextBAttachmentTest.cpp
+    src/mcu/qemu/VnextBAttachment.cpp
+    src/mcu/qemu/VnextBWaitDispatcher.cpp
+    src/mcu/qemu/QemuProcessManager.cpp
+)
+target_include_directories(vnext_b_attachment_test PRIVATE include src)
+if(WIN32)
+    target_compile_definitions(vnext_b_attachment_test PRIVATE _CRT_SECURE_NO_WARNINGS)
+else()
+    target_link_libraries(vnext_b_attachment_test PRIVATE dl)
+endif()
+add_test(NAME vnext_b_attachment COMMAND vnext_b_attachment_test)
+set_tests_properties(vnext_b_attachment PROPERTIES LABELS "vnext-p1" TIMEOUT 30)
+
 # Estresse do CICLO Stop->Run repetido (achado 2026-07-22, relato ao vivo: às vezes o MCU não
 # inicializa, às vezes roda perfeitamente, às vezes roda e trava no meio -- nenhum teste real
 # existente cobria REINICIAR várias vezes, só uma sessão única). Mesmo binário/adapter reais acima.
@@ -1177,6 +1204,8 @@ add_executable(mcu_restart_stress_test
     src/mcu/qemu/QemuProcessManager.cpp
     src/mcu/qemu/QemuArenaBridge.cpp
     src/mcu/qemu/QemuIcountCalibrator.cpp
+    src/mcu/qemu/VnextBAttachment.cpp
+    src/mcu/qemu/VnextBWaitDispatcher.cpp
     src/plugins/PluginModule.cpp
     src/plugins/PluginLoader.cpp
     src/plugins/PluginRuntime.cpp
@@ -1209,6 +1238,8 @@ add_executable(session_restart_stress_test
     src/mcu/qemu/QemuProcessManager.cpp
     src/mcu/qemu/QemuArenaBridge.cpp
     src/mcu/qemu/QemuIcountCalibrator.cpp
+    src/mcu/qemu/VnextBAttachment.cpp
+    src/mcu/qemu/VnextBWaitDispatcher.cpp
     src/fpga/FpgaComponent.cpp
     src/fpga/FpgaPortMapper.cpp
     src/fpga/GhdlBackend.cpp
@@ -1235,6 +1266,7 @@ target_link_libraries(session_restart_stress_test PRIVATE Eigen3::Eigen nlohmann
 target_compile_definitions(session_restart_stress_test PRIVATE
     QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
     ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+    REAL_DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
 )
 if(WIN32)
     target_compile_definitions(session_restart_stress_test PRIVATE _CRT_SECURE_NO_WARNINGS)
@@ -1242,6 +1274,24 @@ else()
     target_link_libraries(session_restart_stress_test PRIVATE dl)
 endif()
 add_test(NAME session_restart_stress COMMAND session_restart_stress_test)
+
+# Reusable real VNEXT-B production scale harness. The topology is selected at runtime so the
+# same executable covers 1/4/8/16 active sessions and the 16-session idle campaign.
+add_executable(vnext_b_production_scale_test
+    test/core/mcu/VnextBProductionScaleTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(vnext_b_production_scale_test PRIVATE include src)
+target_link_libraries(vnext_b_production_scale_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(vnext_b_production_scale_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+    REAL_DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
+)
+if(NOT WIN32)
+    target_link_libraries(vnext_b_production_scale_test PRIVATE dl)
+endif()
+add_test(NAME vnext_b_production_scale COMMAND vnext_b_production_scale_test)
+set_tests_properties(vnext_b_production_scale PROPERTIES TIMEOUT 300)
 
 # Mesmo binário/adapter reais acima, mas com 2 McuController/processos QEMU simultâneos -- lacuna de
 # escala real encontrada na revisão arquitetural de 2026-07-20 (docs/33-plano-revisao-arquitetural-core.md),
@@ -1253,6 +1303,8 @@ add_executable(mcu_multiple_controllers_real_qemu_test
     src/mcu/qemu/QemuProcessManager.cpp
     src/mcu/qemu/QemuArenaBridge.cpp
     src/mcu/qemu/QemuIcountCalibrator.cpp
+    src/mcu/qemu/VnextBAttachment.cpp
+    src/mcu/qemu/VnextBWaitDispatcher.cpp
     src/plugins/PluginModule.cpp
     src/plugins/PluginLoader.cpp
     src/plugins/PluginRuntime.cpp

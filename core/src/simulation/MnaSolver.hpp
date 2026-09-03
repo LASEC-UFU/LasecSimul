@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <utility>
 #include <vector>
+#include "../mcu/ConsumerTrace.hpp"
 #include "../resources/ResourceGovernor.hpp"
 #include "CircuitGroup.hpp"
 #include "ThreadPool.hpp"
@@ -18,7 +19,14 @@ public:
     explicit MnaSolver(resources::ResourceGovernor governor)
         : m_governor(std::move(governor)), m_pool(m_governor.budget().maxWorkerThreads) {}
 
-    void solve(std::vector<CircuitGroup>& groups, std::vector<double>& nodeVoltages) {
+    // TEMPORARY (ConsumerTrace investigation, round 5): `settleStepSeq` optionally correlates this
+    // solve() call's per-group factor()/solve() CPU breakdown back to the settleStep() invocation
+    // that triggered it (see SimulationSession::settleStep()). Defaults to 0 for every other
+    // caller (e.g. MnaSolverTest.cpp), which never enables tracing, so this is purely additive.
+    void solve(std::vector<CircuitGroup>& groups, std::vector<double>& nodeVoltages,
+               uint64_t settleStepSeq = 0) {
+        const bool tracing = mcu::diag::traceEnabled();
+        const uint64_t setupCpu0 = tracing ? mcu::diag::currentThreadCpuTimeNs() : 0;
         m_dirtyGroups.clear();
         if (m_dirtyGroups.capacity() < groups.size()) m_dirtyGroups.reserve(groups.size());
         for (CircuitGroup& group : groups) if (group.dirty()) m_dirtyGroups.push_back(&group);
@@ -28,10 +36,21 @@ public:
             const size_t n = group->totalSize();
             estimatedWork += group->admittanceChanged() ? n * n * n : n * n;
         }
-        auto solveGroup = [&](size_t taskIndex) {
+        const uint64_t setupCpuNs = tracing ? mcu::diag::currentThreadCpuTimeNs() - setupCpu0 : 0;
+        auto solveGroup = [&, tracing](size_t taskIndex) {
             CircuitGroup& group = *m_dirtyGroups[taskIndex];
-            if (group.admittanceChanged()) group.factor();
+            const bool willFactor = group.admittanceChanged();
+            const uint64_t matrixDim = tracing ? group.totalSize() : 0;
+            const uint64_t factorCpu0 = tracing ? mcu::diag::currentThreadCpuTimeNs() : 0;
+            if (willFactor) group.factor();
+            const uint64_t factorCpuNs = tracing ? mcu::diag::currentThreadCpuTimeNs() - factorCpu0 : 0;
+            const uint64_t solveCpu0 = tracing ? mcu::diag::currentThreadCpuTimeNs() : 0;
             const Eigen::VectorXd& voltages = group.solve();
+            if (tracing) {
+                const uint64_t solveCpuNs = mcu::diag::currentThreadCpuTimeNs() - solveCpu0;
+                mcu::diag::traceSolverGroup(mcu::diag::SolverGroupEntry{
+                    settleStepSeq, matrixDim, willFactor ? uint8_t{1} : uint8_t{0}, factorCpuNs, solveCpuNs});
+            }
             const std::vector<uint32_t>& indices = group.nodeIndices();
             const bool singular = group.singular() || !voltages.allFinite();
             for (size_t i = 0; i < indices.size(); ++i) {
@@ -44,12 +63,21 @@ public:
         };
         // Thread dispatch custa mais que uma substituicao LU pequena. Paraleliza somente quando
         // ha trabalho suficiente para amortizar fila/sincronizacao.
+        const uint64_t grantCpu0 = tracing ? mcu::diag::currentThreadCpuTimeNs() : 0;
         const resources::ParallelGrant grant = m_governor.grantParallelTasks(
             m_dirtyGroups.size(), estimatedWork, m_parallelWorkThreshold);
+        const uint64_t grantDecisionCpuNs = tracing ? mcu::diag::currentThreadCpuTimeNs() - grantCpu0 : 0;
+        const uint64_t dispatchCpu0 = tracing ? mcu::diag::currentThreadCpuTimeNs() : 0;
         if (grant.usesWorkers()) {
             m_pool.parallelFor(m_dirtyGroups.size(), grant.parallelTasks, solveGroup);
         } else {
             for (size_t i = 0; i < m_dirtyGroups.size(); ++i) solveGroup(i);
+        }
+        if (tracing) {
+            mcu::diag::traceMnaSolverOuter(mcu::diag::MnaSolverOuterEntry{
+                settleStepSeq, groups.size(), m_dirtyGroups.size(), setupCpuNs, grantDecisionCpuNs,
+                grant.usesWorkers() ? uint8_t{1} : uint8_t{0},
+                mcu::diag::currentThreadCpuTimeNs() - dispatchCpu0});
         }
     }
 

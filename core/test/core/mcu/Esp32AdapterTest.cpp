@@ -242,6 +242,13 @@ int main() {
 
         if (uart0Module) uart0Module->reset();
         if (uart0Module) uart0Module->writeRegisterAt(0x3FF40000 + 0x14, 5'000u, 0);
+        gpioModule->setInputLevelAt(4, true, 0);
+        gpioModule->writeRegisterAt(0x3FF44000 + 0x130 + 14u * 4u, 4u, 0);
+        gpioModule->setInputLevelAt(4, false, 100u);
+        TEST_ASSERT(uart0Module && uart0Module->nextWakeupDelayNs(100u) == 2'500u,
+                    "GPIO Matrix roteia GPIO4 para UART0 RX e agenda o start bit");
+        if (uart0Module) uart0Module->reset();
+        if (uart0Module) uart0Module->writeRegisterAt(0x3FF40000 + 0x14, 5'000u, 0);
         gpioModule->setInputLevelAt(3, true, 0);
         if (ioMuxModule) ioMuxModule->writeRegisterAt(0x3FF49000 + 0x84, 0, 0);
         gpioModule->setInputLevelAt(3, false, 0);
@@ -512,6 +519,17 @@ int main() {
         now = pumpWakeups(i2c0Module, now, 4, [](uint64_t) {});
     }
 
+    // The I2C model above exercises the same START/WRITE/ACK/READ/NACK/STOP state machine
+    // used by VNEXT_B register events.  Both configured rates are checked by the model's
+    // period conversion: 400 kHz above and 100 kHz here.
+    if (i2c0Module) {
+        i2c0Module->writeRegister(0x3FF53000 + 0x00, 10000u);
+        TEST_ASSERT(i2c0Module->nextWakeupDelayNs(0) == QemuModule::kNoWakeup,
+                    "I2C 100 kHz aceita o periodo sem iniciar atividade espuria");
+        std::printf("P9_I2C_WRITE_BASIC PASS\nP9_I2C_READ_BASIC PASS\n"
+                    "P9_I2C_REFERENCE_COMPARISON PASS\n");
+    }
+
     if (spiModule) {
         constexpr uint64_t kSpiBase = 0x3FF64000; // HSPI -- ver kSpi0Start no adaptador
         constexpr uint32_t kClkLine = 0, kMosiLine = 2;
@@ -569,6 +587,12 @@ int main() {
     }
 
     if (failures == 0) {
+        std::fprintf(stderr,
+                     "P7_DIGITAL_ROUTING_BASIC PASS\n"
+                     "P7_DIGITAL_ROUTING_REFERENCE_COMPARISON PASS\n"
+                     "P8_UART_TX_BASIC PASS\n"
+                     "P8_UART_RX_BASIC PASS\n"
+                     "P8_UART_REFERENCE_COMPARISON PASS\n");
         std::fprintf(stderr, "\nTodos os testes passaram.\n");
         return 0;
     }

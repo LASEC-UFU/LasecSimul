@@ -185,6 +185,28 @@ QemuLaunchSpec McuController::buildLaunchSpec(const std::filesystem::path& firmw
                                                RuntimeLaunchIdentity identity) const {
     QemuLaunchSpec spec = m_adapter.buildLaunchArgs(firmwarePath.string());
     spec.runtimeIdentity = identity;
+    // Test-only host sizing for multi-process scale campaigns. QEMU's tb-size unit is MiB;
+    // absent this opt-in the production launch is byte-for-byte unchanged.
+    if (const char* tbSize = std::getenv("LASECSIMUL_QEMU_TB_SIZE"); tbSize && *tbSize) {
+        char* end = nullptr;
+        const long mib = std::strtol(tbSize, &end, 10);
+        if (end && *end == '\0' && mib >= 16 && mib <= 1024) {
+            for (size_t i = 0; i + 1 < spec.args.size(); ++i) {
+                if (spec.args[i] == "-accel") {
+                    spec.args[i + 1] += ",tb-size=" + std::to_string(mib);
+                    break;
+                }
+            }
+        }
+    }
+    // Host-only TCG scheduling experiment for high session counts. The normal VNEXT launch
+    // remains MTTCG; this opt-in serializes each QEMU's vCPUs without changing the wire ABI.
+    if (const char* tcgThread = std::getenv("LASECSIMUL_QEMU_TCG_THREAD");
+        tcgThread && std::string_view(tcgThread) == "single") {
+        for (auto& arg : spec.args) {
+            if (arg == "tcg,thread=multi") arg = "tcg,thread=single";
+        }
+    }
     const bool mttcg = std::find(spec.args.begin(), spec.args.end(), "tcg,thread=multi") !=
                        spec.args.end();
     const bool icount = std::find(spec.args.begin(), spec.args.end(), "-icount") !=
@@ -205,6 +227,15 @@ QemuLaunchSpec McuController::buildLaunchSpec(const std::filesystem::path& firmw
               "LASECSIMUL_QEMU_ARENA_VERSION=3)\n"
             : "[LasecSimul] arena=v3 legacy rollback\n";
     configureNetwork(spec, arenaName);
+    if (std::getenv("LASECSIMUL_TEST_ELF_BOOT")) {
+        for (size_t i = 0; i + 1 < spec.args.size(); ++i) {
+            if (spec.args[i] == "-drive") {
+                spec.args[i] = "-kernel";
+                spec.args[i + 1] = firmwarePath.string();
+                break;
+            }
+        }
+    }
     const std::string& overridePath = !callSiteBinaryOverride.empty() ? callSiteBinaryOverride : m_qemuBinaryOverride;
     if (!overridePath.empty()) spec.binary = overridePath;
     if (debug.enabled()) {
@@ -219,7 +250,7 @@ QemuLaunchSpec McuController::buildLaunchSpec(const std::filesystem::path& firmw
 
 void McuController::start(const std::filesystem::path& firmwarePath, const std::string& arenaName,
                           const std::string& callSiteBinaryOverride, McuDebugOptions debug,
-                          RuntimeLaunchIdentity identity) {
+                          RuntimeLaunchIdentity identity, std::function<void()> notificationWake) {
     // Achado 2026-07-22 (DESATIVADO -- ver achado seguinte): esta chamada calibrava o `-icount
     // shift` medindo a sonda de `QemuIcountCalibrator` (boot ROM genérico, sem firmware real, cada
     // registrador confirmado instantaneamente por um laço síntético -- ver `pumpArenaFor` em
@@ -236,6 +267,16 @@ void McuController::start(const std::filesystem::path& firmwarePath, const std::
     m_runtimeIdentity = identity;
     QemuLaunchSpec spec = buildLaunchSpec(
         firmwarePath, arenaName, callSiteBinaryOverride, debug, identity);
+    const char* selectedTransport = std::getenv("LASECSIMUL_MCU_TRANSPORT");
+    if (selectedTransport && std::string_view(selectedTransport) == "VNEXT_B") {
+        if (!identity.sessionExecutionId || !identity.runtimeInstanceId || !identity.launchGeneration) {
+            throw std::runtime_error("VNEXT_B requires a managed runtime identity");
+        }
+        m_vnextB.start(std::move(spec), identity.sessionExecutionId, arenaName, m_adapter.chipId(),
+                       std::move(notificationWake));
+        m_vnextBAttached = true;
+        return;
+    }
     // O backend socket legado do QEMU encerra qemu_init() quando connect() recebe ECONNREFUSED.
     // Detecte antes de criar a CPU e degrade para SLIRP: firmware OpenETH continua tendo a mesma
     // NIC/MMIO, enquanto um gateway/TAP ausente nunca derruba GPIO, timers ou o processo inteiro.
@@ -272,8 +313,25 @@ void McuController::start(const std::filesystem::path& firmwarePath, const std::
     }
 }
 
-void McuController::stop() { m_processManager.stop(); m_arenaBridge.close(); }
-bool McuController::isRunning() const { return m_processManager.isRunning(); }
-std::string McuController::qemuLogs() const { return m_processManager.logs(); }
+void McuController::stop() {
+    if (m_vnextBAttached) {
+        m_vnextB.stop();
+        m_vnextBAttached = false;
+    }
+    m_processManager.stop();
+    m_arenaBridge.close();
+}
+bool McuController::isRunning() const {
+    return m_vnextBAttached ? m_vnextB.running() : m_processManager.isRunning();
+}
+std::string McuController::qemuLogs() const {
+    std::string result = m_processManager.logs();
+    const std::string vnextLogs = m_vnextB.logs();
+    if (!vnextLogs.empty()) {
+        if (!result.empty()) result += "\n";
+        result += vnextLogs;
+    }
+    return result;
+}
 
 } // namespace lasecsimul::mcu

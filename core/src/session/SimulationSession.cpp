@@ -17,6 +17,7 @@
 #include <utility>
 #include <nlohmann/json.hpp>
 #include "../fpga/FpgaComponent.hpp"
+#include "../mcu/ConsumerTrace.hpp"
 #include "../mcu/McuComponent.hpp"
 #include "../plc/PlcComponent.hpp"
 #include "lasecsimul/qemu_arena_abi.h"
@@ -2253,7 +2254,11 @@ I2cTransferResult SimulationSession::resolveI2cTransferUnlocked(uint32_t mcuInde
         if (candidate->supportsI2cTransfer()) {
             const auto candidateSda = candidate->i2cPinIndex(true);
             const auto candidateScl = candidate->i2cPinIndex(false);
-            if (!candidateSda || !candidateScl || ref.localPinIndex != *candidateSda) return traceFallback("pinos I2C do alvo incompatíveis", candidate);
+            if (!candidateSda || !candidateScl || ref.localPinIndex != *candidateSda) {
+                if (traceI2c) std::fprintf(stderr, "[LasecSimul][I2C fast-path] pin mismatch ref=%u sda=%u scl=%u\\n",
+                                            ref.localPinIndex, candidateSda.value_or(999u), candidateScl.value_or(999u));
+                return traceFallback("pinos I2C do alvo incompatíveis", candidate);
+            }
             const bool sclMatches = std::any_of(
                 m_topology.pinRefsByNode[sclNode].begin(), m_topology.pinRefsByNode[sclNode].end(),
                 [&](const simulation::NodePinRef& sclRef) {
@@ -2492,11 +2497,26 @@ void SimulationSession::reuseUnaffectedCircuitGroups(simulation::Topology& previ
 
 bool SimulationSession::settleStep() {
     const bool profile = m_performanceProfilingEnabled.load(std::memory_order_relaxed);
+    // TEMPORARY (ConsumerTrace investigation, round 5) -- no-op unless
+    // LASECSIMUL_MCU_CONSUMER_TRACE=1; attributes settleStep()'s CPU cost by phase, following the
+    // existing wall-clock profiling blocks already here (m_topologyNanoseconds/
+    // m_deviceStampNanoseconds/m_solverNanoseconds) but using per-thread CPU cycles (same
+    // QueryThreadCycleTime()-based mechanism validated in round 4) instead of wall time, plus a
+    // per-component stamp breakdown. Every phase boundary below is one that already existed in
+    // this function; nothing about ITS behavior is changed, only wrapped with timing. See
+    // ConsumerTrace.hpp.
+    const bool tracing = mcu::diag::traceEnabled();
+    const uint64_t settleStepSeq = tracing ? mcu::diag::nextSettleStepSequence() : 0;
+    const uint64_t phaseStartCpuNs = tracing ? mcu::diag::currentThreadCpuTimeNs() : 0;
+    uint64_t topologyCpuNs = 0, stampingCpuNs = 0, mnaSolveCpuNs = 0, propagationCpuNs = 0, convergenceCpuNs = 0;
+
     const bool topologyWasDirty = m_topologyDirty;
     const auto topologyStart = profile && topologyWasDirty ? std::chrono::steady_clock::now()
                                                             : std::chrono::steady_clock::time_point{};
+    const uint64_t topologyCpu0 = tracing ? mcu::diag::currentThreadCpuTimeNs() : 0;
     rebuildTopologyIfNeeded();
     rebuildSignalRoutesIfNeeded();
+    if (tracing) topologyCpuNs = mcu::diag::currentThreadCpuTimeNs() - topologyCpu0;
     if (profile && topologyWasDirty) {
         m_topologyRebuilds.fetch_add(1, std::memory_order_relaxed);
         m_topologyNanoseconds.fetch_add(static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -2511,6 +2531,7 @@ bool SimulationSession::settleStep() {
     m_stampedThisRound.assign(dirtyComponents.begin(), dirtyComponents.end());
     m_stampedNonlinearThisRound.clear();
     const auto deviceStart = profile ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+    const uint64_t stampingCpu0 = tracing ? mcu::diag::currentThreadCpuTimeNs() : 0;
     for (uint32_t componentIndex : m_stampedThisRound) {
         IComponentModel* component = m_componentInstances[componentIndex].get();
         if (std::binary_search(m_nonlinearComponentIndices.begin(), m_nonlinearComponentIndices.end(),
@@ -2529,6 +2550,7 @@ bool SimulationSession::settleStep() {
 
         simulation::ComponentMatrixView view(m_topology.groups[groupIndex], stampResolution.localIndexByPinId, componentIndex,
                                              extraVarBase);
+        const uint64_t oneStampCpu0 = tracing ? mcu::diag::currentThreadCpuTimeNs() : 0;
         try {
             component->stamp(view);
             // LeakageGuard (D9, docs/25-auditoria-arquitetural-core-2026-07-09.md): aplicado pelo
@@ -2547,7 +2569,12 @@ bool SimulationSession::settleStep() {
             std::fprintf(stderr, "[SimulationSession] stamp() de componente %u lançou: %s\n", componentIndex,
                          e.what());
         }
+        if (tracing) {
+            mcu::diag::traceComponentStamp(settleStepSeq, componentIndex,
+                                            mcu::diag::currentThreadCpuTimeNs() - oneStampCpu0);
+        }
     }
+    if (tracing) stampingCpuNs = mcu::diag::currentThreadCpuTimeNs() - stampingCpu0;
     if (profile) {
         m_componentStamps.fetch_add(m_stampedThisRound.size(), std::memory_order_relaxed);
         m_deviceStampNanoseconds.fetch_add(static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -2557,7 +2584,9 @@ bool SimulationSession::settleStep() {
 
     // 2. Resolve só os grupos dirty (admitância ou corrente mudou) — em paralelo entre si.
     const auto solverStart = profile ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
-    m_mnaSolver.solve(m_topology.groups, m_nodeVoltages);
+    const uint64_t solveCpu0 = tracing ? mcu::diag::currentThreadCpuTimeNs() : 0;
+    m_mnaSolver.solve(m_topology.groups, m_nodeVoltages, settleStepSeq);
+    if (tracing) mnaSolveCpuNs = mcu::diag::currentThreadCpuTimeNs() - solveCpu0;
     if (profile) {
         m_solverCalls.fetch_add(1, std::memory_order_relaxed);
         m_solverNanoseconds.fetch_add(static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -2565,6 +2594,7 @@ bool SimulationSession::settleStep() {
     }
 
     // 3. Nó cuja tensão de fato mudou: marca dirty quem tem pino lá (listenersByNode).
+    const uint64_t propagationCpu0 = tracing ? mcu::diag::currentThreadCpuTimeNs() : 0;
     bool anyVoltageChanged = false;
     for (size_t node = 0; node < m_nodeVoltages.size(); ++node) {
         if (std::abs(m_nodeVoltages[node] - m_previousNodeVoltages[node]) > kVoltageEpsilon) {
@@ -2597,12 +2627,14 @@ bool SimulationSession::settleStep() {
     }
 
     m_previousNodeVoltages = m_nodeVoltages;
+    if (tracing) propagationCpuNs = mcu::diag::currentThreadCpuTimeNs() - propagationCpu0;
 
     // 4. Componente não-linear que estampou neste round e ainda não convergiu pede outra
     //    iteração — mesmo que nenhum vizinho tenha mudado tensão o bastante pra disparar isso via
     //    listener (passo 3). Sem componente não-linear real hoje, isto nunca dispara de fato; é
     //    só o contrato/mecânica fixados (ver .spec, seção 7.4) — Newton-Raphson de verdade
     //    (critério de convergência, diodo/transistor) fica para depois.
+    const uint64_t convergenceCpu0 = tracing ? mcu::diag::currentThreadCpuTimeNs() : 0;
     bool anyNonlinearPending = false;
     if (m_nonlinearIterations < kMaxNonlinearIterations) {
         for (uint32_t componentIndex : m_stampedNonlinearThisRound) {
@@ -2618,6 +2650,16 @@ bool SimulationSession::settleStep() {
                      static_cast<unsigned>(m_stampedNonlinearThisRound.size()), kMaxNonlinearIterations);
     }
     m_nonlinearIterations = anyNonlinearPending ? m_nonlinearIterations + 1 : 0;
+    if (tracing) convergenceCpuNs = mcu::diag::currentThreadCpuTimeNs() - convergenceCpu0;
+
+    if (tracing) {
+        const uint64_t totalCpuNs = mcu::diag::currentThreadCpuTimeNs() - phaseStartCpuNs;
+        const uint64_t accountedCpuNs = topologyCpuNs + stampingCpuNs + mnaSolveCpuNs + propagationCpuNs + convergenceCpuNs;
+        mcu::diag::traceSettleStepPhase(mcu::diag::SettleStepPhaseEntry{
+            /*hostTsNs=*/0, settleStepSeq, totalCpuNs, topologyCpuNs, stampingCpuNs,
+            static_cast<uint64_t>(m_stampedThisRound.size()), mnaSolveCpuNs, propagationCpuNs, convergenceCpuNs,
+            totalCpuNs > accountedCpuNs ? totalCpuNs - accountedCpuNs : 0});
+    }
 
     // Ainda há trabalho se alguma tensão mudou (logo, novos componentes podem ter ficado dirty), se
     // algum não-linear pediu outra iteração, OU se já havia dirty pendente que este round não tocou

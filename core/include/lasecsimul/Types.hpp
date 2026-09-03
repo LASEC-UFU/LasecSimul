@@ -217,6 +217,8 @@ struct QemuLaunchSpec {
     // Linha de diagnostico produzida pelo orquestrador (rede efetiva, fallback etc.).
     // QemuProcessManager a coloca no mesmo buffer de logs antes de iniciar o processo.
     std::string diagnostics;
+    /** Per-process environment additions. Legacy launches leave this empty. */
+    std::vector<std::pair<std::string, std::string>> environment;
 };
 
 struct McuDebugOptions {

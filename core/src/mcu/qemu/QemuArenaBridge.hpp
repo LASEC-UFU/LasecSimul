@@ -56,6 +56,17 @@ public:
      * anteriores ao protocolo v3), sem tocar queueReadIndex. */
     void acknowledgeEventSlot();
 
+    /** D2 STAGE 1 (2026-08-29, SHADOW/OBSERVATION ONLY -- see coreProgressNs's doc-comment in
+     * qemu_arena_abi.h for the full semantic). Publishes `max(nowNs, 1)` -- never literal 0 --
+     * via a release store, so 0 stays an unambiguous "not published yet this execution" sentinel
+     * on the reading side. No-op if the arena isn't open. Increments a bounded, Core-local
+     * publish counter (see publishCountForTesting()) -- no per-call I/O, no new thread/timer.
+     * STAGE 1B: internally rate-gated (>=1ms virtual progress OR >=5ms host-time heartbeat) using
+     * only a cheap std::chrono::steady_clock read -- callers may call this unconditionally every
+     * poll iteration; the value written, when it is written, is always the real current nowNs. */
+    void publishCoreProgress(uint64_t nowNs);
+    uint64_t publishCountForTesting() const { return m_publishCount; }
+
 private:
     class SharedMemory;
 
@@ -64,6 +75,9 @@ private:
     LsdnQemuArenaDescriptor* m_descriptor = nullptr;
     QemuArenaProtocol m_protocol = QemuArenaProtocol::Environment;
     std::vector<MemoryRegion> m_regions;
+    uint64_t m_publishCount = 0;
+    uint64_t m_lastPublishedProgressNs = 0;  // D2 STAGE 1B: last virtual nowNs actually published
+    uint64_t m_lastPublishHostNs = 0;        // D2 STAGE 1B: host time (steady_clock ns) of that publish
 };
 
 } // namespace lasecsimul::mcu::qemu

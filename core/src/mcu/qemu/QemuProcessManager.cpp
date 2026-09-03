@@ -1,6 +1,7 @@
 #include "QemuProcessManager.hpp"
 #include <atomic>
 #include <cstdio>
+#include <cstdlib>
 #include <cwchar>
 #include <mutex>
 #include <sstream>
@@ -94,6 +95,10 @@ std::vector<wchar_t> buildLaunchEnvironment(const QemuLaunchSpec& spec) {
         entries.push_back(L"LASECSIMUL_RUNTIME_INSTANCE_ID=" + std::to_wstring(spec.runtimeIdentity.runtimeInstanceId));
         entries.push_back(L"LASECSIMUL_LAUNCH_GENERATION=" + std::to_wstring(spec.runtimeIdentity.launchGeneration));
     }
+    for (const auto& [key, value] : spec.environment) {
+        entries.push_back(std::wstring(key.begin(), key.end()) + L"=" +
+                          std::wstring(value.begin(), value.end()));
+    }
     std::vector<wchar_t> block;
     for (const auto& e : entries) { block.insert(block.end(), e.begin(), e.end()); block.push_back(L'\0'); }
     block.push_back(L'\0');
@@ -113,6 +118,14 @@ public:
         clearProcessState();
 
         if (!spec.diagnostics.empty()) appendLog(spec.diagnostics.data(), spec.diagnostics.size());
+        {
+            std::ostringstream argvLog;
+            argvLog << "[LasecSimul] final argv:" << spec.binary;
+            for (const auto& arg : spec.args) argvLog << " [" << arg << "]";
+            argvLog << "\n";
+            const std::string text = argvLog.str();
+            appendLog(text.data(), text.size());
+        }
 
 #if defined(_WIN32)
         HANDLE readPipe = nullptr;
@@ -183,6 +196,10 @@ public:
             ::close(pipes[0]);
             ::close(pipes[1]);
 
+            for (const auto& [key, value] : spec.environment) {
+                setenv(key.c_str(), value.c_str(), 1);
+            }
+
             std::vector<char*> argv;
             argv.reserve(spec.args.size() + 2);
             argv.push_back(const_cast<char*>(spec.binary.c_str()));
@@ -250,10 +267,29 @@ public:
     bool isRunning() const {
 #if defined(_WIN32)
         if (!m_running || !m_processInfo.hProcess) return false;
-        return WaitForSingleObject(m_processInfo.hProcess, 0) == WAIT_TIMEOUT;
+        const DWORD state = WaitForSingleObject(m_processInfo.hProcess, 0);
+        if (state != WAIT_TIMEOUT) {
+            DWORD exitCode = STILL_ACTIVE;
+            if (GetExitCodeProcess(m_processInfo.hProcess, &exitCode)) {
+                std::ostringstream status;
+                status << "[LasecSimul] QEMU terminated: wait=" << state
+                       << " exit=0x" << std::hex << exitCode << "\n";
+                const std::string text = status.str();
+                const_cast<Impl*>(this)->appendLog(text.data(), text.size());
+            }
+        }
+        return state == WAIT_TIMEOUT;
 #else
         if (!m_running || m_pid <= 0) return false;
         return ::kill(m_pid, 0) == 0;
+#endif
+    }
+
+    uint64_t processId() const {
+#if defined(_WIN32)
+        return m_processInfo.dwProcessId;
+#else
+        return m_pid > 0 ? static_cast<uint64_t>(m_pid) : 0;
 #endif
     }
 
@@ -410,6 +446,7 @@ void QemuProcessManager::start(const QemuLaunchSpec& spec) { m_impl->start(spec)
 bool QemuProcessManager::stop(std::chrono::milliseconds timeout) { return m_impl->stop(timeout); }
 void QemuProcessManager::kill() { m_impl->kill(); }
 bool QemuProcessManager::isRunning() const { return m_impl->isRunning(); }
+uint64_t QemuProcessManager::processId() const { return m_impl->processId(); }
 std::string QemuProcessManager::logs() const { return m_impl->logs(); }
 
 } // namespace lasecsimul::mcu::qemu

@@ -2,9 +2,11 @@
 
 #include <filesystem>
 #include <string>
+#include <functional>
 #include "lasecsimul/IMcuAdapter.hpp"
 #include "qemu/QemuArenaBridge.hpp"
 #include "qemu/QemuProcessManager.hpp"
+#include "qemu/VnextBAttachment.hpp"
 
 namespace lasecsimul::mcu {
 
@@ -45,7 +47,7 @@ public:
      * criado junto com o componente. */
     void start(const std::filesystem::path& firmwarePath, const std::string& arenaName,
                const std::string& callSiteBinaryOverride = {}, McuDebugOptions debug = {},
-               RuntimeLaunchIdentity identity = {});
+               RuntimeLaunchIdentity identity = {}, std::function<void()> notificationWake = {});
     QemuLaunchSpec buildLaunchSpec(const std::filesystem::path& firmwarePath, const std::string& arenaName,
                                    const std::string& callSiteBinaryOverride = {}, McuDebugOptions debug = {},
                                    RuntimeLaunchIdentity identity = {}) const;
@@ -55,8 +57,17 @@ public:
     void stop();
 
     bool isRunning() const;
+    uint64_t processIdForTesting() const {
+        return m_vnextBAttached ? m_vnextB.processIdForTesting() : m_processManager.processId();
+    }
     std::string qemuLogs() const;
     RuntimeLaunchIdentity runtimeIdentity() const noexcept { return m_runtimeIdentity; }
+
+    /** Explicit production opt-in for the frozen vNext-B transport. Legacy remains the
+     * default and is never started alongside this attachment. */
+    bool vnextBActive() const noexcept { return m_vnextB.running() || m_vnextBAttached; }
+    qemu::VnextBAttachment& vnextBAttachment() { return m_vnextB; }
+    const qemu::VnextBAttachment& vnextBAttachment() const { return m_vnextB; }
 
     qemu::QemuArenaBridge& arenaBridge() { return m_arenaBridge; }
     const qemu::QemuArenaBridge& arenaBridge() const { return m_arenaBridge; }
@@ -66,6 +77,8 @@ private:
     std::string m_qemuBinaryOverride;
     qemu::QemuProcessManager m_processManager;
     qemu::QemuArenaBridge m_arenaBridge;
+    qemu::VnextBAttachment m_vnextB;
+    bool m_vnextBAttached = false;
     RuntimeLaunchIdentity m_runtimeIdentity{};
 };
 

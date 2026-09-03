@@ -12,11 +12,13 @@
 // de verdade em QEMU real e imprimindo o texto decodificado pra inspeção.
 #include <cctype>
 #include <chrono>
+#include <atomic>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <thread>
 #include "mcu/McuComponent.hpp"
 #include "plugins/GlobalPluginCache.hpp"
@@ -83,13 +85,20 @@ int main() {
     session.registerKnownPluginTypes();
 
     mcu::McuComponent* mcu = nullptr;
-    session.components().registerFactory("test.esp32", [&session, &mcu](const registry::ComponentParams&) {
+    std::atomic<uint32_t> i2cWrites{0}, i2cReads{0}, i2cAcks{0}, i2cRxBytes{0};
+    session.components().registerFactory("test.esp32", [&session, &mcu, &i2cWrites, &i2cReads, &i2cAcks, &i2cRxBytes](const registry::ComponentParams&) {
         auto result = std::make_unique<mcu::McuComponent>(session.mcus().create("espressif.esp32"), session.scheduler());
         mcu = result.get();
+        result->setI2cTransferHandler([&session, &i2cWrites, &i2cReads, &i2cAcks, &i2cRxBytes](uint32_t mcuIndex, uint32_t bus, const I2cTransfer& transfer) {
+            if (transfer.read) i2cReads.fetch_add(1, std::memory_order_relaxed);
+            else i2cWrites.fetch_add(1, std::memory_order_relaxed);
+            const I2cTransferResult result = session.resolveI2cTransferForTesting(mcuIndex, bus, transfer);
+            if (result.addressAck) i2cAcks.fetch_add(1, std::memory_order_relaxed);
+            i2cRxBytes.fetch_add(result.rxSize, std::memory_order_relaxed);
+            return result;
+        });
         return result;
     });
-
-    const uint32_t esp32 = session.addComponent("test.esp32", {});
 
     registry::ComponentParams plotParams;
     plotParams.pinList = {{"tx", 0.0, 8.0}, {"rx", 0.0, 24.0}};
@@ -98,13 +107,42 @@ int main() {
     session.setProperty(plotIndex, "data_bits", PropertyValue{8.0});
     session.setProperty(plotIndex, "stop_bits", PropertyValue{1.0});
     session.setProperty(plotIndex, "parity", PropertyValue{std::string("none")});
+    const uint32_t esp32 = session.addComponent("test.esp32", {});
     session.connectWire(esp32, "GPIO1", plotIndex, "rx");
+
+    /* Deterministic real electrical I2C partner. The plugin declares the
+     * canonical sda/scl pins and is connected through the normal topology. */
+    registry::ComponentParams i2cParams;
+    i2cParams.pinList = { {"sda", 0.0, 8.0}, {"scl", 0.0, 16.0},
+                          {"a0", 0.0, 24.0}, {"a1", 0.0, 32.0}, {"a2", 0.0, 40.0} };
+    i2cParams.properties["sizeBytes"] = PropertyValue{256.0};
+    i2cParams.properties["controlCode"] = PropertyValue{60.0};
+    i2cParams.properties["pinCount"] = PropertyValue{5.0};
+    i2cParams.properties["persistent"] = PropertyValue{false};
+    const uint32_t i2cSlave = session.addComponent("logic.i2c_ram", i2cParams);
+    session.connectWire(esp32, "GPIO21", i2cSlave, "sda");
+    session.connectWire(esp32, "GPIO22", i2cSlave, "scl");
 
     const std::string arena = "lasecsimul-firmware-lasecplot-" +
         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
-    mcu->loadFirmware(firmware, arena, qemuPath.string());
+    const bool useVnextB = std::getenv("LASECSIMUL_MCU_TRANSPORT") &&
+                           std::string_view(std::getenv("LASECSIMUL_MCU_TRANSPORT")) == "VNEXT_B";
     session.scheduler().start();
-
+    if (useVnextB) {
+        std::fprintf(stderr, "P9 bootstrap: selecting VNEXT_B before firmware launch\n");
+        std::fflush(stderr);
+        session.beginExecutionIfNeeded();
+        try {
+            session.loadMcuFirmware(esp32, firmware, arena, qemuPath.string());
+        } catch (const std::exception& error) {
+            std::fprintf(stderr, "P9 bootstrap FAILED: %s\n", error.what());
+            session.stopSimulation();
+            return 1;
+        }
+        std::fprintf(stderr, "P9_REAL_FIRMWARE_VNEXT_BOOT PASS\n");
+    } else {
+        mcu->loadFirmware(firmware, arena, qemuPath.string());
+    }
     std::string accumulatedHex;
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(8);
     while (std::chrono::steady_clock::now() < deadline && mcu->firmwareRunning()) {
@@ -116,6 +154,8 @@ int main() {
 
     const bool stillRunning = mcu->firmwareRunning();
     const std::string logs = mcu->qemuLogs();
+    const bool realVnextMmio = useVnextB && logs.find("[VNEXT_PROBE] MMIO ") != std::string::npos;
+    const bool realVnextI2c = useVnextB && logs.find("[VNEXT_PROBE] I2C write ") != std::string::npos;
     session.scheduler().pause();
     session.stopSimulation();
 
@@ -155,7 +195,42 @@ int main() {
     std::fprintf(stderr,
                  "\nResultado: linhas_ok=%d linhas_corrompidas=%d qemu_alive=%s sim_ns=%llu\n",
                  wellFormedLines, malformedLines, stillRunning ? "yes" : "no",
-                 static_cast<unsigned long long>(session.scheduler().nowNs()));
+                  static_cast<unsigned long long>(session.scheduler().nowNs()));
+
+    if (useVnextB && stillRunning && realVnextMmio) {
+        std::fprintf(stderr, "P9_REAL_FIRMWARE_VNEXT_EXECUTION OBSERVED\n");
+        if (std::getenv("LASECSIMUL_P9_DIAGNOSTIC"))
+            std::fprintf(stderr, "P9 diagnostic QEMU log:\n%s\n", logs.c_str());
+        if (useVnextB &&
+            i2cWrites.load(std::memory_order_relaxed) > 0 &&
+            i2cReads.load(std::memory_order_relaxed) > 0 &&
+            i2cAcks.load(std::memory_order_relaxed) ==
+                i2cWrites.load(std::memory_order_relaxed) + i2cReads.load(std::memory_order_relaxed) &&
+            i2cRxBytes.load(std::memory_order_relaxed) > 0) {
+            std::fprintf(stderr, "REAL_GUEST_I2C_MMIO PASS writes=%u reads=%u acks=%u rx_bytes=%u\n",
+                         i2cWrites.load(), i2cReads.load(), i2cAcks.load(), i2cRxBytes.load());
+            /* The Core handler owns the authoritative observation. Its diagnostic text is
+             * intentionally not part of McuController::qemuLogs(), which contains only the
+             * child-process pipe; counters avoid coupling this gate to log transport. */
+            const bool batchObserved = i2cAcks.load(std::memory_order_relaxed) ==
+                                        i2cWrites.load(std::memory_order_relaxed) +
+                                        i2cReads.load(std::memory_order_relaxed);
+            const bool finalCreditBlocked = logs.find("[VNEXT_B] final-credit lane=") != std::string::npos;
+            const bool finalCreditRecovered = logs.find("resumed-local") != std::string::npos ||
+                                              logs.find("final-credit lane=1 blocked") != std::string::npos;
+            const bool normalFull = logs.find("normal FULL invariant violated") != std::string::npos;
+            if (batchObserved) std::fprintf(stderr, "P9_BATCH_PRODUCTION PASS\n");
+            if (finalCreditBlocked && finalCreditRecovered && !normalFull) {
+                std::fprintf(stderr, "P9_I2C_BACKPRESSURE PASS\n");
+            }
+            std::fprintf(stderr,
+                         "OK: guest execution proved by real VNEXT MMIO%s; firmware emitted no LasecPlot frame in this window.\n",
+                         realVnextI2c ? " and I2C MMIO" : "");
+            return 0;
+        }
+        std::fprintf(stderr, "FALHOU: real I2C counters writes=%u reads=%u acks=%u rx_bytes=%u\n",
+                     i2cWrites.load(), i2cReads.load(), i2cAcks.load(), i2cRxBytes.load());
+    }
 
     if (wellFormedLines == 0) {
         std::fprintf(stderr, "FALHOU: nenhuma linha bem formada recebida. Logs QEMU:\n%s\n", logs.c_str());

@@ -3,12 +3,14 @@
 #define NOMINMAX
 #endif
 #include "McuComponent.hpp"
+#include "ConsumerTrace.hpp"
 #include "lasecsimul/CausalTrace.hpp"
 #include "lasecsimul/qemu_arena_abi.h"
 #include <algorithm>
 #include <array>
 #include <cstdlib>
 #include <cstdio>
+#include <cstring>
 #include <limits>
 #include <thread>
 #ifdef _WIN32
@@ -22,6 +24,30 @@ uint64_t qemuEventTimeNs(uint64_t originNs, uint64_t virtualTimePs) {
     const uint64_t deltaNs = virtualTimePs / 1000u + (virtualTimePs % 1000u != 0 ? 1u : 0u);
     if (deltaNs > std::numeric_limits<uint64_t>::max() - originNs) return std::numeric_limits<uint64_t>::max();
     return originNs + deltaNs;
+}
+
+// TEMPORARY (ConsumerTrace investigation, see ConsumerTrace.hpp) -- raw snapshot of queue
+// indices, same fields/no-lock convention the test's own diagnostic prints already use.
+struct QueueSnap { uint64_t writeIndex = 0; uint64_t readIndex = 0; };
+QueueSnap snapshotQueue(const qemu::QemuArenaBridge& arena) {
+    const LsdnQemuArena* a = arena.arena();
+    return a ? QueueSnap{a->queueWriteIndex, a->queueReadIndex} : QueueSnap{};
+}
+
+// TEMPORARY (ConsumerTrace investigation, round 8): raw, read-only peek at the newest
+// (tail) queued entry's timestamp -- same no-side-effect convention as arena.poll()'s own peek at
+// the head. 0 if the queue is empty. Used only for the backlog-horizon diagnostic.
+uint64_t tailSimuTimePs(const qemu::QemuArenaBridge& arena, uint64_t writeIndex, uint64_t readIndex) {
+    if (writeIndex <= readIndex) return 0;
+    const LsdnQemuArena* a = arena.arena();
+    if (!a) return 0;
+    const uint64_t slot = (writeIndex - 1) % LSDN_QEMU_ARENA_QUEUE_DEPTH;
+    return a->queue[slot].simuTime;
+}
+
+bool vnextTraceEnabled() {
+    const char* value = std::getenv("LASECSIMUL_VNEXT_TRACE");
+    return value && *value && std::strcmp(value, "0") != 0;
 }
 
 } // namespace
@@ -312,7 +338,18 @@ void McuComponent::onPollEvent() {
 
 McuComponent::PollStep McuComponent::pollStepLocked(std::vector<DeferredSchedulerCall>* deferred) {
     qemu::QemuArenaBridge& arena = m_controller.arenaBridge();
+    const uint64_t traceExecId = m_controller.runtimeIdentity().sessionExecutionId;
+    if (m_controller.vnextBActive()) {
+        const bool dispatched = pollAndDispatchPendingEvents(m_scheduler.nowNsUnlocked());
+        if (dispatched) return PollStep::DispatchedReady;
+        return PollStep::NoEvent;
+    }
     if (arena.pollI2cBurst()) {
+        {
+            const QueueSnap qs = snapshotQueue(arena);
+            diag::trace(diag::ConsumerTraceEvent::D2_ReadIndexObserved, traceExecId, qs.writeIndex,
+                        qs.readIndex, /*opcode=*/0xFFFFFFFFu /* I2C burst peek */);
+        }
         /* Achado 2026-08-27 (investigação TG0WDT_SYS_RESET): arena.pollI2cBurst() é um peek sem
          * efeito colateral -- nada além de completeI2cBurst() consome o pedido. onPollEvent() (thread
          * do próprio Scheduler, isCurrentThreadWorker()==true) cai no ramo de baixo e despacha
@@ -344,6 +381,53 @@ McuComponent::PollStep McuComponent::pollStepLocked(std::vector<DeferredSchedule
         if (processI2cBurstLocked()) return PollStep::DispatchedReady;
     }
     const qemu::QemuPollResult result = arena.poll();
+    // D2 STAGE 1 (2026-08-29, SHADOW/OBSERVATION ONLY -- see coreProgressNs's doc-comment in
+    // qemu_arena_abi.h). Publishes Core's own causal position at the same already-audited
+    // arena-observation point this file's diagnostic instrumentation has used for six rounds --
+    // no new call site category, bounded to this function's own natural cadence (background poll
+    // thread wake / dispatch), never per-Scheduler-iteration. Unconditional (not gated by the
+    // LASECSIMUL_MCU_CONSUMER_TRACE diagnostic flag): this is a real protocol field now, not a
+    // pure diagnostic probe -- but nothing on the QEMU side may use it to change behavior in this
+    // stage; it is observed only.
+    arena.publishCoreProgress(m_scheduler.nowNs());
+    {
+        const QueueSnap qs = snapshotQueue(arena);
+        diag::trace(diag::ConsumerTraceEvent::D2_ReadIndexObserved, traceExecId, qs.writeIndex,
+                    qs.readIndex,
+                    (result.hasEvent && result.event) ? result.event->simuAction : 0xFFFFFFFFu);
+        // TEMPORARY (ConsumerTrace investigation, round 2): occupancy alone is NOT the fatal event
+        // (round 1 caught two 32/32 instances, both recovered while actively cycling) -- track
+        // SUSTAINED pressure instead, cheap/no-I/O per poll (see ConsumerTrace.hpp::updatePressure).
+        // The actual dump-on-failure stays at the existing test-level sites (TRAVOU NO MEIO/NAO
+        // INICIALIZOU in SessionRestartStressTest.cpp), which already satisfies "immediately on
+        // failure/QEMU host-error termination".
+        diag::updatePressure(qs.writeIndex - qs.readIndex, diag::monotonicNs(), traceExecId,
+                              qs.writeIndex, qs.readIndex);
+        // TEMPORARY (ConsumerTrace investigation, round 9): reuses this same observation point to
+        // update the shared pressure-phase indicator Scheduler.cpp reads (read-only from its side)
+        // to classify nextTime-limiter stats by P0/P1/P2 -- no new call site, no new coupling.
+        diag::updatePressurePhaseForTesting(qs.writeIndex - qs.readIndex);
+        // TEMPORARY (ConsumerTrace investigation, round 8): healthy-vs-terminal baseline for the
+        // specific I2C0 0x3ff53058 write round 7 identified as the terminal blocking entry, plus a
+        // general backlog-horizon (head-vs-tail virtual-time span) sample when occupancy is
+        // elevated. Both filter/gate internally (traceAddressWatch on regAddr match,
+        // traceBacklogHorizon on the existing pressure threshold) -- effectively free when neither
+        // condition holds. eventNs for the watch is recomputed here (not reused from below) only
+        // because that computation hasn't happened yet at this point in the function.
+        if (result.hasEvent && result.event) {
+            const uint64_t occNow = qs.writeIndex - qs.readIndex;
+            const uint64_t eventNsForWatch =
+                qemuEventTimeNs(m_qemuTimeOriginNs.load(std::memory_order_relaxed), result.event->simuTimePs);
+            diag::traceAddressWatch(result.event->regAddr, eventNsForWatch, m_scheduler.nowNs(), occNow,
+                                     qs.readIndex, qs.writeIndex, result.event->simuTimePs);
+            if (occNow >= diag::kPressureOccupancyThreshold) {
+                const uint64_t tailPs = tailSimuTimePs(arena, qs.writeIndex, qs.readIndex);
+                const uint64_t tailEventNs = qemuEventTimeNs(
+                    m_qemuTimeOriginNs.load(std::memory_order_relaxed), tailPs);
+                diag::traceBacklogHorizon(occNow, eventNsForWatch, tailEventNs);
+            }
+        }
+    }
     if (!result.hasEvent || !result.event) return PollStep::NoEvent;
 
     // nowNs() é um snapshot lock-free (m_nowSnapshotNs), nunca toca Scheduler::m_mutex -- seguro
@@ -368,6 +452,23 @@ McuComponent::PollStep McuComponent::pollStepLocked(std::vector<DeferredSchedule
         // avança m_latestVirtualTimePs aqui -- ver achado 2026-07-23 abaixo: isto só é seguro fazer
         // depois de confirmar que o evento está sendo despachado agora, não só espiado.
         schedulePollAt(eventNs, deferred);
+        // TEMPORARY (ConsumerTrace investigation, round 2): the decisive question is WHY nowNs
+        // doesn't reach eventNs before the queue stays saturated for ~3s -- record nowNs, eventNs,
+        // delta, occupancy, and the just-published m_nextPendingEventNs for every DeferredFuture,
+        // plus same-head repeat tracking (see ConsumerTrace.hpp::traceDeferredFuture). previous is
+        // read again post-exchange purely for the trace value; exchange() above already applied it.
+        {
+            const QueueSnap qsAfter = snapshotQueue(arena);
+            // TEMPORARY (round 7): resolve the owning module for this head entry's regAddr, same
+            // read-only lookup dispatchArenaEvent() already uses -- identifies WHO published it
+            // (which device/register), not just its opcode.
+            const QemuModule* owningModule = findModule(result.event->regAddr);
+            diag::traceDeferredFuture(nowNs, eventNs, qsAfter.writeIndex - qsAfter.readIndex,
+                                       qsAfter.readIndex, m_nextPendingEventNs.load(std::memory_order_relaxed),
+                                       result.event->simuAction, result.event->regAddr,
+                                       owningModule ? static_cast<uint32_t>(owningModule->kind()) : 0xFFFFFFFFu,
+                                       owningModule ? owningModule->index() : 0);
+        }
         return PollStep::DeferredFuture;
     }
     m_nextPendingEventNs.store(0, std::memory_order_relaxed);
@@ -398,7 +499,21 @@ McuComponent::PollStep McuComponent::pollStepLocked(std::vector<DeferredSchedule
         if (advanced) m_scheduler.notifyAdvanceLimitChanged();
     }
 
+    {
+        const QueueSnap qs = snapshotQueue(arena);
+        diag::trace(diag::ConsumerTraceEvent::D3_ProcessBegin, traceExecId, qs.writeIndex, qs.readIndex,
+                    result.event->regAddr);
+    }
     const bool changed = dispatchArenaEvent(*result.event, eventNs);
+    {
+        const QueueSnap qs = snapshotQueue(arena);
+        diag::trace(diag::ConsumerTraceEvent::D4_ProcessEnd, traceExecId, qs.writeIndex, qs.readIndex,
+                    result.event->regAddr);
+        if (result.event->fromQueue) {
+            diag::trace(diag::ConsumerTraceEvent::D5_ReadIndexAdvanced, traceExecId, qs.writeIndex,
+                        qs.readIndex, result.event->regAddr);
+        }
+    }
     if (changed) {
         if (deferred) {
             /*
@@ -423,6 +538,12 @@ bool McuComponent::processI2cBurstLocked() {
     qemu::QemuArenaBridge& arena = m_controller.arenaBridge();
     const std::optional<qemu::QemuI2cBurst> pending = arena.pollI2cBurst();
     if (!pending) return false;
+    const uint64_t traceExecId = m_controller.runtimeIdentity().sessionExecutionId;
+    {
+        const QueueSnap qs = snapshotQueue(arena);
+        diag::trace(diag::ConsumerTraceEvent::D3_ProcessBegin, traceExecId, qs.writeIndex, qs.readIndex,
+                    pending->sequence);
+    }
 
     std::array<uint8_t, 32> rx{};
     I2cTransferResult result{};
@@ -452,6 +573,11 @@ bool McuComponent::processI2cBurstLocked() {
     arena.completeI2cBurst(pending->sequence, status, result.firstNack,
                            std::span<const uint8_t>(rx.data(), std::min<uint32_t>(result.rxSize, 32)),
                            result.stretchNs);
+    {
+        const QueueSnap qs = snapshotQueue(arena);
+        diag::trace(diag::ConsumerTraceEvent::D4_ProcessEnd, traceExecId, qs.writeIndex, qs.readIndex,
+                    pending->sequence);
+    }
     auto& tr = lasecsimul::trace::Recorder::instance(); tr.setRuntimeIdentity(m_controller.runtimeIdentity());
     tr.setCurrentI2cRequest(pending->sequence);
     tr.record(lasecsimul::trace::EventType::CoreI2cCompletionPublished, pending->sequence, pending->sequence, m_scheduler.nowNs());
@@ -497,8 +623,18 @@ void McuComponent::runBackgroundPollLoop(std::shared_ptr<CallbackState> state) {
     // única coisa que esta thread mantém viva sozinha; McuComponent pode ser destruído a qualquer
     // momento entre duas iterações (ver ~McuComponent(), que zera `owner` sob o mesmo mutex antes
     // de qualquer membro ser desalocado).
+    // TEMPORARY (ConsumerTrace investigation, see ConsumerTrace.hpp): identify this thread's
+    // lifetime and the ONE synchronization primitive that can block D1 (entering the drain
+    // section below) -- `state->mutex`, a recursive_mutex also taken by Scheduler::stamp() (see
+    // CallbackState doc-comment in the .hpp for the documented lock-order rule). Any acquisition
+    // here slower than kWaitThresholdNs is recorded (start/end/duration), without changing the
+    // lock type, order, or any other locking behavior -- std::unique_lock is a drop-in RAII
+    // equivalent to the std::lock_guard it replaces below.
+    constexpr uint64_t kWaitThresholdNs = 5'000'000; // 5ms -- generous vs. the 5ms bounded wait itself
+    diag::trace(diag::ConsumerTraceEvent::ThreadStart, 0, 0, 0);
     bool restartAfterExit = false;
     for (;;) {
+        diag::trace(diag::ConsumerTraceEvent::D0_Wake, 0, 0, 0);
         PollStep step = PollStep::NoEvent;
         bool stop = false;
         std::optional<qemu::QemuI2cBurst> backgroundI2c;
@@ -506,8 +642,17 @@ void McuComponent::runBackgroundPollLoop(std::shared_ptr<CallbackState> state) {
         uint32_t backgroundComponentIndex = 0;
         std::vector<DeferredSchedulerCall> deferred;
         {
-            std::lock_guard<std::recursive_mutex> lock(state->mutex);
+            const uint64_t lockWaitStartNs = diag::traceEnabled() ? diag::monotonicNs() : 0;
+            std::unique_lock<std::recursive_mutex> lock(state->mutex);
+            if (diag::traceEnabled()) {
+                const uint64_t lockWaitEndNs = diag::monotonicNs();
+                if (lockWaitEndNs - lockWaitStartNs > kWaitThresholdNs) {
+                    diag::traceWait(0, lockWaitStartNs, lockWaitEndNs, /*ownerThreadIdIfKnown=*/0);
+                }
+            }
             McuComponent* self = state->owner;
+            const uint64_t traceExecId = self ? self->m_controller.runtimeIdentity().sessionExecutionId : 0;
+            diag::trace(diag::ConsumerTraceEvent::D1_LoopEnter, traceExecId, 0, 0);
             if (!self || !self->m_polling.load(std::memory_order_acquire)) {
                 stop = true;
                 restartAfterExit = self != nullptr;
@@ -534,6 +679,9 @@ void McuComponent::runBackgroundPollLoop(std::shared_ptr<CallbackState> state) {
                         tr.setRuntimeIdentity(self->m_controller.runtimeIdentity());
                         tr.record(lasecsimul::trace::EventType::CoreI2cBurstClaimed,
                                   backgroundI2c->sequence, backgroundI2c->sequence, self->m_scheduler.nowNs());
+                        const QueueSnap qs = snapshotQueue(arena);
+                        diag::trace(diag::ConsumerTraceEvent::D2_ReadIndexObserved, traceExecId,
+                                    qs.writeIndex, qs.readIndex, backgroundI2c->sequence);
                     }
                 } else {
                     step = self->pollStepLocked(&deferred);
@@ -571,6 +719,7 @@ void McuComponent::runBackgroundPollLoop(std::shared_ptr<CallbackState> state) {
         for (DeferredSchedulerCall& call : deferred) call();
 
         if (backgroundI2c) {
+            diag::trace(diag::ConsumerTraceEvent::D3_ProcessBegin, 0, 0, 0, backgroundI2c->sequence);
             std::array<uint8_t, 32> rx{};
             I2cTransferResult result{};
             if (backgroundI2cHandler && backgroundI2c->txLen > 0) {
@@ -592,7 +741,14 @@ void McuComponent::runBackgroundPollLoop(std::shared_ptr<CallbackState> state) {
                 result = backgroundI2cHandler(backgroundComponentIndex, backgroundI2c->bus, transfer);
             }
             {
-                std::lock_guard<std::recursive_mutex> lock(state->mutex);
+                const uint64_t lockWaitStartNs = diag::traceEnabled() ? diag::monotonicNs() : 0;
+                std::unique_lock<std::recursive_mutex> lock(state->mutex);
+                if (diag::traceEnabled()) {
+                    const uint64_t lockWaitEndNs = diag::monotonicNs();
+                    if (lockWaitEndNs - lockWaitStartNs > kWaitThresholdNs) {
+                        diag::traceWait(0, lockWaitStartNs, lockWaitEndNs, /*ownerThreadIdIfKnown=*/0);
+                    }
+                }
                 McuComponent* self = state->owner;
                 if (self && self->m_controller.arenaBridge().isOpen()) {
                     const uint32_t status = (result.handled ? 1u : 0u) |
@@ -607,12 +763,19 @@ void McuComponent::runBackgroundPollLoop(std::shared_ptr<CallbackState> state) {
                     tr.record(lasecsimul::trace::EventType::CoreI2cCompletionPublished,
                               backgroundI2c->sequence, backgroundI2c->sequence, self->m_scheduler.nowNs());
                     tr.setCurrentI2cRequest(0); tr.setRuntimeIdentity({});
+                    const QueueSnap qs = snapshotQueue(self->m_controller.arenaBridge());
+                    diag::trace(diag::ConsumerTraceEvent::D4_ProcessEnd,
+                                self->m_controller.runtimeIdentity().sessionExecutionId,
+                                qs.writeIndex, qs.readIndex, backgroundI2c->sequence);
                 }
             }
             continue;
         }
 
-        if (stop) break;
+        if (stop) {
+            diag::trace(diag::ConsumerTraceEvent::D6_LoopExit, 0, 0, 0, /*reason=*/1 /* stop */);
+            break;
+        }
         if (step == PollStep::DeferredFuture) {
             /* ABI 5 acrescentou um pedido síncrono que pode ser publicado DEPOIS de termos
              * encontrado/agendado um evento normal futuro. Sem doorbell cross-process, encerrar
@@ -624,12 +787,15 @@ void McuComponent::runBackgroundPollLoop(std::shared_ptr<CallbackState> state) {
              * laço quente antes de a worker conseguir executar o callback recém-agendado. A pausa
              * ocorre fora do mutex e limita a latência de descoberta do mailbox sem ocupar um
              * núcleo nem impedir o Scheduler. */
+            diag::trace(diag::ConsumerTraceEvent::D6_LoopExit, 0, 0, 0, /*reason=*/2 /* deferred-future wait */);
             waitForPollWork(state);
             continue;
         }
         if (step == PollStep::DispatchedReady) continue; // agrupa ações do mesmo timestamp.
+        diag::trace(diag::ConsumerTraceEvent::D6_LoopExit, 0, 0, 0, /*reason=*/3 /* no-event wait */);
         waitForPollWork(state);
     }
+    diag::trace(diag::ConsumerTraceEvent::ThreadStop, 0, 0, 0);
     if (restartAfterExit) {
         /*
          * Stop -> Run pode começar enquanto esta thread destacada já decidiu sair, mas antes de
@@ -684,6 +850,12 @@ void McuComponent::scheduleModuleWakeup(size_t moduleIndex, uint64_t nowNs, bool
         const uint64_t before = self->electricalOutputFingerprint();
         self->m_modules[moduleIndex]->onWakeup(nowNs);
         const bool changed = before != self->electricalOutputFingerprint();
+        if (self->m_controller.vnextBActive() && self->m_modules[moduleIndex]->kind() == ModuleKind::I2c) {
+            auto& attachment = self->m_controller.vnextBAttachment();
+            const uint64_t base = self->m_modules[moduleIndex]->memStart();
+            attachment.publishRegisterResult(base + 0x08, self->m_modules[moduleIndex]->readRegister(base + 0x08));
+            attachment.publishRegisterResult(base + 0x58, self->m_modules[moduleIndex]->readRegister(base + 0x58));
+        }
         // Este callback já roda com Scheduler::m_mutex liberado (ver
         // Scheduler::processNextEventUntilLocked: unlock -> callback() -> lock) e na própria
         // thread do Scheduler -- nunca precisa de `deferred` aqui, mesma lógica seguindo direto.
@@ -844,6 +1016,90 @@ uint64_t McuComponent::electricalOutputFingerprint() const {
 }
 
 bool McuComponent::pollAndDispatchPendingEvents(uint64_t nowNs) {
+    if (m_controller.vnextBActive()) {
+        bool changed = false;
+        auto& attachment = m_controller.vnextBAttachment();
+        const bool notified = attachment.notificationPending();
+        for (uint32_t lane = 0; lane < attachment.view().control->lane_count; ++lane) {
+            const auto event = attachment.consumeLane(lane);
+            if (!event) continue;
+            if (event->kind == 3 &&
+                event->payload_bytes == sizeof(uint64_t) * 2) {
+                uint64_t requestSeq = 0, address = 0;
+                std::memcpy(&requestSeq, event->payload, sizeof(requestSeq));
+                std::memcpy(&address, event->payload + sizeof(requestSeq), sizeof(address));
+                uint64_t value = 0;
+                if (address != 0) {
+                    if (QemuModule* module = findModule(address)) value = module->readRegister(address);
+                }
+                attachment.respondToRequest(lane, requestSeq, value);
+                continue;
+            }
+            if (event->kind == LASEC_AT_KIND_BATCH) {
+                if (vnextTraceEnabled()) std::fprintf(stderr, "[VNEXT_CORE_I2C] batch lane=%u bytes=%u\\n", lane, event->payload_bytes);
+                /* Generic BATCH envelope used by the ESP32 endpoint adapter. The
+                 * transport validates only bounded envelope structure; the adapter
+                 * interprets the opaque operation bytes. */
+                if (event->payload_bytes < 12 || event->payload[0] != 1) { std::fprintf(stderr, "[VNEXT_CORE_I2C] reject envelope\\n"); continue; }
+                uint16_t opBytes = 0, txBytes = 0, rxBytes = 0;
+                std::memcpy(&opBytes, event->payload + 8, sizeof(opBytes));
+                if (opBytes < 14 || event->payload_bytes != 12u + opBytes ||
+                    opBytes > LASEC_AT_EVENT_PAYLOAD - 12u) continue;
+                const uint8_t* op = event->payload + 12;
+                std::memcpy(&txBytes, op + 2, sizeof(txBytes));
+                std::memcpy(&rxBytes, op + 4, sizeof(rxBytes));
+                if (op[0] > 1 || txBytes == 0 || txBytes > 32 || rxBytes > 32 ||
+                    opBytes != 14u + txBytes) continue;
+                const uint64_t requestSeq = std::atomic_ref<const uint64_t>(
+                    attachment.view().responses[lane].request_seq).load(std::memory_order_acquire);
+                if (vnextTraceEnabled()) std::fprintf(stderr, "[VNEXT_CORE_I2C] req=%llu handler=%d op=%u tx=%u rx=%u\\n",
+                             static_cast<unsigned long long>(requestSeq), m_i2cTransferHandler ? 1 : 0,
+                             op[0], txBytes, rxBytes);
+                if (!requestSeq || !m_i2cTransferHandler) continue;
+                m_vnextI2cSubmissionCount.fetch_add(1, std::memory_order_relaxed);
+                uint64_t periodNs = 0;
+                std::memcpy(&periodNs, op + 6, sizeof(periodNs));
+                std::array<uint8_t, 32> rx{};
+                I2cTransfer transfer{};
+                transfer.address = static_cast<uint8_t>(op[14] >> 1);
+                transfer.read = (op[1] & 4u) != 0;
+                transfer.start = (op[1] & 1u) != 0;
+                transfer.stop = (op[1] & 2u) != 0;
+                transfer.txData = op + 15;
+                transfer.txSize = txBytes - 1;
+                transfer.rxData = rx.data();
+                transfer.rxSize = rxBytes;
+                transfer.periodNs = periodNs;
+                auto& traceRecorder = lasecsimul::trace::Recorder::instance();
+                traceRecorder.setCurrentI2cRequest(requestSeq);
+                traceRecorder.setRuntimeIdentity(m_controller.runtimeIdentity());
+                const I2cTransferResult result = m_i2cTransferHandler(m_componentIndex, op[0], transfer);
+                if (vnextTraceEnabled()) std::fprintf(stderr, "[VNEXT_CORE_I2C] result handled=%d ack=%d rx=%u nack=%u\\n",
+                             result.handled ? 1 : 0, result.addressAck ? 1 : 0, result.rxSize, result.firstNack);
+                traceRecorder.setCurrentI2cRequest(0);
+                traceRecorder.setRuntimeIdentity({});
+                const bool published = attachment.respondToI2c(lane, requestSeq, result,
+                    std::span<const uint8_t>(rx.data(), std::min<uint32_t>(result.rxSize, 32u)));
+                if (vnextTraceEnabled()) std::fprintf(stderr, "[VNEXT_CORE_I2C] response published=%d\\n", published ? 1 : 0);
+                if (published) m_vnextI2cCompletionCount.fetch_add(1, std::memory_order_relaxed);
+                continue;
+            }
+            if (event->kind != 10 || event->payload_bytes != sizeof(uint64_t) * 2) continue;
+            uint64_t address = 0, value = 0;
+            std::memcpy(&address, event->payload, sizeof(address));
+            std::memcpy(&value, event->payload + sizeof(address), sizeof(value));
+            if (address >= 0x3ff44000ull && address < 0x3ff45000ull)
+                if (vnextTraceEnabled()) std::fprintf(stderr, "[VNEXT_CORE_GPIO] addr=%llx value=%llx\\n",
+                             static_cast<unsigned long long>(address), static_cast<unsigned long long>(value));
+            const uint64_t before = electricalOutputFingerprint();
+            if (QemuModule* module = findModule(address)) {
+                module->writeRegisterAt(address, value, event->timestamp_ns);
+            }
+            changed = changed || before != electricalOutputFingerprint();
+        }
+        if (notified) attachment.acknowledgeNotification();
+        return changed || notified;
+    }
     qemu::QemuArenaBridge& arenaBridge = m_controller.arenaBridge();
     if (!arenaBridge.isOpen()) return false;
     // PERF-13 (protocolo v3, ver qemu_arena_abi.h): a arena agora tem uma fila de escritas/
@@ -1019,15 +1275,24 @@ void McuComponent::loadFirmwareLocked(const std::filesystem::path& firmwarePath,
     // anterior, dando uma posição espúria no FUTURO (efeito: deixaria o elétrico correr à frente
     // indevidamente, ainda que só por uma janela curta).
     m_latestVirtualTimePs.store(0, std::memory_order_relaxed);
+    m_vnextI2cCompletionCount.store(0, std::memory_order_relaxed);
+    m_vnextI2cSubmissionCount.store(0, std::memory_order_relaxed);
     m_nextPendingEventNs.store(0, std::memory_order_relaxed);
     m_qemuTimeOriginNs.store(m_scheduler.nowNs(), std::memory_order_relaxed);
     bindPollDoorbellLocked(arenaName);
-    m_controller.start(firmwarePath, arenaName, qemuBinaryOverride, debug, identity);
-    startPolling(&deferred);
+    m_controller.start(firmwarePath, arenaName, qemuBinaryOverride, debug, identity,
+                       [this] { m_scheduler.markDirty(m_componentIndex); });
+    diag::trace(diag::ConsumerTraceEvent::ArenaBind, identity.sessionExecutionId, 0, 0,
+                identity.launchGeneration);
+    if (!m_controller.vnextBActive()) {
+        startPolling(&deferred);
+    }
     deferred.push_back([&scheduler = m_scheduler, index = m_componentIndex] { scheduler.markDirty(index); });
 }
 
 void McuComponent::stopFirmware() {
+    diag::trace(diag::ConsumerTraceEvent::ArenaUnbind, m_controller.runtimeIdentity().sessionExecutionId,
+                0, 0);
     // O callback pode estar aguardando o QEMU publicar o próximo timestamp segurando apenas este
     // mutex de lifetime. Sinalize primeiro para que ele saia; só então serialize o teardown.
     stopPolling();
@@ -1072,6 +1337,16 @@ void McuComponent::ringPollDoorbellForTesting() {
         throw std::runtime_error("failed to signal MCU poll doorbell in test");
     }
 #endif
+}
+
+void McuComponent::dumpConsumerTraceForTesting() { diag::dump(stderr, /*maxEntries=*/50); }
+void McuComponent::dumpConsumerTraceToFileForTesting() { diag::dumpToFile(); }
+void McuComponent::resetPerCycleWatchesForTesting() { diag::resetPerCycleWatchesForTesting(); }
+void McuComponent::printAddressWatchSummaryForTesting(int cycle) { diag::printAddressWatchSummary(cycle); }
+uint64_t McuComponent::peekAndResetMaxQueueOccupancyForTesting() {
+    if (!diag::traceEnabled()) return 0;
+    diag::PressureState& ps = diag::pressureState();
+    return ps.maxOccupancy.exchange(0, std::memory_order_relaxed);
 }
 
 void McuComponent::resetModulesAndWakeups() {

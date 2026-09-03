@@ -19,6 +19,7 @@ public:
     bool stop(std::chrono::milliseconds timeout = std::chrono::milliseconds(1000));
     void kill();
     bool isRunning() const;
+    uint64_t processId() const;
     std::string logs() const;
 
 private:
@@ -27,4 +28,3 @@ private:
 };
 
 } // namespace lasecsimul::mcu::qemu
-
