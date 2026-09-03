@@ -1,0 +1,57 @@
+--- hw/i2c/esp32_i2c.c.orig-before-e103	2026-09-03 09:03:59.028965300 -0300
++++ hw/i2c/esp32_i2c.c	2026-09-03 09:03:59.083292200 -0300
+@@ -280,6 +280,17 @@
+     return true;
+ }
+ 
++/* Opt-in gate for the per-operation I2C diagnostics below.  DECISION-003
++ * requires per-operation I2C diagnostic output to be off by default; the two
++ * ackERR sites had been reported as fixed but were still unconditional, and
++ * emitted 22,930 lines in one 60 s 16-session run (E103).  Diagnostic-only:
++ * no I2C, transport, watchdog or reset semantics depend on these writes. */
++static bool esp32_i2c_trace_enabled(void)
++{
++    const char *value = getenv("LASECSIMUL_VNEXT_TRACE");
++    return value && value[0] && strcmp(value, "0") != 0;
++}
++
+ static void esp32_i2c_trace_rejected_plan(Esp32I2CState *s)
+ {
+     static unsigned reports;
+@@ -302,7 +313,9 @@
+     s->sr_reg |= ackERR ? 1u : 0u; // I2C_ACK_REC: 0=ACK, 1=NACK do último resultado
+     if (ackERR) {
+         s->int_raw_reg |= 1 << 10;      // ACK_ERR
+-        printf("Qemu: esp32_i2c_finish_burst ackERR\n"); fflush(stdout);
++        if (esp32_i2c_trace_enabled()) {
++            printf("Qemu: esp32_i2c_finish_burst ackERR\n"); fflush(stdout);
++        }
+     } else {
+         s->int_raw_reg &= ~(1 << 10);
+     }
+@@ -505,7 +518,9 @@
+         if( ackERR ){
+             s->int_raw_reg |= 1<<10;          // Set ACK_ERR
+ 
+-            printf("Qemu: esp32_i2c_event ackERR\n"); fflush( stdout );
++            if (esp32_i2c_trace_enabled()) {
++                printf("Qemu: esp32_i2c_event ackERR\n"); fflush( stdout );
++            }
+             //return;
+         }
+         else s->int_raw_reg &= ~(1<<10);      // Clear ACK_ERR
+@@ -611,7 +626,13 @@
+     case A_I2C_TIMEOUT:      return s->timeout_reg;
+     case A_I2C_FIFO_DATA: {
+         if( fifo8_num_used(&s->rx_fifo) == 0) {
+-            error_report("esp32_i2c: read I2C FIFO while it is empty");
++            /* Bounded, not silenced: 20,154 of these in one 60 s 16-session run
++             * (E103) is a signal worth keeping, but an unbounded per-read report
++             * floods the Core log buffer and evicts the reset records needed to
++             * classify failures. */
++            static unsigned empty_fifo_reports;
++            if (empty_fifo_reports++ < 16)
++                error_report("esp32_i2c: read I2C FIFO while it is empty");
+             return 0xee;
+         }
+         uint8_t res = fifo8_pop(&s->rx_fifo);

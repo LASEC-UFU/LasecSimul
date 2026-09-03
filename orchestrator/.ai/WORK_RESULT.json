@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "request_id": "0755bf6bfa6c42859990d0825b57cb8d",
+  "state": "EXECUTE",
+  "decision": "Authorize a narrow same-release provenance boundary for exactly the missing CPython 3.8.10 x64 base MSIs; do not use 3.10 homonyms or debug/PDB substitutes.",
+  "next_action": "Acquire exactly `core.msi`, `exe.msi` and `lib.msi` from `https://www.python.org/ftp/python/3.8.10/amd64/` into a new project-local staging directory using the previously proven default certificate/hostname-verifying Python HTTPS path, same-origin redirects only, bounded timeout/retries, `.part` staging and atomic rename. For each record requested/final URL, HTTP metadata, size and SHA-256, and require Authenticode status Valid with signer Python Software Foundation; stop on the first mismatch or missing artifact. Then query only MSI ProductVersion, Template/SummaryInformation and ProductCode read-only to prove 3.8.10/x64 identity and inventory those fields. Stop before CAB export/extraction, runtime assembly/execution, dependency installation, MSI actions, PATH/registry/ACL changes, firmware build or QEMU.",
+  "reason": "E093 proves absence from the selected Burn layout, not absence or invalidity of the official base packages. The exact same-origin 3.8.10/amd64 artifacts are the smallest provenance-preserving inputs needed by the already reviewed assembly design. Independent TLS, Authenticode and read-only MSI identity checks prevent accidental cross-version/debug substitution before any material processing."
+}

@@ -1,0 +1,36 @@
+--- a/softmmu/vnext_b.c
++++ b/softmmu/vnext_b.c
+@@ -443,18 +443,31 @@
+     VnextEvent *event = (VnextEvent *)(vnext_base + d->events.offset) + (write & (d->depth - 1));
+     memset(event, 0, sizeof(*event)); event->timestamp = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
+     event->kind = 1; event->endpoint = 0; event->bytes = sizeof(value); memcpy(event->payload, &value, sizeof(value));
+     event->sequence = write; qatomic_store_release(&meta[0], write + 1);
+     SetEvent(vnext_artifact_event);
+     if (vnext_lane_credit(lane) == 0) {
+-        fprintf(stderr, "[VNEXT_B] final-credit lane=%u blocked\n", lane);
++        /* Diagnostics must not be charged to the guest watchdog budget.
++         * esp32_timg_transport_pause(lane, true) opens the compensated window
++         * and the matching (lane, false) credits the elapsed interval back to
++         * the MWDT count base, so anything emitted *before* the window opens
++         * is uncompensated host time that the guest watchdog deadline pays
++         * for.  These two writes used to sit outside it and were also
++         * unconditional: one VNEXT_B session emitted 24,009 of them in 60 s,
++         * and 16 sessions 215,082 -- 83% of all QEMU output.  They are now
++         * opt-in and inside the window.  Diagnostic-only: no transport,
++         * backpressure, scheduler or reset semantics change.
++         * See orchestrator/.ai/EVIDENCE.md E102. */
+         vnext_blocked[lane] = true;
+         esp32_timg_transport_pause(lane, true);
++        if (vnext_trace_enabled())
++            fprintf(stderr, "[VNEXT_B] final-credit lane=%u blocked\n", lane);
+         cpu_stop_current();
+         if (vnext_lane_credit(lane) != 0) {
+-            fprintf(stderr, "[VNEXT_B] final-credit lane=%u resumed-local\n", lane);
++            if (vnext_trace_enabled())
++                fprintf(stderr, "[VNEXT_B] final-credit lane=%u resumed-local\n", lane);
+             vnext_blocked[lane] = false;
+             esp32_timg_transport_pause(lane, false);
+             cpu_resume(cpu);
+         }
+     }
+ }

@@ -1,0 +1,5 @@
+{
+  "firmware": "C:\\SourceCode\\II1P04_GPIO_Debug\\.pio\\build\\esp32\\merged.bin",
+  "qemu": "C:\\SourceCode\\LasecSimul\\vnext_prototype\\dev_qemu_runtime\\qemu-system-xtensa.exe",
+  "updated_at": "2026-09-03T07:29:16-03:00"
+}

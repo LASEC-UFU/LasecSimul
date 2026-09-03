@@ -1,0 +1,44 @@
+{
+    "project_root":  "C:\\SourceCode\\LasecSimul",
+    "loop_poll_seconds":  1,
+    "codex":  {
+                  "enabled":  true,
+                  "model":  "gpt-5.6-luna",
+                  "command":  [
+                                  "codex",
+                                  "exec"
+                              ],
+                  "extra_args":  [
+                                     "--sandbox",
+                                     "workspace-write",
+                                     "--add-dir",
+                                     "C:\\SourceCode\\qemu_lasecSimul",
+                                     "--add-dir",                                     
+                                     "C:\\SourceCode\\II1P04_GPIO_Debug"
+                                 ],
+                  "timeout_minutes":  180
+              },
+    "work":  {
+                 "enabled":  true,
+                 "window_title_regex":  ".*ChatGPT.*",
+                 "input_name_regex":  ".*(Message|Ask|Pergunte|Mensagem|Send a message|Enviar mensagem).*",
+                 "wait_timeout_minutes":  90,
+                 "poll_seconds":  2,
+                 "input_mode":  "last_focused_composer",
+                 "focus_delay_seconds":  1.0,
+                 "paste_delay_seconds":  0.3,
+                 "test_message":  "TESTE DO ORQUESTRADOR - responda apenas: WORK UI OK",
+                 "max_review_packet_chars":  12000,
+                 "periodic_review_every_codex_iterations":  4
+             },
+    "safeguards":  {
+                       "max_iterations":  200,
+                       "max_review_cycles_without_new_evidence":  5,
+                       "max_work_calls_per_hour":  8
+                   },
+    "logging":  {
+                    "keep_codex_logs":  20
+                },
+    "ai_dir":  "orchestrator\\.ai",
+    "executor_contract":  "orchestrator\\AGENTS.md"
+}

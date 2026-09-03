@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "source_repo": "C:\\SourceCode\\qemu_lasecSimul",
+  "branch": "main",
+  "head": "9dc30419a5372756b555ad7926563dcda2215c79",
+  "source_dirty": true,
+  "build_dir": "C:\\SourceCode\\qemu_lasecSimul\\build-ucrt64",
+  "build_executable": "C:\\SourceCode\\qemu_lasecSimul\\build-ucrt64\\qemu-system-xtensa.exe",
+  "canonical_runtime_dir": "C:\\SourceCode\\LasecSimul\\vnext_prototype\\dev_qemu_runtime",
+  "canonical_executable": "C:\\SourceCode\\LasecSimul\\vnext_prototype\\dev_qemu_runtime\\qemu-system-xtensa.exe",
+  "canonical_executable_sha256": "5C621E0B577F648CE665B33CB92F5A214EA5981ADCA369852A3FD8514B1EE2CF",
+  "canonical_executable_timestamp": "2026-09-03T14:42:58-03:00",
+  "runtime_requirements": [
+    "MSYS2 UCRT64 DLLs staged beside executable",
+    "Windows",
+    "xtensa-softmmu"
+  ],
+  "provenance": "CURRENT_WORKTREE_WITH_E102_E103_GUARDS",
+  "last_validated_test": "E105/E106 2026-09-03: bare-metal MWDT fixture matrix reproduced; 10-test Core regression set identical to the pre-patch baseline (7/10, same 3 pre-existing failures); production VNEXT_B run 1/4/8/12/16 sessions",
+  "last_validated_at": "2026-09-03T15:30:00-03:00",
+  "build_toolchain": "MSYS2 UCRT64 at C:\\SourceCode\\tools\\msys64, GCC 16.2.0, binutils 2.47, ninja 1.13.2, meson 1.12.0",
+  "build_command": "nice -n 19 ninja -j 8 qemu-system-xtensa.exe   (capped parallelism, see DECISION-010)",
+  "previous_executable_sha256": "427888AD4E50B7DDB2B98E03037675BB43FB6A13275397D432B6485C1401DE09"
+}

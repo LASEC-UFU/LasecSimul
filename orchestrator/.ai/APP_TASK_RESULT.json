@@ -1,0 +1,24 @@
+{
+  "status": "blocked",
+  "changed_files": [],
+  "commands": [
+    "git -C C:\\SourceCode\\qemu_lasecSimul status --short --branch",
+    "rg -n -C 3 '\\[VNEXT_PROBE\\]|vnext_trace_enabled|fflush' softmmu/vnext_b.c",
+    "Get-FileHash softmmu/vnext_b.c -Algorithm SHA256",
+    "apply_patch: add diagnostic guards to C:/SourceCode/qemu_lasecSimul/softmmu/vnext_b.c"
+  ],
+  "outputs": {
+    "canonical_worktree_exists": true,
+    "canonical_worktree_writable": false,
+    "probe_sites_found": 10,
+    "target_sha256_before": "cf94ed1eda9e32baddf70f804ef3a19893b0c20bdfcd45bb8257bfe8ddf54c35",
+    "build": "not run",
+    "trace_0_silence_check": "not run",
+    "trace_1_probe_check": "not run",
+    "manifest_refresh_validation": "not run"
+  },
+  "blockers": [
+    "The active filesystem policy rejected the required patch because C:\\SourceCode\\qemu_lasecSimul is outside the writable project; no workaround was used."
+  ],
+  "preservation": "No commit, push, reset, clean, checkout, or branch switch was performed. Existing dirty files were preserved."
+}
