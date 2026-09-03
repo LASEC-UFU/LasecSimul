@@ -1,0 +1,38 @@
+SCALE_DIAGNOSTIC session=0 scheduler_running=true scheduler_paused=false qemu_logs=[LasecSimul] execution=mttcg-realtime (default, one TCG thread per vCPU; rollback: LASECSIMUL_ESP32_EXECUTION_MODE=deterministic)
+[LasecSimul] arena=v5 negotiated (default; rollback: LASECSIMUL_QEMU_ARENA_VERSION=3)
+[LasecSimul] network=disabled; no NIC/backend will be created
+[LasecSimul] final argv:C:\SourceCode\LasecSimul\vnext_prototype\dev_qemu_runtime\qemu-system-xtensa.exe [lasecsimul-vnext-scale-0-325066580195200] [qemu-system-xtensa] [-M] [esp32-simul] [-display] [none] [-L] [C:\SourceCode\LasecSimul\devices\qemu-esp32\bin\esp32\rom\bin] [-drive] [file=C:\SourceCode\LasecSimul\vnext_prototype\runtime_inputs\mwdt_behavior\merged.bin,if=mtd,format=raw] [-accel] [tcg,thread=multi]
+Qemu: MCU poll doorbell opened: lasecsimul-vnext-scale-0-325066580195200-doorbell
+Qemu: arena mapped 1384 bytes
+Qemu: arena ABI v5 mapped (1384 bytes), capabilities negotiated
+-----------------------------------
+qemu-system-xtensa
+-M esp32-simul
+-display none
+-L C:\SourceCode\LasecSimul\devices\qemu-esp32\bin\esp32\rom\bin
+-drive file=C:\SourceCode\LasecSimul\vnext_prototype\runtime_inputs\mwdt_behavior\merged.bin,if=mtd,format=raw
+-accel tcg,thread=multi
+-----------------------------------
+Adding SPI flash device
+[LasecSimul] interrupt-wdt scale=100 (explicit realtime override)
+Qemu: initializing SPI Flash 'gd25q32' 4 MB
+Qemu: loading ROM binary 'C:\SourceCode\LasecSimul\devices\qemu-esp32\bin\esp32\rom\bin/esp32-v3-rom.bin'
+Qemu: loading APP binary 'C:\SourceCode\LasecSimul\devices\qemu-esp32\bin\esp32\rom\bin/esp32-v3-rom-app.bin'
+[LasecSimul][ESP32 reset] count=1 mask=0x0f cause0=1 cause1=1 pc0=0x50000000 pc1=0x00000000 wdt0_enabled=0 wdt1_enabled=0 network=disabled expected=no source=OTHER boot_epoch=1 pid=10096
+Qemu: initialized
+Qemu: execution mode: mttcg-realtime (vcpus=2, tcg_threads=2)
+Qemu: starting main loop
+[APP_CPU_RESET_R2] n=1 writer_cpu=0 writer_pc=0x40082eda target_stop=0 target_stopped=0 target_halted=1 target_exit_request=0 virtual_ns=646666800
+[APP_CPU_RESET_R4] cpu=1 stop=0 stopped=0 halted=1 exit_request=1 virtual_ns=646848800
+[LasecSimul][ESP32 reset] count=2 mask=0x02 cause0=1 cause1=12 pc0=0x4000689f pc1=0x40000400 wdt0_enabled=0 wdt1_enabled=0 network=disabled expected=app-cpu-startup source=SW_CPU_RESET_REGISTER boot_epoch=1 pid=10096
+[APP_CPU_RESET_R6] cpu=1 stop=0 stopped=0 halted=0 exit_request=1 virtual_ns=647220000
+[APP_CPU_RESET_WRITE_APPLIED] new=0x00100000
+[APP_CPU_RESET_WRITE_APPLIED] new=0x00120000
+[APP_CPU_RESET_WRITE_APPLIED] new=0x00124000
+[APP_CPU_RESET_WRITE_APPLIED] new=0x00124540
+[APP_CPU_RESET_WRITE_APPLIED] new=0x00124000
+[APP_CPU_RESET_WRITE_APPLIED] new=0x00124540
+[APP_CPU_RESET_WRITE_APPLIED] new=0x00124000
+qemu-system-xtensa: warning: GLib-GIO: Failed to open application manifest `C:\Windows\SystemApps\Microsoft.WindowsAppRuntime.vNext.CBS_8wekyb3d8bbwe\AppxManifest.xml' for package #34 (`Microsoft.WindowsAppRuntime.CBS.1.8_8000.800.1936.100_x64__8wekyb3d8bbwe'): error code 0x2
+
+PRODUCTION_SCALE FAIL failures=1

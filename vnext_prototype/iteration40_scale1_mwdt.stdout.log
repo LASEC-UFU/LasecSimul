@@ -1,0 +1,4 @@
+SCALE session=0 executionId=17866277772778252082 pid=12016 running=true submissions=0 completions=0
+SCALE active_sessions=1 idle=false start=staggered submissions=0 completions=0 lost=0 duplicate=0 wrong_session=0 response_misroute=0 stale_acceptance=0 queue_overwrite=0 deadlock=0
+METRIC qemu_process_count=1 mapping_count=1 event_count=2 wait_registrations=1 dispatcher_slots_peak=1
+METRIC cpu=NOT_AVAILABLE ram=NOT_AVAILABLE handles=NOT_AVAILABLE context_switches=NOT_AVAILABLE latency=NOT_AVAILABLE

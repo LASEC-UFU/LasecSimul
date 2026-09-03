@@ -1,0 +1,4 @@
+# Diagnostic-only fixture: remove the ESP-IDF interrupt watchdog lifecycle
+# while retaining the normal Arduino-on-IDF boot path.
+CONFIG_ESP_INT_WDT=n
+CONFIG_ESP_INT_WDT_CHECK_CPU1=n

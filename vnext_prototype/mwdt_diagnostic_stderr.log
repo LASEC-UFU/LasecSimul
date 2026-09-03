@@ -1,0 +1,116 @@
+Adding SPI flash device
+[LasecSimul] interrupt-wdt scale=100 (explicit realtime override)
+[LasecSimul][ESP32 reset] count=1 mask=0x0f cause0=1 cause1=1 pc0=0x50000000 pc1=0x00000000 wdt0_enabled=0 wdt1_enabled=0 network=disabled expected=no source=OTHER boot_epoch=1 pid=15552
+C:\SourceCode\LasecSimul\vnext_prototype\dev_qemu_runtime\qemu-system-xtensa.exe: warning: GLib-GIO: Failed to open application manifest `C:\Windows\SystemApps\Microsoft.WindowsAppRuntime.vNext.CBS_8wekyb3d8bbwe\AppxManifest.xml' for package #34 (`Microsoft.WindowsAppRuntime.CBS.1.8_8000.800.1936.100_x64__8wekyb3d8bbwe'): error code 0x2
+[LasecSimul][TG0WDT] config en=0 fb_en=1 prescale=1 apb_hz=40000000 mode0=3 mode1=0 mode2=0 mode3=0 timeout0=26000000 timeout1=134217727 timeout2=1048575 timeout3=1048575 virtual_ns=0 host_ns=1788219625116856000
+[LasecSimul][TG1WDT] config en=0 fb_en=1 prescale=1 apb_hz=40000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=26000000 timeout1=134217727 timeout2=1048575 timeout3=1048575 virtual_ns=0 host_ns=1788219625843254000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=1 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=26000000 timeout1=134217727 timeout2=1048575 timeout3=1048575 virtual_ns=719600400 host_ns=1788219626615094000
+[APP_CPU_RESET_R2] n=1 writer_cpu=0 writer_pc=0x40082abe target_stop=0 target_stopped=0 target_halted=1 target_exit_request=0 virtual_ns=1040512100
+[APP_CPU_RESET_R4] cpu=1 stop=0 stopped=0 halted=1 exit_request=1 virtual_ns=1085950500
+[LasecSimul][ESP32 reset] count=2 mask=0x02 cause0=1 cause1=12 pc0=0x4000689f pc1=0x40000400 wdt0_enabled=0 wdt1_enabled=0 network=disabled expected=app-cpu-startup source=SW_CPU_RESET_REGISTER boot_epoch=1 pid=15552
+[APP_CPU_RESET_R6] cpu=1 stop=0 stopped=0 halted=0 exit_request=1 virtual_ns=1175391400
+[APP_CPU_RESET_WRITE_APPLIED] new=0x00100000
+[APP_CPU_RESET_WRITE_APPLIED] new=0x00120000
+[APP_CPU_RESET_WRITE_APPLIED] new=0x00124000
+[APP_CPU_RESET_WRITE_APPLIED] new=0x00124540
+[APP_CPU_RESET_WRITE_APPLIED] new=0x00124000
+[LasecSimul][TG1WDT] config en=0 fb_en=1 prescale=1 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=26000000 timeout1=134217727 timeout2=1048575 timeout3=1048575 virtual_ns=1387669500 host_ns=1788219627283165000
+[LasecSimul][TG1WDT] config en=0 fb_en=1 prescale=1 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=26000000 timeout1=134217727 timeout2=1048575 timeout3=1048575 virtual_ns=1438994200 host_ns=1788219627334491000
+[LasecSimul][TG1WDT] config en=0 fb_en=1 prescale=1 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=26000000 timeout1=134217727 timeout2=1048575 timeout3=1048575 virtual_ns=1494274000 host_ns=1788219627389773000
+[LasecSimul][TG1WDT] config en=0 fb_en=1 prescale=1 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=26000000 timeout1=134217727 timeout2=1048575 timeout3=1048575 virtual_ns=1552926600 host_ns=1788219627448426000
+[LasecSimul][TG1WDT] config en=0 fb_en=1 prescale=1 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=26000000 timeout1=134217727 timeout2=1048575 timeout3=1048575 virtual_ns=1606554200 host_ns=1788219627502054000
+[LasecSimul][TG1WDT] config en=0 fb_en=1 prescale=1 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=26000000 timeout1=134217727 timeout2=1048575 timeout3=1048575 virtual_ns=1652568500 host_ns=1788219627548067000
+[LasecSimul][TG1WDT] config en=0 fb_en=1 prescale=1 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=26000000 timeout1=134217727 timeout2=1048575 timeout3=1048575 virtual_ns=1722492000 host_ns=1788219627617993000
+[LasecSimul][TG1WDT] config en=0 fb_en=1 prescale=1 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=26000000 timeout1=134217727 timeout2=1048575 timeout3=1048575 virtual_ns=1801786900 host_ns=1788219627697286000
+[LasecSimul][TG1WDT] config en=0 fb_en=1 prescale=1 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=26000000 timeout1=134217727 timeout2=1048575 timeout3=1048575 virtual_ns=1876613100 host_ns=1788219627772112000
+[LasecSimul][TG1WDT] config en=0 fb_en=1 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=26000000 timeout1=134217727 timeout2=1048575 timeout3=1048575 virtual_ns=1922569800 host_ns=1788219627818070000
+[LasecSimul][TG1WDT] config en=0 fb_en=1 prescale=40000 apb_hz=80000000 mode0=1 mode1=0 mode2=0 mode3=0 timeout0=26000000 timeout1=134217727 timeout2=1048575 timeout3=1048575 virtual_ns=1987763000 host_ns=1788219627883261000
+[LasecSimul][TG1WDT] config en=0 fb_en=1 prescale=40000 apb_hz=80000000 mode0=1 mode1=3 mode2=0 mode3=0 timeout0=10000 timeout1=134217727 timeout2=1048575 timeout3=1048575 virtual_ns=2050493900 host_ns=1788219627945992000
+[LasecSimul][TG1WDT] feed virtual_ns=2113044100 host_ns=1788219628008543000
+[LasecSimul][TG1WDT] config en=1 fb_en=1 prescale=40000 apb_hz=80000000 mode0=1 mode1=3 mode2=0 mode3=0 timeout0=10000 timeout1=10000 timeout2=1048575 timeout3=1048575 virtual_ns=2133885900 host_ns=1788219628029381000
+[LasecSimul][TG1WDT] arm stage=0 ns_to_timeout=500000000000 virtual_ns=2133885900 host_ns=1788219628098669000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=1 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=26000000 timeout1=134217727 timeout2=1048575 timeout3=1048575 virtual_ns=2239262200 host_ns=1788219628134757000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=1 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=26000000 timeout1=134217727 timeout2=1048575 timeout3=1048575 virtual_ns=2309305000 host_ns=1788219628204800000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=1 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=26000000 timeout1=134217727 timeout2=1048575 timeout3=1048575 virtual_ns=2371489700 host_ns=1788219628266985000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=1 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=26000000 timeout1=134217727 timeout2=1048575 timeout3=1048575 virtual_ns=2425457800 host_ns=1788219628320953000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=1 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=26000000 timeout1=134217727 timeout2=1048575 timeout3=1048575 virtual_ns=2485705800 host_ns=1788219628381200000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=1 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=26000000 timeout1=134217727 timeout2=1048575 timeout3=1048575 virtual_ns=2550995500 host_ns=1788219628446491000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=1 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=26000000 timeout1=134217727 timeout2=1048575 timeout3=1048575 virtual_ns=2613893400 host_ns=1788219628509388000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=1 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=26000000 timeout1=134217727 timeout2=1048575 timeout3=1048575 virtual_ns=2684889300 host_ns=1788219628580383000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=1 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=26000000 timeout1=134217727 timeout2=1048575 timeout3=1048575 virtual_ns=2735599600 host_ns=1788219628631094000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=26000000 timeout1=134217727 timeout2=1048575 timeout3=1048575 virtual_ns=2785132600 host_ns=1788219628680629000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=1 mode1=0 mode2=0 mode3=0 timeout0=26000000 timeout1=134217727 timeout2=1048575 timeout3=1048575 virtual_ns=2850388700 host_ns=1788219628745883000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=1 mode1=3 mode2=0 mode3=0 timeout0=10000 timeout1=134217727 timeout2=1048575 timeout3=1048575 virtual_ns=2932969900 host_ns=1788219628828465000
+[LasecSimul][TG0WDT] feed virtual_ns=3079567700 host_ns=1788219628975062000
+[LasecSimul][TG0WDT] config en=1 fb_en=0 prescale=40000 apb_hz=80000000 mode0=1 mode1=3 mode2=0 mode3=0 timeout0=10000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=3114140100 host_ns=1788219629009634000
+[LasecSimul][TG0WDT] arm stage=0 ns_to_timeout=500000000000 virtual_ns=3114140100 host_ns=1788219629121181000
+[LasecSimul][TG1WDT] config en=1 fb_en=1 prescale=40000 apb_hz=80000000 mode0=1 mode1=3 mode2=0 mode3=0 timeout0=10000 timeout1=10000 timeout2=1048575 timeout3=1048575 virtual_ns=3288683300 host_ns=1788219629184178000
+[LasecSimul][TG1WDT] arm stage=0 ns_to_timeout=384550000000 virtual_ns=3288683300 host_ns=1788219629282202000
+[LasecSimul][TG1WDT] config en=1 fb_en=1 prescale=40000 apb_hz=80000000 mode0=1 mode1=3 mode2=0 mode3=0 timeout0=600 timeout1=10000 timeout2=1048575 timeout3=1048575 virtual_ns=3478478500 host_ns=1788219629373978000
+[LasecSimul][TG1WDT] arm stage=0 ns_to_timeout=0 virtual_ns=3478478500 host_ns=1788219629472682000
+[LasecSimul][TG1WDT] EXPIRE stage=0 mode=1 virtual_ns=3620920400 host_ns=1788219629516413000
+[LasecSimul][TG1WDT] arm stage=1 ns_to_timeout=60000000000 virtual_ns=3696893200 host_ns=1788219629592394000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=1 mode1=3 mode2=0 mode3=0 timeout0=10000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=3790227600 host_ns=1788219629685723000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=3 mode2=0 mode3=0 timeout0=10000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=3923381200 host_ns=1788219629818876000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=10000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=4094048100 host_ns=1788219629989543000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=10000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=4255388900 host_ns=1788219630150884000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=10000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=4406212500 host_ns=1788219630301708000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=10000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=4587504600 host_ns=1788219630483000000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=10000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=4755868800 host_ns=1788219630651364000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=10000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=4919290000 host_ns=1788219630814785000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=10000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=5029981500 host_ns=1788219630925476000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=10000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=5083828900 host_ns=1788219630979324000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=3 mode1=0 mode2=0 mode3=0 timeout0=10000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=5234599100 host_ns=1788219631130093000
+[LasecSimul][TG0WDT] feed virtual_ns=5380458300 host_ns=1788219631275952000
+[LasecSimul][TG0WDT] config en=1 fb_en=0 prescale=40000 apb_hz=80000000 mode0=3 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=5429860000 host_ns=1788219631325354000
+[LasecSimul][TG0WDT] arm stage=0 ns_to_timeout=100000000000 virtual_ns=5429860000 host_ns=1788219631376391000
+[LasecSimul][TG1WDT] config en=0 fb_en=1 prescale=40000 apb_hz=80000000 mode0=1 mode1=3 mode2=0 mode3=0 timeout0=600 timeout1=1200 timeout2=1048575 timeout3=1048575 virtual_ns=5502972200 host_ns=1788219631398705000
+[APP_CPU_RESET_WRITE_APPLIED] new=0x00124002
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=3 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=5582794700 host_ns=1788219631478291000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=5650212600 host_ns=1788219631545709000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=5722333300 host_ns=1788219631617828000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=5812743500 host_ns=1788219631708239000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=5874420300 host_ns=1788219631769916000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=5931386200 host_ns=1788219631826881000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=5984694800 host_ns=1788219631880190000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=6035985200 host_ns=1788219631931480000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=6101566500 host_ns=1788219631997062000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=6153130800 host_ns=1788219632048626000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=3 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=6205159600 host_ns=1788219632100654000
+[LasecSimul][TG0WDT] feed virtual_ns=6265288600 host_ns=1788219632160784000
+[LasecSimul][TG0WDT] config en=1 fb_en=0 prescale=40000 apb_hz=80000000 mode0=3 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=6288705800 host_ns=1788219632184201000
+[LasecSimul][TG0WDT] arm stage=0 ns_to_timeout=100000000000 virtual_ns=6288705800 host_ns=1788219632239215000
+[LasecSimul][TG1WDT] config en=0 fb_en=1 prescale=40000 apb_hz=80000000 mode0=1 mode1=3 mode2=0 mode3=0 timeout0=600 timeout1=1200 timeout2=1048575 timeout3=1048575 virtual_ns=6371775800 host_ns=1788219632267271000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=3 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=6422087900 host_ns=1788219632317584000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=6504399500 host_ns=1788219632399894000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=6571687900 host_ns=1788219632467184000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=6634134900 host_ns=1788219632529630000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=6695198800 host_ns=1788219632590694000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=6756269000 host_ns=1788219632651764000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=6817893500 host_ns=1788219632713388000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=6876207800 host_ns=1788219632771702000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=6954563900 host_ns=1788219632850058000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=7007609700 host_ns=1788219632903104000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=3 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=7071099700 host_ns=1788219632966594000
+[LasecSimul][TG0WDT] feed virtual_ns=7163680800 host_ns=1788219633059175000
+[LasecSimul][TG0WDT] config en=1 fb_en=0 prescale=40000 apb_hz=80000000 mode0=3 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=7213371700 host_ns=1788219633108868000
+[LasecSimul][TG0WDT] arm stage=0 ns_to_timeout=100000000000 virtual_ns=7213371700 host_ns=1788219633203754000
+[LasecSimul][TG1WDT] config en=0 fb_en=1 prescale=40000 apb_hz=80000000 mode0=1 mode1=3 mode2=0 mode3=0 timeout0=600 timeout1=1200 timeout2=1048575 timeout3=1048575 virtual_ns=7343239600 host_ns=1788219633238734000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=3 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=9055366100 host_ns=1788219634950862000
+[LasecSimul][TG1WDT] config en=0 fb_en=1 prescale=40000 apb_hz=80000000 mode0=1 mode1=3 mode2=0 mode3=0 timeout0=600 timeout1=1200 timeout2=1048575 timeout3=1048575 virtual_ns=9089009600 host_ns=1788219634984505000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=3 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=9370892900 host_ns=1788219635266388000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=9410505600 host_ns=1788219635306001000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=9443747000 host_ns=1788219635339242000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=9475281300 host_ns=1788219635370775000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=9506993800 host_ns=1788219635402488000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=9541761900 host_ns=1788219635437257000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=9575448500 host_ns=1788219635470943000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=9605304700 host_ns=1788219635500799000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=9637829000 host_ns=1788219635533324000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=0 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=9671836400 host_ns=1788219635567331000
+[LasecSimul][TG0WDT] config en=0 fb_en=0 prescale=40000 apb_hz=80000000 mode0=3 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=9703784800 host_ns=1788219635599279000
+[LasecSimul][TG0WDT] feed virtual_ns=9739957600 host_ns=1788219635635452000
+[LasecSimul][TG0WDT] config en=1 fb_en=0 prescale=40000 apb_hz=80000000 mode0=3 mode1=0 mode2=0 mode3=0 timeout0=2000 timeout1=20000 timeout2=1048575 timeout3=1048575 virtual_ns=9753374400 host_ns=1788219635648870000
+[LasecSimul][TG0WDT] arm stage=0 ns_to_timeout=100000000000 virtual_ns=9753374400 host_ns=1788219635681284000
+[LasecSimul][TG1WDT] config en=0 fb_en=1 prescale=40000 apb_hz=80000000 mode0=1 mode1=3 mode2=0 mode3=0 timeout0=600 timeout1=1200 timeout2=1048575 timeout3=1048575 virtual_ns=9801970400 host_ns=1788219635697466000
+[APP_CPU_RESET_WRITE] cpu=0 pc=0x40083a5e host_ns=1788219635759083000 virtual_ns=9863589300 pid=15552 identity=<none> address=0x3ff48000 register=RTC_CNTL_OPTIONS0 value=0

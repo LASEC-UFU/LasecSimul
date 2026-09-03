@@ -1,0 +1,13 @@
+=== Iteration 18: VNEXT_PRODUCTION_TCG_CONFIGURATION ===
+Audit: Esp32AdapterTest.cpp, McuController.cpp, QEMU runtime manifest
+Executable: core/build/Debug/esp32_adapter_test.exe (existing bounded target)
+Canonical QEMU SHA-256: 58ED43B801E75D87C0B92EEE1ED4AE3A3C6D1C2178D5D893A40EAE0609F459D4
+Result: exit=0
+TCG configuration checks:
+  OK: default launch requests one host TCG thread per ESP32 vCPU
+  OK: default MTTCG launch omits incompatible instruction-counted time
+  OK: explicit deterministic rollback keeps one TCG thread
+  OK: explicit deterministic rollback restores instruction-counted virtual time
+  OK: unknown non-empty execution mode fails closed to deterministic
+All remaining adapter/module assertions passed.
+Todos os testes passaram.
