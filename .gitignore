@@ -97,3 +97,39 @@ _deps/
 # desta entrada existir.
 *.trace
 /.codex-validation/
+
+# ---------------------------------------------------------------------------
+# Toolchains e caches locais (2026-09-03)
+# ---------------------------------------------------------------------------
+# PlatformIO core dir do projeto: pacotes/toolchains (~5 GB). E' NECESSARIO em
+# disco -- `vnext_prototype/guest_mwdt_baremetal/build.ps1` usa o
+# `toolchain-xtensa-esp32` daqui -- mas nunca deve ser versionado.
+/.piohome/
+# Caches PlatformIO por fixture.
+/vnext_prototype/*/.pio/
+/vnext_prototype/*/.piohome/
+
+# Runtime QEMU canonico (DECISION-001): copia do build de C:\SourceCode\
+# qemu_lasecSimul mais o conjunto de DLLs MSYS2 UCRT64. E' artefato derivado;
+# a SHA autoritativa fica em orchestrator/.ai/QEMU_RUNTIME.json e o
+# procedimento de rebuild em orchestrator/.ai/QEMU_CURRENT_STATE.md.
+/vnext_prototype/dev_qemu_runtime/
+
+# Saidas dos fixtures e dos runners de teste (regeneraveis; o fixture bare-metal
+# compila em ~2 s).
+/vnext_prototype/guest_*/build/
+/vnext_prototype/guest_mwdt_baremetal/runs/
+/vnext_prototype/production_mwdt_runs/
+/vnext_prototype/regression_runs/
+/vnext_prototype/diagnostic_dumps/
+
+# Estado de runtime do orquestrador (o caderno .md/.json consolidado E'
+# versionado; estes sao gerados a cada execucao).
+/orchestrator/.ai/logs/
+/orchestrator/.ai/orchestrator.log
+/orchestrator/.ai/STOP
+
+# Traces/dumps de diagnostico adicionais.
+*.etl
+*.pyc
+__pycache__/
