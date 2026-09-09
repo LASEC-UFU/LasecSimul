@@ -6,6 +6,7 @@
 #include "ConsumerTrace.hpp"
 #include "lasecsimul/CausalTrace.hpp"
 #include "lasecsimul/qemu_arena_abi.h"
+#include "mcu/qemu/VnextBArbiter.hpp"
 #include <algorithm>
 #include <array>
 #include <cstdlib>
@@ -24,6 +25,15 @@ uint64_t qemuEventTimeNs(uint64_t originNs, uint64_t virtualTimePs) {
     const uint64_t deltaNs = virtualTimePs / 1000u + (virtualTimePs % 1000u != 0 ? 1u : 0u);
     if (deltaNs > std::numeric_limits<uint64_t>::max() - originNs) return std::numeric_limits<uint64_t>::max();
     return originNs + deltaNs;
+}
+
+// PLAN_MTTCG_VNEXT_B_CAUSALITY.md section 10.5: VNEXT_B's lasec_at_event::timestamp_ns is
+// already nanoseconds (QEMU_CLOCK_VIRTUAL at publish time, see softmmu/vnext_b.c), unlike the
+// legacy arena's picosecond simuTimePs -- a dedicated, explicitly-named nanosecond helper
+// instead of silently reusing qemuEventTimeNs()'s ps-to-ns division on an already-ns value.
+uint64_t vnextEventTimeNs(uint64_t originNs, uint64_t timestampNs) {
+    if (timestampNs > std::numeric_limits<uint64_t>::max() - originNs) return std::numeric_limits<uint64_t>::max();
+    return originNs + timestampNs;
 }
 
 // TEMPORARY (ConsumerTrace investigation, see ConsumerTrace.hpp) -- raw snapshot of queue
@@ -80,13 +90,32 @@ McuComponent::CallbackState::~CallbackState() {
 
 std::optional<uint64_t> McuComponent::pacingPositionNs() const {
     const uint64_t ps = m_latestVirtualTimePs.load(std::memory_order_relaxed);
-    const uint64_t appliedPosition =
+    const uint64_t appliedPositionLegacy =
         ps == 0 ? 0 : qemuEventTimeNs(
                             m_qemuTimeOriginNs.load(std::memory_order_relaxed), ps);
+    // PLAN_MTTCG_VNEXT_B_CAUSALITY.md section 10.5: VNEXT_B's applied position. Stored raw
+    // (session-relative, see the store site's comment) and origin-adjusted here at read time,
+    // the same convention as the legacy field just above -- only one of the two transports is
+    // ever active for a given session, so the other's field simply stays 0 and max() picks the
+    // live one.
+    const uint64_t vnextBNs = m_latestVnextBVirtualTimeNs.load(std::memory_order_relaxed);
+    const uint64_t appliedPositionVnextB =
+        vnextBNs == 0 ? 0 : vnextEventTimeNs(m_qemuTimeOriginNs.load(std::memory_order_relaxed), vnextBNs);
+    const uint64_t appliedPosition =
+        appliedPositionLegacy > appliedPositionVnextB ? appliedPositionLegacy : appliedPositionVnextB;
     const uint64_t pendingPosition =
         m_nextPendingEventNs.load(std::memory_order_relaxed);
-    const uint64_t safeFrontier =
+    // R3c heartbeat watermark: proves virtual time elapsed even when the guest produced no
+    // lane events at all (legitimately silent -- WFI, no GPIO/I2C). Same raw-stored/
+    // origin-adjusted-at-read convention as appliedPositionVnextB above. This is a pacing FLOOR
+    // only: it never feeds latestVirtualTimeNs() or the arbiter, and it does not represent any
+    // applied/dispatched event.
+    const uint64_t heartbeatNs = m_vnextBHeartbeatWatermarkNs.load(std::memory_order_relaxed);
+    const uint64_t heartbeatPosition =
+        heartbeatNs == 0 ? 0 : vnextEventTimeNs(m_qemuTimeOriginNs.load(std::memory_order_relaxed), heartbeatNs);
+    uint64_t safeFrontier =
         appliedPosition > pendingPosition ? appliedPosition : pendingPosition;
+    if (heartbeatPosition > safeFrontier) safeFrontier = heartbeatPosition;
     if (safeFrontier == 0) return std::nullopt;
     return safeFrontier;
 }
@@ -246,7 +275,7 @@ void McuComponent::waitForPollWork(const std::shared_ptr<CallbackState>& state) 
 #endif
 }
 
-void McuComponent::scheduleNextPoll(std::vector<DeferredSchedulerCall>* deferred) {
+void McuComponent::scheduleNextPoll(std::vector<DeferredSchedulerCall>* deferred, bool schedulerLockHeld) {
     // +1ns (não `nowNs()` cru): quando chamado de dentro de `onPollEvent()` sem o Scheduler
     // rodando em background (`isRunning()==false` -- driver síncrono via `step()`/testes), um
     // evento reagendado EXATAMENTE no instante atual é reprocessado na MESMA passada de
@@ -256,10 +285,11 @@ void McuComponent::scheduleNextPoll(std::vector<DeferredSchedulerCall>* deferred
     // até aqui só porque o reset fantasma do EN/RST (ver `m_resetPinObserved`) fechava a arena
     // antes deste laço rodar. O +1ns é imperceptível pro caso normal (`startPolling()`, chamado
     // fora de `runUntil()`) e garante que `m_nowNs` sempre progride, então o laço termina.
-    schedulePollAt(m_scheduler.nowNs() + 1, deferred);
+    schedulePollAt(m_scheduler.nowNs() + 1, deferred, schedulerLockHeld);
 }
 
-void McuComponent::schedulePollAt(uint64_t timeNs, std::vector<DeferredSchedulerCall>* deferred) {
+void McuComponent::schedulePollAt(uint64_t timeNs, std::vector<DeferredSchedulerCall>* deferred,
+                                   bool schedulerLockHeld) {
     if (m_pollEventScheduled) {
         if (timeNs >= m_pollEventDueNs) return;
         /* Um mailbox síncrono (I2C burst) pode chegar enquanto há um poll marcado para um evento
@@ -281,10 +311,20 @@ void McuComponent::schedulePollAt(uint64_t timeNs, std::vector<DeferredScheduler
         if (!self || self->m_pollGeneration != generation) return;
         self->onPollEvent();
     };
+    // Same three-way branch as scheduleModuleWakeup()'s established pattern: deferred takes
+    // priority (batched, flushed outside the lock later); otherwise schedulerLockHeld selects
+    // between the two Scheduler entry points that differ only in whether they take
+    // Scheduler::m_mutex themselves (scheduleAt(), unsafe if already held -- real deadlock, see
+    // this function's declaration comment) or assume the caller already holds it
+    // (scheduleEventUnlocked()).
     if (deferred) {
         deferred->push_back([&scheduler = m_scheduler, timeNs, callback = std::move(callback)]() mutable {
             scheduler.scheduleAt(timeNs, std::move(callback));
         });
+    } else if (schedulerLockHeld) {
+        const uint64_t nowNs = m_scheduler.nowNs();
+        const uint64_t delayNs = timeNs > nowNs ? timeNs - nowNs : 0;
+        m_scheduler.scheduleEventUnlocked(delayNs, std::move(callback));
     } else {
         m_scheduler.scheduleAt(timeNs, std::move(callback));
     }
@@ -340,9 +380,7 @@ McuComponent::PollStep McuComponent::pollStepLocked(std::vector<DeferredSchedule
     qemu::QemuArenaBridge& arena = m_controller.arenaBridge();
     const uint64_t traceExecId = m_controller.runtimeIdentity().sessionExecutionId;
     if (m_controller.vnextBActive()) {
-        const bool dispatched = pollAndDispatchPendingEvents(m_scheduler.nowNsUnlocked());
-        if (dispatched) return PollStep::DispatchedReady;
-        return PollStep::NoEvent;
+        return pollAndDispatchPendingEvents(m_scheduler.nowNsUnlocked(), deferred);
     }
     if (arena.pollI2cBurst()) {
         {
@@ -1015,47 +1053,68 @@ uint64_t McuComponent::electricalOutputFingerprint() const {
     return fingerprint;
 }
 
-bool McuComponent::pollAndDispatchPendingEvents(uint64_t nowNs) {
+McuComponent::PollStep McuComponent::pollAndDispatchPendingEvents(
+    uint64_t nowNs, std::vector<DeferredSchedulerCall>* deferred, bool schedulerLockHeld) {
     if (m_controller.vnextBActive()) {
-        bool changed = false;
+        // PLAN_MTTCG_VNEXT_B_CAUSALITY.md sections 9/10: temporal-merge arbiter across lanes,
+        // future-event deferral via the same schedulePollAt() mechanism the legacy transport
+        // already uses (weak-lifetime + generation-deduplicated, see schedulePollAt() above --
+        // reused as-is, not reimplemented), and a bounded per-turn drain budget so one wake can
+        // never abandon backlog nor monopolize the Scheduler.
         auto& attachment = m_controller.vnextBAttachment();
-        const bool notified = attachment.notificationPending();
-        for (uint32_t lane = 0; lane < attachment.view().control->lane_count; ++lane) {
-            const auto event = attachment.consumeLane(lane);
-            if (!event) continue;
-            if (event->kind == 3 &&
-                event->payload_bytes == sizeof(uint64_t) * 2) {
+        const uint32_t laneCount = attachment.view().control->lane_count;
+        const uint64_t originNs = m_qemuTimeOriginNs.load(std::memory_order_relaxed);
+
+        // R3c heartbeat: read on every call (independent of whether any lane has anything to
+        // arbitrate), forward-only via qemu::advanceMonotonicNs() (see its doc-comment: this is
+        // exactly what makes repeated/coalesced doorbell-driven reads of the same or an older
+        // watermark safe to call unconditionally). load-acquire pairs with QEMU's store-release
+        // in vnext_heartbeat_cb().
+        {
+            const uint64_t heartbeatNow =
+                std::atomic_ref<const uint64_t>(attachment.view().control->artifact_virtual_time_ns)
+                    .load(std::memory_order_acquire);
+            if (qemu::advanceMonotonicNs(m_vnextBHeartbeatWatermarkNs, heartbeatNow)) {
+                m_scheduler.notifyAdvanceLimitChanged();
+            }
+        }
+
+        // Single per-lane, per-kind dispatch: unchanged from the prior implementation except
+        // that it now operates on one already-selected (lane, event) pair instead of iterating
+        // lanes itself. Returns true if the electrical output fingerprint changed.
+        auto dispatchOneEvent = [&](uint32_t lane, const lasec_at_event& event) -> bool {
+            if (event.kind == 3 && event.payload_bytes == sizeof(uint64_t) * 2) {
                 uint64_t requestSeq = 0, address = 0;
-                std::memcpy(&requestSeq, event->payload, sizeof(requestSeq));
-                std::memcpy(&address, event->payload + sizeof(requestSeq), sizeof(address));
+                std::memcpy(&requestSeq, event.payload, sizeof(requestSeq));
+                std::memcpy(&address, event.payload + sizeof(requestSeq), sizeof(address));
                 uint64_t value = 0;
                 if (address != 0) {
                     if (QemuModule* module = findModule(address)) value = module->readRegister(address);
                 }
                 attachment.respondToRequest(lane, requestSeq, value);
-                continue;
+                return false;
             }
-            if (event->kind == LASEC_AT_KIND_BATCH) {
-                if (vnextTraceEnabled()) std::fprintf(stderr, "[VNEXT_CORE_I2C] batch lane=%u bytes=%u\\n", lane, event->payload_bytes);
+            if (event.kind == LASEC_AT_KIND_BATCH) {
+                if (vnextTraceEnabled()) std::fprintf(stderr, "[VNEXT_CORE_I2C] batch lane=%u bytes=%u\\n", lane, event.payload_bytes);
                 /* Generic BATCH envelope used by the ESP32 endpoint adapter. The
                  * transport validates only bounded envelope structure; the adapter
                  * interprets the opaque operation bytes. */
-                if (event->payload_bytes < 12 || event->payload[0] != 1) { std::fprintf(stderr, "[VNEXT_CORE_I2C] reject envelope\\n"); continue; }
+                if (event.payload_bytes < 12 || event.payload[0] != 1) { std::fprintf(stderr, "[VNEXT_CORE_I2C] reject envelope\\n"); return false; }
                 uint16_t opBytes = 0, txBytes = 0, rxBytes = 0;
-                std::memcpy(&opBytes, event->payload + 8, sizeof(opBytes));
-                if (opBytes < 14 || event->payload_bytes != 12u + opBytes ||
-                    opBytes > LASEC_AT_EVENT_PAYLOAD - 12u) continue;
-                const uint8_t* op = event->payload + 12;
+                std::memcpy(&opBytes, event.payload + 8, sizeof(opBytes));
+                if (opBytes < 14 || event.payload_bytes != 12u + opBytes ||
+                    opBytes > LASEC_AT_EVENT_PAYLOAD - 12u) return false;
+                const uint8_t* op = event.payload + 12;
                 std::memcpy(&txBytes, op + 2, sizeof(txBytes));
                 std::memcpy(&rxBytes, op + 4, sizeof(rxBytes));
                 if (op[0] > 1 || txBytes == 0 || txBytes > 32 || rxBytes > 32 ||
-                    opBytes != 14u + txBytes) continue;
+                    opBytes != 14u + txBytes) return false;
                 const uint64_t requestSeq = std::atomic_ref<const uint64_t>(
                     attachment.view().responses[lane].request_seq).load(std::memory_order_acquire);
                 if (vnextTraceEnabled()) std::fprintf(stderr, "[VNEXT_CORE_I2C] req=%llu handler=%d op=%u tx=%u rx=%u\\n",
                              static_cast<unsigned long long>(requestSeq), m_i2cTransferHandler ? 1 : 0,
                              op[0], txBytes, rxBytes);
-                if (!requestSeq || !m_i2cTransferHandler) continue;
+                if (!requestSeq || !m_i2cTransferHandler) return false;
                 m_vnextI2cSubmissionCount.fetch_add(1, std::memory_order_relaxed);
                 uint64_t periodNs = 0;
                 std::memcpy(&periodNs, op + 6, sizeof(periodNs));
@@ -1082,26 +1141,165 @@ bool McuComponent::pollAndDispatchPendingEvents(uint64_t nowNs) {
                     std::span<const uint8_t>(rx.data(), std::min<uint32_t>(result.rxSize, 32u)));
                 if (vnextTraceEnabled()) std::fprintf(stderr, "[VNEXT_CORE_I2C] response published=%d\\n", published ? 1 : 0);
                 if (published) m_vnextI2cCompletionCount.fetch_add(1, std::memory_order_relaxed);
-                continue;
+                return false;
             }
-            if (event->kind != 10 || event->payload_bytes != sizeof(uint64_t) * 2) continue;
+            if (event.kind != 10 || event.payload_bytes != sizeof(uint64_t) * 2) return false;
             uint64_t address = 0, value = 0;
-            std::memcpy(&address, event->payload, sizeof(address));
-            std::memcpy(&value, event->payload + sizeof(address), sizeof(value));
+            std::memcpy(&address, event.payload, sizeof(address));
+            std::memcpy(&value, event.payload + sizeof(address), sizeof(value));
             if (address >= 0x3ff44000ull && address < 0x3ff45000ull)
                 if (vnextTraceEnabled()) std::fprintf(stderr, "[VNEXT_CORE_GPIO] addr=%llx value=%llx\\n",
                              static_cast<unsigned long long>(address), static_cast<unsigned long long>(value));
             const uint64_t before = electricalOutputFingerprint();
             if (QemuModule* module = findModule(address)) {
-                module->writeRegisterAt(address, value, event->timestamp_ns);
+                module->writeRegisterAt(address, value, event.timestamp_ns);
             }
-            changed = changed || before != electricalOutputFingerprint();
+            return before != electricalOutputFingerprint();
+        };
+
+        // Bounded per turn: must not monopolize the Scheduler (section 9.4), but on exhaustion
+        // must request an immediate continuation rather than silently deferring to the next
+        // doorbell, which may not come if the guest is waiting on THIS turn's responses.
+        constexpr uint32_t kMaxEventsPerTurn = 256;
+        bool changed = false;
+        uint32_t dispatchedCount = 0;
+        bool budgetExhausted = false;
+        for (;;) {
+            std::array<qemu::VnextBLanePeek, LASEC_AT_MAX_LANES> peeks{};
+            for (uint32_t lane = 0; lane < laneCount; ++lane) {
+                if (const auto peeked = attachment.peekLane(lane)) {
+                    peeks[lane] = {true, vnextEventTimeNs(originNs, peeked->timestamp_ns)};
+                }
+            }
+            const qemu::VnextBArbiterDecision decision =
+                qemu::selectNextLaneEvent(std::span<const qemu::VnextBLanePeek>(peeks.data(), laneCount), nowNs);
+            if (!decision.hasCandidate) break;
+            if (!decision.ready) {
+                // Future head: publish the boundary for pacing (never advance
+                // m_latestVnextBVirtualTimeNs here -- only a dispatched event may do that, same
+                // invariant the legacy transport already enforces) and schedule a callback for
+                // exactly that instant. Do not consume anything, do not loop further this turn.
+                const uint64_t previous =
+                    m_nextPendingEventNs.exchange(decision.timestampNs, std::memory_order_relaxed);
+                if (previous != decision.timestampNs) m_scheduler.notifyAdvanceLimitChanged();
+                schedulePollAt(decision.timestampNs, deferred, schedulerLockHeld);
+                break;
+            }
+            if (dispatchedCount >= kMaxEventsPerTurn) {
+                budgetExhausted = true;
+                break;
+            }
+            const auto consumed = attachment.consumeLane(decision.lane);
+            if (!consumed || vnextEventTimeNs(originNs, consumed->timestamp_ns) != decision.timestampNs) {
+                // Protocol error (section 10.1 point 6): the consumed head no longer matches
+                // what was just peeked and selected. Single-consumer operation under
+                // m_callbackState->mutex makes this unreachable in practice; surface it instead
+                // of silently proceeding with a different, unselected entry.
+                std::fprintf(stderr, "[VNEXT_CORE] protocol error: consumed head diverged from "
+                                      "selected peek on lane=%u\\n", decision.lane);
+                break;
+            }
+            m_nextPendingEventNs.store(0, std::memory_order_relaxed);
+            {
+                // Stores the RAW (session-relative) timestamp_ns, matching m_latestVirtualTimePs's
+                // own convention exactly (that field holds raw simuTimePs, not origin-adjusted --
+                // see qemuEventTimeNs() being applied at *read* time in pacingPositionNs() and
+                // latestVirtualTimeNs() below, never at write time). Storing the origin-adjusted
+                // absolute value here instead would silently break latestVirtualTimeNs(), which
+                // every session-progress caller (including the pacing-sync test) reads directly.
+                if (qemu::advanceMonotonicNs(m_latestVnextBVirtualTimeNs, consumed->timestamp_ns)) {
+                    m_scheduler.notifyAdvanceLimitChanged();
+                }
+            }
+            changed = dispatchOneEvent(decision.lane, *consumed) || changed;
+            ++dispatchedCount;
         }
+        // scheduleNextPoll() (nowNs()+1, not schedulePollAt(nowNs, ...)): scheduling exactly at
+        // the current instant risks the Scheduler treating it as already-due and invoking the
+        // callback synchronously/immediately within this same call stack -- observed live as a
+        // std::recursive_mutex "resource deadlock would occur" once the recursion depth exceeded
+        // its limit. This is the same livelock this codebase already solved once, see
+        // scheduleNextPoll()'s own +1ns comment above.
+        if (budgetExhausted) scheduleNextPoll(deferred, schedulerLockHeld);
+
+        // Safe acknowledge (PLAN_MTTCG_VNEXT_B_CAUSALITY.md section 10.4, steps 1-5, EVIDENCE.md
+        // H143/E144): drain first (above), THEN clear the notification flag, THEN re-arbitrate
+        // with acquire semantics so a publish racing the ack is still caught -- never rely on a
+        // second doorbell transition for backlog that was already in the ring, and never busy-
+        // loop when only a future head remains (10.4 step 5: "se houver somente evento futuro,
+        // manter o callback temporal; não criar busy loop").
+        //
+        // E143/E144 (EVIDENCE.md, 2026-09-08; H143): the previous form of this block used
+        // hasPendingLaneEvents() (write_seq != read_seq on any lane) to decide whether to
+        // request an immediate repoll -- true whether the remaining head is ready now OR still
+        // the same future head the main loop above just deferred, since it cannot tell the two
+        // apart. Treating both the same way (an unconditional scheduleNextPoll(), i.e. now+1ns)
+        // directly violates plan section 10.4 step 5 above: now+1ns is always earlier than any
+        // real future deadline, so it always wins schedulePollAt()'s own "only preempt if
+        // strictly earlier" generation-bump check, permanently invalidating the correct callback
+        // just installed and replacing it with an immediate one that finds the exact same future
+        // head and repeats -- a busy loop (proven: E143's isolated RED, and m_pollGeneration
+        // measured ~1000-1200 per real 5s window against the E141 candidate). E144 corrected the
+        // earlier classification: E132-E's historical "session_restart_stress_test 15/15" ran a
+        // Release build; E142/E143 had been rebuilding and running Debug, which is slow enough
+        // per storm iteration that it cannot grind past the busy loop within a 5s window, while
+        // Release is fast enough to (verified: Release passes 3/3 with this exact bug still
+        // present, submissions~750 each run) -- a real, plan-violating, wasteful busy loop that
+        // Release happens not to be blocked by today, not a phantom. Fixed by re-arbitrating for
+        // real instead of guessing from hasPendingLaneEvents() alone: re-peek every lane
+        // (acquire, same as the main loop) and run the same pure policy function the main loop's
+        // "future head" branch already conceptually implements, so the decision distinguishes
+        // no-candidate / ready-now / still-future exactly like the main loop does. See
+        // VnextBArbiter.hpp's decidePostAckRearm() (the pure policy, unit-tested in
+        // VnextBArbiterTest.cpp's H143 RED/GREEN cases) for the policy this mirrors.
+        const bool notified = attachment.notificationPending();
         if (notified) attachment.acknowledgeNotification();
-        return changed || notified;
+        if (!budgetExhausted) {
+            std::array<qemu::VnextBLanePeek, LASEC_AT_MAX_LANES> postAckPeeks{};
+            for (uint32_t lane = 0; lane < laneCount; ++lane) {
+                if (const auto peeked = attachment.peekLane(lane)) {
+                    postAckPeeks[lane] = {true, vnextEventTimeNs(originNs, peeked->timestamp_ns)};
+                }
+            }
+            const qemu::VnextBRearmDecision rearm = qemu::decidePostAckRearm(
+                std::span<const qemu::VnextBLanePeek>(postAckPeeks.data(), laneCount), nowNs, budgetExhausted);
+            switch (rearm.action) {
+            case qemu::VnextBRearmAction::None:
+                // No candidate at all (the drain loop above already consumed everything ready
+                // and nothing remains, future or otherwise): nothing to reschedule.
+                break;
+            case qemu::VnextBRearmAction::Immediate:
+                // A concurrent publish landed a ready event (possibly on a different lane)
+                // between the drain loop's last empty check and the ack above; request an
+                // immediate repoll rather than trusting a doorbell that may already have been
+                // coalesced away by acknowledgeNotification() just now.
+                scheduleNextPoll(deferred, schedulerLockHeld);
+                break;
+            case qemu::VnextBRearmAction::At:
+                // Still (or again) future-only. schedulePollAt() itself is the only thing
+                // allowed to decide whether this preempts the callback already installed above:
+                // a no-op if this timestamp is the same or later (the common case -- it is
+                // literally the same undrained head), a legitimate earlier-deadline preemption
+                // if a concurrently-published event elsewhere is genuinely sooner. Never now+1ns.
+                {
+                    const uint64_t previous =
+                        m_nextPendingEventNs.exchange(rearm.atTimestampNs, std::memory_order_relaxed);
+                    if (previous != rearm.atTimestampNs) m_scheduler.notifyAdvanceLimitChanged();
+                    schedulePollAt(rearm.atTimestampNs, deferred, schedulerLockHeld);
+                }
+                break;
+            }
+        }
+
+        if (dispatchedCount > 0 || budgetExhausted) return PollStep::DispatchedReady;
+        if (m_nextPendingEventNs.load(std::memory_order_relaxed) != 0) return PollStep::DeferredFuture;
+        (void)changed; // electrical-change tracking retained for parity/diagnostics; the return
+                        // value no longer depends on it -- dispatchedCount already reflects every
+                        // consumed event, including ones that don't move the electrical output.
+        return PollStep::NoEvent;
     }
     qemu::QemuArenaBridge& arenaBridge = m_controller.arenaBridge();
-    if (!arenaBridge.isOpen()) return false;
+    if (!arenaBridge.isOpen()) return PollStep::NoEvent;
     // PERF-13 (protocolo v3, ver qemu_arena_abi.h): a arena agora tem uma fila de escritas/
     // heartbeat, não mais um slot único -- mas este caminho (chamado de dentro de stamp(), uma
     // vez por iteração de Newton) continua processando no máximo um evento por chamada de
@@ -1110,12 +1308,13 @@ bool McuComponent::pollAndDispatchPendingEvents(uint64_t nowNs) {
     // Scheduler está rodando em background, ver PERF-12) -- um laço aqui dentro só duplicaria
     // esse trabalho e prenderia stamp() por mais tempo sem necessidade.
     const qemu::QemuPollResult result = arenaBridge.poll();
-    if (!result.hasEvent || !result.event) return false;
+    if (!result.hasEvent || !result.event) return PollStep::NoEvent;
     const uint64_t eventNs = qemuEventTimeNs(m_qemuTimeOriginNs.load(std::memory_order_relaxed), result.event->simuTimePs);
     // Uma stamp causada por outra parte do circuito não pode antecipar o relógio virtual do QEMU.
     // A entrada permanece na fila; onPollEvent() já está agendado para consumi-la no instante certo.
-    if (eventNs > nowNs && !m_syntheticArenaForTesting) return false;
-    return dispatchArenaEvent(*result.event, m_syntheticArenaForTesting ? nowNs : eventNs);
+    if (eventNs > nowNs && !m_syntheticArenaForTesting) return PollStep::DeferredFuture;
+    dispatchArenaEvent(*result.event, m_syntheticArenaForTesting ? nowNs : eventNs);
+    return PollStep::DispatchedReady;
 }
 
 bool McuComponent::dispatchArenaEvent(const qemu::QemuArenaEvent& event, uint64_t eventTimeNs) {
@@ -1150,7 +1349,10 @@ void McuComponent::stamp(MnaMatrixView& matrix) {
     // Mantém o contrato de chamadas que marcam o MCU dirty explicitamente (testes sintéticos,
     // hosts ABI e futuras fontes de interrupção). O poll periódico continua desacoplado do MNA:
     // ele só marca dirty quando a saída elétrica muda.
-    pollAndDispatchPendingEvents(m_scheduler.nowNsUnlocked());
+    // schedulerLockHeld=true: stamp() runs inside Scheduler::runUntil()'s settle loop, which
+    // holds Scheduler::m_mutex throughout (same reasoning as this function's own
+    // scheduleWakeupsForAllModules(..., true) call below -- see schedulePollAt()'s doc-comment).
+    pollAndDispatchPendingEvents(m_scheduler.nowNsUnlocked(), nullptr, true);
 
     // Ponte pino<->matriz, genérica (ver doc da classe): pra cada PinMapping, pergunta ao módulo
     // responsável (nunca sabe qual chip é) se aquele bit está em modo saída -- se sim, dirige o
@@ -1275,6 +1477,11 @@ void McuComponent::loadFirmwareLocked(const std::filesystem::path& firmwarePath,
     // anterior, dando uma posição espúria no FUTURO (efeito: deixaria o elétrico correr à frente
     // indevidamente, ainda que só por uma janela curta).
     m_latestVirtualTimePs.store(0, std::memory_order_relaxed);
+    m_latestVnextBVirtualTimeNs.store(0, std::memory_order_relaxed);
+    // R3c: a heartbeat tick from the PREVIOUS generation must never be mistaken for the new
+    // session's progress -- reset alongside the other virtual-time fields, at the same reload
+    // point, before the new attachment's own watermark starts publishing from ~0.
+    m_vnextBHeartbeatWatermarkNs.store(0, std::memory_order_relaxed);
     m_vnextI2cCompletionCount.store(0, std::memory_order_relaxed);
     m_vnextI2cSubmissionCount.store(0, std::memory_order_relaxed);
     m_nextPendingEventNs.store(0, std::memory_order_relaxed);
@@ -1291,8 +1498,8 @@ void McuComponent::loadFirmwareLocked(const std::filesystem::path& firmwarePath,
 }
 
 void McuComponent::stopFirmware() {
-    diag::trace(diag::ConsumerTraceEvent::ArenaUnbind, m_controller.runtimeIdentity().sessionExecutionId,
-                0, 0);
+    const uint64_t traceExecId = m_controller.runtimeIdentity().sessionExecutionId;
+    diag::trace(diag::ConsumerTraceEvent::ArenaUnbind, traceExecId, 0, 0);
     // O callback pode estar aguardando o QEMU publicar o próximo timestamp segurando apenas este
     // mutex de lifetime. Sinalize primeiro para que ele saia; só então serialize o teardown.
     stopPolling();
@@ -1320,6 +1527,8 @@ void McuComponent::openSyntheticArenaForTesting(const std::string& arenaName) {
         m_syntheticArenaForTesting = true;
         // Ordem invertida (zera primeiro, seta origem depois) -- ver comentário em loadFirmwareLocked().
         m_latestVirtualTimePs.store(0, std::memory_order_relaxed);
+        m_latestVnextBVirtualTimeNs.store(0, std::memory_order_relaxed);
+        m_vnextBHeartbeatWatermarkNs.store(0, std::memory_order_relaxed);
         m_nextPendingEventNs.store(0, std::memory_order_relaxed);
         m_qemuTimeOriginNs.store(m_scheduler.nowNs(), std::memory_order_relaxed);
         bindPollDoorbellLocked(arenaName);

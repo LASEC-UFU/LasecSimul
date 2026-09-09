@@ -55,7 +55,8 @@ Exactly two semantic doorbells per attachment:
 - Redundant causal I2C C2A tokens accumulated until ring FULL.
 - Per-operation fprintf/fflush materially distorted multi-QEMU timing.
 - `tb-size=64M` was invalid/ignored in the historical configuration. Use numeric `64`.
-- CPU1 MWDT compensation has NOT been causally justified.
+- CPU1 TG0 transport-pause compensation is causally bounded and implemented
+  (DECISION-011/E107), but does not close the production MWDT gate.
 - Reset masks identify reset domains; source/caller must be traced.
 
 ## Current production launch intent

@@ -119,10 +119,61 @@ std::string decodeHex(const std::string& hex) {
     return bytes;
 }
 
+bool vnextBootLivenessByPacing(bool firmwareRunning, bool schedulerRunning,
+                               uint64_t pacingBaseline, uint64_t pacingNow) {
+    return firmwareRunning && schedulerRunning && pacingNow > pacingBaseline;
+}
+
+bool vnextBlankLifecycleProgress(bool firmwareRunning, bool schedulerRunning,
+                                 uint64_t pacingBaseline, uint64_t pacingNow) {
+    return vnextBootLivenessByPacing(firmwareRunning, schedulerRunning,
+                                     pacingBaseline, pacingNow);
+}
+
+bool vnextRealFirmwareProgress(uint64_t submissionsStart, uint64_t submissionsNow,
+                               uint64_t completionsStart, uint64_t completionsNow,
+                               uint64_t artifactProgressStart,
+                               uint64_t artifactProgressNow) {
+    return submissionsNow > submissionsStart &&
+           completionsNow > completionsStart &&
+           completionsNow - completionsStart >= 2 &&
+           artifactProgressNow > artifactProgressStart;
+}
+
 } // namespace
 
 int main() {
     phaseMarker("PHASE_00_TEST_START");
+    // E144 (EVIDENCE.md, 2026-09-08): E132-E's historical "session_restart_stress_test 15/15"
+    // ran a Release build; E142/E143 had been (re)building and running Debug without noticing --
+    // an unoptimized Debug build is slow enough per real-firmware dispatch cycle that it cannot
+    // reach the guest's I2C phase within a 5s window even with the H143 fix applied (E144's own
+    // Debug time series: Scheduler::nowNs advances monotonically throughout a 30s window, never
+    // frozen, just ~60x slower than real time), while Release reliably does. Self-report the
+    // build config unconditionally (cheap, once, not a hot-path log) so this is never silently
+    // ambiguous again, and fail closed -- before doing anything else -- if the caller explicitly
+    // requires the formal (Release) configuration via LASECSIMUL_REQUIRE_RELEASE=1.
+#ifdef _DEBUG
+    constexpr const char* kHarnessBuildConfig = "Debug";
+#else
+    constexpr const char* kHarnessBuildConfig = "Release";
+#endif
+    std::fprintf(stderr, "HARNESS_BUILD_CONFIG=%s\n", kHarnessBuildConfig);
+    {
+        const char* requireRelease = std::getenv("LASECSIMUL_REQUIRE_RELEASE");
+        const bool requireReleaseSet = requireRelease && *requireRelease && requireRelease[0] != '0';
+#ifdef _DEBUG
+        if (requireReleaseSet) {
+            std::fprintf(stderr,
+                "FALHOU: LASECSIMUL_REQUIRE_RELEASE=1 exige o build formal (Release), mas este "
+                "executavel foi compilado Debug -- recompile/rode session_restart_stress_test.exe "
+                "em C:\\SourceCode\\LasecSimul\\core\\build\\Release, nao Debug.\n");
+            return 1;
+        }
+#else
+        (void)requireReleaseSet;
+#endif
+    }
 #ifdef _WIN32
     // Achado ao vivo 2026-07-27 (.spec 32.5.8): um crash interno do processo QEMU filho (assert do
     // proprio QEMU, ex. fifo8_pop) pode deixar o processo deste teste num estado que o CRT de Debug
@@ -159,7 +210,7 @@ int main() {
     const bool verboseLogs = verboseOverride && *verboseOverride &&
                              std::string(verboseOverride) != "0";
     const char* requireGpioOverride = std::getenv("LASECSIMUL_STRESS_REQUIRE_GPIO");
-    const bool requireGpio = !requireGpioOverride ||
+    const bool requireGpio = useRealFirmware && requireGpioOverride &&
                              std::string(requireGpioOverride) != "0";
     const std::filesystem::path realFirmware =
         useRealFirmware ? std::filesystem::u8path(firmwareOverride) : std::filesystem::path{};
@@ -187,6 +238,9 @@ int main() {
     std::shared_ptr<plugins::PluginModule> module = cache.loader().loadMcuPlugin(dllPath);
     cache.setActiveMcuModule("espressif.esp32", module);
     cache.loadLibrary(std::filesystem::path(REAL_DEVICES_LIBRARY_JSON_PATH));
+
+    TEST_ASSERT(!vnextBootLivenessByPacing(true, true, 1000, 1000),
+                "oraculo VNEXT_B rejeita processo/scheduler vivos sem avanco de pacing");
 
     phaseMarker("PHASE_01_CREATE_SESSION_BEGIN");
     SimulationSession session(cache);
@@ -329,6 +383,27 @@ int main() {
             continue;
         }
 
+        // If Execution A intentionally held one dispatcher callback while it was torn down,
+        // release it immediately after Execution B has a registered attachment, before B's
+        // boot-liveness wait. VNEXT_B boot is proven by pacingPositionNs(), and pacing itself is
+        // fed by the shared dispatcher; waiting until after B "boots" would turn the test barrier
+        // into an artificial boot deadlock.
+        if (useVnextB && cycle == 1 && staleCallbackBarrierArmed &&
+            staleCallbackBarrierEntered && !staleCallbackBarrierReleased) {
+            mcu::qemu::releaseVnextBTestWaitCallbackBarrier();
+            staleCallbackBarrierReleased = true;
+            (void)mcu::qemu::waitVnextBTestStaleWaitCallbackRejected(std::chrono::seconds(5));
+            staleCallbackRejected = mcu::qemu::vnextBTestStaleWaitCallbackCount();
+            staleCallbackBarrierArmed = false;
+            std::fprintf(stderr, "  stale Execution A callback released before B boot rejected=%llu\n",
+                         static_cast<unsigned long long>(staleCallbackRejected));
+            const auto heldMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - staleBarrierEnteredAt).count();
+            std::fprintf(stderr, "STALE_BARRIER_HELD_MS=%lld STALE_BARRIER_HELD_DURING_B_PROGRESS=0\n",
+                         static_cast<long long>(heldMs));
+            phaseMarker("PHASE_23_STALE_CALLBACK_RELEASED", cycle, executionId);
+        }
+
         // TEMPORARY (ConsumerTrace investigation, round 7: restart-timebase audit) -- one line per
         // cycle, right after loadMcuFirmware() returns: sessionExecutionId + qemuTimeOriginNs (the
         // Scheduler::nowNs() base every eventNs for THIS cycle is computed relative to). Checks for
@@ -350,12 +425,21 @@ int main() {
         // do McuComponent (Scheduler já está rodando) drena a fila, não fazemos isso manualmente
         // aqui (ao contrário de McuRestartStressTest, que usa McuController puro sem Scheduler).
         const auto bootDeadline = std::chrono::steady_clock::now() + bootTimeout;
+        const uint64_t bootPacingBaseline = useVnextB ? mcuPtr->pacingPositionNs().value_or(0) : 0;
+        uint64_t bootPacingObserved = bootPacingBaseline;
         bool booted = false;
         while (std::chrono::steady_clock::now() < bootDeadline) {
             const LsdnQemuArena* arena = mcuPtr->arenaBridge().arena();
-            if ((useVnextB && mcuPtr->firmwareRunning() &&
-                 mcuPtr->qemuLogs().find("[VNEXT_PROBE] after qemu_init") != std::string::npos) ||
-                (!useVnextB && arena && arena->running != 0)) {
+            if (useVnextB) {
+                bootPacingObserved = mcuPtr->pacingPositionNs().value_or(0);
+                if (vnextBootLivenessByPacing(mcuPtr->firmwareRunning(),
+                                              session.scheduler().isRunning(),
+                                              bootPacingBaseline,
+                                              bootPacingObserved)) {
+                    booted = true;
+                    break;
+                }
+            } else if (arena && arena->running != 0) {
                 booted = true;
                 break;
             }
@@ -371,14 +455,18 @@ int main() {
             const LsdnQemuArena* bootArena = mcuPtr->arenaBridge().arena();
             std::fprintf(stderr,
                 "  ciclo %d: NAO INICIALIZOU em %lldms (firmwareRunning=%s arenaRunning=%llu"
-                " queue=%llu/%llu abi=%u peerReady=%s)\n",
+                " queue=%llu/%llu abi=%u peerReady=%s schedulerRunning=%s"
+                " pacingNs=%llu->%llu)\n",
                 cycle, static_cast<long long>(bootTimeout.count()),
                 mcuPtr->firmwareRunning() ? "sim" : "nao",
                 static_cast<unsigned long long>(bootArena ? bootArena->running : 999),
                 static_cast<unsigned long long>(bootArena ? bootArena->queueReadIndex : 999),
                 static_cast<unsigned long long>(bootArena ? bootArena->queueWriteIndex : 999),
                 mcuPtr->arenaBridge().protocolMajor(),
-                mcuPtr->arenaBridge().peerReady() ? "sim" : "nao");
+                mcuPtr->arenaBridge().peerReady() ? "sim" : "nao",
+                session.scheduler().isRunning() ? "sim" : "nao",
+                static_cast<unsigned long long>(bootPacingBaseline),
+                static_cast<unsigned long long>(bootPacingObserved));
             // TEMPORARY (ConsumerTrace investigation) -- dump FIRST, see rationale at the
             // TRAVOU NO MEIO site above (a pre-existing, OPEN/SECONDARY crash can land inside the
             // qemuLogs() print right after a mid-run stall; ordering the dump first protects it
@@ -415,6 +503,7 @@ int main() {
                 staleCallbackBarrierReleased = true;
                 (void)mcu::qemu::waitVnextBTestStaleWaitCallbackRejected(std::chrono::seconds(5));
                 staleCallbackRejected = mcu::qemu::vnextBTestStaleWaitCallbackCount();
+                staleCallbackBarrierArmed = false;
                 std::fprintf(stderr, "  stale Execution A callback released before B run rejected=%llu\\n",
                              static_cast<unsigned long long>(staleCallbackRejected));
                 const auto heldMs = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -437,6 +526,7 @@ int main() {
         // .hpp) é o proxy correto de "o cano QEMU<->Core continua fluindo": não depende do firmware
         // mexer em GPIO nenhum, só de o relógio virtual do QEMU seguir avançando.
         const uint64_t virtualTimeAtStart = mcuPtr->latestVirtualTimeNs();
+        const uint64_t pacingAtStart = useVnextB ? mcuPtr->pacingPositionNs().value_or(0) : 0;
         const uint64_t vnextI2cAtStart = mcuPtr->vnextI2cCompletionCountForTesting();
         const uint64_t vnextI2cSubmissionsAtStart = mcuPtr->vnextI2cSubmissionCountForTesting();
         const uint64_t vnextArtifactProgressAtStart = mcuPtr->vnextArtifactProgressForTesting();
@@ -455,10 +545,22 @@ int main() {
         uint64_t firstGpioHighNowNs = 0;
         uint64_t firstGpioLowAfterHighNowNs = 0;
         uint64_t lastGpioTransitionNowNs = 0;
-        const auto runDeadline = std::chrono::steady_clock::now() + runDuration;
+        constexpr auto kVnextBBlankRunWindow = std::chrono::milliseconds(1500);
+        const auto effectiveRunDuration =
+            useVnextB && !useRealFirmware && runDuration < kVnextBBlankRunWindow
+                ? kVnextBBlankRunWindow
+                : runDuration;
+        const auto runDeadline = std::chrono::steady_clock::now() + effectiveRunDuration;
         const auto maximumDeadline = runDeadline + (useRealFirmware && requireGpio ? gpioGrace
                                                                     : std::chrono::milliseconds{0});
         phaseMarker(cycle == 0 ? "PHASE_06_A_TEST_WINDOW_BEGIN" : "PHASE_14_B_TEST_WINDOW_BEGIN", cycle, executionId);
+        // E144 (EVIDENCE.md, 2026-09-08): opt-in-only (LASECSIMUL_STRESS_TIME_SERIES), never in
+        // the default/hot path -- classifies "Scheduler slow" vs. "Scheduler frozen" with an
+        // actual time series instead of a single end-of-window snapshot, per this episode's own
+        // "no 'stuck' without time series" rule. 250ms cadence, read-only *ForTesting() accessors
+        // only, no behavior change.
+        const bool timeSeriesEnabled = std::getenv("LASECSIMUL_STRESS_TIME_SERIES") != nullptr;
+        auto lastTimeSeriesSampleAt = std::chrono::steady_clock::now();
         bool firstWindowIteration = true;
         while (std::chrono::steady_clock::now() < maximumDeadline) {
             if (firstWindowIteration) phaseMarker(cycle == 0 ? "PHASE_06A_BEFORE_RUNNING_CHECK" : "PHASE_14A_BEFORE_RUNNING_CHECK", cycle, executionId);
@@ -475,17 +577,27 @@ int main() {
                 phaseMarker(cycle == 0 ? "PHASE_06D_AFTER_UART_DRAIN" : "PHASE_14D_AFTER_UART_DRAIN", cycle, executionId);
                 firstWindowIteration = false;
             }
-            if (useVnextB &&
-                mcuPtr->qemuLogs().find("[VNEXT_B_I2C] submit") != std::string::npos) {
+            const uint64_t currentVnextSubmissions = mcuPtr->vnextI2cSubmissionCountForTesting();
+            const uint64_t currentVnextCompletions = mcuPtr->vnextI2cCompletionCountForTesting();
+            const uint64_t currentVnextArtifactProgress = mcuPtr->vnextArtifactProgressForTesting();
+            const bool currentRealFirmwareProgress =
+                vnextRealFirmwareProgress(vnextI2cSubmissionsAtStart, currentVnextSubmissions,
+                                          vnextI2cAtStart, currentVnextCompletions,
+                                          vnextArtifactProgressAtStart,
+                                          currentVnextArtifactProgress);
+            if (useVnextB && useRealFirmware &&
+                currentVnextSubmissions > vnextI2cSubmissionsAtStart &&
+                currentVnextCompletions > vnextI2cAtStart) {
                 aRealI2cObserved = true;
-                if (cycleCount >= 2 && cycle == 0 && !staleCallbackBarrierArmed &&
+                if (cycleCount >= 2 && cycle == 0 && currentRealFirmwareProgress &&
+                    !staleCallbackBarrierArmed &&
                     std::getenv("LASECSIMUL_STRESS_SKIP_STALE_BARRIER") == nullptr) {
                     mcu::qemu::armVnextBTestWaitCallbackBarrier();
                     staleCallbackBarrierArmed = true;
                 }
             }
-            if (staleCallbackBarrierArmed &&
-                aRealI2cObserved &&
+            if (staleCallbackBarrierArmed && !staleCallbackBarrierReleased &&
+                aRealI2cObserved && currentVnextCompletions > vnextI2cAtStart &&
                 mcu::qemu::waitVnextBTestWaitCallbackEntered(std::chrono::milliseconds(1))) {
                 if (!staleCallbackBarrierEntered) {
                     staleCallbackBarrierEntered = true;
@@ -493,7 +605,8 @@ int main() {
                     phaseMarker("PHASE_19_STALE_CALLBACK_HELD", cycle, executionId);
                 }
             }
-            if (staleCallbackBarrierArmed && aRealI2cObserved &&
+            if (staleCallbackBarrierArmed && !staleCallbackBarrierReleased && aRealI2cObserved &&
+                currentVnextCompletions > vnextI2cAtStart &&
                 mcu::qemu::waitVnextBTestWaitCallbackEntered(std::chrono::milliseconds(1))) {
                 staleCallbackBarrierEntered = true;
                 break;
@@ -527,43 +640,86 @@ int main() {
                  (observedGpioHigh && observedGpioLowAfterHigh && gpioTransitions >= 2))) {
                 break;
             }
+            if (timeSeriesEnabled && useVnextB) {
+                const auto nowSteady = std::chrono::steady_clock::now();
+                if (nowSteady - lastTimeSeriesSampleAt >= std::chrono::milliseconds(250)) {
+                    lastTimeSeriesSampleAt = nowSteady;
+                    const auto [lane0Write, lane0Read] = mcuPtr->vnextBAttachmentForTesting().laneRingSeqForTesting(0);
+                    std::fprintf(stderr,
+                        "  E144_TIME_SERIES ciclo=%d elapsedMs=%lld schedulerNowNs=%llu "
+                        "lane0={write=%llu read=%llu} submissions=%llu completions=%llu\n",
+                        cycle,
+                        static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                            nowSteady - (runDeadline - effectiveRunDuration)).count()),
+                        static_cast<unsigned long long>(session.scheduler().nowNs()),
+                        static_cast<unsigned long long>(lane0Write), static_cast<unsigned long long>(lane0Read),
+                        static_cast<unsigned long long>(currentVnextSubmissions),
+                        static_cast<unsigned long long>(currentVnextCompletions));
+                }
+            }
             std::this_thread::sleep_for(useRealFirmware ? std::chrono::milliseconds(2)
                                                         : std::chrono::milliseconds(10));
         }
         const bool stillRunning = mcuPtr->firmwareRunning();
         const bool schedulerStillRunning = session.scheduler().isRunning();
         const uint64_t virtualTimeAfter = mcuPtr->latestVirtualTimeNs();
+        const uint64_t pacingAfter = useVnextB ? mcuPtr->pacingPositionNs().value_or(0) : 0;
+        const uint64_t vnextI2cSubmissionsAfter = mcuPtr->vnextI2cSubmissionCountForTesting();
+        const uint64_t vnextI2cCompletionsAfter = mcuPtr->vnextI2cCompletionCountForTesting();
+        const uint64_t vnextArtifactProgressAfter = mcuPtr->vnextArtifactProgressForTesting();
+        const bool vnextBlankProgressObserved =
+            useVnextB && !useRealFirmware &&
+            vnextBlankLifecycleProgress(stillRunning, schedulerStillRunning,
+                                        pacingAtStart, pacingAfter);
+        const bool vnextRealProgressObserved =
+            useVnextB && useRealFirmware &&
+            vnextRealFirmwareProgress(vnextI2cSubmissionsAtStart, vnextI2cSubmissionsAfter,
+                                      vnextI2cAtStart, vnextI2cCompletionsAfter,
+                                      vnextArtifactProgressAtStart,
+                                      vnextArtifactProgressAfter);
         const bool vnextProgressObserved =
-            mcuPtr->vnextI2cSubmissionCountForTesting() > vnextI2cSubmissionsAtStart &&
-            mcuPtr->vnextI2cCompletionCountForTesting() > vnextI2cAtStart &&
-            mcuPtr->vnextI2cCompletionCountForTesting() - vnextI2cAtStart >= 2;
+            vnextBlankProgressObserved || vnextRealProgressObserved;
         if (useVnextB) {
             std::fprintf(stderr,
-                         "[HARNESS_PROGRESS] cycle=%d submissions=%llu/%llu completions=%llu/%llu"
-                         " artifact_progress=%llu/%llu criteria={submission:%s completion:%s"
-                         " artifact:%s minimum:%s} running={firmware:%s scheduler:%s}\n",
-                         cycle,
-                         static_cast<unsigned long long>(mcuPtr->vnextI2cSubmissionCountForTesting()),
-                         static_cast<unsigned long long>(vnextI2cSubmissionsAtStart),
-                         static_cast<unsigned long long>(mcuPtr->vnextI2cCompletionCountForTesting()),
-                         static_cast<unsigned long long>(vnextI2cAtStart),
-                         static_cast<unsigned long long>(mcuPtr->vnextArtifactProgressForTesting()),
-                         static_cast<unsigned long long>(vnextArtifactProgressAtStart),
-                         mcuPtr->vnextI2cSubmissionCountForTesting() > vnextI2cSubmissionsAtStart ? "true" : "false",
-                         mcuPtr->vnextI2cCompletionCountForTesting() > vnextI2cAtStart ? "true" : "false",
-                         mcuPtr->vnextArtifactProgressForTesting() > vnextArtifactProgressAtStart ? "true" : "false",
-                         mcuPtr->vnextI2cCompletionCountForTesting() - vnextI2cAtStart >= 2 ? "true" : "false",
-                         stillRunning ? "true" : "false",
-                         schedulerStillRunning ? "true" : "false");
+                          "[HARNESS_PROGRESS] cycle=%d submissions=%llu/%llu completions=%llu/%llu"
+                          " artifact_progress=%llu/%llu pacing=%llu/%llu mode=%s"
+                          " criteria={submission:%s completion:%s artifact:%s minimum:%s"
+                          " pacing:%s} running={firmware:%s scheduler:%s}\n",
+                          cycle,
+                          static_cast<unsigned long long>(vnextI2cSubmissionsAfter),
+                          static_cast<unsigned long long>(vnextI2cSubmissionsAtStart),
+                          static_cast<unsigned long long>(vnextI2cCompletionsAfter),
+                          static_cast<unsigned long long>(vnextI2cAtStart),
+                          static_cast<unsigned long long>(vnextArtifactProgressAfter),
+                          static_cast<unsigned long long>(vnextArtifactProgressAtStart),
+                          static_cast<unsigned long long>(pacingAfter),
+                          static_cast<unsigned long long>(pacingAtStart),
+                          useRealFirmware ? "real_firmware" : "blank_flash",
+                          vnextI2cSubmissionsAfter > vnextI2cSubmissionsAtStart ? "true" : "false",
+                          vnextI2cCompletionsAfter > vnextI2cAtStart ? "true" : "false",
+                          vnextArtifactProgressAfter > vnextArtifactProgressAtStart ? "true" : "false",
+                          vnextI2cCompletionsAfter - vnextI2cAtStart >= 2 ? "true" : "false",
+                          pacingAfter > pacingAtStart ? "true" : "false",
+                          stillRunning ? "true" : "false",
+                          schedulerStillRunning ? "true" : "false");
             std::fflush(stderr);
         }
-        if (vnextProgressObserved)
-            phaseMarker(cycle == 0 ? "PHASE_07_A_REAL_PROGRESS_CONFIRMED" : "PHASE_15_B_REAL_PROGRESS_CONFIRMED", cycle, executionId);
+        if (vnextProgressObserved) {
+            if (useVnextB && !useRealFirmware) {
+                phaseMarker(cycle == 0 ? "PHASE_07_A_PACING_PROGRESS_CONFIRMED"
+                                        : "PHASE_15_B_PACING_PROGRESS_CONFIRMED",
+                            cycle, executionId);
+            } else {
+                phaseMarker(cycle == 0 ? "PHASE_07_A_REAL_PROGRESS_CONFIRMED"
+                                        : "PHASE_15_B_REAL_PROGRESS_CONFIRMED",
+                            cycle, executionId);
+            }
+        }
         phaseMarker(cycle == 0 ? "PHASE_08_A_TEST_WINDOW_END" : "PHASE_16_B_TEST_WINDOW_END", cycle, executionId);
         if (useVnextB && verboseLogs) {
             std::fprintf(stderr, "  ciclo %d: VNEXT I2C completions=%llu start=%llu progress=%s\\n",
                          cycle,
-                         static_cast<unsigned long long>(mcuPtr->vnextI2cCompletionCountForTesting()),
+                         static_cast<unsigned long long>(vnextI2cCompletionsAfter),
                          static_cast<unsigned long long>(vnextI2cAtStart),
                          vnextProgressObserved ? "sim" : "nao");
         }
@@ -574,6 +730,7 @@ int main() {
             staleCallbackBarrierReleased = true;
             (void)mcu::qemu::waitVnextBTestStaleWaitCallbackRejected(std::chrono::seconds(5));
             staleCallbackRejected = mcu::qemu::vnextBTestStaleWaitCallbackCount();
+            staleCallbackBarrierArmed = false;
             std::fprintf(stderr, "  stale Execution A callback released rejected=%llu\n",
                          static_cast<unsigned long long>(staleCallbackRejected));
         }
@@ -626,6 +783,56 @@ int main() {
                 mcuPtr->arenaBridge().peerReady() ? "sim" : "nao",
                 static_cast<unsigned long long>(
                     mcuPtr->arenaBridge().negotiatedCapabilities()));
+            // E142 (EVIDENCE.md, 2026-09-08): Phase 2 causal-bisection boundary snapshot -- read
+            // only, uses only existing/new *ForTesting() accessors (no stderr elsewhere, no env
+            // var, no behavior change). Classifies exactly where the artifactEvent -> ... -> I2C
+            // chain stopped for THIS failing cycle. Temporary: kept only if Phase 6/7 finds it
+            // belongs in production diagnostics, removed otherwise.
+            if (useVnextB) {
+                const auto& diagAttachment = mcuPtr->vnextBAttachmentForTesting();
+                const auto [lane0Write, lane0Read] = diagAttachment.laneRingSeqForTesting(0);
+                const auto [lane1Write, lane1Read] = diagAttachment.laneRingSeqForTesting(1);
+                std::fprintf(stderr,
+                    "  E142_BOUNDARY_SNAPSHOT ciclo=%d lane0={write=%llu read=%llu} "
+                    "lane1={write=%llu read=%llu} artifact_state=%u core_state=%u "
+                    "heartbeat=%llu artifact_progress=%llu notificationPending=%s "
+                    "pollGeneration=%llu pollThreadRunning=%s polling=%s pollEventScheduled=%s "
+                    "waitDispatcherOccupiedSlots=%u\n",
+                    cycle,
+                    static_cast<unsigned long long>(lane0Write), static_cast<unsigned long long>(lane0Read),
+                    static_cast<unsigned long long>(lane1Write), static_cast<unsigned long long>(lane1Read),
+                    diagAttachment.view().control ? diagAttachment.view().control->artifact_state : 999u,
+                    diagAttachment.view().control ? diagAttachment.view().control->core_state : 999u,
+                    static_cast<unsigned long long>(diagAttachment.heartbeatWatermarkForTesting()),
+                    static_cast<unsigned long long>(diagAttachment.artifactProgressForTesting()),
+                    diagAttachment.notificationPending() ? "sim" : "nao",
+                    static_cast<unsigned long long>(mcuPtr->pollGenerationForTesting()),
+                    mcuPtr->pollThreadRunningForTesting() ? "sim" : "nao",
+                    mcuPtr->pollingForTesting() ? "sim" : "nao",
+                    mcuPtr->pollEventScheduledForTesting() ? "sim" : "nao",
+                    static_cast<unsigned>(mcu::qemu::VnextBAttachment::waitDispatcherStatsForTesting().occupiedSlots));
+                // E142 Phase 2, second pass: peekLane() is non-mutating -- safe to read the stuck
+                // head event directly and reconstruct the exact arbiter inputs
+                // (originNs + event.timestamp_ns vs nowNs) to prove/disprove the
+                // "eternally-future" hypothesis this entry's own invariant list calls out.
+                if (const auto head = diagAttachment.peekLane(0)) {
+                    const uint64_t originNs = mcuPtr->qemuTimeOriginNsForTesting();
+                    const uint64_t nowNs = session.scheduler().nowNs();
+                    const uint64_t computed = originNs + head->timestamp_ns;
+                    const auto pacing = mcuPtr->pacingPositionNs();
+                    std::fprintf(stderr,
+                        "  E142_ARBITER_INPUTS ciclo=%d lane0Head.timestamp_ns=%llu "
+                        "originNs=%llu computed(origin+ts)=%llu nowNs=%llu ready=%s "
+                        "pacingPositionNs=%s%llu\n",
+                        cycle, static_cast<unsigned long long>(head->timestamp_ns),
+                        static_cast<unsigned long long>(originNs),
+                        static_cast<unsigned long long>(computed),
+                        static_cast<unsigned long long>(nowNs),
+                        computed <= nowNs ? "sim" : "nao",
+                        pacing.has_value() ? "" : "NULLOPT/",
+                        static_cast<unsigned long long>(pacing.value_or(0)));
+                }
+            }
             // TEMPORARY (ConsumerTrace investigation) -- dump the Core-side arena-consumer trace
             // FIRST, right where a mid-run stall (queue-full / QEMU premature exit) is detected,
             // BEFORE qemuLogs()/UART below -- a pre-existing, still-OPEN/SECONDARY crash (exit
@@ -649,7 +856,7 @@ int main() {
             std::fprintf(stderr, "  ciclo %d: OK (virtualTimeNs avancou %llu->%llu",
                          cycle, static_cast<unsigned long long>(virtualTimeAtStart),
                          static_cast<unsigned long long>(virtualTimeAfter));
-            if (useRealFirmware) {
+            if (useRealFirmware && requireGpio) {
                 std::fprintf(stderr, ", GPIO13 bordas=%d high=%s low-apos-high=%s"
                                      " ultimaBordaNowNs=%llu",
                              gpioTransitions, observedGpioHigh ? "sim" : "nao",
@@ -664,7 +871,7 @@ int main() {
             mcu::McuComponent::printAddressWatchSummaryForTesting(cycle);
         }
 
-        if (useRealFirmware && requireGpio &&
+        if (useRealFirmware && requireGpio && !intentionalStaleBarrierHold &&
             (!observedGpioHigh || !observedGpioLowAfterHigh || gpioTransitions < 2)) {
             const LsdnQemuArena* failedArena = mcuPtr->arenaBridge().arena();
             const LsdnQemuQueueEntry* failedHead =
@@ -753,35 +960,74 @@ int main() {
         // full-trace dump). No-op text (queueMaxOcc=0) unless LASECSIMUL_MCU_CONSUMER_TRACE=1.
         std::fprintf(stderr,
             "  ciclo %d: RELEASE-CHECK bootOK=%s virtualTimeNs=%llu->%llu queueMaxOcc=%llu guru=%s"
-            " coreProgressNs=%llu corePublishCount=%llu\n",
+            " coreProgressNs=%llu corePublishCount=%llu pacingNs=%llu->%llu mode=%s\n",
             cycle, booted ? "sim" : "nao",
             static_cast<unsigned long long>(virtualTimeAtStart), static_cast<unsigned long long>(virtualTimeAfter),
             static_cast<unsigned long long>(mcuPtr->peekAndResetMaxQueueOccupancyForTesting()),
             uartText.find("Guru Meditation Error") != std::string::npos ? "sim" : "nao",
             static_cast<unsigned long long>(mcuPtr->coreProgressNsForTesting()),
-            static_cast<unsigned long long>(mcuPtr->corePublishCountForTesting()));
+            static_cast<unsigned long long>(mcuPtr->corePublishCountForTesting()),
+            static_cast<unsigned long long>(pacingAtStart),
+            static_cast<unsigned long long>(pacingAfter),
+            useRealFirmware ? "real_firmware" : "blank_flash");
 
         phaseMarker(cycle == 0 ? "PHASE_09_STOP_A_BEGIN" : "PHASE_17_STOP_B_BEGIN", cycle, executionId);
+        const uint64_t vnextI2cSubmissionsBeforeStop = mcuPtr->vnextI2cSubmissionCountForTesting();
+        const uint64_t vnextI2cCompletionsBeforeStop = mcuPtr->vnextI2cCompletionCountForTesting();
+        std::thread staleReleaseDuringStop;
+        if (intentionalStaleBarrierHold) {
+            // The barrier is test-only and exists solely to leave one Execution A callback in
+            // flight while stop() advances the attachment generation. Releasing it during stop()
+            // proves the stale-generation rejection without manufacturing an unregister drain
+            // timeout or carrying a blocked dispatcher into Execution B.
+            staleReleaseDuringStop = std::thread([] {
+                std::this_thread::sleep_for(std::chrono::milliseconds(250));
+                mcu::qemu::releaseVnextBTestWaitCallbackBarrier();
+                (void)mcu::qemu::waitVnextBTestStaleWaitCallbackRejected(std::chrono::seconds(5));
+            });
+        }
         session.stopSimulation();
+        if (staleReleaseDuringStop.joinable()) {
+            staleReleaseDuringStop.join();
+            staleCallbackBarrierReleased = true;
+            staleCallbackBarrierArmed = false;
+            staleCallbackRejected = mcu::qemu::vnextBTestStaleWaitCallbackCount();
+            std::fprintf(stderr, "  stale Execution A callback released during A stop rejected=%llu\n",
+                         static_cast<unsigned long long>(staleCallbackRejected));
+            const auto heldMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - staleBarrierEnteredAt).count();
+            std::fprintf(stderr, "STALE_BARRIER_HELD_MS=%lld STALE_BARRIER_HELD_DURING_B_PROGRESS=0\n",
+                         static_cast<long long>(heldMs));
+            phaseMarker("PHASE_23_STALE_CALLBACK_RELEASED", cycle, executionId);
+        }
         phaseMarker(cycle == 0 ? "PHASE_10_STOP_A_END" : "PHASE_18_STOP_B_END", cycle, executionId);
+        const bool i2cQuiescedAfterStop =
+            !useVnextB || !useRealFirmware || !aRealI2cObserved ||
+            (mcuPtr->vnextI2cSubmissionCountForTesting() == vnextI2cSubmissionsBeforeStop &&
+             mcuPtr->vnextI2cCompletionCountForTesting() == vnextI2cCompletionsBeforeStop);
         const bool stopClean = !mcuPtr->firmwareRunning() &&
                                !session.scheduler().isRunning() &&
                                !session.scheduler().isPaused() &&
                                session.scheduler().nowNs() == 0 &&
                                session.scheduler().pendingEventCount() == 0 &&
                                !session.runtimeState().executionActive;
-        if (!stopClean) {
+        if (!stopClean || !i2cQuiescedAfterStop) {
             std::fprintf(stderr,
                 "  ciclo %d: STOP NAO LIMPOU -- firmware=%s scheduler=%s paused=%s nowNs=%llu eventos=%zu"
-                " executionActive=%s\n",
+                " executionActive=%s i2cBeforeStop=%llu/%llu i2cAfterStop=%llu/%llu quiesced=%s\n",
                 cycle, mcuPtr->firmwareRunning() ? "rodando" : "parado",
                 session.scheduler().isRunning() ? "rodando" : "parado",
                 session.scheduler().isPaused() ? "sim" : "nao",
                 static_cast<unsigned long long>(session.scheduler().nowNs()),
                 session.scheduler().pendingEventCount(),
-                session.runtimeState().executionActive ? "sim" : "nao");
+                session.runtimeState().executionActive ? "sim" : "nao",
+                static_cast<unsigned long long>(vnextI2cSubmissionsBeforeStop),
+                static_cast<unsigned long long>(vnextI2cCompletionsBeforeStop),
+                static_cast<unsigned long long>(mcuPtr->vnextI2cSubmissionCountForTesting()),
+                static_cast<unsigned long long>(mcuPtr->vnextI2cCompletionCountForTesting()),
+                i2cQuiescedAfterStop ? "sim" : "nao");
             ++stopCleanupFailures;
-        } else if (useVnextB && aRealI2cObserved) {
+        } else if (useVnextB && useRealFirmware && aRealI2cObserved) {
             ++i2cStopQuiescenceCycles;
         }
         removeTemporaryFlash();
@@ -796,7 +1042,10 @@ int main() {
                     "nenhuma falha de wait no doorbell reutilizado ao longo de todos os ciclos");
     }
 
-    TEST_ASSERT(failedToBoot == 0, "nenhum ciclo deveria falhar em INICIALIZAR (arena->running nunca chegando a 1)");
+    TEST_ASSERT(failedToBoot == 0,
+                useVnextB
+                    ? "nenhum ciclo VNEXT_B deveria falhar em INICIALIZAR (pacingPositionNs sem avancar)"
+                    : "nenhum ciclo deveria falhar em INICIALIZAR (arena->running nunca chegando a 1)");
     TEST_ASSERT(stalledMidRun == 0, "nenhum ciclo deveria travar NO MEIO (Scheduler+MCU reais)");
     if (requireGpio) {
         TEST_ASSERT(gpioFailures == 0, "GPIO13 deveria piscar em todos os ciclos com firmware real");
@@ -807,7 +1056,17 @@ int main() {
                 "cada ciclo deveria obter um sessionExecutionId novo e distinto (stopSimulation()"
                 " encerrando a execucao anterior antes do proximo beginExecutionIfNeeded())");
 
-    if (useVnextB && cycleCount >= 2 && failedToBoot == 0 && stalledMidRun == 0 &&
+    if (useVnextB && !useRealFirmware && cycleCount >= 2 && failedToBoot == 0 &&
+        stalledMidRun == 0 && vnextProgressCycles == cycleCount && vnextNoDedicatedPoll) {
+        std::fprintf(stderr, "P9_RESTART_MANAGED_LIFECYCLE PASS mode=blank_flash cycles=%d\n", cycleCount);
+        std::fprintf(stderr, "P9_RESTART_PACING_LIVENESS PASS cycles=%d\n", vnextProgressCycles);
+        std::fprintf(stderr, "P9_STALE_WAIT_CALLBACK_REJECTED NOT_APPLICABLE mode=blank_flash no_real_i2c=1\n");
+        std::fprintf(stderr, "P9_I2C_INFLIGHT_STOP_QUIESCENCE NOT_APPLICABLE mode=blank_flash no_real_i2c=1\n");
+        std::fprintf(stderr, "VNEXT_NO_POLL_RESTART PASS polling_threads=0\n");
+        std::fprintf(stderr, "VNEXT_DISPATCHER_RESTART_REUSE PASS slot_reused=bounded_generation_safe\n");
+    }
+
+    if (useVnextB && useRealFirmware && cycleCount >= 2 && failedToBoot == 0 && stalledMidRun == 0 &&
         vnextProgressCycles == cycleCount && staleCallbackBarrierEntered &&
         staleCallbackBarrierReleased && staleCallbackRejected == 1 &&
         i2cStopQuiescenceCycles == cycleCount) {

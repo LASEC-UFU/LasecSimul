@@ -133,3 +133,14 @@ _deps/
 *.etl
 *.pyc
 __pycache__/
+
+# Evidencia/binarios de episodios de investigacao (candidatos QEMU, DLLs, logs,
+# runtime-promotion snapshots) -- volumosos (GBs) e regeneraveis a partir do
+# historico em orchestrator/.ai/EVIDENCE.md; nunca devem entrar no git.
+/vnext_prototype/mttcg_causality/
+/vnext_prototype/mwdt_baselines/
+/vnext_prototype/mwdt_controls/
+/vnext_prototype/guest_cache_wait_e2e/
+/vnext_prototype/pacing_investigation/
+/vnext_prototype/startup_barrier/
+qemu_logs_dump.txt

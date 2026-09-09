@@ -136,19 +136,71 @@ public:
         if (!CreatePipe(&readPipe, &writePipe, &sa, 0)) throw std::runtime_error("Failed to create QEMU log pipe");
         SetHandleInformation(readPipe, HANDLE_FLAG_INHERIT, 0);
 
-        STARTUPINFOW si{};
-        si.cb = sizeof(si);
-        si.dwFlags = STARTF_USESTDHANDLES;
-        si.hStdOutput = writePipe;
-        si.hStdError = writePipe;
-        si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+        STARTUPINFOEXW siex{};
+        siex.StartupInfo.cb = sizeof(siex);
+        siex.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+        siex.StartupInfo.hStdOutput = writePipe;
+        siex.StartupInfo.hStdError = writePipe;
+        siex.StartupInfo.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+
+        // E123 (EVIDENCE.md, 2026-09-05): root cause of TEARDOWN_HANG/E104, reproduced and proven
+        // via [TEARDOWN_TRACE] instrumentation -- CreateProcessW's plain bInheritHandles=TRUE (as
+        // used here before this fix) inherits EVERY currently-open inheritable handle in this
+        // process into the new child, not just writePipe/hStdInput. Under
+        // LASECSIMUL_SCALE_PARALLEL_START=1 (the declared production topology), multiple sessions'
+        // start() calls run concurrently on different threads; if session B's CreateProcessW
+        // executes during the brief window between session A's own CreateProcessW and session A's
+        // CloseHandle(writePipe) below, session B's QEMU child inherits a stray copy of session A's
+        // pipe write end. Session A's own reader thread (readPipeLoop()'s blocking ReadFile()) then
+        // never observes EOF -- the pipe's last writer is session B's still-running QEMU, not
+        // session A's -- so QemuProcessManager::joinReader()'s m_reader.join() (no timeout) blocks
+        // until session B's QEMU also exits, which under a sequential per-session teardown loop can
+        // be indefinitely long. Proven directly: [TEARDOWN_TRACE] showed
+        // qemuprocessmanager_joinreader_begin with no matching _end for the full 15s defensive
+        // timeout, every other stage (Scheduler::stop's join, VnextBWaitDispatcher::unregister)
+        // completing in ~1ms.
+        //
+        // Fix: PROC_THREAD_ATTRIBUTE_HANDLE_LIST makes ONLY the handles named here inheritable by
+        // THIS child, regardless of what else happens to be open (and inheritable) in the parent at
+        // the exact moment of this CreateProcessW call -- the race is eliminated structurally, not
+        // narrowed by serializing process creation. This is the Windows-documented fix for exactly
+        // this handle-leak class (see "Silently fixing an old and very deep bug", the pattern
+        // GetStdHandle/CreatePipe-based child process launchers are expected to use since Vista).
+        std::vector<HANDLE> inheritedHandles;
+        inheritedHandles.push_back(writePipe);
+        if (siex.StartupInfo.hStdInput && siex.StartupInfo.hStdInput != INVALID_HANDLE_VALUE) {
+            inheritedHandles.push_back(siex.StartupInfo.hStdInput);
+        }
+        SIZE_T attributeListSize = 0;
+        InitializeProcThreadAttributeList(nullptr, 1, 0, &attributeListSize);
+        std::vector<uint8_t> attributeListBuffer(attributeListSize);
+        auto* attributeList = reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(attributeListBuffer.data());
+        const bool attributeListReady = attributeListSize > 0 &&
+            InitializeProcThreadAttributeList(attributeList, 1, 0, &attributeListSize) &&
+            UpdateProcThreadAttribute(attributeList, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
+                                       inheritedHandles.data(),
+                                       inheritedHandles.size() * sizeof(HANDLE), nullptr, nullptr);
+        if (attributeListReady) {
+            siex.lpAttributeList = attributeList;
+        } else {
+            // Should not happen on any real Windows target (these APIs exist since Vista, no
+            // special privileges needed) -- traced rather than silently falling back to the
+            // pre-fix racy behavior unnoticed, per this task's own "prove, don't assume" standard.
+            std::fprintf(stderr,
+                "[QemuProcessManager] AVISO: PROC_THREAD_ATTRIBUTE_HANDLE_LIST indisponivel; "
+                "voltando ao lancamento sem lista de heranca explicita (risco de handle vazado "
+                "entre sessoes concorrentes, ver E123).\n");
+        }
 
         std::wstring commandLine = buildCommandLine(spec);
         std::vector<wchar_t> environmentBlock = buildLaunchEnvironment(spec);
-        if (!CreateProcessW(nullptr, commandLine.data(), nullptr, nullptr, TRUE,
-                            CREATE_NO_WINDOW | CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT,
-                            environmentBlock.data(), nullptr,
-                            &si, &m_processInfo)) {
+        const DWORD creationFlags = CREATE_NO_WINDOW | CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT |
+            (attributeListReady ? EXTENDED_STARTUPINFO_PRESENT : 0);
+        const BOOL created = CreateProcessW(nullptr, commandLine.data(), nullptr, nullptr, TRUE,
+                            creationFlags, environmentBlock.data(), nullptr,
+                            &siex.StartupInfo, &m_processInfo);
+        if (attributeListReady) DeleteProcThreadAttributeList(attributeList);
+        if (!created) {
             CloseHandle(readPipe);
             CloseHandle(writePipe);
             throw std::runtime_error("Failed to start QEMU process: " + spec.binary);
@@ -216,10 +268,15 @@ public:
     }
 
     bool stop(std::chrono::milliseconds timeout) {
-        if (!isRunning()) return true;
+        if (!isRunning()) {
+            joinReader();
+            return true;
+        }
 #if defined(_WIN32)
         const DWORD waitMs = static_cast<DWORD>(timeout.count());
-        if (WaitForSingleObject(m_processInfo.hProcess, waitMs) == WAIT_OBJECT_0) {
+        const bool exitedGracefully =
+            WaitForSingleObject(m_processInfo.hProcess, waitMs) == WAIT_OBJECT_0;
+        if (exitedGracefully) {
             reapProcess();
             return true;
         }
@@ -388,7 +445,18 @@ private:
     }
 
     void joinReader() {
-        if (m_reader.joinable()) m_reader.join();
+        if (!m_reader.joinable()) return;
+        // E123 Phase 1 (EVIDENCE.md, 2026-09-05): diagnostic only, no behavior change -- pinpoints
+        // whether the reader thread's blocking ReadFile() (readPipeLoop()) is the exact site
+        // TEARDOWN_HANG blocks on. Working hypothesis: CreatePipe()'s write end is inheritable
+        // (needed so THIS child can write to it) but nothing prevents a CONCURRENT
+        // CreateProcessW() for a DIFFERENT session (LASECSIMUL_SCALE_PARALLEL_START=1 launches all
+        // N sessions from separate threads) from inheriting the same still-open handle before this
+        // session's own CloseHandle(writePipe) runs -- if that happens, ReadFile() here never sees
+        // EOF until every process holding a stray copy of the handle also exits, which under a
+        // sequential per-session teardown loop can be long after this specific stop() call's own
+        // reasonable bound.
+        m_reader.join();
     }
 
     void clearProcessState() {

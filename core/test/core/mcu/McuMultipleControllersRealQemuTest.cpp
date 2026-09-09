@@ -85,7 +85,10 @@ int main() {
 #ifndef ESP32_ADAPTER_DLL_PATH
 #error "ESP32_ADAPTER_DLL_PATH precisa ser definido pelo CMakeLists (caminho do adapter.dll real)"
 #endif
-    const std::filesystem::path qemuPath = QEMU_REAL_BINARY_PATH;
+    const char* qemuOverride = std::getenv("LASECSIMUL_TEST_QEMU_BINARY");
+    const std::filesystem::path qemuPath =
+        (qemuOverride && *qemuOverride) ? std::filesystem::u8path(qemuOverride)
+                                        : std::filesystem::path(QEMU_REAL_BINARY_PATH);
     const std::filesystem::path dllPath = ESP32_ADAPTER_DLL_PATH;
 
     if (!std::filesystem::exists(qemuPath)) {
@@ -124,23 +127,39 @@ int main() {
     const std::filesystem::path flashA = createBlankFlash("a");
     const std::filesystem::path flashB = createBlankFlash("b");
 
+    // Pre-existing gap surfaced by PLAN_MTTCG_VNEXT_B_CAUSALITY.md R1 (explicit -Transport):
+    // McuController::start()'s VNEXT_B branch requires a non-zero RuntimeLaunchIdentity
+    // (McuController.cpp ~line 303) -- this test only ever exercised LEGACY before that harness
+    // flag existed. A and B need distinct runtimeInstanceId, matching how two real McuComponents
+    // under one SimulationSession would never share one.
+    const RuntimeLaunchIdentity identityA{0xAAAA111122223333ULL, 1, 1};
+    const RuntimeLaunchIdentity identityB{0xBBBB111122223333ULL, 2, 1};
+
     bool startedA = false, startedB = false;
     try {
-        controllerA.start(flashA, arenaA);
+        controllerA.start(flashA, arenaA, {}, {}, identityA);
         startedA = true;
     } catch (const std::exception& e) {
         std::fprintf(stderr, "FALHOU: McuController A start lançou: %s\n", e.what());
     }
     try {
-        controllerB.start(flashB, arenaB);
+        controllerB.start(flashB, arenaB, {}, {}, identityB);
         startedB = true;
     } catch (const std::exception& e) {
         std::fprintf(stderr, "FALHOU: McuController B start lançou: %s\n", e.what());
     }
     TEST_ASSERT(startedA, "primeiro McuController abre arena e inicia processo QEMU real sem lançar");
     TEST_ASSERT(startedB, "segundo McuController abre arena e inicia processo QEMU real sem lançar, com o primeiro ainda ativo");
-    TEST_ASSERT(controllerA.arenaBridge().isOpen() && controllerB.arenaBridge().isOpen(),
-                "as duas arenas de memória compartilhada estão abertas simultaneamente, sem colisão");
+    // arenaBridge() is the LEGACY-only shared-memory wrapper -- McuController::start()'s VNEXT_B
+    // branch never touches it (early return after m_vnextB.start(), McuController.cpp ~line
+    // 306-309), so isOpen() is unconditionally false there by design. Check the transport-
+    // appropriate side; both controllers share the same process-wide LASECSIMUL_MCU_TRANSPORT.
+    const bool usingVnextB = controllerA.vnextBActive();
+    const auto arenaOpen = [usingVnextB](const McuController& c) {
+        return usingVnextB ? c.vnextBAttachment().running() : c.arenaBridge().isOpen();
+    };
+    TEST_ASSERT(arenaOpen(controllerA) && arenaOpen(controllerB),
+                "as duas arenas/anexos de memória compartilhada estão abertos simultaneamente, sem colisão");
 
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
@@ -151,8 +170,12 @@ int main() {
     std::fprintf(stderr, "  [info] isRunning() A=%s B=%s (simultaneamente)\n", aliveA ? "true" : "false", aliveB ? "true" : "false");
     TEST_ASSERT(aliveA && aliveB, "os dois processos QEMU reais permanecem vivos ao mesmo tempo");
 
-    const bool sawArenaA = waitForLogSubstring(controllerA, "arena mapped");
-    const bool sawArenaB = waitForLogSubstring(controllerB, "arena mapped");
+    // "arena mapped" is LEGACY's own log wording (softmmu/simuliface.c); VNEXT_B prints
+    // "vNext-B mapping/events attached" instead (softmmu/vnext_b.c) -- same confirmation, the
+    // transport-appropriate substring.
+    const char* const mappedSubstring = usingVnextB ? "vNext-B mapping/events attached" : "arena mapped";
+    const bool sawArenaA = waitForLogSubstring(controllerA, mappedSubstring);
+    const bool sawArenaB = waitForLogSubstring(controllerB, mappedSubstring);
     TEST_ASSERT(sawArenaA && sawArenaB, "os dois processos confirmam nos próprios logs ter mapeado sua arena");
 
     // Parar A não pode afetar B -- cada McuController/QemuProcessManager é dono só do seu próprio
@@ -160,12 +183,12 @@ int main() {
     controllerA.stop();
     TEST_ASSERT(!controllerA.isRunning(), "McuController A encerra independentemente");
     TEST_ASSERT(controllerB.isRunning(), "McuController B continua rodando, intocado pelo stop() de A");
-    TEST_ASSERT(!controllerA.arenaBridge().isOpen(), "arena A fechada após stop()");
-    TEST_ASSERT(controllerB.arenaBridge().isOpen(), "arena B continua aberta, intocada pelo stop() de A");
+    TEST_ASSERT(!arenaOpen(controllerA), "arena/anexo A fechado após stop()");
+    TEST_ASSERT(arenaOpen(controllerB), "arena/anexo B continua aberto, intocado pelo stop() de A");
 
     controllerB.stop();
     TEST_ASSERT(!controllerB.isRunning(), "McuController B encerra independentemente");
-    TEST_ASSERT(!controllerB.arenaBridge().isOpen(), "arena B fechada após stop()");
+    TEST_ASSERT(!arenaOpen(controllerB), "arena/anexo B fechado após stop()");
 
     std::error_code removeError;
     std::filesystem::remove(flashA, removeError);

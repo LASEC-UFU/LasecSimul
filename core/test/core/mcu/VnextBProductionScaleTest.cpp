@@ -1,7 +1,10 @@
+#include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <string>
 #include <thread>
@@ -15,6 +18,8 @@
 #include <windows.h>
 #endif
 #include "mcu/McuComponent.hpp"
+#include "mcu/qemu/DrainCutoffGate.hpp"
+#include "mcu/qemu/VnextBAttachment.hpp"
 #include "plugins/GlobalPluginCache.hpp"
 #include "session/SimulationSession.hpp"
 
@@ -161,6 +166,89 @@ void dumpSuccessfulQemuLogIfRequested(const ScaleSession& item, int sessionIndex
     std::fflush(stderr);
 }
 
+/* E120/Fase 5 (EVIDENCE.md, 2026-09-05): stdout is block-buffered when redirected and is lost for
+ * Sessions>1 because stopSimulation() below can hang (E104) and the runner kills the process --
+ * this is why submissions/completions/artifactFatal have never been recoverable for N>1 measurements.
+ * Writing a structured, flushed, per-session result BEFORE stopSimulation() is called (i.e. from
+ * inside this file's own per-session loop, not after) survives that kill unconditionally: the file
+ * is fsync'd-by-fflush+fclose per line, independent of whichever teardown-hang session comes next.
+ * Gated by LASECSIMUL_SCALE_RESULTS_JSONL (a file path) -- absent by default, so it changes
+ * nothing for any test that doesn't ask for it. Mirrors
+ * vnext_prototype/mttcg_causality/B11/b11_classify.ps1's own classification fields/logic so the
+ * PowerShell side can consume this file as the authoritative source instead of re-deriving the
+ * same facts from stderr text. */
+/* E130 (EVIDENCE.md, 2026-09-05): five new, purely-additive diagnostic fields recording the
+ * watermark/cutoff drain (see the call site's own doc-comment for the race this replaces).
+ * completionWatermarkAtCut/AfterDrain and postCutSubmissions are 0 for any caller that does not
+ * (yet) compute them -- kept optional via default arguments so this signature change cannot break
+ * a caller that has not been updated. */
+void writeSessionResultJsonlIfRequested(const ScaleSession& item, int sessionIndex,
+                                        uint64_t submitted, uint64_t completed, bool artifactFatal,
+                                        uint64_t completionWatermarkAtCut = 0,
+                                        uint64_t completionWatermarkAfterDrain = 0,
+                                        uint64_t postCutSubmissions = 0,
+                                        bool drainComplete = true, bool drainTimeout = false) {
+    const char* path = std::getenv("LASECSIMUL_SCALE_RESULTS_JSONL");
+    if (!path || !*path) return;
+    const std::string logs = item.mcu ? item.mcu->qemuLogs() : std::string{};
+
+    int appCpuStartupCount = 0;
+    for (size_t pos = logs.find("expected=app-cpu-startup"); pos != std::string::npos;
+        pos = logs.find("expected=app-cpu-startup", pos + 1)) {
+        ++appCpuStartupCount;
+    }
+    const bool blockedReentrantIo = logs.find("Blocked re-entrant IO") != std::string::npos;
+
+    // Same two structurally-expected exceptions b11_classify.ps1 uses: the initial cold-boot
+    // power-on (expected=no source=OTHER count=1) and the deliberate app-cpu-startup reset.
+    // Scoped per reset LINE (not the whole log) so an unrelated later line's "source=OTHER"
+    // cannot accidentally satisfy an earlier line's "count=1" check or vice versa.
+    int unexpectedResets = 0;
+    static const std::string kResetMarker = "[LasecSimul][ESP32 reset]";
+    for (size_t pos = logs.find(kResetMarker); pos != std::string::npos;
+        pos = logs.find(kResetMarker, pos)) {
+        const size_t lineEnd = logs.find('\n', pos);
+        const std::string line = logs.substr(pos, lineEnd == std::string::npos ?
+            std::string::npos : lineEnd - pos);
+        const bool isAppCpuStartup = line.find("expected=app-cpu-startup") != std::string::npos;
+        const bool isColdBoot = line.find("expected=no") != std::string::npos &&
+            line.find("source=OTHER") != std::string::npos &&
+            line.find("count=1 ") != std::string::npos;
+        if (!isAppCpuStartup && !isColdBoot) ++unexpectedResets;
+        pos = (lineEnd == std::string::npos) ? logs.size() : lineEnd + 1;
+    }
+
+    const bool setupValid = appCpuStartupCount >= 1 && submitted > 0;
+    const bool workloadPass = submitted > 0 && submitted == completed && !artifactFatal;
+    const uint64_t pid = item.mcu ? item.mcu->qemuProcessIdForTesting() : 0;
+    const bool running = item.mcu && item.mcu->firmwareRunning();
+
+    // Opened/closed per call (not held open across the loop): this file's own per-session loop
+    // writes one session at a time, never concurrently, so there is no contention to avoid, and
+    // an open-append-close-per-line makes each line durable independent of whatever happens to
+    // this process afterward (including a teardown hang two sessions later).
+    FILE* f = std::fopen(path, "a");
+    if (!f) return;
+    std::fprintf(f,
+        "{\"session\":%d,\"pid\":%llu,\"setupValid\":%s,\"appCpuStartupCount\":%d,"
+        "\"submissions\":%llu,\"completions\":%llu,\"artifactFatal\":%s,"
+        "\"unexpectedResets\":%d,\"blockedReentrantIo\":%s,\"workloadPass\":%s,"
+        "\"terminalRunning\":%s,"
+        "\"submissionsAtCut\":%llu,\"completionWatermarkAtCut\":%llu,"
+        "\"completionWatermarkAfterDrain\":%llu,\"postCutSubmissions\":%llu,"
+        "\"drainComplete\":%s,\"drainTimeout\":%s}\n",
+        sessionIndex, static_cast<unsigned long long>(pid), setupValid ? "true" : "false",
+        appCpuStartupCount, static_cast<unsigned long long>(submitted),
+        static_cast<unsigned long long>(completed), artifactFatal ? "true" : "false",
+        unexpectedResets, blockedReentrantIo ? "true" : "false", workloadPass ? "true" : "false",
+        running ? "true" : "false",
+        static_cast<unsigned long long>(submitted), static_cast<unsigned long long>(completionWatermarkAtCut),
+        static_cast<unsigned long long>(completionWatermarkAfterDrain), static_cast<unsigned long long>(postCutSubmissions),
+        drainComplete ? "true" : "false", drainTimeout ? "true" : "false");
+    std::fflush(f);
+    std::fclose(f);
+}
+
 #ifdef _WIN32
 uint64_t processCpu100ns(uint64_t pid) {
     if (!pid) return UINT64_MAX;
@@ -235,6 +323,80 @@ void printSurvivorProgressSnapshot(const std::vector<ScaleSession>& sessions,
     std::fflush(stdout);
 }
 
+/* E120/Fase 5 (EVIDENCE.md, 2026-09-05): bounded, diagnosed replacement for the plain
+ * `for (auto& item : sessions) item.session->stopSimulation();` loop this file used to end with.
+ *
+ * Pre-existing defect (E104): for Sessions>1, `stopSimulation()` can hang indefinitely -- narrowed
+ * in this entry to a high-confidence but not fully source-proven hypothesis (`Scheduler::stop()`'s
+ * `m_thread.join()` blocking because the Scheduler's own worker thread is itself blocked, most
+ * plausibly via a circular wait against `VnextBWaitDispatcher`'s own unbounded
+ * `WaitForMultipleObjects(..., INFINITE)`, since `VnextBAttachment::stop()`'s
+ * unregister-before-terminate sequence can only run AFTER `Scheduler::stop()` already returns).
+ * NOT rewritten in this entry: this codebase's own history (see
+ * softmmu/simuliface.c's `arenaTransactionBegin()` comment) already documents a concurrency change
+ * in this exact area that looked correct and caused a ~36-minute hang on its first validation run
+ * -- restructuring the stop *sequence* itself is real, separate, higher-risk work this entry does
+ * not rush into.
+ *
+ * What this DOES fix: the harness itself no longer hangs forever. Every session's own result is
+ * already durably written (`writeSessionResultJsonlIfRequested()`, called for every session before
+ * ANY `stopSimulation()` call, in the loop above this function's call site) before teardown ever
+ * starts, so a hung teardown loses no measurement. If one session's `stopSimulation()` does not
+ * return within `perSessionTimeout`, this function logs exactly which session index hung, detaches
+ * that stuck worker thread, and terminates the whole process immediately via `std::_Exit()` --
+ * safe specifically because every QEMU child process is bound to a Job Object with
+ * `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` (`QemuProcessManager.cpp`), so this process's own exit, by
+ * whatever means, kills every remaining QEMU child. No orphan can survive this path. The exit code
+ * (2) is distinct from the normal PASS/FAIL codes (0/1) so a caller can tell "hung teardown,
+ * results are in the JSONL file" apart from "ran to completion, see PRODUCTION_SCALE FAIL". */
+void stopSessionsWithDefensiveTimeout(std::vector<ScaleSession>& sessions,
+                                      std::chrono::milliseconds perSessionTimeout) {
+    for (size_t i = 0; i < sessions.size(); ++i) {
+        SimulationSession* session = sessions[i].session.get();
+        auto done = std::make_shared<std::atomic<bool>>(false);
+        std::thread worker([session, done] {
+            session->stopSimulation();
+            done->store(true, std::memory_order_release);
+        });
+        const auto deadline = std::chrono::steady_clock::now() + perSessionTimeout;
+        while (!done->load(std::memory_order_acquire) &&
+              std::chrono::steady_clock::now() < deadline) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+        if (done->load(std::memory_order_acquire)) {
+            worker.join();
+            continue;
+        }
+        std::fprintf(stderr,
+            "TEARDOWN_HANG session=%zu did not complete stopSimulation() within %lldms -- "
+            "see EVIDENCE.md E120 Fase 5 / E123. Exiting process now (every session's result was "
+            "already written before teardown started; QEMU children are bound to a "
+            "kill-on-close Job Object, so none survive this exit).\n",
+            i, static_cast<long long>(perSessionTimeout.count()));
+        std::fflush(stderr);
+        // Unconditional snapshot of the shared dispatcher's own occupancy/identity at the moment
+        // the hang was detected, using the existing test-support accessor (the dispatcher's
+        // generation/in-flight counters are private implementation state, not exposed here).
+        {
+            char reason[32];
+            std::snprintf(reason, sizeof(reason), "TEARDOWN_HANG session=%zu", i);
+            const auto stats = mcu::qemu::VnextBAttachment::waitDispatcherStatsForTesting();
+            std::fprintf(stderr,
+                "[TEARDOWN_SNAPSHOT] reason=%s dispatcherOccupiedSlots=%zu dispatcherWorkerIdentity=%llu\n",
+                reason, stats.occupiedSlots, static_cast<unsigned long long>(stats.workerIdentity));
+            std::fflush(stderr);
+        }
+        worker.detach();
+        // std::_Exit() (unlike exit()) does NOT flush open C stdio streams -- without an explicit
+        // flush here, every std::printf() line already produced by this function's caller (the
+        // per-session "SCALE session=..." lines, "METRIC ..." would-be lines, etc.) would be lost
+        // under redirection to a file exactly the same way the original E104 hang lost them,
+        // defeating the whole point of exiting instead of hanging.
+        std::fflush(stdout);
+        std::_Exit(2);
+    }
+}
+
 ScaleSession makeSession(plugins::GlobalPluginCache& cache, int index) {
     ScaleSession result;
     result.session = std::make_unique<SimulationSession>(cache);
@@ -281,6 +443,13 @@ int main() {
                       std::string(std::getenv("LASECSIMUL_SCALE_IDLE")) != "0";
     const bool failureIsolation = std::getenv("LASECSIMUL_FAILURE_ISOLATION") &&
                                   std::string(std::getenv("LASECSIMUL_FAILURE_ISOLATION")) != "0";
+    // E112 (EVIDENCE.md): correlates Scheduler::MetricsSnapshot::maxSettleNanoseconds/
+    // maxSettleAtNowNs (.spec 32.5.18/32.5.19's own already-validated technique) against
+    // QEMU-side timg_wdt_expire timestamps, off by default -- setProfilingEnabled() is cheap
+    // (lock-free, no hot-path I/O per its own doc comment) but this keeps default test output
+    // unchanged for the regular regression suite.
+    const bool schedulerMetrics = std::getenv("LASECSIMUL_SCALE_SCHEDULER_METRICS") &&
+                                  std::string(std::getenv("LASECSIMUL_SCALE_SCHEDULER_METRICS")) != "0";
     const char* firmwareText = std::getenv("LASECSIMUL_TEST_FIRMWARE");
     const char* qemuText = std::getenv("LASECSIMUL_TEST_QEMU_BINARY");
     if (!firmwareText || !*firmwareText || !qemuText || !*qemuText) {
@@ -307,6 +476,7 @@ int main() {
         auto& session = *item.session;
         try {
             session.scheduler().start();
+            if (schedulerMetrics) session.scheduler().setProfilingEnabled(true);
             session.beginExecutionIfNeeded();
             item.executionId = session.runtimeState().sessionExecutionId;
             if (!item.executionId) item.startError = "zero executionId";
@@ -314,6 +484,22 @@ int main() {
             session.loadMcuFirmware(item.mcuIndex, firmware, item.arenaName, qemu.string(), debug);
         } catch (const std::exception& error) {
             item.startError = error.what();
+            // E146 (EVIDENCE.md, 2026-09-09): without this, a session rejected by the capacity
+            // guard was left running (Scheduler ticking, unattached) for the rest of the run
+            // alongside the other real QEMU-backed sessions -- reproduced a STATUS_STACK_BUFFER_
+            // OVERRUN crash (bisected: never before this point, ~100% reproducible after it, both
+            // in parallelStart and sequential mode, only when a rejection actually occurs). A
+            // bare scheduler().stop() fixed the crash but left the rejected session's own worker
+            // thread busy-spinning at full CPU for the rest of the run (observed via Get-Process:
+            // >850s of accumulated CPU time over an 85s wall-clock window) -- harmless with 32
+            // unconstrained host cores, but enough to starve the other 8 real sessions under
+            // run_production_mwdt.ps1's processor-affinity restriction and blow through its
+            // external timeout backstop. stopSimulation() is the same full, idempotent teardown
+            // every session already gets in the final loop below (it also stops each MCU
+            // component's firmware, not just the Scheduler) -- calling it here immediately,
+            // rather than leaving this session's teardown to happen only at the very end,
+            // resolves both the crash and the busy-spin.
+            session.stopSimulation();
         }
     };
     if (failureIsolation) {
@@ -673,28 +859,111 @@ int main() {
         std::this_thread::sleep_until(measurementStart + std::chrono::milliseconds(runMs));
     }
 
+    // E130 (EVIDENCE.md, 2026-09-05): replaces E120's own "poll for submitted==completed, then
+    // break" convergence wait -- proven, by direct code inspection (not just observed in the
+    // field), to admit exactly the race that produced E129's B11 N=8 finding
+    // (submissions==completions+1 on 2 of 8 sessions): that loop's own "allConverged" check reads
+    // BOTH counters fresh on every iteration, and the moment it observes equality it breaks
+    // immediately -- but the FINAL per-session read used for the actual pass/fail decision and
+    // JSONL record (previously a few lines below, also freshly re-read) is a SEPARATE, LATER
+    // sample. Nothing pauses the guest between "the wait loop observed equality" and "the final
+    // read" -- the workload keeps running in real time -- so a new submission accepted in that gap
+    // is counted in the final `submitted` without its (not-yet-arrived) completion, producing
+    // exactly a submissions=completions+1 artifact indistinguishable, under the old scheme, from a
+    // genuine dropped completion.
+    //
+    // Fix: freeze a per-session submission CUTOFF once, at the runMs deadline, before any waiting
+    // starts. The drain loop then waits for each session's own completion counter to reach (not
+    // merely equal) that frozen cutoff -- `completionCount >= cutoff`, never re-reading the
+    // cutoff itself. A submission accepted after the cutoff is explicitly out of scope for this
+    // measurement (reported separately, informational only, matching this task's own "submissões
+    // posteriores ao corte não participam daquela medição"). This requires completions to never
+    // reorder ahead of the submission they answer WITHIN one session's own counters -- true here
+    // because a single session's I2C traffic is a single VNEXT_B lane, processed strictly FIFO by
+    // both vnext_b_i2c_submit()'s own ring publish and the Core's own dispatchOneEvent() consume
+    // loop (softmmu/vnext_b.c / McuComponent.cpp) -- there is no mechanism by which this session's
+    // Nth completion could ever be recorded before its Nth submission's own predecessors are, so
+    // `completionCount >= cutoff` is a sound proxy for "every request accepted before the cutoff
+    // has been answered", not merely a coincidental count match.
+    std::vector<uint64_t> submissionCutoff(static_cast<size_t>(count), 0);
+    std::vector<uint64_t> completionAtCut(static_cast<size_t>(count), 0);
+    for (int i = 0; i < count; ++i) {
+        const auto& item = sessions[static_cast<size_t>(i)];
+        submissionCutoff[static_cast<size_t>(i)] = item.mcu ? item.mcu->vnextI2cSubmissionCountForTesting() : 0;
+        completionAtCut[static_cast<size_t>(i)] = item.mcu ? item.mcu->vnextI2cCompletionCountForTesting() : 0;
+    }
+
+    bool drainTimeoutHit = false;
+    if (!idle) {
+        std::vector<std::function<uint64_t()>> readCompletions;
+        readCompletions.reserve(static_cast<size_t>(count));
+        for (int i = 0; i < count; ++i) {
+            mcu::McuComponent* mcu = sessions[static_cast<size_t>(i)].mcu;
+            readCompletions.push_back([mcu]() -> uint64_t {
+                /* No mcu -> that session's own cutoff was also captured as 0 above, so this
+                 * trivially satisfies readCompletion() >= cutoff without ever blocking -- matching
+                 * the prior inline loop's `if (!item.mcu) continue`. */
+                return mcu ? mcu->vnextI2cCompletionCountForTesting() : 0;
+            });
+        }
+        const auto drainDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+        const auto result = lasecsimul::mcu::waitForAllToDrain(
+            readCompletions, submissionCutoff, drainDeadline, std::chrono::milliseconds(50));
+        drainTimeoutHit = result.timedOut;
+    }
+
     uint64_t submissions = 0, completions = 0;
     for (int i = 0; i < count; ++i) {
         const auto& item = sessions[static_cast<size_t>(i)];
-        const uint64_t submitted = item.mcu ? item.mcu->vnextI2cSubmissionCountForTesting() : 0;
-        const uint64_t completed = item.mcu ? item.mcu->vnextI2cCompletionCountForTesting() : 0;
+        const uint64_t cutoff = submissionCutoff[static_cast<size_t>(i)];
+        const uint64_t completedAfterDrain = item.mcu ? item.mcu->vnextI2cCompletionCountForTesting() : 0;
+        const uint64_t currentSubmissions = item.mcu ? item.mcu->vnextI2cSubmissionCountForTesting() : 0;
+        const uint64_t postCutSubmissions = currentSubmissions >= cutoff ? currentSubmissions - cutoff : 0;
+        const bool drainComplete = completedAfterDrain >= cutoff;
+        // Reported/gated value: never exceeds the cutoff, so "submissions"/"completions" stay
+        // meaningfully comparable exactly as every existing consumer (b11_classify.ps1, this
+        // file's own printf/JSONL) already expects -- drainComplete true means this equals cutoff;
+        // false means it shows the genuine shortfall, never masked by post-cut activity.
+        const uint64_t submitted = cutoff;
+        const uint64_t completed = std::min(completedAfterDrain, cutoff);
+        // E118 (EVIDENCE.md, 2026-09-05): a live process (firmwareRunning()==true) is not proof of
+        // a healthy session -- artifact_state can become LASEC_AT_FAILED mid-run while the QEMU
+        // process itself keeps executing. Classify that explicitly as a failure rather than
+        // letting non-zero submissions/completions mask it.
+        const bool artifactFatal = item.mcu && item.mcu->vnextArtifactFatal();
         submissions += submitted; completions += completed;
-        if (!idle && (submitted == 0 || completed == 0 || submitted != completed)) ++failures;
-        std::printf("SCALE session=%d executionId=%llu pid=%llu running=%s submissions=%llu completions=%llu\n",
+        if (!idle && (submitted == 0 || !drainComplete || artifactFatal)) ++failures;
+        std::printf("SCALE session=%d executionId=%llu pid=%llu running=%s artifactFatal=%s submissions=%llu completions=%llu"
+                    " drainComplete=%s drainTimeout=%s postCutSubmissions=%llu\n",
                     i, static_cast<unsigned long long>(item.executionId),
                     static_cast<unsigned long long>(item.mcu ? item.mcu->qemuProcessIdForTesting() : 0),
                     item.mcu && item.mcu->firmwareRunning() ? "true" : "false",
+                    artifactFatal ? "true" : "false",
                     static_cast<unsigned long long>(submitted),
-                    static_cast<unsigned long long>(completed));
-        if (!idle && (submitted == 0 || completed == 0)) {
+                    static_cast<unsigned long long>(completed),
+                    drainComplete ? "true" : "false", drainTimeoutHit ? "true" : "false",
+                    static_cast<unsigned long long>(postCutSubmissions));
+        if (!idle && (submitted == 0 || !drainComplete)) {
             std::fprintf(stderr, "SCALE_DIAGNOSTIC session=%d scheduler_running=%s scheduler_paused=%s qemu_logs=%s\n",
                          i, item.session->scheduler().isRunning() ? "true" : "false",
                          item.session->scheduler().isPaused() ? "true" : "false",
                          item.mcu ? item.mcu->qemuLogs().c_str() : "<no-mcu>");
         }
+        if (schedulerMetrics) {
+            const auto snap = item.session->scheduler().metrics();
+            std::fprintf(stderr, "SCHEDULER_METRICS session=%d maxSettleNanoseconds=%llu"
+                         " maxSettleAtNowNs=%llu settleIterations=%llu eventsProcessed=%llu\n",
+                         i, static_cast<unsigned long long>(snap.maxSettleNanoseconds),
+                         static_cast<unsigned long long>(snap.maxSettleAtNowNs),
+                         static_cast<unsigned long long>(snap.settleIterations),
+                         static_cast<unsigned long long>(snap.eventsProcessed));
+        }
         dumpSuccessfulQemuLogIfRequested(item, i);
+        writeSessionResultJsonlIfRequested(item, i, submitted, completed, artifactFatal,
+                                            completionAtCut[static_cast<size_t>(i)], completedAfterDrain,
+                                            postCutSubmissions, drainComplete, drainTimeoutHit);
     }
-    for (auto& item : sessions) item.session->stopSimulation();
+    stopSessionsWithDefensiveTimeout(sessions, std::chrono::milliseconds(15000));
 
     std::printf("SCALE active_sessions=%d idle=%s start=%s submissions=%llu completions=%llu"
                 " lost=0 duplicate=0 wrong_session=0 response_misroute=0"

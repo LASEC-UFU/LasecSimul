@@ -558,7 +558,9 @@ void Scheduler::stop() {
     }
     signalWorkAvailable();
     m_pacingWake.notify_all();
-    if (m_thread.joinable() && m_thread.get_id() != std::this_thread::get_id()) m_thread.join();
+    if (m_thread.joinable() && m_thread.get_id() != std::this_thread::get_id()) {
+        m_thread.join();
+    }
     // Drena qualquer comando enfileirado bem no instante em que `m_running` virou false acima --
     // como esse flip acontece ANTES do wake/join, é teoricamente possível a worker checar o topo do
     // laço externo e sair sem mais nenhuma chance de drenar (ver doc-comment de CommandDrainFn). Só

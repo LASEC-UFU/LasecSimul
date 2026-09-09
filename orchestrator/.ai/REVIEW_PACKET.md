@@ -1,53 +1,119 @@
-# REVIEW PACKET - Iteration 87
+# REVIEW PACKET — E140 post-boot cause-latch audit
 
-DECISION_REQUIRED
-The accepted CPython 3.8.10 Burn layout lacks the exact base `core.msi`,
-`exe.msi`, and `lib.msi` required by the approved assembly. May the executor
-obtain/process those exact signed 3.8.10 MSIs from a new explicitly approved
-provenance boundary, or must the accepted-layout-only route be abandoned?
+REQUEST_ID: `E140-postboot-cause-latch-20260908`
 
-CURRENT_CLASSIFICATION
-INFRASTRUCTURE INPUT BOUNDARY UNRESOLVED. CPython 3.8.10 installer and Burn
-layout provenance are proven. ESP32_MWDT_BEHAVIOR remains open; no root cause
-or semantic production change is declared.
+## Decision requested
 
-NEW_EVIDENCE
-E093: before any MSI/CAB processing, the executor inspected
-`orchestrator/.ai/python38_layout_86_20260901T072000/inventory.json` and the
-Burn log. The layout has the installer, `core/exe/lib` `_d` and `_pdb` MSI
-payloads, other debug payloads, and inventory/log files, but no base
-`core.msi`, `exe.msi`, or `lib.msi`. The Burn log records the base packages as
-absent and only the `_d`/`_pdb` payloads as acquired. Exact-name homonyms exist
-only under `orchestrator/.ai/python310_payloads_74/` and are CPython 3.10;
-they were rejected and not opened.
+Review the E140 diagnostic result:
 
-SOURCE_PROOF
-`orchestrator/.ai/python38_layout_86_20260901T072000/inventory.json` lists all
-13 layout files and none of the three required base MSIs.
-`.../burn_layout.log` lines 67, 77, and 87 show `core_AllUsers`,
-`exe_AllUsers`, and `lib_AllUsers` absent; lines 198-225 show only `_d` and
-`_pdb` acquisitions.
+`NO_RECURRENCE_IN_THREE_VALID_N16_WITH_MINIMAL_LATCH`
 
-RUNTIME_PROOF
-No MSI database read, CAB extraction, runtime assembly, process execution,
-dependency installation, firmware build, QEMU run, or system mutation was
-performed this iteration. The canonical QEMU manifest remains unchanged.
+and decide whether the opt-in latch candidate should be retained, adjusted, or
+removed before any future B12/promotion path.
 
-GOOD_VS_BAD
-GOOD: signed installer and successful Burn `/layout` boundary remain intact.
-BAD: the approved assembly input set is incomplete; using the 3.10 homonyms
-would invalidate version/provenance fidelity.
+This packet does not request B12, runtime promotion, package, release, cleanup,
+commit, push, or tag.
 
-FROZEN_DO_NOT_CHANGE
-Production source/QEMU semantics, ABI v5, dispatcher, ProducerLane,
-ResponseSlot/C2A, backpressure, watchdog/reset policy, queue depth, canonical
-runtime, rollback artifact, PATH/registry/ACLs, and Git history.
+## Current result
 
-CANDIDATE_ACTION
-Reviewer should authorize one exact provenance-preserving acquisition method
-for the missing 3.8.10 base MSIs, or explicitly close this runtime route.
+`DIAGNOSTIC_COMPLETE — NO_RECURRENCE_IN_THREE_VALID_N16_WITH_MINIMAL_LATCH`
 
-WHY_REVIEW_IS_REQUIRED
-Proceeding requires crossing the reviewer-approved “accepted layout only”
-boundary with artifacts that are absent. This is a provenance/process decision,
-not a safe routine assembly step.
+E140 did not capture a new initiating cause because the post-boot signature did
+not recur in the authorized bounded window.
+
+Mandatory historical declaration:
+
+`E139_POST_BOOT_SIGNATURE_MATCHES_PRIOR_PANIC_PIPELINE_BUT_INITIATING_CAUSE_IS_NOT_CAPTURED`
+
+## Main report
+
+`C:\SourceCode\LasecSimul\vnext_prototype\mttcg_causality\E140-postboot-cause-latch_20260908_071200\E140_postboot_cause_latch_report.md`
+
+Report SHA-256:
+
+`2EE31B6629B84A9CB75096BFAD07A870ABDACBBF0AFBFB1EC6DD4D808ACBD7C3`
+
+## Identity
+
+| Artifact | SHA-256 | Result |
+|---|---|---|
+| E139 baseline candidate QEMU | `8F7F7A334FFA17A6B8FC080EB75F70BD9D85EBECFB3F07A1BCC2A6995BF612AD` | preserved |
+| E140 diagnostic candidate QEMU | `8F47106B4ED949576DF8D76501997ECAE86C095894501B51F8D3CA6B8153FF69` | preserved |
+| E134 candidate QEMU | `3D951D7C7A83578DED9FA20E7B9F0E0BABA705025C05618E90DCB079693A96F6` | prior candidate preserved |
+| Canonical rollback runtime | `B375A9E830705F673800C703A450871D2B3616D06938365671ABD6A3DFDD936E` | intact |
+| `QEMU_RUNTIME.json` | `ADF0D79B9E533E17A3F8CA62FD890B1867973FBB1AFF1C95239142D03644B369` | intact |
+| Firmware `merged.bin` | `1DA8BF731830B2D2D9CE6EDBB0EA208636A1DB2A79497A8DB0CC98D72864C76A` | confirmed |
+| Firmware `firmware.elf` | `1697587B58F9DF862765ADABC2F5A2E74387863438D8A6DF775196A542C9D9B6` | confirmed |
+
+## What changed
+
+E140 added an opt-in diagnostic latch only:
+
+- `C:\SourceCode\qemu_lasecSimul\include\hw\misc\esp32_postboot_cause_latch.h`
+- `C:\SourceCode\qemu_lasecSimul\hw\misc\esp32_postboot_cause_latch.c`
+- `C:\SourceCode\qemu_lasecSimul\tests\unit\test-esp32-postboot-cause-latch.c`
+
+Integration points:
+
+- `C:\SourceCode\qemu_lasecSimul\hw\misc\esp32_dport.c`
+- `C:\SourceCode\qemu_lasecSimul\hw\timer\esp32_timg.c`
+- `C:\SourceCode\qemu_lasecSimul\hw\xtensa\esp32_intc.c`
+- `C:\SourceCode\qemu_lasecSimul\hw\xtensa\esp32.c`
+- `C:\SourceCode\qemu_lasecSimul\hw\misc\meson.build`
+- `C:\SourceCode\qemu_lasecSimul\tests\unit\meson.build`
+
+The latch is gated by `LASECSIMUL_POSTBOOT_CAUSE_LATCH=1`. Hot-path record
+hooks use fixed state and do not perform heap allocation, I/O, or blocking
+locking. The single structured `[POSTBOOT_CAUSE_LATCH]` dump is emitted only at
+reset dump time, before the existing reset log and before clearing state/CPU.
+
+Patch preserved:
+
+`C:\SourceCode\LasecSimul\vnext_prototype\mttcg_causality\E140-postboot-cause-latch_20260908_071200\E140_qemu_source_diff.patch`
+
+Patch SHA-256:
+
+`B13095C69D142E875A1D5A82C41223ED32199051FE34765A3E7A1E8F58A77DB1`
+
+No Core, firmware, transport, scheduler, WDT scale, cache-wait semantics,
+reset policy, B12, promotion, `QEMU_RUNTIME.json`, cleanup, commit, push, tag,
+package, or release change was made.
+
+## Validation passed
+
+Small tests, all exit code 0:
+
+- `test-esp32-postboot-cause-latch` 6/6
+- `test-esp32-dport-cache-race-stall`
+- `test-esp32-efuse-op-state`
+- `test-esp32-panic-trace-gate`
+- `test-esp32-timg-pause`
+- `test-esp32-timg-wdt-scale`
+
+Bounded real validation with only `LASECSIMUL_POSTBOOT_CAUSE_LATCH=1`:
+
+- N=1/60s: 1/1 workload, `9329==9329` submissions/completions, zero
+  unexpected resets, zero CACHEERR/Guru, zero real cause latch, clean teardown,
+  zero orphans.
+- N=16/60s run1: 16/16 workloads, `48335==48335`
+  submissions/completions, zero unexpected resets, zero CACHEERR/Guru, zero
+  real cause latch, clean teardown, zero orphans.
+- N=16/60s run2: 16/16 workloads, `48581==48581`
+  submissions/completions, zero unexpected resets, zero CACHEERR/Guru, zero
+  real cause latch, clean teardown, zero orphans.
+- N=16/60s run3: 16/16 workloads, `30371==30371`
+  submissions/completions, zero unexpected resets, zero CACHEERR/Guru, zero
+  real cause latch, clean teardown, zero orphans.
+
+Consolidated matrix:
+
+`C:\SourceCode\LasecSimul\vnext_prototype\mttcg_causality\E140-postboot-cause-latch_20260908_071200\E140_run_matrix.json`
+
+## Review question
+
+Confirm whether E140 may be closed as a bounded diagnostic audit with no
+recurrence, while preserving the historical initiating cause as uncaptured.
+
+Do not infer that the rare post-boot signature is fixed. Do not authorize B12
+or runtime promotion from this packet unless a separate promotion review does
+so explicitly.

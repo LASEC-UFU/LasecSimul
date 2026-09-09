@@ -1,5 +1,722 @@
 # STATUS - Current authoritative state
 
+## E145 — H143 fechada para Release; capacidade MTTCG segura calculada e imposta em produção; RESET_WAIT/E131 bloqueados por oráculo pré-existente incompatível com a limpeza E141; B12 NÃO executado (2026-09-09, ~06:32-07:20)
+
+Resultado atual: **REVIEW_REQUIRED — H143 FECHADA; GUARDA DE CAPACIDADE ENTREGUE EM PRODUÇÃO; B12 NÃO TENTADO**.
+
+Confirmei em código, antes de qualquer teste, que a correção H143 (E143/E144)
+continua conectada ao caminho de produção real
+(`McuComponent::pollAndDispatchPendingEvents()` chama
+`qemu::decidePostAckRearm()` diretamente). Auditei o caminho de lançamento
+de produção (`McuController::start()`) e confirmei que **não existia
+nenhuma guarda de capacidade** ali — só o runner de teste tinha uma
+(`run_production_mwdt.ps1`, desde E133/DECISION-010). Implementei uma:
+`safe_sessions = floor((processadores_lógicos - reserva) / vCPUs_por_sessão)`,
+calculado a partir da topologia REAL do host (`std::thread::
+hardware_concurrency()`, nunca uma constante fixa desta máquina) — neste
+host, `floor((32-6)/2) = 13`. A guarda rejeita, ANTES de criar qualquer
+processo QEMU, uma nova sessão que ultrapasse esse teto, com uma válvula de
+escape só-experimental (`LASECSIMUL_VNEXT_B_CAPACITY_OVERRIDE=1`) nunca
+usada por nenhum runner/gate/config deste repositório. 20/20 testes puros
+passam (12 do H143 + 8 novos da guarda: abaixo do limite, exatamente no
+limite, acima do limite, casos de borda, e uma topologia DIFERENTE
+provando que a fórmula não está fixa nesta máquina).
+
+Quatro execuções completas de 15 ciclos do `session_restart_stress_test`
+em Release: 2/4 limpas (15/15), 2/4 com 1-2 falhas SÓ nos ciclos iniciais
+(0 e/ou 1) — em TODAS elas `m_pollGeneration=0` (zero tempestade H143) e
+90-100% da lane real drenada, ou seja, estruturalmente NÃO é H143: é um
+achado novo, separado, mais estreito, ainda não caracterizado antes desta
+etapa. Duas regressões completas `VNEXT_B+MTTCG` em Release: 14/14 nas
+duas. B11 (Release, `-Force` nunca usado): N=1 teve uma falha intermitente
+(mesmo formato do achado do restart-test, resolvida na repetição) e depois
+PASSOU; N=8 PASSOU 8/8; N=12 PASSOU 12/12; **N=13 (o teto seguro calculado
+para este host) NÃO foi executado** — ao ser informado de que a máquina
+havia travado de novo durante o planejamento desta própria etapa, o
+usuário, questionado explicitamente, escolheu pular o B11 N=13 nesta
+etapa em vez de tentar o caso limite de novo imediatamente.
+
+**RESET_WAIT/E131 não puderam ser validados**: o oráculo do
+`cache_wait_e2e_real_qemu_test.exe` depende de variáveis de diagnóstico do
+lado QEMU (`LASECSIMUL_E131_TCG_TRACE` e mais 3) e de grep no log do QEMU
+por marcadores que esses diagnósticos produziam — as quatro confirmadas
+ausentes em toda a árvore `qemu_lasecSimul` (removidas corretamente pelo
+E141). O PASS histórico do E131 no E132-E usou um QEMU DIFERENTE, anterior
+ao E141, ainda com esses diagnósticos. Esta é a primeira vez que o
+E131/RESET_WAIT roda contra o candidato E141 — e revela uma incompatibilidade
+de oráculo/harness, NÃO uma regressão funcional, NÃO causada pelo H143.
+Não corrigido nesta etapa (fora de escopo: reabrir E131 como investigação
+exploratória e reintroduzir traces removidos são ambos proibidos
+explicitamente).
+
+Pela própria regra da tarefa, **B12 NÃO foi tentado**: a Fase 3 está
+bloqueada estruturalmente e a célula N=13 da Fase 5 não foi executada.
+Nenhuma edição de `QEMU_RUNTIME.json`, promoção, cleanup, commit, push, tag,
+release ou package. Zero QEMU órfão em todo checkpoint, inclusive durante
+um segundo travamento do host que ocorreu no PLANEJAMENTO desta etapa
+(antes de qualquer comando N=13 ser emitido — `-Force` nunca foi usado
+nesta etapa). Ver `EVIDENCE.md`/`TEST_GATES.md`/`NEXT_ACTION.md` para o
+relato completo.
+
+## E144 — classificação corrigida (E132-E era Release, E142/E143 eram Debug); H143 restaurada e validada; gate formal Release chega a 15/15; B11 N=16 parou em 1/3 por segurança de host após um travamento (2026-09-08/09, ~18:48-19:25)
+
+Resultado atual: **REVIEW_REQUIRED — H143 CORRIGIDA E VALIDADA NO RELEASE;
+B11 N=16 INCOMPLETO POR TRAVAMENTO DE HOST; RESET_WAIT/E131 NÃO
+REEXECUTADOS**.
+
+Confirmei diretamente nos artefatos preservados (não por memória): o
+"session_restart_stress_test 15/15" histórico do E132-E rodou build
+**Release** (`build_manifest.json`: `/p:Configuration=Release`). Todo o
+E142/E143 vinha recompilando e rodando **Debug**, sem perceber a
+discrepância. Isso NÃO reabre a conclusão do E142 sobre a limpeza E141
+(continua corretamente refutada — Core pré/pós-limpeza falhava igual em
+Debug, isso permanece verdade) — mas significa que a classificação
+"sempre vermelho" do E142/E143 estava incompleta: era vermelho em Debug
+especificamente. Reli `PLAN_MTTCG_VNEXT_B_CAUSALITY.md` seção 10.4 passo 5
+e seção 10.2: o mecanismo H143 viola ambas literalmente — um bug real,
+independente de qual configuração de build não é bloqueada por ele hoje.
+
+Baseline Release ANTES de qualquer edição: 3/3 PASS (1 ciclo) mesmo com o
+bug H143 ainda presente — confirma que Release simplesmente não é travado
+pelo busy loop hoje (rápido o bastante pra atravessá-lo), enquanto Debug é.
+Restaurei a correção H143 em `McuComponent.cpp` reusando
+`decidePostAckRearm()` do E143 (sem mudança de desenho, 12/12 puros
+continuam verdes em Release). Rebuild completo (full relink) Debug e
+Release.
+
+Pós-correção: `session_restart_stress_test` Release, ciclo default de 15,
+**15/15 PASS**, batendo exatamente com o histórico do E132-E, zero órfão.
+Série temporal em Debug (30s, amostragem 250ms): `Scheduler::nowNs` avança
+em TODAS as amostras, nunca fica travado por 2s ou mais — Debug é **lento,
+não travado**. Adicionei auto-relato `HARNESS_BUILD_CONFIG=Debug/Release` e
+gate fail-closed `LASECSIMUL_REQUIRE_RELEASE=1` (verificado: rejeita Debug
+imediatamente, antes de subir QEMU).
+
+Validação: `vnext_b_arbiter_test` 12/12 (Release); `vnext_b_attachment_test`
+Release 3/3 execuções, 33/33 cada; duas regressões completas
+`VNEXT_B+MTTCG` 14/14 cada; B11 N=1 PASS (submissions=1869=completions);
+B11 N=8 PASS (8/8 sessões); B11 N=12 PASS (12/12 sessões) — todas com
+`MWDT_ATTRIB_RESETS=0`.
+
+**B11 N=16 chegou a 1 das 3 execuções exigidas.** A execução 1 passou limpa
+(16/16 sessões, 32/32 resets, 0 atribuídos a MWDT). Ao iniciar a execução 2
+imediatamente em seguida (mesmo padrão `-Force` de 32 slots de vCPU sobre
+26 núcleos utilizáveis, sem intervalo de descanso), **o computador travou
+por completo e o usuário precisou resetar a máquina manualmente**. Isto
+bate exatamente com o incidente já documentado no próprio cabeçalho do
+`run_production_mwdt.ps1` ("an unconstrained 16-session run is what froze
+this host on 2026-09-03"). Após a recuperação: zero processo QEMU/teste
+órfão, CPU ociosa (~0,5%), sem memória descontrolada, e todos os arquivos
+editados nesta etapa verificados íntegros (sem corrupção). **Não tentei
+novamente o B11 N=16 nesta sessão** — uma execução limpa é a evidência
+obtida; uma segunda/terceira tentativa exige invocação mais segura
+(intervalo real entre rajadas, menos sessões, ou margem real de
+`ReserveCores` em vez de `-Force`) ou autorização explícita e consciente do
+risco antes de tentar de novo nesta máquina.
+
+`RESET_WAIT` (3/3) e a bateria completa `E131` (6/6) — QEMU-side, já
+fechadas no E132-B, binário QEMU inalterado — NÃO foram reexecutadas nesta
+etapa (correção é somente Core, fora do raio de alcance desta correção,
+sinalizado explicitamente em vez de assumido).
+
+Nenhum B12, promoção, edição de `QEMU_RUNTIME.json`, cleanup, commit, push,
+tag ou release foi executado. Canônico (`B375A9E8...`) intocado. Ver
+`EVIDENCE.md`/`TEST_GATES.md`/`NEXT_ACTION.md` para o relato completo.
+
+## E143 — H143 confirmada em parte (storm real, eliminado), mas insuficiente para restaurar o avanço; correção revertida por regra explícita da própria tarefa (2026-09-08, ~18:40)
+
+Resultado atual: **STOP — H143 REFUTADA COMO EXPLICAÇÃO ÚNICA/COMPLETA; CORREÇÃO REVERTIDA; CAUSA MAIS PROFUNDA AINDA NÃO IDENTIFICADA**.
+
+Auditei `McuComponent::pollAndDispatchPendingEvents()` antes de qualquer
+teste: o bloco pós-ack (`hasPendingLaneEvents() && !budgetExhausted ->
+scheduleNextPoll()`, sempre `now+1ns`) realmente não distingue "cabeça
+pronta" de "cabeça ainda futura" — confirma H143 exatamente. Extraí uma
+função pura (`VnextBArbiter::decidePostAckRearm()`), criei uma simulação
+determinística em processo (sem QEMU) na MESMA escala de nanossegundos que
+o E142 mediu de verdade (gap de ~55.000.000ns) — RED: política antiga trava
+em `finalNowNs=250.002.000` após 2000 iterações, nunca alcança o deadline
+real (305.000.000); GREEN: política nova converge em 1 iteração, consome
+exatamente uma vez em `finalNowNs=305.000.000`. Mais 11 testes puros
+cobrindo toda a matriz da Fase 4 — 12/12 verdes.
+
+Apliquei a correção em produção e testei contra o QEMU real (candidato
+`475C0FC9...`) três vezes: `m_pollGeneration=0` nas três (a tempestade de
+callbacks desapareceu por completo, confirmando que o mecanismo H143 é
+real) — mas `Scheduler::nowNs` continuou sem alcançar o deadline real de
+~305ms em nenhuma das três execuções (217,6ms / 150,8ms / 185,6ms medidos),
+e `submissions=0/0 completions=0/0` persistiu nas três. Pela própria regra
+explícita da tarefa ("impedir somente o now+1ns não restaurar o avanço" ->
+parar, H143 refutada, nenhuma correção deve ser aplicada), **revertei a
+correção em `McuComponent.cpp`** — confirmado exato recompilando e
+reproduzindo a tempestade original (`m_pollGeneration=956`) mais uma vez.
+
+Mantive em árvore (inertes, corretos, não usados por nenhum caminho de
+produção após a reversão): a função pura `decidePostAckRearm()` em
+`VnextBArbiter.hpp` e toda a suíte RED/GREEN em `VnextBArbiterTest.cpp`
+(12/12 verdes) — prontas para serem religadas assim que a causa mais
+profunda for identificada. NÃO toquei `Scheduler.cpp`/pacing nem
+`scheduleEventUnlocked()`, por regra explícita (nenhum RED isolado provou
+lost wake ali especificamente). Zero QEMU órfão em todo checkpoint. Ver
+`EVIDENCE.md`/`TEST_GATES.md`/`NEXT_ACTION.md` para o relato completo.
+Nenhum B11/B12/promoção/cleanup/commit/push/tag/release foi executado.
+
+## E142 — bisseção causal: a regressão do session_restart_stress_test NÃO é da limpeza E141; defeito real, pré-existente, ainda não corrigido (2026-09-08, ~18:10)
+
+Resultado atual: **STOP — HIPÓTESE DA LIMPEZA E141 REFUTADA; DEFEITO REAL PRÉ-EXISTENTE, SEM CORREÇÃO AUTORIZADA NESTA ETAPA**.
+
+Seguindo exatamente a metodologia pedida (Fase 0-3): reconstruí o Core
+pré-limpeza numa árvore descartável (`git worktree` + `pre_lasecsimul_full_diff.patch`
++ arquivos não rastreados preservados, sem stash/reset/checkout na árvore
+principal) e comparei lado a lado, no MESMO ambiente (mesmo QEMU candidato
+`475C0FC9...`, mesmo firmware, mesma prioridade/afinidade de DECISION-010),
+contra o Core pós-limpeza atual. **Os dois falharam exatamente da mesma
+forma**: `session_restart_stress_test` enche a lane 0 até a profundidade
+configurada (`write_seq=8`) e o Core nunca drena nem um evento
+(`read_seq=0`) durante toda a janela de 5s, sempre. Pela própria regra da
+tarefa ("se ambos falharem, pare... não atribua a limpeza"), a hipótese de
+que a limpeza E141 causou esta regressão está **refutada**.
+
+Localizei a fronteira exata com instrumentação somente-leitura (dois
+acessores de teste novos, inertes, sem stderr/env var/mudança de
+comportamento — `vnextBAttachmentForTesting()`, `laneRingSeqForTesting()`):
+o primeiro evento real do guest fica em `timestamp_ns≈305ms`
+(relativo ao QEMU), o `VnextBArbiter` classifica corretamente como "ainda
+não pronto" porque o `nowNs()` do `Scheduler` do Core nunca ultrapassa
+~234-251ms na janela inteira — mesmo `McuComponent::pacingPositionNs()`
+(o piso de avanço, via heartbeat) reportando ~4,03s, ou seja, o pacing NÃO é
+o gargalo. Duas hipóteses de mecanismo real foram lidas no código mas **não
+confirmadas experimentalmente** (registradas em `EVIDENCE.md`, entrada
+E142): `Scheduler::scheduleEventUnlocked()` nunca chama
+`signalWorkAvailable()` (diferente de todo outro ponto de entrada de
+agendamento no mesmo arquivo); e a interação do throttle de pacing em
+tempo real com deferimentos repetidos de evento futuro. Nenhuma correção foi
+tentada — fora do escopo desta etapa assim que a atribuição à limpeza E141
+foi refutada.
+
+`vnext_b_attachment_test` (33/33), as duas regressões 14/14 anteriores e os
+5 testes determinísticos do QEMU continuam verdes e não afetados — este
+defeito é específico do pipeline de despacho de produção real sob o cenário
+de restart-stress com firmware real.
+
+Árvore principal restaurada e verificada por SHA-256 contra backup
+pré-swap; `session_restart_stress_test` e `vnext_b_attachment_test`
+recompilados limpos (0 avisos/0 erros) no estado final; zero QEMU órfão em
+todo checkpoint. Ver `EVIDENCE.md`/`TEST_GATES.md`/`NEXT_ACTION.md` para o
+relato completo. Nenhum B11/B12/promoção/cleanup/commit/push/tag/release foi
+executado.
+
+## E141 production-clean — attachment-test re-oracle DONE and green, but a new real regression found in session_restart_stress_test; STOP (2026-09-08, ~17:15)
+
+Resultado atual: **STOP — VERMELHO FUNCIONAL FORA DO ESCOPO AUTORIZADO**.
+
+Desde a entrada anterior (mesma sessão, ~15:10): sob a autorização explícita
+`APPROVE_TEST_ORACLE_REPLACEMENT_ONLY` (restrita a
+`core/test/core/mcu/VnextBAttachmentTest.cpp`), todo oráculo dependente de
+`[VNEXT_B_STARTUP]`/`LASECSIMUL_VNEXT_STARTUP_TRACE` naquele arquivo foi
+auditado e substituído por estado ABI/funcional já existente (estado de
+lifecycle, `artifact_state`, watermark do heartbeat R3c, ocupação real do
+ring, `artifact_progress_ns`) — zero log novo, zero contador de produção
+novo, zero campo ABI novo, zero hook em caminho quente, zero reintrodução do
+tracer removido. **PASS: 3/3 execuções limpas, 33/33 subtestes em cada uma,
+zero QEMU órfão.** Um bug de ordenação no meu primeiro rascunho (checagem de
+"sinal RUNNING repetido" rodando depois de `dataAttachment.stop()`, contra um
+attachment já morto) foi encontrado via diagnóstico de valores no próprio
+teste e corrigido. Os 5 testes determinísticos do QEMU e duas regressões
+completas `VNEXT_B+MTTCG` (14/14 cada, SHA confirmado) também passaram depois
+disso, contra o mesmo candidato.
+
+Ao prosseguir para o próximo passo da sequência de validação do usuário
+(`session_restart_stress_test`), encontrei um **vermelho novo, real e fora do
+escopo desta autorização**: 15/15 ciclos com firmware real "TRAVOU NO MEIO" —
+`submissions=0/0 completions=0/0 artifact_progress=0/0` durante toda a janela
+de 5s de cada ciclo, apesar de o próprio QEMU mostrar um boot normal (ROM/APP
+carregando, sequência de reset ESP32 correta, Scheduler com atividade real de
+tempo virtual). Isolei a variável com quatro checagens somente-leitura antes
+de classificar: (1) o mesmo teste, mesmo firmware, apontado para o candidato
+E139 já preservado e re-verificado byte-idêntico
+(`8F7F7A334FFA17A6B8FC080EB75F70BD9D85EBECFB3F07A1BCC2A6995BF612AD`) falha do
+mesmo jeito; (2) o firmware está inalterado (SHA confere com o registrado);
+(3) o fonte do teste `SessionRestartStressTest.cpp` está byte-idêntico à
+versão E132-E já documentada como passando 15/15; (4) o log preservado desta
+mesma sessão, de mais cedo hoje, mostra esse EXATO teste passando 15/15
+contra esse MESMO binário QEMU E139 e esse MESMO firmware, com centenas de
+submissões por ciclo. A única variável que resta é o binário Core compilado
+hoje (`McuComponent.cpp`/`McuController.cpp`/`VnextBWaitDispatcher.cpp` —
+todos editados durante a remoção de diagnósticos desta mesma sessão, Parte
+A). Também notei que o único subteste de `VnextBAttachmentTest.cpp` que
+exercita I2C com firmware real drena a lane manualmente num thread próprio do
+teste, contornando de propósito `McuComponent`/`McuController`/
+`VnextBWaitDispatcher` (o pipeline de despacho de produção real) — então seu
+PASS não prova que esse pipeline continua funcionando.
+
+Isto é um vermelho funcional real (contadores ABI reais, não um diagnóstico
+removido) e está **fora** do escopo autorizado ("somente pelo saneamento dos
+oráculos do vnext_b_attachment_test"). Não toquei em `McuComponent.cpp`,
+`McuController.cpp`, `VnextBWaitDispatcher.cpp` nem em
+`SessionRestartStressTest.cpp`. Ver `NEXT_ACTION.md` para a decisão
+pendente. Detalhes completos em `EVIDENCE.md`, entrada E141 Partes A/B/C, e
+gate correspondente em `TEST_GATES.md`.
+
+Candidato QEMU (`475C0FC9...`) re-verificado byte-idêntico ao final desta
+investigação; canônico e `QEMU_RUNTIME.json` intocados; zero QEMU órfão
+confirmado (`tasklist`); nenhum B11/B12/promoção/cleanup/commit/push/tag/
+release foi executado.
+
+## E141 production-clean — Core side done too; stopped on a test-oracle dependency (2026-09-08, ~15:10)
+
+Resultado atual: **REVIEW_REQUIRED — TEST_ORACLE_DEPENDS_ON_REMOVED_DIAGNOSTIC**.
+
+Desde a entrada anterior (mesma sessão, ~14:05): concluída a auditoria e
+remoção do lado Core (`C:\SourceCode\LasecSimul\core\src`) — `TeardownTrace.hpp`
+e ~40 pontos de chamada em `McuComponent.cpp`, `McuController.cpp` (incluindo
+`LASECSIMUL_VNEXT_CORE_STARTUP_TRACE`), `QemuProcessManager.cpp`,
+`VnextBAttachment.cpp`, `VnextBWaitDispatcher.cpp`, `Scheduler.cpp`,
+`SimulationSession.cpp`, e um ponto em
+`core/test/core/mcu/VnextBProductionScaleTest.cpp` (só a chamada diagnóstica
+foi removida; a asserção estrutural em volta foi preservada, não o teste
+inteiro). `LASECSIMUL_MCU_TRANSPORT`, `LASECSIMUL_VNEXT_TRACE`,
+`LASECSIMUL_MCU_CONSUMER_TRACE`, `LASECSIMUL_CAUSAL_TRACE` e outras variáveis
+`LASECSIMUL_*` foram investigadas via `git log`/tamanho de diff e confirmadas
+como funcionalidades de produto pré-existentes e committadas (não lixo de
+investigação E099–E141) — preservadas sem alteração.
+
+Achado importante: o estado de sincronização real do `VnextBWaitDispatcher`
+(geração do wait-set, geração observada, callbacks em voo) estava vivendo
+dentro do namespace `lasecsimul::diag`/`TeardownTrace.hpp`, mas é
+funcionalmente indispensável para o contrato de drain de `unregister()`
+(evita handle solto/use-after-free). Não foi apagado — foi corretamente
+separado em membros de instância de `VnextBWaitDispatcher::Impl`, com nomes
+não-diagnósticos, preservando exatamente a mesma semântica de sincronização.
+
+`lasecsimul-core.lib`/`.exe` e `vnext_b_attachment_test.exe` compilam limpos
+via MSBuild (0 avisos, 0 erros), recompilando exatamente os arquivos
+editados.
+
+Ao rodar `vnext_b_attachment_test` contra o novo candidato QEMU, o primeiro
+subteste (P1) falhou de forma reproduzível (confirmado por retry limpo, não
+é flakiness de tempo). Investigação de causa raiz (comparação controlada
+contra o canônico `B375A9E8...` e contra o candidato E139 já validado em
+B11; busca direta no fonte de `qemu_lasecSimul`; e o diff pré-edição
+capturado às 08:33 desta manhã) **provou que isto não é uma regressão
+funcional**: vários subtestes deste arquivo (pelo menos P1,
+`E117_PHASE3_LIFECYCLE_ORDERING`, e subtestes de caminho de dados que leem
+contadores de uart/lane por sessão) fazem parsing das linhas
+`[VNEXT_B_STARTUP] transition=...` do próprio stdout do QEMU filho, geradas
+por `LASECSIMUL_VNEXT_STARTUP_TRACE` — um diagnóstico que já tinha sido
+corretamente removido (pela sessão E141 interrompida, antes mesmo desta
+continuação começar) por ser um dos itens explicitamente nomeados na tarefa
+para remoção. O canônico e o candidato E139 ainda carregam esse tracer
+antigo (por isso passam os 34 subtestes, incluindo um —
+`B11_DECISION_014_REENTRANCY_CONCURRENCY_PROBE` — que depende da sonda de
+reentrância do lado QEMU, também já removida, e que por isso falha
+corretamente contra o canônico, que já não tem essa sonda).
+
+Isto bate exatamente com a stop condition da própria tarefa (seção 14): "um
+teste depender exclusivamente de log de investigação e não houver oráculo
+funcional seguro." Esta sessão não reinstalou o tracer nem corrigiu às
+pressas os oráculos do teste sem revisão. Ver `NEXT_ACTION.md` para a decisão
+pendente.
+
+Candidato QEMU e binário Core preservados; zero QEMU órfão; canônico
+`B375A9E8...` e `QEMU_RUNTIME.json` intocados; nenhum B11/B12/comparação/
+promoção/cleanup/commit/push/tag/release foi executado.
+
+## E141 production-clean consolidation — QEMU side complete, Core side pending (2026-09-08, ~14:05)
+
+Resultado atual: **IN_PROGRESS — QEMU_SIDE_CLEAN_CORE_SIDE_PENDING**.
+
+Esta é a continuação de uma sessão E141 cujos tokens acabaram no meio de uma
+edição: vários arquivos-fonte do QEMU ficaram com referências pendentes a
+funções diagnósticas já apagadas (não compilavam). Snapshot pré-edição
+preservado em
+`vnext_prototype\mttcg_causality\E141-production-clean_20260908_083000\`
+(git status/diffs/hashes dos dois repositórios, fontes não rastreados
+preservados em `pre_qemu_untracked_source_files\`, zero QEMU confirmado antes
+de editar).
+
+Concluído nesta continuação, somente `qemu_lasecSimul`:
+
+- terminadas as remoções que a sessão anterior deixou pela metade: variável
+  `skipCoreNotify` indefinida em `hw/char/esp32_uart.c` (bypass
+  `LASECSIMUL_UART_DISABLE_CORE_NOTIFY`, agora removido — produção sempre
+  notifica); `e131_tcg_trace_enabled()` chamado em `accel/tcg/translate-all.c`
+  sem definição (família completa E131 TCG-trace removida de
+  `translate-all.c`/`target/xtensa/translate.c`/`target/xtensa/exc_helper.c`/
+  `target/xtensa/helper.h`, incluindo um hook de tempo de tradução disparando
+  incondicionalmente a cada instrução); comentário órfão de
+  `LASECSIMUL_MWDT_ACCOUNTING` em `util/qemu-thread-win32.c`;
+- removidos diagnósticos adicionais que a sessão anterior não tinha alcançado:
+  3 stubs no-op mortos `esp32_cache_trace_*` em `hw/misc/esp32_dport.c` (zero
+  chamadores — removidos por inteiro, não deixados como stub);
+  `LASECSIMUL_BQL_CAUSAL_TRACE` completo em `softmmu/simuliface.c` (3 pontos
+  quentes: leitura de registrador, publicação de fila, burst I2C);
+  contabilidade diagnóstica morta de EFUSE em `hw/nvram/esp32_efuse.c`/`.h`
+  (alimentava um causal tracer de RTC já removido, zero chamadores restantes);
+- encontradas e corrigidas 3 regressões funcionais reais (não diagnósticas),
+  dano colateral das edições em massa da sessão anterior em
+  `hw/misc/esp32_dport.c`: `#define`s do MMU de cache do DPORT, 2 forward
+  declarations e as funções `get_mmu_entry()`/`set_mmu_entry()`/
+  `esp32_cache_ill_write()`/`esp32_cache_ill_accepts()` tinham sido apagadas
+  junto com o bloco CACHE-TRACE adjacente — restauradas literalmente a partir
+  do `git show HEAD:...` após diff linha a linha para separar diagnóstico de
+  funcional; completada `esp32_dport_appcpu_has_non_cache_stop()` (chamada mas
+  nunca definida) usando a mesma expressão booleana já usada 3x no mesmo
+  arquivo para o mesmo propósito; completada `esp32_dport_set_flash_device()`
+  (setter simples, contrato já totalmente especificado no header). Também 2
+  pontos em `hw/xtensa/esp32.c` onde texto literal de escape do PowerShell
+  (`` `r`n ``) tinha sido gravado no fonte C em vez de uma quebra de linha
+  real, quebrando o parser;
+- corrigidos dois bugs reais de portabilidade Windows no sistema de build
+  meson/tracetool do QEMU (`trace/meson.build` — cálculo de nome de grupo
+  quebra com paths de barra invertida; `scripts/tracetool/backend/log.py` —
+  path embutido em diretiva `#line` sem escapar barras invertidas, lidas como
+  escapes `\u`/`\g`/`\q`), que bloqueavam qualquer reconfigure meson nesta
+  máquina; limpo um `libblock.fa` obsoleto (e, defensivamente, todos os
+  outros arquivos `.fa`/`.a` de topo) deixado por um `meson --internal
+  regenerate` acidental que corrompeu o build e — combinado com paralelismo
+  de build sem limite — travou a máquina; todos os rebuilds seguintes usaram
+  `ninja -j 2`.
+
+Resultado: `qemu-system-xtensa.exe` compila limpo (1252/1252, 0 erros), roda
+(`--version` → `QEMU emulator version 8.1.3`, exit 0), SHA256
+`475C0FC956E43FFC0CB83CECE0DC384457A9E1F01D2C6A3F6C21C4665C7EB23D`, preservado
+em
+`vnext_prototype\mttcg_causality\E141-production-clean_20260908_083000\candidate_qemu\`.
+Passam os 5 testes unitários determinísticos do QEMU
+(`test-esp32-dport-cache-race-stall`, `test-esp32-efuse-op-state` incluindo seu
+caso `no_diagnostic_output_contract`, `test-esp32-timg-pause`,
+`test-esp32-timg-wdt-scale`, `test-vnext-b-classify`). Varredura de
+strings/símbolos no binário para todos os marcadores da lista mínima da seção
+7 da tarefa, mais todos os removidos nesta sessão: zero ocorrências. Zero QEMU
+rodando. Canônico `B375A9E8...` e `QEMU_RUNTIME.json` intocados.
+
+Pendente: instrumentação diagnóstica do lado Core/C++
+(`C:\SourceCode\LasecSimul\core\src`) — `TeardownTrace.hpp` e ~48 pontos de
+chamada em `McuComponent.cpp`, `McuController.cpp`, `QemuProcessManager.cpp`,
+`VnextBAttachment.cpp`, `VnextBWaitDispatcher.cpp`;
+`LASECSIMUL_VNEXT_CORE_STARTUP_TRACE`; `LASECSIMUL_MCU_TRANSPORT`. Core ainda
+não foi reconstruído. Nada da bateria de validação curta (seção 9), B11
+N=1/8/12/16 x5, comparação (seção 11), B12 ou promoção foi executado ainda.
+
+## E138 ROM/EFUSE reclassification — REVIEW REQUIRED (2026-09-08)
+
+Resultado atual: **REVIEW_REQUIRED — E138_ROM_EFUSE_ROOT_CAUSE**.
+
+Relatório:
+`C:\SourceCode\LasecSimul\vnext_prototype\mttcg_causality\E138-rom-efuse-classification_20260908_055000\E138_rom_efuse_classification_report.md`.
+
+Pacote de review:
+`C:\SourceCode\LasecSimul\orchestrator\.ai\REVIEW_PACKET.md`.
+
+A E138 corrige a classificação da E137:
+`E137_CAPTURED_E121_ROM_EFUSE_BOOT_RESET — E135_POST_BOOT_PANIC_NOT_REPRODUCED`.
+As sessões E137 6/PID 3120 e 14/PID 15540, e a nova sessão E138 14/PID 6588,
+batem com o caminho ROM/EFUSE de boot inicial da E121: APP CPU ainda não
+iniciado, watchdogs desarmados, `pc0=0x4000fdd0`, `pc1=0x40000400`, e
+`SW_SYS_RESET` disparado no ROM em `pc=0x4000fdcd`.
+
+Canônico e manifest permaneceram intactos:
+
+- runtime canônico `B375A9E830705F673800C703A450871D2B3616D06938365671ABD6A3DFDD936E`;
+- candidato investigado direto `3D951D7C7A83578DED9FA20E7B9F0E0BABA705025C05618E90DCB079693A96F6`;
+- firmware `merged.bin` `1DA8BF731830B2D2D9CE6EDBB0EA208636A1DB2A79497A8DB0CC98D72864C76A`;
+- firmware ELF `1697587B58F9DF862765ADABC2F5A2E74387863438D8A6DF775196A542C9D9B6`;
+- `QEMU_RUNTIME.json` não alterado.
+
+Bloqueado até review: correção semântica EFUSE, B12, promoção, atualização do
+runtime canônico, pacote/release e investigações cache/TG1/WDT/transport/
+scheduler.
+
+## E136 rare B11 N=16 panic classification — REVIEW REQUIRED (2026-09-07)
+
+Resultado atual: **LOW_RATE_ANOMALY_NOT_REPRODUCED_REVIEW_REQUIRED**.
+
+Relatório:
+`C:\SourceCode\LasecSimul\vnext_prototype\mttcg_causality\E136-b11-n16-panic-classification_20260907_220542\E136_classification_report.md`.
+
+Pacote de review:
+`C:\SourceCode\LasecSimul\orchestrator\.ai\REVIEW_PACKET.md`.
+
+O evento original da sessão 0/PID 15044 do B11 N=16 E135 foi reconstruído
+offline: workload completo, `submissions=4380`, `completions=4380`,
+`artifactFatal=false`, teardown limpo, mas dois resets inesperados. Os PCs
+simbolizam para `panic_handler`, `esp_restart_noos_dig` e `start_other_core`,
+mas o run formal não tinha causal trace; portanto `exccause`,
+`pseudo_excause`, fonte de interrupção e estado cache/MMU anteriores ao panic
+continuam desconhecidos.
+
+Na E136, o candidato `3D951D7C...` foi usado diretamente, sem promoção, em B11
+N=16 `VNEXT_B+MTTCG` com apenas `LASECSIMUL_PANIC_CAUSAL_TRACE` e
+`LASECSIMUL_WDT_CAUSAL_TRACE`. Três tentativas válidas passaram 16/16, com zero
+resets inesperados, zero frame de panic e zero dump de expiração WDT. Uma
+tentativa adicional foi preservada como inválida para a pergunta causal porque
+uma sessão não alcançou startup/workload; também teve zero reset inesperado.
+
+Canônico e manifest permaneceram intactos:
+
+- runtime canônico `B375A9E830705F673800C703A450871D2B3616D06938365671ABD6A3DFDD936E`;
+- `QEMU_RUNTIME.json` `ADF0D79B9E533E17A3F8CA62FD890B1867973FBB1AFF1C95239142D03644B369`,
+  read-only;
+- zero QEMU restante.
+
+Promoção, B12, mudança semântica, cleanup, commit, push, tag, package e release
+continuam bloqueados até review.
+
+## E135 NOT_APPLICABLE fix and promotion retry — ROLLED BACK at B11 N=16 (2026-09-07)
+
+Resultado atual: **PROMOTION_ROLLED_BACK — FIRST_REAL_POST_PROMOTION_RED_B11_N16**.
+
+Relatório:
+`C:\SourceCode\LasecSimul\vnext_prototype\mttcg_causality\E134-wdt-scale-reanchor_20260907_152218\E135-gate-executor_20260907_181428\E135_not_applicable_fix_and_promotion_attempt_report.md`.
+
+Foi aplicada apenas a correção mínima autorizada no teste:
+`C:\SourceCode\LasecSimul\core\test\core\mcu\McuControllerRealQemuTest.cpp`
+agora usa o marcador estruturado
+`NOT_APPLICABLE: test=mcu_controller_real_qemu_test subcase=legacy_gateway_tap_fallback reason=transport_vnext_b`
+no subcaso LEGACY-only de gateway/TAP sob VNEXT_B. SHA final do fonte:
+`786C34420C51E22B8638793C94E05EC9AC6AC3289EB011F3BFFC603AC4662B95`.
+
+O executor E135 continua fail-closed para `SKIP:`, `SKIPPED:` e `PULADO:`, e
+aceita somente esse marcador completo, exatamente uma vez, no gate
+`mcu_controller_real_qemu_test` sob `VNEXT_B`. SHA final do executor:
+`501470CC413937227B6EC26E64D563E8096B7AD76C070F3F9208770D136C3381`.
+
+Passaram antes da promoção: self-test do executor com 17 casos, rebuild somente
+de `mcu_controller_real_qemu_test`, execução direta desse teste contra o
+candidato `3D951D7C...`, regressão oficial `VNEXT_B+MTTCG` 14/14 contra o
+candidato, e B11 N=1 contra o candidato.
+
+A promoção controlada final foi tentada em
+`C:\SourceCode\LasecSimul\vnext_prototype\mttcg_causality\E134-wdt-scale-reanchor_20260907_152218\runtime-promotion_E135_final_20260907_192655`.
+Pelo caminho canônico temporariamente em `3D951D7C...`, passaram os três testes
+unitários QEMU, `vnext_b_attachment_test`, `session_restart_stress_test`,
+regressão oficial 14/14 e B11 N=1.
+
+Primeiro vermelho real: B11 N=16 em
+`C:\SourceCode\LasecSimul\vnext_prototype\mttcg_causality\E134-wdt-scale-reanchor_20260907_152218\E135-gate-executor_20260907_181428\final_post_B11_N16`.
+O runner usou QEMU `3D951D7C...`, teve 16/16 sessões, 16/16 JSONL e exit 0,
+mas reportou `B11_CELL_PASS = False`, `RUNNER_PASS = False` e
+`RUNNER_FAILURES = classifier_cellPass_false`; sessão 0 teve dois resets
+inesperados, sem `MWDT_ATTRIB_RESETS`.
+
+Rollback concluído:
+
+- runtime canônico restaurado para
+  `B375A9E830705F673800C703A450871D2B3616D06938365671ABD6A3DFDD936E`;
+- `QEMU_RUNTIME.json` restaurado para
+  `ADF0D79B9E533E17A3F8CA62FD890B1867973FBB1AFF1C95239142D03644B369`;
+- `QEMU_RUNTIME.json` permanece read-only;
+- zero processos QEMU restantes.
+
+Não foi feito cleanup, commit, push, tag, package ou release. O runtime
+vendorizado em `devices\qemu-esp32\bin` continua antigo e bloqueando release
+empacotada.
+
+Próxima ação: classificar o B11 N=16 vermelho a partir do artefato
+`final_post_B11_N16`; não repetir promoção cegamente.
+
+## E135 fail-closed gate executor — BLOCKED / promotion rolled back (2026-09-07)
+
+Resultado atual: **BLOCKED_BEFORE_FINAL_PROMOTION — FAIL_CLOSED_GATE_CONFLICT**.
+
+Relatório:
+`C:\SourceCode\LasecSimul\vnext_prototype\mttcg_causality\E134-wdt-scale-reanchor_20260907_152218\E135-gate-executor_20260907_181428\E135_fail_closed_gate_executor_report.md`.
+
+Executor fail-closed criado/corrigido:
+`C:\SourceCode\LasecSimul\vnext_prototype\mttcg_causality\E134-wdt-scale-reanchor_20260907_152218\E135-gate-executor_20260907_181428\Invoke-E135PromotionGate.ps1`
+SHA256 `25A367AB2196EB21C090F9E41D013E1B06B3588FF950A5CA9F66749E3E6974A1`.
+
+Self-test do executor: PASS. Preflight direto com candidato: PASS
+(`vnext_b_attachment_test` e `session_restart_stress_test` 3/3, SHA candidato
+`3D951D7C...`, sem fallback vendorizado).
+
+A promoção foi tentada e revertida em dois diretórios E135 novos. A tentativa
+`runtime-promotion_E135_20260907_184029` passou os gates Core pós-promoção
+curtos, mas a regressão falhou corretamente no primeiro `PULADO:` observado em
+`mcu_controller_real_qemu_test`. Esse teste imprime `Todos os testes passaram`,
+mas contém um subcaso LEGACY-only explicitamente pulado sob VNEXT_B. Como E135
+mandou rejeitar `PULADO:`, a promoção não pode ser fechada sem decisão de gate.
+
+Estado seguro final:
+
+- canônico restaurado para SHA
+  `B375A9E830705F673800C703A450871D2B3616D06938365671ABD6A3DFDD936E`;
+- `QEMU_RUNTIME.json` restaurado para SHA
+  `ADF0D79B9E533E17A3F8CA62FD890B1867973FBB1AFF1C95239142D03644B369`;
+- zero QEMU restantes;
+- runtime vendorizado em `devices\qemu-esp32\bin\qemu-system-xtensa.exe`
+  continua bloqueio separado de release.
+
+Não foi executado cleanup, commit, push, tag, package ou release.
+
+## Update runtime promotion execution rollback (2026-09-07)
+
+Promoção controlada do runtime foi tentada e revertida automaticamente no
+primeiro vermelho pós-promoção.
+
+Resultado: **PROMOTION_ROLLED_BACK — FIRST_POST_PROMOTION_RED**.
+
+Artefato:
+`C:\SourceCode\LasecSimul\vnext_prototype\mttcg_causality\E134-wdt-scale-reanchor_20260907_152218\runtime-promotion_20260907_175847`.
+
+O candidato `3D951D7C...` foi promovido temporariamente para o caminho canônico
+e `qemu --version` passou; DLLs adjacentes permaneceram inalteradas.
+`QEMU_RUNTIME.json` foi atualizado temporariamente e depois restaurado.
+
+Gates verdes antes do vermelho: `test-esp32-timg-wdt-scale` 13/13,
+`test-esp32-timg-pause` 7/7, `test-vnext-b-classify` 9/9.
+
+Primeiro vermelho: `vnext_b_attachment_test` apenas emitiu `SKIP:
+LASECSIMUL_TEST_QEMU_BINARY is not available`; em seguida
+`session_restart_stress_test` lançou `devices/qemu-esp32/bin/qemu-system-xtensa.exe`
+em vez do runtime canônico promovido, encontrou incompatibilidade de ABI v5 e
+falhou 15/15 ciclos ao iniciar.
+
+Rollback concluído: canônico restaurado para SHA
+`B375A9E830705F673800C703A450871D2B3616D06938365671ABD6A3DFDD936E`,
+`QEMU_RUNTIME.json` restaurado, zero QEMU órfão. Regressão 14/14 e B11 N=1/N=16
+não foram executados após o vermelho. Próxima ação é corrigir a invocação dos
+gates de promoção para forçar o caminho canônico promovido e repetir a promoção
+controlada desde o rollback, sem mudar semântica de produção.
+
+## Update B12 final decision (2026-09-07)
+
+B12 foi concluído por auditoria offline dos artefatos E134/B11 aprovados, no
+escopo exclusivo `VNEXT_B+MTTCG`.
+
+Decisão: **B12_PASS — PROMOTION_REVIEW_AUTHORIZED**.
+
+Relatório:
+`C:\SourceCode\LasecSimul\vnext_prototype\mttcg_causality\E134-wdt-scale-reanchor_20260907_152218\B12-final-decision_20260907_1735\B12_final_decision_report.md`.
+
+O candidato auditado é
+`3D951D7C7A83578DED9FA20E7B9F0E0BABA705025C05618E90DCB079693A96F6`.
+Todos os manifests B11 aprovados usam esse SHA. Configurações aprovadas:
+N=1 1/1, N=8 1/1, N=12 1/1 e N=16 3/3. Todas as sessões têm workload válido,
+`submissions==completions>0`, zero resets inesperados, `artifactFatal=false`,
+sem CACHEERR/Guru/TG expiry indevida/SW reset inesperado/UART loss/I2C
+loss/desync/reentrância/timeout/fail-open, teardown limpo e zero órfãos.
+
+Classificação: `NO_ACTIVE_ANOMALY_OBSERVED`. Não há população atual de falhas
+para classificar como starvation, anomalia de transporte ou anomalia de caminho
+de execução; Fase C não é justificada pelos resultados atuais.
+
+Não houve promoção. `QEMU_RUNTIME.json` e o runtime canônico permanecem intactos
+em SHA256 `B375A9E830705F673800C703A450871D2B3616D06938365671ABD6A3DFDD936E`.
+Próxima ação: review separado de promoção, preservando o canônico como
+rollback.
+
+## Update E134 phase 1 (2026-09-07)
+
+E134 iniciou a investigação de inconsistência `wdt_time_scale`/reanchor sem
+campanha N=16 e sem alterar semântica de produção. Snapshot em
+`C:\SourceCode\LasecSimul\vnext_prototype\mttcg_causality\E134-wdt-scale-reanchor_20260907_152218`.
+
+H134 foi confirmada matematicamente: `get_count()` acumula ticks literais;
+`update_config()` materializa esse contador em `count_base/ns_base`; `arm()`
+compara contra timeout bruto e só depois multiplica `ns_to_timeout` por escala.
+Na sequência E133, `609` ticks literais após FEED colapsam o rearm para
+`3,426,994,200 ns`, quando a semântica contínua de escala 100 preservaria prazo
+por volta de `33,122,494,200 ns`.
+
+Foi adicionado um teste RED puro em QEMU:
+`tests/unit/test-esp32-timg-wdt-scale.c`. Ele falha como esperado contra a
+matemática atual (`3426994200 == 33122494200`). O pacote de review está em
+`orchestrator\.ai\REVIEW_PACKET.md`.
+
+Estado atual: `REVIEW_REQUIRED`. Nenhuma correção semântica de watchdog foi
+aplicada ainda. `QEMU_RUNTIME.json` permanece inalterado. B11/B12/promoção
+seguem bloqueados.
+
+## Update E133 (2026-09-07)
+
+E133 foi executada exclusivamente em `VNEXT_B+MTTCG`. Não houve mudança
+semântica QEMU/Core/firmware, nem B12, promoção, cleanup, commit, tag ou
+release.
+
+Artefato:
+`C:\SourceCode\LasecSimul\vnext_prototype\mttcg_causality\E133-b11-n16-causality_20260907_141445`.
+Consolidado:
+`...\E133_consolidated_result.md` e `...\E133_consolidated_result.json`.
+
+Resultado principal: B11 N=16 permanece **OPEN**. O runner antigo era fail-open
+para B11 N=16 (`runner_exit=0` com `cellPass=false`); isso foi corrigido no
+runner/harness, com 14/14 testes determinísticos passando e cleanup limitado a
+QEMU filho da execução corrente.
+
+Medições novas: R0/ReserveCores=0/sem Force passou uma vez, mas no primeiro
+bloco intercalado o controle R6+Force falhou e o tratamento R0/sem Force também
+falhou. Portanto R6+Force é fator contribuinte/agravante, não causa única
+comprovada. O diagnóstico dirigido mostrou expiração genuína TG1 e
+`first_actual_stage_expiry`, seguida por reset guest de software/pânico
+(`SW_CPU_RESET_REGISTER` / `SW_APPCPU_RESET`), com `MWDT_ATTRIB_RESETS=0`, sem
+CACHEERR/Guru/reentrância/teardown-hang. O quadro de pânico e a sessão sem
+workload com CPU1 em `panic_handler` seguem pendentes.
+
+Estado atual: `EXECUTE`. Próximo passo é uma prova causal dirigida entre a
+primeira expiração TG1 e a decisão guest de reset/pânico, ou uma proposta de
+correção semântica acompanhada de prova mínima e review. B12/promoção seguem
+bloqueados.
+
+## Update E132-F (2026-09-07)
+
+Validação pós-review `VNEXT_B+MTTCG` avançou após E132-E: determinísticos 8/8,
+RESET_WAIT 3/3, E131 6/6, duas regressões 14/14 e B11 N=1/N=8/N=12 passaram.
+O primeiro vermelho real atual é B11 N=16.
+
+B11 N=16: 16/16 sessões despejadas, 16/16 JSONL, classificador
+`cellPass=false`, `sessionsWorkloadPass=13/16`, `totalUnexpectedResets=14`,
+sem MWDT atribuído, sem CACHEERR/exccause=7, sem Guru, sem reentrância
+bloqueada, teardown limpo e zero QEMU órfão. Sessões 7/9/12 ficaram sem
+workload; sessões 2/5/7/9/12 contribuíram resets inesperados. Estado atual:
+`EXECUTE`, parado fail-closed neste N=16. B12, promoção, cleanup, commit, tag e
+release continuam bloqueados.
+
+## Update E132-E (2026-09-07)
+
+O primeiro vermelho determinístico pós-review foi saneado sem mudança semântica
+QEMU/produção. `session_restart_stress_test` agora usa liveness estrutural em
+`VNEXT_B`: `firmwareRunning()`, scheduler rodando e avanço de
+`pacingPositionNs()`. Com flash vazia ele prova lifecycle/pacing/execId/stop
+limpo/sem órfãos; com firmware real ele exige submissions/completions I2C e
+artifact progress.
+
+Validação nova: rebuild isolado verde; blank-flash 3 ciclos verde; firmware
+real 2 ciclos verde; formal firmware real 15 ciclos verde. Tudo rodou com
+traces operacionais OFF, zero timeout, zero QEMU órfão e sem marcadores
+negativos. Consolidado determinístico pós-review: 8/8 PASS, preservando os 7
+verdes anteriores e reexecutando somente o primeiro vermelho corrigido.
+
+Estado atual: `EXECUTE`. Próximo passo é retomar a sequência pós-review
+`VNEXT_B+MTTCG` com RESET_WAIT 3/3 e E131 6/6, depois duas regressões 13/13 e
+B11 N=1/8/12/16. Runtime canônico ainda não foi promovido; B11, B12, cleanup,
+commit, tag e release ainda não foram executados.
+
+## Update E132-D (2026-09-07)
+
+Validação pós-review parou no primeiro vermelho determinístico. Rebuilds QEMU,
+Core/harness e firmware E131 passaram; 7 testes determinísticos passaram; o
+primeiro red foi `session_restart_stress_test` com 15/15 ciclos sem liveness em
+`VNEXT_B` + flash vazia. Classificação: provável defeito de oráculo/harness,
+porque o teste exige `[VNEXT_PROBE] after qemu_init` enquanto os traces ficam
+OFF por padrão. Não foram executados regressões 13/13, B11, B12, promoção,
+cleanup, commit, tag ou release.
+
+## Update E132-C (2026-09-07)
+
+Reviewer independente aprovou `E132-B-review-20260907`. E131 está fechado
+somente para `VNEXT_B+MTTCG`; runtime canônico ainda não foi promovido.
+Snapshot inicial pós-review e auditoria de fonte foram concluídos. Estado atual:
+`EXECUTE`, iniciando rebuild/testes determinísticos pós-review. B11, B12,
+promoção, cleanup, commit, tag e release ainda não foram executados.
+
+## Update E132-B (2026-09-07)
+
+O falso PASS do supervisor e o falso negativo RESET_WAIT foram corrigidos sem
+mudança semântica de produção. RESET_WAIT passou 3/3 e a bateria E131 completa
+passou 6/6 sob VNEXT_B+MTTCG, com teardown limpo e zero órfãos. E131 está
+`CLOSED_PENDING_REVIEW`; B11 e promoção permanecem não executados.
+
 Consolidated 2026-09-03. Start at `QEMU_HANDOFF.md`; this file is the detail
 behind it and the preserved iteration history.
 
@@ -1249,3 +1966,31 @@ did not start. E093 records the input-boundary mismatch; reviewer direction
 is required before acquiring or sourcing any replacement 3.8.10 base MSI.
 No firmware/QEMU/watchdog, production, semantic, ABI, PATH, registry, ACL, or
 Git artifact changed.
+# E134 status — review de fechamento pendente (2026-09-07)
+
+E134 está implementada e validada em `VNEXT_B+MTTCG`, sem B12/promoção.
+Artefatos:
+`C:\SourceCode\LasecSimul\vnext_prototype\mttcg_causality\E134-wdt-scale-reanchor_20260907_152218`.
+
+Validações concluídas: QEMU build PASS, WDT scale deterministic 13/13 PASS
+direto e via Meson, duas regressões `VNEXT_B+MTTCG` 14/14 PASS, B11 N=1/N=8/N=12
+PASS e N=16 PASS 3/3. QEMU candidato:
+`3D951D7C7A83578DED9FA20E7B9F0E0BABA705025C05618E90DCB079693A96F6`.
+
+Pendência honesta: fixture MWDT no-feed reconstruído não produziu observabilidade
+stdout/stderr em tentativas bounded; não contar como prova integrada de expiração
+final. Próxima ação: review de fechamento E134 via `REVIEW_PACKET.md`.
+# E137 status — review de recorrência pendente (2026-09-08)
+
+E137 reproduziu um vermelho real de B11 N=16 em `VNEXT_B+MTTCG` com o candidato
+`3D951D7C7A83578DED9FA20E7B9F0E0BABA705025C05618E90DCB079693A96F6` e somente
+`LASECSIMUL_PANIC_CAUSAL_TRACE`. A tentativa 1 passou; a tentativa 2 falhou e a
+campanha parou no primeiro vermelho. Sessões 6 e 14 tiveram workload válido,
+`SW_SYS_RESET` terminal capturado, `RTC_RESET` inesperado e depois
+`SW_CPU_RESET_REGISTER`, mas `g_exc_frames=NULL` nos dois cores.
+
+Classificação:
+`B11_N16_PANIC_RESET_RECURRENCE_REPRODUCED_FRAME_UNPROVEN_REVIEW_REQUIRED`.
+Não há prova nova de `exccause=7`/`PANIC_RSN_CACHEERR`, CPU, EPC/PC, vaddr ou
+predicado E129 específico. Nenhum código semântico foi alterado; nenhuma
+promoção/B12 foi executada; runtime canônico e `QEMU_RUNTIME.json` preservados.

@@ -94,7 +94,10 @@ int main() {
 #ifndef ESP32_ADAPTER_DLL_PATH
 #error "ESP32_ADAPTER_DLL_PATH precisa ser definido pelo CMakeLists (caminho do adapter.dll real)"
 #endif
-    const std::filesystem::path qemuPath = QEMU_REAL_BINARY_PATH;
+    const char* qemuOverride = std::getenv("LASECSIMUL_TEST_QEMU_BINARY");
+    const std::filesystem::path qemuPath =
+        (qemuOverride && *qemuOverride) ? std::filesystem::u8path(qemuOverride)
+                                        : std::filesystem::path(QEMU_REAL_BINARY_PATH);
     const std::filesystem::path dllPath = ESP32_ADAPTER_DLL_PATH;
 
     if (!std::filesystem::exists(qemuPath)) {
@@ -125,6 +128,7 @@ int main() {
     std::filesystem::path flashPath;
     bool ownsFlashPath = false;
     bool started = false;
+    const RuntimeLaunchIdentity expectedIdentity{0x1111222233334444ULL, 7, 1};
     try {
         const char* configuredFirmware = std::getenv("LASECSIMUL_TEST_FIRMWARE");
         if (configuredFirmware && *configuredFirmware) {
@@ -135,7 +139,6 @@ int main() {
             flashPath = createBlankFlash();
             ownsFlashPath = true;
         }
-        const RuntimeLaunchIdentity expectedIdentity{0x1111222233334444ULL, 7, 1};
         const QemuLaunchSpec identitySpec = controller.buildLaunchSpec(
             flashPath, arenaName, {}, {}, expectedIdentity);
         TEST_ASSERT(identitySpec.runtimeIdentity.sessionExecutionId == expectedIdentity.sessionExecutionId,
@@ -144,13 +147,24 @@ int main() {
                     "QemuLaunchSpec preserva runtimeInstanceId");
         TEST_ASSERT(identitySpec.runtimeIdentity.launchGeneration == expectedIdentity.launchGeneration,
                     "QemuLaunchSpec preserva launchGeneration");
-        controller.start(flashPath, arenaName);
+        // Pre-existing gap surfaced by PLAN_MTTCG_VNEXT_B_CAUSALITY.md R1 (explicit -Transport):
+        // McuController::start()'s VNEXT_B branch requires a non-zero RuntimeLaunchIdentity
+        // (McuController.cpp ~line 303) -- this test only ever exercised LEGACY before that
+        // harness flag existed, so the identity-preservation check above was the only place this
+        // struct was used. Reuse the same identity already validated by buildLaunchSpec().
+        controller.start(flashPath, arenaName, {}, {}, expectedIdentity);
         started = true;
     } catch (const std::exception& e) {
         std::fprintf(stderr, "FALHOU: McuController::start lançou: %s\n", e.what());
     }
     TEST_ASSERT(started, "McuController::start abre a arena e inicia o processo QEMU real sem lançar");
-    TEST_ASSERT(controller.arenaBridge().isOpen(), "arena de memória compartilhada está aberta do lado do Core");
+    // arenaBridge() is the LEGACY-only shared-memory wrapper -- McuController::start()'s VNEXT_B
+    // branch never touches it (it returns after m_vnextB.start(), see McuController.cpp ~line
+    // 306-309), so isOpen() is unconditionally false there by design, not by defect. Check the
+    // transport-appropriate side.
+    const bool usingVnextB = controller.vnextBActive();
+    TEST_ASSERT(usingVnextB ? controller.vnextBAttachment().running() : controller.arenaBridge().isOpen(),
+                "arena/anexo de memória compartilhada está aberto do lado do Core");
 
     // A flash apagada nao executa uma aplicacao, mas o QEMU deve permanecer vivo depois de criar
     // a maquina ESP32, a NIC OpenETH e o backend SLIRP.
@@ -166,28 +180,40 @@ int main() {
     TEST_ASSERT(!controller.isRunning(), "primeiro processo QEMU encerra apos stop()");
 
     // Backend externo indisponivel nao pode derrubar a CPU: a porta abaixo nao tem listener neste
-    // teste, entao o Core troca socket/TAP por SLIRP antes de qemu_init().
+    // teste, entao o Core troca socket/TAP por SLIRP antes de qemu_init(). This degrade-to-SLIRP
+    // mechanism (McuController.cpp ~line 314-324) lives strictly AFTER the VNEXT_B branch's early
+    // return, so it is structurally unreachable under VNEXT_B transport -- not a bug to work
+    // around, a capability VNEXT_B does not implement yet. Skip rather than assert a false PASS.
+    if (usingVnextB) {
+        std::fprintf(stderr,
+                      "NOT_APPLICABLE: test=mcu_controller_real_qemu_test "
+                      "subcase=legacy_gateway_tap_fallback reason=transport_vnext_b\n");
+    } else {
 #ifdef _WIN32
-    _putenv_s("LASECSIMUL_NETWORK_MODE", "lab-bridge");
-    _putenv_s("LASECSIMUL_GATEWAY_PORT", "65534");
+        _putenv_s("LASECSIMUL_NETWORK_MODE", "lab-bridge");
+        _putenv_s("LASECSIMUL_GATEWAY_PORT", "65534");
 #else
-    setenv("LASECSIMUL_NETWORK_MODE", "lab-bridge", 1);
-    setenv("LASECSIMUL_GATEWAY_PORT", "65534", 1);
+        setenv("LASECSIMUL_NETWORK_MODE", "lab-bridge", 1);
+        setenv("LASECSIMUL_GATEWAY_PORT", "65534", 1);
 #endif
-    bool fallbackStarted = false;
-    try {
-        controller.start(flashPath, uniqueArenaName());
-        fallbackStarted = true;
-    } catch (const std::exception& e) {
-        std::fprintf(stderr, "FALHOU: fallback de gateway lancou: %s\n", e.what());
+        bool fallbackStarted = false;
+        try {
+            const RuntimeLaunchIdentity fallbackIdentity{expectedIdentity.sessionExecutionId,
+                                                           expectedIdentity.runtimeInstanceId,
+                                                           expectedIdentity.launchGeneration + 1};
+            controller.start(flashPath, uniqueArenaName(), {}, {}, fallbackIdentity);
+            fallbackStarted = true;
+        } catch (const std::exception& e) {
+            std::fprintf(stderr, "FALHOU: fallback de gateway lancou: %s\n", e.what());
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        const bool sawFallbackWarning = waitForLogSubstring(controller, "gateway unavailable; falling back to isolated SLIRP");
+        const bool sawFallbackOpenEthNic = waitForLogSubstring(controller, "user,model=open_eth");
+        TEST_ASSERT(fallbackStarted && controller.isRunning(),
+                    "QEMU continua executando quando gateway/TAP esta indisponivel");
+        TEST_ASSERT(sawFallbackWarning, "log explica claramente o fallback de backend indisponivel");
+        TEST_ASSERT(sawFallbackOpenEthNic, "fallback preserva a NIC OpenETH usando SLIRP");
     }
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    const bool sawFallbackWarning = waitForLogSubstring(controller, "gateway unavailable; falling back to isolated SLIRP");
-    const bool sawFallbackOpenEthNic = waitForLogSubstring(controller, "user,model=open_eth");
-    TEST_ASSERT(fallbackStarted && controller.isRunning(),
-                "QEMU continua executando quando gateway/TAP esta indisponivel");
-    TEST_ASSERT(sawFallbackWarning, "log explica claramente o fallback de backend indisponivel");
-    TEST_ASSERT(sawFallbackOpenEthNic, "fallback preserva a NIC OpenETH usando SLIRP");
     controller.stop();
     if (ownsFlashPath && !flashPath.empty()) {
         std::error_code removeError;

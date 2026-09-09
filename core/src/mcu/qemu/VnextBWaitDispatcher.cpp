@@ -2,6 +2,8 @@
 
 #include <atomic>
 #include <array>
+#include <chrono>
+#include <condition_variable>
 #include <mutex>
 #include <thread>
 #include <vector>
@@ -28,6 +30,20 @@ public:
     std::atomic<bool> stopping{false};
     uint64_t nextToken = 1;
     size_t nextStartSlot = 0;
+    // E123 Phase 2 (EVIDENCE.md, 2026-09-05): drain contract for unregister() -- see unregister()'s
+    // own comment for what this guarantees and why. Paired with Impl::mutex (the SAME lock run()
+    // already takes to snapshot the wait set / look up a callback), not a separate lock -- avoids
+    // introducing a second lock order to reason about.
+    std::condition_variable drainCv;
+    // Wait-set generation protocol backing unregister()'s drain contract: waitSetGeneration is
+    // bumped (under mutex) by register/unregister; run() publishes the generation its current
+    // WaitForMultipleObjects() snapshot was built from into waitSetObservedGeneration (also under
+    // mutex); callbacksInFlight tracks whether the worker is currently executing a callback. All
+    // three are load-bearing for unregister()'s wait predicate below, not diagnostic output --
+    // instance state (not global) since each dispatcher has its own independent wait set.
+    std::atomic<uint64_t> waitSetGeneration{0};
+    std::atomic<uint64_t> waitSetObservedGeneration{0};
+    std::atomic<uint64_t> callbacksInFlight{0};
 
     VnextBWaitDispatcherStats stats() const {
         std::lock_guard lock(mutex);
@@ -54,6 +70,7 @@ public:
             std::vector<HANDLE> handles{wake};
             std::vector<uint64_t> tokens;
             std::vector<size_t> slots;
+            uint64_t builtFromGeneration = 0;
             {
                 std::lock_guard lock(mutex);
                 // WaitForMultipleObjects returns the lowest-index signaled handle. Rotate the
@@ -67,7 +84,19 @@ public:
                     tokens.push_back(entry.token);
                     slots.push_back(slot);
                 }
+                // E123 Phase 2 (EVIDENCE.md, 2026-09-05): the handle list above is a SNAPSHOT taken
+                // under `mutex`. Publishing the CURRENT wait-set generation here, still under the
+                // same lock that unregister() also takes, means: by the time this store is visible,
+                // the snapshot in `handles` reflects every unregister() that completed-and-returned
+                // before this instant. unregister() blocks on this generation being observed before
+                // returning -- see unregister()'s own comment for the full drain contract.
+                builtFromGeneration = waitSetGeneration.load(std::memory_order_acquire);
+                // Publish under the SAME lock unregister()'s waiters reacquire before rechecking
+                // their predicate -- the standard pattern to avoid a lost wakeup between "state
+                // updated" and "waiter starts blocking" (see unregister()'s own comment).
+                waitSetObservedGeneration.store(builtFromGeneration, std::memory_order_release);
             }
+            drainCv.notify_all();
             const DWORD result = WaitForMultipleObjects(static_cast<DWORD>(handles.size()), handles.data(), FALSE, INFINITE);
             if (result == WAIT_OBJECT_0) { ResetEvent(wake); continue; }
             if (result < WAIT_OBJECT_0 + handles.size()) {
@@ -88,7 +117,17 @@ public:
                     if (index < slots.size())
                         nextStartSlot = (slots[index] + 1) % kMaxRegistrations;
                 }
-                if (callback) callback();
+                if (callback) {
+                    callbacksInFlight.fetch_add(1, std::memory_order_acq_rel);
+                    callback();
+                    {
+                        // Same reasoning as the wait-set generation publish above: decrement under
+                        // the lock unregister()'s waiters reacquire, then notify.
+                        std::lock_guard lock(mutex);
+                        callbacksInFlight.fetch_sub(1, std::memory_order_acq_rel);
+                    }
+                    drainCv.notify_all();
+                }
             }
         }
     }
@@ -109,6 +148,7 @@ uint64_t VnextBWaitDispatcher::registerArtifactEvent(void* nativeHandle, Callbac
         entry.handle = nativeHandle;
         entry.callback = std::move(callback);
         entry.token = token;
+        m_impl->waitSetGeneration.fetch_add(1, std::memory_order_acq_rel);
 #ifdef _WIN32
         SetEvent(m_impl->wake);
 #endif
@@ -118,7 +158,7 @@ uint64_t VnextBWaitDispatcher::registerArtifactEvent(void* nativeHandle, Callbac
 }
 
 void VnextBWaitDispatcher::unregister(uint64_t token) {
-    std::lock_guard lock(m_impl->mutex);
+    std::unique_lock lock(m_impl->mutex);
     for (auto& entry : m_impl->entries) {
         if (entry.token != token) continue;
         entry.callback = {};
@@ -126,8 +166,66 @@ void VnextBWaitDispatcher::unregister(uint64_t token) {
         entry.token = 0;
         break;
     }
+    // Bump the generation while still holding `mutex` -- run()'s wait-set snapshot reads/publishes
+    // this generation under the SAME lock, so any snapshot built AFTER this point is guaranteed not
+    // to reference the handle just cleared.
+    const uint64_t newGeneration =
+        m_impl->waitSetGeneration.fetch_add(1, std::memory_order_acq_rel) + 1;
 #ifdef _WIN32
     SetEvent(m_impl->wake);
+#endif
+
+#ifdef _WIN32
+    // E123 Phase 2 (EVIDENCE.md, 2026-09-05): the actual E104 TEARDOWN_HANG was proven (Phase 1) to
+    // be a DIFFERENT defect (QemuProcessManager's pipe-handle inheritance, fixed separately) -- this
+    // dispatcher itself was never observed to hang in reproduction. It nonetheless had two real,
+    // separately provable gaps the task's own analysis called for: (1) a caller of unregister()
+    // could proceed to close/free something (e.g. VnextBAttachment::stop()'s CloseHandle on the
+    // just-unregistered artifactEvent) while the worker's CURRENT WaitForMultipleObjects() call was
+    // still built from a snapshot that includes that handle; (2) a caller could destroy state a
+    // still-in-flight callback captures (e.g. `this`) with no guarantee the callback had returned.
+    // Both are closed here: unregister() now blocks until the worker has observably rebuilt its
+    // wait set from a generation >= this one AND no callback is currently executing -- so by the
+    // time this function returns, neither hazard can occur for anything the caller does next.
+    //
+    // Self-unregister guard: if this is somehow called FROM the dispatcher's own worker thread
+    // (e.g. a future callback body decides to unregister its own or another token), waiting for
+    // "no callback in flight" would wait for ITSELF and deadlock -- the dispatcher is strictly
+    // single-threaded/sequential in its callback execution (run() never invokes two callbacks
+    // concurrently), so from the worker thread's own perspective there is, by construction, no
+    // OTHER in-flight callback to wait for; only the wait-set generation condition still applies
+    // (the worker's NEXT snapshot, taken after this callback returns and the loop repeats, will
+    // already reflect this unregister()).
+    const bool calledFromWorkerThread = m_impl->worker.get_id() == std::this_thread::get_id();
+    constexpr auto kDrainTimeout = std::chrono::seconds(5);
+    const auto predicate = [this, newGeneration, calledFromWorkerThread] {
+        const bool generationObserved =
+            m_impl->waitSetObservedGeneration.load(std::memory_order_acquire) >= newGeneration;
+        if (calledFromWorkerThread) return generationObserved;
+        const bool noCallbackInFlight =
+            m_impl->callbacksInFlight.load(std::memory_order_acquire) == 0;
+        return generationObserved && noCallbackInFlight;
+    };
+    const bool drained = m_impl->drainCv.wait_for(lock, kDrainTimeout, predicate);
+    if (!drained) {
+        // Never hang forever, even here -- but this is NOT a silent fallback to the old racy
+        // behavior: it is reported unconditionally because hitting this in practice means the
+        // drain contract itself has a bug and the caller is about to proceed exactly as unsafely
+        // as before this fix.
+        std::fprintf(stderr,
+                      "[VnextBWaitDispatcher] unregister() drain TIMEOUT newGeneration=%llu "
+                      "observedGeneration=%llu inFlight=%llu fromWorker=%d\n",
+                      static_cast<unsigned long long>(newGeneration),
+                      static_cast<unsigned long long>(
+                          m_impl->waitSetObservedGeneration.load(std::memory_order_acquire)),
+                      static_cast<unsigned long long>(
+                          m_impl->callbacksInFlight.load(std::memory_order_acquire)),
+                      calledFromWorkerThread ? 1 : 0);
+        std::fflush(stderr);
+    }
+    lock.unlock();
+#else
+    lock.unlock();
 #endif
 }
 

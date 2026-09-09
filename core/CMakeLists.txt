@@ -75,6 +75,7 @@ set(CORE_SOURCES
     src/mcu/qemu/QemuIcountCalibrator.cpp
     src/mcu/qemu/VnextBAttachment.cpp
     src/mcu/qemu/VnextBWaitDispatcher.cpp
+    src/mcu/qemu/VnextBArbiter.cpp
     src/mcu/McuController.cpp
     src/mcu/McuComponent.cpp
     src/plc/PlcRuntime.cpp
@@ -158,6 +159,7 @@ set(TEST_COMMON_SOURCE_FILES
     src/mcu/qemu/QemuIcountCalibrator.cpp
     src/mcu/qemu/VnextBAttachment.cpp
     src/mcu/qemu/VnextBWaitDispatcher.cpp
+    src/mcu/qemu/VnextBArbiter.cpp
     src/mcu/McuController.cpp
     src/mcu/McuComponent.cpp
     src/plc/PlcRuntime.cpp
@@ -905,6 +907,7 @@ add_executable(mcu_debug_launch_test
     src/mcu/qemu/QemuIcountCalibrator.cpp
     src/mcu/qemu/VnextBAttachment.cpp
     src/mcu/qemu/VnextBWaitDispatcher.cpp
+    src/mcu/qemu/VnextBArbiter.cpp
 )
 target_include_directories(mcu_debug_launch_test PRIVATE include src)
 target_link_libraries(mcu_debug_launch_test PRIVATE nlohmann_json::nlohmann_json)
@@ -1041,6 +1044,7 @@ add_executable(mcu_controller_real_qemu_test
     src/mcu/qemu/QemuIcountCalibrator.cpp
     src/mcu/qemu/VnextBAttachment.cpp
     src/mcu/qemu/VnextBWaitDispatcher.cpp
+    src/mcu/qemu/VnextBArbiter.cpp
     src/plugins/PluginModule.cpp
     src/plugins/PluginLoader.cpp
     src/plugins/PluginRuntime.cpp
@@ -1101,6 +1105,7 @@ add_executable(qemu_queue_stress_test
     src/mcu/qemu/QemuIcountCalibrator.cpp
     src/mcu/qemu/VnextBAttachment.cpp
     src/mcu/qemu/VnextBWaitDispatcher.cpp
+    src/mcu/qemu/VnextBArbiter.cpp
     src/plugins/PluginModule.cpp
     src/plugins/PluginLoader.cpp
     src/plugins/PluginRuntime.cpp
@@ -1158,6 +1163,7 @@ add_executable(qemu_queue_full_timeout_test
     src/mcu/qemu/QemuIcountCalibrator.cpp
     src/mcu/qemu/VnextBAttachment.cpp
     src/mcu/qemu/VnextBWaitDispatcher.cpp
+    src/mcu/qemu/VnextBArbiter.cpp
     src/plugins/PluginModule.cpp
     src/plugins/PluginLoader.cpp
     src/plugins/PluginRuntime.cpp
@@ -1184,6 +1190,7 @@ add_executable(vnext_b_attachment_test
     test/core/mcu/VnextBAttachmentTest.cpp
     src/mcu/qemu/VnextBAttachment.cpp
     src/mcu/qemu/VnextBWaitDispatcher.cpp
+    src/mcu/qemu/VnextBArbiter.cpp
     src/mcu/qemu/QemuProcessManager.cpp
 )
 target_include_directories(vnext_b_attachment_test PRIVATE include src)
@@ -1194,6 +1201,16 @@ else()
 endif()
 add_test(NAME vnext_b_attachment COMMAND vnext_b_attachment_test)
 set_tests_properties(vnext_b_attachment PROPERTIES LABELS "vnext-p1" TIMEOUT 30)
+
+# PLAN_MTTCG_VNEXT_B_CAUSALITY.md section 9.2/9.3: pure temporal-merge arbiter, no QEMU/IO
+# dependency at all -- fast enough to run on every build, not just real-QEMU regression passes.
+add_executable(vnext_b_arbiter_test
+    test/core/mcu/VnextBArbiterTest.cpp
+    src/mcu/qemu/VnextBArbiter.cpp
+)
+target_include_directories(vnext_b_arbiter_test PRIVATE include src)
+add_test(NAME vnext_b_arbiter COMMAND vnext_b_arbiter_test)
+set_tests_properties(vnext_b_arbiter PROPERTIES LABELS "vnext-arbiter" TIMEOUT 10)
 
 # Estresse do CICLO Stop->Run repetido (achado 2026-07-22, relato ao vivo: às vezes o MCU não
 # inicializa, às vezes roda perfeitamente, às vezes roda e trava no meio -- nenhum teste real
@@ -1206,6 +1223,7 @@ add_executable(mcu_restart_stress_test
     src/mcu/qemu/QemuIcountCalibrator.cpp
     src/mcu/qemu/VnextBAttachment.cpp
     src/mcu/qemu/VnextBWaitDispatcher.cpp
+    src/mcu/qemu/VnextBArbiter.cpp
     src/plugins/PluginModule.cpp
     src/plugins/PluginLoader.cpp
     src/plugins/PluginRuntime.cpp
@@ -1240,6 +1258,7 @@ add_executable(session_restart_stress_test
     src/mcu/qemu/QemuIcountCalibrator.cpp
     src/mcu/qemu/VnextBAttachment.cpp
     src/mcu/qemu/VnextBWaitDispatcher.cpp
+    src/mcu/qemu/VnextBArbiter.cpp
     src/fpga/FpgaComponent.cpp
     src/fpga/FpgaPortMapper.cpp
     src/fpga/GhdlBackend.cpp
@@ -1291,6 +1310,13 @@ if(NOT WIN32)
     target_link_libraries(vnext_b_production_scale_test PRIVATE dl)
 endif()
 add_test(NAME vnext_b_production_scale COMMAND vnext_b_production_scale_test)
+
+# E130 (EVIDENCE.md, 2026-09-05), Fase 6: deterministic RED/GREEN tests for the drain/cutoff gate
+# (src/mcu/qemu/DrainCutoffGate.hpp) against synthetic counters -- header-only, no QEMU/Core
+# session dependencies needed, unlike vnext_b_production_scale_test above.
+add_executable(drain_cutoff_gate_test test/core/mcu/DrainCutoffGateTest.cpp)
+target_include_directories(drain_cutoff_gate_test PRIVATE include src)
+add_test(NAME drain_cutoff_gate COMMAND drain_cutoff_gate_test)
 set_tests_properties(vnext_b_production_scale PROPERTIES TIMEOUT 300)
 
 # Mesmo binário/adapter reais acima, mas com 2 McuController/processos QEMU simultâneos -- lacuna de
@@ -1305,6 +1331,7 @@ add_executable(mcu_multiple_controllers_real_qemu_test
     src/mcu/qemu/QemuIcountCalibrator.cpp
     src/mcu/qemu/VnextBAttachment.cpp
     src/mcu/qemu/VnextBWaitDispatcher.cpp
+    src/mcu/qemu/VnextBArbiter.cpp
     src/plugins/PluginModule.cpp
     src/plugins/PluginLoader.cpp
     src/plugins/PluginRuntime.cpp
@@ -1422,6 +1449,27 @@ else()
 endif()
 add_test(NAME mcu_firmware_lasecplot COMMAND mcu_firmware_lasecplot_test)
 set_tests_properties(mcu_firmware_lasecplot PROPERTIES TIMEOUT 30)
+
+add_executable(cache_wait_e2e_real_qemu_test
+    test/core/mcu/CacheWaitE2ERealQemuTest.cpp
+    ${CORE_SOURCES_NO_MAIN}
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(cache_wait_e2e_real_qemu_test PRIVATE include src)
+target_link_libraries(cache_wait_e2e_real_qemu_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(cache_wait_e2e_real_qemu_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+    QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+    REAL_DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
+)
+if (MSVC)
+    target_compile_definitions(cache_wait_e2e_real_qemu_test PRIVATE _CRT_SECURE_NO_WARNINGS)
+endif()
+if (UNIX AND NOT APPLE)
+    target_link_libraries(cache_wait_e2e_real_qemu_test PRIVATE dl)
+endif()
+add_test(NAME cache_wait_e2e_real_qemu COMMAND cache_wait_e2e_real_qemu_test)
+set_tests_properties(cache_wait_e2e_real_qemu PROPERTIES TIMEOUT 90)
 
 # PERF-12: mesma ponte registrador<->pino, mas com Scheduler::start() ligado de verdade -- único
 # teste que exercita McuComponent::runBackgroundPollLoop() (McuComponentTest.cpp é só síncrono;

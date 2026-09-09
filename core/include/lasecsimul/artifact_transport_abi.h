@@ -5,7 +5,7 @@
 
 #define LASEC_AT_MAGIC UINT64_C(0x4C415443564E4251)
 #define LASEC_AT_ABI_MAJOR 1u
-#define LASEC_AT_ABI_MINOR 0u
+#define LASEC_AT_ABI_MINOR 1u
 #define LASEC_AT_MAX_LANES 16u
 #define LASEC_AT_MAX_ENDPOINTS 64u
 #define LASEC_AT_MAX_RESPONSES 16u
@@ -60,6 +60,17 @@ typedef struct lasec_at_control_page {
     uint32_t endpoint_count, snapshot_count;
     uint64_t lane_descriptor_offset, response_slot_offset;
     uint64_t snapshot_descriptor_offset, c2a_descriptor_offset;
+    /* ABI v1.1. Monotonic QEMU_CLOCK_VIRTUAL watermark, published periodically by a QEMUTimer
+     * independent of any lane/endpoint activity -- conceptually equivalent to the legacy
+     * transport's simu_event() heartbeat, but never published as a lane event and never causes
+     * an electrical/dispatch effect. Store-release on the QEMU side, load-acquire on the Core
+     * side. Consumed ONLY by McuComponent::pacingPositionNs() as a safe-frontier floor for
+     * Scheduler::AdvanceLimitFn -- proves virtual time has genuinely elapsed even when the guest
+     * is legitimately silent (WFI, no GPIO/I2C), so the Scheduler's pacing never mistakes an idle
+     * guest for a stalled one. Must never feed McuComponent::latestVirtualTimeNs() (that getter
+     * measures confirmed *applied* events, not mere elapsed time) and must never be read by the
+     * VnextBArbiter or dispatched as if it were guest activity. */
+    uint64_t artifact_virtual_time_ns;
 } lasec_at_control_page;
 typedef struct lasec_at_response_slot {
     uint64_t request_seq, response_seq;

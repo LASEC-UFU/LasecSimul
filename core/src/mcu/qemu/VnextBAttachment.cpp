@@ -1,6 +1,7 @@
 #include "VnextBAttachment.hpp"
 #include <algorithm>
 #include <atomic>
+#include <cstdio>
 #include <cstring>
 #include <stdexcept>
 #include <string>
@@ -16,6 +17,21 @@
 
 namespace lasecsimul::mcu::qemu {
 namespace {
+
+// E117 Phase 1: test-only, bounded delay between SetEvent(coreEvent) (QEMU is now free to run and
+// produce) and g_waitDispatcher::registerArtifactEvent() (Core becomes able to consume) -- exists
+// ONLY to build a deterministic reproduction of the startup race hypothesis in
+// VnextBAttachmentTest.cpp (small lane depth + QEMU self-test write burst overflowing the ring
+// before Core ever registers). Never read outside that one delay site; zero effect unless the env
+// var is set, so production behavior (this var never set) is unchanged. Capped at 2000ms like the
+// existing QEMU-side self-test delay's own bound.
+unsigned testOnlyStartupRaceDelayMs() {
+    const char* value = std::getenv("LASECSIMUL_VNEXT_B_SELF_TEST_STARTUP_RACE_DELAY_MS");
+    if (!value || !*value) return 0;
+    char* end = nullptr;
+    const unsigned long delay = std::strtoul(value, &end, 10);
+    return end && !*end && delay <= 2000 ? static_cast<unsigned>(delay) : 0;
+}
 
 struct TestWaitCallbackBarrier {
     std::mutex mutex;
@@ -168,17 +184,29 @@ VnextBAttachment::~VnextBAttachment() { stop(); }
 
 void VnextBAttachment::start(QemuLaunchSpec spec, uint64_t executionId,
                              std::string_view sessionId, std::string_view mcuId,
-                             std::function<void()> notificationWake) {
+                             std::function<void()> notificationWake,
+                             std::function<bool()> attachedStateForDiagnostics) {
+    prepare(std::move(spec), executionId, sessionId, mcuId, std::move(notificationWake),
+            std::move(attachedStateForDiagnostics));
+    activate();
+}
+
+void VnextBAttachment::prepare(QemuLaunchSpec spec, uint64_t executionId,
+                               std::string_view sessionId, std::string_view mcuId,
+                               std::function<void()> notificationWake,
+                               std::function<bool()> attachedStateForDiagnostics) {
     stop();
+    m_state = VnextBLifecycleState::Preparing;
     m_notificationPending.store(false, std::memory_order_release);
     const uint64_t attachmentGeneration =
         m_attachmentGeneration.fetch_add(1, std::memory_order_acq_rel) + 1;
-    if (!executionId) throw std::invalid_argument("vNext-B executionId is zero");
+    if (!executionId) { m_state = VnextBLifecycleState::Failed; throw std::invalid_argument("vNext-B executionId is zero"); }
     const std::string prefix = "LasecSimul-vnextb-" + safeName(sessionId) + "-" + safeName(mcuId) + "-" + std::to_string(executionId);
     m_mappingName = prefix + "-mapping";
     m_coreEventName = prefix + "-artifact-to-core";
     m_artifactEventName = prefix + "-core-to-artifact";
 #ifdef _WIN32
+    try {
     std::vector<uint64_t> layoutScratch;
     const uint32_t laneDepth = configuredLaneDepth();
     m_impl->size = makeLayout(2, 1, 2, 1, laneDepth, 2, layoutScratch);
@@ -219,7 +247,6 @@ void VnextBAttachment::start(QemuLaunchSpec spec, uint64_t executionId,
         if (state == LASEC_AT_READY) break;
         if (state == LASEC_AT_FAILED ||
             std::atomic_ref<uint32_t>(c->artifact_fatal_code).load(std::memory_order_acquire) != 0) {
-            stop();
             throw std::runtime_error("vNext-B QEMU rejected mapping or execution");
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -227,14 +254,19 @@ void VnextBAttachment::start(QemuLaunchSpec spec, uint64_t executionId,
     if (!m_impl->process.isRunning() ||
         std::atomic_ref<uint32_t>(c->artifact_state).load(std::memory_order_acquire) != LASEC_AT_READY) {
         const std::string logs = m_impl->process.logs();
-        stop();
         throw std::runtime_error("vNext-B QEMU READY handshake timeout: " + logs);
     }
     std::atomic_ref<uint32_t>(c->core_state).store(LASEC_AT_READY, std::memory_order_release);
-    std::atomic_ref<uint32_t>(c->core_state).store(LASEC_AT_RUNNING, std::memory_order_release);
-    SetEvent(m_impl->coreEvent);
+    // QEMU's artifact_ready_published also SetEvent()s this same doorbell (vnext_b.c:
+    // vnext_b_main()'s READY announcement) -- reset it here, while the guest is still guaranteed
+    // PRELAUNCH-paused and no producer can be mid-publish, so the dispatcher's first real wake
+    // corresponds to actual guest-produced data rather than the leftover READY signal. Must not
+    // be done once the guest may already be running (see activate()) -- that could discard a
+    // genuine concurrent publication.
+    ResetEvent(m_impl->artifactEvent);
     m_impl->waitToken = g_waitDispatcher.registerArtifactEvent(
-        m_impl->artifactEvent, [this, attachmentGeneration, notificationWake = std::move(notificationWake)] {
+        m_impl->artifactEvent, [this, attachmentGeneration, notificationWake = std::move(notificationWake),
+                                 attachedStateForDiagnostics] {
             {
                 std::unique_lock lock(g_testWaitCallbackBarrier.mutex);
                 if (g_testWaitCallbackBarrier.armed) {
@@ -257,16 +289,52 @@ void VnextBAttachment::start(QemuLaunchSpec spec, uint64_t executionId,
             }
         });
     if (!m_impl->waitToken) {
-        stop();
         throw std::runtime_error("vNext-B wait dispatcher registration capacity exhausted");
     }
+    m_state = VnextBLifecycleState::Ready;
+    } catch (...) {
+        m_state = VnextBLifecycleState::Failed;
+        throw;
+    }
 #else
-    (void)spec; throw std::runtime_error("vNext-B attachment requires Windows named objects");
+    (void)spec;
+    m_state = VnextBLifecycleState::Failed;
+    throw std::runtime_error("vNext-B attachment requires Windows named objects");
+#endif
+}
+
+void VnextBAttachment::activate() {
+#ifdef _WIN32
+    if (m_state == VnextBLifecycleState::Running) {
+        // Idempotent-by-contract, but logged rather than silently repeated: a second activate()
+        // must never rewrite core_state or re-signal coreEvent (vnext_resume()'s own
+        // first_core_running latch already makes a duplicate signal harmless QEMU-side, but this
+        // class does not rely on that -- see EVIDENCE.md E117 Phase 3 test #9).
+        return;
+    }
+    if (m_state != VnextBLifecycleState::Ready || !m_impl->waitToken || !m_impl->coreEvent) {
+        throw std::logic_error("vNext-B activate() requires a successful prepare() first");
+    }
+    if (const unsigned raceDelayMs = testOnlyStartupRaceDelayMs()) {
+        // E117 Phase 1/GREEN: the same test-only knob used to reproduce the pre-fix race now
+        // proves the fix instead -- QEMU cannot produce a single event until coreEvent is
+        // signaled below, and the dispatcher (registered back in prepare()) is already able to
+        // drain anything the instant that happens, so an arbitrary delay here is harmless by
+        // construction, not by luck.
+        std::this_thread::sleep_for(std::chrono::milliseconds(raceDelayMs));
+    }
+    auto* c = const_cast<lasec_at_control_page*>(m_view.control);
+    std::atomic_ref<uint32_t>(c->core_state).store(LASEC_AT_RUNNING, std::memory_order_release);
+    SetEvent(m_impl->coreEvent);
+    m_state = VnextBLifecycleState::Running;
+#else
+    throw std::runtime_error("vNext-B attachment requires Windows named objects");
 #endif
 }
 
 void VnextBAttachment::stop() {
     if (!m_impl) return;
+    m_state = VnextBLifecycleState::Stopping;
     m_attachmentGeneration.fetch_add(1, std::memory_order_acq_rel);
     if (m_impl->waitToken) {
         g_waitDispatcher.unregister(m_impl->waitToken);
@@ -281,8 +349,19 @@ void VnextBAttachment::stop() {
     m_impl->view = nullptr; m_impl->mapping = nullptr; m_impl->coreEvent = nullptr; m_impl->artifactEvent = nullptr;
 #endif
     m_view = {};
+    m_state = VnextBLifecycleState::Stopped;
 }
 bool VnextBAttachment::running() const { return m_impl && m_impl->process.isRunning(); }
+bool VnextBAttachment::isArtifactFatal() const {
+    if (!m_view.control) return false;
+    auto* c = const_cast<lasec_at_control_page*>(m_view.control);
+    return std::atomic_ref<uint32_t>(c->artifact_state).load(std::memory_order_acquire) == LASEC_AT_FAILED;
+}
+uint32_t VnextBAttachment::artifactFatalCode() const {
+    if (!m_view.control) return 0;
+    auto* c = const_cast<lasec_at_control_page*>(m_view.control);
+    return std::atomic_ref<uint32_t>(c->artifact_fatal_code).load(std::memory_order_acquire);
+}
 uint64_t VnextBAttachment::processIdForTesting() const {
     return m_impl ? m_impl->process.processId() : 0;
 }
@@ -307,6 +386,107 @@ std::optional<lasec_at_event> VnextBAttachment::consumeLane(uint32_t lane) {
 #endif
 }
 
+std::optional<lasec_at_event> VnextBAttachment::peekLane(uint32_t lane) const {
+#ifdef _WIN32
+    if (!m_impl || !m_impl->view || lane >= m_view.control->lane_count) return std::nullopt;
+    const auto& d = m_view.lanes[lane];
+    auto* meta = reinterpret_cast<const lasec_at_ring_header*>(static_cast<const uint8_t*>(m_impl->view) + d.metadata.offset);
+    const uint64_t read = std::atomic_ref<const uint64_t>(meta->read_seq).load(std::memory_order_relaxed);
+    const uint64_t write = std::atomic_ref<const uint64_t>(meta->write_seq).load(std::memory_order_acquire);
+    if (read == write) return std::nullopt;
+    const auto* slot = reinterpret_cast<const lasec_at_event*>(static_cast<const uint8_t*>(m_impl->view) + d.events.offset) +
+                       (read & (d.depth - 1));
+    return *slot;
+#else
+    (void)lane; return std::nullopt;
+#endif
+}
+
+bool VnextBAttachment::laneHasPending(uint32_t lane) const {
+#ifdef _WIN32
+    if (!m_impl || !m_impl->view || lane >= m_view.control->lane_count) return false;
+    const auto& d = m_view.lanes[lane];
+    auto* meta = reinterpret_cast<const lasec_at_ring_header*>(static_cast<const uint8_t*>(m_impl->view) + d.metadata.offset);
+    const uint64_t read = std::atomic_ref<const uint64_t>(meta->read_seq).load(std::memory_order_relaxed);
+    const uint64_t write = std::atomic_ref<const uint64_t>(meta->write_seq).load(std::memory_order_acquire);
+    return read != write;
+#else
+    (void)lane; return false;
+#endif
+}
+
+std::pair<uint64_t, uint64_t> VnextBAttachment::laneRingSeqForTesting(uint32_t lane) const {
+#ifdef _WIN32
+    if (!m_impl || !m_impl->view || !m_view.control || lane >= m_view.control->lane_count) return {0, 0};
+    const auto& d = m_view.lanes[lane];
+    const auto* meta = reinterpret_cast<const lasec_at_ring_header*>(static_cast<const uint8_t*>(m_impl->view) + d.metadata.offset);
+    const uint64_t write = std::atomic_ref<const uint64_t>(meta->write_seq).load(std::memory_order_acquire);
+    const uint64_t read = std::atomic_ref<const uint64_t>(meta->read_seq).load(std::memory_order_acquire);
+    return {write, read};
+#else
+    (void)lane; return {0, 0};
+#endif
+}
+
+bool VnextBAttachment::hasPendingLaneEvents() const {
+#ifdef _WIN32
+    if (!m_impl || !m_impl->view || !m_view.control) return false;
+    for (uint32_t lane = 0; lane < m_view.control->lane_count; ++lane) {
+        if (laneHasPending(lane)) return true;
+    }
+    return false;
+#else
+    return false;
+#endif
+}
+
+bool VnextBAttachment::publishLaneEventForTesting(uint32_t lane, uint64_t timestampNs, uint32_t kind,
+                                                   std::span<const uint8_t> payload) {
+#ifdef _WIN32
+    if (!m_impl || !m_impl->view || lane >= m_view.control->lane_count ||
+        payload.size() > LASEC_AT_EVENT_PAYLOAD) return false;
+    const auto& d = m_view.lanes[lane];
+    auto* meta = reinterpret_cast<lasec_at_ring_header*>(static_cast<uint8_t*>(m_impl->view) + d.metadata.offset);
+    const uint64_t write = std::atomic_ref<uint64_t>(meta->write_seq).load(std::memory_order_relaxed);
+    const uint64_t read = std::atomic_ref<uint64_t>(meta->read_seq).load(std::memory_order_acquire);
+    if (write - read >= d.depth) return false;
+    auto* slot = reinterpret_cast<lasec_at_event*>(static_cast<uint8_t*>(m_impl->view) + d.events.offset) +
+                 (write & (d.depth - 1));
+    std::memset(slot, 0, sizeof(*slot));
+    slot->timestamp_ns = timestampNs;
+    slot->lane_sequence = write;
+    slot->kind = kind;
+    slot->payload_bytes = static_cast<uint32_t>(payload.size());
+    if (!payload.empty()) std::memcpy(slot->payload, payload.data(), payload.size());
+    std::atomic_ref<uint64_t>(meta->write_seq).store(write + 1, std::memory_order_release);
+    return true;
+#else
+    (void)lane; (void)timestampNs; (void)kind; (void)payload; return false;
+#endif
+}
+
+bool VnextBAttachment::publishHeartbeatWatermarkForTesting(uint64_t virtualTimeNs) {
+#ifdef _WIN32
+    if (!m_impl || !m_impl->view || !m_view.control) return false;
+    auto* control = const_cast<lasec_at_control_page*>(m_view.control);
+    std::atomic_ref<uint64_t>(control->artifact_virtual_time_ns)
+        .store(virtualTimeNs, std::memory_order_release);
+    return true;
+#else
+    (void)virtualTimeNs; return false;
+#endif
+}
+
+uint64_t VnextBAttachment::heartbeatWatermarkForTesting() const {
+#ifdef _WIN32
+    if (!m_impl || !m_impl->view || !m_view.control) return 0;
+    return std::atomic_ref<const uint64_t>(m_view.control->artifact_virtual_time_ns)
+        .load(std::memory_order_acquire);
+#else
+    return 0;
+#endif
+}
+
 bool VnextBAttachment::publishC2A(uint64_t value) {
 #ifdef _WIN32
     if (!m_impl || !m_impl->view || !m_view.c2a) return false;
@@ -328,6 +508,16 @@ bool VnextBAttachment::publishC2A(uint64_t value) {
     return true;
 #else
     (void)value; return false;
+#endif
+}
+
+void VnextBAttachment::signalCoreRunningForTesting() {
+#ifdef _WIN32
+    if (!m_impl || !m_impl->coreEvent || !m_view.control) return;
+    auto* control = const_cast<lasec_at_control_page*>(m_view.control);
+    std::atomic_ref<uint32_t>(control->core_state).store(LASEC_AT_RUNNING,
+                                                          std::memory_order_release);
+    SetEvent(m_impl->coreEvent);
 #endif
 }
 

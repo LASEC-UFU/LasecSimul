@@ -38,7 +38,9 @@ constexpr int kMaxShift = 10;
 constexpr int kProbeShift = 1;
 constexpr auto kWarmupDuration = std::chrono::milliseconds(50);
 constexpr auto kMeasurementDuration = std::chrono::milliseconds(300);
-constexpr auto kBootTimeout = std::chrono::milliseconds(3000);
+/* QEMU machine construction alone can exceed three seconds on a busy host,
+ * especially through the full -drive/MTD probe path used here. */
+constexpr auto kBootTimeout = std::chrono::milliseconds(10000);
 
 std::string environmentValue(const char* name) {
     const char* value = std::getenv(name);
@@ -232,13 +234,16 @@ void ensureIcountShiftCalibrated(const IMcuAdapter& adapter, const std::string& 
         };
 
         const auto bootDeadline = std::chrono::steady_clock::now() + kBootTimeout;
-        while (std::chrono::steady_clock::now() < bootDeadline &&
+        while (std::chrono::steady_clock::now() < bootDeadline && process.isRunning() &&
                (!bridge.arena() || bridge.arena()->running == 0)) {
             pumpArenaFor(std::chrono::milliseconds(20));
         }
         if (!bridge.arena() || bridge.arena()->running == 0) {
             log("[QemuIcountCalibrator] sonda de calibracao nao inicializou em " +
-                std::to_string(kBootTimeout.count()) + "ms -- usando shift=4 default\n");
+                std::to_string(kBootTimeout.count()) + "ms (processo " +
+                (process.isRunning() ? "ainda rodando" : "encerrou sozinho") +
+                ") -- usando shift=4 default\n");
+            log("[QemuIcountCalibrator] logs do processo QEMU:\n" + process.logs() + "\n");
             process.kill();
             bridge.close();
             std::filesystem::remove(blankFlash);

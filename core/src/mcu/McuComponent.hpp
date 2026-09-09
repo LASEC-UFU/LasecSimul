@@ -223,7 +223,15 @@ public:
      * `QemuIcountCalibrator::pumpArenaFor`), e este getter expõe o valor mais recente. `std::atomic`
      * porque é lido de uma thread diferente da que escreve (poll thread ou chamador síncrono vs. a
      * thread que atende `getSimulationTime` via IPC). */
-    uint64_t latestVirtualTimeNs() const { return m_latestVirtualTimePs.load(std::memory_order_relaxed) / 1000u; }
+    // PLAN_MTTCG_VNEXT_B_CAUSALITY.md section 10.5: VNEXT_B never writes m_latestVirtualTimePs
+    // (wrong unit -- see m_latestVnextBVirtualTimeNs's own comment), so this must also read the
+    // VNEXT_B field or every VNEXT_B session reports zero progress here forever, regardless of
+    // how much the guest actually advanced. Only one of the two is ever nonzero per session.
+    uint64_t latestVirtualTimeNs() const {
+        const uint64_t legacyNs = m_latestVirtualTimePs.load(std::memory_order_relaxed) / 1000u;
+        const uint64_t vnextBNs = m_latestVnextBVirtualTimeNs.load(std::memory_order_relaxed);
+        return legacyNs > vnextBNs ? legacyNs : vnextBNs;
+    }
     uint64_t vnextI2cCompletionCountForTesting() const {
         return m_vnextI2cCompletionCount.load(std::memory_order_relaxed);
     }
@@ -233,6 +241,16 @@ public:
     uint64_t vnextArtifactProgressForTesting() const noexcept {
         return m_controller.vnextBAttachment().artifactProgressForTesting();
     }
+    // E118 (EVIDENCE.md, 2026-09-05): a live QEMU process (firmwareRunning()==true) is not, by
+    // itself, proof of a healthy session -- artifact_state can become LASEC_AT_FAILED mid-run.
+    // Callers doing their own pass/fail classification (the production-scale test harness in
+    // particular) must check this alongside firmwareRunning(), not instead of it.
+    bool vnextArtifactFatal() const { return m_controller.vnextBAttachment().isArtifactFatal(); }
+    // E142 (EVIDENCE.md, 2026-09-08): read-only escape hatch for the causal-bisection diagnostic
+    // in SessionRestartStressTest.cpp -- exposes the real VnextBAttachment so a test can read raw
+    // ring/control-page state (write_seq/read_seq per lane, artifact_state/core_state) that no
+    // existing *ForTesting() wrapper surfaces. No behavior change, no stderr, no env var.
+    const qemu::VnextBAttachment& vnextBAttachmentForTesting() const { return m_controller.vnextBAttachment(); }
 
     /** Achado 2026-07-23 (sincronização de ritmo, ver .claude/plans/humble-waddling-parnas.md):
      * mesma fonte de `latestVirtualTimeNs()`, mas já traduzida pra timeline do `Scheduler`
@@ -291,8 +309,17 @@ private:
     using DeferredSchedulerCall = std::function<void()>;
     void startPolling(std::vector<DeferredSchedulerCall>* deferred = nullptr);
     void stopPolling();
-    void scheduleNextPoll(std::vector<DeferredSchedulerCall>* deferred = nullptr);
-    void schedulePollAt(uint64_t timeNs, std::vector<DeferredSchedulerCall>* deferred = nullptr);
+    void scheduleNextPoll(std::vector<DeferredSchedulerCall>* deferred = nullptr,
+                          bool schedulerLockHeld = false);
+    // schedulerLockHeld: true when the caller already holds Scheduler::m_mutex (stamp(), called
+    // from within Scheduler::runUntil()'s settle loop -- see scheduleModuleWakeup()'s identical
+    // parameter and stamp()'s own scheduleWakeupsForAllModules(..., true) call for the
+    // established precedent). scheduleAt()/scheduleEvent() take that same plain std::mutex
+    // themselves; calling them while it's already held is a real self-deadlock (observed live as
+    // std::system_error "resource deadlock would occur"), not just a style preference -- must
+    // route through Scheduler::scheduleEventUnlocked() instead in that case.
+    void schedulePollAt(uint64_t timeNs, std::vector<DeferredSchedulerCall>* deferred = nullptr,
+                        bool schedulerLockHeld = false);
     void onPollEvent();
     /** Um poll na arena + no máximo uma ação: sem evento (`NoEvent`), evento futuro reagendado via
      * `schedulePollAt` (`DeferredFuture`) ou evento pronto despachado agora (`DispatchedReady`).
@@ -339,7 +366,12 @@ private:
                              const std::string& qemuBinaryOverride, McuDebugOptions debug,
                              std::vector<DeferredSchedulerCall>& deferred,
                              RuntimeLaunchIdentity identity = {});
-    bool pollAndDispatchPendingEvents(uint64_t nowNs);
+    // schedulerLockHeld: see schedulePollAt()'s doc-comment. true only for stamp()'s own direct
+    // call (Scheduler::m_mutex held throughout runUntil()'s settle loop); pollStepLocked()'s
+    // callers (onPollEvent() contexts) always run with it released, so they pass false.
+    PollStep pollAndDispatchPendingEvents(uint64_t nowNs,
+                                           std::vector<DeferredSchedulerCall>* deferred = nullptr,
+                                           bool schedulerLockHeld = false);
     bool dispatchArenaEvent(const qemu::QemuArenaEvent& event, uint64_t eventTimeNs);
     uint64_t electricalOutputFingerprint() const;
     void stampResetPin(MnaMatrixView& matrix, const Pin& pin);
@@ -419,6 +451,19 @@ private:
     // Ver comentário de `latestVirtualTimeNs()` acima -- atualizado em pollStepLocked() a cada
     // evento processado, lido de uma thread diferente via `latestVirtualTimeNs()`.
     std::atomic<uint64_t> m_latestVirtualTimePs{0};
+    // PLAN_MTTCG_VNEXT_B_CAUSALITY.md section 10.5: VNEXT_B's equivalent of
+    // m_latestVirtualTimePs, kept as a SEPARATE nanosecond-typed field rather than writing
+    // nanoseconds into a field named/interpreted as picoseconds. Already an absolute
+    // Scheduler-timeline value (m_qemuTimeOriginNs + the dispatched event's timestamp_ns), so
+    // pacingPositionNs() reads it back directly, with no further conversion.
+    std::atomic<uint64_t> m_latestVnextBVirtualTimeNs{0};
+    // R3c heartbeat watermark (PLAN_MTTCG_VNEXT_B_CAUSALITY.md). Raw (session-relative)
+    // QEMU_CLOCK_VIRTUAL value read from lasec_at_control_page::artifact_virtual_time_ns,
+    // updated forward-only (never regresses). Feeds ONLY pacingPositionNs()'s safe-frontier
+    // floor -- deliberately never touched by latestVirtualTimeNs(), the VnextBArbiter, or any
+    // electrical dispatch. See pollAndDispatchPendingEvents()'s VNEXT_B branch for the update
+    // site and pacingPositionNs() for the read site.
+    std::atomic<uint64_t> m_vnextBHeartbeatWatermarkNs{0};
     std::atomic<uint64_t> m_vnextI2cCompletionCount{0};
     std::atomic<uint64_t> m_vnextI2cSubmissionCount{0};
     uint64_t m_stampCount = 0;

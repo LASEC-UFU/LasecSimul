@@ -64,7 +64,10 @@ int main() {
 #ifndef ESP32_ADAPTER_DLL_PATH
 #error "ESP32_ADAPTER_DLL_PATH precisa ser definido pelo CMakeLists (caminho do adapter.dll real)"
 #endif
-    const std::filesystem::path qemuPath = QEMU_REAL_BINARY_PATH;
+    const char* qemuOverride = std::getenv("LASECSIMUL_TEST_QEMU_BINARY");
+    const std::filesystem::path qemuPath =
+        (qemuOverride && *qemuOverride) ? std::filesystem::u8path(qemuOverride)
+                                        : std::filesystem::path(QEMU_REAL_BINARY_PATH);
     const std::filesystem::path dllPath = ESP32_ADAPTER_DLL_PATH;
     if (!std::filesystem::exists(qemuPath)) {
         std::fprintf(stderr, "PULADO: %s nao existe.\n", qemuPath.string().c_str());

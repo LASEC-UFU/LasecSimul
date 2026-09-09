@@ -6,6 +6,7 @@
 // ver docs/17-pendencias-pos-sessao-qemu-abi.md seção 3.4.
 #include <chrono>
 #include <atomic>
+#include <cstdlib>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -283,8 +284,9 @@ int main() {
     const uint32_t secondMcuIndex = session.addComponent("mcu.esp32", {});
     check(secondMcuPtr && secondMcuIndex != mcuIndex,
           "segundo MCU recebe componentIndex distinto");
-    check(secondMcuPtr && secondMcuPtr->runtimeInstanceId() == secondMcuIndex,
-          "segundo MCU expoe runtimeInstanceId denso");
+    check(secondMcuPtr && secondMcuPtr->runtimeInstanceId() ==
+              static_cast<uint64_t>(secondMcuIndex) + 1u,
+          "segundo MCU expoe runtimeInstanceId denso e 1-based");
     check(secondMcuPtr && secondMcuPtr->runtimeInstanceId() != mcuPtr->runtimeInstanceId(),
           "MCUs logicos nao compartilham runtimeInstanceId");
     const auto gen1 = mcuPtr->reserveLaunchGeneration();
@@ -309,7 +311,10 @@ int main() {
     // sobe e fica de pé) porque o bug depende do RST realmente convergindo pra ~3.3V via solver,
     // não de uma escrita sintética de arena.
     {
-        const std::filesystem::path qemuRealPath = QEMU_REAL_BINARY_PATH;
+        const char* qemuOverride = std::getenv("LASECSIMUL_TEST_QEMU_BINARY");
+        const std::filesystem::path qemuRealPath =
+            (qemuOverride && *qemuOverride) ? std::filesystem::u8path(qemuOverride)
+                                            : std::filesystem::path(QEMU_REAL_BINARY_PATH);
         if (std::filesystem::exists(qemuRealPath)) {
             const std::filesystem::path blankFlashPath =
                 std::filesystem::temp_directory_path() / (uniqueArenaName() + "-flash.bin");
@@ -318,15 +323,31 @@ int main() {
                 const std::vector<char> erasedBlock(64 * 1024, static_cast<char>(0xFF));
                 for (int i = 0; i < 64; ++i) out.write(erasedBlock.data(), erasedBlock.size());
             }
-            mcuPtr->loadFirmware(blankFlashPath, syntheticArenaName, qemuRealPath.string());
-            for (int i = 0; i < 20 && session.settleStep(); ++i) {}
-            session.scheduler().step(1);
-            for (int i = 0; i < 20 && session.settleStep(); ++i) {}
-            check(mcuPtr->loadFirmwareCallCountForTesting() == 1,
-                  "loadFirmware() real nao dispara reload espurio sozinho (RST subindo naturalmente apos o load)");
-            check(mcuPtr->firmwareRunning(),
-                  "processo QEMU real continua rodando depois de assentar (nao foi morto por um reset fantasma)");
-            mcuPtr->stopFirmware();
+            try {
+                // Pre-existing gap surfaced by PLAN_MTTCG_VNEXT_B_CAUSALITY.md R1 (explicit
+                // -Transport): McuController::start()'s VNEXT_B branch requires a non-zero
+                // RuntimeLaunchIdentity (McuController.cpp ~line 303). This test calls
+                // McuComponent::loadFirmware() directly rather than through
+                // SimulationSession::loadMcuFirmware(), so build the identity the same way that
+                // production call site does (SimulationSession.cpp ~line 2024): a real
+                // sessionExecutionId isn't available outside an active session, so use a fixed
+                // non-zero placeholder alongside the component's own real identity accessors.
+                const RuntimeLaunchIdentity identity{
+                    0xD00DFEED11223344ULL, mcuPtr->runtimeInstanceId(), mcuPtr->reserveLaunchGeneration()};
+                mcuPtr->loadFirmware(blankFlashPath, syntheticArenaName, qemuRealPath.string(), {}, identity);
+                for (int i = 0; i < 20 && session.settleStep(); ++i) {}
+                session.scheduler().step(1);
+                for (int i = 0; i < 20 && session.settleStep(); ++i) {}
+                check(mcuPtr->loadFirmwareCallCountForTesting() == 1,
+                      "loadFirmware() real nao dispara reload espurio sozinho (RST subindo naturalmente apos o load)");
+                check(mcuPtr->firmwareRunning(),
+                      "processo QEMU real continua rodando depois de assentar (nao foi morto por um reset fantasma)");
+                mcuPtr->stopFirmware();
+            } catch (const std::exception& e) {
+                const std::string label =
+                    std::string("loadFirmware() real nao lanca excecao ao subir (") + e.what() + ")";
+                check(false, label.c_str());
+            }
             std::error_code removeError;
             std::filesystem::remove(blankFlashPath, removeError);
         } else {
