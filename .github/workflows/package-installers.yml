@@ -94,6 +94,24 @@ jobs:
           update: true
           path-type: inherit
 
+      # O QEMU certificado e um binario UCRT64 customizado. O empacotador calcula o fechamento
+      # transitivo dos imports PE, mas precisa de uma fonte reproduzivel para materializar essas
+      # DLLs. Instalar os sete pacotes de dependencias diretas traz tambem suas dependencias
+      # transitivas (OpenSSL, nettle, nghttp, brotli etc.). Sem isto, o job tinha MSYS2 suficiente
+      # para GHDL, mas nao continha libsnappy.dll e abortava corretamente em fail-closed.
+      - name: Install Windows QEMU runtime dependencies
+        if: matrix.os == 'windows-latest'
+        shell: msys2 {0}
+        run: |
+          pacman --noconfirm --needed -S \
+            mingw-w64-ucrt-x86_64-curl \
+            mingw-w64-ucrt-x86_64-gnutls \
+            mingw-w64-ucrt-x86_64-lzo2 \
+            mingw-w64-ucrt-x86_64-libpng \
+            mingw-w64-ucrt-x86_64-snappy \
+            mingw-w64-ucrt-x86_64-libssh \
+            mingw-w64-ucrt-x86_64-libusb
+
       - name: Setup GHDL
         uses: ghdl/setup-ghdl@v1
         with:
