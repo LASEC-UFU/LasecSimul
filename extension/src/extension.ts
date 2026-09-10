@@ -402,6 +402,11 @@ function launchCoreProcess(extensionPath: string): { corePath: string; pipeName:
   const coreEnv: NodeJS.ProcessEnv = {
     // Prevent shared-memory arena collisions between thin-client instances.
     LASECSIMUL_HOST_INSTANCE_ID: String(process.pid),
+    // The packaged product is certified only for VNEXT_B + MTTCG. Do not inherit an older
+    // machine/user selection here: that would launch the certified QEMU through the legacy arena
+    // and can surface as a misleading arena-ABI failure while reloading firmware.
+    LASECSIMUL_MCU_TRANSPORT: "VNEXT_B",
+    LASECSIMUL_ESP32_EXECUTION_MODE: "mttcg",
     LASECSIMUL_NETWORK_MODE:
       configuredNetworkMode === "lab-bridge" || configuredNetworkMode === "isolated"
         ? configuredNetworkMode

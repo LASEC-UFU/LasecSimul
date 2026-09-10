@@ -158,7 +158,13 @@ function testLabels(test) {
   return Array.isArray(property.value) ? property.value : [property.value];
 }
 
-const expectedLabels = new Set(["hermetic", "external-ghdl", "external-qemu"]);
+const expectedLabels = new Set([
+  "hermetic",
+  "external-ghdl",
+  "external-qemu",
+  "external-python",
+  "external-plc",
+]);
 const classificationErrors = [];
 const testsByLabel = Object.fromEntries([...expectedLabels].map((label) => [label, []]));
 for (const test of discoveredTests) {
@@ -267,8 +273,13 @@ const externalGhdl = ghdlRuntime.available
 const externalQemu = qemuRuntime.available
   ? runTestLabel("external-qemu")
   : skippedTestLabel("external-qemu", "QEMU Xtensa is not executable in this environment");
+// Python and PLC tests already carry their own precise CTest skip expressions when their runtime
+// is unavailable. Keep them outside the parallel hermetic bucket, but still execute and account
+// for them in the canonical baseline instead of silently leaving valid labels unclassified.
+const externalPython = runTestLabel("external-python");
+const externalPlc = runTestLabel("external-plc");
 
-const externalSuites = [externalGhdl, externalQemu];
+const externalSuites = [externalGhdl, externalQemu, externalPython, externalPlc];
 const externalSkippedReasons = externalSuites
   .map((suite) => suite.skippedReason)
   .filter(Boolean);
@@ -278,7 +289,7 @@ const external = {
   failed: externalSuites.reduce((sum, suite) => sum + suite.failed, 0),
   skipped: externalSuites.reduce((sum, suite) => sum + suite.skipped, 0),
   skippedReason: externalSkippedReasons.length > 0 ? externalSkippedReasons.join("; ") : null,
-  runtimes: { ghdl: externalGhdl, qemu: externalQemu },
+  runtimes: { ghdl: externalGhdl, qemu: externalQemu, python: externalPython, plc: externalPlc },
 };
 
 function executablePath(name) {
@@ -414,6 +425,8 @@ const failures = [
   ...(hermetic.exitCode === 0 ? [] : ["hermetic CTest suite failed"]),
   ...(externalGhdl.exitCode === null || externalGhdl.exitCode === 0 ? [] : ["external GHDL CTest suite failed"]),
   ...(externalQemu.exitCode === null || externalQemu.exitCode === 0 ? [] : ["external QEMU CTest suite failed"]),
+  ...(externalPython.exitCode === null || externalPython.exitCode === 0 ? [] : ["external Python CTest suite failed"]),
+  ...(externalPlc.exitCode === null || externalPlc.exitCode === 0 ? [] : ["external PLC CTest suite failed"]),
   ...benchmarkErrors,
 ];
 
@@ -448,7 +461,13 @@ const baseline = {
       qemu: qemuRuntime.version,
       node: process.version,
     },
-    externalRuntimesAvailable: { ghdl: ghdlRuntime.available, qemu: qemuRuntime.available },
+    externalRuntimesAvailable: {
+      ghdl: ghdlRuntime.available,
+      qemu: qemuRuntime.available,
+      // Availability for Python/PLC is classified by their individual CTest skip contracts.
+      python: externalPython.skipped < externalPython.discovered,
+      plc: externalPlc.skipped < externalPlc.discovered,
+    },
   },
   build: {
     configuration,

@@ -40,6 +40,28 @@ const releaseRoot = path.join(repoRoot, "dist", "release", target.vsceTarget);
 const stagingRoot = path.join(repoRoot, "dist", "staging", target.vsceTarget);
 const stagingExtensionDir = path.join(stagingRoot, "extension");
 const bundledRoot = path.join(stagingExtensionDir, "bundled");
+const qemuRuntimeManifestPath = path.join(repoRoot, "orchestrator", ".ai", "QEMU_RUNTIME.json");
+const qemuRuntimeFileNames = new Set([
+  "qemu-system-xtensa.exe",
+  "libbz2-1.dll",
+  "libffi-8.dll",
+  "libgcc_s_seh-1.dll",
+  "libgcrypt-20.dll",
+  "libgio-2.0-0.dll",
+  "libglib-2.0-0.dll",
+  "libgmodule-2.0-0.dll",
+  "libgobject-2.0-0.dll",
+  "libgpg-error-0.dll",
+  "libiconv-2.dll",
+  "libintl-8.dll",
+  "libncursesw6.dll",
+  "libpcre2-8-0.dll",
+  "libpixman-1-0.dll",
+  "libslirp-0.dll",
+  "libwinpthread-1.dll",
+  "libzstd.dll",
+  "zlib1.dll",
+]);
 const tapWindowsVersion = "9.27.0";
 const tapWindowsBinarySha256 = "36e2609b7ceefedcb978ce5c48caf9e0e5af83423717c4e2e3c1d7ebca8f62a5";
 const tapWindowsSourceSha256 = "9348c6142e9a676e8dc0408062957fe4d80baf224d080b8e2b9e519b7ad7f3e8";
@@ -349,12 +371,60 @@ function stageBundledCatalog() {
   writeFile(destPath, `${JSON.stringify(catalog, null, 2)}\n`);
 }
 
+function verifyCertifiedQemuRuntime(filePath, location) {
+  ensureFile(qemuRuntimeManifestPath, "manifesto do runtime QEMU certificado");
+  let manifest;
+  try {
+    manifest = JSON.parse(fs.readFileSync(qemuRuntimeManifestPath, "utf8"));
+  } catch (error) {
+    throw new Error(`QEMU_RUNTIME.json invalido: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  const expected = String(manifest.canonical_executable_sha256 || "").trim().toUpperCase();
+  if (!/^[0-9A-F]{64}$/.test(expected)) {
+    throw new Error("QEMU_RUNTIME.json nao contem canonical_executable_sha256 valido");
+  }
+  ensureFile(filePath, `QEMU ${location}`);
+  const actual = sha256(filePath).toUpperCase();
+  if (actual !== expected) {
+    throw new Error(
+      `QEMU ${location} nao e o runtime certificado: esperado=${expected} atual=${actual} arquivo=${filePath}`
+    );
+  }
+  return { expected, manifest };
+}
+
 function stageBundledAssets() {
   const excluded = new Set(["build_cmake", "node_modules"]);
+  const sourceQemu = path.join(repoRoot, "devices", "qemu-esp32", "bin", "qemu-system-xtensa.exe");
+  const certified = verifyCertifiedQemuRuntime(sourceQemu, "vendorizado de origem");
   copyDirFiltered(path.join(repoRoot, "devices"), path.join(bundledRoot, "devices"), excluded);
   copyDirFiltered(path.join(repoRoot, "mcu-adapters"), path.join(bundledRoot, "mcu-adapters"), excluded);
   copyDirFiltered(path.join(repoRoot, "subcircuits"), path.join(bundledRoot, "subcircuits"), excluded);
   copyDirFiltered(path.join(repoRoot, "Externos"), path.join(bundledRoot, "Externos"), excluded);
+
+  const stagedQemuBin = path.join(bundledRoot, "devices", "qemu-esp32", "bin");
+  // `devices/qemu-esp32/bin` may contain local toolchain debris. The installed runtime receives
+  // only the exact DLL set used by the certified Windows staging script; ROM directories remain
+  // untouched. This also keeps an accidental local file from becoming an undeclared dependency.
+  for (const entry of fs.readdirSync(stagedQemuBin, { withFileTypes: true })) {
+    if (!entry.isFile()) continue;
+    if (qemuRuntimeFileNames.has(entry.name) || entry.name.startsWith("BUILD-PROVENANCE")) continue;
+    fs.rmSync(path.join(stagedQemuBin, entry.name), { force: true });
+  }
+
+  for (const runtimeFile of qemuRuntimeFileNames) {
+    ensureFile(path.join(stagedQemuBin, runtimeFile), `arquivo do runtime QEMU certificado (${runtimeFile})`);
+  }
+  const stagedQemu = path.join(stagedQemuBin, "qemu-system-xtensa.exe");
+  verifyCertifiedQemuRuntime(stagedQemu, "incluido no VSIX");
+  writeFile(
+    path.join(stagedQemuBin, "LASECSIMUL-QEMU-RUNTIME.json"),
+    `${JSON.stringify({
+      sha256: certified.expected,
+      production_topology: certified.manifest.production_topology,
+      certified_release_session_limit: certified.manifest.certified_release_session_limit,
+    }, null, 2)}\n`
+  );
 
   validateWindowsAdapterDependencies(
     path.join(repoRoot, "mcu-adapters", "espressif-esp32", "build", "win-x64", "adapter.dll")
