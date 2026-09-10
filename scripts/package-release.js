@@ -62,6 +62,15 @@ const qemuRuntimeFileNames = new Set([
   "libzstd.dll",
   "zlib1.dll",
 ]);
+const windowsSystemDllNames = new Set([
+  "advapi32.dll", "bcrypt.dll", "cfgmgr32.dll", "comdlg32.dll", "crypt32.dll",
+  "dbghelp.dll", "dnsapi.dll", "gdi32.dll", "imm32.dll", "iphlpapi.dll",
+  "kernel32.dll", "msvcrt.dll", "netapi32.dll", "nsi.dll", "ole32.dll",
+  "oleaut32.dll", "powrprof.dll", "psapi.dll", "rpcrt4.dll", "secur32.dll",
+  "setupapi.dll", "shell32.dll", "shlwapi.dll", "user32.dll", "userenv.dll",
+  "uxtheme.dll", "version.dll", "winmm.dll", "winspool.drv", "ws2_32.dll",
+  "wtsapi32.dll", "ucrtbase.dll",
+]);
 const tapWindowsVersion = "9.27.0";
 const tapWindowsBinarySha256 = "36e2609b7ceefedcb978ce5c48caf9e0e5af83423717c4e2e3c1d7ebca8f62a5";
 const tapWindowsSourceSha256 = "9348c6142e9a676e8dc0408062957fe4d80baf224d080b8e2b9e519b7ad7f3e8";
@@ -106,6 +115,122 @@ function resetDir(dirPath) {
 function copyFileTo(src, dest) {
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   fs.copyFileSync(src, dest);
+}
+
+function findFileCaseInsensitive(dirPath, fileName) {
+  if (!dirPath || !fs.existsSync(dirPath) || !fs.statSync(dirPath).isDirectory()) return null;
+  const wanted = fileName.toLowerCase();
+  const match = fs.readdirSync(dirPath, { withFileTypes: true })
+    .find((entry) => entry.isFile() && entry.name.toLowerCase() === wanted);
+  return match ? path.join(dirPath, match.name) : null;
+}
+
+function findExecutableOnPath(fileNames) {
+  const pathEntries = String(process.env.PATH || "").split(path.delimiter).filter(Boolean);
+  for (const dirPath of pathEntries) {
+    for (const fileName of fileNames) {
+      const match = findFileCaseInsensitive(dirPath, fileName);
+      if (match) return match;
+    }
+  }
+  return null;
+}
+
+function isWindowsSystemDll(fileName) {
+  const lower = fileName.toLowerCase();
+  if (lower.startsWith("api-ms-win-") || lower.startsWith("ext-ms-win-")) return true;
+  if (windowsSystemDllNames.has(lower)) return true;
+  const windowsRoot = process.env.SystemRoot || process.env.WINDIR || "C:\\Windows";
+  return Boolean(
+    findFileCaseInsensitive(path.join(windowsRoot, "System32"), fileName) ||
+    findFileCaseInsensitive(path.join(windowsRoot, "SysWOW64"), fileName)
+  );
+}
+
+function readPeImports(objdumpPath, filePath) {
+  const result = spawnSync(objdumpPath, ["-p", filePath], {
+    encoding: "utf8",
+    windowsHide: true,
+    shell: false,
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  if (result.error || result.status !== 0) {
+    const detail = result.error ? result.error.message : String(result.stderr || result.stdout || "").trim();
+    throw new Error(`nao foi possivel inspecionar imports PE de ${filePath}: ${detail}`);
+  }
+  return [...String(result.stdout || "").matchAll(/DLL Name:\s*([^\s]+)/gi)].map((match) => match[1]);
+}
+
+/** Materializa o fechamento transitivo das DLLs importadas pelo QEMU. */
+function stageWindowsQemuDependencyClosure(sourceQemuBin, stagedQemuBin) {
+  if (process.platform !== "win32") return [...qemuRuntimeFileNames].sort();
+  const objdumpPath = findExecutableOnPath(["objdump.exe", "llvm-objdump.exe"]);
+  if (!objdumpPath) {
+    throw new Error("objdump.exe nao encontrado no PATH; impossivel certificar dependencias do QEMU Windows");
+  }
+
+  const pathEntries = String(process.env.PATH || "").split(path.delimiter).filter(Boolean);
+  const searchDirs = [sourceQemuBin, stagedQemuBin, ...pathEntries];
+  const stagedNames = new Map(
+    fs.readdirSync(stagedQemuBin, { withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => [entry.name.toLowerCase(), entry.name])
+  );
+  const runtimeNames = new Map([["qemu-system-xtensa.exe", "qemu-system-xtensa.exe"]]);
+  const inspected = new Set();
+  const queue = [path.join(stagedQemuBin, "qemu-system-xtensa.exe")];
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    const currentKey = path.basename(current).toLowerCase();
+    if (inspected.has(currentKey)) continue;
+    inspected.add(currentKey);
+    for (const importedName of readPeImports(objdumpPath, current)) {
+      const importedKey = importedName.toLowerCase();
+      if (isWindowsSystemDll(importedName) || runtimeNames.has(importedKey)) continue;
+      let source = null;
+      for (const dirPath of searchDirs) {
+        source = findFileCaseInsensitive(dirPath, importedName);
+        if (source) break;
+      }
+      if (!source) {
+        throw new Error(`dependencia QEMU nao resolvida: ${importedName} (importada por ${path.basename(current)})`);
+      }
+      let stagedName = stagedNames.get(importedKey);
+      if (!stagedName) {
+        stagedName = path.basename(source);
+        copyFileTo(source, path.join(stagedQemuBin, stagedName));
+        stagedNames.set(importedKey, stagedName);
+      }
+      runtimeNames.set(importedKey, stagedName);
+      queue.push(path.join(stagedQemuBin, stagedName));
+    }
+  }
+  return [...runtimeNames.values()].sort((a, b) => a.localeCompare(b));
+}
+
+function verifyWindowsQemuWithCleanPath(stagedQemuBin) {
+  if (process.platform !== "win32") return;
+  const windowsRoot = process.env.SystemRoot || process.env.WINDIR || "C:\\Windows";
+  const qemuPath = path.join(stagedQemuBin, "qemu-system-xtensa.exe");
+  const result = spawnSync(qemuPath, ["--version"], {
+    cwd: stagedQemuBin,
+    encoding: "utf8",
+    windowsHide: true,
+    shell: false,
+    env: {
+      SystemRoot: windowsRoot,
+      WINDIR: windowsRoot,
+      ComSpec: process.env.ComSpec || path.join(windowsRoot, "System32", "cmd.exe"),
+      PATH: [path.join(windowsRoot, "System32"), windowsRoot].join(path.delimiter),
+    },
+  });
+  if (result.error || result.status !== 0) {
+    const status = result.status === null ? "unavailable" : `0x${(result.status >>> 0).toString(16)}`;
+    const detail = result.error ? result.error.message : String(result.stderr || result.stdout || "").trim();
+    throw new Error(`QEMU empacotado nao inicia com PATH limpo: exit=${status} ${detail}`);
+  }
+  console.log("[package-release] QEMU Windows autocontido: --version PASS com PATH limpo");
 }
 
 function copyDirFiltered(src, dest, excludedNames = new Set()) {
@@ -403,26 +528,29 @@ function stageBundledAssets() {
   copyDirFiltered(path.join(repoRoot, "Externos"), path.join(bundledRoot, "Externos"), excluded);
 
   const stagedQemuBin = path.join(bundledRoot, "devices", "qemu-esp32", "bin");
-  // `devices/qemu-esp32/bin` may contain local toolchain debris. The installed runtime receives
-  // only the exact DLL set used by the certified Windows staging script; ROM directories remain
-  // untouched. This also keeps an accidental local file from becoming an undeclared dependency.
+  const sourceQemuBin = path.dirname(sourceQemu);
+  const runtimeFiles = stageWindowsQemuDependencyClosure(sourceQemuBin, stagedQemuBin);
+  const runtimeFileKeys = new Set(runtimeFiles.map((name) => name.toLowerCase()));
+  // Remove debris only after computing the recursive import closure.
   for (const entry of fs.readdirSync(stagedQemuBin, { withFileTypes: true })) {
     if (!entry.isFile()) continue;
-    if (qemuRuntimeFileNames.has(entry.name) || entry.name.startsWith("BUILD-PROVENANCE")) continue;
+    if (runtimeFileKeys.has(entry.name.toLowerCase()) || entry.name.startsWith("BUILD-PROVENANCE")) continue;
     fs.rmSync(path.join(stagedQemuBin, entry.name), { force: true });
   }
 
-  for (const runtimeFile of qemuRuntimeFileNames) {
+  for (const runtimeFile of runtimeFiles) {
     ensureFile(path.join(stagedQemuBin, runtimeFile), `arquivo do runtime QEMU certificado (${runtimeFile})`);
   }
   const stagedQemu = path.join(stagedQemuBin, "qemu-system-xtensa.exe");
   verifyCertifiedQemuRuntime(stagedQemu, "incluido no VSIX");
+  verifyWindowsQemuWithCleanPath(stagedQemuBin);
   writeFile(
     path.join(stagedQemuBin, "LASECSIMUL-QEMU-RUNTIME.json"),
     `${JSON.stringify({
       sha256: certified.expected,
       production_topology: certified.manifest.production_topology,
       certified_release_session_limit: certified.manifest.certified_release_session_limit,
+      runtime_files: runtimeFiles.map((name) => ({ name, sha256: sha256(path.join(stagedQemuBin, name)) })),
     }, null, 2)}\n`
   );
 
