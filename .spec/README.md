@@ -58,6 +58,7 @@ Conteúdo em `archive/` é histórico e **não normativo**. Ele pode explicar um
 - [Subsistemas/dispositivos compostos](features/subsystems.md)
 - [Biblioteca de referência TDPS](features/tdps-reference-library.md)
 - [FPGA/VHDL com GHDL](features/fpga-ghdl.md)
+- [HART Device Engine modular](features/hart-device-engine.md)
 - [Schema IEC 61131-3](schemas/iec61131-project.md)
 - [Schema de subsistema/dispositivo composto](schemas/subsystem-vnext.md)
 - [ADR de incorporação do OpenPLC v4/STruCpp e pipeline PLC nativo](adr/0007-openplc-v4-incorporation-and-native-plc-pipeline.md)

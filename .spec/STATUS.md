@@ -2,7 +2,7 @@
 
 > Arquivo gerado por `node .spec/governance/generate-status.mjs`. Não editar manualmente.
 
-Total: 40 documentos. accepted: 8; active: 29; deferred: 1; planned: 1; superseded: 1.
+Total: 41 documentos. accepted: 8; active: 29; deferred: 1; planned: 2; superseded: 1.
 
 | ID | Kind | Status | Documento | Dependências |
 |---|---|---|---|---|
@@ -41,6 +41,7 @@ Total: 40 documentos. accepted: 8; active: 29; deferred: 1; planned: 1; supersed
 | FEAT-010 | feature | active | [Editor IEC 61131-3 e biblioteca comum de POUs](features/iec61131-editor.md) | FEAT-007, ADR-0007, SCHEMA-003 |
 | FEAT-011 | feature | active | [Navegação por domínio na paleta](features/workspace-navigation.md) | ARCH-001 |
 | FEAT-012 | feature | active | [Biblioteca de controle/processo inspirada no TDPS e importação `.smp`](features/tdps-reference-library.md) | FEAT-001, FEAT-002, FEAT-004, SCHEMA-002, ADR-0008 |
+| FEAT-013 | feature | planned | [HART Device Engine modular](features/hart-device-engine.md) | FEAT-009, FEAT-001, ARCH-002, ARCH-004, ARCH-005, ARCH-006 |
 | GOV-001 | governance | active | [Governança das especificações](governance/governance.md) | — |
 | ROADMAP-001 | roadmap | active | [Roadmap arquitetural F0–F10](ROADMAP.md) | GOV-001, BENCH-001, BENCH-005 |
 | SCHEMA-001 | schema | planned | [Projeto vNext](schemas/project-vnext.md) | ARCH-001, ARCH-006 |
