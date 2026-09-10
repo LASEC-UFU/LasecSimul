@@ -8,7 +8,7 @@
   "build_executable": "C:\\SourceCode\\qemu_lasecSimul\\build-ucrt64\\qemu-system-xtensa.exe",
   "canonical_runtime_dir": "C:\\SourceCode\\LasecSimul\\vnext_prototype\\dev_qemu_runtime",
   "canonical_executable": "C:\\SourceCode\\LasecSimul\\vnext_prototype\\dev_qemu_runtime\\qemu-system-xtensa.exe",
-  "canonical_executable_sha256": "475C0FC956E43FFC0CB83CECE0DC384457A9E1F01D2C6A3F6C21C4665C7EB23D",
+  "canonical_executable_sha256": "920D6E4DE78825A776E8EA3E4A5E8E1A8DF3F43393E271DAA9BA934A165AA0BF",
   "canonical_executable_timestamp": "2026-09-09T00:00:00-03:00",
   "certified_release_session_limit": 8,
   "certified_release_session_limit_note": "E146 (EVIDENCE.md, 2026-09-09): this promotion is certified ONLY for N<=8 simultaneous VNEXT_B+MTTCG sessions (core/src/mcu/qemu/VnextBCapacityGuard.hpp::kVnextBCertifiedReleaseSessionLimit). The raw host-topology ceiling this runtime's own capacity guard computes can be higher (13 on the 32-logical-processor host this episode measured), but that number was never validated end-to-end and must not be treated as certified capacity -- see that header's own comment. N=9 through N=16 are explicitly NOT certified by this promotion; a later episode may raise this limit, but only alongside fresh B11 evidence at the higher N, in the same commit that raises kVnextBCertifiedReleaseSessionLimit.",

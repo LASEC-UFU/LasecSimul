@@ -7,6 +7,7 @@
 #include "lasecsimul/CausalTrace.hpp"
 #include "lasecsimul/qemu_arena_abi.h"
 #include "mcu/qemu/VnextBArbiter.hpp"
+#include "simulation/SettleProvenance.hpp"
 #include <algorithm>
 #include <array>
 #include <cstdlib>
@@ -1074,7 +1075,10 @@ McuComponent::PollStep McuComponent::pollAndDispatchPendingEvents(
             const uint64_t heartbeatNow =
                 std::atomic_ref<const uint64_t>(attachment.view().control->artifact_virtual_time_ns)
                     .load(std::memory_order_acquire);
-            if (qemu::advanceMonotonicNs(m_vnextBHeartbeatWatermarkNs, heartbeatNow)) {
+            const bool heartbeatAdvanced = qemu::advanceMonotonicNs(m_vnextBHeartbeatWatermarkNs, heartbeatNow);
+            lasecsimul::simulation::diag::ProvenanceTracker::instance().recordHeartbeatSample(
+                heartbeatAdvanced, heartbeatNow);
+            if (heartbeatAdvanced) {
                 m_scheduler.notifyAdvanceLimitChanged();
             }
         }
@@ -1083,12 +1087,14 @@ McuComponent::PollStep McuComponent::pollAndDispatchPendingEvents(
         // that it now operates on one already-selected (lane, event) pair instead of iterating
         // lanes itself. Returns true if the electrical output fingerprint changed.
         auto dispatchOneEvent = [&](uint32_t lane, const lasec_at_event& event) -> bool {
+            lasecsimul::simulation::diag::ProvenanceTracker::instance().recordDispatchedEventKind(event.kind);
             if (event.kind == 3 && event.payload_bytes == sizeof(uint64_t) * 2) {
                 uint64_t requestSeq = 0, address = 0;
                 std::memcpy(&requestSeq, event.payload, sizeof(requestSeq));
                 std::memcpy(&address, event.payload + sizeof(requestSeq), sizeof(address));
                 uint64_t value = 0;
                 if (address != 0) {
+                    lasecsimul::simulation::diag::ProvenanceTracker::instance().recordMmioRead(address);
                     if (QemuModule* module = findModule(address)) value = module->readRegister(address);
                 }
                 attachment.respondToRequest(lane, requestSeq, value);
@@ -1147,6 +1153,7 @@ McuComponent::PollStep McuComponent::pollAndDispatchPendingEvents(
             uint64_t address = 0, value = 0;
             std::memcpy(&address, event.payload, sizeof(address));
             std::memcpy(&value, event.payload + sizeof(address), sizeof(value));
+            lasecsimul::simulation::diag::ProvenanceTracker::instance().recordGpioWrite(address);
             if (address >= 0x3ff44000ull && address < 0x3ff45000ull)
                 if (vnextTraceEnabled()) std::fprintf(stderr, "[VNEXT_CORE_GPIO] addr=%llx value=%llx\\n",
                              static_cast<unsigned long long>(address), static_cast<unsigned long long>(value));
@@ -1346,13 +1353,17 @@ bool McuComponent::dispatchArenaEvent(const qemu::QemuArenaEvent& event, uint64_
 void McuComponent::stamp(MnaMatrixView& matrix) {
     std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
     ++m_stampCount;
+    lasecsimul::simulation::diag::ProvenanceTracker::instance().recordStampEntry(m_componentIndex);
     // Mantém o contrato de chamadas que marcam o MCU dirty explicitamente (testes sintéticos,
     // hosts ABI e futuras fontes de interrupção). O poll periódico continua desacoplado do MNA:
     // ele só marca dirty quando a saída elétrica muda.
     // schedulerLockHeld=true: stamp() runs inside Scheduler::runUntil()'s settle loop, which
     // holds Scheduler::m_mutex throughout (same reasoning as this function's own
     // scheduleWakeupsForAllModules(..., true) call below -- see schedulePollAt()'s doc-comment).
-    pollAndDispatchPendingEvents(m_scheduler.nowNsUnlocked(), nullptr, true);
+    const PollStep pollStepResult = pollAndDispatchPendingEvents(m_scheduler.nowNsUnlocked(), nullptr, true);
+    lasecsimul::simulation::diag::ProvenanceTracker::instance().recordPollOutcome(
+        pollStepResult == PollStep::DispatchedReady, pollStepResult == PollStep::DeferredFuture,
+        pollStepResult == PollStep::NoEvent);
 
     // Ponte pino<->matriz, genérica (ver doc da classe): pra cada PinMapping, pergunta ao módulo
     // responsável (nunca sabe qual chip é) se aquele bit está em modo saída -- se sim, dirige o
@@ -1488,7 +1499,12 @@ void McuComponent::loadFirmwareLocked(const std::filesystem::path& firmwarePath,
     m_qemuTimeOriginNs.store(m_scheduler.nowNs(), std::memory_order_relaxed);
     bindPollDoorbellLocked(arenaName);
     m_controller.start(firmwarePath, arenaName, qemuBinaryOverride, debug, identity,
-                       [this] { m_scheduler.markDirty(m_componentIndex); });
+                       [this] {
+                           m_scheduler.markDirty(m_componentIndex);
+                           lasecsimul::simulation::diag::ProvenanceTracker::instance().recordDirty(
+                               lasecsimul::simulation::diag::DirtyOrigin::ExternalMarkDirty,
+                               m_componentIndex, m_scheduler.nowNsUnlocked());
+                       });
     diag::trace(diag::ConsumerTraceEvent::ArenaBind, identity.sessionExecutionId, 0, 0,
                 identity.launchGeneration);
     if (!m_controller.vnextBActive()) {

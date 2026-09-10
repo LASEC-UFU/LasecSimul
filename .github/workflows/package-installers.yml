@@ -166,28 +166,26 @@ jobs:
       - name: Verify GHDL integration
         run: node scripts/build-core.js --config Release --target ghdl_backend_real_ghdl_test && ctest --test-dir core/build -C Release -R ghdl_backend_real_ghdl --output-on-failure
 
+      # Buildado por si (sem --clean) reaproveita a configuracao/objetos ja gerados pelo passo
+      # "Build core" acima -- so' compila/linka este alvo extra. Usado pelo gate pos-empacotamento
+      # abaixo para provar o handshake vNext-B real (mapping/eventos nomeados, ABI v5, READY,
+      # RUNNING, GPIO/UART), nao so' que o QEMU carrega seus imports PE estaticos.
+      - name: Build VNEXT_B attachment gate test
+        if: matrix.os == 'windows-latest'
+        run: node scripts/build-core.js --config Release --target vnext_b_attachment_test
+
       - name: Package release artifacts
         run: node scripts/package-release.js
 
-      # Reproduz uma maquina de usuario sem MSYS2 no PATH. Sem este isolamento, o runner do
-      # Actions encontra DLLs ausentes em /ucrt64/bin e pode publicar um QEMU que termina com
-      # STATUS_DLL_NOT_FOUND (0xC0000135) antes do handshake VNEXT_B.
-      - name: Verify bundled QEMU with clean Windows PATH
+      # Gate real de release: reextrai o VSIX FINAL (nao dist/staging) para um caminho com espaco
+      # fora do repositorio, com PATH limpo, e prova o handshake vNext-B completo -- nao apenas
+      # `qemu --version`. `--version` valida só imports PE estáticos; nunca abriu `esp32-simul`,
+      # nunca criou a mapping/eventos nomeados do vNext-B, nunca observou `artifact_state=READY`.
+      # A v0.0.30 só tinha o gate estreito (ver `scripts/test-bundled-qemu-vnext.js` para o
+      # histórico); isto substitui aquele gate por um que cobre a fronteira real do handshake.
+      - name: Verify bundled QEMU + Core with real VNEXT_B handshake (final VSIX)
         if: matrix.os == 'windows-latest'
-        shell: pwsh
-        run: |
-          $qemuBin = Resolve-Path "dist/staging/win32-x64/extension/bundled/devices/qemu-esp32/bin"
-          $qemu = Join-Path $qemuBin "qemu-system-xtensa.exe"
-          $savedPath = $env:PATH
-          try {
-            $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
-            & $qemu --version
-            if ($LASTEXITCODE -ne 0) {
-              throw "QEMU empacotado falhou com PATH limpo: exit=$LASTEXITCODE"
-            }
-          } finally {
-            $env:PATH = $savedPath
-          }
+        run: node scripts/test-bundled-qemu-vnext.js
 
       - name: Verify bundled GHDL runtime
         run: node scripts/test-bundled-ghdl.js

@@ -100,22 +100,53 @@ public:
             const DWORD result = WaitForMultipleObjects(static_cast<DWORD>(handles.size()), handles.data(), FALSE, INFINITE);
             if (result == WAIT_OBJECT_0) { ResetEvent(wake); continue; }
             if (result < WAIT_OBJECT_0 + handles.size()) {
-                const size_t index = result - WAIT_OBJECT_0 - 1;
+                // E147-E (EVIDENCE.md, 2026-09-10): off-by-one root cause of the E147-B/C/D
+                // wake-storm investigation. `handles[0]` is the dispatcher's own internal `wake`
+                // Event, NOT an attachment -- `tokens`/`slots` only ever hold attachment entries
+                // (see the loop above), so `attachmentIndex` (0-based within tokens/slots) and
+                // `handleIndex` (1-based within handles, offset by the reserved wake slot) are
+                // two DIFFERENT indices and must never be used interchangeably. The previous code
+                // used the same `index` for both, so ResetEvent() reset the wrong handle for
+                // EVERY attachment (one slot too early -- attachment 0's real handle at
+                // handles[1] was left untouched while handles[0]==wake got reset instead, and
+                // similarly for every other slot) -- the true attachment Event stayed signaled
+                // forever, so the next WaitForMultipleObjects() returned immediately for it again
+                // in an unbounded loop. Proven by VnextBWaitDispatcherTest.cpp's RED-1/RED-2
+                // (single- and two-attachment cases) before this fix, both green after it.
+                const size_t attachmentIndex = static_cast<size_t>(result - WAIT_OBJECT_0 - 1);
+                const size_t handleIndex = attachmentIndex + 1;
+                if (attachmentIndex >= tokens.size() || attachmentIndex >= slots.size() ||
+                    handleIndex >= handles.size()) {
+                    // Cannot happen given WaitForMultipleObjects()'s own contract (result is
+                    // always within [0, handles.size())), but fail loudly rather than silently
+                    // indexing out of bounds if that contract is ever violated.
+                    std::fprintf(stderr,
+                                  "[VnextBWaitDispatcher] BUG: attachmentIndex=%zu handleIndex=%zu "
+                                  "out of bounds (tokens=%zu slots=%zu handles=%zu)\n",
+                                  attachmentIndex, handleIndex, tokens.size(), slots.size(), handles.size());
+                    std::fflush(stderr);
+                    continue;
+                }
                 // Rearm before invoking user code. A publication concurrent with the callback
                 // then leaves the manual-reset doorbell signaled and is observed by the next
                 // wait; resetting after the callback would create a lost-wake window.
-                ResetEvent(handles[index]);
+                if (!ResetEvent(handles[handleIndex])) {
+                    std::fprintf(stderr,
+                                  "[VnextBWaitDispatcher] ResetEvent failed for handleIndex=%zu "
+                                  "GetLastError=%lu\n",
+                                  handleIndex, static_cast<unsigned long>(GetLastError()));
+                    std::fflush(stderr);
+                }
                 Callback callback;
                 {
                     std::lock_guard lock(mutex);
                     for (const Entry& entry : entries) {
-                        if (entry.token == tokens[index]) {
+                        if (entry.token == tokens[attachmentIndex]) {
                             callback = entry.callback;
                             break;
                         }
                     }
-                    if (index < slots.size())
-                        nextStartSlot = (slots[index] + 1) % kMaxRegistrations;
+                    nextStartSlot = (slots[attachmentIndex] + 1) % kMaxRegistrations;
                 }
                 if (callback) {
                     callbacksInFlight.fetch_add(1, std::memory_order_acq_rel);

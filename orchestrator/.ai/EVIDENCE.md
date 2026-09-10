@@ -1,5 +1,60 @@
 # EVIDENCE LOG
 
+## E147-J — UART non-vCPU lost-wake RED and minimal fix (2026-09-10)
+
+**REQUEST_ID:** `E147-J-uart-lost-wake`.
+
+**FOLLOW-UP FINDING:** a second ordering window was found after the original
+lost-wake fix. A non-vCPU producer can preserve its effect after credit has
+already returned; the retry token must therefore be armed after preservation
+and immediately notify when credit is already non-zero. The implementation
+adds `vnext_b_note_nonvcpu_backlog()` for UART/I2C and uses an idle BH rearm
+for UART self-retries.
+
+**SECOND GREEN:** the deterministic backlog test passes 2/2, including the
+already-credit-available-after-preserve case. Short real EININDI01 runs show
+all observed blocks are byte blocks (`configWouldBlock=0`); the real workload
+still needs an end-to-end GREEN beyond the ROM banner. Candidate remains
+diagnostic/unpromoted.
+
+**FOLLOW-UP CLASSIFICATION:** direct counters show `backlogFullStops=0` and
+`backlogWakes=0`; the guest vCPU is not being parked by the UART's 128-effect
+capacity. Lane credit returns to 8 and `configWouldBlock` remains zero. Thus
+the remaining ROM-only behavior is not the UART backlog-waiter path and should
+not be “fixed” by changing capacity or scheduler limits.
+
+**RED:** `qemu_lasecSimul/tests/unit/test-vnext-b-uart-backlog.c` reproduced
+the exact interleaving in which lane credit returns before `uart_tx_effect_bh`
+preserves its unsent effect. The old immediate recheck cleared
+`vnext_lane_producer_backlog[]`; the subsequent `vnext_resume()` sweep saw no
+token and scheduled no UART BH. The test failed with exit code 3; raw output is
+preserved in `vnext_prototype/mttcg_causality/E147-J-uart-lost-wake/RED_output.txt`.
+
+**FIX:** the non-vCPU path in `softmmu/vnext_b.c` no longer clears the backlog
+token or transport pause during the immediate credit recheck. The caller first
+preserves the pending UART/I2C operation; the resume sweep remains the single
+owner that observes credit, clears the token, releases the pause and notifies
+the producer. This is intentionally narrow and does not change ring
+classification, vCPU replay, heartbeat, scheduler, pacing or HART.
+
+**GREEN:** `test-vnext-b-uart-backlog.exe --tap` passes 1/1 after the change;
+the QEMU target also rebuilt successfully. A pre-existing unused-function
+warning in `esp32_uart.c` remains; no new warning was introduced by this fix.
+
+**REAL-RUN LIMITATION:** a 5 s EININDI01 run with the diagnostic QEMU showed
+the production path still needs more work: `bytePublished=229`,
+`wouldBlockTotal=3`, `bhEntries=128`, `tx_effect_count(final)=1`, and UART
+remained at the ROM banner (304 bytes). The immediate-credit race counter was
+zero in that run, so the deterministic lost-wake bug is real and fixed but is
+not yet the complete explanation of the remaining application stall. Do not
+promote this candidate. The next bounded investigation must capture the
+BH/credit sequence after the second WOULD_BLOCK, not reopen settle, scheduler,
+HART or unrelated reset work.
+
+**SCOPE:** no canonical runtime promotion, `QEMU_RUNTIME.json` change, package,
+release or HART implementation was performed. Real-project GREEN and the full
+regression suite remain the next validation gate.
+
 ## E138 — E137 reclassified as E121 ROM/EFUSE boot reset, E135 not reproduced (2026-09-08)
 
 **REQUEST_ID:** `E138-rom-efuse-classification-20260908`.

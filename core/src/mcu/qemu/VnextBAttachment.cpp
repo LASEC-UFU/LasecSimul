@@ -1,4 +1,5 @@
 #include "VnextBAttachment.hpp"
+#include "simulation/SettleProvenance.hpp"
 #include <algorithm>
 #include <atomic>
 #include <cstdio>
@@ -279,9 +280,11 @@ void VnextBAttachment::prepare(QemuLaunchSpec spec, uint64_t executionId,
                 }
             }
             if (m_attachmentGeneration.load(std::memory_order_acquire) == attachmentGeneration) {
+                simulation::diag::ProvenanceTracker::instance().recordWakeCallback(/*stale=*/false);
                 m_notificationPending.store(true, std::memory_order_release);
                 if (notificationWake) notificationWake();
             } else {
+                simulation::diag::ProvenanceTracker::instance().recordWakeCallback(/*stale=*/true);
                 std::lock_guard lock(g_testWaitCallbackBarrier.mutex);
                 ++g_testWaitCallbackBarrier.staleRejected;
                 g_testWaitCallbackBarrier.completed = true;

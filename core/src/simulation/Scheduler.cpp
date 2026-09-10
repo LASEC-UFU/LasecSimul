@@ -467,11 +467,14 @@ void Scheduler::start() {
                 // pagava o timeout de 5ms inteiro em vez de acordar assim que a posição de referência
                 // avançasse.
                 const uint64_t observedAdvanceGen = m_advanceLimitGeneration.load(std::memory_order_acquire);
+                const uint64_t observedWorkGen = m_workGeneration.load(std::memory_order_acquire);
                 std::unique_lock<std::mutex> pacingLock(m_pacingMutex);
                 const auto waitStart = std::chrono::steady_clock::now();
-                m_pacingWake.wait_for(pacingLock, std::chrono::milliseconds(5), [this, observedAdvanceGen] {
+                m_pacingWake.wait_for(pacingLock, std::chrono::milliseconds(5), [this, observedAdvanceGen,
+                                                                                  observedWorkGen] {
                     return !m_running.load(std::memory_order_acquire) || m_paused.load(std::memory_order_acquire) ||
-                           m_advanceLimitGeneration.load(std::memory_order_acquire) != observedAdvanceGen;
+                           m_advanceLimitGeneration.load(std::memory_order_acquire) != observedAdvanceGen ||
+                           m_workGeneration.load(std::memory_order_acquire) != observedWorkGen;
                 });
                 m_advanceLimitWaitCount.fetch_add(1, std::memory_order_relaxed);
                 m_advanceLimitWaitNanoseconds.fetch_add(

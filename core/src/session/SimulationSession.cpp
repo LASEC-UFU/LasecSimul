@@ -22,6 +22,7 @@
 #include "../plc/PlcComponent.hpp"
 #include "lasecsimul/qemu_arena_abi.h"
 #include "lasecsimul/CausalTrace.hpp"
+#include "simulation/SettleProvenance.hpp"
 #include "../mcu/qemu/QemuArenaBridge.hpp"
 
 namespace lasecsimul::session {
@@ -2287,6 +2288,17 @@ I2cTransferResult SimulationSession::resolveI2cTransferUnlocked(uint32_t mcuInde
     }
 
     if (targets.empty()) {
+        if (traceI2c) {
+            static std::atomic<uint32_t> noTargetTraceCount{0};
+            const uint32_t sample = noTargetTraceCount.fetch_add(1, std::memory_order_relaxed);
+            if (sample < 8) {
+                std::fprintf(stderr,
+                             "[LasecSimul][I2C fast-path] no-target sdaPin=%u sclPin=%u sdaNode=%u sclNode=%u sdaRefs=%zu sclRefs=%zu addr=0x%02x\n",
+                             *sdaPinIndex, *sclPinIndex, sdaNode, sclNode,
+                             m_topology.pinRefsByNode[sdaNode].size(),
+                             m_topology.pinRefsByNode[sclNode].size(), transfer.address);
+            }
+        }
         I2cTransferResult nack{};
         nack.handled = true;
         nack.firstNack = 0;
@@ -2599,7 +2611,13 @@ bool SimulationSession::settleStep() {
     for (size_t node = 0; node < m_nodeVoltages.size(); ++node) {
         if (std::abs(m_nodeVoltages[node] - m_previousNodeVoltages[node]) > kVoltageEpsilon) {
             anyVoltageChanged = true;
-            for (uint32_t listener : m_topology.listenersByNode[node]) m_scheduler.dirtySet().insert(listener);
+            for (uint32_t listener : m_topology.listenersByNode[node]) {
+                m_scheduler.dirtySet().insert(listener);
+                lasecsimul::simulation::diag::ProvenanceTracker::instance().recordDirty(
+                    lasecsimul::simulation::diag::DirtyOrigin::VoltageListener, listener,
+                    m_scheduler.nowNsUnlocked(), static_cast<uint32_t>(node),
+                    m_previousNodeVoltages[node], m_nodeVoltages[node]);
+            }
         }
     }
 

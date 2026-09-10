@@ -1994,3 +1994,20 @@ Classificação:
 Não há prova nova de `exccause=7`/`PANIC_RSN_CACHEERR`, CPU, EPC/PC, vaddr ou
 predicado E129 específico. Nenhum código semântico foi alterado; nenhuma
 promoção/B12 foi executada; runtime canônico e `QEMU_RUNTIME.json` preservados.
+
+# E147-J status — candidate validation (2026-09-10)
+
+The candidate QEMU SHA
+`920D6E4DE78825A776E8EA3E4A5E8E1A8DF3F43393E271DAA9BA934A165AA0BF` contains
+the bounded I2C continuation split for a 32-byte guest write. Focused QEMU and
+Core tests pass, `session_restart_stress_test` is 15/15, and the full Release
+VNEXT_B+MTTCG regression is 14/14. B11 N=1 and N=8 at 15/60 seconds also pass.
+
+The candidate is not promoted. Full Release regression completed 14/14. A
+locally generated VSIX was independently re-extracted and passed the real
+VNEXT-B packaged gate (44/44 runtime hashes, QEMU version/machine, 33/33
+handshake, packaged Core, zero orphans); the bundled GHDL runtime/backend gate
+also passed. Local release assembly stops only at the Windows bootstrapper
+because this workstation has .NET SDK 8 while the project targets .NET 10;
+the GitHub workflow installs .NET 10. Temporary candidate replacement was
+rolled back; canonical QEMU and `QEMU_RUNTIME.json` remain at `475C0FC9...`.

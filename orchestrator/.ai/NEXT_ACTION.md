@@ -1,5 +1,63 @@
 # NEXT ACTION
 
+## E147-J follow-up (2026-09-10)
+
+The second UART retry ordering window is now covered by
+`vnext_b_note_nonvcpu_backlog()`: UART/I2C arm the token only after preserving
+pending state, and UART uses an idle BH rearm when credit is already available.
+The deterministic test is 2/2. The diagnostic real run still stops at the ROM
+banner, so the candidate is not promotable. Next action is one bounded GREEN
+run on EININDI01 and one on II1P04 with the diagnostic runtime, then the
+VNEXT_B+MTTCG regression. Do not touch scheduler/settle/HART or promote until
+both projects produce application UART/display progress.
+
+## E147-J — RED reproduzido e correção mínima aplicada; validação real pendente (2026-09-10)
+
+O RED determinístico da corrida de crédito/backlog UART está preservado em
+`vnext_prototype/mttcg_causality/E147-J-uart-lost-wake/RED_output.txt` e no
+teste `qemu_lasecSimul/tests/unit/test-vnext-b-uart-backlog.c`.
+
+A correção mínima mantém o token de backlog de produtores não-vCPU armado até o
+caller preservar o efeito pendente; somente o sweep `vnext_resume()` limpa o
+token, libera a pausa e agenda o BH. O teste unitário passa 1/1 e o QEMU
+recompila, mas ainda faltam: executar o projeto EININDI01, confirmar UART além
+do banner, executar II1P04 e EININDI01, regressões VNEXT_B+MTTCG, e só então
+considerar candidato. Não promover runtime nem iniciar B12 antes desses gates.
+
+O primeiro run real após a correção ainda terminou com ROM-only:
+`bytePublished=229`, `wouldBlockTotal=3`, `bhEntries=128` e
+`tx_effect_count(final)=1`; `nonvcpuImmediateCreditRace=0`. Portanto o RED
+isolado foi corrigido, mas existe uma segunda falha no ciclo BH/credit após
+novos `WOULD_BLOCK`s. A próxima prova deve registrar a sequência por instância
+(`BH enter -> publish -> WOULD_BLOCK -> backlog armed -> credit notify -> BH
+enter`) e o estado do ring em cada transição. Não alterar HART, settle ou
+scheduler para tentar contornar esse segundo problema.
+
+## HART Device Engine — próximo track, bloqueado até fechar E147 (2026-09-10)
+
+O material `C:\Users\Administrator\Desktop\hart-device-engine.md` foi
+incorporado na especificação canônica [FEAT-013](../../.spec/features/hart-device-engine.md).
+O documento original usava `FEAT-012`, mas esse ID já pertence à biblioteca
+TDPS; não alterar IDs existentes.
+
+Ordem obrigatória:
+
+1. fechar o defeito atual de VNEXT_B/MTTCG observado em E147 (UART/backpressure
+   e o byte final não entregue), com RED isolado, correção mínima, GREEN e
+   regressão; não iniciar HART durante essa investigação;
+2. somente após o release VNEXT_B estabilizado, executar FEAT-013 Fase 0:
+   caracterizar `core/src/protocols/IndustrialProtocols.*`, FEAT-009, testes
+   HART e golden vectors sem alterar comportamento;
+3. então implementar os contratos HART em fases (profile/plan/runtime,
+   compiler, engine virtual, perfis, autoria e somente depois adaptadores reais)
+   conforme `.spec/features/hart-device-engine.md`.
+
+O HART deve permanecer planejado e inerte agora: não criar threads, sockets,
+timers ou transporte físico e não misturar sua implementação com QEMU, UART,
+VNEXT_B, scheduler ou o runtime canônico. O gate arquitetural será a execução
+de múltiplos perfis/instâncias em uma sessão e em SharedHost sem recursos por
+dispositivo, com FEAT-009 preservada.
+
 ## E145 — H143 closed and capacity-guarded in production; two new narrow findings need a decision; B12 not attempted (2026-09-09, ~06:32-07:20)
 
 Result: **REVIEW_REQUIRED — decision needed, not a fix to make unilaterally.**
@@ -2232,3 +2290,18 @@ Next safe choices are:
 
 Do not classify the historical E139 session-7 failure as ROM/EFUSE, CACHEERR,
 or WDT without a first-cause record. Do not retry long B11 campaigns blindly.
+
+## E147-J candidate status (2026-09-10)
+
+The VNEXT-B I2C continuation fix is implemented in the QEMU candidate
+`920D6E4DE78825A776E8EA3E4A5E8E1A8DF3F43393E271DAA9BA934A165AA0BF`.
+It splits the 32-byte guest write that exceeds the 32-byte mailbox once the
+address byte is included, preserving command completion until the final
+logical STOP. II1P04 now reaches a live OLED in repeated VNEXT-B runs.
+
+Current validation: QEMU/Core focused tests pass; session restart is 15/15;
+VNEXT-B+MTTCG Release regression is 14/14; B11 N=1 and N=8 (15 s and 60 s)
+pass with zero unexpected resets and zero orphans. The canonical runtime
+remains `475C0FC9...` and was not promoted. Candidate SHA is not production
+until the package gate has run with the CI-provided GHDL runtime and a separate
+promotion review authorizes replacement.

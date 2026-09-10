@@ -33,10 +33,21 @@ if (!Number.isFinite(durationMs) || durationMs <= 0) throw new Error("Duração 
 
 const project = JSON.parse(fs.readFileSync(projectPath, "utf8"));
 const pipeName = `lasecsimul-real-esp32-${process.pid}-${Date.now()}`;
+// E147 (EVIDENCE.md, 2026-09-10): this used to hard-code LASECSIMUL_NETWORK_MODE=isolated,
+// silently overriding whatever the caller's own environment requested -- a caller comparing
+// network modes (or transport/execution-mode) had no way to know the benchmark was substituting
+// its own value. Explicit, defaults to the prior behavior, and always logged so a run's actual
+// effective environment is never ambiguous from its own output.
+const networkMode = process.env.LASECSIMUL_NETWORK_MODE ?? "isolated";
+const effectiveTransport = process.env.LASECSIMUL_MCU_TRANSPORT ?? "(unset -> LEGACY)";
+const effectiveExecutionMode = process.env.LASECSIMUL_ESP32_EXECUTION_MODE ?? "(unset -> mttcg default)";
+console.error(`[benchmark-real-esp32] LASECSIMUL_NETWORK_MODE=${networkMode} ` +
+  `LASECSIMUL_MCU_TRANSPORT=${effectiveTransport} LASECSIMUL_ESP32_EXECUTION_MODE=${effectiveExecutionMode} ` +
+  `core=${corePath} qemu=${qemuPath} subcircuit=${subcircuitPath}`);
 const core = spawn(corePath, ["--pipe", pipeName], {
   cwd: repo,
   windowsHide: true,
-  env: { ...process.env, LASECSIMUL_NETWORK_MODE: "isolated" },
+  env: { ...process.env, LASECSIMUL_NETWORK_MODE: networkMode },
   stdio: ["ignore", "pipe", "pipe"],
 });
 const coreExit = new Promise((resolve) => core.once("exit", resolve));
@@ -60,9 +71,27 @@ let displayTimer;
 let displayPollInFlight = false;
 let previousDisplayPayload;
 let displayTelemetryGeneration = 0;
+// E147-H: independent of UART entirely -- polls any meters.probe component's own voltage
+// (Probe::getState() is a single f64 volt reading) on the SAME cheap timer pattern the display
+// timeline already uses, to prove or refute whether the firmware's loop() is genuinely toggling
+// a GPIO at all, without needing a firmware rebuild or relying on UART as the sole oracle. Off by
+// default; enabled via LASECSIMUL_BENCHMARK_PROBE_TRACE=1.
+const probeTraceEnabled = process.env.LASECSIMUL_BENCHMARK_PROBE_TRACE === "1";
+const probeThreshold = Number(process.env.LASECSIMUL_BENCHMARK_PROBE_THRESHOLD ?? 1.65);
+const probeTimeline = [];
+let probeTimer;
+let probePollInFlight = false;
+let previousProbeDigitalState;
+let probeTelemetryGeneration = 0;
 const progress = (label) => console.error(`[benchmark-real-esp32] ${label}`);
 
 function resolveEndpoint(endpoint) {
+  // E147-F: a conductor endpoint's `kind` is "port" (componentId/pinId, the only shape this
+  // function used to handle) OR "node" (nodeId only, no component -- a junction where multiple
+  // wires meet, e.g. two resistors sharing a ground point). blink_led.lsproj is the first
+  // fixture this benchmark was pointed at that actually uses junction nodes; resolved separately
+  // in main()'s wiring loop below (junction groups get unioned first, then connected via a
+  // representative port), so this function only ever sees "port" endpoints now.
   const instance = instances.get(endpoint.componentId);
   if (!instance) throw new Error(`Componente não materializado: ${endpoint.componentId}`);
   if (instance.exposedPins) {
@@ -98,10 +127,40 @@ async function main() {
       await client.setTunnelName(response.instanceId, pins[0]?.id ?? "pin", "", String(component.properties.name));
     }
   }
-  for (const conductor of project.topology?.conductors ?? []) {
-    const from = resolveEndpoint(conductor.from);
-    const to = resolveEndpoint(conductor.to);
-    await client.connectWire(from.instanceId, from.pinId, to.instanceId, to.pinId);
+  // E147-F: union-find over conductor endpoints (port OR junction-node) -- a junction node has
+  // no component of its own; it just means every wire touching that nodeId is electrically the
+  // same net. Group first, then wire together only the PORT endpoints within each group (via a
+  // representative), exactly matching what a direct port-to-port wire would have done if the
+  // schematic had been drawn without the junction bend. A group with fewer than 2 ports has
+  // nothing to connect (a junction that's a dead-end routing point only) and is skipped.
+  const conductors = project.topology?.conductors ?? [];
+  const parent = new Map();
+  const find = (key) => {
+    let root = key;
+    while (parent.has(root) && parent.get(root) !== root) root = parent.get(root);
+    if (!parent.has(root)) parent.set(root, root);
+    let cur = key;
+    while (parent.get(cur) !== root) { const next = parent.get(cur); parent.set(cur, root); cur = next; }
+    return root;
+  };
+  const union = (a, b) => { const ra = find(a), rb = find(b); if (ra !== rb) parent.set(ra, rb); };
+  const endpointKey = (endpoint) =>
+    endpoint.kind === "node" ? `node:${endpoint.nodeId}` : `port:${endpoint.componentId}:${endpoint.pinId}`;
+  const portsByGroup = new Map();
+  for (const conductor of conductors) {
+    union(endpointKey(conductor.from), endpointKey(conductor.to));
+    for (const endpoint of [conductor.from, conductor.to]) {
+      if (endpoint.kind === "node") continue;
+      const root = find(endpointKey(endpoint));
+      if (!portsByGroup.has(root)) portsByGroup.set(root, []);
+      portsByGroup.get(root).push(endpoint);
+    }
+  }
+  for (const ports of portsByGroup.values()) {
+    const resolved = ports.map(resolveEndpoint);
+    for (let i = 1; i < resolved.length; ++i) {
+      await client.connectWire(resolved[0].instanceId, resolved[0].pinId, resolved[i].instanceId, resolved[i].pinId);
+    }
   }
 
   const boardEntry = [...instances.entries()].find(([, value]) => value.primaryMcuInstanceId);
@@ -115,6 +174,9 @@ async function main() {
   const displayEntry = [...instances.entries()].find(([projectId]) =>
     project.components.find((component) => component.id === projectId)?.typeId === "outputs.ssd1306");
   const displayId = displayEntry?.[1].instanceId;
+  const probeEntry = [...instances.entries()].find(([projectId]) =>
+    project.components.find((component) => component.id === projectId)?.typeId === "meters.probe");
+  const probeId = probeEntry?.[1].instanceId;
 
   await client.setSimulationConfig({
     targetStepUs: 0,
@@ -199,6 +261,34 @@ async function main() {
         .finally(() => { displayPollInFlight = false; });
     }, 50);
   }
+  if (probeTraceEnabled && probeId) {
+    // E147-H: `items`/componentStates reads a component's OWN cached getState() snapshot, which
+    // for meters.probe only updates when the probe itself is re-stamp()'d -- proven unreliable
+    // (missed real transitions even under a known-working LEGACY control). `probes` instead does
+    // a direct, always-live node-voltage lookup (CoreApplication.cpp's getTelemetryFrame handler,
+    // resolveNodeVoltage()) independent of any component's own dirty/stamp state -- this is what
+    // the API actually provides this data for.
+    probeTimer = setInterval(() => {
+      if (probePollInFlight) return;
+      probePollInFlight = true;
+      void client.getTelemetryFrame(
+        { items: [], probes: [{ key: "probe", instanceId: probeId, pinId: "pin-1" }] },
+        probeTelemetryGeneration,
+      )
+        .then((frame) => {
+          probeTelemetryGeneration = frame.telemetryGeneration;
+          const voltage = frame.nodeVoltages?.probe;
+          if (voltage === undefined) return;
+          const digitalState = voltage > probeThreshold;
+          if (previousProbeDigitalState === undefined || digitalState !== previousProbeDigitalState) {
+            probeTimeline.push({ wallMs: performance.now() - benchmarkWallOrigin, voltage, digitalState });
+            previousProbeDigitalState = digitalState;
+          }
+        })
+        .catch(() => undefined)
+        .finally(() => { probePollInFlight = false; });
+    }, 50);
+  }
   const initialTime = await client.getSimulationTime();
   let previousSim = initialTime.simulatedNs;
   let previousMcu = initialTime.mcuVirtualNs;
@@ -232,8 +322,11 @@ async function main() {
   uartTimer = undefined;
   clearInterval(displayTimer);
   displayTimer = undefined;
+  clearInterval(probeTimer);
+  probeTimer = undefined;
   while (uartPollInFlight) await new Promise((resolve) => setTimeout(resolve, 5));
   while (displayPollInFlight) await new Promise((resolve) => setTimeout(resolve, 5));
+  while (probePollInFlight) await new Promise((resolve) => setTimeout(resolve, 5));
   progress("parando simulacao");
   const stopStarted = performance.now();
   await client.stopSimulation();
@@ -323,7 +416,10 @@ async function main() {
       (maximum, entry, index) => Math.max(maximum, entry.wallMs - uartTimeline[index].wallMs), 0),
   } : { chunks: 0 };
   const result = {
-    fixture: { projectPath, firmwarePath, boardProjectId, mcuId, durationMs, realTimeRate },
+    fixture: {
+      projectPath, firmwarePath, boardProjectId, mcuId, durationMs, realTimeRate,
+      corePath, qemuPath, subcircuitPath, networkMode, effectiveTransport, effectiveExecutionMode,
+    },
     rate: {
       average: rates.reduce((sum, value) => sum + value, 0) / rates.length,
       minimum: Math.min(...rates),
@@ -347,6 +443,13 @@ async function main() {
     virtualWorkCompletedNs: finalTime.mcuVirtualNs !== undefined && initialTime.mcuVirtualNs !== undefined
       ? finalTime.mcuVirtualNs - initialTime.mcuVirtualNs : undefined,
     display,
+    ...(probeTraceEnabled ? {
+      probe: {
+        found: !!probeId,
+        transitionCount: probeTimeline.length,
+        timeline: probeTimeline,
+      },
+    } : {}),
     metrics,
     ...(compact ? {
       qemu: {
@@ -363,6 +466,7 @@ try {
   await main();
 } finally {
   if (uartTimer) clearInterval(uartTimer);
+  if (probeTimer) clearInterval(probeTimer);
   await client.stop().catch(() => undefined);
   await coreExit;
   if (coreLog.trim()) process.stderr.write(coreLog);

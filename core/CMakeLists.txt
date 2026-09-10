@@ -1212,6 +1212,17 @@ target_include_directories(vnext_b_arbiter_test PRIVATE include src)
 add_test(NAME vnext_b_arbiter COMMAND vnext_b_arbiter_test)
 set_tests_properties(vnext_b_arbiter PROPERTIES LABELS "vnext-arbiter" TIMEOUT 10)
 
+# E147-E (EVIDENCE.md, 2026-09-10): isolated RED/contract tests for the wait-dispatcher's
+# handle-index off-by-one -- real Windows Events, no QEMU/electrical circuit dependency, fast
+# enough to run on every build.
+add_executable(vnext_b_wait_dispatcher_test
+    test/core/mcu/VnextBWaitDispatcherTest.cpp
+    src/mcu/qemu/VnextBWaitDispatcher.cpp
+)
+target_include_directories(vnext_b_wait_dispatcher_test PRIVATE include src)
+add_test(NAME vnext_b_wait_dispatcher COMMAND vnext_b_wait_dispatcher_test)
+set_tests_properties(vnext_b_wait_dispatcher PROPERTIES LABELS "vnext-dispatcher" TIMEOUT 30)
+
 # Estresse do CICLO Stop->Run repetido (achado 2026-07-22, relato ao vivo: às vezes o MCU não
 # inicializa, às vezes roda perfeitamente, às vezes roda e trava no meio -- nenhum teste real
 # existente cobria REINICIAR várias vezes, só uma sessão única). Mesmo binário/adapter reais acima.
