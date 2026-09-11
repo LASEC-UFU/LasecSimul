@@ -57,7 +57,8 @@ std::vector<PropertySchema> HartCommunicationComponent::propertySchema(Mode mode
         {"enabled", "Habilitado", "Comunicacao", "", PropertyValueKind::Bool, "checkbox", true},
         numberSchema("pollingAddress", "Polling address", "HART", "", 0, 0, 63),
         textSchema("uniqueId", "Unique ID", "HART", "029EB1"), textSchema("tag", "Tag", "HART", "HART"),
-        textSchema("unit", "Unidade PV", "HART", "V")};
+        textSchema("unit", "Unidade PV", "HART", "V"), textSchema("hartVariablesJson", "Variáveis HART", "HART", "[]"),
+        textSchema("hartCommandsJson", "Comandos HART", "HART", "[]")};
     if (mode == Mode::Serial) out.push_back(numberSchema("baudRate", "Baud rate", "Serial", "baud", 1200, 1200, 1200));
     else out.push_back(numberSchema("udpPort", "Porta UDP", "UDP", "", 5094, 1, 65535));
     return out;
@@ -66,13 +67,14 @@ std::vector<PropertySchema> HartCommunicationComponent::propertySchema(Mode mode
 PropertyValue HartCommunicationComponent::propertyValue(const std::string& id) const {
     if (id == "bus") return m_bus; if (id == "endpoint") return m_endpointName; if (id == "enabled") return m_enabled;
     if (id == "pollingAddress") return static_cast<double>(m_pollingAddress); if (id == "uniqueId") return m_uniqueId;
-    if (id == "tag") return m_tag; if (id == "unit") return m_unit; if (id == "baudRate") return static_cast<double>(m_baudRate);
+    if (id == "tag") return m_tag; if (id == "unit") return m_unit; if (id == "hartVariablesJson") return m_hartVariablesJson; if (id == "hartCommandsJson") return m_hartCommandsJson; if (id == "baudRate") return static_cast<double>(m_baudRate);
     if (id == "udpPort") return static_cast<double>(m_udpPort); return std::string{};
 }
 void HartCommunicationComponent::setPropertyValue(const std::string& id, const PropertyValue& v) {
     if (id == "bus") m_bus = std::get<std::string>(v); else if (id == "endpoint") m_endpointName = std::get<std::string>(v);
     else if (id == "enabled") m_enabled = std::get<bool>(v); else if (id == "pollingAddress") m_pollingAddress = static_cast<uint8_t>(std::clamp(std::get<double>(v), 0.0, 63.0));
     else if (id == "uniqueId") m_uniqueId = std::get<std::string>(v); else if (id == "tag") m_tag = std::get<std::string>(v); else if (id == "unit") m_unit = std::get<std::string>(v);
+    else if (id == "hartVariablesJson") m_hartVariablesJson = std::get<std::string>(v); else if (id == "hartCommandsJson") m_hartCommandsJson = std::get<std::string>(v);
     else if (id == "baudRate") m_baudRate = 1200;
     else if (id == "udpPort") m_udpPort = static_cast<uint16_t>(std::clamp(std::get<double>(v), 1.0, 65535.0));
     HartTransportConfig config = m_endpoint.config(); config.bus = m_bus; config.endpoint = m_endpointName;

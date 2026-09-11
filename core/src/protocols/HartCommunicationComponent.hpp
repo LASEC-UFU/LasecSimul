@@ -59,6 +59,7 @@ private:
     uint32_t m_baudRate = 1200;
     uint16_t m_udpPort = 5094;
     bool m_enabled = true;
+    std::string m_hartVariablesJson = "[]", m_hartCommandsJson = "[]";
 };
 
 } // namespace lasecsimul::protocols

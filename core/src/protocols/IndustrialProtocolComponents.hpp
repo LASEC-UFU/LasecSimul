@@ -141,6 +141,8 @@ public:
             schemas.push_back(text("uniqueId", "Unique ID", "HART", "0011223344"));
             schemas.push_back(text("tag", "Tag", "HART", "TIC101"));
             schemas.push_back(text("unit", "Unidade PV", "HART", "V"));
+            schemas.push_back(text("hartVariablesJson", "Variáveis HART", "HART", "[]"));
+            schemas.push_back(text("hartCommandsJson", "Comandos HART", "HART", "[]"));
             if (kind == IndustrialComponentKind::HartCommunicator) {
                 PropertySchema command = text("hartCommand", "Comando", "HART", "1");
                 command.editor = "enum";
@@ -177,6 +179,7 @@ private:
         if (id == "scale") return m_scale; if (id == "offset") return m_offset;
         if (id == "pollingAddress") return m_pollingAddress; if (id == "uniqueId") return m_uniqueId;
         if (id == "tag") return m_tag; if (id == "unit") return m_unit; if (id == "hartCommand") return m_hartCommand;
+        if (id == "hartVariablesJson") return m_hartVariablesJson; if (id == "hartCommandsJson") return m_hartCommandsJson;
         return std::string{};
     }
     void setPropertyValue(const std::string& id, const PropertyValue& value) {
@@ -187,6 +190,8 @@ private:
         else if (id == "offset") m_offset = std::get<double>(value); else if (id == "pollingAddress") m_pollingAddress = std::get<double>(value);
         else if (id == "uniqueId") m_uniqueId = std::get<std::string>(value); else if (id == "tag") m_tag = std::get<std::string>(value);
         else if (id == "unit") m_unit = std::get<std::string>(value); else if (id == "hartCommand") m_hartCommand = std::get<std::string>(value);
+        else if (id == "hartVariablesJson") m_hartVariablesJson = std::get<std::string>(value);
+        else if (id == "hartCommandsJson") m_hartCommandsJson = std::get<std::string>(value);
     }
     void scheduleNextScan() {
         if (m_componentIndex == kNoComponent) return;
@@ -210,6 +215,7 @@ private:
     std::string m_area = "holdingRegister";
     double m_address = 0.0, m_scale = 0.001, m_offset = 0.0, m_pollingAddress = 0.0;
     std::string m_uniqueId = "0011223344", m_tag = "TIC101", m_unit = "V", m_hartCommand = "1";
+    std::string m_hartVariablesJson = "[]", m_hartCommandsJson = "[]";
     double m_lastValue = 0.0;
     bool m_online = false;
 };
