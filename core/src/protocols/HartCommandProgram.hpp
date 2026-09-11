@@ -51,11 +51,21 @@ enum class HartVarId : uint8_t {
     LongTag,                   // 32 bytes ISO Latin-1 -- Universal Command 20/21/22
     PollingAddress,            // 1 byte -- Universal Command 6/7
     LoopCurrentMode,           // 1 byte enum (Common Table 16: 0=Disabled, 1=Enabled) -- Universal Command 6/7
+    UpperRangeValue,           // 4 bytes float -- profile.upperRangeValue (Universal Command 15, Common Practice 35-37)
+    LowerRangeValue,           // 4 bytes float -- profile.lowerRangeValue (Universal Command 15, Common Practice 35-37)
 };
 
 /** `$BODY`, `$BODY[a:b]`, hex literal, row/variable reference, `$code`. */
 struct HartExpr {
-    enum class Kind : uint8_t { RequestBody, BodySlice, HexConstant, Variable, UserVariable, LocalCode };
+    /** `LoopCurrentMilliamps`/`PercentOfRange`: the standard HART 4-20mA
+     * linear mapping of PV against the profile's Upper/Lower Range Value
+     * (Universal Commands 2/3). This is the one arithmetic computation the
+     * DSL supports -- a dedicated node, not a generic expression grammar,
+     * because it is the ONLY formula any HART command in this project
+     * needs (HART-FR extensibility gate: add a new formula as a new Kind,
+     * do not build a general arithmetic language for a single use). */
+    enum class Kind : uint8_t { RequestBody, BodySlice, HexConstant, Variable, UserVariable, LocalCode,
+                                LoopCurrentMilliamps, PercentOfRange };
     Kind kind = Kind::RequestBody;
     size_t offset = 0;              // BodySlice
     size_t length = 0;               // BodySlice; 0 means "to end of body"
@@ -74,6 +84,8 @@ struct HartExpr {
     static HartExpr var(HartVarId id) noexcept { HartExpr e; e.kind = Kind::Variable; e.variable = id; return e; }
     static HartExpr userVar(std::string id) { HartExpr e; e.kind = Kind::UserVariable; e.variableId = std::move(id); return e; }
     static HartExpr localCode() noexcept { HartExpr e; e.kind = Kind::LocalCode; return e; }
+    static HartExpr loopCurrentMilliamps() noexcept { HartExpr e; e.kind = Kind::LoopCurrentMilliamps; return e; }
+    static HartExpr percentOfRange() noexcept { HartExpr e; e.kind = Kind::PercentOfRange; return e; }
 };
 
 struct HartStatement; // fwd
@@ -175,6 +187,8 @@ struct HartExecutionVariables {
     std::array<uint8_t, 32> longTag{};
     uint8_t pollingAddress = 0;
     uint8_t loopCurrentMode = 1; // Common Table 16: 1 = Enabled (HART default per HCF_SPEC-127 6.7)
+    float upperRangeValue = 100.0f;
+    float lowerRangeValue = 0.0f;
     struct UserVariable { std::string id; double value = 0.0; HartVariableType type = HartVariableType::Float32; };
     std::span<const UserVariable> userVariables;
 };

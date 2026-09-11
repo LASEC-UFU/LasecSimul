@@ -110,6 +110,77 @@ int main() {
                   cmd8.bytes()[0] == 0x00 && cmd8.bytes()[1] == 0xFA && cmd8.bytes()[2] == 0xFA && cmd8.bytes()[3] == 0xFA,
               "0x08 read dynamic variable classifications: PV=Not Yet Classified, SV/TV/QV=Not Used");
 
+        // HCF_SPEC-127 6.3/6.4: Loop Current / Percent of Range, the linear
+        // 4-20mA mapping added this session. FV100CA's profile has the
+        // generic 0-100 range (see makeGenericProfile()), so PV=0 -> 0% ->
+        // 4.0mA exactly, a clean, verifiable golden.
+        HartResponseBuilder cmd2AtZero(16);
+        check(referenceEngine.execute("hart-1", 1, 0x02, {}, cmd2AtZero) && cmd2AtZero.size() == 8,
+              "0x02 read loop current and percent of range: 8-byte body");
+        const auto expectedCurrentAtZero = HartTypeCodec::encodeFloat32BE(4.0f);
+        const auto expectedPercentAtZero = HartTypeCodec::encodeFloat32BE(0.0f);
+        check(std::equal(expectedCurrentAtZero.begin(), expectedCurrentAtZero.end(), cmd2AtZero.bytes().begin()) &&
+                  std::equal(expectedPercentAtZero.begin(), expectedPercentAtZero.end(), cmd2AtZero.bytes().begin() + 4),
+              "0x02 at PV=0 (range 0-100): loop current = 4.0mA, percent = 0% (the exact 4-20mA floor)");
+
+        check(referenceEngine.setPrimaryValue("FV100CA", 50.0), "set PV to 50 (midpoint of the 0-100 range)");
+        HartResponseBuilder cmd2AtMid(16);
+        check(referenceEngine.execute("hart-1", 1, 0x02, {}, cmd2AtMid) && cmd2AtMid.size() == 8,
+              "0x02 re-read after PV change");
+        const auto expectedCurrentAtMid = HartTypeCodec::encodeFloat32BE(12.0f);
+        const auto expectedPercentAtMid = HartTypeCodec::encodeFloat32BE(50.0f);
+        check(std::equal(expectedCurrentAtMid.begin(), expectedCurrentAtMid.end(), cmd2AtMid.bytes().begin()) &&
+                  std::equal(expectedPercentAtMid.begin(), expectedPercentAtMid.end(), cmd2AtMid.bytes().begin() + 4),
+              "0x02 at PV=50 (midpoint): loop current = 12.0mA (4 + 16*0.5), percent = 50%");
+
+        HartResponseBuilder cmd3AtMid(16);
+        check(referenceEngine.execute("hart-1", 1, 0x03, {}, cmd3AtMid) && cmd3AtMid.size() == 9 &&
+                  std::equal(expectedCurrentAtMid.begin(), expectedCurrentAtMid.end(), cmd3AtMid.bytes().begin()),
+              "0x03's loop current is the SAME real computation as 0x02's, not a separate/inconsistent value");
+        check(referenceEngine.setPrimaryValue("FV100CA", 0.0), "reset PV back to 0 for the rest of this block's goldens");
+
+        // HCF_SPEC-127 6.10 (Command 9): code 0 -> real PV; any other code
+        // -> the spec's own "not supported" convention.
+        const uint8_t cmd9Request[] = {0x00, 0x02};
+        HartResponseBuilder cmd9Resp(32);
+        check(referenceEngine.execute("hart-1", 1, 0x09, cmd9Request, cmd9Resp) && cmd9Resp.size() == 21 /* Table 2: 2 slots */,
+              "0x09 read device variables with status: 21-byte body for 2 requested slots (1 status + 2*8 + 4 timestamp)");
+        check(cmd9Resp.bytes()[0] == 0x00, "0x09 Extended Field Device Status: all-clear");
+        check(cmd9Resp.bytes()[1] == 0x00 && cmd9Resp.bytes()[2] == 0x00 && cmd9Resp.bytes()[3] == 0x39 &&
+                  cmd9Resp.bytes()[8] == 0x00,
+              "0x09 slot 0 (code 0=PV): code echoed, classification=Not Yet Classified, units=57 percent, status=Good");
+        check(cmd9Resp.bytes()[9] == 0x02 && cmd9Resp.bytes()[10] == 0x00 && cmd9Resp.bytes()[11] == 0xFA &&
+                  cmd9Resp.bytes()[16] == 0x30,
+              "0x09 slot 1 (code 2, unsupported): code echoed, units=Not Used, status=Bad+Constant");
+        check(cmd9Resp.bytes()[17] == 0x00 && cmd9Resp.bytes()[18] == 0x00 && cmd9Resp.bytes()[19] == 0x00 && cmd9Resp.bytes()[20] == 0x00,
+              "0x09 Slot 0 timestamp: 0 (no monotonic virtual-time clock wired into HART yet, documented gap)");
+
+        // HCF_SPEC-127 6.14 (Command 14): fully spec-defined "not
+        // applicable" response since no transducer is modeled.
+        HartResponseBuilder cmd14Resp(32);
+        const std::vector<uint8_t> expectedCmd14{0x00, 0x00, 0x00, 0xFA, 0x7F, 0xA0, 0x00, 0x00,
+                                                 0x7F, 0xA0, 0x00, 0x00, 0x7F, 0xA0, 0x00, 0x00};
+        check(referenceEngine.execute("hart-1", 1, 0x0E, {}, cmd14Resp) && cmd14Resp.size() == expectedCmd14.size() &&
+                  std::equal(expectedCmd14.begin(), expectedCmd14.end(), cmd14Resp.bytes().begin()),
+              "0x0E read PV transducer information: fully spec-defined not-applicable response (serial=0, limits=NaN, units=Not Used)");
+
+        // HCF_SPEC-127 6.15 (Command 15): every field either spec-mandated
+        // fallback or a real profile-backed value.
+        HartResponseBuilder cmd15Resp(32);
+        check(referenceEngine.execute("hart-1", 1, 0x0F, {}, cmd15Resp) && cmd15Resp.size() == 18,
+              "0x0F read device information: 18-byte body");
+        check(cmd15Resp.bytes()[0] == 0xFB, "0x0F Alarm Selection Code: 251 None");
+        check(cmd15Resp.bytes()[1] == 0x00, "0x0F Transfer Function Code: 0 Linear (spec-mandated when unsupported)");
+        check(cmd15Resp.bytes()[2] == 0x39, "0x0F PV Units Code: 57 percent (real profile value)");
+        const auto expectedUrv = HartTypeCodec::encodeFloat32BE(100.0f);
+        const auto expectedLrv = HartTypeCodec::encodeFloat32BE(0.0f);
+        check(std::equal(expectedUrv.begin(), expectedUrv.end(), cmd15Resp.bytes().begin() + 3),
+              "0x0F PV Upper Range Value: 100.0 (real profile value, matches Command 2/3's own range)");
+        check(std::equal(expectedLrv.begin(), expectedLrv.end(), cmd15Resp.bytes().begin() + 7),
+              "0x0F PV Lower Range Value: 0.0 (real profile value)");
+        check(cmd15Resp.bytes()[15] == 0xFB, "0x0F Write Protect Code: 251 None (spec-mandated when not implemented)");
+        check(cmd15Resp.bytes()[16] == 0xFA, "0x0F byte 16: 250 Not Used (spec explicitly requires this exact Reserved value)");
+
         const std::vector<uint8_t> packedTag = HartTypeCodec::encodePackedAscii("FV100CA", 8);
         check(packedTag.size() == 6, "packed-ASCII tag round-trips to 6 bytes for 8 chars");
 
@@ -268,6 +339,26 @@ int main() {
         check(referenceEngine.execute("hart-1", 1, 0x0D, {}, shortTagStillIntact) &&
                   std::equal(writeTagDescDateBody.begin(), writeTagDescDateBody.end(), shortTagStillIntact.bytes().begin()),
               "Long Tag write does not perturb the short Tag/Descriptor/Date (completely separate data items)");
+
+        // HCF_SPEC-127 6.21 (Command 21): resolved the id-21/0x15 catalog
+        // naming ambiguity this session (Universal semantics cannot
+        // legitimately be redefined by a vendor). Match -> same as Command
+        // 0; mismatch -> genuine HART silence (no response at all, unlike
+        // 0x0B's status-byte convention). Reuses `newLongTag`, already
+        // written and persisted by the 0x16 test just above. (Same identity
+        // block bytes as the 0x00/0x0B goldens earlier in this function --
+        // redeclared locally since that scope has already closed.)
+        const std::vector<uint8_t> identityBlockFor21{0xFE, 0x3E, 0x03, 0x05, 0x05, 0x62, 0x03, 0x00, 0x06, 0x02, 0x9E, 0xB1};
+        HartResponseBuilder cmd15MatchResp(32);
+        check(referenceEngine.execute("hart-1", 1, 0x15, newLongTag, cmd15MatchResp) &&
+                  cmd15MatchResp.size() == identityBlockFor21.size() &&
+                  std::equal(identityBlockFor21.begin(), identityBlockFor21.end(), cmd15MatchResp.bytes().begin()),
+              "0x15 (Command 21) long tag match: response identical to Command 0's identity block");
+        std::vector<uint8_t> wrongLongTag = newLongTag;
+        wrongLongTag[0] ^= 0xFF;
+        HartResponseBuilder cmd15MismatchResp(32);
+        check(!referenceEngine.execute("hart-1", 1, 0x15, wrongLongTag, cmd15MismatchResp),
+              "0x15 (Command 21) long tag mismatch: genuinely NO response (HART protocol silence, not a status byte)");
 
         // Universal Command 38 (Reset Configuration Changed Flag, MANDATORY
         // per HCF_SPEC-127 6.23): request/response both echo the same

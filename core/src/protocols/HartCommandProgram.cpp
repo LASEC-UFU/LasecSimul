@@ -19,6 +19,8 @@ size_t hartVarWidth(HartVarId id) noexcept {
         case HartVarId::Date: return 3;
         case HartVarId::FinalAssemblyNumber: return 3;
         case HartVarId::LongTag: return 32;
+        case HartVarId::UpperRangeValue: return 4;
+        case HartVarId::LowerRangeValue: return 4;
         default: return 1;
     }
 }
@@ -72,8 +74,33 @@ std::optional<std::span<const uint8_t>> evalExpr(const HartExpr& expr, const Har
                 case HartVarId::LongTag: return std::span<const uint8_t>(vars.longTag.data(), vars.longTag.size());
                 case HartVarId::PollingAddress: scratch[0] = vars.pollingAddress; return std::span(scratch.data(), 1);
                 case HartVarId::LoopCurrentMode: scratch[0] = vars.loopCurrentMode; return std::span(scratch.data(), 1);
+                case HartVarId::UpperRangeValue: {
+                    const auto encoded = HartTypeCodec::encodeFloat32BE(vars.upperRangeValue);
+                    std::copy(encoded.begin(), encoded.end(), scratch.begin());
+                    return std::span<const uint8_t>(scratch.data(), 4);
+                }
+                case HartVarId::LowerRangeValue: {
+                    const auto encoded = HartTypeCodec::encodeFloat32BE(vars.lowerRangeValue);
+                    std::copy(encoded.begin(), encoded.end(), scratch.begin());
+                    return std::span<const uint8_t>(scratch.data(), 4);
+                }
             }
             return std::nullopt;
+        case HartExpr::Kind::PercentOfRange:
+        case HartExpr::Kind::LoopCurrentMilliamps: {
+            // HCF_SPEC-127 6.3: Percent of Range follows PV linearly between
+            // Lower/Upper Range Value; Loop Current is the standard 4-20mA
+            // mapping of that same percent. A zero-span range (URV==LRV) is
+            // a degenerate device misconfiguration this project cannot fix
+            // up -- 0% is the defined fallback rather than propagating
+            // NaN/Inf into the response.
+            const float span = vars.upperRangeValue - vars.lowerRangeValue;
+            const float percent = span != 0.0f ? 100.0f * (vars.primaryVariable - vars.lowerRangeValue) / span : 0.0f;
+            const float value = expr.kind == HartExpr::Kind::PercentOfRange ? percent : 4.0f + 16.0f * (percent / 100.0f);
+            const auto encoded = HartTypeCodec::encodeFloat32BE(value);
+            std::copy(encoded.begin(), encoded.end(), scratch.begin());
+            return std::span<const uint8_t>(scratch.data(), 4);
+        }
         case HartExpr::Kind::UserVariable:
             for (const auto& value : vars.userVariables) {
                 if (value.id != expr.variableId) continue;
@@ -145,6 +172,8 @@ size_t estimateExprMax(const HartExpr& expr, size_t maxRequestBytes) noexcept {
         case HartExpr::Kind::LocalCode: return 1;
         case HartExpr::Kind::Variable: return hartVarWidth(expr.variable);
         case HartExpr::Kind::UserVariable: return 4;
+        case HartExpr::Kind::LoopCurrentMilliamps: return 4;
+        case HartExpr::Kind::PercentOfRange: return 4;
     }
     return maxRequestBytes;
 }

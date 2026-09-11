@@ -61,14 +61,20 @@ std::vector<HartCommandDescriptor> HartReferenceCatalog::commandDescriptors() {
         // (Universal, mandatory) now that the official spec text is
         // available -- see .spec/features/hart-device-engine.md "Anexo F".
         {0x14, "Read Long Tag"},
-        // NOTE: 0x15 (21) is catalogued here as "Write Output Information",
-        // a name that does NOT match HCF_SPEC-127's real Command 21 ("Read
-        // Unique Identifier Associated With Long Tag"). Left untouched --
-        // unclear whether this is a stale/incorrect label from the original
-        // vendor import or a genuine distinct meaning those reference
-        // devices use; Command 21 is deliberately NOT implemented under
-        // this id until that is resolved (see Anexo F).
-        {0x15, "Write Output Information"},
+        // 0x15 (21) was catalogued as "Write Output Information" from the
+        // original process_simul import -- a name that does NOT match
+        // HCF_SPEC-127's real Command 21 ("Read Unique Identifier
+        // Associated With Long Tag"). Resolved this session, not left
+        // ambiguous: 21 is in the Universal range (0-30), and Universal
+        // command semantics are fixed by the HART specification -- no
+        // compliant manufacturer may assign a different meaning to a
+        // Universal command number (this is the exact principle
+        // `HartCommandClassification.hpp` already enforces at authoring
+        // time for everything else). A vendor-specific "Write Output
+        // Information" at id 21 would itself be a HART non-compliance, so
+        // the old label can only be a stale/incorrect import, never a
+        // legitimate alternate meaning -- corrected to the real name.
+        {0x15, "Read Unique Identifier Associated With Long Tag"},
         {0x16, "Write Long Tag"},
         {0x21, "Read Device Variables"},
         {0x26, "Reset Configuration Changed Flag"},
@@ -238,24 +244,32 @@ std::vector<HartCommandDefinition> HartReferenceCatalog::commandProgramDefinitio
     // response is the 9-byte PV-only shape -- shorter than before, but
     // actually right instead of plausible-looking.
     //
-    // Loop Current (bytes 0-3) remains NaN: HCF_SPEC-127 defines it as the
-    // real 4-20mA output current, computable from PV and the profile's
-    // Upper/Lower Range Value via the standard linear mapping, but that
-    // requires an arithmetic expression primitive (`4 + 16*(PV-LRV)/(URV-LRV)`)
-    // the Lasec HART Command DSL does not have yet (only variable refs, hex
-    // constants, body slices, SET/IF/MAP/FOR_CODES -- no arithmetic). Adding
-    // it is real future work, not attempted this session; NaN is the
-    // documented "not computed" placeholder, not a fabricated current value.
+    // Loop Current (bytes 0-3) is now the real 4-20mA linear mapping of PV
+    // against the profile's Upper/Lower Range Value (`HartExpr::loopCurrentMilliamps()`,
+    // added this session alongside Command 2 -- see HartCommandProgram.hpp/.cpp).
+    // This closes the gap the previous session's status note flagged: Command
+    // 3 is now a full, real, spec-compliant PASS, not a partial one.
     {
         HartCommandDefinition cmd;
         cmd.id = 0x03;
-        const auto nan = HartTypeCodec::encodeFloat32BE(HartTypeCodec::quietNaN());
-        const std::vector<uint8_t> nanBytes(nan.begin(), nan.end());
         cmd.name = "Read Dynamic Variables And Loop Current";
         cmd.resp = {
-            HartStatement{HartAppendStmt{HartExpr::hex(nanBytes)}}, // loop current: not computed (see above)
+            HartStatement{HartAppendStmt{HartExpr::loopCurrentMilliamps()}},
             HartStatement{HartAppendStmt{HartExpr::var(HartVarId::PrimaryVariableUnit)}},
             HartStatement{HartAppendStmt{HartExpr::var(HartVarId::PrimaryVariable)}},
+        };
+        commands.push_back(std::move(cmd));
+    }
+
+    // 0x02 (2) -- Read Loop Current And Percent Of Range. HCF_SPEC-127 6.3:
+    // both fields are the same linear mapping Command 3 now uses.
+    {
+        HartCommandDefinition cmd;
+        cmd.id = 0x02;
+        cmd.name = "Read Loop Current And Percent Of Range";
+        cmd.resp = {
+            HartStatement{HartAppendStmt{HartExpr::loopCurrentMilliamps()}},
+            HartStatement{HartAppendStmt{HartExpr::percentOfRange()}},
         };
         commands.push_back(std::move(cmd));
     }
@@ -546,6 +560,134 @@ std::vector<HartCommandDefinition> HartReferenceCatalog::commandProgramDefinitio
         commands.push_back(std::move(cmd));
     }
 
+    // 0x09 (9) -- Read Device Variables with Status. HCF_SPEC-127 6.10:
+    // request is 1-8 raw Device Variable Code bytes (no count prefix,
+    // verified against the real byte table); response is Extended Field
+    // Device Status(1) + 8 bytes per requested slot (Code + Classification +
+    // Units + Value(Float) + Status) + a final 4-byte Slot-0 timestamp,
+    // matching Table 2's byte counts exactly (13/21/29/.../69 for 1-8 slots).
+    // Per the spec's own fallback rule ("If the Field Device does not
+    // support Device Variables... return PV when Device Variable zero is
+    // requested"), code 0 maps to the real PV; every other code uses the
+    // documented "not supported" convention (Value=NaN, Status=0x30 Bad+
+    // Constant, Units=250 Not Used, Classification=0 Not Yet Classified).
+    // The Slot-0 timestamp is returned as 0: this project has no monotonic
+    // virtual-time clock wired into the HART command path yet (same
+    // documented gap as the RC=64/Extended Device Status work in Anexo E).
+    {
+        HartCommandDefinition cmd;
+        cmd.id = 0x09;
+        cmd.name = "Read Device Variables with Status";
+        const auto nan = HartTypeCodec::encodeFloat32BE(HartTypeCodec::quietNaN());
+        const std::vector<uint8_t> nanBytes(nan.begin(), nan.end());
+        HartForCodesStmt forCodes;
+        forCodes.source = HartExpr::body();
+        forCodes.maxIterations = 8;
+        HartIfStmt isPv;
+        isPv.lhs = HartExpr::localCode();
+        isPv.rhs = HartExpr::hexByte(0x00);
+        isPv.thenBranch = {
+            HartStatement{HartAppendStmt{HartExpr::localCode()}},                       // Device Variable Code (echo: 0 = PV)
+            HartStatement{HartAppendStmt{HartExpr::hexByte(0x00)}},                      // Classification: Not Yet Classified
+            HartStatement{HartAppendStmt{HartExpr::var(HartVarId::PrimaryVariableUnit)}},// Units Code
+            HartStatement{HartAppendStmt{HartExpr::var(HartVarId::PrimaryVariable)}},    // Value
+            HartStatement{HartAppendStmt{HartExpr::hexByte(0x00)}},                      // Status: Good
+        };
+        isPv.elseBranch = {
+            HartStatement{HartAppendStmt{HartExpr::localCode()}},   // Device Variable Code (echo the requested, unsupported code)
+            HartStatement{HartAppendStmt{HartExpr::hexByte(0x00)}}, // Classification: Not Yet Classified
+            HartStatement{HartAppendStmt{HartExpr::hexByte(0xFA)}}, // Units: Not Used
+            HartStatement{HartAppendStmt{HartExpr::hex(nanBytes)}}, // Value: Not Used
+            HartStatement{HartAppendStmt{HartExpr::hexByte(0x30)}}, // Status: Bad + Constant
+        };
+        forCodes.body = {HartStatement{std::move(isPv)}};
+        cmd.resp = {
+            HartStatement{HartAppendStmt{HartExpr::hexByte(0x00)}}, // Extended Field Device Status: all-clear (not modeled)
+            HartStatement{std::move(forCodes)},
+            HartStatement{HartAppendStmt{HartExpr::hex({0x00, 0x00, 0x00, 0x00})}}, // Slot 0 timestamp: not modeled
+        };
+        commands.push_back(std::move(cmd));
+    }
+
+    // 0x0E (14) -- Read Primary Variable Transducer Information. HCF_SPEC-127
+    // 6.14: this project models no physical transducer at all, and the spec
+    // explicitly defines the "not applicable" response for exactly that
+    // case -- "Serial Number... set to 0. The other parameters... set to
+    // 0x7F,0xA0,0x00,0x00 or 250, Not Used". This is a complete, real,
+    // spec-compliant response derived directly from the spec's own
+    // documented fallback, not a placeholder invented for this project.
+    {
+        HartCommandDefinition cmd;
+        cmd.id = 0x0E;
+        cmd.name = "Read Primary Variable Transducer Information";
+        cmd.resp = {HartStatement{HartAppendStmt{HartExpr::hex({
+            0x00, 0x00, 0x00,             // Transducer Serial Number: 0 (not applicable)
+            0xFA,                          // Units Code: 250 Not Used
+            0x7F, 0xA0, 0x00, 0x00,        // Upper Transducer Limit: Not Used (NaN)
+            0x7F, 0xA0, 0x00, 0x00,        // Lower Transducer Limit: Not Used
+            0x7F, 0xA0, 0x00, 0x00,        // Minimum Span: Not Used
+        })}}};
+        commands.push_back(std::move(cmd));
+    }
+
+    // 0x0F (15) -- Read Device Information. HCF_SPEC-127 6.15: every field
+    // this project cannot genuinely model has a documented spec fallback --
+    // Transfer Function "must return 0, Linear, if... not supported" and
+    // Write Protect Code "must return 251, None, when... not implemented"
+    // (both quoted directly in the spec text), byte 16 is explicitly
+    // "Reserved, must be set to 250". Alarm Selection uses the Common
+    // Table 6 "251 = None" code (this project models no alarm/failsafe
+    // behavior). PV Units/Upper/Lower Range Value are real, profile-backed
+    // values, not placeholders. PV Damping Value defaults to 0.0 (no
+    // damping applied -- a real, valid value, not a stand-in for a missing
+    // one: a damping constant is genuinely optional hardware/firmware
+    // behavior this simulator does not add). Analog Channel Flags = 0x00:
+    // per Common Table 26, bit 0 reset means "this channel is an analog
+    // OUTPUT (DAC)", which is factually correct for a transmitter's PV loop
+    // -- not an unmodeled placeholder either.
+    {
+        HartCommandDefinition cmd;
+        cmd.id = 0x0F;
+        cmd.name = "Read Device Information";
+        cmd.resp = {
+            HartStatement{HartAppendStmt{HartExpr::hexByte(0xFB)}}, // Alarm Selection Code: 251 None
+            HartStatement{HartAppendStmt{HartExpr::hexByte(0x00)}}, // Transfer Function Code: 0 Linear
+            HartStatement{HartAppendStmt{HartExpr::var(HartVarId::PrimaryVariableUnit)}},
+            HartStatement{HartAppendStmt{HartExpr::var(HartVarId::UpperRangeValue)}},
+            HartStatement{HartAppendStmt{HartExpr::var(HartVarId::LowerRangeValue)}},
+            HartStatement{HartAppendStmt{HartExpr::hex({0x00, 0x00, 0x00, 0x00})}}, // Damping Value: 0.0 seconds
+            HartStatement{HartAppendStmt{HartExpr::hexByte(0xFB)}}, // Write Protect Code: 251 None
+            HartStatement{HartAppendStmt{HartExpr::hexByte(0xFA)}}, // Reserved: 250 Not Used
+            HartStatement{HartAppendStmt{HartExpr::hexByte(0x00)}}, // Analog Channel Flags: output channel, no flags
+        };
+        commands.push_back(std::move(cmd));
+    }
+
+    // 0x15 (21) -- Read Unique Identifier Associated With Long Tag.
+    // HCF_SPEC-127 6.21: response "Same as Command 0" on match. Unlike 0x0B
+    // (authored to PACTware's status-byte-on-mismatch convention), this
+    // command's real spec text says "No response is made unless the Long
+    // Tag matches" -- genuine HART protocol silence on mismatch, not a
+    // status byte. `bodySlice(32, 1)` in the else branch deliberately reads
+    // one byte past the 32-byte Long Tag field: for the well-formed 32-byte
+    // request this command expects, that slice is always out of bounds,
+    // which aborts the whole command via the executor's existing "never
+    // emit partial output on failure" contract -- HartEngine::execute()
+    // then returns false and no frame is sent at all. This reuses an
+    // existing guarantee rather than adding a dedicated "abort" primitive.
+    {
+        HartCommandDefinition cmd;
+        cmd.id = 0x15;
+        cmd.name = "Read Unique Identifier Associated With Long Tag";
+        HartIfStmt longTagMatch;
+        longTagMatch.lhs = HartExpr::bodySlice(0, 32);
+        longTagMatch.rhs = HartExpr::var(HartVarId::LongTag);
+        longTagMatch.thenBranch = hartIdentityBlockMacro();
+        longTagMatch.elseBranch = {HartStatement{HartAppendStmt{HartExpr::bodySlice(32, 1)}}};
+        cmd.resp = {HartStatement{std::move(longTagMatch)}};
+        commands.push_back(std::move(cmd));
+    }
+
     // `commandDescriptors()` documents the full HART command-number union the
     // process_simul reference devices reference (Universal, Common Practice,
     // and a Device-Specific vendor block) -- but listing a command number
@@ -599,6 +741,8 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<std::unordered_map<HartC
         vars.pollingAddress = plan.pollingAddress;
         vars.loopCurrentMode = plan.loopCurrentMode;
         vars.primaryVariableUnit = profile.primaryVariableUnit;
+        vars.upperRangeValue = profile.upperRangeValue;
+        vars.lowerRangeValue = profile.lowerRangeValue;
         vars.primaryVariable = static_cast<float>(primaryValue);
         std::vector<HartExecutionVariables::UserVariable> userVariables;
         userVariables.reserve(plan.variables.size());
