@@ -44,6 +44,7 @@ private:
     static double numberProperty(const registry::ComponentParams&, const char*, double);
     void setPropertyValue(const std::string&, const PropertyValue&);
     PropertyValue propertyValue(const std::string&) const;
+    void rebuildConfiguredPlan();
 
     Mode m_mode;
     simulation::Scheduler& m_scheduler;

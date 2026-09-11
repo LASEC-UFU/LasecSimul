@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -192,6 +193,30 @@ private:
     bool m_dynamicStepPending = false;
     double m_pendingDynamicErrorRatio = 0.0;
     SignalRuntimeMetrics m_metrics;
+};
+
+/**
+ * Reusable scalar expression/function evaluator.  This is deliberately a thin
+ * Core-owned facade over SignalCompiler/SignalRuntime, so protocol devices and
+ * control blocks use exactly the same expression grammar and validation.
+ * Compilation is cold-path; evaluate() is bounded and allocation-free.
+ */
+class SignalExpression {
+public:
+    SignalExpression() = default;
+    SignalExpression(std::vector<std::string> inputIds, std::string expression);
+
+    void compile(std::vector<std::string> inputIds, std::string expression);
+    bool valid() const noexcept { return static_cast<bool>(m_graph); }
+    const std::string& expression() const noexcept { return m_expression; }
+    const std::vector<std::string>& inputIds() const noexcept { return m_inputIds; }
+    double evaluate(std::span<const double> values, uint64_t timestampNs = 0);
+
+private:
+    std::vector<std::string> m_inputIds;
+    std::string m_expression;
+    std::shared_ptr<const CompiledSignalGraph> m_graph;
+    SignalRuntime m_runtime;
 };
 
 } // namespace lasecsimul::simulation

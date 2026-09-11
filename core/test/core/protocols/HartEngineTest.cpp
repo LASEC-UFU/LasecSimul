@@ -102,11 +102,17 @@ int main() {
     check(engine.setPrimaryValue("dev-a", 42.25), "runtime value update");
     check(!engine.setPrimaryValue("missing", 1.0), "missing device rejected");
     const std::vector<uint8_t> configuredResponse{0xCA, 0xFE};
-    const HartDevicePlan configuredDevice{"configured", "hart.default", "hart-1", 5,
-                                         "configured-id", 0.0,
-                                         {{1, true, false, {}}}};
+    HartDevicePlan configuredDevice{"configured", "hart.default", "hart-1", 5,
+                                    "configured-id", 0.0,
+                                    {{1, true, false, {}}}};
+    configuredDevice.variables.push_back({"PV", "Primary", "V", 2.0, "base * gain", false});
+    configuredDevice.variables.push_back({"base", "Base", "V", 3.0, "", false});
+    configuredDevice.variables.push_back({"gain", "Gain", "", 4.0, "", false});
     HartEngine configuredEngine(runtimeProfiles);
     check(configuredEngine.loadPlan({{configuredDevice}}), "per-device command configuration loads");
+    HartResponseBuilder expressionResponse(8);
+    check(configuredEngine.execute(5, 1, {}, expressionResponse) && expressionResponse.size() == 4,
+          "HART variable expression uses Core SignalEngine");
     check(configuredEngine.setCommandResponse("configured", 1, configuredResponse),
           "per-device static response update");
     HartResponseBuilder configuredResponseOut(4);

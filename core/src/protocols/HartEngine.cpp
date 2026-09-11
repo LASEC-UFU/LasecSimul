@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <memory>
 
 namespace lasecsimul::protocols {
 
@@ -139,6 +140,13 @@ HartPlanCompileResult HartPlanCompiler::compile(std::span<const HartDevicePlan> 
                 }
             }
         }
+        for (size_t i = 0; i < device.variables.size(); ++i) {
+            const auto& variable = device.variables[i];
+            if (variable.id.empty()) { result.error = "HART variable id is empty"; return result; }
+            if (!std::isfinite(variable.value)) { result.error = "HART variable value is not finite"; return result; }
+            for (size_t j = 0; j < i; ++j)
+                if (device.variables[j].id == variable.id) { result.error = "duplicate HART variable id"; return result; }
+        }
         for (const HartDevicePlan& prior : result.plan.devices) {
             if (prior.id == device.id) { result.error = "duplicate HART device id"; return result; }
             if (prior.bus == device.bus && prior.pollingAddress == device.pollingAddress) {
@@ -161,7 +169,20 @@ bool HartEngine::loadPlan(HartProtocolPlan plan) {
     for (const HartDevicePlan& device : checked.plan.devices) {
         const HartDeviceProfile* profile = m_profiles.find(device.profileId);
         if (!profile) return false;
-        resolved.push_back({device, profile});
+        RuntimeDevice runtime{device, profile, {}, {}};
+        runtime.variableValues.reserve(device.variables.size());
+        runtime.variableExpressions.reserve(device.variables.size());
+        std::vector<std::string> ids;
+        ids.reserve(device.variables.size());
+        for (const auto& variable : device.variables) ids.push_back(variable.id);
+        for (const auto& variable : device.variables) {
+            runtime.variableValues.push_back(variable.value);
+            if (!variable.expression.empty()) {
+                try { runtime.variableExpressions.push_back(std::make_shared<simulation::SignalExpression>(ids, variable.expression)); }
+                catch (...) { return false; }
+            } else runtime.variableExpressions.push_back(nullptr);
+        }
+        resolved.push_back(std::move(runtime));
     }
     m_devices = std::move(resolved);
     return true;
@@ -172,9 +193,28 @@ void HartEngine::clear() noexcept { m_devices.clear(); }
 bool HartEngine::setPrimaryValue(std::string_view deviceId, double value) noexcept {
     if (!std::isfinite(value)) return false;
     for (RuntimeDevice& device : m_devices) {
-        if (device.plan.id == deviceId) { device.plan.primaryValue = value; return true; }
+        if (device.plan.id == deviceId) {
+            device.plan.primaryValue = value;
+            for (size_t i = 0; i < device.plan.variables.size(); ++i)
+                if (device.plan.variables[i].id == "PV" || device.plan.variables[i].id == "primary")
+                    device.variableValues[i] = value;
+            return true;
+        }
     }
     return false;
+}
+
+double HartEngine::evaluatePrimary(RuntimeDevice& device) noexcept {
+    try {
+        for (size_t i = 0; i < device.variableExpressions.size(); ++i) {
+            if (device.variableExpressions[i])
+                device.variableValues[i] = device.variableExpressions[i]->evaluate(device.variableValues, 0);
+        }
+        for (size_t i = 0; i < device.plan.variables.size(); ++i)
+            if (device.plan.variables[i].id == "PV" || device.plan.variables[i].id == "primary")
+                return device.variableValues[i];
+    } catch (...) { return device.plan.primaryValue; }
+    return device.plan.primaryValue;
 }
 
 bool HartEngine::setCommandEnabled(std::string_view deviceId, HartCommandId command, bool enabled) noexcept {
@@ -232,7 +272,7 @@ bool HartEngine::execute(std::string_view bus, uint8_t pollingAddress, HartComma
         case 0: // Read unique identifier (semantic virtual representation).
             return response.writeAscii(selected->plan.uniqueId);
         case 1: { // Read primary variable: IEEE-754 float32, network byte order.
-            const float value = static_cast<float>(selected->plan.primaryValue);
+            const float value = static_cast<float>(evaluatePrimary(*selected));
             uint32_t bits = 0;
             std::memcpy(&bits, &value, sizeof(bits));
             return response.writeByte(static_cast<uint8_t>(bits >> 24)) &&

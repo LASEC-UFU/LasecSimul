@@ -2,11 +2,14 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
+
+#include "simulation/SignalEngine.hpp"
 
 namespace lasecsimul::protocols {
 
@@ -119,6 +122,17 @@ struct HartDevicePlan {
         std::vector<uint8_t> staticResponse;
     };
     std::vector<CommandConfiguration> commandConfigurations;
+    /** User-authored Core variables. A value is literal; expression is evaluated by
+     * SignalExpression using the same grammar as control.calc_expression. */
+    struct VariableConfiguration {
+        std::string id;
+        std::string name;
+        std::string unit;
+        double value = 0.0;
+        std::string expression;
+        bool writable = false;
+    };
+    std::vector<VariableConfiguration> variables;
 };
 
 struct HartProtocolPlan {
@@ -162,7 +176,10 @@ private:
     struct RuntimeDevice {
         HartDevicePlan plan;
         const HartDeviceProfile* profile = nullptr;
+        std::vector<std::shared_ptr<simulation::SignalExpression>> variableExpressions;
+        std::vector<double> variableValues;
     };
+    static double evaluatePrimary(RuntimeDevice&) noexcept;
     const HartProfileRegistry& m_profiles;
     HartCommandRegistry m_commands;
     std::vector<RuntimeDevice> m_devices;

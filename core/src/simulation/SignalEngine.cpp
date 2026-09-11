@@ -1183,6 +1183,49 @@ void SignalRuntime::noteExplicitBoundary(uint64_t timestampNs) {
     }
 }
 
+SignalExpression::SignalExpression(std::vector<std::string> inputIds, std::string expression) {
+    compile(std::move(inputIds), std::move(expression));
+}
+
+void SignalExpression::compile(std::vector<std::string> inputIds, std::string expression) {
+    if (inputIds.size() > 64) throw std::invalid_argument("expressao excede 64 entradas");
+    SignalGraphDefinition graph;
+    graph.maxVectorWidth = 1;
+    graph.maxMicrosteps = 64;
+    for (const std::string& id : inputIds) {
+        if (id.empty()) throw std::invalid_argument("entrada de expressao vazia");
+        SignalBlockDefinition input;
+        input.id = id;
+        input.kind = SignalBlockKind::ExternalInput;
+        input.output = {"out", {SignalScalarType::Real, 1}, ""};
+        input.realParameters = {0.0};
+        graph.blocks.push_back(std::move(input));
+    }
+    SignalBlockDefinition calc;
+    calc.id = "__core_expression_output";
+    calc.kind = SignalBlockKind::CalcExpression;
+    calc.output = {"out", {SignalScalarType::Real, 1}, ""};
+    calc.expression = expression;
+    for (const std::string& id : inputIds)
+        calc.inputs.push_back({id, {SignalScalarType::Real, 1}, ""});
+    graph.blocks.push_back(std::move(calc));
+    for (const std::string& id : inputIds)
+        graph.connections.push_back({id, "out", "__core_expression_output", id, false});
+    m_graph = SignalCompiler::compile(graph);
+    m_runtime.bind(m_graph);
+    m_inputIds = std::move(inputIds);
+    m_expression = std::move(expression);
+}
+
+double SignalExpression::evaluate(std::span<const double> values, uint64_t timestampNs) {
+    if (!m_graph || values.size() != m_inputIds.size())
+        throw std::invalid_argument("quantidade de entradas da expressao incorreta");
+    for (size_t i = 0; i < values.size(); ++i)
+        m_runtime.setExternalReal(m_inputIds[i], values[i]);
+    m_runtime.executeUntil(timestampNs);
+    return m_runtime.real(m_runtime.output("__core_expression_output"));
+}
+
 SignalSlotHandle SignalRuntime::output(std::string_view blockId) const {
     return SignalCompiler::output(m_graph, blockId);
 }

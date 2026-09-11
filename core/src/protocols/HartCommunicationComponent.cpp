@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <nlohmann/json.hpp>
 
 namespace lasecsimul::protocols {
 namespace {
@@ -48,6 +49,33 @@ HartCommunicationComponent::HartCommunicationComponent(Mode mode, simulation::Sc
     m_endpoint.configure(std::move(config));
 }
 
+void HartCommunicationComponent::rebuildConfiguredPlan() {
+    HartDevicePlan device;
+    device.id = "device-" + m_endpointName;
+    device.profileId = "lasecsimul.hart.process-simul-compatible";
+    device.bus = m_bus; device.pollingAddress = m_pollingAddress;
+    device.uniqueId = m_uniqueId; device.primaryValue = 0.0;
+    const HartDeviceProfile* profile = m_profiles.find(device.profileId);
+    if (!profile) { m_profiles.registerProfile(HartReferenceCatalog::makeGenericProfile()); profile = m_profiles.find(device.profileId); }
+    for (const auto& command : profile->commands) device.commandConfigurations.push_back({command.id, true, false, {}});
+    try {
+        const auto parsed = nlohmann::json::parse(m_hartVariablesJson.empty() ? "[]" : m_hartVariablesJson);
+        if (!parsed.is_array() || parsed.size() > 64) return;
+        for (const auto& item : parsed) {
+            if (!item.is_object() || !item.value("id", std::string{}).size()) return;
+            HartDevicePlan::VariableConfiguration variable;
+            variable.id = item.value("id", std::string{});
+            variable.name = item.value("name", variable.id);
+            variable.unit = item.value("unit", std::string{});
+            variable.value = item.value("value", 0.0);
+            variable.expression = item.value("expression", item.value("function", std::string{}));
+            variable.writable = item.value("writable", false);
+            device.variables.push_back(std::move(variable));
+        }
+    } catch (...) { return; }
+    if (!m_engine.loadPlan(HartProtocolPlan{{std::move(device)}})) return;
+}
+
 const char* HartCommunicationComponent::typeId() const { return m_mode == Mode::Serial ? "protocol.hart.serial" : "protocol.hart.udp"; }
 
 std::vector<PropertySchema> HartCommunicationComponent::propertySchema(Mode mode) {
@@ -74,7 +102,8 @@ void HartCommunicationComponent::setPropertyValue(const std::string& id, const P
     if (id == "bus") m_bus = std::get<std::string>(v); else if (id == "endpoint") m_endpointName = std::get<std::string>(v);
     else if (id == "enabled") m_enabled = std::get<bool>(v); else if (id == "pollingAddress") m_pollingAddress = static_cast<uint8_t>(std::clamp(std::get<double>(v), 0.0, 63.0));
     else if (id == "uniqueId") m_uniqueId = std::get<std::string>(v); else if (id == "tag") m_tag = std::get<std::string>(v); else if (id == "unit") m_unit = std::get<std::string>(v);
-    else if (id == "hartVariablesJson") m_hartVariablesJson = std::get<std::string>(v); else if (id == "hartCommandsJson") m_hartCommandsJson = std::get<std::string>(v);
+    else if (id == "hartVariablesJson") { m_hartVariablesJson = std::get<std::string>(v); rebuildConfiguredPlan(); }
+    else if (id == "hartCommandsJson") m_hartCommandsJson = std::get<std::string>(v);
     else if (id == "baudRate") m_baudRate = 1200;
     else if (id == "udpPort") m_udpPort = static_cast<uint16_t>(std::clamp(std::get<double>(v), 1.0, 65535.0));
     HartTransportConfig config = m_endpoint.config(); config.bus = m_bus; config.endpoint = m_endpointName;

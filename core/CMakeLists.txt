@@ -396,8 +396,10 @@ add_executable(hart_engine_test
     src/protocols/HartReferenceCatalog.cpp
     src/protocols/HartTransport.cpp
     src/protocols/HartCommunicationComponent.cpp
+    src/simulation/SignalEngine.cpp
 )
 target_include_directories(hart_engine_test PRIVATE include src)
+target_link_libraries(hart_engine_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
 add_test(NAME hart_engine COMMAND hart_engine_test)
 
 set_tests_properties(python_session PROPERTIES TIMEOUT 30 SKIP_REGULAR_EXPRESSION "PULADO:")
