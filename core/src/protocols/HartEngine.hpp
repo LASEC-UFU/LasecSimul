@@ -105,4 +105,50 @@ private:
     std::unordered_map<std::string, HartDeviceProfile> m_profiles;
 };
 
+struct HartDevicePlan {
+    std::string id;
+    std::string profileId;
+    std::string bus = "hart-1";
+    uint8_t pollingAddress = 0;
+    std::string uniqueId;
+    double primaryValue = 0.0;
+};
+
+struct HartProtocolPlan {
+    std::vector<HartDevicePlan> devices;
+};
+
+struct HartPlanCompileResult {
+    bool success = false;
+    std::string error;
+    HartProtocolPlan plan;
+};
+
+class HartPlanCompiler final {
+public:
+    static HartPlanCompileResult compile(std::span<const HartDevicePlan> devices,
+                                         const HartProfileRegistry& profiles);
+};
+
+/** Virtual HART runtime. It is deliberately synchronous and bounded: no host I/O,
+ * no worker per device and no string lookup in the command hot path. */
+class HartEngine final {
+public:
+    explicit HartEngine(const HartProfileRegistry& profiles);
+    bool loadPlan(HartProtocolPlan plan);
+    void clear() noexcept;
+    size_t deviceCount() const noexcept { return m_devices.size(); }
+    bool setPrimaryValue(std::string_view deviceId, double value) noexcept;
+    bool execute(uint8_t pollingAddress, HartCommandId command,
+                 std::span<const uint8_t> request, HartResponseBuilder& response) noexcept;
+
+private:
+    struct RuntimeDevice {
+        HartDevicePlan plan;
+        const HartDeviceProfile* profile = nullptr;
+    };
+    const HartProfileRegistry& m_profiles;
+    std::vector<RuntimeDevice> m_devices;
+};
+
 } // namespace lasecsimul::protocols

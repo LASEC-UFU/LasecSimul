@@ -1,6 +1,8 @@
 #include "HartEngine.hpp"
 
 #include <algorithm>
+#include <cmath>
+#include <cstring>
 
 namespace lasecsimul::protocols {
 
@@ -110,6 +112,77 @@ bool HartProfileRegistry::remove(std::string_view id) noexcept {
 const HartDeviceProfile* HartProfileRegistry::find(std::string_view id) const noexcept {
     const auto it = m_profiles.find(std::string(id));
     return it == m_profiles.end() ? nullptr : &it->second;
+}
+
+HartPlanCompileResult HartPlanCompiler::compile(std::span<const HartDevicePlan> devices,
+                                                const HartProfileRegistry& profiles) {
+    HartPlanCompileResult result;
+    for (const HartDevicePlan& device : devices) {
+        if (device.id.empty()) { result.error = "HART device id is empty"; return result; }
+        if (device.bus.empty()) { result.error = "HART bus is empty"; return result; }
+        if (device.pollingAddress > 63) { result.error = "HART polling address out of range"; return result; }
+        if (!profiles.find(device.profileId)) { result.error = "HART profile not found: " + device.profileId; return result; }
+        for (const HartDevicePlan& prior : result.plan.devices) {
+            if (prior.id == device.id) { result.error = "duplicate HART device id"; return result; }
+            if (prior.bus == device.bus && prior.pollingAddress == device.pollingAddress) {
+                result.error = "duplicate HART address on bus: " + device.bus; return result;
+            }
+        }
+        result.plan.devices.push_back(device);
+    }
+    result.success = true;
+    return result;
+}
+
+HartEngine::HartEngine(const HartProfileRegistry& profiles) : m_profiles(profiles) {}
+
+bool HartEngine::loadPlan(HartProtocolPlan plan) {
+    std::vector<RuntimeDevice> resolved;
+    resolved.reserve(plan.devices.size());
+    for (HartDevicePlan& device : plan.devices) {
+        const HartDeviceProfile* profile = m_profiles.find(device.profileId);
+        if (!profile) return false;
+        resolved.push_back({std::move(device), profile});
+    }
+    m_devices = std::move(resolved);
+    return true;
+}
+
+void HartEngine::clear() noexcept { m_devices.clear(); }
+
+bool HartEngine::setPrimaryValue(std::string_view deviceId, double value) noexcept {
+    if (!std::isfinite(value)) return false;
+    for (RuntimeDevice& device : m_devices) {
+        if (device.plan.id == deviceId) { device.plan.primaryValue = value; return true; }
+    }
+    return false;
+}
+
+bool HartEngine::execute(uint8_t pollingAddress, HartCommandId command,
+                         std::span<const uint8_t>, HartResponseBuilder& response) noexcept {
+    RuntimeDevice* selected = nullptr;
+    for (RuntimeDevice& device : m_devices) {
+        if (device.plan.pollingAddress == pollingAddress) { selected = &device; break; }
+    }
+    if (!selected) return false;
+    switch (command) {
+        case 0: // Read unique identifier (semantic virtual representation).
+            return response.writeAscii(selected->plan.uniqueId);
+        case 1: { // Read primary variable: IEEE-754 float32, network byte order.
+            const float value = static_cast<float>(selected->plan.primaryValue);
+            uint32_t bits = 0;
+            std::memcpy(&bits, &value, sizeof(bits));
+            return response.writeByte(static_cast<uint8_t>(bits >> 24)) &&
+                   response.writeByte(static_cast<uint8_t>(bits >> 16)) &&
+                   response.writeByte(static_cast<uint8_t>(bits >> 8)) &&
+                   response.writeByte(static_cast<uint8_t>(bits));
+        }
+        case 3: // Universal dynamic variables: PV only in the baseline profile.
+            return response.writeByte(1) && response.writeByte(0) &&
+                   response.writeByte(0) && response.writeByte(0);
+        default:
+            return false;
+    }
 }
 
 } // namespace lasecsimul::protocols

@@ -52,6 +52,24 @@ int main() {
     check(profiles.find("hart.default") != nullptr, "profile lookup");
     check(profiles.remove("hart.default") && profiles.find("hart.default") == nullptr, "profile removal");
 
+    HartProfileRegistry runtimeProfiles;
+    check(runtimeProfiles.registerProfile({"hart.default", 1, 0, 0,
+                                           {{0, "identity"}, {1, "primary"}, {3, "dynamic"}}}),
+          "runtime profile register");
+    const std::vector<HartDevicePlan> devices{{"dev-a", "hart.default", "hart-1", 3, "0011223344", 21.5},
+                                              {"dev-b", "hart.default", "hart-2", 3, "5566778899", 7.0}};
+    const HartPlanCompileResult plan = HartPlanCompiler::compile(devices, runtimeProfiles);
+    check(plan.success && plan.plan.devices.size() == 2, "plan compile multiple buses");
+    HartEngine engine(runtimeProfiles);
+    check(engine.loadPlan(plan.plan), "engine load plan");
+    HartResponseBuilder primary(8);
+    check(engine.execute(3, 1, {}, primary) && primary.size() == 4, "primary command dispatch");
+    check(engine.setPrimaryValue("dev-a", 42.25), "runtime value update");
+    check(!engine.setPrimaryValue("missing", 1.0), "missing device rejected");
+    const std::vector<HartDevicePlan> collision{{"a", "hart.default", "hart-1", 1, "a", 0.0},
+                                                {"b", "hart.default", "hart-1", 1, "b", 0.0}};
+    check(!HartPlanCompiler::compile(collision, runtimeProfiles).success, "same-bus address collision rejected");
+
     if (failures == 0) std::puts("HART engine contracts: PASS");
     return failures == 0 ? 0 : 1;
 }
