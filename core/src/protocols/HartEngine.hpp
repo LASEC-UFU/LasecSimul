@@ -112,6 +112,13 @@ struct HartDevicePlan {
     uint8_t pollingAddress = 0;
     std::string uniqueId;
     double primaryValue = 0.0;
+    struct CommandConfiguration {
+        HartCommandId command = 0;
+        bool enabled = true;
+        bool hasStaticResponse = false;
+        std::vector<uint8_t> staticResponse;
+    };
+    std::vector<CommandConfiguration> commandConfigurations;
 };
 
 struct HartProtocolPlan {
@@ -139,6 +146,9 @@ public:
     void clear() noexcept;
     size_t deviceCount() const noexcept { return m_devices.size(); }
     bool setPrimaryValue(std::string_view deviceId, double value) noexcept;
+    bool setCommandEnabled(std::string_view deviceId, HartCommandId command, bool enabled) noexcept;
+    bool setCommandResponse(std::string_view deviceId, HartCommandId command,
+                            std::span<const uint8_t> response) noexcept;
     bool registerCommandHandler(IHartCommandHandler& handler) { return m_commands.registerHandler(handler); }
     bool removeCommandHandler(HartCommandId command) noexcept { return m_commands.remove(command); }
     bool execute(std::string_view bus, uint8_t pollingAddress, HartCommandId command,

@@ -122,6 +122,23 @@ HartPlanCompileResult HartPlanCompiler::compile(std::span<const HartDevicePlan> 
         if (device.bus.empty()) { result.error = "HART bus is empty"; return result; }
         if (device.pollingAddress > 63) { result.error = "HART polling address out of range"; return result; }
         if (!profiles.find(device.profileId)) { result.error = "HART profile not found: " + device.profileId; return result; }
+        for (size_t i = 0; i < device.commandConfigurations.size(); ++i) {
+            const auto& configuration = device.commandConfigurations[i];
+            const bool declared = std::any_of(profiles.find(device.profileId)->commands.begin(),
+                                              profiles.find(device.profileId)->commands.end(),
+                                              [&](const HartCommandDescriptor& descriptor) {
+                                                  return descriptor.id == configuration.command;
+                                              });
+            if (!declared) { result.error = "HART command override is not declared by profile"; return result; }
+            if (configuration.staticResponse.size() > 255) {
+                result.error = "HART command override response exceeds frame limit"; return result;
+            }
+            for (size_t j = 0; j < i; ++j) {
+                if (device.commandConfigurations[j].command == configuration.command) {
+                    result.error = "duplicate HART command override"; return result;
+                }
+            }
+        }
         for (const HartDevicePlan& prior : result.plan.devices) {
             if (prior.id == device.id) { result.error = "duplicate HART device id"; return result; }
             if (prior.bus == device.bus && prior.pollingAddress == device.pollingAddress) {
@@ -160,6 +177,33 @@ bool HartEngine::setPrimaryValue(std::string_view deviceId, double value) noexce
     return false;
 }
 
+bool HartEngine::setCommandEnabled(std::string_view deviceId, HartCommandId command, bool enabled) noexcept {
+    for (RuntimeDevice& device : m_devices) {
+        if (device.plan.id != deviceId) continue;
+        for (auto& configuration : device.plan.commandConfigurations) {
+            if (configuration.command == command) { configuration.enabled = enabled; return true; }
+        }
+        return false;
+    }
+    return false;
+}
+
+bool HartEngine::setCommandResponse(std::string_view deviceId, HartCommandId command,
+                                    std::span<const uint8_t> response) noexcept {
+    if (response.size() > 255) return false;
+    for (RuntimeDevice& device : m_devices) {
+        if (device.plan.id != deviceId) continue;
+        for (auto& configuration : device.plan.commandConfigurations) {
+            if (configuration.command != command) continue;
+            configuration.hasStaticResponse = true;
+            configuration.staticResponse.assign(response.begin(), response.end());
+            return true;
+        }
+        return false;
+    }
+    return false;
+}
+
 bool HartEngine::execute(std::string_view bus, uint8_t pollingAddress, HartCommandId command,
                          std::span<const uint8_t> request, HartResponseBuilder& response) noexcept {
     RuntimeDevice* selected = nullptr;
@@ -173,6 +217,14 @@ bool HartEngine::execute(std::string_view bus, uint8_t pollingAddress, HartComma
     const bool declared = std::any_of(selected->profile->commands.begin(), selected->profile->commands.end(),
                                       [command](const HartCommandDescriptor& descriptor) { return descriptor.id == command; });
     if (!declared) return false;
+    for (const auto& configuration : selected->plan.commandConfigurations) {
+        if (configuration.command != command) continue;
+        if (!configuration.enabled) return false;
+        if (configuration.hasStaticResponse) {
+            return response.writeBytes(configuration.staticResponse);
+        }
+        break;
+    }
     if (IHartCommandHandler* custom = m_commands.find(command)) {
         return custom->execute({pollingAddress, static_cast<uint8_t>(command), request}, response);
     }

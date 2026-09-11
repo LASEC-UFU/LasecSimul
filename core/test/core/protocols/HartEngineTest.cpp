@@ -100,6 +100,22 @@ int main() {
           "same address dispatches by bus");
     check(engine.setPrimaryValue("dev-a", 42.25), "runtime value update");
     check(!engine.setPrimaryValue("missing", 1.0), "missing device rejected");
+    const std::vector<uint8_t> configuredResponse{0xCA, 0xFE};
+    const HartDevicePlan configuredDevice{"configured", "hart.default", "hart-1", 5,
+                                         "configured-id", 0.0,
+                                         {{1, true, false, {}}}};
+    HartEngine configuredEngine(runtimeProfiles);
+    check(configuredEngine.loadPlan({{configuredDevice}}), "per-device command configuration loads");
+    check(configuredEngine.setCommandResponse("configured", 1, configuredResponse),
+          "per-device static response update");
+    HartResponseBuilder configuredResponseOut(4);
+    check(configuredEngine.execute(5, 1, {}, configuredResponseOut) &&
+              configuredResponseOut.bytes().size() == 2 && configuredResponseOut.bytes()[0] == 0xCA,
+          "per-device static response dispatch");
+    check(configuredEngine.setCommandEnabled("configured", 1, false),
+          "per-device command disable");
+    HartResponseBuilder disabledResponse(4);
+    check(!configuredEngine.execute(5, 1, {}, disabledResponse), "disabled per-device command rejected");
     CustomHandler custom;
     check(engine.registerCommandHandler(custom), "custom command registration");
     HartResponseBuilder customResponse(4);
