@@ -14,6 +14,7 @@ import { connectEndpointToNode, normalizeWireGeometry, removeOrphanNodes, splitS
 import { assertTopologyInvariants } from "./ui/webview/topologyDocument";
 import { WebviewToHostMessage } from "./ui/webview/messages";
 import { ComponentPaletteViewProvider } from "./ui/views/ComponentPaletteViewProvider";
+import { PropertyInspectorViewProvider } from "./ui/views/PropertyInspectorViewProvider";
 import { materializePinGroup, registerPackage } from "./ui/webview/componentSymbols";
 import { buildGenericSubcircuitPackage, buildGenericSubcircuitSymbol, regenerateGenericSubcircuitState } from "./ui/webview/genericSubcircuitPackage";
 import { absoluteDeviceRefPath, absoluteSubcircuitRefPath, importProjectCommand, openProjectCommand, openProjectFile, openRecentProjectCommand, projectComponentToWebviewComponent, refreshDirtyIndicator, saveProjectAsCommand, saveProjectCommand, webviewComponentToProjectComponent } from "./project/projectCommands";
@@ -106,6 +107,8 @@ import { newIecProjectCommand } from "./plc/plcCommands";
 import { parseIecProject } from "./plc/iecProject";
 import { readPlcNativeModule } from "./plc/artifact";
 import { maybeOfferMachineNetworkSetup, registerMachineNetworkSetupCommand } from "./network/machineNetworkSetup";
+
+let propertyInspectorView: PropertyInspectorViewProvider | undefined;
 import {
   externalFolderPath,
   missingManifestDependencies,
@@ -1164,6 +1167,11 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
     return;
   }
   switch (message.type) {
+    case "selectionChanged": {
+      const selected = message.componentId ? state.schematicState.components.find((c) => c.id === message.componentId) : undefined;
+      propertyInspectorView?.setSelection(selected);
+      return;
+    }
     case "projectChanged": {
       // Vários fluxos client-side mutam `state` na Webview e mandam o snapshot inteiro aqui. O diff
       // precisa cobrir também propriedades/endpoints, porque undo/redo passa por este caminho.
@@ -1574,6 +1582,7 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
         pushPropertyToCore(message.componentId, message.name, message.value);
       }
       syncSchematicPanel();
+      propertyInspectorView?.setSelection(state.schematicState.components.find((c) => c.id === message.componentId));
       lasecPlotManager?.sync();
       if (state.simulationStatus === "running") {
         void pollInstrumentReadouts();
@@ -2427,6 +2436,12 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
     addPaletteComponent,
     (item) => removeRegisteredCatalogItemCommand(item, catalogCommandOptions()),
   );
+  const propertyInspector = new PropertyInspectorViewProvider(context.extensionUri, state.schematicState.catalog,
+    (componentId, name, value) => state.schematicPanel?.postMessage({ version: 1, type: "inspectorUpdateProperty", componentId, name, value }));
+  propertyInspectorView = propertyInspector;
+  context.subscriptions.push(vscode.window.registerWebviewViewProvider("lasecsimul.propertyInspector", propertyInspector, {
+    webviewOptions: { retainContextWhenHidden: true },
+  }));
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider("lasecsimul.componentPalette", state.paletteViewProvider, {

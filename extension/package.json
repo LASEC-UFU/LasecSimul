@@ -164,6 +164,9 @@
           "title": "LasecSimul",
           "icon": "media/activity-icon.svg"
         }
+      ],
+      "secondarySidebar": [
+        { "id": "lasecsimul.properties", "title": "Properties", "icon": "media/activity-icon.svg" }
       ]
     },
     "views": {
@@ -173,6 +176,9 @@
           "name": "Components",
           "type": "webview"
         }
+      ],
+      "lasecsimul.properties": [
+        { "id": "lasecsimul.propertyInspector", "name": "Property Inspector", "type": "webview" }
       ]
     },
     "configuration": {

@@ -1886,6 +1886,7 @@ function selectOnlyComponent(componentId: string): void {
   selectedWireSegment = undefined;
   selectedWireCorner = undefined;
   selectedTextLabels = [];
+  send({ version: WEBVIEW_MESSAGE_VERSION, type: "selectionChanged", componentId });
 }
 
 function selectOnlyWire(wireId: string, segmentIndex?: number): void {
@@ -2097,10 +2098,8 @@ function openSelectedProperties(): void {
 }
 
 function openPropertyDialog(component: WebviewComponentModel): void {
-  activePropertyTarget = { kind: "project", componentId: component.id };
-  propertyDialog.innerHTML = "";
-  propertyDialog.append(renderPropertySheet(component));
-  if (!propertyDialog.open) propertyDialog.showModal();
+  // Compatibility entry point: component properties are edited in the persistent right inspector.
+  selectOnlyComponent(component.id);
 }
 
 function renderBatchDialogContents(components: WebviewComponentModel[]): void {
@@ -2115,9 +2114,11 @@ function renderBatchDialogContents(components: WebviewComponentModel[]): void {
  * validação da tentativa anterior (só faz sentido dentro da MESMA sessão de diálogo aberto) -- ver
  * `applyBatchChange`, que re-renderiza SEM passar por aqui quando quer preservar o erro. */
 function openBatchPropertyDialog(components: WebviewComponentModel[]): void {
-  activePropertyTarget = { kind: "project-batch", componentIds: components.map((component) => component.id) };
-  activeBatchPropertyError = undefined;
-  renderBatchDialogContents(components);
+  if (components.length === 1) return selectOnlyComponent(components[0]!.id);
+  state.selectedComponentIds = components.map((component) => component.id);
+  state.selectedWireIds = [];
+  send({ version: WEBVIEW_MESSAGE_VERSION, type: "selectionChanged", componentId: null });
+  render();
 }
 
 function snapshotToDialogComponent(snapshot: InternalComponentSnapshot): WebviewComponentModel {
@@ -8813,6 +8814,9 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     state.selectedComponentIds = message.componentId ? [message.componentId] : [];
     state.selectedWireIds = [];
     render();
+  }
+  if (message.type === "inspectorUpdateProperty") {
+    send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: message.componentId, name: message.name, value: message.value });
   }
 
   if (message.type === "componentReadout") {

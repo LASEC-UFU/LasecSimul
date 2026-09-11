@@ -82,6 +82,7 @@ export interface InternalComponentSnapshot {
 export type HostToWebviewMessage =
   | { version: number; type: "init"; project: WebviewProjectState }
   | { version: number; type: "selectComponent"; componentId: string | null }
+  | { version: number; type: "inspectorUpdateProperty"; componentId: string; name: string; value: string | number | boolean }
   | { version: number; type: "beginComponentPlacement"; typeId: string }
   | { version: number; type: "syncState"; project: WebviewProjectState }
   /** PC-1/EX-7 (.spec/archive/legacy-v2/lasecsimul-native-devices.spec) -- versão incremental de "syncState": só os
@@ -180,6 +181,7 @@ export type HostToWebviewMessage =
   | { version: number; type: "triggerCreateSubcircuitFromSelection" };
 
 export type WebviewToHostMessage =
+  | { version: number; type: "selectionChanged"; componentId: string | null }
   | { version: number; type: "webviewReady" }
   | { version: number; type: "projectChanged"; project: WebviewProjectState }
   | { version: number; type: "requestAddComponent"; typeId: string }
