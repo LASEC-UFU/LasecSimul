@@ -9,21 +9,18 @@
 
 namespace lasecsimul::protocols {
 
-/** Authoring-side JSON <-> semantic DSL bridge for the Property Inspector's
- * Commands editor (FEAT-013 Property Inspector). The semantic authoring
- * definition is the persistence authority (section 67 of the Property
- * Inspector contract); this is the (de)serializer for it, not a second
- * compiled representation.
+/** Authoring-side JSON <-> semantic DSL bridge for HART command definitions.
+ * The semantic authoring definition is the persistence authority (section 67
+ * of the Property Inspector contract); this is the (de)serializer for it,
+ * not a second compiled representation.
  *
- * Scope of this iteration: a FLAT response-step subset (Hex Constant,
- * built-in Variable reference, Request Body, Body Slice appended in order) --
- * enough to author real read-only commands (matching the shape of the
- * already-migrated 0x00/0x01/0x03) end-to-end through the UI. `write`/`after`
- * stages and the control-flow primitives (`If`, `Map`, `ForCodes`) are not
- * yet exposed to JSON authoring; they remain C++-only
- * (`HartReferenceCatalog::commandProgramDefinitions()`). This is a documented
- * scope boundary, not a silent omission -- see
- * .spec/features/hart-device-engine.md "Anexo B". */
+ * Covers the FULL `HartStatement`/`HartExpr` vocabulary: `write`/`resp`/
+ * `after` stages, `Set`, `If`/EQ, `Map`, `ForCodes`, and expression nodes
+ * (Hex Constant, built-in Variable, user-variable-by-id, Request Body, Body
+ * Slice, `$code`). This is the JSON the Lasec HART Command DSL parser
+ * (`extension/src/dsl/HartCommandDsl.ts`) lowers to -- it is a compiler
+ * target, not something a human is expected to hand-write (see
+ * .spec/features/hart-device-engine.md "Anexo D"). */
 class HartCommandJson final {
 public:
     struct ParseResult {
@@ -32,7 +29,10 @@ public:
         HartCommandDefinition definition;
     };
 
-    /** One command object: `{id, name, enabled, responseSteps:[...]}`. */
+    /** One command object: `{id, name, enabled, writeSteps:[...],
+     * responseSteps:[...], afterSteps:[...]}`. `writeSteps`/`afterSteps`
+     * default to empty when absent (back-compat with the flat-`resp`-only
+     * shape from the previous iteration). */
     static ParseResult parseCommandDefinition(const nlohmann::json& value);
 
     struct CollectionParseResult {

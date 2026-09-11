@@ -69,6 +69,189 @@ bool isReservedStandardCommandId(HartCommandId id) noexcept {
     return id == 0x00 || id == 0x01 || id == 0x03 || id == 0x0B || id == 0x21;
 }
 
+// ---------------------------------------------------------------------------
+// JSON -> HartExpr / HartStatement (full recursive vocabulary: Set/If/Map/
+// ForCodes, not just flat Append). This is the compiler target the Lasec
+// HART Command DSL parser (extension/src/dsl/HartCommandDsl.ts) lowers to.
+
+std::optional<HartExpr> parseExpr(const nlohmann::json& node, std::string& error) {
+    if (!node.is_object() || !node.contains("kind") || !node["kind"].is_string()) {
+        error = "expression must be an object with a string \"kind\"";
+        return std::nullopt;
+    }
+    const std::string kind = node["kind"].get<std::string>();
+    if (kind == "hex") {
+        const std::string hexText = node.value("bytes", std::string{});
+        const auto bytes = parseHex(hexText);
+        if (!bytes) { error = "invalid hex constant \"" + hexText + "\""; return std::nullopt; }
+        return HartExpr::hex(*bytes);
+    }
+    if (kind == "variable") {
+        const std::string name = node.value("variable", std::string{});
+        if (name.empty()) { error = "empty variable reference"; return std::nullopt; }
+        if (const auto varId = parseVarId(name)) return HartExpr::var(*varId);
+        return HartExpr::userVar(name);
+    }
+    if (kind == "body") return HartExpr::body();
+    if (kind == "bodySlice") {
+        if (!node.contains("offset") || !node["offset"].is_number_unsigned() ||
+            !node.contains("length") || !node["length"].is_number_unsigned()) {
+            error = "bodySlice requires unsigned \"offset\" and \"length\"";
+            return std::nullopt;
+        }
+        return HartExpr::bodySlice(node["offset"].get<size_t>(), node["length"].get<size_t>());
+    }
+    if (kind == "localCode") return HartExpr::localCode();
+    error = "unknown expression kind \"" + kind + "\"";
+    return std::nullopt;
+}
+
+bool parseStatementList(const nlohmann::json& array, std::vector<HartStatement>& out, std::string& error, int depth);
+
+bool parseStatement(const nlohmann::json& node, std::vector<HartStatement>& out, std::string& error, int depth) {
+    if (depth > 8) { error = "command body nesting too deep"; return false; }
+    if (!node.is_object() || !node.contains("kind") || !node["kind"].is_string()) {
+        error = "statement must be an object with a string \"kind\"";
+        return false;
+    }
+    const std::string kind = node["kind"].get<std::string>();
+    // Any expression kind appearing directly in a statement list means
+    // "append this" (implicit Append, matches PACTware's SEQUENCE semantics
+    // and keeps the flat-step authoring shape from the previous iteration
+    // working unchanged).
+    if (kind == "hex" || kind == "variable" || kind == "body" || kind == "bodySlice" || kind == "localCode") {
+        auto expr = parseExpr(node, error);
+        if (!expr) return false;
+        out.push_back(HartStatement{HartAppendStmt{std::move(*expr)}});
+        return true;
+    }
+    if (kind == "set") {
+        const std::string target = node.value("target", std::string{});
+        const auto varId = parseVarId(target);
+        if (!varId) { error = "SET target \"" + target + "\" is not a recognized built-in variable"; return false; }
+        if (!node.contains("value")) { error = "SET requires a \"value\" expression"; return false; }
+        auto value = parseExpr(node["value"], error);
+        if (!value) return false;
+        out.push_back(HartStatement{HartSetStmt{*varId, std::move(*value)}});
+        return true;
+    }
+    if (kind == "if") {
+        if (!node.contains("lhs") || !node.contains("rhs")) { error = "IF requires \"lhs\" and \"rhs\""; return false; }
+        auto lhs = parseExpr(node["lhs"], error);
+        if (!lhs) return false;
+        auto rhs = parseExpr(node["rhs"], error);
+        if (!rhs) return false;
+        HartIfStmt stmt;
+        stmt.lhs = std::move(*lhs);
+        stmt.rhs = std::move(*rhs);
+        if (node.contains("then") && !parseStatementList(node["then"], stmt.thenBranch, error, depth + 1)) return false;
+        if (node.contains("else") && !parseStatementList(node["else"], stmt.elseBranch, error, depth + 1)) return false;
+        out.push_back(HartStatement{std::move(stmt)});
+        return true;
+    }
+    if (kind == "map") {
+        if (!node.contains("key")) { error = "MAP requires a \"key\" expression"; return false; }
+        auto key = parseExpr(node["key"], error);
+        if (!key) return false;
+        HartMapStmt stmt;
+        stmt.key = std::move(*key);
+        if (node.contains("table")) {
+            if (!node["table"].is_array()) { error = "MAP \"table\" must be an array"; return false; }
+            for (const auto& entry : node["table"]) {
+                const auto keyBytes = parseHex(entry.value("key", std::string{}));
+                const auto valueBytes = parseHex(entry.value("value", std::string{}));
+                if (!keyBytes || !valueBytes) { error = "MAP table entry has invalid hex"; return false; }
+                stmt.table.push_back({*keyBytes, *valueBytes});
+            }
+        }
+        if (node.contains("default")) {
+            const auto def = parseHex(node.value("default", std::string{}));
+            if (!def) { error = "MAP \"default\" has invalid hex"; return false; }
+            stmt.defaultValue = *def;
+        }
+        out.push_back(HartStatement{std::move(stmt)});
+        return true;
+    }
+    if (kind == "forCodes") {
+        if (!node.contains("source")) { error = "FOR_CODES requires a \"source\" expression"; return false; }
+        auto source = parseExpr(node["source"], error);
+        if (!source) return false;
+        HartForCodesStmt stmt;
+        stmt.source = std::move(*source);
+        if (node.contains("maxIterations")) {
+            if (!node["maxIterations"].is_number_unsigned()) { error = "FOR_CODES \"maxIterations\" must be a non-negative integer"; return false; }
+            stmt.maxIterations = node["maxIterations"].get<size_t>();
+        }
+        if (node.contains("prefix") && !parseStatementList(node["prefix"], stmt.prefix, error, depth + 1)) return false;
+        if (node.contains("body") && !parseStatementList(node["body"], stmt.body, error, depth + 1)) return false;
+        out.push_back(HartStatement{std::move(stmt)});
+        return true;
+    }
+    error = "unsupported statement kind \"" + kind + "\"";
+    return false;
+}
+
+bool parseStatementList(const nlohmann::json& array, std::vector<HartStatement>& out, std::string& error, int depth) {
+    if (!array.is_array()) { error = "expected a JSON array of statements"; return false; }
+    for (const auto& node : array) {
+        if (!parseStatement(node, out, error, depth)) return false;
+    }
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// HartExpr / HartStatement -> JSON (inverse of the above; used so the UI can
+// re-render what it just sent, and so a hand-authored C++ definition -- e.g.
+// the reference catalog's built-ins -- can round-trip for display).
+
+nlohmann::json exprToJson(const HartExpr& expr) {
+    switch (expr.kind) {
+        case HartExpr::Kind::HexConstant: return {{"kind", "hex"}, {"bytes", toHex(expr.constant)}};
+        case HartExpr::Kind::Variable: return {{"kind", "variable"}, {"variable", varIdName(expr.variable)}};
+        case HartExpr::Kind::UserVariable: return {{"kind", "variable"}, {"variable", expr.variableId}};
+        case HartExpr::Kind::RequestBody: return {{"kind", "body"}};
+        case HartExpr::Kind::BodySlice: return {{"kind", "bodySlice"}, {"offset", expr.offset}, {"length", expr.length}};
+        case HartExpr::Kind::LocalCode: return {{"kind", "localCode"}};
+    }
+    return {{"kind", "hex"}, {"bytes", ""}}; // unreachable: switch above is exhaustive over HartExpr::Kind
+}
+
+nlohmann::json statementsToJson(const std::vector<HartStatement>& statements);
+
+nlohmann::json statementToJson(const HartStatement& statement) {
+    return std::visit(
+        [](const auto& node) -> nlohmann::json {
+            using T = std::decay_t<decltype(node)>;
+            if constexpr (std::is_same_v<T, HartAppendStmt>) {
+                return exprToJson(node.source);
+            } else if constexpr (std::is_same_v<T, HartSetStmt>) {
+                return {{"kind", "set"}, {"target", varIdName(node.target)}, {"value", exprToJson(node.value)}};
+            } else if constexpr (std::is_same_v<T, HartIfStmt>) {
+                return {{"kind", "if"}, {"lhs", exprToJson(node.lhs)}, {"rhs", exprToJson(node.rhs)},
+                        {"then", statementsToJson(node.thenBranch)}, {"else", statementsToJson(node.elseBranch)}};
+            } else if constexpr (std::is_same_v<T, HartMapStmt>) {
+                nlohmann::json table = nlohmann::json::array();
+                for (const HartMapEntry& entry : node.table) {
+                    table.push_back({{"key", toHex(entry.key)}, {"value", toHex(entry.value)}});
+                }
+                return {{"kind", "map"}, {"key", exprToJson(node.key)}, {"table", std::move(table)},
+                        {"default", toHex(node.defaultValue)}};
+            } else if constexpr (std::is_same_v<T, HartForCodesStmt>) {
+                return {{"kind", "forCodes"}, {"source", exprToJson(node.source)}, {"maxIterations", node.maxIterations},
+                        {"prefix", statementsToJson(node.prefix)}, {"body", statementsToJson(node.body)}};
+            } else {
+                return {{"kind", "hex"}, {"bytes", ""}}; // unreachable: visit above is exhaustive over HartStatementNode
+            }
+        },
+        statement.node);
+}
+
+nlohmann::json statementsToJson(const std::vector<HartStatement>& statements) {
+    nlohmann::json out = nlohmann::json::array();
+    for (const HartStatement& statement : statements) out.push_back(statementToJson(statement));
+    return out;
+}
+
 } // namespace
 
 HartCommandJson::ParseResult HartCommandJson::parseCommandDefinition(const nlohmann::json& value) {
@@ -90,49 +273,14 @@ HartCommandJson::ParseResult HartCommandJson::parseCommandDefinition(const nlohm
     HartCommandDefinition definition;
     definition.id = id;
     definition.name = value.value("name", std::string{});
-    if (value.contains("enabled") && value["enabled"].is_boolean() && !value["enabled"].get<bool>()) {
-        // An explicitly-disabled custom command compiles to an empty response
-        // program rather than being silently skipped by the caller -- the
-        // collection parser filters it out instead (see parseCommandCollection).
-    }
 
     if (!value.contains("responseSteps") || !value["responseSteps"].is_array()) {
         result.error = "command \"" + definition.name + "\" requires a \"responseSteps\" array";
         return result;
     }
-    for (const auto& step : value["responseSteps"]) {
-        if (!step.is_object() || !step.contains("kind") || !step["kind"].is_string()) {
-            result.error = "response step must be an object with a string \"kind\"";
-            return result;
-        }
-        const std::string kind = step["kind"].get<std::string>();
-        if (kind == "hex") {
-            const std::string hexText = step.value("bytes", std::string{});
-            const auto bytes = parseHex(hexText);
-            if (!bytes) { result.error = "invalid hex constant \"" + hexText + "\""; return result; }
-            definition.resp.push_back(HartStatement{HartAppendStmt{HartExpr::hex(*bytes)}});
-        } else if (kind == "variable") {
-            const std::string name = step.value("variable", std::string{});
-            const auto varId = parseVarId(name);
-            if (varId) definition.resp.push_back(HartStatement{HartAppendStmt{HartExpr::var(*varId)}});
-            else if (!name.empty()) definition.resp.push_back(HartStatement{HartAppendStmt{HartExpr::userVar(name)}});
-            else { result.error = "empty variable reference"; return result; }
-        } else if (kind == "body") {
-            definition.resp.push_back(HartStatement{HartAppendStmt{HartExpr::body()}});
-        } else if (kind == "bodySlice") {
-            if (!step.contains("offset") || !step["offset"].is_number_unsigned() ||
-                !step.contains("length") || !step["length"].is_number_unsigned()) {
-                result.error = "bodySlice step requires unsigned \"offset\" and \"length\"";
-                return result;
-            }
-            definition.resp.push_back(HartStatement{
-                HartAppendStmt{HartExpr::bodySlice(step["offset"].get<size_t>(), step["length"].get<size_t>())}});
-        } else {
-            result.error = "unsupported response step kind \"" + kind +
-                           "\" (only hex/variable/body/bodySlice are authorable from the UI in this iteration)";
-            return result;
-        }
-    }
+    if (!parseStatementList(value["responseSteps"], definition.resp, result.error, 0)) return result;
+    if (value.contains("writeSteps") && !parseStatementList(value["writeSteps"], definition.write, result.error, 0)) return result;
+    if (value.contains("afterSteps") && !parseStatementList(value["afterSteps"], definition.after, result.error, 0)) return result;
 
     result.success = true;
     result.definition = std::move(definition);
@@ -171,36 +319,10 @@ HartCommandJson::CollectionParseResult HartCommandJson::parseCommandCollection(c
 }
 
 nlohmann::json HartCommandJson::toJson(const HartCommandDefinition& definition) {
-    nlohmann::json steps = nlohmann::json::array();
-    bool unsupported = false;
-    for (const HartStatement& statement : definition.resp) {
-        const auto* append = std::get_if<HartAppendStmt>(&statement.node);
-        if (!append) { unsupported = true; break; }
-        switch (append->source.kind) {
-            case HartExpr::Kind::HexConstant:
-                steps.push_back({{"kind", "hex"}, {"bytes", toHex(append->source.constant)}});
-                break;
-            case HartExpr::Kind::Variable:
-                steps.push_back({{"kind", "variable"}, {"variable", varIdName(append->source.variable)}});
-                break;
-            case HartExpr::Kind::UserVariable:
-                steps.push_back({{"kind", "variable"}, {"variable", append->source.variableId}});
-                break;
-            case HartExpr::Kind::RequestBody:
-                steps.push_back({{"kind", "body"}});
-                break;
-            case HartExpr::Kind::BodySlice:
-                steps.push_back({{"kind", "bodySlice"}, {"offset", append->source.offset}, {"length", append->source.length}});
-                break;
-            case HartExpr::Kind::LocalCode:
-                unsupported = true;
-                break;
-        }
-        if (unsupported) break;
-    }
     nlohmann::json out{{"id", definition.id}, {"name", definition.name}, {"enabled", true}};
-    if (unsupported) { out["responseSteps"] = nlohmann::json::array(); out["unsupported"] = true; }
-    else out["responseSteps"] = std::move(steps);
+    out["responseSteps"] = statementsToJson(definition.resp);
+    if (!definition.write.empty()) out["writeSteps"] = statementsToJson(definition.write);
+    if (!definition.after.empty()) out["afterSteps"] = statementsToJson(definition.after);
     return out;
 }
 

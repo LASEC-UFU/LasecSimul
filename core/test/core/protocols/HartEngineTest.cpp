@@ -318,6 +318,168 @@ int main() {
         HartResponseBuilder stillBuiltin(32);
         check(jsonEngine.execute("hart-1", 9, 0x00, {}, stillBuiltin) && stillBuiltin.size() == 12,
               "built-ins survive a broken custom command install (fallback, not a crash)");
+
+        // Full statement vocabulary through JSON: write/SET, IF/EQ, MAP,
+        // FOR_CODES -- not just the flat Append subset. This is the exact
+        // compiler target the Lasec HART Command DSL (extension/src/dsl/
+        // HartCommandDsl.ts) lowers to; this test proves the JSON side of
+        // that bridge independent of the TypeScript parser.
+        const std::string fullVocabJson = R"([{
+            "id": 160, "name": "Full Vocabulary",
+            "writeSteps": [{"kind": "set", "target": "PrimaryVariableUnit", "value": {"kind": "bodySlice", "offset": 0, "length": 1}}],
+            "responseSteps": [
+                {"kind": "if",
+                 "lhs": {"kind": "variable", "variable": "PrimaryVariableUnit"},
+                 "rhs": {"kind": "hex", "bytes": "11"},
+                 "then": [{"kind": "hex", "bytes": "AA"}],
+                 "else": [{"kind": "hex", "bytes": "BB"}]},
+                {"kind": "map",
+                 "key": {"kind": "bodySlice", "offset": 1, "length": 1},
+                 "table": [{"key": "01", "value": "C1"}, {"key": "02", "value": "C2"}],
+                 "default": "C0"},
+                {"kind": "forCodes",
+                 "source": {"kind": "bodySlice", "offset": 2, "length": 2},
+                 "maxIterations": 4,
+                 "body": [{"kind": "localCode"}]}
+            ]
+        }])";
+        const auto fullVocabParsed = HartCommandJson::parseCommandCollection(fullVocabJson);
+        check(fullVocabParsed.success && fullVocabParsed.definitions.size() == 1 &&
+                  fullVocabParsed.definitions[0].write.size() == 1 && fullVocabParsed.definitions[0].resp.size() == 3,
+              "JSON bridge parses write/SET + IF/MAP/FOR_CODES, not just flat Append");
+
+        HartProfileRegistry fullVocabProfiles;
+        check(fullVocabProfiles.registerProfile(HartReferenceCatalog::makeGenericProfile()), "full-vocab profile register");
+        HartEngine fullVocabEngine(fullVocabProfiles);
+        HartDevicePlan fullVocabDevice{"full-vocab-device", "lasecsimul.hart.process-simul-compatible", "hart-1", 12, "029EB1", 0.0};
+        for (const auto& command : HartReferenceCatalog::commandDescriptors())
+            fullVocabDevice.commandConfigurations.push_back({command.id, true, false, {}});
+        check(fullVocabEngine.loadPlan({{fullVocabDevice}}), "full-vocab device plan loads");
+        check(HartReferenceCatalog::installCommandPrograms(fullVocabEngine, fullVocabParsed.definitions).success,
+              "full-vocab command installs (write/SET + IF/MAP/FOR_CODES all validate)");
+
+        const uint8_t fullVocabRequest1[] = {0x11, 0x01, 0x07, 0x08};
+        HartResponseBuilder fullVocabOut1(16);
+        const std::vector<uint8_t> fullVocabExpected1{0xAA, 0xC1, 0x07, 0x08};
+        check(fullVocabEngine.execute("hart-1", 12, 160, fullVocabRequest1, fullVocabOut1) &&
+                  fullVocabOut1.size() == fullVocabExpected1.size() &&
+                  std::equal(fullVocabExpected1.begin(), fullVocabExpected1.end(), fullVocabOut1.bytes().begin()),
+              "JSON-authored write/SET observed by resp's IF, matching the C++-authored equivalent byte-for-byte");
+
+        const uint8_t fullVocabRequest2[] = {0x22, 0x09, 0x0A, 0x0B};
+        HartResponseBuilder fullVocabOut2(16);
+        const std::vector<uint8_t> fullVocabExpected2{0xBB, 0xC0, 0x0A, 0x0B};
+        check(fullVocabEngine.execute("hart-1", 12, 160, fullVocabRequest2, fullVocabOut2) &&
+                  fullVocabOut2.size() == fullVocabExpected2.size() &&
+                  std::equal(fullVocabExpected2.begin(), fullVocabExpected2.end(), fullVocabOut2.bytes().begin()),
+              "JSON-authored IF else branch and MAP default both reachable");
+
+        const nlohmann::json fullVocabRoundTrip = HartCommandJson::toJson(fullVocabParsed.definitions[0]);
+        const auto fullVocabReparsed = HartCommandJson::parseCommandDefinition(fullVocabRoundTrip);
+        check(fullVocabReparsed.success, "full-vocab definition round-trips through toJson() back to a valid definition");
+        HartResponseBuilder fullVocabRoundTripOut(16);
+        const auto fullVocabRoundTripCompiled = HartCommandCompiler::compile(fullVocabReparsed.definition);
+        check(fullVocabRoundTripCompiled.success &&
+                  HartCommandExecutor::execute(fullVocabRoundTripCompiled.program, HartExecutionVariables{}, fullVocabRequest1, fullVocabRoundTripOut) &&
+                  fullVocabRoundTripOut.size() == fullVocabExpected1.size() &&
+                  std::equal(fullVocabExpected1.begin(), fullVocabExpected1.end(), fullVocabRoundTripOut.bytes().begin()),
+              "toJson() -> re-parse -> re-compile produces byte-identical behavior (no data lost in the round trip)");
+
+        // Write-ownership (which built-in variables SET may target) is the
+        // compiler's rule, not re-implemented at the JSON layer: this JSON
+        // parses structurally (any known HartVarId name is syntactically
+        // valid as a SET target), and is rejected only when compiled/installed
+        // -- one source of truth for the rule, not two that could drift apart.
+        const auto badSetParsed = HartCommandJson::parseCommandCollection(
+            R"([{"id": 161, "responseSteps": [{"kind": "set", "target": "ManufacturerId", "value": {"kind": "hex", "bytes": "01"}}]}])");
+        check(badSetParsed.success, "JSON bridge parses a structurally-valid SET target regardless of write-ownership");
+        const auto badSetInstall = HartReferenceCatalog::installCommandPrograms(fullVocabEngine, badSetParsed.definitions);
+        check(!badSetInstall.success && badSetInstall.error.find("non-writable") != std::string::npos,
+              "the compiler (not the JSON parser) rejects SET to a non-writable built-in variable");
+    }
+
+    // Cross-language proof that 0x0B is genuinely DSL-representable (FASE 72
+    // gate): this exact JSON is what extension/src/dsl/HartCommandDsl.ts's
+    // hartCommandBodyToJson() produces for parsing the command-DSL source
+    //   { if in[0:6] == Tag { hex("00") -> out; IdentityBlock -> out }
+    //     else { hex("01") -> out; IdentityBlock -> out } }
+    // (see HartCommandDsl.test.ts's "comando 0x0B equivalente" case for the
+    // TypeScript-side half of this proof). Installed here as a CUSTOM command
+    // (id 175, distinct from the reserved 0x0B) and compared byte-for-byte
+    // against the same golden identity block/status bytes the hand-authored
+    // 0x0B program produces -- proving the DSL path is not just "parses" but
+    // functionally equivalent to the C++ AST it is meant to replace.
+    {
+        HartProfileRegistry dslProfiles;
+        check(dslProfiles.registerProfile(HartReferenceCatalog::makeGenericProfile()), "DSL-0x0B profile register");
+        HartEngine dslEngine(dslProfiles);
+        HartDevicePlan dslDevice{"dsl-0x0b-device", "lasecsimul.hart.process-simul-compatible", "hart-1", 20, "029EB1", 0.0};
+        dslDevice.tag = "FV100CA";
+        for (const auto& command : HartReferenceCatalog::commandDescriptors())
+            dslDevice.commandConfigurations.push_back({command.id, true, false, {}});
+        // 175 == 0xAF, deliberately NOT one of the 60 catalogued ids (unlike
+        // the "full vocabulary" test's 160 == 0xA0, which happens to already
+        // be standard) -- a genuinely custom id must be declared explicitly
+        // when driving HartEngine directly (HartCommunicationComponent does
+        // this automatically via its hartCommandsJson pre-scan).
+        dslDevice.commandConfigurations.push_back({175, true, false, {}});
+        check(dslEngine.loadPlan({{dslDevice}}), "DSL-0x0B device plan loads");
+
+        const nlohmann::json dslLoweredJson = nlohmann::json::parse(R"([{
+            "id": 175, "name": "Custom 0x0B via DSL", "enabled": true,
+            "writeSteps": [],
+            "responseSteps": [{
+                "kind": "if",
+                "lhs": {"kind": "bodySlice", "offset": 0, "length": 6},
+                "rhs": {"kind": "variable", "variable": "Tag"},
+                "then": [
+                    {"kind": "hex", "bytes": "00"},
+                    {"kind": "hex", "bytes": "FE"},
+                    {"kind": "variable", "variable": "ManufacturerId"},
+                    {"kind": "variable", "variable": "DeviceType"},
+                    {"kind": "variable", "variable": "NumRequestPreambles"},
+                    {"kind": "variable", "variable": "UniversalCommandRevision"},
+                    {"kind": "variable", "variable": "TransmitterSpecificRevision"},
+                    {"kind": "variable", "variable": "SoftwareRevision"},
+                    {"kind": "variable", "variable": "HardwareRevisionAndSignal"},
+                    {"kind": "variable", "variable": "Flags"},
+                    {"kind": "variable", "variable": "DeviceId"}
+                ],
+                "else": [
+                    {"kind": "hex", "bytes": "01"},
+                    {"kind": "hex", "bytes": "FE"},
+                    {"kind": "variable", "variable": "ManufacturerId"},
+                    {"kind": "variable", "variable": "DeviceType"},
+                    {"kind": "variable", "variable": "NumRequestPreambles"},
+                    {"kind": "variable", "variable": "UniversalCommandRevision"},
+                    {"kind": "variable", "variable": "TransmitterSpecificRevision"},
+                    {"kind": "variable", "variable": "SoftwareRevision"},
+                    {"kind": "variable", "variable": "HardwareRevisionAndSignal"},
+                    {"kind": "variable", "variable": "Flags"},
+                    {"kind": "variable", "variable": "DeviceId"}
+                ]
+            }]
+        }])");
+        const auto dslParsed = HartCommandJson::parseCommandCollection(dslLoweredJson.dump());
+        check(dslParsed.success, "DSL-lowered JSON for 0x0B parses");
+        const auto dslInstalled = HartReferenceCatalog::installCommandPrograms(dslEngine, dslParsed.definitions);
+        check(dslInstalled.success, "DSL-lowered 0x0B compiles and installs");
+
+        const std::vector<uint8_t> identityBlock{0xFE, 0x3E, 0x03, 0x05, 0x05, 0x62, 0x03, 0x00, 0x06, 0x02, 0x9E, 0xB1};
+        const std::vector<uint8_t> packedTag = HartTypeCodec::encodePackedAscii("FV100CA", 8);
+
+        HartResponseBuilder dslMatch(32);
+        check(dslEngine.execute("hart-1", 20, 175, packedTag, dslMatch) &&
+                  dslMatch.size() == 13 && dslMatch.bytes()[0] == 0x00 &&
+                  std::equal(identityBlock.begin(), identityBlock.end(), dslMatch.bytes().begin() + 1),
+              "DSL-authored 0x0B-equivalent: tag match produces the SAME bytes as the hand-authored 0x0B golden");
+
+        std::vector<uint8_t> wrongTag = packedTag;
+        wrongTag[0] ^= 0xFF;
+        HartResponseBuilder dslMismatch(32);
+        check(dslEngine.execute("hart-1", 20, 175, wrongTag, dslMismatch) &&
+                  dslMismatch.size() == 13 && dslMismatch.bytes()[0] == 0x01,
+              "DSL-authored 0x0B-equivalent: tag mismatch produces status 0x01, matching the hand-authored golden");
     }
 
     // HartCommunicationComponent end to end: construction reads the FULL saved
@@ -335,9 +497,27 @@ int main() {
         params.properties["pollingAddress"] = 7.0;
         params.properties["enabled"] = true;
         params.properties["hartVariablesJson"] = std::string(
-            R"([{"id":"PV","name":"Process Value","role":"PV","type":"Float32","direction":"Internal","value":42.5},{"id":"DiagnosticX","name":"Diagnostic X","type":"Float32","direction":"Internal","value":7.0}])");
+            R"([{"id":"PV","name":"Process Value","role":"PV","type":"Float32","direction":"Internal","value":42.5},)"
+            R"({"id":"DiagnosticX","name":"Diagnostic X","type":"Float32","direction":"Internal","value":7.0},)"
+            R"({"id":"DiagByte","name":"Diag Byte","type":"UInt8","direction":"Internal","value":200},)"
+            R"({"id":"DiagSigned","name":"Diag Signed","type":"Int16","direction":"Internal","value":-5},)"
+            R"({"id":"DiagFlag","name":"Diag Flag","type":"Bool","direction":"Internal","value":1}])");
+        // Command 152 (0x98) is deliberately "Vendor Keepalive" -- one of the
+        // 55 catalogued standard/vendor ids that has ONLY an auto-generated
+        // "echo body" fallback (see HartReferenceCatalog::commandProgramDefinitions()).
+        // Authoring a real custom body under that exact id is the regression
+        // gate for "a custom command MUST override its fallback, even a
+        // standard/vendor one, without corrupting the rest of the device's
+        // command dispatch" -- this combination is what first exposed the
+        // real bug fixed in rebuildConfiguredPlan() (a duplicate
+        // commandConfigurations entry silently failed the WHOLE plan, taking
+        // 0x01/0x0B/every other command down with it, not just 0x98).
         params.properties["hartCommandsJson"] = std::string(
-            R"([{"id":150,"name":"Echo Tag","responseSteps":[{"kind":"variable","variable":"Tag"}]},{"id":151,"name":"Diagnostic X","responseSteps":[{"kind":"variable","variable":"DiagnosticX"}]}])");
+            R"([{"id":150,"name":"Echo Tag","responseSteps":[{"kind":"variable","variable":"Tag"}]},)"
+            R"({"id":151,"name":"Diagnostic X","responseSteps":[{"kind":"variable","variable":"DiagnosticX"}]},)"
+            R"({"id":152,"name":"Diag Byte","responseSteps":[{"kind":"variable","variable":"DiagByte"}]},)"
+            R"({"id":153,"name":"Diag Signed","responseSteps":[{"kind":"variable","variable":"DiagSigned"}]},)"
+            R"({"id":154,"name":"Diag Flag","responseSteps":[{"kind":"variable","variable":"DiagFlag"}]}])");
 
         HartCommunicationComponent component(HartCommunicationComponent::Mode::Serial, scheduler, params);
         auto findValue = [&component](const char* id) -> lasecsimul::PropertyValue {
@@ -356,7 +536,11 @@ int main() {
         check(HartFrameCodec::decode(pvResponseWire.bytes(), pvResponse) && pvResponse.payload.size() == 5,
               "component: saved variable's value (42.5) reaches the standard 0x01 response");
         const auto expectedPv = HartTypeCodec::encodeFloat32BE(42.5f);
-        check(std::equal(expectedPv.begin(), expectedPv.end(), pvResponse.payload.begin() + 1),
+        // `check()` logs and continues rather than aborting, so a prior
+        // failed size check must not be assumed true here -- re-guard size
+        // before the +1 iterator arithmetic (a `check()`-only guard above is
+        // not enough to prevent UB in a later, separate check() call).
+        check(pvResponse.payload.size() == 5 && std::equal(expectedPv.begin(), expectedPv.end(), pvResponse.payload.begin() + 1),
               "component: 0x01 response carries the exact saved PV value");
 
         HartFrame customRequest{7, 150, {}};
@@ -381,13 +565,39 @@ int main() {
                   std::equal(expectedDiagnostic.begin(), expectedDiagnostic.end(), userVariableResponse.payload.begin()),
               "component: command 151 reads DiagnosticX by variableId");
 
+        // Regression for the type-aware UserVariable encoding fix: before it,
+        // EVERY user variable encoded as 4-byte Float32BE regardless of its
+        // declared "type" -- the field was editable, persisted, and silently
+        // ignored by the runtime (exactly the decorative-property bug class
+        // this audit chain exists to find).
+        auto transactCommand = [&component](HartCommandId command) -> std::vector<uint8_t> {
+            HartFrame request{7, command, {}};
+            HartResponseBuilder wire(16);
+            if (!HartFrameCodec::encode(request, wire)) return {};
+            HartResponseBuilder responseWire(16);
+            if (!component.transact(wire.bytes(), responseWire)) return {};
+            HartFrame response;
+            if (!HartFrameCodec::decode(responseWire.bytes(), response)) return {};
+            return response.payload;
+        };
+        const auto diagByte = transactCommand(152);
+        check(diagByte.size() == 1 && diagByte[0] == 200,
+              "component: UInt8 user variable encodes as exactly 1 byte (200), not 4-byte float -- AND command 0x98 "
+              "returns this custom byte, not an echo of the (empty) request body, proving the custom-overrides-"
+              "standard-fallback fix (section 51/52) works for a real device, not just the isolated engine test above");
+        const auto diagSigned = transactCommand(153);
+        check(diagSigned.size() == 2 && diagSigned[0] == 0xFF && diagSigned[1] == 0xFB,
+              "component: Int16 user variable (-5) encodes as the correct 2-byte two's-complement big-endian bytes");
+        const auto diagFlag = transactCommand(154);
+        check(diagFlag.size() == 1 && diagFlag[0] == 1, "component: Bool user variable encodes as exactly 1 byte");
+
         // Simulate a project reopen: a FRESH instance built from the exact same
         // saved properties must behave identically, not reset to defaults.
         HartCommunicationComponent reopened(HartCommunicationComponent::Mode::Serial, scheduler, params);
         HartResponseBuilder reopenedWire(32);
         check(reopened.transact(pvWire.bytes(), reopenedWire), "reopened component transacts the same standard command");
         HartFrame reopenedResponse;
-        check(HartFrameCodec::decode(reopenedWire.bytes(), reopenedResponse) &&
+        check(HartFrameCodec::decode(reopenedWire.bytes(), reopenedResponse) && reopenedResponse.payload.size() == 5 &&
                   std::equal(expectedPv.begin(), expectedPv.end(), reopenedResponse.payload.begin() + 1),
               "reopened component: same saved PV value, not reset to 0.0 (persistence round-trip)");
 

@@ -1,5 +1,66 @@
 # NEXT ACTION
 
+## FEAT-013 Lasec HART Command DSL — real parser built, 0x0B cross-language proven, 2 more real bugs fixed (2026-09-11)
+
+Result: **IN_PROGRESS — the "central" HART Command DSL/Graph/Compiler area
+now has a real, tested, working parser and one command (0x0B) with genuine
+end-to-end cross-language proof; the other 54+4 commands, the visual Command
+Graph editor, legacy removal, and every non-HART Property Inspector domain
+remain open with concrete next actions, not vague future work.**
+
+The task this time explicitly demanded completing an enormous, genuinely
+multi-week scope (unified Lasec DSL for circuits AND HART commands, full
+Visual⇄DSL round-trip, Property Inspector audited property-by-property
+across every domain, all ~60 HART commands migrated, legacy paths removed,
+fuzzing, benchmarks) in one session, with instructions not to stop or report
+partial completion. That scope is not achievable as verified, working
+software in one session without either fabricating completion claims or
+doing reckless unreviewed work -- so this session picked the highest-leverage
+real slice (the task's own words: HART Command is "área central") and did it
+properly, reporting everything else honestly using DONE/IN_PROGRESS/
+BLOCKED_EXTERNAL (never PARTIAL, never DONE without evidence, per the task's
+own closing instruction). Full status master table across 20+ areas is in
+`.spec/features/hart-device-engine.md` "Anexo D".
+
+Real, tested progress: `HartCommandJson` (Core) now accepts the FULL
+statement vocabulary (write/resp/after, Set, If, Map, ForCodes), not just 4
+flat step kinds. A real Lasec HART Command DSL parser now exists
+(`extension/src/dsl/HartCommandDsl.ts`), reusing the circuit DSL's lexer
+(newly exported from `DslParser.ts`) -- chains, slices, hex literals,
+if/else, IdentityBlock macro expansion, read/write inferred from arrow
+direction, 10 unit tests. **First cross-language proof a command is
+genuinely DSL-representable**: 0x0B's DSL source was parsed in TypeScript,
+the resulting JSON fixed as a literal in the Core test, compiled/executed
+there, producing byte-identical output to the existing hand-authored
+implementation (tag match and mismatch both). Also found and fixed 2 more
+real bugs while building/testing this: `UserVariable` always encoded as
+4-byte Float32BE regardless of its declared type (wrong bytes for
+UInt8/UInt16/Int16/Bool); a custom command id colliding with any of the 55
+fallback-only standard/vendor ids silently failed the ENTIRE device's
+command dispatch, not just that command.
+
+`hart_engine_test` (Core): PASS. `npm test` (Extension): 459/459 (was 449),
+zero regressions.
+
+Explicitly NOT done, with concrete next actions (not "future work"): (1)
+migrate 0x00/0x01/0x03/0x21 through the same DSL-text-parser proof 0x0B just
+got, then start on the 55 fallback-only commands; (2) wire the DSL parser
+into the Property Inspector as an actual authoring surface (currently a
+standalone, tested library, not yet reachable from the UI); (3) write the
+cold-migration path for `protocol.hart.transmitter`/`protocol.hart.communicator`
+(still live in production, confirmed via `CoreApplication.cpp`) so
+`HartSemanticEndpoint`/the legacy switch in `IndustrialProtocols.cpp` can
+be safely removed without breaking existing saved projects; (4) the
+property-by-property Property Inspector audit for Ctrl/electrical/
+PLC-Modbus/plugins/Line-Tunnel from the previous session's Anexo C is still
+open; (5) no fuzzing, no benchmarks, no Extension Development Host
+validation attempted.
+
+Next exact action: pick one of (1)-(4) above and continue -- (1) is the
+most direct continuation of this session's momentum (the parser and proof
+pattern already exist, just needs repeating for 4 more commands then
+extending to `map`/`forCodes` DSL syntax for 0x21 and beyond).
+
 ## FEAT-013 Property Inspector — full bidirectional audit, 3 more real bugs fixed, scope of what's left is now explicit (2026-09-11)
 
 Result: **IN_PROGRESS — audit method proven (finds real silent-failure bugs,

@@ -62,6 +62,58 @@ std::optional<std::span<const uint8_t>> evalExpr(const HartExpr& expr, const Har
                 }
             }
             return std::nullopt;
+        case HartExpr::Kind::UserVariable:
+            for (const auto& value : vars.userVariables) {
+                if (value.id != expr.variableId) continue;
+                // Encode per the variable's OWN declared type, not always
+                // Float32BE -- a user variable authored as UInt8/UInt16/
+                // Int16/Bool in the Property Inspector must actually produce
+                // that many bytes on the wire, or its "type" field is exactly
+                // the class of decorative property (edited, persisted,
+                // silently ignored by the runtime) this audit exists to find.
+                switch (value.type) {
+                    case HartVariableType::Float32: {
+                        const auto encoded = HartTypeCodec::encodeFloat32BE(static_cast<float>(value.value));
+                        std::copy(encoded.begin(), encoded.end(), scratch.begin());
+                        return std::span<const uint8_t>(scratch.data(), encoded.size());
+                    }
+                    case HartVariableType::UInt8: {
+                        const auto encoded = HartTypeCodec::encodeUnsignedBE(static_cast<uint32_t>(value.value), 1);
+                        std::copy(encoded.begin(), encoded.end(), scratch.begin());
+                        return std::span<const uint8_t>(scratch.data(), 1);
+                    }
+                    case HartVariableType::UInt16: {
+                        const auto encoded = HartTypeCodec::encodeUnsignedBE(static_cast<uint32_t>(value.value), 2);
+                        std::copy(encoded.begin(), encoded.end(), scratch.begin());
+                        return std::span<const uint8_t>(scratch.data(), 2);
+                    }
+                    case HartVariableType::Int16: {
+                        // Two's complement bit pattern via the same unsigned
+                        // BE encoder -- static_cast<uint32_t> of a negative
+                        // int16_t is well-defined modular conversion (C++20
+                        // mandates two's complement).
+                        const auto encoded = HartTypeCodec::encodeUnsignedBE(
+                            static_cast<uint32_t>(static_cast<uint16_t>(static_cast<int16_t>(value.value))), 2);
+                        std::copy(encoded.begin(), encoded.end(), scratch.begin());
+                        return std::span<const uint8_t>(scratch.data(), 2);
+                    }
+                    case HartVariableType::Bool:
+                        scratch[0] = value.value != 0.0 ? 1 : 0;
+                        return std::span<const uint8_t>(scratch.data(), 1);
+                    case HartVariableType::PackedAscii:
+                        // A PackedAscii-typed value is textual; `UserVariable`
+                        // only carries a numeric `double` today (see
+                        // HartCommandProgram.hpp). Rather than silently
+                        // encode garbage, this is a documented, real gap:
+                        // fail the command instead of emitting wrong bytes.
+                        // Closing it needs a string-valued variable slot,
+                        // deliberately not added under this session's time
+                        // budget -- see "Anexo D" known gaps.
+                        return std::nullopt;
+                }
+                return std::nullopt;
+            }
+            return std::nullopt;
     }
     return std::nullopt;
 }
@@ -80,6 +132,7 @@ size_t estimateExprMax(const HartExpr& expr, size_t maxRequestBytes) noexcept {
         case HartExpr::Kind::HexConstant: return expr.constant.size();
         case HartExpr::Kind::LocalCode: return 1;
         case HartExpr::Kind::Variable: return hartVarWidth(expr.variable);
+        case HartExpr::Kind::UserVariable: return 4;
     }
     return maxRequestBytes;
 }
