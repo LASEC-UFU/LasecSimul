@@ -111,14 +111,21 @@ import {
     assert(errHtml.includes("duplicate command id 128"), "a mensagem de erro real do compilador deveria aparecer no HTML, não um genérico 'inválido'");
   });
 
-  await test("hartInspectorClientScript reserva os ids de comando padrão (0/1/3/11/33) ao sugerir um novo id", () => {
+  await test("hartInspectorClientScript sugere novo id de comando somente dentro da faixa Device-Specific (128-253)", () => {
     // O script roda só na Webview (usa document/acquireVsCodeApi) -- não é
-    // executável aqui, mas a lista de ids reservados é uma constante literal
-    // no texto gerado, então uma leitura estática já caracteriza que
-    // 0x00/0x01/0x03/0x0B/0x21 (0/1/3/11/33) nunca seriam sugeridos como novo
-    // id de comando custom (evita colidir com HartReferenceCatalog).
+    // executável aqui como DOM, mas a lógica de sugestão de novo id é texto
+    // literal no script gerado. Em vez de reservar uma lista fixa de 5 ids
+    // (o mecanismo antigo, estreito demais: só protegia 0x00/0x01/0x03/0x0B/
+    // 0x21), o script agora começa em 128 e nunca ultrapassa 253 -- o que
+    // estruturalmente exclui TODA a faixa HART-standardized (Universal,
+    // Common Practice, Additional Common Practice, WirelessHART, Device
+    // Family) e as faixas Reserved acima de 253, não só os 5 comandos hoje
+    // modelados no Core. A validação real (aceitar/rejeitar) continua sendo
+    // o classificador em HartCommandJson::parseCommandDefinition -- isto é
+    // só a sugestão de default, não o gate de segurança.
     const script = hartInspectorClientScript();
-    assert(script.includes("[0, 1, 3, 11, 33]"), "os 5 ids de comando padrão deveriam estar na lista de reservados do script");
+    assert(script.includes("var nextId = 128;"), "a sugestão de novo id deveria começar em 128 (início da faixa Device-Specific)");
+    assert(script.includes("nextId <= 253"), "a sugestão de novo id nunca deveria ultrapassar 253 (fim da faixa Device-Specific)");
   });
 
   finish();

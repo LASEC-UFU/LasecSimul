@@ -84,6 +84,7 @@ set(CORE_SOURCES
     src/protocols/HartReferenceCatalog.cpp
     src/protocols/HartCommandProgram.cpp
     src/protocols/HartCommandJson.cpp
+    src/protocols/HartCommandClassification.cpp
     src/protocols/HartTypeCodec.cpp
     src/protocols/HartTransport.cpp
     src/protocols/HartCommunicationComponent.cpp
@@ -399,6 +400,7 @@ add_executable(hart_engine_test
     src/protocols/HartReferenceCatalog.cpp
     src/protocols/HartCommandProgram.cpp
     src/protocols/HartCommandJson.cpp
+    src/protocols/HartCommandClassification.cpp
     src/protocols/HartTypeCodec.cpp
     src/protocols/HartTransport.cpp
     src/protocols/HartCommunicationComponent.cpp

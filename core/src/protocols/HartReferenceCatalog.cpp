@@ -277,21 +277,26 @@ std::vector<HartCommandDefinition> HartReferenceCatalog::commandProgramDefinitio
         commands.push_back(std::move(cmd));
     }
 
-    // The reference transmitter exposes the complete command union. Commands
-    // without a device-specific transform remain explicit primitive programs:
-    // the request body is echoed, which is deterministic and keeps all
-    // supported IDs on the compiled path (no native switch/handler fallback).
-    const auto descriptors = commandDescriptors();
-    for (const auto& descriptor : descriptors) {
-        const bool already = std::any_of(commands.begin(), commands.end(), [&](const auto& c) { return c.id == descriptor.id; });
-        if (already) continue;
-        HartCommandDefinition cmd;
-        cmd.id = descriptor.id;
-        cmd.name = descriptor.name + " (compiled primitive)";
-        cmd.resp = {HartStatement{HartAppendStmt{HartExpr::body()}}};
-        commands.push_back(std::move(cmd));
-    }
-
+    // `commandDescriptors()` documents the full HART command-number union the
+    // process_simul reference devices reference (Universal, Common Practice,
+    // and a Device-Specific vendor block) -- but listing a command number
+    // here is a statement about WHAT THIS DEVICE FAMILY CALLS THAT NUMBER,
+    // never a claim that Core implements its behavior (section 53 of the
+    // architecture doc: normative class, implementation availability, and
+    // per-device applicability are three separate questions). Only the ids
+    // modeled above have a real production body. Every other catalogued id
+    // -- Universal/Common Practice ones this profile does not model, and
+    // every Device-Specific (128-253) vendor id -- deliberately gets NO
+    // program here: an unauthored standard id must produce the correct HART
+    // "command not implemented" behavior (`HartEngine::execute` returns
+    // false, no fake response), and an unauthored Device-Specific id must
+    // stay open for a real manufacturer Lasec DSL body, not be silently
+    // pre-occupied by an auto-generated echo. A prior version of this
+    // function DID synthesize an "echo request body" program for every
+    // undescribed id; that was the exact "fake fallback" anti-pattern the
+    // architecture explicitly forbids (a HART host probing e.g. Command 128
+    // would get a plausible-looking echoed reply instead of an honest
+    // not-implemented) and has been removed.
     return commands;
 }
 
@@ -360,18 +365,16 @@ HartReferenceCatalog::InstallResult HartReferenceCatalog::installCommandPrograms
             engine.setCommandProgramHook(makeHook(builtins));
             return {false, "command \"" + name + "\": " + compiled.error};
         }
-        // operator[] assignment, not emplace: `builtins` (copied into `combined`
-        // above) now includes an auto-generated "echo body" placeholder program
-        // for every standard/vendor id not among the 5 fully-modeled commands
-        // (see the fallback loop at the end of `commandProgramDefinitions()`).
-        // `emplace` silently refuses to overwrite an existing key, so a custom
-        // command authored for one of those 55 placeholder ids would compile
-        // successfully, report `installed.success == true`, and then never
-        // actually dispatch -- a real device runtime effect being silently
-        // discarded, exactly the "hartCommandsJson had zero effect" bug class
-        // this Property Inspector audit was written to find. The 5 fully
-        // modeled commands (0x00/0x01/0x03/0x0B/0x21) can never collide here:
-        // `HartCommandJson::isReservedStandardCommandId` rejects authoring a
+        // operator[] assignment, not emplace: kept even though `commandProgramDefinitions()`
+        // no longer auto-generates a placeholder for every catalogued id (that
+        // "echo body" fallback was removed -- see its doc comment), because a
+        // future built-in could still legitimately share an id with a Device-
+        // Specific command during a transitional edit; assignment fails safe
+        // (the custom program always wins) where `emplace` would silently
+        // discard the manufacturer's real body. The 5 fully modeled commands
+        // (0x00/0x01/0x03/0x0B/0x21) can never collide here at all: they
+        // classify as Universal/Common Practice, and
+        // `HartCommandJson::isManufacturerAuthorable` rejects authoring a
         // custom command under those ids before we ever reach this point.
         (*combined)[compiled.program.definition.id] = std::move(compiled.program);
     }

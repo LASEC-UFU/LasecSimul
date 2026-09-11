@@ -2496,3 +2496,170 @@ foi entre (a) reivindicar mais itens como `DONE` sem o mesmo rigor de teste
 usado para os itens acima, ou (b) parar num ponto onde tudo que está
 marcado `DONE` tem evidência real e tudo que não está é `IN_PROGRESS` com
 uma próxima ação concreta escrita. Esta sessão escolheu (b).
+
+## Anexo E -- Classificador normativo HCF_SPEC-99 e remoção do fake fallback (2026-09-11, sessão 5)
+
+Esta sessão implementou a "arquitetura definitiva" pedida em torno de UM
+princípio central que faltava de forma explícita e testada até aqui:
+**quem define a semântica de um command number é determinado pela faixa
+numérica (HCF_SPEC-99 §7.1, Table 9), nunca por convenção de nome de
+vendor nem por "o que o Core já implementa hoje"**.
+
+### E.1 O que foi construído (real, testado, buildado)
+
+1. **`core/src/protocols/HartCommandClassification.{hpp,cpp}`** (novo par de
+   arquivos) -- a ÚNICA autoridade para:
+   - `HartCommandClass classifyHartCommandNumber(uint32_t)`: partição exata
+     de HCF_SPEC-99 Table 9 (0-30 Universal, 31 ExpansionFlag, 32-121 exceto
+     38/48 CommonPractice, 38/48 Universal, 122-126 NonPublic, 127 Reserved,
+     128-253 DeviceSpecific, 254-511 Reserved, 512-767
+     AdditionalCommonPractice, 768-1023 WirelessHart, 1024-33791
+     DeviceFamily, 33792-64511 Reserved, 64512-64765
+     WirelessDeviceSpecific, 64766-64767 Reserved, 64768-65021
+     AdditionalDeviceSpecific, 65022-65535 Reserved).
+   - `HartCommandImplementationPolicy implementationPolicyFor(HartCommandClass)`:
+     deriva StandardCore / ManufacturerDsl / FactoryPrivateDsl /
+     ProtocolInfrastructure / Forbidden a partir da classe -- nunca atribuída
+     independentemente.
+   - `isDeviceSpecificRangeOver90PercentConsumed(count)`: regra dos >90% da
+     faixa 128-253 (126 ids) para liberar Additional Device-Specific,
+     derivada do tamanho real da faixa (`kDeviceSpecificRangeSize = 126`),
+     não um magic number hardcoded.
+   - `isManufacturerAuthorable(id, isWirelessHartCapable, consumedCount)`:
+     predicado único usado tanto pelos testes quanto pelo gate de autoria em
+     `HartCommandJson`.
+2. **`HartCommandJson::parseCommandDefinition`/`parseCommandCollection`
+   reescritos para usar o classificador**, substituindo o antigo
+   `isReservedStandardCommandId` (que só bloqueava 5 ids hardcoded:
+   0x00/0x01/0x03/0x0B/0x21). Agora QUALQUER id HART-standardized
+   (Universal, Common Practice, Additional Common Practice, WirelessHART,
+   Device Family), Reserved, ExpansionFlag ou Non-Public é rejeitado com
+   diagnóstico específico por classe; `parseCommandCollection` calcula
+   `consumedDeviceSpecificCount` a partir da PRÓPRIA coleção antes de validar
+   cada entrada, então a regra dos 90% é avaliada com o total real do
+   dispositivo, não um contexto vazio.
+3. **Removido o "echo fallback" de `HartReferenceCatalog::commandProgramDefinitions()`**
+   -- este era o anti-padrão central que a diretiva desta sessão pediu para
+   eliminar: para os 55 ids catalogados (todos os 60 ids de
+   `commandDescriptors()` exceto os 5 com corpo real) o Core instalava
+   automaticamente um programa que ecoava o corpo da requisição, fazendo um
+   host HART que sondasse, por exemplo, o Command 128 (Device-Specific)
+   receber uma resposta plausível em vez do "command not implemented"
+   correto. Removido sem substituto: um id sem corpo real agora
+   simplesmente não tem entrada no hook, e `HartEngine::execute()` já
+   retorna `false` nesse caso (nenhuma resposta é enviada -- ver D.2 abaixo
+   sobre o limite conhecido de não haver um byte de status RC=64 genérico no
+   frame codec).
+4. **29 dos 60 ids catalogados são, pela classificação normativa,
+   Device-Specific (128-253)** -- esses ids agora ficam genuinamente livres
+   para autoria de manufacturer DSL real (o mecanismo de override já
+   existente continua funcionando, só que agora não está "vencendo" um
+   fallback fake, é a ÚNICA implementação).
+5. **Testes novos em `hart_engine_test`** (todos passando): os 33 boundary
+   cases da seção 115 do pedido, a tabela completa de classificação
+   esperada (seção 116), a tabela completa de policy esperada (seção 117),
+   o teste de threshold 113 vs 114 (seção 122), o "manufacturer override
+   test" (DSL Command 11/33/38/127/122/31 rejeitados, DSL Command 128
+   aceito -- seção 118), e um teste de aplicabilidade Common Practice
+   ponta-a-ponta (device que não declara Command 0x21 recebe "not
+   implemented", sem nenhum toggle -- seção 119).
+6. **Property Inspector**: o helper client-side "+ Add Command" agora
+   restringe a sugestão de novo id à faixa 128-253 (antes usava uma lista
+   fixa de 5 ids reservados e, sem limite superior, podia sugerir um id
+   Reserved como 254 depois que 128-253 enchesse). Tooltip do campo id
+   atualizado para explicar a faixa Device-Specific em vez de citar só os 5
+   comandos antigos. Teste correspondente reescrito para validar o novo
+   comportamento (o teste antigo procurava o literal `"[0, 1, 3, 11, 33]"`,
+   que não existe mais no script).
+
+Build: `hart_engine_test` (MSVC Debug) compila limpo e **PASS** (todos os
+testes, incluindo os novos). Extension: `npm run compile` limpo, `npm test`
+**459/459** (mesma contagem de antes -- 2 testes reescritos, não
+adicionados, então o total não muda).
+
+### E.2 Tabela de exemplo (seção 139/140 do pedido)
+
+| ID | Nome (catálogo) | Classe normativa | Quem define semântica? | Core implementa? | Policy | Produção |
+|---|---|---|---|---|---|---|
+| 0 | Read Unique Identifier | Universal | HART | sim (corpo real) | StandardCore | StandardCore C++ |
+| 11 (0x0B) | Read Unique Identifier Associated With Tag | Universal | HART | sim (corpo real) | StandardCore | StandardCore C++ (+ prova de paridade DSL, não produção) |
+| 33 (0x21) | Read Device Variables | CommonPractice | HART | sim (corpo real) | StandardCore | StandardCore C++ |
+| 2 (0x02) | Read Loop Current And Percent Of Range | Universal | HART | não | StandardCore | Not Implemented (honesto, sem fallback) |
+| 152 (0x98) | Vendor Keepalive (nome do catálogo) | DeviceSpecific | Manufacturer | não por padrão | ManufacturerDsl | Not Implemented até autoria real; testado com corpo customizado autorado (D.1.4/E.1.5) |
+| 128 (0x80) | Vendor Read Configuration (nome do catálogo) | DeviceSpecific | Manufacturer | não por padrão | ManufacturerDsl | idem |
+| 127 | -- | Reserved | ninguém | -- | Forbidden | rejeitado na autoria |
+| 64512 | -- | WirelessDeviceSpecific | Manufacturer (contexto wireless) | -- | ManufacturerDsl | rejeitado (build sem modelo de capability WirelessHART) |
+
+### E.3 Contagens finais (seção 141)
+
+```text
+Universal Core commands (corpo real)                   = 4   (0x00, 0x01, 0x03, 0x0B)
+Universal catalogado mas sem corpo real (not-impl)      = 17  (0x02,0x04-0x0A,0x0C-0x13,0x15)
+Common Practice Core commands (corpo real)              = 1   (0x21 / 33)
+Additional Common Practice Core commands               = 0   (nenhum id do catálogo cai nesta faixa)
+WirelessHART Core commands                             = 0   (nenhum id do catálogo cai nesta faixa)
+Device Family Core commands                            = 0   (nenhum id do catálogo cai nesta faixa)
+Manufacturer Device-Specific ids catalogados (128-253)  = 29  (todos sem corpo por padrão, autoráveis)
+Wireless Manufacturer DSL commands                      = 0   (sem contexto WirelessHART neste build)
+Additional Manufacturer DSL commands                    = 0   (nenhum device chega perto de 90% de 128-253)
+Factory Private commands                                = 0   (122-126 rejeitados; sem modo de fábrica)
+Reserved definitions                                    = 0   (classificador rejeita toda autoria; nenhuma definição existe)
+manufacturer-specific C++ runtime handlers remaining     = 0
+standard commands incorrectly using production DSL       = 0  (os 5 corpos reais são definidos em C++, nunca por texto DSL do usuário)
+generic Common Practice enable/disable toggles added     = 0  (verificado por leitura de hartInspectorSections.ts: único checkbox "Enabled" existente é por-comando-customizado, não um toggle genérico de Common Practice)
+```
+
+### E.4 O que esta sessão NÃO fez (honesto, não "PARTIAL")
+
+- **Byte de status RC=64 genérico no frame**: `HartTransportEndpoint::transact`
+  hoje simplesmente não envia resposta quando `HartEngine::execute` retorna
+  `false` (nenhum frame de volta), em vez de compor um frame com
+  Response-Code=64 ("command not implemented") no cabeçalho de status. Isso
+  é uma lacuna real de fidelidade ao protocolo -- mas o codec de frame atual
+  não modela os 2 bytes de status de forma genérica (cada corpo de comando
+  escreve seu próprio primeiro byte de status quando precisa, ex.: 0x0B). Dar
+  a UM frame codec compartilhado a responsabilidade do RC exigiria tocar
+  TODOS os corpos de comando existentes (golden bytes mudariam) -- não
+  tentado nesta sessão por ser uma mudança de alto risco fora do escopo
+  imediato do classificador. Next action: modelar `HartResponseBuilder` com
+  um método `writeStatus(HartResponseCode)` e migrar os 5 corpos reais para
+  usá-lo antes de fazer `execute()` retornar um RC real em vez de `false`.
+- **WirelessHART device-capability model**: não existe neste build (nenhum
+  profile/plan tem um campo "isWirelessHartCapable"). A faixa Wireless
+  Device-Specific (64512-64765) é sempre rejeitada na autoria como
+  consequência honesta disso, não como uma feature implementada e depois
+  desativada.
+- **Migração dos 55 ids não-modelados para corpos reais de Common
+  Practice/Universal** (ex.: dar a 0x02, 0x05, 0x54 etc. implementações
+  C++ de verdade): continuam "not implemented" corretamente, mas isso é
+  "correto e honesto", não "completo" -- só 4 ids Universal + 1 Common
+  Practice têm corpo real hoje.
+- **Command Graph visual editor, Map/ForCodes na sintaxe textual da DSL,
+  Ctrl primitive reuse concreto dentro de um corpo de comando, auditoria
+  propriedade-a-propriedade de Ctrl/electrical/PLC-Modbus/plugins/Line-Tunnel,
+  fuzzing, benchmarks, remoção do endpoint legado
+  `protocol.hart.transmitter`/`protocol.hart.communicator`**: nenhum destes
+  avançou nesta sessão (mesmo estado do Anexo D.3), permanecem
+  `IN_PROGRESS`.
+
+### E.5 Correção de texto normativo (seção 133/134/135 do pedido)
+
+Nenhum documento `.spec` encontrado nesta sessão afirmava literalmente "all
+HART commands must use DSL" (revisado por busca textual); o texto mais
+próximo de causar essa confusão era a doc comment de `HartCommandJson.hpp`
+("compiler target the Lasec HART Command DSL parser lowers to"), que já
+deixa claro que é um alvo de compilação para autoria manufacturer, não uma
+afirmação sobre TODOS os comandos. Para eliminar qualquer ambiguidade
+futura, o texto normativo abaixo fica registrado como a definição final:
+
+> HART-defined commands use canonical Core implementations. Common Practice
+> command semantics are standardized by HART, while their applicability is
+> derived from the capabilities/declared commands of the individual field
+> device -- never a generic per-command profile toggle. Device-Specific
+> commands (128-253) are manufacturer-defined and are authored using Lasec
+> DSL. Manufacturer-specific behavior must not reuse Universal, Common
+> Practice, Additional Common Practice, WirelessHART or Device Family
+> command numbers for different semantics -- `HartCommandClassification.hpp`
+> is the single normative authority enforcing this at authoring time.
+> Device-Specific = Manufacturer Defined; Device Family = HART-defined. The
+> two must never be confused.

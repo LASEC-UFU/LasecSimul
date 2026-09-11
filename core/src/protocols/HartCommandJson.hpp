@@ -32,8 +32,16 @@ public:
     /** One command object: `{id, name, enabled, writeSteps:[...],
      * responseSteps:[...], afterSteps:[...]}`. `writeSteps`/`afterSteps`
      * default to empty when absent (back-compat with the flat-`resp`-only
-     * shape from the previous iteration). */
-    static ParseResult parseCommandDefinition(const nlohmann::json& value);
+     * shape from the previous iteration).
+     *
+     * `consumedDeviceSpecificCount` is the number of OTHER manufacturer
+     * commands already declared in the same collection whose id falls in
+     * the Device-Specific range (128-253) -- it gates the Additional
+     * Device-Specific range (64768-65021) via the normative >90% rule (see
+     * `isDeviceSpecificRangeOver90PercentConsumed`). Callers validating a
+     * single definition in isolation (e.g. a unit test) may leave it at the
+     * default of 0, which conservatively rejects that range. */
+    static ParseResult parseCommandDefinition(const nlohmann::json& value, uint32_t consumedDeviceSpecificCount = 0);
 
     struct CollectionParseResult {
         bool success = false;
@@ -42,9 +50,16 @@ public:
     };
 
     /** A JSON array of command objects. Rejects duplicate command ids and any
-     * id already owned by the reference catalog's built-in commands (0x00,
-     * 0x01, 0x03, 0x0B, 0x21) -- a custom command may not silently shadow a
-     * standard one (HART-FR-007 tombstone spirit: explicit, not accidental). */
+     * id whose HCF_SPEC-99 Table 9 class is not manufacturer-authorable (see
+     * `HartCommandClassification.hpp`): Universal / Common Practice /
+     * Additional Common Practice / WirelessHART / Device Family commands are
+     * HART-standardized and may never be redefined by a manufacturer body;
+     * Reserved ranges accept no definition at all; Non-Public (122-126) is
+     * rejected because this build has no factory-authoring mode; Wireless
+     * Device-Specific (64512-64765) is rejected because this build has no
+     * WirelessHART device-capability model. Only Device-Specific (128-253),
+     * and Additional Device-Specific once 128-253 is >90% consumed, may be
+     * authored. */
     static CollectionParseResult parseCommandCollection(const std::string& json);
 
     /** Round-trips a definition built from this subset back to JSON, so the

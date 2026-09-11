@@ -1,4 +1,5 @@
 #include "HartCommandJson.hpp"
+#include "HartCommandClassification.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -61,12 +62,45 @@ std::string toHex(std::span<const uint8_t> bytes) {
     return out;
 }
 
-// Standard command ids that a user-authored command may never shadow --
-// they are always served by HartReferenceCatalog::commandProgramDefinitions(),
-// never by a per-device override (HART-FR-007 spirit: explicit exclusion, not
-// silent collision).
-bool isReservedStandardCommandId(HartCommandId id) noexcept {
-    return id == 0x00 || id == 0x01 || id == 0x03 || id == 0x0B || id == 0x21;
+// Diagnostic for a command id a manufacturer may not author, per the
+// HCF_SPEC-99 Table 9 classifier (HartCommandClassification.hpp). Mirrors
+// section 139/150 of the architecture doc: applicability and authorship are
+// different questions, and this function only answers "who may define this
+// id's semantics", never "does this device support it".
+std::string manufacturerAuthoringRejection(HartCommandId id, uint32_t consumedDeviceSpecificCount) {
+    const HartCommandClass cls = classifyHartCommandNumber(id);
+    switch (cls) {
+        case HartCommandClass::Universal:
+        case HartCommandClass::CommonPractice:
+        case HartCommandClass::AdditionalCommonPractice:
+        case HartCommandClass::WirelessHart:
+        case HartCommandClass::DeviceFamily:
+            return "command id " + std::to_string(id) + " is " + hartCommandClassName(cls) +
+                   " (HART-standardized); its semantics are defined by the HART specification and cannot be "
+                   "redefined by a manufacturer command. Use a Device-Specific id (128-253) instead.";
+        case HartCommandClass::NonPublic:
+            return "command id " + std::to_string(id) +
+                   " falls in the Non-Public/factory-only range (122-126); factory-mode authoring is not "
+                   "implemented in this build.";
+        case HartCommandClass::ExpansionFlag:
+            return "command id 31 is the HART Expansion Flag (protocol framing infrastructure for extended "
+                   "command numbers) and can never be a user-defined command body.";
+        case HartCommandClass::Reserved:
+            return "command id " + std::to_string(id) + " falls in a Reserved HART command-number range and "
+                   "cannot be defined.";
+        case HartCommandClass::WirelessDeviceSpecific:
+            return "command id " + std::to_string(id) +
+                   " is Wireless Device-Specific (64512-64765), which requires a WirelessHART-capable device "
+                   "context; this build has no WirelessHART device-capability model.";
+        case HartCommandClass::AdditionalDeviceSpecific:
+            return "command id " + std::to_string(id) +
+                   " is Additional Device-Specific (64768-65021), only usable once the primary Device-Specific "
+                   "range (128-253) is more than 90% consumed by this device (currently " +
+                   std::to_string(consumedDeviceSpecificCount) + "/" + std::to_string(kDeviceSpecificRangeSize) + ").";
+        case HartCommandClass::DeviceSpecific:
+            return {}; // authorable -- never reached, callers check isManufacturerAuthorable() first
+    }
+    return "command id " + std::to_string(id) + " is not manufacturer-authorable.";
 }
 
 // ---------------------------------------------------------------------------
@@ -254,7 +288,8 @@ nlohmann::json statementsToJson(const std::vector<HartStatement>& statements) {
 
 } // namespace
 
-HartCommandJson::ParseResult HartCommandJson::parseCommandDefinition(const nlohmann::json& value) {
+HartCommandJson::ParseResult HartCommandJson::parseCommandDefinition(const nlohmann::json& value,
+                                                                      uint32_t consumedDeviceSpecificCount) {
     ParseResult result;
     if (!value.is_object()) { result.error = "command entry must be a JSON object"; return result; }
     if (!value.contains("id") || !value["id"].is_number_integer()) {
@@ -264,9 +299,11 @@ HartCommandJson::ParseResult HartCommandJson::parseCommandDefinition(const nlohm
     const int64_t idValue = value["id"].get<int64_t>();
     if (idValue < 0 || idValue > 0xFFFF) { result.error = "command id out of range (0-65535)"; return result; }
     const auto id = static_cast<HartCommandId>(idValue);
-    if (isReservedStandardCommandId(id)) {
-        result.error = "command id " + std::to_string(id) +
-                       " is a standard command already served by the reference catalog; choose another id";
+    // This build has no WirelessHART device-capability model (see
+    // HartCommandClassification.hpp), so `isWirelessHartCapable` is always
+    // false here -- an honestly-reported limitation, not a silent stub.
+    if (!isManufacturerAuthorable(id, /*isWirelessHartCapable=*/false, consumedDeviceSpecificCount)) {
+        result.error = manufacturerAuthoringRejection(id, consumedDeviceSpecificCount);
         return result;
     }
 
@@ -299,12 +336,28 @@ HartCommandJson::CollectionParseResult HartCommandJson::parseCommandCollection(c
     if (!parsed.is_array()) { result.error = "command collection must be a JSON array"; return result; }
     if (parsed.size() > 64) { result.error = "too many commands declared (max 64)"; return result; }
 
+    // Additional Device-Specific (64768-65021) authoring is gated on how much
+    // of the primary Device-Specific range (128-253) this SAME collection
+    // already consumes (HCF_SPEC-99 >90% rule) -- computed up front so every
+    // entry in the collection sees the collection's real total, not just the
+    // entries parsed before it.
+    uint32_t consumedDeviceSpecificCount = 0;
+    for (const auto& entry : parsed) {
+        if (!entry.is_object() || !entry.contains("id") || !entry["id"].is_number_integer()) continue;
+        if (entry.contains("enabled") && entry["enabled"].is_boolean() && !entry["enabled"].get<bool>()) continue;
+        const int64_t idValue = entry["id"].get<int64_t>();
+        if (idValue >= static_cast<int64_t>(kDeviceSpecificRangeBegin) &&
+            idValue <= static_cast<int64_t>(kDeviceSpecificRangeEnd)) {
+            ++consumedDeviceSpecificCount;
+        }
+    }
+
     for (const auto& entry : parsed) {
         if (entry.is_object() && entry.contains("enabled") && entry["enabled"].is_boolean() &&
             !entry["enabled"].get<bool>()) {
             continue; // disabled: not compiled, not installed, not an error
         }
-        const ParseResult parsedCommand = parseCommandDefinition(entry);
+        const ParseResult parsedCommand = parseCommandDefinition(entry, consumedDeviceSpecificCount);
         if (!parsedCommand.success) { result.error = parsedCommand.error; return result; }
         for (const HartCommandDefinition& existing : result.definitions) {
             if (existing.id == parsedCommand.definition.id) {

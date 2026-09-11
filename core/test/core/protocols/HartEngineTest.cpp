@@ -1,3 +1,4 @@
+#include "protocols/HartCommandClassification.hpp"
 #include "protocols/HartCommandJson.hpp"
 #include "protocols/HartCommandProgram.hpp"
 #include "protocols/HartCommunicationComponent.hpp"
@@ -266,20 +267,20 @@ int main() {
         HartResponseBuilder customOut(32);
         // unit(57=0x39) + float32BE(12.5 == 0x41480000) + hex(CAFE) + bodySlice(request[0:2])
         const std::vector<uint8_t> expectedCustom{0x39, 0x41, 0x48, 0x00, 0x00, 0xCA, 0xFE, 0xAA, 0xBB};
-        // Regression: id 128 == 0x80, which IS one of the 60 catalogued
-        // commands ("Vendor Read Configuration") -- `commandProgramDefinitions()`
-        // auto-generates an "echo request body" fallback for every catalogued
-        // id without a hand-written program, so this id collides with that
-        // fallback. If the custom entry ever loses to the fallback again
-        // (e.g. `installCommandPrograms` regresses to `unordered_map::emplace`,
-        // which never overwrites an existing key), this response would be a
-        // verbatim echo of `customRequest` instead of unit+PV+hex+slice --
-        // caught here, not just by `installed.success` (which stays true either
-        // way: the fallback silently wins without ever reporting an error).
+        // id 128 == 0x80 ("Vendor Read Configuration" in the reference
+        // catalog's descriptor list) is Device-Specific per HCF_SPEC-99 Table
+        // 9 -- `commandProgramDefinitions()` deliberately installs NO program
+        // for it (no auto-echo fallback; see that function's doc comment), so
+        // this custom body is the ONLY implementation of command 128 here.
+        // If `installCommandPrograms` ever regressed to `unordered_map::emplace`
+        // (which refuses to overwrite an existing key) this would still pass
+        // today since there is nothing to collide with -- the real regression
+        // this guards is a future built-in reintroducing a body under 128
+        // and silently winning over this manufacturer definition.
         check(jsonEngine.execute("hart-1", 9, 128, customRequest, customOut) &&
                   customOut.size() == expectedCustom.size() &&
                   std::equal(expectedCustom.begin(), expectedCustom.end(), customOut.bytes().begin()),
-              "custom command 128 (variable + hex + bodySlice) executes end to end, overriding the auto-generated 0x80 fallback");
+              "custom command 128 (variable + hex + bodySlice) executes end to end as a manufacturer Device-Specific command");
 
         const nlohmann::json roundTrip = HartCommandJson::toJson(parsedValid.definitions[0]);
         check(roundTrip["id"] == 128 && roundTrip["responseSteps"].size() == 4 &&
@@ -503,15 +504,16 @@ int main() {
             R"({"id":"DiagSigned","name":"Diag Signed","type":"Int16","direction":"Internal","value":-5},)"
             R"({"id":"DiagFlag","name":"Diag Flag","type":"Bool","direction":"Internal","value":1}])");
         // Command 152 (0x98) is deliberately "Vendor Keepalive" -- one of the
-        // 55 catalogued standard/vendor ids that has ONLY an auto-generated
-        // "echo body" fallback (see HartReferenceCatalog::commandProgramDefinitions()).
-        // Authoring a real custom body under that exact id is the regression
-        // gate for "a custom command MUST override its fallback, even a
-        // standard/vendor one, without corrupting the rest of the device's
-        // command dispatch" -- this combination is what first exposed the
-        // real bug fixed in rebuildConfiguredPlan() (a duplicate
-        // commandConfigurations entry silently failed the WHOLE plan, taking
-        // 0x01/0x0B/every other command down with it, not just 0x98).
+        // reference catalog's Device-Specific descriptor ids, which
+        // `commandProgramDefinitions()` deliberately leaves unimplemented (no
+        // auto-echo fallback). Authoring a real custom body under that exact
+        // id is the regression gate for "a manufacturer command declared
+        // under a catalogued vendor id must dispatch correctly without
+        // corrupting the rest of the device's command dispatch" -- this
+        // combination is what first exposed the real bug fixed in
+        // rebuildConfiguredPlan() (a duplicate commandConfigurations entry
+        // silently failed the WHOLE plan, taking 0x01/0x0B/every other
+        // command down with it, not just 0x98).
         params.properties["hartCommandsJson"] = std::string(
             R"([{"id":150,"name":"Echo Tag","responseSteps":[{"kind":"variable","variable":"Tag"}]},)"
             R"({"id":151,"name":"Diagnostic X","responseSteps":[{"kind":"variable","variable":"DiagnosticX"}]},)"
@@ -686,6 +688,118 @@ int main() {
         HartResponseBuilder oobOut(16);
         check(!HartCommandExecutor::execute(oobCompiled.program, vars, shortRequest, oobOut),
               "runtime out-of-bounds slice is rejected, never read past the actual request buffer");
+    }
+
+    // HCF_SPEC-99 section 7.1 / Table 9 normative classifier: exhaustive
+    // boundary tests (every partition edge listed in the architecture doc),
+    // the full expected-classification table, and the full expected-policy
+    // table -- ONE authority, checked exhaustively rather than spot-checked.
+    {
+        struct BoundaryCase { uint32_t id; HartCommandClass expected; };
+        const BoundaryCase boundaries[] = {
+            {30, HartCommandClass::Universal}, {31, HartCommandClass::ExpansionFlag},
+            {32, HartCommandClass::CommonPractice}, {37, HartCommandClass::CommonPractice},
+            {38, HartCommandClass::Universal}, {39, HartCommandClass::CommonPractice},
+            {47, HartCommandClass::CommonPractice}, {48, HartCommandClass::Universal},
+            {49, HartCommandClass::CommonPractice}, {121, HartCommandClass::CommonPractice},
+            {122, HartCommandClass::NonPublic}, {126, HartCommandClass::NonPublic},
+            {127, HartCommandClass::Reserved}, {128, HartCommandClass::DeviceSpecific},
+            {253, HartCommandClass::DeviceSpecific}, {254, HartCommandClass::Reserved},
+            {511, HartCommandClass::Reserved}, {512, HartCommandClass::AdditionalCommonPractice},
+            {767, HartCommandClass::AdditionalCommonPractice}, {768, HartCommandClass::WirelessHart},
+            {1023, HartCommandClass::WirelessHart}, {1024, HartCommandClass::DeviceFamily},
+            {33791, HartCommandClass::DeviceFamily}, {33792, HartCommandClass::Reserved},
+            {64511, HartCommandClass::Reserved}, {64512, HartCommandClass::WirelessDeviceSpecific},
+            {64765, HartCommandClass::WirelessDeviceSpecific}, {64766, HartCommandClass::Reserved},
+            {64767, HartCommandClass::Reserved}, {64768, HartCommandClass::AdditionalDeviceSpecific},
+            {65021, HartCommandClass::AdditionalDeviceSpecific}, {65022, HartCommandClass::Reserved},
+            {65535, HartCommandClass::Reserved},
+        };
+        for (const auto& c : boundaries) {
+            const auto actual = classifyHartCommandNumber(c.id);
+            check(actual == c.expected,
+                  ("boundary classification for id " + std::to_string(c.id) + " matches HCF_SPEC-99 Table 9").c_str());
+        }
+
+        struct PolicyCase { uint32_t id; HartCommandImplementationPolicy expected; };
+        const PolicyCase policies[] = {
+            {0, HartCommandImplementationPolicy::StandardCore}, {11, HartCommandImplementationPolicy::StandardCore},
+            {33, HartCommandImplementationPolicy::StandardCore}, {38, HartCommandImplementationPolicy::StandardCore},
+            {48, HartCommandImplementationPolicy::StandardCore},
+            {128, HartCommandImplementationPolicy::ManufacturerDsl}, {253, HartCommandImplementationPolicy::ManufacturerDsl},
+            {512, HartCommandImplementationPolicy::StandardCore}, {768, HartCommandImplementationPolicy::StandardCore},
+            {1024, HartCommandImplementationPolicy::StandardCore},
+            {64512, HartCommandImplementationPolicy::ManufacturerDsl}, {64768, HartCommandImplementationPolicy::ManufacturerDsl},
+            {127, HartCommandImplementationPolicy::Forbidden}, {254, HartCommandImplementationPolicy::Forbidden},
+            {33792, HartCommandImplementationPolicy::Forbidden}, {64766, HartCommandImplementationPolicy::Forbidden},
+            {65022, HartCommandImplementationPolicy::Forbidden},
+        };
+        for (const auto& c : policies) {
+            const auto actual = classifyImplementationPolicy(c.id);
+            check(actual == c.expected,
+                  ("expected implementation policy for id " + std::to_string(c.id)).c_str());
+        }
+
+        // >90%-of-128-253 threshold for Additional Device-Specific (section 36):
+        // must be derived from the range size (126), not a hardcoded magic
+        // number -- 113/126 = 89.68% (not over), 114/126 = 90.47% (over).
+        check(!isDeviceSpecificRangeOver90PercentConsumed(113), "113 of 126 consumed is not over the 90% threshold");
+        check(isDeviceSpecificRangeOver90PercentConsumed(114), "114 of 126 consumed is over the 90% threshold");
+        check(kDeviceSpecificRangeSize == 126, "Device-Specific range size is derived as 253-128+1 == 126");
+
+        check(!isManufacturerAuthorable(64768, false, 113), "Additional Device-Specific rejected below the 90% threshold");
+        check(isManufacturerAuthorable(64768, false, 114), "Additional Device-Specific allowed once over the 90% threshold");
+        check(!isManufacturerAuthorable(64512, /*isWirelessHartCapable=*/false, 0),
+              "Wireless Device-Specific rejected for a non-WirelessHART-capable context");
+        check(isManufacturerAuthorable(64512, /*isWirelessHartCapable=*/true, 0),
+              "Wireless Device-Specific allowed for a WirelessHART-capable context");
+        check(isManufacturerAuthorable(128, false, 0), "Device-Specific is always manufacturer-authorable");
+        check(!isManufacturerAuthorable(122, false, 0), "Non-Public (122-126) is never offered through the normal authoring predicate");
+    }
+
+    // Manufacturer override test (section 118): the JSON authoring gate must
+    // reject a DSL definition under a HART-standardized id and accept one
+    // under a Device-Specific id, using the SAME classifier as above (not a
+    // second hand-maintained id list).
+    {
+        auto attempt = [](int id) {
+            return HartCommandJson::parseCommandDefinition(
+                nlohmann::json::parse(R"({"id":)" + std::to_string(id) + R"(,"responseSteps":[{"kind":"hex","bytes":"00"}]})"));
+        };
+        check(!attempt(11).success, "DSL Command 11 (Universal) is rejected");
+        check(!attempt(33).success, "DSL Command 33 (Common Practice) is rejected");
+        check(!attempt(38).success, "DSL Command 38 (Universal exception inside 32-121) is rejected");
+        check(!attempt(127).success, "DSL Command 127 (Reserved) is rejected");
+        check(!attempt(122).success, "DSL Command 122 (Non-Public) is rejected");
+        check(!attempt(31).success, "DSL Command 31 (Expansion Flag) is rejected");
+        const auto ok = attempt(128);
+        check(ok.success, "DSL Command 128 (Device-Specific) is accepted");
+
+        // Common Practice semantics test (section 119): a device that does
+        // NOT declare a given Common Practice command in its plan must see
+        // it rejected exactly like any other unknown command -- there is no
+        // generic enable/disable toggle, applicability is just "declared or
+        // not" (HartPlanCompiler/HartEngine already implement this; this
+        // regression proves it end to end for a real Common Practice id).
+        HartProfileRegistry cpRegistry;
+        HartDeviceProfile cpProfile;
+        cpProfile.id = "lasecsimul.hart.cp-applicability-test";
+        cpProfile.commands = {{0x01, "Read Primary Variable"}}; // deliberately NOT 33 (Common Practice)
+        check(cpRegistry.registerProfile(cpProfile), "cp-applicability profile registers");
+        HartEngine cpEngine(cpRegistry);
+        check(HartReferenceCatalog::installCommandPrograms(cpEngine), "cp-applicability engine installs built-ins");
+        HartDevicePlan cpDevice;
+        cpDevice.id = "cp-applicability-device";
+        cpDevice.profileId = cpProfile.id;
+        cpDevice.bus = "hart-1";
+        cpDevice.pollingAddress = 30;
+        cpDevice.commandConfigurations = {{0x01, true, false, {}}};
+        check(cpEngine.loadPlan({{cpDevice}}), "cp-applicability device plan loads");
+        HartResponseBuilder cpDeclared(16);
+        check(cpEngine.execute("hart-1", 30, 0x01, {}, cpDeclared), "declared command 0x01 dispatches");
+        HartResponseBuilder cpUndeclared(16);
+        check(!cpEngine.execute("hart-1", 30, 0x21, {}, cpUndeclared),
+              "Common Practice command 0x21, not declared by this device, returns \"not implemented\" (no toggle, no fallback)");
     }
 
     if (failures == 0) std::puts("HART engine contracts: PASS");

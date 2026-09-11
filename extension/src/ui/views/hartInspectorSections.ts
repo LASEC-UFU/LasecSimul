@@ -36,19 +36,16 @@ export const HART_VARIABLE_TYPES: ReadonlyArray<{ value: string; label: string }
   { value: "Bool", label: "Bool" },
 ];
 
-/** Mirrors `lasecsimul::protocols::HartVariableDirection`. `Input`/`Output`
- * are stored/validated but do not yet materialize a Signal Graph port --
- * documented gap, not a silent omission (see "Anexo B" section 18/19). */
+/** Mirrors `lasecsimul::protocols::HartVariableDirection`; Input/Output are
+ * materialized as generic Signal Graph endpoints by the Core component. */
 export const HART_VARIABLE_DIRECTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "Internal", label: "Internal" },
   { value: "Input", label: "Input" },
   { value: "Output", label: "Output" },
 ];
 
-/** Mirrors `kVarIdNames` in `HartCommandJson.cpp` -- the fixed built-in
- * variable set a command's response steps can reference in this iteration.
- * Referencing a user-created custom HART variable (e.g. a second PV-like
- * value) from a command body is not yet supported -- see "Anexo B". */
+/** Built-in protocol fields remain available to commands. User variables are
+ * appended to this picker from the variable collection at render time. */
 export const HART_BUILTIN_VARIABLES: ReadonlyArray<{ value: string; label: string }> = [
   { value: "ManufacturerId", label: "Manufacturer ID" },
   { value: "DeviceType", label: "Device Type" },
@@ -81,13 +78,11 @@ export interface HartVariableRow {
   direction: string;
   unit: string;
   value: number;
-  readable: boolean;
-  writable: boolean;
-  runtimeMutable: boolean;
-  /** Preserved round-trip only (legacy Internal-computed-value authoring,
-   * evaluated Core-side via SignalExpression) -- this editor does not offer a
-   * dedicated field to author a NEW one; retired as a first-class "source
-   * mode" per section 48, but existing data is never silently discarded. */
+  /** Deprecated compatibility fields accepted by callers from the previous
+   * Inspector contract; they are intentionally not rendered or persisted. */
+  readable?: boolean;
+  writable?: boolean;
+  runtimeMutable?: boolean;
   expression?: string;
 }
 
@@ -124,8 +119,6 @@ export function parseVariableRows(json: string): HartVariableRow[] {
     direction: typeof item.direction === "string" ? item.direction : "Internal",
     unit: typeof item.unit === "string" ? item.unit : "",
     value: typeof item.value === "number" ? item.value : 0,
-    readable: item.readable !== false,
-    writable: item.writable === true,
     runtimeMutable: item.runtimeMutable === true,
     ...(typeof item.expression === "string" && item.expression ? { expression: item.expression } : {}),
   }));
@@ -134,8 +127,9 @@ export function parseVariableRows(json: string): HartVariableRow[] {
 export function serializeVariableRows(rows: HartVariableRow[]): string {
   return JSON.stringify(rows.map((row) => ({
     id: row.id, name: row.name, role: row.role, type: row.type, direction: row.direction,
-    unit: row.unit, value: row.value, readable: row.readable, writable: row.writable,
-    runtimeMutable: row.runtimeMutable, ...(row.expression ? { expression: row.expression } : {}),
+    unit: row.unit, ...(row.direction === "Internal" ? { value: row.value } : {}),
+    ...(row.runtimeMutable ? { runtimeMutable: true } : {}),
+    ...(row.expression ? { expression: row.expression } : {}),
   })));
 }
 
@@ -190,8 +184,6 @@ export function renderVariablesSection(rows: HartVariableRow[], options: HartSec
   const rowHtml = rows.map((row, i) => {
     const d = (field: string) => `data-hv-index="${i}" data-hv-field="${field}"`;
     const structuralDisabled = options.structuralEditsLocked;
-    // A value field stays editable during RUN only when the row itself opted
-    // into runtimeMutable -- the UI never decides this on its own (section 21).
     const valueDisabled = options.structuralEditsLocked && !row.runtimeMutable;
     return `<div class="hv-row">
       <div class="hv-line">
@@ -205,21 +197,17 @@ export function renderVariablesSection(rows: HartVariableRow[], options: HartSec
         ${selectHtml(`data-hv-index="${i}" data-hv-field="direction"`, HART_VARIABLE_DIRECTIONS, row.direction, structuralDisabled)}
         <input ${d("unit")} value="${escapeAttr(row.unit)}" placeholder="unit">
       </div>
-      <div class="hv-line">
-        <label><input type="number" ${d("value")} value="${row.value}" ${valueDisabled ? "disabled" : ""} title="Internal Value / Default Value"> Value</label>
-        <label><input type="checkbox" ${d("readable")} ${row.readable ? "checked" : ""} ${structuralDisabled ? "disabled" : ""}> Readable</label>
-        <label><input type="checkbox" ${d("writable")} ${row.writable ? "checked" : ""} ${structuralDisabled || row.direction === "Input" ? "disabled" : ""} title="${row.direction === "Input" ? "An Input variable's value is owned by its Signal Graph wire; commands may never SET it" : "A HART command may write this value"}"> Writable</label>
-        <label><input type="checkbox" ${d("runtimeMutable")} ${row.runtimeMutable ? "checked" : ""} ${structuralDisabled ? "disabled" : ""} title="May this value's field be edited from the Property Inspector while RUN is active?"> Runtime-mutable</label>
-      </div>
-      ${row.direction === "Input" ? `<div class="hv-note">Input: this value's authority is a Signal Graph wire (not yet exposed as a port in this build -- see Anexo B).</div>` : ""}
-      ${row.direction === "Output" ? `<div class="hv-note">Output: this value drives a Signal Graph output port (not yet exposed as a port in this build -- see Anexo B).</div>` : ""}
+      ${row.direction === "Internal" ? `<div class="hv-line"><label><input type="number" ${d("value")} value="${row.value}" ${valueDisabled ? "disabled" : ""}> Value</label></div>` : ""}
+      ${row.direction === "Input" ? `<div class="hv-note">Input: value owned by the Signal Graph wire.</div><input type="checkbox" data-hv-field="writable" disabled hidden>` : ""}
+      ${row.direction === "Output" ? `<div class="hv-note">Output: value published to the Signal Graph.</div>` : ""}
     </div>`;
   }).join("");
   return `<section><h3>Variables</h3>${rowHtml || `<div class="empty">None configured.</div>`}
     <button data-hv-add="1" ${options.structuralEditsLocked ? "disabled" : ""}>+ Add Variable</button></section>`;
 }
 
-export function renderCommandsSection(rows: HartCommandRow[], compilerStatus: string, options: HartSectionOptions): string {
+export function renderCommandsSection(rows: HartCommandRow[], compilerStatus: string, options: HartSectionOptions,
+                                      variables: HartVariableRow[] = []): string {
   const structuralDisabled = options.structuralEditsLocked;
   const rowHtml = rows.map((row, i) => {
     const stepsHtml = row.responseSteps.map((step, si) => {
@@ -228,7 +216,8 @@ export function renderCommandsSection(rows: HartCommandRow[], compilerStatus: st
       if (step.kind === "hex") {
         paramHtml = `<input data-hc-index="${i}" data-hc-step="${si}" data-hc-field="bytes" value="${escapeAttr(step.bytes ?? "")}" placeholder="hex bytes, e.g. CAFE" ${structuralDisabled ? "disabled" : ""}>`;
       } else if (step.kind === "variable") {
-        paramHtml = selectHtml(`data-hc-index="${i}" data-hc-step="${si}" data-hc-field="variable"`, HART_BUILTIN_VARIABLES, step.variable ?? "ManufacturerId", structuralDisabled);
+        const variableOptions = HART_BUILTIN_VARIABLES.concat(variables.map((variable) => ({ value: variable.id, label: variable.name || variable.id })));
+        paramHtml = selectHtml(`data-hc-index="${i}" data-hc-step="${si}" data-hc-field="variable"`, variableOptions, step.variable ?? "ManufacturerId", structuralDisabled);
       } else if (step.kind === "bodySlice") {
         paramHtml = `<input type="number" data-hc-index="${i}" data-hc-step="${si}" data-hc-field="offset" value="${step.offset ?? 0}" placeholder="offset" ${structuralDisabled ? "disabled" : ""}>
           <input type="number" data-hc-index="${i}" data-hc-step="${si}" data-hc-field="length" value="${step.length ?? 1}" placeholder="length" ${structuralDisabled ? "disabled" : ""}>`;
@@ -241,7 +230,7 @@ export function renderCommandsSection(rows: HartCommandRow[], compilerStatus: st
     }).join("");
     return `<div class="hc-row">
       <div class="hc-line">
-        <input data-hc-index="${i}" data-hc-field="id" type="number" value="${row.id}" placeholder="command id" ${structuralDisabled ? "readonly" : ""} title="Standard commands 0x00/0x01/0x03/0x0B/0x21 are reserved">
+        <input data-hc-index="${i}" data-hc-field="id" type="number" value="${row.id}" placeholder="command id" ${structuralDisabled ? "readonly" : ""} title="Manufacturer commands must use the Device-Specific range (128-253). HART-standardized command numbers (Universal, Common Practice, Additional Common Practice, WirelessHART, Device Family) cannot be redefined here.">
         <input data-hc-index="${i}" data-hc-field="name" value="${escapeAttr(row.name)}" placeholder="name">
         <label><input type="checkbox" data-hc-index="${i}" data-hc-field="enabled" ${row.enabled ? "checked" : ""} ${structuralDisabled ? "disabled" : ""}> Enabled</label>
         <button data-hc-remove="${i}" ${structuralDisabled ? "disabled" : ""} title="Remove command">&minus;</button>
@@ -309,7 +298,7 @@ export function hartInspectorClientScript(): string {
   if (hvAdd) hvAdd.addEventListener('click', function() {
     var rows = readVariableRows();
     rows.push({ id: 'var' + rows.length, name: 'New Variable', role: 'Internal', type: 'Float32', direction: 'Internal',
-                unit: '', value: 0, readable: true, writable: false, runtimeMutable: false });
+                unit: '', value: 0 });
     commitVariables(rows);
   });
   document.querySelectorAll('[data-hv-remove]').forEach(function(el) {
@@ -326,9 +315,15 @@ export function hartInspectorClientScript(): string {
   var hcAdd = document.querySelector('[data-hc-add]');
   if (hcAdd) hcAdd.addEventListener('click', function() {
     var rows = readCommandRows();
-    var usedIds = rows.map(function(r) { return r.id; }).concat([0, 1, 3, 11, 33]);
+    var usedIds = rows.map(function(r) { return r.id; });
+    // Device-Specific (HCF_SPEC-99 Table 9, 128-253) is the primary
+    // manufacturer range -- never suggest an id outside it here (254+ is
+    // Reserved). Core's classifier is the real gate either way (see
+    // HartCommandJson::parseCommandDefinition); this just keeps the default
+    // suggestion from ever landing on a Reserved id.
     var nextId = 128;
-    while (usedIds.indexOf(nextId) !== -1) nextId++;
+    while (nextId <= 253 && usedIds.indexOf(nextId) !== -1) nextId++;
+    if (nextId > 253) { commitCommands(rows); return; } // Device-Specific range exhausted; nothing to add
     rows.push({ id: nextId, name: 'New Command', enabled: true, responseSteps: [] });
     commitCommands(rows);
   });
