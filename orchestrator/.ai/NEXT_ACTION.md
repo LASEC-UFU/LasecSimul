@@ -1,6 +1,59 @@
 # NEXT ACTION
 
-## FEAT-013 StandardCore expansion: blocked by real spec-access wall, write-persistence fixed, 6 more Universal commands (2026-09-11)
+## FEAT-013 Real HART specs now local: Universal command gate 17/23, 2 real bugs fixed via spec text (2026-09-11)
+
+Result: **IN_PROGRESS, external blocker RESOLVED — the previous session's
+FieldComm-access wall no longer applies (a real `HART.zip` is now at the
+repo root, gitignored, extracted for searching). Universal commands are
+17/23 implemented and spec-verified, with the 6 remaining gaps each having
+a specific, real, non-vague reason (missing DSL arithmetic, missing Device
+Variable/transducer models, missing Common Table lookups, or a pre-existing
+catalog-naming ambiguity). Common Practice/WirelessHART/Device Family/
+Discrete (~250 commands) are NOT attempted yet — source is available now,
+this is a session-scope decision (explicitly told to close Universal
+first), not a new blocker.**
+
+Revalidating the previous session's 6 Universal commands (12/13/16/17/18/
+19) against the real HCF_SPEC-127 text found Commands 17/18/19 had NO
+response body — the spec requires echoing the written value back. Fixed.
+Added 6 more real Universal commands: 6/7 (Write Polling Address / Read
+Loop Configuration — REAL live device readdressing, since
+`HartDevicePlan::pollingAddress` is the same field used to look the device
+up; tested end to end including save/reopen of the new address), 20/22
+(Long Tag, a new ISO Latin-1 codec distinct from Tag's packed-ASCII), 38/48
+(both explicitly mandatory per spec), and 8 (Dynamic Variable
+Classifications) as a quick additional win. Also found and fixed a SECOND
+real bug, in Command 3 from an even earlier session: it padded unsupported
+SV/TV/QV with a "not used" convention that does not apply to this command
+per the real spec (the response must be truncated to what the device
+genuinely supports); fixed to the correct 9-byte shape. This is the second
+time in this project that real spec access has caught a defect that code
+review alone had missed.
+
+Closed the previous session's open persistence gap: `HartEngine::findDevicePlan`
+(new) plus a component-side sync step mean a HART write command's effect
+(message/descriptor/date/finalAssemblyNumber/longTag/pollingAddress/
+loopCurrentMode) now survives an actual save/reopen, proven with a test
+that captures live property values into a fresh `ComponentParams` rather
+than reusing the original static one. Also fixed a related bug: editing
+tag/uniqueId/unit in the Property Inspector never triggered a live rebuild
+before.
+
+`hart_engine_test`: PASS. `npm test`: 459/459 (untouched this session).
+
+Next exact action: (1) start Common Practice with the "Device Variables"
+cluster (Commands 33/53/54/79) — the user-variable infrastructure already
+exists, making this the most direct extension; (2) add a linear-mapping
+arithmetic expression node to the Lasec HART Command DSL to unblock
+Command 2 and Command 3's Loop Current; (3) resolve the Command 21/id
+0x15 catalog naming ambiguity (ask the user, or dig into the process_simul
+import history); (4) consult `spec183r22.0.txt` (Common Tables, already
+extracted) for the 4 tables Command 15 needs. Full command-by-command
+detail in `.spec/features/hart-device-engine.md` "Anexo F.11-F.13".
+
+---
+
+## FEAT-013 StandardCore expansion: blocked by real spec-access wall, write-persistence fixed, 6 more Universal commands (2026-09-11, earlier this day)
 
 Result: **BLOCKED_EXTERNAL for the bulk of the request, IN_PROGRESS for the
 rest — full StandardCore coverage of Common Practice/WirelessHART/Device

@@ -1,6 +1,48 @@
 # HART engine implementation status
 
-Last updated: 2026-09-11 (StandardCore expansion blocked by spec access; write-persistence fix)
+Last updated: 2026-09-11 (real HART.zip specs now available; Universal 17/23 done)
+
+## 2026-09-11 — HART.zip specs available, 6 more Universal commands verified, 2 real bugs found via real spec text
+
+The previous session's blocker (FieldComm's online reader returning 403)
+is resolved for this project: a real `HART.zip` (HART Communication
+Foundation official PDFs, Rev 9.0/7.1/10.0/etc.) was placed at the repo
+root. Extracted to a gitignored temp dir with `pdftotext` for searching
+(full inventory in `.spec/features/hart-device-engine.md` "Anexo F.10.1");
+the ZIP itself is gitignored (`/HART.zip`) since it's copyrighted material
+that must never enter git history.
+
+Revalidating the previous session's 6 Universal commands against the real
+HCF_SPEC-127 text found a real conformance bug: Commands 17/18/19 (write
+commands) had no response body at all -- the spec requires echoing back
+the value used. Fixed. Implemented 6 more real Universal commands (6/7
+Polling Address+Loop Config -- genuine live device readdressing, tested
+end to end; 20/22 Long Tag with a new Latin-1 codec; 38/48 both spec-
+mandatory; 8 as a bonus). Also found and fixed a SECOND real bug, this
+one in Command 3 from an even earlier session: it padded unsupported
+SV/TV/QV with a "not used" convention the real spec doesn't allow for
+this command -- the response must be truncated instead. Fixed to the
+correct 9-byte shape.
+
+Closed the save/reopen persistence gap flagged in the previous session:
+added `HartEngine::findDevicePlan()` and wired the component to sync live
+device state back into its own persisted properties after every
+transaction, proven with a real save/reopen simulation test. Also fixed a
+related pre-existing bug where editing tag/uniqueId/unit in the Property
+Inspector had no live effect until an unrelated property triggered a
+rebuild.
+
+`hart_engine_test`: PASS. `npm test`: 459/459 (untouched this session).
+Universal command gate: 17/23 implemented and spec-verified, 3 correctly
+Reserved, 4 blocked on missing infrastructure (arithmetic primitive,
+Device Variable indexing, transducer model, Common Table lookups) with a
+specific reason each, 1 blocked on a pre-existing catalog naming
+ambiguity. Common Practice/Wireless/Device Family/Discrete (~250
+commands) not attempted -- source now available, this is a session-scope
+decision (Universal was explicitly prioritized first), not a new spec
+blocker. Full detail in `.spec/features/hart-device-engine.md` "Anexo F".
+
+## 2026-09-11 — StandardCore expansion blocked by spec access; write-persistence fix (earlier this day)
 
 ## 2026-09-11 — Official HART specs inaccessible (HTTP 403, confirmed); write-persistence bug found+fixed; 6 more Universal commands
 
