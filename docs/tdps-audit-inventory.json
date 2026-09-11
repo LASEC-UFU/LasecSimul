@@ -1,0 +1,351 @@
+{
+  "root": "C:/SourceCode/TDPSv771",
+  "generatedAt": "2026-09-11T12:08:16.510Z",
+  "fileCount": 30,
+  "files": [
+    {
+      "file": "examples\\basic flow loop\\basic flow loop.smp",
+      "bytes": 9273,
+      "lines": 551,
+      "recordTypes": [
+        "<<<Unidades Engenharia>>",
+        "<<Tracks>>"
+      ],
+      "references": 94
+    },
+    {
+      "file": "examples\\boiler\\boiler.smp",
+      "bytes": 33049,
+      "lines": 1692,
+      "recordTypes": [
+        "<<<Unidades Engenharia>>",
+        "<<Tracks>>"
+      ],
+      "references": 161
+    },
+    {
+      "file": "examples\\combustion\\cl.smp",
+      "bytes": 15933,
+      "lines": 854,
+      "recordTypes": [
+        "<<<Unidades Engenharia>>",
+        "<<Tracks>>"
+      ],
+      "references": 108
+    },
+    {
+      "file": "examples\\combustion\\dcl.smp",
+      "bytes": 17475,
+      "lines": 927,
+      "recordTypes": [
+        "<<<Unidades Engenharia>>",
+        "<<Tracks>>"
+      ],
+      "references": 120
+    },
+    {
+      "file": "examples\\combustion\\ratio.smp",
+      "bytes": 15402,
+      "lines": 832,
+      "recordTypes": [
+        "<<<Unidades Engenharia>>",
+        "<<Tracks>>"
+      ],
+      "references": 104
+    },
+    {
+      "file": "examples\\combustion2fuels\\combustion2fuels.smp",
+      "bytes": 14353,
+      "lines": 831,
+      "recordTypes": [
+        "<<<Unidades Engenharia>>",
+        "<<Tracks>>"
+      ],
+      "references": 108
+    },
+    {
+      "file": "examples\\coolingplant\\coolingplant.smp",
+      "bytes": 27309,
+      "lines": 1496,
+      "recordTypes": [
+        "<<<Unidades Engenharia>>",
+        "<<Tracks>>"
+      ],
+      "references": 224
+    },
+    {
+      "file": "examples\\course-fine flow loop\\course-fine flow loop.smp",
+      "bytes": 9746,
+      "lines": 612,
+      "recordTypes": [
+        "<<<Unidades Engenharia>>",
+        "<<Tracks>>"
+      ],
+      "references": 94
+    },
+    {
+      "file": "examples\\ethaneplant\\ethaneplant.smp",
+      "bytes": 29463,
+      "lines": 1576,
+      "recordTypes": [
+        "<<<Unidades Engenharia>>",
+        "<<Tracks>>"
+      ],
+      "references": 156
+    },
+    {
+      "file": "examples\\frequency response\\frequencyresponse.smp",
+      "bytes": 9823,
+      "lines": 602,
+      "recordTypes": [
+        "<<<Unidades Engenharia>>",
+        "<<Tracks>>"
+      ],
+      "references": 98
+    },
+    {
+      "file": "examples\\furnace\\furnace.smp",
+      "bytes": 12698,
+      "lines": 698,
+      "recordTypes": [
+        "<<<Unidades Engenharia>>",
+        "<<Tracks>>"
+      ],
+      "references": 93
+    },
+    {
+      "file": "examples\\furnace masterslave\\furnace.smp",
+      "bytes": 14102,
+      "lines": 773,
+      "recordTypes": [
+        "<<<Unidades Engenharia>>",
+        "<<Tracks>>"
+      ],
+      "references": 100
+    },
+    {
+      "file": "examples\\header pressure with 3 consumers\\header pressure with 3 consumers.smp",
+      "bytes": 16020,
+      "lines": 869,
+      "recordTypes": [
+        "<<<Unidades Engenharia>>",
+        "<<Tracks>>"
+      ],
+      "references": 101
+    },
+    {
+      "file": "examples\\heat exchanger\\heatexchanger.smp",
+      "bytes": 15602,
+      "lines": 885,
+      "recordTypes": [
+        "<<<Unidades Engenharia>>",
+        "<<Tracks>>"
+      ],
+      "references": 105
+    },
+    {
+      "file": "examples\\Industrial Boiler\\Caldeira Industrial V0_1.txd",
+      "bytes": 1076266,
+      "lines": 1802,
+      "recordTypes": [],
+      "references": 0
+    },
+    {
+      "file": "examples\\Industrial Boiler\\Caldeira Industrial V0_2.txd",
+      "bytes": 1076294,
+      "lines": 1802,
+      "recordTypes": [],
+      "references": 0
+    },
+    {
+      "file": "examples\\Industrial Boiler\\Caldeira Industrial V0_3.txd",
+      "bytes": 1076237,
+      "lines": 1802,
+      "recordTypes": [],
+      "references": 0
+    },
+    {
+      "file": "examples\\Industrial Boiler\\Caldeira Industrial V0_4.txd",
+      "bytes": 1076237,
+      "lines": 1802,
+      "recordTypes": [],
+      "references": 0
+    },
+    {
+      "file": "examples\\Industrial Boiler\\Industrial Boiler.smp",
+      "bytes": 37333,
+      "lines": 1777,
+      "recordTypes": [
+        "<<<Unidades Engenharia>>",
+        "<<Tracks>>"
+      ],
+      "references": 161
+    },
+    {
+      "file": "examples\\Industrial Boiler\\Referencia Desempenho_1.txd",
+      "bytes": 4300351,
+      "lines": 7202,
+      "recordTypes": [],
+      "references": 0
+    },
+    {
+      "file": "examples\\linearized pH control\\Linearized pH control.smp",
+      "bytes": 12815,
+      "lines": 706,
+      "recordTypes": [
+        "<<<Unidades Engenharia>>",
+        "<<Tracks>>"
+      ],
+      "references": 98
+    },
+    {
+      "file": "examples\\linearized pH control\\pHcontrol.smp",
+      "bytes": 12817,
+      "lines": 706,
+      "recordTypes": [
+        "<<<Unidades Engenharia>>",
+        "<<Tracks>>"
+      ],
+      "references": 98
+    },
+    {
+      "file": "examples\\linearized pH control\\Referencia Desempenho_1.txd",
+      "bytes": 2149707,
+      "lines": 3602,
+      "recordTypes": [],
+      "references": 0
+    },
+    {
+      "file": "examples\\nonlinear flow processes\\nonlinear flow processes.smp",
+      "bytes": 14524,
+      "lines": 860,
+      "recordTypes": [
+        "<<<Unidades Engenharia>>",
+        "<<Tracks>>"
+      ],
+      "references": 108
+    },
+    {
+      "file": "examples\\processes to model\\4processes.smp",
+      "bytes": 13332,
+      "lines": 792,
+      "recordTypes": [
+        "<<<Unidades Engenharia>>",
+        "<<Tracks>>"
+      ],
+      "references": 108
+    },
+    {
+      "file": "examples\\reactor\\reactor.smp",
+      "bytes": 19000,
+      "lines": 1072,
+      "recordTypes": [
+        "<<<Unidades Engenharia>>",
+        "<<Tracks>>"
+      ],
+      "references": 138
+    },
+    {
+      "file": "examples\\regulatory level\\regulatory level.smp",
+      "bytes": 15643,
+      "lines": 876,
+      "recordTypes": [
+        "<<<Unidades Engenharia>>",
+        "<<Tracks>>"
+      ],
+      "references": 108
+    },
+    {
+      "file": "examples\\Smith predictor\\smithpredictor.smp",
+      "bytes": 12171,
+      "lines": 728,
+      "recordTypes": [
+        "<<<Unidades Engenharia>>",
+        "<<Tracks>>"
+      ],
+      "references": 91
+    },
+    {
+      "file": "examples\\splitrange control\\splitrange.smp",
+      "bytes": 9550,
+      "lines": 610,
+      "recordTypes": [
+        "<<<Unidades Engenharia>>",
+        "<<Tracks>>"
+      ],
+      "references": 106
+    },
+    {
+      "file": "examples\\surge tank\\surge tank.smp",
+      "bytes": 14602,
+      "lines": 838,
+      "recordTypes": [
+        "<<<Unidades Engenharia>>",
+        "<<Tracks>>"
+      ],
+      "references": 97
+    }
+  ],
+  "recordTypes": [
+    {
+      "type": "<<<Unidades Engenharia>>",
+      "count": 24,
+      "files": [
+        "examples\\Industrial Boiler\\Industrial Boiler.smp",
+        "examples\\Smith predictor\\smithpredictor.smp",
+        "examples\\basic flow loop\\basic flow loop.smp",
+        "examples\\boiler\\boiler.smp",
+        "examples\\combustion2fuels\\combustion2fuels.smp",
+        "examples\\combustion\\cl.smp",
+        "examples\\combustion\\dcl.smp",
+        "examples\\combustion\\ratio.smp",
+        "examples\\coolingplant\\coolingplant.smp",
+        "examples\\course-fine flow loop\\course-fine flow loop.smp",
+        "examples\\ethaneplant\\ethaneplant.smp",
+        "examples\\frequency response\\frequencyresponse.smp",
+        "examples\\furnace masterslave\\furnace.smp",
+        "examples\\furnace\\furnace.smp",
+        "examples\\header pressure with 3 consumers\\header pressure with 3 consumers.smp",
+        "examples\\heat exchanger\\heatexchanger.smp",
+        "examples\\linearized pH control\\Linearized pH control.smp",
+        "examples\\linearized pH control\\pHcontrol.smp",
+        "examples\\nonlinear flow processes\\nonlinear flow processes.smp",
+        "examples\\processes to model\\4processes.smp",
+        "examples\\reactor\\reactor.smp",
+        "examples\\regulatory level\\regulatory level.smp",
+        "examples\\splitrange control\\splitrange.smp",
+        "examples\\surge tank\\surge tank.smp"
+      ]
+    },
+    {
+      "type": "<<Tracks>>",
+      "count": 24,
+      "files": [
+        "examples\\Industrial Boiler\\Industrial Boiler.smp",
+        "examples\\Smith predictor\\smithpredictor.smp",
+        "examples\\basic flow loop\\basic flow loop.smp",
+        "examples\\boiler\\boiler.smp",
+        "examples\\combustion2fuels\\combustion2fuels.smp",
+        "examples\\combustion\\cl.smp",
+        "examples\\combustion\\dcl.smp",
+        "examples\\combustion\\ratio.smp",
+        "examples\\coolingplant\\coolingplant.smp",
+        "examples\\course-fine flow loop\\course-fine flow loop.smp",
+        "examples\\ethaneplant\\ethaneplant.smp",
+        "examples\\frequency response\\frequencyresponse.smp",
+        "examples\\furnace masterslave\\furnace.smp",
+        "examples\\furnace\\furnace.smp",
+        "examples\\header pressure with 3 consumers\\header pressure with 3 consumers.smp",
+        "examples\\heat exchanger\\heatexchanger.smp",
+        "examples\\linearized pH control\\Linearized pH control.smp",
+        "examples\\linearized pH control\\pHcontrol.smp",
+        "examples\\nonlinear flow processes\\nonlinear flow processes.smp",
+        "examples\\processes to model\\4processes.smp",
+        "examples\\reactor\\reactor.smp",
+        "examples\\regulatory level\\regulatory level.smp",
+        "examples\\splitrange control\\splitrange.smp",
+        "examples\\surge tank\\surge tank.smp"
+      ]
+    }
+  ]
+}
