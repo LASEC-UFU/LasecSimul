@@ -2663,3 +2663,207 @@ futura, o texto normativo abaixo fica registrado como a definição final:
 > is the single normative authority enforcing this at authoring time.
 > Device-Specific = Manufacturer Defined; Device Family = HART-defined. The
 > two must never be confused.
+
+## Anexo F -- StandardCore expansion attempt, real external blocker found (2026-09-11, sessão 6)
+
+Esta sessão recebeu um pedido para implementar TODOS os HART Commands
+"HART-standardized" (Universal, Common Practice, WirelessHART, Device
+Family, Discrete Applications -- centenas de IDs) em C++ canônico,
+citando um ZIP anexo de PDFs (`spec099r9.0.pdf`, `spec127r7.1.pdf`, etc.)
+e exigindo que, quando o ZIP estivesse desatualizado, a revisão vigente
+fosse obtida do FieldComm Group online.
+
+### F.1 Achado crítico, verificado, não hipotético
+
+**O ZIP referenciado não existe neste ambiente.** Busca exaustiva no
+repositório (`find ... -iname "*.pdf"`), no diretório do usuário e em todo
+o restante da máquina não encontrou nenhum dos arquivos citados
+(`spec099r9.0.pdf`, `spec127r7.1.pdf`, `spec151r10.0.pdf`, etc.) -- apenas
+um PDF de referência de uma sessão anterior (`Comandos_Hart.pdf`, cópia do
+repositório PACTware já usado como fonte deste projeto desde a sessão 1).
+
+**O FieldComm Group online reader é access-controlled.** Testado
+diretamente nesta sessão: `WebFetch` em
+`https://library.fieldcommgroup.org/20127/TS20127/` retornou **HTTP 403
+Forbidden**. Uma busca web confirma que as especificações completas
+(TS20099/TS20127/TS20151/etc.) são "controlled technical documents that
+require membership or purchase" -- não há acesso público ao texto integral
+de nenhuma das ~15 especificações citadas na tarefa.
+
+Isso significa que, para a esmagadora maioria dos ~250+ commands pedidos
+(Common Practice 33-554, WirelessHART completo, Device Family completo,
+Discrete completo), **não existe fonte normativa acessível a este agente**
+para extrair request/response byte layout com confiança. Implementar esses
+bytes sem essa fonte seria exatamente o que a própria tarefa proíbe
+explicitamente na seção 3: "não deduza... pelo nome... é melhor deixar
+explicitamente `SPEC_CURRENT_SOURCE_REQUIRED` do que implementar bytes
+inventados."
+
+### F.2 O que foi genuinely implementado nesta sessão apesar do bloqueio
+
+Um subconjunto pequeno mas real dos Universal Commands tem layout de bytes
+estável há décadas (inalterado desde HART 5) e é corroborado
+independentemente pela referência PACTware `hrt_transmitter_v6.py` já
+usada como fonte legítima deste projeto (não um PDF oficial, mas uma
+implementação de referência real, auditável, já adotada desde a sessão 1).
+Implementados e testados:
+
+- **Command 12 (0x0C) Read Message** / **Command 17 (0x11) Write Message**
+  -- 24 caracteres packed-ASCII (18 bytes).
+- **Command 13 (0x0D) Read Tag/Descriptor/Date** / **Command 18 (0x12)
+  Write Tag/Descriptor/Date** -- tag(6) + descriptor(12) + date(3) = 21
+  bytes, layout confirmado byte-a-byte contra `hrt_transmitter_v6.py`'s
+  `tag=$BODY[0:12], descriptor=$BODY[12:36], date=$BODY[36:42]` (offsets
+  em hex chars, /2 = bytes).
+- **Command 16 (0x10) Read Final Assembly Number** / **Command 19 (0x13)
+  Write Final Assembly Number** -- 3 bytes big-endian.
+
+Todos os seis são Universal (0-30) pela classificação normativa já
+existente (`HartCommandClassification.hpp`), portanto `StandardCore` por
+construção -- e já protegidos automaticamente contra redefinição por
+manufacturer DSL (o classificador da sessão anterior cobre isso sem
+nenhuma mudança adicional).
+
+### F.3 Achado arquitetural real e corrigido: writes nunca persistiam
+
+Durante a implementação, foi descoberto que **nenhum HART write command já
+produzido por este projeto jamais persistia seu efeito**: `HartCommandExecutor::execute`
+recebia `HartExecutionVariables` POR VALOR (uma cópia de trabalho
+descartada ao retornar), e `HartEngine::CommandProgramHook` recebia
+`const HartDevicePlan&` -- não havia NENHUM caminho para uma mutação `SET`
+sobreviver além da própria chamada. Isso nunca tinha sido pego porque
+nenhum dos 5 comandos de produção anteriores (0x00/0x01/0x03/0x0B/0x21)
+usa `SET`; o `.write` stage nunca era exercitado em produção, só no teste
+isolado de primitivas.
+
+Corrigido nesta sessão (não era opcional -- Commands 17/18/19 exigem que
+seus writes façam algo real):
+
+1. `HartCommandExecutor::execute` agora recebe `HartExecutionVariables&`
+   (referência, não cópia) -- mutações ficam visíveis ao chamador.
+2. `HartEngine::CommandProgramHook` agora recebe `HartDevicePlan&` (não
+   `const&`) -- o hook pode persistir.
+3. `HartEngine::execute()` copia o `effectivePlan` mutado de volta para o
+   device real (`selected->plan = std::move(effectivePlan)`) SOMENTE
+   quando o hook retorna `true` -- uma escrita rejeitada (ex.: body
+   truncado) nunca deixa mutação parcial (seção 50 "atomic writes",
+   testado explicitamente: comando 18 com 1 byte a menos é rejeitado E o
+   tag/descriptor/date permanecem exatamente como antes).
+4. `HartReferenceCatalog::makeHook` só copia um campo de volta ao plan se
+   ele REALMENTE mudou (comparação byte-a-byte antes/depois) -- sem essa
+   guarda, QUALQUER comando (inclusive uma leitura como 0x01) re-
+   canonicalizaria silenciosamente o tag (maiúsculas + padding de espaço)
+   a cada dispatch, um efeito colateral espúrio que um teste de regressão
+   dedicado agora impede.
+
+Esta é, honestamente, a correção mais importante desta sessão -- maior que
+os 6 commands em si: sem ela, QUALQUER write command futuro (6, 22, 34-37,
+44, etc., quando/se as fontes normativas ficarem disponíveis) teria o
+mesmo bug silencioso de "parece funcionar, não muda nada".
+
+### F.4 Bug de teste real encontrado e corrigido de brinde
+
+O helper `transactCommand` em `HartEngineTest.cpp` (usado desde a sessão
+anterior) tinha um buffer de resposta fixo de 16 bytes -- suficiente para
+os payloads de 1-2 bytes que testava até agora, mas silenciosamente
+insuficiente para o payload de 18 bytes do Command 12. `component.transact`
+retorna `false` em overflow (correto), então o teste simplesmente reportava
+"resposta vazia" em vez de um erro óbvio -- corrigido para 48 bytes com
+comentário explicando por quê.
+
+### F.5 Testes desta sessão
+
+Golden read/write para os 3 pares (12/17, 13/18, 16/19); persistência
+comprovada via HartEngine puro E via `HartCommunicationComponent` real
+(prova de produção, não só de engine isolado); consistência cruzada (um
+write de tag via 18 é observado por um match de tag via 0x0B, e o tag
+antigo passa a dar mismatch); atomicidade (write truncado não muda nada);
+regressão anti-recanonicalização (uma leitura não relacionada não
+perturba tag/descriptor/date). `hart_engine_test`: **PASS**. `npm test`
+(extensão, não tocada nesta sessão): **459/459**, sem regressão.
+
+### F.6 Limitação honesta: sem persistência entre save/reopen
+
+`message`/`descriptor`/`date`/`finalAssemblyNumber` vivem em
+`HartDevicePlan`, reconstruído do zero por `HartCommunicationComponent::
+rebuildConfiguredPlan()` a cada edição de propriedade -- e NENHUMA
+propriedade persistida foi adicionada para esses 4 campos nesta sessão
+(seria escopo adicional real: schema, Property Inspector, serialização).
+Isso significa: um write via Command 17/18/19 sobrevive durante a sessão
+de simulação (testado, funciona), mas é perdido se o projeto for salvo e
+reaberto. `tag` já tinha esse mesmo problema antes desta sessão (não é uma
+regressão introduzida agora) -- este é um limite pré-existente que apenas
+ficou mais visível ao ganhar 3 vizinhos novos.
+
+### F.7 Matriz final (parcial -- apenas o que mudou nesta sessão)
+
+| ID | Nome | Classe | Quem define semântica? | Core implementa? | Fonte | Status |
+|---|---|---|---|---|---|---|
+| 12 (0x0C) | Read Message | Universal | HART | sim | PACTware ref. (corroborado) | PASS_OLDER_COMPATIBLE_SPEC |
+| 17 (0x11) | Write Message | Universal | HART | sim | idem | PASS_OLDER_COMPATIBLE_SPEC |
+| 13 (0x0D) | Read Tag, Descriptor, Date | Universal | HART | sim | idem | PASS_OLDER_COMPATIBLE_SPEC |
+| 18 (0x12) | Write Tag, Descriptor, Date | Universal | HART | sim | idem | PASS_OLDER_COMPATIBLE_SPEC |
+| 16 (0x10) | Read Final Assembly Number | Universal | HART | sim | idem | PASS_OLDER_COMPATIBLE_SPEC |
+| 19 (0x13) | Write Final Assembly Number | Universal | HART | sim | idem | PASS_OLDER_COMPATIBLE_SPEC |
+| 2, 4, 5, 8, 9, 10, 14, 15, 20, 22, 38, 48 | (Universal restante) | Universal | HART | não | -- | NEEDS_CURRENT_SPEC_UPDATE / SPEC_CURRENT_SOURCE_REQUIRED |
+| 33-121 (exceto 38/48) | Common Practice | CommonPractice | HART | não | -- | SPEC_CURRENT_SOURCE_REQUIRED (HTTP 403 confirmado) |
+| 512-767 | Additional Common Practice | AdditionalCommonPractice | HART | não | -- | SPEC_CURRENT_SOURCE_REQUIRED |
+| 768-1023 | WirelessHART | WirelessHart | HART | não | -- | SPEC_CURRENT_SOURCE_REQUIRED |
+| 1024-33791 | Device Family | DeviceFamily | HART | não | -- | SPEC_CURRENT_SOURCE_REQUIRED |
+| 64384-64459 | Discrete Applications | DeviceFamily-like (per §32 do pedido) | HART | não | -- | SPEC_CURRENT_SOURCE_REQUIRED |
+
+### F.8 Contagens finais (seção 63 do pedido)
+
+```text
+Universal standardized commands discovered   = ~23 (0-22, 38, 48; exata
+                                                depende da revisão --
+                                                bloqueado por F.1)
+Universal implemented (corpo real)           = 10 (0,1,3,11,12,13,16,17,18,19)
+Universal remaining                          = ~13
+
+Common Practice standardized commands discovered = SPEC_CURRENT_SOURCE_REQUIRED
+Common Practice implemented                      = 1 (33, da sessão anterior)
+Common Practice remaining                        = SPEC_CURRENT_SOURCE_REQUIRED
+
+Wireless standardized commands discovered    = SPEC_CURRENT_SOURCE_REQUIRED
+Wireless implemented                         = 0
+Wireless remaining                           = SPEC_CURRENT_SOURCE_REQUIRED
+
+Device Family standardized commands discovered = SPEC_CURRENT_SOURCE_REQUIRED
+Device Family implemented                      = 0
+Device Family remaining                        = SPEC_CURRENT_SOURCE_REQUIRED
+
+Discrete standardized commands discovered    = SPEC_CURRENT_SOURCE_REQUIRED
+Discrete implemented                         = 0
+Discrete remaining                           = SPEC_CURRENT_SOURCE_REQUIRED
+
+Commands awaiting current authoritative specification = a MAIORIA da tarefa
+                                                          pedida (ver F.1)
+
+Manufacturer DSL commands accidentally found in C++ = 0 (classificador
+                                                        da sessão anterior
+                                                        já impede isso)
+```
+
+### F.9 Próxima ação exata, não genérica
+
+1. **Bloqueio externo real, não contornável por este agente**: acesso de
+   membro à FieldComm Group (`library.fieldcommgroup.org`) ou aquisição
+   dos PDFs `TS20099`/`TS20127`/`TS20151`/`TS20155`/`TS20160.x`/`TS20285`/
+   `TS20307` na revisão vigente. Sem isso, a seção 56 do pedido ("segunda
+   busca usando fontes oficiais atuais") não pode ser respondida com
+   autoridade normativa -- só com o mesmo tipo de inferência que a própria
+   tarefa proíbe.
+2. Se o usuário puder fornecer os PDFs (upload direto, não um link
+   FieldComm), este agente pode processá-los diretamente e retomar a
+   implementação command-by-command exatamente como pedido.
+3. Alternativa parcial sem os PDFs: continuar usando a MESMA técnica desta
+   sessão (corroboração cruzada contra `hrt_transmitter_v1-v6.py` e outras
+   implementações de referência real, não-oficiais mas auditáveis) para o
+   punhado de commands restantes cujo layout é conhecido-estável há
+   décadas (ex.: Command 20/22 Long Tag, Command 6/7 Polling
+   Address/Loop Configuration -- este último adiado nesta sessão
+   especificamente pela complexidade de re-endereçamento ao vivo, não por
+   falta de fonte).
+4. Adicionar propriedades persistidas para `message`/`descriptor`/`date`/
+   `finalAssemblyNumber` no Property Inspector (fecha o gap F.6).

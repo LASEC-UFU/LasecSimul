@@ -277,6 +277,95 @@ std::vector<HartCommandDefinition> HartReferenceCatalog::commandProgramDefinitio
         commands.push_back(std::move(cmd));
     }
 
+    // -----------------------------------------------------------------
+    // Universal Commands 12/17, 13/18, 16/19: Message, Tag/Descriptor/Date,
+    // Final Assembly Number read/write pairs. Byte layout corroborated
+    // against the PACTware `hrt_transmitter_v6.py` COMMANDS table (same
+    // reference this project has used as ground truth since FEAT-013's
+    // first session): Command 18's write body is exactly tag[0:6] +
+    // descriptor[6:18] + date[18:21] (hex-char offsets there map 1:1 to
+    // byte offsets here), and 17/19 are equally direct single-field writes.
+    // These are NOT sourced from the current HCF_SPEC-127 Rev 7.2 text --
+    // that document is access-controlled (FieldComm Group's online reader
+    // returns HTTP 403 without membership, confirmed this session) -- but
+    // Tag/Descriptor/Date/Message/Final-Assembly-Number have been unchanged
+    // since HART 5 and are corroborated by this project's existing reference
+    // implementation, so they are implemented; anything revision-sensitive
+    // (9, 48, and the rest) is deliberately left unmodeled rather than
+    // guessed (see .spec/features/hart-device-engine.md "Anexo F").
+    //
+    // No command below carries an error_code/status prefix, matching this
+    // project's existing convention for 0x01/0x03 (no generic Response-Code/
+    // Device-Status framing exists yet -- a known, previously documented
+    // gap, not a new inconsistency introduced here).
+
+    // 0x0C (12) -- Read Message.
+    {
+        HartCommandDefinition cmd;
+        cmd.id = 0x0C;
+        cmd.name = "Read Message";
+        cmd.resp = {HartStatement{HartAppendStmt{HartExpr::var(HartVarId::Message)}}};
+        commands.push_back(std::move(cmd));
+    }
+
+    // 0x11 (17) -- Write Message: 24-char packed-ASCII message, no response
+    // payload (this project has no generic status-byte framing to echo; see
+    // the note above).
+    {
+        HartCommandDefinition cmd;
+        cmd.id = 0x11;
+        cmd.name = "Write Message";
+        cmd.write = {HartStatement{HartSetStmt{HartVarId::Message, HartExpr::bodySlice(0, 18)}}};
+        commands.push_back(std::move(cmd));
+    }
+
+    // 0x0D (13) -- Read Tag, Descriptor, Date.
+    {
+        HartCommandDefinition cmd;
+        cmd.id = 0x0D;
+        cmd.name = "Read Tag, Descriptor, Date";
+        cmd.resp = {
+            HartStatement{HartAppendStmt{HartExpr::var(HartVarId::Tag)}},
+            HartStatement{HartAppendStmt{HartExpr::var(HartVarId::Descriptor)}},
+            HartStatement{HartAppendStmt{HartExpr::var(HartVarId::Date)}},
+        };
+        commands.push_back(std::move(cmd));
+    }
+
+    // 0x12 (18) -- Write Tag, Descriptor, Date: tag[0:6] + descriptor[6:18] +
+    // date[18:21], applied atomically (compiler validates all three slices
+    // before any SET executes -- HartCommandExecutor aborts the whole write
+    // stage on the first failing statement, never a partial mutation).
+    {
+        HartCommandDefinition cmd;
+        cmd.id = 0x12;
+        cmd.name = "Write Tag, Descriptor, Date";
+        cmd.write = {
+            HartStatement{HartSetStmt{HartVarId::Tag, HartExpr::bodySlice(0, 6)}},
+            HartStatement{HartSetStmt{HartVarId::Descriptor, HartExpr::bodySlice(6, 12)}},
+            HartStatement{HartSetStmt{HartVarId::Date, HartExpr::bodySlice(18, 3)}},
+        };
+        commands.push_back(std::move(cmd));
+    }
+
+    // 0x10 (16) -- Read Final Assembly Number.
+    {
+        HartCommandDefinition cmd;
+        cmd.id = 0x10;
+        cmd.name = "Read Final Assembly Number";
+        cmd.resp = {HartStatement{HartAppendStmt{HartExpr::var(HartVarId::FinalAssemblyNumber)}}};
+        commands.push_back(std::move(cmd));
+    }
+
+    // 0x13 (19) -- Write Final Assembly Number: 3-byte big-endian unsigned.
+    {
+        HartCommandDefinition cmd;
+        cmd.id = 0x13;
+        cmd.name = "Write Final Assembly Number";
+        cmd.write = {HartStatement{HartSetStmt{HartVarId::FinalAssemblyNumber, HartExpr::bodySlice(0, 3)}}};
+        commands.push_back(std::move(cmd));
+    }
+
     // `commandDescriptors()` documents the full HART command-number union the
     // process_simul reference devices reference (Universal, Common Practice,
     // and a Device-Specific vendor block) -- but listing a command number
@@ -302,7 +391,7 @@ std::vector<HartCommandDefinition> HartReferenceCatalog::commandProgramDefinitio
 
 namespace {
 HartEngine::CommandProgramHook makeHook(std::shared_ptr<std::unordered_map<HartCommandId, HartCompiledCommandProgram>> programs) {
-    return [programs](const HartDeviceProfile& profile, const HartDevicePlan& plan, double primaryValue,
+    return [programs](const HartDeviceProfile& profile, HartDevicePlan& plan, double primaryValue,
                       HartCommandId command, std::span<const uint8_t> request, HartResponseBuilder& response) -> bool {
         const auto it = programs->find(command);
         if (it == programs->end()) return false;
@@ -319,6 +408,12 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<std::unordered_map<HartC
         const std::string_view tagSource = plan.tag.empty() ? std::string_view(plan.id) : std::string_view(plan.tag);
         const std::vector<uint8_t> packedTag = HartTypeCodec::encodePackedAscii(tagSource, 8);
         std::copy_n(packedTag.begin(), std::min(packedTag.size(), vars.tagPacked.size()), vars.tagPacked.begin());
+        const std::vector<uint8_t> packedMessage = HartTypeCodec::encodePackedAscii(plan.message, 24);
+        std::copy_n(packedMessage.begin(), std::min(packedMessage.size(), vars.messagePacked.size()), vars.messagePacked.begin());
+        const std::vector<uint8_t> packedDescriptor = HartTypeCodec::encodePackedAscii(plan.descriptor, 16);
+        std::copy_n(packedDescriptor.begin(), std::min(packedDescriptor.size(), vars.descriptorPacked.size()), vars.descriptorPacked.begin());
+        vars.date = plan.date;
+        vars.finalAssemblyNumber = plan.finalAssemblyNumber;
         vars.primaryVariableUnit = profile.primaryVariableUnit;
         vars.primaryVariable = static_cast<float>(primaryValue);
         std::vector<HartExecutionVariables::UserVariable> userVariables;
@@ -330,7 +425,35 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<std::unordered_map<HartC
             userVariables.push_back({variable.id, value, variable.type});
         }
         vars.userVariables = userVariables;
-        return HartCommandExecutor::execute(it->second, vars, request, response);
+        // Snapshot the packed fields exactly as seeded above so persistence
+        // below can tell "this command's write stage actually SET this
+        // field" apart from "this field's packed encoding is merely stable
+        // under decode(encode(x))". Without this, EVERY command dispatched
+        // through this hook -- including plain reads that never touch Tag --
+        // would silently re-canonicalize `plan.tag` (uppercase + space-pad +
+        // truncate to 8 chars) on every single call, which is exactly the
+        // kind of unrelated side effect a read must never have.
+        const auto tagBefore = vars.tagPacked;
+        const auto messageBefore = vars.messagePacked;
+        const auto descriptorBefore = vars.descriptorPacked;
+        const auto dateBefore = vars.date;
+        const auto finalAssemblyBefore = vars.finalAssemblyNumber;
+        if (!HartCommandExecutor::execute(it->second, vars, request, response)) return false;
+        // Persist only the fields this command's `write`/`after` stage
+        // actually mutated (see the doc comment on
+        // `HartEngine::CommandProgramHook`) back into the plan HartEngine
+        // will copy into the real runtime device. primaryVariableUnit/
+        // primaryVariable are intentionally NEVER written back here even
+        // though SET can target them: the primary variable's value is owned
+        // by the Signal Graph/`primaryValue` parameter, not by this plan
+        // snapshot, and writing it back would fight that ownership on the
+        // next evaluation tick.
+        if (vars.tagPacked != tagBefore) plan.tag = HartTypeCodec::decodePackedAscii(vars.tagPacked);
+        if (vars.messagePacked != messageBefore) plan.message = HartTypeCodec::decodePackedAscii(vars.messagePacked);
+        if (vars.descriptorPacked != descriptorBefore) plan.descriptor = HartTypeCodec::decodePackedAscii(vars.descriptorPacked);
+        if (vars.date != dateBefore) plan.date = vars.date;
+        if (vars.finalAssemblyNumber != finalAssemblyBefore) plan.finalAssemblyNumber = vars.finalAssemblyNumber;
+        return true;
     };
 }
 } // namespace

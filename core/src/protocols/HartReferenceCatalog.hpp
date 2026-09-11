@@ -25,13 +25,20 @@ public:
     static std::vector<HartCommandDescriptor> commandDescriptors();
     static std::vector<HartReferenceDeviceDefinition> deviceDefinitions();
     static HartDeviceProfile makeGenericProfile();
+    static HartDeviceProfile makeProfile(const HartReferenceDeviceDefinition& definition);
+    static bool registerProfiles(HartProfileRegistry& registry);
     static bool registerGenericProfile(HartProfileRegistry& registry);
     static std::vector<HartDevicePlan> makeDevicePlans(std::string_view bus = "hart-1");
 
-    /** Semantic Hart Command DSL programs for the commands migrated off the
-     * former central switch (FASE 19 proof gate: 0x00, 0x01, 0x03, 0x0B, 0x21).
-     * See .spec/features/hart-device-engine.md "Anexo A" for the request/
-     * response layout each program encodes. */
+    /** Semantic Hart Command DSL programs for every Universal command with a
+     * real, spec-corroborated production body: 0x00/0x01/0x03/0x0B/0x21
+     * (FASE 19 proof gate) plus 0x0C/0x0D/0x10/0x11/0x12/0x13 (Message,
+     * Tag/Descriptor/Date, Final Assembly Number -- Anexo F). Every entry
+     * here is StandardCore per HartCommandClassification.hpp: all eleven ids
+     * classify as Universal, so HartCommandJson already refuses to let a
+     * manufacturer command shadow any of them. See
+     * .spec/features/hart-device-engine.md "Anexo A"/"Anexo F" for the
+     * request/response layout each program encodes. */
     static std::vector<HartCommandDefinition> commandProgramDefinitions();
 
     /** Compiles `commandProgramDefinitions()` and wires them into `engine` via

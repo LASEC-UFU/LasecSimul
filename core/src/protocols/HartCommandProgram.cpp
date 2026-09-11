@@ -14,6 +14,10 @@ size_t hartVarWidth(HartVarId id) noexcept {
         case HartVarId::DeviceId: return 3;
         case HartVarId::Tag: return 6;
         case HartVarId::PrimaryVariable: return 4;
+        case HartVarId::Message: return 18;
+        case HartVarId::Descriptor: return 12;
+        case HartVarId::Date: return 3;
+        case HartVarId::FinalAssemblyNumber: return 3;
         default: return 1;
     }
 }
@@ -60,6 +64,10 @@ std::optional<std::span<const uint8_t>> evalExpr(const HartExpr& expr, const Har
                     std::copy(encoded.begin(), encoded.end(), scratch.begin());
                     return std::span<const uint8_t>(scratch.data(), 4);
                 }
+                case HartVarId::Message: return std::span<const uint8_t>(vars.messagePacked.data(), vars.messagePacked.size());
+                case HartVarId::Descriptor: return std::span<const uint8_t>(vars.descriptorPacked.data(), vars.descriptorPacked.size());
+                case HartVarId::Date: return std::span<const uint8_t>(vars.date.data(), vars.date.size());
+                case HartVarId::FinalAssemblyNumber: return std::span<const uint8_t>(vars.finalAssemblyNumber.data(), vars.finalAssemblyNumber.size());
             }
             return std::nullopt;
         case HartExpr::Kind::UserVariable:
@@ -185,10 +193,18 @@ std::string validateStatements(const std::vector<HartStatement>& statements, siz
                 if constexpr (std::is_same_v<T, HartAppendStmt>) {
                     error = validateExpr(node.source, maxRequestBytes);
                 } else if constexpr (std::is_same_v<T, HartSetStmt>) {
-                    if (node.target != HartVarId::Tag && node.target != HartVarId::PrimaryVariableUnit &&
-                        node.target != HartVarId::PrimaryVariable) {
-                        error = "HART command SET targets a non-writable variable";
-                        return;
+                    switch (node.target) {
+                        case HartVarId::Tag:
+                        case HartVarId::PrimaryVariableUnit:
+                        case HartVarId::PrimaryVariable:
+                        case HartVarId::Message:
+                        case HartVarId::Descriptor:
+                        case HartVarId::Date:
+                        case HartVarId::FinalAssemblyNumber:
+                            break;
+                        default:
+                            error = "HART command SET targets a non-writable variable";
+                            return;
                     }
                     error = validateExpr(node.value, maxRequestBytes);
                 } else if constexpr (std::is_same_v<T, HartIfStmt>) {
@@ -247,6 +263,22 @@ bool execStatement(const HartStatement& statement, HartExecutionVariables& vars,
                     case HartVarId::PrimaryVariable:
                         if (bytes->size() != 4) return false;
                         vars.primaryVariable = HartTypeCodec::decodeFloat32BE(*bytes);
+                        return true;
+                    case HartVarId::Message:
+                        if (bytes->size() != vars.messagePacked.size()) return false;
+                        std::copy(bytes->begin(), bytes->end(), vars.messagePacked.begin());
+                        return true;
+                    case HartVarId::Descriptor:
+                        if (bytes->size() != vars.descriptorPacked.size()) return false;
+                        std::copy(bytes->begin(), bytes->end(), vars.descriptorPacked.begin());
+                        return true;
+                    case HartVarId::Date:
+                        if (bytes->size() != vars.date.size()) return false;
+                        std::copy(bytes->begin(), bytes->end(), vars.date.begin());
+                        return true;
+                    case HartVarId::FinalAssemblyNumber:
+                        if (bytes->size() != vars.finalAssemblyNumber.size()) return false;
+                        std::copy(bytes->begin(), bytes->end(), vars.finalAssemblyNumber.begin());
                         return true;
                     default: return false;
                 }
@@ -315,7 +347,7 @@ HartCommandCompileResult HartCommandCompiler::compile(HartCommandDefinition defi
     return result;
 }
 
-bool HartCommandExecutor::execute(const HartCompiledCommandProgram& program, HartExecutionVariables variables,
+bool HartCommandExecutor::execute(const HartCompiledCommandProgram& program, HartExecutionVariables& variables,
                                   std::span<const uint8_t> request, HartResponseBuilder& response) noexcept {
     HartResponseBuilder discard(program.maxResponseBytes + 1);
     if (!execStatements(program.definition.write, variables, request, 0, discard)) return false;

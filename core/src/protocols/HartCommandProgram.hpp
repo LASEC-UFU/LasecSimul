@@ -44,27 +44,33 @@ enum class HartVarId : uint8_t {
     Tag,                       // 6 bytes packed ASCII (8 chars)
     PrimaryVariableUnit,
     PrimaryVariable,           // 4 bytes IEEE-754 BE when appended
+    Message,                   // 18 bytes packed ASCII (24 chars) -- Universal Command 12/17
+    Descriptor,                // 12 bytes packed ASCII (16 chars) -- Universal Command 13/18
+    Date,                      // 3 bytes {day, month, year-1900} -- Universal Command 13/18
+    FinalAssemblyNumber,       // 3 bytes big-endian unsigned -- Universal Command 16/19
 };
 
 /** `$BODY`, `$BODY[a:b]`, hex literal, row/variable reference, `$code`. */
 struct HartExpr {
-    enum class Kind : uint8_t { RequestBody, BodySlice, HexConstant, Variable, LocalCode };
+    enum class Kind : uint8_t { RequestBody, BodySlice, HexConstant, Variable, UserVariable, LocalCode };
     Kind kind = Kind::RequestBody;
     size_t offset = 0;              // BodySlice
     size_t length = 0;               // BodySlice; 0 means "to end of body"
     std::vector<uint8_t> constant;   // HexConstant
     HartVarId variable = HartVarId::ManufacturerId; // Variable
+    std::string variableId;           // UserVariable, resolved against the plan
 
-    static HartExpr body() noexcept { return HartExpr{Kind::RequestBody, 0, 0, {}, {}}; }
+    static HartExpr body() noexcept { HartExpr e; e.kind = Kind::RequestBody; return e; }
     static HartExpr bodySlice(size_t offset, size_t length) noexcept {
-        return HartExpr{Kind::BodySlice, offset, length, {}, {}};
+        HartExpr e; e.kind = Kind::BodySlice; e.offset = offset; e.length = length; return e;
     }
     static HartExpr hex(std::vector<uint8_t> bytes) noexcept {
-        return HartExpr{Kind::HexConstant, 0, 0, std::move(bytes), {}};
+        HartExpr e; e.kind = Kind::HexConstant; e.constant = std::move(bytes); return e;
     }
     static HartExpr hexByte(uint8_t byte) noexcept { return hex({byte}); }
-    static HartExpr var(HartVarId id) noexcept { return HartExpr{Kind::Variable, 0, 0, {}, id}; }
-    static HartExpr localCode() noexcept { return HartExpr{Kind::LocalCode, 0, 0, {}, {}}; }
+    static HartExpr var(HartVarId id) noexcept { HartExpr e; e.kind = Kind::Variable; e.variable = id; return e; }
+    static HartExpr userVar(std::string id) { HartExpr e; e.kind = Kind::UserVariable; e.variableId = std::move(id); return e; }
+    static HartExpr localCode() noexcept { HartExpr e; e.kind = Kind::LocalCode; return e; }
 };
 
 struct HartStatement; // fwd
@@ -159,15 +165,27 @@ struct HartExecutionVariables {
     std::array<uint8_t, 6> tagPacked{};
     uint8_t primaryVariableUnit = 57; // HART unit code 57 = percent
     float primaryVariable = 0.0f;
+    std::array<uint8_t, 18> messagePacked{};
+    std::array<uint8_t, 12> descriptorPacked{};
+    std::array<uint8_t, 3> date{};
+    std::array<uint8_t, 3> finalAssemblyNumber{};
+    struct UserVariable { std::string id; double value = 0.0; HartVariableType type = HartVariableType::Float32; };
+    std::span<const UserVariable> userVariables;
 };
 
 class HartCommandExecutor final {
 public:
-    /** Runs write -> resp -> after in order (FASE 76 gate) against a working
-     * copy of `variables`; only `resp` bytes reach `response`. Returns false on
-     * any out-of-bounds slice, map miss without default, or overflow -- never
-     * partially-written garbage. */
-    static bool execute(const HartCompiledCommandProgram& program, HartExecutionVariables variables,
+    /** Runs write -> resp -> after in order (FASE 76 gate) against `variables`
+     * IN PLACE; only `resp` bytes reach `response`. `variables` is
+     * intentionally a mutable reference (not a by-value working copy): a
+     * write command's SET statements must be observable by the caller after
+     * this returns, or the write has no real effect (see the doc comment on
+     * `HartEngine::CommandProgramHook`). Returns false on any out-of-bounds
+     * slice, map miss without default, or overflow -- never partially-written
+     * garbage; on false, `variables` may hold a partial mutation from
+     * whichever statement failed, so callers must not persist it when this
+     * returns false. */
+    static bool execute(const HartCompiledCommandProgram& program, HartExecutionVariables& variables,
                         std::span<const uint8_t> request, HartResponseBuilder& response) noexcept;
 };
 

@@ -1,9 +1,11 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -108,6 +110,9 @@ struct HartDeviceProfile {
     uint16_t deviceType = 0;
     std::vector<HartCommandDescriptor> commands;
     HartDeviceIdentity identity{};
+    uint8_t primaryVariableUnit = 57;
+    float upperRangeValue = 100.0f;
+    float lowerRangeValue = 0.0f;
 };
 
 class HartProfileRegistry final {
@@ -135,11 +140,7 @@ enum class HartVariableRole : uint8_t {
  * a real codec). */
 enum class HartVariableType : uint8_t { Float32, UInt8, UInt16, Int16, PackedAscii, Bool };
 
-/** `Internal`/`Input`/`Output` only -- see .spec/features/hart-device-engine.md
- * section 37/48: `Constant`/`Reference`/`Expression`/`TransferFunction` as
- * parallel source modes are explicitly retired. `Input`/`Output` are modeled
- * here (stored, validated) but do NOT yet materialize a Signal Graph port --
- * that is a separate, larger structural feature (see Anexo B gap list). */
+/** The only public value-ownership choices for a HART variable. */
 enum class HartVariableDirection : uint8_t { Internal, Input, Output };
 
 struct HartDevicePlan {
@@ -156,28 +157,36 @@ struct HartDevicePlan {
         std::vector<uint8_t> staticResponse;
     };
     std::vector<CommandConfiguration> commandConfigurations;
-    /** User-authored Core variables. A value is literal; expression is evaluated by
-     * SignalExpression using the same grammar as control.calc_expression. */
+    /** User-authored Core variables.  Signal expressions and transfer
+     * functions belong to Signal Graph blocks, never to this record. */
     struct VariableConfiguration {
         std::string id;
         std::string name;
         std::string unit;
         double value = 0.0;
-        std::string expression;
-        bool writable = false;
         HartVariableRole role = HartVariableRole::Internal;
         HartVariableType type = HartVariableType::Float32;
         HartVariableDirection direction = HartVariableDirection::Internal;
-        bool readable = true;
-        /** Distinct from `writable`: `writable` says a HART command may SET this
-         * value; `runtimeMutable` says the Property Inspector may edit it while
-         * RUN is active (HART-FR-021). */
+        /** Internal runtime policy; deliberately not part of normal authoring UX. */
         bool runtimeMutable = false;
     };
     std::vector<VariableConfiguration> variables;
     /** Packed-ASCII device tag used by command 0x0B tag matching; falls back to
      * `id` when empty. */
     std::string tag;
+    /** Universal Command 12/17 (Read/Write Message): up to 24 characters,
+     * packed at execution time -- stored here in human-readable form, same
+     * convention as `tag`. */
+    std::string message;
+    /** Universal Command 13/18 (Read/Write Tag, Descriptor, Date): Descriptor
+     * is up to 16 characters, packed at execution time. */
+    std::string descriptor;
+    /** Universal Command 13/18: {day, month, year-1900}, the standard HART
+     * Date encoding -- raw bytes, no packing. */
+    std::array<uint8_t, 3> date{};
+    /** Universal Command 16/19 (Read/Write Final Assembly Number): 3-byte
+     * big-endian unsigned integer, raw bytes. */
+    std::array<uint8_t, 3> finalAssemblyNumber{};
 };
 
 struct HartProtocolPlan {
@@ -205,6 +214,8 @@ public:
     void clear() noexcept;
     size_t deviceCount() const noexcept { return m_devices.size(); }
     bool setPrimaryValue(std::string_view deviceId, double value) noexcept;
+    bool setVariableInput(std::string_view deviceId, std::string_view variableId, double value) noexcept;
+    std::optional<double> variableValue(std::string_view deviceId, std::string_view variableId) const noexcept;
     bool setCommandEnabled(std::string_view deviceId, HartCommandId command, bool enabled) noexcept;
     bool setCommandResponse(std::string_view deviceId, HartCommandId command,
                             std::span<const uint8_t> response) noexcept;
@@ -214,8 +225,19 @@ public:
      * before a command is treated as unsupported. Lets the semantic Hart
      * Command DSL (HartCommandProgram.hpp) dispatch compiled command programs
      * without HartEngine depending on the DSL module -- registering/removing a
-     * DSL-backed command never requires editing HartEngine (HART-FR-005/006). */
-    using CommandProgramHook = std::function<bool(const HartDeviceProfile&, const HartDevicePlan&, double primaryValue,
+     * DSL-backed command never requires editing HartEngine (HART-FR-005/006).
+     *
+     * `HartDevicePlan&` is intentionally mutable: a write command (e.g.
+     * Universal 6/17/18/19/22) mutates identity fields through the DSL's SET
+     * primitive, and the hook is expected to persist those changes into the
+     * plan it was given. `HartEngine::execute()` copies that mutated plan
+     * back into the real runtime device after a successful call -- a write
+     * command is not just a response byte, it is a real state change (this
+     * was NOT true before the persistence fix landed: SET previously mutated
+     * a throwaway `HartExecutionVariables` copy that was discarded when
+     * `HartCommandExecutor::execute` returned, so every "write" command
+     * would have reported success while changing nothing). */
+    using CommandProgramHook = std::function<bool(const HartDeviceProfile&, HartDevicePlan&, double primaryValue,
                                                    HartCommandId, std::span<const uint8_t>, HartResponseBuilder&)>;
     void setCommandProgramHook(CommandProgramHook hook) { m_programHook = std::move(hook); }
     bool execute(std::string_view bus, uint8_t pollingAddress, HartCommandId command,
@@ -229,7 +251,6 @@ private:
     struct RuntimeDevice {
         HartDevicePlan plan;
         const HartDeviceProfile* profile = nullptr;
-        std::vector<std::shared_ptr<simulation::SignalExpression>> variableExpressions;
         std::vector<double> variableValues;
     };
     static double evaluatePrimary(RuntimeDevice&) noexcept;

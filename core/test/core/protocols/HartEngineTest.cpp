@@ -125,6 +125,112 @@ int main() {
                   cmd21.size() == expectedCmd21.size(),
               "0x21 read device variables: known code 0x00 (PV) + unknown code -> not used (no native handler ever existed for 0x21)");
     }
+
+    // Universal Commands 12/17 (Message), 13/18 (Tag/Descriptor/Date), 16/19
+    // (Final Assembly Number): golden read/write pairs, persistence across
+    // calls (the write-back fix in HartReferenceCatalog::makeHook), cross-
+    // command consistency (a Command 18 tag write is observable by Command
+    // 0x0B's tag match), atomic rejection of a malformed write, and the
+    // regression that a plain read never mutates state (the dirty-check
+    // fix that keeps Command 1 from silently re-canonicalizing the tag).
+    {
+        HartResponseBuilder msgInitial(32);
+        check(referenceEngine.execute("hart-1", 1, 0x0C, {}, msgInitial) && msgInitial.size() == 18,
+              "0x0C read message: 18-byte packed body (24-char field) even before any write");
+
+        const std::vector<uint8_t> newMessage = HartTypeCodec::encodePackedAscii("HELLO WORLD", 24);
+        check(newMessage.size() == 18, "packed-ASCII message round-trips to 18 bytes for 24 chars");
+        HartResponseBuilder writeMsgResp(4);
+        check(referenceEngine.execute("hart-1", 1, 0x11, newMessage, writeMsgResp),
+              "0x11 write message accepts a full 18-byte body");
+        HartResponseBuilder msgAfter(32);
+        check(referenceEngine.execute("hart-1", 1, 0x0C, {}, msgAfter) &&
+                  std::equal(newMessage.begin(), newMessage.end(), msgAfter.bytes().begin()) &&
+                  msgAfter.size() == newMessage.size(),
+              "0x11 write message PERSISTS: a later 0x0C read observes it (not a throwaway mutation)");
+
+        HartResponseBuilder tagDescDateInitial(32);
+        check(referenceEngine.execute("hart-1", 1, 0x0D, {}, tagDescDateInitial) &&
+                  tagDescDateInitial.size() == 21 /* 6 + 12 + 3 */,
+              "0x0D read tag/descriptor/date: 21-byte body");
+        const std::vector<uint8_t> originalTagPacked = HartTypeCodec::encodePackedAscii("FV100CA", 8);
+        check(std::equal(originalTagPacked.begin(), originalTagPacked.end(), tagDescDateInitial.bytes().begin()),
+              "0x0D's tag matches the profile-derived tag before any 0x12 write");
+
+        const std::vector<uint8_t> newTagPacked = HartTypeCodec::encodePackedAscii("NEWTAG", 8);
+        const std::vector<uint8_t> newDescriptorPacked = HartTypeCodec::encodePackedAscii("NEW DESCRIPTOR", 16);
+        const std::vector<uint8_t> newDate{15, 6, 126}; // day=15, month=6, year=2026-1900
+        std::vector<uint8_t> writeTagDescDateBody;
+        writeTagDescDateBody.insert(writeTagDescDateBody.end(), newTagPacked.begin(), newTagPacked.end());
+        writeTagDescDateBody.insert(writeTagDescDateBody.end(), newDescriptorPacked.begin(), newDescriptorPacked.end());
+        writeTagDescDateBody.insert(writeTagDescDateBody.end(), newDate.begin(), newDate.end());
+        check(writeTagDescDateBody.size() == 21, "0x12 write body assembled as tag(6)+descriptor(12)+date(3)=21 bytes");
+
+        HartResponseBuilder writeTagDescDateResp(4);
+        check(referenceEngine.execute("hart-1", 1, 0x12, writeTagDescDateBody, writeTagDescDateResp),
+              "0x12 write tag/descriptor/date accepts a full 21-byte body");
+
+        HartResponseBuilder tagDescDateAfter(32);
+        check(referenceEngine.execute("hart-1", 1, 0x0D, {}, tagDescDateAfter) &&
+                  std::equal(writeTagDescDateBody.begin(), writeTagDescDateBody.end(), tagDescDateAfter.bytes().begin()) &&
+                  tagDescDateAfter.size() == writeTagDescDateBody.size(),
+              "0x12 write PERSISTS all three fields atomically: a later 0x0D read observes exactly what was written");
+
+        // Cross-command consistency (section 47 of the task): 0x12's tag
+        // write must be the SAME tag 0x0B matches against, not a second,
+        // disconnected copy.
+        HartResponseBuilder cmd0bNewTagMatch(32);
+        check(referenceEngine.execute("hart-1", 1, 0x0B, newTagPacked, cmd0bNewTagMatch) &&
+                  cmd0bNewTagMatch.size() == 13 && cmd0bNewTagMatch.bytes()[0] == 0x00,
+              "0x0B observes the NEW tag written by 0x12 (status 0x00, cross-command consistency)");
+        HartResponseBuilder cmd0bOldTagNowMismatches(32);
+        check(referenceEngine.execute("hart-1", 1, 0x0B, originalTagPacked, cmd0bOldTagNowMismatches) &&
+                  cmd0bOldTagNowMismatches.size() == 13 && cmd0bOldTagNowMismatches.bytes()[0] == 0x01,
+              "0x0B no longer matches the OLD tag after 0x12 overwrote it");
+
+        HartResponseBuilder fanInitial(32);
+        // Read this fresh (Final Assembly Number was never touched above):
+        // any of the previous read-only dispatches (0x0C/0x0D/0x0B) must not
+        // have perturbed it either -- proven together with the tag/message
+        // regression check below.
+        check(referenceEngine.execute("hart-1", 1, 0x10, {}, fanInitial) &&
+                  fanInitial.size() == 3 && fanInitial.bytes()[0] == 0 && fanInitial.bytes()[1] == 0 && fanInitial.bytes()[2] == 0,
+              "0x10 read final assembly number: defaults to 0 and is unperturbed by unrelated command dispatches");
+
+        const std::vector<uint8_t> newFan{0x01, 0x02, 0x03};
+        HartResponseBuilder writeFanResp(4);
+        check(referenceEngine.execute("hart-1", 1, 0x13, newFan, writeFanResp),
+              "0x13 write final assembly number accepts a full 3-byte body");
+        HartResponseBuilder fanAfter(32);
+        check(referenceEngine.execute("hart-1", 1, 0x10, {}, fanAfter) &&
+                  std::equal(newFan.begin(), newFan.end(), fanAfter.bytes().begin()) && fanAfter.size() == 3,
+              "0x13 write final assembly number PERSISTS: a later 0x10 read observes it");
+
+        // Atomic write (section 50): a body too short for 0x12's last slice
+        // (date at offset 18, length 3 -- needs 21 bytes, this is 20) must
+        // leave ALL THREE fields untouched, not just reject the date while
+        // silently keeping a partial tag/descriptor mutation.
+        std::vector<uint8_t> truncatedBody(writeTagDescDateBody.begin(), writeTagDescDateBody.end() - 1);
+        check(truncatedBody.size() == 20, "atomicity test body is 1 byte short of the required 21");
+        HartResponseBuilder rejectedWriteResp(4);
+        check(!referenceEngine.execute("hart-1", 1, 0x12, truncatedBody, rejectedWriteResp),
+              "0x12 with a truncated body is rejected outright (out-of-bounds date slice)");
+        HartResponseBuilder tagDescDateStillIntact(32);
+        check(referenceEngine.execute("hart-1", 1, 0x0D, {}, tagDescDateStillIntact) &&
+                  std::equal(writeTagDescDateBody.begin(), writeTagDescDateBody.end(), tagDescDateStillIntact.bytes().begin()),
+              "rejected 0x12 write left tag/descriptor/date EXACTLY as the last successful write -- no partial mutation");
+
+        // Regression: a plain read (Command 1) must never silently
+        // re-canonicalize the tag (uppercase/space-pad/truncate) as a side
+        // effect of merely being dispatched through the same hook.
+        HartResponseBuilder unrelatedRead(32);
+        check(referenceEngine.execute("hart-1", 1, 0x01, {}, unrelatedRead), "unrelated 0x01 read dispatches");
+        HartResponseBuilder tagAfterUnrelatedRead(32);
+        check(referenceEngine.execute("hart-1", 1, 0x0D, {}, tagAfterUnrelatedRead) &&
+                  std::equal(writeTagDescDateBody.begin(), writeTagDescDateBody.end(), tagAfterUnrelatedRead.bytes().begin()),
+              "an unrelated 0x01 read does not perturb tag/descriptor/date (no spurious re-canonicalization)");
+    }
+
     uint8_t payload[] = {0x10, 0x20, 0x30};
     HartFrame request{3, 1, {payload[0], payload[1], payload[2]}};
     HartResponseBuilder wire(16);
@@ -380,8 +486,9 @@ int main() {
         check(fullVocabReparsed.success, "full-vocab definition round-trips through toJson() back to a valid definition");
         HartResponseBuilder fullVocabRoundTripOut(16);
         const auto fullVocabRoundTripCompiled = HartCommandCompiler::compile(fullVocabReparsed.definition);
+        HartExecutionVariables fullVocabRoundTripVars;
         check(fullVocabRoundTripCompiled.success &&
-                  HartCommandExecutor::execute(fullVocabRoundTripCompiled.program, HartExecutionVariables{}, fullVocabRequest1, fullVocabRoundTripOut) &&
+                  HartCommandExecutor::execute(fullVocabRoundTripCompiled.program, fullVocabRoundTripVars, fullVocabRequest1, fullVocabRoundTripOut) &&
                   fullVocabRoundTripOut.size() == fullVocabExpected1.size() &&
                   std::equal(fullVocabExpected1.begin(), fullVocabExpected1.end(), fullVocabRoundTripOut.bytes().begin()),
               "toJson() -> re-parse -> re-compile produces byte-identical behavior (no data lost in the round trip)");
@@ -576,7 +683,10 @@ int main() {
             HartFrame request{7, command, {}};
             HartResponseBuilder wire(16);
             if (!HartFrameCodec::encode(request, wire)) return {};
-            HartResponseBuilder responseWire(16);
+            // 48 bytes: large enough for the widest response this helper is
+            // used against (Command 12's 18-byte packed message), not just
+            // the 1-2 byte user-variable payloads it was first written for.
+            HartResponseBuilder responseWire(48);
             if (!component.transact(wire.bytes(), responseWire)) return {};
             HartFrame response;
             if (!HartFrameCodec::decode(responseWire.bytes(), response)) return {};
@@ -592,6 +702,23 @@ int main() {
               "component: Int16 user variable (-5) encodes as the correct 2-byte two's-complement big-endian bytes");
         const auto diagFlag = transactCommand(154);
         check(diagFlag.size() == 1 && diagFlag[0] == 1, "component: Bool user variable encodes as exactly 1 byte");
+
+        // Universal Command 17/12 (Write/Read Message) through the REAL
+        // production component (not just the bare HartEngine test above):
+        // proves HartCommunicationComponent::transact -> HartEngine::execute
+        // -> the programHook's persistence write-back is wired end to end,
+        // not just correct in isolation.
+        const auto componentNewMessage = HartTypeCodec::encodePackedAscii("PROD PATH OK", 24);
+        HartFrame writeMessageRequest{7, 0x11, componentNewMessage};
+        HartResponseBuilder writeMessageWire(32);
+        check(HartFrameCodec::encode(writeMessageRequest, writeMessageWire), "component test: encode write-message request");
+        HartResponseBuilder writeMessageResponseWire(8);
+        check(component.transact(writeMessageWire.bytes(), writeMessageResponseWire),
+              "component transacts Universal Command 17 (Write Message)");
+        const auto messageAfterWrite = transactCommand(0x0C);
+        check(messageAfterWrite.size() == componentNewMessage.size() &&
+                  std::equal(componentNewMessage.begin(), componentNewMessage.end(), messageAfterWrite.begin()),
+              "component: Command 17's write PERSISTS through the real production path -- Command 12 observes it");
 
         // Simulate a project reopen: a FRESH instance built from the exact same
         // saved properties must behave identically, not reset to defaults.

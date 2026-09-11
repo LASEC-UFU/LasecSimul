@@ -179,18 +179,10 @@ bool HartEngine::loadPlan(HartProtocolPlan plan) {
     for (const HartDevicePlan& device : checked.plan.devices) {
         const HartDeviceProfile* profile = m_profiles.find(device.profileId);
         if (!profile) return false;
-        RuntimeDevice runtime{device, profile, {}, {}};
+        RuntimeDevice runtime{device, profile, {}};
         runtime.variableValues.reserve(device.variables.size());
-        runtime.variableExpressions.reserve(device.variables.size());
-        std::vector<std::string> ids;
-        ids.reserve(device.variables.size());
-        for (const auto& variable : device.variables) ids.push_back(variable.id);
         for (const auto& variable : device.variables) {
             runtime.variableValues.push_back(variable.value);
-            if (!variable.expression.empty()) {
-                try { runtime.variableExpressions.push_back(std::make_shared<simulation::SignalExpression>(ids, variable.expression)); }
-                catch (...) { return false; }
-            } else runtime.variableExpressions.push_back(nullptr);
         }
         resolved.push_back(std::move(runtime));
     }
@@ -214,16 +206,35 @@ bool HartEngine::setPrimaryValue(std::string_view deviceId, double value) noexce
     return false;
 }
 
-double HartEngine::evaluatePrimary(RuntimeDevice& device) noexcept {
-    try {
-        for (size_t i = 0; i < device.variableExpressions.size(); ++i) {
-            if (device.variableExpressions[i])
-                device.variableValues[i] = device.variableExpressions[i]->evaluate(device.variableValues, 0);
+bool HartEngine::setVariableInput(std::string_view deviceId, std::string_view variableId, double value) noexcept {
+    if (!std::isfinite(value)) return false;
+    for (RuntimeDevice& device : m_devices) {
+        if (device.plan.id != deviceId) continue;
+        for (size_t i = 0; i < device.plan.variables.size(); ++i) {
+            if (device.plan.variables[i].id != variableId) continue;
+            if (device.plan.variables[i].direction != HartVariableDirection::Input) return false;
+            device.variableValues[i] = value;
+            return true;
         }
+        return false;
+    }
+    return false;
+}
+
+std::optional<double> HartEngine::variableValue(std::string_view deviceId, std::string_view variableId) const noexcept {
+    for (const RuntimeDevice& device : m_devices) {
+        if (device.plan.id != deviceId) continue;
         for (size_t i = 0; i < device.plan.variables.size(); ++i)
-            if (device.plan.variables[i].id == "PV" || device.plan.variables[i].id == "primary")
-                return device.variableValues[i];
-    } catch (...) { return device.plan.primaryValue; }
+            if (device.plan.variables[i].id == variableId) return device.variableValues[i];
+        return std::nullopt;
+    }
+    return std::nullopt;
+}
+
+double HartEngine::evaluatePrimary(RuntimeDevice& device) noexcept {
+    for (size_t i = 0; i < device.plan.variables.size(); ++i)
+        if (device.plan.variables[i].id == "PV" || device.plan.variables[i].id == "primary")
+            return device.variableValues[i];
     return device.plan.primaryValue;
 }
 
@@ -291,7 +302,21 @@ bool HartEngine::execute(std::string_view bus, uint8_t pollingAddress, HartComma
     }
     if (m_programHook) {
         const double primary = evaluatePrimary(*selected);
-        if (m_programHook(*selected->profile, selected->plan, primary, command, request, response)) return true;
+        HartDevicePlan effectivePlan = selected->plan;
+        for (size_t i = 0; i < effectivePlan.variables.size() && i < selected->variableValues.size(); ++i)
+            effectivePlan.variables[i].value = selected->variableValues[i];
+        if (m_programHook(*selected->profile, effectivePlan, primary, command, request, response)) {
+            // Persist whatever the command's write stage mutated (tag,
+            // message, descriptor, date, final assembly number, ...) back
+            // into the actual runtime device -- a write command is a real
+            // state change, not just a response byte (see the doc comment
+            // on `CommandProgramHook`). `variables`/`commandConfigurations`
+            // round-trip unchanged here too (the hook never touches them),
+            // so this is a safe unconditional copy-back, not a selective one
+            // that could silently miss a field a future write command needs.
+            selected->plan = std::move(effectivePlan);
+            return true;
+        }
     }
     return false;
 }
