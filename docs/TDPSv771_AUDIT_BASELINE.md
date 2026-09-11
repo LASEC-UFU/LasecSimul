@@ -28,9 +28,10 @@ por leitura dos registros e equações, não pelo nome do arquivo.
   lead-lag, FOPDT, tanque, rate limiter, histerese, stiction e PID.
 - `ProcessSubcircuitCompiler` já converte parte do schema de processo para o
   `SignalGraphDefinition` e o `SignalRuntime`.
-- O formato `.lsdevice` já existe para dispositivos e a extensão possui catálogo
-  e Property Inspector; a auditoria deve estender essa infraestrutura, não criar
-  um formato Ctrl/TDPS paralelo.
+- `.lsdevice` permanece o formato de dispositivo/primitivo existente. Quando o
+  usuário combinar blocos primitivos em um bloco composto, o formato correto é
+  `.lssubcircuit`; catálogo e Property Inspector devem suportar ambos sem criar
+  uma arquitetura Ctrl/TDPS paralela.
 - O motor de expressões agora é exposto pelo Core como `SignalExpression`, usado
   pelo HART e pelo `control.calc_expression`, mantendo uma única gramática.
 
@@ -41,10 +42,11 @@ por leitura dos registros e equações, não pelo nome do arquivo.
 2. Um kernel novo só será criado quando a matemática do TDPS exigir uma operação
    que não possa ser composta pelos kernels existentes ou quando a composição
    violar desempenho/estabilidade mensurável.
-3. Todo bloco público reutilizável será publicado como `.lsdevice`; kernels
+3. Blocos/dispositivos primitivos usam `.lsdevice`; composições hierárquicas usam
+   `.lssubcircuit`; kernels permanecem internos ao Core.
    permanecem internos ao Core.
 4. A hierarquia será resolvida no compile/PlanCompiler e achatada para o hot path;
-   nenhuma busca por nome ou travessia de `.lsdevice` ocorrerá por tick.
+   nenhuma busca por nome ou travessia de `.lsdevice`/`.lssubcircuit` ocorrerá por tick.
 5. Nenhuma planta será declarada validada sem golden output e comparação numérica
    objetiva.
 
@@ -52,4 +54,5 @@ por leitura dos registros e equações, não pelo nome do arquivo.
 
 `BASELINE_AUDITED_PARTIAL`: fontes localizadas e infraestrutura existente
 identificada. A próxima coleta deve parsear os `.smp` e `.txd`, extrair as
-operações efetivamente usadas e produzir a matriz TDPS → `.lsdevice` → kernel.
+operações efetivamente usadas e produzir a matriz TDPS → `.lssubcircuit` →
+kernel, registrando `.lsdevice` quando o item for primitivo.
