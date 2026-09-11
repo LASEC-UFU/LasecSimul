@@ -68,7 +68,11 @@ void HartCommunicationComponent::rebuildConfiguredPlan() {
             variable.name = item.value("name", variable.id);
             variable.unit = item.value("unit", std::string{});
             variable.value = item.value("value", 0.0);
-            variable.expression = item.value("expression", item.value("function", std::string{}));
+            // `expression`, `function` and `transferFunction` are all Core
+            // expressions.  They intentionally share SignalEngine's grammar;
+            // the UI never evaluates these strings.
+            variable.expression = item.value("expression",
+                item.value("function", item.value("transferFunction", std::string{})));
             variable.writable = item.value("writable", false);
             device.variables.push_back(std::move(variable));
         }
