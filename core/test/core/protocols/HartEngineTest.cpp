@@ -1,5 +1,6 @@
 #include "protocols/HartEngine.hpp"
 #include "protocols/HartReferenceCatalog.hpp"
+#include "protocols/HartTransport.hpp"
 
 #include <cstdio>
 #include <span>
@@ -116,6 +117,22 @@ int main() {
           "per-device command disable");
     HartResponseBuilder disabledResponse(4);
     check(!configuredEngine.execute(5, 1, {}, disabledResponse), "disabled per-device command rejected");
+    HartTransportEndpoint endpoint(configuredEngine);
+    HartTransportConfig udpConfig{HartTransportKind::Udp, "hart-1", "127.0.0.1", 1200, 5094, 272};
+    check(endpoint.configure(udpConfig), "transport configuration");
+    // Re-enable command 1 for the transport boundary test.
+    check(configuredEngine.setCommandEnabled("configured", 1, true), "transport command enable");
+    HartFrame wireRequest{5, 1, {}};
+    HartResponseBuilder encodedRequest(16);
+    check(HartFrameCodec::encode(wireRequest, encodedRequest), "transport request encode");
+    HartResponseBuilder encodedResponse(272);
+    check(endpoint.transact(encodedRequest.bytes(), encodedResponse), "transport transaction");
+    HartFrame wireResponse;
+    check(HartFrameCodec::decode(encodedResponse.bytes(), wireResponse) &&
+              wireResponse.pollingAddress == 5 && wireResponse.command == 1,
+          "transport response decode");
+    check(endpoint.counters().framesRx == 1 && endpoint.counters().framesTx == 1,
+          "transport counters");
     CustomHandler custom;
     check(engine.registerCommandHandler(custom), "custom command registration");
     HartResponseBuilder customResponse(4);
