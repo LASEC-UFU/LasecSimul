@@ -14,6 +14,7 @@ Last updated: 2026-09-10
 - Built-in commands 0, 1, and 3 are available when declared by the selected profile; custom declared commands can be supplied through `IHartCommandHandler` without editing the engine.
 - `HartReferenceCatalog` now imports the complete 60-ID union from `process_simul`'s transmitter dispatch and command seed tables, plus all 11 reference equipment definitions and their polling addresses/device types. This is a declarative mapping, not yet a claim that every response body has been ported.
 - `HartReferenceCatalog::registerGenericProfile()` and `makeDevicePlans()` create the compatible profile and all 11 independent instances for a selected virtual bus. This is the insertion point for project/subcircuit compilation.
+- Each `HartDevicePlan` now accepts per-device `CommandConfiguration` entries. An instance can disable a profile-declared command or provide a bounded static response without changing the profile, dispatcher, or another device. Runtime setters cover enable/disable and response replacement; compiler rejects undeclared, duplicate, or oversized overrides.
 - Deterministic manual MSVC test passes: `HART engine contracts: PASS`.
 
 Commits: `aea88419`, `cb9b2336`, `db02c53f` (branch `fix/vnext-b-mwdt-hotpath-diagnostics`, pushed to `origin`).
