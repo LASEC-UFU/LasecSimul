@@ -2439,6 +2439,7 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
   const propertyInspector = new PropertyInspectorViewProvider(context.extensionUri, state.schematicState.catalog,
     (componentId, name, value) => state.schematicPanel?.postMessage({ version: 1, type: "inspectorUpdateProperty", componentId, name, value }));
   propertyInspectorView = propertyInspector;
+  state.propertyInspectorView = propertyInspector;
   context.subscriptions.push(vscode.window.registerWebviewViewProvider("lasecsimul.propertyInspector", propertyInspector, {
     webviewOptions: { retainContextWhenHidden: true },
   }));

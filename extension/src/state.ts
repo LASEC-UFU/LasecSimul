@@ -6,6 +6,7 @@ import { createInitialWebviewState } from "./ui/webview/catalog";
 import { WebviewProjectState } from "./ui/webview/model";
 import { SimulationStatus } from "./ui/webview/messages";
 import { ComponentPaletteViewProvider } from "./ui/views/ComponentPaletteViewProvider";
+import { PropertyInspectorViewProvider } from "./ui/views/PropertyInspectorViewProvider";
 import { TrustStore } from "./trust/TrustStore";
 import { ProjectSerializer } from "./project/ProjectSerializer";
 import { SubcircuitDocument } from "./catalog/subcircuitDocument";
@@ -38,6 +39,7 @@ export const state = {
   currentProjectFilePath: undefined as string | undefined,
   simulationStatus: "stopped" as SimulationStatus,
   paletteViewProvider: undefined as ComponentPaletteViewProvider | undefined,
+  propertyInspectorView: undefined as PropertyInspectorViewProvider | undefined,
   extensionContext: undefined as vscode.ExtensionContext | undefined,
   trustStore: undefined as TrustStore | undefined,
   lastSyncedProjectState: undefined as WebviewProjectState | undefined,

@@ -992,6 +992,10 @@ export function setSimulationStatus(status: SimulationStatus): void {
   lasecPlotManager?.updateSimulationState();
   serialTerminalManager?.updateSimulationState();
   serialPortManager?.updateSimulationState();
+  // HART-FR-021 / Property Inspector structural-edit guard: the sidebar disables
+  // add/remove/direction/type controls while RUN is active (see
+  // PropertyInspectorViewProvider::setSimulationStatus).
+  state.propertyInspectorView?.setSimulationStatus(status);
   state.schematicPanel?.postMessage({ version: 1, type: "simulationStatus", status });
 }
 

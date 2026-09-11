@@ -28,6 +28,25 @@ export type SharedFieldValue = { state: "common"; value: string | number | boole
  * `moveSelectedComponentsByArrow`). */
 export type BatchFieldSource = "properties" | "instance";
 
+/** Canonical `PropertySchemaEntry.editor` string -> `PropertyFieldKind` mapping.
+ * Moved from `main.ts` (was defined only there) so the sidebar Property
+ * Inspector (`PropertyInspectorViewProvider.ts`, extension host context) and
+ * the canvas property sheet (`main.ts`, webview context) resolve the exact
+ * same widget for the exact same schema instead of two independently
+ * maintained mappings drifting apart (FEAT-013 Property Inspector audit,
+ * "Anexo B" section 46: consolidate into one canonical editor-kind dispatch). */
+export function propertyFieldKindFromEditor(editor: string): PropertyFieldKind {
+  const normalized = editor.trim().toLowerCase();
+  if (normalized === "checkbox" || normalized === "switch") return "boolean";
+  if (normalized === "select" || normalized === "enum") return "select";
+  if (normalized === "display") return "readonly";
+  if (normalized === "number") return "number";
+  if (normalized === "filepath") return "filePath";
+  if (normalized === "color") return "color";
+  if (normalized === "textarea" || normalized === "textedit") return "textarea";
+  return "text";
+}
+
 export interface SharedPropertyField {
   key: string;
   label: string;

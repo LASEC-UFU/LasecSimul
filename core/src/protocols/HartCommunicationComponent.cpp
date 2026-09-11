@@ -1,5 +1,7 @@
 #include "HartCommunicationComponent.hpp"
 
+#include "HartCommandJson.hpp"
+
 #include <algorithm>
 #include <cstring>
 #include <nlohmann/json.hpp>
@@ -13,6 +15,73 @@ PropertySchema numberSchema(std::string id, std::string label, std::string group
                             double value, std::optional<double> min = {}, std::optional<double> max = {}) {
     PropertySchema s{std::move(id), std::move(label), std::move(group), std::move(unit), PropertyValueKind::Number, "number", value};
     s.minValue = min; s.maxValue = max; return s;
+}
+PropertySchema readonlySchema(std::string id, std::string label, std::string group, std::string value) {
+    PropertySchema s{std::move(id), std::move(label), std::move(group), "", PropertyValueKind::String, "display", std::move(value)};
+    s.flags = PropertySchemaReadOnly;
+    return s;
+}
+
+// Property Inspector Variables editor <-> HartVariableRole/Type/Direction.
+// Unknown/missing strings default to the safest value rather than rejecting
+// the whole collection -- a malformed single field shouldn't lose the rest of
+// a user's authored variable, and every default here is `Internal`-shaped
+// (never `Input`, so a stray import can't accidentally give a variable a
+// write-ownership implication it didn't ask for).
+HartVariableRole parseRole(const std::string& s) {
+    if (s == "PV") return HartVariableRole::PrimaryVariable;
+    if (s == "SV") return HartVariableRole::SecondaryVariable;
+    if (s == "TV") return HartVariableRole::TertiaryVariable;
+    if (s == "QV") return HartVariableRole::QuaternaryVariable;
+    if (s == "DeviceSpecific") return HartVariableRole::DeviceSpecific;
+    if (s == "VendorSpecific") return HartVariableRole::VendorSpecific;
+    if (s == "Custom") return HartVariableRole::Custom;
+    return HartVariableRole::Internal;
+}
+const char* roleName(HartVariableRole role) {
+    switch (role) {
+        case HartVariableRole::PrimaryVariable: return "PV";
+        case HartVariableRole::SecondaryVariable: return "SV";
+        case HartVariableRole::TertiaryVariable: return "TV";
+        case HartVariableRole::QuaternaryVariable: return "QV";
+        case HartVariableRole::DeviceSpecific: return "DeviceSpecific";
+        case HartVariableRole::VendorSpecific: return "VendorSpecific";
+        case HartVariableRole::Custom: return "Custom";
+        case HartVariableRole::Internal: return "Internal";
+    }
+    return "Internal";
+}
+HartVariableType parseType(const std::string& s) {
+    if (s == "UInt8") return HartVariableType::UInt8;
+    if (s == "UInt16") return HartVariableType::UInt16;
+    if (s == "Int16") return HartVariableType::Int16;
+    if (s == "PackedAscii") return HartVariableType::PackedAscii;
+    if (s == "Bool") return HartVariableType::Bool;
+    return HartVariableType::Float32;
+}
+const char* typeName(HartVariableType type) {
+    switch (type) {
+        case HartVariableType::UInt8: return "UInt8";
+        case HartVariableType::UInt16: return "UInt16";
+        case HartVariableType::Int16: return "Int16";
+        case HartVariableType::PackedAscii: return "PackedAscii";
+        case HartVariableType::Bool: return "Bool";
+        case HartVariableType::Float32: return "Float32";
+    }
+    return "Float32";
+}
+HartVariableDirection parseDirection(const std::string& s) {
+    if (s == "Input") return HartVariableDirection::Input;
+    if (s == "Output") return HartVariableDirection::Output;
+    return HartVariableDirection::Internal;
+}
+const char* directionName(HartVariableDirection direction) {
+    switch (direction) {
+        case HartVariableDirection::Input: return "Input";
+        case HartVariableDirection::Output: return "Output";
+        case HartVariableDirection::Internal: return "Internal";
+    }
+    return "Internal";
 }
 }
 
@@ -35,14 +104,17 @@ HartCommunicationComponent::HartCommunicationComponent(Mode mode, simulation::Sc
     m_baudRate = static_cast<uint32_t>(std::max(1.0, numberProperty(p, "baudRate", 1200)));
     m_udpPort = static_cast<uint16_t>(std::clamp(numberProperty(p, "udpPort", 5094), 1.0, 65535.0));
     m_enabled = p.property("enabled", true);
+    // Read on construction, not just on a later setPropertyValue: `addComponent`
+    // passes the FULL saved properties map here (including on project reopen,
+    // per `registry::ComponentParams`'s own doc comment) -- without this, a
+    // saved device's variables/commands were silently dropped and replaced by
+    // an empty "[]" on every reopen (Gate 12/section 38 persistence contract).
+    m_hartVariablesJson = stringProperty(p, "hartVariablesJson", "[]");
+    m_hartCommandsJson = stringProperty(p, "hartCommandsJson", "[]");
 
-    auto profile = HartReferenceCatalog::makeGenericProfile();
-    m_profiles.registerProfile(profile);
-    HartDevicePlan device;
-    device.id = "device-" + m_endpointName; device.profileId = profile.id; device.bus = m_bus;
-    device.pollingAddress = m_pollingAddress; device.uniqueId = m_uniqueId; device.primaryValue = 0.0;
-    for (const auto& command : profile.commands) device.commandConfigurations.push_back({command.id, true, false, {}});
-    m_engine.loadPlan(HartProtocolPlan{{std::move(device)}});
+    HartReferenceCatalog::registerGenericProfile(m_profiles);
+    rebuildConfiguredPlan(); // builds the device from every property above (including
+                             // variables/commands) and installs the command hook.
     HartTransportConfig config;
     config.kind = mode == Mode::Serial ? HartTransportKind::Serial : HartTransportKind::Udp;
     config.bus = m_bus; config.endpoint = m_endpointName; config.baudRate = m_baudRate; config.udpPort = m_udpPort;
@@ -54,15 +126,41 @@ void HartCommunicationComponent::rebuildConfiguredPlan() {
     device.id = "device-" + m_endpointName;
     device.profileId = "lasecsimul.hart.process-simul-compatible";
     device.bus = m_bus; device.pollingAddress = m_pollingAddress;
-    device.uniqueId = m_uniqueId; device.primaryValue = 0.0;
+    device.uniqueId = m_uniqueId; device.primaryValue = 0.0; device.tag = m_tag;
     const HartDeviceProfile* profile = m_profiles.find(device.profileId);
     if (!profile) { m_profiles.registerProfile(HartReferenceCatalog::makeGenericProfile()); profile = m_profiles.find(device.profileId); }
     for (const auto& command : profile->commands) device.commandConfigurations.push_back({command.id, true, false, {}});
+    // `HartEngine::execute()` only reaches the compiled-program hook for a
+    // command declared in `commandConfigurations` -- a custom command id must
+    // be declared here too, or the standard "declared?" check above the hook
+    // rejects it before the DSL ever runs. Parsed leniently (best-effort ids
+    // only): if the JSON is malformed, `rebuildCommandPrograms()` below is the
+    // one authority that reports the compiler error; this loop just needs the
+    // id list, not a second copy of the diagnostic.
+    try {
+        const auto parsedCommands = nlohmann::json::parse(m_hartCommandsJson.empty() ? "[]" : m_hartCommandsJson);
+        if (parsedCommands.is_array()) {
+            for (const auto& entry : parsedCommands) {
+                if (!entry.is_object() || !entry.contains("id") || !entry["id"].is_number_integer()) continue;
+                const int64_t idValue = entry["id"].get<int64_t>();
+                if (idValue < 0 || idValue > 0xFFFF) continue;
+                device.commandConfigurations.push_back({static_cast<HartCommandId>(idValue), true, false, {}});
+            }
+        }
+    } catch (...) { /* rebuildCommandPrograms() reports this; the device just keeps the standard commands */ }
+    // On any rejection below, the PREVIOUS plan stays loaded (no
+    // `m_engine.loadPlan` call happens) -- a malformed edit never corrupts a
+    // previously-working device, and the status property tells the Property
+    // Inspector exactly why (section 22/54: never a silent dangling state).
     try {
         const auto parsed = nlohmann::json::parse(m_hartVariablesJson.empty() ? "[]" : m_hartVariablesJson);
-        if (!parsed.is_array() || parsed.size() > 64) return;
+        if (!parsed.is_array()) { m_hartVariablesStatus = "ERROR: variables must be a JSON array"; return; }
+        if (parsed.size() > 64) { m_hartVariablesStatus = "ERROR: too many variables declared (max 64)"; return; }
         for (const auto& item : parsed) {
-            if (!item.is_object() || !item.value("id", std::string{}).size()) return;
+            if (!item.is_object() || !item.value("id", std::string{}).size()) {
+                m_hartVariablesStatus = "ERROR: every variable needs a non-empty id";
+                return;
+            }
             HartDevicePlan::VariableConfiguration variable;
             variable.id = item.value("id", std::string{});
             variable.name = item.value("name", variable.id);
@@ -73,11 +171,49 @@ void HartCommunicationComponent::rebuildConfiguredPlan() {
             // the UI never evaluates these strings.
             variable.expression = item.value("expression",
                 item.value("function", item.value("transferFunction", std::string{})));
+            variable.role = parseRole(item.value("role", std::string{}));
+            variable.type = parseType(item.value("type", std::string{}));
+            variable.direction = parseDirection(item.value("direction", std::string{}));
+            variable.readable = item.value("readable", true);
+            variable.runtimeMutable = item.value("runtimeMutable", false);
             variable.writable = item.value("writable", false);
+            // Write-ownership (HART-FR-014): a Signal Graph wire owns an Input
+            // variable's value, so no command may be authored to SET it. Reject
+            // the whole edit rather than silently drop just the flag -- a
+            // silently-cleared `writable` would look like it saved correctly.
+            if (variable.direction == HartVariableDirection::Input && variable.writable) {
+                m_hartVariablesStatus = "ERROR: \"" + variable.id + "\" is Input-direction and cannot be writable (Signal Graph owns its value)";
+                return;
+            }
+            for (const auto& already : device.variables) {
+                if (already.id == variable.id) {
+                    m_hartVariablesStatus = "ERROR: duplicate variable id \"" + variable.id + "\"";
+                    return;
+                }
+            }
             device.variables.push_back(std::move(variable));
         }
-    } catch (...) { return; }
-    if (!m_engine.loadPlan(HartProtocolPlan{{std::move(device)}})) return;
+    } catch (const std::exception& ex) { m_hartVariablesStatus = std::string("ERROR: ") + ex.what(); return; }
+    if (!m_engine.loadPlan(HartProtocolPlan{{std::move(device)}})) {
+        m_hartVariablesStatus = "ERROR: plan rejected (see polling address/profile)";
+        return;
+    }
+    m_hartVariablesStatus = "OK";
+    rebuildCommandPrograms(); // loadPlan() replaces devices but never touches the hook; re-installing here
+                              // is cheap (bounded, cold-pathish) and keeps custom commands live after a
+                              // variables edit even though nothing about them actually changed.
+}
+
+void HartCommunicationComponent::rebuildCommandPrograms() {
+    const auto parsed = HartCommandJson::parseCommandCollection(m_hartCommandsJson);
+    if (!parsed.success) {
+        HartReferenceCatalog::installCommandPrograms(m_engine); // built-ins only: a broken custom edit never
+                                                                 // disables 0x00/0x01/0x03/0x0B/0x21.
+        m_hartCommandsStatus = "ERROR: " + parsed.error;
+        return;
+    }
+    const auto installed = HartReferenceCatalog::installCommandPrograms(m_engine, parsed.definitions);
+    m_hartCommandsStatus = installed.success ? "OK" : ("ERROR: " + installed.error);
 }
 
 const char* HartCommunicationComponent::typeId() const { return m_mode == Mode::Serial ? "protocol.hart.serial" : "protocol.hart.udp"; }
@@ -89,8 +225,23 @@ std::vector<PropertySchema> HartCommunicationComponent::propertySchema(Mode mode
         {"enabled", "Habilitado", "Comunicacao", "", PropertyValueKind::Bool, "checkbox", true},
         numberSchema("pollingAddress", "Polling address", "HART", "", 0, 0, 63),
         textSchema("uniqueId", "Unique ID", "HART", "029EB1"), textSchema("tag", "Tag", "HART", "HART"),
-        textSchema("unit", "Unidade PV", "HART", "V"), textSchema("hartVariablesJson", "Variáveis HART", "HART", "[]"),
-        textSchema("hartCommandsJson", "Comandos HART", "HART", "[]")};
+        textSchema("unit", "Unidade PV", "HART", "V")};
+    // Variables/commands are edited exclusively through the Property
+    // Inspector's structured collection editors (PropertyInspectorViewProvider
+    // -> hartInspectorSections.ts), never as raw JSON text -- hidden from the
+    // canvas's generic property sheet so it never offers a second, competing,
+    // unstructured editor for the same data (section 3/49). Still fully
+    // readable/settable via IPC and via the sidebar, which reads
+    // `component.properties` directly rather than iterating visible schemas;
+    // `propertyDialogShowAll` remains an escape hatch for debugging.
+    auto hartJson = textSchema("hartVariablesJson", "Variáveis HART", "HART", "[]"); hartJson.flags |= PropertySchemaHidden;
+    out.push_back(hartJson);
+    auto hartCommands = textSchema("hartCommandsJson", "Comandos HART", "HART", "[]"); hartCommands.flags |= PropertySchemaHidden;
+    out.push_back(hartCommands);
+    auto variablesStatus = readonlySchema("hartVariablesStatus", "Status das variáveis", "Diagnostics", "OK"); variablesStatus.flags |= PropertySchemaHidden;
+    out.push_back(variablesStatus);
+    auto commandsStatus = readonlySchema("hartCommandsStatus", "Status do compilador", "Diagnostics", "OK"); commandsStatus.flags |= PropertySchemaHidden;
+    out.push_back(commandsStatus);
     if (mode == Mode::Serial) out.push_back(numberSchema("baudRate", "Baud rate", "Serial", "baud", 1200, 1200, 1200));
     else out.push_back(numberSchema("udpPort", "Porta UDP", "UDP", "", 5094, 1, 65535));
     return out;
@@ -99,7 +250,7 @@ std::vector<PropertySchema> HartCommunicationComponent::propertySchema(Mode mode
 PropertyValue HartCommunicationComponent::propertyValue(const std::string& id) const {
     if (id == "bus") return m_bus; if (id == "endpoint") return m_endpointName; if (id == "enabled") return m_enabled;
     if (id == "pollingAddress") return static_cast<double>(m_pollingAddress); if (id == "uniqueId") return m_uniqueId;
-    if (id == "tag") return m_tag; if (id == "unit") return m_unit; if (id == "hartVariablesJson") return m_hartVariablesJson; if (id == "hartCommandsJson") return m_hartCommandsJson; if (id == "baudRate") return static_cast<double>(m_baudRate);
+    if (id == "tag") return m_tag; if (id == "unit") return m_unit; if (id == "hartVariablesJson") return m_hartVariablesJson; if (id == "hartCommandsJson") return m_hartCommandsJson; if (id == "hartCommandsStatus") return m_hartCommandsStatus; if (id == "hartVariablesStatus") return m_hartVariablesStatus; if (id == "baudRate") return static_cast<double>(m_baudRate);
     if (id == "udpPort") return static_cast<double>(m_udpPort); return std::string{};
 }
 void HartCommunicationComponent::setPropertyValue(const std::string& id, const PropertyValue& v) {
@@ -107,7 +258,7 @@ void HartCommunicationComponent::setPropertyValue(const std::string& id, const P
     else if (id == "enabled") m_enabled = std::get<bool>(v); else if (id == "pollingAddress") m_pollingAddress = static_cast<uint8_t>(std::clamp(std::get<double>(v), 0.0, 63.0));
     else if (id == "uniqueId") m_uniqueId = std::get<std::string>(v); else if (id == "tag") m_tag = std::get<std::string>(v); else if (id == "unit") m_unit = std::get<std::string>(v);
     else if (id == "hartVariablesJson") { m_hartVariablesJson = std::get<std::string>(v); rebuildConfiguredPlan(); }
-    else if (id == "hartCommandsJson") m_hartCommandsJson = std::get<std::string>(v);
+    else if (id == "hartCommandsJson") { m_hartCommandsJson = std::get<std::string>(v); rebuildCommandPrograms(); }
     else if (id == "baudRate") m_baudRate = 1200;
     else if (id == "udpPort") m_udpPort = static_cast<uint16_t>(std::clamp(std::get<double>(v), 1.0, 65535.0));
     HartTransportConfig config = m_endpoint.config(); config.bus = m_bus; config.endpoint = m_endpointName;

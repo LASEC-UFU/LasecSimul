@@ -256,16 +256,10 @@ std::vector<HartCommandDefinition> HartReferenceCatalog::commandProgramDefinitio
     return commands;
 }
 
-bool HartReferenceCatalog::installCommandPrograms(HartEngine& engine) {
-    auto programs = std::make_shared<std::unordered_map<HartCommandId, HartCompiledCommandProgram>>();
-    for (HartCommandDefinition& definition : commandProgramDefinitions()) {
-        HartCommandCompileResult compiled = HartCommandCompiler::compile(std::move(definition));
-        if (!compiled.success) return false;
-        programs->emplace(compiled.program.definition.id, std::move(compiled.program));
-    }
-    engine.setCommandProgramHook([programs](const HartDeviceProfile& profile, const HartDevicePlan& plan,
-                                            double primaryValue, HartCommandId command,
-                                            std::span<const uint8_t> request, HartResponseBuilder& response) -> bool {
+namespace {
+HartEngine::CommandProgramHook makeHook(std::shared_ptr<std::unordered_map<HartCommandId, HartCompiledCommandProgram>> programs) {
+    return [programs](const HartDeviceProfile& profile, const HartDevicePlan& plan, double primaryValue,
+                      HartCommandId command, std::span<const uint8_t> request, HartResponseBuilder& response) -> bool {
         const auto it = programs->find(command);
         if (it == programs->end()) return false;
         HartExecutionVariables vars;
@@ -284,8 +278,44 @@ bool HartReferenceCatalog::installCommandPrograms(HartEngine& engine) {
         vars.primaryVariableUnit = 57; // percent; no per-device unit authoring yet
         vars.primaryVariable = static_cast<float>(primaryValue);
         return HartCommandExecutor::execute(it->second, vars, request, response);
-    });
+    };
+}
+} // namespace
+
+bool HartReferenceCatalog::installCommandPrograms(HartEngine& engine) {
+    auto programs = std::make_shared<std::unordered_map<HartCommandId, HartCompiledCommandProgram>>();
+    for (HartCommandDefinition& definition : commandProgramDefinitions()) {
+        HartCommandCompileResult compiled = HartCommandCompiler::compile(std::move(definition));
+        if (!compiled.success) return false;
+        programs->emplace(compiled.program.definition.id, std::move(compiled.program));
+    }
+    engine.setCommandProgramHook(makeHook(programs));
     return true;
+}
+
+HartReferenceCatalog::InstallResult HartReferenceCatalog::installCommandPrograms(HartEngine& engine,
+                                                                                 std::vector<HartCommandDefinition> additional) {
+    auto builtins = std::make_shared<std::unordered_map<HartCommandId, HartCompiledCommandProgram>>();
+    for (HartCommandDefinition& definition : commandProgramDefinitions()) {
+        HartCommandCompileResult compiled = HartCommandCompiler::compile(std::move(definition));
+        if (!compiled.success) { engine.setCommandProgramHook(makeHook(builtins)); return {false, "internal: built-in command failed to compile: " + compiled.error}; }
+        builtins->emplace(compiled.program.definition.id, std::move(compiled.program));
+    }
+
+    auto combined = std::make_shared<std::unordered_map<HartCommandId, HartCompiledCommandProgram>>(*builtins);
+    for (HartCommandDefinition& definition : additional) {
+        const std::string name = definition.name.empty() ? std::to_string(definition.id) : definition.name;
+        HartCommandCompileResult compiled = HartCommandCompiler::compile(std::move(definition));
+        if (!compiled.success) {
+            // All-or-nothing for `additional`: fall back to built-ins only so one
+            // broken custom edit never takes down 0x00/0x01/0x03/0x0B/0x21.
+            engine.setCommandProgramHook(makeHook(builtins));
+            return {false, "command \"" + name + "\": " + compiled.error};
+        }
+        combined->emplace(compiled.program.definition.id, std::move(compiled.program));
+    }
+    engine.setCommandProgramHook(makeHook(combined));
+    return {true, {}};
 }
 
 } // namespace lasecsimul::protocols

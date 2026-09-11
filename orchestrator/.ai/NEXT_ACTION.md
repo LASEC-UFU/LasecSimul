@@ -1,5 +1,64 @@
 # NEXT ACTION
 
+## FEAT-013 Property Inspector — audited and wired end-to-end, two real bugs fixed, still partial (2026-09-11)
+
+Result: **IN_PROGRESS — Property Inspector Variables/Commands editors now
+actually work end-to-end (they didn't before), several real gaps remain,
+documented not silently skipped.**
+
+Picked up exactly where the entry below left it (preserved: `HartEngine`,
+`HartReferenceCatalog`, `HartCommandProgram`, `HartTypeCodec`, the 5 DSL
+commands, all prior tests/docs). The task was to audit whether the inherited
+`PropertyInspectorViewProvider.ts` actually delivered the Property Inspector
+contract end-to-end, not assume it did because the file existed -- it did
+not: `hartCommandsJson` was written but never parsed/compiled/installed
+anywhere (the Commands section had zero runtime effect), and
+`HartCommunicationComponent` never called `installCommandPrograms()` at all,
+so even the 5 built-in DSL commands from the previous session were
+unreachable through the component `protocol.hart.serial`/`protocol.hart.udp`
+actually use. Also found and fixed two real, pre-existing bugs unrelated to
+this session's UI work: saved `hartVariablesJson`/`hartCommandsJson` were
+never read from `ComponentParams` on construction (reset to `"[]"` on every
+project reopen), and `device.tag` was never populated from `m_tag` (command
+0x0B always compared against `plan.id`, never the configured Tag).
+
+What changed: `core/src/protocols/HartCommandJson.hpp/.cpp` (new, JSON <->
+semantic DSL bridge for a flat response-step subset: Hex/Variable/Body/
+BodySlice), `HartDevicePlan::VariableConfiguration` gained `role`/`type`/
+`direction`/`readable`/`runtimeMutable`, `HartReferenceCatalog
+::installCommandPrograms()` gained an overload that merges built-ins with
+compiled custom commands (all-or-nothing for the custom set, built-ins never
+go down), `HartPlanCompiler`/`HartEngine::execute` now allow a device to
+declare a custom command id without mutating the shared profile (existing
+cross-device isolation test still passes), and `HartCommunicationComponent`
+now actually reads/validates/compiles/installs everything, exposing
+`hartVariablesStatus`/`hartCommandsStatus` read-only diagnostics. Extension
+side: `PropertyInspectorViewProvider.ts` rewritten (section grouping,
+select/readonly editor support via `propertyFieldKindFromEditor` moved to the
+shared `batchProperties.ts`, a real structured Variables/Commands editor via
+new `hartInspectorSections.ts`, RUN-state structural-edit guard). Both new
+Core end-to-end tests (`hart_engine_test`) and new Extension unit tests
+(`hartInspectorSections.test.ts`, 11 cases) pass; host+webview TypeScript
+compile clean; no regressions in existing extension tests.
+
+Not done, explicitly (see `.spec/features/hart-device-engine.md` "Anexo B"
+for the full gate-by-gate accounting): no UI editor yet for `write`/`after`
+stages or `If`/`Map`/`ForCodes`; commands can only reference the fixed
+built-in `HartVarId` set, not a user-created custom variable; `direction`
+Input/Output is stored/validated but doesn't materialize a Signal Graph port;
+every gate requiring an interactive VS Code Extension Development Host
+(visual layout, on-screen RUN-guard message, live undo/redo click-through,
+`.lssubcircuit` encapsulation, themes/resize) was not reproduced -- only the
+underlying logic was tested in isolation, and that distinction is preserved
+in the writeup rather than glossed over.
+
+Next exact action: continue command-by-command migration of the remaining 55
+catalogued command ids (same pattern as before), OR close the Inspector gaps
+above (`UserVariable` DSL primitive, `If`/`Map`/`ForCodes` UI, Signal Graph
+port materialization for Input/Output) if the Inspector remains the priority
+-- either is legitimate; do not declare the Property Inspector "done" or the
+HART Device Engine complete either way.
+
 ## FEAT-013 HART primitive command DSL — first slice landed, continuation needed (2026-09-11)
 
 Result: **IN_PROGRESS — 5/60 commands ported to the semantic DSL, central

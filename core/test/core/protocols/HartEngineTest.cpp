@@ -1,8 +1,14 @@
+#include "protocols/HartCommandJson.hpp"
 #include "protocols/HartCommandProgram.hpp"
+#include "protocols/HartCommunicationComponent.hpp"
 #include "protocols/HartEngine.hpp"
 #include "protocols/HartReferenceCatalog.hpp"
 #include "protocols/HartTransport.hpp"
 #include "protocols/HartTypeCodec.hpp"
+#include "registry/ComponentParams.hpp"
+#include "simulation/Scheduler.hpp"
+
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <cstdio>
@@ -217,6 +223,137 @@ int main() {
     check(!HartPlanCompiler::compile(collision, runtimeProfiles).success, "same-bus address collision rejected");
     const HartProtocolPlan invalid{{{"broken", "missing-profile", "hart-1", 1, "", 0.0}}};
     check(!engine.loadPlan(invalid), "engine rejects invalid plan");
+
+    // Property Inspector Commands editor bridge: JSON (de)serialization of the
+    // flat response-step subset, merged install alongside the 5 built-ins.
+    {
+        const std::string validJson = R"([
+            {"id": 128, "name": "Custom PV Read", "responseSteps": [
+                {"kind": "variable", "variable": "PrimaryVariableUnit"},
+                {"kind": "variable", "variable": "PrimaryVariable"},
+                {"kind": "hex", "bytes": "CAFE"},
+                {"kind": "bodySlice", "offset": 0, "length": 2}
+            ]}
+        ])";
+        const auto parsedValid = HartCommandJson::parseCommandCollection(validJson);
+        check(parsedValid.success && parsedValid.definitions.size() == 1 &&
+                  parsedValid.definitions[0].id == 128 && parsedValid.definitions[0].resp.size() == 4,
+              "Commands editor JSON parses a real response step sequence");
+
+        HartProfileRegistry jsonProfiles;
+        check(jsonProfiles.registerProfile(HartReferenceCatalog::makeGenericProfile()), "json bridge profile register");
+        HartEngine jsonEngine(jsonProfiles);
+        HartDevicePlan jsonDevice{"json-device", "lasecsimul.hart.process-simul-compatible", "hart-1", 9, "029EB1", 12.5};
+        jsonDevice.tag = "JDEV";
+        for (const auto& command : HartReferenceCatalog::commandDescriptors())
+            jsonDevice.commandConfigurations.push_back({command.id, true, false, {}});
+        check(jsonEngine.loadPlan({{jsonDevice}}), "json bridge device plan loads");
+        const auto installed = HartReferenceCatalog::installCommandPrograms(jsonEngine, parsedValid.definitions);
+        check(installed.success, "custom command merges with built-ins");
+
+        HartResponseBuilder builtinStillWorks(32);
+        check(jsonEngine.execute("hart-1", 9, 0x01, {}, builtinStillWorks) && builtinStillWorks.size() == 5,
+              "built-in 0x01 still dispatches after merging a custom command");
+
+        const uint8_t customRequest[] = {0xAA, 0xBB};
+        HartResponseBuilder customOut(32);
+        // unit(57=0x39) + float32BE(12.5 == 0x41480000) + hex(CAFE) + bodySlice(request[0:2])
+        const std::vector<uint8_t> expectedCustom{0x39, 0x41, 0x48, 0x00, 0x00, 0xCA, 0xFE, 0xAA, 0xBB};
+        check(jsonEngine.execute("hart-1", 9, 128, customRequest, customOut) &&
+                  customOut.size() == expectedCustom.size() &&
+                  std::equal(expectedCustom.begin(), expectedCustom.end(), customOut.bytes().begin()),
+              "custom command 128 (variable + hex + bodySlice) executes end to end through the JSON bridge");
+
+        const nlohmann::json roundTrip = HartCommandJson::toJson(parsedValid.definitions[0]);
+        check(roundTrip["id"] == 128 && roundTrip["responseSteps"].size() == 4 &&
+                  roundTrip["responseSteps"][2]["kind"] == "hex" && roundTrip["responseSteps"][2]["bytes"] == "CAFE",
+              "toJson round-trips the same step sequence the UI would re-render");
+
+        check(!HartCommandJson::parseCommandCollection(R"([{"id": 0, "name": "x", "responseSteps": []}])").success,
+              "JSON bridge rejects a custom command shadowing a reserved standard id");
+        check(!HartCommandJson::parseCommandCollection(R"([{"id": 1, "responseSteps": [{"kind": "hex", "bytes": "ZZ"}]}])").success,
+              "JSON bridge rejects invalid hex");
+        check(!HartCommandJson::parseCommandCollection(
+                  R"([{"id": 200, "responseSteps": [{"kind": "variable", "variable": "NotARealVariable"}]}])").success,
+              "JSON bridge rejects an unknown variable reference");
+        check(!HartCommandJson::parseCommandCollection(
+                  R"([{"id": 201, "responseSteps": []}, {"id": 201, "responseSteps": []}])").success,
+              "JSON bridge rejects duplicate command ids within one collection");
+
+        // A broken custom collection must not take down the built-ins: the
+        // Property Inspector's Diagnostics status reflects the error, but
+        // 0x00/0x01/0x03/0x0B/0x21 keep working (HartCommunicationComponent
+        // ::rebuildCommandPrograms follows exactly this fallback).
+        HartCommandDefinition broken;
+        broken.id = 150;
+        broken.resp = {HartStatement{HartAppendStmt{HartExpr::bodySlice(0, 1000)}}}; // exceeds the bound
+        const auto brokenInstall = HartReferenceCatalog::installCommandPrograms(jsonEngine, {broken});
+        check(!brokenInstall.success && !brokenInstall.error.empty(), "a broken custom command reports a diagnostic");
+        HartResponseBuilder stillBuiltin(32);
+        check(jsonEngine.execute("hart-1", 9, 0x00, {}, stillBuiltin) && stillBuiltin.size() == 12,
+              "built-ins survive a broken custom command install (fallback, not a crash)");
+    }
+
+    // HartCommunicationComponent end to end: construction reads the FULL saved
+    // properties map (including hartVariablesJson/hartCommandsJson and tag) --
+    // this is the exact path `addComponent` uses on project reopen, and it used
+    // to silently drop variables/commands/tag back to defaults (Gate 12 /
+    // section 38 persistence contract; the tag bug predates this session).
+    {
+        lasecsimul::simulation::Scheduler scheduler(4, [] { return true; });
+        lasecsimul::registry::ComponentParams params;
+        params.properties["bus"] = std::string("hart-1");
+        params.properties["endpoint"] = std::string("COM9");
+        params.properties["uniqueId"] = std::string("112233");
+        params.properties["tag"] = std::string("PT101");
+        params.properties["pollingAddress"] = 7.0;
+        params.properties["enabled"] = true;
+        params.properties["hartVariablesJson"] = std::string(
+            R"([{"id":"PV","name":"Process Value","role":"PV","type":"Float32","direction":"Internal","value":42.5,"readable":true,"writable":false}])");
+        params.properties["hartCommandsJson"] = std::string(
+            R"([{"id":150,"name":"Echo Tag","responseSteps":[{"kind":"variable","variable":"Tag"}]}])");
+
+        HartCommunicationComponent component(HartCommunicationComponent::Mode::Serial, scheduler, params);
+        auto findValue = [&component](const char* id) -> lasecsimul::PropertyValue {
+            for (auto& d : component.propertyDescriptors()) if (d.schema.id == id) return d.get();
+            return std::string{};
+        };
+        check(std::get<std::string>(findValue("hartVariablesStatus")) == "OK", "component construction accepts saved variables");
+        check(std::get<std::string>(findValue("hartCommandsStatus")) == "OK", "component construction accepts saved commands");
+
+        HartFrame pvRequest{7, 1, {}};
+        HartResponseBuilder pvWire(16);
+        check(HartFrameCodec::encode(pvRequest, pvWire), "component test: encode PV request");
+        HartResponseBuilder pvResponseWire(32);
+        check(component.transact(pvWire.bytes(), pvResponseWire), "component transacts a standard command");
+        HartFrame pvResponse;
+        check(HartFrameCodec::decode(pvResponseWire.bytes(), pvResponse) && pvResponse.payload.size() == 5,
+              "component: saved variable's value (42.5) reaches the standard 0x01 response");
+        const auto expectedPv = HartTypeCodec::encodeFloat32BE(42.5f);
+        check(std::equal(expectedPv.begin(), expectedPv.end(), pvResponse.payload.begin() + 1),
+              "component: 0x01 response carries the exact saved PV value");
+
+        HartFrame customRequest{7, 150, {}};
+        HartResponseBuilder customWire(16);
+        check(HartFrameCodec::encode(customRequest, customWire), "component test: encode custom command request");
+        HartResponseBuilder customResponseWire(32);
+        check(component.transact(customWire.bytes(), customResponseWire), "component transacts a custom (UI-authored) command");
+        HartFrame customResponse;
+        check(HartFrameCodec::decode(customResponseWire.bytes(), customResponse) && customResponse.payload.size() == 6,
+              "component: custom command 150 (Variable Tag) dispatches through the JSON bridge");
+        check(HartTypeCodec::decodePackedAscii(customResponse.payload).substr(0, 5) == "PT101",
+              "component: saved \"tag\" property (not just plan.id) reaches command 0x0B/custom Tag references (persistence bug fixed)");
+
+        // Simulate a project reopen: a FRESH instance built from the exact same
+        // saved properties must behave identically, not reset to defaults.
+        HartCommunicationComponent reopened(HartCommunicationComponent::Mode::Serial, scheduler, params);
+        HartResponseBuilder reopenedWire(32);
+        check(reopened.transact(pvWire.bytes(), reopenedWire), "reopened component transacts the same standard command");
+        HartFrame reopenedResponse;
+        check(HartFrameCodec::decode(reopenedWire.bytes(), reopenedResponse) &&
+                  std::equal(expectedPv.begin(), expectedPv.end(), reopenedResponse.payload.begin() + 1),
+              "reopened component: same saved PV value, not reset to 0.0 (persistence round-trip)");
+    }
 
     // Direct DSL primitive characterization (not a real HART command): proves
     // SET, IF/EQ, MAP and FOR_CODES individually, and the write -> resp -> after

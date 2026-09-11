@@ -45,6 +45,11 @@ private:
     void setPropertyValue(const std::string&, const PropertyValue&);
     PropertyValue propertyValue(const std::string&) const;
     void rebuildConfiguredPlan();
+    /** Parses `m_hartCommandsJson` (Property Inspector Commands editor) and
+     * installs it merged with the reference catalog's built-in 0x00/0x01/0x03/
+     * 0x0B/0x21 via `HartReferenceCatalog::installCommandPrograms`, recording
+     * the outcome in `m_hartCommandsStatus` for the Diagnostics section. */
+    void rebuildCommandPrograms();
 
     Mode m_mode;
     simulation::Scheduler& m_scheduler;
@@ -61,6 +66,11 @@ private:
     uint16_t m_udpPort = 5094;
     bool m_enabled = true;
     std::string m_hartVariablesJson = "[]", m_hartCommandsJson = "[]";
+    /** "OK" or "ERROR: <compiler message>" -- read-only, shown in the Property
+     * Inspector's Diagnostics/Commands section (never a silent failure). */
+    std::string m_hartCommandsStatus = "OK";
+    /** Same idea for the Variables editor (id/direction/duplicate validation). */
+    std::string m_hartVariablesStatus = "OK";
 };
 
 } // namespace lasecsimul::protocols

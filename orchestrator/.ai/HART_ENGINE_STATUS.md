@@ -1,8 +1,67 @@
 # HART engine implementation status
 
-Last updated: 2026-09-11 (primitive command DSL)
+Last updated: 2026-09-11 (Property Inspector)
 
-## 2026-09-11 — semantic command DSL replaces the command-0/1/3 switch; 0x0B/0x21 implemented for the first time
+## 2026-09-11 — Property Inspector: audited, wired end-to-end, two real pre-existing bugs fixed
+
+The previous entry (below) left the DSL tested only in isolation
+(`hart_engine_test`) -- it was never actually reachable from
+`HartCommunicationComponent`, the component `protocol.hart.serial`/
+`protocol.hart.udp` really use. Auditing the Property Inspector (per the
+task's own warning not to assume it was done just because a file existed)
+surfaced that the whole thing was inert:
+
+- `HartReferenceCatalog::installCommandPrograms()` was never called by
+  `HartCommunicationComponent` -- not even the 5 built-in DSL commands from
+  the previous session were dispatchable through the component actually used.
+- `hartCommandsJson` (the Inspector's Commands editor property) was written
+  by `setPropertyValue` but never parsed, compiled, or installed anywhere --
+  the Commands section had zero effect on the running device.
+- Two real, pre-existing bugs, unrelated to the Inspector UI itself: the
+  constructor never read `hartVariablesJson`/`hartCommandsJson` from the
+  saved `ComponentParams`, so a saved device's variables/commands reset to
+  `"[]"` on every project reopen; and `device.tag` was never populated from
+  `m_tag`, so command 0x0B always compared against `plan.id`, never the
+  user-configured Tag.
+
+Fixed, extended, and tested end-to-end (not just declared): `HartCommandJson`
+(new) bridges the Property Inspector's flat response-step JSON to the
+semantic DSL, with compile-time diagnostics surfaced back as a read-only
+`hartCommandsStatus`/`hartVariablesStatus` property; `HartDevicePlan
+::VariableConfiguration` gained `role`/`type`/`direction`/`readable`/
+`runtimeMutable`; a custom command id can now be declared per-device without
+mutating the shared profile (`HartPlanCompiler`/`HartEngine::execute` both
+updated, carefully, to keep the existing "undeclared command rejected"
+isolation guarantee). The Property Inspector sidebar
+(`PropertyInspectorViewProvider.ts`) was rewritten: section grouping by
+`PropertySchema.group`, `select`/`readonly` editor kinds (previously only
+text/number/checkbox -- `propertyFieldKindFromEditor` moved out of `main.ts`
+into `batchProperties.ts` so both the canvas sheet and the sidebar share one
+dispatch), a real Variables editor (stable id, role/type/direction dropdowns,
+readable/writable/runtimeMutable, write-ownership hint for Input), a real
+Commands editor (ordered response steps: Hex/Variable/Body/BodySlice,
+add/remove/reorder, live compiler status), and a RUN-state structural-edit
+guard wired through `coreLifecycle.ts::setSimulationStatus`.
+
+`hart_engine_test` (Core, MSVC Release) and `hartInspectorSections.test.ts`
+(Extension, new, 11 cases) both green; host+webview TypeScript compile clean;
+no regressions in `batchProperties`/`workspace`/`paletteTree` tests.
+
+**Honestly not done**: `write`/`after` stages and the `If`/`Map`/`ForCodes`
+control-flow primitives have no UI editor yet (only flat `resp` steps);
+commands can only reference the fixed built-in `HartVarId` set, not a
+user-created custom variable; `direction=Input`/`Output` is stored and
+validated but does not yet materialize a Signal Graph port; every gate that
+requires clicking through a live VS Code Extension Development Host (visual
+section layout, structural-edit-during-RUN message on screen, live undo/redo,
+`.lssubcircuit` encapsulation, themes/resize) was not reproduced interactively
+-- only the underlying logic was tested in isolation. Full detail, including
+which of the original contract's 90 sections/14 gates are DONE vs PARTIAL vs
+not attempted, is in `.spec/features/hart-device-engine.md` "Anexo B". The
+HART Device Engine as a whole is still far from complete: 55 of 60 catalogued
+commands have no body, and benchmarks/fuzzing/legacy removal haven't started.
+
+## 2026-09-11 (earlier) — semantic command DSL replaces the command-0/1/3 switch; 0x0B/0x21 implemented for the first time
 
 Prior architecture reconciled: `HartEngine`, `HartReferenceCatalog`
 (60-command/11-device import), `HartPlanCompiler`, `HartTransportEndpoint`, and

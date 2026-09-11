@@ -121,6 +121,27 @@ private:
     std::unordered_map<std::string, HartDeviceProfile> m_profiles;
 };
 
+/** Property Inspector authoring vocabulary (FEAT-013 Property Inspector). Kept
+ * as a small closed enum matched by a UI-side mirror (see
+ * `hartVariableSchema.ts`) rather than a generic Core "describe my JSON
+ * collection" mechanism -- these are architecture-level, not per-profile. */
+enum class HartVariableRole : uint8_t {
+    PrimaryVariable, SecondaryVariable, TertiaryVariable, QuaternaryVariable,
+    Internal, DeviceSpecific, VendorSpecific, Custom,
+};
+
+/** Only the types `HartTypeCodec` actually implements today; do not add a type
+ * here the codec cannot encode (section 14 rule: no UI type disconnected from
+ * a real codec). */
+enum class HartVariableType : uint8_t { Float32, UInt8, UInt16, Int16, PackedAscii, Bool };
+
+/** `Internal`/`Input`/`Output` only -- see .spec/features/hart-device-engine.md
+ * section 37/48: `Constant`/`Reference`/`Expression`/`TransferFunction` as
+ * parallel source modes are explicitly retired. `Input`/`Output` are modeled
+ * here (stored, validated) but do NOT yet materialize a Signal Graph port --
+ * that is a separate, larger structural feature (see Anexo B gap list). */
+enum class HartVariableDirection : uint8_t { Internal, Input, Output };
+
 struct HartDevicePlan {
     std::string id;
     std::string profileId;
@@ -144,6 +165,14 @@ struct HartDevicePlan {
         double value = 0.0;
         std::string expression;
         bool writable = false;
+        HartVariableRole role = HartVariableRole::Internal;
+        HartVariableType type = HartVariableType::Float32;
+        HartVariableDirection direction = HartVariableDirection::Internal;
+        bool readable = true;
+        /** Distinct from `writable`: `writable` says a HART command may SET this
+         * value; `runtimeMutable` says the Property Inspector may edit it while
+         * RUN is active (HART-FR-021). */
+        bool runtimeMutable = false;
     };
     std::vector<VariableConfiguration> variables;
     /** Packed-ASCII device tag used by command 0x0B tag matching; falls back to

@@ -1847,8 +1847,244 @@ prova arquitetural obrigatória (FASE 19/72/73), sem exigir opcode ad-hoc.
   o snapshot de `HartExecutionVariables` para `RuntimeDevice`, calculado uma
   vez em `loadPlan()`, com apenas PV/unit atualizados por chamada.
   Ver [[project_hart_device_engine_v2]].
-- Restam 55 dos 60 comandos catalogados sem corpo implementado, Property
-  Inspector semântico, migração dos componentes de comunicação existentes
-  (`HartCommunicationComponent`) para o hook, benchmarks em escala,
-  fuzzing do compilador/executor, e remoção de legado — FASE 20-30
-  permanecem abertas.
+- Restam 55 dos 60 comandos catalogados sem corpo implementado, benchmarks em
+  escala, fuzzing do compilador/executor, e remoção de legado — FASE 20-30
+  permanecem abertas. `HartCommunicationComponent` foi migrado para o hook
+  nesta sessão (ver Anexo B); Property Inspector semântico também — Anexo B.
+
+---
+
+## Anexo B — Property Inspector do HART: auditoria e implementação (2026-09-11)
+
+### B.1 Reconciliação do estado herdado
+
+`PropertyInspectorViewProvider.ts` (commit `c8593239`) já usava a infraestrutura
+oficial do VS Code (`vscode.WebviewViewProvider` + `registerWebviewViewProvider`
+com `"type": "webview"` em `package.json`, seção `views`) e já reencaminhava
+mutações pelo caminho normal `requestUpdateProperty` (undo/redo/persistência
+compartilhados, não duplicados) — isso foi preservado integralmente.
+
+O que a auditoria encontrou **não** implementado, apesar de o arquivo existir:
+
+- `renderHartCollections` tratava `hartVariablesJson`/`hartCommandsJson` como
+  duas tabelas de linhas soltas (`id`/`name`/`unit`/`source`), sem `role`,
+  `type`, `direction`, `readable`/`runtimeMutable` — e usava um campo
+  `source`/`function` livre equivalente ao antigo modo `Expression` que a
+  arquitetura já havia retirado (seção 48).
+- **`hartCommandsJson` nunca era lido pelo Core.** `HartCommunicationComponent
+  ::setPropertyValue` só armazenava a string; não existia parser, não existia
+  compilação, não existia instalação no `HartEngine`. Um comando "criado" pelo
+  Inspector não tinha nenhum efeito no dispositivo rodando — a seção Commands
+  inteira era inerte.
+- `HartReferenceCatalog::installCommandPrograms()` (os 5 comandos DSL da
+  sessão anterior) nunca era chamado por `HartCommunicationComponent` — mesmo
+  os comandos 0x00/0x01/0x03/0x0B/0x21 não estavam acessíveis pelo componente
+  usado de verdade pelo `protocol.hart.serial`/`protocol.hart.udp`.
+- **Bug de persistência real, anterior a esta sessão**: o construtor de
+  `HartCommunicationComponent` nunca lia `hartVariablesJson`/`hartCommandsJson`
+  de `ComponentParams` — um projeto salvo com variáveis/comandos configurados
+  voltava para `"[]"` a cada reabertura (violava a seção 38/Gate 12).
+- **Bug real, também anterior**: `device.tag` nunca era preenchido a partir de
+  `m_tag` (nem no construtor, nem em `rebuildConfiguredPlan`) — o comando
+  0x0B sempre comparava contra `plan.id`, nunca contra a Tag configurada pelo
+  usuário.
+- Painel sem agrupamento de seções (tudo em uma única lista sob "Properties",
+  apesar de `PropertySchema.group` já existir e não ser usado), sem suporte a
+  `editor:"select"`/`"display"` (só text/number/checkbox), sem diagnóstico do
+  compilador visível, sem guarda estrutural durante RUN.
+
+### B.2 O que foi implementado nesta sessão
+
+**Core** (`core/src/protocols/`):
+
+- `HartEngine.hpp`: `HartVariableRole`, `HartVariableType`, `HartVariableDirection`
+  e os campos correspondentes em `HartDevicePlan::VariableConfiguration`
+  (`role`, `type`, `direction`, `readable`, `runtimeMutable`), aditivos
+  (posição final da struct, nenhum call site existente quebrado).
+- `HartCommandJson.hpp/.cpp` (novo): ponte JSON <-> DSL semântica para o
+  subconjunto plano de authoring (`Hex Constant`/`Variable`/`Request Body`/
+  `Body Slice` como passos de `resp`), com rejeição explícita de: JSON
+  malformado, variável desconhecida, hex inválido, id de comando duplicado, e
+  id de comando reservado (0x00/0x01/0x03/0x0B/0x21 — nunca pode ser
+  sombreado por um comando custom).
+- `HartReferenceCatalog::installCommandPrograms(engine, additional)` (nova
+  sobrecarga): compila os 5 comandos built-in + os comandos custom
+  fornecidos num único hook combinado; se QUALQUER comando custom falhar ao
+  compilar, a instalação cai para **somente os built-ins** (nunca deixa um
+  edit quebrado derrubar 0x00/0x01/0x03/0x0B/0x21) e devolve a mensagem de
+  erro exata.
+- `HartCommunicationComponent`: agora lê `hartVariablesJson`/`hartCommandsJson`
+  do `ComponentParams` no construtor (corrige o bug de persistência),
+  preenche `device.tag` (corrige o bug da Tag), parseia/valida/compila os
+  comandos custom via `HartCommandJson`+`HartCommandCompiler`, expõe duas
+  propriedades read-only novas (`hartVariablesStatus`, `hartCommandsStatus`)
+  com a mensagem de erro exata do compilador, e rejeita write-ownership
+  (`direction=Input && writable` é rejeitado com diagnóstico, nunca
+  silenciosamente aceito com o campo zerado).
+- `HartPlanCompiler::compile()`/`HartEngine::execute()`: um id de comando
+  custom agora pode ser declarado por dispositivo (`commandConfigurations`)
+  sem precisar estar no `HartDeviceProfile` compartilhado — a validação
+  original ("override não declarado pelo perfil") permanece para
+  disable/static-response de comandos que o perfil *conhece*; só a
+  declaração aditiva pura (enabled, sem override) de um id novo passou a ser
+  aceita. Sem essa mudança, nenhum comando autorado pela UI conseguia
+  despachar (ver B.4).
+- `HartCommunicationComponent::propertySchema()`: os 4 campos JSON/status
+  passaram a ter `PropertySchemaHidden` — não aparecem mais na property sheet
+  genérica do canvas (que os mostraria como texto JSON cru, um segundo editor
+  competindo com o painel estruturado), mas continuam totalmente
+  legíveis/graváveis via IPC e via o próprio Inspector.
+
+**Extension** (`extension/src/ui/`):
+
+- `batchProperties.ts`: `propertyFieldKindFromEditor` movido de `main.ts`
+  (só existia lá) para cá — agora é a MESMA função usada pela property sheet
+  do canvas e pelo painel lateral (seção 46: um único dispatch de
+  `editor` -> widget, não dois mantidos à mão separadamente). `main.ts`
+  passou a importar em vez de duplicar.
+- `hartInspectorSections.ts` (novo, sem dependência de `vscode`, testável em
+  Node): modelo de linhas (`HartVariableRow`, `HartCommandRow`,
+  `HartCommandStepRow`), parse/serialize simétricos ao JSON que o Core
+  espera, e os renderers HTML dos editores de Variables/Commands — incluindo
+  o script client-side (reconstrói as linhas a partir do DOM atual a cada
+  commit, sem manter uma segunda cópia autoritativa).
+- `PropertyInspectorViewProvider.ts`: reescrito para agrupar campos por
+  `schema.group` (título por seção, em vez de lista única), suportar
+  `editor:"select"` (dropdown com `schema.options`) e `"display"`
+  (read-only), esconder os 4 campos HART "crus" do fluxo genérico, e montar
+  as seções Variables/Commands/Diagnostics via `hartInspectorSections.ts`.
+  Ganhou `setSimulationStatus()`, chamado por `coreLifecycle.ts::setSimulationStatus`
+  (mesmo padrão de `lasecPlotManager`/`serialTerminalManager`) — controles
+  estruturais (Add/Remove, `id`, `direction`, `type`) desabilitam durante
+  RUN/PAUSE; campos com `runtimeMutable=true` continuam editáveis.
+
+### B.3 Editor de Variables — modelo real exposto
+
+`id` (variableId estável, somente-leitura após criado) · `name`
+(displayName) · `role` (select: PV/SV/TV/QV/Internal/DeviceSpecific/
+VendorSpecific/Custom) · `type` (select: Float32/UInt8/UInt16/Int16/
+PackedAscii/Bool — só os tipos que `HartTypeCodec` de fato implementa) ·
+`direction` (select: Internal/Input/Output) · `unit` · `value` · `readable`/
+`writable`/`runtimeMutable` (checkboxes). `writable` desabilita
+automaticamente quando `direction=Input`, com explicação inline. Um
+`expression` legado (authoring computado via SignalExpression, pré-existente)
+sobrevive ao round-trip sem ganhar um campo dedicado no editor novo — não é
+mais um "modo de origem" de primeira classe, mas dado existente nunca é
+descartado silenciosamente.
+
+**Gap real, documentado, não fechado**: `direction=Input`/`Output` é
+armazenado e validado (write-ownership), mas **não materializa uma porta no
+Signal Graph** — isso exigiria estender o mecanismo `ComponentPinSpec`/
+`DynamicPinGroupSpec` (`lasecsimul/Types.hpp`) para portas dirigidas por uma
+coleção JSON (hoje ele só deriva contagem de pinos de UMA propriedade
+numérica), preservação de fios ao trocar direction, e mudanças no
+`PlanCompiler`. Isso é um recurso estrutural grande e separado — o Gate 3 do
+contrato original (mudar direction e ver a porta aparecer/fio conectável)
+**não está pronto**; a validação write-ownership (Gate 9) está.
+
+### B.4 Editor de Commands — modelo real exposto
+
+Cada comando: `id` (reservado 0x00/0x01/0x03/0x0B/0x21, somente-leitura após
+criado) · `name` · `enabled` · lista ordenável de passos de `Response`:
+`Hex Constant` (bytes), `Variable` (select sobre o conjunto fixo de
+`HartVarId`), `Request Body`, `Body Slice` (offset/length) — reordenar via
+&uarr;/&darr;, adicionar/remover por passo. Um indicador "Compiler: ✓ Valid /
+✗ &lt;mensagem exata&gt;" fica sempre visível, alimentado por
+`hartCommandsStatus` (Core).
+
+**Gap real, documentado, não fechado**: `write`/`after` e os primitivos de
+controle de fluxo (`If`/`Map`/`ForCodes`) não têm editor na UI ainda — só
+`resp` com os 4 passos planos acima. Isso cobre o padrão real da maioria dos
+comandos "leitura simples" (inclusive prova os Gates 6/7/8/10 abaixo), mas
+não FOR_CODES/IF/MAP pela UI. Referenciar uma variável HART *customizada*
+(criada pelo usuário) de dentro de um comando também não é suportado ainda —
+só o conjunto fixo de `HartVarId` (PV via a convenção pré-existente
+`id="PV"`/`"primary"` continua funcionando, ver B.5 Gate 2). Ambos exigiriam
+estender `HartCommandJson` com os nós adicionais e, para variáveis
+customizadas, um novo `HartExpr::Kind::UserVariable` resolvido por handle no
+executor — desenho já esboçado, não implementado (ver [[project_hart_device_engine_v2]]).
+
+### B.5 Gates — resultado real (não assumido)
+
+Gates comprovados por teste automatizado (Core `hart_engine_test` +
+Extension `hartInspectorSections.test.ts`, ambos verdes, e compilação limpa
+de host+webview):
+
+- **Gate 2 (criar variável, ler via comando)**: uma variável `id="PV"` com
+  `value`/`expression` chega ao comando 0x01 padrão exatamente como salva —
+  caracterizado ponta a ponta em `HartEngineTest.cpp` (constrói
+  `HartCommunicationComponent` com `hartVariablesJson` real, executa 0x01,
+  confere o float exato).
+- **Gate 6/7 (criar comando novo via primitivas semânticas, sem editar
+  `HartEngine`/dispatcher)**: comando custom com passos `Variable`+`Hex`+
+  `BodySlice` compila e despacha ponta a ponta sem tocar `HartEngine.cpp`
+  nem `PropertyInspectorViewProvider.ts` para esse comando específico —
+  caracterizado em `HartEngineTest.cpp` ("custom command 128... executes end
+  to end through the JSON bridge") e replicável pela UI (mesmo parser/
+  compilador).
+- **Gate 8 (diagnóstico do compilador)**: um `BodySlice` além do limite
+  reporta erro (`installCommandPrograms` retorna `.error` não vazio) e os
+  built-ins continuam respondendo — caracterizado em
+  `HartEngineTest.cpp` ("a broken custom command reports a diagnostic" /
+  "built-ins survive a broken custom command install").
+- **Gate 12 (save/reopen)**: uma SEGUNDA instância de `HartCommunicationComponent`
+  construída com os MESMOS `ComponentParams` (simulando reabrir o projeto)
+  produz a mesma resposta 0x01 — prova direta do bug de persistência
+  corrigido.
+- **Gate 9 parcial (write-ownership)**: validado para os alvos `SET`
+  atualmente graváveis (`Tag`/`PrimaryVariableUnit`/`PrimaryVariable` no
+  `HartCommandCompiler`, e `direction=Input && writable` rejeitado em
+  `HartCommunicationComponent::rebuildConfiguredPlan`); não validado ainda
+  para `SET` de uma variável customizada, porque isso não existe na DSL
+  ainda (ver B.4).
+
+Gates **não executados** (exigem VS Code Extension Development Host
+interativo, que este agente não tem como abrir/clicar) — sem evidência,
+portanto não reivindicados como prontos:
+
+- Gate 1 (inspecionar visualmente as 6 seções no canvas real).
+- Gate 3 (porta Input/Output aparecendo/conectável no canvas) — também
+  bloqueado pela lacuna estrutural da B.3.
+- Gate 5 (mensagem de rejeição estrutural durante RUN visível na tela real —
+  a lógica de desabilitar os controles está implementada e testada
+  isoladamente, mas o clique real não foi reproduzido).
+- Gate 11 (Undo/Redo manual) — a mutação usa o MESMO pipeline
+  `requestUpdateProperty` de qualquer outra propriedade (então undo/redo
+  deveria "vir de graça"), mas isso não foi confirmado clicando.
+- Gate 13 (encapsulamento `.lssubcircuit`) — não auditado nesta sessão.
+- Gate 14 (temas/resize) — CSS usa variáveis de tema do VS Code
+  (`--vscode-*`) e `flex-wrap`/`overflow-wrap` para não quebrar em painel
+  estreito, mas não foi visualmente confirmado.
+
+### B.6 Checklist do contrato original (seção 90) — estado real
+
+Feito e comprovado: painel persistente via infraestrutura oficial · sem modal
+HART canônico competindo · fluxo de seleção canônico (`setSelection`
+alimentado por `state.schematicState`, não DOM scraping) · seções agrupadas ·
+`variableId` estável (não-editável após criado) · Internal/Input/Output
+armazenado e validado · edição estrutural bloqueada durante RUN · campos
+`runtimeMutable` seguem a regra do Core · comandos editáveis
+semanticamente (subconjunto plano) · `Body`/`BodySlice`/`Variable`/`Hex`
+representados · diagnóstico do compilador exposto · nenhum bytecode exposto
+· commit-on-change (não por tecla) · sem polling do projeto inteiro ·
+Inspector nunca é fonte de verdade · testes Core e Extension passam.
+
+Parcial ou pendente: `req`/`write`/`after` e `If`/`Map`/`ForCodes` sem editor
+· referência a variável customizada dentro de comando · porta Signal Graph
+para Input/Output · encapsulamento `.lssubcircuit` não auditado · Undo/Redo,
+temas, resize e os demais gates que exigem Extension Development Host
+interativo não confirmados manualmente · consolidação do editor canônico é
+parcial (dispatch de `kind` unificado; os dois renderers HTML continuam
+fisicamente separados, um DOM client-side e um HTML string server-side —
+unificação completa exigiria mover a sidebar para o mesmo modelo de
+webview+DOM do canvas, fora do escopo desta sessão).
+
+### B.7 Próxima ação
+
+Continuar as fases HART pendentes (FASE 20-30): migrar mais comandos do
+catálogo de 60 usando `HartReferenceCatalog::commandProgramDefinitions()`
+como molde; depois, se ainda relevante, fechar os gaps do Inspector acima
+(`UserVariable`, `If`/`Map`/`ForCodes` na UI, porta Signal Graph) antes de
+tentar os gates que exigem Extension Development Host interativo. Não
+declarar o HART Device Engine concluído enquanto os 55 comandos restantes,
+benchmarks, fuzzing e remoção de legado continuarem pendentes.

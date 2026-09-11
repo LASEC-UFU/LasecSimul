@@ -26,7 +26,7 @@ import {
 import { formatEngineeringValue, defaultSiPrefixFactor, SI_PREFIXES } from "./valueFormatting.js";
 import { isJunctionVisible, movableTopologyNodeIds, endpointScenePosition as resolveEndpointScenePosition } from "./wireTopology.js";
 import { WireSpatialIndex } from "./wireSpatialIndex.js";
-import { BatchPropertyPatch, PropertyField, PropertyFieldKind, SharedFieldValue, SharedPropertyField, computeGenericInstanceFields, computeSharedPropertyFields, planBatchPropertyChange } from "./batchProperties.js";
+import { BatchPropertyPatch, PropertyField, PropertyFieldKind, SharedFieldValue, SharedPropertyField, computeGenericInstanceFields, computeSharedPropertyFields, planBatchPropertyChange, propertyFieldKindFromEditor } from "./batchProperties.js";
 import { parseSerialInput, serialFormatBytes, SerialFormat } from "./serialFormat.js";
 import { shouldRenderSimulationSnapshot, simulationControlModel } from "./simulationControls.js";
 import { isHighWireVoltage, reconcileWireVoltages } from "./wirePresentation.js";
@@ -7243,18 +7243,6 @@ function inferPropertyGroup(name: string): string {
   if (normalized.includes("show") || normalized.includes("visible") || normalized.includes("title") || normalized.includes("label")) return t("visual");
   if (normalized.includes("pole") || normalized.includes("throw") || normalized.includes("close") || normalized.includes("open")) return t("principal");
   return t("principal");
-}
-
-function propertyFieldKindFromEditor(editor: string): PropertyFieldKind {
-  const normalized = editor.trim().toLowerCase();
-  if (normalized === "checkbox" || normalized === "switch") return "boolean";
-  if (normalized === "select" || normalized === "enum") return "select";
-  if (normalized === "display") return "readonly";
-  if (normalized === "number") return "number";
-  if (normalized === "filepath") return "filePath";
-  if (normalized === "color") return "color";
-  if (normalized === "textarea" || normalized === "textedit") return "textarea";
-  return "text";
 }
 
 /** Mesmo texto que `voltmeterReadoutText` produzia (hardcoded só pro voltímetro), generalizado pra

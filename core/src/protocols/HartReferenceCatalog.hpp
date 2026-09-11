@@ -39,6 +39,17 @@ public:
      * to compile (bound/validation error) -- the engine is left without a hook
      * in that case, matching "no partial/unsafe install". */
     static bool installCommandPrograms(HartEngine& engine);
+
+    struct InstallResult { bool success = false; std::string error; };
+
+    /** Same as `installCommandPrograms(engine)`, plus `additional` (typically
+     * Property Inspector-authored, parsed via `HartCommandJson`): every entry
+     * is compiled and merged into the SAME hook as the 5 built-ins. All-or-
+     * nothing for `additional` -- if any one fails to compile, none of
+     * `additional` is installed (the built-ins still are, so a broken custom
+     * edit never takes down the standard commands), and `.error` names the
+     * failing command so the Property Inspector can surface it. */
+    static InstallResult installCommandPrograms(HartEngine& engine, std::vector<HartCommandDefinition> additional);
 };
 
 } // namespace lasecsimul::protocols

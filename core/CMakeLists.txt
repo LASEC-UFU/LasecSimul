@@ -83,6 +83,7 @@ set(CORE_SOURCES
     src/protocols/HartEngine.cpp
     src/protocols/HartReferenceCatalog.cpp
     src/protocols/HartCommandProgram.cpp
+    src/protocols/HartCommandJson.cpp
     src/protocols/HartTypeCodec.cpp
     src/protocols/HartTransport.cpp
     src/protocols/HartCommunicationComponent.cpp
@@ -397,10 +398,12 @@ add_executable(hart_engine_test
     src/protocols/HartEngine.cpp
     src/protocols/HartReferenceCatalog.cpp
     src/protocols/HartCommandProgram.cpp
+    src/protocols/HartCommandJson.cpp
     src/protocols/HartTypeCodec.cpp
     src/protocols/HartTransport.cpp
     src/protocols/HartCommunicationComponent.cpp
     src/simulation/SignalEngine.cpp
+    src/simulation/Scheduler.cpp
 )
 target_include_directories(hart_engine_test PRIVATE include src)
 target_link_libraries(hart_engine_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)

@@ -125,12 +125,22 @@ HartPlanCompileResult HartPlanCompiler::compile(std::span<const HartDevicePlan> 
         if (!profiles.find(device.profileId)) { result.error = "HART profile not found: " + device.profileId; return result; }
         for (size_t i = 0; i < device.commandConfigurations.size(); ++i) {
             const auto& configuration = device.commandConfigurations[i];
-            const bool declared = std::any_of(profiles.find(device.profileId)->commands.begin(),
-                                              profiles.find(device.profileId)->commands.end(),
-                                              [&](const HartCommandDescriptor& descriptor) {
-                                                  return descriptor.id == configuration.command;
-                                              });
-            if (!declared) { result.error = "HART command override is not declared by profile"; return result; }
+            const bool declaredByProfile = std::any_of(profiles.find(device.profileId)->commands.begin(),
+                                                       profiles.find(device.profileId)->commands.end(),
+                                                       [&](const HartCommandDescriptor& descriptor) {
+                                                           return descriptor.id == configuration.command;
+                                                       });
+            // A profile-declared command may be disabled or given a static
+            // response override (that's what this list was originally for). A
+            // command the profile does NOT know about may only appear here as a
+            // plain additive declaration (enabled, no static override) -- that's
+            // how a device gains a custom/vendor command id without mutating the
+            // shared profile object (HartEngine::execute() checks this same list
+            // for exactly that). Disabling or static-overriding an undeclared
+            // command has no coherent meaning, so it stays rejected.
+            if (!declaredByProfile && (!configuration.enabled || configuration.hasStaticResponse)) {
+                result.error = "HART command override is not declared by profile"; return result;
+            }
             if (configuration.staticResponse.size() > 255) {
                 result.error = "HART command override response exceeds frame limit"; return result;
             }
@@ -254,9 +264,20 @@ bool HartEngine::execute(std::string_view bus, uint8_t pollingAddress, HartComma
         }
     }
     if (!selected) return false;
-    const bool declared = std::any_of(selected->profile->commands.begin(), selected->profile->commands.end(),
-                                      [command](const HartCommandDescriptor& descriptor) { return descriptor.id == command; });
-    if (!declared) return false;
+    // Declared by the profile (the common case: standard/vendor commands
+    // every instance of this profile shares) OR declared by this specific
+    // device's commandConfigurations (a custom command added to just this
+    // instance, e.g. authored through the Property Inspector -- see
+    // HartPlanCompiler::compile()'s matching relaxation for why an
+    // undeclared-by-profile entry can appear there at all). Either way, a
+    // command truly unknown to both stays rejected -- this is what keeps one
+    // device's custom command id from leaking into another device sharing the
+    // same engine (see hart_engine_test "undeclared custom command rejected").
+    const bool declaredByProfile = std::any_of(selected->profile->commands.begin(), selected->profile->commands.end(),
+                                               [command](const HartCommandDescriptor& descriptor) { return descriptor.id == command; });
+    const bool declaredByDevice = std::any_of(selected->plan.commandConfigurations.begin(), selected->plan.commandConfigurations.end(),
+                                              [command](const HartDevicePlan::CommandConfiguration& configuration) { return configuration.command == command; });
+    if (!declaredByProfile && !declaredByDevice) return false;
     for (const auto& configuration : selected->plan.commandConfigurations) {
         if (configuration.command != command) continue;
         if (!configuration.enabled) return false;
