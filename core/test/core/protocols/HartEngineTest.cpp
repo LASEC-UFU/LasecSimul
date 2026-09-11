@@ -18,6 +18,14 @@ public:
         return response.writeByte(0x42);
     }
 };
+
+class CustomHandler final : public IHartCommandHandler {
+public:
+    HartCommandId command() const noexcept override { return 99; }
+    bool execute(const HartCommandContext&, HartResponseBuilder& response) noexcept override {
+        return response.writeByte(0x99);
+    }
+};
 }
 
 int main() {
@@ -64,11 +72,28 @@ int main() {
     check(engine.loadPlan(plan.plan), "engine load plan");
     HartResponseBuilder primary(8);
     check(engine.execute(3, 1, {}, primary) && primary.size() == 4, "primary command dispatch");
+    HartResponseBuilder secondary(8);
+    check(engine.execute("hart-2", 3, 1, {}, secondary) && secondary.size() == 4 &&
+              secondary.bytes()[0] != primary.bytes()[0],
+          "same address dispatches by bus");
     check(engine.setPrimaryValue("dev-a", 42.25), "runtime value update");
     check(!engine.setPrimaryValue("missing", 1.0), "missing device rejected");
+    CustomHandler custom;
+    check(engine.registerCommandHandler(custom), "custom command registration");
+    HartResponseBuilder customResponse(4);
+    check(!engine.execute(3, 99, {}, customResponse), "undeclared custom command rejected");
+    HartProfileRegistry customProfiles;
+    check(customProfiles.registerProfile({"hart.custom", 1, 0, 0, {{99, "custom"}}}), "custom profile register");
+    HartEngine customEngine(customProfiles);
+    check(customEngine.registerCommandHandler(custom), "custom engine handler");
+    check(customEngine.loadPlan({{{"custom-device", "hart.custom", "hart-1", 4, "custom", 0.0}}}), "custom plan");
+    check(customEngine.execute(4, 99, {}, customResponse) && customResponse.bytes()[0] == 0x99,
+          "custom command dispatch without engine edit");
     const std::vector<HartDevicePlan> collision{{"a", "hart.default", "hart-1", 1, "a", 0.0},
                                                 {"b", "hart.default", "hart-1", 1, "b", 0.0}};
     check(!HartPlanCompiler::compile(collision, runtimeProfiles).success, "same-bus address collision rejected");
+    const HartProtocolPlan invalid{{{"broken", "missing-profile", "hart-1", 1, "", 0.0}}};
+    check(!engine.loadPlan(invalid), "engine rejects invalid plan");
 
     if (failures == 0) std::puts("HART engine contracts: PASS");
     return failures == 0 ? 0 : 1;

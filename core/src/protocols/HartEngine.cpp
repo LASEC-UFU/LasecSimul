@@ -137,12 +137,14 @@ HartPlanCompileResult HartPlanCompiler::compile(std::span<const HartDevicePlan> 
 HartEngine::HartEngine(const HartProfileRegistry& profiles) : m_profiles(profiles) {}
 
 bool HartEngine::loadPlan(HartProtocolPlan plan) {
+    const HartPlanCompileResult checked = HartPlanCompiler::compile(plan.devices, m_profiles);
+    if (!checked.success) return false;
     std::vector<RuntimeDevice> resolved;
-    resolved.reserve(plan.devices.size());
-    for (HartDevicePlan& device : plan.devices) {
+    resolved.reserve(checked.plan.devices.size());
+    for (const HartDevicePlan& device : checked.plan.devices) {
         const HartDeviceProfile* profile = m_profiles.find(device.profileId);
         if (!profile) return false;
-        resolved.push_back({std::move(device), profile});
+        resolved.push_back({device, profile});
     }
     m_devices = std::move(resolved);
     return true;
@@ -158,13 +160,22 @@ bool HartEngine::setPrimaryValue(std::string_view deviceId, double value) noexce
     return false;
 }
 
-bool HartEngine::execute(uint8_t pollingAddress, HartCommandId command,
-                         std::span<const uint8_t>, HartResponseBuilder& response) noexcept {
+bool HartEngine::execute(std::string_view bus, uint8_t pollingAddress, HartCommandId command,
+                         std::span<const uint8_t> request, HartResponseBuilder& response) noexcept {
     RuntimeDevice* selected = nullptr;
     for (RuntimeDevice& device : m_devices) {
-        if (device.plan.pollingAddress == pollingAddress) { selected = &device; break; }
+        if (device.plan.bus == bus && device.plan.pollingAddress == pollingAddress) {
+            selected = &device;
+            break;
+        }
     }
     if (!selected) return false;
+    const bool declared = std::any_of(selected->profile->commands.begin(), selected->profile->commands.end(),
+                                      [command](const HartCommandDescriptor& descriptor) { return descriptor.id == command; });
+    if (!declared) return false;
+    if (IHartCommandHandler* custom = m_commands.find(command)) {
+        return custom->execute({pollingAddress, static_cast<uint8_t>(command), request}, response);
+    }
     switch (command) {
         case 0: // Read unique identifier (semantic virtual representation).
             return response.writeAscii(selected->plan.uniqueId);

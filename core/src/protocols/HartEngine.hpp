@@ -139,8 +139,14 @@ public:
     void clear() noexcept;
     size_t deviceCount() const noexcept { return m_devices.size(); }
     bool setPrimaryValue(std::string_view deviceId, double value) noexcept;
-    bool execute(uint8_t pollingAddress, HartCommandId command,
+    bool registerCommandHandler(IHartCommandHandler& handler) { return m_commands.registerHandler(handler); }
+    bool removeCommandHandler(HartCommandId command) noexcept { return m_commands.remove(command); }
+    bool execute(std::string_view bus, uint8_t pollingAddress, HartCommandId command,
                  std::span<const uint8_t> request, HartResponseBuilder& response) noexcept;
+    bool execute(uint8_t pollingAddress, HartCommandId command,
+                 std::span<const uint8_t> request, HartResponseBuilder& response) noexcept {
+        return execute("hart-1", pollingAddress, command, request, response);
+    }
 
 private:
     struct RuntimeDevice {
@@ -148,6 +154,7 @@ private:
         const HartDeviceProfile* profile = nullptr;
     };
     const HartProfileRegistry& m_profiles;
+    HartCommandRegistry m_commands;
     std::vector<RuntimeDevice> m_devices;
 };
 
