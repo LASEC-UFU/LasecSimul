@@ -80,6 +80,7 @@ set(CORE_SOURCES
     src/mcu/McuComponent.cpp
     src/plc/PlcRuntime.cpp
     src/protocols/IndustrialProtocols.cpp
+    src/protocols/HartEngine.cpp
     src/fpga/FpgaComponent.cpp
     src/fpga/FpgaPortMapper.cpp
     src/fpga/GhdlBackend.cpp
@@ -385,6 +386,13 @@ add_executable(industrial_protocols_test
 )
 target_include_directories(industrial_protocols_test PRIVATE include src)
 add_test(NAME industrial_protocols COMMAND industrial_protocols_test)
+
+add_executable(hart_engine_test
+    test/core/protocols/HartEngineTest.cpp
+    src/protocols/HartEngine.cpp
+)
+target_include_directories(hart_engine_test PRIVATE include src)
+add_test(NAME hart_engine COMMAND hart_engine_test)
 
 set_tests_properties(python_session PROPERTIES TIMEOUT 30 SKIP_REGULAR_EXPRESSION "PULADO:")
 if(Python3_Interpreter_FOUND)
