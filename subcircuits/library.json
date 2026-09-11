@@ -5,17 +5,149 @@
   "version": "0.1.0",
   "license": "MIT",
   "subcircuits": [
-    { "typeId": "subcircuits.esp32_devkitc_v4", "manifest": "esp32_devkitc_v4.lssubcircuit" },
-    { "typeId": "subcircuits.esp32_wroom32", "manifest": "esp32_wroom32.lssubcircuit" },
-    { "typeId": "subcircuits.process.fopdt", "manifest": "process_fopdt.lssubcircuit" },
-    { "typeId": "subcircuits.tdps.basic_flow_loop", "manifest": "tdps_basic_flow_loop.lssubcircuit" },
-    { "typeId": "subcircuits.tdps.smith_predictor", "manifest": "tdps_smith_predictor.lssubcircuit" },
-    { "typeId": "subcircuits.tdps.split_range", "manifest": "tdps_split_range.lssubcircuit" },
-    { "typeId": "subcircuits.tdps.surge_tank_level", "manifest": "tdps_surge_tank_level.lssubcircuit" },
-    { "typeId": "subcircuits.tdps.heat_exchanger", "manifest": "tdps_heat_exchanger.lssubcircuit" },
-    { "typeId": "subcircuits.tdps.furnace_combustion", "manifest": "tdps_furnace_combustion.lssubcircuit" },
-    { "typeId": "subcircuits.tdps.boiler_drum", "manifest": "tdps_boiler_drum.lssubcircuit" },
-    { "typeId": "subcircuits.tdps.reactor_temperature", "manifest": "tdps_reactor_temperature.lssubcircuit" },
-    { "typeId": "subcircuits.tdps.ph_neutralization", "manifest": "tdps_ph_neutralization.lssubcircuit" }
+    {
+      "typeId": "subcircuits.esp32_devkitc_v4",
+      "manifest": "esp32_devkitc_v4.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.esp32_wroom32",
+      "manifest": "esp32_wroom32.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.process.fopdt",
+      "manifest": "process_fopdt.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.tdps.basic_flow_loop",
+      "manifest": "tdps_basic_flow_loop.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.tdps.smith_predictor",
+      "manifest": "tdps_smith_predictor.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.tdps.split_range",
+      "manifest": "tdps_split_range.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.tdps.surge_tank_level",
+      "manifest": "tdps_surge_tank_level.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.tdps.heat_exchanger",
+      "manifest": "tdps_heat_exchanger.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.tdps.furnace_combustion",
+      "manifest": "tdps_furnace_combustion.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.tdps.boiler_drum",
+      "manifest": "tdps_boiler_drum.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.tdps.reactor_temperature",
+      "manifest": "tdps_reactor_temperature.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.tdps.ph_neutralization",
+      "manifest": "tdps_ph_neutralization.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.control.gain",
+      "manifest": "control_gain.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.control.sum",
+      "manifest": "control_sum.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.control.product",
+      "manifest": "control_product.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.control.pid",
+      "manifest": "control_pid.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.control.integrator",
+      "manifest": "control_integrator.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.control.filtered_derivative",
+      "manifest": "control_filtered_derivative.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.control.unit_delay",
+      "manifest": "control_unit_delay.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.control.dead_time",
+      "manifest": "control_dead_time.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.control.first_order",
+      "manifest": "control_first_order.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.control.second_order",
+      "manifest": "control_second_order.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.control.lead_lag",
+      "manifest": "control_lead_lag.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.control.fopdt",
+      "manifest": "control_fopdt.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.control.transfer_function",
+      "manifest": "control_transfer_function.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.control.tank",
+      "manifest": "control_tank.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.control.valve_characteristic",
+      "manifest": "control_valve_characteristic.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.control.saturation",
+      "manifest": "control_saturation.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.control.deadband",
+      "manifest": "control_deadband.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.control.hysteresis",
+      "manifest": "control_hysteresis.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.control.stiction",
+      "manifest": "control_stiction.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.control.rate_limiter",
+      "manifest": "control_rate_limiter.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.control.limiter",
+      "manifest": "control_limiter.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.control.bias",
+      "manifest": "control_bias.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.control.subtract",
+      "manifest": "control_subtract.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.control.divide",
+      "manifest": "control_divide.lssubcircuit"
+    }
   ]
 }

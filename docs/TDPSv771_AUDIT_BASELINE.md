@@ -35,6 +35,24 @@ por leitura dos registros e equações, não pelo nome do arquivo.
 - O motor de expressões agora é exposto pelo Core como `SignalExpression`, usado
   pelo HART e pelo `control.calc_expression`, mantendo uma única gramática.
 
+Os kernels necessários também estão publicados como 24 subcircuitos reutilizáveis em
+`subcircuits/control_*.lssubcircuit` (PID, ganho, soma, produto, integrador, derivada filtrada,
+atraso unitário/tempo morto, primeira/segunda ordem, lead-lag, FOPDT, função de transferência,
+tanque, característica de válvula, saturação/limitador, banda morta, histerese, stiction e
+limitador de taxa). Todos são registrados em `subcircuits/library.json` e compilados pelo Core para
+os `SignalBlockKind` correspondentes do mesmo `SignalEngine`.
+
+### Referência visual das plantas
+
+Os dez `.lssubcircuit` TDPS convertidos usam o `screen.bmp` completo do exemplo correspondente
+como referência, convertido uma vez para PNG otimizado em `subcircuits/tdps-reference-images/` e
+declarado como `symbol.background`. As imagens são embutidas pelo sanitizador como
+`data:image/png;base64`, portanto continuam funcionando no
+VSIX sem depender do caminho `C:\SourceCode\TDPSv771`. A imagem é somente visual: a funcionalidade
+continua em `components[]`, `topology` e no SignalEngine. Componentes internos não-túnel são
+referenciados por ID em `exposedComponents[]`, permitindo sua projeção/externação sem copiar estado
+ou propriedades. `scripts/apply-tdps-reference-symbols.mjs` reaplica essa associação a cada geração.
+
 ## Regras de trabalho
 
 1. Cada modelo será inventariado com entradas, saídas, parâmetros, estados,

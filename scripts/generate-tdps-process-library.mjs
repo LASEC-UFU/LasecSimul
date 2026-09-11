@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -137,3 +138,8 @@ function buildScenario(scenario) {
 for (const scenario of scenarios) {
   fs.writeFileSync(path.join(outputDir, scenario.file), `${JSON.stringify(buildScenario(scenario), null, 2)}\n`, "utf8");
 }
+
+// A autoria dos modelos continua separada da arte de referência: depois de regenerar os JSONs,
+// reaplica deterministically o screen.bmp completo no símbolo e as projeções exposedComponents.
+// Isto evita que uma futura regeneração volte silenciosamente ao símbolo genérico anterior.
+execFileSync(process.execPath, [path.join(repoRoot, "scripts", "apply-tdps-reference-symbols.mjs")], { stdio: "inherit" });

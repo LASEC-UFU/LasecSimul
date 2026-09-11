@@ -1,0 +1,218 @@
+{
+  "schemaVersion": 3,
+  "typeId": "subcircuits.control.pid",
+  "name": "Controle - PID",
+  "language": "pt-BR",
+  "folderPath": [
+    "Control",
+    "SignalEngine"
+  ],
+  "workspaceSection": "control",
+  "help": {
+    "description": "Bloco PID executado pelo SignalEngine do Core."
+  },
+  "components": [
+    {
+      "id": "sp",
+      "typeId": "connectors.tunnel",
+      "properties": {
+        "name": "sp",
+        "pinId": "sp",
+        "defaultValue": 0
+      },
+      "visual": {
+        "x": 40,
+        "y": 70,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "pv",
+      "typeId": "connectors.tunnel",
+      "properties": {
+        "name": "pv",
+        "pinId": "pv",
+        "defaultValue": 0
+      },
+      "visual": {
+        "x": 40,
+        "y": 125,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "stage",
+      "typeId": "control.pid",
+      "label": "PID",
+      "properties": {
+        "kc": 1,
+        "ti": 10,
+        "td": 0,
+        "bias": 0,
+        "derivativeFilter": 0.1,
+        "outputMin": 0,
+        "outputMax": 100,
+        "action": 1,
+        "derivativeOnPv": true,
+        "initialIntegral": 0,
+        "samplePeriodNs": 10000000
+      },
+      "visual": {
+        "x": 170,
+        "y": 112,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "out-tunnel",
+      "typeId": "connectors.tunnel",
+      "properties": {
+        "name": "out",
+        "pinId": "out"
+      },
+      "visual": {
+        "x": 320,
+        "y": 122,
+        "rotation": 180
+      }
+    }
+  ],
+  "topology": {
+    "revision": 0,
+    "nodes": [],
+    "conductors": [
+      {
+        "id": "wire-in-0",
+        "from": {
+          "kind": "port",
+          "componentId": "sp-tunnel",
+          "pinId": "pin"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "stage",
+          "pinId": "sp"
+        },
+        "points": []
+      },
+      {
+        "id": "wire-in-1",
+        "from": {
+          "kind": "port",
+          "componentId": "pv-tunnel",
+          "pinId": "pin"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "stage",
+          "pinId": "pv"
+        },
+        "points": []
+      },
+      {
+        "id": "wire-out",
+        "from": {
+          "kind": "port",
+          "componentId": "stage",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "out-tunnel",
+          "pinId": "pin"
+        },
+        "points": []
+      }
+    ]
+  },
+  "interface": [
+    {
+      "pinId": "sp",
+      "label": "SP",
+      "internalTunnel": "sp",
+      "domain": "signal",
+      "direction": "in",
+      "valueType": "Real",
+      "width": 1
+    },
+    {
+      "pinId": "pv",
+      "label": "PV",
+      "internalTunnel": "pv",
+      "domain": "signal",
+      "direction": "in",
+      "valueType": "Real",
+      "width": 1
+    },
+    {
+      "pinId": "out",
+      "label": "OUT",
+      "internalTunnel": "out",
+      "domain": "signal",
+      "direction": "out",
+      "valueType": "Real",
+      "width": 1
+    }
+  ],
+  "symbolMode": "generic",
+  "symbol": {
+    "width": 180,
+    "height": 116,
+    "border": true,
+    "shapes": [
+      {
+        "kind": "text",
+        "x": 90,
+        "y": 18,
+        "value": "PID",
+        "fontSize": 10,
+        "textAnchor": "middle",
+        "color": "#111827"
+      }
+    ],
+    "pins": [
+      {
+        "id": "sp",
+        "kind": "ANALOG_IN",
+        "x": 0,
+        "y": 28,
+        "angle": 180,
+        "length": 8,
+        "label": "SP"
+      },
+      {
+        "id": "pv",
+        "kind": "ANALOG_IN",
+        "x": 0,
+        "y": 56,
+        "angle": 180,
+        "length": 8,
+        "label": "PV"
+      },
+      {
+        "id": "out",
+        "kind": "ANALOG_OUT",
+        "x": 180,
+        "y": 56,
+        "angle": 0,
+        "length": 8,
+        "label": "OUT"
+      }
+    ]
+  },
+  "exposedComponents": [
+    {
+      "componentId": "stage",
+      "x": 90,
+      "y": 56,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 0
+    }
+  ],
+  "exportedPropertyComponentIds": [
+    "stage"
+  ]
+}

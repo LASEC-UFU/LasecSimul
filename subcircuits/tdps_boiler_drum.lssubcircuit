@@ -188,37 +188,18 @@
       "unit": "bar"
     }
   ],
-  "symbolMode": "generic",
+  "symbolMode": "custom",
   "symbol": {
-    "width": 150,
-    "height": 118,
+    "width": 640,
+    "height": 360,
     "border": true,
-    "shapes": [
-      {
-        "kind": "text",
-        "x": 75,
-        "y": 34,
-        "value": "BOILER",
-        "fontSize": 11,
-        "textAnchor": "middle",
-        "color": "#111827"
-      },
-      {
-        "kind": "text",
-        "x": 75,
-        "y": 52,
-        "value": "DRUM",
-        "fontSize": 8,
-        "textAnchor": "middle",
-        "color": "#374151"
-      }
-    ],
+    "shapes": [],
     "pins": [
       {
         "id": "firing",
         "kind": "ANALOG_IN",
         "x": 0,
-        "y": 34,
+        "y": 103.72881355932203,
         "angle": 180,
         "length": 8,
         "label": "Queima"
@@ -227,7 +208,7 @@
         "id": "feedwater",
         "kind": "ANALOG_IN",
         "x": 0,
-        "y": 68,
+        "y": 207.45762711864407,
         "angle": 180,
         "length": 8,
         "label": "Agua alimentacao"
@@ -235,15 +216,41 @@
       {
         "id": "pressure",
         "kind": "ANALOG_OUT",
-        "x": 150,
-        "y": 50,
+        "x": 640,
+        "y": 152.54237288135593,
         "angle": 0,
         "length": 8,
         "label": "Pressao"
       }
-    ]
+    ],
+    "background": {
+      "kind": "image",
+      "asset": "tdps-reference-images/tdps_boiler_drum.png",
+      "mime": "image/png"
+    }
   },
-  "exposedComponents": [],
+  "exposedComponents": [
+    {
+      "componentId": "balance",
+      "x": 210,
+      "y": 110,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 0
+    },
+    {
+      "componentId": "plant",
+      "x": 420,
+      "y": 110,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 1
+    }
+  ],
   "exportedPropertyComponentIds": [
     "balance",
     "plant"

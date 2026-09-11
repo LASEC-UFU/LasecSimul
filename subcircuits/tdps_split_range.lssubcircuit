@@ -149,37 +149,18 @@
       "unit": "%"
     }
   ],
-  "symbolMode": "generic",
+  "symbolMode": "custom",
   "symbol": {
-    "width": 150,
-    "height": 90,
+    "width": 640,
+    "height": 480,
     "border": true,
-    "shapes": [
-      {
-        "kind": "text",
-        "x": 75,
-        "y": 34,
-        "value": "SPLIT",
-        "fontSize": 11,
-        "textAnchor": "middle",
-        "color": "#111827"
-      },
-      {
-        "kind": "text",
-        "x": 75,
-        "y": 52,
-        "value": "RANGE",
-        "fontSize": 8,
-        "textAnchor": "middle",
-        "color": "#374151"
-      }
-    ],
+    "shapes": [],
     "pins": [
       {
         "id": "command",
         "kind": "ANALOG_IN",
         "x": 0,
-        "y": 34,
+        "y": 181.33333333333331,
         "angle": 180,
         "length": 8,
         "label": "Comando"
@@ -187,15 +168,41 @@
       {
         "id": "response",
         "kind": "ANALOG_OUT",
-        "x": 150,
-        "y": 50,
+        "x": 640,
+        "y": 266.66666666666663,
         "angle": 0,
         "length": 8,
         "label": "Resposta"
       }
-    ]
+    ],
+    "background": {
+      "kind": "image",
+      "asset": "tdps-reference-images/tdps_split_range.png",
+      "mime": "image/png"
+    }
   },
-  "exposedComponents": [],
+  "exposedComponents": [
+    {
+      "componentId": "balance",
+      "x": 210,
+      "y": 110,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 0
+    },
+    {
+      "componentId": "plant",
+      "x": 420,
+      "y": 110,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 1
+    }
+  ],
   "exportedPropertyComponentIds": [
     "balance",
     "plant"

@@ -1,63 +1,57 @@
 {
   "schemaVersion": 3,
-  "typeId": "subcircuits.process.fopdt",
-  "name": "Processo FOPDT",
+  "typeId": "subcircuits.control.filtered_derivative",
+  "name": "Controle - Derivador filtrado",
   "language": "pt-BR",
   "folderPath": [
-    "Process",
-    "Modelos"
+    "Control",
+    "SignalEngine"
   ],
-  "workspaceSection": "process",
+  "workspaceSection": "control",
   "help": {
-    "description": "Modelo reutilizavel K/(tau*s+1) com tempo morto. Executado como composicao Gain/FirstOrder/DeadTime no Signal Engine."
+    "description": "Bloco Derivador filtrado executado pelo SignalEngine do Core."
   },
   "components": [
     {
-      "id": "input",
+      "id": "in",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "u",
-        "pinId": "u",
+        "name": "in",
+        "pinId": "in",
         "defaultValue": 0
       },
       "visual": {
         "x": 40,
-        "y": 100,
+        "y": 70,
         "rotation": 0
       }
     },
     {
-      "id": "plant",
-      "typeId": "control.process",
+      "id": "stage",
+      "typeId": "control.filtered_derivative",
+      "label": "Derivador filtrado",
       "properties": {
         "gain": 1,
-        "tau1": 1,
-        "tau2": 0,
-        "deadTime": 0.1,
-        "hysteresis": 0,
-        "stiction": 0,
-        "rateLimiter": 0,
-        "actuatorTau": 0,
-        "lead": 0,
-        "lag": 0,
+        "filterTau": 0.01,
+        "initial": 0,
         "samplePeriodNs": 10000000
       },
       "visual": {
-        "x": 180,
-        "y": 100,
+        "x": 170,
+        "y": 85,
         "rotation": 0
       }
     },
     {
-      "id": "output",
+      "id": "out-tunnel",
       "typeId": "connectors.tunnel",
       "properties": {
-        "name": "y",
-        "pinId": "y"
+        "name": "out",
+        "pinId": "out"
       },
       "visual": {
-        "x": 360,
-        "y": 100,
+        "x": 320,
+        "y": 95,
         "rotation": 180
       }
     }
@@ -67,29 +61,29 @@
     "nodes": [],
     "conductors": [
       {
-        "id": "wire-1",
+        "id": "wire-in-0",
         "from": {
           "kind": "port",
-          "componentId": "input",
+          "componentId": "in-tunnel",
           "pinId": "pin"
         },
         "to": {
           "kind": "port",
-          "componentId": "plant",
+          "componentId": "stage",
           "pinId": "in"
         },
         "points": []
       },
       {
-        "id": "wire-2",
+        "id": "wire-out",
         "from": {
           "kind": "port",
-          "componentId": "plant",
+          "componentId": "stage",
           "pinId": "out"
         },
         "to": {
           "kind": "port",
-          "componentId": "output",
+          "componentId": "out-tunnel",
           "pinId": "pin"
         },
         "points": []
@@ -98,61 +92,66 @@
   },
   "interface": [
     {
-      "pinId": "u",
-      "label": "u",
-      "internalTunnel": "u",
+      "pinId": "in",
+      "label": "IN",
+      "internalTunnel": "in",
       "domain": "signal",
       "direction": "in",
       "valueType": "Real",
       "width": 1
     },
     {
-      "pinId": "y",
-      "label": "y",
-      "internalTunnel": "y",
+      "pinId": "out",
+      "label": "OUT",
+      "internalTunnel": "out",
       "domain": "signal",
       "direction": "out",
       "valueType": "Real",
       "width": 1
     }
   ],
-  "symbolMode": "custom",
+  "symbolMode": "generic",
   "symbol": {
-    "width": 640,
-    "height": 480,
+    "width": 180,
+    "height": 88,
     "border": true,
-    "shapes": [],
-    "pins": [
+    "shapes": [
       {
-        "id": "u",
-        "kind": "ANALOG_IN",
-        "x": 0,
-        "y": 240,
-        "angle": 180,
-        "length": 8,
-        "label": "u"
-      },
-      {
-        "id": "y",
-        "kind": "ANALOG_OUT",
-        "x": 640,
-        "y": 240,
-        "angle": 0,
-        "length": 8,
-        "label": "y"
+        "kind": "text",
+        "x": 90,
+        "y": 18,
+        "value": "Derivador filtrado",
+        "fontSize": 10,
+        "textAnchor": "middle",
+        "color": "#111827"
       }
     ],
-    "background": {
-      "kind": "image",
-      "asset": "tdps-reference-images/process_fopdt.png",
-      "mime": "image/png"
-    }
+    "pins": [
+      {
+        "id": "in",
+        "kind": "ANALOG_IN",
+        "x": 0,
+        "y": 28,
+        "angle": 180,
+        "length": 8,
+        "label": "IN"
+      },
+      {
+        "id": "out",
+        "kind": "ANALOG_OUT",
+        "x": 180,
+        "y": 42,
+        "angle": 0,
+        "length": 8,
+        "label": "OUT"
+      }
+    ]
   },
   "exposedComponents": [
     {
-      "componentId": "plant",
-      "x": 180,
-      "y": 100,
+      "componentId": "stage",
+      "x": 90,
+      "y": 42,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -161,6 +160,6 @@
     }
   ],
   "exportedPropertyComponentIds": [
-    "plant"
+    "stage"
   ]
 }

@@ -162,6 +162,66 @@ CompiledProcessSubcircuit ProcessSubcircuitCompiler::compile(
             continue;
         }
 
+        // Blocos de controle publicados como subcircuitos de um único estágio. Eles são apenas
+        // nomes de autoria: o hot path continua sendo o mesmo SignalEngine usado pelos processos
+        // TDPS (nenhum motor paralelo ou busca por string por tick).
+        const auto controlUnary = [&](SignalBlockKind kind, std::vector<double> parameters) {
+            result.graph.blocks.push_back(realBlock(component.id, kind, {"in"}, std::move(parameters), periodNs));
+            ports[component.id].inputs["in"] = {component.id, "in"};
+            ports[component.id].output = {component.id, "out"};
+        };
+        if (component.typeId == "control.gain") { controlUnary(SignalBlockKind::Gain, {number(properties, "gain", 1.0)}); continue; }
+        if (component.typeId == "control.integrator") { controlUnary(SignalBlockKind::Integrator, {number(properties, "gain", 1.0), number(properties, "initial", 0.0)}); continue; }
+        if (component.typeId == "control.filtered_derivative") { controlUnary(SignalBlockKind::FilteredDerivative, {number(properties, "gain", 1.0), number(properties, "filterTau", 0.01), number(properties, "initial", 0.0)}); continue; }
+        if (component.typeId == "control.unit_delay") { controlUnary(SignalBlockKind::UnitDelay, {number(properties, "initial", 0.0)}); continue; }
+        if (component.typeId == "control.dead_time") { controlUnary(SignalBlockKind::DeadTime, {number(properties, "delay", 0.1), number(properties, "initial", 0.0)}); continue; }
+        if (component.typeId == "control.first_order") { controlUnary(SignalBlockKind::FirstOrder, {number(properties, "gain", 1.0), number(properties, "tau", 1.0), number(properties, "initial", 0.0)}); continue; }
+        if (component.typeId == "control.second_order") { controlUnary(SignalBlockKind::SecondOrder, {number(properties, "gain", 1.0), number(properties, "omega", 1.0), number(properties, "zeta", 1.0), number(properties, "initial", 0.0), number(properties, "initialDerivative", 0.0)}); continue; }
+        if (component.typeId == "control.lead_lag") { controlUnary(SignalBlockKind::LeadLag, {number(properties, "gain", 1.0), number(properties, "leadTau", 0.0), number(properties, "lagTau", 1.0), number(properties, "initial", 0.0)}); continue; }
+        if (component.typeId == "control.fopdt") { controlUnary(SignalBlockKind::Fopdt, {number(properties, "gain", 1.0), number(properties, "tau", 1.0), number(properties, "delay", 0.1), number(properties, "initial", 0.0)}); continue; }
+        if (component.typeId == "control.tank") { controlUnary(SignalBlockKind::Tank, {number(properties, "area", 1.0), number(properties, "initial", 0.0)}); continue; }
+        if (component.typeId == "control.valve_characteristic") { controlUnary(SignalBlockKind::ValveCharacteristic, {number(properties, "coefficient", 1.0), number(properties, "exponent", 1.0)}); continue; }
+        if (component.typeId == "control.saturation" || component.typeId == "control.limiter") { controlUnary(component.typeId == "control.limiter" ? SignalBlockKind::Limiter : SignalBlockKind::Saturation, {number(properties, "minimum", 0.0), number(properties, "maximum", 100.0)}); continue; }
+        if (component.typeId == "control.deadband") { controlUnary(SignalBlockKind::Deadband, {number(properties, "width", 0.0)}); continue; }
+        if (component.typeId == "control.hysteresis") { controlUnary(SignalBlockKind::Hysteresis, {number(properties, "low", 0.0), number(properties, "high", 1.0), number(properties, "lowOutput", 0.0), number(properties, "highOutput", 1.0), number(properties, "initial", 0.0)}); continue; }
+        if (component.typeId == "control.stiction") { controlUnary(SignalBlockKind::Stiction, {number(properties, "breakaway", 0.0), number(properties, "slip", 0.0), number(properties, "initial", 0.0)}); continue; }
+        if (component.typeId == "control.rate_limiter") { controlUnary(SignalBlockKind::RateLimiter, {number(properties, "riseRate", 1.0), number(properties, "fallRate", 1.0), number(properties, "initial", 0.0)}); continue; }
+        if (component.typeId == "control.transfer_function") {
+            const std::string model = properties.value("model", std::string("first_order"));
+            if (model == "first_order") { controlUnary(SignalBlockKind::FirstOrder, {number(properties, "gain", 1.0), number(properties, "tau", 1.0), number(properties, "initial", 0.0)}); continue; }
+            if (model == "second_order") { controlUnary(SignalBlockKind::SecondOrder, {number(properties, "gain", 1.0), number(properties, "omega", 1.0), number(properties, "zeta", 1.0), number(properties, "initial", 0.0), number(properties, "initialDerivative", 0.0)}); continue; }
+            if (model == "lead_lag") { controlUnary(SignalBlockKind::LeadLag, {number(properties, "gain", 1.0), number(properties, "leadTau", 0.0), number(properties, "lagTau", 1.0), number(properties, "initial", 0.0)}); continue; }
+            if (model == "fopdt") { controlUnary(SignalBlockKind::Fopdt, {number(properties, "gain", 1.0), number(properties, "tau", 1.0), number(properties, "delay", 0.1), number(properties, "initial", 0.0)}); continue; }
+            throw std::invalid_argument("modelo de funcao de transferencia desconhecido: " + model);
+        }
+        if (component.typeId == "control.sum" || component.typeId == "control.product") {
+            std::vector<std::string> inputIds;
+            if (properties.contains("inputs") && properties["inputs"].is_array())
+                for (const auto& input : properties["inputs"]) if (input.is_string()) inputIds.push_back(input.get<std::string>());
+            if (inputIds.empty()) inputIds = {"in0", "in1"};
+            const auto kind = component.typeId == "control.sum" ? SignalBlockKind::Sum : SignalBlockKind::Product;
+            result.graph.blocks.push_back(realBlock(component.id, kind, inputIds, {}, periodNs));
+            for (const auto& input : inputIds) ports[component.id].inputs[input] = {component.id, input};
+            ports[component.id].output = {component.id, "out"};
+            continue;
+        }
+        if (component.typeId == "control.bias" || component.typeId == "control.subtract" || component.typeId == "control.divide") {
+            std::vector<std::string> inputIds;
+            if (properties.contains("inputs") && properties["inputs"].is_array())
+                for (const auto& input : properties["inputs"]) if (input.is_string()) inputIds.push_back(input.get<std::string>());
+            if (component.typeId == "control.bias") inputIds = {"in"};
+            else if (inputIds.size() < 2) inputIds = {"in0", "in1"};
+            const std::string expression = component.typeId == "control.bias"
+                ? "x0+" + std::to_string(number(properties, "bias", 0.0))
+                : (component.typeId == "control.subtract" ? "x0-x1" : "x0/x1");
+            SignalBlockDefinition calc = realBlock(component.id, SignalBlockKind::CalcExpression, inputIds, {}, periodNs);
+            calc.expression = expression;
+            result.graph.blocks.push_back(std::move(calc));
+            for (const auto& input : inputIds) ports[component.id].inputs[input] = {component.id, input};
+            ports[component.id].output = {component.id, "out"};
+            continue;
+        }
+
         if (component.typeId == "control.process") {
             std::vector<std::string> chain;
             const double hysteresis = number(properties, "hysteresis", 0.0);

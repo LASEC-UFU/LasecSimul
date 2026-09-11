@@ -1,0 +1,212 @@
+{
+  "schemaVersion": 3,
+  "typeId": "subcircuits.control.sum",
+  "name": "Controle - Soma",
+  "language": "pt-BR",
+  "folderPath": [
+    "Control",
+    "SignalEngine"
+  ],
+  "workspaceSection": "control",
+  "help": {
+    "description": "Bloco Soma executado pelo SignalEngine do Core."
+  },
+  "components": [
+    {
+      "id": "in0",
+      "typeId": "connectors.tunnel",
+      "properties": {
+        "name": "in0",
+        "pinId": "in0",
+        "defaultValue": 0
+      },
+      "visual": {
+        "x": 40,
+        "y": 70,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "in1",
+      "typeId": "connectors.tunnel",
+      "properties": {
+        "name": "in1",
+        "pinId": "in1",
+        "defaultValue": 0
+      },
+      "visual": {
+        "x": 40,
+        "y": 125,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "stage",
+      "typeId": "control.sum",
+      "label": "Soma",
+      "properties": {
+        "inputs": [
+          "in0",
+          "in1"
+        ],
+        "samplePeriodNs": 10000000
+      },
+      "visual": {
+        "x": 170,
+        "y": 112,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "out-tunnel",
+      "typeId": "connectors.tunnel",
+      "properties": {
+        "name": "out",
+        "pinId": "out"
+      },
+      "visual": {
+        "x": 320,
+        "y": 122,
+        "rotation": 180
+      }
+    }
+  ],
+  "topology": {
+    "revision": 0,
+    "nodes": [],
+    "conductors": [
+      {
+        "id": "wire-in-0",
+        "from": {
+          "kind": "port",
+          "componentId": "in0-tunnel",
+          "pinId": "pin"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "stage",
+          "pinId": "in0"
+        },
+        "points": []
+      },
+      {
+        "id": "wire-in-1",
+        "from": {
+          "kind": "port",
+          "componentId": "in1-tunnel",
+          "pinId": "pin"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "stage",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "wire-out",
+        "from": {
+          "kind": "port",
+          "componentId": "stage",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "out-tunnel",
+          "pinId": "pin"
+        },
+        "points": []
+      }
+    ]
+  },
+  "interface": [
+    {
+      "pinId": "in0",
+      "label": "A",
+      "internalTunnel": "in0",
+      "domain": "signal",
+      "direction": "in",
+      "valueType": "Real",
+      "width": 1
+    },
+    {
+      "pinId": "in1",
+      "label": "B",
+      "internalTunnel": "in1",
+      "domain": "signal",
+      "direction": "in",
+      "valueType": "Real",
+      "width": 1
+    },
+    {
+      "pinId": "out",
+      "label": "OUT",
+      "internalTunnel": "out",
+      "domain": "signal",
+      "direction": "out",
+      "valueType": "Real",
+      "width": 1
+    }
+  ],
+  "symbolMode": "generic",
+  "symbol": {
+    "width": 180,
+    "height": 116,
+    "border": true,
+    "shapes": [
+      {
+        "kind": "text",
+        "x": 90,
+        "y": 18,
+        "value": "Soma",
+        "fontSize": 10,
+        "textAnchor": "middle",
+        "color": "#111827"
+      }
+    ],
+    "pins": [
+      {
+        "id": "in0",
+        "kind": "ANALOG_IN",
+        "x": 0,
+        "y": 28,
+        "angle": 180,
+        "length": 8,
+        "label": "A"
+      },
+      {
+        "id": "in1",
+        "kind": "ANALOG_IN",
+        "x": 0,
+        "y": 56,
+        "angle": 180,
+        "length": 8,
+        "label": "B"
+      },
+      {
+        "id": "out",
+        "kind": "ANALOG_OUT",
+        "x": 180,
+        "y": 56,
+        "angle": 0,
+        "length": 8,
+        "label": "OUT"
+      }
+    ]
+  },
+  "exposedComponents": [
+    {
+      "componentId": "stage",
+      "x": 90,
+      "y": 56,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 0
+    }
+  ],
+  "exportedPropertyComponentIds": [
+    "stage"
+  ]
+}
