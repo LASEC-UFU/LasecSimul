@@ -114,8 +114,9 @@ HartCommandJson::ParseResult HartCommandJson::parseCommandDefinition(const nlohm
         } else if (kind == "variable") {
             const std::string name = step.value("variable", std::string{});
             const auto varId = parseVarId(name);
-            if (!varId) { result.error = "unknown variable reference \"" + name + "\""; return result; }
-            definition.resp.push_back(HartStatement{HartAppendStmt{HartExpr::var(*varId)}});
+            if (varId) definition.resp.push_back(HartStatement{HartAppendStmt{HartExpr::var(*varId)}});
+            else if (!name.empty()) definition.resp.push_back(HartStatement{HartAppendStmt{HartExpr::userVar(name)}});
+            else { result.error = "empty variable reference"; return result; }
         } else if (kind == "body") {
             definition.resp.push_back(HartStatement{HartAppendStmt{HartExpr::body()}});
         } else if (kind == "bodySlice") {
@@ -181,6 +182,9 @@ nlohmann::json HartCommandJson::toJson(const HartCommandDefinition& definition) 
                 break;
             case HartExpr::Kind::Variable:
                 steps.push_back({{"kind", "variable"}, {"variable", varIdName(append->source.variable)}});
+                break;
+            case HartExpr::Kind::UserVariable:
+                steps.push_back({{"kind", "variable"}, {"variable", append->source.variableId}});
                 break;
             case HartExpr::Kind::RequestBody:
                 steps.push_back({{"kind", "body"}});

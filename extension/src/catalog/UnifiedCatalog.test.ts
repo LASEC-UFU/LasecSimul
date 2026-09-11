@@ -127,6 +127,38 @@ test("catalogo canonico registra PLC, Modbus e HART nas areas visiveis", () => {
   }
 });
 
+// Property Inspector editor-kind coverage gate (section 117/120/134 of the
+// Property Inspector audit): a new device/subcircuit manifest declaring a
+// `propertySchema` entry with an editor string `propertyFieldKindFromEditor`
+// doesn't recognize falls through SILENTLY to a plain text box today --
+// exactly the "looks configured, does nothing right" bug class the audit
+// found once already (`hartCommandsJson`). This only covers catalog entries
+// whose propertySchema is authored STATICALLY (device/subcircuit manifests,
+// loaded here with no Core process) -- built-in Core components (electrical,
+// HART, PLC/Modbus) declare their schema in C++ and are only attached to the
+// catalog at runtime via `attachPropertySchemas()`'s live IPC round trip, out
+// of reach for a Node-only test; those are covered separately, per-component,
+// by Core-side tests (see `hart_engine_test`'s own editor-kind coverage
+// check for `HartCommunicationComponent`).
+const KNOWN_EDITOR_STRINGS = new Set([
+  "text", "number", "checkbox", "switch", "select", "enum", "display", "filepath", "color", "textarea", "textedit",
+]);
+
+test("propertySchema estatico do catalogo real (devices/subcircuitos) so usa editor kinds reconhecidos pelo Property Inspector", () => {
+  const catalog = loadUnifiedCatalog(process.cwd(), "pt-BR").catalog;
+  let checked = 0;
+  for (const entry of catalog) {
+    for (const schema of entry.propertySchema ?? []) {
+      checked++;
+      assert(
+        KNOWN_EDITOR_STRINGS.has(schema.editor.trim().toLowerCase()),
+        `${entry.typeId}.${schema.id}: editor "${schema.editor}" nao esta na lista reconhecida por propertyFieldKindFromEditor -- cairia silenciosamente para texto`
+      );
+    }
+  }
+  assert(checked > 0, "sanity: deveria haver ao menos 1 propertySchema estatico real no catalogo para este teste ter sentido");
+});
+
 console.log(`\nResultado: ${passed} passaram, ${failed} falharam\n`);
 process.exitCode = failed > 0 ? 1 : 0;
 

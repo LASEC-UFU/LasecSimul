@@ -107,6 +107,7 @@ import { newIecProjectCommand } from "./plc/plcCommands";
 import { parseIecProject } from "./plc/iecProject";
 import { readPlcNativeModule } from "./plc/artifact";
 import { maybeOfferMachineNetworkSetup, registerMachineNetworkSetupCommand } from "./network/machineNetworkSetup";
+import { commitDslCommand, commitOpenDslIfPresent, onDslDraftOpenChanged, openDslCommand, registerDslDraftCloseTracking } from "./dsl/dslCommands";
 
 let propertyInspectorView: PropertyInspectorViewProvider | undefined;
 import {
@@ -493,6 +494,7 @@ async function ensureCoreConnected(): Promise<boolean> {
 let startSimulationPreparationPending = false;
 
 async function runSimulationWithFirmwareCheck(): Promise<void> {
+  if (!(await commitOpenDslIfPresent())) return;
   // O comando de teclado/Command Palette obedece à mesma máquina de estados do botão: retomar uma
   // pausa nunca passa pelo carregador de firmware e nunca recria o circuito/QEMU.
   if (state.simulationStatus === "paused") {
@@ -1666,10 +1668,10 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       stopSimulation();
       return;
     case "requestSaveProject":
-      void saveProjectCommand();
+      void commitOpenDslIfPresent().then((ok) => ok ? saveProjectCommand() : undefined);
       return;
     case "requestSaveProjectAs":
-      void saveProjectAsCommand();
+      void commitOpenDslIfPresent().then((ok) => ok ? saveProjectAsCommand() : undefined);
       return;
     case "requestOpenProject":
       if (state.extensionContext) {
@@ -2225,6 +2227,7 @@ async function writeSubcircuitEditingSessionBack(session: SubcircuitEditingSessi
  * `.lsproj`; dentro de "Editar Subcircuito" grava o `.lssubcircuit` atual sem fechar/desempilhar a
  * sessão e estabelece uma nova baseline para o indicador de alterações. */
 async function saveActiveSchematicCommand(): Promise<void> {
+  if (!(await commitOpenDslIfPresent())) return;
   const session = state.subcircuitEditingStack[state.subcircuitEditingStack.length - 1];
   if (!session) {
     await saveProjectCommand();
@@ -2440,6 +2443,14 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
     (componentId, name, value) => state.schematicPanel?.postMessage({ version: 1, type: "inspectorUpdateProperty", componentId, name, value }));
   propertyInspectorView = propertyInspector;
   state.propertyInspectorView = propertyInspector;
+  // While an unapplied "Lasec DSL" text draft is open, IT is the editing
+  // authority (not the Property Inspector) -- see .spec/features/hart-device-engine.md
+  // "Anexo B" sections 108-110. Without this, editing a property here while a
+  // DSL draft sits open would be silently discarded the next time that draft
+  // is applied (`commitDslCommand` replaces state.schematicState wholesale
+  // from the draft text, unaware of any Inspector edit made in the meantime).
+  onDslDraftOpenChanged((open) => propertyInspectorView?.setDslDraftOpen(open));
+  context.subscriptions.push(registerDslDraftCloseTracking());
   context.subscriptions.push(vscode.window.registerWebviewViewProvider("lasecsimul.propertyInspector", propertyInspector, {
     webviewOptions: { retainContextWhenHidden: true },
   }));
@@ -2478,6 +2489,8 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
         .catch((err: unknown) => reportCoreWarning("configurar simulação", err));
     }),
     vscode.commands.registerCommand("lasecsimul.openSchematicEditor", () => openSchematicEditor(context.extensionUri)),
+    vscode.commands.registerCommand("lasecsimul.openDslEditor", () => void openDslCommand()),
+    vscode.commands.registerCommand("lasecsimul.applyDsl", () => void commitDslCommand()),
     vscode.commands.registerCommand("lasecsimul.newSubcircuit", () => triggerCreateSubcircuitFromSelection(state.schematicPanel)),
     vscode.commands.registerCommand("lasecsimul.openSettings", async () => {
       try {

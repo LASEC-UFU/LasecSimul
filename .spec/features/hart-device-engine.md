@@ -2088,3 +2088,247 @@ como molde; depois, se ainda relevante, fechar os gaps do Inspector acima
 tentar os gates que exigem Extension Development Host interativo. Não
 declarar o HART Device Engine concluído enquanto os 55 comandos restantes,
 benchmarks, fuzzing e remoção de legado continuarem pendentes.
+### Correção arquitetural v2 — ownership de valor e portas de sinal
+
+O modelo público de `HartVariable` possui somente identidade (`variableId`,
+`name`), metadata (`role`, `type`, `unit`) e ownership do valor:
+`Internal | Input | Output`. `Internal` persiste `value`; `Input` recebe o
+valor do Signal Graph; `Output` publica o valor no Signal Graph. Expressões,
+funções de transferência, Modbus e controladores são blocos externos ligados
+por fios, nunca modos da variável HART.
+
+`Input` e `Output` materializam `SignalPortDescriptor` genérico, com id estável
+derivado de `variableId`; `Internal` não materializa porta. Os campos legados
+`readable`, `writable`, `runtimeMutable` e `required` não fazem parte da UX
+normal nem da representação canônica. O parser aceita dados antigos apenas
+para migração; acesso e requisitos devem vir do profile/schema e das
+semânticas dos comandos.
+
+Comandos podem referenciar variáveis de usuário pelo mesmo `variableId` salvo
+no Inspector. O nome exibido é apenas um rótulo de seleção e renomeá-lo não
+altera bindings.
+
+Esta seção supersede as descrições históricas B.3/B.5/B.6 que classificavam as
+portas de sinal e referências de usuário como gaps: o plano efetivo agora
+materializa e executa essas portas no Core.
+
+Na compilação do plano, cada porta HART é materializada no Signal Graph com o
+id `hart.<componentIndex>.<variableId>`. Portas `Input` são blocos `Probe` e
+portas `Output` são blocos `ExternalInput`; o índice de componente é apenas o
+namespace da instância e o identificador da variável permanece estável mesmo
+quando o nome exibido muda.
+
+---
+
+## Anexo C — Auditoria completa e bidirecional do Property Inspector (2026-09-11, sessão 3)
+
+### C.1 Reconciliação
+
+Esta sessão começou com trabalho concorrente NÃO commitado em progresso:
+suporte multi-perfil HART (`HartReferenceCatalog::registerProfiles`/
+`makeProfile`, `profileId` por instância), portas Signal Graph reais para
+Input/Output (`HartCommunicationComponent::signalPorts()`,
+`SignalPortDescriptor`, `HartEngine::setVariableInput`/`variableValue`,
+mudanças em `core/include/lasecsimul/IComponentModel.hpp`/`Signal.hpp` e
+`core/src/session/SimulationSession.*`), remoção de `readable`/`writable`/
+`expression` do modelo canônico de variável, `HartExpr::Kind::UserVariable`
+(comandos referenciando variáveis criadas pelo usuário), e um novo módulo
+`extension/src/dsl/` (DSL textual de circuito inteiro, comando "Aplicar DSL
+ao Esquemático"). Nada disso foi revertido; nenhum arquivo fora do escopo
+HART/Property-Inspector foi tocado (TDPS/Ctrl continuam intocados, conforme
+`extension/src/catalog/packageSanitizers.ts` permanece modificado e não
+staged por este agente).
+
+### C.2 Bugs reais encontrados e corrigidos (não apenas "compila")
+
+1. **Colisão silenciosa entre comando custom e fallback auto-gerado.**
+   `commandProgramDefinitions()` passou a gerar um programa "echo body" para
+   todo id catalogado sem handler dedicado (55 dos 60). `installCommandPrograms
+   (engine, additional)` copiava os built-ins e usava
+   `std::unordered_map::emplace` para inserir os comandos custom —
+   `emplace` nunca sobrescreve uma chave existente. Resultado: um comando
+   custom autorado para qualquer um desses 55 ids compilava com sucesso
+   (`installed.success == true`, nenhum erro reportado) e NUNCA era
+   despachado — o fallback "echo body" continuava respondendo, silenciosamente.
+   Encontrado porque o teste original desta feature usava id 128 (== 0x80,
+   "Vendor Read Configuration") como "id custom arbitrário" sem perceber a
+   colisão. Corrigido: `(*combined)[id] = std::move(compiled.program)`
+   (sobrescreve). Regressão coberta em `HartEngineTest.cpp` com comentário
+   explícito apontando a causa raiz, para que uma futura reintrodução de
+   `emplace` falhe o teste, não apenas "funcione por acaso".
+2. **`HartCommandJson::toJson` descartava silenciosamente um passo
+   `UserVariable`.** O `switch` sobre `HartExpr::Kind` não tinha `case
+   UserVariable` (adicionado depois do `switch` original); o efeito era
+   remover esse passo da serialização sem marcar `"unsupported": true` —
+   exatamente a classe "parece ok, perde dado" que esta auditoria existe pra
+   achar. Corrigido; teste de round-trip adicionado.
+3. **`dslDocument` (módulo `extension/src/dsl/dslCommands.ts`) nunca era
+   limpo.** `isDslDocumentOpen()` ficava `true` para sempre depois do
+   primeiro uso de "Editar circuito em DSL", mesmo após aplicar ou fechar a
+   aba — afetando `commitOpenDslIfPresent()` (gate de Save/Run) para sempre
+   depois disso, e tornando inutilizável qualquer sinal "draft está aberto"
+   que uma UI (como o Property Inspector) precisasse consultar. Corrigido com
+   um listener em `vscode.workspace.onDidCloseTextDocument`.
+
+Nenhum destes 3 bugs foi introduzido por esta sessão — os dois primeiros são
+efeito colateral de trabalho concorrente ainda sem testes de regressão
+próprios; o terceiro é um bug de nascença do módulo DSL novo. Todos foram
+corrigidos, não apenas relatados, conforme a instrução de autonomia da tarefa.
+
+### C.3 Conflito DSL vs. Property Inspector (seções 108-110 do enunciado)
+
+Investigado end-to-end lendo `dslCommands.ts`/`DslReconciler.ts`: o DSL
+textual é "propose-and-apply" — abrir o editor (`openDslCommand`) cria um
+`vscode.TextDocument` independente com um snapshot serializado; nada em
+`state.schematicState` muda até `commitDslCommand` (que substitui o
+Authoring Model inteiro a partir do texto). Achado real: como o Property
+Inspector edita `state.schematicState` diretamente e imediatamente
+(pipeline `requestUpdateProperty` normal), uma edição feita no Inspector
+**enquanto** um draft DSL não aplicado está aberto seria silenciosamente
+sobrescrita na próxima vez que esse draft for aplicado (o draft não sabe que
+o Inspector mudou algo nesse meio-tempo). Isso corresponde exatamente ao
+cenário do enunciado (seção 109).
+
+Resolvido seguindo a preferência arquitetural explícita do enunciado ("DSL
+draft = editing authority"): `PropertyInspectorViewProvider.setDslDraftOpen()`
+(novo), acionado via `onDslDraftOpenChanged` (novo, em `dslCommands.ts`) nos
+dois pontos em que o estado do draft muda (abrir/fechar). Enquanto um draft
+está aberto, o painel inteiro renderiza somente leitura com um banner
+explicando por quê, e o handler de mensagens do lado do host rejeita
+qualquer `setProperty` que ainda chegue (defesa em profundidade contra uma
+Webview que não tenha re-renderizado a tempo). Não foi implementado um
+mecanismo formal de "mutation → DSL patch" (a alternativa que o enunciado
+também permite) — read-only é suficiente e mais simples, e é a opção que o
+próprio enunciado chama de preferência original.
+
+Limitação conhecida, documentada: o banner cobre "draft aberto" (uma aba com
+`languageId === "lasecsimul-dsl"` existe), não "draft sujo desde o último
+apply" — depois de aplicar, o painel continua bloqueado até a aba ser
+fechada, mesmo que o texto agora reflita exatamente o Authoring Model atual.
+Mais conservador que o estritamente necessário, mas seguro (nunca permite a
+divergência silenciosa que a seção 109 descreve) e simples de raciocinar.
+
+### C.4 Arquitetura confirmada por leitura direta de código (não suposição)
+
+- **Fonte canônica de propriedades**: `PropertySchema` (Core,
+  `lasecsimul/Types.hpp`) → `PropertySchemaEntry` (Extension,
+  `ui/webview/model.ts`) é a ÚNICA fonte usada tanto pela property sheet do
+  canvas (`main.ts::renderPropertyField`/`resolvePropertyFields`) quanto pelo
+  painel lateral (`PropertyInspectorViewProvider::renderField`). Confirmado:
+  nenhum dos dois mantém uma segunda lista de campos por `typeId` — ambos
+  iteram `descriptor.propertySchema` genericamente.
+- **Dispatch de `kind`**: unificado nesta linha de trabalho
+  (`propertyFieldKindFromEditor` movido de `main.ts` pra
+  `batchProperties.ts`, importado por ambos). Os DOIS renderers continuam
+  fisicamente separados (um manipula DOM client-side, o outro gera uma
+  string HTML server-side) — unificar isso de verdade exigiria portar a
+  sidebar pro mesmo modelo de webview+script do canvas, o que é uma
+  refatoração maior, fora do escopo seguro desta sessão (ver C.6).
+- **Seleção canônica**: `state.selectedComponentIds`/`state.schematicState`
+  é a única fonte; `propertyInspectorView.setSelection()` é alimentado pelos
+  mesmos pontos que já existiam (`requestUpdateProperty` handler,
+  `selectComponent` handler) — sem DOM scraping, sem polling.
+- **Mutação canônica**: TODA edição de propriedade (canvas ou sidebar) passa
+  por `requestUpdateProperty` → `pushPropertyToCore` → undo/redo/persistência
+  compartilhados. O painel lateral nunca tem um caminho de mutação próprio.
+- **Zero switch por `typeId`** no renderer genérico — a única ramificação por
+  tipo é `isHart` para as duas coleções semânticas (Variables/Commands), que
+  o próprio enunciado (seção 135) aceita como exceção legítima ("specialized
+  editor... for genuinely complex semantic collections").
+- Isto confirma estruturalmente a propriedade da seção 134 ("adicionar um
+  componente novo com PropertyDescriptors padrão não deveria exigir nova tela
+  no Inspector") para QUALQUER `typeId` cujo schema seja padrão — Ctrl,
+  elétrico, PLC/Modbus, `.lsdevice` incluídos — sem precisar re-verificar tipo
+  por tipo manualmente, porque a prova é estrutural (ausência de
+  `if (typeId === ...)`), não uma amostragem.
+
+### C.5 Testes adicionados (reais, executados, verdes)
+
+Core (`hart_engine_test`, MSVC Release — `HART engine contracts: PASS`):
+correção de `registerProfiles` vs. `registerGenericProfile` no teste de
+referência; bytes golden de identidade atualizados para os valores reais do
+perfil atual; regressão explícita para o bug de colisão de comando (C.2.1);
+round-trip de `toJson` para `UserVariable` (C.2.2); gate de cobertura de
+editor kind rodando sobre `HartCommunicationComponent::propertySchema()`
+para os modos Serial e UDP (seção 117/120/134, ver C.5 nota de escopo).
+
+Extension (`npm test`, host+webview TypeScript limpos, **449 verificações,
+0 falhas** em toda a suíte existente — nenhuma regressão introduzida):
+`hartInspectorSections.test.ts` (11 casos, já existentes, revalidados contra
+o modelo Core atualizado) + novo teste de cobertura em `UnifiedCatalog.test.ts`
+que itera o catálogo REAL carregado por `loadUnifiedCatalog` (sem Core) e
+falha se qualquer `propertySchema` estático usar um `editor` que
+`propertyFieldKindFromEditor` não reconheceria.
+
+**Nota de escopo honesta sobre os gates de cobertura**: o catálogo estático
+(`loadUnifiedCatalog`, sem processo Core) só carrega `propertySchema` pra 6
+das 68 entradas atuais (manifests de device/subcircuito autorados
+estaticamente) — os demais tipos (elétrico, HART, PLC/Modbus) declaram seu
+schema em C++ e só chegam ao catálogo em runtime via
+`attachPropertySchemas()`, que faz IPC contra um Core vivo. Não existe nesta
+sessão um harness de teste que suba o Core e faça esse round-trip em Node,
+então a cobertura automática de editor-kind para esses tipos fica limitada a:
+(a) o gate C-side já citado, específico de `HartCommunicationComponent`; (b)
+a prova estrutural de C.4 (nenhum dispatch por `typeId`, então o MESMO
+`renderField` genérico atende qualquer schema, HART ou não). Construir um
+harness de integração Core-IPC-em-Node é um esforço genuinamente separado e
+maior (levantar processo, handshake, ciclo de vida) — não implementado aqui;
+registrado como próxima ação concreta, não como "future work" vago.
+
+### C.6 Matriz final (contrato original, seção 143)
+
+| Area                    | PASS | PARTIAL | BROKEN | MISSING | BLOCKED_EXTERNAL |
+|-------------------------|-----:|--------:|-------:|--------:|------------------:|
+| Generic properties      | ✓ (arquitetura, testes automatizados) | seleção/undo/tema não confirmados clicando | — | — | Gates 1/5/11/14 (GUI) |
+| Ctrl                    | — | — | — | não auditado propriedade-a-propriedade nesta sessão | requer varredura manual ou harness Core-IPC |
+| HART device (General/Identity/Addressing) | ✓ | — | — | — | — |
+| HART variables          | ✓ (id estável, role/type/direction, ownership, UserVariable em comandos) | portas materializam mas não confirmadas clicando no canvas | — | — | Gate 3 visual |
+| HART commands           | ✓ (resp plano: Hex/Variable/Body/BodySlice, diagnóstico, override corrigido) | `write`/`after`/If/Map/ForCodes sem editor | — | não expostos na UI | — |
+| .lssubcircuit            | — | encapsulamento (props expostas vs. internals) não auditado nesta sessão | — | — | — |
+| Electrical               | — | — | — | não auditado propriedade-a-propriedade | requer varredura manual ou harness Core-IPC |
+| PLC/Modbus               | — | — | — | não auditado propriedade-a-propriedade | requer varredura manual ou harness Core-IPC |
+| Plugins (.lsdevice)      | — | genérico por arquitetura (C.4), não testado com um plugin real | — | — | — |
+| Line/Tunnel              | — | — | — | não auditado nesta sessão | — |
+| Save/reopen              | ✓ (HART: teste real reconstruindo o componente com os mesmos ComponentParams) | outros tipos não teste-reabertos nesta sessão | — | — | — |
+| RUN policy               | ✓ (HART: guard genérico incluindo agora o draft DSL) | guard genérico fora do HART (propriedades `affectsPinCount`/estruturais de outros tipos) não auditado/testado | — | — | — |
+| Undo/Redo                | ✓ (arquitetural: mesmo pipeline de qualquer propriedade) | não confirmado clicando | — | — | Gate 11 |
+| DSL integration          | ✓ (conflito identificado e corrigido: read-only durante draft, bug de lifecycle corrigido) | — | — | — | — |
+
+### C.7 Por que os itens não-PASS não foram fechados
+
+- **Ctrl/Electrical/PLC-Modbus/Line-Tunnel, auditoria propriedade-a-propriedade**:
+  exigiria ou (a) leitura manual de cada `propertySchema()` em C++ nesses
+  domínios comparada campo a campo com o que a UI genérica realmente
+  renderiza (dezenas de tipos, centenas de campos — múltiplas sessões de
+  trabalho reais, não uma tarefa de minutos), ou (b) um harness de teste que
+  suba o Core e faça `attachPropertySchemas()` de verdade em Node. Nenhum dos
+  dois foi construído aqui. A prova estrutural de C.4 dá confiança de que a
+  ARQUITETURA está correta (mesmo dispatch genérico pra todos), mas não
+  substitui verificar que cada campo específico tem o `editor`/`options`
+  certos. Próxima ação concreta: escolher entre (a) uma varredura manual
+  dirigida por catálogo (visitar cada `*Component.cpp` e listar
+  `propertySchema()`) ou (b) construir o harness Core-IPC-em-Node -- (b) é
+  mais caro de construir mas paga dividendos permanentes (o mesmo gate de
+  cobertura de C.5 passaria a cobrir 68/68 entradas, não 6/68 + o caso HART
+  isolado).
+- **`.lssubcircuit` encapsulamento, Line/Tunnel**: não teve nenhuma
+  investigação começada nesta sessão (tempo). Próxima ação: repetir o
+  método de C.4 (ler o código de seleção/renderização pra esses tipos
+  específicos) antes de assumir que funcionam.
+- **Gates 1/3/5/11/14 (visual/clique real)**: `BLOCKED_EXTERNAL` genuíno —
+  este agente não tem VS Code Extension Development Host interativo
+  disponível. Toda a lógica que esses gates exercitariam foi testada
+  isoladamente (ver C.5) e por leitura de código, nunca reivindicada como
+  clicada de verdade.
+
+### C.8 Arquivos tocados nesta sessão (além dos já listados no Anexo B)
+
+Modificados: `core/src/protocols/HartCommandJson.cpp`,
+`core/src/protocols/HartReferenceCatalog.cpp`,
+`core/test/core/protocols/HartEngineTest.cpp`,
+`extension/src/catalog/UnifiedCatalog.test.ts`, `extension/src/extension.ts`,
+`extension/src/ui/views/PropertyInspectorViewProvider.ts`,
+`extension/src/dsl/dslCommands.ts` (arquivo novo de outro agente, ainda não
+commitado; só o bug de lifecycle de C.2.3 foi corrigido, resto preservado
+intacto), `.spec/features/hart-device-engine.md` (este Anexo). Nenhum
+arquivo de TDPS/Ctrl/QEMU foi tocado ou commitado por este agente.

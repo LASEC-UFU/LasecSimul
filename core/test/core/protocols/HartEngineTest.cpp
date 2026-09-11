@@ -52,8 +52,15 @@ int main() {
               referenceProfile.manufacturerId == 0x3E,
           "generic process_simul-compatible profile");
     HartProfileRegistry referenceRegistry;
-    check(HartReferenceCatalog::registerGenericProfile(referenceRegistry),
-          "reference profile registration");
+    // `makeDevicePlans()` assigns each reference device its own tailored
+    // profile (`lasecsimul.hart.process-simul.<name>`, per-device
+    // manufacturer/deviceType/primaryVariableUnit/upperRangeValue), not the
+    // single shared generic profile -- `registerProfiles()` registers the
+    // generic profile AND all 11 per-device ones; `registerGenericProfile()`
+    // alone is for callers (like `HartCommunicationComponent`'s default
+    // `profileId`) that intentionally want just the shared compatible profile.
+    check(HartReferenceCatalog::registerProfiles(referenceRegistry),
+          "reference profile registration (generic + per-device profiles)");
     const auto referencePlans = HartReferenceCatalog::makeDevicePlans();
     check(referencePlans.size() == 11 &&
               referencePlans.front().pollingAddress == 1 &&
@@ -67,9 +74,11 @@ int main() {
     // Golden vectors for the five commands migrated off the former central
     // switch (FASE 19/72/73 proof gate): FV100CA, bus "hart-1", address 1,
     // manufacturerId=0x3E, deviceType=0x03, uniqueId="029EB1" -> deviceId
-    // {0x02,0x9E,0xB1}, default identity revisions, PV defaults to 0.0.
+    // {0x02,0x9E,0xB1}, identity revisions from HartReferenceCatalog::makeGenericProfile()
+    // (numRequestPreambles=5, universalCommandRevision=5, transmitterSpecificRevision=98,
+    // softwareRevision=3, hardwareRevisionAndSignal=0, flags=6), PV defaults to 0.0.
     {
-        const std::vector<uint8_t> identityBlock{0xFE, 0x3E, 0x03, 0x05, 0x07, 0x01, 0x01, 0x00, 0x00,
+        const std::vector<uint8_t> identityBlock{0xFE, 0x3E, 0x03, 0x05, 0x05, 0x62, 0x03, 0x00, 0x06,
                                                  0x02, 0x9E, 0xB1};
         HartResponseBuilder cmd0(32);
         check(referenceEngine.execute("hart-1", 1, 0x00, {}, cmd0) &&
@@ -169,18 +178,16 @@ int main() {
     HartDevicePlan configuredDevice{"configured", "hart.default", "hart-1", 5,
                                     "configured-id", 0.0,
                                     {{1, true, false, {}}}};
-    configuredDevice.variables.push_back({"PV", "Primary", "V", 2.0, "base * gain", false});
-    configuredDevice.variables.push_back({"base", "Base", "V", 3.0, "", false});
-    configuredDevice.variables.push_back({"gain", "Gain", "", 4.0, "", false});
+    configuredDevice.variables.push_back({"PV", "Primary", "V", 2.0});
     HartEngine configuredEngine(runtimeProfiles);
     check(configuredEngine.loadPlan({{configuredDevice}}), "per-device command configuration loads");
     check(HartReferenceCatalog::installCommandPrograms(configuredEngine), "DSL command programs install (configured engine)");
-    HartResponseBuilder expressionResponse(8);
-    const auto expectedPv = HartTypeCodec::encodeFloat32BE(12.0f); // base(3) * gain(4)
-    check(configuredEngine.execute(5, 1, {}, expressionResponse) && expressionResponse.size() == 5 &&
-              expressionResponse.bytes()[0] == 0x39 &&
-              std::equal(expectedPv.begin(), expectedPv.end(), expressionResponse.bytes().begin() + 1),
-          "HART variable expression uses Core SignalEngine, PV reaches the DSL response byte-exact");
+    HartResponseBuilder configuredRead(8);
+    const auto expectedPv = HartTypeCodec::encodeFloat32BE(2.0f);
+    check(configuredEngine.execute(5, 1, {}, configuredRead) && configuredRead.size() == 5 &&
+              configuredRead.bytes()[0] == 0x39 &&
+              std::equal(expectedPv.begin(), expectedPv.end(), configuredRead.bytes().begin() + 1),
+          "HART Internal variable reaches the DSL response byte-exact");
     check(configuredEngine.setCommandResponse("configured", 1, configuredResponse),
           "per-device static response update");
     HartResponseBuilder configuredResponseOut(4);
@@ -259,23 +266,42 @@ int main() {
         HartResponseBuilder customOut(32);
         // unit(57=0x39) + float32BE(12.5 == 0x41480000) + hex(CAFE) + bodySlice(request[0:2])
         const std::vector<uint8_t> expectedCustom{0x39, 0x41, 0x48, 0x00, 0x00, 0xCA, 0xFE, 0xAA, 0xBB};
+        // Regression: id 128 == 0x80, which IS one of the 60 catalogued
+        // commands ("Vendor Read Configuration") -- `commandProgramDefinitions()`
+        // auto-generates an "echo request body" fallback for every catalogued
+        // id without a hand-written program, so this id collides with that
+        // fallback. If the custom entry ever loses to the fallback again
+        // (e.g. `installCommandPrograms` regresses to `unordered_map::emplace`,
+        // which never overwrites an existing key), this response would be a
+        // verbatim echo of `customRequest` instead of unit+PV+hex+slice --
+        // caught here, not just by `installed.success` (which stays true either
+        // way: the fallback silently wins without ever reporting an error).
         check(jsonEngine.execute("hart-1", 9, 128, customRequest, customOut) &&
                   customOut.size() == expectedCustom.size() &&
                   std::equal(expectedCustom.begin(), expectedCustom.end(), customOut.bytes().begin()),
-              "custom command 128 (variable + hex + bodySlice) executes end to end through the JSON bridge");
+              "custom command 128 (variable + hex + bodySlice) executes end to end, overriding the auto-generated 0x80 fallback");
 
         const nlohmann::json roundTrip = HartCommandJson::toJson(parsedValid.definitions[0]);
         check(roundTrip["id"] == 128 && roundTrip["responseSteps"].size() == 4 &&
                   roundTrip["responseSteps"][2]["kind"] == "hex" && roundTrip["responseSteps"][2]["bytes"] == "CAFE",
               "toJson round-trips the same step sequence the UI would re-render");
 
+        const auto parsedUserVar = HartCommandJson::parseCommandDefinition(
+            nlohmann::json::parse(R"({"id": 202, "responseSteps": [{"kind": "variable", "variable": "DiagnosticX"}]})"));
+        check(parsedUserVar.success, "a user-variable response step parses");
+        const nlohmann::json userVarRoundTrip = HartCommandJson::toJson(parsedUserVar.definition);
+        check(userVarRoundTrip["responseSteps"][0]["kind"] == "variable" &&
+                  userVarRoundTrip["responseSteps"][0]["variable"] == "DiagnosticX" &&
+                  userVarRoundTrip.value("unsupported", false) == false,
+              "toJson round-trips a user-variable step by its stable variableId, not marked unsupported");
+
         check(!HartCommandJson::parseCommandCollection(R"([{"id": 0, "name": "x", "responseSteps": []}])").success,
               "JSON bridge rejects a custom command shadowing a reserved standard id");
         check(!HartCommandJson::parseCommandCollection(R"([{"id": 1, "responseSteps": [{"kind": "hex", "bytes": "ZZ"}]}])").success,
               "JSON bridge rejects invalid hex");
-        check(!HartCommandJson::parseCommandCollection(
-                  R"([{"id": 200, "responseSteps": [{"kind": "variable", "variable": "NotARealVariable"}]}])").success,
-              "JSON bridge rejects an unknown variable reference");
+        check(HartCommandJson::parseCommandCollection(
+                  R"([{"id": 200, "responseSteps": [{"kind": "variable", "variable": "UserVariable"}]}])").success,
+              "JSON bridge accepts a user-variable reference by stable variableId");
         check(!HartCommandJson::parseCommandCollection(
                   R"([{"id": 201, "responseSteps": []}, {"id": 201, "responseSteps": []}])").success,
               "JSON bridge rejects duplicate command ids within one collection");
@@ -309,9 +335,9 @@ int main() {
         params.properties["pollingAddress"] = 7.0;
         params.properties["enabled"] = true;
         params.properties["hartVariablesJson"] = std::string(
-            R"([{"id":"PV","name":"Process Value","role":"PV","type":"Float32","direction":"Internal","value":42.5,"readable":true,"writable":false}])");
+            R"([{"id":"PV","name":"Process Value","role":"PV","type":"Float32","direction":"Internal","value":42.5},{"id":"DiagnosticX","name":"Diagnostic X","type":"Float32","direction":"Internal","value":7.0}])");
         params.properties["hartCommandsJson"] = std::string(
-            R"([{"id":150,"name":"Echo Tag","responseSteps":[{"kind":"variable","variable":"Tag"}]}])");
+            R"([{"id":150,"name":"Echo Tag","responseSteps":[{"kind":"variable","variable":"Tag"}]},{"id":151,"name":"Diagnostic X","responseSteps":[{"kind":"variable","variable":"DiagnosticX"}]}])");
 
         HartCommunicationComponent component(HartCommunicationComponent::Mode::Serial, scheduler, params);
         auto findValue = [&component](const char* id) -> lasecsimul::PropertyValue {
@@ -343,6 +369,17 @@ int main() {
               "component: custom command 150 (Variable Tag) dispatches through the JSON bridge");
         check(HartTypeCodec::decodePackedAscii(customResponse.payload).substr(0, 5) == "PT101",
               "component: saved \"tag\" property (not just plan.id) reaches command 0x0B/custom Tag references (persistence bug fixed)");
+        HartFrame userVariableRequest{7, 151, {}};
+        HartResponseBuilder userVariableWire(16);
+        check(HartFrameCodec::encode(userVariableRequest, userVariableWire), "component test: encode user-variable command");
+        HartResponseBuilder userVariableResponseWire(16);
+        check(component.transact(userVariableWire.bytes(), userVariableResponseWire),
+              "component transacts a command bound to a user-created variable");
+        HartFrame userVariableResponse;
+        const auto expectedDiagnostic = HartTypeCodec::encodeFloat32BE(7.0f);
+        check(HartFrameCodec::decode(userVariableResponseWire.bytes(), userVariableResponse) &&
+                  std::equal(expectedDiagnostic.begin(), expectedDiagnostic.end(), userVariableResponse.payload.begin()),
+              "component: command 151 reads DiagnosticX by variableId");
 
         // Simulate a project reopen: a FRESH instance built from the exact same
         // saved properties must behave identically, not reset to defaults.
@@ -353,6 +390,27 @@ int main() {
         check(HartFrameCodec::decode(reopenedWire.bytes(), reopenedResponse) &&
                   std::equal(expectedPv.begin(), expectedPv.end(), reopenedResponse.payload.begin() + 1),
               "reopened component: same saved PV value, not reset to 0.0 (persistence round-trip)");
+
+        // Property Inspector editor-kind coverage gate (section 117/120/134 of
+        // the Property Inspector audit): every PropertySchema this component
+        // declares must use an `editor` string `propertyFieldKindFromEditor`
+        // (extension/src/ui/webview/batchProperties.ts) actually maps to a
+        // supported widget. A schema added later with an unrecognized editor
+        // string would otherwise fall through to a plain text box SILENTLY
+        // (exactly the "compiles, looks fine, does nothing right" class of bug
+        // this audit was written to catch) -- this fails loudly instead.
+        static const std::vector<std::string> kKnownEditors{
+            "text", "number", "checkbox", "switch", "select", "enum", "display", "filepath", "color", "textarea", "textedit"};
+        for (const auto& schema : HartCommunicationComponent::propertySchema(HartCommunicationComponent::Mode::Serial)) {
+            const bool known = std::find(kKnownEditors.begin(), kKnownEditors.end(), schema.editor) != kKnownEditors.end();
+            check(known, ("HART property \"" + schema.id + "\" uses an editor kind (\"" + schema.editor +
+                         "\") the Property Inspector does not recognize").c_str());
+        }
+        for (const auto& schema : HartCommunicationComponent::propertySchema(HartCommunicationComponent::Mode::Udp)) {
+            const bool known = std::find(kKnownEditors.begin(), kKnownEditors.end(), schema.editor) != kKnownEditors.end();
+            check(known, ("HART property \"" + schema.id + "\" uses an editor kind (\"" + schema.editor +
+                         "\") the Property Inspector does not recognize").c_str());
+        }
     }
 
     // Direct DSL primitive characterization (not a real HART command): proves

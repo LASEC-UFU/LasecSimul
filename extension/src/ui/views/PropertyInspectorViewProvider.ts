@@ -37,6 +37,7 @@ export class PropertyInspectorViewProvider implements vscode.WebviewViewProvider
   private component?: WebviewComponentModel;
   private catalog: WebviewComponentCatalogEntry[] = [];
   private simulationStatus: SimulationStatus = "stopped";
+  private dslDraftOpen = false;
 
   constructor(private readonly extensionUri: vscode.Uri, catalog: WebviewComponentCatalogEntry[],
               private readonly forwardMutation: (componentId: string, name: string, value: string | number | boolean) => void) {
@@ -50,19 +51,33 @@ export class PropertyInspectorViewProvider implements vscode.WebviewViewProvider
    * (HART-FR-021, section 20). */
   setSimulationStatus(status: SimulationStatus): void { this.simulationStatus = status; void this.render(); }
 
+  /** While an unapplied "Lasec DSL" text draft is open, it -- not this panel
+   * -- is the editing authority (Anexo B sections 108-110): an Inspector edit
+   * made in the meantime would be silently discarded the next time the draft
+   * is applied, since `commitDslCommand` replaces the whole Authoring Model
+   * from the draft text with no knowledge of any concurrent Inspector edit.
+   * Rather than let two surfaces both look editable with values that can
+   * silently diverge, this panel goes fully read-only until the draft closes
+   * or is applied. */
+  setDslDraftOpen(open: boolean): void { this.dslDraftOpen = open; void this.render(); }
+
   resolveWebviewView(view: vscode.WebviewView): void | Thenable<void> {
     this.view = view;
     view.webview.options = { enableScripts: true, localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, "out")] };
     view.webview.onDidReceiveMessage((message: InspectorMessage) => {
-      if (message.type === "setProperty" && this.component) this.forwardMutation(this.component.id, message.name, message.value);
+      // Defense in depth: the rendered HTML already omits/disables every
+      // input while a DSL draft is open, but a message that slips through
+      // anyway (e.g. a stale webview that hasn't re-rendered yet) must still
+      // never reach the Authoring Model.
+      if (message.type === "setProperty" && this.component && !this.dslDraftOpen) this.forwardMutation(this.component.id, message.name, message.value);
     });
     return this.render();
   }
 
-  private renderField(schema: PropertySchemaEntry, value: string | number | boolean): string {
+  private renderField(schema: PropertySchemaEntry, value: string | number | boolean, forceReadOnly: boolean): string {
     const kind = propertyFieldKindFromEditor(schema.editor);
     const label = `<span>${escapeAttr(schema.label || schema.id)}</span>`;
-    if (kind === "readonly") {
+    if (kind === "readonly" || forceReadOnly) {
       return `<label class="ro">${label}<div class="ro-value">${escapeAttr(String(value ?? ""))}</div></label>`;
     }
     if (kind === "boolean") {
@@ -97,27 +112,35 @@ export class PropertyInspectorViewProvider implements vscode.WebviewViewProvider
       byGroup.get(group)!.push(schema);
     }
     const generalSections = groupOrder.map((group) => {
-      const fieldsHtml = byGroup.get(group)!.map((schema) => this.renderField(schema, values[schema.id] ?? schema.default)).join("");
+      const fieldsHtml = byGroup.get(group)!.map((schema) => this.renderField(schema, values[schema.id] ?? schema.default, this.dslDraftOpen)).join("");
       const title = GROUP_DISPLAY_NAMES[group] ?? group;
       return `<section><h3>${escapeAttr(title)}</h3>${fieldsHtml}</section>`;
     }).join("");
 
     let hartHtml = "";
     if (isHart) {
-      const structuralEditsLocked = this.simulationStatus !== "stopped";
+      const structuralEditsLocked = this.dslDraftOpen || this.simulationStatus !== "stopped";
       const variableRows = parseVariableRows(String(values.hartVariablesJson ?? "[]"));
       const commandRows = parseCommandRows(String(values.hartCommandsJson ?? "[]"));
       const commandsStatus = String(values.hartCommandsStatus ?? "OK");
       const variablesStatus = String(values.hartVariablesStatus ?? "OK");
       hartHtml = renderVariablesSection(variableRows, { structuralEditsLocked }) +
-        renderCommandsSection(commandRows, commandsStatus, { structuralEditsLocked }) +
+        renderCommandsSection(commandRows, commandsStatus, { structuralEditsLocked }, variableRows) +
         (variablesStatus.trim().toUpperCase() !== "OK"
           ? `<section><h3>Diagnostics</h3><div class="hc-status err">Variables: &#10007; ${escapeAttr(variablesStatus)}</div></section>`
           : "");
-      if (structuralEditsLocked) {
-        hartHtml = `<div class="run-note">Simulation is ${escapeAttr(this.simulationStatus)}: structural edits (add/remove, id, direction, type) are disabled. Runtime-mutable values can still be edited.</div>` + hartHtml;
+      if (structuralEditsLocked && !this.dslDraftOpen) {
+        hartHtml = `<div class="run-note">Simulation is ${escapeAttr(this.simulationStatus)}: structural edits and variable values are disabled.</div>` + hartHtml;
       }
     }
+
+    // A DSL draft, once open, is the editing authority until applied or
+    // closed (Anexo B sections 108-110) -- one banner covers every component
+    // type, not just HART, since the whole Authoring Model is at stake, not
+    // just this one component's properties.
+    const dslBanner = this.dslDraftOpen
+      ? `<div class="run-note">A DSL draft is open ("LasecSimul: Editar circuito em DSL"). It is the current editing authority: this panel is read-only until you apply it ("LasecSimul: Aplicar DSL ao Esquemático") or close the draft, so an edit here can never be silently overwritten by the draft.</div>`
+      : "";
 
     this.view.webview.html = `<!doctype html><html><head><meta charset="utf-8"><style>
       body{font:var(--vscode-font-size) var(--vscode-font-family);color:var(--vscode-foreground);padding:10px}
@@ -145,7 +168,7 @@ export class PropertyInspectorViewProvider implements vscode.WebviewViewProvider
       .run-note{font-size:11px;opacity:.85;background:var(--vscode-inputValidation-warningBackground);border:1px solid var(--vscode-inputValidation-warningBorder);padding:6px;border-radius:4px;margin-bottom:8px}
       button{font-size:10px}
     </style></head><body>
-      <h2>Properties</h2>${c
+      <h2>Properties</h2>${dslBanner}${c
         ? `<div><strong>${escapeAttr(c.label || c.typeId)}</strong><small> &middot; ${escapeAttr(c.typeId)}</small></div>${generalSections || `<div class="empty">No editable properties.</div>`}${hartHtml}`
         : `<div class="empty">No component selected.<br><br>Select a component in the workspace.</div>`}
       <script>

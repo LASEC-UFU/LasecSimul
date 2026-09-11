@@ -1,5 +1,67 @@
 # NEXT ACTION
 
+## FEAT-013 Property Inspector — full bidirectional audit, 3 more real bugs fixed, scope of what's left is now explicit (2026-09-11)
+
+Result: **IN_PROGRESS — audit method proven (finds real silent-failure bugs,
+not just "compiles"), HART + generic architecture genuinely solid and
+tested, most non-HART domains honestly still unaudited.**
+
+This continued directly from the entry below, which itself found and fixed
+2 real bugs. This pass found 3 MORE, on top of substantial concurrent,
+uncommitted work found in-flight on the same files (multi-profile HART,
+real Signal Graph Input/Output ports, `HartExpr::UserVariable`, and a new
+`extension/src/dsl/` whole-circuit textual DSL module) — none of it
+reverted:
+
+1. `HartReferenceCatalog::installCommandPrograms(engine, additional)` used
+   `unordered_map::emplace`, which silently refuses to overwrite a key that
+   already exists — since a fallback program now auto-generates for all 60
+   catalogued command ids, a custom command reusing any of the 55
+   non-fully-modeled ids compiled successfully and reported `success: true`
+   but never actually dispatched (the fallback kept answering). Fixed to
+   `operator[]`.
+2. `HartCommandJson::toJson()` silently dropped a `UserVariable` response
+   step instead of marking it unsupported (missing switch case).
+3. `extension/src/dsl/dslCommands.ts`'s `dslDocument` was never cleared on
+   close, so `isDslDocumentOpen()` stayed `true` forever after first use —
+   a real lifecycle bug in the new DSL module, unrelated to but discovered
+   while investigating the DSL-vs-Property-Inspector conflict this audit's
+   task explicitly asked about.
+
+That conflict itself (an Inspector edit silently overwritten when an
+unapplied DSL draft is later applied) is real and is now closed: the
+Inspector goes fully read-only (banner + server-side rejection) while a DSL
+draft is open, matching the architecture's own stated preference ("DSL
+draft = editing authority").
+
+All fixes covered by new regression tests. `hart_engine_test` (Core, MSVC
+Release): PASS. `npm test` (Extension): **449/449, zero regressions** across
+the entire existing suite, not just the HART-related subset. Two new
+catalog-driven editor-kind coverage gates added (one Core-side over
+`HartCommunicationComponent::propertySchema()`, one Node-side over the real
+static catalog via `loadUnifiedCatalog`) so a future schema with an
+unrecognized `editor` string fails a test instead of silently falling back
+to a plain text box.
+
+**What this pass did NOT do, honestly**: a property-by-property audit of
+Ctrl blocks, electrical components, PLC/Modbus, `.lsdevice` plugins, and
+Line/Tunnel. Structural code reading (no `if (typeId === ...)` branches in
+either property-sheet renderer except the one justified HART-collections
+exception) gives real confidence the *architecture* generalizes correctly to
+those types, but that's not the same as verifying each type's actual fields
+render/persist/reopen correctly — that would need either a large manual
+sweep or a Core-IPC-in-Node integration test harness (`attachPropertySchemas()`
+equivalent outside a live VS Code host), neither of which exists yet. Full
+PASS/PARTIAL/MISSING/BLOCKED_EXTERNAL matrix with per-item reasoning is in
+`.spec/features/hart-device-engine.md` "Anexo C" — do not read a "PASS" on
+HART as a blanket "Property Inspector is done."
+
+Next exact action: pick one of (a) the manual per-domain property sweep
+(Ctrl first — it has the most block types), or (b) build the Core-IPC test
+harness so the existing coverage-gate pattern extends to all 68 catalog
+entries instead of 6+HART. Either is legitimate; do not declare the
+Property Inspector complete without doing at least one.
+
 ## FEAT-013 Property Inspector — audited and wired end-to-end, two real bugs fixed, still partial (2026-09-11)
 
 Result: **IN_PROGRESS — Property Inspector Variables/Commands editors now

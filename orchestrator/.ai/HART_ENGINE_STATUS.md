@@ -1,8 +1,50 @@
 # HART engine implementation status
 
-Last updated: 2026-09-11 (Property Inspector)
+Last updated: 2026-09-11 (Property Inspector full audit)
 
-## 2026-09-11 — Property Inspector: audited, wired end-to-end, two real pre-existing bugs fixed
+## 2026-09-11 — Property Inspector: full bidirectional audit, 3 more real bugs found and fixed
+
+Picked up mid-flight, concurrent, uncommitted work on the same files
+(multi-profile HART support, real Signal Graph ports for Input/Output,
+`HartExpr::Kind::UserVariable`, and a new whole-circuit textual DSL module
+`extension/src/dsl/`). None of it was reverted. A systematic audit (not
+"it compiles, ship it") found and fixed 3 more real bugs on top of that
+work, all with regression tests, all green (`hart_engine_test` PASS,
+`npm test` 449/449 across the whole extension suite, zero regressions):
+
+1. `HartReferenceCatalog::installCommandPrograms(engine, additional)` used
+   `unordered_map::emplace` to merge custom commands into the built-ins.
+   Since `commandProgramDefinitions()` now auto-generates an "echo body"
+   fallback for all 60 catalogued ids, `emplace` silently refused to
+   overwrite that fallback for any custom command reusing one of those 55
+   ids — it compiled, reported success, and never actually dispatched. Fixed
+   to `operator[]` (overwrite).
+2. `HartCommandJson::toJson()`'s switch over `HartExpr::Kind` was missing a
+   case for the newly-added `UserVariable` kind, silently dropping that
+   response step from the serialized JSON instead of marking it unsupported.
+3. `extension/src/dsl/dslCommands.ts`'s `dslDocument` was never cleared,
+   so `isDslDocumentOpen()` stayed `true` forever after the first use of
+   "Editar circuito em DSL" — permanently affecting the Save/Run commit gate
+   and making the flag useless for anything that needed to know whether a
+   draft was *currently* open. Fixed with a `onDidCloseTextDocument` listener.
+
+Also investigated and resolved the DSL-vs-Inspector editing-authority
+conflict explicitly raised by this audit: while an unapplied DSL draft is
+open, `PropertyInspectorViewProvider` now goes fully read-only (banner +
+server-side mutation rejection) rather than risk a silent edit being
+overwritten when the draft is applied.
+
+Full matrix (PASS/PARTIAL/MISSING/BLOCKED_EXTERNAL per domain: Ctrl,
+electrical, PLC/Modbus, plugins, Line/Tunnel, `.lssubcircuit`, save/reopen,
+RUN policy, undo/redo, DSL integration) with honest reasoning for every
+non-PASS item is in `.spec/features/hart-device-engine.md` "Anexo C". Short
+version: HART variables/commands and the generic architecture are
+genuinely solid and tested; a property-by-property audit of Ctrl/electrical/
+PLC-Modbus/plugins/Line-Tunnel was NOT done this session (would need either
+a large manual sweep or a Core-IPC-in-Node test harness this session didn't
+build) and stays open, honestly, rather than claimed by extrapolation.
+
+## 2026-09-11 (earlier) — Property Inspector: audited, wired end-to-end, two real pre-existing bugs fixed
 
 The previous entry (below) left the DSL tested only in isolation
 (`hart_engine_test`) -- it was never actually reachable from

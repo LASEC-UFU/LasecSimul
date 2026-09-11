@@ -127,7 +127,31 @@ HartDeviceProfile HartReferenceCatalog::makeGenericProfile() {
     profile.manufacturerId = 0x3E;
     profile.deviceType = 0x03;
     profile.commands = commandDescriptors();
+    profile.identity = {0x05, 0x05, 0x62, 0x03, 0x00, 0x06};
     return profile;
+}
+
+HartDeviceProfile HartReferenceCatalog::makeProfile(const HartReferenceDeviceDefinition& definition) {
+    HartDeviceProfile profile = makeGenericProfile();
+    profile.id = "lasecsimul.hart.process-simul." + std::string(definition.name);
+    profile.manufacturerId = definition.manufacturerId;
+    profile.deviceType = definition.deviceType;
+    profile.primaryVariableUnit = 57;
+    profile.upperRangeValue = 100.0f;
+    if (definition.name == "FIT100CA" || definition.name == "FIT100AR" || definition.name == "FIT100V" || definition.name == "FIT100A") {
+        profile.primaryVariableUnit = 240; profile.upperRangeValue = 2000.0f;
+    } else if (definition.name == "TIT100") {
+        profile.primaryVariableUnit = 53; profile.upperRangeValue = 150.0f;
+    } else if (definition.name == "PIT100V" || definition.name == "PIT100A") {
+        profile.primaryVariableUnit = 192; profile.upperRangeValue = 16.0f;
+    }
+    return profile;
+}
+
+bool HartReferenceCatalog::registerProfiles(HartProfileRegistry& registry) {
+    bool ok = registerGenericProfile(registry);
+    for (const auto& definition : deviceDefinitions()) ok = registry.registerProfile(makeProfile(definition)) && ok;
+    return ok;
 }
 
 bool HartReferenceCatalog::registerGenericProfile(HartProfileRegistry& registry) {
@@ -140,7 +164,7 @@ std::vector<HartDevicePlan> HartReferenceCatalog::makeDevicePlans(std::string_vi
     result.reserve(definitions.size());
     for (const HartReferenceDeviceDefinition& definition : definitions) {
         HartDevicePlan plan{std::string(definition.name),
-                           "lasecsimul.hart.process-simul-compatible",
+                           "lasecsimul.hart.process-simul." + std::string(definition.name),
                            std::string(bus), definition.pollingAddress,
                            std::string(definition.uniqueId), 0.0};
         plan.tag = std::string(definition.tag);
@@ -253,6 +277,21 @@ std::vector<HartCommandDefinition> HartReferenceCatalog::commandProgramDefinitio
         commands.push_back(std::move(cmd));
     }
 
+    // The reference transmitter exposes the complete command union. Commands
+    // without a device-specific transform remain explicit primitive programs:
+    // the request body is echoed, which is deterministic and keeps all
+    // supported IDs on the compiled path (no native switch/handler fallback).
+    const auto descriptors = commandDescriptors();
+    for (const auto& descriptor : descriptors) {
+        const bool already = std::any_of(commands.begin(), commands.end(), [&](const auto& c) { return c.id == descriptor.id; });
+        if (already) continue;
+        HartCommandDefinition cmd;
+        cmd.id = descriptor.id;
+        cmd.name = descriptor.name + " (compiled primitive)";
+        cmd.resp = {HartStatement{HartAppendStmt{HartExpr::body()}}};
+        commands.push_back(std::move(cmd));
+    }
+
     return commands;
 }
 
@@ -275,8 +314,17 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<std::unordered_map<HartC
         const std::string_view tagSource = plan.tag.empty() ? std::string_view(plan.id) : std::string_view(plan.tag);
         const std::vector<uint8_t> packedTag = HartTypeCodec::encodePackedAscii(tagSource, 8);
         std::copy_n(packedTag.begin(), std::min(packedTag.size(), vars.tagPacked.size()), vars.tagPacked.begin());
-        vars.primaryVariableUnit = 57; // percent; no per-device unit authoring yet
+        vars.primaryVariableUnit = profile.primaryVariableUnit;
         vars.primaryVariable = static_cast<float>(primaryValue);
+        std::vector<HartExecutionVariables::UserVariable> userVariables;
+        userVariables.reserve(plan.variables.size());
+        for (size_t i = 0; i < plan.variables.size(); ++i) {
+            const auto& variable = plan.variables[i];
+            const double value = (variable.id == "PV" || variable.id == "primary")
+                ? primaryValue : variable.value;
+            userVariables.push_back({variable.id, value, variable.type});
+        }
+        vars.userVariables = userVariables;
         return HartCommandExecutor::execute(it->second, vars, request, response);
     };
 }
@@ -312,7 +360,20 @@ HartReferenceCatalog::InstallResult HartReferenceCatalog::installCommandPrograms
             engine.setCommandProgramHook(makeHook(builtins));
             return {false, "command \"" + name + "\": " + compiled.error};
         }
-        combined->emplace(compiled.program.definition.id, std::move(compiled.program));
+        // operator[] assignment, not emplace: `builtins` (copied into `combined`
+        // above) now includes an auto-generated "echo body" placeholder program
+        // for every standard/vendor id not among the 5 fully-modeled commands
+        // (see the fallback loop at the end of `commandProgramDefinitions()`).
+        // `emplace` silently refuses to overwrite an existing key, so a custom
+        // command authored for one of those 55 placeholder ids would compile
+        // successfully, report `installed.success == true`, and then never
+        // actually dispatch -- a real device runtime effect being silently
+        // discarded, exactly the "hartCommandsJson had zero effect" bug class
+        // this Property Inspector audit was written to find. The 5 fully
+        // modeled commands (0x00/0x01/0x03/0x0B/0x21) can never collide here:
+        // `HartCommandJson::isReservedStandardCommandId` rejects authoring a
+        // custom command under those ids before we ever reach this point.
+        (*combined)[compiled.program.definition.id] = std::move(compiled.program);
     }
     engine.setCommandProgramHook(makeHook(combined));
     return {true, {}};
