@@ -1,8 +1,43 @@
 # HART engine implementation status
 
-Last updated: 2026-09-11 (HCF_SPEC-99 normative classifier)
+Last updated: 2026-09-11 (StandardCore expansion blocked by spec access; write-persistence fix)
 
-## 2026-09-11 — HCF_SPEC-99 normative command classifier, fake echo-fallback removed
+## 2026-09-11 — Official HART specs inaccessible (HTTP 403, confirmed); write-persistence bug found+fixed; 6 more Universal commands
+
+A task asked for full StandardCore C++ coverage of every HART-standardized
+command (Universal/Common Practice/WirelessHART/Device Family/Discrete —
+hundreds of IDs), citing an attached ZIP of official HCF_SPEC PDFs and
+requiring the current FieldComm Group revision when the ZIP was outdated.
+**The ZIP does not exist anywhere in this repo or machine** (verified by
+exhaustive search), and `https://library.fieldcommgroup.org/20127/TS20127/`
+returns **HTTP 403 Forbidden** (verified via WebFetch) — these are
+member-only controlled documents, not publicly readable. Per the task's
+own rule, request/response bytes were not guessed for anything lacking a
+real source; ~250 of the ~260 requested commands are explicitly marked
+`SPEC_CURRENT_SOURCE_REQUIRED` rather than faked.
+
+What WAS implemented, corroborated against the same PACTware reference
+this project has used since session 1 (stable, unchanged since HART 5):
+Universal Commands 12/17 (Message), 13/18 (Tag/Descriptor/Date), 16/19
+(Final Assembly Number) — 6 more Universal commands with real bodies,
+golden tests, and persistence proof.
+
+Building these surfaced a real architecture bug: no HART write command
+had ever persisted its effect (`HartCommandExecutor::execute` mutated a
+throwaway copy; `HartEngine::CommandProgramHook` took a `const` plan
+reference). Fixed generically — `execute()` now takes variables by
+reference, the hook takes a mutable plan, and `HartEngine::execute()`
+copies the mutation back to the real device only on success (atomic).
+Also had to guard against a subtler bug this fix could have introduced:
+without a before/after byte comparison, ANY command dispatch (even an
+unrelated read) would have silently re-canonicalized the tag on every
+call — caught by a dedicated regression test before it shipped.
+
+`hart_engine_test`: PASS. `npm test`: 459/459 (untouched this session).
+Full writeup, corrected counts, and exact next actions in
+`.spec/features/hart-device-engine.md` "Anexo F".
+
+## 2026-09-11 — HCF_SPEC-99 normative command classifier, fake echo-fallback removed (earlier this day)
 
 A new task, citing HCF_SPEC-99/HCF_SPEC-151 explicitly, demanded a
 "who-defines-semantics" architecture: HART-standardized command numbers are

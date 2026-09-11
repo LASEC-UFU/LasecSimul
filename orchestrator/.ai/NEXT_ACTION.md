@@ -1,6 +1,65 @@
 # NEXT ACTION
 
-## FEAT-013 HCF_SPEC-99 normative command classifier, fake echo-fallback removed (2026-09-11)
+## FEAT-013 StandardCore expansion: blocked by real spec-access wall, write-persistence fixed, 6 more Universal commands (2026-09-11)
+
+Result: **BLOCKED_EXTERNAL for the bulk of the request, IN_PROGRESS for the
+rest — full StandardCore coverage of Common Practice/WirelessHART/Device
+Family/Discrete (~250 commands) cannot proceed without member access to
+the FieldComm Group spec library (confirmed HTTP 403 via WebFetch this
+session, not an assumption) or user-supplied PDFs. Universal commands
+12/13/16/17/18/19 were implemented for real, and a genuine write-
+persistence architecture bug (no HART write command ever persisted
+anything) was found and fixed.**
+
+The task cited an attached ZIP of official HCF_SPEC PDFs (spec099, 127,
+151, 155, 160.x, 285, 307, ...) that does not exist anywhere in this repo
+or machine (verified by exhaustive `find`), and demanded the current
+FieldComm Group revision be fetched online otherwise. Tried
+`https://library.fieldcommgroup.org/20127/TS20127/` directly — **403
+Forbidden**, confirmed member-only. Per the task's own explicit rule ("do
+not deduce request/response bytes from a command's name; mark
+SPEC_CURRENT_SOURCE_REQUIRED instead of guessing"), the ~250 commands in
+Common Practice/WirelessHART/Device Family/Discrete stay unimplemented and
+explicitly marked as blocked rather than faked. Full accounting in
+`.spec/features/hart-device-engine.md` "Anexo F" (F.1 for the blocker,
+F.8 for exact counts, F.9 for the concrete unblock path).
+
+What DID get done, corroborated against the PACTware reference this
+project has used since session 1 (stable byte layouts unchanged since
+HART 5): Universal Commands 12/17 (Message), 13/18 (Tag/Descriptor/Date),
+16/19 (Final Assembly Number) — golden tests, persistence proof through
+both the bare engine and the real `HartCommunicationComponent`, atomicity
+test (truncated write changes nothing), cross-command consistency test (a
+Command 18 tag write is observed by Command 0x0B's tag match).
+
+The more important find: building these exposed that NO HART write
+command in this project's history ever persisted its effect —
+`HartCommandExecutor::execute` mutated a throwaway `HartExecutionVariables`
+copy, and `HartEngine::CommandProgramHook` took a `const HartDevicePlan&`.
+Fixed generically (execute() takes variables by reference; the hook takes
+a mutable plan; `HartEngine::execute()` copies the mutation back to the
+real device only when the hook succeeds, so a rejected write is atomic —
+tested). Guarded against a second-order bug the fix could have introduced:
+a before/after byte comparison in the hook ensures an UNRELATED read never
+silently re-canonicalizes the tag.
+
+`hart_engine_test`: PASS. `npm test`: 459/459 (untouched this session).
+
+Next exact action: (1) if the user can supply the actual HCF_SPEC PDFs (or
+FieldComm Group member credentials), resume command-by-command
+implementation immediately — the architecture (classifier, compiler,
+persistence) is ready for it; (2) without that, the next honestly-doable
+slice is Universal Commands 6/7 (Write Polling Address / Read Loop
+Configuration, deliberately deferred this session for its live-
+readdressing complexity, not missing source) and 20/22 (Long Tag,
+well-known layout, just not yet cross-checked against this session's
+PACTware technique); (3) add persisted Property Inspector properties for
+message/descriptor/date/finalAssemblyNumber so Command 17/18/19 writes
+survive save/reopen, not just the live session.
+
+---
+
+## FEAT-013 HCF_SPEC-99 normative command classifier, fake echo-fallback removed (2026-09-11, earlier this day)
 
 Result: **IN_PROGRESS — the normative "who defines semantics" layer
 (HCF_SPEC-99 Table 9 classifier + implementation policy) is now real,
