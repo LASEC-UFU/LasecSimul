@@ -1,4 +1,5 @@
 #include "protocols/HartEngine.hpp"
+#include "protocols/HartReferenceCatalog.hpp"
 
 #include <cstdio>
 #include <span>
@@ -29,6 +30,16 @@ public:
 }
 
 int main() {
+    const auto referenceCommands = HartReferenceCatalog::commandDescriptors();
+    const auto referenceDevices = HartReferenceCatalog::deviceDefinitions();
+    check(referenceCommands.size() == 60, "process_simul command catalog imported");
+    check(referenceDevices.size() == 11 && referenceDevices.front().name == "FV100CA" &&
+              referenceDevices.back().name == "FIT100A",
+          "process_simul device catalog imported");
+    const HartDeviceProfile referenceProfile = HartReferenceCatalog::makeGenericProfile();
+    check(referenceProfile.commands.size() == referenceCommands.size() &&
+              referenceProfile.manufacturerId == 0x3E,
+          "generic process_simul-compatible profile");
     uint8_t payload[] = {0x10, 0x20, 0x30};
     HartFrame request{3, 1, {payload[0], payload[1], payload[2]}};
     HartResponseBuilder wire(16);

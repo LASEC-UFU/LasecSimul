@@ -81,6 +81,7 @@ set(CORE_SOURCES
     src/plc/PlcRuntime.cpp
     src/protocols/IndustrialProtocols.cpp
     src/protocols/HartEngine.cpp
+    src/protocols/HartReferenceCatalog.cpp
     src/fpga/FpgaComponent.cpp
     src/fpga/FpgaPortMapper.cpp
     src/fpga/GhdlBackend.cpp
@@ -390,6 +391,7 @@ add_test(NAME industrial_protocols COMMAND industrial_protocols_test)
 add_executable(hart_engine_test
     test/core/protocols/HartEngineTest.cpp
     src/protocols/HartEngine.cpp
+    src/protocols/HartReferenceCatalog.cpp
 )
 target_include_directories(hart_engine_test PRIVATE include src)
 add_test(NAME hart_engine COMMAND hart_engine_test)
