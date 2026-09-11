@@ -42,6 +42,7 @@
 #include "../fpga/FpgaComponent.hpp"
 #include "../fpga/GhdlBackend.hpp"
 #include "../protocols/IndustrialProtocolComponents.hpp"
+#include "../protocols/HartCommunicationComponent.hpp"
 #include <nlohmann/json.hpp>
 #include <array>
 #include <cstdio>
@@ -1006,6 +1007,18 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
                        protocols::IndustrialComponentKind::HartTransmitter, "HART Transmitter");
     registerIndustrial("protocol.hart.communicator", "Comunicador HART",
                        protocols::IndustrialComponentKind::HartCommunicator, "HART Communicator");
+    const auto registerHartTransport = [&](const char* typeId, const char* label,
+                                           protocols::HartCommunicationComponent::Mode mode,
+                                           const char* englishLabel) {
+        reg.registerFactory(typeId, [&scheduler, mode](const ComponentParams& p) {
+            return std::make_unique<protocols::HartCommunicationComponent>(mode, scheduler, p);
+        });
+        registerBuiltinMetadata(typeId, label, protocols::HartCommunicationComponent::propertySchema(mode),
+            std::string{"{\"en\":{\"name\":\""} + englishLabel + "\"}}",
+            protocols::HartCommunicationComponent::readoutFormat(), std::nullopt, {});
+    };
+    registerHartTransport("protocol.hart.serial", "HART Serial", protocols::HartCommunicationComponent::Mode::Serial, "HART Serial");
+    registerHartTransport("protocol.hart.udp", "HART UDP", protocols::HartCommunicationComponent::Mode::Udp, "HART UDP");
 }
 
 } // namespace
@@ -1902,6 +1915,25 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
                 {"dropped", *dropped && std::holds_alternative<double>(**dropped) ? std::get<double>(**dropped) : 0.0},
             }.dump();
         } catch (const std::exception& e) { resp.ok = false; resp.error = std::string("getUartStatus falhou: ") + e.what(); }
+        return resp;
+    }
+    if (msg.type == "hartTransact") {
+        try {
+            const nlohmann::json payload = nlohmann::json::parse(msg.payloadJson.empty() ? "{}" : msg.payloadJson);
+            const uint32_t instanceId = static_cast<uint32_t>(std::stoul(payload.value("instanceId", std::string{"0"})));
+            const std::string hex = payload.value("frameHex", std::string{});
+            if (hex.empty() || (hex.size() & 1u) != 0 || hex.size() > 544u ||
+                !std::all_of(hex.begin(), hex.end(), [](unsigned char c) { return std::isxdigit(c) != 0; }))
+                throw std::invalid_argument("frameHex HART invalido ou maior que 272 bytes");
+            std::vector<uint8_t> frame; frame.reserve(hex.size() / 2);
+            for (size_t i = 0; i < hex.size(); i += 2) frame.push_back(static_cast<uint8_t>(std::stoul(hex.substr(i, 2), nullptr, 16)));
+            const auto result = session.hartTransact(instanceId, frame);
+            if (!result) throw std::runtime_error("transacao HART rejeitada: componente desabilitado, invalido ou quadro incorreto");
+            static constexpr char digits[] = "0123456789abcdef";
+            std::string out; out.reserve(result->size() * 2);
+            for (uint8_t b : *result) { out.push_back(digits[b >> 4]); out.push_back(digits[b & 15]); }
+            resp.ok = true; resp.payloadJson = nlohmann::json{{"frameHex", out}, {"simulationTimeNs", session.scheduler().nowNs()}}.dump();
+        } catch (const std::exception& e) { resp.ok = false; resp.error = std::string("hartTransact falhou: ") + e.what(); }
         return resp;
     }
     if (msg.type == "setSubcircuitChildProperty") {

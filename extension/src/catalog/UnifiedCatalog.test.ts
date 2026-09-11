@@ -120,7 +120,7 @@ test("catalogo canonico registra PLC, Modbus e HART nas areas visiveis", () => {
   const catalog = loadUnifiedCatalog(process.cwd(), "pt-BR").catalog;
   const byTypeId = new Map(catalog.map((entry) => [entry.typeId, entry]));
   assert(byTypeId.get("plc.instance")?.workspaceSection === "control", "PLC deve existir na aba Controle");
-  for (const typeId of ["protocol.modbus.server", "protocol.modbus.client", "protocol.hart.transmitter", "protocol.hart.communicator"]) {
+  for (const typeId of ["protocol.modbus.server", "protocol.modbus.client", "protocol.hart.transmitter", "protocol.hart.communicator", "protocol.hart.serial", "protocol.hart.udp"]) {
     const entry = byTypeId.get(typeId);
     assert(entry?.workspaceSection === "process", `${typeId} deve existir na aba Processo`);
     assert(entry?.folderPath?.[0] === "Process", `${typeId} deve ficar sob a pasta Process`);

@@ -432,6 +432,8 @@ public:
      * Tunnel.hpp). `std::nullopt` = sucesso; valor presente = "codigo|mensagem". */
     std::optional<std::string> setProperty(uint32_t component, const std::string& propertyName,
                                            const PropertyValue& value);
+    std::optional<std::vector<uint8_t>> hartTransact(uint32_t componentIndex,
+                                                     std::span<const uint8_t> request);
 
     /** Resolve o id LOCAL de um componente dentro de um subcircuito (ex: "button_en" no
      * `.lssubcircuit`) pro índice REAL do componente no Core -- usado pelo overlay de Modo Placa no

@@ -83,6 +83,7 @@ set(CORE_SOURCES
     src/protocols/HartEngine.cpp
     src/protocols/HartReferenceCatalog.cpp
     src/protocols/HartTransport.cpp
+    src/protocols/HartCommunicationComponent.cpp
     src/fpga/FpgaComponent.cpp
     src/fpga/FpgaPortMapper.cpp
     src/fpga/GhdlBackend.cpp
@@ -394,6 +395,7 @@ add_executable(hart_engine_test
     src/protocols/HartEngine.cpp
     src/protocols/HartReferenceCatalog.cpp
     src/protocols/HartTransport.cpp
+    src/protocols/HartCommunicationComponent.cpp
 )
 target_include_directories(hart_engine_test PRIVATE include src)
 add_test(NAME hart_engine COMMAND hart_engine_test)

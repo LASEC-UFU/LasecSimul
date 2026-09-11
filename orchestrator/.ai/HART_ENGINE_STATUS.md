@@ -16,13 +16,14 @@ Last updated: 2026-09-10
 - `HartReferenceCatalog::registerGenericProfile()` and `makeDevicePlans()` create the compatible profile and all 11 independent instances for a selected virtual bus. This is the insertion point for project/subcircuit compilation.
 - Each `HartDevicePlan` now accepts per-device `CommandConfiguration` entries. An instance can disable a profile-declared command or provide a bounded static response without changing the profile, dispatcher, or another device. Runtime setters cover enable/disable and response replacement; compiler rejects undeclared, duplicate, or oversized overrides.
 - `HartTransportEndpoint` now provides the bounded transport-independent request/response boundary. It decodes and validates a frame, dispatches through the selected bus, re-encodes the response, and exposes counters. It deliberately performs no host I/O; serial/UDP adapters must feed it through a shared lifecycle.
+- Core now registers `protocol.hart.serial` and `protocol.hart.udp` communication blocks. They own a bounded `HartTransportEndpoint` and expose editable bus/endpoint/address/device/baud-or-port properties. The `hartTransact` IPC verb accepts one bounded frame and returns one encoded response, so the existing Serial Terminal lifecycle or a shared UDP adapter can be connected without a second reader/socket per block.
 - Deterministic manual MSVC test passes: `HART engine contracts: PASS`.
 
 Commits: `aea88419`, `cb9b2336`, `db02c53f` (branch `fix/vnext-b-mwdt-hotpath-diagnostics`, pushed to `origin`).
 
 ## Deliberately not claimed yet
 
-- This is not the complete HART specification implementation. Serial/TCP transports, framing variants, long-address semantics, timing/turnaround, profile catalog, UI/editor integration, persistence, and the full command matrix remain open.
+- This is not the complete HART specification implementation. Framing variants, long-address semantics, timing/turnaround, profile catalog, persistence, and the full command matrix remain open. The Core transport-block/IPC boundary is now present; actual host serial/UDP adapters and UI actions still need integration tests.
 - The existing `HartSemanticEndpoint` and `VirtualIndustrialBus` remain unchanged for compatibility; migration to `HartEngine` must be a separate, tested step.
 - No production runtime promotion or release was performed for the HART work.
 

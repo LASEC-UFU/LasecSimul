@@ -229,6 +229,10 @@ export class CoreClient {
     return await this.request("getUartStatus", { instanceId }) as { pending: number; dropped: number };
   }
 
+  async hartTransact(instanceId: string, frameHex: string): Promise<{ frameHex: string; simulationTimeNs: number }> {
+    return await this.request("hartTransact", { instanceId, frameHex }) as { frameHex: string; simulationTimeNs: number };
+  }
+
   /** Edita uma propriedade de um componente DENTRO de um subcircuito, endereçando por id local
    * (ex: "button_en") em vez do índice Core -- usado pelo overlay de Modo Placa no circuito
    * principal, ver `core/src/app/CoreApplication.cpp::"setSubcircuitChildProperty"`. */

@@ -1,4 +1,5 @@
 #include "SimulationSession.hpp"
+#include "../protocols/HartCommunicationComponent.hpp"
 #include "../components/bridges/SignalBridges.hpp"
 #include <array>
 #include <algorithm>
@@ -1417,6 +1418,20 @@ std::optional<std::string> SimulationSession::setProperty(uint32_t component, co
     // inteiro) -- mesmo contrato observável (código/mensagem de erro idênticos).
     return runViaCommandQueue([component, propertyName, value](SimulationSession& self) {
         return self.setPropertyUnlocked(component, propertyName, value);
+    });
+}
+
+std::optional<std::vector<uint8_t>> SimulationSession::hartTransact(uint32_t componentIndex,
+                                                                     std::span<const uint8_t> request) {
+    std::vector<uint8_t> copy(request.begin(), request.end());
+    return runViaCommandQueue([componentIndex, request = std::move(copy)](SimulationSession& self)
+        -> std::optional<std::vector<uint8_t>> {
+        if (componentIndex >= self.m_componentInstances.size() || !self.m_componentInstances[componentIndex]) return std::nullopt;
+        auto* component = dynamic_cast<protocols::HartCommunicationComponent*>(self.m_componentInstances[componentIndex].get());
+        if (!component) return std::nullopt;
+        protocols::HartResponseBuilder response(272);
+        if (!component->transact(request, response)) return std::nullopt;
+        return std::vector<uint8_t>(response.bytes().begin(), response.bytes().end());
     });
 }
 
