@@ -56,3 +56,15 @@ por leitura dos registros e equações, não pelo nome do arquivo.
 identificada. A próxima coleta deve parsear os `.smp` e `.txd`, extrair as
 operações efetivamente usadas e produzir a matriz TDPS → `.lssubcircuit` →
 kernel, registrando `.lsdevice` quando o item for primitivo.
+
+## Primeira extração mecanizada
+
+O parser `scripts/audit-tdps-smp.mjs` processou todos os 30 arquivos `.smp/.txd`
+e captura registros `=====<<<TIPO:ID>>>=====` e campos `{...} Nome:valor`.
+As contagens estruturadas atuais são: `TEXTO ANIMADO` 213, `BLOCO CALC` 172,
+`PROCESSO` 139, `CONTROLADOR` 66 e `REGISTRADOR` 57. Os marcadores de seção
+(`Unidades Engenharia` e `Tracks`) aparecem em 24 modelos e não são blocos
+matemáticos. O JSON preserva cada ID, campo, referência `Mnn`, tamanho e linhas.
+As expressões `Funcao:` de `BLOCO CALC`, parâmetros de `PROCESSO` e estados
+iniciais de `CONTROLADOR`/`REGISTRADOR` serão usados na decomposição do
+`SignalEngine` e na matriz TDPS -> `.lssubcircuit` -> kernel.
