@@ -1,6 +1,60 @@
 # NEXT ACTION
 
-## FEAT-013 Lasec HART Command DSL — real parser built, 0x0B cross-language proven, 2 more real bugs fixed (2026-09-11)
+## FEAT-013 HCF_SPEC-99 normative command classifier, fake echo-fallback removed (2026-09-11)
+
+Result: **IN_PROGRESS — the normative "who defines semantics" layer
+(HCF_SPEC-99 Table 9 classifier + implementation policy) is now real,
+tested, and wired into the authoring gate; the 55 not-yet-modeled standard
+commands, WirelessHART capability, RC=64 protocol fidelity, the visual
+Command Graph editor, and every non-HART Property Inspector domain remain
+open with concrete next actions.**
+
+This task cited HCF_SPEC-99/HCF_SPEC-151 explicitly and demanded that
+command-number range alone determine who may define a command's semantics
+(HART for Universal/Common Practice/Additional Common Practice/
+WirelessHART/Device Family, manufacturer for Device-Specific/Wireless
+Device-Specific/Additional Device-Specific, nobody for Reserved). Built
+`core/src/protocols/HartCommandClassification.{hpp,cpp}` as the single
+authority for this, replaced the old 5-id hardcoded authoring block in
+`HartCommandJson` with the real classifier, and — the highest-value find —
+removed `HartReferenceCatalog`'s automatic "echo request body" fallback,
+which had been silently pre-occupying all 29 Device-Specific (manufacturer)
+ids and all 26 other unmodeled standard ids with a fake plausible response
+instead of the correct "command not implemented". Full boundary (33 cases),
+classification-table, policy-table, >90%-threshold, manufacturer-override,
+and Common-Practice-applicability tests added to `hart_engine_test`, all
+passing. Full writeup and final command matrix in
+`.spec/features/hart-device-engine.md` "Anexo E".
+
+`hart_engine_test` (Core): PASS. `npm test` (Extension): 459/459, zero
+regressions.
+
+Explicitly NOT done, with concrete next actions: (1) `HartTransportEndpoint`
+still drops the frame entirely (no reply) for an unsupported command instead
+of sending a real Response-Code=64 status byte — fixing this means giving
+`HartResponseBuilder` a generic status-byte API and migrating the 5 real
+command bodies to use it (golden bytes would change, so not attempted this
+session); (2) no WirelessHART device-capability model exists, so Wireless
+Device-Specific (64512-64765) is always rejected — would need a real
+`isWirelessHartCapable` field on `HartDeviceProfile`/`HartDevicePlan`; (3)
+the 55 still-unmodeled standard/vendor command ids are now honestly "not
+implemented" (real progress over silently fake-echoing) but still have no
+real body — migrating a few of them (e.g. 0x02, 0x05) through the existing
+DSL-text-parser proof pattern from the previous session is the natural next
+slice; (4) Command Graph visual editor, Map/ForCodes textual DSL syntax,
+concrete Ctrl-primitive reuse inside a command body, Property Inspector
+property-by-property audit outside HART, fuzzing, benchmarks, and legacy
+`protocol.hart.transmitter`/`communicator` removal are all still open from
+prior sessions, unchanged.
+
+Next exact action: pick one of (1)-(4) above and continue — (3) is the most
+direct continuation of the DSL-parser momentum from the previous session;
+(1) is the most protocol-correctness-critical if a real HART host/master
+integration is ever tested against this engine.
+
+---
+
+## FEAT-013 Lasec HART Command DSL — real parser built, 0x0B cross-language proven, 2 more real bugs fixed (2026-09-11, earlier this day)
 
 Result: **IN_PROGRESS — the "central" HART Command DSL/Graph/Compiler area
 now has a real, tested, working parser and one command (0x0B) with genuine

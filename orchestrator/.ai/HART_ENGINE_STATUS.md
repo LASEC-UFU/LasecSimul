@@ -1,6 +1,36 @@
 # HART engine implementation status
 
-Last updated: 2026-09-11 (Lasec HART Command DSL)
+Last updated: 2026-09-11 (HCF_SPEC-99 normative classifier)
+
+## 2026-09-11 — HCF_SPEC-99 normative command classifier, fake echo-fallback removed
+
+A new task, citing HCF_SPEC-99/HCF_SPEC-151 explicitly, demanded a
+"who-defines-semantics" architecture: HART-standardized command numbers are
+always `StandardCore` C++, manufacturer ranges (128-253 primarily) are
+always Lasec DSL, Reserved ranges accept nothing, and Common Practice
+applicability is derived from the device, never a manual toggle.
+
+Reconciliation found the real gap was an active anti-pattern, not missing
+infrastructure: `HartReferenceCatalog` auto-installed an "echo request
+body" fallback for all 55 catalogued ids without a real implementation,
+including all 29 Device-Specific (manufacturer) ids -- so probing e.g.
+Command 128 got a plausible fake reply instead of "not implemented", and
+the manufacturer range was never really open. Built
+`HartCommandClassification.{hpp,cpp}` as the one authority for HCF_SPEC-99
+Table 9 (class + derived policy + the >90% Additional-Device-Specific
+threshold), wired it into `HartCommandJson`'s authoring gate (replacing a
+5-id hardcoded list with a real classifier covering every HART-standardized
+range), and removed the echo fallback outright. Full boundary/
+classification/policy/threshold/override/applicability test suite added to
+`hart_engine_test`, all passing. Also fixed a real Property Inspector bug:
+the "+Add Command" id suggestion had no upper bound and could have
+suggested a Reserved id (254) once 128-253 filled up. Full writeup, command
+matrix, and final counts in `.spec/features/hart-device-engine.md`
+"Anexo E". Explicitly not done: no generic RC=64 status byte in the frame
+codec (real protocol-fidelity gap, high-risk to fix without touching every
+existing golden), no WirelessHART capability model, the 55 remaining
+standard/vendor ids are still unmodeled (now honestly "not implemented"
+instead of fake-echoing).
 
 ## 2026-09-11 — Lasec HART Command DSL: real parser, cross-language proof for 0x0B, 2 more real bugs fixed
 
