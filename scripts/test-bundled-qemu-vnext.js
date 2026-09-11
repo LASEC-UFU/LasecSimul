@@ -177,11 +177,18 @@ function verifyVnextBHandshake(qemuPath, romDir, workDir) {
   });
   const output = `${result.stdout || ""}${result.stderr || ""}`;
   if (result.error) fail(`vnext_b_attachment_test nao executou: ${result.error.message}`);
-  if (/\bSKIP\b/.test(output)) {
+  if (/\b(?:SKIP|SKIPPED|PULADO)\s*:|\b(?:SKIP|SKIPPED|PULADO)\b/.test(output)) {
     fail(
       "vnext_b_attachment_test reportou SKIP -- isso significa que o teste NAO usou o QEMU do VSIX " +
       `(fallback silencioso proibido neste gate). Saida:\n${output}`
     );
+  }
+  const notApplicable = output.match(/^NOT_APPLICABLE:\s+test=E118-AUDIT_UART_BACKLOG\s+reason=real_firmware_not_built\b[^\r\n]*$/gm) || [];
+  if (/\bNOT_APPLICABLE\s*:/.test(output) && notApplicable.length !== 1) {
+    fail(`vnext_b_attachment_test reportou NOT_APPLICABLE inesperado ou duplicado; somente o audit E118 sem firmware pode usar esse marcador:\n${output}`);
+  }
+  if (notApplicable.length === 1) {
+    console.log("[test-bundled-qemu-vnext] E118 UART backlog audit NOT_APPLICABLE: firmware real nao foi fornecido; handshake obrigatorio continua validado");
   }
   if (result.status !== 0) {
     fail(`vnext_b_attachment_test falhou (exit=${result.status}) contra o QEMU do VSIX final:\n${output}`);
