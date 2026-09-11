@@ -57,6 +57,32 @@ identificada. A próxima coleta deve parsear os `.smp` e `.txd`, extrair as
 operações efetivamente usadas e produzir a matriz TDPS → `.lssubcircuit` →
 kernel, registrando `.lsdevice` quando o item for primitivo.
 
+## Evidência pré-existente reaproveitada
+
+A especificação alinhada em `C:\SourceCode\lasecsimul-spec-tdps-repo-aligned\.spec`
+já contém decisões e fixtures diretamente aplicáveis, que passam a ser fontes
+canônicas desta auditoria:
+
+- ADR-0008 define `.lssubcircuit` schema v3 como composição TDPS normal, usando
+  `components`, `topology`, `interface`/tunnels, `symbol`, componentes expostos e
+  propriedades exportadas; rejeita um `TDPSEngine` ou hierarquia paralela.
+- FEAT-012 define o importador `.smp` como adapter de autoria, resolução de `Mnn`
+  somente no cold path e conversão para `.lsproj`/`.lssubcircuit`.
+- `.spec/fixtures/tdps-v771-coverage.json` já registra 24 modelos, 66 controles,
+  139 processos, 172 blocos de cálculo, 57 registradores, 24 registradores XY e
+  213 textos animados, com hashes dos arquivos de origem.
+- `.spec/fixtures/f7-process-coverage.md` e `f7-process-goldens.md` já mapeiam
+  Gain, Sum, CalcExpression, FirstOrder, DeadTime, LeadLag, Saturation,
+  RateLimiter, Hysteresis, Stiction, PID e seis bridges para o Core, além dos
+  cenários `process_fopdt`, `tdps_basic_flow_loop` e `tdps_smith_predictor`.
+- O repositório já contém `scripts/generate-tdps-process-library.mjs` e os
+  subcircuitos TDPS gerados. Esses artefatos devem ser auditados e validados
+  contra as fontes, não recriados.
+
+Essa evidência reduz o escopo real: a etapa seguinte é verificar gaps entre o
+que a spec declara e o que realmente compila/executa no Core atual, começando
+por parser/importador e pelos goldens existentes.
+
 ## Primeira extração mecanizada
 
 O parser `scripts/audit-tdps-smp.mjs` processou todos os 30 arquivos `.smp/.txd`
