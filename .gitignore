@@ -7,6 +7,11 @@ Thumbs.db
 *.temp
 .codex-simulide-src/
 
+# Third-party reference material dropped at the repo root for local research
+# (e.g. HART.zip: HART Communication Foundation spec PDFs) -- copyrighted,
+# not ours to redistribute via git history. Keep on disk, never commit.
+/HART.zip
+
 # VS Code
 .vscode/
 !.vscode/extensions.json

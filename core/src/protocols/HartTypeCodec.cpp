@@ -93,6 +93,16 @@ std::string HartTypeCodec::decodePackedAscii(std::span<const uint8_t> bytes) noe
     return result;
 }
 
+std::vector<uint8_t> HartTypeCodec::encodeLatin1(std::string_view text, size_t maxChars) noexcept {
+    std::vector<uint8_t> result(maxChars, 0x20); // space-pad, no case-folding (HCF_SPEC-127 Command 20/22)
+    for (size_t i = 0; i < maxChars && i < text.size(); ++i) result[i] = static_cast<uint8_t>(text[i]);
+    return result;
+}
+
+std::string HartTypeCodec::decodeLatin1(std::span<const uint8_t> bytes) noexcept {
+    return std::string(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+}
+
 float HartTypeCodec::quietNaN() noexcept { return std::numeric_limits<float>::quiet_NaN(); }
 
 } // namespace lasecsimul::protocols

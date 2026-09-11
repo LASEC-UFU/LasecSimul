@@ -187,6 +187,18 @@ struct HartDevicePlan {
     /** Universal Command 16/19 (Read/Write Final Assembly Number): 3-byte
      * big-endian unsigned integer, raw bytes. */
     std::array<uint8_t, 3> finalAssemblyNumber{};
+    /** Universal Command 20/21/22 (Read/Write Long Tag): up to 32 ISO
+     * Latin-1 characters -- a completely separate data item from `tag`
+     * (HCF_SPEC-127 6.20: "The Tag and Long Tag are completely separate
+     * data items."). */
+    std::string longTag;
+    /** Universal Command 6/7 (Write Polling Address / Read Loop
+     * Configuration): Common Table 16 code, 1 = Enabled (HART-default
+     * "active" per HCF_SPEC-127 6.7). `pollingAddress` above already exists
+     * and doubles as this device's bus address (used for lookup in
+     * `HartEngine::execute()`) -- Command 6 writing it is therefore a REAL
+     * live-readdressing mutation, not just a stored field. */
+    uint8_t loopCurrentMode = 1;
 };
 
 struct HartProtocolPlan {
@@ -216,6 +228,14 @@ public:
     bool setPrimaryValue(std::string_view deviceId, double value) noexcept;
     bool setVariableInput(std::string_view deviceId, std::string_view variableId, double value) noexcept;
     std::optional<double> variableValue(std::string_view deviceId, std::string_view variableId) const noexcept;
+    /** Read-only view of a device's CURRENT runtime plan -- in particular the
+     * identity fields a write command's `CommandProgramHook` may have
+     * mutated (tag/message/descriptor/date/finalAssemblyNumber/longTag/
+     * pollingAddress/loopCurrentMode). Lets a host component (e.g.
+     * `HartCommunicationComponent`) sync those live changes back into its
+     * own persisted properties after a transaction, so a HART write
+     * command's effect survives save/reopen and not just the live session. */
+    const HartDevicePlan* findDevicePlan(std::string_view deviceId) const noexcept;
     bool setCommandEnabled(std::string_view deviceId, HartCommandId command, bool enabled) noexcept;
     bool setCommandResponse(std::string_view deviceId, HartCommandId command,
                             std::span<const uint8_t> response) noexcept;

@@ -48,6 +48,9 @@ enum class HartVarId : uint8_t {
     Descriptor,                // 12 bytes packed ASCII (16 chars) -- Universal Command 13/18
     Date,                      // 3 bytes {day, month, year-1900} -- Universal Command 13/18
     FinalAssemblyNumber,       // 3 bytes big-endian unsigned -- Universal Command 16/19
+    LongTag,                   // 32 bytes ISO Latin-1 -- Universal Command 20/21/22
+    PollingAddress,            // 1 byte -- Universal Command 6/7
+    LoopCurrentMode,           // 1 byte enum (Common Table 16: 0=Disabled, 1=Enabled) -- Universal Command 6/7
 };
 
 /** `$BODY`, `$BODY[a:b]`, hex literal, row/variable reference, `$code`. */
@@ -169,6 +172,9 @@ struct HartExecutionVariables {
     std::array<uint8_t, 12> descriptorPacked{};
     std::array<uint8_t, 3> date{};
     std::array<uint8_t, 3> finalAssemblyNumber{};
+    std::array<uint8_t, 32> longTag{};
+    uint8_t pollingAddress = 0;
+    uint8_t loopCurrentMode = 1; // Common Table 16: 1 = Enabled (HART default per HCF_SPEC-127 6.7)
     struct UserVariable { std::string id; double value = 0.0; HartVariableType type = HartVariableType::Float32; };
     std::span<const UserVariable> userVariables;
 };

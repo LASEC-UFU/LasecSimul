@@ -231,6 +231,13 @@ std::optional<double> HartEngine::variableValue(std::string_view deviceId, std::
     return std::nullopt;
 }
 
+const HartDevicePlan* HartEngine::findDevicePlan(std::string_view deviceId) const noexcept {
+    for (const RuntimeDevice& device : m_devices) {
+        if (device.plan.id == deviceId) return &device.plan;
+    }
+    return nullptr;
+}
+
 double HartEngine::evaluatePrimary(RuntimeDevice& device) noexcept {
     for (size_t i = 0; i < device.plan.variables.size(); ++i)
         if (device.plan.variables[i].id == "PV" || device.plan.variables[i].id == "primary")

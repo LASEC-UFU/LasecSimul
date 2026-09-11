@@ -35,7 +35,7 @@ std::array<uint8_t, 3> parseDeviceIdHex(std::string_view text) noexcept {
 
 std::vector<HartCommandDescriptor> HartReferenceCatalog::commandDescriptors() {
     // Union of process_simul's command seed table and its transmitter dispatch table.
-    static constexpr std::array<std::pair<HartCommandId, std::string_view>, 60> commands{{
+    static constexpr std::array<std::pair<HartCommandId, std::string_view>, 63> commands{{
         {0x00, "Read Unique Identifier"},
         {0x01, "Read Primary Variable"},
         {0x02, "Read Loop Current And Percent Of Range"},
@@ -56,9 +56,26 @@ std::vector<HartCommandDescriptor> HartReferenceCatalog::commandDescriptors() {
         {0x11, "Write Message"},
         {0x12, "Write Tag, Descriptor, Date"},
         {0x13, "Write Final Assembly Number"},
+        // 0x14/0x16 (20/22, Read/Write Long Tag) were absent from the
+        // original process_simul import; added per HCF_SPEC-127 6.20/6.22
+        // (Universal, mandatory) now that the official spec text is
+        // available -- see .spec/features/hart-device-engine.md "Anexo F".
+        {0x14, "Read Long Tag"},
+        // NOTE: 0x15 (21) is catalogued here as "Write Output Information",
+        // a name that does NOT match HCF_SPEC-127's real Command 21 ("Read
+        // Unique Identifier Associated With Long Tag"). Left untouched --
+        // unclear whether this is a stale/incorrect label from the original
+        // vendor import or a genuine distinct meaning those reference
+        // devices use; Command 21 is deliberately NOT implemented under
+        // this id until that is resolved (see Anexo F).
         {0x15, "Write Output Information"},
+        {0x16, "Write Long Tag"},
         {0x21, "Read Device Variables"},
         {0x26, "Reset Configuration Changed Flag"},
+        // 0x30 (48, Read Additional Device Status) was likewise absent --
+        // the existing 0x48 entry below is a DIFFERENT, distinct command
+        // (decimal 72, Common Practice range), not decimal 48.
+        {0x30, "Read Additional Device Status"},
         {0x28, "Enter/Exit Fixed Current Mode"},
         {0x29, "Trim DAC Zero"},
         {0x2A, "Trim DAC Gain"},
@@ -200,11 +217,35 @@ std::vector<HartCommandDefinition> HartReferenceCatalog::commandProgramDefinitio
         commands.push_back(std::move(cmd));
     }
 
-    // 0x03 -- Read Dynamic Variables And Loop Current: loop current + 4x
-    // (unit, value) for PV/SV/TV/QV. Only PV is modeled by this profile; SV/TV/QV
-    // and loop current use the HART "not used" convention (unit 0xFA + IEEE-754
-    // NaN) rather than a fabricated number -- loop current requires an LRV/URV
-    // range model FEAT-013 does not have yet (documented limitation, not a guess).
+    // 0x03 -- Read Dynamic Variables And Loop Current. CORRECTED this session
+    // against HCF_SPEC-127 6.4 (verified from HART/spec127r7.1.pdf, extracted
+    // from the HART.zip now at the repository root): a prior session's
+    // implementation was WRONG in a way that only became visible once the
+    // real spec text was available, not from code review alone.
+    //
+    // The spec's Table 1 requires "the number of Response Data bytes must be
+    // FIXED [per device type]... a Device type may not return PV, SV, and TV
+    // in one mode and later only PV and SV" -- i.e. an unsupported Dynamic
+    // Variable is never padded with a placeholder, the response is
+    // TRUNCATED to exactly the bytes for what that device type genuinely
+    // supports (9 bytes for PV-only, 14 for PV+SV, 19 for +TV, 24 for +QV).
+    // The prior implementation instead padded SV/TV/QV with the HART "not
+    // used" convention (unit 0xFA + NaN) to always return the full 24 bytes
+    // -- that convention is real (see Commands 9/21/48) but does NOT apply
+    // to Command 3, which has no such fallback documented at all; padding
+    // unsupported variables here was simply incorrect, not just incomplete.
+    // This profile genuinely models only PV, so the correct, spec-compliant
+    // response is the 9-byte PV-only shape -- shorter than before, but
+    // actually right instead of plausible-looking.
+    //
+    // Loop Current (bytes 0-3) remains NaN: HCF_SPEC-127 defines it as the
+    // real 4-20mA output current, computable from PV and the profile's
+    // Upper/Lower Range Value via the standard linear mapping, but that
+    // requires an arithmetic expression primitive (`4 + 16*(PV-LRV)/(URV-LRV)`)
+    // the Lasec HART Command DSL does not have yet (only variable refs, hex
+    // constants, body slices, SET/IF/MAP/FOR_CODES -- no arithmetic). Adding
+    // it is real future work, not attempted this session; NaN is the
+    // documented "not computed" placeholder, not a fabricated current value.
     {
         HartCommandDefinition cmd;
         cmd.id = 0x03;
@@ -212,15 +253,9 @@ std::vector<HartCommandDefinition> HartReferenceCatalog::commandProgramDefinitio
         const std::vector<uint8_t> nanBytes(nan.begin(), nan.end());
         cmd.name = "Read Dynamic Variables And Loop Current";
         cmd.resp = {
-            HartStatement{HartAppendStmt{HartExpr::hex(nanBytes)}}, // loop current: not modeled
+            HartStatement{HartAppendStmt{HartExpr::hex(nanBytes)}}, // loop current: not computed (see above)
             HartStatement{HartAppendStmt{HartExpr::var(HartVarId::PrimaryVariableUnit)}},
             HartStatement{HartAppendStmt{HartExpr::var(HartVarId::PrimaryVariable)}},
-            HartStatement{HartAppendStmt{HartExpr::hexByte(0xFA)}}, // SV: not used
-            HartStatement{HartAppendStmt{HartExpr::hex(nanBytes)}},
-            HartStatement{HartAppendStmt{HartExpr::hexByte(0xFA)}}, // TV: not used
-            HartStatement{HartAppendStmt{HartExpr::hex(nanBytes)}},
-            HartStatement{HartAppendStmt{HartExpr::hexByte(0xFA)}}, // QV: not used
-            HartStatement{HartAppendStmt{HartExpr::hex(nanBytes)}},
         };
         commands.push_back(std::move(cmd));
     }
@@ -308,14 +343,20 @@ std::vector<HartCommandDefinition> HartReferenceCatalog::commandProgramDefinitio
         commands.push_back(std::move(cmd));
     }
 
-    // 0x11 (17) -- Write Message: 24-char packed-ASCII message, no response
-    // payload (this project has no generic status-byte framing to echo; see
-    // the note above).
+    // 0x11 (17) -- Write Message. HCF_SPEC-127 6.17 (verified against the
+    // official PDF, HART/spec127r7.1.pdf): the Response Data Bytes are NOT
+    // empty -- "the value returned in the response data bytes reflects the
+    // value actually used by the Field Device", i.e. the SAME 18-byte packed
+    // message is echoed back. A prior session left `.resp` empty (reasoning
+    // this project has no generic status-byte framing yet); that was wrong
+    // independent of the status-byte question -- the DATA payload itself is
+    // a real echo per spec, fixed here now that the spec text is available.
     {
         HartCommandDefinition cmd;
         cmd.id = 0x11;
         cmd.name = "Write Message";
         cmd.write = {HartStatement{HartSetStmt{HartVarId::Message, HartExpr::bodySlice(0, 18)}}};
+        cmd.resp = {HartStatement{HartAppendStmt{HartExpr::var(HartVarId::Message)}}};
         commands.push_back(std::move(cmd));
     }
 
@@ -336,6 +377,8 @@ std::vector<HartCommandDefinition> HartReferenceCatalog::commandProgramDefinitio
     // date[18:21], applied atomically (compiler validates all three slices
     // before any SET executes -- HartCommandExecutor aborts the whole write
     // stage on the first failing statement, never a partial mutation).
+    // HCF_SPEC-127 6.18 (verified): Response Data Bytes echo tag+descriptor+
+    // date, same fix as 0x11 above -- `.resp` was missing entirely before.
     {
         HartCommandDefinition cmd;
         cmd.id = 0x12;
@@ -344,6 +387,11 @@ std::vector<HartCommandDefinition> HartReferenceCatalog::commandProgramDefinitio
             HartStatement{HartSetStmt{HartVarId::Tag, HartExpr::bodySlice(0, 6)}},
             HartStatement{HartSetStmt{HartVarId::Descriptor, HartExpr::bodySlice(6, 12)}},
             HartStatement{HartSetStmt{HartVarId::Date, HartExpr::bodySlice(18, 3)}},
+        };
+        cmd.resp = {
+            HartStatement{HartAppendStmt{HartExpr::var(HartVarId::Tag)}},
+            HartStatement{HartAppendStmt{HartExpr::var(HartVarId::Descriptor)}},
+            HartStatement{HartAppendStmt{HartExpr::var(HartVarId::Date)}},
         };
         commands.push_back(std::move(cmd));
     }
@@ -358,11 +406,143 @@ std::vector<HartCommandDefinition> HartReferenceCatalog::commandProgramDefinitio
     }
 
     // 0x13 (19) -- Write Final Assembly Number: 3-byte big-endian unsigned.
+    // HCF_SPEC-127 6.19 (verified): response echoes the same 3 bytes, same
+    // fix as 0x11/0x12 above.
     {
         HartCommandDefinition cmd;
         cmd.id = 0x13;
         cmd.name = "Write Final Assembly Number";
         cmd.write = {HartStatement{HartSetStmt{HartVarId::FinalAssemblyNumber, HartExpr::bodySlice(0, 3)}}};
+        cmd.resp = {HartStatement{HartAppendStmt{HartExpr::var(HartVarId::FinalAssemblyNumber)}}};
+        commands.push_back(std::move(cmd));
+    }
+
+    // -----------------------------------------------------------------
+    // Universal Commands 6/7 (Write Polling Address / Read Loop
+    // Configuration), 20/22 (Read/Write Long Tag), 38 (Reset Configuration
+    // Changed Flag), 48 (Read Additional Device Status). All verified
+    // byte-for-byte against HART/spec127r7.1.pdf (HCF_SPEC-127 Rev 7.1,
+    // extracted from the HART.zip now present at the repository root -- see
+    // .spec/features/hart-device-engine.md "Anexo F" for the full spec
+    // inventory and section references).
+
+    // 0x06 (6) -- Write Polling Address. HCF_SPEC-127 6.7: request/response
+    // are both {pollingAddress: Unsigned-8, loopCurrentMode: Enum(Common
+    // Table 16)}, response echoes the value actually used by the device.
+    // This is a REAL live-readdressing mutation: `HartDevicePlan::pollingAddress`
+    // doubles as the bus address `HartEngine::execute()` uses to find the
+    // device, so writing it here changes which address the NEXT transaction
+    // must use to reach this device (this transaction still replies under
+    // the address the request arrived on, matching normal HART transaction
+    // semantics -- the response is built and sent before the caller ever
+    // re-resolves the device by address again). Backward-compatibility
+    // (HART 5 masters sending a single byte) is NOT implemented -- HART 7
+    // masters always send both bytes; documented gap, not a silent one.
+    {
+        HartCommandDefinition cmd;
+        cmd.id = 0x06;
+        cmd.name = "Write Polling Address";
+        cmd.write = {
+            HartStatement{HartSetStmt{HartVarId::PollingAddress, HartExpr::bodySlice(0, 1)}},
+            HartStatement{HartSetStmt{HartVarId::LoopCurrentMode, HartExpr::bodySlice(1, 1)}},
+        };
+        cmd.resp = {
+            HartStatement{HartAppendStmt{HartExpr::var(HartVarId::PollingAddress)}},
+            HartStatement{HartAppendStmt{HartExpr::var(HartVarId::LoopCurrentMode)}},
+        };
+        commands.push_back(std::move(cmd));
+    }
+
+    // 0x07 (7) -- Read Loop Configuration. HCF_SPEC-127 6.8: same 2-byte
+    // shape as 0x06's response, read-only.
+    {
+        HartCommandDefinition cmd;
+        cmd.id = 0x07;
+        cmd.name = "Read Loop Configuration";
+        cmd.resp = {
+            HartStatement{HartAppendStmt{HartExpr::var(HartVarId::PollingAddress)}},
+            HartStatement{HartAppendStmt{HartExpr::var(HartVarId::LoopCurrentMode)}},
+        };
+        commands.push_back(std::move(cmd));
+    }
+
+    // 0x14 (20) -- Read Long Tag. HCF_SPEC-127 6.20: 32-byte ISO Latin-1,
+    // "completely separate data item" from the 6-byte packed-ASCII Tag
+    // (Command 13/18/0x0B). No status/error prefix, same convention as
+    // every other command here.
+    {
+        HartCommandDefinition cmd;
+        cmd.id = 0x14;
+        cmd.name = "Read Long Tag";
+        cmd.resp = {HartStatement{HartAppendStmt{HartExpr::var(HartVarId::LongTag)}}};
+        commands.push_back(std::move(cmd));
+    }
+
+    // 0x16 (22) -- Write Long Tag. HCF_SPEC-127 6.22: request/response both
+    // 32-byte Latin-1, response echoes the value actually used.
+    {
+        HartCommandDefinition cmd;
+        cmd.id = 0x16;
+        cmd.name = "Write Long Tag";
+        cmd.write = {HartStatement{HartSetStmt{HartVarId::LongTag, HartExpr::bodySlice(0, 32)}}};
+        cmd.resp = {HartStatement{HartAppendStmt{HartExpr::var(HartVarId::LongTag)}}};
+        commands.push_back(std::move(cmd));
+    }
+
+    // 0x26 (38) -- Reset Configuration Changed Flag. HCF_SPEC-127 6.23:
+    // "This command must be implemented by all devices." Request/response
+    // are both the same 2-byte Configuration Change Counter -- the spec
+    // defines this as a pure echo (the device compares the counter to its
+    // own and, on match, clears a Device Status bit this project does not
+    // yet model -- see Anexo F for that documented gap). No SET/persisted
+    // variable is needed for the echo itself, so this reuses the same
+    // `Append(bodySlice(...))` primitive every read-only command uses.
+    // Backward compatibility (HART 5/6 masters sending zero bytes) is NOT
+    // implemented -- documented gap, not silent.
+    {
+        HartCommandDefinition cmd;
+        cmd.id = 0x26;
+        cmd.name = "Reset Configuration Changed Flag";
+        cmd.resp = {HartStatement{HartAppendStmt{HartExpr::bodySlice(0, 2)}}};
+        commands.push_back(std::move(cmd));
+    }
+
+    // 0x30 (48) -- Read Additional Device Status. HCF_SPEC-127 6.24: "This
+    // command must be implemented by all devices." Full response is up to
+    // 25 bytes of device/analog-channel status this project has no model
+    // for yet (Device Status Byte, Extended Device Status, Operating Mode,
+    // Standardized Status 0-3, Analog Channel Saturated/Fixed -- see Anexo
+    // F). The spec explicitly permits truncating "after the last status
+    // byte supported by the Field Device" and requires AT LEAST bytes 0-8
+    // (Device-Specific Status 0-5 + Extended Device Status + Operating Mode
+    // + Standardized Status 0). All nine are returned as literal zero here:
+    // a real, spec-compliant, minimal response (all-clear/no-condition for
+    // every currently-unmodeled bit/enum), not a fake placeholder -- the
+    // wire contract (this command exists, returns exactly this shape) is
+    // genuinely satisfied even though no diagnostic condition can currently
+    // be reported through it.
+    {
+        HartCommandDefinition cmd;
+        cmd.id = 0x30;
+        cmd.name = "Read Additional Device Status";
+        cmd.resp = {HartStatement{HartAppendStmt{HartExpr::hex(std::vector<uint8_t>(9, 0x00))}}};
+        commands.push_back(std::move(cmd));
+    }
+
+    // 0x08 (8) -- Read Dynamic Variable Classifications. HCF_SPEC-127 6.9:
+    // exactly 4 bytes, one Enum per Dynamic Variable. This project models no
+    // classification for ANY variable (not even PV), and the spec's own text
+    // covers that case explicitly: "Dynamic Variables not supporting a
+    // Device Variable Classification must return 0 (Not Yet Classified)"
+    // for PV, and a separate note says unsupported variables (SV/TV/QV, not
+    // modeled at all here) "must return 250 (Not Used)". This is a real,
+    // fully spec-compliant response, not a placeholder -- the classification
+    // concept genuinely does not exist in this device model yet.
+    {
+        HartCommandDefinition cmd;
+        cmd.id = 0x08;
+        cmd.name = "Read Dynamic Variable Classifications";
+        cmd.resp = {HartStatement{HartAppendStmt{HartExpr::hex({0x00, 0xFA, 0xFA, 0xFA})}}};
         commands.push_back(std::move(cmd));
     }
 
@@ -414,6 +594,10 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<std::unordered_map<HartC
         std::copy_n(packedDescriptor.begin(), std::min(packedDescriptor.size(), vars.descriptorPacked.size()), vars.descriptorPacked.begin());
         vars.date = plan.date;
         vars.finalAssemblyNumber = plan.finalAssemblyNumber;
+        const std::vector<uint8_t> encodedLongTag = HartTypeCodec::encodeLatin1(plan.longTag, 32);
+        std::copy_n(encodedLongTag.begin(), std::min(encodedLongTag.size(), vars.longTag.size()), vars.longTag.begin());
+        vars.pollingAddress = plan.pollingAddress;
+        vars.loopCurrentMode = plan.loopCurrentMode;
         vars.primaryVariableUnit = profile.primaryVariableUnit;
         vars.primaryVariable = static_cast<float>(primaryValue);
         std::vector<HartExecutionVariables::UserVariable> userVariables;
@@ -438,6 +622,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<std::unordered_map<HartC
         const auto descriptorBefore = vars.descriptorPacked;
         const auto dateBefore = vars.date;
         const auto finalAssemblyBefore = vars.finalAssemblyNumber;
+        const auto longTagBefore = vars.longTag;
         if (!HartCommandExecutor::execute(it->second, vars, request, response)) return false;
         // Persist only the fields this command's `write`/`after` stage
         // actually mutated (see the doc comment on
@@ -453,6 +638,13 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<std::unordered_map<HartC
         if (vars.descriptorPacked != descriptorBefore) plan.descriptor = HartTypeCodec::decodePackedAscii(vars.descriptorPacked);
         if (vars.date != dateBefore) plan.date = vars.date;
         if (vars.finalAssemblyNumber != finalAssemblyBefore) plan.finalAssemblyNumber = vars.finalAssemblyNumber;
+        if (vars.longTag != longTagBefore) plan.longTag = HartTypeCodec::decodeLatin1(vars.longTag);
+        // pollingAddress/loopCurrentMode are plain scalar bytes (no lossy
+        // pack/unpack round-trip like the string fields above), so writing
+        // them back unconditionally has no spurious-canonicalization risk --
+        // this is what makes Command 6's live readdressing take effect.
+        plan.pollingAddress = vars.pollingAddress;
+        plan.loopCurrentMode = vars.loopCurrentMode;
         return true;
     };
 }

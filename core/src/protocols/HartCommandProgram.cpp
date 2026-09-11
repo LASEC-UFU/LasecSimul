@@ -18,6 +18,7 @@ size_t hartVarWidth(HartVarId id) noexcept {
         case HartVarId::Descriptor: return 12;
         case HartVarId::Date: return 3;
         case HartVarId::FinalAssemblyNumber: return 3;
+        case HartVarId::LongTag: return 32;
         default: return 1;
     }
 }
@@ -68,6 +69,9 @@ std::optional<std::span<const uint8_t>> evalExpr(const HartExpr& expr, const Har
                 case HartVarId::Descriptor: return std::span<const uint8_t>(vars.descriptorPacked.data(), vars.descriptorPacked.size());
                 case HartVarId::Date: return std::span<const uint8_t>(vars.date.data(), vars.date.size());
                 case HartVarId::FinalAssemblyNumber: return std::span<const uint8_t>(vars.finalAssemblyNumber.data(), vars.finalAssemblyNumber.size());
+                case HartVarId::LongTag: return std::span<const uint8_t>(vars.longTag.data(), vars.longTag.size());
+                case HartVarId::PollingAddress: scratch[0] = vars.pollingAddress; return std::span(scratch.data(), 1);
+                case HartVarId::LoopCurrentMode: scratch[0] = vars.loopCurrentMode; return std::span(scratch.data(), 1);
             }
             return std::nullopt;
         case HartExpr::Kind::UserVariable:
@@ -201,6 +205,9 @@ std::string validateStatements(const std::vector<HartStatement>& statements, siz
                         case HartVarId::Descriptor:
                         case HartVarId::Date:
                         case HartVarId::FinalAssemblyNumber:
+                        case HartVarId::LongTag:
+                        case HartVarId::PollingAddress:
+                        case HartVarId::LoopCurrentMode:
                             break;
                         default:
                             error = "HART command SET targets a non-writable variable";
@@ -279,6 +286,18 @@ bool execStatement(const HartStatement& statement, HartExecutionVariables& vars,
                     case HartVarId::FinalAssemblyNumber:
                         if (bytes->size() != vars.finalAssemblyNumber.size()) return false;
                         std::copy(bytes->begin(), bytes->end(), vars.finalAssemblyNumber.begin());
+                        return true;
+                    case HartVarId::LongTag:
+                        if (bytes->size() != vars.longTag.size()) return false;
+                        std::copy(bytes->begin(), bytes->end(), vars.longTag.begin());
+                        return true;
+                    case HartVarId::PollingAddress:
+                        if (bytes->size() != 1 || (*bytes)[0] > 63) return false;
+                        vars.pollingAddress = (*bytes)[0];
+                        return true;
+                    case HartVarId::LoopCurrentMode:
+                        if (bytes->size() != 1 || (*bytes)[0] > 1) return false;
+                        vars.loopCurrentMode = (*bytes)[0];
                         return true;
                     default: return false;
                 }

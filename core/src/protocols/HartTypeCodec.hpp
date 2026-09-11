@@ -29,6 +29,13 @@ public:
     static std::vector<uint8_t> encodePackedAscii(std::string_view text, size_t maxChars) noexcept;
     static std::string decodePackedAscii(std::span<const uint8_t> bytes) noexcept;
 
+    /** ISO Latin-1, one byte per character, space-padded to `maxChars` --
+     * used by the Long Tag field (HCF_SPEC-127 Commands 20/21/22), which is
+     * explicitly NOT packed-ASCII (unlike the 8-char Tag field): case is
+     * preserved and the full 8-bit range is available. */
+    static std::vector<uint8_t> encodeLatin1(std::string_view text, size_t maxChars) noexcept;
+    static std::string decodeLatin1(std::span<const uint8_t> bytes) noexcept;
+
     static float quietNaN() noexcept;
 };
 

@@ -111,6 +111,18 @@ HartCommunicationComponent::HartCommunicationComponent(Mode mode, simulation::Sc
     // an empty "[]" on every reopen (Gate 12/section 38 persistence contract).
     m_hartVariablesJson = stringProperty(p, "hartVariablesJson", "[]");
     m_hartCommandsJson = stringProperty(p, "hartCommandsJson", "[]");
+    // Universal Command 12/13/16/20/6 identity fields (Anexo F.6): read on
+    // construction for the exact same reopen reason as variables/commands
+    // above -- without this, a HART write command's effect from a PRIOR
+    // session would be silently dropped back to defaults on every reopen.
+    m_message = stringProperty(p, "message", "");
+    m_descriptor = stringProperty(p, "descriptor", "");
+    m_longTag = stringProperty(p, "longTag", "");
+    m_date[0] = static_cast<uint8_t>(std::clamp(numberProperty(p, "dateDay", 0), 0.0, 31.0));
+    m_date[1] = static_cast<uint8_t>(std::clamp(numberProperty(p, "dateMonth", 0), 0.0, 12.0));
+    m_date[2] = static_cast<uint8_t>(std::clamp(numberProperty(p, "dateYear", 0), 0.0, 255.0));
+    m_finalAssemblyNumber = static_cast<uint32_t>(std::clamp(numberProperty(p, "finalAssemblyNumber", 0), 0.0, 16777215.0));
+    m_loopCurrentModeEnabled = p.property("loopCurrentMode", true);
 
     HartReferenceCatalog::registerProfiles(m_profiles);
     m_profileId = stringProperty(p, "profileId", m_profileId);
@@ -130,6 +142,11 @@ void HartCommunicationComponent::rebuildConfiguredPlan() {
     device.profileId = m_profileId;
     device.bus = m_bus; device.pollingAddress = m_pollingAddress;
     device.uniqueId = m_uniqueId; device.primaryValue = 0.0; device.tag = m_tag;
+    device.message = m_message; device.descriptor = m_descriptor; device.date = m_date;
+    device.finalAssemblyNumber = {static_cast<uint8_t>(m_finalAssemblyNumber >> 16),
+                                  static_cast<uint8_t>(m_finalAssemblyNumber >> 8),
+                                  static_cast<uint8_t>(m_finalAssemblyNumber)};
+    device.longTag = m_longTag; device.loopCurrentMode = m_loopCurrentModeEnabled ? 1 : 0;
     const HartDeviceProfile* profile = m_profiles.find(device.profileId);
     if (!profile) { m_profileId = "lasecsimul.hart.process-simul-compatible"; device.profileId = m_profileId; profile = m_profiles.find(device.profileId); }
     for (const auto& command : profile->commands) device.commandConfigurations.push_back({command.id, true, false, {}});
@@ -246,6 +263,22 @@ void HartCommunicationComponent::rebuildCommandPrograms() {
     m_hartCommandsStatus = installed.success ? "OK" : ("ERROR: " + installed.error);
 }
 
+void HartCommunicationComponent::syncPersistedStateFromEngine() {
+    const HartDevicePlan* plan = m_engine.findDevicePlan(m_deviceId);
+    if (!plan) return;
+    m_tag = plan->tag;
+    m_message = plan->message;
+    m_descriptor = plan->descriptor;
+    m_date = plan->date;
+    const uint32_t fan = (static_cast<uint32_t>(plan->finalAssemblyNumber[0]) << 16) |
+                        (static_cast<uint32_t>(plan->finalAssemblyNumber[1]) << 8) |
+                        static_cast<uint32_t>(plan->finalAssemblyNumber[2]);
+    m_finalAssemblyNumber = fan;
+    m_longTag = plan->longTag;
+    m_pollingAddress = plan->pollingAddress;
+    m_loopCurrentModeEnabled = plan->loopCurrentMode != 0;
+}
+
 const char* HartCommunicationComponent::typeId() const { return m_mode == Mode::Serial ? "protocol.hart.serial" : "protocol.hart.udp"; }
 
 void HartCommunicationComponent::onAssignedIndex(uint32_t index) {
@@ -274,7 +307,21 @@ std::vector<PropertySchema> HartCommunicationComponent::propertySchema(Mode mode
         numberSchema("pollingAddress", "Polling address", "HART", "", 0, 0, 63),
         textSchema("profileId", "Perfil de dispositivo", "HART", "lasecsimul.hart.process-simul-compatible"),
         textSchema("uniqueId", "Unique ID", "HART", "029EB1"), textSchema("tag", "Tag", "HART", "HART"),
-        textSchema("unit", "Unidade PV", "HART", "V")};
+        textSchema("unit", "Unidade PV", "HART", "V"),
+        // Universal Command 12/17 (Message), 13/18 (Descriptor/Date), 16/19
+        // (Final Assembly Number), 20/22 (Long Tag), 6/7 (Loop Current Mode)
+        // -- persisted so a HART write command's effect survives save/reopen
+        // (Anexo F.6). `pollingAddress` above already round-trips Command 6's
+        // live-readdressing effect since it is the same schema id
+        // `syncPersistedStateFromEngine` writes back into.
+        textSchema("message", "Mensagem", "HART", ""),
+        textSchema("descriptor", "Descriptor", "HART", ""),
+        numberSchema("dateDay", "Data (dia)", "HART", "", 0, 0, 31),
+        numberSchema("dateMonth", "Data (mes)", "HART", "", 0, 0, 12),
+        numberSchema("dateYear", "Data (ano-1900)", "HART", "", 0, 0, 255),
+        numberSchema("finalAssemblyNumber", "Numero de montagem final", "HART", "", 0, 0, 16777215),
+        textSchema("longTag", "Long Tag", "HART", ""),
+        {"loopCurrentMode", "Corrente de loop habilitada", "HART", "", PropertyValueKind::Bool, "checkbox", true}};
     // Variables/commands are edited exclusively through the Property
     // Inspector's structured collection editors (PropertyInspectorViewProvider
     // -> hartInspectorSections.ts), never as raw JSON text -- hidden from the
@@ -301,19 +348,41 @@ PropertyValue HartCommunicationComponent::propertyValue(const std::string& id) c
     if (id == "bus") return m_bus; if (id == "endpoint") return m_endpointName; if (id == "enabled") return m_enabled;
     if (id == "pollingAddress") return static_cast<double>(m_pollingAddress); if (id == "uniqueId") return m_uniqueId;
     if (id == "tag") return m_tag; if (id == "unit") return m_unit; if (id == "profileId") return m_profileId; if (id == "hartVariablesJson") return m_hartVariablesJson; if (id == "hartCommandsJson") return m_hartCommandsJson; if (id == "hartCommandsStatus") return m_hartCommandsStatus; if (id == "hartVariablesStatus") return m_hartVariablesStatus; if (id == "baudRate") return static_cast<double>(m_baudRate);
-    if (id == "udpPort") return static_cast<double>(m_udpPort); return std::string{};
+    if (id == "udpPort") return static_cast<double>(m_udpPort);
+    if (id == "message") return m_message; if (id == "descriptor") return m_descriptor; if (id == "longTag") return m_longTag;
+    if (id == "dateDay") return static_cast<double>(m_date[0]); if (id == "dateMonth") return static_cast<double>(m_date[1]);
+    if (id == "dateYear") return static_cast<double>(m_date[2]);
+    if (id == "finalAssemblyNumber") return static_cast<double>(m_finalAssemblyNumber);
+    if (id == "loopCurrentMode") return m_loopCurrentModeEnabled;
+    return std::string{};
 }
 void HartCommunicationComponent::setPropertyValue(const std::string& id, const PropertyValue& v) {
     if (id == "bus") { m_bus = std::get<std::string>(v); rebuildConfiguredPlan(); }
     else if (id == "endpoint") { m_endpointName = std::get<std::string>(v); rebuildConfiguredPlan(); }
     else if (id == "enabled") m_enabled = std::get<bool>(v);
     else if (id == "pollingAddress") { m_pollingAddress = static_cast<uint8_t>(std::clamp(std::get<double>(v), 0.0, 63.0)); rebuildConfiguredPlan(); }
-    else if (id == "uniqueId") m_uniqueId = std::get<std::string>(v); else if (id == "tag") m_tag = std::get<std::string>(v); else if (id == "unit") m_unit = std::get<std::string>(v);
+    // `tag`/`uniqueId`/`unit` previously assigned the member with NO
+    // `rebuildConfiguredPlan()` call -- a real, silent bug: editing the tag
+    // in the Property Inspector had no effect on the live `m_engine` until
+    // some UNRELATED property edit happened to trigger a rebuild. Fixed
+    // alongside the new fields below, which follow the correct pattern from
+    // the start (Anexo F.6).
+    else if (id == "uniqueId") { m_uniqueId = std::get<std::string>(v); rebuildConfiguredPlan(); }
+    else if (id == "tag") { m_tag = std::get<std::string>(v); rebuildConfiguredPlan(); }
+    else if (id == "unit") { m_unit = std::get<std::string>(v); rebuildConfiguredPlan(); }
     else if (id == "profileId") { m_profileId = std::get<std::string>(v); rebuildConfiguredPlan(); }
     else if (id == "hartVariablesJson") { m_hartVariablesJson = std::get<std::string>(v); rebuildConfiguredPlan(); }
     else if (id == "hartCommandsJson") { m_hartCommandsJson = std::get<std::string>(v); rebuildCommandPrograms(); }
     else if (id == "baudRate") m_baudRate = 1200;
     else if (id == "udpPort") m_udpPort = static_cast<uint16_t>(std::clamp(std::get<double>(v), 1.0, 65535.0));
+    else if (id == "message") { m_message = std::get<std::string>(v); rebuildConfiguredPlan(); }
+    else if (id == "descriptor") { m_descriptor = std::get<std::string>(v); rebuildConfiguredPlan(); }
+    else if (id == "longTag") { m_longTag = std::get<std::string>(v); rebuildConfiguredPlan(); }
+    else if (id == "dateDay") { m_date[0] = static_cast<uint8_t>(std::clamp(std::get<double>(v), 0.0, 31.0)); rebuildConfiguredPlan(); }
+    else if (id == "dateMonth") { m_date[1] = static_cast<uint8_t>(std::clamp(std::get<double>(v), 0.0, 12.0)); rebuildConfiguredPlan(); }
+    else if (id == "dateYear") { m_date[2] = static_cast<uint8_t>(std::clamp(std::get<double>(v), 0.0, 255.0)); rebuildConfiguredPlan(); }
+    else if (id == "finalAssemblyNumber") { m_finalAssemblyNumber = static_cast<uint32_t>(std::clamp(std::get<double>(v), 0.0, 16777215.0)); rebuildConfiguredPlan(); }
+    else if (id == "loopCurrentMode") { m_loopCurrentModeEnabled = std::get<bool>(v); rebuildConfiguredPlan(); }
     HartTransportConfig config = m_endpoint.config(); config.bus = m_bus; config.endpoint = m_endpointName;
     config.baudRate = m_baudRate; config.udpPort = m_udpPort; m_endpoint.configure(std::move(config));
 }

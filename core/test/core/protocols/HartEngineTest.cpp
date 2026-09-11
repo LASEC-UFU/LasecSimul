@@ -44,7 +44,7 @@ public:
 int main() {
     const auto referenceCommands = HartReferenceCatalog::commandDescriptors();
     const auto referenceDevices = HartReferenceCatalog::deviceDefinitions();
-    check(referenceCommands.size() == 60, "process_simul command catalog imported");
+    check(referenceCommands.size() == 63, "process_simul command catalog imported");
     check(referenceDevices.size() == 11 && referenceDevices.front().name == "FV100CA" &&
               referenceDevices.back().name == "FIT100A",
           "process_simul device catalog imported");
@@ -93,11 +93,22 @@ int main() {
                   std::equal(cmd1.bytes().begin(), cmd1.bytes().end(), pv0.begin()) && cmd1.size() == 5,
               "0x01 read primary variable includes the unit byte (fixed from the prior 4-byte response)");
 
+        // HCF_SPEC-127 6.4 Table 1: a device supporting only PV returns
+        // exactly 9 bytes (loop current + PV unit + PV) -- NOT 24 bytes
+        // padded with "not used" placeholders for SV/TV/QV. A prior session
+        // padded to 24 bytes; verified wrong against the real spec and fixed
+        // this session (see HartReferenceCatalog.cpp's 0x03 comment).
         HartResponseBuilder cmd3(32);
-        check(referenceEngine.execute("hart-1", 1, 0x03, {}, cmd3) && cmd3.size() == 24,
-              "0x03 read dynamic variables: 24-byte body (loop current + 4x unit/value)");
-        check(cmd3.bytes()[4] == 0x39 && cmd3.bytes()[9] == 0xFA && cmd3.bytes()[14] == 0xFA && cmd3.bytes()[19] == 0xFA,
-              "0x03 marks SV/TV/QV as HART 'not used' (0xFA), only PV modeled");
+        check(referenceEngine.execute("hart-1", 1, 0x03, {}, cmd3) && cmd3.size() == 9,
+              "0x03 read dynamic variables: 9-byte body (loop current + PV unit/value) for a PV-only device");
+        check(cmd3.bytes()[4] == 0x39, "0x03's PV unit byte matches the profile (57 = percent)");
+
+        // HCF_SPEC-127 6.9: PV classification not modeled -> 0 (Not Yet
+        // Classified); SV/TV/QV not supported at all -> 250 (Not Used).
+        HartResponseBuilder cmd8(8);
+        check(referenceEngine.execute("hart-1", 1, 0x08, {}, cmd8) && cmd8.size() == 4 &&
+                  cmd8.bytes()[0] == 0x00 && cmd8.bytes()[1] == 0xFA && cmd8.bytes()[2] == 0xFA && cmd8.bytes()[3] == 0xFA,
+              "0x08 read dynamic variable classifications: PV=Not Yet Classified, SV/TV/QV=Not Used");
 
         const std::vector<uint8_t> packedTag = HartTypeCodec::encodePackedAscii("FV100CA", 8);
         check(packedTag.size() == 6, "packed-ASCII tag round-trips to 6 bytes for 8 chars");
@@ -140,9 +151,10 @@ int main() {
 
         const std::vector<uint8_t> newMessage = HartTypeCodec::encodePackedAscii("HELLO WORLD", 24);
         check(newMessage.size() == 18, "packed-ASCII message round-trips to 18 bytes for 24 chars");
-        HartResponseBuilder writeMsgResp(4);
-        check(referenceEngine.execute("hart-1", 1, 0x11, newMessage, writeMsgResp),
-              "0x11 write message accepts a full 18-byte body");
+        HartResponseBuilder writeMsgResp(32);
+        check(referenceEngine.execute("hart-1", 1, 0x11, newMessage, writeMsgResp) && writeMsgResp.size() == newMessage.size() &&
+                  std::equal(newMessage.begin(), newMessage.end(), writeMsgResp.bytes().begin()),
+              "0x11 write message accepts a full 18-byte body and echoes it back (HCF_SPEC-127 6.17)");
         HartResponseBuilder msgAfter(32);
         check(referenceEngine.execute("hart-1", 1, 0x0C, {}, msgAfter) &&
                   std::equal(newMessage.begin(), newMessage.end(), msgAfter.bytes().begin()) &&
@@ -166,9 +178,11 @@ int main() {
         writeTagDescDateBody.insert(writeTagDescDateBody.end(), newDate.begin(), newDate.end());
         check(writeTagDescDateBody.size() == 21, "0x12 write body assembled as tag(6)+descriptor(12)+date(3)=21 bytes");
 
-        HartResponseBuilder writeTagDescDateResp(4);
-        check(referenceEngine.execute("hart-1", 1, 0x12, writeTagDescDateBody, writeTagDescDateResp),
-              "0x12 write tag/descriptor/date accepts a full 21-byte body");
+        HartResponseBuilder writeTagDescDateResp(32);
+        check(referenceEngine.execute("hart-1", 1, 0x12, writeTagDescDateBody, writeTagDescDateResp) &&
+                  writeTagDescDateResp.size() == writeTagDescDateBody.size() &&
+                  std::equal(writeTagDescDateBody.begin(), writeTagDescDateBody.end(), writeTagDescDateResp.bytes().begin()),
+              "0x12 write tag/descriptor/date accepts a full 21-byte body and echoes it back (HCF_SPEC-127 6.18)");
 
         HartResponseBuilder tagDescDateAfter(32);
         check(referenceEngine.execute("hart-1", 1, 0x0D, {}, tagDescDateAfter) &&
@@ -198,9 +212,10 @@ int main() {
               "0x10 read final assembly number: defaults to 0 and is unperturbed by unrelated command dispatches");
 
         const std::vector<uint8_t> newFan{0x01, 0x02, 0x03};
-        HartResponseBuilder writeFanResp(4);
-        check(referenceEngine.execute("hart-1", 1, 0x13, newFan, writeFanResp),
-              "0x13 write final assembly number accepts a full 3-byte body");
+        HartResponseBuilder writeFanResp(8);
+        check(referenceEngine.execute("hart-1", 1, 0x13, newFan, writeFanResp) &&
+                  writeFanResp.size() == newFan.size() && std::equal(newFan.begin(), newFan.end(), writeFanResp.bytes().begin()),
+              "0x13 write final assembly number accepts a full 3-byte body and echoes it back (HCF_SPEC-127 6.19)");
         HartResponseBuilder fanAfter(32);
         check(referenceEngine.execute("hart-1", 1, 0x10, {}, fanAfter) &&
                   std::equal(newFan.begin(), newFan.end(), fanAfter.bytes().begin()) && fanAfter.size() == 3,
@@ -229,6 +244,73 @@ int main() {
         check(referenceEngine.execute("hart-1", 1, 0x0D, {}, tagAfterUnrelatedRead) &&
                   std::equal(writeTagDescDateBody.begin(), writeTagDescDateBody.end(), tagAfterUnrelatedRead.bytes().begin()),
               "an unrelated 0x01 read does not perturb tag/descriptor/date (no spurious re-canonicalization)");
+
+        // Universal Commands 20/22 (Long Tag): 32-byte Latin-1, a completely
+        // separate data item from Tag (verified above still says "NEWTAG").
+        HartResponseBuilder longTagInitial(64);
+        check(referenceEngine.execute("hart-1", 1, 0x14, {}, longTagInitial) && longTagInitial.size() == 32 &&
+                  std::all_of(longTagInitial.bytes().begin(), longTagInitial.bytes().end(), [](uint8_t b) { return b == 0x20; }),
+              "0x14 read long tag: defaults to 32 spaces (empty field, Latin-1 space-padded)");
+        std::string longTagText = "Loop-1 Long Tag Ident.";
+        const std::vector<uint8_t> newLongTag = HartTypeCodec::encodeLatin1(longTagText, 32);
+        HartResponseBuilder writeLongTagResp(64);
+        check(referenceEngine.execute("hart-1", 1, 0x16, newLongTag, writeLongTagResp) &&
+                  writeLongTagResp.size() == newLongTag.size() &&
+                  std::equal(newLongTag.begin(), newLongTag.end(), writeLongTagResp.bytes().begin()),
+              "0x16 write long tag accepts a full 32-byte body and echoes it back (HCF_SPEC-127 6.22)");
+        HartResponseBuilder longTagAfter(64);
+        check(referenceEngine.execute("hart-1", 1, 0x14, {}, longTagAfter) &&
+                  std::equal(newLongTag.begin(), newLongTag.end(), longTagAfter.bytes().begin()),
+              "0x16 write PERSISTS: a later 0x14 read observes it");
+        check(HartTypeCodec::decodeLatin1(newLongTag).substr(0, longTagText.size()) == longTagText,
+              "Latin-1 preserves case/punctuation exactly (unlike packed-ASCII's uppercase folding)");
+        HartResponseBuilder shortTagStillIntact(32);
+        check(referenceEngine.execute("hart-1", 1, 0x0D, {}, shortTagStillIntact) &&
+                  std::equal(writeTagDescDateBody.begin(), writeTagDescDateBody.end(), shortTagStillIntact.bytes().begin()),
+              "Long Tag write does not perturb the short Tag/Descriptor/Date (completely separate data items)");
+
+        // Universal Command 38 (Reset Configuration Changed Flag, MANDATORY
+        // per HCF_SPEC-127 6.23): request/response both echo the same
+        // 2-byte Configuration Change Counter.
+        const uint8_t configChangeCounter[] = {0x01, 0x2C};
+        HartResponseBuilder cmd38Resp(8);
+        check(referenceEngine.execute("hart-1", 1, 0x26, configChangeCounter, cmd38Resp) &&
+                  cmd38Resp.size() == 2 && cmd38Resp.bytes()[0] == 0x01 && cmd38Resp.bytes()[1] == 0x2C,
+              "0x26 reset configuration changed flag echoes the request's Configuration Change Counter");
+
+        // Universal Command 48 (Read Additional Device Status, MANDATORY per
+        // HCF_SPEC-127 6.24): at least the mandatory 9 bytes (0-8), all-clear
+        // since this project has no device/analog-channel status model yet.
+        HartResponseBuilder cmd48Resp(32);
+        check(referenceEngine.execute("hart-1", 1, 0x30, {}, cmd48Resp) && cmd48Resp.size() == 9 &&
+                  std::all_of(cmd48Resp.bytes().begin(), cmd48Resp.bytes().end(), [](uint8_t b) { return b == 0x00; }),
+              "0x30 read additional device status returns the mandatory minimum 9 bytes, all-clear");
+
+        // Universal Commands 6/7 (Write Polling Address / Read Loop
+        // Configuration) -- the live-readdressing gate (section 12 of the
+        // task). Device "FV100CA" starts at address 1 on bus "hart-1".
+        HartResponseBuilder loopConfigInitial(8);
+        check(referenceEngine.execute("hart-1", 1, 0x07, {}, loopConfigInitial) && loopConfigInitial.size() == 2 &&
+                  loopConfigInitial.bytes()[0] == 1 && loopConfigInitial.bytes()[1] == 1,
+              "0x07 read loop configuration: address=1, loop current mode=1 (Enabled, the HART default)");
+
+        const uint8_t writeAddressRequest[] = {50, 1}; // new address 50, loop current mode stays Enabled
+        HartResponseBuilder writeAddressResp(8);
+        check(referenceEngine.execute("hart-1", 1, 0x06, writeAddressRequest, writeAddressResp) &&
+                  writeAddressResp.size() == 2 && writeAddressResp.bytes()[0] == 50 && writeAddressResp.bytes()[1] == 1,
+              "0x06 write polling address 1 -> 50 succeeds and echoes the new address (HCF_SPEC-127 6.7)");
+
+        HartResponseBuilder oldAddressGone(8);
+        check(!referenceEngine.execute("hart-1", 1, 0x07, {}, oldAddressGone),
+              "old address 1 no longer resolves this device after Command 6 -- REAL live readdressing, not a cosmetic field");
+        HartResponseBuilder newAddressWorks(8);
+        check(referenceEngine.execute("hart-1", 50, 0x07, {}, newAddressWorks) && newAddressWorks.size() == 2 &&
+                  newAddressWorks.bytes()[0] == 50 && newAddressWorks.bytes()[1] == 1,
+              "new address 50 resolves the SAME device immediately after the same transaction that changed it");
+        HartResponseBuilder identityStillWorksAtNewAddress(32);
+        check(referenceEngine.execute("hart-1", 50, 0x01, {}, identityStillWorksAtNewAddress) &&
+                  identityStillWorksAtNewAddress.size() == 5,
+              "the device's OTHER state (PV) is unaffected by the address change -- same device, new address, not a fresh/reset one");
     }
 
     uint8_t payload[] = {0x10, 0x20, 0x30};
@@ -712,7 +794,7 @@ int main() {
         HartFrame writeMessageRequest{7, 0x11, componentNewMessage};
         HartResponseBuilder writeMessageWire(32);
         check(HartFrameCodec::encode(writeMessageRequest, writeMessageWire), "component test: encode write-message request");
-        HartResponseBuilder writeMessageResponseWire(8);
+        HartResponseBuilder writeMessageResponseWire(32);
         check(component.transact(writeMessageWire.bytes(), writeMessageResponseWire),
               "component transacts Universal Command 17 (Write Message)");
         const auto messageAfterWrite = transactCommand(0x0C);
@@ -720,15 +802,83 @@ int main() {
                   std::equal(componentNewMessage.begin(), componentNewMessage.end(), messageAfterWrite.begin()),
               "component: Command 17's write PERSISTS through the real production path -- Command 12 observes it");
 
-        // Simulate a project reopen: a FRESH instance built from the exact same
-        // saved properties must behave identically, not reset to defaults.
-        HartCommunicationComponent reopened(HartCommunicationComponent::Mode::Serial, scheduler, params);
+        // Also exercise Command 22 (Write Long Tag) and Command 6 (Write
+        // Polling Address) through the real component before capturing the
+        // "saved project" snapshot below -- these are exactly the two new
+        // commands most likely to regress the save/reopen gate (Long Tag is
+        // a brand new persisted field; Polling Address changes the very key
+        // `findValue`/`transactCommand` address themselves).
+        const auto componentNewLongTag = HartTypeCodec::encodeLatin1("Reopen Test Tag", 32);
+        HartFrame writeLongTagRequest{7, 0x16, componentNewLongTag};
+        HartResponseBuilder writeLongTagWire(64);
+        check(HartFrameCodec::encode(writeLongTagRequest, writeLongTagWire), "component test: encode write-long-tag request");
+        HartResponseBuilder writeLongTagResponseWire(64);
+        check(component.transact(writeLongTagWire.bytes(), writeLongTagResponseWire),
+              "component transacts Universal Command 22 (Write Long Tag)");
+
+        const std::vector<uint8_t> writeAddressRequest{8, 1}; // 7 -> 8, loop current stays Enabled
+        HartFrame writeAddressRequestFrame{7, 0x06, writeAddressRequest};
+        HartResponseBuilder writeAddressWire(16);
+        check(HartFrameCodec::encode(writeAddressRequestFrame, writeAddressWire), "component test: encode write-polling-address request");
+        HartResponseBuilder writeAddressResponseWire(16);
+        check(component.transact(writeAddressWire.bytes(), writeAddressResponseWire),
+              "component transacts Universal Command 6 (Write Polling Address) 7 -> 8");
+        HartFrame stillAt7 = HartFrame{7, 0x0C, {}};
+        HartResponseBuilder stillAt7Wire(16);
+        check(HartFrameCodec::encode(stillAt7, stillAt7Wire), "component test: encode probe at old address 7");
+        HartResponseBuilder stillAt7Resp(16);
+        check(!component.transact(stillAt7Wire.bytes(), stillAt7Resp),
+              "component: old address 7 no longer resolves after Command 6 (live readdressing through the real component)");
+        HartFrame nowAt8{8, 0x0C, {}};
+        HartResponseBuilder nowAt8Wire(16);
+        check(HartFrameCodec::encode(nowAt8, nowAt8Wire), "component test: encode probe at new address 8");
+        HartResponseBuilder nowAt8Resp(48);
+        check(component.transact(nowAt8Wire.bytes(), nowAt8Resp), "component: new address 8 resolves the same device");
+
+        // Real save/reopen simulation (Anexo F.6 gate, closed): capture the
+        // component's CURRENT property values -- exactly what an external
+        // persistence layer does when saving a project -- into a fresh
+        // ComponentParams, then construct a brand-new component from THAT.
+        // Reusing the original `params` (as a prior version of this test
+        // did) would only prove construction works from a static snapshot,
+        // never that a live HART write's effect actually reaches storage.
+        lasecsimul::registry::ComponentParams savedParams;
+        for (const auto& descriptor : component.propertyDescriptors()) savedParams.properties[descriptor.schema.id] = descriptor.get();
+        check(std::get<double>(savedParams.properties.at("pollingAddress")) == 8.0,
+              "saved snapshot captured Command 6's address change (7 -> 8), not the original construction-time value");
+
+        HartCommunicationComponent reopened(HartCommunicationComponent::Mode::Serial, scheduler, savedParams);
+        HartFrame reopenedPvRequest{8, 1, {}}; // reopened device now lives at address 8, not 7
+        HartResponseBuilder reopenedPvWire(16);
+        check(HartFrameCodec::encode(reopenedPvRequest, reopenedPvWire), "reopen test: encode PV request at new address");
         HartResponseBuilder reopenedWire(32);
-        check(reopened.transact(pvWire.bytes(), reopenedWire), "reopened component transacts the same standard command");
+        check(reopened.transact(reopenedPvWire.bytes(), reopenedWire), "reopened component transacts the same standard command at the PERSISTED address");
         HartFrame reopenedResponse;
         check(HartFrameCodec::decode(reopenedWire.bytes(), reopenedResponse) && reopenedResponse.payload.size() == 5 &&
                   std::equal(expectedPv.begin(), expectedPv.end(), reopenedResponse.payload.begin() + 1),
               "reopened component: same saved PV value, not reset to 0.0 (persistence round-trip)");
+
+        HartFrame reopenedMessageRequest{8, 0x0C, {}};
+        HartResponseBuilder reopenedMessageWire(16);
+        check(HartFrameCodec::encode(reopenedMessageRequest, reopenedMessageWire), "reopen test: encode message request");
+        HartResponseBuilder reopenedMessageResponseWire(32);
+        check(reopened.transact(reopenedMessageWire.bytes(), reopenedMessageResponseWire), "reopened component transacts Command 12");
+        HartFrame reopenedMessageResponse;
+        check(HartFrameCodec::decode(reopenedMessageResponseWire.bytes(), reopenedMessageResponse) &&
+                  reopenedMessageResponse.payload.size() == componentNewMessage.size() &&
+                  std::equal(componentNewMessage.begin(), componentNewMessage.end(), reopenedMessageResponse.payload.begin()),
+              "reopened component: Command 17's message SURVIVES save/reopen (Anexo F.6 gap closed, not just live-session)");
+
+        HartFrame reopenedLongTagRequest{8, 0x14, {}};
+        HartResponseBuilder reopenedLongTagWire(16);
+        check(HartFrameCodec::encode(reopenedLongTagRequest, reopenedLongTagWire), "reopen test: encode long tag request");
+        HartResponseBuilder reopenedLongTagResponseWire(64);
+        check(reopened.transact(reopenedLongTagWire.bytes(), reopenedLongTagResponseWire), "reopened component transacts Command 20");
+        HartFrame reopenedLongTagResponse;
+        check(HartFrameCodec::decode(reopenedLongTagResponseWire.bytes(), reopenedLongTagResponse) &&
+                  reopenedLongTagResponse.payload.size() == componentNewLongTag.size() &&
+                  std::equal(componentNewLongTag.begin(), componentNewLongTag.end(), reopenedLongTagResponse.payload.begin()),
+              "reopened component: Command 22's long tag SURVIVES save/reopen");
 
         // Property Inspector editor-kind coverage gate (section 117/120/134 of
         // the Property Inspector audit): every PropertySchema this component
