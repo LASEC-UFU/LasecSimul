@@ -17,7 +17,19 @@ for (const file of files) {
   const text = fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '');
   const lines = text.split(/\r?\n/);
   const recordTypes = [];
+  const recordsInFile = [];
+  let current = null;
   for (const line of lines) {
+    const model = line.match(/^=====<<<([^:>]+):([^>]+)>>>=====$/);
+    if (model) {
+      current = { type: model[1].trim(), id: model[2].trim(), fields: {} };
+      recordsInFile.push(current);
+      const item = records.get(current.type) || { count: 0, files: new Set() };
+      item.count++; item.files.add(path.relative(root, file)); records.set(current.type, item);
+      continue;
+    }
+    const field = line.match(/^\{[^/]+\/\d+\}\s*([^:]+):\s*(.*)$/);
+    if (field && current) current.fields[field[1].trim()] = field[2].trim();
     const match = line.match(/^\s*(<{2,3}[^>]+>>)/);
     if (match) {
       const type = match[1]; recordTypes.push(type);
@@ -26,7 +38,7 @@ for (const file of files) {
     }
   }
   models.push({ file: path.relative(root, file), bytes: Buffer.byteLength(text), lines: lines.length,
-    recordTypes, references: [...text.matchAll(/\bM\d+\b/g)].length });
+    recordTypes, records: recordsInFile, references: [...text.matchAll(/\bM\d+\b/g)].length });
 }
 const out = { root, generatedAt: new Date().toISOString(), fileCount: files.length,
   files: models, recordTypes: [...records].map(([type, v]) => ({ type, count: v.count, files: [...v.files].sort() }))
