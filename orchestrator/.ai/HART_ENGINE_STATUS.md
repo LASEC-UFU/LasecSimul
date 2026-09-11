@@ -13,6 +13,7 @@ Last updated: 2026-09-10
 - Runtime dispatch selects `(bus, pollingAddress)`, allowing the same HART address on different virtual buses. The legacy address-only overload remains compatible and targets `hart-1`.
 - Built-in commands 0, 1, and 3 are available when declared by the selected profile; custom declared commands can be supplied through `IHartCommandHandler` without editing the engine.
 - `HartReferenceCatalog` now imports the complete 60-ID union from `process_simul`'s transmitter dispatch and command seed tables, plus all 11 reference equipment definitions and their polling addresses/device types. This is a declarative mapping, not yet a claim that every response body has been ported.
+- `HartReferenceCatalog::registerGenericProfile()` and `makeDevicePlans()` create the compatible profile and all 11 independent instances for a selected virtual bus. This is the insertion point for project/subcircuit compilation.
 - Deterministic manual MSVC test passes: `HART engine contracts: PASS`.
 
 Commits: `aea88419`, `cb9b2336`, `db02c53f` (branch `fix/vnext-b-mwdt-hotpath-diagnostics`, pushed to `origin`).
