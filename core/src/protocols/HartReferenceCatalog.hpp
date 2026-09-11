@@ -24,6 +24,8 @@ public:
     static std::vector<HartCommandDescriptor> commandDescriptors();
     static std::vector<HartReferenceDeviceDefinition> deviceDefinitions();
     static HartDeviceProfile makeGenericProfile();
+    static bool registerGenericProfile(HartProfileRegistry& registry);
+    static std::vector<HartDevicePlan> makeDevicePlans(std::string_view bus = "hart-1");
 };
 
 } // namespace lasecsimul::protocols

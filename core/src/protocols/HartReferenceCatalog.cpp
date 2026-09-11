@@ -101,4 +101,21 @@ HartDeviceProfile HartReferenceCatalog::makeGenericProfile() {
     return profile;
 }
 
+bool HartReferenceCatalog::registerGenericProfile(HartProfileRegistry& registry) {
+    return registry.registerProfile(makeGenericProfile());
+}
+
+std::vector<HartDevicePlan> HartReferenceCatalog::makeDevicePlans(std::string_view bus) {
+    std::vector<HartDevicePlan> result;
+    const auto definitions = deviceDefinitions();
+    result.reserve(definitions.size());
+    for (const HartReferenceDeviceDefinition& definition : definitions) {
+        result.push_back({std::string(definition.name),
+                          "lasecsimul.hart.process-simul-compatible",
+                          std::string(bus), definition.pollingAddress,
+                          std::string(definition.uniqueId), 0.0});
+    }
+    return result;
+}
+
 } // namespace lasecsimul::protocols

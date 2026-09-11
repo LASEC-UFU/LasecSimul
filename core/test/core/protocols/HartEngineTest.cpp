@@ -40,6 +40,17 @@ int main() {
     check(referenceProfile.commands.size() == referenceCommands.size() &&
               referenceProfile.manufacturerId == 0x3E,
           "generic process_simul-compatible profile");
+    HartProfileRegistry referenceRegistry;
+    check(HartReferenceCatalog::registerGenericProfile(referenceRegistry),
+          "reference profile registration");
+    const auto referencePlans = HartReferenceCatalog::makeDevicePlans();
+    check(referencePlans.size() == 11 &&
+              referencePlans.front().pollingAddress == 1 &&
+              referencePlans.back().pollingAddress == 11,
+          "reference device plan factory");
+    HartEngine referenceEngine(referenceRegistry);
+    check(referenceEngine.loadPlan({referencePlans}) && referenceEngine.deviceCount() == 11,
+          "reference device plan loads");
     uint8_t payload[] = {0x10, 0x20, 0x30};
     HartFrame request{3, 1, {payload[0], payload[1], payload[2]}};
     HartResponseBuilder wire(16);
