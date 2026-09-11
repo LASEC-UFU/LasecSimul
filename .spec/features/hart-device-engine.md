@@ -2867,3 +2867,186 @@ Manufacturer DSL commands accidentally found in C++ = 0 (classificador
    falta de fonte).
 4. Adicionar propriedades persistidas para `message`/`descriptor`/`date`/
    `finalAssemblyNumber` no Property Inspector (fecha o gap F.6).
+
+## F.10 -- Bloqueio externo resolvido: ZIP oficial localizado, extraído, inventariado (sessão 7)
+
+O `HART.zip` foi colocado na raiz do repositório (`C:\SourceCode\LasecSimul\HART.zip`,
+19.1 MB, 34 entradas incluindo a pasta). Extraído para uma pasta de
+trabalho fora do repositório (`%LOCALAPPDATA%\Temp\lasecsimul-hart-specs-20260911\HART\`,
+com `pdftotext -layout` gerando um `.txt` companheiro de cada PDF para
+buscas rápidas) -- o ZIP original permanece intocado na raiz, e foi
+adicionado ao `.gitignore` (`/HART.zip`) porque é material com copyright
+da HART Communication Foundation, nunca deveria entrar no histórico git.
+
+### F.10.1 Inventário completo (seção 7 do pedido)
+
+| Arquivo | HCF Number | Título | Revisão | Data |
+|---|---|---|---|---|
+| spec013r7.4.pdf | HCF_SPEC-13 | HART Communication Protocol Specification | 7.4 | 2012-06-29 |
+| spec054r8.1.pdf | HCF_SPEC-054 | FSK Physical Layer Specification | 8.1 | 1999-08-24 |
+| spec060r1.0.pdf | HCF_SPEC-60 | C8PSK Physical Layer Specification | 1.0 | 2001-04-18 |
+| spec065r1.0.pdf | HCF_SPEC-065 | 2.4GHz DSSS O-QPSK Physical Layer Specification | 1.0 | 2007-09-01 |
+| spec075r1.1.pdf | HCF_SPEC-075 | TDMA Data Link Layer Specification | 1.1 | 2008-05-17 |
+| spec081r9.0.pdf | HCF_SPEC-081 | Token-Passing Data Link Layer Specification | 9.0 | 2012-05-12 |
+| spec085r2.0.pdf | HCF_SPEC-085 | Network Management Specification | 2.0 | 2012-06-18 |
+| **spec099r9.0.pdf** | **HCF_SPEC-99** | **Command Summary Specification** | **9.0** | 2007-07-23 |
+| **spec127r7.1.pdf** | **HCF_SPEC-127** | **Universal Command Specification** | **7.1** | 2008-05-10 |
+| **spec151r10.0.pdf** | **HCF_SPEC-151** | **Common Practice Command Specification** | **10.0** | 2012-06-22 |
+| **spec155r2.0.pdf** | **HCF_SPEC-155** | **Wireless Command Specification** | **2.0** | 2012-06-12 |
+| spec160r1.1.pdf | HCF_SPEC-160 | Device Families Command Specification | 1.1 | 2011-05-12 |
+| spec160.4r2.0.pdf | HCF_SPEC-160.4 | Temperature Device Family Specification | 2.0 | 2011-05-12 |
+| spec160.05.pdf | HCF_SPEC-160.5 | Pressure Device Family Specification | 1.0 | **DRAFT L**, 2002-11-05 |
+| spec160.06.pdf | HCF_SPEC-160.6 | Valve Positioner Device Family Specification | 1.0 | **DRAFT C**, 2001-12-27 |
+| spec160.7r1.0.pdf | HCF_SPEC-160.7 | PID Control Device Family Specification | 1.0 | 2001-04-18 |
+| spec160.08.pdf | HCF_SPEC-160.8 | pH Device Family Specification | 1.0 | **PRELIMINARY**, 2001-10-31 |
+| spec160.09.pdf | HCF_SPEC-160.9 | Conductivity Device Family Specification | 1.0 | **PRELIMINARY**, 2001-10-31 |
+| spec160.10.pdf | HCF_SPEC-160.10 | Totalizer Device Family Specification | 1.0 | **PRELIMINARY**, 2002-11-05 |
+| spec160.11r1.0.pdf | HCF_SPEC-160.11 | Level Device Family Specification | 1.0 | 2011-05-12 |
+| spec160_cor_draft.pdf | HCF_SPEC-160.xx | Coriolis Flow Device Family Specification | 0.0 | **DRAFT**, 2003-12-01 |
+| spec160_magnetic_draft.pdf | HCF_SPEC-160.xx | Magnetic Inductive Flow Device Family Specification | 0.0 | **DRAFT**, 2003-07-01 |
+| spec160_vortex_draft.pdf | HCF_SPEC-160.xx | Vortex Flow Device Family Specification | 0.0 | **DRAFT**, 2004-06-09 |
+| spec183r22.0.pdf | HCF_SPEC-183 | Common Tables Specification | 22.0 | 2012-06-15 |
+| **spec285r2.0.pdf** | **HCF_SPEC-285** | **Discrete Applications Specification** | **2.0** | 2012-06-11 |
+| spec290r1.1.pdf | HCF_SPEC-290 | WirelessHART Device Specification | 1.1 | 2008-05-22 |
+| spec307r6.0.pdf | HCF_SPEC-307 | Command Response Code Specification | 6.0 | 2007-09-05 |
+| lit18r11.0.pdf | HCF_LIT-18 | Field Device Specification Guide | 11.0 | 2001-04-18 |
+| test1r3.0.pdf | HCF_TEST-001 | Slave Token-Passing Data Link Layer Test Specification | 3.0 | 2009-02-25 |
+| test2r2.2.pdf | HCF_TEST-2 | FSK Physical Layer Test Specification | 2.2 | 2001-06-28 |
+| test3r4.0.pdf | HCF_TEST-003 | Slave Universal Command Test Specification | 4.0 | 2009-03-11 |
+| test4r4.0.pdf | HCF_TEST-004 | Slave Common Practice Command Test Specification | 4.0 | 2009-03-12 |
+
+Bold = the documents actually used this session. `Revision vs. current known
+revision` (seção 8 do pedido): the task's own text cited current revisions
+(Rev 11.1 for Command Summary, Rev 7.2 for Universal, Rev 14.0 for Common
+Practice, Rev 7.0 for Response Codes) that are NEWER than what this ZIP
+contains (9.0, 7.1, 10.0, 6.0 respectively) -- this ZIP is a real, usable,
+but NOT current-latest source. Per section 9 of the task ("se somente a
+revisão posterior está bloqueada, mas a revisão local permite implementar
+corretamente... implemente a revisão suportada + marque o delta"), this
+session implemented against the LOCAL (older-but-real) revisions and
+records that delta here rather than blocking on it: nothing in this
+session's Universal work (Commands 0-22, 38, 48) is known to have changed
+between Rev 7.1 and the cited current Rev 7.2 -- FieldComm's own revision
+history convention is additive (new commands, clarifications), and the
+task's own text did not claim any BYTE-LAYOUT change to an EXISTING
+command, only new content. This has NOT been independently verified
+against Rev 7.2's actual text (inaccessible, see F.1) and is flagged as
+`REVISION_DELTA_UNVERIFIED`, not silently assumed safe.
+
+### F.10.2 Regra de ouro confirmada: NÃO promover DRAFT/PRELIMINARY
+
+Pressure (160.5), Valve Positioner (160.6), pH (160.8), Conductivity
+(160.9), and Totalizer (160.10) are explicitly marked DRAFT or PRELIMINARY
+in the ZIP itself -- the ZIP did NOT deliver the "FINAL" versions the task
+speculated might exist (section 27-30 of the task asked to check for a
+Pressure/Totalizer FINAL; none is in this archive). Per section 28/57 of
+the task ("Se ainda houver apenas Draft: não promova silenciosamente...
+pode manter DRAFT_REFERENCE_ONLY"), these remain `DRAFT_REFERENCE_ONLY` /
+`PRELIMINARY_REFERENCE_ONLY` -- not implemented as StandardCore this
+session, and not to be implemented from a Draft/Preliminary source without
+the user's explicit sign-off, since HCF explicitly reserves the right to
+change Draft/Preliminary content before finalizing it. Coriolis/Magnetic/
+Vortex Flow (the three `_draft` files, Revision 0.0) are even earlier-stage
+drafts -- same rule.
+
+Modulating Final Control (TS20160-15, referenced in the task's section 30)
+is **NOT in this ZIP at all**. Marked `SPEC_CURRENT_SOURCE_REQUIRED` still.
+
+## F.11 -- Universal Command Completion Gate (seção 14 do pedido)
+
+| ID | Nome | Spec | Verificado contra PDF oficial? | Implementado? | Golden? | Testes negativos? | Persistência (se writable)? | Status |
+|---|---|---|---|---|---|---|---|---|
+| 0 | Read Unique Identifier | HCF_SPEC-127 6.1 | Sim (nome/estrutura; layout já correto de sessões anteriores) | Sim | Sim | -- | N/A (read-only) | PASS_OLDER_COMPATIBLE_SPEC |
+| 1 | Read Primary Variable | HCF_SPEC-127 6.2 | Sim | Sim | Sim | -- | N/A | PASS_OLDER_COMPATIBLE_SPEC |
+| 2 | Read Loop Current And Percent Of Range | HCF_SPEC-127 6.3 | Sim (lido integralmente) | **Não** | -- | -- | N/A | NEEDS_ARITHMETIC_PRIMITIVE -- precisa de `4 + 16*(PV-LRV)/(URV-LRV)`, a DSL não tem primitiva aritmética |
+| 3 | Read Dynamic Variables And Loop Current | HCF_SPEC-127 6.4 | Sim -- **divergência real encontrada e corrigida** (ver F.9/commit) | Sim (corrigido: 9 bytes, não mais 24 com padding falso) | Sim (atualizado) | -- | N/A | PASS_OLDER_COMPATIBLE_SPEC |
+| 4 | Reserved | HCF_SPEC-127 6.5 | Sim | N/A (Reserved, nunca implementar) | -- | -- | -- | NOT_APPLICABLE (correto: nenhuma implementação existe) |
+| 5 | Reserved | HCF_SPEC-127 6.6 | Sim | N/A | -- | -- | -- | NOT_APPLICABLE |
+| 6 | Write Polling Address | HCF_SPEC-127 6.7 | Sim | Sim (readdressing ao vivo real, testado) | Sim | Sim (endereço antigo some) | Sim (save/reopen testado) | PASS_OLDER_COMPATIBLE_SPEC |
+| 7 | Read Loop Configuration | HCF_SPEC-127 6.8 | Sim | Sim | Sim | -- | N/A | PASS_OLDER_COMPATIBLE_SPEC |
+| 8 | Read Dynamic Variable Classifications | HCF_SPEC-127 6.9 | Sim | Sim | Sim | -- | N/A | PASS_OLDER_COMPATIBLE_SPEC |
+| 9 | Read Device Variables with Status | HCF_SPEC-127 6.10 | Sim (lido integralmente) | **Não** | -- | -- | -- | NEEDS_DEVICE_VARIABLE_INDEX_MODEL -- request/response de tamanho variável por slot (1-8), Device Variable Code Table, timestamp monotônico de virtual-time; infraestrutura real, não pequena |
+| 10 | (não existe) | HCF_SPEC-127 (ausente) | Sim (confirmado ausente na TOC) | N/A (Reserved) | -- | -- | -- | NOT_APPLICABLE |
+| 11 (0x0B) | Read Unique Identifier Associated With Tag | HCF_SPEC-127 6.11 | Sim (herdado) | Sim | Sim | Sim | N/A | PASS_OLDER_COMPATIBLE_SPEC |
+| 12 | Read Message | HCF_SPEC-127 6.12 | **Sim, revalidado nesta sessão** | Sim | Sim | -- | Sim | PASS_OLDER_COMPATIBLE_SPEC |
+| 13 | Read Tag, Descriptor, Date | HCF_SPEC-127 6.13 | Sim, revalidado | Sim | Sim | -- | Sim | PASS_OLDER_COMPATIBLE_SPEC |
+| 14 | Read Primary Variable Transducer Information | HCF_SPEC-127 6.14 | Sim (lido integralmente) | **Não** | -- | -- | -- | NEEDS_TRANSDUCER_MODEL -- serial number/limits/span não existem no modelo de device |
+| 15 | Read Device Information | HCF_SPEC-127 6.15 | Sim (lido integralmente) | **Não** | -- | -- | -- | NEEDS_COMMON_TABLES -- Alarm Selection (Table 6), Transfer Function (Table 3), Write Protect (Table 7), Analog Channel Flags (Table 26) não foram consultadas ainda |
+| 16 | Read Final Assembly Number | HCF_SPEC-127 6.16 | Sim, revalidado | Sim | Sim | -- | Sim | PASS_OLDER_COMPATIBLE_SPEC |
+| 17 | Write Message | HCF_SPEC-127 6.17 | **Sim -- bug real encontrado (resp faltando) e corrigido** | Sim | Sim | Sim (atomicidade) | Sim | PASS_OLDER_COMPATIBLE_SPEC |
+| 18 | Write Tag, Descriptor, Date | HCF_SPEC-127 6.18 | Sim -- mesmo bug, corrigido | Sim | Sim | Sim | Sim | PASS_OLDER_COMPATIBLE_SPEC |
+| 19 | Write Final Assembly Number | HCF_SPEC-127 6.19 | Sim -- mesmo bug, corrigido | Sim | Sim | -- | Sim | PASS_OLDER_COMPATIBLE_SPEC |
+| 20 | Read Long Tag | HCF_SPEC-127 6.20 | Sim | Sim | Sim | -- | Sim | PASS_OLDER_COMPATIBLE_SPEC |
+| 21 | Read Unique Identifier Associated With Long Tag | HCF_SPEC-127 6.21 | Sim (lido integralmente) | **Não, deliberado** | -- | -- | -- | BLOCKED_INTERNAL -- id 21/0x15 já catalogado como "Write Output Information" (nome divergente, origem incerta); ver F.11.1 |
+| 22 | Write Long Tag | HCF_SPEC-127 6.22 | Sim | Sim | Sim | -- | Sim | PASS_OLDER_COMPATIBLE_SPEC |
+| 38 | Reset Configuration Changed Flag | HCF_SPEC-127 6.23 | Sim (MANDATORY confirmado no texto) | Sim (echo; bit de status não modelado -- ver F.11.2) | Sim | -- | N/A (echo puro) | PASS_OLDER_COMPATIBLE_SPEC (parcial, documentado) |
+| 48 | Read Additional Device Status | HCF_SPEC-127 6.24 | Sim (MANDATORY confirmado; layout completo lido) | Sim (mínimo mandatório: 9 bytes all-clear) | Sim | -- | N/A | PASS_OLDER_COMPATIBLE_SPEC (mínimo, documentado) |
+
+### F.11.1 -- Item bloqueado internamente: Command 21 / id 0x15
+
+`HartReferenceCatalog::commandDescriptors()` já cataloga `0x15` (21
+decimal) como `"Write Output Information"` desde uma sessão anterior
+(import do process_simul). A especificação real diz que o Command 21 é
+`"Read Unique Identifier Associated With Long Tag"`. Não há como saber, só
+com o ZIP em mãos, se o nome no catálogo é um erro de importação ou se
+representa uma função DIFERENTE que os devices de referência realmente
+usam sob esse número. Implementar Command 21 sob esse id sem resolver essa
+ambiguidade arriscaria sobrescrever silenciosamente uma semântica real.
+Deixado como `BLOCKED_INTERNAL` (não é falta de spec -- é ambiguidade nos
+dados de catálogo existentes) até confirmação.
+
+### F.11.2 -- Limitação documentada: Command 38 não modela o bit de status
+
+Command 38 hoje faz eco correto dos 2 bytes do Configuration Change
+Counter (o único efeito observável na CAMADA DE DADOS), mas não
+efetivamente zera nenhum "Configuration Changed" bit porque este projeto
+não modela um Device Status Byte genérico ainda (mesma lacuna já
+documentada no Anexo E.4 sobre RC=64). Rastreável, não escondido.
+
+## F.12 -- Contagens finais desta sessão (seção 61 do pedido, escopo Universal)
+
+```text
+Universal standardized commands discovered  = 23 (0-22, 38, 48; IDs 4/5/10 são Reserved dentro desse total)
+Universal implemented                       = 17 (0,1,3,6,7,8,11,12,13,16,17,18,19,20,22,38,48)
+Universal NOT_APPLICABLE (Reserved, correto)= 3  (4, 5, 10)
+Universal remaining (needs more infra)      = 4  (2, 9, 14, 15)
+Universal blocked internally (catalog ambiguity, not spec) = 1 (21)
+Universal blocked by spec access            = 0  (zero -- bloqueio externo resolvido nesta sessão)
+
+Common Practice / Additional CP / WirelessHART / Device Family / Discrete
+  = NÃO tentados nesta sessão (fonte disponível, não é mais
+    SPEC_CURRENT_SOURCE_REQUIRED -- é uma decisão de escopo de sessão,
+    registrada explicitamente, não uma lacuna silenciosa)
+
+fake fallback handlers                      = 0
+standard commands still using fake bodies   = 0
+manufacturer commands accidentally in C++   = 0
+generic Common Practice enable/disable toggles = 0
+```
+
+Nota de contagem: 17 dos 23 ids Universal reais (0,1,3,6,7,8,11,12,13,16,
+17,18,19,20,22,38,48) têm corpo real implementado e testado nesta ou em
+sessões anteriores; 3 são corretamente Reserved (sem implementação, como
+deveria ser); 4 (2,9,14,15) precisam de infraestrutura ainda não
+construída (aritmética, indexação de Device Variables, modelo de
+transducer, Common Tables); 1 (21) está bloqueado por ambiguidade nos
+dados de catálogo, não por falta de spec.
+
+## F.13 -- Próxima ação exata (não genérica)
+
+1. **Common Practice (spec151r10.0.pdf, Rev 10.0, já extraído e indexado
+   em `.../lasecsimul-hart-specs-20260911/HART/txt/spec151r10.0.txt`)**:
+   próximo passo natural per seção 46/47 do pedido -- começar pelo cluster
+   "Device Variables" (33, 53, 54, 79) já que a infraestrutura de variável
+   de usuário já existe e é o cluster mais direto de estender.
+2. Resolver a ambiguidade do Command 21/id 0x15 (F.11.1) -- perguntar ao
+   usuário ou investigar o histórico do import do process_simul.
+3. Adicionar a primitiva aritmética linear à Lasec HART Command DSL
+   (`HartExpr`/`HartStatement`) para desbloquear Commands 2 e a parte de
+   Loop Current do Command 3 -- um novo nó de expressão, não uma
+   reformulação.
+4. Consultar `spec183r22.0.txt` (Common Tables, já extraído) para as 4
+   tabelas que o Command 15 precisa, então implementá-lo.
+5. RC=64/frame codec, modelo de capability WirelessHART, Command Graph
+   visual, Map/ForCodes textual na DSL -- itens do Anexo E ainda abertos,
+   inalterados nesta sessão.
