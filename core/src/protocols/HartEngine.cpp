@@ -268,24 +268,11 @@ bool HartEngine::execute(std::string_view bus, uint8_t pollingAddress, HartComma
     if (IHartCommandHandler* custom = m_commands.find(command)) {
         return custom->execute({pollingAddress, static_cast<uint8_t>(command), request}, response);
     }
-    switch (command) {
-        case 0: // Read unique identifier (semantic virtual representation).
-            return response.writeAscii(selected->plan.uniqueId);
-        case 1: { // Read primary variable: IEEE-754 float32, network byte order.
-            const float value = static_cast<float>(evaluatePrimary(*selected));
-            uint32_t bits = 0;
-            std::memcpy(&bits, &value, sizeof(bits));
-            return response.writeByte(static_cast<uint8_t>(bits >> 24)) &&
-                   response.writeByte(static_cast<uint8_t>(bits >> 16)) &&
-                   response.writeByte(static_cast<uint8_t>(bits >> 8)) &&
-                   response.writeByte(static_cast<uint8_t>(bits));
-        }
-        case 3: // Universal dynamic variables: PV only in the baseline profile.
-            return response.writeByte(1) && response.writeByte(0) &&
-                   response.writeByte(0) && response.writeByte(0);
-        default:
-            return false;
+    if (m_programHook) {
+        const double primary = evaluatePrimary(*selected);
+        if (m_programHook(*selected->profile, selected->plan, primary, command, request, response)) return true;
     }
+    return false;
 }
 
 } // namespace lasecsimul::protocols

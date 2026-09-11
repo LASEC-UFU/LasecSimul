@@ -82,6 +82,8 @@ set(CORE_SOURCES
     src/protocols/IndustrialProtocols.cpp
     src/protocols/HartEngine.cpp
     src/protocols/HartReferenceCatalog.cpp
+    src/protocols/HartCommandProgram.cpp
+    src/protocols/HartTypeCodec.cpp
     src/protocols/HartTransport.cpp
     src/protocols/HartCommunicationComponent.cpp
     src/fpga/FpgaComponent.cpp
@@ -394,6 +396,8 @@ add_executable(hart_engine_test
     test/core/protocols/HartEngineTest.cpp
     src/protocols/HartEngine.cpp
     src/protocols/HartReferenceCatalog.cpp
+    src/protocols/HartCommandProgram.cpp
+    src/protocols/HartTypeCodec.cpp
     src/protocols/HartTransport.cpp
     src/protocols/HartCommunicationComponent.cpp
     src/simulation/SignalEngine.cpp

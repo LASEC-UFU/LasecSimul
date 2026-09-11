@@ -1,5 +1,53 @@
 # NEXT ACTION
 
+## FEAT-013 HART primitive command DSL — first slice landed, continuation needed (2026-09-11)
+
+Result: **IN_PROGRESS — 5/60 commands ported to the semantic DSL, central
+switch removed for those five, everything else open.**
+
+This picks up FEAT-013 exactly where the entry below ("HART Device Engine —
+próximo track, bloqueado até fechar E147") left it blocked: E147 closed with
+the certified `v0.0.31` release (commit `3f6450e3`, tag `v0.0.31`,
+`E147_J_HANDOFF.md`), and a previous agent session already resumed HART work
+after that release (commits `aea88419`..`e3dc0fa4`, 2026-09-10 21:04 through
+2026-09-11 08:08) — `HartEngine`, `HartReferenceCatalog`, `HartPlanCompiler`,
+`HartTransportEndpoint`, and the serial/UDP Core blocks. This session did not
+touch QEMU/scheduler/VNEXT_B/MTTCG files at all, per both FEAT-013's own
+architecture rule and this file's own prior caution.
+
+What changed: added `core/src/protocols/HartCommandProgram.hpp/.cpp` (semantic
+authoring IR + cold-path compiler + bounded hot-path executor) and
+`HartTypeCodec.hpp/.cpp`, grounded in a direct audit of PACTware's
+`hrt_transmitter_v6.py`/`hrt_type.py` and `process_simul`'s
+`hart_command_registry.dart` (fetched and read directly this session, not
+assumed) — see `.spec/features/hart-device-engine.md` "Anexo A" for the full
+audit and the command x primitive matrix. Migrated commands 0x00, 0x01, 0x03
+off the former native `switch` in `HartEngine::execute` (fixing two real bugs:
+command 1 was missing its PV-unit byte, command 3 was a fabricated 4-byte
+placeholder) and implemented 0x0B and 0x21 for the first time — neither ever
+had a native handler in LasecSimul, so this is the FASE 19 proof gate in its
+strongest form (zero special-case commands, before and after). `hart_engine_test`
+(Release, MSVC) passes with new byte-exact goldens for all five commands plus
+direct SET/IF/MAP/ForCodes/bounds characterization tests.
+
+Not done, explicitly: the other 55 catalogued command IDs still have no body;
+`HartFunctionRegistry`/tombstones/ENUM-BIT_ENUM codecs; caching the per-device
+`HartExecutionVariables` snapshot at `loadPlan()` time instead of recomputing
+it (small, bounded, but non-ideal) per `execute()` call; wiring
+`HartCommunicationComponent`'s existing serial/UDP blocks to
+`setCommandProgramHook()`; Property Inspector UI for the DSL; benchmarks at
+device-count scale; fuzzing the compiler/executor; legacy removal. FEAT-013
+stays `status: planned` in `.spec/STATUS.md` — this is one bounded slice, not
+a completion claim.
+
+Next exact action: continue command-by-command migration using
+`HartReferenceCatalog::commandProgramDefinitions()` as the pattern (add a
+`HartCommandDefinition`, compile, add to the returned vector, add a golden
+test) — universal commands 0x02 and 0x07/0x08 are reasonable next targets
+since they reuse the same identity/PV variables already wired. Do not attempt
+`HartCommunicationComponent` wiring or a Property Inspector UI before more
+commands are ported and the per-device snapshot caching gap above is closed.
+
 ## E147-J follow-up (2026-09-10)
 
 The second UART retry ordering window is now covered by

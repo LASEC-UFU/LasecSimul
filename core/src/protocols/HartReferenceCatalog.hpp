@@ -1,5 +1,6 @@
 #pragma once
 
+#include "HartCommandProgram.hpp"
 #include "HartEngine.hpp"
 
 #include <string_view>
@@ -26,6 +27,18 @@ public:
     static HartDeviceProfile makeGenericProfile();
     static bool registerGenericProfile(HartProfileRegistry& registry);
     static std::vector<HartDevicePlan> makeDevicePlans(std::string_view bus = "hart-1");
+
+    /** Semantic Hart Command DSL programs for the commands migrated off the
+     * former central switch (FASE 19 proof gate: 0x00, 0x01, 0x03, 0x0B, 0x21).
+     * See .spec/features/hart-device-engine.md "Anexo A" for the request/
+     * response layout each program encodes. */
+    static std::vector<HartCommandDefinition> commandProgramDefinitions();
+
+    /** Compiles `commandProgramDefinitions()` and wires them into `engine` via
+     * `HartEngine::setCommandProgramHook`. Returns false if any program fails
+     * to compile (bound/validation error) -- the engine is left without a hook
+     * in that case, matching "no partial/unsafe install". */
+    static bool installCommandPrograms(HartEngine& engine);
 };
 
 } // namespace lasecsimul::protocols

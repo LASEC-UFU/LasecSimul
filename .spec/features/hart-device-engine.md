@@ -1725,3 +1725,130 @@ A implementação deve demonstrar que a arquitetura funciona com a seguinte oper
 Em SharedHost, a execução acima não pode criar threads ou sockets proporcionalmente às 64 instâncias virtuais.
 
 Esse cenário é o gate arquitetural principal desta feature.
+
+---
+
+## Anexo A — Auditoria de primitivas e DSL semântica de comandos (FASE 8-19)
+
+### A.1 Escopo e método
+
+Verificado diretamente contra a fonte pública (não assumido da paráfrase de uma
+tarefa anterior):
+
+- `ININDII-UFU/EININDII07_PACTware_ProcessSimul`: `hrt/hrt_transmitter_v6.py`,
+  `hrt/hrt_transmitter_v1.py`, `hrt/hrt_type.py`.
+- `josuemoraisgh/process_simul`: `lib/domain/hart/hart_command_registry.dart`.
+
+**Não auditado nesta sessão** (limite de orçamento, não esquecimento):
+`hrt_transmitter_v2..v5.py`, `hrt_frame.py`, `hrt_enum.py`, `hrt_bitenum.py`,
+`hart_payload_parser.dart`, `hart_transmitter.dart`, `hart_comm.dart`,
+`hart_type_converter.dart`. A confirmação de que `v6` já é totalmente
+declarativo (`COMMANDS` com `req/write/resp/after`) é direta; a alegação de que
+`v1` **já** possuía o mesmo formato declarativo veio de um resumo automatizado
+da ferramenta de fetch e não foi confirmada por diff byte-a-byte contra `v6` —
+tratar a tabela de evolução abaixo como direcional até uma reauditoria com
+leitura completa de `v2..v5`.
+
+### A.2 Primitivas confirmadas em `hrt_transmitter_v6.py`
+
+`COMMANDS` é o único ponto de configuração; cada comando é um dict opcional com
+estágios `req`/`write`/`resp`/`after`. Tokens confirmados: `"$BODY"`, `"$SEL2"`,
+`"$BODY[a:b]"` (slice compilado, offset inclusivo/fim exclusivo), `"$code"`
+(dentro de `FOR_CODES`), literais HEX (`"FE"`, `"7FC00000"`), e chaves de
+linha/variável (`"manufacturer_id"`, `"PROCESS_VARIABLE"`, ...). Estruturas
+dict: `SET{row,value}`, `IF{EQ:[A,B],THEN,ELSE}`, `MAP{KEY,TABLE,DEFAULT}`,
+`FOR_CODES{SRC,PREFIX,DO}`. Macros confirmadas: `IDENTITY_BLOCK` (10 campos),
+`PV_UNIT_AND_VALUE`. `compile_commands()` pré-compila slices e valida hex antes
+da execução; o motor de avaliação (`_eval_token()`) é genérico, sem
+if/elif por comando.
+
+### A.3 `hrt_type.py` — inventário de codecs confirmado
+
+| Tipo | Função | Largura | Endian | Observação |
+|---|---|---|---|---|
+| UNSIGNED | `_hrt_type_hex2_uint`/`_uint2_hex` | 1-4 bytes | BE | zero-pad à esquerda |
+| INTEGER | `_hrt_type_hex2_int`/`_int2_hex` | 2 bytes | BE | complemento de dois |
+| SREAL/FLOAT | `_hrt_type_hex2_sreal`/`_sreal2_hex` | 4 bytes | BE | IEEE-754, `struct`-packed |
+| PACKED ASCII | `_hrt_type_hex2_pascii`/`_pascii2_hex` | variável (6 bits/char) | BE bit-packed | maiúsculas, ASCII 0x20-0x5F, trunca/pad |
+| DATE | `_hrt_type_hex2_date`/`_date2_hex` | 3 bytes | BE | DD/MM/YYYY, ano offset +1900 |
+| TIME | `_hrt_type_hex2_time`/`_time2_hex` | 4 bytes | BE | precisão de milissegundo |
+| ENUM/BIT_ENUM/BOOL | roteados por `hrt_type_hex_to`/`hrt_type_hex_from` | — | — | tabelas em `hrt_enum.py`/`hrt_bitenum.py`, **não auditadas nesta sessão** |
+
+O algoritmo de packed-ASCII confirmado (máscara de 6 bits sobre o intervalo
+0x20-0x5F, com dobra do bit 6) é o algoritmo padrão HART documentado, não uma
+particularidade do PACTware — `HartTypeCodec` (ver A.5) o implementa de forma
+independente e caracterizada por round-trip, não copiado às cegas (regra da
+seção 17).
+
+### A.4 `process_simul` `HartCommandRegistry` — mapeamento confirmado
+
+| `process_simul` (Dart) | LasecSimul (C++) | Estado |
+|---|---|---|
+| `HartCommandHandler` | `IHartCommandHandler` | já existia, preservado |
+| `HartCommandContext` | `HartCommandContext` + `HartExecutionVariables` (novo) | preservado + estendido |
+| registro sem switch central | `HartCommandRegistry`/`setCommandProgramHook` | preservado + estendido |
+| tombstone (`_removedCommands`) impedindo fallback para `_onUnknown` | **ainda não implementado** para o caminho DSL | gap identificado, não fechado nesta sessão (FASE 21/71) |
+| `HartFunctionRegistry` (parsers nomeados reutilizáveis) | **ainda não construído como registry separado**; `HartVarId` cobre a mesma necessidade sem lookup por string | decisão consciente: o gate "zero string no hot path" já está satisfeito sem essa camada extra; construir o registry nomeado fica para quando um comando real precisar de função authoring-time por nome (FASE 78) |
+| `HartPayloadCodec`/reader bounded | `HartPayloadReader`/`HartResponseBuilder` (`HartEngine.hpp`, já existiam) | reutilizados, nenhum codec duplicado |
+
+### A.5 DSL semântica canônica — implementada
+
+`core/src/protocols/HartCommandProgram.hpp/.cpp` (authoring IR + compilador +
+executor) e `core/src/protocols/HartTypeCodec.hpp/.cpp` (codecs tipados
+reutilizáveis: `Float32BE`, `UnsignedBE`, `PackedAscii`). Nós de authoring:
+`HartExpr` (`RequestBody`, `BodySlice`, `HexConstant`, `Variable`, `LocalCode`)
+e `HartStatement` (`Append`, `Set`, `If`/`EQ`, `Map`, `ForCodes`). `req` foi
+deliberadamente **omitido** do executor: o `HartEngine` do LasecSimul é sempre
+o dispositivo (responder), nunca o mestre, então não há requisição de saída a
+compor; o campo é reservado no comentário do cabeçalho para um eventual papel
+de mestre, mas nenhum código o percorre hoje.
+
+Variáveis usam `HartVarId` (enum estável), resolvido para acesso direto a
+campo — nenhuma string é comparada por frame. `HartCommandCompiler::compile()`
+valida: alcance de `BodySlice` contra um limite declarado de requisição,
+chaves duplicadas em `MAP`, bound de iteração de `FOR_CODES` (1-64), destino de
+`SET` gravável (`Tag`, `PrimaryVariableUnit`, `PrimaryVariable` apenas) e
+estimativa estática de pior caso de resposta. `HartCommandExecutor::execute()`
+roda `write -> resp -> after` nessa ordem sobre uma cópia de trabalho de
+`HartExecutionVariables`, rejeita qualquer slice fora dos limites do
+`request` real (não apenas do bound estático) e nunca escreve bytes parciais
+em caso de falha.
+
+`IHartCommandHandler`/`HartCommandRegistry` nativos continuam disponíveis como
+último recurso (`HART-FR-016`); a integração usa um hook opcional
+(`HartEngine::setCommandProgramHook`) para que `HartEngine.hpp` não precise
+depender do módulo DSL — adicionar/remover um comando compilado não exige
+editar `HartEngine`.
+
+### A.6 Matriz comando × primitiva (escopo desta sessão)
+
+| Comando | Estágios usados | Primitivas | Handler nativo antes | Handler nativo depois |
+|---|---|---|---|---|
+| 0x00 Read Unique Identifier | resp | `IDENTITY_BLOCK` macro (Append×10) | switch central (bugado: retornava ASCII de `uniqueId`) | **nenhum** — DSL |
+| 0x01 Read Primary Variable | resp | Append(Variable) ×2 | switch central (bug: faltava byte de unidade, resposta de 4 bytes) | **nenhum** — DSL, 5 bytes, corrigido |
+| 0x03 Read Dynamic Variables And Loop Current | resp | Append ×9 (constantes + variáveis) | switch central (placeholder incorreto de 4 bytes fixos) | **nenhum** — DSL, 24 bytes, SV/TV/QV/loop = "not used"/NaN documentado |
+| 0x0B Read Unique ID Associated With Tag | resp | `If`/`EQ` + `IDENTITY_BLOCK` macro ×2 | **nunca existiu** | **nenhum** — primeira implementação, via DSL |
+| 0x21 Read Device Variables | resp | `ForCodes` + `If`/`EQ` | **nunca existiu** | **nenhum** — primeira implementação, via DSL |
+| demais 55 comandos do catálogo de 60 IDs | — | — | não implementados (apenas descritor id+nome) | não implementados — inalterado, não superestimar |
+
+0x0B e 0x21 não são "migrações de handler especial" no sentido literal — nunca
+houve handler nativo para eles em LasecSimul; são a primeira implementação, e
+comprovam que a DSL cobre exatamente os dois casos que a tarefa aponta como
+prova arquitetural obrigatória (FASE 19/72/73), sem exigir opcode ad-hoc.
+
+### A.7 Gaps conhecidos, não resolvidos nesta sessão
+
+- `HartFunctionRegistry` nomeado, tombstones no caminho DSL, codecs
+  `ENUM`/`BIT_ENUM`, `MAP` como estrutura compacta além de varredura linear
+  (aceitável para tabelas pequenas atuais, não validado em escala).
+- `installCommandPrograms()` hoje repete `encodePackedAscii`/parse de hex de
+  `uniqueId` a cada `execute()` (alocação pequena e limitada, não ilimitada,
+  mas não é o "zero alocação" ideal do hot path) — otimização pendente: mover
+  o snapshot de `HartExecutionVariables` para `RuntimeDevice`, calculado uma
+  vez em `loadPlan()`, com apenas PV/unit atualizados por chamada.
+  Ver [[project_hart_device_engine_v2]].
+- Restam 55 dos 60 comandos catalogados sem corpo implementado, Property
+  Inspector semântico, migração dos componentes de comunicação existentes
+  (`HartCommunicationComponent`) para o hook, benchmarks em escala,
+  fuzzing do compilador/executor, e remoção de legado — FASE 20-30
+  permanecem abertas.

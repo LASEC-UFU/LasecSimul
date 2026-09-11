@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <span>
 #include <string>
@@ -89,12 +90,24 @@ private:
     std::unordered_map<HartCommandId, IHartCommandHandler*> m_handlers;
 };
 
+/** Static command-0/0x0B identity fields not yet exposed as authored profile
+ * properties; defaults are HART-plausible placeholders (FASE 24.2 open item). */
+struct HartDeviceIdentity {
+    uint8_t numRequestPreambles = 5;
+    uint8_t universalCommandRevision = 7;
+    uint8_t transmitterSpecificRevision = 1;
+    uint8_t softwareRevision = 1;
+    uint8_t hardwareRevisionAndSignal = 0;
+    uint8_t flags = 0;
+};
+
 struct HartDeviceProfile {
     std::string id;
     uint32_t version = 1;
     uint16_t manufacturerId = 0;
     uint16_t deviceType = 0;
     std::vector<HartCommandDescriptor> commands;
+    HartDeviceIdentity identity{};
 };
 
 class HartProfileRegistry final {
@@ -133,6 +146,9 @@ struct HartDevicePlan {
         bool writable = false;
     };
     std::vector<VariableConfiguration> variables;
+    /** Packed-ASCII device tag used by command 0x0B tag matching; falls back to
+     * `id` when empty. */
+    std::string tag;
 };
 
 struct HartProtocolPlan {
@@ -165,6 +181,14 @@ public:
                             std::span<const uint8_t> response) noexcept;
     bool registerCommandHandler(IHartCommandHandler& handler) { return m_commands.registerHandler(handler); }
     bool removeCommandHandler(HartCommandId command) noexcept { return m_commands.remove(command); }
+    /** Consulted after per-device overrides and native `IHartCommandHandler`s,
+     * before a command is treated as unsupported. Lets the semantic Hart
+     * Command DSL (HartCommandProgram.hpp) dispatch compiled command programs
+     * without HartEngine depending on the DSL module -- registering/removing a
+     * DSL-backed command never requires editing HartEngine (HART-FR-005/006). */
+    using CommandProgramHook = std::function<bool(const HartDeviceProfile&, const HartDevicePlan&, double primaryValue,
+                                                   HartCommandId, std::span<const uint8_t>, HartResponseBuilder&)>;
+    void setCommandProgramHook(CommandProgramHook hook) { m_programHook = std::move(hook); }
     bool execute(std::string_view bus, uint8_t pollingAddress, HartCommandId command,
                  std::span<const uint8_t> request, HartResponseBuilder& response) noexcept;
     bool execute(uint8_t pollingAddress, HartCommandId command,
@@ -183,6 +207,7 @@ private:
     const HartProfileRegistry& m_profiles;
     HartCommandRegistry m_commands;
     std::vector<RuntimeDevice> m_devices;
+    CommandProgramHook m_programHook;
 };
 
 } // namespace lasecsimul::protocols

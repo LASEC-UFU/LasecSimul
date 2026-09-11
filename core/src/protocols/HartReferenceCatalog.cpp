@@ -1,8 +1,37 @@
 #include "HartReferenceCatalog.hpp"
 
+#include "HartTypeCodec.hpp"
+
+#include <algorithm>
 #include <array>
+#include <memory>
+#include <unordered_map>
 
 namespace lasecsimul::protocols {
+
+namespace {
+
+std::array<uint8_t, 3> parseDeviceIdHex(std::string_view text) noexcept {
+    std::array<uint8_t, 3> result{};
+    auto hexNibble = [](char c) -> int {
+        if (c >= '0' && c <= '9') return c - '0';
+        if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+        if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+        return -1;
+    };
+    size_t outIndex = 0;
+    size_t i = 0;
+    while (outIndex < result.size() && i + 2 <= text.size()) {
+        const int hi = hexNibble(text[i]);
+        const int lo = hexNibble(text[i + 1]);
+        if (hi < 0 || lo < 0) break;
+        result[outIndex++] = static_cast<uint8_t>((hi << 4) | lo);
+        i += 2;
+    }
+    return result;
+}
+
+} // namespace
 
 std::vector<HartCommandDescriptor> HartReferenceCatalog::commandDescriptors() {
     // Union of process_simul's command seed table and its transmitter dispatch table.
@@ -110,12 +139,153 @@ std::vector<HartDevicePlan> HartReferenceCatalog::makeDevicePlans(std::string_vi
     const auto definitions = deviceDefinitions();
     result.reserve(definitions.size());
     for (const HartReferenceDeviceDefinition& definition : definitions) {
-        result.push_back({std::string(definition.name),
-                          "lasecsimul.hart.process-simul-compatible",
-                          std::string(bus), definition.pollingAddress,
-                          std::string(definition.uniqueId), 0.0});
+        HartDevicePlan plan{std::string(definition.name),
+                           "lasecsimul.hart.process-simul-compatible",
+                           std::string(bus), definition.pollingAddress,
+                           std::string(definition.uniqueId), 0.0};
+        plan.tag = std::string(definition.tag);
+        result.push_back(std::move(plan));
     }
     return result;
+}
+
+std::vector<HartCommandDefinition> HartReferenceCatalog::commandProgramDefinitions() {
+    std::vector<HartCommandDefinition> commands;
+
+    // 0x00 -- Read Unique Identifier: the plain 13-byte identity block.
+    {
+        HartCommandDefinition cmd;
+        cmd.id = 0x00;
+        cmd.name = "Read Unique Identifier";
+        cmd.resp = hartIdentityBlockMacro();
+        commands.push_back(std::move(cmd));
+    }
+
+    // 0x01 -- Read Primary Variable: PV unit code (1 byte) + PV float32 BE.
+    // The prior native handler omitted the unit byte (4-byte response instead
+    // of the correct 5); fixed here per HART command-1 layout, not carried
+    // forward silently (FASE 17).
+    {
+        HartCommandDefinition cmd;
+        cmd.id = 0x01;
+        cmd.name = "Read Primary Variable";
+        cmd.resp = {
+            HartStatement{HartAppendStmt{HartExpr::var(HartVarId::PrimaryVariableUnit)}},
+            HartStatement{HartAppendStmt{HartExpr::var(HartVarId::PrimaryVariable)}},
+        };
+        commands.push_back(std::move(cmd));
+    }
+
+    // 0x03 -- Read Dynamic Variables And Loop Current: loop current + 4x
+    // (unit, value) for PV/SV/TV/QV. Only PV is modeled by this profile; SV/TV/QV
+    // and loop current use the HART "not used" convention (unit 0xFA + IEEE-754
+    // NaN) rather than a fabricated number -- loop current requires an LRV/URV
+    // range model FEAT-013 does not have yet (documented limitation, not a guess).
+    {
+        HartCommandDefinition cmd;
+        cmd.id = 0x03;
+        const auto nan = HartTypeCodec::encodeFloat32BE(HartTypeCodec::quietNaN());
+        const std::vector<uint8_t> nanBytes(nan.begin(), nan.end());
+        cmd.name = "Read Dynamic Variables And Loop Current";
+        cmd.resp = {
+            HartStatement{HartAppendStmt{HartExpr::hex(nanBytes)}}, // loop current: not modeled
+            HartStatement{HartAppendStmt{HartExpr::var(HartVarId::PrimaryVariableUnit)}},
+            HartStatement{HartAppendStmt{HartExpr::var(HartVarId::PrimaryVariable)}},
+            HartStatement{HartAppendStmt{HartExpr::hexByte(0xFA)}}, // SV: not used
+            HartStatement{HartAppendStmt{HartExpr::hex(nanBytes)}},
+            HartStatement{HartAppendStmt{HartExpr::hexByte(0xFA)}}, // TV: not used
+            HartStatement{HartAppendStmt{HartExpr::hex(nanBytes)}},
+            HartStatement{HartAppendStmt{HartExpr::hexByte(0xFA)}}, // QV: not used
+            HartStatement{HartAppendStmt{HartExpr::hex(nanBytes)}},
+        };
+        commands.push_back(std::move(cmd));
+    }
+
+    // 0x0B -- Read Unique Identifier Associated With Tag: status (00 match /
+    // 01 mismatch) + identity block, exactly the PACTware `hrt_transmitter_v6`
+    // shape (IF EQ(BODY[0:6], Tag) THEN/ELSE IDENTITY_BLOCK). This is the FASE
+    // 72 proof that the special handler can disappear: no native handler was
+    // ever written for 0x0B in LasecSimul, so this is a first implementation
+    // via the DSL, not a migration away from an existing one.
+    {
+        HartCommandDefinition cmd;
+        cmd.id = 0x0B;
+        cmd.name = "Read Unique Identifier Associated With Tag";
+        HartIfStmt tagMatch;
+        tagMatch.lhs = HartExpr::bodySlice(0, 6);
+        tagMatch.rhs = HartExpr::var(HartVarId::Tag);
+        tagMatch.thenBranch = {HartStatement{HartAppendStmt{HartExpr::hexByte(0x00)}}};
+        for (HartStatement& stmt : hartIdentityBlockMacro()) tagMatch.thenBranch.push_back(std::move(stmt));
+        tagMatch.elseBranch = {HartStatement{HartAppendStmt{HartExpr::hexByte(0x01)}}};
+        for (HartStatement& stmt : hartIdentityBlockMacro()) tagMatch.elseBranch.push_back(std::move(stmt));
+        cmd.resp = {HartStatement{std::move(tagMatch)}};
+        commands.push_back(std::move(cmd));
+    }
+
+    // 0x21 -- Read Device Variables: error_code + FOR_CODES over the request
+    // body, one (unit, value) pair per requested device-variable code. Only
+    // code 0x00 (PV) is modeled; every other code returns the HART "not used"
+    // convention. Matches the FASE 33 worked example exactly.
+    {
+        HartCommandDefinition cmd;
+        cmd.id = 0x21;
+        cmd.name = "Read Device Variables";
+        HartForCodesStmt forCodes;
+        forCodes.source = HartExpr::body();
+        forCodes.maxIterations = 8; // bounded: worst case 8 * 5 = 40 response bytes
+        HartIfStmt knownCode;
+        knownCode.lhs = HartExpr::localCode();
+        knownCode.rhs = HartExpr::hexByte(0x00);
+        knownCode.thenBranch = {
+            HartStatement{HartAppendStmt{HartExpr::var(HartVarId::PrimaryVariableUnit)}},
+            HartStatement{HartAppendStmt{HartExpr::var(HartVarId::PrimaryVariable)}},
+        };
+        const auto nan = HartTypeCodec::encodeFloat32BE(HartTypeCodec::quietNaN());
+        knownCode.elseBranch = {
+            HartStatement{HartAppendStmt{HartExpr::hexByte(0xFA)}},
+            HartStatement{HartAppendStmt{HartExpr::hex(std::vector<uint8_t>(nan.begin(), nan.end()))}},
+        };
+        forCodes.body = {HartStatement{std::move(knownCode)}};
+        cmd.resp = {
+            HartStatement{HartAppendStmt{HartExpr::hexByte(0x00)}}, // error_code: no per-device error tracking yet
+            HartStatement{std::move(forCodes)},
+        };
+        commands.push_back(std::move(cmd));
+    }
+
+    return commands;
+}
+
+bool HartReferenceCatalog::installCommandPrograms(HartEngine& engine) {
+    auto programs = std::make_shared<std::unordered_map<HartCommandId, HartCompiledCommandProgram>>();
+    for (HartCommandDefinition& definition : commandProgramDefinitions()) {
+        HartCommandCompileResult compiled = HartCommandCompiler::compile(std::move(definition));
+        if (!compiled.success) return false;
+        programs->emplace(compiled.program.definition.id, std::move(compiled.program));
+    }
+    engine.setCommandProgramHook([programs](const HartDeviceProfile& profile, const HartDevicePlan& plan,
+                                            double primaryValue, HartCommandId command,
+                                            std::span<const uint8_t> request, HartResponseBuilder& response) -> bool {
+        const auto it = programs->find(command);
+        if (it == programs->end()) return false;
+        HartExecutionVariables vars;
+        vars.manufacturerId = static_cast<uint8_t>(profile.manufacturerId);
+        vars.deviceType = static_cast<uint8_t>(profile.deviceType);
+        vars.deviceId = parseDeviceIdHex(plan.uniqueId);
+        vars.numRequestPreambles = profile.identity.numRequestPreambles;
+        vars.universalCommandRevision = profile.identity.universalCommandRevision;
+        vars.transmitterSpecificRevision = profile.identity.transmitterSpecificRevision;
+        vars.softwareRevision = profile.identity.softwareRevision;
+        vars.hardwareRevisionAndSignal = profile.identity.hardwareRevisionAndSignal;
+        vars.flags = profile.identity.flags;
+        const std::string_view tagSource = plan.tag.empty() ? std::string_view(plan.id) : std::string_view(plan.tag);
+        const std::vector<uint8_t> packedTag = HartTypeCodec::encodePackedAscii(tagSource, 8);
+        std::copy_n(packedTag.begin(), std::min(packedTag.size(), vars.tagPacked.size()), vars.tagPacked.begin());
+        vars.primaryVariableUnit = 57; // percent; no per-device unit authoring yet
+        vars.primaryVariable = static_cast<float>(primaryValue);
+        return HartCommandExecutor::execute(it->second, vars, request, response);
+    });
+    return true;
 }
 
 } // namespace lasecsimul::protocols

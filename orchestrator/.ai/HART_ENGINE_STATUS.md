@@ -1,6 +1,63 @@
 # HART engine implementation status
 
-Last updated: 2026-09-10
+Last updated: 2026-09-11 (primitive command DSL)
+
+## 2026-09-11 — semantic command DSL replaces the command-0/1/3 switch; 0x0B/0x21 implemented for the first time
+
+Prior architecture reconciled: `HartEngine`, `HartReferenceCatalog`
+(60-command/11-device import), `HartPlanCompiler`, `HartTransportEndpoint`, and
+the serial/UDP Core blocks from the previous agent were all preserved as-is.
+The one thing genuinely missing per the corrected plan was the command
+*semantics* layer: only commands 0/1/3 had bodies, hardcoded in a native
+`switch` inside `HartEngine::execute` — exactly the anti-pattern
+`.spec/features/hart-device-engine.md` HART-FR-005/006 forbid, and command 0/1/3's
+bodies were wrong (0 returned raw ASCII of `uniqueId`, 1 was missing its unit
+byte, 3 was a 4-byte placeholder).
+
+Added, grounded in a direct audit of `hrt_transmitter_v6.py`, `hrt_type.py` and
+`hart_command_registry.dart` (not the task's paraphrase alone — see
+`.spec/features/hart-device-engine.md` "Anexo A"):
+
+- `core/src/protocols/HartTypeCodec.hpp/.cpp` — `Float32BE`, `UnsignedBE`,
+  `PackedAscii` codecs, characterized by round-trip, matching the real HART
+  packed-ASCII algorithm.
+- `core/src/protocols/HartCommandProgram.hpp/.cpp` — the semantic authoring
+  IR (`HartExpr`: RequestBody/BodySlice/HexConstant/Variable/LocalCode;
+  `HartStatement`: Append/Set/If-Eq/Map/ForCodes), a cold-path compiler that
+  validates body-slice bounds, MAP duplicate keys, ForCodes iteration caps
+  (1-64), SET write-ownership, and a static worst-case response-size bound,
+  and a bounded hot-path executor (no heap allocation beyond the response
+  buffer, no string/name lookup, runs write -> resp -> after in order).
+- `HartEngine::setCommandProgramHook()` — a `std::function` extension point so
+  `HartEngine.hpp` does not depend on the DSL module; registering a new
+  compiled command never requires editing `HartEngine`.
+- `HartReferenceCatalog::commandProgramDefinitions()`/`installCommandPrograms()`
+  — commands 0x00, 0x01, 0x03, 0x0B, 0x21 expressed entirely via the DSL.
+  **0x0B and 0x21 never had a native handler in LasecSimul before this
+  change** — they are first implementations via the DSL, not migrations away
+  from an existing special case, which is the strongest form of the FASE 19
+  proof gate (the special-case count for these two was already zero and stays
+  zero).
+- Fixed two real bugs while migrating (documented, not silent): command 1 now
+  includes the PV unit byte (5 bytes, was 4); command 3 now returns the real
+  24-byte layout (loop current + 4x unit/value for PV/SV/TV/QV) with SV/TV/QV
+  and loop current as HART's "not used" convention (unit 0xFA + IEEE-754 NaN)
+  instead of fabricated numbers, since no range/multivariable model exists yet.
+- `HartEngineTest.cpp` extended with byte-exact goldens for all five commands
+  (including 0x0B tag match/mismatch and 0x21 known/unknown code) plus a
+  direct SET/IF/MAP/ForCodes characterization program and three negative
+  compiler tests (non-writable SET target, oversized body slice, runtime
+  out-of-bounds slice). `hart_engine_test` (Release, MSVC): **PASS**.
+
+Deliberately not claimed: the remaining 55 catalogued command IDs still have
+no body; `HartFunctionRegistry`/tombstones/ENUM-BIT_ENUM codecs are not built;
+`installCommandPrograms()`'s hook still re-parses `uniqueId`/re-encodes `tag`
+per call instead of caching a per-device snapshot at `loadPlan()` time (small,
+bounded, but not the "zero hot-path allocation" ideal); `HartCommunicationComponent`
+is not wired to the hook; no Property Inspector UI, benchmark, or fuzz pass was
+done. See "Anexo A" for the full gap list.
+
+## 2026-09-10 entry (previous agent)
 
 ## Implemented and verified
 
